@@ -135,36 +135,33 @@ class TestDeclareThenImport:
     """``-module(m, [f(…)])`` then ``-import_from(v, [f])`` — the ordering that
     produced the bare ``TypeError``."""
 
-    def test_the_pair_loads(self):
-        _load_module(
-            "tests.fixtures.fnmismatch_schema",
-            _fixture_path("fnmismatch_schema"),
-        )
-        use = _load_module(
-            "tests.fixtures.fnmismatch_use", _fixture_path("fnmismatch_use"),
-        )
-        assert isinstance(use.fnm_verdict, PredicateMeta)
+    def test_the_pair_is_refused_at_load_not_by_a_field_name_type_error(self):
+        """The field-name clash no longer surfaces: the head is emitted
+        positionally, so the module body runs.  What stops the load now is
+        the operator ruling of 2026-09-24 -- ``fnmismatch_use`` supplies the
+        clauses of a predicate ``fnmismatch_schema`` only DECLARES
+        (``-dynamic``, no clauses), the dropped "vocabulary-implements"
+        idiom -- and that refusal is a ``SyntaxError`` from step 3d, never the
+        ``TypeError`` this fixture was written for.
 
-    def test_the_local_name_is_the_imported_class(self):
+        (Until 2026-09-24 this class also pinned that the pair LOADS, that
+        the local name IS the schema's class, and that solutions flow
+        through the local clause.  All three were the idiom itself; identity
+        across a declare-then-import is still pinned against a DEFINING
+        exporter by ``test_differing_field_names_across_the_import``.)"""
         schema = _load_module(
             "tests.fixtures.fnmismatch_schema",
             _fixture_path("fnmismatch_schema"),
         )
-        use = _load_module(
-            "tests.fixtures.fnmismatch_use", _fixture_path("fnmismatch_use"),
-        )
-        # The import wins the binding; identity is shared, not split.
-        assert use.fnm_verdict is schema.fnm_verdict
-
-    def test_solutions_flow_through_the_local_clause(self):
-        _load_module(
-            "tests.fixtures.fnmismatch_schema",
-            _fixture_path("fnmismatch_schema"),
-        )
-        use = _load_module(
-            "tests.fixtures.fnmismatch_use", _fixture_path("fnmismatch_use"),
-        )
-        assert _solutions(use.fnm_chk, 1) == [(mint("ok"),)]
+        with pytest.raises(SyntaxError) as exc_info:
+            _load_module(
+                "tests.fixtures.fnmismatch_use", _fixture_path("fnmismatch_use"),
+            )
+        assert not isinstance(exc_info.value, ClausalTermConstructionError)
+        msg = " ".join(str(exc_info.value).split())
+        assert ("tests.fixtures.fnmismatch_schema only declares "
+                "fnm_verdict/2") in msg
+        assert _solutions(schema.fnm_verdict, 2) == []
 
     def test_differing_field_names_across_the_import(self):
         """The local declaration spells (STATUS, CITATIONS), the exporter
@@ -175,12 +172,31 @@ class TestDeclareThenImport:
         assert _solutions(use.impord_dti_check, 1) == [(mint("ok"),), (mint("no"),)]
 
     def test_a_local_fact_fills_the_foreign_slots_in_order(self):
-        """The bodyless-fact path: ``impord_fverdict(maybe, pending)`` must
-        land in slot order against the imported class, not by local name."""
-        vocab = _load_fixture("impord_fact_vocab")
-        use = _load_fixture("impord_declare_then_import_fact")
-        assert use.impord_fverdict is vocab.impord_fverdict
-        assert _solutions(vocab.impord_fverdict, 2) == [(mint("maybe"), mint("pending"))]
+        """The bodyless-fact path (``_build_fact_statements``): a fact for an
+        imported functor is emitted POSITIONALLY, ``maybe`` in slot 0 and
+        ``pending`` in slot 1, not by the local field names.
+
+        Checked on the generated code since 2026-09-24: loading the fixture
+        end to end now stops at the dropped "vocabulary-implements" idiom
+        (``impord_fact_vocab`` only declares ``impord_fverdict/2``), so the
+        answers can no longer be read back.  The load is still checked: it
+        must be THAT refusal, not a field-name ``TypeError`` -- which is what
+        the positional emission is for."""
+        out = _unparse(
+            "-private([maybe, pending])\n"
+            "-module(m, [f(STATUS, CITATIONS)])\n"
+            "-import_from(other, [f])\n"
+            "f(maybe, pending)\n"
+        )
+        assert "head=f('maybe', 'pending')" in out
+        assert "STATUS=" not in out
+
+        _load_fixture("impord_fact_vocab")
+        with pytest.raises(SyntaxError) as exc_info:
+            _load_fixture("impord_declare_then_import_fact")
+        assert not isinstance(exc_info.value, ClausalTermConstructionError)
+        assert "only declares impord_fverdict/2" in " ".join(
+            str(exc_info.value).split())
 
 
 class TestImportThenDeclare:

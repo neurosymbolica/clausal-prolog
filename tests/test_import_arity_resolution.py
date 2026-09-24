@@ -123,23 +123,80 @@ class TestImportedFunctorCollisionIsUnchanged:
         assert "reached by writing" not in message
 
 
-class TestBlastRadiusRefusalNamesTheAttemptedKey:
-    """Final review M-e.  A write's blast radius includes the row a shared
-    ``-import_from``'d class is reading, and that row can be at a DIFFERENT
-    ARITY: the importer writing ``t5b_kfact/2`` against an owner that exports
-    the dual-declared atom ``t5b_kfact`` (a /0 fact) was refused with "may not
-    write t5b_kfact/0" — a key that appears nowhere in the importer's source.
-    The refusal and the row it names are both right; the line has to say both
-    keys or the reader hunts for a ``/0`` they never wrote.
+class TestALocalPredicateAtAnotherArityLoads:
+    """Was ``TestBlastRadiusRefusalNamesTheAttemptedKey`` (final review M-e):
+    the importer writes ``t5b_kfact/2`` of its own beside the owner's
+    imported dual-declared ``t5b_kfact`` (a /0 fact).  In the class era the
+    shared class put the owner's ``/0`` row in the write's blast radius and
+    the load was refused ("may not write t5b_kfact/0 (reached by writing
+    t5b_kfact/2)"); in the handle era ``through=`` resolves at the written
+    arity and the same load succeeded.
+
+    Operator ruling 2026-09-24: a local ``p/2`` beside an imported ``p/1``
+    LOADS, in BOTH eras -- name and arity make a different predicate
+    (``todo/done/imported-class-at-another-arity-blast-radius-is-class-era-only-2026-09-24.md``).
     Fixture: ``tests/fixtures/t5b_dual_arity_clash``."""
 
-    def test_the_refusal_names_the_owned_key_and_the_attempted_key(self):
-        _load_fixture("t5b_dual_owner")
-        with pytest.raises(SyntaxError) as exc_info:
-            _load_fixture("t5b_dual_arity_clash")
-        message = str(exc_info.value)
-        assert "may not write t5b_kfact/0" in message, "the row that refused"
-        assert "(reached by writing t5b_kfact/2)" in message, "what was written"
+    @pytest.mark.parametrize("era", ["class", "mangled"])
+    def test_it_loads_answers_and_leaves_the_owner_alone(self, era,
+                                                         monkeypatch):
+        import sys
+        import clausal.logic.compiler_v2 as cv2
+        from clausal.logic.atoms import mangle
+        from clausal.logic.solve import solve
+        from clausal.logic.variables import Var, deref, walk
+
+        owner = _load_fixture("t5b_dual_owner")
+        owner_db = owner.__dict__["$module"].db
+        owner_clauses = list(owner_db.row("t5b_kfact", 0).clauses)
+        assert owner_clauses, "the owner's /0 fact is the shape under test"
+        owner_source = owner_db.row("t5b_kfact", 0).source
+
+        use_name = "tests.fixtures.t5b_dual_arity_clash"
+        if era == "mangled":
+            original = cv2._refuse_foreign_writes
+            rebound = []
+
+            def refuse(db, nodes, module_dict, origins, author, module_name):
+                if module_name == use_name:
+                    handle = mangle("tests.fixtures.t5b_dual_owner",
+                                    "t5b_kfact")
+                    module_dict["t5b_kfact"] = handle
+                    origins["t5b_kfact"] = ("tests.fixtures.t5b_dual_owner",
+                                            handle)
+                    rebound.append(module_name)
+                return original(db, nodes, module_dict, origins, author,
+                                module_name)
+
+            monkeypatch.setattr(cv2, "_refuse_foreign_writes", refuse)
+        try:
+            use = _load_fixture("t5b_dual_arity_clash")
+        finally:
+            sys.modules.pop(use_name, None)
+        if era == "mangled":
+            assert rebound == [use_name], "the handle-era rebinding never ran"
+
+        lm = use.__dict__["$module"]
+
+        def answers(gen, a, b):
+            return [(walk(deref(a)), walk(deref(b))) for _ in gen]
+
+        # Every route to the importer's own t5b_kfact/2: an outside query, a
+        # solve.call by name, a body goal inside the importer (t5b_dac_go),
+        # and a meta-call (call/3) by name.
+        a, b = Var(), Var()
+        assert answers(solve(("t5b_kfact", a, b), lm), a, b) == [(1, 2)]
+        a, b = Var(), Var()
+        assert answers(call("t5b_kfact", a, b, module=lm), a, b) == [(1, 2)]
+        a, b = Var(), Var()
+        assert answers(call("t5b_dac_go", a, b, module=lm), a, b) == [(1, 2)]
+        a, b = Var(), Var()
+        assert answers(solve(("call", mint("t5b_kfact"), a, b), lm),
+                       a, b) == [(1, 2)]
+        assert lm.db.row("t5b_kfact", 2).db is lm.db
+        # The owner's /0: same clause, same owner.
+        assert owner_db.row("t5b_kfact", 0).clauses == owner_clauses
+        assert owner_db.row("t5b_kfact", 0).source == owner_source
 
 
 class TestImportedDeclaredAtomWithZeroArityClauses:

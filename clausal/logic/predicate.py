@@ -931,20 +931,17 @@ class PredicateMeta(type):
         own, and the clauses live under the name the CLAUSE HEADS use.
 
         Re-binding a class that already has a row is legitimate and expected:
-        a clause-free imported declaration getting its clauses downstream, a
-        file re-compiled in one process, a name defined at two arities.  It is
-        also how a shared predicate gets STOLEN, so it is policed: a class
-        already reading another Database's real row is left where it is unless
-        the caller passes *authorized*, which TWO callers do, each from inside
-        a write the mutation gate has just cleared: ``compiler_v2`` step 4's
-        clause install, and ``specialization._install_specialized`` (P3-3
-        Task 7), which makes a ``-specialize`` alias the compiled face of the
-        defining module's row.  The specialization one passes
-        ``through=pred_cls`` to its ``Database.mutate``, so the class's
-        CURRENT row is in that write's blast radius and the policy has already
-        refused the case this guard exists for -- an alias name that resolves
-        to somebody else's predicate -- before the bind is reached.  See the
-        body.
+        a file re-compiled in one process, a name defined at two arities.
+        What it NEVER does is move a class off ANOTHER Database's real row --
+        that is how a shared predicate got STOLEN (the clause-free
+        "vocabulary-implements" idiom, dropped 2026-09-24).  An unauthorized
+        caller (a recompile, a dispatch install) is left where it is,
+        silently, as before.  An *authorized* caller -- each runs inside a
+        write the mutation gate has just cleared: ``compiler_v2`` step 4's
+        clause install, step 4a, and ``specialization._install_specialized``
+        (P3-3 Task 7) -- gets a ``RuntimeError``: the loads that used to
+        reach the move are refused before any write, so reaching it is a
+        broken invariant, not a request.  See the body.
         A REAL old row keeps its own contents (it is the Database's, not the
         class's); the pieces of state that were per-CLASS rather than
         per-key before this task travel with the class so the move stays
@@ -988,8 +985,24 @@ class PredicateMeta(type):
             old_row is not None
             and not old_row.detached
             and old_row.db is not db
-            and not authorized
         ):
+            if authorized:
+                # NO STEAL, EVER (2026-09-24, the vocabulary-implements drop).
+                # An authorized caller used to MOVE the class here -- the
+                # clause-free vocabulary idiom's mechanism -- and where the
+                # owner's row held runtime clauses they vanished from every
+                # caller through the class.  Every load write through an
+                # ``-import_from`` is now refused before step 4 (step 3d,
+                # ``compiler_v2._implements_an_imported_declaration``), so an
+                # authorized caller reaching this is a broken invariant: say
+                # so rather than move another Database's predicate silently.
+                raise RuntimeError(
+                    f"internal: binding {cls.__name__} to "
+                    f"{db.module_name()}'s row {functor}/{arity} would move it "
+                    f"off {old_row.db.module_name()}'s row "
+                    f"{old_row.key[0]}/{old_row.key[1]}; a predicate never "
+                    f"changes its defining module (the load should have been "
+                    f"refused before any write)")
             # POLICED (P3-3 Task 3 fix round 1).  Re-binding is a write that
             # MOVES predicate identity: the class is what a goal resolves
             # through, so re-pointing an ``-import_from``'d class at the
@@ -998,13 +1011,8 @@ class PredicateMeta(type):
             # the clauses nobody can reach any more.  A recompile or a
             # dispatch install has no authorship to make that decision with
             # (its ``recompile`` kind is never refused, precisely because it
-            # is meant to change nothing), so it does not get to.  The
-            # authorized re-binds are ``compiler_v2`` step 4's clause install
-            # -- which is what keeps the clause-free vocabulary idiom working
-            # -- and ``specialization._install_specialized``'s alias install
-            # (P3-3 Task 7); both run inside a mutation-gate transaction
-            # already cleared for their author, and the second additionally
-            # names the class in that transaction's ``through=``.
+            # is meant to change nothing), so it does not get to -- and an
+            # authorized caller (above) raises instead of moving it.
             #
             # A class on its private DETACHED row is unbound, not bound
             # elsewhere, so its first real bind is always fine.
@@ -1778,8 +1786,13 @@ def localize_owner_functor(db: Any, functor: str, arity: int):
     return None
 
 
-def _dispatch_at(obj: Any, arity: int) -> Callable:
+def _dispatch_at(obj: Any, arity: int, db: Any = None) -> Callable:
     """Resolve *obj*'s dispatch function for a call of *arity* arguments.
+
+    *db*, when given, is the CALLER's database -- the ruling-Q0 hint: a
+    predicate HANDLE naming the caller's own module resolves there even when
+    the ``.clausal`` runner has popped that module from ``sys.modules``
+    (``_owner_db_for_module_name``).  Every other shape ignores it.
 
     ``_get_dispatch()`` is a duck-typed protocol, and it is deliberately and
     permanently **single-argument**.  Roughly two dozen implementors live
@@ -1871,7 +1884,7 @@ def _dispatch_at(obj: Any, arity: int) -> Callable:
         raise LogicException(string_goal_error(chars_text(obj), arity, "call/N"))
     if type(obj) is str:   # STAGE 2: the atom (was the arity-0 cell)
         from clausal.logic.cells import qualify_mangled_goal  # noqa: PLC0415
-        _q = qualify_mangled_goal(obj)
+        _q = qualify_mangled_goal(obj, db=db)
         if _q is not obj:
             # W4 (ruled 2026-09-22): a MANGLED atom naming a LOADED module is
             # a module-qualified predicate HANDLE -- the value a held
@@ -1883,7 +1896,14 @@ def _dispatch_at(obj: Any, arity: int) -> Callable:
             # what ``call/N`` does too, so the two paths agree.
             from clausal.logic.solve import resolve_module  # noqa: PLC0415
             _mod_name, _name = _q[1], _q[2]
-            _module = resolve_module(_mod_name, None, "call/N")
+            _hint = _hint_db(db)
+            if _hint is not None and _mod_name == _hint.module_name():
+                # Q0: the caller's own module, answered from the caller's db
+                # -- resolve_module would look in sys.modules and miss it.
+                _hdb, _hmd = _hint, _hint.module_dict
+            else:
+                _module = resolve_module(_mod_name, None, "call/N")
+                _hdb, _hmd = _module.db, _module.module_dict
             # F7 (ruled 2026-09-24): the arity check runs BEFORE
             # ``Database.get_dispatch``'s builtin-registry fallback.
             # ``get_dispatch`` falls back to a same-named builtin keyed
@@ -1908,13 +1928,13 @@ def _dispatch_at(obj: Any, arity: int) -> Callable:
             # arity, else the builtin registry -- is therefore asked FIRST;
             # the refusal stays, after it, for the case where nothing
             # answers.
-            _fn = _module.db.get_dispatch(_name, arity)
+            _fn = _hdb.get_dispatch(_name, arity)
             if _fn is not None:
                 return _fn
-            _refuse_if_known_at_another_arity(_module.db, _name, arity)
-            _bound = (_module.module_dict or {}).get(_name)
+            _refuse_if_known_at_another_arity(_hdb, _name, arity)
+            _bound = (_hmd or {}).get(_name)
             if _bound is not None and _bound is not obj:
-                return _dispatch_at(_bound, arity)
+                return _dispatch_at(_bound, arity, _hdb)
             from clausal.logic.exceptions import (  # noqa: PLC0415
                 LogicException, existence_error,
                 dangling_handle_indicator_and_why,
@@ -2073,7 +2093,55 @@ def _db_for_module_name(module_name: str):
     mod = sys.modules.get(module_name)
     if mod is None:
         return None
-    return getattr(mod.__dict__.get("$module"), "db", None)
+    return namespace_db(mod.__dict__)
+
+
+def namespace_db(namespace) -> "Database | None":
+    """The Database a module NAMESPACE carries (``namespace["$module"].db``),
+    or ``None`` -- the one home for reading a ruling-Q0 ``db=`` hint off a
+    namespace, and for ``_db_for_module_name``'s ``sys.modules`` read.
+
+    PLACEHOLDER TRAP (measured 2026-09-24): while ``import_hook`` loads a
+    module, ``namespace["$module"]`` is the hook's PLACEHOLDER ``LogicModule``
+    until ``compile_module`` returns.  Its Database shares the module dict, so
+    ``module_name()`` is the real module's: it captures every local handle
+    and answers from an empty store.  Code running INSIDE ``compile_module``
+    must use compile_module's own ``db`` (the load channel threads it); the
+    namespace-derived hints are right only after the load.  At the flip,
+    either swap ``$module`` before step 3 or fix it here.
+    """
+    if not namespace:
+        return None
+    try:
+        return getattr(namespace.get("$module"), "db", None)
+    except AttributeError:          # not a mapping
+        return None
+
+
+def _hint_db(db):
+    """*db* as a ruling-Q0 hint, or ``None`` when it cannot be one.
+
+    Only a database backed by a real module dict names a module: a db-like
+    shim with no ``module_dict`` (``globals_env._GlobalsDb``) or a
+    ``Database("x")`` built on a bare string is treated as NO hint rather
+    than crashing or capturing handles meant for a loaded module called
+    ``"x"``.  Callers therefore pass whatever db they hold, unguarded.
+    """
+    if db is None or not isinstance(getattr(db, "module_dict", None), dict):
+        return None
+    return db
+
+
+def _owner_db_for_module_name(module_name: str, db=None):
+    """The Database that owns *module_name*'s predicates: the caller's own
+    *db* when it IS that module (ruling Q0 -- the ``.clausal`` runner pops
+    loaded modules from ``sys.modules``), else the loaded module's, else
+    ``None``.  One home for the local-first rule, shared by the resolvers,
+    ``cells.qualify_mangled_goal`` and ``_dispatch_at``'s handle arm."""
+    hint = _hint_db(db)
+    if hint is not None and module_name == hint.module_name():
+        return hint
+    return _db_for_module_name(module_name)
 
 
 def _resolve_mangled_owner(binding, db=None):
@@ -2111,13 +2179,9 @@ def _resolve_mangled_owner(binding, db=None):
     """
     from clausal.logic.atoms import demangle  # noqa: PLC0415
     module_name, functor = demangle(binding)
-    if (db is not None and isinstance(db.module_dict, dict)
-            and module_name == db.module_name()):
-        # Only a database backed by a real module dict: ``Database("x")``
-        # answers its raw string as its name and must not capture handles
-        # meant for a loaded module called "x".
-        return db, functor
-    owner = _db_for_module_name(module_name)
+    # Local first (``_owner_db_for_module_name``); a hint that is not a real
+    # module database (``_hint_db``) is no hint.
+    owner = _owner_db_for_module_name(module_name, db)
     if owner is None:
         return None
     return owner, functor
@@ -2141,6 +2205,55 @@ def mint_predicate_handle(db, functor: str) -> str:
             f"cannot mint a predicate handle for {functor!r}: its database "
             f"belongs to no module ({module_name})")
     return mangle(module_name, functor)
+
+
+def is_bound_predicate_at(binding, arity: int, db=None) -> bool:
+    """Is *binding* a predicate at *arity*, reading the arity from where the
+    predicate LIVES?
+
+    A ``PredicateMeta`` class bound to a real row answers with that row's
+    arity (``row.key[1]``): a class can be bound at an arity its ``_fields``
+    do not spell (a name re-bound within its database), and the row is what
+    a write or a call reaches.  Everything else -- an unbound class, a
+    detached one, a mangled handle -- is ``is_declared_predicate``.  The
+    ONE arity source for the load channel's "is this the imported
+    predicate?" questions (``compiler_v2._implements_an_imported_declaration``
+    and :func:`is_foreign_class_at_other_arity`), so the two cannot disagree
+    about a class whose fields and row differ (round-7 review).
+    """
+    if isinstance(binding, PredicateMeta):
+        row = binding._row
+        if row is not None and not row.detached:
+            return row.key[1] == arity
+    return is_declared_predicate(binding, arity=arity, db=db)
+
+
+def is_foreign_class_at_other_arity(binding, db, arity: int) -> bool:
+    """True when *binding* is a ``PredicateMeta`` class already reading
+    ANOTHER Database's real row, at an arity other than *arity*.
+
+    That is an ``-import_from``'d predicate whose name this module ALSO uses
+    at another arity for a predicate of its own (``-import_from(a, [p])``
+    binds a's ``p/1`` class; this file defines ``p/2``).  The ``p/2`` head is
+    this module's own predicate -- its row is this module's, exactly as the
+    handle era resolves it -- so the class must be neither bound to it
+    (``_bind_row`` would move a's predicate) nor handed the ``p/2`` dispatch
+    or index plans (they would land on a's ``p/1`` row), nor put a's row in
+    the write's blast radius (operator ruling 2026-09-24: a local ``p/2``
+    beside an imported ``p/1`` LOADS -- name and arity make a different
+    predicate).  Class era only: a mangled handle has no class to mis-bind,
+    and ``through=`` resolves it at the written arity.
+
+    The arity is the BOUND ROW's (``row.key[1]``), not ``len(_fields)``: a
+    class can be bound at an arity its field names do not spell (a name
+    defined at two arities re-binds it within its database).
+    """
+    if not isinstance(binding, PredicateMeta):
+        return False
+    row = binding._row
+    if row is None or row.detached or db is None or row.db is db:
+        return False
+    return not is_bound_predicate_at(binding, arity)
 
 
 def resolve_predicate_row(binding, *, arity: int,
@@ -2491,11 +2604,7 @@ def predicate_arities_for(binding, *, cache: "dict | None" = None,
         owner = predicate_owner_module(binding)
         # The caller's db first (Q0), exactly as the mangled arm does, so the
         # two eras agree under the same hint when the owner was popped.
-        if (db is not None and isinstance(db.module_dict, dict)
-                and owner == db.module_name()):
-            owner_db = db
-        else:
-            owner_db = _db_for_module_name(owner) if owner else None
+        owner_db = _owner_db_for_module_name(owner, db) if owner else None
         if owner_db is not None:
             defined, _declared = _arity_maps(owner_db, cache)
             found |= defined.get(binding.__name__, set())
@@ -2917,6 +3026,6 @@ __all__ = ["PredicateMeta", "RetiredStateError", "_MISSING", "is_term_instance",
            "make_predicate", "make_atom",
            "resolve_predicate_row", "is_declared_predicate",
            "is_declared_predicate_name", "predicate_arities_for",
-           "mint_predicate_handle",
+           "mint_predicate_handle", "namespace_db",
            "predicate_owner_module",
            "head_cell", "build_term_cell"]

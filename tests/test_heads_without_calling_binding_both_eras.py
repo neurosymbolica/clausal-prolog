@@ -116,20 +116,29 @@ def test_an_imported_head_at_the_wrong_arity_raises_the_arity_error(
 
 
 @pytest.mark.parametrize("era", ERAS)
-@pytest.mark.parametrize("owner_stem,name,arity,importer", [
-    ("impclob_decl_vocab", "impclob_verdict", 2, "impclob_implements"),
-    ("fnmismatch_schema", "fnm_verdict", 2, "fnmismatch_use"),
-])
-def test_an_implementing_importer_head_is_built_not_called(
-        fixture_modules, era, owner_stem, name, arity, importer):
-    """Declare-then-import-then-define.  Whether this LOADS is the
-    vocabulary-drop ruling's question (it loads on main in both eras); what
-    this pins is that the head no longer dies calling a str."""
-    try:
-        _load_importer(fixture_modules, era, owner_stem, name, arity,
-                       importer)
-    except TypeError as exc:  # pragma: no cover - the defect's shape
-        pytest.fail(f"{era}: {type(exc).__name__}: {exc}")
+def test_implementing_a_declared_only_predicate_reaches_the_vocabulary_drop(
+        fixture_modules, era):
+    """Declare-then-import-then-define against a FIELDED declaration: the
+    vocabulary drop's refusal (0c8f5839), in both eras -- not a TypeError
+    from calling a str at the head."""
+    with pytest.raises(SyntaxError) as exc_info:
+        _load_importer(fixture_modules, era, "fnmismatch_schema",
+                       "fnm_verdict", 2, "fnmismatch_use")
+    msg = str(exc_info.value)
+    assert ("tests.fixtures.fnmismatch_use defines clauses for fnm_verdict/2"
+            in msg), msg
+    assert "only declares fnm_verdict/2" in msg
+
+
+@pytest.mark.parametrize("era", ERAS)
+def test_implementing_an_arity_only_export_loads_in_both_eras(
+        fixture_modules, era):
+    """``impclob_verdict/2`` is a bare export entry (the ``gv_free`` idiom
+    the vocabulary drop keeps): the importer's head is BUILT, not called,
+    and the load goes through in both eras."""
+    mod = _load_importer(fixture_modules, era, "impclob_decl_vocab",
+                         "impclob_verdict", 2, "impclob_implements")
+    assert mod is not None
 
 
 # ── head_cell / field names on one owner, both bindings side by side ────────
