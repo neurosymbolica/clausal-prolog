@@ -180,6 +180,7 @@ def compile_module(
     """
     logic_module = LogicModule(module_name, module_dict=module_dict)
     db = logic_module.db
+    _install_real_module(module_dict, logic_module)
 
     # ── Step 0-: Reserved truth-value names ───────────────────────────────
     #    Runs before everything so the diagnostic names the real problem
@@ -541,6 +542,57 @@ def compile_module(
     return logic_module
 
 
+_IMPORT_PLACEHOLDER = "_clausal_import_placeholder"
+
+
+def mark_import_placeholder(module: LogicModule) -> LogicModule:
+    """Mark *module* as the import hook's exec-time PLACEHOLDER ``$module``:
+    the one module ``compile_module`` may replace (``_install_real_module``).
+    Returns *module*."""
+    setattr(module, _IMPORT_PLACEHOLDER, True)
+    return module
+
+
+def _install_real_module(module_dict: dict, logic_module: LogicModule) -> None:
+    """Make *logic_module* the module ``module_dict`` names, for the WHOLE of
+    ``compile_module`` (pre-flip task 4; W4b-2d dry run root cause R1).
+
+    ``import_hook._run_v2_pipeline`` execs the module body with a PLACEHOLDER
+    ``LogicModule`` bound as ``$module`` (the body's ``-constants``
+    directives register onto it).  The placeholder's Database shares the
+    module dict, so it reports the real module's name and claims every
+    local handle -- but its store is EMPTY.  Every name-keyed lookup of the
+    module being compiled goes through that namespace:
+    ``_db_for_module_name`` reads ``sys.modules[name].__dict__["$module"]``
+    and ``resolve_module`` coerces through ``__clausal_module__`` (absent,
+    so it wrapped a fresh, equally empty ``Module``).  So a handle to this
+    module resolved mid-compile -- a ``-specialize`` source program called at
+    step 6b, once the flip binds it to a handle -- answered from nothing.
+
+    Swapping here, before step 0, closes it for every step: the constants the
+    body registered are carried across (the one thing the placeholder holds;
+    it has no clauses), then both names point at the real module.
+
+    Only a module the hook MARKED as its placeholder
+    (``mark_import_placeholder``) is replaced -- never "whatever ``$module``
+    holds".  A second compile into a namespace that already finished loading
+    (the direct API on a loaded module's dict) must not swap the live module,
+    whose db has clauses, for a fresh one; before this function
+    compile_module wrote neither name, so leaving them is today's behaviour.
+    No ``$module`` (the direct API), or an unmarked one: nothing installed.
+    A marker rather than a ``compile_module`` keyword keeps its signature,
+    which tests (and wrappers) monkeypatch positionally.
+    """
+    placeholder = module_dict.get("$module")
+    if not getattr(placeholder, _IMPORT_PLACEHOLDER, False):
+        return
+    logic_module.constants.update(getattr(placeholder, "constants", None) or {})
+    logic_module.constant_units.update(
+        getattr(placeholder, "constant_units", None) or {})
+    module_dict["$module"] = logic_module
+    module_dict["__clausal_module__"] = logic_module
+
+
 _MODULE_ALIASES: dict[str, str] = {
     "csv_mod": "py.csv",
     "date_time": "py.datetime",
@@ -708,11 +760,12 @@ def _plant_imported_rows(db, mod, orig_name: str, local_name: str) -> None:
 def _process_imports(module_items: list, module_dict: dict, db=None) -> None:
     """Execute import directives, populating module_dict.
 
-    *db* is the importing module's Database -- the LOCAL in ``compile_module``,
-    not ``module_dict["$module"].db``: at this point the dict still holds the
-    placeholder module the body exec'd against, which ``compile_module``
-    replaces afterwards.  Reaching for the dict here plants into a database
-    that is then thrown away.
+    *db* is the importing module's Database -- the LOCAL in ``compile_module``.
+    Since ``_install_real_module`` the dict's ``$module`` is that same module
+    for the whole compile (it used to be the import hook's placeholder, and
+    reaching for the dict planted into a database that was thrown away);
+    the explicit parameter stays, because the direct API passes a namespace
+    with no ``$module`` at all.
     """
     for item in module_items:
         if isinstance(item, ImportFromItem):

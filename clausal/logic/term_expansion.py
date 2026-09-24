@@ -63,9 +63,9 @@ def run_term_expansion(
     Separates term_expansion clauses from regular items, compiles the
     expansion rules, then applies them to each regular item.
 
-    Also checks ``module_dict`` for imported modules whose LogicModule
-    carries ``_te_predicate_nodes`` — these are term_expansion clauses
-    from ``-import_from`` directives processed earlier in the pipeline.
+    Also collects the term_expansion clauses of an imported
+    ``term_expansion`` binding (``-import_from(mod, [term_expansion])``),
+    recorded on its owner's Database.
 
     Returns the (possibly rewritten) list of predicate nodes.  If no
     term_expansion clauses exist, returns predicate_nodes unchanged
@@ -108,18 +108,18 @@ def run_term_expansion(
     all_te_clauses = imported_te_clauses + expansion_clauses
     expansion_module = _compile_expansion_rules(all_te_clauses, module_dict)
 
-    # Store local TE predicate nodes for downstream importers.
-    # On the LogicModule (``-import_module``) and on this module's DATABASE,
-    # which is where ``-import_from(mod, [term_expansion])`` finds them
-    # (``_te_nodes_of_binding``).  W4b-2d R6: they used to be stashed on the
-    # term_expansion CLASS -- state stored nowhere else, so once the
+    # Store local TE predicate nodes for downstream importers, on this
+    # module's DATABASE, where ``-import_from(mod, [term_expansion])`` finds
+    # them (``_te_nodes_of_binding``).  W4b-2d R6: they used to be stashed on
+    # the term_expansion CLASS -- state stored nowhere else, so once the
     # importer's binding is a handle the imported rules vanished silently.
-    if expansion_clauses:
-        lm = module_dict.get("$module")
-        if lm is not None:
-            lm._te_predicate_nodes = list(expansion_clauses)
-        if db is not None:
-            db.te_predicate_nodes = list(expansion_clauses)
+    # NOT on ``$module``: that write used to land on the import hook's
+    # PLACEHOLDER module (thrown away after compile), so a bare
+    # ``-import_module(mod)`` never carried TE rules; now that compile_module
+    # installs the real module first (``_install_real_module``) writing there
+    # would silently start carrying them.  Only a by-name import does.
+    if expansion_clauses and db is not None:
+        db.te_predicate_nodes = list(expansion_clauses)
 
     # Step 4: Initialize module state: module_expansion_state([], [], "nil")
     # Use the same class from the expansion module so unification works.
@@ -147,36 +147,23 @@ def run_term_expansion(
 def _collect_imported_te_clauses(module_dict: dict) -> list:
     """Collect term_expansion predicate nodes from imported modules.
 
-    Checks two sources:
-    1. Python modules in ``module_dict`` whose ``$module`` LogicModule
-       carries ``_te_predicate_nodes``.
-    2. A binding of the predicate ``term_expansion`` -- a class or a
-       mangled handle -- whose OWNER module's Database recorded its local
-       term_expansion clauses (``Database.te_predicate_nodes``, set when a
-       module with TE rules is compiled).
-
-    This allows both ``-import_module(mod)`` and
-    ``-import_from(mod, [term_expansion])`` to provide expansion rules.
+    The source is a binding of the predicate ``term_expansion`` -- a class
+    or a mangled handle -- whose OWNER module's Database recorded its local
+    term_expansion clauses (``Database.te_predicate_nodes``, set when a
+    module with TE rules is compiled), i.e.
+    ``-import_from(mod, [term_expansion])``.  A bare ``-import_module(mod)``
+    does not provide expansion rules: the ``$module``-borne route this
+    function used to check was only ever written onto the import hook's
+    placeholder module, so it never fired.
     """
-    import types
     seen = set()  # avoid duplicates
     result = []
 
     for value in module_dict.values():
-        # Case 1: imported Python module with $module
-        if isinstance(value, types.ModuleType):
-            lm = value.__dict__.get("$module")
-            if lm is not None:
-                te_nodes = getattr(lm, "_te_predicate_nodes", None)
-                if te_nodes and id(te_nodes) not in seen:
-                    seen.add(id(te_nodes))
-                    result.extend(te_nodes)
-        # Case 2: an imported term_expansion predicate (class or handle)
-        else:
-            te_nodes = _te_nodes_of_binding(value)
-            if te_nodes and id(te_nodes) not in seen:
-                seen.add(id(te_nodes))
-                result.extend(te_nodes)
+        te_nodes = _te_nodes_of_binding(value)
+        if te_nodes and id(te_nodes) not in seen:
+            seen.add(id(te_nodes))
+            result.extend(te_nodes)
 
     return result
 
