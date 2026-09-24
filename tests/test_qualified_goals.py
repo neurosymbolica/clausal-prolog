@@ -453,14 +453,20 @@ class TestQualifiedCallN:
         assert inner == Compound("existence_error", (mint("module"), "'t6_nope'"))
         assert "call/1" in context
 
-    def test_a_control_construct_under_a_qualification_is_refused_by_call(
+    def test_a_control_construct_under_a_qualification_runs_in_the_module(
             self, mods):
-        with pytest.raises(LogicException) as exc_info:
-            list(pcall("call_host1",
-                       (":", EXPORTER, (",", ("p", 11), ("p", 12))),
+        """FLIPPED, operator ruling 2026-09-25 (call-runs-body-terms round 2: follow Scryer): ``M:(A, B)`` runs the conjunction with
+        M as the context of the whole body -- it answers exactly as the two
+        qualified conjuncts do one after the other."""
+        whole = list(pcall("call_host1",
+                           (":", EXPORTER, (",", ("p", 11), ("p", 12))),
+                           module=mods.importer))
+        a = list(pcall("call_host1", (":", EXPORTER, ("p", 11)),
                        module=mods.importer))
-        inner, _context = _error_term(exc_info.value)
-        assert inner.args[0] == mint("callable_control_construct_unsupported")
+        b = list(pcall("call_host1", (":", EXPORTER, ("p", 12)),
+                       module=mods.importer))
+        assert len(a) == len(b) == 1      # the exporter's p(11), p(12)
+        assert len(whole) == 1
 
     def test_a_qualified_goal_naming_nothing_fails_silently(self, mods):
         """The §4.2 contract: a name that resolves to nothing FAILS, and a

@@ -233,9 +233,13 @@ class TestCallN:
         # nv
         mod = fresh_module()
         x = Var()
-        results = [deref(x) for _ in call("call", x, module=mod)]
-        # call/1 with unbound goal — not callable, should produce no solutions
-        assert results == []
+        # call/1 with an unbound goal is ISO's instantiation_error (Scryer:
+        # ``call(_)``), not a silent failure -- 2026-09-25, call-runs-body-terms.
+        import pytest
+        from clausal.logic.exceptions import LogicException
+        with pytest.raises(LogicException) as info:
+            list(call("call", x, module=mod))
+        assert info.value.term.args[0] == "instantiation_error"
 
     def test_call_goal_4(self):
         """call_goal with 3 extra args."""
