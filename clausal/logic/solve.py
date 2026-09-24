@@ -847,7 +847,7 @@ def _module_for_moduleless_solve(goal) -> tuple[Any, Module]:
                 _pre_is_cell, _pre_functor, goal, "solve/1")
             return _strip_module_qualification(goal, None)
         from clausal.logic.exceptions import (  # noqa: PLC0415
-            LogicException, existence_error, dangling_handle_indicator_and_why,
+            LogicException, existence_error,
         )
         if type(functor) is str and is_mangled(functor):
             # A MANGLED functor that ``qualify_mangled_goal`` above did NOT
@@ -859,11 +859,8 @@ def _module_for_moduleless_solve(goal) -> tuple[Any, Module]:
             # ``existence_error(procedure, Name/Arity)`` shape -- never the
             # raw ``\x1f`` spelling, never a Python repr.
             module_name, name = demangle(functor)
-            indicator, why = dangling_handle_indicator_and_why(
-                module_name, name, len(goal) - 1, loaded=False,
-            )
-            raise LogicException(existence_error(
-                "procedure", indicator, f"solve/1: {why}"))
+            raise dangling_handle_exception(
+                module_name, name, len(goal) - 1, False, "solve/1")
         raise LogicException(existence_error(
             # The REPR, not the goal (P3-3 Task 6 fix round 1, F4): the live
             # cell holds the caller's Vars, so a ``catch/3`` pattern unifying
@@ -967,15 +964,32 @@ def _raise_if_dangling_handle_target_missing(
         return
     if (module.module_dict or {}).get(name) is not None:
         return
+    raise dangling_handle_exception(mod_name, name, arity, True, context)
+
+
+def dangling_handle_exception(
+    module_name: str, name: str, arity: int, loaded: bool, context: str,
+):
+    """The ``LogicException`` a dangling predicate HANDLE raises at a goal
+    ENTRY point -- ``solve``'s normalisation and the ``call/N`` builtin
+    (ruling 2, 2026-09-24: ``call/N`` raises exactly what ``solve`` raises,
+    so both build it here and nowhere else).
+
+    ``error(existence_error(procedure, Name/Arity), Context)`` with the
+    halves already DEMANGLED; *loaded* is whether the handle's module half is
+    a loaded Clausal module (predicate absent) or not (module never loaded),
+    and it changes only the context text.  *context* is the entry point
+    (``"solve/1"``, ``"call/2"``, ...) that opens the context string.
+    """
     from clausal.logic.exceptions import (  # noqa: PLC0415
         LogicException, existence_error, dangling_handle_indicator_and_why,
     )
     indicator, why = dangling_handle_indicator_and_why(
-        mod_name, name, arity, loaded=True)
-    raise LogicException(existence_error(
-        "procedure", indicator,
-        f"{context}: {why} (reached through a module-qualified predicate "
-        f"handle)"))
+        module_name, name, arity, loaded=loaded)
+    if loaded:
+        why += " (reached through a module-qualified predicate handle)"
+    return LogicException(existence_error(
+        "procedure", indicator, f"{context}: {why}"))
 
 
 def _infer_module(goal) -> Module | None:

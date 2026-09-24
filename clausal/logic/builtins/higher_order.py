@@ -6,6 +6,7 @@ max_by/3, min_by/3, filter_map/3."""
 from __future__ import annotations
 
 from clausal.logic.variables import Var, deref, is_var, unify
+from clausal.logic.atoms import demangle, is_mangled
 from clausal.logic.exceptions import LogicException, string_goal_error
 from clausal.logic.trampoline import DONE, StepGenerator
 from clausal.logic.builtins.lists import _as_items, _seq_result, _was_string
@@ -113,6 +114,13 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
     resolves to nothing is exactly the same non-goal it was before this task.
     A resolvable module does not change it: ``call(M:nosuch(X))`` fails.
 
+    The one exception is a MANGLED predicate handle (ruling 2, 2026-09-24):
+    it is not a name the caller wrote but a reference that was supposed to
+    resolve, so a dangling one -- module never loaded, or loaded without the
+    predicate -- RAISES ``existence_error(procedure, Name/Arity)``, the very
+    term ``solve`` raises for it (``solve.dangling_handle_exception``).  A
+    handle that resolves and has no solutions still just fails.
+
     Raises for an unresolvable module designator (P3-3 Task 6) and for the
     n-ary control constructs (deferred to the ISO-surface phase).  Both raise
     even when *db* is None, so the diagnostic never depends on how the builtin
@@ -155,6 +163,15 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
     # ``:``/2 arm below resolves it exactly as it resolves an explicit one.
     _q = qualify_mangled_goal(folded)
     if _q is not folded:
+        # Ruling 2 (2026-09-24): a handle whose module LOADED but which names
+        # no predicate there RAISES, with the term ``solve`` raises -- the
+        # same check ``solve``'s normalisation makes, called the same way,
+        # so the two entry points cannot disagree on when or what.  A handle
+        # that resolves falls through and, like any goal, may simply fail.
+        from clausal.logic.solve import (  # noqa: PLC0415
+            _raise_if_dangling_handle_target_missing,
+        )
+        _raise_if_dangling_handle_target_missing(True, functor, _q, context)
         return _resolve_named_goal(db, _q, (), context)
     if functor == QUALIFIED_GOAL_FUNCTOR and len(call_args) >= 2:
         # Slots 1 and 2 are the qualification; everything past them is an
@@ -193,6 +210,20 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
     if dispatch is None:
         dispatch = _namespace_dispatch(db, functor, arity)
     if dispatch is None:
+        if is_mangled(functor):
+            # Ruling 2 (2026-09-24): a MANGLED functor that
+            # ``qualify_mangled_goal`` left unconverted is a handle whose
+            # module half is not a loaded Clausal module, and nothing in the
+            # calling db answers to it either -- ``solve`` raises for it, so
+            # ``call/N`` does too, with the same term.  Only AFTER the
+            # lookups: a ``-hide`` atom carries its bare declared module
+            # name, and the calling db may define it under that spelling.
+            from clausal.logic.solve import (  # noqa: PLC0415
+                dangling_handle_exception,
+            )
+            _mod_name, _name = demangle(functor)
+            raise dangling_handle_exception(
+                _mod_name, _name, arity, False, context)
         return None
     return dispatch, call_args
 
