@@ -127,3 +127,36 @@ of these three sites (a query argument for `_ground_value`, a
 `term_to_ast_expr`), and diff the resulting atom's spelling against the
 same predicate's plain declared name. That answers the policy question by
 observation instead of by design debate.
+
+## Resolved (2026-09-24, branch fix/w4b-self-atom-plain-2026-09-24)
+
+Operator ruling: the self-denoting atom in data position stays PLAIN
+("the default in Prolog is global, but be cognizant of directive hide/1").
+Discriminator is `is_declared_predicate_name`, never `is_mangled`: a
+`-hide` DATA atom is mangled too, and its mangled spelling is its identity.
+
+- `term_to_ast_expr`: CHANGED. New arm ahead of the generic `str` arm --
+  a `str` binding that `is_declared_predicate_name` accepts bakes
+  `mint(predicate_binding_name(term))`; a `-hide` atom falls through and is
+  baked verbatim.
+- `_templatize_query_goal` / `_ground_value`: CHANGED. Evidence: its scalar
+  arm intercepts every `str` BEFORE `term_to_ast_expr` is reached, so a
+  top-level mangled predicate argument would bind the mangled spelling on
+  the parameterized path while the unparameterized path bakes the plain one
+  (the fix above would be bypassed). It now parameterizes the plain name.
+  The zero-field CLASS arm (today's era) is untouched.
+- `_is_ground_py`: NO CHANGE. Answers a bool, never a spelling; `True` for
+  both eras and for a `-hide` atom -- the ruling has nothing to act on.
+- `head_key` (database.py): not reopened, per the note above.
+
+Tests: `tests/test_self_denoting_predicate_atom_plain.py` (fixture
+`hide_owner.clausal` loaded as `hide_owner`). Mutations: reverting either
+site fails its tests; swapping the gate to `is_mangled` fails the three
+`-hide` tests.
+
+Not in scope, observed while probing: a bare predicate name written in a
+`.clausal` CLAUSE (e.g. the fact `p(bar)` where `bar/1` is a predicate)
+evaluates at runtime to the BINDING (the class today, the mangled handle
+post-flip), not the plain atom -- so `p(bar)` queried from Python with
+either `"bar"` or the class answers 0 today. That is the source-compile
+path, not these sites.

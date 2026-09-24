@@ -43,7 +43,7 @@ from typing import Any, Iterator
 
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
 from clausal.logic.atoms import (
-    is_atom as _term_is_atom, spelling as _spelling, is_mangled, demangle,
+    is_atom as _term_is_atom, mint as _mint_atom, spelling as _spelling, is_mangled, demangle,
 )
 from clausal.logic.database import Clause, Database, Module
 from clausal.logic.predicate import (
@@ -455,7 +455,10 @@ def _templatize_query_goal(goal: Any):
     Composite/control/arithmetic goals are returned unchanged (``params`` empty);
     they keep the value-keyed cache as a correct fallback.
     """
-    from clausal.logic.predicate import PredicateMeta, is_zero_field_class
+    from clausal.logic.predicate import (
+        PredicateMeta, is_declared_predicate_name, is_zero_field_class,
+        predicate_binding_name,
+    )
 
     def _ground_value(val):
         """Return the scalar ground value to parameterize, or None to leave it.
@@ -476,6 +479,17 @@ def _templatize_query_goal(goal: Any):
         dv = deref(val)
         if is_var(dv):
             return None
+        # A predicate's self-denoting atom stays PLAIN (operator ruling
+        # 2026-09-24).  Post-flip the binding is a mangled ``str``, which the
+        # scalar arm below would pass through VERBATIM -- bypassing
+        # ``term_to_ast_expr``'s matching arm, so the same top-level query
+        # argument would bind the mangled spelling here but bake the plain one
+        # on the unparameterized path.  Parameterize the PLAIN name instead:
+        # both paths then agree.  ``is_declared_predicate_name``, not
+        # ``is_mangled``: a ``-hide`` DATA atom is mangled too and keeps its
+        # spelling (it falls through to the scalar arm).
+        if type(dv) is str and is_declared_predicate_name(dv):
+            return _mint_atom(predicate_binding_name(dv))
         if type(dv) in (int, float, complex, bool, str, bytes) or dv is None:
             return dv
         # A Python datetime is NOT parameterized. It was (ab0dabcd, 2026-09-02,

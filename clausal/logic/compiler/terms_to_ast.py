@@ -44,7 +44,7 @@ from clausal.pythonic_ast.nodes import (
 )
 from clausal.logic.predicate import (
     PredicateMeta, is_declared_predicate_name, is_zero_field_class,
-    is_term_instance, term_field_names, term_field_names_of_class,
+    is_term_instance, predicate_binding_name, term_field_names, term_field_names_of_class,
 )
 from clausal.logic.atoms import (
     is_atom as _term_is_atom,
@@ -732,6 +732,21 @@ def term_to_ast_expr(
     if term is Undefined:
         return _name("Undefined")
 
+    # A predicate's SELF-DENOTING atom stays PLAIN in both eras (operator
+    # ruling 2026-09-24: "the default in Prolog is global, but be cognizant
+    # of directive hide/1").  Post-flip a predicate's module binding is its
+    # mangled handle (``module\x1fname``), a ``str`` -- so without this arm
+    # the generic ``str`` arm below bakes the MANGLED spelling, where today's
+    # class arms (``is_zero_field_class`` / ``is_declared_predicate_name``
+    # further down) bake ``term.__name__``.  Gated on
+    # ``is_declared_predicate_name``, NOT ``is_mangled``: a ``-hide`` DATA
+    # atom is mangled too, and its mangled spelling IS its identity (every
+    # reference in the owning module compiles to that same spelling), so it
+    # must fall through and be baked verbatim.  See
+    # todo/done/self-denoting-predicate-atom-spelling-post-flip-mangled-or-plain-2026-09-24.md.
+    if type(term) is str and is_declared_predicate_name(term):
+        return ast.Constant(value=_mint_atom(predicate_binding_name(term)))
+
     if isinstance(term, (int, float, str, bytes, complex)):
         return ast.Constant(value=term)
 
@@ -1232,14 +1247,12 @@ def term_to_ast_expr(
     # in term position.  Almost always the atom/predicate name clash.
     #
     # F2b: is_declared_predicate_name, not a bare isinstance -- but `term`
-    # can never be a mangled atom here regardless, since the generic
-    # ``isinstance(term, (int, float, str, bytes, complex))`` arm far above
-    # already returns for ANY str (mangled atom included) before this line
-    # is ever reached; that arm's ``ast.Constant(value=term)`` is exactly
-    # what a mangled predicate atom needs (it already denotes itself -- W4
-    # ruling, seam.py). This line's own class arm stays reachable only for
-    # today's-era PredicateMeta class object, so `term.__name__` below is
-    # always safe.
+    # can never be a mangled atom here regardless: a mangled PREDICATE
+    # binding returns its plain name from the self-denoting-atom arm above
+    # the generic ``str`` arm (operator ruling 2026-09-24), and any other
+    # str returns from the ``str`` arm itself.  This line's own class arm
+    # stays reachable only for today's-era PredicateMeta class object, so
+    # `term.__name__` below is always safe.
     if is_declared_predicate_name(term):
         # STAGE 2 (spec 2026-09-18 §4): a predicate referenced BY NAME in
         # argument position is the ATOM of that name -- the str.  The
