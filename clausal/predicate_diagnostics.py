@@ -49,6 +49,7 @@ import textwrap
 import types
 
 from clausal._suffixes import SOURCE_SUFFIXES
+from clausal.logic.exceptions import LogicException, existence_error
 from clausal.import_diagnostics import (
     _INDENT,
     _WIDTH,
@@ -103,20 +104,63 @@ def predicate_not_found(functor, arity, db=None, module_globals=None):
     )
 
 
-class PredicateArityMismatchError(TypeError):
+class PredicateArityMismatchError(LogicException, TypeError):
     """The call named a predicate that exists, at an arity it does not have.
 
     A ``TypeError`` because that is what the raw failure already was — the
     generated dispatch function ran out of positional arguments — so any
     ``except TypeError`` around a goal keeps catching it.  What changes is the
     message: see :func:`describe_arity_mismatch`.
+
+    Also a ``LogicException`` (operator ruling 2026-09-25, "do what Scryer
+    does"): ISO has no arity-mismatch error -- a predicate is name + arity, so
+    ``pk/2`` simply does not exist when only ``pk/1`` does, and Scryer answers
+    ``catch(call(pk(3), _), E, true)`` with
+    ``E = error(existence_error(procedure, pk/2), pk/2)``, the indicator at
+    the CALLED arity.  ``.term`` is that ISO term, with this message (the
+    "takes 1 argument" diagnostic) as its context, the way an unknown
+    procedure's ``existence_error`` carries its "why" text
+    (``predicate._dispatch_at``).  ``catch/3`` reads ``.term`` of any
+    ``LogicException``, so a source catcher
+    ``error(existence_error(procedure, PI), _)`` catches it; ``except
+    TypeError`` / ``except PredicateArityMismatchError`` in Python keep
+    working, and ``str()`` is the message alone, as before.
+
+    *functor* / *called_arity* build the indicator.  Built without them (an
+    out-of-tree caller with only a message) the term is the
+    ``PredicateArityMismatchError(Message)`` compound ``catch/3`` bound
+    before 2026-09-25.
     """
+
+    def __init__(self, message, functor=None, called_arity=None):
+        if isinstance(functor, str) and isinstance(called_arity, int):
+            from clausal.logic.atoms import demangle, is_mangled, mint  # noqa: PLC0415
+            from clausal.terms import Compound  # noqa: PLC0415
+            name = demangle(functor)[1] if is_mangled(functor) else functor
+            term = existence_error(
+                "procedure", Compound("/", (mint(name), called_arity)),
+                message)
+        else:
+            term = None
+        # Exception.__init__, not LogicException's: ``args`` stays the
+        # message itself, so ``str()`` and ``repr()`` read as they always did.
+        Exception.__init__(self, message)
+        if term is None:
+            from clausal.logic.exceptions import python_error_term  # noqa: PLC0415
+            term = python_error_term(self)
+        self.term = term
+        self.functor = functor
+        self.called_arity = called_arity
+
+    def __str__(self) -> str:  # noqa: D105
+        return Exception.__str__(self)
 
 
 def predicate_arity_mismatch(functor, called_arity, defined_arity, site=None):
     """Build the exception for a call to *functor* at the wrong arity."""
     return PredicateArityMismatchError(
-        describe_arity_mismatch(functor, called_arity, defined_arity, site)
+        describe_arity_mismatch(functor, called_arity, defined_arity, site),
+        functor, called_arity,
     )
 
 

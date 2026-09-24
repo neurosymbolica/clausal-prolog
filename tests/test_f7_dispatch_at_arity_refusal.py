@@ -40,8 +40,14 @@ def _load(tmp_path, monkeypatch, name, body):
 
 
 def test_wrong_arity_call_on_a_user_predicate_is_the_arity_refusal(tmp_path, monkeypatch):
-    """Not an existence error, and not a raw AttributeError/TypeError: the
-    same ``PredicateArityMismatchError`` the class-object arm always gave."""
+    """Not a raw AttributeError/TypeError: the same
+    ``PredicateArityMismatchError`` the class-object arm always gave.
+
+    FLIPPED IN PART 2026-09-25 (operator ruling, "do what Scryer does"): the
+    refusal IS an ISO existence error now -- ``PredicateArityMismatchError``
+    is a ``LogicException`` whose term is ``error(existence_error(procedure,
+    Name/CalledArity), Message)`` as well as a ``TypeError``
+    (tests/test_arity_mismatch_is_iso_existence_error_both_eras.py).  It used to say "not an existence error" here."""
     mod = _load(tmp_path, monkeypatch, "f7_wrongarity", """
         -module(f7_wrongarity, [pred(A)])
         pred(1),
@@ -51,6 +57,11 @@ def test_wrong_arity_call_on_a_user_predicate_is_the_arity_refusal(tmp_path, mon
         _dispatch_at(mangle("f7_wrongarity", "pred"), 2)
     assert "pred" in str(info.value)
     assert "1 argument" in str(info.value) or "takes 1" in str(info.value)
+    # 2026-09-25: and it is the ISO existence error at the CALLED arity.
+    assert isinstance(info.value, LogicException)
+    formal = info.value.term.args[0]
+    assert formal.functor == "existence_error"
+    assert tuple(formal.args[1].args) == ("pred", 2)
 
 
 def test_correct_arity_call_is_unchanged(tmp_path, monkeypatch):
@@ -114,7 +125,13 @@ def test_wrong_arity_with_nothing_else_answering_still_refuses(
         tmp_path, monkeypatch, era):
     """The half of F7 the ruling keeps: ``pred/1`` called at 2, with no
     ``pred/2`` row and no ``pred/2`` builtin, is the arity refusal in both
-    eras -- not an existence error and not a raw TypeError."""
+    eras -- not a raw TypeError.
+
+    FLIPPED IN PART 2026-09-25 (operator ruling, "do what Scryer does"): the
+    refusal IS an ISO existence error now -- ``PredicateArityMismatchError``
+    is a ``LogicException`` whose term is ``error(existence_error(procedure,
+    Name/CalledArity), Message)`` as well as a ``TypeError``
+    (tests/test_arity_mismatch_is_iso_existence_error_both_eras.py).  It used to say "not an existence error" here."""
     from clausal.logic.builtins._registry import _BUILTINS, _DB_BUILTINS
     from clausal.logic.predicate import PredicateMeta
     mod = _load(tmp_path, monkeypatch, f"f7_nothing_{era}", """
@@ -125,8 +142,11 @@ def test_wrong_arity_with_nothing_else_answering_still_refuses(
     cls = mod.__dict__["$module"].module_dict["pred"]
     assert isinstance(cls, PredicateMeta)
     target = cls if era == "class" else mangle(f"f7_nothing_{era}", "pred")
-    with pytest.raises(PredicateArityMismatchError, match="takes 1 argument"):
+    with pytest.raises(PredicateArityMismatchError, match="takes 1 argument") as info:
         _dispatch_at(target, 2)
+    formal = info.value.term.args[0]
+    assert formal.functor == "existence_error"
+    assert tuple(formal.args[1].args) == ("pred", 2)
 
 
 @pytest.mark.parametrize("era", ["class", "handle"])

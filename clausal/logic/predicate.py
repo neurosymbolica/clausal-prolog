@@ -1372,7 +1372,8 @@ class PredicateMeta(type):
         except Exception:  # noqa: BLE001 - the fault is still real; state it
             err = PredicateArityMismatchError(
                 f"{cls.__name__} takes {defined} arguments, "
-                f"but this call passes {arity}"
+                f"but this call passes {arity}",
+                cls.__name__, arity,
             )
         raise err
 
@@ -1562,7 +1563,7 @@ def _refuse_unqualified_other_arity(binding: Any, name: str, arity: int,
         except Exception:  # noqa: BLE001 - the fault is still real; state it
             err = PredicateArityMismatchError(
                 f"{name} takes {defined} arguments, "
-                f"but this call passes {arity}")
+                f"but this call passes {arity}", name, arity)
         raise err
     defined = None
     from clausal.logic.cells import qualify_mangled_goal  # noqa: PLC0415

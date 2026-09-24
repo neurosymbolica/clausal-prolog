@@ -173,6 +173,14 @@ def python_error_term(exc: Exception) -> Compound:
     return Compound(type(exc).__name__, (str(exc),))
 
 
+def _dual_typed_match(exc: BaseException, cls: type) -> bool:
+    """True when the logic ball *exc* is ALSO an instance of the non-logic
+    exception class *cls* by a base of its own -- never for a class that is
+    merely a base of ``LogicException`` itself (``Exception``,
+    ``BaseException``), which every logic ball is an instance of."""
+    return isinstance(exc, cls) and not issubclass(LogicException, cls)
+
+
 def catch_match(catcher: Any, term: Any, exc: BaseException, trail: Any) -> bool:
     """Match a ``catch/3`` catcher against a raised exception.
 
@@ -228,14 +236,20 @@ def catch_match(catcher: Any, term: Any, exc: BaseException, trail: Any) -> bool
         # Exception, so a bare isinstance would let ``++Exception`` swallow
         # logic balls (roborev job 18). Those keep their own catch-all
         # spelling, ``catch(G, _, R)`` — a ++ class matches a logic ball
-        # only when it names LogicException (or a subclass) explicitly.
+        # only when it names LogicException (or a subclass) explicitly --
+        # or when the ball is ALSO an instance of that Python class, which a
+        # DUAL-typed engine error is (``PredicateArityMismatchError`` is a
+        # LogicException and a TypeError since 2026-09-25, so ``++TypeError``
+        # keeps catching it).  A mere BASE of LogicException (``++Exception``,
+        # ``++BaseException``) still never matches a logic ball.
         if isinstance(exc, LogicException) and not issubclass(
                 catcher, LogicException):
-            return False
+            return _dual_typed_match(exc, catcher)
         return isinstance(exc, catcher)
     if isinstance(catcher, BaseException):
-        if isinstance(exc, LogicException) and not isinstance(
-                catcher, LogicException):
+        if (isinstance(exc, LogicException)
+                and not isinstance(catcher, LogicException)
+                and not _dual_typed_match(exc, type(catcher))):
             return False
         if not isinstance(exc, type(catcher)):
             return False
