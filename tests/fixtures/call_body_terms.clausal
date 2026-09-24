@@ -1,0 +1,93 @@
+# call/1 of a BODY term (ISO 7.6.2) -- tests/test_call_runs_body_terms.py.
+# For every row N: b(N, X, Y) is the goal written as a clause BODY, and
+# g(N, X, Y, G) builds the SAME text in TERM position; run(N, X, Y) calls
+# that term.  The test asserts both answer alike, row by row.
+-module(call_body_terms, [])
+-private([fail, a1, b1, foo(A)])
+-allow_singletons
+-table(reach/1)
+
+p(1),
+p(2),
+s(2),
+s(3),
+r(9),
+edge(1, 2),
+edge(2, 3),
+reach(1),
+reach(Y) <- (reach(X), edge(X, Y))
+
+b(1, X, Y) <- (X > 0)
+g(1, X, Y, G) <- (G is (X > 0))
+b(2, X, Y) <- (X > 0, Y is X)
+g(2, X, Y, G) <- (G is (X > 0, Y is X))
+b(3, X, Y) <- (p(X), s(X))
+g(3, X, Y, G) <- (G is (p(X), s(X)))
+b(4, X, Y) <- (not p(X))
+g(4, X, Y, G) <- (G is (not p(X)))
+b(5, X, Y) <- (p(X) or s(X))
+g(5, X, Y, G) <- (G is (p(X) or s(X)))
+b(6, X, Y) <- if_(X == 1, True, False)
+g(6, X, Y, G) <- (G is if_(X == 1, True, fail))
+b(7, X, Y) <- if_(p(X), s(X), r(X))
+g(7, X, Y, G) <- (G is if_(p(X), s(X), r(X)))
+b(8, X, Y) <- (X is not 1)
+g(8, X, Y, G) <- (G is (X is not 1))
+b(9, X, Y) <- (X in [1, 2])
+g(9, X, Y, G) <- (G is (X in [1, 2]))
+b(10, X, Y) <- (X not in [1, 2])
+g(10, X, Y, G) <- (G is (X not in [1, 2]))
+b(11, X, Y) <- (0 < X < 3)
+g(11, X, Y, G) <- (G is (0 < X < 3))
+b(12, X, Y) <- True
+g(12, X, Y, G) <- (G is True)
+b(13, X, Y) <- False
+g(13, X, Y, G) <- (G is False)
+b(14, X, Y) <- (p(X) and s(X))
+g(14, X, Y, G) <- (G is (p(X) and s(X)))
+b(15, X, Y) <- (not (X > 1, Y is X))
+g(15, X, Y, G) <- (G is (not (X > 1, Y is X)))
+b(16, X, Y) <- (X != 1)
+g(16, X, Y, G) <- (G is (X != 1))
+b(17, X, Y) <- (X == 1)
+g(17, X, Y, G) <- (G is (X == 1))
+b(18, X, Y) <- (X <= 1)
+g(18, X, Y, G) <- (G is (X <= 1))
+b(19, X, Y) <- (X >= 2)
+g(19, X, Y, G) <- (G is (X >= 2))
+b(20, X, Y) <- (X < 2)
+g(20, X, Y, G) <- (G is (X < 2))
+b(21, X, Y) <- (p(X), s(X))
+g(21, X, Y, G) <- (G1 is p(X), G is (G1, s(X)))
+b(22, X, Y) <- (X is Y)
+g(22, X, Y, G) <- (G is (X is Y))
+b(23, X, Y) <- (p(X), not s(X))
+g(23, X, Y, G) <- (G is (p(X), not s(X)))
+b(24, X, Y) <- (call(p, X), s(X))
+g(24, X, Y, G) <- (G is (call(p, X), s(X)))
+b(25, X, Y) <- (Y is X, Y == X + 0)
+g(25, X, Y, G) <- (G is (Y is X, Y == X + 0))
+b(26, X, Y) <- (not reach(X))
+g(26, X, Y, G) <- (G is (not reach(X)))
+b(27, X, Y) <- ((p(X), Y is 1) or (s(X), Y is 2))
+g(27, X, Y, G) <- (G is ((p(X), Y is 1) or (s(X), Y is 2)))
+b(28, X, Y) <- if_(X is 1, Y is a1, Y is b1)
+g(28, X, Y, G) <- (G is if_(X is 1, Y is a1, Y is b1))
+b(29, X, Y) <- (X > 0, X is 3)
+g(29, X, Y, G) <- (G is (X > 0, X is 3))
+b(30, X, Y) <- (X is foo(Y), Y is 7)
+g(30, X, Y, G) <- (G is (X is foo(Y), Y is 7))
+
+run(N, X, Y) <- (g(N, X, Y, G), call(G))
+call_it(G) <- call(G)
+call_it2(G, A) <- call(G, A)
+
+# The five defects the 2026-09-25 plan verified on main, verbatim.
+t1(X) <- (G is (X > 0), call(G))
+t2(X, Y) <- (G is (X > 0, Y is X), call(G))
+t3(X) <- call((X > 0))
+t4(X) <- (G is not (X == 1), call(G))
+t5(X) <- (G is if_(X==1, true, fail), call(G))
+# t4 as intended: `G is not (...)` parses as `G is not ...` (dif), so the
+# negation needs its own parentheses.
+t4b(X) <- (G is (not (X == 1)), call(G))

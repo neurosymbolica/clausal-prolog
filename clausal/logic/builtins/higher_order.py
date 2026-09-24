@@ -29,6 +29,7 @@ from clausal.logic.builtins._registry import (
     _trampoline_builtin, _ensure_trampoline_dispatch,
     _DB_BUILTINS, _BUILTIN_FIELDS,
 )
+from clausal.logic.builtins.call_body import is_body_term, body_goal_dispatch
 
 
 # ── call_goal/1,2,3 — invoke a goal closure (V2-9 lambdas) ──────────────────
@@ -143,6 +144,11 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
     are answered instead of refused, also independently of *db* — see
     ``_ZERO_ARITY_CONTROL_GOALS``.
     """
+    if not extra_args and is_body_term(goal_val):
+        # A BODY term -- also reached as the inner goal of ``M:Body``, whose
+        # arm below restarts here against M's db (ISO: M is the context
+        # module of the whole body).
+        return body_goal_dispatch(db, goal_val, context)
     is_cell, functor = compound_cell_shape(goal_val)
     if is_cell:
         goal_args = list(goal_val[1:])
@@ -319,14 +325,29 @@ def _make_call_goal_factory(extra_n: int):
             goal_val = deref(args[0])
             trail = args[extra_n + 1]
             dispatch = None
+            if is_var(goal_val):
+                # ISO 7.8.3.3: an unbound goal is an instantiation error
+                # (Scryer: ``call(_)`` and ``call(_, x)``), never a silent
+                # failure.
+                from clausal.logic.exceptions import instantiation_error  # noqa: PLC0415
+                raise LogicException(instantiation_error(
+                    f"call/{extra_n + 1}: the goal is unbound"))
+            # A BODY term (conjunction, or, not, if_, a comparison ...) is
+            # interpreted by ``_resolve_named_goal`` -- see ``call_body``.
+            # Checked first: its nodes are Python-``callable`` and would
+            # otherwise take the goal-OBJECT route below and be refused.
+            body = extra_n == 0 and is_body_term(goal_val)
             # Operator ruling 2026-09-24: an imported predicate reached
             # through an unqualified name -- its class, or (after the flip)
             # the owner HANDLE an import binds -- resolves under that name
             # in the calling module, not in the owner.  A handle the calling
             # module does not bind by a plain name keeps the qualified route
             # through ``_resolve_named_goal`` below.
-            localized = localize_goal(db, goal_val)
-            if localized is not goal_val:
+            localized = goal_val if body else localize_goal(db, goal_val)
+            if body:
+                dispatch, call_args = _resolve_named_goal(
+                    db, goal_val, (), "call/1")
+            elif localized is not goal_val:
                 dispatch = _ensure_trampoline_dispatch(localized, extra_n)
                 call_args = [deref(a) for a in args[1:extra_n + 1]]
             elif callable(goal_val) or hasattr(goal_val, '_get_dispatch'):
