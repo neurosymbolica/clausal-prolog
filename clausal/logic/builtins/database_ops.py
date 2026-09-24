@@ -319,7 +319,6 @@ def _find_pred_cls(functor: str, arity: int,
     name from ``predicate_binding_name`` and the write target from
     ``_home_db`` -- neither reads the class.
     """
-    from clausal.logic.atoms import is_mangled  # noqa: PLC0415
     from clausal.logic.predicate import is_declared_predicate  # noqa: PLC0415
     if module_dict is None:
         return None
@@ -332,10 +331,27 @@ def _find_pred_cls(functor: str, arity: int,
     # adopted a row for it -- see ``_home_db``.  Not for any other mangled
     # atom: a ``-hide`` data atom can have an unresolvable owner too, and it
     # is no predicate.
-    if (is_mangled(candidate) and db is not None
-            and db.adopted_row(functor, arity) is not None):
+    if _adopted_row_named_by(db, candidate, functor, arity) is not None:
         return candidate
     return None
+
+
+def _adopted_row_named_by(db, handle, functor: str, arity: int):
+    """The row this database adopted for ``functor/arity`` -- but only when
+    *handle* is that row's handle: its atom half is the row's own functor and
+    its module half the module owning the row's database.  A ``-hide`` data
+    atom or an unrelated handle rebound under an imported name is not the
+    import, and must not route a write to the owner's row."""
+    from clausal.logic.atoms import demangle, is_mangled  # noqa: PLC0415
+    if db is None or not is_mangled(handle):
+        return None
+    row = db.adopted_row(functor, arity)
+    if row is None:
+        return None
+    module_name, name = demangle(handle)
+    if name != row.key[0] or module_name != row.db.module_name():
+        return None
+    return row
 
 
 def _canonical_functor(db, binding, functor: str) -> str:
@@ -372,14 +388,13 @@ def _home_db(db, binding, functor: str, arity: int) -> "Any":
     on ``gate_dyn_user`` by the F1 review).  Falls back to *db* when there is
     no binding, or when the class is still on its private detached row.
     """
-    from clausal.logic.atoms import is_mangled  # noqa: PLC0415
     from clausal.logic.predicate import resolve_predicate_row  # noqa: PLC0415
     if binding is None:
         return db
     row = resolve_predicate_row(binding, arity=arity, db=db)
-    if row is None and is_mangled(binding) and db is not None:
+    if row is None:
         # Adopted rows are keyed by the IMPORTER's spelling.
-        row = db.adopted_row(functor, arity)
+        row = _adopted_row_named_by(db, binding, functor, arity)
     if row is None or row.detached:
         return db
     return row.db

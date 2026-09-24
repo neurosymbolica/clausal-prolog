@@ -123,3 +123,36 @@ def test_a_resolvable_handle_is_found_without_any_adopted_row(pair, tmp_path):
         assert _home_db(db, md["gd_q"], "gd_q", 1) is owner.__dict__["$module"].db
     finally:
         sys.modules.pop("_rows5859_plain", None)
+
+
+def test_only_the_import_s_own_handle_takes_the_lost_route(pair):
+    """With an adopted row present, an unrelated mangled atom rebound under
+    the imported name is NOT the import: neither a handle to another module
+    nor one naming another functor routes the write to the owner."""
+    owner, user = pair
+    udb = user.__dict__["$module"].db
+    sys.modules.pop(_OWNER, None)
+    md = dict(user.__dict__)
+    assert udb.adopted_row("gd_p", 1) is not None
+    for impostor in (mangle("_rows5859_elsewhere", "gd_p"),
+                     mangle(_OWNER, "gd_other")):
+        md["gd_p"] = impostor
+        assert _find_pred_cls("gd_p", 1, md) is None, impostor
+        assert _home_db(udb, impostor, "gd_p", 1) is udb, impostor
+
+
+@pytest.mark.parametrize("owner_popped", [False, True])
+def test_retract_follows_the_handle_to_the_owner(pair, owner_popped):
+    owner, user = pair
+    odb = owner.__dict__["$module"].db
+    lm = user.__dict__["$module"]
+    next(call("gd_add", 7, module=lm), None)          # on the owner (class era)
+    assert 7 in _owner_answers(owner)
+    _flip(user)
+    if owner_popped:
+        sys.modules.pop(_OWNER, None)
+    # (listing/_indicator_row is F1 row 60's: its db.row leg finds the
+    # importer's -dynamic twin before _find_pred_cls, in BOTH eras --
+    # todo/listing-an-imported-dynamic-predicate-shows-the-importers-twin-2026-09-24.md)
+    next(call("retract", ("gd_p", 7), module=lm), None)
+    assert 7 not in _owner_answers(owner), "retract missed the owner's row"
