@@ -47,17 +47,29 @@ def test_a_predicate_whose_name_is_bound_to_an_atom_is_owned_by_its_load():
                           module_source_path(module.__dict__))
 
 
-def test_every_clause_bearing_row_a_module_owns_has_an_owner(tmp_path):
-    """The population check: non-empty, and no clause-bearing owned row left
-    unstamped."""
+def test_every_clause_bearing_row_a_module_owns_has_an_owner(
+        tmp_path, monkeypatch):
+    """The population check: non-empty, covering BOTH binding shapes, and no
+    clause-bearing owned row left unstamped.  ``s4rs_slot`` is imported as an
+    atom, so the local ``s4rs_slot/2`` arrives with a non-class binding."""
+    monkeypatch.syspath_prepend(str(tmp_path))
+    _write_module(tmp_path, "s4rs_vocab", """
+        -module(s4rs_vocab, [s4rs_slot])
+    """)
     module = _write_module(tmp_path, "s4rs_owned", """
+        -import_from(s4rs_vocab, [s4rs_slot])
+
         s4rs_a(1),
         s4rs_a(2),
         s4rs_b(X, Y) <- (s4rs_a(X), s4rs_a(Y)),
+        s4rs_slot(7, 1),
     """)
+    assert not isinstance(module.__dict__.get("s4rs_slot"), PredicateMeta), (
+        "s4rs_slot is bound to a class: the non-class path is not exercised")
+    assert isinstance(module.__dict__.get("s4rs_a"), PredicateMeta)
     db = module.__dict__["$module"].db
-    bearing = [k for k in db.owned_keys() if db.row(*k).clauses]
-    assert bearing, "the module owns no clause-bearing rows: nothing checked"
+    bearing = {k for k in db.owned_keys() if db.row(*k).clauses}
+    assert {("s4rs_a", 1), ("s4rs_b", 2), ("s4rs_slot", 2)} <= bearing
     assert {k for k in bearing if db.row(*k).source is None} == set()
     assert {db.row(*k).source[0] for k in bearing} == {"s4rs_owned"}
 
@@ -70,4 +82,7 @@ def test_an_undeclared_predicate_carries_the_field_names_of_its_head(tmp_path):
         s4rs_swap(R, S) <- s4rs_pair(S, R),
     """)
     db = module.__dict__["$module"].db
-    assert db.row("s4rs_swap", 2).signature == ("r", "s")
+    assert db.row("s4rs_swap", 2).signature == ("r", "s"), (
+        "EXPECTED to go red when the PredicateMeta flip lands: the field "
+        "names live only on the class -- see "
+        "todo/step4-signature-comes-from-the-class-2026-09-24.md")

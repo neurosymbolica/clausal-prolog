@@ -300,9 +300,11 @@ def compile_module(
             # after the flip, an atom or nothing in the 34 arrivals measured
             # where a clause-bearing name is not bound to a class -- the
             # clauses just written are this load's, and the gate reads the
-            # owner off the ROW.
-            record_clause_source(db.row(functor, arity), module_name,
-                                 module_dict)
+            # owner off the ROW.  ``create=True`` because that never answers
+            # an ADOPTED row (another database's): this load owns what it
+            # just wrote, never what it imported.
+            record_clause_source(db.row(functor, arity, create=True),
+                                 module_name, module_dict)
 
     # ── Step 4a: seed pending from -dynamic specs (A12-F005) ─────────────
     #    A declared-but-clause-less dynamic predicate must still compile to
