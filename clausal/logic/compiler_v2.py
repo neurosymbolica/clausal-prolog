@@ -1294,7 +1294,6 @@ def _redefinition_error(exc, functor: str, arity: int, pred_cls,
         functor, arity, module_name, exporter_name,
         resolve_predicate_row(pred_cls, arity=arity, db=db),
         exporter_module=module_dict.get(exporter_name),
-        declared_at=getattr(pred_cls, "_registered_at", None),
     )
     return SyntaxError(f"{described}\n  {gate_line}")
 

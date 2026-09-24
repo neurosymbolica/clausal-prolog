@@ -78,3 +78,15 @@ home.
 Recommendation: B (the file is already there twice; the line number names the
 export list, not the clauses). Not applied because `import_diagnostics.py` is
 owned by the unmerged vocabulary-drop branch right now.
+
+## Resolved (2026-09-24, operator ruling: option B; branch fix/small-todos-batch-2026-09-24)
+
+The "f is declared at file:line" line is gone from the load CLOBBER message
+(`import_diagnostics.describe_imported_predicate_redefinition` loses its
+`declared_at` parameter; `compiler_v2._redefinition_error` stops passing
+`_registered_at`). The message is now identical in both eras, so the tests
+that stripped that line (`test_import_origins_both_eras.py` x2,
+`test_vocabulary_implements_refused.py`) compare verbatim and assert its
+absence -- 3 of them fail against the old source. Other `_registered_at`
+readers (construction/arity errors, `specialization._SpecTarget`) are
+untouched; `PredRow.declared_at` is another branch's.

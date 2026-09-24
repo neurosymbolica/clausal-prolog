@@ -141,11 +141,10 @@ def test_the_load_channel_s_refusal_text_is_the_same_in_both_eras(owner):
         texts[era] = str(_redefinition_error(
             gate, "impclob_colour", 1, binding, origins, "some_importer",
             {_OWNER: owner}))
-    # The declaration-site line is class-only until the site has a row-side
-    # home; everything else must match.
-    strip = lambda t: "\n".join(l for l in t.splitlines()
-                                if " is declared at " not in l)
-    assert strip(texts["class"]) == strip(texts["mangled"])
+    # No declaration-site line in either era (ruling B, 2026-09-24), so the
+    # two texts match verbatim.
+    assert " is declared at " not in texts["class"]
+    assert texts["class"] == texts["mangled"]
     assert "the 2 clauses already on impclob_colour" in " ".join(
         texts["mangled"].split())
 
@@ -159,8 +158,7 @@ def test_the_load_refusal_fires_through_the_real_gate_in_both_eras(owner):
     from clausal.logic.compiler_v2 import _refuse_foreign_writes
     from clausal.terms import Compound
     node = SimpleNamespace(head=Compound("impclob_colour", ("teal",)))
-    strip = lambda t: "\n".join(l for l in t.splitlines()
-                                if " is declared at " not in l)
+    strip = lambda t: t     # nothing era-specific left (ruling B)
     texts = {}
     for era, binding in _eras(owner).items():
         origins = _import_from_origins(_aliased_import(), {"hue": binding})
@@ -170,4 +168,5 @@ def test_the_load_refusal_fires_through_the_real_gate_in_both_eras(owner):
                                    "some_importer")
         texts[era] = strip(str(exc_info.value))
     assert texts["class"] == texts["mangled"]
+    assert " is declared at " not in texts["class"]
     assert "may not write impclob_colour/1" in texts["mangled"]
