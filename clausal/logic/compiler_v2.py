@@ -440,6 +440,18 @@ def compile_module(
                 # database, so that test is VACUOUSLY TRUE here (measured
                 # 2026-09-17), and ``-dynamic(d/2)`` beside ``d/1`` clauses
                 # would then bind d/1's class onto d/2's row.
+                #
+                # A predicate HANDLE (a mangled atom -- the binding after the
+                # flip) has no ``_row``, so the class test below would send an
+                # IMPORTED ``-dynamic`` to ``pending[key] = None``: step 5 then
+                # compiled this module's own empty dispatch and the mutation
+                # gate refused it as a redefinition (flip dry run R5).  Ask the
+                # era-agnostic foreignness test for a handle first; it reads
+                # the owner's row at THIS arity, so a local ``-dynamic(p/2)``
+                # beside an imported ``p/1`` stays local (name+arity ruling).
+                if (type(pred_cls) is str
+                        and _belongs_elsewhere(pred_cls, db, arity)):
+                    continue
                 cls_row = getattr(pred_cls, "_row", None)
                 if cls_row is not None and cls_row.key[1] == arity:
                     if _belongs_elsewhere(pred_cls, db, arity):

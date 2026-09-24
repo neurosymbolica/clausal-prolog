@@ -346,7 +346,8 @@ def functor_signature_for(name: str, namespace: "dict | None", *, classes: bool 
 
 
 def cell_signature_for_name(
-    name: str, resolve_globals: "dict | None" = None, *, arity: "int | None" = None
+    name: str, resolve_globals: "dict | None" = None, *, arity: "int | None" = None,
+    qualified_handle: bool = False,
 ) -> "tuple[str, tuple[str, ...]] | None":
     """Resolve *name* to ``(functor, fields)`` for a DATA functor, or None.
 
@@ -394,6 +395,15 @@ def cell_signature_for_name(
     holds the bare functor (R5: compound data crosses module boundaries as
     cells now, so both sides must agree on slot 0).  Its fields come from the
     OWNER's registry, for the same reason.
+
+    A name bound to a predicate HANDLE (the binding after the flip) answers
+    with the predicate's PLAIN name, as its class answers ``__name__`` today
+    (``_functor_spelling``).  *qualified_handle* keeps the handle's MANGLED
+    spelling instead: the ``--`` seam passes it, because W4 piece 1
+    (``test_w4_qualified_handle``) pins the module-qualified functor for a
+    seam cell built from a handle.  Whether that pin or ruling S (plain) is
+    the post-flip answer for the seam is an open operator question; the flag
+    keeps the seam's current behaviour until it is ruled.
     """
     namespace = resolve_globals if resolve_globals is not None else lowering_globals()
     if namespace is None:
@@ -427,14 +437,19 @@ def cell_signature_for_name(
             # A data functor keeps the old answer, because its declaration
             # really does fix the slots -- over-supplying THOSE is an error.
             return None
-        return _functor_spelling(binding, leaf), tuple(cls_fields)
+        return (_functor_spelling(binding, leaf, db=namespace_db(namespace),
+                                  qualified_handle=qualified_handle),
+                tuple(cls_fields))
     fields = functor_signature_for(leaf, leaf_namespace)
     if fields is None:
         return None
-    return _functor_spelling(binding, leaf), fields
+    return (_functor_spelling(binding, leaf, db=namespace_db(namespace),
+                              qualified_handle=qualified_handle),
+            fields)
 
 
-def _functor_spelling(binding: Any, leaf: str) -> str:
+def _functor_spelling(binding: Any, leaf: str, *, db=None,
+                      qualified_handle: bool = False) -> str:
     """The functor string slot 0 carries for a name bound to *binding*.
 
     A CLASS answers with its own ``__name__``: an ``-import_from`` alias
@@ -452,9 +467,24 @@ def _functor_spelling(binding: Any, leaf: str) -> str:
     Anything else (nothing bound, some unrelated value) falls back to the
     leaf name — the only spelling available, and the right one whenever the
     registry entry is the module's own declaration.
+
+    A predicate HANDLE (a mangled atom -- the binding after the flip) answers
+    with the predicate's PLAIN name, exactly what its class answers today:
+    an importer's ``gd_p(X)`` must build the ``("gd_p", X)`` cell the owner's
+    clauses are keyed by, or ``assertz(gd_p(X))`` raises existence_error for
+    the mangled spelling (flip dry run R3, fix A2).  Gated on
+    ``predicate_binding_name`` (``is_declared_predicate_name``), never on
+    ``is_mangled``: a ``-hide`` DATA atom is mangled too and its mangled
+    spelling is its identity.  *db* is the ruling-Q0 hint.
+    *qualified_handle*: see ``cell_signature_for_name``.
     """
     if isinstance(binding, type):
         return binding.__name__
+    if (not qualified_handle and type(binding) is str
+            and _is_mangled(binding)):
+        _plain = predicate_binding_name(binding, db=db)
+        if _plain is not None:
+            return _plain
     if _term_is_atom(binding):
         return _atom_spelling(binding)
     return leaf

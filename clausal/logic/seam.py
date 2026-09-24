@@ -111,8 +111,15 @@ def seam_term(node: Any, module_globals: dict, loose: bool = False) -> Any:
             kwargs = [(kw.name, build(kw.value)) for kw in (term.kwargs or [])]
             with lowering_scope(module_globals):
                 # The WRITTEN arity: a predicate class cannot narrow it.
+                # ``qualified_handle``: a name bound to a predicate HANDLE
+                # keeps the handle's MANGLED spelling here (W4 piece 1,
+                # ``test_w4_qualified_handle``), where the compiler builds
+                # the PLAIN name.  Which one the seam should build after the
+                # flip is an open operator question (flip dry run §3.5);
+                # this keeps the seam's current answer until it is ruled.
                 sig = cell_signature_for_name(
-                    fname, arity=len(args) + len(kwargs))
+                    fname, arity=len(args) + len(kwargs),
+                    qualified_handle=True)
                 owa = loose or _implicit_functors_active(module_globals)
                 if sig is not None:
                     functor, fields = sig

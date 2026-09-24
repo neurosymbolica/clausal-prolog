@@ -792,6 +792,21 @@ def _make_listing__1(db):
         """
         val = deref(pred)
 
+        # The bare-predicate form ``listing(fib)`` hands the module BINDING.
+        # A class takes the PredicateMeta arm below; after the flip the
+        # binding is the predicate's HANDLE, a mangled atom, which the atom
+        # arm would read as the arity-0 name ``'m\x1ffib'/0`` and refuse
+        # (flip dry run R7).  List what the class arm lists, through the
+        # handle's owner row.  Only a declared predicate's handle is taken:
+        # a ``-hide`` DATA atom is mangled in the same shape and keeps the
+        # atom arm's treatment.
+        bare = _bare_handle_listing(val, db)
+        if bare is not None:
+            for _name, _arity, _clauses in bare:
+                _print_listing(_name, _arity, _clauses)
+            yield None
+            return
+
         # Recognize a Name/Arity indicator (cell, Compound, or a runtime
         # Div node) BEFORE the generic term-instance resolution below:
         # Compound and Div are both (perhaps surprisingly) @dataclass, so
@@ -889,14 +904,46 @@ def _make_listing__1(db):
                 ))
             clauses = row.clauses
 
-        if not clauses:
-            print(f"% {name}/{arity} — no clauses")
-        else:
-            print(f"% {name}/{arity} — {len(clauses)} clause(s)")
-            for clause in clauses:
-                print(_format_clause(clause))
+        _print_listing(name, arity, clauses)
         yield None
     return _listing__1
+
+
+def _print_listing(name, arity, clauses) -> None:
+    if not clauses:
+        print(f"% {name}/{arity} — no clauses")
+    else:
+        print(f"% {name}/{arity} — {len(clauses)} clause(s)")
+        for clause in clauses:
+            print(_format_clause(clause))
+
+
+def _bare_handle_listing(val, db):
+    """``[(name, arity, clauses), ...]`` when *val* is a predicate HANDLE
+    passed bare (``listing(fib)`` once the binding is a handle), else
+    ``None``.
+
+    One entry per arity the handle's owner DEFINES
+    (``predicate_arities_for``), in arity order, each read from the row the
+    indicator form ``listing(fib/N)`` reads (``_indicator_row``), so the two
+    spellings cannot disagree.  A class names its one bound arity; a handle
+    names none, so a name defined at several arities lists each of them
+    rather than picking one.
+    """
+    if type(val) is not str or not is_mangled(val):
+        return None
+    if not is_declared_predicate_name(val, db=db):
+        return None
+    from clausal.logic.predicate import predicate_arities_for  # noqa: PLC0415
+    arities = sorted(predicate_arities_for(val, db=db))
+    if not arities:
+        return None
+    name = demangle(val)[1]
+    out = []
+    for arity in arities:
+        row = _indicator_row(db, name, arity, val)
+        out.append((name, arity, row.clauses if row is not None else []))
+    return out
 
 
 # ``_db_optional`` is LOAD-BEARING, not a consistency nicety (P3-3 Task 8
