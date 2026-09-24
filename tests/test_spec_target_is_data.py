@@ -10,7 +10,9 @@ canonically) before and after the change.
 from __future__ import annotations
 
 import importlib
+import os
 import re
+import sys
 
 import pytest
 
@@ -34,6 +36,7 @@ def test_the_target_builds_the_cell_the_class_builds():
         target(nope=1)
     assert (exc.value.functor, exc.value.registered_fields) == (
         "spt_p", ("a", "b", "c"))
+    assert exc.value.registered_at == cls._registered_at   # carried over
 
 
 def _canon(clauses):
@@ -68,10 +71,21 @@ def test_the_unfolder_runs_without_any_class(mi):
 
 # ── the actual output, against main's (class-built) output ──────────────────
 
-import os
-import sys
-
 _FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
+
+
+def _per_clause(lines):
+    """Renumber variables within EACH clause.  The dump named them across the
+    whole list, which froze accidental sharing of Var objects between
+    separate clauses (the CPD pass does not rename clauses apart); a golden
+    should pin structure, not that."""
+    out = []
+    for line in lines:
+        names = {}
+        out.append(re.sub(r"\bV\d+\b",
+                          lambda m: names.setdefault(m.group(0), f"V{len(names)}"),
+                          line))
+    return out
 
 
 def _goldens():
@@ -113,12 +127,12 @@ def _installed_by_loading(stem, monkeypatch):
 ])
 def test_each_unfolding_path_installs_what_main_installed(
         stem, key, monkeypatch):
-    golden = _goldens()[key]
+    golden = _per_clause(_goldens()[key])
     assert golden, "empty golden: nothing compared"
-    assert _installed_by_loading(stem, monkeypatch)[key] == golden
+    assert _per_clause(_installed_by_loading(stem, monkeypatch)[key]) == golden
 
 
-def test_the_direct_api_installs_what_main_installed():
+def test_the_direct_api_installs_what_main_installed(monkeypatch):
     from clausal.logic.specialization import specialize_mi
     from clausal.logic import specialization as sp
     mis = importlib.import_module("clausal.examples.metainterpreters")
@@ -131,9 +145,7 @@ def test_the_direct_api_installs_what_main_installed():
         got["c"] = _canon(clauses)
         return real(pred_cls, new_name, fields, clauses, *a, **k)
 
-    sp._install_specialized = spy
-    try:
-        specialize_mi(analyze_mi(mis.solve), program, "SolveNatnum")
-    finally:
-        sp._install_specialized = real
-    assert got["c"] == _goldens()["SolveNatnum/1"]
+    monkeypatch.setattr(sp, "_install_specialized", spy)
+    specialize_mi(analyze_mi(mis.solve), program, "SolveNatnum")
+    assert "c" in got, "nothing installed"
+    assert _per_clause(got["c"]) == _per_clause(_goldens()["SolveNatnum/1"])

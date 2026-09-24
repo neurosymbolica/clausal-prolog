@@ -504,17 +504,22 @@ class _SpecTarget:
     """
     name: str
     fields: tuple[str, ...]
+    # Where the predicate was declared, for the construction error's
+    # "registered by" line; a class carries it, a bare target may not.
+    registered_at: Any = dataclasses.field(default=None, compare=False)
 
     @classmethod
     def of(cls, pred_cls: PredicateMeta) -> "_SpecTarget":
-        return cls(pred_cls.__name__, tuple(pred_cls._fields))
+        return cls(pred_cls.__name__, tuple(pred_cls._fields),
+                   getattr(pred_cls, "_registered_at", None))
 
     def __call__(self, **kwargs: Any) -> tuple:
         """The cell ``PredicateMeta.__call__`` builds from keywords: the
         functor, then each field's value, a fresh ``Var`` where absent.  An
         unknown keyword raises the same attributable
-        ``ClausalTermConstructionError`` it raises there (the builder reads
-        only ``__name__``/``_fields`` off what it is given)."""
+        ``ClausalTermConstructionError`` it raises there, with the
+        registration site when the target knows it (the builder reads only
+        ``__name__``/``_fields``/``_registered_at`` off what it is given)."""
         unknown = [k for k in kwargs if k not in self.fields]
         if unknown:
             from types import SimpleNamespace  # noqa: PLC0415
@@ -522,7 +527,8 @@ class _SpecTarget:
                 _source_site, _term_construction_error,
             )
             raise _term_construction_error(
-                SimpleNamespace(__name__=self.name, _fields=self.fields),
+                SimpleNamespace(__name__=self.name, _fields=self.fields,
+                                _registered_at=self.registered_at),
                 kwargs, _source_site(1))
         return (self.name, *(kwargs[f] if f in kwargs else Var()
                              for f in self.fields))
