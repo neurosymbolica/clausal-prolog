@@ -1452,13 +1452,58 @@ def _resolve_other_arity_of_class(cls: "PredicateMeta", arity: int) -> Callable 
     return row._db.get_dispatch(functor, arity)
 
 
-def _refuse_unqualified_other_arity(binding: Any, name: str, arity: int) -> Callable:
+def _binding_owner_db(binding: Any):
+    """The Database that OWNS a predicate *binding* (class or handle), or
+    ``None`` -- a class's row db, a handle's module db."""
+    if isinstance(binding, PredicateMeta):
+        row = binding._row
+        return row._db if row is not None else None
+    if type(binding) is str:
+        from clausal.logic.atoms import is_mangled, demangle  # noqa: PLC0415
+        if is_mangled(binding):
+            return _db_for_module_name(demangle(binding)[0])
+    return None
+
+
+def binding_grants_arity(binding: Any, arity: int, db: Any, name: str) -> bool:
+    """True when the predicate *binding* -- reached through the UNQUALIFIED
+    name *name* in the module whose Database is *db* -- is that name's
+    predicate at *arity*.  Era-agnostic.
+
+    Operator rulings 2026-09-24 (name + ARITY; the aliased-import leak): a
+    binding is the target only at an arity it is a predicate at
+    (``is_declared_predicate``) AND, when it is IMPORTED (owned by another
+    Database), only at an arity it was imported at: ``-import_from`` plants
+    the exporter's rows under the local name (``compiler_v2.
+    _plant_imported_rows``), so ``db.row(name, arity)`` answers exactly that.
+    The owner's OTHER arities -- a later ``assertz`` there included -- are not
+    imported.  Without this the handle era (whose ``is_declared_predicate``
+    asks the owner's ``declared_kind``) would grant arities the class era
+    (``len(_fields)``) does not.
+
+    The import record is the importing db's ADOPTED rows under *name*
+    (``Database.adopt_row``); a name with none -- a binding placed by hand
+    (a hand-built globals dict, a held handle assigned in Python) rather
+    than by ``-import_from`` -- has no import record to consult and is
+    trusted at every arity it is a predicate at, as before.
+    """
+    if not is_declared_predicate(binding, arity=arity):
+        return False
+    owner = _binding_owner_db(binding)
+    if owner is None or db is None or owner is db:
+        return True
+    adopted = {a for (f, a) in getattr(db, "_adopted", {}) if f == name}
+    return not adopted or arity in adopted
+
+
+def _refuse_unqualified_other_arity(binding: Any, name: str, arity: int,
+                                    db: Any = None) -> Callable:
     """The last resort of an UNQUALIFIED call ``name(...)`` at *arity* whose
-    name is bound to a predicate (class or handle) declared at ANOTHER arity,
-    after the calling module's own row and the builtins under *name* have
-    both declined.  Raises ``PredicateArityMismatchError`` naming *name* --
-    the name the caller USED, which for an aliased import is not the
-    owner's.
+    name is bound to a predicate (class or handle) that is not its target at
+    *arity*, after the calling module's own row and the builtins under
+    *name* have both declined.  Raises ``PredicateArityMismatchError`` naming
+    *name* -- the name the caller USED, which for an aliased import is not
+    the owner's.
 
     Operator ruling 2026-09-24 (closing the aliased-import leak,
     ``todo/done/aliased-import-other-arity-resolves-in-the-owner-2026-09-24.md``):
@@ -1467,13 +1512,14 @@ def _refuse_unqualified_other_arity(binding: Any, name: str, arity: int) -> Call
     owner.  So unlike ``_dispatch_at`` -- which serves a binding reached
     DIRECTLY or by a qualified/dotted reference and resolves the other arity
     in the binding's own module -- this never looks the name up in the
-    owner.  Callers (``solve.call`` Phase 5, ``globals_env``'s keep-binding
-    branch) are the two places that know the name was unqualified.
+    owner.  Callers: ``solve.call`` Phase 5, ``globals_env``'s keep-binding
+    branch, and ``_UnqualifiedName`` (the meta-call arm).
 
-    One exception, not a resolution elsewhere: a ``PredicateMeta`` class
-    whose ``_fields`` are stale while its clause heads ARE at *arity*
-    (``PredicateMeta._clause_arity``) is this call's target after all; its
-    own dispatch is returned, exactly as the class arm would have.
+    One exception, and only for a class LOCAL to the calling module (its row
+    is in *db*): a class whose ``_fields`` are stale while its clause heads
+    ARE at *arity* (``PredicateMeta._clause_arity``) is this call's target
+    after all, and its dispatch is returned.  An imported class never takes
+    this exception -- its row is the owner's.
     """
     from clausal.predicate_diagnostics import (  # noqa: PLC0415
         PredicateArityMismatchError, predicate_arity_mismatch,
@@ -1481,7 +1527,8 @@ def _refuse_unqualified_other_arity(binding: Any, name: str, arity: int) -> Call
     if isinstance(binding, PredicateMeta):
         row = binding._row
         clauses = row.clauses if row is not None else ()
-        if clauses and all(_head_arity(c.head) == arity for c in clauses):
+        if (clauses and db is not None and row._db is db
+                and all(_head_arity(c.head) == arity for c in clauses)):
             return binding._get_dispatch()        # stale _fields: the target
         try:
             defined = binding._clause_arity()
@@ -1504,11 +1551,93 @@ def _refuse_unqualified_other_arity(binding: Any, name: str, arity: int) -> Call
     from clausal.logic.cells import qualify_mangled_goal  # noqa: PLC0415
     _q = qualify_mangled_goal(binding) if type(binding) is str else binding
     if _q is not binding:
-        db = _db_for_module_name(_q[1])
-        if db is not None:
-            others = sorted(a for a in db.arities_for(_q[2]) if a != arity)
+        owner = _db_for_module_name(_q[1])
+        if owner is not None:
+            others = sorted(a for a in owner.arities_for(_q[2]) if a != arity)
             defined = others[0] if len(others) == 1 else None
     raise predicate_arity_mismatch(name, arity, defined)
+
+
+class _UnqualifiedName:
+    """A meta-call goal that ARRIVED as an unqualified name of the calling
+    module bound to an IMPORTED predicate (class or handle) -- the adapter
+    ``localize_goal`` hands a meta-predicate (``call/N``, ``maplist`` & co.,
+    ``phrase``, ``time_goal``) in place of the bare binding.
+
+    Operator ruling 2026-09-24 (the aliased-import leak): ``maplist(nl, ...)``
+    in ``alim`` must resolve under ``nl`` in ``alim``, exactly as a direct
+    ``nl(...)`` body call does.  The bare binding cannot say that: it is the
+    OWNER's class or handle, and ``_dispatch_at`` on it answers the owner's
+    other arities (right for a qualified / directly held reference, wrong
+    here).  ``_dispatch_at`` recognises this type and asks ``dispatch_at``.
+    """
+    __slots__ = ("db", "name", "binding")
+
+    def __init__(self, db: Any, name: str, binding: Any) -> None:
+        self.db = db
+        self.name = name
+        self.binding = binding
+
+    def dispatch_at(self, arity: int) -> Callable:
+        if binding_grants_arity(self.binding, arity, self.db, self.name):
+            return _dispatch_at(self.binding, arity)
+        fn = self.db.get_dispatch(self.name, arity)
+        if fn is not None:
+            return fn
+        return _refuse_unqualified_other_arity(
+            self.binding, self.name, arity, self.db)
+
+    def _get_dispatch(self):
+        # The frozen arity-free protocol: only a class knows its own arity.
+        if isinstance(self.binding, PredicateMeta):
+            return self.binding._get_dispatch()
+        raise TypeError(
+            f"{self.name!r}: a predicate handle needs the call arity")
+
+    def __repr__(self) -> str:
+        return f"_UnqualifiedName({self.name!r} -> {self.binding!r})"
+
+
+def localize_goal(db: Any, goal_val: Any) -> Any:
+    """*goal_val* as a meta-call in the module whose Database is *db*.
+
+    When *goal_val* is a predicate binding (class or handle) that *db* did not
+    define itself but binds under an unqualified name -- an ``-import_from``,
+    aliased or not -- return an ``_UnqualifiedName`` so the call resolves under
+    that name in *db* (operator ruling 2026-09-24).  Anything else --
+    including a binding *db* owns, which resolves in *db* either way, and a
+    binding *db* does not bind by any plain name (a qualified reference) --
+    comes back unchanged.
+
+    The one ambiguity is inherent: a handle string built by a QUALIFIED
+    reference is equal to the owner handle an import binds, so in a module
+    that also imports that predicate it is read as the import.  A qualified
+    meta-call is spelled ``M:G`` and resolved by ``_resolve_named_goal``'s
+    qualified arm, which this does not touch.
+
+    Several plain names for one binding: the owner's own name wins when it is
+    one of them, else the alphabetically first -- deterministic.
+    """
+    if db is None or not is_declared_predicate_name(goal_val):
+        return goal_val
+    owner = _binding_owner_db(goal_val)
+    if owner is None or owner is db:
+        return goal_val
+    md = getattr(db, "module_dict", None)
+    if not isinstance(md, dict):
+        return goal_val
+    if isinstance(goal_val, PredicateMeta):
+        names = [k for k, v in md.items() if v is goal_val and "." not in k]
+        own = goal_val.__name__
+    else:
+        names = [k for k, v in md.items()
+                 if type(v) is str and v == goal_val and "." not in k]
+        from clausal.logic.atoms import demangle  # noqa: PLC0415
+        own = demangle(goal_val)[1]
+    if not names:
+        return goal_val
+    name = own if own in names else sorted(names)[0]
+    return _UnqualifiedName(db, name, goal_val)
 
 
 def _dispatch_at(obj: Any, arity: int) -> Callable:
@@ -1537,6 +1666,10 @@ def _dispatch_at(obj: Any, arity: int) -> Callable:
     and the goal emitters reference that name directly, so only unlocked
     (``-dynamic``) callees and the runtime meta-call funnels arrive here.
     """
+    if type(obj) is _UnqualifiedName:
+        # Operator ruling 2026-09-24: a meta-call goal that arrived as an
+        # unqualified name resolves under THAT name in the calling module.
+        return obj.dispatch_at(arity)
     if isinstance(obj, PredicateMeta):
         # F7 (ruled 2026-09-24): the ARITY-TAKING OVERLOAD of ``_get_dispatch``
         # is retired from this call site -- measured (full suite, before vs.

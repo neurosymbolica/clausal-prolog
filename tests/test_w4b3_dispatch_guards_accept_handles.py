@@ -174,11 +174,14 @@ class TestSolveCallPhase5:
 
     # -- a predicate name is name + ARITY (operator ruling, 2026-09-24) ------
     #
-    # A binding (class or handle) at ANOTHER arity is not this call's target:
-    # the call resolves normally -- the builtin, then the calling module's own
-    # row -- and only when nothing answers does the binding report the arity
-    # (``test_wrong_arity_still_refuses`` below, kept).  The class-era refusal
-    # ahead of a live answer was an artefact of the predicate being a class.
+    # A binding (class or handle) at ANOTHER arity -- or, for an IMPORTED one,
+    # at an arity it was not imported at -- is not this call's target.  The
+    # call resolves in THIS module under THIS name: its own row first, then a
+    # builtin under the name.  When neither answers the call REFUSES naming
+    # the name used; it never resolves the other arity in the binding's owner
+    # (aliased-import ruling, 2026-09-24).  ``test_wrong_arity_still_refuses``
+    # below pins the refusal.  The class-era refusal ahead of a live answer
+    # was an artefact of the predicate being a class.
 
     @pytest.mark.parametrize("era", ["class", "handle"])
     def test_a_builtin_answers_at_another_arity(self, lm, owner, monkeypatch,
@@ -305,11 +308,17 @@ _LIST_CASES = [
 
 def test_the_list_case_table_covers_all_sixteen_builtins():
     """Positive control on the population: 16 distinct builtin/arity pairs,
-    each a registered builtin."""
-    from clausal.logic.builtins._registry import _BUILTINS
+    each a registered builtin.  Since the aliased-import ruling (2026-09-24)
+    they are db-receiving (``_DB_BUILTINS``, ``_db_optional``): the caller's
+    database is what says which unqualified name a goal arrived under."""
+    from clausal.logic.builtins._registry import _BUILTINS, _DB_BUILTINS
+    from clausal.logic.builtins.higher_order import _GOAL_FIRST_LIST_BUILTINS
     keys = {(b, 1 + len(a) + n) for b, _, a, n in _LIST_CASES}
     assert len(keys) == 16
-    assert keys <= set(_BUILTINS), keys - set(_BUILTINS)
+    assert keys == set(_GOAL_FIRST_LIST_BUILTINS)
+    assert keys <= set(_DB_BUILTINS), keys - set(_DB_BUILTINS)
+    assert not keys & set(_BUILTINS)
+    assert all(getattr(_DB_BUILTINS[k], "_db_optional", False) for k in keys)
 
 
 @pytest.mark.parametrize(
@@ -407,10 +416,15 @@ class TestInjectResolvedTargets:
     # -- a predicate name is name + ARITY (operator ruling, 2026-09-24) ------
     #
     # An applied target takes a predicate binding -- class or handle alike --
-    # only at its own arity.  At another arity the call resolves normally (a
-    # builtin, this db's own row); the class-era PredicateArityMismatchError
-    # was an artefact of the predicate being a class.  Only when nothing else
-    # answers is the binding kept, and the call then reports the arity.
+    # only at its own arity (for an import: an arity it was imported at).  At
+    # another arity the call resolves in this module under this name: this
+    # db's own row, then a builtin under the name.  When nothing answers, the
+    # binding is kept under the name (term construction, its own arity) and
+    # the call site gets a ``$disp_`` entry that refuses naming the name --
+    # never the owner (aliased-import ruling, 2026-09-24).  A DOTTED name is
+    # the qualifier's and still resolves there.  The class-era
+    # PredicateArityMismatchError was an artefact of the predicate being a
+    # class.
 
     @staticmethod
     def _owner_binding(owner, name, era):

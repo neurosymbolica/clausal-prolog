@@ -24,11 +24,16 @@ refusal where nothing else answers (both eras).
 
 Both sites now follow the ruling, mirroring `globals_env._inject_resolved_targets`:
 
-1. `solve.call` Phase 5: a module-dict binding (class or handle) declared at
-   ANOTHER arity is no longer the call's target.  The call falls through to
-   Phase 6 (builtin), then `module.db.get_dispatch` (the calling module's own
-   row); only when neither answers is the binding handed to `_dispatch_at`,
-   which resolves it in its own module or refuses.
+1. `solve.call` Phase 5: a module-dict binding (class or handle) that is not
+   the name's predicate at the call arity (`predicate.binding_grants_arity`:
+   declared there, and for an import, imported there) is no longer the
+   call's target.  The call asks `module.db.get_dispatch` (the calling
+   module's own row, then the builtin registry) and then Phase 6; when
+   neither answers it REFUSES naming the name used
+   (`_refuse_unqualified_other_arity`) -- it never resolves the other arity
+   in the binding's owner.  (Final form after two review rounds and the
+   aliased-import ruling; see
+   `todo/done/aliased-import-other-arity-resolves-in-the-owner-2026-09-24.md`.)
 2. `predicate._dispatch_at`:
    - handle arm: `Database.get_dispatch` (the module's row at the call arity,
      else the builtin registry) is asked BEFORE
@@ -40,11 +45,17 @@ Both sites now follow the ruling, mirroring `globals_env._inject_resolved_target
      answered a `ping/2` call through a `ping/0` handle but was refused
      through the `ping/0` class.
 
+`_dispatch_at`'s two arms serve a binding held DIRECTLY or reached by a
+QUALIFIED reference; an unqualified name never reaches their other-arity
+fallback (body calls are rerouted at compile time, meta-calls localized --
+see the aliased-import todo).
+
 Tests: F7's `test_wrong_arity_does_not_silently_resolve_to_a_builtin_at_the_other_arity`
 is REVERSED (renamed `test_wrong_arity_resolves_normally_to_the_builtin_at_the_call_arity`,
 both eras, docstring cites the ruling); w4b3's
 `test_dotted_sys_modules_route_at_another_arity` updated (run-time half now
-answers with the owner's builtin `last/2`).  New: both-era refusal-kept test,
+answers with the owner's builtin `last/2` -- a dotted, i.e. qualified,
+reference).  New: both-era refusal-kept test,
 own-row test, and two `solve.call` Phase 5 tests (builtin; local row).  Every
 other `PredicateArityMismatchError` pin (38 in
 `test_predicate_arity_mismatch_diagnostic.py`, the w4b3 phrase/time_goal/

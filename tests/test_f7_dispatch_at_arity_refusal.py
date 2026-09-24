@@ -262,6 +262,132 @@ def test_an_unqualified_call_at_another_arity_resolves_only_under_the_name_used(
 
 
 @pytest.mark.parametrize("era", ["class", "handle"])
+def test_a_meta_call_through_an_unqualified_name_resolves_under_that_name(
+        tmp_path, monkeypatch, capsys, era):
+    """Roborev MEDIUM on the aliased-import ruling (2026-09-24): a META-call
+    whose goal arrived as an unqualified name of the calling module resolves
+    under THAT name in the calling module -- ``call/N``, ``maplist`` and
+    ``phrase`` all refuse ``nl`` at arity 2 (``alim`` has no ``nl/2``, no
+    builtin is ``nl/2``); before the fix each handed alow's binding to
+    ``_dispatch_at``, which answered alow's builtin ``numlist/2``.
+
+    Also pinned: the imported arity still answers through each; ``time_goal
+    (nl)`` calls ``nl/0``, and under the name used that is the BUILTIN
+    ``nl/0`` (newline) -- the name, not the owner, decides; and the
+    QUALIFIED meta-call ``call(alow:numlist, 3, L)`` still resolves in the
+    qualifier under its name (the builtin ``numlist/2``).  Both eras."""
+    from clausal.logic.solve import call as _call
+    from clausal.logic.variables import Var, deref
+    ow = _load(tmp_path, monkeypatch, f"f7_mc_ow_{era}", """
+        -module(f7_mc_ow_ERA, [numlist(A)])
+        numlist(1),
+    """.replace("ERA", era))
+    O = ow.__dict__["$module"]
+    if era == "handle":
+        _bind_imports_as_owner_handles(monkeypatch, O)
+    imp = _load(tmp_path, monkeypatch, f"f7_mc_im_{era}", """
+        -module(f7_mc_im_ERA, [])
+        -import_from(f7_mc_ow_ERA, [alias(numlist, nl)])
+        m(L) <- call(nl, 3, L)
+        mm(L) <- maplist(nl, [3], [L])
+        ph(R) <- phrase(nl, 3, R)
+        tg <- time_goal(nl)
+        m1 <- call(nl, 1)
+        mm1 <- maplist(nl, [1])
+    """.replace("ERA", era))
+    I = imp.__dict__["$module"]
+    if era == "handle":
+        assert I.module_dict["nl"] == mangle(f"f7_mc_ow_{era}", "numlist")
+    for goal in ("m", "mm", "ph"):
+        with pytest.raises(PredicateArityMismatchError, match=r"\bnl\b"):
+            list(_call(goal, Var(), module=I))
+    assert len(list(_call("m1", module=I))) == 1
+    assert len(list(_call("mm1", module=I))) == 1
+    assert len(list(_call("tg", module=I))) == 1         # builtin nl/0
+    capsys.readouterr()
+    out = Var()
+    got = [deref(out) for _ in _call(
+        "call", (":", f"f7_mc_ow_{era}", "numlist"), 3, out, module=I)]
+    assert got == [[1, 2, 3]]
+
+
+@pytest.mark.parametrize("era", ["class", "handle"])
+def test_an_owner_arity_added_after_the_import_is_not_imported(
+        tmp_path, monkeypatch, era):
+    """Roborev LOW 1: the import binds ONE predicate.  ``alow`` gains a
+    ``numlist/2`` row by ``assertz`` after ``alim`` imported ``numlist/1``
+    as ``nl``; ``nl(3, L)`` in ``alim`` still refuses in BOTH eras (the
+    handle's owner would call itself a predicate at 2; the import record --
+    the adopted rows -- says only 1 was imported).  Direct and through
+    ``solve.call`` and a meta-call; the qualified reference sees the new
+    row."""
+    from clausal.logic.solve import _drive_trampoline, call as _call
+    from clausal.logic.variables import Trail, Var, deref
+    from clausal.terms import Compound
+    ow = _load(tmp_path, monkeypatch, f"f7_late_ow_{era}", """
+        -module(f7_late_ow_ERA, [numlist(A)])
+        numlist(1),
+    """.replace("ERA", era))
+    O = ow.__dict__["$module"]
+    if era == "handle":
+        _bind_imports_as_owner_handles(monkeypatch, O)
+    imp = _load(tmp_path, monkeypatch, f"f7_late_im_{era}", """
+        -module(f7_late_im_ERA, [])
+        -import_from(f7_late_ow_ERA, [alias(numlist, nl)])
+        use(L) <- nl(3, L)
+        m(L) <- call(nl, 3, L)
+    """.replace("ERA", era))
+    I = imp.__dict__["$module"]
+    assert len(list(_call("assertz", Compound("numlist", (3, "own")),
+                          module=O))) == 1
+    assert O.db.row("numlist", 2) is not None
+    for goal in ("use", "m"):
+        with pytest.raises(PredicateArityMismatchError, match=r"\bnl\b"):
+            list(_call(goal, Var(), module=I))
+    with pytest.raises(PredicateArityMismatchError, match=r"\bnl\b"):
+        list(_call("nl", 3, Var(), module=I))
+    # the qualified reference -- the owner, under its name -- sees the row
+    out = Var()
+    got = [deref(out) for _ in _drive_trampoline(
+        _dispatch_at(mangle(f"f7_late_ow_{era}", "numlist"), 2), Trail(), 3, out)]
+    assert got == ["own"]
+
+
+@pytest.mark.parametrize("era", ["class", "handle"])
+def test_an_imported_stale_class_does_not_answer_from_its_owner(
+        tmp_path, monkeypatch, era):
+    """Roborev LOW 2: ``_refuse_unqualified_other_arity``'s stale-``_fields``
+    exception is for a class LOCAL to the calling module.  Here the owner's
+    ``ping`` class goes stale AFTER the import (a runtime ``assertz(ping(1,
+    2))`` re-binds it to the owner's ``ping/2`` row, ``_fields == ()``); the
+    importer imported ``ping/0`` only, so ``ping(1, 2)`` there refuses -- it
+    must not answer from the owner's row.  Both eras."""
+    from clausal.logic.predicate import PredicateMeta
+    from clausal.logic.solve import call as _call
+    from clausal.terms import Compound
+    ow = _load(tmp_path, monkeypatch, f"f7_st_ow_{era}", """
+        -module(f7_st_ow_ERA, [ping])
+        ping <- (1 > 0)
+    """.replace("ERA", era))
+    O = ow.__dict__["$module"]
+    if era == "handle":
+        _bind_imports_as_owner_handles(monkeypatch, O)
+    imp = _load(tmp_path, monkeypatch, f"f7_st_im_{era}", """
+        -module(f7_st_im_ERA, [])
+        -import_from(f7_st_ow_ERA, [ping])
+    """.replace("ERA", era))
+    I = imp.__dict__["$module"]
+    assert len(list(_call("assertz", Compound("ping", (1, 2)), module=O))) == 1
+    cls = O.module_dict["ping"]
+    assert isinstance(cls, PredicateMeta)
+    assert cls._fields == () and cls._row._key == ("ping", 2)   # STALE, owner's
+    with pytest.raises(PredicateArityMismatchError, match="ping"):
+        list(_call("ping", 1, 2, module=I))
+    assert len(list(_call("ping", module=I))) == 1             # ping/0 intact
+    assert len(list(_call("ping", 1, 2, module=O))) == 1        # owner's own
+
+
+@pytest.mark.parametrize("era", ["class", "handle"])
 def test_an_unaliased_import_at_another_arity_resolves_under_its_own_name(
         tmp_path, monkeypatch, era):
     """The ruling's unaliased check: ``-import_from(alow, [numlist])`` then

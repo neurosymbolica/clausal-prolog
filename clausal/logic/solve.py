@@ -49,7 +49,7 @@ from clausal.logic.database import Clause, Database, Module
 from clausal.logic.predicate import (
     is_term_instance, term_field_names, _dispatch_at,
     is_declared_predicate, is_declared_predicate_name,
-    _refuse_unqualified_other_arity,
+    _refuse_unqualified_other_arity, binding_grants_arity,
 )
 from clausal.logic.trampoline import StepGenerator, DONE, _drive_until_yield
 from clausal.logic.cells import (
@@ -1155,7 +1155,8 @@ def call(
         # ``globals_env._inject_resolved_targets`` bakes into a compiled
         # call site.
         if pred_cls is not None and is_declared_predicate_name(pred_cls) \
-                and not is_declared_predicate(pred_cls, arity=arity):
+                and not binding_grants_arity(pred_cls, arity, module.db,
+                                             functor):
             other_arity_binding = pred_cls
         elif pred_cls is not None and (
                 hasattr(pred_cls, '_get_dispatch')
@@ -1196,7 +1197,7 @@ def call(
     # class whose clauses ARE at this arity is still returned (its target).
     if dispatch_fn is None and other_arity_binding is not None:
         dispatch_fn = _refuse_unqualified_other_arity(
-            other_arity_binding, functor, arity)
+            other_arity_binding, functor, arity, module.db)
 
     if dispatch_fn is None:
         if _handle_name is not None:

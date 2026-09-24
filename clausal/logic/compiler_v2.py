@@ -39,6 +39,7 @@ from clausal.logic.compiler import (
 from clausal.logic.predicate import (
     PredicateMeta, make_predicate, record_clause_source,
     field_names_for, is_declared_predicate, is_declared_predicate_name,
+    binding_grants_arity,
     predicate_arities_for, predicate_binding_name,
     resolve_predicate_row,
 )
@@ -248,7 +249,8 @@ def compile_module(
     #    USED.  The import remap spells ``nl(3, L)`` as the owner's dotted
     #    key, which would resolve ``/2`` in the OWNER under the OWNER's name;
     #    re-point such a call site to the local name instead.
-    _route_other_arity_imported_calls_to_local(module_items, predicate_nodes, module_dict)
+    _route_other_arity_imported_calls_to_local(
+        module_items, predicate_nodes, module_dict, db)
 
     # ── Step 3c: resolve each imported name to the CLASS it bound ────────
     #    Names only, no policy: ``origins`` maps every spelling an
@@ -1794,7 +1796,7 @@ def _route_imported_atom_calls_to_local(
 
 
 def _route_other_arity_imported_calls_to_local(
-    module_items: list, predicate_nodes: list, module_dict: dict,
+    module_items: list, predicate_nodes: list, module_dict: dict, db=None,
 ) -> None:
     """Re-point an UNQUALIFIED call to an imported predicate at ANOTHER arity
     from the import remap's dotted key to the LOCAL name the file used.
@@ -1816,7 +1818,10 @@ def _route_other_arity_imported_calls_to_local(
     (it yields no data-position ``LoadName`` target), so it keeps the
     qualifier's resolution.  Only arities the imported binding is NOT a
     predicate at are re-pointed -- the imported arity keeps the dotted key and
-    its ``$disp_`` bake.  Mirrors ``_route_imported_atom_calls_to_local``
+    its ``$disp_`` bake.  "Imported at" is ``predicate.binding_grants_arity``
+    against the importing *db*, the same test in both eras: the owner's OTHER
+    arities (one ``assertz``'d there, say) were not imported, even though a
+    handle's owner would call itself a predicate at them.  Mirrors ``_route_imported_atom_calls_to_local``
     (the atom twin, P3-3 Task 5b).
     """
     reroutes: dict[str, str] = {}      # dotted key -> local name
@@ -1844,8 +1849,8 @@ def _route_other_arity_imported_calls_to_local(
                 and not obj.kwargs
             ):
                 local = reroutes.get(obj.func.name)
-                if local is not None and not is_declared_predicate(
-                        module_dict.get(local), arity=len(obj.args)):
+                if local is not None and not binding_grants_arity(
+                        module_dict.get(local), len(obj.args), db, local):
                     obj.func = LoadNameNode(
                         name=local, position=obj.func.position)
             for child in obj.children():

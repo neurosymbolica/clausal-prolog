@@ -71,3 +71,29 @@ Unaliased `-import_from(alow, [numlist])` then `numlist(3, L)` resolves
 under `numlist` in the calling module: the builtin `numlist/2` answers.
 Pinned both eras (the handle era emulated by binding imports to the owner
 handle) in `tests/test_f7_dispatch_at_arity_refusal.py`.
+
+## Review round (roborev on 95f3c2b6, same day)
+
+- **Meta-calls (MEDIUM).** `call(nl, 3, L)`, `maplist(nl, [3], [L])`,
+  `phrase(nl, 3, R)` handed alow's binding to `_dispatch_at` and leaked
+  numlist/2 again.  `predicate.localize_goal(db, goal)` now wraps a
+  predicate binding the calling db does not own but binds under a plain
+  name into `_UnqualifiedName(db, name, binding)`, which `_dispatch_at`
+  resolves under that name in that db (own row, builtin, else refuse).
+  Wired into call/N (class and handle goals), phrase/2,3, time_goal/1,2, and
+  the 16 goal-first list builtins, which became db-receiving `_db_optional`
+  factories for it (`higher_order._GOAL_FIRST_LIST_BUILTINS`; with no db they
+  are the old builtins exactly).  The qualified meta-call `call(M:G, ...)`
+  (a cell) keeps `_resolve_named_goal`'s qualified arm.  Inherent ambiguity:
+  an owner handle equal to one the caller imports is read as the import.
+- **LOW 1.** "Is the binding this name's predicate at N" is now one
+  era-agnostic test, `predicate.binding_grants_arity`: declared at N, and for
+  an IMPORT, imported at N -- the importing db's adopted rows under the name
+  (`Database.adopt_row`).  An owner arity added later (assertz) is not
+  imported, in either era.  A binding placed by hand (no adopted rows under
+  the name) is trusted as before.  Used by the compile-time reroute,
+  `globals_env` (`_is_call_target` for plain names, `_atom_shadows_row`, the
+  `$disp_` refusal entry), `solve.call` Phase 5, and `_UnqualifiedName`.
+- **LOW 2.** `_refuse_unqualified_other_arity`'s stale-`_fields` exception
+  applies only to a class whose row is in the CALLING db.
+- **LOW 3.** Stale comments and these notes brought in line.

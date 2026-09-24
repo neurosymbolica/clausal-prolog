@@ -29,6 +29,7 @@ from clausal.logic.predicate import (
     is_term_instance, term_field_names,
     is_declared_predicate, resolve_predicate_row,
     is_declared_predicate_name, _refuse_unqualified_other_arity,
+    binding_grants_arity,
 )
 from clausal.logic.builtins import (
     get_builtin_predicate, BuiltinPredicate,
@@ -541,13 +542,13 @@ def _unqualified_other_arity_dispatch(binding, db, name: str, arity: int):
     def dispatch(*args):
         fn = db.get_dispatch(name, arity) if db is not None else None
         if fn is None:
-            fn = _refuse_unqualified_other_arity(binding, name, arity)
+            fn = _refuse_unqualified_other_arity(binding, name, arity, db)
         return fn(*args)
     dispatch.__qualname__ = f"unqualified_other_arity[{name}/{arity}]"
     return dispatch
 
 
-def _is_call_target(binding, arity: int) -> bool:
+def _is_call_target(binding, arity: int, db=None, name=None) -> bool:
     """True when *binding* is what an APPLIED reference at *arity* calls.
 
     W4b-3 ruling (operator, 2026-09-24): a predicate name is name + ARITY.
@@ -559,9 +560,19 @@ def _is_call_target(binding, arity: int) -> bool:
     being a class.  A data reference (*arity* < 0) has no arity to match.
     Every other ``_get_dispatch`` implementor (``BuiltinPredicate``, the
     foreign duck-typed ones) is accepted as before.
+
+    With *db* and *name* (an UNQUALIFIED name in the module being compiled),
+    an IMPORTED binding is the target only at an arity it was imported at
+    (``predicate.binding_grants_arity``, aliased-import ruling 2026-09-24):
+    the owner's other arities are not imported, in either era.  A dotted
+    name passes neither -- it is the qualifier's, owner arities included.
     """
     if is_declared_predicate_name(binding):
-        return arity < 0 or is_declared_predicate(binding, arity=arity)
+        if arity < 0:
+            return True
+        if name is not None:
+            return binding_grants_arity(binding, arity, db, name)
+        return is_declared_predicate(binding, arity=arity)
     return hasattr(binding, "_get_dispatch")
 
 
@@ -593,7 +604,7 @@ def _atom_shadows_row(binding, db, name: str, arity: int) -> bool:
     # this very arity IS the target and is never shadowed.
     return (
         (_term_is_atom(binding) or is_declared_predicate_name(binding))
-        and not (arity >= 0 and is_declared_predicate(binding, arity=arity))
+        and not (arity >= 0 and binding_grants_arity(binding, arity, db, name))
         and db is not None
         and arity >= 0
         and db.row(name, arity) is not None
@@ -675,7 +686,9 @@ def _inject_resolved_targets(
         # alike -- only at its own arity (``_is_call_target``); at another
         # arity it falls through to the builtin lookup / ``_atom_shadows_row``
         # / the dotted routing like any non-predicate binding.
-        if existing is not None and _is_call_target(existing, target_arity):
+        if existing is not None and _is_call_target(
+                existing, target_arity, db,
+                None if "." in target_name else target_name):
             if isinstance(existing, BuiltinPredicate):
                 builtin = get_builtin_predicate(target_name, target_arity, db)
                 if builtin is not None and builtin._arity != existing._arity:
@@ -783,7 +796,8 @@ def _inject_resolved_targets(
             # over ``$dispatch_at(name, N)`` -- and ``_dispatch_at`` would
             # have resolved the other arity in the binding's OWNER.
             if (target_arity >= 0 and is_declared_predicate_name(obj)
-                    and not is_declared_predicate(obj, arity=target_arity)):
+                    and not binding_grants_arity(obj, target_arity, db,
+                                                 target_name)):
                 base_globals[_disp_key(target_name, target_arity)] = (
                     _unqualified_other_arity_dispatch(
                         obj, db, target_name, target_arity))
