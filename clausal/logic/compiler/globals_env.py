@@ -28,6 +28,7 @@ from clausal.logic.database import Clause, Database
 from clausal.logic.predicate import (
     is_term_instance, term_field_names,
     is_declared_predicate, resolve_predicate_row,
+    is_declared_predicate_name,
 )
 from clausal.logic.builtins import (
     get_builtin_predicate, BuiltinPredicate,
@@ -624,7 +625,13 @@ def _inject_resolved_targets(
     called_names = {name for name, arity in targets if arity >= 0}
     for target_name, target_arity in targets:
         existing = base_globals.get(target_name)
-        if existing is not None and hasattr(existing, "_get_dispatch"):
+        # W4b-3: after the flip a predicate's binding is a module-qualified
+        # HANDLE with no ``_get_dispatch``.  Unaccepted here it falls through
+        # to the builtin lookup below (a same-named builtin then wins over the
+        # user predicate) and a locked predicate loses its ``$disp_`` bake.
+        if existing is not None and (
+                hasattr(existing, "_get_dispatch")
+                or is_declared_predicate_name(existing)):
             if isinstance(existing, BuiltinPredicate):
                 builtin = get_builtin_predicate(target_name, target_arity, db)
                 if builtin is not None and builtin._arity != existing._arity:

@@ -17,6 +17,7 @@ from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.trampoline import DONE, StepGenerator
 from clausal.logic.predicate import (
     is_term_instance, term_field_names, _dispatch_at,
+    is_declared_predicate_name,
 )
 
 from clausal.logic.builtins._registry import (
@@ -66,7 +67,10 @@ def _goal_dispatch_and_args(goal_val, db=None, context="time_goal/1"):
     (ruling 2 extended, 2026-09-24).  It is a reference that was supposed to
     resolve, and failing silently is how that mistake stays invisible.
     """
-    if callable(goal_val) or hasattr(goal_val, '_get_dispatch'):
+    # W4b-3: ``is_declared_predicate_name`` admits the module-qualified
+    # HANDLE a predicate name is bound to after the flip.
+    if callable(goal_val) or hasattr(goal_val, '_get_dispatch') \
+            or is_declared_predicate_name(goal_val):
         return _ensure_trampoline_dispatch(goal_val, 0), ()
     is_cell, functor = compound_cell_shape(goal_val)
     if is_cell and functor not in CELL_GOAL_CONTROL_FUNCTORS and functor != QUALIFIED_GOAL_FUNCTOR:

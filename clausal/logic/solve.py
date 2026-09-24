@@ -48,6 +48,7 @@ from clausal.logic.atoms import (
 from clausal.logic.database import Clause, Database, Module
 from clausal.logic.predicate import (
     is_term_instance, term_field_names, _dispatch_at,
+    is_declared_predicate_name,
 )
 from clausal.logic.trampoline import StepGenerator, DONE, _drive_until_yield
 from clausal.logic.cells import (
@@ -1111,7 +1112,13 @@ def call(
     dispatch_fn = None
     if module is not None and module.module_dict is not None:
         pred_cls = module.module_dict.get(functor)
-        if pred_cls is not None and hasattr(pred_cls, '_get_dispatch'):
+        # W4b-3: after the flip the binding is a module-qualified HANDLE,
+        # which has no ``_get_dispatch``; skipping this phase then hands the
+        # call to a same-named BUILTIN in Phase 6.  ``_dispatch_at`` resolves
+        # either shape.
+        if pred_cls is not None and (
+                hasattr(pred_cls, '_get_dispatch')
+                or is_declared_predicate_name(pred_cls)):
             # Pass the arity: call("citation", A, B) against citation/3 is the
             # same fault as writing it in a clause body, and gets the same
             # message rather than a TypeError about a missing `trail`.  Via

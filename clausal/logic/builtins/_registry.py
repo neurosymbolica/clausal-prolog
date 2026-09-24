@@ -12,7 +12,7 @@ from typing import Any, Callable
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
 from clausal.logic.predicate import (
     PredicateMeta, is_term_instance, term_field_names, make_predicate,
-    _dispatch_at,
+    _dispatch_at, is_declared_predicate_name,
 )
 from clausal.logic.trampoline import DONE, StepGenerator
 from clausal.terms import Compound, DictTerm, SetTerm, KWTerm
@@ -147,6 +147,17 @@ def _ensure_trampoline_dispatch(goal_val, arity: int | None = None):
     if hasattr(goal_val, '_get_dispatch'):
         if arity is None:
             return goal_val._get_dispatch()
+        return _dispatch_at(goal_val, arity)
+    if is_declared_predicate_name(goal_val):
+        # W4b-3: a module-qualified predicate HANDLE (what a predicate name
+        # is bound to after the flip).  A handle carries no arity of its own,
+        # so it cannot be resolved without the caller's count -- refuse
+        # loudly rather than fall through to wrapping a str as a simple-mode
+        # callable.
+        if arity is None:
+            raise TypeError(
+                f"_ensure_trampoline_dispatch: a predicate handle "
+                f"({goal_val!r}) needs the call arity")
         return _dispatch_at(goal_val, arity)
     # A Pythonic AST node (Predicate, Lambda, Compound-as-term, …) is
     # ``callable`` — every node gets a field-replacement ``__call__`` from

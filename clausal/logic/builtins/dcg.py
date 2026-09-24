@@ -5,6 +5,7 @@ from __future__ import annotations
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.predicate import (
     is_term_instance, term_field_names, _dispatch_at,
+    is_declared_predicate_name,
 )
 from clausal.logic.trampoline import DONE, StepGenerator
 
@@ -187,8 +188,11 @@ def _phrase__2(db, this_generator, _proceed, _fail, _catcher, rule_body, list_ar
     # phrase/3 downstream see text and not a bare str
     list_val = _text_out(list_val)
 
-    if isinstance(rule_val, type) and hasattr(rule_val, '_get_dispatch'):
-        # Class reference (0 extra args): phrase(greeting, [hello, world])
+    if (isinstance(rule_val, type) and hasattr(rule_val, '_get_dispatch')) \
+            or is_declared_predicate_name(rule_val):
+        # Class reference (0 extra args): phrase(greeting, [hello, world]),
+        # or (W4b-3) the module-qualified HANDLE the name is bound to after
+        # the flip -- which ``_resolve_nonterminal`` below would refuse.
         # A nonterminal's translated arity is its written arity plus S0 and S,
         # so a bare name here is called at 2 — see _DCG_ARITY_NOTE.
         dispatch = _dispatch_at(rule_val, 2)
@@ -237,7 +241,8 @@ def _phrase__3(db, this_generator, _proceed, _fail, _catcher, rule_body, list_ar
     list_val = _text_out(list_val)   # stage 1: the rule body receives the carrier, not the transient bare str
     rest_val = deref(rest_arg)
 
-    if isinstance(rule_val, type) and hasattr(rule_val, '_get_dispatch'):
+    if (isinstance(rule_val, type) and hasattr(rule_val, '_get_dispatch')) \
+            or is_declared_predicate_name(rule_val):   # W4b-3: see phrase/2
         dispatch = _dispatch_at(rule_val, 2)  # see _DCG_ARITY_NOTE
         sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, list_val, rest_val, trail)
     elif is_term_instance(rule_val):
