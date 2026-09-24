@@ -2554,6 +2554,17 @@ def _process_declarations(module_items: list, module_dict: dict,
                                              db=db)
                 if _row is not None and _row.clauses:
                     continue
+                # An IMPORTED predicate at this arity wins even with no
+                # clauses yet (operator ruling 2026-09-24, option A): a
+                # clause-less ``-dynamic`` exporter's row is still the
+                # predicate an ``-import_from`` shares, and binding the atom
+                # here split identity silently -- an ``assertz`` landed on
+                # a row neither module read.  Same outcome as against a
+                # DEFINING exporter (the clause test above).
+                if (_row is not None and _row.db is not db
+                        and not _row.detached
+                        and _row.key[1] == len(field_names)):
+                    continue
                 # Bound in THIS module's namespace only -- deliberately NOT
                 # through the process-wide ``predicate_builtins`` pool the
                 # bare-atom branch above shares.  That pool is the ATOM

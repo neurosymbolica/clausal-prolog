@@ -19,3 +19,7 @@ term, an `assertz`).
 
 Question: should a short positional construction raise like a long one? Check
 for callers that rely on the padding before changing it.
+
+## Resolved (2026-09-24, operator ruling C; branch fix/small-todos-batch-2026-09-24, e4dc60a8)
+
+See `todo/done/too-few-positional-args-pad-with-fresh-vars-QUESTION-2026-09-24.md`.
