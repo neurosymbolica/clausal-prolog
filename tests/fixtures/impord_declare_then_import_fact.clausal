@@ -2,8 +2,9 @@
 # Declare-then-import where the head is a bodyless FACT
 # (_build_fact_statements, the path the original bug report hit).  The local
 # declaration spells the fields (STATUS, CITATIONS); the import rebinds
-# impord_fverdict to a class whose fields are (OUTCOME, CITES).  Emitted
-# positionally, `maybe` lands in slot 0 and `pending` in slot 1.
+# impord_fverdict to the vocab's class, whose fields are the (arg_0, arg_1)
+# placeholders of its bare `impord_fverdict/2` export.  Emitted positionally,
+# `maybe` lands in slot 0 and `pending` in slot 1.
 #
 # Since 2026-09-24 the LOAD is refused: impord_fact_vocab only declares
 # impord_fverdict/2, and supplying its clauses downstream (the

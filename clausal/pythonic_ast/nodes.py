@@ -87,7 +87,8 @@ __all__ = [
     # Module-level items (pipeline split)
     "Directive", "ImportFromDirective", "ImportModuleDirective",
     "ModuleDeclaration", "PrivateDeclaration", "TranslationsDirective",
-    "BareAtomRefs", "StrictAtomsDeclaration", "ImplicitAtomsDeclaration",
+    "BareAtomRefs", "HeadFieldNames", "StrictAtomsDeclaration",
+    "ImplicitAtomsDeclaration",
     # A10-F016: these were defined but absent from __all__.
     "SpecializeDirective", "EdcgAccDecl", "EdcgPassDecl", "EdcgPredDecl",
     # Imports
@@ -1138,6 +1139,27 @@ class ImplicitAtomsDeclaration(Node):
     ``SyntaxError``.
     """
     pass
+
+
+@node_class
+class HeadFieldNames(Node):
+    """Module item: the field names the rewriter fixed for each functor.
+
+    A snapshot of ``EmbedTransformer._seen_functors`` taken at the end of
+    ``visit_Module``, keyed by NAME (one arity per name per file is enforced
+    by the rewriter), each value a ``tuple[str, ...]``.  It is exactly the
+    tuple the functor's class is minted with, and the first registration
+    wins: a ``-module``/``-private``/``-edcg_pred`` declaration beats any
+    clause, a ``-dynamic``/``f/N`` placeholder loses to the first real head.
+
+    A compile-time WORKLIST, not a declaration: ``compiler_v2.compile_module``
+    step 4 stamps ``row.signature`` from it on every row this load writes
+    clauses to (arity-checked), whatever the module dict binds the name to.
+    It never enters ``Database._declared``.  Because module items are
+    re-derived by re-parsing on a bytecode-cache hit, it is present on both
+    load paths.  ``reflection`` skips it (``_SKIPPED_ITEMS``).
+    """
+    fields: dict = field(default_factory=dict)
 
 
 @node_class
