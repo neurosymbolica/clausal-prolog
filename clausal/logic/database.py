@@ -644,6 +644,23 @@ class Database:
             found |= {f for (f, _a) in keyed}
         return sorted(found)
 
+    def owned_keys(self) -> "set[tuple[str, int]]":
+        """Every ``(functor, arity)`` this database is the HOME of.
+
+        The same containers ``row()``'s own ``known`` test consults, and
+        deliberately NOT ``_adopted``: a row adopted at ``-import_from`` is
+        another database's, and a question asked of it here (``is_dynamic``,
+        say) is answered by the wrong database.  Keyed off the store, never
+        off ``module_dict``, so it answers the same whatever a predicate's
+        module binding looks like -- a class today, a mangled atom after the
+        PredicateMeta retirement flip.
+        """
+        found = set(self._rows)
+        for keyed in (self._clauses, self._dispatch, self._lazy_recompile,
+                      self._signatures, self._dynamic):
+            found.update(keyed)
+        return found
+
     def adopt_row(self, local_functor: str, arity: int, row: "PredRow") -> bool:
         """Make ``(local_functor, arity)`` resolve to an existing *row* that
         another database owns.  True if it was adopted, False if this database

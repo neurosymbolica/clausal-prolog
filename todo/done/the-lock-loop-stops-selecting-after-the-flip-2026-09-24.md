@@ -55,3 +55,32 @@ census discipline: N==0 is a refusal, not a pass.)
 ## Owner
 
 W4b-2d / the flip. Do not land the flip before this is fixed.
+
+## Resolved 2026-09-24
+
+Step 7 is now `_lock_static_predicates(db)`: it iterates
+`Database.owned_keys()` (the containers `row()`'s `known` test reads, minus
+`_adopted`) and sets `row.locked` on each non-dynamic key. It takes no module
+dict, so a binding's Python type cannot empty it.
+
+Measured against the old walk over the house suite (3641 module loads, probe
+placed BEFORE the loop — an earlier probe placed after it read its own
+writes and reported everything as "already locked"):
+
+| population | n | old walk | new |
+|---|---|---|---|
+| imported static rows | 205 | re-locked (owner had already locked) | skipped, no change |
+| imported `-dynamic` row (`test_cell_goals` `cg_imp` `lp/1`) | 1 | **locked the owner's dynamic predicate** | skipped |
+| owned static row, module-dict class carries another row | 4 | own row left unlocked | locked |
+| owned static row, name bound as an atom | 6 distinct | left unlocked | locked |
+
+The second row was a live bug: importing a `-dynamic` predicate without
+re-declaring `-dynamic` in the importer locked it on the OWNER, after which
+the owner's own `assertz` raised `permission_error(modify, static_procedure)`.
+The importer asked its own database `is_dynamic` about an adopted row.
+`tests/fixtures/gate_dyn_user.clausal` re-declares `-dynamic`, which is why
+nothing caught it.
+
+Positive controls: `tests/test_lock_static_predicates.py`. Mutation-checked —
+restoring the old walk fails the import test; an empty population fails
+three of the four. Gate: 146 failed both sides, identical sets, +4 passed.
