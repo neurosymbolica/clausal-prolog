@@ -187,17 +187,34 @@ def _items(namespace):
         return []
 
 
-def _arity_of(obj):
-    """Declared arity of a predicate class, or ``None`` if it is not one."""
-    from clausal.logic.predicate import PredicateMeta
+def _arities_of(obj):
+    """The SET of arities *obj* is a predicate at; empty if it is not one.
 
-    if not isinstance(obj, PredicateMeta):
+    F4, ruling 3.  This was ``_arity_of``, answering one arity or ``None``,
+    and both pool builders guarded it with ``if arity:`` -- so a ``p/0``
+    predicate was falsy and never reached the near-miss pool.  The empty set
+    now carries "not a predicate here", and several arities are several
+    suggestions.  Era-agnostic (a ``PredicateMeta`` class or a mangled atom),
+    and read from the owner's lossless ``predicate_arities``, never the
+    lossy ``Database.arities_for`` -- see
+    ``clausal.logic.predicate.predicate_arities_for``.
+    """
+    from clausal.logic.predicate import predicate_arities_for
+
+    try:
+        return predicate_arities_for(obj)
+    except Exception:  # noqa: BLE001 - a diagnostic must not raise
+        return set()
+
+
+def _owner_of(obj):
+    """The module that owns the predicate *obj* denotes, era-agnostic."""
+    from clausal.logic.predicate import predicate_owner_module
+
+    try:
+        return predicate_owner_module(obj)
+    except Exception:  # noqa: BLE001
         return None
-    fields = getattr(obj, "_fields", None)
-    if fields is not None:
-        return len(fields)
-    arity = getattr(obj, "_arity", None)
-    return arity if isinstance(arity, int) else None
 
 
 def _modname(module_globals):
@@ -228,9 +245,12 @@ def _local_entries(module_globals, modname, db):
     class in the namespace — exactly the case that reaches the failing
     lookup), and the namespace carries the predicate classes.  Union them.
 
-    Zero-arity namespace entries are dropped unless the database confirms
-    clauses for them: in Clausal a bare atom is a fieldless predicate class, so
-    keeping them would bury three callable predicates under fifty atoms.
+    Zero-arity namespace entries are kept (F4): they used to be dropped by
+    an ``if arity:`` guard, on the stated ground that a bare atom was a
+    fieldless predicate class and would bury the real predicates.  Since the
+    atoms-as-str flip an atom is a ``str``, which answers the empty set, so
+    the only zero-arity entries left are real ``p/0`` predicates -- the ones
+    the guard was wrongly hiding.
     """
     from clausal.import_hook import predicate_builtins
 
@@ -247,10 +267,9 @@ def _local_entries(module_globals, modname, db):
         # call.  THE FLIP retired the last of these ``is`` pins.
         if predicate_builtins.get(name) == value:
             continue
-        if modname is not None and getattr(value, "__module__", None) != modname:
+        if modname is not None and _owner_of(value) != modname:
             continue  # imported or re-exported; not this module's own
-        arity = _arity_of(value)
-        if arity:
+        for arity in _arities_of(value):
             found[(name, arity)] = None
     return sorted(found)
 
@@ -274,11 +293,10 @@ def _imported_entries(module_globals, modname):
         # call.  THE FLIP retired the last of these ``is`` pins.
         if predicate_builtins.get(name) == value:
             continue
-        origin = getattr(value, "__module__", None)
+        origin = _owner_of(value)
         if origin is None or origin == modname:
             continue
-        arity = _arity_of(value)
-        if arity:
+        for arity in _arities_of(value):
             out.append((name, arity, origin))
     out.sort()
     return out
@@ -319,12 +337,13 @@ class _Hit:
 
 
 def _defines(mod, functor):
-    """Arity at which the loaded module *mod* defines *functor*, or ``None``."""
+    """Arities at which the loaded module *mod* defines *functor*, sorted;
+    empty when it does not."""
     try:
         obj = getattr(mod, functor, None)
     except Exception:  # noqa: BLE001
-        return None
-    return _arity_of(obj)
+        return []
+    return sorted(_arities_of(obj))
 
 
 def _import_directive_targets(path):
@@ -371,8 +390,7 @@ def _imported_module_hits(functor, module_globals, modname, path):
         if getattr(mod, "__name__", None) == modname:
             return
         seen.add(dotted)
-        arity = _defines(mod, functor)
-        if arity is not None:
+        for arity in _defines(mod, functor):
             hits.append(_Hit(dotted, arity, "imported", alias))
 
     if path:
@@ -486,12 +504,13 @@ def _sibling_hits(functor, siblings, already):
         mod = _loaded_module_for(sibling)
         if mod is not None:
             dotted = getattr(mod, "__name__", label)
-            arity = _defines(mod, functor) if dotted not in already else False
+            arities = _defines(mod, functor) if dotted not in already else []
         else:
             dotted = label
             arity = (_declared_arity(sibling, functor)
                      if dotted not in already else False)
-        if arity is not False and arity is not None:
+            arities = [] if arity is False or arity is None else [arity]
+        for arity in arities:
             hits.append(_Hit(dotted, arity, "sibling"))
         if len(hits) >= _MAX_HITS:
             break
@@ -542,11 +561,19 @@ def _suggestion_line(functor, arity, here, builtin, hits, pool):
                 else "same name, different arity, another module")
         return _sentence(f"did you mean: {what} from {hit.module} ?   "
                          f"({note})")
-    names = _suggestions(functor, [name for name, _ in pool])
+    # Deduplicated: a name at two arities is ONE candidate name (scored once,
+    # counted once by the tie guard) rendered as two suggestions below.
+    names = _suggestions(functor, list(dict.fromkeys(name for name, _ in pool)))
     if not names:
         return []
-    rendered = dict(pool)
-    shown = ", ".join(rendered.get(name, name) for name in names)
+    # One name can stand at several arities -- several suggestions (F4),
+    # so group rather than let ``dict(pool)`` keep only the last.
+    rendered: dict[str, list[str]] = {}
+    for name, text in pool:
+        if text not in rendered.setdefault(name, []):
+            rendered[name].append(text)
+    shown = ", ".join(", ".join(rendered.get(name) or [name])
+                      for name in names)
     return _sentence(f"did you mean: {shown} ?   (similar name)")
 
 

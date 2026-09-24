@@ -630,6 +630,26 @@ class Database:
                     return True
         return False
 
+    def predicate_arities(self, functor: str) -> "set[int]":
+        """Every arity *functor* is declared PREDICATE-shaped at -- the
+        arity-answering twin of :meth:`is_predicate_name`, scanning exactly
+        its containers, so ``bool(predicate_arities(f)) ==
+        is_predicate_name(f)`` always.
+
+        The lossless counterpart of :meth:`arities_for` (which misses
+        ``_predicate_export`` and ``_adopted``; see ``is_predicate_name``).
+        Exists for the predicate-not-found diagnostic's near-miss pool
+        (F4, ruling 3: the diagnostic arity reader answers a SET, the empty
+        set meaning "not a predicate here").  ``arities_for`` keeps its own
+        narrower meaning for the import plant, which must not treat an
+        adopted row as the exporter's own.
+        """
+        found: set[int] = set()
+        for keyed in (self._rows, self._adopted, self._predicate_export,
+                      *self._home_stores()):
+            found |= {a for (f, a) in keyed if f == functor}
+        return found
+
     def functors(self) -> "list[str]":
         """Every predicate NAME this database knows, sorted.
 

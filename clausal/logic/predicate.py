@@ -1883,6 +1883,67 @@ def is_declared_predicate_name(binding) -> bool:
     return False
 
 
+def predicate_owner_module(binding) -> "str | None":
+    """F4: the name of the module that OWNS the predicate *binding* denotes,
+    era-agnostic, or ``None``.
+
+    A ``PredicateMeta`` class answers its ``__module__``; a mangled atom
+    answers its module half (after the flip a module attribute for a
+    predicate is a mangled atom, and a ``str`` has no ``__module__`` -- a
+    filter keyed on ``getattr(value, "__module__")`` then selects NOTHING).
+    Anything else -> ``None``.  Does not require the owner to be loaded.
+    """
+    if isinstance(binding, PredicateMeta):
+        owner = getattr(binding, "__module__", None)
+        return owner if isinstance(owner, str) else None
+    from clausal.logic.atoms import demangle, is_mangled  # noqa: PLC0415
+    if is_mangled(binding):
+        return demangle(binding)[0]
+    return None
+
+
+def predicate_arities_for(binding) -> "set[int]":
+    """F4 (ruling 3): the SET of arities *binding* denotes a predicate at,
+    era-agnostic; the EMPTY set means "not a predicate" -- the role ``None``
+    played for the single-arity reader this replaces
+    (``predicate_diagnostics._arity_of``, whose ``if arity:`` guards dropped
+    every ``p/0``).  Several arities are several answers, not ambiguity.
+
+    Source: the owner's ``Database.predicate_arities`` -- never
+    ``Database.arities_for``, which misses a bare ``name/arity`` export
+    entry and an ``-import_from`` adopted row.
+
+    1. a ``PredicateMeta`` class -> ``{len(cls._fields)}`` (the old reader's
+       answer, kept so nothing it answered is lost -- e.g. a module that is
+       not in ``sys.modules``) UNION the owner db's
+       ``predicate_arities(cls.__name__)`` when the owner is a loaded Clausal
+       module (a ``-dynamic(p/1, p/2)`` name binds one class but is a
+       predicate at both).
+    2. a mangled atom whose module half is a loaded Clausal module -> that
+       db's ``predicate_arities(functor)``.
+    3. anything else (a ``@dataclass`` class, a plain string, ``None``, an
+       unloaded owner, an arbitrary object) -> ``set()``.
+    """
+    if isinstance(binding, PredicateMeta):
+        found: set[int] = set()
+        fields = getattr(binding, "_fields", None)
+        if fields is not None:
+            found.add(len(fields))
+        owner = predicate_owner_module(binding)
+        db = _db_for_module_name(owner) if owner else None
+        if db is not None:
+            found |= db.predicate_arities(binding.__name__)
+        return found
+    from clausal.logic.atoms import is_mangled  # noqa: PLC0415
+    if is_mangled(binding):
+        resolved = _resolve_mangled_owner(binding)
+        if resolved is None:
+            return set()
+        db, functor = resolved
+        return db.predicate_arities(functor)
+    return set()
+
+
 def field_names_for(value, *, arity=None, db=None, namespace=None):
     """Field names for a declared functor, or None.
 
@@ -2265,4 +2326,5 @@ __all__ = ["PredicateMeta", "RetiredStateError", "_MISSING", "is_term_instance",
            "term_field_values", "term_field_dict",
            "make_predicate", "make_atom",
            "resolve_predicate_row", "is_declared_predicate",
-           "is_declared_predicate_name"]
+           "is_declared_predicate_name", "predicate_arities_for",
+           "predicate_owner_module"]
