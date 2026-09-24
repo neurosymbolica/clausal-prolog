@@ -389,42 +389,50 @@ test("concat all") <- (
 ### Examples
 
 ```clausal
-# List all clauses for a predicate:
-debug_fib <- listing(fib)
+# List all clauses for a predicate, by its Name/Arity indicator -- `fib/2`
+# here is `/`, the arithmetic operator, applied to a name and an int; it is
+# NOT data (see the paragraph below):
+debug_fib <- listing(fib/2)
 
-# Also accepted: an ATOM naming a 0-arity predicate, or a Name/Arity
-# indicator naming any arity -- `fib/2` here is `/`, the arithmetic
-# operator, applied to a predicate reference and an int; it is NOT data
-# (see the paragraph below):
-debug_greet <- listing('greet')
-debug_fib2 <- listing(fib/2)
+# Name//Arity (a DCG nonterminal indicator) names Name/(Arity+2):
+debug_digits <- listing(digits // 1)
 
 # Pretty-print a complex term:
 show_deep(TERM) <- portray_clause(TERM)
 ```
 
-`listing` accepts, in any of these shapes: a `PredicateMeta` class or
-instance; a builtin predicate (prints a `"% name/arity — builtin"` line); an
-**atom** naming a 0-arity predicate; or a `Name/Arity` indicator naming
-a predicate at any arity. A **string** is not a name: `listing("greet")`
-raises `type_error(predicate, "greet")`. The indicator has three representations: the
-cell `('/', Name, Arity)` and the engine's `Compound("/", (Name, Arity))`
-(both reachable from Python/engine callers that already hold the name and
-arity as data), and — what a user-written `foo/2` actually compiles to in
-`.clausal` source, as in the `debug_fib2` example above — a runtime `Div`
-node, since `/` is the arithmetic operator and a structural (non-`is`) use
-of it stays a reified operator term rather than data. For the last two, an
-unknown `name/arity` raises `existence_error(procedure, Name/Arity)` — a
-predicate nobody ever declared is not the same as one with an empty clause
-list, which instead prints `"% name/arity — no clauses"`. An indicator whose
-name or arity is an unbound variable (`listing(X/2)`) raises
-`instantiation_error`. It prints a header with clause count, then each clause
-in `head <- (body).` format.
+`listing/1` follows Scryer Prolog's contract (operator ruling 2026-09-25,
+"do what Scryer does"). Its argument is a predicate indicator, `Name/Arity`
+or `Name//Arity`:
+
+- an **unbound** argument fails;
+- an indicator naming no predicate, or a predicate with **no clauses**, fails;
+- anything that is not an indicator -- a bare atom (`listing(fib)`), a
+  compound term (`listing(color(R, H))`), a string, a number -- raises
+  `type_error(predicate_indicator, PI)`;
+- a malformed operand raises what `functor/3` raises for it: an unbound name
+  or arity `instantiation_error`, a non-integer arity
+  `type_error(integer, A)`, a negative one
+  `domain_error(not_less_than_zero, A)`, a string name
+  `type_error(atomic, N)`, a number name `type_error(atom, N)`.
+
+The indicator has several representations: the cells `('/', Name, Arity)` /
+`('//', Name, Arity)` and the engine's `Compound("/", (Name, Arity))` (both
+reachable from Python/engine callers that already hold the name and arity as
+data), and -- what a user-written `foo/2` or `foo // 2` actually compiles to
+in `.clausal` source -- a runtime `Div` / `FloorDiv` node, since `/` and `//`
+are arithmetic operators and a structural (non-`is`) use stays a reified
+operator term rather than data. It prints a header with clause count, then
+each clause in `head <- (body).` format.
+
+From Python, `listing` also takes a `PredicateMeta` class or instance (it
+lists that predicate, and prints `"% name/arity — no clauses"` for an empty
+one) or a builtin predicate (prints a `"% name/arity — builtin"` line).
 
 The indicator finds an IMPORTED predicate as well as a local one: an
 `-import_from` binds the exporter's predicate, whose clauses live on the
 exporter's row, so `listing(qq/1)` and `listing('qq'/1)` from the importer
-print exactly what `listing(qq)` prints there. (Before the P3-3 close-out
+print exactly what `listing(qq/1)` prints there. (Before the P3-3 close-out
 fix they raised `existence_error` for a predicate the importer could see and
 call, because the name was looked up in the calling module's database alone.)
 

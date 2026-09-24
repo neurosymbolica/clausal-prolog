@@ -8,6 +8,7 @@ import sys
 import pytest
 
 from clausal.logic.atoms import mint
+from clausal.logic.cells import chars
 from clausal.logic.variables import Var, Trail, unify, deref
 from clausal.logic.builtins import get_builtin_dispatch
 from clausal.logic.builtins.io import _format_clause_head
@@ -101,20 +102,22 @@ class TestListing:
         assert "animal(" in output
         assert '"cat"' in output
 
-    def test_a_cell_resolves_to_its_predicate(self):
-        """P2: what used to arrive here as a term INSTANCE is a CELL.
+    def test_a_compound_cell_is_not_a_predicate_indicator(self):
+        """FLIPPED 2026-09-25 -- Operator ruling 2026-09-25 ("do what Scryer does").
 
-        The instance resolved through ``type(val)`` and needed no database.
-        A cell carries the functor and the arity and no class, so it
-        resolves against the caller's database instead -- the same route
-        the atom and ``Name/Arity`` shapes take, and for the same reason
-        (R-P2-2, module locality).
+        This used to be ``test_a_cell_resolves_to_its_predicate``: the
+        compound ``color(red, ...)`` listed ``color/2``.  Scryer's
+        ``listing/1`` accepts only ``Name/Arity`` and ``Name//Arity``; a
+        compound term is ``type_error(predicate_indicator, PI)``.
         """
-        # nv
         db = _db_with_fact("color", 2)
         dispatch = get_builtin_dispatch("listing", 1, db)
-        output = _run_listing(dispatch, ("color", "red", "#ff0000"))
-        assert "color/2" in output
+        cell = ("color", "red", "#ff0000")
+        with pytest.raises(LogicException) as exc_info:
+            _run_listing(dispatch, cell)
+        formal = _formal(exc_info)
+        assert formal.functor == "type_error"
+        assert formal.args == (mint("predicate_indicator"), cell)
 
     def test_non_predicate_error(self):
         # nv
@@ -180,6 +183,28 @@ def _run_listing(dispatch, pred):
     return buf.getvalue()
 
 
+def _listing_answers(dispatch, pred):
+    """``(number of answers, stdout)`` of one ``listing/1`` call -- the
+    Scryer-contract cases FAIL (zero answers) and print nothing."""
+    trail = Trail()
+    buf = io.StringIO()
+    old = sys.stdout
+    sys.stdout = buf
+    try:
+        n = len(list(solutions(
+            StepGenerator(dispatch, None, None, None, pred, trail))))
+    finally:
+        sys.stdout = old
+    return n, buf.getvalue()
+
+
+def _formal(exc_info):
+    """The formal term of a caught ``error(Formal, Context)``."""
+    err = exc_info.value.term
+    assert isinstance(err, Compound) and err.functor == "error"
+    return err.args[0]
+
+
 def _db_with_fact(name, arity):
     from clausal.logic.database import Database
 
@@ -196,37 +221,42 @@ class TestListingAtomArgument:
     is a STRING and is refused (Task 12).
     """
 
-    def test_atom_lists_the_zero_arity_predicate_by_name(self):
+    def test_a_bare_atom_is_not_a_predicate_indicator(self):
+        """FLIPPED 2026-09-25 -- Operator ruling 2026-09-25 ("do what Scryer does").
+
+        This used to be ``test_atom_lists_the_zero_arity_predicate_by_name``
+        (``listing(greet)`` listed ``greet/0``).  Scryer:
+        ``listing(fib)`` is ``type_error(predicate_indicator, fib)`` -- even
+        when ``greet/0`` exists.  ``listing(greet/0)`` is the spelling."""
         db = _db_with_fact("greet", 0)
         dispatch = get_builtin_dispatch("listing", 1, db)
-        output = _run_listing(dispatch, mint("greet"))
-        assert "greet/0" in output
-        assert "1 clause(s)" in output
+        with pytest.raises(LogicException) as exc_info:
+            _run_listing(dispatch, mint("greet"))
+        formal = _formal(exc_info)
+        assert formal.functor == "type_error"
+        assert formal.args == (mint("predicate_indicator"), mint("greet"))
+        n, output = _listing_answers(dispatch, ("/", mint("greet"), 0))
+        assert n == 1 and "greet/0" in output and "1 clause(s)" in output
 
     def test_string_name_with_no_db_raises_type_error(self):
         dispatch = get_builtin_dispatch("listing", 1, None)
         with pytest.raises(LogicException):
             _run_listing(dispatch, "greet")
 
-    def test_atom_naming_an_absent_predicate_raises_existence_error(self):
+    def test_atom_naming_an_absent_predicate_is_still_a_type_error(self):
+        """FLIPPED 2026-09-25 -- Operator ruling 2026-09-25 ("do what Scryer does").  Was an ``existence_error`` for
+        ``no_such_predicate/0``; Scryer refuses the SHAPE before it looks
+        anything up, so a bare atom is ``type_error(predicate_indicator)``
+        whether or not anything of that name exists."""
         from clausal.logic.database import Database
 
         db = Database()
         dispatch = get_builtin_dispatch("listing", 1, db)
         with pytest.raises(LogicException) as exc_info:
             _run_listing(dispatch, mint("no_such_predicate"))
-        err = exc_info.value.term
-        # error(existence_error(procedure, Compound("/", (name, arity))), _)
-        assert isinstance(err, Compound) and err.functor == "error"
-        inner = err.args[0]
-        assert isinstance(inner, Compound) and inner.functor == "existence_error"
-        assert inner.args[0] == mint("procedure")
-        indicator = inner.args[1]
-        assert isinstance(indicator, Compound) and indicator.functor == "/"
-        # The engine's own indicator builders carry the SPELLING in the
-        # Name slot (uniformly across the tree: see test_cell_goals'
-        # existence-error rows); only the type/domain NAMES are atoms.
-        assert indicator.args == ("no_such_predicate", 0)
+        formal = _formal(exc_info)
+        assert formal.functor == "type_error"
+        assert formal.args[0] == mint("predicate_indicator")
 
 
 class TestListingNameArityIndicatorArgument:
@@ -251,24 +281,27 @@ class TestListingNameArityIndicatorArgument:
         assert "pt/2" in output
         assert "1 clause(s)" in output
 
-    def test_name_arity_cell_with_no_db_raises_type_error(self):
+    def test_name_arity_cell_with_no_db_fails(self):
+        """FLIPPED 2026-09-25 -- Operator ruling 2026-09-25 ("do what Scryer does").  Was a ``type_error``: with no
+        database the indicator names no clauses, and Scryer's
+        ``\\+ \\+ clause(Head, _)`` guard FAILS for that."""
         dispatch = get_builtin_dispatch("listing", 1, None)
-        with pytest.raises(LogicException):
-            _run_listing(dispatch, ("/", mint("pt"), 2))
+        assert _listing_answers(dispatch, ("/", mint("pt"), 2)) == (0, "")
 
-    def test_name_arity_indicator_naming_an_absent_predicate_raises_existence_error(self):
+    def test_name_arity_indicator_naming_an_absent_predicate_fails(self):
+        """FLIPPED 2026-09-25 -- Operator ruling 2026-09-25 ("do what Scryer does").  Was ``existence_error(procedure,
+        no_such_predicate/3)``.  Scryer: ``listing(nosuch/1)`` FAILS, and
+        so does an indicator naming a predicate with no clauses
+        (``:- dynamic(d/1)``, ``listing(d/1)``)."""
         from clausal.logic.database import Database
 
         db = Database()
         dispatch = get_builtin_dispatch("listing", 1, db)
-        with pytest.raises(LogicException) as exc_info:
-            _run_listing(dispatch, ("/", mint("no_such_predicate"), 3))
-        err = exc_info.value.term
-        assert isinstance(err, Compound) and err.functor == "error"
-        inner = err.args[0]
-        assert inner.functor == "existence_error"
-        indicator = inner.args[1]
-        assert indicator.args == ("no_such_predicate", 3)
+        assert _listing_answers(
+            dispatch, ("/", mint("no_such_predicate"), 3)) == (0, "")
+        db.mark_dynamic("dyn_empty", 1)
+        assert db.row("dyn_empty", 1, create=True).clauses == []
+        assert _listing_answers(dispatch, ("/", mint("dyn_empty"), 1)) == (0, "")
 
     def test_name_arity_cell_with_bound_vars_in_the_slots_lists_the_predicate(self):
         """P3-3 Task 8 fix round 1 (F2): the name/arity slots are ordinary
@@ -382,9 +415,8 @@ class TestListingDivIndicatorArgument:
             return buf.getvalue()
 
         # The CLASS form is passed from Python: in source, ``listing(fib)``
-        # now passes the plain ATOM ``fib`` (ruling S, 2026-09-24), which
-        # names fib/0 (spec 6.4) -- so the fixture's ``debug_fib_by_class``
-        # no longer reaches the class.
+        # passes the plain ATOM ``fib`` (ruling S, 2026-09-24), which is
+        # type_error(predicate_indicator, fib) since 2026-09-25 (Scryer).
         buf = _io.StringIO()
         saved = _sys.stdout
         _sys.stdout = buf
@@ -395,28 +427,25 @@ class TestListingDivIndicatorArgument:
         out_class = buf.getvalue()
         out_indicator = _capture("debug_fib_by_indicator")
         assert out_indicator == out_class
+        # Operator ruling 2026-09-25: the source spelling ``fib // 0``
+        # (Scryer's Name//Arity) names fib/2 -- the same listing.
+        assert _capture("debug_fib_by_nonterminal") == out_class
         assert "fib/2" in out_class
         assert "3 clause(s)" in out_class
 
-    def test_div_with_a_plain_int_left_operand_raises_type_error(self):
-        """``3/2`` -- no predicate-denoting operand -- is genuine
-        arithmetic, not an indicator, and must still raise ``type_error``
-        exactly as an unrecognized shape always has."""
+    def test_div_with_a_plain_int_left_operand_raises_type_error_atom(self):
+        """UPDATED 2026-09-25 -- Operator ruling 2026-09-25 ("do what Scryer does").  ``3/2`` IS ``Name/Arity``-shaped, so
+        Scryer hands it to ``functor(Head, 3, 2)``, whose error is
+        ``type_error(atom, 3)`` (the culprit is the NAME operand, not the
+        whole ``Div`` as before)."""
         from clausal.terms import Div
 
         dispatch = get_builtin_dispatch("listing", 1, None)
         with pytest.raises(LogicException) as exc_info:
             _run_listing(dispatch, Div(left=3, right=2))
-        err = exc_info.value.term
-        assert isinstance(err, Compound) and err.functor == "error"
-        inner = err.args[0]
-        assert inner.functor == "type_error"
-        # The culprit is the actual Div INSTANCE, not (as an earlier,
-        # buggy ordering produced) the Div CLASS -- see the
-        # is_indicator_shaped gate in io.py.
-        culprit = inner.args[1]
-        assert isinstance(culprit, Div)
-        assert culprit.left == 3 and culprit.right == 2
+        formal = _formal(exc_info)
+        assert formal.functor == "type_error"
+        assert formal.args == (mint("atom"), 3)
 
     def test_div_with_a_non_int_right_operand_raises_type_error(self):
         """``fib/"oops"`` -- a predicate-denoting (atom) left operand but a
@@ -629,3 +658,82 @@ class TestPortrayClause:
         v = Var()
         output = _capture_portray(v)
         assert output.strip().startswith("_")
+
+
+class TestListingFollowsScryersContract:
+    """Operator ruling 2026-09-25: "do what Scryer does".  Scryer's
+    ``listing/1`` (library(format))::
+
+        listing(PI) :-
+                nonvar(PI),
+                (   PI = Name/Arity0 -> Arity = Arity0
+                ;   PI = Name//Arity0 -> Arity is Arity0 + 2
+                ;   type_error(predicate_indicator, PI, listing/1)
+                ),
+                functor(Head, Name, Arity),
+                \\+ \\+ clause(Head, _),
+                ...
+
+    Every expected term below was observed on Scryer (2026-09-25) for the
+    same argument; the ``functor/3`` errors carry Clausal's own context."""
+
+    @staticmethod
+    def _dispatch():
+        return get_builtin_dispatch("listing", 1, _db_with_fact("greet", 2))
+
+    def test_an_unbound_argument_fails(self):
+        assert _listing_answers(self._dispatch(), Var()) == (0, "")
+
+    @pytest.mark.parametrize("pi", [
+        chars("greet"), 42, ("greet", 1, 2), [mint("greet")],
+    ], ids=["string", "number", "compound", "list"])
+    def test_a_non_indicator_is_a_predicate_indicator_type_error(self, pi):
+        with pytest.raises(LogicException) as exc_info:
+            _run_listing(self._dispatch(), pi)
+        formal = _formal(exc_info)
+        assert formal.functor == "type_error"
+        assert formal.args == (mint("predicate_indicator"), pi)
+
+    @pytest.mark.parametrize("pi", [
+        lambda: ("/", Var(), 2), lambda: ("/", mint("greet"), Var()),
+        lambda: ("//", mint("greet"), Var()),
+    ], ids=["name", "arity", "dcg-arity"])
+    def test_an_unbound_operand_is_an_instantiation_error(self, pi):
+        with pytest.raises(LogicException) as exc_info:
+            _run_listing(self._dispatch(), pi())
+        assert exc_info.value.term.args[0] == mint("instantiation_error")
+
+    @pytest.mark.parametrize("pi, formal", [
+        (("/", mint("greet"), mint("x")), ("type_error", "integer", "x")),
+        (("/", mint("greet"), -1),
+         ("domain_error", "not_less_than_zero", -1)),
+        (("/", chars("greet"), 2), ("type_error", "atomic", None)),
+        (("/", 3, 2), ("type_error", "atom", 3)),
+    ], ids=["non-integer arity", "negative arity", "string name",
+            "number name"])
+    def test_a_malformed_operand_is_functor_3s_error(self, pi, formal):
+        with pytest.raises(LogicException) as exc_info:
+            _run_listing(self._dispatch(), pi)
+        got = _formal(exc_info)
+        kind, what, culprit = formal
+        assert got.functor == kind
+        assert got.args[0] == mint(what)
+        assert got.args[1] == (pi[1] if culprit is None else culprit)
+
+    @pytest.mark.parametrize("pi", [
+        ("/", mint("greet"), 1), ("/", mint("nosuch"), 2),
+        ("//", mint("greet"), 2),
+    ], ids=["other arity", "absent name", "dcg other arity"])
+    def test_an_indicator_naming_nothing_fails(self, pi):
+        assert _listing_answers(self._dispatch(), pi) == (0, "")
+
+    @pytest.mark.parametrize("make", [
+        lambda: ("//", mint("greet"), 0),
+        lambda: Compound("//", (mint("greet"), 0)),
+        lambda: __import__("clausal.terms", fromlist=["FloorDiv"]).FloorDiv(
+            left=mint("greet"), right=0),
+    ], ids=["cell", "compound", "floordiv-node"])
+    def test_name_dcg_arity_lists_the_arity_plus_two(self, make):
+        n, out = _listing_answers(self._dispatch(), make())
+        assert n == 1
+        assert "greet/2" in out and "1 clause(s)" in out

@@ -16,7 +16,7 @@ import ast
 import pytest
 
 from clausal.import_hook import _load_module
-from clausal.logic.atoms import mangle
+from clausal.logic.atoms import mangle, mint
 from clausal.logic.compiler.terms_to_ast import lowering_scope, term_to_ast_expr
 from clausal.logic.predicate import PredicateMeta, mint_predicate_handle
 from clausal.logic.solve import call, solve
@@ -119,13 +119,16 @@ def test_a_wrong_arity_atom_goal_still_names_the_arity(mod):
 
 
 
-def test_listing_a_bare_name_names_the_zero_arity_predicate(mod):
-    """Source ``listing(b)`` now passes the ATOM, which names ``b/0``
-    (spec 6.4, pinned by ``test_row_30_listing_takes_an_atom_and_refuses_a_
-    string``) -- no longer b/1's class.  ``listing(b/1)`` is the spelling."""
+def test_listing_a_bare_name_is_not_a_predicate_indicator(mod):
+    """Source ``listing(b)`` passes the ATOM -- no longer b/1's class.
+    Operator ruling 2026-09-25 ("do what Scryer does"): a bare atom is ``type_error(predicate_indicator, b)``
+    (it named ``b/0`` and raised existence_error before 2026-09-25).
+    ``listing(b/1)`` is the spelling."""
     from clausal.logic.exceptions import LogicException
     lm = mod.__dict__["$module"]
     with pytest.raises(LogicException) as exc:
         list(solve(("listing", "b"), lm))
-    assert exc.value.term.args[0].functor == "existence_error"
+    formal = exc.value.term.args[0]
+    assert formal.functor == "type_error"
+    assert formal.args == (mint("predicate_indicator"), mint("b"))
     assert len(list(solve(("listing", ("/", "b", 1)), lm))) == 1
