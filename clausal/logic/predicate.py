@@ -2211,8 +2211,20 @@ class AmbiguousHandleOwnerError(LookupError):
 # (the reference callback prunes it, and an emptied name is deleted).
 _HANDLE_OWNERS: "dict[str, list]" = {}
 
+# module name -> the registry weakrefs (the ref OBJECTS, compared by
+# identity) that were ALL still live right after ``_registered_handle_owner``
+# ran the collector for that name.  The same set ambiguous again skips the
+# collection: a program that keeps asking about a truly ambiguous name pays
+# one collection, not one per lookup.  Holding the ref objects (never the
+# databases) keeps their identities from being reused; any change to the
+# name's registrations -- a new load, or a reap, which also drops this
+# entry -- gives a different set, and the next lookup collects again.  At
+# most one entry per registered name.
+_AMBIGUOUS_AFTER_COLLECT: "dict[str, tuple]" = {}
+
 
 def _reap_handle_owner(module_name: str, ref) -> None:
+    _AMBIGUOUS_AFTER_COLLECT.pop(module_name, None)
     refs = _HANDLE_OWNERS.get(module_name)
     if refs is None:
         return
@@ -2249,6 +2261,12 @@ def _live_handle_owners(module_name: str) -> list:
             if d is not None]
 
 
+def _same_refs(remembered, refs) -> bool:
+    return (remembered is not None and refs is not None
+            and len(remembered) == len(refs)
+            and all(a is b for a, b in zip(remembered, refs)))
+
+
 def _registered_handle_owner(module_name: str):
     """The ONE live database registered under *module_name*, ``None`` when
     there is none, ``AmbiguousHandleOwnerError`` when more than one is live.
@@ -2259,13 +2277,21 @@ def _registered_handle_owner(module_name: str):
     Before calling a name ambiguous the collector is run once: only an owner
     something still REALLY holds counts.  Off the hot path -- reached only
     for a handle whose owner is neither the caller nor in ``sys.modules``,
-    and the collection only when two candidates are left."""
+    and the collection only when two candidates are left -- and at most once
+    per candidate set (``_AMBIGUOUS_AFTER_COLLECT``): an owner later dropped
+    into a cycle is then seen at the next natural collection, which reaps
+    it and so re-arms the collection here."""
     live = _live_handle_owners(module_name)
-    if len(live) > 1:
+    if len(live) > 1 and not _same_refs(
+            _AMBIGUOUS_AFTER_COLLECT.get(module_name),
+            _HANDLE_OWNERS.get(module_name)):
         import gc  # noqa: PLC0415
         del live
         gc.collect()
         live = _live_handle_owners(module_name)
+        if len(live) > 1:
+            _AMBIGUOUS_AFTER_COLLECT[module_name] = tuple(
+                _HANDLE_OWNERS.get(module_name, ()))
     if not live:
         return None
     if len(live) == 1:
