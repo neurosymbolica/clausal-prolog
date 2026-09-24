@@ -602,3 +602,83 @@ def test_a_python_written_closure_passed_on_by_a_clause(clib, via):
     _L, D = clib
     out = Var()
     assert [walk(out) for _ in call(via, _python_probe, out, module=D)] == [20]
+
+
+# ── A lambda NODE built in Python and handed to a query (2026-09-25) ───────
+#
+# Found in a trial: a ``Lambda`` node built from Python and passed in a
+# ``solve`` goal to a meta-declared argument raised ISO
+# ``type_error(callable, "lambda X, Y: ...")`` where the undeclared
+# library runs it.  The same cause as the source-lambda NameError above: the
+# lambda was not hoisted out of the ``MetaArg`` marker, and one whose body
+# names nothing the lowering must bind reached run time as the raw node, which
+# ``_ensure_trampoline_dispatch`` refuses.  Pinned as "declared answers exactly
+# what undeclared answers", through 1..3 hops.
+
+_PLIB = """
+    -module(mplib_DECL, [p1(LO, G, OUT), p2(LO, G, OUT), p3(LO, G, OUT),
+                         tprobe(D, X, S)])
+    META
+    p1(LO, G, OUT) <- call_goal(G, LO, OUT),
+    p2(LO, G, OUT) <- p1(LO, G, OUT),
+    p3(LO, G, OUT) <- p2(LO, G, OUT),
+    tprobe(_, X, S) <- eval_(X * 10, S),
+"""
+
+
+def _python_lambdas():
+    """Two well-formed Python-built lambdas: one whose body refers to its
+    parameters by name (it was a NameError), one whose body names nothing
+    the lowering must bind (it reached run time as the raw node: the
+    type_error(callable, "lambda X, Y: ...") of the trial)."""
+    from clausal.terms import Call, DictTerm, LoadName
+    import clausal.pythonic_ast.nodes as sa
+
+    def params(*names):
+        return sa.Params(params=[sa.PosOrKwParam(name=n) for n in names])
+
+    by_name = sa.Lambda(
+        params=params("X", "Y"),
+        body=Call(func=LoadName(name="tprobe"),
+                  args=[DictTerm({"k": 1}), LoadName(name="X"), LoadName(name="Y")],
+                  kwargs=[]))
+    no_names = sa.Lambda(
+        params=params("X", "Y"),
+        body=Call(func=LoadName(name="tprobe"),
+                  args=[DictTerm({"k": 1}), 1, 10], kwargs=[]))
+    return [("by_name", by_name, [20]), ("no_names", no_names, None)]
+
+
+_PDOM = """
+    -module(mpdom_ERA, [])
+    -import_from(mplib_declared_ERA, [p1, p2, p3, tprobe])
+"""
+
+
+@pytest.mark.parametrize("hop", ["p1", "p2", "p3"])
+@pytest.mark.parametrize("where", ["declared", "undeclared", "class", "handle"])
+def test_a_python_built_lambda_node_in_a_query(tmp_path, monkeypatch, hop, where):
+    """declared / undeclared: the query runs in the library itself (the
+    trial's shape).  class / handle: it runs in a module importing the
+    declared library, in each era."""
+    from clausal.logic.solve import solve
+    decl = "undeclared" if where == "undeclared" else "declared"
+    meta = ("-meta_predicate(p1('?', 2, '?'), p2('?', 2, '?'), p3('?', 2, '?'))"
+            if decl == "declared" else "")
+    tag = f"{decl}_{where}"
+    lib = _load(tmp_path, monkeypatch, f"mplib_{tag}",
+                _PLIB.replace("DECL", tag).replace("META", meta))
+    L = lib.__dict__["$module"]
+    if where in ("class", "handle"):
+        if where == "handle":
+            _bind_imports_as_owner_handles(monkeypatch, L)
+        dom = _load(tmp_path, monkeypatch, f"mpdom_{where}",
+                    _PDOM.replace("ERA", where))
+        L = dom.__dict__["$module"]
+    for label, lam, want in _python_lambdas():
+        out = Var()
+        got = [walk(out) for _ in solve((hop, 2, lam, out), L)]
+        if want is None:
+            assert len(got) == 1, (label, got)     # succeeds once, OUT unbound
+        else:
+            assert got == want, (label, got)
