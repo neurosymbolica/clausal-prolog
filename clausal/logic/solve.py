@@ -1530,10 +1530,15 @@ def _tabled_call_site(goal, module, trail):
     if not mod.db.is_tabled(functor, arity):
         # An -import_from-remapped predicate resolves by bare name here but
         # is tabled — and tabled INTO — the exporting module's db. Follow
-        # the PredicateMeta back to its defining module before giving up.
+        # the binding back to its defining module before giving up.
+        # ``predicate_owner_module`` answers a class's ``__module__`` and a
+        # mangled handle's module half alike: a bare ``getattr(binding,
+        # "__module__")`` on a handle (a ``str``) answers ``'builtins'`` --
+        # a silent "not tabled" once the bindings flip.
+        from clausal.logic.predicate import predicate_owner_module  # noqa: PLC0415
         md = mod.module_dict
-        pred_cls = md.get(functor) if md is not None else None
-        owner_name = getattr(pred_cls, "__module__", None)
+        binding = md.get(functor) if md is not None else None
+        owner_name = predicate_owner_module(binding)
         owner = sys.modules.get(owner_name) if owner_name else None
         if owner is None:
             return None
