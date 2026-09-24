@@ -2264,6 +2264,22 @@ def _install(
         fn = wrapped
     if db is not None:
         db.set_dispatch(functor, arity, fn, lazy_recompile=lazy_recompile)
+    if (
+        db is not None
+        and isinstance(pred_cls, PredicateMeta)
+        and pred_cls._row is not None
+        and not pred_cls._row.detached
+        and pred_cls._row.db is db
+        and pred_cls._row.key[1] != arity
+    ):
+        # The class is this database's face of the SAME NAME at ANOTHER
+        # arity -- the callers resolve ``pred_cls`` by name, which is
+        # arity-blind, so ``-dynamic(ping/2)`` beside ``ping <- True`` handed
+        # ping/0's class to ping/2's install.  Binding it here moved the class
+        # onto ping/2's row and every ping/0 call then ran ping__2 (a raw
+        # TypeError).  The dispatch is on the row already (above); the class
+        # stays where its clauses are.
+        pred_cls = None
     if pred_cls is not None and isinstance(pred_cls, PredicateMeta):
         # P3-3 Task 2: bind first, then write the ROW the class faces —
         # the Database's once bound, the class's private detached row on the
