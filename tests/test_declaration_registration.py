@@ -95,9 +95,10 @@ def test_specialize_route_still_registers_through_register_signature():
     # implementation's own _specialized_fields, so the pin cannot agree with
     # the code by construction.
     fields = ("GOALS",)
-    specialize_mi(
-        pattern, natnum_program, "solve_pin_natnum", db=module.db,
+    result = specialize_mi(
+        pattern, natnum_program, "solve_pin_natnum", db=db,
     )
+    assert result is not None
     assert db.row("solve_pin_natnum", len(fields)) is not None
     assert db.signature_for("solve_pin_natnum", len(fields)) == fields
     assert field_names_for("solve_pin_natnum", arity=len(fields),
