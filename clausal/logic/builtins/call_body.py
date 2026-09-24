@@ -7,9 +7,9 @@ position becomes ``call(V)``, and ``','``/``;``/``->`` are control constructs.
 The step-1 target of the ISO ``clause/2`` plan (2026-09-25) is that the Body
 ``clause/2`` hands back is callable, whatever its shape.
 
-The Clausal spellings are the ones the SAME TEXT produces in term position --
-not the ISO cells ``(",", A, B)``, which the surface never builds and which
-``cells.refuse_control_construct_cell`` still refuses:
+The Clausal spellings are the ones the SAME TEXT produces in term position
+(the ISO cells ``(",", A, B)`` etc., which the surface never builds, run too
+-- see ISO CELLS below):
 
 ====================================  ===================================
 written                               term position (what ``G`` holds)
@@ -71,7 +71,7 @@ from typing import Any
 
 from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.logic.atoms import is_mangled
-from clausal.logic.cells import _cell_shape, compound_cell_shape
+from clausal.logic.cells import _cell_shape, compound_cell_shape, is_chars
 from clausal.logic.trampoline import DONE, StepGenerator
 from clausal.pythonic_ast import nodes
 
@@ -99,9 +99,10 @@ def is_conjunction_tuple(t: Any) -> bool:
     representation cannot tell them apart, and the cell reading wins.)
 
     The ``tuple`` type object in slot 0 is the RETIRED tuple-tag spelling
-    ``(tuple, 1, 2)`` (the tag is the str ``"()"`` now): still data, so it
-    keeps the silent failure every non-goal has
-    (``test_cell_goals.test_a_tuple_tag_data_cell_goal_fails_silently``)."""
+    ``(tuple, 1, 2)`` (the tag is the str ``"()"`` now): still DATA, not a
+    conjunction, so it is ``type_error(callable, G)`` like any non-goal
+    (``is_non_callable_term``; ``test_cell_goals.
+    test_a_tuple_tag_data_cell_goal_is_a_type_error``)."""
     return (type(t) is tuple and len(t) >= 2 and not _cell_shape(t)[0]
             and t[0] is not tuple)
 
@@ -334,7 +335,22 @@ def _construct(t):
         return "\\+", 1
     if type(t) is nodes.IfExpr:
         return "if_", 3
-    return type(t).op, 2                 # a comparison node
+    return _ISO_NAME.get(type(t), type(t).op), 2   # a comparison node
+
+
+# The ISO name of each comparison node, which call/N's error names (checked
+# on the box's Scryer: ``call((X =:= Y), z)`` -> existence_error ``(=:=)/3``
+# and likewise ``==``, ``=\\=``, ``\\==``, ``=``, ``\\=``, ``<``, ``=<``,
+# ``>``, ``>=``, ``is``).  Needed because the Clausal surface spells two
+# different nodes alike: ``==`` is ArithEq (ISO ``=:=``) AND StructuralEq.
+# ``in``/``not in`` have no ISO counterpart and keep the Clausal spelling.
+_ISO_NAME = {
+    nodes.ArithEq: "=:=", nodes.ArithNeq: "=\\=",
+    nodes.StructuralEq: "==", nodes.StructuralNeq: "\\==",
+    nodes.Unify: "=", nodes.DoesNotUnify: "\\=",
+    nodes.Lt: "<", nodes.LtE: "=<", nodes.Gt: ">", nodes.GtE: ">=",
+    nodes.Evaluate: "is", nodes.in_: "in", nodes.NotIn: "not in",
+}
 
 
 def folded_existence_error(name, arity, context):
@@ -356,11 +372,43 @@ def body_with_extras_error(goal, n_extra, context):
     return folded_existence_error(name, arity + n_extra, context)
 
 
+def is_non_callable_term(t, lists: bool = True) -> bool:
+    """True for a term that can never be a goal: a number, ``None``, tuple
+    DATA, and -- with *lists* -- a non-empty list or a string (Scryer's
+    call/1 refuses every non-empty list).  An unbound Var, an atom, a cell
+    and a goal object are not "non-callable": each has its own answer."""
+    t = deref(t)
+    if is_var(t):
+        return False
+    if _is_number(t) or t is None:
+        return True
+    if type(t) is tuple and t:
+        is_cell, _ = _cell_shape(t)
+        if t[0] is tuple or (is_cell and not compound_cell_shape(t)[0]
+                             and not is_chars(t)):
+            return True                   # tuple DATA (either tag spelling)
+    if lists and ((type(t) is list and t) or is_chars(t)):
+        return True
+    return False
+
+
+def non_callable_goal_dispatch(goal, context):
+    """A dispatch that raises ``type_error(callable, Goal)`` when RUN -- for
+    the goal-taking list builtins, which (like Scryer's library) reach the
+    call only per element: ``maplist(42, [])`` succeeds, ``maplist(42, [1])``
+    raises."""
+    def _non_callable(this_generator, _proceed, _fail, _catcher, *args):
+        from clausal.logic.exceptions import LogicException  # noqa: PLC0415
+        raise LogicException(non_callable_goal_error(goal, context))
+        yield  # pragma: no cover -- makes this a generator function
+    return _non_callable
+
+
 def non_callable_goal_error(goal, context):
     """``call(42)``, ``call([1, 2])``, ``call("ab")`` (Scryer's call/1 refuses
     every non-empty list): ``type_error(callable, Goal)``."""
     from clausal.logic.exceptions import type_error  # noqa: PLC0415
-    from clausal.logic.cells import is_chars, chars_text  # noqa: PLC0415
+    from clausal.logic.cells import chars_text  # noqa: PLC0415
     if is_chars(goal):
         # Scryer's culprit is the LIST of chars (``call("ab")`` ->
         # type_error(callable, [a, b])); the carrier spelling never leaks.
@@ -491,4 +539,5 @@ __all__ = [
     "is_body_term", "check_callable_body", "body_goal_dispatch",
     "body_with_extras_error", "non_callable_goal_error",
     "iso_control_cell_dispatch", "folded_existence_error",
+    "is_non_callable_term", "non_callable_goal_dispatch",
 ]

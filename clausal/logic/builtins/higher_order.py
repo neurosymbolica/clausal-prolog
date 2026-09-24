@@ -20,7 +20,6 @@ from clausal.logic.cells import (
     CELL_GOAL_CONTROL_FUNCTORS,
     QUALIFIED_GOAL_FUNCTOR,
     compound_cell_shape,
-    refuse_control_construct_cell,
     resolve_qualified_goal_cell,
     qualify_mangled_goal,
 )
@@ -32,6 +31,7 @@ from clausal.logic.builtins._registry import (
 from clausal.logic.builtins.call_body import (
     is_body_term, body_goal_dispatch, body_with_extras_error,
     non_callable_goal_error, iso_control_cell_dispatch, folded_existence_error,
+    is_non_callable_term,
 )
 from clausal.terms import Compound
 
@@ -588,7 +588,13 @@ def _is_goal(val):
     -- W4b-3 -- the module-qualified predicate HANDLE a predicate name is
     bound to after the flip; a mangled DATA atom is not one)."""
     return (callable(val) or hasattr(val, '_get_dispatch')
-            or is_declared_predicate_name(val))
+            or is_declared_predicate_name(val)
+            # Operator ruling 2026-09-25 (follow Scryer): a NON-callable goal
+            # passes too, so the builtin reaches its per-element call, where
+            # ``_ensure_trampoline_dispatch`` hands back a dispatch raising
+            # type_error(callable, G) -- maplist(42, []) succeeds and
+            # maplist(42, [1]) raises, as in Scryer.  It used to FAIL here.
+            or is_non_callable_term(val))
 
 
 @_trampoline_builtin("take_while", 3)

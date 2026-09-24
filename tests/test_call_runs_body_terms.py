@@ -92,8 +92,13 @@ def _row_answers(module, name, n, x):
     except LogicException as e:
         formal = e.term.args[0]
         return f"raise {getattr(formal, 'functor', formal)}"
-    except Exception as e:                  # a Python error, e.g. date > 0
-        return f"raise {type(e).__name__}"
+    except TypeError as e:
+        # Only a DATE / Opaque input may meet a Python TypeError (``date > 0``
+        # is one in BOTH spellings).  Anything else -- a converter crash --
+        # propagates and fails the test (roborev on 4b4323ed).
+        if isinstance(x, (datetime.date, Opaque)):
+            return "raise TypeError"
+        raise
 
 
 def _term(exc_info):
@@ -120,10 +125,10 @@ def test_term_answers_like_the_clause_body(host, n, x):
 def test_the_table_is_not_vacuous(host):
     """A table where every row fails on both sides would pass the test
     above: count the rows that actually ANSWER."""
-    answering = {n for n in ROWS for x in INPUTS
-                 if _row_answers(host, "run", n, x)}
-    failing = {n for n in ROWS for x in INPUTS
-               if not _row_answers(host, "run", n, x)}
+    # Only list-valued answers count: a "raise ..." string is not an answer.
+    got = [(n, _row_answers(host, "run", n, x)) for n in ROWS for x in INPUTS]
+    answering = {n for n, v in got if isinstance(v, list) and v}
+    failing = {n for n, v in got if v == []}
     # Rows 13 and 33 fail by construction (``False``; ``..., fail``).
     assert set(ROWS) - answering == {13, 33}
     assert len(failing) >= 20       # and most rows also have a failing input
@@ -180,11 +185,13 @@ def test_defect_t4_with_the_negation_parenthesized(host):
 
 
 def test_values_without_a_literal_lowering_reach_the_body(host):
-    """roborev on 152a8f64: rows 31/32 with a date and an opaque unhashable
-    object answer, in both spellings (the row test compares them)."""
+    """roborev on 152a8f64: rows 31 (``Y is X, X == Y``) and 32 (``Y is X,
+    X is Y``) with a date and an opaque unhashable object answer, in both
+    spellings (the row test compares them)."""
     for x in (DATE, Opaque("o")):
-        assert _row_answers(host, "run", 32, x) == [[x, x]]
-        assert _row_answers(host, "run", 32, x) == _row_answers(host, "b", 32, x)
+        for n in (31, 32):
+            assert _row_answers(host, "run", n, x) == [[x, x]], n
+            assert _row_answers(host, "b", n, x) == [[x, x]], n
 
 
 def test_fail_as_a_compiled_goal_is_failure(host):
@@ -312,6 +319,17 @@ def test_committed_choice_cells_are_refused(host, functor):
     (nodes.Not(operand=("p", 1)), ("\\+", 2)),
     (nodes.IfExpr(test=("p", 1), body=True, orelse=False), ("if_", 4)),
     (nodes.Gt(left=1, right=0), (">", 3)),
+    # ISO names, checked on the box's Scryer (roborev on 4b4323ed: the
+    # Clausal spelling ``==`` is both ArithEq and StructuralEq)
+    (nodes.ArithEq(left=1, right=1), ("=:=", 3)),
+    (nodes.StructuralEq(left=1, right=1), ("==", 3)),
+    (nodes.ArithNeq(left=1, right=2), ("=\\=", 3)),
+    (nodes.StructuralNeq(left=1, right=2), ("\\==", 3)),
+    (nodes.Unify(left=1, right=1), ("=", 3)),
+    (nodes.DoesNotUnify(left=1, right=2), ("\\=", 3)),
+    (nodes.Lt(left=0, right=1), ("<", 3)),
+    (nodes.LtE(left=0, right=1), ("=<", 3)),
+    (nodes.GtE(left=1, right=0), (">=", 3)),
     ((",", ("p", 1), ("s", 2)), (",", 3)),              # the ISO cell
     ((";", ("p", 1), ("s", 2)), (";", 3)),
     (("\\+", ("p", 1)), ("\\+", 2)),
@@ -460,5 +478,95 @@ def test_c_and_python_trampolines_answer_the_table_alike():
     assert c["impl"] != py["impl"]
     assert py["impl"] == "clausal.logic._trampoline_py"
     assert len(c["rows"]) == len(ROWS) * len(INPUTS) == 36 * 8
-    assert sum(1 for v in c["rows"].values() if v) >= 30
+    assert sum(1 for v in c["rows"].values() if isinstance(v, list) and v) >= 30
     assert c["rows"] == py["rows"]
+
+
+# ── ruling A: ``fail`` needs no declaration ─────────────────────────────────
+
+
+def test_fail_needs_no_declaration(host):
+    """Operator ruling 2026-09-25 (A): the fixture does NOT declare ``fail``
+    and still loads; as a goal it fails (rows 6, 33-35), and in term position
+    it is the ATOM ``fail`` (ISO), not a truth value."""
+    X = Var()
+    assert [deref(X) for _ in _answers_gen(host, "fail_atom", X)] == ["fail"]
+    assert _answers(host, "call_it", "fail") == []
+    assert _answers(host, "call_it", False) == []
+
+
+# ── ruling B: goal-taking list builtins, phrase, time_goal ─────────────────
+
+
+_LIST_BUILTIN_CALLS = [
+    ("maplist", (42, [1])),
+    ("maplist", (42, [1], Var())),
+    ("include", (42, [1], Var())),
+    ("exclude", (42, [1], Var())),
+    ("foldl", (42, [1], 0, Var())),
+    ("take_while", (42, [1], Var())),
+    ("drop_while", (42, [1], Var())),
+    ("span", (42, [1], Var(), Var())),
+    ("group_by", (42, [1], Var())),
+    ("sort_by", (42, [1], Var())),
+    ("max_by", (42, [1], Var())),
+    ("min_by", (42, [1], Var())),
+    ("filter_map", (42, [1], Var())),
+    ("partition", (42, [1], Var(), Var())),
+    ("tfilter", (42, [1], Var())),
+    ("tpartition", (42, [1], Var(), Var())),
+]
+
+
+def test_the_table_covers_every_goal_first_list_builtin():
+    from clausal.logic.builtins.higher_order import _GOAL_FIRST_LIST_BUILTINS
+    assert sorted((n, len(a)) for n, a in _LIST_BUILTIN_CALLS) == \
+        sorted(_GOAL_FIRST_LIST_BUILTINS)
+
+
+@pytest.mark.parametrize("name, args", _LIST_BUILTIN_CALLS,
+                         ids=[f"{n}/{len(a)}" for n, a in _LIST_BUILTIN_CALLS])
+def test_a_list_builtin_with_a_non_callable_goal_raises(host, name, args):
+    """Operator ruling 2026-09-25 (B), Scryer: ``maplist(42, [1])`` ->
+    type_error(callable, 42).  It used to fail silently."""
+    from clausal.logic.solve import solve
+    goal = (name,) + tuple(args)
+    with pytest.raises(LogicException) as info:
+        list(solve(goal, host))
+    formal = _formal(_term(info))
+    assert formal.functor == "type_error"
+    assert formal.args[0] == "callable" and formal.args[1] == 42
+
+
+def test_the_goal_is_checked_only_when_called_as_in_scryer(host):
+    """Scryer: ``maplist(42, [])`` succeeds -- the goal is never called."""
+    from clausal.logic.solve import solve
+    assert len(list(solve(("maplist", 42, []), host))) == 1
+
+
+def test_phrase_of_a_non_callable_is_a_type_error(host):
+    """Scryer: ``phrase(42, L)`` -> type_error(callable, 42) (it used to
+    fail).  Lists and strings stay what phrase always made of them."""
+    from clausal.logic.solve import solve
+    for goal in (("phrase", 42, Var()), ("phrase", 4.5, [], Var())):
+        with pytest.raises(LogicException) as info:
+            list(solve(goal, host))
+        assert _formal(_term(info)).functor == "type_error"
+
+
+def test_time_goal_is_call_1_timed(host, capsys):
+    """time_goal now answers what call/1 answers for every shape: a body and
+    a qualified body run, a non-callable is type_error, unbound is
+    instantiation_error (it used to fail for all of them)."""
+    from clausal.logic.solve import solve
+    X = Var()
+    assert [deref(X) for _ in solve(
+        ("time_goal", (("p", X), ("s", X))), host)] == [2]
+    X = Var()
+    assert [deref(X) for _ in solve(
+        ("time_goal", (":", OTHER, ("p", X))), host)] == [10, 20]
+    for goal, functor in ((42, "type_error"), (Var(), "instantiation_error")):
+        with pytest.raises(LogicException) as info:
+            list(solve(("time_goal", goal), host))
+        f = _formal(_term(info))
+        assert getattr(f, "functor", f) == functor

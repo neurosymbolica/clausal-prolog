@@ -183,6 +183,16 @@ def _ensure_trampoline_dispatch(goal_val, arity: int | None = None, db=None):
             f"an anonymous predicate (lambda) needs logic-variable head names "
             f"(ALL-CAPS like X, or _leading)",
         ))
+    from clausal.logic.builtins.call_body import (  # noqa: PLC0415
+        is_non_callable_term, non_callable_goal_dispatch,
+    )
+    if is_non_callable_term(goal_val):
+        # Operator ruling 2026-09-25 (follow Scryer): a number, a non-empty
+        # list, tuple data ... raises type_error(callable, G) when CALLED.
+        # Wrapping it as a simple-mode callable would crash with a raw Python
+        # TypeError on first use.
+        n = "N" if arity is None else arity + 1
+        return non_callable_goal_dispatch(goal_val, f"call/{n}")
     # Assume simple-mode callable
     return _simple_to_trampoline(goal_val)
 

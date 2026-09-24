@@ -3,7 +3,10 @@
 # g(N, X, Y, G) builds the SAME text in TERM position; run(N, X, Y) calls
 # that term.  The test asserts both answer alike, row by row.
 -module(call_body_terms, [])
--private([fail, a1, b1, foo(A)])
+-private([a1, b1, foo(A)])
+# `fail` is NOT declared: a builtin goal needs no declaration (operator
+# ruling 2026-09-25, compiler_v2.BUILTIN_GOAL_ATOMS).
+fail_atom(X) <- (X is fail)
 -allow_singletons
 -table(reach/1)
 
