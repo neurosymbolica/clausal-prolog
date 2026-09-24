@@ -188,7 +188,7 @@ class TestDeclareThenImport:
             "-import_from(other, [f])\n"
             "f(maybe, pending)\n"
         )
-        assert "head=f('maybe', 'pending')" in out
+        assert "head=$head(f, 'maybe', 'pending')" in out
         assert "STATUS=" not in out
 
         _load_fixture("impord_fact_vocab")

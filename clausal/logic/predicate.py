@@ -201,6 +201,31 @@ class ClausalTermConstructionError(TypeError):
         self.constructed_at = constructed_at
 
 
+class AmbiguousArityConstructionError(ClausalTermConstructionError):
+    """A term was built against a name registered at SEVERAL arities, and
+    the arguments fit none of them, or more than one.
+
+    ``arity`` and ``registered_fields`` are ``None`` -- there is no single
+    registration to report, and ``()`` would read as a 0-field one.  The
+    candidates are in ``signatures``, ``{arity: field names}``.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        functor: str,
+        signatures: "dict[int, tuple[str, ...]]",
+        supplied_fields: tuple[str, ...],
+        constructed_at: tuple[str, int] | None,
+    ) -> None:
+        super().__init__(
+            message, functor=functor, arity=None,
+            supplied_fields=supplied_fields, registered_fields=None,
+            registered_at=None, constructed_at=constructed_at)
+        self.signatures = dict(signatures)
+
+
 def _construction_hint(
     functor: str,
     supplied: tuple[str, ...],
@@ -2490,8 +2515,12 @@ def head_cell(binding, /, *args: Any, **kwargs: Any) -> Any:
     * a predicate HANDLE -> :func:`_handle_head_cell`: the cell is built
       under the handle's PLAIN name (ruling S -- the class built it under
       ``cls.__name__``, the same spelling) from the field names the OWNER's
-      Database registers, through :func:`build_term_cell`, the helper the
-      class uses -- so the arity check answers the same in both eras.
+      Database records (``Database.head_signatures``: the row's signature
+      -- after a clause, the head's derived names, the class's ``_fields``
+      too -- else an arity-only declaration's ``arg_N`` placeholders, the
+      class's ``_fields`` while no clause exists), through
+      :func:`build_term_cell`, the helper the class uses -- so the arity
+      check answers the same in both eras.
     """
     if type(binding) is str:
         from clausal.logic.atoms import is_mangled  # noqa: PLC0415
@@ -2534,7 +2563,8 @@ def _head_signature_for(functor: str, signatures: dict, args: tuple,
     Several (a name defined at more than one arity, ruling 2026-09-24) ->
     the arity as WRITTEN (positional + keyword count) when the keywords
     fit it; else the one arity the arguments fit; else a
-    ``ClausalTermConstructionError`` naming the arities, never a guess.
+    :class:`AmbiguousArityConstructionError` naming the arities, never a
+    guess.
     """
     if len(signatures) == 1:
         return next(iter(signatures.values()))
@@ -2554,10 +2584,9 @@ def _head_signature_for(functor: str, signatures: dict, args: tuple,
         f"but it is registered at several arities ({known}), and "
         f"{'none' if not fits else 'more than one'} of them fits\n"
         f"  constructed at: {_format_site(constructed_at)}")
-    raise ClausalTermConstructionError(
-        message, functor=functor, arity=written, supplied_fields=supplied,
-        registered_fields=(), registered_at=None,
-        constructed_at=constructed_at)
+    raise AmbiguousArityConstructionError(
+        message, functor=functor, signatures=signatures,
+        supplied_fields=supplied, constructed_at=constructed_at)
 
 
 def predicate_arities_for(binding, *, cache: "dict | None" = None,
@@ -2641,10 +2670,12 @@ def field_names_for(value, *, arity=None, db=None, namespace=None):
     IS declared but at an arity with no names anywhere (``-dynamic(f/2)``,
     or a bare ``f/2`` entry in a ``-module``/``-private`` export list: both
     register an arity and never field names).  EXCEPTION (2026-09-24): a
-    MANGLED handle answers the synthesized ``arg_N`` placeholders for such a
-    declaration (``Database.placeholder_fields``), because the handle
-    replaces the class and the class's ``_fields`` carries exactly those;
-    a plain name with a *db* still answers ``None``, as before.  ``()``
+    MANGLED handle answers what the class it replaces carries --
+    ``Database.field_names_at``: the row's registered signature when one is
+    recorded (after a clause, the head's derived names), else the
+    synthesized ``arg_N`` placeholders of an arity-only declaration
+    (``Database.placeholder_fields``); a plain name with a *db* still
+    answers ``None`` for the latter, as before.  ``()``
     means declared with ZERO fields (the 0-arity predicate
     written ``p()``), and ``len()`` is the arity for anything longer.  For
     "is this declared" -- a question this accessor deliberately does NOT
@@ -2708,18 +2739,23 @@ def _field_names_for_name(name, arity, db, namespace):
         owner_db = _db_for_module_name(module_name)
         if owner_db is None:
             return None
-        # ``field_names_at`` adds the arity-only placeholders (``arg_N``)
-        # to ``signature_for``: a handle replaces the class, and the class
-        # of a bare ``p/1`` export or ``-dynamic(p/1)`` carries them.
+        # A handle replaces the class, so it answers what the class's
+        # ``_fields`` would: ``field_names_at`` is the registered signature
+        # (after a clause: the head's derived names, stamped at step 4)
+        # first, and an arity-only declaration's ``arg_N`` placeholders
+        # only when nothing else is recorded.
         if arity is not None:
             return owner_db.field_names_at(bare_name, arity)
         found = owner_db.declared_fields_by_name(bare_name)
         if found is None:
-            by_arity = {a: owner_db.placeholder_fields(bare_name, a)
-                        for a in owner_db.predicate_arities(bare_name)}
-            by_arity = {a: f for a, f in by_arity.items() if f is not None}
-            if len(by_arity) == 1:
-                found = next(iter(by_arity.values()))
+            # By NAME with no fielded declaration: answer only when the name
+            # is a predicate at exactly ONE arity (the class carries one
+            # ``_fields``); at several, which one is meant is not ours to
+            # guess.
+            arities = owner_db.predicate_arities(bare_name)
+            if len(arities) == 1:
+                found = owner_db.field_names_at(bare_name,
+                                                next(iter(arities)))
         return found
     if db is not None:
         if arity is not None:
@@ -3028,4 +3064,5 @@ __all__ = ["PredicateMeta", "RetiredStateError", "_MISSING", "is_term_instance",
            "is_declared_predicate_name", "predicate_arities_for",
            "mint_predicate_handle", "namespace_db",
            "predicate_owner_module",
-           "head_cell", "build_term_cell"]
+           "head_cell", "build_term_cell",
+           "AmbiguousArityConstructionError"]

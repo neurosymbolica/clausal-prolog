@@ -1224,14 +1224,26 @@ class Database:
         (``mark_dynamic``) -- when nothing here records real names for the
         key; ``None`` otherwise.
 
-        These are exactly the names the ``PredicateMeta`` class minted for
-        such a declaration carries (``_fields``, synthesized by the
-        rewriter), and until now they lived ONLY there, so after the flip --
-        when a module attribute is a predicate HANDLE, not the class --
-        nothing could answer them (``todo/dynamic-declarations-are-invisible-
-        to-arm-3-2026-09-22.md``).  Derived from the declaration keys this
-        Database already holds rather than stored a second time, so they can
-        never disagree with ``declared_kind``.
+        Two states, and the class answers differently in each:
+
+        * DECLARATION ONLY (no clause for the key in the declaring file):
+          the ``PredicateMeta`` class carries exactly these synthesized
+          ``_fields``, and until now they lived ONLY there, so after the
+          flip -- a module attribute is a predicate HANDLE, not the class --
+          nothing could answer them (``todo/dynamic-declarations-are-
+          invisible-to-arm-3-2026-09-22.md``).
+        * AFTER A CLAUSE: the rewriter unseats the placeholders
+          (``_unseat_directive_minted``) and the class carries the head's
+          derived names; step 4 stamps the same names as the row's
+          ``signature`` (the signature-source work, a5c4fab8).  This method
+          then answers ``None``, because :meth:`signature_for` reads that
+          signature first -- so :meth:`field_names_at` gives the head's
+          names, as the class does.  Placeholders are the answer only when
+          nothing else is recorded.
+
+        Derived from the declaration keys this Database already holds rather
+        than stored a second time, so they can never disagree with
+        ``declared_kind``.
 
         Deliberately a separate read, NOT a fallback inside
         :meth:`signature_for`: ~15 callers read ``signature_for(...) is
@@ -1263,9 +1275,13 @@ class Database:
         here -- a predicate (``predicate_arities``: rows, home stores,
         adopted rows, bare export entries) or a fielded declaration
         (``_declared``) -- the population a clause HEAD written against a
-        predicate handle can be building.  An arity known with no names at
-        all (a clause-only key) answers ``arg_N`` placeholders, the names the
-        class minted for it would carry."""
+        predicate handle can be building.  Each arity's names are
+        :meth:`field_names_at`'s: the registered signature (a clause head's
+        derived names, stamped at step 4, or a fielded declaration's) first,
+        an arity-only declaration's placeholders only when nothing else is
+        recorded.  A key known with no names at all (clauses added at run
+        time to an undeclared key) answers ``arg_N`` -- positional
+        construction is all such a key has ever supported."""
         arities = set(self.predicate_arities(functor))
         arities |= {a for (f, a) in self._declared if f == functor}
         out: dict[int, tuple[str, ...]] = {}

@@ -28,7 +28,7 @@ import clausal.import_hook  # noqa: F401 -- installs the meta-path finder
 from clausal.import_hook import _load_module
 from clausal.logic.atoms import mangle
 from clausal.logic.predicate import (
-    ClausalTermConstructionError, PredicateMeta, field_names_for, head_cell,
+    AmbiguousArityConstructionError, ClausalTermConstructionError, PredicateMeta, field_names_for, head_cell,
     mint_predicate_handle, resolve_predicate_row,
 )
 from clausal.logic.variables import Var, deref
@@ -145,14 +145,20 @@ def test_implementing_an_arity_only_export_loads_in_both_eras(
 
 _OWNER = "_heads5_owner"
 _OWNER_SRC = textwrap.dedent("""\
-    -module(_heads5_owner, [p(A), q(A, B), z(), dx/1, m(A)])
+    -module(_heads5_owner, [p(A), q(A, B), z(), dx/1, m(A), gy/1])
     -dynamic(e/2)
+    -dynamic(f/2)
     -dynamic(m/2)
+    -dynamic(n/1)
 
     p(1),
     q(1, 2),
     z(),
     m(1),
+    f(P, Q) <- (p(P), p(Q))
+    f(R, S) <- q(R, S)
+    gy(W) <- p(W)
+    n(U, V) <- q(U, V)
 """)
 
 
@@ -247,6 +253,35 @@ def test_arity_only_placeholders_are_answered_for_a_handle(owner):
                 == (name, *(["<var>"] * (arity - 1)), 5))
 
 
+@pytest.mark.parametrize("name,arity,derived", [
+    ("f", 2, ("p", "q")),      # -dynamic(f/2), then clauses
+    ("gy", 1, ("w",)),         # bare gy/1 export, then a clause
+])
+def test_after_a_clause_the_handle_answers_the_heads_names(
+        owner, name, arity, derived):
+    """The second state of an arity-only declaration: a clause unseats the
+    placeholders, the class carries the head's derived names, and step 4
+    stamps them as the row's signature -- which the handle reads first."""
+    db = _db(owner)
+    both = _both(owner, name)
+    assert both["class"]._fields == derived            # the class era
+    assert db.row(name, arity).signature == derived     # what the handle reads
+    assert db.placeholder_fields(name, arity) is None
+    assert field_names_for(both["handle"], arity=arity) == derived
+    assert field_names_for(both["handle"]) == derived
+    assert db.head_signatures(name) == {arity: derived}
+    # a KEYWORD head -- the rewriter's default emission -- builds the same
+    # cell in both eras, and a placeholder keyword is refused in both
+    kw = {derived[-1]: 9}
+    built = {era: _shape(head_cell(b, **dict(kw)))
+             for era, b in both.items()}
+    assert built["class"] == built["handle"] == (
+        name, *(["<var>"] * (arity - 1)), 9)
+    for binding in both.values():
+        with pytest.raises(ClausalTermConstructionError):
+            head_cell(binding, **{f"arg_{arity - 1}": 9})
+
+
 def test_real_names_win_over_placeholders(owner):
     db = _db(owner)
     assert db.placeholder_fields("p", 1) is None       # not arity-only
@@ -261,8 +296,28 @@ def test_a_name_at_two_arities_builds_at_the_written_one(owner):
     assert _shape(head_cell(handle, 1, 2)) == ("m", 1, 2)
     assert _shape(head_cell(handle, A=1)) == ("m", 1)
     assert _shape(head_cell(handle, arg_1=2)) == ("m", "<var>", 2)
-    with pytest.raises(ClausalTermConstructionError, match=r"m/1, m/2"):
+    with pytest.raises(AmbiguousArityConstructionError,
+                       match=r"m/1, m/2") as exc_info:
         head_cell(handle, 1, 2, 3)
+    exc = exc_info.value
+    assert isinstance(exc, ClausalTermConstructionError)   # still caught
+    # No single registration to report -- not a 0-field one.
+    assert exc.arity is None and exc.registered_fields is None
+    assert exc.signatures == {1: ("A",), 2: ("arg_0", "arg_1")}
+    assert exc.supplied_fields == ("arg_0", "arg_1", "arg_2")
+
+
+def test_by_name_at_several_arities_answers_nothing_for_a_handle(owner):
+    """``n/1`` is placeholder-only (``-dynamic``), ``n/2`` has a clause with
+    real names.  By name, a handle does not answer one arity's placeholders
+    as if they were the name's (roborev Low); by arity, each is exact."""
+    handle = mint_predicate_handle(_db(owner), "n")
+    assert field_names_for(handle) is None
+    assert field_names_for(handle, arity=1) == ("arg_0",)
+    assert field_names_for(handle, arity=2) == ("u", "v")
+    # a fielded declaration still answers by name, as the class does
+    both = _both(owner, "m")
+    assert field_names_for(both["handle"]) == both["class"]._fields == ("A",)
 
 
 def test_a_handle_naming_nothing_raises_loudly(owner):
