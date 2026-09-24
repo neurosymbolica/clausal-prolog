@@ -2276,5 +2276,31 @@ def _install(
             row.dispatch_fn = fn
             if lazy_recompile is not None:
                 row.lazy_recompile = lazy_recompile
+    elif pred_cls is not None and db is not None:
+        # W4b2b re-audit (F1 row 57), additive: the post-flip shape of
+        # ``pred_cls`` -- a mangled atom naming THIS SAME (functor, arity)
+        # -- reaching here in place of a class.  There is no class to
+        # ``_bind_row`` onto or mint a private detached row for (that
+        # machinery is what a class-era caller needs to keep ``cls._row``
+        # in sync with the Database; a mangled atom carries no such
+        # class-side cache to synchronize), so this widens only the
+        # ``db is not None`` half of the block above through the now
+        # era-agnostic mutation gate (``through=pred_cls`` --
+        # ``_resolve_through_row`` in ``database.py`` already accepts a
+        # mangled atom, resolving it via its owner's db) and reads the
+        # SAME row ``Database.mutate`` itself yields as ``target``, rather
+        # than re-deriving it through a class method that does not exist
+        # for this shape.  The ``db is None`` bare-query-compile case has no
+        # db to resolve a mangled atom against and is intentionally left
+        # unhandled here, exactly as an unrecognised ``pred_cls`` always was
+        # (no input produces a mangled atom without a db behind it).
+        from clausal.logic.atoms import is_mangled  # noqa: PLC0415
+        if is_mangled(pred_cls):
+            with db.mutate(functor, arity, author=db.load_author(),
+                           kind="recompile", detail="install",
+                           through=pred_cls) as row:
+                row.dispatch_fn = fn
+                if lazy_recompile is not None:
+                    row.lazy_recompile = lazy_recompile
     return fn
 
