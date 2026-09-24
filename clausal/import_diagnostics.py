@@ -211,13 +211,15 @@ def _defined_names(mod):
     from clausal.logic.atoms import demangle
     from clausal.logic.predicate import (
         PredicateMeta, field_names_for, is_declared_predicate_name,
+        namespace_db,
     )
 
     entries = []
+    mod_db = namespace_db(vars(mod))
     for name, value in vars(mod).items():
         if not isinstance(name, str) or name.startswith("_") or "$" in name:
             continue
-        if not is_declared_predicate_name(value):
+        if not is_declared_predicate_name(value, db=mod_db):
             continue
         # Equality, never identity, for an atom (spec §2/§5.2): two
         # equal atoms are the same atom whether or not they are the
@@ -670,6 +672,116 @@ def describe_imported_predicate_redefinition(
         f"or, if it is meant to be a predicate of this module, drop "
         f"{functor} from the -import_from({exporter}, [...]) list and give "
         f"the local one a name of its own.",
+    ]))
+    return "\n".join(lines)
+
+
+def describe_imported_declaration_implemented(
+    functor, arity, importer, exporter, imported_as=None,
+):
+    """Why clauses for an ``-import_from``'d predicate the exporter only
+    DECLARES are refused -- and where they go instead.
+
+    The "vocabulary-implements" idiom (the exporter declares, an importer
+    supplies the clauses, everyone else imports the exporter's name) was
+    dropped by operator ruling, 2026-09-24
+    (``todo/done/vocabulary-implements-steal-has-no-row-form-2026-09-24.md``):
+    a predicate has one defining module, and here that is the importer.
+    *imported_as* is the local alias when the ``-import_from`` renamed it.
+    """
+    spelled = (f"{functor} (imported as {imported_as})"
+               if imported_as else functor)
+    lines = [
+        f"{importer} defines clauses for {functor}/{arity}, which it "
+        f"-import_from's from {exporter} -- but {exporter} only declares "
+        f"{functor}/{arity}; it does not define it."
+    ]
+    lines.extend(textwrap.wrap(
+        f"Supplying the clauses for a predicate imported from a module that "
+        f"only declares it is not supported: a predicate has exactly one "
+        f"defining module, and the module that writes its clauses is that "
+        f"module.",
+        width=_WIDTH, initial_indent=_INDENT, subsequent_indent=_INDENT,
+        break_long_words=False, break_on_hyphens=False,
+    ))
+    lines.extend(_arrow([
+        f"define {functor}/{arity} in {importer} and export it from "
+        f"{importer}: drop {spelled} from the -import_from({exporter}, "
+        f"[...]) list and add {functor}/{arity} to {importer}'s -module "
+        f"export list;",
+        f"then have the modules that use it import it from {importer}, "
+        f"not from {exporter} (and remove the declaration from {exporter} "
+        f"if nothing else needs it).",
+    ]))
+    return "\n".join(lines)
+
+
+def describe_imported_python_predicate_implemented(
+    functor, arity, importer, exporter, imported_as=None,
+):
+    """Why clauses for a predicate CLASS a Python module exports are refused.
+
+    The class was created in Python (``make_predicate``, or a class with
+    ``metaclass=PredicateMeta``); no Clausal module defines it, and a load
+    may not become its defining module from the outside (the
+    vocabulary-implements drop, 2026-09-24).  The remedies are Python-shaped:
+    there is no ``-module`` export list on the exporter's side.
+    """
+    spelled = (f"{functor} (imported as {imported_as})"
+               if imported_as else functor)
+    lines = [
+        f"{importer} defines clauses for {functor}/{arity}, which it "
+        f"-import_from's from {exporter} -- but {functor}/{arity} is a "
+        f"predicate class created in Python module {exporter}, not a "
+        f"predicate a Clausal module defines."
+    ]
+    lines.extend(textwrap.wrap(
+        "A load cannot supply the clauses of a predicate that another module "
+        "hands out: a predicate has exactly one defining module.",
+        width=_WIDTH, initial_indent=_INDENT, subsequent_indent=_INDENT,
+        break_long_words=False, break_on_hyphens=False,
+    ))
+    lines.extend(_arrow([
+        f"define the clauses in a Clausal module that owns the predicate: "
+        f"drop {spelled} from the -import_from({exporter}, [...]) list and "
+        f"define {functor}/{arity} in {importer} (export it from there);",
+        f"or have {exporter} define it -- give the Python-side predicate "
+        f"its clauses where it is created.",
+    ]))
+    return "\n".join(lines)
+
+
+def describe_imported_runtime_dynamic_implemented(
+    functor, arity, importer, exporter, n_runtime, imported_as=None,
+):
+    """Why a LOAD may not add clauses to an imported ``-dynamic`` predicate
+    that holds clauses asserted at runtime -- and what to write instead.
+
+    Not "only declares": the exporter's row holds *n_runtime* clauses, put
+    there by ``assertz`` rather than by a load.  Letting the load through used
+    to move the shared predicate onto the importer's row, and those runtime
+    clauses then vanished from every caller (round-3 review, 2026-09-24).
+    """
+    spelled = (f"{functor} (imported as {imported_as})"
+               if imported_as else functor)
+    plural = "clause" if n_runtime == 1 else "clauses"
+    lines = [
+        f"{importer} defines clauses for {functor}/{arity}, imported from "
+        f"{exporter}, whose {functor}/{arity} is a -dynamic predicate holding "
+        f"{n_runtime} {plural} asserted at runtime."
+    ]
+    lines.extend(textwrap.wrap(
+        f"A load cannot add clauses to another module's predicate: "
+        f"{functor}/{arity} has exactly one defining module, {exporter}.",
+        width=_WIDTH, initial_indent=_INDENT, subsequent_indent=_INDENT,
+        break_long_words=False, break_on_hyphens=False,
+    ))
+    lines.extend(_arrow([
+        f"assert them at runtime instead -- an assertz of {functor}/{arity} "
+        f"from {importer} lands on {exporter}'s row;",
+        f"or define a predicate of {importer}'s own: drop {spelled} from the "
+        f"-import_from({exporter}, [...]) list, define {functor}/{arity} in "
+        f"{importer} and export it from there.",
     ]))
     return "\n".join(lines)
 

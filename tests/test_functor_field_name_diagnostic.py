@@ -131,19 +131,29 @@ class TestDirectiveMintedPlaceholderMismatch:
     conflicts — see ``TestAtomShadowsPredicate`` for one end to end.
     """
 
-    def test_loading_the_pair_now_succeeds(self):
+    def test_loading_the_pair_no_longer_raises_the_field_name_error(self):
+        """The module body runs (the head is positional), so no
+        ``ClausalTermConstructionError``.  The load itself is then REFUSED
+        since 2026-09-24 -- ``fnmismatch_use`` supplies clauses for a
+        predicate ``fnmismatch_schema`` only declares, the dropped
+        "vocabulary-implements" idiom -- so what this pins is WHICH error
+        stops it: the step-3d ``SyntaxError``, never the field-name one.
+        (It used to assert that the pair loads and shares the schema's
+        class; both were the idiom.)"""
         schema = _load_module(
             "tests.fixtures.fnmismatch_schema",
             os.path.join(FIXTURES, "fnmismatch_schema.clausal"),
         )
-        use = _load_module(
-            "tests.fixtures.fnmismatch_use",
-            os.path.join(FIXTURES, "fnmismatch_use.clausal"),
-        )
-        # The import wins the binding, and the local field spellings no longer
-        # contradict it.
-        assert use.fnm_verdict is schema.fnm_verdict
-        assert use.fnm_verdict._fields == ("arg_0", "arg_1")
+        with pytest.raises(SyntaxError) as exc_info:
+            _load_module(
+                "tests.fixtures.fnmismatch_use",
+                os.path.join(FIXTURES, "fnmismatch_use.clausal"),
+            )
+        assert not isinstance(exc_info.value, ClausalTermConstructionError)
+        assert "only declares fnm_verdict/2" in " ".join(
+            str(exc_info.value).split())
+        # The exporter's placeholder class is untouched by the refused load.
+        assert schema.fnm_verdict._fields == ("arg_0", "arg_1")
 
 
 # ── Cause 2 (Phenomenon A): imported atom shadows a same-named predicate ───

@@ -70,10 +70,11 @@ def _goal_dispatch_and_args(goal_val, db=None, context="time_goal/1"):
     # W4b-3: ``is_declared_predicate_name`` admits the module-qualified
     # HANDLE a predicate name is bound to after the flip.
     if callable(goal_val) or hasattr(goal_val, '_get_dispatch') \
-            or is_declared_predicate_name(goal_val):
+            or is_declared_predicate_name(goal_val, db=db):
         # Operator ruling 2026-09-24: an imported predicate reached through
         # an unqualified name resolves under that name in the calling module.
-        return _ensure_trampoline_dispatch(localize_goal(db, goal_val), 0), ()
+        return _ensure_trampoline_dispatch(
+            localize_goal(db, goal_val), 0, db), ()
     is_cell, functor = compound_cell_shape(goal_val)
     if (type(goal_val) is str and goal_val and db is not None
             and goal_val not in CELL_GOAL_CONTROL_FUNCTORS):

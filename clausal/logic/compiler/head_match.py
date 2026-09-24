@@ -35,7 +35,7 @@ from clausal.pythonic_ast.nodes import (
 )
 from clausal.logic.predicate import (
     is_term_instance, term_field_names, term_field_names_of_class, PredicateMeta,
-    is_declared_predicate_name,
+    is_declared_predicate_name, namespace_db,
 )
 from clausal.logic.cells import TUPLE_TAG, CELLS_NAMESPACE_KEY, _cell_shape, is_chars
 from clausal.logic.atoms import is_atom as _term_is_atom
@@ -760,7 +760,9 @@ def head_to_match_pattern(
             # import or a typo, not an OWA-advisory functor -- and must
             # fall through to the existing (loud) dead-pattern path rather
             # than silently match on the whole dotted string.
-            if not is_declared_predicate_name(resolved):
+            if not is_declared_predicate_name(
+                    resolved,
+                    db=namespace_db(globals_)):
                 if term.kwargs:
                     raise SyntaxError(
                         f"functor {term.func.name!r} has no declared "

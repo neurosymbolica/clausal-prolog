@@ -382,7 +382,8 @@ _CLAUSE_KINDS = frozenset((WRITE_LOAD_CLAUSES, WRITE_ASSERT, WRITE_RETRACT))
 RUNTIME_AUTHOR_PREFIX = "runtime-assert:"
 
 
-def _resolve_through_row(through: Any, arity: int) -> "PredRow | None":
+def _resolve_through_row(through: Any, arity: int,
+                         db: Any = None) -> "PredRow | None":
     """The extra row ``through=`` names, era-agnostically -- see
     :meth:`Database._write_rows`.
 
@@ -422,7 +423,7 @@ def _resolve_through_row(through: Any, arity: int) -> "PredRow | None":
     if through is None:
         return None
     if isinstance(through, PredicateMeta) or is_mangled(through):
-        return resolve_predicate_row(through, arity=arity)
+        return resolve_predicate_row(through, arity=arity, db=db)
     raise TypeError(
         f"through= does not recognise this value: {through!r} "
         f"(a {type(through).__name__}); expected a PredicateMeta class or "
@@ -448,9 +449,12 @@ def write_refusal(row: "PredRow", author: str, kind: str) -> "str | None":
        clause-clobber refusal: an ``-import_from`` SHARES the exporter's
        class, so a clause written here would replace, not extend, for every
        module that can reach it.  Narrowed exactly as the guard it replaces
-       was: a row nobody owns (``source is None`` — the clause-free vocabulary
-       export, whose implementer lives downstream) and an owned row with
-       nothing on it are both free to write.
+       was: a row nobody owns (``source is None``) and an owned row with
+       nothing on it are both free to write.  (The case that narrowing was
+       FOR -- a clause-free vocabulary export implemented downstream -- is
+       refused since 2026-09-24, but not here: a declaration-only export has
+       no row to ask, so the load channel refuses it from the import itself,
+       ``compiler_v2._implements_an_imported_declaration``.)
 
     ``WRITE_RECOMPILE`` is deliberately never refused: recompiling a dispatch
     from the clause list the row already holds changes no answers and takes no
@@ -810,7 +814,8 @@ class Database:
             # does this name mean here".  It must NOT answer a write: a
             # ``create=True`` caller is defining a predicate, and handing it
             # somebody else's row is how a local clause stops producing
-            # solutions (tests/fixtures/fnmismatch_use.clausal).
+            # solutions (tests/fixtures/fnmismatch_use.clausal -- itself a
+            # load error since 2026-09-24; the rule stands).
             if not create:
                 return self._adopted.get(key)
         # NOTE: deliberately does NOT touch ``_clauses`` here (Finding 2) —
@@ -978,7 +983,7 @@ class Database:
         target = self.row(functor, arity, create=create)
         if target is not None:
             rows.append(target)
-        other = _resolve_through_row(through, arity)
+        other = _resolve_through_row(through, arity, db=self)
         if other is not None and all(r is not other for r in rows):
             rows.append(other)
         return rows

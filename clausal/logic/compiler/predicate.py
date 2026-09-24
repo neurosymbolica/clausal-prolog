@@ -34,7 +34,7 @@ from clausal.terms import (
 from clausal.pythonic_ast.nodes import StarUnpack  # noqa: F401
 from clausal.logic.database import Clause, Database
 from clausal.logic.predicate import (
-    PredicateMeta, _dispatch_at,
+    PredicateMeta, _dispatch_at, is_foreign_class_at_other_arity,
 )
 from clausal.codegen import functiondef_to_function
 from clausal.logic.solve import _deref_walk as _deref_walk_fn
@@ -930,11 +930,28 @@ def _compile_predicate_trampoline_impl(
         body_compiler = _make_body_compiler_trampoline(
             _effective_db, ctx_template=ctx_template,
         )
+    elif getattr(body_compiler, "accepts_ctx_template", False):
+        # A caller-supplied body compiler (``solve._compile_as_query``) that
+        # asks for this compile's ctx: it then sees the SAME
+        # ``locked_dispatch_keys`` the default compiler does, so a call site
+        # the resolution loop routed through a ``$disp_`` entry (a locked
+        # predicate, or the name+arity ruling's unqualified other-arity
+        # dispatcher) uses it instead of ``$dispatch_at`` on the name's
+        # binding.  ``ctx_template`` is filled in place below, before any
+        # clause body is compiled.
+        _custom_body_compiler = body_compiler
+
+        def body_compiler(clause, var_context, _bc=_custom_body_compiler):
+            return _bc(clause, var_context, ctx_template=ctx_template)
 
     # Resolve pred_cls: explicit param > globals_ > auto-detect later.
     if pred_cls is None:
         pred_cls = (globals_ or {}).get(functor)
         if not isinstance(pred_cls, PredicateMeta):
+            pred_cls = None
+        elif is_foreign_class_at_other_arity(pred_cls, db, arity):
+            # An imported class at another arity: this predicate is the
+            # module's own, not the import (vocabulary-implements drop).
             pred_cls = None
 
     if not clauses:
@@ -1060,6 +1077,10 @@ def _compile_predicate_trampoline_impl(
     if pred_cls is None:
         pred_cls = base_globals.get(functor)
         if not isinstance(pred_cls, PredicateMeta):
+            pred_cls = None
+        elif is_foreign_class_at_other_arity(pred_cls, db, arity):
+            # An imported class at another arity: this predicate is the
+            # module's own, not the import (vocabulary-implements drop).
             pred_cls = None
 
     # Destructive-reuse: inject DR dispatch functions into base_globals so
@@ -1780,6 +1801,10 @@ def _compile_predicate_shallow_impl(
         pred_cls = (globals_ or {}).get(functor)
         if not isinstance(pred_cls, PredicateMeta):
             pred_cls = None
+        elif is_foreign_class_at_other_arity(pred_cls, db, arity):
+            # An imported class at another arity: this predicate is the
+            # module's own, not the import (vocabulary-implements drop).
+            pred_cls = None
 
     if not clauses:
         fn = _compile_always_fail(functor, arity)
@@ -1894,6 +1919,10 @@ def _compile_predicate_shallow_impl(
     if pred_cls is None:
         pred_cls = base_globals.get(functor)
         if not isinstance(pred_cls, PredicateMeta):
+            pred_cls = None
+        elif is_foreign_class_at_other_arity(pred_cls, db, arity):
+            # An imported class at another arity: this predicate is the
+            # module's own, not the import (vocabulary-implements drop).
             pred_cls = None
 
     # Phase 7: set compile context so _dispatch_call_iter can emit cached

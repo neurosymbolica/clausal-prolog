@@ -43,11 +43,13 @@ _UNSTAMPED = []         # class arrivals left with no signature
 _PENDING = []
 _CONFIGURED = False
 
-# Declare-then-import-then-define (design §3): the class bound under the
-# name is the EXPORTER's, carrying unseated ``-dynamic``/``f/N`` placeholder
-# names, while this module declares ``f(STATUS, CITATIONS)``.  The new source
-# answers the declaration; that is the ruled correction.
-ALLOWED = {("fnm_verdict", 2), ("impord_fverdict", 2)}
+# Declare-then-import-then-define (design §3) was the one ALLOWED mismatch:
+# the class bound under the name was the EXPORTER's placeholder, and the new
+# source answered this module's own declaration.  Those loads (fnm_verdict/2,
+# impord_fverdict/2) are REFUSED since 2026-09-24 -- the dropped
+# "vocabulary-implements" idiom -- so they never reach step 4, and any
+# mismatch at all is now unexpected.
+ALLOWED: set = set()
 
 
 def _settle():
