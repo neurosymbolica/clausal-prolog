@@ -1817,6 +1817,28 @@ def is_declared_predicate(binding, *, arity: int) -> bool:
     return False
 
 
+def predicate_binding_name(binding) -> "str | None":
+    """F1 rows 27/29: the predicate's OWN name for a module-dict *binding*,
+    era-agnostic -- or ``None`` when *binding* is not a declared predicate.
+
+    An aliased ``-import_from(m, [alias(f, G)])`` binds the exporter's
+    predicate under ``G``; clause heads compile to ``f``, so the load channel
+    needs ``f`` back from the binding.  Today that is the class's
+    ``__name__``; after the flip it is the atom half of the mangled spelling,
+    which ``demangle`` reads directly -- no class needed.
+
+    Gated on :func:`is_declared_predicate_name`, so a mangled DATA atom, a
+    plain string and a mangled atom naming an unloaded module all answer
+    ``None`` rather than a name.
+    """
+    if not is_declared_predicate_name(binding):
+        return None
+    if isinstance(binding, PredicateMeta):
+        return binding.__name__
+    from clausal.logic.atoms import demangle  # noqa: PLC0415
+    return demangle(binding)[1]
+
+
 def is_declared_predicate_name(binding) -> bool:
     """F2b: True iff *binding* denotes a declared PREDICATE, AT ANY ARITY,
     era-agnostic.

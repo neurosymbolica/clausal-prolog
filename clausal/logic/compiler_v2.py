@@ -38,7 +38,8 @@ from clausal.logic.compiler import (
 )
 from clausal.logic.predicate import (
     PredicateMeta, make_predicate, record_clause_source,
-    field_names_for, is_declared_predicate, resolve_predicate_row,
+    field_names_for, is_declared_predicate, predicate_binding_name,
+    resolve_predicate_row,
 )
 from clausal.pythonic_ast.nodes import (
     AtomAppliedAsFunctor as AtomAppliedAsFunctorItem,
@@ -273,7 +274,7 @@ def compile_module(
             pred_cls = None
         with _load_gate(db, functor, arity, author, WRITE_LOAD_CLAUSES,
                         pred_cls if pred_cls is not None
-                        else _imported_class(origins, functor),
+                        else _imported_binding(origins, functor),
                         origins, module_name, module_dict):
             logic_module.define_predicate(pred_node)
             if pred_cls is not None:
@@ -332,7 +333,7 @@ def compile_module(
                 # the owner's (``todo/aliased-assertz-loses-the-owner-under-
                 # cells-2026-09-20.md``).  Binding the import here is what
                 # makes the two spellings ONE case.
-                imported = _imported_class_by_canonical_name(
+                imported = _imported_binding_by_canonical_name(
                     origins, db, functor, arity)
                 if imported is not None and not db.is_defined(functor, arity):
                     # NOT when this module has clauses of its own under the
@@ -382,7 +383,7 @@ def compile_module(
                 # would then bind d/1's class onto d/2's row.
                 cls_row = getattr(pred_cls, "_row", None)
                 if cls_row is not None and cls_row.key[1] == arity:
-                    if _belongs_elsewhere(pred_cls, db):
+                    if _belongs_elsewhere(pred_cls, db, arity):
                         # A ``-dynamic`` declaration for a predicate this
                         # module IMPORTED (P3-3 Task 3 fix round 1).  The
                         # declaration is legitimate — it is how a module says
@@ -429,7 +430,7 @@ def compile_module(
         clauses = db.clauses_for(functor, arity)
         with _load_gate(db, functor, arity, author, WRITE_LOAD_DISPATCH,
                         pred_cls if pred_cls is not None
-                        else _imported_class(origins, functor),
+                        else _imported_binding(origins, functor),
                         origins, module_name, module_dict):
             if db.is_shallow(functor, arity):
                 compile_predicate_shallow(
@@ -793,22 +794,31 @@ def _reject_reserved_truth_names(
 
 
 def _import_from_origins(module_items: list, module_dict: dict) -> dict:
-    """``{name: (dotted module, bound class or None)}`` for every name an
+    """``{name: (dotted module, bound predicate or None)}`` for every name an
     ``-import_from`` binds in this file.
 
     Indexed under BOTH names an aliased import gives a predicate.  ``alias(f,
-    G)`` binds the exporter's class under ``G``, but the class keeps its own
-    functor ``f``, and a clause head compiles to the CLASS's functor — so
+    G)`` binds the exporter's predicate under ``G``, but it keeps its own
+    functor ``f``, and a clause head compiles to that functor — so
     ``head_key`` hands the load channel ``f`` while the file only ever
     mentions ``G``.  Indexing the alias alone let the aliased spelling walk
     straight past the refusal and clobber the exporter through step 5's
     dispatch assignment, with the clause list left intact so the damage was
     invisible to a clause count (found by review, 2026-08-25).
 
-    This is a RESOLVER, not a guard (P3-3 Task 3): it answers "which class
-    does this head name reach", and the mutation gate answers "may this load
-    write it".  It is the one place the identity todo's "resolve a head to its
-    class once" is done for the load channel.
+    This is a RESOLVER, not a guard (P3-3 Task 3): it answers "which
+    predicate does this head name reach", and the mutation gate answers "may
+    this load write it".  It is the one place the identity todo's "resolve a
+    head to its predicate once" is done for the load channel.
+
+    Era-agnostic (F1 row 27): the bound value is whatever the module dict
+    holds for a declared predicate -- a ``PredicateMeta`` class today, a
+    mangled atom after the flip -- and its own name comes from
+    ``predicate_binding_name``, not ``__name__``.  Measured 2026-09-24 over
+    the house suite: 2,354 bindings, 275 classes, and NONE of the 2,079
+    others is a declared predicate, so the wider filter changes nothing
+    today; ``tests/test_import_origins_both_eras.py`` checks that both
+    shapes give the same answers.
     """
     origins: dict[str, tuple[str, Any]] = {}
     for item in module_items:
@@ -817,50 +827,62 @@ def _import_from_origins(module_items: list, module_dict: dict) -> dict:
         for name_spec in item.names:
             local = name_spec[1] if isinstance(name_spec, tuple) else name_spec
             bound = module_dict.get(local)
-            if not isinstance(bound, PredicateMeta):
+            own_name = predicate_binding_name(bound)
+            if own_name is None:
                 bound = None
             origins[local] = (item.module, bound)
-            if bound is not None and bound.__name__ != local:
-                origins.setdefault(bound.__name__, (item.module, bound))
+            if own_name is not None and own_name != local:
+                origins.setdefault(own_name, (item.module, bound))
     return origins
 
 
-def _belongs_elsewhere(pred_cls, db) -> bool:
-    """True when *pred_cls* already reads another Database's real row — i.e.
+def _belongs_elsewhere(binding, db, arity: int) -> bool:
+    """True when *binding* already reads another Database's real row -- i.e.
     it is somebody else's predicate, reached here through an
     ``-import_from``.  A class on its private detached row is unbound, not
-    foreign."""
-    row = getattr(pred_cls, "_row", None)
+    foreign.
+
+    The row comes from ``resolve_predicate_row`` (F1 row 29): the class's
+    ``_row`` today, exactly what this read directly, and the owner's row for
+    a mangled atom after the flip -- where a ``getattr(binding, "_row")``
+    would answer ``None`` and quietly call every import local.
+    """
+    row = resolve_predicate_row(binding, arity=arity)
     return row is not None and not row.detached and row.db is not db
 
 
-def _imported_class_by_canonical_name(origins: dict, db, functor: str,
-                                      arity: int):
+def _imported_binding_by_canonical_name(origins: dict, db, functor: str,
+                                        arity: int):
     """The predicate this module IMPORTED whose own name is *functor* at
     *arity* — or None.
 
-    A class carries the exporter's ``__name__`` wherever it goes, so an
+    A predicate keeps the exporter's name wherever it goes, so an
     ``-import_from(m, [alias(bo_p, AliasS)])`` leaves the canonical spelling
-    bound to nothing in ``module_dict`` and ``AliasS`` bound to a class that
-    calls itself ``bo_p``.  ``_import_from_origins`` has ALREADY seen through
-    that — it indexes an aliased import under both the alias and
-    ``bound.__name__`` — so this is ``_imported_class`` plus the two checks
-    that call site needs and it does not:
+    bound to nothing in ``module_dict`` and ``AliasS`` bound to a predicate
+    that calls itself ``bo_p``.  ``_import_from_origins`` has ALREADY seen
+    through that — it indexes an aliased import under both the alias and
+    the predicate's own name — so this is ``_imported_binding`` plus the two
+    checks that call site needs and it does not:
 
     * ARITY.  ``origins`` is keyed by name alone, and a name bound at another
       arity is not the predicate this ``-dynamic(f/N)`` declares.
     * FOREIGNNESS.  ``_belongs_elsewhere`` keeps a module's own declaration
       from ever being rerouted, including the degenerate import-from-self.
 
+    Both checks are era-agnostic (F1 row 29): ``is_declared_predicate`` is
+    the class's ``len(_fields) == arity`` today and ``_belongs_elsewhere``
+    reads the class's ``_row`` through ``resolve_predicate_row`` -- the same
+    two reads this made directly -- and each answers for a mangled atom too.
+
     NOT a scan of ``module_dict.values()`` by ``__name__`` (roborev job 78,
     finding 1): that also matches a class reached by a plain Python import, a
     ``-specialize`` target, or anything another rewrite pass left in the dict,
     none of which is an ``-import_from``.
     """
-    bound = _imported_class(origins, functor)
-    if bound is None or len(bound._fields or ()) != arity:
+    bound = _imported_binding(origins, functor)
+    if bound is None or not is_declared_predicate(bound, arity=arity):
         return None
-    return bound if _belongs_elsewhere(bound, db) else None
+    return bound if _belongs_elsewhere(bound, db, arity) else None
 
 
 def _lock_static_predicates(db) -> int:
@@ -923,7 +945,7 @@ def _refuse_foreign_writes(db, predicate_nodes: list, module_dict: dict,
         checked.add((functor, arity))
         pred_cls = module_dict.get(functor)
         if not isinstance(pred_cls, PredicateMeta):
-            pred_cls = _imported_class(origins, functor)
+            pred_cls = _imported_binding(origins, functor)
         exc = db.refusal_for(
             functor, arity, author=author, kind=WRITE_LOAD_CLAUSES,
             detail=_LOAD_SITES[WRITE_LOAD_CLAUSES], through=pred_cls,
@@ -941,21 +963,25 @@ _LOAD_SITES = {
 }
 
 
-def _imported_class(origins: dict, functor: str) -> "PredicateMeta | None":
-    """The class an ``-import_from`` bound for *functor*, or ``None``.
+def _imported_binding(origins: dict, functor: str):
+    """The predicate an ``-import_from`` bound for *functor* -- a class today,
+    a mangled atom after the flip -- or ``None``.
 
-    Used to hand the mutation gate the shared class a write would land on
+    Used to hand the mutation gate the shared predicate a write would land on
     when ``module_dict.get(functor)`` finds nothing — which is exactly the
-    ALIASED import (identity todo instance 3): the class is in the module
+    ALIASED import (identity todo instance 3): the predicate is in the module
     dict under its alias, so the functor a clause head compiles to reaches
     nothing, and the write went unexamined while step 5 replaced the shared
     dispatch anyway.
+
+    ``_import_from_origins`` already filtered the value to a declared
+    predicate, so this is a lookup.  Every consumer is era-agnostic (F1 row
+    29): ``through=`` resolves either shape, ``_imported_binding_by_
+    canonical_name`` reads it through the resolvers, and the redefinition
+    diagnostic reads its row through ``resolve_predicate_row``.
     """
     origin = origins.get(functor)
-    if origin is None:
-        return None
-    bound = origin[1]
-    return bound if isinstance(bound, PredicateMeta) else None
+    return None if origin is None else origin[1]
 
 
 @contextlib.contextmanager
@@ -1008,9 +1034,9 @@ def _redefinition_error(exc, functor: str, arity: int, pred_cls,
     origin = origins.get(functor)
     # P1 (spec 2026-09-17 §2.2), simplification: *pred_cls* arrives already
     # resolved.  Both ``_load_gate`` call sites pass either step 4's
-    # isinstance-guarded class or ``_imported_class``'s result, and
-    # ``_imported_class`` returns a predicate class or ``None`` — so the type
-    # test was a ``None`` check in a type test's clothing.
+    # isinstance-guarded class or ``_imported_binding``'s result, which is a
+    # declared predicate (class or mangled atom) or ``None`` — so a type test
+    # here would be a ``None`` check in a type test's clothing.
     if origin is None or pred_cls is None:
         return SyntaxError(gate_line)
     exporter_name = origin[0]
@@ -1018,8 +1044,10 @@ def _redefinition_error(exc, functor: str, arity: int, pred_cls,
         describe_imported_predicate_redefinition,
     )
     described = describe_imported_predicate_redefinition(
-        functor, arity, module_name, exporter_name, pred_cls,
+        functor, arity, module_name, exporter_name,
+        resolve_predicate_row(pred_cls, arity=arity),
         exporter_module=module_dict.get(exporter_name),
+        declared_at=getattr(pred_cls, "_registered_at", None),
     )
     return SyntaxError(f"{described}\n  {gate_line}")
 
