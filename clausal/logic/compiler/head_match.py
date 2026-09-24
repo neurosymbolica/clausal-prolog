@@ -856,7 +856,18 @@ def head_to_match_pattern(
     # is_term_instance branch (that matches term *instances*). Route it
     # through unify() — atoms compare by identity/equality — mirroring the
     # str/bytes capture+guard pattern so it works in all argument modes.
-    if isinstance(term, type) and isinstance(term, PredicateMeta):
+    #
+    # F5 (row 39): era-agnostic swap for the arity-blind
+    # `isinstance(term, type) and isinstance(term, PredicateMeta)` test --
+    # `is_declared_predicate_name` answers the identical question and also
+    # covers the post-flip mangled-atom shape (already caught by the `str`
+    # branch above in practice).  MUST move in the same commit as
+    # terms_to_ast.py:101 (row 18), which answers False ("not opaque,
+    # handled here") specifically because THIS branch captures and
+    # unify()s the same shape -- migrating one without the other reopens
+    # the accept-all wildcard bug (A02-F003) for a bare predicate-class
+    # reference used as a head literal.
+    if is_declared_predicate_name(term):
         cap_name = f"_acap{len(list_guards) if list_guards is not None else 0}"
         if list_guards is not None:
             list_guards.append(("atom", cap_name, term))
