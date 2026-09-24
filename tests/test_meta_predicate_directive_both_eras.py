@@ -543,3 +543,62 @@ def test_a_lambda_nested_in_a_compound_in_a_colon_position(llib):
     assert q[:2] == (":", f"mldom_{era}")
     functor, closure = q[2]
     assert functor == "box" and callable(closure)
+
+
+# ── A Python-written closure as a meta-argument (2026-09-25) ───────────────
+#
+# A plain Python simple-mode goal function ``fn(*args, trail, k)``, built in
+# Python and handed into a query, is a goal OBJECT: a meta-declared position
+# leaves it unwrapped and call_goal runs it, exactly as without the
+# declaration.  Pinned through one and two meta hops, both eras, through the
+# ``call`` Python entry and through a clause that passes it on.  (A raw
+# Python function inside a ``solve`` CELL goal is refused by the query
+# compiler with or without the declaration -- ``term_to_ast_expr:
+# unsupported term type function`` -- so that entry is not pinned here.)
+
+_CLIB = """
+    -module(mclib_ERA, [c1(LO, G, OUT), c2(LO, G, OUT)])
+    -meta_predicate(c1('?', 2, '?'), c2('?', 2, '?'))
+    c1(LO, G, OUT) <- call_goal(G, LO, OUT),
+    c2(LO, G, OUT) <- c1(LO, G, OUT),
+"""
+
+_CDOM = """
+    -module(mcdom_ERA, [])
+    -import_from(mclib_ERA, [c1, c2])
+    via1(G, OUT) <- c1(2, G, OUT),
+    via2(G, OUT) <- c2(2, G, OUT),
+"""
+
+
+def _python_probe(x, status, trail, k):
+    from clausal.logic.variables import unify
+    if unify(status, deref(x) * 10, trail):
+        yield None
+
+
+@pytest.fixture(params=["class", "handle"])
+def clib(request, tmp_path, monkeypatch):
+    era = request.param
+    lib = _load(tmp_path, monkeypatch, f"mclib_{era}", _CLIB.replace("ERA", era))
+    L = lib.__dict__["$module"]
+    if era == "handle":
+        _bind_imports_as_owner_handles(monkeypatch, L)
+    dom = _load(tmp_path, monkeypatch, f"mcdom_{era}", _CDOM.replace("ERA", era))
+    return L, dom.__dict__["$module"]
+
+
+@pytest.mark.parametrize("hop", ["c1", "c2"])
+@pytest.mark.parametrize("where", ["library", "importer"])
+def test_a_python_written_closure_runs_through_meta_hops(clib, hop, where):
+    L, D = clib
+    module = L if where == "library" else D
+    out = Var()
+    assert [walk(out) for _ in call(hop, 3, _python_probe, out, module=module)] == [30]
+
+
+@pytest.mark.parametrize("via", ["via1", "via2"])
+def test_a_python_written_closure_passed_on_by_a_clause(clib, via):
+    _L, D = clib
+    out = Var()
+    assert [walk(out) for _ in call(via, _python_probe, out, module=D)] == [20]
