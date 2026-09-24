@@ -39,7 +39,7 @@ from clausal.logic.compiler import (
 from clausal.logic.predicate import (
     PredicateMeta, make_predicate, record_clause_source,
     field_names_for, is_declared_predicate, is_declared_predicate_name,
-    predicate_binding_name,
+    predicate_arities_for, predicate_binding_name,
     resolve_predicate_row,
 )
 from clausal.pythonic_ast.nodes import (
@@ -1265,6 +1265,81 @@ def _process_directives(module_items: list, db: Any, module_dict: dict | None = 
                     method(functor, arity)
 
 
+def _ambiguous_mi(mi_name: str, arities) -> RuntimeError:
+    """Ruling QA's refusal, for every route that finds several arities."""
+    arities = sorted(arities)
+    return RuntimeError(
+        f"-specialize: meta-interpreter '{mi_name}' is defined at "
+        f"{len(arities)} arities "
+        f"({', '.join(f'{mi_name}/{a}' for a in arities)}); "
+        f"a meta-interpreter must have exactly one -- rename one of them")
+
+
+def _meta_interpreter_row(db, module_dict: dict, mi_name: str, *,
+                          refuse_ambiguous: bool
+                          ) -> "PredRow | PredicateMeta | None":
+    """The ROW of the meta-interpreter a ``-specialize`` names, or ``None``
+    -- or, in two class-era arms below, the ``PredicateMeta`` class bound to
+    it.  Its one consumer, ``analyze_mi``, accepts both.  TODO(W4b-3): the
+    class arms go with the class, leaving ``PredRow | None``.
+
+    F1 rows 32/33: found in the specializing module's OWN database -- a local
+    MI or an ``-import_from``'d one (an adopted row) both answer there -- so
+    it works whatever the module-dict binding looks like.
+    ``predicate_arities`` is the lossless population; ``arities_for`` misses
+    an adopted row (measured: empty for 99 of 100 lookups over the house
+    suite, because the MIs are imported).
+
+    In order:
+
+    1. several arities with a ROW (clauses or not) is ambiguous: refused
+       when *refuse_ambiguous* (ruling QA, 2026-09-24: the class route
+       silently picked one; no measured case was ambiguous), otherwise
+       ``None``;
+    2. the one arity with a row -- with clauses, or a clause-less
+       ``-dynamic`` MI, which the caller hands to ``analyze_mi`` so its
+       "expected at least 2 clauses" refusal (spelled in one place) is what
+       the author sees;
+    3. failing that, a module-dict binding that denotes a predicate -- one
+       bound by a plain Python import has no row here -- with the same
+       ambiguity refusal over its owner's arities.  A mangled atom is
+       resolved to its owner's row.  A ``PredicateMeta`` class is returned
+       AS THE CLASS: ``analyze_mi`` reads its ``_fields`` (a Python-built
+       predicate may have no registered signature) and refuses it when it
+       has no row, exactly as before.  That arm goes with the class at
+       W4b-3.
+    """
+    rows = {a: r for a in db.predicate_arities(mi_name)
+            if (r := db.row(mi_name, a)) is not None}
+    if len(rows) > 1:
+        if refuse_ambiguous:
+            raise _ambiguous_mi(mi_name, rows)
+        return None
+    binding = module_dict.get(mi_name)
+    if rows:
+        row = next(iter(rows.values()))
+        # A Python-built MI whose clauses reached this database without a
+        # registered signature: its field names live only on the class
+        # bound to it, which the class route read.  Hand that class over
+        # (W4b-3 removes this arm with the class).
+        if (row.db.signature_for(*row.key) is None
+                and isinstance(binding, PredicateMeta) and binding._row is row):
+            return binding
+        return row
+    if not is_declared_predicate_name(binding):
+        return None
+    arities = predicate_arities_for(binding)
+    if len(arities) > 1:
+        if refuse_ambiguous:
+            raise _ambiguous_mi(mi_name, arities)
+        return None
+    if isinstance(binding, PredicateMeta):
+        return binding
+    if arities:
+        return resolve_predicate_row(binding, arity=next(iter(arities)))
+    return None
+
+
 def _preregister_specializations(
     module_items: list,
     module_dict: dict,
@@ -1282,14 +1357,17 @@ def _preregister_specializations(
         if not isinstance(item, SpecializeItem):
             continue
 
-        mi_cls = module_dict.get(item.mi_name)
-        if not isinstance(mi_cls, PredicateMeta):
+        # At step 1c only an IMPORTED MI has clauses; a local one is
+        # skipped here and specialized at step 6b, exactly as before.
+        mi_row = _meta_interpreter_row(db, module_dict, item.mi_name,
+                                       refuse_ambiguous=False)
+        if mi_row is None:
             continue  # Will error in _run_specialization
 
         # Analyze MI to get field names for the specialized predicate.
         # program_arg is auto-detected by analyze_mi from field names.
         try:
-            pattern = analyze_mi(mi_cls)
+            pattern = analyze_mi(mi_row)
             fields = _specialized_fields(pattern)
         except Exception:
             continue  # Will error properly in _run_specialization
@@ -1304,6 +1382,15 @@ def _preregister_specializations(
             # mangled atom.  ``_install_specialized`` registers again later
             # through ``register_signature``; both write the same tuple.
             db.declare_functor(item.new_name, tuple(fields))
+            # Ruling QB (2026-09-24): mint the ROW now.  A declared functor
+            # with no row is DATA to ``declared_kind``, so between here and
+            # step 6b every reference to the target read as data -- today
+            # the class hid that; after the flip nothing would.  Scope: what
+            # step 1c pre-registers at all, i.e. an IMPORTED MI.  A local
+            # MI's target is not pre-registered (no clauses yet to analyse)
+            # and has no class, row or declaration at step 2 on main either
+            # (probed 2026-09-24), so the flip changes nothing for it.
+            db.row(item.new_name, len(fields), create=True)
 
 
 def _run_specialization(
@@ -1323,8 +1410,9 @@ def _run_specialization(
         if not isinstance(item, SpecializeItem):
             continue
 
-        mi_cls = module_dict.get(item.mi_name)
-        if not isinstance(mi_cls, PredicateMeta):
+        mi_row = _meta_interpreter_row(db, module_dict, item.mi_name,
+                                       refuse_ambiguous=True)
+        if mi_row is None:
             # P1 (spec 2026-09-17 §2.4): the diagnostic enumerates the
             # DATABASE's predicates — every container ``row()`` consults,
             # plus the rows adopted at ``-import_from`` — rather than the
@@ -1342,7 +1430,7 @@ def _run_specialization(
             )
 
         # Analyze the MI (auto-detects program_arg from field names).
-        pattern = analyze_mi(mi_cls)
+        pattern = analyze_mi(mi_row)
 
         # Evaluate the source program.
         source_cls = module_dict.get(item.source_program)
