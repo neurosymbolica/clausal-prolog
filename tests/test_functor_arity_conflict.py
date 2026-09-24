@@ -103,13 +103,16 @@ class TestPositionalOverflowRaises:
         term = cls(1, 2)
         assert _cf(term, cls, "left") == 1 and _cf(term, cls, "right") == 2
 
-    def test_partial_positional_still_fills_with_vars(self):
-        from clausal.logic.variables import is_var
-
+    def test_partial_positional_raises_like_overflow(self):
+        """FLIPPED 2026-09-24 (ruling C): too FEW positional arguments used to
+        pad with fresh variables; it is now refused exactly like too many.
+        A missing slot named by keyword still completes the term."""
         cls = make_predicate("fac_partial", ["left", "right"])
-        term = cls(1)
-        assert _cf(term, cls, "left") == 1
-        assert is_var(_cf(term, cls, "right"))
+        with pytest.raises(ClausalTermConstructionError) as exc_info:
+            cls(1)
+        assert "1 positional argument(s)" in str(exc_info.value)
+        term = cls(1, right=2)
+        assert _cf(term, cls, "right") == 2
 
     def test_mixed_positional_and_keyword_within_arity_still_constructs(self):
         cls = make_predicate("fac_mixed", ["left", "right"])

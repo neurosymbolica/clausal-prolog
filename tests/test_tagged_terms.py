@@ -406,13 +406,12 @@ class TestSignatureConstruction:
         with pytest.raises(SyntaxError, match="keyword arguments"):
             self._compile("_tt_sig_kw", "point(y=2, x=1)")
 
-    def test_partial_positional_backfills_the_omitted_slot(self):
-        """``point(1)`` supplies ``x`` only; ``y`` backfills with a fresh
-        ``Var()`` -- asserted by TEXT (var-ness), not by identity, since a
-        fresh Var's id is not a meaningful thing to pin."""
-        self._compile("_tt_sig_partial", "point(1)")
-        src = capture_predicate_codegen("_tt_sig_partial", ["p"])
-        assert "('point', 1, $Var())" in src
+    def test_partial_positional_raises_like_over_arity(self):
+        """FLIPPED 2026-09-24 (ruling C): ``point(1)`` used to backfill ``y``
+        with a fresh ``Var()``; a short construction of a DATA functor is now
+        refused exactly like a long one (no silent padding)."""
+        with pytest.raises(SyntaxError, match=r"point/2 was constructed with 1"):
+            self._compile("_tt_sig_partial", "point(1)")
 
     def test_empty_construction_backfills_both_slots(self):
         self._compile("_tt_sig_empty", "point()")
@@ -518,55 +517,21 @@ class TestHeadSignaturePlacement:
 
 
 class TestPartialHeadReferenceIndexing:
-    """P3-2 whole-branch final review, F2: recorded as executable findings,
-    not fixed here (pre-existing, exposed-not-caused — see
-    ``todo/indexed-dispatch-drops-partial-head-references-2026-09-05.md``).
+    """P3-2 whole-branch final review, F2 -- RETIRED 2026-09-24 by ruling C.
 
-    A clause head that references a declared data functor at LESS than its
-    full declared arity (``pt(1)`` — partial-positional; ``pt(y=2)`` —
-    keyword-only) is unreachable by any real caller once the predicate's
-    clause count crosses ``_INDEX_THRESHOLD``: ``head_match.
-    head_to_match_pattern``'s ``Call(LoadName)`` branch places the clause's
-    PATTERN against the functor's full DECLARED signature (``pt(1)`` ->
-    ``case ('pt', 1, _)``), but ``arg_index._arg_to_index_key``'s ``Call``
-    branch keys the BUCKET the clause is filed under by the WRITTEN arity
-    (``len(arg.args)`` -> ``('pt', 1)``) — and a real caller's value is
-    always the already-backfilled, full-arity cell (``('pt', 2)``), so the
-    bucket the caller probes is never the bucket the clause landed in.
-    Below the threshold there is no bucket at all, and the same clause
-    matches correctly via the unindexed linear scan's full ``unify()``.
-
-    One shared fixture module (``_load_inline``) declares ``pt(x, y)`` and
-    five discriminator predicates, mirroring ``kind/2``'s functor+arity
-    dispatch shape (a data-functor clause plus enough int-headed padding
-    clauses to separate the above/below-threshold pairs):
-
-    - ``probe_sat``      (6 clauses, above threshold): ``pt(1, 2)`` — full
-      declared arity written in the head. Correct today; pinned as a plain
-      regression test.
-    - ``probe_partial``  (6 clauses, above threshold): ``pt(1)``. BROKEN —
-      ``xfail(strict=True)``.
-    - ``probe_partial_below`` (2 clauses, below threshold): ``pt(1)``.
-      Correct — pins the unindexed floor the eventual fix must preserve.
-
-    The keyword halves (``probe_kw``/``probe_kw_below``, ``pt(y=2)``) were
-    RETIRED on 2026-09-19: a term is built positionally now and the spelling
-    they covered is a load-time error.  Their positional twins above cover the
-    same indexing question, so nothing was lost but the spelling.
-
-    Every query passes the FULL, already-backfilled cell a real caller
-    would always hold (construction-side placement backfills every omitted
-    slot before the value exists at runtime — see
-    ``TestSignatureConstruction``), so a passing result demonstrates actual
-    dispatch reachability, not an artefact of how the query was written.
+    This class recorded that a clause head referencing a declared data
+    functor at LESS than its declared arity (``pt(1)`` for ``pt(x, y)``) was
+    padded to ``('pt', 1, _)`` as a pattern but filed under the WRITTEN-arity
+    bucket, so above ``_INDEX_THRESHOLD`` no caller could reach it
+    (``xfail(strict=True)``).  Ruling C refuses the short construction at
+    load instead of padding it, so the unreachable clause cannot be written;
+    the saturated reference still dispatches.
     """
 
     _SRC = (
         "-module(_tt_partial_head_idx, [\n"
         "    pt(x, y),\n"
         "    probe_sat(S, K),\n"
-        "    probe_partial(S, K),\n"
-        "    probe_partial_below(S, K),\n"
         "])\n"
         "\n"
         'probe_sat(pt(1, 2), "hit"),\n'
@@ -575,18 +540,6 @@ class TestPartialHeadReferenceIndexing:
         'probe_sat(903, "n3"),\n'
         'probe_sat(904, "n4"),\n'
         'probe_sat(905, "n5"),\n'
-        "\n"
-        'probe_partial(pt(1), "hit"),\n'
-        'probe_partial(911, "n1"),\n'
-        'probe_partial(912, "n2"),\n'
-        'probe_partial(913, "n3"),\n'
-        'probe_partial(914, "n4"),\n'
-        'probe_partial(915, "n5"),\n'
-        "\n"
-        "\n"
-        'probe_partial_below(pt(1), "hit"),\n'
-        'probe_partial_below(931, "n1"),\n'
-        "\n"
     )
 
     @pytest.fixture(scope="class")
@@ -602,23 +555,11 @@ class TestPartialHeadReferenceIndexing:
         """Full declared arity written in the head: correct today."""
         assert self._probe(lm, "probe_sat", ("pt", 1, 2)) == [mint("hit")]
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "indexed-dispatch-drops-partial-head-references-2026-09-05: "
-            "bucket keyed on WRITTEN arity ('pt', 1) from the raw head "
-            "Call, caller probes the DECLARED arity ('pt', 2) — no bucket "
-            "match, zero solutions."
-        ),
-    )
-    def test_partial_positional_reference_above_threshold_dispatches(self, lm):
-        assert self._probe(lm, "probe_partial", ("pt", 1, 9)) == [mint("hit")]
-
-    def test_partial_positional_reference_below_threshold_dispatches(self, lm):
-        """Same clause shape, below ``_INDEX_THRESHOLD``: no bucket exists,
-        the unindexed linear scan's full ``unify()`` finds it correctly —
-        the regression floor the eventual fix must not narrow."""
-        assert self._probe(lm, "probe_partial_below", ("pt", 1, 9)) == [mint("hit")]
+    def test_a_partial_head_reference_is_refused_at_load(self):
+        with pytest.raises(SyntaxError, match=r"pt/2 was constructed with 1"):
+            _load_inline("_tt_partial_head_idx_short", (
+                "-module(_tt_partial_head_idx_short, [pt(x, y), probe(S, K)])\n"
+                'probe(pt(1), "hit"),\n'))
 
 
 class TestParity:
@@ -820,16 +761,14 @@ class TestHeadPatterns:
         assert three.count(",") == 3    # tag + 3 args
         assert three.startswith("case ['seg', ")
 
-    def test_partial_construction_gets_a_wildcard_for_the_missing_slot(self):
-        """P3-2 Task 1 (controller ruling): the matching half of signature
-        placement.  A partial reference now builds a cell PATTERN too, with
-        a wildcard for the field it omits -- ``point(V)`` matches
-        ``('point', <p0>, _)``, not a class pattern.  Supersedes
-        ``test_partial_construction_keeps_the_class_pattern``, which pinned
-        the PRE-Task-1 behaviour this test inverts."""
-        got = self._pattern(self._source_compound("point", 1))
-        assert got.startswith("case ['point', ")
-        assert got.endswith(", _]:")
+    def test_partial_construction_is_refused_like_over_arity(self):
+        """FLIPPED 2026-09-24 (ruling C): the matching half of the
+        construction rule.  A partial head reference ``point(V)`` used to get
+        a wildcard for the omitted slot; it is now refused exactly like the
+        construction is -- a pattern that builds one shape and matches
+        another is the thing the twin placement exists to prevent."""
+        with pytest.raises(SyntaxError, match=r"point/2 was constructed with 1"):
+            self._pattern(self._source_compound("point", 1))
 
     def test_a_predicate_reference_matches_as_a_sequence_too(self):
         """P2 INVERTS this, and means to.

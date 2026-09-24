@@ -1036,6 +1036,15 @@ class PredicateMeta(type):
                 raise _term_arity_error(
                     cls, len(args), kwargs, _source_site(1)
                 )
+            if len(args) < len(fields) and not all(
+                    f in kwargs for f in fields[len(args):]):
+                # Ruling C (2026-09-24): too FEW positional arguments is
+                # refused exactly like too many -- no silent fresh-Var
+                # padding.  A class is ONE arity; the compound at another
+                # arity is built by name (``(name, *args)``), not by it.
+                raise _term_arity_error(
+                    cls, len(args), kwargs, _source_site(1)
+                )
             for i, val in enumerate(args):
                 kwargs[fields[i]] = val
 

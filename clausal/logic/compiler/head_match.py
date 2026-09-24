@@ -682,6 +682,11 @@ def head_to_match_pattern(
         # and the MatchClass fallback beside it cannot disagree about what
         # ``term.func.name`` means.
         _sig = cell_signature_for_name(term.func.name, globals_)
+        if (_sig is not None and not term.kwargs
+                and 0 < len(term.args) < len(_sig[1])):
+            # Ruling C: the WRITTEN arity (see terms_to_ast's twin).
+            _sig = cell_signature_for_name(
+                term.func.name, globals_, arity=len(term.args))
         _owa = _implicit_functors_active(globals_)
         if _sig is None:
             resolved = _resolve_loadname(term.func.name, globals_)

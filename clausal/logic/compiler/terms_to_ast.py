@@ -425,6 +425,17 @@ def cell_signature_for_name(
             # A data functor keeps the old answer, because its declaration
             # really does fix the slots -- over-supplying THOSE is an error.
             return None
+        if arity is not None and arity < len(cls_fields):
+            # Ruling C (2026-09-24): a term is built at its WRITTEN arity,
+            # never padded.  A predicate NAME may be written at several
+            # arities (name+arity), so a short construction of one is the
+            # compound at the arity written -- ``count_leaves(T)`` naming the
+            # nonterminal count_leaves//1 is ``('count_leaves', T)``, and
+            # phrase appends S0/S to it.  A DATA functor's declaration does
+            # fix the slots, so a short construction of one is refused by
+            # ``_place_signature_slots`` exactly as a long one is.
+            return (_functor_spelling(binding, leaf),
+                    tuple(f"arg_{i}" for i in range(arity)))
         return _functor_spelling(binding, leaf), tuple(cls_fields)
     fields = functor_signature_for(leaf, leaf_namespace)
     if fields is None:
@@ -550,6 +561,13 @@ def _place_signature_slots(fields, positional, keywords, *, functor, missing):
     """
     n_fields = len(fields)
     if len(positional) > n_fields:
+        raise _cell_arity_error(functor, fields, len(positional))
+    if positional and len(positional) + len(keywords) < n_fields:
+        # Ruling C (2026-09-24): no silent padding -- too FEW positional
+        # arguments is refused exactly like too many.  (A predicate name at a
+        # shorter arity never reaches here: ``cell_signature_for_name`` gives
+        # it the written arity's own slots.)  Keyword-only construction
+        # (no positional at all) still names the slots it fills.
         raise _cell_arity_error(functor, fields, len(positional))
     slots = [_UNSET] * n_fields
     for i, value in enumerate(positional):
@@ -1087,6 +1105,11 @@ def term_to_ast_expr(
         # reference now builds a cell too instead of falling back to class
         # emission.
         _sig = cell_signature_for_name(fname)
+        if (_sig is not None and not kw_exprs
+                and 0 < len(arg_exprs) < len(_sig[1])):
+            # Ruling C: ask again at the WRITTEN arity (a predicate name
+            # answers that arity's slots; a data functor its declaration).
+            _sig = cell_signature_for_name(fname, arity=len(arg_exprs))
         _namespace = lowering_globals()
         _owa = _implicit_functors_active(_namespace)
         if _sig is not None:

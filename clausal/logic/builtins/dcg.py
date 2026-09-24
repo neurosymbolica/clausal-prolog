@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from clausal.logic.atoms import is_mangled
 
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.predicate import (
@@ -118,24 +117,23 @@ def _resolve_nonterminal(db, rule_val, extra_args, context):
     from clausal.logic.builtins.higher_order import _resolve_named_goal  # noqa: PLC0415
     is_cell, functor = compound_cell_shape(rule_val)
     if not is_cell:
-        if type(rule_val) is str and rule_val and not is_mangled(rule_val):
+        if type(rule_val) is str and rule_val:
             # A bare ATOM names the nonterminal: ruling S (2026-09-24) makes
             # ``phrase(greeting, L)`` pass the plain atom ``greeting``, not the
             # class, so this is the atom's arm the old pin
             # (``test_phrase_bare_str_rule_reference_fails_cleanly``, now
             # flipped) said P4 would need.  It contributes no arguments of its
-            # own: S0/S are the whole call, ``greeting/2``.
+            # own: S0/S are the whole call, ``greeting/2``.  A mangled handle
+            # takes the same route (a dangling one raises, as in call/N).
             return _resolve_named_goal(db, rule_val, list(extra_args), context)
         return None
     if functor in CELL_GOAL_CONTROL_FUNCTORS or functor == QUALIFIED_GOAL_FUNCTOR:
         return None
-    # _DCG_ARITY_NOTE, on the cell: a nonterminal cell is built at the class's
-    # TRANSLATED arity, so ``tok//1`` arrives as ``("tok", T, S0, S)`` -- its
-    # last two slots are the difference-list pair, and phrase supplies that
-    # pair itself.  Drop them, exactly as the class arm's ``fields[:-2]`` does,
-    # and let the caller's own S0/S take their place.  ``[1:-2]`` truncates to
-    # empty for a cell of arity 0 or 1, which is what that note asks for.
-    user_args = [deref(a) for a in rule_val[1:-2]]
+    # Ruling C (2026-09-24), ISO call/N style: a nonterminal cell is built at
+    # its WRITTEN arity -- ``tok(T)`` is ``("tok", T)``, never padded to the
+    # translated ``tok/3`` -- so phrase APPENDS S0/S to the cell's own
+    # arguments.  (It used to drop the last two slots of a padded cell.)
+    user_args = [deref(a) for a in rule_val[1:]]
     # Resolve the FUNCTOR with every argument as an extra.  The atom route
     # through the shared resolver contributes no arguments of its own, so the
     # ISO fold lands at exactly ``len(user_args) + 2`` -- the arity the class

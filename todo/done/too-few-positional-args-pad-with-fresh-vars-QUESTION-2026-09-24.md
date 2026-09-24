@@ -65,3 +65,39 @@ stop being the constructor for a short term.
 Recommendation: C (it is what the name+arity ruling implies, and it removes
 the only reason for A); B is not viable on its own. Not applied: it changes
 term identity for every short construction, which is an operator call.
+
+## Resolved (2026-09-24, operator ruling C; branch fix/small-todos-batch-2026-09-24)
+
+A term is built at its WRITTEN arity; nothing pads.
+
+* **Data functor** (declaration fixes the slots): too few positional args is
+  refused exactly like too many -- compile time (`terms_to_ast._place_signature_slots`,
+  shared by construction and `head_match` patterns) and the runtime class call
+  (`PredicateMeta.__call__`, unless keywords fill the rest).
+* **Predicate name** (name+arity: one name, several arities): a short
+  construction is the compound at the written arity
+  (`cell_signature_for_name(..., arity=n)` answers that arity's own slots;
+  both construction and head-pattern sites ask again at the written arity).
+  `phrase(count_leaves(T), ...)` builds `('count_leaves', T)`.
+* **phrase/2,3** append S0/S to the cell's written args (`rule_val[1:]`,
+  ISO call/N) instead of dropping two padded slots; a bare atom or handle
+  nonterminal goes through `_resolve_named_goal` too.
+
+Tests: `tests/test_written_arity_construction_both_eras.py` (phrase through the
+class and a `mint_predicate_handle` binding). Pins flipped with notes:
+`test_functor_arity_conflict` (partial positional), `test_tagged_terms`
+(construction + head pattern + the partial-head indexing class, whose xfail
+defect -- `todo/done/indexed-dispatch-drops-partial-head-references-2026-09-05.md`
+-- can no longer be written), `test_goal_position_seam` (`pair(a, _)`),
+`test_import_path_canonicalization` (`sole_verdict(ok, _)`),
+`test_call_n_dangling_handle_raises` (written-arity nonterminal), `test_dcg`
+(Python-side nonterminal terms built by name via `_nt`, since `cls(v)` on a
+//N class now raises). test_dcg: 141 passed.
+
+Mutations (each reverted): compile short-raise off -> 4 fail; predicate
+written arity off -> 4 fail + 19 errors; runtime short-raise off -> 2 fail;
+phrase back to `[1:-2]` -> 33 fail; head_match retry off -> 1 fails.
+
+Not done (pre-existing, flipped era): a HANDLE-bound predicate name has no
+construction lowering at all (`cell_signature_for_name` finds no fields on a
+handle, so `tok(z)` lowers to a call of the str) -- independent of ruling C.
