@@ -22,3 +22,9 @@ Wire at: F1 rows 58/59 (`_find_pred_cls`/`_namespace_dispatch`), row 60
 flip itself mints bindings with `mint_predicate_handle`.
 
 Check for done: `grep -rn "resolve_predicate_row\|is_declared_predicate\|predicate_binding_name\|predicate_arities_for" clausal` — every call with a db in scope passes it.
+
+**Wired (branch fix/w4b-self-atom-plain-2026-09-24):** `solve._templatize_query_goal`
+(`_compile_as_query` passes `module.db`) and `terms_to_ast.term_to_ast_expr`'s
+self-denoting-atom arm (reads the lowering scope's `$module` db via
+`_lowering_db()`; the query compile's scope carries it, so a nested handle in a
+popped module's query resolves too).

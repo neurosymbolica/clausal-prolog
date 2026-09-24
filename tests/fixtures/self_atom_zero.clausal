@@ -1,0 +1,9 @@
+# Fixture for tests/test_self_denoting_predicate_atom_plain.py: a ZERO-arity
+# predicate `z` referenced bare in DATA position (`q(z)`), so a query can
+# compare today's class binding and the post-flip mangled handle against the
+# plain atom the source fact stores.
+
+-module(self_atom_zero, [z/0, q/1])
+
+z <- True,
+q(z),

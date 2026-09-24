@@ -44,10 +44,11 @@ from clausal.pythonic_ast.nodes import (
 )
 from clausal.logic.predicate import (
     PredicateMeta, is_declared_predicate_name, is_zero_field_class,
-    is_term_instance, term_field_names, term_field_names_of_class,
+    is_term_instance, predicate_binding_name, term_field_names, term_field_names_of_class,
 )
 from clausal.logic.atoms import (
     is_atom as _term_is_atom,
+    is_mangled as _is_mangled,
     mint as _mint_atom,
     spelling as _atom_spelling,
 )
@@ -199,6 +200,16 @@ def lowering_scope(module_globals: "dict | None"):
         yield
     finally:
         _LOWERING_SCOPE_STACK.pop()
+
+
+def _lowering_db():
+    """The innermost open compile's module DATABASE, or None -- the ruling-Q0
+    ``db=`` hint for the era-agnostic predicate resolvers, read from the
+    namespace's ``$module`` the same way ``functor_signature_for`` does."""
+    namespace = lowering_globals()
+    if namespace is None:
+        return None
+    return getattr(namespace.get("$module"), "db", None)
 
 
 def lowering_globals() -> "dict | None":
@@ -732,6 +743,38 @@ def term_to_ast_expr(
     if term is Undefined:
         return _name("Undefined")
 
+    # A predicate's SELF-DENOTING atom stays PLAIN in both eras (operator
+    # ruling 2026-09-24: "the default in Prolog is global, but be cognizant
+    # of directive hide/1").  Post-flip a predicate's module binding is its
+    # mangled handle (``module\x1fname``), a ``str`` -- so without this arm
+    # the generic ``str`` arm below bakes the MANGLED spelling, where today's
+    # class arms (``is_zero_field_class`` / ``is_declared_predicate_name``
+    # further down) bake ``term.__name__``.  ``predicate_binding_name`` is
+    # gated on ``is_declared_predicate_name``, NOT ``is_mangled``: a ``-hide`` DATA
+    # atom is mangled too, and its mangled spelling IS its identity (every
+    # reference in the owning module compiles to that same spelling), so it
+    # must fall through and be baked verbatim.
+    #
+    # A mangled str whose owner module does NOT resolve (no loaded Clausal
+    # module under its module half) also falls through VERBATIM -- it is not
+    # refused.  Deliberate: from the spelling alone such a str cannot be told
+    # apart from a -hide DATA atom, and an unresolvable -hide atom is a
+    # legitimate runtime value (a module loaded under a sys.modules key other
+    # than its -module name mints ``hide_owner\x1fhide_secret`` that
+    # ``_resolve_mangled_owner`` answers None for; that atom round-trips into
+    # queries today).  Raising here would break it.  The cost: a predicate
+    # handle whose owner is not loaded keeps its mangled spelling, so the
+    # answer depends on load state -- the same dependency every
+    # ``is_declared_predicate_name`` caller has.  See
+    # todo/done/self-denoting-predicate-atom-spelling-post-flip-mangled-or-plain-2026-09-24.md.
+    # Only a MANGLED str can be a predicate handle (a class never reaches this
+    # arm), so a plain string -- the common case -- pays one ``in`` test, not
+    # a lowering-scope db lookup.
+    if type(term) is str and _is_mangled(term):
+        _pred_name = predicate_binding_name(term, db=_lowering_db())
+        if _pred_name is not None:
+            return ast.Constant(value=_mint_atom(_pred_name))
+
     if isinstance(term, (int, float, str, bytes, complex)):
         return ast.Constant(value=term)
 
@@ -1232,14 +1275,12 @@ def term_to_ast_expr(
     # in term position.  Almost always the atom/predicate name clash.
     #
     # F2b: is_declared_predicate_name, not a bare isinstance -- but `term`
-    # can never be a mangled atom here regardless, since the generic
-    # ``isinstance(term, (int, float, str, bytes, complex))`` arm far above
-    # already returns for ANY str (mangled atom included) before this line
-    # is ever reached; that arm's ``ast.Constant(value=term)`` is exactly
-    # what a mangled predicate atom needs (it already denotes itself -- W4
-    # ruling, seam.py). This line's own class arm stays reachable only for
-    # today's-era PredicateMeta class object, so `term.__name__` below is
-    # always safe.
+    # can never be a mangled atom here regardless: a mangled PREDICATE
+    # binding returns its plain name from the self-denoting-atom arm above
+    # the generic ``str`` arm (operator ruling 2026-09-24), and any other
+    # str returns from the ``str`` arm itself.  This line's own class arm
+    # stays reachable only for today's-era PredicateMeta class object, so
+    # `term.__name__` below is always safe.
     if is_declared_predicate_name(term):
         # STAGE 2 (spec 2026-09-18 §4): a predicate referenced BY NAME in
         # argument position is the ATOM of that name -- the str.  The

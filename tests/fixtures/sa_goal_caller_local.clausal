@@ -1,0 +1,8 @@
+# tests/test_self_denoting_predicate_atom_plain.py: calls a goal argument and
+# defines its OWN z/0 with TWO solutions -- so reaching it (2 answers) is
+# distinguishable from reaching sa_goal_other's z (1 answer).
+-module(sa_goal_caller_local, [run/1, z/0])
+
+run(G) <- call(G),
+z <- True,
+z <- True,

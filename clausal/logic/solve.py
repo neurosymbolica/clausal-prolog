@@ -43,7 +43,7 @@ from typing import Any, Iterator
 
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
 from clausal.logic.atoms import (
-    is_atom as _term_is_atom, spelling as _spelling, is_mangled, demangle,
+    is_atom as _term_is_atom, mint as _mint_atom, spelling as _spelling, is_mangled, demangle,
 )
 from clausal.logic.database import Clause, Database, Module
 from clausal.logic.predicate import (
@@ -442,7 +442,7 @@ def _goal_cache_key(goal: Any, module: Module, thunks: list | None = None):
 
 
 
-def _templatize_query_goal(goal: Any):
+def _templatize_query_goal(goal: Any, db=None):
     """Parameterize the fully-ground top-level arguments of a predicate-call goal.
 
     Returns ``(template_goal, [(param_var, value), ...])``. Each direct argument
@@ -454,28 +454,57 @@ def _templatize_query_goal(goal: Any):
 
     Composite/control/arithmetic goals are returned unchanged (``params`` empty);
     they keep the value-keyed cache as a correct fallback.
+
+    *db* is the querying module's database, passed to the predicate-binding
+    resolver as the ruling-Q0 hint so a LOCAL handle resolves even when its
+    module has been popped from ``sys.modules``.
     """
-    from clausal.logic.predicate import PredicateMeta, is_zero_field_class
+    from clausal.logic.predicate import PredicateMeta, predicate_binding_name
 
     def _ground_value(val):
-        """Return the scalar ground value to parameterize, or None to leave it.
+        """Return the ground value to parameterize, or None to leave it.
 
-        Only plain scalar literals and zero-arity atoms are parameterized: they
-        unify directly with a head literal regardless of mode.  Structural args
+        Only plain scalar literals and predicate bindings (lowered to the PLAIN
+        atom of the predicate's name) are parameterized: they unify directly
+        with a head literal regardless of mode.  Structural args
         (list/dict/compound) are *not* parameterized because the literal-baking
         path rewrites them (e.g. a list literal becomes cons cells) — a raw value
         bound to a Var would not match the rewritten head pattern.  Those keep the
         value-keyed cache fallback.
 
-        Atoms (zero-arity ``PredicateMeta`` classes) are parameterized so the
-        atom *object* is passed in as a bound arg rather than baked into the
-        compiled query as a bare ``Name(atom.__name__)`` — the latter raises
-        ``NameError`` for a cross-module atom whose bare name is not in the
-        target function's globals (e.g. imported via ``-import_module`` only).
+        A predicate binding is a ``PredicateMeta`` class of any arity today,
+        its mangled handle post-flip -- see the first arm below.
         """
         dv = deref(val)
         if is_var(dv):
             return None
+        # A predicate's self-denoting atom stays PLAIN in BOTH eras (operator
+        # ruling 2026-09-24).  One arm for both shapes, ahead of the scalar
+        # arm: post-flip the binding is a mangled ``str`` the scalar arm would
+        # pass through VERBATIM, and today a zero-field CLASS used to be bound
+        # as the class object itself -- which unifies with neither the plain
+        # atom a ``.clausal`` source fact ``q(z)`` stores nor anything else a
+        # query can write, and disagreed with ``term_to_ast_expr``'s nested
+        # lowering (``__name__``).  An arity>=1 class used to fall to the
+        # baking path, which already produced the plain name; parameterizing
+        # it changes nothing but cache reuse.  ``predicate_binding_name`` is
+        # gated on ``is_declared_predicate_name``, not ``is_mangled``: a
+        # ``-hide`` DATA atom is mangled too, answers None, and keeps its
+        # spelling (it falls through to the scalar arm) -- including one whose
+        # owner module cannot be resolved, see ``term_to_ast_expr``.  One
+        # resolver call, with the Q0 ``db`` hint.
+        #
+        # Ruling S, extended 2026-09-24: goal-argument use must qualify.  This
+        # holds on the query-parameter path too, so a predicate binding passed
+        # as a GOAL argument (``run(other_mod.z)`` with ``run(G) <- call(G)``)
+        # becomes the plain atom ``z`` and is resolved in the CALLING module;
+        # to reach another module's predicate, write it qualified
+        # (``other_mod:z``).  Before this arm, a zero-arity class (and a
+        # handle) reached ``other_mod``'s ``z``; pinned by
+        # ``test_goal_argument_must_be_qualified_to_reach_another_module``.
+        name = predicate_binding_name(dv, db=db)
+        if name is not None:
+            return _mint_atom(name)
         if type(dv) in (int, float, complex, bool, str, bytes) or dv is None:
             return dv
         # A Python datetime is NOT parameterized. It was (ab0dabcd, 2026-09-02,
@@ -486,8 +515,6 @@ def _templatize_query_goal(goal: Any):
         # harness-date-migration. Left structural, it lowers through
         # term_to_ast_expr and meets the same refusal a nested one does, which
         # names the term to write.
-        if is_zero_field_class(dv):
-            return dv
         return None
 
     if isinstance(type(goal), PredicateMeta):
@@ -585,7 +612,7 @@ def _compile_as_query(goal: Any, module: Module) -> Any:
     # Parameterize ground top-level args so distinct values reuse one compiled
     # query.  The returned param_pairs are bound to their values (on the trail)
     # by the caller before driving the search.
-    goal, param_pairs = _templatize_query_goal(goal)
+    goal, param_pairs = _templatize_query_goal(goal, getattr(module, "db", None))
 
     # Compute cache key before AST conversion (needs original term).  After
     # templatizing, ground args are Vars, so the key is value-independent.
