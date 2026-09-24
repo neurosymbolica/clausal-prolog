@@ -31,7 +31,7 @@ from clausal.logic.builtins._registry import (
 from clausal.logic.builtins.call_body import (
     is_body_term, body_goal_dispatch, body_with_extras_error,
     non_callable_goal_error, iso_control_cell_dispatch, folded_existence_error,
-    is_non_callable_term, needs_meta_call, MetaCallGoal,
+    needs_meta_call, MetaCallGoal,
 )
 from clausal.terms import Compound
 
@@ -589,15 +589,12 @@ def _is_goal(val):
     bound to after the flip; a mangled DATA atom is not one)."""
     return (callable(val) or hasattr(val, '_get_dispatch')
             or is_declared_predicate_name(val)
-            # Operator ruling 2026-09-25 (follow Scryer): a NON-callable goal
-            # passes too, so the builtin reaches its per-element call, where
-            # ``_ensure_trampoline_dispatch`` hands back a dispatch raising
-            # type_error(callable, G) -- maplist(42, []) succeeds and
-            # maplist(42, [1]) raises, as in Scryer.  It used to FAIL here.
-            or is_non_callable_term(val)
-            # ... and so does a goal only call/N can run (a cell, a plain
-            # atom, an unbound Var, a body term): ``_ensure_trampoline_
-            # dispatch`` runs it AS call/N per element (same ruling).
+            # Operator rule 2026-09-25 (ISO first: the WG17 prologue defines
+            # maplist & co. via call/N): EVERY other goal passes too, and
+            # ``_ensure_trampoline_dispatch`` runs it AS call/N per element --
+            # a cell, an atom, an unbound Var, a number, a list ...  They used
+            # to FAIL here; now maplist(G, []) succeeds for any G, and the
+            # first element answers what call(G, E) answers.
             or needs_meta_call(val))
 
 
@@ -1046,7 +1043,7 @@ def _make_localizing_factory(impl):
 
         def _localized(this_generator, _proceed, _fail, _catcher, goal, *rest):
             goal = localize_goal(db, deref(goal))
-            if needs_meta_call(goal):
+            if needs_meta_call(goal, db):
                 # Resolved against THIS db, per element, by call/N itself
                 # (operator ruling 2026-09-25) -- see ``MetaCallGoal``.
                 goal = MetaCallGoal(goal, db)

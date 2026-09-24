@@ -651,14 +651,91 @@ def test_an_unbound_goal_over_an_empty_list_succeeds(host):
     assert [deref(L) for _ in solve(("foldl", Var(), [], 0, L), host)] == [0]
 
 
-def test_list_and_string_goals_follow_scryer_per_builtin(host):
-    """Scryer disagrees with ITSELF here, and both halves are followed:
-    ``maplist("ab", [1])`` / ``maplist([a], [1])`` -> type_error(callable,
-    G), while ``call([a], 1)`` / ``call("ab", 1)`` -> existence_error
-    '.'/3 (box, 2026-09-25)."""
+def test_list_and_string_goals_answer_as_call_n_does(host):
+    """FLIPPED, operator rule 2026-09-25 (check ISO first).  Core 13211-1
+    has no maplist, but the WG17 Prolog prologue DEFINES it through call/N::
+
+        maplist(G, [E|Es]) :- call(G, E), maplist(G, Es).
+
+    (include/exclude/foldl the same way), so each element answers exactly
+    what ``call(G, E)`` answers.  ``call([a], 1)`` / ``call("ab", 1)`` is
+    ``existence_error(procedure, '.'/3)`` -- the fold makes the compound
+    '.'/3 -- and so are ``maplist([a], [1])`` and ``maplist("ab", [1])``.
+
+    Scryer DIFFERS (box, 2026-09-25): its maplist gives
+    ``type_error(callable, [a])``.  The cause is NOT module qualification --
+    checked: ``call(lists:[a], 1)`` and ``call(user:[a], 1)`` both give
+    existence_error '.'/3 there.  It is that Scryer's RUNTIME call/N refuses
+    a list goal (``G = [a], call(G, 1)`` -> type_error(callable, [a])),
+    while a LITERAL ``call([a], 1)`` is expanded at compile time into the
+    goal '.'(a, [], 1) (-> existence_error).  maplist hands call/N a runtime
+    goal, so it inherits the type_error.  ISO decides otherwise: ``[a]`` is
+    the compound '.'(a, []), which IS callable, so the fold makes '.'/3 and
+    no such procedure exists -- existence_error, which is what this engine
+    answers for both spellings."""
     from clausal.logic.cells import chars
     for goal in (["a"], chars("ab")):
         with pytest.raises(LogicException) as info:
             _ml(host, goal, [1])
-        assert _formal(_term(info)).functor == "type_error"
+        formal = _formal(_term(info))
+        assert formal.functor == "existence_error"
+        assert tuple(formal.args[1].args) == (".", 3)
         assert _existence_indicator(host, "call_it2", goal, 1) == (".", 3)
+
+
+def _solve_all(host, goal):
+    from clausal.logic.solve import solve
+    return list(solve(goal, host))
+
+
+def _outs(host, goal, out):
+    from clausal.logic.solve import solve
+    return [deref(out) for _ in solve(goal, host)]
+
+
+def test_qualified_goals_in_include_and_foldl(host):
+    """``(":", M, G)`` resolves in M for every builtin, as call/N does."""
+    L = Var()
+    assert _outs(host, ("include", (":", OTHER, "p"), [1, 10, 20, 3], L),
+                 L) == [[10, 20]]
+    assert len(_solve_all(host, ("maplist", (":", OTHER, "p"), [10]))) == 1
+
+
+def test_compound_and_body_goals_in_maplist_include_foldl(host):
+    """A Compound goal folds like its cell; a body term is ``call(Body, E)``
+    -- the fold names ``(>)/3`` etc., existence_error, as call/N says."""
+    from clausal.terms import Compound
+    L = Var()
+    assert _outs(host, ("include", Compound("edge", (1,)), [2, 3], L),
+                 L) == [[2]]
+    assert len(_solve_all(host, ("maplist", Compound("edge", (1,)), [2]))) == 1
+    body = nodes.Gt(left=Var(), right=0)
+    for goal, ind in (
+            (("maplist", body, [1]), (">", 3)),
+            (("include", body, [1], Var()), (">", 3)),
+            (("foldl", body, [1], 0, Var()), (">", 5)),
+            (("maplist", (("p", 1), ("s", 2)), [1]), (",", 3))):
+        with pytest.raises(LogicException) as info:
+            _solve_all(host, goal)
+        formal = _formal(_term(info))
+        assert formal.functor == "existence_error", goal
+        assert tuple(formal.args[1].args) == ind
+
+
+def test_a_handle_to_the_callers_own_module(host):
+    """A mangled predicate HANDLE naming the calling module's own predicate
+    stays on the goal-OBJECT route (``is_declared_predicate_name`` with the
+    caller's db) and runs."""
+    from clausal.logic.atoms import mangle
+    handle = mangle(HOST, "p")
+    assert len(_solve_all(host, ("maplist", handle, [1, 2]))) == 1
+    assert _solve_all(host, ("maplist", handle, [1, 5])) == []
+    L = Var()
+    assert _outs(host, ("include", handle, [0, 1, 2, 3], L), L) == [[1, 2]]
+
+
+def test_every_list_builtin_is_covered_for_the_unbound_goal():
+    """The unbound-goal test above is parametrized over ALL 16 builtins --
+    confirm the parametrization is the registry's list, not a subset."""
+    from clausal.logic.builtins.higher_order import _GOAL_FIRST_LIST_BUILTINS
+    assert len(_LIST_BUILTIN_CALLS) == len(_GOAL_FIRST_LIST_BUILTINS) == 16

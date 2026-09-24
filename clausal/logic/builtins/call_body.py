@@ -392,12 +392,21 @@ def is_non_callable_term(t, lists: bool = True) -> bool:
     return False
 
 
-def needs_meta_call(t) -> bool:
-    """True for a goal the goal-taking list builtins must hand to ``call/N``
-    per element because nothing else can run it: an unbound Var, a cell, a
-    plain atom that is not a declared predicate handle, a Compound, or a
-    body term (operator ruling 2026-09-25, follow Scryer: ``maplist(p(1),
-    L)`` calls ``p(1, E)``; ``maplist(_, [1])`` is instantiation_error)."""
+def needs_meta_call(t, db=None) -> bool:
+    """True for a goal a goal-taking list builtin must hand to ``call/N`` per
+    element: everything that is not already a runnable goal OBJECT (a closure,
+    a predicate class, a ``_get_dispatch`` implementor, a declared predicate
+    handle).  That is an unbound Var, a cell, a plain atom, a Compound, a
+    body term -- and a NON-callable term (number, list, string, tuple data).
+
+    Operator rule 2026-09-25, ISO first: the WG17 Prolog prologue DEFINES
+    ``maplist(G, [E|Es]) :- call(G, E), maplist(G, Es).`` (include/exclude/
+    foldl alike), so each element must answer exactly what ``call/N``
+    answers -- ``maplist(p(1), L)`` calls ``p(1, E)``, ``maplist(_, [1])``
+    and ``maplist(42, [1])`` raise as ``call(_, 1)`` and ``call(42, 1)`` do,
+    and ``maplist([a], [1])`` is ``existence_error(procedure, '.'/3)`` like
+    ``call([a], 1)``.  *db* is the caller's database, the ruling-Q0 hint for
+    the declared-handle check."""
     t = deref(t)
     if is_var(t):
         return True
@@ -407,10 +416,10 @@ def needs_meta_call(t) -> bool:
         return False
     if type(t) is str:
         from clausal.logic.predicate import is_declared_predicate_name  # noqa: PLC0415
-        return not is_declared_predicate_name(t)
+        return not is_declared_predicate_name(t, db=db)
     from clausal.terms import Compound  # noqa: PLC0415
     return (compound_cell_shape(t)[0] or isinstance(t, Compound)
-            or is_body_term(t))
+            or is_body_term(t) or is_non_callable_term(t))
 
 
 class MetaCallGoal:
@@ -445,18 +454,6 @@ class MetaCallGoal:
                 fn = calls[n] = _DB_BUILTINS[("call", n)](db)
             return fn(this_generator, _proceed, _fail, _catcher, goal, *args)
         return _meta_call
-
-
-def non_callable_goal_dispatch(goal, context):
-    """A dispatch that raises ``type_error(callable, Goal)`` when RUN -- for
-    the goal-taking list builtins, which (like Scryer's library) reach the
-    call only per element: ``maplist(42, [])`` succeeds, ``maplist(42, [1])``
-    raises."""
-    def _non_callable(this_generator, _proceed, _fail, _catcher, *args):
-        from clausal.logic.exceptions import LogicException  # noqa: PLC0415
-        raise LogicException(non_callable_goal_error(goal, context))
-        yield  # pragma: no cover -- makes this a generator function
-    return _non_callable
 
 
 def non_callable_goal_error(goal, context):
@@ -594,6 +591,6 @@ __all__ = [
     "is_body_term", "check_callable_body", "body_goal_dispatch",
     "body_with_extras_error", "non_callable_goal_error",
     "iso_control_cell_dispatch", "folded_existence_error",
-    "is_non_callable_term", "non_callable_goal_dispatch",
+    "is_non_callable_term",
     "needs_meta_call", "MetaCallGoal",
 ]
