@@ -116,6 +116,14 @@ class PredRow:
     backend: str = DEFAULT_BACKEND
     locked: bool = False
     source: "tuple[str, str] | None" = None
+    # ``(filename, lineno)`` where this predicate was DECLARED -- the site
+    # its class was minted at (``PredicateMeta._registered_at``), copied here
+    # by the first ``PredicateMeta._bind_row`` onto this row.  The arity-
+    # mismatch diagnostic's "defined at" line reads it for a HANDLE binding,
+    # which has no class to ask (W4b-2d R6 / dry-run §3.4).  ``None`` when
+    # no class was ever bound here or the site was unknown.
+    declared_at: "tuple[str, int] | None" = dataclasses.field(
+        default=None, repr=False, compare=False)
     writes: list = dataclasses.field(default_factory=list)
     # (REMOVED 2026-09-22, option D.)  ``dynamic_arities`` used to live here
     # as a per-NAME set, on the argument that it "cannot be reconstructed from
@@ -563,6 +571,11 @@ class Database:
         self._dynamic: set[tuple[str, int]] = set()
         self._discontiguous: set[tuple[str, int]] = set()
         self._tabled: set[tuple[str, int]] = set()
+        # This module's own term_expansion clauses (simple_ast Predicate
+        # nodes), recorded by ``run_term_expansion`` so an importer of
+        # ``term_expansion`` can apply them.  ``None`` when it defines none.
+        # W4b-2d R6: this used to be a stash on the term_expansion CLASS.
+        self.te_predicate_nodes: "list | None" = None
         self._shallow: set[tuple[str, int]] = set()
         self._table_store: dict = {}
         self._rows: dict[tuple[str, int], PredRow] = {}
@@ -1304,23 +1317,13 @@ class Database:
     def mark_tabled(self, functor: str, arity: int) -> None:
         """Mark a predicate as tabled (memoised via SLG resolution).
 
-        Also stamps the minted PredicateMeta class (when it exists in this
-        db's ``module_dict``) with ``_tabled_home_db = self``, so tabledness
-        travels with the class across ``-import_from`` — the caller-side NAF
-        seam reads the stamp to find the home db and table store
-        (todo/cross-module-tabled-naf-loses-wfs-delay.md).  Last marker wins:
-        one load pipeline marks the same predicate on more than one db (the
-        exec-time db, then the compile pipeline's) and the most recent is the
-        live one; only the owning module can mark at all (``-table`` in an
-        importing module is refused at load).
+        An importer finds this db as the callee's tabling home through the
+        callee's ROW (``predicate.tabled_home_of``), not through a stamp on
+        the class -- the ``_tabled_home_db`` class stamp that used to be
+        written here was state stored nowhere but the class, and went
+        silently missing once a binding is a handle (W4b-2d R6).
         """
         self._tabled.add((functor, arity))
-        md = self.module_dict
-        if md is not None:
-            from clausal.logic.predicate import PredicateMeta  # noqa: PLC0415
-            cand = md.get(functor)
-            if isinstance(cand, PredicateMeta):
-                cand._tabled_home_db = self
 
     def is_tabled(self, functor: str, arity: int) -> bool:
         """True if the predicate was declared -table."""

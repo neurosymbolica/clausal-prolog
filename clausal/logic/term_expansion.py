@@ -22,11 +22,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from clausal.logic.atoms import mint as _mint
+from clausal.logic.atoms import demangle, is_mangled, mint as _mint
 from clausal.logic.database import Module as LogicModule, Clause, head_key
 from clausal.logic.compiler import compile_predicate_trampoline
 from clausal.logic.variables import Var as _Var
-from clausal.logic.predicate import PredicateMeta, make_predicate
+from clausal.logic.predicate import (
+    PredicateMeta, _db_for_module_name, make_predicate, predicate_owner_module,
+)
 from clausal.logic.builtins._helpers import functor_arity
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.pythonic_ast.nodes import Predicate as PredicateItem
@@ -54,15 +56,16 @@ def _is_term_expansion_clause(pred_node) -> bool:
 def run_term_expansion(
     predicate_nodes: list,
     module_dict: dict,
+    db=None,
 ) -> list:
     """Apply term_expansion rules to predicate nodes.
 
     Separates term_expansion clauses from regular items, compiles the
     expansion rules, then applies them to each regular item.
 
-    Also checks ``module_dict`` for imported modules whose LogicModule
-    carries ``_te_predicate_nodes`` — these are term_expansion clauses
-    from ``-import_from`` directives processed earlier in the pipeline.
+    Also collects the term_expansion clauses of an imported
+    ``term_expansion`` binding (``-import_from(mod, [term_expansion])``),
+    recorded on its owner's Database.
 
     Returns the (possibly rewritten) list of predicate nodes.  If no
     term_expansion clauses exist, returns predicate_nodes unchanged
@@ -74,6 +77,10 @@ def run_term_expansion(
         Runtime Predicate (simple_ast) nodes from Phase A.
     module_dict : dict
         The module's __dict__ (for resolving types in compilation).
+    db : Database, optional
+        The Database of the module being compiled.  Its local
+        term_expansion clauses are recorded there
+        (``Database.te_predicate_nodes``) for downstream importers.
 
     Returns
     -------
@@ -101,18 +108,18 @@ def run_term_expansion(
     all_te_clauses = imported_te_clauses + expansion_clauses
     expansion_module = _compile_expansion_rules(all_te_clauses, module_dict)
 
-    # Store local TE predicate nodes for downstream importers, on the
-    # term_expansion class, so that -import_from(mod, [term_expansion]) can
-    # pick them up.  NOT on ``$module``: that write used to land on the import
-    # hook's PLACEHOLDER module (thrown away after compile), so a bare
-    # ``-import_module(mod)`` never carried TE rules.  Once compile_module
-    # installs the real module first (``_install_real_module``) the write
-    # would have started to reach importers -- a silent change of which
-    # imports bring expansion rules.  Only a by-name import does.
-    if expansion_clauses:
-        te_cls = module_dict.get("term_expansion")
-        if isinstance(te_cls, PredicateMeta):
-            te_cls._te_predicate_nodes = list(expansion_clauses)
+    # Store local TE predicate nodes for downstream importers, on this
+    # module's DATABASE, where ``-import_from(mod, [term_expansion])`` finds
+    # them (``_te_nodes_of_binding``).  W4b-2d R6: they used to be stashed on
+    # the term_expansion CLASS -- state stored nowhere else, so once the
+    # importer's binding is a handle the imported rules vanished silently.
+    # NOT on ``$module``: that write used to land on the import hook's
+    # PLACEHOLDER module (thrown away after compile), so a bare
+    # ``-import_module(mod)`` never carried TE rules; now that compile_module
+    # installs the real module first (``_install_real_module``) writing there
+    # would silently start carrying them.  Only a by-name import does.
+    if expansion_clauses and db is not None:
+        db.te_predicate_nodes = list(expansion_clauses)
 
     # Step 4: Initialize module state: module_expansion_state([], [], "nil")
     # Use the same class from the expansion module so unification works.
@@ -140,27 +147,50 @@ def run_term_expansion(
 def _collect_imported_te_clauses(module_dict: dict) -> list:
     """Collect term_expansion predicate nodes from imported modules.
 
-    The source is a ``PredicateMeta`` class named ``term_expansion`` that
-    carries ``_te_predicate_nodes`` (set when a module with TE rules is
-    loaded), i.e. ``-import_from(mod, [term_expansion])``.  A bare
-    ``-import_module(mod)`` does not provide expansion rules: the
-    ``$module``-borne route this function used to check was only ever
-    written onto the import hook's placeholder module, so it never fired.
+    The source is a binding of the predicate ``term_expansion`` -- a class
+    or a mangled handle -- whose OWNER module's Database recorded its local
+    term_expansion clauses (``Database.te_predicate_nodes``, set when a
+    module with TE rules is compiled), i.e.
+    ``-import_from(mod, [term_expansion])``.  A bare ``-import_module(mod)``
+    does not provide expansion rules: the ``$module``-borne route this
+    function used to check was only ever written onto the import hook's
+    placeholder module, so it never fired.
     """
     seen = set()  # avoid duplicates
     result = []
 
     for value in module_dict.values():
-        if (
-            isinstance(value, PredicateMeta)
-            and getattr(value, "__name__", "") == "term_expansion"
-        ):
-            te_nodes = getattr(value, "_te_predicate_nodes", None)
-            if te_nodes and id(te_nodes) not in seen:
-                seen.add(id(te_nodes))
-                result.extend(te_nodes)
+        te_nodes = _te_nodes_of_binding(value)
+        if te_nodes and id(te_nodes) not in seen:
+            seen.add(id(te_nodes))
+            result.extend(te_nodes)
 
     return result
+
+
+def _te_nodes_of_binding(value) -> "list | None":
+    """The term_expansion clauses recorded by the module that OWNS *value*,
+    when *value* is a binding of the predicate ``term_expansion`` -- a
+    ``PredicateMeta`` class of that name or a mangled handle whose functor
+    half is ``term_expansion`` -- else ``None``.
+
+    Era-agnostic: the owner is ``predicate_owner_module`` (a class's
+    ``__module__``, a handle's module half) and the clauses are read off
+    that module's Database, never off the class.  The term_expansion
+    predicate itself has no row -- its clauses are consumed by expansion,
+    not compiled -- so the owner is found by module name.
+    """
+    if isinstance(value, PredicateMeta):
+        if getattr(value, "__name__", "") != "term_expansion":
+            return None
+    elif type(value) is str:
+        if not is_mangled(value) or demangle(value)[1] != "term_expansion":
+            return None
+    else:
+        return None
+    owner = predicate_owner_module(value)
+    owner_db = _db_for_module_name(owner) if owner else None
+    return getattr(owner_db, "te_predicate_nodes", None)
 
 
 #: The field order of the ``module_expansion_state`` term, in one place.

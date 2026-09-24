@@ -40,7 +40,7 @@ from clausal.logic.predicate import (
     PredicateMeta, make_predicate, record_clause_source,
     field_names_for, is_declared_predicate, is_declared_predicate_name,
     binding_grants_arity,
-    predicate_arities_for, predicate_binding_name,
+    predicate_arities_for, predicate_binding_name, predicate_owner_module,
     resolve_predicate_row, _db_for_module_name,
     is_foreign_class_at_other_arity, module_source_path,
     is_bound_predicate_at,
@@ -193,7 +193,7 @@ def compile_module(
 
     # ── Step 1: Term expansion (after imports, before directives) ────────
     from clausal.logic.term_expansion import run_term_expansion
-    predicate_nodes = run_term_expansion(predicate_nodes, module_dict)
+    predicate_nodes = run_term_expansion(predicate_nodes, module_dict, db)
 
     # ── Step 1b: Goal expansion (regex pre-compile + auto-binding) ─────
     from clausal.logic.goal_expansion import run_goal_expansion
@@ -1445,11 +1445,13 @@ def _refuse_untablable_target(
     # ``solve_count_tabled/2`` — all declared, none with a row), so rerouting
     # would replace the accurate "declared but has no clauses" with "never
     # defined".
-    # ``cls`` is kept as the CLASS below (``cls._row``, an F1-shaped read
-    # untouched by this migration -- W4b-2b built the F2 resolver only);
-    # ``is_pred`` itself is the F2 question, era-agnostic now.
-    cls = module_dict.get(functor)
-    is_pred = is_declared_predicate(cls, arity=arity, db=db)
+    # ``is_pred`` is the F2 question and the row/owner reads below are F1/F4
+    # (W4b-2d R6, fix I): all three era-agnostic, so a HANDLE binding gets
+    # the same refusal a class does.  They used to read ``cls._row`` and
+    # ``cls.__module__`` directly, which a handle does not have.  All three
+    # take the Q0 ``db=`` hint.
+    binding = module_dict.get(functor)
+    is_pred = is_declared_predicate(binding, arity=arity, db=db)
 
     if functor in specialize_aliases:
         # P3-3 Task 7 retired the reason this refusal used to give -- "-specialize
@@ -1470,9 +1472,11 @@ def _refuse_untablable_target(
             f"instead, or drop the directive."
         )
 
-    # A read that must not mint: a class still on NO row has no clauses.
-    if is_pred and cls._row is not None and cls._row.clauses:
-        origin = getattr(cls, "__module__", None)
+    # A read that must not mint: a binding still on NO row has no clauses.
+    row = (resolve_predicate_row(binding, arity=arity, db=db)
+           if is_pred else None)
+    if row is not None and row.clauses:
+        origin = predicate_owner_module(binding)
         where = f" (defined in {origin})" if origin else ""
         raise SyntaxError(
             f"-table({functor}/{arity}): {functor}/{arity} is defined in "

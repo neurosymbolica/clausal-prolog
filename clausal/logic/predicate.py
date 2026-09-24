@@ -824,18 +824,9 @@ class PredicateMeta(type):
         # mode: the duck type (``_assertz``, ``_get_dispatch()``, ``_lock``)
         # behaves exactly as before with no Database in sight.
         cls._row = None
-        # The Database of the module that declared this predicate ``-table``,
-        # stamped by ``Database.mark_tabled`` at load.  ``None`` everywhere
-        # else.  Tabledness is recorded in the OWNING module's per-module db;
-        # an ``-import_from`` shares this class with modules whose own db
-        # knows nothing about it, so the stamp is what lets a caller-side
-        # seam (``_is_tabled_naf`` at compile time, ``_naf_tabled`` at run
-        # time) find the callee's home db — and with it the home table store
-        # — instead of silently compiling ``not Imported(...)`` as plain NAF
-        # (todo/cross-module-tabled-naf-loses-wfs-delay.md).  Which arities
-        # are tabled stays the home db's answer (``is_tabled``); the class
-        # carries only the pointer.
-        cls._tabled_home_db = None  # Database | None
+        # (``_tabled_home_db`` REMOVED 2026-09-24, W4b-2d R6: the cross-module
+        # tabled-NAF home is the binding's ROW's database now --
+        # ``tabled_home_of`` -- so it survives the binding becoming a handle.)
 
     # ── Predicate state: the Database row ─────────────────────────────────
     #
@@ -1004,6 +995,15 @@ class PredicateMeta(type):
                 new_row.locked = True
             if new_row.source is None:
                 new_row.source = old_row.source
+        if new_row.declared_at is None:
+            # The declaration site travels to the row (W4b-2d R6): FIRST
+            # bind wins, so a later class bound onto an existing row -- a
+            # ``-specialize`` alias, an implementer -- never re-stamps where
+            # the predicate was declared.  Only a real site: a predicate with
+            # a FIELD called ``_registered_at`` has a slot descriptor there.
+            site = cls.__dict__.get("_registered_at")
+            if isinstance(site, tuple):
+                new_row.declared_at = site
         cls._row = new_row
 
     def _ensure_clauses(cls) -> list:
@@ -1439,7 +1439,22 @@ def _refuse_if_known_at_another_arity(db: "Database", functor: str, arity: int) 
     from clausal.predicate_diagnostics import predicate_arity_mismatch  # noqa: PLC0415
     others = sorted(a for a in db.arities_for(functor) if a != arity)
     defined = others[0] if len(others) == 1 else None
-    raise predicate_arity_mismatch(functor, arity, defined)
+    raise predicate_arity_mismatch(functor, arity, defined,
+                                   site=_row_declared_at(db, functor, defined))
+
+
+def _row_declared_at(db, functor: str, arity) -> "tuple[str, int] | None":
+    """The declaration site recorded on *db*'s row for ``functor/arity``
+    (``PredRow.declared_at``), or ``None`` -- for a diagnostic's "defined
+    at" line when the binding is a handle and there is no class to ask
+    (W4b-2d R6).  Never raises: it only feeds a message."""
+    if db is None or not isinstance(arity, int):
+        return None
+    try:
+        row = db.row(functor, arity)
+    except Exception:  # noqa: BLE001 - a message, not a decision
+        return None
+    return row.declared_at if row is not None else None
 
 
 def _resolve_other_arity_of_class(cls: "PredicateMeta", arity: int) -> Callable | None:
@@ -1556,6 +1571,7 @@ def _refuse_unqualified_other_arity(binding: Any, name: str, arity: int,
                 f"but this call passes {arity}")
         raise err
     defined = None
+    site = None
     from clausal.logic.cells import qualify_mangled_goal  # noqa: PLC0415
     _q = qualify_mangled_goal(binding) if type(binding) is str else binding
     if _q is not binding:
@@ -1563,7 +1579,11 @@ def _refuse_unqualified_other_arity(binding: Any, name: str, arity: int,
         if owner is not None:
             others = sorted(a for a in owner.arities_for(_q[2]) if a != arity)
             defined = others[0] if len(others) == 1 else None
-    raise predicate_arity_mismatch(name, arity, defined)
+            # The class arm's "defined at" line, from the ROW (W4b-2d R6):
+            # only under the owner's own name, as there.
+            if name == _q[2]:
+                site = _row_declared_at(owner, _q[2], defined)
+    raise predicate_arity_mismatch(name, arity, defined, site=site)
 
 
 class _UnqualifiedName:
@@ -2290,6 +2310,43 @@ def resolve_predicate_row(binding, *, arity: int,
             return None
         db, functor = resolved
         return db.row(functor, arity)
+    return None
+
+
+def tabled_home_of(binding, *, arity: int, db) -> "tuple | None":
+    """``(home_db, canonical_functor)`` when *binding* -- a module-dict
+    binding in the module whose Database is *db* -- names a predicate that
+    is tabled at *arity* in ANOTHER module's database; ``None`` otherwise.
+
+    The cross-module tabled-NAF seam (``tabled_naf._resolve_tabled_call`` at
+    compile time, ``tabling._naf_tabled`` at run time) asks this for an
+    ``-import_from``'d callee: tabledness is recorded in the OWNING module's
+    db, and an importer's own db knows nothing about it
+    (todo/cross-module-tabled-naf-loses-wfs-delay.md).  It used to be
+    answered by a ``_tabled_home_db`` stamp that ``Database.mark_tabled``
+    put on the CLASS -- state that lived nowhere but the class, so once a
+    binding is a mangled handle the seam went silently wrong: ``[]`` where
+    WFS says ``Undefined``, and ``[True]`` when only the compile-time half
+    was moved (the W4b-2d dry run, R6).  Both halves call this one function
+    so they cannot disagree.
+
+    The home is the database of the binding's ROW (``resolve_predicate_row``
+    -- a class's ``_row``, a handle's owner row at *arity*): an importer
+    reaches the owner's row by adoption, never a copy, so ``row.db`` IS the
+    module that declared ``-table``.  The canonical spelling is the row's
+    own functor, which is what the home db keys its tables, dispatch and
+    signatures by (the compiled seam may hand in a dotted import spelling).
+    Which arities are tabled stays the home db's answer (``is_tabled``).
+    """
+    row = resolve_predicate_row(binding, arity=arity, db=db)
+    if row is None:
+        return None
+    home = row.db
+    if home is db:
+        return None
+    canonical = row.key[0]
+    if home.is_tabled(canonical, arity):
+        return home, canonical
     return None
 
 
