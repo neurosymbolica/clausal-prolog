@@ -49,9 +49,9 @@ def test_a_class_sitting_on_another_aritys_row_is_not_returned_for_that_arity(
     # the defect this test is built on, pinned so the test cannot go vacuous
     assert len(cls._fields) == 1 and cls._row.key == ("d", 2)
     assert mod.db.row("d", 2) is cls._row
-    assert _find_pred_cls("d", 2, md, None) is None
+    assert _find_pred_cls("d", 2, md) is None
     # ... and the honest arity still resolves
-    assert _find_pred_cls("d", 1, md, None) is cls
+    assert _find_pred_cls("d", 1, md) is cls
 
 
 # -- the last leg is symmetric with the no-row leg (L3) ----------------------
@@ -78,6 +78,6 @@ def test_a_row_here_does_not_hide_a_class_bound_to_another_databases_row(
     mod.module_dict["qq"] = exported
     assert exported._row is not mod.db.row("qq", 1)
 
-    assert _find_pred_cls("qq", 1, mod.module_dict, None) is exported
+    assert _find_pred_cls("qq", 1, mod.module_dict) is exported
     # still arity-checked on that leg
-    assert _find_pred_cls("qq", 2, mod.module_dict, None) is None
+    assert _find_pred_cls("qq", 2, mod.module_dict) is None

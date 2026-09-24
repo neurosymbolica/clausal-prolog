@@ -180,13 +180,12 @@ def _check_cell_head_permission(term_val: Any, context: str, db,
         return term_val
     arity = len(term_val) - 1
     args = tuple(term_val[1:])
-    pred_cls = _find_pred_cls(functor, arity, module_dict, None)
-    if pred_cls is not None:
-        # The CANONICAL name is the class's, not the spelling the cell used:
-        # an ``-import_from`` alias binds the exporter's class under the local
-        # name, and the row lives under the exporter's (see ``_find_pred_cls``).
-        functor = pred_cls.__name__
-    home = _home_db(db, pred_cls)
+    pred_cls = _find_pred_cls(functor, arity, module_dict)
+    # The CANONICAL name is the predicate's own, not the spelling the cell
+    # used: an ``-import_from`` alias binds the exporter's predicate under the
+    # local name, and the row lives under the exporter's.
+    home = _home_db(db, pred_cls, functor, arity)
+    functor = _canonical_functor(db, pred_cls, functor)
     row = home.row(functor, arity) if home is not None else None
     if row is not None and row.dynamic:
         # P2 head flip (2026-09-19): a head IS the cell, so a cell reaching a
@@ -299,125 +298,88 @@ def _declared_here_at_arity(module_dict: "dict | None", functor: str,
 
 
 def _find_pred_cls(functor: str, arity: int,
-                   module_dict: "dict | None", head: "Any" = None) -> "Any":
-    """Return the PredicateMeta class the goal named, or None.
+                   module_dict: "dict | None") -> "Any":
+    """The predicate BINDING the goal's name denotes at *arity* -- a
+    ``PredicateMeta`` class today, a module-qualified handle (mangled atom)
+    after the flip -- or ``None``.
 
-    ARITY-CHECKED (P3-3 Task 3, identity todo instance 3): ``module_dict``
-    holds one class per NAME, so a ``p/1`` assert used to hand ``p/3``'s class
-    to the lock check and to the recompile — and ``compiler._install`` would
-    then re-bind that class onto ``p/1``'s row, moving a predicate the assert
-    never mentioned.  A name that is bound at another arity resolves to no
-    class here; the gate still sees the write, because it is asked about the
-    ROW.
+    ARITY-CHECKED (P3-3 Task 3): ``module_dict`` holds one binding per NAME,
+    so a ``p/1`` assert must not be handed ``p/3``'s predicate; a name bound
+    at another arity resolves to nothing here and the gate still sees the
+    write, because it is asked about the ROW.
 
-    IDENTITY-RESOLVED (P3-3 Task 3 fix round 2, the same todo instance): the
-    canonical *functor* is the CLASS's name, which is not always the spelling
-    the goal used.  ``-import_from(m, [alias(bo_p, AliasS)])`` binds the
-    exporter's class under ``AliasS`` only, so ``module_dict[functor]`` finds
-    either nothing or — when the importer also declares ``-dynamic(bo_p/1)``
-    — a local shadow class that is not the predicate the goal named.  The
-    goal's own term settles it: ``AliasS(5)`` is an INSTANCE of the exporter's
-    class, so *head*'s type is the predicate, whatever it is spelled here.
-    Accepted only when that class is reachable from this module dict under
-    some spelling, so a term that merely passed through this module cannot
-    redirect the write to a predicate the module cannot see.
-
-    ROW-FIRST, CLASS-FALLBACK (P1, spec 2026-09-17 §2.2 + §3).  The name is
-    resolved through this module's Database row, and the redirect test is a
-    row comparison.  When there is NO row under that key the CLASS answers, as
-    it always did: a predicate reached by a plain Python import (never through
-    ``-import_from``, so no row was adopted) is visible in this module dict and
-    invisible to ``db.row`` — the same "declared here but rowless" shape that
-    keeps the two ``compiler_v2`` directive-target sites on the class.
-
-    ARITY-CHECKED ON EVERY LEG, and the last leg SYMMETRIC with that fallback
-    (final review I1 + roborev L3, 2026-09-17).  A row's key is arity-exact,
-    but the CLASS sitting on it need not be: a class can be bound to a row of
-    another arity (``todo/dynamic-at-another-arity-moves-the-class-2026-09-17.md``
-    is a live, pre-existing way to produce one), so handing back whatever sits
-    on the named row would re-open the very hazard the ARITY-CHECKED paragraph
-    above describes — the caller LOCKS what it gets, recompiles through it and
-    builds terms with it.  Every leg therefore re-checks ``len(_fields) ==
-    arity``, and when neither the module's binding nor the head's own class is
-    on the named row the answer is the same arity-checked class read the
-    no-row leg makes, not ``None``: a class the module can plainly see is the
-    better answer than a cross-module write path.
+    What it answers is the module's own binding when that denotes a predicate
+    of this arity (``is_declared_predicate``, era-agnostic; the class arm is
+    exactly the old ``len(_fields) == arity``).  F1 rows 58/59, 2026-09-24:
+    the function used to return "a class" through five legs.  Two of them
+    redirected by the HEAD's own class; a head is a cell since P2, and over
+    the house suite they were reached 0 times in 229 calls, so they are gone.
+    With them gone every remaining leg answered exactly this binding check,
+    so the row-comparison scaffolding went too.  Callers take the canonical
+    name from ``predicate_binding_name`` and the write target from
+    ``_home_db`` -- neither reads the class.
     """
-    from clausal.logic.predicate import PredicateMeta  # noqa: PLC0415
+    from clausal.logic.atoms import is_mangled  # noqa: PLC0415
+    from clausal.logic.predicate import is_declared_predicate  # noqa: PLC0415
     if module_dict is None:
         return None
-    # ROW-RESOLVED (P1, spec 2026-09-17 §2.2).  The name is looked up in the
-    # module's own Database — ``module_dict["$module"].db``, never a
-    # predicate's ``_row.db``, which is a DIFFERENT Database for an imported
-    # name — and a row is keyed ``(functor, arity)``, which is what makes the
-    # lookup arity-checked without counting a class's fields.
     db = getattr(module_dict.get("$module"), "db", None)
-    named_row = db.row(functor, arity) if db is not None else None
-    own = type(head)
-    own_row = getattr(own, "_row", None)
-    # THE REDIRECT TEST, on rows: the row this module's spelling names is not
-    # the row the goal's OWN term reads.  ``named_row is None`` — the aliased
-    # import, where the canonical functor names no row here — is a mismatch
-    # like any other.  ``type(head)`` stays: the head's own class is the
-    # predicate, whatever it is spelled here (spec §3).
-    if (
-        named_row is not own_row
-        and isinstance(own, PredicateMeta)
-        and own.__name__ == functor
-        and len(own._fields) == arity
-        and any(v is own for v in module_dict.values())
-    ):
-        return own
-    # THE class reads that remain (spec §3): what this function RETURNS is a
-    # class — the caller locks it, recompiles through it and builds terms with
-    # it — so the module's binding is handed back when it is the class sitting
-    # on that row, and the head's own class when it is the one there instead.
     candidate = module_dict.get(functor)
-
-    def _arity_checked(cls_obj):
-        """*cls_obj* when it is a predicate class of THIS arity, else None."""
-        return (cls_obj if isinstance(cls_obj, PredicateMeta)
-                and len(cls_obj._fields or ()) == arity else None)
-
-    if named_row is None:
-        # THE CLASS FALLBACK (review round 1).  A class this module reached by
-        # a plain Python import is bound here under the right spelling at the
-        # right arity and has NO row in this Database — ``-import_from`` is
-        # what adopts a row, and this name never went through it.  The row
-        # lookup cannot see such a predicate, so the class answers, exactly as
-        # it did before the reroute: dropping it made ``listing(pp/1)`` and
-        # ``_namespace_dispatch`` raise for a predicate the module can see.
-        # Same class-without-a-row shape that left ``compiler_v2``'s
-        # ``_validate_directive_targets``/``_refuse_untablable_target`` on the
-        # class — a row cannot yet answer "declared/visible at module level".
-        return _arity_checked(candidate)
-    if (getattr(candidate, "_row", None) is named_row
-            and _arity_checked(candidate) is not None):
+    if is_declared_predicate(candidate, arity=arity, db=db):
         return candidate
-    if own_row is named_row and _arity_checked(own) is not None:
-        return own
-    # NEITHER is on the row (the class is bound to another Database's row, or
-    # to another arity's, and the head is generic).  Symmetric with the no-row
-    # leg above: the module's own arity-checked binding answers.
-    return _arity_checked(candidate)
+    # A HANDLE whose own route is lost (its owner popped from sys.modules)
+    # still names the predicate this module IMPORTED when this database
+    # adopted a row for it -- see ``_home_db``.  Not for any other mangled
+    # atom: a ``-hide`` data atom can have an unresolvable owner too, and it
+    # is no predicate.
+    if (is_mangled(candidate) and db is not None
+            and db.adopted_row(functor, arity) is not None):
+        return candidate
+    return None
 
 
-def _home_db(db, pred_cls) -> "Any":
-    """The Database whose row a write through *pred_cls* must land in.
+def _canonical_functor(db, binding, functor: str) -> str:
+    """The predicate's OWN name for a write through *binding*: an
+    ``-import_from`` alias binds the exporter's predicate under a local
+    spelling, and its row lives under the exporter's name."""
+    from clausal.logic.atoms import demangle, is_mangled  # noqa: PLC0415
+    from clausal.logic.predicate import predicate_binding_name  # noqa: PLC0415
+    if binding is None:
+        return functor
+    name = predicate_binding_name(binding, db=db)
+    if name is None and is_mangled(binding):
+        # Its owner is unresolvable, but an imported name binds the OWNER's
+        # handle (ruling D1), whose atom half is the owner's own name.
+        name = demangle(binding)[1]
+    return name or functor
 
-    A predicate reached through an ``-import_from`` is ONE predicate: the
-    class is shared deliberately, and it reads the OWNER's row.  A runtime
-    assert made through it therefore belongs in that row -- write it into the
-    asserting module's own database instead and the two modules end up with
-    two clause lists behind one class, which is the shape that made an
-    importer's ``assertz`` change the owner's answers while the owner's row
-    still held its own clauses (P3-3 Task 3 fix round 1).
 
-    Falls back to *db* when there is no class, or when the class is still on
-    its private detached row -- that row is nobody's predicate, and writing
-    there would hide the clause from the module database entirely.
+def _home_db(db, binding, functor: str, arity: int) -> "Any":
+    """The Database whose row a write through *binding* must land in.
+
+    A predicate reached through an ``-import_from`` is ONE predicate: it
+    reads the OWNER's row, so a runtime assert made through it belongs in
+    that row -- write it into the asserting module's own database instead and
+    the two modules end up with two clause lists behind one predicate (P3-3
+    Task 3 fix round 1).
+
+    The row comes from ``resolve_predicate_row`` (the class's ``_row`` today;
+    the owner's row for a handle).  When a HANDLE's own route is lost -- its
+    owner was popped from ``sys.modules`` by the test runner, which the Q0
+    ``db=`` hint does not cover for a foreign module -- the row this database
+    ADOPTED at import is the same owner row, and is used instead: without it
+    the write lands on the importer's own dead twin with no error (measured
+    on ``gate_dyn_user`` by the F1 review).  Falls back to *db* when there is
+    no binding, or when the class is still on its private detached row.
     """
-    row = getattr(pred_cls, "_row", None) if pred_cls is not None else None
+    from clausal.logic.atoms import is_mangled  # noqa: PLC0415
+    from clausal.logic.predicate import resolve_predicate_row  # noqa: PLC0415
+    if binding is None:
+        return db
+    row = resolve_predicate_row(binding, arity=arity, db=db)
+    if row is None and is_mangled(binding) and db is not None:
+        # Adopted rows are keyed by the IMPORTER's spelling.
+        row = db.adopted_row(functor, arity)
     if row is None or row.detached:
         return db
     return row.db
@@ -469,7 +431,7 @@ def _assertz_factory(db):
             return
         clause = _build_clause(term_val, "assertz/1", db, module_dict)
         functor, arity = head_key(clause.head)
-        pred_cls = _find_pred_cls(functor, arity, module_dict, term_val)
+        pred_cls = _find_pred_cls(functor, arity, module_dict)
         # THROUGH THE GATE (P3-3 Task 3).  The lock check that used to stand
         # here is the gate's policy now — one question, "may this author write
         # this row", asked identically by all four channels — and it still
@@ -479,7 +441,7 @@ def _assertz_factory(db):
         # carries the check onto an -import_from'd predicate: the clause goes
         # into THIS module's row, but a shared class makes the exporter's row
         # part of the write's blast radius.
-        home = _home_db(db, pred_cls)
+        home = _home_db(db, pred_cls, functor, arity)
         home_globals = _home_globals(db, module_dict, home)
         with home.mutate(functor, arity, author=db.runtime_author(),
                          kind="assert", detail="assertz/1", through=pred_cls):
@@ -510,9 +472,9 @@ def _asserta_factory(db):
             return
         clause = _build_clause(term_val, "asserta/1", db, module_dict)
         functor, arity = head_key(clause.head)
-        pred_cls = _find_pred_cls(functor, arity, module_dict, term_val)
+        pred_cls = _find_pred_cls(functor, arity, module_dict)
         # Through the gate; see assertz/1 above.
-        home = _home_db(db, pred_cls)
+        home = _home_db(db, pred_cls, functor, arity)
         home_globals = _home_globals(db, module_dict, home)
         with home.mutate(functor, arity, author=db.runtime_author(),
                          kind="assert", detail="asserta/1", through=pred_cls):
@@ -556,8 +518,8 @@ def _retract_factory(db):
             functor, arity = head_key(term_val)
         except TypeError:
             return
-        pred_cls = _find_pred_cls(functor, arity, module_dict, term_val)
-        home = _home_db(db, pred_cls)
+        pred_cls = _find_pred_cls(functor, arity, module_dict)
+        home = _home_db(db, pred_cls, functor, arity)
         clause_list = home._clauses.get((functor, arity))
         if clause_list is None:
             return
