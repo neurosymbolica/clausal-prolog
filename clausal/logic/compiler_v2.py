@@ -39,7 +39,7 @@ from clausal.logic.compiler import (
 from clausal.logic.predicate import (
     PredicateMeta, make_predicate, record_clause_source,
     field_names_for, is_declared_predicate, is_declared_predicate_name,
-    predicate_binding_name,
+    predicate_arities_for, predicate_binding_name,
     resolve_predicate_row,
 )
 from clausal.pythonic_ast.nodes import (
@@ -1265,6 +1265,45 @@ def _process_directives(module_items: list, db: Any, module_dict: dict | None = 
                     method(functor, arity)
 
 
+def _meta_interpreter_row(db, module_dict: dict, mi_name: str, *,
+                          refuse_ambiguous: bool):
+    """The ROW of the meta-interpreter a ``-specialize`` names, or ``None``.
+
+    F1 rows 32/33: found in the specializing module's OWN database -- a local
+    MI or an ``-import_from``'d one (an adopted row) both answer there --
+    never by reading a class out of the module dict, so it works whatever
+    the binding looks like.  ``predicate_arities`` is the lossless
+    population; ``arities_for`` misses an adopted row (measured: empty for
+    99 of 100 lookups over the house suite, because the MIs are imported).
+
+    Only arities whose row HAS CLAUSES are candidates.  Several is refused
+    when *refuse_ambiguous* (ruling QA, 2026-09-24: the class this replaces
+    silently picked one; no measured case was ambiguous).  If the database
+    has none, a module-dict binding that denotes a predicate at exactly one
+    arity is resolved era-agnostically as a last resort -- a predicate bound
+    by a plain Python import has no row here.
+    """
+    candidates = sorted(
+        a for a in db.predicate_arities(mi_name)
+        if (r := db.row(mi_name, a)) is not None and r.clauses)
+    if len(candidates) > 1:
+        if not refuse_ambiguous:
+            return None
+        raise RuntimeError(
+            f"-specialize: meta-interpreter '{mi_name}' is defined at "
+            f"{len(candidates)} arities "
+            f"({', '.join(f'{mi_name}/{a}' for a in candidates)}); "
+            f"a meta-interpreter must have exactly one -- rename one of them")
+    if candidates:
+        return db.row(mi_name, candidates[0])
+    binding = module_dict.get(mi_name)
+    if is_declared_predicate_name(binding):
+        arities = predicate_arities_for(binding)
+        if len(arities) == 1:
+            return resolve_predicate_row(binding, arity=next(iter(arities)))
+    return None
+
+
 def _preregister_specializations(
     module_items: list,
     module_dict: dict,
@@ -1282,14 +1321,17 @@ def _preregister_specializations(
         if not isinstance(item, SpecializeItem):
             continue
 
-        mi_cls = module_dict.get(item.mi_name)
-        if not isinstance(mi_cls, PredicateMeta):
+        # At step 1c only an IMPORTED MI has clauses; a local one is
+        # skipped here and specialized at step 6b, exactly as before.
+        mi_row = _meta_interpreter_row(db, module_dict, item.mi_name,
+                                       refuse_ambiguous=False)
+        if mi_row is None:
             continue  # Will error in _run_specialization
 
         # Analyze MI to get field names for the specialized predicate.
         # program_arg is auto-detected by analyze_mi from field names.
         try:
-            pattern = analyze_mi(mi_cls)
+            pattern = analyze_mi(mi_row)
             fields = _specialized_fields(pattern)
         except Exception:
             continue  # Will error properly in _run_specialization
@@ -1304,6 +1346,11 @@ def _preregister_specializations(
             # mangled atom.  ``_install_specialized`` registers again later
             # through ``register_signature``; both write the same tuple.
             db.declare_functor(item.new_name, tuple(fields))
+            # Ruling QB (2026-09-24): mint the ROW now.  A declared functor
+            # with no row is DATA to ``declared_kind``, so between here and
+            # step 6b every reference to the target read as data -- today
+            # the class hid that; after the flip nothing would.
+            db.row(item.new_name, len(fields), create=True)
 
 
 def _run_specialization(
@@ -1323,8 +1370,16 @@ def _run_specialization(
         if not isinstance(item, SpecializeItem):
             continue
 
-        mi_cls = module_dict.get(item.mi_name)
-        if not isinstance(mi_cls, PredicateMeta):
+        mi_row = _meta_interpreter_row(db, module_dict, item.mi_name,
+                                       refuse_ambiguous=True)
+        if mi_row is None and db.is_predicate_name(item.mi_name):
+            # A predicate of that name, but no clauses: the refusal the
+            # class route gave, from analyze_mi, unchanged.
+            from clausal.logic.specialization import CannotSpecialize  # noqa: PLC0415
+            raise CannotSpecialize(
+                f"{item.mi_name}: expected at least 2 clauses (base + "
+                f"recursive), got 0")
+        if mi_row is None:
             # P1 (spec 2026-09-17 §2.4): the diagnostic enumerates the
             # DATABASE's predicates — every container ``row()`` consults,
             # plus the rows adopted at ``-import_from`` — rather than the
@@ -1342,7 +1397,7 @@ def _run_specialization(
             )
 
         # Analyze the MI (auto-detects program_arg from field names).
-        pattern = analyze_mi(mi_cls)
+        pattern = analyze_mi(mi_row)
 
         # Evaluate the source program.
         source_cls = module_dict.get(item.source_program)

@@ -83,13 +83,19 @@ class MIPattern:
     program_var: Any = None         # PROGRAM variable in recursive clause head
 
 
-def analyze_mi(pred_cls: PredicateMeta, program_arg: int | None = None) -> MIPattern:
+def analyze_mi(pred_cls, program_arg: int | None = None) -> MIPattern:
     """Analyze a meta-interpreter's clauses and return a structured pattern.
 
     Parameters
     ----------
-    pred_cls : PredicateMeta
-        The MI predicate class (e.g. ``SolveCount``).
+    pred_cls : PredRow or PredicateMeta
+        The MI predicate: its ROW (what the compiler passes, F1 rows 32/33 --
+        found in the importing module's own database, so it works whatever
+        the module-dict binding looks like), or a ``PredicateMeta`` class
+        (the direct Python API; a thin adapter until W4b-3 deletes classes).
+        From a row the name and arity are its key and the field names its
+        registered signature -- measured 2026-09-24 over the house suite to
+        equal the class's ``__name__``/``_fields`` in 219 of 219 calls.
     program_arg : int, optional
         Which field index carries the object program.  If None, auto-detected
         by looking for a field named ``PROGRAM`` or ``_PROGRAM``.
@@ -103,12 +109,23 @@ def analyze_mi(pred_cls: PredicateMeta, program_arg: int | None = None) -> MIPat
     CannotSpecialize
         If the clauses don't match a recognized MI pattern.
     """
-    # The ROW's clauses (W2); a class on no row has none, and this read
-    # must not mint one.
-    _row = pred_cls._row
-    clauses = _row.clauses if _row is not None else []
-    fields = pred_cls._fields
-    name = pred_cls.__name__
+    if isinstance(pred_cls, PredicateMeta):
+        # The ROW's clauses (W2); a class on no row has none, and this read
+        # must not mint one.
+        _row = pred_cls._row
+        clauses = _row.clauses if _row is not None else []
+        fields = pred_cls._fields
+        name = pred_cls.__name__
+    else:
+        name, arity = pred_cls.key
+        clauses = pred_cls.clauses
+        # The OWNER's signature: an imported MI's row is adopted, and its
+        # field names are registered where it is defined, not here.
+        fields = pred_cls.db.signature_for(name, arity)
+        if fields is None:
+            raise CannotSpecialize(
+                f"{name}/{arity}: no field names are registered for it, so "
+                f"its program argument cannot be identified")
     arity = len(fields)
 
     if len(clauses) < 2:
