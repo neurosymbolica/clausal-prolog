@@ -1265,45 +1265,60 @@ def _process_directives(module_items: list, db: Any, module_dict: dict | None = 
                     method(functor, arity)
 
 
+def _ambiguous_mi(mi_name: str, arities) -> RuntimeError:
+    """Ruling QA's refusal, for every route that finds several arities."""
+    arities = sorted(arities)
+    return RuntimeError(
+        f"-specialize: meta-interpreter '{mi_name}' is defined at "
+        f"{len(arities)} arities "
+        f"({', '.join(f'{mi_name}/{a}' for a in arities)}); "
+        f"a meta-interpreter must have exactly one -- rename one of them")
+
+
 def _meta_interpreter_row(db, module_dict: dict, mi_name: str, *,
                           refuse_ambiguous: bool):
     """The ROW of the meta-interpreter a ``-specialize`` names, or ``None``.
 
     F1 rows 32/33: found in the specializing module's OWN database -- a local
-    MI or an ``-import_from``'d one (an adopted row) both answer there --
-    never by reading a class out of the module dict, so it works whatever
-    the binding looks like.  ``predicate_arities`` is the lossless
-    population; ``arities_for`` misses an adopted row (measured: empty for
-    99 of 100 lookups over the house suite, because the MIs are imported).
+    MI or an ``-import_from``'d one (an adopted row) both answer there -- so
+    it works whatever the module-dict binding looks like.
+    ``predicate_arities`` is the lossless population; ``arities_for`` misses
+    an adopted row (measured: empty for 99 of 100 lookups over the house
+    suite, because the MIs are imported).
 
-    Only arities whose row HAS CLAUSES are candidates.  Several is refused
-    when *refuse_ambiguous* (ruling QA, 2026-09-24: the class this replaces
-    silently picked one; no measured case was ambiguous).  If the database
-    has none, a module-dict binding that denotes a predicate at exactly one
-    arity is resolved era-agnostically as a last resort -- a predicate bound
-    by a plain Python import has no row here.  That route can answer a row
-    with NO clauses (a clause-less ``-dynamic`` MI), deliberately: the caller
-    hands it to ``analyze_mi``, whose "expected at least 2 clauses" refusal
-    is the one the class route gave, spelled in one place.
+    In order:
+
+    1. the arities whose row HAS CLAUSES;
+    2. failing that, the arities that have a row at all -- a clause-less
+       ``-dynamic`` MI, which the caller hands to ``analyze_mi`` so its
+       "expected at least 2 clauses" refusal (spelled in one place) is what
+       the author sees;
+    3. failing that, a module-dict binding that denotes a predicate, resolved
+       era-agnostically -- a predicate bound by a plain Python import has no
+       row here.
+
+    At any step, several arities are refused when *refuse_ambiguous* (ruling
+    QA, 2026-09-24: the class route silently picked one; no measured case was
+    ambiguous) and otherwise answer ``None``.
     """
-    candidates = sorted(
-        a for a in db.predicate_arities(mi_name)
-        if (r := db.row(mi_name, a)) is not None and r.clauses)
-    if len(candidates) > 1:
-        if not refuse_ambiguous:
+    def pick(arities, row_of):
+        if len(arities) > 1:
+            if refuse_ambiguous:
+                raise _ambiguous_mi(mi_name, arities)
             return None
-        raise RuntimeError(
-            f"-specialize: meta-interpreter '{mi_name}' is defined at "
-            f"{len(candidates)} arities "
-            f"({', '.join(f'{mi_name}/{a}' for a in candidates)}); "
-            f"a meta-interpreter must have exactly one -- rename one of them")
-    if candidates:
-        return db.row(mi_name, candidates[0])
+        return row_of(next(iter(arities))) if arities else None
+
+    known = db.predicate_arities(mi_name)
+    with_clauses = {a for a in known
+                    if (r := db.row(mi_name, a)) is not None and r.clauses}
+    with_row = {a for a in known if db.row(mi_name, a) is not None}
+    for arities in (with_clauses, with_row):
+        if arities:
+            return pick(arities, lambda a: db.row(mi_name, a))
     binding = module_dict.get(mi_name)
     if is_declared_predicate_name(binding):
-        arities = predicate_arities_for(binding)
-        if len(arities) == 1:
-            return resolve_predicate_row(binding, arity=next(iter(arities)))
+        return pick(predicate_arities_for(binding),
+                    lambda a: resolve_predicate_row(binding, arity=a))
     return None
 
 

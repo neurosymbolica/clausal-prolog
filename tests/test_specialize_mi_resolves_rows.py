@@ -163,3 +163,27 @@ def test_a_declared_mi_with_no_clauses_gets_analyze_mi_s_refusal(
             _load_module("spec_empty_mi", str(tmp_path / "spec_empty_mi.clausal"))
     finally:
         sys.modules.pop("spec_empty_mi", None)
+
+
+def test_a_clause_less_row_is_found_in_the_db_without_any_binding():
+    """Step 2 of the lookup: the post-flip shape, where the binding may not
+    resolve mid-load -- the database alone must find the clause-less row."""
+    db = Database()
+    db.mark_dynamic("cl_mi", 2)
+    row = _meta_interpreter_row(db, {}, "cl_mi", refuse_ambiguous=True)
+    assert row is not None and row is db.row("cl_mi", 2)
+    with pytest.raises(CannotSpecialize, match=r"got 0"):
+        analyze_mi(row)
+
+
+def test_the_binding_route_refuses_several_arities_too(mis, monkeypatch):
+    """QA holds on every route, with the same message.  The owner is made to
+    report two arities for the bound name; the database route has none."""
+    from clausal.logic import compiler_v2 as cv2
+    monkeypatch.setattr(cv2, "predicate_arities_for", lambda b, **k: {2, 3})
+    with pytest.raises(RuntimeError,
+                       match=r"defined at 2 arities \(solve/2, solve/3\)"):
+        _meta_interpreter_row(Database(), {"solve": mis.solve}, "solve",
+                              refuse_ambiguous=True)
+    assert _meta_interpreter_row(Database(), {"solve": mis.solve}, "solve",
+                                 refuse_ambiguous=False) is None
