@@ -625,6 +625,34 @@ class TestInjectResolvedTargets:
         assert calls == [("last", 2)] * 3
 
     @pytest.mark.parametrize("era", ["class", "handle"])
+    def test_a_local_row_asserted_after_the_first_call_outranks_the_cached_builtin(
+            self, owner, era):
+        """Round 6 (LOW 1): the entry cached the builtin ``last/2`` on its
+        first call; a later ``assertz`` creates the module's OWN ``last/2``
+        row, which must then answer -- as ``solve.call`` already does -- not
+        the cached builtin."""
+        from clausal.logic.compiler.globals_env import (
+            _disp_key, _inject_resolved_targets,
+        )
+        from clausal.logic.solve import _drive_trampoline
+        from clausal.logic.variables import Trail
+        from clausal.terms import Compound
+        b = self._owner_binding(owner, "last", era)
+        globals_ = {"last": b}
+        bg = dict(globals_)
+        _inject_resolved_targets({("last", 2)}, bg, owner.db, globals_)
+        fn = bg[_disp_key("last", 2)]
+        assert len(list(_drive_trampoline(fn, Trail(), [4, 5], 5))) == 1
+        assert owner.db.row("last", 2) is None
+        assert len(list(call("assertz", Compound("last", (9, 9)),
+                             module=owner))) == 1
+        assert owner.db.row("last", 2) is not None
+        # the local row answers now, through the compiled entry and solve.call
+        assert len(list(_drive_trampoline(fn, Trail(), 9, 9))) == 1
+        assert len(list(_drive_trampoline(fn, Trail(), [4, 5], 5))) == 0
+        assert len(list(call("last", [4, 5], 5, module=owner))) == 0
+
+    @pytest.mark.parametrize("era", ["class", "handle"])
     def test_with_nothing_else_to_answer_the_arity_is_reported(
             self, lm, owner, era):
         """No builtin ping/2 and no ping/2 row in the compiling db: the

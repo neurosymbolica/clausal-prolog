@@ -543,24 +543,34 @@ def _unqualified_other_arity_dispatch(binding, db, name: str, arity: int):
     is asked.
     """
     cached = None
+    cached_is_builtin = False
 
     def dispatch(*args):
-        nonlocal cached
+        nonlocal cached, cached_is_builtin
         if cached is not None:
-            return cached(*args)
+            # Round 6: a cached BUILTIN stands only while this db still has
+            # no row of its own at name/arity -- an assertz after the first
+            # call creates one, and the local row outranks the builtin
+            # (solve.call sees it too).  One row() probe per call.
+            if not (cached_is_builtin and db.row(name, arity) is not None):
+                return cached(*args)
+            cached = None
         if db is not None:
             fn = db.get_dispatch(name, arity)      # own row, then builtins
             row = db.row(name, arity) if fn is not None else None
             # Review round 5: cache what cannot change under us -- a BUILTIN
-            # (no row of our own answered) or a LOCKED row's dispatch.  An
-            # unlocked (dynamic) row may be recompiled or retracted, and
-            # "nothing answers" may stop being true, so those re-resolve.
+            # (no row of our own answered; re-checked per call, above) or a
+            # LOCKED row's dispatch.  An unlocked (dynamic) row may be
+            # recompiled or retracted, and "nothing answers" may stop being
+            # true, so those re-resolve.
             if fn is not None and (row is None or row.locked):
                 cached = fn
+                cached_is_builtin = row is None
         else:
             bp = get_builtin_predicate(name, arity, None)
             fn = bp._get_dispatch() if bp is not None else None
             cached = fn
+            cached_is_builtin = False      # no db: no local row can appear
         if fn is None:
             fn = _refuse_unqualified_other_arity(binding, name, arity, db)
         return fn(*args)

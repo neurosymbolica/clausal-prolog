@@ -482,10 +482,10 @@ def test_one_predicate_imported_under_two_spellings(tmp_path, monkeypatch, order
     (it used to refuse as ``nl`` when the alias came last).  Both imported
     arities still answer.
 
-    RESIDUAL, pinned so a fix is seen: the ALIASED spelling at another arity,
-    ``nl(3, L)``, is resolved under ``numlist`` too (it answers ``numlist/2``)
-    -- in a module that also binds ``numlist`` itself.  Recording the
-    spelling in the import remap is the full fix."""
+    The residual -- the ALIASED spelling at another arity, ``nl(3, L)``, is
+    resolved under ``numlist`` too -- is pinned as the RULED behaviour in
+    the strict-xfail test below; recording the spelling in the import remap
+    is the full fix."""
     from clausal.logic.solve import call as _call
     from clausal.logic.variables import Var, deref
     _load(tmp_path, monkeypatch, f"f7_two_ow_{order}", """
@@ -511,23 +511,64 @@ def test_one_predicate_imported_under_two_spellings(tmp_path, monkeypatch, order
     assert sols("u", 1) == [[[1, 2, 3]]]
     assert sols("w", 0) == [[]]
     assert sols("x", 0) == [[]]
-    assert sols("v", 1) == [[[1, 2, 3]]]          # RESIDUAL, see docstring
+
+
+@pytest.mark.xfail(strict=True, reason=(
+    "known gap: the import remap does not record which spelling the author "
+    "wrote, so an aliased spelling sharing a dotted key with the unaliased "
+    "one is resolved under the unaliased name (round-5 fallback)"))
+@pytest.mark.parametrize("order", ["unaliased_first", "alias_first"])
+def test_the_aliased_spelling_of_a_double_import_resolves_under_the_alias(
+        tmp_path, monkeypatch, order):
+    """The RULED behaviour for the residual of
+    ``test_one_predicate_imported_under_two_spellings``: ``nl(3, L)`` in a
+    module that imports ``numlist`` both plain and as ``nl`` is an
+    unqualified call under ``nl``, and ``nl/2`` exists nowhere -- it refuses
+    naming ``nl``.  xfail(strict) until the remap records the spelling, so a
+    fix turns this red-for-XPASS rather than reading as a regression."""
+    from clausal.logic.solve import call as _call
+    from clausal.logic.variables import Var
+    tag = f"xf_{order}"
+    _load(tmp_path, monkeypatch, f"f7_two_ow_{tag}", """
+        -module(f7_two_ow_TAG, [numlist(A)])
+        numlist(1),
+    """.replace("TAG", tag))
+    names = ("numlist, alias(numlist, nl)" if order == "unaliased_first"
+             else "alias(numlist, nl), numlist")
+    imp = _load(tmp_path, monkeypatch, f"f7_two_im_{tag}", """
+        -module(f7_two_im_TAG, [])
+        -import_from(f7_two_ow_TAG, [NAMES])
+        v(L) <- nl(3, L)
+    """.replace("TAG", tag).replace("NAMES", names))
+    I = imp.__dict__["$module"]
+    with pytest.raises(PredicateArityMismatchError, match=r"\bnl\b"):
+        list(_call("v", Var(), module=I))
 
 
 @pytest.mark.parametrize("era", ["class", "handle"])
-def test_partial_application_through_an_alias_resolves_under_the_alias(
-        tmp_path, monkeypatch, era):
-    """Review round 5 (MEDIUM 2).  ``nl(3)`` is built by the imported binding,
-    so the TERM carries the OWNER's functor -- ``("numlist", 3)`` -- in both
-    eras (pinned below: an alias is a local spelling of one predicate, and
-    terms built through it must unify with the owner's).  ``call(nl(3), L)``
-    folds to ``numlist(3, L)``; the calling module does not bind
-    ``numlist``, so the owner functor is mapped back to the alias that built
-    it (``localize_owner_functor``) and the call resolves under ``nl`` here:
-    nothing answers ``nl/2`` -> the refusal, not the builtin ``numlist/2``.
-    ``maplist`` takes no cell goals at all (it fails, as it always has for a
-    cell) -- pinned so that it cannot start leaking silently.  The imported
-    arity through a cell, ``call(nl, 1)`` / ``call(nl(1))``, still answers."""
+def test_a_cell_named_by_an_aliased_owner_functor(
+        tmp_path, monkeypatch, capsys, era):
+    """Rounds 5-6.  A term built through an imported binding keeps the
+    OWNER's functor -- ``nl(3)`` is ``("numlist", 3)`` in both eras (pinned
+    below): an alias is a local spelling of ONE predicate, and terms built
+    through it must unify with the owner's.
+
+    Controller decision (round 6, reviewer's option 2): such a cell is
+    remapped to the alias ONLY at an arity the alias imported, so
+    ``call(nl(1))`` -- and ``call(dd(N, M))`` in general -- still runs the
+    imported predicate.  At every other arity it is a goal named
+    ``numlist`` like any other, and takes the calling module's normal
+    lookup:
+
+    * ``numlist(1, 5, L)`` built by univ / handed in from elsewhere reaches
+      the builtin ``numlist/3`` through ``call/N`` and ``time_goal`` (round 5
+      had routed it to ``nl`` and refused);
+    * DOCUMENTED CONSEQUENCE: ``call(nl(3), L)`` builds ``("numlist", 3)``,
+      and at arity 2 resolves as ``numlist/2`` in the caller -- the builtin
+      answers.  Partial application through an alias behaves like writing
+      the owner's name, because the term IS the owner's term.
+
+    ``maplist`` takes no cell goals at all (it fails, as it always has)."""
     from clausal.logic.solve import call as _call
     from clausal.logic.variables import Var, deref
     ow = _load(tmp_path, monkeypatch, f"f7_pa_ow_{era}", """
@@ -543,14 +584,51 @@ def test_partial_application_through_an_alias_resolves_under_the_alias(
         mm(L) <- maplist(nl(3), [L])
         t(T) <- (T is nl(3))
         one <- call(nl(1))
+        two <- call(nl(2))
     """.replace("ERA", era))
     I = imp.__dict__["$module"]
     t = Var()
     assert [deref(t) for _ in _call("t", t, module=I)] == [("numlist", 3)]
-    with pytest.raises(PredicateArityMismatchError, match=r"\bnl\b"):
-        list(_call("m", Var(), module=I))
-    assert list(_call("mm", Var(), module=I)) == []
+    # the imported arity: remapped to the alias, the import answers
     assert len(list(_call("one", module=I))) == 1
+    assert len(list(_call("two", module=I))) == 0
+    # another arity, built by univ / handed in: the builtin numlist/3
+    out = Var()
+    assert [deref(out) for _ in _call(
+        "call", ("numlist", 1, 5, out), module=I)] == [[1, 2, 3, 4, 5]]
+    out = Var()
+    assert [deref(out) for _ in _call(
+        "time_goal", ("numlist", 1, 5, out), module=I)] == [[1, 2, 3, 4, 5]]
+    capsys.readouterr()
+    # DOCUMENTED CONSEQUENCE: partial application = the owner's name
+    out = Var()
+    assert [deref(out) for _ in _call("m", out, module=I)] == [[1, 2, 3]]
+    assert list(_call("mm", Var(), module=I)) == []
+
+
+@pytest.mark.parametrize("era", ["class", "handle"])
+def test_an_aliased_partial_application_at_the_imported_arity_runs(
+        tmp_path, monkeypatch, era):
+    """``call(dd(N, M))`` with ``alias(dec, dd)``: the cell is ``("dec", N,
+    M)`` and the calling module does not bind ``dec``; at dec's imported
+    arity the cell is remapped to ``dd`` and runs.  (Before round 5 it failed
+    silently.)"""
+    from clausal.logic.solve import call as _call
+    from clausal.logic.variables import Var, deref
+    ow = _load(tmp_path, monkeypatch, f"f7_dd_ow_{era}", """
+        -module(f7_dd_ow_ERA, [dec(A, B)])
+        dec(N, M) <- eval_(N - 1, M)
+    """.replace("ERA", era))
+    if era == "handle":
+        _bind_imports_as_owner_handles(monkeypatch, ow.__dict__["$module"])
+    imp = _load(tmp_path, monkeypatch, f"f7_dd_im_{era}", """
+        -module(f7_dd_im_ERA, [])
+        -import_from(f7_dd_ow_ERA, [alias(dec, dd)])
+        c(M) <- call(dd(5, M))
+    """.replace("ERA", era))
+    I = imp.__dict__["$module"]
+    out = Var()
+    assert [deref(out) for _ in _call("c", out, module=I)] == [4]
 
 
 @pytest.mark.parametrize("era", ["class", "handle"])

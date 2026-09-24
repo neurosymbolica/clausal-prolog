@@ -48,7 +48,7 @@ from clausal.logic.atoms import (
 from clausal.logic.database import Clause, Database, Module
 from clausal.logic.predicate import (
     is_term_instance, term_field_names, _dispatch_at,
-    is_declared_predicate, is_declared_predicate_name,
+    is_declared_predicate_name,
     _refuse_unqualified_other_arity, binding_grants_arity,
 )
 from clausal.logic.trampoline import StepGenerator, DONE, _drive_until_yield

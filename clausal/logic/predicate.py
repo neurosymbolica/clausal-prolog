@@ -1714,23 +1714,28 @@ def localize_goal(db: Any, goal_val: Any) -> Any:
     return goal_val
 
 
-def localize_owner_functor(db: Any, functor: str):
-    """For a named goal (cell or atom) whose functor *functor* is NOT bound
-    in the calling module but IS the owner's name of a predicate the module
-    imported under an ALIAS: the ``_UnqualifiedName`` for that alias, else
-    ``None``.
+def localize_owner_functor(db: Any, functor: str, arity: int):
+    """For a named goal (cell or atom) ``functor/arity`` whose functor is NOT
+    bound in the calling module but IS the owner's name of a predicate the
+    module imported under an ALIAS **at this very arity**: the
+    ``_UnqualifiedName`` for that alias, else ``None`` (the normal lookup).
 
-    Review round 5 (partial application): ``nl(3)`` in a module that did
-    ``-import_from(alow, [alias(numlist, nl)])`` is built by the imported
-    binding, so the TERM carries the owner's functor -- ``("numlist", 3)`` --
-    as every term built through that binding does (an alias is a local
-    spelling of ONE predicate, and its terms must unify with the owner's).
-    ``call(nl(3), L)`` then folds to ``numlist(3, L)``, which the calling
-    module would resolve to the builtin ``numlist/2``: the aliased-import leak
-    again.  Mapping the owner functor back to the local spelling that built it
-    resolves the call under the name used, as the ruling requires.  A functor
-    the module binds itself (a local predicate, an unaliased import) is left
-    to the normal path.
+    A term built through an imported binding keeps the OWNER's functor
+    (``dd(N, M)`` with ``alias(dec, dd)`` is ``("dec", N, M)``) -- an alias is
+    a local spelling of ONE predicate, and its terms must unify with the
+    owner's.  The calling module does not bind ``dec``, so without this a
+    goal it built through its own import would fail at the IMPORTED arity.
+
+    Controller decision (round 6, reviewer's option 2, reported to the
+    operator): remap ONLY at the arities the alias imported
+    (``binding_grants_arity``).  At every other arity the goal is just a goal
+    named by the owner's functor, whoever built it -- ``numlist(1, 5, L)``
+    from univ or from another module must reach the builtin ``numlist/3``,
+    as it did before -- so it takes the calling module's normal lookup.
+    Documented consequence: ``call(nl(3), L)`` builds ``("numlist", 3)`` and
+    at arity 2 resolves as ``numlist/2`` in the caller (the builtin answers)
+    -- partial application through an alias behaves like writing the owner's
+    name, because the term IS the owner's term.
     """
     if db is None:
         return None
@@ -1742,14 +1747,17 @@ def localize_owner_functor(db: Any, functor: str):
         entries = idx[2].get(functor)
         if not entries:
             return None
-        live = _live_entries(md, entries)
+        live = [(n, bd) for (n, bd) in _live_entries(md, entries)
+                if binding_grants_arity(bd, arity, db, n)]
         if live:
             name, binding = sorted(live, key=lambda e: e[0])[0]
-            key = ("$functor", functor)
+            key = ("$functor", functor, arity)
             adapter = idx[3].get(key)
             if adapter is None or adapter.name != name or adapter.binding is not binding:
                 adapter = idx[3][key] = _UnqualifiedName(db, name, binding)
             return adapter
+        if _live_entries(md, entries):
+            return None                  # imported, but not at this arity
     return None
 
 

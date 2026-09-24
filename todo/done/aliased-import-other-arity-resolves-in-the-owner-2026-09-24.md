@@ -127,3 +127,17 @@ handle) in `tests/test_f7_dispatch_at_arity_refusal.py`.
   rebinding that newly binds an import is seen at the next size change).
   The `$disp_` entry caches a builtin or a LOCKED row's dispatch;
   unlocked rows and "nothing answers" re-resolve per call.
+
+## Round 6 (controller decision, reported to the operator)
+
+Supersedes the round-5 partial-application bullet: `localize_owner_functor`
+remaps an owner-functor cell to the alias ONLY at an arity the alias imported
+(`binding_grants_arity`); every other arity takes the calling module's normal
+lookup, so `numlist(1, 5, L)` built by univ / passed in reaches the builtin
+`numlist/3` again (round 5 had refused it as `nl`).  Accepted and pinned
+consequence: `call(nl(3), L)` builds `("numlist", 3)` and at arity 2 resolves
+as `numlist/2` in the caller (the builtin answers) -- partial application
+through an alias behaves like writing the owner's name, because the term IS
+the owner's term.  The double-import residual is now a strict-xfail test
+asserting the ruled refusal.  The `$disp_` entry's cached builtin is re-checked
+against `db.row(name, arity)` per call, so a row asserted later outranks it.

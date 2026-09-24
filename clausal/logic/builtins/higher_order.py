@@ -224,12 +224,11 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
         # functor here is a dangling handle, decided now rather than failed.
         _raise_if_unloaded_handle(functor, arity, context)
         return None
-    # Review round 5 (operator ruling 2026-09-24): a cell built through an
-    # ALIASED import carries the OWNER's functor (``nl(3)`` is
-    # ``("numlist", 3)``); resolve it under the alias that built it, in this
-    # module, never as the owner's name here (where a builtin ``numlist/2``
-    # would answer).  See ``predicate.localize_owner_functor``.
-    aliased = localize_owner_functor(db, functor)
+    # A cell built through an ALIASED import carries the OWNER's functor
+    # (``dd(N, M)`` is ``("dec", N, M)``); at an arity the alias IMPORTED it
+    # resolves under the alias here.  Every other arity takes the normal
+    # lookup below (round 6 decision) -- see ``predicate.localize_owner_functor``.
+    aliased = localize_owner_functor(db, functor, arity)
     if aliased is not None:
         return aliased.dispatch_at(arity), call_args
     dispatch = db.get_dispatch(functor, arity)
