@@ -714,6 +714,41 @@ def describe_imported_declaration_implemented(
     return "\n".join(lines)
 
 
+def describe_imported_python_predicate_implemented(
+    functor, arity, importer, exporter, imported_as=None,
+):
+    """Why clauses for a predicate CLASS a Python module exports are refused.
+
+    The class was created in Python (``make_predicate``, or a class with
+    ``metaclass=PredicateMeta``); no Clausal module defines it, and a load
+    may not become its defining module from the outside (the
+    vocabulary-implements drop, 2026-09-24).  The remedies are Python-shaped:
+    there is no ``-module`` export list on the exporter's side.
+    """
+    spelled = (f"{functor} (imported as {imported_as})"
+               if imported_as else functor)
+    lines = [
+        f"{importer} defines clauses for {functor}/{arity}, which it "
+        f"-import_from's from {exporter} -- but {functor}/{arity} is a "
+        f"predicate class created in Python module {exporter}, not a "
+        f"predicate a Clausal module defines."
+    ]
+    lines.extend(textwrap.wrap(
+        "A load cannot supply the clauses of a predicate that another module "
+        "hands out: a predicate has exactly one defining module.",
+        width=_WIDTH, initial_indent=_INDENT, subsequent_indent=_INDENT,
+        break_long_words=False, break_on_hyphens=False,
+    ))
+    lines.extend(_arrow([
+        f"define the clauses in a Clausal module that owns the predicate: "
+        f"drop {spelled} from the -import_from({exporter}, [...]) list and "
+        f"define {functor}/{arity} in {importer} (export it from there);",
+        f"or have {exporter} define it -- give the Python-side predicate "
+        f"its clauses where it is created.",
+    ]))
+    return "\n".join(lines)
+
+
 def describe_imported_runtime_dynamic_implemented(
     functor, arity, importer, exporter, n_runtime, imported_as=None,
 ):

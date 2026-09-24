@@ -291,14 +291,15 @@ def test_an_import_from_the_module_itself_is_not_refused(owners):
 
 @pytest.fixture
 def private_module():
-    """Load a fixture under a PRIVATE module name (the tests below mutate the
-    owner's rows), and drop every such name afterwards."""
+    """Load a module under a PRIVATE name (the tests below mutate the owner's
+    rows) -- a fixture stem, or any path via ``path=`` -- and drop every name
+    it was asked for afterwards, whether the load succeeded or not."""
     loaded = []
 
-    def load(stem: str, name: str):
+    def load(stem: str | None, name: str, path: str | None = None):
         sys.modules.pop(name, None)
         loaded.append(name)
-        return _load_module(name, _fixture_path(stem))
+        return _load_module(name, path or _fixture_path(stem))
 
     yield load
     for name in loaded:
@@ -364,10 +365,9 @@ def test_a_dynamic_exporter_holding_runtime_clauses_is_refused_and_keeps_them(
     # exporter -- the class did not move.
     cls_row_before = schema.fnm_verdict._row
     with pytest.raises(SyntaxError) as exc_info:
-        _load_module("_vocabdrop_rt_use", _importer(
+        private_module(None, "_vocabdrop_rt_use", path=_importer(
             tmp_path, "_vocabdrop_rt_use", owner_name, "fnm_verdict",
             "fnm_verdict(ok, [])"))
-    sys.modules.pop("_vocabdrop_rt_use", None)
     assert "asserted at runtime" in _flat(exc_info.value)
     assert schema.fnm_verdict._row is cls_row_before
     x, y = Var(), Var()
@@ -405,6 +405,11 @@ def test_an_exporter_row_a_load_wrote_and_emptied_keeps_the_clobber_message(
     assert first == ("some_implementer defines a clause for bo_p/1, which it "
                      f"-import_from's from {owner_name}.")
     assert "only declares" not in str(texts["class"])
+    # Through the same formatting as the gate's own clobber refusal: the
+    # gate line rides at the end, naming the write and the owner.
+    last = str(texts["class"]).splitlines()[-1].strip()
+    assert last.startswith("compile_module step 4: ")
+    assert "may not write bo_p/1: it is owned by " in last
 
 
 def test_an_authorized_bind_never_moves_a_predicate_off_another_database():
@@ -427,3 +432,57 @@ def test_an_authorized_bind_never_moves_a_predicate_off_another_database():
 
     cls._bind_row(other_db, "vocabdrop_steal_probe", 1)       # policed: no-op
     assert cls._row is home
+
+
+def test_a_python_module_exporting_a_predicate_class_gets_its_own_message(
+        tmp_path, monkeypatch, private_module):
+    """Round-4 review: a ``.clausal`` file importing a ``make_predicate``
+    class from a PYTHON module and writing its clauses used to work (the
+    class's first bind was off its detached row).  One defining module still
+    holds -- refused -- but the message must not be ``.clausal``-shaped
+    ("only declares", "-module export list"): the exporter is Python."""
+    monkeypatch.syspath_prepend(str(tmp_path))
+    (tmp_path / "vocabdrop_pyexp.py").write_text(textwrap.dedent("""\
+        from clausal.logic.predicate import make_predicate
+        vocabdrop_pyverdict = make_predicate("vocabdrop_pyverdict", ["a", "b"])
+        """))
+    sys.modules.pop("vocabdrop_pyexp", None)
+    import vocabdrop_pyexp  # noqa: F401 -- the exporter is loaded, as in use
+    try:
+        assert isinstance(vocabdrop_pyexp.vocabdrop_pyverdict, PredicateMeta)
+        with pytest.raises(SyntaxError) as exc_info:
+            private_module(None, "_vocabdrop_py_use", path=_importer(
+                tmp_path, "_vocabdrop_py_use", "vocabdrop_pyexp",
+                "vocabdrop_pyverdict", "vocabdrop_pyverdict(ok, yes)"))
+    finally:
+        sys.modules.pop("vocabdrop_pyexp", None)
+    flat = _flat(exc_info.value)
+    assert ("vocabdrop_pyverdict/2 is a predicate class created in Python "
+            "module vocabdrop_pyexp") in flat
+    assert "or have vocabdrop_pyexp define it" in flat
+    assert "only declares" not in flat
+    assert "-module export list" not in flat
+    assert "asserted at runtime" not in flat
+
+
+def test_a_specialize_over_an_imported_mi_still_binds(monkeypatch,
+                                                      private_module):
+    """``-specialize`` makes its alias the compiled face of this module's row
+    with an AUTHORIZED ``_bind_row``; the raise added for the steal must not
+    catch it.  Population asserted: the authorized bind really ran."""
+    from clausal.logic.predicate import PredicateMeta as _PM
+    real = _PM.__dict__["_bind_row"]
+    authorized_binds = []
+
+    def spy(cls, db, functor, arity, authorized=False):
+        if authorized and functor == "solve_count_natnum":
+            authorized_binds.append((functor, arity))
+        return real(cls, db, functor, arity, authorized)
+
+    monkeypatch.setattr(_PM, "_bind_row", spy)
+    mod = private_module("specialize_natnum", "_vocabdrop_specialize_natnum")
+    assert authorized_binds, "the -specialize authorized bind never ran"
+    lm = mod.__dict__["$module"]
+    n = Var()
+    assert [walk(deref(n)) for _ in call(
+        "solve_count_natnum", [["natnum", ["s", 0]]], n, module=lm)] == [2]

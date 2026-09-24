@@ -17,12 +17,13 @@ from __future__ import annotations
 
 import contextlib
 import importlib
+import sys
 import warnings
 from typing import Any
 
 from clausal.atom_diagnostics import truth_literal_hint_lines
 from clausal.logic.database import (
-    Module as LogicModule, Clause, head_key,
+    Module as LogicModule, Clause, head_key, refusal_error,
     WRITE_LOAD_CLAUSES, WRITE_LOAD_DISPATCH,
 )
 from clausal.logic.cells import DECLARED_ATOMS_KEY
@@ -40,7 +41,7 @@ from clausal.logic.predicate import (
     PredicateMeta, make_predicate, record_clause_source,
     field_names_for, is_declared_predicate, is_declared_predicate_name,
     predicate_arities_for, predicate_binding_name,
-    resolve_predicate_row,
+    resolve_predicate_row, _db_for_module_name,
 )
 from clausal.pythonic_ast.nodes import (
     AtomAppliedAsFunctor as AtomAppliedAsFunctorItem,
@@ -996,14 +997,15 @@ def _refuse_foreign_writes(db, predicate_nodes: list, module_dict: dict,
                 module_dict,
             )
         refused = _implements_an_imported_declaration(
-            origins, module_dict, functor, arity, module_name)
+            origins, module_dict, functor, arity, module_name, author)
         if refused is not None:
             raise refused
 
 
 def _implements_an_imported_declaration(origins: dict, module_dict: dict,
                                         functor: str, arity: int,
-                                        module_name: str):
+                                        module_name: str,
+                                        author: str = "<load>"):
     """The load error for clauses this module writes against a predicate it
     ``-import_from``'s from ANOTHER module -- or ``None``.
 
@@ -1021,15 +1023,22 @@ def _implements_an_imported_declaration(origins: dict, module_dict: dict,
     Asked AFTER the gate (the caller checks ``Database.refusal_for`` first),
     so a row a load wrote that still holds clauses keeps the existing clobber
     refusal and its message.  Everything else that reaches here is refused,
-    with a message for the exporter row's actual shape:
+    with a message for the exporter's actual shape:
 
+    * a PYTHON module (not a loaded Clausal module) exporting a predicate
+      class -- ``make_predicate`` or a ``PredicateMeta`` class statement: the
+      class was created in Python, so no Clausal module owns it;
     * clause-free and never written by a load -- a declaration-only export
       (NO row post-flip, a private detached row today) or an empty
       ``-dynamic`` one: the exporter ONLY DECLARES it;
     * a ``-dynamic`` row holding clauses asserted at RUNTIME (no load
       source): assert from here instead (it lands on the owner's row), or
       define a predicate of this module's own;
-    * a row a load wrote, since emptied: the clobber diagnostic.
+    * a row a load wrote, since emptied: the clobber diagnostic, through
+      ``_redefinition_error`` so it reads exactly like the gate's own
+      clobber refusal (gate line included).
+
+    *author* is the load's author, for that gate line.
 
     Keyed on the binding's ARITY-EXACT predicate, never on class identity:
     ``is_declared_predicate`` answers for a class today and a mangled handle
@@ -1064,14 +1073,26 @@ def _implements_an_imported_declaration(origins: dict, module_dict: dict,
     imported_as = imported_as[0] if imported_as else None
     row = resolve_predicate_row(bound, arity=arity)
     from clausal import import_diagnostics as diag  # noqa: PLC0415
+    if (sys.modules.get(exporter) is not None
+            and _db_for_module_name(exporter) is None):
+        # The exporter is loaded and is NOT a Clausal module: a Python module
+        # handing out a predicate class it created itself.
+        return SyntaxError(diag.describe_imported_python_predicate_implemented(
+            functor, arity, module_name, exporter, imported_as=imported_as,
+        ))
     if row is not None and row.source is not None:
         # A load wrote this row; its clauses were retracted since (the gate
-        # refuses it outright while it still holds any).
-        return SyntaxError(diag.describe_imported_predicate_redefinition(
-            functor, arity, module_name, exporter, row,
-            exporter_module=module_dict.get(exporter),
-            declared_at=getattr(bound, "_registered_at", None),
-        ))
+        # refuses it outright while it still holds any).  Same text as the
+        # gate's own clobber refusal.
+        owner = row.source[1]
+        gate = refusal_error(
+            functor, arity, author, WRITE_LOAD_CLAUSES,
+            f"it is owned by {owner}; a load may not add clauses to another "
+            f"module's predicate",
+            channel=_LOAD_SITES[WRITE_LOAD_CLAUSES],
+        )
+        return _redefinition_error(gate, functor, arity, bound, origins,
+                                   module_name, module_dict)
     if row is not None and row.clauses:
         return SyntaxError(diag.describe_imported_runtime_dynamic_implemented(
             functor, arity, module_name, exporter, len(row.clauses),

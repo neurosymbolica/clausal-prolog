@@ -81,12 +81,11 @@ step 4's authorized bind moves a class off a foreign real row 0 times over
 the targeted suites (177 arrivals) and the whole population (1,205 arrivals);
 positive control with the refusal disabled: 1.
 
-**The steal branch is LEFT.** `authorized=True` is still needed by step 4a
-and `specialization._install_specialized`; step 4's own use has no measured
-user, but a class reaching `module_dict` by a route other than
-`-import_from` is not provably absent, and dropping the flag would turn such
-a bind into a silent skip. Comment updated; it goes with the classes at the
-flip.
+**The steal is removed (final).** `authorized=True` stays as a flag (step
+4, step 4a and `specialization._install_specialized` pass it), but an
+authorized `_bind_row` onto a class reading ANOTHER Database's real row now
+RAISES instead of moving it -- see the review rounds below. (The first cut
+of this change left the move in place; round 3 removed it.)
 
 **Found on the way (pre-existing, parked):**
 `todo/field-named-export-of-an-imported-dynamic-splits-identity-2026-09-24.md`,
@@ -124,3 +123,19 @@ the targeted files: N=96, 0 mismatches) and
 `test_step4_row_stamps.py`'s declare-import-define test asserts the refusal --
 no legal shape remains where a step-4 row is bound to a foreign placeholder
 class.
+
+**Review round 4.** Every load write through an `-import_from` of another
+module's predicate is refused; a PYTHON exporter (a loaded module with no
+Clausal Database, handing out a `make_predicate`/`PredicateMeta` class) gets
+its own message and remedy (`describe_imported_python_predicate_implemented`:
+define the clauses in a Clausal module that owns the predicate, or have the
+Python module define it). Measured first: 0 users -- over the in-tree
+population (82 loads, 8 imported-predicate keys, all Clausal exporters) and
+the 12 packages (9 carry `.clausal` files with `-import_from`: 103 files, 92
+load; the 11 that do not need `cv2`/`equinox`/`flax`; 0 imported-predicate
+keys). With the refusal disabled the Python shape loads (positive control).
+The loaded-then-emptied branch now goes through `_redefinition_error`, so it
+reads like the gate's clobber refusal, gate line included. Three tests that
+drove an AUTHORIZED cross-database rebind (`test_predrow.py` x2,
+`predmeta_p1/test_index_plans_row_home.py`) now pin the raise; the
+locked/source carry-over is pinned on a same-database rebind.
