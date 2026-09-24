@@ -1390,10 +1390,11 @@ class PredicateMeta(type):
 def _refuse_if_known_at_another_arity(db: "Database", functor: str, arity: int) -> None:  # noqa: F821
     """Raise ``PredicateArityMismatchError`` if *db* knows *functor* as a
     predicate at some arity OTHER than *arity* -- the handle-dispatch twin
-    of ``PredicateMeta._refuse_call_at``, called BEFORE the caller consults
-    ``Database.get_dispatch``'s builtin-registry fallback (F7, ruled
-    2026-09-24; see the call site in ``_dispatch_at`` for the hazard this
-    ordering avoids).
+    of ``PredicateMeta._refuse_call_at``.  F7 (2026-09-24) first called it
+    BEFORE ``Database.get_dispatch``'s builtin-registry fallback; the name +
+    ARITY ruling (operator, 2026-09-24) moved it AFTER: a same-named builtin
+    at the call arity is the normal answer, and this refusal is for the case
+    where nothing answers (see the call site in ``_dispatch_at``).
 
     ``db.is_predicate_name(functor)`` -- not ``db.arities_for`` -- is the
     "known at some arity" test: ``arities_for`` scans only ``_signatures``/
@@ -1431,6 +1432,24 @@ def _refuse_if_known_at_another_arity(db: "Database", functor: str, arity: int) 
     others = sorted(a for a in db.arities_for(functor) if a != arity)
     defined = others[0] if len(others) == 1 else None
     raise predicate_arity_mismatch(functor, arity, defined)
+
+
+def _resolve_other_arity_of_class(cls: "PredicateMeta", arity: int) -> Callable | None:
+    """The dispatch a call of *arity* arguments reaches when the class *cls*
+    (declared at ANOTHER arity) is not its target, or ``None``.
+
+    Name + ARITY ruling (operator, 2026-09-24).  Resolved in the class's own
+    module -- ``cls._row._db``, the Database a module-qualified handle for
+    this class names -- through ``Database.get_dispatch``: that module's own
+    row at *arity*, else the builtin registry.  Exactly what the handle arm
+    of ``_dispatch_at`` consults at the same arity, so the two eras agree.
+    ``None`` (the caller keeps its refusal) for an unbound class.
+    """
+    row = cls._row
+    if row is None or row._db is None:
+        return None
+    functor = row._key[0]
+    return row._db.get_dispatch(functor, arity)
 
 
 def _dispatch_at(obj: Any, arity: int) -> Callable:
@@ -1481,7 +1500,27 @@ def _dispatch_at(obj: Any, arity: int) -> Callable:
         # ``_get_dispatch(arity)`` used to reach, from the one place still
         # holding a raw class rather than a handle.  ``_get_dispatch()``
         # itself is called bare here, same as every other implementor.
-        obj._refuse_call_at(arity)
+        #
+        # Name + ARITY ruling (operator, 2026-09-24): a predicate name is
+        # name+arity, so a class whose clauses say it is ``p/1`` is simply
+        # not the target of a ``p/2`` call.  Before refusing, ``p/2`` is
+        # resolved the way the handle arm below resolves it -- in the
+        # class's OWN module (``row._db``, the module a handle for this class
+        # would name): that module's row at the call arity, else the builtin
+        # registry (``Database.get_dispatch`` asks both).  The refusal stays
+        # only when nothing answers there, so the class era and the handle
+        # era agree (the class-era refusal ahead of a live answer was an
+        # artefact of the predicate being a class).
+        from clausal.predicate_diagnostics import (  # noqa: PLC0415
+            PredicateArityMismatchError,
+        )
+        try:
+            obj._refuse_call_at(arity)
+        except PredicateArityMismatchError:
+            fn = _resolve_other_arity_of_class(obj, arity)
+            if fn is not None:
+                return fn
+            raise
         return obj._get_dispatch()
     if is_chars(obj):
         # THE FLIP (spec §6.4): a ``str`` is a STRING.  The Stage A arm here
@@ -1525,10 +1564,20 @@ def _dispatch_at(obj: Any, arity: int) -> Callable:
             # ``numlist/1`` in a module that also has a 2-clause local
             # definition, called at arity 2, used to silently hand back the
             # ``numlist/2`` builtin -- see shadow_census.py).
-            _refuse_if_known_at_another_arity(_module.db, _name, arity)
+            #
+            # REVERSED by the name + ARITY ruling (operator, 2026-09-24): a
+            # predicate name is name+arity, so ``numlist/1`` is not the
+            # target of a ``numlist/2`` call and the builtin ``numlist/2``
+            # answering it is the NORMAL resolution, not a silent shadow
+            # (the class-era refusal was an artefact of the predicate being
+            # a class).  ``get_dispatch`` -- this module's row at the call
+            # arity, else the builtin registry -- is therefore asked FIRST;
+            # the refusal stays, after it, for the case where nothing
+            # answers.
             _fn = _module.db.get_dispatch(_name, arity)
             if _fn is not None:
                 return _fn
+            _refuse_if_known_at_another_arity(_module.db, _name, arity)
             _bound = (_module.module_dict or {}).get(_name)
             if _bound is not None and _bound is not obj:
                 return _dispatch_at(_bound, arity)

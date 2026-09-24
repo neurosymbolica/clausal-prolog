@@ -11,6 +11,12 @@ wrong-arity call on ``foo/2`` could silently resolve to a builtin ``foo/3``
 instead of refusing.  ``numlist`` is a real, dual-arity builtin
 (``numlist/2`` and ``numlist/3``, ``clausal/logic/builtins/lists.py``), which
 makes it the concrete population this module's shadowing test exercises.
+
+REVERSED IN PART by the name + ARITY ruling (operator, 2026-09-24): a
+predicate name is name + ARITY, so a same-named builtin (or the module's own
+row) AT THE CALL ARITY is the call's normal answer, not a silent shadow --
+``get_dispatch`` is now asked BEFORE the refusal, in both eras.  What F7
+keeps is the refusal where nothing answers at the call arity.
 """
 import sys
 import textwrap
@@ -57,29 +63,108 @@ def test_correct_arity_call_is_unchanged(tmp_path, monkeypatch):
     assert callable(fn)
 
 
-def test_wrong_arity_does_not_silently_resolve_to_a_builtin_at_the_other_arity(tmp_path, monkeypatch):
-    """The shadowing hazard, concretely: a local ``numlist/1`` shares its name
-    with the builtin ``numlist/2`` (and ``numlist/3``).  Calling it at arity 2
-    must refuse -- never silently hand back the builtin's ``numlist/2``."""
+def _numlist_answers(fn, *args):
+    from clausal.logic.solve import _drive_trampoline
+    from clausal.logic.variables import Trail, Var, deref
+    out = Var()
+    return [deref(out) for _ in _drive_trampoline(fn, Trail(), *args, out)]
+
+
+@pytest.mark.parametrize("era", ["class", "handle"])
+def test_wrong_arity_resolves_normally_to_the_builtin_at_the_call_arity(
+        tmp_path, monkeypatch, era):
+    """REVERSED by the name + ARITY ruling (operator, 2026-09-24).
+
+    This test used to be ``test_wrong_arity_does_not_silently_resolve_to_a_
+    builtin_at_the_other_arity`` and pinned the opposite: a local
+    ``numlist/1`` called at arity 2 had to REFUSE rather than answer with the
+    builtin ``numlist/2``.  The ruling: a predicate name is name + ARITY, so
+    ``numlist/1`` is not the target of a ``numlist/2`` call at all, and the
+    call resolves normally -- here to the builtin ``numlist/2``.  The old
+    refusal was an artefact of ``PredicateMeta`` being a class, not
+    behaviour to preserve.  The refusal survives only where NOTHING answers
+    at the call arity (``test_wrong_arity_call_on_a_user_predicate_is_the_
+    arity_refusal`` above).  Both eras -- the class binding and the
+    module-qualified handle -- must agree."""
     from clausal.logic.builtins._registry import _BUILTINS, _DB_BUILTINS
-    mod = _load(tmp_path, monkeypatch, "f7_shadow", """
-        -module(f7_shadow, [numlist(A)])
+    from clausal.logic.predicate import PredicateMeta
+    assert ("numlist", 2) in _BUILTINS or ("numlist", 2) in _DB_BUILTINS
+    mod = _load(tmp_path, monkeypatch, f"f7_shadow_{era}", """
+        -module(f7_shadow_ERA, [numlist(A)])
         numlist(1),
-    """)
-    with pytest.raises(PredicateArityMismatchError):
-        fn = _dispatch_at(mangle("f7_shadow", "numlist"), 2)
-        builtin_fn = (_BUILTINS.get(("numlist", 2))
-                      or _DB_BUILTINS.get(("numlist", 2)))
-        assert fn is not builtin_fn, (
-            "silently resolved the local numlist/1's wrong-arity call to "
-            "the numlist/2 builtin instead of refusing"
-        )
+    """.replace("ERA", era))
+    cls = mod.__dict__["$module"].module_dict["numlist"]
+    assert isinstance(cls, PredicateMeta)
+    target = cls if era == "class" else mangle(f"f7_shadow_{era}", "numlist")
+    fn = _dispatch_at(target, 2)
+    # the builtin numlist(High, List): numlist(3, L) gives L = [1, 2, 3]
+    assert _numlist_answers(fn, 3) == [[1, 2, 3]]
     # the arity-1 call is untouched and still reaches the LOCAL predicate,
-    # not the builtin.
-    fn1 = _dispatch_at(mangle("f7_shadow", "numlist"), 1)
-    builtin_fn1 = _BUILTINS.get(("numlist", 1)) or _DB_BUILTINS.get(("numlist", 1))
-    assert builtin_fn1 is None, "sanity: there is no numlist/1 builtin to confuse this with"
-    assert callable(fn1)
+    # not a builtin (there is no numlist/1 builtin to confuse it with).
+    assert ("numlist", 1) not in _BUILTINS and ("numlist", 1) not in _DB_BUILTINS
+    fn1 = _dispatch_at(target, 1)
+    from clausal.logic.solve import _drive_trampoline
+    from clausal.logic.variables import Trail
+    assert len(list(_drive_trampoline(fn1, Trail(), 1))) == 1
+    assert len(list(_drive_trampoline(fn1, Trail(), 2))) == 0
+
+
+@pytest.mark.parametrize("era", ["class", "handle"])
+def test_wrong_arity_with_nothing_else_answering_still_refuses(
+        tmp_path, monkeypatch, era):
+    """The half of F7 the ruling keeps: ``pred/1`` called at 2, with no
+    ``pred/2`` row and no ``pred/2`` builtin, is the arity refusal in both
+    eras -- not an existence error and not a raw TypeError."""
+    from clausal.logic.builtins._registry import _BUILTINS, _DB_BUILTINS
+    from clausal.logic.predicate import PredicateMeta
+    mod = _load(tmp_path, monkeypatch, f"f7_nothing_{era}", """
+        -module(f7_nothing_ERA, [pred(A)])
+        pred(1),
+    """.replace("ERA", era))
+    assert ("pred", 2) not in _BUILTINS and ("pred", 2) not in _DB_BUILTINS
+    cls = mod.__dict__["$module"].module_dict["pred"]
+    assert isinstance(cls, PredicateMeta)
+    target = cls if era == "class" else mangle(f"f7_nothing_{era}", "pred")
+    with pytest.raises(PredicateArityMismatchError, match="takes 1 argument"):
+        _dispatch_at(target, 2)
+
+
+@pytest.mark.parametrize("era", ["class", "handle"])
+def test_wrong_arity_reaches_the_modules_own_row_at_the_call_arity(
+        tmp_path, monkeypatch, era):
+    """Name + ARITY ruling: the module's own ``ping/2`` answers a ``ping/2``
+    call made through its ``ping/0`` binding.  Before the ruling the eras
+    DISAGREED here: the handle arm answered (``get_dispatch`` found the row)
+    while the class arm refused off the ``ping/0`` clause heads.
+
+    One file cannot define both ``ping/0`` and ``ping/2`` (one name, one
+    arity, refused at load), so the ``ping/2`` row is installed on the
+    owner's db with ``set_dispatch``, borrowing a compiled ``ping/2`` from a
+    second module."""
+    from clausal.logic.predicate import PredicateMeta
+    from clausal.logic.solve import _drive_trampoline, call as _call
+    from clausal.logic.variables import Trail, Var
+    name = f"f7_ownrow_{era}"
+    mod = _load(tmp_path, monkeypatch, name, """
+        -module(NAME, [])
+        ping <- (1 > 0)
+    """.replace("NAME", name))
+    donor = _load(tmp_path, monkeypatch, f"{name}_donor", """
+        -module(NAME_donor, [])
+        ping(1, 2),
+    """.replace("NAME", name))
+    M, D = mod.__dict__["$module"], donor.__dict__["$module"]
+    list(_call("ping", 1, Var(), module=D))              # compile it
+    M.db.set_dispatch("ping", 2, D.db.get_dispatch("ping", 2))
+    cls = M.module_dict["ping"]
+    assert isinstance(cls, PredicateMeta) and cls._fields == ()
+    assert cls._row is not None and cls._row._key == ("ping", 0)
+    target = cls if era == "class" else mangle(name, "ping")
+    fn = _dispatch_at(target, 2)
+    assert len(list(_drive_trampoline(fn, Trail(), 1, 2))) == 1
+    assert len(list(_drive_trampoline(fn, Trail(), 1, 3))) == 0
+    # and ping/0 is still ping/0
+    assert len(list(_drive_trampoline(_dispatch_at(target, 0), Trail()))) == 1
 
 
 def test_a_foreign_duck_typed_implementor_is_still_called_bare():

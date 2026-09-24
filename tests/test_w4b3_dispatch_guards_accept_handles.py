@@ -142,6 +142,41 @@ class TestSolveCallPhase5:
         assert len(list(call("is_pos", 3, module=lm))) == 1
         assert len(list(call("is_pos", -3, module=lm))) == 0
 
+    # -- a predicate name is name + ARITY (operator ruling, 2026-09-24) ------
+    #
+    # A binding (class or handle) at ANOTHER arity is not this call's target:
+    # the call resolves normally -- the builtin, then the calling module's own
+    # row -- and only when nothing answers does the binding report the arity
+    # (``test_wrong_arity_still_refuses`` below, kept).  The class-era refusal
+    # ahead of a live answer was an artefact of the predicate being a class.
+
+    @pytest.mark.parametrize("era", ["class", "handle"])
+    def test_a_builtin_answers_at_another_arity(self, lm, owner, monkeypatch,
+                                                 era):
+        """``owner`` has a user ``last/1``; ``call("last", L, X)`` is
+        ``last/2`` and reaches the builtin."""
+        b = TestInjectResolvedTargets._owner_binding(owner, "last", era)
+        assert len(list(call("last", 1, module=owner))) == 1   # last/1 is live
+        if era == "handle":
+            monkeypatch.setitem(owner.module_dict, "last", b)
+        assert owner.module_dict["last"] is b
+        x = Var()
+        assert _answers("last", ([4, 5], x), owner, [x]) == [(5,)]
+        # and last/1 is still the user's
+        assert len(list(call("last", 1, module=owner))) == 1
+        assert len(list(call("last", 2, module=owner))) == 0
+
+    @pytest.mark.parametrize("era", ["class", "handle"])
+    def test_the_local_row_answers_at_another_arity(self, lm, owner,
+                                                     monkeypatch, era):
+        """``lm`` binds ``ping`` to ``owner``'s ``ping/0``; ``lm``'s own
+        ``ping/2`` answers ``call("ping", 1, 2)``."""
+        assert lm.db.row("ping", 2) is not None
+        b = TestInjectResolvedTargets._owner_binding(owner, "ping", era)
+        monkeypatch.setitem(lm.module_dict, "ping", b)
+        assert len(list(call("ping", 1, 2, module=lm))) == 1
+        assert len(list(call("ping", 1, 3, module=lm))) == 0
+
     def test_wrong_arity_still_refuses(self, lm, monkeypatch):
         with pytest.raises(PredicateArityMismatchError):
             list(call("is_pos", 1, 2, module=lm))
@@ -430,16 +465,26 @@ class TestInjectResolvedTargets:
     def test_dotted_sys_modules_route_at_another_arity(
             self, lm, owner, monkeypatch, era):
         """``owner.last`` is last/1; the call is /2.  No builtin is dotted, so
-        nothing else answers: the object is kept (not a NameError at run
-        time), nothing is baked, and the call reports the arity.
+        at COMPILE time nothing else answers: the object is kept (not a
+        NameError at run time) and nothing is baked.
 
-        NOT mutation-sensitive, by construction: with an arity-blind accept
-        the same object is kept and ``_maybe_cache_dispatch`` refuses the
-        bake at the wrong arity anyway.  It pins the outcome, both eras."""
+        At RUN time the kept binding is asked for ``last/2`` in ITS module
+        (``owner``), and there the builtin ``last/2`` answers -- UPDATED for
+        the name + ARITY ruling (operator, 2026-09-24; ``todo/done/wrong-
+        arity-call-still-refuses-in-two-places-2026-09-24.md``): this used to
+        pin a ``PredicateArityMismatchError`` from ``_dispatch_at(b, 2)``, the
+        class-era refusal the ruling retires.  Both eras agree.
+
+        The compile-time half is NOT mutation-sensitive, by construction:
+        with an arity-blind accept the same object is kept and
+        ``_maybe_cache_dispatch`` refuses the bake at the wrong arity
+        anyway.  It pins the outcome, both eras."""
         from clausal.logic.compiler.globals_env import (
             _disp_key, _inject_resolved_targets,
         )
         from clausal.logic.predicate import _dispatch_at
+        from clausal.logic.solve import _drive_trampoline
+        from clausal.logic.variables import Trail
         b = self._owner_binding(owner, "last", era)
         monkeypatch.setitem(sys.modules[owner.name].__dict__, "last", b)
         dotted = f"{owner.name}.last"
@@ -447,8 +492,9 @@ class TestInjectResolvedTargets:
         _inject_resolved_targets({(dotted, 2)}, base_globals, lm.db, {})
         assert base_globals[dotted] is b
         assert _disp_key(dotted, 2) not in base_globals
-        with pytest.raises(PredicateArityMismatchError):
-            _dispatch_at(b, 2)
+        fn = _dispatch_at(b, 2)                    # the builtin last/2
+        assert len(list(_drive_trampoline(fn, Trail(), [4, 5], 5))) == 1
+        assert len(list(_drive_trampoline(fn, Trail(), [4, 5], 4))) == 0
 
     # -- dotted names (review, 2026-09-24) ---------------------------------
     #
