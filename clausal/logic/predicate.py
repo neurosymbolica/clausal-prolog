@@ -375,7 +375,8 @@ def term_arity_error_for(
 
 
 def build_term_cell(functor: str, fields: tuple[str, ...], args: tuple,
-                    kwargs: dict, *, origin: Any = None) -> tuple:
+                    kwargs: dict, *, origin: Any = None,
+                    site: Any = None) -> tuple:
     """THE one home of term construction against a registered signature:
     place *args* and *kwargs* into *fields* and build the cell
     ``(functor, slot, ...)``, with the head/term ARITY check.
@@ -393,7 +394,8 @@ def build_term_cell(functor: str, fields: tuple[str, ...], args: tuple,
 
     *origin* is the class being called, if any: its ``_registered_at``
     (the declaration site) is read only when an error is raised, keeping it
-    off the construction hot path.  A HANDLE has no origin, and no site.
+    off the construction hot path.  A HANDLE has no origin; its caller passes
+    the owner row's ``declared_at`` as *site* instead.
 
     *kwargs* is consumed (positional fills are written into it, which is
     what the construction error reports as the supplied fields).  The
@@ -406,14 +408,14 @@ def build_term_cell(functor: str, fields: tuple[str, ...], args: tuple,
         # raising.  One length check replaces the per-argument comparison.
         if len(args) > len(fields):
             raise term_arity_error_for(
-                functor, fields, getattr(origin, "_registered_at", None),
+                functor, fields, getattr(origin, "_registered_at", site),
                 len(args), kwargs, _source_site(2))
         for i, val in enumerate(args):
             kwargs[fields[i]] = val
     unknown = [k for k in kwargs if k not in fields]
     if unknown:
         raise term_construction_error_for(
-            functor, tuple(fields), getattr(origin, "_registered_at", None),
+            functor, tuple(fields), getattr(origin, "_registered_at", site),
             kwargs, _source_site(2))
     from clausal.logic.variables import Var  # noqa: PLC0415
     return (functor, *(kwargs[f] if f in kwargs else Var() for f in fields))
@@ -2814,11 +2816,11 @@ def _handle_head_cell(handle: str, args: tuple, kwargs: dict) -> Any:
         # A 0-arity head is the ATOM of its name -- the class returned
         # ITSELF here (``red() is red``); post-flip the atom IS the str.
         return functor
-    # ``registered_at`` (the declaration SITE) is a class attribute with no
-    # Database home yet -- see todo/...declaration-site-lives-only-on-the-
-    # class-2026-09-24.md; the diagnostic's "registered by" line reads
-    # ``<unknown>`` for a handle until that is ruled.
-    return build_term_cell(functor, fields, args, kwargs)
+    # The declaration SITE lives on the owner's row (``PredRow.declared_at``,
+    # W4b-2d R6), so a handle's construction error names it the way the
+    # class's ``_registered_at`` does.
+    site = _row_declared_at(resolved[0], resolved[1], len(fields))
+    return build_term_cell(functor, fields, args, kwargs, site=site)
 
 
 def _head_signature_for(functor: str, signatures: dict, args: tuple,

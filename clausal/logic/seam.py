@@ -111,15 +111,12 @@ def seam_term(node: Any, module_globals: dict, loose: bool = False) -> Any:
             kwargs = [(kw.name, build(kw.value)) for kw in (term.kwargs or [])]
             with lowering_scope(module_globals):
                 # The WRITTEN arity: a predicate class cannot narrow it.
-                # ``qualified_handle``: a name bound to a predicate HANDLE
-                # keeps the handle's MANGLED spelling here (W4 piece 1,
-                # ``test_w4_qualified_handle``), where the compiler builds
-                # the PLAIN name.  Which one the seam should build after the
-                # flip is an open operator question (flip dry run §3.5);
-                # this keeps the seam's current answer until it is ruled.
+                # A name bound to a predicate HANDLE is spelled by the one
+                # rule the compiler uses (``handle_cell_functor``, operator
+                # ruling 2026-09-25 option (c)): plain when this module binds
+                # the plain name to that predicate, mangled otherwise.
                 sig = cell_signature_for_name(
-                    fname, arity=len(args) + len(kwargs),
-                    qualified_handle=True)
+                    fname, arity=len(args) + len(kwargs))
                 owa = loose or _implicit_functors_active(module_globals)
                 if sig is not None:
                     functor, fields = sig
@@ -148,14 +145,22 @@ def seam_term(node: Any, module_globals: dict, loose: bool = False) -> Any:
                 if is_atom(binding) and is_mangled(binding):
                     # W4 (ruled 2026-09-22): a name bound to a MODULE-QUALIFIED
                     # atom is a predicate HANDLE -- after the class goes,
-                    # ``h = m.pred`` binds one -- and the cell's functor is
-                    # that spelling, so the module travels in it.  A name
-                    # bound to a PLAIN string is not a handle and keeps the
-                    # declared-functor rule a strict module relies on.
+                    # ``h = m.pred`` binds one -- and the module travels in
+                    # the cell's functor, unless this module binds the plain
+                    # name to that same predicate (ruling 2026-09-25 option
+                    # (c), ``handle_cell_functor``).  A name bound to a PLAIN
+                    # string is not a handle and keeps the declared-functor
+                    # rule a strict module relies on.
                     if kwargs:
                         raise SyntaxError(
                             f"--: {fname!r} is bound to a predicate handle; a "
                             f"goal cell takes positional arguments only")
+                    # Only a declared PREDICATE's handle: a ``-hide`` data
+                    # atom is mangled in the same shape, and its owner binds
+                    # the plain name to it, so the rule would unmangle it.
+                    if is_declared_predicate_name(binding):
+                        from clausal.logic.compiler.terms_to_ast import handle_cell_functor  # noqa: PLC0415
+                        binding = handle_cell_functor(binding, module_globals)
                     return (sys.intern(binding), *args)
                 if is_declared_predicate_name(binding):
                     if kwargs:

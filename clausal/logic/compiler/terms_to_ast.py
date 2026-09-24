@@ -346,8 +346,7 @@ def functor_signature_for(name: str, namespace: "dict | None", *, classes: bool 
 
 
 def cell_signature_for_name(
-    name: str, resolve_globals: "dict | None" = None, *, arity: "int | None" = None,
-    qualified_handle: bool = False,
+    name: str, resolve_globals: "dict | None" = None, *, arity: "int | None" = None
 ) -> "tuple[str, tuple[str, ...]] | None":
     """Resolve *name* to ``(functor, fields)`` for a DATA functor, or None.
 
@@ -396,14 +395,10 @@ def cell_signature_for_name(
     cells now, so both sides must agree on slot 0).  Its fields come from the
     OWNER's registry, for the same reason.
 
-    A name bound to a predicate HANDLE (the binding after the flip) answers
-    with the predicate's PLAIN name, as its class answers ``__name__`` today
-    (``_functor_spelling``).  *qualified_handle* keeps the handle's MANGLED
-    spelling instead: the ``--`` seam passes it, because W4 piece 1
-    (``test_w4_qualified_handle``) pins the module-qualified functor for a
-    seam cell built from a handle.  Whether that pin or ruling S (plain) is
-    the post-flip answer for the seam is an open operator question; the flag
-    keeps the seam's current behaviour until it is ruled.
+    A name bound to a predicate HANDLE (the binding after the flip) is
+    spelled by :func:`handle_cell_functor` (operator ruling 2026-09-25,
+    option (c)): PLAIN when this namespace binds the plain name to that same
+    predicate, MANGLED otherwise.
     """
     namespace = resolve_globals if resolve_globals is not None else lowering_globals()
     if namespace is None:
@@ -412,8 +407,8 @@ def cell_signature_for_name(
     if resolved is None:
         return None
     binding, leaf, leaf_namespace = resolved
-    if is_declared_predicate_name(
-            binding, db=namespace_db(namespace)):
+    _db = namespace_db(namespace)
+    if is_declared_predicate_name(binding, db=_db):
         # (W4a: the `_clausal_instances` gate that stood here is gone with the
         # bridge.  It read the flag straight out of `cls.__dict__`, so it kept
         # honouring a class-body assignment after the attribute itself became
@@ -437,19 +432,62 @@ def cell_signature_for_name(
             # A data functor keeps the old answer, because its declaration
             # really does fix the slots -- over-supplying THOSE is an error.
             return None
-        return (_functor_spelling(binding, leaf, db=namespace_db(namespace),
-                                  qualified_handle=qualified_handle),
+        # ``is_predicate``: the question was just answered above, so the
+        # spelling does not ask ``is_declared_predicate_name`` a second time.
+        return (_functor_spelling(binding, leaf, namespace=namespace,
+                                  is_predicate=True),
                 tuple(cls_fields))
     fields = functor_signature_for(leaf, leaf_namespace)
     if fields is None:
         return None
-    return (_functor_spelling(binding, leaf, db=namespace_db(namespace),
-                              qualified_handle=qualified_handle),
-            fields)
+    return _functor_spelling(binding, leaf), fields
 
 
-def _functor_spelling(binding: Any, leaf: str, *, db=None,
-                      qualified_handle: bool = False) -> str:
+def handle_cell_functor(handle: str, namespace: "dict | None") -> str:
+    """The functor a cell built from the predicate HANDLE *handle* carries
+    when it is built in *namespace* -- operator ruling 2026-09-25, option (c).
+
+    PLAIN (the handle's atom half) when *namespace* binds that plain name to
+    the SAME predicate: the ordinary local or ``-import_from``'d case, where
+    the plain spelling already means this predicate here (ISO; ruling S).
+    MANGLED otherwise -- a handle held in Python (``h = mangle(m, p)``), a
+    dotted ``lib.pred(X)`` in term position, an aliased import (the plain
+    name is not bound here, or is bound to something else), or any other
+    way a handle reaches the module: the plain spelling would mean something
+    else here, or nothing, so the module travels in the cell (W4).
+
+    "The same predicate" is era-agnostic: the plain name bound to *handle*
+    itself, or to a ``PredicateMeta`` class on a real row the handle names
+    (``mint_predicate_handle(row.db, row.key[0])``, what the flip binds in its
+    place), so the answer does not change when the binding flips.  The caller
+    has already established that *handle* is a declared predicate's handle.
+    """
+    from clausal.logic.atoms import demangle  # noqa: PLC0415
+    plain = demangle(handle)[1]
+    bound = namespace.get(plain) if namespace is not None else None
+    if bound is not None and _denotes_handle(bound, handle):
+        return plain
+    return handle
+
+
+def _denotes_handle(bound: Any, handle: str) -> bool:
+    if type(bound) is str:
+        return bound == handle
+    if isinstance(bound, PredicateMeta):
+        row = bound.__dict__.get("_row")
+        if row is None or row.detached:
+            return False
+        try:
+            from clausal.logic.predicate import mint_predicate_handle  # noqa: PLC0415
+            return mint_predicate_handle(row.db, row.key[0]) == handle
+        except ValueError:          # a row of a module-less database
+            return False
+    return False
+
+
+def _functor_spelling(binding: Any, leaf: str, *,
+                      namespace: "dict | None" = None,
+                      is_predicate: bool = False) -> str:
     """The functor string slot 0 carries for a name bound to *binding*.
 
     A CLASS answers with its own ``__name__``: an ``-import_from`` alias
@@ -468,23 +506,18 @@ def _functor_spelling(binding: Any, leaf: str, *, db=None,
     leaf name — the only spelling available, and the right one whenever the
     registry entry is the module's own declaration.
 
-    A predicate HANDLE (a mangled atom -- the binding after the flip) answers
-    with the predicate's PLAIN name, exactly what its class answers today:
-    an importer's ``gd_p(X)`` must build the ``("gd_p", X)`` cell the owner's
-    clauses are keyed by, or ``assertz(gd_p(X))`` raises existence_error for
-    the mangled spelling (flip dry run R3, fix A2).  Gated on
-    ``predicate_binding_name`` (``is_declared_predicate_name``), never on
-    ``is_mangled``: a ``-hide`` DATA atom is mangled too and its mangled
-    spelling is its identity.  *db* is the ruling-Q0 hint.
-    *qualified_handle*: see ``cell_signature_for_name``.
+    A predicate HANDLE (a mangled atom -- the binding after the flip) is
+    spelled by :func:`handle_cell_functor` in *namespace*: an importer's
+    ``gd_p(X)`` builds the plain ``("gd_p", X)`` cell the owner's clauses are
+    keyed by, as its class does (flip dry run R3, fix A2).  *is_predicate*
+    says the caller established that *binding* is a declared predicate
+    (``is_declared_predicate_name``); without it a mangled binding is a
+    ``-hide`` DATA atom, whose mangled spelling is its identity.
     """
     if isinstance(binding, type):
         return binding.__name__
-    if (not qualified_handle and type(binding) is str
-            and _is_mangled(binding)):
-        _plain = predicate_binding_name(binding, db=db)
-        if _plain is not None:
-            return _plain
+    if is_predicate and type(binding) is str and _is_mangled(binding):
+        return handle_cell_functor(binding, namespace)
     if _term_is_atom(binding):
         return _atom_spelling(binding)
     return leaf
