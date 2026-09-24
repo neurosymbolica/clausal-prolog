@@ -19,6 +19,7 @@ from .quote_map import build_quote_map, quote_of
 from clausal.pythonic_ast.nodes import (
     AtomAppliedAsFunctor as AtomAppliedAsFunctorItem,
     BareAtomRefs as BareAtomRefsItem,
+    HeadFieldNames as HeadFieldNamesItem,
     Directive as DirectiveItem,
     EdcgAccDecl,
     EdcgPassDecl,
@@ -7208,6 +7209,13 @@ class EmbedTransformer(NodeTransformer):
         transformer._check_var_shaped_predicate_names()
         transformer._check_constant_name_is_free()
         transformer._settle_atom_functor_sites()
+        # The field names each functor's head carries, as the rewriter
+        # settled them (first registration wins).  compile_module step 4
+        # stamps ``row.signature`` from this -- the class is no longer the
+        # vehicle (todo/done/step4-signature-comes-from-the-class-2026-09-24.md).
+        transformer._module_items.append(HeadFieldNamesItem(fields={
+            name: tuple(fields)
+            for name, fields in transformer._seen_functors.items()}))
         if transformer._bare_atom_refs:
             transformer._module_items.append(
                 BareAtomRefsItem(names=frozenset(transformer._bare_atom_refs))
