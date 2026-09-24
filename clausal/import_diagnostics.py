@@ -552,8 +552,8 @@ def _describe_missing_module(exc, dotted, failed, directive, importer_file):
 # ── redefining an imported predicate ─────────────────────────────────────────
 
 
-def _clause_author(pred_cls, exporter, exporter_module):
-    """``(name, where)`` of the module that supplied ``pred_cls``'s clauses.
+def _clause_author(row, exporter, exporter_module):
+    """``(name, where)`` of the module that supplied *row*'s clauses.
 
     ``-import_from`` binds a SHARED class, so the clauses sitting on it are not
     automatically the exporter's: a clause-free export implemented downstream
@@ -564,13 +564,12 @@ def _clause_author(pred_cls, exporter, exporter_module):
     Returns ``(None, None)`` when nothing was recorded, so the caller can say
     so rather than guess.
     """
-    # The ROW, not the `_clauses_source` facade (W2, 2026-09-22).  The
-    # facade was `(cls._row or cls._detached_row()).source`, so this
-    # diagnostic MINTED a private throwaway row for any class that had
-    # none -- to read a field that is `None` on a fresh row anyway.
-    # `getattr` keeps the old contract of answering for a non-class too.
-    _row = getattr(pred_cls, "_row", None)
-    source = _row.source if _row is not None else None
+    # The ROW, not the `_clauses_source` facade (W2, 2026-09-22), and now
+    # handed in rather than read off a class (F1 row 29): the caller
+    # resolves it with ``resolve_predicate_row``, which answers for a
+    # mangled-atom binding as well as a class.  ``None`` -- no row -- reads
+    # as "nothing recorded", exactly as a class with no row did.
+    source = row.source if row is not None else None
     if not (isinstance(source, tuple) and len(source) == 2):
         return None, None
     name, path = source
@@ -588,7 +587,8 @@ def _clause_author(pred_cls, exporter, exporter_module):
 
 
 def describe_imported_predicate_redefinition(
-    functor, arity, importer, exporter, pred_cls, exporter_module=None,
+    functor, arity, importer, exporter, row, exporter_module=None,
+    declared_at=None,
 ):
     """Why a clause for an ``-import_from``'d, already-defined predicate is
     refused — and what to write instead.
@@ -603,13 +603,20 @@ def describe_imported_predicate_redefinition(
     exporter did, and then names the two places a clause could legitimately go,
     because "you cannot write this" alone leaves the author with a rule and
     nowhere to put it.
+
+    *row* is the imported predicate's row (``None`` if it has none) and
+    *declared_at* its ``(file, line)`` declaration site if one is known.
+    Both used to be read off the predicate CLASS; taking them as values is
+    what lets the caller pass a mangled-atom binding's row after the flip
+    (F1 row 29).  The declaration site is recorded only on a class today,
+    so after the flip that one line is omitted until the site has another
+    home -- the rest of the message is unchanged.
     """
-    _row = getattr(pred_cls, "_row", None)      # the ROW's clauses (W2)
-    n = len(_row.clauses) if _row is not None else 0
+    n = len(row.clauses) if row is not None else 0
     plural = "clause" if n == 1 else "clauses"
     subject = "that 1 clause" if n == 1 else f"those {n} clauses"
     was = "was" if n == 1 else "were"
-    author, author_path = _clause_author(pred_cls, exporter, exporter_module)
+    author, author_path = _clause_author(row, exporter, exporter_module)
     lines = [
         f"{importer} defines a clause for {functor}/{arity}, which it "
         f"-import_from's from {exporter}."
@@ -641,7 +648,7 @@ def describe_imported_predicate_redefinition(
         ))
     if author_path:
         lines.append(f"{_INDENT}  {author_path}")
-    site = getattr(pred_cls, "_registered_at", None)
+    site = declared_at
     if isinstance(site, tuple) and len(site) == 2:
         lines.append(f"{_INDENT}{functor} is declared at {site[0]}:{site[1]}")
     elif site:
