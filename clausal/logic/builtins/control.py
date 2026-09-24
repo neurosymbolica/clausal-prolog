@@ -25,7 +25,7 @@ from clausal.logic.builtins._registry import (
     _trampoline_builtin, _ensure_trampoline_dispatch,
 )
 from clausal.logic.cells import (
-    compound_cell_shape, CELL_GOAL_CONTROL_FUNCTORS, QUALIFIED_GOAL_FUNCTOR,
+    compound_cell_shape, CELL_GOAL_CONTROL_FUNCTORS,
 )
 
 
@@ -41,7 +41,8 @@ _BUILTIN_FIELDS[("when", 2)] = ("condition", "goal")
 
 def _goal_dispatch_and_args(goal_val, db=None, context="time_goal/1"):
     """Return (dispatch_fn, args_tuple) for a goal value, or (None, None) when
-    the goal names nothing -- which time_goal turns into a silent failure.
+    the goal is no goal shape at all -- which time_goal turns into a silent
+    failure.
 
     Handles:
     - callable (Python function / lambda) → no extra args
@@ -58,8 +59,10 @@ def _goal_dispatch_and_args(goal_val, db=None, context="time_goal/1"):
     only correct place to look a name up is the calling module (R-P2-2,
     module locality) -- the same reason call/N became db-receiving in P3-3
     Task 5, and phrase/2,3 in this sweep.  It is narrowed the same way: a
-    control construct and a module-qualified goal are turned away, because
-    the shared resolver RAISES for them where time_goal has always failed.
+    control construct is turned away, because the shared resolver RAISES
+    for it where time_goal has always failed.  A module-qualified goal
+    ``M:G`` is resolved (G in M) since the -meta_predicate ruling
+    (2026-09-25).
 
     That narrowing is NOT "time_goal never raises where the resolver does".
     Two cases RAISE ``existence_error(procedure, Name/Arity)`` here, exactly
@@ -71,9 +74,9 @@ def _goal_dispatch_and_args(goal_val, db=None, context="time_goal/1"):
       resolve, and failing silently is how that mistake stays invisible;
     * an atom or cell naming a predicate the caller binds only at ANOTHER
       arity -- ``time_goal(b)`` against ``b/1`` -- as
-      ``PredicateArityMismatchError`` (catchable; ruling Q3, 2026-09-25).
-
-    Only a name bound to no predicate at all still fails.
+      ``PredicateArityMismatchError`` (catchable; ruling Q3, 2026-09-25);
+    * an atom or cell naming an UNKNOWN procedure (ruling 2, 2026-09-25,
+      "like Scryer": no longer a silent failure).
     """
     # W4b-3: ``is_declared_predicate_name`` admits the module-qualified
     # HANDLE a predicate name is bound to after the flip.
@@ -92,7 +95,10 @@ def _goal_dispatch_and_args(goal_val, db=None, context="time_goal/1"):
         from clausal.logic.builtins.higher_order import _resolve_named_goal  # noqa: PLC0415
         resolved = _resolve_named_goal(db, goal_val, (), context)
         return resolved if resolved is not None else (None, None)
-    if is_cell and functor not in CELL_GOAL_CONTROL_FUNCTORS and functor != QUALIFIED_GOAL_FUNCTOR:
+    if is_cell and functor not in CELL_GOAL_CONTROL_FUNCTORS:
+        # A module-qualified ``M:G`` is admitted (operator ruling 2026-09-25:
+        # it is what a -meta_predicate argument arrives as); the resolver
+        # resolves G in M.
         from clausal.logic.builtins.higher_order import _resolve_named_goal  # noqa: PLC0415
         resolved = _resolve_named_goal(db, goal_val, (), context)
         if resolved is not None:
@@ -146,9 +152,9 @@ def _time_goal__1(db, this_generator, _proceed, _fail, _catcher, goal, trail):
     - a predicate instance, e.g. in_(X_, [1,2,3]) — dispatched with its fields
     - an atom or cell NAMING a predicate, resolved in the caller
 
-    A goal that names nothing fails.  A named goal the caller defines only at
-    another arity raises ISO ``existence_error(procedure, Name/Arity)``, as
-    does a dangling handle -- see ``_goal_dispatch_and_args``.
+    A named goal that no procedure answers -- unknown, or defined only at
+    another arity -- raises ISO ``existence_error(procedure, Name/Arity)``,
+    as does a dangling handle -- see ``_goal_dispatch_and_args``.
     """
     goal_val = deref(goal)
     dispatch, goal_args = _goal_dispatch_and_args(goal_val, db, "time_goal/1")

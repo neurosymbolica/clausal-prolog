@@ -293,7 +293,14 @@ class TestPhrase:
             list(call("phrase", rule, [mint("hi")], module=lm))
 
     def test_a_data_atom_is_still_not_a_rule(self, lm):
-        assert list(call("phrase", _secret(lm), [mint("hi")], module=lm)) == []
+        """FLIPPED 2026-09-25 -- operator ruling 2 ("like Scryer"): a
+        ``-hide`` DATA atom names no nonterminal, and an unknown procedure
+        now raises ``existence_error(procedure, secret/2)`` -- demangled --
+        where it used to fail silently."""
+        from clausal.logic.exceptions import LogicException
+        with pytest.raises(LogicException) as exc:
+            list(call("phrase", _secret(lm), [mint("hi")], module=lm))
+        assert tuple(exc.value.term.args[0].args[1].args) == ("secret", 2)
 
 
 # ── 3. the 16 list builtins, time_goal, _ensure_trampoline_dispatch ─────────
@@ -350,9 +357,15 @@ def test_list_builtin_answers_the_same_for_a_handle(lm, builtin, goal, inputs, n
 
 
 def test_a_data_atom_is_still_not_a_list_goal(lm):
-    """``-hide``'s mangled DATA atom keeps failing quietly; widening on
-    ``is_mangled`` would raise existence_error here instead."""
-    assert list(call("maplist", _secret(lm), [1], module=lm)) == []
+    """``-hide``'s mangled DATA atom names no procedure.  FLIPPED
+    2026-09-25 -- operator ruling 2 ("like Scryer"): it used to fail
+    quietly; an unknown procedure in a meta-call now raises
+    ``existence_error(procedure, secret/1)``, demangled (no ``\\x1f`` in
+    the catchable term)."""
+    from clausal.logic.exceptions import LogicException
+    with pytest.raises(LogicException) as exc:
+        list(call("maplist", _secret(lm), [1], module=lm))
+    assert tuple(exc.value.term.args[0].args[1].args) == ("secret", 1)
 
 
 @pytest.mark.parametrize("which", ["class", "handle"])

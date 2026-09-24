@@ -1082,7 +1082,13 @@ class TestConsRuleRetirementDCGAudit:
         mod = _load("t5_dcg2", src, tmp_path)
         assert _succeeds("phrase", "hi", ["h", "i"], module=mod)
         assert not _succeeds("phrase", "hi", ["h", "o"], module=mod)
-        assert not _succeeds("phrase", "nosuch", ["h", "i"], module=mod)
+        # FLIPPED 2026-09-25 -- operator ruling 2 ("like Scryer"): an unknown
+        # nonterminal N//0 raises existence_error(procedure, N/2); it used to
+        # fail silently.
+        from clausal.logic.exceptions import LogicException
+        with pytest.raises(LogicException) as exc:
+            _succeeds("phrase", "nosuch", ["h", "i"], module=mod)
+        assert tuple(exc.value.term.args[0].args[1].args) == ("nosuch", 2)
 
 
 # ── String / bytes terminals in rule bodies (R3) ─────────────────────────────

@@ -4270,6 +4270,41 @@ def _parse_pred_arity_args(args, directive_name):
     return specs
 
 
+def _parse_meta_predicate_args(args):
+    """Parse ``-meta_predicate(p(1, '?'), q(0, ':', '+'))`` (or one list of
+    heads) into ``[(functor, arity, specs), ...]``.
+
+    Operator ruling 2026-09-25 (Scryer's meta_predicate/1).  A spec is what
+    Scryer's ``setup_meta_predicate`` accepts: a non-negative integer, or one
+    of the atoms ``'+'``, ``'-'``, ``'?'``, ``':'`` -- written quoted, since
+    none of them is a Python name.  ``^`` and ``//`` are refused, as Scryer
+    refuses them (``InvalidMetaPredicateDecl``).
+    """
+    from clausal.logic.meta_predicate import valid_spec  # noqa: PLC0415
+    if len(args) == 1 and isinstance(args[0], List):
+        args = args[0].elts
+    heads = []
+    for arg in args:
+        if not (isinstance(arg, Call) and isinstance(arg.func, Name)
+                and not arg.keywords and arg.args):
+            raise SyntaxError(
+                "Malformed argument in -meta_predicate(...): expected a head "
+                f"like apply_all(1, '?'), got {dump(arg)}")
+        specs = []
+        for spec in arg.args:
+            value = spec.value if isinstance(spec, Constant) else None
+            if isinstance(value, bool) or not valid_spec(value):
+                raise SyntaxError(
+                    f"-meta_predicate({arg.func.id}(...)): invalid meta "
+                    f"argument specifier {dump(spec)}; expected an integer "
+                    "0..N or one of '+', '-', '?', ':'")
+            specs.append(value)
+        heads.append((arg.func.id, len(specs), tuple(specs)))
+    if not heads:
+        raise SyntaxError("-meta_predicate(...) requires at least one head")
+    return heads
+
+
 # The metaclass reference inside the parsed class-minting / atom-binding
 # templates.  A ``$`` name cannot be spelled in Python source, so the
 # templates name this PLACEHOLDER and ``_swap_placeholder`` re-spells it
@@ -8017,6 +8052,29 @@ class EmbedTransformer(NodeTransformer):
                 statements.extend(predspec)
             else:
                 statements.append(predspec)
+            return statements if len(statements) > 1 else statements[0]
+        if name == "meta_predicate":
+            heads = _parse_meta_predicate_args(args)
+            transformer._module_items.append(
+                DirectiveItem(name="meta_predicate", specs=heads))
+            load = Load()
+            statements = []
+            for functor, arity, specs in heads:
+                # $module.db.mark_meta_predicate("functor", arity, (spec, ...))
+                call_node = replace(
+                    Expr(value=Call(
+                        func=Attribute(
+                            value=Attribute(
+                                value=Name(id="$module", ctx=load),
+                                attr="db", ctx=load),
+                            attr="mark_meta_predicate", ctx=load),
+                        args=[Constant(value=functor), Constant(value=arity),
+                              Tuple(elts=[Constant(value=v) for v in specs],
+                                    ctx=load)],
+                        keywords=[])),
+                    expr_stmt)
+                fix_missing_locations(call_node)
+                statements.append(call_node)
             return statements if len(statements) > 1 else statements[0]
         if name == "discontiguous":
             specs = _parse_pred_arity_args(args, "discontiguous")

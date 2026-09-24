@@ -317,6 +317,9 @@ from clausal.logic.seam import (
 from clausal.logic.compiler.terms_to_ast import (  # noqa: E402
     ARITH_RUNTIME_NAMES as _ARITH_RUNTIME_NAMES,
 )
+from clausal.logic.meta_predicate import (  # noqa: E402
+    qualify_in_db as _meta_qualify_in_db,
+)
 from clausal.logic.generated_names import (
     register_generated_names as _register_generated_names,
 )
@@ -1038,6 +1041,9 @@ def _compile_predicate_trampoline_impl(
         "$seglist_unify_gen": _seglist_unify_gen,
         "$Fraction": Fraction,
         **_ARITH_RUNTIME_NAMES,
+        # -meta_predicate call sites (clausal.logic.meta_predicate).
+        "$meta_qualify": _meta_qualify_in_db,
+        "$meta_db": db,
     }
     # Ensure freeze/when hooks are registered.
     base_globals["$install_when_ground"] = _install_when_ground_fn
@@ -1880,6 +1886,9 @@ def _compile_predicate_shallow_impl(
         "$seglist_unify_gen": _seglist_unify_gen,
         "$Fraction": Fraction,
         **_ARITH_RUNTIME_NAMES,
+        # -meta_predicate call sites (clausal.logic.meta_predicate).
+        "$meta_qualify": _meta_qualify_in_db,
+        "$meta_db": db,
     }
     # Ensure freeze/when hooks are registered.
     base_globals["$install_when_ground"] = _install_when_ground_fn_s

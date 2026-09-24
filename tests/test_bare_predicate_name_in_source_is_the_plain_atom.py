@@ -21,7 +21,8 @@ from clausal.logic.compiler.terms_to_ast import lowering_scope, term_to_ast_expr
 from clausal.logic.predicate import PredicateMeta, mint_predicate_handle
 from clausal.logic.solve import call, solve
 from clausal.logic.variables import Var, deref
-from clausal.terms import LoadName
+from clausal.logic.exceptions import LogicException
+from clausal.terms import Compound, LoadName
 
 _SRC = """\
 -module({name}, [z/0, b/1, add/3, q/1, r/1, l/1, g_map/0, g_call/0,
@@ -194,6 +195,49 @@ def test_a_named_goal_at_a_missing_arity_raises_iso_existence_error(
     pi = formal.args[1]
     assert isinstance(pi, Compound) and pi.functor == "/"
     assert tuple(pi.args) == (mint(name), arity)
+
+
+
+def _renamed(goal, old, new):
+    """*goal* with every str slot equal to *old* (the goal name, at any
+    nesting of cells) replaced by *new*."""
+    if type(goal) is tuple:
+        return tuple(_renamed(g, old, new) for g in goal)
+    return new if goal == old else goal
+
+
+@pytest.mark.parametrize("goal, name, arity",
+                         [r[1:] for r in _WRONG_ARITY_GOALS],
+                         ids=[r[0] for r in _WRONG_ARITY_GOALS])
+def test_a_named_goal_naming_an_unknown_procedure_raises_iso_existence_error(
+        mod, goal, name, arity):
+    """Ruling 2 (operator, 2026-09-25, "like Scryer"): a meta-call naming an
+    UNKNOWN procedure raises ``existence_error(procedure, Name/Arity)``,
+    catchable -- it used to FAIL silently (the retired §4.2 contract).  The
+    same builtins, the same arities, with the name bound to nothing; a
+    phrase nonterminal N//A is N/(A+2)."""
+    lm = mod.__dict__["$module"]
+    with pytest.raises(LogicException) as exc:
+        list(solve(_renamed(goal(), name, "nosuch"), lm))
+    term = exc.value.term
+    assert term.functor == "error", term
+    formal = term.args[0]
+    assert formal.functor == "existence_error" and formal.args[0] == mint("procedure")
+    assert formal.args[1] == Compound("/", (mint("nosuch"), arity))
+
+
+def test_the_unknown_procedure_raise_is_catchable_in_source(tmp_path):
+    name = "bpn_catch_unknown"
+    p = tmp_path / f"{name}.clausal"
+    p.write_text(
+        f"-module({name}, [])\n"
+        "-private([procedure, nosuch])\n"
+        "caught(PI) <- catch(maplist(nosuch, [1]),"
+        " error(existence_error(procedure, PI), _), True)\n")
+    lm = _load_module(name, str(p)).__dict__["$module"]
+    pi = Var()
+    assert [deref(pi) for _ in call("caught", pi, module=lm)] == [
+        Compound("/", (mint("nosuch"), 1))]
 
 
 def test_listing_a_bare_name_is_not_a_predicate_indicator(mod):

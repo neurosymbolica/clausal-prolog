@@ -143,11 +143,19 @@ def test_a_resolvable_handle_still_answers(host):
     assert len(_answers(call("use0", mangle(LIB, "flag"), module=host))) == 1
 
 
-def test_an_unmangled_unknown_name_still_fails_silently(host):
-    """The translator's pinned §4.2 contract, untouched by ruling 2."""
+def test_an_unmangled_unknown_name_raises_existence_error(host):
+    """FLIPPED 2026-09-25 -- operator ruling 2 ("like Scryer"): a meta-call naming an UNKNOWN procedure raises ISO existence_error(procedure, Name/Arity), catchable; it used to fail silently (the retired §4.2 contract).
+
+    This used to be ``test_an_unmangled_unknown_name_still_fails_silently``
+    (the translator's pinned §4.2 contract, untouched by the 2026-09-24
+    handle ruling)."""
     from clausal.logic.solve import call
-    assert _answers(call("use1", "calln_nosuch_plain", Var(), module=host)) == []
-    assert _answers(call("use0", "calln_nosuch_plain", module=host)) == []
+    for gen, arity in ((call("use1", "calln_nosuch_plain", Var(), module=host), 1),
+                       (call("use0", "calln_nosuch_plain", module=host), 0)):
+        formal = _raised(gen).args[0]
+        assert formal.functor == "existence_error"
+        assert formal.args[0] == "procedure"
+        assert tuple(formal.args[1].args) == ("calln_nosuch_plain", arity)
 
 
 # ── call/3+: call/N's extras fold into the handle's goal ─────────────────────

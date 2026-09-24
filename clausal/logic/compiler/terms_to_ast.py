@@ -42,6 +42,7 @@ from clausal.pythonic_ast.nodes import (
     Lambda, literal_value,
     SetLiteral as _SetLiteral_t,
 )
+from clausal.logic.meta_predicate import MetaArg as _MetaArg
 from clausal.logic.predicate import (
     PredicateMeta, is_declared_predicate_name, is_zero_field_class,
     construction_arity_fault,
@@ -731,6 +732,14 @@ def term_to_ast_expr(
     """
     raw = term
     term = deref(term)
+
+    if type(term) is _MetaArg:
+        # A ``-meta_predicate`` argument position (see
+        # ``clausal.logic.meta_predicate``): qualified with the calling
+        # module at run time.
+        return _call(_name("$meta_qualify"), _name("$meta_db"),
+                     term_to_ast_expr(term.value, var_context,
+                                      eval_arith=eval_arith))
 
     if is_var(term):
         vid = term._id

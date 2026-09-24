@@ -195,9 +195,16 @@ class TestCallNOverCells:
     def test_a_tuple_tag_data_cell_goal_fails_silently(self, mod):
         assert list(pcall("cg1", (tuple, 1, 2), module=_lm(mod))) == []
 
-    def test_an_unknown_cell_goal_fails_silently(self, mod):
-        """An absent predicate is not an error here — same as any non-goal."""
-        assert list(pcall("cg1", ("no_such_pred", 1), module=_lm(mod))) == []
+    def test_an_unknown_cell_goal_raises_existence_error(self, mod):
+        """FLIPPED 2026-09-25 -- operator ruling 2 ("like Scryer"): a meta-call naming an UNKNOWN procedure raises ISO existence_error(procedure, Name/Arity), catchable; it used to fail silently (the retired §4.2 contract).
+
+        This used to be ``test_an_unknown_cell_goal_fails_silently``."""
+        from clausal.logic.exceptions import LogicException
+        with pytest.raises(LogicException) as exc:
+            list(pcall("cg1", ("no_such_pred", 1), module=_lm(mod)))
+        formal = exc.value.term.args[0]
+        assert formal.functor == "existence_error"
+        assert tuple(formal.args[1].args) == ("no_such_pred", 1)
 
     def test_call_over_a_predicate_class_is_untouched(self, mod):
         """The pre-existing route — a goal OBJECT answering ``_get_dispatch``
@@ -459,8 +466,16 @@ class TestZeroArityControlConstructsByName:
     def test_the_control_constructs_do_not_consume_the_arity_one_spelling(
             self, mod):
         """``call(true, X)`` is the goal ``true/1`` — an ordinary undefined
-        predicate, as ISO has it — not ``true`` with an argument thrown away."""
-        assert list(pcall("cg2", mint("true"), 1, module=_lm(mod))) == []
+        predicate, as ISO has it — not ``true`` with an argument thrown away.
+
+        FLIPPED 2026-09-25 -- operator ruling 2 ("like Scryer"): a meta-call naming an UNKNOWN procedure raises ISO existence_error(procedure, Name/Arity), catchable; it used to fail silently (the retired §4.2 contract).  So it is ``existence_error(procedure, true/1)``, as Scryer
+        answers ``call(true, 1)``; it used to answer ``[]``."""
+        from clausal.logic.exceptions import LogicException
+        with pytest.raises(LogicException) as exc:
+            list(pcall("cg2", mint("true"), 1, module=_lm(mod)))
+        formal = exc.value.term.args[0]
+        assert formal.functor == "existence_error"
+        assert tuple(formal.args[1].args) == ("true", 1)
 
     def test_they_answer_without_a_database_too(self):
         """Decided before the db lookups, like the control-construct refusal,

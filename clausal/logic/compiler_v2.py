@@ -890,7 +890,7 @@ def _reject_reserved_truth_names(
                 if isinstance(name, str):
                     note(name, f"{kind} declaration")
         elif isinstance(item, DirectiveItem):
-            for functor, arity in item.specs:
+            for functor, arity, *_ in item.specs:
                 note(functor, f"-{item.name}({functor}/{arity})")
 
     if not offenders:
@@ -1566,6 +1566,13 @@ def _process_directives(module_items: list, db: Any, module_dict: dict | None = 
                 for functor, arity in item.specs:
                     db.mark_predicate_export(functor, arity)
                 continue
+            if item.name == "meta_predicate":
+                # Operator ruling 2026-09-25: Scryer's meta_predicate/1.
+                # Recorded BEFORE any clause compiles, so a caller compiled
+                # later in this load (or an importer) sees the specs.
+                for functor, arity, specs in item.specs:
+                    db.mark_meta_predicate(functor, arity, specs)
+                continue
             method_name = _directive_methods.get(item.name)
             if method_name is not None:
                 method = getattr(db, method_name)
@@ -1868,7 +1875,7 @@ def _locally_declared_names(module_items: list) -> frozenset[str]:
             # declared vocabulary just like the field-carrying form, recorded
             # as a directive item rather than an export tuple because it
             # declares a PREDICATE, not a data functor's slot layout.
-            names.update(functor for functor, _arity in item.specs)
+            names.update(functor for functor, _arity, *_ in item.specs)
         elif isinstance(item, HideDeclItem):
             names.update(item.items)
         elif isinstance(item, ImportFromItem):
@@ -2459,7 +2466,7 @@ def _predicate_functor_names(predicate_nodes: list, module_items: list) -> set:
     names = {head_key(node.head)[0] for node in predicate_nodes}
     for item in module_items:
         if isinstance(item, DirectiveItem):
-            names.update(functor for functor, _arity in item.specs)
+            names.update(functor for functor, _arity, *_ in item.specs)
         elif isinstance(item, SpecializeItem):
             names.add(item.new_name)
     return names

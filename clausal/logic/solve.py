@@ -1260,6 +1260,15 @@ def call(
     if trail is None:
         trail = Trail()
 
+    if module is not None and type(functor) is str:
+        # -meta_predicate (operator ruling 2026-09-25): a query names its
+        # module, so a declared predicate's meta-arguments are qualified
+        # with it -- as Scryer's toplevel expands a query goal.
+        _specs = module.db.meta_predicate_specs(functor, arity)
+        if _specs:
+            from clausal.logic.meta_predicate import qualify_args  # noqa: PLC0415
+            args = tuple(qualify_args(_specs, list(args), module.db))
+
     yield from _drive_trampoline(dispatch_fn, trail, *args)
 
 

@@ -104,8 +104,8 @@ def _resolve_nonterminal(db, rule_val, extra_args, context):
     A DCG body is not a goal tree -- ``phrase((a, b), L)`` never named a
     nonterminal here -- so those functors are turned away before the resolver
     can raise, and the silent failure they have always had is preserved.  A
-    module-qualified nonterminal is left out on the same ground: it resolved
-    to nothing here before, and making it work is a feature, not this sweep.
+    module-qualified nonterminal ``M:NT`` (what a ``-meta_predicate``
+    argument arrives as, operator ruling 2026-09-25) resolves NT in M.
 
     One resolver raise is deliberately NOT narrowed away: a dangling
     predicate HANDLE (a mangled functor whose module never loaded, or whose
@@ -115,7 +115,9 @@ def _resolve_nonterminal(db, rule_val, extra_args, context):
     refusal: a nonterminal name the caller binds only at another arity --
     ``phrase(b, L)`` against ``b/1`` asks for ``b/2`` -- raises
     ``PredicateArityMismatchError`` (ISO ``existence_error(procedure, b/2)``,
-    catchable; ruling Q3, 2026-09-25).  A name bound to nothing still fails.
+    catchable; ruling Q3, 2026-09-25).  Nor, since ruling 2 (2026-09-25),
+    the UNKNOWN nonterminal: ``phrase(nosuch, L)`` raises
+    ``existence_error(procedure, nosuch/2)`` -- N//A is N/(A+2) -- as Scryer.
     """
     from clausal.logic.builtins.higher_order import _resolve_named_goal  # noqa: PLC0415
     is_cell, functor = compound_cell_shape(rule_val)
@@ -130,6 +132,15 @@ def _resolve_nonterminal(db, rule_val, extra_args, context):
             # takes the same route (a dangling one raises, as in call/N).
             return _resolve_named_goal(db, rule_val, list(extra_args), context)
         return None
+    if functor == QUALIFIED_GOAL_FUNCTOR and len(rule_val) == 3:
+        # ``M:NT`` -- a -meta_predicate qualification (operator ruling
+        # 2026-09-25) puts a nonterminal argument in this shape: resolve the
+        # module, then the nonterminal in IT, with the same S0/S extras.
+        from clausal.logic.cells import resolve_qualified_goal_cell  # noqa: PLC0415
+        from clausal.logic.builtins.higher_order import _calling_module  # noqa: PLC0415
+        target, inner = resolve_qualified_goal_cell(
+            rule_val, context, _calling_module(db))
+        return _resolve_nonterminal(target.db, deref(inner), extra_args, context)
     if functor in CELL_GOAL_CONTROL_FUNCTORS or functor == QUALIFIED_GOAL_FUNCTOR:
         return None
     # Ruling C (2026-09-24), ISO call/N style: a nonterminal cell is built at

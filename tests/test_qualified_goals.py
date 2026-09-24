@@ -462,11 +462,18 @@ class TestQualifiedCallN:
         inner, _context = _error_term(exc_info.value)
         assert inner.args[0] == mint("callable_control_construct_unsupported")
 
-    def test_a_qualified_goal_naming_nothing_fails_silently(self, mods):
-        """The §4.2 contract: a name that resolves to nothing FAILS, and a
-        resolvable module does not change that."""
-        assert list(pcall("call_host1", (":", EXPORTER, ("nosuch", Var())),
-                          module=mods.importer)) == []
+    def test_a_qualified_goal_naming_nothing_raises_existence_error(self, mods):
+        """FLIPPED 2026-09-25 -- operator ruling 2 ("like Scryer"): a meta-call naming an UNKNOWN procedure raises ISO existence_error(procedure, Name/Arity), catchable; it used to fail silently (the retired §4.2 contract).
+
+        This used to be ``test_a_qualified_goal_naming_nothing_fails_silently``
+        ("a resolvable module does not change that")."""
+        from clausal.logic.exceptions import LogicException
+        with pytest.raises(LogicException) as exc:
+            list(pcall("call_host1", (":", EXPORTER, ("nosuch", Var())),
+                       module=mods.importer))
+        formal = exc.value.term.args[0]
+        assert formal.functor == "existence_error"
+        assert tuple(formal.args[1].args) == ("nosuch", 1)
 
     def test_call_over_a_qualified_cell_with_extras_dispatches_in_the_exporting_db(
             self, mods):

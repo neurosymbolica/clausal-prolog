@@ -7,7 +7,8 @@ from __future__ import annotations
 
 from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.logic.atoms import demangle, is_mangled
-from clausal.logic.exceptions import LogicException, string_goal_error
+from clausal.logic.exceptions import LogicException, existence_error, string_goal_error
+from clausal.terms import Compound
 from clausal.logic.trampoline import DONE, StepGenerator
 from clausal.logic.builtins.lists import _as_items, _seq_result, _was_string
 from clausal.logic.builtins._helpers import _is_empty_list, _standard_order_key
@@ -122,24 +123,25 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
     behave identically — is what makes this arm arity-general rather than
     ``== 2``.
 
-    Returns ``None`` — which the caller turns into a silent failure, the
-    behaviour every non-callable goal has had — when the goal is not a cell or
-    atom, when no db was threaded, or when the calling module binds the name
-    to NO predicate at all.  That last case is deliberate: the translator
-    session's pinned §4.2 contract is that a non-callable goal FAILS rather
-    than raising, and a name that resolves to nothing is exactly the same
-    non-goal it was before this task.  A resolvable module does not change
-    it: ``call(M:nosuch(X))`` fails.
+    Returns ``None`` — which the caller turns into a silent failure — only
+    when the goal is not a cell or atom, or when no db was threaded (nothing
+    to resolve a name against).
 
-    But a name the calling module DOES bind to a predicate, at another arity
-    only, RAISES: nothing answers at the folded arity, so this is the refusal
-    a body call at that arity gets (``_refuse_unqualified_other_arity``) --
-    ``PredicateArityMismatchError``, whose ``.term`` is ISO
-    ``error(existence_error(procedure, Name/Arity), _)`` and which ``catch/3``
-    catches (ruling Q3, 2026-09-25, "do what Scryer does").  Every caller of
-    this resolver inherits that raise: call/N, phrase/2,3, time_goal/1 and
-    every goal-first list builtin through ``_NamedGoal`` -- pinned per builtin
-    in ``tests/test_bare_predicate_name_in_source_is_the_plain_atom.py``.
+    A name that resolves to NO procedure RAISES ISO
+    ``existence_error(procedure, Name/Arity)``, catchable -- operator ruling
+    2 (2026-09-25, "like Scryer"), retiring the translator session's §4.2
+    "a non-callable goal fails" contract for this case; ``call(M:nosuch(X))``
+    with a resolvable M raises too.  A name the calling module binds to a
+    predicate at another arity only raises the same ISO term as
+    ``PredicateArityMismatchError`` -- the refusal a body call at that arity
+    gets (``_refuse_unqualified_other_arity``; ruling Q3, 2026-09-25).
+    Every caller of this resolver inherits both raises: call/N, phrase/2,3,
+    time_goal/1 and every goal-first list builtin through ``_NamedGoal`` --
+    pinned per builtin in
+    ``tests/test_bare_predicate_name_in_source_is_the_plain_atom.py``.
+
+    A resolved procedure declared ``-meta_predicate`` gets its meta-argument
+    positions qualified with the resolving module (``_meta_qualified``).
 
     The one exception is a MANGLED predicate handle (ruling 2, 2026-09-24):
     it is not a name the caller wrote but a reference that was supposed to
@@ -242,7 +244,8 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
     # lookup below (round 6 decision) -- see ``predicate.localize_owner_functor``.
     aliased = localize_owner_functor(db, functor, arity)
     if aliased is not None:
-        return aliased.dispatch_at(arity), call_args
+        return aliased.dispatch_at(arity), _meta_qualified(
+            db, functor, arity, call_args)
     dispatch = db.get_dispatch(functor, arity)
     if dispatch is None:
         dispatch = _namespace_dispatch(db, functor, arity)
@@ -262,8 +265,30 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
         if binding is not None and is_declared_predicate_name(binding, db=db):
             return _refuse_unqualified_other_arity(
                 binding, functor, arity, db), call_args
-        return None
-    return dispatch, call_args
+        # Ruling 2 (operator, 2026-09-25, "like Scryer"): a meta-call naming
+        # an UNKNOWN procedure raises ISO existence_error(procedure, N/A) --
+        # catchable -- where it used to fail silently (the old §4.2
+        # "a non-callable goal fails" contract, retired for this case).
+        _where = getattr(_calling_module(db), "name", None)
+        raise LogicException(existence_error(
+            "procedure", Compound("/", (functor, arity)),
+            f"{context}: no procedure {functor}/{arity} is defined in "
+            + (f"module {_where}" if _where else "the calling module")))
+    return dispatch, _meta_qualified(db, functor, arity, call_args)
+
+
+def _meta_qualified(db, functor, arity, call_args):
+    """*call_args* with the ``-meta_predicate`` positions of the procedure
+    ``functor/arity`` (as *db* means it) qualified with *db*'s module --
+    Scryer's ``expand_call_goal``.  A qualified goal ``M:G`` reaches here
+    with ``db`` = M's database, so G's meta-arguments are qualified with
+    M, as Scryer does.  Builtins carry no declaration and are untouched
+    (ruling 2A: they resolve in the module of the clause that calls them)."""
+    specs = db.meta_predicate_specs(functor, arity)
+    if not specs:
+        return call_args
+    from clausal.logic.meta_predicate import qualify_args  # noqa: PLC0415
+    return qualify_args(specs, list(call_args), db)
 
 
 def _calling_module(db):
@@ -353,6 +378,13 @@ def _make_call_goal_factory(extra_n: int):
             if localized is not goal_val:
                 dispatch = _ensure_trampoline_dispatch(localized, extra_n)
                 call_args = [deref(a) for a in args[1:extra_n + 1]]
+                # An imported name reached through its binding (a dotted
+                # import reference in data position stays the binding): the
+                # -meta_predicate positions are qualified under that name
+                # here, as the atom route does (operator ruling 2026-09-25).
+                _name = getattr(localized, "name", None)
+                if type(_name) is str:
+                    call_args = _meta_qualified(db, _name, extra_n, call_args)
             elif callable(goal_val) or hasattr(goal_val, '_get_dispatch'):
                 # extra_n is exactly what the goal will be called with.
                 dispatch = _ensure_trampoline_dispatch(goal_val, extra_n)

@@ -1,0 +1,149 @@
+"""``-meta_predicate(p(1, ?))``: module-qualify a meta-argument at the call.
+
+Operator ruling 2026-09-25 (ruling 1, "follow Scryer").  Ruling S makes a
+predicate name passed as data the PLAIN atom, so a higher-order predicate in
+another module used to look that atom up in ITS OWN module.  Scryer's answer
+is the meta_predicate declaration: at a call of a declared predicate, every
+argument whose spec is ``:`` or a non-negative integer is qualified with the
+CALLER's module (``M:G``) unless it is already qualified; ``?``/``+``/``-``
+arguments are untouched.  Scryer's ``loader.pl``::
+
+    qualified_spec((:)).
+    qualified_spec(MS) :- integer(MS), MS >= 0.
+
+    expand_module_name(ESG0, MS, M, ESG) :-
+        (  var(ESG0) -> ( M == user -> ESG = ESG0 ; ESG = M:ESG0 )
+        ;  ESG0 = _:_ -> ESG = ESG0
+        ;  ... built_in ... -> ESG = ESG0
+        ;  ESG = M:ESG0 ).
+
+and its ``setup_meta_predicate`` (``src/machine/preprocessor.rs``) accepts
+exactly ``+``, ``-``, ``?``, ``:`` and integers ``0..MAX_ARITY`` -- ``^``
+and ``//`` are an ``InvalidMetaPredicateDecl`` there, so they are refused
+here too.
+
+The qualified goal is the runtime cell ``(":", M, G)`` -- the spelling
+``call/N``'s qualified arm, ``solve`` and ``resolve_qualified_goal_cell``
+already resolve -- so it reaches maplist & co., phrase and time_goal inside
+the callee through the existing qualified-goal path.
+
+Where it happens: at the CALL SITE.  A compiled body call whose callee the
+compiler resolves (``terms_to_goalop``'s ``SubCall``) wraps each qualifying
+argument in :class:`MetaArg`, which lowers to ``$meta_qualify($meta_db, A)``:
+the decision is static, the wrapping is at run time (the argument may be a
+variable bound to an already-qualified goal, which Scryer also leaves
+alone).  ``call/N`` (``higher_order._resolve_named_goal``) and the Python
+``solve.call`` entry qualify when THEY resolve a declared predicate, with the
+module they resolved it in -- Scryer's ``expand_call_goal``.
+"""
+from __future__ import annotations
+
+import sys
+from typing import Any
+
+from clausal.logic.variables import deref
+
+QUALIFIED = ":"
+
+#: The spec atoms Scryer accepts besides integers.
+DATA_SPECS = frozenset({"+", "-", "?"})
+
+
+def is_qualifying_spec(spec: Any) -> bool:
+    """Scryer's ``qualified_spec/1``: ``:`` or an integer >= 0."""
+    return spec == QUALIFIED or (type(spec) is int and spec >= 0)
+
+
+def valid_spec(spec: Any) -> bool:
+    return spec in DATA_SPECS or is_qualifying_spec(spec)
+
+
+def module_designator(db: Any) -> Any:
+    """The designator a qualification written in *db*'s module carries: the
+    module's NAME (an atom, as Scryer writes ``M:G``) when that name resolves
+    back to this very module, else the ``Module`` object itself -- which
+    ``resolve_module`` accepts too, so a module the ``.clausal`` runner popped
+    from ``sys.modules`` still resolves."""
+    md = getattr(db, "module_dict", None)
+    module = md.get("$module") if isinstance(md, dict) else None
+    if module is None:
+        return None
+    name = getattr(module, "name", None)
+    if isinstance(name, str):
+        found = sys.modules.get(name)
+        if found is module or getattr(found, "__clausal_module__", None) is module:
+            return name
+    return module
+
+
+def _already_qualified(value: Any) -> bool:
+    from clausal.logic.atoms import is_mangled  # noqa: PLC0415
+    v = deref(value)
+    if type(v) is tuple and len(v) == 3 and v[0] == QUALIFIED:
+        return True
+    # A predicate HANDLE names its module inside the atom.
+    return type(v) is str and is_mangled(v)
+
+
+def qualify(designator: Any, value: Any) -> Any:
+    """``M:Value`` unless *value* is already qualified (or no module)."""
+    if designator is None or _already_qualified(value):
+        return value
+    return (QUALIFIED, designator, value)
+
+
+def qualify_in_db(db: Any, value: Any) -> Any:
+    """``$meta_qualify``: the compiled call site's runtime half."""
+    return qualify(module_designator(db), value)
+
+
+def qualify_args(specs: "tuple | None", args: list, db: Any) -> list:
+    """*args* with every qualifying-spec position qualified with *db*'s
+    module; *args* itself when there is nothing to do."""
+    if not specs or len(specs) != len(args):
+        return args
+    designator = module_designator(db)
+    if designator is None:
+        return args
+    return [qualify(designator, a) if is_qualifying_spec(s) else a
+            for s, a in zip(specs, args)]
+
+
+def meta_specs_for_call(db: Any, fname: str, arity: int) -> "tuple | None":
+    """The ``-meta_predicate`` specs of the callee a compiled body call
+    ``fname(...)`` at *arity* reaches from *db*'s module, or ``None``.
+
+    The row first (a local predicate, or an import's adopted row under the
+    local name).  Then the DOTTED spelling: ``-import_from`` rewrites every
+    reference to an imported predicate into the exporter's ``pkg.mod.p``,
+    which is a module-dict key, not a Database key -- resolved to the
+    binding's own row exactly as ``arg_index.hint_row`` does.  A dotted call
+    the author wrote as such is indistinguishable here, so it too is
+    qualified with the CALLING module (Scryer would qualify ``m:p(G)``'s G
+    with ``m``); recorded in the ruling's report.
+    """
+    specs = db.meta_predicate_specs(fname, arity)
+    if specs is not None or "." not in fname:
+        return specs
+    md = getattr(db, "module_dict", None)
+    if not isinstance(md, dict) or fname not in md:
+        return None
+    from clausal.logic.predicate import resolve_predicate_row  # noqa: PLC0415
+    row = resolve_predicate_row(md[fname], arity=arity, db=db)
+    if row is None or row.key[1] != arity:
+        return None
+    return row.db._meta_specs.get(row.key)
+
+
+class MetaArg:
+    """Compiler IR marker: a call argument in a qualifying meta position.
+    ``term_to_ast_expr`` lowers it to ``$meta_qualify($meta_db, <value>)``.
+    The child is ``.value`` so the compiler's generic single-child walkers
+    (``_vars._collect_var_ids``) see the variables inside."""
+    __slots__ = ("value",)
+
+    def __init__(self, value: Any) -> None:
+        self.value = value
+
+    def __repr__(self) -> str:
+        return f"MetaArg({self.value!r})"

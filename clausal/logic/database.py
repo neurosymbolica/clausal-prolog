@@ -571,6 +571,11 @@ class Database:
         self._dynamic: set[tuple[str, int]] = set()
         self._discontiguous: set[tuple[str, int]] = set()
         self._tabled: set[tuple[str, int]] = set()
+        # ``-meta_predicate(p(1, ?))`` (operator ruling 2026-09-25, Scryer's
+        # meta_predicate/1): (functor, arity) -> the spec tuple, e.g.
+        # ``(1, "?")``.  Deliberately NOT a home store: a declaration alone
+        # does not make a predicate known.  See ``meta_predicate_specs``.
+        self._meta_specs: dict[tuple[str, int], tuple] = {}
         # This module's own term_expansion clauses (simple_ast Predicate
         # nodes), recorded by ``run_term_expansion`` so an importer of
         # ``term_expansion`` can apply them.  ``None`` when it defines none.
@@ -1451,6 +1456,27 @@ class Database:
     def is_shallow(self, functor: str, arity: int) -> bool:
         """True if the predicate was declared -shallow."""
         return (functor, arity) in self._shallow
+
+    def mark_meta_predicate(self, functor: str, arity: int, specs: tuple) -> None:
+        """Record ``-meta_predicate(functor(Spec, ...))`` -- one spec per
+        argument: an int ``0..N`` (a goal missing N arguments), ``":"``
+        (module-sensitive), or ``"?"``/``"+"``/``"-"`` (plain data)."""
+        specs = tuple(specs)
+        if len(specs) != arity:
+            raise ValueError(
+                f"-meta_predicate: {functor}/{arity} given {len(specs)} spec(s)")
+        self._meta_specs[(functor, arity)] = specs
+
+    def meta_predicate_specs(self, functor: str, arity: int) -> "tuple | None":
+        """The meta-predicate specs of the predicate ``functor/arity`` MEANS
+        here, or ``None``.  Asked through the ROW, so an ``-import_from``'d
+        predicate (an adopted row, aliased or not) answers its OWNER's
+        declaration under the owner's key; a local declaration with no row
+        yet answers from this database."""
+        row = self.row(functor, arity)
+        if row is not None and row.db is not self:
+            return row.db._meta_specs.get(row.key)
+        return self._meta_specs.get((functor, arity))
 
     @property
     def table_store(self) -> dict:
