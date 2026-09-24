@@ -12,6 +12,7 @@ from clausal.logic.trampoline import DONE, StepGenerator
 from clausal.logic.builtins.lists import _as_items, _seq_result, _was_string
 from clausal.logic.builtins._helpers import _is_empty_list, _standard_order_key
 from clausal.logic.predicate import (
+    _refuse_unqualified_other_arity,
     is_declared_predicate_name, localize_goal, localize_owner_functor,
 )
 
@@ -238,6 +239,18 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
         # Only AFTER the lookups: a ``-hide`` atom carries its bare declared
         # module name, and the calling db may define it under that spelling.
         _raise_if_unloaded_handle(functor, arity, context)
+        # Nothing answers at this arity, but the calling module binds the
+        # NAME to a predicate at another: the refusal a body call
+        # ``citation(x)`` gets (name+arity ruling, 2026-09-24: "keep the
+        # refusal where nothing else answers").  Needed since ruling S made
+        # ``maplist(citation, L)`` pass the ATOM rather than the binding,
+        # which ``_dispatch_at`` used to refuse the same way.
+        module_dict = getattr(db, "module_dict", None)
+        binding = (module_dict.get(functor)
+                   if isinstance(module_dict, dict) else None)
+        if binding is not None and is_declared_predicate_name(binding, db=db):
+            return _refuse_unqualified_other_arity(
+                binding, functor, arity, db), call_args
         return None
     return dispatch, call_args
 
@@ -962,6 +975,62 @@ _GOAL_FIRST_LIST_BUILTINS = (
 )
 
 
+class _NamedGoal:
+    """A goal that arrived as a NAME -- a plain atom ``b`` or a cell
+    ``add(1)`` -- handed to a goal-first list builtin, which can only run a
+    goal object.  Operator ruling 2026-09-24 (ruling S's consequence): a bare
+    predicate name in data position is its PLAIN atom, so ``maplist(b, L)``
+    now passes ``'b'``, and it must resolve by name in the CALLER's module
+    exactly as ``call(b, X)`` does.
+
+    Not a second resolver: ``_get_dispatch`` answers a trampoline function
+    that, handed the builtin's extras, runs the caller's own ``call/N``
+    (``_make_call_goal_factory``) with this goal first -- the ISO fold
+    (``call(add(1), X, Y)`` is ``add(1, X, Y)``), the namespace and qualified
+    lookups, and the silent failure for a name that resolves to nothing all
+    come from there.  Arity-free on purpose: the extras count is known only
+    at the call, and ``_dispatch_at`` hands a non-``PredicateMeta`` object to
+    its plain ``_get_dispatch()``.
+    """
+    __slots__ = ("db", "goal", "_by_extras")
+
+    def __init__(self, db, goal) -> None:
+        self.db = db
+        self.goal = goal
+        self._by_extras = {}
+
+    def _get_dispatch(self):
+        db, goal, cache = self.db, self.goal, self._by_extras
+
+        def _named_goal(this_generator, _proceed, _fail, _catcher, *args):
+            n = len(args) - 1                  # args = (*extras, trail)
+            call_n = cache.get(n)
+            if call_n is None:
+                factory = _DB_BUILTINS.get(("call", n + 1))
+                if factory is None:            # past call/8: nothing answers
+                    return _fails(_fail)
+                call_n = cache[n] = factory(db)
+            return call_n(this_generator, _proceed, _fail, _catcher, goal, *args)
+        return _named_goal
+
+    def __repr__(self) -> str:
+        return f"_NamedGoal({self.goal!r})"
+
+
+def _fails(_fail):
+    yield (_fail, DONE)
+
+
+def _as_named_goal(db, goal):
+    """*goal* wrapped as a ``_NamedGoal`` when it is a NAME the list builtins
+    cannot run themselves (a plain atom or a cell); anything else unchanged."""
+    if type(goal) is str and not is_declared_predicate_name(goal):
+        return _NamedGoal(db, goal)
+    if type(goal) is tuple and compound_cell_shape(goal)[0]:
+        return _NamedGoal(db, goal)
+    return goal
+
+
 def _make_localizing_factory(impl):
     def factory(db):
         if db is None:
@@ -969,7 +1038,8 @@ def _make_localizing_factory(impl):
 
         def _localized(this_generator, _proceed, _fail, _catcher, goal, *rest):
             return impl(this_generator, _proceed, _fail, _catcher,
-                        localize_goal(db, deref(goal)), *rest)
+                        _as_named_goal(db, localize_goal(db, deref(goal))),
+                        *rest)
         _localized.__name__ = impl.__name__
         return _localized
     factory._db_optional = True

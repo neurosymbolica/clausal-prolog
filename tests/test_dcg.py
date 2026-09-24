@@ -1062,14 +1062,17 @@ class TestConsRuleRetirementDCGAudit:
         assert _succeeds("phrase", cls, [mint("h"), mint("i")], module=mod)
         assert not _succeeds("phrase", cls, [mint("h"), mint("o")], module=mod)
 
-    def test_phrase_bare_str_rule_reference_fails_cleanly(self, tmp_path):
-        # nv — a bare str standing in for the RULE (not the input list) is
-        # not a nonterminal reference; phrase/2 fails cleanly (yields no
-        # solution) rather than silently treating the str as some
-        # cons-decomposed goal shape.
+    def test_phrase_bare_atom_rule_reference_names_the_nonterminal(self, tmp_path):
+        # nv — FLIPPED 2026-09-24 (operator ruling S): this pinned that a
+        # bare atom standing in for the RULE does NOT resolve.  A bare
+        # predicate name in data position is now its PLAIN atom, so the atom
+        # is exactly what source ``phrase(hi, L)`` passes; it names hi//0 and
+        # resolves in the calling module like call/N.
         src = 'hi >> (["h", "i"])\n'
         mod = _load("t5_dcg2", src, tmp_path)
-        assert not _succeeds("phrase", "hi", ["h", "i"], module=mod)
+        assert _succeeds("phrase", "hi", ["h", "i"], module=mod)
+        assert not _succeeds("phrase", "hi", ["h", "o"], module=mod)
+        assert not _succeeds("phrase", "nosuch", ["h", "i"], module=mod)
 
 
 # ── String / bytes terminals in rule bodies (R3) ─────────────────────────────

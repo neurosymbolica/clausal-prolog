@@ -17,5 +17,7 @@ fib(N, F) <- (
     F == F1 + F2
 )
 
+# Since ruling S (2026-09-24) a bare `fib` here is the ATOM fib, naming fib/0
+# (spec 6.4); the class form is driven from Python in tests/test_listing.py.
 debug_fib_by_class() <- listing(fib)
 debug_fib_by_indicator() <- listing(fib/2)

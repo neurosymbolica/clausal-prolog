@@ -381,7 +381,18 @@ class TestListingDivIndicatorArgument:
                 _sys.stdout = saved
             return buf.getvalue()
 
-        out_class = _capture("debug_fib_by_class")
+        # The CLASS form is passed from Python: in source, ``listing(fib)``
+        # now passes the plain ATOM ``fib`` (ruling S, 2026-09-24), which
+        # names fib/0 (spec 6.4) -- so the fixture's ``debug_fib_by_class``
+        # no longer reaches the class.
+        buf = _io.StringIO()
+        saved = _sys.stdout
+        _sys.stdout = buf
+        try:
+            list(call("listing", mod.fib, module=m))
+        finally:
+            _sys.stdout = saved
+        out_class = buf.getvalue()
         out_indicator = _capture("debug_fib_by_indicator")
         assert out_indicator == out_class
         assert "fib/2" in out_class

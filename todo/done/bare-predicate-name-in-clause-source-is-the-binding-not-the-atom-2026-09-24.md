@@ -95,3 +95,34 @@ B. Keep the binding in clause source (close this todo as "intended"), and
 Recommendation: A -- it also fixes the query side, which under ruling S is
 already handing maplist a plain atom and getting a silent 0. Nothing applied;
 the lowering diff is above and trivially re-created.
+
+## Resolved (2026-09-24, operator ruling: option A; branch fix/small-todos-batch-2026-09-24)
+
+1. **Goal-first list builtins resolve a NAME in the caller.** `higher_order._NamedGoal`:
+   the 16 localizing list builtins (`_make_localizing_factory`) wrap a plain
+   atom or a cell goal in an adapter whose dispatch runs the caller's own
+   `call/N` with the goal first -- no second resolver (ISO fold, namespace,
+   qualified and aliased lookups all from `call/N`).
+2. **`phrase/2,3` and `time_goal/1`** get an ATOM arm through the same
+   `_resolve_named_goal`. The old pin `test_phrase_bare_str_rule_reference_fails_cleanly`
+   ("P4 will need the atom's arm and this pin has to flip") is flipped.
+3. **`_resolve_named_goal`**: when nothing answers at the arity but the caller
+   binds the NAME to a predicate at another arity, it raises the body call's
+   refusal (`_refuse_unqualified_other_arity`) -- which the class used to give
+   through `_dispatch_at` (`maplist(citation, L)` against citation/3).
+4. **The lowering** (`terms_to_ast` LoadName arm): a bare name bound to a
+   declared predicate bakes `mint(plain name)`; a `-hide` DATA atom keeps its load.
+
+Behaviour changes pinned with notes: `maplist(nl(3), [L])` now folds like
+`call(nl(3), L)` (f7 `mm`); `call(pk(3), X)` at an arity nothing answers
+raises the refusal instead of failing (f7); source `listing(fib)` passes the
+atom, naming fib/0 per spec 6.4 (listing test drives the class from Python;
+`listing(fib/2)` is the spelling). Not changed: listing/1 of a bare atom
+still means `/0` -- if the operator wants SWI's "all arities", that is a
+separate decision (io.py).
+
+Tests: `tests/test_bare_predicate_name_in_source_is_the_plain_atom.py` (both
+eras: class and `mint_predicate_handle`); the 25 previously broken tests pass.
+Mutations (each reverted): no lowering -> 3 fail; no `_NamedGoal` atom arm ->
+24 fail; no other-arity refusal -> 21 fail; no phrase atom arm -> 5 fail; no
+time_goal atom arm -> 1 fails.

@@ -701,6 +701,22 @@ def term_to_ast_expr(
         )
 
     if isinstance(term, LoadName):
+        # Ruling S (2026-09-24) for CLAUSE SOURCE: a bare name bound to a
+        # PREDICATE, in data position, is the plain atom of its name -- the
+        # same literal the value arms below bake for an already-resolved
+        # class or handle.  A runtime ``Name`` load would hand over the
+        # binding itself (the class today, the mangled handle after the
+        # flip).  The zero-arity case never gets here (the rewriter already
+        # lowers a bare ``z`` to ``'z'``); a ``-hide`` DATA atom is not a
+        # declared predicate, so it keeps its load and its mangled spelling.
+        # A goal-taking builtin handed the atom resolves it by name in the
+        # caller (``higher_order._NamedGoal``, ``call/N``).
+        namespace = lowering_globals()
+        if namespace is not None and "." not in term.name:
+            _pred_name = predicate_binding_name(
+                namespace.get(term.name), db=_lowering_db())
+            if _pred_name is not None:
+                return ast.Constant(value=_mint_atom(_pred_name))
         return _name(term.name)
 
     # Bare (non-Call) LoadAttr in value position: a module-qualified atom used

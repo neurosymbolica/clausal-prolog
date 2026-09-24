@@ -75,6 +75,14 @@ def _goal_dispatch_and_args(goal_val, db=None, context="time_goal/1"):
         # an unqualified name resolves under that name in the calling module.
         return _ensure_trampoline_dispatch(localize_goal(db, goal_val), 0), ()
     is_cell, functor = compound_cell_shape(goal_val)
+    if (type(goal_val) is str and goal_val and db is not None
+            and goal_val not in CELL_GOAL_CONTROL_FUNCTORS):
+        # A bare ATOM names the goal: ruling S (2026-09-24) makes
+        # ``time_goal(citation)`` pass the plain atom, not the class.  Same
+        # resolver as the cell arm below (and as call/1).
+        from clausal.logic.builtins.higher_order import _resolve_named_goal  # noqa: PLC0415
+        resolved = _resolve_named_goal(db, goal_val, (), context)
+        return resolved if resolved is not None else (None, None)
     if is_cell and functor not in CELL_GOAL_CONTROL_FUNCTORS and functor != QUALIFIED_GOAL_FUNCTOR:
         from clausal.logic.builtins.higher_order import _resolve_named_goal  # noqa: PLC0415
         resolved = _resolve_named_goal(db, goal_val, (), context)

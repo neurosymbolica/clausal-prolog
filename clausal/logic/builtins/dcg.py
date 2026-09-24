@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from clausal.logic.atoms import is_mangled
+
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.predicate import (
     is_term_instance, term_field_names, _dispatch_at,
@@ -116,12 +118,14 @@ def _resolve_nonterminal(db, rule_val, extra_args, context):
     from clausal.logic.builtins.higher_order import _resolve_named_goal  # noqa: PLC0415
     is_cell, functor = compound_cell_shape(rule_val)
     if not is_cell:
-        # A CELL only.  A bare atom naming a 0-arity nonterminal is pinned
-        # NOT to resolve here (``test_phrase_bare_str_rule_reference_fails_
-        # cleanly``) and does not need to: while predicate CLASSES exist the
-        # arm above answers ``phrase(greeting, L)``.  When P4 retires the
-        # class this has to become the atom's arm and that pin has to flip --
-        # a ruling for P4, not a side effect of this sweep.
+        if type(rule_val) is str and rule_val and not is_mangled(rule_val):
+            # A bare ATOM names the nonterminal: ruling S (2026-09-24) makes
+            # ``phrase(greeting, L)`` pass the plain atom ``greeting``, not the
+            # class, so this is the atom's arm the old pin
+            # (``test_phrase_bare_str_rule_reference_fails_cleanly``, now
+            # flipped) said P4 would need.  It contributes no arguments of its
+            # own: S0/S are the whole call, ``greeting/2``.
+            return _resolve_named_goal(db, rule_val, list(extra_args), context)
         return None
     if functor in CELL_GOAL_CONTROL_FUNCTORS or functor == QUALIFIED_GOAL_FUNCTOR:
         return None
