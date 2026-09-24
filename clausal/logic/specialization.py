@@ -1375,20 +1375,16 @@ def _make_solve_goal_predicate(
             pred = module_dict.get(functor)
             # W4b-3 (found by review): after the flip the binding is a
             # module-qualified HANDLE with no ``_get_dispatch``; unaccepted,
-            # it fell to "Unknown goal" below and failed silently.  A handle
-            # carries no arity, so it resolves at the goal's own -- a wrong
-            # arity then raises PredicateArityMismatchError (a TypeError),
-            # where the class arm's bare ``_get_dispatch()`` gets a raw
-            # TypeError from the positional call.  The class arm is kept
-            # as it was.
+            # it fell to "Unknown goal" below and failed silently.  Both
+            # shapes resolve through ``_dispatch_at`` at the goal's own
+            # arity, so a wrong-arity goal raises PredicateArityMismatchError
+            # (a TypeError) in both eras -- the class arm used to call a bare
+            # ``_get_dispatch()`` and fail with a raw positional TypeError.
             if pred is not None and (
                     hasattr(pred, '_get_dispatch')
                     or is_declared_predicate_name(pred)):
                 from clausal.logic.trampoline import StepGenerator
-                if hasattr(pred, '_get_dispatch'):
-                    dispatch_fn = pred._get_dispatch()
-                else:
-                    dispatch_fn = _dispatch_at(pred, len(args))
+                dispatch_fn = _dispatch_at(pred, len(args))
                 sg = StepGenerator(dispatch_fn, this_generator, this_generator, this_generator, *args, trail)
                 st = yield (sg, None)
                 while st is not DONE:

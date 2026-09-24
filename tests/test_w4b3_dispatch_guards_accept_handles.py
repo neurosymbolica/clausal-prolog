@@ -43,6 +43,7 @@ step(1, 0, 1),
 step(2, 1, 3),
 step(-1, 3, 2),
 last(1, 1),
+ping(1, 2),
 holds(secret),
 greeting >> (["hi"])
 go <- is_pos(3)
@@ -60,6 +61,27 @@ def lm(tmp_path):
     p.write_text(_SRC.format(name=name))
     mod = _load_module(name, str(p))
     assert sys.modules[name] is mod
+    try:
+        yield mod.__dict__["$module"]
+    finally:
+        sys.modules.pop(name, None)
+
+
+_OWNER_SRC = """\
+-module({name}, [])
+ping <- (1 > 0)
+last(1),
+"""
+
+
+@pytest.fixture
+def owner(tmp_path):
+    """A second loaded module defining ``ping/0`` and ``last/1`` -- names the
+    ``lm`` module (or a builtin) owns at a DIFFERENT arity."""
+    name = f"w4b3own_{next(_counter)}"
+    p = tmp_path / f"{name}.clausal"
+    p.write_text(_OWNER_SRC.format(name=name))
+    mod = _load_module(name, str(p))
     try:
         yield mod.__dict__["$module"]
     finally:
@@ -151,6 +173,15 @@ class TestPhrase:
         rest = Var()
         got = _answers("phrase", (rule, [mint("hi"), mint("x")], rest), lm, [rest])
         assert got == [([mint("x")],)]
+
+    @pytest.mark.parametrize("which", ["class", "handle"])
+    def test_phrase_2_wrong_arity_refuses(self, lm, which):
+        """``is_pos/1`` used as a nonterminal is called at 2 (S0, S): the
+        refusal names the arity, in both eras."""
+        cls, h = _both(lm, "is_pos")
+        rule = cls if which == "class" else h
+        with pytest.raises(PredicateArityMismatchError):
+            list(call("phrase", rule, [mint("hi")], module=lm))
 
     def test_a_data_atom_is_still_not_a_rule(self, lm):
         assert list(call("phrase", _secret(lm), [mint("hi")], module=lm)) == []
@@ -283,6 +314,88 @@ class TestInjectResolvedTargets:
         bg = self._inject(lm, {("key", 2)}, flip)
         assert bg.get(_disp_key("key", 2)) is row.dispatch_fn
 
+    # -- an applied target takes a handle only at ITS arity (review round 2)
+    #
+    # ``is_declared_predicate_name`` is arity-blind; the early accept runs
+    # before the builtin lookup and ``_atom_shadows_row``, so an arity-blind
+    # accept would keep a handle naming ``name`` at SOME arity for EVERY
+    # arity.  These pin the handle era only: the class arm still accepts any
+    # class (``hasattr(_get_dispatch)``), unchanged -- see the report.
+
+    def test_a_local_predicate_beats_an_owner_handle_at_another_arity(
+            self, lm, owner):
+        from clausal.logic.compiler.globals_env import (
+            _DbDispatchAdapter, _inject_resolved_targets,
+        )
+        from clausal.logic.predicate import _dispatch_at, is_declared_predicate
+        from clausal.logic.solve import _drive_trampoline
+        from clausal.logic.variables import Trail
+        h = mangle(owner.name, "ping")
+        assert is_declared_predicate(h, arity=0)          # the owner has ping/0
+        assert not is_declared_predicate(h, arity=2)
+        assert lm.db.row("ping", 2) is not None           # the local has ping/2
+        globals_ = dict(lm.module_dict)
+        globals_["ping"] = h
+        base_globals = dict(globals_)
+        _inject_resolved_targets({("ping", 2)}, base_globals, lm.db, globals_)
+        target = base_globals["ping"]
+        assert isinstance(target, _DbDispatchAdapter)
+        fn = _dispatch_at(target, 2)
+        assert len(list(_drive_trampoline(fn, Trail(), 1, 2))) == 1
+
+    def test_a_builtin_beats_a_handle_at_another_arity(self, lm, owner):
+        from clausal.logic.builtins import BuiltinPredicate
+        from clausal.logic.compiler.globals_env import _inject_resolved_targets
+        from clausal.logic.predicate import is_declared_predicate
+        h = mangle(owner.name, "last")
+        assert is_declared_predicate(h, arity=1)          # owner has last/1
+        globals_ = {"last": h}                            # no local last/2
+        base_globals = dict(globals_)
+        _inject_resolved_targets({("last", 2)}, base_globals, owner.db, globals_)
+        bp = base_globals["last"]
+        assert isinstance(bp, BuiltinPredicate)
+        # and it answers as the builtin last/2 does
+        from clausal.logic.predicate import _dispatch_at
+        from clausal.logic.solve import _drive_trampoline
+        from clausal.logic.variables import Trail
+        fn = _dispatch_at(bp, 2)
+        assert len(list(_drive_trampoline(fn, Trail(), [4, 5], 5))) == 1
+
+    def test_a_handle_at_its_own_arity_is_still_accepted(self, lm, owner):
+        from clausal.logic.compiler.globals_env import _inject_resolved_targets
+        h = mangle(owner.name, "last")
+        globals_ = {"last": h}
+        base_globals = dict(globals_)
+        _inject_resolved_targets({("last", 1)}, base_globals, owner.db, globals_)
+        assert base_globals["last"] is h
+
+    def test_a_data_reference_keeps_a_handle(self, lm, owner):
+        from clausal.logic.compiler.globals_env import _inject_resolved_targets
+        h = mangle(owner.name, "ping")
+        globals_ = {"ping": h}
+        base_globals = dict(globals_)
+        _inject_resolved_targets({("ping", -1)}, base_globals, lm.db, globals_)
+        assert base_globals["ping"] is h
+
+    def test_dotted_applied_at_another_arity_takes_the_attribute_walk(
+            self, lm, owner):
+        """The dotted key holds a handle at /0; the call is /2; the walk
+        finds the module attribute that IS /2 and bakes its dispatch."""
+        import types
+        from clausal.logic.compiler.globals_env import (
+            _disp_key, _inject_resolved_targets,
+        )
+        list(call("ping", 1, 2, module=lm))   # compile it
+        row = lm.db.row("ping", 2)
+        assert row.locked and row.dispatch_fn is not None
+        attr = _handle(lm, "ping")
+        globals_ = {"X": types.SimpleNamespace(ping=attr),
+                    "X.ping": mangle(owner.name, "ping")}
+        base_globals = dict(globals_)
+        _inject_resolved_targets({("X.ping", 2)}, base_globals, lm.db, globals_)
+        assert base_globals["X.ping"] is attr
+        assert base_globals.get(_disp_key("X.ping", 2)) is row.dispatch_fn
+
     # -- dotted names (review, 2026-09-24) ---------------------------------
     #
     # A dotted target (``mod.last``) resolves by one of three routes: the
@@ -359,12 +472,12 @@ class TestSpecializerSolveGoal:
 
     @pytest.mark.parametrize("era", ["class", "handle"])
     def test_wrong_arity_raises_in_both_eras(self, lm, era):
-        """Class: a raw TypeError from the positional call (unchanged).
-        Handle: resolved at the goal's own arity, so PredicateArityMismatchError
-        -- itself a TypeError."""
+        """Both shapes resolve through ``_dispatch_at`` at the goal's arity,
+        so both raise PredicateArityMismatchError (a TypeError subclass, so
+        an ``except TypeError`` still catches it)."""
+        assert issubclass(PredicateArityMismatchError, TypeError)
         sg = self._dispatcher(lm, era)
-        expected = TypeError if era == "class" else PredicateArityMismatchError
-        with pytest.raises(expected):
+        with pytest.raises(PredicateArityMismatchError):
             list(call(sg, ["is_pos", 1, 2]))
 
     def test_a_data_atom_is_still_an_unknown_goal(self, lm):

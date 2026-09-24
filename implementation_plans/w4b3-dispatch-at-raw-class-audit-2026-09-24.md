@@ -1,8 +1,8 @@
 # W4b-3 prerequisite: raw `PredicateMeta` classes reaching `_dispatch_at` — audit 2026-09-24
 
-Read-only audit of canonical `main` @ `dde50d49`. Probes ran in a detached worktree
-`/workspace/_dispaudit` (same sha; `.so` copied from `_lockloop` @ 453e5188, no C diff
-vs main under `clausal/**/*.c|h`). Every claim is tagged **MEASURED** or **READ**.
+Read-only audit of canonical `main` @ `dde50d49`. Probes ran in a detached worktree at
+the same sha, with compiled extensions built from 453e5188 (no C diff vs main under
+`clausal/**/*.c|h`). Every claim is tagged **MEASURED** or **READ**.
 
 ## 1. What the class arm does (READ)
 
@@ -147,7 +147,19 @@ globals_env.py:627 ... or is_declared_predicate_name(existing)
 
 These do not change behaviour before the flip: the class arms still answer first, and today
 the only mangled bindings are held handles, where the change is the intended one.
-Full trial diff (all six files): `/tmp/claude-1000/-workspace-clausal-bug-fix/12aec789-b136-4843-8455-ea948d075bf0/scratchpad/trial.diff`; worktree `/workspace/_dispaudit` still holds it plus the instrumentation.
+The trial diff was exactly the six lines above (plus folding the 8 inline guards into
+`_is_goal`); it was never committed.
+
+As landed on `fix/w4b3-dispatch-conversions-2026-09-24`, two of the sketch lines were
+changed on review, because each DID change behaviour before the flip:
+- `_registry.py`: the handle arm goes AFTER the class arm (`is_declared_predicate_name` is
+  also true of a class, so a first arm would send a class with `arity=None` through
+  `_dispatch_at(cls, 0)` and its arity refusal), and a handle with no arity raises
+  `TypeError` instead of guessing 0.
+- `globals_env.py`: an APPLIED target (arity >= 0) accepts a handle only via
+  `is_declared_predicate(existing, arity=target_arity)`; the arity-blind accept kept a
+  handle naming `name` at another arity for every arity, pre-empting the builtin lookup,
+  `_atom_shadows_row` and the dotted routing.
 
 ## 7. Silent-selector hazards (the recurring failure mode)
 

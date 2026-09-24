@@ -629,9 +629,17 @@ def _inject_resolved_targets(
         # HANDLE with no ``_get_dispatch``.  Unaccepted here it falls through
         # to the builtin lookup below (a same-named builtin then wins over the
         # user predicate) and a locked predicate loses its ``$disp_`` bake.
+        # An APPLIED target accepts a handle only at its own arity: a handle
+        # naming ``name`` at some other arity is not this call's target, and
+        # falls through to the builtin lookup / ``_atom_shadows_row`` / the
+        # dotted routing exactly as any other non-predicate binding does
+        # (review round 2).  A data reference (arity -1) has no arity to
+        # match, and keeps the binding either way.
         if existing is not None and (
                 hasattr(existing, "_get_dispatch")
-                or is_declared_predicate_name(existing)):
+                or (is_declared_predicate(existing, arity=target_arity)
+                    if target_arity >= 0
+                    else is_declared_predicate_name(existing))):
             if isinstance(existing, BuiltinPredicate):
                 builtin = get_builtin_predicate(target_name, target_arity, db)
                 if builtin is not None and builtin._arity != existing._arity:
