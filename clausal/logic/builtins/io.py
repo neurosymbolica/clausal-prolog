@@ -8,7 +8,9 @@ from __future__ import annotations
 import sys as _sys
 
 from clausal.logic.atoms import (
+    demangle,
     is_atom as _term_is_atom,
+    is_mangled,
     spelling,
 )
 from clausal.logic.cells import (
@@ -33,6 +35,7 @@ from clausal.logic.runtime._seg_helpers import normalize_seg_input
 from clausal.logic.predicate import (
     PredicateMeta, is_term_instance, term_field_names,
     term_field_names_of_class, resolve_predicate_row,
+    is_declared_predicate_name,
 )
 from clausal.logic.exceptions import (
     LogicException, type_error, domain_error, existence_error,
@@ -534,7 +537,7 @@ def _format_clause(clause):
 # ── listing/1 ────────────────────────────────────────────────────────────────
 
 
-def _as_name_arity_indicator(val):
+def _as_name_arity_indicator(val, db=None):
     """Recognize *val* as a ``Name/Arity`` predicate indicator, in any of
     three representations:
 
@@ -572,18 +575,29 @@ def _as_name_arity_indicator(val):
       ``deref(term.left)`` / ``deref(term.right)``) — since either slot may
       hold a trail-bound Var.
 
-    Returns ``(name, arity, pred_cls)`` — *name* the identifier SPELLING —
+    Returns ``(name, arity, binding)`` — *name* the identifier SPELLING —
     or ``None`` if *val* is not one of those three shapes with a name that is
-    an ATOM (or a ``PredicateMeta`` class, reduced to its ``__name__``) and a
-    non-bool int arity.  A plain ``str`` name is a STRING and answers
-    ``None`` (Task 12).
+    an ATOM (or a predicate BINDING, reduced to its own name) and a non-bool
+    int arity.  A plain ``str`` name is a STRING and answers ``None``
+    (Task 12).
 
-    *pred_cls* is the class itself when the left operand WAS one, and ``None``
-    otherwise (final review M-a).  The name alone is not enough to find the
-    predicate: an ``-import_from``'d class lives on the EXPORTER's row, so
-    reducing it to ``__name__`` and looking that up in the calling database
-    turned ``listing(qq/1)`` into an ``existence_error`` for a predicate the
-    caller can see and call.  The class knows its own row; the name does not.
+    *binding* is the predicate binding itself when the left operand WAS one
+    -- a ``PredicateMeta`` class today, a module-qualified HANDLE (a mangled
+    atom) after the flip -- and ``None`` otherwise (final review M-a).  The
+    name alone is not enough to find the predicate: an ``-import_from``'d
+    predicate lives on the EXPORTER's row, so reducing it to its name and
+    looking that up in the calling database turned ``listing(qq/1)`` into an
+    ``existence_error`` for a predicate the caller can see and call.  The
+    binding knows its own row; the name does not.
+
+    F1 row 60 (2026-09-24): a mangled name is recognised as a handle only when
+    it denotes a PREDICATE (``is_declared_predicate_name`` at its owner, or the
+    import this database adopted a row for when the owner was popped from
+    ``sys.modules``); the test runs BEFORE the plain-atom arm, which would
+    otherwise take any mangled atom for its raw spelling.  A ``-hide`` DATA
+    atom is mangled in the same shape and is NOT a handle: it keeps today's
+    treatment (its mangled spelling, which names no predicate, so ``listing``
+    raises ``existence_error``).  *db* is the caller's database, the Q0 hint.
     """
     pred_cls = None
     if type(val) is tuple and len(val) == 3 and val[0] == "/":
@@ -597,6 +611,9 @@ def _as_name_arity_indicator(val):
     if isinstance(name, PredicateMeta):
         pred_cls = name
         name = name.__name__
+    elif _is_predicate_handle(name, arity, db):
+        pred_cls = name
+        name = demangle(name)[1]
     elif _term_is_atom(name):
         # THE FLIP (spec §6.4): the name half of a predicate indicator is an
         # ATOM, so ``r30_foo/1`` written in source arrives as the arity-0
@@ -634,47 +651,89 @@ def _indicator_operands(val):
     return None
 
 
+def _is_predicate_handle(name, arity, db) -> bool:
+    """True iff *name* is a mangled atom that is a predicate HANDLE -- never
+    for a ``-hide`` data atom (``is_mangled`` is not "is a predicate").
+
+    Two ways in: the handle's owner resolves and declares the name as a
+    predicate (arity-blind, like the class arm: the arity is checked when the
+    row is read); or the owner was popped from ``sys.modules`` and *db*
+    adopted a row for exactly this handle at ``-import_from``.  ``*arity*`` is
+    only consulted for the adopted-row key, and a non-int arity (a malformed
+    indicator) answers ``False`` so the caller's shape checks still run.
+    """
+    if not is_mangled(name):
+        return False
+    if is_declared_predicate_name(name, db=db):
+        return True
+    if not isinstance(arity, int) or isinstance(arity, bool):
+        return False
+    from clausal.logic.builtins.database_ops import (  # noqa: PLC0415
+        _adopted_row_named_by,
+    )
+    return _adopted_row_named_by(db, name, demangle(name)[1], arity) is not None
+
+
 def _indicator_row(db, name, arity, pred_cls):
     """The row whose clauses ``listing/1`` should print, or ``None``.
 
     Three lookups, in the order that makes an indicator name the same
     predicate the equivalent GOAL would (final review M-a):
 
-    1. the CLASS's own bound row, when the indicator's left operand was a
-       class and its row is a REAL row at the requested arity.  A shared
-       ``-import_from``'d class reads the exporter's row, which is the whole
-       point: ``listing(qq/1)`` must print what ``listing(qq)`` prints.  A
-       DETACHED row is skipped — it is nobody's predicate (same rule
+    1. the BINDING's own row, when the indicator's left operand was a
+       predicate binding (*pred_cls*: a class, or after the flip a handle)
+       and its row is a REAL row at the requested arity
+       (``resolve_predicate_row``, era-agnostic).  A shared
+       ``-import_from``'d predicate reads the exporter's row, which is the
+       whole point: ``listing(qq/1)`` must print what ``listing(qq)`` prints.
+       A DETACHED row is skipped -- it is nobody's predicate (same rule
        ``PredicateMeta._bind_row`` applies), so a standalone class of the
-       same name must not shadow the caller's real one;
-    2. the calling database's own row — the ordinary local predicate;
-    3. the calling module's NAMESPACE, resolved exactly as
+       same name must not shadow the caller's real one.  A HANDLE is
+       authoritative (ruling QE): when neither its row nor the row this
+       database adopted for it answers at *arity*, the answer is ``None``
+       (an ``existence_error``), never a bare-name lookup that could list a
+       different local ``name/N``;
+    2. the calling module's NAMESPACE, resolved exactly as
        ``higher_order._namespace_dispatch`` resolves a named goal
-       (``_find_pred_cls`` for the arity-checked class, then ``_home_db``
-       for the row it actually reads), so the str spelling
-       ``listing("qq"/1)`` finds the same imported predicate the class
-       spelling does.
+       (``_find_pred_cls`` for the arity-checked binding, then ``_home_db``
+       for the row it actually reads), so the atom spelling
+       ``listing('qq'/1)`` finds the same imported predicate the binding
+       spelling does.  F1 row 60 (2026-09-24): this leg used to come AFTER
+       the bare ``db.row`` below, and a module that imports a predicate and
+       re-declares it ``-dynamic`` holds a LOCAL empty twin under the same
+       key, which ``db.row`` prefers -- so listing the import printed the
+       twin's "no clauses" in both eras.  A module's OWN predicate resolves
+       to its own database here, so it is unaffected;
+    3. the calling database's own row -- the ordinary local predicate the
+       namespace does not bind at this arity (a name defined at several
+       arities binds one of them).
     """
     if pred_cls is not None:
-        row = pred_cls._row
-        if row is not None and not row.detached and row.key[1] == arity:
-            return row
+        row = resolve_predicate_row(pred_cls, arity=arity, db=db)
+        if isinstance(pred_cls, PredicateMeta):
+            if row is not None and not row.detached and row.key[1] == arity:
+                return row
+        else:
+            if row is None:
+                from clausal.logic.builtins.database_ops import (  # noqa: PLC0415
+                    _adopted_row_named_by,
+                )
+                row = _adopted_row_named_by(db, pred_cls, name, arity)
+            return row if row is not None and not row.detached else None
     if db is None:
         return None
-    row = db.row(name, arity, create=False)
-    if row is not None:
-        return row
     from clausal.logic.builtins.database_ops import (  # noqa: PLC0415
         _canonical_functor, _find_pred_cls, _home_db,
     )
     module_dict = getattr(db, "module_dict", None)
-    if module_dict is None:
-        return None
-    found = _find_pred_cls(name, arity, module_dict)
-    if found is None:
-        return None
-    return _home_db(db, found, name, arity).row(
-        _canonical_functor(db, found, name), arity, create=False)
+    found = (_find_pred_cls(name, arity, module_dict)
+             if module_dict is not None else None)
+    if found is not None:
+        row = _home_db(db, found, name, arity).row(
+            _canonical_functor(db, found, name), arity, create=False)
+        if row is not None:
+            return row
+    return db.row(name, arity, create=False)
 
 
 @_db_builtin("listing", 1, fields=("pred",))
@@ -730,7 +789,7 @@ def _make_listing__1(db):
         # the arity-0 cell ``("z0",)`` names z0/0.  A bare ``str`` is a
         # STRING after THE FLIP and is NOT a name: it falls through to the
         # ``type_error(predicate, …)`` at the bottom of this function.
-        indicator = None if _term_is_atom(val) else _as_name_arity_indicator(val)
+        indicator = None if _term_is_atom(val) else _as_name_arity_indicator(val, db)
 
         # Accept an instance → resolve to its class
         if (

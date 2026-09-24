@@ -15,3 +15,17 @@ Fix shape: resolve through the binding (`_find_pred_cls` + `_home_db`) before
 the bare `db.row` leg, or skip a local row that has no clauses and no source
 when an adopted row exists (`Database.adopted_row`). Test with
 `tests/test_find_pred_binding_both_eras.py`'s `pair` fixture, both eras.
+
+## Resolved
+
+**2026-09-24, F1 row 60** (branch `fix/w4b-row60-indicator-row-2026-09-24`).
+`io._indicator_row` now asks the calling module's NAMESPACE first
+(`_find_pred_cls` + `_home_db` + `_canonical_functor`, the same route
+`_namespace_dispatch` takes) and only then the bare `db.row`, so the import
+resolves to the owner's row and the importer's `-dynamic` twin is never
+reached through it. A module's own predicate resolves to its own database on
+that leg, and a name the namespace does not bind at the requested arity still
+falls through to `db.row`. Pinned in both eras (class binding and flipped
+handle), with the owner loaded and popped, by
+`tests/test_listing_indicator_both_eras.py::test_the_atom_indicator_lists_the_owner_not_the_importer_twin`
+(4/4 red with the old leg order restored).
