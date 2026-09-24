@@ -160,14 +160,21 @@ def test_two_live_owners_under_one_name_are_refused_not_guessed(tmp_path):
             is db.row("q0r_r", 1)
         assert _field_names_for_name(handle, 1, db, None) \
             == db.signature_for("q0r_r", 1)
-    del first, mod, db
-    # One survivor: no longer ambiguous once a collection reaps the dropped
-    # module (held only by its own reference cycle).  The collection is
-    # explicit here: this candidate set was already found ambiguous AFTER a
-    # collection, and the registry collects at most once per set (see
-    # test_handle_owner_collect_memo.py, which also covers the registry
-    # running the collector itself for a FRESH set).
-    gc.collect()
+    # One survivor: no longer ambiguous.  No explicit collection here: the
+    # dropped module is held only by its own reference cycle, and a DISPATCH
+    # runs the collector itself before it calls a name ambiguous (a question
+    # on this already-ambiguous set would not -- test_handle_owner_collect_
+    # memo.py).  Automatic collection is off so the control is not racing it.
+    gc.disable()
+    try:
+        del first, mod, db
+        assert len(predmod._HANDLE_OWNERS["q0r_reuse"]) == 2, \
+            "control: the dropped module must still look live before the " \
+            "lookup"
+        _q = qualify_mangled_goal((handle, 1))
+        assert _q[2] == ("q0r_r", 1) and _q[1].db is _db(second)
+    finally:
+        gc.enable()
     assert resolve_predicate_row(handle, arity=1) is _db(second).row(
         "q0r_r", 1)
 

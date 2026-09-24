@@ -58,17 +58,24 @@ def test_a_truly_ambiguous_name_is_collected_for_once_not_per_lookup(
     second = _load_popped(tmp_path, name, "q0m_r(2),\n")
     handle = mangle(name, "q0m_r")
     collections[0] = 0
-    # First lookup: one collection, both survive -- still refused / None.
+    # First QUESTION: one collection, both survive -- None.
     assert _owner_db_or_none(name) is None
     assert collections[0] == 1
-    # Every later lookup of the SAME set: no collection, same answers.
+    # Every later question about the SAME set: no collection, same answer.
     for _ in range(5):
         assert _owner_db_or_none(name) is None
         assert resolve_predicate_row(handle, arity=1) is None
+    assert collections[0] == 1, \
+        "a question about the same ambiguous set must not collect again"
+    # A DISPATCH never trusts the memo: exactly one collection per raise,
+    # so its answer does not depend on when the collector last ran.
+    for i in range(3):
         with pytest.raises(AmbiguousHandleOwnerError, match=name):
             qualify_mangled_goal((handle, 1))
-    assert collections[0] == 1, \
-        "the same ambiguous set must not be collected for again"
+        assert collections[0] == 2 + i
+    # ... and the questions after it still skip.
+    assert _owner_db_or_none(name) is None
+    assert collections[0] == 4
     # One owner REALLY dropped (a collection reaps it): the survivor answers.
     survivor = _db(second)
     del first
@@ -82,8 +89,9 @@ def test_a_truly_ambiguous_name_is_collected_for_once_not_per_lookup(
 
 def test_a_new_owner_under_the_name_re_arms_the_collection(
         tmp_path, collections, monkeypatch):
-    """A different candidate set (a third load) is collected for afresh --
-    and a module dropped into a cycle before that lookup is seen then."""
+    """A different candidate set (a third load) is collected for afresh by a
+    QUESTION too -- and a module dropped into a cycle before that lookup is
+    seen then."""
     name = "q0m_rearm"
     monkeypatch.delitem(predmod._HANDLE_OWNERS, name, raising=False)
     first = _load_popped(tmp_path, name, "q0m_s(1),\n")

@@ -2126,7 +2126,8 @@ def _hint_db(db):
     return db
 
 
-def _owner_db_for_module_name(module_name: str, db=None):
+def _owner_db_for_module_name(module_name: str, db=None, *,
+                              question: bool = False):
     """The Database that owns the predicates a HANDLE whose module half is
     *module_name* names, or ``None``.  HANDLE RESOLUTION ONLY -- never call
     this for a module name a user WROTE (``M:G``, an import): those go
@@ -2150,7 +2151,7 @@ def _owner_db_for_module_name(module_name: str, db=None):
     which one it meant, and answering with either would be silently wrong.
     Only a DISPATCH calls this directly; a question (resolver, predicate
     test, diagnostic) calls ``_owner_db_or_none``, where ambiguity is
-    "unknown".
+    "unknown" (*question* -- see ``_registered_handle_owner``).
 
     One home for the rule, shared by the resolvers,
     ``cells.qualify_mangled_goal`` and ``_dispatch_at``'s handle arm."""
@@ -2168,7 +2169,7 @@ def _owner_db_for_module_name(module_name: str, db=None):
     found = _db_for_module_name(module_name)
     if found is not None:
         return found
-    return _registered_handle_owner(module_name)
+    return _registered_handle_owner(module_name, question=question)
 
 
 def _owner_db_or_none(module_name: str, db=None):
@@ -2178,7 +2179,7 @@ def _owner_db_or_none(module_name: str, db=None):
     (``cells.qualify_mangled_goal``, ``_dispatch_at``'s handle arm) raises
     ``AmbiguousHandleOwnerError``; a question about a handle never does."""
     try:
-        return _owner_db_for_module_name(module_name, db)
+        return _owner_db_for_module_name(module_name, db, question=True)
     except AmbiguousHandleOwnerError:
         return None
 
@@ -2213,13 +2214,15 @@ _HANDLE_OWNERS: "dict[str, list]" = {}
 
 # module name -> the registry weakrefs (the ref OBJECTS, compared by
 # identity) that were ALL still live right after ``_registered_handle_owner``
-# ran the collector for that name.  The same set ambiguous again skips the
+# ran the collector for that name.  A QUESTION about the same set skips the
 # collection: a program that keeps asking about a truly ambiguous name pays
-# one collection, not one per lookup.  Holding the ref objects (never the
-# databases) keeps their identities from being reused; any change to the
-# name's registrations -- a new load, or a reap, which also drops this
-# entry -- gives a different set, and the next lookup collects again.  At
-# most one entry per registered name.
+# one collection, not one per lookup.  A DISPATCH never consults it -- it
+# is about to raise, the exceptional case, so it always collects first and
+# its answer never depends on when the collector last ran.  Holding the
+# ref objects (never the databases) keeps their identities from being
+# reused; any change to the name's registrations -- a new load, or a reap,
+# which also drops this entry -- gives a different set, and the next
+# question collects again.  At most one entry per registered name.
 _AMBIGUOUS_AFTER_COLLECT: "dict[str, tuple]" = {}
 
 
@@ -2267,7 +2270,7 @@ def _same_refs(remembered, refs) -> bool:
             and all(a is b for a, b in zip(remembered, refs)))
 
 
-def _registered_handle_owner(module_name: str):
+def _registered_handle_owner(module_name: str, *, question: bool = False):
     """The ONE live database registered under *module_name*, ``None`` when
     there is none, ``AmbiguousHandleOwnerError`` when more than one is live.
 
@@ -2277,14 +2280,16 @@ def _registered_handle_owner(module_name: str):
     Before calling a name ambiguous the collector is run once: only an owner
     something still REALLY holds counts.  Off the hot path -- reached only
     for a handle whose owner is neither the caller nor in ``sys.modules``,
-    and the collection only when two candidates are left -- and at most once
-    per candidate set (``_AMBIGUOUS_AFTER_COLLECT``): an owner later dropped
-    into a cycle is then seen at the next natural collection, which reaps
-    it and so re-arms the collection here."""
+    and the collection only when two candidates are left.  A *question*
+    (answered ``None`` on ambiguity) collects at most once per candidate set
+    (``_AMBIGUOUS_AFTER_COLLECT``), so an owner dropped into a cycle after
+    its set was found ambiguous is seen by questions at the next natural
+    collection (or dispatch); a DISPATCH collects every time before it
+    raises, so it resolves to a survivor regardless of collector timing."""
     live = _live_handle_owners(module_name)
-    if len(live) > 1 and not _same_refs(
+    if len(live) > 1 and not (question and _same_refs(
             _AMBIGUOUS_AFTER_COLLECT.get(module_name),
-            _HANDLE_OWNERS.get(module_name)):
+            _HANDLE_OWNERS.get(module_name))):
         import gc  # noqa: PLC0415
         del live
         gc.collect()
