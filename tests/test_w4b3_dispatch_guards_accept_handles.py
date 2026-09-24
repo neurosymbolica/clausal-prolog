@@ -282,3 +282,94 @@ class TestInjectResolvedTargets:
         assert row is not None and row.locked and row.dispatch_fn is not None
         bg = self._inject(lm, {("key", 2)}, flip)
         assert bg.get(_disp_key("key", 2)) is row.dispatch_fn
+
+    # -- dotted names (review, 2026-09-24) ---------------------------------
+    #
+    # A dotted target (``mod.last``) resolves by one of three routes: the
+    # module's own dotted-key binding (what ``-import_from`` writes), the
+    # attribute walk from a name in the globals, or ``sys.modules``.  The
+    # early accept above runs before all three, so a class under the dotted
+    # key never reached them either; the handle must land on the same answer
+    # as the class on every route, in data (-1) and applied (2) position,
+    # with the same ``$disp_`` bake.  Unconverted, the dotted-key route lost
+    # the bake and the ``sys.modules`` route resolved NOTHING for a handle.
+
+    @pytest.mark.parametrize("targets", [(2,), (-1,), (2, -1)],
+                             ids=["applied", "data", "both"])
+    @pytest.mark.parametrize("route", ["dotted-key", "attr-walk", "sys-modules"])
+    @pytest.mark.parametrize("era", ["class", "handle"])
+    def test_dotted_target(self, lm, monkeypatch, era, route, targets):
+        from clausal.logic.builtins import BuiltinPredicate
+        from clausal.logic.compiler.globals_env import (
+            _disp_key, _inject_resolved_targets,
+        )
+        list(call("last", 1, 1, module=lm))   # compile it
+        row = lm.db.row("last", 2)
+        assert row is not None and row.locked and row.dispatch_fn is not None
+        pymod = sys.modules[lm.name]
+        binding = lm.module_dict["last"] if era == "class" else _handle(lm, "last")
+        # the module attribute IS the module dict entry: this is the flip
+        monkeypatch.setitem(pymod.__dict__, "last", binding)
+        dotted = f"{lm.name}.last"
+        globals_ = {}
+        if route in ("dotted-key", "attr-walk"):
+            globals_[lm.name] = pymod
+        if route == "dotted-key":
+            globals_[dotted] = binding
+        base_globals = dict(globals_)
+        _inject_resolved_targets({(dotted, a) for a in targets},
+                                 base_globals, lm.db, globals_)
+        got = base_globals.get(dotted)
+        assert not isinstance(got, BuiltinPredicate)
+        assert got is binding
+        if 2 in targets:
+            assert base_globals.get(_disp_key(dotted, 2)) is row.dispatch_fn
+        else:
+            assert _disp_key(dotted, 2) not in base_globals
+
+
+# ── 5. the specializer's residual-goal dispatcher (found by review) ─────────
+
+
+class TestSpecializerSolveGoal:
+    """``_make_solve_goal_predicate``'s ``module_dict`` fallback: a residual
+    goal ``[name, *args]`` is dispatched to the module's predicate of that
+    name.  Unconverted, a handle binding reached "Unknown goal -- fail
+    silently"."""
+
+    @staticmethod
+    def _dispatcher(lm, era):
+        from clausal.logic.specialization import _make_solve_goal_predicate
+        md = dict(lm.module_dict)
+        if era == "handle":
+            for n in ("is_pos", "last"):
+                _both(lm, n)
+                md[n] = _handle(lm, n)
+        return _make_solve_goal_predicate("SG_w4b3", None, md)
+
+    @pytest.mark.parametrize("era", ["class", "handle"])
+    def test_residual_goal_reaches_the_user_predicate(self, lm, era):
+        sg = self._dispatcher(lm, era)
+        assert len(list(call(sg, ["is_pos", 3]))) == 1
+        assert len(list(call(sg, [mint("is_pos"), 3]))) == 1
+        assert len(list(call(sg, ["is_pos", -3]))) == 0
+        # the user's last/2, not the builtin
+        assert len(list(call(sg, ["last", 1, 1]))) == 1
+        assert len(list(call(sg, ["last", [5], 5]))) == 0
+
+    @pytest.mark.parametrize("era", ["class", "handle"])
+    def test_wrong_arity_raises_in_both_eras(self, lm, era):
+        """Class: a raw TypeError from the positional call (unchanged).
+        Handle: resolved at the goal's own arity, so PredicateArityMismatchError
+        -- itself a TypeError."""
+        sg = self._dispatcher(lm, era)
+        expected = TypeError if era == "class" else PredicateArityMismatchError
+        with pytest.raises(expected):
+            list(call(sg, ["is_pos", 1, 2]))
+
+    def test_a_data_atom_is_still_an_unknown_goal(self, lm):
+        from clausal.logic.specialization import _make_solve_goal_predicate
+        md = dict(lm.module_dict)
+        md["secret"] = _secret(lm)
+        sg = _make_solve_goal_predicate("SG_w4b3", None, md)
+        assert list(call(sg, ["secret", 1])) == []

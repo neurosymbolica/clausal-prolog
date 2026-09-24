@@ -674,7 +674,10 @@ def _inject_resolved_targets(
                 if obj is None:
                     break
                 obj = getattr(obj, part, None)
-            if obj is not None and hasattr(obj, "_get_dispatch"):
+            # W4b-3: a predicate HANDLE (post-flip module attribute) is
+            # accepted and cached exactly as the class is.
+            if obj is not None and (hasattr(obj, "_get_dispatch")
+                                    or is_declared_predicate_name(obj)):
                 base_globals[target_name] = obj
                 _maybe_cache_dispatch(obj, target_name, target_arity)
                 continue
@@ -686,7 +689,9 @@ def _inject_resolved_targets(
             mod_obj = _sys.modules.get(mod_path)
             if mod_obj is not None:
                 resolved = getattr(mod_obj, attr_name, None)
-                if resolved is not None and hasattr(resolved, "_get_dispatch"):
+                if resolved is not None and (
+                        hasattr(resolved, "_get_dispatch")
+                        or is_declared_predicate_name(resolved)):   # W4b-3
                     base_globals[target_name] = resolved
                     _maybe_cache_dispatch(resolved, target_name, target_arity)
                     continue
