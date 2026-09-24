@@ -132,3 +132,22 @@ def test_the_reverse_spelling_refuses_to_guess_between_two_owners():
     assert imp.adopt_row("pb", 1, row_b)            # a second owner's p/1
     assert imp.adopted_spelling("p", 1) is None
     assert imp.adopted_spelling("p", 2) is None
+
+
+def test_two_aliased_imports_that_swap_names_do_not_recurse_forever():
+    """``alias(a, b)`` from one owner and ``alias(b, a)`` from another, with
+    neither local name bound in the importer: ``_find_pred_cls``'s
+    reverse-spelling fallback maps a -> b -> a -> ...  It used to recurse
+    until RecursionError; a spelling already tried now answers nothing."""
+    from types import SimpleNamespace
+    from clausal.logic.builtins.database_ops import _find_pred_cls
+    from clausal.logic.database import Database
+
+    own_a, own_b, imp = Database(), Database(), Database()
+    assert imp.adopt_row("b", 1, own_a.row("a", 1, create=True))  # alias(a, b)
+    assert imp.adopt_row("a", 1, own_b.row("b", 1, create=True))  # alias(b, a)
+    assert imp.adopted_spelling("a", 1) == "b"
+    assert imp.adopted_spelling("b", 1) == "a"
+    md = {"$module": SimpleNamespace(db=imp)}
+    assert _find_pred_cls("a", 1, md) is None
+    assert _find_pred_cls("b", 1, md) is None

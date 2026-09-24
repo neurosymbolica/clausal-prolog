@@ -26,6 +26,8 @@ def _nt(cls, *args):
     state slots with fresh variables -- it raises -- so the term phrase takes
     is built by name, and phrase appends S0/S to it (ISO call/N)."""
     return (cls.__name__, *args)
+
+
 def _load(name, src_text, tmp_path):
     """write a .clausal file and load it as a module."""
     p = tmp_path / f"{name}.clausal"

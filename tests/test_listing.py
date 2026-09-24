@@ -119,6 +119,21 @@ class TestListing:
         assert formal.functor == "type_error"
         assert formal.args == (mint("predicate_indicator"), cell)
 
+    def test_a_term_instance_is_named_as_itself_not_its_class(self):
+        """``listing(Compound("foo", (1,)))``: a term INSTANCE is not an
+        indicator either, and the refusal's culprit is the term PASSED --
+        the Python-object arm swapped it for ``type(val)`` before raising,
+        so the error named the ``Compound`` CLASS (roborev Low, 2026-09-25)."""
+        db = _db_with_fact("color", 2)
+        dispatch = get_builtin_dispatch("listing", 1, db)
+        term = Compound("foo", (1,))
+        with pytest.raises(LogicException) as exc_info:
+            _run_listing(dispatch, term)
+        formal = _formal(exc_info)
+        assert formal.functor == "type_error"
+        assert formal.args[0] == mint("predicate_indicator")
+        assert formal.args[1] is term
+
     def test_non_predicate_error(self):
         # nv
         trail = Trail()

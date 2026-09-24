@@ -770,6 +770,7 @@ def _make_listing__1(db):
         else:
             # The Python-object arms.  A term INSTANCE resolves to its class
             # (a cell is a tuple, not an instance, and does not reach here).
+            culprit = val               # the refusal names what was PASSED
             if not _term_is_atom(val) and is_term_instance(val):
                 val = type(val)
             if isinstance(val, BuiltinPredicate):
@@ -778,7 +779,7 @@ def _make_listing__1(db):
                 return
             if not isinstance(val, PredicateMeta):
                 raise LogicException(type_error(
-                    "predicate_indicator", val, "listing/1"))
+                    "predicate_indicator", culprit, "listing/1"))
             name = val.__name__
             arity = len(term_field_names_of_class(val))
             # A bare ``make_predicate`` class from user Python may be on NO

@@ -298,7 +298,7 @@ def _declared_here_at_arity(module_dict: "dict | None", functor: str,
 
 
 def _find_pred_cls(functor: str, arity: int,
-                   module_dict: "dict | None") -> "Any":
+                   module_dict: "dict | None", _seen: "frozenset" = frozenset()) -> "Any":
     """The predicate BINDING the goal's name denotes at *arity* -- a
     ``PredicateMeta`` class today, a module-qualified handle (mangled atom)
     after the flip -- or ``None``.
@@ -343,8 +343,13 @@ def _find_pred_cls(functor: str, arity: int,
     # bound to NOTHING here -- a local ``gd_p`` keeps its own meaning.
     if candidate is None and db is not None:
         local = db.adopted_spelling(functor, arity)
-        if local is not None:
-            return _find_pred_cls(local, arity, module_dict)
+        # *_seen*: two aliased imports that swap names (``alias(a, b)`` and
+        # ``alias(b, a)``) with neither local name bound would send this
+        # fallback back and forth forever; a spelling already tried answers
+        # nothing.
+        if local is not None and local not in _seen:
+            return _find_pred_cls(local, arity, module_dict,
+                                  _seen | {functor})
     return None
 
 
