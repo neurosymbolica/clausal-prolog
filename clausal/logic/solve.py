@@ -456,8 +456,7 @@ def _templatize_query_goal(goal: Any):
     they keep the value-keyed cache as a correct fallback.
     """
     from clausal.logic.predicate import (
-        PredicateMeta, is_declared_predicate_name, is_zero_field_class,
-        predicate_binding_name,
+        PredicateMeta, is_declared_predicate_name, predicate_binding_name,
     )
 
     def _ground_value(val):
@@ -470,25 +469,27 @@ def _templatize_query_goal(goal: Any):
         bound to a Var would not match the rewritten head pattern.  Those keep the
         value-keyed cache fallback.
 
-        Atoms (zero-arity ``PredicateMeta`` classes) are parameterized so the
-        atom *object* is passed in as a bound arg rather than baked into the
-        compiled query as a bare ``Name(atom.__name__)`` — the latter raises
-        ``NameError`` for a cross-module atom whose bare name is not in the
-        target function's globals (e.g. imported via ``-import_module`` only).
+        A predicate BINDING (a ``PredicateMeta`` class of any arity today, its
+        mangled handle post-flip) is parameterized as the PLAIN atom of its
+        name -- see the first arm below.
         """
         dv = deref(val)
         if is_var(dv):
             return None
-        # A predicate's self-denoting atom stays PLAIN (operator ruling
-        # 2026-09-24).  Post-flip the binding is a mangled ``str``, which the
-        # scalar arm below would pass through VERBATIM -- bypassing
-        # ``term_to_ast_expr``'s matching arm, so the same top-level query
-        # argument would bind the mangled spelling here but bake the plain one
-        # on the unparameterized path.  Parameterize the PLAIN name instead:
-        # both paths then agree.  ``is_declared_predicate_name``, not
-        # ``is_mangled``: a ``-hide`` DATA atom is mangled too and keeps its
-        # spelling (it falls through to the scalar arm).
-        if type(dv) is str and is_declared_predicate_name(dv):
+        # A predicate's self-denoting atom stays PLAIN in BOTH eras (operator
+        # ruling 2026-09-24).  One arm for both shapes, ahead of the scalar
+        # arm: post-flip the binding is a mangled ``str`` the scalar arm would
+        # pass through VERBATIM, and today a zero-field CLASS used to be bound
+        # as the class object itself -- which unifies with neither the plain
+        # atom a ``.clausal`` source fact ``q(z)`` stores nor anything else a
+        # query can write, and disagreed with ``term_to_ast_expr``'s nested
+        # lowering (``__name__``).  An arity>=1 class used to fall to the
+        # baking path, which already produced the plain name; parameterizing
+        # it changes nothing but cache reuse.  ``is_declared_predicate_name``,
+        # not ``is_mangled``: a ``-hide`` DATA atom is mangled too and keeps
+        # its spelling (it falls through to the scalar arm) -- including one
+        # whose owner module cannot be resolved, see ``term_to_ast_expr``.
+        if is_declared_predicate_name(dv):
             return _mint_atom(predicate_binding_name(dv))
         if type(dv) in (int, float, complex, bool, str, bytes) or dv is None:
             return dv
@@ -500,8 +501,6 @@ def _templatize_query_goal(goal: Any):
         # harness-date-migration. Left structural, it lowers through
         # term_to_ast_expr and meets the same refusal a nested one does, which
         # names the term to write.
-        if is_zero_field_class(dv):
-            return dv
         return None
 
     if isinstance(type(goal), PredicateMeta):

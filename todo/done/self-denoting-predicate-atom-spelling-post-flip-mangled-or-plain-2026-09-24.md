@@ -143,20 +143,41 @@ Discriminator is `is_declared_predicate_name`, never `is_mangled`: a
   arm intercepts every `str` BEFORE `term_to_ast_expr` is reached, so a
   top-level mangled predicate argument would bind the mangled spelling on
   the parameterized path while the unparameterized path bakes the plain one
-  (the fix above would be bypassed). It now parameterizes the plain name.
-  The zero-field CLASS arm (today's era) is untouched.
+  (the fix above would be bypassed). Review round (roborev MEDIUM): ONE arm,
+  ahead of the scalar arm, `if is_declared_predicate_name(dv): return
+  mint(predicate_binding_name(dv))`, for BOTH eras; the old zero-field
+  CLASS arm (which bound the class object itself) is gone. Measured before
+  changing it: across 68 targeted test files (2626 tests) the class arm
+  fired ONCE, in `tests/test_f3_is_zero_field_class_callers.py`'s pin of
+  the pre-ruling behaviour (updated). And the class it returned was
+  useless: a `.clausal` fact `q(z)` (z/0 a predicate) stores the plain str
+  `'z'`, so `solve(("q", m.z), m)` answered 0 with the class, 1 with the
+  plain atom (now 1 in both eras).
 - `_is_ground_py`: NO CHANGE. Answers a bool, never a spelling; `True` for
   both eras and for a `-hide` atom -- the ruling has nothing to act on.
 - `head_key` (database.py): not reopened, per the note above.
 
-Tests: `tests/test_self_denoting_predicate_atom_plain.py` (fixture
-`hide_owner.clausal` loaded as `hide_owner`). Mutations: reverting either
-site fails its tests; swapping the gate to `is_mangled` fails the three
-`-hide` tests.
+- A mangled str whose owner module does NOT resolve (roborev LOW): kept
+  VERBATIM in both sites, not refused. It cannot be told apart from a
+  `-hide` DATA atom, and an unresolvable `-hide` atom is legitimate: a
+  module loaded under a `sys.modules` key other than its `-module` name
+  mints `hide_owner\x1fhide_secret`, `_resolve_mangled_owner` answers None,
+  and the atom round-trips into a query today. The cost, documented at the
+  `term_to_ast_expr` arm: a predicate handle whose owner is not loaded keeps
+  its mangled spelling (load-state dependent, like every
+  `is_declared_predicate_name` caller).
 
-Not in scope, observed while probing: a bare predicate name written in a
-`.clausal` CLAUSE (e.g. the fact `p(bar)` where `bar/1` is a predicate)
-evaluates at runtime to the BINDING (the class today, the mangled handle
-post-flip), not the plain atom -- so `p(bar)` queried from Python with
-either `"bar"` or the class answers 0 today. That is the source-compile
-path, not these sites.
+Tests: `tests/test_self_denoting_predicate_atom_plain.py` (fixtures
+`hide_owner.clausal` loaded as `hide_owner`, new `self_atom_zero.clausal`
+for a zero-arity predicate; a subprocess test for the alt-key `-hide`
+round-trip). Mutations: reverting both sites, restoring the class arm,
+swapping the gate to `is_mangled`, and refusing an unresolvable mangled
+str each fail tests.
+
+Not in scope, observed while probing (filed as
+`todo/bare-predicate-name-in-clause-source-is-the-binding-not-the-atom-2026-09-24.md`):
+a bare ARITY>=1 predicate name written in a `.clausal` clause (e.g. the
+fact `r(b)` where `b/1` is a predicate) evaluates at runtime to the BINDING
+(the class today, the mangled handle post-flip), not the plain atom; a
+zero-arity one (`q(z)`) stores the plain atom. So the self-atom is not yet
+plain on the clause-source side.

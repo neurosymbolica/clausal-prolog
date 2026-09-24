@@ -742,7 +742,19 @@ def term_to_ast_expr(
     # ``is_declared_predicate_name``, NOT ``is_mangled``: a ``-hide`` DATA
     # atom is mangled too, and its mangled spelling IS its identity (every
     # reference in the owning module compiles to that same spelling), so it
-    # must fall through and be baked verbatim.  See
+    # must fall through and be baked verbatim.
+    #
+    # A mangled str whose owner module does NOT resolve (no loaded Clausal
+    # module under its module half) also falls through VERBATIM -- it is not
+    # refused.  Deliberate: from the spelling alone such a str cannot be told
+    # apart from a -hide DATA atom, and an unresolvable -hide atom is a
+    # legitimate runtime value (a module loaded under a sys.modules key other
+    # than its -module name mints ``hide_owner\x1fhide_secret`` that
+    # ``_resolve_mangled_owner`` answers None for; that atom round-trips into
+    # queries today).  Raising here would break it.  The cost: a predicate
+    # handle whose owner is not loaded keeps its mangled spelling, so the
+    # answer depends on load state -- the same dependency every
+    # ``is_declared_predicate_name`` caller has.  See
     # todo/done/self-denoting-predicate-atom-spelling-post-flip-mangled-or-plain-2026-09-24.md.
     if type(term) is str and is_declared_predicate_name(term):
         return ast.Constant(value=_mint_atom(predicate_binding_name(term)))
