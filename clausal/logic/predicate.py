@@ -2076,14 +2076,16 @@ def namespace_db(namespace) -> "Database | None":
     or ``None`` -- the one home for reading a ruling-Q0 ``db=`` hint off a
     namespace, and for ``_db_for_module_name``'s ``sys.modules`` read.
 
-    PLACEHOLDER TRAP (measured 2026-09-24): while ``import_hook`` loads a
-    module, ``namespace["$module"]`` is the hook's PLACEHOLDER ``LogicModule``
-    until ``compile_module`` returns.  Its Database shares the module dict, so
+    PLACEHOLDER TRAP (measured 2026-09-24; CLOSED for compile_module by
+    ``compiler_v2._install_real_module``): while ``import_hook`` execs a
+    module BODY, ``namespace["$module"]`` is the hook's PLACEHOLDER
+    ``LogicModule``.  Its Database shares the module dict, so
     ``module_name()`` is the real module's: it captures every local handle
-    and answers from an empty store.  Code running INSIDE ``compile_module``
-    must use compile_module's own ``db`` (the load channel threads it); the
-    namespace-derived hints are right only after the load.  At the flip,
-    either swap ``$module`` before step 3 or fix it here.
+    and answers from an empty store.  ``compile_module`` now installs the
+    real module as ``$module`` (and ``__clausal_module__``) before its first
+    step, so from there on this answers the db being filled.  Only the body
+    exec still sees the placeholder, and there the real db does not exist
+    yet, so there is nothing a handle could answer from.
     """
     if not namespace:
         return None

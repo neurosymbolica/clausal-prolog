@@ -101,13 +101,15 @@ def run_term_expansion(
     all_te_clauses = imported_te_clauses + expansion_clauses
     expansion_module = _compile_expansion_rules(all_te_clauses, module_dict)
 
-    # Store local TE predicate nodes for downstream importers.
-    # Attach to both the LogicModule and the term_expansion class (if present)
-    # so that -import_from(mod, [term_expansion]) can pick them up.
+    # Store local TE predicate nodes for downstream importers, on the
+    # term_expansion class, so that -import_from(mod, [term_expansion]) can
+    # pick them up.  NOT on ``$module``: that write used to land on the import
+    # hook's PLACEHOLDER module (thrown away after compile), so a bare
+    # ``-import_module(mod)`` never carried TE rules.  Once compile_module
+    # installs the real module first (``_install_real_module``) the write
+    # would have started to reach importers -- a silent change of which
+    # imports bring expansion rules.  Only a by-name import does.
     if expansion_clauses:
-        lm = module_dict.get("$module")
-        if lm is not None:
-            lm._te_predicate_nodes = list(expansion_clauses)
         te_cls = module_dict.get("term_expansion")
         if isinstance(te_cls, PredicateMeta):
             te_cls._te_predicate_nodes = list(expansion_clauses)
@@ -138,30 +140,18 @@ def run_term_expansion(
 def _collect_imported_te_clauses(module_dict: dict) -> list:
     """Collect term_expansion predicate nodes from imported modules.
 
-    Checks two sources:
-    1. Python modules in ``module_dict`` whose ``$module`` LogicModule
-       carries ``_te_predicate_nodes``.
-    2. PredicateMeta classes named ``term_expansion`` that carry
-       ``_te_predicate_nodes`` (set when a module with TE rules is loaded).
-
-    This allows both ``-import_module(mod)`` and
-    ``-import_from(mod, [term_expansion])`` to provide expansion rules.
+    The source is a ``PredicateMeta`` class named ``term_expansion`` that
+    carries ``_te_predicate_nodes`` (set when a module with TE rules is
+    loaded), i.e. ``-import_from(mod, [term_expansion])``.  A bare
+    ``-import_module(mod)`` does not provide expansion rules: the
+    ``$module``-borne route this function used to check was only ever
+    written onto the import hook's placeholder module, so it never fired.
     """
-    import types
     seen = set()  # avoid duplicates
     result = []
 
     for value in module_dict.values():
-        # Case 1: imported Python module with $module
-        if isinstance(value, types.ModuleType):
-            lm = value.__dict__.get("$module")
-            if lm is not None:
-                te_nodes = getattr(lm, "_te_predicate_nodes", None)
-                if te_nodes and id(te_nodes) not in seen:
-                    seen.add(id(te_nodes))
-                    result.extend(te_nodes)
-        # Case 2: imported term_expansion PredicateMeta class
-        elif (
+        if (
             isinstance(value, PredicateMeta)
             and getattr(value, "__name__", "") == "term_expansion"
         ):

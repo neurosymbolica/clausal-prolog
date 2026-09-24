@@ -76,12 +76,16 @@ def test_load_channel_hint_at_compile_module_s_own_point(tmp_path,
     against the finished db.  This one runs ``_import_from_origins`` where
     ``compile_module`` really calls it -- step 3c, BEFORE step 4 writes a
     clause -- with the local ``db`` compile_module threads.  There the
-    predicate is known only as a DECLARATION (the ``-module`` export), there
-    is no row yet, and ``$module`` is still the placeholder: the no-hint
-    route (``sys.modules`` -> placeholder) and the placeholder db both miss
-    the handle; only compile_module's own db resolves it.  Covers the
-    export-declared case; a predicate with neither export nor directive is
-    unknown to the db at step 3c in any era."""
+    predicate is known only as a DECLARATION (the ``-module`` export) and
+    there is no row yet.  Covers the export-declared case; a predicate with
+    neither export nor directive is unknown to the db at step 3c in any era.
+
+    RE-PINNED 2026-09-24 (pre-flip task 4, ``_install_real_module``): this
+    test used to pin the PLACEHOLDER TRAP -- ``$module`` still the import
+    hook's placeholder at step 3c, so the no-hint route (``sys.modules`` ->
+    placeholder) and the ``$module`` db both MISSED the handle.  That miss is
+    the defect the flip dry run hit (R1).  ``$module`` is now compile_module's
+    own module for the whole compile, so all three routes resolve it."""
     import clausal.logic.compiler_v2 as cv
     from clausal.logic.compiler_v2 import ImportFromItem
     name = "q0c_real"
@@ -108,8 +112,8 @@ def test_load_channel_hint_at_compile_module_s_own_point(tmp_path,
         _load_module(name, str(path))
     finally:
         sys.modules.pop(name, None)
-    assert seen["placeholder"] and seen["row"] is None
-    assert not seen["no_hint"] and not seen["placeholder_hint"]
+    assert not seen["placeholder"] and seen["row"] is None
+    assert seen["no_hint"] and seen["placeholder_hint"]
     handle = seen["origins"][f"{name}_alias"][1]
     assert handle is not None
     assert seen["origins"][f"{name}_p"] == ("elsewhere", handle)

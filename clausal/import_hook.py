@@ -256,12 +256,12 @@ def _run_v2_pipeline(loader, module, module_dict, filename, recover_module_items
     )
     # -constants directives register into $module.constants (see
     # register_module_constant, clausal/logic/constants.py) WHILE the
-    # module body execs — i.e. onto dummy_logic_module, the placeholder
-    # $module that compile_module below then throws away in favour of a
-    # freshly-built LogicModule. Carry the registrations across the swap
-    # so module_constant/3 sees what the module actually declared.
-    logic_module.constants.update(dummy_logic_module.constants)
-    logic_module.constant_units.update(dummy_logic_module.constant_units)
+    # module body execs — i.e. onto dummy_logic_module, the placeholder.
+    # compile_module swaps the real LogicModule in as $module and
+    # __clausal_module__ BEFORE its first step, carrying those
+    # registrations (compiler_v2._install_real_module: mid-compile a handle
+    # to this module must not resolve to the placeholder's empty store).
+    # These two writes are therefore no-ops on the normal path.
     module_dict["$module"] = logic_module
     module.__clausal_module__ = logic_module
 
