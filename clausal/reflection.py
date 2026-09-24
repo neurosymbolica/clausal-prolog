@@ -584,6 +584,15 @@ class _ClauseReifier:
         # it, and W4a made the name a raising tombstone (predicate.py) -- so
         # it could only ever have met hand-written source, and nothing in
         # the tree writes that source.
+        #
+        # A module-level head is emitted as ``$head(<binding>, *args,
+        # **kwargs)`` (W4b-2d task 5, ``term_rewriting._head_ctor_ast``) so
+        # the load never calls the binding; it reifies as the head it builds,
+        # ``<binding>(*args, **kwargs)``.
+        if (isinstance(node.func, ast.Name) and node.func.id == "$head"
+                and node.args and isinstance(node.args[0], ast.Name)):
+            node = ast.Call(func=node.args[0], args=node.args[1:],
+                            keywords=node.keywords)
         if not isinstance(node.func, ast.Name):
             raise ReifyError(f"cannot reify call: {ast.unparse(node)}")
         # Generated code spells a runtime class ``$``-prefixed (``$Var``,

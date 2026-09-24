@@ -34,7 +34,7 @@ from clausal.terms import (
 from clausal.pythonic_ast.nodes import StarUnpack  # noqa: F401
 from clausal.logic.database import Clause, Database
 from clausal.logic.predicate import (
-    PredicateMeta, _dispatch_at,
+    PredicateMeta, _dispatch_at, head_cell as _head_cell,
 )
 from clausal.codegen import functiondef_to_function
 from clausal.logic.solve import _deref_walk as _deref_walk_fn
@@ -387,6 +387,10 @@ INJECTED_RUNTIME_BUILTINS: dict = {
     # module attribute to the atom CELL with an interned slot 0 (§9.3), and
     # ``$``-prefixed so a user predicate named ``mint`` cannot shadow it.
     "$mint": _mint,
+    # A module-level clause HEAD: ``$head(<binding>, ...)`` builds the cell
+    # without calling the binding, so a predicate HANDLE (a str) works as
+    # well as a class (W4b-2d task 5; ``term_rewriting._head_ctor_ast``).
+    "$head": _head_cell,
     # THE SEAM: ``--term`` in Python-hosted code (clausal.logic.seam).
     "$seam": _seam_term,
     # Explicit text crossings in Python-hosted code: str(x), f"{x!s}" spell
