@@ -148,10 +148,10 @@ def test_two_live_owners_under_one_name_are_refused_not_guessed(tmp_path):
     second = _load_popped(tmp_path, "q0r_reuse", "q0r_r(2),\n")
     assert _db(first) is not _db(second)
     handle = mangle("q0r_reuse", "q0r_r")
+    # A DISPATCH refuses; a QUESTION answers "unknown" (None), never a guess.
     with pytest.raises(AmbiguousHandleOwnerError, match="q0r_reuse"):
-        resolve_predicate_row(handle, arity=1)
-    with pytest.raises(AmbiguousHandleOwnerError):
         qualify_mangled_goal((handle, 1))
+    assert resolve_predicate_row(handle, arity=1) is None
     # A caller that IS one of them answers locally, with no ambiguity --
     # and ``_field_names_for_name`` honours that db too.
     for mod in (first, second):
@@ -200,7 +200,8 @@ def test_an_importer_resolves_the_owner_it_imported_by_identity(tmp_path):
         # Popped too: the registry alone cannot tell them apart.
         sys.modules.pop("q0r_src", None)
         with pytest.raises(AmbiguousHandleOwnerError):
-            resolve_predicate_row(handle, arity=1)
+            qualify_mangled_goal((handle, 1))
+        assert resolve_predicate_row(handle, arity=1) is None
         assert resolve_predicate_row(handle, arity=1, db=imp_db) \
             is _db(original).row("q0r_s", 1)
     finally:
@@ -236,3 +237,123 @@ def test_class_and_handle_agree_for_a_popped_owner_with_no_hint(tmp_path):
     assert predicate_arities_for(cls) == {1, 2}
     assert predicate_arities_for(handle, db=db) == predicate_arities_for(
         cls, db=db) == {1, 2}
+
+
+# ── name reuse through the question paths and solve (review round) ───────
+
+@pytest.fixture
+def reused(tmp_path):
+    """An importer of ``q0r_src2`` v1, then v2 loaded under the same name;
+    all three popped and alive -- the registry alone is ambiguous."""
+    src = tmp_path / "q0r_src2.clausal"
+    src.write_text("-module(q0r_src2, [q0r_s/1])\n\nq0r_s(1),\n")
+    sys.path.insert(0, str(tmp_path))
+    try:
+        sys.modules.pop("q0r_src2", None)
+        v1 = _load_module("q0r_src2", str(src))
+        importer = _load_popped(tmp_path, "q0r_imp2", """
+            -import_from(q0r_src2, [q0r_s])
+            q0r_i(X) <- q0r_s(X)
+        """)
+        sys.modules.pop("q0r_src2", None)
+        src.write_text("-module(q0r_src2, [q0r_s/1])\n\nq0r_s(2),\n")
+        v2 = _load_module("q0r_src2", str(src))
+        sys.modules.pop("q0r_src2", None)
+        yield v1, importer, v2
+    finally:
+        sys.path.remove(str(tmp_path))
+        sys.modules.pop("q0r_src2", None)
+
+
+def test_questions_about_an_ambiguous_handle_answer_unknown_not_raise(reused):
+    from clausal.logic.predicate import (
+        binding_grants_arity, is_declared_predicate_name,
+        predicate_binding_name,
+    )
+    v1, importer, v2 = reused
+    handle = mangle("q0r_src2", "q0r_s")
+    with pytest.raises(AmbiguousHandleOwnerError):
+        qualify_mangled_goal((handle, 1))          # a dispatch raises
+    # ... a question does not: no hint = unknown.
+    assert resolve_predicate_row(handle, arity=1) is None
+    assert not is_declared_predicate(handle, arity=1)
+    assert not is_declared_predicate_name(handle)
+    assert predicate_binding_name(handle) is None
+    assert predicate_arities_for(handle) == set()
+    assert _field_names_for_name(handle, 1, None, None) is None
+    # With the caller's db every question answers, by identity or locally.
+    imp_db = _db(importer)
+    assert binding_grants_arity(handle, 1, imp_db, "q0r_s")
+    assert resolve_predicate_row(handle, arity=1, db=imp_db) \
+        is _db(v1).row("q0r_s", 1)
+    assert binding_grants_arity(handle, 1, _db(v2), "q0r_s")
+    assert resolve_predicate_row(handle, arity=1, db=_db(v2)) \
+        is _db(v2).row("q0r_s", 1)
+
+
+def test_the_import_index_uses_the_callers_db(reused):
+    from clausal.logic.predicate import _import_index
+    v1, importer, _v2 = reused
+    imp_db = _db(importer)
+    md = dict(importer.__dict__)
+    handle = mangle("q0r_src2", "q0r_s")
+    md["q0r_alias"] = handle
+    _snap, by_binding, _by_owner, _ = _import_index(imp_db, md, force=True)
+    assert ("q0r_alias", handle) in [kv for kvs in by_binding.values()
+                                     for kv in kvs]
+
+
+def test_solve_with_the_owner_as_module_is_not_ambiguous(reused):
+    v1, _importer, v2 = reused
+    handle = mangle("q0r_src2", "q0r_s")
+    for mod, want in ((v1, [1]), (v2, [2])):
+        assert _answers(handle, module=mod.__dict__["$module"]) == want
+    with pytest.raises(AmbiguousHandleOwnerError):
+        _answers(handle)                            # no module: a dispatch
+
+
+def test_a_synthesised_designator_is_stable_per_owner():
+    """An owner whose module dict carries no ``$module`` for it gets ONE
+    synthesised Module, reused -- the query cache keys on its id."""
+    from clausal.logic.database import Database, Module
+    from clausal.logic.predicate import register_handle_owner
+    db = Database(module_dict={"__name__": "q0r_bare"})
+    register_handle_owner(db)
+    handle = mangle("q0r_bare", "q0r_b")
+    first = qualify_mangled_goal((handle, 1))[1]
+    second = qualify_mangled_goal((handle, 1))[1]
+    assert isinstance(first, Module) and first.db is db
+    assert first is second
+
+
+def test_binding_grants_arity_finds_an_ambiguous_owner_by_identity(tmp_path):
+    """The import record limits an imported handle to the arities it was
+    imported at -- which needs the OWNER.  With the name reused and both
+    owners popped, only the caller's db (by identity) finds it; without it
+    the owner is "unknown" and the not-imported arity would be granted."""
+    from clausal.logic.database import Clause
+    from clausal.logic.predicate import binding_grants_arity
+    src = tmp_path / "q0r_src3.clausal"
+    src.write_text("-module(q0r_src3, [q0r_t/1])\n-dynamic(q0r_t/1)\n\n"
+                   "q0r_t(1),\n")
+    sys.path.insert(0, str(tmp_path))
+    try:
+        sys.modules.pop("q0r_src3", None)
+        v1 = _load_module("q0r_src3", str(src))
+        importer = _load_popped(tmp_path, "q0r_imp3",
+                                "-import_from(q0r_src3, [q0r_t])\n")
+        sys.modules.pop("q0r_src3", None)
+        v2 = _load_module("q0r_src3", str(src))
+        sys.modules.pop("q0r_src3", None)
+        # The owner gains q0r_t/2 AFTER the import: not imported.
+        _db(v1).assertz(Clause(head=("q0r_t", 1, 2), body=[]))
+        imp_db = _db(importer)
+        assert imp_db.adopted_arities("q0r_t") == frozenset({1})
+        handle = mangle("q0r_src3", "q0r_t")
+        assert is_declared_predicate(handle, arity=2, db=imp_db)
+        assert binding_grants_arity(handle, 1, imp_db, "q0r_t")
+        assert not binding_grants_arity(handle, 2, imp_db, "q0r_t")
+        assert v2 is not v1
+    finally:
+        sys.path.remove(str(tmp_path))
+        sys.modules.pop("q0r_src3", None)

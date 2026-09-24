@@ -196,6 +196,11 @@ def test_popped_module_local_handle_lowers_plain_only_with_the_db_hint(tmp_path)
     sys.modules.pop(name, None)
     mod = _load_module(name, str(path))
     sys.modules.pop(name, None)            # as the .clausal runner does
+    # Isolate the HINT from the handle-owner registry (ruling Q0's
+    # cross-module remainder, test_handle_owner_registry.py): it would
+    # otherwise answer for the popped module and make the control vacuous.
+    from clausal.logic.predicate import _HANDLE_OWNERS
+    _HANDLE_OWNERS.pop(name, None)
     db = _db(mod)
     handle = mint_predicate_handle(db, "sa_p")
     # Positive control: without the hint the popped owner is unreachable, so
