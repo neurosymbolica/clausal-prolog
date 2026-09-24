@@ -882,6 +882,11 @@ def _lock_static_predicates(db) -> int:
       also a data atom) is locked; the walk never saw it.
     * an owned static row is locked even when the class bound under its
       name carries a different row; the walk locked that other row instead.
+
+    Locking an imported row is its OWNER's job alone.  An owner that never
+    ran this step -- rows built directly in Python rather than loaded
+    through ``compile_module`` -- is no longer locked as a side effect of
+    some module importing it.
     """
     locked = 0
     for key in db.owned_keys():

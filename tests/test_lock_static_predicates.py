@@ -17,6 +17,7 @@ The population is now the Database's own rows, so these tests pin:
 
 from __future__ import annotations
 
+import os
 import textwrap
 
 import pytest
@@ -129,3 +130,28 @@ def test_an_imported_static_predicate_stays_locked(tmp_path, monkeypatch):
     assert owner.db.row("lsp_sp", 1).locked is True
     with pytest.raises(LogicException, match="static"):
         list(solve(("assertz", ("lsp_sp", 2)), importer))
+
+
+def test_a_static_predicate_whose_name_is_bound_to_an_atom_is_locked():
+    """``t5b_slot`` is imported as an ATOM, so the module dict binds the name
+    to that atom -- and the module also defines a local ``t5b_slot/2``.  The
+    module-dict walk never saw the predicate and left it writable."""
+    path = os.path.join(os.path.dirname(__file__), "fixtures",
+                        "t5b_local_pred.clausal")
+    lm = _lm(_load_module("tests.fixtures.t5b_local_pred", path))
+    assert lm.db.row("t5b_slot", 2).locked is True
+    with pytest.raises(LogicException, match="static"):
+        list(solve(("assertz", ("t5b_slot", "t5b_a", 9)), lm))
+
+
+def test_a_declared_clause_less_predicate_locks_its_database_row(tmp_path):
+    """A fielded declaration with no clauses, named by a directive, gets a
+    row -- but the class in the module dict carries a DIFFERENT (detached)
+    row, and the module-dict walk locked that one, leaving the real row
+    writable."""
+    lm = _lm(_write_module(tmp_path, "lsp_declonly",
+                           "-private([lsp_p(X)])\n-discontiguous(lsp_p/1)\n\n"
+                           "lsp_q(1),\n"))
+    assert lm.db.row("lsp_p", 1).locked is True
+    with pytest.raises(LogicException, match="static"):
+        list(solve(("assertz", ("lsp_p", 1)), lm))
