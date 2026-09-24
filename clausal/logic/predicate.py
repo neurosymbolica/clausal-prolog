@@ -201,6 +201,31 @@ class ClausalTermConstructionError(TypeError):
         self.constructed_at = constructed_at
 
 
+class AmbiguousArityConstructionError(ClausalTermConstructionError):
+    """A term was built against a name registered at SEVERAL arities, and
+    the arguments fit none of them, or more than one.
+
+    ``arity`` and ``registered_fields`` are ``None`` -- there is no single
+    registration to report, and ``()`` would read as a 0-field one.  The
+    candidates are in ``signatures``, ``{arity: field names}``.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        functor: str,
+        signatures: "dict[int, tuple[str, ...]]",
+        supplied_fields: tuple[str, ...],
+        constructed_at: tuple[str, int] | None,
+    ) -> None:
+        super().__init__(
+            message, functor=functor, arity=None,
+            supplied_fields=supplied_fields, registered_fields=None,
+            registered_at=None, constructed_at=constructed_at)
+        self.signatures = dict(signatures)
+
+
 def _construction_hint(
     functor: str,
     supplied: tuple[str, ...],
@@ -271,15 +296,6 @@ def _construction_hint(
     )
 
 
-def _term_construction_error(
-    cls: Any, kwargs: dict, constructed_at: tuple[str, int] | None
-) -> ClausalTermConstructionError:
-    """Build the attributable error for a field-name mismatch on *cls*."""
-    return term_construction_error_for(
-        cls.__name__, tuple(cls._fields), getattr(cls, "_registered_at", None),
-        kwargs, constructed_at)
-
-
 def term_construction_error_for(
     functor: str, registered: tuple[str, ...], registered_at: Any,
     kwargs: dict, constructed_at: tuple[str, int] | None,
@@ -321,22 +337,23 @@ def _overflow_supplied_fields(
     )
 
 
-def _term_arity_error(
-    cls: Any, n_args: int, kwargs: dict, constructed_at: tuple[str, int] | None
+def term_arity_error_for(
+    functor: str, registered: tuple[str, ...], registered_at: Any,
+    n_args: int, kwargs: dict, constructed_at: tuple[str, int] | None,
 ) -> ClausalTermConstructionError:
-    """Build the attributable error for positional overflow on *cls*.
+    """The attributable positional-overflow error, from plain data -- the
+    arity half of :func:`build_term_cell`, for a builder that has a functor
+    and its registered fields but no class (a predicate HANDLE's head).
 
     ``PredicateMeta.__call__`` used to *drop* positional arguments past
     ``len(_fields)``, so ``some_atom(A, B)`` on a zero-arity class returned a
     silently wrong term.  That is worse than the keyword path's bare
     ``TypeError``: there is no exception at all to repair against.
     """
-    functor = cls.__name__
-    registered = tuple(cls._fields)
+    registered = tuple(registered)
     supplied = _overflow_supplied_fields(registered, n_args) + tuple(
         k for k in kwargs if k not in registered[:n_args]
     )
-    registered_at = getattr(cls, "_registered_at", None)
     message = (
         f"functor {functor}/{len(registered)} was constructed with {n_args} "
         f"positional argument(s)\n"
@@ -355,6 +372,51 @@ def _term_arity_error(
         registered_at=registered_at,
         constructed_at=constructed_at,
     )
+
+
+def build_term_cell(functor: str, fields: tuple[str, ...], args: tuple,
+                    kwargs: dict, *, origin: Any = None) -> tuple:
+    """THE one home of term construction against a registered signature:
+    place *args* and *kwargs* into *fields* and build the cell
+    ``(functor, slot, ...)``, with the head/term ARITY check.
+
+    Era-agnostic by construction: ``PredicateMeta.__call__`` (a class
+    binding, today) and :func:`head_cell` (a predicate HANDLE, after the
+    flip) both come here, so the two eras answer the same cell and raise the
+    same error for the same (functor, fields, args, kwargs).
+
+    * more positional arguments than fields -> :func:`term_arity_error_for`;
+    * a keyword naming no field -> :func:`term_construction_error_for`;
+    * a slot neither fills gets a fresh ``Var()`` -- including the trailing
+      slots of a SHORT positional construction (the padding the too-few-args
+      ruling will change; change it HERE, and both eras follow).
+
+    *origin* is the class being called, if any: its ``_registered_at``
+    (the declaration site) is read only when an error is raised, keeping it
+    off the construction hot path.  A HANDLE has no origin, and no site.
+
+    *kwargs* is consumed (positional fills are written into it, which is
+    what the construction error reports as the supplied fields).  The
+    "constructed at" site search starts at the CALLER'S caller (frame 2),
+    exactly where ``PredicateMeta.__call__``'s own search started.
+    """
+    if args:
+        # Positional overflow used to be DROPPED (``if i < len(fields)``),
+        # so a call with too many arguments returned a wrong term instead of
+        # raising.  One length check replaces the per-argument comparison.
+        if len(args) > len(fields):
+            raise term_arity_error_for(
+                functor, fields, getattr(origin, "_registered_at", None),
+                len(args), kwargs, _source_site(2))
+        for i, val in enumerate(args):
+            kwargs[fields[i]] = val
+    unknown = [k for k in kwargs if k not in fields]
+    if unknown:
+        raise term_construction_error_for(
+            functor, tuple(fields), getattr(origin, "_registered_at", None),
+            kwargs, _source_site(2))
+    from clausal.logic.variables import Var  # noqa: PLC0415
+    return (functor, *(kwargs[f] if f in kwargs else Var() for f in fields))
 
 
 _init_cache: dict[tuple[str, ...], Callable] = {}
@@ -1031,33 +1093,13 @@ class PredicateMeta(type):
         if not cls._fields and not args and not kwargs:
             return cls
 
-        fields = cls._fields
-
-        if args:
-            # Positional overflow used to be DROPPED here (``if i <
-            # len(fields)``), so a call with too many arguments returned a
-            # wrong term instead of raising — strictly worse than the keyword
-            # path's TypeError, because there was nothing to repair against.
-            # One length check replaces the former per-argument comparison, so
-            # the hot path is if anything marginally cheaper.
-            if len(args) > len(fields):
-                raise _term_arity_error(
-                    cls, len(args), kwargs, _source_site(1)
-                )
-            for i, val in enumerate(args):
-                kwargs[fields[i]] = val
-
         # P2 Task 3 (2026-09-19): a class applied to arguments builds the CELL
         # -- the functor-first tuple the engine unifies in C -- never an
-        # instance.  Every Python-side producer (reflection's vocabulary,
-        # clpb, term expansion, the packages) goes through here, so this one
-        # site is the constructor flip; the class stays as the predicate
-        # handle until P4 deletes it.  Unknown keywords still raise.
-        unknown = [k for k in kwargs if k not in fields]
-        if unknown:
-            raise _term_construction_error(cls, kwargs, _source_site(1))
-        from clausal.logic.variables import Var  # noqa: PLC0415
-        return (cls.__name__, *(kwargs[f] if f in kwargs else Var() for f in fields))
+        # instance.  The placement and the arity/field checks live in
+        # ``build_term_cell``, shared with a predicate HANDLE's head
+        # (``head_cell``), so the two eras cannot drift apart.
+        return build_term_cell(cls.__name__, cls._fields, args, kwargs,
+                               origin=cls)
 
     def _clausal_head(cls, *args: Any, **kwargs: Any) -> Any:
         """RETIRED (W4a, 2026-09-22): the clause-HEAD instance constructor.
@@ -2513,6 +2555,99 @@ def predicate_owner_module(binding) -> "str | None":
     return None
 
 
+def head_cell(binding, /, *args: Any, **kwargs: Any) -> Any:
+    """``$head``: build a clause HEAD for the predicate *binding* names,
+    without calling the binding (W4b-2d task 5; the flip dry run's R4).
+
+    The rewriter emits every module-level head as ``$head(<binding>, ...)``
+    (``term_rewriting._head_ctor_ast``).  While a module body runs, a head
+    naming a predicate -- an IMPORTED one included -- used to be built by
+    calling the binding, ``binding(*args)``, i.e. ``PredicateMeta.__call__``.
+    After the flip the binding is a predicate HANDLE (a mangled ``str``),
+    so that call raised ``'str' object is not callable`` and the load died
+    before the mutation gate could give its refusal.
+
+    * a ``PredicateMeta`` class, or anything else that is not a mangled
+      handle -> called exactly as before (``binding(*args, **kwargs)``): the
+      same cell, the same ``ClausalTermConstructionError`` and the same
+      message, byte for byte, and the same ``TypeError`` for a non-callable;
+    * a predicate HANDLE -> :func:`_handle_head_cell`: the cell is built
+      under the handle's PLAIN name (ruling S -- the class built it under
+      ``cls.__name__``, the same spelling) from the field names the OWNER's
+      Database records (``Database.head_signatures``: the row's signature
+      -- after a clause, the head's derived names, the class's ``_fields``
+      too -- else an arity-only declaration's ``arg_N`` placeholders, the
+      class's ``_fields`` while no clause exists), through
+      :func:`build_term_cell`, the helper the class uses -- so the arity
+      check answers the same in both eras.
+    """
+    if type(binding) is str:
+        from clausal.logic.atoms import is_mangled  # noqa: PLC0415
+        if is_mangled(binding):
+            return _handle_head_cell(binding, args, kwargs)
+    return binding(*args, **kwargs)
+
+
+def _handle_head_cell(handle: str, args: tuple, kwargs: dict) -> Any:
+    """The HANDLE arm of :func:`head_cell`."""
+    from clausal.logic.atoms import demangle  # noqa: PLC0415
+    functor = demangle(handle)[1]
+    resolved = _resolve_mangled_owner(handle)
+    signatures = resolved[0].head_signatures(resolved[1]) if resolved else {}
+    if not signatures:
+        raise TypeError(
+            f"cannot build a clause head for {functor}: the predicate handle "
+            f"{handle!r} names nothing its owner module "
+            f"{demangle(handle)[0]!r} knows"
+            + ("" if resolved else " (the module is not loaded)"))
+    fields = _head_signature_for(functor, signatures, args, kwargs)
+    if not fields and not args and not kwargs:
+        # A 0-arity head is the ATOM of its name -- the class returned
+        # ITSELF here (``red() is red``); post-flip the atom IS the str.
+        return functor
+    # ``registered_at`` (the declaration SITE) is a class attribute with no
+    # Database home yet -- see todo/...declaration-site-lives-only-on-the-
+    # class-2026-09-24.md; the diagnostic's "registered by" line reads
+    # ``<unknown>`` for a handle until that is ruled.
+    return build_term_cell(functor, fields, args, kwargs)
+
+
+def _head_signature_for(functor: str, signatures: dict, args: tuple,
+                        kwargs: dict) -> tuple[str, ...]:
+    """Which of the owner's ``{arity: fields}`` a head is built against.
+
+    One known arity -> that one, whatever was written: exactly the class
+    era, whose class carries ONE ``_fields`` (so an overflow or a stray
+    keyword raises from ``build_term_cell`` with the class's message).
+    Several (a name defined at more than one arity, ruling 2026-09-24) ->
+    the arity as WRITTEN (positional + keyword count) when the keywords
+    fit it; else the one arity the arguments fit; else a
+    :class:`AmbiguousArityConstructionError` naming the arities, never a
+    guess.
+    """
+    if len(signatures) == 1:
+        return next(iter(signatures.values()))
+    written = len(args) + len(kwargs)
+    fits = sorted(a for a, names in signatures.items()
+                  if len(args) <= a and all(k in names for k in kwargs))
+    if written in fits:
+        return signatures[written]
+    if len(fits) == 1:
+        return signatures[fits[0]]
+    supplied = _overflow_supplied_fields((), len(args)) + tuple(kwargs)
+    constructed_at = _source_site(1)
+    known = ", ".join(f"{functor}/{a}" for a in sorted(signatures))
+    message = (
+        f"functor {functor} was constructed with {len(args)} positional "
+        f"argument(s) and field names {_format_fields(tuple(kwargs))}\n"
+        f"but it is registered at several arities ({known}), and "
+        f"{'none' if not fits else 'more than one'} of them fits\n"
+        f"  constructed at: {_format_site(constructed_at)}")
+    raise AmbiguousArityConstructionError(
+        message, functor=functor, signatures=signatures,
+        supplied_fields=supplied, constructed_at=constructed_at)
+
+
 def predicate_arities_for(binding, *, cache: "dict | None" = None,
                           db=None) -> "set[int]":
     """F4 (ruling 3): the SET of arities *binding* is a DEFINED predicate
@@ -2593,9 +2728,14 @@ def field_names_for(value, *, arity=None, db=None, namespace=None):
     known for *value* -- either because nothing is declared, OR because it
     IS declared but at an arity with no names anywhere (``-dynamic(f/2)``,
     or a bare ``f/2`` entry in a ``-module``/``-private`` export list: both
-    register an arity and never field names, on the class's own
-    ``PredicateMeta._fields`` -- synthesized placeholders -- and nowhere
-    else).  ``()`` means declared with ZERO fields (the 0-arity predicate
+    register an arity and never field names).  EXCEPTION (2026-09-24): a
+    MANGLED handle answers what the class it replaces carries --
+    ``Database.field_names_at``: the row's registered signature when one is
+    recorded (after a clause, the head's derived names), else the
+    synthesized ``arg_N`` placeholders of an arity-only declaration
+    (``Database.placeholder_fields``); a plain name with a *db* still
+    answers ``None`` for the latter, as before.  ``()``
+    means declared with ZERO fields (the 0-arity predicate
     written ``p()``), and ``len()`` is the arity for anything longer.  For
     "is this declared" -- a question this accessor deliberately does NOT
     answer, because for an arity-only declaration it has no way to -- ask
@@ -2658,9 +2798,24 @@ def _field_names_for_name(name, arity, db, namespace):
         owner_db = _db_for_module_name(module_name)
         if owner_db is None:
             return None
+        # A handle replaces the class, so it answers what the class's
+        # ``_fields`` would: ``field_names_at`` is the registered signature
+        # (after a clause: the head's derived names, stamped at step 4)
+        # first, and an arity-only declaration's ``arg_N`` placeholders
+        # only when nothing else is recorded.
         if arity is not None:
-            return owner_db.signature_for(bare_name, arity)
-        return owner_db.declared_fields_by_name(bare_name)
+            return owner_db.field_names_at(bare_name, arity)
+        found = owner_db.declared_fields_by_name(bare_name)
+        if found is None:
+            # By NAME with no fielded declaration: answer only when the name
+            # is a predicate at exactly ONE arity (the class carries one
+            # ``_fields``); at several, which one is meant is not ours to
+            # guess.
+            arities = owner_db.predicate_arities(bare_name)
+            if len(arities) == 1:
+                found = owner_db.field_names_at(bare_name,
+                                                next(iter(arities)))
+        return found
     if db is not None:
         if arity is not None:
             found = db.signature_for(name, arity)
@@ -2967,4 +3122,6 @@ __all__ = ["PredicateMeta", "RetiredStateError", "_MISSING", "is_term_instance",
            "resolve_predicate_row", "is_declared_predicate",
            "is_declared_predicate_name", "predicate_arities_for",
            "mint_predicate_handle", "namespace_db",
-           "predicate_owner_module"]
+           "predicate_owner_module",
+           "head_cell", "build_term_cell",
+           "AmbiguousArityConstructionError"]

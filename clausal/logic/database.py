@@ -1229,6 +1229,82 @@ class Database:
         mechanism answers."""
         self._predicate_export.add((functor, arity))
 
+    def placeholder_fields(self, functor: str,
+                           arity: int) -> tuple[str, ...] | None:
+        """The ``arg_0 .. arg_{N-1}`` field names of an ARITY-ONLY
+        declaration -- a bare ``name/arity`` export entry
+        (``mark_predicate_export``) or ``-dynamic(name/arity)``
+        (``mark_dynamic``) -- when nothing here records real names for the
+        key; ``None`` otherwise.
+
+        Two states, and the class answers differently in each:
+
+        * DECLARATION ONLY (no clause for the key in the declaring file):
+          the ``PredicateMeta`` class carries exactly these synthesized
+          ``_fields``, and until now they lived ONLY there, so after the
+          flip -- a module attribute is a predicate HANDLE, not the class --
+          nothing could answer them (``todo/dynamic-declarations-are-
+          invisible-to-arm-3-2026-09-22.md``).
+        * AFTER A CLAUSE: the rewriter unseats the placeholders
+          (``_unseat_directive_minted``) and the class carries the head's
+          derived names; step 4 stamps the same names as the row's
+          ``signature`` (the signature-source work, a5c4fab8).  This method
+          then answers ``None``, because :meth:`signature_for` reads that
+          signature first -- so :meth:`field_names_at` gives the head's
+          names, as the class does.  Placeholders are the answer only when
+          nothing else is recorded.
+
+        Derived from the declaration keys this Database already holds rather
+        than stored a second time, so they can never disagree with
+        ``declared_kind``.
+
+        Deliberately a separate read, NOT a fallback inside
+        :meth:`signature_for`: ~15 callers read ``signature_for(...) is
+        None`` as "no names registered", and that answer is unchanged.
+        ``predicate.field_names_for`` consults it for a HANDLE, the arm that
+        replaces the class's ``_fields``.
+        """
+        key = (functor, arity)
+        if key not in self._predicate_export and key not in self._dynamic:
+            return None
+        if self.signature_for(functor, arity) is not None:
+            return None
+        return tuple(f"arg_{i}" for i in range(arity))
+
+    def field_names_at(self, functor: str,
+                       arity: int) -> tuple[str, ...] | None:
+        """The field names of *functor*/*arity* as a term would be built
+        against them here: the registered signature (``signature_for``:
+        a clause head's names, then a fielded declaration's), else an
+        arity-only declaration's placeholders (:meth:`placeholder_fields`);
+        ``None`` when this Database records no names for the key."""
+        found = self.signature_for(functor, arity)
+        if found is None:
+            found = self.placeholder_fields(functor, arity)
+        return found
+
+    def head_signatures(self, functor: str) -> "dict[int, tuple[str, ...]]":
+        """``{arity: field names}`` for every arity *functor* is KNOWN at
+        here -- a predicate (``predicate_arities``: rows, home stores,
+        adopted rows, bare export entries) or a fielded declaration
+        (``_declared``) -- the population a clause HEAD written against a
+        predicate handle can be building.  Each arity's names are
+        :meth:`field_names_at`'s: the registered signature (a clause head's
+        derived names, stamped at step 4, or a fielded declaration's) first,
+        an arity-only declaration's placeholders only when nothing else is
+        recorded.  A key known with no names at all (clauses added at run
+        time to an undeclared key) answers ``arg_N`` -- positional
+        construction is all such a key has ever supported."""
+        arities = set(self.predicate_arities(functor))
+        arities |= {a for (f, a) in self._declared if f == functor}
+        out: dict[int, tuple[str, ...]] = {}
+        for arity in sorted(arities):
+            found = self.field_names_at(functor, arity)
+            if found is None:
+                found = tuple(f"arg_{i}" for i in range(arity))
+            out[arity] = tuple(found)
+        return out
+
     def declared_kind(self, functor: str, arity: int) -> str | None:
         """``"predicate"`` when the Database knows a row for the key (clauses,
         dispatch, ``-dynamic``, an adopted import, or a directive-minted row)

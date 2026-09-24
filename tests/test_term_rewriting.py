@@ -20,6 +20,7 @@ from clausal.templating.term_rewriting import (
 from clausal.logic.variables import Var as RealVar
 from clausal.terms import DictTerm, SetTerm
 from clausal.logic.generated_names import with_dollar_twins
+from clausal.logic.predicate import head_cell
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -30,6 +31,8 @@ def _ns():
     ns['Var'] = lambda: '<Var>'   # mock; returns a sentinel string
     ns['DictTerm'] = DictTerm
     ns['SetTerm'] = SetTerm
+    # A module-level clause head is emitted as ``$head(<binding>, ...)``.
+    ns['$head'] = head_cell
     # Generated code reaches these through their ``$`` twins.
     return with_dollar_twins(ns)
 
