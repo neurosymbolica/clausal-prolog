@@ -239,6 +239,13 @@ def _convert_inner(goal: Any, db: Any) -> GoalOp:
         _extend(inner_ops, goal.left, db)
         _extend(inner_ops, goal.right, db)
         return Sequence(ops=inner_ops)
+    if type(goal) is str and goal == "fail":
+        # ``fail`` as a GOAL is failure (ISO 7.8.2), the same as ``False``
+        # and as ``call(fail)`` -- operator ruling 2026-09-25.  ``fail`` is
+        # not a truth-value alias (``true``/``false`` are), so it reaches
+        # here as the ATOM, and was lowered to a call of an undefined
+        # ``fail/0``: ``existence_error(procedure, fail/0)``.
+        return Fail()
     if type(goal) is str:
         # STAGE 2 of the atoms-as-str flip: an atom in GOAL position is the
         # call of the 0-arity predicate of its name -- the rule solve/1 and

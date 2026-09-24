@@ -44,7 +44,16 @@ it then shares.  Two choices keep that faithful and cheap:
   compiled artifact depends only on the goal's STRUCTURE: one compile per
   shape, not per value.
 
-ERRORS (checked against Scryer, 2026-09-25).  An unbound goal is
+ISO CELLS (operator ruling 2026-09-25).  ``(",", A, B)``, ``(";", A, B)``
+and ``("\\+", G)`` -- what a runtime-built ISO term or a .pl import holds --
+run through the same converter.  ``->`` and ``*->`` are refused
+(``iso_control_cell_dispatch``): Clausal is cut-free with no committed choice.
+
+ERRORS (checked against Scryer, 2026-09-25; the operator ruled "follow
+Scryer" the same day).  A non-callable top-level goal (number, non-empty list
+or string, tuple data) is ``type_error(callable, G)``; call/N's extras on a
+construct name no procedure: ``call((A, B), X)`` is
+``existence_error(procedure, ','/3)``.  An unbound goal is
 ``instantiation_error``.  A number in a goal position reached through the
 transparent constructs (conjunction, ``or``, ``if_``) is
 ``type_error(callable, Whole)`` naming the WHOLE term, before anything runs --
@@ -82,11 +91,6 @@ _BODY_NODES = _CMP_GOALS + (
 
 # Non-callable in ISO terms: a number.  (bool is True/False -- a goal.)
 _NUMBER_TYPES = (int, float, complex, Decimal, Fraction)
-
-# Atomic leaves safe to pass as a run-time parameter instead of a baked
-# literal.  A str is an atom; a MANGLED one (a predicate handle / -hide atom)
-# is left to the literal lowering, which knows how to treat it.
-_PARAM_ATOMIC = (int, float, str, Decimal, Fraction)
 
 
 def is_conjunction_tuple(t: Any) -> bool:
@@ -154,6 +158,9 @@ def check_callable_body(goal: Any, context: str) -> None:
             return walk(t.left) or walk(t.right)
         if type(t) is nodes.IfExpr:
             return walk(t.test) or walk(t.body) or walk(t.orelse)
+        is_cell, functor = compound_cell_shape(t)
+        if is_cell and len(t) == 3 and functor in (",", ";"):
+            return walk(t[1]) or walk(t[2])
         return False
 
     if walk(goal):
@@ -184,34 +191,41 @@ class _Converter:
 
     # ── argument positions ──────────────────────────────────────────────
     def arg(self, raw):
-        """An argument-position subterm with Vars and atomic leaves lifted
-        into parameters, so the compiled body does not depend on them."""
+        """An argument-position subterm with its VALUES lifted into run-time
+        parameters, so the compiled body depends only on its structure.
+
+        Only STRUCTURE is kept in the compiled code: lists, tuples/cells
+        (slot 0 of a cell is the functor), and arithmetic nodes, whose
+        elements are lifted in turn.  Every other value -- a number, an atom,
+        a ``datetime.date``, an ndarray, a Compound, any opaque Python object
+        -- becomes a parameter, never a literal: a literal needs a lowering
+        and a hashable cache key, and a parameter needs neither (roborev on
+        152a8f64: a bound Var holding a date was inlined and lost the query
+        compiler's bound-Var fallback).  The one exception is a MANGLED atom
+        (a predicate handle), which keeps the literal lowering that knows how
+        to treat it.
+        """
         t = deref(raw)
         if is_var(t):
             return t                      # an unbound Var is already a slot
-        if isinstance(raw, Var):          # a BOUND Var: its value, by reference
-            if isinstance(t, _PARAM_ATOMIC) and type(t) is not bool \
-                    and not (type(t) is str and is_mangled(t)):
-                return self._param(t, raw)
-            # A structured value: lift what is inside it.
-            return self.arg(t)
-        if isinstance(t, _PARAM_ATOMIC) and type(t) is not bool:
-            if type(t) is str and is_mangled(t):
-                return t
-            return self._param(t)
+        memo = raw if isinstance(raw, Var) else None
+        if type(t) is str and is_mangled(t):
+            return t
         if type(t) is list:
             return [self.arg(e) for e in t]
         if type(t) is tuple:
             is_cell, _ = _cell_shape(t)
+            if is_cell and not compound_cell_shape(t)[0]:
+                return self._param(t, memo)   # TUPLE_TAG / chars carrier: data
             if is_cell:
-                if not compound_cell_shape(t)[0]:
-                    return t              # TUPLE_TAG / chars carrier: data
                 # Slot 0 is the functor -- structure, never a parameter.
                 return (t[0],) + tuple(self.arg(e) for e in t[1:])
             return tuple(self.arg(e) for e in t)
-        if isinstance(t, nodes.Node) and type(t) in _NODE_FIELDS:
-            return self._rebuild(t, self.arg)
-        return t
+        if isinstance(t, nodes.Node):
+            if type(t) in _NODE_FIELDS:
+                return self._rebuild(t, self.arg)
+            return t                      # code (a Call, a Lambda ...): as is
+        return self._param(t, memo)
 
     def _rebuild(self, node, fn):
         kw = {}
@@ -280,10 +294,116 @@ class _Converter:
                 comparisons=[self._rebuild(c, self.arg) for c in t.comparisons])
         if tt in _CMP_GOALS:
             return self._rebuild(t, self.arg)
+        is_cell, functor = compound_cell_shape(t)
+        if is_cell and len(t) == 3 and functor == ",":
+            return nodes.TupleLiteral(elements=[self.goal(t[1]), self.goal(t[2])])
+        if is_cell and len(t) == 3 and functor == ";":
+            return nodes.Or(left=self.goal(t[1]), right=self.goal(t[2]))
+        if is_cell and len(t) == 2 and functor == "\\+":
+            direct = self._maybe_tabled(t[1])
+            return nodes.Not(operand=direct if direct is not None
+                             else self._call_leaf(t[1]))
         # Everything else -- a cell, an atom, a predicate class, a lambda,
         # a qualified goal -- is call/1's to resolve, exactly as it would be
         # on its own.
         return self._call_leaf(t)
+
+
+# ── errors (operator ruling 2026-09-25: follow Scryer) ──────────────────────
+
+
+def _indicator(name, arity):
+    from clausal.logic.atoms import mint  # noqa: PLC0415
+    from clausal.terms import Compound  # noqa: PLC0415
+    return Compound("/", (mint(name), arity))
+
+
+# The construct a body term spells, as ``(name, arity)`` -- what call/N's
+# fold extends.  Clausal's own spelling for the Clausal-only constructs
+# (``if_``, and a comparison's operator, e.g. ``==`` for ArithEq).
+def _construct(t):
+    if t is True:
+        return "true", 0
+    if t is False:
+        return "false", 0
+    if type(t) in (tuple, nodes.TupleLiteral, nodes.And, nodes.CompareChain):
+        return ",", 2
+    if type(t) is nodes.Or:
+        return ";", 2
+    if type(t) is nodes.Not:
+        return "\\+", 1
+    if type(t) is nodes.IfExpr:
+        return "if_", 3
+    return type(t).op, 2                 # a comparison node
+
+
+def folded_existence_error(name, arity, context):
+    """``existence_error(procedure, Name/Arity)`` for a goal call/N's fold
+    turned into a name no procedure has (Scryer: ``call(true, x)`` ->
+    ``true/1``, ``call([a], x)`` -> ``'.'/3``)."""
+    from clausal.logic.exceptions import existence_error  # noqa: PLC0415
+    return existence_error(
+        "procedure", _indicator(name, arity),
+        f"{context}: call/N adds its extra arguments to the goal, and "
+        f"{name}/{arity} is no procedure")
+
+
+def body_with_extras_error(goal, n_extra, context):
+    """``call((A, B), X)``: the fold makes ``','(A, B, X)``, which names no
+    procedure -- Scryer: ``existence_error(procedure, ','/3)``, and the
+    analogue for every other construct (``;``/3, ``\\+``/2, ``->``/3)."""
+    name, arity = _construct(goal)
+    return folded_existence_error(name, arity + n_extra, context)
+
+
+def non_callable_goal_error(goal, context):
+    """``call(42)``, ``call([1, 2])``, ``call("ab")`` (Scryer's call/1 refuses
+    every non-empty list): ``type_error(callable, Goal)``."""
+    from clausal.logic.exceptions import type_error  # noqa: PLC0415
+    from clausal.logic.cells import is_chars, chars_text  # noqa: PLC0415
+    if is_chars(goal):
+        # Scryer's culprit is the LIST of chars (``call("ab")`` ->
+        # type_error(callable, [a, b])); the carrier spelling never leaks.
+        text = chars_text(goal)
+        culprit, shown = list(text), f'"{text}"'
+    else:
+        culprit = _culprit(goal)
+        shown = repr(culprit)
+    return type_error(
+        "callable", culprit,
+        f"{context}: {shown} is not a callable term (operator ruling "
+        f"2026-09-25: follow Scryer)")
+
+
+def iso_control_cell_dispatch(db, cell, functor, arity, context):
+    """An ISO control-construct CELL in goal position (after call/N's fold).
+
+    ``(",", A, B)``, ``(";", A, B)`` and ``("\\+", G)`` run as bodies, through
+    the same converter as the Clausal spellings.  ``->`` and ``*->`` are
+    REFUSED: Clausal is cut-free with no committed choice (ruled, forever).
+    The refusal is ``existence_error(procedure, '->'/2)`` -- exactly what an
+    ISO system that does not provide a construct answers when a program calls
+    it, so a portable ``catch/3`` for "no such procedure" sees it; the
+    context names the reason and the Clausal alternative.  Any other arity is
+    the fold's ``','/3`` and friends (Scryer: existence_error).
+    """
+    from clausal.logic.exceptions import (  # noqa: PLC0415
+        LogicException, existence_error,
+    )
+    if (functor in (",", ";") and arity == 2) or (functor == "\\+" and arity == 1):
+        return body_goal_dispatch(db, cell, context)
+    if functor in ("->", "*->") and arity == 2:
+        raise LogicException(existence_error(
+            "procedure", _indicator(functor, 2),
+            f"{context}: {functor}/2 is not provided -- Clausal is cut-free "
+            f"with no committed choice (ruled permanently), so if-then "
+            f"{'(soft cut) ' if functor == '*->' else ''}has no construct; "
+            f"write if_(Cond, Then, Else), whose test is not committed"))
+    raise LogicException(existence_error(
+        "procedure", _indicator(functor, arity),
+        f"{context}: {functor}/{arity} is no procedure -- the control "
+        f"construct {functor} takes "
+        f"{1 if functor == chr(92) + '+' else 2} argument(s)"))
 
 
 # The semantic fields of each node type the converter rebuilds (``position``
@@ -367,4 +487,8 @@ def body_goal_dispatch(db, goal_val, context: str):
     return _call_body, []
 
 
-__all__ = ["is_body_term", "check_callable_body", "body_goal_dispatch"]
+__all__ = [
+    "is_body_term", "check_callable_body", "body_goal_dispatch",
+    "body_with_extras_error", "non_callable_goal_error",
+    "iso_control_cell_dispatch", "folded_existence_error",
+]

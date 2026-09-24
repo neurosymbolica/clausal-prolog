@@ -29,7 +29,11 @@ from clausal.logic.builtins._registry import (
     _trampoline_builtin, _ensure_trampoline_dispatch,
     _DB_BUILTINS, _BUILTIN_FIELDS,
 )
-from clausal.logic.builtins.call_body import is_body_term, body_goal_dispatch
+from clausal.logic.builtins.call_body import (
+    is_body_term, body_goal_dispatch, body_with_extras_error,
+    non_callable_goal_error, iso_control_cell_dispatch, folded_existence_error,
+)
+from clausal.terms import Compound
 
 
 # ── call_goal/1,2,3 — invoke a goal closure (V2-9 lambdas) ──────────────────
@@ -122,13 +126,15 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
     behave identically — is what makes this arm arity-general rather than
     ``== 2``.
 
-    Returns ``None`` — which the caller turns into a silent failure, the
-    behaviour every non-callable goal has had — when the goal is not a cell or
-    atom, when no db was threaded, or when the named predicate does not exist.
-    That last case is deliberate: the translator session's pinned §4.2 contract
-    is that a non-callable goal FAILS rather than raising, and a name that
-    resolves to nothing is exactly the same non-goal it was before this task.
-    A resolvable module does not change it: ``call(M:nosuch(X))`` fails.
+    Returns ``None`` — which the caller turns into a silent failure — when no
+    db was threaded, or when the named predicate does not exist: a name that
+    resolves to nothing fails, and a resolvable module does not change it
+    (``call(M:nosuch(X))`` fails).  A goal that is not CALLABLE at all (a
+    number, a non-empty list or string, tuple data ...) RAISES
+    ``type_error(callable, Goal)`` since the operator ruling of 2026-09-25
+    (follow Scryer), which retired the translator's "section 4.2" contract
+    that it fail too.  A body term runs (``call_body``); call/N's extras on a
+    body term or a control construct name no procedure (existence_error).
 
     The one exception is a MANGLED predicate handle (ruling 2, 2026-09-24):
     it is not a name the caller wrote but a reference that was supposed to
@@ -144,11 +150,24 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
     are answered instead of refused, also independently of *db* — see
     ``_ZERO_ARITY_CONTROL_GOALS``.
     """
-    if not extra_args and is_body_term(goal_val):
+    if is_body_term(goal_val):
         # A BODY term -- also reached as the inner goal of ``M:Body``, whose
         # arm below restarts here against M's db (ISO: M is the context
         # module of the whole body).
-        return body_goal_dispatch(db, goal_val, context)
+        if not extra_args:
+            return body_goal_dispatch(db, goal_val, context)
+        # call/N's extras fold onto the construct, and the folded goal names
+        # no procedure (operator ruling 2026-09-25, follow Scryer):
+        # ``call((A, B), X)`` -> existence_error(procedure, ','/3).
+        raise LogicException(body_with_extras_error(
+            goal_val, len(extra_args), context))
+    if isinstance(goal_val, Compound):
+        # A Compound goal is the cell of the same shape (``solve`` lowers it
+        # the same way); it used to fall to the silent-failure tail.
+        cell = (goal_val.functor,) + tuple(goal_val.args)
+        return _resolve_named_goal(
+            db, cell if goal_val.args else goal_val.functor, extra_args,
+            context)
     is_cell, functor = compound_cell_shape(goal_val)
     if is_cell:
         goal_args = list(goal_val[1:])
@@ -162,6 +181,12 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
         raise LogicException(string_goal_error("", len(extra_args), "call/N"))
     elif type(goal_val) is str:
         functor, goal_args = goal_val, []   # STAGE 2: an atom is the 0-arity goal of its name
+    elif is_chars(goal_val) and not extra_args:
+        # Operator ruling 2026-09-25 (follow Scryer): ``call("ab")`` is
+        # ``type_error(callable, "ab")`` -- Scryer's call/1 refuses every
+        # non-empty LIST, and a string is one.  With extras the fold makes
+        # it the compound '.'/N+2, which names no procedure (below).
+        raise LogicException(non_callable_goal_error(goal_val, context))
     elif is_chars(goal_val):
         # THE FLIP (spec §6.4): a ``str`` is a STRING, so ``call("foo")`` is
         # not a call to ``foo/0``.  Task 15 item 3 (ISO alignment): the
@@ -173,8 +198,17 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
         # silent failure is exactly how that mistake stays invisible.
         raise LogicException(
             string_goal_error(chars_text(goal_val), len(extra_args), "call/N"))
+    elif type(goal_val) is list and extra_args:
+        # A non-empty list with extras folds to the compound '.'/N+2
+        # (Scryer: ``call([a], x)`` -> existence_error(procedure, '.'/3)).
+        raise LogicException(folded_existence_error(
+            ".", 2 + len(extra_args), context))
     else:
-        return None
+        # Not a callable term (operator ruling 2026-09-25, follow Scryer,
+        # retiring the translator's "section 4.2" silent-failure contract):
+        # a number, a non-empty list, tuple DATA, a dict ... is
+        # ``type_error(callable, Goal)``.
+        raise LogicException(non_callable_goal_error(goal_val, context))
     call_args = [deref(a) for a in goal_args] + [deref(a) for a in extra_args]
     # The goal as the fold leaves it — the term both special routes below are
     # decided on (F4), and the culprit the control-construct refusal names.
@@ -211,7 +245,19 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
     # in goal position as ``call((",", A, B))``, and it used to fail silently
     # here while ``solve((",",), m)`` raised.
     if functor in CELL_GOAL_CONTROL_FUNCTORS:
-        refuse_control_construct_cell(folded, functor, context)
+        # Operator ruling 2026-09-25: the ISO cells ``(",", A, B)``,
+        # ``(";", A, B)`` and ``("\\+", G)`` run as bodies; ``->`` and
+        # ``*->`` are refused (cut-free, no committed choice); any other
+        # arity -- what call/N's fold makes -- names no procedure.
+        return iso_control_cell_dispatch(db, folded, functor,
+                                         len(call_args), context)
+    if call_args and functor in _ZERO_ARITY_CONTROL_GOALS:
+        # ``call(true, X)`` / ``call(fail, X)``: the fold makes true/1, a
+        # control construct with extra arguments, which no database defines
+        # (Scryer: existence_error(procedure, true/1)) -- the same answer the
+        # ``True``/``False`` object gets (operator ruling 2026-09-25).
+        raise LogicException(folded_existence_error(
+            functor, len(call_args), context))
     if not call_args and functor in _ZERO_ARITY_CONTROL_GOALS:
         # SUPPORTED, not refused (final review I-3).  Unlike ``,``/``;``/``->``
         # these need no goal-tree interpreter: ``true`` succeeds once, ``fail``
@@ -336,7 +382,7 @@ def _make_call_goal_factory(extra_n: int):
             # interpreted by ``_resolve_named_goal`` -- see ``call_body``.
             # Checked first: its nodes are Python-``callable`` and would
             # otherwise take the goal-OBJECT route below and be refused.
-            body = extra_n == 0 and is_body_term(goal_val)
+            body = is_body_term(goal_val)
             # Operator ruling 2026-09-24: an imported predicate reached
             # through an unqualified name -- its class, or (after the flip)
             # the owner HANDLE an import binds -- resolves under that name
@@ -346,7 +392,7 @@ def _make_call_goal_factory(extra_n: int):
             localized = goal_val if body else localize_goal(db, goal_val)
             if body:
                 dispatch, call_args = _resolve_named_goal(
-                    db, goal_val, (), "call/1")
+                    db, goal_val, args[1:extra_n + 1], f"call/{extra_n + 1}")
             elif localized is not goal_val:
                 dispatch = _ensure_trampoline_dispatch(localized, extra_n)
                 call_args = [deref(a) for a in args[1:extra_n + 1]]

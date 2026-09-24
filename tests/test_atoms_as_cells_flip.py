@@ -744,10 +744,16 @@ class TestTheNilAtomInAKeyPosition:
         context = exc.value.term.args[1]
         assert "the empty list is not a callable term" in context
         assert "list of its characters" not in context
-        # …and a real string still gets the string wording.
+        # …and a real string still gets the string wording -- with an extra
+        # argument.  FLIPPED, operator ruling 2026-09-25 (call-runs-body-terms round 2: follow Scryer): at call/1 a string is
+        # type_error(callable, "foo") (Scryer ``call("ab")``); only call/N's
+        # fold makes it the missing procedure '.'/3.
+        with pytest.raises(LogicException) as exc:
+            list(call("call_goal", chars("foo"), Var(), module=builtins_mod))
+        assert "list of its characters" in exc.value.term.args[1]
         with pytest.raises(LogicException) as exc:
             list(call("call_goal", chars("foo"), module=builtins_mod))
-        assert "list of its characters" in exc.value.term.args[1]
+        assert exc.value.term.args[0].functor == "type_error"
 
     def test_a_py_wrapper_option_table_survives_a_nil_name(self):
         """``modules/py/__init__.py``'s ``option``/``has_option`` looked the

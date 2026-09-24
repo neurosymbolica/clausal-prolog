@@ -18,6 +18,7 @@ trampoline import blocked, so the whole engine runs on ``_trampoline_py``.
 """
 from __future__ import annotations
 
+import datetime
 import json
 import os
 import subprocess
@@ -35,9 +36,26 @@ from clausal.pythonic_ast import nodes
 FIXTURES = Path(__file__).parent / "fixtures"
 HOST = "call_body_terms"
 OTHER = "call_body_terms_other"
-ROWS = range(1, 31)
+ROWS = range(1, 37)
 UNBOUND = "unbound"
-INPUTS = (UNBOUND, 0, 1, 2, 3, 9)
+
+
+class Opaque:
+    """A value with no literal lowering and no hash (roborev on 152a8f64)."""
+    __hash__ = None
+
+    def __init__(self, tag):
+        self.tag = tag
+
+    def __eq__(self, other):
+        return isinstance(other, Opaque) and other.tag == self.tag
+
+    def __repr__(self):
+        return f"Opaque({self.tag!r})"
+
+
+DATE = datetime.date(2026, 9, 25)
+INPUTS = (UNBOUND, 0, 1, 2, 3, 9, DATE, Opaque("o"))
 
 
 def _load(name):
@@ -71,8 +89,11 @@ def _row_answers(module, name, n, x):
     from clausal.logic.solve import call
     try:
         return [[_norm(X), _norm(Y)] for _ in call(name, n, X, Y, module=module)]
-    except LogicException as e:                         # pragma: no cover
-        return f"raise {e.term}"
+    except LogicException as e:
+        formal = e.term.args[0]
+        return f"raise {getattr(formal, 'functor', formal)}"
+    except Exception as e:                  # a Python error, e.g. date > 0
+        return f"raise {type(e).__name__}"
 
 
 def _term(exc_info):
@@ -103,8 +124,8 @@ def test_the_table_is_not_vacuous(host):
                  if _row_answers(host, "run", n, x)}
     failing = {n for n in ROWS for x in INPUTS
                if not _row_answers(host, "run", n, x)}
-    # Row 13 is ``False``: it never answers, by construction.
-    assert set(ROWS) - answering == {13}
+    # Rows 13 and 33 fail by construction (``False``; ``..., fail``).
+    assert set(ROWS) - answering == {13, 33}
     assert len(failing) >= 20       # and most rows also have a failing input
 
 
@@ -156,6 +177,26 @@ def test_defect_t4_as_written_is_dif_so_the_goal_is_unbound(host):
 def test_defect_t4_with_the_negation_parenthesized(host):
     assert _answers(host, "t4b", 1) == []
     assert len(_answers(host, "t4b", 2)) == 1
+
+
+def test_values_without_a_literal_lowering_reach_the_body(host):
+    """roborev on 152a8f64: rows 31/32 with a date and an opaque unhashable
+    object answer, in both spellings (the row test compares them)."""
+    for x in (DATE, Opaque("o")):
+        assert _row_answers(host, "run", 32, x) == [[x, x]]
+        assert _row_answers(host, "run", 32, x) == _row_answers(host, "b", 32, x)
+
+
+def test_fail_as_a_compiled_goal_is_failure(host):
+    """Operator ruling 2026-09-25 (item 3): ``fail`` in a clause body used to
+    be a call of an undefined fail/0 -- existence_error.  Rows 6 and 33-35
+    are the compiled side of the table; these pin it directly."""
+    assert _row_answers(host, "b", 6, 2) == []
+    assert _row_answers(host, "b", 6, 1) == [[1, "_"]]
+    assert _row_answers(host, "b", 33, UNBOUND) == []
+    assert [a[0] for a in _row_answers(host, "b", 34, UNBOUND)] == [1, 2]
+    assert [a[0] for a in _row_answers(host, "b", 35, UNBOUND)] == [1, 2]
+    assert [a[0] for a in _row_answers(host, "b", 36, UNBOUND)] == [1, 2]
 
 
 def test_defect_t5_if_term(host):
@@ -220,21 +261,96 @@ def test_a_variable_goal_inside_a_body_is_call_of_it(host):
     assert [deref(X) for _ in _answers_gen(host, "call_it", goal)] == [2, 3]
 
 
-def test_the_iso_control_construct_cells_are_still_refused(host):
-    """Unchanged: ``(",", A, B)`` is the ISO spelling the surface never
-    builds; it stays refused with its own diagnostic, not interpreted."""
+def _existence_indicator(host, pred, *args):
     with pytest.raises(LogicException) as info:
-        _answers(host, "call_it", (",", ("p", Var()), ("s", Var())))
-    assert _formal(_term(info)).args[0] == \
-        "callable_control_construct_unsupported"
+        _answers(host, pred, *args)
+    formal = _formal(_term(info))
+    assert formal.functor == "existence_error"
+    assert formal.args[0] == "procedure"
+    ind = formal.args[1]
+    assert ind.functor == "/"
+    return tuple(ind.args)
 
 
-def test_a_body_node_with_call_n_extras_is_still_refused(host):
-    """call/N with extras over a body node is not a body call (Scryer:
-    existence_error for ','/3); the pre-existing type_error is kept."""
+def test_the_iso_control_construct_cells_run_as_bodies(host):
+    """Operator ruling 2026-09-25 (item 4): ``(",", A, B)``, ``(";", A, B)``
+    and ``("\\+", G)`` -- the runtime spelling is the str ``\\+`` -- run
+    through the same converter as the Clausal spellings, nested too."""
+    X = Var()
+    got = [deref(X) for _ in _answers_gen(
+        host, "call_it", (",", ("p", X), ("s", X)))]
+    assert got == [2]
+    X = Var()
+    got = [deref(X) for _ in _answers_gen(
+        host, "call_it", (";", ("p", X), ("s", X)))]
+    assert got == [1, 2, 2, 3]
+    X = Var()
+    got = [deref(X) for _ in _answers_gen(
+        host, "call_it", (",", ("p", X), ("\\+", ("s", X))))]
+    assert got == [1]
+    assert _answers(host, "call_it", ("\\+", ("p", 1))) == []
+    # A number inside is the whole-body type_error, through the cells too.
+    assert _type_error_culprit(host, (",", ("r", 0), 1)) == (",", ("r", 0), 1)
+
+
+@pytest.mark.parametrize("functor", ["->", "*->"])
+def test_committed_choice_cells_are_refused(host, functor):
+    """``->`` and ``*->``: cut-free, no committed choice (ruled forever).
+    existence_error(procedure, '->'/2) -- what an ISO system that lacks a
+    construct answers -- with the reason in the context."""
+    cell = (functor, ("p", Var()), ("s", Var()))
+    assert _existence_indicator(host, "call_it", cell) == (functor, 2)
     with pytest.raises(LogicException) as info:
-        _answers(host, "call_it2", nodes.Gt(left=Var(), right=0), 1)
-    assert _formal(_term(info)).functor == "type_error"
+        _answers(host, "call_it", cell)
+    assert "no committed choice" in _term(info).args[1]
+    assert "if_(" in _term(info).args[1]
+
+
+@pytest.mark.parametrize("goal, indicator", [
+    ((("p", 1), ("s", 2)), (",", 3)),                  # call((A, B), X)
+    (nodes.Or(left=("p", 1), right=("s", 2)), (";", 3)),
+    (nodes.Not(operand=("p", 1)), ("\\+", 2)),
+    (nodes.IfExpr(test=("p", 1), body=True, orelse=False), ("if_", 4)),
+    (nodes.Gt(left=1, right=0), (">", 3)),
+    ((",", ("p", 1), ("s", 2)), (",", 3)),              # the ISO cell
+    ((";", ("p", 1), ("s", 2)), (";", 3)),
+    (("\\+", ("p", 1)), ("\\+", 2)),
+    (("->", ("p", 1), ("s", 2)), ("->", 3)),
+    (True, ("true", 1)),
+    ("true", ("true", 1)),
+    ("fail", ("fail", 1)),
+    ([1, 2], (".", 3)),
+])
+def test_call_n_extras_on_a_construct_name_no_procedure(host, goal, indicator):
+    """Operator ruling 2026-09-25 (item 2), Scryer on the box:
+    ``call((true,true),x)`` -> existence_error(procedure, ','/3);
+    ``;``/3, ``\\+``/2, ``->``/3, ``true``/1, ``'.'/3`` alike."""
+    assert _existence_indicator(host, "call_it2", goal, "x") == indicator
+
+
+@pytest.mark.parametrize("goal", [
+    42, 3.5, [1, 2], ("()", 1, 2), (tuple, 1, 2),
+    nodes.Not(operand=1),                      # call(not 1): Not runs call(1)
+])
+def test_a_non_callable_top_level_goal_is_a_type_error(host, goal):
+    """Operator ruling 2026-09-25 (item 1), retiring the translator's
+    "section 4.2" silent-failure contract: Scryer ``call(42)``,
+    ``call([a])``, ``call(\\+ 1)`` -> type_error(callable, G)."""
+    with pytest.raises(LogicException) as info:
+        _answers(host, "call_it", goal)
+    formal = _formal(_term(info))
+    assert formal.functor == "type_error" and formal.args[0] == "callable"
+
+
+def test_a_string_goal_is_a_type_error_at_call_1(host):
+    """Scryer: ``call("ab")`` -> type_error(callable, [a, b]); with an extra
+    argument the fold names '.'/3 (unchanged)."""
+    from clausal.logic.cells import chars
+    with pytest.raises(LogicException) as info:
+        _answers(host, "call_it", chars("ab"))
+    formal = _formal(_term(info))
+    assert formal.functor == "type_error" and formal.args[1] == ["a", "b"]
+    assert _existence_indicator(host, "call_it2", chars("ab"), "x") == (".", 3)
 
 
 # ── module qualification, nesting, caching ──────────────────────────────────
@@ -264,16 +380,28 @@ def test_a_body_nested_in_a_body_via_a_bound_variable(host):
     assert [deref(X) for _ in _answers_gen(host, "call_it", goal)] == [2]
 
 
-def test_one_compile_per_shape_not_per_value(host):
+def test_one_compile_per_shape_not_per_value(host, monkeypatch):
     """Argument values are run-time parameters, so calling one shape with
-    fifty different values adds at most one compiled query."""
+    fifty different values compiles it ONCE.  Counts compiles directly (the
+    query cache is FIFO-capped, so its size could pass vacuously); the
+    positive control is the first call, which must compile."""
+    import clausal.logic.compiler as C
     from clausal.logic import solve as S
-    for x in range(3):                     # warm the shape
-        _answers(host, "t2", x, Var())
-    before = len(S._query_cache)
-    for x in range(3, 53):
+    real = C.compile_predicate_trampoline
+    compiles = []
+
+    def counting(name, *a, **k):
+        if name == "_query":
+            compiles.append(name)
+        return real(name, *a, **k)
+
+    monkeypatch.setattr(C, "compile_predicate_trampoline", counting)
+    S._query_cache.clear()
+    assert len(_answers(host, "t2", 1, Var())) == 1
+    assert len(compiles) == 1                    # positive control
+    for x in range(2, 52):
         assert len(_answers(host, "t2", x, Var())) == 1
-    assert len(S._query_cache) - before <= 1
+    assert len(compiles) == 1
 
 
 def test_a_tabled_leaf_under_not_is_emitted_as_the_direct_call(host):
@@ -305,11 +433,12 @@ _PARITY_SCRIPT = textwrap.dedent(r"""
     sys.path.insert(0, sys.argv[3])
     import clausal.logic.trampoline as T
     import test_call_runs_body_terms as tc
-    host = tc._load(tc.OTHER) and tc._load(tc.HOST)
+    tc._load(tc.OTHER)
+    host = tc._load(tc.HOST)
     out = {"impl": T.StepGenerator.__module__,
-           "rows": {f"{n}/{x}": tc._row_answers(host, "run", n, x)
+           "rows": {f"{n}/{x!r}": tc._row_answers(host, "run", n, x)
                     for n in tc.ROWS for x in tc.INPUTS}}
-    print(json.dumps(out))
+    print(json.dumps(out, default=repr))
 """)
 
 
@@ -330,6 +459,6 @@ def test_c_and_python_trampolines_answer_the_table_alike():
     py = _run_table("py")
     assert c["impl"] != py["impl"]
     assert py["impl"] == "clausal.logic._trampoline_py"
-    assert len(c["rows"]) == len(ROWS) * len(INPUTS) == 180
+    assert len(c["rows"]) == len(ROWS) * len(INPUTS) == 36 * 8
     assert sum(1 for v in c["rows"].values() if v) >= 30
     assert c["rows"] == py["rows"]

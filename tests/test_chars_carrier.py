@@ -276,4 +276,8 @@ class TestSlice5Crossings:
         mod = _mod(tmp_path, 'p <- call("foo")\n')
         with pytest.raises(LogicException) as ei:
             _first(mod, "p")
-        assert "existence_error" in str(ei.value) and "$chars" not in str(ei.value)
+        # FLIPPED, operator ruling 2026-09-25 (follow Scryer): at call/1 a
+        # string is type_error(callable, [f, o, o]) -- Scryer ``call("ab")``
+        # -- not existence_error; the carrier spelling still never leaks.
+        assert "type_error" in str(ei.value) and "$chars" not in str(ei.value)
+        assert ei.value.term.args[0].args[1] == ["f", "o", "o"]
