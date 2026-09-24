@@ -98,7 +98,15 @@ def _is_opaque_head_literal(term: Any) -> bool:
         return False
     if is_term_instance(term):
         return False
-    if isinstance(term, type) and isinstance(term, PredicateMeta):
+    # F5 (row 18): era-agnostic swap for the arity-blind
+    # `isinstance(term, type) and isinstance(term, PredicateMeta)` test --
+    # `is_declared_predicate_name` answers the identical question (a bare
+    # predicate-class reference, today's era) and additionally covers the
+    # post-flip mangled-atom shape, though that shape is already caught by
+    # the `str` check above in practice.  MUST move in the same commit as
+    # the head_match.py:858 (row 39) branch this pairs with -- see that
+    # branch's comment for why.
+    if is_declared_predicate_name(term):
         return False
     # Ground containers with a nested unbound Var stay structural (a captured
     # literal can't bind the inner Var) — keep the degraded wildcard for them.
