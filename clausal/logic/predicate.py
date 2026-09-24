@@ -1583,7 +1583,9 @@ class _UnqualifiedName:
 
     def dispatch_at(self, arity: int) -> Callable:
         if binding_grants_arity(self.binding, arity, self.db, self.name):
-            return _dispatch_at(self.binding, arity)
+            # Q0 (round-3 review): the calling db is the hint here too --
+            # the same one ``binding_grants_arity`` was just given.
+            return _dispatch_at(self.binding, arity, db=self.db)
         fn = self.db.get_dispatch(self.name, arity)
         if fn is not None:
             return fn

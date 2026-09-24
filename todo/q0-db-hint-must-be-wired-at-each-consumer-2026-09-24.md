@@ -107,7 +107,8 @@ scope.
   class fallback runs only when no `$module` is present.
 - **The population is foreign:** predicate_diagnostics `_imported_entries` and
   `_defines` look at other modules. The hint only short-circuits the caller's
-  OWN module. A popped cross-module owner registry is deferred per Q0.
+  OWN module. (The popped cross-module owner is now answered by the
+  handle-owner registry -- see "Q0 remainder" below.)
 - **Post-flip defects outside Q0, found on the way:**
   `constants.constant_functor_term` calls `binding(*args)`, and a handle str is
   not callable. `import_diagnostics._defined_names` calls
@@ -144,9 +145,30 @@ scope.
   `_imported_binding_by_canonical_name` (M13).
 
 ## Round 3 review (landed with these open, 2026-09-24)
-- solve.py:1122 -- `call(handle, ..., module=lm)` with the functor itself a handle goes
+- ~~solve.py:1122 -- `call(handle, ..., module=lm)` with the functor itself a handle goes
   through `qualify_mangled_goal(functor)` / `resolve_module` WITHOUT the hint (only the
-  alias route is tested).
-- predicate.py `_UnqualifiedName.dispatch_at`: `return _dispatch_at(self.binding, arity)`
-  -- pass `db=self.db` (it already feeds binding_grants_arity).
+  alias route is tested).~~ **CLOSED** (branch fix/q0-runtime-registry-2026-09-24):
+  `solve.call` passes the calling module's db (a `Module`, or an imported module's
+  `__clausal_module__`); test
+  `test_runtime_call_with_a_handle_functor_passes_the_module_s_db` (both designator
+  shapes), mutation-checked.
+- ~~predicate.py `_UnqualifiedName.dispatch_at`: `return _dispatch_at(self.binding, arity)`
+  -- pass `db=self.db` (it already feeds binding_grants_arity).~~ **CLOSED** (same
+  branch): passes `db=self.db`; test `test_unqualified_name_dispatch_passes_its_db`,
+  mutation-checked.
 - specialization.py:1383-1389 computes `namespace_db(module_dict)` twice per call.
+
+## Q0 remainder: the handle-owner registry (branch fix/q0-runtime-registry-2026-09-24)
+
+Ruling Q0 (final): the caller's db first; a registry ONLY for the cross-module
+remainder. `predicate._owner_db_for_module_name` is the HANDLE-ONLY rule:
+caller's db -> by identity, the owner the caller adopted a row from
+(`Database.adopted_owner_dbs`) -> `sys.modules` -> the weak registry
+`_HANDLE_OWNERS` (filled by `compile_module`). `resolve_module` (a user-written
+`M:G`, `module=`) is untouched: `qualify_mangled_goal` carries the owner's Module
+OBJECT when `sys.modules` cannot answer the name (`handle_designator`). Name reuse
+with two live owners raises `AmbiguousHandleOwnerError` (after one gc pass).
+`_field_names_for_name` honours its `db`. Tests: `tests/test_handle_owner_registry.py`.
+The hint tests here pop the registry entry so their no-hint controls stay
+meaningful.
+

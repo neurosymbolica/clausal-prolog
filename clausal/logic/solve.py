@@ -1122,7 +1122,14 @@ def call(
     if type(functor) is str:
         if is_mangled(functor):
             _handle_module_name, _handle_name = demangle(functor)
-        _q = qualify_mangled_goal(functor)
+        # Q0 (round-3 review): the calling module's db is the hint, so a
+        # handle naming ``module`` itself resolves there even when the
+        # ``.clausal`` runner popped it from ``sys.modules``.  Only a real
+        # Clausal module carries one (a Module, or an imported module's
+        # ``__clausal_module__``); a designator string is resolved below.
+        _cm = module if isinstance(module, Module) else getattr(
+            module, "__clausal_module__", None)
+        _q = qualify_mangled_goal(functor, db=getattr(_cm, "db", None))
         if _q is not functor:
             module = resolve_module(_q[1], module, "call/N")
             functor = _q[2]
