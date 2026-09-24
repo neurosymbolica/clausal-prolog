@@ -1,6 +1,6 @@
 # Engine-lane handoff, 2026-09-24 — P4 / PredicateMeta retirement
 
-Canonical main: **`a7e26641`**. Box/GitLab NOT pushed. Gate throughout:
+Canonical main: **`d8543fbf`**. Box/GitLab NOT pushed. Gate throughout:
 146 failed / ~16892 passed, NEW 0 / GONE 0. Package gate 105 = 105 (in-room)
 / 110 (canonical — a different package environment; re-baseline per tree).
 
@@ -88,13 +88,39 @@ names the class because raw classes still reach it directly (`solve.py`'s
 first. This invalidates the earlier assumption that a native predicate always
 arrives as a handle.
 
+## F5, F9, F3 — ALL DONE (2026-09-24, after the first version of this handoff)
+
+* **F5** (rows 18, 39) — the coupled pair swapped in ONE commit, with the
+  mirroring proved two ways: a code trace, and a test calling both functions
+  on the same inputs asserting they agree.
+* **F3** (row 9) — **NO CODE CHANGE NEEDED at any of the four callers.** All
+  three INFERENCE verdicts in the design doc were turned into verified ones.
+  It did surface an undocumented divergence the brief never flagged: in
+  `term_to_ast_expr` the baked literal's SPELLING differs across eras (a
+  plain name today, a raw mangled string post-flip). That needs a ruling, so
+  it was PARKED, not guessed —
+  `todo/self-denoting-predicate-atom-spelling-post-flip-mangled-or-plain-2026-09-24.md`.
+* **F9** (row 1) — **the design brief was WRONG and would have shipped a
+  silent bug.** It said filter on `is_mangled(value)` *instead*; today every
+  binding is a class, so that selects NOTHING until the flip and the
+  diagnostic quietly goes blank. Filter is `is_declared_predicate_name`
+  (era-agnostic), and the task's real deliverable is a POSITIVE CONTROL: two
+  tests assert the population is non-empty and check exact pairs, failing
+  TODAY if the filter empties. Also measured: `field_names_for` returns
+  `None` for ordinary clause-defined predicates in the mangled era, so an
+  `arities_for` fallback keeps the `/N` suffix — and `arities_for` is itself
+  lossy for bare `name/arity` exports and adopted rows. Fine for a
+  diagnostic; NOT fine for a gate.
+
+**The recurring lesson, now three times in one day:** a filter keyed on the
+old shape does not fail loudly when the shape changes — it silently selects
+nothing. The lock loop, the F9 brief, and the `through=` bug are the same
+mistake wearing different clothes. Any migration of a SELECTOR needs a
+non-empty positive control; migrating the ACTION is the easy half.
+
 ## What is left, in order
 
-1. **F5, F9, F3** — small, sized in
-   `implementation_plans/w4b2-f2b-and-hard-families-2026-09-23.md`. F3 may
-   close with zero edits. NOTE F5 and F3 both touch `terms_to_ast.py` — do
-   not run them as concurrent agents.
-2. **The 11 still-blocked sites** — worklist with per-row evidence in
+1. **The 11 still-blocked sites** — worklist with per-row evidence in
    `.superpowers/sdd/f1-reaudit-report.md`. Not migrations: they need the
    flip to supply a replacement for the class object. `analyze_mi` (32/33)
    has no era-agnostic arm at all; `_find_pred_cls` (58/59) is documented as
