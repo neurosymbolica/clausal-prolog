@@ -634,21 +634,41 @@ class Database:
         """Every arity *functor* is declared PREDICATE-shaped at -- the
         arity-answering twin of :meth:`is_predicate_name`, scanning exactly
         its containers, so ``bool(predicate_arities(f)) ==
-        is_predicate_name(f)`` always.
-
-        The lossless counterpart of :meth:`arities_for` (which misses
-        ``_predicate_export`` and ``_adopted``; see ``is_predicate_name``).
-        Exists for the predicate-not-found diagnostic's near-miss pool
-        (F4, ruling 3: the diagnostic arity reader answers a SET, the empty
-        set meaning "not a predicate here").  ``arities_for`` keeps its own
-        narrower meaning for the import plant, which must not treat an
-        adopted row as the exporter's own.
+        is_predicate_name(f)`` always.  The lossless counterpart of
+        :meth:`arities_for` (which misses ``_predicate_export`` and
+        ``_adopted``).  One functor's slice of :meth:`arity_maps`'s second
+        map; a caller asking about many names should take the maps once.
         """
-        found: set[int] = set()
-        for keyed in (self._rows, self._adopted, self._predicate_export,
-                      *self._home_stores()):
-            found |= {a for (f, a) in keyed if f == functor}
-        return found
+        return set(self.arity_maps()[1].get(functor, ()))
+
+    def arity_maps(self) -> "tuple[dict[str, set[int]], dict[str, set[int]]]":
+        """``(defined, declared)``: two ``functor -> set[arity]`` indexes,
+        built in ONE pass over the stores.
+
+        * ``defined`` -- the keys this database is the HOME of, exactly
+          :meth:`owned_keys` (``_rows`` plus :meth:`_home_stores`: clauses,
+          dispatch, lazy recompile, signatures, ``-dynamic``).  An arity here
+          is one a call can actually reach in this module.
+        * ``declared`` -- everything :meth:`is_predicate_name` counts:
+          ``defined`` plus ``_adopted`` (an ``-import_from`` row another
+          database owns) and ``_predicate_export`` (a bare ``name/arity``
+          export entry, which may never get a clause here).
+
+        Exists for the predicate-not-found diagnostic (F4, ruling 3), which
+        asks about every binding in a namespace: a per-functor scan there
+        is O(bindings x keys).
+        """
+        defined: dict[str, set[int]] = {}
+        for keyed in (self._rows, *self._home_stores()):
+            for key in keyed:
+                if isinstance(key, tuple) and len(key) == 2:
+                    defined.setdefault(key[0], set()).add(key[1])
+        declared = {f: set(a) for f, a in defined.items()}
+        for keyed in (self._adopted, self._predicate_export):
+            for key in keyed:
+                if isinstance(key, tuple) and len(key) == 2:
+                    declared.setdefault(key[0], set()).add(key[1])
+        return defined, declared
 
     def functors(self) -> "list[str]":
         """Every predicate NAME this database knows, sorted.

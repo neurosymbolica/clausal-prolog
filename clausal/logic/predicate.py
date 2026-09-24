@@ -1902,27 +1902,40 @@ def predicate_owner_module(binding) -> "str | None":
     return None
 
 
-def predicate_arities_for(binding) -> "set[int]":
-    """F4 (ruling 3): the SET of arities *binding* denotes a predicate at,
-    era-agnostic; the EMPTY set means "not a predicate" -- the role ``None``
-    played for the single-arity reader this replaces
+def predicate_arities_for(binding, *, cache: "dict | None" = None) -> "set[int]":
+    """F4 (ruling 3): the SET of arities *binding* is a DEFINED predicate
+    at, era-agnostic; the EMPTY set means "not a predicate" -- the role
+    ``None`` played for the single-arity reader this replaces
     (``predicate_diagnostics._arity_of``, whose ``if arity:`` guards dropped
     every ``p/0``).  Several arities are several answers, not ambiguity.
 
-    Source: the owner's ``Database.predicate_arities`` -- never
-    ``Database.arities_for``, which misses a bare ``name/arity`` export
-    entry and an ``-import_from`` adopted row.
+    "Defined" is the owner db's HOME keys (``Database.arity_maps()[0]``,
+    exactly ``owned_keys``), never the declared-only extras: an arity known
+    only from a bare ``name/arity`` export entry or an adopted row is not
+    one a call reaches -- with ``p/1`` clauses and a bare-exported ``p/2``,
+    calling ``p/2`` raises an arity mismatch, so ``p/2`` is not a thing to
+    suggest (roborev on F4).
 
-    1. a ``PredicateMeta`` class -> ``{len(cls._fields)}`` (the old reader's
-       answer, kept so nothing it answered is lost -- e.g. a module that is
-       not in ``sys.modules``) UNION the owner db's
-       ``predicate_arities(cls.__name__)`` when the owner is a loaded Clausal
-       module (a ``-dynamic(p/1, p/2)`` name binds one class but is a
-       predicate at both).
-    2. a mangled atom whose module half is a loaded Clausal module -> that
-       db's ``predicate_arities(functor)``.
+    1. a ``PredicateMeta`` class -> ``{len(cls._fields)}`` (the arity the
+       name is bound at -- the old reader's answer, kept so nothing it
+       answered is lost: a module not in ``sys.modules``, a partial load,
+       ``term_expansion/4``, which no db records) UNION the owner db's
+       defined arities for ``cls.__name__`` (a ``-dynamic(p/1, p/2)`` name
+       binds one class but is defined at both).
+    2. a mangled atom whose module half is a loaded Clausal module -> the
+       owner db's defined arities; if there are NONE, its declared arities
+       instead.  The fallback is the mangled twin of arm 1's ``_fields``: a
+       name that exists here only as a declaration (a bare-exported
+       ``p/1`` with no clauses, an adopted row) is bound as a class at that
+       arity today, so the class era answers it, and the mangled era must
+       too.  It never ADDS a declared arity beside a defined one.
     3. anything else (a ``@dataclass`` class, a plain string, ``None``, an
        unloaded owner, an arbitrary object) -> ``set()``.
+
+    *cache*, when given, is a dict owned by the caller and kept for one
+    batch of questions (one diagnostic): it memoises each db's
+    ``arity_maps()`` so a namespace sweep is O(bindings + keys), not
+    O(bindings x keys).  Do not keep it across database mutations.
     """
     if isinstance(binding, PredicateMeta):
         found: set[int] = set()
@@ -1932,7 +1945,8 @@ def predicate_arities_for(binding) -> "set[int]":
         owner = predicate_owner_module(binding)
         db = _db_for_module_name(owner) if owner else None
         if db is not None:
-            found |= db.predicate_arities(binding.__name__)
+            defined, _declared = _arity_maps(db, cache)
+            found |= defined.get(binding.__name__, set())
         return found
     from clausal.logic.atoms import is_mangled  # noqa: PLC0415
     if is_mangled(binding):
@@ -1940,8 +1954,19 @@ def predicate_arities_for(binding) -> "set[int]":
         if resolved is None:
             return set()
         db, functor = resolved
-        return db.predicate_arities(functor)
+        defined, declared = _arity_maps(db, cache)
+        return set(defined.get(functor) or declared.get(functor) or ())
     return set()
+
+
+def _arity_maps(db, cache):
+    if cache is None:
+        return db.arity_maps()
+    key = id(db)
+    hit = cache.get(key)
+    if hit is None or hit[0] is not db:
+        hit = cache[key] = (db, db.arity_maps())
+    return hit[1]
 
 
 def field_names_for(value, *, arity=None, db=None, namespace=None):

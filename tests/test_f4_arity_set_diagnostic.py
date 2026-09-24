@@ -34,6 +34,7 @@ import clausal.predicate_diagnostics as pd
 
 LIB = "f4arity_lib"
 USE = "f4arity_use"
+REV = "f4arity_rev"
 
 LIB_SRC = f"""
 -module({LIB}, [halted_flag/0, go_onward(X), pair_up(A, B), vexport/1])
@@ -59,6 +60,15 @@ USE_SRC = f"""
 local_one(1),
 """
 
+# roborev on F4: ``probe_it/1`` is DEFINED (clauses); ``probe_it/2`` is only a
+# bare export entry.  Calling ``probe_it/2`` raises an arity mismatch, so it
+# must never be listed as defined or suggested.
+REV_SRC = f"""
+-module({REV}, [probe_it/2, lone_exp/1])
+
+probe_it(1),
+"""
+
 
 def _old_arity_of(obj):
     """The reader as it was before F4, verbatim -- the measurement baseline."""
@@ -76,12 +86,14 @@ def mods(tmp_path_factory):
     d = tmp_path_factory.mktemp("f4arity")
     (d / f"{LIB}.clausal").write_text(textwrap.dedent(LIB_SRC).lstrip())
     (d / f"{USE}.clausal").write_text(textwrap.dedent(USE_SRC).lstrip())
-    for name in (LIB, USE):
+    (d / f"{REV}.clausal").write_text(textwrap.dedent(REV_SRC).lstrip())
+    for name in (LIB, USE, REV):
         sys.modules.pop(name, None)
     lib = _load_module(LIB, str(d / f"{LIB}.clausal"))
     use = _load_module(USE, str(d / f"{USE}.clausal"))
+    _load_module(REV, str(d / f"{REV}.clausal"))
     yield lib, use
-    for name in (LIB, USE):
+    for name in (LIB, USE, REV):
         sys.modules.pop(name, None)
 
 
@@ -170,6 +182,72 @@ class TestLossySourcesStillSuggested:
         assert db.predicate_arities("halted_flag") == {0}
 
 
+# ── declared-only arities are not suggested beside a defined one ─────────────
+
+
+class TestDeclaredOnlyArityBesideADefinedOne:
+    """``probe_it/1`` has a clause; ``probe_it/2`` is only a bare export
+    entry.  Only DEFINED arities (the db's home keys) are reported."""
+
+    def _rev_db(self):
+        return _db(sys.modules[REV])
+
+    def test_the_setup_is_what_it_claims(self, mods):
+        db = self._rev_db()
+        assert ("probe_it", 2) in db._predicate_export
+        assert ("probe_it", 2) not in db.owned_keys()
+        assert ("probe_it", 1) in db.owned_keys()
+        assert db.predicate_arities("probe_it") == {1, 2}  # the lossless union
+
+    def test_defines_lists_only_the_defined_arity(self, mods):
+        msg = describe_missing_predicate("probe_it", 3, db=self._rev_db())
+        defines = msg.split("defines:", 1)[1].split("did you mean", 1)[0]
+        assert "probe_it/1" in defines and "probe_it/2" not in defines, msg
+
+    def test_wrong_arity_call_suggests_only_the_defined_arity(self, mods):
+        line = _did_you_mean(
+            describe_missing_predicate("probe_it", 3, db=self._rev_db()))
+        assert "probe_it/1" in line and "probe_it/2" not in line, line
+
+    def test_near_miss_suggests_only_the_defined_arity(self, mods):
+        line = _did_you_mean(
+            describe_missing_predicate("probe_itt", 2, db=self._rev_db()))
+        assert "probe_it/1" in line and "probe_it/2" not in line, line
+
+    def test_both_eras_answer_the_defined_arity(self, mods):
+        assert predicate_arities_for(sys.modules[REV].probe_it) == {1}
+        assert predicate_arities_for(mangle(REV, "probe_it")) == {1}
+
+    def test_a_declaration_only_name_still_answers_its_arity(self, mods):
+        """No defined arity at all: the declaration is the only thing the
+        name can mean, and the class era answers it via ``_fields``."""
+        assert predicate_arities_for(sys.modules[REV].lone_exp) == {1}
+        assert predicate_arities_for(mangle(REV, "lone_exp")) == {1}
+
+
+# ── cost: one index per database per message ─────────────────────────────────
+
+
+def test_one_index_build_per_database_per_message(mods, monkeypatch):
+    from clausal.logic.database import Database
+    calls = []
+    real = Database.arity_maps
+
+    def counting(self):
+        calls.append(id(self))
+        return real(self)
+
+    monkeypatch.setattr(Database, "arity_maps", counting)
+    _lib, use = mods
+    ns = dict(use.__dict__)
+    bindings = sum(1 for v in ns.values() if predicate_arities_for(v))
+    assert bindings >= 8, bindings
+    calls.clear()
+    describe_missing_predicate("zzz_quux", 1, module_globals=ns)
+    assert calls, "the index was never consulted -- the probe is stale"
+    assert len(calls) == len(set(calls)), calls
+
+
 # ── era-agnostic: a module binding that is a mangled atom ────────────────────
 
 
@@ -221,7 +299,8 @@ class _DataShape:
 
 
 @pytest.mark.parametrize("value", [
-    None, 3, "pair_up", "no_such_module\x00x", _DataShape, object(), str,
+    None, 3, "pair_up", mangle("f4arity_no_such_module", "x"), _DataShape,
+    object(), str,
 ])
 def test_non_predicates_answer_the_empty_set(value, mods):
     assert predicate_arities_for(value) == set()
