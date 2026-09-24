@@ -1317,6 +1317,7 @@ def _run_specialization(
     from clausal.logic.specialization import analyze_mi, specialize_mi, specialize_mi_deep, specialize_mi_cpd
     from clausal.logic.solve import call
     from clausal.logic.variables import Var, deref, walk
+    from clausal.logic.atoms import is_mangled
 
     for item in module_items:
         if not isinstance(item, SpecializeItem):
@@ -1351,8 +1352,18 @@ def _run_specialization(
                 f"not found in module dict"
             )
 
-        if isinstance(source_cls, PredicateMeta):
-            # It's a predicate — call it to get the program list.
+        if isinstance(source_cls, PredicateMeta) or is_mangled(source_cls):
+            # It's a predicate — call it to get the program list.  A mangled
+            # atom (post-flip module_dict binding, F1 re-audit row 34) needs
+            # no separate branch here: ``call()`` already demangles its
+            # own-module handles and resolves the owning module itself (W4
+            # boundary + the 2026-09-24 dangling-handle ruling), the same
+            # infrastructure every other mangled-goal call site already
+            # goes through — so handing it *source_cls* directly, exactly as
+            # the class arm always has, is the whole migration.  Safe today:
+            # ``module_dict`` holds only classes pre-flip, so no input can
+            # reach this widened branch before the flip; this only starts
+            # firing once one can.
             program_var = Var()
             program_data = None
             for _ in call(source_cls, program_var):
