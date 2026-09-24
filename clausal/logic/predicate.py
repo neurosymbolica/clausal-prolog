@@ -114,8 +114,8 @@ def module_source_path(module_dict_or_module):
         return path
 
 
-def record_clause_source(pred_cls, module_name: str, module_dict: dict) -> None:
-    """Note whose load wrote the class's clause list (its row's).
+def record_clause_source(row, module_name: str, module_dict: dict) -> None:
+    """Note whose load wrote *row*'s clause list.
 
     Called at the one site that assigns the clause list wholesale
     (``compiler_v2`` step 4; the two deferred paths in
@@ -123,13 +123,17 @@ def record_clause_source(pred_cls, module_name: str, module_dict: dict) -> None:
     The mutation gate's ownership policy reads it back — it is what tells a
     module reloading its own clauses from a module about to destroy
     another's, and it is keyed on the source PATH for that reason.
+
+    Takes the ROW (W4b-2d, F1 row 24), not the class: step 4 used to stamp
+    ``pred_cls._state_row()`` and only when the name was bound to a class, so
+    once a predicate's binding is a mangled atom nothing would be stamped,
+    every row would read as unowned, and the gate's clause-clobber refusal
+    would pass every load.  Measured 2026-09-24: in all 16,123 class arrivals
+    over the house suite the class's row after the bind IS
+    ``db.row(functor, arity)``, so stamping the row directly writes the same
+    field.
     """
-    # THE ROW, not the retired `_clauses_source` facade (W2, 2026-09-22).
-    # This is the one WRITER, and it needs a row to write to -- `_state_row`
-    # gives it the same one the facade would have, so a class not yet bound
-    # to a Database still records its source exactly as before.
-    pred_cls._state_row().source = (
-        module_name, module_source_path(module_dict))
+    row.source = (module_name, module_source_path(module_dict))
 
 
 def _source_site(depth: int) -> tuple[str, int] | None:
