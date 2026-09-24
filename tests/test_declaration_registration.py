@@ -78,9 +78,7 @@ def test_specialize_route_still_registers_through_register_signature():
     temporarily commenting out that line -- this test went red; restoring
     it, green again (see task-2-report.md)."""
     from clausal.logic.database import Module
-    from clausal.logic.specialization import (
-        analyze_mi, specialize_mi, _specialized_fields,
-    )
+    from clausal.logic.specialization import analyze_mi, specialize_mi
     from clausal.logic.variables import Var
     import clausal.examples.metainterpreters as mi_mod
 
@@ -93,10 +91,10 @@ def test_specialize_route_still_registers_through_register_signature():
                     module_dict={"__name__": "t_pin_register_signature"})
     db = module.db
     pattern = analyze_mi(mi_mod.solve)
-    # The specializer's own field list -- what _install_specialized hands to
-    # register_signature -- read off the pattern, not off the installed
-    # predicate (operator ruling QC: the result is inspected as a ROW).
-    fields = tuple(_specialized_fields(pattern))
+    # solve/2 specialized drops PROGRAM and keeps GOALS.  A literal, not the
+    # implementation's own _specialized_fields, so the pin cannot agree with
+    # the code by construction.
+    fields = ("GOALS",)
     specialize_mi(
         pattern, natnum_program, "solve_pin_natnum", db=module.db,
     )
