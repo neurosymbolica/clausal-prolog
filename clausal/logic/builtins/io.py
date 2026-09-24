@@ -651,6 +651,32 @@ def _indicator_operands(val):
     return None
 
 
+def _importer_spellings(db, handle) -> list:
+    """The names under which the calling module could have adopted *handle*'s
+    row: the handle's own atom half, then every other name the module's
+    namespace binds to *handle* -- an ``alias(Orig, Local)`` import binds the
+    OWNER's handle (ruling D1) under ``Local``, and adopted rows are keyed by
+    that importer spelling, which the handle itself does not carry."""
+    names = [demangle(handle)[1]]
+    module_dict = getattr(db, "module_dict", None) if db is not None else None
+    if isinstance(module_dict, dict):
+        names += [k for k, v in module_dict.items()
+                  if type(v) is str and v == handle and k not in names]
+    return names
+
+
+def _handle_row(db, handle, arity):
+    """The row a predicate HANDLE denotes at *arity*, or ``None``: its own
+    row, else the row *db* adopted for it under any importer spelling
+    (``database_ops._binding_row``, the shared rule)."""
+    from clausal.logic.builtins.database_ops import _binding_row  # noqa: PLC0415
+    for spelling_ in _importer_spellings(db, handle):
+        row = _binding_row(db, handle, spelling_, arity)
+        if row is not None:
+            return row
+    return None
+
+
 def _is_predicate_handle(name, arity, db) -> bool:
     """True iff *name* is a mangled atom that is a predicate HANDLE -- never
     for a ``-hide`` data atom (``is_mangled`` is not "is a predicate").
@@ -658,8 +684,9 @@ def _is_predicate_handle(name, arity, db) -> bool:
     Two ways in: the handle's owner resolves and declares the name as a
     predicate (arity-blind, like the class arm: the arity is checked when the
     row is read); or the owner was popped from ``sys.modules`` and *db*
-    adopted a row for exactly this handle at ``-import_from``.  ``*arity*`` is
-    only consulted for the adopted-row key, and a non-int arity (a malformed
+    adopted a row for exactly this handle at ``-import_from``, under any
+    importer spelling (an aliased import included).  *arity* is only
+    consulted for the adopted-row key, and a non-int arity (a malformed
     indicator) answers ``False`` so the caller's shape checks still run.
     """
     if not is_mangled(name):
@@ -668,10 +695,7 @@ def _is_predicate_handle(name, arity, db) -> bool:
         return True
     if not isinstance(arity, int) or isinstance(arity, bool):
         return False
-    from clausal.logic.builtins.database_ops import (  # noqa: PLC0415
-        _adopted_row_named_by,
-    )
-    return _adopted_row_named_by(db, name, demangle(name)[1], arity) is not None
+    return _handle_row(db, name, arity) is not None
 
 
 def _indicator_row(db, name, arity, pred_cls):
@@ -683,7 +707,7 @@ def _indicator_row(db, name, arity, pred_cls):
     1. the BINDING's own row, when the indicator's left operand was a
        predicate binding (*pred_cls*: a class, or after the flip a handle)
        and its row is a REAL row at the requested arity
-       (``resolve_predicate_row``, era-agnostic).  A shared
+       (``database_ops._binding_row``, era-agnostic).  A shared
        ``-import_from``'d predicate reads the exporter's row, which is the
        whole point: ``listing(qq/1)`` must print what ``listing(qq)`` prints.
        A DETACHED row is skipped -- it is nobody's predicate (same rule
@@ -695,41 +719,39 @@ def _indicator_row(db, name, arity, pred_cls):
        different local ``name/N``;
     2. the calling module's NAMESPACE, resolved exactly as
        ``higher_order._namespace_dispatch`` resolves a named goal
-       (``_find_pred_cls`` for the arity-checked binding, then ``_home_db``
-       for the row it actually reads), so the atom spelling
-       ``listing('qq'/1)`` finds the same imported predicate the binding
-       spelling does.  F1 row 60 (2026-09-24): this leg used to come AFTER
-       the bare ``db.row`` below, and a module that imports a predicate and
-       re-declares it ``-dynamic`` holds a LOCAL empty twin under the same
-       key, which ``db.row`` prefers -- so listing the import printed the
-       twin's "no clauses" in both eras.  A module's OWN predicate resolves
-       to its own database here, so it is unaffected;
+       (``_find_pred_cls`` for the arity-checked binding, then the row that
+       binding reads), so the atom spelling ``listing('qq'/1)`` finds the
+       same imported predicate the binding spelling does.  Taken only when
+       the binding reads a REAL row (``_binding_row``): a binding that is
+       detached or unbound is nobody's predicate, and a standalone class
+       whose ``__name__`` differs from the name it is bound under must not
+       redirect the lookup to that other name.  F1 row 60 (2026-09-24): this
+       leg used to come AFTER the bare ``db.row`` below, and a module that
+       imports a predicate and re-declares it ``-dynamic`` holds a LOCAL empty
+       twin under the same key, which ``db.row`` prefers -- so listing the
+       import printed the twin's "no clauses" in both eras.  A module's OWN
+       predicate resolves to its own database here, so it is unaffected;
     3. the calling database's own row -- the ordinary local predicate the
        namespace does not bind at this arity (a name defined at several
        arities binds one of them).
     """
+    from clausal.logic.builtins.database_ops import (  # noqa: PLC0415
+        _binding_row, _canonical_functor, _find_pred_cls,
+    )
     if pred_cls is not None:
-        row = resolve_predicate_row(pred_cls, arity=arity, db=db)
-        if isinstance(pred_cls, PredicateMeta):
-            if row is not None and not row.detached and row.key[1] == arity:
-                return row
-        else:
-            if row is None:
-                from clausal.logic.builtins.database_ops import (  # noqa: PLC0415
-                    _adopted_row_named_by,
-                )
-                row = _adopted_row_named_by(db, pred_cls, name, arity)
-            return row if row is not None and not row.detached else None
+        if not isinstance(pred_cls, PredicateMeta):
+            return _handle_row(db, pred_cls, arity)
+        row = _binding_row(db, pred_cls, name, arity)
+        if row is not None and row.key[1] == arity:
+            return row
     if db is None:
         return None
-    from clausal.logic.builtins.database_ops import (  # noqa: PLC0415
-        _canonical_functor, _find_pred_cls, _home_db,
-    )
     module_dict = getattr(db, "module_dict", None)
     found = (_find_pred_cls(name, arity, module_dict)
              if module_dict is not None else None)
-    if found is not None:
-        row = _home_db(db, found, name, arity).row(
+    bound = _binding_row(db, found, name, arity) if found is not None else None
+    if bound is not None:
+        row = bound.db.row(
             _canonical_functor(db, found, name), arity, create=False)
         if row is not None:
             return row

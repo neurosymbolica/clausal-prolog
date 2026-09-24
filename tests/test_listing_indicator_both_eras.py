@@ -20,13 +20,14 @@ import clausal.import_hook  # noqa: F401 — installs the meta-path finder
 from clausal.import_hook import _load_module
 from clausal.logic.atoms import mangle
 from clausal.logic.exceptions import LogicException
-from clausal.logic.predicate import PredicateMeta
+from clausal.logic.predicate import PredicateMeta, make_predicate
 from clausal.logic.solve import call
 from clausal.terms import Div
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
 _OWNER = "tests.fixtures.gate_dyn_owner"
 _USER = "_row60_gate_dyn_user"
+_ALIAS = "_row60_alias_user"
 _HIDE = "hide_owner"
 
 
@@ -142,6 +143,57 @@ def test_a_module_still_lists_its_own_predicates(
         sys.modules.pop(_OWNER, None)
     for ind in (("/", "gd_p", 1), Div(left=owner.__dict__["gd_p"], right=1)):
         assert "% gd_p/1 — 2 clause(s)" in _listing(ind, om, capsys), ind
+
+
+@pytest.fixture
+def aliased(pair):
+    """``alias(gd_p, gd_loc)``: the adopted row is keyed by the importer's
+    spelling ``gd_loc``, the owner's row by ``gd_p``."""
+    owner, _user = pair
+    sys.modules.pop(_ALIAS, None)
+    mod = _load_module(_ALIAS, os.path.join(FIXTURES, "row60_alias_user.clausal"))
+    yield owner, mod
+    sys.modules.pop(_ALIAS, None)
+
+
+@pytest.mark.parametrize("flipped,owner_popped", _ERAS)
+def test_an_aliased_import_lists_the_owner(
+        aliased, capsys, flipped, owner_popped):
+    owner, user = aliased
+    lm = user.__dict__["$module"]
+    # Primed through the OWNER: asserting through the alias itself fails
+    # today (todo/assertz-through-an-aliased-import-raises-existence-error-2026-09-24.md).
+    next(call("assertz", ("gd_p", 42), module=owner.__dict__["$module"]), None)
+    assert len(owner.__dict__["$module"].db.row("gd_p", 1).clauses) == 2
+    twin = lm.db.row("gd_loc", 1)
+    assert twin is not None and twin.db is lm.db and twin.clauses == []
+    assert lm.db.adopted_row("gd_loc", 1) is not None
+    assert lm.db.adopted_row("gd_p", 1) is None, "keyed by the owner's name"
+    if flipped:
+        md = user.__dict__
+        assert isinstance(md["gd_loc"], PredicateMeta)
+        md["gd_loc"] = mangle(_OWNER, "gd_p")
+    if owner_popped:
+        sys.modules.pop(_OWNER, None)
+    for ind in (("/", "gd_loc", 1), Div(left=user.__dict__["gd_loc"], right=1)):
+        out = _listing(ind, lm, capsys)
+        assert "— 2 clause(s)" in out, (ind, out)
+
+
+@pytest.mark.parametrize("detached", [False, True])
+def test_a_standalone_class_bound_under_another_name_does_not_redirect(
+        pair, capsys, detached):
+    """The namespace leg is taken only when the binding reads a REAL row.  A
+    standalone class named ``gd_p`` bound under ``gd_add`` has no row (or a
+    private detached one); it must not send ``listing(gd_add/1)`` to the
+    local ``gd_p`` twin."""
+    owner, user = pair
+    lm = _prime(owner, user)
+    stray = make_predicate("gd_p", ["x"])
+    if detached:
+        assert stray._state_row().detached
+    user.__dict__["gd_add"] = stray
+    assert "% gd_add/1 — 1 clause(s)" in _listing(("/", "gd_add", 1), lm, capsys)
 
 
 def test_a_mangled_predicate_handle_lists_its_predicate(hide, capsys):
