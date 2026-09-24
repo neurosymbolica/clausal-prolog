@@ -438,12 +438,16 @@ def _convert_inner(goal: Any, db: Any) -> GoalOp:
                 )
                 meta_specs = meta_specs_for_call(db, fname, arity)
                 if meta_specs:
-                    # A lambda LITERAL is a closure compiled in THIS module
-                    # (its body's names resolve here, as Scryer qualifies a
-                    # yall lambda with its defining module): nothing to add.
+                    # A lambda LITERAL in a GOAL (integer) position is a
+                    # closure compiled in THIS module -- its body's names
+                    # resolve here, as Scryer qualifies a yall lambda with
+                    # its defining module -- so there is nothing to add.  A
+                    # ``:`` position is module-sensitive DATA and is always
+                    # qualified (the hoisting walk still compiles the lambda
+                    # inside the marker).
                     ordered_args = [
-                        MetaArg(a)
-                        if is_qualifying_spec(spec) and not isinstance(a, nodes.Lambda)
+                        a if (type(spec) is int and isinstance(a, nodes.Lambda))
+                        else MetaArg(a, spec) if is_qualifying_spec(spec)
                         else a
                         for spec, a in zip(meta_specs, ordered_args)]
             return SubCall(fname=fname, arity=arity, args=ordered_args)

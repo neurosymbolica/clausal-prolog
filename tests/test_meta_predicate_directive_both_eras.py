@@ -31,7 +31,7 @@ from clausal.logic.atoms import mangle, mint
 from clausal.logic.exceptions import LogicException
 from clausal.logic.predicate import PredicateMeta
 from clausal.logic.solve import call
-from clausal.logic.variables import Var, deref, walk
+from clausal.logic.variables import Var, deref, is_var, walk
 from clausal.terms import Compound
 
 
@@ -489,7 +489,8 @@ _LLIB = """
 """
 
 _LDOM = """
-    -module(mldom_ERA, [])
+    -module(mldom_ERA, [mark(X)])
+    -import_module(mldom_ERA)
     -import_from(mllib_ERA, [e0, e1, e2, e3, h1, h2, h3, cprobe])
     -private([box(X), seen])
     decide(B, V) <- (V is B),
@@ -502,6 +503,8 @@ _LDOM = """
     hop2(V) <- (K is 1000, h2(2, ((U, W) <- (eval_(U * K, B), decide(B, W))), V)),
     hop3(V) <- (K is 1000, h3(2, ((U, W) <- (eval_(U * K, B), decide(B, W))), V)),
     nested(T) <- cprobe(box((A <- (A is 7))), T),
+    colon_lambda(T) <- cprobe((A <- (A is 7)), T),
+    colon_class(T) <- cprobe(mldom_ERA.mark, T),
 """
 
 
@@ -675,10 +678,70 @@ def test_a_python_built_lambda_node_in_a_query(tmp_path, monkeypatch, hop, where
         dom = _load(tmp_path, monkeypatch, f"mpdom_{where}",
                     _PDOM.replace("ERA", where))
         L = dom.__dict__["$module"]
-    for label, lam, want in _python_lambdas():
+    ref = _load(tmp_path, monkeypatch, f"mplib_ref_{where}",
+                _PLIB.replace("DECL", f"ref_{where}").replace("META", ""))
+    R = ref.__dict__["$module"]
+
+    def answers(module, lam):
         out = Var()
-        got = [walk(out) for _ in solve((hop, 2, lam, out), L)]
-        if want is None:
-            assert len(got) == 1, (label, got)     # succeeds once, OUT unbound
-        else:
+        return [("unbound" if is_var(v) else v)
+                for v in (walk(out) for _ in solve((hop, 2, lam, out), module))]
+
+    for label, lam, want in _python_lambdas():
+        got = answers(L, lam)
+        # Exactly what an UNDECLARED library answers for the same lambda.
+        assert got == answers(R, lam), (label, got)
+        if want is not None:
             assert got == want, (label, got)
+        else:
+            assert got == ["unbound"], (label, got)
+
+
+def test_a_colon_position_always_qualifies_even_a_goal_object(llib):
+    """roborev MEDIUM (2026-09-25): ``:`` is module-sensitive DATA, and
+    Scryer always hands it over as M:X -- a yall lambda there arrives as
+    ``cd:[X]>>true`` (verified on the box).  The goal-object and
+    lambda-literal exemptions are for GOAL (integer) positions only: a bare
+    lambda, a bare class and a Python function in cprobe's ``:`` position
+    arrive qualified."""
+    era, D = llib
+    q = _one(D, "colon_lambda")
+    assert q[:2] == (":", f"mldom_{era}") and callable(q[2])
+    q = _one(D, "colon_class")
+    assert q == (":", f"mldom_{era}", D.module_dict["mark"])
+    t = Var()
+    assert [walk(t) for _ in call("cprobe", _python_probe, t, module=D)] == [
+        (":", f"mldom_{era}", _python_probe)]
+
+
+def test_a_unit_quantity_in_a_goal_position_is_qualified_then_refused(llib):
+    """roborev LOW (2026-09-25): ``callable()`` was the goal-object test, and
+    a unit Quantity is callable (``byte(4)``), so it skipped qualification.
+    It is qualified now, and ``M:Quantity`` is ISO type_error(callable, Q)
+    -- Scryer's answer for ``call(lists:5)`` -- where the name resolver used
+    to answer nothing."""
+    from clausal.logic.meta_predicate import is_goal_object, qualify
+    from clausal.modules.units import byte
+    era, D = llib
+    assert not is_goal_object(byte)
+    assert qualify("m", byte, 1) == (":", "m", byte)
+    with pytest.raises(LogicException) as exc:
+        list(call("e1", byte, Var(), module=D))
+    formal = exc.value.term.args[0]
+    assert formal.functor == "type_error" and formal.args[0] == "callable"
+    assert formal.args[1] is byte
+
+
+@pytest.mark.parametrize("goal", [(":", "somewhere", Var()), (":", "somewhere", 5)])
+def test_a_qualified_non_goal_raises_like_scryer(llib, goal):
+    """``M:_`` is instantiation_error, ``M:5`` type_error(callable, 5) --
+    Scryer's answers; this arm used to fail silently."""
+    era, D = llib
+    goal = (":", f"mldom_{era}", goal[2])
+    with pytest.raises(LogicException) as exc:
+        list(call("e0", goal, module=D))
+    formal = exc.value.term.args[0]
+    if is_var(goal[2]):
+        assert formal == "instantiation_error"
+    else:
+        assert formal.functor == "type_error" and formal.args == ("callable", 5)

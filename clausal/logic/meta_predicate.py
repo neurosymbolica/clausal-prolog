@@ -38,7 +38,9 @@ module they resolved it in -- Scryer's ``expand_call_goal``.
 """
 from __future__ import annotations
 
+import functools
 import sys
+import types
 from typing import Any
 
 from clausal.logic.variables import deref
@@ -89,29 +91,45 @@ def _already_qualified(value: Any) -> bool:
             and is_declared_predicate_name(v))
 
 
-def _is_goal_object(value: Any) -> bool:
-    """A goal OBJECT (a predicate class, a lambda closure, anything with
-    ``_get_dispatch``) rather than a name: it resolves itself, so a module
-    qualification adds nothing -- and wrapping it made the name resolver
-    answer nothing (a silent failure: a dotted ``m.p`` reference in data
-    position is p's class in the class era)."""
+_FUNCTION_KINDS = (types.FunctionType, types.MethodType, functools.partial)
+
+
+def is_goal_object(value: Any) -> bool:
+    """THE test for a goal OBJECT -- a goal that is not a NAME (atom or
+    cell) and resolves itself: anything answering ``_get_dispatch`` (a
+    predicate class, a ``BuiltinPredicate``, the ``_UnqualifiedName`` /
+    ``_NamedGoal`` adapters) or a plain Python function (a Python-written
+    closure, a compiled Clausal lambda).  Dereferenced first.
+
+    Deliberately NOT ``callable()``: a unit ``Quantity`` (``byte(4)``), a
+    Python type, a pythonic-AST node and any other object with ``__call__``
+    are not goals, and must not skip a goal position's qualification.
+
+    Shared by ``$meta_qualify`` (a goal object in a GOAL position is not
+    wrapped), ``higher_order._resolve_named_goal`` and ``dcg`` (``M:Obj``
+    dispatches the object)."""
     v = deref(value)
     if type(v) is str or type(v) is tuple:
         return False
-    return callable(v) or hasattr(v, "_get_dispatch")
+    return hasattr(v, "_get_dispatch") or isinstance(v, _FUNCTION_KINDS)
 
 
-def qualify(designator: Any, value: Any) -> Any:
-    """``M:Value`` unless *value* is already qualified, a goal object, or
-    there is no module."""
-    if designator is None or _already_qualified(value) or _is_goal_object(value):
+def qualify(designator: Any, value: Any, spec: Any = 0) -> Any:
+    """``M:Value`` unless *value* is already qualified, or there is no
+    module.  A goal OBJECT in a GOAL position (an integer spec) is left as
+    it is -- it resolves itself; a ``:`` position is module-sensitive DATA
+    and is ALWAYS qualified, as Scryer hands it over (``cd:[X]>>true`` for
+    a yall lambda, verified on the box)."""
+    if designator is None or _already_qualified(value):
+        return value
+    if type(spec) is int and is_goal_object(value):
         return value
     return (QUALIFIED, designator, value)
 
 
-def qualify_in_db(db: Any, value: Any) -> Any:
+def qualify_in_db(db: Any, value: Any, spec: Any = 0) -> Any:
     """``$meta_qualify``: the compiled call site's runtime half."""
-    return qualify(module_designator(db), value)
+    return qualify(module_designator(db), value, spec)
 
 
 def qualify_args(specs: "tuple | None", args: list, db: Any) -> list:
@@ -122,7 +140,7 @@ def qualify_args(specs: "tuple | None", args: list, db: Any) -> list:
     designator = module_designator(db)
     if designator is None:
         return args
-    return [qualify(designator, a) if is_qualifying_spec(s) else a
+    return [qualify(designator, a, s) if is_qualifying_spec(s) else a
             for s, a in zip(specs, args)]
 
 
@@ -161,13 +179,16 @@ def meta_specs_for_call(db: Any, fname: str, arity: int) -> "tuple | None":
 
 class MetaArg:
     """Compiler IR marker: a call argument in a qualifying meta position.
-    ``term_to_ast_expr`` lowers it to ``$meta_qualify($meta_db, <value>)``.
-    The child is ``.value`` so the compiler's generic single-child walkers
-    (``_vars._collect_var_ids``) see the variables inside."""
-    __slots__ = ("value",)
+    ``term_to_ast_expr`` lowers it to
+    ``$meta_qualify($meta_db, <value>, <spec>)``.  The child is ``.value`` so
+    the compiler's generic single-child walkers (``_vars._collect_var_ids``)
+    see the variables inside; ``.spec`` is the position's spec (an int, or
+    ``":"``), which decides whether a goal object is exempt."""
+    __slots__ = ("value", "spec")
 
-    def __init__(self, value: Any) -> None:
+    def __init__(self, value: Any, spec: Any = 0) -> None:
         self.value = value
+        self.spec = spec
 
     def __repr__(self) -> str:
-        return f"MetaArg({self.value!r})"
+        return f"MetaArg({self.value!r}, {self.spec!r})"

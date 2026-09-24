@@ -7,8 +7,12 @@ from __future__ import annotations
 
 from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.logic.atoms import demangle, is_mangled
-from clausal.logic.exceptions import LogicException, existence_error, string_goal_error
+from clausal.logic.exceptions import (
+    LogicException, existence_error, instantiation_error, string_goal_error,
+    type_error,
+)
 from clausal.terms import Compound
+from clausal.logic.meta_predicate import is_goal_object as _is_goal_object
 from clausal.logic.trampoline import DONE, StepGenerator
 from clausal.logic.builtins.lists import _as_items, _seq_result, _was_string
 from clausal.logic.builtins._helpers import _is_empty_list, _standard_order_key
@@ -238,6 +242,16 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
             extras = [deref(a) for a in call_args[2:]]
             return (_ensure_trampoline_dispatch(inner_v, len(extras), target.db),
                     extras)
+        if is_var(inner_v):
+            raise LogicException(instantiation_error(context))
+        if not (type(inner_v) is str or compound_cell_shape(inner_v)[0]
+                or _is_empty_list(inner_v) or is_chars(inner_v)):
+            # ``M:X`` with X neither a name nor a goal object (a number, a
+            # unit Quantity, ...): ISO type_error(callable, X) -- Scryer's
+            # answer for ``call(lists:5)`` (verified on the box; M:_ is an
+            # instantiation_error there too).  The name resolver below would
+            # answer None -- a SILENT failure.
+            raise LogicException(type_error("callable", inner_v, context))
         return _resolve_named_goal(
             target.db, inner, tuple(call_args[2:]), context)
     # No arity condition (F3): ``call((",",))`` is as much a control construct
@@ -303,15 +317,6 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
             f"{context}: no procedure {functor}/{arity} is defined in "
             + (f"module {_where}" if _where else "the calling module")))
     return dispatch, _meta_qualified(db, functor, arity, call_args)
-
-
-def _is_goal_object(value) -> bool:
-    """A goal that is an OBJECT rather than a name (atom or cell): a
-    predicate class, a ``BuiltinPredicate``, a lambda closure.  A str or a
-    tuple is a name, never an object."""
-    if type(value) is str or type(value) is tuple:
-        return False
-    return callable(value) or hasattr(value, "_get_dispatch")
 
 
 def _meta_qualified(db, functor, arity, call_args):

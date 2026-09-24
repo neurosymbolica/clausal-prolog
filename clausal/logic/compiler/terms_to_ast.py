@@ -739,7 +739,8 @@ def term_to_ast_expr(
         # module at run time.
         return _call(_name("$meta_qualify"), _name("$meta_db"),
                      term_to_ast_expr(term.value, var_context,
-                                      eval_arith=eval_arith))
+                                      eval_arith=eval_arith),
+                     ast.Constant(value=term.spec))
 
     if is_var(term):
         vid = term._id

@@ -141,8 +141,8 @@ def _resolve_nonterminal(db, rule_val, extra_args, context):
         target, inner = resolve_qualified_goal_cell(
             rule_val, context, _calling_module(db))
         inner = deref(inner)
-        if (not isinstance(inner, (str, tuple))
-                and hasattr(inner, "_get_dispatch")):
+        from clausal.logic.meta_predicate import is_goal_object  # noqa: PLC0415
+        if is_goal_object(inner):
             # ``M:NT`` whose NT is a nonterminal CLASS (a dotted ``m.nt``
             # reference): it resolves itself; S0/S are the whole call.
             return (_dispatch_at(inner, len(extra_args), target.db),
