@@ -101,21 +101,25 @@ def test_positive_control_mangled_era_returns_the_modules_own_predicates():
     ]
 
 
-def test_mangled_era_arity_survives_even_though_field_names_for_answers_none():
-    """``field_names_for`` answers ``None`` for every one of these three --
-    verified directly below -- because it only records names for an
-    explicit structural declaration, never an ordinary clause head
-    (``same(X, Y) <- ...`` never calls ``declare_functor``).  If
-    ``_defined_names`` used ``field_names_for(value) or ()`` as its ONLY
-    arity source, every mangled predicate would silently render with NO
-    arity suffix (``"holds"`` instead of ``"holds/1"``) -- a real
-    diagnostic regression, not just a missing name.  This test pins the
-    correct ``/N`` suffix so that regression cannot ship silently either."""
+def test_mangled_era_arity_suffix_does_not_come_from_field_names_for():
+    """``_defined_names`` must render the ``/N`` suffix from the ARITY, not
+    from ``field_names_for(value) or ()``.  When this was written,
+    ``field_names_for`` answered ``None`` for all three mangled names (an
+    ordinary clause head never calls ``declare_functor``), so an arity read
+    through it would have rendered ``"holds"`` instead of ``"holds/1"``.
+
+    Since W4b-2d task 5 (2026-09-24), a handle answers what the class it
+    replaces carries -- by name, the one arity's registered signature (the
+    step-4 stamp of the head's names) -- so the three now AGREE with the
+    class era instead of answering ``None``.  The ``/N`` pin below still
+    holds, which is the point of this test."""
     from clausal.logic.predicate import field_names_for
 
-    _load_hide_owner()
+    owner = _load_hide_owner()
     for name in ("holds", "label", "same"):
-        assert field_names_for(mangle("hide_owner", name)) is None
+        assert (field_names_for(mangle("hide_owner", name))
+                == field_names_for(owner.__dict__[name])
+                == owner.__dict__[name]._fields), name
     fake_mod = types.ModuleType("hide_owner")
     fake_mod.same = mangle("hide_owner", "same")
     assert _defined_names(fake_mod) == [("same", "same/2")]

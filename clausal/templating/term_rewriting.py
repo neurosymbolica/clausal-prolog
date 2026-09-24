@@ -4305,7 +4305,24 @@ def _head_ctor_ast(head_ast):
     Kept as a named function rather than deleted at its six call sites: it is
     where "what a head is built as" is decided, and the next change to that
     question (P4, when the class goes) wants one place to make it.
+
+    W4b-2d task 5 (2026-09-24): the head no longer CALLS the binding.  A
+    module-level head ``p(a, X=x)`` is emitted as ``$head(p, a, X=x)``
+    (``clausal.logic.predicate.head_cell``): a ``PredicateMeta`` class is
+    still called exactly as before (same cell, same errors), and a predicate
+    HANDLE -- a ``str``, not callable -- builds the cell from its plain name
+    and the owner Database's registered field names, through the same
+    ``build_term_cell`` the class uses.  Only a head whose callee is a plain
+    ``Name`` is wrapped: an expression-level rule head (``assertz(p(X) <-
+    q(X))``) is already a ``$Call(func=$LoadName(...))`` node, lowered at
+    compile time, and a ``$``-name is a runtime constructor, never a
+    predicate binding.
     """
+    if (isinstance(head_ast, Call) and isinstance(head_ast.func, Name)
+            and not head_ast.func.id.startswith("$")):
+        callee = head_ast.func
+        head_ast.func = copy_location(Name(id="$head", ctx=Load()), callee)
+        head_ast.args = [callee, *head_ast.args]
     return head_ast
 
 

@@ -25,16 +25,16 @@ def _resolve_tabled_call(fname, call_arity, db):
     if the call is not tabled anywhere it can see.
 
     *db* itself answers for a same-module callee.  An ``-import_from``-ed
-    callee is tabled only in its OWN module's db; the minted PredicateMeta
-    travels across modules carrying a ``_tabled_home_db`` stamp
-    (``Database.mark_tabled``), and ``db.module_dict`` is exactly the
+    callee is tabled only in its OWN module's db, which its binding's ROW
+    names (``predicate.tabled_home_of`` -- the SAME answer the runtime half,
+    ``tabling._naf_tabled``, uses), and ``db.module_dict`` is exactly the
     namespace the compiled call resolves through at runtime — including the
     dotted spelling (``"lib.Win"``) the import rewrite emits — so consulting
     it keeps the NAF lowering decision aligned with what the positive call
     would actually reach (todo/cross-module-tabled-naf-loses-wfs-delay.md).
     The home db keys its tables (and dispatch, and signatures) by the
-    predicate's own name, so the class's ``__name__`` is the canonical
-    spelling for everything done against the home db.
+    predicate's own name, so the row's functor is the canonical spelling for
+    everything done against the home db.
     """
     if db is None:
         return None
@@ -42,13 +42,8 @@ def _resolve_tabled_call(fname, call_arity, db):
         return db, fname
     md = db.module_dict
     cand = md.get(fname) if md is not None else None
-    home = getattr(cand, "_tabled_home_db", None)
-    if home is None or home is db:
-        return None
-    canonical = getattr(cand, "__name__", fname)
-    if home.is_tabled(canonical, call_arity):
-        return home, canonical
-    return None
+    from clausal.logic.predicate import tabled_home_of  # noqa: PLC0415
+    return tabled_home_of(cand, arity=call_arity, db=db)
 
 
 def _is_tabled_naf(inner_goal, db) -> bool:

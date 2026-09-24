@@ -116,6 +116,14 @@ class PredRow:
     backend: str = DEFAULT_BACKEND
     locked: bool = False
     source: "tuple[str, str] | None" = None
+    # ``(filename, lineno)`` where this predicate was DECLARED -- the site
+    # its class was minted at (``PredicateMeta._registered_at``), copied here
+    # by the first ``PredicateMeta._bind_row`` onto this row.  The arity-
+    # mismatch diagnostic's "defined at" line reads it for a HANDLE binding,
+    # which has no class to ask (W4b-2d R6 / dry-run §3.4).  ``None`` when
+    # no class was ever bound here or the site was unknown.
+    declared_at: "tuple[str, int] | None" = dataclasses.field(
+        default=None, repr=False, compare=False)
     writes: list = dataclasses.field(default_factory=list)
     # (REMOVED 2026-09-22, option D.)  ``dynamic_arities`` used to live here
     # as a per-NAME set, on the argument that it "cannot be reconstructed from
@@ -563,6 +571,11 @@ class Database:
         self._dynamic: set[tuple[str, int]] = set()
         self._discontiguous: set[tuple[str, int]] = set()
         self._tabled: set[tuple[str, int]] = set()
+        # This module's own term_expansion clauses (simple_ast Predicate
+        # nodes), recorded by ``run_term_expansion`` so an importer of
+        # ``term_expansion`` can apply them.  ``None`` when it defines none.
+        # W4b-2d R6: this used to be a stash on the term_expansion CLASS.
+        self.te_predicate_nodes: "list | None" = None
         self._shallow: set[tuple[str, int]] = set()
         self._table_store: dict = {}
         self._rows: dict[tuple[str, int], PredRow] = {}
@@ -1236,6 +1249,82 @@ class Database:
         mechanism answers."""
         self._predicate_export.add((functor, arity))
 
+    def placeholder_fields(self, functor: str,
+                           arity: int) -> tuple[str, ...] | None:
+        """The ``arg_0 .. arg_{N-1}`` field names of an ARITY-ONLY
+        declaration -- a bare ``name/arity`` export entry
+        (``mark_predicate_export``) or ``-dynamic(name/arity)``
+        (``mark_dynamic``) -- when nothing here records real names for the
+        key; ``None`` otherwise.
+
+        Two states, and the class answers differently in each:
+
+        * DECLARATION ONLY (no clause for the key in the declaring file):
+          the ``PredicateMeta`` class carries exactly these synthesized
+          ``_fields``, and until now they lived ONLY there, so after the
+          flip -- a module attribute is a predicate HANDLE, not the class --
+          nothing could answer them (``todo/dynamic-declarations-are-
+          invisible-to-arm-3-2026-09-22.md``).
+        * AFTER A CLAUSE: the rewriter unseats the placeholders
+          (``_unseat_directive_minted``) and the class carries the head's
+          derived names; step 4 stamps the same names as the row's
+          ``signature`` (the signature-source work, a5c4fab8).  This method
+          then answers ``None``, because :meth:`signature_for` reads that
+          signature first -- so :meth:`field_names_at` gives the head's
+          names, as the class does.  Placeholders are the answer only when
+          nothing else is recorded.
+
+        Derived from the declaration keys this Database already holds rather
+        than stored a second time, so they can never disagree with
+        ``declared_kind``.
+
+        Deliberately a separate read, NOT a fallback inside
+        :meth:`signature_for`: ~15 callers read ``signature_for(...) is
+        None`` as "no names registered", and that answer is unchanged.
+        ``predicate.field_names_for`` consults it for a HANDLE, the arm that
+        replaces the class's ``_fields``.
+        """
+        key = (functor, arity)
+        if key not in self._predicate_export and key not in self._dynamic:
+            return None
+        if self.signature_for(functor, arity) is not None:
+            return None
+        return tuple(f"arg_{i}" for i in range(arity))
+
+    def field_names_at(self, functor: str,
+                       arity: int) -> tuple[str, ...] | None:
+        """The field names of *functor*/*arity* as a term would be built
+        against them here: the registered signature (``signature_for``:
+        a clause head's names, then a fielded declaration's), else an
+        arity-only declaration's placeholders (:meth:`placeholder_fields`);
+        ``None`` when this Database records no names for the key."""
+        found = self.signature_for(functor, arity)
+        if found is None:
+            found = self.placeholder_fields(functor, arity)
+        return found
+
+    def head_signatures(self, functor: str) -> "dict[int, tuple[str, ...]]":
+        """``{arity: field names}`` for every arity *functor* is KNOWN at
+        here -- a predicate (``predicate_arities``: rows, home stores,
+        adopted rows, bare export entries) or a fielded declaration
+        (``_declared``) -- the population a clause HEAD written against a
+        predicate handle can be building.  Each arity's names are
+        :meth:`field_names_at`'s: the registered signature (a clause head's
+        derived names, stamped at step 4, or a fielded declaration's) first,
+        an arity-only declaration's placeholders only when nothing else is
+        recorded.  A key known with no names at all (clauses added at run
+        time to an undeclared key) answers ``arg_N`` -- positional
+        construction is all such a key has ever supported."""
+        arities = set(self.predicate_arities(functor))
+        arities |= {a for (f, a) in self._declared if f == functor}
+        out: dict[int, tuple[str, ...]] = {}
+        for arity in sorted(arities):
+            found = self.field_names_at(functor, arity)
+            if found is None:
+                found = tuple(f"arg_{i}" for i in range(arity))
+            out[arity] = tuple(found)
+        return out
+
     def declared_kind(self, functor: str, arity: int) -> str | None:
         """``"predicate"`` when the Database knows a row for the key (clauses,
         dispatch, ``-dynamic``, an adopted import, or a directive-minted row)
@@ -1324,23 +1413,13 @@ class Database:
     def mark_tabled(self, functor: str, arity: int) -> None:
         """Mark a predicate as tabled (memoised via SLG resolution).
 
-        Also stamps the minted PredicateMeta class (when it exists in this
-        db's ``module_dict``) with ``_tabled_home_db = self``, so tabledness
-        travels with the class across ``-import_from`` — the caller-side NAF
-        seam reads the stamp to find the home db and table store
-        (todo/cross-module-tabled-naf-loses-wfs-delay.md).  Last marker wins:
-        one load pipeline marks the same predicate on more than one db (the
-        exec-time db, then the compile pipeline's) and the most recent is the
-        live one; only the owning module can mark at all (``-table`` in an
-        importing module is refused at load).
+        An importer finds this db as the callee's tabling home through the
+        callee's ROW (``predicate.tabled_home_of``), not through a stamp on
+        the class -- the ``_tabled_home_db`` class stamp that used to be
+        written here was state stored nowhere but the class, and went
+        silently missing once a binding is a handle (W4b-2d R6).
         """
         self._tabled.add((functor, arity))
-        md = self.module_dict
-        if md is not None:
-            from clausal.logic.predicate import PredicateMeta  # noqa: PLC0415
-            cand = md.get(functor)
-            if isinstance(cand, PredicateMeta):
-                cand._tabled_home_db = self
 
     def is_tabled(self, functor: str, arity: int) -> bool:
         """True if the predicate was declared -table."""

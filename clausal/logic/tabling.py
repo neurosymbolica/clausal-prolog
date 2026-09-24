@@ -38,7 +38,7 @@ import threading
 from typing import Any, Callable
 
 from clausal.logic.variables import deref, is_var, unify
-from clausal.logic.predicate import is_term_instance, term_field_names
+from clausal.logic.predicate import is_term_instance, tabled_home_of, term_field_names
 from clausal.terms import Compound, Undefined
 from clausal.logic.cells import is_cell, intern_cell, is_intern_enabled
 
@@ -850,7 +850,8 @@ def _naf_tabled(functor, arity, args, trail, table_store, db=None):
     Cross-module: the compiled seam always passes the CALLER's store and db,
     but an ``-import_from``-ed callee is tabled — and tabled INTO — its own
     module's db.  When the caller's db does not table the call, follow the
-    shared PredicateMeta's ``_tabled_home_db`` stamp and operate on the home
+    binding's ROW to its home (``predicate.tabled_home_of``, the same answer
+    the compile-time half uses) and operate on the home
     store/db instead (todo/cross-module-tabled-naf-loses-wfs-delay.md); the
     same-module hot path never takes the extra lookup.
     """
@@ -860,16 +861,13 @@ def _naf_tabled(functor, arity, args, trail, table_store, db=None):
     if _is_tabled is not None and not _is_tabled(functor, arity):
         md = getattr(db, "module_dict", None)
         cand = md.get(functor) if md is not None else None
-        home = getattr(cand, "_tabled_home_db", None)
-        if home is not None and home is not db:
+        found = tabled_home_of(cand, arity=arity, db=db)
+        if found is not None:
             # The home db keys tables/dispatch by the predicate's OWN name;
             # the compiled seam may pass the import rewrite's dotted
             # spelling ("lib.Win") — canonicalize alongside the redirect.
-            canonical = getattr(cand, "__name__", functor)
-            if home.is_tabled(canonical, arity):
-                functor = canonical
-                db = home
-                table_store = home.table_store
+            db, functor = found
+            table_store = db.table_store
     key = make_subgoal_key(args, trail)
     store_key = (functor, arity, key)
     entry = table_store.get(store_key)
