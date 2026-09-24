@@ -88,6 +88,46 @@ def owner(tmp_path):
         sys.modules.pop(name, None)
 
 
+_STALE_SRC = """\
+-module({name}, [])
+last <- (1 > 0)
+"""
+
+
+@pytest.fixture
+def stale(tmp_path):
+    """A module whose ``last`` CLASS has STALE ``_fields``: it is authored as
+    ``last/0``, then a real ``assertz(last(1, 1))`` adds a ``last/2`` row and
+    the class is re-bound to it -- ``_fields == ()`` while the row (and its
+    clause heads) are ``last/2``.  ``last/2`` is also a BUILTIN, so a lookup
+    that trusts ``_fields`` hands the module's own predicate to the builtin.
+    (The staleness is what ``PredicateMeta._clause_arity`` exists for.)"""
+    from clausal.terms import Compound
+    name = f"w4b3stale_{next(_counter)}"
+    p = tmp_path / f"{name}.clausal"
+    p.write_text(_STALE_SRC.format(name=name))
+    mod = _load_module(name, str(p))
+    m = mod.__dict__["$module"]
+    try:
+        assert len(list(call("assertz", Compound("last", (1, 1)), module=m))) == 1
+        cls = m.module_dict["last"]
+        assert isinstance(cls, PredicateMeta)
+        assert cls._fields == () and cls._row._key == ("last", 2)   # STALE
+        yield m
+    finally:
+        sys.modules.pop(name, None)
+
+
+def _site_dispatch(base_globals, name, arity):
+    """What a compiled call site ``name/arity`` dispatches through, exactly as
+    the goal emitters choose it: the ``$disp_name_N`` entry when the resolver
+    left one, else ``$dispatch_at(base_globals[name], N)``."""
+    from clausal.logic.compiler.globals_env import _disp_key
+    from clausal.logic.predicate import _dispatch_at
+    fn = base_globals.get(_disp_key(name, arity))
+    return fn if fn is not None else _dispatch_at(base_globals[name], arity)
+
+
 def _handle(lm, name):
     """The post-flip binding for *name*, checked to BE that shape."""
     h = mangle(lm.name, name)
@@ -141,6 +181,69 @@ class TestSolveCallPhase5:
         monkeypatch.setitem(lm.module_dict, "is_pos", h)
         assert len(list(call("is_pos", 3, module=lm))) == 1
         assert len(list(call("is_pos", -3, module=lm))) == 0
+
+    # -- a predicate name is name + ARITY (operator ruling, 2026-09-24) ------
+    #
+    # A binding (class or handle) at ANOTHER arity -- or, for an IMPORTED one,
+    # at an arity it was not imported at -- is not this call's target.  The
+    # call resolves in THIS module under THIS name: its own row first, then a
+    # builtin under the name.  When neither answers the call REFUSES naming
+    # the name used; it never resolves the other arity in the binding's owner
+    # (aliased-import ruling, 2026-09-24).  ``test_wrong_arity_still_refuses``
+    # below pins the refusal.  The class-era refusal ahead of a live answer
+    # was an artefact of the predicate being a class.
+
+    @pytest.mark.parametrize("era", ["class", "handle"])
+    def test_a_builtin_answers_at_another_arity(self, lm, owner, monkeypatch,
+                                                 era):
+        """``owner`` has a user ``last/1``; ``call("last", L, X)`` is
+        ``last/2`` and reaches the builtin."""
+        b = TestInjectResolvedTargets._owner_binding(owner, "last", era)
+        assert len(list(call("last", 1, module=owner))) == 1   # last/1 is live
+        if era == "handle":
+            monkeypatch.setitem(owner.module_dict, "last", b)
+        assert owner.module_dict["last"] is b
+        x = Var()
+        assert _answers("last", ([4, 5], x), owner, [x]) == [(5,)]
+        # and last/1 is still the user's
+        assert len(list(call("last", 1, module=owner))) == 1
+        assert len(list(call("last", 2, module=owner))) == 0
+
+    @pytest.mark.parametrize("era", ["class", "handle"])
+    def test_the_local_row_answers_at_another_arity(self, lm, owner,
+                                                     monkeypatch, era):
+        """``lm`` binds ``ping`` to ``owner``'s ``ping/0``; ``lm``'s own
+        ``ping/2`` answers ``call("ping", 1, 2)``."""
+        assert lm.db.row("ping", 2) is not None
+        b = TestInjectResolvedTargets._owner_binding(owner, "ping", era)
+        monkeypatch.setitem(lm.module_dict, "ping", b)
+        assert len(list(call("ping", 1, 2, module=lm))) == 1
+        assert len(list(call("ping", 1, 3, module=lm))) == 0
+
+    @pytest.mark.parametrize("era", ["class", "handle"])
+    def test_the_local_row_beats_a_builtin_at_another_arity(
+            self, lm, owner, monkeypatch, era):
+        """Review round: ``lm`` binds ``last`` to ``owner``'s ``last/1`` and
+        has its OWN ``last/2``, which shares the builtin's name and arity.
+        The local predicate answers, not the builtin: ``last([5], 5)`` is
+        false for ``lm``'s one fact ``last(1, 1)``."""
+        b = TestInjectResolvedTargets._owner_binding(owner, "last", era)
+        monkeypatch.setitem(lm.module_dict, "last", b)
+        assert len(list(call("last", 1, 1, module=lm))) == 1
+        assert len(list(call("last", [5], 5, module=lm))) == 0
+
+    @pytest.mark.parametrize("era", ["class", "handle"])
+    def test_a_stale_fields_class_keeps_its_local_predicate(
+            self, stale, monkeypatch, era):
+        """Review round: the ``last`` class says ``/0`` but its clauses are
+        ``/2``.  ``call("last", A, B)`` must reach the module's own ``last/2``,
+        not the builtin ``last/2`` -- both eras (the handle is not stale)."""
+        if era == "handle":
+            monkeypatch.setitem(stale.module_dict, "last",
+                                _handle(stale, "last"))
+        assert len(list(call("last", 1, 1, module=stale))) == 1
+        assert len(list(call("last", [5], 5, module=stale))) == 0
+        assert len(list(call("last", module=stale))) == 1       # last/0
 
     def test_wrong_arity_still_refuses(self, lm, monkeypatch):
         with pytest.raises(PredicateArityMismatchError):
@@ -215,11 +318,17 @@ _LIST_CASES = [
 
 def test_the_list_case_table_covers_all_sixteen_builtins():
     """Positive control on the population: 16 distinct builtin/arity pairs,
-    each a registered builtin."""
-    from clausal.logic.builtins._registry import _BUILTINS
+    each a registered builtin.  Since the aliased-import ruling (2026-09-24)
+    they are db-receiving (``_DB_BUILTINS``, ``_db_optional``): the caller's
+    database is what says which unqualified name a goal arrived under."""
+    from clausal.logic.builtins._registry import _BUILTINS, _DB_BUILTINS
+    from clausal.logic.builtins.higher_order import _GOAL_FIRST_LIST_BUILTINS
     keys = {(b, 1 + len(a) + n) for b, _, a, n in _LIST_CASES}
     assert len(keys) == 16
-    assert keys <= set(_BUILTINS), keys - set(_BUILTINS)
+    assert keys == set(_GOAL_FIRST_LIST_BUILTINS)
+    assert keys <= set(_DB_BUILTINS), keys - set(_DB_BUILTINS)
+    assert not keys & set(_BUILTINS)
+    assert all(getattr(_DB_BUILTINS[k], "_db_optional", False) for k in keys)
 
 
 @pytest.mark.parametrize(
@@ -317,10 +426,15 @@ class TestInjectResolvedTargets:
     # -- a predicate name is name + ARITY (operator ruling, 2026-09-24) ------
     #
     # An applied target takes a predicate binding -- class or handle alike --
-    # only at its own arity.  At another arity the call resolves normally (a
-    # builtin, this db's own row); the class-era PredicateArityMismatchError
-    # was an artefact of the predicate being a class.  Only when nothing else
-    # answers is the binding kept, and the call then reports the arity.
+    # only at its own arity (for an import: an arity it was imported at).  At
+    # another arity the call resolves in this module under this name: this
+    # db's own row, then a builtin under the name.  When nothing answers, the
+    # binding is kept under the name (term construction, its own arity) and
+    # the call site gets a ``$disp_`` entry that refuses naming the name --
+    # never the owner (aliased-import ruling, 2026-09-24).  A DOTTED name is
+    # the qualifier's and still resolves there.  The class-era
+    # PredicateArityMismatchError was an artefact of the predicate being a
+    # class.
 
     @staticmethod
     def _owner_binding(owner, name, era):
@@ -336,7 +450,7 @@ class TestInjectResolvedTargets:
     def test_a_local_predicate_beats_an_owner_binding_at_another_arity(
             self, lm, owner, era):
         from clausal.logic.compiler.globals_env import (
-            _DbDispatchAdapter, _inject_resolved_targets,
+            _disp_key, _inject_resolved_targets,
         )
         from clausal.logic.predicate import _dispatch_at, is_declared_predicate
         from clausal.logic.solve import _drive_trampoline
@@ -349,10 +463,98 @@ class TestInjectResolvedTargets:
         globals_["ping"] = b
         base_globals = dict(globals_)
         _inject_resolved_targets({("ping", 2)}, base_globals, lm.db, globals_)
-        target = base_globals["ping"]
-        assert isinstance(target, _DbDispatchAdapter)
-        fn = _dispatch_at(target, 2)
+        # round 4: the NAME key keeps the binding; the /2 call site gets its
+        # own $disp_ entry, which reaches the local row.
+        assert base_globals["ping"] is b
+        fn = base_globals[_disp_key("ping", 2)]
         assert len(list(_drive_trampoline(fn, Trail(), 1, 2))) == 1
+
+    @pytest.mark.parametrize("era", ["class", "handle"])
+    def test_a_local_row_beats_a_builtin_at_another_arity(self, lm, owner, era):
+        """Review round: ``lm`` has its own ``last/2``; the binding is
+        ``owner``'s ``last/1``.  The local row wins AHEAD of the builtin
+        ``last/2`` -- the same order ``solve.call`` uses at run time."""
+        from clausal.logic.compiler.globals_env import _inject_resolved_targets
+        from clausal.logic.solve import _drive_trampoline
+        from clausal.logic.variables import Trail
+        b = self._owner_binding(owner, "last", era)
+        assert lm.db.row("last", 2) is not None
+        globals_ = dict(lm.module_dict)
+        globals_["last"] = b
+        base_globals = dict(globals_)
+        _inject_resolved_targets({("last", 2)}, base_globals, lm.db, globals_)
+        assert base_globals["last"] is b                 # round 4: name kept
+        fn = _site_dispatch(base_globals, "last", 2)
+        assert len(list(_drive_trampoline(fn, Trail(), 1, 1))) == 1
+        assert len(list(_drive_trampoline(fn, Trail(), [5], 5))) == 0
+
+    @pytest.mark.parametrize("order", ["1-then-2", "2-then-1"])
+    @pytest.mark.parametrize("era", ["class", "handle"])
+    def test_one_clause_set_using_the_name_at_two_arities_and_as_a_term(
+            self, lm, owner, era, order):
+        """Roborev round 4 (MEDIUM): one clause set with
+
+            p(X) <- last(X)            # the imported last/1 (owner's)
+            q(A, B) <- last(A, B)      # lm's own last/2
+            r(T) <- (T = last(1))      # a last/1 TERM
+
+        shares one globals dict, so the resolver sees ``("last", 1)``,
+        ``("last", 2)`` and the data reference ``("last", -1)`` together.
+        The /2 target used to OVERWRITE the ``last`` key with a
+        ``_DbDispatchAdapter`` -- arity-blind, NameError on construction --
+        so, depending on which target the set yielded first, /1 calls got
+        the /2 dispatch and building ``last(1)`` raised.  The name key must
+        keep the binding in BOTH orders, each call site must reach its own
+        predicate, and the term must still build.  (A file cannot declare
+        this shape -- importing ``last`` and defining ``last/2`` is refused
+        at load -- so the resolver is driven directly, with the order
+        forced.)"""
+        from clausal.logic.compiler.globals_env import _inject_resolved_targets
+        from clausal.logic.solve import _drive_trampoline
+        from clausal.logic.variables import Trail
+        b = self._owner_binding(owner, "last", era)          # owner's last/1
+        assert lm.db.row("last", 2) is not None              # lm's last/2
+        targets = [("last", 1), ("last", 2), ("last", -1)]
+        if order == "2-then-1":
+            targets = [("last", 2), ("last", 1), ("last", -1)]
+        globals_ = dict(lm.module_dict)
+        globals_["last"] = b
+        base_globals = dict(globals_)
+        _inject_resolved_targets(targets, base_globals, lm.db, globals_)
+        assert base_globals["last"] is b
+        # p: last/1 is the owner's fact last(1)
+        f1 = _site_dispatch(base_globals, "last", 1)
+        assert len(list(_drive_trampoline(f1, Trail(), 1))) == 1
+        assert len(list(_drive_trampoline(f1, Trail(), 2))) == 0
+        # q: last/2 is lm's fact last(1, 1), not the builtin
+        f2 = _site_dispatch(base_globals, "last", 2)
+        assert len(list(_drive_trampoline(f2, Trail(), 1, 1))) == 1
+        assert len(list(_drive_trampoline(f2, Trail(), [5], 5))) == 0
+        # r: the term last(1) still builds from the name key (class era: the
+        # class constructs it; handle era: the key is the handle, unchanged)
+        if era == "class":
+            assert base_globals["last"](1) == ("last", 1)
+
+    @pytest.mark.parametrize("era", ["class", "handle"])
+    def test_a_stale_fields_class_is_not_shadowed_by_a_builtin(
+            self, stale, era):
+        """Review round: compile-time twin of the ``solve.call`` stale test.
+        The class's ``_fields`` say ``/0``, its row is ``/2``; the call site
+        ``last/2`` must compile to the module's own predicate."""
+        from clausal.logic.builtins import BuiltinPredicate
+        from clausal.logic.compiler.globals_env import _inject_resolved_targets
+        from clausal.logic.predicate import _dispatch_at
+        from clausal.logic.solve import _drive_trampoline
+        from clausal.logic.variables import Trail
+        globals_ = dict(stale.module_dict)
+        if era == "handle":
+            globals_["last"] = _handle(stale, "last")
+        base_globals = dict(globals_)
+        _inject_resolved_targets({("last", 2)}, base_globals, stale.db, globals_)
+        assert base_globals["last"] is globals_["last"]  # round 4: name kept
+        fn = _site_dispatch(base_globals, "last", 2)
+        assert len(list(_drive_trampoline(fn, Trail(), 1, 1))) == 1
+        assert len(list(_drive_trampoline(fn, Trail(), [5], 5))) == 0
 
     @pytest.mark.parametrize("era", ["class", "handle"])
     def test_a_builtin_beats_a_binding_at_another_arity(self, lm, owner, era):
@@ -366,11 +568,89 @@ class TestInjectResolvedTargets:
         globals_ = {"last": b}                            # no local last/2
         base_globals = dict(globals_)
         _inject_resolved_targets({("last", 2)}, base_globals, owner.db, globals_)
-        bp = base_globals["last"]
-        assert isinstance(bp, BuiltinPredicate)
-        # and it answers as the builtin last/2 does
-        fn = _dispatch_at(bp, 2)
+        # round 4: the name key keeps the binding (never a merged builtin);
+        # the /2 call site answers as the builtin last/2 does
+        assert base_globals["last"] is b
+        fn = _site_dispatch(base_globals, "last", 2)
         assert len(list(_drive_trampoline(fn, Trail(), [4, 5], 5))) == 1
+        assert len(list(_drive_trampoline(fn, Trail(), [4, 5], 4))) == 0
+
+    @pytest.mark.parametrize("era", ["class", "handle"])
+    def test_the_other_arity_entry_caches_only_what_cannot_go_stale(
+            self, lm, owner, monkeypatch, era):
+        """Review round 5 (LOW 1): the ``$disp_`` entry resolves once and
+        keeps the answer when it is a BUILTIN or a LOCKED row; an UNLOCKED
+        row re-resolves on every call (it may be recompiled or retracted)."""
+        from clausal.logic.compiler.globals_env import (
+            _disp_key, _inject_resolved_targets,
+        )
+        from clausal.logic.solve import _drive_trampoline
+        from clausal.logic.variables import Trail
+        b = self._owner_binding(owner, "last", era)
+
+        def entry(db):
+            globals_ = {"last": b}
+            bg = dict(globals_)
+            _inject_resolved_targets({("last", 2)}, bg, db, globals_)
+            return bg[_disp_key("last", 2)]
+
+        def counting(db):
+            calls = []
+            real = db.get_dispatch
+            monkeypatch.setattr(db, "get_dispatch",
+                                lambda f, a: calls.append((f, a)) or real(f, a))
+            return calls
+
+        # a builtin (owner has no last/2 row): resolved once
+        fn = entry(owner.db)
+        calls = counting(owner.db)
+        for _ in range(3):
+            assert len(list(_drive_trampoline(fn, Trail(), [4, 5], 5))) == 1
+        assert calls == [("last", 2)]
+        # lm's own last/2, LOCKED: resolved once
+        row = lm.db.row("last", 2)
+        list(call("last", 1, 1, module=lm))            # compile + lock it
+        assert row.locked
+        fn = entry(lm.db)
+        calls = counting(lm.db)
+        for _ in range(3):
+            assert len(list(_drive_trampoline(fn, Trail(), 1, 1))) == 1
+        assert calls == [("last", 2)]
+        # the same row UNLOCKED: re-resolved every call
+        monkeypatch.setattr(row, "locked", False)
+        fn = entry(lm.db)
+        calls.clear()
+        for _ in range(3):
+            assert len(list(_drive_trampoline(fn, Trail(), 1, 1))) == 1
+        assert calls == [("last", 2)] * 3
+
+    @pytest.mark.parametrize("era", ["class", "handle"])
+    def test_a_local_row_asserted_after_the_first_call_outranks_the_cached_builtin(
+            self, owner, era):
+        """Round 6 (LOW 1): the entry cached the builtin ``last/2`` on its
+        first call; a later ``assertz`` creates the module's OWN ``last/2``
+        row, which must then answer -- as ``solve.call`` already does -- not
+        the cached builtin."""
+        from clausal.logic.compiler.globals_env import (
+            _disp_key, _inject_resolved_targets,
+        )
+        from clausal.logic.solve import _drive_trampoline
+        from clausal.logic.variables import Trail
+        from clausal.terms import Compound
+        b = self._owner_binding(owner, "last", era)
+        globals_ = {"last": b}
+        bg = dict(globals_)
+        _inject_resolved_targets({("last", 2)}, bg, owner.db, globals_)
+        fn = bg[_disp_key("last", 2)]
+        assert len(list(_drive_trampoline(fn, Trail(), [4, 5], 5))) == 1
+        assert owner.db.row("last", 2) is None
+        assert len(list(call("assertz", Compound("last", (9, 9)),
+                             module=owner))) == 1
+        assert owner.db.row("last", 2) is not None
+        # the local row answers now, through the compiled entry and solve.call
+        assert len(list(_drive_trampoline(fn, Trail(), 9, 9))) == 1
+        assert len(list(_drive_trampoline(fn, Trail(), [4, 5], 5))) == 0
+        assert len(list(call("last", [4, 5], 5, module=owner))) == 0
 
     @pytest.mark.parametrize("era", ["class", "handle"])
     def test_with_nothing_else_to_answer_the_arity_is_reported(
@@ -387,6 +667,16 @@ class TestInjectResolvedTargets:
         assert base_globals["ping"] is b
         with pytest.raises(PredicateArityMismatchError):
             _dispatch_at(b, 2)
+        # Operator ruling 2026-09-24 (the aliased-import leak): this call site
+        # is UNQUALIFIED, so it gets its own ``$disp_`` entry that resolves in
+        # THIS module under THIS name and otherwise refuses -- never the
+        # binding's owner.  The emitter prefers it over $dispatch_at.
+        from clausal.logic.compiler.globals_env import _disp_key
+        from clausal.logic.solve import _drive_trampoline
+        from clausal.logic.variables import Trail
+        fn = base_globals[_disp_key("ping", 2)]
+        with pytest.raises(PredicateArityMismatchError, match="ping"):
+            list(_drive_trampoline(fn, Trail(), 1, 2))
 
     @pytest.mark.parametrize("era", ["class", "handle"])
     def test_a_binding_at_its_own_arity_is_still_accepted(self, lm, owner, era):
@@ -430,16 +720,26 @@ class TestInjectResolvedTargets:
     def test_dotted_sys_modules_route_at_another_arity(
             self, lm, owner, monkeypatch, era):
         """``owner.last`` is last/1; the call is /2.  No builtin is dotted, so
-        nothing else answers: the object is kept (not a NameError at run
-        time), nothing is baked, and the call reports the arity.
+        at COMPILE time nothing else answers: the object is kept (not a
+        NameError at run time) and nothing is baked.
 
-        NOT mutation-sensitive, by construction: with an arity-blind accept
-        the same object is kept and ``_maybe_cache_dispatch`` refuses the
-        bake at the wrong arity anyway.  It pins the outcome, both eras."""
+        At RUN time the kept binding is asked for ``last/2`` in ITS module
+        (``owner``), and there the builtin ``last/2`` answers -- UPDATED for
+        the name + ARITY ruling (operator, 2026-09-24; ``todo/done/wrong-
+        arity-call-still-refuses-in-two-places-2026-09-24.md``): this used to
+        pin a ``PredicateArityMismatchError`` from ``_dispatch_at(b, 2)``, the
+        class-era refusal the ruling retires.  Both eras agree.
+
+        The compile-time half is NOT mutation-sensitive, by construction:
+        with an arity-blind accept the same object is kept and
+        ``_maybe_cache_dispatch`` refuses the bake at the wrong arity
+        anyway.  It pins the outcome, both eras."""
         from clausal.logic.compiler.globals_env import (
             _disp_key, _inject_resolved_targets,
         )
         from clausal.logic.predicate import _dispatch_at
+        from clausal.logic.solve import _drive_trampoline
+        from clausal.logic.variables import Trail
         b = self._owner_binding(owner, "last", era)
         monkeypatch.setitem(sys.modules[owner.name].__dict__, "last", b)
         dotted = f"{owner.name}.last"
@@ -447,8 +747,9 @@ class TestInjectResolvedTargets:
         _inject_resolved_targets({(dotted, 2)}, base_globals, lm.db, {})
         assert base_globals[dotted] is b
         assert _disp_key(dotted, 2) not in base_globals
-        with pytest.raises(PredicateArityMismatchError):
-            _dispatch_at(b, 2)
+        fn = _dispatch_at(b, 2)                    # the builtin last/2
+        assert len(list(_drive_trampoline(fn, Trail(), [4, 5], 5))) == 1
+        assert len(list(_drive_trampoline(fn, Trail(), [4, 5], 4))) == 0
 
     # -- dotted names (review, 2026-09-24) ---------------------------------
     #

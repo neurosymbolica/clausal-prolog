@@ -49,6 +49,7 @@ from clausal.logic.database import Clause, Database, Module
 from clausal.logic.predicate import (
     is_term_instance, term_field_names, _dispatch_at,
     is_declared_predicate_name,
+    _refuse_unqualified_other_arity, binding_grants_arity,
 )
 from clausal.logic.trampoline import StepGenerator, DONE, _drive_until_yield
 from clausal.logic.cells import (
@@ -1137,13 +1138,27 @@ def call(
 
     # Phase 5: look up PredicateMeta class from module globals first.
     dispatch_fn = None
+    other_arity_binding = None
     if module is not None and module.module_dict is not None:
         pred_cls = module.module_dict.get(functor)
         # W4b-3: after the flip the binding is a module-qualified HANDLE,
         # which has no ``_get_dispatch``; skipping this phase then hands the
         # call to a same-named BUILTIN in Phase 6.  ``_dispatch_at`` resolves
         # either shape.
-        if pred_cls is not None and (
+        #
+        # Name + ARITY ruling (operator, 2026-09-24): a predicate binding --
+        # class or handle alike -- is this call's target only at its own
+        # arity (``globals_env._is_call_target``, the compile-time twin of
+        # this lookup).  At another arity the call resolves NORMALLY:
+        # this module's own db row, then the builtin.  Only when
+        # neither answers does the call refuse (below) -- the same order
+        # ``globals_env._inject_resolved_targets`` bakes into a compiled
+        # call site.
+        if pred_cls is not None and is_declared_predicate_name(pred_cls, db=module.db) \
+                and not binding_grants_arity(pred_cls, arity, module.db,
+                                             functor):
+            other_arity_binding = pred_cls
+        elif pred_cls is not None and (
                 hasattr(pred_cls, '_get_dispatch')
                 or is_declared_predicate_name(pred_cls, db=module.db)):
             # Pass the arity: call("citation", A, B) against citation/3 is the
@@ -1151,6 +1166,16 @@ def call(
             # message rather than a TypeError about a missing `trail`.  Via
             # _dispatch_at, because pred_cls need not be a PredicateMeta.
             dispatch_fn = _dispatch_at(pred_cls, arity)
+
+    # Name + ARITY ruling, review round: the calling module's OWN predicate
+    # at the call arity wins over a same-named builtin (``get_dispatch`` asks
+    # the row first, the builtin registry only after).  A class's ``_fields``
+    # can be stale (see ``PredicateMeta._clause_arity``), so "declared at
+    # another arity" may be wrong about a class whose clauses ARE at this
+    # arity; asking the local row before Phase 6 keeps that predicate
+    # answering instead of a builtin sharing its name.
+    if other_arity_binding is not None:
+        dispatch_fn = module.db.get_dispatch(functor, arity)
 
     # Phase 6: try builtins before Database fallback.
     if dispatch_fn is None and module is not None:
@@ -1162,6 +1187,17 @@ def call(
     # Fall back to Database dispatch lookup (test modules and Compound-head predicates).
     if dispatch_fn is None and module is not None:
         dispatch_fn = module.db.get_dispatch(functor, arity)
+
+    # Name + ARITY ruling: nothing in THIS module answered -- not its row, not
+    # a builtin under this name -- so the call refuses, naming the name it
+    # used.  It does NOT resolve the other arity in the binding's owner
+    # (``_dispatch_at`` would): this call is UNQUALIFIED, and an import --
+    # aliased or not -- grants the one arity it was imported at (operator
+    # ruling 2026-09-24, closing the aliased-import leak).  A stale-``_fields``
+    # class whose clauses ARE at this arity is still returned (its target).
+    if dispatch_fn is None and other_arity_binding is not None:
+        dispatch_fn = _refuse_unqualified_other_arity(
+            other_arity_binding, functor, arity, module.db)
 
     if dispatch_fn is None:
         if _handle_name is not None:

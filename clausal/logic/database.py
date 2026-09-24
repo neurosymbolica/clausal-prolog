@@ -571,6 +571,10 @@ class Database:
         # be found by the local definition's own ``row(..., create=True)``.
         # See ``row()``: adopted rows answer READS only.
         self._adopted: dict[tuple[str, int], PredRow] = {}
+        # Per-name index over ``_adopted`` (review round 4): the arities each
+        # local name was imported at.  Maintained by ``adopt_row``, the only
+        # writer of ``_adopted``; read by ``adopted_arities``.
+        self._adopted_arities: dict[str, frozenset[int]] = {}
         self.module_dict: dict | None = module_dict
 
     def _home_stores(self) -> tuple:
@@ -731,7 +735,15 @@ class Database:
         if key in self._rows or key in self._adopted:
             return False
         self._adopted[key] = row
+        self._adopted_arities[local_functor] = (
+            self._adopted_arities.get(local_functor, frozenset()) | {arity})
         return True
+
+    def adopted_arities(self, functor: str) -> frozenset:
+        """The arities ``-import_from`` adopted a row for under the local name
+        *functor* -- the import record, empty when the name was not imported.
+        O(1): the per-name index ``adopt_row`` maintains."""
+        return self._adopted_arities.get(functor, frozenset())
 
     def adopted_row(self, functor: str, arity: int) -> "PredRow | None":
         """The row this database ADOPTED for ``(functor, arity)`` at
