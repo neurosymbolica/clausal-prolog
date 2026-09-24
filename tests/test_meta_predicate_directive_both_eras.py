@@ -297,3 +297,160 @@ def test_a_partial_meta_goal_through_maplist_qualifies_with_the_caller(pair):
     the caller's reference, as in the class era."""
     _era, _O, I = pair
     assert _n(I, "go_map_partial") == 1
+
+
+# ── A goal-passing library across modules (2026-09-25) ─────────────────────
+#
+# Two shapes found FAILING SILENTLY once the library
+# declared -meta_predicate.  Scryer (verified on the box) answers both:
+#
+#     :- meta_predicate(run_all(?, ?, 4, ?)).
+#     run_all([R|RS], P, G, [row(R,S,C)|IS]) :- call(G, R, P, S, C), ...
+#     qa(CL) :- slib:run_all([k1], ctx, sdom:check, CL).  % [row(k1,yes,1)]
+#     qb(R)  :- wrap(s, [k1], ctx, check, R).              % out(s,[row(k1,yes,1)])
+#     qc(R)  :- top(check, [k1], R).        % 3-deep     % out(s,[row(k1,yes,1)])
+#     catch(slib:run_all([k1], ctx, sdom:nosuch, _), E, true)
+#                                   % E = error(existence_error(procedure,nosuch/4),_)
+#
+# Root cause: a dotted ``m.p`` reference in data position is p's CLASS (a
+# goal OBJECT, not a name); ``$meta_qualify`` wrapped it as ``(":", M, Cls)``
+# and the qualified arm handed Cls to the NAME resolver, which answers None
+# for a non-name -- no solution, no error.
+
+_GLIB = """
+    -module(mglib_ERA, [ev1(G, X), ev2(G, X, Y), ev3(G, X, Y, Z),
+                        run_all(RS, P, G, IS), wrap(S, KS, P, G, OUT),
+                        top(G, KS, R), parse_with(NT, L)])
+    -private([row(R, S, C), out(S, CL), s, ctx])
+    -meta_predicate(ev1(1, '?'), ev2(2, '?', '?'), ev3(3, '?', '?', '?'),
+                    run_all('?', '?', 4, '?'), wrap('?', '?', '?', 4, '?'),
+                    top(4, '?', '?'), parse_with(2, '?'))
+    ev1(G, X) <- call_goal(G, X),
+    ev2(G, X, Y) <- call_goal(G, X, Y),
+    ev3(G, X, Y, Z) <- call_goal(G, X, Y, Z),
+    run_all([], _, _, []),
+    run_all([R, *RS], P, G, [I, *IS]) <- (call_goal(G, R, P, S, C), I is row(R, S, C), run_all(RS, P, G, IS))
+    wrap(S, KS, P, G, OUT) <- (run_all(KS, P, G, CL), OUT is out(S, CL))
+    top(G, KS, R) <- wrap(s, KS, ctx, G, R)
+    parse_with(NT, L) <- phrase(NT, L)
+"""
+
+_GRULES = """
+    -module(mgrules_ERA, [ext_check(A, B, C, D)])
+    -private([k1, ctx, yes])
+    ext_check(k1, ctx, yes, 3),
+"""
+
+_GDOM = """
+    -module(mgdom_ERA, [check(A, B, C, D), g1a(X), g2a(X, Y), g3a(X, Y, Z),
+                        greet/2])
+    -import_module(mglib_ERA)
+    -import_module(mgdom_ERA)
+    -import_from(mglib_ERA, [ev1, ev2, ev3, run_all, wrap, top, parse_with])
+    -import_from(mgrules_ERA, [ext_check])
+    -private([ctx, k1, s, yes])
+    check(k1, ctx, yes, 1),
+    g1a(1),
+    g2a(1, 2),
+    g3a(1, 2, 3),
+    a_dotted(CL) <- mglib_ERA.run_all([k1], ctx, mgdom_ERA.check, CL)
+    a_imported(CL) <- run_all([k1], ctx, mgdom_ERA.check, CL)
+    a_bare(CL) <- run_all([k1], ctx, check, CL)
+    a_other_module(CL) <- run_all([k1], ctx, ext_check, CL)
+    b_bare(R) <- wrap(s, [k1], ctx, check, R)
+    b_dotted(R) <- wrap(s, [k1], ctx, mgdom_ERA.check, R)
+    b_other_module(R) <- wrap(s, [k1], ctx, ext_check, R)
+    greet >> (["h", "i"])
+    p_bare() <- parse_with(greet, ["h", "i"]),
+    p_dotted() <- parse_with(mgdom_ERA.greet, ["h", "i"]),
+    c_three_deep(R) <- top(check, [k1], R)
+    c_three_deep_dotted(R) <- top(mgdom_ERA.check, [k1], R)
+    pass4(G, CL) <- run_all([k1], ctx, G, CL)
+    x1(X) <- ev1(g1a, X)
+    x2(Y) <- ev2(g2a, 1, Y)
+    x3(Z) <- ev3(g3a, 1, 2, Z)
+    x1_dotted(X) <- ev1(mgdom_ERA.g1a, X)
+    x2_dotted(Y) <- ev2(mgdom_ERA.g2a, 1, Y)
+    x3_dotted(Z) <- ev3(mgdom_ERA.g3a, 1, 2, Z)
+"""
+
+_ROW1 = [("row", "k1", "yes", 1)]
+
+
+@pytest.fixture(params=["class", "handle"])
+def glib(request, tmp_path, monkeypatch):
+    era = request.param
+    lib = _load(tmp_path, monkeypatch, f"mglib_{era}", _GLIB.replace("ERA", era))
+    _load(tmp_path, monkeypatch, f"mgrules_{era}", _GRULES.replace("ERA", era))
+    if era == "handle":
+        _bind_imports_as_owner_handles(monkeypatch, lib.__dict__["$module"])
+    dom = _load(tmp_path, monkeypatch, f"mgdom_{era}", _GDOM.replace("ERA", era))
+    return era, dom.__dict__["$module"]
+
+
+@pytest.mark.parametrize("goal, want", [
+    ("a_dotted", _ROW1),                       # shape (a), as reported
+    ("a_imported", _ROW1),
+    ("a_bare", _ROW1),
+    ("a_other_module", [("row", "k1", "yes", 3)]),
+    ("b_bare", ("out", "s", _ROW1)),           # shape (b), as reported
+    ("b_dotted", ("out", "s", _ROW1)),
+    ("b_other_module", ("out", "s", [("row", "k1", "yes", 3)])),
+    ("c_three_deep", ("out", "s", _ROW1)),
+    ("c_three_deep_dotted", ("out", "s", _ROW1)),
+])
+def test_a_goal_passed_across_modules_through_meta_arguments(glib, goal, want):
+    _era, D = glib
+    assert _one(D, goal) == want
+
+
+@pytest.mark.parametrize("goal, want", [
+    ("x1", 1), ("x2", 2), ("x3", 3),
+    ("x1_dotted", 1), ("x2_dotted", 2), ("x3_dotted", 3),
+])
+def test_extra_argument_counts_one_to_three(glib, goal, want):
+    """call_goal/N with 1..3 extras onto a bare and a dotted meta-argument
+    (4 extras is run_all above)."""
+    _era, D = glib
+    assert _one(D, goal) == want
+
+
+def test_bare_vs_m_colon_g_vs_class_goal_handed_in_at_run_time(glib):
+    era, D = glib
+    cls_or_handle = D.module_dict["check"]
+    for g in ("check", (":", f"mgdom_{era}", "check"), cls_or_handle,
+              (":", f"mgdom_{era}", cls_or_handle)):
+        assert _one_with(D, "pass4", g) == _ROW1, g
+
+
+def test_a_qualified_goal_naming_a_missing_predicate_raises(glib):
+    """Ruling 2: never a silent failure."""
+    era, D = glib
+    with pytest.raises(LogicException) as exc:
+        _one_with(D, "pass4", (":", f"mgdom_{era}", "nosuch"))
+    formal = exc.value.term.args[0]
+    assert formal.functor == "existence_error"
+    assert formal.args[1] == Compound("/", (mint("nosuch"), 4))
+
+
+def _one_with(module, goal, arg):
+    q = Var()
+    out = [walk(q) for _ in call(goal, arg, q, module=module)]
+    assert len(out) == 1, out
+    return out[0]
+
+
+@pytest.mark.parametrize("goal", ["p_bare", "p_dotted"])
+def test_a_nonterminal_passed_across_modules_to_phrase(glib, goal):
+    _era, D = glib
+    assert _n(D, goal) == 1
+
+
+def test_phrase_resolves_m_colon_a_nonterminal_class(glib):
+    """``M:NT`` whose NT is a goal OBJECT (the class) -- phrase's qualified
+    arm handed it to the name resolver, which answered None."""
+    era, D = glib
+    nt = D.module_dict["greet"]
+    for g in ("greet", (":", f"mgdom_{era}", "greet"), nt,
+              (":", f"mgdom_{era}", nt)):
+        assert _n(D, "parse_with", g, ["h", "i"]) == 1, g

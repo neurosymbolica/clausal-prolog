@@ -140,7 +140,14 @@ def _resolve_nonterminal(db, rule_val, extra_args, context):
         from clausal.logic.builtins.higher_order import _calling_module  # noqa: PLC0415
         target, inner = resolve_qualified_goal_cell(
             rule_val, context, _calling_module(db))
-        return _resolve_nonterminal(target.db, deref(inner), extra_args, context)
+        inner = deref(inner)
+        if (not isinstance(inner, (str, tuple))
+                and hasattr(inner, "_get_dispatch")):
+            # ``M:NT`` whose NT is a nonterminal CLASS (a dotted ``m.nt``
+            # reference): it resolves itself; S0/S are the whole call.
+            return (_dispatch_at(inner, len(extra_args), target.db),
+                    list(extra_args))
+        return _resolve_nonterminal(target.db, inner, extra_args, context)
     if functor in CELL_GOAL_CONTROL_FUNCTORS or functor == QUALIFIED_GOAL_FUNCTOR:
         return None
     # Ruling C (2026-09-24), ISO call/N style: a nonterminal cell is built at

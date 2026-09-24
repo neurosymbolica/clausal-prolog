@@ -227,6 +227,17 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
         # the WHOLE resolution — the control-construct refusal included, so
         # ``call(M:(A, B))`` is refused exactly like ``call((A, B))`` — with
         # the leftover extras handed on to fold onto the inner goal there.
+        inner_v = deref(inner)
+        if _is_goal_object(inner_v):
+            # ``M:G`` whose G is a goal OBJECT -- a predicate class, a lambda
+            # closure, anything answering ``_get_dispatch`` -- not a name:
+            # it resolves itself, so M has nothing to add.  This arm used to
+            # hand it to the NAME resolver below, which answers None for a
+            # non-name: a SILENT failure (a dotted ``m.p`` reference in data
+            # position is p's class in the class era).
+            extras = [deref(a) for a in call_args[2:]]
+            return (_ensure_trampoline_dispatch(inner_v, len(extras), target.db),
+                    extras)
         return _resolve_named_goal(
             target.db, inner, tuple(call_args[2:]), context)
     # No arity condition (F3): ``call((",",))`` is as much a control construct
@@ -292,6 +303,15 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
             f"{context}: no procedure {functor}/{arity} is defined in "
             + (f"module {_where}" if _where else "the calling module")))
     return dispatch, _meta_qualified(db, functor, arity, call_args)
+
+
+def _is_goal_object(value) -> bool:
+    """A goal that is an OBJECT rather than a name (atom or cell): a
+    predicate class, a ``BuiltinPredicate``, a lambda closure.  A str or a
+    tuple is a name, never an object."""
+    if type(value) is str or type(value) is tuple:
+        return False
+    return callable(value) or hasattr(value, "_get_dispatch")
 
 
 def _meta_qualified(db, functor, arity, call_args):

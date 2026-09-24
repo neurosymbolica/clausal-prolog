@@ -89,9 +89,22 @@ def _already_qualified(value: Any) -> bool:
             and is_declared_predicate_name(v))
 
 
+def _is_goal_object(value: Any) -> bool:
+    """A goal OBJECT (a predicate class, a lambda closure, anything with
+    ``_get_dispatch``) rather than a name: it resolves itself, so a module
+    qualification adds nothing -- and wrapping it made the name resolver
+    answer nothing (a silent failure: a dotted ``m.p`` reference in data
+    position is p's class in the class era)."""
+    v = deref(value)
+    if type(v) is str or type(v) is tuple:
+        return False
+    return callable(v) or hasattr(v, "_get_dispatch")
+
+
 def qualify(designator: Any, value: Any) -> Any:
-    """``M:Value`` unless *value* is already qualified (or no module)."""
-    if designator is None or _already_qualified(value):
+    """``M:Value`` unless *value* is already qualified, a goal object, or
+    there is no module."""
+    if designator is None or _already_qualified(value) or _is_goal_object(value):
         return value
     return (QUALIFIED, designator, value)
 
