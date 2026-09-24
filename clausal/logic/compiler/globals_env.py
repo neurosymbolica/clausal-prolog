@@ -597,12 +597,12 @@ def _is_call_target(binding, arity: int, db=None, name=None) -> bool:
     the owner's other arities are not imported, in either era.  A dotted
     name passes neither -- it is the qualifier's, owner arities included.
     """
-    if is_declared_predicate_name(binding):
+    if is_declared_predicate_name(binding, db=db):
         if arity < 0:
             return True
         if name is not None:
             return binding_grants_arity(binding, arity, db, name)
-        return is_declared_predicate(binding, arity=arity)
+        return is_declared_predicate(binding, arity=arity, db=db)
     return hasattr(binding, "_get_dispatch")
 
 
@@ -633,7 +633,7 @@ def _atom_shadows_row(binding, db, name: str, arity: int) -> bool:
     # ``name/arity`` wins over it exactly as over an atom; one declared at
     # this very arity IS the target and is never shadowed.
     return (
-        (_term_is_atom(binding) or is_declared_predicate_name(binding))
+        (_term_is_atom(binding) or is_declared_predicate_name(binding, db=db))
         and not (arity >= 0 and binding_grants_arity(binding, arity, db, name))
         and db is not None
         and arity >= 0
@@ -691,9 +691,9 @@ def _inject_resolved_targets(
         # (`obj._arity` is `len(obj._fields)`, identical by construction --
         # see predicate.py's own note on the two spellings), era-agnostic;
         # resolve_predicate_row replaces the raw `obj._row` read.
-        if not (arity >= 0 and is_declared_predicate(obj, arity=arity)):
+        if not (arity >= 0 and is_declared_predicate(obj, arity=arity, db=db)):
             return
-        row = resolve_predicate_row(obj, arity=arity)
+        row = resolve_predicate_row(obj, arity=arity, db=db)
         if row is None or not row.locked:
             return
         dispatch = row.dispatch_fn
@@ -766,7 +766,7 @@ def _inject_resolved_targets(
             # At another arity the object is still kept (next branch): a
             # dotted name has no other resolution -- no builtin is dotted --
             # so the call reports the arity at run time.
-            if obj is not None and _is_call_target(obj, target_arity):
+            if obj is not None and _is_call_target(obj, target_arity, db):
                 base_globals[target_name] = obj
                 _maybe_cache_dispatch(obj, target_name, target_arity)
                 continue
@@ -779,7 +779,7 @@ def _inject_resolved_targets(
             if mod_obj is not None:
                 resolved = getattr(mod_obj, attr_name, None)
                 if resolved is not None and _is_call_target(
-                        resolved, target_arity):   # W4b-3
+                        resolved, target_arity, db):   # W4b-3
                     base_globals[target_name] = resolved
                     _maybe_cache_dispatch(resolved, target_name, target_arity)
                     continue
@@ -787,7 +787,7 @@ def _inject_resolved_targets(
             if builtin is not None:
                 _merge_builtin(base_globals, target_name, builtin)
             elif (mod_obj is not None and resolved is not None
-                    and is_declared_predicate_name(resolved)):
+                    and is_declared_predicate_name(resolved, db=db)):
                 # W4b-3: a predicate at ANOTHER arity, and nothing else
                 # answers a dotted name: keep it (as the attribute walk
                 # keeps its object) so the call reports the arity at run
@@ -817,7 +817,7 @@ def _inject_resolved_targets(
         if binding is None and globals_:
             binding = globals_.get(target_name)
         if (target_arity >= 0 and binding is not None
-                and is_declared_predicate_name(binding)
+                and is_declared_predicate_name(binding, db=db)
                 and not _is_call_target(binding, target_arity, db,
                                         target_name)):
             base_globals.setdefault(target_name, binding)

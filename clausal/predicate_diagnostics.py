@@ -187,7 +187,7 @@ def _items(namespace):
         return []
 
 
-def _arities_of(obj, cache=None):
+def _arities_of(obj, cache=None, db=None):
     """The SET of arities *obj* is a predicate at; empty if it is not one.
 
     F4, ruling 3.  This was ``_arity_of``, answering one arity or ``None``,
@@ -205,7 +205,7 @@ def _arities_of(obj, cache=None):
     from clausal.logic.predicate import predicate_arities_for
 
     try:
-        return predicate_arities_for(obj, cache=cache)
+        return predicate_arities_for(obj, cache=cache, db=db)
     except Exception:  # noqa: BLE001 - a diagnostic must not raise
         return set()
 
@@ -277,7 +277,7 @@ def _local_entries(module_globals, modname, db, cache=None):
             continue
         if modname is not None and _owner_of(value) != modname:
             continue  # imported or re-exported; not this module's own
-        for arity in _arities_of(value, cache):
+        for arity in _arities_of(value, cache, db):
             found[(name, arity)] = None
     return sorted(found)
 

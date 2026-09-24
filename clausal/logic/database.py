@@ -382,7 +382,8 @@ _CLAUSE_KINDS = frozenset((WRITE_LOAD_CLAUSES, WRITE_ASSERT, WRITE_RETRACT))
 RUNTIME_AUTHOR_PREFIX = "runtime-assert:"
 
 
-def _resolve_through_row(through: Any, arity: int) -> "PredRow | None":
+def _resolve_through_row(through: Any, arity: int,
+                         db: Any = None) -> "PredRow | None":
     """The extra row ``through=`` names, era-agnostically -- see
     :meth:`Database._write_rows`.
 
@@ -422,7 +423,7 @@ def _resolve_through_row(through: Any, arity: int) -> "PredRow | None":
     if through is None:
         return None
     if isinstance(through, PredicateMeta) or is_mangled(through):
-        return resolve_predicate_row(through, arity=arity)
+        return resolve_predicate_row(through, arity=arity, db=db)
     raise TypeError(
         f"through= does not recognise this value: {through!r} "
         f"(a {type(through).__name__}); expected a PredicateMeta class or "
@@ -959,7 +960,7 @@ class Database:
         target = self.row(functor, arity, create=create)
         if target is not None:
             rows.append(target)
-        other = _resolve_through_row(through, arity)
+        other = _resolve_through_row(through, arity, db=self)
         if other is not None and all(r is not other for r in rows):
             rows.append(other)
         return rows
