@@ -49,6 +49,7 @@ import textwrap
 import types
 
 from clausal._suffixes import SOURCE_SUFFIXES
+from clausal.logic.exceptions import LogicException, existence_error
 from clausal.import_diagnostics import (
     _INDENT,
     _WIDTH,
@@ -75,7 +76,24 @@ _SOURCE_SUFFIXES = SOURCE_SUFFIXES
 # ── the exception ────────────────────────────────────────────────────────────
 
 
-class PredicateNotFoundError(KeyError):
+def procedure_existence_term(functor, arity, message):
+    """``error(existence_error(procedure, Name/Arity), Message)`` -- the ISO
+    term Scryer raises for a call to a procedure that does not exist, with the
+    engine's own diagnostic *message* as the context (its "why").
+
+    *functor* may be a mangled predicate handle; only its demangled NAME goes
+    into the indicator (ruling 2026-09-24: the culprit is the bare
+    ``Name/Arity``, the module named in the message only).  Shared by the two
+    dual-typed lookup errors below.
+    """
+    from clausal.logic.atoms import demangle, is_mangled, mint  # noqa: PLC0415
+    from clausal.terms import Compound  # noqa: PLC0415
+    name = demangle(functor)[1] if is_mangled(functor) else functor
+    return existence_error(
+        "procedure", Compound("/", (mint(name), arity)), message)
+
+
+class PredicateNotFoundError(LogicException, KeyError):
     """``KeyError`` whose ``str()`` is its message, verbatim.
 
     The raise site has always been a ``KeyError`` and callers catch it as one
@@ -84,12 +102,43 @@ class PredicateNotFoundError(KeyError):
     is ``repr(m)``: it wraps the text in quotes and escapes every newline,
     which would turn a multi-line candidate list into one unreadable line.
     Overriding ``__str__`` is the smallest change that keeps both properties.
+
+    Also a ``LogicException`` (operator ruling 2026-09-25: a DIRECT call of an
+    unknown procedure raises ISO ``existence_error``, like Scryer, whose
+    ``catch(nosuch(1), E, true)`` gives
+    ``E = error(existence_error(procedure, nosuch/1), nosuch/1)``).  ``.term``
+    is ``error(existence_error(procedure, Name/Arity), Message)``, the "defines:
+    ... / -> define it or import it" candidate list as the context, so
+    ``catch/3`` binds the ISO term where it bound the transliterated
+    ``PredicateNotFoundError(Message)`` compound before.  ADD, not replace:
+    ``except KeyError`` / ``except PredicateNotFoundError`` and a
+    ``++KeyError`` catcher (``exceptions._dual_typed_match``) keep working;
+    ``args``/``str()`` stay the message alone.
+
+    *functor* / *arity* build the indicator.  Built without them (an
+    out-of-tree caller with only a message) the term is the
+    ``PredicateNotFoundError(Message)`` compound ``catch/3`` bound before
+    2026-09-25.  The same design as ``PredicateArityMismatchError``.
     """
+
+    def __init__(self, message, functor=None, arity=None):
+        # Exception.__init__, not LogicException's: ``args`` stays the
+        # message itself, so ``str()``, ``repr()`` and ``e.args[0]`` read as
+        # they always did.
+        Exception.__init__(self, message)
+        if isinstance(functor, str) and isinstance(arity, int):
+            term = procedure_existence_term(functor, arity, message)
+        else:
+            from clausal.logic.exceptions import python_error_term  # noqa: PLC0415
+            term = python_error_term(self)
+        self.term = term
+        self.functor = functor
+        self.arity = arity
 
     def __str__(self) -> str:  # noqa: D105
         if len(self.args) == 1 and isinstance(self.args[0], str):
             return self.args[0]
-        return super().__str__()
+        return Exception.__str__(self)
 
 
 def predicate_not_found(functor, arity, db=None, module_globals=None):
@@ -99,7 +148,8 @@ def predicate_not_found(functor, arity, db=None, module_globals=None):
     so that every raise site tells the same story.
     """
     return PredicateNotFoundError(
-        describe_missing_predicate(functor, arity, db, module_globals)
+        describe_missing_predicate(functor, arity, db, module_globals),
+        functor, arity,
     )
 
 
