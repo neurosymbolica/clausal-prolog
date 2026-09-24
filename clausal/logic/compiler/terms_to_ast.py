@@ -770,7 +770,13 @@ def term_to_ast_expr(
             _pred_name = predicate_binding_name(
                 namespace.get(term.name), db=_lowering_db())
             if _pred_name is not None:
-                return ast.Constant(value=_mint_atom(_pred_name))
+                # The WRITTEN name, not the binding's own: under an
+                # ``alias(p, q)`` import, ``q`` is bound to p's binding, and
+                # the atom must be ``q`` -- which resolves through the import
+                # in this namespace -- never ``p``, which here may name a
+                # DIFFERENT local predicate (roborev, 2026-09-25; Scryer
+                # passes ``q``).
+                return ast.Constant(value=_mint_atom(term.name))
         return _name(term.name)
 
     # Bare (non-Call) LoadAttr in value position: a module-qualified atom used

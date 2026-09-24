@@ -508,6 +508,15 @@ def _templatize_query_goal(goal: Any, db=None):
         # ``test_goal_argument_must_be_qualified_to_reach_another_module``.
         name = predicate_binding_name(dv, db=db)
         if name is not None:
+            # The name THIS module binds the predicate under, when that is not
+            # the owner's: an ``alias(p, q)`` import is ``q`` here, and ``p``
+            # may be a DIFFERENT local predicate (roborev, 2026-09-25; Scryer
+            # passes ``q`` and resolves it through the import).
+            if db is not None:
+                from clausal.logic.predicate import localize_goal  # noqa: PLC0415
+                local = localize_goal(db, dv)
+                if local is not dv and type(getattr(local, "name", None)) is str:
+                    name = local.name
             return _mint_atom(name)
         if type(dv) in (int, float, complex, bool, str, bytes) or dv is None:
             return dv

@@ -151,3 +151,33 @@ def test_two_aliased_imports_that_swap_names_do_not_recurse_forever():
     md = {"$module": SimpleNamespace(db=imp)}
     assert _find_pred_cls("a", 1, md) is None
     assert _find_pred_cls("b", 1, md) is None
+
+
+def test_the_alias_redirect_leaves_a_row_this_database_owns_alone():
+    """roborev LOW (2026-09-25): the owner-spelling -> alias redirect in
+    ``_find_pred_cls`` and ``_adopted_row_named_by`` checked only the module
+    dict.  A database that OWNS a row under the owner's spelling (``p/1``,
+    say one assertz created, with no binding) while importing another
+    module's ``p`` as ``alias(p, q)`` must keep its own ``p``: no redirect to
+    the import."""
+    from types import SimpleNamespace
+    from clausal.logic.atoms import mangle
+    from clausal.logic.builtins.database_ops import (
+        _adopted_row_named_by, _find_pred_cls,
+    )
+    from clausal.logic.database import Database
+
+    owner = Database({"__name__": "redir_owner"})
+    imp = Database({"__name__": "redir_imp"})
+    assert imp.adopt_row("q", 1, owner.row("p", 1, create=True))   # alias(p, q)
+    imp.row("p", 1, create=True)                                      # its OWN p/1
+    assert imp.owns("p", 1) and imp.adopted_spelling("p", 1) == "q"
+    handle = mangle("redir_owner", "p")
+    md = {"$module": SimpleNamespace(db=imp), "q": handle}
+    imp.module_dict.update(md)
+    assert _adopted_row_named_by(imp, handle, "p", 1) is None
+    assert _find_pred_cls("p", 1, md) is None
+    # ... and with no row of its own the redirect still answers the import.
+    imp2 = Database({"__name__": "redir_imp2"})
+    assert imp2.adopt_row("q", 1, owner.row("p", 1))
+    assert _adopted_row_named_by(imp2, handle, "p", 1) is owner.row("p", 1)

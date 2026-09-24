@@ -745,3 +745,121 @@ def test_a_qualified_non_goal_raises_like_scryer(llib, goal):
         assert formal == "instantiation_error"
     else:
         assert formal.functor == "type_error" and formal.args == ("callable", 5)
+
+
+# ── An aliased import passed as data: the WRITTEN name (2026-09-25) ────────
+#
+# roborev MEDIUM: a bare predicate name in data position used to become the
+# atom of the binding's OWN (owner's) name.  Under ``alias(p, q)`` in a module
+# that defines its own ``p``, that ran the LOCAL p (or raised
+# PredicateArityMismatchError when the local p has another arity).  Scryer
+# passes ``q`` and resolves it through the import.  In clause source the
+# import rewrite already spelled the reference as the dotted binding; the
+# owner-name atom came from the ruling-S LoadName arm (a query built with
+# ``LoadName``) and the query-parameter path (a Python-held binding).
+
+_AOWNER = """
+    -module(maow_ERA, [p(X), ap(G, L)])
+    -private([owner])
+    -meta_predicate(ap(1, '?'))
+    p(owner),
+    ap(G, L) <- maplist(G, L),
+"""
+
+_AUSER_SAME = """
+    -module(mau_same_ERA, [])
+    -import_from(maow_ERA, [alias(p, q), ap])
+    -private([local, owner])
+    p(local),
+    m1(L) <- maplist(q, L),
+    c1(X) <- call(q, X),
+    a1(L) <- ap(q, L),
+"""
+
+_AUSER_OTHER = """
+    -module(mau_other_ERA, [])
+    -import_from(maow_ERA, [alias(p, q), ap])
+    -private([local, owner])
+    p(local, local),
+    m1(L) <- maplist(q, L),
+    c1(X) <- call(q, X),
+    a1(L) <- ap(q, L),
+"""
+
+
+@pytest.fixture(params=[(e, k) for e in ("class", "handle") for k in ("same", "other")],
+                ids=lambda p: f"{p[0]}-{p[1]}-arity")
+def aliased(request, tmp_path, monkeypatch):
+    era, kind = request.param
+    ow = _load(tmp_path, monkeypatch, f"maow_{era}", _AOWNER.replace("ERA", era))
+    if era == "handle":
+        _bind_imports_as_owner_handles(monkeypatch, ow.__dict__["$module"])
+    src = (_AUSER_SAME if kind == "same" else _AUSER_OTHER).replace("ERA", era)
+    us = _load(tmp_path, monkeypatch, f"mau_{kind}_{era}", src)
+    return us.__dict__["$module"]
+
+
+def test_an_aliased_name_in_source_resolves_through_the_import(aliased):
+    U = aliased
+    assert _n(U, "m1", ["owner"]) == 1 and _n(U, "m1", ["local"]) == 0
+    x = Var()
+    assert [walk(x) for _ in call("c1", x, module=U)] == ["owner"]
+    assert _n(U, "a1", ["owner"]) == 1       # and as a -meta_predicate argument
+
+
+def test_an_aliased_binding_in_a_python_query_is_the_written_name(aliased):
+    from clausal.logic.solve import solve
+    from clausal.terms import Call, LoadName
+    U = aliased
+    binding = U.module_dict["q"]
+    by_binding = ("maplist", binding, ["owner"])
+    by_loadname = Call(func=LoadName(name="maplist"),
+                       args=[LoadName(name="q"), ["owner"]], kwargs=[])
+    for goal in (by_binding, by_loadname, ("maplist", "q", ["owner"])):
+        assert len(list(solve(goal, U))) == 1, goal
+
+
+# ── TRO through a -meta_predicate self-call (2026-09-25) ───────────────────
+
+def test_tro_sees_a_meta_argument_passed_through_a_self_call():
+    """roborev LOW: every qualifying argument of a SELF-call is a MetaArg,
+    and the pass-through check read it as a non-variable -- with no prefix
+    goals that made the clause TRO-ineligible.  The qualification is
+    idempotent (entry already qualified), so the head variable passed on
+    unchanged is a pass-through for TRO."""
+    from clausal.logic.compiler.tro import _tro_args_safe_ir
+    from clausal.logic.meta_predicate import MetaArg
+    g, n, m = Var(), Var(), Var()
+    head = ("loop", g, n)
+    assert _tro_args_safe_ir(head, [], [MetaArg(g, 0), n], 2) == (True, frozenset())
+    assert _tro_args_safe_ir(head, [], [g, n], 2) == (True, frozenset())
+    assert _tro_args_safe_ir(head, [], [MetaArg(m, 0), n], 2)[0] is False
+
+
+_TROLIB = """
+    -module(mtro_DECL, [loop(G, N), run(N)])
+    META
+    loop(_, 0),
+    loop(G, N) <- (N > 0, eval_(N - 1, M), loop(G, M)),
+    okl(),
+    run(N) <- loop(okl, N),
+"""
+
+
+@pytest.mark.parametrize("decl", ["declared", "undeclared"])
+def test_a_meta_declared_recursive_walker_over_100k_steps(tmp_path, monkeypatch, decl):
+    import clausal.logic.compiler.optimisations.tro as tro
+    plans = []
+    orig = tro.analyse
+
+    def spy(ir, head, functor, arity, *a, **k):
+        r = orig(ir, head, functor, arity, *a, **k)
+        if functor == "loop":
+            plans.append(r.eligible)
+        return r
+    monkeypatch.setattr(tro, "analyse", spy)
+    meta = "-meta_predicate(loop(0, '?'))" if decl == "declared" else ""
+    m = _load(tmp_path, monkeypatch, f"mtro_{decl}",
+              _TROLIB.replace("DECL", decl).replace("META", meta))
+    assert any(plans), plans                   # TRO-eligible, declared or not
+    assert _n(m.__dict__["$module"], "run", 100_000) == 1

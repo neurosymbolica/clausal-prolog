@@ -183,12 +183,7 @@ class PredicateArityMismatchError(LogicException, TypeError):
 
     def __init__(self, message, functor=None, called_arity=None):
         if isinstance(functor, str) and isinstance(called_arity, int):
-            from clausal.logic.atoms import demangle, is_mangled, mint  # noqa: PLC0415
-            from clausal.terms import Compound  # noqa: PLC0415
-            name = demangle(functor)[1] if is_mangled(functor) else functor
-            term = existence_error(
-                "procedure", Compound("/", (mint(name), called_arity)),
-                message)
+            term = procedure_existence_term(functor, called_arity, message)
         else:
             term = None
         # Exception.__init__, not LogicException's: ``args`` stays the

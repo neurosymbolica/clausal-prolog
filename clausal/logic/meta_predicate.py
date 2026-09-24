@@ -78,7 +78,7 @@ def module_designator(db: Any) -> Any:
     return module
 
 
-def _already_qualified(value: Any) -> bool:
+def _already_qualified(value: Any, db: Any = None) -> bool:
     from clausal.logic.atoms import is_mangled  # noqa: PLC0415
     from clausal.logic.predicate import is_declared_predicate_name  # noqa: PLC0415
     v = deref(value)
@@ -87,8 +87,10 @@ def _already_qualified(value: Any) -> bool:
     # A predicate HANDLE names its module inside the atom.  A ``-hide`` DATA
     # atom is mangled the same way but names no predicate: it is qualified
     # like any other atom.
+    # *db* is the calling database, the ruling-Q0 hint so a handle naming a
+    # module popped from ``sys.modules`` still resolves (roborev 2026-09-25).
     return (type(v) is str and is_mangled(v)
-            and is_declared_predicate_name(v))
+            and is_declared_predicate_name(v, db=db))
 
 
 _FUNCTION_KINDS = (types.FunctionType, types.MethodType, functools.partial)
@@ -114,13 +116,13 @@ def is_goal_object(value: Any) -> bool:
     return hasattr(v, "_get_dispatch") or isinstance(v, _FUNCTION_KINDS)
 
 
-def qualify(designator: Any, value: Any, spec: Any = 0) -> Any:
+def qualify(designator: Any, value: Any, spec: Any = 0, db: Any = None) -> Any:
     """``M:Value`` unless *value* is already qualified, or there is no
     module.  A goal OBJECT in a GOAL position (an integer spec) is left as
     it is -- it resolves itself; a ``:`` position is module-sensitive DATA
     and is ALWAYS qualified, as Scryer hands it over (``cd:[X]>>true`` for
     a yall lambda, verified on the box)."""
-    if designator is None or _already_qualified(value):
+    if designator is None or _already_qualified(value, db):
         return value
     if type(spec) is int and is_goal_object(value):
         return value
@@ -129,7 +131,7 @@ def qualify(designator: Any, value: Any, spec: Any = 0) -> Any:
 
 def qualify_in_db(db: Any, value: Any, spec: Any = 0) -> Any:
     """``$meta_qualify``: the compiled call site's runtime half."""
-    return qualify(module_designator(db), value, spec)
+    return qualify(module_designator(db), value, spec, db)
 
 
 def qualify_args(specs: "tuple | None", args: list, db: Any) -> list:
@@ -140,7 +142,7 @@ def qualify_args(specs: "tuple | None", args: list, db: Any) -> list:
     designator = module_designator(db)
     if designator is None:
         return args
-    return [qualify(designator, a, s) if is_qualifying_spec(s) else a
+    return [qualify(designator, a, s, db) if is_qualifying_spec(s) else a
             for s, a in zip(specs, args)]
 
 
