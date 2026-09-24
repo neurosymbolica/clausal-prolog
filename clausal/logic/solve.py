@@ -1126,7 +1126,9 @@ def call(
 
     Raises
     ------
-    KeyError  if the predicate is not defined in module.
+    PredicateNotFoundError  (a ``KeyError`` and a ``LogicException`` whose
+              ``.term`` is ISO ``existence_error(procedure, Name/Arity)``)
+              if the predicate is not defined in module.
     """
     # W4: a module-qualified NAME (the mangled handle) is its own module
     # designator -- switch to that module and continue with the bare name.
@@ -1253,8 +1255,18 @@ def call(
             raise KeyError(
                 f"Predicate {functor!r}/{arity}: module is required when functor is a string"
             )
-        raise KeyError(
-            f"Predicate {functor!r}/{arity} is not defined in module {module.name!r}"
+        # Operator ruling 2026-09-25: an unknown procedure is ISO
+        # existence_error(procedure, Name/Arity).  ``PredicateNotFoundError``
+        # is a KeyError AND a LogicException carrying that term, so every
+        # ``except KeyError`` around ``call`` keeps working and ``.term`` is
+        # the ISO one; the message is unchanged (``str()`` drops the quotes a
+        # bare KeyError added).
+        from clausal.predicate_diagnostics import (  # noqa: PLC0415
+            PredicateNotFoundError,
+        )
+        raise PredicateNotFoundError(
+            f"Predicate {functor!r}/{arity} is not defined in module {module.name!r}",
+            functor, arity,
         )
 
     if trail is None:
