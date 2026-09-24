@@ -2284,13 +2284,26 @@ def _resolve_predicate(goal, logic_module, caller_path):
         candidates.append(db.row(name, arity))
     if "." in name:
         prefix, last = name.rsplit(".", 1)
-        prefix_mod = sys.modules.get(prefix)
+        # The prefix module as the CALLER bound it (``-import_module`` puts
+        # the module object in its dict) before ``sys.modules``, which the
+        # runner empties of what it loads.
+        md = getattr(logic_module, "module_dict", None) or {}
+        prefix_mod = md.get(prefix)
+        if not hasattr(prefix_mod, "__dict__"):
+            prefix_mod = sys.modules.get(prefix)
         prefix_lm = getattr(prefix_mod, "__dict__", {}).get("$module") if prefix_mod else None
         prefix_db = getattr(prefix_lm, "db", None)
         if prefix_db is not None:
             candidates.append(prefix_db.row(last, arity))
         if db is not None:
-            candidates.append(db.row(last, arity))
+            # The bare last segment in the caller's database -- an
+            # ``-import_from`` of the prefix module lands there -- but ONLY
+            # as the prefix module's own row: a local predicate that merely
+            # shares the bare name is a different predicate.
+            bare = db.row(last, arity)
+            if bare is not None and (bare.db is prefix_db
+                                     or bare.db.module_name() == prefix):
+                candidates.append(bare)
     for row in candidates:
         if row is None or row.detached or not row.clauses:
             continue
@@ -2300,7 +2313,6 @@ def _resolve_predicate(goal, logic_module, caller_path):
         def_lm = owner_md.get("$module")
         return row, (def_lm or logic_module), owner_md.get("__file__")
     return None
-
 
 
 def _head_prefix(head, goal):
