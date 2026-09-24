@@ -764,7 +764,7 @@ def term_to_ast_expr(
         # lowers a bare ``z`` to ``'z'``); a ``-hide`` DATA atom is not a
         # declared predicate, so it keeps its load and its mangled spelling.
         # A goal-taking builtin handed the atom resolves it by name in the
-        # caller (``higher_order._NamedGoal``, ``call/N``).
+        # caller (``call_body.MetaCallGoal``, ``call/N``).
         namespace = lowering_globals()
         if namespace is not None and "." not in term.name:
             _pred_name = predicate_binding_name(

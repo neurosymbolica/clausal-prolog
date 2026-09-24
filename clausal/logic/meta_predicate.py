@@ -98,7 +98,7 @@ def is_goal_object(value: Any) -> bool:
     """THE test for a goal OBJECT -- a goal that is not a NAME (atom or
     cell) and resolves itself: anything answering ``_get_dispatch`` (a
     predicate class, a ``BuiltinPredicate``, the ``_UnqualifiedName`` /
-    ``_NamedGoal`` adapters) or a plain Python function (a Python-written
+    ``call_body.MetaCallGoal`` adapters) or a plain Python function (a Python-written
     closure, a compiled Clausal lambda).  Dereferenced first.
 
     Deliberately NOT ``callable()``: a unit ``Quantity`` (``byte(4)``), a

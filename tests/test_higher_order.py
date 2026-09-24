@@ -135,9 +135,17 @@ class TestMapList2:
         # nv
         assert run_trampoline(_map_list__2, _goal_positive, 42) == 0
 
-    def test_non_callable_fails(self):
+    def test_non_callable_raises(self):
+        """FLIPPED, operator ruling 2026-09-25 (follow Scryer): a
+        non-callable goal is type_error(callable, 42) when it is CALLED --
+        it used to fail silently.  ``maplist(42, [])`` never calls it and
+        succeeds, as in Scryer."""
         # nv
-        assert run_trampoline(_map_list__2, 42, [1, 2, 3]) == 0
+        from clausal.logic.exceptions import LogicException
+        with pytest.raises(LogicException) as info:
+            run_trampoline(_map_list__2, 42, [1, 2, 3])
+        assert info.value.term.args[0].functor == "type_error"
+        assert run_trampoline(_map_list__2, 42, []) == 1
 
 
 # ── map_list/3 ────────────────────────────────────────────────────────────────

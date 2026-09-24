@@ -186,14 +186,31 @@ class TestCallNOverCells:
         assert [deref(X)
                 for _ in pcall("cg2", "p", X, module=_lm(mod))] == [1, 2]
 
-    def test_a_non_cell_non_callable_goal_still_fails_silently(self, mod):
-        """The translator session's pinned §4.2 contract, unchanged."""
-        assert list(pcall("cg1", 42, module=_lm(mod))) == []
-        assert list(pcall("cg1", 3.5, module=_lm(mod))) == []
-        assert list(pcall("cg1", [1, 2], module=_lm(mod))) == []
+    def test_a_non_cell_non_callable_goal_is_a_type_error(self, mod):
+        """FLIPPED, operator ruling 2026-09-25 (call-runs-body-terms round 2: follow Scryer): the translator session's
+        "section 4.2" silent-failure contract is retired.  Scryer answers
+        ``call(42)``, ``call(3.5)`` and ``call([1, 2])`` with
+        type_error(callable, G), and so does this engine now."""
+        for goal in (42, 3.5):
+            with pytest.raises(LogicException) as exc_info:
+                list(pcall("cg1", goal, module=_lm(mod)))
+            inner, _ = _error_term(exc_info.value)
+            assert inner.functor == "type_error"
+            assert inner.args[0] == mint("callable") and inner.args[1] == goal
+        # FLIPPED again, operator rule 2026-09-25, ISO first: a non-empty list or string is the callable compound '.'/2, so call/1 of one names the missing procedure '.'/2; Scryer disagrees with itself (literal call([a]) -> existence_error, run-time G = [a], call(G) -> type_error): ``[1, 2]`` is existence_error '.'/2.
+        with pytest.raises(LogicException) as exc_info:
+            list(pcall("cg1", [1, 2], module=_lm(mod)))
+        inner, _ = _error_term(exc_info.value)
+        assert inner.functor == "existence_error"
+        assert tuple(inner.args[1].args) == (".", 2)
 
-    def test_a_tuple_tag_data_cell_goal_fails_silently(self, mod):
-        assert list(pcall("cg1", (tuple, 1, 2), module=_lm(mod))) == []
+    def test_a_tuple_tag_data_cell_goal_is_a_type_error(self, mod):
+        """FLIPPED, operator ruling 2026-09-25 (call-runs-body-terms round 2: follow Scryer): tuple DATA is not a goal, and a
+        non-goal is type_error(callable, G) rather than a silent failure."""
+        for goal in ((tuple, 1, 2), ("()", 1, 2)):
+            with pytest.raises(LogicException) as exc_info:
+                list(pcall("cg1", goal, module=_lm(mod)))
+            assert _error_term(exc_info.value)[0].functor == "type_error"
 
     def test_an_unknown_cell_goal_raises_existence_error(self, mod):
         """FLIPPED 2026-09-25 -- operator ruling 2 ("like Scryer"): a meta-call naming an UNKNOWN procedure raises ISO existence_error(procedure, Name/Arity), catchable; it used to fail silently (the retired §4.2 contract).
@@ -256,11 +273,14 @@ class TestCallNOverCells:
     def test_a_zero_argument_control_cell_is_refused_not_silently_failed(
             self, mod):
         """``call((",",))`` used to fall past the arity-guarded refusal and
-        fail silently while ``solve((",",), m)`` raised.  Fix round 1, F3."""
+        fail silently while ``solve((",",), m)`` raised.  Fix round 1, F3.
+        FLIPPED, operator ruling 2026-09-25 (call-runs-body-terms round 2: follow Scryer): still raised, now as ISO's
+        existence_error(procedure, ','/0) -- ``,`` is a construct of arity 2."""
         with pytest.raises(LogicException) as exc_info:
             list(pcall("cg1", ",", module=_lm(mod)))
-        assert _error_term(exc_info.value)[0].args[0] == mint(
-            "callable_control_construct_unsupported")
+        inner, _ = _error_term(exc_info.value)
+        assert inner.functor == "existence_error"
+        assert tuple(inner.args[1].args) == (",", 0)
 
     def test_the_atom_spelling_of_a_qualified_goal_folds_the_same_way(
             self, mod):
@@ -298,13 +318,13 @@ class TestCallNOverCells:
 
     def test_the_atom_spelling_of_a_control_construct_hits_the_same_refusal(
             self, mod):
-        """Same folding, the other deferred route."""
+        """Same folding, the other deferred route.  FLIPPED, operator ruling 2026-09-25 (call-runs-body-terms round 2: follow Scryer):
+        the ISO conjunction cell RUNS now, so the pin is that both spellings
+        ANSWER alike."""
         lm = _lm(mod)
-        with pytest.raises(LogicException) as a:
-            list(pcall("cg3", mint(","), ("p", 1), ("p", 2), module=lm))
-        with pytest.raises(LogicException) as b:
-            list(pcall("cg1", (",", ("p", 1), ("p", 2)), module=lm))
-        assert _error_term(a.value)[0] == _error_term(b.value)[0]
+        a = list(pcall("cg3", mint(","), ("p", 1), ("p", 2), module=lm))
+        b = list(pcall("cg1", (",", ("p", 1), ("p", 2)), module=lm))
+        assert len(a) == len(b) == 1
 
     def test_the_call_family_is_registered_db_receiving(self):
         """call/N moved from _BUILTINS to _DB_BUILTINS so it can resolve a
@@ -350,13 +370,17 @@ class TestDeferredCellGoalForms:
                            cell))
         assert f"{functor}/2 is a control construct" in context
 
-    def test_a_control_construct_cell_goal_is_refused_by_call(self, mod):
+    def test_a_control_construct_cell_goal_runs_under_call(self, mod):
+        """FLIPPED, operator ruling 2026-09-25 (call-runs-body-terms round 2: follow Scryer): ``(",", A, B)``, ``(";", A, B)`` and
+        ``("\\+", G)`` run as bodies; ``->`` stays refused (cut-free, no
+        committed choice) -- tests/test_call_runs_body_terms.py owns that.
+        ``solve`` still refuses the cell (next test): the ruling was call's."""
         cell = (",", ("p", 1), ("p", 2))
+        assert len(list(pcall("cg1", cell, module=_lm(mod)))) == 1
         with pytest.raises(LogicException) as exc_info:
-            list(pcall("cg1", cell, module=_lm(mod)))
+            list(pcall("cg1", ("->", ("p", 1), ("p", 2)), module=_lm(mod)))
         inner, context = _error_term(exc_info.value)
-        assert inner.functor == "type_error"
-        assert inner.args[0] == mint("callable_control_construct_unsupported")
+        assert inner.functor == "existence_error"
         assert "call/1" in context
 
     def test_the_refusal_names_the_compile_time_form(self, mod):
@@ -465,17 +489,15 @@ class TestZeroArityControlConstructsByName:
 
     def test_the_control_constructs_do_not_consume_the_arity_one_spelling(
             self, mod):
-        """``call(true, X)`` is the goal ``true/1`` — an ordinary undefined
-        predicate, as ISO has it — not ``true`` with an argument thrown away.
-
-        FLIPPED 2026-09-25 -- operator ruling 2 ("like Scryer"): a meta-call naming an UNKNOWN procedure raises ISO existence_error(procedure, Name/Arity), catchable; it used to fail silently (the retired §4.2 contract).  So it is ``existence_error(procedure, true/1)``, as Scryer
-        answers ``call(true, 1)``; it used to answer ``[]``."""
-        from clausal.logic.exceptions import LogicException
-        with pytest.raises(LogicException) as exc:
+        """``call(true, X)`` is the goal ``true/1`` -- not ``true`` with an
+        argument thrown away.  FLIPPED, operator ruling 2026-09-25 (call-runs-body-terms round 2: follow Scryer): Scryer answers
+        existence_error(procedure, true/1), and so does this engine (it used
+        to fail silently, as an unknown name does)."""
+        with pytest.raises(LogicException) as exc_info:
             list(pcall("cg2", mint("true"), 1, module=_lm(mod)))
-        formal = exc.value.term.args[0]
-        assert formal.functor == "existence_error"
-        assert tuple(formal.args[1].args) == ("true", 1)
+        inner, _ = _error_term(exc_info.value)
+        assert inner.functor == "existence_error"
+        assert tuple(inner.args[1].args) == ("true", 1)
 
     def test_they_answer_without_a_database_too(self):
         """Decided before the db lookups, like the control-construct refusal,

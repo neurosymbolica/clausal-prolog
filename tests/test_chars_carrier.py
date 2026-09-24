@@ -276,4 +276,6 @@ class TestSlice5Crossings:
         mod = _mod(tmp_path, 'p <- call("foo")\n')
         with pytest.raises(LogicException) as ei:
             _first(mod, "p")
+        # Round 2 made this a type_error (follow Scryer); FLIPPED back,
+        # operator rule 2026-09-25, ISO first: a non-empty list or string is the callable compound '.'/2, so call/1 of one names the missing procedure '.'/2; Scryer disagrees with itself (literal call([a]) -> existence_error, run-time G = [a], call(G) -> type_error).  The carrier spelling still never leaks.
         assert "existence_error" in str(ei.value) and "$chars" not in str(ei.value)

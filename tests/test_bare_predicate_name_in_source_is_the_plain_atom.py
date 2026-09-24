@@ -84,7 +84,7 @@ def test_goal_taking_builtins_resolve_the_atom_in_the_caller(mod):
 
 def test_the_reified_list_builtins_drive_a_named_goal(mod):
     """tfilter/3 and tpartition/4 ran the goal in a plain inline loop, which
-    cannot drive a ``_NamedGoal`` (it delegates to call/N through a
+    cannot drive a ``MetaCallGoal`` (formerly ``_NamedGoal``; it delegates to call/N through a
     StepGenerator): the delegation step read as a solution with T unbound,
     and every element was dropped -- ``tfilter(tpos, [1, -2, 3], R)``
     answered ``R = []`` (2026-09-25; test_09 test_regression_tfilter_user_reified)."""
@@ -231,13 +231,16 @@ def test_the_unknown_procedure_raise_is_catchable_in_source(tmp_path):
     p = tmp_path / f"{name}.clausal"
     p.write_text(
         f"-module({name}, [])\n"
-        "-private([procedure, nosuch])\n"
-        "caught(PI) <- catch(maplist(nosuch, [1]),"
+        "-private([procedure, bpn_absent_proc])\n"
+        "caught(PI) <- catch(maplist(bpn_absent_proc, [1]),"
         " error(existence_error(procedure, PI), _), True)\n")
+    # A distinct atom, not ``nosuch``: a -private atom declared here leaks into
+    # another module's ``m.nosuch(...)`` resolution (pre-existing on main;
+    # todo/private-atom-leaks-into-another-modules-qualified-call-2026-09-25.md).
     lm = _load_module(name, str(p)).__dict__["$module"]
     pi = Var()
     assert [deref(pi) for _ in call("caught", pi, module=lm)] == [
-        Compound("/", (mint("nosuch"), 1))]
+        Compound("/", (mint("bpn_absent_proc"), 1))]
 
 
 def test_listing_a_bare_name_is_not_a_predicate_indicator(mod):

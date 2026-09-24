@@ -593,11 +593,10 @@ def test_a_cell_named_by_an_aliased_owner_functor(
       answers.  Partial application through an alias behaves like writing
       the owner's name, because the term IS the owner's term.
 
-    ``maplist`` used to take no cell goals at all (it failed).  Since
-    2026-09-24 (ruling S: a goal-first list builtin handed a NAME resolves it
-    through the caller's ``call/N``) it folds a cell exactly as ``call/N``
-    does, so ``maplist(nl(3), [L])`` is ``call(nl(3), L)`` -- the same
-    documented consequence."""
+    ``maplist`` runs a cell goal AS call/N per element (FLIPPED, operator
+    ruling 2026-09-25, follow Scryer: ``maplist(p(1), L)`` calls
+    ``p(1, E)``) -- so ``maplist(nl(3), [L])`` answers exactly as
+    ``call(nl(3), L)`` does.  It used to fail."""
     from clausal.logic.solve import call as _call
     from clausal.logic.variables import Var, deref
     ow = _load(tmp_path, monkeypatch, f"f7_pa_ow_{era}", """

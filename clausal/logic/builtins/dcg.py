@@ -98,14 +98,17 @@ def _resolve_nonterminal(db, rule_val, extra_args, context):
     rule (the db's dispatch table, then the module namespace) rather than a
     second copy of it here.
 
-    NARROWED to the shapes phrase already accepted, because the shared
-    resolver is stricter than phrase is: call/N RAISES for a control
-    construct, for a string and for ``[]``, where phrase has always FAILED.
-    A DCG body is not a goal tree -- ``phrase((a, b), L)`` never named a
-    nonterminal here -- so those functors are turned away before the resolver
-    can raise, and the silent failure they have always had is preserved.  A
-    module-qualified nonterminal ``M:NT`` (what a ``-meta_predicate``
-    argument arrives as, operator ruling 2026-09-25) resolves NT in M.
+    NARROWED to the shapes phrase already accepted.  A DCG body is not a goal
+    tree: call/N RUNS a control-construct cell as a body (operator ruling
+    2026-09-25) and raises for a string, ``[]`` and any non-callable, but
+    ``phrase((a, b), L)`` never named a nonterminal here, so control
+    functors -- and strings and lists, which are DCG terminals -- are turned
+    away before the resolver sees them and keep failing.  A module-qualified
+    nonterminal ``M:NT`` (what a ``-meta_predicate`` argument arrives as,
+    operator ruling 2026-09-25) resolves NT in M.  The one non-cell that
+    RAISES is a non-callable term (a number, tuple data ...):
+    ``phrase(42, L)`` is type_error(callable, 42), as in Scryer (operator
+    ruling 2026-09-25) -- it used to fail.
 
     One resolver raise is deliberately NOT narrowed away: a dangling
     predicate HANDLE (a mangled functor whose module never loaded, or whose
@@ -121,6 +124,12 @@ def _resolve_nonterminal(db, rule_val, extra_args, context):
     """
     from clausal.logic.builtins.higher_order import _resolve_named_goal  # noqa: PLC0415
     is_cell, functor = compound_cell_shape(rule_val)
+    from clausal.logic.builtins.call_body import (  # noqa: PLC0415
+        is_non_callable_term, non_callable_goal_error,
+    )
+    if not is_cell and is_non_callable_term(rule_val, lists=False):
+        from clausal.logic.exceptions import LogicException  # noqa: PLC0415
+        raise LogicException(non_callable_goal_error(rule_val, context))
     if not is_cell:
         if type(rule_val) is str and rule_val:
             # A bare ATOM names the nonterminal: ruling S (2026-09-24) makes
