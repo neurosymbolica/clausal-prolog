@@ -190,26 +190,77 @@ def _defined_names(mod):
     The fallback when a module declares no ``-module(...)``: those names are
     still importable (``from M import f`` is a plain ``getattr``), so this is
     the honest answer to "what may I import from here?".
+
+    Era-agnostic (PredicateMeta retirement, W4b-2d): TODAY a module-dict
+    predicate binding is a ``PredicateMeta`` CLASS; after the flip it is a
+    module-qualified MANGLED ATOM (a plain ``str``).  The population test
+    is ``is_declared_predicate_name`` -- NOT a bare ``is_mangled`` swap,
+    which would select nothing at all until the flip lands (every binding
+    is still a class today) and silently empty this diagnostic with no test
+    to catch it.  ``is_declared_predicate_name`` answers correctly in BOTH
+    eras: ``True`` for a ``PredicateMeta`` class or a mangled atom naming a
+    declared predicate, ``False`` for anything else -- a plain module-level
+    string or int, an imported non-predicate callable, a data functor's
+    ``@dataclass`` class, or a mangled atom naming a DATA atom (e.g. one
+    hidden via ``-hide``, which is registered as neither "predicate" nor
+    "data" anywhere) -- so none of those false-positive shapes can appear.
+    See ``test_import_diagnostics_defined_names.py`` for the population
+    (non-empty, both eras) and false-positive evidence.
     """
     from clausal.import_hook import predicate_builtins
-    from clausal.logic.predicate import PredicateMeta
+    from clausal.logic.atoms import demangle
+    from clausal.logic.predicate import (
+        PredicateMeta, field_names_for, is_declared_predicate_name,
+    )
 
     entries = []
     for name, value in vars(mod).items():
         if not isinstance(name, str) or name.startswith("_") or "$" in name:
             continue
-        if not isinstance(value, PredicateMeta):
+        if not is_declared_predicate_name(value):
             continue
         # Equality, never identity, for an atom (spec §2/§5.2): two
         # equal atoms are the same atom whether or not they are the
         # same tuple object, and ``mint`` returns a fresh tuple each
-        # call.  THE FLIP retired the last of these ``is`` pins.
+        # call.  THE FLIP retired the last of these ``is`` pins.  (A
+        # mangled atom never collides with this pool -- the pool holds
+        # only unmangled spellings -- so this is a no-op, not a branch,
+        # for the mangled arm below.)
         if predicate_builtins.get(name) == value:
             continue
-        if getattr(value, "__module__", None) != mod.__name__:
-            continue  # re-exported from elsewhere; not this module's own
-        fields = getattr(value, "_fields", ()) or ()
-        entries.append((name, f"{name}/{len(fields)}" if fields else name))
+        if isinstance(value, PredicateMeta):
+            if getattr(value, "__module__", None) != mod.__name__:
+                continue  # re-exported from elsewhere; not this module's own
+            fields = getattr(value, "_fields", ()) or ()
+            arity = len(fields)
+        else:
+            # ``is_declared_predicate_name`` only ever answers True for a
+            # PredicateMeta class (handled above) or a mangled atom -- so
+            # this is the mangled-atom arm by elimination.
+            owner_module, functor = demangle(value)
+            if owner_module != mod.__name__:
+                continue  # re-exported from elsewhere; not this module's own
+            fields = field_names_for(value) or ()
+            if fields:
+                arity = len(fields)
+            else:
+                # ``field_names_for`` answers None for an ordinary clause-
+                # defined predicate -- it only records names for an
+                # explicit structural declaration, never a bare
+                # ``p(X, Y) <- ...`` head (see its own docstring).  Fall
+                # back to the owner db's arity registry so an N-ary
+                # predicate still renders ``name/N`` rather than silently
+                # dropping the suffix and reading as 0-ary.  Same idiom as
+                # ``testing.py``/``compiler_v2.py``: a loaded module's
+                # Database lives at ``mod.__dict__["$module"].db``.
+                owner_mod = sys.modules.get(owner_module)
+                owner_db = getattr(
+                    getattr(owner_mod, "__dict__", {}).get("$module"),
+                    "db", None,
+                )
+                arities = owner_db.arities_for(functor) if owner_db else set()
+                arity = arities.pop() if len(arities) == 1 else 0
+        entries.append((name, f"{name}/{arity}" if arity else name))
     entries.sort()
     return entries
 
