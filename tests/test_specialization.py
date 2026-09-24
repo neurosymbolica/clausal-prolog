@@ -39,10 +39,19 @@ def spec_module(request):
     Operator ruling QC (2026-09-24): after P4 the direct ``specialize_mi*``
     API requires the caller to name where the predicate lives (``db=`` of a
     ``Module``), returns the row, and the predicate is queried by NAME with
-    ``call(name, ..., module=m)``.  These tests already work that way: every
-    specialization is written into this module's database, queried by name
-    through it, and inspected through ``_row``.  One per test, so names never
-    collide across tests and re-specialization is never accidental.
+    ``call(name, ..., module=m)``.  Every specialization here is written into
+    this module's database and inspected through ``_row``; queries are by
+    name against this module.
+
+    HOW a by-name query resolves depends on the namespace, not only the db:
+    ``call(name, module=m)`` looks in ``m.module_dict`` FIRST, then the
+    builtins, and only then ``m.db.get_dispatch`` (``solve.call``).  So a
+    specialization made through ``_specialize`` (which binds the alias in
+    ``module_dict``) is answered through the class bound there, and one made
+    through ``_specialize_row_route`` (``db=`` only) is answered through the
+    database row -- the post-P4 route, covered by one ``test_row_route_*``
+    test per phase area.  One module per test, so names never collide across
+    tests and re-specialization is never accidental.
     """
     from clausal.logic.database import Module
 
@@ -51,15 +60,31 @@ def spec_module(request):
 
 
 def _specialize(module, fn, pattern, program, name, **kw):
-    """Specialize into *module* the one way every test here does: its
-    database (``db=``) AND its namespace (``module_dict=``), so the alias is
-    bound where ``call(name, ..., module=module)`` looks first and a
+    """Specialize into *module*'s database (``db=``) AND its namespace
+    (``module_dict=``).  The alias is bound in ``module_dict``, which is where
+    ``call(name, ..., module=module)`` looks first -- so queries on it are
+    answered by the CLASS bound there (whose dispatch reads the row), and a
     same-named builtin can never answer in its place.  *fn* is
     ``specialize_mi``, ``specialize_mi_deep`` or ``specialize_mi_cpd``."""
     return fn(
         pattern, program, name,
         db=module.db, module_dict=module.module_dict, **kw,
     )
+
+
+def _specialize_row_route(module, fn, pattern, program, name, arity, **kw):
+    """Specialize into *module*'s database ONLY (``db=``, no ``module_dict=``)
+    -- the post-P4 row route.  Nothing is bound in ``module.module_dict`` and
+    no builtin has *name*, so ``call(name, ..., module=module)`` falls through
+    to ``module.db.get_dispatch``.  Both are asserted, so a query that
+    answers really came out of the row."""
+    from clausal.logic.builtins import get_builtin_predicate
+
+    result = fn(pattern, program, name, db=module.db, **kw)
+    assert name not in module.module_dict
+    assert get_builtin_predicate(name, arity, module.db) is None
+    assert module.db.get_dispatch(name, arity) is not None
+    return result
 
 
 def _row(module, name, arity):
@@ -437,6 +462,24 @@ class TestSpecializeSolveCount:
             spec_module, "SolveCountNatnum5", [["natnum", ["s", ["s", 0]]]],
         ))
         assert any(count == 3 for count in results)
+
+    def test_row_route_count_natnum(self, mi_module, spec_module):
+        """Phase 1, post-P4 route: ``db=`` only, queried by name through
+        ``module.db.get_dispatch`` -- same counts as the tests above."""
+        # nv
+        pattern = analyze_mi(mi_module.solve_count)
+        _specialize_row_route(
+            spec_module, specialize_mi,
+            pattern, _make_natnum_program(), "RowRouteCountNatnum", 2,
+        )
+        for goal, expected in [
+            ([["natnum", 0]], [1]),
+            ([["natnum", ["s", 0]]], [2]),
+            ([["natnum", ["s", ["s", 0]]]], [3]),
+        ]:
+            assert list(_query_with_extra(
+                spec_module, "RowRouteCountNatnum", goal,
+            )) == expected
 
 
 class TestSpecializeSolveCountGraph:
@@ -836,6 +879,23 @@ class TestSpecializeSolveFactorial:
             spec_module, "SolveFactorial7", [["factorial", 3, 7]],
         ))
         assert len(results) == 0
+
+    def test_row_route_factorial(self, mi_module, spec_module):
+        """Phase 3, post-P4 route: the residual catch-all answers when the
+        predicate is reached through ``module.db.get_dispatch``."""
+        # nv
+        pattern = analyze_mi(mi_module.solve)
+        _specialize_row_route(
+            spec_module, specialize_mi,
+            pattern, _make_factorial_program(), "RowRouteFactorial", 1,
+        )
+        for n, r in [(0, 1), (1, 1), (3, 6), (5, 120)]:
+            assert list(_query(
+                spec_module, "RowRouteFactorial", [["factorial", n, r]],
+            )), f"factorial({n}, {r}) should succeed"
+        assert not list(_query(
+            spec_module, "RowRouteFactorial", [["factorial", 3, 7]],
+        ))
 
 
 class TestSpecializeSolveCountFactorial:
@@ -1508,6 +1568,28 @@ class TestSpecializeDeep:
                     f"{label} factorial({n}): expected {expected}, got {results}"
                 )
 
+    def test_row_route_deep_factorial(self, mi_module, spec_module):
+        """Phase 4, post-P4 route: deep-specialized factorial binds R when
+        reached through ``module.db.get_dispatch``."""
+        # nv
+        from clausal.logic.specialization import specialize_mi_deep
+        from clausal.logic.variables import Var, deref, walk
+        from clausal.logic.solve import call
+
+        pattern = analyze_mi(mi_module.solve)
+        _specialize_row_route(
+            spec_module, specialize_mi_deep,
+            pattern, _make_factorial_program(), "RowRouteDeepFactorial", 1,
+            max_depth=5,
+        )
+        for n, expected in [(0, 1), (1, 1), (3, 6)]:
+            r = Var()
+            results = [walk(deref(r)) for _ in call(
+                "RowRouteDeepFactorial", [["factorial", n, r]],
+                module=spec_module,
+            )]
+            assert expected in results, f"factorial({n}): got {results}"
+
 
 class TestEmbeddingTermination:
     """Tests that homeomorphic embedding prevents divergence."""
@@ -1566,7 +1648,9 @@ class TestEmbeddingTermination:
 
 
 def _query(module, name, goal_list):
-    """Query a specialized predicate BY NAME with just a goal list."""
+    """Query a specialized predicate by name against *module* with just a
+    goal list.  Resolution is ``call``'s: ``module_dict``, then builtins, then
+    ``module.db.get_dispatch`` (see ``spec_module``)."""
     from clausal.logic.solve import call
 
     for _ in call(name, goal_list, module=module):
@@ -1574,8 +1658,8 @@ def _query(module, name, goal_list):
 
 
 def _query_with_extra(module, name, goal_list):
-    """Query a specialized predicate by name with goal list + one extra arg
-    (COUNT)."""
+    """Query a specialized predicate by name against *module* with goal list
+    + one extra arg (COUNT).  Resolves as ``_query`` does."""
     from clausal.logic.variables import Var, deref, walk
     from clausal.logic.solve import call
 
@@ -1585,7 +1669,8 @@ def _query_with_extra(module, name, goal_list):
 
 
 def _query_limit(module, name, goal_list, max_depth):
-    """Query a depth-limited specialized predicate by name."""
+    """Query a depth-limited specialized predicate by name against *module*.
+    Resolves as ``_query`` does."""
     from clausal.logic.solve import call
 
     for _ in call(name, goal_list, max_depth, module=module):
@@ -1593,7 +1678,8 @@ def _query_limit(module, name, goal_list, max_depth):
 
 
 def _query_tree(module, name, goal_list):
-    """Query a proof-tree specialized predicate by name."""
+    """Query a proof-tree specialized predicate by name against *module*.
+    Resolves as ``_query`` does."""
     from clausal.logic.variables import Var, deref, walk
     from clausal.logic.solve import call
 
@@ -1870,6 +1956,25 @@ class TestCpdSolveGraph:
             c = sum(1 for _ in call("SolveGCpd6", q, module=spec_module))
             assert s == c, f"{q}: shallow={s}, cpd={c}"
 
+    def test_row_route_cpd_graph(self, mi_module, spec_module):
+        """Phase 5, post-P4 route: CPD graph answers when reached through
+        ``module.db.get_dispatch``."""
+        # nv
+        from clausal.logic.solve import call
+        pattern = analyze_mi(mi_module.solve)
+        _specialize_row_route(
+            spec_module, specialize_mi_cpd,
+            pattern, _make_graph_program(), "RowRouteCpdGraph", 1,
+        )
+        for q, expected in [
+            ([["edge", "a", "b"]], 1), ([["path", "a", "b"]], 1),
+            ([["path", "a", "c"]], 1), ([["path", "a", "d"]], 1),
+            ([["path", "c", "a"]], 0),
+        ]:
+            assert sum(1 for _ in call(
+                "RowRouteCpdGraph", q, module=spec_module,
+            )) == expected, q
+
 
 class TestCpdSolveCount:
     """CPD on solve_count/3 with natnum — tests post-match chaining."""
@@ -2127,6 +2232,22 @@ class TestNoDbClassHandleDefault:
         counts = [walk(deref(v))
                   for _ in call(pred_cls, [["natnum", ["s", 0]]], v)]
         assert counts == [2]
+
+    def test_module_dict_only_gets_a_per_call_database(self, mi_module):
+        """``module_dict=`` without ``db=``: the specialization builds its own
+        Database over the caller's namespace (``_defining_db``), and the
+        returned class answers out of it."""
+        from clausal.logic.solve import call
+
+        module_dict = {"__name__": "nodb_module_dict_only"}
+        pattern = analyze_mi(mi_module.solve)
+        pred_cls = specialize_mi(
+            pattern, _make_natnum_program(), "NoDbModuleDictNatnum",
+            module_dict,
+        )
+        assert pred_cls._row.db.module_dict is module_dict
+        assert sum(1 for _ in call(pred_cls, [["natnum", ["s", 0]]])) == 1
+        assert sum(1 for _ in call(pred_cls, [["natnum", "a"]])) == 0
 
 
 # ── P3-3 Task 7: the specialized predicate is a Database ROW ─────────────────
