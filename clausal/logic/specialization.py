@@ -30,6 +30,8 @@ from clausal.logic.predicate import (
     make_predicate,
     is_term_instance,
     term_field_names,
+    is_declared_predicate_name,
+    _dispatch_at,
 )
 from clausal.logic.database import Clause, head_key
 from clausal.logic.builtins.inspection import _copy_term
@@ -1371,9 +1373,18 @@ def _make_solve_goal_predicate(
         # Fallback: try module_dict for user-defined predicates.
         if module_dict:
             pred = module_dict.get(functor)
-            if pred is not None and hasattr(pred, '_get_dispatch'):
+            # W4b-3 (found by review): after the flip the binding is a
+            # module-qualified HANDLE with no ``_get_dispatch``; unaccepted,
+            # it fell to "Unknown goal" below and failed silently.  Both
+            # shapes resolve through ``_dispatch_at`` at the goal's own
+            # arity, so a wrong-arity goal raises PredicateArityMismatchError
+            # (a TypeError) in both eras -- the class arm used to call a bare
+            # ``_get_dispatch()`` and fail with a raw positional TypeError.
+            if pred is not None and (
+                    hasattr(pred, '_get_dispatch')
+                    or is_declared_predicate_name(pred)):
                 from clausal.logic.trampoline import StepGenerator
-                dispatch_fn = pred._get_dispatch()
+                dispatch_fn = _dispatch_at(pred, len(args))
                 sg = StepGenerator(dispatch_fn, this_generator, this_generator, this_generator, *args, trail)
                 st = yield (sg, None)
                 while st is not DONE:

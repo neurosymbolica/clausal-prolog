@@ -28,6 +28,7 @@ from clausal.logic.database import Clause, Database
 from clausal.logic.predicate import (
     is_term_instance, term_field_names,
     is_declared_predicate, resolve_predicate_row,
+    is_declared_predicate_name,
 )
 from clausal.logic.builtins import (
     get_builtin_predicate, BuiltinPredicate,
@@ -527,6 +528,24 @@ def _merge_builtin(base_globals: dict, name: str, builtin) -> None:
 # oracle for ``_collect_globals_info``'s combined walk.
 
 
+def _is_call_target(binding, arity: int) -> bool:
+    """True when *binding* is what an APPLIED reference at *arity* calls.
+
+    W4b-3 ruling (operator, 2026-09-24): a predicate name is name + ARITY.
+    A predicate binding -- a ``PredicateMeta`` class today, a module-qualified
+    HANDLE after the flip, alike -- is this call's target only when it is
+    declared at exactly *arity*; at any other arity the call resolves
+    normally (a builtin, this db's own row, ...), and the class-era
+    ``PredicateArityMismatchError`` refusal was an artefact of the predicate
+    being a class.  A data reference (*arity* < 0) has no arity to match.
+    Every other ``_get_dispatch`` implementor (``BuiltinPredicate``, the
+    foreign duck-typed ones) is accepted as before.
+    """
+    if is_declared_predicate_name(binding):
+        return arity < 0 or is_declared_predicate(binding, arity=arity)
+    return hasattr(binding, "_get_dispatch")
+
+
 def _atom_shadows_row(binding, db, name: str, arity: int) -> bool:
     """True when an ATOM module binding is hiding this db's own ``name/arity``.
 
@@ -549,8 +568,13 @@ def _atom_shadows_row(binding, db, name: str, arity: int) -> bool:
     arity-0 cell.  Deliberately NOT ``predicate.is_atom_value``: that widens
     to a zero-field ``PredicateMeta``, which IS a live call target here.
     """
+    # W4b-3 ruling: a PREDICATE binding (class or handle) declared at
+    # ANOTHER arity is not this call's target, so this db's own
+    # ``name/arity`` wins over it exactly as over an atom; one declared at
+    # this very arity IS the target and is never shadowed.
     return (
-        _term_is_atom(binding)
+        (_term_is_atom(binding) or is_declared_predicate_name(binding))
+        and not (arity >= 0 and is_declared_predicate(binding, arity=arity))
         and db is not None
         and arity >= 0
         and db.row(name, arity) is not None
@@ -624,7 +648,15 @@ def _inject_resolved_targets(
     called_names = {name for name, arity in targets if arity >= 0}
     for target_name, target_arity in targets:
         existing = base_globals.get(target_name)
-        if existing is not None and hasattr(existing, "_get_dispatch"):
+        # W4b-3: after the flip a predicate's binding is a module-qualified
+        # HANDLE with no ``_get_dispatch``.  Unaccepted here it falls through
+        # to the builtin lookup below (a same-named builtin then wins over the
+        # user predicate) and a locked predicate loses its ``$disp_`` bake.
+        # An APPLIED target accepts a predicate binding -- class or handle
+        # alike -- only at its own arity (``_is_call_target``); at another
+        # arity it falls through to the builtin lookup / ``_atom_shadows_row``
+        # / the dotted routing like any non-predicate binding.
+        if existing is not None and _is_call_target(existing, target_arity):
             if isinstance(existing, BuiltinPredicate):
                 builtin = get_builtin_predicate(target_name, target_arity, db)
                 if builtin is not None and builtin._arity != existing._arity:
@@ -667,7 +699,12 @@ def _inject_resolved_targets(
                 if obj is None:
                     break
                 obj = getattr(obj, part, None)
-            if obj is not None and hasattr(obj, "_get_dispatch"):
+            # W4b-3: a predicate HANDLE (post-flip module attribute) is
+            # accepted and cached exactly as the class is, at its own arity.
+            # At another arity the object is still kept (next branch): a
+            # dotted name has no other resolution -- no builtin is dotted --
+            # so the call reports the arity at run time.
+            if obj is not None and _is_call_target(obj, target_arity):
                 base_globals[target_name] = obj
                 _maybe_cache_dispatch(obj, target_name, target_arity)
                 continue
@@ -679,13 +716,21 @@ def _inject_resolved_targets(
             mod_obj = _sys.modules.get(mod_path)
             if mod_obj is not None:
                 resolved = getattr(mod_obj, attr_name, None)
-                if resolved is not None and hasattr(resolved, "_get_dispatch"):
+                if resolved is not None and _is_call_target(
+                        resolved, target_arity):   # W4b-3
                     base_globals[target_name] = resolved
                     _maybe_cache_dispatch(resolved, target_name, target_arity)
                     continue
             builtin = get_builtin_predicate(target_name, target_arity, db)
             if builtin is not None:
                 _merge_builtin(base_globals, target_name, builtin)
+            elif (mod_obj is not None and resolved is not None
+                    and is_declared_predicate_name(resolved)):
+                # W4b-3: a predicate at ANOTHER arity, and nothing else
+                # answers a dotted name: keep it (as the attribute walk
+                # keeps its object) so the call reports the arity at run
+                # time instead of a NameError.
+                base_globals[target_name] = resolved
             continue
         builtin = get_builtin_predicate(target_name, target_arity, db)
         if builtin is not None:

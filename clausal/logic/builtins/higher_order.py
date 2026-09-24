@@ -11,6 +11,7 @@ from clausal.logic.exceptions import LogicException, string_goal_error
 from clausal.logic.trampoline import DONE, StepGenerator
 from clausal.logic.builtins.lists import _as_items, _seq_result, _was_string
 from clausal.logic.builtins._helpers import _is_empty_list, _standard_order_key
+from clausal.logic.predicate import is_declared_predicate_name
 
 from clausal.logic.cells import (
     is_chars, chars_text,   # stage 1: the chars carrier
@@ -355,7 +356,7 @@ def _map_list__2(this_generator, _proceed, _fail, _catcher, goal, lst, trail):
     lst_val = deref(lst)
     goal_val = deref(goal)
     items = _as_items(lst_val)
-    if items is None or not (callable(goal_val) or hasattr(goal_val, '_get_dispatch')):
+    if items is None or not _is_goal(goal_val):
         yield (_fail, DONE)
         return
     dispatch = _ensure_trampoline_dispatch(goal_val, 1)
@@ -384,7 +385,7 @@ def _map_list__3(this_generator, _proceed, _fail, _catcher, goal, xs, ys, trail)
     xs_val = deref(xs)
     goal_val = deref(goal)
     xs_items = _as_items(xs_val)
-    if xs_items is None or not (callable(goal_val) or hasattr(goal_val, '_get_dispatch')):
+    if xs_items is None or not _is_goal(goal_val):
         yield (_fail, DONE)
         return
     was_str = _was_string(xs_val)   # stage 1: str, carrier or ground SegString
@@ -412,7 +413,7 @@ def _include__3(this_generator, _proceed, _fail, _catcher, goal, lst, included, 
     lst_val = deref(lst)
     goal_val = deref(goal)
     items = _as_items(lst_val)
-    if items is None or not (callable(goal_val) or hasattr(goal_val, '_get_dispatch')):
+    if items is None or not _is_goal(goal_val):
         yield (_fail, DONE)
         return
     was_str = _was_string(lst_val)   # stage 1: str, carrier or ground SegString
@@ -443,7 +444,7 @@ def _exclude__3(this_generator, _proceed, _fail, _catcher, goal, lst, excluded, 
     lst_val = deref(lst)
     goal_val = deref(goal)
     items = _as_items(lst_val)
-    if items is None or not (callable(goal_val) or hasattr(goal_val, '_get_dispatch')):
+    if items is None or not _is_goal(goal_val):
         yield (_fail, DONE)
         return
     was_str = _was_string(lst_val)   # stage 1: str, carrier or ground SegString
@@ -472,7 +473,7 @@ def _foldl__4(this_generator, _proceed, _fail, _catcher, goal, lst, v0, v, trail
     lst_val = deref(lst)
     goal_val = deref(goal)
     items = _as_items(lst_val)
-    if items is None or not (callable(goal_val) or hasattr(goal_val, '_get_dispatch')):
+    if items is None or not _is_goal(goal_val):
         yield (_fail, DONE)
         return
     dispatch = _ensure_trampoline_dispatch(goal_val, 3)
@@ -497,8 +498,11 @@ def _foldl__4(this_generator, _proceed, _fail, _catcher, goal, lst, v0, v, trail
 
 
 def _is_goal(val):
-    """Check if val is a callable goal (closure or predicate with dispatch)."""
-    return callable(val) or hasattr(val, '_get_dispatch')
+    """Check if val is a callable goal (closure, predicate with dispatch, or
+    -- W4b-3 -- the module-qualified predicate HANDLE a predicate name is
+    bound to after the flip; a mangled DATA atom is not one)."""
+    return (callable(val) or hasattr(val, '_get_dispatch')
+            or is_declared_predicate_name(val))
 
 
 @_trampoline_builtin("take_while", 3)
@@ -812,7 +816,7 @@ def _partition__4(this_generator, _proceed, _fail, _catcher, goal, lst, included
     lst_val = deref(lst)
     goal_val = deref(goal)
     items = _as_items(lst_val)
-    if items is None or not (callable(goal_val) or hasattr(goal_val, '_get_dispatch')):
+    if items is None or not _is_goal(goal_val):
         yield (_fail, DONE)
         return
     was_str = _was_string(lst_val)   # stage 1: str, carrier or ground SegString
@@ -852,7 +856,7 @@ def _tfilter__3(this_generator, _proceed, _fail, _catcher, goal, lst, filtered, 
     lst_val = deref(lst)
     goal_val = deref(goal)
     items = _as_items(lst_val)
-    if items is None or not (callable(goal_val) or hasattr(goal_val, '_get_dispatch')):
+    if items is None or not _is_goal(goal_val):
         yield (_fail, DONE)
         return
     was_str = _was_string(lst_val)   # stage 1: str, carrier or ground SegString
@@ -890,7 +894,7 @@ def _tpartition__4(this_generator, _proceed, _fail, _catcher, goal, lst, include
     lst_val = deref(lst)
     goal_val = deref(goal)
     items = _as_items(lst_val)
-    if items is None or not (callable(goal_val) or hasattr(goal_val, '_get_dispatch')):
+    if items is None or not _is_goal(goal_val):
         yield (_fail, DONE)
         return
     was_str = _was_string(lst_val)   # stage 1: str, carrier or ground SegString
