@@ -568,7 +568,10 @@ def test_a_cell_named_by_an_aliased_owner_functor(
       answers.  Partial application through an alias behaves like writing
       the owner's name, because the term IS the owner's term.
 
-    ``maplist`` takes no cell goals at all (it fails, as it always has)."""
+    ``maplist`` runs a cell goal AS call/N per element (FLIPPED, operator
+    ruling 2026-09-25, follow Scryer: ``maplist(p(1), L)`` calls
+    ``p(1, E)``) -- so ``maplist(nl(3), [L])`` answers exactly as
+    ``call(nl(3), L)`` does.  It used to fail."""
     from clausal.logic.solve import call as _call
     from clausal.logic.variables import Var, deref
     ow = _load(tmp_path, monkeypatch, f"f7_pa_ow_{era}", """
@@ -603,7 +606,8 @@ def test_a_cell_named_by_an_aliased_owner_functor(
     # DOCUMENTED CONSEQUENCE: partial application = the owner's name
     out = Var()
     assert [deref(out) for _ in _call("m", out, module=I)] == [[1, 2, 3]]
-    assert list(_call("mm", Var(), module=I)) == []
+    out = Var()
+    assert [deref(out) for _ in _call("mm", out, module=I)] == [[1, 2, 3]]
 
 
 @pytest.mark.parametrize("era", ["class", "handle"])

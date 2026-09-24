@@ -2383,20 +2383,18 @@ def _process_bare_atom_refs(
             if name in builtin_names:
                 # Builtin under any arity — resolved by get_builtin_predicate.
                 continue
-            if name in BUILTIN_GOAL_ATOMS:
-                # ``fail`` is a builtin GOAL, like ``true`` (operator ruling
-                # 2026-09-25): no declaration.  ``true``/``false`` never get
-                # here -- they fold to the truth values before this pass --
-                # but ``fail`` is an ordinary ATOM in term position (ISO),
-                # so it is accepted as the atom a ``-private([fail])`` would
-                # have declared, and the body compiler lowers it to failure
-                # (``terms_to_goalop``).
-                module_dict[name] = predicate_builtins.setdefault(
-                    name, _mint_atom(name))
-                continue
-            if effective_strict:
+            if effective_strict and name not in BUILTIN_GOAL_ATOMS:
                 undeclared.append(name)
                 continue
+            # A BUILTIN_GOAL_ATOMS name (``fail``) is accepted here even in
+            # strict mode: a builtin GOAL, like ``true``, needs no
+            # declaration (operator ruling 2026-09-25).  ``true``/``false``
+            # never get here -- they fold to the truth values before this
+            # pass -- but ``fail`` is an ordinary ATOM in term position (ISO),
+            # so it becomes the atom a ``-private([fail])`` would have
+            # declared, and the body compiler lowers it to failure
+            # (``terms_to_goalop``).
+            #
             # Accept the spelling — no class is minted (§1b/R2).  Recorded in
             # ``predicate_builtins`` (the same pool ``$intern_atom`` and
             # ``_process_declarations`` use), which is the strict-atoms

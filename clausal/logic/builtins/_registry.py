@@ -185,7 +185,13 @@ def _ensure_trampoline_dispatch(goal_val, arity: int | None = None, db=None):
         ))
     from clausal.logic.builtins.call_body import (  # noqa: PLC0415
         is_non_callable_term, non_callable_goal_dispatch,
+        needs_meta_call, MetaCallGoal,
     )
+    if needs_meta_call(goal_val):
+        # A cell, a plain atom, an unbound Var, a body term: only call/N can
+        # run it, so it runs AS call/N (operator ruling 2026-09-25) -- the
+        # instantiation_error, the name resolution against *db*, everything.
+        return MetaCallGoal(goal_val, db)._get_dispatch()
     if is_non_callable_term(goal_val):
         # Operator ruling 2026-09-25 (follow Scryer): a number, a non-empty
         # list, tuple data ... raises type_error(callable, G) when CALLED.

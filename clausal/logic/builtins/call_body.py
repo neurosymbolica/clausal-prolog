@@ -392,6 +392,61 @@ def is_non_callable_term(t, lists: bool = True) -> bool:
     return False
 
 
+def needs_meta_call(t) -> bool:
+    """True for a goal the goal-taking list builtins must hand to ``call/N``
+    per element because nothing else can run it: an unbound Var, a cell, a
+    plain atom that is not a declared predicate handle, a Compound, or a
+    body term (operator ruling 2026-09-25, follow Scryer: ``maplist(p(1),
+    L)`` calls ``p(1, E)``; ``maplist(_, [1])`` is instantiation_error)."""
+    t = deref(t)
+    if is_var(t):
+        return True
+    if callable(t) and not isinstance(t, nodes.Node):
+        return False                      # a closure / predicate class
+    if hasattr(t, "_get_dispatch"):
+        return False
+    if type(t) is str:
+        from clausal.logic.predicate import is_declared_predicate_name  # noqa: PLC0415
+        return not is_declared_predicate_name(t)
+    from clausal.terms import Compound  # noqa: PLC0415
+    return (compound_cell_shape(t)[0] or isinstance(t, Compound)
+            or is_body_term(t))
+
+
+class MetaCallGoal:
+    """*goal* run through ``call/N`` in *db*'s module, whatever N is.
+
+    What a goal-taking list builtin (maplist, foldl, include ...) receives in
+    place of a goal only ``call/N`` can resolve: its dispatch (the duck-typed,
+    single-argument ``_get_dispatch`` protocol) is ``call/(K+1)`` with the
+    goal first, K being however many arguments the builtin supplies per
+    element.  So every such shape behaves exactly as ``call(G, A1 ...)``
+    does -- one resolution rule, not a second copy of it.
+    """
+
+    __slots__ = ("goal", "db", "_calls")
+
+    def __init__(self, goal, db):
+        self.goal = goal
+        self.db = db
+        self._calls = {}
+
+    def __repr__(self):
+        return f"MetaCallGoal({self.goal!r})"
+
+    def _get_dispatch(self):
+        goal, db, calls = self.goal, self.db, self._calls
+
+        def _meta_call(this_generator, _proceed, _fail, _catcher, *args):
+            n = len(args)                 # the extras, plus the trail
+            fn = calls.get(n)
+            if fn is None:
+                from clausal.logic.builtins._registry import _DB_BUILTINS  # noqa: PLC0415
+                fn = calls[n] = _DB_BUILTINS[("call", n)](db)
+            return fn(this_generator, _proceed, _fail, _catcher, goal, *args)
+        return _meta_call
+
+
 def non_callable_goal_dispatch(goal, context):
     """A dispatch that raises ``type_error(callable, Goal)`` when RUN -- for
     the goal-taking list builtins, which (like Scryer's library) reach the
@@ -540,4 +595,5 @@ __all__ = [
     "body_with_extras_error", "non_callable_goal_error",
     "iso_control_cell_dispatch", "folded_existence_error",
     "is_non_callable_term", "non_callable_goal_dispatch",
+    "needs_meta_call", "MetaCallGoal",
 ]

@@ -83,7 +83,10 @@ def _goal_dispatch_and_args(goal_val, db=None, context="time_goal/1"):
         # under call/1 -- the shared resolver decides both.  Checked before
         # the goal-OBJECT arm: a body node is Python-``callable``.
         from clausal.logic.builtins.higher_order import _resolve_named_goal  # noqa: PLC0415
-        return _resolve_named_goal(db, goal_val, (), context)
+        resolved = _resolve_named_goal(db, goal_val, (), context)
+        if resolved is not None:          # the (dispatch, args) contract
+            return resolved
+        return None, None
     # W4b-3: ``is_declared_predicate_name`` admits the module-qualified
     # HANDLE a predicate name is bound to after the flip.
     if callable(goal_val) or hasattr(goal_val, '_get_dispatch') \

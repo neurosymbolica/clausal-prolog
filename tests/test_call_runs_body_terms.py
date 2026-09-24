@@ -544,14 +544,31 @@ def test_the_goal_is_checked_only_when_called_as_in_scryer(host):
     assert len(list(solve(("maplist", 42, []), host))) == 1
 
 
-def test_phrase_of_a_non_callable_is_a_type_error(host):
+@pytest.mark.parametrize("rule", [42, 4.5, ("()", 1, 2), None])
+@pytest.mark.parametrize("arity", [2, 3])
+def test_phrase_of_a_non_callable_is_a_type_error(host, rule, arity):
     """Scryer: ``phrase(42, L)`` -> type_error(callable, 42) (it used to
-    fail).  Lists and strings stay what phrase always made of them."""
+    fail).  Tuple data and None are non-goals the same way."""
     from clausal.logic.solve import solve
-    for goal in (("phrase", 42, Var()), ("phrase", 4.5, [], Var())):
-        with pytest.raises(LogicException) as info:
-            list(solve(goal, host))
-        assert _formal(_term(info)).functor == "type_error"
+    goal = ("phrase", rule, Var()) + ((Var(),) if arity == 3 else ())
+    with pytest.raises(LogicException) as info:
+        list(solve(goal, host))
+    formal = _formal(_term(info))
+    assert formal.functor == "type_error" and formal.args[0] == "callable"
+
+
+@pytest.mark.parametrize("arity", [2, 3])
+def test_phrase_of_a_list_or_string_keeps_failing(host, arity):
+    """Pinned as-is: a list or string rule is a DCG TERMINAL, not a
+    non-callable, so ruling B leaves it alone -- it fails, as it always has.
+    NOTE this is NOT Scryer: ``phrase([a], L)`` gives ``L = [a]`` and
+    ``phrase("ab", L)`` gives ``L = [a, b]`` there (box, 2026-09-25).
+    Supporting terminal rules is a feature, parked in the report."""
+    from clausal.logic.cells import chars
+    from clausal.logic.solve import solve
+    for rule in (["a"], chars("ab")):
+        goal = ("phrase", rule, Var()) + ((Var(),) if arity == 3 else ())
+        assert list(solve(goal, host)) == []
 
 
 def test_time_goal_is_call_1_timed(host, capsys):
@@ -570,3 +587,78 @@ def test_time_goal_is_call_1_timed(host, capsys):
             list(solve(("time_goal", goal), host))
         f = _formal(_term(info))
         assert getattr(f, "functor", f) == functor
+
+
+# ── round 4: runtime cells / atoms / unbound goals in the list builtins ─────
+
+
+def _ml(host, goal, *rest):
+    from clausal.logic.solve import solve
+    return list(solve(("maplist", goal) + rest, host))
+
+
+def test_a_runtime_cell_goal_folds_like_call_n(host):
+    """Operator ruling 2026-09-25, Scryer: ``maplist(p(1), L)`` calls
+    ``p(1, E)`` per element -- it used to fail silently."""
+    assert len(_ml(host, ("edge", 1), [2])) == 1
+    assert _ml(host, ("edge", 1), [3]) == []
+    from clausal.logic.solve import solve
+    assert len(list(solve(("maplist", ("edge", 1), [2, 2]), host))) == 1
+
+
+def test_a_plain_atom_goal_is_resolved_in_the_calling_module(host):
+    assert len(_ml(host, "p", [1, 2])) == 1
+    assert _ml(host, "p", [1, 5]) == []
+    from clausal.logic.solve import solve
+    L = Var()
+    assert [deref(L) for _ in solve(("include", "s", [1, 2, 3], L), host)] \
+        == [[2, 3]]
+
+
+def test_a_qualified_goal_resolves_in_its_module(host):
+    assert len(_ml(host, (":", OTHER, "p"), [10, 20])) == 1
+    assert _ml(host, (":", OTHER, "p"), [1]) == []
+
+
+def test_a_body_term_goal_is_call_n_of_it(host):
+    """``maplist(X > 0, [1])`` is ``call(X > 0, 1)`` -- existence_error
+    (>)/3 in Scryer and here."""
+    with pytest.raises(LogicException) as info:
+        _ml(host, nodes.Gt(left=Var(), right=0), [1])
+    formal = _formal(_term(info))
+    assert formal.functor == "existence_error"
+    assert tuple(formal.args[1].args) == (">", 3)
+
+
+@pytest.mark.parametrize("name, args", _LIST_BUILTIN_CALLS,
+                         ids=[f"{n}/{len(a)}" for n, a in _LIST_BUILTIN_CALLS])
+def test_an_unbound_goal_is_an_instantiation_error_per_element(host, name, args):
+    """Operator ruling 2026-09-25, Scryer: ``maplist(_, [1])`` ->
+    instantiation_error; the goal is reached only per element, so
+    ``maplist(_, [])`` succeeds (box: maplist/2, maplist/3, foldl/4)."""
+    from clausal.logic.solve import solve
+    goal = (name, Var()) + tuple(args[1:])
+    with pytest.raises(LogicException) as info:
+        list(solve(goal, host))
+    assert _formal(_term(info)) == "instantiation_error"
+
+
+def test_an_unbound_goal_over_an_empty_list_succeeds(host):
+    from clausal.logic.solve import solve
+    assert len(list(solve(("maplist", Var(), []), host))) == 1
+    assert len(list(solve(("maplist", Var(), [], []), host))) == 1
+    L = Var()
+    assert [deref(L) for _ in solve(("foldl", Var(), [], 0, L), host)] == [0]
+
+
+def test_list_and_string_goals_follow_scryer_per_builtin(host):
+    """Scryer disagrees with ITSELF here, and both halves are followed:
+    ``maplist("ab", [1])`` / ``maplist([a], [1])`` -> type_error(callable,
+    G), while ``call([a], 1)`` / ``call("ab", 1)`` -> existence_error
+    '.'/3 (box, 2026-09-25)."""
+    from clausal.logic.cells import chars
+    for goal in (["a"], chars("ab")):
+        with pytest.raises(LogicException) as info:
+            _ml(host, goal, [1])
+        assert _formal(_term(info)).functor == "type_error"
+        assert _existence_indicator(host, "call_it2", goal, 1) == (".", 3)

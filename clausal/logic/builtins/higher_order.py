@@ -31,7 +31,7 @@ from clausal.logic.builtins._registry import (
 from clausal.logic.builtins.call_body import (
     is_body_term, body_goal_dispatch, body_with_extras_error,
     non_callable_goal_error, iso_control_cell_dispatch, folded_existence_error,
-    is_non_callable_term,
+    is_non_callable_term, needs_meta_call, MetaCallGoal,
 )
 from clausal.terms import Compound
 
@@ -594,7 +594,11 @@ def _is_goal(val):
             # ``_ensure_trampoline_dispatch`` hands back a dispatch raising
             # type_error(callable, G) -- maplist(42, []) succeeds and
             # maplist(42, [1]) raises, as in Scryer.  It used to FAIL here.
-            or is_non_callable_term(val))
+            or is_non_callable_term(val)
+            # ... and so does a goal only call/N can run (a cell, a plain
+            # atom, an unbound Var, a body term): ``_ensure_trampoline_
+            # dispatch`` runs it AS call/N per element (same ruling).
+            or needs_meta_call(val))
 
 
 @_trampoline_builtin("take_while", 3)
@@ -1041,8 +1045,12 @@ def _make_localizing_factory(impl):
             return impl
 
         def _localized(this_generator, _proceed, _fail, _catcher, goal, *rest):
-            return impl(this_generator, _proceed, _fail, _catcher,
-                        localize_goal(db, deref(goal)), *rest)
+            goal = localize_goal(db, deref(goal))
+            if needs_meta_call(goal):
+                # Resolved against THIS db, per element, by call/N itself
+                # (operator ruling 2026-09-25) -- see ``MetaCallGoal``.
+                goal = MetaCallGoal(goal, db)
+            return impl(this_generator, _proceed, _fail, _catcher, goal, *rest)
         _localized.__name__ = impl.__name__
         return _localized
     factory._db_optional = True
