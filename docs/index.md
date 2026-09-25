@@ -10,7 +10,7 @@ Clausal brings Prolog-style logic programming to Python — not as a front-end t
 ```clausal
 # fibonacci.clausal
 
--table(fib/2),
+-table(fib/2)
 
 fib(0, 0),
 fib(1, 1),
@@ -25,10 +25,10 @@ fib(N, F) <- (
 ```
 
 ```python
-from clausal import Var
-from fibonacci import fib
+from clausal import Var, solve
+import fibonacci
 
-for trail in fib(10, F := Var()):
+for trail in solve(("fib", 10, F := Var()), module=fibonacci):
     print(F.value)  # 55
 ```
 
@@ -37,7 +37,7 @@ for trail in fib(10, F := Var()):
 ## Why Clausal?
 
 - **Python syntax and semantics** — Clausal code uses Python's parser. No separate parser, no foreign operators to learn.
-- **Deep integration** — predicates are Python classes, logic variables are Python objects, backtracking uses Python generators.
+- **Deep integration** — goals are Python tuples, logic variables are Python objects, backtracking uses Python generators.
 - **Full-featured** — [tabling](tabling.md), [CLP(ℤ)](constraints.md), [DCGs](dcg.md), EDCGs, [modules](import.md), [term expansion](term_expansion.md), goal expansion, [reified if-then-else](reified_ite.md).
 - **Fast** — C extension for unification/trails, [first-argument indexing](indexing.md), groundness-keyed dispatch, [tail recursion optimization](compiler.md#tail-recursion-optimization-tro), [bytecode caching](caching.md).
 
