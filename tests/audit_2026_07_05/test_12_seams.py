@@ -96,7 +96,7 @@ tf(X) <- in_domain(X, 1, 3)
         m = load("f001_dif", self.TD_SRC)
         x = Var()
         seen = []
-        for _ in solve(m.td(x), m):
+        for _ in solve(("td", x), m):
             xv = deref(x)
             seen.append(is_var(xv) and get_attr(xv, DIF_KEY) is not None)
         assert seen == [True]
@@ -108,10 +108,10 @@ tf(X) <- in_domain(X, 1, 3)
     def test_replayed_answer_still_carries_dif(self, load):
         m = load("f001_dif", self.TD_SRC)
         x = Var()
-        list(solve(m.td(x), m))            # fill the table
+        list(solve(("td", x), m))            # fill the table
         _query_cache.clear()
         y = Var()
-        for _ in solve(m.td(y), m):
+        for _ in solve(("td", y), m):
             yv = deref(y)
             assert is_var(yv) and get_attr(yv, DIF_KEY) is not None
             t = Trail()
@@ -124,10 +124,10 @@ tf(X) <- in_domain(X, 1, 3)
     def test_replayed_answer_still_carries_fd_domain(self, load):
         m = load("f001_fd", self.TF_SRC)
         x = Var()
-        list(solve(m.tf(x), m))            # fill the table
+        list(solve(("tf", x), m))            # fill the table
         _query_cache.clear()
         y = Var()
-        for _ in solve(m.tf(y), m):
+        for _ in solve(("tf", y), m):
             yv = deref(y)
             assert is_var(yv), "answer should be an unbound domain var"
             st = get_attr(yv, FD_KEY)
@@ -137,7 +137,7 @@ tf(X) <- in_domain(X, 1, 3)
         m = load("f001_fd_first", self.TF_SRC)
         x = Var()
         seen = []
-        for _ in solve(m.tf(x), m):
+        for _ in solve(("tf", x), m):
             xv = deref(x)
             seen.append(is_var(xv) and get_attr(xv, FD_KEY) is not None)
         assert seen == [True]
@@ -165,7 +165,7 @@ badeqs(X) <- (X == "somestr")
         m = load("f002", self.SRC)
         x = Var()
         try:
-            sols = list(solve(m.badeq(x), m))
+            sols = list(solve(("badeq", x), m))
         except Exception:
             return  # a (catchable) type error is acceptable
         assert sols == [], "X == myatom must not succeed"
@@ -174,7 +174,7 @@ badeqs(X) <- (X == "somestr")
         m = load("f002", self.SRC)
         x = Var()
         try:
-            sols = list(solve(m.badeqs(x), m))
+            sols = list(solve(("badeqs", x), m))
         except Exception:
             return
         assert sols == [], 'X == "somestr" must not succeed'
@@ -186,7 +186,7 @@ badeqs(X) <- (X == "somestr")
         m = load("f002", self.SRC)
         x = Var()
         with pytest.raises(LogicException):
-            list(solve(m.badeq(x), m))
+            list(solve(("badeq", x), m))
 
     # A12-F002 gap: a ground COMPOUND == operand kept the inverted semantics
     # (after X == point4(1,2): unify(X, 42) → True, unify(X, point4(1,2)) →
@@ -208,7 +208,7 @@ oklin(LX, LY) <- (LX == LY * 2, LY == 3)
         m = load("f002_cmp", self.CMP_SRC)
         x = Var()
         with pytest.raises(LogicException):
-            list(solve(m.badeqc(x), m))
+            list(solve(("badeqc", x), m))
 
     def test_eq_runtime_compound_operand_raises_catchable_type_error(self):
         from clausal.logic.exceptions import LogicException
@@ -222,10 +222,10 @@ oklin(LX, LY) <- (LX == LY * 2, LY == 3)
         # controls: expression trees must NOT be caught by the compound guard
         m = load("f002_cmp", self.CMP_SRC)
         x = Var()
-        assert [deref(x) for _ in solve(m.okadd(x), m)] == [7]
+        assert [deref(x) for _ in solve(("okadd", x), m)] == [7]
         _query_cache.clear()
         x, y = Var(), Var()
-        assert [deref(x) for _ in solve(m.oklin(x, y), m)] == [6]
+        assert [deref(x) for _ in solve(("oklin", x, y), m)] == [6]
         # ground non-linear expr node reaching the guard (Pow bypasses both
         # the linearise arm and _both_ground) must also stay legal
         from clausal.terms import Pow
@@ -405,7 +405,7 @@ class TestF002NeNonRealOperand:
 badne(X) <- ( X != "banana", X is "apple" )
 """)
         with pytest.raises(LogicException):
-            list(solve(m.badne(Var()), m))
+            list(solve(("badne", Var()), m))
 
     # ── controls: numeric, residual and both-ground != unchanged ─────────
 
@@ -506,7 +506,7 @@ class TestF002ExprTreeVsNonNumericOperand:
 badexpr(X) <- ( X + 1 == "banana", X is 4 )
 """)
         with pytest.raises(LogicException):
-            list(solve(m.badexpr(Var()), m))
+            list(solve(("badexpr", Var()), m))
 
     # ── controls ─────────────────────────────────────────────────────────
 
@@ -706,7 +706,7 @@ class TestNonNumericLeafInsideExprTree:
 badleaf(X) <- ( X + "a" == 5, X is 4 )
 """)
         with pytest.raises(LogicException):
-            list(solve(m.badleaf(Var()), m))
+            list(solve(("badleaf", Var()), m))
 
     def test_compiled_repro_catchable_via_catch3(self, load):
         # catch/3 must catch it, and the error term must be a proper ground
@@ -715,7 +715,7 @@ badleaf(X) <- ( X + "a" == 5, X is 4 )
 safeleaf(SX, SE) <- catch((SX + "a" == 5), SE, 1 == 1)
 """)
         e = Var()
-        caught = [deref(e) for _ in solve(m.safeleaf(Var(), e), m)]
+        caught = [deref(e) for _ in solve(("safeleaf", Var(), e), m)]
         assert len(caught) == 1
         term = caught[0]
         assert term.functor == "error"
@@ -809,7 +809,7 @@ reach(X, Y) <- (
         except Exception:
             return  # load error is the preferred behaviour
         y = Var()
-        got = sorted(deref(y) for _ in solve(m.reach(1, y), m))
+        got = sorted(deref(y) for _ in solve(("reach", 1, y), m))
         assert got == [1, 2, 3, 4], f"untabled: duplicate answers {got}"
 
 
@@ -835,7 +835,7 @@ class TestF004EngineNamespaceLeak:
         # ``getattr`` spelling is why the AST sweep for ``solve(m.p(...))``
         # did not reach this one: the goal's func is a Call, not an
         # Attribute.)
-        got = [deref(x) for _ in solve(getattr(m, name)(mint("a"), x), m)]
+        got = [deref(x) for _ in solve((name, mint("a"), x), m)]
         assert got == [mint("b")]
 
     def test_leak_is_observable_in_module_dict(self, load):
@@ -854,7 +854,7 @@ class TestF004EngineNamespaceLeak:
         # control: 'solve' is NOT leaked, so a solve/2 user predicate is fine
         m = load("f004_solve", 'solve("a", "b"),\n')
         x = Var()
-        assert [deref(x) for _ in solve(m.solve(mint("a"), x), m)] == [mint("b")]
+        assert [deref(x) for _ in solve(("solve", mint("a"), x), m)] == [mint("b")]
 
     def test_headlit_guard_immune_to_user_unify_predicate(self, load):
         # A12-F004 follow-up: the opaque head-literal guard (A02-F003) must
@@ -871,7 +871,7 @@ unify(1, 2, 3),
 hl_date("seed", 0),
 """)
         logic_mod = m.__dict__["$module"]
-        list(call("assertz", m.hl_date(datetime.date(2026, 1, 1), 1),
+        list(call("assertz", ("hl_date", datetime.date(2026, 1, 1), 1),
                   module=logic_mod))
         _query_cache.clear()
         r = Var()
@@ -924,16 +924,16 @@ probe(PX) <- ghost2(PX)
         assert list(call("ghost2", x, module=logic_mod)) == []
         _query_cache.clear()
         x = Var()
-        assert list(solve(m.ghost2(x), m)) == []
+        assert list(solve(("ghost2", x), m)) == []
         _query_cache.clear()
         x = Var()
-        assert list(solve(m.probe(x), m)) == []
+        assert list(solve(("probe", x), m)) == []
         # assertz after the empty queries still works (dynamic stays open)
         _query_cache.clear()
-        list(call("assertz", m.ghost2(mint("y")), module=logic_mod))
+        list(call("assertz", ("ghost2", mint("y")), module=logic_mod))
         _query_cache.clear()
         x = Var()
-        assert [deref(x) for _ in solve(m.ghost2(x), m)] == [mint("y")]
+        assert [deref(x) for _ in solve(("ghost2", x), m)] == [mint("y")]
 
     def test_directive_then_clause_keeps_named_fields(self, load):
         # A12-F005 regression: the -dynamic(pers/2) handler pre-registered
@@ -948,10 +948,25 @@ likes("bob", 42),
 
 pers(NAME, AGE) <- likes(NAME, AGE)
 """)
-        assert m.pers._fields == ("name", "age")
+        # W4b-2d: the binding is a handle, so the fields are read through
+        # the Database, and the keyword goal is a keyword Call node naming
+        # the predicate -- the named-field construction the class call did.
+        from clausal.pythonic_ast.nodes import Call, Keyword
+        from clausal.terms import LoadName
+        db = m.__dict__["$module"].db
+        assert db.field_names_at("pers", 2) == ("name", "age")
         x = Var()
-        got = [deref(x) for _ in solve(m.pers(name=mint("bob"), age=x), m)]
+        goal = Call(func=LoadName(name="pers"), args=[],
+                    kwargs=[Keyword(name="name", value=mint("bob")),
+                            Keyword(name="age", value=x)])
+        got = [deref(x) for _ in solve(goal, m)]
         assert got == [42]
+        # the names, not the keyword order, place the arguments
+        x = Var()
+        goal = Call(func=LoadName(name="pers"), args=[],
+                    kwargs=[Keyword(name="age", value=x),
+                            Keyword(name="name", value=mint("bob"))])
+        assert [deref(x) for _ in solve(goal, m)] == [42]
 
     def test_dynamic_with_seed_fact_works(self, load):
         # control: with one initial fact the same workflow is fine
@@ -965,7 +980,7 @@ seed <- assertz(ghost("x"))
         logic_mod = m.__dict__["$module"]
         list(call("seed", module=logic_mod))
         x = Var()
-        got = sorted(deref(x) for _ in solve(m.ghost(x), m))
+        got = sorted(deref(x) for _ in solve(("ghost", x), m))
         assert got == [mint("init"), mint("x")]
 
 
@@ -989,7 +1004,7 @@ bad_elem(R) <- (
 )
 """)
         r = Var()
-        got = [deref(r) for _ in solve(m.guarded(r), m)]
+        got = [deref(r) for _ in solve(("guarded", r), m)]
         assert got == [mint("caught")]
 
     def test_tabled_list_answer_via_liskov_char_list(self, load):
@@ -1003,7 +1018,7 @@ bad_elem(R) <- (
 sl(["a", "b"], R) <- (R is "matched")
 """)
         r = Var()
-        got = [deref(r) for _ in solve(m.sl([mint("a"), mint("b")], r), m)]
+        got = [deref(r) for _ in solve(("sl", [mint("a"), mint("b")], r), m)]
         assert got == [mint("matched")]
 
 
@@ -1058,7 +1073,7 @@ p(5, "five"),
         t = Trail()
         x, r = Var(), Var()
         in_domain(x, 2, 3, t)
-        got = [(deref(x), deref(r)) for _ in solve(m.p(x, r), m)]
+        got = [(deref(x), deref(r)) for _ in solve(("p", x, r), m)]
         assert got == [(2, mint("two")), (3, mint("three"))]
 
     def test_dif_constrained_query_var(self, load):
@@ -1066,7 +1081,7 @@ p(5, "five"),
         t = Trail()
         x, r = Var(), Var()
         dif(x, 2, t)
-        got = [(deref(x), deref(r)) for _ in solve(m.p(x, r), m)]
+        got = [(deref(x), deref(r)) for _ in solve(("p", x, r), m)]
         assert got == [(1, mint("one")), (3, mint("three")), (4, mint("four")), (5, mint("five"))]
 
 
@@ -1079,7 +1094,7 @@ class TestControlConstraintScoping:
         m = load("oncep", 'oncep(X) <- once(X is not 1)\n')
         x = Var()
         n = 0
-        for _ in solve(m.oncep(x), m):
+        for _ in solve(("oncep", x), m):
             n += 1
             xv = deref(x)
             assert is_var(xv) and get_attr(xv, DIF_KEY) is not None
@@ -1098,7 +1113,7 @@ fail_after_dif(X) <- (
 """)
         x = Var()
         n = 0
-        for _ in solve(m.nafp(x), m):
+        for _ in solve(("nafp", x), m):
             n += 1
             xv = deref(x)
             assert not (is_var(xv) and get_attr(xv, DIF_KEY) is not None), (
@@ -1124,12 +1139,12 @@ td(3),
     def test_dif_constrained_caller(self, load):
         m = load("treplay", self.SRC)
         x = Var()
-        assert sorted(deref(x) for _ in solve(m.td(x), m)) == [1, 2, 3]
+        assert sorted(deref(x) for _ in solve(("td", x), m)) == [1, 2, 3]
         _query_cache.clear()
         t = Trail()
         y = Var()
         dif(y, 2, t)
-        assert sorted(deref(y) for _ in solve(m.td(y), m)) == [1, 3]
+        assert sorted(deref(y) for _ in solve(("td", y), m)) == [1, 3]
 
     def test_fd_constrained_caller(self, load):
         m = load("treplay", self.SRC)
@@ -1137,7 +1152,7 @@ td(3),
         t = Trail()
         z = Var()
         in_domain(z, 2, 3, t)
-        assert sorted(deref(z) for _ in solve(m.td(z), m)) == [2, 3]
+        assert sorted(deref(z) for _ in solve(("td", z), m)) == [2, 3]
 
 
 class TestCompilerRuntimeTablingSeam:
@@ -1157,7 +1172,7 @@ reach(X, Y) <- (
 )
 """)
         y = Var()
-        got = sorted(deref(y) for _ in solve(m.reach(1, y), m))
+        got = sorted(deref(y) for _ in solve(("reach", 1, y), m))
         assert got == [1, 2, 3, 4]
 
     def test_left_recursive_tabled_diamond_dedups(self, load):
@@ -1172,7 +1187,7 @@ reach(X, Y) <- (
 )
 """)
         y = Var()
-        got = sorted(deref(y) for _ in solve(m.reach(1, y), m))
+        got = sorted(deref(y) for _ in solve(("reach", 1, y), m))
         assert got == [1, 2, 3, 4]
 
     def test_deterministic_tail_recursion_under_table(self, load):
@@ -1187,7 +1202,7 @@ cnt(N, R) <- (
 )
 """)
         r = Var()
-        assert [deref(r) for _ in solve(m.cnt(3, r), m)] == [mint("done")]
+        assert [deref(r) for _ in solve(("cnt", 3, r), m)] == [mint("done")]
 
 
 class TestStringsAsListsDispatchParity:
@@ -1237,7 +1252,7 @@ h([_, _, _, *_], R) <- (R is "many")
         m = load("liskov_guard", self.GUARD_SRC)
         _query_cache.clear()
         r = Var()
-        assert [deref(r) for _ in solve(m.r(probe, r), m)] == expected
+        assert [deref(r) for _ in solve(("r", probe, r), m)] == expected
 
     @pytest.mark.parametrize("probe,expected", [
         ([mint("a"), mint("b")], [mint("two")]),
@@ -1250,7 +1265,7 @@ h([_, _, _, *_], R) <- (R is "many")
         m = load("liskov_head", self.HEAD_SRC)
         _query_cache.clear()
         r = Var()
-        assert [deref(r) for _ in solve(m.h(probe, r), m)] == expected
+        assert [deref(r) for _ in solve(("h", probe, r), m)] == expected
 
     def test_tabled_str_query_against_list_head(self, load):
         m = load("liskov_tabled", """\
@@ -1261,7 +1276,7 @@ sl(["a", "b"], R) <- (R is "matched")
         r = Var()
         # The head list ["a", "b"] is a list of char ATOMS — that IS the
         # string "ab" (THE FLIP §6.2) — so a str probe matches it.
-        assert [deref(r) for _ in solve(m.sl(chars("ab"), r), m)] == [mint("matched")]
+        assert [deref(r) for _ in solve(("sl", chars("ab"), r), m)] == [mint("matched")]
 
 
 class TestAssertzReindexSeam:
@@ -1286,19 +1301,19 @@ addone <- assertz(f("e", 5))
         m = load("reindex", self.SRC)
         logic_mod = m.__dict__["$module"]
         L = Var()
-        for _ in solve(m.keys(L), m):
+        for _ in solve(("keys", L), m):
             assert deref(L) == [mint("a"), mint("b"), mint("c"), mint("d")]
         list(call("addone", module=logic_mod))
         _query_cache.clear()
         L2 = Var()
-        for _ in solve(m.keys(L2), m):
+        for _ in solve(("keys", L2), m):
             assert deref(L2) == [mint("a"), mint("b"), mint("c"),
                                  mint("d"), mint("e")]
         _query_cache.clear()
         v = Var()
-        assert [deref(v) for _ in solve(m.f(mint("e"), v), m)] == [5]
+        assert [deref(v) for _ in solve(("f", mint("e"), v), m)] == [5]
         _query_cache.clear()
         k, v2 = Var(), Var()
-        got = [(deref(k), deref(v2)) for _ in solve(m.f(k, v2), m)]
+        got = [(deref(k), deref(v2)) for _ in solve(("f", k, v2), m)]
         assert got == [(mint("a"), 1), (mint("b"), 2), (mint("c"), 3),
                        (mint("d"), 4), (mint("e"), 5)]

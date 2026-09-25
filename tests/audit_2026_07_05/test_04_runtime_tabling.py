@@ -387,17 +387,17 @@ class TestModeMatrixGuards:
     def test_solve_call_once_query_matrix(self, load, clear_query_cache):
         m = load("mode", PA_SRC)
         Y = Var()
-        assert answers(solve(m.pa(1, Y), m), Y) == [(2,)]
+        assert answers(solve(("pa", 1, Y), m), Y) == [(2,)]
         from clausal.terms import Compound
         Y2 = Var()
         assert answers(solve(Compound("pa", (1, Y2)), m), Y2) == [(2,)]
         assert sum(1 for _ in solve(True, m)) == 1
         assert sum(1 for _ in solve(False, m)) == 0
-        assert once(m.pa(1, Var()), m) is not None
-        assert once(m.pa(7, Var()), m) is None
+        assert once(("pa", 1, Var()), m) is not None
+        assert once(("pa", 7, Var()), m) is None
         # module inference from the goal term
         Z = Var()
-        assert answers(solve(m.pa(3, Z), m), Z) == [(3,)]
+        assert answers(solve(("pa", 3, Z), m), Z) == [(3,)]
         # call with string functor and with the predicate class
         V = Var()
         assert answers(call("pa", 1, V, module=m), V) == [(2,)]
@@ -408,14 +408,14 @@ class TestModeMatrixGuards:
         Q = Var()
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            assert list(query(m.pa(1, Q), {"Q": Q}, m)) == [{"Q": 2}]
+            assert list(query(("pa", 1, Q), {"Q": Q}, m)) == [{"Q": 2}]
 
     def test_query_cache_distinguishes_aliased_vars(self, load, clear_query_cache):
         m = load("mode", PA_SRC)
         V, W = Var(), Var()
-        distinct = answers(solve(m.pa(V, W), m), V, W)
+        distinct = answers(solve(("pa", V, W), m), V, W)
         A = Var()
-        aliased = answers(solve(m.pa(A, A), m), A)
+        aliased = answers(solve(("pa", A, A), m), A)
         assert sorted(map(repr, distinct)) == ["(1, 2)", "(3, 3)"]
         assert aliased == [(3,)]
 
@@ -455,11 +455,11 @@ class TestTablingGuards:
         db = m.__clausal_module__.db
         V = Var()
         assert sorted(a[0] for a in answers(call("tz", V, module=m), V)) == [1, 2]
-        assert sum(1 for _ in call("assertz", m.tz(99), module=m)) == 1
+        assert sum(1 for _ in call("assertz", ("tz", 99), module=m)) == 1
         assert db.table_store == {}  # auto-invalidated
         V2 = Var()
         assert sorted(a[0] for a in answers(call("tz", V2, module=m), V2)) == [1, 2, 99]
-        assert sum(1 for _ in call("retract", m.tz(1), module=m)) == 1
+        assert sum(1 for _ in call("retract", ("tz", 1), module=m)) == 1
         V3 = Var()
         assert sorted(a[0] for a in answers(call("tz", V3, module=m), V3)) == [2, 99]
 
@@ -678,8 +678,9 @@ class TestCToolkitGuards:
             raise RuntimeError("user error")
         m.__clausal_module__.module_dict["boom_rt"] = boom_rt
         from clausal.logic.trampoline import StepGenerator, solutions
-        pred = m.__clausal_module__.module_dict["rtesol"]
-        sg = StepGenerator(pred._get_dispatch(), None, None, None, Var(), Trail())
+        dispatch = m.__clausal_module__.db.get_dispatch("rtesol", 1)
+        assert dispatch is not None
+        sg = StepGenerator(dispatch, None, None, None, Var(), Trail())
         with pytest.raises(RuntimeError):
             solutions(sg)
 
@@ -895,7 +896,7 @@ class TestF004QueryWfsStub:
         # annotated Undefined instead of a hardcoded True.
         m = load("f004", WIN_SYM_SRC.replace("win", "winu").replace("move", "movu"))
         X = Var()
-        res = query_wfs(m.winu(X), {"X": X}, m)
+        res = query_wfs(("winu", X), {"X": X}, m)
         assert len(res) == 2
         assert all(r["_truth"] is Undefined for r in res)
 
@@ -995,7 +996,7 @@ class TestF007PoisonedEvaluatingTables:
     def test_once_then_full_query(self, load):
         m = load("f007a", PATH_SRC.replace("path", "patha").replace("edge", "edgea"))
         Y = Var()
-        t = once(m.patha(1, Y), m)
+        t = once(("patha", 1, Y), m)
         assert t is not None and deref(Y) == 2
         _query_cache.clear()
         gc.collect()  # ensure the abandoned solve generator is finalized
@@ -1020,7 +1021,7 @@ class TestF007PoisonedEvaluatingTables:
         # pinning the poisoned state).
         m = load("f007c", PATH_SRC.replace("path", "pathc").replace("edge", "edgec"))
         Y = Var()
-        once(m.pathc(1, Y), m)
+        once(("pathc", 1, Y), m)
         gc.collect()
         store = m.__clausal_module__.db.table_store
         statuses = {e.status for e in store.values()}
@@ -1037,7 +1038,7 @@ class TestF007RecFirstAbandonment:
     def test_recfirst_once_then_full_query(self, load):
         m = load("f007r1", RECFIRST_ONCE_SRC)
         Y = Var()
-        t = once(m.qq(Y), m)
+        t = once(("qq", Y), m)
         assert t is not None and deref(Y) == 1
         _query_cache.clear()
         gc.collect()
@@ -1049,7 +1050,7 @@ class TestF007RecFirstAbandonment:
     def test_recfirst_once_no_evaluating_entries(self, load):
         m = load("f007r2", RECFIRST_ONCE_SRC.replace("qq", "qr").replace("ee", "er"))
         Y = Var()
-        once(m.qr(Y), m)
+        once(("qr", Y), m)
         gc.collect()
         store = m.__clausal_module__.db.table_store
         assert "evaluating" not in {e.status for e in store.values()}
@@ -1061,7 +1062,7 @@ class TestF007RecFirstAbandonment:
                                  .replace("la", "lg").replace("lb", "lh")
         m = load("f007r3", src)
         Y = Var()
-        once(m.rg(1, Y), m)
+        once(("rg", 1, Y), m)
         _query_cache.clear()
         gc.collect()
         Ya, Yb = Var(), Var()
@@ -1085,7 +1086,7 @@ class TestF008RootSuspendSpuriousSolution:
         # fabricates an unbound answer (defense in depth with F007).
         m = load("f008", PATH_SRC.replace("path", "pathe").replace("edge", "edgee"))
         Y = Var()
-        once(m.pathe(1, Y), m)  # poison: leaves consumer-only table state
+        once(("pathe", 1, Y), m)  # poison: leaves consumer-only table state
         gc.collect()
         Y2 = Var()
         got = answers(call("pathe", 1, Y2, module=m), Y2)

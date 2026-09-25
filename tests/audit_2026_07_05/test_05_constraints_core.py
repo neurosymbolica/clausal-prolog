@@ -187,7 +187,7 @@ dictpred(D, V) <- (
 )
 """)
         dd, v = Var(), Var()
-        assert answers(solve(m.dictpred(dd, v), m), v) == []
+        assert answers(solve(("dictpred", dd, v), m), v) == []
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -715,28 +715,28 @@ class TestLanguageIntegration:
     def test_is_not_sugar_enumerates_distinct_pairs(self, load):
         m = load("lang", LANG_SRC)
         x, y = Var(), Var()
-        got = answers(solve(m.pair_diff(x, y), m), x, y)
+        got = answers(solve(("pair_diff", x, y), m), x, y)
         assert got == [(mint("red"), mint("green")), (mint("green"), mint("red"))]
 
     def test_is_not_survives_clause_backtracking(self, load):
         m = load("lang", LANG_SRC)
         x = Var()
-        assert answers(solve(m.survive(x), m), x) == [(1,), (3,)]
+        assert answers(solve(("survive", x), m), x) == [(1,), (3,)]
 
     def test_immediate_not_unify_point_in_time(self, load):
         m = load("lang", LANG_SRC)
         # two unbound vars unify → not(is) fails immediately
-        assert once(m.imm(Var(), Var()), module=m) is None
-        assert once(m.imm(1, 2), module=m) is not None
+        assert once(("imm", Var(), Var()), module=m) is None
+        assert once(("imm", 1, 2), module=m) is not None
 
     def test_reified_builtins_from_source(self, load):
         m = load("lang", LANG_SRC)
         tv = Var()
-        assert answers(solve(m.reif_eq_test(1, 1, tv), m), tv) == [(True,)]
+        assert answers(solve(("reif_eq_test", 1, 1, tv), m), tv) == [(True,)]
         tv = Var()
-        assert answers(solve(m.reif_eq_test(1, 2, tv), m), tv) == [(False,)]
+        assert answers(solve(("reif_eq_test", 1, 2, tv), m), tv) == [(False,)]
         x, tv = Var(), Var()
-        assert len(answers(solve(m.reif_dif_test(x, 1, tv), m), x, tv)) == 2
+        assert len(answers(solve(("reif_dif_test", x, 1, tv), m), x, tv)) == 2
 
 
 # ══════════════════════════════════════════════════════════════════════════

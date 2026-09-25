@@ -349,16 +349,19 @@ class TestF001IndexedDispatchPartialTerms:
 
 
 class TestF001TrampolineTRODispatchUncomputableKeys:
-    def test_fixtures_compile_to_tro_dispatch_variants(self, moddict):
+    def test_fixtures_compile_to_tro_dispatch_variants(self, mod):
         # guard: each fixture must actually hit the TRO (tro_state) variant of
-        # the intended dispatch strategy, or the tests below probe nothing
-        for name, n_plans in (("acc4", 1), ("sgl4", 1), ("mp5", 2), ("str5", 2)):
-            fn = moddict[name]._get_dispatch()
+        # the intended dispatch strategy, or the tests below probe nothing.
+        # W4b-2d: the dispatch and the row are read through the Database.
+        db = mod.db
+        for name, arity, n_plans in (("acc4", 3, 1), ("sgl4", 2, 1),
+                                     ("mp5", 2, 2), ("str5", 2, 2)):
+            fn = db.get_dispatch(name, arity)
             assert "tro_state" in fn.__code__.co_freevars, name
-            assert len(moddict[name]._state_row().index_plans) == n_plans, name
-        jfn = moddict["jt3"]._get_dispatch()
+            assert len(db.row(name, arity).index_plans) == n_plans, name
+        jfn = db.get_dispatch("jt3", 3)
         assert "tro_state" in jfn.__code__.co_freevars
-        assert moddict["jt3"]._state_row().index_plans_joint
+        assert db.row("jt3", 3).index_plans_joint
 
     # controls: TRO recursion itself works through each dispatch variant
     def test_control_single_plan_tro_recursion(self, mod):
@@ -477,38 +480,39 @@ class TestF002ListDispatchFallthrough:
 
 
 class TestF003ExoticHeadWildcard:
-    def _assert_fact(self, mod, cls, *args):
+    def _assert_fact(self, mod, name, *args):
+        # W4b-2d: the fact is a plain cell, not a class instance.
         solve_mod._query_cache.clear()
-        list(call("assertz", cls(*args), module=mod))
+        list(call("assertz", (name, *args), module=mod))
 
     def test_control_date_true_positive(self, mod, moddict):
-        self._assert_fact(mod, moddict["dyn_date"], datetime.date(2026, 1, 1), 1)
+        self._assert_fact(mod, "dyn_date", datetime.date(2026, 1, 1), 1)
         R = Var()
         assert (1,) in collect(mod, "dyn_date", datetime.date(2026, 1, 1), R, outv=[R])
 
     def test_date_mismatch_must_fail(self, mod, moddict):
-        self._assert_fact(mod, moddict["dyn_date"], datetime.date(2026, 1, 1), 1)
+        self._assert_fact(mod, "dyn_date", datetime.date(2026, 1, 1), 1)
         R = Var()
         assert collect(mod, "dyn_date", datetime.date(1999, 9, 9), R, outv=[R]) == []
 
     def test_date_output_mode_binds(self, mod, moddict):
-        self._assert_fact(mod, moddict["dyn_date"], datetime.date(2026, 1, 1), 1)
+        self._assert_fact(mod, "dyn_date", datetime.date(2026, 1, 1), 1)
         X, R = Var(), Var()
         sols = collect(mod, "dyn_date", X, R, outv=[X, R])
         assert (datetime.date(2026, 1, 1), 1) in sols
 
     def test_tuple_mismatch_must_fail(self, mod, moddict):
-        self._assert_fact(mod, moddict["dyn_tuple"], (1, 2), 100)
+        self._assert_fact(mod, "dyn_tuple", (1, 2), 100)
         R = Var()
         assert collect(mod, "dyn_tuple", (9, 9), R, outv=[R]) == []
 
     def test_set_mismatch_must_fail(self, mod, moddict):
-        self._assert_fact(mod, moddict["dyn_set"], {3, 4}, 200)
+        self._assert_fact(mod, "dyn_set", {3, 4}, 200)
         R = Var()
         assert collect(mod, "dyn_set", {5, 6}, R, outv=[R]) == []
 
     def test_decimal_mismatch_must_fail(self, mod, moddict):
-        self._assert_fact(mod, moddict["dyn_dec"], Decimal("2.5"), 9)
+        self._assert_fact(mod, "dyn_dec", Decimal("2.5"), 9)
         R = Var()
         assert collect(mod, "dyn_dec", Decimal("7.7"), R, outv=[R]) == []
 
@@ -655,11 +659,11 @@ class TestIndexedDispatchGuards:
 
 
 class TestJointAndSecondaryDispatchGuards:
-    def test_strategies_actually_fired(self, moddict):
+    def test_strategies_actually_fired(self, mod):
         # protects the F001 joint/secondary xfails from silently probing the
         # wrong strategy if thresholds ever change
-        assert moddict["jnt2"]._state_row().index_plans_joint
-        assert moddict["sec2"]._state_row().index_plans_hierarchical
+        assert mod.db.row("jnt2", 3).index_plans_joint
+        assert mod.db.row("sec2", 3).index_plans_hierarchical
 
     def test_joint_modes(self, mod):
         R = Var()
