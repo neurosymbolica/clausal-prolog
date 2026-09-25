@@ -172,8 +172,57 @@ def _conj(*goals, _varnames=None):
     return _gen()
 
 
-def _iter_from_goal(goal_or_iter, _varnames=None):
+def _is_goal_value(x) -> bool:
+    """True for a goal written as a VALUE: a cell (``("between", 1, 3, X)``,
+    what ``clausal.between(1, 3, X)`` builds) or a bare ``str`` (an atom goal
+    or a predicate handle such as ``m.pred``).
+
+    Both are iterable, and iterating them is always wrong here: a cell walks
+    its functor and arguments, a ``str`` walks its characters, and neither
+    ever runs the goal -- a silently wrong answer, not an error.
+    """
+    from clausal.logic.cells import compound_cell_shape
+    return type(x) is str or compound_cell_shape(x)[0]
+
+
+def _iter_from_goal_value(goal, _varnames, module):
+    """Solve a cell/str *goal* with ``solve`` and yield binding dicts.
+
+    The module is resolved EAGERLY, so a goal that has none -- an unqualified
+    cell with no ``module=`` -- raises solve's own ``existence_error(module,
+    ...)`` when ``Solutions`` is constructed, not later inside a display hook.
+    A module-qualified cell ``(":", M, G)`` names its own module.
+
+    Bindings are reported for the goal's variables in left-to-right order,
+    keyed by the names in *_varnames* where the caller supplied them and by
+    the variable's own name (``_0``) otherwise.
+    """
+    from clausal.logic.solve import (
+        _resolved_goal_and_module, solve, _deref_walk,
+    )
+    from clausal.logic.builtins.inspection import _collect_vars_impl
+
+    goal, resolved = _resolved_goal_and_module(goal, module, "Solutions")
+    found: list = []
+    _collect_vars_impl(goal, found)
+    id_to_name = {id(v): n for n, v in (_varnames or {}).items()}
+    named = {id_to_name.get(id(v), str(v)): v for v in found}
+    # Caller-named variables the walk did not reach (already bound, or
+    # outside the goal) are still reported, as the instance path does.
+    for n, v in (_varnames or {}).items():
+        named.setdefault(n, v)
+
+    def _gen():
+        for _ in solve(goal, resolved):
+            yield {n: _deref_walk(v) for n, v in named.items()}
+
+    return _gen()
+
+
+def _iter_from_goal(goal_or_iter, _varnames=None, module=None):
     """If given a term instance, drive it and yield binding dicts.
+    A cell or a ``str`` is a goal VALUE and is solved (see
+    :func:`_iter_from_goal_value`; *module* is the module that answers it).
     Otherwise pass through as an iterator.
 
     *_varnames* maps user-written variable names to their Var objects so that
@@ -202,11 +251,15 @@ def _iter_from_goal(goal_or_iter, _varnames=None):
             return iter([{}])
         if goal_or_iter is False:
             return iter([])
+        if _is_goal_value(goal_or_iter):
+            return _iter_from_goal_value(goal_or_iter, _varnames, module)
         try:
             return iter(goal_or_iter)
         except TypeError:
             raise TypeError(
-                f"Solutions expects a predicate instance or iterator, "
+                f"Solutions expects a goal (a cell, an atom or handle str, "
+                f"True/False, a term instance) or an iterator of binding "
+                f"dicts, "
                 f"got {type(goal_or_iter).__name__}: {goal_or_iter!r}\n"
                 f"Hint: Python's 'is' is an identity test, not unification."
             ) from None
@@ -257,6 +310,17 @@ class Solutions:
         X = Var()
         Solutions(query(goal, {"X": X}, module))
 
+    or pass a GOAL -- a cell, such as the one a builtin class builds, or
+    a module-qualified cell -- with the module that answers it::
+
+        Solutions(between(1, 3, X := Var()), module=m)
+        Solutions(("pred", X := Var()), module=m)
+        Solutions((":", m, ("pred", X := Var())))
+
+    A cell is solved, never iterated (iterating it would walk the tuple's
+    elements and bind nothing).  An unqualified cell with no ``module=``
+    raises ``existence_error(module, ...)`` here, at construction.
+
     when evaluated in an IPython cell the solutions are presented one at a
     time, separated by ``or``, with a key-driven prompt between each.
 
@@ -276,8 +340,9 @@ class Solutions:
     _PROMPT = "   [SPACE/n: next  |  ENTER/.: stop  |  ESC/q: abort  |  a: all]  "
 
     def __init__(self, goal_or_iter: Any, _varnames=None, _read=None,
-                 limit=None):
-        self._iter = _iter_from_goal(goal_or_iter, _varnames=_varnames)
+                 limit=None, module=None):
+        self._iter = _iter_from_goal(goal_or_iter, _varnames=_varnames,
+                                     module=module)
         # Allow tests to inject a scripted key-reader.
         self._read = _read if _read is not None else _read_char
         self._limit = limit
