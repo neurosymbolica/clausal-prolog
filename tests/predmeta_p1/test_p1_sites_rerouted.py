@@ -127,14 +127,22 @@ def test_the_declared_arity_row_already_exists_when_step_4a_looks(tmp_path):
     mod = _load(tmp_path, "p1_dyn2", "-dynamic(d/1)\n-dynamic(d/2)\nd(1),\n")
     assert mod.db.row("d", 2) is not None, "the vacuous test this site avoids"
     assert mod.db.row("d", 1) is not None
-    assert len(mod.module_dict["d"]._fields) == 1, "the NAME's class is d/1"
+    # Post-W4b-2d the NAME's binding is a handle, which carries no arity of
+    # its own (it was d/1's class, whose ``_fields`` said 1): nothing can be
+    # handed to the wrong row.  What the site protected is observable on the
+    # rows themselves -- d/1 holds the clause, d/2 holds nothing.
+    from clausal.logic.predicate import mint_predicate_handle
+    assert mod.module_dict["d"] == mint_predicate_handle(mod.db, "d")
+    assert len(mod.db.row("d", 1).clauses) == 1
+    assert not mod.db.row("d", 2).clauses
 
 
 def test_the_ordinary_dynamic_predicate_still_answers(tmp_path):
     """The positive control for the same site: one declaration, one arity."""
     mod = _load(tmp_path, "p1_dyn4", "-dynamic(d/1)\nd(1),\n")
-    cls = mod.module_dict["d"]
-    assert cls._row.key == ("d", 1)
+    from clausal.logic.predicate import resolve_predicate_row
+    row = resolve_predicate_row(mod.module_dict["d"], arity=1, db=mod.db)
+    assert row is not None and row.key == ("d", 1)
     assert _answers(mod, "d") == [1]
 
 
