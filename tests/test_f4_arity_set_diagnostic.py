@@ -328,22 +328,36 @@ class TestNothingLost:
 
     def test_new_set_contains_every_old_answer(self, mods):
         """Every namespace binding of every loaded module: where the old
-        reader answered an arity, the new set contains it."""
-        population = 0
+        reader answered an arity, the new set contains it.
+
+        W4b-3 slice 5 EMPTIED most of the old reader's population: it
+        answered only for a ``PredicateMeta`` class, and nearly all the
+        classes in loaded module namespaces were the rewriter's (a partially
+        loaded module's never reached the flip).  The rewriter mints none
+        now, so a loaded module binds no class of its OWN (``__module__`` is
+        the module itself for a class statement in its body) -- pinned here
+        as ZERO over a non-empty scan.  A ``make_predicate`` class a test
+        binds by hand (the Python-API arm, retired at slice 6) is still
+        checked for loss."""
+        scanned = 0
+        rewriter_made = []
         lost = []
         for modname, mod in list(sys.modules.items()):
             ns = getattr(mod, "__dict__", None)
             if not isinstance(ns, dict) or "$module" not in ns:
                 continue
+            scanned += 1
             for name, value in list(ns.items()):
                 old = _old_arity_of(value)
                 if old is None:
                     continue
-                population += 1
+                if getattr(value, "__module__", None) == ns.get("__name__"):
+                    rewriter_made.append((modname, name))
                 if old not in predicate_arities_for(value):
                     lost.append((modname, name, old))
-        assert population > 0, "population is EMPTY -- the filter is stale"
-        assert population >= 8, population
+        assert scanned >= 3, (
+            f"scanned {scanned} Clausal modules -- the fixture did not load")
+        assert rewriter_made == [], rewriter_made
         assert not lost, lost
 
     def test_predicate_arities_agrees_with_is_predicate_name(self, mods):

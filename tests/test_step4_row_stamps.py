@@ -189,7 +189,10 @@ def test_the_stamp_does_not_depend_on_what_the_name_is_bound_to(
                        module_name="<module>"):
         if module_name == "s4rs_eras":
             for name in ("s4rs_pair", "s4rs_swap"):
-                assert isinstance(module_dict.get(name), PredicateMeta)
+                # Since W4b-3 slice 5 the module body binds its own handle
+                # (``$declare_head``), not a class: "mangled_handle" below
+                # rebinds the same value, "absent" removes it.
+                assert module_dict.get(name) == mangle(module_name, name)
                 if binding == "mangled_handle":
                     module_dict[name] = mangle(module_name, name)
                 else:

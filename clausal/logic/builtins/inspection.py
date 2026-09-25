@@ -336,11 +336,11 @@ def _construct_named(name_val, args, who: str):
     # still answers None here with no db/namespace supplied.
     _ctor_fields = field_names_for(name_val, arity=len(args))
     if isinstance(name_val, type) and _ctor_fields is not None:
-        # ``field_names_for`` is the field list whatever minted the class — a
-        # generated ``class <functor>(metaclass=PredicateMeta)`` block (the
-        # usual route for an in-file predicate, see
-        # ``_make_functor_class_ast``), ``make_predicate``, or a declared
-        # ``@dataclass`` functor.  ``PredicateMeta.__call__`` fills missing
+        # ``field_names_for`` is the field list whatever minted the class —
+        # ``make_predicate`` or a declared ``@dataclass`` functor.  (The
+        # rewriter's ``class <functor>(metaclass=PredicateMeta)`` block, the
+        # route for an in-file predicate, went at W4b-3 slice 5: a module
+        # binds its predicate's handle, not a class.)  ``PredicateMeta.__call__`` fills missing
         # trailing fields with fresh Vars and rejects only *overflow*, so it
         # is this exact-match gate, not the constructor, that makes
         # ``name_val(*args)`` bind every field positionally with nothing

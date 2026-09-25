@@ -82,7 +82,12 @@ def lower_arg(t: Any, span=None) -> ast.expr:
 
 
 def lower_fact(term: tuple, span=None) -> list[ast.stmt]:
-    """A fact term ('name', arg...) -> [class guard, $define_predicate(...)]."""
+    """A fact term ('name', arg...) -> [declaration, $define_predicate(...)].
+
+    The declaration is the ``$declare_head`` statement the seam rewriter
+    emits for a predicate name (``term_rewriting._make_predicate_decl_ast``,
+    W4b-3 slice 5; it was a guarded ``PredicateMeta`` class block), and the
+    head is built through ``$head`` exactly as the rewriter builds it."""
     if type(term) is not tuple or not term or type(term[0]) is not str:
         raise LoweringRefused(f"not a callable term: {term!r}")
     name, args = term[0], list(term[1:])
@@ -91,23 +96,12 @@ def lower_fact(term: tuple, span=None) -> list[ast.stmt]:
     fields = tuple(f"arg_{i}" for i in range(len(args)))
     fields_src = "(" + "".join(f"{f!r}, " for f in fields) + ")"
 
-    guard_src = f'''
-try:
-    if "{name}" not in globals():
-        raise NameError
-    if isinstance({name}, {_DOLLAR}PredicateMeta) and getattr({name}, "_fields", None) != {fields_src}:
-        raise NameError
-    if type({name}) is tuple and {name} == ({name!r},):
-        raise NameError
-except NameError:
-    class {name}(metaclass={_DOLLAR}PredicateMeta):
-        _fields = {fields_src}
-'''
-    guard = ast.parse(guard_src).body
+    guard = ast.parse(
+        f"{_DOLLAR}declare_head({name!r}, {fields_src})").body
 
     head = ast.Call(
-        func=ast.Name(id=name, ctx=ast.Load()),
-        args=[],
+        func=ast.Name(id=f"{_DOLLAR}head", ctx=ast.Load()),
+        args=[ast.Name(id=name, ctx=ast.Load())],
         keywords=[ast.keyword(arg=f, value=lower_arg(a))
                   for f, a in zip(fields, args)],
     )

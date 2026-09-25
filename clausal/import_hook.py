@@ -42,6 +42,9 @@ from .import_diagnostics import exec_with_import_diagnostics
 from .syntax_diagnostics import clausal_syntax_diagnostics
 from .templating.term_rewriting import EmbedTransformer, TermTransformer
 from .logic.database import Module as LogicModule
+from .logic.predicate import (
+    begin_loading_declarations, end_loading_declarations,
+)
 from .logic.constants import (
     check_constant_ground,
     check_currency_unit,
@@ -253,11 +256,18 @@ def _run_v2_pipeline(loader, module, module_dict, filename, recover_module_items
     # A failed `-import_from` surfaces here as CPython's stock ImportError,
     # which names the file but not its vocabulary.  This is the raise site at
     # which the Clausal context is known, so enrich it here.
-    exec_with_import_diagnostics(code, module_dict, module_items, filename)
+    # The body's ``$declare_head`` record (W4b-3 slice 5): started empty for
+    # every run, and retired at compile_module's flip point -- or here, if
+    # the load fails before it gets there.
+    begin_loading_declarations(module_dict)
+    try:
+        exec_with_import_diagnostics(code, module_dict, module_items, filename)
 
-    logic_module = compile_module(
-        predicate_nodes, module_items, module_dict, module.__name__,
-    )
+        logic_module = compile_module(
+            predicate_nodes, module_items, module_dict, module.__name__,
+        )
+    finally:
+        end_loading_declarations(module_dict)
     # -constants directives register into $module.constants (see
     # register_module_constant, clausal/logic/constants.py) WHILE the
     # module body execs — i.e. onto dummy_logic_module, the placeholder.

@@ -2219,19 +2219,21 @@ def _quoted_head_functor_name(transformer, func_node, shape):
 
     * ISO 6.3.3 — a double-quoted literal is not an atom spelling and can
       never name a functor (``_refuse_double_quoted_functor``);
-    * a head, unlike a body goal, is compiled to a functor CLASS whose name
-      is emitted as Python source (``_make_functor_class_ast`` parses it),
-      so the spelling has to be a plain name.  This is an implementation
-      limit rather than an ISO rule, but it has to be stated HERE: with no
+    * a head, unlike a body goal, binds its functor as a module-level
+      Python NAME (``$declare_head`` binds it, ``$head(<name>, ...)`` reads
+      it; W4b-3 slice 5 -- it was a class statement parsed from source by
+      ``_make_functor_class_ast``), so the spelling has to be a plain name.
+      This is an implementation limit rather than an ISO rule, but it has to be stated HERE: with no
       check the generated source fails to parse and the author is shown
       CPython's complaint about a line of code they never wrote.
 
       NOT exempt under ``_reify``, unlike the ISO 6.3.3 refusal above, and
       the difference is not a judgement call: ``reify_source`` runs this
-      very ``visit_Expr``, which calls ``_make_functor_class_ast``, which
-      ``parse()``s the emitted class name.  So reflection DOES emit the
-      class, and exempting the check just moves the failure downstream --
-      measured, ``'foo bar'(X) <- (bar(X))`` then raises ``ReifyError:
+      very ``visit_Expr``, which (until W4b-3 slice 5) called
+      ``_make_functor_class_ast``, which ``parse()``d the emitted class
+      name, and still emits the name as a ``$head`` argument.  So reflection
+      DOES emit it, and exempting the check just moves the failure
+      downstream -- measured in the class era, ``'foo bar'(X) <- (bar(X))`` then raises ``ReifyError:
       invalid syntax. Perhaps you forgot a comma? (<unknown>, line 4)``,
       the unattributed CPython complaint this check exists to replace.  The
       contract in ``_refuse_double_quoted_functor`` is about rules whose
@@ -4306,19 +4308,18 @@ def _parse_meta_predicate_args(args):
     return heads
 
 
-# The metaclass reference inside the parsed class-minting / atom-binding
-# templates.  A ``$`` name cannot be spelled in Python source, so the
-# templates name this PLACEHOLDER and ``_swap_placeholder`` re-spells it
-# ``$PredicateMeta`` after ``parse`` (the same mechanism
-# ``_make_atom_str_assign_ast`` uses for ``$mint``).  A placeholder, not the
-# bare ``PredicateMeta``: the user's own head may be spelled
-# ``PredicateMeta``, and that name must stay the user's everywhere else in
-# the block (``class PredicateMeta(metaclass=$PredicateMeta)``).
-_PM_PLACEHOLDER = "__CLAUSAL_PM__"
+# The guard reference inside the parsed atom-binding template.  A ``$`` name
+# cannot be spelled in Python source, so the template names this PLACEHOLDER
+# and ``_swap_placeholder`` re-spells it ``$keeps_predicate`` after ``parse``
+# (the same mechanism ``_make_atom_str_assign_ast`` uses for ``$mint``).  A
+# placeholder, not a bare name: the user's own atom may be spelled like the
+# helper, and that name must stay the user's in the rest of the block.  (It
+# named ``$PredicateMeta`` while the guard was an ``isinstance`` test and a
+# predicate was a class; W4b-3 slice 5.)
+_KEEPS_PLACEHOLDER = "__CLAUSAL_KEEPS__"
 
 
-def _swap_placeholder(block, placeholder=_PM_PLACEHOLDER,
-                      runtime_name="PredicateMeta"):
+def _swap_placeholder(block, placeholder, runtime_name):
     """Re-spell every ``Name`` *placeholder* in *block* as the ``$`` twin of
     *runtime_name*; no other name in the block is touched."""
     twin = dollar_name(runtime_name)
@@ -4362,114 +4363,44 @@ def _head_ctor_ast(head_ast):
     return head_ast
 
 
-def _make_functor_class_ast(functor_name, field_names, source):
-    """Generate a guarded block that defines a Predicate class.
+def _make_predicate_decl_ast(functor_name, field_names, source):
+    """The statement that declares *functor_name* as a predicate of the
+    module, with *field_names* as its head's field names (W4b-3 slice 5).
 
-    Generated code (example for ``fib`` with fields ``n``, ``f``):
+    Generated code (example for ``fib`` with fields ``n``, ``f``)::
 
-        try:
-            if 'fib' not in globals():
-                raise NameError
-            if isinstance(fib, PredicateMeta) and getattr(
-                fib, '_fields', None) != ('n', 'f'):
-                raise NameError
-        except NameError:
-            class fib(metaclass=PredicateMeta):
-                _fields = ('n', 'f')
+        $declare_head('fib', ('n', 'f'))
 
-    ``PredicateMeta`` handles ``__init__``, ``__eq__``, ``__repr__``,
-    ``__match_args__``, ``__slots__``, and partial-term creation (missing
-    fields → fresh ``Var()``).  No ``@dataclass`` and no singleton.
-    ``fib`` stays as the class in module globals.
+    ``$declare_head`` (``clausal.logic.predicate.declare_head``) binds the
+    module's own predicate HANDLE under the name and records the field names
+    (and this statement's source position) in the namespace's
+    ``$predicate_heads`` record, which ``$head`` builds the module's heads
+    against and step 4 of ``compiler_v2.compile_module`` stamps as the row's
+    ``declared_at``.  It decides WHETHER to bind with the same rules the
+    guarded class block this replaced spelled in Python (see
+    ``predicate._declares_over``): an unbound name, a runtime-table alias,
+    a different-fields ``PredicateMeta``, this module's own handle declared
+    with other field names, or the pooled ATOM of the same spelling are
+    taken; anything else (an imported handle, a user's own value) is left
+    alone.
 
-    The arity-aware re-raise of ``NameError`` is needed because, under the
-    global-atoms-default rule (Phase 2 of GLOBAL_ATOMS_DEFAULT.md), any
-    earlier file in the process may have auto-minted a 0-arity
-    ``PredicateMeta`` for the same name into ``predicate_builtins``.
-    Without the arity check, that 0-arity class would silently shadow this
-    file's intended N-arity predicate.
-
-    P3-1 Task 2 (§1b/R2): a bare atom no longer mints a class at all — an
-    earlier file's auto-accepted or declared atom of this exact spelling
-    sits in ``predicate_builtins``/this module's globals as the ATOM of
-    that spelling.  That shape gets the same re-raise-and-mint treatment as
-    the old arity-mismatched class: an atom placeholder of the SAME spelling
-    is exactly as safe to override as the old 0-arity class was, and for the
-    same reason (Phenomenon A — an atom name and an N-arity predicate of the
-    same spelling can coexist across files; the predicate wins in the file
-    that actually declares it).  A binding that is NOT that atom (some
-    unrelated user value) is left alone, same as any other
-    non-``PredicateMeta`` binding.
-
-    THE FLIP (2026-09-06-atoms-as-cells-strings) changed what that atom
-    placeholder LOOKS like: it is the arity-0 cell ``('bar',)``, not the
-    ``str`` ``'bar'``, so the guard tests the cell.  Without the update the
-    seeded atom survived, and the very next statement — the fact
-    ``bar(1),`` — called it: ``TypeError: 'tuple' object is not callable``
-    at load, in any process where some EARLIER module had declared ``bar``
-    as an atom.
-
-    The guard is deliberately narrowed to ``isinstance(.., PredicateMeta)``:
-    a non-``PredicateMeta`` binding of the same name (e.g. a user-defined
-    ``def Foo(...)`` in the .clausal file) is left alone and the predicate
-    block is skipped.  Clobbering a non-``PredicateMeta`` value would
-    silently destroy user code; failing loudly later (when the clause body
-    tries to use ``Foo`` as a predicate) preserves the pre-Phase-2 behavior
-    for that edge case.
-
-    "Bound" means bound in the MODULE dict, probed via ``globals()``
-    membership.  A bare-name probe would fall through to ``__builtins__``,
-    so a head named after a Python builtin (``reversed``, ``sorted``, …)
-    read as "already bound", was skipped by the guard above, and the head
-    call then invoked the real builtin — a load-time ``TypeError`` naming
-    neither the predicate nor the cause.  The user never bound those names,
-    so the left-alone rule does not apply to them: they mint normally.
+    This replaced a guarded ``class <functor>(metaclass=$PredicateMeta):
+    _fields = (...)`` block -- about 17,000 class creations per suite run --
+    whose class the flip turned into this same handle at step 4a-bis.
     """
-    fields_tuple = repr(tuple(field_names))
-    lines = [
-        "try:",
-        f"    if {functor_name!r} not in globals():",
-        "        raise NameError",
-        # 2026-09-09 ruling: the module namespace also carries the BARE
-        # aliases of the runtime-table classes (``Sub``, ``Node``, ``Var``,
-        # ...) for the deprecation window.  A head spelled like one is not
-        # "user-bound, leave alone" -- the binding is the runtime alias, the
-        # identical object its ``$`` twin holds -- so it mints normally and
-        # the user's predicate takes the bare name; generated code reaches
-        # the class through the twin, so nothing else changes hands.  The
-        # guard is emitted ONLY for a twinned spelling: for any other head
-        # ``globals().get('$name')`` is None, and a user's own ``name =
-        # None`` would otherwise read as the alias and be minted over.
-        *([
-            f"    if {functor_name} is globals().get({dollar_name(functor_name)!r}):",
-            "        raise NameError",
-        ] if has_twin(functor_name) else []),
-        f"    if isinstance({functor_name}, {_PM_PLACEHOLDER}) and getattr(",
-        f"            {functor_name}, '_fields', None) != {fields_tuple}:",
-        "        raise NameError",
-        # The seeded-pool ATOM placeholder.  ``type(...) is tuple`` FIRST:
-        # the name may be bound to anything the user put there, and a value
-        # with a broadcasting ``__eq__`` (a numpy array, a pandas frame)
-        # would raise at LOAD time on the bare ``==`` — the isinstance
-        # short-circuit the pre-flip ``isinstance(.., str)`` guard had.
-        f"    if type({functor_name}) is str and "
-        f"{functor_name} == {functor_name!r}:",   # STAGE 2: the atom placeholder is the str
-        "        raise NameError",
-        "except NameError:",
-        f"    class {functor_name}(metaclass={_PM_PLACEHOLDER}):",
-        f"        _fields = {fields_tuple}",
-    ]
-    tree = parse("\n".join(lines))
-    block = tree.body[0]
-    _swap_placeholder(block)
-    # Position the WHOLE block, not just the try: the nodes come from parsing a
-    # fresh snippet, so without this the inner ``class`` statement keeps the
-    # snippet's own line 7 and any traceback through it (notably the
-    # field-name mismatch diagnostic's "registered by:") points at a line that
-    # has nothing to do with the declaration.
-    for node in walk(block):
+    stmt = Expr(value=Call(
+        func=Name(id="$declare_head", ctx=Load()),
+        args=[
+            Constant(value=functor_name),
+            Tuple(elts=[Constant(value=f) for f in field_names], ctx=Load()),
+        ],
+        keywords=[],
+    ))
+    # Position the whole statement at the declaration: the recorded site is
+    # the "registered by:" line of a construction error.
+    for node in walk(stmt):
         copy_location(node, source)
-    return block
+    return stmt
 
 
 def _make_atom_str_assign_ast(atom_name, source, value=None):
@@ -4505,15 +4436,16 @@ def _make_atom_str_assign_ast(atom_name, source, value=None):
 
     Generated code (example for ``foo``)::
 
-        if not isinstance(globals().get('foo'), PredicateMeta):
+        if not $keeps_predicate('foo'):
             foo = $mint('foo')
 
-    The guard mirrors ``_make_functor_class_ast``'s spirit: a name already
-    bound to a genuine ``PredicateMeta`` (a real predicate, minted by an
-    earlier clause/import in this same file) is left alone rather than
-    clobbered by the atom placeholder; any other existing value (unbound,
-    or a stale atom from the process-wide ``predicate_builtins`` preseed) is
-    safely overwritten with this atom's own spelling.
+    The guard mirrors ``_make_predicate_decl_ast``'s spirit: a name already
+    bound to a predicate this module declared (an earlier clause's
+    ``$declare_head`` in this same file -- W4b-3 slice 5; it tested
+    ``isinstance(.., PredicateMeta)`` while that was a class) is left alone
+    rather than clobbered by the atom placeholder; any other existing value
+    (unbound, or a stale atom from the process-wide ``predicate_builtins``
+    preseed) is safely overwritten with this atom's own spelling.
 
     THE FLIP (2026-09-06-atoms-as-cells-strings §9.3): the RHS is
     ``$mint(spelling)`` — the module attribute ``mod.foo`` is the atom CELL
@@ -4526,12 +4458,12 @@ def _make_atom_str_assign_ast(atom_name, source, value=None):
     if value is None:
         value = atom_name
     lines = [
-        f"if not isinstance(globals().get({atom_name!r}), {_PM_PLACEHOLDER}):",
+        f"if not {_KEEPS_PLACEHOLDER}({atom_name!r}):",
         f"    {atom_name} = None",
     ]
     tree = parse("\n".join(lines))
     block = tree.body[0]
-    _swap_placeholder(block)
+    _swap_placeholder(block, _KEEPS_PLACEHOLDER, "keeps_predicate")
     assign = block.body[0]
     assign.value = Call(
         func=Name(id="$mint", ctx=load),
@@ -6003,9 +5935,9 @@ class EmbedTransformer(NodeTransformer):
         The body's ``P(M, X)`` is not a call to ``P/2``; ``visit_Name`` reads
         ``P`` as a fresh logic variable, so the clause lowers to a meta-call on
         an unbound ``Var`` AND the module-level walrus rebinds the global ``P``
-        from the class to that ``Var``.  The guarded class block of
-        ``_make_functor_class_ast`` deliberately leaves a non-``PredicateMeta``
-        binding alone, so the SECOND clause head then calls the variable:
+        from the class to that ``Var``.  The declaration statement
+        (``_make_predicate_decl_ast``; a guarded class block until W4b-3
+        slice 5) deliberately leaves such a binding alone, so the SECOND clause head then calls the variable:
 
             TypeError: 'clausal.logic.variables.AttVar' object is not callable
 
@@ -6768,7 +6700,7 @@ class EmbedTransformer(NodeTransformer):
             transformer._register_functor(
                 functor_name, all_field_names, expr_stmt, "first clause")
             statements.append(
-                _make_functor_class_ast(functor_name, all_field_names, expr_stmt)
+                _make_predicate_decl_ast(functor_name, all_field_names, expr_stmt)
             )
         statements.append(define_stmt)
         return statements if len(statements) > 1 else statements[0]
@@ -6802,7 +6734,7 @@ class EmbedTransformer(NodeTransformer):
             transformer._register_functor(
                 functor_name, [], expr_stmt, "first clause")
             statements.append(
-                _make_functor_class_ast(functor_name, [], expr_stmt)
+                _make_predicate_decl_ast(functor_name, [], expr_stmt)
             )
         statements.append(define_stmt)
         return statements if len(statements) > 1 else statements[0]
@@ -8176,7 +8108,7 @@ class EmbedTransformer(NodeTransformer):
                         functor_name, all_field_names, expr_stmt,
                         "first clause")
                     statements.append(
-                        _make_functor_class_ast(functor_name, all_field_names, expr_stmt)
+                        _make_predicate_decl_ast(functor_name, all_field_names, expr_stmt)
                     )
                 statements.append(define_stmt)
                 return statements if len(statements) > 1 else statements[0]
@@ -8271,7 +8203,7 @@ class EmbedTransformer(NodeTransformer):
                     # (A12-F005 — see _unseat_directive_minted).
                     transformer._directive_minted_functors.add(functor)
                     statements.append(
-                        _make_functor_class_ast(functor, field_names, expr_stmt))
+                        _make_predicate_decl_ast(functor, field_names, expr_stmt))
             predspec = transformer._handle_predspec_directive(
                 "mark_dynamic", args, expr_stmt)
             if isinstance(predspec, list):
@@ -8435,7 +8367,7 @@ class EmbedTransformer(NodeTransformer):
                 functor, field_names, entry_node, source_label)
             transformer._directive_minted_functors.add(functor)
             statements.append(
-                _make_functor_class_ast(functor, field_names, expr_stmt)
+                _make_predicate_decl_ast(functor, field_names, expr_stmt)
             )
         transformer._module_items.append(
             DirectiveItem(name="predicate_export", specs=[(functor, arity)])
@@ -8445,7 +8377,7 @@ class EmbedTransformer(NodeTransformer):
         """Process ``-module(Name, [export1(A,B), export2(X,Y)])`` directive.
 
         Extracts predicate signatures from the export list and emits
-        ``_make_functor_class_ast`` definitions for each, pre-registering
+        ``_make_predicate_decl_ast`` declarations for each, pre-registering
         them in ``_seen_functors`` so that subsequent clauses use the
         declared field names rather than inferring them from the first clause.
         Bare (zero-arity) entries are ATOMS — global by spelling (§1b/R2) —
@@ -8495,7 +8427,7 @@ class EmbedTransformer(NodeTransformer):
                 if isinstance(export, Name):
                     # Bare atom: global by spelling (§1b/R2) — no class is
                     # minted any more (no ``_register_functor``/
-                    # ``_make_functor_class_ast`` statement).  Record the
+                    # ``_make_predicate_decl_ast`` statement).  Record the
                     # name for ``visit_Name``'s strictness check
                     # (``transformer.atoms``) and for the ModuleAST info
                     # ``compiler_v2._process_declarations`` reads (rebinds
@@ -8555,7 +8487,7 @@ class EmbedTransformer(NodeTransformer):
                             functor_name, field_names, export,
                             "-module export list")
                         statements.append(
-                            _make_functor_class_ast(
+                            _make_predicate_decl_ast(
                                 functor_name, field_names, expr_stmt
                             )
                         )
@@ -8635,7 +8567,7 @@ class EmbedTransformer(NodeTransformer):
                         functor_name, field_names, item,
                         "-private declaration")
                     statements.append(
-                        _make_functor_class_ast(
+                        _make_predicate_decl_ast(
                             functor_name, field_names, expr_stmt
                         )
                     )
@@ -9875,7 +9807,7 @@ class EmbedTransformer(NodeTransformer):
         if pred_name not in transformer._seen_functors:
             transformer._register_functor(
                 pred_name, field_names, expr_stmt, "-edcg_pred directive")
-            return _make_functor_class_ast(pred_name, field_names, expr_stmt)
+            return _make_predicate_decl_ast(pred_name, field_names, expr_stmt)
         return replace(Pass(), expr_stmt)
 
     # ── Translations directive ───────────────────────────────────────────────
@@ -10191,7 +10123,7 @@ class EmbedTransformer(NodeTransformer):
             transformer._register_functor(
                 functor_name, all_field_names, expr_stmt, "first clause")
             statements.append(
-                _make_functor_class_ast(
+                _make_predicate_decl_ast(
                     functor_name, all_field_names, expr_stmt
                 )
             )

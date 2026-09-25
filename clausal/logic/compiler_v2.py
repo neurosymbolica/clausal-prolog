@@ -44,7 +44,8 @@ from clausal.logic.predicate import (
     predicate_arities_for, predicate_binding_name, predicate_owner_module,
     resolve_predicate_row, _db_for_module_name,
     is_foreign_class_at_other_arity, module_source_path,
-    is_bound_predicate_at,
+    is_bound_predicate_at, declared_head, is_local_predicate_binding,
+    end_loading_declarations,
 )
 from clausal.pythonic_ast.nodes import (
     AtomAppliedAsFunctor as AtomAppliedAsFunctorItem,
@@ -298,6 +299,11 @@ def compile_module(
         # is a snapshot and the write is what the row's contract names as the
         # deliberate clause-list minting site.
         pred_cls = module_dict.get(functor)
+        # This module's own predicate HANDLE (``$declare_head``, W4b-3 slice
+        # 5) stands where the rewriter's class stood for the gate's
+        # ``through=``: the write goes through the LOCAL binding, never
+        # falls back to an ``-import_from`` of the same spelling.
+        local = pred_cls if declared_head(module_dict, pred_cls) else None
         # P1 2026-09-17: this guard is NOT redundant and stays.  Measured over
         # the whole suite (14,615 arrivals here), 34 of them find something
         # other than a predicate class under a functor that HAS clause nodes —
@@ -317,7 +323,9 @@ def compile_module(
             # lookup applies the same test).
             pred_cls = None
         with _load_gate(db, functor, arity, author, WRITE_LOAD_CLAUSES,
-                        _load_through(pred_cls, origins, functor, db, arity),
+                        _load_through(pred_cls if pred_cls is not None
+                                      else local, origins, functor, db,
+                                      arity),
                         origins, module_name, module_dict):
             logic_module.define_predicate(pred_node)
             if pred_cls is not None:
@@ -338,6 +346,14 @@ def compile_module(
                 # to land in the Database, not in an unminted per-row list.
                 pred_cls._ensure_clauses()[:] = db_clauses
                 pending[key] = pred_cls
+            elif local is not None:
+                # This module's own predicate HANDLE (``$declare_head``,
+                # W4b-3 slice 5): the key the rewriter's class was bound to
+                # here and handed to step 5.  The handle goes in its place,
+                # so the compile writes its index plans onto this row
+                # (``_plan_row_for``) and installs through it, as it did
+                # through the class.
+                pending[key] = local
             else:
                 pending[key] = None
             # Whatever the name is bound to -- a class today, a mangled atom
@@ -349,6 +365,15 @@ def compile_module(
             # just wrote, never what it imported.
             clause_row = db.row(functor, arity, create=True)
             record_clause_source(clause_row, module_name, module_dict)
+            # THE DECLARATION SITE (W4b-3 slice 5): the rewriter's class
+            # carried it (``_registered_at``) onto the row when step 4 bound
+            # it (``_bind_row``, first bind wins); the module body's
+            # ``$declare_head`` record carries it now.  Same population: a
+            # name this module declared and still binds to its own handle.
+            if clause_row.declared_at is None:
+                declared = declared_head(module_dict, module_dict.get(functor))
+                if declared is not None and isinstance(declared[2], tuple):
+                    clause_row.declared_at = declared[2]
             # THE SIGNATURE comes from the rewriter's head field names, on
             # the same row and under the same "whatever the name is bound
             # to" rule (operator ruling 2026-09-24): it describes the row's
@@ -508,6 +533,11 @@ def compile_module(
     #    to the compiler) and ``origins``; nothing reads them off the dict
     #    again.  See ``_flip_bindings``.
     _flip_bindings(module_dict, db)
+    # The module body's ``$declare_head`` record retires here too (W4b-3
+    # slice 5): it answered for the handles this load declared exactly as
+    # long as the rewriter's classes did, and from here on the Database is
+    # the sole authority for them.
+    end_loading_declarations(module_dict)
 
     # ── Step 4b: validate directive targets (A12-F003) ───────────────────
     _validate_directive_targets(module_items, db, module_dict)
@@ -561,10 +591,12 @@ def compile_module(
             with db.mutate(functor, arity, author=author,
                            kind=WRITE_LOAD_DISPATCH, detail="table-wrap",
                            through=pred_cls):
-                if pred_cls is not None:
+                if isinstance(pred_cls, PredicateMeta):
                     # ``_row``, not a facade: every class in ``pending`` was
                     # bound to THIS db's row at step 4/4a, so this is the
                     # same store ``set_dispatch`` writes on the next line.
+                    # (A local HANDLE in ``pending`` has no class-side row:
+                    # ``set_dispatch`` is the whole write.)
                     pred_cls._row.dispatch_fn = wrapped
                 db.set_dispatch(functor, arity, wrapped)
 
@@ -1244,9 +1276,7 @@ def _refuse_foreign_writes(db, predicate_nodes: list, module_dict: dict,
         if (functor, arity) in checked:
             continue
         checked.add((functor, arity))
-        pred_cls = module_dict.get(functor)
-        if not isinstance(pred_cls, PredicateMeta):
-            pred_cls = None
+        pred_cls = _local_binding(module_dict, functor)
         pred_cls = _load_through(pred_cls, origins, functor, db, arity)
         exc = db.refusal_for(
             functor, arity, author=author, kind=WRITE_LOAD_CLAUSES,
@@ -1426,6 +1456,20 @@ _LOAD_SITES = {
     WRITE_LOAD_CLAUSES: "compile_module step 4",
     WRITE_LOAD_DISPATCH: "compile_module step 5",
 }
+
+
+def _local_binding(module_dict: dict, functor: str):
+    """The binding a load write of *functor* goes THROUGH when this module
+    itself declared the name: a ``PredicateMeta`` class (the Python-API arm,
+    until slice 6) or the module's own predicate HANDLE (``$declare_head``,
+    W4b-3 slice 5 -- where the rewriter's class used to be); else ``None``,
+    and ``_load_through`` falls back to an ``-import_from`` of the name."""
+    binding = module_dict.get(functor)
+    if isinstance(binding, PredicateMeta):
+        return binding
+    if declared_head(module_dict, binding) is not None:
+        return binding
+    return None
 
 
 def _load_through(pred_cls, origins: dict, functor: str, db, arity: int):
@@ -2373,11 +2417,12 @@ def _process_bare_atom_refs(
     untouched) when any higher-precedence resolution rule already supplies
     it:
 
-    * a genuine ``PredicateMeta`` class already sits in ``module_dict`` —
-      an in-file ``_make_functor_class_ast`` exec-time block (a real
-      predicate class, whether declared with fields or clause-head-only)
-      never leaks cross-module the way a plain atom str does (see below),
-      so trusting ``module_dict`` for this shape is safe;
+    * this module's own predicate HANDLE already sits in ``module_dict`` —
+      bound by an in-file ``$declare_head`` statement (W4b-3 slice 5; it
+      was a ``PredicateMeta`` class block), whether declared with fields or
+      clause-head-only; it never leaks cross-module the way a plain atom
+      str does (see below), so trusting ``module_dict`` for this shape is
+      safe;
     * an already-bound object that is NOT the process-pool's exact
       self-mapped atom str for this name AND NOT the exact
       ``runtime_builtins`` entry for this name (P3-2 Task 8) — a genuine
@@ -2713,11 +2758,11 @@ def _process_declarations(module_items: list, module_dict: dict,
       the module's ``__clausal_functor_signatures__`` registry describes —
       so a data functor needs no class to construct through, and the plain
       interned spelling is bound instead, exactly as a bare atom entry is.
-      The don't-clobber guard is what keeps PREDICATES as classes: a
-      predicate with in-file clauses already has a real ``PredicateMeta``
-      in ``module_dict`` (minted by ``_make_functor_class_ast``, which runs
-      during exec, before this pass), and a class that is there is never
-      overwritten.
+      The don't-clobber guard is what keeps PREDICATES as handles: a
+      predicate with in-file clauses already has its handle in
+      ``module_dict`` (bound by ``$declare_head``, which runs during exec,
+      before this pass; a ``PredicateMeta`` class until W4b-3 slice 5), and
+      a predicate binding that is there is never overwritten.
 
     P3-1 §1b/R2: atoms are global-by-spelling interned strs, so a local
     ``-module``/``-private`` atom declaration and an ``-import_from`` of the
@@ -2749,11 +2794,11 @@ def _process_declarations(module_items: list, module_dict: dict,
                     # Atom: bind ``mint(entry)`` -- UNLESS a
                     # same-named real predicate already exists in
                     # module_dict (Phenomenon A: an in-file 0-arity fact
-                    # statement or an N-arity clause re-minted a genuine
-                    # PredicateMeta class over this atom's own -module/
-                    # -private line, exec-time, via the guarded block in
-                    # ``_make_functor_class_ast``/``_build_zero_arity_fact_
-                    # statements``).  The predicate wins -- do not clobber
+                    # statement or an N-arity clause re-declared the name
+                    # over this atom's own -module/-private line, exec-time,
+                    # via ``$declare_head`` -- ``_make_predicate_decl_ast``/
+                    # ``_build_zero_arity_fact_statements``; a PredicateMeta
+                    # class block until W4b-3 slice 5).  The predicate wins -- do not clobber
                     # it back to a plain atom; see
                     # ``_make_atom_str_assign_ast``'s docstring for the
                     # matching guard on the OTHER direction (an atom must
@@ -2766,7 +2811,7 @@ def _process_declarations(module_items: list, module_dict: dict,
                     # DECLARED atom compiles to its cell literal at every
                     # reference site and never reads this binding.
                     # ``pi`` is the atom, ``++pi`` is the value.
-                    if (not isinstance(module_dict.get(entry), PredicateMeta)
+                    if (not is_local_predicate_binding(module_dict, entry)
                             and entry not in _module_constants(module_dict)):
                         module_dict[entry] = predicate_builtins.setdefault(
                             entry, _mint_atom(entry)
@@ -2787,10 +2832,10 @@ def _process_declarations(module_items: list, module_dict: dict,
                 #
                 # The guard is the whole predicate/data split at this site.
                 # It cannot be "is there a class?": the ``-module``/
-                # ``-private`` REWRITE emits a ``_make_functor_class_ast``
-                # block for every field-carrying export, so by the time this
-                # runs EVERY declared functor has one, predicate and data
-                # alike.  *predicate_functors* is the real question --
+                # ``-private`` REWRITE emits a ``$declare_head`` statement
+                # (``_make_predicate_decl_ast``) for every field-carrying
+                # export, so by the time this runs EVERY declared functor is
+                # bound to a handle, predicate and data alike.  *predicate_functors* is the real question --
                 # will this name have clauses? -- answered from the clause
                 # nodes and the predicate-shaped directives (see
                 # ``_predicate_functor_names``).  A predicate keeps its

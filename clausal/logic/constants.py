@@ -252,9 +252,22 @@ def constant_functor_term(name: str, args, kwargs, namespace):
     raises for the same mistakes in a clause body -- the same mistake should
     not be a clean error in one position and a mangled term in the other.
     """
-    from clausal.logic.predicate import is_declared_predicate_name, namespace_db
+    from clausal.logic.predicate import (
+        build_term_cell, declared_head, is_declared_predicate_name,
+        namespace_db,
+    )
 
     binding = namespace.get(name)
+    declared = declared_head(namespace, binding)
+    if declared is not None:
+        # A predicate this module body declared (``$declare_head``, W4b-3
+        # slice 5): CONSTRUCTED against its recorded field names, exactly as
+        # the rewriter's class was called here while a predicate was one.
+        functor, fields, site = declared
+        if not fields and not args and not kwargs:
+            return functor
+        return build_term_cell(functor, fields, args, dict(kwargs or {}),
+                               site=site)
     if is_declared_predicate_name(
             binding, db=namespace_db(namespace)):
         return binding(*args, **kwargs)
