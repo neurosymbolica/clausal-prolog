@@ -35,7 +35,8 @@ from clausal import Var
 from clausal.import_hook import _load_module, predicate_builtins
 from clausal.logic.solve import solve   # P2: a cell goal is driven, never iterated
 from clausal.logic.predicate import (
-    PredicateMeta, is_zero_field_class, is_atom_value, make_predicate,
+    PredicateMeta, is_declared_predicate, is_zero_field_class, is_atom_value,
+    make_predicate, resolve_predicate_row,
 )
 from clausal.logic.variables import Trail, deref, unify
 from clausal.logic.solve import call
@@ -48,6 +49,23 @@ def _fixture_path(filename: str) -> str:
 
 def _load_fixture(filename: str, mod_name: str) -> object:
     return _load_module(mod_name, _fixture_path(filename))
+
+
+def _db_of(mod):
+    return mod.__dict__["$module"].db
+
+
+def _is_compiled_predicate(mod, name, arity):
+    """*name* is bound in *mod* to a declared predicate at *arity* with a
+    live row holding clauses.  After the W4b-2d flip the binding is a
+    mangled HANDLE (a str), so this is asked of the module's Database, not
+    answered by ``isinstance(..., PredicateMeta)``."""
+    db = _db_of(mod)
+    binding = getattr(mod, name)
+    if not is_declared_predicate(binding, arity=arity, db=db):
+        return False
+    row = resolve_predicate_row(binding, arity=arity, db=db)
+    return row is not None and not row.detached and bool(row.clauses)
 
 
 # ── Case 1: two modules, both reference bare atom undeclared ────────────────
@@ -288,8 +306,8 @@ def test_strict_atoms_global_atom_builtin_compiles():
         "strict_atoms_global_atom.clausal",
         "tests.fixtures.strict_atoms_global_atom",
     )
-    # Predicate compiled; LookupStrictGlobal must be a PredicateMeta.
-    assert isinstance(mod.lookup_strict_global, PredicateMeta)
+    # Predicate compiled: lookup_strict_global/1 is a predicate with clauses.
+    assert _is_compiled_predicate(mod, "lookup_strict_global", 1)
 
 
 def test_strict_atoms_empty_file_compiles():
@@ -300,7 +318,7 @@ def test_strict_atoms_empty_file_compiles():
         "strict_atoms_empty.clausal",
         "tests.fixtures.strict_atoms_empty",
     )
-    assert isinstance(mod.ok, PredicateMeta)
+    assert _is_compiled_predicate(mod, "ok", 1)
 
 
 def test_strict_atoms_multiple_undeclared_reported_together():
@@ -371,10 +389,15 @@ def test_private_names_are_importable_and_share_identity():
     assert owner.privimp_tag == predicate_builtins.get("privimp_tag")
 
     # The private *predicate* crossed the boundary too.
-    assert consumer.priv_imp_helper is owner.priv_imp_helper
+    assert consumer.priv_imp_helper == owner.priv_imp_helper
+    owner_row = resolve_predicate_row(owner.priv_imp_helper, arity=1,
+                                      db=_db_of(owner))
+    assert owner_row is not None
+    assert resolve_predicate_row(consumer.priv_imp_helper, arity=1,
+                                 db=_db_of(consumer)) is owner_row
 
     # Shared identity is the point: the query actually solves.
-    assert list(solve(consumer.priv_imp_use(Var()), consumer)) != []
+    assert list(solve(("priv_imp_use", Var()), consumer)) != []
 
     # No warning: importing a private name is a supported pattern, not a
     # smell.  A `ClausalPrivateAtomImportWarning`-style diagnostic would
