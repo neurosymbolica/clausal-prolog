@@ -758,6 +758,30 @@ def _make_listing__1(db):
         if is_var(val):
             return                      # Scryer: nonvar(PI), else fail
 
+        # A predicate HANDLE passed DIRECTLY -- the Python API,
+        # ``listing(mod.fib)`` once the binding is a handle -- lists its
+        # predicate, as the class arm below lists a class (operator ruling
+        # 2026-09-25).  A class names one arity; a handle names none, so a
+        # name that is a predicate at several arities lists each, in arity
+        # order: Scryer refuses a bare name only because it is ambiguous, and
+        # listing them all is the Python API's answer.  SOURCE ``listing(fib)``
+        # never gets here -- ruling S lowers the bare name to its plain atom,
+        # which ``_pi_parts`` does not take, so it stays Scryer's
+        # ``type_error(predicate_indicator, fib)``.  A ``-hide`` DATA atom is
+        # mangled in the same shape but is no predicate, so it keeps that
+        # refusal with its own spelling.
+        bare = _bare_handle_listing(val, db)
+        if bare is not None:
+            for _name, _arity, _clauses in bare:
+                if not _clauses:
+                    print(f"% {_name}/{_arity} — no clauses")
+                else:
+                    print(f"% {_name}/{_arity} — {len(_clauses)} clause(s)")
+                    for clause in _clauses:
+                        print(_format_clause(clause))
+            yield None
+            return
+
         parts = _pi_parts(val)
         if parts is not None:
             name, arity, binding = _checked_indicator(parts, db)
@@ -796,6 +820,29 @@ def _make_listing__1(db):
                 print(_format_clause(clause))
         yield None
     return _listing__1
+
+
+def _bare_handle_listing(val, db):
+    """``[(name, arity, clauses), ...]`` for a declared predicate HANDLE
+    passed directly, one entry per arity its owner DEFINES
+    (``predicate_arities_for``) in arity order, each read from the row the
+    indicator form ``listing(name/N)`` reads (``_indicator_row``) so the two
+    cannot disagree -- else ``None`` (not a handle, a ``-hide`` data atom, or
+    a handle naming nothing defined)."""
+    if type(val) is not str or not is_mangled(val):
+        return None
+    if not is_declared_predicate_name(val, db=db):
+        return None
+    from clausal.logic.predicate import predicate_arities_for  # noqa: PLC0415
+    arities = sorted(predicate_arities_for(val, db=db))
+    if not arities:
+        return None
+    name = demangle(val)[1]
+    out = []
+    for arity in arities:
+        row = _indicator_row(db, name, arity, val)
+        out.append((name, arity, row.clauses if row is not None else []))
+    return out
 
 
 # ``_db_optional`` is LOAD-BEARING, not a consistency nicety (P3-3 Task 8

@@ -56,7 +56,7 @@ def seam_term(node: Any, module_globals: dict, loose: bool = False) -> Any:
         cell_signature_for_name,
         lowering_scope,
     )
-    from clausal.logic.predicate import is_declared_predicate_name
+    from clausal.logic.predicate import is_declared_predicate_name, namespace_db
 
     def dotted(attr: LoadAttr) -> str:
         parts = []
@@ -111,6 +111,9 @@ def seam_term(node: Any, module_globals: dict, loose: bool = False) -> Any:
             kwargs = [(kw.name, build(kw.value)) for kw in (term.kwargs or [])]
             with lowering_scope(module_globals):
                 # The WRITTEN arity: a predicate class cannot narrow it.
+                # A name bound to a predicate HANDLE builds the PLAIN cell,
+                # the one rule the compiler uses (``handle_cell_functor``,
+                # operator ruling 2026-09-25 option (a)).
                 sig = cell_signature_for_name(
                     fname, arity=len(args) + len(kwargs))
                 owa = loose or _implicit_functors_active(module_globals)
@@ -141,14 +144,26 @@ def seam_term(node: Any, module_globals: dict, loose: bool = False) -> Any:
                 if is_atom(binding) and is_mangled(binding):
                     # W4 (ruled 2026-09-22): a name bound to a MODULE-QUALIFIED
                     # atom is a predicate HANDLE -- after the class goes,
-                    # ``h = m.pred`` binds one -- and the cell's functor is
-                    # that spelling, so the module travels in it.  A name
+                    # ``h = m.pred`` binds one.  Its cell is PLAIN (operator
+                    # ruling 2026-09-25 option (a), superseding W4's
+                    # qualified functor): ISO functors are never qualified;
+                    # to run it in its module, call it as ``m:G``.  A name
                     # bound to a PLAIN string is not a handle and keeps the
                     # declared-functor rule a strict module relies on.
                     if kwargs:
                         raise SyntaxError(
                             f"--: {fname!r} is bound to a predicate handle; a "
                             f"goal cell takes positional arguments only")
+                    # Only a declared PREDICATE's handle: a ``-hide`` data
+                    # atom is mangled in the same shape, and its owner binds
+                    # the plain name to it; it keeps its mangled spelling.
+                    # ``db=``: the ruling-Q0 hint, as ``cell_signature_for_name``
+                    # passes it -- a LOCAL handle resolves in this module's own
+                    # db even after the module is popped from sys.modules.
+                    if is_declared_predicate_name(
+                            binding, db=namespace_db(module_globals)):
+                        from clausal.logic.compiler.terms_to_ast import handle_cell_functor  # noqa: PLC0415
+                        binding = handle_cell_functor(binding)
                     return (sys.intern(binding), *args)
                 if is_declared_predicate_name(binding):
                     if kwargs:

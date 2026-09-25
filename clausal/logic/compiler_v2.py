@@ -28,6 +28,7 @@ from clausal.logic.database import (
 from clausal.logic.cells import DECLARED_ATOMS_KEY
 from clausal.logic.atoms import (
     is_atom as _term_is_atom,
+    is_mangled,
     mint as _mint_atom,
     spelling as _atom_spelling,
 )
@@ -277,6 +278,7 @@ def compile_module(
     #    transaction), so asking twice is free and asking early is honest.
     _refuse_foreign_writes(db, predicate_nodes, module_dict, origins, author,
                            module_name)
+    _refuse_unrefused_deferred_heads(predicate_nodes, module_dict, module_name)
 
     # ── Step 4: assertz all clauses ───────────────────────────────────────
     pending: dict[tuple[str, int], PredicateMeta | None] = {}
@@ -440,6 +442,33 @@ def compile_module(
                 # database, so that test is VACUOUSLY TRUE here (measured
                 # 2026-09-17), and ``-dynamic(d/2)`` beside ``d/1`` clauses
                 # would then bind d/1's class onto d/2's row.
+                #
+                # A predicate HANDLE (a mangled atom -- the binding after the
+                # flip) has no ``_row``, so the class test below would send an
+                # IMPORTED ``-dynamic`` to ``pending[key] = None``: step 5 then
+                # compiled this module's own empty dispatch and the mutation
+                # gate refused it as a redefinition (flip dry run R5).  Ask the
+                # era-agnostic foreignness test for a handle first; it reads
+                # the owner's row at THIS arity, so a local ``-dynamic(p/2)``
+                # beside an imported ``p/1`` stays local (name+arity ruling).
+                if type(pred_cls) is str and is_mangled(pred_cls):
+                    if _belongs_elsewhere(pred_cls, db, arity):
+                        continue
+                    # A LOCAL handle.  There is no class to bind: the row is
+                    # this Database's own (``resolve_predicate_row``, the
+                    # owner's row for a handle), so step 5 compiles it with
+                    # no class -- ``pending[key] = None``, the entry a
+                    # clause-less ``-dynamic`` class also gets (option D: it
+                    # has no ``_row`` yet).  Said here explicitly rather than
+                    # reached by ``getattr(<str>, "_row")`` answering None.
+                    _lrow = resolve_predicate_row(pred_cls, arity=arity, db=db)
+                    if _lrow is not None and _lrow.db is not db:
+                        raise RuntimeError(
+                            f"-dynamic({functor}/{arity}): a handle "
+                            f"_belongs_elsewhere called local reads another "
+                            f"Database's row")
+                    pending[key] = None
+                    continue
                 cls_row = getattr(pred_cls, "_row", None)
                 if cls_row is not None and cls_row.key[1] == arity:
                     if _belongs_elsewhere(pred_cls, db, arity):
@@ -956,6 +985,35 @@ def _import_from_origins(module_items: list, module_dict: dict,
             if own_name is not None and own_name != local:
                 origins.setdefault(own_name, (item.module, bound))
     return origins
+
+
+def _refuse_unrefused_deferred_heads(predicate_nodes, module_dict,
+                                     module_name) -> None:
+    """The invariant behind ``predicate._handle_head_cell``'s deferral: a head
+    built for ANOTHER module's predicate, positionally and ignoring its field
+    names, because the load gate refuses it, never reaches a row.  Reached
+    only when step 3d permitted this load; a deferred key among its writes
+    means the gate did NOT refuse such a head, and the positional cell would
+    be stored.  Raise instead of storing a head built on that assumption.
+
+    Reachable from source: a head written through a Python-held handle
+    (``h = mangle(m, 'p')`` then ``h(COLOUR) <- ...``) is not an
+    ``-import_from``, so step 3d does not refuse it.  Before the deferral
+    that head raised ClausalTermConstructionError (field names); now it is
+    this refusal."""
+    deferred = module_dict.pop("$deferred_heads", None)
+    if not deferred:
+        return
+    written = {head_key(p.head) for p in predicate_nodes}
+    stray = sorted(deferred & written)
+    if stray:
+        names = ", ".join(f"{f}/{a}" for f, a in stray)
+        raise SyntaxError(
+            f"{module_name}: the clause head(s) {names} are written through a "
+            f"handle to ANOTHER module's predicate, with field names that "
+            f"predicate does not have, and this module does not -import_from "
+            f"it -- a module may define clauses only for its own predicates; "
+            f"write them in the owning module")
 
 
 def _belongs_elsewhere(binding, db, arity: int) -> bool:

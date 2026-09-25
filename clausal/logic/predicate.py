@@ -405,7 +405,8 @@ def construction_arity_fault(fields: tuple[str, ...], n_positional: int,
 
 
 def build_term_cell(functor: str, fields: tuple[str, ...], args: tuple,
-                    kwargs: dict, *, origin: Any = None) -> tuple:
+                    kwargs: dict, *, origin: Any = None,
+                    site: Any = None) -> tuple:
     """THE one home of term construction against a registered signature:
     place *args* and *kwargs* into *fields* and build the cell
     ``(functor, slot, ...)``, with the head/term ARITY check.
@@ -425,7 +426,8 @@ def build_term_cell(functor: str, fields: tuple[str, ...], args: tuple,
 
     *origin* is the class being called, if any: its ``_registered_at``
     (the declaration site) is read only when an error is raised, keeping it
-    off the construction hot path.  A HANDLE has no origin, and no site.
+    off the construction hot path.  A HANDLE has no origin; its caller passes
+    the owner row's ``declared_at`` as *site* instead.
 
     *kwargs* is consumed (positional fills are written into it, which is
     what the construction error reports as the supplied fields).  The
@@ -441,14 +443,14 @@ def build_term_cell(functor: str, fields: tuple[str, ...], args: tuple,
         # :func:`construction_arity_fault`, shared with the compiler.
         if construction_arity_fault(fields, len(args), kwargs):
             raise term_arity_error_for(
-                functor, fields, getattr(origin, "_registered_at", None),
+                functor, fields, getattr(origin, "_registered_at", site),
                 len(args), kwargs, _source_site(2))
         for i, val in enumerate(args):
             kwargs[fields[i]] = val
     unknown = [k for k in kwargs if k not in fields]
     if unknown:
         raise term_construction_error_for(
-            functor, tuple(fields), getattr(origin, "_registered_at", None),
+            functor, tuple(fields), getattr(origin, "_registered_at", site),
             kwargs, _source_site(2))
     from clausal.logic.variables import Var  # noqa: PLC0415
     return (functor, *(kwargs[f] if f in kwargs else Var() for f in fields))
@@ -2836,16 +2838,91 @@ def head_cell(binding, /, *args: Any, **kwargs: Any) -> Any:
       class's ``_fields`` while no clause exists), through
       :func:`build_term_cell`, the helper the class uses -- so the arity
       check answers the same in both eras.
+
+    A HANDLE naming ANOTHER module's predicate (an importer writing a clause
+    for an imported name) DEFERS to the load gate (operator ruling
+    2026-09-25): see :func:`_handle_head_cell`.  The executing module is
+    read from the CALLER'S FRAME: ``$head`` is bound straight to this
+    function in ``INJECTED_RUNTIME_BUILTINS`` and is called only by a module
+    body's generated code, so frame 1's globals ARE that module's namespace.
+    A caller that is not that code -- a wrapper, a ``functools.partial``, an
+    eval with its own globals -- finds no ``$module`` there (or its own), so
+    the head keeps its construction error: the failure mode is the error the
+    head raised before deferral existed, never a silent accept.  Passing the
+    namespace explicitly would change the ``$head(<binding>, ...)`` emission,
+    which the reifier and the rewriter-output pins read.
     """
     if type(binding) is str:
         from clausal.logic.atoms import is_mangled  # noqa: PLC0415
         if is_mangled(binding):
-            return _handle_head_cell(binding, args, kwargs)
+            return _handle_head_cell(binding, args, kwargs,
+                                     home=sys._getframe(1).f_globals)
     return binding(*args, **kwargs)
 
 
-def _handle_head_cell(handle: str, args: tuple, kwargs: dict) -> Any:
-    """The HANDLE arm of :func:`head_cell`."""
+def _handle_head_cell(handle: str, args: tuple, kwargs: dict,
+                      home: "dict | None" = None) -> Any:
+    """The HANDLE arm of :func:`head_cell`.
+
+    *home* is the namespace of the module whose body builds the head.  When
+    it is not the handle's owner, the head is an importer's clause for an
+    imported predicate, which the load gate refuses ("defines a clause for
+    gv_owned/1, which it -import_from's ...").  The rewriter
+    spells such a head with field names derived from the IMPORTER's head
+    (``gv_owned(teal)`` -> ``arg_0=teal``, ``gv_owned(COLOUR)`` ->
+    ``colour=COLOUR``), in head order.  The class era built it against a
+    local class re-minted with those names.  So a construction error against
+    the OWNER's names does not speak for such a head: it is built at its
+    written arity, in written order, and the gate gives the verdict.
+
+    Only at an arity the OWNER knows: that is a clause for the imported
+    predicate, which the gate refuses.  A head at another arity keeps the
+    arity error both eras raise today
+    (``test_an_imported_head_at_the_wrong_arity_raises_the_arity_error``).
+    A head in the owner's own module, or with no module to tell (*home*
+    carries no ``$module``), keeps every construction error.
+
+    INVARIANT: a deferred head never reaches a row.  Its positional build
+    ignores the field names, which is right only because the gate refuses
+    it.  So the key is recorded in *home*'s ``$deferred_heads``, and
+    ``compiler_v2.compile_module`` raises if its step 3d permitted a load
+    that would write one (``_refuse_unrefused_deferred_heads``).
+    """
+    from clausal.logic.atoms import demangle  # noqa: PLC0415
+    try:
+        return _owner_head_cell(handle, args, dict(kwargs))
+    except ClausalTermConstructionError:
+        if not _defers_to_the_gate(handle, home, len(args) + len(kwargs)):
+            raise
+    functor = demangle(handle)[1]
+    written = (*args, *kwargs.values())
+    home.setdefault("$deferred_heads", set()).add((functor, len(written)))
+    return (functor, *written) if written else functor
+
+
+def _defers_to_the_gate(handle: str, home: "dict | None", written: int) -> bool:
+    """True when the module *home* (a namespace) is not *handle*'s owner and
+    the head is written at an arity the owner knows.
+
+    The owner is compared by DATABASE IDENTITY, with *home*'s db as the
+    ruling-Q0 hint: ``_resolve_mangled_owner(handle, db=home_db)`` answers
+    *home_db* itself for a handle naming *home*'s own module.  A handle names
+    a module, not a load, so a handle minted by an EARLIER load under the same
+    module name (the twin-reload case) is, by ruling Q0, this module's own:
+    it keeps its construction error, exactly as a local handle does."""
+    if home is None:
+        return False
+    home_db = namespace_db(home)
+    if home_db is None:
+        return False
+    resolved = _resolve_mangled_owner(handle, db=home_db)
+    if resolved is None or resolved[0] is home_db:
+        return False
+    return written in resolved[0].head_signatures(resolved[1])
+
+
+def _owner_head_cell(handle: str, args: tuple, kwargs: dict) -> Any:
+    """A handle's head built against the OWNER's registered field names."""
     from clausal.logic.atoms import demangle  # noqa: PLC0415
     functor = demangle(handle)[1]
     resolved = _resolve_mangled_owner(handle)
@@ -2861,11 +2938,11 @@ def _handle_head_cell(handle: str, args: tuple, kwargs: dict) -> Any:
         # A 0-arity head is the ATOM of its name -- the class returned
         # ITSELF here (``red() is red``); post-flip the atom IS the str.
         return functor
-    # ``registered_at`` (the declaration SITE) is a class attribute with no
-    # Database home yet -- see todo/...declaration-site-lives-only-on-the-
-    # class-2026-09-24.md; the diagnostic's "registered by" line reads
-    # ``<unknown>`` for a handle until that is ruled.
-    return build_term_cell(functor, fields, args, kwargs)
+    # The declaration SITE lives on the owner's row (``PredRow.declared_at``,
+    # W4b-2d R6), so a handle's construction error names it the way the
+    # class's ``_registered_at`` does.
+    site = _row_declared_at(resolved[0], resolved[1], len(fields))
+    return build_term_cell(functor, fields, args, kwargs, site=site)
 
 
 def _head_signature_for(functor: str, signatures: dict, args: tuple,

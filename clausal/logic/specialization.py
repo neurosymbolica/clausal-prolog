@@ -85,24 +85,56 @@ class MIPattern:
     program_var: Any = None         # PROGRAM variable in recursive clause head
 
 
-def analyze_mi(pred_cls: "PredRow | PredicateMeta",
-               program_arg: int | None = None) -> MIPattern:
+def _row_for_handle(handle: str, db=None) -> "PredRow":
+    """The row a predicate HANDLE names for ``analyze_mi``, or
+    ``CannotSpecialize``.
+
+    Only a declared predicate's handle resolves (``predicate_arities_for`` is
+    empty for a plain string, a ``-hide`` data atom, or an unloaded owner),
+    and only at exactly one defined arity.  *db* is the caller's database,
+    the ruling-Q0 hint: a LOCAL handle resolves through it even after its
+    module was popped from ``sys.modules``.
+    """
+    from clausal.logic.predicate import (  # noqa: PLC0415
+        predicate_arities_for, resolve_predicate_row)
+    arities = predicate_arities_for(handle, db=db)
+    if not arities:
+        raise CannotSpecialize(
+            f"{handle!r} is not a predicate handle: it names no defined "
+            f"predicate")
+    if len(arities) != 1:
+        raise CannotSpecialize(
+            f"the predicate handle {handle!r} is defined at several arities "
+            f"{sorted(arities)}; pass the row for the one to specialize")
+    row = resolve_predicate_row(handle, arity=next(iter(arities)), db=db)
+    if row is None:
+        raise CannotSpecialize(f"the predicate handle {handle!r} has no row")
+    return row
+
+
+def analyze_mi(pred_cls: "PredRow | PredicateMeta | str",
+               program_arg: int | None = None, *, db=None) -> MIPattern:
     """Analyze a meta-interpreter's clauses and return a structured pattern.
 
     Parameters
     ----------
-    pred_cls : PredRow or PredicateMeta
+    pred_cls : PredRow, PredicateMeta or a predicate handle (str)
         The MI predicate: its ROW (what the compiler passes, F1 rows 32/33 --
         found in the importing module's own database, so it works whatever
         the module-dict binding looks like), or a ``PredicateMeta`` class
         (the direct Python API; a thin adapter until W4b-3 deletes classes
         -- TODO(W4b-3): drop the class arm with ``_meta_interpreter_row``'s).
+        A predicate HANDLE (the same module attribute once the binding flips)
+        resolves to its row at its one defined arity.
         From a row the name and arity are its key and the field names its
         registered signature -- measured 2026-09-24 over the house suite to
         equal the class's ``__name__``/``_fields`` in 219 of 219 calls.
     program_arg : int, optional
         Which field index carries the object program.  If None, auto-detected
         by looking for a field named ``PROGRAM`` or ``_PROGRAM``.
+    db : Database, optional
+        The caller's database (the ruling-Q0 hint) for resolving a predicate
+        HANDLE; consulted only for one.
 
     Returns
     -------
@@ -113,6 +145,14 @@ def analyze_mi(pred_cls: "PredRow | PredicateMeta",
     CannotSpecialize
         If the clauses don't match a recognized MI pattern.
     """
+    if type(pred_cls) is str:
+        # A predicate HANDLE -- the module attribute the direct Python API
+        # passes (``analyze_mi(mi_module.solve)``) once the binding flips
+        # (dry run R8: ``'str' object has no attribute 'key'``).  It names
+        # no arity, so resolve it to the row at its ONE defined arity.
+        # Several arities is ruling QA's open question: refuse, naming them,
+        # rather than guess.
+        pred_cls = _row_for_handle(pred_cls, db=db)
     if isinstance(pred_cls, PredicateMeta):
         # The ROW's clauses (W2); a class on no row has none, and this read
         # must not mint one.
