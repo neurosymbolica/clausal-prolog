@@ -71,13 +71,16 @@ def test_registered_fields_match_the_declared_arity(key):
 @pytest.mark.parametrize("key", ISO_KEYS, ids=[f"{n}/{a}" for n, a in ISO_KEYS])
 def test_the_builtin_class_has_the_declared_arity(key):
     name, arity = key
-    cls = _registry.get_builtin_class(name)
-    assert cls is not None, name
-    # `_arity`/`_fields` are what `PredicateMeta` reports and what its repr
-    # (`<Predicate =:=/4 ...>`) is built from — the arity every consumer of
-    # the term constructor sees.
-    assert cls._arity == arity, (name, repr(cls))
-    assert len(cls._fields) == arity, (name, cls._fields)
+    obj = _registry.get_builtin_class(name)
+    assert obj is not None, name
+    # The builtin's term constructor (a ``BuiltinTerm`` since W4b-3 slice 3,
+    # a ``PredicateMeta`` class before) is registered at exactly the
+    # declared arity, and a positional construction at it builds the cell
+    # of that arity -- what every consumer of the constructor sees.
+    assert obj.arities == (arity,), (name, repr(obj))
+    assert len(obj._fields_by_arity[arity]) == arity, (name, obj)
+    cell = obj(*range(arity))
+    assert cell == (name, *range(arity)), cell
 
 
 def test_the_arithmetic_comparison_term_has_arity_two_at_runtime(run_clausal):

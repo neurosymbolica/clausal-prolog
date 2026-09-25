@@ -1,7 +1,7 @@
 """Registry infrastructure for builtin predicates.
 
-Provides the decorator-based registration system, adapter classes
-(BuiltinPredicate, MultiArityBuiltin), and the public lookup API.
+Provides the decorator-based registration system, the adapters
+(BuiltinPredicate, BuiltinTerm), and the public lookup API.
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ from typing import Any, Callable
 
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
 from clausal.logic.predicate import (
-    PredicateMeta, is_term_instance, term_field_names, make_predicate,
+    is_term_instance, term_field_names,
     _dispatch_at, is_declared_predicate_name,
 )
 from clausal.logic.trampoline import DONE, StepGenerator
@@ -466,108 +466,125 @@ def get_builtin_dispatch(
     return None
 
 
-# ── MultiArityBuiltin + class builder ─────────────────────────────────────────
+# ── BuiltinTerm: a builtin's module-level object ──────────────────────────────
 
 
-class MultiArityBuiltin:
-    """Wrapper for builtins with multiple arities (e.g. maplist/2 and maplist/3).
+class BuiltinTerm:
+    """A builtin's module-level object (``clausal.between``,
+    ``_BUILTIN_CLASSES["between"]``): a TERM constructor and a goal object.
+    NOT a class (W4b-3 slice 3: the ``PredicateMeta`` builtin classes, and
+    the ``MultiArityBuiltin`` wrapper over them, are retired).
 
-    Routes term construction to the correct PredicateMeta class based on the
-    number of positional arguments, and provides arity-based dispatch.
+    * Called, it builds the CELL -- ``clausal.between(1, 3, X)`` is
+      ``("between", 1, 3, X)``, exactly what ``--between(1, 3, X)`` builds
+      in a ``.clausal`` module -- through :func:`build_term_cell`, the one
+      home of construction against a registered signature (keywords by
+      field name, a fresh ``Var`` for a slot neither fills, the arity
+      refusals).  The signature is picked by argument count, else the
+      widest arity's, as the class (single arity) and ``MultiArityBuiltin``
+      (several) both did.  With no arguments, a 0-arity builtin builds its
+      0-arity cell, the ATOM (``clausal.nl()`` is ``'nl'``); the class era
+      handed back the class itself, which is no term.
+    * As a goal it speaks the frozen duck-typed ``_get_dispatch()``
+      protocol, so ``_dispatch_at`` and ``_ensure_trampoline_dispatch``
+      answer it through their GENERIC arm: the one arity's dispatch
+      function, or -- for a name registered at several arities -- a
+      dispatcher keyed on the argument count at call time, which fails for
+      an unregistered count.  That is what the class answered (its
+      arity refusal never fired: a builtin class's private row holds no
+      clauses and no declaration) and what ``MultiArityBuiltin`` answered.
+      A builtin with no db-free dispatch (``_stateless_dispatch`` is
+      ``None``) raises the class's ``NotImplementedError``.
     """
-    __slots__ = ("_functor", "_arity_classes", "_arity_dispatch_fns")
+    __slots__ = ("_functor", "_fields_by_arity", "_dispatch_by_arity",
+                 "_multi_dispatch")
 
     def __init__(self, functor: str) -> None:
         self._functor = functor
-        self._arity_classes: dict[int, PredicateMeta] = {}
-        self._arity_dispatch_fns: dict[int, Callable] = {}
+        self._fields_by_arity: dict[int, tuple[str, ...]] = {}
+        self._dispatch_by_arity: dict[int, Callable] = {}
+        self._multi_dispatch = None
 
-    def _add(self, arity: int, cls: PredicateMeta, dispatch_fn: Callable | None) -> None:
-        self._arity_classes[arity] = cls
+    def _add(self, arity: int, fields: tuple[str, ...],
+             dispatch_fn: "Callable | None") -> None:
+        self._fields_by_arity[arity] = tuple(fields)
         if dispatch_fn is not None:
-            self._arity_dispatch_fns[arity] = dispatch_fn
+            self._dispatch_by_arity[arity] = dispatch_fn
+
+    @property
+    def arities(self) -> tuple[int, ...]:
+        return tuple(sorted(self._fields_by_arity))
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        """Construct a term, routing to the correct arity class by arg count."""
-        arity = len(args) + len(kwargs)
-        cls = self._arity_classes.get(arity)
-        if cls is None:
-            # Fall back to max arity class and let it fill missing fields
-            cls = self._arity_classes[max(self._arity_classes)]
-        return cls(*args, **kwargs)
+        fba = self._fields_by_arity
+        fields = fba.get(len(args) + len(kwargs))
+        if fields is None:
+            fields = fba[max(fba)]
+        if not fields and not args and not kwargs:
+            return self._functor
+        from clausal.logic.predicate import build_term_cell  # noqa: PLC0415
+        return build_term_cell(self._functor, fields, args, kwargs)
 
     def _get_dispatch(self) -> Callable:
-        """Return an arity-dispatching function for the trampoline.
-
-        The returned function keys on the real argument count at call time.
-        """
-        fns = self._arity_dispatch_fns
-
-        def _dispatch(this_generator, _proceed, _fail, _catcher, *args):
-            arity = len(args) - 1  # exclude trail
-            fn = fns.get(arity)
+        fba = self._fields_by_arity
+        if len(fba) == 1:
+            (arity,) = fba
+            fn = self._dispatch_by_arity.get(arity)
             if fn is None:
-                yield (_fail, DONE)
-                return
-            yield from fn(this_generator, _proceed, _fail, _catcher, *args)
+                raise NotImplementedError(
+                    f"Predicate {self._functor}/{arity} has no compiled "
+                    "dispatch function. The compiler must be run first.")
+            return fn
+        if self._multi_dispatch is None:
+            fns = self._dispatch_by_arity
 
-        return _dispatch
+            def _dispatch(this_generator, _proceed, _fail, _catcher, *args):
+                fn = fns.get(len(args) - 1)  # exclude trail
+                if fn is None:
+                    yield (_fail, DONE)
+                    return
+                yield from fn(this_generator, _proceed, _fail, _catcher,
+                              *args)
+
+            self._multi_dispatch = _dispatch
+        return self._multi_dispatch
 
     def __repr__(self) -> str:
-        arities = sorted(self._arity_classes)
-        return f"<BuiltinClass {self._functor}/{arities}>"
+        arities = self.arities
+        spelled = (str(arities[0]) if len(arities) == 1
+                   else str(list(arities)))
+        return f"<builtin {self._functor}/{spelled}>"
 
 
-# Populated by _build_all_builtin_classes() at module load time.
-# Maps functor name → PredicateMeta class (single-arity) or MultiArityBuiltin.
-_BUILTIN_CLASSES: dict[str, PredicateMeta | MultiArityBuiltin] = {}
+# The name ``MultiArityBuiltin`` stays importable: it is exported from
+# ``clausal.logic.builtins``.  Every builtin object is one ``BuiltinTerm``
+# now, whatever its arity count.
+MultiArityBuiltin = BuiltinTerm
+
+
+# Populated by _build_all_builtin_classes() at module load time.  The name is
+# historical (the values were PredicateMeta classes until W4b-3 slice 3).
+# Maps functor name -> its BuiltinTerm.
+_BUILTIN_CLASSES: dict[str, BuiltinTerm] = {}
 
 
 def _build_all_builtin_classes() -> None:
-    """Create PredicateMeta classes for all registered builtins.
-
-    Called once at module load.  Groups multi-arity builtins under one name.
-    """
-    # Collect all (functor, arity) → dispatch_fn pairs
+    """Build one :class:`BuiltinTerm` per registered builtin NAME, holding
+    each of its arities' field names and db-free dispatch.  Called once at
+    module load."""
     all_keys: dict[str, list[int]] = {}
     for functor, arity in list(_BUILTIN_FIELDS):
         all_keys.setdefault(functor, []).append(arity)
-
     for functor, arities in all_keys.items():
-        if len(arities) == 1:
-            arity = arities[0]
-            fields = _BUILTIN_FIELDS[(functor, arity)]
-            cls = make_predicate(functor, list(fields))
-            # The class's own private row -- these classes are minted
-            # DETACHED on purpose and never join a module Database (W2: the
-            # engine's one DELIBERATE minter of a detached row; goes with
-            # ``make_predicate`` at P4).
-            row = cls._state_row()
-            dispatch_fn = _stateless_dispatch(functor, arity)
-            if dispatch_fn is not None:
-                # Through the mutation gate (P3-3 Task 3): a dispatch install
-                # needs an open transaction, builtins included.  The row is
-                # private, so the write is unowned, permitted, and stamped to
-                # the registry.
-                with cls._mutate("builtin-registry", "recompile"):
-                    row.dispatch_fn = dispatch_fn
-            row.locked = True
-            _BUILTIN_CLASSES[functor] = cls
-        else:
-            wrapper = MultiArityBuiltin(functor)
-            for arity in sorted(arities):
-                fields = _BUILTIN_FIELDS[(functor, arity)]
-                cls = make_predicate(f"{functor}", list(fields))
-                row = cls._state_row()          # detached on purpose, as above
-                dispatch_fn = _stateless_dispatch(functor, arity)
-                if dispatch_fn is not None:
-                    with cls._mutate("builtin-registry", "recompile"):
-                        row.dispatch_fn = dispatch_fn
-                row.locked = True
-                wrapper._add(arity, cls, dispatch_fn)
-            _BUILTIN_CLASSES[functor] = wrapper
+        obj = BuiltinTerm(functor)
+        for arity in sorted(arities):
+            obj._add(arity, _BUILTIN_FIELDS[(functor, arity)],
+                     _stateless_dispatch(functor, arity))
+        _BUILTIN_CLASSES[functor] = obj
 
 
-def get_builtin_class(functor: str) -> PredicateMeta | MultiArityBuiltin | None:
-    """Return the constructable class/wrapper for a builtin, or None."""
+def get_builtin_class(functor: str) -> "BuiltinTerm | None":
+    """Return the builtin's :class:`BuiltinTerm` (its term constructor and
+    goal object), or None.  (Named for the class it returned until W4b-3
+    slice 3.)"""
     return _BUILTIN_CLASSES.get(functor)
