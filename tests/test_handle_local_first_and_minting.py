@@ -121,9 +121,14 @@ def test_the_class_arm_uses_the_hint_too(tmp_path):
     sys.modules.pop("q0_cls", None)
     _HANDLE_OWNERS.pop("q0_cls", None)      # isolate the hint (see above)
     db = module.__dict__["$module"].db
-    cls = module.__dict__["q0_two"]
-    assert cls.__module__ == "q0_cls"
     handle = mint_predicate_handle(db, "q0_two")
+    # After the W4b-2d flip the load binds the HANDLE; the class arm is still
+    # engine code, so its class -- one the popped module owns -- is built by
+    # hand, exactly the shape the load used to bind.
+    assert module.__dict__["q0_two"] == handle
+    cls = make_predicate("q0_two", ["x"])
+    cls.__module__ = "q0_cls"
+    assert cls.__module__ == "q0_cls"
     assert predicate_arities_for(handle, db=db) == {1, 2}
     assert predicate_arities_for(cls, db=db) == {1, 2}
     assert predicate_arities_for(cls) == {len(cls._fields)}   # popped, no hint
