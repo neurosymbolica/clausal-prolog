@@ -668,20 +668,30 @@ def _flip_bindings(module_dict: dict, db) -> None:
     ``SyntaxError`` naming the binding (W4b-3 slice 1, operator ruling
     2026-09-25; the message is ``import_diagnostics.
     describe_unowned_predicate_class``).  It used to stay bound as it was.
+    The refusal is decided by a SCAN before anything changes: no binding
+    flipped, *db* not registered as a handle owner, and every offending
+    binding named in one error (roborev, 2026-09-25).
     """
     from clausal.logic.predicate import (  # noqa: PLC0415
         mint_predicate_handle, register_handle_owner)
-    register_handle_owner(db)
+    plan = []
+    unowned = []
     for key, value in list(module_dict.items()):
         if not isinstance(value, PredicateMeta) or key.startswith("$"):
             continue
         found = _flip_owner(value, db, module_dict)
         if found is None:
-            from clausal import import_diagnostics as diag  # noqa: PLC0415
-            raise SyntaxError(diag.describe_unowned_predicate_class(
-                key, value,
-                module_dict.get("__name__") or db.module_name()))
-        owner, functor = found
+            unowned.append((key, value))
+        else:
+            plan.append((key, found))
+    if unowned:
+        from clausal import import_diagnostics as diag  # noqa: PLC0415
+        module_name = module_dict.get("__name__") or db.module_name()
+        raise SyntaxError("\n".join(
+            diag.describe_unowned_predicate_class(key, value, module_name)
+            for key, value in unowned))
+    register_handle_owner(db)
+    for key, (owner, functor) in plan:
         try:
             handle = mint_predicate_handle(owner, functor)
         except ValueError:

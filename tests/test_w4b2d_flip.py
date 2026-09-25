@@ -250,10 +250,16 @@ w4b3_duck = _Duck("w4b3_duck", (3, 4))
 
 
 def _py_exporter(tmp_path, monkeypatch):
+    """Write the exporter and make teardown drop it AND every module a test
+    loads from it.  ``setitem`` then ``delitem`` records the key, so
+    monkeypatch removes whatever the test imports under it at teardown
+    (a bare ``pop`` first would leave it recording nothing)."""
     monkeypatch.syspath_prepend(str(tmp_path))
     (tmp_path / "w4b3_pyexp.py").write_text(_PY_EXPORTER)
-    sys.modules.pop("w4b3_pyexp", None)
-    monkeypatch.delitem(sys.modules, "w4b3_pyexp", raising=False)
+    for name in ("w4b3_pyexp", "w4b3_use_w4b3_pycls", "w4b3_use_w4b3_pymk",
+                 "w4b3_use_duck", "w4b3_use_duck_only", "w4b3_use_both"):
+        monkeypatch.setitem(sys.modules, name, None)
+        monkeypatch.delitem(sys.modules, name)
 
 
 @pytest.mark.parametrize("name", ["w4b3_pycls", "w4b3_pymk"])
@@ -269,7 +275,6 @@ def test_a_python_made_predicate_class_is_refused_at_load(
             -import_from(w4b3_pyexp, [{name}])
             via(X) <- {name}(X),
         """)
-    sys.modules.pop(modname, None)
     msg = str(exc_info.value)
     assert (f"{modname} binds {name} to {name}/1, a PredicateMeta class "
             f"created in Python at ") in msg, msg
@@ -288,16 +293,13 @@ def test_the_duck_typed_protocol_the_refusal_points_at_still_loads(
         -import_from(w4b3_pyexp, [w4b3_duck])
         via_duck(X) <- w4b3_duck(X),
     """)
-    try:
-        lm = user.__dict__["$module"]
-        assert type(user.w4b3_duck).__name__ == "_Duck"
-        assert _classes(user) == []
-        for goal in ("via_duck", "w4b3_duck"):
-            X = Var()
-            assert sorted(deref(X) for _ in call(goal, X, module=lm)) == \
-                [3, 4], goal
-    finally:
-        sys.modules.pop("w4b3_use_duck", None)
+    lm = user.__dict__["$module"]
+    assert type(user.w4b3_duck).__name__ == "_Duck"
+    assert _classes(user) == []
+    for goal in ("via_duck", "w4b3_duck"):
+        X = Var()
+        assert sorted(deref(X) for _ in call(goal, X, module=lm)) == \
+            [3, 4], goal
 
 
 def test_the_refusal_is_about_the_binding_not_the_exporter(
@@ -312,8 +314,34 @@ def test_the_refusal_is_about_the_binding_not_the_exporter(
         -import_from(w4b3_pyexp, [w4b3_duck])
         only(X) <- w4b3_duck(X),
     """)
-    sys.modules.pop("w4b3_use_duck_only", None)
     assert "w4b3_pycls" not in vars(user)
+
+
+def test_the_refusal_is_atomic_and_names_every_offender(tmp_path,
+                                                        monkeypatch):
+    """The refusal is decided by a scan BEFORE the flip changes anything:
+    both offending bindings are named in one error, the failed module is
+    not left in ``sys.modules``, and its database was never registered as a
+    handle owner (roborev 2026-09-25: it used to raise mid-loop, after
+    earlier bindings flipped and the registration ran)."""
+    import importlib
+    from clausal.logic.predicate import _live_handle_owners
+    _py_exporter(tmp_path, monkeypatch)
+    _write(tmp_path, "w4b3_use_both.clausal", """
+        -import_from(w4b3_pyexp, [w4b3_pycls, w4b3_pymk])
+        local_fact(1),
+        via(X) <- (w4b3_pycls(X), w4b3_pymk(X)),
+    """)
+    # The REAL import path (importlib drops a module whose exec raised).
+    # The ``_load_module`` test helper leaves any failed load in
+    # ``sys.modules`` -- for every load error, not only this one.
+    with pytest.raises(SyntaxError) as exc_info:
+        importlib.import_module("w4b3_use_both")
+    msg = str(exc_info.value)
+    assert "binds w4b3_pycls to w4b3_pycls/1" in msg, msg
+    assert "binds w4b3_pymk to w4b3_pymk/1" in msg, msg
+    assert sys.modules.get("w4b3_use_both") is None
+    assert _live_handle_owners("w4b3_use_both") == []
 
 
 def _outcome(fn):
