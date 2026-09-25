@@ -467,24 +467,16 @@ def cell_signature_for_name(
         cls_fields = term_field_names_of_class(binding)
         if cls_fields is None:
             return None
-        if arity is not None and arity > len(cls_fields):
-            # ... but a PREDICATE class is not the authority on the arity the
-            # way a data-functor DECLARATION is.  A class holds exactly one
-            # arity, while one predicate NAME may legitimately be written at
-            # several: ``p(-3), p(2),`` declares p/1 and ``--(p(X, 1))`` is a
-            # p/2 goal cell in the same file.  Before Task 3 this arm answered
-            # None and the caller built the cell at the WRITTEN arity; letting
-            # the class's field tuple through made that a load-time
-            # "constructed with 2 positional argument(s) but ... 1 field(s)".
-            # A data functor keeps the old answer, because its declaration
-            # really does fix the slots -- over-supplying THOSE is an error.
-            return None
         # ``is_predicate``: the question was just answered above, so the
         # spelling does not ask ``is_declared_predicate_name`` a second time.
         _spelled = _functor_spelling(binding, leaf, is_predicate=True)
-        if arity is not None and arity < len(cls_fields):
+        if arity is not None and arity != len(cls_fields):
             # Ruling C (2026-09-24): a term is built at its WRITTEN arity,
-            # never padded.  A predicate NAME may be written at several
+            # never padded -- and never refused or corrected when it is
+            # LONGER either (operator ruling 2026-09-25: ``--q(1, 2, 3)`` for
+            # a ``q/2`` is ``('q', 1, 2, 3)``; this arm used to answer None
+            # for the long case, and the caller then placed the arguments
+            # against the name's DECLARATION and refused them).  A predicate NAME may be written at several
             # arities (name+arity), so a short construction of one is the
             # compound at the arity written -- ``count_leaves(T)`` naming the
             # nonterminal count_leaves//1 is ``('count_leaves', T)``, and
@@ -517,7 +509,13 @@ def construction_signature_for_name(
     """
     sig = cell_signature_for_name(name, resolve_globals)
     if (sig is not None and not has_keywords
-            and construction_arity_fault(sig[1], n_positional, ()) == "too_few"):
+            and construction_arity_fault(sig[1], n_positional, ())
+            in ("too_few", "too_many")):
+        # Too MANY as well as too few (operator ruling 2026-09-25): a
+        # predicate name written at another arity is the compound AT THAT
+        # ARITY, never refused or corrected -- ``--q(1, 2, 3)`` for a
+        # ``q/2`` is ``('q', 1, 2, 3)``.  A DATA functor answers its
+        # declaration again, which ``_place_signature_slots`` then refuses.
         sig = cell_signature_for_name(name, resolve_globals, arity=n_positional)
     return sig
 
@@ -675,9 +673,11 @@ def _place_signature_slots(fields, positional, keywords, *, functor, missing):
         # Too many positional arguments, or (ruling C, 2026-09-24: no silent
         # padding) too FEW -- decided by the runtime's own helper, so the
         # compile-time and runtime refusals cannot drift apart.  (A predicate
-        # name at a shorter arity never reaches here:
+        # name at another arity never reaches here:
         # ``construction_signature_for_name`` gives it the written arity's
-        # own slots.)  Keyword-only construction still names its slots.
+        # own slots.)  Keyword-only construction that names only SOME slots
+        # is refused as well (operator ruling 2026-09-25): ``missing()`` is
+        # never reached any more by a construction the decision admits.
         raise _cell_arity_error(functor, fields, len(positional))
     slots = [_UNSET] * n_fields
     for i, value in enumerate(positional):
@@ -1198,12 +1198,10 @@ def term_to_ast_expr(
         #
         # P3-2 Task 1 (signature-resolved construction): positional args fill
         # leading declared slots,
-        # keyword args fill their named slots, and every slot neither
-        # reaches backfills with a fresh ``Var()`` — the same "missing field
-        # -> fresh Var()" rule ``PredicateMeta.__call__`` applies to class
-        # construction (see ``_place_signature_slots``), so a kwarg/partial
-        # reference now builds a cell too instead of falling back to class
-        # emission.
+        # keyword args fill their named slots, and a slot neither reaches
+        # is refused (operator ruling 2026-09-25: no padding; it used to
+        # backfill with a fresh ``Var()``) -- the same rule
+        # ``PredicateMeta.__call__`` applies (see ``_place_signature_slots``).
         # Ruling C: a short keyword-free construction is re-asked at the
         # WRITTEN arity (a predicate name answers that arity's slots; a data
         # functor its declaration) -- see construction_signature_for_name.

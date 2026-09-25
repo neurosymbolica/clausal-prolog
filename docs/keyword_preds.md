@@ -39,19 +39,15 @@ point(1, 2, 3),
 
 ## Partial Terms
 
-When you build a term with fewer arguments than the predicate has fields, the
-missing fields are filled with fresh logic variables (a partial term):
+A term is never padded: a construction with fewer arguments than the declared
+functor has fields is refused, not filled with fresh logic variables.  A field
+you want to leave open is written as a variable -- which is what a partial
+term is:
 
 ```clausal
 -private([point(x, y, z)])
 
-p(P) <- (P is point(10))        # point(10, _, _)
-```
-
-A field you want to leave open in the middle is written as a variable, which
-is what a partial term is anyway:
-
-```clausal
+p(P) <- (P is point(10, _Y, _Z))        # point(10, _, _)
 p(P) <- (P is point(_X, 20, 30))
 ```
 

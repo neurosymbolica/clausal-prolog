@@ -778,12 +778,13 @@ def _pf(term, cls, name):
     return cell_args(term)[cls._fields.index(name)]
 
 
-def test_partial_term_unspecified_field_is_var():
+def test_partial_term_unspecified_field_is_refused():
+    """(operator ruling 2026-09-25: no padding; it used to fill the rest with fresh Vars)"""
     # nv
+    from clausal.logic.predicate import ClausalTermConstructionError
     point = _make_functor_class("point", "x_", "y_")
-    result = point(x_=1)
-    assert _pf(result, point, "x_") == 1
-    assert isinstance(_pf(result, point, "y_"), RealVar)
+    with pytest.raises(ClausalTermConstructionError):
+        point(x_=1)
 
 
 def test_partial_term_explicit_none_preserved():
@@ -793,20 +794,13 @@ def test_partial_term_explicit_none_preserved():
     assert _pf(result, point, "y_") is None
 
 
-def test_partial_term_no_args_all_vars():
+def test_partial_term_no_args_is_refused():
+    """(operator ruling 2026-09-25: no padding; it used to fill the rest with fresh Vars)"""
     # nv
+    from clausal.logic.predicate import ClausalTermConstructionError
     point = _make_functor_class("point", "x_", "y_")
-    result = point()
-    assert isinstance(_pf(result, point, "x_"), RealVar)
-    assert isinstance(_pf(result, point, "y_"), RealVar)
-
-
-def test_partial_term_fresh_vars_each_call():
-    # nv
-    point = _make_functor_class("point", "x_", "y_")
-    r1 = point(x_=1)
-    r2 = point(x_=1)
-    assert _pf(r1, point, "y_") is not _pf(r2, point, "y_")
+    with pytest.raises(ClausalTermConstructionError):
+        point()
 
 
 # ── TermTransformer: anonymous variable _ ─────────────────────────────────────

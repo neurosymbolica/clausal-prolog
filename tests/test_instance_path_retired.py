@@ -21,7 +21,7 @@ def test_make_predicate_refuses_the_instances_keyword():
 
 def test_calling_a_class_always_builds_the_cell():
     Pt = make_predicate("Pt2", ["x", "y"])
-    cell = Pt(x=1)
+    cell = Pt(x=1, y=Var())
     assert cell[0] == "Pt2" and cell[1] == 1 and isinstance(cell[2], Var)
     assert type(cell) is tuple, "never an instance, whatever the class carries"
 
@@ -39,7 +39,7 @@ def test_is_term_instance_is_dataclass_only():
         a: int
     assert is_term_instance(D(1)) is True and term_field_names(D(1)) == ("a",)
     Pt = make_predicate("Pt4", ["x"])
-    assert is_term_instance(Pt(x=1)) is False, "a cell is not an instance"
+    assert is_term_instance(Pt(1)) is False, "a cell is not an instance"
     assert is_term_instance(Pt) is False, "nor is the class"
 
 

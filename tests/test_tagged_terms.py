@@ -434,10 +434,12 @@ class TestSignatureConstruction:
         with pytest.raises(SyntaxError, match=r"point/2 was constructed with 1"):
             self._compile("_tt_sig_partial", "point(1)")
 
-    def test_empty_construction_backfills_both_slots(self):
-        self._compile("_tt_sig_empty", "point()")
-        src = capture_predicate_codegen("_tt_sig_empty", ["p"])
-        assert "('point', $Var(), $Var())" in src
+    def test_empty_construction_is_refused(self):
+        """``point()`` used to backfill both slots with fresh Vars; a
+        construction naming no slot of a fielded signature is refused
+        (operator ruling 2026-09-25: no padding; it used to fill the rest with fresh Vars)."""
+        with pytest.raises(SyntaxError, match=r"point/2"):
+            self._compile("_tt_sig_empty", "point()")
 
     def test_over_arity_raises_naming_the_functor(self):
         with pytest.raises(SyntaxError, match=r"point/2"):
@@ -473,9 +475,10 @@ class TestSignatureConstruction:
         # through, so it is still the placer that has to agree.
         point = make_predicate("point", ["x", "y"])
         assert normalize_term(point(y=2, x=1)) == ("point", 1, 2)
-        kw_only = point(x=1)
-        assert normalize_term(kw_only)[:2] == ("point", 1)
-        assert normalize_term(kw_only)[2] == ("$var",)
+        # keyword-only naming SOME slots: refused, never padded (2026-09-25)
+        from clausal.logic.predicate import ClausalTermConstructionError
+        with pytest.raises(ClausalTermConstructionError):
+            point(x=1)
 
 
 class TestHeadSignaturePlacement:
@@ -519,10 +522,14 @@ class TestHeadSignaturePlacement:
         assert got.startswith("case ['point', ")
         assert not got.endswith(", _]:")  # both slots filled, neither omitted
 
-    def test_partial_keyword_head_arg_wildcards_the_omitted_slot(self):
-        got = self._pattern_for(self._kw_compound("point", 0, ["X"]))
+    def test_partial_keyword_head_arg_is_refused(self):
+        """A head reference naming only SOME slots used to wildcard the
+        rest; the compile-time placer refuses it as the runtime one does
+        (operator ruling 2026-09-25: no padding; it used to fill the rest with fresh Vars)."""
+        with pytest.raises(SyntaxError, match=r"point/2"):
+            self._pattern_for(self._kw_compound("point", 0, ["X"]))
+        got = self._pattern_for(self._kw_compound("point", 0, ["X", "Y"]))
         assert got.startswith("case ['point', ")
-        assert got.endswith(", _]:")
 
     def test_over_arity_head_reference_raises_naming_the_functor(self):
         with pytest.raises(SyntaxError, match=r"point/2"):

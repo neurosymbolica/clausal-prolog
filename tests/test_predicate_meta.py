@@ -64,24 +64,25 @@ class TestTermConstruction:
         assert _f(t, fib, "n") == 0
         assert _f(t, fib, "f") == 0
 
-    def test_partial_kwargs_fills_var(self):
+    def test_partial_kwargs_are_refused(self):
+        """Naming only SOME fields is refused (operator ruling 2026-09-25: no padding; it used to fill the rest with fresh Vars)."""
         # nv
-        t = fib(n=5)
-        assert _f(t, fib, "n") == 5
-        assert is_var(_f(t, fib, "f"))
+        from clausal.logic.predicate import ClausalTermConstructionError
+        with pytest.raises(ClausalTermConstructionError):
+            fib(n=5)
 
-    def test_no_args_all_vars(self):
+    def test_no_args_are_refused(self):
+        """A construction with no arguments against a fielded class is
+        refused (operator ruling 2026-09-25: no padding; it used to fill the rest with fresh Vars)."""
         # nv
-        t = fib()
-        assert is_var(_f(t, fib, "n"))
-        assert is_var(_f(t, fib, "f"))
+        from clausal.logic.predicate import ClausalTermConstructionError
+        with pytest.raises(ClausalTermConstructionError):
+            fib()
 
-    def test_each_call_fresh_vars(self):
+    def test_all_keywords_place_by_name(self):
         # nv
-        t1 = fib()
-        t2 = fib()
-        assert _f(t1, fib, "n") is not _f(t2, fib, "n")
-        assert _f(t1, fib, "f") is not _f(t2, fib, "f")
+        t = fib(f=8, n=5)
+        assert _f(t, fib, "n") == 5 and _f(t, fib, "f") == 8
 
     def test_positional_args(self):
         # nv
@@ -98,12 +99,12 @@ class TestTermConstruction:
         assert cell_functor(t) == "fib"
         assert cell_arity(t) == 2
 
-    def test_three_fields_partial(self):
+    def test_three_fields_partial_is_refused(self):
+        """(operator ruling 2026-09-25: no padding; it used to fill the rest with fresh Vars)"""
         # nv
-        t = point(x=1)
-        assert _f(t, point, "x") == 1
-        assert is_var(_f(t, point, "y"))
-        assert is_var(_f(t, point, "z"))
+        from clausal.logic.predicate import ClausalTermConstructionError
+        with pytest.raises(ClausalTermConstructionError):
+            point(x=1)
 
     def test_none_is_not_missing(self):
         """Explicitly passing None should NOT be replaced with Var()."""

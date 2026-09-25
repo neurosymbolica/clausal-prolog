@@ -238,11 +238,10 @@ goal that references it actually runs.
 **Advisory, not backfilled.** A functor that IS declared, referenced at a
 different written arity, is also advisory under the flag: `point/2` declared,
 referenced as `point(10, 20, 30)`, builds `("point", 10, 20, 30)` at the arity
-actually written; a short reference (`point(1)`) builds `("point", 1)` rather
-than backfilling the missing slot with a fresh `Var()` the way the
-unconditional (unflagged) placement rule does. Without the flag, an over-arity
-reference to a declared functor is a compile-time `SyntaxError` naming
-`point/2`.
+actually written; a short reference (`point(1)`) builds `("point", 1)`.
+Without the flag, a short or over-arity reference to a declared DATA functor
+is a compile-time `SyntaxError` naming `point/2` -- a term is never padded
+with fresh variables.
 
 **Keyword construction is unaffected.** The flag only makes keyword-*free*
 (positional) construction advisory. A keyword reference (`point(x=1, y=2)`)
