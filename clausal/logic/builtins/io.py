@@ -45,7 +45,9 @@ from clausal.logic.exceptions import (
 )
 
 from clausal.logic.builtins._helpers import _is_empty_list
-from clausal.logic.builtins._registry import _builtin, _db_builtin, _DB_BUILTINS, BuiltinPredicate
+from clausal.logic.builtins._registry import (
+    _builtin, _db_builtin, _DB_BUILTINS, BuiltinPredicate, BuiltinTerm,
+)
 
 
 # ── The three writer families (spec §6.7, Task 15 item 4 as amended) ─────────
@@ -700,6 +702,12 @@ def _checked_indicator(parts, db):
     binding = None
     if isinstance(name, PredicateMeta):
         binding, name = name, name.__name__
+    elif isinstance(name, BuiltinTerm):
+        # A builtin's object from Python (``clausal.between / 3``) names the
+        # builtin, as its CLASS did before W4b-3 slice 3 (roborev Low on
+        # slice 3).  It is no binding: the class's private row was nobody's,
+        # so the lookup is the plain name's, exactly as before.
+        name = name._functor
     elif _is_predicate_handle(name, arity, db):
         binding, name = name, demangle(name)[1]
     elif _term_is_atom(name):
@@ -799,6 +807,15 @@ def _make_listing__1(db):
                 val = type(val)
             if isinstance(val, BuiltinPredicate):
                 print(f"% {val._functor}/{val._arity} — builtin")
+                yield None
+                return
+            if isinstance(val, BuiltinTerm):
+                # The builtin's object (``clausal.between``) -- a class with
+                # an empty private row before W4b-3 slice 3, listed then as
+                # "no clauses".  It is a builtin, and says so, one line per
+                # registered arity.
+                for _a in val.arities:
+                    print(f"% {val._functor}/{_a} — builtin")
                 yield None
                 return
             if not isinstance(val, PredicateMeta):

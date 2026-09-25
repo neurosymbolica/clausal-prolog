@@ -1294,6 +1294,18 @@ def term_to_ast_expr(
     if is_zero_field_class(term):
         return ast.Constant(value=_mint_atom(term.__name__))
 
+    # A builtin's OBJECT in term position (``clausal.succ`` handed to
+    # ``maplist`` from Python) is the ATOM of its name -- what its
+    # ``PredicateMeta`` class lowered to until W4b-3 slice 3 (the zero-field
+    # arm above, or the STAGE 2 predicate-name arm below).  Slice 3 made it a
+    # ``BuiltinTerm`` and lost the arm: such a goal raised
+    # ``NotImplementedError: unsupported term type BuiltinTerm``.  Lazy
+    # import: the builtins package imports the compiler.
+    if type(term).__name__ == "BuiltinTerm":
+        from clausal.logic.builtins._registry import BuiltinTerm  # noqa: PLC0415
+        if type(term) is BuiltinTerm:
+            return ast.Constant(value=_mint_atom(term._functor))
+
     if is_term_instance(term):
         cls = type(term)
         # ``$``-twin for a class the runtime table binds (a simple_ast node

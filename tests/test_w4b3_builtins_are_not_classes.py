@@ -152,3 +152,70 @@ def test_a_db_less_compile_of_a_builtin_named_predicate_is_its_own():
     # the builtin itself is untouched
     X = Var()
     assert [walk(deref(X)) for _ in call(clausal.last, [1, 2], X)] == [2]
+
+
+# ── Follow-ups (2026-09-25): no padding, listing, Solutions, lowering ───────
+
+
+def test_a_builtin_object_in_a_goal_lowers_to_its_atom():
+    """A builtin's object in TERM position of a Python-built goal is the atom
+    of its name, as its class was before slice 3 -- ``maplist(succ, ...)``
+    from Python.  Slice 3 lost the lowering arm (``NotImplementedError:
+    unsupported term type BuiltinTerm``)."""
+    m = clausal.Module("_w4b3_lower")
+    X = Var()
+    assert [walk(deref(X)) for _ in clausal.solve(("=", X, clausal.between),
+                                                  module=m)] == ["between"]
+    L = Var()
+    assert [walk(deref(L)) for _ in clausal.solve(
+        ("maplist", clausal.succ, [1, 2], L), module=m)] == [[2, 3]]
+
+
+def _listing_output(arg):
+    import contextlib
+    import io
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        n = len(list(call("listing", arg, module=clausal.Module("_w4b3_lst"))))
+    return n, buf.getvalue()
+
+
+def test_listing_takes_a_builtin_object_in_an_indicator_as_its_name():
+    """roborev Low on slice 3: ``listing(<builtin>/3)`` from Python raised
+    type_error(atomic, ...) -- ``_checked_indicator`` knew only the class.
+    It names the builtin, exactly as the atom spelling does."""
+    assert _listing_output(("/", clausal.between, 3)) == \
+        _listing_output(("/", "between", 3))
+
+
+def test_listing_a_builtin_object_says_it_is_a_builtin():
+    assert _listing_output(clausal.between) == (1, "% between/3 — builtin\n")
+    assert _listing_output(clausal.maplist)[1].splitlines()[:2] == [
+        "% maplist/2 — builtin", "% maplist/3 — builtin"]
+
+
+def test_solutions_refuses_a_module_it_would_ignore():
+    """roborev Low on slice 3: ``Solutions(<not a goal value>, module=m)``
+    dropped ``module=`` silently.  Now a TypeError; a goal value still
+    takes it."""
+    from clausal.repl import Solutions
+    m = clausal.Module("_w4b3_sol")
+    for not_a_goal_value in (True, False, iter([{}])):
+        with pytest.raises(TypeError, match="module="):
+            Solutions(not_a_goal_value, module=m)
+    X = Var()
+    assert [d["X"] for d in Solutions(clausal.between(1, 2, X), module=m,
+                                      _varnames={"X": X})._iter] == [1, 2]
+    assert list(Solutions(iter([{"a": 1}]))._iter) == [{"a": 1}]
+
+
+def test_a_slot_given_positionally_and_by_name_is_refused():
+    """The no-padding audit: ``build_term_cell`` let a positional overwrite
+    a keyword naming the SAME slot, dropping the keyword's value silently.
+    Python's own "multiple values" refusal, now."""
+    from clausal.logic.predicate import (
+        ClausalTermConstructionError, build_term_cell)
+    with pytest.raises(ClausalTermConstructionError,
+                       match=r"\(a\) given both positionally and by name"):
+        build_term_cell("q", ("a", "b"), (1,), {"b": 2, "a": 5})
+    assert build_term_cell("q", ("a", "b"), (1,), {"b": 2}) == ("q", 1, 2)

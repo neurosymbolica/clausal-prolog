@@ -477,14 +477,19 @@ class BuiltinTerm:
 
     * Called, it builds the CELL -- ``clausal.between(1, 3, X)`` is
       ``("between", 1, 3, X)``, exactly what ``--between(1, 3, X)`` builds
-      in a ``.clausal`` module -- through :func:`build_term_cell`, the one
-      home of construction against a registered signature (keywords by
-      field name, a fresh ``Var`` for a slot neither fills, the arity
-      refusals).  The signature is picked by argument count, else the
-      widest arity's, as the class (single arity) and ``MultiArityBuiltin``
-      (several) both did.  With no arguments, a 0-arity builtin builds its
-      0-arity cell, the ATOM (``clausal.nl()`` is ``'nl'``); the class era
-      handed back the class itself, which is no term.
+      in a ``.clausal`` module.  At a REGISTERED arity (the argument count,
+      positional plus keyword) the arguments are placed by
+      :func:`build_term_cell` against that arity's field names.  At any
+      other count it builds the cell at the WRITTEN arity, never padded
+      to a registered one (operator ruling 2026-09-25: no implicit arity
+      padding anywhere; a default argument is an explicit predicate):
+      ``between(1, 2)`` is ``("between", 1, 2)``, which as a goal is
+      ``existence_error(procedure, between/2)``, and ``between()`` is the
+      atom.  Keywords name the slots of a registered arity, so keywords at
+      a count no arity has are refused
+      (:class:`ClausalTermConstructionError`) -- there is no written-arity
+      cell they could name.  A 0-arity builtin's call is its atom
+      (``clausal.nl()`` is ``'nl'``); the class era handed back the class.
     * As a goal it speaks the frozen duck-typed ``_get_dispatch()``
       protocol, so ``_dispatch_at`` and ``_ensure_trampoline_dispatch``
       answer it through their GENERIC arm: the one arity's dispatch
@@ -516,14 +521,38 @@ class BuiltinTerm:
         return tuple(sorted(self._fields_by_arity))
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        fba = self._fields_by_arity
-        fields = fba.get(len(args) + len(kwargs))
+        written = len(args) + len(kwargs)
+        fields = self._fields_by_arity.get(written)
         if fields is None:
-            fields = fba[max(fba)]
-        if not fields and not args and not kwargs:
+            if kwargs:
+                raise self._keyword_arity_error(args, kwargs)
+            # The WRITTEN arity (no padding): ``between(1, 2)`` is between/2.
+            return (self._functor, *args) if args else self._functor
+        if not fields:
             return self._functor
         from clausal.logic.predicate import build_term_cell  # noqa: PLC0415
         return build_term_cell(self._functor, fields, args, kwargs)
+
+    def _keyword_arity_error(self, args: tuple, kwargs: dict):
+        from clausal.logic.predicate import (  # noqa: PLC0415
+            ClausalTermConstructionError, _source_site,
+        )
+        functor = self._functor
+        written = len(args) + len(kwargs)
+        known = ", ".join(f"{functor}/{a}" for a in self.arities)
+        names = ", ".join(kwargs)
+        message = (
+            f"builtin {functor} was written with {written} argument(s), "
+            f"field names ({names}), but it is registered only at {known}: "
+            f"field names place the arguments of a registered arity, and a "
+            f"construction is never padded to one (operator ruling "
+            f"2026-09-25).  Supply every field of the arity you mean, or "
+            f"build the {functor}/{written} cell positionally.")
+        widest = self._fields_by_arity[max(self._fields_by_arity)]
+        return ClausalTermConstructionError(
+            message, functor=functor, arity=written,
+            supplied_fields=tuple(kwargs), registered_fields=widest,
+            registered_at=None, constructed_at=_source_site(3))
 
     def _get_dispatch(self) -> Callable:
         fba = self._fields_by_arity

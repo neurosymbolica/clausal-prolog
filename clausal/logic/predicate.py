@@ -445,6 +445,24 @@ def build_term_cell(functor: str, fields: tuple[str, ...], args: tuple,
             raise term_arity_error_for(
                 functor, fields, getattr(origin, "_registered_at", site),
                 len(args), kwargs, _source_site(2))
+        # A keyword naming a slot a POSITIONAL argument already fills used
+        # to be overwritten by it here -- the keyword's value dropped
+        # silently, and the slot the arguments were meant to reach left
+        # unfilled and padded with a fresh ``Var`` (W4b-3, the no-padding
+        # audit, 2026-09-25).  Python's own "multiple values" refusal.
+        doubled = [fields[i] for i in range(len(args)) if fields[i] in kwargs]
+        if doubled:
+            registered_at = getattr(origin, "_registered_at", site)
+            constructed_at = _source_site(2)
+            raise ClausalTermConstructionError(
+                f"functor {functor}/{len(fields)} was constructed with "
+                f"field(s) {_format_fields(tuple(doubled))} given both "
+                f"positionally and by name\n"
+                f"  registered by: {_format_site(registered_at)}\n"
+                f"  constructed at: {_format_site(constructed_at)}",
+                functor=functor, arity=len(fields),
+                supplied_fields=tuple(kwargs), registered_fields=tuple(fields),
+                registered_at=registered_at, constructed_at=constructed_at)
         for i, val in enumerate(args):
             kwargs[fields[i]] = val
     unknown = [k for k in kwargs if k not in fields]
