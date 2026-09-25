@@ -1333,7 +1333,7 @@ def query(
                 print(X.value)
 
         Do NOT iterate a goal built by calling a predicate from Python:
-        ``m.greeting`` is a handle (a ``str``) and a builtin class such as
+        ``m.greeting`` is a handle (a ``str``) and a builtin's term constructor such as
         ``clausal.between(1, 3, X)`` builds a CELL (a tuple), so
         ``for _ in between(1, 3, X)`` walks the tuple's elements and never
         runs the goal.

@@ -37,6 +37,7 @@ from clausal.logic.builtins._registry import (  # noqa: F401
     # Adapter classes
     BuiltinPredicate,
     MultiArityBuiltin,
+    BuiltinTerm,
     # Public lookup API
     get_builtin_predicate,
     get_builtin_dispatch,
@@ -86,6 +87,7 @@ _build_all_builtin_classes()
 __all__ = [
     "BuiltinPredicate",
     "MultiArityBuiltin",
+    "BuiltinTerm",
     "get_builtin_predicate",
     "get_builtin_class",
     "get_builtin_dispatch",

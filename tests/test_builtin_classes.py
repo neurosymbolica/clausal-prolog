@@ -107,10 +107,13 @@ class TestSingleArityConstruction:
         assert _field(t, "n") == 3
 
     def test_zero_arity(self):
+        """A 0-arity builtin builds its 0-arity cell, the ATOM (W4b-3 slice
+        3; the class era handed back the class itself, which is no term)."""
         # nv
         nl = get_builtin_class("nl")
-        assert isinstance(nl, PredicateMeta)
-        assert nl._arity == 0
+        assert not isinstance(nl, PredicateMeta)
+        assert nl.arities == (0,)
+        assert nl() == "nl"
 
     def test_no_args_all_vars(self):
         # nv
@@ -160,54 +163,56 @@ class TestFieldNames:
         assert _BUILTIN_FIELDS[(cell_functor(t), cell_arity(t))] == ("l1", "l2", "l3")
 
 
-# ── PredicateMeta protocol ────────────────────────────────────────────────────
+# ── The builtin object: not a class (W4b-3 slice 3) ──────────────────────────
 
 
-class TestPredicateMetaProtocol:
-    """Builtin classes should satisfy the PredicateMeta protocol."""
+class TestBuiltinObjectProtocol:
+    """A builtin's object is a ``BuiltinTerm``: a term constructor that
+    speaks the duck-typed ``_get_dispatch()`` protocol.  It was a
+    ``PredicateMeta`` class, whose private row held the dispatch and a
+    lock; it is no class and carries no predicate state now."""
 
-    def test_is_predicate_meta(self):
+    def test_is_not_a_predicate_class(self):
         # nv
+        from clausal.logic.builtins import BuiltinTerm
         append = get_builtin_class("append")
-        assert isinstance(append, PredicateMeta)
+        assert isinstance(append, BuiltinTerm)
+        assert not isinstance(append, (type, PredicateMeta))
 
     def test_functor_property(self):
         # nv
         append = get_builtin_class("append")
         assert append._functor == "append"
 
-    def test_arity_property(self):
+    def test_arities(self):
         # nv
-        append = get_builtin_class("append")
-        assert append._arity == 3
+        assert get_builtin_class("append").arities == (3,)
+        assert get_builtin_class("maplist").arities[:2] == (2, 3)
 
-    def test_locked(self):
+    def test_carries_no_predicate_state(self):
+        """No row, no clause store: nothing to lock or assert into."""
         # nv
         append = get_builtin_class("append")
-        assert append._state_row().locked is True
-
-    def test_assertz_raises_on_locked(self):
-        # nv
-        append = get_builtin_class("append")
-        with pytest.raises(RuntimeError, match="locked"):
-            append._assertz("dummy")
-
-    def test_dispatch_fn_set(self):
-        # nv
-        append = get_builtin_class("append")
-        assert append._state_row().dispatch_fn is not None
+        for attr in ("_row", "_state_row", "_assertz", "_lock"):
+            assert not hasattr(append, attr), attr
 
     def test_get_dispatch(self):
         # nv
+        from clausal.logic.builtins._registry import _stateless_dispatch
         append = get_builtin_class("append")
         fn = append._get_dispatch()
         assert callable(fn)
+        assert fn is append._dispatch_by_arity[3]
+        assert _stateless_dispatch("append", 3) is not None
 
     def test_db_builtin_no_dispatch(self):
-        """DB-dependent builtins should not have dispatch set (needs db)."""
+        """DB-dependent builtins have no db-free dispatch; asking for it is
+        the class era's NotImplementedError."""
         # nv
         assertz = get_builtin_class("assertz")
-        assert assertz._state_row().dispatch_fn is None
+        assert 1 not in assertz._dispatch_by_arity
+        with pytest.raises(NotImplementedError, match="assertz/1"):
+            assertz._get_dispatch()
 
 
 # ── __eq__ / __repr__ / __match_args__ ────────────────────────────────────────

@@ -1137,9 +1137,12 @@ def _compile_predicate_trampoline_impl(
     # _inject_resolved_targets so that BuiltinPredicate adapters for call
     # targets (which handle DB-dependent builtins correctly) are not
     # overwritten.  For stateless builtins (factory is None), prefer the
-    # PredicateMeta/MultiArityBuiltin class: it is callable as a term
-    # constructor (needed when a goal appears as an argument to a meta-predicate
-    # such as time_goal) and also provides _get_dispatch().
+    # builtin's ``BuiltinTerm``: it is callable as a term constructor (needed
+    # when a goal appears as an argument to a meta-predicate such as
+    # time_goal) and also provides _get_dispatch().  (A ``PredicateMeta``
+    # class until W4b-3 slice 3 -- which is why the ``pred_cls`` fallback
+    # below used to pick a BUILTIN's class for a db-less compile of a
+    # predicate named like a builtin; a ``BuiltinTerm`` is no class.)
     for _bc_name, _bc_val in _BUILTIN_CLASSES.items():
         existing = base_globals.get(_bc_name)
         if existing is None or (
@@ -1984,9 +1987,12 @@ def _compile_predicate_shallow_impl(
     # _inject_resolved_targets so that BuiltinPredicate adapters for call
     # targets (which handle DB-dependent builtins correctly) are not
     # overwritten.  For stateless builtins (factory is None), prefer the
-    # PredicateMeta/MultiArityBuiltin class: it is callable as a term
-    # constructor (needed when a goal appears as an argument to a meta-predicate
-    # such as time_goal) and also provides _get_dispatch().
+    # builtin's ``BuiltinTerm``: it is callable as a term constructor (needed
+    # when a goal appears as an argument to a meta-predicate such as
+    # time_goal) and also provides _get_dispatch().  (A ``PredicateMeta``
+    # class until W4b-3 slice 3 -- which is why the ``pred_cls`` fallback
+    # below used to pick a BUILTIN's class for a db-less compile of a
+    # predicate named like a builtin; a ``BuiltinTerm`` is no class.)
     for _bc_name, _bc_val in _BUILTIN_CLASSES.items():
         existing = base_globals.get(_bc_name)
         if existing is None or (

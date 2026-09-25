@@ -9,9 +9,11 @@ Notation in signature lines:
 
 ---
 
-??? abstract "Builtin Predicate Classes"
+??? abstract "Builtin Term Constructors"
 
-    Every built-in predicate has a constructable `PredicateMeta` class, so you can build canonical term trees in Python:
+    Every built-in predicate has a term constructor, a `BuiltinTerm` (the same
+    object as `clausal.<name>`).  Calling it **builds a cell** -- data, exactly
+    what `--append(...)` builds in a `.clausal` module; it runs nothing:
 
     ```python
     from clausal.logic.builtins import get_builtin_class
@@ -20,24 +22,29 @@ Notation in signature lines:
     append = get_builtin_class("append")
     between = get_builtin_class("between")
 
-    X_ = Var()
     Z_ = Var()
 
     # Positional construction
     t = append([1, 2], [3, 4], Z_)
-    # → append(l1=[1, 2], l2=[3, 4], l3=Var())
+    # → ('append', [1, 2], [3, 4], Z_)
 
     # Keyword construction with partial fill (missing fields → Var())
     t2 = between(low=1, high=10)
-    # → between(low=1, high=10, x=Var())
+    # → ('between', 1, 10, <Var>)
 
-    # Pattern matching works via __match_args__
-    match t:
-        case append(a, b, c):
-            print(a, b, c)
+    # A 0-arity builtin builds its atom
+    get_builtin_class("nl")()
+    # → 'nl'
     ```
 
-    Each builtin class is a full `PredicateMeta` with `_fields`, `_functor`, `_arity`, `__eq__`, `__repr__`, and `__match_args__`. Stateless builtins also have `_dispatch_fn` set (so `_get_dispatch()` works directly). DB-dependent builtins (assertz, retract, etc.) have `_dispatch_fn = None` since they need a live database; use them for term construction only.
+    Run a cell with `solve(cell, module=m)` from Python, or with the
+    goal-position seam (`for X in --between(1, 3, X):`) inside a `.clausal`
+    module.  The object is not a class (it was a `PredicateMeta` class until
+    the W4b-3 retirement): it has no clause store and nothing to lock or
+    assert into.  It speaks the `_get_dispatch()` protocol, so it can also be
+    handed to `call/N`-style code as a goal object; a DB-dependent builtin
+    (assertz, retract, ...) has no db-free dispatch and raises
+    `NotImplementedError` there -- construct its term and run it with a module.
 
     **Passing builtins to higher-order predicates:** Builtin predicates can be passed directly as arguments to `maplist`, `include`, `exclude`, `foldl`, `Call/N`, and other higher-order builtins — no lambda wrapper is needed:
 
@@ -49,19 +56,17 @@ Notation in signature lines:
 
     This works for any builtin or user-defined predicate whose arity matches what the higher-order predicate expects.
 
-    **Multi-arity builtins** (maplist/2,3 and phrase/2,3) are wrapped in `MultiArityBuiltin`, which routes `__call__` by argument count:
+    **Multi-arity builtins** (maplist/2,3, phrase/2,3, ...) pick the signature by argument count:
 
     ```python
     maplist = get_builtin_class("maplist")
-    maplist(goal, [1, 2])           # → maplist/2 term
-    maplist(goal, [1, 2], [2, 4])   # → maplist/3 term
+    maplist(goal, [1, 2])           # → maplist/2 cell
+    maplist(goal, [1, 2], [2, 4])   # → maplist/3 cell
     ```
 
-    All builtin classes are locked (`_locked = True`) — they cannot be modified via assertz/retract.
-
     **Registry access:**
-    - `get_builtin_class(functor)` — returns the class or `MultiArityBuiltin`, or `None`
-    - `_BUILTIN_CLASSES` — dict mapping functor name → class/wrapper
+    - `get_builtin_class(functor)` — returns the builtin's `BuiltinTerm`, or `None` (the name is historical)
+    - `_BUILTIN_CLASSES` — dict mapping functor name → `BuiltinTerm`
     - `_BUILTIN_FIELDS` — dict mapping `(functor, arity)` → field name tuple
 
     **Tests:** `tests/test_builtin_classes.py` (41 tests)
