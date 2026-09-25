@@ -253,10 +253,16 @@ class TestImplicitFunctors:
 
     # -- predicate references keep class/goal emission under OWA -----------
 
-    def test_a_predicate_reference_keeps_class_goal_emission_under_owa(self):
-        """A functor WITH clauses is a predicate, not data -- calling it is
-        a goal, and OWA does not change that (a goal is not data)."""
-        _load_inline(
+    def test_a_predicate_reference_still_answers_under_owa(self):
+        """A functor WITH clauses is a predicate -- calling it through
+        ``call/1`` answers its clauses, and OWA does not change that.
+
+        This used to assert ``"('q'," not in`` the codegen, which was green
+        only because ``q(...)`` was quasi-quotation and ``call(q(X))``
+        compiled as ``call(X)``.  With q() retired (2026-09-25) the
+        reference is the cell ``('q', X)``, as for any name since the P2
+        head flip; what matters is that call/1 resolves it."""
+        m = _load_inline(
             "_if_pred",
             "-implicit_functors\n"
             "-module(_if_pred, [q(A), r(A)])\n"
@@ -264,7 +270,10 @@ class TestImplicitFunctors:
             "r(X) <- call(q(X)),\n",
         )
         src = capture_predicate_codegen("_if_pred", ["r"])
-        assert "('q'," not in src
+        assert "('q', " in src          # not stripped to call(X) any more
+        x = Var()
+        lm = m.__dict__["$module"]
+        assert [deref(x) for _ in call("r", x, module=lm)] == [1]
 
     # -- strict-atoms orthogonality ------------------------------------------
 

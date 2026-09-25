@@ -169,3 +169,19 @@ class ClausalBooleanSeamWarning(ClausalLintWarning):
     DATA is not this warning.
     """
 
+
+
+class ClausalRetiredQuasiQuoteWarning(ClausalDeprecatedSpellingWarning):
+    """``q(...)`` inside a ``term_expansion/4`` clause.
+
+    ``q(expr)`` was a quasi-quotation that stripped itself; it was retired
+    2026-09-25 and ``q`` is now an ordinary name.  So an old rule such as
+    ``term_expansion(q(fact(X)), [q(fact(X)), q(logged(X))], S, S)`` now
+    builds ``('q', ...)`` cells and silently matches nothing -- the module
+    loads with the expansion missing.  Write the pattern as a plain term, as
+    in ISO ``term_expansion``: ``term_expansion(fact(X), [fact(X),
+    logged(X)], S, S)``.  Read only in a clause that has a
+    ``term_expansion(_, _, _, _)`` in it, once per clause; a rule that means
+    a real ``q/1`` term can silence it with ``warnings.filterwarnings`` on
+    this class.
+    """

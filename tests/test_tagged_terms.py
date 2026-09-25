@@ -388,9 +388,19 @@ class TestCellEmission:
         R = _V()
         assert [_dr(R) for _ in _solve_g(("use", R), m)] == [70]
 
-    def test_a_predicate_reference_is_not_a_cell(self):
-        """Only DATA functors (no clauses) become cells -- a predicate stays a
-        class so ``call/1`` and dispatch keep working on it."""
+    def test_a_predicate_reference_answers_through_call(self):
+        """A reference to a predicate WITH clauses, passed to ``call/1``,
+        still answers.
+
+        This used to assert ``"('q'," not in`` the codegen -- and was green
+        only because ``q(...)`` was quasi-quotation, which stripped
+        ``call(q(X))`` to ``call(X)``: the property was never exercised.
+        With ``q`` an ordinary name (q() retired 2026-09-25) the reference
+        compiles to the cell ``('q', X)``, as it does for every other name
+        since the P2 head flip (see the test above): a cell NAMES a
+        predicate and call/N resolves it.  So pin the behaviour, not the
+        string.
+        """
         m = _load_inline(
             "_tt_pred",
             "-module(_tt_pred, [q(A), r(A), s(A)])\n"
@@ -399,7 +409,10 @@ class TestCellEmission:
             "s(X) <- r(X),\n",
         )
         src = capture_predicate_codegen("_tt_pred", ["r"])
-        assert "('q'," not in src
+        assert "('q', " in src          # not stripped to call(X) any more
+        x = Var()
+        lm = m.__dict__["$module"]
+        assert [deref(x) for _ in call("s", x, module=lm)] == [1]
 
 
 class TestSignatureConstruction:

@@ -315,15 +315,16 @@ def test_F007_dump_source_arrow_fidelity(tmp_path):
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# A10-F008 — TermExpansion q()-pattern doc examples are non-functional
+# A10-F008 — TermExpansion doc examples are non-functional
+# (plain-term patterns since q() was retired 2026-09-25)
 # ═════════════════════════════════════════════════════════════════════════════
 
 
 def test_F008_te_doc_quick_example(tmp_path):
     m = _load(tmp_path, """
         term_expansion(
-            q(fact(X)),
-            [q(fact(X)), q(logged_fact(X))],
+            fact(X),
+            [fact(X), logged_fact(X)],
             STATE, STATE
         ),
         fact("a"),
@@ -336,7 +337,7 @@ def test_F008_te_doc_quick_example(tmp_path):
 
 def test_F008_te_doc_suppression_example(tmp_path):
     m = _load(tmp_path, """
-        term_expansion(q(debug(X)), [], STATE, STATE) <- True
+        term_expansion(debug(X), [], STATE, STATE) <- True
         debug("x"),
         keep(1),
     """)

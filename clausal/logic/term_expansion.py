@@ -265,9 +265,9 @@ def _make_module_state(init_list, final_list, user_state):
 def _collect_functor_arities(node, out: dict, seen: set) -> None:
     """Collect ``functor_name -> arity`` for every ``Call(LoadName(name), args)``
     reachable from *node* (term-instances, lists, and pythonic_ast Nodes are
-    all descended). Names are ordinary lowercase functor identifiers — the
-    quasi-quote ``q`` wrapper is already stripped to plain Call data by the
-    time term_expansion clauses reach here."""
+    all descended). Names are ordinary lowercase functor identifiers — a
+    pattern is a plain term (``q()`` quasi-quotation was retired 2026-09-25,
+    so a ``q`` here is the ordinary functor ``q``)."""
     from clausal.pythonic_ast.nodes import Call as _Call, LoadName as _LoadName
     from clausal.logic.predicate import is_term_instance, term_field_names
     from clausal.logic.cells import compound_cell_shape  # noqa: PLC0415
@@ -355,7 +355,7 @@ def _compile_expansion_rules(expansion_clauses, module_dict):
     te_cls = lm.module_dict["term_expansion"]
 
     # A10-F008 / A10-D004(a): pre-mint term classes for functors referenced in
-    # the (quasi-quoted) expansion patterns — e.g. a brand-new ``logged_fact``
+    # the expansion patterns — e.g. a brand-new ``logged_fact``
     # introduced by an expansion. Without this, constructing ``logged_fact(X)``
     # at expansion time fails with "not in scope as a term class".
     functor_arities: dict[str, int] = {}
@@ -406,7 +406,7 @@ def _expand_item(item, expansion_module, module_state):
     if result is not None:
         return result
 
-    # A10-F008 / A10-D004(a): a bare-term pattern like ``q(fact(X))`` never
+    # A10-F008 / A10-D004(a): a bare-term pattern like ``fact(X)`` never
     # unifies with the whole Predicate item (which is Predicate(head=fact(..),
     # body=..)). Retry against the item's HEAD; the expansion terms are then
     # head terms, so wrap each back into a fact Predicate.
@@ -436,7 +436,7 @@ def _head_as_cell(term: Any) -> Any:
     for a predicate functor too), while the clause-HEAD channel still carried
     instances.  So an item whose functor HAS clauses arrived as an instance
     and did not unify with the cell its own pattern built:
-    ``term_expansion(q(key(KEY)), ...)`` silently matched nothing, and the
+    ``term_expansion(key(KEY), ...)`` silently matched nothing, and the
     module loaded with the expansion's output missing.
 
     Only the TOP term is lowered: nested arguments compile to cells already,
@@ -466,8 +466,8 @@ def _try_te_match(item, match_target, expansion_module, module_state, wrap_head)
     # the HEAD-pattern retry is lowered: a whole-item pattern binds the
     # Predicate NODE, and rebuilding that node with a lowered head hands the
     # rules a copy -- the identity and pass-through expansions return the term
-    # they matched, and three of them went red on the copy.  A quoted RULE
-    # pattern (``q(key(K) <- Body)``) would want the same lowering one level
+    # they matched, and three of them went red on the copy.  A RULE
+    # pattern (``key(K) <- Body``) would want the same lowering one level
     # in; no fixture or corpus file writes one, and it is parked in
     # todo/term-expansion-whole-item-pattern-head-representation-2026-09-19.md.
     if wrap_head:

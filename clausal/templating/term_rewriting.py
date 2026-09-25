@@ -1933,6 +1933,7 @@ from clausal.lint_warnings import (  # noqa: E402, F401
     ClausalTitleCaseIdentifierWarning,
     ClausalScaleInNameWarning,
     ClausalKeywordArgumentWarning,
+    ClausalRetiredQuasiQuoteWarning,
 )
 
 
@@ -2542,16 +2543,15 @@ class TermTransformer(NodeTransformer):
     def visit_Call(transformer, call):
         visit = transformer.visit
 
-        # q(expr) — quasi-quotation: produces the simple_ast node for expr.
-        # The inner expression is transformed by the SAME TermTransformer
-        # (sharing seen_vars), so variables are unified across the clause.
-        if (
-            isinstance(call.func, Name)
-            and call.func.id == "q"
-            and len(call.args) == 1
-            and not call.keywords
-        ):
-            return visit(call.args[0])
+        # ``q(expr)`` is NOT special here.  It was a quasi-quotation that
+        # stripped itself and lowered ``expr``; retired 2026-09-25, because a
+        # term in argument position already lowers as DATA (a cell), so the
+        # wrapper did nothing a plain term does not -- except hijack the name
+        # ``q`` in every module (``--q(1)`` evaluated to 1, and a user's
+        # ``q/1`` could not be called or built).  ISO term_expansion takes
+        # plain terms; so does Clausal.  An old ``term_expansion(q(...), ...)``
+        # rule now builds ``('q', ...)`` cells that match nothing, so
+        # ``_lint_retired_quasi_quote`` says so at load time.
 
         # constant_number_units(Name, N, U) — COMPILE-TIME MODULE INSERTION.
         #
@@ -5585,6 +5585,7 @@ class EmbedTransformer(NodeTransformer):
         # runtime class).
         transformer._titlecase_seen: set[str] = set()
         transformer._scale_name_seen: set[str] = set()
+        transformer._retired_q_seen: set[int] = set()
         transformer._titlecase_imported: set[str] = set()
         transformer._titlecase_python_bound: set[str] = set()
         # Reflection models MORE than compiles — see TermTransformer._reify.
@@ -7007,6 +7008,57 @@ class EmbedTransformer(NodeTransformer):
             if node is not None:
                 walk_(node)
 
+    def _lint_retired_quasi_quote(transformer, *nodes):
+        """Warn for ``q(<one argument>)`` in a ``term_expansion/4`` clause.
+
+        ``q()`` quasi-quotation was retired 2026-09-25 (``q`` is an ordinary
+        name now), so an old expansion rule written with it builds
+        ``('q', ...)`` cells that match no item: the module would load with
+        the expansion silently missing.  Only a subtree that CONTAINS a
+        ``term_expansion(_, _, _, _)`` call is read -- a clause head, or a
+        body calling it -- which is what keeps a user's own ``q/1`` quiet
+        everywhere else.  Once per clause site.  See
+        ClausalRetiredQuasiQuoteWarning.
+
+        Piggybacks on ``_lint_titlecase``'s call sites, like
+        ``_lint_scale_in_name``.
+        """
+        def is_q(node):
+            return (isinstance(node, Call) and isinstance(node.func, Name)
+                    and node.func.id == "q" and len(node.args) == 1
+                    and not node.keywords)
+
+        def is_te(node):
+            return (isinstance(node, Call) and isinstance(node.func, Name)
+                    and node.func.id == "term_expansion"
+                    and len(node.args) + len(node.keywords) == 4)
+
+        for top in nodes:
+            if top is None:
+                continue
+            everything = list(_ast_module.walk(top))
+            if not any(is_te(n) for n in everything):
+                continue
+            first = next((n for n in everything if is_q(n)), None)
+            if first is None:
+                continue
+            lineno = getattr(first, "lineno", None) or getattr(top, "lineno", 0)
+            if lineno in transformer._retired_q_seen:
+                continue
+            transformer._retired_q_seen.add(lineno)
+            import warnings                                    # noqa: PLC0415
+            where = (transformer._site(lineno) if lineno
+                     else transformer._filename)
+            warnings.warn(
+                f"{where}: `q(...)` in a term_expansion/4 clause: q() "
+                f"quasi-quotation was retired 2026-09-25 and `q` is an "
+                f"ordinary name now, so this builds a ('q', ...) term that "
+                f"matches nothing and the expansion silently does not fire. "
+                f"Write the pattern as a plain term, as in ISO "
+                f"term_expansion: term_expansion(fact(X), [fact(X)], S, S).",
+                ClausalRetiredQuasiQuoteWarning,
+                stacklevel=_stacklevel_outside_rewriter())
+
     def _lint_keyword_argument(transformer, *nodes):
         """Refuse a TERM written with KEYWORD arguments inside the CLAUSAL
         subtrees *nodes* (see ClausalKeywordArgumentWarning).
@@ -7153,6 +7205,7 @@ class EmbedTransformer(NodeTransformer):
         # nineteen call sites each.
         transformer._lint_scale_in_name(*nodes)
         transformer._lint_keyword_argument(*nodes)
+        transformer._lint_retired_quasi_quote(*nodes)
         import warnings  # noqa: PLC0415
 
         def _is_escape(node):
