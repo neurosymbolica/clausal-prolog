@@ -27,7 +27,6 @@ from clausal.logic.atoms import (
 from clausal.logic.variables import Var, deref, is_var, unify, Trail
 from clausal.logic.predicate import (
     PredicateMeta,
-    make_predicate,
     is_term_instance,
     term_field_names,
     is_declared_predicate_name, namespace_db,
@@ -338,37 +337,60 @@ def _specialization_author(db: "Database") -> str:
     return f"{SPECIALIZE_AUTHOR_PREFIX}{db.load_author()}"
 
 
-def _defining_db(db: "Database | None",
-                 module_dict: dict | None) -> "Database":
-    """The Database the specialized predicate is a row OF.
+# The per-call Databases of the direct API that were given a PRIVATE module
+# name (no ``db=``, no named ``module_dict``).  A handle is a ``str``: nothing
+# the caller holds keeps the Database alive, and the handle-owner registry is
+# weak, so the strong reference lives here (one entry per such call).
+_PRIVATE_SPECIALIZATION_DBS: dict = {}
+_PRIVATE_COUNTER = [0]
 
-    P3-3 Task 7.  A specialized predicate is a predicate: it belongs in the
-    database of the module that defines it, which is the module whose
-    namespace it is installed into.  ``compiler_v2._run_specialization`` holds
-    that database and hands it over, so a ``-specialize`` target now lands
-    beside the module's own predicates instead of in a ``Database`` the
-    specializer built and dropped on the floor.
+#: The ``module_dict`` key under which a db-less call over a NAMED namespace
+#: keeps its per-namespace Database, so repeated calls share one owner.
+_NAMESPACE_DB_KEY = "$specialization_db"
 
-    The direct Python API (``specialize_mi`` called from a test or a script
-    with a pattern, a program and a name) has no module and therefore no
-    defining module database.  It keeps a Database of its own -- one per
-    specialization call, over the caller's ``module_dict`` when there is one --
-    and that is NOT the free-floating shape this task removed: the returned
-    class READS that database's row, so the predicate is registered, signed,
-    stamped and dispatched out of a real row rather than out of class
-    attributes, and the database is reachable from the handle the caller holds
-    (``pred_cls._row.db``).  A single process-wide "specialization module"
-    database would be the free-floating shape wearing a name, and is
-    deliberately not what happens here.
+
+def _defining_db(db: "Database | None", module_dict: dict | None,
+                 new_name: str) -> "Database":
+    """The Database the specialized predicate is a row OF -- always one that
+    names a module, because the result is a HANDLE (W4b-3 slice 4).
+
+    * ``db=`` given: the DEFINING module's database (``compiler_v2``
+      passes the module it is compiling).  It must name a module; one that
+      does not cannot own a handle and is refused.
+    * no ``db=``, a ``module_dict`` that names itself (``__name__``): one
+      Database over that namespace, kept IN it (``$specialization_db``) so
+      repeated calls share one owner and the namespace keeps it alive.
+    * no ``db=`` and no module name (operator ruling 2026-09-25): a Database
+      with a PRIVATE, REGISTERED module name (``_clausal_specialize_<name>_
+      <n>``), held here strongly and registered as its handles' owner, so
+      the handle the call returns still resolves.
     """
+    from clausal.logic.database import Database  # noqa: PLC0415
+    from clausal.logic.predicate import register_handle_owner  # noqa: PLC0415
     if db is not None:
+        if db.module_name() in ("<anonymous>", "<detached>"):
+            raise ValueError(
+                f"specialize_mi*: the db= passed for {new_name!r} names no "
+                f"module, so it cannot own the handle the call returns -- "
+                f"pass a module's Database (Module(name).db), or omit db= "
+                f"for a private one")
         return db
-    from clausal.logic.database import Database
-    return Database(module_dict=module_dict)
+    if isinstance(module_dict, dict) and module_dict.get("__name__"):
+        existing = module_dict.get(_NAMESPACE_DB_KEY)
+        if existing is None:
+            existing = Database(module_dict=module_dict)
+            module_dict[_NAMESPACE_DB_KEY] = existing
+        register_handle_owner(existing)
+        return existing
+    _PRIVATE_COUNTER[0] += 1
+    private = f"_clausal_specialize_{new_name}_{_PRIVATE_COUNTER[0]}"
+    private_db = Database(module_dict={"__name__": private})
+    _PRIVATE_SPECIALIZATION_DBS[private] = private_db
+    register_handle_owner(private_db)
+    return private_db
 
 
 def _install_specialized(
-    pred_cls: PredicateMeta,
     new_name: str,
     fields: list[str],
     clauses: list,
@@ -376,129 +398,68 @@ def _install_specialized(
     module_dict: dict | None,
     solve_goal_name: str | None = None,
     goal_map: dict | None = None,
-) -> PredicateMeta:
-    """Install a specialized predicate as a ROW in *db*, through the gate.
+) -> str:
+    """Install a specialized predicate as a ROW of *db*, through the gate,
+    and return its HANDLE (W4b-3 slice 4: no class).
 
-    P3-3 Task 7, and the single copy of what the three ``specialize_mi*``
-    entry points each used to spell for themselves.  Before it, all three
-    minted a class with ``make_predicate``, built a throwaway
-    ``Database(module_dict=module_dict)``, asserted the clauses into it and
-    left the module's own database not knowing the predicate existed:
-    ``db.row(new_name, arity)`` answered ``None`` while the class answered
-    queries out of a store nothing else could reach.  That is also the
-    database the ``-table`` refusal for a ``-specialize`` alias used to name
-    (``compiler_v2._refuse_untablable_target``).
+    P3-3 Task 7 made the specialized predicate a row of the defining module
+    rather than class attributes over a throwaway Database; slice 4 removes
+    the class it was still bound through.  In one transaction -- all of it
+    inside, so a refused write (the gate asks on entry) leaves the caller's
+    namespace untouched:
 
-    What happens here, in one transaction -- ALL of it inside, so that a
-    refused write (the gate asks on entry) leaves the caller's namespace
-    untouched rather than holding an uninstalled class:
-
-    * the alias name, and the residual-goal dispatcher when there is one, are
-      bound in the compile namespace;
-    * the class is BOUND to *db*'s row for ``(new_name, arity)`` -- so
-      ``pred_cls._clauses`` IS ``db._clauses[key]`` from this point, and the
-      mirror-the-clauses-onto-the-class dance the old block needed (a
-      ``module_dict`` write so ``db.assertz`` could resolve through it, plus a
-      ``pred_cls._assertz`` fallback when there was no ``module_dict``) is
-      gone with the second store it existed to keep in step;
-    * the clause list is written and the keyword signature registered;
+    * the namespace (*module_dict*, when given) binds *new_name* to the
+      handle ``mint_predicate_handle(db, new_name)``, and the residual-goal
+      dispatcher when there is one;
+    * the clause list is written to the row, and the keyword signature
+      registered;
     * the row's ``source`` is claimed for the specialization author when
-      nobody owns it yet, which is what makes a LATER write by the same author
-      (re-running the specializer over the same name and database) permitted
-      by rule 1 rather than refused as a clause clobber by rule 3;
-    * the dispatch is compiled and installed, nested inside this transaction,
-      so the exit does not invalidate what the compile just installed.
+      nobody owns it yet (a LATER write by the same author -- re-running the
+      specializer over the same name and database -- is then permitted by
+      rule 1 rather than refused as a clobber by rule 3);
+    * the dispatch is compiled onto the row (``pred_cls=None``), nested
+      inside this transaction so the exit does not invalidate it.
 
-    ``through=pred_cls`` puts the class's CURRENT row in the write's blast
-    radius: a ``pred_cls`` handed in from outside may already be somebody
-    else's predicate, and binding it here would hand them these clauses.  The
-    gate asks about that row too, and only a bind it has cleared is
-    ``authorized``.
-
-    ``detail="-specialize"`` names the DIRECTIVE, because ``detail`` is what
-    ``refusal_error`` leads the message with when it is a str -- the slot that
-    holds ``assertz/1`` and ``retract/1`` for the other channels.  Spelling it
-    ``"specialize"`` made the refusal read "specialize: specialize:<path> may
-    not write ..." (fix round 1, F3): the channel and the author prefix are
-    different facts and should not be the same word.
+    ``detail="-specialize"`` names the DIRECTIVE: ``refusal_error`` leads its
+    message with a str ``detail``.  *db* names a module (``_defining_db``),
+    and is registered as the handle's owner (ruling Q0): a handle minted
+    here may be run before any load registration -- a recursive specialized
+    predicate calls itself through it.
     """
     from clausal.logic.compiler import compile_predicate_trampoline
     from clausal.logic.database import WRITE_LOAD_CLAUSES
+    from clausal.logic.predicate import (  # noqa: PLC0415
+        mint_predicate_handle, register_handle_owner)
 
     arity = len(fields)
     author = _specialization_author(db)
+    handle = mint_predicate_handle(db, new_name)
+    register_handle_owner(db)
     globals_ = module_dict if module_dict is not None else {}
 
-    # EVERYTHING, the namespace writes included, inside the transaction (fix
-    # round 1, F5).  The gate asks the ownership policy on ENTRY, so a
-    # refusal fires before any of this runs: binding the alias name to the
-    # class first would leave the caller's module_dict holding a predicate
-    # that was never installed anywhere -- a detached class under a name the
-    # module cannot write, which is the free-floating shape this task exists
-    # to remove, re-created on the failure path.
     with db.mutate(new_name, arity, author=author, kind=WRITE_LOAD_CLAUSES,
-                   detail="-specialize", through=pred_cls) as row:
-        # THE FLIP (W4b-2d task 8): the NAMESPACE gets the predicate's
-        # handle, minted from the defining db, exactly what
-        # ``compiler_v2._flip_bindings`` binds for every other predicate.
-        # This is the one runtime path that installs a predicate binding
-        # outside ``compile_module`` (the direct Python API,
-        # ``specialize_mi(..., module_dict, db=...)`` on a LOADED module);
-        # inside a load, step 6c's flip would rebind it anyway.  The class is
-        # still what this function returns and what the row is bound
-        # through.  A db that names no module cannot own a handle, so there
-        # the class stays -- a throwaway namespace nobody resolves by name.
-        globals_[new_name] = _namespace_binding(pred_cls, db, new_name,
-                                                module_dict)
+                   detail="-specialize", through=None) as row:
+        if module_dict is not None:
+            module_dict[new_name] = handle
         # Residual goal dispatcher, if the object program left goals this
         # specialization cannot unfold.  Resolved by NAME out of the compile
-        # namespace, exactly as before -- and it is also the ONE route by
-        # which one specialized predicate calls another, since the unfolder
-        # emits no alias-to-alias code reference: the goal survives as a term
-        # and ``_make_solve_goal_predicate``'s ``module_dict`` fallback takes
-        # it to the callee's ``_get_dispatch()``, hence to the callee's row.
+        # namespace -- also the ONE route by which one specialized predicate
+        # calls another (the goal survives as a term and
+        # ``_make_solve_goal_predicate``'s ``module_dict`` fallback takes it
+        # to the callee's handle, hence to the callee's row).
         if solve_goal_name is not None:
             globals_[solve_goal_name] = _make_solve_goal_predicate(
                 solve_goal_name, goal_map, module_dict,
             )
-        pred_cls._bind_row(db, new_name, arity, authorized=True)
-        # ``_ensure_clauses``, not a plain read: a read mints nothing (P3-3
-        # Task 2 fix round 1) and this IS the clause-install site, so the
-        # write has to land where ``db.clauses_for``/``is_defined`` can see it.
-        pred_cls._ensure_clauses()[:] = clauses
+        row.ensure_clauses()[:] = clauses
         db.register_signature(new_name, arity, tuple(fields))
         if row.source is None:
             row.source = (db.module_name(), author)
         compile_predicate_trampoline(
             new_name, arity, clauses, db,
-            globals_=globals_, pred_cls=pred_cls,
+            globals_=globals_, pred_cls=None,
         )
 
-    return pred_cls
-
-
-def _namespace_binding(pred_cls, db, new_name: str, module_dict):
-    """What ``_install_specialized`` binds *new_name* to in the namespace:
-    the handle; the class when the namespace is not *db*'s own module dict
-    (a handle minted there would name a module the namespace is not), or
-    *db* names no module.  (There is no flip-off case any more: W4b-3
-    slice 1 removed ``CLAUSAL_NO_FLIP``.)"""
-    if (module_dict is None
-            or getattr(db, "module_dict", None) is not module_dict):
-        return pred_cls
-    from clausal.logic.predicate import (  # noqa: PLC0415
-        mint_predicate_handle, register_handle_owner)
-    try:
-        handle = mint_predicate_handle(db, new_name)
-    except ValueError:
-        return pred_cls
-    # The namespace now holds a handle naming *db*'s module, and the
-    # compiled bodies in it (a recursive specialized predicate) dispatch it
-    # with no caller db.  A ``Module`` built from Python is in no
-    # ``sys.modules`` and never went through ``compile_module``'s
-    # registration, so register it as the handle's owner (ruling Q0, weak
-    # and idempotent) -- or the first recursive call is a dangling handle.
-    register_handle_owner(db)
     return handle
 
 
@@ -507,10 +468,9 @@ def specialize_mi(
     object_program: list,
     new_name: str,
     module_dict: dict | None = None,
-    pred_cls: PredicateMeta | None = None,
     goal_map: dict | None = None,
     db: "Database | None" = None,
-) -> PredicateMeta:
+) -> str:
     """Specialize an MI with respect to an object program.
 
     Parameters
@@ -525,25 +485,26 @@ def specialize_mi(
         Name for the specialized predicate.
     module_dict : dict, optional
         Module dictionary for predicate resolution.  If provided, the new
-        predicate class is installed here.
-    pred_cls : PredicateMeta, optional
-        Pre-existing predicate class to use instead of creating a new one.
-        Used by the pipeline to reuse a class pre-registered at Step 1c.
+        predicate's HANDLE is bound here under *new_name*.
     db : Database, optional
         The DEFINING module's database — where the specialized predicate is
         registered as a row (P3-3 Task 7).  ``compiler_v2`` passes the module
-        it is compiling.  Without one there is no defining module and the
-        specialization keeps a database of its own; see ``_defining_db``.
+        it is compiling.  It must name a module.  Without one the
+        specialization keeps a database of its own -- over *module_dict* when
+        that names itself, else under a PRIVATE, REGISTERED module name; see
+        ``_defining_db``.
 
     Returns
     -------
-    PredicateMeta
-        The specialized predicate class with clauses installed and compiled.
+    str
+        The specialized predicate's HANDLE (``module\x1fname``), its clauses
+        installed and compiled on the defining database's row.  Query it with
+        ``call(handle, ...)`` or ``solve((handle, ...))``; the class it used
+        to return is gone (W4b-3 slice 4, a clean break -- no shim).
     """
     fields = _specialized_fields(pattern)
-    if pred_cls is None:
-        pred_cls = make_predicate(new_name, fields)
-    target = _SpecTarget.of(pred_cls)
+    target = _SpecTarget(new_name, tuple(fields),
+                         _declared_site(db, new_name, len(fields)))
 
     # Detect whether the object program has residual goals (builtins/external).
     known_functors = _known_functors(object_program)
@@ -560,8 +521,8 @@ def specialize_mi(
 
     # Install as a row in the defining module's database, through the gate.
     return _install_specialized(
-        pred_cls, new_name, fields, clauses,
-        _defining_db(db, module_dict), module_dict,
+        new_name, fields, clauses,
+        _defining_db(db, module_dict, new_name), module_dict,
         solve_goal_name=solve_goal_name if has_residual else None,
         goal_map=goal_map,
     )
@@ -575,21 +536,15 @@ class _SpecTarget:
     F1 row 35 (the "data half"): the unfolder used to take the
     ``PredicateMeta`` class and use it only as data -- ``pred_cls(**kw)`` for
     a cell, ``__name__`` for a self-reference, ``_fields`` for positions.
-    None of that needs a class, and after the retirement flip there is none
-    to pass.  Today it is built from the class in hand (``of``), so every
-    cell is byte-identical to what the class produced; the install half
-    (``_install_specialized``) still takes the class until the flip.
+    None of that needs a class, and there is none any more (W4b-3 slice 4):
+    it is built from the name and field names, and the install half
+    (``_install_specialized``) takes no class either.
     """
     name: str
     fields: tuple[str, ...]
     # Where the predicate was declared, for the construction error's
     # "registered by" line; a class carries it, a bare target may not.
     registered_at: Any = dataclasses.field(default=None, compare=False)
-
-    @classmethod
-    def of(cls, pred_cls: PredicateMeta) -> "_SpecTarget":
-        return cls(pred_cls.__name__, tuple(pred_cls._fields),
-                   getattr(pred_cls, "_registered_at", None))
 
     def __call__(self, **kwargs: Any) -> tuple:
         """The cell ``PredicateMeta.__call__`` builds from keywords: the
@@ -607,6 +562,16 @@ class _SpecTarget:
                 _source_site(1))
         return (self.name, *(kwargs[f] if f in kwargs else Var()
                              for f in self.fields))
+
+
+def _declared_site(db, new_name: str, arity: int):
+    """Where ``new_name/arity`` was declared in *db* (a ``-specialize``
+    target pre-registered at step 1c), for a construction error's
+    "registered by" line -- or None."""
+    if db is None:
+        return None
+    row = db.row(new_name, arity)
+    return getattr(row, "declared_at", None) if row is not None else None
 
 
 def _specialized_fields(pattern: MIPattern) -> list[str]:
@@ -1608,11 +1573,10 @@ def specialize_mi_deep(
     object_program: list,
     new_name: str,
     module_dict: dict | None = None,
-    pred_cls: PredicateMeta | None = None,
     goal_map: dict | None = None,
     max_depth: int = 10,
     db: "Database | None" = None,
-) -> PredicateMeta:
+) -> str:
     """Specialize an MI with depth-bounded unfolding.
 
     Like ``specialize_mi()`` but recursively unfolds body goals that match
@@ -1629,8 +1593,6 @@ def specialize_mi_deep(
         Name for the top-level specialized predicate.
     module_dict : dict, optional
         Module dictionary for predicate resolution.
-    pred_cls : PredicateMeta, optional
-        Pre-existing predicate class to reuse.
     goal_map : dict, optional
         Custom goal handlers for residual dispatch.
     max_depth : int
@@ -1640,13 +1602,12 @@ def specialize_mi_deep(
 
     Returns
     -------
-    PredicateMeta
-        The specialized predicate class.
+    str
+        The specialized predicate's HANDLE; see ``specialize_mi``.
     """
     fields = _specialized_fields(pattern)
-    if pred_cls is None:
-        pred_cls = make_predicate(new_name, fields)
-    target = _SpecTarget.of(pred_cls)
+    target = _SpecTarget(new_name, tuple(fields),
+                         _declared_site(db, new_name, len(fields)))
 
     known_functors = _known_functors(object_program)
     has_residual = _has_residual_goals(object_program, known_functors)
@@ -1672,8 +1633,8 @@ def specialize_mi_deep(
 
     # Install as a row in the defining module's database, through the gate.
     return _install_specialized(
-        pred_cls, new_name, fields, clauses,
-        _defining_db(db, module_dict), module_dict,
+        new_name, fields, clauses,
+        _defining_db(db, module_dict, new_name), module_dict,
         solve_goal_name=solve_goal_name if has_residual else None,
         goal_map=goal_map,
     )
@@ -1944,11 +1905,10 @@ def specialize_mi_cpd(
     object_program: list,
     new_name: str,
     module_dict: dict | None = None,
-    pred_cls: PredicateMeta | None = None,
     goal_map: dict | None = None,
     max_depth: int = 10,
     db: "Database | None" = None,
-) -> PredicateMeta:
+) -> str:
     """Specialize an MI with conjunctive partial deduction (deforestation).
 
     Extends Phase 1 unfolding by deforesting intermediate goal-list
@@ -1968,8 +1928,6 @@ def specialize_mi_cpd(
         Name for the specialized predicate.
     module_dict : dict, optional
         Module dictionary for predicate resolution.
-    pred_cls : PredicateMeta, optional
-        Pre-existing predicate class to reuse.
     goal_map : dict, optional
         Custom goal handlers for residual dispatch.
     max_depth : int
@@ -1979,13 +1937,12 @@ def specialize_mi_cpd(
 
     Returns
     -------
-    PredicateMeta
-        The specialized predicate class.
+    str
+        The specialized predicate's HANDLE; see ``specialize_mi``.
     """
     fields = _specialized_fields(pattern)
-    if pred_cls is None:
-        pred_cls = make_predicate(new_name, fields)
-    target = _SpecTarget.of(pred_cls)
+    target = _SpecTarget(new_name, tuple(fields),
+                         _declared_site(db, new_name, len(fields)))
 
     known_functors = _known_functors(object_program)
     has_residual = _has_residual_goals(object_program, known_functors)
@@ -2009,8 +1966,8 @@ def specialize_mi_cpd(
 
     # Install as a row in the defining module's database, through the gate.
     return _install_specialized(
-        pred_cls, new_name, fields, deforested,
-        _defining_db(db, module_dict), module_dict,
+        new_name, fields, deforested,
+        _defining_db(db, module_dict, new_name), module_dict,
         solve_goal_name=solve_goal_name if has_residual else None,
         goal_map=goal_map,
     )

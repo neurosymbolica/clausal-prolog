@@ -1869,15 +1869,21 @@ def _preregister_specializations(
         except Exception:
             continue  # Will error properly in _run_specialization
 
-        # Create and register the empty predicate class.
+        # Register the empty predicate: a ROW and the HANDLE (W4b-3 slice 4c
+        # -- it used to be a ``make_predicate`` class bound under the name,
+        # which the flip then turned into this same handle).
         if item.new_name not in module_dict:
-            cls = make_predicate(item.new_name, fields)
-            module_dict[item.new_name] = cls
-            # W4b-1: the class is not the only place these fields may be
-            # read from.  Register the declaration so ``field_names_for``
-            # answers from the NAME once W4b-2 makes the module attribute a
-            # mangled atom.  ``_install_specialized`` registers again later
-            # through ``register_signature``; both write the same tuple.
+            from clausal.logic.predicate import (  # noqa: PLC0415
+                mint_predicate_handle, register_handle_owner)
+            try:
+                module_dict[item.new_name] = mint_predicate_handle(
+                    db, item.new_name)
+                register_handle_owner(db)
+            except ValueError:
+                pass    # a db naming no module owns no handle; step 6b refuses
+            # The declaration, so ``field_names_for`` answers from the NAME.
+            # ``_install_specialized`` registers again later through
+            # ``register_signature``; both write the same tuple.
             db.declare_functor(item.new_name, tuple(fields))
             # Ruling QB (2026-09-24): mint the ROW now.  A declared functor
             # with no row is DATA to ``declared_kind``, so between here and
@@ -1972,13 +1978,6 @@ def _run_specialization(
                 f"must be a predicate or list, got {type(source_cls)}"
             )
 
-        # Reuse pre-registered class if available.
-        existing_cls = module_dict.get(item.new_name)
-        if isinstance(existing_cls, PredicateMeta):
-            target_cls = existing_cls
-        else:
-            target_cls = None
-
         # Run the specializer (deep unfolding if depth > 0, CPD if cpd=True).
         #
         # P3-3 Task 7: ``db=db`` is what makes the specialized predicate THIS
@@ -1988,19 +1987,18 @@ def _run_specialization(
         # ``module_dict``; the row it now gets is registered, signed and
         # gate-stamped here beside the module's own predicates.
         if item.cpd:
-            specialized_cls = specialize_mi_cpd(
+            specialize_mi_cpd(
                 pattern, program_data, item.new_name, module_dict,
-                pred_cls=target_cls, max_depth=item.depth or 10, db=db,
+                max_depth=item.depth or 10, db=db,
             )
         elif item.depth > 0:
-            specialized_cls = specialize_mi_deep(
+            specialize_mi_deep(
                 pattern, program_data, item.new_name, module_dict,
-                pred_cls=target_cls, max_depth=item.depth, db=db,
+                max_depth=item.depth, db=db,
             )
         else:
-            specialized_cls = specialize_mi(
-                pattern, program_data, item.new_name, module_dict,
-                pred_cls=target_cls, db=db,
+            specialize_mi(
+                pattern, program_data, item.new_name, module_dict, db=db,
             )
 
         # The specialized predicate is already compiled and installed

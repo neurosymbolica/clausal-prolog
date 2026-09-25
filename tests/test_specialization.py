@@ -89,6 +89,20 @@ def _specialize_row_route(module, fn, pattern, program, name, arity, **kw):
     return result
 
 
+
+def _row_of(handle, arity=1):
+    """The row a specialization's returned HANDLE names (W4b-3 slice 4: the
+    API returns the handle; it returned a class whose ``_row`` this read)."""
+    from clausal.logic.atoms import is_mangled
+    from clausal.logic.predicate import resolve_predicate_row
+    assert type(handle) is str and is_mangled(handle), handle
+    return resolve_predicate_row(handle, arity=arity)
+
+
+def _dispatch_of(handle, arity=1):
+    from clausal.logic.predicate import _dispatch_at
+    return _dispatch_at(handle, arity)
+
 def _row(module, name, arity):
     """The specialized predicate's ROW in *module*'s database (never None)."""
     row = module.db.row(name, arity)
@@ -2203,17 +2217,39 @@ class TestCpdTermination:
 
 
 class TestNoDbClassHandleDefault:
-    """DELETE AT W4b-3 (operator ruling QC, 2026-09-24).
-
-    Every other test in this file specializes into a module (``db=`` +
-    ``module_dict=``) and queries by name, the post-P4 shape.  Until W4b-3
-    the API still ships its old default -- no ``db=``, a private Database,
-    and a returned class the caller queries directly -- so these keep that
-    route covered at the answer level: a residual catch-all through
-    ``specialize_mi`` and a counting variant through ``specialize_mi_cpd``.
-    When W4b-3 makes ``db=`` required they stop being valid; delete them
-    then (``test_no_db_still_row_linked`` below goes at the same time).
+    """The no-``db=`` default of the direct API.  KEPT at W4b-3 by operator
+    ruling 2026-09-25 (it was marked for deletion under ruling QC): a
+    specialization with no ``db=`` and no named namespace gets a Database
+    with a PRIVATE, REGISTERED module name, so the call still returns a
+    HANDLE the caller queries directly.  (The class it returned is gone.)
     """
+
+    def test_the_private_module_handle_resolves_with_nothing_else_held(
+            self, mi_module):
+        import gc
+        from clausal.logic.atoms import demangle
+        from clausal.logic.solve import solve
+        handle = specialize_mi(analyze_mi(mi_module.solve),
+                               _make_natnum_program(), "NoDbPrivate")
+        module_name, name = demangle(handle)
+        assert name == "NoDbPrivate"
+        assert module_name.startswith("_clausal_specialize_NoDbPrivate_")
+        gc.collect()      # the handle is a str: the db must be held elsewhere
+        assert len(list(solve((handle, [["natnum", ["s", 0]]])))) == 1
+
+    def test_two_db_less_calls_get_two_private_modules(self, mi_module):
+        from clausal.logic.atoms import demangle
+        a = specialize_mi(analyze_mi(mi_module.solve),
+                          _make_natnum_program(), "NoDbTwice")
+        b = specialize_mi(analyze_mi(mi_module.solve),
+                          _make_natnum_program(), "NoDbTwice")
+        assert demangle(a)[0] != demangle(b)[0]
+
+    def test_an_explicit_db_naming_no_module_is_refused(self, mi_module):
+        from clausal.logic.database import Database
+        with pytest.raises(ValueError, match="names no module"):
+            specialize_mi(analyze_mi(mi_module.solve),
+                          _make_natnum_program(), "NoDbAnon", db=Database())
 
     def test_factorial_residual_through_the_class_handle(self, mi_module):
         from clausal.logic.solve import call
@@ -2255,7 +2291,7 @@ class TestNoDbClassHandleDefault:
             pattern, _make_natnum_program(), "NoDbModuleDictNatnum",
             module_dict,
         )
-        assert pred_cls._row.db.module_dict is module_dict
+        assert _row_of(pred_cls).db.module_dict is module_dict
         assert sum(1 for _ in call(pred_cls, [["natnum", ["s", 0]]])) == 1
         assert sum(1 for _ in call(pred_cls, [["natnum", "a"]])) == 0
 
@@ -2291,7 +2327,7 @@ class TestSpecializedPredicateIsARow:
         )
         row = db.row("T7RowNatnum", 1)
         assert row is not None
-        assert pred_cls._row is row
+        assert _row_of(pred_cls) is row
         assert row.detached is False
 
     def test_signature_registered_in_the_callers_db(self, mi_module, spec_module):
@@ -2311,7 +2347,7 @@ class TestSpecializedPredicateIsARow:
             pattern, _make_natnum_program(), "T7ClausesNatnum",
         )
         assert len(db.clauses_for("T7ClausesNatnum", 1)) == 3
-        assert db.get_dispatch("T7ClausesNatnum", 1) is pred_cls._get_dispatch()
+        assert db.get_dispatch("T7ClausesNatnum", 1) is _dispatch_of(pred_cls)
 
     def test_write_is_gate_stamped(self, mi_module, spec_module):
         from clausal.logic.database import WRITE_LOAD_CLAUSES
@@ -2348,7 +2384,7 @@ class TestSpecializedPredicateIsARow:
             pattern, _make_natnum_program(), "T7AgainNatnum",
         )
         assert len(db.clauses_for("T7AgainNatnum", 1)) == 3
-        assert pred_cls._row is db.row("T7AgainNatnum", 1)
+        assert _row_of(pred_cls) is db.row("T7AgainNatnum", 1)
 
     def test_no_db_still_row_linked(self, mi_module):
         """With no database anywhere in the caller's world there is no defining
@@ -2369,11 +2405,11 @@ class TestSpecializedPredicateIsARow:
         pred_cls = specialize_mi(
             pattern, _make_natnum_program(), "T7NoDbNatnum",
         )
-        row = pred_cls._row
+        row = _row_of(pred_cls)
         assert row is not None
         assert row.detached is False
         assert row.db.row("T7NoDbNatnum", 1) is row
-        assert row.db.get_dispatch("T7NoDbNatnum", 1) is pred_cls._get_dispatch()
+        assert row.db.get_dispatch("T7NoDbNatnum", 1) is _dispatch_of(pred_cls)
         # One stamp for the whole specialization: the nested set_dispatch and
         # dispatch-install transactions inherit this one (P3-3 Task 3).
         assert len(row.writes) == 1
@@ -2395,8 +2431,8 @@ class TestSpecializedPredicateIsARow:
             spec_module, specialize_mi_cpd,
             pattern, _make_natnum_program(), "T7CpdNatnum", max_depth=3,
         )
-        assert deep._row is db.row("T7DeepNatnum", 1)
-        assert cpd._row is db.row("T7CpdNatnum", 1)
+        assert _row_of(deep) is db.row("T7DeepNatnum", 1)
+        assert _row_of(cpd) is db.row("T7CpdNatnum", 1)
         assert db.get_dispatch("T7DeepNatnum", 1) is not None
         assert db.get_dispatch("T7CpdNatnum", 1) is not None
 
@@ -2451,9 +2487,9 @@ class TestSpecializedPredicateIsARow:
             pattern, [[["wrap", y], [["T7Inner", [["natnum", y]]]]]], "T7Outer",
         )
 
-        assert inner._row is db.row("T7Inner", 1)
-        assert outer._row is db.row("T7Outer", 1)
-        assert inner._row.db is outer._row.db
+        assert _row_of(inner) is db.row("T7Inner", 1)
+        assert _row_of(outer) is db.row("T7Outer", 1)
+        assert _row_of(inner).db is _row_of(outer).db
         # The callee is reached through its row's dispatch, not a private one.
         # W4b-2d: the module dict binds the specialization's HANDLE (it was
         # the class), which resolves to that same row.
@@ -2462,8 +2498,8 @@ class TestSpecializedPredicateIsARow:
         )
         assert module_dict["T7Inner"] == mint_predicate_handle(db, "T7Inner")
         assert resolve_predicate_row(module_dict["T7Inner"], arity=1,
-                                     db=db) is inner._row
-        assert inner._get_dispatch() is db.get_dispatch("T7Inner", 1)
+                                     db=db) is _row_of(inner)
+        assert _dispatch_of(inner) is db.get_dispatch("T7Inner", 1)
 
         assert sum(1 for _ in call(
             "T7Outer", [["wrap", ["s", 0]]], module=spec_module,
