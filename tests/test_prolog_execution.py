@@ -265,7 +265,7 @@ class TestEqArithmeticLoweringAgrees:
         # said false. `#=` binds, so Scryer now answers `_A = 1257000`.
         mod = _load_clausal(tmp_path, "eq4", _EQ_SOURCE)
         v = Var()
-        clausal = _run_clausal(lambda: mod.eq(v, 1257000), v, module=mod)
+        clausal = _run_clausal(lambda: ("eq", v, 1257000), v, module=mod)
         scryer = _run_scryer(tmp_path, _EQ_PL, "eq(_, 1257000).")
         assert clausal == ("succeeds", (1257000,))  # the bound value itself, per §1.2
         assert_agreement(clausal, scryer, case="eq(V, 1257000)")
@@ -274,7 +274,7 @@ class TestEqArithmeticLoweringAgrees:
         # Symmetric to the row above; was equally divergent.
         mod = _load_clausal(tmp_path, "eq6", _EQ_SOURCE)
         v = Var()
-        clausal = _run_clausal(lambda: mod.eq(1257000, v), v, module=mod)
+        clausal = _run_clausal(lambda: ("eq", 1257000, v), v, module=mod)
         scryer = _run_scryer(tmp_path, _EQ_PL, "eq(1257000, _).")
         assert clausal == ("succeeds", (1257000,))
         assert_agreement(clausal, scryer, case="eq(1257000, V)")
@@ -284,7 +284,7 @@ class TestEqArithmeticLoweringAgrees:
         # `clpz:(_A in inf..sup).` -- a success carrying a constraint, which is
         # an answer shape this harness could not produce before the ruling.
         mod = _load_clausal(tmp_path, "eq7", _EQ_SOURCE)
-        clausal = _run_clausal(lambda: mod.eq(Var(), Var()), module=mod)
+        clausal = _run_clausal(lambda: ("eq", Var(), Var()), module=mod)
         scryer = _run_scryer(tmp_path, _EQ_PL, "eq(_, _).")
         assert_agreement(clausal, scryer, case="eq(V, W)")
         assert scryer[1] is not None and "clpz" in scryer[1], scryer
@@ -294,7 +294,7 @@ class TestEqArithmeticLoweringAgrees:
         # domain_error(clpz_expression, foo). Agreement is on the outcome KIND.
         mod = _load_clausal(tmp_path, "eq5", _EQ_SOURCE)
         v = Var()
-        clausal = _run_clausal(lambda: mod.eq(v, "foo"), v, module=mod)
+        clausal = _run_clausal(lambda: ("eq", v, "foo"), v, module=mod)
         scryer = _run_scryer(tmp_path, _EQ_PL, "eq(_, foo).")
         assert clausal[0] == "raises"
         assert_agreement(clausal, scryer, case="eq(V, foo)")
@@ -320,7 +320,7 @@ class TestEqNonIntegerOperandStillDiverges:
         # 2500 == 2500.0: Clausal succeeds. `=:=` succeeded here BEFORE the
         # ruling, so this row is a regression the ruling knowingly accepted.
         mod = _load_clausal(tmp_path, "eqf", _EQ_SOURCE)
-        clausal = _run_clausal(lambda: mod.eq(2500, 2500.0), module=mod)
+        clausal = _run_clausal(lambda: ("eq", 2500, 2500.0), module=mod)
         scryer = _run_scryer(tmp_path, _EQ_PL, "eq(2500, 2500.0).")
         assert "domain_error(clpz_expression" in scryer[1], scryer
         assert_known_divergence(clausal, scryer, case="eq(2500, 2500.0)",
@@ -328,14 +328,14 @@ class TestEqNonIntegerOperandStillDiverges:
 
     def test_ground_atoms_equal(self, tmp_path):
         mod = _load_clausal(tmp_path, "eq2", _EQ_SOURCE)
-        clausal = _run_clausal(lambda: mod.eq(chars("foo"), chars("foo")), module=mod)
+        clausal = _run_clausal(lambda: ("eq", chars("foo"), chars("foo")), module=mod)
         scryer = _run_scryer(tmp_path, _EQ_PL, "eq(foo, foo).")
         assert_known_divergence(clausal, scryer, case="eq(foo, foo)",
                                 spec_section="the 2026-09-19 integer limit")
 
     def test_ground_atoms_unequal(self, tmp_path):
         mod = _load_clausal(tmp_path, "eq3", _EQ_SOURCE)
-        clausal = _run_clausal(lambda: mod.eq(chars("foo"), chars("bar")), module=mod)
+        clausal = _run_clausal(lambda: ("eq", chars("foo"), chars("bar")), module=mod)
         scryer = _run_scryer(tmp_path, _EQ_PL, "eq(foo, bar).")
         assert_known_divergence(clausal, scryer, case="eq(foo, bar)",
                                 spec_section="the 2026-09-19 integer limit")
@@ -352,13 +352,13 @@ class TestIdentStructuralLoweringAgrees:
 
     def test_ground_atoms_equal(self, tmp_path):
         mod = _load_clausal(tmp_path, "id1", _IDENT_SOURCE)
-        clausal = _run_clausal(lambda: mod.ident(chars("foo"), chars("foo")), module=mod)
+        clausal = _run_clausal(lambda: ("ident", chars("foo"), chars("foo")), module=mod)
         scryer = _run_scryer(tmp_path, _IDENT_PL, "ident(foo, foo).")
         assert_agreement(clausal, scryer, case="ident(foo, foo)")
 
     def test_ground_atoms_unequal(self, tmp_path):
         mod = _load_clausal(tmp_path, "id2", _IDENT_SOURCE)
-        clausal = _run_clausal(lambda: mod.ident(chars("foo"), chars("bar")), module=mod)
+        clausal = _run_clausal(lambda: ("ident", chars("foo"), chars("bar")), module=mod)
         scryer = _run_scryer(tmp_path, _IDENT_PL, "ident(foo, bar).")
         assert_agreement(clausal, scryer, case="ident(foo, bar)")
 
@@ -366,7 +366,7 @@ class TestIdentStructuralLoweringAgrees:
         # The row the arithmetic spelling cannot serve: both say false, because
         # 2500 and 2500.0 are different TERMS.
         mod = _load_clausal(tmp_path, "id3", _IDENT_SOURCE)
-        clausal = _run_clausal(lambda: mod.ident(2500, 2500.0), module=mod)
+        clausal = _run_clausal(lambda: ("ident", 2500, 2500.0), module=mod)
         scryer = _run_scryer(tmp_path, _IDENT_PL, "ident(2500, 2500.0).")
         assert_agreement(clausal, scryer, case="ident(2500, 2500.0)")
         assert clausal[0] == "fails", clausal
@@ -374,7 +374,7 @@ class TestIdentStructuralLoweringAgrees:
     def test_unbound_left_ground_numeric_right(self, tmp_path):
         mod = _load_clausal(tmp_path, "id4", _IDENT_SOURCE)
         v = Var()
-        clausal = _run_clausal(lambda: mod.ident(v, 1257000), v, module=mod)
+        clausal = _run_clausal(lambda: ("ident", v, 1257000), v, module=mod)
         scryer = _run_scryer(tmp_path, _IDENT_PL, "ident(_, 1257000).")
         assert_agreement(clausal, scryer, case="ident(V, 1257000)")
 
@@ -382,7 +382,7 @@ class TestIdentStructuralLoweringAgrees:
         # Two DISTINCT fresh variables are not identical, in either engine --
         # and this is the row the arithmetic spelling answers by POSTING.
         mod = _load_clausal(tmp_path, "id5", _IDENT_SOURCE)
-        clausal = _run_clausal(lambda: mod.ident(Var(), Var()), module=mod)
+        clausal = _run_clausal(lambda: ("ident", Var(), Var()), module=mod)
         scryer = _run_scryer(tmp_path, _IDENT_PL, "ident(_, _).")
         assert_agreement(clausal, scryer, case="ident(V, W)")
         assert clausal[0] == "fails", clausal
@@ -415,7 +415,7 @@ class TestTaxWitnessWorkedExample:
         """
         mod = _load_clausal(tmp_path, "witness1", _WITNESS_SOURCE)
         after = Var()
-        clausal = _run_clausal(lambda: mod.taxable(1257000, 257000, after), after, module=mod)
+        clausal = _run_clausal(lambda: ("taxable", 1257000, 257000, after), after, module=mod)
         scryer = _run_scryer(tmp_path, _WITNESS_PL, "taxable(1257000, 257000, After).")
         assert clausal == ("succeeds", (1000000,))
         assert_agreement(clausal, scryer,
@@ -429,7 +429,7 @@ class TestTaxWitnessWorkedExample:
         # happily checks it -- this is the row that hides the defect from any
         # gate that only ever calls with all outputs pre-filled.
         mod = _load_clausal(tmp_path, "witness2", _WITNESS_SOURCE)
-        clausal = _run_clausal(lambda: mod.taxable(1257000, 257000, 1000000), module=mod)
+        clausal = _run_clausal(lambda: ("taxable", 1257000, 257000, 1000000), module=mod)
         scryer = _run_scryer(tmp_path, _WITNESS_PL, "taxable(1257000, 257000, 1000000).")
         assert_agreement(clausal, scryer, case="taxable(1257000, 257000, 1000000) [bound]")
 
@@ -441,7 +441,7 @@ class TestTaxWitnessWorkedExample:
         """
         mod = _load_clausal(tmp_path, "witness3", _WITNESS_SOURCE)
         a = Var()
-        clausal = _run_clausal(lambda: mod.allow(a, 1257000), a, module=mod)
+        clausal = _run_clausal(lambda: ("allow", a, 1257000), a, module=mod)
         scryer = _run_scryer(tmp_path, _WITNESS_PL, "allow(A, 1257000).")
         assert clausal == ("succeeds", (1257000,))
         assert_agreement(clausal, scryer, case="allow(A, 1257000)")
@@ -458,7 +458,7 @@ class TestTaxWitnessWorkedExample:
         prevent, so the new reason is asserted explicitly.
         """
         mod = _load_clausal(tmp_path, "witness4", _WITNESS_SOURCE)
-        clausal = _run_clausal(lambda: mod.chk(2500.0), module=mod)
+        clausal = _run_clausal(lambda: ("chk", 2500.0), module=mod)
         scryer = _run_scryer(tmp_path, _WITNESS_PL, "chk(2500.0).")
         assert scryer[0] == "raises", scryer
         assert "domain_error(clpz_expression" in scryer[1], scryer
@@ -467,7 +467,7 @@ class TestTaxWitnessWorkedExample:
 
     def test_chk_bound_int_agrees(self, tmp_path):
         mod = _load_clausal(tmp_path, "witness5", _WITNESS_SOURCE)
-        clausal = _run_clausal(lambda: mod.chk(2500), module=mod)
+        clausal = _run_clausal(lambda: ("chk", 2500), module=mod)
         scryer = _run_scryer(tmp_path, _WITNESS_PL, "chk(2500).")
         assert_agreement(clausal, scryer, case="chk(2500)")
 
@@ -501,7 +501,7 @@ class TestDateOrderingWitness:
         # clause head carries the ATOM the atom-mode literal denotes, so the
         # Python caller must pass the atom (`mint`), not a str.
         clausal = _run_clausal(
-            lambda: mod.service_in_force(mint("virtual_asset"),
+            lambda: ("service_in_force", mint("virtual_asset"),
                                          _T(_P(datetime).date(2026, 9, 2)))
         , module=mod)
         scryer = _run_scryer(
@@ -536,13 +536,13 @@ _SAME_PL = _translate(_SAME_SOURCE)
 class TestKnownCorrectLoweringControl:
     def test_same_agrees_when_equal(self, tmp_path):
         mod = _load_clausal(tmp_path, "same1", _SAME_SOURCE)
-        clausal = _run_clausal(lambda: mod.same(5, 5), module=mod)
+        clausal = _run_clausal(lambda: ("same", 5, 5), module=mod)
         scryer = _run_scryer(tmp_path, _SAME_PL, "same(5, 5).")
         assert_agreement(clausal, scryer, case="same(5, 5)")
 
     def test_same_agrees_when_unequal(self, tmp_path):
         mod = _load_clausal(tmp_path, "same2", _SAME_SOURCE)
-        clausal = _run_clausal(lambda: mod.same(5, 6), module=mod)
+        clausal = _run_clausal(lambda: ("same", 5, 6), module=mod)
         scryer = _run_scryer(tmp_path, _SAME_PL, "same(5, 6).")
         assert_agreement(clausal, scryer, case="same(5, 6)")
 
@@ -608,7 +608,7 @@ class TestStrLiteralUnifiesWithImportedAtom:
         try:
             asker = _load_clausal(tmp_path, "asker", _ASKER_CLAUSAL)
             var = Var()
-            clausal = _run_clausal(lambda: asker.hit(var), var, module=asker)
+            clausal = _run_clausal(lambda: ("hit", var), var, module=asker)
         finally:
             sys.path.remove(str(tmp_path))
 
@@ -690,7 +690,7 @@ class TestBracketAtomLiteralAgrees:
     def test_bracket_atom_literal_agrees(self, tmp_path):
         mod = _load_clausal(tmp_path, "nil1", _NIL_SOURCE)
         var = Var()
-        clausal = _run_clausal(lambda: mod.hit(var), var, module=mod)
+        clausal = _run_clausal(lambda: ("hit", var), var, module=mod)
         # The engine's own answer: the atom `[]` is the empty list.
         assert clausal == ("succeeds", ([],)), clausal
 
@@ -725,10 +725,10 @@ class TestStringIsItsCharListInEquality:
 
     def test_string_equals_its_char_list_both_directions(self, tmp_path):
         mod = _load_clausal(tmp_path, "streq1", _STRING_EQ_SOURCE)
-        for pred, case in ((mod.hit, 'hit(X), X is "ab", X == [a, b]'),
-                           (mod.hit2, 'hit2(X), X is [a, b], X == "ab"')):
+        for pred, case in (("hit", 'hit(X), X is "ab", X == [a, b]'),
+                           ("hit2", 'hit2(X), X is [a, b], X == "ab"')):
             var = Var()
-            clausal = _run_clausal(lambda: pred(var), var, module=mod)
+            clausal = _run_clausal(lambda: (pred, var), var, module=mod)
             assert clausal[0] == "succeeds", (case, clausal)
 
         pl = _translate(_STRING_EQ_SOURCE)
