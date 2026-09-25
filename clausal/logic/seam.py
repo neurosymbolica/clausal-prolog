@@ -9,7 +9,7 @@ turns that node into the term the engine itself would build:
 * a data functor becomes the cell ``("verdict", ...)`` — placed against
   the functor's declared signature exactly as ``term_to_ast_expr`` places
   it (positional args fill leading slots, keywords their named slots,
-  omitted slots backfill with a fresh ``Var``), under the host module's
+  an omitted slot is refused -- never padded), under the host module's
   own functor rules (declared, imported, or ``-implicit_functors``);
 * a bare name is the ATOM the host module binds it to — ``("good",)`` —
   under the host module's own atom rules (strict atoms, declarations,

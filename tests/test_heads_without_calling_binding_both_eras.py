@@ -209,8 +209,7 @@ def _without_registered_by(msg):
 @pytest.mark.parametrize("name,args,kwargs,expected", [
     ("p", (7,), {}, ("p", 7)),
     ("p", (), {"A": 7}, ("p", 7)),
-    ("p", (), {}, ("p", "<var>")),
-    ("q", (), {"B": 8}, ("q", "<var>", 8)),
+    ("q", (), {"B": 8, "A": 7}, ("q", 7, 8)),
     ("q", (7, 8), {}, ("q", 7, 8)),
 ])
 def test_the_same_cell_as_the_class_built(owner, name, args, kwargs, expected):
@@ -243,6 +242,17 @@ _CLASS_ERA_ERRORS = {
         "functor q/2 was constructed with 1 positional argument(s)\n"
         "but its class was registered with 2 field(s) (A, B)",
         "q", 2, ("A", "arg_1"), ("A", "B")),
+    # Operator ruling 2026-09-25 (no padding): these two BUILT a padded cell
+    # in the class era; both are refused now, with the arity error.
+    ("p", (), ()): (
+        "functor p/1 was constructed with 0 positional argument(s)\n"
+        "but its class was registered with 1 field(s) (A)",
+        "p", 1, (), ("A",)),
+    ("q", (), (("B", 8),)): (
+        "functor q/2 was constructed with 0 positional argument(s) and field "
+        "names (B)\n"
+        "but its class was registered with 2 field(s) (A, B)",
+        "q", 2, ("B",), ("A", "B")),
 }
 
 
@@ -252,6 +262,8 @@ _CLASS_ERA_ERRORS = {
     ("q", (7,), {}),                       # short: ruling C refuses, no pad
     ("q", (), {"C": 1}),                   # a field it does not have
     ("q", (1,), {"arg_1": 1}),             # placeholder spelling
+    ("p", (), {}),                         # no arguments: no padding
+    ("q", (), {"B": 8}),                   # keyword-only partial: no padding
 ])
 def test_the_same_construction_error_as_the_class_raised(owner, name, args, kwargs):
     msgs = {}
@@ -288,8 +300,13 @@ def test_arity_only_placeholders_are_answered_for_a_handle(owner):
         # a plain name keeps its old answer
         assert field_names_for(name, arity=arity, db=db) is None
         kw = {placeholders[-1]: 5}
-        assert (_shape(head_cell(both["handle"], **dict(kw)))
-                == (name, *(["<var>"] * (arity - 1)), 5))
+        if arity == 1:
+            assert _shape(head_cell(both["handle"], **dict(kw))) == (name, 5)
+        else:
+            # Keyword-only construction naming SOME slots is refused, never
+            # padded (operator ruling 2026-09-25).
+            with pytest.raises(ClausalTermConstructionError):
+                head_cell(both["handle"], **dict(kw))
 
 
 @pytest.mark.parametrize("name,arity,derived", [
@@ -311,10 +328,14 @@ def test_after_a_clause_the_handle_answers_the_heads_names(
     # a KEYWORD head -- the rewriter's default emission -- builds the same
     # cell in both eras, and a placeholder keyword is refused in both
     kw = {derived[-1]: 9}
-    built = {era: _shape(head_cell(b, **dict(kw)))
-             for era, b in both.items()}
-    assert built["handle"] == (
-        name, *(["<var>"] * (arity - 1)), 9)
+    if arity == 1:
+        assert _shape(head_cell(both["handle"], **dict(kw))) == (name, 9)
+    else:
+        # naming only some slots is refused, never padded (2026-09-25)
+        with pytest.raises(ClausalTermConstructionError):
+            head_cell(both["handle"], **dict(kw))
+    full = dict(zip(derived, range(arity)))
+    assert _shape(head_cell(both["handle"], **full)) == (name, *range(arity))
     for binding in both.values():
         with pytest.raises(ClausalTermConstructionError):
             head_cell(binding, **{f"arg_{arity - 1}": 9})
@@ -333,7 +354,10 @@ def test_a_name_at_two_arities_builds_at_the_written_one(owner):
     assert _shape(head_cell(handle, 1)) == ("m", 1)
     assert _shape(head_cell(handle, 1, 2)) == ("m", 1, 2)
     assert _shape(head_cell(handle, A=1)) == ("m", 1)
-    assert _shape(head_cell(handle, arg_1=2)) == ("m", "<var>", 2)
+    # naming only some of m/2's slots is refused, never padded (2026-09-25)
+    with pytest.raises(ClausalTermConstructionError):
+        head_cell(handle, arg_1=2)
+    assert _shape(head_cell(handle, arg_1=2, arg_0=1)) == ("m", 1, 2)
     with pytest.raises(AmbiguousArityConstructionError,
                        match=r"m/1, m/2") as exc_info:
         head_cell(handle, 1, 2, 3)

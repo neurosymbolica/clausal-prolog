@@ -3,7 +3,7 @@
 PredicateMeta turns a class into a first-class predicate:
   - Class-level clause storage, dispatch, and signature
   - Locking to prevent cross-module mutation
-  - __call__ override for partial term creation (missing fields → Var())
+  - __call__ override building the term's cell (every field supplied; no padding)
   - __init__, __eq__, __repr__, __match_args__ — no @dataclass needed
 
 Usage:
@@ -354,9 +354,12 @@ def term_arity_error_for(
     supplied = _overflow_supplied_fields(registered, n_args) + tuple(
         k for k in kwargs if k not in registered[:n_args]
     )
+    named = [k for k in kwargs if k in registered]
     message = (
         f"functor {functor}/{len(registered)} was constructed with {n_args} "
-        f"positional argument(s)\n"
+        f"positional argument(s)"
+        + (f" and field names {_format_fields(tuple(named))}" if named else "")
+        + "\n"
         f"but its class was registered with {len(registered)} field(s) "
         f"{_format_fields(registered)}\n"
         f"  registered by: {_format_site(registered_at)}\n"
@@ -381,11 +384,13 @@ def construction_arity_fault(fields: tuple[str, ...], n_positional: int,
     few").  Answers ``"too_many"``, ``"too_few"`` or ``None``.
 
     * more positional arguments than *fields* -> ``"too_many"``;
-    * at least one positional argument, and some slot past them that no
-      name in *keyword_names* fills -> ``"too_few"``: no silent fresh-Var
-      padding;
-    * otherwise ``None`` -- including keyword-only construction (no
-      positional at all), which names the slots it fills.
+    * some slot past the positional arguments that no name in
+      *keyword_names* fills -> ``"too_few"``: no silent fresh-Var padding.
+      That includes KEYWORD-ONLY construction that names only some slots,
+      and a construction with no arguments at all against a signature that
+      has fields (operator ruling 2026-09-25, "let's not auto-correct
+      arity"; it used to pad every unnamed slot with a fresh ``Var``);
+    * otherwise ``None``.
 
     Pure data in, nothing raised, so every site shares the DECISION and keeps
     its own error: :func:`build_term_cell` (runtime: the class call, and a
@@ -398,7 +403,7 @@ def construction_arity_fault(fields: tuple[str, ...], n_positional: int,
     n_fields = len(fields)
     if n_positional > n_fields:
         return "too_many"
-    if 0 < n_positional < n_fields and not all(
+    if n_positional < n_fields and not all(
             f in keyword_names for f in fields[n_positional:]):
         return "too_few"
     return None
@@ -421,8 +426,9 @@ def build_term_cell(functor: str, fields: tuple[str, ...], args: tuple,
       :func:`term_arity_error_for` -- the decision is
       :func:`construction_arity_fault`, the one the compiler asks too;
     * a keyword naming no field -> :func:`term_construction_error_for`;
-    * a slot neither fills (keyword-only construction) gets a fresh
-      ``Var()``.
+    * a slot neither fills -- keyword-only construction naming only some
+      slots, or no arguments at all -- is the too-few refusal as well
+      (operator ruling 2026-09-25); nothing is padded with a fresh ``Var``.
 
     *origin* is the class being called, if any: its ``_registered_at``
     (the declaration site) is read only when an error is raised, keeping it
@@ -434,17 +440,27 @@ def build_term_cell(functor: str, fields: tuple[str, ...], args: tuple,
     "constructed at" site search starts at the CALLER'S caller (frame 2),
     exactly where ``PredicateMeta.__call__``'s own search started.
     """
+    # Positional overflow used to be DROPPED (``if i < len(fields)``), so a
+    # call with too many arguments returned a wrong term instead of raising.
+    # Ruling C (2026-09-24) refuses too FEW the same way: a registered
+    # signature is ONE arity; the compound at another arity is built by name
+    # (``(name, *args)``), not against it.  Asked for EVERY construction, not
+    # only one with positional arguments (operator ruling 2026-09-25): a
+    # keyword-only construction naming some slots, and one with no arguments
+    # at all, are refused too -- they used to be padded with fresh Vars.  The
+    # decision is :func:`construction_arity_fault`, shared with the compiler.
+    # A keyword naming no field at all is that error first when there are no
+    # positional arguments (its message names the stray field), exactly as it
+    # was before keyword-only construction was checked for arity.
+    if not args and any(k not in fields for k in kwargs):
+        raise term_construction_error_for(
+            functor, tuple(fields), getattr(origin, "_registered_at", site),
+            kwargs, _source_site(2))
+    if construction_arity_fault(fields, len(args), kwargs):
+        raise term_arity_error_for(
+            functor, fields, getattr(origin, "_registered_at", site),
+            len(args), kwargs, _source_site(2))
     if args:
-        # Positional overflow used to be DROPPED (``if i < len(fields)``),
-        # so a call with too many arguments returned a wrong term instead of
-        # raising.  Ruling C (2026-09-24) refuses too FEW the same way: a
-        # registered signature is ONE arity; the compound at another arity is
-        # built by name (``(name, *args)``), not against it.  The decision is
-        # :func:`construction_arity_fault`, shared with the compiler.
-        if construction_arity_fault(fields, len(args), kwargs):
-            raise term_arity_error_for(
-                functor, fields, getattr(origin, "_registered_at", site),
-                len(args), kwargs, _source_site(2))
         # A keyword naming a slot a POSITIONAL argument already fills used
         # to be overwritten by it here -- the keyword's value dropped
         # silently, and the slot the arguments were meant to reach left
@@ -1139,14 +1155,15 @@ class PredicateMeta(type):
     # ── Term construction ─────────────────────────────────────────────────
 
     def __call__(cls, *args: Any, **kwargs: Any) -> Any:
-        """Create a term instance, filling missing fields with fresh Var().
+        """Build the term's CELL through :func:`build_term_cell`.
 
-        For zero-arity predicates (atoms), returns the class itself —
-        the class IS the atom value.  ``red() is red`` holds.
+        For zero-arity predicates (atoms), returns the class itself.
 
-        - Positional args are mapped to fields in order.
-        - Keyword args: any field not provided gets a fresh Var().
-        - If no args at all, all fields get Var() (fully unbound term).
+        - Positional args are mapped to fields in order; keyword args fill
+          the fields they name.
+        - Every field must be supplied: a construction that leaves one out
+          (keyword-only naming some fields, or no arguments at all) is
+          refused, never padded with fresh Vars (operator ruling 2026-09-25).
         """
         if not cls._fields and not args and not kwargs:
             return cls

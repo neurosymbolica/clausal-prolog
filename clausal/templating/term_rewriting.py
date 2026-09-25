@@ -6117,6 +6117,39 @@ class EmbedTransformer(NodeTransformer):
             )
         ] + keywords
 
+    def _spell_edcg_hidden_head_slots(transformer, functor_name, head_args,
+                                      head_keywords, anchor):
+        """An ``-edcg_pred`` head written at its VISIBLE arity (a plain
+        clause, not a ``>>`` rule, which threads its accumulators itself)
+        gets its hidden ``_edcg_*`` accumulator slots SPELLED, each a fresh
+        ``$Var()``, appended in place.
+
+        They used to be filled by keyword-only construction padding every
+        unnamed slot with a fresh ``Var`` -- which the no-padding ruling
+        (operator, 2026-09-25) retired, so a construction naming only some
+        slots is refused now.  This keeps what the head has always meant
+        (the visible arguments, and a free variable in each hidden slot) as
+        the compiler's explicit spelling rather than an implicit fill.
+        Whether such a fact should instead thread each accumulator unchanged
+        (``in = out``, as a ``>>`` rule with no push does) is an open EDCG
+        question -- ``todo/construction-padding-audit-2026-09-25.md``.
+        """
+        spec = transformer._edcg_preds.get(functor_name)
+        if spec is None:
+            return
+        visible_arity = spec[0]
+        if len(head_args) + len(head_keywords) != visible_arity:
+            return
+        fields = transformer._seen_functors.get(functor_name) or ()
+        hidden = [f for f in fields if f.startswith("_edcg_")]
+        for field in hidden:
+            fresh = replace(Call(func=replace(Name(id="$Var", ctx=load), anchor),
+                                 args=[], keywords=[]), anchor)
+            if head_keywords:
+                head_keywords.append(make_keyword_node(field, fresh, anchor))
+            else:
+                head_args.append(fresh)
+
     def _unseat_directive_minted(transformer, functor_name):
         """Drop a -dynamic-minted placeholder registration for *functor_name*.
 
@@ -6709,6 +6742,8 @@ class EmbedTransformer(NodeTransformer):
             arg_field_names, transformed_pos, orig_pos_args,
             kwarg_field_names, transformed_kw, orig_kw_args,
         )
+        transformer._spell_edcg_hidden_head_slots(
+            functor_name, head_args, head_keywords, anchor)
         head_ast = replace(
             Call(
                 func=replace(Name(id=functor_name, ctx=load), anchor),
@@ -7965,6 +8000,8 @@ class EmbedTransformer(NodeTransformer):
                     arg_field_names, transformed_pos, orig_pos_args,
                     kwarg_field_names, transformed_kw, orig_kw_args,
                 )
+                transformer._spell_edcg_hidden_head_slots(
+                    functor_name, head_args, head_keywords, anchor)
                 head_ast = replace(
                     Call(
                         func=replace(Name(id=functor_name, ctx=load), anchor),

@@ -673,11 +673,11 @@ def head_to_match_pattern(
         # clause that builds one shape and matches another, one that can
         # never fire):
         # signature PLACEMENT applies here too -- positional args fill
-        # leading slots, keyword args fill named slots, and every
-        # omitted slot becomes a WILDCARD pattern (an omitted head slot
-        # binds nothing, exactly as a bare ``_`` argument would), so a
-        # partial head reference ``point(x=1)`` compiles to the pattern
-        # ``('point', 1, _)``.  Resolve against ``globals_`` -- the very
+        # leading slots, keyword args fill named slots.  An omitted slot
+        # USED to become a WILDCARD pattern (``point(x=1)`` compiled to
+        # ``('point', 1, _)``); it is refused now, exactly as construction
+        # refuses it (operator ruling 2026-09-25: no padding) -- write
+        # ``_`` for a slot that means "anything".  Resolve against ``globals_`` -- the very
         # dict ``_resolve_loadname`` uses for ``fields``, so the cell branch
         # and the MatchClass fallback beside it cannot disagree about what
         # ``term.func.name`` means.
