@@ -37,7 +37,7 @@ import clausal.import_hook  # noqa: F401 — installs the meta-path finder
 from clausal.import_hook import _load_module
 from clausal.logic.database import Clause, Database, WriteStamp
 from clausal.logic.exceptions import LogicException
-from clausal.logic.predicate import make_predicate
+from clausal.logic.predicate import make_predicate, resolve_predicate_row
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
 from clausal.terms import Compound
@@ -73,6 +73,14 @@ def _answers(module, functor):
     lm = module.__dict__["$module"]
     x = Var()
     return [deref(x) for _ in call(functor, x, module=lm)]
+
+
+def _row_of(module, binding, arity):
+    """The row a module-dict *binding* reaches, read from *module*'s Database.
+
+    After the W4b-2d flip a predicate binding is a mangled HANDLE (a str),
+    not a class, so "which row does it read" goes through the db."""
+    return resolve_predicate_row(binding, arity=arity, db=_db_of(module))
 
 
 def _refusal_text(exc) -> str:
@@ -187,16 +195,25 @@ def _locked_module(tmp_path, name):
 
 
 def test_channel_1_low_level_db_assertz_from_a_non_owner_is_refused(tmp_path):
-    module, db, cls = _locked_module(tmp_path, "gate_c1")
-    assert cls._state_row().locked is True
+    module, db, binding = _locked_module(tmp_path, "gate_c1")
+    row = _row_of(module, binding, 1)
+    assert row is db.row("gate_c1_p", 1)
+    assert row.locked is True
     with pytest.raises(LogicException) as exc_info:
-        db.assertz(Clause(head=cls(2), body=[]))
+        db.assertz(_clause("gate_c1_p", 2))
     assert "may not write gate_c1_p/1" in _refusal_text(exc_info.value)
     assert _answers(module, "gate_c1_p") == [1], "and the answers did not move"
 
 
 def test_channel_3_the_class_mutator_from_a_non_owner_is_refused(tmp_path):
-    module, db, cls = _locked_module(tmp_path, "gate_c3")
+    # After the flip the module binds a HANDLE, which has no mutator; the
+    # class-mutator channel is still open to a ``make_predicate`` class bound
+    # to the same (locked) row, so that is the class this channel goes through.
+    module, db, _binding = _locked_module(tmp_path, "gate_c3")
+    cls = make_predicate("gate_c3_p", ["x"])
+    cls._bind_row(db, "gate_c3_p", 1)
+    assert cls._row is db.row("gate_c3_p", 1)
+    assert cls._row.locked is True
     with pytest.raises(RuntimeError) as exc_info:
         cls._assertz(Clause(head=cls(2), body=[]))
     assert "may not write gate_c3_p/1" in str(exc_info.value)
@@ -218,7 +235,7 @@ def test_channel_4_the_assertz_builtin_from_a_non_owner_is_refused(tmp_path):
     with pytest.raises(LogicException) as exc_info:
         next(call("go", Var(), module=module.__dict__["$module"]), None)
     assert "may not write impclob_colour/1" in _refusal_text(exc_info.value)
-    assert len(owner.impclob_colour._state_row().clauses) == 2
+    assert len(_row_of(owner, owner.impclob_colour, 1).clauses) == 2
 
 
 def test_channel_2_the_compiler_from_a_non_owner_is_refused_with_the_same_text():
@@ -323,7 +340,7 @@ def test_alias_scenario_2_an_aliased_import_cannot_clobber_the_exporter():
     with pytest.raises(SyntaxError) as exc_info:
         _load_fixture("impclob_alias_redefine")
     assert "may not write impclob_colour/1" in str(exc_info.value)
-    assert len(owner.impclob_colour._state_row().clauses) == 2
+    assert len(_row_of(owner, owner.impclob_colour, 1).clauses) == 2
 
 
 def test_alias_scenario_3_a_second_implementer_is_refused():
@@ -442,13 +459,17 @@ def test_an_imported_dynamic_predicate_is_asserted_ON_ITS_OWNER():
     owner_db = _db_of(owner)
     cls = owner.gd_p
     owner_row = owner_db.row("gd_p", 1)
-    assert cls._row is owner_row
+    assert owner_row is not None
+    assert _row_of(owner, cls, 1) is owner_row
+    assert _row_of(user, user.__dict__["gd_p"], 1) is owner_row, (
+        "the importer's binding reads the owner's row")
 
     next(call("gd_add", 2, module=user.__dict__["$module"]), None)
 
     assert sorted(_answers(owner, "gd_p")) == [1, 2], "the owner sees it"
     assert sorted(_answers(user, "gd_p")) == [1, 2], "and so does the importer"
-    assert cls._row is owner_row, "the shared class did not move"
+    assert _row_of(owner, cls, 1) is owner_row, "the shared binding did not move"
+    assert _row_of(user, user.__dict__["gd_p"], 1) is owner_row
     assert len(owner_row.clauses) == 2
     runtime = [s for s in owner_row.writes
                if s.author.startswith("runtime-assert:")]
@@ -565,8 +586,9 @@ def test_an_aliased_import_asserts_ON_ITS_OWNER():
     owner_db = _db_of(owner)
     cls = owner.bo_p
     owner_row = owner_db.row("bo_p", 1)
-    assert cls._row is owner_row
-    assert user.__dict__["AliasS"] is cls, "the alias binds the exporter's class"
+    assert owner_row is not None
+    assert _row_of(owner, cls, 1) is owner_row
+    assert user.__dict__["AliasS"] == cls, "the alias binds the exporter's handle"
 
     assert _answers(owner, "bo_p") == [1]
 
@@ -574,7 +596,8 @@ def test_an_aliased_import_asserts_ON_ITS_OWNER():
 
     assert _answers(owner, "bo_p") == [1, 5], "the owner keeps its clause and sees the new one"
     assert _answers(user, "AliasS") == [1, 5], "and so does the importer"
-    assert cls._row is owner_row, "the shared class did not move"
+    assert _row_of(owner, cls, 1) is owner_row, "the shared binding did not move"
+    assert _row_of(user, user.__dict__["AliasS"], 1) is owner_row
     assert len(owner_row.clauses) == 2
     runtime = [s for s in owner_row.writes
                if s.author.startswith("runtime-assert:")]
@@ -595,7 +618,7 @@ def test_a_local_definition_wins_a_clash_with_an_aliased_import():
     owner = _load_fixture("gate_alias_owner")
     clash = _load_fixture("gate_alias_clash")
 
-    assert clash.__dict__["bo_p"] is not owner.bo_p, (
+    assert clash.__dict__["bo_p"] != owner.bo_p, (
         "the local definition, not the import, holds the canonical spelling"
     )
     assert _answers(owner, "bo_p") == [1]
