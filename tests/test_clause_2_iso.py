@@ -451,11 +451,48 @@ def test_call_of_the_body_answers_what_the_head_does(lm, x):
     assert through == direct
 
 
+INPUTS = [None, 0, 1, 2, 3, "a", "b"]
+
+
+def _clause_answers_somewhere(lm, pred, arity_first_inputs):
+    """For each stored clause of *pred*/2 (in order), whether ``call(B)``
+    under its Head's bindings has a solution for at least one first-argument
+    input.  Keyed by clause position, so a clause no input exercises shows
+    up by index."""
+    from clausal.logic.solve import call
+    from clausal.logic.variables import Trail, unify
+    n = len(lm.db.row(pred, 2).clauses)
+    hit = [False] * n
+    for x in arity_first_inputs:
+        H, B = (pred, Var(), Var()), Var()
+        outer = Trail()
+        for i, _ in enumerate(call("clause", H, B, module=lm, trail=outer)):
+            inner = Trail()
+            mark = inner.mark()
+            if x is None or unify(deref(H[1]), x, inner):
+                gen = call("call", B, module=lm, trail=inner)
+                try:
+                    if next(gen, None) is not None:
+                        hit[i] = True
+                finally:
+                    gen.close()
+            inner.undo(mark)
+    return hit
+
+
 def test_the_round_trip_covers_every_clause(lm):
-    """Positive control for the test above: every clause of d/2 answers for
-    some input (none is dead weight that would pass trivially)."""
-    assert len(lm.db.row("d", 2).clauses) == 17
-    assert len(_clause(lm, ("d", Var(), Var()))) == 17
+    """Positive control for the round-trip test above: EVERY stored clause
+    of d/2 answers, through clause/2 + call/1, for at least one input -- so
+    none is dead weight the comparison would pass trivially."""
+    hit = _clause_answers_somewhere(lm, "d", INPUTS)
+    assert len(hit) == 17
+    assert all(hit), [i for i, h in enumerate(hit) if not h]
+
+
+def test_the_special_form_round_trip_covers_every_clause(lm):
+    hit = _clause_answers_somewhere(lm, "mf", [None] + list(range(1, 10)))
+    assert len(hit) == 9
+    assert all(hit), [i for i, h in enumerate(hit) if not h]
 
 
 # ── Clause.hoisted from every normalizer ────────────────────────────────────
@@ -618,6 +655,9 @@ def test_only_the_selected_rule_is_built(monkeypatch, tmp_path):
         got = _clause(rlm, ("r", ("k", 150), Var()))
         assert len(got) == 1 and got[0][1][0] == "qq"
         assert counts["body"] == 1, counts
+        # The head filter compiles one head-only query per clause whose
+        # hoisted argument is a compound (todo/clause-2-compound-hoisted-head-args-compile-per-clause-2026-09-25.md).
+        assert counts["compile"] == 300 + 1, counts
     finally:
         sys.modules.pop(name, None)
 
@@ -683,3 +723,38 @@ def test_special_form_bodies_come_back_as_cells(lm):
     assert got[3][0] == "catch" and got[4][1] == ("throw", "oops")
     assert got[5][0][0] == "forall" and got[9][0] == "eval_"
     assert got[7][0][0].endswith("match")         # the module predicate's cell
+
+
+# ── Python expressions in goal position, and in hoisted head arguments ──────
+
+
+def test_a_goal_position_thunk_is_refused_without_running(lm, capsys):
+    """roborev: ``fx(1) <- ++print("x")`` is code, even with no variable in
+    it.  clause/2 must neither run it (the side effect) nor hand back its
+    return value (``None``) as the Body."""
+    from tests.fixtures import clause2_bump
+    before = clause2_bump.COUNT[0]
+    capsys.readouterr()
+    for n in (1, 2, 3):
+        assert _pi(_error(lm, ("fx", n))) == ("fx", 1)
+    assert capsys.readouterr().out == ""
+    assert clause2_bump.COUNT[0] == before
+    # A variable-free thunk in DATA position is a constant: still built.
+    (h, b), = _clause(lm, ("fx", 4))
+    assert type(b[0]) is nodes.Unify and b[0].right == 2
+    # Positive control: calling the goal DOES run it.
+    from clausal.logic.solve import call
+    assert len(list(call("fx", 2, module=lm))) == 1
+    assert clause2_bump.COUNT[0] == before + 1
+
+
+def test_a_hoisted_head_argument_reading_variables_is_refused(lm):
+    """roborev: ``hg(pt(f"{Y}", 1), Y, 1)`` -- the hoisted head argument is
+    a closure over Y, so the head has no term form.  The clause is refused
+    whenever the stored head (the hoisted position left unbound) could be
+    the one asked about -- ``hg(0, Y, 1)`` included, since the real argument
+    cannot be known -- and a query its head cannot match is unaffected."""
+    assert _pi(_error(lm, ("hg", Var(), Var(), Var()))) == ("hg", 3)
+    assert _pi(_error(lm, ("hg", 0, Var(), 1))) == ("hg", 3)
+    (h, b), = _clause(lm, ("hg", Var(), Var(), 2))
+    assert h[1] == 0 and b == ("p", h[2])

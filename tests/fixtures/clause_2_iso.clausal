@@ -12,6 +12,8 @@
 -dynamic(late/1)
 -dynamic(big/2)
 -dynamic(mf/2)
+-dynamic(fx/1)
+-dynamic(hg/3)
 -allow_singletons
 
 # Static (locked): clause/2 refuses it with permission_error.
@@ -89,3 +91,14 @@ mf(8, Y) <- (not match(r"\d+", "abc"), Y is nm),
 mf(9, Y) <- eval_(2 + 3, Y)
 
 rt_mf(X, Y) <- (clause(mf(X, Y), B), call(B))
+
+# A Python expression used as a GOAL is code, even when it reads no
+# variable: clause/2 must refuse it, not run it.
+fx(1) <- ++print("x"),
+fx(2) <- (True, ++__import__("tests.fixtures.clause2_bump", fromlist=["bump"]).bump()),
+fx(3) <- once(++print("z")),
+fx(4) <- (Y is ++len("ab"), Y == 2)
+
+# A HOISTED head argument holding a variable-reading f-string.
+hg(pt(f"{Y}", 1), Y, 1) <- p(Y),
+hg(0, Y, 2) <- p(Y)

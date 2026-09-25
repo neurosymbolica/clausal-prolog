@@ -304,6 +304,75 @@ def _capturing_thunk(t: Any) -> Any:
     return None
 
 
+# The GOAL-position arguments of each meta-call special form (the rest are
+# data): a thunk there is code the goal runs, not a value.
+_GOAL_ARGS = {
+    ("once", 1): (0,), ("call_nth", 2): (0,), ("count_all", 2): (0,),
+    ("findall", 3): (1,), ("bagof", 3): (1,), ("setof", 3): (1,),
+    ("forall", 2): (0, 1), ("catch", 3): (0, 2), ("catch_error", 2): (0,),
+    ("catch_recover", 3): (0, 2), ("call_cleanup", 2): (0, 1),
+    ("setup_call_cleanup", 3): (0, 1, 2), ("freeze", 2): (1,),
+    ("when", 2): (1,),
+}
+
+
+def _goal_thunk(goals: list) -> Any:
+    """The first ``PyThunk`` in a GOAL position of *goals*, or ``None``.
+
+    A thunk used as a goal (``fx(1) <- ++print("x")``) is Python code run
+    for its effect, not a term -- even one that reads no variable.  Building
+    the Body evaluates every thunk it reaches, so a goal thunk would run its
+    side effect on every clause/2 call and leave its RETURN VALUE (``None``)
+    where the goal was.  Goal positions: an element of the body, the
+    operands of a conjunction / ``or`` / ``not`` / ``if_``, and the goal
+    arguments of a special form (``_GOAL_ARGS``) or of ``call/N``."""
+    from clausal.terms import PyThunk  # noqa: PLC0415
+
+    def walk(g):
+        if isinstance(g, PyThunk):
+            return g
+        if type(g) is nodes.TupleLiteral:
+            subs = g.elements
+        elif type(g) in (nodes.And, nodes.Or):
+            subs = (g.left, g.right)
+        elif type(g) is nodes.Not:
+            subs = (g.operand,)
+        elif type(g) is nodes.IfExpr:
+            subs = (g.test, g.body, g.orelse)
+        elif type(g) is nodes.Call and type(g.func) is nodes.LoadName:
+            name, n = g.func.name, len(g.args)
+            idx = (0,) if name == "call" and n else _GOAL_ARGS.get((name, n), ())
+            subs = [g.args[i] for i in idx]
+        else:
+            return None
+        for sub in subs:
+            hit = walk(sub)
+            if hit is not None:
+                return hit
+        return None
+
+    for g in goals:
+        hit = walk(g)
+        if hit is not None:
+            return hit
+    return None
+
+
+def _no_term_form(goals: list) -> "str | None":
+    """Why *goals* cannot be built as terms without running Python, or
+    ``None``: a thunk in goal position, or one that reads clause
+    variables."""
+    hit = _goal_thunk(goals)
+    if hit is not None:
+        return (f"its body runs the Python expression {hit!r} as a goal, "
+                f"which is code, not a term")
+    hit = _capturing_thunk(goals)
+    if hit is not None:
+        return (f"it holds the Python expression {hit!r}, which reads the "
+                f"clause's variables and so is not a term")
+    return None
+
+
 def _as_goal(goals: list) -> Any:
     """The goal list as ONE goal node: ``True`` for none, the goal for one,
     the conjunction ``TupleLiteral`` for more."""
@@ -345,7 +414,8 @@ def _compile(goals: list, home_db):
 # no term class (``NameError``), an object that cannot be called to build one
 # (``TypeError``), a node term position refuses (``NotImplementedError``,
 # ``SyntaxError`` -- a lambda argument, say).
-_BUILD_ERRORS = (NameError, TypeError, NotImplementedError, SyntaxError)
+_BUILD_ERRORS = (NameError, TypeError, NotImplementedError, SyntaxError,
+                 RuntimeError)   # RuntimeError: _ConstructionFailed's base below
 
 _PLAIN = (int, float, str, bool, bytes, type(None))
 
@@ -394,13 +464,35 @@ def _cache_for(clause) -> dict:
 
 def _head_built(clause, home_db) -> _Built:
     """The HEAD-only construction: ``body[:hoisted]`` alone -- for a fact
-    table, just the direct pairs, no compile at all."""
+    table, just the direct pairs, no compile at all.  When the hoisted
+    arguments cannot be built (a thunk reading clause variables, a build
+    error) it builds NOTHING and carries *why*: ``head_matches`` then
+    matches the stored head as it is, hoisted positions still fresh
+    variables, and the caller refuses the clause if that matches."""
     slot = _cache_for(clause)
     built = slot.get("head")
     if built is None:
-        direct, rest = _split_lead(list(clause.body[:clause.hoisted]))
-        fn, params = _compile(rest, home_db)
-        built = slot["head"] = _Built(direct, fn, params, None, None)
+        lead = list(clause.body[:clause.hoisted])
+        why = _no_term_form(lead)
+        if why is None:
+            direct, rest = _split_lead(lead)
+            try:
+                fn, params = _compile(rest, home_db)
+            except _BUILD_ERRORS as exc:
+                why = f"its head cannot be built as a term ({exc})"
+            else:
+                built = _Built(direct, fn, params, None, None)
+        if built is None:
+            built = _Built((), None, (), None, why)
+        slot["head"] = built
+    return built
+
+
+def _head_failed(clause, home_db, exc) -> _Built:
+    """Record that the head-only construction raised at RUN time."""
+    built = _Built((), None, (), None,
+                   f"its head cannot be built as a term ({exc})")
+    _cache_for(clause)["head"] = built
     return built
 
 
@@ -416,12 +508,9 @@ def _full_built(clause, home_db, why: "str | None" = None) -> _Built:
         return cached
     from clausal.terms import Unify  # noqa: PLC0415
     rest = list(clause.body[clause.hoisted:])
-    if why is None:
-        hit = _capturing_thunk(rest)
-        if hit is not None:
-            why = (f"its body holds the Python expression {hit!r}, which "
-                   f"reads the clause's variables and so is not a term")
     head = _head_built(clause, home_db)
+    if why is None:
+        why = head.why or _no_term_form(rest)
     built = None
     if why is None:
         namespace = getattr(home_db, "module_dict", None) or {}
@@ -444,16 +533,23 @@ def _full_built(clause, home_db, why: "str | None" = None) -> _Built:
     return built
 
 
+class _ConstructionFailed(RuntimeError):
+    """The construction query had no solution -- it only binds fresh
+    variables, so this is an engine defect, reported like a build error."""
+
+
 def _on_private_trail(built: _Built, then):
     """Run *built* on a private trail, call ``then(tmp)`` with its bindings
     in place, undo, and return what *then* returned.
 
     The construction binds the STORED clause's variables, so nothing else
     may see them bound -- a meta-interpreter calls clause/2 again, on the
-    same clause, while an answer is live."""
+    same clause, while an answer is live.  The drive is CLOSED before the
+    trail is undone, so no suspended frame outlives the bindings it ran on."""
     from clausal.logic.solve import _drive_trampoline  # noqa: PLC0415
     tmp = Trail()
     mark = tmp.mark()
+    gen = None
     try:
         for v, value in built.direct:
             unify(v, value, tmp)          # a fresh head Var: binds
@@ -461,22 +557,34 @@ def _on_private_trail(built: _Built, then):
             return then(tmp)
         for pv, value in built.params:
             unify(pv, value, tmp)
-        for _ in _drive_trampoline(built.fn, tmp):
+        gen = _drive_trampoline(built.fn, tmp)
+        for _ in gen:
             return then(tmp)
+        raise _ConstructionFailed("the construction query has no solution")
     finally:
+        if gen is not None:
+            gen.close()
         tmp.undo(mark)
-    raise AssertionError(       # the goals only bind fresh variables
-        f"{_CONTEXT}: building a stored clause failed")
 
 
-def head_matches(clause, home_db, cell) -> bool:
-    """Whether *clause*'s head, hoisted arguments put back, unifies with the
-    query head *cell* -- decided on the private trail, with nothing copied
-    and the body not built.  The filter that keeps ``clause(p(1), B)`` on a
-    large table from building every clause."""
+def head_matches(clause, home_db, cell) -> "tuple[bool, str | None]":
+    """``(matched, why)``: whether *clause*'s head, hoisted arguments put
+    back, unifies with the query head *cell* -- decided on the private
+    trail, with nothing copied and the body not built.  The filter that
+    keeps ``clause(p(1), B)`` on a large table from building every clause.
+
+    *why* is set when the hoisted arguments cannot be built: *matched* then
+    says whether the stored head with those positions left as fresh
+    variables unifies -- the clause MAY be the one asked about, and the
+    caller refuses it rather than answer with a wrong head."""
     head = _as_cell(clause.head)
-    return _on_private_trail(_head_built(clause, home_db),
-                             lambda tmp: bool(unify(cell, head, tmp)))
+    built = _head_built(clause, home_db)
+    try:
+        matched = _on_private_trail(built, lambda tmp: bool(unify(cell, head, tmp)))
+    except _BUILD_ERRORS as exc:
+        built = _head_failed(clause, home_db, exc)
+        matched = _on_private_trail(built, lambda tmp: bool(unify(cell, head, tmp)))
+    return matched, built.why
 
 
 def clause_terms(clause, home_db) -> tuple:
@@ -573,8 +681,13 @@ def _clause_factory(db):
         for clause in list(row.clauses):
             # Head first, cheaply: the body is built only for a clause the
             # query selects.
-            if not head_matches(clause, home, cell):
+            matched, why = head_matches(clause, home, cell)
+            if not matched:
                 continue
+            if why is not None:
+                name, arity = row.key
+                raise _private(name, arity, (
+                    f"has a clause with no term form -- {why}"))
             c_head, c_body, why = clause_terms(clause, home)
             if why is not None:
                 name, arity = row.key
