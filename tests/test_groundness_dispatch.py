@@ -18,7 +18,7 @@ from clausal.logic.compiler.arg_index import (
     _INDEX_VAR,
     _INDEX_THRESHOLD,
 )
-from clausal.logic.predicate import PredicateMeta
+from tests.predicate_api_support import term_ctor
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.logic.trampoline import StepGenerator, solutions, DONE
 from clausal.terms import Compound, Unify
@@ -84,8 +84,7 @@ class TestExtractArgKey:
 
     def test_predicate_meta_second_field(self):
         # nv
-        class color(metaclass=PredicateMeta):
-            _fields = ("name", "code")
+        color = term_ctor("color", ("name", "code"))
 
         v1, v2 = Var(), Var()
         head = color(name=v1, code=v2)
@@ -480,8 +479,7 @@ class TestBackwardCompat:
 class TestPredicateMetaGroundness:
     def test_second_field_lookup(self):
         # nv
-        class fruit(metaclass=PredicateMeta):
-            _fields = ("name", "color")
+        fruit = term_ctor("fruit", ("name", "color"))
 
         db = Database()
         for name, color in [(mint("apple"), mint("red")), (mint("banana"), mint("yellow")),
@@ -496,7 +494,6 @@ class TestPredicateMetaGroundness:
 
         fn = compile_predicate(
             "fruit", 2, db.clauses_for("fruit", 2), db,
-            globals_={"fruit": fruit},
         )
 
         # Lookup by color (second field)

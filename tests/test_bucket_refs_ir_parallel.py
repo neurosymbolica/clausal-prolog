@@ -22,7 +22,6 @@ from __future__ import annotations
 import pytest
 
 from clausal.logic.database import Clause
-from clausal.logic.predicate import PredicateMeta
 from clausal.logic.variables import Var
 from clausal.terms import Compound, Call, LoadName
 
@@ -104,14 +103,14 @@ def test_bucket_refs_analyse_ir_agrees_with_legacy(
     # callee is ``db.row(fname, arity)``, not a name lookup in base_globals.
     db = callee_cls._row.db
 
-    base_globals_legacy = {callee_name: callee_cls}
+    base_globals_legacy = {callee_name: callee_cls.handle}
     ctx_legacy = _mkctx(db=db)
     _inject_bucket_refs_trampoline(
         ctx_legacy, [clause], base_globals_legacy, db=db)
     legacy_br = dict(ctx_legacy.bucket_ref_map)
     legacy_jbr = dict(ctx_legacy.joint_bucket_ref_map)
 
-    base_globals_ir = {callee_name: callee_cls}
+    base_globals_ir = {callee_name: callee_cls.handle}
     ir_br, ir_jbr = analyse_ir_bucket_refs([clause], base_globals_ir, db=db)
 
     assert ir_br == legacy_br, (

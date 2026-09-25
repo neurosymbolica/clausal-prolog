@@ -91,8 +91,7 @@ class TestExtractFirstArgKey:
 
     def test_predicate_meta_head(self):
         # nv
-        class color(metaclass=PredicateMeta):
-            _fields = ("name", "code")
+        color = term_ctor("color", ("name", "code"))
 
         v = Var()
         head = color(name=v, code=Var())
@@ -1215,8 +1214,7 @@ class TestPredicateMetaIndexing:
     def test_predicate_meta_facts(self):
         """PredicateMeta class facts with normalized Var+Unify heads."""
         # nv
-        class fruit(metaclass=PredicateMeta):
-            _fields = ("name", "count")
+        fruit = term_ctor("fruit", ("name", "count"))
 
         db = Database()
         for name, count in [("apple", 5), ("banana", 3), ("cherry", 8),
@@ -1228,7 +1226,6 @@ class TestPredicateMetaIndexing:
 
         fn = compile_predicate(
             "fruit", 2, db.clauses_for("fruit", 2), db,
-            globals_={"fruit": fruit},
         )
 
         trail = Trail()
@@ -1330,12 +1327,12 @@ class TestAtomInListHead:
         back as the plain str ``'usd'``, not the ``usd`` class object.
         """
         # nv
-        usd = class_arm_predicate("usd", [])
-        non_o_a = class_arm_predicate("non_o_a", [])
-        non_o_x = class_arm_predicate("non_o_x", [])
-        ltr = class_arm_predicate("ltr", [])
-        smart_t = class_arm_predicate("smart_t", [])
-        unrestricted = class_arm_predicate("unrestricted", [])
+        # The atoms are the atoms (W4b-3 slice 7): they were zero-field
+        # PredicateMeta classes, the shape of the original bug below, which
+        # left with the class.  What stays pinned is the mixed scalar/list
+        # last-argument compile.
+        usd, non_o_a, non_o_x = "usd", "non_o_a", "non_o_x"
+        ltr, smart_t, unrestricted = "ltr", "smart_t", "unrestricted"
 
         db = Database()
         clauses = [

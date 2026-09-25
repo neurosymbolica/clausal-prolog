@@ -23,7 +23,7 @@ from clausal.logic.compiler import compile_predicate_trampoline
 from clausal.logic.compiler.compile_ctx import CompilationContext
 from clausal.logic.compiler.strategy import TrampolineStrategy
 from clausal.logic.database import Clause, Database
-from clausal.logic.predicate import PredicateMeta
+from tests.predicate_api_support import RowPredicate
 from clausal.logic.solve import call
 from clausal.logic.variables import deref
 from clausal.terms import Call, Compound, LoadName
@@ -35,16 +35,16 @@ from clausal.terms import Call, Compound, LoadName
 def _locked_indexed_callee(db, name, arity, facts):
     """Compile *facts* as ``name/arity`` into *db*, locked and indexed.
 
-    The row is bound BEFORE the compile so the plans the compiler writes
-    through the class land on the Database's row (they are row-local state
-    since Task 1) rather than on a detached row that is later discarded.
-    """
-    cls = PredicateMeta(name, (), {"_fields": tuple(f"arg{i}" for i in range(arity))})
-    cls._bind_row(db, name, arity)
+    Compiled through the predicate's HANDLE, the way ``compiler_v2`` step 5
+    compiles a loaded module's predicate, so the plans land on the
+    Database's row.  (It compiled through a ``PredicateMeta`` class bound
+    to the row until W4b-3 slice 7.)  Returns a ``RowPredicate``: its
+    ``handle`` is the binding a module's globals hold."""
+    pred = RowPredicate(name, [f"arg{i}" for i in range(arity)], db)
     clauses = [_normalize_fact_clause(Compound(name, tuple(a))) for a in facts]
-    compile_predicate_trampoline(name, arity, clauses, pred_cls=cls)
-    cls._state_row().locked = True
-    return cls
+    compile_predicate_trampoline(name, arity, clauses, db, pred_cls=pred.handle)
+    pred._state_row().locked = True
+    return pred
 
 
 # _INDEX_THRESHOLD is 4; 40 distinct first args is comfortably indexed.
@@ -52,7 +52,8 @@ _FACTS2 = [(i, i * 10) for i in range(40)]
 
 
 def _callee_db():
-    db = Database()
+    from clausal.logic.database import Module
+    db = Module("_axh_callee", module_dict={"__name__": "_axh_callee"}).db
     cls = _locked_indexed_callee(db, "colour", 2, _FACTS2)
     return db, cls
 
@@ -89,7 +90,7 @@ def test_the_db_has_a_row_only_at_the_compiled_arity():
 def test_inject_hints_at_the_matching_arity():
     from clausal.logic.compiler.goal_trampoline import _inject_bucket_refs_trampoline
     db, cls = _callee_db()
-    base_globals = {"colour": cls}
+    base_globals = {"colour": cls.handle}
     clause = Clause(head=Compound("caller", (Var(),)), body=_body(2))
     ctx = _mkctx(db)
     _inject_bucket_refs_trampoline(ctx, [clause], base_globals, db=db)
@@ -100,7 +101,7 @@ def test_inject_hints_at_the_matching_arity():
 def test_inject_skips_a_call_at_an_arity_with_no_row():
     from clausal.logic.compiler.goal_trampoline import _inject_bucket_refs_trampoline
     db, cls = _callee_db()
-    base_globals = {"colour": cls}
+    base_globals = {"colour": cls.handle}
     clause = Clause(head=Compound("caller", (Var(),)), body=_body(1))
     ctx = _mkctx(db)
     _inject_bucket_refs_trampoline(ctx, [clause], base_globals, db=db)
@@ -119,7 +120,7 @@ def test_inject_without_a_db_falls_back_to_the_class():
     compile keeps its hints instead of silently losing them."""
     from clausal.logic.compiler.goal_trampoline import _inject_bucket_refs_trampoline
     db, cls = _callee_db()
-    base_globals = {"colour": cls}
+    base_globals = {"colour": cls.handle}
     clause = Clause(head=Compound("caller", (Var(),)), body=_body(2))
     ctx = _mkctx(None)
     _inject_bucket_refs_trampoline(ctx, [clause], base_globals, db=None)
@@ -144,7 +145,7 @@ def test_ir_walker_hints_at_the_matching_arity():
     from clausal.logic.compiler.goal_trampoline import analyse_ir_bucket_refs
     db, cls = _callee_db()
     clause = Clause(head=Compound("caller", (Var(),)), body=_body(2))
-    br, _jbr = analyse_ir_bucket_refs([clause], {"colour": cls}, db=db)
+    br, _jbr = analyse_ir_bucket_refs([clause], {"colour": cls.handle}, db=db)
     assert [k for k in br if k[1] == 2], br
 
 
@@ -152,7 +153,7 @@ def test_ir_walker_skips_a_call_at_an_arity_with_no_row():
     from clausal.logic.compiler.goal_trampoline import analyse_ir_bucket_refs
     db, cls = _callee_db()
     clause = Clause(head=Compound("caller", (Var(),)), body=_body(1))
-    br, jbr = analyse_ir_bucket_refs([clause], {"colour": cls}, db=db)
+    br, jbr = analyse_ir_bucket_refs([clause], {"colour": cls.handle}, db=db)
     assert not br and not jbr, br
 
 
@@ -167,14 +168,14 @@ def _ir_for(nargs, db):
 def test_call_site_analyse_hints_at_the_matching_arity():
     from clausal.logic.compiler.optimisations import call_site
     db, cls = _callee_db()
-    plan = call_site.analyse(_ir_for(2, db), None, {"colour": cls}, db=db)
+    plan = call_site.analyse(_ir_for(2, db), None, {"colour": cls.handle}, db=db)
     assert plan.hints
 
 
 def test_call_site_analyse_skips_an_arity_with_no_row():
     from clausal.logic.compiler.optimisations import call_site
     db, cls = _callee_db()
-    plan = call_site.analyse(_ir_for(1, db), None, {"colour": cls}, db=db)
+    plan = call_site.analyse(_ir_for(1, db), None, {"colour": cls.handle}, db=db)
     assert not plan.hints and not plan.joint_hints
 
 
@@ -182,7 +183,7 @@ def test_call_site_analyse_without_a_db_falls_back_to_the_class():
     """The same ruling at site 3 (final review I3)."""
     from clausal.logic.compiler.optimisations import call_site
     db, cls = _callee_db()
-    plan = call_site.analyse(_ir_for(2, db), None, {"colour": cls}, db=None)
+    plan = call_site.analyse(_ir_for(2, db), None, {"colour": cls.handle}, db=None)
     assert plan.hints
 
 
@@ -199,7 +200,7 @@ def test_call_site_analyse_without_a_db_or_a_class_emits_no_hints():
 def test_populate_runtime_writes_the_map_at_the_matching_arity():
     from clausal.logic.compiler.optimisations import call_site
     db, cls = _callee_db()
-    base_globals = {"colour": cls}
+    base_globals = {"colour": cls.handle}
     ir = _ir_for(2, db)
     plan = call_site.analyse(ir, None, base_globals, db=db)
     ctx = _mkctx(db)
@@ -214,7 +215,7 @@ def test_populate_runtime_refuses_a_hint_at_an_arity_with_no_row():
     there is no row to read them from."""
     from clausal.logic.compiler.optimisations import call_site
     db, cls = _callee_db()
-    base_globals = {"colour": cls}
+    base_globals = {"colour": cls.handle}
     ir = _ir_for(1, db)
     fabricated = call_site.CallSitePlan(
         hints=((0, "colour.bucket(pos=0, 3)"),), joint_hints=(),
@@ -235,7 +236,7 @@ def test_the_compile_pipeline_threads_its_db_to_the_populator():
     from clausal.logic.compiler.goal_shallow import _prepopulate_call_site_runtime
     db, cls = _callee_db()
     ctx = _mkctx(db)
-    ctx.base_globals = {"colour": cls}
+    ctx.base_globals = {"colour": cls.handle}
     _prepopulate_call_site_runtime(_body(2), ctx)
     assert [k for k in ctx.bucket_ref_map if k[1] == 2], ctx.bucket_ref_map
     assert any(".bucket(" in k for k in ctx.base_globals)
@@ -276,7 +277,7 @@ def test_a_dotted_callee_resolves_through_the_object_at_that_spelling():
     from clausal.logic.compiler.arg_index import hint_row
     db, cls = _callee_db()          # colour/2, locked, in `db`
     importer = Database()           # a DIFFERENT Database, as an importer is
-    base_globals = {"pkg.mod.colour": cls}
+    base_globals = {"pkg.mod.colour": cls.handle}
     row = hint_row(importer, "pkg.mod.colour", 2, base_globals)
     assert row is db.row("colour", 2)
     # ... and the same spelling at another arity resolves to nothing
@@ -310,7 +311,7 @@ def test_a_rowless_callee_keeps_its_hints_through_the_class_fallback():
     from clausal.logic.compiler.arg_index import hint_row
     db, cls = _callee_db()          # colour/2, locked, indexed, in `db`
     compiling = Database()          # a Database that has never seen colour
-    base_globals = {"colour": cls}
+    base_globals = {"colour": cls.handle}
     assert compiling.row("colour", 2) is None
     assert hint_row(compiling, "colour", 2, base_globals) is db.row("colour", 2)
     # a same-name class at ANOTHER arity is not borrowed
@@ -352,13 +353,13 @@ def test_the_analysers_refuse_a_positional_or_missing_db():
     db, cls = _callee_db()
     clause = Clause(head=Compound("caller", (Var(),)), body=_body(2))
     with pytest.raises(TypeError):
-        analyse_ir_bucket_refs([clause], {"colour": cls})
+        analyse_ir_bucket_refs([clause], {"colour": cls.handle})
     with pytest.raises(TypeError):
-        analyse_ir_bucket_refs([clause], {"colour": cls}, db)
+        analyse_ir_bucket_refs([clause], {"colour": cls.handle}, db)
     with pytest.raises(TypeError):
-        call_site.analyse(_ir_for(2, db), None, {"colour": cls})
+        call_site.analyse(_ir_for(2, db), None, {"colour": cls.handle})
     with pytest.raises(TypeError):
-        call_site.analyse(_ir_for(2, db), None, {"colour": cls}, db)
+        call_site.analyse(_ir_for(2, db), None, {"colour": cls.handle}, db)
 
 
 def test_populate_runtime_refuses_a_positional_or_missing_db():
@@ -369,7 +370,7 @@ def test_populate_runtime_refuses_a_positional_or_missing_db():
     from clausal.logic.compiler.optimisations import call_site
 
     db, cls = _callee_db()
-    base_globals = {"colour": cls}
+    base_globals = {"colour": cls.handle}
     ir = _ir_for(2, db)
     plan = call_site.analyse(ir, None, base_globals, db=db)
     with pytest.raises(TypeError):

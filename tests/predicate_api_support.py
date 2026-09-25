@@ -88,3 +88,67 @@ class ForeignPredicate:
 
     def _get_dispatch(self):
         return self._dispatch
+
+
+class RowPredicate:
+    """A predicate as a loaded module holds it since the flip: a HANDLE
+    naming a row of a module's Database.  For tests that used to compile
+    into a ``PredicateMeta`` class (the retired class-era fixture) only to
+    read back the row the compile wrote -- index plans, the lock, the
+    dispatch.  ``compile_predicate(..., pred_cls=<RowPredicate>)`` through
+    :func:`compile_through` hands the compiler the handle and the Database,
+    exactly the arguments ``compiler_v2`` step 5 passes for a loaded module.
+
+    ``_state_row()`` / ``_row`` answer that row, so a test body written
+    against the class reads the same state from the same place."""
+
+    _serial = 0
+
+    def __init__(self, name: str, fields, db=None) -> None:
+        from clausal.logic.database import Module
+        from clausal.logic.predicate import (
+            mint_predicate_handle, register_handle_owner)
+        if db is None:
+            RowPredicate._serial += 1
+            modname = f"_rowpred_{name}_{RowPredicate._serial}"
+            db = Module(modname, module_dict={"__name__": modname}).db
+        self.db = db
+        self.__name__ = name
+        self._fields = tuple(fields)
+        register_handle_owner(db)
+        self.handle = mint_predicate_handle(db, name)
+
+    def _state_row(self):
+        return self.db.row(self.__name__, len(self._fields), create=True)
+
+    @property
+    def _row(self):
+        return self.db.row(self.__name__, len(self._fields))
+
+    def __call__(self, *args, **kwargs):
+        return build_term_cell(self.__name__, self._fields, args,
+                               dict(kwargs))
+
+    def _assertz(self, clause) -> None:
+        """Append *clause* to the row (``Database.assertz``)."""
+        self.db.assertz(clause)
+
+
+def compile_through(compile_fn):
+    """Wrap a ``compile_predicate_*`` function so a :class:`RowPredicate`
+    passed as ``pred_cls`` compiles into ITS Database through its handle (a
+    ``db`` passed explicitly must be that same Database)."""
+    import functools
+
+    @functools.wraps(compile_fn)
+    def compile_(functor, arity, clauses, db=None, *args, pred_cls=None,
+                 **kwargs):
+        if isinstance(pred_cls, RowPredicate):
+            if db is not None and db is not pred_cls.db:
+                raise AssertionError(
+                    "compile_through: a RowPredicate compiles into its own "
+                    "Database")
+            db, pred_cls = pred_cls.db, pred_cls.handle
+        return compile_fn(functor, arity, clauses, db, *args,
+                          pred_cls=pred_cls, **kwargs)
+    return compile_

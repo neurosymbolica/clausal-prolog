@@ -9,7 +9,7 @@ lowering-reads-hints lands in a later E sub-slice).
 from __future__ import annotations
 
 from clausal.logic.database import Clause
-from clausal.logic.predicate import PredicateMeta
+from tests.predicate_api_support import term_ctor
 from clausal.logic.variables import Var
 from clausal.terms import (
     Sub,
@@ -20,7 +20,9 @@ from clausal.terms import (
 
 
 def _pred(name: str, fields: tuple[str, ...]):
-    return PredicateMeta(name, (), {"_fields": fields})
+    # Head builder only: the analysis reads the head CELL (W4b-3 slice 7;
+    # it was a PredicateMeta class, which built the same cell).
+    return term_ctor(name, fields)
 
 
 def _clause_tro_eligible():

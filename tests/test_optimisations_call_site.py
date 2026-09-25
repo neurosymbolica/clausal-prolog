@@ -30,7 +30,7 @@ def _case_eligible_literal_arg():
     x = Var()
     body = [Call(func=LoadName(name="color_e3"), args=[mint("red")], kwargs=[])]
     clause = Clause(head=Compound("caller", (x,)), body=body)
-    base_globals = {"color_e3": callee_cls}
+    base_globals = {"color_e3": callee_cls.handle}
     return clause, base_globals, callee_cls._row.db
 
 
@@ -42,7 +42,7 @@ def _case_ineligible_variable_arg():
     x, y = Var(), Var()
     body = [Call(func=LoadName(name="color_e3v"), args=[y], kwargs=[])]
     clause = Clause(head=Compound("caller", (x,)), body=body)
-    base_globals = {"color_e3v": callee_cls}
+    base_globals = {"color_e3v": callee_cls.handle}
     return clause, base_globals, callee_cls._row.db
 
 

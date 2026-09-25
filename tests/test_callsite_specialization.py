@@ -13,7 +13,7 @@ import pytest
 
 from clausal.logic.atoms import mint, spelling
 from clausal.logic.database import Clause, Database
-from clausal.logic.compiler import compile_predicate_trampoline as compile_predicate
+from clausal.logic.compiler import compile_predicate_trampoline as _compile_predicate
 from clausal.logic.compiler.arg_index import (
     _extract_arg_key,
     _INDEX_THRESHOLD,
@@ -23,7 +23,7 @@ from clausal.logic.compiler.arg_index import (
 )
 from clausal.logic.compiler.goal_trampoline import _inject_bucket_refs_trampoline
 from clausal.logic.compiler.globals_env import _disp_key
-from clausal.logic.predicate import PredicateMeta
+from tests.predicate_api_support import RowPredicate, compile_through
 from clausal.logic.variables import Var, Trail, deref, is_var
 from clausal.logic.trampoline import StepGenerator, solutions, DONE
 from clausal.terms import Compound, Unify, Call, LoadName
@@ -62,8 +62,16 @@ def _trampoline_solutions(dispatch, args, trail=None):
     return solutions(sg, lambda: tuple(deref(a) for a in args))
 
 
-def _make_pred_cls(name, fields):
-    return PredicateMeta(name, (), {"_fields": tuple(fields)})
+# W4b-3 slice 7: a predicate is a row named by a handle.  ``_make_pred_cls``
+# made a ``PredicateMeta`` class to compile into; it now makes a
+# ``RowPredicate`` (a handle on a fresh module Database), and
+# ``compile_predicate`` hands the compiler that Database and handle -- the
+# load path's own arguments -- so every plan read below reads the same row.
+compile_predicate = compile_through(_compile_predicate)
+
+
+def _make_pred_cls(name, fields, db=None):
+    return RowPredicate(name, fields, db)
 
 
 # ── Phase 10a: _index_plans set after compilation ─────────────────────────────
@@ -419,16 +427,15 @@ class TestBucketKeyNaming:
 
 
 def _make_locked_pred_cls(name, facts, db=None):
-    """Build a locked PredicateMeta with _index_plans populated.
-
-    The class is bound to a row in a (fresh, by default) Database BEFORE
-    the compile, so the plans the compiler writes through the class land on
-    that row -- which is where the call-site passes read them from since
-    P1.  The Database is reachable afterwards as ``pred_cls._row.db``.
+    """Build a locked predicate with _index_plans populated: a row in a
+    (fresh, by default) module Database, compiled through its handle, so
+    the plans land on that row -- which is where the call-site passes read
+    them from since P1.  The Database is ``pred_cls._row.db``; a module's
+    globals bind the name to ``pred_cls.handle``.
     """
-    pred_cls = _make_pred_cls(name, [f"arg{i}" for i in range(len(facts[0]))])
+    pred_cls = _make_pred_cls(
+        name, [f"arg{i}" for i in range(len(facts[0]))], db)
     arity = len(facts[0])
-    pred_cls._bind_row(db if db is not None else Database(), name, arity)
     clauses = _make_fact_clauses(name, facts)
     compile_predicate(name, arity, clauses, pred_cls=pred_cls)
     pred_cls._state_row().locked = True
@@ -457,7 +464,7 @@ class TestInjectBucketRefs:
             body=[call_goal],
         )
 
-        base_globals = {"color": callee_cls}
+        base_globals = {"color": callee_cls.handle}
         # Set locked_dispatch_keys so _disp_key-based check won't interfere
         _inject_bucket_refs_trampoline(_mkctx(db=callee_cls._row.db), [caller_clause], base_globals)
 
@@ -499,7 +506,7 @@ class TestInjectBucketRefs:
             body=[call_goal],
         )
 
-        base_globals = {"shape": callee_cls}
+        base_globals = {"shape": callee_cls.handle}
         _inject_bucket_refs_trampoline(_mkctx(db=callee_cls._row.db), [caller_clause], base_globals)
 
         expected_gkey = _bucket_key("shape", 0, ("Dog", 2))
@@ -519,7 +526,7 @@ class TestInjectBucketRefs:
             head=Compound("caller", (x,)),
             body=[call_goal],
         )
-        base_globals = {"color": callee_cls}
+        base_globals = {"color": callee_cls.handle}
         ctx = _mkctx(db=callee_cls._row.db)
         _inject_bucket_refs_trampoline(ctx, [caller_clause], base_globals)
 
@@ -542,7 +549,7 @@ class TestInjectBucketRefs:
             head=Compound("caller", (x,)),
             body=[call_goal],
         )
-        base_globals = {"color": callee_cls}
+        base_globals = {"color": callee_cls.handle}
         _inject_bucket_refs_trampoline(_mkctx(db=callee_cls._row.db), [caller_clause], base_globals)
 
         # No bucket refs should be injected for variable args
@@ -565,7 +572,7 @@ class TestInjectBucketRefs:
             head=Compound("caller", (x,)),
             body=[call_goal],
         )
-        base_globals = {"color": callee_cls}
+        base_globals = {"color": callee_cls.handle}
         _inject_bucket_refs_trampoline(_mkctx(db=callee_cls._row.db), [caller_clause], base_globals)
 
         bucket_keys = [k for k in base_globals if "bucket" in k]
@@ -585,7 +592,7 @@ class TestInjectBucketRefs:
             head=Compound("caller", (x,)),
             body=[call_goal],
         )
-        base_globals = {"color": callee_cls}
+        base_globals = {"color": callee_cls.handle}
         _inject_bucket_refs_trampoline(_mkctx(db=callee_cls._row.db), [caller_clause], base_globals)
 
         bucket_keys = [k for k in base_globals if "bucket" in k]
@@ -664,7 +671,7 @@ class TestCallsiteCorrectnessAndFallback:
             head=Compound("find_red", (x,)),
             body=[call_goal],
         )
-        base_globals = {"color": callee_cls}
+        base_globals = {"color": callee_cls.handle}
         _inject_bucket_refs_trampoline(_mkctx(db=callee_cls._row.db), [caller_clause], base_globals)
 
         expected_gkey = _bucket_key("color", 0, ("red", 0))
@@ -689,7 +696,7 @@ class TestCallsiteCorrectnessAndFallback:
             head=Compound("caller", (x,)),
             body=[call_goal],
         )
-        base_globals = {"dyn_color": callee_cls}
+        base_globals = {"dyn_color": callee_cls.handle}
         _inject_bucket_refs_trampoline(_mkctx(db=callee_cls._row.db), [caller_clause], base_globals)
 
         bucket_keys = [k for k in base_globals if "bucket" in k]
@@ -711,7 +718,7 @@ class TestCallsiteCorrectnessAndFallback:
             head=Compound("color", (x,)),
             body=[call_goal],
         )
-        base_globals = {"color": pred_cls}
+        base_globals = {"color": pred_cls.handle}
         _inject_bucket_refs_trampoline(
             _mkctx(db=pred_cls._row.db), [caller_clause], base_globals)
 
@@ -732,7 +739,7 @@ class TestCallsiteCorrectnessAndFallback:
             )
             for a in ["red", "green", "blue"]
         ]
-        base_globals = {"color": callee_cls}
+        base_globals = {"color": callee_cls.handle}
         _inject_bucket_refs_trampoline(_mkctx(db=callee_cls._row.db), clauses, base_globals)
 
         for atom in ["red", "green", "blue"]:
@@ -751,7 +758,7 @@ class TestCallsiteCorrectnessAndFallback:
             head=Compound("find_blue", (x,)),
             body=[call_goal],
         )
-        base_globals = {"color": callee_cls}
+        base_globals = {"color": callee_cls.handle}
         _inject_bucket_refs_trampoline(_mkctx(db=callee_cls._row.db), [caller_clause], base_globals)
 
         gkey = _bucket_key("color", 0, ("blue", 0))
@@ -774,7 +781,7 @@ class TestCallsiteCorrectnessAndFallback:
             head=Compound("f", (x,)),
             body=[call_goal],
         )
-        base_globals = {"color": callee_cls}
+        base_globals = {"color": callee_cls.handle}
         _inject_bucket_refs_trampoline(_mkctx(db=callee_cls._row.db), [caller_clause], base_globals)
         gkey = _bucket_key("color", 0, ("red", 0))
         first_fn = base_globals[gkey]
@@ -812,7 +819,7 @@ class TestDirectBucketCallSiteExecution:
         # as ``db.row(callee_name, 2)``, so the compile has to be handed one.
         fn = compile_predicate(
             "caller", 1, [caller_clause], callee_cls._row.db,
-            globals_={callee_name: callee_cls},
+            globals_={callee_name: callee_cls.handle},
         )
         return fn, callee_name
 

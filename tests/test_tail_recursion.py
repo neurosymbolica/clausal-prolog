@@ -31,7 +31,8 @@ def _get_tro_check_indices(functor, arity, clause, db=None):
     ir = terms_to_goalop(clause.body, db=db)
     return analyse(ir, clause.head, functor, arity, db=db).check_indices
 from clausal.logic.database import Clause, Database
-from clausal.logic.predicate import PredicateMeta, resolve_predicate_row
+from clausal.logic.predicate import resolve_predicate_row
+from tests.predicate_api_support import RowPredicate
 from clausal.logic.solve import call
 from clausal.logic.trampoline import StepGenerator, DONE
 from clausal.logic.variables import Var, Trail, deref, is_var
@@ -139,8 +140,7 @@ class TestDetectTroClause(unittest.TestCase):
     """Test _detect_tro_clause detection."""
 
     def _make_clause(self, head_fields, body):
-        class P(metaclass=PredicateMeta):
-            _fields = head_fields
+        P = RowPredicate('P', head_fields, None)
         head_args = {f: Var() for f in head_fields}
         head = P(**head_args)
         return Clause(head=head, body=body), P, head_args
@@ -157,8 +157,7 @@ class TestDetectTroClause(unittest.TestCase):
         # nv
         x = Var()
 
-        class Q(metaclass=PredicateMeta):
-            _fields = ('x',)
+        Q = RowPredicate('Q', ('x',), None)
 
         cl = Clause(
             head=Q(x),
@@ -174,8 +173,7 @@ class TestDetectTroClause(unittest.TestCase):
         n1 = Var()
         result = Var()
 
-        class Fact(metaclass=PredicateMeta):
-            _fields = ('n', 'result')
+        Fact = RowPredicate('Fact', ('n', 'result'), None)
 
         cl = Clause(
             head=Fact(n, result),
@@ -192,8 +190,7 @@ class TestDetectTroClause(unittest.TestCase):
         # nv
         n = Var()
 
-        class R(metaclass=PredicateMeta):
-            _fields = ('n',)
+        R = RowPredicate('R', ('n',), None)
 
         cl = Clause(
             head=R(n),
@@ -209,8 +206,7 @@ class TestDetectTroClause(unittest.TestCase):
         # nv
         x = Var()
 
-        class S(metaclass=PredicateMeta):
-            _fields = ('x',)
+        S = RowPredicate('S', ('x',), None)
 
         cl = Clause(
             head=S(x),
@@ -226,8 +222,7 @@ class TestDetectTroClause(unittest.TestCase):
         acc = Var()
         result = Var()
 
-        class Rev(metaclass=PredicateMeta):
-            _fields = ('list', 'acc', 'result')
+        Rev = RowPredicate('Rev', ('list', 'acc', 'result'), None)
 
         # AccReverse([H, *T], ACC, RESULT) <- AccReverse(T, [H, *ACC], RESULT)
         # No prefix goals; t and h are body-only vars not in head — rejected.
@@ -249,8 +244,7 @@ class TestDetectTroClause(unittest.TestCase):
         result = Var()
         acc2 = Var()
 
-        class Rev(metaclass=PredicateMeta):
-            _fields = ('list', 'acc', 'result')
+        Rev = RowPredicate('Rev', ('list', 'acc', 'result'), None)
 
         # Rev([H, *T], ACC, R) <- (ACC2 is [H, *ACC], Rev(T, ACC2, R))
         # With a prefix goal, head vars are allowed; ACC2 is Unify-bound.
@@ -270,8 +264,7 @@ class TestDetectTroClause(unittest.TestCase):
         goals_var = Var()
         rest = Var()
 
-        class Meta(metaclass=PredicateMeta):
-            _fields = ('goals', 'result')
+        Meta = RowPredicate('Meta', ('goals', 'result'), None)
 
         # Meta([X|Rest], R) <- Meta(Rest, R)  — but passing [X] as a nested list
         # With no prefix goals, X from head decomposition is unsafe.
@@ -292,8 +285,7 @@ class TestDetectTroClause(unittest.TestCase):
         n1 = Var()
         acc = Var()
 
-        class Acc(metaclass=PredicateMeta):
-            _fields = ('n', 'state')
+        Acc = RowPredicate('Acc', ('n', 'state'), None)
 
         # Acc(N, State) <- (N > 0, eval_(N-1, N1), Acc(N1, Compound("s", (N, State))))
         # N and State are head vars; with prefix goals, allow_head_vars=True.
@@ -315,8 +307,7 @@ class TestDetectTroClause(unittest.TestCase):
         x = Var()
         y = Var()
 
-        class P(metaclass=PredicateMeta):
-            _fields = ('a', 'b')
+        P = RowPredicate('P', ('a', 'b'), None)
 
         cl = Clause(
             head=P(x, y),
@@ -337,7 +328,7 @@ class TestTroCorrectness(unittest.TestCase):
     """Test TRO-compiled predicates produce correct results."""
 
     def setUp(self):
-        self.db = Database()
+        self.db = _module_db()
 
     def _compile_and_query(self, pred_cls, clauses, *args):
         """Compile clauses with TRO, then query and return results."""
@@ -348,20 +339,19 @@ class TestTroCorrectness(unittest.TestCase):
         self.db.register_signature(functor, arity, pred_cls._fields)
         compile_predicate_trampoline(
             functor, arity, clauses, self.db,
-            globals_={functor: pred_cls},
-            pred_cls=pred_cls,
+            globals_={functor: pred_cls.handle},
+            pred_cls=pred_cls.handle,
         )
         trail = Trail()
         results = []
-        for _ in call(pred_cls, *args, trail=trail):
+        for _ in call(pred_cls.handle, *args, trail=trail):
             results.append(tuple(deref(a) for a in args))
         return results
 
     def test_simple_countdown(self):
         """N > 0, eval_(N - 1, N1), CountDown(N1) — deterministic prefix."""
         # nv
-        class CountDown(metaclass=PredicateMeta):
-            _fields = ('n',)
+        CountDown = RowPredicate('CountDown', ('n',), self.db)
 
         n = Var()
         n1 = Var()
@@ -382,8 +372,7 @@ class TestTroCorrectness(unittest.TestCase):
     def test_accumulator_sum(self):
         """acc_sum([H|T], Acc, R) <- acc_sum(T, Acc+H, R)."""
         # nv
-        class ASum(metaclass=PredicateMeta):
-            _fields = ('list', 'acc', 'result')
+        ASum = RowPredicate('ASum', ('list', 'acc', 'result'), self.db)
 
         acc = Var()
         result = Var()
@@ -402,8 +391,7 @@ class TestTroCorrectness(unittest.TestCase):
     def test_passthrough_variable(self):
         """Output variable passed through unchanged in tail call."""
         # nv
-        class Pass(metaclass=PredicateMeta):
-            _fields = ('n', 'out')
+        Pass = RowPredicate('Pass', ('n', 'out'), self.db)
 
         n = Var()
         n1 = Var()
@@ -430,8 +418,7 @@ class TestTroCorrectness(unittest.TestCase):
     def test_deep_recursion(self):
         """TRO handles deep recursion without excessive allocations."""
         # nv
-        class Deep(metaclass=PredicateMeta):
-            _fields = ('n',)
+        Deep = RowPredicate('Deep', ('n',), self.db)
 
         n = Var()
         n1 = Var()
@@ -475,7 +462,7 @@ def _make_counting_sg():
 
 
 def _dispatch_of(pred):
-    """The compiled dispatch of *pred*: a ``PredicateMeta`` class (the
+    """The compiled dispatch of *pred*: a ``RowPredicate`` (the
     Python-built predicates below), or a ``(module, name, arity)`` triple for
     a module-loaded predicate -- post-flip its module-dict binding is a
     mangled handle, whose row (and so dispatch) is read off its owner's
@@ -497,7 +484,19 @@ def _dispatch_of(pred):
         assert row is not None, f"no row for {handle!r}/{arity}"
         assert row.db is db, "resolved to another load's row, not this one"
         return db.get_dispatch(*row.key)
+    if isinstance(pred, RowPredicate):
+        # A predicate compiled into a module Database through its handle
+        # (W4b-3 slice 7; a PredicateMeta class answered _get_dispatch()).
+        return pred.db.get_dispatch(pred.__name__, len(pred._fields))
     return pred._get_dispatch()
+
+
+def _module_db():
+    """A fresh Database of a NAMED module, so a handle can name it."""
+    from clausal.logic.database import Module
+    _module_db.serial = getattr(_module_db, "serial", 0) + 1
+    name = f"_tro_mod_{_module_db.serial}"
+    return Module(name, module_dict={"__name__": name}).db
 
 
 def _patch_sg(counting_cls, *pred_classes):
@@ -549,7 +548,7 @@ class TestTroAllocations(unittest.TestCase):
     """Test that TRO reduces StepGenerator allocations."""
 
     def setUp(self):
-        self.db = Database()
+        self.db = _module_db()
 
     def _compile(self, pred_cls, clauses):
         functor = pred_cls.__name__
@@ -559,15 +558,14 @@ class TestTroAllocations(unittest.TestCase):
         self.db.register_signature(functor, arity, pred_cls._fields)
         compile_predicate_trampoline(
             functor, arity, clauses, self.db,
-            globals_={functor: pred_cls},
-            pred_cls=pred_cls,
+            globals_={functor: pred_cls.handle},
+            pred_cls=pred_cls.handle,
         )
 
     def test_tro_constant_allocations(self):
         """TRO predicate should use O(1) StepGenerators regardless of depth."""
         # nv
-        class TroCount(metaclass=PredicateMeta):
-            _fields = ('n',)
+        TroCount = RowPredicate('TroCount', ('n',), self.db)
 
         n = Var()
         n1 = Var()
@@ -586,18 +584,19 @@ class TestTroAllocations(unittest.TestCase):
         counting_cls, counter = _make_counting_sg()
         restore = _patch_sg(counting_cls, TroCount)
         trail = Trail()
-        for _ in call(TroCount, 100, trail=trail):
+        for _ in call(TroCount.handle, 100, trail=trail):
             pass
         count_100 = counter[0]
         restore()
 
         # Query with depth 1000
-        self.db = Database()
+        self.db = _module_db()
+        TroCount = RowPredicate('TroCount', ('n',), self.db)
         self._compile(TroCount, clauses)
         counting_cls2, counter2 = _make_counting_sg()
         restore2 = _patch_sg(counting_cls2, TroCount)
         trail2 = Trail()
-        for _ in call(TroCount, 1000, trail=trail2):
+        for _ in call(TroCount.handle, 1000, trail=trail2):
             pass
         count_1000 = counter2[0]
         restore2()
@@ -614,11 +613,9 @@ class TestTroAllocations(unittest.TestCase):
     def test_non_tro_linear_allocations(self):
         """Non-TRO predicate (nondeterministic prefix) uses O(n) StepGenerators."""
         # nv
-        class Helper(metaclass=PredicateMeta):
-            _fields = ('x',)
+        Helper = RowPredicate('Helper', ('x',), self.db)
 
-        class NonTro(metaclass=PredicateMeta):
-            _fields = ('n',)
+        NonTro = RowPredicate('NonTro', ('n',), self.db)
 
         n = Var()
         n1 = Var()
@@ -640,21 +637,21 @@ class TestTroAllocations(unittest.TestCase):
         self.db.register_signature('Helper', 1, ('x',))
         compile_predicate_trampoline(
             'Helper', 1, helper_clauses, self.db,
-            globals_={'Helper': Helper}, pred_cls=Helper,
+            globals_={'Helper': Helper.handle}, pred_cls=Helper.handle,
         )
         for cl in nontro_clauses:
             self.db.assertz(cl)
         self.db.register_signature('NonTro', 1, ('n',))
         compile_predicate_trampoline(
             'NonTro', 1, nontro_clauses, self.db,
-            globals_={'NonTro': NonTro, 'Helper': Helper},
-            pred_cls=NonTro,
+            globals_={'NonTro': NonTro.handle, 'Helper': Helper.handle},
+            pred_cls=NonTro.handle,
         )
 
         counting_cls, counter = _make_counting_sg()
         restore = _patch_sg(counting_cls, NonTro, Helper)
         trail = Trail()
-        for _ in call(NonTro, 10, trail=trail):
+        for _ in call(NonTro.handle, 10, trail=trail):
             pass
         restore()
 
@@ -665,8 +662,7 @@ class TestTroAllocations(unittest.TestCase):
     def test_tro_with_passthrough_output(self):
         """TRO correctly binds output variable through passthrough."""
         # nv
-        class Acc(metaclass=PredicateMeta):
-            _fields = ('n', 'acc', 'result')
+        Acc = RowPredicate('Acc', ('n', 'acc', 'result'), self.db)
 
         n = Var()
         n1 = Var()
@@ -688,13 +684,13 @@ class TestTroAllocations(unittest.TestCase):
         self.db.register_signature('Acc', 3, ('n', 'acc', 'result'))
         compile_predicate_trampoline(
             'Acc', 3, clauses, self.db,
-            globals_={'Acc': Acc}, pred_cls=Acc,
+            globals_={'Acc': Acc.handle}, pred_cls=Acc.handle,
         )
 
         # Verify correct result
         r = Var()
         trail = Trail()
-        for _ in call(Acc, 5, 0, r, trail=trail):
+        for _ in call(Acc.handle, 5, 0, r, trail=trail):
             self.assertEqual(deref(r), 15)  # 5+4+3+2+1+0 = 15
             break
         else:
@@ -704,7 +700,7 @@ class TestTroAllocations(unittest.TestCase):
         counting_cls, counter = _make_counting_sg()
         restore = _patch_sg(counting_cls, Acc)
         trail2 = Trail()
-        for _ in call(Acc, 500, 0, Var(), trail=trail2):
+        for _ in call(Acc.handle, 500, 0, Var(), trail=trail2):
             pass
         restore()
         self.assertEqual(counter[0], 1, f"Expected 1 SG, got {counter[0]}")
@@ -858,8 +854,7 @@ class TestTroRuntimeGroundCheck(unittest.TestCase):
         """_get_tro_check_indices returns positions for head-decomposition vars."""
         pass  # helper defined at module-level
 
-        class P(metaclass=PredicateMeta):
-            _fields = ('list', 'acc', 'result')
+        P = RowPredicate('P', ('list', 'acc', 'result'), None)
 
         h = Var()
         t = Var()
@@ -886,8 +881,7 @@ class TestTroRuntimeGroundCheck(unittest.TestCase):
         pass  # helpers defined at module-level
         from clausal.pythonic_ast.nodes import StarUnpack as _SU
 
-        class L(metaclass=PredicateMeta):
-            _fields = ('list', 'acc', 'result')
+        L = RowPredicate('L', ('list', 'acc', 'result'), None)
 
         wild = Var()
         t = Var()

@@ -13,11 +13,10 @@ from clausal.logic.variables import Var, Trail, unify, deref
 from clausal.logic.builtins import get_builtin_dispatch
 from clausal.logic.builtins.io import _format_clause_head
 from clausal.logic.trampoline import StepGenerator, solutions
-from clausal.logic.predicate import PredicateMeta
 from clausal.logic.database import Clause
 from clausal.logic.exceptions import LogicException
 from clausal.terms import Compound
-from tests.predicate_api_support import class_arm_predicate
+from tests.predicate_api_support import RowPredicate, class_arm_predicate
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -52,38 +51,42 @@ def _capture_portray(term):
 
 # ── Test predicates ──────────────────────────────────────────────────────────
 
-class color(metaclass=PredicateMeta):
-    _fields = ("name", "hex")
+# Rows of a module Database, named by their handles -- listed from Python
+# through the handle (they were PredicateMeta classes until W4b-3 slice 7;
+# the listing output is the same).  Rebuilt per test (``_fresh_preds``).
+color = animal = empty_pred = None
 
-class animal(metaclass=PredicateMeta):
-    _fields = ("species",)
 
-class empty_pred(metaclass=PredicateMeta):
-    _fields = ("x",)
+def _fresh_preds():
+    global color, animal, empty_pred
+    from clausal.logic.database import Module
+    _fresh_preds.serial = getattr(_fresh_preds, "serial", 0) + 1
+    name = f"_listing_preds_{_fresh_preds.serial}"
+    db = Module(name, module_dict={"__name__": name}).db
+    color = RowPredicate("color", ("name", "hex"), db)
+    animal = RowPredicate("animal", ("species",), db)
+    empty_pred = RowPredicate("empty_pred", ("x",), db)
+    for pred in (color, animal, empty_pred):
+        db.mark_dynamic(pred.__name__, len(pred._fields))
 
 
 # ── listing/1 ────────────────────────────────────────────────────────────────
 
 class TestListing:
     def setup_method(self):
-        """Reset predicate clauses before each test."""
-        color._state_row().clauses = []
-        color._state_row().locked = False
-        animal._state_row().clauses = []
-        animal._state_row().locked = False
-        empty_pred._state_row().clauses = []
-        empty_pred._state_row().locked = False
+        """Fresh predicates (no clauses, unlocked) before each test."""
+        _fresh_preds()
 
     def test_no_clauses(self):
         # nv
-        output = _capture_listing(empty_pred)
+        output = _capture_listing(empty_pred.handle)
         assert "no clauses" in output
         assert "empty_pred/1" in output
 
     def test_single_fact(self):
         # nv
         color._assertz(Clause(color("red", "#ff0000"), []))
-        output = _capture_listing(color)
+        output = _capture_listing(color.handle)
         assert "color/2" in output
         assert "1 clause(s)" in output
         assert "color(" in output
@@ -93,13 +96,13 @@ class TestListing:
         color._assertz(Clause(color("red", "#ff0000"), []))
         color._assertz(Clause(color("green", "#00ff00"), []))
         color._assertz(Clause(color("blue", "#0000ff"), []))
-        output = _capture_listing(color)
+        output = _capture_listing(color.handle)
         assert "3 clause(s)" in output
 
     def test_fact_with_ground_head(self):
         # nv
         animal._assertz(Clause(animal("cat"), []))
-        output = _capture_listing(animal)
+        output = _capture_listing(animal.handle)
         assert "animal(" in output
         assert '"cat"' in output
 
@@ -145,7 +148,7 @@ class TestListing:
     def test_fact_format_ends_with_dot(self):
         # nv
         animal._assertz(Clause(animal("dog"), []))
-        output = _capture_listing(animal)
+        output = _capture_listing(animal.handle)
         lines = [l for l in output.strip().split("\n") if not l.startswith("%")]
         assert all(l.endswith(".") for l in lines if l.strip())
 
@@ -153,7 +156,7 @@ class TestListing:
         # nv
         color._assertz(Clause(color("red", "#ff0000"), []))
         color._assertz(Clause(color("blue", "#0000ff"), []))
-        output = _capture_listing(color)
+        output = _capture_listing(color.handle)
         assert "2 clause(s)" in output
 
 
@@ -169,12 +172,11 @@ class TestListing:
 
 class TestListingClassArgumentGoldenOutput:
     def test_multi_clause_class_output_is_byte_identical(self):
-        color._state_row().clauses = []
-        color._state_row().locked = False
+        _fresh_preds()
         color._assertz(Clause(color("red", "#ff0000"), []))
         color._assertz(Clause(color("green", "#00ff00"), []))
         color._assertz(Clause(color("blue", "#0000ff"), []))
-        output = _capture_listing(color)
+        output = _capture_listing(color.handle)
         assert output == (
             "% color/2 — 3 clause(s)\n"
             'color("red", "#ff0000").\n'
@@ -640,7 +642,7 @@ class TestCellValuedClauseArgument:
         color._state_row().clauses = []
         color._state_row().locked = False
         color._assertz(Clause(color("red", ("rgb", 255, 0, 0)), []))
-        output = _capture_listing(color)
+        output = _capture_listing(color.handle)
         assert "rgb(255, 0, 0)" in output
         assert "('rgb'" not in output
 
