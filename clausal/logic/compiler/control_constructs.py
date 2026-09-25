@@ -728,11 +728,13 @@ def _compile_throw(
     ctx: CompilationContext,
     term_arg: Any,
 ) -> list[ast.stmt]:
-    """Compile throw(Term) — raise LogicException(term_expr)."""
+    """Compile throw(Term) -- raise ``$throw_ball(term_expr)``: a COPY of
+    the ball, or instantiation_error for an unbound one (ISO 7.8.10; see
+    ``globals_env._throw_ball``)."""
     var_context = ctx.var_context
     term_expr = term_to_ast_expr(term_arg, var_context, eval_arith=False)
     return [
-        ast.Raise(exc=_call(_name("$LogicException"), term_expr)),
+        ast.Raise(exc=_call(_name("$throw_ball"), term_expr)),
     ]
 
 

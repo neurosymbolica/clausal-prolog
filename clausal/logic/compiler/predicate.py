@@ -105,7 +105,7 @@ from .terms_to_ast import lowering_scope
 from .terms_to_goalop import BareGoalVariableError, BareGoalUndefinedError
 from .globals_env import (
     _GlobalsDb, _DbDispatchAdapter, _set_of_dedup, _set_of_sort_dedup,
-    _findall_copy_row, _disp_key,
+    _findall_copy_row, _throw_ball, _disp_key,
     _merge_builtin, _inject_resolved_targets,
     _collect_globals_info, _preallocate_body_vars,
 )
@@ -1006,6 +1006,7 @@ def _compile_predicate_trampoline_impl(
         "$dispatch_at": _dispatch_at,
         "$deref_walk": _deref_walk_fn,
         "$findall_copy": _findall_copy_row,
+        "$throw_ball": _throw_ball,
         "$set_of_dedup": _set_of_dedup,
         "$set_of_sort_dedup": _set_of_sort_dedup,
         "$harvest_conditions": _harvest_conditions,
@@ -1848,6 +1849,7 @@ def _compile_predicate_shallow_impl(
         "$dispatch_at": _dispatch_at,
         "$deref_walk": _deref_walk_fn,
         "$findall_copy": _findall_copy_row,
+        "$throw_ball": _throw_ball,
         "$set_of_dedup": _set_of_dedup,
         "$set_of_sort_dedup": _set_of_sort_dedup,
         "$harvest_conditions": _harvest_conditions,

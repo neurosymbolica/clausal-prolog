@@ -17,7 +17,7 @@ import sys as _sys
 from typing import Any
 
 from clausal.logic.generated_names import dollar_ref
-from clausal.logic.variables import deref
+from clausal.logic.variables import deref, is_var
 from clausal.terms import (
     Compound,
     Call, LoadName, LoadAttr,
@@ -90,6 +90,26 @@ def _findall_copy_row(template):
         return walked
     from clausal.logic.builtins.inspection import _copy_term  # noqa: PLC0415
     return _copy_term(walked, {})
+
+
+def _throw_ball(ball):
+    """The exception ``throw(Ball)`` raises (ISO 13211-1 §7.8.10).
+
+    ``instantiation_error`` when *Ball* is unbound (§7.8.10.3).  Otherwise
+    the ball is a COPY made now (§7.8.10.1 b: "the system makes a copy B' of
+    B"), before ``catch/3`` undoes the trail back to its mark.  Raising the
+    ball as written kept its Vars, and the undo then unbound them: the
+    catcher saw ``_`` where the thrower had bound a value.  That is what a
+    ball reached through a variable always met -- ``G is throw(oops),
+    catch(call(G), E, true)`` bound E to an unbound variable, not ``oops``.
+    """
+    from clausal.logic.exceptions import (  # noqa: PLC0415
+        LogicException, instantiation_error,
+    )
+    if is_var(deref(ball)):
+        return LogicException(instantiation_error(
+            "throw/1: the ball is unbound (ISO 7.8.10.3)"))
+    return LogicException(_findall_copy_row(ball))
 
 
 # ── Predicate-as-class dispatch adapter ───────────────────────────────────────
