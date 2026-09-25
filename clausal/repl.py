@@ -247,6 +247,14 @@ def _iter_from_goal(goal_or_iter, _varnames=None, module=None):
     """
     from clausal.logic.predicate import is_term_instance, term_field_names, term_field_values
     if not is_term_instance(goal_or_iter):
+        if module is not None and not _is_goal_value(goal_or_iter):
+            # roborev Low on slice 3: ``module=`` used to be dropped here
+            # silently.  Only a goal VALUE is solved against a module; True/
+            # False, an iterator of binding dicts and a term instance are not.
+            raise TypeError(
+                f"Solutions(module=...) applies to a goal value (a cell, or an "
+                f"atom or handle str); got {type(goal_or_iter).__name__}: "
+                f"{goal_or_iter!r}.  Drop module=, or pass the goal as a cell.")
         if goal_or_iter is True:
             return iter([{}])
         if goal_or_iter is False:
@@ -320,6 +328,9 @@ class Solutions:
     A cell is solved, never iterated (iterating it would walk the tuple's
     elements and bind nothing).  An unqualified cell with no ``module=``
     raises ``existence_error(module, ...)`` here, at construction.
+    ``module=`` with anything that is NOT a goal value (True/False, an
+    iterator of binding dicts, a term instance) is a ``TypeError``, never
+    silently ignored.
 
     when evaluated in an IPython cell the solutions are presented one at a
     time, separated by ``or``, with a key-driven prompt between each.
