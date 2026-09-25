@@ -17,6 +17,7 @@ from clausal.logic.predicate import PredicateMeta
 from clausal.logic.database import Clause
 from clausal.logic.exceptions import LogicException
 from clausal.terms import Compound
+from tests.predicate_api_support import class_arm_predicate
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -397,10 +398,10 @@ class TestListingDivIndicatorArgument:
         compiling a module; the end-to-end compiled case is pinned by
         ``test_div_end_to_end_matches_class_form_byte_identically``)."""
         from clausal.terms import Div
-        from clausal.logic.predicate import make_predicate
+
 
         db = _db_with_fact("qr", 1)
-        cls = make_predicate("qr", ["x"])
+        cls = class_arm_predicate("qr", ["x"])
         dispatch = get_builtin_dispatch("listing", 1, db)
         output = _run_listing(dispatch, Div(left=cls, right=1))
         assert "qr/1" in output

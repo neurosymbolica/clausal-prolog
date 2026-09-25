@@ -50,8 +50,9 @@ import ast
 from clausal.logic.atoms import mangle
 from clausal.logic.builtins._helpers import _is_ground_py
 from clausal.logic.compiler.terms_to_ast import term_to_ast_expr
-from clausal.logic.predicate import is_zero_field_class, make_predicate
+from clausal.logic.predicate import is_zero_field_class
 from clausal.logic.solve import _templatize_query_goal
+from tests.predicate_api_support import class_arm_predicate
 
 
 def _mangled_self_atom() -> str:
@@ -69,7 +70,7 @@ def test_is_zero_field_class_false_for_mangled_atom():
 
 
 def test_is_zero_field_class_true_for_the_class_it_replaces():
-    P0 = make_predicate("F3ProbeZeroArityA", [])
+    P0 = class_arm_predicate("F3ProbeZeroArityA", [])
     assert is_zero_field_class(P0) is True
 
 
@@ -81,8 +82,8 @@ class TestGroundValuePassesThroughVerbatimInBothEras:
         tests/test_self_denoting_predicate_atom_plain.py): a predicate
         binding is parameterized as the PLAIN atom of its name, not as the
         class object itself."""
-        P0 = make_predicate("F3ProbeZeroArityB", [])
-        Goal = make_predicate("F3ProbeGoalB", ["a"])
+        P0 = class_arm_predicate("F3ProbeZeroArityB", [])
+        Goal = class_arm_predicate("F3ProbeGoalB", ["a"])
         _, params = _templatize_query_goal(Goal(a=P0))
         assert len(params) == 1
         _var, value = params[0]
@@ -90,7 +91,7 @@ class TestGroundValuePassesThroughVerbatimInBothEras:
 
     def test_mangled_atom_field_is_parameterized_with_the_string_itself(self):
         mangled = _mangled_self_atom()
-        Goal = make_predicate("F3ProbeGoalC", ["a"])
+        Goal = class_arm_predicate("F3ProbeGoalC", ["a"])
         _, params = _templatize_query_goal(Goal(a=mangled))
         assert len(params) == 1
         _var, value = params[0]
@@ -102,7 +103,7 @@ class TestGroundValuePassesThroughVerbatimInBothEras:
 
 class TestIsGroundIdenticalInBothEras:
     def test_class_is_ground(self):
-        P0 = make_predicate("F3ProbeZeroArityD", [])
+        P0 = class_arm_predicate("F3ProbeZeroArityD", [])
         assert _is_ground_py(P0) is True
 
     def test_mangled_atom_is_ground(self):
@@ -113,7 +114,7 @@ class TestIsGroundIdenticalInBothEras:
 
 class TestTermToAstExprNoCrashButSpellingDiverges:
     def test_class_mints_the_plain_name(self):
-        P0 = make_predicate("F3ProbeZeroArityE", [])
+        P0 = class_arm_predicate("F3ProbeZeroArityE", [])
         expr = term_to_ast_expr(P0, {})
         assert isinstance(expr, ast.Constant)
         assert expr.value == "F3ProbeZeroArityE"

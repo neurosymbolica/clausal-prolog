@@ -310,15 +310,15 @@ class TestExprToBDD:
         PredicateMeta instance, so functor-name matching alone is not proof
         the .left/.right access is safe."""
         # nv
-        from clausal.logic.predicate import make_predicate
-        fake_bool_eq = make_predicate("BoolEq", ["x"])
+        from tests.predicate_api_support import term_ctor
+        fake_bool_eq = term_ctor("BoolEq", ["x"])
         with pytest.raises(TypeError, match="unsupported"):
             _expr_to_bdd(fake_bool_eq(1))
 
     def test_term_named_boolimpl_without_left_right_raises_type_error(self):
         # nv
-        from clausal.logic.predicate import make_predicate
-        fake_bool_impl = make_predicate("BoolImpl", ["x"])
+        from tests.predicate_api_support import term_ctor
+        fake_bool_impl = term_ctor("BoolImpl", ["x"])
         with pytest.raises(TypeError, match="unsupported"):
             _expr_to_bdd(fake_bool_impl(1))
 
@@ -839,10 +839,10 @@ class TestTermConstructors:
         another arity means something else, and the reader must decline it
         rather than destructure it."""
         # nv
-        from clausal.logic.predicate import make_predicate
-        assert _bool_binary_operands(make_predicate("BoolEq", ["x"])(1)) is None
+        from tests.predicate_api_support import term_ctor
+        assert _bool_binary_operands(term_ctor("BoolEq", ["x"])(1)) is None
         assert _bool_binary_operands(
-            make_predicate("BoolImpl", ["a", "b", "c"])(1, 2, 3)) is None
+            term_ctor("BoolImpl", ["a", "b", "c"])(1, 2, 3)) is None
 
     def test_operand_reader_answers_for_a_reserved_1_tuple(self):
         """``('x',)`` is RESERVED and makes ``compound_cell_shape`` refuse.

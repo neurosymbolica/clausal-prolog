@@ -16,7 +16,7 @@ import sys
 
 import pytest
 
-from clausal.logic.predicate import make_predicate
+from tests.predicate_api_support import term_ctor
 from clausal.logic.specialization import (
     _SpecTarget, _specialized_fields, _unfold, analyze_mi,
 )
@@ -25,8 +25,9 @@ from clausal.logic.variables import Var
 
 def test_the_target_builds_the_cell_a_class_builds():
     """The target (name + fields, no class -- W4b-3 slice 4) builds the
-    cell a class with the same fields builds."""
-    cls = make_predicate("spt_p", ["a", "b", "c"])
+    cell a construction against the same fields builds (``build_term_cell``,
+    through ``term_ctor``; a ``make_predicate`` class until W4b-3 slice 6)."""
+    cls = term_ctor("spt_p", ["a", "b", "c"])
     target = _SpecTarget("spt_p", ("a", "b", "c"))
     assert target(a=1, b=2, c=3) == cls(a=1, b=2, c=3) == ("spt_p", 1, 2, 3)
     # The unfolder's own builder fills a slot it leaves out with a fresh Var

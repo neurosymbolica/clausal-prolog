@@ -505,7 +505,7 @@ class _DbDispatchAdapter:
 - Bytecode is cached in `__pycache__/` via `SourceLoader`
 
 **Phase B** (module exec time):
-- Bytecode execution creates load-time `PredicateMeta` classes and collects `Predicate` nodes (step 4a-bis below rebinds every name to its handle)
+- Bytecode execution binds each predicate name to its handle (`$declare_head`, which records the head's field names until the flip point, step 4a-bis) and collects `Predicate` nodes; it created a load-time `PredicateMeta` class per name until W4b-3 slice 5
 - `compile_module()` takes over from there
 
 ### compile_module steps
@@ -520,9 +520,9 @@ compile_module(predicate_nodes, module_items, module_dict, module_name)
 | 1. Term expansion | `run_term_expansion()` — apply `term_expansion/4` rules to predicate nodes. See [Term Expansion](term_expansion.md) |
 | 1b. Goal expansion | `run_goal_expansion()` — walk clause bodies and apply built-in expansions. Currently: regex auto-binding (ALLCAPS named groups → Unify chains) and static pattern pre-compilation. See [goal_expansion](#goal-expansion-v3-3) below. |
 | 2. [Directives](directives.md) | `_process_directives()` — apply `-dynamic`, `-discontiguous`, `-table`, `-shallow` metadata to the database |
-| 3. Declarations | `_process_declarations()` — process `-module` and `-private` declarations, create PredicateMeta classes for declared functors |
-| 4. assertz clauses | Each `Predicate` node is asserted via `logic_module.define_predicate()`. The load-time class is bound to the Database row (`_bind_row`), so its clauses ARE the database's list |
-| 4a-bis. The flip | `_flip_bindings()` — every predicate binding a Clausal database owns is rebound in `module_dict` to `mint_predicate_handle(owner_db, functor)`; an `-import_from` binds the OWNER's handle. Runs again after step 6b, since `-specialize` binds a class there |
+| 3. Declarations | `_process_declarations()` — process `-module` and `-private` declarations: a declared atom binds its spelling, a declared data functor its interned name; a predicate keeps the handle the module body bound |
+| 4. assertz clauses | Each `Predicate` node is asserted via `logic_module.define_predicate()` onto the Database row; the row's signature is stamped from the rewriter's head field names and its `declared_at` from the `$declare_head` record |
+| 4a-bis. The flip | `_flip_bindings()` — a `PredicateMeta` class still bound in `module_dict` (only a Python-made one can be, and it is REFUSED) is checked; the module body's `$declare_head` record retires here, so the Database answers alone from now on |
 | 5. Compile | Each `(functor, arity)` is compiled via `compile_predicate_trampoline` (or `compile_predicate_shallow` for shallow predicates) |
 | 6. [Tabling](tabling.md) | Tabled predicates are wrapped with `make_tabled_wrapper_trampoline` from `clausal.logic.tabling` |
 | 7. Locking | Non-[dynamic](directives.md) predicates' rows are locked (`_lock_static_predicates(db)`) to prevent runtime modification |

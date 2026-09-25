@@ -480,13 +480,14 @@ class TestSignatureConstruction:
         the same slots.  Signature placement changed what a construction
         lowers TO, never what it means -- the compile-time placer and the
         runtime one must keep agreeing."""
-        from clausal.logic.predicate import make_predicate
+        from tests.predicate_api_support import term_ctor
 
-        # R6: read through a PYTHON-minted class -- a ``.clausal``
-        # declaration mints none, but ``PredicateMeta.__call__`` is untouched
-        # and is still what every Python-side functor producer constructs
-        # through, so it is still the placer that has to agree.
-        point = make_predicate("point", ["x", "y"])
+        # R6: the RUNTIME placer is ``build_term_cell`` -- the one home of
+        # construction against a signature (a handle's ``$head`` and, until
+        # W4b-3 slice 7, ``PredicateMeta.__call__`` both go through it).
+        # ``term_ctor`` calls it directly (``make_predicate`` was retired at
+        # W4b-3 slice 6).
+        point = term_ctor("point", ["x", "y"])
         assert normalize_term(point(y=2, x=1)) == ("point", 1, 2)
         # keyword-only naming SOME slots: refused, never padded (2026-09-25)
         from clausal.logic.predicate import ClausalTermConstructionError
@@ -1481,15 +1482,15 @@ class TestLiveCellHeadArg:
 
     def _fact_module(self, arg):
         from clausal.logic.database import Clause, Database, Module
-        from clausal.logic.predicate import make_predicate
+        from tests.predicate_api_support import term_ctor
         from clausal.logic.compiler import predicate as predicate_mod
 
-        Q = make_predicate("qq", ("S", "K"))
+        Q = term_ctor("qq", ("S", "K"))
         db = Database()
         db.assertz(Clause(head=Q(S=arg, K="yes"), body=[]))
         db.assertz(Clause(head=Q(S=Var(), K="catchall"), body=[]))
         predicate_mod.compile_predicate_trampoline(
-            "qq", 2, db.clauses_for("qq", 2), db, globals_={"qq": Q})
+            "qq", 2, db.clauses_for("qq", 2), db)
         m = Module("_tt_live_cell")
         m.db = db
         return m
@@ -1638,15 +1639,15 @@ class TestCellHeadGuardLeaks:
 
     def _module(self, arg):
         from clausal.logic.database import Clause, Database, Module
-        from clausal.logic.predicate import make_predicate
+        from tests.predicate_api_support import term_ctor
         from clausal.logic.compiler import predicate as predicate_mod
 
-        Q = make_predicate("gg", ("S", "K"))
+        Q = term_ctor("gg", ("S", "K"))
         db = Database()
         db.assertz(Clause(head=Q(S=arg, K="yes"), body=[]))
         db.assertz(Clause(head=Q(S=Var(), K="catchall"), body=[]))
         predicate_mod.compile_predicate_trampoline(
-            "gg", 2, db.clauses_for("gg", 2), db, globals_={"gg": Q})
+            "gg", 2, db.clauses_for("gg", 2), db)
         m = Module("_tt_guard_leak")
         m.db = db
         return m
@@ -1723,15 +1724,15 @@ class TestCellHeadArgOpaqueSlots:
 
     def _module(self, functor, arg):
         from clausal.logic.database import Clause, Database, Module
-        from clausal.logic.predicate import make_predicate
+        from tests.predicate_api_support import term_ctor
         from clausal.logic.compiler import predicate as predicate_mod
 
-        Q = make_predicate(functor, ("S", "K"))
+        Q = term_ctor(functor, ("S", "K"))
         db = Database()
         db.assertz(Clause(head=Q(S=arg, K=mint("yes")), body=[]))
         db.assertz(Clause(head=Q(S=Var(), K=mint("catchall")), body=[]))
         predicate_mod.compile_predicate_trampoline(
-            functor, 2, db.clauses_for(functor, 2), db, globals_={functor: Q})
+            functor, 2, db.clauses_for(functor, 2), db)
         m = Module("_tt_opaque_slot")
         m.db = db
         return m
@@ -1793,11 +1794,11 @@ class TestCellHeadArgOpaqueSlots:
         from clausal.logic.compiler.globals_env import _collect_globals_info
         from clausal.logic.compiler.terms_to_ast import headlit_global_key
         from clausal.logic.database import Clause
-        from clausal.logic.predicate import make_predicate
+        from tests.predicate_api_support import term_ctor
 
         d = datetime.date(2020, 1, 1)
         cell = ("pt", 1, d)          # keyed by id(), so hold the ONE object
-        Q = make_predicate("ww", ("S", "K"))
+        Q = term_ctor("ww", ("S", "K"))
         types, _thunks, _targets = _collect_globals_info(
             [Clause(head=Q(S=cell, K=mint("yes")), body=[])])
         assert headlit_global_key(d) in types, sorted(types)
@@ -1832,12 +1833,12 @@ class TestStructuralHeadValue:
 
     def test_the_hoist_moves_a_cell_head_arg_into_the_body(self):
         from clausal.logic.database import _normalize_structural_head_args
-        from clausal.logic.predicate import make_predicate
+        from tests.predicate_api_support import term_ctor
         from clausal.terms import Unify
 
         from clausal.logic.cells import cell_args
 
-        Q = make_predicate("qq", ("S", "K"))
+        Q = term_ctor("qq", ("S", "K"))
         head, body = _normalize_structural_head_args(
             Q(S=("pt", 1, Var()), K="yes"), [True])
         # P2: the normalised head is a CELL, so S is read at the position

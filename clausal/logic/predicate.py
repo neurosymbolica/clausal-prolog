@@ -3714,26 +3714,38 @@ for _retired_name, _retired_where in _RETIRED_STATE_NAMES.items():
 del _retired_name, _retired_where
 
 
+class MakePredicateRetiredError(TypeError):
+    """``make_predicate`` was RETIRED (W4b-3 slice 6, 2026-09-25): a
+    predicate is a Database row, named by a handle, and a class created in
+    Python has no Database to be a row of.  A ``TypeError`` -- the call
+    itself is the mistake, whatever its arguments -- raised at the call, so
+    the traceback points at the line to change."""
+
+
+_MAKE_PREDICATE_RETIRED = (
+    "make_predicate({name!r}, {fields!r}) was retired (W4b-3 slice 6): a "
+    "predicate is a row in a module's Database, named by a handle, not a "
+    "class made in Python.\n"
+    "  -> define {name} in a .clausal module and import it (or load the "
+    "module and run a goal with solve((\"{name}\", *args), module=m));\n"
+    "  -> to supply a predicate from Python, bind a plain object (not a "
+    "class) with a _get_dispatch() method returning its dispatch function "
+    "into a Python module, and -import_from it;\n"
+    "  -> to build a term, write the cell: ({name!r}, arg, ...).")
+
+
 def make_predicate(name: str, fields: list[str], *,
                    instances: Any = _MISSING) -> "PredicateMeta":
-    """Dynamically create a PredicateMeta class.
+    """RETIRED (W4b-3 slice 6): raises :class:`MakePredicateRetiredError`.
 
-    Useful in tests and runtime code that needs a predicate without a
-    module-level class definition::
-
-        foo = make_predicate("foo", ["a", "b"])
-        foo._assertz(Clause(head=foo(a=Var(), b=Var()), body=[...]))
-        compile_predicate("foo", 2, foo._state_row().clauses, pred_cls=foo)
-        fn = foo._get_dispatch()
-    """
-    if instances is not _MISSING:
-        raise TypeError(
-            "make_predicate() got `instances=`: that bridge was retired "
-            "(W4a, 2026-09-22); a predicate class builds cells.  (The "
-            "parameter is still declared so passing it says THIS, rather "
-            "than the bare 'unexpected keyword argument' every other typo "
-            "should get.)")
-    return PredicateMeta(name, (), {"_fields": tuple(fields)})
+    It created a ``PredicateMeta`` class from Python -- the Python-API arm of
+    the class era, which a load has refused to bind since W4b-3 slice 1.
+    The name stays so a caller gets THIS explanation, pointing at the
+    replacements, rather than an ``ImportError``/``AttributeError``."""
+    raise MakePredicateRetiredError(
+        _MAKE_PREDICATE_RETIRED.format(name=name, fields=list(fields)
+                                       if isinstance(fields, (list, tuple))
+                                       else fields))
 
 
 def make_atom(name: str) -> tuple[str]:
@@ -3752,8 +3764,9 @@ def make_atom(name: str) -> tuple[str]:
     exported, and out-of-tree callers spell an atom with it); what it returns
     changed.
 
-    A zero-arity PREDICATE class — the thing a bare ``p()`` declaration mints,
-    which is a procedure and not an atom — is ``make_predicate(name, [])``.
+    (A zero-arity PREDICATE -- the thing a bare ``p()`` declaration declares,
+    which is a procedure and not an atom -- is a row named by its handle;
+    ``make_predicate(name, [])`` minted one as a class until W4b-3 slice 6.)
 
     Delegates to ``clausal.logic.atoms.mint`` (spec §6.1) — the public atom
     API that Plan 0 of the atoms-as-cells/strings plan introduces.
@@ -3771,7 +3784,7 @@ __all__ = ["PredicateMeta", "RetiredStateError", "_MISSING", "is_term_instance",
            "is_atom_value",
            "term_field_names", "term_field_names_of_class", "field_names_for",
            "term_field_values", "term_field_dict",
-           "make_predicate", "make_atom",
+           "make_predicate", "MakePredicateRetiredError", "make_atom",
            "resolve_predicate_row", "is_declared_predicate",
            "is_declared_predicate_name", "predicate_arities_for",
            "mint_predicate_handle", "namespace_db",

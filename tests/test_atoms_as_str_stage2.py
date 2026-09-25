@@ -7,6 +7,7 @@ from clausal.logic.atoms import (mint, key_of, is_atom, spelling, char_atom,
                                  is_char_atom, NIL_KEY)
 from clausal.logic.cells import (chars, is_chars, refuse_reserved_1tuple,
                                  is_reserved_1tuple, compound_cell_shape, _cell_shape)
+from tests.predicate_api_support import class_arm_predicate
 
 
 def test_an_atom_is_the_interned_str():
@@ -201,8 +202,8 @@ class TestReviewRound1:
     def test_no_class_is_a_term_to_either_functor_twin(self):
         from clausal.logic.builtins._helpers import _functor_name_py, _arity_py
         from clausal.logic.variables._variables import _functor_name, _arity
-        from clausal.logic.predicate import make_predicate
-        cls = make_predicate("trr_zero_field", [])
+
+        cls = class_arm_predicate("trr_zero_field", [])
         assert _functor_name_py(cls) is None and _arity_py(cls) is None
         assert _functor_name(cls) is None and _arity(cls) is None
 

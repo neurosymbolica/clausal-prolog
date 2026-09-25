@@ -50,7 +50,7 @@ Both are addressed:
 The `.pyc` contains the bytecode for the **transformed module** — i.e., the output of `EmbedTransformer`. This means:
 - `$define_predicate(Predicate(head=..., body=...), $module)` calls (from `head <- body` rules)
 - `$assert_fact(term)` calls (from trailing-comma facts)
-- `class foo(metaclass=PredicateMeta): _fields = (...)` declarations (from functor auto-generation)
+- `$declare_head('foo', (...))` statements — one per predicate name, binding the module's predicate handle and recording its head's field names (they were `class foo(metaclass=PredicateMeta)` blocks until W4b-3 slice 5)
 - `Var()` allocations (from logic variable names)
 
 These calls still execute at import time (they assert clauses), but the parsing and AST transformation cost is eliminated.

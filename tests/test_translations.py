@@ -23,7 +23,8 @@ from clausal.logic.translations import (
     get_languages,
     _clear,
 )
-from clausal.logic.predicate import make_predicate, PredicateMeta
+from clausal.logic.predicate import PredicateMeta
+from tests.predicate_api_support import term_ctor
 from clausal.logic.variables import Var, Trail, deref
 from clausal.logic.cells import chars, is_chars, chars_text
 from clausal.terms import Compound, KWTerm, term_str, TermStyle
@@ -155,7 +156,7 @@ class TestDisplayLocale:
 
     def test_predicate_meta_with_locale(self):
         # nv
-        Greeting = make_predicate("greeting", ["NAME", "MESSAGE"])
+        Greeting = term_ctor("greeting", ["NAME", "MESSAGE"])
         register_predicate("th", "greeting", "ทักทาย", 2)
         t = Greeting(NAME="hello", MESSAGE="world")
         s = term_str(t, TermStyle(locale="th"))
@@ -179,7 +180,7 @@ class TestDisplayLocale:
     def test_zero_arity_atom_with_locale(self):
         """Zero-arity PredicateMeta atoms get their name translated in display."""
         # nv
-        nil_atom = make_predicate("nil", [])
+        nil_atom = "nil"     # the atom (a make_predicate class until W4b-3 slice 6)
         s = term_str(nil_atom, TermStyle(locale="th"))
         assert "ว่าง" in s
 
@@ -234,7 +235,7 @@ class TestTranslateBuiltin:
         from clausal.logic.builtins.translations_builtin import _translate__3
         trail = Trail()
         result_var = Var()
-        th_atom = make_predicate("th", [])
+        th_atom = "th"       # the atom (a make_predicate class until W4b-3 slice 6)
         t = Compound("append", (1, 2, 3))
         gen = _translate__3(th_atom, t, result_var, trail, None)
         sol = next(gen, "NO_SOLUTION")

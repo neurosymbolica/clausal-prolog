@@ -367,7 +367,7 @@ def test_row_clauses_read_does_not_vivify_is_defined():
 # row; the Database's class-mirror blocks and arity-blind `_pred_cls_for` die.
 # ══════════════════════════════════════════════════════════════════════════════
 
-from clausal.logic.predicate import PredicateMeta, make_predicate  # noqa: E402
+from clausal.logic.predicate import PredicateMeta  # noqa: E402
 
 
 # ── the class reads THROUGH the row ─────────────────────────────────────────
@@ -378,7 +378,7 @@ def test_bound_class_clauses_is_the_database_row_list_itself():
     in step. Before Task 2 ``cls._clauses`` was a private per-class list and
     ``Database.assertz`` had to mirror every append onto it."""
     db = Database()
-    p = make_predicate("p", ["a"])
+    p = class_arm_predicate("p", ["a"])
     p._bind_row(db, "p", 1)
     # ADAPTED, P3-3 Task 2 fix round 1: binding alone mints nothing, so the
     # identity is asserted once the predicate actually HAS a clause list —
@@ -394,7 +394,7 @@ def test_bound_class_clauses_is_the_database_row_list_itself():
 
 def test_db_assertz_is_visible_through_the_bound_class_without_a_mirror():
     db = Database()
-    p = make_predicate("p", ["a"])
+    p = class_arm_predicate("p", ["a"])
     p._bind_row(db, "p", 1)
     c = _clause("p", 1)
     db.assertz(c)
@@ -404,7 +404,7 @@ def test_db_assertz_is_visible_through_the_bound_class_without_a_mirror():
 
 def test_db_asserta_and_retract_are_visible_through_the_bound_class():
     db = Database()
-    p = make_predicate("p", ["a"])
+    p = class_arm_predicate("p", ["a"])
     p._bind_row(db, "p", 1)
     first, second = _clause("p", 1), _clause("p", 2)
     db.assertz(first)
@@ -416,7 +416,7 @@ def test_db_asserta_and_retract_are_visible_through_the_bound_class():
 
 def test_db_mutation_invalidates_the_dispatch_the_class_reads():
     db = Database()
-    p = make_predicate("p", ["a"])
+    p = class_arm_predicate("p", ["a"])
     p._bind_row(db, "p", 1)
     db.set_dispatch("p", 1, lambda *a: iter([]))
     assert p._state_row().dispatch_fn is not None
@@ -428,7 +428,7 @@ def test_db_mutation_invalidates_the_dispatch_the_class_reads():
 def test_class_writes_land_in_the_database():
     """Every relocated attribute, in the write direction."""
     db = Database()
-    p = make_predicate("p", ["a"])
+    p = class_arm_predicate("p", ["a"])
     p._bind_row(db, "p", 1)
     fn = lambda *a: iter([])  # noqa: E731
     lazy = lambda: fn  # noqa: E731
@@ -450,7 +450,7 @@ def test_clauses_wholesale_rebind_goes_through_the_row():
     """``cls._state_row().clauses = []`` (the reset spelling several tests use) replaces the
     Database's entry rather than orphaning the class onto a private list."""
     db = Database()
-    p = make_predicate("p", ["a"])
+    p = class_arm_predicate("p", ["a"])
     p._bind_row(db, "p", 1)
     db.assertz(_clause("p", 1))
     fresh = []
@@ -462,7 +462,7 @@ def test_clauses_wholesale_rebind_goes_through_the_row():
 
 def test_get_dispatch_recompiles_through_the_rows_lazy_callback():
     db = Database()
-    p = make_predicate("p", ["a"])
+    p = class_arm_predicate("p", ["a"])
     p._bind_row(db, "p", 1)
     fn = lambda *a: iter([])  # noqa: E731
     calls = []
@@ -483,7 +483,7 @@ def test_get_dispatch_prefers_what_install_stored_over_the_callbacks_return():
     """The tabled-wrapper invariant: ``_install`` puts the SLG wrapper on the
     row, so whatever the recompile callback happens to return loses."""
     db = Database()
-    p = make_predicate("p", ["a"])
+    p = class_arm_predicate("p", ["a"])
     p._bind_row(db, "p", 1)
     raw = lambda *a: iter([])      # noqa: E731
     wrapped = lambda *a: iter([])  # noqa: E731
@@ -497,7 +497,7 @@ def test_get_dispatch_prefers_what_install_stored_over_the_callbacks_return():
 
 
 def test_get_dispatch_without_clauses_or_lazy_still_raises():
-    p = make_predicate("lonely", ["a"])
+    p = class_arm_predicate("lonely", ["a"])
     with pytest.raises(NotImplementedError):
         p._get_dispatch()
 
@@ -510,7 +510,7 @@ def test_assertz_no_longer_appends_onto_an_arity_mismatched_class():
     arity entirely, so a ``p/1`` assertz appended its clause onto a class that
     was ``p/3``. There is no second store to miss now: the row for ``p/1`` is
     the only place the clause goes, and the ``p/3`` class reads ``p/3``'s row."""
-    p3 = make_predicate("p", ["a", "b", "c"])
+    p3 = class_arm_predicate("p", ["a", "b", "c"])
     db = Database(module_dict={"p": p3})
     p3._bind_row(db, "p", 3)
     db.assertz(_clause("p", 1))
@@ -519,7 +519,7 @@ def test_assertz_no_longer_appends_onto_an_arity_mismatched_class():
 
 
 def test_retract_no_longer_reaches_into_an_arity_mismatched_class():
-    p3 = make_predicate("p", ["a", "b", "c"])
+    p3 = class_arm_predicate("p", ["a", "b", "c"])
     db = Database(module_dict={"p": p3})
     p3._bind_row(db, "p", 3)
     keep = _clause("p", 9, 9, 9)
@@ -536,12 +536,13 @@ def test_database_no_longer_has_pred_cls_for():
 # ── detached compatibility mode: no Database anywhere ───────────────────────
 
 
-def test_bare_make_predicate_is_a_working_predicate_with_no_database():
-    """The out-of-tree contract (~22 external ``_get_dispatch`` implementors,
-    ``clausal.reflection``, ``clpb``, the builtin registry): a class minted by
-    a bare ``make_predicate`` must append clauses, take a dispatch and answer
-    ``_get_dispatch()`` with no Database in sight."""
-    cls = make_predicate("Detached", ["x"])
+def test_a_bare_class_is_a_working_predicate_with_no_database():
+    """A class on no Database (the metaclass called, as ``make_predicate``
+    did before W4b-3 slice 6 retired it) appends clauses, takes a dispatch
+    and answers ``_get_dispatch()`` through its private detached row -- the
+    class machinery, deleted with the class at slice 7.  (The out-of-tree
+    ``_get_dispatch`` protocol is a plain object's, not this.)"""
+    cls = class_arm_predicate("Detached", ["x"])
     assert cls._state_row().clauses == []
     assert cls._state_row().dispatch_fn is None
     assert cls._state_row().lazy_recompile is None
@@ -565,8 +566,8 @@ def test_bare_make_predicate_is_a_working_predicate_with_no_database():
 def test_detached_classes_of_the_same_name_and_arity_do_not_share_state():
     """Each detached class gets its OWN private row — the builtin registry
     mints several same-named classes (one per arity) in one process."""
-    a = make_predicate("dup", ["x"])
-    b = make_predicate("dup", ["x"])
+    a = class_arm_predicate("dup", ["x"])
+    b = class_arm_predicate("dup", ["x"])
     a._state_row().clauses.append("A")
     assert b._state_row().clauses == []
     a._state_row().locked = True
@@ -575,7 +576,7 @@ def test_detached_classes_of_the_same_name_and_arity_do_not_share_state():
 
 
 def test_detached_row_is_private_and_lazy():
-    cls = make_predicate("Lazy", ["x"])
+    cls = class_arm_predicate("Lazy", ["x"])
     assert cls._row is None, "no row until some predicate state is touched"
     _ = cls._state_row().clauses
     assert isinstance(cls._row, PredRow)
@@ -584,7 +585,7 @@ def test_detached_row_is_private_and_lazy():
 
 
 def test_predicate_meta_mutators_work_detached_and_respect_the_lock():
-    cls = make_predicate("Mut", ["x"])
+    cls = class_arm_predicate("Mut", ["x"])
     c1 = Clause(head=cls(1), body=[])      # a head is a CELL (W4a)
     c2 = Clause(head=cls(2), body=[])
     cls._assertz(c1)
@@ -606,7 +607,7 @@ def test_predicate_meta_mutators_work_detached_and_respect_the_lock():
 
 def test_bind_row_is_idempotent():
     db = Database()
-    cls = make_predicate("p", ["a"])
+    cls = class_arm_predicate("p", ["a"])
     cls._bind_row(db, "p", 1)
     row = cls._row
     cls._bind_row(db, "p", 1)
@@ -617,7 +618,7 @@ def test_bind_row_uses_the_passed_functor_not_the_class_name():
     """An aliased ``-import_from`` binds a class under a name that is not its
     own; the clauses live under the name the CLAUSE HEADS use."""
     db = Database()
-    cls = make_predicate("original", ["a"])
+    cls = class_arm_predicate("original", ["a"])
     cls._bind_row(db, "alias", 1)
     assert cls._row._key == ("alias", 1)
     db.assertz(_clause("alias", 1))
@@ -636,7 +637,7 @@ def test_rebinding_carries_locked_and_source():
     (``test_an_authorized_cross_database_rebind_raises_and_moves_nothing``) --
     so the carry-over is pinned on the re-bind that still exists."""
     db1 = Database()
-    cls = make_predicate("p", ["a"])
+    cls = class_arm_predicate("p", ["a"])
     cls._bind_row(db1, "p", 1)
     cls._state_row().locked = True
     cls._row.source = ("m1", "/tmp/m1.clausal")
@@ -657,7 +658,7 @@ def test_an_authorized_cross_database_rebind_raises_and_moves_nothing():
     2026-09-24 it raises; the old row keeps its clauses AND the class keeps
     reading them, and the target row is left as it was."""
     db1, db2 = Database(), Database()
-    cls = make_predicate("p", ["a"])
+    cls = class_arm_predicate("p", ["a"])
     cls._bind_row(db1, "p", 1)
     db1.assertz(_clause("p", 1))
     with pytest.raises(RuntimeError, match="never changes its defining module"):
@@ -674,7 +675,7 @@ def test_an_unauthorized_rebind_leaves_the_class_where_it_is():
     its private DETACHED row is unbound, not foreign, so its first bind is
     always allowed."""
     db1, db2 = Database(), Database()
-    cls = make_predicate("p", ["a"])
+    cls = class_arm_predicate("p", ["a"])
     cls._bind_row(db1, "p", 1)                    # first bind: detached -> db1
     db1.assertz(_clause("p", 1))
 
@@ -709,7 +710,7 @@ class TestBindRowCarriesDetachedClauses:
         from clausal.logic.solve import solve
         from clausal.logic.variables import Var, deref
 
-        P = make_predicate("dp", ["x"])
+        P = class_arm_predicate("dp", ["x"])
         P._assertz(Clause(head=P(x=1), body=[]))
         P._assertz(Clause(head=P(x=2), body=[]))
         assert P._row.detached is True and len(P._state_row().clauses) == 2
@@ -738,7 +739,7 @@ class TestBindRowCarriesDetachedClauses:
 
     def test_the_detached_rows_write_stamps_travel_with_its_clauses(self):
         db = Database()
-        P = make_predicate("dpw", ["x"])
+        P = class_arm_predicate("dpw", ["x"])
         P._assertz(Clause(head=P(x=1), body=[]))
         stamps_before = list(P._row.writes)
         assert stamps_before, "the _assertz is a stamped write"
@@ -750,7 +751,7 @@ class TestBindRowCarriesDetachedClauses:
 
     def test_the_detached_row_is_emptied_rather_than_left_duplicating(self):
         db = Database()
-        P = make_predicate("dpe", ["x"])
+        P = class_arm_predicate("dpe", ["x"])
         P._assertz(Clause(head=P(x=1), body=[]))
         old_row = P._row
         P._bind_row(db, "dpe", 1)
@@ -768,7 +769,7 @@ class TestBindRowCarriesDetachedClauses:
         from clausal.logic.exceptions import LogicException
         from clausal.logic.solve import solve
 
-        P = make_predicate("dq", ["x"])
+        P = class_arm_predicate("dq", ["x"])
         P._assertz(Clause(head=P(x=1), body=[]))
         P._assertz(Clause(head=P(x=2), body=[]))
         module_dict = {"dq": P}
@@ -917,6 +918,7 @@ def _run_goal(module, functor, arg):
 # is the one shape that would otherwise go quietly wrong.
 
 from clausal.logic.predicate import RetiredStateError, _RETIRED_STATE_NAMES
+from tests.predicate_api_support import class_arm_predicate
 
 _RETIRED = (
     "_clauses", "_dispatch_fn", "_lazy_recompile", "_locked",
@@ -930,7 +932,7 @@ _RETIRED = (
 
 
 def test_every_retired_name_is_a_tombstone_on_the_class():
-    cls = make_predicate("Retired", ["x"])
+    cls = class_arm_predicate("Retired", ["x"])
     for name in _RETIRED:
         with pytest.raises(RetiredStateError, match=name):
             getattr(cls, name)
@@ -946,7 +948,7 @@ def test_a_getattr_probe_with_a_default_does_not_go_quiet():
     (the goal resolver in builtins/control.py).  An ``AttributeError``
     tombstone would have made it answer ``None`` -- silently -- so the
     tombstone raises something ``getattr``/``hasattr`` do not swallow."""
-    cls = make_predicate("Probe", ["x"])
+    cls = class_arm_predicate("Probe", ["x"])
     with pytest.raises(RetiredStateError):
         getattr(cls, "_dispatch_fn", None)
     with pytest.raises(RetiredStateError):
@@ -960,7 +962,7 @@ def test_the_row_is_the_one_face_and_reads_are_live():
     """Mutate through the class's row (and through the Database), read back
     through ``_state_row()`` -- the accessor the facades collapsed into."""
     db = Database()
-    cls = make_predicate("RowLive", ["x"])
+    cls = class_arm_predicate("RowLive", ["x"])
     cls._bind_row(db, "RowLive", 1)
     row = cls._state_row()
     assert row is cls._row
@@ -991,7 +993,7 @@ def test_a_field_named_like_a_retired_attribute_stays_a_field():
     (W4a: the instance half of this claim -- ``inst._locked`` reading the
     field rather than the row -- went with the instance path.  The cell
     carries the field positionally instead, which is asserted here.)"""
-    cls = make_predicate("FieldClash", ["_locked"])
+    cls = class_arm_predicate("FieldClash", ["_locked"])
     assert cls._fields == ("_locked",)
     assert cls("field value") == ("FieldClash", "field value")
     with pytest.raises(RetiredStateError):
@@ -1007,7 +1009,7 @@ def test_ordinary_class_introspection_never_meets_a_tombstone():
     the opposite; this pins the measured answer).  Only a walker that brings
     the retired NAMES itself sees the error, which is what it is for."""
     import inspect
-    cls = make_predicate("Introspect", ["x"])
+    cls = class_arm_predicate("Introspect", ["x"])
     names = {name for name, _ in inspect.getmembers(cls)}
     assert names.isdisjoint(_RETIRED)
     assert "_row" in names, "the raw slot is an ordinary class attribute"
@@ -1025,7 +1027,7 @@ def test_reading_a_bound_clauseless_class_leaves_is_defined_false():
     (``__repr__``, ``_clause_arity``, ``_declared_arity``, the compiler's own
     inspections) reported it defined."""
     db = Database()
-    cls = make_predicate("declared_only", ["x"])
+    cls = class_arm_predicate("declared_only", ["x"])
     cls._bind_row(db, "declared_only", 1)
     db.mark_dynamic("declared_only", 1)   # the ONE declaration channel now
 
@@ -1041,7 +1043,7 @@ def test_reading_a_bound_clauseless_class_leaves_is_defined_false():
 def test_the_first_assertz_onto_a_bound_class_mints_and_aliases():
     """... and the sanctioned mutators do mint, both directions."""
     db = Database()
-    cls = make_predicate("mints", ["x"])
+    cls = class_arm_predicate("mints", ["x"])
     cls._bind_row(db, "mints", 1)
     assert db.is_defined("mints", 1) is False
 
@@ -1052,7 +1054,7 @@ def test_the_first_assertz_onto_a_bound_class_mints_and_aliases():
     db.assertz(_clause("mints", 2))                  # Database-side mutator
     assert len(cls._state_row().clauses) == 2
 
-    other = make_predicate("mints2", ["x"])
+    other = class_arm_predicate("mints2", ["x"])
     other._bind_row(db, "mints2", 1)
     other._asserta(Clause(head=other(1), body=[]))
     assert db.is_defined("mints2", 1) is True

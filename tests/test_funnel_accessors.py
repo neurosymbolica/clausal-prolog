@@ -48,7 +48,6 @@ from clausal.logic.predicate import (
     PredicateMeta,
     is_zero_field_class,
     is_term_instance,
-    make_predicate,
     term_field_dict,
     term_field_names,
     term_field_names_of_class,
@@ -68,6 +67,7 @@ from clausal.logic.cells import TUPLE_TAG, make_cell, make_tuple_cell
 from clausal.logic.variables import Var, deref, is_var
 from clausal.terms import Compound, KWTerm
 from clausal.pythonic_ast.nodes import Add
+from tests.predicate_api_support import class_arm_predicate
 
 
 # ── Corpus ─────────────────────────────────────────────────────────────────
@@ -75,8 +75,8 @@ from clausal.pythonic_ast.nodes import Add
 # A PredicateMeta term whose declared field order is NOT alphabetical, so a
 # naive "sort the fields" implementation would silently pass while an
 # order-sensitive one would not.
-bar = make_predicate("bar", ["b", "a"])
-foo_atom = make_predicate("foo", [])
+bar = class_arm_predicate("bar", ["b", "a"])
+foo_atom = class_arm_predicate("foo", [])
 
 
 class NotADataclass:
@@ -212,7 +212,7 @@ class TestFunctorArity:
             mint("foo"),
             Add(left=1, right=2),
             mint("baz"),
-            make_predicate("qux", ["x", "y", "z"])(x=1, y=2, z=3),
+            class_arm_predicate("qux", ["x", "y", "z"])(x=1, y=2, z=3),
         ],
         ids=[
             "compound-nullary",
@@ -310,7 +310,7 @@ class TestMigrationRegression:
         from types import SimpleNamespace
         from clausal.logic.term_expansion import _is_term_expansion_clause
 
-        te = make_predicate("term_expansion", ("a", "b", "c", "d"))
+        te = class_arm_predicate("term_expansion", ("a", "b", "c", "d"))
         head = te(a=1, b=2, c=3, d=4)                 # a head is a CELL (W4a)
         pred_node = SimpleNamespace(head=head)
         assert _is_term_expansion_clause(pred_node)
@@ -320,7 +320,7 @@ class TestMigrationRegression:
         from types import SimpleNamespace
         from clausal.logic.term_expansion import _is_term_expansion_clause
 
-        other = make_predicate("NotTermExpansion", ("a", "b", "c", "d"))
+        other = class_arm_predicate("NotTermExpansion", ("a", "b", "c", "d"))
         head = other(a=1, b=2, c=3, d=4)
         pred_node = SimpleNamespace(head=head)
         assert not _is_term_expansion_clause(pred_node)
@@ -330,7 +330,7 @@ class TestMigrationRegression:
         from types import SimpleNamespace
         from clausal.logic.term_expansion import _is_term_expansion_clause
 
-        te3 = make_predicate("term_expansion", ("a", "b", "c"))
+        te3 = class_arm_predicate("term_expansion", ("a", "b", "c"))
         head = te3(a=1, b=2, c=3)
         pred_node = SimpleNamespace(head=head)
         assert not _is_term_expansion_clause(pred_node)
@@ -706,9 +706,9 @@ class TestCellGroundnessRegression:
         """The whole point: cell and class term answer the same."""
         # nv
         from clausal.logic.builtins._helpers import _is_ground
-        from clausal.logic.predicate import make_predicate
 
-        pt = make_predicate("pt", ["a", "b"])
+
+        pt = class_arm_predicate("pt", ["a", "b"])
         free = Var()
         assert _is_ground(pt(1, free)) is False
         assert _is_ground(make_cell("pt", 1, free)) is False

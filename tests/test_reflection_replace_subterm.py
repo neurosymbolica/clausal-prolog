@@ -16,7 +16,6 @@ from clausal.logic.cells import chars
 from clausal.import_hook import _load_module
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
-from clausal.logic.predicate import make_predicate
 from clausal.terms import Compound
 from clausal.pythonic_ast import nodes as simple_ast
 from clausal import reflection as R
@@ -31,9 +30,11 @@ def _clear_query_cache():
 
 
 # atoms and a helper for building f(a, g(a))-style ground compounds
-_a = make_predicate("a", [])
-_b = make_predicate("b", [])
-_c = make_predicate("c", [])
+# The atoms a, b, c.  They were zero-field ``make_predicate`` classes, which
+# lowered to these same atoms (W4b-3 slice 6 retired ``make_predicate``).
+_a = "a"
+_b = "b"
+_c = "c"
 
 
 def _g(x):
@@ -111,10 +112,10 @@ class TestOtherTermKinds:
         from clausal.terms import KWTerm
 
         term = KWTerm("g", x=_a, y=_b)
-        assert self._all(term, _a, _c) == ["KWTerm('g', x=c, y=b)"]
+        assert self._all(term, _a, _c) == ["KWTerm('g', x='c', y='b')"]  # atoms render quoted in a KWTerm repr
 
     def test_plain_dict_value_is_rewritten(self):
-        assert self._all({"k": _a, "j": _b}, _a, _c) == ["{'k': c, 'j': b}"]
+        assert self._all({"k": _a, "j": _b}, _a, _c) == ["{'k': 'c', 'j': 'b'}"]
 
     def test_unbound_old_matches_every_non_var_subterm(self):
         # OLD is an unbound var: it unifies every ground subterm (root included),

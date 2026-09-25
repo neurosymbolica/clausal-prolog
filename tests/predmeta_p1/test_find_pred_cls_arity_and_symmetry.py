@@ -22,8 +22,9 @@ from __future__ import annotations
 from clausal.import_hook import _load_module
 from clausal.logic.builtins.database_ops import _find_pred_cls
 from clausal.logic.predicate import (
-    make_predicate, mint_predicate_handle, resolve_predicate_row,
+    mint_predicate_handle, resolve_predicate_row,
 )
+from tests.predicate_api_support import class_arm_predicate
 
 
 def _write(tmp_path, name, src):
@@ -60,7 +61,7 @@ def test_a_class_sitting_on_another_aritys_row_is_not_returned_for_that_arity(
     # The class arm of the guard is still engine code; the misplaced class
     # is built by hand -- a ONE-field class on d/1's row, then moved onto
     # the ('d', 2) row -- and bound under the name.
-    cls = make_predicate("d", ["x"])
+    cls = class_arm_predicate("d", ["x"])
     cls._bind_row(mod.db, "d", 1, authorized=True)
     assert cls._row.key == ("d", 1)
     cls._bind_row(mod.db, "d", 2, authorized=True)

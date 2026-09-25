@@ -35,8 +35,9 @@ import pytest
 from clausal.logic.atoms import mint
 from clausal.logic.cells import is_cell, cell_functor, cell_arity
 from clausal.logic.builtins.inspection import _functor__3, _univ__2
-from clausal.logic.predicate import PredicateMeta, make_predicate
+from clausal.logic.predicate import PredicateMeta
 from clausal.logic.variables import Var, Trail, deref, unify
+from tests.predicate_api_support import class_arm_predicate
 
 
 def built_by(builtin, *args):
@@ -62,7 +63,7 @@ def built_by(builtin, *args):
 @pytest.fixture
 def cite():
     """A declared functor of arity 1 — the shape from the field report."""
-    return make_predicate("tfcdt_cite", ["key"])
+    return class_arm_predicate("tfcdt_cite", ["key"])
 
 
 # ── functor/3 construction ─────────────────────────────────────────────────
@@ -121,7 +122,7 @@ def test_arity_zero_atom_asked_at_arity_one_is_still_generic():
     ``entry_key/2`` then decomposes it to get the name.  Pinned so this fix
     cannot break that library; the generic term is a cell (§6.4), which
     decomposes through the same funnel a Compound did."""
-    schema_atom = make_predicate("tfcdt_applicant_age", [])
+    schema_atom = class_arm_predicate("tfcdt_applicant_age", [])
     built = built_by(_functor__3, schema_atom, 1)
     assert type(built) is tuple and len(built) == 2
     assert built[0] == "tfcdt_applicant_age"
@@ -144,7 +145,7 @@ def test_builtin_name_atom_builds_a_generic_cell_not_a_type_error():
 def test_arity_zero_still_yields_the_name_itself():
     """``functor(T, Name, 0)`` binds T to Name unchanged — the A09-F027
     round-trip property for atomic constants."""
-    atom = make_predicate("tfcdt_zed", [])
+    atom = class_arm_predicate("tfcdt_zed", [])
     assert built_by(_functor__3, atom, 0) is atom
 
 

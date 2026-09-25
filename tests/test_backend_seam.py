@@ -31,7 +31,8 @@ from clausal.logic.database import Database
 from clausal.logic.exceptions import LogicException
 from clausal.logic.compiler.globals_env import _disp_key, _inject_resolved_targets
 from clausal.logic.compiler.predicate import _install
-from clausal.logic.predicate import make_predicate
+from clausal.logic.predicate import (
+    mint_predicate_handle, register_handle_owner)
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
 
@@ -45,15 +46,19 @@ def _fresh_db(name: str = "_seam") -> Database:
 
 def _bound_class(db: Database, functor: str, arity: int, *, locked: bool,
                  dispatch=None):
-    """A ``PredicateMeta`` bound to ``db``'s row for ``functor/arity``."""
-    cls = make_predicate(functor, [f"a{i}" for i in range(arity)])
-    cls._bind_row(db, functor, arity)
-    cls._row.locked = locked
+    """``db``'s row for ``functor/arity``, locked or not, with *dispatch*
+    installed -- and the predicate HANDLE a module binds for it, which is
+    what ``_inject_resolved_targets`` meets in a module's globals since the
+    flip.  (A ``make_predicate`` class bound to the row until W4b-3 slice 6;
+    the name is kept so the tests below read unchanged.)"""
+    row = db.row(functor, arity, create=True)
+    row.locked = locked
     if dispatch is not None:
         with db.mutate(functor, arity, author="test", kind="recompile",
                        detail="test fixture"):
-            cls._row.dispatch_fn = dispatch
-    return cls
+            row.dispatch_fn = dispatch
+    register_handle_owner(db)
+    return mint_predicate_handle(db, functor)
 
 
 def _dummy_dispatch(*_args, **_kwargs):
@@ -77,7 +82,7 @@ class TestBakeInReadsTheRow:
         reference nothing can invalidate."""
         db = _fresh_db()
         cls = _bound_class(db, "Leaf", 1, locked=False, dispatch=_dummy_dispatch)
-        assert cls._row.dispatch_fn is _dummy_dispatch  # there IS one to bake
+        assert db.row("Leaf", 1).dispatch_fn is _dummy_dispatch  # there IS one to bake
         base_globals: dict = {}
         _inject_resolved_targets({("Leaf", 1)}, base_globals, db, {"Leaf": cls})
         assert _disp_key("Leaf", 1) not in base_globals

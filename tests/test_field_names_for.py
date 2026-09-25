@@ -17,8 +17,9 @@ from clausal.logic.atoms import mangle
 from clausal.logic.database import Database
 from clausal.logic.cells import FUNCTOR_SIGNATURES_KEY
 from clausal.logic.predicate import (
-    field_names_for, make_predicate, term_field_names_of_class,
+    field_names_for, term_field_names_of_class,
 )
+from tests.predicate_api_support import class_arm_predicate
 
 
 @dataclasses.dataclass
@@ -32,7 +33,7 @@ def test_arm1_dataclass_class_yields_declared_fields():
 
 
 def test_arm2_predicate_class_yields_its_fields():
-    Pt = make_predicate("Pt", ["x", "y"])
+    Pt = class_arm_predicate("Pt", ["x", "y"])
     assert field_names_for(Pt) == ("x", "y")
 
 
@@ -129,7 +130,7 @@ def test_arm4_a_non_class_non_name_value_is_None():
 def test_zero_field_declaration_is_empty_tuple_not_None():
     """The contract's sharp edge: ``p()`` is DECLARED with no fields, and
     that is not the same answer as 'nothing declared'."""
-    P = make_predicate("P0", [])
+    P = class_arm_predicate("P0", [])
     assert field_names_for(P) == ()
     assert field_names_for("never_declared", arity=0, db=Database()) is None
 
@@ -182,7 +183,7 @@ def test_field_named_clause_free_declaration_is_unaffected():
 
 
 def test_term_field_names_of_class_still_answers_for_its_callers():
-    Pt = make_predicate("PtAlias", ["x"])
+    Pt = class_arm_predicate("PtAlias", ["x"])
     assert term_field_names_of_class(Pt) == ("x",)
     assert term_field_names_of_class(Point) == ("x", "y")
     assert term_field_names_of_class(42) is None

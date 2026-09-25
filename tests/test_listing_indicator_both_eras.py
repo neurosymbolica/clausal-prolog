@@ -25,9 +25,10 @@ import clausal.import_hook  # noqa: F401 — installs the meta-path finder
 from clausal.import_hook import _load_module
 from clausal.logic.atoms import mangle
 from clausal.logic.exceptions import LogicException
-from clausal.logic.predicate import make_predicate
+
 from clausal.logic.solve import call
 from clausal.terms import Div
+from tests.predicate_api_support import class_arm_predicate
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
 _OWNER = "tests.fixtures.gate_dyn_owner"
@@ -189,7 +190,7 @@ def test_a_standalone_class_bound_under_another_name_does_not_redirect(
     local ``gd_p`` twin."""
     owner, user = pair
     lm = _prime(owner, user)
-    stray = make_predicate("gd_p", ["x"])
+    stray = class_arm_predicate("gd_p", ["x"])
     if detached:
         assert stray._state_row().detached
     user.__dict__["gd_add"] = stray

@@ -26,6 +26,7 @@ from clausal.logic.variables import Trail, Var, deref, unify
 from clausal.terms import Compound, term_canonical, term_str
 from clausal.modules.py.datetime import _dt_to_term as _T
 from clausal.modules.py.datetime import _term_to_dt as _P  # py datetime -> its TERM
+from tests.predicate_api_support import class_arm_predicate
 
 
 def _load_inline_clausal(name: str, source: str):
@@ -1318,10 +1319,10 @@ def test_the_zero_field_class_test_is_named_is_zero_field_class():
 
     from clausal.logic import predicate
     from clausal.logic.atoms import is_atom as term_is_atom
-    from clausal.logic.predicate import make_predicate
+
 
     assert predicate.is_zero_field_class is predicate.is_atom
-    assert predicate.is_zero_field_class(make_predicate("t12_zero", []))
+    assert predicate.is_zero_field_class(class_arm_predicate("t12_zero", []))
     assert not predicate.is_zero_field_class(mint("t12_zero"))
     # The TERM test keeps the plain name.
     assert term_is_atom(mint("t12_zero"))

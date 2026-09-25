@@ -30,6 +30,7 @@ from clausal.logic.atoms import mangle
 from clausal.logic.predicate import PredicateMeta, predicate_arities_for
 from clausal.predicate_diagnostics import describe_missing_predicate
 import clausal.predicate_diagnostics as pd
+from tests.predicate_api_support import class_arm_predicate
 
 
 LIB = "f4arity_lib"
@@ -311,10 +312,10 @@ def test_class_whose_owner_is_not_loaded_keeps_its_own_arity():
     fixture population, a db-only reader loses 59 of 910 old answers
     (partially loaded modules, ``make_predicate`` classes, and
     ``term_expansion/4``, which no db records)."""
-    from clausal.logic.predicate import make_predicate
-    cls = make_predicate("f4arity_floating", ["a", "b", "c"])
+
+    cls = class_arm_predicate("f4arity_floating", ["a", "b", "c"])
     assert predicate_arities_for(cls) == {3}
-    assert predicate_arities_for(make_predicate("f4arity_nullary", [])) == {0}
+    assert predicate_arities_for(class_arm_predicate("f4arity_nullary", [])) == {0}
 
 
 def test_unloaded_owner_answers_the_empty_set():
@@ -340,8 +341,8 @@ class TestNothingLost:
         never vacuous -- and no loaded module binds a class of its OWN
         (``__module__`` is the module itself for a class statement in its
         body)."""
-        from clausal.logic.predicate import make_predicate
-        seeded = make_predicate("f4arity_seeded", ["a", "b"])
+
+        seeded = class_arm_predicate("f4arity_seeded", ["a", "b"])
         monkeypatch.setitem(vars(sys.modules[LIB]), "f4arity_seeded", seeded)
         scanned = 0
         population = 0

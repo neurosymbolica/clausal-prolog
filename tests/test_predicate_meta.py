@@ -582,12 +582,14 @@ class TestMakeAtom:
         assert deref(x) == mint("a")
         assert not unify(a, b, trail)
 
-    def test_zero_arity_predicate_class_comes_from_make_predicate(self):
-        """The behaviour ``make_atom`` used to provide, at its new address."""
+    def test_zero_arity_predicate_class_is_no_longer_made_from_python(self):
+        """``make_atom``'s old behaviour moved to ``make_predicate(name, [])``
+        at P3-3 Task 7; W4b-3 slice 6 retired ``make_predicate``.  A 0-arity
+        PREDICATE is a row named by its handle; the ATOM is ``make_atom``."""
         # nv
-        from clausal.logic.predicate import make_predicate
-        a = make_predicate("a", [])
-        assert isinstance(a, PredicateMeta)
-        assert a._fields == ()
-        assert a._arity == 0
-        assert a() == a
+        from clausal.logic.predicate import (  # KEEP_MP
+            MakePredicateRetiredError, make_predicate)
+        with pytest.raises(MakePredicateRetiredError):
+            make_predicate("a", [])  # KEEP_MP
+        from clausal.logic.predicate import make_atom
+        assert make_atom("a") == mint("a")

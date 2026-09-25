@@ -14,6 +14,7 @@ from clausal.logic.database import Module
 from clausal.logic.solve import solve
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
 from clausal.terms import Compound, Call, LoadName, KWTerm, DictTerm, SegList, ConcreteSeg, VarSeg
+from tests.predicate_api_support import class_arm_predicate
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -836,12 +837,12 @@ class TestGlobalAtom:
     def test_guard_fails_when_atom_mismatches(self):
         """(+name, +atom) — fails when atom is NOT the global class for that name."""
         # nv
-        from clausal.logic.predicate import make_predicate
+
         name = "_test_global_atom_guard_mismatch_xyz"
         # Mint the global atom for 'name'.
         _global_atom_call(mint(name), Var())
         # Create a separate (non-global) PredicateMeta with the same name.
-        impostor = make_predicate(name, [])
+        impostor = class_arm_predicate(name, [])
         results = _global_atom_call(mint(name), impostor)
         assert results == []
 
@@ -862,9 +863,9 @@ class TestGlobalAtom:
     def test_reverse_lookup_fails_for_non_global_class(self):
         """(-name, +atom) — fails if atom is not the global class registered for its name."""
         # nv
-        from clausal.logic.predicate import make_predicate
+
         # A PredicateMeta NOT placed into predicate_builtins.
-        local_only = make_predicate("_test_global_atom_local_only_xyz", [])
+        local_only = class_arm_predicate("_test_global_atom_local_only_xyz", [])
         n_out = Var()
         results = _global_atom_call(n_out, local_only)
         assert results == []

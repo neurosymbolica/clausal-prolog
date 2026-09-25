@@ -27,6 +27,7 @@ from clausal.logic.database import Clause, Database
 from clausal.logic.predicate import resolve_predicate_row
 from clausal.logic.specialization import CannotSpecialize, analyze_mi
 from clausal.terms import Compound
+from tests.predicate_api_support import class_arm_predicate
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
 _MIS = "clausal.examples.metainterpreters"
@@ -110,8 +111,8 @@ def test_a_predicate_bound_only_by_a_python_import_is_still_found(mis):
 def test_a_python_built_mi_keeps_its_class_fields_and_its_refusal():
     """A class with fields but no registered signature, and one with no row
     at all, answer as they did through the class route."""
-    from clausal.logic.predicate import make_predicate
-    cls = make_predicate("pybuilt_mi", ["GOALS", "PROGRAM"])
+
+    cls = class_arm_predicate("pybuilt_mi", ["GOALS", "PROGRAM"])
     assert cls._row is None
     found = _meta_interpreter_row(Database(), {"pybuilt_mi": cls},
                                   "pybuilt_mi", refuse_ambiguous=True)
@@ -226,8 +227,8 @@ def test_the_binding_route_refuses_several_arities_too(monkeypatch, shape):
     if shape == "mangled":
         binding = mangle("_amb_owner", "amb_mi")
     else:
-        from clausal.logic.predicate import make_predicate
-        binding = make_predicate("amb_mi", ["G", "P"])
+
+        binding = class_arm_predicate("amb_mi", ["G", "P"])
         binding.__module__ = "_amb_owner"
     md = {"amb_mi": binding}
     with pytest.raises(RuntimeError,
@@ -249,12 +250,12 @@ def test_a_second_arity_without_clauses_is_still_ambiguous():
 
 def test_a_row_without_a_signature_uses_the_bound_class_s_fields(mis):
     """A Python-built MI: clauses in the db, field names only on the class."""
-    from clausal.logic.predicate import make_predicate
+
     db = Database()
     solve_row = _mi_row(mis, "solve")
     fields = solve_row.db.signature_for(*solve_row.key)
     assert fields
-    cls = make_predicate("sigless_mi", list(fields))
+    cls = class_arm_predicate("sigless_mi", list(fields))
     for clause in solve_row.clauses:
         assert isinstance(clause.head, tuple)       # a head is a cell (P2)
         db.assertz(Clause(head=("sigless_mi",) + clause.head[1:],

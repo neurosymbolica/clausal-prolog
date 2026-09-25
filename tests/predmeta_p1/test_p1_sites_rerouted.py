@@ -18,6 +18,7 @@ from clausal.import_hook import _load_module
 from clausal.logic.atoms import is_atom
 from clausal.logic.solve import call
 from clausal.logic.variables import deref
+from tests.predicate_api_support import class_arm_predicate
 
 
 def _write(tmp_path, name, src):
@@ -68,9 +69,9 @@ def test_signature_for_falls_back_to_the_class_for_a_hand_built_dict():
     dict holds one class per NAME and the shim is handed the arity.
     """
     from clausal.logic.compiler.globals_env import _GlobalsDb
-    from clausal.logic.predicate import make_predicate
 
-    cls = make_predicate("foo", ["a", "b"])
+
+    cls = class_arm_predicate("foo", ["a", "b"])
     # The DETACHED row explicitly: this test is the hand-built-dict, no-
     # Database case, so the class has no row and `_state_row()` mints what
     # the retired `_signature` facade would have minted here.
