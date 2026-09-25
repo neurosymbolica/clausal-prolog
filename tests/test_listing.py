@@ -576,8 +576,11 @@ class TestListingBuiltinClassHasDispatch:
     def test_builtin_class_has_a_dispatch_fn(self):
         from clausal.logic.builtins._registry import _BUILTIN_CLASSES
 
-        cls = _BUILTIN_CLASSES["listing"]
-        assert cls._state_row().dispatch_fn is not None
+        obj = _BUILTIN_CLASSES["listing"]
+        # A ``BuiltinTerm`` since W4b-3 slice 3 (a class with a private row
+        # before): the db-free dispatch it holds at arity 1.
+        assert obj._dispatch_by_arity.get(1) is not None
+        assert obj._get_dispatch() is not None
 
     def test_stateless_dispatch_answers_for_listing(self):
         from clausal.logic.builtins._registry import _stateless_dispatch

@@ -563,10 +563,11 @@ A rule's body is a list of compiled goal nodes, not cells — write rules in a
     _deref_walk(term)  # recursively dereferences Compound, lists, etc.
     ```
 
-    ### Builtin Predicate Classes
+    ### Builtin Term Constructors
 
-    Every builtin has a class, and calling it **builds a cell** — it does not
-    run anything. Run the cell like any other goal:
+    Every builtin has a term constructor (a `BuiltinTerm`, the same object as
+    `clausal.<name>`), and calling it **builds a cell** — it does not run
+    anything. Run the cell like any other goal:
 
     ```python
     from clausal import Module, Var, solve
@@ -581,7 +582,8 @@ A rule's body is a list of compiled goal nodes, not cells — write rules in a
     Iterating the cell itself (`for _ in append(...)`) walks the tuple's
     elements — it never runs the goal.
 
-    Multi-arity builtins (`maplist`, `phrase`) use `MultiArityBuiltin`.
+    Multi-arity builtins (`maplist`, `phrase`) pick the signature by argument
+    count.
 
     ### assertz/retract from Python
 

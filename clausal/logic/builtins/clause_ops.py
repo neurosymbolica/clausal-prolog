@@ -106,7 +106,7 @@ from clausal.pythonic_ast import nodes
 from clausal.terms import Compound
 
 from clausal.logic.builtins._registry import (
-    _BUILTINS, _DB_BUILTINS, _db_builtin,
+    _BUILTINS, _DB_BUILTINS, _db_builtin, BuiltinTerm as _BuiltinTerm,
 )
 
 _CONTEXT = "clause/2"
@@ -158,7 +158,9 @@ def _is_callable(t: Any) -> bool:
         return False
     if type(t) is list or is_chars(t):
         return True                      # [] / "": the atom '[]'
-    if isinstance(t, PredicateMeta):
+    if isinstance(t, (PredicateMeta, _BuiltinTerm)):
+        # A builtin's object (``clausal.between``) is what its CLASS was
+        # before W4b-3 slice 3: callable here, as the class was.
         return True
     return is_term_instance(t) and not isinstance(t, nodes.Node)
 
@@ -208,9 +210,8 @@ def _is_goal_object(binding: Any) -> bool:
     builtin class (``ModulePredicate`` and the other out-of-tree adapters).
     Constructing ``match(P, S)`` calls ``match(...)``, and such an object
     raises ``TypeError`` -- its term is the cell."""
-    from clausal.logic.builtins._registry import MultiArityBuiltin  # noqa: PLC0415
     return (hasattr(binding, "_get_dispatch")
-            and not isinstance(binding, (PredicateMeta, MultiArityBuiltin)))
+            and not isinstance(binding, (PredicateMeta, _BuiltinTerm)))
 
 
 _MISSING = object()
@@ -684,6 +685,8 @@ def _resolve(db, head):
         head = _as_cell(head)
     if isinstance(head, PredicateMeta):
         head = head.__name__
+    elif isinstance(head, _BuiltinTerm):
+        head = head._functor           # its class's __name__ before slice 3
     if type(head) is str:
         name, arity, cell = head, 0, head
     elif compound_cell_shape(head)[0]:

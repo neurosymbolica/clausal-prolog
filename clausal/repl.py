@@ -310,7 +310,7 @@ class Solutions:
         X = Var()
         Solutions(query(goal, {"X": X}, module))
 
-    or pass a GOAL -- a cell, such as the one a builtin class builds, or
+    or pass a GOAL -- a cell, such as the one a builtin's term constructor builds, or
     a module-qualified cell -- with the module that answers it::
 
         Solutions(between(1, 3, X := Var()), module=m)
