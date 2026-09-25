@@ -178,3 +178,127 @@ def test_the_declaration_site_reaches_the_row(tmp_path, monkeypatch):
     assert row is not None and row.declared_at is not None
     assert row.declared_at[0].endswith("s5_site.clausal")
     assert row.declared_at[1] == 1
+
+
+# ── Follow-ups (operator answers + review, 2026-09-25) ───────────────────
+
+def test_the_arity_conflict_message_names_the_declaration_not_a_class(
+        tmp_path, monkeypatch):
+    """There is no class to be "minted with N fields" any more: the message
+    says what is true -- the name is DECLARED with N field(s)."""
+    monkeypatch.syspath_prepend(str(tmp_path))
+    with pytest.raises(SyntaxError) as info:
+        _load(tmp_path, "s5_conflict", """
+            s5c_p(1),
+            s5c_p(1, 2),
+        """)
+    text = str(info.value)
+    assert "conflicts with the declaration of s5c_p/1" in text
+    assert "s5c_p is declared with 1 field(s) (arg_0)" in text
+    assert "class" not in text.split("remedy:")[0]
+
+
+def test_a_circular_import_still_lists_what_the_partial_module_defines(
+        tmp_path, monkeypatch):
+    """The one reachable case of ``import_diagnostics._defined_names`` on a
+    module whose load has not reached the flip: a CIRCULAR import reads the
+    partially initialised module mid-exec.  Its names are handles by then,
+    answered from the loading record (the class era listed the classes)."""
+    monkeypatch.syspath_prepend(str(tmp_path))
+    _write(tmp_path, "s5_circ_a.clausal", """
+        s5ca_one(1),
+        s5ca_two(1, 2),
+        -import_from(s5_circ_b, [s5cb_pred])
+        s5ca_other(X) <- s5cb_pred(X)
+    """)
+    _write(tmp_path, "s5_circ_b.clausal", """
+        -import_from(s5_circ_a, [s5ca_missing])
+        s5cb_pred(1),
+    """)
+    for name in ("s5_circ_a", "s5_circ_b"):
+        monkeypatch.delitem(sys.modules, name, raising=False)
+    with pytest.raises(ImportError) as info:
+        __import__("s5_circ_a")
+    text = str(info.value)
+    assert "partially initialized module 's5_circ_a'" in text   # the case
+    assert "s5_circ_a does define: s5ca_one/1, s5ca_two/2" in text
+    for name in ("s5_circ_a", "s5_circ_b"):
+        sys.modules.pop(name, None)
+
+
+def test_importlib_reload_rereads_the_body_without_duplicating_clauses(
+        tmp_path, monkeypatch):
+    """``importlib.reload`` re-runs a module body in the SAME namespace.  On
+    main (0c645200) it raised ``TypeError: cannot build a clause head for p:
+    the predicate handle ... names nothing its owner module knows``; the
+    body's declarations are fresh per run now, so it reloads -- the same
+    answers, no duplicated clauses, and an edited file's change is seen."""
+    import importlib
+    import os
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.delitem(sys.modules, "s5_rl_mod", raising=False)
+    path = _write(tmp_path, "s5_rl_mod.clausal", """
+        -module(s5_rl_mod, [s5rl_p(X)])
+        s5rl_p(1),
+        s5rl_p(2),
+    """)
+    mod = importlib.import_module("s5_rl_mod")
+    assert _answers(mod, "s5rl_p", 1) == [(1,), (2,)]
+    mod = importlib.reload(mod)
+    assert _answers(mod, "s5rl_p", 1) == [(1,), (2,)]
+    assert len(mod.__dict__["$module"].db.clauses_for("s5rl_p", 1)) == 2
+    # An edited source (mtime bumped so the bytecode cache cannot serve the
+    # old code) is what the reload reads.
+    _write(tmp_path, "s5_rl_mod.clausal", """
+        -module(s5_rl_mod, [s5rl_p(X)])
+        s5rl_p(1),
+        s5rl_p(2),
+        s5rl_p(3),
+    """)
+    st = os.stat(path)
+    os.utime(path, ns=(st.st_atime_ns, st.st_mtime_ns + 10**9))
+    mod = importlib.reload(mod)
+    assert _answers(mod, "s5rl_p", 1) == [(1,), (2,), (3,)]
+    sys.modules.pop("s5_rl_mod", None)
+
+
+def test_a_clause_at_the_console_is_not_an_internal_error():
+    """``ClausalConsole``'s namespace carries ``__name__`` again (the default
+    ``code.InteractiveConsole`` gives it), so a clause typed there fails as
+    it did on main -- no clause store at the console -- and not with an
+    ``internal:`` error from ``$declare_head``."""
+    import contextlib
+    import io
+    from clausal.python_repl import ClausalConsole
+    console = ClausalConsole()
+    assert console.locals["__name__"] == "__console__"
+    err = io.StringIO()
+    with contextlib.redirect_stderr(err):
+        console.runsource("s5con_f(a),")
+    assert "internal" not in err.getvalue()
+    assert "$define_predicate" in err.getvalue()     # main's error, unchanged
+    assert console.locals["s5con_f"] == mangle("__console__", "s5con_f")
+
+
+def test_a_loading_handle_answers_its_arity_even_before_its_owner_resolves():
+    """``predicate_arities_for`` reads the loading record FIRST, as
+    ``is_declared_predicate[_name]`` do, so the three agree while the owner
+    module cannot be resolved (review, 2026-09-25)."""
+    from clausal.logic.predicate import (
+        begin_loading_declarations, end_loading_declarations,
+        is_declared_predicate, is_declared_predicate_name,
+        predicate_arities_for, PREDICATE_HEADS_KEY,
+    )
+    ns = {"__name__": "s5_unresolved_owner"}
+    begin_loading_declarations(ns)
+    handle = mangle("s5_unresolved_owner", "s5u_p")
+    ns[PREDICATE_HEADS_KEY]["s5u_p"] = (("a", "b"), None)
+    ns["s5u_p"] = handle
+    try:
+        assert "s5_unresolved_owner" not in sys.modules
+        assert is_declared_predicate_name(handle)
+        assert is_declared_predicate(handle, arity=2)
+        assert predicate_arities_for(handle) == {2}
+    finally:
+        end_loading_declarations(ns)
+    assert predicate_arities_for(handle) == set()

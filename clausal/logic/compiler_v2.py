@@ -298,12 +298,13 @@ def compile_module(
         # self-copy in the ordinary case; it is kept because ``clauses_for``
         # is a snapshot and the write is what the row's contract names as the
         # deliberate clause-list minting site.
-        pred_cls = module_dict.get(functor)
-        # This module's own predicate HANDLE (``$declare_head``, W4b-3 slice
-        # 5) stands where the rewriter's class stood for the gate's
-        # ``through=``: the write goes through the LOCAL binding, never
-        # falls back to an ``-import_from`` of the same spelling.
-        local = pred_cls if declared_head(module_dict, pred_cls) else None
+        # The same rule as step 3d (``_local_binding``).  This module's own
+        # predicate HANDLE (``$declare_head``, W4b-3 slice 5) stands where
+        # the rewriter's class stood for the gate's ``through=``: the write
+        # goes through the LOCAL binding, never falls back to an
+        # ``-import_from`` of the same spelling.
+        pred_cls, declared = _local_binding(module_dict, functor)
+        local = pred_cls if declared is not None else None
         # P1 2026-09-17: this guard is NOT redundant and stays.  Measured over
         # the whole suite (14,615 arrivals here), 34 of them find something
         # other than a predicate class under a functor that HAS clause nodes —
@@ -370,10 +371,9 @@ def compile_module(
             # it (``_bind_row``, first bind wins); the module body's
             # ``$declare_head`` record carries it now.  Same population: a
             # name this module declared and still binds to its own handle.
-            if clause_row.declared_at is None:
-                declared = declared_head(module_dict, module_dict.get(functor))
-                if declared is not None and isinstance(declared[2], tuple):
-                    clause_row.declared_at = declared[2]
+            if (clause_row.declared_at is None and declared is not None
+                    and isinstance(declared[2], tuple)):
+                clause_row.declared_at = declared[2]
             # THE SIGNATURE comes from the rewriter's head field names, on
             # the same row and under the same "whatever the name is bound
             # to" rule (operator ruling 2026-09-24): it describes the row's
@@ -1276,7 +1276,7 @@ def _refuse_foreign_writes(db, predicate_nodes: list, module_dict: dict,
         if (functor, arity) in checked:
             continue
         checked.add((functor, arity))
-        pred_cls = _local_binding(module_dict, functor)
+        pred_cls = _local_binding(module_dict, functor)[0]
         pred_cls = _load_through(pred_cls, origins, functor, db, arity)
         exc = db.refusal_for(
             functor, arity, author=author, kind=WRITE_LOAD_CLAUSES,
@@ -1459,17 +1459,21 @@ _LOAD_SITES = {
 
 
 def _local_binding(module_dict: dict, functor: str):
-    """The binding a load write of *functor* goes THROUGH when this module
-    itself declared the name: a ``PredicateMeta`` class (the Python-API arm,
-    until slice 6) or the module's own predicate HANDLE (``$declare_head``,
-    W4b-3 slice 5 -- where the rewriter's class used to be); else ``None``,
-    and ``_load_through`` falls back to an ``-import_from`` of the name."""
+    """``(binding, declared)`` for the binding a load write of *functor*
+    goes THROUGH when this module itself holds the name: a ``PredicateMeta``
+    class (the Python-API arm, until slice 6; *declared* is ``None``) or the
+    module's own predicate HANDLE (``$declare_head``, W4b-3 slice 5 -- where
+    the rewriter's class used to be; *declared* is ``declared_head``'s
+    ``(functor, fields, site)``).  ``(None, None)`` otherwise, and
+    ``_load_through`` falls back to an ``-import_from`` of the name.  The ONE
+    rule step 3d and step 4 share."""
     binding = module_dict.get(functor)
     if isinstance(binding, PredicateMeta):
-        return binding
-    if declared_head(module_dict, binding) is not None:
-        return binding
-    return None
+        return binding, None
+    declared = declared_head(module_dict, binding)
+    if declared is not None:
+        return binding, declared
+    return None, None
 
 
 def _load_through(pred_cls, origins: dict, functor: str, db, arity: int):

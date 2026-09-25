@@ -5900,7 +5900,7 @@ class EmbedTransformer(NodeTransformer):
                 f"functor {functor_name}/{len(all_field_names)} conflicts "
                 f"with the declaration of {functor_name}/{len(prev_fields)} "
                 f"in the same file\n{where}\n"
-                f"{functor_name}'s class is minted with "
+                f"{functor_name} is declared with "
                 f"{len(prev_fields)} field(s) {declared}, so a "
                 f"{len(all_field_names)}-argument head cannot be built "
                 f"against it. A functor name has exactly one arity in "
@@ -5916,7 +5916,7 @@ class EmbedTransformer(NodeTransformer):
             f"clause head for {functor_name}/{len(all_field_names)} names "
             f"field(s) {', '.join(unknown)} that {functor_name} does not "
             f"have\n{where}\n"
-            f"{functor_name}'s class is minted with fields {declared}. "
+            f"{functor_name} is declared with fields {declared}. "
             f"Use those names, or change the declaration to match."
         )
 

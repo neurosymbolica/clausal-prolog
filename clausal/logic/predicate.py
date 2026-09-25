@@ -3043,9 +3043,11 @@ def declare_head(functor: str, fields: tuple, /) -> None:
         return
     handle = local_predicate_handle(namespace, functor)
     if handle is None:
-        raise RuntimeError(
-            f"internal: $declare_head({functor!r}) ran in a namespace that "
-            f"names no module")
+        raise SyntaxError(
+            f"cannot declare the predicate {functor}: this namespace belongs "
+            f"to no module (it has no __name__), and a predicate is named by "
+            f"its module.  Define {functor} in a .clausal file and import it, "
+            f"or run this code with a module-level __name__ bound")
     namespace.setdefault(PREDICATE_HEADS_KEY, {})[functor] = (
         fields, _source_site(1))
     namespace[functor] = handle
@@ -3330,15 +3332,18 @@ def predicate_arities_for(binding, *, cache: "dict | None" = None,
         return found
     from clausal.logic.atoms import is_mangled  # noqa: PLC0415
     if is_mangled(binding):
+        # Declared by its LOADING module (W4b-3 slice 5): the class arm's
+        # answer -- the declared arity, UNION the defined ones when the owner
+        # resolves.  Read FIRST, as ``is_declared_predicate[_name]`` read it,
+        # so an owner that does not resolve (yet) cannot make this answer
+        # "not a predicate" while they answer "a predicate".
+        loading = loading_head_fields(binding)
         resolved = _resolve_mangled_owner(binding, db)
         if resolved is None:
-            return set()
-        loading = loading_head_fields(binding)
+            return {len(loading)} if loading is not None else set()
         db, functor = resolved
         defined, declared = _arity_maps(db, cache)
         if loading is not None:
-            # Declared by its LOADING module (W4b-3 slice 5): the class
-            # arm's answer -- the declared arity UNION the defined ones.
             return {len(loading)} | set(defined.get(functor, ()))
         return set(defined.get(functor) or declared.get(functor) or ())
     return set()
