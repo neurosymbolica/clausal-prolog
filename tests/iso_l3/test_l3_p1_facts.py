@@ -72,16 +72,17 @@ def l3_env(tmp_path, monkeypatch):
         shutil.rmtree(p, ignore_errors=True)
 
 
-def _answers(pred, arity=2, *, module=None):
+def _answers(name, arity=2, *, module=None):
     """P2: a cell goal carries no module and ``query`` refuses to guess one
-    (R-P2-2, module locality), so the caller passes the module *pred* came
-    off."""
+    (R-P2-2, module locality), so the caller passes the module *name* is
+    defined in.  After the W4b-2d flip the module attribute is a handle, not
+    a callable class, so the goal is the plain cell ``(name, *vars)``."""
     from clausal.logic.solve import query
     from clausal.logic.variables import Var
     vs = [Var() for _ in range(arity)]
     names = [f"v{i}" for i in range(arity)]
     return [tuple(s[n] for n in names)
-            for s in query(pred(*vs), dict(zip(names, vs)), module)]
+            for s in query((name, *vs), dict(zip(names, vs)), module)]
 
 
 def test_P1_iso_facts_answer_identically_to_the_seam_twin(l3_env):
@@ -96,7 +97,9 @@ def test_P1_iso_facts_answer_identically_to_the_seam_twin(l3_env):
     assert stats["read"] == 2 and stats["lowered"] == 2 and stats["refused"] == 0, stats
     assert type(iso.__loader__).__name__ == "PrologLoader"
 
-    a_iso, a_seam = _answers(iso.fact_a, module=iso), _answers(seam.fact_a, module=seam)
+    assert iso.fact_a and seam.fact_a      # both modules bind the predicate
+    a_iso = _answers("fact_a", module=iso)
+    a_seam = _answers("fact_a", module=seam)
     assert a_iso == [(1, 10), (2, 20)]
     assert a_iso == a_seam
 

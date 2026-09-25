@@ -14,6 +14,7 @@ Findings tested here:
 
 import pytest
 
+from clausal.logic.atoms import demangle
 from clausal.logic.cells import chars, is_chars
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref, Trail, unify
@@ -27,7 +28,10 @@ def _nt(cls, *args):
     nonterminal is ONE arity (N+2); applying it to N arguments used to pad the
     two state slots with fresh variables and now raises, so the term phrase
     takes is built by name and phrase appends S0/S (ISO call/N)."""
-    return (cls.__name__, *args)
+    # After the W4b-2d flip the module-dict binding is a mangled HANDLE
+    # (a str); its name is the handle's predicate half.
+    name = demangle(cls)[1] if isinstance(cls, str) else cls.__name__
+    return (name, *args)
 
 
 def test_F067_phrase3_rest_type_preserves_str():

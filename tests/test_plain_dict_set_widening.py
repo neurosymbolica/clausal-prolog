@@ -109,7 +109,7 @@ class TestPlainDictPairModeIn:
         )
         mod = _load_module("pmi", str(src))
         p = Var()
-        for _ in solve(mod.pairs_of(dict(D), p), mod):
+        for _ in solve(("pairs_of", dict(D), p), mod):
             assert sorted(deref(p)) == [["a", 1], ["b", 2]]
             break
         else:
@@ -120,7 +120,7 @@ class TestPlainDictPairModeIn:
         src.write_text("keys_of(D, P) <- (findall(K, (K in D), P))\n")
         mod = _load_module("kmi", str(src))
         p = Var()
-        for _ in solve(mod.keys_of(dict(D), p), mod):
+        for _ in solve(("keys_of", dict(D), p), mod):
             assert sorted(deref(p)) == ["a", "b"]
             break
         else:

@@ -11,6 +11,33 @@ import pytest
 from clausal.logic.atoms import mint
 
 
+def _module_db(mod):
+    """The Database of a loaded .clausal module."""
+    return mod.__clausal_module__.db
+
+
+def _pred_row(mod, name, arity):
+    """The live row the module-dict binding *name* denotes at *arity*.
+
+    After the W4b-2d flip the binding is a mangled predicate HANDLE (a str),
+    not a class, so row reads go through the module's Database."""
+    from clausal.logic.predicate import resolve_predicate_row
+    return resolve_predicate_row(getattr(mod, name), arity=arity,
+                                 db=_module_db(mod))
+
+
+def _assert_is_module_predicate(mod, name, arity):
+    """*name* is bound in *mod* to a declared predicate at *arity* whose
+    row is a real (not detached) row of the module's own Database."""
+    from clausal.logic.predicate import is_declared_predicate
+    db = _module_db(mod)
+    binding = getattr(mod, name)
+    assert is_declared_predicate(binding, arity=arity, db=db), binding
+    row = _pred_row(mod, name, arity)
+    assert row is not None and not row.detached, (name, arity, row)
+    assert row is db.row(name, arity)
+
+
 # ── Fixture imports ──────────────────────────────────────────────────────────
 
 
@@ -48,13 +75,13 @@ class TestDirectiveParsing:
 
     def test_specialized_predicate_is_predicate_meta(self, specialize_natnum):
         # nv
-        from clausal.logic.predicate import PredicateMeta
-        assert isinstance(specialize_natnum.solve_count_natnum, PredicateMeta)
+        _assert_is_module_predicate(specialize_natnum, "solve_count_natnum", 2)
 
     def test_specialized_fields_no_program(self, specialize_natnum):
         """Specialized predicate should drop the PROGRAM field."""
         # nv
-        fields = specialize_natnum.solve_count_natnum._fields
+        fields = _module_db(specialize_natnum).signature_for(
+            "solve_count_natnum", 2)
         assert "PROGRAM" not in fields
         assert "GOALS" in fields
         assert "COUNT" in fields
@@ -62,12 +89,12 @@ class TestDirectiveParsing:
     def test_specialized_has_clauses(self, specialize_natnum):
         """Specialized predicate should have compiled clauses."""
         # nv
-        assert len(specialize_natnum.solve_count_natnum._state_row().clauses) == 3
+        assert len(_pred_row(specialize_natnum, "solve_count_natnum", 2).clauses) == 3
 
     def test_specialized_has_dispatch(self, specialize_natnum):
         """Specialized predicate should have a dispatch function."""
         # nv
-        assert specialize_natnum.solve_count_natnum._state_row().dispatch_fn is not None
+        assert _pred_row(specialize_natnum, "solve_count_natnum", 2).dispatch_fn is not None
 
 
 # ── SolveCount specialization tests ─────────────────────────────────────────
@@ -157,7 +184,7 @@ class TestSpecializeSolveGraph:
 
     def test_solve_graph_fields(self, specialize_graph):
         # nv
-        fields = specialize_graph.solve_graph._fields
+        fields = _module_db(specialize_graph).signature_for("solve_graph", 1)
         assert "PROGRAM" not in fields
         assert "GOALS" in fields
 
@@ -174,7 +201,8 @@ class TestSpecializeLimitNatnum:
 
     def test_fields(self, specialize_limit):
         # nv
-        fields = specialize_limit.solve_limit_natnum._fields
+        fields = _module_db(specialize_limit).signature_for(
+            "solve_limit_natnum", 2)
         assert "PROGRAM" not in fields
         assert "GOALS" in fields
         assert "MAX_DEPTH" in fields
@@ -287,7 +315,7 @@ class TestSpecializeFactorial:
         """Factorial has builtins → specialized predicate should have catch-all."""
         # 1 base + 2 object clauses + 1 catch-all = 4
         # nv
-        assert len(specialize_builtins.solve_factorial._state_row().clauses) == 4
+        assert len(_pred_row(specialize_builtins, "solve_factorial", 1).clauses) == 4
 
     def test_factorial_0(self, specialize_builtins):
         # nv
@@ -414,8 +442,7 @@ class TestDeepPipeline:
 
     def test_deep_predicate_is_predicate_meta(self, specialize_deep):
         # nv
-        from clausal.logic.predicate import PredicateMeta
-        assert isinstance(specialize_deep.deep_natnum, PredicateMeta)
+        _assert_is_module_predicate(specialize_deep, "deep_natnum", 1)
 
     def test_deep_natnum_0(self, specialize_deep):
         # nv
@@ -480,7 +507,7 @@ class TestDeepPipeline:
         """The depth parameter should be accessible in some form."""
         # Basic check: deep predicate has clauses.
         # nv
-        assert len(specialize_deep.deep_natnum._state_row().clauses) >= 3
+        assert len(_pred_row(specialize_deep, "deep_natnum", 1).clauses) >= 3
 
 
 # ── Error handling tests ────────────────────────────────────────────────────
@@ -552,23 +579,19 @@ class TestCpdPipeline:
     def test_cpd_natnum_exists(self, cpd_module):
         """cpd_natnum predicate class is created."""
         # nv
-        from clausal.logic.predicate import PredicateMeta
-        assert isinstance(cpd_module.cpd_natnum, PredicateMeta)
+        _assert_is_module_predicate(cpd_module, "cpd_natnum", 1)
 
     def test_cpd_graph_exists(self, cpd_module):
         # nv
-        from clausal.logic.predicate import PredicateMeta
-        assert isinstance(cpd_module.cpd_graph, PredicateMeta)
+        _assert_is_module_predicate(cpd_module, "cpd_graph", 1)
 
     def test_cpd_count_exists(self, cpd_module):
         # nv
-        from clausal.logic.predicate import PredicateMeta
-        assert isinstance(cpd_module.cpd_count_natnum, PredicateMeta)
+        _assert_is_module_predicate(cpd_module, "cpd_count_natnum", 2)
 
     def test_cpd_limit_exists(self, cpd_module):
         # nv
-        from clausal.logic.predicate import PredicateMeta
-        assert isinstance(cpd_module.cpd_limit_natnum, PredicateMeta)
+        _assert_is_module_predicate(cpd_module, "cpd_limit_natnum", 2)
 
     def test_cpd_natnum_query(self, cpd_module):
         # nv
@@ -640,11 +663,6 @@ class TestCpdPipeline:
 # ── P3-3 Task 7: the specialized predicate is a ROW in the module's db ───────
 
 
-def _module_db(mod):
-    """The Database of a loaded .clausal module."""
-    return mod.__clausal_module__.db
-
-
 class TestSpecializedPredicateIsARow:
     """P3-3 Task 7.  ``-specialize`` used to mint a free-floating predicate
     class and compile it against a throwaway ``Database`` the module's own
@@ -660,9 +678,9 @@ class TestSpecializedPredicateIsARow:
 
     def test_class_reads_the_module_row(self, specialize_natnum):
         db = _module_db(specialize_natnum)
-        cls = specialize_natnum.solve_count_natnum
-        assert cls._row is db.row("solve_count_natnum", 2)
-        assert cls._row.detached is False
+        row = _pred_row(specialize_natnum, "solve_count_natnum", 2)
+        assert row is db.row("solve_count_natnum", 2)
+        assert row.detached is False
 
     def test_signature_registered(self, specialize_natnum):
         db = _module_db(specialize_natnum)
@@ -675,10 +693,11 @@ class TestSpecializedPredicateIsARow:
 
     def test_dispatch_installed_on_the_module_row(self, specialize_natnum):
         db = _module_db(specialize_natnum)
-        cls = specialize_natnum.solve_count_natnum
+        from clausal.logic.predicate import _dispatch_at
+        binding = specialize_natnum.solve_count_natnum
         fn = db.get_dispatch("solve_count_natnum", 2)
         assert fn is not None
-        assert fn is cls._get_dispatch()
+        assert fn is _dispatch_at(binding, 2, db)
 
     def test_write_is_gate_stamped_with_the_specialization_author(
         self, specialize_natnum,
@@ -709,7 +728,7 @@ class TestSpecializedPredicateIsARow:
                             ("deep_count_natnum", 2)):
             row = db.row(name, arity)
             assert row is not None, f"{name}/{arity} missing from the module db"
-            assert getattr(specialize_deep, name)._row is row
+            assert _pred_row(specialize_deep, name, arity) is row
 
     def test_specialized_calls_specialized_through_row_dispatch(
         self, specialize_deep,
@@ -719,13 +738,16 @@ class TestSpecializedPredicateIsARow:
         it through the module database's row, not through a private store.
         """
         db = _module_db(specialize_deep)
-        cls = specialize_deep.deep_count_natnum
+        from clausal.logic.predicate import _dispatch_at, resolve_predicate_row
+        binding = specialize_deep.deep_count_natnum
         fn = db.get_dispatch("deep_count_natnum", 2)
         assert fn is not None
         target = fn.__globals__.get("deep_count_natnum")
-        assert target is cls
-        assert target._row is db.row("deep_count_natnum", 2)
-        assert target._get_dispatch() is fn
+        assert target is not None
+        assert target == binding
+        assert resolve_predicate_row(target, arity=2, db=db) \
+            is db.row("deep_count_natnum", 2)
+        assert _dispatch_at(target, 2, db) is fn
 
     def test_specializing_onto_a_name_this_module_defines_is_refused(self):
         """A module that writes my_alias/1's clauses AND names my_alias as a
@@ -776,6 +798,9 @@ class TestSpecializedPredicateIsARow:
         db = _module_db(specialize_deep)
         fn = db.get_dispatch("deep_natnum", 1)
         for name, arity in (("shallow_natnum", 1), ("deep_count_natnum", 2)):
+            from clausal.logic.predicate import resolve_predicate_row
             sibling = fn.__globals__.get(name)
-            assert sibling is getattr(specialize_deep, name)
-            assert sibling._row is db.row(name, arity)
+            assert sibling is not None
+            assert sibling == getattr(specialize_deep, name)
+            assert resolve_predicate_row(sibling, arity=arity, db=db) \
+                is db.row(name, arity)

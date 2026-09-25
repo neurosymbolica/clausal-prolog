@@ -160,10 +160,10 @@ def test_imported_predicates_still_answer_end_to_end(mods):
     from clausal.logic.solve import solve   # P2: a cell goal is driven, never iterated
     X, Z = Var(), Var()
     assert sorted((X.value, Z.value)
-                  for _ in solve(mods["plain"].two_hop(X, Z), mods["plain"])) == [(1, 3)]
+                  for _ in solve(("two_hop", X, Z), mods["plain"])) == [(1, 3)]
     A, B = Var(), Var()
     assert sorted((A.value, B.value)
-                  for _ in solve(mods["alias"].hop(A, B), mods["alias"])) == [(1, 2), (2, 3)]
+                  for _ in solve(("hop", A, B), mods["alias"])) == [(1, 2), (2, 3)]
 
 
 def test_a_local_definition_takes_over_a_name_that_was_adopted_first():

@@ -9,6 +9,7 @@ from __future__ import annotations
 import pytest
 
 from clausal.logic.atoms import char_atom, mint
+from clausal.logic.atoms import demangle
 from clausal.logic.cells import chars
 from clausal.logic.solve import call, query
 from clausal.logic.variables import Var, deref, Trail
@@ -25,7 +26,10 @@ def _nt(cls, *args):
     ONE arity (N+2), and applying it to N arguments no longer pads the two
     state slots with fresh variables -- it raises -- so the term phrase takes
     is built by name, and phrase appends S0/S to it (ISO call/N)."""
-    return (cls.__name__, *args)
+    # After the W4b-2d flip the module-dict binding is a mangled HANDLE
+    # (a str); its name is the handle's predicate half.
+    name = demangle(cls)[1] if isinstance(cls, str) else cls.__name__
+    return (name, *args)
 
 
 def _load(name, src_text, tmp_path):
