@@ -188,20 +188,18 @@ def test_a_cell_built_from_a_predicate_binding_carries_the_plain_functor(gate_dy
 def test_a_hide_data_atom_keeps_its_mangled_functor_spelling():
     """A2 is gated on "is a declared predicate", never on ``is_mangled``: a
     ``-hide`` DATA atom is mangled in the handle's shape and its mangled
-    spelling is its identity -- even in its owner, which binds the plain
-    name to it."""
+    spelling is its identity.  ``is_predicate`` (the caller's
+    ``is_declared_predicate_name`` answer) is what separates the two."""
     from clausal.logic.compiler.terms_to_ast import _functor_spelling
     saved = sys.modules.pop("hide_owner", None)
     try:
         mod = _load_module("hide_owner", os.path.join(FIXTURES, "hide_owner.clausal"))
-        md = mod.__dict__
         db = _lm(mod).db
         secret = mangle("hide_owner", "hide_secret")
-        assert _functor_spelling(secret, "x", namespace=md) == secret
+        assert _functor_spelling(secret, "x") == secret
         handle = mint_predicate_handle(db, "holds")
-        # Ruling (a): a predicate handle is PLAIN in any namespace.
-        assert _functor_spelling(handle, "x", namespace=md, is_predicate=True) == "holds"
-        assert _functor_spelling(handle, "x", namespace={}, is_predicate=True) == "holds"
+        # Ruling (a): a predicate handle is PLAIN (no namespace consulted).
+        assert _functor_spelling(handle, "x", is_predicate=True) == "holds"
     finally:
         sys.modules.pop("hide_owner", None)
         if saved is not None:
@@ -419,9 +417,11 @@ def test_a_plain_cell_runs_in_the_owner_only_when_qualified(clib_pair, lister, e
     lm = _lm(host)
     from clausal.logic.variables import Var
     # A plain cell VALUE, called, runs in the CALLER.  A caller that knows
-    # no dfact/1 never reaches the owner's clauses.  (A separate host: the
-    # dotted GOAL references in sa_chost's own bodies make ``dfact`` known
-    # there, so ``run`` in sa_chost does answer the owner's clause.)
+    # no dfact/1 never reaches the owner's clauses.  (A separate host:
+    # sa_chost binds the Python-held handle ``h = mangle("sa_clib", "dfact")``,
+    # which ``predicate._import_index`` indexes as an import, so a meta-call
+    # of the plain ``dfact`` there DOES answer the owner's clause -- see
+    # todo/plain-cell-reads-route-to-owner-when-host-has-dotted-goals-2026-09-25.md.)
     bare = lister("sa_crun", """
         -module(sa_crun, [run(G)])
         -import_module(sa_clib)
@@ -663,3 +663,135 @@ def test_a_host_head_pattern_matches_an_owner_built_term(
         X = Var()
         got = [deref(X) for _ in call("patq", (functor, 5), X, module=lm)]
         assert got == expected, functor
+
+
+# ── review Lows on 176584ec ──────────────────────────────────────────────────
+
+
+def _flip_bindings_before_step_4(monkeypatch):
+    """Flip every binding at step 3d, BEFORE steps 4 and 4a, so step 4a
+    meets this module's OWN ``-dynamic`` as a handle.  ``flipped_loads``
+    flips at step 4b, where the dry run put it; step 4a then still sees the
+    module's own class, and only an IMPORTED binding (flipped in its owner)
+    reaches 4a as a handle."""
+    import clausal.logic.compiler_v2 as cv2
+    real = cv2._refuse_foreign_writes
+
+    def _flip_then_gate(db, predicate_nodes, module_dict, *rest):
+        _flip_all_bindings(module_dict, db)
+        return real(db, predicate_nodes, module_dict, *rest)
+
+    monkeypatch.setattr(cv2, "_refuse_foreign_writes", _flip_then_gate)
+
+
+@pytest.mark.parametrize("era", ERAS)
+def test_step_4a_a_local_dynamic_handle_is_compiled_from_its_own_row(
+        lister, monkeypatch, era):
+    """compiler_v2 step 4a, a LOCAL clause-less ``-dynamic`` whose binding
+    is a handle: explicitly ``pending[key] = None`` (no class to bind; its
+    row is this db's), the entry a clause-less class gets -- not the class
+    test answering None for a str by accident."""
+    from clausal.logic.variables import Var, deref
+    if era == "handle":
+        _flip_bindings_before_step_4(monkeypatch)
+    mod = lister("sa_ld", """
+        -module(sa_ld, [sa_ld_p/1, add(X)])
+        -dynamic(sa_ld_p/1)
+        add(X) <- assertz(sa_ld_p(X))
+    """)
+    binding = mod.__dict__["sa_ld_p"]
+    assert (type(binding) is str) == (era == "handle"), "the flip did not happen"
+    lm = _lm(mod)
+    row = lm.db.row("sa_ld_p", 1, create=False)
+    assert row is not None and row.db is lm.db and row.dynamic
+    assert row.clauses == []
+    X = Var()
+    assert [deref(X) for _ in call("sa_ld_p", X, module=lm)] == []
+    assert list(call("add", 3, module=lm)) != []
+    assert [deref(X) for _ in call("sa_ld_p", X, module=lm)] == [3]
+    assert [c.head for c in lm.db.row("sa_ld_p", 1).clauses] == [("sa_ld_p", 3)]
+
+
+def test_the_seam_s_handle_branch_passes_the_q0_hint(lister):
+    """seam.py's own handle branch (an arity no signature answers) asks
+    ``is_declared_predicate_name`` with the module's db, as
+    ``cell_signature_for_name`` does: a LOCAL handle stays a predicate --
+    and so PLAIN -- after its module is popped, even when a second live load
+    under the same name makes the handle-owner registry ambiguous."""
+    src = """
+        -module(sa_sq, [sa_sq_p(A)])
+        from clausal.logic.atoms import mangle
+        held = mangle("sa_sq", "sa_sq_p")
+        sa_sq_p(1),
+        def build_wide():
+            return --held(X, Y)
+    """
+    first = lister("sa_sq", src)
+    sys.modules.pop("sa_sq", None)
+    twin = lister("sa_sq", src)
+    sys.modules.pop("sa_sq", None)
+    assert _lm(twin).db is not _lm(first).db
+    wide = first.build_wide()
+    assert wide[0] == "sa_sq_p" and len(wide) == 3
+
+
+@pytest.mark.parametrize("home_is_owner", [True, False])
+def test_deferral_compares_the_owner_by_database_identity(vocab_rival, home_is_owner):
+    """``_defers_to_the_gate``: the owner is the Q0-resolved DATABASE, not a
+    module-name string."""
+    from clausal.logic.predicate import _defers_to_the_gate
+    vocab = _load_module(vocab_rival[0], os.path.join(FIXTURES, "gate_vocab.clausal"))
+    handle = mint_predicate_handle(_lm(vocab).db, "gv_owned")
+    if home_is_owner:
+        home = vocab.__dict__
+    else:
+        from clausal.logic.database import Module
+        home = {"$module": Module("sa_defer_home", module_dict={"__name__": "sa_defer_home"})}
+    assert _defers_to_the_gate(handle, home, 1) is (not home_is_owner)
+    from clausal.logic.predicate import ClausalTermConstructionError, _handle_head_cell
+    if home_is_owner:
+        with pytest.raises(ClausalTermConstructionError):
+            _handle_head_cell(handle, (), {"arg_0": "teal"}, home=home)
+        assert "$deferred_heads" not in home
+    else:
+        # Deferred: built at the written arity, and RECORDED for the
+        # compile-time invariant check.
+        assert _handle_head_cell(handle, (), {"arg_0": "teal"}, home=home) == (
+            "gv_owned", "teal")
+        assert home["$deferred_heads"] == {("gv_owned", 1)}
+    # never at an arity the owner does not know, nor with no module to tell
+    assert _defers_to_the_gate(handle, home, 2) is False
+    assert _defers_to_the_gate(handle, {}, 1) is False
+
+
+def test_a_deferred_head_the_gate_permits_is_refused():
+    """The invariant: a head built positionally for the gate to refuse never
+    reaches a row."""
+    from clausal.logic.compiler_v2 import _refuse_unrefused_deferred_heads
+
+    class _Node:
+        def __init__(self, head):
+            self.head = head
+
+    md = {"$deferred_heads": {("gv_owned", 1)}}
+    with pytest.raises(SyntaxError, match="gv_owned/1"):
+        _refuse_unrefused_deferred_heads([_Node(("gv_owned", "teal"))], md, "m")
+    md = {"$deferred_heads": {("gv_owned", 1)}}
+    _refuse_unrefused_deferred_heads([_Node(("other", 1))], md, "m")
+    assert "$deferred_heads" not in md
+
+
+def test_a_head_through_a_python_held_handle_never_reaches_a_row(vocab_rival, tmp_path):
+    """The invariant from SOURCE: a Python-held handle is not an
+    -import_from, so step 3d does not refuse its head; the deferred head is
+    refused by the compile-time check instead of being stored positionally
+    on this module's own gv_owned/1 row."""
+    _load_module(vocab_rival[0], os.path.join(FIXTURES, "gate_vocab.clausal"))
+    src = tmp_path / "sa_hh.clausal"
+    src.write_text("-module(sa_hh, [])\n"
+                   "-allow_singletons\n"
+                   "from clausal.logic.atoms import mangle\n"
+                   "h = mangle('tests.fixtures.gate_vocab', 'gv_owned')\n"
+                   "h(COLOUR) <- true\n")
+    with pytest.raises(SyntaxError, match="written through a handle"):
+        _load_module(vocab_rival[2], str(src))

@@ -2842,8 +2842,15 @@ def head_cell(binding, /, *args: Any, **kwargs: Any) -> Any:
     A HANDLE naming ANOTHER module's predicate (an importer writing a clause
     for an imported name) DEFERS to the load gate (operator ruling
     2026-09-25): see :func:`_handle_head_cell`.  The executing module is
-    read from the caller's frame, since ``$head`` is called only from a
-    module body's generated code.
+    read from the CALLER'S FRAME: ``$head`` is bound straight to this
+    function in ``INJECTED_RUNTIME_BUILTINS`` and is called only by a module
+    body's generated code, so frame 1's globals ARE that module's namespace.
+    A caller that is not that code -- a wrapper, a ``functools.partial``, an
+    eval with its own globals -- finds no ``$module`` there (or its own), so
+    the head keeps its construction error: the failure mode is the error the
+    head raised before deferral existed, never a silent accept.  Passing the
+    namespace explicitly would change the ``$head(<binding>, ...)`` emission,
+    which the reifier and the rewriter-output pins read.
     """
     if type(binding) is str:
         from clausal.logic.atoms import is_mangled  # noqa: PLC0415
@@ -2874,6 +2881,12 @@ def _handle_head_cell(handle: str, args: tuple, kwargs: dict,
     (``test_an_imported_head_at_the_wrong_arity_raises_the_arity_error``).
     A head in the owner's own module, or with no module to tell (*home*
     carries no ``$module``), keeps every construction error.
+
+    INVARIANT: a deferred head never reaches a row.  Its positional build
+    ignores the field names, which is right only because the gate refuses
+    it.  So the key is recorded in *home*'s ``$deferred_heads``, and
+    ``compiler_v2.compile_module`` raises if its step 3d permitted a load
+    that would write one (``_refuse_unrefused_deferred_heads``).
     """
     from clausal.logic.atoms import demangle  # noqa: PLC0415
     try:
@@ -2883,23 +2896,29 @@ def _handle_head_cell(handle: str, args: tuple, kwargs: dict,
             raise
     functor = demangle(handle)[1]
     written = (*args, *kwargs.values())
+    home.setdefault("$deferred_heads", set()).add((functor, len(written)))
     return (functor, *written) if written else functor
 
 
 def _defers_to_the_gate(handle: str, home: "dict | None", written: int) -> bool:
     """True when the module *home* (a namespace) is not *handle*'s owner and
-    the head is written at an arity the owner knows."""
+    the head is written at an arity the owner knows.
+
+    The owner is compared by DATABASE IDENTITY, with *home*'s db as the
+    ruling-Q0 hint: ``_resolve_mangled_owner(handle, db=home_db)`` answers
+    *home_db* itself for a handle naming *home*'s own module.  A handle names
+    a module, not a load, so a handle minted by an EARLIER load under the same
+    module name (the twin-reload case) is, by ruling Q0, this module's own:
+    it keeps its construction error, exactly as a local handle does."""
     if home is None:
         return False
     home_db = namespace_db(home)
     if home_db is None:
         return False
-    from clausal.logic.atoms import demangle  # noqa: PLC0415
-    if demangle(handle)[0] == home_db.module_name():
+    resolved = _resolve_mangled_owner(handle, db=home_db)
+    if resolved is None or resolved[0] is home_db:
         return False
-    resolved = _resolve_mangled_owner(handle)
-    return (resolved is not None
-            and written in resolved[0].head_signatures(resolved[1]))
+    return written in resolved[0].head_signatures(resolved[1])
 
 
 def _owner_head_cell(handle: str, args: tuple, kwargs: dict) -> Any:

@@ -56,7 +56,7 @@ def seam_term(node: Any, module_globals: dict, loose: bool = False) -> Any:
         cell_signature_for_name,
         lowering_scope,
     )
-    from clausal.logic.predicate import is_declared_predicate_name
+    from clausal.logic.predicate import is_declared_predicate_name, namespace_db
 
     def dotted(attr: LoadAttr) -> str:
         parts = []
@@ -157,7 +157,11 @@ def seam_term(node: Any, module_globals: dict, loose: bool = False) -> Any:
                     # Only a declared PREDICATE's handle: a ``-hide`` data
                     # atom is mangled in the same shape, and its owner binds
                     # the plain name to it; it keeps its mangled spelling.
-                    if is_declared_predicate_name(binding):
+                    # ``db=``: the ruling-Q0 hint, as ``cell_signature_for_name``
+                    # passes it -- a LOCAL handle resolves in this module's own
+                    # db even after the module is popped from sys.modules.
+                    if is_declared_predicate_name(
+                            binding, db=namespace_db(module_globals)):
                         from clausal.logic.compiler.terms_to_ast import handle_cell_functor  # noqa: PLC0415
                         binding = handle_cell_functor(binding)
                     return (sys.intern(binding), *args)

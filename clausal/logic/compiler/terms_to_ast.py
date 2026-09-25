@@ -435,8 +435,7 @@ def cell_signature_for_name(
             return None
         # ``is_predicate``: the question was just answered above, so the
         # spelling does not ask ``is_declared_predicate_name`` a second time.
-        _spelled = _functor_spelling(binding, leaf, namespace=namespace,
-                                     is_predicate=True)
+        _spelled = _functor_spelling(binding, leaf, is_predicate=True)
         if arity is not None and arity < len(cls_fields):
             # Ruling C (2026-09-24): a term is built at its WRITTEN arity,
             # never padded.  A predicate NAME may be written at several
@@ -498,7 +497,6 @@ def handle_cell_functor(handle: str) -> str:
 
 
 def _functor_spelling(binding: Any, leaf: str, *,
-                      namespace: "dict | None" = None,
                       is_predicate: bool = False) -> str:
     """The functor string slot 0 carries for a name bound to *binding*.
 
