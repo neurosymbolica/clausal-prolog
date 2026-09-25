@@ -159,3 +159,100 @@ def test_or_separator_between_solutions():
     lines = [l.strip() for l in out.splitlines() if l.strip()]
     or_indices = [i for i, l in enumerate(lines) if l == "or"]
     assert len(or_indices) == 2
+
+
+# ── A cell GOAL is solved, never iterated (post-flip hazard) ──────────────────
+#
+# After the PredicateMeta flip, calling a builtin class from Python BUILDS A
+# CELL: ``clausal.between(1, 3, X)`` is the tuple ``("between", 1, 3, X)``.
+# ``Solutions`` used to hand anything iterable to ``iter()``, so a cell was
+# walked element by element -- four "solutions", X never bound: a silently
+# wrong answer.  A str (an atom goal or a predicate handle) walked its chars.
+
+def _cell_run(goal, *keys, **kw):
+    import io, sys
+    buf = io.StringIO()
+    old = sys.stdout
+    sys.stdout = buf
+    try:
+        Solutions(goal, _read=make_keys(*keys), **kw)._run()
+    finally:
+        sys.stdout = old
+    return buf.getvalue()
+
+
+def test_builtin_cell_goal_is_solved_with_module():
+    from clausal import Module, Var, between
+    X = Var()
+    goal = between(1, 3, X)
+    assert type(goal) is tuple  # the hazard's premise: a cell, iterable
+    sols = list(Solutions(goal, _varnames={"X": X},
+                          module=Module("repl_cell_goal"))._iter)
+    assert sols == [{"X": 1}, {"X": 2}, {"X": 3}]
+
+
+def test_builtin_cell_goal_displays_its_solutions():
+    from clausal import Module, Var, between
+    X = Var()
+    out = _cell_run(between(1, 2, X), "a", _varnames={"X": X},
+                    module=Module("repl_cell_goal_display"))
+    assert "X is 1" in out and "X is 2" in out
+    assert "between" not in out  # the functor is not a "solution"
+
+
+def test_cell_goal_unnamed_vars_are_reported():
+    from clausal import Module, Var, between
+    X = Var()
+    sols = list(Solutions(between(1, 2, X),
+                          module=Module("repl_cell_goal_unnamed"))._iter)
+    assert [list(s.values()) for s in sols] == [[1], [2]]
+
+
+def test_unqualified_cell_goal_without_module_is_loud():
+    from clausal import Var, between
+    from clausal.logic.exceptions import LogicException
+    with pytest.raises(LogicException, match="existence_error|module"):
+        Solutions(between(1, 3, Var()))  # raises at construction
+
+
+def test_user_predicate_cell_goal_and_qualified_cell(tmp_path):
+    from clausal import Var
+    from clausal.import_hook import _load_module
+    src = tmp_path / "repl_cell_goal_user.clausal"
+    src.write_text("colour(1),\ncolour(2),\nok(),\n")
+    mod = _load_module("repl_cell_goal_user", str(src))
+    X = Var()
+    assert list(Solutions(("colour", X), _varnames={"X": X},
+                          module=mod)._iter) == [{"X": 1}, {"X": 2}]
+    Y = Var()
+    assert list(Solutions((":", mod, ("colour", Y)),
+                          _varnames={"Y": Y})._iter) == [{"Y": 1}, {"Y": 2}]
+    # A str goal (an atom goal, or a predicate handle such as ``mod.ok``)
+    # is solved -- iterating it would walk its characters.
+    assert list(Solutions("ok", module=mod)._iter) == [{}]
+    assert list(Solutions(mod.ok, module=mod)._iter) == [{}]
+
+
+# ── query()'s deprecation text names the ruled form ───────────────────────────
+
+def test_query_deprecation_warning_recommends_solve_and_call():
+    import warnings
+    from clausal import Module, Var, query, between
+    X = Var()
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        list(query(between(1, 1, X), {"X": X}, Module("repl_query_warn")))
+    msgs = [str(x.message) for x in w
+            if issubclass(x.category, DeprecationWarning)]
+    assert len(msgs) == 1, msgs
+    msg = msgs[0]
+    assert 'solve(("pred", X := Var()), module=m)' in msg
+    assert 'call("pred", X := Var(), module=m)' in msg
+    assert "for trail in pred(X := Var())" not in msg
+
+
+def test_query_docstring_does_not_recommend_iterating_a_call():
+    from clausal.logic.solve import query
+    doc = query.__doc__
+    assert "for trail in greeting(X := Var())" not in doc
+    assert 'solve(("greeting", X := Var()), module=m)' in doc

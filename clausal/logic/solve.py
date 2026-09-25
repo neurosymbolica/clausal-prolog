@@ -1323,10 +1323,20 @@ def query(
     """Solve goal and yield one fully-dereferenced binding dict per solution.
 
     .. deprecated::
-        Prefer iterating the goal directly and reading ``Var.value``::
+        Prefer ``solve`` (or ``call``) with the goal as a cell and the module
+        that answers it, reading ``Var.value``::
 
-            for trail in greeting(X := Var()):
+            for trail in solve(("greeting", X := Var()), module=m):
                 print(X.value)
+
+            for trail in call("greeting", X := Var(), module=m):
+                print(X.value)
+
+        Do NOT iterate a goal built by calling a predicate from Python:
+        ``m.greeting`` is a handle (a ``str``) and a builtin class such as
+        ``clausal.between(1, 3, X)`` builds a CELL (a tuple), so
+        ``for _ in between(1, 3, X)`` walks the tuple's elements and never
+        runs the goal.
 
     Parameters
     ----------
@@ -1342,8 +1352,12 @@ def query(
     """
     import warnings
     warnings.warn(
-        "query() is deprecated. Iterate the goal directly and use Var.value:\n"
-        "  for trail in pred(X := Var()): print(X.value)",
+        "query() is deprecated. Solve the goal as a cell with the module "
+        "that answers it, and use Var.value:\n"
+        "  for trail in solve((\"pred\", X := Var()), module=m): "
+        "print(X.value)\n"
+        "  for trail in call(\"pred\", X := Var(), module=m): "
+        "print(X.value)",
         DeprecationWarning,
         stacklevel=2,
     )
