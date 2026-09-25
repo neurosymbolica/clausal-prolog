@@ -1069,7 +1069,7 @@ Use `phrase/2` or `phrase/3` to call DCG rules from regular predicates:
 when using `-module(...)`, DCG predicates must be declared with their full signature including the two hidden state arguments:
 
 ```clausal
-# Correct: PredicateMeta classes created with proper field counts
+# Correct: predicates declared with proper arities
 -module(my_grammar, [greeting(S0, S), digit(D, S0, S)])
 
 # Wrong: greeting/digit are read as atoms here, not predicate references
