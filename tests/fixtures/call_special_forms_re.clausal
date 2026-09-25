@@ -1,0 +1,29 @@
+# A module that IMPORTS py.re's findall/3: in a clause body, `findall(P, S, L)`
+# is then the REGEX predicate (the import rewrites the call to py.re.findall),
+# not the special form -- tests/test_call_runs_special_form_cells.py.
+-module(call_special_forms_re, [])
+-import_from(py.re, [findall, match, alias(search, rs)])
+-import_from(py.random, [permutation])
+-import_from(tests.fixtures.call_special_forms_owner, [once])
+-allow_singletons
+
+b(L) <- findall("\\d", "a1b2", L)
+g(L, G) <- (G is findall("\\d", "a1b2", L))
+run(L) <- (g(L, G), call(G))
+
+# py.random's permutation/2 shadows the BUILTIN permutation/2 in a body (one
+# shuffled answer, not six): call/1 of the cell must pick the same one.
+pb(P) <- permutation([1, 2, 3], P)
+pg(P, G) <- (G is permutation([1, 2, 3], P))
+prun(P) <- (pg(P, G), call(G))
+pcell(P) <- call(("permutation", [1, 2, 3], P))
+# An ALIASED import: the term carries the dotted name, which the module binds.
+ab(M) <- rs("b", "abc", M)
+ag(M, G) <- (G is rs("b", "abc", M))
+arun(M) <- (ag(M, G), call(G))
+
+# The IMPORTED name wins over the special form, in the body and so in call/1:
+# findall/3 here is py.re's, once/1 is call_special_forms_owner's.
+fcell(L) <- call(("findall", "\\d", "a1b2", L))
+ob(G) <- once(G)
+ocell(G) <- call(("once", G))
