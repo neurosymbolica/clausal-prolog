@@ -120,11 +120,15 @@ class TestCellAsGoal:
         X = Var()
         assert [deref(X) for _ in solve(("p", X), _lm(mod))] == [1, 2]
 
-    def test_a_cell_goal_answers_what_the_class_term_goal_answers(self, mod):
+    def test_a_cell_goal_answers_what_the_module_binding_goal_answers(self, mod):
+        """The goal built from the module BINDING -- a class term pre-flip,
+        the handle-headed cell ``(mod.p, X)`` post-W4b-2d -- answers as the
+        plain cell does."""
         X, Y = Var(), Var()
-        by_class = [deref(X) for _ in solve(mod.p(X), _lm(mod))]
+        assert mod.p != "p"                   # the two spellings really differ
+        by_binding = [deref(X) for _ in solve((mod.p, X), _lm(mod))]
         by_cell = [deref(Y) for _ in solve(("p", Y), _lm(mod))]
-        assert by_cell == by_class == [1, 2]
+        assert by_cell == by_binding == [1, 2]
 
     def test_a_ground_cell_goal_succeeds_and_fails_by_value(self, mod):
         assert len(list(solve(("p", 2), _lm(mod)))) == 1
@@ -239,9 +243,11 @@ class TestCallNOverCells:
         ``_resolve_named_goal``: ``p(X)`` from Python IS the cell ``("p", X)``
         now, so both spellings are one term and answer alike.  Closes
         todo/done/call-n-does-not-resolve-a-runtime-built-class-term-goal-2026-09-06.md."""
+        # W4b-2d: ``mod.p`` is the predicate's handle; the term built from
+        # it at runtime is the handle-headed cell ``(mod.p, X)``.
         X, Y = Var(), Var()
-        assert [deref(X) for _ in pcall("cg1", mod.p(X), module=_lm(mod))] == [1, 2]
-        assert ([deref(X) for _ in pcall("cg1", mod.p(X), module=_lm(mod))]
+        assert [deref(X) for _ in pcall("cg1", (mod.p, X), module=_lm(mod))] == [1, 2]
+        assert ([deref(X) for _ in pcall("cg1", (mod.p, X), module=_lm(mod))]
                 == [deref(Y) for _ in pcall("cg1", ("p", Y), module=_lm(mod))])
 
     def test_an_imported_predicate_answers_call_as_it_answers_solve(
@@ -548,10 +554,10 @@ class TestCellAssertRetract:
         X = Var()
         by_cell = [deref(X) for _ in solve(("p", X), lm)]
         Y = Var()
-        by_class = [deref(Y) for _ in solve(mod.p(Y), lm)]
+        by_binding = [deref(Y) for _ in solve((mod.p, Y), lm)]  # handle-headed
         Z = Var()
         by_call_node = [deref(Z) for _ in pcall("p", Z, module=lm)]
-        assert by_cell == by_class == by_call_node == [1, 2, 7]
+        assert by_cell == by_binding == by_call_node == [1, 2, 7]
 
     def test_asserta_puts_the_cell_first(self, mod):
         lm = _lm(mod)
