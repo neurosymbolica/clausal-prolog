@@ -3,7 +3,7 @@
 # `/` the ARITHMETIC operator applied to a bare predicate reference and an
 # int literal -- it compiles to a runtime Div node (`fib` resolves to the
 # PredicateMeta class this module binds), not the cell `('/', 'fib', 2)`.
-# `_as_name_arity_indicator` (clausal/logic/builtins/io.py) recognizes that
+# `_pi_parts` (clausal/logic/builtins/io.py) recognizes that
 # shape as a fourth Name/Arity indicator representation.
 
 fib(0, 1),
@@ -17,5 +17,11 @@ fib(N, F) <- (
     F == F1 + F2
 )
 
-debug_fib_by_class() <- listing(fib)
+# Since ruling S (2026-09-24) a bare `fib` here is the ATOM fib, and since
+# the operator ruling of 2026-09-25 ("do what Scryer does") `listing(fib)` is
+# type_error(predicate_indicator, fib); the class form is driven from Python
+# in tests/test_listing.py.  `fib // 0` is Scryer's Name//Arity spelling (a
+# DCG nonterminal indicator): it compiles to a runtime FloorDiv node and
+# names fib/(0+2).
+debug_fib_by_nonterminal() <- listing(fib // 0)
 debug_fib_by_indicator() <- listing(fib/2)

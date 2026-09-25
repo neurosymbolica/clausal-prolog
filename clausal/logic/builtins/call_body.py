@@ -365,14 +365,6 @@ def is_special_form(functor: Any, arity: int) -> bool:
     return type(functor) is str and (functor, arity) in SPECIAL_FORMS
 
 
-_SPECIAL_FORM_NAMES = frozenset(name for name, _ in SPECIAL_FORMS)
-
-
-def is_special_form_name(functor: Any) -> bool:
-    """True when *functor* names a special form at SOME arity."""
-    return type(functor) is str and functor in _SPECIAL_FORM_NAMES
-
-
 def _when_condition(conv, raw):
     """A when/2 condition: ``or`` (and ISO ``;``) rebuilt as the node the
     compiler lowers to ``$install_when_disjunction``; everything else --
@@ -703,6 +695,5 @@ __all__ = [
     "iso_control_cell_dispatch", "folded_existence_error",
     "is_non_callable_term",
     "needs_meta_call", "MetaCallGoal",
-    "SPECIAL_FORMS", "is_special_form", "is_special_form_name",
-    "special_form_dispatch",
+    "SPECIAL_FORMS", "is_special_form", "special_form_dispatch",
 ]

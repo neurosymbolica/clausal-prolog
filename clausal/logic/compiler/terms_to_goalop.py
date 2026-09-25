@@ -435,6 +435,30 @@ def _convert_inner(goal: Any, db: Any) -> GoalOp:
                     if param_name not in kw_dict:
                         _not_yet(goal)
                     ordered_args.append(kw_dict[param_name])
+            if db is not None:
+                # -meta_predicate (operator ruling 2026-09-25, Scryer): an
+                # argument in a ``:``/integer position is qualified with THIS
+                # module at the call -- decided here, where the callee the
+                # name means in this module is known; done at run time by
+                # ``$meta_qualify`` (the value may be a variable bound to an
+                # already-qualified goal, which is left alone).
+                from clausal.logic.meta_predicate import (  # noqa: PLC0415
+                    MetaArg, is_qualifying_spec, meta_specs_for_call,
+                )
+                meta_specs = meta_specs_for_call(db, fname, arity)
+                if meta_specs:
+                    # A lambda LITERAL in a GOAL (integer) position is a
+                    # closure compiled in THIS module -- its body's names
+                    # resolve here, as Scryer qualifies a yall lambda with
+                    # its defining module -- so there is nothing to add.  A
+                    # ``:`` position is module-sensitive DATA and is always
+                    # qualified (the hoisting walk still compiles the lambda
+                    # inside the marker).
+                    ordered_args = [
+                        a if (type(spec) is int and isinstance(a, nodes.Lambda))
+                        else MetaArg(a, spec) if is_qualifying_spec(spec)
+                        else a
+                        for spec, a in zip(meta_specs, ordered_args)]
             return SubCall(fname=fname, arity=arity, args=ordered_args)
 
         case nodes.Unify(left=l, right=r):

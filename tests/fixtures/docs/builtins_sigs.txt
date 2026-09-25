@@ -924,7 +924,7 @@ term_to_string(+Term, -String)
 --8<-- [end:term_to_string_2]
 
 --8<-- [start:listing_1]
-listing(+Predicate)
+listing(+PredicateIndicator)
 --8<-- [end:listing_1]
 
 --8<-- [start:portray_clause_1]

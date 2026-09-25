@@ -104,9 +104,9 @@ def _resolve_nonterminal(db, rule_val, extra_args, context):
     ``phrase((a, b), L)`` never named a nonterminal here, so control
     functors -- and strings and lists, which are DCG terminals -- are turned
     away before the resolver sees them and keep failing.  A module-qualified
-    nonterminal is left out on the same ground: it resolved to nothing here
-    before, and making it work is a feature, not this sweep.  The one
-    non-cell that RAISES is a non-callable term (a number, tuple data ...):
+    nonterminal ``M:NT`` (what a ``-meta_predicate`` argument arrives as,
+    operator ruling 2026-09-25) resolves NT in M.  The one non-cell that
+    RAISES is a non-callable term (a number, tuple data ...):
     ``phrase(42, L)`` is type_error(callable, 42), as in Scryer (operator
     ruling 2026-09-25) -- it used to fail.
 
@@ -114,7 +114,13 @@ def _resolve_nonterminal(db, rule_val, extra_args, context):
     predicate HANDLE (a mangled functor whose module never loaded, or whose
     loaded module lacks the nonterminal) RAISES
     ``existence_error(procedure, Name/Arity)`` in phrase/2,3 exactly as in
-    ``call/N`` (ruling 2 extended, 2026-09-24).
+    ``call/N`` (ruling 2 extended, 2026-09-24).  Nor is the other-arity
+    refusal: a nonterminal name the caller binds only at another arity --
+    ``phrase(b, L)`` against ``b/1`` asks for ``b/2`` -- raises
+    ``PredicateArityMismatchError`` (ISO ``existence_error(procedure, b/2)``,
+    catchable; ruling Q3, 2026-09-25).  Nor, since ruling 2 (2026-09-25),
+    the UNKNOWN nonterminal: ``phrase(nosuch, L)`` raises
+    ``existence_error(procedure, nosuch/2)`` -- N//A is N/(A+2) -- as Scryer.
     """
     from clausal.logic.builtins.higher_order import _resolve_named_goal  # noqa: PLC0415
     is_cell, functor = compound_cell_shape(rule_val)
@@ -125,22 +131,39 @@ def _resolve_nonterminal(db, rule_val, extra_args, context):
         from clausal.logic.exceptions import LogicException  # noqa: PLC0415
         raise LogicException(non_callable_goal_error(rule_val, context))
     if not is_cell:
-        # A CELL only.  A bare atom naming a 0-arity nonterminal is pinned
-        # NOT to resolve here (``test_phrase_bare_str_rule_reference_fails_
-        # cleanly``) and does not need to: while predicate CLASSES exist the
-        # arm above answers ``phrase(greeting, L)``.  When P4 retires the
-        # class this has to become the atom's arm and that pin has to flip --
-        # a ruling for P4, not a side effect of this sweep.
+        if type(rule_val) is str and rule_val:
+            # A bare ATOM names the nonterminal: ruling S (2026-09-24) makes
+            # ``phrase(greeting, L)`` pass the plain atom ``greeting``, not the
+            # class, so this is the atom's arm the old pin
+            # (``test_phrase_bare_str_rule_reference_fails_cleanly``, now
+            # flipped) said P4 would need.  It contributes no arguments of its
+            # own: S0/S are the whole call, ``greeting/2``.  A mangled handle
+            # takes the same route (a dangling one raises, as in call/N).
+            return _resolve_named_goal(db, rule_val, list(extra_args), context)
         return None
+    if functor == QUALIFIED_GOAL_FUNCTOR and len(rule_val) == 3:
+        # ``M:NT`` -- a -meta_predicate qualification (operator ruling
+        # 2026-09-25) puts a nonterminal argument in this shape: resolve the
+        # module, then the nonterminal in IT, with the same S0/S extras.
+        from clausal.logic.cells import resolve_qualified_goal_cell  # noqa: PLC0415
+        from clausal.logic.builtins.higher_order import _calling_module  # noqa: PLC0415
+        target, inner = resolve_qualified_goal_cell(
+            rule_val, context, _calling_module(db))
+        inner = deref(inner)
+        from clausal.logic.meta_predicate import is_goal_object  # noqa: PLC0415
+        if is_goal_object(inner):
+            # ``M:NT`` whose NT is a nonterminal CLASS (a dotted ``m.nt``
+            # reference): it resolves itself; S0/S are the whole call.
+            return (_dispatch_at(inner, len(extra_args), target.db),
+                    list(extra_args))
+        return _resolve_nonterminal(target.db, inner, extra_args, context)
     if functor in CELL_GOAL_CONTROL_FUNCTORS or functor == QUALIFIED_GOAL_FUNCTOR:
         return None
-    # _DCG_ARITY_NOTE, on the cell: a nonterminal cell is built at the class's
-    # TRANSLATED arity, so ``tok//1`` arrives as ``("tok", T, S0, S)`` -- its
-    # last two slots are the difference-list pair, and phrase supplies that
-    # pair itself.  Drop them, exactly as the class arm's ``fields[:-2]`` does,
-    # and let the caller's own S0/S take their place.  ``[1:-2]`` truncates to
-    # empty for a cell of arity 0 or 1, which is what that note asks for.
-    user_args = [deref(a) for a in rule_val[1:-2]]
+    # Ruling C (2026-09-24), ISO call/N style: a nonterminal cell is built at
+    # its WRITTEN arity -- ``tok(T)`` is ``("tok", T)``, never padded to the
+    # translated ``tok/3`` -- so phrase APPENDS S0/S to the cell's own
+    # arguments.  (It used to drop the last two slots of a padded cell.)
+    user_args = [deref(a) for a in rule_val[1:]]
     # Resolve the FUNCTOR with every argument as an extra.  The atom route
     # through the shared resolver contributes no arguments of its own, so the
     # ISO fold lands at exactly ``len(user_args) + 2`` -- the arity the class

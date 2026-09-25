@@ -199,7 +199,6 @@ def _without_registered_by(msg):
     ("p", (7,), {}, ("p", 7)),
     ("p", (), {"A": 7}, ("p", 7)),
     ("p", (), {}, ("p", "<var>")),
-    ("q", (7,), {}, ("q", 7, "<var>")),              # short: pads, both eras
     ("q", (), {"B": 8}, ("q", "<var>", 8)),
     ("q", (7, 8), {}, ("q", 7, 8)),
 ])
@@ -212,6 +211,7 @@ def test_the_same_cell_in_both_eras(owner, name, args, kwargs, expected):
 @pytest.mark.parametrize("name,args,kwargs", [
     ("p", (1, 2), {}),                     # overflow
     ("q", (1, 2, 3), {}),                  # overflow
+    ("q", (7,), {}),                       # short: ruling C refuses, no pad
     ("q", (), {"C": 1}),                   # a field it does not have
     ("q", (1,), {"arg_1": 1}),             # placeholder spelling
 ])

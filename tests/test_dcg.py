@@ -18,6 +18,16 @@ from clausal.import_hook import _load_module
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 
+
+def _nt(cls, *args):
+    """A nonterminal term at its WRITTEN arity -- ``tok(T)`` is
+    ``("tok", T)``.  Ruling C (2026-09-24): the class of a //N nonterminal is
+    ONE arity (N+2), and applying it to N arguments no longer pads the two
+    state slots with fresh variables -- it raises -- so the term phrase takes
+    is built by name, and phrase appends S0/S to it (ISO call/N)."""
+    return (cls.__name__, *args)
+
+
 def _load(name, src_text, tmp_path):
     """write a .clausal file and load it as a module."""
     p = tmp_path / f"{name}.clausal"
@@ -63,10 +73,10 @@ class TestAtomHeadDispatch:
         r = mod.module_dict["r"]
         foo = mod.module_dict["foo"]
         bar = mod.module_dict["bar"]
-        assert _succeeds("phrase", r(foo), [mint("F")], module=mod)
-        assert not _succeeds("phrase", r(foo), [mint("B")], module=mod)
-        assert _succeeds("phrase", r(bar), [mint("B")], module=mod)
-        assert not _succeeds("phrase", r(bar), [mint("F")], module=mod)
+        assert _succeeds("phrase", _nt(r, foo), [mint("F")], module=mod)
+        assert not _succeeds("phrase", _nt(r, foo), [mint("B")], module=mod)
+        assert _succeeds("phrase", _nt(r, bar), [mint("B")], module=mod)
+        assert not _succeeds("phrase", _nt(r, bar), [mint("F")], module=mod)
 
     def test_dcg_atom_head_no_compound_match(self, tmp_path):
         """An atom-head clause must NOT match a compound input."""
@@ -84,11 +94,11 @@ class TestAtomHeadDispatch:
         assert mod.module_dict["ve"] == mint("ve")
         ve = lambda *args: ("ve", *args)
         # r(foo) only the atom clause
-        assert _succeeds("phrase", r(foo), [mint("atom")], module=mod)
-        assert not _succeeds("phrase", r(foo), [mint("compound")], module=mod)
+        assert _succeeds("phrase", _nt(r, foo), [mint("atom")], module=mod)
+        assert not _succeeds("phrase", _nt(r, foo), [mint("compound")], module=mod)
         # r(ve(foo)) only the compound clause
-        assert _succeeds("phrase", r(ve(foo)), [mint("compound")], module=mod)
-        assert not _succeeds("phrase", r(ve(foo)), [mint("atom")], module=mod)
+        assert _succeeds("phrase", _nt(r, ve(foo)), [mint("compound")], module=mod)
+        assert not _succeeds("phrase", _nt(r, ve(foo)), [mint("atom")], module=mod)
 
     def test_plain_rule_atom_head_dispatch(self, tmp_path):
         """core (non-DCG) regression: plain ``<-`` rule with atom heads."""
@@ -191,7 +201,7 @@ class TestNonTerminals:
         cls = mod.module_dict["tok"]
         v = Var()
         results = []
-        for _ in call("phrase", cls(v), ["x"], module=mod):
+        for _ in call("phrase", _nt(cls, v), ["x"], module=mod):
             results.append(deref(v))
         assert results == ["x"]
 
@@ -207,13 +217,13 @@ class TestInlineGoals:
         cls = mod.module_dict["pos"]
         v = Var()
         results = []
-        for _ in call("phrase", cls(v), [5], module=mod):
+        for _ in call("phrase", _nt(cls, v), [5], module=mod):
             results.append(deref(v))
         assert results == [5]
         # Negative number should fail the inline goal.
         v2 = Var()
         results2 = []
-        for _ in call("phrase", cls(v2), [-1], module=mod):
+        for _ in call("phrase", _nt(cls, v2), [-1], module=mod):
             results2.append(deref(v2))
         assert results2 == []
 
@@ -224,13 +234,13 @@ class TestInlineGoals:
         cls = mod.module_dict["bounded"]
         v = Var()
         results = []
-        for _ in call("phrase", cls(v), [5], module=mod):
+        for _ in call("phrase", _nt(cls, v), [5], module=mod):
             results.append(deref(v))
         assert results == [5]
         # Out of range.
         v2 = Var()
         results2 = []
-        for _ in call("phrase", cls(v2), [10], module=mod):
+        for _ in call("phrase", _nt(cls, v2), [10], module=mod):
             results2.append(deref(v2))
         assert results2 == []
 
@@ -247,15 +257,15 @@ class TestInlineGoals:
         cls = mod.module_dict["bounded"]
         # In range: accepted.
         v = Var()
-        results = [deref(v) for _ in call("phrase", cls(v), [5], module=mod)]
+        results = [deref(v) for _ in call("phrase", _nt(cls, v), [5], module=mod)]
         assert results == [5]
         # The second goal (_d < 10) MUST reject [50].
         v2 = Var()
-        results2 = [deref(v2) for _ in call("phrase", cls(v2), [50], module=mod)]
+        results2 = [deref(v2) for _ in call("phrase", _nt(cls, v2), [50], module=mod)]
         assert results2 == []
         # The first goal (_d > 0) still rejects [-1].
         v3 = Var()
-        results3 = [deref(v3) for _ in call("phrase", cls(v3), [-1], module=mod)]
+        results3 = [deref(v3) for _ in call("phrase", _nt(cls, v3), [-1], module=mod)]
         assert results3 == []
 
     def test_whole_body_multi_goal_block(self, tmp_path):
@@ -270,9 +280,9 @@ class TestInlineGoals:
         mod = _load("igw", src, tmp_path)
         cls = mod.module_dict["ranged"]
         # No input consumed: succeeds on [] when both goals hold.
-        assert _succeeds("phrase", cls(5), [], module=mod)
-        assert not _succeeds("phrase", cls(50), [], module=mod)
-        assert not _succeeds("phrase", cls(0), [], module=mod)
+        assert _succeeds("phrase", _nt(cls, 5), [], module=mod)
+        assert not _succeeds("phrase", _nt(cls, 50), [], module=mod)
+        assert not _succeeds("phrase", _nt(cls, 0), [], module=mod)
 
     def test_empty_brace_block_error(self, tmp_path):
         """An empty ``{}`` DCG body gives a real error message, not an AST dump."""
@@ -382,12 +392,12 @@ class TestIfThenElse:
         done = mod.module_dict["done"]
         empty = mod.module_dict["empty"]
         # [_x] consumes the leading `done`; then-branch [done] consumes the next.
-        assert _succeeds("phrase", c(done), [done, done], module=mod)
+        assert _succeeds("phrase", _nt(c, done), [done, done], module=mod)
         # leading token is not `done` → condition fails → else-branch [empty].
-        assert _succeeds("phrase", c(done), [empty], module=mod)
+        assert _succeeds("phrase", _nt(c, done), [empty], module=mod)
         # condition commits: after consuming `done`, then-branch needs another
         # `done` but sees `empty` — must fail (does NOT fall through to else).
-        assert not _succeeds("phrase", c(done), [done, empty], module=mod)
+        assert not _succeeds("phrase", _nt(c, done), [done, empty], module=mod)
 
     def test_if_then_else_terminal_else_branch(self, tmp_path):
         """R2: the else-branch (terminal) path also produces a parse."""
@@ -421,7 +431,7 @@ class TestPushback:
         # Phase 2 Task 13 Liskov rule, the rest list of 1-char strs may
         # promote to ``"x"`` — accept either form.
         results = []
-        for _ in call("phrase", cls(v), ["x"], rest, module=mod):
+        for _ in call("phrase", _nt(cls, v), ["x"], rest, module=mod):
             results.append((deref(v), deref(rest)))
         assert results == [("x", ["x"])] or results == [("x", chars("x"))]
 
@@ -453,7 +463,7 @@ class TestPhrase:
         v = Var()
         rest = Var()
         results = []
-        for _ in call("phrase", cls(v), ["a", "b", "c"], rest, module=mod):
+        for _ in call("phrase", _nt(cls, v), ["a", "b", "c"], rest, module=mod):
             results.append((deref(v), deref(rest)))
         assert results == [("a", ["b", "c"])]
 
@@ -537,7 +547,7 @@ class TestFixtureIntegration:
         cls = self.module_dict["digit"]
         v = Var()
         results = []
-        for _ in call("phrase", cls(v), [5], module=self.mod):
+        for _ in call("phrase", _nt(cls, v), [5], module=self.mod):
             results.append(deref(v))
         assert results == [5]
 
@@ -556,7 +566,7 @@ class TestFixtureIntegration:
         v = Var()
         rest = Var()
         results = []
-        for _ in call("phrase", cls(v), ["x"], rest, module=self.mod):
+        for _ in call("phrase", _nt(cls, v), ["x"], rest, module=self.mod):
             results.append((deref(v), deref(rest)))
         assert results == [("x", ["x"])] or results == [("x", chars("x"))]
 
@@ -591,7 +601,7 @@ class TestStateThreading:
         cls = mod.module_dict["state"]
         s = Var()
         rest = Var()
-        for _ in call("phrase", cls(s), [42], rest, module=mod):
+        for _ in call("phrase", _nt(cls, s), [42], rest, module=mod):
             assert deref(s) == 42
             assert deref(rest) == [42]  # state unchanged
 
@@ -606,7 +616,7 @@ class TestStateThreading:
         cls = mod.module_dict["state2"]
         s0 = Var()
         rest = Var()
-        for _ in call("phrase", cls(s0, 99), [42], rest, module=mod):
+        for _ in call("phrase", _nt(cls, s0, 99), [42], rest, module=mod):
             assert deref(s0) == 42
             assert deref(rest) == [99]
 
@@ -725,7 +735,7 @@ class TestStateThreading:
         )
         mod = _load("acc1", src, tmp_path)
         rest = Var()
-        for _ in call("phrase", mod.module_dict["push_all"]([1, 2, 3]),
+        for _ in call("phrase", _nt(mod.module_dict["push_all"], [1, 2, 3]),
                        [[]], rest, module=mod):
             # Items pushed in order → reversed due to prepend
             assert deref(rest) == [[3, 2, 1]]
@@ -744,7 +754,7 @@ class TestStateThreading:
         )
         mod = _load("acc2", src, tmp_path)
         rest = Var()
-        for _ in call("phrase", mod.module_dict["push_all"]([]),
+        for _ in call("phrase", _nt(mod.module_dict["push_all"], []),
                        [[]], rest, module=mod):
             assert deref(rest) == [[]]
 
@@ -795,7 +805,7 @@ class TestStateThreading:
         )
         mod = _load("ss", src, tmp_path)
         rest = Var()
-        for _ in call("phrase", mod.module_dict["set_name"]("alice"),
+        for _ in call("phrase", _nt(mod.module_dict["set_name"], "alice"),
                        ["bob"], rest, module=mod):
             assert deref(rest) == ["alice"]
 
@@ -983,7 +993,7 @@ class TestDCGStringInput:
         cls = mod.module_dict["tok"]
         v = Var()
         results = []
-        for _ in call("phrase", cls(v), chars("x"), module=mod):
+        for _ in call("phrase", _nt(cls, v), chars("x"), module=mod):
             results.append(deref(v))
         assert results == [mint("x")]
 
@@ -995,12 +1005,12 @@ class TestDCGStringInput:
         cls = mod.module_dict["vowel"]
         v = Var()
         results = []
-        for _ in call("phrase", cls(v), chars("e"), module=mod):
+        for _ in call("phrase", _nt(cls, v), chars("e"), module=mod):
             results.append(deref(v))
         assert results == [mint("e")]
         # Consonant should fail
         results2 = []
-        for _ in call("phrase", cls(v), chars("b"), module=mod):
+        for _ in call("phrase", _nt(cls, v), chars("b"), module=mod):
             results2.append(deref(v))
         assert results2 == []
 
@@ -1062,14 +1072,23 @@ class TestConsRuleRetirementDCGAudit:
         assert _succeeds("phrase", cls, [mint("h"), mint("i")], module=mod)
         assert not _succeeds("phrase", cls, [mint("h"), mint("o")], module=mod)
 
-    def test_phrase_bare_str_rule_reference_fails_cleanly(self, tmp_path):
-        # nv — a bare str standing in for the RULE (not the input list) is
-        # not a nonterminal reference; phrase/2 fails cleanly (yields no
-        # solution) rather than silently treating the str as some
-        # cons-decomposed goal shape.
+    def test_phrase_bare_atom_rule_reference_names_the_nonterminal(self, tmp_path):
+        # nv — FLIPPED 2026-09-24 (operator ruling S): this pinned that a
+        # bare atom standing in for the RULE does NOT resolve.  A bare
+        # predicate name in data position is now its PLAIN atom, so the atom
+        # is exactly what source ``phrase(hi, L)`` passes; it names hi//0 and
+        # resolves in the calling module like call/N.
         src = 'hi >> (["h", "i"])\n'
         mod = _load("t5_dcg2", src, tmp_path)
-        assert not _succeeds("phrase", "hi", ["h", "i"], module=mod)
+        assert _succeeds("phrase", "hi", ["h", "i"], module=mod)
+        assert not _succeeds("phrase", "hi", ["h", "o"], module=mod)
+        # FLIPPED 2026-09-25 -- operator ruling 2 ("like Scryer"): an unknown
+        # nonterminal N//0 raises existence_error(procedure, N/2); it used to
+        # fail silently.
+        from clausal.logic.exceptions import LogicException
+        with pytest.raises(LogicException) as exc:
+            _succeeds("phrase", "nosuch", ["h", "i"], module=mod)
+        assert tuple(exc.value.term.args[0].args[1].args) == ("nosuch", 2)
 
 
 # ── String / bytes terminals in rule bodies (R3) ─────────────────────────────
@@ -1131,8 +1150,8 @@ class TestCallNonterminal:
         mod = _load("cn1", src, tmp_path)
         run = mod.module_dict["run"]
         greeting = mod.module_dict["greeting"]
-        assert _succeeds("phrase", run(greeting), [mint("hello")], module=mod)
-        assert not _succeeds("phrase", run(greeting), [mint("bye")], module=mod)
+        assert _succeeds("phrase", _nt(run, greeting), [mint("hello")], module=mod)
+        assert not _succeeds("phrase", _nt(run, greeting), [mint("bye")], module=mod)
 
 
 # ── Prolog import round-trip of {..} embedded goals ──────────────────────────
@@ -1166,7 +1185,7 @@ class TestPrologImportInlineGoals:
         # [x] is an ATOM terminal; query with the module's interned ``x`` atom.
         xatom = mod.module_dict["x"]
         n = Var()
-        results = [deref(n) for _ in call("phrase", cls(n), [xatom], module=mod)]
+        results = [deref(n) for _ in call("phrase", _nt(cls, n), [xatom], module=mod)]
         assert results == [1]
 
     def test_conjunction_body_roundtrip(self, tmp_path):
@@ -1178,7 +1197,7 @@ class TestPrologImportInlineGoals:
         assert "{(D >= 0, D <= 9)}" in src
         cls = mod.module_dict["bounded"]
         # In range: accepted.
-        assert _succeeds("phrase", cls(Var()), [5], module=mod)
+        assert _succeeds("phrase", _nt(cls, Var()), [5], module=mod)
         # BOTH guards enforced: [12] rejected (the >= 0 / <= 9 pair).
-        assert not _succeeds("phrase", cls(Var()), [12], module=mod)
-        assert not _succeeds("phrase", cls(Var()), [-1], module=mod)
+        assert not _succeeds("phrase", _nt(cls, Var()), [12], module=mod)
+        assert not _succeeds("phrase", _nt(cls, Var()), [-1], module=mod)

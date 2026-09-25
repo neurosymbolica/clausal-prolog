@@ -142,3 +142,12 @@ OWA (`-implicit_functors`) is unaffected either way: an OWA-unknown functor
 head arg is never lifted into a bucket in the first place (see the sibling
 todo above) and always keys `_INDEX_VAR` — no arity bookkeeping applies to
 it, so this fix and that gap are independent.
+
+## Resolved (2026-09-24, by ruling C; branch fix/small-todos-batch-2026-09-24)
+
+The shape cannot be written any more: a head referencing a declared data
+functor below its declared arity (`pt(1)` for `pt(x, y)`) is refused at load
+like an over-arity one, so there is no padded pattern to file under the
+wrong bucket. `tests/test_tagged_terms.py::TestPartialHeadReferenceIndexing`
+now pins the refusal and keeps the saturated-reference regression test.
+See `todo/done/too-few-positional-args-pad-with-fresh-vars-QUESTION-2026-09-24.md`.

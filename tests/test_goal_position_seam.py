@@ -870,11 +870,13 @@ class TestJudgementAtTheSeamQueryBoundary:
         "wins(X) <- (move(X, Y), not wins(Y))\n"
         "num(3),\n"
         "def partial_conditional():\n"
-        "    if --wins(pair(a)):\n"          # slot B omitted: the query fills a Var
+        # Slot B is written as ``_``: ruling C (2026-09-24) refuses a short
+        # construction of a data functor instead of padding it with a Var.
+        "    if --wins(pair(a, _)):\n"
         "        return 'true'\n"
         "    return 'false'\n"
         "def partial_definite():\n"
-        "    if --wins(pair(d)):\n"
+        "    if --wins(pair(d, _)):\n"
         "        return 'true'\n"
         "    return 'false'\n"
         "def arith_over_var():\n"

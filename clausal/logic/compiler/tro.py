@@ -17,6 +17,7 @@ import ast
 from typing import Any
 
 from clausal.logic.variables import is_var, deref  # noqa: F401
+from clausal.logic.meta_predicate import MetaArg as _MetaArg
 from clausal.terms import (
     Compound,
     And, Or, Not,
@@ -226,6 +227,15 @@ def _tro_args_safe_ir(
         head_arg = deref(head_arg)
         if is_var(head_arg) and i < len(tail_args):
             tail_arg = deref(tail_args[i])
+            if type(tail_arg) is _MetaArg:
+                # A -meta_predicate position of a SELF-call: the head variable
+                # passed through unchanged, wrapped for qualification.  The
+                # qualification is idempotent -- the value was qualified when
+                # the predicate was entered (every entry qualifies: compiled
+                # call sites, call/N, solve.call), and an already-qualified
+                # goal or a goal object is left as it is -- so for TRO it IS
+                # the pass-through variable (roborev, 2026-09-25).
+                tail_arg = deref(tail_arg.value)
             if is_var(tail_arg) and tail_arg._id == head_arg._id:
                 head_passthrough_ids.add(head_arg._id)
 
@@ -442,6 +452,15 @@ def _tro_args_safe(
         head_arg = deref(head_arg)
         if is_var(head_arg) and i < len(tail_args):
             tail_arg = deref(tail_args[i])
+            if type(tail_arg) is _MetaArg:
+                # A -meta_predicate position of a SELF-call: the head variable
+                # passed through unchanged, wrapped for qualification.  The
+                # qualification is idempotent -- the value was qualified when
+                # the predicate was entered (every entry qualifies: compiled
+                # call sites, call/N, solve.call), and an already-qualified
+                # goal or a goal object is left as it is -- so for TRO it IS
+                # the pass-through variable (roborev, 2026-09-25).
+                tail_arg = deref(tail_arg.value)
             if is_var(tail_arg) and tail_arg._id == head_arg._id:
                 head_passthrough_ids.add(head_arg._id)
 

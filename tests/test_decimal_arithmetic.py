@@ -274,10 +274,28 @@ class TestWrittenSpellingsInCompiledArithmetic:
         _same(got_is, got_ev)
         assert type(got_is) is type(want) and got_is == want and str(got_is) == str(want), (expr, got_is)
 
-    @pytest.mark.parametrize("expr", ["rdiv(2, 4) + 1", "decimal(1, 0) * 2", "rdiv(1, 3, 5) * 2"])
-    def test_a_look_alike_cell_is_refused_loudly_on_both_paths(self, tmp_path, expr):
-        got_is, got_ev = _both(tmp_path, "true", expr, header=self._HDR + "-private([rdiv(A, B, C)])\n")
+    # 2026-09-25, ruling C / operator Q1 ("a data functor refuses too few
+    # args"): a functor name holds ONE declared arity, so the old shared header
+    # (rdiv/2 THEN rdiv/3) left rdiv at /3, and ``rdiv(2, 4)`` only passed here
+    # because it was silently padded to ``rdiv(2, 4, _)``.  It is now a load
+    # SyntaxError, so each case declares the arity it writes: ``rdiv(2, 4)``
+    # is a non-canonical rdiv/2 cell, ``rdiv(1, 3, 5)`` an rdiv/3 look-alike.
+    @pytest.mark.parametrize("expr, hdr", [
+        ("rdiv(2, 4) + 1", "-private([decimal(A, B), rdiv(A, B)])\n"),
+        ("decimal(1, 0) * 2", "-private([decimal(A, B), rdiv(A, B)])\n"),
+        ("rdiv(1, 3, 5) * 2", "-private([decimal(A, B), rdiv(A, B, C)])\n"),
+    ], ids=["rdiv(2, 4) + 1", "decimal(1, 0) * 2", "rdiv(1, 3, 5) * 2"])
+    def test_a_look_alike_cell_is_refused_loudly_on_both_paths(self, tmp_path, expr, hdr):
+        got_is, got_ev = _both(tmp_path, "true", expr, header=hdr)
         assert isinstance(got_is, LogicException) and isinstance(got_ev, LogicException), (got_is, got_ev)
+
+    def test_a_short_construction_of_a_data_functor_is_refused_at_load(self, tmp_path):
+        """Ruling C / Q1 (2026-09-25): the name's declaration is rdiv/3 (the
+        later of the two), so ``rdiv(2, 4)`` is too few arguments -- refused
+        at load, not padded to the look-alike ``rdiv(2, 4, _)``."""
+        with pytest.raises(SyntaxError, match=r"rdiv/3 was constructed with 2 positional"):
+            _both(tmp_path, "true", "rdiv(2, 4) + 1",
+                  header=self._HDR + "-private([rdiv(A, B, C)])\n")
 
     def test_an_atom_times_two_is_refused_not_repeated(self, tmp_path):
         got_is, got_ev = _both(tmp_path, "true", "yes * 2")
