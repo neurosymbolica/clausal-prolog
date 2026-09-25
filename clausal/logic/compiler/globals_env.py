@@ -17,11 +17,12 @@ import sys as _sys
 from typing import Any
 
 from clausal.logic.generated_names import dollar_ref
-from clausal.logic.variables import deref
+from clausal.logic.variables import deref, is_var
 from clausal.terms import (
     Compound,
     Call, LoadName, LoadAttr,
     PyThunk,
+    SegBytes, SegList, SegString, VarSeg,
 )
 from clausal.pythonic_ast.nodes import StarUnpack
 from clausal.logic.database import Clause, Database
@@ -35,8 +36,8 @@ from clausal.logic.builtins import (
     get_builtin_predicate, BuiltinPredicate,
 )
 
-from clausal.logic.cells import _cell_shape
-from clausal.logic.atoms import is_atom as _term_is_atom
+from clausal.logic.cells import _cell_shape, is_chars
+from clausal.logic.atoms import is_atom as _term_is_atom, is_nil
 
 from ._ast_helpers import _name, _call, _assign
 from ._vars import _var_python_name, _collect_vars
@@ -90,6 +91,67 @@ def _findall_copy_row(template):
         return walked
     from clausal.logic.builtins.inspection import _copy_term  # noqa: PLC0415
     return _copy_term(walked, {})
+
+
+def _throw_ball(ball):
+    """The exception ``throw(Ball)`` raises (ISO 13211-1 §7.8.10).
+
+    ``instantiation_error`` when *Ball* is unbound (§7.8.10.3).  Otherwise
+    the ball is a COPY made now (§7.8.10.1 b: "the system makes a copy B' of
+    B"), before ``catch/3`` undoes the trail back to its mark.  Raising the
+    ball as written kept its Vars, and the undo then unbound them: the
+    catcher saw ``_`` where the thrower had bound a value.  That is what a
+    ball reached through a variable always met -- ``G is throw(oops),
+    catch(call(G), E, true)`` bound E to an unbound variable, not ``oops``.
+    """
+    from clausal.logic.exceptions import (  # noqa: PLC0415
+        LogicException, instantiation_error,
+    )
+    if is_var(deref(ball)):
+        return LogicException(instantiation_error(
+            "throw/1: the ball is unbound (ISO 7.8.10.3)"))
+    return LogicException(_findall_copy_row(ball))
+
+
+def _is_list_or_partial_list(term) -> bool:
+    """ISO's "a list or a partial list": unbound, ``[]``, a list (in any of
+    the engine's list shapes), or a SegList whose bound tail segments are
+    lists or partial lists in turn -- ``[a, *T]`` with T unbound or a list,
+    not with T bound to ``foo``.
+
+    ``isinstance``, not ``type() in``: a ``-constant_value`` list is a
+    ``_FrozenList`` (a ``list`` subclass) and IS a list.  The string carrier
+    ``('$chars', s)`` is a list too -- a double-quoted string under
+    ``double_quotes(chars)``, which is ISO's list of one-char atoms -- and a
+    ``bytes`` is the code list.  A bare ``str`` is an ATOM (stage 2), so
+    ``findall(X, G, foo)`` is the type_error."""
+    t = deref(term)
+    if (is_var(t) or isinstance(t, (list, bytes)) or is_chars(t)
+            or is_nil(t)):
+        return True
+    if isinstance(t, (SegString, SegBytes)):
+        return True
+    if isinstance(t, SegList):
+        return all(_is_list_or_partial_list(seg.var)
+                   for seg in t.segments if isinstance(seg, VarSeg))
+    return False
+
+
+def _check_bag(bag, who: str) -> None:
+    """``type_error(list, Bag)`` for a findall/bagof/setof result that is
+    neither a list nor a partial list (ISO 13211-1 8.10.1.3 d, 8.10.2.3 c,
+    8.10.3.3 c; Scryer raises it before running the goal).  It used to be a
+    silent failure: the unify of the collected list with ``foo`` failed."""
+    if _is_list_or_partial_list(bag):
+        return
+    # Only the ERROR path imports (the check above is the hot path).
+    from clausal.logic.exceptions import (  # noqa: PLC0415
+        LogicException, type_error,
+    )
+    from clausal.logic.solve import _deref_walk  # noqa: PLC0415
+    culprit = _deref_walk(bag)
+    raise LogicException(type_error(
+        "list", culprit, f"{who}: the result must be a list or a partial list"))
 
 
 # ── Predicate-as-class dispatch adapter ───────────────────────────────────────

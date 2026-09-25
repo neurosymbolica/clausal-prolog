@@ -605,7 +605,12 @@ def _compile_find_all_core(
     unify_mark = ctx.fresh("_fa_um")
 
     template_expr = term_to_ast_expr(template, var_context, eval_arith=False)
-    bag_expr = term_to_ast_expr(bag, var_context, eval_arith=False)
+    # The bag is BUILT once, into a temp, and the temp serves both the ISO
+    # check and the unify: a constructed bag (``[R, *T]``, an inline
+    # ``$Var()`` for ``_``, a ``++()`` escape) must not be built twice.
+    bag_tmp = ctx.fresh("_fa_bag")
+    bag_build = _assign(bag_tmp, term_to_ast_expr(bag, var_context,
+                                                  eval_arith=False))
 
     inner_stmts = _lower_inner(ctx, inner_goal, [_yield_none_stmt()])
     gen_body = inner_stmts + [
@@ -642,14 +647,21 @@ def _compile_find_all_core(
     unify_block = [
         _assign_mark(unify_mark, trail_name),
         ast.If(
-            test=_call(_name("$unify"), bag_expr, _name(results_var), _name(trail_name)),
+            test=_call(_name("$unify"), _name(bag_tmp), _name(results_var), _name(trail_name)),
             body=k_stmts or [ast.Pass()],
             orelse=[],
         ),
         _undo_stmt(unify_mark, trail_name),
     ]
 
+    # ISO 8.10.1.3 d / 8.10.2.3 c / 8.10.3.3 c: a bag that is neither a list
+    # nor a partial list is type_error(list, Bag) -- checked BEFORE the goal
+    # runs, as Scryer does (``findall(X, _, foo)`` is the type_error).
+    who = "setof/3" if dedup else ("bagof/3" if fail_on_empty else "findall/3")
     stmts: list[ast.stmt] = [
+        bag_build,
+        ast.Expr(value=_call(_name("$check_bag"), _name(bag_tmp),
+                             ast.Constant(value=who))),
         _assign(results_var, ast.List(elts=[], ctx=ast.Load())),
         _assign(cond_bag, ast.List(elts=[], ctx=ast.Load())),
         _leader_stmt(cond_leader),
@@ -729,11 +741,13 @@ def _compile_throw(
     ctx: CompilationContext,
     term_arg: Any,
 ) -> list[ast.stmt]:
-    """Compile throw(Term) — raise LogicException(term_expr)."""
+    """Compile throw(Term) -- raise ``$throw_ball(term_expr)``: a COPY of
+    the ball, or instantiation_error for an unbound one (ISO 7.8.10; see
+    ``globals_env._throw_ball``)."""
     var_context = ctx.var_context
     term_expr = term_to_ast_expr(term_arg, var_context, eval_arith=False)
     return [
-        ast.Raise(exc=_call(_name("$LogicException"), term_expr)),
+        ast.Raise(exc=_call(_name("$throw_ball"), term_expr)),
     ]
 
 

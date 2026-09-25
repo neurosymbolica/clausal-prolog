@@ -1,0 +1,131 @@
+# call/1 of a SPECIAL-FORM cell and of a ModulePredicate cell --
+# tests/test_call_runs_special_form_cells.py.  For every row N: b(N, X, Y) is
+# the goal written as a clause BODY, and g(N, X, Y, G) builds the SAME text in
+# TERM position; run(N, X, Y) calls that term.  Both must answer alike.
+-module(call_special_forms, [oops, boom(A), caught, done, foo])
+-import_from(py.re, [match, search])
+-allow_singletons
+-constant_value(nums, [1, 2, 3])
+-constant_value(other_nums, [1, 2])
+
+p(1),
+p(2),
+p(3),
+s(2),
+s(3),
+noisy(X) <- (p(X), X > 1)
+
+b(1, X, Y) <- findall(Z, p(Z), Y)
+g(1, X, Y, G) <- (G is findall(Z, p(Z), Y))
+b(2, X, Y) <- findall(Z, (p(Z), s(Z)), Y)
+g(2, X, Y, G) <- (G is findall(Z, (p(Z), s(Z)), Y))
+b(3, X, Y) <- findall(Z, (p(Z), Z > X), Y)
+g(3, X, Y, G) <- (G is findall(Z, (p(Z), Z > X), Y))
+b(4, X, Y) <- bagof(Z, p(Z), Y)
+g(4, X, Y, G) <- (G is bagof(Z, p(Z), Y))
+b(5, X, Y) <- bagof(Z, (p(Z), Z > 5), Y)
+g(5, X, Y, G) <- (G is bagof(Z, (p(Z), Z > 5), Y))
+b(6, X, Y) <- setof(Z, (s(Z) or p(Z)), Y)
+g(6, X, Y, G) <- (G is setof(Z, (s(Z) or p(Z)), Y))
+b(7, X, Y) <- once(p(X))
+g(7, X, Y, G) <- (G is once(p(X)))
+b(8, X, Y) <- once((p(X), s(X)))
+g(8, X, Y, G) <- (G is once((p(X), s(X))))
+b(9, X, Y) <- forall(p(Z), Z > 0)
+g(9, X, Y, G) <- (G is forall(p(Z), Z > 0))
+b(10, X, Y) <- forall(p(Z), s(Z))
+g(10, X, Y, G) <- (G is forall(p(Z), s(Z)))
+b(11, X, Y) <- catch(throw(oops), E, Y is E)
+g(11, X, Y, G) <- (G is catch(throw(oops), E, Y is E))
+b(12, X, Y) <- catch(throw(boom(X)), boom(Z), Y is Z)
+g(12, X, Y, G) <- (G is catch(throw(boom(X)), boom(Z), Y is Z))
+b(13, X, Y) <- catch(p(X), _, fail)
+g(13, X, Y, G) <- (G is catch(p(X), _, fail))
+b(14, X, Y) <- catch((p(X), throw(boom(X))), boom(Z), Y is Z)
+g(14, X, Y, G) <- (G is catch((p(X), throw(boom(X))), boom(Z), Y is Z))
+b(15, X, Y) <- eval_(X + 1, Y)
+g(15, X, Y, G) <- (G is eval_(X + 1, Y))
+b(16, X, Y) <- count_all(p(_), Y)
+g(16, X, Y, G) <- (G is count_all(p(_), Y))
+b(17, X, Y) <- call_nth(p(Y), 2)
+g(17, X, Y, G) <- (G is call_nth(p(Y), 2))
+# nested: findall inside once inside catch, and the other way round
+b(18, X, Y) <- catch(once(findall(Z, p(Z), Y)), _, fail)
+g(18, X, Y, G) <- (G is catch(once(findall(Z, p(Z), Y)), _, fail))
+b(19, X, Y) <- findall(Z, once(catch(p(Z), _, fail)), Y)
+g(19, X, Y, G) <- (G is findall(Z, once(catch(p(Z), _, fail)), Y))
+b(20, X, Y) <- catch(once(throw(boom(X))), boom(Z), Y is Z)
+g(20, X, Y, G) <- (G is catch(once(throw(boom(X))), boom(Z), Y is Z))
+b(21, X, Y) <- catch_error(throw(oops), Y)
+g(21, X, Y, G) <- (G is catch_error(throw(oops), Y))
+b(22, X, Y) <- catch_recover(throw(oops), E, Y is E)
+g(22, X, Y, G) <- (G is catch_recover(throw(oops), E, Y is E))
+b(23, X, Y) <- setup_call_cleanup(True, p(Y), True)
+g(23, X, Y, G) <- (G is setup_call_cleanup(True, p(Y), True))
+b(24, X, Y) <- call_cleanup(p(Y), True)
+g(24, X, Y, G) <- (G is call_cleanup(p(Y), True))
+b(25, X, Y) <- (freeze(X, Y is done), X is 1)
+g(25, X, Y, G) <- (G is (freeze(X, Y is done), X is 1))
+b(26, X, Y) <- when(nonvar(X), Y is X)
+g(26, X, Y, G) <- (G is when(nonvar(X), Y is X))
+b(27, X, Y) <- when(ground(X), Y is X)
+g(27, X, Y, G) <- (G is when(ground(X), Y is X))
+b(28, X, Y) <- (when((nonvar(X) or nonvar(Y)), True), Y is 5)
+g(28, X, Y, G) <- (G is (when((nonvar(X) or nonvar(Y)), True), Y is 5))
+# ModulePredicate goals (py.re)
+b(29, X, Y) <- (match("\\d+", "123"), Y is 1)
+g(29, X, Y, G) <- (G is (match("\\d+", "123"), Y is 1))
+b(30, X, Y) <- search("b", "abc", Y)
+g(30, X, Y, G) <- (G is search("b", "abc", Y))
+b(31, X, Y) <- findall(Z, (p(Z), not s(Z)), Y)
+g(31, X, Y, G) <- (G is findall(Z, (p(Z), not s(Z)), Y))
+b(32, X, Y) <- catch(throw(_), E, Y is E)
+g(32, X, Y, G) <- (G is catch(throw(_), E, Y is E))
+b(33, X, Y) <- (p(X), findall(Z, (s(Z), Z >= X), Y))
+g(33, X, Y, G) <- (G is (p(X), findall(Z, (s(Z), Z >= X), Y)))
+b(34, X, Y) <- findall(Z, noisy(Z), Y)
+g(34, X, Y, G) <- (G is findall(Z, noisy(Z), Y))
+
+run(N, X, Y) <- (g(N, X, Y, G), call(G))
+call_it(G) <- call(G)
+
+# A meta-interpreter's shape: bodies stored as TERMS (what clause/2 will hand
+# back), each run by call/1, against the same clauses compiled.
+stored(all_p(Y), findall(Z, p(Z), Y)),
+stored(first_s(Y), once(s(Y))),
+stored(safe_p(Y), catch((p(Y), throw(boom(Y))), boom(Z), true)),
+stored(pos_all, forall(p(Z), Z > 0)),
+stored(ps(Y), findall(Z, catch(once((p(Z), s(Z))), _, fail), Y)),
+all_p(Y) <- findall(Z, p(Z), Y)
+first_s(Y) <- once(s(Y))
+safe_p(Y) <- catch((p(Y), throw(boom(Y))), boom(Z), true)
+pos_all <- forall(p(Z), Z > 0)
+ps(Y) <- findall(Z, catch(once((p(Z), s(Z))), _, fail), Y)
+mi(H) <- (stored(H, B), mi_body(B))
+mi_body(B) <- call(B)
+
+# A findall/bagof/setof result that is neither a list nor a partial list is
+# type_error(list, R) (ISO 8.10.1.3 d, 8.10.2.3 c, 8.10.3.3 c), in the body
+# and through call/1 alike; a partial list is fine.
+nb(1) <- findall(X, p(X), foo)
+nbt(1, G) <- (G is findall(X, p(X), foo))
+nb(2) <- bagof(X, p(X), 3)
+nbt(2, G) <- (G is bagof(X, p(X), 3))
+nb(3) <- setof(X, p(X), boom(1))
+nbt(3, G) <- (G is setof(X, p(X), boom(1)))
+nb(4) <- bagof(X, fail, foo)
+nbt(4, G) <- (G is bagof(X, fail, foo))
+nb(5) <- setof(X, fail, foo)
+nbt(5, G) <- (G is setof(X, fail, foo))
+nb(6) <- findall(X, fail, 7)
+nbt(6, G) <- (G is findall(X, fail, 7))
+nb_run(N) <- (nbt(N, G), call(G))
+pl(1, R) <- findall(X, p(X), [R, *T])
+pl(2, R) <- findall(X, p(X), [1, R, 3])
+pl(3, R) <- findall(X, p(X), R)
+pl(4, R) <- findall(X, fail, [])
+pl(5, R) <- setof(X, p(X), [R, *T])
+pl(6, R) <- findall(X, p(X), [9, *T])
+# A -constant_value list is a _FrozenList (a list SUBCLASS): a list.
+cf(1) <- findall(X, p(X), ++nums)
+cf(2) <- findall(X, p(X), ++other_nums)
