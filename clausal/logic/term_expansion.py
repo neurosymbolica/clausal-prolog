@@ -27,7 +27,7 @@ from clausal.logic.database import Module as LogicModule, Clause, head_key
 from clausal.logic.compiler import compile_predicate_trampoline
 from clausal.logic.variables import Var as _Var
 from clausal.logic.predicate import (
-    PredicateMeta, _db_for_module_name, make_predicate, predicate_owner_module,
+    PredicateMeta, _db_for_module_name, predicate_owner_module,
 )
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.pythonic_ast.nodes import Predicate as PredicateItem
@@ -333,11 +333,11 @@ def _term_expansion_module(module_dict):
     # destructured in TE clause bodies.  C-level unify only handles Var/list/tuple.
     lm.module_dict["unify"] = structural_unify
 
-    # Create the term_expansion PredicateMeta class.
-    te_cls = make_predicate("term_expansion", ["term", "expansion", "module_before", "module_after"])
-    lm.module_dict["term_expansion"] = te_cls
-    # W4b-1: register the declaration on the synthetic module's own db, so
-    # ``term_expansion/4`` is answerable by NAME and not only off the class.
+    # NO class (W4b-3 slice 4a): ``term_expansion/4`` is a ROW of the
+    # synthetic module's own Database, compiled and dispatched by name
+    # (``call("term_expansion", ..., module=lm)`` asks ``db.get_dispatch``).
+    # It used to be a ``make_predicate`` class bound under the name.  The
+    # declaration makes the name answerable as a declared functor.
     lm.db.declare_functor(
         "term_expansion", ("term", "expansion", "module_before", "module_after"))
 
@@ -352,7 +352,6 @@ def _term_expansion_module(module_dict):
 def _compile_expansion_rules(expansion_clauses, module_dict):
     """Compile term_expansion clauses into a mini LogicModule."""
     lm = _term_expansion_module(module_dict)
-    te_cls = lm.module_dict["term_expansion"]
 
     # A10-F008 / A10-D004(a): pre-mint term classes for functors referenced in
     # the (quasi-quoted) expansion patterns — e.g. a brand-new ``logged_fact``
@@ -374,17 +373,12 @@ def _compile_expansion_rules(expansion_clauses, module_dict):
     functor, arity = "term_expansion", 4
     clauses = lm.db.clauses_for(functor, arity)
     if clauses:
-        # BIND THE ROW FIRST.  The clauses were asserted into ``lm.db``, so
-        # this class IS the compiled face of a stored predicate and
-        # ``_bind_row`` is the documented call for that.  Without it the
-        # class is still on NO row when the compile writes ``_index_plans``
-        # through the facade, which minted a private detached row -- 4 of the
-        # 12 detached rows over 56 fixtures came from here -- and the index
-        # plans then landed on a throwaway instead of on ``lm.db``'s row.
-        te_cls._bind_row(lm.db, functor, arity)
+        # Compiled onto ``lm.db``'s own row (``pred_cls=None``): the row is
+        # the predicate, so the index plans and the dispatch land there with
+        # no class to bind first (W4b-3 slice 4a).
         compile_predicate_trampoline(
             functor, arity, clauses, lm.db,
-            globals_=lm.module_dict, pred_cls=te_cls,
+            globals_=lm.module_dict, pred_cls=None,
         )
 
     return lm

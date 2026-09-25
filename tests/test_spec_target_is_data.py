@@ -23,11 +23,14 @@ from clausal.logic.specialization import (
 from clausal.logic.variables import Var
 
 
-def test_the_target_builds_the_cell_the_class_builds():
+def test_the_target_builds_the_cell_a_class_builds():
+    """The target (name + fields, no class -- W4b-3 slice 4) builds the
+    cell a class with the same fields builds."""
     cls = make_predicate("spt_p", ["a", "b", "c"])
-    target = _SpecTarget.of(cls)
-    assert (target.name, target.fields) == ("spt_p", ("a", "b", "c"))
+    target = _SpecTarget("spt_p", ("a", "b", "c"))
     assert target(a=1, b=2, c=3) == cls(a=1, b=2, c=3) == ("spt_p", 1, 2, 3)
+    # The unfolder's own builder fills a slot it leaves out with a fresh Var
+    # (it writes its generated heads by keyword on purpose).
     partial = target(b=2)
     assert partial[0] == "spt_p" and partial[2] == 2
     assert isinstance(partial[1], Var) and isinstance(partial[3], Var)
@@ -36,7 +39,6 @@ def test_the_target_builds_the_cell_the_class_builds():
         target(nope=1)
     assert (exc.value.functor, exc.value.registered_fields) == (
         "spt_p", ("a", "b", "c"))
-    assert exc.value.registered_at == cls._registered_at   # carried over
 
 
 def _canon(clauses):
@@ -55,18 +57,48 @@ def _natnum_program():
 
 @pytest.mark.parametrize("mi", ["solve", "solve_count", "solve_limit"])
 def test_the_unfolder_runs_without_any_class(mi):
-    """A target built from a name and fields alone -- the post-flip shape --
-    unfolds to the same clauses as one built from a class."""
+    """A target built from a name and fields alone -- the only shape since
+    W4b-3 slice 4 -- unfolds to EXACTLY the clauses the class-built target
+    unfolded to (recorded on 9fa2cfa0, before the class went:
+    ``fixtures/spec_target_unfold_goldens.json``)."""
+    import json
     mis = importlib.import_module("clausal.examples.metainterpreters")
     pattern = analyze_mi(getattr(mis, mi))
     fields = tuple(_specialized_fields(pattern))
-
-    from_class = _unfold(pattern, _natnum_program(),
-                         _SpecTarget.of(make_predicate("spt_spec", list(fields))))
     classless = _unfold(pattern, _natnum_program(),
                         _SpecTarget("spt_spec", fields))
-    assert from_class, "nothing unfolded: nothing compared"
-    assert _canon(classless) == _canon(from_class)
+    with open(os.path.join(_FIXTURES, "spec_target_unfold_goldens.json")) as f:
+        golden = json.load(f)[mi]
+    assert golden, "empty golden: nothing compared"
+    assert _canon(classless) == golden
+
+
+def test_a_specialize_target_carries_its_directive_site():
+    """The ``registered by`` line: the make_predicate class carried
+    ``_registered_at``; the target reads its row's ``declared_at``, which
+    ``compiler_v2._run_specialization`` stamps with the ``-specialize``
+    directive's own line (``_declared_site``)."""
+    from clausal.import_hook import _load_module
+    from clausal.logic.predicate import ClausalTermConstructionError
+    from clausal.logic.specialization import _declared_site
+    path = os.path.join(_FIXTURES, "specialize_natnum.clausal")
+    name = "_spt_site_natnum"
+    sys.modules.pop(name, None)
+    try:
+        mod = _load_module(name, path)
+    finally:
+        sys.modules.pop(name, None)
+    db = mod.__dict__["$module"].db
+    with open(path) as f:
+        line = next(i for i, text in enumerate(f, 1)
+                    if text.startswith("-specialize(") and
+                    "solve_count_natnum" in text)
+    site = _declared_site(db, "solve_count_natnum", 2)
+    assert site == (os.path.abspath(path), line) or site == (path, line), site
+    target = _SpecTarget("solve_count_natnum", ("GOALS", "COUNT"), site)
+    with pytest.raises(ClausalTermConstructionError) as exc:
+        target(nope=1)
+    assert exc.value.registered_at == site
 
 
 # ── the actual output, against main's (class-built) output ──────────────────
@@ -106,9 +138,9 @@ def _installed_by_loading(stem, monkeypatch):
     captured = {}
     real = sp._install_specialized
 
-    def spy(pred_cls, new_name, fields, clauses, *a, **k):
+    def spy(new_name, fields, clauses, *a, **k):
         captured[f"{new_name}/{len(fields)}"] = _canon(clauses)
-        return real(pred_cls, new_name, fields, clauses, *a, **k)
+        return real(new_name, fields, clauses, *a, **k)
 
     monkeypatch.setattr(sp, "_install_specialized", spy)
     name = f"_spt_golden_{stem}"
@@ -142,9 +174,9 @@ def test_the_direct_api_installs_what_main_installed(monkeypatch):
     got = {}
     real = sp._install_specialized
 
-    def spy(pred_cls, new_name, fields, clauses, *a, **k):
+    def spy(new_name, fields, clauses, *a, **k):
         got["c"] = _canon(clauses)
-        return real(pred_cls, new_name, fields, clauses, *a, **k)
+        return real(new_name, fields, clauses, *a, **k)
 
     monkeypatch.setattr(sp, "_install_specialized", spy)
     specialize_mi(analyze_mi(mis.solve), program, "SolveNatnum")

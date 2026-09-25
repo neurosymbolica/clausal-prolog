@@ -174,8 +174,8 @@ def test_the_direct_specialize_api_binds_a_handle_and_recursion_runs():
                [["natnum", ["s", x]], [["natnum", x]]]]
     returned = specialize_mi(analyze_mi(mi.solve), program, "SolveNat",
                              db=m.db, module_dict=m.module_dict)
-    assert isinstance(returned, PredicateMeta)   # the API still returns it
-    assert m.module_dict["SolveNat"] == mangle(name, "SolveNat")
+    # W4b-3 slice 4: the API returns the HANDLE, the one it binds
+    assert returned == m.module_dict["SolveNat"] == mangle(name, "SolveNat")
     goal = [["natnum", ["s", ["s", ["s", 0]]]]]
     assert len(list(call("SolveNat", goal, module=m))) == 1
     # The handle alone, with no module named: the defining db is its
