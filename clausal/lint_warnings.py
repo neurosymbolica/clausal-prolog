@@ -181,7 +181,9 @@ class ClausalRetiredQuasiQuoteWarning(ClausalDeprecatedSpellingWarning):
     loads with the expansion missing.  Write the pattern as a plain term, as
     in ISO ``term_expansion``: ``term_expansion(fact(X), [fact(X),
     logged(X)], S, S)``.  Read only in a clause that has a
-    ``term_expansion(_, _, _, _)`` in it, once per clause; a rule that means
+    ``term_expansion(_, _, _, _)`` in it, or a clause of a predicate its body
+    reaches in the same file; never a ``q(...)`` that is itself a body goal,
+    or one inside a ``++`` Python escape.  Once per clause; a rule that means
     a real ``q/1`` term can silence it with ``warnings.filterwarnings`` on
     this class.
     """

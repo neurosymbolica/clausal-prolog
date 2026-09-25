@@ -69,7 +69,7 @@ A pattern is written as a plain term, as in ISO `term_expansion/2`: in argument 
 
 Variables are shared between the pattern and the replacement. In the example above, `X` in the input pattern is the same `X` in both output terms.
 
-`q()` quasi-quotation was retired on 2026-09-25: `q` is an ordinary name now, and `q(fact(X))` is the term `q(fact(X))`. A `q(...)` left in a `term_expansion/4` clause would match nothing, so loading one emits a `ClausalRetiredQuasiQuoteWarning` naming the line. Drop the wrapper.
+`q()` quasi-quotation was retired on 2026-09-25: `q` is an ordinary name now, and `q(fact(X))` is the term `q(fact(X))`. A `q(...)` left in a `term_expansion/4` clause (or in a clause of a helper its body calls) would match nothing, so loading one emits a `ClausalRetiredQuasiQuoteWarning` naming the line. Drop the wrapper.
 
 ### Module State Threading
 

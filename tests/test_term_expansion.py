@@ -409,11 +409,19 @@ class TestRetiredQuasiQuoteWarning:
     in a ``term_expansion/4`` clause warns at load, and nowhere else."""
 
     @staticmethod
-    def _warned(name, source):
+    def _warned(name, source, *, load_may_raise=False):
         from clausal.lint_warnings import ClausalRetiredQuasiQuoteWarning
+        mod = None
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
-            mod = _load_src(name, source)
+            try:
+                mod = _load_src(name, source)
+            except Exception:
+                # The warning is emitted by the rewriter, before anything
+                # compiles; a test about the WARNING may use a shape whose
+                # load then fails for its own reasons.
+                if not load_may_raise:
+                    raise
         hits = [w for w in caught
                 if issubclass(w.category, ClausalRetiredQuasiQuoteWarning)]
         return mod, hits
@@ -445,6 +453,93 @@ class TestRetiredQuasiQuoteWarning:
             "term_expansion(INP, OUTP, S, S) <- (INP is q(c(X)), OUTP is [])\n"
         ))
         assert len(hits) == 3
+
+    def test_an_old_q_pattern_warns_with_q_and_fact_already_pooled_atoms(self):
+        """Hermetic against load order: another module has declared the
+        ATOMS ``q``, ``fact`` and ``logged_fact`` (the pool every module dict
+        is seeded with), which is the state the full suite reached when this
+        failed with ``TypeError: 'str' object is not callable`` at expansion
+        time -- see tests/test_pool_atom_applied_as_functor.py."""
+        # nv
+        _load_src("_te_pool_owner",
+                  "-module(_te_pool_owner, [q, fact, logged_fact])\n"
+                  "kind(q),\nkind(fact),\nkind(logged_fact),\n")
+        self.test_an_old_q_pattern_warns_and_does_not_expand()
+        mod = _load_src("_te_pool_plain", (
+            "term_expansion(fact(X), [fact(X), logged_fact(X)], S, S),\n"
+            "fact(1),\n"
+        ))
+        assert _answers(mod, "logged_fact") == [(1,)]
+
+    def test_clauses_without_line_numbers_are_not_merged(self):
+        """Roborev L1: the dedup key used to be the line of the first q(),
+        falling back to 0, so a second clause with no lineno was silenced."""
+        # nv
+        from clausal.lint_warnings import ClausalRetiredQuasiQuoteWarning
+        t = EmbedTransformer(source_lines=None, filename=None)
+        clauses = [ast.parse(f"term_expansion(q({f}(X)), [], S, S)",
+                             mode="eval").body for f in ("a", "b")]
+        for c in clauses:
+            for n in ast.walk(c):
+                for attr in ("lineno", "end_lineno"):
+                    if hasattr(n, attr):
+                        delattr(n, attr)
+            t._lint_retired_quasi_quote(c)
+        t._lint_retired_quasi_quote(clauses[0])      # same clause again: once
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            t._settle_retired_quasi_quote()
+        assert sum(issubclass(w.category, ClausalRetiredQuasiQuoteWarning)
+                   for w in caught) == 2
+
+    def test_a_q_pattern_in_a_helper_reached_from_term_expansion_warns(self):
+        """Roborev L2: the delegating shape -- the q() patterns live in a
+        helper that the term_expansion body calls, transitively."""
+        # nv
+        # (The load itself then fails: a term_expansion body cannot call
+        # this module's own predicates today -- ``step/2 has no compiled
+        # dispatch function`` -- parked in
+        # todo/term-expansion-cannot-call-a-helper-in-its-own-module-2026-09-25.md.
+        # The warning is the rewriter's, and comes first.)
+        _, hits = self._warned("_te_helper", (
+            "term_expansion(I, O, S, S) <- step(I, O)\n"
+            "step(I, O) <- rewrite(I, O)\n"
+            "rewrite(q(fact(X)), [q(logged_fact(X))]),\n"
+            "unrelated(q(1)),\n"
+            "fact(1),\n"
+        ), load_may_raise=True)
+        assert len(hits) == 1
+        assert "a clause of rewrite, reached from term_expansion/4" in str(hits[0].message)
+        assert ".clausal:3:" in str(hits[0].message)
+
+    def test_a_q_inside_a_python_escape_or_as_a_goal_is_quiet(self):
+        """Roborev L3: ``++(...)`` is Python, where ``q(x)`` is Python's own
+        call; and ``q(I)`` as a body GOAL calls the user's ``q/1``."""
+        # nv
+        _, hits = self._warned("_te_escape", (
+            "term_expansion(I, O, S, S) <- (q(I), O is ++((lambda q: q(3))(abs)))\n"
+            "term_expansion(I, O, S, S) <- (not q(I), O is [I])\n"
+        ), load_may_raise=True)
+        assert hits == []
+
+    def test_a_file_without_q_is_not_walked(self, monkeypatch):
+        """Roborev L4: the cheap gate -- no ``q(`` in the source, no walk."""
+        # nv
+        from clausal.templating import term_rewriting as tr
+        walked = []
+        real = tr.iter_child_nodes
+        monkeypatch.setattr(tr, "iter_child_nodes",
+                            lambda n: (walked.append(n), real(n))[1])
+        t = EmbedTransformer(source_lines=["term_expansion(fact(X), [], S, S)\n"],
+                             filename="x.clausal")
+        t._lint_retired_quasi_quote(
+            ast.parse("term_expansion(fact(X), [], S, S)", mode="eval").body)
+        assert walked == [] and t._retired_q_records == []
+        t2 = EmbedTransformer(source_lines=["term_expansion(q(X), [], S, S)\n"],
+                              filename="x.clausal")
+        t2._lint_retired_quasi_quote(
+            ast.parse("term_expansion(q(X), [], S, S)", mode="eval").body)
+        assert walked and len(t2._retired_q_records) == 1
 
     def test_plain_patterns_and_q_outside_term_expansion_are_quiet(self):
         # nv
