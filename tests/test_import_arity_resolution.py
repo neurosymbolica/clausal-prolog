@@ -36,7 +36,6 @@ import pytest
 from clausal.logic.atoms import mint
 import clausal.import_hook  # noqa: F401 — installs the meta-path finder
 from clausal.import_hook import _load_module
-from clausal.logic.predicate import PredicateMeta
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref, walk
 
@@ -208,10 +207,19 @@ class TestImportedDeclaredAtomWithZeroArityClauses:
         self.owner = _load_fixture("t5b_dual_owner")
         self.use = _load_fixture("t5b_dual_importer")
 
-    def test_the_owner_binds_the_dual_declared_name_to_its_class(self):
+    def test_the_owner_binds_the_dual_declared_name_to_its_predicate(self):
         """The precondition this task is about: the /0 clause block wins the
-        owner's binding, so the declaration alone no longer shows in it."""
-        assert isinstance(self.owner.t5b_kfact, PredicateMeta)
+        owner's binding, so the declaration alone no longer shows in it.
+        (W4b-2d: the binding is the predicate's HANDLE, resolving to the
+        owner's /0 row; it was the class.)"""
+        from clausal.logic.predicate import (
+            mint_predicate_handle, resolve_predicate_row,
+        )
+        owner_db = self.owner.__dict__["$module"].db
+        binding = self.owner.t5b_kfact
+        assert binding == mint_predicate_handle(owner_db, "t5b_kfact")
+        row = resolve_predicate_row(binding, arity=0, db=owner_db)
+        assert row is owner_db.row("t5b_kfact", 0) and row.clauses
         assert self.owner.t5b_kplain == mint("t5b_kplain")
 
     def test_the_owners_own_read_answers(self):
@@ -254,6 +262,7 @@ class TestImportedDeclaredAtomWithZeroArityClauses:
     def test_the_module_attribute_is_unchanged(self):
         """Out of scope, and unchanged: the Clausal-level data reference is
         the atom, while ``mod.t5b_kfact`` from Python is still the owner's
-        /0 predicate class."""
-        assert isinstance(self.use.t5b_kfact, PredicateMeta)
-        assert self.use.t5b_kfact is self.owner.t5b_kfact
+        /0 predicate -- its handle post-W4b-2d (the class before)."""
+        from clausal.logic.atoms import is_mangled
+        assert is_mangled(self.use.t5b_kfact)
+        assert self.use.t5b_kfact == self.owner.t5b_kfact

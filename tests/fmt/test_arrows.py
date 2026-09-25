@@ -109,7 +109,7 @@ def test_a_formatted_lambda_still_runs(tmp_path):
     from clausal.logic.variables import Var, deref
 
     out = Var()
-    solutions = list(solve(module.doubles([1, 2, 3], out), module))
+    solutions = list(solve(("doubles", [1, 2, 3], out), module))
     assert solutions, "the formatted lambda no longer solves"
 
 

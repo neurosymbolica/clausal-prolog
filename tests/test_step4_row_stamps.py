@@ -88,9 +88,13 @@ def test_every_clause_bearing_row_a_module_owns_has_an_owner(
         s4rs_b(X, Y) <- (s4rs_a(X), s4rs_a(Y)),
         s4rs_slot(7, 1),
     """)
-    assert not isinstance(module.__dict__.get("s4rs_slot"), PredicateMeta), (
-        "s4rs_slot is bound to a class: the non-class path is not exercised")
-    assert isinstance(module.__dict__.get("s4rs_a"), PredicateMeta)
+    # The two binding shapes post-W4b-2d: a predicate HANDLE (``s4rs_a``; it
+    # was a class) and a plain imported ATOM (``s4rs_slot``).
+    from clausal.logic.atoms import is_mangled
+    slot = module.__dict__.get("s4rs_slot")
+    assert isinstance(slot, str) and not is_mangled(slot), (
+        "s4rs_slot is bound to a predicate: the atom path is not exercised")
+    assert module.__dict__.get("s4rs_a") == mangle("s4rs_owned", "s4rs_a")
     db = module.__dict__["$module"].db
     bearing = {k for k in db.owned_keys() if db.row(*k).clauses}
     assert {("s4rs_a", 1), ("s4rs_b", 2), ("s4rs_slot", 2)} <= bearing

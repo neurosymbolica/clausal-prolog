@@ -231,9 +231,9 @@ class TestBareAliasesStayForTheDeprecationWindow:
         from clausal.logic.variables import deref, is_var
         # ``++Var()`` hands back a fresh, unbound variable.
         X = Var()
-        answers = [is_var(deref(X)) for _ in solve(mod.mk(X), mod)]
+        answers = [is_var(deref(X)) for _ in solve(("mk", X), mod)]
         assert answers == [True]
-        assert len(list(solve(mod.chk(Var()), mod))) == 1
+        assert len(list(solve(("chk", Var()), mod))) == 1
 
 
 # ── (c) the collision class the change removes ──────────────────────────────
@@ -278,7 +278,7 @@ class TestUserPredicateNamedLikeARuntimeClass:
             "-module(dollar_collide_sub_lower, [sub(X, Y), go(Y)])\n"
             "sub(X, Y) <- (Y == X - 1)\ngo(Y) <- (sub(5, Y))\n",
         )
-        assert len(list(solve(mod.go(Var()), mod))) == 1
+        assert len(list(solve(("go", Var()), mod))) == 1
 
 
 # ── review fixes (2026-09-09, second round) ─────────────────────────────────

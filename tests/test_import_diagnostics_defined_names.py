@@ -116,10 +116,15 @@ def test_mangled_era_arity_suffix_does_not_come_from_field_names_for():
     from clausal.logic.predicate import field_names_for
 
     owner = _load_hide_owner()
-    for name in ("holds", "label", "same"):
+    owner_db = owner.__dict__["$module"].db
+    for name, arity in (("holds", 1), ("label", 1), ("same", 2)):
+        # The class's ``_fields`` (pre-flip) is the row's registered
+        # signature now: read it off the owner's Database.
+        signature = owner_db.signature_for(name, arity)
+        assert signature is not None and len(signature) == arity, name
         assert (field_names_for(mangle("hide_owner", name))
                 == field_names_for(owner.__dict__[name])
-                == owner.__dict__[name]._fields), name
+                == signature), name
     fake_mod = types.ModuleType("hide_owner")
     fake_mod.same = mangle("hide_owner", "same")
     assert _defined_names(fake_mod) == [("same", "same/2")]

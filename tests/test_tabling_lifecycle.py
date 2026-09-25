@@ -125,7 +125,7 @@ class TestWrapperSurvivesRecompile:
         m = load(DEDUP_SRC)
         lm = _lm(m)
         assert len(list(call("dup", 1, module=lm))) == 1
-        assert sum(1 for _ in call("assertz", m.dup(9), module=lm)) == 1
+        assert sum(1 for _ in call("assertz", ("dup", 9), module=lm)) == 1
         assert len(list(call("dup", 1, module=lm))) == 1
 
     def test_retract_builtin_keeps_dedup_and_drops_stale_answers(self, load):
@@ -143,7 +143,7 @@ fact(2),
         # Populate a table entry for the variant Fact(1), then remove the only
         # clause that answers it.
         assert len(list(call("fact", 1, module=lm))) == 1
-        assert sum(1 for _ in call("retract", m.fact(1), module=lm)) == 1
+        assert sum(1 for _ in call("retract", ("fact", 1), module=lm)) == 1
         assert list(call("fact", 1, module=lm)) == []
         assert len(list(call("fact", 2, module=lm))) == 1
 
@@ -241,7 +241,7 @@ real(X) <- (X == 1)
 """)
         lm = _lm(m)
         assert list(call("later", 1, module=lm)) == []
-        assert sum(1 for _ in call("assertz", m.later(1), module=lm)) == 1
+        assert sum(1 for _ in call("assertz", ("later", 1), module=lm)) == 1
         assert len(list(call("later", 1, module=lm))) == 1
 
     def test_discontiguous_on_imported_target_still_accepted(self, load):

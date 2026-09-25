@@ -21,9 +21,9 @@ here:
 ``capture_predicate_codegen``
     Deterministic capture of the Python source a predicate compiles to.
     Used by the codegen golden test and by the pattern-emission tests.
-    Compilation of a predicate is lazy and memoised on the class, so the capture clears
-    ``_dispatch_fn`` and re-drives ``_get_dispatch()`` through the
-    predicate's own ``_lazy_recompile`` closure -- i.e. it reproduces the
+    Compilation of a predicate is lazy and memoised on its Database row, so
+    the capture invalidates the row and re-drives ``Database.get_dispatch``
+    through the predicate's own ``_lazy_recompile`` closure -- i.e. it reproduces the
     REAL compile path (same ``globals_``, same strategy, same indexing),
     not a hand-rolled approximation.
 """
@@ -38,7 +38,7 @@ from typing import Any
 from clausal.logic.cells import is_cell, cell_args, cell_functor
 from clausal.logic.compiler import predicate as _predicate_mod
 from clausal.logic.predicate import (
-    PredicateMeta, is_term_instance, term_field_names,
+    is_term_instance, term_field_names,
 )
 from clausal.logic.variables import deref, is_var
 
@@ -171,24 +171,37 @@ def _stabilise(src: str) -> str:
     return _UNSTABLE_NAME_RE.sub(_sub, src)
 
 
-def module_predicate_names(module) -> list[str]:
-    """Every rule/fact predicate a ``.clausal`` module defines, name-sorted.
+def _module_db(module):
+    """The ``Database`` a loaded ``.clausal`` module's predicates live in."""
+    return module.__dict__["$module"].db
 
-    Data functors and atoms (no clauses) are skipped -- they compile no
-    dispatch function.  Names imported from another module are skipped too
-    (``__module__`` gate), so a golden captured for module A does not shift
-    when an unrelated module B it imports changes.
+
+def module_predicate_keys(module) -> list[tuple[str, int]]:
+    """Every ``(name, arity)`` rule/fact predicate a ``.clausal`` module
+    defines, sorted.
+
+    Read off the module's DATABASE (W4b-2d: a module-dict binding is a
+    mangled handle, not a class, so the module dict no longer lists
+    predicates).  ``owned_keys`` is the population: rows this database is
+    the HOME of, so a row adopted at ``-import_from`` is skipped and a
+    golden captured for module A does not shift when an unrelated module B
+    it imports changes (the old ``__module__`` gate).  Data functors and
+    atoms (no clauses) are skipped -- they compile no dispatch function.
     """
-    names = []
-    for name, obj in vars(module).items():
-        if not isinstance(obj, PredicateMeta):
+    db = _module_db(module)
+    keys = []
+    for (name, arity) in db.owned_keys():
+        row = db.row(name, arity)
+        if row is None or not row.clauses:
             continue
-        if obj._row is None or not obj._row.clauses:
-            continue
-        if getattr(obj, "__module__", None) != module.__name__:
-            continue
-        names.append(name)
-    return sorted(names)
+        keys.append((name, arity))
+    return sorted(keys)
+
+
+def module_predicate_names(module) -> list[str]:
+    """Every rule/fact predicate NAME a ``.clausal`` module defines,
+    name-sorted (the names of :func:`module_predicate_keys`)."""
+    return sorted({name for name, _arity in module_predicate_keys(module)})
 
 
 def capture_predicate_codegen(module_name: str, pred_names=None) -> str:
@@ -207,8 +220,27 @@ def capture_predicate_codegen(module_name: str, pred_names=None) -> str:
     each named predicate's memoised dispatch is dropped and recompiled.
     """
     module = importlib.import_module(module_name)
+    db = _module_db(module)
+    owned = module_predicate_keys(module)
     if pred_names is None:
-        pred_names = module_predicate_names(module)
+        pred_names = sorted({name for name, _arity in owned})
+    # Each named predicate's rows, at every arity it has clauses at.  A name
+    # asked for that has NO such row is a harness failure, never an empty
+    # capture: the class era raised AttributeError here, and an empty
+    # population must not read as "codegen unchanged".
+    keys = []
+    for name in pred_names:
+        at = [key for key in owned if key[0] == name]
+        if not at:
+            raise AssertionError(
+                f"{module_name}: no predicate {name!r} with clauses in the "
+                f"module's database (owned keys: {sorted(owned)})")
+        keys.extend(at)
+    if not keys:
+        raise AssertionError(
+            f"{module_name}: the capture population is EMPTY (0 predicates "
+            f"with clauses in the module's database) -- an empty capture is "
+            f"a harness failure, not unchanged codegen")
     captured: list[str] = []
     original = _predicate_mod.functiondef_to_function
 
@@ -218,10 +250,9 @@ def capture_predicate_codegen(module_name: str, pred_names=None) -> str:
 
     _predicate_mod.functiondef_to_function = _spy
     try:
-        for name in pred_names:
-            pred = getattr(module, name)
-            pred._state_row().dispatch_fn = None
-            pred._get_dispatch()
+        for name, arity in keys:
+            db.row(name, arity).invalidate()
+            db.get_dispatch(name, arity)
     finally:
         _predicate_mod.functiondef_to_function = original
 

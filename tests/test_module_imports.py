@@ -235,15 +235,20 @@ class TestQualifiedCalls:
         """Compiled code can dispatch via dotted globals key."""
         mod = _load_fixture("importable_utils.clausal",
                             "tests.fixtures.importable_utils")
-        helper_cls = mod.helper
+        from clausal.logic.atoms import is_mangled
+        from clausal.logic.predicate import _dispatch_at
+        helper = mod.helper
 
-        # Simulate: base_globals has "utils.helper" → class
-        base_globals = {"utils.helper": helper_cls}
+        # Simulate: base_globals has "utils.helper" → the predicate's handle
+        # (W4b-2d; it was the class).
+        base_globals = {"utils.helper": helper}
 
-        # The class is accessible via _get_dispatch
-        assert hasattr(base_globals["utils.helper"], "_get_dispatch")
-        dispatch = base_globals["utils.helper"]._get_dispatch()
+        # The handle dispatches the way compiled code dispatches a call of
+        # helper/2: through ``_dispatch_at`` at the call arity.
+        assert is_mangled(base_globals["utils.helper"])
+        dispatch = _dispatch_at(base_globals["utils.helper"], 2)
         assert dispatch is not None
+        assert dispatch is mod.__dict__["$module"].db.get_dispatch("helper", 2)
 
     def test_import_module_fixture_loads(self):
         """imports_module.clausal loads and use_imported works."""
@@ -329,7 +334,7 @@ class TestQualifiedValueAtoms:
         mod = _load_fixture("qualified_atom_import_module_only.clausal",
                             "qualified_atom_import_module_only")
         euro = vocab.euro  # foreign atom; its bare name is not in mod's globals
-        results = list(solve(mod.known_currency(euro), mod))
+        results = list(solve(("known_currency", euro), mod))
         assert len(results) == 1
 
 

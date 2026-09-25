@@ -30,9 +30,11 @@ def _make_dynamic_module(tmp_path, name):
 
 
 def _solutions(pred, a, lm):
+    """*pred* is the predicate's NAME: the goal is the cell ``(pred, a, V)``
+    run in *lm* (W4b-2d: ``mod.p`` is a handle, not a callable class)."""
     out = []
     V = Var()
-    for _ in solve(pred(a, V), module=lm):
+    for _ in solve((pred, a, V), module=lm):
         out.append(V.value)
     return out
 
@@ -53,16 +55,16 @@ def _head_maker(lm):
 def test_db_assertz_visible_to_solve(tmp_path):
     mod, lm = _make_dynamic_module(tmp_path, "lvl_assertz")
     head = _head_maker(lm)
-    assert _solutions(mod.p, 3, lm) == []
+    assert _solutions("p", 3, lm) == []
     lm.db.assertz(Clause(head=head(3, 30), body=[]))
-    assert _solutions(mod.p, 3, lm) == [30]
+    assert _solutions("p", 3, lm) == [30]
 
 
 def test_db_asserta_visible_to_solve(tmp_path):
     mod, lm = _make_dynamic_module(tmp_path, "lvl_asserta")
     head = _head_maker(lm)
     lm.db.asserta(Clause(head=head(4, 40), body=[]))
-    assert _solutions(mod.p, 4, lm) == [40]
+    assert _solutions("p", 4, lm) == [40]
 
 
 def test_db_retract_visible_to_solve(tmp_path):
@@ -71,7 +73,7 @@ def test_db_retract_visible_to_solve(tmp_path):
     # Assert a literal-headed clause (not Var+Is-normalized) so the structural
     # match in Database.retract can find it; this isolates the sync behaviour.
     lm.db.assertz(Clause(head=head(3, 30), body=[]))
-    assert _solutions(mod.p, 3, lm) == [30]
+    assert _solutions("p", 3, lm) == [30]
     removed = lm.db.retract(head(3, 30))
     assert removed is True
-    assert _solutions(mod.p, 3, lm) == []
+    assert _solutions("p", 3, lm) == []

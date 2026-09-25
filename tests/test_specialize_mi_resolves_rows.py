@@ -24,7 +24,7 @@ from clausal.logic import compiler_v2
 from clausal.logic.atoms import mangle
 from clausal.logic.compiler_v2 import _meta_interpreter_row
 from clausal.logic.database import Clause, Database
-from clausal.logic.predicate import PredicateMeta
+from clausal.logic.predicate import resolve_predicate_row
 from clausal.logic.specialization import CannotSpecialize, analyze_mi
 from clausal.terms import Compound
 
@@ -38,6 +38,17 @@ def mis():
     return importlib.import_module(_MIS)
 
 
+def _mi_row(mis, name):
+    """The MI's row in its OWN module's Database, at its one arity (W4b-2d:
+    the module attribute is a handle, so the row is read off the Database)."""
+    db = mis.__dict__["$module"].db
+    arities = db.predicate_arities(name)
+    assert len(arities) == 1, (name, sorted(arities))
+    row = db.row(name, next(iter(arities)))
+    assert row is not None and row.clauses, name
+    return row
+
+
 def _pattern_shape(p):
     return (p.fields, p.goal_arg, p.program_arg, p.extra_args,
             p.match_clause_index, p.append_index, p.recursive_call_indices,
@@ -46,10 +57,13 @@ def _pattern_shape(p):
 
 
 @pytest.mark.parametrize("mi", ["solve", "solve_count", "solve_limit", "solve_tree"])
-def test_analyze_mi_reads_a_row_exactly_as_it_reads_the_class(mis, mi):
-    cls = getattr(mis, mi)
-    assert isinstance(cls, PredicateMeta) and cls._row is not None
-    assert _pattern_shape(analyze_mi(cls._row)) == _pattern_shape(analyze_mi(cls))
+def test_analyze_mi_reads_a_row_exactly_as_it_reads_the_handle(mis, mi):
+    """Post-flip the module attribute is the MI's HANDLE (the direct Python
+    API's argument); the compiler hands the ROW.  Both must analyse alike."""
+    handle = getattr(mis, mi)
+    assert handle == mangle(_MIS, mi)
+    row = _mi_row(mis, mi)
+    assert _pattern_shape(analyze_mi(row)) == _pattern_shape(analyze_mi(handle))
 
 
 # A PRIVATE module name: loading the fixture under its dotted
@@ -75,15 +89,11 @@ def test_the_mi_is_found_in_the_module_s_db_whatever_it_is_bound_to(
     module = fresh_spec_module()
     db = module.__dict__["$module"].db
     md = dict(module.__dict__)
-    assert isinstance(md["solve_count"], PredicateMeta)
+    assert md["solve_count"] == mangle(_MIS, "solve_count")  # post-flip shape
 
     row = _meta_interpreter_row(db, md, "solve_count", refuse_ambiguous=True)
     assert row is not None, "the imported MI was not found: nothing compared"
-    assert row is mis.solve_count._row
-
-    md["solve_count"] = mangle(_MIS, "solve_count")      # the post-flip shape
-    assert _meta_interpreter_row(db, md, "solve_count",
-                                 refuse_ambiguous=True) is row
+    assert row is _mi_row(mis, "solve_count")
     md["solve_count"] = None                            # not bound at all
     assert _meta_interpreter_row(db, md, "solve_count",
                                  refuse_ambiguous=True) is row
@@ -91,12 +101,10 @@ def test_the_mi_is_found_in_the_module_s_db_whatever_it_is_bound_to(
 
 def test_a_predicate_bound_only_by_a_python_import_is_still_found(mis):
     """No row in this database -- the last-resort binding route."""
+    assert mis.solve == mangle(_MIS, "solve")    # the binding is the handle
     found = _meta_interpreter_row(Database(), {"solve": mis.solve}, "solve",
                                   refuse_ambiguous=True)
-    assert found is mis.solve          # the class itself, until W4b-3
-    assert _meta_interpreter_row(
-        Database(), {"solve": mangle(_MIS, "solve")}, "solve",
-        refuse_ambiguous=True) is mis.solve._row
+    assert found is _mi_row(mis, "solve")    # resolved to the owner's row
 
 
 def test_a_python_built_mi_keeps_its_class_fields_and_its_refusal():
@@ -152,7 +160,8 @@ def test_the_specialized_target_is_a_predicate_from_pre_registration(
     row = db.row("solve_count_natnum", 2)
     assert row is seen["row"], "the installed row is not the pre-minted one"
     assert row.clauses and row.dispatch_fn is not None
-    assert module.__dict__["solve_count_natnum"]._row is row
+    assert resolve_predicate_row(module.__dict__["solve_count_natnum"],
+                                 arity=2, db=db) is row
 
 
 def test_a_row_with_clauses_but_no_field_names_is_refused():
@@ -242,8 +251,11 @@ def test_a_row_without_a_signature_uses_the_bound_class_s_fields(mis):
     """A Python-built MI: clauses in the db, field names only on the class."""
     from clausal.logic.predicate import make_predicate
     db = Database()
-    cls = make_predicate("sigless_mi", list(mis.solve._fields))
-    for clause in mis.solve._row.clauses:
+    solve_row = _mi_row(mis, "solve")
+    fields = solve_row.db.signature_for(*solve_row.key)
+    assert fields
+    cls = make_predicate("sigless_mi", list(fields))
+    for clause in solve_row.clauses:
         assert isinstance(clause.head, tuple)       # a head is a cell (P2)
         db.assertz(Clause(head=("sigless_mi",) + clause.head[1:],
                           body=clause.body))

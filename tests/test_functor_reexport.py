@@ -33,7 +33,6 @@ import os
 from clausal.logic.atoms import mint
 import clausal.import_hook  # noqa: F401 — installs the meta-path finder
 from clausal.import_hook import _load_module
-from clausal.logic.predicate import PredicateMeta
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref, walk
 
@@ -70,11 +69,19 @@ class TestFunctorReExport:
         vocab = _load_fixture("functor_reexport_vocab")
         queries = _load_fixture("functor_reexport_queries")
 
-        assert isinstance(vocab.flip, PredicateMeta)
+        # W4b-2d: the binding is the vocab's predicate HANDLE (it was the
+        # class); the shared identity is the handle naming the vocab's row.
+        from clausal.logic.predicate import (
+            mint_predicate_handle, resolve_predicate_row,
+        )
+        vocab_db = vocab.__dict__["$module"].db
+        assert vocab.flip == mint_predicate_handle(vocab_db, "flip")
         # Re-declaring the imported functor in -module must NOT re-mint.
-        assert queries.flip is vocab.flip
-        # The re-exported class carries the vocab's clauses, not an empty class.
-        assert len(queries.flip._state_row().clauses) == 2
+        assert queries.flip == vocab.flip
+        # The re-exported binding reaches the vocab's clauses, not an empty row.
+        row = resolve_predicate_row(queries.flip, arity=2)
+        assert row is vocab_db.row("flip", 2)
+        assert len(row.clauses) == 2
 
     def test_downstream_import_resolves_to_kit_class(self):
         vocab = _load_fixture("functor_reexport_vocab")

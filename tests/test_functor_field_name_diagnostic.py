@@ -144,6 +144,13 @@ class TestDirectiveMintedPlaceholderMismatch:
             "tests.fixtures.fnmismatch_schema",
             os.path.join(FIXTURES, "fnmismatch_schema.clausal"),
         )
+        # W4b-2d: the exporter's field names are read off its Database row
+        # (the placeholder CLASS is gone -- the binding is a handle).
+        from clausal.logic.predicate import field_names_for
+        schema_db = schema.__dict__["$module"].db
+        names_before = schema_db.field_names_at("fnm_verdict", 2)
+        assert names_before is not None and len(names_before) == 2
+        assert field_names_for(schema.fnm_verdict) == names_before
         with pytest.raises(SyntaxError) as exc_info:
             _load_module(
                 "tests.fixtures.fnmismatch_use",
@@ -152,8 +159,10 @@ class TestDirectiveMintedPlaceholderMismatch:
         assert not isinstance(exc_info.value, ClausalTermConstructionError)
         assert "only declares fnm_verdict/2" in " ".join(
             str(exc_info.value).split())
-        # The exporter's placeholder class is untouched by the refused load.
-        assert schema.fnm_verdict._fields == ("arg_0", "arg_1")
+        # The exporter's predicate is untouched by the refused load.
+        assert schema_db.field_names_at("fnm_verdict", 2) == names_before
+        assert field_names_for(schema.fnm_verdict) == names_before
+        assert not schema_db.row("fnm_verdict", 2).clauses
 
 
 # ── Cause 2 (Phenomenon A): imported atom shadows a same-named predicate ───

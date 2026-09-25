@@ -2455,7 +2455,14 @@ class TestSpecializedPredicateIsARow:
         assert outer._row is db.row("T7Outer", 1)
         assert inner._row.db is outer._row.db
         # The callee is reached through its row's dispatch, not a private one.
-        assert module_dict["T7Inner"] is inner
+        # W4b-2d: the module dict binds the specialization's HANDLE (it was
+        # the class), which resolves to that same row.
+        from clausal.logic.predicate import (
+            mint_predicate_handle, resolve_predicate_row,
+        )
+        assert module_dict["T7Inner"] == mint_predicate_handle(db, "T7Inner")
+        assert resolve_predicate_row(module_dict["T7Inner"], arity=1,
+                                     db=db) is inner._row
         assert inner._get_dispatch() is db.get_dispatch("T7Inner", 1)
 
         assert sum(1 for _ in call(

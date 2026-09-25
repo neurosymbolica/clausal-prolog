@@ -50,12 +50,16 @@ def test_the_note_fires_for_a_predicate_with_clauses(declared_only):
 
 
 def test_the_note_fires_for_a_declared_clause_less_predicate(declared_only):
-    from clausal.logic.predicate import PredicateMeta
+    from clausal.logic.predicate import mint_predicate_handle
     declared = vars(declared_only)["p"]
     db = vars(declared_only)["$module"].db
-    # the shape this test is about, pinned so it cannot go vacuous
-    assert isinstance(declared, PredicateMeta) and len(declared._fields) == 1
+    # the shape this test is about, pinned so it cannot go vacuous: a
+    # DECLARED, clause-less p/1 -- post-W4b-2d its binding is the handle
+    # (it was a one-field class), and the arity lives on the Database.
+    assert declared == mint_predicate_handle(db, "p")
+    assert db.predicate_arities("p") == {1}
     assert db.row("p", 1) is not None   # P4 prerequisite (2026-09-18): a declaration creates its row
+    assert not db.row("p", 1).clauses
     notes = _notes_for(declared_only, "p", [1])
     assert notes and "GENERIC compound p/1" in notes[0]
 
