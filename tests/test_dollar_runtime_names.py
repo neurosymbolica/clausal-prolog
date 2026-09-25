@@ -175,9 +175,13 @@ class TestEmbedTransformerEmitsDollarNames:
         names = _generated_names(src)
         for name in ("Predicate", "Call", "LoadName", "Var", "Quantity",
                      "PyThunk", "FStringThunk", "DictTerm", "SetLiteral",
-                     "Unify", "Add", "PredicateMeta"):
+                     "Unify", "Add"):
             assert f"${name}" in names, f"${name} not referenced:\n{src}"
             assert name not in names, f"bare {name} still referenced:\n{src}"
+        # W4b-3 slice 5: a predicate name is declared by ``$declare_head``;
+        # the class block that referenced ``$PredicateMeta`` is gone.
+        assert "$declare_head" in names, src
+        assert "$PredicateMeta" not in names and "PredicateMeta" not in names
 
     def test_no_bare_runtime_name_survives_in_generated_code(self):
         """The general form of the test above: NOTHING generated code
@@ -364,14 +368,16 @@ class TestUserPredicateNamedPredicateMeta:
                 "PredicateMeta(4),\ngo(Y) <- (PredicateMeta(Y))\n",
             )
 
-    def test_template_rewrites_only_the_metaclass_reference(self):
-        from clausal.templating.term_rewriting import _make_functor_class_ast
+    def test_the_declaration_names_the_head_only_as_data(self):
+        """W4b-3 slice 5: the declaration statement carries the head's name
+        as a string CONSTANT, never as a name reference, so a head spelled
+        like a runtime name cannot collide with the helper it calls."""
+        from clausal.templating.term_rewriting import _make_predicate_decl_ast
         anchor = ast.parse("x = 1").body[0]
-        block = _make_functor_class_ast("PredicateMeta", ["X"], anchor)
-        src = ast.unparse(block)
-        assert "metaclass=$PredicateMeta" in src
-        assert "isinstance(PredicateMeta, $PredicateMeta)" in src
-        assert "class PredicateMeta(" in src
+        stmt = _make_predicate_decl_ast("PredicateMeta", ["X"], anchor)
+        assert ast.unparse(stmt) == "$declare_head('PredicateMeta', ('X',))"
+        names = {n.id for n in ast.walk(stmt) if isinstance(n, ast.Name)}
+        assert names == {"$declare_head"}
 
 
 

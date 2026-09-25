@@ -71,6 +71,10 @@ def _base_namespace() -> dict:
     from clausal.import_hook import _simple_ast_builtins
     from clausal.terms import set_style, TermStyle, ANSI_COLORS
     ns = dict(_simple_ast_builtins)
+    # ``code.InteractiveConsole``'s own default namespace carries this name;
+    # passing ``locals=`` replaced it, and generated code that names the
+    # namespace's module (``$declare_head``, W4b-3 slice 5) found none.
+    ns["__name__"] = "__console__"
     ns["set_style"] = set_style
     ns["TermStyle"] = TermStyle
     ns["ANSI_COLORS"] = ANSI_COLORS

@@ -36,6 +36,7 @@ from clausal.pythonic_ast.nodes import StarUnpack  # noqa: F401
 from clausal.logic.database import Clause, Database
 from clausal.logic.predicate import (
     PredicateMeta, _dispatch_at, head_cell as _head_cell,
+    declare_head as _declare_head, keeps_predicate as _keeps_predicate,
     is_foreign_class_at_other_arity,
 )
 from clausal.codegen import functiondef_to_function
@@ -400,6 +401,15 @@ INJECTED_RUNTIME_BUILTINS: dict = {
     # without calling the binding, so a predicate HANDLE (a str) works as
     # well as a class (W4b-2d task 5; ``term_rewriting._head_ctor_ast``).
     "$head": _head_cell,
+    # A predicate NAME's declaration in a module body (W4b-3 slice 5): binds
+    # the module's own handle and records the head's field names, where the
+    # rewriter used to emit a guarded ``class <functor>(metaclass=
+    # $PredicateMeta)`` block (``term_rewriting._make_predicate_decl_ast``).
+    "$declare_head": _declare_head,
+    # The guard of a ``-module``/``-private`` bare-atom line: the atom does
+    # not clobber a predicate the module already declared
+    # (``term_rewriting._make_atom_str_assign_ast``).
+    "$keeps_predicate": _keeps_predicate,
     # THE SEAM: ``--term`` in Python-hosted code (clausal.logic.seam).
     "$seam": _seam_term,
     # Explicit text crossings in Python-hosted code: str(x), f"{x!s}" spell

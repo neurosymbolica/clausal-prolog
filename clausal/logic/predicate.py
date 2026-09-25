@@ -670,6 +670,12 @@ def _head_arity(head: Any) -> int | None:
     whose arity is right there — because it needs a str functor and this needs
     only a count.
     """
+    if type(head) is str:
+        # STAGE 2: an atom head is name/0 (``database.head_key`` agrees).
+        # Since W4b-3 slice 5 this is how a module's own 0-arity fact
+        # (``myflag,``) stores its head -- the atom, where it used to be the
+        # rewriter's zero-field class, whose ``_fields`` answered 0 below.
+        return 0
     fields = field_names_for(head)
     if fields is not None:
         return len(fields)
@@ -2736,6 +2742,11 @@ def is_declared_predicate(binding, *, arity: int, db=None) -> bool:
     """
     if isinstance(binding, PredicateMeta):
         return len(getattr(binding, "_fields", ())) == arity
+    loading = loading_head_fields(binding)
+    if loading is not None:
+        # A handle its LOADING module declared: answered as the rewriter's
+        # class answered, from its field names (W4b-3 slice 5).
+        return len(loading) == arity
     from clausal.logic.atoms import is_mangled  # noqa: PLC0415
     if is_mangled(binding):
         resolved = _resolve_mangled_owner(binding, db)
@@ -2824,6 +2835,8 @@ def is_declared_predicate_name(binding, *, db=None) -> bool:
     """
     if isinstance(binding, PredicateMeta):
         return True
+    if loading_head_fields(binding) is not None:
+        return True      # declared by its LOADING module (W4b-3 slice 5)
     from clausal.logic.atoms import is_mangled  # noqa: PLC0415
     if is_mangled(binding):
         resolved = _resolve_mangled_owner(binding, db)
@@ -2851,6 +2864,202 @@ def predicate_owner_module(binding) -> "str | None":
     if is_mangled(binding):
         return demangle(binding)[0]
     return None
+
+
+# ── W4b-3 slice 5: a predicate NAME is declared, not a class minted ────────
+
+#: The module-namespace record of every predicate name the running module
+#: body has declared (``$declare_head``): ``{functor: (fields, site)}``.
+#: ``fields`` is what a head is built against while the body runs -- the
+#: role the rewriter's class ``_fields`` played -- and ``site`` the
+#: declaration's source position (the class's ``_registered_at``), which
+#: ``compiler_v2`` step 4 stamps as ``row.declared_at``.  ``$``-keyed, so
+#: no user name can collide with it and the flip's binding scan skips it.
+PREDICATE_HEADS_KEY = "$predicate_heads"
+
+
+def local_predicate_handle(namespace, functor: str) -> "str | None":
+    """The handle *namespace*'s own module binds *functor* to: the value
+    ``compiler_v2._flip_bindings`` binds for a local predicate
+    (``mint_predicate_handle`` over the module's Database, whose
+    ``module_name()`` is this same ``__name__``).  ``None`` for a namespace
+    that names no module."""
+    module_name = namespace.get("__name__")
+    if not module_name:
+        return None
+    from clausal.logic.atoms import mangle  # noqa: PLC0415
+    return mangle(module_name, functor)
+
+
+def declared_head(namespace, binding) -> "tuple[str, tuple, Any] | None":
+    """``(functor, fields, site)`` when *binding* is a predicate HANDLE the
+    module body running in *namespace* declared with ``$declare_head``;
+    ``None`` otherwise (an imported handle, an atom, any other value).
+
+    The binding must still BE that module's handle for the name: a later
+    ``-import_from`` or a user assignment over the name retires the
+    declaration, exactly as rebinding the name retired the class."""
+    if type(binding) is not str or not namespace:
+        return None
+    heads = namespace.get(PREDICATE_HEADS_KEY)
+    if not heads:
+        return None
+    from clausal.logic.atoms import demangle, is_mangled  # noqa: PLC0415
+    if not is_mangled(binding):
+        return None
+    functor = demangle(binding)[1]
+    entry = heads.get(functor)
+    if entry is None or binding != local_predicate_handle(namespace, functor):
+        return None
+    return functor, entry[0], entry[1]
+
+
+def is_local_predicate_binding(namespace, name: str) -> bool:
+    """True when *name* in *namespace* is bound to a predicate this module
+    declared -- a local handle ``$declare_head`` bound, or (the Python-API
+    arm, until slice 6) a ``PredicateMeta`` class.  The era-agnostic
+    spelling of the load path's ``isinstance(module_dict.get(name),
+    PredicateMeta)`` "a predicate lives here" test."""
+    value = namespace.get(name)
+    if isinstance(value, PredicateMeta):
+        return True
+    return declared_head(namespace, value) is not None
+
+
+#: Module name -> namespace, for every module whose body has run under the
+#: import hook and whose compile has not yet reached the flip point.  See
+#: :func:`loading_head_fields`.
+_LOADING_NAMESPACES: dict = {}
+
+
+def begin_loading_declarations(namespace: dict) -> None:
+    """Start *namespace*'s ``$declare_head`` record for a module load (the
+    import hook, right before the body runs).  A fresh record every run, so
+    a body re-run into a namespace that already finished a load never reads
+    the previous run's declarations as its own."""
+    namespace[PREDICATE_HEADS_KEY] = {}
+    name = namespace.get("__name__")
+    if name:
+        _LOADING_NAMESPACES[name] = namespace
+
+
+def end_loading_declarations(namespace: dict) -> None:
+    """Retire *namespace*'s ``$declare_head`` record: the flip point of
+    ``compiler_v2.compile_module`` (step 4a-bis), where the rewriter's class
+    became the handle and the Database became the sole authority for it --
+    and, on a failed load, the import hook's cleanup.  Idempotent."""
+    namespace.pop(PREDICATE_HEADS_KEY, None)
+    name = namespace.get("__name__")
+    if name and _LOADING_NAMESPACES.get(name) is namespace:
+        del _LOADING_NAMESPACES[name]
+
+
+def loading_head_fields(binding) -> "tuple | None":
+    """The field names a module that is still LOADING declared for the
+    predicate HANDLE *binding* (``$declare_head``), or ``None``.
+
+    The class the rewriter used to mint answered "a predicate at
+    ``len(_fields)``, with these field names" from the moment the module
+    body ran, before step 4 of ``compiler_v2.compile_module`` gave the
+    Database a row to answer from -- goal expansion's auto-binding reads a
+    head's names at step 1b, for one.  The declaration record answers the
+    same question for the handle until the flip point (step 4a-bis), where
+    ``end_loading_declarations`` retires it and the Database is the sole
+    authority, exactly as it became for the class-turned-handle.
+
+    O(1) and allocation-free when no load is in progress: the resolvers
+    that ask this sit on runtime paths too."""
+    if not _LOADING_NAMESPACES or type(binding) is not str:
+        return None
+    from clausal.logic.atoms import HIDDEN_SEP  # noqa: PLC0415
+    module_name, sep, _functor = binding.partition(HIDDEN_SEP)
+    if not sep:
+        return None
+    namespace = _LOADING_NAMESPACES.get(module_name)
+    if namespace is None:
+        return None
+    found = declared_head(namespace, binding)
+    return found[1] if found is not None else None
+
+
+def _declares_over(namespace, functor: str, fields: tuple) -> bool:
+    """Whether ``$declare_head(functor, fields)`` (re)binds *functor* -- the
+    guard the rewriter's class block spelled in Python, arm for arm:
+
+    * the name is unbound in the MODULE dict (a Python builtin of the same
+      spelling -- ``sorted``, ``reversed`` -- is not a user binding);
+    * the name is bound to the runtime-table alias its ``$`` twin holds (the
+      deprecation-window bare ``Var``, ``Sub``, ...);
+    * the name is bound to a ``PredicateMeta`` class with other field names
+      (a Python-API class, until slice 6: a same-fields one is left alone,
+      as before, and the flip refuses it);
+    * the name is bound to THIS module's own handle and the recorded fields
+      differ (the class era re-minted the class: a ``-dynamic`` placeholder
+      unseated by a clause's head names), or none are recorded (a module
+      body re-run into a namespace that already finished a load);
+    * the name is bound to the pooled ATOM of its own spelling (an earlier
+      module declared the atom; the predicate wins in the file that
+      declares it -- Phenomenon A).
+
+    Anything else -- an imported handle, a user's own value -- is left
+    alone, and the head is built from that binding as before."""
+    if functor not in namespace:
+        return True
+    value = namespace[functor]
+    from clausal.logic.generated_names import dollar_name, has_twin  # noqa: PLC0415
+    if has_twin(functor) and value is namespace.get(dollar_name(functor)):
+        return True
+    if isinstance(value, PredicateMeta):
+        return getattr(value, "_fields", None) != fields
+    if type(value) is not str:
+        return False
+    if value == functor:
+        return True
+    if value == local_predicate_handle(namespace, functor):
+        entry = (namespace.get(PREDICATE_HEADS_KEY) or {}).get(functor)
+        return entry is None or entry[0] != fields
+    return False
+
+
+def declare_head(functor: str, fields: tuple, /) -> None:
+    """``$declare_head``: declare *functor* as a predicate of the module whose
+    body is running, with *fields* as its head's field names (W4b-3 slice 5).
+
+    The rewriter emits one statement per predicate name where it used to
+    emit a guarded ``class <functor>(metaclass=$PredicateMeta)`` block, at
+    the same position.  When :func:`_declares_over` says the name is this
+    module's to bind, it binds the module's own predicate HANDLE -- the
+    value the flip bound in place of the class at step 4a-bis -- and records
+    ``(fields, site)`` under :data:`PREDICATE_HEADS_KEY` for the heads the
+    body builds (:func:`head_cell`) and for step 4's ``declared_at`` stamp.
+    Otherwise it changes nothing.
+
+    The namespace is the CALLER's globals, read from frame 1 as
+    :func:`head_cell` reads its home: only generated module-body code calls
+    this."""
+    namespace = sys._getframe(1).f_globals
+    fields = tuple(fields)
+    if not _declares_over(namespace, functor, fields):
+        return
+    handle = local_predicate_handle(namespace, functor)
+    if handle is None:
+        raise SyntaxError(
+            f"cannot declare the predicate {functor}: this namespace belongs "
+            f"to no module (it has no __name__), and a predicate is named by "
+            f"its module.  Define {functor} in a .clausal file and import it, "
+            f"or run this code with a module-level __name__ bound")
+    namespace.setdefault(PREDICATE_HEADS_KEY, {})[functor] = (
+        fields, _source_site(1))
+    namespace[functor] = handle
+
+
+def keeps_predicate(name: str, /) -> bool:
+    """``$keeps_predicate``: the guard of a ``-module``/``-private`` bare-atom
+    line (``term_rewriting._make_atom_str_assign_ast``) -- True when *name*
+    is already a predicate this module declared, which the atom must not
+    clobber.  It tested ``isinstance(.., $PredicateMeta)`` while a predicate
+    was a class."""
+    return is_local_predicate_binding(sys._getframe(1).f_globals, name)
 
 
 def head_cell(binding, /, *args: Any, **kwargs: Any) -> Any:
@@ -2895,8 +3104,21 @@ def head_cell(binding, /, *args: Any, **kwargs: Any) -> Any:
     if type(binding) is str:
         from clausal.logic.atoms import is_mangled  # noqa: PLC0415
         if is_mangled(binding):
-            return _handle_head_cell(binding, args, kwargs,
-                                     home=sys._getframe(1).f_globals)
+            home = sys._getframe(1).f_globals
+            declared = declared_head(home, binding)
+            if declared is not None:
+                # This module body's OWN predicate (``$declare_head``, W4b-3
+                # slice 5): built against the field names its declaration
+                # recorded -- exactly what the rewriter's class did with its
+                # ``_fields`` -- and a construction error names the
+                # declaration site the class's ``_registered_at`` held.  A
+                # 0-arity head is the ATOM of its name, as for any handle.
+                functor, fields, site = declared
+                if not fields and not args and not kwargs:
+                    return functor
+                return build_term_cell(functor, fields, args, kwargs,
+                                       site=site)
+            return _handle_head_cell(binding, args, kwargs, home=home)
     return binding(*args, **kwargs)
 
 
@@ -2943,7 +3165,8 @@ def _handle_head_cell(handle: str, args: tuple, kwargs: dict,
         # beside an imported ``p/1`` LOADS -- a different predicate, this
         # module's own.  The class era got there by the rewriter's guard
         # re-minting a LOCAL class when the imported class's ``_fields`` did
-        # not match the head (``_make_functor_class_ast``); after the flip
+        # not match the head (``_make_functor_class_ast``, retired at W4b-3
+        # slice 5); after the flip
         # the binding is the owner's handle, the guard does not fire, and
         # the owner's one signature would refuse the head.  Built at the
         # written arity in written order -- the rewriter's field names for
@@ -3109,11 +3332,19 @@ def predicate_arities_for(binding, *, cache: "dict | None" = None,
         return found
     from clausal.logic.atoms import is_mangled  # noqa: PLC0415
     if is_mangled(binding):
+        # Declared by its LOADING module (W4b-3 slice 5): the class arm's
+        # answer -- the declared arity, UNION the defined ones when the owner
+        # resolves.  Read FIRST, as ``is_declared_predicate[_name]`` read it,
+        # so an owner that does not resolve (yet) cannot make this answer
+        # "not a predicate" while they answer "a predicate".
+        loading = loading_head_fields(binding)
         resolved = _resolve_mangled_owner(binding, db)
         if resolved is None:
-            return set()
+            return {len(loading)} if loading is not None else set()
         db, functor = resolved
         defined, declared = _arity_maps(db, cache)
+        if loading is not None:
+            return {len(loading)} | set(defined.get(functor, ()))
         return set(defined.get(functor) or declared.get(functor) or ())
     return set()
 
@@ -3171,6 +3402,11 @@ def field_names_for(value, *, arity=None, db=None, namespace=None):
     4. anything else -> ``None``.
     """
     if isinstance(value, str):
+        loading = loading_head_fields(value)
+        if loading is not None:
+            # A handle its LOADING module declared: the rewriter's class
+            # answered ``_fields`` here (arm 2); W4b-3 slice 5.
+            return loading
         return _field_names_for_name(value, arity, db, namespace)
     if not isinstance(value, type):
         return None

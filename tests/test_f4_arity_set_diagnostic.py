@@ -326,24 +326,45 @@ def test_unloaded_owner_answers_the_empty_set():
 
 class TestNothingLost:
 
-    def test_new_set_contains_every_old_answer(self, mods):
+    def test_new_set_contains_every_old_answer(self, mods, monkeypatch):
         """Every namespace binding of every loaded module: where the old
-        reader answered an arity, the new set contains it."""
+        reader answered an arity, the new set contains it.
+
+        W4b-3 slice 5 took away most of the old reader's population: it
+        answered only for a ``PredicateMeta`` class, and nearly all the
+        classes in loaded module namespaces were the rewriter's.  The
+        rewriter mints none now, so the population is SEEDED with the one
+        class shape still made (``make_predicate``, the Python-API arm
+        retired at slice 6), bound into a loaded module the way a Python
+        caller binds one -- a population of at least one, so ``not lost`` is
+        never vacuous -- and no loaded module binds a class of its OWN
+        (``__module__`` is the module itself for a class statement in its
+        body)."""
+        from clausal.logic.predicate import make_predicate
+        seeded = make_predicate("f4arity_seeded", ["a", "b"])
+        monkeypatch.setitem(vars(sys.modules[LIB]), "f4arity_seeded", seeded)
+        scanned = 0
         population = 0
+        rewriter_made = []
         lost = []
         for modname, mod in list(sys.modules.items()):
             ns = getattr(mod, "__dict__", None)
             if not isinstance(ns, dict) or "$module" not in ns:
                 continue
+            scanned += 1
             for name, value in list(ns.items()):
                 old = _old_arity_of(value)
                 if old is None:
                     continue
                 population += 1
+                if getattr(value, "__module__", None) == ns.get("__name__"):
+                    rewriter_made.append((modname, name))
                 if old not in predicate_arities_for(value):
                     lost.append((modname, name, old))
-        assert population > 0, "population is EMPTY -- the filter is stale"
-        assert population >= 8, population
+        assert scanned >= 3, (
+            f"scanned {scanned} Clausal modules -- the fixture did not load")
+        assert population >= 1, "population is EMPTY -- the filter is stale"
+        assert rewriter_made == [], rewriter_made
         assert not lost, lost
 
     def test_predicate_arities_agrees_with_is_predicate_name(self, mods):

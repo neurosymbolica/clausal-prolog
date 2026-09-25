@@ -15,7 +15,7 @@ from clausal.pythonic_ast import nodes as sa
 from clausal.templating.term_rewriting import (
     TermTransformer,
     EmbedTransformer,
-    _make_functor_class_ast,
+    _make_predicate_decl_ast,
 )
 from clausal.logic.variables import Var as RealVar
 from clausal.terms import DictTerm, SetTerm
@@ -672,12 +672,16 @@ def test_embed_normal_code_unchanged():
 def test_embed_trailing_comma_defines_fact():
     # Trailing-comma fact: ``f(a),`` goes through $define_predicate with body=True.
     # nv
-    from clausal.logic.predicate import PredicateMeta
+    from clausal.logic.predicate import declare_head
 
     predicates = []
     ns = _ns()
     ns['Var'] = lambda: '<Var>'
-    ns['PredicateMeta'] = ns['$PredicateMeta'] = PredicateMeta
+    # W4b-3 slice 5: the predicate name is declared by ``$declare_head``
+    # (it was a ``$PredicateMeta`` class block), which binds the module's
+    # handle -- so the namespace needs a module name.
+    ns['$declare_head'] = declare_head
+    ns['__name__'] = '_tr_trailing_comma'
     module = type('MockModule', (), {'define_predicate': lambda self, p: predicates.append(p)})()
     ns['$define_predicate'] = lambda pred, mod: mod.define_predicate(pred)
     ns['$module'] = module
@@ -751,29 +755,44 @@ with ~~{} as clauses:
     assert isinstance(ns['clauses'][1], ast.Return)
 
 
-# ── Partial-term: _make_functor_class_ast __call__ fills missing fields ────────
+# ── Partial-term: a declared predicate's head is built against its fields ───
 
 
 def _make_functor_class(functor_name: str, *field_names: str):
-    """Compile and return the Predicate class generated for the given fields."""
-    from clausal.logic.predicate import PredicateMeta
-
+    """Exec the declaration the rewriter emits for *functor_name* and return
+    a HEAD constructor for it: ``$head`` applied to the bound handle, as the
+    module body applies it (W4b-3 slice 5; this exec'd the guarded
+    ``PredicateMeta`` class block and returned the class)."""
     anchor = ast.parse("x").body[0]
     ast.fix_missing_locations(anchor)
-    class_ast = _make_functor_class_ast(functor_name, list(field_names), anchor)
+    stmt = _make_predicate_decl_ast(functor_name, list(field_names), anchor)
     module = ast.fix_missing_locations(
-        ast.Module(body=[class_ast], type_ignores=[])
+        ast.Module(body=[stmt], type_ignores=[])
     )
-    ns = with_dollar_twins({"Var": RealVar, "PredicateMeta": PredicateMeta})
+    ns = with_dollar_twins({"Var": RealVar})
+    from clausal.import_hook import runtime_builtins
+    ns.update(runtime_builtins)
+    ns["__name__"] = "_tr_partial_term"
     exec(compile(module, "<test>", "exec"), ns)
-    return ns[functor_name]
+    handle = ns[functor_name]
+
+    def construct(*args, **kwargs):
+        # ``$head`` reads its home namespace from its CALLER's frame, as it
+        # does from the module body's: call it from code whose globals are a
+        # copy of *ns* (the declarations record is shared by reference).
+        scope = dict(ns, __fn=head_cell, __h=handle, __a=args, __k=kwargs)
+        return eval(compile("__fn(__h, *__a, **__k)", "<test>", "eval"),
+                    scope)
+
+    construct._fields = tuple(field_names)
+    return construct
 
 
 def _pf(term, cls, name):
     """The value of field *name* in a term CELL built from *cls*.
 
     P2: construction yields a functor and POSITIONS; the names stay on the
-    class that declared them."""
+    declaration."""
     from clausal.logic.cells import cell_args
     return cell_args(term)[cls._fields.index(name)]
 

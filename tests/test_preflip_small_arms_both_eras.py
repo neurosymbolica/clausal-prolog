@@ -646,7 +646,16 @@ def _flip_bindings_before_step_4(monkeypatch, must_flip):
 
     def _flip_then_gate(db, predicate_nodes, module_dict, *rest):
         for key, value in list(module_dict.items()):
-            if not isinstance(value, PredicateMeta) or key.startswith("$"):
+            if key.startswith("$"):
+                continue
+            if (type(value) is str and not isinstance(value, PredicateMeta)
+                    and value == mint_predicate_handle(db, key)):
+                # Already this module's own handle: since W4b-3 slice 5 the
+                # module body binds it (``$declare_head``), so a real load
+                # shows step 4a a LOCAL handle with no stand-in at all.
+                flipped.append(key)
+                continue
+            if not isinstance(value, PredicateMeta):
                 continue
             row = value.__dict__.get("_row")
             if row is not None and not row.detached:

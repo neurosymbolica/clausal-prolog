@@ -121,19 +121,39 @@ def test_P1_NEGATIVE_CONTROL_a_mislowered_arity_is_caught(l3_env):
     mod, _ = L3.lower_items(items)
     # Drop the second argument from the emitted head -- a wrong-arity lowering.
     import ast
+    dropped = 0
     for node in ast.walk(mod):
-        if isinstance(node, ast.Call) and getattr(node.func, "id", None) == "fact_a":
+        # The head is ``$head(fact_a, arg_0=.., arg_1=..)`` (W4b-3 slice 5).
+        if (isinstance(node, ast.Call) and getattr(node.func, "id", None) == "$head"
+                and getattr(node.args[0], "id", None) == "fact_a"):
             node.keywords = node.keywords[:1]
+            dropped += 1
+    assert dropped == 1          # the mis-lowering really happened
     ast.fix_missing_locations(mod)
     (tmp / "bad.pl").write_text("fact_a(1, 10).\n", encoding="utf-8")
-    # The guard pins _fields at arity 2 while the head now supplies 1 -> must not
-    # silently produce a working arity-1 predicate.
+    # The declaration pins the field names at arity 2 while the head now
+    # supplies 1 -> must not silently produce a working arity-1 predicate.
     from clausal import import_hook
+    from clausal.logic.predicate import ClausalTermConstructionError
+    def namespace():
+        ns: dict = {"__name__": "bad"}
+        ns.update(import_hook.runtime_builtins)
+        # The two names the import hook binds per load.  Without them the
+        # exec died on ``$define_predicate`` -- before the head was even
+        # built -- and ``pytest.raises(Exception)`` took that NameError for
+        # the arity check (found by W4b-3 slice 5).
+        ns["$define_predicate"] = lambda pred, module: defined.append(pred)
+        ns["$module"] = None
+        return ns
+
+    defined: list = []
+    # POSITIVE CONTROL: the correct lowering runs clean in this namespace.
+    good, _ = L3.lower_items(L3.read_iso("fact_a(1, 10).\n"))
+    exec(compile(good, "good.pl", "exec"), namespace())
+    assert len(defined) == 1
     code = compile(mod, "bad.pl", "exec")
-    ns: dict = {}
-    ns.update(import_hook.runtime_builtins)
-    with pytest.raises(Exception):
-        exec(code, ns)
+    with pytest.raises(ClausalTermConstructionError):
+        exec(code, namespace())
 
 
 def test_P1_refuses_rather_than_half_handles_an_unsupported_term():
