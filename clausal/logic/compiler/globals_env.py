@@ -112,6 +112,41 @@ def _throw_ball(ball):
     return LogicException(_findall_copy_row(ball))
 
 
+def _is_list_or_partial_list(term) -> bool:
+    """ISO's "a list or a partial list": unbound, ``[]``, a list (in any of
+    the engine's list shapes), or a SegList whose bound tail segments are
+    lists or partial lists in turn -- ``[a, *T]`` with T unbound or a list,
+    not with T bound to ``foo``."""
+    from clausal.logic.atoms import is_nil  # noqa: PLC0415
+    from clausal.logic.cells import is_chars  # noqa: PLC0415
+    from clausal.terms import SegBytes, SegList, SegString, VarSeg  # noqa: PLC0415
+    t = deref(term)
+    if is_var(t) or type(t) in (list, bytes) or is_chars(t) or is_nil(t):
+        return True
+    if isinstance(t, (SegString, SegBytes)):
+        return True
+    if isinstance(t, SegList):
+        return all(_is_list_or_partial_list(seg.var)
+                   for seg in t.segments if isinstance(seg, VarSeg))
+    return False
+
+
+def _check_bag(bag, who: str) -> None:
+    """``type_error(list, Bag)`` for a findall/bagof/setof result that is
+    neither a list nor a partial list (ISO 13211-1 8.10.1.3 d, 8.10.2.3 c,
+    8.10.3.3 c; Scryer raises it before running the goal).  It used to be a
+    silent failure: the unify of the collected list with ``foo`` failed."""
+    if _is_list_or_partial_list(bag):
+        return
+    from clausal.logic.exceptions import (  # noqa: PLC0415
+        LogicException, type_error,
+    )
+    from clausal.logic.solve import _deref_walk  # noqa: PLC0415
+    culprit = _deref_walk(bag)
+    raise LogicException(type_error(
+        "list", culprit, f"{who}: the result must be a list or a partial list"))
+
+
 # ── Predicate-as-class dispatch adapter ───────────────────────────────────────
 #
 # Phase 2 of the predicate-as-class refactor changes compiled dispatch calls

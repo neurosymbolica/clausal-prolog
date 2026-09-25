@@ -813,6 +813,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
                 if $unify(_acap0, 'mymember enumerate all', trail):
                     _v70 = $Var()
                     _v71 = $Var()
+                    $check_bag(_v71, 'findall/3')
                     _fa_results257 = []
                     _fa_cond258 = []
                     _fa_cl259 = $current_leader()
@@ -847,6 +848,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
                 if $unify(_acap0, 'mymember duplicate values', trail):
                     _v72 = $Var()
                     _v73 = $Var()
+                    $check_bag(_v73, 'findall/3')
                     _fa_results263 = []
                     _fa_cond264 = []
                     _fa_cl265 = $current_leader()
@@ -1347,6 +1349,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
                 if $unify(_acap0, 'myprefix enumerate', trail):
                     _v96 = $Var()
                     _v97 = $Var()
+                    $check_bag(_v97, 'findall/3')
                     _fa_results319 = []
                     _fa_cond320 = []
                     _fa_cl321 = $current_leader()
@@ -1637,6 +1640,7 @@ def test__p0_b17__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             if $unify(_acap0, 'mymember enumerate all', trail):
                 _v70 = $Var()
                 _v71 = $Var()
+                $check_bag(_v71, 'findall/3')
                 _fa_results365 = []
                 _fa_cond366 = []
                 _fa_cl367 = $current_leader()
@@ -1667,6 +1671,7 @@ def test__p0_b18__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             if $unify(_acap0, 'mymember duplicate values', trail):
                 _v72 = $Var()
                 _v73 = $Var()
+                $check_bag(_v73, 'findall/3')
                 _fa_results371 = []
                 _fa_cond372 = []
                 _fa_cl373 = $current_leader()
@@ -2063,6 +2068,7 @@ def test__p0_b44__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             if $unify(_acap0, 'myprefix enumerate', trail):
                 _v96 = $Var()
                 _v97 = $Var()
+                $check_bag(_v97, 'findall/3')
                 _fa_results427 = []
                 _fa_cond428 = []
                 _fa_cl429 = $current_leader()

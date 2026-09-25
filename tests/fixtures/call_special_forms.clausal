@@ -2,7 +2,7 @@
 # tests/test_call_runs_special_form_cells.py.  For every row N: b(N, X, Y) is
 # the goal written as a clause BODY, and g(N, X, Y, G) builds the SAME text in
 # TERM position; run(N, X, Y) calls that term.  Both must answer alike.
--module(call_special_forms, [oops, boom(A), caught, done])
+-module(call_special_forms, [oops, boom(A), caught, done, foo])
 -import_from(py.re, [match, search])
 -allow_singletons
 
@@ -101,3 +101,26 @@ pos_all <- forall(p(Z), Z > 0)
 ps(Y) <- findall(Z, catch(once((p(Z), s(Z))), _, fail), Y)
 mi(H) <- (stored(H, B), mi_body(B))
 mi_body(B) <- call(B)
+
+# A findall/bagof/setof result that is neither a list nor a partial list is
+# type_error(list, R) (ISO 8.10.1.3 d, 8.10.2.3 c, 8.10.3.3 c), in the body
+# and through call/1 alike; a partial list is fine.
+nb(1) <- findall(X, p(X), foo)
+nbt(1, G) <- (G is findall(X, p(X), foo))
+nb(2) <- bagof(X, p(X), 3)
+nbt(2, G) <- (G is bagof(X, p(X), 3))
+nb(3) <- setof(X, p(X), boom(1))
+nbt(3, G) <- (G is setof(X, p(X), boom(1)))
+nb(4) <- bagof(X, fail, foo)
+nbt(4, G) <- (G is bagof(X, fail, foo))
+nb(5) <- setof(X, fail, foo)
+nbt(5, G) <- (G is setof(X, fail, foo))
+nb(6) <- findall(X, fail, 7)
+nbt(6, G) <- (G is findall(X, fail, 7))
+nb_run(N) <- (nbt(N, G), call(G))
+pl(1, R) <- findall(X, p(X), [R, *T])
+pl(2, R) <- findall(X, p(X), [1, R, 3])
+pl(3, R) <- findall(X, p(X), R)
+pl(4, R) <- findall(X, fail, [])
+pl(5, R) <- setof(X, p(X), [R, *T])
+pl(6, R) <- findall(X, p(X), [9, *T])

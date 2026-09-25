@@ -346,6 +346,16 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
         # which the adapter carries.
         return aliased.dispatch_at(arity), _meta_qualified(
             db, aliased.name, arity, call_args)
+    # A name the calling module binds to a NON-predicate goal object (a
+    # ModulePredicate) is that object, before the db's row and the builtins:
+    # a clause body calls the binding (``-import_from(py.random,
+    # [permutation])`` makes ``permutation(L, P)`` py.random's, not the
+    # builtin permutation/2), and so does ``solve.call`` ("Phase 5").
+    _module_dict = getattr(db, "module_dict", None)
+    dispatch = (_goal_object_dispatch(db, _module_dict.get(functor), arity)
+                if isinstance(_module_dict, dict) else None)
+    if dispatch is not None:
+        return dispatch, call_args
     dispatch = db.get_dispatch(functor, arity)
     if dispatch is None:
         dispatch = _namespace_dispatch(db, functor, arity)
@@ -437,7 +447,7 @@ def _namespace_dispatch(db, functor, arity):
         return None
     pred_cls = _find_pred_cls(functor, arity, module_dict)
     if pred_cls is None:
-        return _goal_object_dispatch(db, module_dict.get(functor), arity)
+        return None
     home = _home_db(db, pred_cls, functor, arity)
     canonical = _canonical_functor(db, pred_cls, functor)
     if home is db and canonical == functor:
@@ -456,8 +466,11 @@ def _goal_object_dispatch(db, binding, arity):
     class under the name and FAILED SILENTLY.  Resolved through
     ``predicate._dispatch_at``, the one place the protocol is called, so the
     binding's own arity check (a ``ModulePredicate``'s existence_error at an
-    arity it does not register) answers as it does in the body.  A predicate
-    binding at another arity is not this: ``_find_pred_cls`` already said no.
+    arity it does not register) answers as it does in the body.  Asked
+    BEFORE the db's row and the builtins (``_resolve_named_goal``), because
+    that is the body's order: with py.random's ``permutation`` imported, the
+    body's ``permutation(L, P)`` is py.random's, not the builtin
+    permutation/2.  A predicate binding (class or handle) answers None.
     """
     if (binding is None or type(binding) is str
             or not hasattr(binding, "_get_dispatch")

@@ -649,7 +649,13 @@ def _compile_find_all_core(
         _undo_stmt(unify_mark, trail_name),
     ]
 
+    # ISO 8.10.1.3 d / 8.10.2.3 c / 8.10.3.3 c: a bag that is neither a list
+    # nor a partial list is type_error(list, Bag) -- checked BEFORE the goal
+    # runs, as Scryer does (``findall(X, _, foo)`` is the type_error).
+    who = "setof/3" if dedup else ("bagof/3" if fail_on_empty else "findall/3")
     stmts: list[ast.stmt] = [
+        ast.Expr(value=_call(_name("$check_bag"), bag_expr,
+                             ast.Constant(value=who))),
         _assign(results_var, ast.List(elts=[], ctx=ast.Load())),
         _assign(cond_bag, ast.List(elts=[], ctx=ast.Load())),
         _leader_stmt(cond_leader),

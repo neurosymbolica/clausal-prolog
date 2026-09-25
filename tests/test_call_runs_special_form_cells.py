@@ -275,6 +275,30 @@ def test_an_imported_findall_stays_the_regex_predicate(re_host):
     assert got[0][0] == "py.re.findall"
 
 
+@pytest.mark.parametrize("via", ["prun", "pcell"])
+def test_a_module_predicate_binding_wins_over_a_same_named_builtin(re_host, via):
+    """py.random's permutation/2 imported: the body gives ONE answer (a
+    shuffle), and call/1 of the cell -- built in term position or in the
+    clause -- gives the same one, not the builtin's six permutations."""
+    from clausal.logic.solve import call
+    body = [_norm(P) for P in [Var()] for _ in call("pb", P, module=re_host)]
+    P = Var()
+    got = [_norm(P) for _ in call(via, P, module=re_host)]
+    assert len(body) == 1
+    assert len(got) == 1 and sorted(got[0]) == [1, 2, 3]
+
+
+def test_an_aliased_module_predicate_term_runs(re_host):
+    from clausal.logic.solve import call
+    M = Var()
+    body = [_norm(M) for _ in call("ab", M, module=re_host)]
+    M = Var()
+    assert [_norm(M) for _ in call("arun", M, module=re_host)] == body == [{}]
+    M, G = Var(), Var()
+    got = [_norm(G) for _ in call("ag", M, G, module=re_host)]
+    assert got[0][0] == "py.re.search"
+
+
 # ── ISO errors (13211-1 first, Scryer on the box where ISO is silent) ───────
 
 
@@ -370,6 +394,44 @@ def test_call_n_extras_past_a_special_form_name_no_procedure(host, args,
     formal = _formal(ei)
     assert formal.functor == "existence_error"
     assert formal.args[1].args == indicator
+
+
+# ── the result of findall/bagof/setof must be a list or a partial list ─────
+
+
+NON_LIST_ROWS = {1: "foo", 2: 3, 3: ("boom", 1), 4: "foo", 5: "foo", 6: 7}
+
+
+@pytest.mark.parametrize("pred", ["nb", "nb_run"])
+@pytest.mark.parametrize("n", sorted(NON_LIST_ROWS))
+def test_a_non_list_result_is_a_type_error(host, pred, n):
+    """ISO 8.10.1.3 d / 8.10.2.3 c / 8.10.3.3 c, Scryer alike (checked on the
+    box: ``findall(X, p(X), foo)`` -> type_error(list, foo), also for bagof
+    and setof, also when the goal has no solution).  It was a silent
+    failure, in the body AND through call/1."""
+    from clausal.logic.solve import call
+    with pytest.raises(LogicException) as ei:
+        list(call(pred, n, module=host))
+    formal = _formal(ei)
+    assert formal.functor == "type_error"
+    assert formal.args == ("list", NON_LIST_ROWS[n])
+
+
+def test_the_result_is_checked_before_the_goal_runs(host):
+    """Scryer: ``findall(X, _, foo)`` is type_error(list, foo), not the
+    instantiation_error of its goal."""
+    with pytest.raises(LogicException) as ei:
+        _call(host, ("findall", Var(), Var(), "foo"))
+    assert _formal(ei).args == ("list", "foo")
+
+
+@pytest.mark.parametrize("n, expected", [
+    (1, [1]), (2, [2]), (3, [[1, 2, 3]]), (4, ["_"]), (5, [1]), (6, []),
+])
+def test_a_partial_list_result_is_fine(host, n, expected):
+    from clausal.logic.solve import call
+    R = Var()
+    assert [_norm(R) for _ in call("pl", n, R, module=host)] == expected
 
 
 # ── a meta-interpreter's shape ──────────────────────────────────────────────
