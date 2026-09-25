@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import contextlib
 import importlib
+import os
 import warnings
 from typing import Any
 
@@ -594,29 +595,55 @@ def compile_module(
 # ── W4b-2d task 8: THE FLIP ───────────────────────────────────────────────
 # ``CLAUSAL_NO_FLIP=1`` switches it off, for A/B runs only: the class era
 # is otherwise gone from the load path.  Read once at import.
-import os as _os  # noqa: E402
-_FLIP = _os.environ.get("CLAUSAL_NO_FLIP", "") in ("", "0")
+_FLIP = os.environ.get("CLAUSAL_NO_FLIP", "") in ("", "0")
 
 
-def _flip_owner(value: "PredicateMeta", db) -> "tuple[Any, str]":
+def _flip_owner(value: "PredicateMeta", db,
+                module_dict: dict) -> "tuple[Any, str] | None":
     """``(owner_db, functor)`` the handle for the class *value* is minted
-    from (ruling X3: from a DATABASE, never from ``__module__``).
+    from (ruling X3: from a DATABASE, never from ``__module__``), or
+    ``None`` when *value* is not a Clausal database's predicate and must
+    stay bound AS IT IS.
 
-    A class bound to a real row names its owner through the row (ruling D1:
-    an ``-import_from``'d class is bound to the EXPORTER's row, so an import
-    binds the owner's handle, and an aliased import binds it under the
-    alias with the owner's functor).  A class on no row -- a clause-less
-    ``-dynamic`` (option D), a ``-specialize`` placeholder, a declared name
-    with no clauses -- takes its own module's db when that module is a
-    LOADED Clausal module, else the compiling db."""
+    * A class bound to a real row names its owner through the row (ruling
+      D1: an ``-import_from``'d class is bound to the EXPORTER's row, so an
+      import binds the owner's handle, and an aliased import binds it under
+      the alias with the owner's functor).
+    * A class on no row whose ``__module__`` is a LOADED Clausal module:
+      that module's db.
+    * A class on no row minted by THIS module's body (``__module__`` is the
+      compiling module -- a clause-less ``-dynamic`` under option D, a
+      declared name with no clauses), or one this db already holds a row or
+      a ``-dynamic`` mark for at the class's arity (a step-1c ``-specialize``
+      target, minted by ``make_predicate`` in ``clausal.logic.predicate``
+      but row-planted by ruling QB): the compiling db.
+    * Anything else -- a class a plain PYTHON module exports
+      (``-import_from(py_mod, [p])``), a ``make_predicate`` class compiled
+      with ``db=None`` onto its private row -- has no Database a handle
+      could name.  Its own ``_get_dispatch()`` is what answers it (the
+      frozen duck-typed protocol), so it is left bound: a handle minted
+      from the compiling db would name a predicate that db does not have,
+      and every call through it would be ``PredicateNotFoundError``
+      (roborev, 2026-09-25).
+    """
     row = value.__dict__.get("_row")
     if row is not None and not row.detached:
         return row.db, row.key[0]
-    owner = None
+    functor = value.__name__
     origin = getattr(value, "__module__", None)
-    if origin and origin != db.module_name():
+    if origin and origin not in (db.module_name(),
+                                 module_dict.get("__name__")):
         owner = _db_for_module_name(origin)
-    return (owner if owner is not None else db), value.__name__
+        if owner is not None:
+            return owner, functor
+    elif origin:
+        return db, functor
+    fields = value.__dict__.get("_fields")
+    if fields is not None:
+        arity = len(fields)
+        if db.row(functor, arity) is not None or db.is_dynamic(functor, arity):
+            return db, functor
+    return None
 
 
 def _flip_bindings(module_dict: dict, db) -> None:
@@ -645,7 +672,10 @@ def _flip_bindings(module_dict: dict, db) -> None:
     for key, value in list(module_dict.items()):
         if not isinstance(value, PredicateMeta) or key.startswith("$"):
             continue
-        owner, functor = _flip_owner(value, db)
+        found = _flip_owner(value, db, module_dict)
+        if found is None:
+            continue
+        owner, functor = found
         try:
             handle = mint_predicate_handle(owner, functor)
         except ValueError:

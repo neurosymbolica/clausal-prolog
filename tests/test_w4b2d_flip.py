@@ -198,3 +198,144 @@ def test_a_local_predicate_at_another_arity_than_an_import_loads():
         "$module"].db
     assert owner_db.row("t5b_kfact", 2) is None     # the owner is untouched
     assert lm.db.row("t5b_kfact", 2).clauses
+
+
+# ── A predicate no Clausal Database owns stays bound as it is (roborev) ──
+
+_PY_EXPORTER = '''
+from clausal.logic.predicate import PredicateMeta, make_predicate
+from clausal.logic.compiler import compile_predicate_trampoline
+from clausal.logic.database import Clause
+
+
+class pycls(metaclass=PredicateMeta):     # a class statement in Python
+    _fields = ("x",)
+
+
+pymk = make_predicate("pymk", ["x"])      # make_predicate, compiled db=None
+
+for _p, _vals in ((pycls, (1, 2)), (pymk, (7, 8))):
+    compile_predicate_trampoline(
+        _p.__name__, 1,
+        [Clause(head=(_p.__name__, v), body=[]) for v in _vals],
+        None, pred_cls=_p)
+'''
+
+_PY_IMPORTER = '''
+-import_from(flip_pyexp, [pycls, pymk])
+via_cls(X) <- pycls(X),
+via_mk(X) <- pymk(X),
+'''
+
+_PY_PROBE = '''
+import sys
+sys.path.insert(0, sys.argv[1])
+import clausal.import_hook, importlib, json
+from clausal.logic.solve import call
+from clausal.logic.variables import Var, deref
+from clausal.logic.predicate import PredicateMeta
+m = importlib.import_module("flip_pyuse")
+lm = m.__dict__["$module"]
+out = {}
+for goal in ("via_cls", "via_mk", "pycls", "pymk"):
+    X = Var()
+    try:
+        out[goal] = sorted(deref(X) for _ in call(goal, X, module=lm))
+    except Exception as e:
+        out[goal] = type(e).__name__
+out["classes"] = sorted(k for k in ("pycls", "pymk")
+                        if isinstance(m.__dict__[k], PredicateMeta))
+print(json.dumps(out))
+'''
+
+
+def test_a_python_exported_predicate_answers_as_it_does_without_the_flip(
+        tmp_path):
+    """``-import_from(py_mod, [p])`` of a class a plain PYTHON module
+    defines, or a ``make_predicate`` class compiled with ``db=None``: no
+    Clausal Database owns it, so a handle minted from the importer would
+    name a predicate the importer does not have (``PredicateNotFoundError``
+    on every call).  Its own ``_get_dispatch()`` answers, flip or no flip
+    -- called from a body AND by name -- and the binding stays the class."""
+    (tmp_path / "flip_pyexp.py").write_text(_PY_EXPORTER)
+    (tmp_path / "flip_pyuse.clausal").write_text(
+        textwrap.dedent(_PY_IMPORTER).lstrip())
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    results = {}
+    for era, extra in (("flip", {}), ("class", {"CLAUSAL_NO_FLIP": "1"})):
+        env = {k: v for k, v in os.environ.items() if k != "CLAUSAL_NO_FLIP"}
+        env.update(extra)
+        env["PYTHONPATH"] = os.pathsep.join(
+            [root] + [p for p in env.get("PYTHONPATH", "").split(os.pathsep)
+                      if p])
+        proc = subprocess.run(
+            [sys.executable, "-c", _PY_PROBE, str(tmp_path)], cwd=root,
+            env=env, capture_output=True, text=True, timeout=300)
+        assert proc.returncode == 0, proc.stderr[-2000:]
+        results[era] = proc.stdout.strip().splitlines()[-1]
+    import json
+    flip = json.loads(results["flip"])
+    assert flip == {"via_cls": [1, 2], "via_mk": [7, 8], "pycls": [1, 2],
+                    "pymk": [7, 8], "classes": ["pycls", "pymk"]}, flip
+    assert results["flip"] == results["class"]
+
+
+def _outcome(fn):
+    try:
+        return ("ok", fn())
+    except Exception as e:  # noqa: BLE001 -- the TYPE is what is compared
+        return ("raised", type(e).__name__)
+
+
+def test_the_hinted_fast_path_answers_what_the_handle_arm_answers(tmp_path):
+    """``$dispatch_at``'s fast path for a handle naming the compiling module
+    gives the general handle arm's answer.  Pinned for the shape roborev
+    doubted: a mangled str of that module with no row, spelled like the
+    builtin ``atom_length/2``.  ``Database.get_dispatch`` falls back to the
+    builtin -- and so does the general arm, which resolves the owner to the
+    hint and asks ``get_dispatch`` first; the two must not diverge."""
+    from clausal.logic.compiler.predicate import _dispatch_at_for
+    from clausal.logic.predicate import _dispatch_at
+    mod = _load(tmp_path, "flip_fast", """
+        -private([a])
+        own(a),
+    """)
+    db = mod.__dict__["$module"].db
+    hinted = _dispatch_at_for(db)
+    # POSITIVE CONTROL: the local predicate IS answered by the fast path,
+    # with the very function the general arm returns.
+    assert hinted(mod.own, 1) is _dispatch_at(mod.own, 1, db)
+    stray = mangle(db.module_name(), "atom_length")
+    assert db.row("atom_length", 2) is None
+    assert _outcome(lambda: hinted(stray, 2)) == \
+        _outcome(lambda: _dispatch_at(stray, 2, db))
+
+
+def test_a_new_arity_local_predicate_keeps_head_order_across_heads(tmp_path,
+                                                                   monkeypatch):
+    """The ``"local"`` head (a local ``kp/2`` beside an imported ``kp/1``)
+    is built in written order.  The rewriter's keywords are derived per
+    head (``first=FIRST``, ``other=OTHER``) and emitted in head order, so
+    differently-named heads build the same positional cell; a keyword head
+    the USER writes is refused before the body runs."""
+    monkeypatch.syspath_prepend(str(tmp_path))
+    _load(tmp_path, "flip_kw_owner", """
+        -module(flip_kw_owner, [kp(X)])
+        kp(1),
+    """)
+    use = _load(tmp_path, "flip_kw_user", """
+        -module(flip_kw_user, [go(A, B)])
+        -import_from(flip_kw_owner, [kp])
+        kp(FIRST, SECOND) <- (FIRST is 5, SECOND is 6),
+        kp(OTHER, NAME) <- (OTHER is 7, NAME is 8),
+        go(A, B) <- kp(A, B),
+    """)
+    A, B = Var(), Var()
+    assert [(deref(A), deref(B)) for _ in call(
+        "go", A, B, module=use.__dict__["$module"])] == [(5, 6), (7, 8)]
+    with pytest.raises(SyntaxError, match="keyword arguments"):
+        _load(tmp_path, "flip_kw_user2", """
+            -module(flip_kw_user2, [])
+            -import_from(flip_kw_owner, [kp])
+            kp(b=1, a=2),
+        """)
