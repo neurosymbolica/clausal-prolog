@@ -59,6 +59,18 @@ class Clause:
     position: "tuple[int,int,int,int] | None" = dataclasses.field(
         default=None, compare=False, repr=False,
     )
+    # How many LEADING body goals came from the head: the ``Unify(V, Arg)``
+    # goals a head normalizer (``_normalize_dataclass_fact``,
+    # ``_normalize_structural_head_args``, ``database_ops.
+    # _normalize_fact_clause``) moved out of it, ``V`` being the fresh Var it
+    # left in the argument's place.  ``clause/2`` (ISO 8.8.1) puts exactly
+    # ``body[:hoisted]`` back into the head and hands ``body[hoisted:]`` back
+    # as the Body, so a written ``fib(0, 0)`` reads back as ``fib(0, 0)``
+    # with Body ``true`` -- the body cannot tell a hoisted ``Unify`` from one
+    # the program wrote, which is why the count has to be recorded.  0 for a
+    # clause nothing hoisted from, and for every Clause built without a
+    # normalizer.  Location-like metadata: not part of equality.
+    hoisted: int = dataclasses.field(default=0, compare=False, repr=False)
 
     def is_fact(self) -> bool:
         return not self.body
@@ -1556,16 +1568,22 @@ class Module:
         # Normalize dataclass facts: ground field values → Var + Is body goals.
         if body_goals == [True] and _is_normalizable_fact(head):
             head, body_goals = _normalize_dataclass_fact(head)
+            # Every goal of a normalized fact is a hoisted head argument; an
+            # unchanged one comes back as ``[True]``, which hoisted nothing.
+            hoisted = 0 if body_goals == [True] else len(body_goals)
         else:
             # Ruled clause: hoist structural head args (Compound / Call(LoadName)
             # / functor-instance) into prepended Unify goals so an unbound caller
             # binds in output mode — the same Var+Unify shape facts use. Atomic
             # head literals keep the match-guard path.
+            written = len(body_goals)
             head, body_goals = _normalize_structural_head_args(head, body_goals)
+            hoisted = len(body_goals) - written    # the PREPENDED goals
         self.db.assertz(Clause(
             head=head,
             body=body_goals,
             position=getattr(predicate_node, "position", None),
+            hoisted=hoisted,
         ))
         functor, arity = head_key(head)
         param_names = _extract_param_names(head)

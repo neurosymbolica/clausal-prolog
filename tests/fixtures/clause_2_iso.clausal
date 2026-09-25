@@ -1,0 +1,116 @@
+# ISO clause/2 (13211-1 8.8.1) -- tests/test_clause_2_iso.py.
+-module(clause_2_iso, [])
+-import_from(regex, [match])
+-private([a, b, f(A), pt(A, B), oops, caught, ok, m, nm])
+-dynamic(fib/2)
+-dynamic(d/2)
+-dynamic(lu/1)
+-dynamic(none/1)
+-dynamic(sp/2)
+-dynamic(fs/2)
+-dynamic(ma/2)
+-dynamic(late/1)
+-dynamic(big/2)
+-dynamic(mf/2)
+-dynamic(fx/1)
+-dynamic(hg/3)
+-dynamic(hz/2)
+-meta_predicate(twice(0))
+-allow_singletons
+
+# Static (locked): clause/2 refuses it with permission_error.
+st(1),
+st(X) <- st(X)
+p(1),
+p(2),
+s(2),
+s(3),
+
+# Head shapes: constants, a repeated variable, compound / list / nested
+# arguments.  Every argument the loader hoists into the body must come back
+# in the head, and the body must then be `true`.
+fib(0, 0),
+fib(1, 1),
+fib(N, F) <- (N > 1, eval_(N - 1, N1), eval_(N - 2, N2),
+              fib(N1, F1), fib(N2, F2), eval_(F1 + F2, F))
+
+# The round-trip table: for every clause (H, B), call(B) with H's bindings
+# must answer what calling H does.  No meta-call special form here (see sp/2).
+d(0, 0),
+d(X, X),
+d(f(X), [1, X]),
+d([a, pt(Y, [b])], Y) <- p(Y),
+d(pt(X, Y), a) <- (p(X), s(Y)),
+d(X, Y) <- (p(X), s(Y)),
+d(X, Y) <- (not p(X), s(Y)),
+d(X, Y) <- if_(p(X), s(Y), Y is 3),
+d(X, Y) <- (p(X), Y is X + 1),
+d(X, Y) <- (p(X) or s(Y)),
+d(X, Y) <- (s(Y), 0 < Y < 3),
+d(X, Y) <- (p(Y), Y in [1, 2], X is a),
+d(X, Y) <- (p(X), p(Y), X != Y),
+d(X, Y) <- (s(X), X == 2, Y is b),
+d(a, Y) <- (p(Y), Y >= 2),
+d(b, Y) <- call(p, Y),
+d(X, Y) <- (p(X) and s(Y), X < Y),
+
+# The meta-call special forms come back as the cells ISO spells them.
+sp(1, Y) <- findall(X, p(X), Y),
+sp(2, Y) <- once(p(Y)),
+sp(3, Y) <- (not findall(X, once(p(X)), Y)),
+sp(4, Y) <- eval_(Y + 1, 3),
+
+lu(1),
+lu(2),
+
+rt(X, Y) <- (clause(d(X, Y), B), call(B))
+cl(H, B) <- clause(H, B)
+
+# A body with a Python expression that reads the clause's variables has no
+# term form: clause/2 refuses the clause, but only when the head matches.
+fs(1, Y) <- (Y is f"v{Y}"),
+fs(2, Y) <- p(Y)
+
+# A body call at an arity the name's binding does not have (mp is bound to
+# mp/1): the term is the cell mp(1, Y), not a failed construction.
+mp(1),
+ma(1, Y) <- mp(Y),
+ma(2, Y) <- mp(1, Y)
+
+# A body calling a procedure nothing defines at load time.
+late(Y) <- later_def(Y)
+
+# The round trip over bodies holding meta-call special forms and a Python
+# module predicate (call/N runs their cells since main d724dd52).
+mf(1, Y) <- findall(X, p(X), Y),
+mf(2, Y) <- once(p(Y)),
+mf(3, Y) <- catch(p(Y), E, True),
+mf(4, Y) <- catch(throw(oops), E, Y is caught),
+mf(5, Y) <- (forall(p(X), X > 0), Y is ok),
+mf(6, Y) <- (p(Y), not findall(X, once(s(X)), [])),
+mf(7, Y) <- (match(r"\d+", "123"), Y is m),
+mf(8, Y) <- (not match(r"\d+", "abc"), Y is nm),
+mf(9, Y) <- eval_(2 + 3, Y)
+
+rt_mf(X, Y) <- (clause(mf(X, Y), B), call(B))
+
+# A Python expression used as a GOAL is code, even when it reads no
+# variable: clause/2 must refuse it, not run it.
+fx(1) <- ++print("x"),
+fx(2) <- (True, ++__import__("tests.fixtures.clause2_bump", fromlist=["bump"]).bump()),
+fx(3) <- once(++print("z")),
+fx(4) <- (Y is ++len("ab"), Y == 2),
+fx(5) <- time_goal(++print("t")),
+fx(6) <- maplist(++print("m"), [1]),
+fx(7) <- twice(++print("w"))
+
+twice(G) <- (call(G), call(G))
+
+# A HOISTED head argument holding a variable-reading f-string.
+hg(pt(f"{Y}", 1), Y, 1) <- p(Y),
+hg(0, Y, 2) <- p(Y)
+
+# A hoisted head argument that raises when it is BUILT (a run-time error in
+# the head-only construction).
+hz(++(1 + "a"), Y) <- p(Y),
+hz(0, Y) <- p(Y)

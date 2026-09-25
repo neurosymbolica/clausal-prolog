@@ -42,7 +42,8 @@ def _normalize_fact_clause(term: Any):
                 body.append(_Unify(left=v, right=arg_val))
             else:
                 new_args.append(arg_val)
-        return Clause(head=Compound(term.functor, tuple(new_args)), body=body)
+        return Clause(head=Compound(term.functor, tuple(new_args)), body=body,
+                      hoisted=len(body))
     # Dataclass and KWTerm facts are passed as-is; their field patterns work
     # correctly since they use Python structural matching.
     from clausal.logic.database import Clause  # already imported above
