@@ -306,8 +306,10 @@ def test_body_shapes(lm):
     assert type(b[12][2]) is nodes.ArithNeq
     assert type(b[13][1]) is nodes.ArithEq and b[13][1].right == 2
     assert type(b[14][1]) is nodes.GtE
-    # call(p, Y): term position builds the predicate's binding for `p`
-    assert b[15][0] == "call" and b[15][2] is not None
+    # call(p, Y): ruling S -- a predicate name in DATA position is the plain
+    # atom 'p' (it was the predicate's class before main 0738b335).
+    assert b[15][0] == "call" and b[15][1] == "p" and type(b[15][1]) is str
+    assert is_var(b[15][2])
     # (p(X) and s(Y), X < Y): `and` flattens into the conjunction
     assert type(b[16]) is tuple and len(b[16]) == 3
     assert type(b[16][2]) is nodes.Lt
