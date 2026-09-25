@@ -322,6 +322,7 @@ from clausal.logic.compiler.terms_to_ast import (  # noqa: E402
 )
 from clausal.logic.meta_predicate import (  # noqa: E402
     qualify_in_db as _meta_qualify_in_db,
+    qualify_in_module as _meta_qualify_in_module,
 )
 from clausal.logic.generated_names import (
     register_generated_names as _register_generated_names,
@@ -1102,6 +1103,7 @@ def _compile_predicate_trampoline_impl(
         **_ARITH_RUNTIME_NAMES,
         # -meta_predicate call sites (clausal.logic.meta_predicate).
         "$meta_qualify": _meta_qualify_in_db,
+        "$meta_qualify_module": _meta_qualify_in_module,
         "$meta_db": db,
     }
     # Ensure freeze/when hooks are registered.
@@ -1949,6 +1951,7 @@ def _compile_predicate_shallow_impl(
         **_ARITH_RUNTIME_NAMES,
         # -meta_predicate call sites (clausal.logic.meta_predicate).
         "$meta_qualify": _meta_qualify_in_db,
+        "$meta_qualify_module": _meta_qualify_in_module,
         "$meta_db": db,
     }
     # Ensure freeze/when hooks are registered.

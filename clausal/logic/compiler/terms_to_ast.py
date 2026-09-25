@@ -816,6 +816,28 @@ def term_to_ast_expr(
     raw = term
     term = deref(term)
 
+    if type(term) is _MetaArg and term.module is not None:
+        # A dotted ``lib.p(...)`` / ``lib.p`` in a qualifying meta position:
+        # the qualified goal ``lib:p(...)`` (operator ruling 2026-09-25).  The
+        # inner goal is spelled with the WRITTEN leaf name -- the name lib
+        # answers to, as ``lib:p(...)`` would look it up there -- never with
+        # a spelling resolved in the calling module.
+        value = term.value
+        if isinstance(value, Call) and not value.kwargs:
+            leaf = _dotted_name_from_loadattr(value.func).rpartition(".")[2]
+            inner = cell_literal_ast(sys.intern(leaf), [
+                term_to_ast_expr(a, var_context, eval_arith=eval_arith)
+                for a in value.args])
+        elif isinstance(value, Call):
+            # Keyword placement needs lib's signature: the term lowering
+            # places it (ruling (a): the plain cell).
+            inner = term_to_ast_expr(value, var_context, eval_arith=eval_arith)
+        else:
+            leaf = _dotted_name_from_loadattr(value).rpartition(".")[2]
+            inner = ast.Constant(value=_mint_atom(leaf))
+        return _call(_name("$meta_qualify_module"), _name("$meta_db"),
+                     ast.Constant(value=term.module), inner)
+
     if type(term) is _MetaArg:
         # A ``-meta_predicate`` argument position (see
         # ``clausal.logic.meta_predicate``): qualified with the calling
