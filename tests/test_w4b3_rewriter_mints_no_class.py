@@ -314,8 +314,10 @@ def test_a_namespace_with_no_usable_name_is_refused_at_run_time(name):
     falsy raises a RUNTIME error (it fires while a body runs, where a
     ``SyntaxError`` would have no file or line), with the user wording."""
     from clausal.logic.predicate import declare_head
-    ns = {"$declare_head": declare_head}
+    ns = {"__d": declare_head}
     if name is not None:
         ns["__name__"] = name
-    with pytest.raises(RuntimeError, match="no usable __name__"):
-        exec("__d('s5nn_p', ('a',))", ns | {"__d": declare_head})
+    with pytest.raises(RuntimeError, match="no usable __name__") as info:
+        exec("__d('s5nn_p', ('a',))", ns)
+    assert info.type is RuntimeError
+    assert "non-empty module-level __name__" in str(info.value)

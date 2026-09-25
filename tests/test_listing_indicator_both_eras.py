@@ -25,7 +25,6 @@ import clausal.import_hook  # noqa: F401 — installs the meta-path finder
 from clausal.import_hook import _load_module
 from clausal.logic.atoms import mangle
 from clausal.logic.exceptions import LogicException
-
 from clausal.logic.solve import call
 from clausal.terms import Div
 from tests.predicate_api_support import class_arm_predicate

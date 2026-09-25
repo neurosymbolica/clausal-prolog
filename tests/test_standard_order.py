@@ -213,8 +213,6 @@ class TestAtomKeyCollapse:
         assert _standard_order_key(chars("work"))[0] == _ORD_COMPOUND
 
     def test_class_atom_key_matches_same_spelled_atom_key(self):
-
-
         # STAGE 2 (spec 2026-09-18 §4): no class is an atom.  The atom `work`
         # is the str and keys in the atom band; the CLASS keys in the opaque
         # band, apart from it -- the "same-spelled class and atom are one
@@ -225,8 +223,6 @@ class TestAtomKeyCollapse:
         assert _standard_order_key(atom_cls)[0] > _ORD_ATOM
 
     def test_same_spelled_atom_and_class_atom_sort_adjacent_equal(self):
-
-
         atom_cls = class_arm_predicate("work", [])
         # Neither is ordered strictly before the other by the key.
         # STAGE 2: the class sorts AFTER the atom of its name (opaque band), never equal

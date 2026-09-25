@@ -111,7 +111,6 @@ def test_a_predicate_bound_only_by_a_python_import_is_still_found(mis):
 def test_a_python_built_mi_keeps_its_class_fields_and_its_refusal():
     """A class with fields but no registered signature, and one with no row
     at all, answer as they did through the class route."""
-
     cls = class_arm_predicate("pybuilt_mi", ["GOALS", "PROGRAM"])
     assert cls._row is None
     found = _meta_interpreter_row(Database(), {"pybuilt_mi": cls},
@@ -227,7 +226,6 @@ def test_the_binding_route_refuses_several_arities_too(monkeypatch, shape):
     if shape == "mangled":
         binding = mangle("_amb_owner", "amb_mi")
     else:
-
         binding = class_arm_predicate("amb_mi", ["G", "P"])
         binding.__module__ = "_amb_owner"
     md = {"amb_mi": binding}
@@ -250,7 +248,6 @@ def test_a_second_arity_without_clauses_is_still_ambiguous():
 
 def test_a_row_without_a_signature_uses_the_bound_class_s_fields(mis):
     """A Python-built MI: clauses in the db, field names only on the class."""
-
     db = Database()
     solve_row = _mi_row(mis, "solve")
     fields = solve_row.db.signature_for(*solve_row.key)

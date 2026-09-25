@@ -316,7 +316,6 @@ class TestV2CompileModule:
         incidental module-dict contents goes vacuous without failing.
         """
         # nv
-
         path = os.path.join(FIXTURES_DIR, "static_pred.clausal")
         md = _load_via_v2(path, "_v2_static_pred_norow")
         db = md["$module"].db

@@ -468,7 +468,6 @@ class TestDollarRefFallsBackToTheTwinByName:
 
     def test_a_user_class_keeps_its_bare_name(self):
         from clausal.logic.generated_names import dollar_ref
-
         cls = class_arm_predicate("MyOwnPred", ["a"])
         with warnings.catch_warnings():
             warnings.simplefilter("error")

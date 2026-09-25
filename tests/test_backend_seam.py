@@ -82,7 +82,8 @@ class TestBakeInReadsTheRow:
         reference nothing can invalidate."""
         db = _fresh_db()
         cls = _bound_class(db, "Leaf", 1, locked=False, dispatch=_dummy_dispatch)
-        assert db.row("Leaf", 1).dispatch_fn is _dummy_dispatch  # there IS one to bake
+        # there IS one to bake
+        assert db.row("Leaf", 1).dispatch_fn is _dummy_dispatch
         base_globals: dict = {}
         _inject_resolved_targets({("Leaf", 1)}, base_globals, db, {"Leaf": cls})
         assert _disp_key("Leaf", 1) not in base_globals

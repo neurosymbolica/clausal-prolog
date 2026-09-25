@@ -413,8 +413,8 @@ def _bool_binary_operands(expr):
     answered False, with no error anywhere -- unlike ``_expr_to_bdd``, whose
     miss lands on a TypeError.
 
-    The functor name is not proof: ``make_predicate("BoolEq", ["x"])``
-    declared elsewhere builds a well-formed ``('BoolEq', X)`` meaning
+    The functor name is not proof: a ``BoolEq/1`` declared elsewhere (or
+    the cell ``('BoolEq', X)`` written by hand) is well-formed and means
     something else, so the ARITY decides.
     """
     try:

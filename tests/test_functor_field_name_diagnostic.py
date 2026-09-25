@@ -30,7 +30,7 @@ from clausal.import_hook import _load_module
 from clausal.logic.predicate import (
     ClausalTermConstructionError,
     PredicateMeta,
-    )
+)
 from tests.predicate_api_support import class_arm_predicate
 
 

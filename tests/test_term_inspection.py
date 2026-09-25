@@ -837,7 +837,6 @@ class TestGlobalAtom:
     def test_guard_fails_when_atom_mismatches(self):
         """(+name, +atom) — fails when atom is NOT the global class for that name."""
         # nv
-
         name = "_test_global_atom_guard_mismatch_xyz"
         # Mint the global atom for 'name'.
         _global_atom_call(mint(name), Var())
@@ -863,7 +862,6 @@ class TestGlobalAtom:
     def test_reverse_lookup_fails_for_non_global_class(self):
         """(-name, +atom) — fails if atom is not the global class registered for its name."""
         # nv
-
         # A PredicateMeta NOT placed into predicate_builtins.
         local_only = class_arm_predicate("_test_global_atom_local_only_xyz", [])
         n_out = Var()

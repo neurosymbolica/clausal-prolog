@@ -662,14 +662,15 @@ def _global_atom__2(name, atom, trail, k):
         Name in the dict (i.e. Atom is genuinely the registered global, not
         a module-local namesake); unify Name with the ATOM of that name.
         Atom is ordinarily the cell itself; a 0-arity ``PredicateMeta``
-        (what ``make_predicate(name, [])`` builds) is still accepted for
-        anything that manually installs one.
+        (what the retired ``make_predicate(name, [])`` built; W4b-3 slice 6)
+        is still accepted for anything that manually installs one.
       (-Name, -Atom): enumerate.  Yield one solution per registered atom —
         a cell whose spelling is its key, or a legacy 0-arity
         PredicateMeta.  Order not guaranteed.
 
     P3-1 Task 7 sweep: pre-pivot this builtin minted a fresh
-    ``make_predicate(Name, [])`` class per name — the last live,
+    ``make_predicate(Name, [])`` class per name (a function retired since,
+    at W4b-3 slice 6) — the last live,
     user-reachable atom-class-construction path (every other one is
     compile-time and was flipped in Task 2/3).  It is one of the five
     documented legitimate ways to reach an undeclared atom under

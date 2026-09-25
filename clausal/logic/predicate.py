@@ -23,7 +23,7 @@ import os
 import re
 import sys
 import textwrap
-from typing import Any, Callable
+from typing import Any, Callable, NoReturn
 
 from clausal.logic.cells import is_chars, chars_text  # stage 1: the chars carrier
 from clausal._suffixes import CLAUSAL_SUFFIXES
@@ -928,8 +928,8 @@ class PredicateMeta(type):
         # longer mints one for a plain atom, but a 0-arity PREDICATE
         # declared with explicit call syntax — ``-module(m, [p()])``, as
         # opposed to the bare-Name atom syntax ``-module(m, [p])`` — still
-        # legitimately mints one, and ``make_predicate(n, [])`` remains a
-        # general-purpose, still-tested construction API for that shape
+        # legitimately mints one, and ``make_predicate(n, [])`` WAS a
+        # construction API for that shape until W4b-3 slice 6 retired it
         # (``make_atom`` is NOT: P3-3 Task 7 made it return the atom str,
         # since a public factory minting a class atom was the one door left
         # for a class atom to enter a program that has none). This zero-field
@@ -937,8 +937,9 @@ class PredicateMeta(type):
 
         # Where this class was registered, for the field-name mismatch
         # diagnostic.  Frame 1 is the .clausal module body running the
-        # generated ``class <functor>(metaclass=PredicateMeta)`` block (or the
-        # Python caller of ``make_predicate``).  Skipped when a field of that
+        # generated ``class <functor>(metaclass=PredicateMeta)`` block until
+        # W4b-3 slice 5, or the Python code calling the metaclass; the
+        # retired ``make_predicate`` was one).  Skipped when a field of that
         # name exists, since __slots__ would have made it a descriptor.
         if "_registered_at" not in fields:
             cls._registered_at = _source_site(1)
@@ -959,9 +960,9 @@ class PredicateMeta(type):
         #
         # ``None`` until first use.  A class the compiler binds into a module
         # gets the owning Database's row (``_bind_row``); a class minted with
-        # no Database anywhere — bare ``make_predicate`` from Python, the
-        # out-of-tree pattern, ``clausal.reflection``, ``clpb``, the builtin
-        # registry — lazily gets a PRIVATE DETACHED row over a private
+        # no Database anywhere — a class statement or metaclass call from
+        # Python (``make_predicate`` did this until W4b-3 slice 6 retired
+        # it) — lazily gets a PRIVATE DETACHED row over a private
         # Database of its own (``_state_row``).  That is the compatibility
         # mode: the duck type (``_assertz``, ``_get_dispatch()``, ``_lock``)
         # behaves exactly as before with no Database in sight.
@@ -986,7 +987,8 @@ class PredicateMeta(type):
         here on first use over a single-predicate ``Database`` nobody else can
         reach, and cached in ``cls._row``.  That is the compatibility mode;
         ``_bind_row`` later replaces the private row if the class is compiled
-        into a module.  Goes with ``make_predicate`` at P4.
+        into a module.  Goes with the class (W4b-3 slice 7;
+        ``make_predicate`` itself was retired at slice 6).
 
         Lazy (not minted in ``__init__``) for two reasons: ``database.py``
         imports ``predicate.py``, so eager construction would need a
@@ -3049,7 +3051,8 @@ def declare_head(functor: str, fields: tuple, /) -> None:
             f"cannot declare the predicate {functor}: this namespace belongs "
             f"to no module (it has no usable __name__), and a predicate is "
             f"named by its module.  Define {functor} in a .clausal file and "
-            f"import it, or run this code with a module-level __name__ bound")
+            f"import it, or run this code with a non-empty module-level "
+            f"__name__")
     namespace.setdefault(PREDICATE_HEADS_KEY, {})[functor] = (
         fields, _source_site(1))
     namespace[functor] = handle
@@ -3735,7 +3738,7 @@ _MAKE_PREDICATE_RETIRED = (
 
 
 def make_predicate(name: str, fields: list[str], *,
-                   instances: Any = _MISSING) -> "PredicateMeta":
+                   instances: Any = _MISSING) -> NoReturn:
     """RETIRED (W4b-3 slice 6): raises :class:`MakePredicateRetiredError`.
 
     It created a ``PredicateMeta`` class from Python -- the Python-API arm of

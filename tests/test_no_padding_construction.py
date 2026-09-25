@@ -23,7 +23,8 @@ import pytest
 import clausal.import_hook  # noqa: F401
 from clausal.import_hook import _load_module
 from clausal.logic.predicate import (
-    ClausalTermConstructionError, build_term_cell, head_cell, )
+    ClausalTermConstructionError, build_term_cell, head_cell,
+)
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref, walk
 from tests.predicate_api_support import class_arm_predicate

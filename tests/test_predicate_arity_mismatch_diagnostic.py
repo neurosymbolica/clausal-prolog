@@ -30,7 +30,6 @@ import pytest
 
 from clausal.logic.atoms import mint
 from clausal.logic.database import Clause, Database
-
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref, walk
 from clausal.predicate_diagnostics import (

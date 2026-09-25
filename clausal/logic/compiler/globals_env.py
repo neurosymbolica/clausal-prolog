@@ -251,7 +251,8 @@ class _GlobalsDb:
 
     THE CLASS FALLBACK, for a HAND-BUILT globals dict with no ``$module``
     (roborev M2, 2026-09-17).  That dict shape is documented and in use —
-    ``predicate.make_predicate``'s docstring builds one — and it names no
+    the retired ``predicate.make_predicate``'s docstring built one (W4b-3
+    slice 6), and a db-less compile still takes one — and it names no
     Database, so the row read cannot answer.  Answering ``None`` there is not
     "the same answer the class read gave": the class read ANSWERED, and a
     keyword-call body compiled against such a dict raises ``RuntimeError`` for

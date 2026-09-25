@@ -183,7 +183,8 @@ def meta_specs_for_call(db: Any, fname: str, arity: int) -> "tuple | None":
     if lookup is None:
         # A db-like SHIM -- ``globals_env._GlobalsDb``, which the db-less
         # compile path (``compile_predicate(..., db=None)``, the
-        # ``make_predicate`` hand-built-globals recipe) sets as ``ctx.db`` --
+        # hand-built-globals recipe the retired ``make_predicate`` taught)
+        # sets as ``ctx.db`` --
         # implements only ``signature_for`` and records no declarations.
         return None
     specs = lookup(fname, arity)

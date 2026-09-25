@@ -28,7 +28,8 @@ from clausal.import_hook import _load_module
 from clausal.logic.atoms import mangle
 from clausal.logic.database import Database
 from clausal.logic.predicate import (
-    is_declared_predicate_name, )
+    is_declared_predicate_name,
+)
 from tests.predicate_api_support import class_arm_predicate
 
 

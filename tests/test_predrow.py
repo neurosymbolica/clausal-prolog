@@ -368,6 +368,7 @@ def test_row_clauses_read_does_not_vivify_is_defined():
 # ══════════════════════════════════════════════════════════════════════════════
 
 from clausal.logic.predicate import PredicateMeta  # noqa: E402
+from tests.predicate_api_support import class_arm_predicate  # noqa: E402
 
 
 # ── the class reads THROUGH the row ─────────────────────────────────────────
@@ -918,7 +919,6 @@ def _run_goal(module, functor, arg):
 # is the one shape that would otherwise go quietly wrong.
 
 from clausal.logic.predicate import RetiredStateError, _RETIRED_STATE_NAMES
-from tests.predicate_api_support import class_arm_predicate
 
 _RETIRED = (
     "_clauses", "_dispatch_fn", "_lazy_recompile", "_locked",

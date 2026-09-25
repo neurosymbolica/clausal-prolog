@@ -30,8 +30,10 @@ def _clear_query_cache():
 
 
 # atoms and a helper for building f(a, g(a))-style ground compounds
-# The atoms a, b, c.  They were zero-field ``make_predicate`` classes, which
-# lowered to these same atoms (W4b-3 slice 6 retired ``make_predicate``).
+# The atoms a, b, c: plain strs.  They were zero-field ``make_predicate``
+# classes (retired at W4b-3 slice 6).  The rewrite answers are the same; only
+# the rendering differs -- inside a KWTerm or dict repr an atom now prints
+# QUOTED ('c'), where the class printed bare (c).
 _a = "a"
 _b = "b"
 _c = "c"
@@ -112,7 +114,8 @@ class TestOtherTermKinds:
         from clausal.terms import KWTerm
 
         term = KWTerm("g", x=_a, y=_b)
-        assert self._all(term, _a, _c) == ["KWTerm('g', x='c', y='b')"]  # atoms render quoted in a KWTerm repr
+        # an atom renders QUOTED inside a KWTerm repr (see _a above)
+        assert self._all(term, _a, _c) == ["KWTerm('g', x='c', y='b')"]
 
     def test_plain_dict_value_is_rewritten(self):
         assert self._all({"k": _a, "j": _b}, _a, _c) == ["{'k': 'c', 'j': 'b'}"]

@@ -180,7 +180,8 @@ class TestDisplayLocale:
     def test_zero_arity_atom_with_locale(self):
         """Zero-arity PredicateMeta atoms get their name translated in display."""
         # nv
-        nil_atom = "nil"     # the atom (a make_predicate class until W4b-3 slice 6)
+        # the atom (a make_predicate class until W4b-3 slice 6)
+        nil_atom = "nil"
         s = term_str(nil_atom, TermStyle(locale="th"))
         assert "ว่าง" in s
 
@@ -235,7 +236,8 @@ class TestTranslateBuiltin:
         from clausal.logic.builtins.translations_builtin import _translate__3
         trail = Trail()
         result_var = Var()
-        th_atom = "th"       # the atom (a make_predicate class until W4b-3 slice 6)
+        # the atom (a make_predicate class until W4b-3 slice 6)
+        th_atom = "th"
         t = Compound("append", (1, 2, 3))
         gen = _translate__3(th_atom, t, result_var, trail, None)
         sol = next(gen, "NO_SOLUTION")

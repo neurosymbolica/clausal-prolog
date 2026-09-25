@@ -21,8 +21,9 @@ def test_make_predicate_is_retired_whatever_its_arguments():
     with one message that points at the replacements."""
     from clausal.logic.predicate import (  # KEEP_MP
         MakePredicateRetiredError, make_predicate)
-    for call_it in (lambda: make_predicate("Old", ["a"], instances=True),  # KEEP_MP
-                    lambda: make_predicate("Old", ["a"])):  # KEEP_MP
+    for call_it in (
+            lambda: make_predicate("Old", ["a"], instances=True),  # KEEP_MP
+            lambda: make_predicate("Old", ["a"])):  # KEEP_MP
         with pytest.raises(MakePredicateRetiredError) as exc:
             call_it()
         assert isinstance(exc.value, TypeError)

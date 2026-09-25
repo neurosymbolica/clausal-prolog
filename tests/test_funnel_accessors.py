@@ -707,7 +707,6 @@ class TestCellGroundnessRegression:
         # nv
         from clausal.logic.builtins._helpers import _is_ground
 
-
         pt = class_arm_predicate("pt", ["a", "b"])
         free = Var()
         assert _is_ground(pt(1, free)) is False

@@ -1320,7 +1320,6 @@ def test_the_zero_field_class_test_is_named_is_zero_field_class():
     from clausal.logic import predicate
     from clausal.logic.atoms import is_atom as term_is_atom
 
-
     assert predicate.is_zero_field_class is predicate.is_atom
     assert predicate.is_zero_field_class(class_arm_predicate("t12_zero", []))
     assert not predicate.is_zero_field_class(mint("t12_zero"))

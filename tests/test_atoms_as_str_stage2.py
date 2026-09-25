@@ -202,7 +202,6 @@ class TestReviewRound1:
     def test_no_class_is_a_term_to_either_functor_twin(self):
         from clausal.logic.builtins._helpers import _functor_name_py, _arity_py
         from clausal.logic.variables._variables import _functor_name, _arity
-
         cls = class_arm_predicate("trr_zero_field", [])
         assert _functor_name_py(cls) is None and _arity_py(cls) is None
         assert _functor_name(cls) is None and _arity(cls) is None

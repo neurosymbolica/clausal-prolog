@@ -823,7 +823,8 @@ def _make_listing__1(db):
                     "predicate_indicator", culprit, "listing/1"))
             name = val.__name__
             arity = len(term_field_names_of_class(val))
-            # A bare ``make_predicate`` class from user Python may be on NO
+            # A class made in user Python (a class statement or metaclass
+            # call; ``make_predicate`` until W4b-3 slice 6) may be on NO
             # row, and a listing must not mint one: resolve_predicate_row's
             # class arm is a raw, non-minting ``val._row`` read.
             _row = resolve_predicate_row(val, arity=arity, db=db)

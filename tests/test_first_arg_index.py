@@ -769,7 +769,6 @@ class TestDeepGateWiredThroughCompiler:
         the flag -- built via a real term-instance head, the way a
         Python-side producer (R6) still constructs one."""
         from clausal.logic.database import Clause, Database
-        from clausal.logic.predicate import make_predicate
 
         Wrap = term_ctor("wrap", ["sub"])
         db = Database()

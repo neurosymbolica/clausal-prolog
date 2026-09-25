@@ -24,7 +24,8 @@ from clausal.import_hook import _load_module
 from clausal.logic.atoms import demangle, mangle
 from clausal.logic.database import Database
 from clausal.logic.predicate import (
-    _HANDLE_OWNERS, is_declared_predicate, is_declared_predicate_name, mint_predicate_handle, predicate_arities_for, predicate_binding_name,
+    _HANDLE_OWNERS, is_declared_predicate, is_declared_predicate_name,
+    mint_predicate_handle, predicate_arities_for, predicate_binding_name,
     resolve_predicate_row,
 )
 from tests.predicate_api_support import class_arm_predicate

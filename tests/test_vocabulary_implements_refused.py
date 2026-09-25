@@ -425,7 +425,6 @@ def test_an_authorized_bind_never_moves_a_predicate_off_another_database():
     moving it (it used to move -- the idiom's mechanism).  An unauthorized
     bind still leaves the class where it is, silently, and a first bind off
     the private detached row is still free."""
-
     owner_db, other_db = Database(), Database()
     cls = class_arm_predicate("vocabdrop_steal_probe", ["x"])
     assert cls._row is None or cls._row.detached
@@ -701,7 +700,6 @@ def test_a_python_made_class_on_a_real_clausal_row_is_not_python(
     """The row decides first: a class made in Python (``make_predicate``,
     whose ``__module__`` is not a Clausal module) that is BOUND to a real
     Clausal row is a Clausal predicate, however it is re-exported."""
-
     owner = private_module("impclob_decl_vocab", "_vocabdrop_r5_real_row")
     owner_db = owner.__dict__["$module"].db
     cls = class_arm_predicate("vocabdrop_mp", ["a", "b"])
@@ -728,7 +726,6 @@ def test_a_python_made_class_with_clauses_on_its_detached_row_is_python(
     first, so it gets the Python message, not "a -dynamic predicate holding
     runtime clauses" (there is no exporter row to hold them)."""
     from clausal.logic.database import Clause
-
     cls = class_arm_predicate("vocabdrop_detached", ["a"])
     cls._assertz(Clause(head=Compound("vocabdrop_detached", (1,)), body=[]))
     assert cls._row.detached and cls._row.clauses, "not the shape under test"
@@ -776,7 +773,8 @@ def test_the_other_arity_test_reads_the_bound_rows_arity_not_the_fields():
     spell (a name at two arities re-binds it within its database).  The
     bound ROW's key is the arity that counts."""
     from clausal.logic.predicate import (
-        is_foreign_class_at_other_arity, )
+        is_foreign_class_at_other_arity,
+    )
     owner_db, other_db = Database(), Database()
     cls = class_arm_predicate("vocabdrop_two_arities", ["a"])
     cls._bind_row(owner_db, "vocabdrop_two_arities", 1)
@@ -812,7 +810,6 @@ def test_a_class_whose_fields_and_row_disagree_never_hits_the_internal_raise(
     module still exports) is bound to a's ``r7q/1`` row and put in a's
     module dict where the import reads it.  The binding shape under test is
     unchanged -- a class whose ``_fields`` (1) and bound row (2) disagree."""
-
     owner_name = f"_vocabdrop_r7_owner_{b_arity}"
     use_name = f"_vocabdrop_r7_use_{b_arity}"
     owner = private_module(None, owner_name, path=_write(

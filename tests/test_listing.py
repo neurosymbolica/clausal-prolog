@@ -399,7 +399,6 @@ class TestListingDivIndicatorArgument:
         ``test_div_end_to_end_matches_class_form_byte_identically``)."""
         from clausal.terms import Div
 
-
         db = _db_with_fact("qr", 1)
         cls = class_arm_predicate("qr", ["x"])
         dispatch = get_builtin_dispatch("listing", 1, db)
