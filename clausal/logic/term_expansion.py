@@ -29,7 +29,6 @@ from clausal.logic.variables import Var as _Var
 from clausal.logic.predicate import (
     PredicateMeta, _db_for_module_name, make_predicate, predicate_owner_module,
 )
-from clausal.logic.builtins._helpers import functor_arity
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.pythonic_ast.nodes import Predicate as PredicateItem
 
@@ -47,9 +46,8 @@ def _is_term_expansion_clause(pred_node) -> bool:
     is_cell, functor = compound_cell_shape(head)      # P2: a head is a cell
     if is_cell:
         return functor == "term_expansion" and len(head) - 1 == 4
-    # Also check PredicateMeta instances (pre-flip shape; goes with the class)
-    if isinstance(type(head), PredicateMeta):
-        return functor_arity(head) == ("term_expansion", 4)
+    # (A ``PredicateMeta`` INSTANCE arm stood here, the pre-cell head shape.
+    # W4a made such an instance impossible; deleted W4b-3 slice 2.)
     return False
 
 

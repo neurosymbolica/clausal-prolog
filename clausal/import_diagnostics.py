@@ -745,6 +745,53 @@ def describe_imported_python_predicate_implemented(
     return "\n".join(lines)
 
 
+def describe_unowned_predicate_class(key, cls, module_name):
+    """Why a load REFUSES a ``PredicateMeta`` class no Clausal module owns.
+
+    W4b-3 slice 1 (operator ruling 2026-09-25): after the flip every
+    predicate binding a load leaves is a handle, minted from the owning
+    Database.  A class created in Python -- a ``metaclass=PredicateMeta``
+    class statement, or ``make_predicate`` (compiled with ``db=None``) --
+    has no Database to name, and ``PredicateMeta`` is being deleted.  The
+    remedies: a Clausal module, or the frozen duck-typed ``_get_dispatch``
+    protocol on a plain object, which is untouched.
+    """
+    name = cls.__name__
+    fields = cls.__dict__.get("_fields")
+    indicator = f"{name}/{len(fields)}" if fields is not None else name
+    # WHERE it was created: the class's registration site (the Python
+    # caller of ``make_predicate``, or the class statement), which names the
+    # user's file.  ``__module__`` alone would name ``clausal.logic.predicate``
+    # for every ``make_predicate`` class.
+    site = cls.__dict__.get("_registered_at")
+    if isinstance(site, tuple) and len(site) == 2:
+        where = f"at {site[0]}:{site[1]}"
+    else:
+        where = f"in module {getattr(cls, '__module__', None) or '<unknown>'}"
+    lines = [
+        f"{module_name} binds {key} to {indicator}, a PredicateMeta class "
+        f"created in Python {where} -- no Clausal module defines it, and a "
+        f"load no longer accepts a predicate CLASS."
+    ]
+    lines.extend(textwrap.wrap(
+        "PredicateMeta is retired: a predicate is a Database row, and a "
+        "module binds the owner's handle.  A class created in Python "
+        "(a metaclass=PredicateMeta class statement, or make_predicate) has "
+        "no Database a handle could name.",
+        width=_WIDTH, initial_indent=_INDENT, subsequent_indent=_INDENT,
+        break_long_words=False, break_on_hyphens=False,
+    ))
+    lines.extend(_arrow([
+        f"to supply {indicator} from Python, bind a plain object (not a "
+        f"class) with a _get_dispatch() method returning the predicate's "
+        f"dispatch function -- e.g. compile_predicate_trampoline("
+        f"{name!r}, arity, clauses, None) -- and -import_from that object;",
+        f"or define {indicator} in a Clausal module and -import_from it "
+        f"from there.",
+    ]))
+    return "\n".join(lines)
+
+
 def describe_imported_runtime_dynamic_implemented(
     functor, arity, importer, exporter, n_runtime, imported_as=None,
 ):

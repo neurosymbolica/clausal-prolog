@@ -34,7 +34,7 @@ from clausal.pythonic_ast.nodes import (
     StarUnpack, TupleLiteral, SetLiteral, literal_value,
 )
 from clausal.logic.predicate import (
-    is_term_instance, term_field_names, term_field_names_of_class, PredicateMeta,
+    is_term_instance, term_field_names, term_field_names_of_class,
     is_declared_predicate_name, namespace_db,
 )
 from clausal.logic.cells import TUPLE_TAG, CELLS_NAMESPACE_KEY, _cell_shape, is_chars
@@ -118,14 +118,14 @@ def _matched_field_names(term: Any) -> tuple[str, ...]:
     the same fields when *constructing* a term; this is the matching half of
     that rule.
 
-    ``PredicateMeta`` terms keep ``_fields`` verbatim — every declared argument
-    of a user predicate is semantic.  Note this is deliberately not used by
-    ``_head_arg_patterns``: there the field list is the predicate's own argument
-    list and must stay aligned with the head's arity.
+    Note this is deliberately not used by ``_head_arg_patterns``: there the
+    field list is the predicate's own argument list and must stay aligned with
+    the head's arity.  (A ``PredicateMeta`` INSTANCE arm stood here; W4a made
+    such an instance impossible -- a class applied builds a cell -- and it
+    returned ``names`` unchanged, which the fall-through below also does.
+    Deleted W4b-3 slice 2.)
     """
     names = term_field_names(term)
-    if isinstance(type(term), PredicateMeta):
-        return names
     if dataclasses.is_dataclass(term):
         skipped = {f.name for f in dataclasses.fields(term) if not f.compare}
         if skipped:

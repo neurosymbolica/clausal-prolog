@@ -206,7 +206,6 @@ def _term_to_goal(term: Any, db: Any = None) -> Any:
     # W4: a mangled functor is a qualified goal.  *db* is the compiling
     # module's (ruling Q0 hint), so a handle naming it resolves when popped.
     term = qualify_mangled_goal(term, db)
-    from clausal.logic.predicate import PredicateMeta
     from clausal.pythonic_ast.nodes import Call as AstCall, LoadName
 
     if type(term) in (list, bytes, tuple) and len(term) == 0:
@@ -228,11 +227,6 @@ def _term_to_goal(term: Any, db: Any = None) -> Any:
         if term in CELL_GOAL_CONTROL_FUNCTORS:    # parity with call/N (F5): ','/0 is refused, not looked up
             refuse_control_construct_cell(term, term, "solve/1")
         return AstCall(func=LoadName(name=term), args=[], kwargs=[])
-    if isinstance(type(term), PredicateMeta):
-        cls = type(term)
-        fields = term_field_names(term)
-        args = [getattr(term, f) for f in fields]
-        return AstCall(func=LoadName(name=cls.__name__), args=args, kwargs=[])
     if isinstance(term, Compound):
         return AstCall(
             func=LoadName(name=term.functor),
@@ -297,8 +291,6 @@ def _structural_key(term: Any, var_index: dict, thunks: list | None = None) -> t
     *thunks*, when a list is passed, receives every ``PyThunk`` leaf in
     traversal order — see ``_goal_cache_key``.
     """
-    from clausal.logic.predicate import PredicateMeta
-
     t = deref(term)
     if is_var(t):
         idx = var_index.get(id(t))
@@ -306,10 +298,6 @@ def _structural_key(term: Any, var_index: dict, thunks: list | None = None) -> t
             idx = len(var_index)
             var_index[id(t)] = idx
         return ("var", idx)
-    if isinstance(type(t), PredicateMeta):
-        return ("pred", type(t),
-                tuple(_structural_key(getattr(t, f), var_index, thunks)
-                      for f in term_field_names(t)))
     if isinstance(t, Compound):
         return ("cmp", t.functor,
                 tuple(_structural_key(a, var_index, thunks) for a in t.args))
@@ -432,9 +420,7 @@ def _goal_cache_key(goal: Any, module: Module, thunks: list | None = None):
     traversal is the point: a second, separately-written walk could drift out
     of step with the key's and silently rebind the wrong thunk.
     """
-    from clausal.logic.predicate import PredicateMeta
-    if not (isinstance(type(goal), PredicateMeta)
-            or isinstance(goal, Compound)
+    if not (isinstance(goal, Compound)
             or isinstance(goal, _GoalNode)
             or compound_cell_shape(goal)[0]):
         return None
@@ -463,7 +449,7 @@ def _templatize_query_goal(goal: Any, db=None):
     resolver as the ruling-Q0 hint so a LOCAL handle resolves even when its
     module has been popped from ``sys.modules``.
     """
-    from clausal.logic.predicate import PredicateMeta, predicate_binding_name
+    from clausal.logic.predicate import predicate_binding_name
 
     def _ground_value(val):
         """Return the ground value to parameterize, or None to leave it.
@@ -529,21 +515,6 @@ def _templatize_query_goal(goal: Any, db=None):
         # term_to_ast_expr and meets the same refusal a nested one does, which
         # names the term to write.
         return None
-
-    if isinstance(type(goal), PredicateMeta):
-        params: list = []
-        new_vals: dict = {}
-        for f in term_field_names(goal):
-            gv = _ground_value(getattr(goal, f))
-            if gv is None:
-                new_vals[f] = getattr(goal, f)
-            else:
-                pv = Var()
-                params.append((pv, gv))
-                new_vals[f] = pv
-        if not params:
-            return goal, []
-        return type(goal)(**new_vals), params
 
     if isinstance(goal, Compound):
         params = []

@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import contextlib
 import importlib
-import os
 import warnings
 from typing import Any
 
@@ -593,17 +592,16 @@ def compile_module(
 
 
 # ── W4b-2d task 8: THE FLIP ───────────────────────────────────────────────
-# ``CLAUSAL_NO_FLIP=1`` switches it off, for A/B runs only: the class era
-# is otherwise gone from the load path.  Read once at import.
-_FLIP = os.environ.get("CLAUSAL_NO_FLIP", "") in ("", "0")
+# There is no off switch: ``CLAUSAL_NO_FLIP`` went with W4b-3 slice 1
+# (operator ruling 2026-09-25 -- the class era ends).
 
 
 def _flip_owner(value: "PredicateMeta", db,
                 module_dict: dict) -> "tuple[Any, str] | None":
     """``(owner_db, functor)`` the handle for the class *value* is minted
     from (ruling X3: from a DATABASE, never from ``__module__``), or
-    ``None`` when *value* is not a Clausal database's predicate and must
-    stay bound AS IT IS.
+    ``None`` when *value* is not a Clausal database's predicate -- which
+    ``_flip_bindings`` REFUSES (W4b-3 slice 1).
 
     * A class bound to a real row names its owner through the row (ruling
       D1: an ``-import_from``'d class is bound to the EXPORTER's row, so an
@@ -620,11 +618,12 @@ def _flip_owner(value: "PredicateMeta", db,
     * Anything else -- a class a plain PYTHON module exports
       (``-import_from(py_mod, [p])``), a ``make_predicate`` class compiled
       with ``db=None`` onto its private row -- has no Database a handle
-      could name.  Its own ``_get_dispatch()`` is what answers it (the
-      frozen duck-typed protocol), so it is left bound: a handle minted
-      from the compiling db would name a predicate that db does not have,
-      and every call through it would be ``PredicateNotFoundError``
-      (roborev, 2026-09-25).
+      could name: ``None``.  A handle minted from the compiling db would
+      name a predicate that db does not have (``PredicateNotFoundError`` on
+      every call, roborev 2026-09-25).  W4b-2d left such a class bound as it
+      was; W4b-3 slice 1 refuses it (operator ruling 2026-09-25), pointing
+      at the duck-typed ``_get_dispatch`` protocol on a plain object, which
+      is frozen and untouched.
     """
     row = value.__dict__.get("_row")
     if row is not None and not row.detached:
@@ -663,19 +662,36 @@ def _flip_bindings(module_dict: dict, db) -> None:
     ``-specialize`` source program at step 6b, an ``-initialization`` goal),
     and the end-of-load registration would be too late for a module the
     caller never put in ``sys.modules``.  Idempotent and weak.
+
+    A class NO Clausal database owns (``_flip_owner`` answers ``None``: a
+    ``PredicateMeta`` class created in Python) is REFUSED with a
+    ``SyntaxError`` naming the binding (W4b-3 slice 1, operator ruling
+    2026-09-25; the message is ``import_diagnostics.
+    describe_unowned_predicate_class``).  It used to stay bound as it was.
+    The refusal is decided by a SCAN before anything changes: no binding
+    flipped, *db* not registered as a handle owner, and every offending
+    binding named in one error (roborev, 2026-09-25).
     """
-    if not _FLIP:
-        return
     from clausal.logic.predicate import (  # noqa: PLC0415
         mint_predicate_handle, register_handle_owner)
-    register_handle_owner(db)
+    plan = []
+    unowned = []
     for key, value in list(module_dict.items()):
         if not isinstance(value, PredicateMeta) or key.startswith("$"):
             continue
         found = _flip_owner(value, db, module_dict)
         if found is None:
-            continue
-        owner, functor = found
+            unowned.append((key, value))
+        else:
+            plan.append((key, found))
+    if unowned:
+        from clausal import import_diagnostics as diag  # noqa: PLC0415
+        module_name = module_dict.get("__name__") or db.module_name()
+        raise SyntaxError("\n".join(
+            diag.describe_unowned_predicate_class(key, value, module_name)
+            for key, value in unowned))
+    register_handle_owner(db)
+    for key, (owner, functor) in plan:
         try:
             handle = mint_predicate_handle(owner, functor)
         except ValueError:

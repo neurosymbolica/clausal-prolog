@@ -479,11 +479,11 @@ def _install_specialized(
 
 def _namespace_binding(pred_cls, db, new_name: str, module_dict):
     """What ``_install_specialized`` binds *new_name* to in the namespace:
-    the handle post-flip; the class when the flip is off, or when the
-    namespace is not *db*'s own module dict (a handle minted there would
-    name a module the namespace is not), or *db* names no module."""
-    from clausal.logic import compiler_v2  # noqa: PLC0415
-    if (not compiler_v2._FLIP or module_dict is None
+    the handle; the class when the namespace is not *db*'s own module dict
+    (a handle minted there would name a module the namespace is not), or
+    *db* names no module.  (There is no flip-off case any more: W4b-3
+    slice 1 removed ``CLAUSAL_NO_FLIP``.)"""
+    if (module_dict is None
             or getattr(db, "module_dict", None) is not module_dict):
         return pred_cls
     from clausal.logic.predicate import (  # noqa: PLC0415
