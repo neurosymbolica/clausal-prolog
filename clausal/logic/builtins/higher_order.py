@@ -12,7 +12,8 @@ from clausal.logic.trampoline import DONE, StepGenerator
 from clausal.logic.builtins.lists import _as_items, _seq_result, _was_string
 from clausal.logic.builtins._helpers import _is_empty_list, _standard_order_key
 from clausal.logic.predicate import (
-    is_declared_predicate_name, localize_goal, localize_owner_functor,
+    _dispatch_at, is_declared_predicate_name, localize_goal,
+    localize_owner_functor,
 )
 
 from clausal.logic.cells import (
@@ -30,6 +31,7 @@ from clausal.logic.builtins._registry import (
 )
 from clausal.logic.builtins.call_body import (
     is_body_term, body_goal_dispatch, body_with_extras_error,
+    is_special_form, is_special_form_name, special_form_dispatch,
     non_callable_goal_error, iso_control_cell_dispatch, folded_existence_error,
     needs_meta_call, MetaCallGoal,
 )
@@ -238,6 +240,14 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
         # the leftover extras handed on to fold onto the inner goal there.
         return _resolve_named_goal(
             target.db, inner, tuple(call_args[2:]), context)
+    if is_special_form(functor, len(call_args)):
+        # A compiler SPECIAL FORM (findall/3, once/1, catch/3, throw/1 ...),
+        # after the fold -- so ``call(findall(X), G, L)`` is findall/3 too.
+        # No database defines these names (the compiler lowers them inline),
+        # so they used to reach the lookup below, find nothing, and fail
+        # SILENTLY.  Decided before the ``db is None`` bail for the same
+        # reason as the zero-arity constructs: no db can answer for them.
+        return special_form_dispatch(db, folded, context)
     # No arity condition (F3): ``call((",",))`` is as much a control construct
     # in goal position as ``call((",", A, B))``, and it used to fail silently
     # here while ``solve((",",), m)`` raised.
@@ -287,6 +297,13 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
         # Only AFTER the lookups: a ``-hide`` atom carries its bare declared
         # module name, and the calling db may define it under that spelling.
         _raise_if_unloaded_handle(functor, arity, context)
+        if is_special_form_name(functor):
+            # ``call(once(G), X)``: the fold made once/2, which is no special
+            # form and which nothing here defines -- existence_error, as
+            # Scryer answers (``once/2``) and as call/N's extras on ``true``
+            # or ``,`` already do, rather than a silent failure.
+            raise LogicException(folded_existence_error(
+                functor, arity, context))
         return None
     return dispatch, call_args
 
@@ -337,12 +354,33 @@ def _namespace_dispatch(db, functor, arity):
         return None
     pred_cls = _find_pred_cls(functor, arity, module_dict)
     if pred_cls is None:
-        return None
+        return _goal_object_dispatch(db, module_dict.get(functor), arity)
     home = _home_db(db, pred_cls, functor, arity)
     canonical = _canonical_functor(db, pred_cls, functor)
     if home is db and canonical == functor:
         return None  # the lookup that already came back empty
     return home.get_dispatch(canonical, arity)
+
+
+def _goal_object_dispatch(db, binding, arity):
+    """The dispatch of a NON-predicate goal object the name is bound to --
+    a ``ModulePredicate`` (``-import_from(py.re, [match])``) or any other
+    implementor of the duck-typed ``_get_dispatch`` protocol -- else None.
+
+    A clause body calls such a binding through its ``_get_dispatch()``
+    (``solve.call`` does the same, its "Phase 5"), so ``match(P, S)`` ran
+    while ``call(("match", P, S))`` from the same module found no predicate
+    class under the name and FAILED SILENTLY.  Resolved through
+    ``predicate._dispatch_at``, the one place the protocol is called, so the
+    binding's own arity check (a ``ModulePredicate``'s existence_error at an
+    arity it does not register) answers as it does in the body.  A predicate
+    binding at another arity is not this: ``_find_pred_cls`` already said no.
+    """
+    if (binding is None or type(binding) is str
+            or not hasattr(binding, "_get_dispatch")
+            or is_declared_predicate_name(binding, db=db)):
+        return None
+    return _dispatch_at(binding, arity, db)
 
 
 def _make_call_goal_factory(extra_n: int):

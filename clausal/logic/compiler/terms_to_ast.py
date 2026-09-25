@@ -245,6 +245,52 @@ def _implicit_functors_active(namespace: "dict | None") -> bool:
 # ``position`` had no callers left.)
 
 
+def _goal_cell_functor(fname: str, arity: int, namespace) -> "str | None":
+    """The functor of the goal CELL ``fname(A1 ... An)`` builds in TERM
+    position although nothing declares *fname* as a functor -- or None, for
+    the ordinary construction.
+
+    Two kinds of name, both goals that no predicate CLASS stands behind, so
+    the ``ast.Call`` fallback could only fail at run time:
+
+    * a compiler SPECIAL FORM (``findall/3``, ``once/1``, ``catch/3`` ...,
+      ``call_body.SPECIAL_FORMS``), bare: nothing callable is bound to the
+      name, and ``G is findall(X, p(X), L)`` raised NameError "not in scope
+      as a term class";
+    * a name -- bare, or the DOTTED spelling ``-import_from`` rewrites an
+      imported name into (``py.re.match``) -- bound to a NON-callable
+      ``_get_dispatch`` goal object such as a ``ModulePredicate``, where
+      ``G is match(P, S)`` raised TypeError "'ModulePredicate' object is not
+      callable".  The cell carries the BASE name (``match``), the R5
+      spelling every other imported functor's cell has.
+
+    The cell is what ``call/1`` runs as that very goal (``call_body.
+    special_form_dispatch``; ``higher_order._goal_object_dispatch``).  A name
+    bound to a declared PREDICATE keeps its class construction, and a
+    callable binding keeps being called (out-of-tree ``_get_dispatch``
+    implementors may construct their term that way).
+    """
+    resolved = _resolve_functor_binding(fname, namespace) if namespace else None
+    binding, leaf = (resolved[0], resolved[1]) if resolved else (None, fname)
+    if binding is not None and is_declared_predicate_name(
+            binding, db=namespace_db(namespace)):
+        return None
+    from clausal.logic.builtins.call_body import is_special_form  # noqa: PLC0415
+    if "." not in fname and is_special_form(fname, arity):
+        return fname
+    if (binding is not None and type(binding) is not str
+            and hasattr(binding, "_get_dispatch") and not callable(binding)):
+        # The base name only where it names THIS object in the module and is
+        # not a special form: ``py.re.findall`` must stay dotted, since the
+        # bare ``findall/3`` cell is the special form, and so is it in a body
+        # (the import rewrote the body call to the dotted name too).
+        if (leaf != fname and namespace.get(leaf) is binding
+                and not is_special_form(leaf, arity)):
+            return leaf
+        return fname
+    return None
+
+
 def _resolve_functor_binding(
     name: str, namespace: dict
 ) -> "tuple[Any, str, Any] | None":
@@ -1129,6 +1175,10 @@ def term_to_ast_expr(
                         f"signature to place its named slots against"
                     )
                 return cell_literal_ast(sys.intern(fname), arg_exprs)
+        _goal_functor = None if kw_exprs else _goal_cell_functor(
+            fname, len(arg_exprs), _namespace)
+        if _goal_functor is not None:
+            return cell_literal_ast(sys.intern(_goal_functor), arg_exprs)
         return ast.Call(
             func=_name(fname),
             args=arg_exprs,

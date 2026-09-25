@@ -1,0 +1,10 @@
+# A module that IMPORTS py.re's findall/3: in a clause body, `findall(P, S, L)`
+# is then the REGEX predicate (the import rewrites the call to py.re.findall),
+# not the special form -- tests/test_call_runs_special_form_cells.py.
+-module(call_special_forms_re, [])
+-import_from(py.re, [findall, match])
+-allow_singletons
+
+b(L) <- findall("\\d", "a1b2", L)
+g(L, G) <- (G is findall("\\d", "a1b2", L))
+run(L) <- (g(L, G), call(G))
