@@ -43,9 +43,12 @@ VIA_DOTTED = """\
 -import_from(pkg.soledom, [sole_verdict, ok])
 
 classify(VERDICT, matched) <- (
-    VERDICT is sole_verdict(ok)
+    VERDICT is sole_verdict(ok, _)
 )
 """
+# ``sole_verdict(ok, _)``, not ``sole_verdict(ok)``: ruling C (2026-09-24)
+# refuses a short construction of a DATA functor instead of padding the
+# missing slot with a fresh variable.
 
 _NAMES = ("soledom", "pkg", "pkg.soledom", "viaflat", "viadotted")
 

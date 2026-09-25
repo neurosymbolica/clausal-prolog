@@ -38,15 +38,19 @@ def _load(tmp_path, name, src):
 
 def test_a_class_sitting_on_another_aritys_row_is_not_returned_for_that_arity(
         tmp_path):
-    """``-dynamic(d/2)`` beside ``d(1),`` moves ``d/1``'s class onto the
-    ``('d', 2)`` row (a pre-existing defect, its own todo).  The row-matched
-    leg must still not hand a ONE-field class to a ``d/2`` assert: the caller
-    locks it, recompiles through it and builds terms with it.
+    """``-dynamic(d/2)`` beside ``d(1),`` USED TO move ``d/1``'s class onto
+    the ``('d', 2)`` row (fixed 2026-09-24,
+    ``todo/done/dynamic-at-another-arity-moves-the-class-2026-09-17.md``).
+    The row-matched leg must still not hand a ONE-field class to a ``d/2``
+    assert: the caller locks it, recompiles through it and builds terms with
+    it.  The misplaced state is now built by hand so the guard stays tested.
     """
     mod = _load(tmp_path, "fpc_ar", "-dynamic(d/1)\n-dynamic(d/2)\nd(1),\n")
     md = mod.module_dict
     cls = md["d"]
-    # the defect this test is built on, pinned so the test cannot go vacuous
+    assert cls._row.key == ("d", 1), "the load moved the class again"
+    cls._bind_row(mod.db, "d", 2, authorized=True)
+    # the state this test is built on, pinned so the test cannot go vacuous
     assert len(cls._fields) == 1 and cls._row.key == ("d", 2)
     assert mod.db.row("d", 2) is cls._row
     assert _find_pred_cls("d", 2, md) is None

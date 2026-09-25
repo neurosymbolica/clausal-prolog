@@ -31,3 +31,19 @@ functor) and `-import_from`s a PREDICATE `f/2`: should the import win (as it
 does against a defining exporter), or should the clash be a load error? Either
 way the silent split is wrong. Until 2026-09-24 the idiom's local clause hid
 this (the head re-bound the name).
+
+## Resolved (2026-09-24, operator ruling: option A -- the import wins; branch fix/small-todos-batch-2026-09-24)
+
+`compiler_v2._process_declarations`: a field-named export entry with no local
+clauses keeps an existing binding that is an IMPORTED predicate at the
+entry's arity (its row belongs to another database, not detached), even when
+that row has no clauses yet -- the clause-less `-dynamic` exporter case. It
+used to keep only a clause-carrying import, so this shape bound the atom and
+the write was lost. An import at ANOTHER arity still leaves the entry local
+data. Repro (`rx_add(ok)` then `rx_chk`) now answers `['ok']` from both
+modules.
+
+Tests: `tests/test_field_named_export_of_imported_dynamic_both_eras.py` --
+class and handle eras (handle era via the D1 import emulation), same and
+different field names, plus the other-arity case. Mutations: no keep-import
+branch -> the 4 era cases fail; no arity guard -> the other-arity case fails.

@@ -369,7 +369,9 @@ def test_a_refused_load_writes_nothing_at_all(monkeypatch):
         f"the refused load opened {writes.by('gate_rival')} -- the LEGAL "
         f"earlier write must not have landed either; the refusal is for the "
         f"load, not for one predicate of it")
-    assert len(vocab.gv_owned._state_row().clauses) == 1
+    # Read through the owner's Database, not the class (``_state_row``), so
+    # the pin holds once the binding is a handle (2026-09-25, small arms).
+    assert len(vocab.__dict__["$module"].db.row("gv_owned", 1).clauses) == 1
 
     # Positive control: the same recorder sees a permitted load's writes.
     _load_fixture("gate_vocab")

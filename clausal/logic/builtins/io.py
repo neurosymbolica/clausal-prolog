@@ -5,6 +5,7 @@ listing/1, portray_clause/1."""
 
 from __future__ import annotations
 
+import numbers as _numbers
 import sys as _sys
 
 from clausal.logic.atoms import (
@@ -14,7 +15,7 @@ from clausal.logic.atoms import (
     spelling,
 )
 from clausal.logic.cells import (
-    TUPLE_TAG, chars, is_chars, chars_text, compound_cell_shape,
+    TUPLE_TAG, chars, is_chars, chars_text,
 )
 from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.terms import (
@@ -25,6 +26,7 @@ from clausal.terms import (
     Compound,
     DictTerm,
     Div,
+    FloorDiv,
     KWTerm,
     SegBytes,
     SegList,
@@ -537,120 +539,6 @@ def _format_clause(clause):
 # ── listing/1 ────────────────────────────────────────────────────────────────
 
 
-def _as_name_arity_indicator(val, db=None):
-    """Recognize *val* as a ``Name/Arity`` predicate indicator, in any of
-    three representations:
-
-    - the CELL shape ``('/', 'foo', 2)`` (see ``clausal/logic/cells.py``) —
-      reachable from Python/engine callers that build the indicator as
-      plain data directly (e.g. a caller that already has the name and
-      arity in hand and constructs the tuple itself); NOT what a
-      user-written ``foo/2`` compiles to in ``.clausal`` source today (see
-      the ``Div`` case below) — corrected in P3-3 Task 8 fix round 1 (F1)
-      after the earlier docs claimed otherwise;
-    - the engine-internal ``Compound("/", (functor, arity))`` shape other
-      builtins in this package (``database_ops.py``) build and consume;
-    - a runtime ``Div`` node (``clausal.pythonic_ast.nodes.Div``, re-exported
-      from ``clausal.terms``) — what a user-written ``Fib/2`` ACTUALLY
-      compiles to in today's surface: ``/`` is the arithmetic operator, so a
-      structural (non-``is``) use of it stays reified as ``Div(left=...,
-      right=...)`` rather than a cell (operator nodes are structural terms,
-      matched/constructed, not evaluated — see ``BinOp.__unify__``'s
-      docstring).  Probed directly (P3-3 Task 8 fix round 1, F1):
-      ``Fib/2`` compiles to ``Div(left=<the Fib PredicateMeta class>,
-      right=2)`` when ``Fib`` is a declared predicate in scope, or
-      ``Div(left=("fib",), right=2)`` when the left operand is an atom (a
-      bare name, or — in the default ``-double_quotes(atom)`` mode — a
-      ``"fib"`` literal); ``3/2`` (no predicate-denoting operand) compiles to
-      ``Div(left=3, right=2)`` unchanged, which is exactly the shape this
-      function must REJECT — a bare numeric ``/`` is not a predicate
-      indicator, and ``left`` failing the ``PredicateMeta``-or-ATOM check
-      below is what tells the two apart.  This is a sound discriminator, not
-      a guess: it only recognizes the indicator shape when ``left`` denotes
-      a NAME (a class or an atom) and ``right`` is a plain int, so it can
-      never misread a genuine arithmetic ``Div`` whose left operand is a
-      number or a string.  ``.left``/``.right`` are dereffed before the type checks —
-      the same access pattern ``arith_to_ast_expr`` uses for a ``Div`` node
-      reached through ``is/2`` (``clausal/logic/compiler/terms_to_ast.py``
-      ``deref(term.left)`` / ``deref(term.right)``) — since either slot may
-      hold a trail-bound Var.
-
-    Returns ``(name, arity, binding)`` — *name* the identifier SPELLING —
-    or ``None`` if *val* is not one of those three shapes with a name that is
-    an ATOM (or a predicate BINDING, reduced to its own name) and a non-bool
-    int arity.  A plain ``str`` name is a STRING and answers ``None``
-    (Task 12).
-
-    *binding* is the predicate binding itself when the left operand WAS one
-    -- a ``PredicateMeta`` class today, a module-qualified HANDLE (a mangled
-    atom) after the flip -- and ``None`` otherwise (final review M-a).  The
-    name alone is not enough to find the predicate: an ``-import_from``'d
-    predicate lives on the EXPORTER's row, so reducing it to its name and
-    looking that up in the calling database turned ``listing(qq/1)`` into an
-    ``existence_error`` for a predicate the caller can see and call.  The
-    binding knows its own row; the name does not.
-
-    F1 row 60 (2026-09-24): a mangled name is recognised as a handle only when
-    it denotes a PREDICATE (``is_declared_predicate_name`` at its owner, or the
-    import this database adopted a row for when the owner was popped from
-    ``sys.modules``); the test runs BEFORE the plain-atom arm, which would
-    otherwise take any mangled atom for its raw spelling.  A ``-hide`` DATA
-    atom is mangled in the same shape and is NOT a handle: it keeps today's
-    treatment (its mangled spelling, which names no predicate, so ``listing``
-    raises ``existence_error``).  *db* is the caller's database, the Q0 hint.
-    """
-    pred_cls = None
-    if type(val) is tuple and len(val) == 3 and val[0] == "/":
-        name, arity = deref(val[1]), deref(val[2])
-    elif isinstance(val, Compound) and val.functor == "/" and len(val.args) == 2:
-        name, arity = deref(val.args[0]), deref(val.args[1])
-    elif isinstance(val, Div):
-        name, arity = deref(val.left), deref(val.right)
-    else:
-        return None
-    if isinstance(name, PredicateMeta):
-        pred_cls = name
-        name = name.__name__
-    elif _is_predicate_handle(name, arity, db):
-        pred_cls = name
-        name = demangle(name)[1]
-    elif _term_is_atom(name):
-        # THE FLIP (spec §6.4): the name half of a predicate indicator is an
-        # ATOM, so ``r30_foo/1`` written in source arrives as the arity-0
-        # cell ``("r30_foo",)``.
-        name = spelling(name)
-    else:
-        # Task 12: the Stage A arm that also read a plain ``str`` as the name
-        # is deleted.  A ``str`` here is a STRING, not a name — the caller
-        # (``listing/1``) turns this ``None`` into ``type_error(predicate,
-        # …)``, the same refusal a bare string argument gets.  The engine's
-        # own indicator BUILDERS (``database_ops.py``'s ``Compound("/",
-        # (functor, arity))``) hold the spelling, but they build error terms;
-        # nothing feeds one back in here.
-        return None
-    if not isinstance(arity, int) or isinstance(arity, bool):
-        return None
-    if arity < 0:
-        return None
-    return name, arity, pred_cls
-
-
-def _indicator_operands(val):
-    """The two operands of an indicator-SHAPED *val*, dereffed, or ``None``.
-
-    Shape only — it says nothing about whether the operands are well formed,
-    which is exactly what the instantiation-vs-type distinction needs
-    (final review M-a).
-    """
-    if type(val) is tuple and len(val) == 3 and val[0] == "/":
-        return deref(val[1]), deref(val[2])
-    if isinstance(val, Compound) and val.functor == "/" and len(val.args) == 2:
-        return deref(val.args[0]), deref(val.args[1])
-    if isinstance(val, Div):
-        return deref(val.left), deref(val.right)
-    return None
-
-
 def _importer_spellings(db, handle) -> list:
     """The names under which the calling module could have adopted *handle*'s
     row: the handle's own atom half, then every other name the module's
@@ -758,136 +646,171 @@ def _indicator_row(db, name, arity, pred_cls):
     return db.row(name, arity, create=False)
 
 
+def _pi_parts(val):
+    """``(separator, name, arity)`` of a ``Name/Arity`` or ``Name//Arity``
+    SHAPED *val*, operands dereffed, or ``None`` -- shape only, nothing about
+    whether the operands are well formed.
+
+    Four spellings of each: the cell ``('/', n, a)``, the engine's
+    ``Compound("/", (n, a))``, and the runtime operator node a user-written
+    ``fib/2`` (``Div``) or ``fib//2`` (``FloorDiv``) compiles to.
+    """
+    if type(val) is tuple and len(val) == 3 and val[0] in ("/", "//"):
+        return val[0], deref(val[1]), deref(val[2])
+    if (isinstance(val, Compound) and val.functor in ("/", "//")
+            and len(val.args) == 2):
+        return val.functor, deref(val.args[0]), deref(val.args[1])
+    if isinstance(val, Div):
+        return "/", deref(val.left), deref(val.right)
+    if isinstance(val, FloorDiv):
+        return "//", deref(val.left), deref(val.right)
+    return None
+
+
+def _checked_indicator(parts, db):
+    """``(name, arity, binding)`` for a well-formed indicator, else the ISO
+    error Scryer's ``listing/1`` raises for it (operator ruling 2026-09-25,
+    "do what Scryer does").
+
+    Scryer checks the SHAPE itself and hands the operands to ``functor/3``,
+    so every operand fault is ``functor/3``'s: an unbound operand is an
+    ``instantiation_error``, a non-integer arity ``type_error(integer, A)``, a
+    negative one ``domain_error(not_less_than_zero, A)``, a compound name
+    (a string is the list it denotes) ``type_error(atomic, N)``, and an
+    atomic non-atom name ``type_error(atom, N)`` (``type_error(callable, N)``
+    at arity 0, which ``clause/2`` reports for ``functor(H, 3, 0)``).
+    ``Name//A`` names ``Name/(A+2)``.  *binding* is the predicate binding
+    the name WAS (a ``PredicateMeta`` class, or a predicate HANDLE), else
+    ``None``: the name alone is not enough to find an ``-import_from``'d
+    predicate, which lives on the EXPORTER's row (final review M-a).  A mangled
+    name is a handle only when it denotes a PREDICATE (F1 row 60): a ``-hide``
+    DATA atom has the same shape, keeps its mangled spelling, and names no
+    predicate.
+    """
+    sep, name, arity = parts
+    if is_var(name) or is_var(arity):
+        raise LogicException(instantiation_error(
+            "listing/1: the predicate indicator is not sufficiently "
+            "instantiated — bind Name/Arity before listing it",
+        ))
+    if not isinstance(arity, int) or isinstance(arity, bool):
+        raise LogicException(type_error("integer", arity, "listing/1"))
+    if sep == "//":
+        arity += 2
+    binding = None
+    if isinstance(name, PredicateMeta):
+        binding, name = name, name.__name__
+    elif _is_predicate_handle(name, arity, db):
+        binding, name = name, demangle(name)[1]
+    elif _term_is_atom(name):
+        name = spelling(name)
+    elif isinstance(name, _numbers.Number) and not isinstance(name, bool):
+        raise LogicException(type_error(
+            "atom" if arity > 0 else "callable", name, "listing/1"))
+    else:
+        raise LogicException(type_error("atomic", name, "listing/1"))
+    if arity < 0:
+        raise LogicException(domain_error(
+            "not_less_than_zero", arity, "listing/1"))
+    return name, arity, binding
+
+
 @_db_builtin("listing", 1, fields=("pred",))
 def _make_listing__1(db):
-    """Factory for ``listing/1`` — captures *db* so a predicate-name ATOM
-    or a ``Name/Arity`` indicator can be resolved to a row.
+    """Factory for ``listing/1`` — captures *db* so a ``Name/Arity``
+    indicator can be resolved to a row.
 
-    P3-3 Task 8: migrated off a bare class-only builtin.  The class/instance/
-    ``BuiltinPredicate`` argument shapes need no database at all — a
-    ``PredicateMeta``'s clauses are its row's (Task 2; W2 reads the row) —
-    so ``db=None`` (the db-less path ``get_builtin_dispatch("listing", 1,
-    None)`` and ``tests/test_listing.py`` exercise) keeps working for those
-    three exactly as before.  The two NEW shapes below (a name ATOM, a
-    ``Name/Arity`` indicator) genuinely need a database to resolve against,
-    and raise the pre-existing ``type_error`` when there isn't one.
+    The class/instance/``BuiltinPredicate`` argument shapes are the PYTHON
+    API and need no database at all (a ``PredicateMeta``'s clauses are its
+    row's), so ``db=None`` (``get_builtin_dispatch("listing", 1, None)``)
+    keeps working for those.  An indicator with no database to resolve it
+    against names no clauses, and fails.
     """
     def _listing__1(pred, trail, k):
-        """listing(Pred) — print all clauses of a predicate to stdout.
+        """listing(PI) — print all clauses of a predicate to stdout.
 
-        Accepts:
-          - a PredicateMeta class or instance (resolves to class)
-          - a BuiltinPredicate (prints the "% name/arity — builtin" line)
-          - an atom naming a predicate (NEW, P3-3 Task 8) — the arity-0
-            cell ``("foo",)`` (the atoms-as-cells design's §6.4; a bare
-            ``str`` is a STRING and raises ``type_error(predicate, …)``)
-          - a ``Name/Arity`` indicator (NEW, P3-3 Task 8): the cell
-            ``('/', name, arity)``, the engine's ``Compound("/", (name,
-            arity))``, or -- what a user-written ``Fib/2`` actually
-            compiles to in today's surface, since ``/`` is arithmetic and
-            a structural (non-``is``) use of it stays a reified operator
-            term -- a runtime ``Div`` node whose (dereffed) left operand is
-            a ``PredicateMeta`` class or a str and whose right operand is a
-            non-bool int.
+        Operator ruling 2026-09-25: "do what Scryer does".  Scryer's
+        definition (library(format))::
+
+            listing(PI) :-
+                    nonvar(PI),
+                    (   PI = Name/Arity0 -> Arity = Arity0
+                    ;   PI = Name//Arity0 -> Arity is Arity0 + 2
+                    ;   type_error(predicate_indicator, PI, listing/1)
+                    ),
+                    functor(Head, Name, Arity),
+                    \\+ \\+ clause(Head, _),
+                    ...
+
+        So, for a TERM argument:
+          - unbound -> fails;
+          - ``Name/Arity`` / ``Name//Arity`` -> lists Name/Arity (resp.
+            Name/(Arity+2)); FAILS when that predicate does not exist or has
+            no clauses; a malformed operand is ``functor/3``'s ISO error
+            (``_checked_indicator``);
+          - anything else -- a bare atom, a compound term, a string, a
+            number -- is ``type_error(predicate_indicator, PI)``.
+        Kept (the Python API, retired at a later flip): a ``PredicateMeta``
+        class or instance lists its own clauses, a ``BuiltinPredicate``
+        prints its "% name/arity — builtin" line.
         """
         val = deref(pred)
+        if is_var(val):
+            return                      # Scryer: nonvar(PI), else fail
 
-        # Recognize a Name/Arity indicator (cell, Compound, or a runtime
-        # Div node) BEFORE the generic term-instance resolution below:
-        # Compound and Div are both (perhaps surprisingly) @dataclass, so
-        # is_term_instance() would otherwise swallow an indicator-shaped
-        # value -- whether or not it turns out to be a WELL-FORMED
-        # indicator -- and either treat it as a bare class with no fields
-        # of its own, or (for an ill-formed Div like 3/2, a genuine
-        # arithmetic expression) report the wrong culprit in the resulting
-        # type_error (the Div CLASS instead of the actual Div instance).
-        # Gating on the TYPE, not on whether _as_name_arity_indicator
-        # actually parsed it, keeps the raised error's culprit the real
-        # value in both the well-formed and the rejected case.
-        is_indicator_shaped = (
-            type(val) is tuple and len(val) == 3 and val[0] == "/"
-        ) or isinstance(val, (Compound, Div))
-        # Spec §6.4: ``listing/1`` accepts an ATOM as the predicate name —
-        # the arity-0 cell ``("z0",)`` names z0/0.  A bare ``str`` is a
-        # STRING after THE FLIP and is NOT a name: it falls through to the
-        # ``type_error(predicate, …)`` at the bottom of this function.
-        indicator = None if _term_is_atom(val) else _as_name_arity_indicator(val, db)
-
-        # Accept an instance → resolve to its class
-        if (
-            indicator is None
-            and not _term_is_atom(val)
-            and not is_indicator_shaped
-            and is_term_instance(val)
-        ):
-            val = type(val)
-
-        if isinstance(val, PredicateMeta):
-            # The branch dispatch (PredicateMeta vs. BuiltinPredicate vs.
-            # the other shapes below) stays a class-specific isinstance --
-            # it decides WHICH shape ``val`` is, not "give me the row",
-            # and only this branch's row fetch is W4b-2b's F1 concern.
-            name = val.__name__
-            arity = len(term_field_names_of_class(val))
-            # *val* is whatever the caller passed: a bare ``make_predicate``
-            # class from user Python may be on NO row, and a listing must not
-            # mint one.  resolve_predicate_row's class arm is the identical
-            # raw, non-minting ``val._row`` read (era-agnostic now); *arity*
-            # here is the class's OWN field count (just computed above for
-            # the same purpose), not an independent call-site number, but
-            # the class arm does not consult it either way.
-            _row = resolve_predicate_row(val, arity=arity, db=db)
-            clauses = _row.clauses if _row is not None else []
-        elif isinstance(val, BuiltinPredicate):
-            name = val._functor
-            arity = val._arity
-            print(f"% {name}/{arity} — builtin")
+        # A predicate HANDLE passed DIRECTLY -- the Python API,
+        # ``listing(mod.fib)`` once the binding is a handle -- lists its
+        # predicate, as the class arm below lists a class (operator ruling
+        # 2026-09-25).  A class names one arity; a handle names none, so a
+        # name that is a predicate at several arities lists each, in arity
+        # order: Scryer refuses a bare name only because it is ambiguous, and
+        # listing them all is the Python API's answer.  SOURCE ``listing(fib)``
+        # never gets here -- ruling S lowers the bare name to its plain atom,
+        # which ``_pi_parts`` does not take, so it stays Scryer's
+        # ``type_error(predicate_indicator, fib)``.  A ``-hide`` DATA atom is
+        # mangled in the same shape but is no predicate, so it keeps that
+        # refusal with its own spelling.
+        bare = _bare_handle_listing(val, db)
+        if bare is not None:
+            for _name, _arity, _clauses in bare:
+                if not _clauses:
+                    print(f"% {_name}/{_arity} — no clauses")
+                else:
+                    print(f"% {_name}/{_arity} — {len(_clauses)} clause(s)")
+                    for clause in _clauses:
+                        print(_format_clause(clause))
             yield None
             return
-        else:
-            pred_cls = None
-            if _term_is_atom(val):
-                name, arity = spelling(val), 0
-            elif indicator is not None:
-                name, arity, pred_cls = indicator
-            elif not is_indicator_shaped and compound_cell_shape(val)[0]:
-                # A compound CELL names its predicate: ``listing(color(R, H))``
-                # is ``listing(color/2)``.  P2: what used to arrive here as a
-                # term INSTANCE, and resolved through ``type(val)`` above, is a
-                # cell now -- it carries the same two facts that class did, the
-                # functor and the arity, and none of the rest.  Which is why it
-                # lands in THIS branch and not that one: a cell has no class to
-                # read ``_clauses`` off, so it resolves against the caller's
-                # database like the atom and indicator shapes (R-P2-2, module
-                # locality).  ``is_indicator_shaped`` is re-tested rather
-                # than assumed spent: an UNFINISHED indicator (``X/2``, arity
-                # still unbound) reaches here with ``indicator is None``, and
-                # without the guard this arm read ``('/', name, _G1)`` as the
-                # predicate ``'/'/2`` and swallowed the instantiation_error
-                # below.  A TUPLE_TAG cell is tuple DATA and names nothing.
-                name, arity = compound_cell_shape(val)[1], len(val) - 1
-            else:
-                # An indicator-SHAPED value with an unbound operand is not a
-                # malformed indicator, it is an unfinished one (final review
-                # M-a): ``listing(X/2)`` gave a type_error naming the whole
-                # Div, which reads as "``/`` is the wrong sort of term here"
-                # when the term is right and only the variable is missing.
-                operands = _indicator_operands(val)
-                if operands is not None and any(is_var(o) for o in operands):
-                    raise LogicException(instantiation_error(
-                        "listing/1: the predicate indicator is not "
-                        "sufficiently instantiated — bind Name/Arity before "
-                        "listing it",
-                    ))
-                raise LogicException(type_error("predicate", val, "listing/1"))
-            if db is None and pred_cls is None:
-                raise LogicException(type_error("predicate", val, "listing/1"))
-            row = _indicator_row(db, name, arity, pred_cls)
-            if row is None:
-                raise LogicException(existence_error(
-                    "procedure", Compound("/", (name, arity)), "listing/1",
-                ))
+
+        parts = _pi_parts(val)
+        if parts is not None:
+            name, arity, binding = _checked_indicator(parts, db)
+            if db is None and binding is None:
+                return                  # nothing to resolve it against
+            row = _indicator_row(db, name, arity, binding)
+            if row is None or not row.clauses:
+                return                  # Scryer: \+ \+ clause(Head, _)
             clauses = row.clauses
+        else:
+            # The Python-object arms.  A term INSTANCE resolves to its class
+            # (a cell is a tuple, not an instance, and does not reach here).
+            culprit = val               # the refusal names what was PASSED
+            if not _term_is_atom(val) and is_term_instance(val):
+                val = type(val)
+            if isinstance(val, BuiltinPredicate):
+                print(f"% {val._functor}/{val._arity} — builtin")
+                yield None
+                return
+            if not isinstance(val, PredicateMeta):
+                raise LogicException(type_error(
+                    "predicate_indicator", culprit, "listing/1"))
+            name = val.__name__
+            arity = len(term_field_names_of_class(val))
+            # A bare ``make_predicate`` class from user Python may be on NO
+            # row, and a listing must not mint one: resolve_predicate_row's
+            # class arm is a raw, non-minting ``val._row`` read.
+            _row = resolve_predicate_row(val, arity=arity, db=db)
+            clauses = _row.clauses if _row is not None else []
 
         if not clauses:
             print(f"% {name}/{arity} — no clauses")
@@ -897,6 +820,29 @@ def _make_listing__1(db):
                 print(_format_clause(clause))
         yield None
     return _listing__1
+
+
+def _bare_handle_listing(val, db):
+    """``[(name, arity, clauses), ...]`` for a declared predicate HANDLE
+    passed directly, one entry per arity its owner DEFINES
+    (``predicate_arities_for``) in arity order, each read from the row the
+    indicator form ``listing(name/N)`` reads (``_indicator_row``) so the two
+    cannot disagree -- else ``None`` (not a handle, a ``-hide`` data atom, or
+    a handle naming nothing defined)."""
+    if type(val) is not str or not is_mangled(val):
+        return None
+    if not is_declared_predicate_name(val, db=db):
+        return None
+    from clausal.logic.predicate import predicate_arities_for  # noqa: PLC0415
+    arities = sorted(predicate_arities_for(val, db=db))
+    if not arities:
+        return None
+    name = demangle(val)[1]
+    out = []
+    for arity in arities:
+        row = _indicator_row(db, name, arity, val)
+        out.append((name, arity, row.clauses if row is not None else []))
+    return out
 
 
 # ``_db_optional`` is LOAD-BEARING, not a consistency nicety (P3-3 Task 8

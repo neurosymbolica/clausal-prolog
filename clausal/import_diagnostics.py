@@ -590,7 +590,6 @@ def _clause_author(row, exporter, exporter_module):
 
 def describe_imported_predicate_redefinition(
     functor, arity, importer, exporter, row, exporter_module=None,
-    declared_at=None,
 ):
     """Why a clause for an ``-import_from``'d, already-defined predicate is
     refused — and what to write instead.
@@ -606,13 +605,13 @@ def describe_imported_predicate_redefinition(
     because "you cannot write this" alone leaves the author with a rule and
     nowhere to put it.
 
-    *row* is the imported predicate's row (``None`` if it has none) and
-    *declared_at* its ``(file, line)`` declaration site if one is known.
-    Both used to be read off the predicate CLASS; taking them as values is
-    what lets the caller pass a mangled-atom binding's row after the flip
-    (F1 row 29).  The declaration site is recorded only on a class today,
-    so after the flip that one line is omitted until the site has another
-    home -- the rest of the message is unchanged.
+    *row* is the imported predicate's row (``None`` if it has none).  It
+    used to be read off the predicate CLASS; taking it as a value is what
+    lets the caller pass a mangled-atom binding's row after the flip (F1 row
+    29).  The message no longer carries a "*f* is declared at file:line"
+    line (operator ruling 2026-09-24, option B): the site lived only on the
+    class, it pointed at the export list rather than the clauses, and the
+    owning file is already named twice (the author line and the gate line).
     """
     n = len(row.clauses) if row is not None else 0
     plural = "clause" if n == 1 else "clauses"
@@ -650,11 +649,6 @@ def describe_imported_predicate_redefinition(
         ))
     if author_path:
         lines.append(f"{_INDENT}  {author_path}")
-    site = declared_at
-    if isinstance(site, tuple) and len(site) == 2:
-        lines.append(f"{_INDENT}{functor} is declared at {site[0]}:{site[1]}")
-    elif site:
-        lines.append(f"{_INDENT}{functor} is declared at {site}")
     # With no recorded author the honest remedy is a HEDGE: the line above has
     # just said ownership is unknown, and naming the exporter as the supplier
     # anyway would state as fact the very attribution this diagnostic exists to

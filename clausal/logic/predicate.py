@@ -374,8 +374,39 @@ def term_arity_error_for(
     )
 
 
+def construction_arity_fault(fields: tuple[str, ...], n_positional: int,
+                             keyword_names) -> "str | None":
+    """THE too-few/too-many decision for a construction against a registered
+    signature (ruling C, 2026-09-24; operator Q1 2026-09-25: "refuse too
+    few").  Answers ``"too_many"``, ``"too_few"`` or ``None``.
+
+    * more positional arguments than *fields* -> ``"too_many"``;
+    * at least one positional argument, and some slot past them that no
+      name in *keyword_names* fills -> ``"too_few"``: no silent fresh-Var
+      padding;
+    * otherwise ``None`` -- including keyword-only construction (no
+      positional at all), which names the slots it fills.
+
+    Pure data in, nothing raised, so every site shares the DECISION and keeps
+    its own error: :func:`build_term_cell` (runtime: the class call, and a
+    handle's head through :func:`head_cell`) raises
+    :func:`term_arity_error_for`; the compiler's ``_place_signature_slots``
+    (compile time, placing AST nodes) raises a ``SyntaxError``; and the
+    compiler's written-arity re-ask (``construction_signature_for_name``)
+    reads ``"too_few"`` as "a predicate NAME written at a shorter arity".
+    """
+    n_fields = len(fields)
+    if n_positional > n_fields:
+        return "too_many"
+    if 0 < n_positional < n_fields and not all(
+            f in keyword_names for f in fields[n_positional:]):
+        return "too_few"
+    return None
+
+
 def build_term_cell(functor: str, fields: tuple[str, ...], args: tuple,
-                    kwargs: dict, *, origin: Any = None) -> tuple:
+                    kwargs: dict, *, origin: Any = None,
+                    site: Any = None) -> tuple:
     """THE one home of term construction against a registered signature:
     place *args* and *kwargs* into *fields* and build the cell
     ``(functor, slot, ...)``, with the head/term ARITY check.
@@ -385,15 +416,18 @@ def build_term_cell(functor: str, fields: tuple[str, ...], args: tuple,
     flip) both come here, so the two eras answer the same cell and raise the
     same error for the same (functor, fields, args, kwargs).
 
-    * more positional arguments than fields -> :func:`term_arity_error_for`;
+    * more positional arguments than fields, or FEWER with the rest not all
+      named by keyword (ruling C, 2026-09-24: no silent padding) ->
+      :func:`term_arity_error_for` -- the decision is
+      :func:`construction_arity_fault`, the one the compiler asks too;
     * a keyword naming no field -> :func:`term_construction_error_for`;
-    * a slot neither fills gets a fresh ``Var()`` -- including the trailing
-      slots of a SHORT positional construction (the padding the too-few-args
-      ruling will change; change it HERE, and both eras follow).
+    * a slot neither fills (keyword-only construction) gets a fresh
+      ``Var()``.
 
     *origin* is the class being called, if any: its ``_registered_at``
     (the declaration site) is read only when an error is raised, keeping it
-    off the construction hot path.  A HANDLE has no origin, and no site.
+    off the construction hot path.  A HANDLE has no origin; its caller passes
+    the owner row's ``declared_at`` as *site* instead.
 
     *kwargs* is consumed (positional fills are written into it, which is
     what the construction error reports as the supplied fields).  The
@@ -403,17 +437,20 @@ def build_term_cell(functor: str, fields: tuple[str, ...], args: tuple,
     if args:
         # Positional overflow used to be DROPPED (``if i < len(fields)``),
         # so a call with too many arguments returned a wrong term instead of
-        # raising.  One length check replaces the per-argument comparison.
-        if len(args) > len(fields):
+        # raising.  Ruling C (2026-09-24) refuses too FEW the same way: a
+        # registered signature is ONE arity; the compound at another arity is
+        # built by name (``(name, *args)``), not against it.  The decision is
+        # :func:`construction_arity_fault`, shared with the compiler.
+        if construction_arity_fault(fields, len(args), kwargs):
             raise term_arity_error_for(
-                functor, fields, getattr(origin, "_registered_at", None),
+                functor, fields, getattr(origin, "_registered_at", site),
                 len(args), kwargs, _source_site(2))
         for i, val in enumerate(args):
             kwargs[fields[i]] = val
     unknown = [k for k in kwargs if k not in fields]
     if unknown:
         raise term_construction_error_for(
-            functor, tuple(fields), getattr(origin, "_registered_at", None),
+            functor, tuple(fields), getattr(origin, "_registered_at", site),
             kwargs, _source_site(2))
     from clausal.logic.variables import Var  # noqa: PLC0415
     return (functor, *(kwargs[f] if f in kwargs else Var() for f in fields))
@@ -1405,7 +1442,8 @@ class PredicateMeta(type):
         except Exception:  # noqa: BLE001 - the fault is still real; state it
             err = PredicateArityMismatchError(
                 f"{cls.__name__} takes {defined} arguments, "
-                f"but this call passes {arity}"
+                f"but this call passes {arity}",
+                cls.__name__, arity,
             )
         raise err
 
@@ -1615,7 +1653,7 @@ def _refuse_unqualified_other_arity(binding: Any, name: str, arity: int,
         except Exception:  # noqa: BLE001 - the fault is still real; state it
             err = PredicateArityMismatchError(
                 f"{name} takes {defined} arguments, "
-                f"but this call passes {arity}")
+                f"but this call passes {arity}", name, arity)
         raise err
     defined = None
     site = None
@@ -2800,16 +2838,91 @@ def head_cell(binding, /, *args: Any, **kwargs: Any) -> Any:
       class's ``_fields`` while no clause exists), through
       :func:`build_term_cell`, the helper the class uses -- so the arity
       check answers the same in both eras.
+
+    A HANDLE naming ANOTHER module's predicate (an importer writing a clause
+    for an imported name) DEFERS to the load gate (operator ruling
+    2026-09-25): see :func:`_handle_head_cell`.  The executing module is
+    read from the CALLER'S FRAME: ``$head`` is bound straight to this
+    function in ``INJECTED_RUNTIME_BUILTINS`` and is called only by a module
+    body's generated code, so frame 1's globals ARE that module's namespace.
+    A caller that is not that code -- a wrapper, a ``functools.partial``, an
+    eval with its own globals -- finds no ``$module`` there (or its own), so
+    the head keeps its construction error: the failure mode is the error the
+    head raised before deferral existed, never a silent accept.  Passing the
+    namespace explicitly would change the ``$head(<binding>, ...)`` emission,
+    which the reifier and the rewriter-output pins read.
     """
     if type(binding) is str:
         from clausal.logic.atoms import is_mangled  # noqa: PLC0415
         if is_mangled(binding):
-            return _handle_head_cell(binding, args, kwargs)
+            return _handle_head_cell(binding, args, kwargs,
+                                     home=sys._getframe(1).f_globals)
     return binding(*args, **kwargs)
 
 
-def _handle_head_cell(handle: str, args: tuple, kwargs: dict) -> Any:
-    """The HANDLE arm of :func:`head_cell`."""
+def _handle_head_cell(handle: str, args: tuple, kwargs: dict,
+                      home: "dict | None" = None) -> Any:
+    """The HANDLE arm of :func:`head_cell`.
+
+    *home* is the namespace of the module whose body builds the head.  When
+    it is not the handle's owner, the head is an importer's clause for an
+    imported predicate, which the load gate refuses ("defines a clause for
+    gv_owned/1, which it -import_from's ...").  The rewriter
+    spells such a head with field names derived from the IMPORTER's head
+    (``gv_owned(teal)`` -> ``arg_0=teal``, ``gv_owned(COLOUR)`` ->
+    ``colour=COLOUR``), in head order.  The class era built it against a
+    local class re-minted with those names.  So a construction error against
+    the OWNER's names does not speak for such a head: it is built at its
+    written arity, in written order, and the gate gives the verdict.
+
+    Only at an arity the OWNER knows: that is a clause for the imported
+    predicate, which the gate refuses.  A head at another arity keeps the
+    arity error both eras raise today
+    (``test_an_imported_head_at_the_wrong_arity_raises_the_arity_error``).
+    A head in the owner's own module, or with no module to tell (*home*
+    carries no ``$module``), keeps every construction error.
+
+    INVARIANT: a deferred head never reaches a row.  Its positional build
+    ignores the field names, which is right only because the gate refuses
+    it.  So the key is recorded in *home*'s ``$deferred_heads``, and
+    ``compiler_v2.compile_module`` raises if its step 3d permitted a load
+    that would write one (``_refuse_unrefused_deferred_heads``).
+    """
+    from clausal.logic.atoms import demangle  # noqa: PLC0415
+    try:
+        return _owner_head_cell(handle, args, dict(kwargs))
+    except ClausalTermConstructionError:
+        if not _defers_to_the_gate(handle, home, len(args) + len(kwargs)):
+            raise
+    functor = demangle(handle)[1]
+    written = (*args, *kwargs.values())
+    home.setdefault("$deferred_heads", set()).add((functor, len(written)))
+    return (functor, *written) if written else functor
+
+
+def _defers_to_the_gate(handle: str, home: "dict | None", written: int) -> bool:
+    """True when the module *home* (a namespace) is not *handle*'s owner and
+    the head is written at an arity the owner knows.
+
+    The owner is compared by DATABASE IDENTITY, with *home*'s db as the
+    ruling-Q0 hint: ``_resolve_mangled_owner(handle, db=home_db)`` answers
+    *home_db* itself for a handle naming *home*'s own module.  A handle names
+    a module, not a load, so a handle minted by an EARLIER load under the same
+    module name (the twin-reload case) is, by ruling Q0, this module's own:
+    it keeps its construction error, exactly as a local handle does."""
+    if home is None:
+        return False
+    home_db = namespace_db(home)
+    if home_db is None:
+        return False
+    resolved = _resolve_mangled_owner(handle, db=home_db)
+    if resolved is None or resolved[0] is home_db:
+        return False
+    return written in resolved[0].head_signatures(resolved[1])
+
+
+def _owner_head_cell(handle: str, args: tuple, kwargs: dict) -> Any:
+    """A handle's head built against the OWNER's registered field names."""
     from clausal.logic.atoms import demangle  # noqa: PLC0415
     functor = demangle(handle)[1]
     resolved = _resolve_mangled_owner(handle)
@@ -2825,11 +2938,11 @@ def _handle_head_cell(handle: str, args: tuple, kwargs: dict) -> Any:
         # A 0-arity head is the ATOM of its name -- the class returned
         # ITSELF here (``red() is red``); post-flip the atom IS the str.
         return functor
-    # ``registered_at`` (the declaration SITE) is a class attribute with no
-    # Database home yet -- see todo/...declaration-site-lives-only-on-the-
-    # class-2026-09-24.md; the diagnostic's "registered by" line reads
-    # ``<unknown>`` for a handle until that is ruled.
-    return build_term_cell(functor, fields, args, kwargs)
+    # The declaration SITE lives on the owner's row (``PredRow.declared_at``,
+    # W4b-2d R6), so a handle's construction error names it the way the
+    # class's ``_registered_at`` does.
+    site = _row_declared_at(resolved[0], resolved[1], len(fields))
+    return build_term_cell(functor, fields, args, kwargs, site=site)
 
 
 def _head_signature_for(functor: str, signatures: dict, args: tuple,
@@ -3347,5 +3460,5 @@ __all__ = ["PredicateMeta", "RetiredStateError", "_MISSING", "is_term_instance",
            "is_declared_predicate_name", "predicate_arities_for",
            "mint_predicate_handle", "namespace_db",
            "predicate_owner_module",
-           "head_cell", "build_term_cell",
+           "head_cell", "build_term_cell", "construction_arity_fault",
            "AmbiguousArityConstructionError"]

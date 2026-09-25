@@ -7,11 +7,16 @@ from __future__ import annotations
 
 from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.logic.atoms import demangle, is_mangled
-from clausal.logic.exceptions import LogicException, string_goal_error
+from clausal.logic.exceptions import (
+    LogicException, existence_error, instantiation_error, string_goal_error,
+)
+from clausal.terms import Compound
+from clausal.logic.meta_predicate import is_goal_object as _is_goal_object
 from clausal.logic.trampoline import DONE, StepGenerator
 from clausal.logic.builtins.lists import _as_items, _seq_result, _was_string
 from clausal.logic.builtins._helpers import _is_empty_list, _standard_order_key
 from clausal.logic.predicate import (
+    _refuse_unqualified_other_arity,
     is_declared_predicate_name, localize_goal, localize_owner_functor,
 )
 
@@ -126,14 +131,30 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
     behave identically — is what makes this arm arity-general rather than
     ``== 2``.
 
-    Returns ``None`` — which the caller turns into a silent failure — when no
-    db was threaded, or when the named predicate does not exist: a name that
-    resolves to nothing fails, and a resolvable module does not change it
-    (``call(M:nosuch(X))`` fails).  A goal that is not CALLABLE at all (a
-    number, tuple data, None ...) RAISES ``type_error(callable, Goal)``
-    since the operator ruling of 2026-09-25, which retired the translator's "section 4.2" contract
-    that it fail too.  A body term runs (``call_body``); call/N's extras on a
-    body term or a control construct name no procedure (existence_error).
+    Returns ``None`` — which the caller turns into a silent failure — only
+    when no db was threaded (nothing to resolve a name against).
+
+    A goal that is not CALLABLE at all (a number, tuple data, None ...)
+    RAISES ``type_error(callable, Goal)``, and a body term runs
+    (``call_body``); call/N's extras on a body term or a control construct
+    name no procedure (existence_error) -- operator ruling of 2026-09-25
+    (follow Scryer), which retired the translator's "section 4.2" contract
+    that such goals fail.
+
+    A name that resolves to NO procedure RAISES ISO
+    ``existence_error(procedure, Name/Arity)``, catchable -- operator ruling
+    2 (2026-09-25, "like Scryer"); ``call(M:nosuch(X))`` with a resolvable M
+    raises too.  A name the calling module binds to a predicate at another
+    arity only raises the same ISO term as ``PredicateArityMismatchError`` --
+    the refusal a body call at that arity gets
+    (``_refuse_unqualified_other_arity``; ruling Q3, 2026-09-25).  Every
+    caller of this resolver inherits these raises: call/N, phrase/2,3,
+    time_goal/1 and every goal-first list builtin through ``call_body.MetaCallGoal`` --
+    pinned per builtin in
+    ``tests/test_bare_predicate_name_in_source_is_the_plain_atom.py``.
+
+    A resolved procedure declared ``-meta_predicate`` gets its meta-argument
+    positions qualified with the resolving module (``_meta_qualified``).
 
     The one exception is a MANGLED predicate handle (ruling 2, 2026-09-24):
     it is not a name the caller wrote but a reference that was supposed to
@@ -224,6 +245,20 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
         # goal, or the bare atom itself for an arity-0 ``call(H)``.
         from clausal.logic.solve import raise_if_dangling_handle  # noqa: PLC0415
         raise_if_dangling_handle(functor, _q, context)
+        # -meta_predicate (operator ruling 2026-09-25): a handle the CALLING
+        # module binds by a plain name (an import) is that module's own
+        # unqualified reference -- in the handle era a cell built through an
+        # import (``apply_all(my_pred)``) carries the owner's handle in slot
+        # 0.  Its meta-arguments belong to the caller, as the class era's
+        # plain functor gives; qualify them here, before the re-entry would
+        # qualify them with the OWNER (the rule for a written ``M:G``).
+        if call_args and type(functor) is str:
+            _local = localize_goal(db, functor)
+            _lname = getattr(_local, "name", None)
+            if _local is not functor and type(_lname) is str:
+                _qa = _meta_qualified(db, _lname, len(call_args), call_args)
+                if _qa is not call_args:
+                    _q = qualify_mangled_goal((functor, *_qa), db=db)
         return _resolve_named_goal(db, _q, (), context)
     if functor == QUALIFIED_GOAL_FUNCTOR and len(call_args) >= 2:
         # Slots 1 and 2 are the qualification; everything past them is an
@@ -236,6 +271,24 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
         # the WHOLE resolution — the control-construct refusal included, so
         # ``call(M:(A, B))`` is refused exactly like ``call((A, B))`` — with
         # the leftover extras handed on to fold onto the inner goal there.
+        inner_v = deref(inner)
+        if _is_goal_object(inner_v):
+            # ``M:G`` whose G is a goal OBJECT -- a predicate class, a lambda
+            # closure, anything answering ``_get_dispatch`` -- not a name:
+            # it resolves itself, so M has nothing to add.  This arm used to
+            # hand it to the NAME resolver below, which answers None for a
+            # non-name: a SILENT failure (a dotted ``m.p`` reference in data
+            # position is p's class in the class era).
+            extras = [deref(a) for a in call_args[2:]]
+            return (_ensure_trampoline_dispatch(inner_v, len(extras), target.db),
+                    extras)
+        if is_var(inner_v):
+            # ``M:_`` is instantiation_error (Scryer, verified on the box).
+            # Everything else restarts below against M's db: a body term runs
+            # there, a list is existence_error '.'/N, and a non-callable (a
+            # number, a unit Quantity ...) is type_error(callable, X) -- Scryer
+            # answers ``call(lists:5)`` so.
+            raise LogicException(instantiation_error(context))
         return _resolve_named_goal(
             target.db, inner, tuple(call_args[2:]), context)
     # No arity condition (F3): ``call((",",))`` is as much a control construct
@@ -279,7 +332,11 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
     # lookup below (round 6 decision) -- see ``predicate.localize_owner_functor``.
     aliased = localize_owner_functor(db, functor, arity)
     if aliased is not None:
-        return aliased.dispatch_at(arity), call_args
+        # *functor* is the OWNER's spelling; the adopted row -- and so the
+        # owner's -meta_predicate declaration -- is keyed by the LOCAL alias,
+        # which the adapter carries.
+        return aliased.dispatch_at(arity), _meta_qualified(
+            db, aliased.name, arity, call_args)
     dispatch = db.get_dispatch(functor, arity)
     if dispatch is None:
         dispatch = _namespace_dispatch(db, functor, arity)
@@ -287,8 +344,42 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
         # Only AFTER the lookups: a ``-hide`` atom carries its bare declared
         # module name, and the calling db may define it under that spelling.
         _raise_if_unloaded_handle(functor, arity, context)
-        return None
-    return dispatch, call_args
+        # Nothing answers at this arity, but the calling module binds the
+        # NAME to a predicate at another: the refusal a body call
+        # ``citation(x)`` gets (name+arity ruling, 2026-09-24: "keep the
+        # refusal where nothing else answers").  Needed since ruling S made
+        # ``maplist(citation, L)`` pass the ATOM rather than the binding,
+        # which ``_dispatch_at`` used to refuse the same way.
+        module_dict = getattr(db, "module_dict", None)
+        binding = (module_dict.get(functor)
+                   if isinstance(module_dict, dict) else None)
+        if binding is not None and is_declared_predicate_name(binding, db=db):
+            return _refuse_unqualified_other_arity(
+                binding, functor, arity, db), call_args
+        # Ruling 2 (operator, 2026-09-25, "like Scryer"): a meta-call naming
+        # an UNKNOWN procedure raises ISO existence_error(procedure, N/A) --
+        # catchable -- where it used to fail silently (the old §4.2
+        # "a non-callable goal fails" contract, retired for this case).
+        _where = getattr(_calling_module(db), "name", None)
+        raise LogicException(existence_error(
+            "procedure", Compound("/", (functor, arity)),
+            f"{context}: no procedure {functor}/{arity} is defined in "
+            + (f"module {_where}" if _where else "the calling module")))
+    return dispatch, _meta_qualified(db, functor, arity, call_args)
+
+
+def _meta_qualified(db, functor, arity, call_args):
+    """*call_args* with the ``-meta_predicate`` positions of the procedure
+    ``functor/arity`` (as *db* means it) qualified with *db*'s module --
+    Scryer's ``expand_call_goal``.  A qualified goal ``M:G`` reaches here
+    with ``db`` = M's database, so G's meta-arguments are qualified with
+    M, as Scryer does.  Builtins carry no declaration and are untouched
+    (ruling 2A: they resolve in the module of the clause that calls them)."""
+    specs = db.meta_predicate_specs(functor, arity)
+    if not specs:
+        return call_args
+    from clausal.logic.meta_predicate import qualify_args  # noqa: PLC0415
+    return qualify_args(specs, list(call_args), db)
 
 
 def _calling_module(db):
@@ -393,6 +484,13 @@ def _make_call_goal_factory(extra_n: int):
             elif localized is not goal_val:
                 dispatch = _ensure_trampoline_dispatch(localized, extra_n)
                 call_args = [deref(a) for a in args[1:extra_n + 1]]
+                # An imported name reached through its binding (a dotted
+                # import reference in data position stays the binding): the
+                # -meta_predicate positions are qualified under that name
+                # here, as the atom route does (operator ruling 2026-09-25).
+                _name = getattr(localized, "name", None)
+                if type(_name) is str:
+                    call_args = _meta_qualified(db, _name, extra_n, call_args)
             elif callable(goal_val) or hasattr(goal_val, '_get_dispatch'):
                 # extra_n is exactly what the goal will be called with.
                 dispatch = _ensure_trampoline_dispatch(goal_val, extra_n)
@@ -956,12 +1054,15 @@ def _tfilter__3(this_generator, _proceed, _fail, _catcher, goal, lst, filtered, 
     for elem in items:
         t_var = Var()
         mark = trail.mark()
-        # Run the goal inline (simple-mode) to get the truth value
-        # without going through the trampoline yield protocol.
-        t_val = None
-        for _ in _run_goal_once(dispatch, deref(elem), t_var, trail):
-            t_val = deref(t_var)
-            break  # committed choice: take first solution only
+        # Driven through the trampoline like include/3: a goal that DELEGATES
+        # (a ``MetaCallGoal`` running the caller's call/N yields a
+        # StepGenerator) cannot be driven by a plain inline loop -- that read
+        # the delegation step as a solution with T unbound, and every element
+        # was dropped.  First solution only (committed choice): the step
+        # generator is never resumed.
+        sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, deref(elem), t_var, trail)
+        _st = yield (sg, None)
+        t_val = deref(t_var) if _st is not DONE else None
         trail.undo(mark)
         if t_val is True:
             kept.append(deref(elem))
@@ -995,10 +1096,10 @@ def _tpartition__4(this_generator, _proceed, _fail, _catcher, goal, lst, include
     for elem in items:
         t_var = Var()
         mark = trail.mark()
-        t_val = None
-        for _ in _run_goal_once(dispatch, deref(elem), t_var, trail):
-            t_val = deref(t_var)
-            break
+        # Trampoline-driven, first solution only -- see tfilter/3.
+        sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, deref(elem), t_var, trail)
+        _st = yield (sg, None)
+        t_val = deref(t_var) if _st is not DONE else None
         trail.undo(mark)
         if t_val is True:
             yes.append(deref(elem))
@@ -1070,16 +1171,3 @@ def _register_localizing_list_builtins() -> None:
 
 
 _register_localizing_list_builtins()
-
-
-def _run_goal_once(dispatch, *args_and_trail):
-    """Run a trampoline dispatch function and yield for each solution.
-
-    Drives the trampoline mini-loop internally so callers can iterate
-    solutions with a plain ``for _ in _run_goal_once(...):`` loop.
-    """
-    gen = dispatch(None, None, None, None, *args_and_trail)
-    for _parent, value in gen:
-        if value is DONE:
-            return
-        yield value

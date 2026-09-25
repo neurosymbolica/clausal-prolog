@@ -21,6 +21,15 @@ from clausal.terms import SegString, VarSeg, SegList, ConcreteSeg
 from tests.audit_2026_05_25._helpers import load_inline_clausal
 
 
+def _nt(cls, *args):
+    """A nonterminal term at its WRITTEN arity -- ``tok(T)`` is
+    ``("tok", T)``.  2026-09-25, ruling C / operator Q1: the class of a //N
+    nonterminal is ONE arity (N+2); applying it to N arguments used to pad the
+    two state slots with fresh variables and now raises, so the term phrase
+    takes is built by name and phrase appends S0/S (ISO call/N)."""
+    return (cls.__name__, *args)
+
+
 def test_F067_phrase3_rest_type_preserves_str():
     """phrase/3 Rest preserves str shape when input is str (F070 fix, Phase 2 Task 14).
 
@@ -39,7 +48,7 @@ def test_F067_phrase3_rest_type_preserves_str():
     # principle) or at least not silently downgrade to list.
     v, rest = Var(), Var()
     found = False
-    for _ in call("phrase", cls(v), chars("abcd"), rest, module=mod):
+    for _ in call("phrase", _nt(cls, v), chars("abcd"), rest, module=mod):
         rv = deref(rest)
         # F067 fix: Rest is a str slice ("bcd") of the str input, not a
         # list of 1-char strs.
@@ -173,7 +182,7 @@ def test_F069_phrase3_rejects_segstring_input():
     # Bug: phrase/3 with ground SegString input fails.
     v, rest = Var(), Var()
     found = sum(
-        1 for _ in call("phrase", tok(v), seg, rest, module=mod)
+        1 for _ in call("phrase", _nt(tok, v), seg, rest, module=mod)
     )
     assert found == 1, (
         f"phrase/3 with ground SegString input should succeed "
@@ -207,7 +216,7 @@ def test_F069_phrase3_rejects_segstring_rest():
     v = Var()
 
     found = sum(
-        1 for _ in call("phrase", tok(v), chars("abcd"), seg_rest, module=mod)
+        1 for _ in call("phrase", _nt(tok, v), chars("abcd"), seg_rest, module=mod)
     )
     assert found == 1, (
         f"phrase/3 with SegString-shaped Rest should unify; "

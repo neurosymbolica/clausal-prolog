@@ -5,8 +5,10 @@ resolves with no ``module=`` anywhere a goal is accepted.
 Two pieces, both additive (a class-bound name keeps working as before):
 
 1. the ``--`` seam's functor slot accepts a NAME bound to an atom value, so
-   ``h = <qualified atom>; --h(X)`` builds ``(<qualified atom>, X)`` and the
-   module travels inside the cell;
+   ``h = <qualified atom>; --h(X)`` builds a cell.  Since 2026-09-25 (operator
+   ruling, option (a)) that cell is the PLAIN ``(pred, X)``: ISO functors are
+   never module-qualified, and a goal that must run in the module is written
+   ``(":", M, G)``;
 2. a cell whose functor is mangled is a module-qualified goal at every
    entry point -- ``solve``, ``call/N``, and the runtime funnel
    ``_dispatch_at`` -- normalised to the ``(":", M, G)`` form the engine
@@ -49,7 +51,16 @@ def _host(tmp_path, name, body):
 
 # ── piece 1: the seam's functor slot ────────────────────────────────────────
 
-def test_a_name_bound_to_a_qualified_atom_builds_the_qualified_cell(lib, tmp_path):
+def test_a_name_bound_to_a_qualified_atom_builds_the_plain_cell(lib, tmp_path):
+    """FLIPPED 2026-09-25 -- operator ruling 2026-09-25, option (a).
+
+    This used to be ``test_a_name_bound_to_a_qualified_atom_builds_the_
+    qualified_cell``: the cell's functor was the handle's MANGLED spelling,
+    so the module travelled in the cell.  ISO: a functor is never
+    module-qualified; qualification lives only on a goal (``M:G``).  A cell
+    built from a handle is PLAIN, like the one its owner builds, and it runs
+    in its module as ``(":", M, cell)`` or ``solve(cell, M)``."""
+    from clausal.logic.solve import solve
     host = _host(tmp_path, "w4host_seam", f"""
         from clausal.logic.atoms import mangle
         h = mangle("{LIB}", "pred")
@@ -57,8 +68,9 @@ def test_a_name_bound_to_a_qualified_atom_builds_the_qualified_cell(lib, tmp_pat
             return --h(X)
     """)
     cell = host.build()
-    assert cell[0] == mangle(LIB, "pred"), "the functor is the handle's spelling"
+    assert cell[0] == "pred", "the functor is the predicate's plain name"
     assert len(cell) == 2
+    assert sorted(deref(cell[1]) for _ in solve((":", LIB, cell))) == [1, 2]
 
 
 def test_a_name_bound_to_a_class_still_builds_the_bare_cell(lib, tmp_path):
