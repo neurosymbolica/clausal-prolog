@@ -28,14 +28,24 @@ Notation in signature lines:
     t = append([1, 2], [3, 4], Z_)
     # → ('append', [1, 2], [3, 4], Z_)
 
-    # Keyword construction with partial fill (missing fields → Var())
-    t2 = between(low=1, high=10)
-    # → ('between', 1, 10, <Var>)
+    # Keyword construction: name every field of a registered arity
+    t2 = between(low=1, high=10, x=Z_)
+    # → ('between', 1, 10, Z_)
+
+    # Any other argument count builds the cell AS WRITTEN -- never padded
+    # to a registered arity (a default argument is an explicit predicate)
+    between(1, 10)
+    # → ('between', 1, 10): between/2, an existence_error when run
+    between()
+    # → 'between'
 
     # A 0-arity builtin builds its atom
     get_builtin_class("nl")()
     # → 'nl'
     ```
+
+    Keywords at a count no registered arity has (`between(low=1, high=10)`)
+    are refused: field names place the arguments of a registered arity.
 
     Run a cell with `solve(cell, module=m)` from Python, or with the
     goal-position seam (`for X in --between(1, 3, X):`) inside a `.clausal`

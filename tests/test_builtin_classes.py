@@ -70,7 +70,8 @@ class TestRegistry:
 
 
 class TestSingleArityConstruction:
-    """Test that single-arity builtin classes produce proper term instances."""
+    """Single-arity builtins build cells (W4b-3 slice 3), at the written
+    arity (no padding)."""
 
     def test_append_positional(self):
         # nv
@@ -83,21 +84,46 @@ class TestSingleArityConstruction:
         assert _field(t, "l3") == [1, 2, 3]
 
     def test_append_keyword(self):
+        """Keywords naming EVERY field of the registered arity place them."""
         # nv
         append = get_builtin_class("append")
-        t = append(l1=[1], l2=[2])
-        assert _field(t, "l1") == [1]
-        assert _field(t, "l2") == [2]
-        # l3 should be auto-filled with Var()
-        assert isinstance(deref(_field(t, "l3")), Var)
+        t = append(l3=[1, 2], l1=[1], l2=[2])
+        assert t == ("append", [1], [2], [1, 2])
 
-    def test_between_partial(self):
+    def test_keywords_at_an_unregistered_count_are_refused(self):
+        """No padding (operator ruling 2026-09-25): keywords name the slots
+        of a registered arity, so ``append(l1=..., l2=...)`` -- 2 arguments,
+        append is append/3 -- is refused, where it used to pad ``l3`` with a
+        fresh Var."""
+        # nv
+        from clausal.logic.predicate import ClausalTermConstructionError
+        append = get_builtin_class("append")
+        with pytest.raises(ClausalTermConstructionError,
+                           match="registered only at append/3"):
+            append(l1=[1], l2=[2])
+        with pytest.raises(ClausalTermConstructionError,
+                           match="registered only at between/3"):
+            get_builtin_class("between")(low=1, high=10)
+
+    def test_positional_at_an_unregistered_count_builds_the_written_arity(self):
+        """``between(1, 2)`` is between/2 -- the cell as WRITTEN, never
+        padded to between/3 (it used to raise too-few); as a goal it is an
+        existence_error.  Too many is written too."""
         # nv
         between = get_builtin_class("between")
-        t = between(low=1, high=10)
-        assert _field(t, "low") == 1
-        assert _field(t, "high") == 10
-        assert isinstance(deref(_field(t, "x")), Var)
+        assert between(1, 2) == ("between", 1, 2)
+        assert between(1, 2, 3, 4) == ("between", 1, 2, 3, 4)
+        assert get_builtin_class("maplist")("f") == ("maplist", "f")
+
+    def test_a_goal_at_an_unregistered_arity_is_an_existence_error(self):
+        # nv
+        import clausal
+        from clausal.logic.exceptions import LogicException
+        from clausal.predicate_diagnostics import PredicateNotFoundError
+        with pytest.raises((PredicateNotFoundError, LogicException)) as e:
+            list(clausal.solve(get_builtin_class("between")(1, 2),
+                               module=clausal.Module("_w4b3_nopad")))
+        assert "between/2" in str(e.value)
 
     def test_length_positional(self):
         # nv
@@ -115,12 +141,12 @@ class TestSingleArityConstruction:
         assert nl.arities == (0,)
         assert nl() == "nl"
 
-    def test_no_args_all_vars(self):
+    def test_no_args_is_the_atom(self):
+        """No arguments is the WRITTEN arity 0: the atom, never an all-Var
+        cell of a registered arity (operator ruling 2026-09-25)."""
         # nv
-        in_ = get_builtin_class("in_")
-        t = in_()
-        assert isinstance(deref(_field(t, "elem")), Var)
-        assert isinstance(deref(_field(t, "lst")), Var)
+        assert get_builtin_class("in_")() == "in_"
+        assert get_builtin_class("between")() == "between"
 
 
 # ── Field names ───────────────────────────────────────────────────────────────
