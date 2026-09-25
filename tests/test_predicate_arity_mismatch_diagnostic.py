@@ -887,9 +887,15 @@ class TestZeroArityFactAtomHead:
 
             arcm_flag,
         """)))
-        flag = mod.arcm_flag
-        assert flag._state_row().clauses                    # the bare fact IS a clause
-        assert flag._clause_arity() == 0        # used to raise TypeError
+        # After the W4b-2d flip the binding is a handle: the row comes from
+        # the db, and its heads are read the way the diagnostic reads them
+        # (``_head_arity``, which ``_clause_arity`` applies to every head).
+        from clausal.logic.predicate import _head_arity, resolve_predicate_row
+        db = mod.__dict__["$module"].db
+        row = resolve_predicate_row(mod.arcm_flag, arity=0, db=db)
+        assert row is not None and row is db.row("arcm_flag", 0)
+        assert row.clauses                      # the bare fact IS a clause
+        assert [_head_arity(c.head) for c in row.clauses] == [0]  # used to raise TypeError
 
     def test_calling_an_atom_fact_at_arity_one(self, tmp_path, monkeypatch):
         """End to end, through the import that makes the name a goal.
