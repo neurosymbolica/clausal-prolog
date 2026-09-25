@@ -19,6 +19,12 @@ A ``:``/integer spec position is qualified with the CALLER's module
 in the caller through call/N, maplist, phrase and time_goal inside the
 callee.  Without the declaration the name resolves in the callee and --
 ruling 2 (2026-09-25) -- an unknown procedure RAISES.
+
+Handle era (W4b-2d flip): the load binds imports to the owner's handles
+itself, so the era fixtures run ``[handle]`` only and assert the import
+binding they depend on; the stand-in ``_bind_imports_as_owner_handles`` is
+gone (after the flip it re-bound nothing, and the ``[class]`` arms silently
+ran the handle era).
 """
 from __future__ import annotations
 
@@ -29,7 +35,6 @@ import pytest
 
 from clausal.logic.atoms import mangle, mint
 from clausal.logic.exceptions import LogicException
-from clausal.logic.predicate import PredicateMeta
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref, is_var, walk
 from clausal.terms import Compound
@@ -45,24 +50,15 @@ def _load(tmp_path, monkeypatch, name, body):
     return mod
 
 
-def _bind_imports_as_owner_handles(monkeypatch, owner):
-    """The handle era for ``-import_from`` (D1: an import binds the OWNER's
-    handle) -- the emulation test_arity_mismatch_is_iso_existence_error_both_eras
-    uses."""
-    import clausal.logic.compiler_v2 as cv
-    orig = cv._process_imports
-    seen = []
-
-    def flipped(items, module_dict, db=None):
-        orig(items, module_dict, db)
-        for k, v in list(module_dict.items()):
-            if (isinstance(v, PredicateMeta) and v._row is not None
-                    and v._row._db is owner.db):
-                module_dict[k] = mangle(owner.name, v._row._key[0])
-                seen.append(k)
-
-    monkeypatch.setattr(cv, "_process_imports", flipped)
-    return seen
+def _assert_import_is_owner_handle(module, name, owner_name, functor=None):
+    """Ruling D1, done by the LOAD since the W4b-2d flip: the imported
+    *name* is bound to the owner's handle.  Replaces the stand-in
+    ``_bind_imports_as_owner_handles``, which re-bound classes the load no
+    longer leaves (after the flip it re-bound nothing, so the "handle" arm
+    and the "class" arm ran the same code)."""
+    got = module.module_dict[name]
+    assert got == mangle(owner_name, functor or name), (
+        f"the load did not bind {name} to {owner_name}'s handle: {got!r}")
 
 
 _OWNER = """
@@ -127,21 +123,19 @@ _ALIAS_IMPORTER = """
 """
 
 
-@pytest.fixture(params=["class", "handle"])
+@pytest.fixture(params=["handle"])   # W4b-2d: the class era is gone
 def pair(request, tmp_path, monkeypatch):
     era = request.param
     ow = _load(tmp_path, monkeypatch, f"mpu_{era}", _OWNER.replace("ERA", era))
     O = ow.__dict__["$module"]
-    seen = (_bind_imports_as_owner_handles(monkeypatch, O)
-            if era == "handle" else None)
     im = _load(tmp_path, monkeypatch, f"mpm_{era}", _IMPORTER.replace("ERA", era))
     I = im.__dict__["$module"]
     al = _load(tmp_path, monkeypatch, f"mpa_{era}",
                _ALIAS_IMPORTER.replace("ERA", era))
     I.alias_importer = al.__dict__["$module"]
-    if era == "handle":
-        assert "apply_all" in seen, "the handle era must really be exercised"
-        assert I.module_dict["apply_all"] == mangle(f"mpu_{era}", "apply_all")
+    _assert_import_is_owner_handle(I, "apply_all", f"mpu_{era}")
+    _assert_import_is_owner_handle(I.alias_importer, "aa", f"mpu_{era}",
+                                   "apply_all")
     return era, O, I
 
 
@@ -377,15 +371,15 @@ _GDOM = """
 _ROW1 = [("row", "k1", "yes", 1)]
 
 
-@pytest.fixture(params=["class", "handle"])
+@pytest.fixture(params=["handle"])   # W4b-2d: the class era is gone
 def glib(request, tmp_path, monkeypatch):
     era = request.param
-    lib = _load(tmp_path, monkeypatch, f"mglib_{era}", _GLIB.replace("ERA", era))
+    _load(tmp_path, monkeypatch, f"mglib_{era}", _GLIB.replace("ERA", era))
     _load(tmp_path, monkeypatch, f"mgrules_{era}", _GRULES.replace("ERA", era))
-    if era == "handle":
-        _bind_imports_as_owner_handles(monkeypatch, lib.__dict__["$module"])
     dom = _load(tmp_path, monkeypatch, f"mgdom_{era}", _GDOM.replace("ERA", era))
-    return era, dom.__dict__["$module"]
+    D = dom.__dict__["$module"]
+    _assert_import_is_owner_handle(D, "run_all", f"mglib_{era}")
+    return era, D
 
 
 @pytest.mark.parametrize("goal, want", [
@@ -508,14 +502,14 @@ _LDOM = """
 """
 
 
-@pytest.fixture(params=["class", "handle"])
+@pytest.fixture(params=["handle"])   # W4b-2d: the class era is gone
 def llib(request, tmp_path, monkeypatch):
     era = request.param
-    lib = _load(tmp_path, monkeypatch, f"mllib_{era}", _LLIB.replace("ERA", era))
-    if era == "handle":
-        _bind_imports_as_owner_handles(monkeypatch, lib.__dict__["$module"])
+    _load(tmp_path, monkeypatch, f"mllib_{era}", _LLIB.replace("ERA", era))
     dom = _load(tmp_path, monkeypatch, f"mldom_{era}", _LDOM.replace("ERA", era))
-    return era, dom.__dict__["$module"]
+    D = dom.__dict__["$module"]
+    _assert_import_is_owner_handle(D, "cprobe", f"mllib_{era}")
+    return era, D
 
 
 def test_a_lambda_with_zero_extras(llib):
@@ -580,15 +574,15 @@ def _python_probe(x, status, trail, k):
         yield None
 
 
-@pytest.fixture(params=["class", "handle"])
+@pytest.fixture(params=["handle"])   # W4b-2d: the class era is gone
 def clib(request, tmp_path, monkeypatch):
     era = request.param
     lib = _load(tmp_path, monkeypatch, f"mclib_{era}", _CLIB.replace("ERA", era))
     L = lib.__dict__["$module"]
-    if era == "handle":
-        _bind_imports_as_owner_handles(monkeypatch, L)
     dom = _load(tmp_path, monkeypatch, f"mcdom_{era}", _CDOM.replace("ERA", era))
-    return L, dom.__dict__["$module"]
+    D = dom.__dict__["$module"]
+    _assert_import_is_owner_handle(D, "c1", f"mclib_{era}")
+    return L, D
 
 
 @pytest.mark.parametrize("hop", ["c1", "c2"])
@@ -659,11 +653,12 @@ _PDOM = """
 
 
 @pytest.mark.parametrize("hop", ["p1", "p2", "p3"])
-@pytest.mark.parametrize("where", ["declared", "undeclared", "class", "handle"])
+@pytest.mark.parametrize("where", ["declared", "undeclared", "handle"])
 def test_a_python_built_lambda_node_in_a_query(tmp_path, monkeypatch, hop, where):
     """declared / undeclared: the query runs in the library itself (the
-    trial's shape).  class / handle: it runs in a module importing the
-    declared library, in each era."""
+    trial's shape).  handle: it runs in a module importing the declared
+    library, whose imports the load bound to the library's handles (the
+    class arm is gone with the class era)."""
     from clausal.logic.solve import solve
     decl = "undeclared" if where == "undeclared" else "declared"
     meta = ("-meta_predicate(p1('?', 2, '?'), p2('?', 2, '?'), p3('?', 2, '?'))"
@@ -672,12 +667,11 @@ def test_a_python_built_lambda_node_in_a_query(tmp_path, monkeypatch, hop, where
     lib = _load(tmp_path, monkeypatch, f"mplib_{tag}",
                 _PLIB.replace("DECL", tag).replace("META", meta))
     L = lib.__dict__["$module"]
-    if where in ("class", "handle"):
-        if where == "handle":
-            _bind_imports_as_owner_handles(monkeypatch, L)
+    if where == "handle":
         dom = _load(tmp_path, monkeypatch, f"mpdom_{where}",
                     _PDOM.replace("ERA", where))
         L = dom.__dict__["$module"]
+        _assert_import_is_owner_handle(L, hop, f"mplib_{tag}")
     ref = _load(tmp_path, monkeypatch, f"mplib_ref_{where}",
                 _PLIB.replace("DECL", f"ref_{where}").replace("META", ""))
     R = ref.__dict__["$module"]
@@ -787,16 +781,16 @@ _AUSER_OTHER = """
 """
 
 
-@pytest.fixture(params=[(e, k) for e in ("class", "handle") for k in ("same", "other")],
+@pytest.fixture(params=[(e, k) for e in ("handle",) for k in ("same", "other")],
                 ids=lambda p: f"{p[0]}-{p[1]}-arity")
 def aliased(request, tmp_path, monkeypatch):
     era, kind = request.param
-    ow = _load(tmp_path, monkeypatch, f"maow_{era}", _AOWNER.replace("ERA", era))
-    if era == "handle":
-        _bind_imports_as_owner_handles(monkeypatch, ow.__dict__["$module"])
+    _load(tmp_path, monkeypatch, f"maow_{era}", _AOWNER.replace("ERA", era))
     src = (_AUSER_SAME if kind == "same" else _AUSER_OTHER).replace("ERA", era)
     us = _load(tmp_path, monkeypatch, f"mau_{kind}_{era}", src)
-    return us.__dict__["$module"]
+    U = us.__dict__["$module"]
+    _assert_import_is_owner_handle(U, "q", f"maow_{era}", "p")
+    return U
 
 
 def test_an_aliased_name_in_source_resolves_through_the_import(aliased):
