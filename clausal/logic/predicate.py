@@ -1723,10 +1723,9 @@ def _binding_key(binding: Any) -> Any:
 
 def _binding_own_name(binding: Any) -> str:
     """The OWNER's name of a predicate binding -- the functor a term built
-    through it carries, whatever local spelling bound it."""
-    if isinstance(binding, PredicateMeta):
-        row = binding._row
-        return row._key[0] if row is not None else binding.__name__
+    through it carries, whatever local spelling bound it.  Only ever a
+    HANDLE: ``_import_index`` indexes handles only (W4b-3 slice 2), and its
+    entries are the only way here."""
     from clausal.logic.atoms import demangle  # noqa: PLC0415
     return demangle(binding)[1]
 
@@ -1754,8 +1753,11 @@ def _import_index(db: Any, md: dict, force: bool = False):
     for k, v in md.items():
         if type(k) is not str or "." in k:
             continue
-        if not (isinstance(v, PredicateMeta)
-                or (type(v) is str and _is_mangled_fast(v))):
+        # HANDLES only.  A ``PredicateMeta`` class arm stood here; after the
+        # flip no load leaves a class bound in a module dict (every one is
+        # flipped, or refused at load since W4b-3 slice 1), and the census
+        # measured it never true (0 of 65,787).  Deleted W4b-3 slice 2.
+        if not (type(v) is str and _is_mangled_fast(v)):
             continue
         if not is_declared_predicate_name(v, db=db):
             continue
@@ -3388,8 +3390,9 @@ def describe_term_identity_mismatch(obj: Any) -> str:
 
 def _describe_term_identity_mismatch(obj: Any) -> str:
     cls = type(obj)
-    if isinstance(cls, PredicateMeta):
-        return ""  # recognised; nothing to explain
+    # (A "this package's own ``PredicateMeta`` INSTANCE: recognised" arm
+    # stood here.  W4a made such an instance impossible; deleted W4b-3
+    # slice 2.)
     if not isinstance(getattr(cls, "_fields", None), tuple):
         return ""  # not a functor class at all
     foreign = type(cls)

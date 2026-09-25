@@ -44,7 +44,7 @@ from clausal.pythonic_ast.nodes import (
 )
 from clausal.logic.meta_predicate import MetaArg as _MetaArg
 from clausal.logic.predicate import (
-    PredicateMeta, is_declared_predicate_name, is_zero_field_class,
+    is_declared_predicate_name, is_zero_field_class,
     construction_arity_fault,
     namespace_db,
     is_term_instance, predicate_binding_name, term_field_names, term_field_names_of_class,
@@ -692,53 +692,6 @@ def _place_signature_slots(fields, positional, keywords, *, functor, missing):
     return [missing() if slot is _UNSET else slot for slot in slots]
 
 
-def unnameable_instance_cell_functor(term: Any) -> "str | None":
-    """A live INSTANCE whose class cannot be named here → its cell functor.
-
-    P3-2 Task 2.  A live ``PredicateMeta`` instance normally keeps CLASS
-    emission (the controller's ruling on the gate asymmetry: cell-vs-class is
-    decided on the BINDING, and an instance's producer is class-world).  That
-    rests on a premise with one hole in it: post-R6 a ``.clausal`` data
-    functor's name binds its interned spelling, but the ``-module`` rewrite's
-    class block runs at EXEC time, before ``_process_declarations`` rebinds
-    the name -- so a ``-constants`` right-hand side (``-constant_value(_ORIGIN_, Point(0, 0))``) is evaluated through the class and yields exactly the
-    instance the ruling says cannot exist.
-
-    Emitting a class construction for it produces code that cannot run: the
-    only spelling available is ``Point``, and ``Point`` is the str.  So the
-    binding question is asked HERE too, and the answer is the same one the
-    NAME side gives -- which is the whole point, since a construction that
-    disagreed with its own matching half is the hazard the ruling exists to
-    remove:
-
-    * the compile scope binds this class under its own name -> nameable,
-      class emission.  Returns None.  (Reaching here at all takes a live
-      INSTANCE; since Task 6 emptied the bridge, no in-repo vocabulary
-      builds one -- ``clausal.reflection``'s ``Goal`` and ``clpb``'s
-      ``BoolEq`` used to be the examples and are cells now.)
-    * the name resolves as DATA (str binding + signature registry) and the
-      registry's slot layout is this class's own -> a cell, the identical
-      shape every other reference to that functor in this module compiles to.
-    * anything else -> None; class emission, unchanged.
-    """
-    cls = type(term)
-    if not isinstance(cls, PredicateMeta):
-        return None
-    scope = lowering_globals()
-    if scope is None:
-        return None
-    name = cls.__name__
-    if scope.get(name) is cls:
-        return None
-    signature = cell_signature_for_name(name)
-    if signature is None:
-        return None
-    functor, fields = signature
-    if tuple(fields) != tuple(getattr(cls, "_fields", ())):
-        return None
-    return functor
-
-
 def cell_literal_ast(functor: str, arg_exprs: list[ast.expr]) -> ast.Tuple:
     """The cell literal ``("functor", <arg0>, ...)`` as an AST expression."""
     return ast.Tuple(
@@ -1363,22 +1316,10 @@ def term_to_ast_expr(
         # per site also retires the ``_position``/``position`` exclusion that
         # the old instance gate needed.
         #
-        # The one exception is an instance whose class this compile cannot
-        # NAME -- see ``unnameable_instance_cell_functor``, which asks the
-        # same binding question the name side asks and therefore cannot
-        # disagree with it.
-        _cell_f = unnameable_instance_cell_functor(term)
-        if _cell_f is not None:
-            return cell_literal_ast(
-                _cell_f,
-                [
-                    term_to_ast_expr(
-                        getattr(term, name), var_context,
-                        eval_arith=eval_arith,
-                    )
-                    for name in fields
-                ],
-            )
+        # (``unnameable_instance_cell_functor``, the one exception -- a live
+        # ``PredicateMeta`` INSTANCE whose class this compile cannot name --
+        # was deleted in W4b-3 slice 2: W4a made such an instance impossible,
+        # and for every other instance it answered None.)
         # The Phase-0 fast-constructor emission gate (positional
         # ``cls_name._clausal_new(...)``) that used to precede this keyword
         # call was retired in W4b, 2026-09-23: the emitter can no longer

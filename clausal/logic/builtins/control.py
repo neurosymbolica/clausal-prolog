@@ -16,7 +16,6 @@ from clausal.logic.atoms import is_atom as _term_is_atom, mint, spelling
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.trampoline import DONE, StepGenerator
 from clausal.logic.predicate import (
-    is_term_instance, term_field_names, _dispatch_at,
     is_declared_predicate_name, localize_goal,
 )
 
@@ -123,20 +122,12 @@ def _goal_dispatch_and_args(goal_val, db=None, context="time_goal/1"):
         if resolved is not None:
             return resolved
         return None, None
-    if is_term_instance(goal_val):
-        cls = type(goal_val)
-        # Only dispatch if the class has a compiled dispatch function.
-        # This excludes AST nodes (And, Or, in_ as structural nodes, etc.) which
-        # are PredicateMeta instances but do not have a compiled predicate body.
-        # The ROW's dispatch (W2).  ``getattr``: ``is_term_instance`` is
-        # also true of a ``@dataclass`` instance, whose class has no ``_row``
-        # at all (roborev on 9028f9b3) -- that goal falls through to
-        # ``(None, None)`` as it always did.  A predicate class on no row has
-        # no dispatch, and the probe must not mint a row for an AST node.
-        row = getattr(cls, "_row", None)
-        if row is not None and row.dispatch_fn is not None:
-            args = tuple(getattr(goal_val, f) for f in term_field_names(goal_val))
-            return _dispatch_at(cls, len(args)), args
+    # (A term-INSTANCE arm stood here: dispatch through ``type(goal)._row``.
+    # Only a ``PredicateMeta`` class carries ``_row``, and W4a made an
+    # instance of one impossible; a ``@dataclass`` instance fell through to
+    # ``(None, None)``, as every goal reaching this line still does.
+    # Measured: 1 term instance reached it, with no ``_row``.  Deleted W4b-3
+    # slice 2.)
     return None, None
 
 
