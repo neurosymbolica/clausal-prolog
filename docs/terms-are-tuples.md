@@ -48,6 +48,11 @@ fields = db.signature_for(functor, len(args))
 
 * **`m.pred(X)` still works.** The class is still the predicate handle, and a
   module attribute still resolves to it. That goes in P4, not here.
+  **Update 2026-09-25: it has gone.** P4's flip (main `e107929e`) binds every
+  module attribute for a predicate to the owner's handle, a `str`, so
+  `m.pred(X)` is now `TypeError: 'str' object is not callable`. From Python,
+  run a plain cell against the module: `solve(("pred", X), module=m)` — see
+  [Querying from Python](python_integration.md#querying-from-python).
 * **A clause HEAD is still an instance** on the one internal channel that
   builds it (`PredicateMeta._clausal_head`). Also P4.
 * **Atoms are unchanged**: an atom is the interned `str`, a string is the

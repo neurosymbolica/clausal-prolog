@@ -101,7 +101,7 @@ set_name(_n) >> (state2(_, _n))
 
     # Correct usage: brackets around the state value.
     rest = Var()
-    for _ in call("phrase", set_name("alice"), ["bob"], rest, module=mod):
+    for _ in call("phrase", _nt(set_name, "alice"), ["bob"], rest, module=mod):
         rv = deref(rest)
         assert rv == ["alice"], (
             f"phrase(set_name('alice'), ['bob'], Rest) correct form "
@@ -114,7 +114,7 @@ set_name(_n) >> (state2(_, _n))
     # doesn't produce a silent wrong answer. Under phrase/3's state-threading
     # semantics, Rest=['alice'] is expected, not Rest=['alice', 'o', 'b'].
     rest = Var()
-    for _ in call("phrase", set_name("alice"), "bob", rest, module=mod):
+    for _ in call("phrase", _nt(set_name, "alice"), "bob", rest, module=mod):
         rv = deref(rest)
         # This should not happen: phrase/3 should reject str inputs in
         # state-threading position or at minimum not silently produce

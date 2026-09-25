@@ -92,17 +92,22 @@ The base case: an empty goal list means all goals are proved. The recursive case
 **Querying it:**
 
 ```python
-from clausal.examples.metainterpreters import natnum_program, graph_program
-from clausal.examples.metainterpreters import solve, natnum, succ, path, edge
+from clausal import Var, once, solve
+from clausal.examples import metainterpreters as mi
+
+# The object-level terms are cells: natnum(succ(succ(0))) is
+# ("natnum", ("succ", ("succ", 0))).
 
 # Does natnum(s(s(0))) hold?
-p = next(natnum_program.query())
-result = list(solve.query(goals=[natnum(succ(succ(0)))], program=p))
+P = Var()
+once(("natnum_program", P), module=mi)
+result = list(solve(("solve", [("natnum", ("succ", ("succ", 0)))], P.value), module=mi))
 # → one solution (the proof succeeds)
 
 # Is there a path from a to c?
-g = next(graph_program.query())
-result = list(solve.query(goals=[path("a", "c")], program=g))
+G = Var()
+once(("graph_program", G), module=mi)
+result = list(solve(("solve", [("path", "a", "c")], G.value), module=mi))
 # → one solution
 ```
 

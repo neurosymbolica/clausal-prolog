@@ -211,9 +211,9 @@ Add test predicates to any example file, then run with pytest:
 Or query from [Python](python_integration.md):
 
 ```python
-from clausal import Var
-from clausal.examples.fibonacci import Fib
+from clausal import Var, solve
+from clausal.examples import fibonacci
 
-for trail in Fib(10, F := Var()):
+for trail in solve(("fib", 10, F := Var()), module=fibonacci):
     print(F.value)  # 55
 ```

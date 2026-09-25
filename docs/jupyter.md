@@ -47,9 +47,7 @@ In a Jupyter notebook, all solutions are rendered at once (up to a configurable
 limit) as styled HTML.  Each solution is separated by **or**:
 
 ```python
-from clausal import Member, Var, Solutions
-
-Solutions(Member(X := Var(), [1, 2, 3]))
+*(X in [1, 2, 3])
 ```
 
 Displays:
@@ -70,10 +68,17 @@ In terminal IPython, the same code uses interactive keypresses instead.
 By default, at most **20 solutions** are shown in a Jupyter notebook.  This
 prevents accidentally rendering thousands of results from a large search space.
 
-Override per-query with the `limit` parameter:
+Override per-query by building the `Solutions` yourself — it wraps any
+iterator of binding dicts — and passing `limit`. The goal is a cell run
+against a module with `solve`:
 
 ```python
-Solutions(Member(X, range(100)), limit=5)
+from clausal import Module, Var, solve, Solutions
+
+X = Var()
+Solutions(({"X": X.value}
+           for _ in solve(("in_", X, list(range(100))), module=Module("scratch"))),
+          limit=5)
 ```
 
 Or change the global default:

@@ -1,6 +1,6 @@
 # Python Integration
 
-Clausal and Python work together seamlessly. From `.clausal` files, use `++()` to call any Python expression. From Python code, use `query()` to run logic programs and collect results.
+Clausal and Python work together seamlessly. From `.clausal` files, use `++()` to call any Python expression. From Python code, build a goal cell and run it against its module with [`solve()`](#querying-from-python).
 
 ---
 
@@ -288,25 +288,29 @@ my_module.bar                     # ('bar',)
 
 ## Querying from Python
 
-### Direct iteration — the simplest way
-
-> Legacy surface: iterating a predicate class instance predates the cell
-> representation. New code uses goal-position `--` above.
-
-Predicate term instances are directly iterable.  Each iteration yields the
-`Trail` after a solution — read bindings via `Var.value`, `int()`, `float()`,
-or `str()`:
+A goal from Python is a **cell** — a tuple whose first element is the
+predicate's name and whose remaining elements are its arguments — run against
+a **module**, the one whose database answers it. Pass both, every time:
 
 ```python
-from clausal import Var
-from fibonacci import Fib
+from clausal import Var, solve
+import fibonacci
 
-for trail in Fib(10, F := Var()):
+for trail in solve(("fib", 10, F := Var()), module=fibonacci):
     print(F.value)  # 55
 ```
 
-The module is inferred automatically from the predicate class.  No `solve` or
-`deref` import needed.
+`module=` takes the imported `.clausal` module (as here), a `Module` object, or
+the module's dotted name as a string. A cell does not carry a module of its
+own, so `solve` without `module=` refuses an unqualified cell with an ISO
+`existence_error(module, …)` rather than guessing where the predicate lives.
+
+!!! warning "A module attribute is a handle, not something to call"
+    `fibonacci.fib` is the predicate's **handle** — a `str` naming the module
+    that owns it and the predicate — so `fibonacci.fib(10, F)` raises
+    `TypeError: 'str' object is not callable`. Build the cell and pass the
+    module instead. (Python code *hosted* in a `.clausal` file can also run a
+    goal in [goal position](#goal-position-if-goal-for-in-goal) with `--`.)
 
 `Var` objects support Python coercion:
 
@@ -319,66 +323,73 @@ The module is inferred automatically from the predicate class.  No `solve` or
 | `bool(X)` | Bool coercion (raises `UnboundVarCoercionError` if unbound) |
 | `f"{X}"` | F-string auto-deref |
 
-### `solve` — iterate with explicit module
-
-Use `solve` when you need to pass the module explicitly or when working with
-non-predicate goal terms:
-
-```python
-from clausal import Var, solve
-from fibonacci import Fib
-
-for trail in solve(Fib(10, F := Var())):
-    print(F.value)  # 55
-```
-
-You can pass the module explicitly (as an imported Python module or a `Module`
-object):
-
-```python
-import fibonacci
-for trail in solve(Fib(10, F := Var()), fibonacci):
-    print(F.value)
-```
+Read a binding **inside** the loop: each iteration yields the `Trail` with that
+solution's bindings live, and they are undone before the next one.
 
 ### `once` — first solution only
 
 ```python
 from clausal import Var, once
-from fibonacci import Fib
+import fibonacci
 
-trail = once(Fib(10, F := Var()))
+trail = once(("fib", 10, F := Var()), module=fibonacci)
 if trail is not None:
     print(F.value)  # 55
 ```
 
 Returns the `Trail` for the first solution, or `None` if the goal fails.
 
-### `call` — drive a named predicate by string
+### `call` — drive a named predicate directly
 
-Lowest-overhead path — dispatches directly to the compiled function:
+`call` takes the predicate name and its arguments separately and hands them
+straight to the compiled dispatch function, skipping the goal compilation
+`solve` does. It is the lowest-overhead path for calling one predicate many
+times:
 
 ```python
 from clausal import Var, call
 import fibonacci
 
 for trail in call("fib", 7, N := Var(), module=fibonacci):
-    print(N.value)
+    print(N.value)  # 13
 ```
+
+### Driving Clausal from a test or scoring harness
+
+Code that runs many goals — a pytest suite around a rulebase, a harness that
+scores answers — should build every goal through **one helper function of its
+own**, not by writing raw tuples at each call site:
+
+```python
+from clausal import Var, solve
+import fibonacci
+
+def answers(name, *args):
+    """The one place this harness builds a goal and names its module."""
+    return solve((name, *args), module=fibonacci)
+
+def test_fib_10():
+    F = Var()
+    assert [F.value for _ in answers("fib", 10, F)] == [55]
+```
+
+The goal's shape and the module it runs against are then decided in exactly
+one place: a change to either is one edit, and a call site cannot quietly
+drift to a different module or a malformed goal.
 
 ### `query` — collect binding dicts (deprecated)
 
 !!! warning "Deprecated"
-    `query()` is deprecated.  Iterate the goal directly and use `Var.value`:
-    `for trail in pred(X := Var()): print(X.value)`
+    `query()` is deprecated. Iterate `solve(...)` and read `Var.value` inside
+    the loop, as above.
 
 ```python
 from clausal import Var, query
-from fibonacci import Fib
+import fibonacci
 
 F = Var()
-for bindings in query(Fib(10, F), {"F": F}):
-    print(bindings)  # {"F": 55}
+for bindings in query(("fib", 10, F), {"F": F}, fibonacci):
+    print(bindings)  # {'F': 55}
 ```
 
 ---
@@ -397,7 +408,7 @@ unify(v, dt.date(2026, 3, 16), trail)
 deref(v)  # → datetime.date(2026, 3, 16)
 ```
 
-This means `datetime`, `Decimal`, `pathlib.Path`, and any other Python type with `__eq__` works as a logic term without wrapping. `datetime.date`, naive `datetime`/`time`, and `timedelta` are also accepted directly as **query arguments** — `solve(m.same_day(date(2024, 1, 1), X))` just works, both as direct arguments and nested inside list/compound arguments — no `[Y, M, D]` triple encoding needed on the Python-interop path. Call methods via `++()`:
+This means `Decimal`, `pathlib.Path`, and any other Python type with `__eq__` works as a logic term without wrapping. Dates and times are the exception on the **query** path: a date is the term `("date", Y, M, D)` (likewise `("datetime", …)`, `("time", …)` and `("timedelta", …)`), and that term is what a query passes — `solve(("same_day", ("date", 2024, 1, 1), X), module=m)`, directly or nested inside a list or compound argument. A bare Python `datetime.date` as a query argument is refused with a `NotImplementedError` that names the term to write, rather than binding by reference and quietly matching nothing. Call methods via `++()`:
 
 ```clausal
 -import_from(date_time, [date])
@@ -412,20 +423,40 @@ iso_date(Y, M, D, S) <- (
 
 ## Using `Module` Directly
 
-For tests or programmatic use without the [import hook](import.md):
+For tests or programmatic use without the [import hook](import.md), load a
+`.clausal` file from its path — each call compiles it afresh, with its own
+database — and query it exactly as above:
 
 ```python
-from clausal.logic.database import Module, Clause
-from clausal.logic.predicate import make_predicate
-from clausal.logic.compiler import compile_predicate
-from clausal.logic.variables import Var
+from clausal import Var, solve
+from clausal.testing import load_clausal_module
 
-fib = make_predicate("fib", ["n", "result"])
-fib._assertz(Clause(head=fib(n=Var(), result=Var()), body=[True]))
-compile_predicate("fib", 2, fib._state_row().clauses, pred_cls=fib)
-
-mod = Module("test", module_dict={"fib": fib})
+fibonacci = load_clausal_module("clausal/examples/fibonacci.clausal")
+for trail in solve(("fib", 10, F := Var()), module=fibonacci):
+    print(F.value)  # 55
 ```
+
+Facts can also be asserted into a bare `Module` from Python. The clause head
+is a cell, the database holds the clauses, and the predicate is compiled once;
+a later `assertz` on the same database recompiles it on its next call:
+
+```python
+from clausal import Clause, Module, Var, solve
+from clausal.logic.compiler import compile_predicate_trampoline
+
+graph = Module("graph")
+db = graph.db
+for a, b in [("a", "b"), ("b", "c")]:
+    db.assertz(Clause(head=("edge", a, b), body=[]))
+compile_predicate_trampoline("edge", 2, db.clauses_for("edge", 2), db)
+
+db.assertz(Clause(head=("edge", "c", "d"), body=[]))
+for trail in solve(("edge", X := Var(), Y := Var()), module=graph):
+    print(X.value, Y.value)  # a b / b c / c d
+```
+
+A rule's body is a list of compiled goal nodes, not cells — write rules in a
+`.clausal` file and load it as above.
 
 ---
 
@@ -468,11 +499,20 @@ mod = Module("test", module_dict={"fib": fib})
 
     ### Dispatch Lookup Order
 
-    `call(functor, *args, module)` resolves predicates in this order:
+    `call(functor, *args, module=…)` resolves predicates in this order:
 
-    1. `module.module_dict[functor]._get_dispatch()` — PredicateMeta class from module globals
-    2. `get_builtin_predicate(functor, arity, db)._get_dispatch()` — builtin predicates
-    3. `module.db.get_dispatch(functor, arity)` — Database fallback
+    1. A module-qualified handle as `functor` (a module attribute such as
+       `fibonacci.fib`) switches to the module that owns it.
+    2. The module's own binding for the name, at the arity it was defined or
+       imported at — resolved with `_dispatch_at(binding, arity, db)`. A
+       binding is the owning module's predicate **handle** (a `str`), so this
+       step reads the owner's row, not an attribute of the binding.
+    3. `get_builtin_predicate(functor, arity, db)` — builtin predicates.
+    4. `module.db.get_dispatch(functor, arity)` — the module's own database
+       row.
+
+    Nothing answering is `PredicateNotFoundError`, a `KeyError` whose `.term`
+    is the ISO `existence_error(procedure, Name/Arity)`.
 
     ### `structural_unify`
 
@@ -490,26 +530,42 @@ mod = Module("test", module_dict={"fib": fib})
 
     ### Builtin Predicate Classes
 
-    Every builtin has a constructable `PredicateMeta` class:
+    Every builtin has a class, and calling it **builds a cell** — it does not
+    run anything. Run the cell like any other goal:
 
     ```python
+    from clausal import Module, Var, solve
     from clausal.logic.builtins import get_builtin_class
 
     append = get_builtin_class("append")
-    t = append([1, 2], [3], Var())   # → append(l1=[1, 2], l2=[3], l3=Var())
+    goal = append([1, 2], [3], L := Var())   # → ('append', [1, 2], [3], L)
+    for trail in solve(goal, module=Module("scratch")):
+        print(L.value)  # [1, 2, 3]
     ```
+
+    Iterating the cell itself (`for _ in append(...)`) walks the tuple's
+    elements — it never runs the goal.
 
     Multi-arity builtins (`maplist`, `phrase`) use `MultiArityBuiltin`.
 
     ### assertz/retract from Python
 
-    when called from a `.clausal` module, these builtins:
+    Run the builtin as a goal, with the clause as a cell and the module that
+    owns the predicate:
 
-    1. Check that the target predicate is not locked (see [Directives](directives.md) for `-dynamic`)
-    2. assertz/retract the clause on the [Database](database_ops.md)
-    3. Look up the PredicateMeta class from `db.module_dict`
-    4. Nothing to sync: the class reads the database's row (`pred_cls._state_row()` is `db.row(functor, arity)` once bound)
-    5. Recompile with module globals
+    ```python
+    from clausal import once
+
+    once(("assertz", ("counter", 1)), module=m)    # m declares -dynamic(counter/1)
+    once(("retract", ("counter", 0)), module=m)
+    ```
+
+    The builtins:
+
+    1. Check that the target predicate is not locked (see [Directives](directives.md) for `-dynamic`) — a static one raises ISO `permission_error(modify, static_procedure, Name/Arity)`
+    2. Resolve the predicate's row: the module's binding for the name is the owner's handle, and `resolve_predicate_row` finds the owner's row (`db.row(functor, arity)` in that owner's database), so a write through an `-import_from` lands in the owner's clause list
+    3. assertz/retract the clause on that [Database](database_ops.md) row
+    4. Recompile against the owner's module globals
 
     ### `++()` Implementation
 

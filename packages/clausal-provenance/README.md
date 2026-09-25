@@ -1,5 +1,12 @@
 # clausal-provenance
 
+> **DISABLED (2026-09-25), pending a redesign.** The package registers
+> predicates through engine classes (`PredicateMeta`), which the engine has
+> retired: every predicate is now a Database row and a module binds a handle.
+> A class-based design also cannot map to ISO Prolog. The likely redesign is a
+> meta-interpreter over `clause/2`. Importing `clausal.modules.provenance`
+> raises `ImportError` until then.
+
 Provenance-tagged bottom-up Datalog for [Clausal](https://gitlab.com/MikeAmy/clausal).
 
 A peer evaluation strategy to SLG, with semirings ranging from plain Boolean

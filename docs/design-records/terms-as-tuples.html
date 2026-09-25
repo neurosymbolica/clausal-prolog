@@ -355,6 +355,11 @@ list(each(goal, (S, IDS), mod.__dict__)) ==
     <p><span class="chip c-retracted">Retracted</span></p>
     <p>An earlier draft of this record recommended keeping <em>one generic callable handle</em> at module level, so Python could still call and construct. That was argued from 209 object-shaped accesses in the engine's own tests without checking what the seam had already replaced them with. The module-level name should be the atom <code>('some_pred',)</code> and nothing else. The 209 are a migration to an idiom that already exists.</p>
   </div>
+
+  <div class="pull">
+    <p><span class="chip c-ruled">Note 2026-09-25</span></p>
+    <p>As landed (the flip, main <code>e107929e</code>), the module-level name is the owner's predicate <em>handle</em> &mdash; a <code>str</code> naming the owning module and the predicate &mdash; rather than the atom this section proposed, and an <code>-import_from</code> binds the owner's handle. It names the predicate; it is not callable. The text above is kept as it was written. For Python that <em>embeds</em> Clausal (not hosted in a <code>.clausal</code> file, so no <code>--</code>), the calling convention is a plain cell plus the module: <code>solve(("some_pred", X), module=m)</code>, or <code>call("some_pred", X, module=m)</code>; see <code>docs/python_integration.md</code>.</p>
+  </div>
 </section>
 
 <section>

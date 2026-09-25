@@ -10,9 +10,10 @@ import clausal              # installs the import hook
 import my_prolog_module     # translates my_prolog_module.pl on the fly
 ```
 
-The result is a normal Clausal module: predicates are `PredicateMeta` classes,
+The result is a normal Clausal module: each predicate is bound to its handle,
 dispatch is compiled, and everything works exactly as if you had written the
-code in `.clausal` syntax.
+code in `.clausal` syntax — including querying it from Python with a goal cell
+and `module=`.
 
 ---
 
