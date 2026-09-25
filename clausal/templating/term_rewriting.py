@@ -1928,6 +1928,7 @@ from clausal.lint_warnings import (  # noqa: E402, F401
     ClausalSingletonWarning,
     ClausalSeamLiteralWarning,
     ClausalShadowedVariableWarning,
+    ClausalBooleanSeamWarning,
     ClausalDeprecatedSpellingWarning,
     ClausalTitleCaseIdentifierWarning,
     ClausalScaleInNameWarning,
@@ -6502,6 +6503,10 @@ class EmbedTransformer(NodeTransformer):
         # "cannot be used in a comprehension iterable expression", pointing at
         # generated code and carrying none of the explanation this refusal
         # exists to give.
+        for generator in node.generators:
+            for condition in generator.ifs:
+                transformer._lint_boolean_seam(
+                    condition, "a comprehension's `if` filter")
         carrying = [i for i, g in enumerate(node.generators)
                     if (found := transformer._goal_operand(g.iter)) is not None
                     and not found[1]]
@@ -7359,6 +7364,9 @@ class EmbedTransformer(NodeTransformer):
                 AtomAppliedAsFunctorItem(sites=tuple(deferred)))
 
     def visit_Call(transformer, call):
+        if (isinstance(call.func, Name) and call.func.id == "bool"
+                and len(call.args) == 1 and not call.keywords):
+            transformer._lint_boolean_seam(call.args[0], "`bool(...)`")
         call = transformer.generic_visit(call)
         # ``str(x)`` in Python-hosted code: the atom-aware text crossing.
         if (isinstance(call.func, Name) and call.func.id == "str"
@@ -7516,6 +7524,47 @@ class EmbedTransformer(NodeTransformer):
 
     visit_AsyncFunctionDef = visit_FunctionDef
 
+    # ── boolean-context lint ───────────────────────────────────────────
+    def _lint_boolean_seam(transformer, operand, context):
+        """Warn when *operand* is a ``--`` seam read as a truth value.
+
+        Called only for operands in a BOOLEAN context that is not a goal
+        position -- goal positions (``if --g:``, ``while not --g:``, ``for X
+        in --g:``, a comprehension's first iterable) are lowered by their
+        own visitors before any generic visit reaches here.  Outside them
+        ``--g`` is the CELL, a non-empty tuple, so the test is always true
+        (``not --g`` always false) and the goal never runs.  See
+        ``ClausalBooleanSeamWarning``."""
+        expression = _double_prefix_operand(operand, USub)
+        if expression is None:
+            return
+        import warnings  # noqa: PLC0415
+        warnings.warn(ClausalBooleanSeamWarning(
+            f"{transformer._filename}:{operand.lineno}:{operand.col_offset + 1}: "
+            f"`--{unparse(expression)}` is used as a truth value in {context}, "
+            f"which is not a goal position: there `--` builds the cell (a "
+            f"non-empty tuple), so it is ALWAYS TRUE and the goal never runs. "
+            f"To run the goal, put it in goal position (`if --g:`, "
+            f"`if not --g:`, `while --g:`, `for X in --g:`), or, as an "
+            f"expression, `any(True for X in --g)` with X a variable of "
+            f"the goal."
+        ), stacklevel=2)
+
+    def visit_Assert(transformer, node):
+        transformer._lint_boolean_seam(node.test, "an `assert`")
+        return transformer.generic_visit(node)
+
+    def visit_BoolOp(transformer, node):
+        word = "an `and`" if isinstance(node.op, And) else "an `or`"
+        for value in node.values:
+            transformer._lint_boolean_seam(value, word)
+        return transformer.generic_visit(node)
+
+    def visit_IfExp(transformer, node):
+        transformer._lint_boolean_seam(
+            node.test, "a conditional expression's test (`x if --g else y`)")
+        return transformer.generic_visit(node)
+
     def visit_ClassDef(transformer, node):
         transformer._scope_depth += 1
         result = transformer.generic_visit(node)
@@ -7523,6 +7572,10 @@ class EmbedTransformer(NodeTransformer):
         return result
 
     def visit_UnaryOp(transformer, unary_op):
+        if isinstance(unary_op.op, Not):
+            # ``if not --g:`` / ``while not --g:`` never get here (their
+            # visitors lower the whole test); any other ``not --g`` is.
+            transformer._lint_boolean_seam(unary_op.operand, "a `not`")
         # ``--`` and ``~~`` must be written without a space, and for ``--``
         # that is not a nicety: ``a <- -b`` and ``a < --b`` parse to the same
         # tree, so the columns are the only thing that says which was

@@ -767,8 +767,8 @@ class TestJudgementThroughLoweredArguments:
         "move(pair(d), pair(e)),\n"          # pair(d) wins outright
         "wins(X) <- (move(X, Y), not wins(Y))\n"
         "beats(X, Y) <- (move(X, Y), not wins(Y))\n"
-        "ground_a = ('pair', 'a')\n"
-        "ground_d = ('pair', 'd')\n"
+        "ground_a = --pair(a)\n"
+        "ground_d = --pair(d)\n"
         "def compound_conditional():\n"
         "    if --wins(pair(a)):\n"
         "        return 'true'\n"

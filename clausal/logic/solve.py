@@ -10,15 +10,21 @@ call(functor, *args, module, trail=None)         → Iterator[Trail]
 The ``module`` argument is optional for ``solve``, ``once``, and ``query``:
 when omitted, the module is inferred from the PredicateMeta classes in the
 goal term.  You can also pass an imported ``.clausal`` Python module directly
-(e.g. ``import hello; solve(greeting(X), hello)``), or its dotted name as a
+(e.g. ``import hello; solve(("greeting", X), module=hello)``), or its dotted name as a
 str (``solve(("greeting", X), "hello")``) — see ``resolve_module``, which is
 also what the module-qualified goal ``(":", M, G)`` resolves *M* with.
 
 Design
 ------
-``solve`` handles arbitrary goal terms — both simple_ast nodes (Call, And, Or,
-…) and runtime PredicateMeta instances (e.g. ``greeting(X := Var())``).
-Runtime terms are converted to simple_ast nodes automatically.  Vars embedded
+``solve`` handles arbitrary goal terms — simple_ast nodes (Call, And, Or, …),
+CELL goals (``("greeting", X := Var())``) and runtime term instances.  Runtime
+terms are converted to simple_ast nodes automatically.
+
+The query idiom: from a plain ``.py`` file, ``solve(("pred", X := Var()),
+module=m)`` with the module passed every time; in Python hosted by a
+``.clausal`` file, the goal-position seam ``for X in --pred(X):``.  Calling a
+predicate name (``pred(X := Var())``) is a ``TypeError``: a module
+attribute for a predicate is its name, a ``str``.  Vars embedded
 in the goal are injected into the compiled function's globals so that the
 compiled code references the *user's* Var objects.  This lets the user read
 bindings via ``deref()`` on their original Var objects after each solution.
@@ -178,10 +184,10 @@ def _drive_trampoline(dispatch_fn: Any, trail: Trail, *args: Any) -> Iterator[Tr
 def _term_to_goal(term: Any, db: Any = None) -> Any:
     """Convert a runtime term instance to a simple_ast goal node.
 
-    When the user writes ``solve(greeting(N := Var()))``, ``greeting(N)``
-    produces a PredicateMeta *instance* (a runtime term), not a simple_ast
-    ``Call`` node.  The compiler expects goal nodes, so we convert here.
-    A CELL goal ``("f", a, b)`` lowers the same way (P3-3 Task 5, R11): slot 0
+    ``solve(("greeting", N := Var()), module=m)`` passes a CELL goal, and a
+    runtime term instance can arrive too; neither is a simple_ast ``Call``
+    node.  The compiler expects goal nodes, so we convert here.
+    A CELL goal ``("f", a, b)`` lowers (P3-3 Task 5, R11): slot 0
     names the predicate, the rest are its arguments, so it becomes
     ``AstCall(LoadName("f"), [a, b])`` — the identical node a ``Compound`` goal
     produces, which is what makes a cell goal and a class-term goal share

@@ -62,18 +62,27 @@ builds for that source in a clause — at the point of execution.
 ```clausal
 -module(oracle, [verdict(STATUS, IDS, CITATIONS)])
 -double_quotes(chars)
--import_from(rulebase, [decide])
+-private([permitted])
 
 def expected(status, ids, cites):
     return --verdict(++status, ++ids, ++cites)      # ('verdict', status, ids, cites)
 
-GOLD = --verdict(permitted, ["r1"], [])              # ('verdict', ('permitted',), ['r1'], [])
+GOLD = --verdict(permitted, ['r1'], [])              # ('verdict', 'permitted', ['r1'], [])
+TEXT = --verdict(permitted, ["r1"], [])              # ('verdict', 'permitted', [('$chars', 'r1')], [])
+
+expected("permitted", ["r1"], []) == GOLD            # True
+expected("permitted", ["r1"], []) == TEXT            # False
 ```
+
+A Python `str` handed in through `++` is an **atom**, while `"r1"` written
+inside `--` under `-double_quotes(chars)` is a **string**, so the gold value
+spells the id `'r1'` (an atom in every mode) to compare equal with what
+`expected` builds from Python text.
 
 Inside `--` the grammar is Clausal's, under the host module's own rules:
 
 - a **bare name** is the atom the module declares or imports (`permitted` →
-  `('permitted',)`); an undeclared one is the usual strict-atoms error, or is
+  `'permitted'`, a plain `str`); an undeclared one is the usual strict-atoms error, or is
   minted under `-implicit_atoms`;
 - an **ALL-CAPS or `_leading` name** is a fresh logic variable, shared within
   the one `--` expression;
@@ -96,19 +105,21 @@ names are Python names. `~~expr` is unrelated: it yields Python `ast` nodes.
 ### Text crossings: `str(x)` and `f"{x}"`
 
 Going the other way — an engine answer reaching Python **text** — the two
-places Python makes text explicitly are rewritten to an atom-aware helper:
+places Python makes text explicitly are rewritten to a term-aware helper:
 `str(x)` and an f-string's `{x}` (also `{x!s}`, with or without a format
-spec) give an atom's **spelling**, and plain `str` for anything else. A
+spec) give an atom's **spelling** (an atom is already that `str`), a
+string's **text**, and plain `str` for anything else. A
 format spec applies to the **value**: `f"{n:02d}"` on an int is `"06"` in a
 hosted file exactly as in a plain one (a bare `{x}` spells an atom and passes
 anything else unchanged to `format()`; `{x!s}` keeps Python's meaning, `str`
 first, then the spec). Without
-this, `str(answer)` on the atom `('ok',)` is the tuple repr `"('ok',)"`, and a
-comparison against text scores a wrong answer with no error. The rewrite is
-skipped in a file that binds `str` itself. It covers only those explicit
-forms: `%s`, `.format`, `print`, `json.dumps` and container reprs still show
-the cell — call `spelling()` there, or better, lift the text side to a term
-with `mint()` and compare terms.
+this, `str(answer)` on the string `"ok"` (the cell `('$chars', 'ok')`) is the
+tuple repr `"('$chars', 'ok')"`, and a comparison against text scores a wrong
+answer with no error. The rewrite is skipped in a file that binds `str`
+itself. It covers only those explicit forms: `%s`, `.format`, `print`,
+`json.dumps` and container reprs still show the cell — convert there
+explicitly, or better, lift the text side to a term with `mint()` and compare
+terms.
 
 Two cautions. The rewrite fires **only** in Python hosted by a `.clausal`
 file; a plain `.py` module never gets it, so verify it from a host or you
@@ -141,6 +152,13 @@ one go in one seam as a conjunction. An export that is unbound and
 constrained raises `ResidualConstraints` (keep the store with an explicit
 `Trail`, or ask for the residue inside the goal). Everywhere else `--` is
 still the term.
+
+A term is a non-empty tuple, so it is always true: `assert --edge(zzz, X)`,
+`if --g and ready:`, `x if --g else y`, `bool(--g)`, `not --g` outside an
+`if`/`while` test, and a comprehension's `if --g` filter never run the goal.
+Each such site raises a `ClausalBooleanSeamWarning` at load; put the goal in
+goal position, or, as an expression, write `any(True for X in --g)` with `X`
+a variable of the goal.
 
 `UndefinedAnswer` and `ResidualConstraints` are both importable from
 `clausal.logic.seam`.
@@ -175,7 +193,12 @@ A module-level `--goal:` over a predicate defined in the same file fails
 during that file's load — the Python body runs before the file's own
 clauses are compiled. Over an imported predicate it works.
 
-## Crossing the boundary: atoms out, strings back
+## Crossing the boundary: atoms and strings
+
+An atom **is** a Python `str` (`bar` is `'bar'`); a string is the cell
+`('$chars', text)`. Every outbound conversion hands an atom over as the `str`
+it already is; what differs between them is how deep they turn a **string**
+into text.
 
 There are **two** outbound conversions, and which one a boundary gets is a
 decided trade rather than an accident.
@@ -185,28 +208,32 @@ wrapper argument goes through it:
 
 | Term | What the Python callee sees |
 |---|---|
-| atom `bar` (the cell `("bar",)`) | the `str` `'bar'` — its spelling |
-| string `"bar"` | the `str` `'bar'` |
+| atom `bar` | the `str` `'bar'` — the atom itself |
+| string `"bar"` (the cell `('$chars', 'bar')`) | the `str` `'bar'` — its text |
 | a partial string that has become ground | the `str` it walks to |
-| compound cell `foo(bar, 1)` | the tuple `('foo', 'bar', 1)` (converted elementwise) |
-| list `[bar, 1]` | `['bar', 1]` |
-| `DictTerm` / dict | a `dict`, **keys converted too** — an atom key becomes a `str` key |
+| compound cell `foo("x", 1)` | the tuple `('foo', 'x', 1)` (converted elementwise) |
+| list `[bar, "x"]` | `['bar', 'x']` |
+| `DictTerm` / dict | a `dict`, **keys converted too** |
 | anything else | itself |
 
-`clausal.logic.to_python.unwrap_atom` is the **top-level** one, and it is what
-a `++` escape or an f-string argument gets: it unwraps an atom **argument** to
-its spelling and hands everything else over as it stands.
+`clausal.logic.to_python.unwrap_atom` is the **shallow** one, and it is what
+a `++` escape or an f-string argument gets: a string **argument** becomes its
+text, and so does a string **element of a list argument** (one level, so
+`", ".join(W)` works); everything else is handed over as it stands.
 
 | Term at a `++` / f-string argument | What the Python expression sees |
 |---|---|
-| atom `bar` (the cell `("bar",)`) | the `str` `'bar'` — its spelling |
-| anything else, **including containers** | itself, unconverted |
+| atom `bar` | the `str` `'bar'` |
+| string `"bar"` | the `str` `'bar'` |
+| list `["x", "y"]` | `['x', 'y']` |
+| anything else, **including deeper containers** | itself, unconverted |
 
-So a nested atom crosses **raw**: `++len(L)` on `L = [bar, baz]` sees
-`[('bar',), ('baz',)]`, not `['bar', 'baz']`, and a `DictTerm` argument arrives
-as a `DictTerm`. When you want the deep conversion at a `++`, ask for it by
-name — `from clausal.modules.py._helpers import to_python` in the Python module
-you are escaping into, and call it on the argument there.
+So a string nested deeper crosses **raw**: `++repr(L)` on `L = [f("x")]` sees
+`[('f', ('$chars', 'x'))]`, and a `DictTerm` argument arrives as a `DictTerm`.
+Atoms need nothing: `++len(L)` on `L = [bar, baz]` sees `['bar', 'baz']`. When
+you want the deep conversion at a `++`, ask for it by name — `from
+clausal.modules.py._helpers import to_python` in the Python module you are
+escaping into, and call it on the argument there.
 
 Why the asymmetry: a `py.*` call crosses a bounded argument list into a
 foreign library that cannot read engine terms at all, and pays for the walk
@@ -215,8 +242,9 @@ written by someone who can see exactly what they are passing — and the walk
 cost 7.4 % of a `++`-heavy benchmark against a 3 % bar (the design's §9.1
 recorded this fallback in advance; it was applied 2026-09-07 on the measurement).
 
-Inbound is deliberately **not** symmetric: a Python `str` coming back is a
-**string**, never the atom that went out. So
+Inbound, a plain Python `str` coming back through `++` is an **atom** — the
+same value an atom is — so an atom that crosses out and back is unchanged,
+and text that crosses out comes back as an atom, not a string:
 
 ```clausal
 -double_quotes(chars)
@@ -224,43 +252,49 @@ Inbound is deliberately **not** symmetric: a Python `str` coming back is a
 
 round_trip(X, Y) <- (Y is ++X)
 
-test("an atom crosses out as text and comes back as a string") <- (
+test("an atom crosses out and back as the same atom") <- (
     round_trip(bar, Y),
-    string(Y),
-    Y is "bar",
-    not (Y is bar)
+    atom(Y),
+    Y is bar
+)
+
+test("text crosses back as an atom, not a string") <- (
+    round_trip("bar", Y),
+    atom(Y),
+    not (Y is "bar")
 )
 ```
 
-That is the ISO/Scryer rule — foreign text is a string — and it is loud on
-purpose: a program that silently treated a file line as a symbol was relying
-on the two kinds being confused. A program that needs an atom back **mints
-one**: `atom_chars(A, Text)` in Clausal, or `mint(text)` in Python.
+A program that needs a string back **makes one**: `atom_chars(Y, Text)` in
+Clausal. (The ruled boundary design has `++` read a plain `str` as TEXT and
+an `atom(...)`-tagged value as the atom; that step has not landed.)
 
 ### The Python atom API
 
 ```python
 from clausal.logic.atoms import mint, is_atom, spelling, char_atom
 
-mint("bar")            # → ('bar',)   the canonical atom for a spelling
-is_atom(("bar",))      # → True       the term test
-spelling(("bar",))     # → 'bar'      TypeError if not an atom
-char_atom("a")         # → ('a',)     the one-character atom
+print(repr(mint("bar")))           # 'bar'   the atom for a spelling: the str itself
+print(is_atom("bar"))              # True    the term test: an atom is a plain str
+print(is_atom(("bar",)))           # False   ('bar',) is the RESERVED 1-tuple, not an atom
+print(is_atom(("$chars", "bar")))  # False   that is the string "bar"
+print(repr(spelling("bar")))       # 'bar'   TypeError if not an atom
+print(repr(char_atom("a")))        # 'a'     the one-character atom
 ```
 
 Write new Python-side atom handling against these four names rather than
-against the tuple shape. Compare atoms with `==`, **never** with `is`:
-`mint` returns a fresh (equal) tuple each call, and a compiler-emitted atom
-constant unmarshalled from a `.pyc` is a different object again.
+against a representation. Compare atoms with `==`, **never** with `is`: an
+atom is a plain `str`, and Python does not promise that two equal strings are
+the same object.
 
-A module attribute for a declared atom is that cell:
+A module attribute for a declared atom is that atom:
 
 ```python
 import my_module
 from clausal.logic.atoms import mint
 
-my_module.bar == mint("bar")      # True
-my_module.bar                     # ('bar',)
+print(my_module.bar == mint("bar"))   # True
+print(repr(my_module.bar))            # 'bar'
 ```
 
 ### What the `py.*` wrappers accept and answer
@@ -278,10 +312,11 @@ my_module.bar                     # ('bar',)
   `get(R, stdout, V)` work.
 
 !!! note "Interpolated containers are terms, not converted Python"
-    The thunk path unwraps a **top-level** atom only, so an interpolated
-    container reaches `format()` as the engine term it is — `f"{D}"` on a dict
+    The thunk path converts a **top-level** string (and a list's string
+    elements) only, so any other interpolated container reaches `format()` as the engine term it is — `f"{D}"` on a dict
     `D = {a: 1}` renders that `DictTerm`'s own `__format__`/`repr`, with the
-    key still the cell `('a',)`. For a rendering you control, ask for one:
+    key still the atom `'a'` and a string value still the cell
+    `('$chars', ...)`. For a rendering you control, ask for one:
     `term_to_string(D, S)` (or `print_term/1`), then interpolate `S`.
 
 ---

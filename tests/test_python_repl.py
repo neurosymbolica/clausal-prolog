@@ -198,6 +198,20 @@ def test_star_query_import_then_use(monkeypatch):
     assert "1" in buf.getvalue()
 
 
+def test_goal_seam_in_the_repl_says_it_is_unavailable_and_names_the_alternative():
+    """The REPL has no host Clausal module, so ``for F in --g:`` cannot run.
+    The refusal used to blame "a plain .py file", which is not what the user
+    typed; it now says the goal seam is not available here and names the
+    query forms that are (``solve(cell, module=m)``, the REPL's ``*(...)``)."""
+    # nv
+    console = ClausalConsole(filename="<test>")
+    out = run_source("for X in --in_(X, [1, 2]): print(X)\n", console)
+    assert "NameError" in out, out
+    assert "not available in the REPL" in out, out
+    assert "module=m" in out and "*(pred(X))" in out, out
+    assert "plain .py" not in out, out
+
+
 # ── enable_python_repl ────────────────────────────────────────────────────────
 
 
