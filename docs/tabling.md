@@ -229,7 +229,7 @@ if self.is_tabled(functor, arity):
     self.abolish_table(functor, arity)
 ```
 
-`compiler._install` abolishes as well, when it re-establishes the wrapper on a recompile. That covers the mutation paths that never call `Database.assertz`/`retract` — the `retract/1` builtin deletes straight out of `db._clauses`, and `PredicateMeta._assertz`/`_retract` only clear the dispatch — all of which recompile through `_install`.
+`compiler._install` abolishes as well, when it re-establishes the wrapper on a recompile. That covers the mutation paths that never call `Database.assertz`/`retract` — the `retract/1` builtin deletes straight out of `db._clauses`, and `PredicateMeta._assertz`/`_retract` (reachable only on a class no Clausal database owns — a loaded module binds every predicate to its handle, and runtime writes go through the `assertz`/`retract` builtins) only clear the dispatch — all of which recompile through `_install`.
 
 ---
 

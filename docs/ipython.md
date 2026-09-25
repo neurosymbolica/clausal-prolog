@@ -95,19 +95,22 @@ export CLAUSAL_IPYTHON=1
 
 There are two ways to query in IPython:
 
-### Plain Python iteration
+### Plain Python: `solve` with a goal cell
 
-Since predicate terms are directly iterable, you can use a standard `for` loop:
+Build the goal as a cell — the predicate's name followed by its arguments —
+and run it against the module that defines it, with a standard `for` loop:
 
 ```python
-from clausal import Var
-from hello import greeting
+from clausal import Var, solve
+import hello
 
-for trail in greeting(X := Var()):
+for trail in solve(("greeting", X := Var()), module=hello):
     print(X.value)
 ```
 
-This works identically in plain Python scripts and IPython.
+This works identically in plain Python scripts and IPython. A module
+attribute such as `hello.greeting` is the predicate's handle (a `str`), not
+something to call — see [Querying from Python](python_integration.md#querying-from-python).
 
 ### `*(goals)` — IPython-specific shorthand
 
@@ -132,13 +135,13 @@ into Clausal goals:
 ### Single goal
 
 ```python
-*(Solve(ROWS))
+*(solve(ROWS))
 ```
 
 ### Conjunction — comma-separated
 
 ```python
-*(Problem(1, ROWS), Sudoku(ROWS))
+*(problem(1, ROWS), sudoku(ROWS))
 ```
 
 Multiple comma-separated goals are folded into a left-associative `And` chain
@@ -160,7 +163,7 @@ Any uppercase name inside a `*(...)` query is automatically allocated as a
 fresh `Var()` via a walrus assignment embedded in the goal expression itself:
 
 ```python
-*(Member(X, [1, 2, 3]), X > 1)
+*(X in [1, 2, 3], X > 1)
 # X is allocated as Var() automatically
 ```
 
@@ -228,46 +231,41 @@ kernels, which render output as HTML rather than a terminal.
 
 ## Using `Solutions` directly
 
-For programmatic use, wrap any iterator of binding dicts:
+For programmatic use, wrap any iterator of binding dicts. Run the goals with
+`call` — the predicate's name, its arguments, and the module that defines it —
+on one shared `Trail`, so the second goal sees the first one's bindings.
+`problem/2` fetches a puzzle and `solve/1` constrains and labels it:
 
 ```python
 from clausal import Var, call, Solutions
 from clausal.logic.variables import walk, Trail
+from clausal.examples import sudoku
 
 ROWS = Var()
 trail = Trail()
 
 def gen():
-    for _ in call(sudoku.Problem, 1, ROWS, trail=trail):
-        for _ in call(sudoku.Solve, ROWS, trail=trail):
+    for _ in call("problem", 1, ROWS, module=sudoku, trail=trail):
+        for _ in call("solve", ROWS, module=sudoku, trail=trail):
             yield {'ROWS': walk(ROWS)}
 
 Solutions(gen())
 ```
 
-`Solutions` also accepts a predicate instance directly:
+For a single goal, `solve` with a cell does the same job. This one only
+fetches puzzle 1 — its blanks stay unbound variables; solving it is the
+second goal above:
 
 ```python
+from clausal import Var, solve, Solutions
+from clausal.logic.variables import walk
+from clausal.examples import sudoku
+
 ROWS = Var()
-Solutions(sudoku.Sudoku(ROWS))
+Solutions({"ROWS": walk(ROWS)}
+          for _ in solve(("problem", 1, ROWS), module=sudoku))
 ```
 
----
-
-## `call` with predicate classes
-
-`call()` accepts a predicate class directly — no `module=` argument needed:
-
-```python
-from clausal import call
-
-for _ in call(sudoku.Solve, ROWS):
-    print(walk(ROWS))
-```
-
-String functor names still work when a module is provided:
-
-```python
-for _ in call("solve", ROWS, module=mod):
-    ...
-```
+`Solutions` does not run a goal cell handed to it directly — a cell is a
+tuple, and `Solutions(("problem", 1, ROWS))` would iterate its elements.
+Pass the iterator that `solve` or `call` returns.

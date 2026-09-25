@@ -47,7 +47,7 @@ def fib__2(arg0, arg1, trail, k):
 |---|---|
 | `Var()` (unbound) | `MatchAs(name="_vN")` — capture into local name |
 | Integer / string literal | `MatchValue(IntLiteral(N))` — exact match |
-| PredicateMeta term `fib(n=_v, ...)` | `MatchClass(fib, patterns)` — structural match |
+| Compound cell `('point', X, Y)` | `MatchSequence([MatchValue('point'), ...])` — structural match on the functor, then the arguments |
 | List `[HEAD, *TAIL]` | `MatchAs(name="_lcapN")` + deferred list guard (see below) |
 | [`DictTerm`](dicts_sets.md)`({"k": V, ...})` | `MatchAs(name="_dcapN")` + dict unify guard |
 | [`SetTerm`](dicts_sets.md)`({1, 2, 3})` | `MatchAs(name="_scapN")` + set unify guard |
@@ -97,9 +97,9 @@ A worklist handles arbitrary nesting depth (e.g. `[[[X, *Y], *Z], *W]` produces 
 | `Call(LoadName("forall"), [cond, action])` | Desugared to `not (cond and not action)` — uses existing NAF compilation. |
 | `in_(elem, coll)` | `for _x in deref(coll): mark ...; if unify(elem, _x, trail): k; undo` |
 | `NotIn(elem, coll)` | found-flag pattern |
-| `Call(LoadName(f), args)` | `for _ in f._get_dispatch()(args, trail, k): k_stmts` |
+| `Call(LoadName(f), args)` | `StepGenerator($dispatch_at(f, N), …, args, trail)` — see [Sub-predicate calls](#sub-predicate-calls) |
 
-The Call case is the core cross-predicate dispatch. `f` is the predicate name; it is resolved from the compiled function's `__globals__` at runtime, not by a string lookup in a central registry.
+The Call case is the core cross-predicate dispatch. `f` is the predicate name; its binding — the owning module's predicate handle — is resolved from the compiled function's `__globals__` at runtime, and `$dispatch_at(f, N)` turns it into the dispatch function on the owner's row at the call site's arity N.
 
 ### Variable pre-allocation
 
@@ -118,13 +118,13 @@ _inject_resolved_targets(call_targets, base_globals, db, globals_)
 
 **`_collect_globals_info(clauses)`** — single tree walk returning:
 
-- `head_types`: `{name: cls}` for any `PredicateMeta` class found in clause heads (needed for `case fib(n=_v):` structural match patterns).
+- `head_types`: `{name: cls}` for any class found in clause heads (needed for `MatchClass` patterns — `Compound` and dataclass heads; a cell head needs none).
 - `py_thunks`: `{key: fn}` for any `PyThunk` lambda found in clause bodies (the `++expr` Python-escape syntax).
 - `call_targets`: `set[(fname, arity)]` for every `Call(LoadName(f), ...)` node found in clause bodies.
 
-**`_inject_resolved_targets(targets, base_globals, db, globals_)`** — resolution loop that ensures each called `(fname, arity)` pair has a `_get_dispatch()`-compatible object in `base_globals`:
+**`_inject_resolved_targets(targets, base_globals, db, globals_)`** — resolution loop that ensures each called `(fname, arity)` pair has a binding in `base_globals` that `$dispatch_at` can resolve:
 
-1. If `fname` is already in `base_globals` and is a `PredicateMeta` class → already present; apply locked dispatch caching (see below) and continue.
+1. If `fname` is already in `base_globals` and is a predicate binding at this arity — the owner's handle, or a class no Clausal database owns → already present; apply locked dispatch caching (see below) and continue.
 2. If `fname` is a known builtin → inject a `BuiltinPredicate` adapter.
 3. If `db` is not `None` and `fname` is in the database → inject a `_DbDispatchAdapter` wrapping `db.get_dispatch`.
 4. Dotted names (`mod.Pred`) are resolved via attribute traversal through the module dict.
@@ -134,25 +134,25 @@ _inject_resolved_targets(call_targets, base_globals, db, globals_)
 For predicates that are **locked** (non-dynamic, `row.locked` is `True`) at compilation time, `_inject_resolved_targets` also captures the dispatch function directly into `base_globals` under a stable key:
 
 ```python
-_disp_key("Edge", 2)  →  "_disp_Edge_2"
-base_globals["_disp_Edge_2"] = Edge._state_row().dispatch_fn
+_disp_key("edge", 2)  →  "$disp_edge_2"
+base_globals["$disp_edge_2"] = resolve_predicate_row(edge, arity=2, db=db).dispatch_fn
 ```
 
-The code-generation functions (`_dispatch_call_trampoline`, `_dispatch_call_iter`) check the current compilation context for cached keys. when a callee's dispatch key is present, the generated `StepGenerator` construction uses the cached local directly instead of calling `._get_dispatch()` at every invocation:
+The code-generation functions (`_dispatch_call_trampoline`, `_dispatch_call_iter`) check the current compilation context for cached keys. when a callee's dispatch key is present, the generated `StepGenerator` construction uses the cached local directly instead of resolving the binding through `$dispatch_at` at every invocation:
 
 ```python
 # Unlocked / dynamic predicate (default):
-_gen = StepGenerator(Foo._get_dispatch(), this_generator, arg0, arg1, trail)
+_gen = StepGenerator($dispatch_at(foo, 2), this_generator, arg0, arg1, trail)
 
 # Locked predicate — cached dispatch closure:
-_gen = StepGenerator(_disp_Foo_2, this_generator, arg0, arg1, trail)
+_gen = StepGenerator($disp_foo_2, this_generator, arg0, arg1, trail)
 ```
 
-`_disp_Foo_2` is a reference to a pre-captured dispatch function in the compiled function's `__globals__` — one attribute lookup is eliminated on every call site.
+`$disp_foo_2` is a reference to a pre-captured dispatch function in the compiled function's `__globals__` — the binding-to-row resolution is eliminated on every call site.
 
 **when dispatch caching fires:** Locking happens *after* initial module compilation, so intra-module calls within the same `.clausal` file are compiled before their callees are locked. Dispatch caching fires for cross-module calls (where the imported module is already locked), for explicit recompilations after locking, and for predicates compiled via `compile_predicate` / `compile_predicate_trampoline` after the callee's `_lock()` has been called.
 
-**Safety:** On lazy recompile (triggered by `assertz`/`retract`), the whole compilation reruns with the updated clause list, so any cached dispatch functions are refreshed. Dynamic predicates (`_locked = False`) never get cached; they always use `._get_dispatch()`.
+**Safety:** On lazy recompile (triggered by `assertz`/`retract`), the whole compilation reruns with the updated clause list, so any cached dispatch functions are refreshed. Dynamic predicates (`row.locked` is `False`) never get cached; they always go through `$dispatch_at`.
 
 ### Call-site bucket specialisation
 
@@ -161,17 +161,17 @@ Locked dispatch caching captures the dispatch *closure* for locked callees. Call
 `_inject_bucket_refs_trampoline` runs after `_inject_resolved_targets`. It scans each clause body for `Call` nodes whose callee is locked and has `_index_plans`. For each such call site it converts the term-level argument to an AST expression, extracts a static key via `_static_call_key`, and — if the key appears in the callee's bucket dict — injects the bucket function into `base_globals` under a readable string key:
 
 ```python
-base_globals["Color.bucket(pos=0, 'red')"] = Color._state_row().index_plans[0]["red"]
+base_globals["color.bucket(pos=0, 'red')"] = resolve_predicate_row(color, arity=1, db=db).index_plans[0]["red"]
 ```
 
-`_dispatch_call_trampoline` then emits an `ast.Name` referencing that key instead of either `_disp_Color_1` or `Color._get_dispatch()`:
+`_dispatch_call_trampoline` then emits an `ast.Name` referencing that key instead of either `$disp_color_1` or `$dispatch_at(color, 1)`:
 
 ```python
 # static literal 'red' in indexed position 0 — direct bucket ref:
-_gen = StepGenerator(Color.bucket(pos=0, 'red'), this_generator, 'red', trail)
+_gen = StepGenerator(color.bucket(pos=0, 'red'), this_generator, 'red', trail)
 
 # arg is a variable — falls back to cached dispatch closure:
-_gen = StepGenerator(_disp_Color_1, this_generator, X_, trail)
+_gen = StepGenerator($disp_color_1, this_generator, X_, trail)
 ```
 
 Joint bucket pairs (when both indexed positions hold static literals) are also specialisable.
@@ -236,7 +236,7 @@ Plain tuples get Python's `UNPACK_SEQUENCE` opcode — faster than attribute acc
 ### Sub-predicate calls
 
 ```python
-_gen = StepGenerator(fib._get_dispatch(), this_generator, N1, A, trail)
+_gen = StepGenerator($dispatch_at(fib, 2), this_generator, N1, A, trail)
 _st = yield (_gen, None)
 while _st is not DONE:
     # body continuation: current solution available
@@ -246,10 +246,10 @@ while _st is not DONE:
 
 `StepGenerator` wraps the child dispatch function. `this_generator` is passed as the child's `parent`, so the child yields `(this_generator, None)` on solution and `(this_generator, DONE)` on exhaustion. The trampoline routes these back to us.
 
-when `fib` is locked at compilation time, the dispatch function is pre-captured into `base_globals` as `_disp_fib_2`, and the generated code uses `_disp_fib_2` directly instead of `fib._get_dispatch()`:
+when `fib` is locked at compilation time, the dispatch function is pre-captured into `base_globals` as `$disp_fib_2`, and the generated code uses `$disp_fib_2` directly instead of `$dispatch_at(fib, 2)`:
 
 ```python
-_gen = StepGenerator(_disp_fib_2, this_generator, N1, A, trail)
+_gen = StepGenerator($disp_fib_2, this_generator, N1, A, trail)
 ```
 
 ### Tail recursion optimization (TRO)
@@ -449,17 +449,17 @@ compile_predicate(
 ```
 
 - `db=None` is allowed; a `_GlobalsDb` proxy is used for signature lookups from `globals_`.
-- `pred_cls` explicitly identifies the PredicateMeta class to install the dispatch function on.
+- `pred_cls` identifies a `PredicateMeta` class to install the dispatch function on — only for a class no Clausal database owns (a loaded module's predicates are rows in its `Database`, bound to handles, and are compiled with `db`).
 - `globals_` is the module globals dict; predicate names in the body resolve from this dict.
-- Returns the compiled dispatch function and also installs it via `_install(pred_cls, fn, lazy_fn)`.
+- Returns the compiled dispatch function and also installs it via `_install(db, functor, arity, fn, lazy_fn, pred_cls)`.
 
 ### _install
 
-`_install` stores the dispatch function in two places:
-1. `pred_cls._state_row().dispatch_fn = fn` — the row the PredicateMeta class faces (the Database's once bound; a private detached one on the `db=None` path).
-2. `db.set_dispatch(functor, arity, fn, lazy_fn)` — the Database entry is also updated (kept for backward compatibility with code that looks up dispatch through the Database).
+`_install` stores the dispatch function:
+1. `db.set_dispatch(functor, arity, fn, lazy_fn)` — on the predicate's row in the Database. This is where a loaded module's predicates keep their dispatch: the module binds each one to its handle, and `$dispatch_at`/`resolve_predicate_row` read the row.
+2. When `pred_cls` is given — a class no Clausal database owns — on that class's row too (a private detached one on the `db=None` path).
 
-A lazy recompile closure is also registered in both locations. when `assertz`/`retract` invalidates dispatch by setting `row.dispatch_fn = None`, the next call to `_get_dispatch()` invokes the lazy closure to recompile from the current clause list.
+A lazy recompile closure is registered alongside. when `assertz`/`retract` invalidates dispatch by setting `row.dispatch_fn = None`, the next dispatch through the row (`$dispatch_at`, `db.get_dispatch`) invokes the lazy closure to recompile from the current clause list.
 
 ---
 
@@ -477,7 +477,7 @@ when `db=None`, the compiler uses a `_GlobalsDb(globals_)` proxy that implements
 
 ## `_DbDispatchAdapter` — backward compatibility shim
 
-when a called predicate is not a PredicateMeta class in module globals (e.g. in tests that use `Compound`-headed clauses, or for predicates not yet loaded), the compiler injects a `_DbDispatchAdapter`:
+when a called predicate has no predicate binding in module globals (e.g. a bare `Module` whose clauses were asserted from Python, or predicates not yet loaded), the compiler injects a `_DbDispatchAdapter`:
 
 ```python
 class _DbDispatchAdapter:
@@ -485,7 +485,7 @@ class _DbDispatchAdapter:
         return self._db.get_dispatch(self._functor, self._arity)
 ```
 
-This gives the same `_get_dispatch()` call interface as a real PredicateMeta class, so the compiled call site (`fname._get_dispatch()(args, trail, k)`) is unchanged.
+`$dispatch_at` accepts the `_get_dispatch()` protocol this adapter implements, so the compiled call site (`$dispatch_at(fname, N)`) is unchanged.
 
 ---
 
@@ -505,7 +505,7 @@ This gives the same `_get_dispatch()` call interface as a real PredicateMeta cla
 - Bytecode is cached in `__pycache__/` via `SourceLoader`
 
 **Phase B** (module exec time):
-- Bytecode execution creates PredicateMeta classes and collects `Predicate` nodes
+- Bytecode execution creates load-time `PredicateMeta` classes and collects `Predicate` nodes (step 4a-bis below rebinds every name to its handle)
 - `compile_module()` takes over from there
 
 ### compile_module steps
@@ -521,10 +521,11 @@ compile_module(predicate_nodes, module_items, module_dict, module_name)
 | 1b. Goal expansion | `run_goal_expansion()` — walk clause bodies and apply built-in expansions. Currently: regex auto-binding (ALLCAPS named groups → Unify chains) and static pattern pre-compilation. See [goal_expansion](#goal-expansion-v3-3) below. |
 | 2. [Directives](directives.md) | `_process_directives()` — apply `-dynamic`, `-discontiguous`, `-table`, `-shallow` metadata to the database |
 | 3. Declarations | `_process_declarations()` — process `-module` and `-private` declarations, create PredicateMeta classes for declared functors |
-| 4. assertz clauses | Each `Predicate` node is asserted via `logic_module.define_predicate()`. The class is bound to the Database row (`_bind_row`), so `pred_cls._state_row().clauses` IS the database's list |
+| 4. assertz clauses | Each `Predicate` node is asserted via `logic_module.define_predicate()`. The load-time class is bound to the Database row (`_bind_row`), so its clauses ARE the database's list |
+| 4a-bis. The flip | `_flip_bindings()` — every predicate binding a Clausal database owns is rebound in `module_dict` to `mint_predicate_handle(owner_db, functor)`; an `-import_from` binds the OWNER's handle. Runs again after step 6b, since `-specialize` binds a class there |
 | 5. Compile | Each `(functor, arity)` is compiled via `compile_predicate_trampoline` (or `compile_predicate_shallow` for shallow predicates) |
 | 6. [Tabling](tabling.md) | Tabled predicates are wrapped with `make_tabled_wrapper_trampoline` from `clausal.logic.tabling` |
-| 7. Locking | Non-[dynamic](directives.md) predicates are locked (`pred_cls._lock()`) to prevent runtime modification |
+| 7. Locking | Non-[dynamic](directives.md) predicates' rows are locked (`_lock_static_predicates(db)`) to prevent runtime modification |
 
 ### How predicate nodes are collected
 

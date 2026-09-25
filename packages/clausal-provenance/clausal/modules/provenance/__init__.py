@@ -23,7 +23,17 @@ See :mod:`clausal.modules.provenance.engine` for the engine and
 :mod:`clausal.modules.provenance.protocol` for the semiring protocol.
 """
 
+
 from __future__ import annotations
+
+# DISABLED 2026-09-25 (operator): the engine's PredicateMeta retirement removed
+# the class-based predicate registration this package is built on, and a
+# class-based design cannot map to ISO Prolog.  It needs a redesign (probably
+# as a meta-interpreter).  Importing it fails loudly rather than half-working.
+raise ImportError(
+    "clausal-provenance is disabled pending a redesign: its class-based "
+    "predicate registration does not survive the PredicateMeta retirement "
+    "and cannot map to ISO Prolog (see the package README).")
 
 # ── Engine ───────────────────────────────────────────────────────────────
 from clausal.modules.provenance.engine import (

@@ -127,9 +127,10 @@ query**. It asks: for which arguments does the predicate hold at all?
 
 ```python
 # The most general query for list_sum
-from clausal import Var
+from clausal import Var, solve
+import list_sum_example   # the .clausal file holding list_sum/2
 
-for trail in list_sum(LIST := Var(), SUM := Var()):
+for trail in solve(("list_sum", LIST := Var(), SUM := Var()), module=list_sum_example):
     print(LIST.value, SUM.value)
 ```
 

@@ -409,7 +409,7 @@ Core implementation of higher-order call. `Goal` must be a callable (lambda or `
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:phrase_2"
 ```
-Invoke a DCG rule and require it to consume the entire input list. `RuleBody` is either a predicate class (0 extra args, e.g. `greeting`) or a partial term (N extra args, e.g. `digit(D)`). equivalent to calling the rule with `List` as the input state and `[]` as the output state.
+Invoke a DCG rule and require it to consume the entire input list. `RuleBody` is either a predicate name (0 extra args, e.g. `greeting`) or a partial term (N extra args, e.g. `digit(D)`). equivalent to calling the rule with `List` as the input state and `[]` as the output state.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins.py` (`_phrase__2`)

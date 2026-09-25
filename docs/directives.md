@@ -20,7 +20,7 @@ The export list may mix predicates with arity (e.g. `pred1(A, B)`) and bare atom
 
 #### Data functors vs predicates
 
-A **field-carrying** entry — `Point(X, Y)` — declares a *data functor*: a shape
+A **field-carrying** entry — `point(X, Y)` — declares a *data functor*: a shape
 you build terms with. Its terms compile to cells, plain tuples tagged with the
 functor spelling, and the name binds that spelling rather than a class:
 
@@ -28,14 +28,15 @@ functor spelling, and the name binds that spelling rather than a class:
 --8<-- "tests/fixtures/docs/directives_sigs.txt:module_data_functor"
 ```
 
-The `kind/2` clause builds and matches the cell `("Point", X, Y)`.
+The `kind/2` clause builds and matches the cell `("point", X, Y)`.
 
-From Python, `shapes.Point` is the string `"Point"`, and a term of it is the
-tuple `("Point", 1, 2)` — there is no constructor to call. Build the tuple.
+From Python, `shapes.point` is the string `"point"`, and a term of it is the
+tuple `("point", 1, 2)` — there is no constructor to call. Build the tuple.
 
-An entry that has **clauses** in the file is a predicate as before: it keeps its
-`PredicateMeta` class, `call/1` and friends dispatch on it, and nothing about
-using it changes.
+An entry that has **clauses** in the file is a predicate: the module attribute
+is its handle (`shapes.kind` names the predicate `kind`), `call/1` and friends
+dispatch on it, and from Python it runs as a goal cell with `module=`:
+`solve(("kind", ("point", 1, 2), K), module=shapes)` binds `K` to `point`.
 
 #### `name/arity` — a predicate export
 
@@ -74,7 +75,7 @@ Both spellings work in [`-private`](#-private) too.
 -private([helper(X, Y), edge(A, B)])
 ```
 
-Declares predicates and atoms that are internal to the module. Predicates get proper `PredicateMeta` classes and atoms become writable bare names, exactly as `-module` exports do — and, as for `-module`, an atom listed here is the ordinary global atom of that spelling, not a module-local variant.
+Declares predicates and atoms that are internal to the module. Predicates are declared on the module's `Database` (and bound to their handles) and atoms become writable bare names, exactly as `-module` exports do — and, as for `-module`, an atom listed here is the ordinary global atom of that spelling, not a module-local variant.
 
 The list may also contain bare atoms:
 
@@ -83,7 +84,7 @@ The list may also contain bare atoms:
 ```
 
 !!! warning "`-private` is a marker, not a barrier"
-    **`-private` means "not part of my documented surface" — Python's leading underscore, not C++ `private`.** It does *not* make a name unreachable. `-import_from(owner, [draft])` reaches a `-private` atom or predicate just as readily as an exported one, and binds the **owner's** predicate class (for an atom there is nothing to bind — it is the same global atom either way). Clausal has no access control at all: `-import_from` lowers to a Python `from M import name` and consults nothing about `M`'s declarations — not its `-private` list, not its `-module` export list (see [Why not Prolog-style modules](import.md#why-not-prolog-style-modules) — "No export lists. Everything is public").
+    **`-private` means "not part of my documented surface" — Python's leading underscore, not C++ `private`.** It does *not* make a name unreachable. `-import_from(owner, [draft])` reaches a `-private` atom or predicate just as readily as an exported one, and binds the **owner's** predicate handle (for an atom there is nothing to bind — it is the same global atom either way). Clausal has no access control at all: `-import_from` lowers to a Python `from M import name` and consults nothing about `M`'s declarations — not its `-private` list, not its `-module` export list (see [Why not Prolog-style modules](import.md#why-not-prolog-style-modules) — "No export lists. Everything is public").
 
     This is deliberate and [pinned by a test](https://gitlab.com/MikeAmy/clausal/-/blob/main/tests/test_global_atoms_default.py). It is also load-bearing: under strict atoms, a fixture or generated module with no `-module(...)` export list has importing from its `-private` list as its identity-preserving route across a file boundary.
 
@@ -710,7 +711,7 @@ Directives are processed during module loading:
 
 1. The term transformer parses `-directive(...)` syntax into directive AST nodes
 2. The compiler (v2 pipeline) processes directives before clause compilation via `_process_directives`
-3. Property directives set metadata flags on the predicate's `PredicateMeta` class (see [Predicates](predicates.md))
+3. Property directives set metadata flags on the predicate's row in the module's `Database` (see [Predicates](predicates.md))
 4. Import directives trigger module loading and predicate injection (see [Import System](import.md))
 
 Directives apply to the entire module — they cannot be scoped to individual clauses.

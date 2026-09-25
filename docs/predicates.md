@@ -190,7 +190,7 @@ helper(X, Y) <- (Y == X + 1)
 Use `-private` when a predicate is an implementation detail that other modules should not depend on.
 
 !!! warning "`-private` is advisory, not enforced"
-    A `-private` predicate is **still importable**. `-import_from(this_module, [helper])` succeeds and binds this module's `helper` class. Clausal has no access control — the marker discourages coupling, it does not prevent it, exactly like a leading underscore in Python. See [Directives § `-private`](directives.md#-private) for the full meaning of the directive.
+    A `-private` predicate is **still importable**. `-import_from(this_module, [helper])` succeeds and binds this module's `helper` predicate (its handle). Clausal has no access control — the marker discourages coupling, it does not prevent it, exactly like a leading underscore in Python. See [Directives § `-private`](directives.md#-private) for the full meaning of the directive.
 
 ---
 
@@ -283,38 +283,45 @@ Files are loaded via Python's [import system](import.md). `import my_module` loa
 
 > For most use cases, define predicates in `.clausal` files. This section covers the lower-level Python API for embedding or advanced use.
 
-### PredicateMeta
+### Predicates from Python
 
-Every predicate is a Python class with `PredicateMeta` as its metaclass. In `.clausal` files this is generated automatically from clause heads. For programmatic use:
+A loaded module's attribute for a predicate is the predicate's **handle**: a
+`str` naming the module that owns it and the predicate. It names the
+predicate; it is not a class and not something to call. To run a predicate,
+build a goal **cell** — its name followed by its arguments — and pass the
+module (see [Querying from Python](python_integration.md#querying-from-python)):
 
 ```python
-from clausal.logic.predicate import PredicateMeta
+from clausal import Var, solve
+from clausal.examples import fibonacci
 
-class fib(metaclass=PredicateMeta):
-    _fields = ('n', 'result')
+for trail in solve(("fib", 10, F := Var()), module=fibonacci):
+    print(F.value)  # 55
 ```
 
-### Term Instances
+### Rows and signatures
 
-Calling the class creates a term instance:
-
-```python
-fib(n=7, result=13)      # fully specified term
-fib(n=7)                 # partial — result field gets a fresh Var()
-fib()                    # all fields get fresh Var()
-```
-
-### Dynamic Predicate Creation
+A predicate's state — its clauses, its compiled dispatch, whether it is
+locked — lives on its row in the module's `Database`, and its field names are
+recorded there too. Ask the database, by name and arity:
 
 ```python
-from clausal import make_predicate
+from clausal.examples import fibonacci
+from clausal.logic.predicate import resolve_predicate_row
 
-foo = make_predicate("foo", ["a", "b"])
+db = fibonacci.__clausal_module__.db
+row = db.row("fib", 2)
+row.locked                       # True  — not declared -dynamic
+len(row.clauses)                 # 3
+db.field_names_at("fib", 2)      # ('N', 'F') — from the -module declaration
+
+# From a handle, e.g. one a module imported: the OWNER's row
+resolve_predicate_row(fibonacci.fib, arity=2) is row   # True
 ```
 
 ### Locking
 
-Predicates are locked after module loading — `assertz`/`retract` raise `RuntimeError`. Use `-dynamic(pred/arity)` to allow runtime modification. See [Directives](directives.md) and [Database Operations](database_ops.md).
+Predicates are locked after module loading — `assertz`/`retract` on one raise the ISO `permission_error(modify, static_procedure, Name/Arity)`. Use `-dynamic(pred/arity)` to allow runtime modification; from Python, run the builtin as a goal: `once(("assertz", ("counter", 1)), module=m)`. See [Directives](directives.md) and [Database Operations](database_ops.md).
 
 ---
 

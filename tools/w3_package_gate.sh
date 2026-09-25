@@ -33,20 +33,18 @@ if [ ! -x "$venv/bin/python" ]; then
     "$venv/bin/pip" install -q pytest numpy scipy
 fi
 "$venv/bin/pip" install -q --no-deps \
-    -e "$room/packages/clausal-provenance" \
     -e "$room/packages/clausal-scipy" \
     -e "$room/packages/clausal-spacy"
 cd "$room"
 "$venv/bin/python" - "$room" <<'PY'
-import sys, clausal, clausal.modules.provenance, clausal.modules.py.scipy_stats
+import sys, clausal, clausal.modules.py.scipy_stats
 room = sys.argv[1]
 assert clausal.__file__.startswith(room), clausal.__file__
-assert clausal.modules.provenance.__file__.startswith(room), clausal.modules.provenance.__file__
 print("engine:", clausal.__file__)
 PY
 set +e
 timeout 900 "$venv/bin/python" -m pytest \
-    packages/clausal-provenance/tests packages/clausal-scipy/tests packages/clausal-spacy/tests \
+    packages/clausal-scipy/tests packages/clausal-spacy/tests \
     -q -rfE -p no:cacheprovider --continue-on-collection-errors > "$out.txt" 2>&1
 echo "exit=$?" >> "$out.txt"
 set -e
