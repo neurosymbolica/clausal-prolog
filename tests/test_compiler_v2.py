@@ -301,17 +301,19 @@ class TestV2CompileModule:
         assert checked, "fixture exercised no non-dynamic predicate at all"
         assert ("fact", 2) in checked, checked
 
-    def test_a_class_this_database_has_no_row_for_is_not_locked(self):
-        """The other half of step 7's narrowing, pinned directly.
+    def test_a_class_this_database_has_no_row_for_is_refused_not_locked(self):
+        """A row-less class in the module dict is REFUSED at load (W4b-3
+        slice 1, operator ruling 2026-09-25), before step 7 could touch it.
 
-        Locking a row-less class used to MINT A DETACHED ROW and write the
-        lock into a private Database nobody can reach -- a no-op with a side
-        effect.  Pinned with a class minted HERE rather than with one the
-        fixture happens to contain, because which incidental classes land in
-        a module dict changes as term vocabularies stop being classes (the
-        CLP(B) ``BoolEq``/``BoolImpl`` were the subject until they became
-        plain functions), and a pin that depends on that is a pin that goes
-        vacuous without failing.
+        This used to pin the other half of step 7's narrowing: locking a
+        row-less class MINTED A DETACHED ROW and wrote the lock into a
+        private Database nobody can reach.  After the flip the class was
+        left bound as it was (the class-preserving branch); that branch is
+        gone, so the load now stops at the flip and names the binding --
+        and still never locks the orphan.  Pinned with a class minted HERE
+        rather than with one the fixture happens to contain, because a pin
+        that depends on incidental module-dict contents goes vacuous
+        without failing.
         """
         # nv
         from clausal.logic.predicate import make_predicate
@@ -323,9 +325,12 @@ class TestV2CompileModule:
         assert db.row("zz_no_row_here", 1) is None, "fixture must not define it"
         md["zz_no_row_here"] = orphan
 
-        # Re-run step 7 over the dict now holding the orphan.
-        compile_module([], [], md, md["__name__"])
-        assert not orphan._state_row().locked
+        # Re-run the load over the dict now holding the orphan.
+        with pytest.raises(SyntaxError, match=r"binds zz_no_row_here to "
+                           r"zz_no_row_here/1, a PredicateMeta class "
+                           r"created in Python"):
+            compile_module([], [], md, md["__name__"])
+        assert orphan._row is None or not orphan._row.locked
 
     def test_dynamic_not_locked(self):
         """Dynamic predicates are NOT locked after compile_module."""
