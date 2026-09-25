@@ -1,13 +1,14 @@
-"""A predicate's SELF-DENOTING atom stays PLAIN in both eras.
+"""A predicate's SELF-DENOTING atom stays PLAIN.
 
 Operator ruling 2026-09-24 (todo/done/self-denoting-predicate-atom-spelling-
 post-flip-mangled-or-plain-2026-09-24.md): a bare reference to a predicate in
 DATA position denotes the atom of its plain name, "because the default in
 Prolog is global, but be cognizant of directive hide/1".
 
-Today a predicate's module binding is a ``PredicateMeta`` class; after the
-flip it is the mangled handle ``module\\x1fname`` (a ``str``).  Both must lower
-to the same PLAIN literal.  A ``-hide`` DATA atom is ALSO a mangled ``str``,
+Since the W4b-2d flip a predicate's module binding is the mangled handle
+``module\\x1fname`` (a ``str``; it used to be a ``PredicateMeta`` class, and
+the class arm of these tests went with it).  It must lower to the PLAIN
+literal.  A ``-hide`` DATA atom is ALSO a mangled ``str``,
 but it is not a predicate's self-atom: its mangled spelling is its identity
 and must be kept -- so the discriminator is ``is_declared_predicate_name``,
 never ``is_mangled``.
@@ -34,8 +35,8 @@ from clausal.import_hook import _load_module
 from clausal.logic.atoms import is_mangled, mangle
 from clausal.logic.compiler.terms_to_ast import lowering_scope, term_to_ast_expr
 from clausal.logic.predicate import (
-    PredicateMeta, _resolve_mangled_owner, is_declared_predicate_name,
-    is_zero_field_class, mint_predicate_handle, predicate_binding_name,
+    _resolve_mangled_owner, is_declared_predicate_name,
+    mint_predicate_handle, predicate_binding_name,
 )
 from clausal.logic.solve import _deref_walk, _templatize_query_goal, solve
 from clausal.logic.variables import Var, is_var
@@ -74,9 +75,15 @@ def _lower(term, mod):
         return term_to_ast_expr(term, {})
 
 
+def _is_zero_arity_predicate(mod, name):
+    """*name* is a predicate of *mod*'s Database at arity 0 only."""
+    return _db(mod).predicate_arities(name) == {0}
+
+
 def _shapes(owner, zero=None):
-    """(module, plain name, class binding, handle) for every exported
-    predicate -- the population compared.  The handle is minted from the
+    """(module, plain name, handle) for every exported predicate -- the
+    population compared.  The module-dict binding must BE the handle (so a
+    class era coming back fails here rather than being lowered as one).  The handle is minted from the
     owner's DATABASE (ruling X3) and checked through the Q0 ``db=`` hint, so
     another test popping ``hide_owner`` from ``sys.modules`` cannot turn this
     population empty.  Positive control: non-empty, each shape is what it
@@ -86,15 +93,15 @@ def _shapes(owner, zero=None):
         population.append((zero, "z"))
     rows = []
     for mod, name in population:
-        cls = getattr(mod, name)
+        binding = getattr(mod, name)
         handle = mint_predicate_handle(_db(mod), name)
-        assert isinstance(cls, PredicateMeta), (name, cls)
+        assert binding == handle, (name, binding)
         assert is_mangled(handle), name
         assert is_declared_predicate_name(handle, db=_db(mod)), name
-        rows.append((mod, name, cls, handle))
+        rows.append((mod, name, handle))
     assert len(rows) == len(population) > 0
     if zero is not None:
-        assert sum(1 for _m, _n, c, _h in rows if is_zero_field_class(c)) == 1
+        assert sum(1 for m, n, _h in rows if _is_zero_arity_predicate(m, n)) == 1
     return rows
 
 
@@ -107,21 +114,17 @@ def _hidden(owner):
 
 # ── term_to_ast_expr ──────────────────────────────────────────────────────
 
-def test_class_and_mangled_bindings_bake_the_same_plain_literal(owner, zero):
-    for mod, name, cls, handle in _shapes(owner, zero):
-        from_class = _lower(cls, mod)
+def test_a_mangled_binding_bakes_its_plain_literal(owner, zero):
+    for mod, name, handle in _shapes(owner, zero):
         from_handle = _lower(handle, mod)
-        assert isinstance(from_class, ast.Constant), name
         assert isinstance(from_handle, ast.Constant), name
-        assert from_class.value == name
         assert from_handle.value == name, (
             f"predicate handle baked {from_handle.value!r}, "
             f"not its plain name {name!r}")
 
 
 def test_nested_predicate_binding_bakes_plain(owner, zero):
-    for mod, name, cls, handle in _shapes(owner, zero):
-        assert _eval(_lower(("f", cls, 1), mod)) == ("f", name, 1)
+    for mod, name, handle in _shapes(owner, zero):
         assert _eval(_lower(("f", handle, 1), mod)) == ("f", name, 1)
 
 
@@ -141,10 +144,10 @@ def test_plain_string_is_untouched(owner):
 # ── _templatize_query_goal / _ground_value ────────────────────────────────
 
 def test_ground_value_parameterizes_the_plain_name(owner, zero):
-    """Both eras, every arity: the parameter is the plain atom (a str), never
-    the class object and never the mangled spelling."""
-    for mod, name, cls, handle in _shapes(owner, zero):
-        for binding in (cls, handle):
+    """Every arity: the parameter is the plain atom (a str), never the
+    mangled spelling."""
+    for mod, name, handle in _shapes(owner, zero):
+        for binding in (handle,):
             _goal, params = _templatize_query_goal(("same", binding, Var()), _db(mod))
             assert [v for _p, v in params] == [name], (name, binding, params)
             assert type(params[0][1]) is str
@@ -159,8 +162,8 @@ def test_ground_value_keeps_hide_atom_mangled(owner):
 # ── end to end through solve ──────────────────────────────────────────────
 
 def test_solve_unifies_a_mangled_predicate_binding_as_its_plain_atom(owner, zero):
-    for mod, name, cls, handle in _shapes(owner, zero):
-        for binding in (cls, handle):
+    for mod, name, handle in _shapes(owner, zero):
+        for binding in (handle,):
             for wrap in (lambda b: b, lambda b: ("f", b)):
                 X = Var()
                 got = [_deref_walk(X) for _ in solve(("=", X, wrap(binding)), mod)]
@@ -177,11 +180,12 @@ def test_solve_hide_atom_still_matches_its_owner_facts(owner):
 
 def test_zero_arity_source_fact_matches_both_binding_shapes(zero):
     """``q(z)`` in source stores the plain atom ``z``; a query written with
-    the binding -- the class today, the handle post-flip -- must find it.
-    Before the ruling the class arm bound the CLASS object and answered 0."""
+    the binding -- the handle post-flip -- must find it.  (Before the
+    ruling the class-era binding was the CLASS object and answered 0.)"""
     X = Var()
     assert [_deref_walk(X) for _ in solve(("q", X), zero)] == ["z"]
-    for binding in (zero.z, mint_predicate_handle(_db(zero), "z")):
+    assert zero.z == mint_predicate_handle(_db(zero), "z")
+    for binding in (zero.z,):
         assert sum(1 for _ in solve(("q", binding), zero)) == 1, binding
 
 
@@ -283,8 +287,9 @@ def test_goal_argument_must_be_qualified_to_reach_another_module():
     local = _load_module("sa_goal_caller_local",
                          _fixture_path("sa_goal_caller_local.clausal"))
     handle = mint_predicate_handle(_db(other), "z")
-    bindings = (other.z, handle)
-    assert is_zero_field_class(other.z)
+    assert other.z == handle
+    bindings = (handle,)
+    assert _is_zero_arity_predicate(other, "z")
     assert predicate_binding_name(handle, db=_db(other)) == "z"
 
     def answers(goal, mod):
