@@ -148,3 +148,24 @@ class ClausalShadowedVariableWarning(ClausalLintWarning):
     migration that is exactly when it is most useful.
     """
 
+
+class ClausalBooleanSeamWarning(ClausalLintWarning):
+    """A ``--goal`` read as a BOOLEAN outside goal position.
+
+    ``--g`` runs the goal only in goal position: the test of ``if`` /
+    ``elif`` / ``while`` (also under ``not``), a ``for`` iterable, and a
+    comprehension's first iterable.  Everywhere else it builds the CELL, a
+    non-empty tuple, and a tuple is always true.  So
+
+        assert --edge(zzz, X)        # passes, whatever edge/2 holds
+        ok = --g and ready           # ok is ready, the goal never ran
+        x = a if --g else b          # always a
+
+    never test the goal, and nothing raises.  Emitted at load, once per site
+    (the message names the file and line), for a ``--`` that is the direct
+    operand of ``assert``, ``and``/``or``, a conditional expression's test,
+    ``bool(...)``, ``not`` (outside an ``if``/``while`` test), or a
+    comprehension's ``if`` filter.  A cell assigned, passed or returned as
+    DATA is not this warning.
+    """
+

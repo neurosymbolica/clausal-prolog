@@ -153,6 +153,13 @@ constrained raises `ResidualConstraints` (keep the store with an explicit
 `Trail`, or ask for the residue inside the goal). Everywhere else `--` is
 still the term.
 
+A term is a non-empty tuple, so it is always true: `assert --edge(zzz, X)`,
+`if --g and ready:`, `x if --g else y`, `bool(--g)`, `not --g` outside an
+`if`/`while` test, and a comprehension's `if --g` filter never run the goal.
+Each such site raises a `ClausalBooleanSeamWarning` at load; put the goal in
+goal position, or, as an expression, write `any(True for X in --g)` with `X`
+a variable of the goal.
+
 `UndefinedAnswer` and `ResidualConstraints` are both importable from
 `clausal.logic.seam`.
 
