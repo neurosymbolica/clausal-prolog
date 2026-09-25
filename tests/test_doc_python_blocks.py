@@ -11,11 +11,16 @@ by name, so in-process runs would share ``sys.modules``), and checks what it
 prints. ``modules`` builds the ``.clausal`` files the block imports -- taken
 from the page's own ```clausal blocks where the page defines them, else from
 ``clausal/examples``. ``post`` is appended to make a block that only builds a
-value show it.
+value show it: a block whose last statement is a bare expression (a
+``Solutions(...)`` display) has that value bound to ``_doc_value`` -- the
+block's OWN object, not a rebuilt one -- and ``_show(_doc_value)`` renders it
+through the IPython display protocol (``_repr_html_``, what Jupyter calls) as
+plain text.
 """
 
 from __future__ import annotations
 
+import ast
 import re
 import subprocess
 import sys
@@ -43,6 +48,28 @@ def _block(page: str, lang: str, anchor: str) -> str:
     hits = [b for b in _blocks(page, lang) if anchor in b]
     assert len(hits) == 1, f"{page}: {anchor!r} matches {len(hits)} {lang} blocks"
     return hits[0]
+
+
+def _capture_last_expression(code: str) -> str:
+    """*code* with a trailing bare expression bound to ``_doc_value``."""
+    tree = ast.parse(code)
+    if tree.body and isinstance(tree.body[-1], ast.Expr):
+        last = tree.body[-1]
+        tree.body[-1] = ast.Assign(
+            targets=[ast.Name("_doc_value", ast.Store())], value=last.value)
+        ast.fix_missing_locations(tree)
+        return ast.unparse(tree)
+    return code
+
+
+# Renders a Solutions display as the text a notebook shows.
+_SHOW = """
+import html as _html, re as _re
+def _show(solutions):
+    h = _re.sub(r'<style.*?</style>', '', solutions._repr_html_(), flags=_re.S)
+    t = _html.unescape(_re.sub(r'<br\\s*/?>|<div', lambda m: '\\n' + m.group(0), h))
+    print(_re.sub(r'<[^>]+>', '', t))
+"""
 
 
 def _example(name: str) -> str:
@@ -78,14 +105,20 @@ _CASES = [
     ("ipython-solve", "ipython.md", 'solve(("greeting"',
      {"hello": 'greeting("hello"),\ngreeting("hi"),\n'}, "", ["hello", "hi"]),
     ("ipython-solutions-call", "ipython.md", "def gen():", {},
-     "for d in Solutions(gen())._iter: print(d['ROWS'][0])",
-     ["[1, 5, 6, 8, 9, 4, 3, 2, 7]"]),
+     "_show(_doc_value)",
+     ["ROWS is [[1, 5, 6, 8, 9, 4, 3, 2, 7], [9, 2, 8, 7, 3, 1, 4, 5, 6], "
+      "[4, 7, 3, 2, 6, 5, 9, 1, 8], [3, 6, 2, 4, 1, 7, 8, 9, 5], "
+      "[7, 8, 9, 3, 5, 2, 6, 4, 1], [5, 1, 4, 9, 8, 6, 2, 7, 3], "
+      "[8, 3, 1, 5, 4, 9, 7, 6, 2], [6, 9, 7, 1, 2, 3, 5, 8, 4], "
+      "[2, 4, 5, 6, 7, 8, 1, 3, 9]]"]),
     ("ipython-solutions-solve", "ipython.md",
      '"problem", 1, ROWS), module=sudoku', {},
-     "ROWS = Var()\n"
-     "print([d['ROWS'][0][:1] for d in Solutions({'ROWS': walk(ROWS)} for _"
-     " in solve(('problem', 1, ROWS), module=sudoku))._iter])",
-     ["[[1]]"]),
+     "_show(_doc_value)",
+     ["ROWS is [[1, _, _, 8, _, 4, _, _, _], [_, 2, _, _, _, _, 4, 5, 6], "
+      "[_, _, 3, 2, _, 5, _, _, _], [_, _, _, 4, _, _, 8, _, 5], "
+      "[7, 8, 9, _, 5, _, _, _, _], [_, _, _, _, _, 6, 2, _, 3], "
+      "[8, _, 1, _, _, _, 7, _, _], [_, _, _, 1, 2, 3, _, 8, _], "
+      "[2, _, 5, _, _, _, _, _, 9]]"]),
     ("index", "index.md", 'solve(("fib"',
      {"fibonacci": None}, "", ["55"]),
     ("tutorial-greeting", "tutorial.md", 'solve(("greeting", "hello")',
@@ -117,7 +150,9 @@ def test_doc_python_block_runs(tmp_path, page, anchor, modules, post, expected):
         f"import sys; sys.path[0:0] = [{str(_ROOT)!r}, '.']\n"
         "import clausal\n"
         f"assert clausal.__file__.startswith({str(_ROOT)!r}), clausal.__file__\n"
-        + _block(page, "python", anchor) + "\n" + post + "\n"
+        + _SHOW
+        + _capture_last_expression(_block(page, "python", anchor)) + "\n"
+        + post + "\n"
     )
     # Blocks that name a repo path (``clausal/examples/...``) run from the root.
     cwd = _ROOT if "clausal/examples/" in code else tmp_path
