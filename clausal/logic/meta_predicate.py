@@ -131,12 +131,15 @@ def qualify(designator: Any, value: Any, spec: Any = 0, db: Any = None) -> Any:
     with the handle's OWNER as ``M`` and the PLAIN name as ``X`` (operator
     ruling 2026-09-25, per the always-plain ruling: data never carries a
     mangled name) -- ``cells.qualify_mangled_goal``'s spelling, whose
-    designator is ``predicate.handle_designator``'s.  In a GOAL (integer)
-    position a handle is a goal object that already resolves to its owner,
-    and is passed as it is."""
+    designator is ``predicate.handle_designator``'s.  A CELL whose functor
+    is a handle, ``(handle, X, ...)``, is ``(":", <owner>, (plain, X,
+    ...))`` the same way (coordinator relay of the standing rulings,
+    2026-09-25).  In a GOAL (integer) position a handle is a goal object
+    that already resolves to its owner, and is passed as it is."""
     if spec == QUALIFIED and designator is not None:
         v = deref(value)
-        if _is_predicate_handle(v, db):
+        if _is_predicate_handle(v, db) or (
+                type(v) is tuple and v and _is_predicate_handle(v[0], db)):
             from clausal.logic.cells import qualify_mangled_goal  # noqa: PLC0415
             return qualify_mangled_goal(v, db)
     if designator is None or _already_qualified(value, db):

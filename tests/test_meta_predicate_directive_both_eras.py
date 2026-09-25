@@ -501,6 +501,7 @@ _LDOM = """
     colon_lambda(T) <- cprobe((A <- (A is 7)), T),
     colon_class(T) <- cprobe(mldom_ERA.mark, T),
     colon_foreign(T) <- cprobe(mllib_ERA.decide, T),
+    colon_pass(G, T) <- cprobe(G, T),
 """
 
 
@@ -733,6 +734,36 @@ def test_a_handle_in_a_colon_position_is_qualified_with_its_owner(llib):
     from clausal.logic.meta_predicate import qualify
     assert qualify(f"mldom_{era}", handle, 1, D.db) == handle
     assert qualify(f"mldom_{era}", handle, ":", D.db) == want
+
+
+def test_a_handle_functored_cell_in_a_colon_position_is_owner_and_plain(llib):
+    """Coordinator relay of the standing rulings, 2026-09-25: a CELL whose
+    functor is a declared predicate handle, ``(handle, X, ...)``, in a
+    ``:`` position is ``(":", <owner designator>, (plain_name, X, ...))``
+    -- the designator ``cells.qualify_mangled_goal`` uses.  It used to be
+    wrapped with the CALLER's module around the still-mangled cell.  The
+    caller is ``mldom_ERA``, the owner ``mllib_ERA``."""
+    from clausal.logic.meta_predicate import qualify
+    from clausal.logic.predicate import mint_predicate_handle
+    era, D = llib
+    lib = sys.modules[f"mllib_{era}"].__dict__["$module"]
+    handle = mint_predicate_handle(lib.db, "decide")
+    want = (":", f"mllib_{era}", ("decide", 1, "seen"))
+    t = Var()
+    # compiled call site (``$meta_qualify`` at run time: the cell arrives
+    # through a variable, the way a handle-functored cell reaches one)
+    assert [walk(t) for _ in call("colon_pass", (handle, 1, "seen"), t,
+                                  module=D)] == [want]
+    t = Var()
+    assert [walk(t) for _ in call("cprobe", (handle, 1, "seen"), t,
+                                  module=D)] == [want]    # Python entry
+    x = Var()
+    got = qualify(f"mldom_{era}", (handle, x), ":", D.db)
+    assert got[:2] == (":", f"mllib_{era}") and got[2][0] == "decide"
+    assert got[2][1] is x                                 # args kept as-is
+    # a GOAL (integer) position is unchanged by this ruling
+    assert qualify(f"mldom_{era}", (handle, x), 1, D.db) == (
+        ":", f"mldom_{era}", (handle, x))
 
 
 def test_a_unit_quantity_in_a_goal_position_is_qualified_then_refused(llib):
