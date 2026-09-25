@@ -78,19 +78,23 @@ def module_designator(db: Any) -> Any:
     return module
 
 
-def _already_qualified(value: Any, db: Any = None) -> bool:
+def _is_predicate_handle(v: Any, db: Any = None) -> bool:
+    """A predicate HANDLE names its module inside the atom.  A ``-hide``
+    DATA atom is mangled the same way but names no predicate: it is
+    qualified like any other atom.  *db* is the calling database, the
+    ruling-Q0 hint so a handle naming a module popped from ``sys.modules``
+    still resolves (roborev 2026-09-25)."""
     from clausal.logic.atoms import is_mangled  # noqa: PLC0415
     from clausal.logic.predicate import is_declared_predicate_name  # noqa: PLC0415
+    return (type(v) is str and is_mangled(v)
+            and is_declared_predicate_name(v, db=db))
+
+
+def _already_qualified(value: Any, db: Any = None) -> bool:
     v = deref(value)
     if type(v) is tuple and len(v) == 3 and v[0] == QUALIFIED:
         return True
-    # A predicate HANDLE names its module inside the atom.  A ``-hide`` DATA
-    # atom is mangled the same way but names no predicate: it is qualified
-    # like any other atom.
-    # *db* is the calling database, the ruling-Q0 hint so a handle naming a
-    # module popped from ``sys.modules`` still resolves (roborev 2026-09-25).
-    return (type(v) is str and is_mangled(v)
-            and is_declared_predicate_name(v, db=db))
+    return _is_predicate_handle(v, db)
 
 
 _FUNCTION_KINDS = (types.FunctionType, types.MethodType, functools.partial)
@@ -121,7 +125,20 @@ def qualify(designator: Any, value: Any, spec: Any = 0, db: Any = None) -> Any:
     module.  A goal OBJECT in a GOAL position (an integer spec) is left as
     it is -- it resolves itself; a ``:`` position is module-sensitive DATA
     and is ALWAYS qualified, as Scryer hands it over (``cd:[X]>>true`` for
-    a yall lambda, verified on the box)."""
+    a yall lambda, verified on the box).
+
+    A predicate HANDLE in a ``:`` position is spelled Scryer's ``M:X``
+    with the handle's OWNER as ``M`` and the PLAIN name as ``X`` (operator
+    ruling 2026-09-25, per the always-plain ruling: data never carries a
+    mangled name) -- ``cells.qualify_mangled_goal``'s spelling, whose
+    designator is ``predicate.handle_designator``'s.  In a GOAL (integer)
+    position a handle is a goal object that already resolves to its owner,
+    and is passed as it is."""
+    if spec == QUALIFIED and designator is not None:
+        v = deref(value)
+        if _is_predicate_handle(v, db):
+            from clausal.logic.cells import qualify_mangled_goal  # noqa: PLC0415
+            return qualify_mangled_goal(v, db)
     if designator is None or _already_qualified(value, db):
         return value
     if type(spec) is int and is_goal_object(value):

@@ -485,6 +485,7 @@ _LLIB = """
 _LDOM = """
     -module(mldom_ERA, [mark(X)])
     -import_module(mldom_ERA)
+    -import_module(mllib_ERA)
     -import_from(mllib_ERA, [e0, e1, e2, e3, h1, h2, h3, cprobe])
     -private([box(X), seen])
     decide(B, V) <- (V is B),
@@ -499,6 +500,7 @@ _LDOM = """
     nested(T) <- cprobe(box((A <- (A is 7))), T),
     colon_lambda(T) <- cprobe((A <- (A is 7)), T),
     colon_class(T) <- cprobe(mldom_ERA.mark, T),
+    colon_foreign(T) <- cprobe(mllib_ERA.decide, T),
 """
 
 
@@ -702,10 +704,35 @@ def test_a_colon_position_always_qualifies_even_a_goal_object(llib):
     q = _one(D, "colon_lambda")
     assert q[:2] == (":", f"mldom_{era}") and callable(q[2])
     q = _one(D, "colon_class")
-    assert q == (":", f"mldom_{era}", D.module_dict["mark"])
+    # A predicate HANDLE (``mldom_ERA.mark``) is spelled M:X with the
+    # handle's OWNER as M and the PLAIN name as X (operator ruling
+    # 2026-09-25, the always-plain ruling: data never carries a mangled
+    # name).  It used to arrive bare, as the mangled handle itself.
+    assert D.module_dict["mark"] == mangle(f"mldom_{era}", "mark")
+    assert q == (":", f"mldom_{era}", "mark")
     t = Var()
     assert [walk(t) for _ in call("cprobe", _python_probe, t, module=D)] == [
         (":", f"mldom_{era}", _python_probe)]
+
+
+def test_a_handle_in_a_colon_position_is_qualified_with_its_owner(llib):
+    """Operator ruling 2026-09-25: M is the handle's OWNER, not the caller.
+    ``mldom_ERA`` (the caller) passes ``mllib_ERA.decide`` -- a handle
+    owned by ``mllib_ERA`` -- to ``cprobe``'s ``:`` position, both from a
+    compiled body call and from the Python ``call`` entry."""
+    from clausal.logic.predicate import mint_predicate_handle
+    era, D = llib
+    lib = sys.modules[f"mllib_{era}"].__dict__["$module"]
+    want = (":", f"mllib_{era}", "decide")
+    assert _one(D, "colon_foreign") == want
+    t = Var()
+    handle = mint_predicate_handle(lib.db, "decide")
+    assert [walk(t) for _ in call("cprobe", handle, t, module=D)] == [want]
+    # a GOAL (integer) position passes the same handle as it is: it is a
+    # goal object that already resolves to its owner
+    from clausal.logic.meta_predicate import qualify
+    assert qualify(f"mldom_{era}", handle, 1, D.db) == handle
+    assert qualify(f"mldom_{era}", handle, ":", D.db) == want
 
 
 def test_a_unit_quantity_in_a_goal_position_is_qualified_then_refused(llib):

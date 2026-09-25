@@ -20,8 +20,9 @@ Handle era (W4b-2d flip): the LOAD binds the handle now, so the stand-in
 side of every class-vs-handle comparison is replaced by the value the
 class era answered, captured under ``CLAUSAL_NO_FLIP=1`` on 9e6c2633 and
 pinned here -- so each check still compares the handle against something
-other than itself.  ``test_an_imported_head_at_the_wrong_arity_raises_the_
-arity_error`` is left as it was: it waits on an operator decision.
+other than itself.  The wrong-arity import test, which waited on an
+operator decision, was re-pinned 2026-09-25 to the name + arity ruling
+(``test_an_imported_head_at_a_new_arity_builds_the_importers_own_predicate``).
 """
 
 from __future__ import annotations
@@ -42,11 +43,6 @@ from clausal.logic.predicate import (
 from clausal.logic.variables import Var, deref
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
-# Only the operator-pending test still parametrizes on this (see the module
-# docstring); every other test runs the handle era the load produces.
-ERAS = ("class", "handle")
-
-
 # ── the end-to-end loads: an importer's head names an imported predicate ────
 
 
@@ -71,8 +67,7 @@ def fixture_modules():
 def _load_importer(load, era, owner_stem, name, arity, importer_stem):
     """Load *owner_stem*, assert the LOAD bound *name* to its handle (the
     handle era's precondition; nothing here sets it), then the importer.
-    *era* is accepted for the operator-pending test only and not consulted:
-    there is no class era to select."""
+    *era* is not consulted: there is no class era to select."""
     for k in [k for k in sys.modules if k.startswith("tests.fixtures.")]:
         del sys.modules[k]
     owner = load(owner_stem)
@@ -101,24 +96,34 @@ def test_a_head_naming_an_imported_predicate_reaches_the_gate(
     assert "not callable" not in msg
 
 
-@pytest.mark.parametrize("era", ERAS)
-def test_an_imported_head_at_the_wrong_arity_raises_the_arity_error(
-        fixture_modules, era):
-    """``impord_narrow(ok, [])`` against an imported ``impord_narrow/1``: the
-    class constructor's arity check, answered in both eras by
-    ``build_term_cell``."""
-    with pytest.raises(ClausalTermConstructionError) as exc_info:
-        _load_importer(fixture_modules, era, "impord_arity_vocab",
-                       "impord_narrow", 1, "impord_arity_clash")
-    msg = str(exc_info.value)
-    assert "impord_narrow/1" in msg
-    assert "2 positional argument(s)" in msg
-    assert "exactly one arity" in msg
-    assert "impord_arity_clash.clausal:" in msg      # constructed at
-    if era == "class":
-        # The declaration SITE lives only on the class (todo: declaration
-        # site); a handle's "registered by" reads <unknown> until it moves.
-        assert "impord_arity_vocab.clausal:" in msg
+def test_an_imported_head_at_a_new_arity_builds_the_importers_own_predicate(
+        fixture_modules):
+    """``impord_narrow(ok, [])`` against an imported ``impord_narrow/1``:
+    the head builds the IMPORTER's own ``impord_narrow/2`` and the load goes
+    through; the owner's ``impord_narrow/1`` is untouched.
+
+    Re-pinned 2026-09-25 to the operator's name + arity ruling (2026-09-24:
+    "a local p/2 beside an imported p/1 LOADS"; ``predicate.
+    _foreign_head_verdict`` -> ``"local"``).  Until then this test was
+    ``test_an_imported_head_at_the_wrong_arity_raises_the_arity_error`` and
+    pinned the owner's arity error in a [class] and a [handle] arm; the
+    class arm is gone with the class era, as in the rest of this file."""
+    from clausal.logic.solve import call
+    from clausal.logic.variables import walk
+    mod = _load_importer(fixture_modules, "handle", "impord_arity_vocab",
+                         "impord_narrow", 1, "impord_arity_clash")
+    lm = mod.__dict__["$module"]
+    owner_db = sys.modules["tests.fixtures.impord_arity_vocab"].__dict__[
+        "$module"].db
+    s, c = Var(), Var()
+    assert [(walk(deref(s)), walk(deref(c)))
+            for _ in call("impord_narrow", s, c, module=lm)] == [("ok", [])]
+    assert lm.db.row("impord_narrow", 2) is not None
+    assert owner_db.row("impord_narrow", 2) is None
+    assert owner_db.head_signatures("impord_narrow") == {1: ("ONLY",)}
+    x = Var()
+    assert [walk(deref(x))
+            for _ in call("impord_narrow", x, module=lm)] == ["solo"]
 
 
 def test_implementing_a_declared_only_predicate_reaches_the_vocabulary_drop(

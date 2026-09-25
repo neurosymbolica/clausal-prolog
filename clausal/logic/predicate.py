@@ -2876,9 +2876,10 @@ def _handle_head_cell(handle: str, args: tuple, kwargs: dict,
     written arity, in written order, and the gate gives the verdict.
 
     Only at an arity the OWNER knows: that is a clause for the imported
-    predicate, which the gate refuses.  A head at another arity keeps the
-    arity error both eras raise today
-    (``test_an_imported_head_at_the_wrong_arity_raises_the_arity_error``).
+    predicate, which the gate refuses.  A head at another arity is the
+    importer's OWN predicate (the name + arity ruling; see
+    :func:`_foreign_head_verdict` and
+    ``test_an_imported_head_at_a_new_arity_builds_the_importers_own_predicate``).
     A head in the owner's own module, or with no module to tell (*home*
     carries no ``$module``), keeps every construction error.
 
