@@ -473,22 +473,15 @@ def test_a_python_module_exporting_a_predicate_class_gets_its_own_message(
 
 def test_a_specialize_over_an_imported_mi_still_binds(monkeypatch,
                                                       private_module):
-    """``-specialize`` makes its alias the compiled face of this module's row
-    with an AUTHORIZED ``_bind_row``; the raise added for the steal must not
-    catch it.  Population asserted: the authorized bind really ran."""
-    from clausal.logic.predicate import PredicateMeta as _PM
-    real = _PM.__dict__["_bind_row"]
-    authorized_binds = []
-
-    def spy(cls, db, functor, arity, authorized=False):
-        if authorized and functor == "solve_count_natnum":
-            authorized_binds.append((functor, arity))
-        return real(cls, db, functor, arity, authorized)
-
-    monkeypatch.setattr(_PM, "_bind_row", spy)
+    """``-specialize`` over an imported MI installs its alias as a row of
+    THIS module and answers through it; the refusal added for the steal
+    must not catch it.  (It used to be pinned through a spy on the class's
+    authorized ``_bind_row``; W4b-3 slice 4 installs with no class, so the
+    row and the answer are what is pinned.)"""
     mod = private_module("specialize_natnum", "_vocabdrop_specialize_natnum")
-    assert authorized_binds, "the -specialize authorized bind never ran"
     lm = mod.__dict__["$module"]
+    row = lm.db.row("solve_count_natnum", 2)
+    assert row is not None and row.db is lm.db and row.clauses
     n = Var()
     assert [walk(deref(n)) for _ in call(
         "solve_count_natnum", [["natnum", ["s", 0]]], n, module=lm)] == [2]

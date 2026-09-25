@@ -9630,6 +9630,12 @@ class EmbedTransformer(NodeTransformer):
                 new_name=new_name,
                 depth=depth,
                 cpd=cpd,
+                # The directive's source line: the specialized predicate's
+                # declaration site (W4b-3 slice 4 -- the make_predicate class
+                # used to carry one as ``_registered_at``).
+                position=(expr_stmt.lineno, expr_stmt.col_offset,
+                          getattr(expr_stmt, "end_lineno", expr_stmt.lineno),
+                          getattr(expr_stmt, "end_col_offset", 0)),
             )
         )
         # No runtime code needed — handled in compile_module pipeline.

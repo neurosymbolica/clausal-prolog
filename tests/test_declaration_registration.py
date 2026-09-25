@@ -99,7 +99,9 @@ def test_specialize_route_still_registers_through_register_signature():
         pattern, natnum_program, "solve_pin_natnum", db=db,
     )
     assert db.row("solve_pin_natnum", len(fields)) is not None
-    assert result._row is db.row("solve_pin_natnum", len(fields))
+    # a HANDLE naming the defining module (W4b-3 slice 4: no class)
+    from clausal.logic.atoms import mangle
+    assert result == mangle("t_pin_register_signature", "solve_pin_natnum")
     assert db.signature_for("solve_pin_natnum", len(fields)) == fields
     assert field_names_for("solve_pin_natnum", arity=len(fields),
                             db=db) == fields
