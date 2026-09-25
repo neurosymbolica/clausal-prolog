@@ -21,6 +21,9 @@ from __future__ import annotations
 
 from clausal.import_hook import _load_module
 from clausal.logic.builtins.database_ops import _find_pred_cls
+from clausal.logic.predicate import (
+    make_predicate, mint_predicate_handle, resolve_predicate_row,
+)
 
 
 def _write(tmp_path, name, src):
@@ -47,9 +50,21 @@ def test_a_class_sitting_on_another_aritys_row_is_not_returned_for_that_arity(
     """
     mod = _load(tmp_path, "fpc_ar", "-dynamic(d/1)\n-dynamic(d/2)\nd(1),\n")
     md = mod.module_dict
-    cls = md["d"]
-    assert cls._row.key == ("d", 1), "the load moved the class again"
+    # After the W4b-2d flip the load binds ``d`` to its HANDLE, which has no
+    # arity to be wrong about: both d/1 and d/2 are this module's predicates,
+    # so the handle is the binding at each.
+    handle = md["d"]
+    assert handle == mint_predicate_handle(mod.db, "d"), handle
+    assert _find_pred_cls("d", 1, md) == handle
+    assert _find_pred_cls("d", 2, md) == handle
+    # The class arm of the guard is still engine code; the misplaced class
+    # is built by hand -- a ONE-field class on d/1's row, then moved onto
+    # the ('d', 2) row -- and bound under the name.
+    cls = make_predicate("d", ["x"])
+    cls._bind_row(mod.db, "d", 1, authorized=True)
+    assert cls._row.key == ("d", 1)
     cls._bind_row(mod.db, "d", 2, authorized=True)
+    md["d"] = cls
     # the state this test is built on, pinned so the test cannot go vacuous
     assert len(cls._fields) == 1 and cls._row.key == ("d", 2)
     assert mod.db.row("d", 2) is cls._row
@@ -72,16 +87,20 @@ def test_a_row_here_does_not_hide_a_class_bound_to_another_databases_row(
     monkeypatch.syspath_prepend(str(tmp_path))
     _write(tmp_path, "fpc_ex", "-module(fpc_ex, [qq(X)])\n\nqq(1),\n")
     exporter = _load_module("fpc_ex", str(tmp_path / "fpc_ex.clausal"))
-    exported = exporter.__dict__["qq"]
+    exported = exporter.__dict__["qq"]      # a handle, post-flip
+    exporter_row = resolve_predicate_row(
+        exported, arity=1, db=exporter.__dict__["$module"].db)
+    assert exporter_row is not None
 
     # A local -dynamic mints a row for ('qq', 1) here ...
     mod = _load(tmp_path, "fpc_im", "-dynamic(qq/1)\n")
     assert mod.db.row("qq", 1) is not None
     # ... and then a plain Python import rebinds the NAME to the exporter's
-    # class, whose row belongs to the exporter's Database.
+    # binding, whose row belongs to the exporter's Database.
     mod.module_dict["qq"] = exported
-    assert exported._row is not mod.db.row("qq", 1)
+    assert resolve_predicate_row(exported, arity=1, db=mod.db) is exporter_row
+    assert exporter_row is not mod.db.row("qq", 1)
 
-    assert _find_pred_cls("qq", 1, mod.module_dict) is exported
+    assert _find_pred_cls("qq", 1, mod.module_dict) == exported
     # still arity-checked on that leg
     assert _find_pred_cls("qq", 2, mod.module_dict) is None
