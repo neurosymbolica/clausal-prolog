@@ -5,8 +5,9 @@ Verifies:
 2. Identity expansion (pass-through with TE rule)
 3. Clause suppression (``"none"``)
 4. term_expansion clauses are NOT themselves expanded
-5. q(...) quasi-quotation produces correct AST nodes
-6. Variables shared between q(...) and clause body
+5. Patterns are plain terms; q() quasi-quotation is retired (2026-09-25)
+   and ``q`` is an ordinary name
+6. Variables shared between a pattern and the replacement
 7. Full pipeline integration: .clausal fixtures with term_expansion
 """
 
@@ -283,18 +284,42 @@ class TestModuleState:
         assert "type_error" in str(exc.value) and "evaluable" in str(exc.value)
 
 
-class TestQuasiQuotation:
-    """Test q(...) quasi-quotation in TermTransformer."""
+def _load_src(name, source):
+    """Write *source* to a temp ``.clausal`` file and load it fresh."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        path = os.path.join(d, f"{name}.clausal")
+        with open(path, "w") as fh:
+            fh.write(source)
+        return _load_module(name, path)
 
-    def test_q_produces_call_node(self):
-        """q(foo(_x)) produces a Call constructor AST node."""
+
+def _answers(mod, functor, arity=1):
+    lm = mod.__dict__["$module"]
+    vs = [Var() for _ in range(arity)]
+    return sorted((tuple(deref(v) for v in vs) for _ in call(functor, *vs, module=lm)),
+                  key=repr)
+
+
+class TestPlainTermPatterns:
+    """Patterns are plain terms, as in ISO term_expansion.
+
+    ``q(expr)`` quasi-quotation was retired 2026-09-25.  It stripped itself
+    and lowered ``expr`` -- which a term in argument position already
+    lowers as DATA (a cell), so it did nothing a plain term does not, and
+    it hijacked the name ``q`` in every module.  These were the q() tests;
+    each is now the plain-term equivalent, plus pins that ``q`` is an
+    ordinary name.
+    """
+
+    def test_a_pattern_argument_lowers_as_a_cell_constructor(self):
+        """``foo(_x)`` in argument position lowers as DATA -- the cell
+        constructor -- with no quoting (was ``q(foo(_x))``)."""
         # nv
         from clausal.templating.term_rewriting import TermTransformer
-        tree = ast.parse("q(foo(_x))", mode="eval").body
+        tree = ast.parse("foo(_x)", mode="eval").body
         t = TermTransformer()
         result = t.visit(tree)
-
-        # Result should be a Python AST Call that constructs simple_ast.Call
         assert isinstance(result, ast.Call)
         assert isinstance(result.func, ast.Name)
         assert result.func.id == "$Call"
@@ -302,14 +327,231 @@ class TestQuasiQuotation:
         assert "func" in kw_names
         assert "args" in kw_names
 
-    def test_q_shares_vars(self):
-        """Variables inside q() are shared with the enclosing context."""
+    def test_variables_are_shared_across_the_clause(self):
+        """Variables of a pattern are shared with the enclosing context
+        (was ``[q(foo(_x)), bar(_x)]``)."""
         # nv
         from clausal.templating.term_rewriting import TermTransformer
-        tree = ast.parse("[q(foo(_x)), bar(_x)]", mode="eval").body
+        tree = ast.parse("[foo(_x), bar(_x)]", mode="eval").body
         t = TermTransformer()
         t.visit(tree)
         assert "_x" in t.seen_vars
+
+    def test_q_is_no_longer_stripped_by_the_term_transformer(self):
+        """``q(foo(_x))`` is the functor ``q`` applied to ``foo(_x)``, not
+        ``foo(_x)``: the lowered call names ``q``."""
+        # nv
+        from clausal.templating.term_rewriting import TermTransformer
+        t = TermTransformer()
+        result = t.visit(ast.parse("q(foo(_x))", mode="eval").body)
+        assert "'q'" in ast.unparse(result)
+        assert "'foo'" in ast.unparse(result)
+
+    def test_plain_pattern_one_to_many_expands(self):
+        """The doc quick example, plain (was ``q(fact(X))`` ...)."""
+        # nv
+        mod = _load_src("_te_plain_qe", (
+            "term_expansion(\n"
+            "    fact(X),\n"
+            "    [fact(X), logged_fact(X)],\n"
+            "    STATE, STATE\n"
+            "),\n"
+            "fact(1),\n"
+            "fact(2),\n"
+        ))
+        assert _answers(mod, "fact") == [(1,), (2,)]
+        assert _answers(mod, "logged_fact") == [(1,), (2,)]
+
+    def test_q_one_is_the_ordinary_cell(self):
+        """``q(1)`` is the cell ``('q', 1)``, like any declared functor --
+        not ``1``."""
+        # nv
+        mod = _load_src("_te_q_cell", (
+            "-private([q/1])\n"
+            "r(T) <- (T is q(1))\n"
+        ))
+        assert _answers(mod, "r") == [(("q", 1),)]
+
+    def test_q_one_through_the_seam_is_the_cell(self):
+        """``--q(1)`` used to evaluate to ``1``; it builds ``('q', 1)``."""
+        # nv
+        mod = _load_src("_te_q_seam", (
+            "-module(_te_q_seam, [q(A)])\n"
+            "def build():\n"
+            "    return --q(1)\n"
+        ))
+        assert mod.build() == ("q", 1)
+
+    def test_a_declared_q1_predicate_works_in_every_goal_context(self):
+        """A user's ``q/1`` is an ordinary predicate: as a body goal, under
+        ``call/1``, ``not`` and ``findall/3``.  Each of these was a
+        ``BareGoalVariableError`` or an instantiation error while ``q(X)``
+        was stripped to ``X``."""
+        # nv
+        mod = _load_src("_te_q_pred", (
+            "q(1),\n"
+            "q(2),\n"
+            "body(X) <- q(X)\n"
+            "meta(X) <- call(q(X))\n"
+            "naf(X) <- (X is 3, not q(X))\n"
+            "all(L) <- findall(X, q(X), L)\n"
+        ))
+        assert _answers(mod, "q") == [(1,), (2,)]
+        assert _answers(mod, "body") == [(1,), (2,)]
+        assert _answers(mod, "meta") == [(1,), (2,)]
+        assert _answers(mod, "naf") == [(3,)]
+        assert _answers(mod, "all") == [([1, 2],)]
+
+
+class TestRetiredQuasiQuoteWarning:
+    """An old ``q(...)`` rule now builds ``('q', ...)`` cells that match
+    nothing -- the expansion would silently not fire.  So a ``q(<one arg>)``
+    in a ``term_expansion/4`` clause warns at load, and nowhere else."""
+
+    @staticmethod
+    def _warned(name, source, *, load_may_raise=False):
+        from clausal.lint_warnings import ClausalRetiredQuasiQuoteWarning
+        mod = None
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            try:
+                mod = _load_src(name, source)
+            except Exception:
+                # The warning is emitted by the rewriter, before anything
+                # compiles; a test about the WARNING may use a shape whose
+                # load then fails for its own reasons.
+                if not load_may_raise:
+                    raise
+        hits = [w for w in caught
+                if issubclass(w.category, ClausalRetiredQuasiQuoteWarning)]
+        return mod, hits
+
+    def test_an_old_q_pattern_warns_and_does_not_expand(self):
+        # nv
+        mod, hits = self._warned("_te_old_q", (
+            "term_expansion(\n"
+            "    q(fact(X)),\n"
+            "    [q(fact(X)), q(logged_fact(X))],\n"
+            "    STATE, STATE\n"
+            "),\n"
+            "fact(1),\n"
+        ))
+        assert len(hits) == 1
+        msg = str(hits[0].message)
+        assert "retired 2026-09-25" in msg and "term_expansion(fact(X)" in msg
+        assert ".clausal:2:" in msg   # the line of the first q(...)
+        # ...and the reason it warns: the rule no longer matches the item.
+        assert _answers(mod, "fact") == [(1,)]
+        lm = mod.__dict__["$module"]
+        assert not lm.db.clauses_for("logged_fact", 1)
+
+    def test_one_warning_per_clause(self):
+        # nv
+        _, hits = self._warned("_te_old_q2", (
+            "term_expansion(q(a(X)), [], S, S),\n"
+            "term_expansion(q(b(X)), [], S, S) <- True\n"
+            "term_expansion(INP, OUTP, S, S) <- (INP is q(c(X)), OUTP is [])\n"
+        ))
+        assert len(hits) == 3
+
+    def test_an_old_q_pattern_warns_with_q_and_fact_already_pooled_atoms(self):
+        """Hermetic against load order: another module has declared the
+        ATOMS ``q``, ``fact`` and ``logged_fact`` (the pool every module dict
+        is seeded with), which is the state the full suite reached when this
+        failed with ``TypeError: 'str' object is not callable`` at expansion
+        time -- see tests/test_pool_atom_applied_as_functor.py."""
+        # nv
+        _load_src("_te_pool_owner",
+                  "-module(_te_pool_owner, [q, fact, logged_fact])\n"
+                  "kind(q),\nkind(fact),\nkind(logged_fact),\n")
+        self.test_an_old_q_pattern_warns_and_does_not_expand()
+        mod = _load_src("_te_pool_plain", (
+            "term_expansion(fact(X), [fact(X), logged_fact(X)], S, S),\n"
+            "fact(1),\n"
+        ))
+        assert _answers(mod, "logged_fact") == [(1,)]
+
+    def test_clauses_without_line_numbers_are_not_merged(self):
+        """Roborev L1: the dedup key used to be the line of the first q(),
+        falling back to 0, so a second clause with no lineno was silenced."""
+        # nv
+        from clausal.lint_warnings import ClausalRetiredQuasiQuoteWarning
+        t = EmbedTransformer(source_lines=None, filename=None)
+        clauses = [ast.parse(f"term_expansion(q({f}(X)), [], S, S)",
+                             mode="eval").body for f in ("a", "b")]
+        for c in clauses:
+            for n in ast.walk(c):
+                for attr in ("lineno", "end_lineno"):
+                    if hasattr(n, attr):
+                        delattr(n, attr)
+            t._lint_retired_quasi_quote(c)
+        t._lint_retired_quasi_quote(clauses[0])      # same clause again: once
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            t._settle_retired_quasi_quote()
+        assert sum(issubclass(w.category, ClausalRetiredQuasiQuoteWarning)
+                   for w in caught) == 2
+
+    def test_a_q_pattern_in_a_helper_reached_from_term_expansion_warns(self):
+        """Roborev L2: the delegating shape -- the q() patterns live in a
+        helper that the term_expansion body calls, transitively."""
+        # nv
+        # (The load itself then fails: a term_expansion body cannot call
+        # this module's own predicates today -- ``step/2 has no compiled
+        # dispatch function`` -- parked in
+        # todo/term-expansion-cannot-call-a-helper-in-its-own-module-2026-09-25.md.
+        # The warning is the rewriter's, and comes first.)
+        _, hits = self._warned("_te_helper", (
+            "term_expansion(I, O, S, S) <- step(I, O)\n"
+            "step(I, O) <- rewrite(I, O)\n"
+            "rewrite(q(fact(X)), [q(logged_fact(X))]),\n"
+            "unrelated(q(1)),\n"
+            "fact(1),\n"
+        ), load_may_raise=True)
+        assert len(hits) == 1
+        assert "a clause of rewrite, reached from term_expansion/4" in str(hits[0].message)
+        assert ".clausal:3:" in str(hits[0].message)
+
+    def test_a_q_inside_a_python_escape_or_as_a_goal_is_quiet(self):
+        """Roborev L3: ``++(...)`` is Python, where ``q(x)`` is Python's own
+        call; and ``q(I)`` as a body GOAL calls the user's ``q/1``."""
+        # nv
+        _, hits = self._warned("_te_escape", (
+            "term_expansion(I, O, S, S) <- (q(I), O is ++((lambda q: q(3))(abs)))\n"
+            "term_expansion(I, O, S, S) <- (not q(I), O is [I])\n"
+        ), load_may_raise=True)
+        assert hits == []
+
+    def test_a_file_without_q_is_not_walked(self, monkeypatch):
+        """Roborev L4: the cheap gate -- no ``q(`` in the source, no walk."""
+        # nv
+        from clausal.templating import term_rewriting as tr
+        walked = []
+        real = tr.iter_child_nodes
+        monkeypatch.setattr(tr, "iter_child_nodes",
+                            lambda n: (walked.append(n), real(n))[1])
+        t = EmbedTransformer(source_lines=["term_expansion(fact(X), [], S, S)\n"],
+                             filename="x.clausal")
+        t._lint_retired_quasi_quote(
+            ast.parse("term_expansion(fact(X), [], S, S)", mode="eval").body)
+        assert walked == [] and t._retired_q_records == []
+        t2 = EmbedTransformer(source_lines=["term_expansion(q(X), [], S, S)\n"],
+                              filename="x.clausal")
+        t2._lint_retired_quasi_quote(
+            ast.parse("term_expansion(q(X), [], S, S)", mode="eval").body)
+        assert walked and len(t2._retired_q_records) == 1
+
+    def test_plain_patterns_and_q_outside_term_expansion_are_quiet(self):
+        # nv
+        _, hits = self._warned("_te_quiet", (
+            "-private([q/2])\n"
+            "term_expansion(fact(X), [fact(X)], S, S),\n"
+            "term_expansion(q(1, X), [], S, S),\n"
+            "q(1),\n"
+            "r(X) <- call(q(X))\n"
+            "fact(1),\n"
+        ))
+        assert hits == []
 
 
 class TestModuleItemsUnchanged:
@@ -524,10 +766,10 @@ class TestInitFinalInjection:
 
 
 class TestNestedVarSubstitution:
-    """A var matched inside a quoted PATTERN flows into the quoted OUTPUT.
+    """A var matched inside a PATTERN flows into the OUTPUT.
 
     Gap 2 of todo/term-expansion-compile-time-predicate-synthesis.md (filed
-    2026-07-03): ``term_expansion(q(key(KEY)), [q(marker(KEY))], S, S)`` used
+    2026-07-03): ``term_expansion(key(KEY), [marker(KEY)], S, S)`` used
     to leave ``marker/1`` existing but EMPTY — the matched KEY never reached
     the registered output facts.  Fixed since; pinned here end-to-end.
     """
@@ -543,5 +785,5 @@ class TestNestedVarSubstitution:
         results = [deref(x) for _ in call("marker", x, module=lm)]
         names = sorted(results, key=repr)
         assert names == [mint("income"), mint("stays")], (
-            f"matched KEY must flow into the quoted output; got {results!r}"
+            f"matched KEY must flow into the output; got {results!r}"
         )

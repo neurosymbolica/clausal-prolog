@@ -1267,6 +1267,25 @@ def term_to_ast_expr(
             fname, len(arg_exprs), _namespace)
         if _goal_functor is not None:
             return cell_literal_ast(sys.intern(_goal_functor), arg_exprs)
+        # An ATOM is data and cannot build a term, so a name bound to one is
+        # an UNDECLARED functor here, exactly as an unbound name is -- never
+        # a call of the str.  It is bound without this module saying so more
+        # often than not: every module dict is pre-seeded with the
+        # process-wide atom pool (GLOBAL_ATOMS_DEFAULT rule 1.4), so an atom
+        # ANOTHER module declared sits under the name, and ``zz(1)`` died on
+        # CPython's ``TypeError: 'str' object is not callable`` where the
+        # same module loaded alone says "not in scope as a term class".
+        # (-implicit_functors returned the cell above; a DECLARED data
+        # functor binds its atom too, but answered a signature above.)
+        if _namespace is not None:
+            _resolved = _resolve_functor_binding(fname, _namespace)
+            if _resolved is not None and _term_is_atom(_resolved[0]):
+                return ast.Call(
+                    func=_name("$undeclared_functor"),
+                    args=[ast.Constant(value=fname),
+                          ast.Constant(value=len(arg_exprs)), *arg_exprs],
+                    keywords=kw_exprs,
+                )
         return ast.Call(
             func=_name(fname),
             args=arg_exprs,

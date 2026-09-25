@@ -1,11 +1,12 @@
-# Term expansion: a variable matched INSIDE a quoted pattern must flow into
-# the quoted output and register as a real, queryable fact.  Gap 2 of
+# Term expansion: a variable matched INSIDE a pattern must flow into the
+# output and register as a real, queryable fact.  Patterns are plain terms, as
+# in ISO term_expansion (q() quasi-quotation was retired 2026-09-25).  Gap 2 of
 # todo/term-expansion-compile-time-predicate-synthesis.md: this used to load
 # with marker/1 existing but EMPTY.
 -module(expansion_nested_var, [ marker(K), key(X),
                                 term_expansion(A, B, S, T), stays, income ])
 
-term_expansion(q(key(KEY)), [q(marker(KEY))], STATE, STATE) <- True
+term_expansion(key(KEY), [marker(KEY)], STATE, STATE) <- True
 
 key(stays),
 key(income),

@@ -3,8 +3,8 @@
 --8<-- [start:quick_example]
 # Every fact automatically gets a "logged" wrapper
 term_expansion(
-    q(fact(X)),
-    [q(fact(X)), q(logged_fact(X))],
+    fact(X),
+    [fact(X), logged_fact(X)],
     STATE, STATE
 ),
 
@@ -27,7 +27,7 @@ term_expansion(ITEM, ITEM, STATE, STATE) <- True
 
 --8<-- [start:suppressing_items]
 # Remove all facts for "debug" predicate
-term_expansion(q(debug(X)), [], STATE, STATE) <- True
+term_expansion(debug(X), [], STATE, STATE) <- True
 --8<-- [end:suppressing_items]
 
 --8<-- [start:one_to_many_expansion]
@@ -35,11 +35,10 @@ term_expansion(q(debug(X)), [], STATE, STATE) <- True
 term_expansion(TERM, [TERM, TERM], STATE, STATE) <- True
 --8<-- [end:one_to_many_expansion]
 
---8<-- [start:quasi_quotation]
-# Without q(): the expansion rule would try to CALL double_fact(X)
-# With q(): double_fact(X) is treated as data to be transformed
-term_expansion(q(double_fact(X)), [q(fact(X)), q(fact(X))], S, S),
---8<-- [end:quasi_quotation]
+--8<-- [start:plain_term_patterns]
+# A pattern is a plain term: in argument position it is DATA, never a goal
+term_expansion(double_fact(X), [fact(X), fact(X)], S, S),
+--8<-- [end:plain_term_patterns]
 
 --8<-- [start:module_state_threading]
 # Count clauses as they are expanded

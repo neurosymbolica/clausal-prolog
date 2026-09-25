@@ -60,3 +60,24 @@ feature to already do.
 - `clausal/templating/term_rewriting.py` (`visit_Call`, the `q` branch)
 - `clausal/logic/compiler/terms_to_goalop.py` (raises the misleading error)
 - `docs/term_expansion.md`, `docs/architecture.md`
+
+## Resolved 2026-09-25: q() RETIRED (operator ruling)
+
+Neither (1) nor (2): the special case in `TermTransformer.visit_Call` is
+deleted and `q` is an ordinary name. Premise measured before removal: every
+in-repo q() use (the doc quick/suppression/double_fact examples, the
+`expansion_nested_var` fixture, q() in a TE body under `is`, in a list, around
+a rule pattern -- 7 programs) lowers to a byte-identical module (positions
+normalised) and gives identical answers when written without q(). No site
+needed it. What it did do: strip a user's `q/1` -- `call(q(X))` was
+`call(X)` (instantiation error), and `not q(X)`, `findall(X, q(X), L)`, a
+body goal `q(X)` were each a `BareGoalVariableError`; all answer now.
+
+Two tests (`test_tagged_terms` / `test_implicit_functors`, "a predicate
+reference is not a cell") were green ONLY because of the strip: their
+`"('q'," not in src` fails for every other name since the P2 head flip. They
+now pin that `call(q(X))` answers.
+
+An old `q(...)` in a `term_expansion/4` clause now builds `('q', ...)` cells
+that match nothing, so it warns at load (`ClausalRetiredQuasiQuoteWarning`,
+once per clause, only in a subtree containing `term_expansion(_,_,_,_)`).

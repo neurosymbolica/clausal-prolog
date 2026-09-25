@@ -107,6 +107,7 @@ from .terms_to_ast import lowering_scope
 from .terms_to_goalop import BareGoalVariableError, BareGoalUndefinedError
 from .globals_env import (
     _GlobalsDb, _DbDispatchAdapter, _set_of_dedup, _set_of_sort_dedup,
+    _undeclared_functor,
     _findall_copy_row, _throw_ball, _check_bag, _disp_key,
     _merge_builtin, _inject_resolved_targets,
     _collect_globals_info, _preallocate_body_vars,
@@ -427,6 +428,11 @@ INJECTED_RUNTIME_BUILTINS: dict = {
     # (Task 15 fix round 4, item 4).
     "$dict_key": _dict_key,
     "$unify": unify,
+    # A construction whose functor NAME is bound to an ATOM (terms_to_ast's
+    # fallback): raises the undeclared-functor NameError instead of calling
+    # the str.  The name can be an atom without this module declaring it --
+    # every module dict is pre-seeded with the process-wide atom pool.
+    "$undeclared_functor": _undeclared_functor,
     "$ast": ast,
     # The cells module itself, so a head pattern can name the tuple-DATA tag
     # as the dotted value pattern ``$cells.TUPLE_TAG`` -- a bare name in a

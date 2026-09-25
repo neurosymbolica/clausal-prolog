@@ -59,15 +59,17 @@ Return a list to expand one item into multiple items. This is the most powerful 
 2. OUTPUT becomes `[color("red"), color("red")]`
 3. The module now has two copies of `color("red")`
 
-### q() Quasi-Quotation
+### Patterns Are Plain Terms
 
-The `q()` function creates term templates in expansion rules. It quotes a term so it can be manipulated as data:
+A pattern is written as a plain term, as in ISO `term_expansion/2`: in argument position a term is data, never a goal, so nothing needs quoting:
 
 ```clausal
---8<-- "tests/fixtures/docs/term_expansion_sigs.txt:quasi_quotation"
+--8<-- "tests/fixtures/docs/term_expansion_sigs.txt:plain_term_patterns"
 ```
 
-Variables inside `q()` are shared between the pattern and the replacement. In the example above, `X` in the input pattern is the same `X` in both output terms.
+Variables are shared between the pattern and the replacement. In the example above, `X` in the input pattern is the same `X` in both output terms.
+
+`q()` quasi-quotation was retired on 2026-09-25: `q` is an ordinary name now, and `q(fact(X))` is the term `q(fact(X))`. A `q(...)` left in a `term_expansion/4` clause (or in a clause of a helper its body calls) would match nothing, so loading one emits a `ClausalRetiredQuasiQuoteWarning` naming the line. Drop the wrapper.
 
 ### Module State Threading
 
@@ -176,7 +178,7 @@ The goal expansion pass detects the `(?P<YEAR>...)` group, rewrites `match/2` to
 ## Gotchas
 
 - **term_expansion clauses are NOT themselves expanded** — they pass through unchanged to prevent infinite loops.
-- **Always use `q()`** to quote terms in expansion rules. Without it, the term is evaluated instead of treated as data.
+- **Write patterns as plain terms** — `term_expansion(fact(X), ...)`, not `term_expansion(q(fact(X)), ...)`. `q()` was retired 2026-09-25; an old `q(...)` pattern matches nothing and warns at load.
 - **Module state starts as `None`** unless you initialize it. Guard arithmetic operations accordingly.
 - **One-to-many expansion returns a list** — make sure OUTPUT is `[item1, item2, ...]`, not a bare term, when you want multiple outputs.
 
@@ -184,7 +186,7 @@ The goal expansion pass detects the `(?P<YEAR>...)` group, rewrites `match/2` to
 
 ??? info "Test coverage"
 
-    - `tests/test_term_expansion.py` (25 tests): pass-through, detection, identity, suppression, one-to-many, module state, init/final injection, imported TE rules, new functors, q() quasi-quotation, full pipeline integration
+    - `tests/test_term_expansion.py` (25 tests): pass-through, detection, identity, suppression, one-to-many, module state, init/final injection, imported TE rules, new functors, plain-term patterns (and the retired-q() warning), full pipeline integration
     - `tests/test_regex.py` (93 tests): goal expansion for regex auto-binding and precompilation
 
 ---

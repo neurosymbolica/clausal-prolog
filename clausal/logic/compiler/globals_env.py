@@ -170,6 +170,33 @@ def _check_bag(bag, who: str) -> None:
 # Database lookup with the same _get_dispatch() interface.
 
 
+def undeclared_functor_error(functor: str, arity: int) -> NameError:
+    """The error a construction ``functor(A1, ..., An)`` of a functor nothing
+    declares raises: "not in scope as a term class".
+
+    One sentence for both routes to it: ``_DbDispatchAdapter.__call__`` (the
+    name is bound to nothing, so the adapter stands in) and
+    ``$undeclared_functor`` (the name is bound to an ATOM, which is data and
+    cannot build a term -- calling it was CPython's bare ``TypeError: 'str'
+    object is not callable``).  ``name=`` is what lets the undefined-name
+    diagnostic reach it (``enrich_undefined_name`` keys on ``exc.name``).
+    """
+    return NameError(
+        f"Predicate '{functor}/{arity}' is not in scope as a term class.\n"
+        f"To construct a '{functor}' goal term, import it first, e.g.:\n"
+        f"  from your_module import {functor}",
+        name=functor,
+    )
+
+
+def _undeclared_functor(functor: str, arity: int, *args, **kwargs):
+    """``$undeclared_functor``: what a construction compiles to when its
+    functor NAME is bound to an atom and nothing declares it as a functor.
+    Raises at run time, where the adapter's NameError is raised for an
+    unbound name, so a clause that never runs still loads."""
+    raise undeclared_functor_error(functor, arity)
+
+
 class _DbDispatchAdapter:
     """Adapter: wraps db.get_dispatch() with _get_dispatch() interface.
 
@@ -204,12 +231,7 @@ class _DbDispatchAdapter:
         # CPython's bare ``name 'cite' is not defined`` when it did not, and
         # both should name the module that exports it.  ``enrich_undefined_name``
         # keys on ``exc.name``, which CPython sets only for its own raises.
-        raise NameError(
-            f"Predicate '{self._functor}/{self._arity}' is not in scope as a term class.\n"
-            f"To construct a '{self._functor}' goal term, import it first, e.g.:\n"
-            f"  from your_module import {self._functor}",
-            name=self._functor,
-        )
+        raise undeclared_functor_error(self._functor, self._arity)
 
 
 class _GlobalsDb:
