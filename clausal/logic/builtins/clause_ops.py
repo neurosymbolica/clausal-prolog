@@ -47,8 +47,9 @@ The special forms have no term class and no runtime builtin, so term
 position cannot build them
 (``todo/control-builtins-cannot-be-built-as-terms-2026-09-25.md``); they come
 back as the ISO term the text denotes, the CELL -- not refused, and not
-lossy: it is the term ``findall(T, G, L)``.  What is missing is ``call/1``
-running that cell, which is the todo's.
+lossy: it is the term ``findall(T, G, L)``, and since main d724dd52
+``call/N`` runs it (and a ModulePredicate's cell), so ``clause(H, B),
+call(B)`` answers what ``H`` does (``tests/test_clause_2_iso.py``, mf/2).
 
 A clause whose body reads its variables from Python has NO term form: the
 closure is not a term, and building it evaluates it with the variables

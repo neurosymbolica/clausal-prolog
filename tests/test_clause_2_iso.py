@@ -659,3 +659,27 @@ def test_an_asserta_fact_has_its_hoisted_arguments_put_back(lm):
     got = _clause(lm, ("aa_new", Var(), Var(), Var()))
     assert [(h[1], h[2], b) for h, b in got] == [(2, "y", True), (1, "x", True)]
     assert is_var(got[0][0][3])
+
+
+# ── special forms and module predicates round-trip (main d724dd52) ──────────
+
+
+@pytest.mark.parametrize("x", [None] + list(range(1, 10)))
+def test_special_form_and_module_predicate_bodies_round_trip(lm, x):
+    """``rt_mf(X, Y) <- (clause(mf(X, Y), B), call(B))`` answers what
+    ``mf(X, Y)`` does, for bodies holding findall/once/catch/throw/forall/
+    eval_, a negated findall, and a ``regex.match`` (a ModulePredicate) --
+    call/N runs their cells since main d724dd52 (question 3 of the report)."""
+    direct = _sorted_answers(lm, "mf", x)
+    through = _sorted_answers(lm, "rt_mf", x)
+    assert direct, "no answers: the comparison would be vacuous"
+    assert through == direct
+
+
+def test_special_form_bodies_come_back_as_cells(lm):
+    got = {h[1]: b for h, b in _clause(lm, ("mf", Var(), Var()))}
+    assert len(got) == 9
+    assert got[1][0] == "findall" and got[2][0] == "once"
+    assert got[3][0] == "catch" and got[4][1] == ("throw", "oops")
+    assert got[5][0][0] == "forall" and got[9][0] == "eval_"
+    assert got[7][0][0].endswith("match")         # the module predicate's cell

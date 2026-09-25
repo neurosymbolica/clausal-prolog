@@ -1,6 +1,7 @@
 # ISO clause/2 (13211-1 8.8.1) -- tests/test_clause_2_iso.py.
 -module(clause_2_iso, [])
--private([a, b, f(A), pt(A, B)])
+-import_from(regex, [match])
+-private([a, b, f(A), pt(A, B), oops, caught, ok, m, nm])
 -dynamic(fib/2)
 -dynamic(d/2)
 -dynamic(lu/1)
@@ -10,6 +11,7 @@
 -dynamic(ma/2)
 -dynamic(late/1)
 -dynamic(big/2)
+-dynamic(mf/2)
 -allow_singletons
 
 # Static (locked): clause/2 refuses it with permission_error.
@@ -73,3 +75,17 @@ ma(2, Y) <- mp(1, Y)
 
 # A body calling a procedure nothing defines at load time.
 late(Y) <- later_def(Y)
+
+# The round trip over bodies holding meta-call special forms and a Python
+# module predicate (call/N runs their cells since main d724dd52).
+mf(1, Y) <- findall(X, p(X), Y),
+mf(2, Y) <- once(p(Y)),
+mf(3, Y) <- catch(p(Y), E, True),
+mf(4, Y) <- catch(throw(oops), E, Y is caught),
+mf(5, Y) <- (forall(p(X), X > 0), Y is ok),
+mf(6, Y) <- (p(Y), not findall(X, once(s(X)), [])),
+mf(7, Y) <- (match(r"\d+", "123"), Y is m),
+mf(8, Y) <- (not match(r"\d+", "abc"), Y is nm),
+mf(9, Y) <- eval_(2 + 3, Y)
+
+rt_mf(X, Y) <- (clause(mf(X, Y), B), call(B))
