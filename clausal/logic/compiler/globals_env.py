@@ -789,7 +789,7 @@ def _inject_resolved_targets(
     avoiding a fourth clause traversal.
 
     Phase 7: for each resolved target whose ``PredRow`` is locked,
-    additionally captures its dispatch function under ``_disp_{fname}_{arity}``
+    additionally captures its dispatch function under ``$disp_{fname}_{arity}`` (``_disp_key``)
     in ``base_globals``.  Generated code can then reference the dispatch
     function directly instead of calling ``_get_dispatch()`` on every
     predicate invocation.

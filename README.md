@@ -38,6 +38,8 @@ Predicate names are lowercase (`snake_case` by convention); variables are ALL_CA
 
 ```prolog
 # family.clausal
+-private([tom, bob, liz, ann, pat])
+
 parent(tom, bob),
 parent(tom, liz),
 parent(bob, ann),
@@ -95,7 +97,9 @@ verb_phrase >> (["runs"] or ["barks"])
 
 ```python
 from clausal import once
-result = once(call("phrase", "sentence", ["the", "cat", "runs"], module=grammar))
+import grammar
+
+result = once(("phrase", "sentence", ["the", "cat", "runs"]), module=grammar)
 ```
 
 ### CLP(FD) — constraint logic programming over integers

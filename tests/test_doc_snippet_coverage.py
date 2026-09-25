@@ -55,7 +55,6 @@ _KNOWN_UNCOMPILABLE = {
     # `-import_from` remedy. Neither is standalone-compilable.
     ("import.md", 406),
     ("import.md", 422),
-    ("index.md", 10),
     ("purity.md", 111),
 }
 

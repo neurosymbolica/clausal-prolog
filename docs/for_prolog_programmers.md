@@ -194,14 +194,15 @@ word_count(TEXT, N) <- (N is ++len(TEXT.split()))
 And call any Clausal predicate from Python:
 
 ```python
-from clausal import Var
-from my_module import reachable
+from clausal import Var, solve
+import my_module
 
-for trail in reachable("a", DEST := Var()):
+for trail in solve(("reachable", "a", DEST := Var()), module=my_module):
     print(DEST.value)
 ```
 
-No subprocess, no marshalling, no FFI. Logic predicates are Python classes.
+No subprocess, no marshalling, no FFI. A goal is a Python tuple — the
+predicate's name and its arguments — run against the module that defines it.
 Logic variables are Python objects. Everything runs on one VM.
 
 ### [Compilation](compiler.md), not interpretation
