@@ -179,18 +179,84 @@ def meta_specs_for_call(db: Any, fname: str, arity: int) -> "tuple | None":
     return row.db._meta_specs.get(row.key)
 
 
+def _clausal_module_db(obj: Any) -> Any:
+    """The Database of *obj* when it is a CLAUSAL module -- a logic
+    ``Module``, or an imported ``.clausal`` Python module -- else ``None``."""
+    from clausal.logic.database import Module  # noqa: PLC0415
+    from clausal.logic.predicate import namespace_db  # noqa: PLC0415
+    if isinstance(obj, Module):
+        return obj.db
+    cm = getattr(obj, "__clausal_module__", None)
+    if cm is not None:
+        return getattr(cm, "db", None)
+    ns = getattr(obj, "__dict__", None)
+    return namespace_db(ns) if isinstance(ns, dict) else None
+
+
+def dotted_module_prefix(dotted: str, namespace: Any) -> "str | None":
+    """The MODULE half of a WRITTEN dotted reference ``lib.p`` / ``pkg.m.p``
+    when that prefix names a Clausal module from *namespace* -- resolved as a
+    goal-position dotted call resolves it (``terms_to_ast.
+    _resolve_module_path``: attribute walk from the namespace, then
+    ``sys.modules``) -- else ``None`` (``obj.attr`` on a Python value, a
+    Python module such as ``py.re``, an unbound prefix)."""
+    if "." not in dotted or not isinstance(namespace, dict):
+        return None
+    from clausal.logic.compiler.terms_to_ast import (  # noqa: PLC0415
+        _resolve_module_path,
+    )
+    prefix = dotted.rpartition(".")[0]
+    owner = _resolve_module_path(prefix, namespace)
+    return prefix if _clausal_module_db(owner) is not None else None
+
+
+def qualify_in_module(db: Any, prefix: str, inner: Any) -> tuple:
+    """``$meta_qualify_module``: a dotted ``lib.p(...)`` / ``lib.p`` written
+    in a qualifying meta position is the QUALIFIED GOAL ``lib:p(...)``
+    (operator ruling 2026-09-25) -- ``(":", <lib's designator>, inner)``.
+
+    *prefix* is the dotted module path as written, resolved against the
+    CALLING module's namespace (*db*'s ``module_dict``) the way the compiler
+    resolved it; the designator is spelled as every other qualified goal
+    cell spells one (:func:`module_designator`: the module's name when
+    ``sys.modules`` resolves it back to that module, else the ``Module``).
+    Already qualified, so ``$meta_qualify`` is not applied on top."""
+    from clausal.logic.compiler.terms_to_ast import (  # noqa: PLC0415
+        _resolve_module_path,
+    )
+    md = getattr(db, "module_dict", None)
+    owner = _resolve_module_path(prefix, md if isinstance(md, dict) else {})
+    owner_db = _clausal_module_db(owner)
+    if owner_db is None:
+        from clausal.logic.solve import resolve_module  # noqa: PLC0415
+        owner_db = resolve_module(prefix, context="meta_predicate").db
+    designator = module_designator(owner_db)
+    if designator is None:
+        designator = prefix
+    return (QUALIFIED, designator, inner)
+
+
 class MetaArg:
     """Compiler IR marker: a call argument in a qualifying meta position.
     ``term_to_ast_expr`` lowers it to
     ``$meta_qualify($meta_db, <value>, <spec>)``.  The child is ``.value`` so
     the compiler's generic single-child walkers (``_vars._collect_var_ids``)
     see the variables inside; ``.spec`` is the position's spec (an int, or
-    ``":"``), which decides whether a goal object is exempt."""
-    __slots__ = ("value", "spec")
+    ``":"``), which decides whether a goal object is exempt.
 
-    def __init__(self, value: Any, spec: Any = 0) -> None:
+    ``.module`` is set (the dotted module path, e.g. ``"lib"``) when the
+    written argument is a dotted ``lib.p(...)`` or ``lib.p`` whose base is a
+    Clausal module: it lowers to the qualified goal
+    ``$meta_qualify_module($meta_db, "lib", <p-goal>)`` instead
+    (:func:`qualify_in_module`), and ``.value`` stays the written node."""
+    __slots__ = ("value", "spec", "module")
+
+    def __init__(self, value: Any, spec: Any = 0, module: "str | None" = None) -> None:
         self.value = value
         self.spec = spec
+        self.module = module
 
     def __repr__(self) -> str:
+        if self.module is not None:
+            return f"MetaArg({self.value!r}, {self.spec!r}, module={self.module!r})"
         return f"MetaArg({self.value!r}, {self.spec!r})"

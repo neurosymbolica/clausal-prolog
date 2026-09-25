@@ -1002,7 +1002,8 @@ def _hoist_lambdas_in_term(
         # ``Lambda`` node, compiled in the CALLER's scope, and its parameter
         # names were unbound there (``NameError: name 'U' is not defined``).
         inner = _hoist_lambdas_in_term(ctx, term.value, lambda_defs)
-        return term if inner is term.value else _MetaArg(inner, term.spec)
+        return (term if inner is term.value
+                else _MetaArg(inner, term.spec, term.module))
     if isinstance(term, Compound):
         new_args = tuple(
             _hoist_lambdas_in_term(ctx, a, lambda_defs) for a in term.args

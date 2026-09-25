@@ -707,8 +707,11 @@ def test_a_colon_position_always_qualifies_even_a_goal_object(llib):
     era, D = llib
     q = _one(D, "colon_lambda")
     assert q[:2] == (":", f"mldom_{era}") and callable(q[2])
+    # A WRITTEN dotted name ``mldom.mark`` is the qualified goal
+    # ``mldom:mark`` (operator ruling 2026-09-25, see
+    # test_meta_arg_dotted_is_qualified_goal) -- not the class object.
     q = _one(D, "colon_class")
-    assert q == (":", f"mldom_{era}", D.module_dict["mark"])
+    assert q == (":", f"mldom_{era}", "mark")
     t = Var()
     assert [walk(t) for _ in call("cprobe", _python_probe, t, module=D)] == [
         (":", f"mldom_{era}", _python_probe)]

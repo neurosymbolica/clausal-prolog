@@ -443,10 +443,29 @@ def _convert_inner(goal: Any, db: Any) -> GoalOp:
                 # ``$meta_qualify`` (the value may be a variable bound to an
                 # already-qualified goal, which is left alone).
                 from clausal.logic.meta_predicate import (  # noqa: PLC0415
-                    MetaArg, is_qualifying_spec, meta_specs_for_call,
+                    MetaArg, dotted_module_prefix, is_qualifying_spec,
+                    meta_specs_for_call,
                 )
                 meta_specs = meta_specs_for_call(db, fname, arity)
                 if meta_specs:
+                    # A DOTTED ``lib.p(...)`` / ``lib.p`` written in a
+                    # qualifying position is the qualified goal ``lib:p(...)``
+                    # (operator ruling 2026-09-25), as the same dotted call in
+                    # goal position resolves in lib -- not a term (ruling (a)
+                    # makes that the plain ``p`` cell) that ``$meta_qualify``
+                    # would then qualify with THIS module.  Only a LoadAttr
+                    # the author wrote: an ``-import_from`` rewrite of a bare
+                    # name is a dotted LoadName and keeps caller qualification.
+                    _ns = getattr(db, "module_dict", None)
+
+                    def _dotted_goal_module(a):
+                        node = a.func if isinstance(a, nodes.Call) else a
+                        if not isinstance(node, nodes.LoadAttr):
+                            return None
+                        dotted = _dotted_name_from_loadattr(node)
+                        return (None if dotted is None
+                                else dotted_module_prefix(dotted, _ns))
+
                     # A lambda LITERAL in a GOAL (integer) position is a
                     # closure compiled in THIS module -- its body's names
                     # resolve here, as Scryer qualifies a yall lambda with
@@ -456,8 +475,10 @@ def _convert_inner(goal: Any, db: Any) -> GoalOp:
                     # inside the marker).
                     ordered_args = [
                         a if (type(spec) is int and isinstance(a, nodes.Lambda))
-                        else MetaArg(a, spec) if is_qualifying_spec(spec)
-                        else a
+                        else a if not is_qualifying_spec(spec)
+                        else MetaArg(a, spec, _mod)
+                        if (_mod := _dotted_goal_module(a)) is not None
+                        else MetaArg(a, spec)
                         for spec, a in zip(meta_specs, ordered_args)]
             return SubCall(fname=fname, arity=arity, args=ordered_args)
 
