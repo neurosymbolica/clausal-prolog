@@ -62,14 +62,14 @@ D2 = ("date", 2024, 1, 2)
 def test_a_date_term_arg_unifies_by_value(tmp_path):
     mod = _load(tmp_path, "dq_a", "same_day(D, D),\n")
     x = Var()
-    assert _solutions(mod.same_day(D1, x), x, module=mod) == [D1]
-    assert len(_solutions(mod.same_day(D1, ("date", 2024, 1, 1)), module=mod)) == 1
-    assert _solutions(mod.same_day(D1, D2), module=mod) == []
+    assert _solutions(("same_day", D1, x), x, module=mod) == [D1]
+    assert len(_solutions(("same_day", D1, ("date", 2024, 1, 1)), module=mod)) == 1
+    assert _solutions(("same_day", D1, D2), module=mod) == []
 
 
 def test_a_date_term_does_not_unify_with_a_ymd_list(tmp_path):
     mod = _load(tmp_path, "dq_b", "same_day(D, D),\n")
-    assert _solutions(mod.same_day(D1, [2024, 1, 1]), module=mod) == []
+    assert _solutions(("same_day", D1, [2024, 1, 1]), module=mod) == []
 
 
 def test_a_date_term_arg_flows_into_the_date_time_builtins(tmp_path):
@@ -81,7 +81,7 @@ def test_a_date_term_arg_flows_into_the_date_time_builtins(tmp_path):
     )
     n = Var()
     expected = (date(2024, 6, 1) - date(2024, 1, 1)).days
-    assert _solutions(mod.window(("date", 2024, 6, 1), n), n, module=mod) == [expected]
+    assert _solutions(("window", ("date", 2024, 6, 1), n), n, module=mod) == [expected]
 
 
 def test_distinct_date_term_args_all_answer(tmp_path):
@@ -93,7 +93,7 @@ def test_distinct_date_term_args_all_answer(tmp_path):
 
     def run(d):
         v = Var()
-        for _ in solve(mod.echo(d, v), mod):
+        for _ in solve(("echo", d, v), mod):
             return deref(v)
         return None
 
@@ -110,7 +110,7 @@ def test_datetime_time_timedelta_TERM_args_echo(tmp_path):
         ("timedelta", 3, 71, 0),
     ):
         v = Var()
-        assert _solutions(mod.echo(value, v), v, module=mod) == [value], f"{value!r}"
+        assert _solutions(("echo", value, v), v, module=mod) == [value], f"{value!r}"
 
 
 def test_a_BARE_python_datetime_query_arg_is_refused_and_names_the_term(tmp_path):
@@ -124,7 +124,7 @@ def test_a_BARE_python_datetime_query_arg_is_refused_and_names_the_term(tmp_path
         (timedelta(days=3), "('timedelta', 3, 0, 0)"),
     ):
         with pytest.raises(NotImplementedError) as exc:
-            _solutions(mod.same_day(value, Var()), module=mod)
+            _solutions(("same_day", value, Var()), module=mod)
         assert form in str(exc.value), str(exc.value)
 
 
@@ -147,5 +147,5 @@ def test_the_ruled_term_form_is_what_a_nested_caller_passes(tmp_path):
     mod = _load(tmp_path, "dq_f", "heads(L, H) <- (L is [H, *_REST])\n")
     h = Var()
     assert _solutions(
-        mod.heads([("date", 2024, 5, 5), ("date", 2024, 5, 6)], h), h
+        ("heads", [("date", 2024, 5, 5), ("date", 2024, 5, 6)], h), h
     , module=mod) == [("date", 2024, 5, 5)]
