@@ -69,28 +69,28 @@ def _solutions(goal, out=None, *, module):
 
 def test_class_catcher_matches_python_exception(mod):
     r = Var()
-    assert _solutions(mod.c_class(r), r, module=mod) == [mint("caught")]
+    assert _solutions(("c_class", r), r, module=mod) == [mint("caught")]
 
 
 def test_instance_catcher_binds_the_real_args(mod):
     m = Var()
-    [msg] = _solutions(mod.c_inst(m), m, module=mod)
+    [msg] = _solutions(("c_inst", m), m, module=mod)
     assert chars_text(msg) == "invalid literal for int() with base 10: 'nope'"
 
 
 def test_wrong_class_catcher_stays_selective(mod):
     with pytest.raises(ValueError):
-        _solutions(mod.c_wrong(Var()), module=mod)
+        _solutions(("c_wrong", Var()), module=mod)
 
 
 def test_wrong_instance_catcher_stays_selective(mod):
     with pytest.raises(ValueError):
-        _solutions(mod.c_inst_wrong(Var()), module=mod)
+        _solutions(("c_inst_wrong", Var()), module=mod)
 
 
 def test_superclass_catcher_matches_by_isinstance(mod):
     r = Var()
-    assert _solutions(mod.c_super(r), r, module=mod) == [mint("caught_super")]
+    assert _solutions(("c_super", r), r, module=mod) == [mint("caught_super")]
 
 
 def test_structural_titlecase_catcher_is_a_syntax_error(tmp_path):
@@ -107,7 +107,7 @@ def test_structural_titlecase_catcher_is_a_syntax_error(tmp_path):
 
 def test_python_catcher_does_not_match_a_logic_ball(mod):
     with pytest.raises(LogicException):
-        _solutions(mod.c_logic(Var()), module=mod)
+        _solutions(("c_logic", Var()), module=mod)
 
 
 def test_superclass_python_catcher_does_not_match_a_logic_ball(mod):
@@ -116,4 +116,4 @@ def test_superclass_python_catcher_does_not_match_a_logic_ball(mod):
     # boundary is Python-only: logic balls keep their own catch-all spelling,
     # catch(G, _, R).
     with pytest.raises(LogicException):
-        _solutions(mod.c_logic_super(Var()), module=mod)
+        _solutions(("c_logic_super", Var()), module=mod)
