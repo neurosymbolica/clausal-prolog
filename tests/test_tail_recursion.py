@@ -476,21 +476,34 @@ def _make_counting_sg():
 
 def _dispatch_of(pred):
     """The compiled dispatch of *pred*: a ``PredicateMeta`` class (the
-    Python-built predicates below), or a ``(handle, arity)`` pair for a
-    module-loaded predicate -- post-flip its module-dict binding is a mangled
-    handle, whose row (and so dispatch) is read off its owner's Database."""
+    Python-built predicates below), or a ``(module, name, arity)`` triple for
+    a module-loaded predicate -- post-flip its module-dict binding is a
+    mangled handle, whose row (and so dispatch) is read off its owner's
+    Database.
+
+    The handle is resolved WITH the loaded module's db as the hint (ruling
+    Q0), never bare: ``load_clausal_module`` loads every file under the same
+    ``_clausal_test_<stem>`` name and pops it from ``sys.modules``, and the
+    ``.clausal`` pytest collector keeps its own load of the same fixture
+    alive for the whole session -- so a bare handle names a module that TWO
+    live databases answer to, and the engine refuses it
+    (``AmbiguousHandleOwnerError``) by design.  The hint picks this test's
+    own load, which is the one the query below runs in."""
     if isinstance(pred, tuple):
-        handle, arity = pred
-        row = resolve_predicate_row(handle, arity=arity)
+        mod, name, arity = pred
+        db = mod.__dict__['$module'].db
+        handle = mod.__dict__[name]
+        row = resolve_predicate_row(handle, arity=arity, db=db)
         assert row is not None, f"no row for {handle!r}/{arity}"
-        return row.db.get_dispatch(*row.key)
+        assert row.db is db, "resolved to another load's row, not this one"
+        return db.get_dispatch(*row.key)
     return pred._get_dispatch()
 
 
 def _patch_sg(counting_cls, *pred_classes):
     """Swap ``StepGenerator`` in ``solve.call``'s module *and* every compiled
     dispatch function's ``__globals__`` dict for *pred_classes* (classes, or
-    ``(handle, arity)`` pairs -- see ``_dispatch_of``).
+    ``(module, name, arity)`` triples -- see ``_dispatch_of``).
 
     Returns a restore callable.  Every predicate asked for must be patched:
     a dispatch left unpatched would count NOTHING, and a count of 1 (the
@@ -718,10 +731,13 @@ class TestTroImportHook(unittest.TestCase):
         # nv
         from clausal.testing import load_clausal_module
         mod = load_clausal_module('tests/fixtures/tro_predicates.clausal')
-        AccSum = mod.__dict__['acc_sum']
+        lm = mod.__dict__['$module']
+        # By NAME in this test's own load (module=lm), never the bare handle:
+        # the same-named fixture load the .clausal collector holds would make
+        # the handle ambiguous (see ``_dispatch_of``).
         r = Var()
         trail = Trail()
-        for _ in call(AccSum, [1, 2, 3, 4, 5], 0, r, trail=trail):
+        for _ in call('acc_sum', [1, 2, 3, 4, 5], 0, r, module=lm, trail=trail):
             self.assertEqual(deref(r), 15)
             break
         else:
@@ -732,10 +748,13 @@ class TestTroImportHook(unittest.TestCase):
         # nv
         from clausal.testing import load_clausal_module
         mod = load_clausal_module('tests/fixtures/tro_predicates.clausal')
-        AccFactorial = mod.__dict__['acc_factorial']
+        lm = mod.__dict__['$module']
+        # By NAME in this test's own load (module=lm), never the bare handle:
+        # the same-named fixture load the .clausal collector holds would make
+        # the handle ambiguous (see ``_dispatch_of``).
         r = Var()
         trail = Trail()
-        for _ in call(AccFactorial, 10, 1, r, trail=trail):
+        for _ in call('acc_factorial', 10, 1, r, module=lm, trail=trail):
             self.assertEqual(deref(r), 3628800)
             break
         else:
@@ -749,7 +768,7 @@ class TestTroImportHook(unittest.TestCase):
         lm = mod.__dict__['$module']
 
         counting_cls, counter = _make_counting_sg()
-        restore = _patch_sg(counting_cls, (mod.__dict__['acc_length'], 3))
+        restore = _patch_sg(counting_cls, (mod, 'acc_length', 3))
         try:
             trail = Trail()
             big_list = list(range(500))
@@ -776,12 +795,15 @@ class TestTroGroundnessDispatch(unittest.TestCase):
         # nv
         from clausal.testing import load_clausal_module
         mod = load_clausal_module('tests/fixtures/deep_index.clausal')
-        MyNthOf = mod.__dict__['my_nth_of']
+        lm = mod.__dict__['$module']
+        # By NAME in this test's own load (module=lm), never the bare handle:
+        # the same-named fixture load the .clausal collector holds would make
+        # the handle ambiguous (see ``_dispatch_of``).
 
         # Correctness
         r = Var()
         trail = Trail()
-        for _ in call(MyNthOf, 2, [10, 20, 30], r, trail=trail):
+        for _ in call('my_nth_of', 2, [10, 20, 30], r, module=lm, trail=trail):
             self.assertEqual(deref(r), 30)
             break
         else:
@@ -795,7 +817,7 @@ class TestTroGroundnessDispatch(unittest.TestCase):
         lm = mod.__dict__['$module']
 
         counting_cls, counter = _make_counting_sg()
-        restore = _patch_sg(counting_cls, (mod.__dict__['my_nth_of'], 3))
+        restore = _patch_sg(counting_cls, (mod, 'my_nth_of', 3))
         try:
             trail = Trail()
             for _ in call('my_nth_of', 50, list(range(100)), Var(), module=lm,
@@ -817,14 +839,17 @@ class TestTroRuntimeGroundCheck(unittest.TestCase):
         # nv
         from clausal.testing import load_clausal_module
         mod = load_clausal_module('tests/fixtures/tro_predicates.clausal')
-        AccLength = mod.__dict__['acc_length']
+        lm = mod.__dict__['$module']
+        # By NAME in this test's own load (module=lm), never the bare handle:
+        # the same-named fixture load the .clausal collector holds would make
+        # the handle ambiguous (see ``_dispatch_of``).
 
         # Call with unbound first arg — should produce solutions via
         # StepGenerator fallback, not break due to TRO.
         list_var = Var()
         trail = Trail()
         results = []
-        for _ in call(AccLength, [], 0, Var(), trail=trail):
+        for _ in call('acc_length', [], 0, Var(), module=lm, trail=trail):
             results.append(True)
         # Base case: AccLength([], 0, 0) should still work
         self.assertEqual(len(results), 1)
