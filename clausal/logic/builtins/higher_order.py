@@ -292,7 +292,8 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
             raise LogicException(instantiation_error(context))
         return _resolve_named_goal(
             target.db, inner, tuple(call_args[2:]), context)
-    if is_special_form(functor, len(call_args)):
+    if (is_special_form(functor, len(call_args))
+            and not _import_shadows_special_form(db, functor)):
         # A compiler SPECIAL FORM (findall/3, once/1, catch/3, throw/1 ...),
         # after the fold -- so ``call(findall(X), G, L)`` is findall/3 too.
         # No database defines these names (the compiler lowers them inline),
@@ -453,6 +454,32 @@ def _namespace_dispatch(db, functor, arity):
     if home is db and canonical == functor:
         return None  # the lookup that already came back empty
     return home.get_dispatch(canonical, arity)
+
+
+def _import_shadows_special_form(db, functor) -> bool:
+    """True when the calling module IMPORTED a binding under the special-form
+    name *functor* -- a ModulePredicate (``-import_from(py.re, [findall])``)
+    or another module's predicate (``-import_from(m, [once])``).
+
+    That is how the compiled body decides: ``-import_from`` rewrites every
+    body call of an imported name to the dotted global (``py.re.findall``),
+    which is no special form, so the body runs the import; a module's OWN
+    predicate of that name is not rewritten, and its body still lowers the
+    special form.  ``call/N`` of the cell answers the same way: the import
+    wins, and the resolution below reaches it (the goal-object arm, or the
+    adopted row).
+    """
+    module_dict = getattr(db, "module_dict", None)
+    if not isinstance(module_dict, dict):
+        return False
+    binding = module_dict.get(functor)
+    if binding is None:
+        return False
+    if is_declared_predicate_name(binding, db=db):
+        from clausal.logic.predicate import _binding_owner_db  # noqa: PLC0415
+        owner = _binding_owner_db(binding, db)
+        return owner is not None and owner is not db
+    return type(binding) is not str and hasattr(binding, "_get_dispatch")
 
 
 def _goal_object_dispatch(db, binding, arity):

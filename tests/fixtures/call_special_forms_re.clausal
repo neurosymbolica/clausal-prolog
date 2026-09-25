@@ -4,6 +4,7 @@
 -module(call_special_forms_re, [])
 -import_from(py.re, [findall, match, alias(search, rs)])
 -import_from(py.random, [permutation])
+-import_from(tests.fixtures.call_special_forms_owner, [once])
 -allow_singletons
 
 b(L) <- findall("\\d", "a1b2", L)
@@ -20,3 +21,9 @@ pcell(P) <- call(("permutation", [1, 2, 3], P))
 ab(M) <- rs("b", "abc", M)
 ag(M, G) <- (G is rs("b", "abc", M))
 arun(M) <- (ag(M, G), call(G))
+
+# The IMPORTED name wins over the special form, in the body and so in call/1:
+# findall/3 here is py.re's, once/1 is call_special_forms_owner's.
+fcell(L) <- call(("findall", "\\d", "a1b2", L))
+ob(G) <- once(G)
+ocell(G) <- call(("once", G))

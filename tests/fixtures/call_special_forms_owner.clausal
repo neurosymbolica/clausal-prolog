@@ -1,0 +1,5 @@
+# Defines a predicate named once/1 -- tests/test_call_runs_special_form_cells.py.
+# In THIS module the body `once(G)` is still the special form (a module's own
+# predicate is not rewritten); a module that IMPORTS it calls it instead.
+-module(call_special_forms_owner, [once(G)])
+once(G) <- (G is 5)

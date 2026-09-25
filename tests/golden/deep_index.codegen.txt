@@ -786,7 +786,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             try:
                 if $unify(_acap0, 'mymember absent', trail):
 
-                    def _naf_gen_fn249(_naf_self, _naf_proceed, _naf_fail, _naf_catcher, trail):
+                    def _naf_gen_fn255(_naf_self, _naf_proceed, _naf_fail, _naf_catcher, trail):
                         _gen21 = StepGenerator($dispatch_at(my_member, 2), _naf_self, _naf_self, _naf_self, 4, [1, 2, 3], trail)
                         _st21 = (yield (_gen21, None))
                         while _st21 is not $DONE:
@@ -794,10 +794,10 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
                             _st21 = (yield (_gen21, None))
                         yield (_naf_fail, $DONE)
                     _m5 = trail.mark()
-                    _naf_sg251 = StepGenerator(_naf_gen_fn249, None, None, None, trail)
-                    _naf250 = not $naf_has_solution(_naf_sg251)
+                    _naf_sg257 = StepGenerator(_naf_gen_fn255, None, None, None, trail)
+                    _naf256 = not $naf_has_solution(_naf_sg257)
                     trail.undo(_m5)
-                    if _naf250:
+                    if _naf256:
                         yield (_proceed, None)
             except GeneratorExit:
                 _mark_cl = True
@@ -813,10 +813,11 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
                 if $unify(_acap0, 'mymember enumerate all', trail):
                     _v70 = $Var()
                     _v71 = $Var()
-                    $check_bag(_v71, 'findall/3')
-                    _fa_results257 = []
-                    _fa_cond258 = []
-                    _fa_cl259 = $current_leader()
+                    _fa_bag269 = _v71
+                    $check_bag(_fa_bag269, 'findall/3')
+                    _fa_results263 = []
+                    _fa_cond264 = []
+                    _fa_cl265 = $current_leader()
                     _fa_m6 = trail.mark()
 
                     def _fa_gen22():
@@ -825,15 +826,15 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
                         return None
                         yield None
                     for _ in _fa_gen22():
-                        _fa_results257.append($findall_copy(_v70))
-                        $harvest_conditions(_fa_cl259, _fa_cond258)
+                        _fa_results263.append($findall_copy(_v70))
+                        $harvest_conditions(_fa_cl265, _fa_cond264)
                     trail.undo(_fa_m6)
-                    $charge_conditions(trail, _fa_cl259, _fa_cond258)
-                    _fa_um262 = trail.mark()
-                    if $unify(_v71, _fa_results257, trail):
+                    $charge_conditions(trail, _fa_cl265, _fa_cond264)
+                    _fa_um268 = trail.mark()
+                    if $unify(_fa_bag269, _fa_results263, trail):
                         if $fd_eq(_v71, [10, 20, 30], trail):
                             yield (_proceed, None)
-                    trail.undo(_fa_um262)
+                    trail.undo(_fa_um268)
             except GeneratorExit:
                 _mark_cl = True
                 raise
@@ -848,10 +849,11 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
                 if $unify(_acap0, 'mymember duplicate values', trail):
                     _v72 = $Var()
                     _v73 = $Var()
-                    $check_bag(_v73, 'findall/3')
-                    _fa_results263 = []
-                    _fa_cond264 = []
-                    _fa_cl265 = $current_leader()
+                    _fa_bag276 = _v73
+                    $check_bag(_fa_bag276, 'findall/3')
+                    _fa_results270 = []
+                    _fa_cond271 = []
+                    _fa_cl272 = $current_leader()
                     _fa_m7 = trail.mark()
 
                     def _fa_gen23():
@@ -860,15 +862,15 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
                         return None
                         yield None
                     for _ in _fa_gen23():
-                        _fa_results263.append($findall_copy(_v72))
-                        $harvest_conditions(_fa_cl265, _fa_cond264)
+                        _fa_results270.append($findall_copy(_v72))
+                        $harvest_conditions(_fa_cl272, _fa_cond271)
                     trail.undo(_fa_m7)
-                    $charge_conditions(trail, _fa_cl265, _fa_cond264)
-                    _fa_um268 = trail.mark()
-                    if $unify(_v73, _fa_results263, trail):
+                    $charge_conditions(trail, _fa_cl272, _fa_cond271)
+                    _fa_um275 = trail.mark()
+                    if $unify(_fa_bag276, _fa_results270, trail):
                         if $fd_eq(_v73, [1, 1, 2], trail):
                             yield (_proceed, None)
-                    trail.undo(_fa_um268)
+                    trail.undo(_fa_um275)
             except GeneratorExit:
                 _mark_cl = True
                 raise
@@ -1349,10 +1351,11 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
                 if $unify(_acap0, 'myprefix enumerate', trail):
                     _v96 = $Var()
                     _v97 = $Var()
-                    $check_bag(_v97, 'findall/3')
-                    _fa_results319 = []
-                    _fa_cond320 = []
-                    _fa_cl321 = $current_leader()
+                    _fa_bag333 = _v97
+                    $check_bag(_fa_bag333, 'findall/3')
+                    _fa_results327 = []
+                    _fa_cond328 = []
+                    _fa_cl329 = $current_leader()
                     _fa_m8 = trail.mark()
 
                     def _fa_gen49():
@@ -1361,15 +1364,15 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
                         return None
                         yield None
                     for _ in _fa_gen49():
-                        _fa_results319.append($findall_copy(_v96))
-                        $harvest_conditions(_fa_cl321, _fa_cond320)
+                        _fa_results327.append($findall_copy(_v96))
+                        $harvest_conditions(_fa_cl329, _fa_cond328)
                     trail.undo(_fa_m8)
-                    $charge_conditions(trail, _fa_cl321, _fa_cond320)
-                    _fa_um324 = trail.mark()
-                    if $unify(_v97, _fa_results319, trail):
+                    $charge_conditions(trail, _fa_cl329, _fa_cond328)
+                    _fa_um332 = trail.mark()
+                    if $unify(_fa_bag333, _fa_results327, trail):
                         if $fd_eq(_v97, [[], [1], [1, 2]], trail):
                             yield (_proceed, None)
-                    trail.undo(_fa_um324)
+                    trail.undo(_fa_um332)
             except GeneratorExit:
                 _mark_cl = True
                 raise
@@ -1617,7 +1620,7 @@ def test__p0_b16__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
         case [_acap0]:
             if $unify(_acap0, 'mymember absent', trail):
 
-                def _naf_gen_fn357(_naf_self, _naf_proceed, _naf_fail, _naf_catcher, trail):
+                def _naf_gen_fn366(_naf_self, _naf_proceed, _naf_fail, _naf_catcher, trail):
                     _gen66 = StepGenerator($dispatch_at(my_member, 2), _naf_self, _naf_self, _naf_self, 4, [1, 2, 3], trail)
                     _st63 = (yield (_gen66, None))
                     while _st63 is not $DONE:
@@ -1625,10 +1628,10 @@ def test__p0_b16__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
                         _st63 = (yield (_gen66, None))
                     yield (_naf_fail, $DONE)
                 _m9 = trail.mark()
-                _naf_sg359 = StepGenerator(_naf_gen_fn357, None, None, None, trail)
-                _naf358 = not $naf_has_solution(_naf_sg359)
+                _naf_sg368 = StepGenerator(_naf_gen_fn366, None, None, None, trail)
+                _naf367 = not $naf_has_solution(_naf_sg368)
                 trail.undo(_m9)
-                if _naf358:
+                if _naf367:
                     yield (_proceed, None)
 
 # ----
@@ -1640,10 +1643,11 @@ def test__p0_b17__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             if $unify(_acap0, 'mymember enumerate all', trail):
                 _v70 = $Var()
                 _v71 = $Var()
-                $check_bag(_v71, 'findall/3')
-                _fa_results365 = []
-                _fa_cond366 = []
-                _fa_cl367 = $current_leader()
+                _fa_bag380 = _v71
+                $check_bag(_fa_bag380, 'findall/3')
+                _fa_results374 = []
+                _fa_cond375 = []
+                _fa_cl376 = $current_leader()
                 _fa_m10 = trail.mark()
 
                 def _fa_gen67():
@@ -1652,15 +1656,15 @@ def test__p0_b17__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
                     return None
                     yield None
                 for _ in _fa_gen67():
-                    _fa_results365.append($findall_copy(_v70))
-                    $harvest_conditions(_fa_cl367, _fa_cond366)
+                    _fa_results374.append($findall_copy(_v70))
+                    $harvest_conditions(_fa_cl376, _fa_cond375)
                 trail.undo(_fa_m10)
-                $charge_conditions(trail, _fa_cl367, _fa_cond366)
-                _fa_um370 = trail.mark()
-                if $unify(_v71, _fa_results365, trail):
+                $charge_conditions(trail, _fa_cl376, _fa_cond375)
+                _fa_um379 = trail.mark()
+                if $unify(_fa_bag380, _fa_results374, trail):
                     if $fd_eq(_v71, [10, 20, 30], trail):
                         yield (_proceed, None)
-                trail.undo(_fa_um370)
+                trail.undo(_fa_um379)
 
 # ----
 
@@ -1671,10 +1675,11 @@ def test__p0_b18__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             if $unify(_acap0, 'mymember duplicate values', trail):
                 _v72 = $Var()
                 _v73 = $Var()
-                $check_bag(_v73, 'findall/3')
-                _fa_results371 = []
-                _fa_cond372 = []
-                _fa_cl373 = $current_leader()
+                _fa_bag387 = _v73
+                $check_bag(_fa_bag387, 'findall/3')
+                _fa_results381 = []
+                _fa_cond382 = []
+                _fa_cl383 = $current_leader()
                 _fa_m11 = trail.mark()
 
                 def _fa_gen68():
@@ -1683,15 +1688,15 @@ def test__p0_b18__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
                     return None
                     yield None
                 for _ in _fa_gen68():
-                    _fa_results371.append($findall_copy(_v72))
-                    $harvest_conditions(_fa_cl373, _fa_cond372)
+                    _fa_results381.append($findall_copy(_v72))
+                    $harvest_conditions(_fa_cl383, _fa_cond382)
                 trail.undo(_fa_m11)
-                $charge_conditions(trail, _fa_cl373, _fa_cond372)
-                _fa_um376 = trail.mark()
-                if $unify(_v73, _fa_results371, trail):
+                $charge_conditions(trail, _fa_cl383, _fa_cond382)
+                _fa_um386 = trail.mark()
+                if $unify(_fa_bag387, _fa_results381, trail):
                     if $fd_eq(_v73, [1, 1, 2], trail):
                         yield (_proceed, None)
-                trail.undo(_fa_um376)
+                trail.undo(_fa_um386)
 
 # ----
 
@@ -2068,10 +2073,11 @@ def test__p0_b44__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             if $unify(_acap0, 'myprefix enumerate', trail):
                 _v96 = $Var()
                 _v97 = $Var()
-                $check_bag(_v97, 'findall/3')
-                _fa_results427 = []
-                _fa_cond428 = []
-                _fa_cl429 = $current_leader()
+                _fa_bag444 = _v97
+                $check_bag(_fa_bag444, 'findall/3')
+                _fa_results438 = []
+                _fa_cond439 = []
+                _fa_cl440 = $current_leader()
                 _fa_m12 = trail.mark()
 
                 def _fa_gen94():
@@ -2080,15 +2086,15 @@ def test__p0_b44__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
                     return None
                     yield None
                 for _ in _fa_gen94():
-                    _fa_results427.append($findall_copy(_v96))
-                    $harvest_conditions(_fa_cl429, _fa_cond428)
+                    _fa_results438.append($findall_copy(_v96))
+                    $harvest_conditions(_fa_cl440, _fa_cond439)
                 trail.undo(_fa_m12)
-                $charge_conditions(trail, _fa_cl429, _fa_cond428)
-                _fa_um432 = trail.mark()
-                if $unify(_v97, _fa_results427, trail):
+                $charge_conditions(trail, _fa_cl440, _fa_cond439)
+                _fa_um443 = trail.mark()
+                if $unify(_fa_bag444, _fa_results438, trail):
                     if $fd_eq(_v97, [[], [1], [1, 2]], trail):
                         yield (_proceed, None)
-                trail.undo(_fa_um432)
+                trail.undo(_fa_um443)
 
 # ----
 

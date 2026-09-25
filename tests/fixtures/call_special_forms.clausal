@@ -5,6 +5,8 @@
 -module(call_special_forms, [oops, boom(A), caught, done, foo])
 -import_from(py.re, [match, search])
 -allow_singletons
+-constant_value(nums, [1, 2, 3])
+-constant_value(other_nums, [1, 2])
 
 p(1),
 p(2),
@@ -124,3 +126,6 @@ pl(3, R) <- findall(X, p(X), R)
 pl(4, R) <- findall(X, fail, [])
 pl(5, R) <- setof(X, p(X), [R, *T])
 pl(6, R) <- findall(X, p(X), [9, *T])
+# A -constant_value list is a _FrozenList (a list SUBCLASS): a list.
+cf(1) <- findall(X, p(X), ++nums)
+cf(2) <- findall(X, p(X), ++other_nums)

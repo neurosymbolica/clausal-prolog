@@ -22,6 +22,7 @@ from clausal.terms import (
     Compound,
     Call, LoadName, LoadAttr,
     PyThunk,
+    SegBytes, SegList, SegString, VarSeg,
 )
 from clausal.pythonic_ast.nodes import StarUnpack
 from clausal.logic.database import Clause, Database
@@ -35,8 +36,8 @@ from clausal.logic.builtins import (
     get_builtin_predicate, BuiltinPredicate,
 )
 
-from clausal.logic.cells import _cell_shape
-from clausal.logic.atoms import is_atom as _term_is_atom
+from clausal.logic.cells import _cell_shape, is_chars
+from clausal.logic.atoms import is_atom as _term_is_atom, is_nil
 
 from ._ast_helpers import _name, _call, _assign
 from ._vars import _var_python_name, _collect_vars
@@ -116,12 +117,17 @@ def _is_list_or_partial_list(term) -> bool:
     """ISO's "a list or a partial list": unbound, ``[]``, a list (in any of
     the engine's list shapes), or a SegList whose bound tail segments are
     lists or partial lists in turn -- ``[a, *T]`` with T unbound or a list,
-    not with T bound to ``foo``."""
-    from clausal.logic.atoms import is_nil  # noqa: PLC0415
-    from clausal.logic.cells import is_chars  # noqa: PLC0415
-    from clausal.terms import SegBytes, SegList, SegString, VarSeg  # noqa: PLC0415
+    not with T bound to ``foo``.
+
+    ``isinstance``, not ``type() in``: a ``-constant_value`` list is a
+    ``_FrozenList`` (a ``list`` subclass) and IS a list.  The string carrier
+    ``('$chars', s)`` is a list too -- a double-quoted string under
+    ``double_quotes(chars)``, which is ISO's list of one-char atoms -- and a
+    ``bytes`` is the code list.  A bare ``str`` is an ATOM (stage 2), so
+    ``findall(X, G, foo)`` is the type_error."""
     t = deref(term)
-    if is_var(t) or type(t) in (list, bytes) or is_chars(t) or is_nil(t):
+    if (is_var(t) or isinstance(t, (list, bytes)) or is_chars(t)
+            or is_nil(t)):
         return True
     if isinstance(t, (SegString, SegBytes)):
         return True
@@ -138,6 +144,7 @@ def _check_bag(bag, who: str) -> None:
     silent failure: the unify of the collected list with ``foo`` failed."""
     if _is_list_or_partial_list(bag):
         return
+    # Only the ERROR path imports (the check above is the hot path).
     from clausal.logic.exceptions import (  # noqa: PLC0415
         LogicException, type_error,
     )

@@ -129,8 +129,11 @@ def test_the_table_covers_every_special_form(host):
     """Every special form but halt/0,1 (below) has a row in the fixture."""
     from clausal.logic.builtins.call_body import SPECIAL_FORMS
     text = (FIXTURES / f"{HOST}.clausal").read_text()
+    # A word boundary: "call_cleanup(" must not be found inside
+    # "setup_call_cleanup(".
     missing = [name for (name, _) in SPECIAL_FORMS
-               if name != "halt" and f"{name}(" not in text]
+               if name != "halt"
+               and not re.search(rf"(?<![\w.]){re.escape(name)}\(", text)]
     assert not missing
 
 
@@ -432,6 +435,56 @@ def test_a_partial_list_result_is_fine(host, n, expected):
     from clausal.logic.solve import call
     R = Var()
     assert [_norm(R) for _ in call("pl", n, R, module=host)] == expected
+
+
+@pytest.mark.parametrize("n, answers", [(1, 1), (2, 0)])
+def test_a_constant_list_is_a_list(host, n, answers):
+    """roborev on eb3c4216: ``type() in (list, bytes)`` refused a
+    ``_FrozenList`` -- the list a ``-constant_value`` holds -- so a findall
+    into ``++nums`` raised type_error(list, [1, 2, 3]).  It unifies (or not)
+    as a list again."""
+    from clausal.logic.solve import call
+    assert len(list(call("cf", n, module=host))) == answers
+
+
+@pytest.mark.parametrize("text, answers", [("ab", 1), ("ax", 0)])
+def test_a_string_is_the_list_of_its_chars(host, text, answers):
+    """The ('$chars', s) carrier -- a double-quoted string under ISO's
+    double_quotes(chars) -- is a list, so it is no type_error: findall's
+    collected chars unify with it, or do not.  A bare str is an ATOM."""
+    from clausal.logic.cells import chars
+    from clausal.logic.atoms import char_atom
+    C = Var()
+    goal = ("findall", C,
+            nodes.in_(left=C, right=[char_atom("a"), char_atom("b")]),
+            chars(text))
+    assert len(_call(host, goal)) == answers
+    with pytest.raises(LogicException) as ei:
+        _call(host, ("findall", C, nodes.in_(left=C, right=["a"]), "ab"))
+    assert _formal(ei).args == ("list", "ab")
+
+
+def test_a_constant_list_is_a_frozen_list_subclass(host):
+    """The positive control for the test above: the value IS a subclass."""
+    from clausal.logic.compiler.globals_env import _is_list_or_partial_list
+    from clausal.logic.constants import _FrozenList
+    frozen = _FrozenList([1, 2, 3])
+    assert type(frozen) is not list and isinstance(frozen, list)
+    assert _is_list_or_partial_list(frozen)
+
+
+@pytest.mark.parametrize("body, cell", [("b", "fcell"), ("ob", "ocell")])
+def test_an_imported_name_wins_over_the_special_form(re_host, body, cell):
+    """roborev on eb3c4216: ``-import_from(py.re, [findall])`` makes the
+    body's findall/3 the REGEX predicate (the import rewrites the call), and
+    ``-import_from(m, [once])`` makes once/1 m's; call/1 of the bare cell
+    must run the same import, not the special form."""
+    from clausal.logic.solve import call
+    X = Var()
+    expected = [_norm(X) for _ in call(body, X, module=re_host)]
+    X = Var()
+    assert [_norm(X) for _ in call(cell, X, module=re_host)] == expected
+    assert expected                      # not vacuous: regex answers, once gives 5
 
 
 # ── a meta-interpreter's shape ──────────────────────────────────────────────

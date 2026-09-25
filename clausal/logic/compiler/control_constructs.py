@@ -605,7 +605,12 @@ def _compile_find_all_core(
     unify_mark = ctx.fresh("_fa_um")
 
     template_expr = term_to_ast_expr(template, var_context, eval_arith=False)
-    bag_expr = term_to_ast_expr(bag, var_context, eval_arith=False)
+    # The bag is BUILT once, into a temp, and the temp serves both the ISO
+    # check and the unify: a constructed bag (``[R, *T]``, an inline
+    # ``$Var()`` for ``_``, a ``++()`` escape) must not be built twice.
+    bag_tmp = ctx.fresh("_fa_bag")
+    bag_build = _assign(bag_tmp, term_to_ast_expr(bag, var_context,
+                                                  eval_arith=False))
 
     inner_stmts = _lower_inner(ctx, inner_goal, [_yield_none_stmt()])
     gen_body = inner_stmts + [
@@ -642,7 +647,7 @@ def _compile_find_all_core(
     unify_block = [
         _assign_mark(unify_mark, trail_name),
         ast.If(
-            test=_call(_name("$unify"), bag_expr, _name(results_var), _name(trail_name)),
+            test=_call(_name("$unify"), _name(bag_tmp), _name(results_var), _name(trail_name)),
             body=k_stmts or [ast.Pass()],
             orelse=[],
         ),
@@ -654,7 +659,8 @@ def _compile_find_all_core(
     # runs, as Scryer does (``findall(X, _, foo)`` is the type_error).
     who = "setof/3" if dedup else ("bagof/3" if fail_on_empty else "findall/3")
     stmts: list[ast.stmt] = [
-        ast.Expr(value=_call(_name("$check_bag"), bag_expr,
+        bag_build,
+        ast.Expr(value=_call(_name("$check_bag"), _name(bag_tmp),
                              ast.Constant(value=who))),
         _assign(results_var, ast.List(elts=[], ctx=ast.Load())),
         _assign(cond_bag, ast.List(elts=[], ctx=ast.Load())),
