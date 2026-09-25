@@ -361,8 +361,16 @@ def _compile_expansion_rules(expansion_clauses, module_dict):
     _seen_ids: set = set()
     for pred_node in expansion_clauses:
         _collect_functor_arities(pred_node, functor_arities, _seen_ids)
+    # "Not bound" includes bound to an ATOM: an atom is data and builds no
+    # term, and the module dict this copies is pre-seeded with the
+    # process-wide atom pool, so an atom ANOTHER module declared (``fact``,
+    # ``logged_fact``) sits under the name.  Skipping it left the pattern
+    # compiled as a call of that str -- ``TypeError: 'str' object is not
+    # callable`` at expansion time, only when an earlier load had declared
+    # the atom.
+    from clausal.logic.atoms import is_atom as _is_atom  # noqa: PLC0415
     for name, arity in functor_arities.items():
-        if name not in lm.module_dict:
+        if name not in lm.module_dict or _is_atom(lm.module_dict[name]):
             lm.module_dict[name] = _data_functor_ctor(name, arity)
 
     # assertz each expansion clause.
