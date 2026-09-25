@@ -13,8 +13,9 @@ Pinned here:
 
 * the refusal fires, with its message and remedy, for a declaration-only
   export AND a ``-dynamic`` one;
-* in BOTH eras -- the import bound to a ``PredicateMeta`` class and to a
-  mangled handle -- with the same text (the check reads rows, not classes);
+* with the import bound to a mangled handle -- the only era after the
+  W4b-2d flip (the ``[class]`` arm of the old both-eras parametrization is
+  gone: the module dict no longer holds a class for it to take);
 * nothing is written: counted at the gate's one door, with a positive control;
 * a same-spelling import at ANOTHER arity is not refused;
 * the existing clobber refusal for a DEFINED export keeps its own message.
@@ -59,15 +60,16 @@ def _flat(exc) -> str:
     return " ".join(str(exc).split())
 
 
-# ── End to end, today's era (class bindings) ─────────────────────────────────
+# ── End to end (handle bindings) ─────────────────────────────────────────────
 
 
 def test_the_idiom_is_refused_at_load_with_a_remedy():
     vocab = _load_fixture("impclob_decl_vocab")
     with pytest.raises(SyntaxError) as exc_info:
         _load_fixture("impclob_implements_vocab")
-    assert isinstance(vocab.impclob_verdict, PredicateMeta), (
-        "this is the CLASS era; the mangled era is pinned below")
+    assert vocab.impclob_verdict == mangle(
+        "tests.fixtures.impclob_decl_vocab", "impclob_verdict"), (
+        "the exporter's binding is the mangled handle")
     msg = str(exc_info.value)
     first = msg.splitlines()[0]
     assert first == (
@@ -126,7 +128,7 @@ def test_the_remedy_shape_loads_and_answers():
         mint("ok")]
 
 
-# ── Both eras, through the real pre-pass ─────────────────────────────────────
+# ── Through the real pre-pass ────────────────────────────────────────────────
 
 _VOCAB = "_vocabdrop_decl_vocab"
 _SCHEMA = "_vocabdrop_fnm_schema"
@@ -146,9 +148,13 @@ def owners():
 
 
 def _eras(module, functor, owner_name):
-    cls = module.__dict__[functor]
-    assert isinstance(cls, PredicateMeta)
-    return {"class": cls, "mangled": mangle(owner_name, functor)}
+    """The binding(s) to check.  Post-flip there is ONE era: the module dict
+    binds the owner's mangled handle, which is asserted here so a binding of
+    any other shape (a class era coming back, a stand-in) fails loudly
+    rather than being checked as if it were the handle."""
+    binding = module.__dict__[functor]
+    assert binding == mangle(owner_name, functor), binding
+    return {"mangled": binding}
 
 
 def _head(functor, arity):
@@ -177,10 +183,10 @@ def test_the_pre_pass_refuses_in_both_eras_with_the_same_text(
                 Database(), [_head(functor, 2)], {local: binding}, origins,
                 "/elsewhere/implementer.clausal", "some_implementer")
         texts[era] = str(exc_info.value)
-    assert texts["class"] == texts["mangled"]
-    assert f"{owner_name} only declares {functor}/2" in _flat(texts["class"])
+    assert list(texts) == ["mangled"]
+    assert f"{owner_name} only declares {functor}/2" in _flat(texts["mangled"])
     if alias:
-        assert f"drop {functor} (imported as {alias})" in _flat(texts["class"])
+        assert f"drop {functor} (imported as {alias})" in _flat(texts["mangled"])
 
 
 @pytest.mark.parametrize("owner_name", [_VOCAB, _SCHEMA])
@@ -228,7 +234,7 @@ def test_a_local_predicate_under_an_aliased_imports_own_name_is_not_refused(
     module, functor = owners[_VOCAB]
     imported = _eras(module, functor, _VOCAB)
     local = _eras(local_def, functor, _LOCAL)
-    for era in ("class", "mangled"):
+    for era in ("mangled",):
         assert is_declared_predicate(local[era], arity=2), era
         origins = _import_from_origins(
             [ImportFromDirective(module=_VOCAB, names=[(functor, "G")])],
@@ -269,7 +275,8 @@ def test_a_defined_export_keeps_the_clobber_refusal_and_its_message():
         "tests.fixtures.impclob_owner.")
     assert "may not write impclob_colour/1" in msg
     assert "only declares" not in msg
-    assert len(owner.impclob_colour._state_row().clauses) == 2
+    assert len(owner.__dict__["$module"].db.row(
+        "impclob_colour", 1).clauses) == 2
 
 
 def test_an_import_from_the_module_itself_is_not_refused(owners):
@@ -337,14 +344,15 @@ def test_a_dynamic_exporter_holding_runtime_clauses_is_refused_and_keeps_them(
                      module=schema.__dict__["$module"]))
     row = owner_db.row("fnm_verdict", 2)
     assert row.clauses and row.source is None, "not the shape under test"
+    slm = schema.__dict__["$module"]
     x, y = Var(), Var()
-    assert [walk(deref(x)) for _ in call(schema.fnm_verdict, x, y)] == [
+    assert [walk(deref(x)) for _ in call("fnm_verdict", x, y, module=slm)] == [
         mint("early")], "the runtime clause must answer before the load, too"
 
-    # BOTH ERAS at the check itself.
+    # At the check itself, through the exporter's own binding (the handle).
     texts = {}
-    for era, binding in {"class": schema.fnm_verdict,
-                         "mangled": mangle(owner_name, "fnm_verdict")}.items():
+    assert schema.fnm_verdict == mangle(owner_name, "fnm_verdict")
+    for era, binding in {"mangled": schema.fnm_verdict}.items():
         origins = _import_from_origins(
             [ImportFromDirective(module=owner_name, names=["fnm_verdict"])],
             {"fnm_verdict": binding})
@@ -352,8 +360,7 @@ def test_a_dynamic_exporter_holding_runtime_clauses_is_refused_and_keeps_them(
         texts[era] = str(_implements_an_imported_declaration(
             origins, {"fnm_verdict": binding}, "fnm_verdict", 2,
             "some_implementer"))
-    assert texts["class"] == texts["mangled"]
-    flat = _flat(texts["class"])
+    flat = _flat(texts["mangled"])
     assert ("whose fnm_verdict/2 is a -dynamic predicate holding 1 clause "
             "asserted at runtime") in flat
     assert "only declares" not in flat
@@ -362,16 +369,16 @@ def test_a_dynamic_exporter_holding_runtime_clauses_is_refused_and_keeps_them(
     assert f"lands on {owner_name}'s row" in flat
 
     # End to end: refused, and the runtime clause still answers through the
-    # exporter -- the class did not move.
-    cls_row_before = schema.fnm_verdict._row
+    # exporter -- its row did not move.
+    row_before = owner_db.row("fnm_verdict", 2)
     with pytest.raises(SyntaxError) as exc_info:
         private_module(None, "_vocabdrop_rt_use", path=_importer(
             tmp_path, "_vocabdrop_rt_use", owner_name, "fnm_verdict",
             "fnm_verdict(ok, [])"))
     assert "asserted at runtime" in _flat(exc_info.value)
-    assert schema.fnm_verdict._row is cls_row_before
+    assert owner_db.row("fnm_verdict", 2) is row_before
     x, y = Var(), Var()
-    assert [walk(deref(x)) for _ in call(schema.fnm_verdict, x, y)] == [
+    assert [walk(deref(x)) for _ in call("fnm_verdict", x, y, module=slm)] == [
         mint("early")]
 
 
@@ -389,8 +396,8 @@ def test_an_exporter_row_a_load_wrote_and_emptied_keeps_the_clobber_message(
     del row.ensure_clauses()[:]
     assert not row.clauses
     texts = {}
-    for era, binding in {"class": owner.bo_p,
-                         "mangled": mangle(owner_name, "bo_p")}.items():
+    assert owner.bo_p == mangle(owner_name, "bo_p")
+    for era, binding in {"mangled": owner.bo_p}.items():
         origins = _import_from_origins(
             [ImportFromDirective(module=owner_name, names=["bo_p"])],
             {"bo_p": binding})
@@ -399,15 +406,14 @@ def test_an_exporter_row_a_load_wrote_and_emptied_keeps_the_clobber_message(
             origins, {"bo_p": binding}, "bo_p", 1, "some_implementer")
         assert texts[era] is not None, era
     # No declaration-site line in either era (ruling B, 2026-09-24).
-    assert " is declared at " not in str(texts["class"])
-    assert str(texts["class"]) == str(texts["mangled"])
-    first = str(texts["class"]).splitlines()[0]
+    assert " is declared at " not in str(texts["mangled"])
+    first = str(texts["mangled"]).splitlines()[0]
     assert first == ("some_implementer defines a clause for bo_p/1, which it "
                      f"-import_from's from {owner_name}.")
-    assert "only declares" not in str(texts["class"])
+    assert "only declares" not in str(texts["mangled"])
     # Through the same formatting as the gate's own clobber refusal: the
     # gate line rides at the end, naming the write and the owner.
-    last = str(texts["class"]).splitlines()[-1].strip()
+    last = str(texts["mangled"]).splitlines()[-1].strip()
     assert last.startswith("compile_module step 4: ")
     assert "may not write bo_p/1: it is owned by " in last
 
@@ -506,7 +512,7 @@ _R5_USER_BODY = (
     "r5meta(X, Y) <- call(r5p, X, Y)\n")
 
 
-def _assert_own_p2_answers_every_way(ulm, era="class"):
+def _assert_own_p2_answers_every_way(ulm):
     """Round-7 LOW 2: B's own ``r5p/2`` answers however it is reached -- an
     outside query (``solve`` of a goal term), ``solve.call`` by NAME in B, a
     body goal inside B, and a meta-call (``call/3``) inside B.  All four are
@@ -526,15 +532,13 @@ def _assert_own_p2_answers_every_way(ulm, era="class"):
     x, y = Var(), Var()
     assert answers(solve(("call", mint("r5p"), x, y), ulm), x, y) == [
         (1, 2)], "call/3 from a query"
-    if era == "class":
-        # The meta-call INSIDE B: its ``r5p`` argument was lowered when B's
-        # body ran, i.e. to the class today.  The handle-era leg rebinds the
-        # name only at step 3d, after that lowering, so this route would mix
-        # eras (a class in the term, a handle in the namespace) -- it is
-        # checked in the class era, where it is faithful.
-        x, y = Var(), Var()
-        assert answers(call("r5meta", x, y, module=ulm), x, y) == [
-            (1, 2)], "call/3 in a body"
+    # The meta-call INSIDE B: its ``r5p`` argument was lowered when B's body
+    # ran.  Pre-flip this leg was class-era only (the handle-era stand-in
+    # rebound the name at step 3d, after that lowering, mixing eras); with
+    # the real flip the name is a handle from the start, so it is faithful.
+    x, y = Var(), Var()
+    assert answers(call("r5meta", x, y, module=ulm), x, y) == [
+        (1, 2)], "call/3 in a body"
 
 
 def _write(tmp_path, name, text):
@@ -543,21 +547,22 @@ def _write(tmp_path, name, text):
     return str(path)
 
 
-@pytest.mark.parametrize("era", ["class", "mangled"])
 @pytest.mark.parametrize("shape", sorted(_OWNERS))
 def test_a_local_predicate_at_another_arity_than_an_imported_class_loads(
-        tmp_path, monkeypatch, private_module, shape, era):
+        tmp_path, monkeypatch, private_module, shape):
     """Round-5 review: B imports a's ``r5p/1`` CLASS and defines its OWN
     ``r5p/2``.  The pre-pass rightly says "not this predicate" (other arity)
     and the gate permits (a's row holds nothing a load owns), but step 4 used
     to bind a's class to B's ``r5p/2`` row -- which now raises -- and step 5
     would have installed B's dispatch on a's ``r5p/1`` row.  The head is B's
     own predicate: it loads, B's ``r5p/2`` answers, a's ``r5p/1`` is
-    untouched.  In the handle era the name is bound to a's mangled handle."""
+    untouched.  Post-flip the name is bound to a's mangled handle (the old
+    ``[class]`` arm, and the ``[mangled]`` arm's stand-in rebinding, are gone:
+    the load binds the handle itself)."""
     import clausal.logic.compiler_v2 as cv2
     template, kind = _OWNERS[shape]
-    owner_name = f"_vocabdrop_r5_owner_{shape}_{era}"
-    use_name = f"_vocabdrop_r5_use_{shape}_{era}"
+    owner_name = f"_vocabdrop_r5_owner_{shape}"
+    use_name = f"_vocabdrop_r5_use_{shape}"
     owner = private_module(None, owner_name, path=_write(
         tmp_path, owner_name, template.format(name=owner_name)))
     olm = owner.__dict__["$module"]
@@ -570,24 +575,22 @@ def test_a_local_predicate_at_another_arity_than_an_imported_class_loads(
         del row.ensure_clauses()[:]
         row.invalidate()
         expected_owner = []
-    owner_row = owner.r5p._row
-    assert owner_row is olm.db.row("r5p", 1)
+    handle = mangle(owner_name, "r5p")
+    assert owner.r5p == handle
+    owner_row = olm.db.row("r5p", 1)
+    assert owner_row is not None
 
-    # Observed (and, for the handle era, rebound) at step 3d: the imports are
-    # processed inside compile_module, so this is the first point the
-    # module dict holds them, and everything from the pre-pass on reads it.
+    # Observed at step 3d: the imports are processed inside compile_module,
+    # so this is the first point the module dict holds them, and everything
+    # from the pre-pass on reads it.
     original = cv2._refuse_foreign_writes
     seen = []
 
     def refuse(db, predicate_nodes, module_dict, origins, author, module_name):
         if module_name == use_name:
-            # Population: the name really is bound to a's p/1 CLASS here --
-            # the shape under test -- before any era rebinding.
-            seen.append(module_dict.get("r5p") is owner.r5p)
-            if era == "mangled":
-                handle = mangle(owner_name, "r5p")
-                module_dict["r5p"] = handle
-                origins["r5p"] = (owner_name, handle)
+            # Population: the name really is bound to a's p/1 HANDLE here --
+            # the shape under test.
+            seen.append(module_dict.get("r5p") == handle)
         return original(db, predicate_nodes, module_dict, origins, author,
                         module_name)
 
@@ -596,32 +599,34 @@ def test_a_local_predicate_at_another_arity_than_an_imported_class_loads(
         f"-module({use_name}, [r5chk(X, Y), r5meta(X, Y)])\n"
         f"-import_from({owner_name}, [r5p])\n\n"
         + _R5_USER_BODY)))
-    assert seen == [True], "the name was not bound to a's class at step 4"
+    assert seen == [True], "the name was not bound to a's handle at step 3d"
 
     ulm = use.__dict__["$module"]
-    _assert_own_p2_answers_every_way(ulm, era)
+    _assert_own_p2_answers_every_way(ulm)
     assert ulm.db.row("r5p", 2).clauses
     # a's p/1: same row, same answers -- nothing moved, no dispatch landed.
-    assert owner.r5p._row is owner_row
+    assert olm.db.row("r5p", 1) is owner_row
     z = Var()
-    assert [walk(deref(z)) for _ in call(owner.r5p, z)] == expected_owner
+    assert [walk(deref(z)) for _ in call("r5p", z, module=olm)] == expected_owner
 
 
-@pytest.mark.parametrize("era", ["class", "mangled"])
 def test_a_plain_exporter_s_loaded_clauses_do_not_stop_another_arity(
-        tmp_path, monkeypatch, private_module, era):
+        tmp_path, monkeypatch, private_module):
     """The third exporter shape, a STATIC ``r5p/1`` with load clauses.  The
     class era used to refuse B's own ``r5p/2`` through the gate's blast radius
     (the shared class read a's owned ``r5p/1`` row); the handle era loaded it.
     Operator ruling 2026-09-24: it LOADS in both eras -- name and arity make a
     different predicate.  B's ``r5p/2`` answers, a's ``r5p/1`` is untouched."""
     import clausal.logic.compiler_v2 as cv2
-    owner_name = f"_vocabdrop_r5_owner_plain_{era}"
-    use_name = f"_vocabdrop_r5_use_plain_{era}"
+    owner_name = "_vocabdrop_r5_owner_plain"
+    use_name = "_vocabdrop_r5_use_plain"
     owner = private_module(None, owner_name, path=_write(
         tmp_path, owner_name,
         f"-module({owner_name}, [r5p/1])\n-private([one])\nr5p(one),\n"))
-    owner_row = owner.r5p._row
+    olm = owner.__dict__["$module"]
+    handle = mangle(owner_name, "r5p")
+    assert owner.r5p == handle
+    owner_row = olm.db.row("r5p", 1)
     assert owner_row.locked and owner_row.clauses, "not the shape under test"
 
     original = cv2._refuse_foreign_writes
@@ -629,11 +634,7 @@ def test_a_plain_exporter_s_loaded_clauses_do_not_stop_another_arity(
 
     def refuse(db, predicate_nodes, module_dict, origins, author, module_name):
         if module_name == use_name:
-            seen.append(module_dict.get("r5p") is owner.r5p)
-            if era == "mangled":
-                handle = mangle(owner_name, "r5p")
-                module_dict["r5p"] = handle
-                origins["r5p"] = (owner_name, handle)
+            seen.append(module_dict.get("r5p") == handle)
         return original(db, predicate_nodes, module_dict, origins, author,
                         module_name)
 
@@ -642,11 +643,11 @@ def test_a_plain_exporter_s_loaded_clauses_do_not_stop_another_arity(
         f"-module({use_name}, [r5chk(X, Y), r5meta(X, Y)])\n"
         f"-import_from({owner_name}, [r5p])\n\n"
         + _R5_USER_BODY)))
-    assert seen == [True], "the name was not bound to a's class at step 3d"
-    _assert_own_p2_answers_every_way(use.__dict__["$module"], era)
-    assert owner.r5p._row is owner_row
+    assert seen == [True], "the name was not bound to a's handle at step 3d"
+    _assert_own_p2_answers_every_way(use.__dict__["$module"])
+    assert olm.db.row("r5p", 1) is owner_row
     z = Var()
-    assert [walk(deref(z)) for _ in call(owner.r5p, z)] == [mint("one")]
+    assert [walk(deref(z)) for _ in call("r5p", z, module=olm)] == [mint("one")]
 
 
 def test_a_python_alias_module_re_exporting_a_clausal_predicate_is_not_python(
@@ -808,14 +809,25 @@ def test_a_class_whose_fields_and_row_disagree_never_hits_the_internal_raise(
     * ``r7q/2`` -- the class's row: the imported predicate, clause-free and
       never loaded, so the drop-the-idiom refusal;
     * ``r7q/1`` -- a's EXPORTED, adopted, load-owned row: the clobber
-      refusal (it is the imported predicate at that arity)."""
+      refusal (it is the imported predicate at that arity).
+
+    Post-flip a ``.clausal`` load binds a HANDLE, never a class, so the class
+    is planted explicitly: a ``make_predicate`` class (the shape a Python
+    module still exports) is bound to a's ``r7q/1`` row and put in a's
+    module dict where the import reads it.  The binding shape under test is
+    unchanged -- a class whose ``_fields`` (1) and bound row (2) disagree."""
+    from clausal.logic.predicate import make_predicate
     owner_name = f"_vocabdrop_r7_owner_{b_arity}"
     use_name = f"_vocabdrop_r7_use_{b_arity}"
     owner = private_module(None, owner_name, path=_write(
         tmp_path, owner_name,
         f"-module({owner_name}, [r7q/1])\n-private([one])\nr7q(one),\n"))
     olm = owner.__dict__["$module"]
-    cls = owner.r7q
+    assert owner.r7q == mangle(owner_name, "r7q")   # what the load bound
+    cls = make_predicate("r7q", ["a"])
+    cls._bind_row(olm.db, "r7q", 1)                 # first bind: free
+    assert cls._row is olm.db.row("r7q", 1)
+    owner.__dict__["r7q"] = cls                     # the import reads this
     cls._bind_row(olm.db, "r7q", 2)                 # same db: allowed
     # The move carries ``locked``/``source`` over; clear them so a's r7q/2 is
     # a clause-free row no load owns -- the shape the gate PERMITS, which is
