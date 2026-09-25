@@ -482,7 +482,10 @@ def _make_init(fields: tuple[str, ...]):
 def _term_iter(self):
     """Iterate solutions for this term as a goal.
 
-    Enables ``for trail in greeting(X := Var()): print(deref(X))``.
+    A leftover of the class-term era: calling a predicate name no longer
+    builds an instance, so this is not the query idiom.  From a plain ``.py``
+    file, ``for trail in solve(("greeting", X := Var()), module=m):``; in
+    Python hosted by a ``.clausal`` file, ``for X in --greeting(X):``.
     """
     from clausal.logic.solve import solve  # noqa: PLC0415
     return solve(self)
