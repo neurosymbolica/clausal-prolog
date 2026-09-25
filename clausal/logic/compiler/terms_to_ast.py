@@ -42,8 +42,10 @@ from clausal.pythonic_ast.nodes import (
     Lambda, literal_value,
     SetLiteral as _SetLiteral_t,
 )
+from clausal.logic.meta_predicate import MetaArg as _MetaArg
 from clausal.logic.predicate import (
     PredicateMeta, is_declared_predicate_name, is_zero_field_class,
+    construction_arity_fault,
     namespace_db,
     is_term_instance, predicate_binding_name, term_field_names, term_field_names_of_class,
 )
@@ -433,13 +435,46 @@ def cell_signature_for_name(
             return None
         # ``is_predicate``: the question was just answered above, so the
         # spelling does not ask ``is_declared_predicate_name`` a second time.
-        return (_functor_spelling(binding, leaf, namespace=namespace,
-                                  is_predicate=True),
-                tuple(cls_fields))
+        _spelled = _functor_spelling(binding, leaf, namespace=namespace,
+                                     is_predicate=True)
+        if arity is not None and arity < len(cls_fields):
+            # Ruling C (2026-09-24): a term is built at its WRITTEN arity,
+            # never padded.  A predicate NAME may be written at several
+            # arities (name+arity), so a short construction of one is the
+            # compound at the arity written -- ``count_leaves(T)`` naming the
+            # nonterminal count_leaves//1 is ``('count_leaves', T)``, and
+            # phrase appends S0/S to it.  A DATA functor's declaration does
+            # fix the slots, so a short construction of one is refused by
+            # ``_place_signature_slots`` exactly as a long one is.
+            return (_spelled, tuple(f"arg_{i}" for i in range(arity)))
+        return _spelled, tuple(cls_fields)
     fields = functor_signature_for(leaf, leaf_namespace)
     if fields is None:
         return None
     return _functor_spelling(binding, leaf), fields
+
+
+def construction_signature_for_name(
+    name: str, resolve_globals: "dict | None" = None, *,
+    n_positional: int, has_keywords: bool,
+) -> "tuple[str, tuple[str, ...]] | None":
+    """The ``(functor, fields)`` a construction or head pattern WRITTEN with
+    *n_positional* positional arguments is placed against, or None.
+
+    :func:`cell_signature_for_name`, then ruling C (2026-09-24): when the
+    shared decision :func:`~clausal.logic.predicate.construction_arity_fault`
+    calls a keyword-free construction ``"too_few"``, ask again at the
+    WRITTEN arity -- a predicate NAME answers that arity's own slots (the
+    compound at the arity written, as in Scryer), a DATA functor its
+    declaration (which ``_place_signature_slots`` then refuses).  The one
+    home of that re-ask for ``term_to_ast_expr``'s construction site and
+    ``head_match``'s pattern site.
+    """
+    sig = cell_signature_for_name(name, resolve_globals)
+    if (sig is not None and not has_keywords
+            and construction_arity_fault(sig[1], n_positional, ()) == "too_few"):
+        sig = cell_signature_for_name(name, resolve_globals, arity=n_positional)
+    return sig
 
 
 def handle_cell_functor(handle: str) -> str:
@@ -591,7 +626,14 @@ def _place_signature_slots(fields, positional, keywords, *, functor, missing):
     not inspect either beyond placing them.
     """
     n_fields = len(fields)
-    if len(positional) > n_fields:
+    if construction_arity_fault(
+            fields, len(positional), [name for name, _ in keywords]):
+        # Too many positional arguments, or (ruling C, 2026-09-24: no silent
+        # padding) too FEW -- decided by the runtime's own helper, so the
+        # compile-time and runtime refusals cannot drift apart.  (A predicate
+        # name at a shorter arity never reaches here:
+        # ``construction_signature_for_name`` gives it the written arity's
+        # own slots.)  Keyword-only construction still names its slots.
         raise _cell_arity_error(functor, fields, len(positional))
     slots = [_UNSET] * n_fields
     for i, value in enumerate(positional):
@@ -730,6 +772,15 @@ def term_to_ast_expr(
     raw = term
     term = deref(term)
 
+    if type(term) is _MetaArg:
+        # A ``-meta_predicate`` argument position (see
+        # ``clausal.logic.meta_predicate``): qualified with the calling
+        # module at run time.
+        return _call(_name("$meta_qualify"), _name("$meta_db"),
+                     term_to_ast_expr(term.value, var_context,
+                                      eval_arith=eval_arith),
+                     ast.Constant(value=term.spec))
+
     if is_var(term):
         vid = term._id
         if vid in var_context:
@@ -743,6 +794,28 @@ def term_to_ast_expr(
         )
 
     if isinstance(term, LoadName):
+        # Ruling S (2026-09-24) for CLAUSE SOURCE: a bare name bound to a
+        # PREDICATE, in data position, is the plain atom of its name -- the
+        # same literal the value arms below bake for an already-resolved
+        # class or handle.  A runtime ``Name`` load would hand over the
+        # binding itself (the class today, the mangled handle after the
+        # flip).  The zero-arity case never gets here (the rewriter already
+        # lowers a bare ``z`` to ``'z'``); a ``-hide`` DATA atom is not a
+        # declared predicate, so it keeps its load and its mangled spelling.
+        # A goal-taking builtin handed the atom resolves it by name in the
+        # caller (``call_body.MetaCallGoal``, ``call/N``).
+        namespace = lowering_globals()
+        if namespace is not None and "." not in term.name:
+            _pred_name = predicate_binding_name(
+                namespace.get(term.name), db=_lowering_db())
+            if _pred_name is not None:
+                # The WRITTEN name, not the binding's own: under an
+                # ``alias(p, q)`` import, ``q`` is bound to p's binding, and
+                # the atom must be ``q`` -- which resolves through the import
+                # in this namespace -- never ``p``, which here may name a
+                # DIFFERENT local predicate (roborev, 2026-09-25; Scryer
+                # passes ``q``).
+                return ast.Constant(value=_mint_atom(term.name))
         return _name(term.name)
 
     # Bare (non-Call) LoadAttr in value position: a module-qualified atom used
@@ -1112,7 +1185,11 @@ def term_to_ast_expr(
         # construction (see ``_place_signature_slots``), so a kwarg/partial
         # reference now builds a cell too instead of falling back to class
         # emission.
-        _sig = cell_signature_for_name(fname)
+        # Ruling C: a short keyword-free construction is re-asked at the
+        # WRITTEN arity (a predicate name answers that arity's slots; a data
+        # functor its declaration) -- see construction_signature_for_name.
+        _sig = construction_signature_for_name(
+            fname, n_positional=len(arg_exprs), has_keywords=bool(kw_exprs))
         _namespace = lowering_globals()
         _owa = _implicit_functors_active(_namespace)
         if _sig is not None:

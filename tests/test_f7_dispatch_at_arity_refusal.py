@@ -40,8 +40,14 @@ def _load(tmp_path, monkeypatch, name, body):
 
 
 def test_wrong_arity_call_on_a_user_predicate_is_the_arity_refusal(tmp_path, monkeypatch):
-    """Not an existence error, and not a raw AttributeError/TypeError: the
-    same ``PredicateArityMismatchError`` the class-object arm always gave."""
+    """Not a raw AttributeError/TypeError: the same
+    ``PredicateArityMismatchError`` the class-object arm always gave.
+
+    FLIPPED IN PART 2026-09-25 (operator ruling, "do what Scryer does"): the
+    refusal IS an ISO existence error now -- ``PredicateArityMismatchError``
+    is a ``LogicException`` whose term is ``error(existence_error(procedure,
+    Name/CalledArity), Message)`` as well as a ``TypeError``
+    (tests/test_arity_mismatch_is_iso_existence_error_both_eras.py).  It used to say "not an existence error" here."""
     mod = _load(tmp_path, monkeypatch, "f7_wrongarity", """
         -module(f7_wrongarity, [pred(A)])
         pred(1),
@@ -51,6 +57,11 @@ def test_wrong_arity_call_on_a_user_predicate_is_the_arity_refusal(tmp_path, mon
         _dispatch_at(mangle("f7_wrongarity", "pred"), 2)
     assert "pred" in str(info.value)
     assert "1 argument" in str(info.value) or "takes 1" in str(info.value)
+    # 2026-09-25: and it is the ISO existence error at the CALLED arity.
+    assert isinstance(info.value, LogicException)
+    formal = info.value.term.args[0]
+    assert formal.functor == "existence_error"
+    assert tuple(formal.args[1].args) == ("pred", 2)
 
 
 def test_correct_arity_call_is_unchanged(tmp_path, monkeypatch):
@@ -114,7 +125,13 @@ def test_wrong_arity_with_nothing_else_answering_still_refuses(
         tmp_path, monkeypatch, era):
     """The half of F7 the ruling keeps: ``pred/1`` called at 2, with no
     ``pred/2`` row and no ``pred/2`` builtin, is the arity refusal in both
-    eras -- not an existence error and not a raw TypeError."""
+    eras -- not a raw TypeError.
+
+    FLIPPED IN PART 2026-09-25 (operator ruling, "do what Scryer does"): the
+    refusal IS an ISO existence error now -- ``PredicateArityMismatchError``
+    is a ``LogicException`` whose term is ``error(existence_error(procedure,
+    Name/CalledArity), Message)`` as well as a ``TypeError``
+    (tests/test_arity_mismatch_is_iso_existence_error_both_eras.py).  It used to say "not an existence error" here."""
     from clausal.logic.builtins._registry import _BUILTINS, _DB_BUILTINS
     from clausal.logic.predicate import PredicateMeta
     mod = _load(tmp_path, monkeypatch, f"f7_nothing_{era}", """
@@ -125,8 +142,11 @@ def test_wrong_arity_with_nothing_else_answering_still_refuses(
     cls = mod.__dict__["$module"].module_dict["pred"]
     assert isinstance(cls, PredicateMeta)
     target = cls if era == "class" else mangle(f"f7_nothing_{era}", "pred")
-    with pytest.raises(PredicateArityMismatchError, match="takes 1 argument"):
+    with pytest.raises(PredicateArityMismatchError, match="takes 1 argument") as info:
         _dispatch_at(target, 2)
+    formal = info.value.term.args[0]
+    assert formal.functor == "existence_error"
+    assert tuple(formal.args[1].args) == ("pred", 2)
 
 
 @pytest.mark.parametrize("era", ["class", "handle"])
@@ -380,6 +400,11 @@ def test_an_imported_stale_class_does_not_answer_from_its_owner(
     assert len(list(_call("assertz", Compound("ping", (1, 2)), module=O))) == 1
     cls = O.module_dict["ping"]
     assert isinstance(cls, PredicateMeta)
+    # The assert no longer MOVES the class (fixed 2026-09-24, todo/done/
+    # zero-field-class-bound-to-another-aritys-row-crashes-call-2026-09-24.md);
+    # the stale state this pins is built by hand.
+    assert cls._row._key == ("ping", 0), "the assert moved the class again"
+    cls._bind_row(O.db, "ping", 2, authorized=True)
     assert cls._fields == () and cls._row._key == ("ping", 2)   # STALE, owner's
     with pytest.raises(PredicateArityMismatchError, match="ping"):
         list(_call("ping", 1, 2, module=I))
@@ -643,8 +668,11 @@ def test_an_owner_arity_added_later_is_not_reachable_through_a_cell_goal(
     in the handle era asks the OWNER -- so ``pk/2`` asserted in the owner
     after ``pk/1`` was imported answered ``call(pk(3), X)`` in the importer.
     ``_find_pred_cls`` now asks ``binding_grants_arity`` (imported at that
-    arity?), in both eras: the cell goal fails, as an unresolvable named
-    goal always has."""
+    arity?), in both eras.  The cell goal used to FAIL; since 2026-09-24 a
+    named goal that nothing answers at its arity, whose name the caller binds
+    to a predicate at another arity, gets the refusal a body call
+    ``pk(3, X)`` gets (name+arity ruling: keep the refusal where nothing
+    else answers) -- still never the owner's pk/2."""
     from clausal.logic.solve import call as _call
     from clausal.logic.variables import Var
     from clausal.terms import Compound
@@ -664,7 +692,8 @@ def test_an_owner_arity_added_later_is_not_reachable_through_a_cell_goal(
     I = imp.__dict__["$module"]
     assert len(list(_call("assertz", Compound("pk", (3, "own")), module=O))) == 1
     assert O.db.row("pk", 2) is not None
-    assert list(_call("c", Var(), module=I)) == []
+    with pytest.raises(PredicateArityMismatchError, match="pk takes 1"):
+        list(_call("c", Var(), module=I))
     assert len(list(_call("one", module=I))) == 1
     # the owner itself sees its new arity
     assert len(list(_call("pk", 3, "own", module=O))) == 1

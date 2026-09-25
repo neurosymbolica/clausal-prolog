@@ -69,12 +69,16 @@ def _listing(indicator, module, capsys):
     return capsys.readouterr().out
 
 
-def _existence_culprit(indicator, module):
-    with pytest.raises(LogicException) as exc:
-        next(call("listing", indicator, module=module), None)
-    err = exc.value.term.args[0]
-    assert err.functor == "existence_error", err
-    return err.args[1].args
+def _lists_nothing(indicator, module, capsys):
+    """True when ``listing(indicator)`` FAILS and prints nothing.
+
+    Operator ruling 2026-09-25 ("do what Scryer does"): an indicator naming no predicate fails, as Scryer's
+    ``\\+ \\+ clause(Head, _)`` guard does.  This helper used to be
+    ``_existence_culprit`` and returned the culprit of the
+    ``existence_error`` the same calls raised before 2026-09-25."""
+    capsys.readouterr()
+    answers = list(call("listing", indicator, module=module))
+    return answers == [] and capsys.readouterr().out == ""
 
 
 def _prime(owner, user):
@@ -161,8 +165,8 @@ def test_an_aliased_import_lists_the_owner(
         aliased, capsys, flipped, owner_popped):
     owner, user = aliased
     lm = user.__dict__["$module"]
-    # Primed through the OWNER: asserting through the alias itself fails
-    # today (todo/assertz-through-an-aliased-import-raises-existence-error-2026-09-24.md).
+    # Primed through the OWNER, so this test does not depend on the alias
+    # write path (tests/test_assert_through_aliased_import_both_eras.py).
     next(call("assertz", ("gd_p", 42), module=owner.__dict__["$module"]), None)
     assert len(owner.__dict__["$module"].db.row("gd_p", 1).clauses) == 2
     twin = lm.db.row("gd_loc", 1)
@@ -205,8 +209,9 @@ def test_a_mangled_predicate_handle_lists_its_predicate(hide, capsys):
 
 def test_a_mangled_predicate_handle_is_authoritative_at_its_arity(
         hide, tmp_path, capsys):
-    """Ruling QE: a handle at an arity its owner does not define raises,
-    naming the PLAIN name -- no fall-through to the caller's same-named
+    """Ruling QE: a handle at an arity its owner does not define names
+    nothing (it FAILS since 2026-09-25; it raised existence_error before)
+    -- no fall-through to the caller's same-named
     predicate at that arity (which the caller DOES define here, so a
     fall-through would list it)."""
     src = tmp_path / "row60_local_holds.clausal"
@@ -217,19 +222,19 @@ def test_a_mangled_predicate_handle_is_authoritative_at_its_arity(
     try:
         lm = local.__dict__["$module"]
         assert "% holds/2 — 1 clause(s)" in _listing(("/", "holds", 2), lm, capsys)
-        assert _existence_culprit(("/", mangle(_HIDE, "holds"), 2), lm) == (
-            "holds", 2)
+        assert _lists_nothing(("/", mangle(_HIDE, "holds"), 2), lm, capsys)
         assert "% holds/1 — 1 clause(s)" in _listing(
             ("/", mangle(_HIDE, "holds"), 1), lm, capsys)
     finally:
         sys.modules.pop(name, None)
 
 
-def test_a_hide_atom_indicator_is_not_a_predicate(hide):
+def test_a_hide_atom_indicator_is_not_a_predicate(hide, capsys):
     """A -hide DATA atom is mangled in the handle's shape; it keeps today's
-    treatment: its mangled spelling names no predicate."""
+    treatment: its mangled spelling names no predicate (so the listing
+    FAILS since 2026-09-25, as any indicator naming nothing does)."""
     lm = hide.__dict__["$module"]
     secret = mangle(_HIDE, "hide_secret")
-    assert _existence_culprit(("/", secret, 1), lm) == (secret, 1)
+    assert _lists_nothing(("/", secret, 1), lm, capsys)
     orphan = mangle("_row60_not_loaded", "hide_secret")
-    assert _existence_culprit(("/", orphan, 1), lm) == (orphan, 1)
+    assert _lists_nothing(("/", orphan, 1), lm, capsys)

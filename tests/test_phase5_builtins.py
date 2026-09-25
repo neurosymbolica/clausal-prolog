@@ -421,18 +421,19 @@ class TestTFilter:
         return goal_eq_1
 
     def _run_tfilter(self, lst):
+        # Driven by the TRAMPOLINE (2026-09-25): tfilter now runs its goal the
+        # way include/3 does, yielding a StepGenerator for the driver to run,
+        # so a hand loop that read every yield as a solution no longer can.
+        # (The inline loop it replaced could not drive a delegating goal --
+        # test_09 test_regression_tfilter_user_reified.)
         from clausal.logic.builtins.higher_order import _tfilter__3
-        from clausal.logic.trampoline import DONE
+        from clausal.logic.trampoline import StepGenerator, solutions
         dispatch = self._make_eq_1_dispatch()
         trail = Trail()
         filtered = Var()
-        gen = _tfilter__3(None, None, None, None, dispatch, lst, filtered, trail)
-        results = []
-        for parent, value in gen:
-            if value is DONE:
-                break
-            results.append(deref(filtered))
-        return results
+        return solutions(
+            StepGenerator(_tfilter__3, None, None, None, dispatch, lst, filtered, trail),
+            lambda: deref(filtered))
 
     def test_with_reified_eq(self):
         # nv
@@ -471,18 +472,15 @@ class TestTPartition:
         return goal_eq_1
 
     def _run_tpartition(self, lst):
+        # Trampoline-driven, as TestTFilter._run_tfilter (2026-09-25).
         from clausal.logic.builtins.higher_order import _tpartition__4
-        from clausal.logic.trampoline import DONE
+        from clausal.logic.trampoline import StepGenerator, solutions
         dispatch = self._make_eq_1_dispatch()
         trail = Trail()
         yes, no = Var(), Var()
-        gen = _tpartition__4(None, None, None, None, dispatch, lst, yes, no, trail)
-        results = []
-        for parent, value in gen:
-            if value is DONE:
-                break
-            results.append((deref(yes), deref(no)))
-        return results
+        return solutions(
+            StepGenerator(_tpartition__4, None, None, None, dispatch, lst, yes, no, trail),
+            lambda: (deref(yes), deref(no)))
 
     def test_with_reified_eq(self):
         # nv

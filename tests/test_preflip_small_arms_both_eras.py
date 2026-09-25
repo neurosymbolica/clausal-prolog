@@ -257,17 +257,19 @@ def test_bare_listing_of_a_handle_is_a_predicate_indicator_type_error(
     assert _predicate_indicator_culprit("listing", (handle,), lm) == "fib"
 
 
-def test_bare_listing_of_a_class_binding_is_unchanged(lister, capsys):
-    """The CLASS era keeps the Python-API arm: ``listing(<class>)`` lists.
-    Source ``listing(fib)`` passes that same class object today, so it lists
-    too; only the flip makes the source form Scryer's type_error."""
+def test_bare_listing_of_a_class_binding(lister, capsys):
+    """The CLASS era.  SOURCE ``listing(fib)`` is Scryer's type_error with the
+    plain name here too: ruling S (main ae1a456d) lowers a bare predicate
+    name in data position to its plain atom in both eras, so the source form
+    never hands listing/1 the binding.  The Python API, ``listing(<class>)``,
+    keeps its arm and lists."""
     mod = lister("sa_e_fibc", _FIB.format(name="sa_e_fibc"))
     assert isinstance(mod.__dict__["fib"], PredicateMeta)
     lm = _lm(mod)
-    for goal, args in (("listing", (mod.__dict__["fib"],)), ("show", ())):
-        capsys.readouterr()
-        assert len(list(call(goal, *args, module=lm))) == 1
-        assert capsys.readouterr().out.startswith("% fib/2 — 2 clause(s)\n")
+    assert _predicate_indicator_culprit("show", (), lm) == "fib"
+    capsys.readouterr()
+    assert len(list(call("listing", mod.__dict__["fib"], module=lm))) == 1
+    assert capsys.readouterr().out.startswith("% fib/2 — 2 clause(s)\n")
 
 
 @pytest.mark.parametrize("popped", [False, True])
@@ -288,9 +290,9 @@ def test_bare_listing_of_an_imported_handle_names_the_plain_name(lister, popped)
     assert _predicate_indicator_culprit("listing", (handle,), _lm(user)) == "colour"
 
 
-def test_bare_listing_of_a_hide_data_atom_is_unchanged():
-    """A ``-hide`` DATA atom is not a handle: it keeps the atom arm (its
-    mangled spelling at arity 0 names no predicate)."""
+def test_bare_listing_of_a_hide_data_atom_keeps_its_own_spelling():
+    """A ``-hide`` DATA atom is not a handle: Scryer's refusal of a bare
+    atom names it by its own (mangled) spelling, not demangled."""
     saved = sys.modules.pop("hide_owner", None)
     try:
         mod = _load_module("hide_owner", os.path.join(FIXTURES, "hide_owner.clausal"))
@@ -298,8 +300,8 @@ def test_bare_listing_of_a_hide_data_atom_is_unchanged():
         with pytest.raises(LogicException) as exc:
             list(call("listing", secret, module=_lm(mod)))
         err = exc.value.term.args[0]
-        assert err.functor == "existence_error"
-        assert err.args[1].args == (secret, 0)
+        assert err.functor == "type_error"
+        assert err.args == ("predicate_indicator", secret)
     finally:
         sys.modules.pop("hide_owner", None)
         if saved is not None:
@@ -425,8 +427,8 @@ def test_a_plain_cell_runs_in_the_owner_only_when_qualified(clib_pair, lister, e
         -import_module(sa_clib)
         run(G) <- call(G)
     """)
-    X0 = Var()
-    assert [deref(X0) for _ in call("run", ("dfact", X0), module=_lm(bare))] == []
+    # ISO since main ae1a456d: an unknown procedure is existence_error.
+    assert _existence_culprit("run", ("dfact", Var()), _lm(bare)).args == ("dfact", 1)
     # Qualified, it runs in the owner: M:G, or solve(cell, M).
     X = Var()
     assert [deref(X) for _ in solve((":", "sa_clib", ("dfact", X)))] == [0]
