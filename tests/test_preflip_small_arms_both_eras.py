@@ -242,36 +242,66 @@ def _predicate_indicator_culprit(goal, args, lm):
     return err.args[1]
 
 
-def test_bare_listing_of_a_handle_is_a_predicate_indicator_type_error(
-        lister, flipped_loads):
-    """SOURCE ``listing(fib)`` in the handle era, and the Python call with
-    the handle: Scryer's ``type_error(predicate_indicator, fib)``, naming the
-    PLAIN name the source wrote, never ``'m\\x1ffib'``."""
-    mod = lister("sa_e_fib", _FIB.format(name="sa_e_fib"))
-    handle = mod.__dict__["fib"]
-    assert type(handle) is str, "the flip did not happen"
-    lm = _lm(mod)
-    assert _predicate_indicator_culprit("show", (), lm) == "fib"
-    assert _predicate_indicator_culprit("listing", (handle,), lm) == "fib"
-
-
-def test_bare_listing_of_a_class_binding(lister, capsys):
-    """The CLASS era.  SOURCE ``listing(fib)`` is Scryer's type_error with the
-    plain name here too: ruling S (main ae1a456d) lowers a bare predicate
-    name in data position to its plain atom in both eras, so the source form
-    never hands listing/1 the binding.  The Python API, ``listing(<class>)``,
-    keeps its arm and lists."""
-    mod = lister("sa_e_fibc", _FIB.format(name="sa_e_fibc"))
-    assert isinstance(mod.__dict__["fib"], PredicateMeta)
-    lm = _lm(mod)
-    assert _predicate_indicator_culprit("show", (), lm) == "fib"
+def _listed(goal, args, lm, capsys):
     capsys.readouterr()
-    assert len(list(call("listing", mod.__dict__["fib"], module=lm))) == 1
-    assert capsys.readouterr().out.startswith("% fib/2 — 2 clause(s)\n")
+    assert len(list(call(goal, *args, module=lm))) == 1
+    return capsys.readouterr().out
 
 
+@pytest.mark.parametrize("era", ERAS)
+def test_source_listing_of_a_bare_name_is_a_predicate_indicator_type_error(
+        lister, era_loads, era):
+    """SOURCE ``listing(fib)``: ruling S lowers the bare name to its plain
+    atom in both eras, so it is Scryer's ``type_error(predicate_indicator,
+    fib)``, never naming ``'m\\x1ffib'``."""
+    era_loads(era)
+    mod = lister("sa_e_fib", _FIB.format(name="sa_e_fib"))
+    assert (type(mod.__dict__["fib"]) is str) == (era == "handle")
+    assert _predicate_indicator_culprit("show", (), _lm(mod)) == "fib"
+
+
+@pytest.mark.parametrize("era", ERAS)
+def test_the_python_api_lists_the_binding_it_is_handed(
+        lister, era_loads, era, capsys):
+    """Operator ruling 2026-09-25: ``listing(mod.fib)`` from PYTHON lists in
+    both eras -- the class its one arity, the handle its predicate.
+
+    FLIPPED 2026-09-25: the handle arm used to raise
+    ``type_error(predicate_indicator, fib)`` (the class arm listed), which
+    roborev flagged as the two eras disagreeing on one call."""
+    era_loads(era)
+    mod = lister("sa_e_api", _FIB.format(name="sa_e_api"))
+    binding = mod.__dict__["fib"]
+    assert (type(binding) is str) == (era == "handle"), "the flip did not happen"
+    out = _listed("listing", (binding,), _lm(mod), capsys)
+    assert out.startswith("% fib/2 — 2 clause(s)\n"), out
+    assert out.count("fib(") == 2
+
+
+def test_the_python_api_lists_every_arity_of_a_handle(lister, capsys):
+    """A handle names no arity: a name that is a predicate at SEVERAL lists
+    each, in arity order.  (A class is bound at one arity and lists that
+    one; ``_multi_arity`` binds ``p``'s class at p/1.)"""
+    mod = _multi_arity(lister, "sa_e_multi")
+    lm = _lm(mod)
+    handle = mint_predicate_handle(lm.db, "p")
+    out = _listed("listing", (handle,), lm, capsys)
+    assert [ln for ln in out.splitlines() if ln.startswith("%")] == [
+        "% p/1 — 1 clause(s)", "% p/2 — 1 clause(s)"]
+    cls = mod.__dict__["p"]
+    assert isinstance(cls, PredicateMeta)
+    cls_out = _listed("listing", (cls,), lm, capsys)
+    assert [ln for ln in cls_out.splitlines() if ln.startswith("%")] == [
+        "% p/1 — 1 clause(s)"]
+
+
+@pytest.mark.parametrize("era", ERAS)
 @pytest.mark.parametrize("popped", [False, True])
-def test_bare_listing_of_an_imported_handle_names_the_plain_name(lister, popped):
+def test_the_python_api_lists_an_imported_binding_from_the_owner(
+        lister, era, popped, capsys):
+    """FLIPPED 2026-09-25 (was ``..._names_the_plain_name``, a type_error):
+    an ``-import_from``'d binding handed to listing/1 from Python lists the
+    OWNER's clauses, with the owner loaded or popped from ``sys.modules``."""
     owner = lister("sa_e_own", """
         -module(sa_e_own, [colour(C)])
         colour(1),
@@ -281,11 +311,14 @@ def test_bare_listing_of_an_imported_handle_names_the_plain_name(lister, popped)
         -module(sa_e_use, [])
         -import_from(sa_e_own, [colour])
     """)
-    handle = mint_predicate_handle(_lm(owner).db, "colour")
-    user.__dict__["colour"] = handle
+    md = user.__dict__
+    assert isinstance(md["colour"], PredicateMeta)
+    if era == "handle":
+        md["colour"] = mint_predicate_handle(_lm(owner).db, "colour")
     if popped:
         sys.modules.pop("sa_e_own", None)
-    assert _predicate_indicator_culprit("listing", (handle,), _lm(user)) == "colour"
+    out = _listed("listing", (md["colour"],), _lm(user), capsys)
+    assert out.startswith("% colour/1 — 2 clause(s)\n"), out
 
 
 def test_bare_listing_of_a_hide_data_atom_keeps_its_own_spelling():
