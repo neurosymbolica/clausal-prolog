@@ -9,6 +9,11 @@ loaded owner, then checking it gives the SAME answers as the class.
 
 Each check also asserts its population is non-empty: a resolver that quietly
 answers ``None`` for both shapes would otherwise "agree" with itself.
+
+Handle era (W4b-2d flip): the load binds the mangled handle now, and the
+class shape no longer exists, so the "same answer as the class" checks
+became checks against the owner's Database directly (its row, its clause
+count) -- the answers the class arm used to supply.
 """
 
 from __future__ import annotations
@@ -28,7 +33,7 @@ from clausal.logic.compiler_v2 import (
 )
 from clausal.logic.database import Database
 from clausal.logic.predicate import (
-    PredicateMeta, predicate_binding_name, resolve_predicate_row,
+    predicate_binding_name, resolve_predicate_row,
 )
 from clausal.pythonic_ast.nodes import ImportFromDirective
 
@@ -49,10 +54,17 @@ def owner():
 
 
 def _eras(owner):
-    """The same predicate, ``impclob_colour/1``, in both binding shapes."""
-    cls = owner.__dict__["impclob_colour"]
-    assert isinstance(cls, PredicateMeta)
-    return {"class": cls, "mangled": mangle(_OWNER, "impclob_colour")}
+    """``impclob_colour/1``'s binding: the handle the LOAD bound (asserted,
+    so the check never runs on a shape nothing produced)."""
+    binding = owner.__dict__["impclob_colour"]
+    assert binding == mangle(_OWNER, "impclob_colour"), binding
+    return {"mangled": binding}
+
+
+def _owner_row(owner):
+    row = owner.__dict__["$module"].db.row("impclob_colour", 1)
+    assert row is not None and row.clauses, "the owner's row is empty"
+    return row
 
 
 def _aliased_import():
@@ -83,9 +95,7 @@ def test_origins_index_an_aliased_import_under_both_names_in_both_eras(owner):
         assert origins["impclob_colour"] == (_OWNER, binding), era
         rows[era] = resolve_predicate_row(
             _imported_binding(origins, "impclob_colour"), arity=1)
-    assert rows["class"] is not None
-    assert rows["class"] is rows["mangled"]
-    assert rows["class"].clauses, "the owner's row is empty: nothing compared"
+    assert rows["mangled"] is _owner_row(owner)
 
 
 def test_origins_keep_a_non_predicate_import_unbound(owner):
@@ -109,7 +119,6 @@ def test_the_canonical_name_lookup_agrees_in_both_eras(owner):
         assert _imported_binding_by_canonical_name(
             origins, owner_db, "impclob_colour", 1) is None, (
             f"{era}: the owner's own database is not foreign to it")
-    assert found["class"] is _eras(owner)["class"]
     assert found["mangled"] == _eras(owner)["mangled"]
 
 
@@ -124,9 +133,9 @@ def test_the_redefinition_diagnostic_says_the_same_in_both_eras(owner):
             "impclob_colour", 1, "some_importer", _OWNER,
             resolve_predicate_row(binding, arity=1),
             exporter_module=owner)
-    assert texts["class"] == texts["mangled"]
+    assert len(_owner_row(owner).clauses) == 2
     assert "the 2 clauses already on impclob_colour" in " ".join(
-        texts["class"].split())
+        texts["mangled"].split())
 
 
 def test_the_load_channel_s_refusal_text_is_the_same_in_both_eras(owner):
@@ -143,8 +152,7 @@ def test_the_load_channel_s_refusal_text_is_the_same_in_both_eras(owner):
             {_OWNER: owner}))
     # No declaration-site line in either era (ruling B, 2026-09-24), so the
     # two texts match verbatim.
-    assert " is declared at " not in texts["class"]
-    assert texts["class"] == texts["mangled"]
+    assert " is declared at " not in texts["mangled"]
     assert "the 2 clauses already on impclob_colour" in " ".join(
         texts["mangled"].split())
 
@@ -167,6 +175,5 @@ def test_the_load_refusal_fires_through_the_real_gate_in_both_eras(owner):
                                    origins, "/elsewhere/importer.clausal",
                                    "some_importer")
         texts[era] = strip(str(exc_info.value))
-    assert texts["class"] == texts["mangled"]
-    assert " is declared at " not in texts["class"]
+    assert " is declared at " not in texts["mangled"]
     assert "may not write impclob_colour/1" in texts["mangled"]

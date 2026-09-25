@@ -20,7 +20,7 @@ import pytest
 from clausal.import_hook import _load_module
 from clausal.logic.compiler.terms_to_ast import lowering_scope, term_to_ast_expr
 from clausal.logic.predicate import (
-    ClausalTermConstructionError, PredicateMeta, mint_predicate_handle,
+    ClausalTermConstructionError, head_cell, mint_predicate_handle,
 )
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
@@ -76,14 +76,18 @@ def test_a_short_predicate_name_builds_the_written_arity(mod):
     assert [deref(t) for _ in call("mk_head", t, module=lm)] == [("v", "solo")]
 
 
-def test_the_runtime_class_call_refuses_too_few_like_too_many(mod):
+def test_the_runtime_handle_construction_refuses_too_few_like_too_many(mod):
+    """Handle era: the module-dict binding is the handle, and the runtime
+    construction against it is ``head_cell`` (the one the class call and the
+    handle share, ``build_term_cell``).  Called from THIS module's frame, so
+    no ``$module`` there: every construction error is kept."""
     v = mod.__dict__["v"]
-    assert isinstance(v, PredicateMeta)
+    assert v == mint_predicate_handle(mod.__dict__["$module"].db, "v")
     with pytest.raises(ClausalTermConstructionError, match="1 positional"):
-        v("solo")
+        head_cell(v, "solo")
     with pytest.raises(ClausalTermConstructionError, match="3 positional"):
-        v("a", "b", "c")
-    assert v("ok", "cited") == ("v", "ok", "cited")
+        head_cell(v, "a", "b", "c")
+    assert head_cell(v, "ok", "cited") == ("v", "ok", "cited")
 
 
 def test_phrase_appends_the_pair_to_the_written_args(mod):
@@ -101,15 +105,12 @@ def test_phrase_appends_the_pair_to_the_written_args(mod):
         list(call("phrase", ("tok", Var(), Var(), Var()), ["q"], module=lm))
 
 
-@pytest.mark.parametrize("flipped", [False, True], ids=["class", "flipped"])
-def test_phrase_resolves_the_written_arity_cell_through_either_binding(
-        mod, flipped):
+def test_phrase_resolves_the_written_arity_cell_through_the_handle(mod):
     """The cell ``('tok', X)`` names tok by its plain name; the caller's
-    binding for it is the class today and the handle after the flip."""
+    binding for it is the handle the load bound (the class arm is gone with
+    the class era)."""
     lm = mod.__dict__["$module"]
-    if flipped:
-        assert isinstance(mod.__dict__["tok"], PredicateMeta)
-        mod.__dict__["tok"] = mint_predicate_handle(lm.db, "tok")
+    assert mod.__dict__["tok"] == mint_predicate_handle(lm.db, "tok")
     x = Var()
     assert [deref(x) for _ in call("phrase", ("tok", x), ["q"], module=lm)] == ["q"]
     x, r = Var(), Var()

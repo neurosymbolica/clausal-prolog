@@ -27,10 +27,14 @@ change.  Each was found by the flip dry run
 Arm I (``_refuse_untablable_target``) landed with R6 and is pinned in
 ``test_class_only_state_moved_both_eras.py``.
 
-The handle era is emulated the way the other both-eras tests do it: ruling D1
-(an import binds the OWNER's handle, ``mint_predicate_handle(owner_db,
-name)``), either on one binding after load or on every binding during the
-load (``flipped_loads``, applied where the dry run applied the flip).
+Handle era (W4b-2d flip): the LOAD binds every handle now (ruling D1 for an
+import), so the class arms and the stand-in ``flipped_loads`` /
+``era_loads`` / ``_flip_all_bindings`` load-time flip are gone -- after the
+flip they found no class and flipped nothing.  Tests assert the handle
+binding they depend on.  The one stand-in kept is
+``_flip_bindings_before_step_4``: the real flip runs AFTER step 4a, so a
+local handle reaching step 4a still needs it, and it now asserts that it
+flipped the binding under test.
 """
 
 from __future__ import annotations
@@ -46,54 +50,16 @@ import clausal.import_hook  # noqa: F401 -- installs the meta-path finder
 from clausal.import_hook import _load_module
 from clausal.logic.atoms import mangle
 from clausal.logic.exceptions import LogicException
-from clausal.logic.predicate import PredicateMeta, mint_predicate_handle
+from clausal.logic.predicate import mint_predicate_handle
 from clausal.logic.solve import call
 from clausal.terms import Call as TermCall, LoadName
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
-ERAS = ["class", "handle"]
 _OWNER = "tests.fixtures.gate_dyn_owner"
 
 
 def _lm(mod):
     return mod.__dict__["$module"]
-
-
-def _flip_all_bindings(module_dict, db):
-    """The dry run's ``_flip_bindings`` in miniature (same as
-    ``test_class_only_state_moved_both_eras._flip_all_bindings``)."""
-    for key, value in list(module_dict.items()):
-        if not isinstance(value, PredicateMeta) or key.startswith("$"):
-            continue
-        row = value.__dict__.get("_row")
-        if row is not None and not row.detached:
-            owner, functor = row.db, row.key[0]
-        else:
-            owner, functor = db, value.__name__
-        module_dict[key] = mint_predicate_handle(owner, functor)
-
-
-@pytest.fixture
-def flipped_loads(monkeypatch):
-    """Flip every binding after step 4a, before step 4b and step 5 -- where
-    the dry run flipped.  An IMPORTER compiled under this sees the owner's
-    handle from its import onwards, step 4a included."""
-    import clausal.logic.compiler_v2 as cv2
-    real = cv2._validate_directive_targets
-
-    def _flip_then_validate(module_items, db, module_dict):
-        _flip_all_bindings(module_dict, db)
-        return real(module_items, db, module_dict)
-
-    monkeypatch.setattr(cv2, "_validate_directive_targets", _flip_then_validate)
-
-
-@pytest.fixture
-def era_loads(request):
-    def use(era):
-        if era == "handle":
-            request.getfixturevalue("flipped_loads")
-    return use
 
 
 # ── G + A2: an imported -dynamic, asserted through the importer ─────────────
@@ -116,18 +82,14 @@ def gate_dyn():
             sys.modules[n] = saved[n]
 
 
-@pytest.mark.parametrize("era", ERAS)
-def test_an_imported_dynamic_loads_and_asserts_onto_the_owner(gate_dyn, era_loads, era):
+def test_an_imported_dynamic_loads_and_asserts_onto_the_owner(gate_dyn):
     """G: the importer LOADS (no redefinition refusal) and A2: its
     ``assertz(gd_p(X))`` builds the plain ``gd_p`` cell, so the clause lands
     on the OWNER's row and the importer's twin stays empty."""
-    era_loads(era)
     owner, user = gate_dyn()
     binding = user.__dict__["gd_p"]
-    if era == "handle":
-        assert type(binding) is str, "the flip did not happen"
-    else:
-        assert isinstance(binding, PredicateMeta)
+    assert binding == mint_predicate_handle(_lm(owner).db, "gd_p"), (
+        "the load did not bind the owner's handle")
     lm = _lm(user)
     assert list(call("gd_add", 42, module=lm)) != []
     owner_row = _lm(owner).db.row("gd_p", 1)
@@ -138,8 +100,7 @@ def test_an_imported_dynamic_loads_and_asserts_onto_the_owner(gate_dyn, era_load
     assert twin is None or twin.clauses == []
 
 
-@pytest.mark.parametrize("era", ERAS)
-def test_step_4a_leaves_an_imported_dynamic_to_its_owner(gate_dyn, era_loads, era):
+def test_step_4a_leaves_an_imported_dynamic_to_its_owner(gate_dyn):
     """G in isolation: step 4a must not seed the importer's pending entry for
     an imported ``-dynamic``.  The buggy path compiled the importer's OWN
     (empty) dispatch at step 5, which the gate refused as a redefinition; so
@@ -148,7 +109,6 @@ def test_step_4a_leaves_an_imported_dynamic_to_its_owner(gate_dyn, era_loads, er
     dispatch, and (3) a query through the importer answers the OWNER's
     clause, which an empty local dispatch would answer as ``[]``."""
     from clausal.logic.variables import Var, deref
-    era_loads(era)
     owner, user = gate_dyn()
     lm = _lm(user)
     twin = lm.db.row("gd_p", 1, create=False)
@@ -170,19 +130,13 @@ def _lowered_value(module_dict, term):
                         "<t>", "eval"), dict(module_dict))
 
 
-@pytest.mark.parametrize("era", ERAS)
-def test_a_cell_built_from_a_predicate_binding_carries_the_plain_functor(gate_dyn, era):
+def test_a_cell_built_from_a_predicate_binding_carries_the_plain_functor(gate_dyn):
     owner, user = gate_dyn()
     md = user.__dict__
-    cls = md["gd_p"]
-    assert isinstance(cls, PredicateMeta), "fixture no longer binds a class"
-    try:
-        if era == "handle":
-            md["gd_p"] = mint_predicate_handle(_lm(owner).db, "gd_p")
-        term = TermCall(func=LoadName(name="gd_p"), args=[7], kwargs=[])
-        assert _lowered_value(md, term) == ("gd_p", 7)
-    finally:
-        md["gd_p"] = cls
+    assert md["gd_p"] == mint_predicate_handle(_lm(owner).db, "gd_p"), (
+        "the load did not bind the owner's handle")
+    term = TermCall(func=LoadName(name="gd_p"), args=[7], kwargs=[])
+    assert _lowered_value(md, term) == ("gd_p", 7)
 
 
 def test_a_hide_data_atom_keeps_its_mangled_functor_spelling():
@@ -248,31 +202,27 @@ def _listed(goal, args, lm, capsys):
     return capsys.readouterr().out
 
 
-@pytest.mark.parametrize("era", ERAS)
 def test_source_listing_of_a_bare_name_is_a_predicate_indicator_type_error(
-        lister, era_loads, era):
+        lister):
     """SOURCE ``listing(fib)``: ruling S lowers the bare name to its plain
     atom in both eras, so it is Scryer's ``type_error(predicate_indicator,
     fib)``, never naming ``'m\\x1ffib'``."""
-    era_loads(era)
     mod = lister("sa_e_fib", _FIB.format(name="sa_e_fib"))
-    assert (type(mod.__dict__["fib"]) is str) == (era == "handle")
+    assert type(mod.__dict__["fib"]) is str
     assert _predicate_indicator_culprit("show", (), _lm(mod)) == "fib"
 
 
-@pytest.mark.parametrize("era", ERAS)
 def test_the_python_api_lists_the_binding_it_is_handed(
-        lister, era_loads, era, capsys):
-    """Operator ruling 2026-09-25: ``listing(mod.fib)`` from PYTHON lists in
-    both eras -- the class its one arity, the handle its predicate.
+        lister, capsys):
+    """Operator ruling 2026-09-25: ``listing(mod.fib)`` from PYTHON lists
+    the handle's predicate.
 
     FLIPPED 2026-09-25: the handle arm used to raise
     ``type_error(predicate_indicator, fib)`` (the class arm listed), which
     roborev flagged as the two eras disagreeing on one call."""
-    era_loads(era)
     mod = lister("sa_e_api", _FIB.format(name="sa_e_api"))
     binding = mod.__dict__["fib"]
-    assert (type(binding) is str) == (era == "handle"), "the flip did not happen"
+    assert type(binding) is str, "the flip did not happen"
     out = _listed("listing", (binding,), _lm(mod), capsys)
     assert out.startswith("% fib/2 — 2 clause(s)\n"), out
     assert out.count("fib(") == 2
@@ -280,25 +230,20 @@ def test_the_python_api_lists_the_binding_it_is_handed(
 
 def test_the_python_api_lists_every_arity_of_a_handle(lister, capsys):
     """A handle names no arity: a name that is a predicate at SEVERAL lists
-    each, in arity order.  (A class is bound at one arity and lists that
-    one; ``_multi_arity`` binds ``p``'s class at p/1.)"""
+    each, in arity order.  (The class era's one-arity listing of a class is
+    gone with the class; the module attribute IS the handle now.)"""
     mod = _multi_arity(lister, "sa_e_multi")
     lm = _lm(mod)
     handle = mint_predicate_handle(lm.db, "p")
+    assert mod.__dict__["p"] == handle
     out = _listed("listing", (handle,), lm, capsys)
     assert [ln for ln in out.splitlines() if ln.startswith("%")] == [
         "% p/1 — 1 clause(s)", "% p/2 — 1 clause(s)"]
-    cls = mod.__dict__["p"]
-    assert isinstance(cls, PredicateMeta)
-    cls_out = _listed("listing", (cls,), lm, capsys)
-    assert [ln for ln in cls_out.splitlines() if ln.startswith("%")] == [
-        "% p/1 — 1 clause(s)"]
 
 
-@pytest.mark.parametrize("era", ERAS)
 @pytest.mark.parametrize("popped", [False, True])
 def test_the_python_api_lists_an_imported_binding_from_the_owner(
-        lister, era, popped, capsys):
+        lister, popped, capsys):
     """FLIPPED 2026-09-25 (was ``..._names_the_plain_name``, a type_error):
     an ``-import_from``'d binding handed to listing/1 from Python lists the
     OWNER's clauses, with the owner loaded or popped from ``sys.modules``."""
@@ -312,9 +257,8 @@ def test_the_python_api_lists_an_imported_binding_from_the_owner(
         -import_from(sa_e_own, [colour])
     """)
     md = user.__dict__
-    assert isinstance(md["colour"], PredicateMeta)
-    if era == "handle":
-        md["colour"] = mint_predicate_handle(_lm(owner).db, "colour")
+    assert md["colour"] == mint_predicate_handle(_lm(owner).db, "colour"), (
+        "the load did not bind the owner's handle")
     if popped:
         sys.modules.pop("sa_e_own", None)
     out = _listed("listing", (md["colour"],), _lm(user), capsys)
@@ -401,38 +345,34 @@ def _existence_culprit(goal, arg, lm):
 
 
 @pytest.fixture
-def clib_pair(lister, era_loads):
-    def load(era):
-        era_loads(era)
+def clib_pair(lister):
+    def load():
         lib = lister("sa_clib", _CLIB)
         host = lister("sa_chost", _CHOST)
-        assert (type(lib.__dict__["dfact"]) is str) == (era == "handle")
+        assert type(lib.__dict__["dfact"]) is str
         return lib, host
     return load
 
 
-@pytest.mark.parametrize("era", ERAS)
-def test_a_cell_built_from_any_handle_is_plain(clib_pair, era):
-    _lib, host = clib_pair(era)
+def test_a_cell_built_from_any_handle_is_plain(clib_pair):
+    _lib, host = clib_pair()
     lm = _lm(host)
     assert _one("cell_h", lm) == ("dfact", 1)      # a Python-held handle
     assert _one("cell_d", lm) == ("dfact", 1)      # dotted, term position
 
 
-@pytest.mark.parametrize("era", ERAS)
-def test_an_owner_built_term_unifies_with_the_dotted_spelling(clib_pair, era):
+def test_an_owner_built_term_unifies_with_the_dotted_spelling(clib_pair):
     """roborev's interop case: ``lib.make(T), T = lib.hf(X)`` -- one logical
     term, one spelling -- which failed in the handle era under (c)."""
-    _lib, host = clib_pair(era)
+    _lib, host = clib_pair()
     assert _all("made", _lm(host)) == [7]
 
 
-@pytest.mark.parametrize("era", ERAS)
-def test_a_plain_cell_writes_only_through_the_caller_s_namespace(clib_pair, era):
+def test_a_plain_cell_writes_only_through_the_caller_s_namespace(clib_pair):
     """The host does not bind ``dfact``, so neither spelling may write the
     owner's -dynamic: ISO routes a write by the caller's namespace (or an
     explicit ``M:G``), never by a qualified functor."""
-    lib, host = clib_pair(era)
+    lib, host = clib_pair()
     lm, owner_row = _lm(host), _lm(lib).db.row("dfact", 1)
     before = list(owner_row.clauses)
     for goal in ("add_h", "add_d"):
@@ -442,11 +382,10 @@ def test_a_plain_cell_writes_only_through_the_caller_s_namespace(clib_pair, era)
     assert lm.db.row("dfact", 1, create=False) is None, "written locally"
 
 
-@pytest.mark.parametrize("era", ERAS)
-def test_a_plain_cell_runs_in_the_owner_only_when_qualified(clib_pair, lister, era):
+def test_a_plain_cell_runs_in_the_owner_only_when_qualified(clib_pair, lister):
     from clausal.logic.solve import solve
     from clausal.logic.variables import deref
-    lib, host = clib_pair(era)
+    lib, host = clib_pair()
     lm = _lm(host)
     from clausal.logic.variables import Var
     # A plain cell VALUE, called, runs in the CALLER.  A caller that knows
@@ -474,15 +413,13 @@ def test_a_plain_cell_runs_in_the_owner_only_when_qualified(clib_pair, lister, e
     assert _all("goal_d", lm) == [0]
 
 
-@pytest.mark.parametrize("era", ERAS)
 @pytest.mark.parametrize("atom_pool_seeded", [False, True])
-def test_the_seam_builds_the_plain_cell(lister, era_loads, era, atom_pool_seeded):
+def test_the_seam_builds_the_plain_cell(lister, atom_pool_seeded):
     """The ``--`` seam, the same rule: an imported name, a Python-held handle
     to an imported predicate, and one to a predicate the host does NOT
     import all build the PLAIN cell.  ``atom_pool_seeded`` keeps the
     full-suite pollution (an earlier module exporting the global atom
     ``sa_s_other``, pre-seeded into every module dict) in-file."""
-    era_loads(era)
     if atom_pool_seeded:
         lister("sa_spool", """
             -module(sa_spool, [sa_s_other])
@@ -510,7 +447,7 @@ def test_the_seam_builds_the_plain_cell(lister, era_loads, era, atom_pool_seeded
         def build_held_wide():
             return --held(X, Y)
     """)
-    assert (type(host.__dict__["spred"]) is str) == (era == "handle")
+    assert type(host.__dict__["spred"]) is str
     assert host.build_import()[0] == "spred"
     assert host.build_alias()[0] == "spred"
     assert host.build_held()[0] == "spred"
@@ -544,16 +481,15 @@ def _pattern_key(p):
             len(p.recursive_clause.body or []))
 
 
-@pytest.mark.parametrize("era", ERAS)
-def test_analyze_mi_accepts_the_module_attribute(era):
+def test_analyze_mi_accepts_the_module_attribute():
     import clausal.examples.metainterpreters as mi
     from clausal.logic.specialization import analyze_mi
-    cls = mi.solve
-    assert isinstance(cls, PredicateMeta), "fixture no longer binds a class"
-    expected = _pattern_key(analyze_mi(cls))
-    binding = cls if era == "class" else mint_predicate_handle(_lm(mi).db, "solve")
+    binding = mi.solve
+    assert binding == mint_predicate_handle(_lm(mi).db, "solve"), (
+        "the load did not bind the handle")
+    # What analyze_mi answered for the CLASS (CLAUSAL_NO_FLIP=1, 9e6c2633).
+    expected = ("solve", 2, ("GOALS", "PROGRAM"), 1, 0, (), 1, 3)
     assert _pattern_key(analyze_mi(binding)) == expected
-    assert expected[:2] == ("solve", 2)
 
 
 def test_analyze_mi_refuses_a_string_that_is_not_a_predicate_handle():
@@ -629,9 +565,7 @@ def vocab_rival():
             sys.modules[n] = saved[n]
 
 
-@pytest.mark.parametrize("era", ERAS)
-def test_a_clobbering_import_head_is_refused_by_the_gate(vocab_rival, era_loads, era):
-    era_loads(era)
+def test_a_clobbering_import_head_is_refused_by_the_gate(vocab_rival):
     vocab = _load_module(vocab_rival[0], os.path.join(FIXTURES, "gate_vocab.clausal"))
     with pytest.raises(SyntaxError) as exc:
         _load_module(vocab_rival[1], os.path.join(FIXTURES, "gate_rival.clausal"))
@@ -639,11 +573,9 @@ def test_a_clobbering_import_head_is_refused_by_the_gate(vocab_rival, era_loads,
     assert len(_lm(vocab).db.row("gv_owned", 1).clauses) == 1
 
 
-@pytest.mark.parametrize("era", ERAS)
 def test_a_variable_head_for_an_import_is_refused_by_the_gate(
-        vocab_rival, era_loads, era, tmp_path):
+        vocab_rival, tmp_path):
     """The derived name is a VARIABLE's (``colour``), not a placeholder."""
-    era_loads(era)
     _load_module(vocab_rival[0], os.path.join(FIXTURES, "gate_vocab.clausal"))
     src = tmp_path / "sa_hv.clausal"
     src.write_text("-module(sa_hv, [])\n"
@@ -669,14 +601,12 @@ def test_the_owner_s_own_head_keeps_its_construction_error(vocab_rival):
     assert "<unknown>" not in str(exc.value)
 
 
-@pytest.mark.parametrize("era", ERAS)
 @pytest.mark.parametrize("by_name", [False, True])
 def test_a_host_head_pattern_matches_an_owner_built_term(
-        lister, era_loads, era, by_name):
+        lister, by_name):
     """roborev's interop case, head side: ``patq(sa_hlib.hf(X), X)`` in the
     HOST matches the ``hf`` term the OWNER builds (``sa_hlib.make``), with or
     without an import by name, in both eras -- and never a mangled one."""
-    era_loads(era)
     lister("sa_hlib", """
         -module(sa_hlib, [hf(A), make(T)])
         hf(1),
@@ -701,39 +631,54 @@ def test_a_host_head_pattern_matches_an_owner_built_term(
 # ── review Lows on 176584ec ──────────────────────────────────────────────────
 
 
-def _flip_bindings_before_step_4(monkeypatch):
+def _flip_bindings_before_step_4(monkeypatch, must_flip):
     """Flip every binding at step 3d, BEFORE steps 4 and 4a, so step 4a
-    meets this module's OWN ``-dynamic`` as a handle.  ``flipped_loads``
-    flips at step 4b, where the dry run put it; step 4a then still sees the
-    module's own class, and only an IMPORTED binding (flipped in its owner)
-    reaches 4a as a handle."""
+    meets this module's OWN ``-dynamic`` as a handle.  The real flip
+    (``compiler_v2._flip_bindings``) runs after step 4a, so a real load
+    never shows 4a a LOCAL handle; this stand-in still does real work and
+    returns the keys it flipped.  It ASSERTS it flipped *must_flip*: a
+    stand-in that silently flips nothing would leave the test checking the
+    class path under the handle test's name."""
     import clausal.logic.compiler_v2 as cv2
+    from clausal.logic.predicate import PredicateMeta
     real = cv2._refuse_foreign_writes
+    flipped = []
 
     def _flip_then_gate(db, predicate_nodes, module_dict, *rest):
-        _flip_all_bindings(module_dict, db)
+        for key, value in list(module_dict.items()):
+            if not isinstance(value, PredicateMeta) or key.startswith("$"):
+                continue
+            row = value.__dict__.get("_row")
+            if row is not None and not row.detached:
+                owner, functor = row.db, row.key[0]
+            else:
+                owner, functor = db, value.__name__
+            module_dict[key] = mint_predicate_handle(owner, functor)
+            flipped.append(key)
+        assert must_flip in flipped, (
+            f"the step-3d stand-in flip did not flip {must_flip!r}: {flipped}")
         return real(db, predicate_nodes, module_dict, *rest)
 
     monkeypatch.setattr(cv2, "_refuse_foreign_writes", _flip_then_gate)
+    return flipped
 
 
-@pytest.mark.parametrize("era", ERAS)
 def test_step_4a_a_local_dynamic_handle_is_compiled_from_its_own_row(
-        lister, monkeypatch, era):
+        lister, monkeypatch):
     """compiler_v2 step 4a, a LOCAL clause-less ``-dynamic`` whose binding
     is a handle: explicitly ``pending[key] = None`` (no class to bind; its
     row is this db's), the entry a clause-less class gets -- not the class
     test answering None for a str by accident."""
     from clausal.logic.variables import Var, deref
-    if era == "handle":
-        _flip_bindings_before_step_4(monkeypatch)
+    flipped = _flip_bindings_before_step_4(monkeypatch, "sa_ld_p")
     mod = lister("sa_ld", """
         -module(sa_ld, [sa_ld_p/1, add(X)])
         -dynamic(sa_ld_p/1)
         add(X) <- assertz(sa_ld_p(X))
     """)
     binding = mod.__dict__["sa_ld_p"]
-    assert (type(binding) is str) == (era == "handle"), "the flip did not happen"
+    assert "sa_ld_p" in flipped, "the stand-in never ran"
+    assert type(binding) is str, "the flip did not happen"
     lm = _lm(mod)
     row = lm.db.row("sa_ld_p", 1, create=False)
     assert row is not None and row.db is lm.db and row.dynamic

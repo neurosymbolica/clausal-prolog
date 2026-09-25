@@ -17,9 +17,13 @@ which failed SILENTLY once the binding was a handle:
 * ``_registered_at`` -- the arity-mismatch "defined at" line.  The site is on
   the row (``PredRow.declared_at``) now, for the handle arms.
 
-Each test flips the binding the way the flip will (ruling D1: an imported
-name binds the OWNER's handle, ``mint_predicate_handle(owner_db, name)``)
-and runs in both eras.
+Handle era (W4b-2d flip): the LOAD binds the OWNER's handle now (ruling
+D1, ``mint_predicate_handle(owner_db, name)``), so the class arm, the
+stand-in ``_flip`` and the stand-in ``_flip_all_bindings`` /
+``flipped_loads`` load-time flip are gone -- after the flip each found no
+class and flipped nothing.  Every test asserts the handle binding it
+depends on instead.  Reads of class-only state (``_registered_at``, the
+``_tabled_home_db`` stamp) became reads of where that state lives now.
 """
 
 from __future__ import annotations
@@ -31,27 +35,25 @@ import pytest
 
 import clausal.import_hook  # noqa: F401 -- installs the meta-path finder
 from clausal.import_hook import _load_module
-from clausal.logic.predicate import PredicateMeta, mint_predicate_handle
+from clausal.logic.predicate import mint_predicate_handle
 from clausal.logic.solve import query_wfs
 from clausal.logic.variables import Trail, Var, unify
 from clausal.terms import Call as TermCall, LoadName, Undefined
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
-ERAS = ["class", "handle"]
 
 
 def _lm(mod):
     return mod.__dict__["$module"]
 
 
-def _flip(user_mod, name, owner_mod, era):
-    """Bind *name* in *user_mod* to the owner's handle (``era == "handle"``),
-    after checking the fixture really bound the class."""
+def _assert_owner_handle(user_mod, name, owner_mod):
+    """The LOAD bound *name* in *user_mod* to the owner's handle (ruling
+    D1).  Asserted, never set."""
     md = user_mod.__dict__
-    assert isinstance(md[name], PredicateMeta), "fixture no longer binds a class"
-    if era == "handle":
-        md[name] = mint_predicate_handle(_lm(owner_mod).db, name)
-        assert type(md[name]) is str
+    assert md[name] == mint_predicate_handle(_lm(owner_mod).db, name), (
+        f"the load did not bind {name} to the owner's handle")
+    assert type(md[name]) is str
 
 
 def _goal(name, *args):
@@ -119,103 +121,59 @@ def xm_pair(tmp_path):
         sys.modules.pop(name, None)
 
 
-@pytest.mark.parametrize("era", ERAS)
-def test_compile_half_finds_the_home_through_either_binding(xm_pair, era):
+def test_compile_half_finds_the_home_through_either_binding(xm_pair):
     from clausal.logic.compiler.tabled_naf import _is_tabled_naf, _resolve_tabled_call
     lib, use = xm_pair(_SYM_LIB)
-    _flip(use, "win", lib, era)
+    _assert_owner_handle(use, "win", lib)
     udb, ldb = _lm(use).db, _lm(lib).db
     assert _resolve_tabled_call("win", 1, udb) == (ldb, "win")
     assert _is_tabled_naf(_goal("win", Var()), udb) is True
 
 
-@pytest.mark.parametrize("era", ERAS)
-def test_runtime_half_keeps_the_cross_module_answer_undefined(xm_pair, era):
+def test_runtime_half_keeps_the_cross_module_answer_undefined(xm_pair):
     """THE silent failure: ``[]`` with neither half moved, ``[True]`` with
     only the compile-time half moved.  WFS says Undefined."""
     lib, use = xm_pair(_SYM_LIB)
-    _flip(use, "win", lib, era)
+    _assert_owner_handle(use, "win", lib)
     assert _truths(_lm(use), "res", 1) == [Undefined]
 
 
-def _flip_all_bindings(module_dict, db):
-    """The dry run's ``_flip_bindings`` (spike ``bab8aa69``), in miniature:
-    every ``PredicateMeta`` binding becomes the handle of the database that
-    OWNS it -- the class's row's db (an import's row is the exporter's:
-    ruling D1), else the compiling db."""
-    for key, value in list(module_dict.items()):
-        if not isinstance(value, PredicateMeta) or key.startswith("$"):
-            continue
-        row = value.__dict__.get("_row")
-        if row is not None and not row.detached:
-            owner, functor = row.db, row.key[0]
-        else:
-            owner, functor = db, value.__name__
-        module_dict[key] = mint_predicate_handle(owner, functor)
-
-
-@pytest.fixture
-def flipped_loads(monkeypatch):
-    """Load modules with the flip applied where the dry run applied it:
-    after step 4a, before step 4b (directive validation) and step 5
-    (compilation) -- so the importer's NAF lowering (compile time) and its
-    compiled seam (run time) both see handles, in the owner as well."""
-    import clausal.logic.compiler_v2 as cv2
-    real = cv2._validate_directive_targets
-
-    def _flip_then_validate(module_items, db, module_dict):
-        _flip_all_bindings(module_dict, db)
-        return real(module_items, db, module_dict)
-
-    monkeypatch.setattr(cv2, "_validate_directive_targets", _flip_then_validate)
-
-
-@pytest.mark.parametrize("era", ERAS)
-def test_cross_module_answer_is_undefined_end_to_end(xm_pair, era, request):
+def test_cross_module_answer_is_undefined_end_to_end(xm_pair):
     """The dry run's repro, end to end, with BOTH modules loaded under the
     flip: ``[]`` with neither read moved and ``[True]`` with only the
     compile-time read moved.  WFS says Undefined."""
-    if era == "handle":
-        request.getfixturevalue("flipped_loads")
     lib, use = xm_pair(_SYM_LIB)
-    if era == "handle":
-        assert type(use.__dict__["win"]) is str, "the flip did not happen"
-        assert type(use.__dict__["res"]) is str
+    _assert_owner_handle(use, "win", lib)
+    assert type(use.__dict__["res"]) is str, "the flip did not happen"
     assert _truths(_lm(use), "res", 1) == [Undefined]
     assert _truths(_lm(use), "res", 2) == [Undefined]
 
 
-@pytest.mark.parametrize("era", ERAS)
 def test_cross_module_definite_answers_stay_definite_end_to_end(
-        xm_pair, era, request):
-    if era == "handle":
-        request.getfixturevalue("flipped_loads")
+        xm_pair):
     lib, use = xm_pair(_ASYM_LIB)
-    if era == "handle":
-        assert type(use.__dict__["win"]) is str, "the flip did not happen"
+    _assert_owner_handle(use, "win", lib)
     assert _truths(_lm(use), "res", 2) == []
     assert _truths(_lm(use), "res", 1) == [True]
     assert _truths(_lm(use), "res", 3) == [True]
 
 
-@pytest.mark.parametrize("era", ERAS)
-def test_runtime_half_keeps_definite_answers_definite(xm_pair, era):
+def test_runtime_half_keeps_definite_answers_definite(xm_pair):
     lib, use = xm_pair(_ASYM_LIB)
-    _flip(use, "win", lib, era)
+    _assert_owner_handle(use, "win", lib)
     assert _truths(_lm(use), "res", 2) == []
     assert _truths(_lm(use), "res", 1) == [True]
     assert _truths(_lm(use), "res", 3) == [True]
 
 
-@pytest.mark.parametrize("era", ERAS)
-def test_runtime_half_directly_redirects_to_the_home_store(xm_pair, era):
+def test_runtime_half_directly_redirects_to_the_home_store(xm_pair):
     """``_naf_tabled`` itself, with the CALLER's store and db: an imported
     tabled callee is evaluated in its home db, so the negation of an
     Undefined answer delays (``True`` + a delay) instead of reading an empty
     caller-side table."""
     from clausal.logic.tabling import _naf_tabled
     lib, use = xm_pair(_SYM_LIB)
-    _flip(use, "win", lib, era)
+    _assert_owner_handle(use, "win", lib)
     udb, ldb = _lm(use).db, _lm(lib).db
     t = Trail()
     assert _naf_tabled("win", 1, (1,), t, udb.table_store, db=udb) is True
@@ -223,8 +181,7 @@ def test_runtime_half_directly_redirects_to_the_home_store(xm_pair, era):
     assert not any(k[0] == "win" for k in udb.table_store), "leaked into the caller"
 
 
-@pytest.mark.parametrize("era", ERAS)
-def test_query_wfs_annotates_an_imported_tabled_goal(tmp_path, era):
+def test_query_wfs_annotates_an_imported_tabled_goal(tmp_path):
     """``solve._tabled_call_site`` follows the binding to its owner module
     (it read ``__module__`` -- ``'builtins'`` on a handle)."""
     sys.path.insert(0, FIXTURES)
@@ -233,7 +190,7 @@ def test_query_wfs_annotates_an_imported_tabled_goal(tmp_path, era):
         p = tmp_path / "r6_wfs_impfrom.clausal"
         p.write_text("-import_from(wfs_win, [win])\n\nuses_f(X) <- win(X)\n")
         use = _load_module("r6_wfs_impfrom", str(p))
-        _flip(use, "win", owner, era)
+        _assert_owner_handle(use, "win", owner)
         from clausal.logic.solve import _tabled_call_site
         site = _tabled_call_site(_goal("win", 1), _lm(use), Trail())
         assert site is not None and site[0].db is _lm(owner).db
@@ -246,9 +203,15 @@ def test_query_wfs_annotates_an_imported_tabled_goal(tmp_path, era):
         sys.modules.pop("r6_wfs_impfrom", None)
 
 
-def test_the_class_carries_no_tabled_home_stamp(xm_pair):
-    lib, _use = xm_pair(_SYM_LIB)
-    assert "_tabled_home_db" not in vars(lib.__dict__["win"])
+def test_the_tabled_home_is_the_owner_row_not_a_stamp(xm_pair):
+    """The class-era form checked that no ``_tabled_home_db`` stamp sat on
+    the class.  There is no class to stamp now; the home is answered from
+    the binding's ROW (``tabled_home_of``), which this checks directly."""
+    from clausal.logic.predicate import tabled_home_of
+    lib, use = xm_pair(_SYM_LIB)
+    assert type(lib.__dict__["win"]) is str      # nothing to carry a stamp
+    udb, ldb = _lm(use).db, _lm(lib).db
+    assert tabled_home_of(use.__dict__["win"], arity=1, db=udb) == (ldb, "win")
 
 
 # ── _te_predicate_nodes: imported term_expansion rules ───────────────────────
@@ -265,25 +228,22 @@ def te_provider():
         sys.modules["expansion_provider"] = saved
 
 
-def _te_binding(prov, era):
+def _te_binding(prov):
     te = prov.__dict__["term_expansion"]
-    assert isinstance(te, PredicateMeta), "fixture no longer binds a class"
-    if era == "handle":
-        return mint_predicate_handle(_lm(prov).db, "term_expansion")
+    assert te == mint_predicate_handle(_lm(prov).db, "term_expansion"), (
+        "the load did not bind the handle")
     return te
 
 
-@pytest.mark.parametrize("era", ERAS)
-def test_imported_te_rules_are_collected_through_either_binding(te_provider, era):
+def test_imported_te_rules_are_collected_through_either_binding(te_provider):
     from clausal.logic.term_expansion import _collect_imported_te_clauses
     nodes = _collect_imported_te_clauses(
-        {"term_expansion": _te_binding(te_provider, era)})
+        {"term_expansion": _te_binding(te_provider)})
     assert nodes == _lm(te_provider).db.te_predicate_nodes
     assert len(nodes) == 1
 
 
-@pytest.mark.parametrize("era", ERAS)
-def test_imported_te_rules_expand_through_either_binding(te_provider, era):
+def test_imported_te_rules_expand_through_either_binding(te_provider):
     """End to end through ``compile_module``: an importer whose
     ``term_expansion`` binding is the provider's class or handle gets the
     provider's one-to-many rule (each item duplicated).  Post-flip it
@@ -294,15 +254,14 @@ def test_imported_te_rules_expand_through_either_binding(te_provider, era):
     from clausal.logic.variables import deref
     from tests.test_term_expansion import _parse_and_collect
     preds, items, md = _parse_and_collect('color("red"),\ncolor("green"),\n')
-    md["term_expansion"] = _te_binding(te_provider, era)
+    md["term_expansion"] = _te_binding(te_provider)
     lm = compile_module(preds, items, md, "_r6_te_importer")
     x = Var()
     got = sorted(deref(x) for _ in call("color", x, module=lm))
     assert got == sorted([mint("green"), mint("green"), mint("red"), mint("red")])
 
 
-@pytest.mark.parametrize("era", ERAS)
-def test_imported_te_fixture_end_to_end(era, request):
+def test_imported_te_fixture_end_to_end():
     """``expansion_importer`` loaded after ``expansion_provider``, both under
     the flip: the importer's ``-import_from`` binds the provider's HANDLE.
     The dry run measured ``['green', 'red']`` here -- the imported rule
@@ -310,8 +269,6 @@ def test_imported_te_fixture_end_to_end(era, request):
     from clausal.logic.atoms import mint
     from clausal.logic.solve import call
     from clausal.logic.variables import deref
-    if era == "handle":
-        request.getfixturevalue("flipped_loads")
     saved = {n: sys.modules.pop(n, None)
              for n in ("expansion_provider", "_r6_exp_imp")}
     sys.path.insert(0, FIXTURES)
@@ -320,8 +277,8 @@ def test_imported_te_fixture_end_to_end(era, request):
                             os.path.join(FIXTURES, "expansion_provider.clausal"))
         mod = _load_module("_r6_exp_imp",
                            os.path.join(FIXTURES, "expansion_importer.clausal"))
-        if era == "handle":
-            assert type(prov.__dict__["term_expansion"]) is str
+        assert type(prov.__dict__["term_expansion"]) is str
+        assert mod.__dict__["term_expansion"] == prov.__dict__["term_expansion"]
         x = Var()
         got = sorted(deref(x) for _ in call("color", x, module=_lm(mod)))
         assert got == sorted([mint("green"), mint("green"),
@@ -343,16 +300,13 @@ def test_a_handle_to_another_predicate_contributes_nothing(te_provider):
 # ── _refuse_untablable_target: -table naming an imported predicate ──────────
 
 
-@pytest.mark.parametrize("era", ERAS)
-def test_table_on_an_imported_target_names_the_owner(era):
+def test_table_on_an_imported_target_names_the_owner():
     from clausal.logic.compiler_v2 import _refuse_untablable_target
     from clausal.logic.database import Database
     owner = _load_module("tests.fixtures.importable_utils",
                          os.path.join(FIXTURES, "importable_utils.clausal"))
     binding = owner.__dict__["double"]
-    assert isinstance(binding, PredicateMeta)
-    if era == "handle":
-        binding = mint_predicate_handle(_lm(owner).db, "double")
+    assert binding == mint_predicate_handle(_lm(owner).db, "double")
     with pytest.raises(SyntaxError) as exc:
         _refuse_untablable_target("double", 2, Database("r6_importer"),
                                   {"double": binding}, set())
@@ -361,12 +315,9 @@ def test_table_on_an_imported_target_names_the_owner(era):
     assert "(defined in tests.fixtures.importable_utils)" in msg
 
 
-@pytest.mark.parametrize("era", ERAS)
-def test_table_on_an_imported_target_end_to_end(era, request):
+def test_table_on_an_imported_target_end_to_end():
     """``test_tabling_lifecycle::test_imported_target_refused_naming_the_
     other_module`` under the flip."""
-    if era == "handle":
-        request.getfixturevalue("flipped_loads")
     with pytest.raises(SyntaxError) as exc:
         _load_module("r6_tbl_imported_target",
                      os.path.join(FIXTURES, "table_imported_target.clausal"))
@@ -391,18 +342,19 @@ def arimp():
 
 def test_the_declaration_site_is_on_the_row(arimp):
     lib, _use = arimp
-    cls = lib.__dict__["arimp_pair"]
+    assert type(lib.__dict__["arimp_pair"]) is str   # no class to ask
     row = _lm(lib).db.row("arimp_pair", 2)
-    assert row.declared_at == cls._registered_at
+    # the class era's ``_registered_at`` for this fixture (CLAUSAL_NO_FLIP=1,
+    # 9e6c2633): the -module line, line 3
     assert row.declared_at[0].endswith("arimp_lib.clausal")
+    assert row.declared_at[1] == 3
 
 
-@pytest.mark.parametrize("era", ERAS)
-def test_unqualified_wrong_arity_points_at_the_definition(arimp, era):
+def test_unqualified_wrong_arity_points_at_the_definition(arimp):
     from clausal.logic.predicate import _refuse_unqualified_other_arity
     from clausal.predicate_diagnostics import PredicateArityMismatchError
     lib, use = arimp
-    _flip(use, "arimp_pair", lib, era)
+    _assert_owner_handle(use, "arimp_pair", lib)
     binding = use.__dict__["arimp_pair"]
     with pytest.raises(PredicateArityMismatchError) as exc:
         _refuse_unqualified_other_arity(binding, "arimp_pair", 1, _lm(use).db)
@@ -411,14 +363,13 @@ def test_unqualified_wrong_arity_points_at_the_definition(arimp, era):
     assert "arimp_lib.clausal:" in msg
 
 
-@pytest.mark.parametrize("era", ERAS)
-def test_direct_wrong_arity_points_at_the_definition(arimp, era):
+def test_direct_wrong_arity_points_at_the_definition(arimp):
     """``_dispatch_at`` -- the class arm's ``_refuse_call_at`` and the handle
     arm's ``_refuse_if_known_at_another_arity`` -- both say where."""
     from clausal.logic.predicate import _dispatch_at
     from clausal.predicate_diagnostics import PredicateArityMismatchError
     lib, use = arimp
-    _flip(use, "arimp_pair", lib, era)
+    _assert_owner_handle(use, "arimp_pair", lib)
     with pytest.raises(PredicateArityMismatchError) as exc:
         _dispatch_at(use.__dict__["arimp_pair"], 1)
     msg = str(exc.value)
@@ -426,14 +377,11 @@ def test_direct_wrong_arity_points_at_the_definition(arimp, era):
     assert "arimp_lib.clausal:" in msg
 
 
-@pytest.mark.parametrize("era", ERAS)
-def test_imported_wrong_arity_points_across_the_boundary_end_to_end(era, request):
+def test_imported_wrong_arity_points_across_the_boundary_end_to_end():
     """``test_predicate_arity_mismatch_diagnostic::TestImportedPredicate``
     under the flip: the dry run lost the "defined at" line (§3.4)."""
     from clausal.logic.solve import call
     from clausal.predicate_diagnostics import PredicateArityMismatchError
-    if era == "handle":
-        request.getfixturevalue("flipped_loads")
     saved = {n: sys.modules.pop(n, None)
              for n in ("tests.fixtures.arimp_lib", "_r6_arimp_use_e2e")}
     try:
@@ -441,8 +389,7 @@ def test_imported_wrong_arity_points_across_the_boundary_end_to_end(era, request
                      os.path.join(FIXTURES, "arimp_lib.clausal"))
         use = _load_module("_r6_arimp_use_e2e",
                            os.path.join(FIXTURES, "arimp_use.clausal"))
-        if era == "handle":
-            assert type(use.__dict__["arimp_pair"]) is str
+        assert type(use.__dict__["arimp_pair"]) is str
         with pytest.raises(PredicateArityMismatchError) as exc:
             list(call("arimp_uses", Var(), module=_lm(use)))
         msg = str(exc.value)

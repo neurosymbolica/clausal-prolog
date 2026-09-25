@@ -6,6 +6,11 @@
 ``d(STATUS, NOTES)`` (no local clauses) was taken for a DATA functor and
 bound the ATOM, so ``assertz`` through the importer went to a row neither
 module read -- silently.  Against a DEFINING exporter the import already won.
+
+Handle era (W4b-2d flip): the load binds the owner's handle itself, so the
+class arm and the stand-in ``_bind_imports_as_owner_handles`` monkeypatch
+are gone -- after the flip that stand-in found no class and re-bound
+nothing, which would have left the "handle" arm checking nothing new.
 """
 from __future__ import annotations
 
@@ -16,7 +21,6 @@ import pytest
 
 from clausal.import_hook import _load_module
 from clausal.logic.atoms import mangle
-from clausal.logic.predicate import PredicateMeta
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
 
@@ -33,25 +37,6 @@ rx_chk(R) <- fdx_verdict(R, C_UNUSED)
 """
 
 
-def _bind_imports_as_owner_handles(monkeypatch, owner_name, owner_db):
-    """The handle era for ``-import_from`` (ruling D1): every name the import
-    bound to the owner's class is re-bound to the owner's handle."""
-    import clausal.logic.compiler_v2 as cv
-    orig = cv._process_imports
-    seen = []
-
-    def flipped(items, module_dict, db=None):
-        orig(items, module_dict, db)
-        for k, v in list(module_dict.items()):
-            if (isinstance(v, PredicateMeta) and v._row is not None
-                    and v._row._db is owner_db):
-                module_dict[k] = mangle(owner_name, v._row._key[0])
-                seen.append(k)
-
-    monkeypatch.setattr(cv, "_process_imports", flipped)
-    return seen
-
-
 def _load(tmp_path, name, src):
     p = tmp_path / f"{name}.clausal"
     p.write_text(textwrap.dedent(src))
@@ -65,26 +50,21 @@ def _answers(lm, name):
 
 @pytest.mark.parametrize("spec", ["STATUS, CITATIONS", "S, NOTES"],
                          ids=["same-fields", "other-fields"])
-@pytest.mark.parametrize("era", ["class", "handle"])
 def test_the_import_wins_over_a_field_named_export(
-        tmp_path, monkeypatch, era, spec):
+        tmp_path, monkeypatch, spec):
     monkeypatch.syspath_prepend(str(tmp_path))
-    tag = f"{era}_{'s' if spec.startswith('STATUS') else 'o'}"
+    tag = f"handle_{'s' if spec.startswith('STATUS') else 'o'}"
     o, u = f"fdx_own_{tag}", f"fdx_use_{tag}"
     try:
         owner = _load(tmp_path, o, _OWNER.format(o=o))
         om = owner.__dict__["$module"]
-        seen = []
-        if era == "handle":
-            seen = _bind_imports_as_owner_handles(monkeypatch, o, om.db)
         user = _load(tmp_path, u, _USER.format(o=o, u=u, spec=spec))
         um = user.__dict__["$module"]
         binding = user.__dict__["fdx_verdict"]
-        if era == "handle":
-            assert "fdx_verdict" in seen, "the handle era did not engage"
-            assert binding == mangle(o, "fdx_verdict")
-        else:
-            assert binding is owner.__dict__["fdx_verdict"], binding
+        # The OWNER's handle, not the atom the field-named export would
+        # have bound (the defect) and not a local handle of the user's.
+        assert binding == mangle(o, "fdx_verdict"), binding
+        assert owner.__dict__["fdx_verdict"] == binding
         assert next(call("rx_add", "ok", module=um), None) is not None
         assert _answers(um, "rx_chk") == ["ok"]
         x, y = Var(), Var()
