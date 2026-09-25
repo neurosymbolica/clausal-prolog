@@ -31,7 +31,7 @@ def _get_tro_check_indices(functor, arity, clause, db=None):
     ir = terms_to_goalop(clause.body, db=db)
     return analyse(ir, clause.head, functor, arity, db=db).check_indices
 from clausal.logic.database import Clause, Database
-from clausal.logic.predicate import PredicateMeta
+from clausal.logic.predicate import PredicateMeta, resolve_predicate_row
 from clausal.logic.solve import call
 from clausal.logic.trampoline import StepGenerator, DONE
 from clausal.logic.variables import Var, Trail, deref, is_var
@@ -474,11 +474,27 @@ def _make_counting_sg():
     return _Counting, counter
 
 
+def _dispatch_of(pred):
+    """The compiled dispatch of *pred*: a ``PredicateMeta`` class (the
+    Python-built predicates below), or a ``(handle, arity)`` pair for a
+    module-loaded predicate -- post-flip its module-dict binding is a mangled
+    handle, whose row (and so dispatch) is read off its owner's Database."""
+    if isinstance(pred, tuple):
+        handle, arity = pred
+        row = resolve_predicate_row(handle, arity=arity)
+        assert row is not None, f"no row for {handle!r}/{arity}"
+        return row.db.get_dispatch(*row.key)
+    return pred._get_dispatch()
+
+
 def _patch_sg(counting_cls, *pred_classes):
     """Swap ``StepGenerator`` in ``solve.call``'s module *and* every compiled
-    dispatch function's ``__globals__`` dict for *pred_classes*.
+    dispatch function's ``__globals__`` dict for *pred_classes* (classes, or
+    ``(handle, arity)`` pairs -- see ``_dispatch_of``).
 
-    Returns a restore callable.
+    Returns a restore callable.  Every predicate asked for must be patched:
+    a dispatch left unpatched would count NOTHING, and a count of 1 (the
+    root StepGenerator alone) would then read as "TRO fired".
     """
     _real = StepGenerator
     patched: list[dict] = []
@@ -489,15 +505,15 @@ def _patch_sg(counting_cls, *pred_classes):
 
     # 2) Each compiled dispatch fn has its own __globals__.
     for pcls in pred_classes:
-        dispatch = pcls._get_dispatch()
-        if dispatch is None:
-            continue
+        dispatch = _dispatch_of(pcls)
+        assert dispatch is not None, f"{pcls!r}: no compiled dispatch to patch"
         # dispatch may be a plain function or a wrapper; chase __wrapped__.
         fn = getattr(dispatch, '__wrapped__', dispatch)
         g = getattr(fn, '__globals__', None)
-        if g is not None and "StepGenerator" in g:
-            g["StepGenerator"] = counting_cls
-            patched.append(g)
+        assert g is not None and "StepGenerator" in g, (
+            f"{pcls!r}: dispatch globals carry no StepGenerator to patch")
+        g["StepGenerator"] = counting_cls
+        patched.append(g)
 
     def _restore():
         for d in patched:
@@ -730,14 +746,15 @@ class TestTroImportHook(unittest.TestCase):
         # nv
         from clausal.testing import load_clausal_module
         mod = load_clausal_module('tests/fixtures/tro_predicates.clausal')
-        AccLength = mod.__dict__['acc_length']
+        lm = mod.__dict__['$module']
 
         counting_cls, counter = _make_counting_sg()
-        restore = _patch_sg(counting_cls, AccLength)
+        restore = _patch_sg(counting_cls, (mod.__dict__['acc_length'], 3))
         try:
             trail = Trail()
             big_list = list(range(500))
-            for _ in call(AccLength, big_list, 0, Var(), trail=trail):
+            for _ in call('acc_length', big_list, 0, Var(), module=lm,
+                          trail=trail):
                 pass
         finally:
             restore()
@@ -775,13 +792,14 @@ class TestTroGroundnessDispatch(unittest.TestCase):
         # nv
         from clausal.testing import load_clausal_module
         mod = load_clausal_module('tests/fixtures/deep_index.clausal')
-        MyNthOf = mod.__dict__['my_nth_of']
+        lm = mod.__dict__['$module']
 
         counting_cls, counter = _make_counting_sg()
-        restore = _patch_sg(counting_cls, MyNthOf)
+        restore = _patch_sg(counting_cls, (mod.__dict__['my_nth_of'], 3))
         try:
             trail = Trail()
-            for _ in call(MyNthOf, 50, list(range(100)), Var(), trail=trail):
+            for _ in call('my_nth_of', 50, list(range(100)), Var(), module=lm,
+                          trail=trail):
                 pass
         finally:
             restore()
