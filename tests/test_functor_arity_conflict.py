@@ -30,7 +30,10 @@ from clausal.import_hook import _load_module
 from clausal.logic.predicate import (
     ClausalTermConstructionError,
     PredicateMeta,
+    field_names_for,
+    is_declared_predicate,
     make_predicate,
+    resolve_predicate_row,
 )
 from clausal.logic.solve import call
 from clausal.logic.variables import deref
@@ -137,6 +140,29 @@ def _load(tmp_path, name, text):
     return _load_module(f"tests_fac_{name}", _write(tmp_path, name, text))
 
 
+# After the W4b-2d flip a module attribute naming a predicate is a mangled
+# HANDLE (a str), not a class: field names, rows and "is it a predicate" are
+# read from the module's Database.
+
+def _db(mod):
+    return mod.__clausal_module__.db
+
+
+def _fields_of(mod, name, arity):
+    """The field names the binding *name* carries at *arity* (the class's
+    ``_fields`` in the class era)."""
+    return field_names_for(getattr(mod, name), arity=arity, db=_db(mod))
+
+
+def _is_predicate_at(mod, name, arity):
+    """*name* is bound to a declared predicate at exactly *arity*."""
+    return is_declared_predicate(getattr(mod, name), arity=arity, db=_db(mod))
+
+
+def _row_of(mod, name, arity):
+    return resolve_predicate_row(getattr(mod, name), arity=arity, db=_db(mod))
+
+
 class TestDeclarationClauseArityConflict:
     """``-module(m, [f(A)])`` + ``f(1, 2),`` is a load-time error."""
 
@@ -239,7 +265,7 @@ class TestDeclarationClauseArityConflict:
 
             f(1, 2),
         """)
-        assert mod.f._fields == ("A", "B")
+        assert _fields_of(mod, "f", 2) == ("A", "B")
 
     def test_anonymous_argument_does_not_produce_a_placeholder_mismatch(
         self, tmp_path
@@ -262,7 +288,7 @@ class TestDeclarationClauseArityConflict:
                 verdict(S, _)
             )
         """)
-        assert mod.verdict._fields == ("STATUS", "CITATIONS")
+        assert _fields_of(mod, "verdict", 2) == ("STATUS", "CITATIONS")
 
     def test_anonymous_argument_in_a_head_takes_the_declared_name(
         self, tmp_path
@@ -276,7 +302,7 @@ class TestDeclarationClauseArityConflict:
 
             pair(1, _),
         """)
-        assert mod.pair._fields == ("LEFT", "RIGHT")
+        assert _fields_of(mod, "pair", 2) == ("LEFT", "RIGHT")
 
     def test_unknown_explicit_keyword_is_reported_at_compile_time(self, tmp_path):
         with pytest.raises(SyntaxError) as exc_info:
@@ -384,7 +410,7 @@ class TestShorterHeadAfterLongerIsRefused:
             foo(a, b),
             foo(a, _),
         """)
-        assert len(mod.foo._state_row().clauses) == 2
+        assert len(_row_of(mod, "foo", 2).clauses) == 2
 
     def test_a_keyword_subset_head_is_refused(self, tmp_path):
         """``f(A=1)`` was the arity-conflict EXEMPTION: binding by name made
@@ -466,8 +492,8 @@ class TestTheRemedyPrintsTheTemplateEdit:
 
             max_retries(3),
         """)
-        assert isinstance(mod.max_retries, PredicateMeta)
-        assert mod.max_retries._fields == ("arg_0",)
+        assert _is_predicate_at(mod, "max_retries", 1)
+        assert _fields_of(mod, "max_retries", 1) == ("arg_0",)
         v = Var()
         results = [
             deref(v) for _ in call(
@@ -532,8 +558,10 @@ class TestTheRemedyPrintsTheTemplateEdit:
 
             {head},
         """)
-        assert isinstance(mod.f, PredicateMeta)
-        assert len(mod.f._fields) == arity
+        assert _is_predicate_at(mod, "f", arity)
+        assert len(_fields_of(mod, "f", arity)) == arity
+        # the predicate wins at the head's arity and at no other
+        assert _db(mod).predicate_arities("f") == {arity}
 
     def test_the_predicate_wins_and_is_queryable(self, tmp_path):
         """P3-1 §3a/§1b/R2 INVERSION of
@@ -547,7 +575,7 @@ class TestTheRemedyPrintsTheTemplateEdit:
 
             max_retries(3),
         """)
-        assert isinstance(mod.max_retries, PredicateMeta)
+        assert _is_predicate_at(mod, "max_retries", 1)
         v = Var()
         results = [
             deref(v) for _ in call(
@@ -699,7 +727,7 @@ class TestTheRemedyPrintsTheTemplateEdit:
 
             f(1, _x=2),
         """)
-        assert mod.f._fields == ("A", "_x")
+        assert _fields_of(mod, "f", 2) == ("A", "_x")
 
 
 class TestTheUnknownFieldRaiseIsUntouched:
