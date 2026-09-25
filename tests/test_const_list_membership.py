@@ -410,6 +410,16 @@ class TestConstSetBuilder:
             hash(value)  # must not raise
 
 
+def _compiled_dispatch(pymod, mod, name, arity):
+    """The compiled dispatch of the predicate bound under *name*.  After the
+    W4b-2d flip the binding is a mangled handle, not a class with
+    ``_get_dispatch``; ``_dispatch_at`` resolves it through the db."""
+    from clausal.logic.predicate import _dispatch_at
+    fn = _dispatch_at(getattr(pymod, name), arity, mod.db)
+    assert fn is not None, (name, arity)
+    return fn
+
+
 def test_the_atom_fast_path_actually_fires():
     """Every other test here asserts the two builds AGREE, which they also do
     when the fast path silently declines — so nothing above notices a
@@ -423,7 +433,7 @@ def test_the_atom_fast_path_actually_fires():
     green throughout; the A/B perf gate is what caught it.
     """
     pymod, mod = _ON
-    fn = pymod.atoms4._get_dispatch()
+    fn = _compiled_dispatch(pymod, mod, "atoms4", 1)
     cells = [k for k in fn.__globals__ if k.startswith("$cset_")
              and k != "$cset_atom"]
     assert len(cells) == 1, cells
@@ -455,7 +465,7 @@ def test_a_mixed_callsite_fires_too_and_keeps_whole_terms():
     frozenset of whole terms — the atom stays in it as the CELL, which is what
     keeps it distinguishable from the string of the same text."""
     pymod, mod = _ON
-    fn = pymod.mixed_kinds._get_dispatch()
+    fn = _compiled_dispatch(pymod, mod, "mixed_kinds", 1)
     cells = [k for k in fn.__globals__ if k.startswith("$cset_")
              and k != "$cset_atom"]
     assert len(cells) == 1, cells
