@@ -134,8 +134,8 @@ _inject_resolved_targets(call_targets, base_globals, db, globals_)
 For predicates that are **locked** (non-dynamic, `row.locked` is `True`) at compilation time, `_inject_resolved_targets` also captures the dispatch function directly into `base_globals` under a stable key:
 
 ```python
-_disp_key("edge", 2)  →  "_disp_edge_2"
-base_globals["_disp_Edge_2"] = resolve_predicate_row(edge, arity=2, db=db).dispatch_fn
+_disp_key("edge", 2)  →  "$disp_edge_2"
+base_globals["$disp_edge_2"] = resolve_predicate_row(edge, arity=2, db=db).dispatch_fn
 ```
 
 The code-generation functions (`_dispatch_call_trampoline`, `_dispatch_call_iter`) check the current compilation context for cached keys. when a callee's dispatch key is present, the generated `StepGenerator` construction uses the cached local directly instead of resolving the binding through `$dispatch_at` at every invocation:
@@ -145,10 +145,10 @@ The code-generation functions (`_dispatch_call_trampoline`, `_dispatch_call_iter
 _gen = StepGenerator($dispatch_at(foo, 2), this_generator, arg0, arg1, trail)
 
 # Locked predicate — cached dispatch closure:
-_gen = StepGenerator(_disp_foo_2, this_generator, arg0, arg1, trail)
+_gen = StepGenerator($disp_foo_2, this_generator, arg0, arg1, trail)
 ```
 
-`_disp_foo_2` is a reference to a pre-captured dispatch function in the compiled function's `__globals__` — the binding-to-row resolution is eliminated on every call site.
+`$disp_foo_2` is a reference to a pre-captured dispatch function in the compiled function's `__globals__` — the binding-to-row resolution is eliminated on every call site.
 
 **when dispatch caching fires:** Locking happens *after* initial module compilation, so intra-module calls within the same `.clausal` file are compiled before their callees are locked. Dispatch caching fires for cross-module calls (where the imported module is already locked), for explicit recompilations after locking, and for predicates compiled via `compile_predicate` / `compile_predicate_trampoline` after the callee's `_lock()` has been called.
 
@@ -164,14 +164,14 @@ Locked dispatch caching captures the dispatch *closure* for locked callees. Call
 base_globals["color.bucket(pos=0, 'red')"] = resolve_predicate_row(color, arity=1, db=db).index_plans[0]["red"]
 ```
 
-`_dispatch_call_trampoline` then emits an `ast.Name` referencing that key instead of either `_disp_color_1` or `$dispatch_at(color, 1)`:
+`_dispatch_call_trampoline` then emits an `ast.Name` referencing that key instead of either `$disp_color_1` or `$dispatch_at(color, 1)`:
 
 ```python
 # static literal 'red' in indexed position 0 — direct bucket ref:
 _gen = StepGenerator(color.bucket(pos=0, 'red'), this_generator, 'red', trail)
 
 # arg is a variable — falls back to cached dispatch closure:
-_gen = StepGenerator(_disp_color_1, this_generator, X_, trail)
+_gen = StepGenerator($disp_color_1, this_generator, X_, trail)
 ```
 
 Joint bucket pairs (when both indexed positions hold static literals) are also specialisable.
@@ -246,10 +246,10 @@ while _st is not DONE:
 
 `StepGenerator` wraps the child dispatch function. `this_generator` is passed as the child's `parent`, so the child yields `(this_generator, None)` on solution and `(this_generator, DONE)` on exhaustion. The trampoline routes these back to us.
 
-when `fib` is locked at compilation time, the dispatch function is pre-captured into `base_globals` as `_disp_fib_2`, and the generated code uses `_disp_fib_2` directly instead of `$dispatch_at(fib, 2)`:
+when `fib` is locked at compilation time, the dispatch function is pre-captured into `base_globals` as `$disp_fib_2`, and the generated code uses `$disp_fib_2` directly instead of `$dispatch_at(fib, 2)`:
 
 ```python
-_gen = StepGenerator(_disp_fib_2, this_generator, N1, A, trail)
+_gen = StepGenerator($disp_fib_2, this_generator, N1, A, trail)
 ```
 
 ### Tail recursion optimization (TRO)

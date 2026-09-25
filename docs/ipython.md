@@ -233,7 +233,8 @@ kernels, which render output as HTML rather than a terminal.
 
 For programmatic use, wrap any iterator of binding dicts. Run the goals with
 `call` — the predicate's name, its arguments, and the module that defines it —
-on one shared `Trail`, so the second goal sees the first one's bindings:
+on one shared `Trail`, so the second goal sees the first one's bindings.
+`problem/2` fetches a puzzle and `solve/1` constrains and labels it:
 
 ```python
 from clausal import Var, call, Solutions
@@ -245,13 +246,15 @@ trail = Trail()
 
 def gen():
     for _ in call("problem", 1, ROWS, module=sudoku, trail=trail):
-        for _ in call("sudoku", ROWS, module=sudoku, trail=trail):
+        for _ in call("solve", ROWS, module=sudoku, trail=trail):
             yield {'ROWS': walk(ROWS)}
 
 Solutions(gen())
 ```
 
-For a single goal, `solve` with a cell does the same job:
+For a single goal, `solve` with a cell does the same job. This one only
+fetches puzzle 1 — its blanks stay unbound variables; solving it is the
+second goal above:
 
 ```python
 from clausal import Var, solve, Solutions

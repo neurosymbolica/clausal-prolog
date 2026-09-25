@@ -538,11 +538,11 @@ The indexing optimisations described above all apply to the *callee*: how quickl
 Without call-site specialisation, a call to a locked predicate looks like:
 
 ```python
-# base_globals["_disp_color_1"] = resolve_predicate_row(color, arity=1, db=db).dispatch_fn  (captured at compile time)
-StepGenerator(_disp_color_1, this_generator, 'red', trail)
+# base_globals["$disp_color_1"] = resolve_predicate_row(color, arity=1, db=db).dispatch_fn  (captured at compile time)
+StepGenerator($disp_color_1, this_generator, 'red', trail)
 ```
 
-At runtime `_disp_color_1` is the dispatch closure. It calls `deref(args[0])`, computes `_runtime_arg_key`, and does a dict lookup. But when the call site already has `'red'` as a literal, the bucket to call is known at compile time — the runtime lookup is redundant.
+At runtime `$disp_color_1` is the dispatch closure. It calls `deref(args[0])`, computes `_runtime_arg_key`, and does a dict lookup. But when the call site already has `'red'` as a literal, the bucket to call is known at compile time — the runtime lookup is redundant.
 
 With call-site specialisation the same call becomes:
 
@@ -561,7 +561,7 @@ The globals key `"color.bucket(pos=0, 'red')"` is not a valid Python identifier,
 |---|---|
 | Two static args, joint bucket exists | `"foo.bucket(pos=(0,1), ('red', 2))"` |
 | One static arg, single-pos bucket exists | `"foo.bucket(pos=0, 'red')"` |
-| Locked predicate, no static match | `_disp_foo_2` (cached dispatch closure) |
+| Locked predicate, no static match | `$disp_foo_2` (cached dispatch closure) |
 | Dynamic predicate | `$dispatch_at(foo, 2)` (the binding — the owner's handle — resolved to its row's dispatch at each call) |
 
 ## Key invariants
