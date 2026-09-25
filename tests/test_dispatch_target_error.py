@@ -17,7 +17,8 @@ import types
 import pytest
 
 from clausal.logic.exceptions import DispatchTargetError, LogicException
-from clausal.logic.predicate import PredicateMeta, _dispatch_at, make_predicate
+from clausal.logic.predicate import PredicateMeta, _dispatch_at
+from tests.predicate_api_support import class_arm_predicate
 
 
 def test_a_module_target_raises_dispatch_target_error():
@@ -81,7 +82,7 @@ def test_a_foreign_implementor_is_still_called_bare():
 
 
 def test_a_predicate_class_is_still_arity_aware():
-    cls = make_predicate("W3Pred", ["a", "b"])
+    cls = class_arm_predicate("W3Pred", ["a", "b"])
     assert isinstance(cls, PredicateMeta)
     with pytest.raises(NotImplementedError) as info:
         _dispatch_at(cls, 5)

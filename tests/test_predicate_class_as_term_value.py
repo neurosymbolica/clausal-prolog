@@ -41,14 +41,15 @@ import pytest
 
 from clausal.logic.atoms import mint
 from clausal.import_hook import _load_module
-from clausal.logic.predicate import PredicateMeta, make_predicate
+from clausal.logic.predicate import PredicateMeta
 from clausal.logic.variables import Trail, Var, occurs_check, unify
+from tests.predicate_api_support import class_arm_predicate
 
 
 @pytest.fixture
 def cite():
     """An arity-1 declared functor, as ``-private([cite(KEY)])`` mints it."""
-    return make_predicate("pcatv_cite", ["key"])
+    return class_arm_predicate("pcatv_cite", ["key"])
 
 
 # ── unify ─────────────────────────────────────────────────────────────────
@@ -71,7 +72,7 @@ class TestClassAsValueUnify:
         assert unify(cite, cite, Trail()) is True
 
     def test_against_a_different_functor_class_fails_quietly(self, cite):
-        other = make_predicate("pcatv_other", ["key"])
+        other = class_arm_predicate("pcatv_other", ["key"])
         assert unify(cite, other, Trail()) is False
 
     def test_against_an_instance_of_itself_fails_quietly(self, cite):

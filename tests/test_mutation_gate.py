@@ -37,11 +37,12 @@ import clausal.import_hook  # noqa: F401 — installs the meta-path finder
 from clausal.import_hook import _load_module
 from clausal.logic.database import Clause, Database, WriteStamp
 from clausal.logic.exceptions import LogicException
-from clausal.logic.predicate import make_predicate, resolve_predicate_row
+from clausal.logic.predicate import resolve_predicate_row
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
 from clausal.terms import Compound
 from tests.load_write_spy_support import record_load_writes
+from tests.predicate_api_support import class_arm_predicate
 
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
@@ -149,7 +150,7 @@ def test_a_dispatch_install_through_the_class_property_outside_a_txn_raises():
     ``Database.mutate`` alone would leave it wide open, and it is the door
     ``compiler._install`` writes through."""
     db = Database()
-    cls = make_predicate("gd", ["x"])
+    cls = class_arm_predicate("gd", ["x"])
     cls._bind_row(db, "gd", 1)
     with pytest.raises(RuntimeError) as exc_info:
         cls._state_row().dispatch_fn = lambda *a: iter(())
@@ -159,7 +160,7 @@ def test_a_dispatch_install_through_the_class_property_outside_a_txn_raises():
 
 def test_a_dispatch_install_through_the_class_gate_is_allowed():
     db = Database()
-    cls = make_predicate("gd2", ["x"])
+    cls = class_arm_predicate("gd2", ["x"])
     cls._bind_row(db, "gd2", 1)
     fn = lambda *a: iter(())  # noqa: E731
     with cls._mutate("test", "recompile"):
@@ -171,7 +172,7 @@ def test_assigning_none_is_invalidation_and_needs_no_txn():
     """``invalidate()`` stays THE one invalidation point, and it is not a
     clobber: a cleared dispatch recompiles from the OWNER's clause list."""
     db = Database()
-    cls = make_predicate("gd3", ["x"])
+    cls = class_arm_predicate("gd3", ["x"])
     cls._bind_row(db, "gd3", 1)
     with cls._mutate("test", "recompile"):
         cls._state_row().dispatch_fn = lambda *a: iter(())
@@ -210,7 +211,7 @@ def test_channel_3_the_class_mutator_from_a_non_owner_is_refused(tmp_path):
     # class-mutator channel is still open to a ``make_predicate`` class bound
     # to the same (locked) row, so that is the class this channel goes through.
     module, db, _binding = _locked_module(tmp_path, "gate_c3")
-    cls = make_predicate("gate_c3_p", ["x"])
+    cls = class_arm_predicate("gate_c3_p", ["x"])
     cls._bind_row(db, "gate_c3_p", 1)
     assert cls._row is db.row("gate_c3_p", 1)
     assert cls._row.locked is True

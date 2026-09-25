@@ -241,24 +241,26 @@ def test_a_db_less_compile_of_a_rule_with_a_body_call_still_works():
     -meta_predicate lookup in terms_to_goalop called
     ``db.meta_predicate_specs`` on it and every body call raised
     ``AttributeError``.  The db-less recipe (``make_predicate``'s hand-built
-    globals) is supported."""
+    globals) is supported.  (W4b-3 slice 6: the recipe's callee is the
+    frozen ``_get_dispatch`` protocol on a plain object, and the caller is
+    driven through the dispatch the compile returns -- ``make_predicate``,
+    which supplied both as classes, was retired.)"""
     from clausal.logic.compiler import compile_predicate_trampoline
     from clausal.logic.database import Clause
-    from clausal.logic.predicate import make_predicate
     from clausal.terms import Call, LoadName
+    from tests.predicate_api_support import (
+        ForeignPredicate, dispatch_solutions)
 
-    base = make_predicate("mp_dbless_base", ["x"])
-    top = make_predicate("mp_dbless_top", ["x"])
     x = Var()
-    compile_predicate_trampoline(
-        "mp_dbless_base", 1, [Clause(base(1), [])], pred_cls=base)
-    compile_predicate_trampoline(
+    base = compile_predicate_trampoline(
+        "mp_dbless_base", 1, [Clause(("mp_dbless_base", 1), [])])
+    top = compile_predicate_trampoline(
         "mp_dbless_top", 1,
-        [Clause(top(x), [Call(func=LoadName(name="mp_dbless_base"),
-                              args=[x], kwargs=[])])],
-        pred_cls=top, globals_={"mp_dbless_base": base})
-    y = Var()
-    assert [deref(y) for _ in call(top, y)] == [1]
+        [Clause(("mp_dbless_top", x),
+                [Call(func=LoadName(name="mp_dbless_base"),
+                      args=[x], kwargs=[])])],
+        globals_={"mp_dbless_base": ForeignPredicate(base)})
+    assert dispatch_solutions(top, Var()) == [(1,)]
 
 
 @pytest.mark.parametrize("goal", ["go_a", "go_a_call", "go_a_map"])

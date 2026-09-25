@@ -24,10 +24,11 @@ from clausal.import_hook import _load_module
 from clausal.logic.atoms import demangle, mangle
 from clausal.logic.database import Database
 from clausal.logic.predicate import (
-    _HANDLE_OWNERS, is_declared_predicate, is_declared_predicate_name, make_predicate,
+    _HANDLE_OWNERS, is_declared_predicate, is_declared_predicate_name,
     mint_predicate_handle, predicate_arities_for, predicate_binding_name,
     resolve_predicate_row,
 )
+from tests.predicate_api_support import class_arm_predicate
 
 
 def _load_popped(tmp_path, name, source):
@@ -89,7 +90,7 @@ def test_a_handle_is_minted_from_the_database(tmp_path):
     handle = mint_predicate_handle(db, "q0_m")
     assert demangle(handle) == ("q0_mint", "q0_m")
     # The shape X3 forbids: a make_predicate class names its MINTER.
-    cls = make_predicate("q0_m", ["x"])
+    cls = class_arm_predicate("q0_m", ["x"])
     wrong = mangle(cls.__module__, "q0_m")
     assert resolve_predicate_row(wrong, arity=1, db=db) is None
 
@@ -126,7 +127,7 @@ def test_the_class_arm_uses_the_hint_too(tmp_path):
     # engine code, so its class -- one the popped module owns -- is built by
     # hand, exactly the shape the load used to bind.
     assert module.__dict__["q0_two"] == handle
-    cls = make_predicate("q0_two", ["x"])
+    cls = class_arm_predicate("q0_two", ["x"])
     cls.__module__ = "q0_cls"
     assert cls.__module__ == "q0_cls"
     assert predicate_arities_for(handle, db=db) == {1, 2}

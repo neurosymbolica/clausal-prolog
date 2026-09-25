@@ -21,7 +21,9 @@ from clausal.logic.builtins import (
     get_builtin_class,
     _BUILTIN_CLASSES,
 )
-from clausal.logic.predicate import PredicateMeta, make_predicate
+from clausal.logic.predicate import (
+    PredicateMeta, make_predicate, MakePredicateRetiredError,
+)
 from clausal.logic.exceptions import LogicException
 from clausal.repl import Solutions
 import clausal._lazy_hook as _lazy_hook  # registers lightweight stub finder
@@ -81,6 +83,7 @@ __all__ = [
     "structural_unify",
     "PredicateMeta",
     "make_predicate",
+    "MakePredicateRetiredError",
     "LogicException",
     "get_builtin_class",
     "Solutions",

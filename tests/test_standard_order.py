@@ -30,6 +30,7 @@ from clausal.logic.variables import Var, Trail, deref
 from clausal.terms import Compound, DictTerm, KWTerm, SetTerm
 from clausal.logic.atoms import char_atom, is_atom, mint, spelling
 from clausal.logic.cells import chars
+from tests.predicate_api_support import class_arm_predicate
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────
@@ -212,21 +213,17 @@ class TestAtomKeyCollapse:
         assert _standard_order_key(chars("work"))[0] == _ORD_COMPOUND
 
     def test_class_atom_key_matches_same_spelled_atom_key(self):
-        from clausal.logic.predicate import make_predicate
-
         # STAGE 2 (spec 2026-09-18 §4): no class is an atom.  The atom `work`
         # is the str and keys in the atom band; the CLASS keys in the opaque
         # band, apart from it -- the "same-spelled class and atom are one
         # atom" rule of P3-1 Task 4 is retired with the 1-tuple.
-        atom_cls = make_predicate("work", [])
+        atom_cls = class_arm_predicate("work", [])
         assert _standard_order_key(mint("work")) == (_ORD_ATOM, "work")
         assert _standard_order_key(atom_cls) != _standard_order_key(mint("work"))
         assert _standard_order_key(atom_cls)[0] > _ORD_ATOM
 
     def test_same_spelled_atom_and_class_atom_sort_adjacent_equal(self):
-        from clausal.logic.predicate import make_predicate
-
-        atom_cls = make_predicate("work", [])
+        atom_cls = class_arm_predicate("work", [])
         # Neither is ordered strictly before the other by the key.
         # STAGE 2: the class sorts AFTER the atom of its name (opaque band), never equal
         ordered = _key_sorted([atom_cls, mint("work")])

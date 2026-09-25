@@ -32,12 +32,12 @@ from clausal.logic.predicate import (
     PredicateMeta,
     field_names_for,
     is_declared_predicate,
-    make_predicate,
     resolve_predicate_row,
 )
 from clausal.logic.solve import call
 from clausal.logic.variables import deref
 from clausal import Var
+from tests.predicate_api_support import class_arm_predicate
 
 
 # ── Run time: positional overflow ──────────────────────────────────────────
@@ -61,7 +61,7 @@ class TestPositionalOverflowRaises:
             cls("a", "b")
 
     def test_overflow_names_functor_and_both_arities(self):
-        cls = make_predicate("fac_pair", ["left", "right"])
+        cls = class_arm_predicate("fac_pair", ["left", "right"])
         with pytest.raises(ClausalTermConstructionError) as exc_info:
             cls(1, 2, 3)
         msg = str(exc_info.value)
@@ -70,7 +70,7 @@ class TestPositionalOverflowRaises:
         assert "(left, right)" in msg
 
     def test_overflow_carries_the_same_structured_attributes(self):
-        cls = make_predicate("fac_attrs", ["only"])
+        cls = class_arm_predicate("fac_attrs", ["only"])
         with pytest.raises(ClausalTermConstructionError) as exc_info:
             cls(1, 2)
         err = exc_info.value
@@ -84,7 +84,7 @@ class TestPositionalOverflowRaises:
         assert err.constructed_at is not None
 
     def test_overflow_reports_both_source_locations(self):
-        cls = make_predicate("fac_where", ["only"])
+        cls = class_arm_predicate("fac_where", ["only"])
         with pytest.raises(ClausalTermConstructionError) as exc_info:
             cls(1, 2)
         msg = str(exc_info.value)
@@ -94,7 +94,7 @@ class TestPositionalOverflowRaises:
 
     def test_overflow_on_a_zero_arity_class_names_the_shadowing_cause(self):
         """An atom called with arguments is Phenomenon A — say so."""
-        atom = make_predicate("fac_bare_atom", [])
+        atom = class_arm_predicate("fac_bare_atom", [])
         with pytest.raises(ClausalTermConstructionError) as exc_info:
             atom(1, 2)
         msg = str(exc_info.value)
@@ -102,7 +102,7 @@ class TestPositionalOverflowRaises:
         assert "0-arity atom" in msg
 
     def test_exact_arity_still_constructs(self):
-        cls = make_predicate("fac_ok", ["left", "right"])
+        cls = class_arm_predicate("fac_ok", ["left", "right"])
         term = cls(1, 2)
         assert _cf(term, cls, "left") == 1 and _cf(term, cls, "right") == 2
 
@@ -110,7 +110,7 @@ class TestPositionalOverflowRaises:
         """FLIPPED 2026-09-24 (ruling C): too FEW positional arguments used to
         pad with fresh variables; it is now refused exactly like too many.
         A missing slot named by keyword still completes the term."""
-        cls = make_predicate("fac_partial", ["left", "right"])
+        cls = class_arm_predicate("fac_partial", ["left", "right"])
         with pytest.raises(ClausalTermConstructionError) as exc_info:
             cls(1)
         assert "1 positional argument(s)" in str(exc_info.value)
@@ -118,12 +118,12 @@ class TestPositionalOverflowRaises:
         assert _cf(term, cls, "right") == 2
 
     def test_mixed_positional_and_keyword_within_arity_still_constructs(self):
-        cls = make_predicate("fac_mixed", ["left", "right"])
+        cls = class_arm_predicate("fac_mixed", ["left", "right"])
         term = cls(1, right=2)
         assert _cf(term, cls, "left") == 1 and _cf(term, cls, "right") == 2
 
     def test_zero_arity_no_args_still_returns_the_class_itself(self):
-        atom = make_predicate("fac_identity", [])
+        atom = class_arm_predicate("fac_identity", [])
         assert atom() is atom
 
 

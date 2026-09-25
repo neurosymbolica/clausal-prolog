@@ -4,30 +4,41 @@ A predicate class builds CELLS, and every door that built an instance is
 a loud refusal, so an out-of-tree minter fails rather than drifting."""
 import pytest
 
-from clausal.logic.predicate import PredicateMeta, RetiredStateError, make_predicate
+from clausal.logic.predicate import PredicateMeta, RetiredStateError
 from clausal.logic.variables import Var
+from tests.predicate_api_support import class_arm_predicate
 
 
 def test_clausal_head_is_a_raising_tombstone():
-    Pt = make_predicate("Pt", ["x", "y"])
+    Pt = class_arm_predicate("Pt", ["x", "y"])
     with pytest.raises(RetiredStateError, match="_clausal_head"):
         Pt._clausal_head(x=1, y=2)
 
 
-def test_make_predicate_refuses_the_instances_keyword():
-    with pytest.raises(TypeError, match="instances"):
-        make_predicate("Old", ["a"], instances=True)
+def test_make_predicate_is_retired_whatever_its_arguments():
+    """W4b-3 slice 6: ``make_predicate`` refuses EVERY call -- the retired
+    ``instances=`` keyword included (it used to get its own TypeError) --
+    with one message that points at the replacements."""
+    from clausal.logic.predicate import (  # KEEP_MP
+        MakePredicateRetiredError, make_predicate)
+    for call_it in (
+            lambda: make_predicate("Old", ["a"], instances=True),  # KEEP_MP
+            lambda: make_predicate("Old", ["a"])):  # KEEP_MP
+        with pytest.raises(MakePredicateRetiredError) as exc:
+            call_it()
+        assert isinstance(exc.value, TypeError)
+        assert "retired (W4b-3 slice 6)" in str(exc.value)
 
 
 def test_calling_a_class_always_builds_the_cell():
-    Pt = make_predicate("Pt2", ["x", "y"])
+    Pt = class_arm_predicate("Pt2", ["x", "y"])
     cell = Pt(x=1, y=Var())
     assert cell[0] == "Pt2" and cell[1] == 1 and isinstance(cell[2], Var)
     assert type(cell) is tuple, "never an instance, whatever the class carries"
 
 
 def test_no_fast_instance_constructor_is_attached():
-    Pt = make_predicate("Pt3", ["x"])
+    Pt = class_arm_predicate("Pt3", ["x"])
     assert not hasattr(Pt, "_clausal_new")
 
 
@@ -38,7 +49,7 @@ def test_is_term_instance_is_dataclass_only():
     class D:
         a: int
     assert is_term_instance(D(1)) is True and term_field_names(D(1)) == ("a",)
-    Pt = make_predicate("Pt4", ["x"])
+    Pt = class_arm_predicate("Pt4", ["x"])
     assert is_term_instance(Pt(1)) is False, "a cell is not an instance"
     assert is_term_instance(Pt) is False, "nor is the class"
 
@@ -134,7 +145,7 @@ def test_c_and_python_twins_agree_and_neither_knows_an_instance():
     class D:
         a: int
 
-    Pt = make_predicate("Pt5", ["x"])
+    Pt = class_arm_predicate("Pt5", ["x"])
     smuggled = Pt.__new__(Pt)          # no constructor was called
     for obj in (D(1), Pt, Pt(x=1), "atom", ("f", 1), smuggled):
         assert bool(C.is_term_instance(obj)) == P._is_term_instance_py(obj), obj

@@ -29,7 +29,7 @@ The two engines are separate worlds connected by Clausal's translation pipeline.
 
     Clausal offers two ways to run Prolog code:
 
-    - **[Importing `.pl` files](importing_prolog.md)** translates Prolog to Clausal syntax and runs it on the native engine. Predicates become `PredicateMeta` classes, fully integrated with Python. Best for most programs.
+    - **[Importing `.pl` files](importing_prolog.md)** translates Prolog to Clausal syntax and runs it on the native engine. Its predicates become rows in the module's Database, bound to predicate handles and called like any other Clausal predicate (from Python, with `solve(goal, module=m)`). Best for most programs.
     - **Scryer embedding** (this page) runs Prolog on an actual ISO Prolog engine in-process. Best when you need Scryer's native constraint solvers, its library ecosystem, or strict ISO conformance.
     - **[Trealla embedding](trealla.md)** is a lighter-weight alternative — faster startup, smaller footprint, but no tabling.
 

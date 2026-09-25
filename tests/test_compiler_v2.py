@@ -29,6 +29,7 @@ from clausal.logic.predicate import (
 )
 from clausal.logic.solve import call, solve
 from clausal.logic.variables import Var, Trail, deref
+from tests.predicate_api_support import class_arm_predicate
 
 
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
@@ -315,16 +316,15 @@ class TestV2CompileModule:
         incidental module-dict contents goes vacuous without failing.
         """
         # nv
-        from clausal.logic.predicate import make_predicate
         path = os.path.join(FIXTURES_DIR, "static_pred.clausal")
         md = _load_via_v2(path, "_v2_static_pred_norow")
         db = md["$module"].db
 
-        orphan = make_predicate("zz_no_row_here", ["a"])
+        orphan = class_arm_predicate("zz_no_row_here", ["a"])
         assert db.row("zz_no_row_here", 1) is None, "fixture must not define it"
         # A second class that WOULD flip (it names this db's module and a
         # row this db holds), so a half-flip is observable.
-        owned = make_predicate("zz_owned_here", ["a"])
+        owned = class_arm_predicate("zz_owned_here", ["a"])
         owned.__module__ = md["__name__"]
         md["zz_owned_here"] = owned
         md["zz_no_row_here"] = orphan

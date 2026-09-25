@@ -36,6 +36,7 @@ from clausal.pythonic_ast import nodes as simple_ast
 from clausal.templating.term_rewriting import EmbedTransformer
 
 from tests.tagged_terms_support import capture_predicate_codegen
+from tests.predicate_api_support import class_arm_predicate
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -467,8 +468,7 @@ class TestDollarRefFallsBackToTheTwinByName:
 
     def test_a_user_class_keeps_its_bare_name(self):
         from clausal.logic.generated_names import dollar_ref
-        from clausal.logic.predicate import make_predicate
-        cls = make_predicate("MyOwnPred", ["a"])
+        cls = class_arm_predicate("MyOwnPred", ["a"])
         with warnings.catch_warnings():
             warnings.simplefilter("error")
             assert dollar_ref(cls) == "MyOwnPred"

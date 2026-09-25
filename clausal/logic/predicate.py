@@ -23,7 +23,7 @@ import os
 import re
 import sys
 import textwrap
-from typing import Any, Callable
+from typing import Any, Callable, NoReturn
 
 from clausal.logic.cells import is_chars, chars_text  # stage 1: the chars carrier
 from clausal._suffixes import CLAUSAL_SUFFIXES
@@ -928,8 +928,8 @@ class PredicateMeta(type):
         # longer mints one for a plain atom, but a 0-arity PREDICATE
         # declared with explicit call syntax — ``-module(m, [p()])``, as
         # opposed to the bare-Name atom syntax ``-module(m, [p])`` — still
-        # legitimately mints one, and ``make_predicate(n, [])`` remains a
-        # general-purpose, still-tested construction API for that shape
+        # legitimately mints one, and ``make_predicate(n, [])`` WAS a
+        # construction API for that shape until W4b-3 slice 6 retired it
         # (``make_atom`` is NOT: P3-3 Task 7 made it return the atom str,
         # since a public factory minting a class atom was the one door left
         # for a class atom to enter a program that has none). This zero-field
@@ -937,8 +937,9 @@ class PredicateMeta(type):
 
         # Where this class was registered, for the field-name mismatch
         # diagnostic.  Frame 1 is the .clausal module body running the
-        # generated ``class <functor>(metaclass=PredicateMeta)`` block (or the
-        # Python caller of ``make_predicate``).  Skipped when a field of that
+        # generated ``class <functor>(metaclass=PredicateMeta)`` block until
+        # W4b-3 slice 5, or the Python code calling the metaclass; the
+        # retired ``make_predicate`` was one).  Skipped when a field of that
         # name exists, since __slots__ would have made it a descriptor.
         if "_registered_at" not in fields:
             cls._registered_at = _source_site(1)
@@ -959,9 +960,9 @@ class PredicateMeta(type):
         #
         # ``None`` until first use.  A class the compiler binds into a module
         # gets the owning Database's row (``_bind_row``); a class minted with
-        # no Database anywhere — bare ``make_predicate`` from Python, the
-        # out-of-tree pattern, ``clausal.reflection``, ``clpb``, the builtin
-        # registry — lazily gets a PRIVATE DETACHED row over a private
+        # no Database anywhere — a class statement or metaclass call from
+        # Python (``make_predicate`` did this until W4b-3 slice 6 retired
+        # it) — lazily gets a PRIVATE DETACHED row over a private
         # Database of its own (``_state_row``).  That is the compatibility
         # mode: the duck type (``_assertz``, ``_get_dispatch()``, ``_lock``)
         # behaves exactly as before with no Database in sight.
@@ -986,7 +987,8 @@ class PredicateMeta(type):
         here on first use over a single-predicate ``Database`` nobody else can
         reach, and cached in ``cls._row``.  That is the compatibility mode;
         ``_bind_row`` later replaces the private row if the class is compiled
-        into a module.  Goes with ``make_predicate`` at P4.
+        into a module.  Goes with the class (W4b-3 slice 7;
+        ``make_predicate`` itself was retired at slice 6).
 
         Lazy (not minted in ``__init__``) for two reasons: ``database.py``
         imports ``predicate.py``, so eager construction would need a
@@ -3043,11 +3045,14 @@ def declare_head(functor: str, fields: tuple, /) -> None:
         return
     handle = local_predicate_handle(namespace, functor)
     if handle is None:
-        raise SyntaxError(
+        # A RUNTIME error: this is raised while a body runs, where a
+        # ``SyntaxError`` would carry no filename or line to point at.
+        raise RuntimeError(
             f"cannot declare the predicate {functor}: this namespace belongs "
-            f"to no module (it has no __name__), and a predicate is named by "
-            f"its module.  Define {functor} in a .clausal file and import it, "
-            f"or run this code with a module-level __name__ bound")
+            f"to no module (it has no usable __name__), and a predicate is "
+            f"named by its module.  Define {functor} in a .clausal file and "
+            f"import it, or run this code with a non-empty module-level "
+            f"__name__")
     namespace.setdefault(PREDICATE_HEADS_KEY, {})[functor] = (
         fields, _source_site(1))
     namespace[functor] = handle
@@ -3712,26 +3717,38 @@ for _retired_name, _retired_where in _RETIRED_STATE_NAMES.items():
 del _retired_name, _retired_where
 
 
+class MakePredicateRetiredError(TypeError):
+    """``make_predicate`` was RETIRED (W4b-3 slice 6, 2026-09-25): a
+    predicate is a Database row, named by a handle, and a class created in
+    Python has no Database to be a row of.  A ``TypeError`` -- the call
+    itself is the mistake, whatever its arguments -- raised at the call, so
+    the traceback points at the line to change."""
+
+
+_MAKE_PREDICATE_RETIRED = (
+    "make_predicate({name!r}, {fields!r}) was retired (W4b-3 slice 6): a "
+    "predicate is a row in a module's Database, named by a handle, not a "
+    "class made in Python.\n"
+    "  -> define {name} in a .clausal module and import it (or load the "
+    "module and run a goal with solve((\"{name}\", *args), module=m));\n"
+    "  -> to supply a predicate from Python, bind a plain object (not a "
+    "class) with a _get_dispatch() method returning its dispatch function "
+    "into a Python module, and -import_from it;\n"
+    "  -> to build a term, write the cell: ({name!r}, arg, ...).")
+
+
 def make_predicate(name: str, fields: list[str], *,
-                   instances: Any = _MISSING) -> "PredicateMeta":
-    """Dynamically create a PredicateMeta class.
+                   instances: Any = _MISSING) -> NoReturn:
+    """RETIRED (W4b-3 slice 6): raises :class:`MakePredicateRetiredError`.
 
-    Useful in tests and runtime code that needs a predicate without a
-    module-level class definition::
-
-        foo = make_predicate("foo", ["a", "b"])
-        foo._assertz(Clause(head=foo(a=Var(), b=Var()), body=[...]))
-        compile_predicate("foo", 2, foo._state_row().clauses, pred_cls=foo)
-        fn = foo._get_dispatch()
-    """
-    if instances is not _MISSING:
-        raise TypeError(
-            "make_predicate() got `instances=`: that bridge was retired "
-            "(W4a, 2026-09-22); a predicate class builds cells.  (The "
-            "parameter is still declared so passing it says THIS, rather "
-            "than the bare 'unexpected keyword argument' every other typo "
-            "should get.)")
-    return PredicateMeta(name, (), {"_fields": tuple(fields)})
+    It created a ``PredicateMeta`` class from Python -- the Python-API arm of
+    the class era, which a load has refused to bind since W4b-3 slice 1.
+    The name stays so a caller gets THIS explanation, pointing at the
+    replacements, rather than an ``ImportError``/``AttributeError``."""
+    raise MakePredicateRetiredError(
+        _MAKE_PREDICATE_RETIRED.format(name=name, fields=list(fields)
+                                       if isinstance(fields, (list, tuple))
+                                       else fields))
 
 
 def make_atom(name: str) -> tuple[str]:
@@ -3750,8 +3767,9 @@ def make_atom(name: str) -> tuple[str]:
     exported, and out-of-tree callers spell an atom with it); what it returns
     changed.
 
-    A zero-arity PREDICATE class — the thing a bare ``p()`` declaration mints,
-    which is a procedure and not an atom — is ``make_predicate(name, [])``.
+    (A zero-arity PREDICATE -- the thing a bare ``p()`` declaration declares,
+    which is a procedure and not an atom -- is a row named by its handle;
+    ``make_predicate(name, [])`` minted one as a class until W4b-3 slice 6.)
 
     Delegates to ``clausal.logic.atoms.mint`` (spec §6.1) — the public atom
     API that Plan 0 of the atoms-as-cells/strings plan introduces.
@@ -3769,7 +3787,7 @@ __all__ = ["PredicateMeta", "RetiredStateError", "_MISSING", "is_term_instance",
            "is_atom_value",
            "term_field_names", "term_field_names_of_class", "field_names_for",
            "term_field_values", "term_field_dict",
-           "make_predicate", "make_atom",
+           "make_predicate", "MakePredicateRetiredError", "make_atom",
            "resolve_predicate_row", "is_declared_predicate",
            "is_declared_predicate_name", "predicate_arities_for",
            "mint_predicate_handle", "namespace_db",

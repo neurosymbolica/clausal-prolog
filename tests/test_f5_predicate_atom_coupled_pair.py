@@ -53,17 +53,18 @@ import dataclasses
 
 from clausal.logic.compiler.head_match import head_to_match_pattern
 from clausal.logic.compiler.terms_to_ast import _is_opaque_head_literal
-from clausal.logic.predicate import is_declared_predicate_name, make_predicate
+from clausal.logic.predicate import is_declared_predicate_name
+from tests.predicate_api_support import class_arm_predicate
 
 
 # ── Shared fixtures ──────────────────────────────────────────────────────
 
 def _a_predicate_class():
-    return make_predicate("F5CoupledPairPred", ["a", "b"])
+    return class_arm_predicate("F5CoupledPairPred", ["a", "b"])
 
 
 def _a_zero_arity_predicate_class():
-    return make_predicate("F5CoupledPairZeroArity", [])
+    return class_arm_predicate("F5CoupledPairZeroArity", [])
 
 
 @dataclasses.dataclass

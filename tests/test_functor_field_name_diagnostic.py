@@ -30,8 +30,8 @@ from clausal.import_hook import _load_module
 from clausal.logic.predicate import (
     ClausalTermConstructionError,
     PredicateMeta,
-    make_predicate,
 )
+from tests.predicate_api_support import class_arm_predicate
 
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
@@ -56,7 +56,7 @@ class TestConstructionErrorShape:
         assert issubclass(ClausalTermConstructionError, TypeError)
 
     def test_names_functor_arity_and_both_field_tuples(self):
-        cls = make_predicate("fnd_verdict", ["status", "citations"])
+        cls = class_arm_predicate("fnd_verdict", ["status", "citations"])
         with pytest.raises(ClausalTermConstructionError) as exc_info:
             cls(arg_0="ok", arg_1=[])
         msg = str(exc_info.value)
@@ -65,7 +65,7 @@ class TestConstructionErrorShape:
         assert "(status, citations)" in msg
 
     def test_carries_structured_attributes(self):
-        cls = make_predicate("fnd_pair", ["left", "right"])
+        cls = class_arm_predicate("fnd_pair", ["left", "right"])
         with pytest.raises(ClausalTermConstructionError) as exc_info:
             cls(alpha=1, beta=2)
         err = exc_info.value
@@ -75,7 +75,7 @@ class TestConstructionErrorShape:
         assert err.registered_fields == ("left", "right")
 
     def test_reports_the_construction_source_location(self):
-        cls = make_predicate("fnd_where", ["only"])
+        cls = class_arm_predicate("fnd_where", ["only"])
         with pytest.raises(ClausalTermConstructionError) as exc_info:
             cls(nope=1)
         msg = str(exc_info.value)
@@ -83,14 +83,14 @@ class TestConstructionErrorShape:
         assert os.path.basename(__file__) in msg
 
     def test_registered_location_is_recorded_on_the_class(self):
-        cls = make_predicate("fnd_regsite", ["only"])
+        cls = class_arm_predicate("fnd_regsite", ["only"])
         assert isinstance(cls._registered_at, tuple)
         filename, lineno = cls._registered_at
         assert os.path.basename(__file__) == os.path.basename(filename)
         assert lineno > 0
 
     def test_matching_field_names_still_construct(self):
-        cls = make_predicate("fnd_ok", ["left", "right"])
+        cls = class_arm_predicate("fnd_ok", ["left", "right"])
         term = cls(left=1, right=2)
         assert _cf(term, cls, "left") == 1 and _cf(term, cls, "right") == 2
 
@@ -198,7 +198,7 @@ class TestAtomShadowsPredicate:
             )
 
     def test_atom_cause_is_detected_at_unit_level_too(self):
-        atom = make_predicate("fnd_bare_atom", [])
+        atom = class_arm_predicate("fnd_bare_atom", [])
         with pytest.raises(ClausalTermConstructionError) as exc_info:
             atom(PROFILE=1, VALUE=2)
         msg = str(exc_info.value)
@@ -211,7 +211,7 @@ class TestCauseDiscrimination:
     """Neither hint fires for a plain rename mismatch."""
 
     def test_generic_mismatch_gets_neither_specific_hint(self):
-        cls = make_predicate("fnd_generic", ["left", "right"])
+        cls = class_arm_predicate("fnd_generic", ["left", "right"])
         with pytest.raises(ClausalTermConstructionError) as exc_info:
             cls(alpha=1, beta=2)
         msg = str(exc_info.value)

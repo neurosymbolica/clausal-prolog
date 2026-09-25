@@ -10,7 +10,7 @@ from clausal.logic.database import (
 )
 from clausal.terms import Call, Compound, LoadName, Unify
 from clausal.logic.variables import Var, is_var
-from clausal.logic.predicate import make_predicate
+from tests.predicate_api_support import term_ctor
 from clausal.import_hook import _load_module
 from clausal.logic.solve import call
 
@@ -51,7 +51,7 @@ def _hf(head, cls, name):
 
 class TestNormalizeStructuralHeadArgs:
     def test_structural_field_hoisted_to_prepended_unify(self):
-        pt = make_predicate("pt", ("a", "b"))
+        pt = term_ctor("pt", ("a", "b"))
         compound = Call(func=LoadName(name="point"), args=[1, 2], kwargs=[])
         head = pt(a=Var(), b=compound)
         new_head, new_body = _normalize_structural_head_args(head, [True])
@@ -65,14 +65,14 @@ class TestNormalizeStructuralHeadArgs:
         assert new_body[1] is True  # original body preserved after prepend
 
     def test_atomic_fields_left_alone(self):
-        pt = make_predicate("pt", ("a", "b"))
+        pt = term_ctor("pt", ("a", "b"))
         head = pt(a=Var(), b=20000)
         new_head, new_body = _normalize_structural_head_args(head, [True])
         assert _hf(new_head, pt, "b") == 20000      # untouched
         assert new_body == [True]       # no goals added
 
     def test_no_structural_fields_is_noop(self):
-        pt = make_predicate("pt", ("a",))
+        pt = term_ctor("pt", ("a",))
         head = pt(a=Var())
         h2, b2 = _normalize_structural_head_args(head, [True])
         assert h2 is head and b2 == [True]

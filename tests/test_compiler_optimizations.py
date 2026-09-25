@@ -86,7 +86,7 @@ from clausal.logic.atoms import mint
 from clausal.logic.compiler import compile_predicate_trampoline_ast
 from clausal.logic.compiler.goal_trampoline import compile_goal_trampoline
 from clausal.logic.database import Clause, Database
-from clausal.logic.predicate import make_predicate
+from tests.predicate_api_support import term_ctor
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.terms import Compound
 from clausal.pythonic_ast.nodes import (
@@ -566,7 +566,7 @@ class TestSinglePassTraversal:
     def test_head_types_collected(self):
         """User-defined term classes from heads are collected."""
         from clausal.logic.compiler.globals_env import _collect_globals_info, _collect_head_types
-        MyTerm = make_predicate("MyTerm", ("val",))
+        MyTerm = term_ctor("MyTerm", ("val",))
         t1, t2 = MyTerm(val=1), MyTerm(val=2)
         clauses = [
             Clause(head=t1, body=[]),
@@ -619,24 +619,30 @@ class TestLockedDispatchCaching:
     """
 
     def _make_locked_callee(self):
-        """Return a locked PredicateMeta for Bar/1 with a compiled dispatch."""
+        """Return ``(db, handle)``: Bar/1 compiled into a module's Database
+        and LOCKED, and the predicate HANDLE a module binds for it.  The
+        caller compiles Foo into the same db with ``globals_={"Bar":
+        handle}`` -- the binding a loaded module's body sees since the flip.
+        (It returned a locked ``make_predicate`` class until W4b-3 slice 6.)
+        """
         from clausal.logic.compiler import compile_predicate_trampoline
-        Bar = make_predicate("Bar", ("x",))
-        db = Database()
+        from clausal.logic.database import Module
+        from clausal.logic.predicate import (
+            mint_predicate_handle, register_handle_owner)
+        db = Module("tco_locked_callee",
+                    module_dict={"__name__": "tco_locked_callee"}).db
         v = Var()
         db.assertz(Clause(head=Compound("Bar", (v,)), body=[]))
         compile_predicate_trampoline("Bar", 1, db.clauses_for("Bar", 1), db)
-        Bar._state_row().locked = True
-        with Bar._mutate("test", "recompile"):      # the gate, P3-3 Task 3
-            Bar._state_row().dispatch_fn = db.get_dispatch("Bar", 1)
-        return Bar
+        db.row("Bar", 1).locked = True
+        register_handle_owner(db)
+        return db, mint_predicate_handle(db, "Bar")
 
     def test_disp_key_in_globals_for_locked_callee(self):
         """_disp_Bar_1 is injected into base_globals when Bar is locked+compiled."""
         # nv
         from clausal.logic.compiler import compile_predicate_trampoline
-        Bar = self._make_locked_callee()
-        db = Database()
+        db, Bar = self._make_locked_callee()
         v = Var()
         clauses = [
             Clause(
@@ -654,8 +660,7 @@ class TestLockedDispatchCaching:
         # nv
         import dis, io
         from clausal.logic.compiler import compile_predicate_trampoline
-        Bar = self._make_locked_callee()
-        db = Database()
+        db, Bar = self._make_locked_callee()
         v = Var()
         clauses = [
             Clause(
@@ -687,10 +692,18 @@ class TestLockedDispatchCaching:
         # nv
         import dis, io
         from clausal.logic.compiler import compile_predicate_trampoline
-        Baz = make_predicate("Baz", ("x",))
+        from clausal.logic.database import Module
+        from clausal.logic.predicate import (
+            mint_predicate_handle, register_handle_owner)
+        db = Module("tco_unlocked_callee",
+                    module_dict={"__name__": "tco_unlocked_callee"}).db
+        w = Var()
+        db.assertz(Clause(head=Compound("Baz", (w,)), body=[]))
+        compile_predicate_trampoline("Baz", 1, db.clauses_for("Baz", 1), db)
+        register_handle_owner(db)
+        Baz = mint_predicate_handle(db, "Baz")
         # NOT locked
-        assert not Baz._state_row().locked
-        db = Database()
+        assert not db.row("Baz", 1).locked
         v = Var()
         clauses = [
             Clause(
@@ -717,8 +730,7 @@ class TestLockedDispatchCaching:
         # nv
         from clausal.logic.compiler import compile_predicate_trampoline
         from clausal.logic.trampoline import StepGenerator, DONE as _DONE
-        Bar = self._make_locked_callee()
-        db = Database()
+        db, Bar = self._make_locked_callee()
         v = Var()
         result_var = Var()
         clauses = [
@@ -879,7 +891,7 @@ class TestCompoundKeyIndexing:
     def test_predicate_meta_compound_key(self):
         """PredicateMeta heads also produce (class_name, field_count) index keys."""
         from clausal.logic.compiler.arg_index import _extract_arg_key
-        MyTerm = make_predicate("MyTerm", ("val",))
+        MyTerm = term_ctor("MyTerm", ("val",))
         t = MyTerm(val=1)
         cl = Clause(head=Compound("Foo", (t, Var())), body=[])
         key = _extract_arg_key(cl, 0, 2)

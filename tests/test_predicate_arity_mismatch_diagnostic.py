@@ -30,7 +30,6 @@ import pytest
 
 from clausal.logic.atoms import mint
 from clausal.logic.database import Clause, Database
-from clausal.logic.predicate import make_predicate
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref, walk
 from clausal.predicate_diagnostics import (
@@ -38,6 +37,7 @@ from clausal.predicate_diagnostics import (
     describe_arity_mismatch,
 )
 from clausal.testing import load_clausal_module, main
+from tests.predicate_api_support import class_arm_predicate
 
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
@@ -354,13 +354,13 @@ class TestExceptionType:
         plain ``TypeError(msg)`` — the failure this fix exists to replace —
         passed the whole file.
         """
-        pair = make_predicate("arcm_typed", ["k", "v"])
+        pair = class_arm_predicate("arcm_typed", ["k", "v"])
         pair._state_row().clauses.append(Clause(head=pair(1, 2), body=[]))
         with pytest.raises(PredicateArityMismatchError):
             pair._get_dispatch(1)
 
     def test_caught_as_a_type_error_at_the_raise_site(self):
-        pair = make_predicate("arcm_typed_te", ["k", "v"])
+        pair = class_arm_predicate("arcm_typed_te", ["k", "v"])
         pair._state_row().clauses.append(Clause(head=pair(1, 2), body=[]))
         with pytest.raises(TypeError):
             pair._get_dispatch(3)
@@ -534,7 +534,7 @@ class TestForeignSingleArgumentImplementor:
         assert _dispatch_at(foreign_pair, 2) is _foreign_pair_dispatch
         assert _dispatch_at(foreign_pair, 99) is _foreign_pair_dispatch
         # A PredicateMeta: the arity is forwarded and a disagreement refused.
-        pair = make_predicate("arcm_routed", ["k", "v"])
+        pair = class_arm_predicate("arcm_routed", ["k", "v"])
         pair._state_row().clauses.append(Clause(head=pair(1, 2), body=[]))
         with pair._mutate("test", "recompile"):    # the gate, P3-3 Task 3
             pair._state_row().dispatch_fn = lambda *a: None
@@ -582,7 +582,7 @@ def _declared(name, fields, arities):
     on.
     """
     db = Database()
-    cls = make_predicate(name, fields)
+    cls = class_arm_predicate(name, fields)
     for arity in arities:
         db.mark_dynamic(name, arity)
     cls._bind_row(db, name, len(fields))
@@ -651,7 +651,7 @@ class TestDynamicDeclaredArity:
 
     def test_retracting_back_to_empty_keeps_the_declaration(self):
         """assertz → retract → the declared arity still refuses."""
-        pair = make_predicate("arcm_dynpair", ["k", "v", "w"])
+        pair = class_arm_predicate("arcm_dynpair", ["k", "v", "w"])
         moving = _declared("arcm_dyndecl", ["a", "b", "c"], {3})
         with pytest.raises(PredicateArityMismatchError):
             moving._refuse_call_at(2)
@@ -698,7 +698,7 @@ class TestDynamicDeclaredArity:
 
     def test_undeclared_stays_declined(self):
         """The default is ``None`` — every pre-existing decline is untouched."""
-        plain = make_predicate("arcm_dynnone", ["a", "b", "c"])
+        plain = class_arm_predicate("arcm_dynnone", ["a", "b", "c"])
         # No Database has a mark for it, so the derived set is EMPTY -- which
         # is what the old class-stamped `None` meant.
         plain._refuse_call_at(2)                 # must not raise
@@ -794,8 +794,8 @@ def _stale_predicate(name, n_clauses):
     Built by hand here so the clause count can be a fact table's, and so no
     shared fixture class is mutated.
     """
-    pair = make_predicate(name + "_pair", ["k", "v"])
-    stale = make_predicate(name, [])
+    pair = class_arm_predicate(name + "_pair", ["k", "v"])
+    stale = class_arm_predicate(name, [])
     stale._state_row().clauses.extend(_CountingClause(pair(i, i)) for i in range(n_clauses))
     assert stale._arity == 0          # stale, permanently
     return stale
@@ -844,9 +844,9 @@ class TestClauseListChangesAreObeyed:
     """
 
     def test_assertz_of_another_arity_flips_the_decision(self):
-        pair = make_predicate("arcm_dyn_pair", ["k", "v"])
-        one = make_predicate("arcm_dyn_one", ["k"])
-        moving = make_predicate("arcm_dyn", [])
+        pair = class_arm_predicate("arcm_dyn_pair", ["k", "v"])
+        one = class_arm_predicate("arcm_dyn_one", ["k"])
+        moving = class_arm_predicate("arcm_dyn", [])
 
         moving._assertz(Clause(head=pair(1, 2), body=[]))
         moving._refuse_call_at(2)                    # /2 heads: accepted
@@ -860,8 +860,8 @@ class TestClauseListChangesAreObeyed:
             moving._refuse_call_at(2)
 
     def test_retracting_the_last_clause_stops_refusing(self):
-        pair = make_predicate("arcm_empty_pair", ["k", "v"])
-        moving = make_predicate("arcm_empty", [])
+        pair = class_arm_predicate("arcm_empty_pair", ["k", "v"])
+        moving = class_arm_predicate("arcm_empty", [])
         moving._assertz(Clause(head=pair(1, 2), body=[]))
         with pytest.raises(PredicateArityMismatchError):
             moving._refuse_call_at(1)
@@ -980,7 +980,7 @@ class TestCompoundHead:
 
     def test_str_functor(self):
         from clausal.terms import Compound
-        pred = make_predicate("arcm_compound", [])
+        pred = class_arm_predicate("arcm_compound", [])
         pred._state_row().clauses.append(Clause(head=Compound("arcm_compound", (1, 2)),
                                     body=[]))
         assert pred._clause_arity() == 2
@@ -991,7 +991,7 @@ class TestCompoundHead:
     def test_var_functor(self):
         from clausal.logic.variables import Var
         from clausal.terms import Compound
-        pred = make_predicate("arcm_compound_var", [])
+        pred = class_arm_predicate("arcm_compound_var", [])
         pred._state_row().clauses.append(Clause(head=Compound(Var(), (1, 2, 3)), body=[]))
         assert pred._clause_arity() == 3
         pred._refuse_call_at(3)          # agrees: nothing refused
@@ -1001,14 +1001,14 @@ class TestAHeadShapeNobodyAnticipated:
     """Undefined arity means *nothing is refused*, never *something is raised*."""
 
     def test_an_unreadable_head_refuses_nothing(self):
-        junk = make_predicate("arcm_junk", [])
+        junk = class_arm_predicate("arcm_junk", [])
         junk._state_row().clauses.append(Clause(head=object(), body=[]))
         assert junk._clause_arity() is None
         junk._refuse_call_at(3)          # must not raise at all
 
     def test_one_unreadable_head_makes_the_whole_arity_unknown(self):
-        pair = make_predicate("arcm_mixed_pair", ["k", "v"])
-        mixed = make_predicate("arcm_mixed", [])
+        pair = class_arm_predicate("arcm_mixed_pair", ["k", "v"])
+        mixed = class_arm_predicate("arcm_mixed", [])
         mixed._state_row().clauses.append(Clause(head=pair(1, 2), body=[]))
         mixed._state_row().clauses.append(Clause(head=object(), body=[]))
         assert mixed._clause_arity() is None
@@ -1025,7 +1025,7 @@ class TestAHeadShapeNobodyAnticipated:
             def head(self):
                 raise RuntimeError("a diagnostic must survive this")
 
-        boom = make_predicate("arcm_boom", [])
+        boom = class_arm_predicate("arcm_boom", [])
         boom._state_row().clauses.append(Exploding())
         boom._refuse_call_at(2)
 

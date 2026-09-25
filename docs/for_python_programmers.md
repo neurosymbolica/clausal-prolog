@@ -175,11 +175,15 @@ is_atom("ok")         # True — a raw str IS an atom
 ok == "ok"             # True — the same value
 ```
 
-If you specifically want a zero-arity `PredicateMeta` **class** — a 0-arity
-predicate *value*, a different and rarer thing from an atom — that is
-`make_predicate("ok", [])`. The class and the atom are disjoint kinds now
-(no class is an atom), so a helper that used to answer either question no
-longer does:
+A 0-arity **predicate** — a procedure, a different thing from an atom — is
+defined in a `.clausal` module (`ok,` or `ok <- ...`) and is a row in that
+module's Database; the module binds its name to a predicate handle. There is
+no way to make one from Python any more: `make_predicate` was retired
+(W4b-3 slice 6) and raises `MakePredicateRetiredError`, pointing at a
+`.clausal` module, `solve((name, *args), module=m)`, or a plain object with a
+`_get_dispatch()` method for a predicate implemented in Python. A
+`PredicateMeta` class and an atom are disjoint kinds (no class is an atom),
+so a helper that used to answer either question no longer does:
 
 | Helper | Question |
 |---|---|

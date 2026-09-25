@@ -195,7 +195,7 @@ def test_the_arity_conflict_message_names_the_declaration_not_a_class(
     text = str(info.value)
     assert "conflicts with the declaration of s5c_p/1" in text
     assert "s5c_p is declared with 1 field(s) (arg_0)" in text
-    assert "class" not in text.split("remedy:")[0]
+    assert "class is minted" not in text
 
 
 def test_a_circular_import_still_lists_what_the_partial_module_defines(
@@ -217,13 +217,15 @@ def test_a_circular_import_still_lists_what_the_partial_module_defines(
     """)
     for name in ("s5_circ_a", "s5_circ_b"):
         monkeypatch.delitem(sys.modules, name, raising=False)
-    with pytest.raises(ImportError) as info:
-        __import__("s5_circ_a")
-    text = str(info.value)
-    assert "partially initialized module 's5_circ_a'" in text   # the case
-    assert "s5_circ_a does define: s5ca_one/1, s5ca_two/2" in text
-    for name in ("s5_circ_a", "s5_circ_b"):
-        sys.modules.pop(name, None)
+    try:
+        with pytest.raises(ImportError) as info:
+            __import__("s5_circ_a")
+        text = str(info.value)
+        assert "partially initialized module 's5_circ_a'" in text   # the case
+        assert "s5_circ_a does define: s5ca_one/1, s5ca_two/2" in text
+    finally:
+        for name in ("s5_circ_a", "s5_circ_b"):
+            sys.modules.pop(name, None)
 
 
 def test_importlib_reload_rereads_the_body_without_duplicating_clauses(
@@ -242,24 +244,26 @@ def test_importlib_reload_rereads_the_body_without_duplicating_clauses(
         s5rl_p(1),
         s5rl_p(2),
     """)
-    mod = importlib.import_module("s5_rl_mod")
-    assert _answers(mod, "s5rl_p", 1) == [(1,), (2,)]
-    mod = importlib.reload(mod)
-    assert _answers(mod, "s5rl_p", 1) == [(1,), (2,)]
-    assert len(mod.__dict__["$module"].db.clauses_for("s5rl_p", 1)) == 2
-    # An edited source (mtime bumped so the bytecode cache cannot serve the
-    # old code) is what the reload reads.
-    _write(tmp_path, "s5_rl_mod.clausal", """
-        -module(s5_rl_mod, [s5rl_p(X)])
-        s5rl_p(1),
-        s5rl_p(2),
-        s5rl_p(3),
-    """)
-    st = os.stat(path)
-    os.utime(path, ns=(st.st_atime_ns, st.st_mtime_ns + 10**9))
-    mod = importlib.reload(mod)
-    assert _answers(mod, "s5rl_p", 1) == [(1,), (2,), (3,)]
-    sys.modules.pop("s5_rl_mod", None)
+    try:
+        mod = importlib.import_module("s5_rl_mod")
+        assert _answers(mod, "s5rl_p", 1) == [(1,), (2,)]
+        mod = importlib.reload(mod)
+        assert _answers(mod, "s5rl_p", 1) == [(1,), (2,)]
+        assert len(mod.__dict__["$module"].db.clauses_for("s5rl_p", 1)) == 2
+        # An edited source (mtime bumped so the bytecode cache cannot serve the
+        # old code) is what the reload reads.
+        _write(tmp_path, "s5_rl_mod.clausal", """
+            -module(s5_rl_mod, [s5rl_p(X)])
+            s5rl_p(1),
+            s5rl_p(2),
+            s5rl_p(3),
+        """)
+        st = os.stat(path)
+        os.utime(path, ns=(st.st_atime_ns, st.st_mtime_ns + 10**9))
+        mod = importlib.reload(mod)
+        assert _answers(mod, "s5rl_p", 1) == [(1,), (2,), (3,)]
+    finally:
+        sys.modules.pop("s5_rl_mod", None)
 
 
 def test_a_clause_at_the_console_is_not_an_internal_error():
@@ -302,3 +306,18 @@ def test_a_loading_handle_answers_its_arity_even_before_its_owner_resolves():
     finally:
         end_loading_declarations(ns)
     assert predicate_arities_for(handle) == set()
+
+
+@pytest.mark.parametrize("name", [None, ""])
+def test_a_namespace_with_no_usable_name_is_refused_at_run_time(name):
+    """``$declare_head`` in a namespace whose ``__name__`` is missing or
+    falsy raises a RUNTIME error (it fires while a body runs, where a
+    ``SyntaxError`` would have no file or line), with the user wording."""
+    from clausal.logic.predicate import declare_head
+    ns = {"__d": declare_head}
+    if name is not None:
+        ns["__name__"] = name
+    with pytest.raises(RuntimeError, match="no usable __name__") as info:
+        exec("__d('s5nn_p', ('a',))", ns)
+    assert info.type is RuntimeError
+    assert "non-empty module-level __name__" in str(info.value)

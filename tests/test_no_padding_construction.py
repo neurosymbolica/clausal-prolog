@@ -23,10 +23,11 @@ import pytest
 import clausal.import_hook  # noqa: F401
 from clausal.import_hook import _load_module
 from clausal.logic.predicate import (
-    ClausalTermConstructionError, build_term_cell, head_cell, make_predicate,
+    ClausalTermConstructionError, build_term_cell, head_cell,
 )
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref, walk
+from tests.predicate_api_support import class_arm_predicate
 
 
 def _load(tmp_path, name, src):
@@ -62,7 +63,7 @@ def test_a_stray_keyword_still_gets_its_own_message():
 
 
 def test_a_class_call_and_a_handle_head_refuse_it_alike(tmp_path):
-    Pt = make_predicate("np_pt", ["x", "y"])
+    Pt = class_arm_predicate("np_pt", ["x", "y"])
     with pytest.raises(ClausalTermConstructionError):
         Pt(x=1)
     with pytest.raises(ClausalTermConstructionError):

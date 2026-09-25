@@ -38,7 +38,7 @@ from clausal.logic.compiler import (
     compile_predicate_shallow,
 )
 from clausal.logic.predicate import (
-    PredicateMeta, make_predicate, record_clause_source,
+    PredicateMeta, record_clause_source,
     field_names_for, is_declared_predicate, is_declared_predicate_name,
     binding_grants_arity,
     predicate_arities_for, predicate_binding_name, predicate_owner_module,
@@ -646,10 +646,11 @@ def _flip_owner(value: "PredicateMeta", db,
       declared name with no clauses), or one this db already holds a row or
       a ``-dynamic`` mark for at the class's arity (a step-1c ``-specialize``
       target, minted by ``make_predicate`` in ``clausal.logic.predicate``
-      but row-planted by ruling QB): the compiling db.
+      until W4b-3 slice 4, row-planted by ruling QB): the compiling db.
     * Anything else -- a class a plain PYTHON module exports
-      (``-import_from(py_mod, [p])``), a ``make_predicate`` class compiled
-      with ``db=None`` onto its private row -- has no Database a handle
+      (``-import_from(py_mod, [p])``), a metaclass-called class (the
+      retired ``make_predicate``'s shape) compiled with ``db=None`` onto
+      its private row -- has no Database a handle
       could name: ``None``.  A handle minted from the compiling db would
       name a predicate that db does not have (``PredicateNotFoundError`` on
       every call, roborev 2026-09-25).  W4b-2d left such a class bound as it
@@ -1317,7 +1318,8 @@ def _implements_an_imported_declaration(origins: dict, module_dict: dict,
     with a message for the exporter's actual shape:
 
     * a PYTHON module (not a loaded Clausal module) exporting a predicate
-      class -- ``make_predicate`` or a ``PredicateMeta`` class statement: the
+      class -- a ``PredicateMeta`` class statement or metaclass call (the
+      retired ``make_predicate``'s shape): the
       class was created in Python, so no Clausal module owns it;
     * clause-free and never written by a load -- a declaration-only export
       (NO row post-flip, a private detached row today) or an empty

@@ -209,14 +209,15 @@ def test_a_local_predicate_at_another_arity_than_an_import_loads():
 #
 # Operator ruling 2026-09-25: the flip's class-preserving branch goes.  A
 # ``PredicateMeta`` class a plain PYTHON module creates (a class statement,
-# or ``make_predicate`` compiled with ``db=None``) has no Database a handle
+# or the metaclass called -- ``make_predicate``'s shape -- compiled with
+# ``db=None``) has no Database a handle
 # could name; it used to stay bound and answer through its own
 # ``_get_dispatch()``.  Now the load refuses it and points at what still
 # works: the duck-typed ``_get_dispatch`` protocol on a plain object (the
 # frozen protocol ~22 out-of-tree implementors use), or a Clausal module.
 
 _PY_EXPORTER = '''
-from clausal.logic.predicate import PredicateMeta, make_predicate
+from clausal.logic.predicate import PredicateMeta
 from clausal.logic.compiler import compile_predicate_trampoline
 from clausal.logic.database import Clause
 
@@ -225,7 +226,10 @@ class w4b3_pycls(metaclass=PredicateMeta):   # a class statement in Python
     _fields = ("x",)
 
 
-w4b3_pymk = make_predicate("w4b3_pymk", ["x"])   # make_predicate, db=None
+# The metaclass CALLED -- the shape ``make_predicate`` built (retired at
+# W4b-3 slice 6; it raises now), which Python can still spell until the
+# class is deleted at slice 7.
+w4b3_pymk = PredicateMeta("w4b3_pymk", (), {"_fields": ("x",)})
 
 for _p, _vals in ((w4b3_pycls, (1, 2)), (w4b3_pymk, (7, 8))):
     compile_predicate_trampoline(

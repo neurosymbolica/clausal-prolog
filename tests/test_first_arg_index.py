@@ -20,7 +20,8 @@ from clausal.logic.compiler.arg_index import (
     _INDEX_VAR,
     _INDEX_THRESHOLD,
 )
-from clausal.logic.predicate import PredicateMeta, make_predicate
+from clausal.logic.predicate import PredicateMeta
+from tests.predicate_api_support import class_arm_predicate, term_ctor
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.logic.trampoline import StepGenerator, solutions, DONE
 from clausal.terms import Compound, Unify
@@ -141,7 +142,7 @@ class TestExtractFirstArgKey:
         """
         # nv — regression for map_coloring private-atom-fact indexing bug
         from clausal.terms import LoadName
-        red = make_predicate("red", [])
+        red = class_arm_predicate("red", [])   # the class arm (W4b-3 slice 7)
         v = Var()
         c = Clause(head=Compound("color", (v,)),
                    body=[Unify(left=v, right=LoadName(name="red"))])
@@ -279,7 +280,7 @@ class TestCellIndexKey:
         # analog of this gap, parked at P3-2 fix round 1 and wired here --
         # the repro from
         # todo/done/first-arg-index-partially-ground-instance-keys-into-bucket-2026-09-05.md.
-        Wrap = make_predicate("wrap", ["sub"])
+        Wrap = term_ctor("wrap", ["sub"])
         assert _runtime_arg_key(Wrap(sub=Var())) is _INDEX_VAR
 
     def test_a_fully_ground_cell_still_keys_normally(self):
@@ -289,7 +290,7 @@ class TestCellIndexKey:
         from clausal.logic.compiler.arg_index import _runtime_arg_key
         assert _runtime_arg_key(("wrap", "direct")) == ("wrap", 1)
         assert _runtime_arg_key(("item", "r", ("met", "direct"), "d")) == ("item", 3)
-        Wrap = make_predicate("wrap", ["sub"])
+        Wrap = term_ctor("wrap", ["sub"])
         assert _runtime_arg_key(Wrap(sub="direct")) == ("wrap", 1)
         # ... and the gate is opt-out, exactly as it is for a cell: a
         # predicate/position whose lifted arms carry no literal sub-value
@@ -671,8 +672,7 @@ class TestDeepGateFlagComputation:
         from clausal.logic.compiler.list_dispatch import (
             _lifted_head_arg_needs_deep_gate,
         )
-        from clausal.logic.predicate import make_predicate
-        Wrap = make_predicate("wrap", ["sub"])
+        Wrap = term_ctor("wrap", ["sub"])
         assert _lifted_head_arg_needs_deep_gate(Wrap(sub=1)) is True
         assert _lifted_head_arg_needs_deep_gate(Wrap(sub=Var())) is False
 
@@ -769,9 +769,8 @@ class TestDeepGateWiredThroughCompiler:
         the flag -- built via a real term-instance head, the way a
         Python-side producer (R6) still constructs one."""
         from clausal.logic.database import Clause, Database
-        from clausal.logic.predicate import make_predicate
 
-        Wrap = make_predicate("wrap", ["sub"])
+        Wrap = term_ctor("wrap", ["sub"])
         db = Database()
         for i in range(3):
             db.assertz(Clause(head=Compound("Boxed2", (i, "pad")), body=[True]))
@@ -1331,12 +1330,12 @@ class TestAtomInListHead:
         back as the plain str ``'usd'``, not the ``usd`` class object.
         """
         # nv
-        usd = make_predicate("usd", [])
-        non_o_a = make_predicate("non_o_a", [])
-        non_o_x = make_predicate("non_o_x", [])
-        ltr = make_predicate("ltr", [])
-        smart_t = make_predicate("smart_t", [])
-        unrestricted = make_predicate("unrestricted", [])
+        usd = class_arm_predicate("usd", [])
+        non_o_a = class_arm_predicate("non_o_a", [])
+        non_o_x = class_arm_predicate("non_o_x", [])
+        ltr = class_arm_predicate("ltr", [])
+        smart_t = class_arm_predicate("smart_t", [])
+        unrestricted = class_arm_predicate("unrestricted", [])
 
         db = Database()
         clauses = [
