@@ -164,3 +164,70 @@ def test_doc_python_block_runs(tmp_path, page, anchor, modules, post, expected):
     lines = r.stdout.splitlines()
     for want in expected:
         assert want in lines, f"{want!r} not printed; stdout was:\n{r.stdout}"
+
+
+# ```python blocks that state each printed value in a trailing comment:
+# ``print(expr)   # <value>   prose``.  The block's stdout, line for line, must
+# be exactly those values -- so a stale shape in a comment (the pre-flip
+# ``('bar',)``) fails here instead of teaching the wrong representation.
+_PRINTS_WHAT_IT_SAYS = [
+    ("pi-atom-api", "python_integration.md",
+     "from clausal.logic.atoms import mint, is_atom, spelling, char_atom", {}),
+    ("pi-module-attr", "python_integration.md", "import my_module",
+     {"my_module": "-module(my_module, [])\n-private([bar])\n"}),
+]
+
+_PRINT_CLAIM = re.compile(r"^print\(.*\)\s+#\s+(\S+)", re.M)
+
+
+def _run_block(tmp_path, modules, body):
+    for name, source in modules.items():
+        (tmp_path / f"{name}.clausal").write_text(source)
+    code = (
+        f"import sys; sys.path[0:0] = [{str(_ROOT)!r}, '.']\n"
+        "import clausal\n"
+        f"assert clausal.__file__.startswith({str(_ROOT)!r}), clausal.__file__\n"
+        + body + "\n"
+    )
+    r = subprocess.run([sys.executable, "-c", code], cwd=tmp_path,
+                       capture_output=True, text=True, timeout=300)
+    assert r.returncode == 0, r.stderr[-3000:]
+    return r.stdout.splitlines()
+
+
+@pytest.mark.parametrize(
+    "page, anchor, modules",
+    [c[1:] for c in _PRINTS_WHAT_IT_SAYS],
+    ids=[c[0] for c in _PRINTS_WHAT_IT_SAYS],
+)
+def test_doc_python_block_prints_what_it_says(tmp_path, page, anchor, modules):
+    block = _block(page, "python", anchor)
+    claims = _PRINT_CLAIM.findall(block)
+    assert claims, f"{anchor!r}: no `print(...)  # value` lines"
+    assert _run_block(tmp_path, modules, block) == claims
+
+
+# The seam's hosted-Python example is a ```clausal block (the Python lives in
+# a .clausal file).  Every top-level line with a trailing ``# value`` comment
+# is a claim: ``NAME = --...  # value`` says what the module attribute is,
+# ``expr  # value`` what the expression evaluates to in that module.  Both are
+# checked against the loaded module, so the example cannot drift from the
+# engine again (it once claimed ``('permitted',)`` atoms and an equality that
+# was False).
+_SEAM_CLAIM = re.compile(r"^([A-Za-z_][^\n#]*?)\s+#\s+(.+?)\s*$", re.M)
+
+
+def test_doc_seam_example_claims_hold(tmp_path):
+    block = _block("python_integration.md", "clausal", "GOLD = --verdict(")
+    claims = [(lhs, want) for lhs, want in _SEAM_CLAIM.findall(block)
+              if not lhs.startswith(("def ", "return "))]
+    assert len(claims) >= 4, claims
+    checks = []
+    for lhs, want in claims:
+        m = re.fullmatch(r"([A-Za-z_]\w*) = .*", lhs)
+        expr = m.group(1) if m else lhs
+        checks.append(f"print(repr(eval({expr!r}, vars(oracle))))")
+    out = _run_block(tmp_path, {"oracle": block},
+                     "import oracle\n" + "\n".join(checks))
+    assert out == [want for _, want in claims]
+
