@@ -3043,11 +3043,13 @@ def declare_head(functor: str, fields: tuple, /) -> None:
         return
     handle = local_predicate_handle(namespace, functor)
     if handle is None:
-        raise SyntaxError(
+        # A RUNTIME error: this is raised while a body runs, where a
+        # ``SyntaxError`` would carry no filename or line to point at.
+        raise RuntimeError(
             f"cannot declare the predicate {functor}: this namespace belongs "
-            f"to no module (it has no __name__), and a predicate is named by "
-            f"its module.  Define {functor} in a .clausal file and import it, "
-            f"or run this code with a module-level __name__ bound")
+            f"to no module (it has no usable __name__), and a predicate is "
+            f"named by its module.  Define {functor} in a .clausal file and "
+            f"import it, or run this code with a module-level __name__ bound")
     namespace.setdefault(PREDICATE_HEADS_KEY, {})[functor] = (
         fields, _source_site(1))
     namespace[functor] = handle
