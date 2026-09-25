@@ -501,6 +501,14 @@ def compile_module(
                 else:
                     pending[key] = None
 
+    # ── Step 4a-bis: THE FLIP (W4b-2d task 8) ────────────────────────────
+    #    Every predicate binding in the module dict becomes its mangled
+    #    HANDLE, before anything from step 4b on reads the dict.  The
+    #    classes step 4/4a bound stay alive in ``pending`` (step 5 hands them
+    #    to the compiler) and ``origins``; nothing reads them off the dict
+    #    again.  See ``_flip_bindings``.
+    _flip_bindings(module_dict, db)
+
     # ── Step 4b: validate directive targets (A12-F003) ───────────────────
     _validate_directive_targets(module_items, db, module_dict)
 
@@ -565,6 +573,11 @@ def compile_module(
     #    called.  Specialized predicates compile themselves internally.
     _run_specialization(module_items, predicate_nodes, module_dict, db)
 
+    # ── Step 6c: THE FLIP again -- ``-specialize`` re-binds classes ──────
+    #    ``_install_specialized`` binds the specialized predicate's CLASS
+    #    under its name at step 6b, after the first flip ran.
+    _flip_bindings(module_dict, db)
+
     # ── Step 7: Lock non-dynamic predicates ──────────────────────────────
     _lock_static_predicates(db)
 
@@ -576,6 +589,68 @@ def compile_module(
     register_handle_owner(db)
 
     return logic_module
+
+
+# ── W4b-2d task 8: THE FLIP ───────────────────────────────────────────────
+# ``CLAUSAL_NO_FLIP=1`` switches it off, for A/B runs only: the class era
+# is otherwise gone from the load path.  Read once at import.
+import os as _os  # noqa: E402
+_FLIP = _os.environ.get("CLAUSAL_NO_FLIP", "") in ("", "0")
+
+
+def _flip_owner(value: "PredicateMeta", db) -> "tuple[Any, str]":
+    """``(owner_db, functor)`` the handle for the class *value* is minted
+    from (ruling X3: from a DATABASE, never from ``__module__``).
+
+    A class bound to a real row names its owner through the row (ruling D1:
+    an ``-import_from``'d class is bound to the EXPORTER's row, so an import
+    binds the owner's handle, and an aliased import binds it under the
+    alias with the owner's functor).  A class on no row -- a clause-less
+    ``-dynamic`` (option D), a ``-specialize`` placeholder, a declared name
+    with no clauses -- takes its own module's db when that module is a
+    LOADED Clausal module, else the compiling db."""
+    row = value.__dict__.get("_row")
+    if row is not None and not row.detached:
+        return row.db, row.key[0]
+    owner = None
+    origin = getattr(value, "__module__", None)
+    if origin and origin != db.module_name():
+        owner = _db_for_module_name(origin)
+    return (owner if owner is not None else db), value.__name__
+
+
+def _flip_bindings(module_dict: dict, db) -> None:
+    """THE FLIP (W4b-2d task 8): rebind every ``PredicateMeta`` value in
+    *module_dict* to ``mint_predicate_handle(owner_db, functor)``.
+
+    Runs twice in ``compile_module``: after step 4a (every class step 4/4a
+    bound is on its row, so the owner is readable), and after step 6b,
+    because ``-specialize`` installs a class at 6b.  ``$``-names are the
+    engine's own runtime bindings, never a predicate the user named, and
+    are left alone.  An owner that belongs to no module (``<anonymous>``)
+    cannot own a handle (``mint_predicate_handle`` refuses it); the handle
+    is then minted from the compiling db, the X3 fallback.
+
+    Also registers *db* as a handle owner (ruling Q0) right away: a handle
+    minted here may be RUN before ``compile_module`` returns (a
+    ``-specialize`` source program at step 6b, an ``-initialization`` goal),
+    and the end-of-load registration would be too late for a module the
+    caller never put in ``sys.modules``.  Idempotent and weak.
+    """
+    if not _FLIP:
+        return
+    from clausal.logic.predicate import (  # noqa: PLC0415
+        mint_predicate_handle, register_handle_owner)
+    register_handle_owner(db)
+    for key, value in list(module_dict.items()):
+        if not isinstance(value, PredicateMeta) or key.startswith("$"):
+            continue
+        owner, functor = _flip_owner(value, db)
+        try:
+            handle = mint_predicate_handle(owner, functor)
+        except ValueError:
+            handle = mint_predicate_handle(db, functor)
+        module_dict[key] = handle
 
 
 _IMPORT_PLACEHOLDER = "_clausal_import_placeholder"

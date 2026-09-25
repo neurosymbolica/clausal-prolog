@@ -2892,12 +2892,46 @@ def _handle_head_cell(handle: str, args: tuple, kwargs: dict,
     try:
         return _owner_head_cell(handle, args, dict(kwargs))
     except ClausalTermConstructionError:
-        if not _defers_to_the_gate(handle, home, len(args) + len(kwargs)):
+        verdict = _foreign_head_verdict(handle, home, len(args) + len(kwargs))
+        if verdict is None:
             raise
     functor = demangle(handle)[1]
     written = (*args, *kwargs.values())
+    if verdict == "local":
+        # The name + ARITY ruling (operator, 2026-09-24): a local ``p/2``
+        # beside an imported ``p/1`` LOADS -- a different predicate, this
+        # module's own.  The class era got there by the rewriter's guard
+        # re-minting a LOCAL class when the imported class's ``_fields`` did
+        # not match the head (``_make_functor_class_ast``); after the flip
+        # the binding is the owner's handle, the guard does not fire, and
+        # the owner's one signature would refuse the head.  Built at the
+        # written arity in written order -- the rewriter's field names for
+        # this head, which step 4 stamps on the LOCAL row
+        # (``HeadFieldNames``) -- and NOT recorded as deferred: no gate
+        # refusal is owed, the row is this module's.
+        return (functor, *written) if written else functor
     home.setdefault("$deferred_heads", set()).add((functor, len(written)))
     return (functor, *written) if written else functor
+
+
+def _foreign_head_verdict(handle: str, home: "dict | None",
+                          written: int) -> "str | None":
+    """How :func:`_handle_head_cell` treats a head the owner's signature
+    refused: ``"defer"`` (an importer's clause for the imported predicate,
+    the gate refuses it), ``"local"`` (an importer's OWN predicate at an
+    arity the owner does not know -- the name + arity ruling), or ``None``
+    (the owner's own module, or no module to tell: keep the error)."""
+    if _defers_to_the_gate(handle, home, written):
+        return "defer"
+    home_db = namespace_db(home) if home is not None else None
+    if home_db is None:
+        return None
+    resolved = _resolve_mangled_owner(handle, db=home_db)
+    if resolved is None or resolved[0] is home_db:
+        return None
+    if written in resolved[0].head_signatures(resolved[1]):
+        return None
+    return "local"
 
 
 def _defers_to_the_gate(handle: str, home: "dict | None", written: int) -> bool:

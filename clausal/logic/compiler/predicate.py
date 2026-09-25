@@ -14,6 +14,8 @@ dispatch / bucket-ref state lives on ``CompilationContext``
 
 from __future__ import annotations
 
+import functools
+
 import ast
 import warnings
 from typing import Any, Callable
@@ -38,6 +40,53 @@ from clausal.logic.predicate import (
     is_foreign_class_at_other_arity,
 )
 from clausal.codegen import functiondef_to_function
+
+
+def _dispatch_at_for(db):
+    """The ``$dispatch_at`` a body compiled for *db* calls: ``_dispatch_at``
+    with *db* as the ruling-Q0 CALLER hint.
+
+    After the flip (W4b-2d) every predicate binding a compiled body loads is
+    a HANDLE, and a call site not routed through a locked ``$disp_`` entry
+    -- every call compiled at load, which runs before step 7 locks -- goes
+    through ``$dispatch_at(handle, N)``.  Without the caller's db the owner
+    is found by NAME only (``sys.modules``, then the handle-owner
+    registry), which the ``.clausal`` runner defeats: it loads every
+    ``t.clausal`` as ``_clausal_test_t`` and pops it, so two live databases
+    answer to one name and the dispatch raised ``AmbiguousHandleOwnerError``
+    (measured: test_predicate_arity_mismatch_diagnostic, 4 tests, in file
+    order only).  The hint resolves a handle naming the compiling module to
+    ITS db, and an imported one to the owner it adopted, by identity.
+
+    It is the call site's hot path, so a handle naming the compiling
+    module ITSELF -- the common case: every local call not routed through a
+    ``$disp_`` entry -- is answered without the general handle arm's
+    demangle-and-resolve (measured: that arm cost the flip 16% on a qsort
+    and 28% on a graph-path workload).  Exactly the answer the handle arm
+    gives: for such a handle ruling Q0's rule 1 makes the hint the owner,
+    and the arm asks ``get_dispatch`` at the call arity FIRST; only a miss
+    there (the refusals, the other-arity rules) takes the general path.  A
+    db that cannot be a hint (``_GlobalsDb``, no db) gets the bare function.
+    """
+    from clausal.logic.predicate import _hint_db  # noqa: PLC0415
+    hint = _hint_db(db)
+    if hint is None:
+        return _dispatch_at
+    module_name = hint.module_name()
+    if module_name in ("<anonymous>", "<detached>"):
+        return functools.partial(_dispatch_at, db=hint)
+    from clausal.logic.atoms import mangle  # noqa: PLC0415
+    prefix = mangle(module_name, "")
+    cut = len(prefix)
+    get_dispatch = hint.get_dispatch
+
+    def _dispatch_at_hinted(obj, arity, _db=hint):
+        if type(obj) is str and obj.startswith(prefix):
+            fn = get_dispatch(obj[cut:], arity)
+            if fn is not None:
+                return fn
+        return _dispatch_at(obj, arity, _db)
+    return _dispatch_at_hinted
 from clausal.logic.solve import _deref_walk as _deref_walk_fn
 from clausal.logic.builtins import (  # noqa: F401
     get_builtin_predicate,
@@ -1006,7 +1055,7 @@ def _compile_predicate_trampoline_impl(
         "$tramp_call": _tramp_call,
         "$naf_has_solution": _naf_has_solution,
         "$drive_until_yield": _drive_until_yield,
-        "$dispatch_at": _dispatch_at,
+        "$dispatch_at": _dispatch_at_for(db),
         "$deref_walk": _deref_walk_fn,
         "$findall_copy": _findall_copy_row,
         "$set_of_dedup": _set_of_dedup,
@@ -1851,7 +1900,7 @@ def _compile_predicate_shallow_impl(
         "$tramp_call": _tramp_call,
         "$naf_has_solution": _naf_has_solution,
         "$drive_until_yield": _drive_until_yield,
-        "$dispatch_at": _dispatch_at,
+        "$dispatch_at": _dispatch_at_for(db),
         "$deref_walk": _deref_walk_fn,
         "$findall_copy": _findall_copy_row,
         "$set_of_dedup": _set_of_dedup,
