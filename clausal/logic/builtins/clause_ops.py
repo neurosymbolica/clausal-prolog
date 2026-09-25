@@ -316,7 +316,39 @@ _GOAL_ARGS = {
 }
 
 
-def _goal_thunk(goals: list) -> Any:
+# Goal-taking BUILTINS that are not special forms: their goal argument is
+# run, so a thunk there is code.  (call/N is handled by name.)
+_BUILTIN_GOAL_ARGS = {
+    ("time_goal", 1): (0,), ("time_goal", 2): (0,),
+    ("phrase", 2): (0,), ("phrase", 3): (0,),
+}
+
+
+def _goal_positions(name: str, n: int, db) -> tuple:
+    """The argument positions of a ``name/n`` call that are GOALS: call/N
+    and call_goal/N's first, a special form's (``_GOAL_ARGS``), a goal-first
+    list builtin's first (``higher_order._GOAL_FIRST_LIST_BUILTINS``: maplist
+    & co.), time_goal / phrase, and a user predicate's ``-meta_predicate``
+    positions whose spec qualifies (``:`` or an integer, Scryer's
+    ``qualified_spec``)."""
+    if n and name in ("call", "call_goal"):
+        return (0,)
+    hit = _GOAL_ARGS.get((name, n)) or _BUILTIN_GOAL_ARGS.get((name, n))
+    if hit:
+        return hit
+    from clausal.logic.builtins.higher_order import (  # noqa: PLC0415
+        _GOAL_FIRST_LIST_BUILTINS,
+    )
+    if (name, n) in _GOAL_FIRST_LIST_BUILTINS:
+        return (0,)
+    specs = db.meta_predicate_specs(name, n) if db is not None else None
+    if specs:
+        from clausal.logic.meta_predicate import is_qualifying_spec  # noqa: PLC0415
+        return tuple(i for i, sp in enumerate(specs) if is_qualifying_spec(sp))
+    return ()
+
+
+def _goal_thunk(goals: list, db=None) -> Any:
     """The first ``PyThunk`` in a GOAL position of *goals*, or ``None``.
 
     A thunk used as a goal (``fx(1) <- ++print("x")``) is Python code run
@@ -325,7 +357,7 @@ def _goal_thunk(goals: list) -> Any:
     side effect on every clause/2 call and leave its RETURN VALUE (``None``)
     where the goal was.  Goal positions: an element of the body, the
     operands of a conjunction / ``or`` / ``not`` / ``if_``, and the goal
-    arguments of a special form (``_GOAL_ARGS``) or of ``call/N``."""
+    arguments of a call (``_goal_positions``)."""
     from clausal.terms import PyThunk  # noqa: PLC0415
 
     def walk(g):
@@ -340,9 +372,8 @@ def _goal_thunk(goals: list) -> Any:
         elif type(g) is nodes.IfExpr:
             subs = (g.test, g.body, g.orelse)
         elif type(g) is nodes.Call and type(g.func) is nodes.LoadName:
-            name, n = g.func.name, len(g.args)
-            idx = (0,) if name == "call" and n else _GOAL_ARGS.get((name, n), ())
-            subs = [g.args[i] for i in idx]
+            idx = _goal_positions(g.func.name, len(g.args), db)
+            subs = [g.args[i] for i in idx if i < len(g.args)]
         else:
             return None
         for sub in subs:
@@ -358,11 +389,11 @@ def _goal_thunk(goals: list) -> Any:
     return None
 
 
-def _no_term_form(goals: list) -> "str | None":
+def _no_term_form(goals: list, db=None) -> "str | None":
     """Why *goals* cannot be built as terms without running Python, or
     ``None``: a thunk in goal position, or one that reads clause
     variables."""
-    hit = _goal_thunk(goals)
+    hit = _goal_thunk(goals, db)
     if hit is not None:
         return (f"its body runs the Python expression {hit!r} as a goal, "
                 f"which is code, not a term")
@@ -414,8 +445,7 @@ def _compile(goals: list, home_db):
 # no term class (``NameError``), an object that cannot be called to build one
 # (``TypeError``), a node term position refuses (``NotImplementedError``,
 # ``SyntaxError`` -- a lambda argument, say).
-_BUILD_ERRORS = (NameError, TypeError, NotImplementedError, SyntaxError,
-                 RuntimeError)   # RuntimeError: _ConstructionFailed's base below
+_BUILD_ERRORS = (NameError, TypeError, NotImplementedError, SyntaxError)
 
 _PLAIN = (int, float, str, bool, bytes, type(None))
 
@@ -473,7 +503,7 @@ def _head_built(clause, home_db) -> _Built:
     built = slot.get("head")
     if built is None:
         lead = list(clause.body[:clause.hoisted])
-        why = _no_term_form(lead)
+        why = _no_term_form(lead, home_db)
         if why is None:
             direct, rest = _split_lead(lead)
             try:
@@ -510,7 +540,7 @@ def _full_built(clause, home_db, why: "str | None" = None) -> _Built:
     rest = list(clause.body[clause.hoisted:])
     head = _head_built(clause, home_db)
     if why is None:
-        why = head.why or _no_term_form(rest)
+        why = head.why or _no_term_form(rest, home_db)
     built = None
     if why is None:
         namespace = getattr(home_db, "module_dict", None) or {}
@@ -533,9 +563,24 @@ def _full_built(clause, home_db, why: "str | None" = None) -> _Built:
     return built
 
 
-class _ConstructionFailed(RuntimeError):
+class _ConstructionFailed(Exception):
     """The construction query had no solution -- it only binds fresh
     variables, so this is an engine defect, reported like a build error."""
+
+
+class _BuildFailed(Exception):
+    """The CONSTRUCTION itself raised one of ``_BUILD_ERRORS`` (or had no
+    solution): a fact about the clause, which the caller may cache.  Nothing
+    else is wrapped -- an exception from the ``then`` callback (which unifies
+    with the CALLER's term) or any other error propagates as it is, uncached,
+    so a transient failure does not make a clause uninspectable for good."""
+
+    def __init__(self, exc):
+        super().__init__(str(exc))
+        self.exc = exc
+
+
+_NO_SOLUTION = object()
 
 
 def _on_private_trail(built: _Built, then):
@@ -545,22 +590,26 @@ def _on_private_trail(built: _Built, then):
     The construction binds the STORED clause's variables, so nothing else
     may see them bound -- a meta-interpreter calls clause/2 again, on the
     same clause, while an answer is live.  The drive is CLOSED before the
-    trail is undone, so no suspended frame outlives the bindings it ran on."""
+    trail is undone, so no suspended frame outlives the bindings it ran on.
+    A build error from the construction comes out as ``_BuildFailed``."""
     from clausal.logic.solve import _drive_trampoline  # noqa: PLC0415
     tmp = Trail()
     mark = tmp.mark()
     gen = None
     try:
-        for v, value in built.direct:
-            unify(v, value, tmp)          # a fresh head Var: binds
-        if built.fn is None:
-            return then(tmp)
-        for pv, value in built.params:
-            unify(pv, value, tmp)
-        gen = _drive_trampoline(built.fn, tmp)
-        for _ in gen:
-            return then(tmp)
-        raise _ConstructionFailed("the construction query has no solution")
+        try:
+            for v, value in built.direct:
+                unify(v, value, tmp)          # a fresh head Var: binds
+            if built.fn is not None:
+                for pv, value in built.params:
+                    unify(pv, value, tmp)
+                gen = _drive_trampoline(built.fn, tmp)
+                if next(gen, _NO_SOLUTION) is _NO_SOLUTION:
+                    raise _ConstructionFailed(
+                        "the construction query has no solution")
+        except (*_BUILD_ERRORS, _ConstructionFailed) as exc:
+            raise _BuildFailed(exc) from exc
+        return then(tmp)
     finally:
         if gen is not None:
             gen.close()
@@ -581,8 +630,8 @@ def head_matches(clause, home_db, cell) -> "tuple[bool, str | None]":
     built = _head_built(clause, home_db)
     try:
         matched = _on_private_trail(built, lambda tmp: bool(unify(cell, head, tmp)))
-    except _BUILD_ERRORS as exc:
-        built = _head_failed(clause, home_db, exc)
+    except _BuildFailed as failed:
+        built = _head_failed(clause, home_db, failed.exc)
         matched = _on_private_trail(built, lambda tmp: bool(unify(cell, head, tmp)))
     return matched, built.why
 
@@ -600,9 +649,10 @@ def clause_terms(clause, home_db) -> tuple:
             h, b = _on_private_trail(
                 built, lambda tmp: _copy_term((head, built.out), {}))
             return h, b, None
-        except _BUILD_ERRORS as exc:
-            built = _full_built(clause, home_db,
-                                why=f"its body cannot be built as a term ({exc})")
+        except _BuildFailed as failed:
+            built = _full_built(
+                clause, home_db,
+                why=f"its body cannot be built as a term ({failed.exc})")
     return None, None, built.why
 
 

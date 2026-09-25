@@ -655,9 +655,10 @@ def test_only_the_selected_rule_is_built(monkeypatch, tmp_path):
         got = _clause(rlm, ("r", ("k", 150), Var()))
         assert len(got) == 1 and got[0][1][0] == "qq"
         assert counts["body"] == 1, counts
-        # The head filter compiles one head-only query per clause whose
-        # hoisted argument is a compound (todo/clause-2-compound-hoisted-head-args-compile-per-clause-2026-09-25.md).
-        assert counts["compile"] == 300 + 1, counts
+        # A known cost, bounded rather than pinned: at most one head-only
+        # compile per clause plus the body (todo/clause-2-compound-hoisted-
+        # head-args-compile-per-clause-2026-09-25.md) -- lower is better.
+        assert counts["compile"] <= 300 + 1, counts
     finally:
         sys.modules.pop(name, None)
 
@@ -735,8 +736,8 @@ def test_a_goal_position_thunk_is_refused_without_running(lm, capsys):
     from tests.fixtures import clause2_bump
     before = clause2_bump.COUNT[0]
     capsys.readouterr()
-    for n in (1, 2, 3):
-        assert _pi(_error(lm, ("fx", n))) == ("fx", 1)
+    for n in (1, 2, 3, 5, 6, 7):     # 5 time_goal, 6 maplist, 7 -meta_predicate
+        assert _pi(_error(lm, ("fx", n))) == ("fx", 1), n
     assert capsys.readouterr().out == ""
     assert clause2_bump.COUNT[0] == before
     # A variable-free thunk in DATA position is a constant: still built.
@@ -758,3 +759,75 @@ def test_a_hoisted_head_argument_reading_variables_is_refused(lm):
     assert _pi(_error(lm, ("hg", 0, Var(), 1))) == ("hg", 3)
     (h, b), = _clause(lm, ("hg", Var(), Var(), 2))
     assert h[1] == 0 and b == ("p", h[2])
+
+
+
+# ── transient vs cached failures (roborev on c9c152be) ──────────────────────
+
+
+def test_a_head_that_raises_when_built_is_refused(lm):
+    """``hz(++(1 + "a"), Y)``: the head-only construction raises TypeError at
+    RUN time (``_head_failed``) -- the clause is refused wherever the stored
+    head could match, and the other clause still answers."""
+    assert _pi(_error(lm, ("hz", Var(), Var()))) == ("hz", 2)
+    # hz(0, Y): the failing clause's hoisted position is unknown, so it MAY
+    # be the one asked about -- refused too.
+    assert _pi(_error(lm, ("hz", 0, Var()))) == ("hz", 2)
+
+
+def test_a_construction_with_no_solution_is_refused(lm, monkeypatch):
+    """``_ConstructionFailed``: a construction query that yields nothing (an
+    engine defect) is an ISO permission_error, not an AssertionError."""
+    from clausal.logic import solve
+    real = solve._drive_trampoline
+
+    def nothing():
+        return
+        yield                               # a generator with no solution
+
+    def empty(fn, trail, *args):
+        # clause/2's construction is the only drive with no arguments.
+        return nothing() if not args else real(fn, trail, *args)
+    monkeypatch.setattr(solve, "_drive_trampoline", empty)
+    formal = _error(lm, ("fib", Var(), Var()))
+    assert _pi(formal) == ("fib", 2)
+
+
+def test_a_transient_construction_error_is_not_cached(lm, monkeypatch):
+    """A RuntimeError (a RecursionError, say) while building is NOT a fact
+    about the clause: it propagates, and the next call succeeds."""
+    from clausal.logic import solve
+    real = solve._drive_trampoline
+    state = {"left": 1}
+
+    def flaky(fn, trail, *args):
+        if not args and state["left"]:      # the construction's drive
+            state["left"] -= 1
+            raise RecursionError("transient")
+        return real(fn, trail, *args)
+    monkeypatch.setattr(solve, "_drive_trampoline", flaky)
+    with pytest.raises(RecursionError):
+        _clause(lm, ("fib", Var(), Var()))
+    assert state["left"] == 0
+    assert [h for h, _ in _clause(lm, ("fib", Var(), Var()))][:2] == [
+        ("fib", 0, 0), ("fib", 1, 1)]
+
+
+def test_an_error_unifying_with_the_query_is_not_the_clauses_fault(lm, monkeypatch):
+    """An exception from unifying the stored head with the CALLER's term (an
+    attributed variable's hook, say) propagates uncached."""
+    from clausal.logic.builtins import clause_ops
+    real = clause_ops.unify
+    query = ("lu", Var())
+    state = {"left": 1}
+
+    def flaky(a, b, trail):
+        if a is query and state["left"]:
+            state["left"] -= 1
+            raise RuntimeError("hook failed")
+        return real(a, b, trail)
+    monkeypatch.setattr(clause_ops, "unify", flaky)
+    with pytest.raises(RuntimeError):
+        _clause(lm, query)
+    assert state["left"] == 0
+    assert [h[1] for h, _ in _clause(lm, query)] == [1, 2]

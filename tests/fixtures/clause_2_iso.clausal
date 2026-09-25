@@ -14,6 +14,8 @@
 -dynamic(mf/2)
 -dynamic(fx/1)
 -dynamic(hg/3)
+-dynamic(hz/2)
+-meta_predicate(twice(0))
 -allow_singletons
 
 # Static (locked): clause/2 refuses it with permission_error.
@@ -97,8 +99,18 @@ rt_mf(X, Y) <- (clause(mf(X, Y), B), call(B))
 fx(1) <- ++print("x"),
 fx(2) <- (True, ++__import__("tests.fixtures.clause2_bump", fromlist=["bump"]).bump()),
 fx(3) <- once(++print("z")),
-fx(4) <- (Y is ++len("ab"), Y == 2)
+fx(4) <- (Y is ++len("ab"), Y == 2),
+fx(5) <- time_goal(++print("t")),
+fx(6) <- maplist(++print("m"), [1]),
+fx(7) <- twice(++print("w"))
+
+twice(G) <- (call(G), call(G))
 
 # A HOISTED head argument holding a variable-reading f-string.
 hg(pt(f"{Y}", 1), Y, 1) <- p(Y),
 hg(0, Y, 2) <- p(Y)
+
+# A hoisted head argument that raises when it is BUILT (a run-time error in
+# the head-only construction).
+hz(++(1 + "a"), Y) <- p(Y),
+hz(0, Y) <- p(Y)
