@@ -2802,16 +2802,72 @@ def head_cell(binding, /, *args: Any, **kwargs: Any) -> Any:
       class's ``_fields`` while no clause exists), through
       :func:`build_term_cell`, the helper the class uses -- so the arity
       check answers the same in both eras.
+
+    A HANDLE naming ANOTHER module's predicate (an importer writing a clause
+    for an imported name) DEFERS to the load gate (operator ruling
+    2026-09-25): see :func:`_handle_head_cell`.  The executing module is
+    read from the caller's frame, since ``$head`` is called only from a
+    module body's generated code.
     """
     if type(binding) is str:
         from clausal.logic.atoms import is_mangled  # noqa: PLC0415
         if is_mangled(binding):
-            return _handle_head_cell(binding, args, kwargs)
+            return _handle_head_cell(binding, args, kwargs,
+                                     home=sys._getframe(1).f_globals)
     return binding(*args, **kwargs)
 
 
-def _handle_head_cell(handle: str, args: tuple, kwargs: dict) -> Any:
-    """The HANDLE arm of :func:`head_cell`."""
+def _handle_head_cell(handle: str, args: tuple, kwargs: dict,
+                      home: "dict | None" = None) -> Any:
+    """The HANDLE arm of :func:`head_cell`.
+
+    *home* is the namespace of the module whose body builds the head.  When
+    it is not the handle's owner, the head is an importer's clause for an
+    imported predicate, which the load gate refuses ("defines a clause for
+    gv_owned/1, which it -import_from's ...").  The rewriter
+    spells such a head with field names derived from the IMPORTER's head
+    (``gv_owned(teal)`` -> ``arg_0=teal``, ``gv_owned(COLOUR)`` ->
+    ``colour=COLOUR``), in head order.  The class era built it against a
+    local class re-minted with those names.  So a construction error against
+    the OWNER's names does not speak for such a head: it is built at its
+    written arity, in written order, and the gate gives the verdict.
+
+    Only at an arity the OWNER knows: that is a clause for the imported
+    predicate, which the gate refuses.  A head at another arity keeps the
+    arity error both eras raise today
+    (``test_an_imported_head_at_the_wrong_arity_raises_the_arity_error``).
+    A head in the owner's own module, or with no module to tell (*home*
+    carries no ``$module``), keeps every construction error.
+    """
+    from clausal.logic.atoms import demangle  # noqa: PLC0415
+    try:
+        return _owner_head_cell(handle, args, dict(kwargs))
+    except ClausalTermConstructionError:
+        if not _defers_to_the_gate(handle, home, len(args) + len(kwargs)):
+            raise
+    functor = demangle(handle)[1]
+    written = (*args, *kwargs.values())
+    return (functor, *written) if written else functor
+
+
+def _defers_to_the_gate(handle: str, home: "dict | None", written: int) -> bool:
+    """True when the module *home* (a namespace) is not *handle*'s owner and
+    the head is written at an arity the owner knows."""
+    if home is None:
+        return False
+    home_db = namespace_db(home)
+    if home_db is None:
+        return False
+    from clausal.logic.atoms import demangle  # noqa: PLC0415
+    if demangle(handle)[0] == home_db.module_name():
+        return False
+    resolved = _resolve_mangled_owner(handle)
+    return (resolved is not None
+            and written in resolved[0].head_signatures(resolved[1]))
+
+
+def _owner_head_cell(handle: str, args: tuple, kwargs: dict) -> Any:
+    """A handle's head built against the OWNER's registered field names."""
     from clausal.logic.atoms import demangle  # noqa: PLC0415
     functor = demangle(handle)[1]
     resolved = _resolve_mangled_owner(handle)

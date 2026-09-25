@@ -396,9 +396,8 @@ def cell_signature_for_name(
     OWNER's registry, for the same reason.
 
     A name bound to a predicate HANDLE (the binding after the flip) is
-    spelled by :func:`handle_cell_functor` (operator ruling 2026-09-25,
-    option (c)): PLAIN when this namespace binds the plain name to that same
-    predicate, MANGLED otherwise.
+    spelled by :func:`handle_cell_functor`: always its PLAIN name (operator
+    ruling 2026-09-25, option (a)).
     """
     namespace = resolve_globals if resolve_globals is not None else lowering_globals()
     if namespace is None:
@@ -443,46 +442,24 @@ def cell_signature_for_name(
     return _functor_spelling(binding, leaf), fields
 
 
-def handle_cell_functor(handle: str, namespace: "dict | None") -> str:
-    """The functor a cell built from the predicate HANDLE *handle* carries
-    when it is built in *namespace* -- operator ruling 2026-09-25, option (c).
+def handle_cell_functor(handle: str) -> str:
+    """The functor a cell built from the predicate HANDLE *handle* carries:
+    ALWAYS its PLAIN name (operator ruling 2026-09-25, option (a), which
+    supersedes option (c)).
 
-    PLAIN (the handle's atom half) when *namespace* binds that plain name to
-    the SAME predicate: the ordinary local or ``-import_from``'d case, where
-    the plain spelling already means this predicate here (ISO; ruling S).
-    MANGLED otherwise -- a handle held in Python (``h = mangle(m, p)``), a
-    dotted ``lib.pred(X)`` in term position, an aliased import (the plain
-    name is not bound here, or is bound to something else), or any other
-    way a handle reaches the module: the plain spelling would mean something
-    else here, or nothing, so the module travels in the cell (W4).
-
-    "The same predicate" is era-agnostic: the plain name bound to *handle*
-    itself, or to a ``PredicateMeta`` class on a real row the handle names
-    (``mint_predicate_handle(row.db, row.key[0])``, what the flip binds in its
-    place), so the answer does not change when the binding flips.  The caller
-    has already established that *handle* is a declared predicate's handle.
+    ISO: a functor is never module-qualified.  Qualification lives only on a
+    GOAL, as ``M:G``.  So a cell built in data, term or head position from a
+    handle -- an imported or local name, a handle held in Python
+    (``h = mangle(m, p)``), a dotted ``lib.p(X)`` in term position -- is the
+    plain ``(p, ...)`` cell the owner's own clauses build, and one logical
+    term has one spelling (``lib.make(T), T = lib.p(X)`` unifies).  A cell
+    that must RUN in another module is called as ``lib:G`` or
+    ``solve(cell, lib)``.  The caller has already established that *handle*
+    is a declared predicate's handle; a ``-hide`` DATA atom never reaches
+    here and keeps its mangled spelling.
     """
     from clausal.logic.atoms import demangle  # noqa: PLC0415
-    plain = demangle(handle)[1]
-    bound = namespace.get(plain) if namespace is not None else None
-    if bound is not None and _denotes_handle(bound, handle):
-        return plain
-    return handle
-
-
-def _denotes_handle(bound: Any, handle: str) -> bool:
-    if type(bound) is str:
-        return bound == handle
-    if isinstance(bound, PredicateMeta):
-        row = bound.__dict__.get("_row")
-        if row is None or row.detached:
-            return False
-        try:
-            from clausal.logic.predicate import mint_predicate_handle  # noqa: PLC0415
-            return mint_predicate_handle(row.db, row.key[0]) == handle
-        except ValueError:          # a row of a module-less database
-            return False
-    return False
+    return demangle(handle)[1]
 
 
 def _functor_spelling(binding: Any, leaf: str, *,
@@ -507,9 +484,9 @@ def _functor_spelling(binding: Any, leaf: str, *,
     registry entry is the module's own declaration.
 
     A predicate HANDLE (a mangled atom -- the binding after the flip) is
-    spelled by :func:`handle_cell_functor` in *namespace*: an importer's
-    ``gd_p(X)`` builds the plain ``("gd_p", X)`` cell the owner's clauses are
-    keyed by, as its class does (flip dry run R3, fix A2).  *is_predicate*
+    spelled by :func:`handle_cell_functor`, always PLAIN: an importer's
+    ``gd_p(X)`` builds the ``("gd_p", X)`` cell the owner's clauses are keyed
+    by, as its class does (flip dry run R3, fix A2).  *is_predicate*
     says the caller established that *binding* is a declared predicate
     (``is_declared_predicate_name``); without it a mangled binding is a
     ``-hide`` DATA atom, whose mangled spelling is its identity.
@@ -517,7 +494,7 @@ def _functor_spelling(binding: Any, leaf: str, *,
     if isinstance(binding, type):
         return binding.__name__
     if is_predicate and type(binding) is str and _is_mangled(binding):
-        return handle_cell_functor(binding, namespace)
+        return handle_cell_functor(binding)
     if _term_is_atom(binding):
         return _atom_spelling(binding)
     return leaf

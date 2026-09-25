@@ -181,12 +181,6 @@ def _check_cell_head_permission(term_val: Any, context: str, db,
     arity = len(term_val) - 1
     args = tuple(term_val[1:])
     pred_cls = _find_pred_cls(functor, arity, module_dict)
-    if pred_cls is None:
-        # A cell whose functor IS a predicate handle names its owner itself
-        # (ruling 2026-09-25 option (c): the cell a Python-held handle or a
-        # dotted ``lib.p(X)`` builds is MANGLED) -- the handle is its own
-        # binding, and the write goes to the owner's row.
-        pred_cls = _cell_handle(term_val, db)
     # The CANONICAL name is the predicate's own, not the spelling the cell
     # used: an ``-import_from`` alias binds the exporter's predicate under the
     # local name, and the row lives under the exporter's.
@@ -269,31 +263,6 @@ def _check_cell_head_permission(term_val: Any, context: str, db,
            "so its terms compile to cells and it has no clause list")
         + remedy,
     ))
-
-
-def _cell_handle(term_val: Any, db) -> "str | None":
-    """The predicate HANDLE *term_val*'s functor is, when *term_val* is a
-    cell whose functor is the mangled handle of a predicate declared at the
-    cell's arity -- else ``None``.
-
-    Operator ruling 2026-09-25, option (c): a cell built from a handle the
-    module does not bind under its plain name (a handle held in Python, a
-    dotted ``lib.p(X)`` in term position) keeps the MANGLED functor, so the
-    module travels in the cell.  The write doors take that module from it:
-    the handle is the write's binding (``through=``) and names the owner's
-    row, exactly as an ``-import_from``'d binding does.  A ``-hide`` DATA
-    atom is mangled in the same shape and is no predicate, so it answers
-    ``None`` and keeps its existing treatment.
-    """
-    from clausal.logic.atoms import is_mangled  # noqa: PLC0415
-    from clausal.logic.cells import compound_cell_shape  # noqa: PLC0415
-    from clausal.logic.predicate import is_declared_predicate  # noqa: PLC0415
-    ok, functor = compound_cell_shape(term_val)
-    if not ok or not is_mangled(functor):
-        return None
-    if not is_declared_predicate(functor, arity=len(term_val) - 1, db=db):
-        return None
-    return functor
 
 
 def _declared_here_at_arity(module_dict: "dict | None", functor: str,
@@ -504,13 +473,9 @@ def _assertz_factory(db):
         term_val = deref(term)
         if is_var(term_val):
             return
-        handle = _cell_handle(term_val, db)
         clause = _build_clause(term_val, "assertz/1", db, module_dict)
         functor, arity = head_key(clause.head)
-        # A handle-functored cell's binding is the handle itself (see
-        # ``_cell_handle``); its head comes back under the plain name.
-        pred_cls = (handle if handle is not None
-                    else _find_pred_cls(functor, arity, module_dict))
+        pred_cls = _find_pred_cls(functor, arity, module_dict)
         # THROUGH THE GATE (P3-3 Task 3).  The lock check that used to stand
         # here is the gate's policy now — one question, "may this author write
         # this row", asked identically by all four channels — and it still
@@ -549,13 +514,9 @@ def _asserta_factory(db):
         term_val = deref(term)
         if is_var(term_val):
             return
-        handle = _cell_handle(term_val, db)
         clause = _build_clause(term_val, "asserta/1", db, module_dict)
         functor, arity = head_key(clause.head)
-        # A handle-functored cell's binding is the handle itself (see
-        # ``_cell_handle``); its head comes back under the plain name.
-        pred_cls = (handle if handle is not None
-                    else _find_pred_cls(functor, arity, module_dict))
+        pred_cls = _find_pred_cls(functor, arity, module_dict)
         # Through the gate; see assertz/1 above.
         home = _home_db(db, pred_cls, functor, arity)
         home_globals = _home_globals(db, module_dict, home)
@@ -595,15 +556,13 @@ def _retract_factory(db):
         # actually holds -- without that, ``_first_match_index`` would compare
         # a tuple against a class-term head and never match, so a legal
         # ``retract(("p", 1))`` would silently fail instead of retracting.
-        handle = _cell_handle(term_val, db)
         term_val = _check_cell_head_permission(term_val, "retract/1", db,
                                                module_dict)
         try:
             functor, arity = head_key(term_val)
         except TypeError:
             return
-        pred_cls = (handle if handle is not None
-                    else _find_pred_cls(functor, arity, module_dict))
+        pred_cls = _find_pred_cls(functor, arity, module_dict)
         home = _home_db(db, pred_cls, functor, arity)
         clause_list = home._clauses.get((functor, arity))
         if clause_list is None:

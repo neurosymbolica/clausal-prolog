@@ -15,10 +15,14 @@ change.  Each was found by the flip dry run
   redefinition;
 * A2 (R3): a cell built from a handle carried the MANGLED functor, so the
   importer's ``assertz(gd_p(X))`` raised existence_error for
-  ``'m\\x1fgd_p'/1``.  Operator ruling 2026-09-25, option (c): a cell built
-  from a handle is PLAIN when the namespace binds the plain name to that same
-  predicate, MANGLED otherwise (a Python-held handle, a dotted ``lib.p(X)``),
-  and the write doors route a mangled cell to its owner.
+  ``'m\\x1fgd_p'/1``.  Operator ruling 2026-09-25, option (a) (superseding
+  option (c)): a cell built from a handle is ALWAYS PLAIN in data, term and
+  head position -- ISO functors are never module-qualified; qualification
+  lives only on goals (``M:G``) -- and a plain cell writes through the
+  caller's namespace only.
+* the handle head path (ruling (b), same day): an importer's clause for an
+  imported predicate DEFERS to the load gate's refusal instead of raising
+  ClausalTermConstructionError against the owner's field names.
 
 Arm I (``_refuse_untablable_target``) landed with R6 and is pinned in
 ``test_class_only_state_moved_both_eras.py``.
@@ -185,7 +189,7 @@ def test_a_hide_data_atom_keeps_its_mangled_functor_spelling():
     """A2 is gated on "is a declared predicate", never on ``is_mangled``: a
     ``-hide`` DATA atom is mangled in the handle's shape and its mangled
     spelling is its identity -- even in its owner, which binds the plain
-    name to it (so rule (c) alone would unmangle it)."""
+    name to it."""
     from clausal.logic.compiler.terms_to_ast import _functor_spelling
     saved = sys.modules.pop("hide_owner", None)
     try:
@@ -195,10 +199,9 @@ def test_a_hide_data_atom_keeps_its_mangled_functor_spelling():
         secret = mangle("hide_owner", "hide_secret")
         assert _functor_spelling(secret, "x", namespace=md) == secret
         handle = mint_predicate_handle(db, "holds")
-        # Rule (c): the owner binds ``holds`` to this predicate -> plain;
-        # a namespace that does not -> mangled.
+        # Ruling (a): a predicate handle is PLAIN in any namespace.
         assert _functor_spelling(handle, "x", namespace=md, is_predicate=True) == "holds"
-        assert _functor_spelling(handle, "x", namespace={}, is_predicate=True) == handle
+        assert _functor_spelling(handle, "x", namespace={}, is_predicate=True) == "holds"
     finally:
         sys.modules.pop("hide_owner", None)
         if saved is not None:
@@ -303,23 +306,29 @@ def test_bare_listing_of_a_hide_data_atom_is_unchanged():
             sys.modules["hide_owner"] = saved
 
 
-# ── rule (c): a handle the module does NOT bind by its plain name ────────────
+# ── ruling (a): a cell built from a handle is ALWAYS plain ───────────────────
 #
-# roborev (Medium) on c0df2aeb: pin the COMPILED-body behaviour.  ``h`` is a
-# handle held in Python; ``sa_clib.dfact(X)`` is a dotted reference in term
-# position.  Neither binds ``dfact`` in the host, so under (c) the cell is
-# MANGLED, and call/N and assertz/retract route it to the owner.
+# Operator ruling 2026-09-25, option (a), superseding option (c).  ``h`` is a
+# handle held in Python; ``sa_clib.dfact(X)`` is a dotted reference in TERM
+# position.  Neither binds ``dfact`` in the host.  Under (c) their cells were
+# MANGLED and the write doors routed them to the owner; under (a) they are the
+# PLAIN ``dfact`` cell, a plain cell writes through the CALLER's namespace
+# only (so the host cannot write the owner's -dynamic through one), and a cell
+# that must RUN in the owner is called as ``(":", lib, G)`` or
+# ``solve(cell, lib)``.  A dotted ``sa_clib.dfact(X)`` in GOAL position is
+# still the qualified goal.
 
 
 _CLIB = """
-    -module(sa_clib, [dfact/1])
+    -module(sa_clib, [dfact/1, make(T)])
     -dynamic(dfact/1)
     dfact(0),
+    make(dfact(7)),
 """
 
 _CHOST = """
     -module(sa_chost, [cell_h(C), cell_d(C), add_h(X), add_d(X), get_h(X),
-                       get_d(X), del_h(X)])
+                       goal_d(X), made(X), run(G)])
     -import_module(sa_clib)
     from clausal.logic.atoms import mangle
     h = mangle("sa_clib", "dfact")
@@ -328,22 +337,11 @@ _CHOST = """
     cell_d(C) <- same(C, sa_clib.dfact(1))
     add_h(X) <- assertz(h(X))
     add_d(X) <- assertz(sa_clib.dfact(X))
-    del_h(X) <- retract(h(X))
     get_h(X) <- call(h(X))
-    get_d(X) <- call(sa_clib.dfact(X))
+    goal_d(X) <- sa_clib.dfact(X)
+    run(G) <- call(G)
+    made(X) <- (sa_clib.make(T), same(T, sa_clib.dfact(X)))
 """
-
-
-def _binds_no_predicate(module, name):
-    """The module does not bind *name* to a PREDICATE -- rule (c)'s actual
-    precondition for "mangled".  NOT ``name not in module.__dict__``: every
-    module dict is pre-seeded with the process-wide atom pool
-    (``predicate_builtins``, GLOBAL_ATOMS_DEFAULT rule 1.4), so an atom of
-    that spelling declared by ANY earlier-loaded module is bound here as a
-    plain str (``test_constants::test_distinct_names_do_not_interact``
-    exports the global atom ``other``)."""
-    from clausal.logic.predicate import is_declared_predicate_name
-    return not is_declared_predicate_name(module.__dict__.get(name))
 
 
 def _one(goal, lm):
@@ -361,57 +359,96 @@ def _all(goal, lm):
     return sorted(deref(X) for _ in call(goal, X, module=lm))
 
 
+def _existence_culprit(goal, arg, lm):
+    with pytest.raises(LogicException) as exc:
+        list(call(goal, arg, module=lm))
+    err = exc.value.term.args[0]
+    assert err.functor == "existence_error", err
+    return err.args[1]
+
+
+@pytest.fixture
+def clib_pair(lister, era_loads):
+    def load(era):
+        era_loads(era)
+        lib = lister("sa_clib", _CLIB)
+        host = lister("sa_chost", _CHOST)
+        assert (type(lib.__dict__["dfact"]) is str) == (era == "handle")
+        return lib, host
+    return load
+
+
 @pytest.mark.parametrize("era", ERAS)
-def test_a_handle_not_bound_by_its_plain_name_builds_the_mangled_cell(
-        lister, era_loads, era):
-    era_loads(era)
-    lib = lister("sa_clib", _CLIB)
-    host = lister("sa_chost", _CHOST)
-    assert (type(lib.__dict__["dfact"]) is str) == (era == "handle")
-    assert _binds_no_predicate(host, "dfact"), "the host must not bind the plain name"
+def test_a_cell_built_from_any_handle_is_plain(clib_pair, era):
+    _lib, host = clib_pair(era)
     lm = _lm(host)
-    qualified = mangle("sa_clib", "dfact")
-    # Python-held: mangled in both eras (it is a handle in both).
-    assert _one("cell_h", lm) == (qualified, 1)
-    # Dotted: the CLASS era is unchanged (a class spells its own name); the
-    # handle is not bound as ``dfact`` here, so (c) keeps the module.
-    assert _one("cell_d", lm) == (("dfact", 1) if era == "class" else (qualified, 1))
+    assert _one("cell_h", lm) == ("dfact", 1)      # a Python-held handle
+    assert _one("cell_d", lm) == ("dfact", 1)      # dotted, term position
 
 
 @pytest.mark.parametrize("era", ERAS)
-def test_a_mangled_cell_is_called_and_written_on_its_owner(lister, era_loads, era):
-    era_loads(era)
-    lib = lister("sa_clib", _CLIB)
-    host = lister("sa_chost", _CHOST)
-    lm, owner_db = _lm(host), _lm(lib).db
-    assert list(call("add_h", 11, module=lm)) != []
-    if era == "handle":
-        # The dotted cell is mangled only in the handle era; in the class era
-        # it is the PLAIN ``dfact`` cell, which this host does not know
-        # (existence_error, as on main -- class era unchanged).
-        assert list(call("add_d", 12, module=lm)) != []
-    heads = [c.head[1] for c in owner_db.row("dfact", 1).clauses]
-    assert heads[1:] == ([11, 12] if era == "handle" else [11])
-    assert _lm(host).db.row("dfact", 1, create=False) is None, "written locally"
-    expected = [0, 11, 12] if era == "handle" else [0, 11]
-    assert _all("get_h", lm) == expected
-    assert _all("get_d", lm) == expected
-    assert list(call("del_h", 11, module=lm)) != []
-    assert _all("get_h", lm) == [x for x in expected if x != 11]
+def test_an_owner_built_term_unifies_with_the_dotted_spelling(clib_pair, era):
+    """roborev's interop case: ``lib.make(T), T = lib.hf(X)`` -- one logical
+    term, one spelling -- which failed in the handle era under (c)."""
+    _lib, host = clib_pair(era)
+    assert _all("made", _lm(host)) == [7]
+
+
+@pytest.mark.parametrize("era", ERAS)
+def test_a_plain_cell_writes_only_through_the_caller_s_namespace(clib_pair, era):
+    """The host does not bind ``dfact``, so neither spelling may write the
+    owner's -dynamic: ISO routes a write by the caller's namespace (or an
+    explicit ``M:G``), never by a qualified functor."""
+    lib, host = clib_pair(era)
+    lm, owner_row = _lm(host), _lm(lib).db.row("dfact", 1)
+    before = list(owner_row.clauses)
+    for goal in ("add_h", "add_d"):
+        culprit = _existence_culprit(goal, 11, lm)
+        assert culprit.args == ("dfact", 1), (goal, culprit)
+    assert owner_row.clauses == before
+    assert lm.db.row("dfact", 1, create=False) is None, "written locally"
+
+
+@pytest.mark.parametrize("era", ERAS)
+def test_a_plain_cell_runs_in_the_owner_only_when_qualified(clib_pair, lister, era):
+    from clausal.logic.solve import solve
+    from clausal.logic.variables import deref
+    lib, host = clib_pair(era)
+    lm = _lm(host)
+    from clausal.logic.variables import Var
+    # A plain cell VALUE, called, runs in the CALLER.  A caller that knows
+    # no dfact/1 never reaches the owner's clauses.  (A separate host: the
+    # dotted GOAL references in sa_chost's own bodies make ``dfact`` known
+    # there, so ``run`` in sa_chost does answer the owner's clause.)
+    bare = lister("sa_crun", """
+        -module(sa_crun, [run(G)])
+        -import_module(sa_clib)
+        run(G) <- call(G)
+    """)
+    X0 = Var()
+    assert [deref(X0) for _ in call("run", ("dfact", X0), module=_lm(bare))] == []
+    # Qualified, it runs in the owner: M:G, or solve(cell, M).
+    X = Var()
+    assert [deref(X) for _ in solve((":", "sa_clib", ("dfact", X)))] == [0]
+    Y = Var()
+    assert [deref(Y) for _ in solve(("dfact", Y), lib)] == [0]
+    # ``call(h(X))`` names the handle in the meta-call's GOAL argument, which
+    # is goal position: the qualified goal, as a body goal ``h(X)`` is.
+    assert _all("get_h", lm) == [0]
+    # A dotted reference in GOAL position is still the qualified goal.
+    assert _all("goal_d", lm) == [0]
 
 
 @pytest.mark.parametrize("era", ERAS)
 @pytest.mark.parametrize("atom_pool_seeded", [False, True])
-def test_the_seam_follows_the_same_rule(lister, era_loads, era, atom_pool_seeded):
-    """The ``--`` seam applies the same rule.  The rule is about the
-    NAMESPACE, not about how the handle was obtained: a Python-held handle
-    to a predicate this module imports by name is PLAIN, and one to a
-    predicate it does not import (``other``) is MANGLED."""
+def test_the_seam_builds_the_plain_cell(lister, era_loads, era, atom_pool_seeded):
+    """The ``--`` seam, the same rule: an imported name, a Python-held handle
+    to an imported predicate, and one to a predicate the host does NOT
+    import all build the PLAIN cell.  ``atom_pool_seeded`` keeps the
+    full-suite pollution (an earlier module exporting the global atom
+    ``sa_s_other``, pre-seeded into every module dict) in-file."""
     era_loads(era)
     if atom_pool_seeded:
-        # The full-suite pollution, reproduced: an earlier module exports a
-        # GLOBAL ATOM with the plain name, so every later module dict holds
-        # it (the process-wide atom pool).  That is not a predicate binding.
         lister("sa_spool", """
             -module(sa_spool, [sa_s_other])
         """)
@@ -435,13 +472,18 @@ def test_the_seam_follows_the_same_rule(lister, era_loads, era, atom_pool_seeded
             return --held(X)
         def build_held_other():
             return --held_other(X)
+        def build_held_wide():
+            return --held(X, Y)
     """)
     assert (type(host.__dict__["spred"]) is str) == (era == "handle")
     assert host.build_import()[0] == "spred"
     assert host.build_alias()[0] == "spred"
     assert host.build_held()[0] == "spred"
-    assert _binds_no_predicate(host, "sa_s_other")
-    assert host.build_held_other()[0] == mangle("sa_slib", "sa_s_other")
+    assert host.build_held_other()[0] == "sa_s_other"
+    # At an arity the predicate is not defined at, no signature answers and
+    # the seam's own handle branch builds the cell -- plain there too.
+    wide = host.build_held_wide()
+    assert wide[0] == "spred" and len(wide) == 3
 
 
 def _multi_arity(lister, name):
@@ -529,83 +571,93 @@ def test_analyze_mi_resolves_a_local_handle_through_the_db_hint(lister):
     assert _pattern_key(analyze_mi(handle, db=db)) == expected
 
 
-# ── the handle head path ─────────────────────────────────────────────────────
+# ── the handle head path defers to the load gate (ruling (b)) ────────────────
 #
-# Found under the flip emulation, NOT fixed here (not contained): an importer
-# that writes a clause for an imported predicate spells the head with field
-# names derived from ITS OWN head (``gv_owned(teal),`` -> ``arg_0=teal``).  In
-# the class era the importer's body re-mints a local class with those names,
-# the head builds, and the mutation gate refuses the load.  A HANDLE builds
-# against the OWNER's names (``gv_owned(NAME)``), so the head raises
-# ClausalTermConstructionError first and the gate's refusal is never seen.
+# Found under the flip emulation: an importer that writes a clause for an
+# imported predicate spells the head with field names derived from ITS OWN
+# head (``gv_owned(teal),`` -> ``arg_0=teal``, ``gv_owned(COLOUR)`` ->
+# ``colour=COLOUR``).  In the class era the importer's body re-mints a local
+# class with those names and the gate refuses the load; a HANDLE built against
+# the OWNER's names (``gv_owned(NAME)``) raised ClausalTermConstructionError
+# first, and the gate's refusal was never seen.  Operator ruling 2026-09-25
+# (b): the handle head path defers to the gate.
 
 
-@pytest.mark.parametrize("era", [
-    "class",
-    pytest.param("handle", marks=pytest.mark.xfail(
-        strict=True, raises=Exception,
-        reason="the handle head path raises ClausalTermConstructionError "
-               "before the gate refuses (importer-derived head field names)")),
-])
-def test_a_clobbering_import_head_is_refused_by_the_gate(era_loads, era):
-    era_loads(era)
-    names = ("tests.fixtures.gate_vocab", "tests.fixtures.gate_rival")
+@pytest.fixture
+def vocab_rival():
+    names = ("tests.fixtures.gate_vocab", "tests.fixtures.gate_rival", "_sa_hv")
     saved = {n: sys.modules.pop(n, None) for n in names}
-    try:
-        vocab = _load_module(names[0], os.path.join(FIXTURES, "gate_vocab.clausal"))
-        with pytest.raises(SyntaxError) as exc:
-            _load_module(names[1], os.path.join(FIXTURES, "gate_rival.clausal"))
-        assert "may not write gv_owned/1" in str(exc.value)
-        assert len(_lm(vocab).db.row("gv_owned", 1).clauses) == 1
-    finally:
-        for n in names:
-            sys.modules.pop(n, None)
-            if saved[n] is not None:
-                sys.modules[n] = saved[n]
+    yield names
+    for n in names:
+        sys.modules.pop(n, None)
+        if saved[n] is not None:
+            sys.modules[n] = saved[n]
 
 
-def test_a_handle_head_construction_error_names_the_declaration_site():
-    """The stale "no Database home yet" comment: the site IS on the owner's
-    row (``PredRow.declared_at``), so a handle's head error names it rather
-    than ``registered by: <unknown>``."""
+@pytest.mark.parametrize("era", ERAS)
+def test_a_clobbering_import_head_is_refused_by_the_gate(vocab_rival, era_loads, era):
+    era_loads(era)
+    vocab = _load_module(vocab_rival[0], os.path.join(FIXTURES, "gate_vocab.clausal"))
+    with pytest.raises(SyntaxError) as exc:
+        _load_module(vocab_rival[1], os.path.join(FIXTURES, "gate_rival.clausal"))
+    assert "may not write gv_owned/1" in str(exc.value)
+    assert len(_lm(vocab).db.row("gv_owned", 1).clauses) == 1
+
+
+@pytest.mark.parametrize("era", ERAS)
+def test_a_variable_head_for_an_import_is_refused_by_the_gate(
+        vocab_rival, era_loads, era, tmp_path):
+    """The derived name is a VARIABLE's (``colour``), not a placeholder."""
+    era_loads(era)
+    _load_module(vocab_rival[0], os.path.join(FIXTURES, "gate_vocab.clausal"))
+    src = tmp_path / "sa_hv.clausal"
+    src.write_text("-module(sa_hv, [])\n"
+                   "-import_from(tests.fixtures.gate_vocab, [gv_owned])\n"
+                   "gv_owned(COLOUR) <- true\n")
+    with pytest.raises(SyntaxError) as exc:
+        _load_module(vocab_rival[2], str(src))
+    assert "defines a clause for gv_owned/1" in str(exc.value)
+
+
+def test_the_owner_s_own_head_keeps_its_construction_error(vocab_rival):
+    """Deferral is for ANOTHER module's head only: called with no module to
+    tell (this test's namespace has no ``$module``), a handle's head keeps
+    the error, and it names the SITE the owner row records
+    (``declared_at``), not ``<unknown>``."""
     from clausal.logic.predicate import ClausalTermConstructionError, head_cell
-    saved = sys.modules.pop("tests.fixtures.gate_vocab", None)
-    try:
-        vocab = _load_module("tests.fixtures.gate_vocab",
-                             os.path.join(FIXTURES, "gate_vocab.clausal"))
-        handle = mint_predicate_handle(_lm(vocab).db, "gv_owned")
-        assert head_cell(handle, NAME="teal") == ("gv_owned", "teal")
-        with pytest.raises(ClausalTermConstructionError) as exc:
-            head_cell(handle, arg_0="teal")
-        assert "gate_vocab.clausal:" in str(exc.value)
-        assert "<unknown>" not in str(exc.value)
-    finally:
-        sys.modules.pop("tests.fixtures.gate_vocab", None)
-        if saved is not None:
-            sys.modules["tests.fixtures.gate_vocab"] = saved
+    vocab = _load_module(vocab_rival[0], os.path.join(FIXTURES, "gate_vocab.clausal"))
+    handle = mint_predicate_handle(_lm(vocab).db, "gv_owned")
+    assert head_cell(handle, NAME="teal") == ("gv_owned", "teal")
+    with pytest.raises(ClausalTermConstructionError) as exc:
+        head_cell(handle, arg_0="teal")
+    assert "gate_vocab.clausal:" in str(exc.value)
+    assert "<unknown>" not in str(exc.value)
 
 
 @pytest.mark.parametrize("era", ERAS)
 @pytest.mark.parametrize("by_name", [False, True])
-def test_a_head_pattern_follows_the_same_rule(lister, era_loads, era, by_name):
-    """``head_match``'s cell pattern for a dotted ``sa_hlib.hf(X)`` in a
-    clause head: PLAIN when the host also imports ``hf`` by name (or in the
-    class era, where a class spells its own name), MANGLED otherwise."""
+def test_a_host_head_pattern_matches_an_owner_built_term(
+        lister, era_loads, era, by_name):
+    """roborev's interop case, head side: ``patq(sa_hlib.hf(X), X)`` in the
+    HOST matches the ``hf`` term the OWNER builds (``sa_hlib.make``), with or
+    without an import by name, in both eras -- and never a mangled one."""
     era_loads(era)
     lister("sa_hlib", """
-        -module(sa_hlib, [hf(A)])
+        -module(sa_hlib, [hf(A), make(T)])
         hf(1),
+        make(hf(5)),
     """)
     host = lister("sa_hhost", f"""
-        -module(sa_hhost, [patq(T, X)])
+        -module(sa_hhost, [patq(T, X), owner_built(X)])
         {"-import_from(sa_hlib, [hf])" if by_name else ""}
         -import_module(sa_hlib)
         patq(sa_hlib.hf(X), X) <- true
+        owner_built(X) <- (sa_hlib.make(T), patq(T, X))
     """)
     lm = _lm(host)
     from clausal.logic.variables import Var, deref
-    plain = by_name or era == "class"
-    for functor in ("hf", mangle("sa_hlib", "hf")):
+    assert _all("owner_built", lm) == [5]
+    for functor, expected in (("hf", [5]), (mangle("sa_hlib", "hf"), [])):
         X = Var()
         got = [deref(X) for _ in call("patq", (functor, 5), X, module=lm)]
-        assert got == ([5] if (functor == "hf") == plain else []), functor
+        assert got == expected, functor
