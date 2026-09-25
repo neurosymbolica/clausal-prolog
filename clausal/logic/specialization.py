@@ -341,41 +341,89 @@ def _specialization_author(db: "Database") -> str:
 # name (no ``db=``, no named ``module_dict``).  A handle is a ``str``: nothing
 # the caller holds keeps the Database alive, and the handle-owner registry is
 # weak, so the strong reference lives here (one entry per such call).
-_PRIVATE_SPECIALIZATION_DBS: dict = {}
+# The per-call Databases the direct API gave a PRIVATE module name (no
+# ``db=``, and no namespace to own the predicate).  A handle is a ``str`` --
+# nothing the caller holds can keep a Database alive -- and the handle-owner
+# registry is weak, so the strong reference has to live here.  BOUNDED
+# (roborev Low on slice 4): the most recent ``_PRIVATE_DB_LIMIT`` are kept,
+# least-recently-specialized evicted first.  An evicted handle is then a
+# DANGLING handle, and calling it raises the ordinary
+# ``existence_error(procedure, Name/Arity)`` naming its private module --
+# loud, never a silent wrong answer.  A caller that needs a specialization
+# to outlive that window passes ``db=`` (or a named ``module_dict``), whose
+# module then owns it for as long as the module lives.
+_PRIVATE_DB_LIMIT = 256
+_PRIVATE_SPECIALIZATION_DBS: "dict[str, Database]" = {}
 _PRIVATE_COUNTER = [0]
 
-#: The ``module_dict`` key under which a db-less call over a NAMED namespace
-#: keeps its per-namespace Database, so repeated calls share one owner.
+#: The ``module_dict`` key under which a db-less call over a bare NAMED dict
+#: (one no module owns) keeps its Database, so repeated calls share one owner.
 _NAMESPACE_DB_KEY = "$specialization_db"
+
+
+def _check_named_db(db: "Database", new_name: str) -> "Database":
+    if db.module_name() in ("<anonymous>", "<detached>"):
+        raise ValueError(
+            f"specialize_mi*: the db= passed for {new_name!r} names no "
+            f"module, so it cannot own the handle the call returns -- "
+            f"pass a module's Database (Module(name).db), or omit db= "
+            f"for a private one")
+    return db
+
+
+def _namespace_owner_db(module_dict: dict) -> "Database | None":
+    """The Database that already OWNS the namespace *module_dict*, if any:
+    its ``$module`` (a loaded ``.clausal`` module, or one mid-load), else a
+    live registered handle owner of its name whose Database IS over this
+    very dict (a Python-built ``Module`` that has installed a handle
+    before).  Reusing it is what keeps ONE owner per module name (roborev
+    Medium on slice 4: a second Database under the same name answered from
+    an empty store, or made every handle of the module ambiguous)."""
+    from clausal.logic.predicate import (  # noqa: PLC0415
+        _live_handle_owners, namespace_db)
+    owner = namespace_db(module_dict)
+    if owner is not None:
+        return owner
+    name = module_dict.get("__name__")
+    for live in _live_handle_owners(name) if name else ():
+        if getattr(live, "module_dict", None) is module_dict:
+            return live
+    return None
 
 
 def _defining_db(db: "Database | None", module_dict: dict | None,
                  new_name: str) -> "Database":
     """The Database the specialized predicate is a row OF -- always one that
-    names a module, because the result is a HANDLE (W4b-3 slice 4).
+    names a module, because the result is a HANDLE (W4b-3 slice 4).  Asked
+    BEFORE any unfolding, so a refused ``db=`` costs nothing.
 
     * ``db=`` given: the DEFINING module's database (``compiler_v2``
       passes the module it is compiling).  It must name a module; one that
       does not cannot own a handle and is refused.
-    * no ``db=``, a ``module_dict`` that names itself (``__name__``): one
-      Database over that namespace, kept IN it (``$specialization_db``) so
-      repeated calls share one owner and the namespace keeps it alive.
+    * no ``db=``, a ``module_dict`` some Database already owns (a loaded
+      module's ``__dict__``, a registered ``Module``): THAT Database -- one
+      owner per module name (``_namespace_owner_db``).
+    * no ``db=``, a bare dict that names itself (``__name__``) and that no
+      module owns: one Database over it, kept IN it (``$specialization_db``)
+      so repeated calls share one owner and the dict keeps it alive.
     * no ``db=`` and no module name (operator ruling 2026-09-25): a Database
       with a PRIVATE, REGISTERED module name (``_clausal_specialize_<name>_
-      <n>``), held here strongly and registered as its handles' owner, so
-      the handle the call returns still resolves.
+      <n>``), held here (bounded, see ``_PRIVATE_DB_LIMIT``) and registered
+      as its handles' owner, so the handle the call returns still resolves.
+
+    Known limit: a Python-built ``Module`` over *module_dict* that has never
+    installed or registered anything cannot be found from the dict alone (a
+    ``Module`` does not bind itself into its namespace), so such a call gets
+    the ``$specialization_db`` -- pass ``db=m.db`` to specialize INTO it.
     """
     from clausal.logic.database import Database  # noqa: PLC0415
     from clausal.logic.predicate import register_handle_owner  # noqa: PLC0415
     if db is not None:
-        if db.module_name() in ("<anonymous>", "<detached>"):
-            raise ValueError(
-                f"specialize_mi*: the db= passed for {new_name!r} names no "
-                f"module, so it cannot own the handle the call returns -- "
-                f"pass a module's Database (Module(name).db), or omit db= "
-                f"for a private one")
-        return db
+        return _check_named_db(db, new_name)
     if isinstance(module_dict, dict) and module_dict.get("__name__"):
+        owner = _namespace_owner_db(module_dict)
+        if owner is not None:
+            return owner
         existing = module_dict.get(_NAMESPACE_DB_KEY)
         if existing is None:
             existing = Database(module_dict=module_dict)
@@ -386,6 +434,8 @@ def _defining_db(db: "Database | None", module_dict: dict | None,
     private = f"_clausal_specialize_{new_name}_{_PRIVATE_COUNTER[0]}"
     private_db = Database(module_dict={"__name__": private})
     _PRIVATE_SPECIALIZATION_DBS[private] = private_db
+    while len(_PRIVATE_SPECIALIZATION_DBS) > _PRIVATE_DB_LIMIT:
+        _PRIVATE_SPECIALIZATION_DBS.pop(next(iter(_PRIVATE_SPECIALIZATION_DBS)))
     register_handle_owner(private_db)
     return private_db
 
@@ -503,8 +553,9 @@ def specialize_mi(
         to return is gone (W4b-3 slice 4, a clean break -- no shim).
     """
     fields = _specialized_fields(pattern)
+    defining_db = _defining_db(db, module_dict, new_name)   # up front
     target = _SpecTarget(new_name, tuple(fields),
-                         _declared_site(db, new_name, len(fields)))
+                         _declared_site(defining_db, new_name, len(fields)))
 
     # Detect whether the object program has residual goals (builtins/external).
     known_functors = _known_functors(object_program)
@@ -522,7 +573,7 @@ def specialize_mi(
     # Install as a row in the defining module's database, through the gate.
     return _install_specialized(
         new_name, fields, clauses,
-        _defining_db(db, module_dict, new_name), module_dict,
+        defining_db, module_dict,
         solve_goal_name=solve_goal_name if has_residual else None,
         goal_map=goal_map,
     )
@@ -1606,8 +1657,9 @@ def specialize_mi_deep(
         The specialized predicate's HANDLE; see ``specialize_mi``.
     """
     fields = _specialized_fields(pattern)
+    defining_db = _defining_db(db, module_dict, new_name)   # up front
     target = _SpecTarget(new_name, tuple(fields),
-                         _declared_site(db, new_name, len(fields)))
+                         _declared_site(defining_db, new_name, len(fields)))
 
     known_functors = _known_functors(object_program)
     has_residual = _has_residual_goals(object_program, known_functors)
@@ -1634,7 +1686,7 @@ def specialize_mi_deep(
     # Install as a row in the defining module's database, through the gate.
     return _install_specialized(
         new_name, fields, clauses,
-        _defining_db(db, module_dict, new_name), module_dict,
+        defining_db, module_dict,
         solve_goal_name=solve_goal_name if has_residual else None,
         goal_map=goal_map,
     )
@@ -1941,8 +1993,9 @@ def specialize_mi_cpd(
         The specialized predicate's HANDLE; see ``specialize_mi``.
     """
     fields = _specialized_fields(pattern)
+    defining_db = _defining_db(db, module_dict, new_name)   # up front
     target = _SpecTarget(new_name, tuple(fields),
-                         _declared_site(db, new_name, len(fields)))
+                         _declared_site(defining_db, new_name, len(fields)))
 
     known_functors = _known_functors(object_program)
     has_residual = _has_residual_goals(object_program, known_functors)
@@ -1967,7 +2020,7 @@ def specialize_mi_cpd(
     # Install as a row in the defining module's database, through the gate.
     return _install_specialized(
         new_name, fields, deforested,
-        _defining_db(db, module_dict, new_name), module_dict,
+        defining_db, module_dict,
         solve_goal_name=solve_goal_name if has_residual else None,
         goal_map=goal_map,
     )

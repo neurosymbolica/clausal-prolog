@@ -57,15 +57,48 @@ def _natnum_program():
 
 @pytest.mark.parametrize("mi", ["solve", "solve_count", "solve_limit"])
 def test_the_unfolder_runs_without_any_class(mi):
-    """A target built from a name and fields alone unfolds (the class it was
-    compared against is gone; the goldens below pin the output)."""
+    """A target built from a name and fields alone -- the only shape since
+    W4b-3 slice 4 -- unfolds to EXACTLY the clauses the class-built target
+    unfolded to (recorded on 9fa2cfa0, before the class went:
+    ``fixtures/spec_target_unfold_goldens.json``)."""
+    import json
     mis = importlib.import_module("clausal.examples.metainterpreters")
     pattern = analyze_mi(getattr(mis, mi))
     fields = tuple(_specialized_fields(pattern))
     classless = _unfold(pattern, _natnum_program(),
                         _SpecTarget("spt_spec", fields))
-    assert classless, "nothing unfolded"
-    assert all(c.head[0] == "spt_spec" for c in classless)
+    with open(os.path.join(_FIXTURES, "spec_target_unfold_goldens.json")) as f:
+        golden = json.load(f)[mi]
+    assert golden, "empty golden: nothing compared"
+    assert _canon(classless) == golden
+
+
+def test_a_specialize_target_carries_its_directive_site():
+    """The ``registered by`` line: the make_predicate class carried
+    ``_registered_at``; the target reads its row's ``declared_at``, which
+    ``compiler_v2._run_specialization`` stamps with the ``-specialize``
+    directive's own line (``_declared_site``)."""
+    from clausal.import_hook import _load_module
+    from clausal.logic.predicate import ClausalTermConstructionError
+    from clausal.logic.specialization import _declared_site
+    path = os.path.join(_FIXTURES, "specialize_natnum.clausal")
+    name = "_spt_site_natnum"
+    sys.modules.pop(name, None)
+    try:
+        mod = _load_module(name, path)
+    finally:
+        sys.modules.pop(name, None)
+    db = mod.__dict__["$module"].db
+    with open(path) as f:
+        line = next(i for i, text in enumerate(f, 1)
+                    if text.startswith("-specialize(") and
+                    "solve_count_natnum" in text)
+    site = _declared_site(db, "solve_count_natnum", 2)
+    assert site == (os.path.abspath(path), line) or site == (path, line), site
+    target = _SpecTarget("solve_count_natnum", ("GOALS", "COUNT"), site)
+    with pytest.raises(ClausalTermConstructionError) as exc:
+        target(nope=1)
+    assert exc.value.registered_at == site
 
 
 # ── the actual output, against main's (class-built) output ──────────────────

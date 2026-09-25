@@ -1935,6 +1935,18 @@ def _run_specialization(
         # Analyze the MI (auto-detects program_arg from field names).
         pattern = analyze_mi(mi_row)
 
+        # The target's DECLARATION SITE is this directive's line, stamped on
+        # its row (first stamp wins) so the specializer's construction error
+        # can name it -- the ``registered by`` line the make_predicate class
+        # carried (its ``_registered_at``) before W4b-3 slice 4.
+        from clausal.logic.specialization import _specialized_fields  # noqa: PLC0415
+        _target_row = db.row(item.new_name, len(_specialized_fields(pattern)),
+                             create=True)
+        _pos = getattr(item, "position", None)
+        _path = module_source_path(module_dict)
+        if _target_row.declared_at is None and _pos and _path:
+            _target_row.declared_at = (_path, _pos[0])
+
         # Evaluate the source program.
         source_cls = module_dict.get(item.source_program)
         if source_cls is None:

@@ -36,20 +36,17 @@ def mi_module():
 def spec_module(request):
     """The DEFINING module a specialization is installed into.
 
-    Operator ruling QC (2026-09-24): at W4b-3 the direct ``specialize_mi*``
-    API will require the caller to name where the predicate lives (``db=`` of
-    a ``Module``) and will return the row; the predicate is queried by NAME
-    with ``call(name, ..., module=m)``.  Until W4b-3 it still returns a
-    CLASS (see ``TestSpecializedPredicateIsARow``), which these tests only
-    use where noted.  Every specialization here is written into
-    this module's database and inspected through ``_row``; queries are by
-    name against this module.
+    Since W4b-3 slice 4 the direct ``specialize_mi*`` API returns the
+    predicate's HANDLE (it returned a class).  Every specialization here is
+    written into this module's database and inspected through its row
+    (``_row_of(handle)`` / ``_row``); queries are by name against this
+    module.
 
     HOW a by-name query resolves depends on the namespace, not only the db:
     ``call(name, module=m)`` looks in ``m.module_dict`` FIRST, then the
     builtins, and only then ``m.db.get_dispatch`` (``solve.call``).  So a
     specialization made through ``_specialize`` (which binds the alias in
-    ``module_dict``) is answered through the class bound there, and one made
+    ``module_dict``) is answered through the handle bound there, and one made
     through ``_specialize_row_route`` (``db=`` only) is answered through the
     database row -- the post-P4 route, covered by one ``test_row_route_*``
     test per phase area.  One module per test, so names never collide across
@@ -65,8 +62,8 @@ def _specialize(module, fn, pattern, program, name, **kw):
     """Specialize into *module*'s database (``db=``) AND its namespace
     (``module_dict=``).  The alias is bound in ``module_dict``, which is where
     ``call(name, ..., module=module)`` looks first -- so queries on it are
-    answered by the CLASS bound there (whose dispatch reads the row), and a
-    same-named builtin can never answer in its place.  *fn* is
+    answered through the HANDLE bound there (it names this module's row),
+    and a same-named builtin can never answer in its place.  *fn* is
     ``specialize_mi``, ``specialize_mi_deep`` or ``specialize_mi_cpd``."""
     return fn(
         pattern, program, name,
@@ -2213,10 +2210,10 @@ class TestCpdTermination:
         assert len(_row(spec_module, "SolveTerm4", 1).clauses) > 0
 
 
-# ── The no-db= default and the class handle (DELETE AT W4b-3) ──────────────
+# ── The no-db= default: a private, registered module (ruling 4) ────────────
 
 
-class TestNoDbClassHandleDefault:
+class TestNoDbPrivateModuleDefault:
     """The no-``db=`` default of the direct API.  KEPT at W4b-3 by operator
     ruling 2026-09-25 (it was marked for deletion under ruling QC): a
     specialization with no ``db=`` and no named namespace gets a Database
@@ -2251,49 +2248,49 @@ class TestNoDbClassHandleDefault:
             specialize_mi(analyze_mi(mi_module.solve),
                           _make_natnum_program(), "NoDbAnon", db=Database())
 
-    def test_factorial_residual_through_the_class_handle(self, mi_module):
+    def test_factorial_residual_through_the_returned_handle(self, mi_module):
         from clausal.logic.solve import call
         from clausal.logic.variables import Var, deref, walk
 
         pattern = analyze_mi(mi_module.solve)
-        pred_cls = specialize_mi(
+        handle = specialize_mi(
             pattern, _make_factorial_program(), "NoDbFactorial",
         )
         for n, expected in [(0, 1), (3, 6), (5, 120)]:
             r = Var()
             results = [walk(deref(r))
-                       for _ in call(pred_cls, [["factorial", n, r]])]
+                       for _ in call(handle, [["factorial", n, r]])]
             assert expected in results, f"factorial({n}): got {results}"
-        assert sum(1 for _ in call(pred_cls, [["factorial", 3, 7]])) == 0
+        assert sum(1 for _ in call(handle, [["factorial", 3, 7]])) == 0
 
-    def test_cpd_count_through_the_class_handle(self, mi_module):
+    def test_cpd_count_through_the_returned_handle(self, mi_module):
         from clausal.logic.solve import call
         from clausal.logic.variables import Var, deref, walk
 
         pattern = analyze_mi(mi_module.solve_count)
-        pred_cls = specialize_mi_cpd(
+        handle = specialize_mi_cpd(
             pattern, _make_natnum_program(), "NoDbCountCpd",
         )
         v = Var()
         counts = [walk(deref(v))
-                  for _ in call(pred_cls, [["natnum", ["s", 0]]], v)]
+                  for _ in call(handle, [["natnum", ["s", 0]]], v)]
         assert counts == [2]
 
     def test_module_dict_only_gets_a_per_call_database(self, mi_module):
-        """``module_dict=`` without ``db=``: the specialization builds its own
-        Database over the caller's namespace (``_defining_db``), and the
-        returned class answers out of it."""
+        """``module_dict=`` without ``db=``, a bare named dict no module owns:
+        the specialization builds one Database over it (``_defining_db``),
+        and the returned handle answers out of it."""
         from clausal.logic.solve import call
 
         module_dict = {"__name__": "nodb_module_dict_only"}
         pattern = analyze_mi(mi_module.solve)
-        pred_cls = specialize_mi(
+        handle = specialize_mi(
             pattern, _make_natnum_program(), "NoDbModuleDictNatnum",
             module_dict,
         )
-        assert _row_of(pred_cls).db.module_dict is module_dict
-        assert sum(1 for _ in call(pred_cls, [["natnum", ["s", 0]]])) == 1
-        assert sum(1 for _ in call(pred_cls, [["natnum", "a"]])) == 0
+        assert _row_of(handle).db.module_dict is module_dict
+        assert sum(1 for _ in call(handle, [["natnum", ["s", 0]]])) == 1
+        assert sum(1 for _ in call(handle, [["natnum", "a"]])) == 0
 
 
 # ── P3-3 Task 7: the specialized predicate is a Database ROW ─────────────────
@@ -2304,30 +2301,23 @@ class TestSpecializedPredicateIsARow:
     free-floating class and compile it against a ``Database`` it threw away,
     so the specialized predicate existed only as class attributes.  It is now
     a row: registered, signed, gate-stamped and dispatched through a
-    ``Database`` — the caller's when it passes one, the specialization's own
-    otherwise — and the returned class READS that row.
-
-    Operator ruling QC (2026-09-24): these write into the ``spec_module``
-    fixture's database and query by name like the rest of the file.  Two
-    things deliberately stay as they are until W4b-3 changes the API: the
-    ``X._row is row`` / ``X._get_dispatch() is db.get_dispatch(...)``
-    identity checks pin that the RETURNED CLASS reads the row, which cannot
-    be said through the row while ``specialize_mi`` returns a class (at W4b-3
-    they become "the result IS the row"); and ``test_no_db_still_row_linked``
-    pins the no-``db=`` mode that W4b-3 ends (retire it, or turn it into the
-    refusal test, then).
+    ``Database`` -- the caller's when it passes one, the specialization's own
+    otherwise -- and the returned HANDLE names that row (W4b-3 slice 4).
+    ``_row_of(handle) is row`` / ``_dispatch_of(handle) is
+    db.get_dispatch(...)`` pin that; ``test_no_db_still_row_linked`` pins the
+    no-``db=`` mode, kept by operator ruling 4 (2026-09-25).
     """
 
     def test_row_registered_in_the_callers_db(self, mi_module, spec_module):
         db = spec_module.db
         pattern = analyze_mi(mi_module.solve)
-        pred_cls = _specialize(
+        handle = _specialize(
             spec_module, specialize_mi,
             pattern, _make_natnum_program(), "T7RowNatnum",
         )
         row = db.row("T7RowNatnum", 1)
         assert row is not None
-        assert _row_of(pred_cls) is row
+        assert _row_of(handle) is row
         assert row.detached is False
 
     def test_signature_registered_in_the_callers_db(self, mi_module, spec_module):
@@ -2342,12 +2332,12 @@ class TestSpecializedPredicateIsARow:
     def test_clauses_and_dispatch_land_in_the_callers_db(self, mi_module, spec_module):
         db = spec_module.db
         pattern = analyze_mi(mi_module.solve)
-        pred_cls = _specialize(
+        handle = _specialize(
             spec_module, specialize_mi,
             pattern, _make_natnum_program(), "T7ClausesNatnum",
         )
         assert len(db.clauses_for("T7ClausesNatnum", 1)) == 3
-        assert db.get_dispatch("T7ClausesNatnum", 1) is _dispatch_of(pred_cls)
+        assert db.get_dispatch("T7ClausesNatnum", 1) is _dispatch_of(handle)
 
     def test_write_is_gate_stamped(self, mi_module, spec_module):
         from clausal.logic.database import WRITE_LOAD_CLAUSES
@@ -2379,37 +2369,36 @@ class TestSpecializedPredicateIsARow:
             spec_module, specialize_mi,
             pattern, _make_natnum_program(), "T7AgainNatnum",
         )
-        pred_cls = _specialize(
+        handle = _specialize(
             spec_module, specialize_mi,
             pattern, _make_natnum_program(), "T7AgainNatnum",
         )
         assert len(db.clauses_for("T7AgainNatnum", 1)) == 3
-        assert _row_of(pred_cls) is db.row("T7AgainNatnum", 1)
+        assert _row_of(handle) is db.row("T7AgainNatnum", 1)
 
     def test_no_db_still_row_linked(self, mi_module):
         """With no database anywhere in the caller's world there is no defining
-        module, so the specialization keeps a Database of its own — but the
-        class READS its row, and the predicate is registered there, gate-
-        stamped and owned, rather than living in class attributes.
+        module, so the specialization keeps a Database of its own (a private,
+        registered module) -- and the returned handle names its row, where
+        the predicate is registered, gate-stamped and owned.
 
-        This one passed BEFORE Task 7 as far as the row link goes, because
-        ``compiler._install`` already bound the class to the throwaway
-        database's row — which was the bug: the right mechanism against the
-        wrong database.  The write log and ``source`` are what it could not
+        Before Task 7 ``compiler._install`` already bound the then-returned
+        class to the throwaway database's row -- the right mechanism against
+        the wrong database.  The write log and ``source`` are what it could not
         show then, and are what make this the no-``db`` twin of
         ``test_write_is_gate_stamped``."""
         from clausal.logic.database import WRITE_LOAD_CLAUSES
         from clausal.logic.specialization import SPECIALIZE_AUTHOR_PREFIX
 
         pattern = analyze_mi(mi_module.solve)
-        pred_cls = specialize_mi(
+        handle = specialize_mi(
             pattern, _make_natnum_program(), "T7NoDbNatnum",
         )
-        row = _row_of(pred_cls)
+        row = _row_of(handle)
         assert row is not None
         assert row.detached is False
         assert row.db.row("T7NoDbNatnum", 1) is row
-        assert row.db.get_dispatch("T7NoDbNatnum", 1) is _dispatch_of(pred_cls)
+        assert row.db.get_dispatch("T7NoDbNatnum", 1) is _dispatch_of(handle)
         # One stamp for the whole specialization: the nested set_dispatch and
         # dispatch-install transactions inherit this one (P3-3 Task 3).
         assert len(row.writes) == 1
@@ -2507,3 +2496,90 @@ class TestSpecializedPredicateIsARow:
         assert sum(1 for _ in call(
             "T7Outer", [["wrap", "a"]], module=spec_module,
         )) == 0
+
+
+# ── roborev on slice 4 (2026-09-25) ──────────────────────────────────────────
+
+
+class TestDefiningDbOwnership:
+    """One owner per module name: a db-less call over a namespace some
+    Database already owns specializes INTO that Database (roborev Medium:
+    it used to build a SECOND Database under the same name)."""
+
+    def test_a_loaded_modules_dict_without_db_uses_its_own_database(
+            self, mi_module, tmp_path):
+        import sys
+        from clausal.import_hook import _load_module
+        from clausal.logic.atoms import mangle
+        from clausal.logic.predicate import _live_handle_owners
+        from clausal.logic.solve import call, solve
+        from clausal.logic.variables import Var, deref, walk
+
+        name = "_spec_owner_loaded"
+        path = tmp_path / f"{name}.clausal"
+        path.write_text(f"-module({name}, [own(X)])\nown(1),\n")
+        sys.modules.pop(name, None)
+        mod = _load_module(name, str(path))
+        try:
+            md = mod.__dict__
+            lm = md["$module"]
+            handle = specialize_mi(analyze_mi(mi_module.solve),
+                                   _make_natnum_program(), "OwnSpec", md)
+            assert handle == mangle(name, "OwnSpec")
+            assert "$specialization_db" not in md
+            assert lm.db.row("OwnSpec", 1) is not None       # INTO its db
+            goal = [["natnum", ["s", 0]]]
+            assert len(list(call(handle, goal))) == 1
+            assert len(list(solve((handle, goal)))) == 1
+            assert len(list(call("OwnSpec", goal, module=lm))) == 1
+            # no second owner: the module's other handles stay unambiguous
+            assert len(_live_handle_owners(name)) == 1
+            X = Var()
+            assert [walk(deref(X)) for _ in solve((md["own"], X))] == [1]
+        finally:
+            sys.modules.pop(name, None)
+
+
+class TestPrivateDbsAreBounded:
+    """roborev Low: the private per-call Databases are held strongly (a
+    handle is a str and the owner registry is weak), BOUNDED -- oldest
+    evicted -- and an evicted handle is a loud dangling handle."""
+
+    def test_the_oldest_private_db_is_evicted(self, mi_module, monkeypatch):
+        from clausal.logic import specialization as sp
+        from clausal.logic.solve import call
+        from clausal.predicate_diagnostics import PredicateNotFoundError
+        import gc
+        monkeypatch.setattr(sp, "_PRIVATE_DB_LIMIT", 2)
+        monkeypatch.setattr(sp, "_PRIVATE_SPECIALIZATION_DBS", {})
+        pattern = analyze_mi(mi_module.solve)
+        handles = [specialize_mi(pattern, _make_natnum_program(), f"Bnd{i}")
+                   for i in range(3)]
+        assert len(sp._PRIVATE_SPECIALIZATION_DBS) == 2
+        gc.collect()
+        goal = [["natnum", 0]]
+        assert len(list(call(handles[2], goal))) == 1
+        assert len(list(call(handles[1], goal))) == 1
+        with pytest.raises(PredicateNotFoundError):
+            list(call(handles[0], goal))
+
+
+class TestAnonymousDbRefusedUpFront:
+    """roborev Low: a db= naming no module is refused BEFORE any unfolding."""
+
+    @pytest.mark.parametrize("fn_name", ["specialize_mi", "specialize_mi_deep",
+                                         "specialize_mi_cpd"])
+    def test_refused_before_the_unfold(self, mi_module, monkeypatch, fn_name):
+        from clausal.logic import specialization as sp
+        from clausal.logic.database import Database
+
+        def boom(*a, **k):
+            raise AssertionError("unfolded before refusing the db")
+
+        for inner in ("_unfold", "_unfold_deep", "_deforest_pass"):
+            if hasattr(sp, inner):
+                monkeypatch.setattr(sp, inner, boom)
+        with pytest.raises(ValueError, match="names no module"):
+            getattr(sp, fn_name)(analyze_mi(mi_module.solve),
+                                 _make_natnum_program(), "AnonUpFront",
+                                 db=Database())

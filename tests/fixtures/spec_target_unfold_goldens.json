@@ -1,0 +1,18 @@
+{
+ "_comment": "_unfold(pattern, natnum, target) canonicalised, recorded on 9fa2cfa0 with the CLASS-built target (_SpecTarget.of(make_predicate('spt_spec', fields))); W4b-3 slice 4 builds the target from name + fields and must unfold identically.",
+ "solve": [
+  "('spt_spec', V0) :- [Unify(left=V0, right=[])]",
+  "('spt_spec', [['natnum', 0], StarUnpack(value=V1)]) :- [Call(func=LoadName(name='spt_spec'), args=[V1], kwargs=[])]",
+  "('spt_spec', [['natnum', ['s', 'X']], StarUnpack(value=V2)]) :- [Call(func=LoadName(name='spt_spec'), args=[[['natnum', 'X'], StarUnpack(value=V2)]], kwargs=[])]"
+ ],
+ "solve_count": [
+  "('spt_spec', V0, V1) :- [Unify(left=V0, right=[]), Unify(left=V1, right=0)]",
+  "('spt_spec', [['natnum', 0], StarUnpack(value=V2)], V3) :- [Call(func=LoadName(name='spt_spec'), args=[V2, V4], kwargs=[]), ArithEq(left=V3, right=Add(left=V4, right=1))]",
+  "('spt_spec', [['natnum', ['s', 'X']], StarUnpack(value=V5)], V6) :- [Call(func=LoadName(name='spt_spec'), args=[[['natnum', 'X'], StarUnpack(value=V5)], V7], kwargs=[]), ArithEq(left=V6, right=Add(left=V7, right=1))]"
+ ],
+ "solve_limit": [
+  "('spt_spec', V0, V1) :- [Unify(left=V0, right=[])]",
+  "('spt_spec', [['natnum', 0], StarUnpack(value=V2)], V3) :- [Gt(left=V3, right=0), ArithEq(left=V4, right=Sub(left=V3, right=1)), Call(func=LoadName(name='spt_spec'), args=[V2, V4], kwargs=[])]",
+  "('spt_spec', [['natnum', ['s', 'X']], StarUnpack(value=V5)], V6) :- [Gt(left=V6, right=0), ArithEq(left=V7, right=Sub(left=V6, right=1)), Call(func=LoadName(name='spt_spec'), args=[[['natnum', 'X'], StarUnpack(value=V5)], V7], kwargs=[])]"
+ ]
+}
