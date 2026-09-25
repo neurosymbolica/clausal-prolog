@@ -90,9 +90,9 @@ def test_F002_match_charlist_equals_string(tmp_path):
         R4(S, R) <- replace(r"b", "X", S, R)
     ''', "f002")
     char_list = [char_atom("1"), char_atom("2"), char_atom("3")]
-    assert len(list(solve(m.M2(char_list), module=m))) == 1
+    assert len(list(solve(("M2", char_list), module=m))) == 1
     R = Var()
-    assert _values(m.R4([char_atom("a"), char_atom("b"), char_atom("c")], R),
+    assert _values(("R4", [char_atom("a"), char_atom("b"), char_atom("c")], R),
                    R, m) == [chars("aXc")]
 
 
@@ -104,7 +104,7 @@ def test_F002_charlist_repr_false_positive(tmp_path):
     ''', "f002b")
     # char-list "a" contains no quote; the repr "['a']" does — current code
     # falsely succeeds by scanning the repr
-    assert list(solve(m.SQ([char_atom("a")]), module=m)) == []
+    assert list(solve(("SQ", [char_atom("a")]), module=m)) == []
 
 
 def test_F003_user_defined_match_not_hijacked(tmp_path):
@@ -114,7 +114,7 @@ def test_F003_user_defined_match_not_hijacked(tmp_path):
         caller(X) <- match("hello", X)
     ''', "f003")
     X = Var()
-    assert _values(m.caller(X), X, m) == [mint("hello")]
+    assert _values(("caller", X), X, m) == [mint("hello")]
 
 
 def test_F004_invalid_pattern_catchable(tmp_path):
@@ -125,7 +125,7 @@ def test_F004_invalid_pattern_catchable(tmp_path):
         catch_regex(R) <- catch(match("(", "x"), _, (R is caught))
     ''', "f004")
     R = Var()
-    out = _values(m.catch_regex(R), R, m)
+    out = _values(("catch_regex", R), R, m)
     assert out == [mint("caught")]
 
 
@@ -146,7 +146,7 @@ def test_F005_wrong_arity_is_an_error_not_silent_failure(tmp_path):
         bad(S) <- match(r"x", S, G, H)
     ''', "f005")
     with pytest.raises(LogicException) as excinfo:
-        list(solve(m.bad("x"), module=m))
+        list(solve(("bad", "x"), module=m))
     term = excinfo.value.term
     assert isinstance(term, Compound) and term.functor == "error"
     inner = term.args[0]
@@ -162,7 +162,7 @@ def test_F006_mixed_groups_expose_positional_values(tmp_path):
         M(S, G) <- match(r"(?P<A>\\d+)-(\\d+)", S, G)
     ''', "f006")
     G = Var()
-    (g,) = _values(m.M(chars("1-2"), G), G, m)
+    (g,) = _values(("M", chars("1-2"), G), G, m)
     assert g.get("A") == chars("1") and chars("2") in g.values()
 
 
@@ -173,7 +173,7 @@ def test_F007_dynamic_pattern_autobind_or_documented(tmp_path):
         dyn(P, S, YEAR) <- match(P, S)
     ''', "f007")
     Y = Var()
-    assert _values(m.dyn(chars(r"(?P<YEAR>\d+)"), chars("2026"), Y), Y, m) == [chars("2026")]
+    assert _values(("dyn", chars(r"(?P<YEAR>\d+)"), chars("2026"), Y), Y, m) == [chars("2026")]
 
 
 def test_F007_dynamic_autobind_no_aliasing_across_activations(tmp_path):
@@ -187,7 +187,7 @@ def test_F007_dynamic_autobind_no_aliasing_across_activations(tmp_path):
         pair(X) <- (dyn(r"x", "x", "one"), dyn(r"x", "x", "two"), X is "ok")
     ''', "f007b")
     X = Var()
-    assert _values(m.pair(X), X, m) == [mint("ok")]
+    assert _values(("pair", X), X, m) == [mint("ok")]
 
 
 def test_F007_dynamic_autobind_group_present_two_activations(tmp_path):
@@ -200,7 +200,7 @@ def test_F007_dynamic_autobind_group_present_two_activations(tmp_path):
                       dyn(r"(?P<YEAR>\\d+)", "2026", B))
     ''', "f007c")
     A, B = Var(), Var()
-    got = [(deref(A), deref(B)) for _ in solve(m.two(A, B), module=m)]
+    got = [(deref(A), deref(B)) for _ in solve(("two", A, B), module=m)]
     assert got == [(chars("2025"), chars("2026"))]
 
 
@@ -214,9 +214,9 @@ def test_F007_dynamic_autobind_gated_on_logic_var_names(tmp_path):
     ''', "f007d")
     # lowercase group: no binding attempted, so the conflicting value "x"
     # still succeeds.
-    assert len(list(solve(m.dyn(chars(r"(?P<year>\d+)"), chars("2026"), chars("x")), module=m))) == 1
+    assert len(list(solve(("dyn", chars(r"(?P<year>\d+)"), chars("2026"), chars("x")), module=m))) == 1
     # ALLCAPS group binds — and therefore conflicts with "x" here.
-    assert list(solve(m.dyn(chars(r"(?P<YEAR>\d+)"), chars("2026"), chars("x")), module=m)) == []
+    assert list(solve(("dyn", chars(r"(?P<YEAR>\d+)"), chars("2026"), chars("x")), module=m)) == []
 
 
 def test_F008_guard_unmatched_optional_group_binds_none(tmp_path):
@@ -227,7 +227,7 @@ def test_F008_guard_unmatched_optional_group_binds_none(tmp_path):
         opt_g(S, TAG) <- match(r"(?P<TAG>\\d+)?x", S)
     ''', "f008")
     T = Var()
-    assert _values(m.opt_g(chars("x"), T), T, m) == [None]
+    assert _values(("opt_g", chars("x"), T), T, m) == [None]
 
 
 def test_F009_guard_findall_single_group_is_string(tmp_path):
@@ -238,7 +238,7 @@ def test_F009_guard_findall_single_group_is_string(tmp_path):
         FA(S, M) <- findall(r"(\\d)x", S, M)
     ''', "f009")
     M = Var()
-    assert _values(m.FA(chars("1x2x"), M), M, m) == [chars("1"), chars("2")]
+    assert _values(("FA", chars("1x2x"), M), M, m) == [chars("1"), chars("2")]
 
 
 def test_guard_regex_ground_modes_match_re_oracle(tmp_path):
@@ -248,12 +248,12 @@ def test_guard_regex_ground_modes_match_re_oracle(tmp_path):
         G2(S, R) <- replace(r"b", "X", S, R)
         G3(S, PARTS) <- split(r",", S, PARTS)
     ''', "oracle")
-    assert len(list(solve(m.G1(chars("123")), module=m))) == 1
-    assert list(solve(m.G1(chars("abc")), module=m)) == []
+    assert len(list(solve(("G1", chars("123")), module=m))) == 1
+    assert list(solve(("G1", chars("abc")), module=m)) == []
     R = Var()
-    assert _values(m.G2(chars("abc"), R), R, m) == [chars("aXc")]
+    assert _values(("G2", chars("abc"), R), R, m) == [chars("aXc")]
     P = Var()
-    assert _values(m.G3(chars("a,b"), P), P, m) == [[chars("a"), chars("b")]]
+    assert _values(("G3", chars("a,b"), P), P, m) == [[chars("a"), chars("b")]]
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -300,7 +300,7 @@ def test_F013_dict_literal_pattern_matches(tmp_path):
         -import_from(reflection, [reified_clause])
         dict_pattern(SRC) <- reified_clause(SRC, pt({"k": 5}) <- True)
     ''', "f013")
-    assert len(list(solve(m.dict_pattern(chars('pt({"k": 5}),\n')), module=m))) == 1
+    assert len(list(solve(("dict_pattern", chars('pt({"k": 5}),\n')), module=m))) == 1
 
 
 def test_F014_reified_item_unbound_source_instantiation_error(tmp_path):
@@ -311,7 +311,7 @@ def test_F014_reified_item_unbound_source_instantiation_error(tmp_path):
         AI(S, I) <- reified_item(S, I)
     ''', "f014")
     with pytest.raises(LogicException):
-        list(solve(m.AI(Var(), Var()), module=m))
+        list(solve(("AI", Var(), Var()), module=m))
 
 
 def test_guard_reified_item_enumerates(tmp_path):
@@ -320,7 +320,7 @@ def test_guard_reified_item_enumerates(tmp_path):
         AI(SRC, ITEM) <- reified_item(SRC, ITEM)
     ''', "reify")
     src = 'edge2(1, 2),\nconn(X, Y) <- edge2(X, Y)\n'
-    assert len(list(solve(m.AI(chars(src), Var()), module=m))) == 2
+    assert len(list(solve(("AI", chars(src), Var()), module=m))) == 2
 
 
 # ═════════════════════════════════════════════════════════════════════════════
