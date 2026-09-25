@@ -67,11 +67,17 @@ def test_the_module_database_is_reachable_through_dollar_module(mod):
 
 
 def test_row_existence_IS_equivalent_to_the_isinstance_test(mod):
-    from clausal.logic.predicate import PredicateMeta
+    # After the W4b-2d flip the binding is the mangled predicate HANDLE, and
+    # the binding-side "is this a predicate" test that replaces
+    # ``isinstance(obj, PredicateMeta)`` is ``is_declared_predicate``.
+    from clausal.logic.predicate import (
+        is_declared_predicate, mint_predicate_handle,
+    )
     db = _db(mod)
     for name, arity in (("has_clauses", 1), ("declared_empty", 1)):
         obj = getattr(mod, name)
-        assert isinstance(obj, PredicateMeta), name
+        assert obj == mint_predicate_handle(db, name), (name, obj)
+        assert is_declared_predicate(obj, arity=arity, db=db), name
         assert db.row(name, arity) is not None, (
             f"{name}: row() disagrees with isinstance -- the P1 reroute is unsound")
 
@@ -138,11 +144,17 @@ def test_row_existence_IS_equivalent_even_for_a_declared_clause_less_predicate(
     (``_validate_directive_targets`` asks the row first).  ``is_defined``
     is unchanged: a row is not a definition.
     """
-    from clausal.logic.predicate import PredicateMeta
+    from clausal.logic.predicate import (
+        field_names_for, is_declared_predicate, mint_predicate_handle,
+    )
     db = _db(declared_only)
     declared = vars(declared_only)["p"]
-    assert isinstance(declared, PredicateMeta)
-    assert len(declared._fields) == 1
+    # Post-flip: the binding is the handle (not a class); its predicate-ness
+    # and field names are the db's answers.
+    assert declared == mint_predicate_handle(db, "p"), declared
+    assert is_declared_predicate(declared, arity=1, db=db)
+    assert not is_declared_predicate(declared, arity=2, db=db)
+    assert len(field_names_for(declared, arity=1, db=db)) == 1
     assert db.row("p", 1) is not None, (
         "a fielded -private declaration must create its row")
     assert db.row("p", 2) is None, "only at the declared arity"
