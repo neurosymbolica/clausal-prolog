@@ -293,10 +293,14 @@ def test_goal_argument_must_be_qualified_to_reach_another_module():
     # Positive control: the other module's z IS reachable, qualified.
     assert answers(("run", (":", "sa_goal_other", "z")), caller) == 1
     # The caller defines no z: the plain atom -- and so either binding --
-    # finds nothing there.
-    assert answers(("run", "z"), caller) == 0
-    for b in bindings:
-        assert answers(("run", b), caller) == 0, b
+    # finds nothing there.  FLIPPED 2026-09-25 -- operator ruling 2 ("like
+    # Scryer"): an unknown procedure in a meta-call RAISES
+    # existence_error(procedure, z/0); these used to answer 0.
+    from clausal.logic.exceptions import LogicException
+    for g in ("z", *bindings):
+        with pytest.raises(LogicException) as exc:
+            answers(("run", g), caller)
+        assert tuple(exc.value.term.args[0].args[1].args) == ("z", 0), g
     # A caller WITH its own z (two solutions): the binding resolves to THAT
     # one, never to sa_goal_other's (one solution).
     assert answers(("run", "z"), local) == 2

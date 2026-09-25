@@ -212,9 +212,16 @@ class TestCallNOverCells:
                 list(pcall("cg1", goal, module=_lm(mod)))
             assert _error_term(exc_info.value)[0].functor == "type_error"
 
-    def test_an_unknown_cell_goal_fails_silently(self, mod):
-        """An absent predicate is not an error here — same as any non-goal."""
-        assert list(pcall("cg1", ("no_such_pred", 1), module=_lm(mod))) == []
+    def test_an_unknown_cell_goal_raises_existence_error(self, mod):
+        """FLIPPED 2026-09-25 -- operator ruling 2 ("like Scryer"): a meta-call naming an UNKNOWN procedure raises ISO existence_error(procedure, Name/Arity), catchable; it used to fail silently (the retired §4.2 contract).
+
+        This used to be ``test_an_unknown_cell_goal_fails_silently``."""
+        from clausal.logic.exceptions import LogicException
+        with pytest.raises(LogicException) as exc:
+            list(pcall("cg1", ("no_such_pred", 1), module=_lm(mod)))
+        formal = exc.value.term.args[0]
+        assert formal.functor == "existence_error"
+        assert tuple(formal.args[1].args) == ("no_such_pred", 1)
 
     def test_call_over_a_predicate_class_is_untouched(self, mod):
         """The pre-existing route — a goal OBJECT answering ``_get_dispatch``

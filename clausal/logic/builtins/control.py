@@ -38,7 +38,9 @@ _BUILTIN_FIELDS[("when", 2)] = ("condition", "goal")
 
 
 def _goal_dispatch_and_args(goal_val, db=None, context="time_goal/1"):
-    """Return (dispatch_fn, args_tuple) for a goal value, or (None, None) on failure.
+    """Return (dispatch_fn, args_tuple) for a goal value, or (None, None) when
+    the goal is no goal shape at all -- which time_goal turns into a silent
+    failure.
 
     Handles:
     - callable (Python function / lambda) → no extra args
@@ -59,13 +61,24 @@ def _goal_dispatch_and_args(goal_val, db=None, context="time_goal/1"):
     Every cell goes to the shared resolver, control constructs and
     module-qualified goals included, and so do body terms and non-callables
     (operator ruling 2026-09-25, follow Scryer: ``time/1`` is ``call/1``
-    timed).  So ``time_goal((A, B))`` and ``time_goal(M:G)`` RUN, a
-    committed-choice ``->`` cell raises the same refusal call/1 raises,
-    ``time_goal(42)`` is type_error(callable, 42) and ``time_goal(_)`` is
-    instantiation_error -- where time_goal used to FAIL for all of them.  A
-    dangling predicate HANDLE RAISES existence_error as ``call/N`` does
-    (ruling 2 extended, 2026-09-24).  A name that resolves to nothing still
-    fails, as under call/N.
+    timed).  So ``time_goal((A, B))`` and ``time_goal(M:G)`` RUN (``M:G`` is
+    also what a -meta_predicate argument arrives as), a committed-choice
+    ``->`` cell raises the same refusal call/1 raises, ``time_goal(42)`` is
+    type_error(callable, 42) and ``time_goal(_)`` is instantiation_error --
+    where time_goal used to FAIL for all of them.  A bare ATOM names the goal
+    too (ruling S, 2026-09-24: ``time_goal(citation)`` passes the plain atom).
+
+    Three cases RAISE ``existence_error(procedure, Name/Arity)``, exactly as
+    ``call/N`` does:
+
+    * a dangling predicate HANDLE (a mangled functor whose module never
+      loaded, or whose loaded module lacks the predicate) -- ruling 2
+      extended, 2026-09-24;
+    * an atom or cell naming a predicate the caller binds only at ANOTHER
+      arity -- ``time_goal(b)`` against ``b/1`` -- as
+      ``PredicateArityMismatchError`` (catchable; ruling Q3, 2026-09-25);
+    * an atom or cell naming an UNKNOWN procedure (ruling 2, 2026-09-25,
+      "like Scryer": no longer a silent failure).
     """
     from clausal.logic.builtins.call_body import (  # noqa: PLC0415
         is_body_term, is_non_callable_term,
@@ -96,6 +109,14 @@ def _goal_dispatch_and_args(goal_val, db=None, context="time_goal/1"):
         return _ensure_trampoline_dispatch(
             localize_goal(db, goal_val), 0, db), ()
     is_cell, functor = compound_cell_shape(goal_val)
+    if type(goal_val) is str and goal_val and db is not None:
+        # A bare ATOM names the goal: ruling S (2026-09-24) makes
+        # ``time_goal(citation)`` pass the plain atom, not the class.  Same
+        # resolver as the cell arm below (and as call/1), which also answers
+        # the zero-arity control atoms and refuses the others.
+        from clausal.logic.builtins.higher_order import _resolve_named_goal  # noqa: PLC0415
+        resolved = _resolve_named_goal(db, goal_val, (), context)
+        return resolved if resolved is not None else (None, None)
     if is_cell:
         from clausal.logic.builtins.higher_order import _resolve_named_goal  # noqa: PLC0415
         resolved = _resolve_named_goal(db, goal_val, (), context)
@@ -148,6 +169,11 @@ def _time_goal__1(db, this_generator, _proceed, _fail, _catcher, goal, trail):
     - a Python callable / lambda (no extra args)
     - a PredicateMeta class or BuiltinPredicate (called with no args)
     - a predicate instance, e.g. in_(X_, [1,2,3]) — dispatched with its fields
+    - an atom or cell NAMING a predicate, resolved in the caller
+
+    A named goal that no procedure answers -- unknown, or defined only at
+    another arity -- raises ISO ``existence_error(procedure, Name/Arity)``,
+    as does a dangling handle -- see ``_goal_dispatch_and_args``.
     """
     goal_val = deref(goal)
     dispatch, goal_args = _goal_dispatch_and_args(goal_val, db, "time_goal/1")

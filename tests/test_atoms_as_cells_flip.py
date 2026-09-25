@@ -977,19 +977,22 @@ def test_row_30_listing_takes_an_atom_and_refuses_a_string(capsys):
     indicator = ("/", mint("r30_foo"), 1)
     assert len(list(solve(("r30_list", indicator), mod))) == 1
     assert "r30_foo/1" in capsys.readouterr().out
-    # ...and the bare ATOM names the /0 predicate of that spelling (§6.4).
+    # ...and the bare ATOM is not an indicator at all.  Operator ruling 2026-09-25 ("do what Scryer does"):
+    # type_error(predicate_indicator, r30_foo) -- it named r30_foo/0 and
+    # raised existence_error before 2026-09-25.
     with pytest.raises(LogicException) as exc:
         list(solve(("r30_list", mint("r30_foo")), mod))
     formal = _formal(exc)
-    assert formal.functor == "existence_error"      # r30_foo/0, not r30_foo/1
-    assert formal.args[0] == mint("procedure")
+    assert formal.functor == "type_error"
+    assert formal.args == (mint("predicate_indicator"), mint("r30_foo"))
     capsys.readouterr()
-    # A STRING is not a predicate indicator: type_error(predicate, "…").
+    # A STRING is not a predicate indicator either (it was
+    # type_error(predicate, "…") before 2026-09-25).
     with pytest.raises(LogicException) as exc:
         list(solve(("r30_list", chars("r30_foo")), mod))
     formal = _formal(exc)
     assert formal.functor == "type_error"
-    assert formal.args[0] == mint("predicate")
+    assert formal.args[0] == mint("predicate_indicator")
     assert formal.args[1] == chars("r30_foo")
 
 
@@ -1134,8 +1137,10 @@ def test_translate_refuses_a_string_language(builtins_mod):
 
 def test_listing_refuses_a_string_indicator_name(capsys):
     """``io._as_name_arity_indicator`` accepted a plain ``str`` in the NAME
-    half of ``Name/Arity``.  The name half is an atom (§6.4); a string there
-    is ``type_error(predicate, …)``, the same refusal a bare string gets."""
+    half of ``Name/Arity``.  The name half is an atom (§6.4).  Operator ruling 2026-09-25 ("do what Scryer does"): a
+    string there is ``functor/3``'s ``type_error(atomic, "…")`` -- a string
+    is the (compound) list it denotes; it was ``type_error(predicate, …)``
+    before 2026-09-25."""
     from clausal.logic.builtins import get_builtin_dispatch
     from clausal.logic.database import Clause, Database
     from clausal.logic.trampoline import StepGenerator, solutions
@@ -1158,7 +1163,7 @@ def test_listing_refuses_a_string_indicator_name(capsys):
             list(_run(shape))
         formal = exc.value.term.args[0]
         assert formal.functor == "type_error"
-        assert formal.args[0] == mint("predicate")
+        assert formal.args == (mint("atomic"), chars("t12_pt"))
 
 
 def test_re_pattern_that_is_not_text_raises_type_error():

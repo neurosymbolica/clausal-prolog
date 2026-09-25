@@ -18,3 +18,17 @@ Byte-identity of the single-arity output must hold (a golden exists in
 tests/test_listing.py).
 
 Cost of leaving it: a confusing error for the common `listing(foo)` habit.
+
+**Closed 2026-09-25 -- the other way.** The operator ruled "do what Scryer
+does" (ISO Prolog; SWI is not a target). Scryer's `listing/1` does not
+enumerate arities: `listing(fib)` is
+`error(type_error(predicate_indicator, fib), listing/1)`, observed on Scryer.
+So a bare atom is now that type_error (it no longer lists `foo/0`), and the
+`predicate_rows(module)` helper this todo proposed stays unbuilt -- it has no
+consumer. The same change makes a compound (`listing(color(R, H))`) and a
+string a `type_error(predicate_indicator, …)`, an unbound argument and an
+indicator naming no predicate (or one with no clauses) FAIL, a malformed
+operand raise `functor/3`'s error, and `Name//N` list `Name/(N+2)`.
+Implementation: `clausal/logic/builtins/io.py` (`_pi_parts`,
+`_checked_indicator`, `listing/1`); tests:
+`tests/test_listing.py::TestListingFollowsScryersContract`.

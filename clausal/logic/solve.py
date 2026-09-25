@@ -508,6 +508,15 @@ def _templatize_query_goal(goal: Any, db=None):
         # ``test_goal_argument_must_be_qualified_to_reach_another_module``.
         name = predicate_binding_name(dv, db=db)
         if name is not None:
+            # The name THIS module binds the predicate under, when that is not
+            # the owner's: an ``alias(p, q)`` import is ``q`` here, and ``p``
+            # may be a DIFFERENT local predicate (roborev, 2026-09-25; Scryer
+            # passes ``q`` and resolves it through the import).
+            if db is not None:
+                from clausal.logic.predicate import localize_goal  # noqa: PLC0415
+                local = localize_goal(db, dv)
+                if local is not dv and type(getattr(local, "name", None)) is str:
+                    name = local.name
             return _mint_atom(name)
         if type(dv) in (int, float, complex, bool, str, bytes) or dv is None:
             return dv
@@ -1276,6 +1285,15 @@ def call(
 
     if trail is None:
         trail = Trail()
+
+    if module is not None and type(functor) is str:
+        # -meta_predicate (operator ruling 2026-09-25): a query names its
+        # module, so a declared predicate's meta-arguments are qualified
+        # with it -- as Scryer's toplevel expands a query goal.
+        _specs = module.db.meta_predicate_specs(functor, arity)
+        if _specs:
+            from clausal.logic.meta_predicate import qualify_args  # noqa: PLC0415
+            args = tuple(qualify_args(_specs, list(args), module.db))
 
     yield from _drive_trampoline(dispatch_fn, trail, *args)
 

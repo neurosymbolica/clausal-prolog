@@ -47,3 +47,14 @@ not.
 declared-and-empty. Test lives beside
 `tests/predmeta_p1/test_p1_sites_rerouted.py::test_the_ordinary_dynamic_predicate_still_answers`,
 which is the positive control for the healthy shape.
+
+## Resolved (2026-09-24, branch fix/small-todos-batch-2026-09-24)
+
+Confirmed the suspect: the arity-blind resolve-by-name in
+`compiler/predicate.py` (four sites) handed d/1's class to d/2's `_install`,
+whose unauthorized `_bind_row` moved it (same database, so not policed). Fixed
+at `_install`, not at the P4 sites: a class already on this database's row at
+another arity is not re-bound and gets no dispatch written onto it. Exit
+criterion met: `d/1` answers `[1]`, `d/2` is declared and empty. See
+`todo/done/zero-field-class-bound-to-another-aritys-row-crashes-call-2026-09-24.md`
+for tests.

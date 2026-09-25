@@ -36,6 +36,7 @@ from clausal.terms import (
 )
 from clausal.pythonic_ast.nodes import IfExpr, Lambda
 from clausal.logic.database import Clause, Database
+from clausal.logic.meta_predicate import MetaArg as _MetaArg
 
 from ._ast_helpers import (
     _name, _attr, _call, _assign, _assign_mark, _undo_stmt, _if,
@@ -980,6 +981,14 @@ def _hoist_lambdas_in_term(
         func_name, func_def = _compile_goal_lambda(ctx, term)
         lambda_defs.append(func_def)
         return LoadName(name=func_name)
+    if type(term) is _MetaArg:
+        # A -meta_predicate position (clausal.logic.meta_predicate): hoist
+        # INSIDE the marker.  This walk used to stop at it, so a lambda
+        # passed as a meta-argument reached ``term_to_ast_expr`` as a raw
+        # ``Lambda`` node, compiled in the CALLER's scope, and its parameter
+        # names were unbound there (``NameError: name 'U' is not defined``).
+        inner = _hoist_lambdas_in_term(ctx, term.value, lambda_defs)
+        return term if inner is term.value else _MetaArg(inner, term.spec)
     if isinstance(term, Compound):
         new_args = tuple(
             _hoist_lambdas_in_term(ctx, a, lambda_defs) for a in term.args

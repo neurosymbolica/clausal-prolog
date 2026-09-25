@@ -143,11 +143,19 @@ def test_a_resolvable_handle_still_answers(host):
     assert len(_answers(call("use0", mangle(LIB, "flag"), module=host))) == 1
 
 
-def test_an_unmangled_unknown_name_still_fails_silently(host):
-    """The translator's pinned §4.2 contract, untouched by ruling 2."""
+def test_an_unmangled_unknown_name_raises_existence_error(host):
+    """FLIPPED 2026-09-25 -- operator ruling 2 ("like Scryer"): a meta-call naming an UNKNOWN procedure raises ISO existence_error(procedure, Name/Arity), catchable; it used to fail silently (the retired §4.2 contract).
+
+    This used to be ``test_an_unmangled_unknown_name_still_fails_silently``
+    (the translator's pinned §4.2 contract, untouched by the 2026-09-24
+    handle ruling)."""
     from clausal.logic.solve import call
-    assert _answers(call("use1", "calln_nosuch_plain", Var(), module=host)) == []
-    assert _answers(call("use0", "calln_nosuch_plain", module=host)) == []
+    for gen, arity in ((call("use1", "calln_nosuch_plain", Var(), module=host), 1),
+                       (call("use0", "calln_nosuch_plain", module=host), 0)):
+        formal = _raised(gen).args[0]
+        assert formal.functor == "existence_error"
+        assert formal.args[0] == "procedure"
+        assert tuple(formal.args[1].args) == ("calln_nosuch_plain", arity)
 
 
 # ── call/3+: call/N's extras fold into the handle's goal ─────────────────────
@@ -215,12 +223,14 @@ def test_time_goal_raises_the_same_error_term_solve_raises(host, module_name, na
     (NOT_LOADED, "whatever"),
 ])
 def test_phrase_2_raises_the_same_error_term_solve_raises(host, module_name, name):
-    """A nonterminal cell carries its S0/S pair; phrase supplies its own, so
-    ``phrase(H, L)`` names ``H/2`` -- the goal ``solve((H, L, []))``."""
+    """``phrase(H, L)`` names ``H/2`` -- the goal ``solve((H, L, []))``.
+    Ruling C (2026-09-24): the nonterminal term is its WRITTEN arity (the bare
+    handle for H//0) and phrase appends S0/S; it used to be a cell padded with
+    the pair, which phrase dropped."""
     from clausal.logic.solve import call, solve
     handle = mangle(module_name, name)
     solve_term = _raised(solve((handle, Var(), Var())))
-    term = _raised(call("ph2", (handle, Var(), Var()), [], module=host))
+    term = _raised(call("ph2", handle, [], module=host))
     _assert_ruled_shape(term, name, 2)
     assert term.args[0] == solve_term.args[0]
     assert (_split_context(term.args[1], "phrase/2")
@@ -237,7 +247,7 @@ def test_phrase_3_raises_the_same_error_term_solve_raises(host, module_name, nam
     from clausal.logic.solve import call, solve
     handle = mangle(module_name, name)
     solve_term = _raised(solve((handle, 5, Var(), Var())))
-    term = _raised(call("ph3", (handle, 5, Var(), Var()), [], Var(), module=host))
+    term = _raised(call("ph3", (handle, 5), [], Var(), module=host))   # written arity (ruling C)
     _assert_ruled_shape(term, name, 3)
     assert term.args[0] == solve_term.args[0]
     assert (_split_context(term.args[1], "phrase/3")

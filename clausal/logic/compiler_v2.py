@@ -890,7 +890,7 @@ def _reject_reserved_truth_names(
                 if isinstance(name, str):
                     note(name, f"{kind} declaration")
         elif isinstance(item, DirectiveItem):
-            for functor, arity in item.specs:
+            for functor, arity, *_ in item.specs:
                 note(functor, f"-{item.name}({functor}/{arity})")
 
     if not offenders:
@@ -1354,7 +1354,6 @@ def _redefinition_error(exc, functor: str, arity: int, pred_cls,
         functor, arity, module_name, exporter_name,
         resolve_predicate_row(pred_cls, arity=arity, db=db),
         exporter_module=module_dict.get(exporter_name),
-        declared_at=getattr(pred_cls, "_registered_at", None),
     )
     return SyntaxError(f"{described}\n  {gate_line}")
 
@@ -1566,6 +1565,13 @@ def _process_directives(module_items: list, db: Any, module_dict: dict | None = 
                 # ``gv_free/1``).
                 for functor, arity in item.specs:
                     db.mark_predicate_export(functor, arity)
+                continue
+            if item.name == "meta_predicate":
+                # Operator ruling 2026-09-25: Scryer's meta_predicate/1.
+                # Recorded BEFORE any clause compiles, so a caller compiled
+                # later in this load (or an importer) sees the specs.
+                for functor, arity, specs in item.specs:
+                    db.mark_meta_predicate(functor, arity, specs)
                 continue
             method_name = _directive_methods.get(item.name)
             if method_name is not None:
@@ -1869,7 +1875,7 @@ def _locally_declared_names(module_items: list) -> frozenset[str]:
             # declared vocabulary just like the field-carrying form, recorded
             # as a directive item rather than an export tuple because it
             # declares a PREDICATE, not a data functor's slot layout.
-            names.update(functor for functor, _arity in item.specs)
+            names.update(functor for functor, _arity, *_ in item.specs)
         elif isinstance(item, HideDeclItem):
             names.update(item.items)
         elif isinstance(item, ImportFromItem):
@@ -2475,7 +2481,7 @@ def _predicate_functor_names(predicate_nodes: list, module_items: list) -> set:
     names = {head_key(node.head)[0] for node in predicate_nodes}
     for item in module_items:
         if isinstance(item, DirectiveItem):
-            names.update(functor for functor, _arity in item.specs)
+            names.update(functor for functor, _arity, *_ in item.specs)
         elif isinstance(item, SpecializeItem):
             names.add(item.new_name)
     return names
@@ -2633,6 +2639,17 @@ def _process_declarations(module_items: list, module_dict: dict,
                 _row = resolve_predicate_row(existing, arity=len(field_names),
                                              db=db)
                 if _row is not None and _row.clauses:
+                    continue
+                # An IMPORTED predicate at this arity wins even with no
+                # clauses yet (operator ruling 2026-09-24, option A): a
+                # clause-less ``-dynamic`` exporter's row is still the
+                # predicate an ``-import_from`` shares, and binding the atom
+                # here split identity silently -- an ``assertz`` landed on
+                # a row neither module read.  Same outcome as against a
+                # DEFINING exporter (the clause test above).
+                if (_row is not None and _row.db is not db
+                        and not _row.detached
+                        and _row.key[1] == len(field_names)):
                     continue
                 # Bound in THIS module's namespace only -- deliberately NOT
                 # through the process-wide ``predicate_builtins`` pool the

@@ -398,9 +398,9 @@ def test_an_exporter_row_a_load_wrote_and_emptied_keeps_the_clobber_message(
         texts[era] = _implements_an_imported_declaration(
             origins, {"bo_p": binding}, "bo_p", 1, "some_implementer")
         assert texts[era] is not None, era
-    strip = lambda t: "\n".join(l for l in str(t).splitlines()
-                                if " is declared at " not in l)
-    assert strip(texts["class"]) == strip(texts["mangled"])
+    # No declaration-site line in either era (ruling B, 2026-09-24).
+    assert " is declared at " not in str(texts["class"])
+    assert str(texts["class"]) == str(texts["mangled"])
     first = str(texts["class"]).splitlines()[0]
     assert first == ("some_implementer defines a clause for bo_p/1, which it "
                      f"-import_from's from {owner_name}.")

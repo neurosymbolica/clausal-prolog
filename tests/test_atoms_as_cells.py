@@ -198,9 +198,15 @@ def test_type_error_term_carries_atom_args():
     assert t.args[1] == "who"                                  # context stays a string
 
 
-def test_listing_accepts_cell_atom(mod, capsys):
+def test_listing_takes_the_indicator_of_a_zero_arity_predicate(mod, capsys):
     # ``z0`` is the one fact the probe module defines (see the ``mod`` fixture).
-    assert len(list(solve(("listing", "z0"), _lm(mod)))) == 1
+    # Operator ruling 2026-09-25 ("do what Scryer does"): the bare atom ``z0`` is
+    # type_error(predicate_indicator, z0); ``z0/0`` is the spelling.
+    from clausal.logic.exceptions import LogicException
+    with pytest.raises(LogicException) as exc:
+        list(solve(("listing", "z0"), _lm(mod)))
+    assert exc.value.term.args[0].args[0] == "predicate_indicator"
+    assert len(list(solve(("listing", ("/", "z0", 0)), _lm(mod)))) == 1
     assert "z0/0" in capsys.readouterr().out
 
 
