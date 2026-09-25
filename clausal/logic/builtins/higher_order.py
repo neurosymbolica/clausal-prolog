@@ -16,7 +16,7 @@ from clausal.logic.trampoline import DONE, StepGenerator
 from clausal.logic.builtins.lists import _as_items, _seq_result, _was_string
 from clausal.logic.builtins._helpers import _is_empty_list, _standard_order_key
 from clausal.logic.predicate import (
-    _refuse_unqualified_other_arity,
+    _dispatch_at, _refuse_unqualified_other_arity,
     is_declared_predicate_name, localize_goal, localize_owner_functor,
 )
 
@@ -35,6 +35,7 @@ from clausal.logic.builtins._registry import (
 )
 from clausal.logic.builtins.call_body import (
     is_body_term, body_goal_dispatch, body_with_extras_error,
+    is_special_form, special_form_dispatch,
     non_callable_goal_error, iso_control_cell_dispatch, folded_existence_error,
     needs_meta_call, MetaCallGoal,
 )
@@ -291,6 +292,15 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
             raise LogicException(instantiation_error(context))
         return _resolve_named_goal(
             target.db, inner, tuple(call_args[2:]), context)
+    if (is_special_form(functor, len(call_args))
+            and not _import_shadows_special_form(db, functor)):
+        # A compiler SPECIAL FORM (findall/3, once/1, catch/3, throw/1 ...),
+        # after the fold -- so ``call(findall(X), G, L)`` is findall/3 too.
+        # No database defines these names (the compiler lowers them inline),
+        # so they used to reach the lookup below, find nothing, and fail
+        # SILENTLY.  Decided before the ``db is None`` bail for the same
+        # reason as the zero-arity constructs: no db can answer for them.
+        return special_form_dispatch(db, folded, context)
     # No arity condition (F3): ``call((",",))`` is as much a control construct
     # in goal position as ``call((",", A, B))``, and it used to fail silently
     # here while ``solve((",",), m)`` raised.
@@ -337,6 +347,16 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
         # which the adapter carries.
         return aliased.dispatch_at(arity), _meta_qualified(
             db, aliased.name, arity, call_args)
+    # A name the calling module binds to a NON-predicate goal object (a
+    # ModulePredicate) is that object, before the db's row and the builtins:
+    # a clause body calls the binding (``-import_from(py.random,
+    # [permutation])`` makes ``permutation(L, P)`` py.random's, not the
+    # builtin permutation/2), and so does ``solve.call`` ("Phase 5").
+    _module_dict = getattr(db, "module_dict", None)
+    dispatch = (_goal_object_dispatch(db, _module_dict.get(functor), arity)
+                if isinstance(_module_dict, dict) else None)
+    if dispatch is not None:
+        return dispatch, call_args
     dispatch = db.get_dispatch(functor, arity)
     if dispatch is None:
         dispatch = _namespace_dispatch(db, functor, arity)
@@ -434,6 +454,56 @@ def _namespace_dispatch(db, functor, arity):
     if home is db and canonical == functor:
         return None  # the lookup that already came back empty
     return home.get_dispatch(canonical, arity)
+
+
+def _import_shadows_special_form(db, functor) -> bool:
+    """True when the calling module IMPORTED a binding under the special-form
+    name *functor* -- a ModulePredicate (``-import_from(py.re, [findall])``)
+    or another module's predicate (``-import_from(m, [once])``).
+
+    That is how the compiled body decides: ``-import_from`` rewrites every
+    body call of an imported name to the dotted global (``py.re.findall``),
+    which is no special form, so the body runs the import; a module's OWN
+    predicate of that name is not rewritten, and its body still lowers the
+    special form.  ``call/N`` of the cell answers the same way: the import
+    wins, and the resolution below reaches it (the goal-object arm, or the
+    adopted row).
+    """
+    module_dict = getattr(db, "module_dict", None)
+    if not isinstance(module_dict, dict):
+        return False
+    binding = module_dict.get(functor)
+    if binding is None:
+        return False
+    if is_declared_predicate_name(binding, db=db):
+        from clausal.logic.predicate import _binding_owner_db  # noqa: PLC0415
+        owner = _binding_owner_db(binding, db)
+        return owner is not None and owner is not db
+    return type(binding) is not str and hasattr(binding, "_get_dispatch")
+
+
+def _goal_object_dispatch(db, binding, arity):
+    """The dispatch of a NON-predicate goal object the name is bound to --
+    a ``ModulePredicate`` (``-import_from(py.re, [match])``) or any other
+    implementor of the duck-typed ``_get_dispatch`` protocol -- else None.
+
+    A clause body calls such a binding through its ``_get_dispatch()``
+    (``solve.call`` does the same, its "Phase 5"), so ``match(P, S)`` ran
+    while ``call(("match", P, S))`` from the same module found no predicate
+    class under the name and FAILED SILENTLY.  Resolved through
+    ``predicate._dispatch_at``, the one place the protocol is called, so the
+    binding's own arity check (a ``ModulePredicate``'s existence_error at an
+    arity it does not register) answers as it does in the body.  Asked
+    BEFORE the db's row and the builtins (``_resolve_named_goal``), because
+    that is the body's order: with py.random's ``permutation`` imported, the
+    body's ``permutation(L, P)`` is py.random's, not the builtin
+    permutation/2.  A predicate binding (class or handle) answers None.
+    """
+    if (binding is None or type(binding) is str
+            or not hasattr(binding, "_get_dispatch")
+            or is_declared_predicate_name(binding, db=db)):
+        return None
+    return _dispatch_at(binding, arity, db)
 
 
 def _make_call_goal_factory(extra_n: int):

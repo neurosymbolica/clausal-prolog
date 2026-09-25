@@ -155,8 +155,12 @@ class TestSourceLocationsG6:
             "g_findall",
             "find_all_raise(BAG) <- findall(Y, (Y is ++(1/0)), BAG)\n",
         )
+        from clausal.logic.variables import Var
         with pytest.raises(ZeroDivisionError) as exc_info:
-            list(call("find_all_raise", None, module=logic_mod))
+            # An unbound BAG: ``None`` is not a list or a partial list, so
+            # findall/3 now raises type_error(list, None) before the goal
+            # runs (ISO 8.10.1.3 d).
+            list(call("find_all_raise", Var(), module=logic_mod))
         _assert_frame_line(exc_info.value, "find_all_raise", 3)
 
     def test_goal_lambda_body_raises(self, tmp_path):

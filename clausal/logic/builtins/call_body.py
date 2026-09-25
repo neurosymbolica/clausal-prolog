@@ -314,6 +314,95 @@ class _Converter:
         return self._call_leaf(t)
 
 
+# ── the compiler's SPECIAL FORMS ────────────────────────────────────────────
+#
+# A goal the clause-body compiler lowers INLINE rather than through a
+# dispatch: ``terms_to_goalop._convert``'s MetaCall arms (plus ``eval_/2``,
+# which it lowers to ArithEval).  No runtime builtin carries these names, so
+# before this ``call(("findall", X, G, L))`` resolved to nothing and FAILED
+# SILENTLY.  Now the cell is turned back into the very ``Call`` node the same
+# text is in a clause body, and compiled -- the compiler's lowering IS the
+# semantics, there is no second copy of it.
+#
+# Each argument has a ROLE:
+#   G  a goal.  Emitted as ``call(P)``, P bound at run time to the argument,
+#      because every one of these forms is DEFINED on ``call/1`` of its goal
+#      (ISO 7.8.9 catch/3, 8.10.1 findall/3, 8.15.2 once/1 ...): so an unbound
+#      goal is instantiation_error, a number is type_error(callable, G) naming
+#      the whole goal, and a body term, a special form or a qualified goal
+#      runs exactly as call/1 runs it -- inside the form, so catch/3 catches it.
+#   A  a term argument (template, bag, catcher, ball, counter, expression).
+#   W  a when/2 condition: the compile-time ``or`` spelling is rebuilt, the
+#      rest are terms the runtime reads (coroutining._install_when_condition).
+#
+# ``tests/test_call_runs_special_form_cells.py`` holds this table to
+# ``terms_to_goalop`` in both directions, so a new special form cannot be
+# added to the compiler without being made callable here.
+SPECIAL_FORMS: dict[tuple[str, int], str] = {
+    ("findall", 3): "AGA",
+    ("bagof", 3): "AGA",
+    ("setof", 3): "AGA",
+    ("once", 1): "G",
+    ("forall", 2): "GG",
+    ("catch", 3): "GAG",
+    ("catch_error", 2): "GA",
+    ("catch_recover", 3): "GAG",
+    ("throw", 1): "A",
+    ("call_nth", 2): "GA",
+    ("count_all", 2): "GA",
+    ("setup_call_cleanup", 3): "GGG",
+    ("call_cleanup", 2): "GG",
+    ("freeze", 2): "AG",
+    ("when", 2): "WG",
+    ("eval_", 2): "AA",
+    ("halt", 0): "",
+    ("halt", 1): "A",
+}
+
+
+def is_special_form(functor: Any, arity: int) -> bool:
+    """True when *functor*/*arity* is a compiler special form."""
+    return type(functor) is str and (functor, arity) in SPECIAL_FORMS
+
+
+def _when_condition(conv, raw):
+    """A when/2 condition: ``or`` (and ISO ``;``) rebuilt as the node the
+    compiler lowers to ``$install_when_disjunction``; everything else --
+    ``nonvar(X)``, ``ground(X)``, a conjunction pair -- is a term the runtime
+    reads, exactly as the compiled body hands it over."""
+    t = deref(raw)
+    if type(t) is nodes.Or:
+        return nodes.Or(left=_when_condition(conv, t.left),
+                        right=_when_condition(conv, t.right))
+    is_cell, functor = compound_cell_shape(t)
+    if is_cell and functor == ";" and len(t) == 3:
+        return nodes.Or(left=_when_condition(conv, t[1]),
+                        right=_when_condition(conv, t[2]))
+    return conv.arg(t)
+
+
+def special_form_dispatch(db, folded, context: str):
+    """``(dispatch, [])`` running the special-form goal *folded* -- a cell
+    ``(name, A1 ... An)`` or, for ``halt/0``, the atom -- in *db*'s module,
+    as the same goal written in a clause body runs."""
+    if type(folded) is str:
+        functor, args = folded, ()
+    else:
+        functor, args = folded[0], tuple(folded[1:])
+    roles = SPECIAL_FORMS[(functor, len(args))]
+    conv = _Converter(db)
+    built = []
+    for role, a in zip(roles, args):
+        if role == "G":
+            built.append(conv._call_leaf(deref(a)))
+        elif role == "W":
+            built.append(_when_condition(conv, a))
+        else:
+            built.append(conv.arg(a))
+    node = nodes.Call(func=nodes.LoadName(name=functor), args=built, kwargs=[])
+    return _compiled_node_dispatch(db, conv, node)
+
+
 # ── errors (operator ruling 2026-09-25: follow Scryer) ──────────────────────
 
 
@@ -577,6 +666,12 @@ def body_goal_dispatch(db, goal_val, context: str):
     if node is False:
         from clausal.logic.builtins.higher_order import _control_fail  # noqa: PLC0415
         return _control_fail, []
+    return _compiled_node_dispatch(db, conv, node)
+
+
+def _compiled_node_dispatch(db, conv, node):
+    """``(dispatch, [])`` running the goal NODE *node* -- *conv*'s product --
+    compiled through the query compiler against *db*'s module."""
     from clausal.logic.solve import _compile_as_query  # noqa: PLC0415
     fn, param_pairs = _compile_as_query(node, _module_for(db))
     params = conv.params + list(param_pairs)
@@ -600,4 +695,5 @@ __all__ = [
     "iso_control_cell_dispatch", "folded_existence_error",
     "is_non_callable_term",
     "needs_meta_call", "MetaCallGoal",
+    "SPECIAL_FORMS", "is_special_form", "special_form_dispatch",
 ]
