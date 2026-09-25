@@ -83,10 +83,14 @@ def my_predicate(this_generator, parent, arg1, arg2, trail):
     yield (parent, DONE)                   # exhausted
 ```
 
-Sub-predicate calls wrap the child dispatch in `StepGenerator`:
+Sub-predicate calls wrap the child dispatch in `StepGenerator`. `child` is the
+callee's binding in the module globals — its handle — and `$dispatch_at`
+resolves it, at the call site's arity, to the compiled dispatch function on
+the callee's row (a locked callee's function is captured at compile time
+instead):
 
 ```python
-_gen = StepGenerator(child._get_dispatch(), this_generator, ...)
+_gen = StepGenerator($dispatch_at(child, 2), this_generator, ...)
 _st = yield (_gen, None)
 while _st is not DONE:
     ...                     # continuation
@@ -143,15 +147,16 @@ The cost of AST transformation is paid once at import time. `PredicateLoader` (a
 
 ## Python ↔ logic interop
 
-Logic predicates can be called from Python via the iterator protocol or callbacks:
+Logic predicates are called from Python by running a goal **cell** — the
+predicate's name and its arguments — against the module that defines it.
+`solve` yields once per solution, with that solution's bindings live:
 
 ```python
-# Iterator: receive solutions one at a time
-for solution in Goal(X, Y):
-    print(X.value, Y.value)
+from clausal import Var, solve
+import fibonacci
 
-# Callback style
-Goal(X, Y).solutions(lambda x, y: print(x, y))
+for trail in solve(("fib", 7, F := Var()), module=fibonacci):
+    print(F.value)  # 13
 ```
 
 The recursion and yielding challenges are solved by the trampoline. Python code called from within logic code runs normally with no special requirements.
@@ -172,7 +177,7 @@ The deep layering — Python → logic → Python → logic — is explicitly su
 | `clausal.import_hook` | Done — `.pyc` caching, deferred compilation |
 | `clausal.logic.compiler` | Done — head patterns + body goals, simple + trampoline modes |
 | `clausal.logic.database` | Done — clause store, directives, dispatch |
-| `clausal.logic.builtins` | Done — assertz/retract, in_/append, arithmetic, higher-order, term inspection, exceptions, I/O; constructable PredicateMeta classes for all 75+ builtins |
+| `clausal.logic.builtins` | Done — assertz/retract, in_/append, arithmetic, higher-order, term inspection, exceptions, I/O; a class per builtin whose call builds that builtin's goal cell |
 | `clausal.logic.solve` | Done — call/solve/query/once |
 | Predicate indexing | Done — groundness-keyed multi-arg dispatch |
 | Bytecode caching | Done — `__pycache__/*.pyc` via SourceLoader |

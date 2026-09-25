@@ -538,17 +538,17 @@ The indexing optimisations described above all apply to the *callee*: how quickl
 Without call-site specialisation, a call to a locked predicate looks like:
 
 ```python
-# base_globals["_disp_Color_1"] = Color._state_row().dispatch_fn  (captured at compile time)
-StepGenerator(_disp_Color_1, this_generator, 'red', trail)
+# base_globals["_disp_color_1"] = resolve_predicate_row(color, arity=1, db=db).dispatch_fn  (captured at compile time)
+StepGenerator(_disp_color_1, this_generator, 'red', trail)
 ```
 
-At runtime `_disp_Color_1` is the dispatch closure. It calls `deref(args[0])`, computes `_runtime_arg_key`, and does a dict lookup. But when the call site already has `'red'` as a literal, the bucket to call is known at compile time — the runtime lookup is redundant.
+At runtime `_disp_color_1` is the dispatch closure. It calls `deref(args[0])`, computes `_runtime_arg_key`, and does a dict lookup. But when the call site already has `'red'` as a literal, the bucket to call is known at compile time — the runtime lookup is redundant.
 
 With call-site specialisation the same call becomes:
 
 ```python
 # base_globals["color.bucket(pos=0, 'red')"] = <bucket fn>  (injected at compile time)
-StepGenerator(Color.bucket(pos=0, 'red'), this_generator, 'red', trail)
+StepGenerator(color.bucket(pos=0, 'red'), this_generator, 'red', trail)
 ```
 
 One deref, one dict lookup, and the dispatch closure itself are all eliminated.
@@ -559,16 +559,16 @@ The globals key `"color.bucket(pos=0, 'red')"` is not a valid Python identifier,
 
 | Condition at call site | Dispatch expression emitted |
 |---|---|
-| Two static args, joint bucket exists | `"Foo.bucket(pos=(0,1), ('red', 2))"` |
-| One static arg, single-pos bucket exists | `"Foo.bucket(pos=0, 'red')"` |
-| Locked predicate, no static match | `_disp_Foo_2` (cached dispatch closure) |
-| Dynamic predicate | `Foo._get_dispatch()` |
+| Two static args, joint bucket exists | `"foo.bucket(pos=(0,1), ('red', 2))"` |
+| One static arg, single-pos bucket exists | `"foo.bucket(pos=0, 'red')"` |
+| Locked predicate, no static match | `_disp_foo_2` (cached dispatch closure) |
+| Dynamic predicate | `$dispatch_at(foo, 2)` (the binding — the owner's handle — resolved to its row's dispatch at each call) |
 
 ## Key invariants
 
-**Locked-only.** Only call sites targeting a predicate with `_locked=True` at the caller's compile time are specialised. [Dynamic predicates](directives.md) always go through `._get_dispatch()` because their clause set may change at runtime.
+**Locked-only.** Only call sites targeting a predicate whose row is locked (`row.locked`) at the caller's compile time are specialised. [Dynamic predicates](directives.md) always go through `$dispatch_at` because their clause set may change at runtime.
 
-**`_index_plans` set before locking.** The import hook locks predicates after all their clauses are compiled and the dispatch function is installed. when a cross-module call is compiled the callee is already locked and `_index_plans` is already populated. Self-recursive calls are compiled while the predicate is still unlocked, so they fall back to the cached dispatch closure / `_get_dispatch()` — which is correct.
+**`_index_plans` set before locking.** The import hook locks predicates after all their clauses are compiled and the dispatch function is installed. when a cross-module call is compiled the callee is already locked and `_index_plans` is already populated. Self-recursive calls are compiled while the predicate is still unlocked, so they fall back to the cached dispatch closure / `$dispatch_at` — which is correct.
 
 **Recompilation safety.** Lazy recompile (triggered by `assertz`/`retract`) calls `compile_predicate_trampoline` from scratch, overwriting `_dispatch_fn` and `_index_plans` atomically. Call-site specialisation only ever applies to calls *to* locked predicates; locked predicates never change after locking. Callers of dynamic predicates are never specialised and are therefore unaffected by dynamic recompilation.
 
@@ -577,7 +577,8 @@ The globals key `"color.bucket(pos=0, 'red')"` is not a valid Python identifier,
     **Bucket dict exposure** — `_index_plans`. After the final dispatch fn is built inside `compile_predicate_trampoline`, the per-position dicts are stored on the predicate's row with every bucket wrapped by `_make_call_site_bucket_trampoline` — call sites drive these functions *directly* via `StepGenerator`, so each SIGNAL-mode bucket is completed to the full trampoline contract (terminal `(fail, DONE)` yield, TRO re-dispatch through the dispatch fn):
 
     ```python
-    pred_cls._state_row().index_plans = {
+    _plan_row = _plan_row_for(pred_cls, db, functor, arity)   # the Database's row
+    _plan_row.index_plans = {
         pos: {key: _make_call_site_bucket_trampoline(bfn, fn, DONE, ...)
               for key, bfn in idx_dict.items()}
         for pos, idx_dict, _ in plans
