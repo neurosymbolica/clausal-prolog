@@ -76,8 +76,9 @@ static (locked) user procedure        permission_error(access,
 builtin / meta-call special form /    permission_error(access,
 control construct                     private_procedure, Name/Arity)
 unknown procedure                     fails
-a list or string                      fails -- ISO: the callable '.'/2,
-                                      which no procedure defines
+a non-empty list or string            type_error(callable, List) -- Scryer,
+(as Head or Body)                     by operator ruling (ISO would fail)
+[] / ""                               fails (the atom '[]')
 ``M:H`` / a predicate handle          resolved in that module
 ====================================  ======================================
 
@@ -145,17 +146,41 @@ def _is_callable(t: Any) -> bool:
         return True                      # an atom (a handle is one too)
     if is_body_term(t) or compound_cell_shape(t)[0] or isinstance(t, Compound):
         return True
+    if _is_nonempty_list(t):
+        # OPERATOR RULING 2026-09-25 -- an explicit exception to "ISO first":
+        # ISO makes a non-empty list the callable compound '.'/2 (so
+        # clause([a], B) would name an undefined procedure and fail), but
+        # clause/2 follows Scryer and Trealla here: a non-empty list or
+        # string, as Head or as Body, is type_error(callable, List).  (Trealla
+        # fails for a list BODY; Scryer raises, and Scryer is the reference.)
+        # The empty list is the atom '[]' in both: callable, and it fails.
+        return False
     if type(t) is list or is_chars(t):
-        return True                      # '[]' or the compound '.'/2
+        return True                      # [] / "": the atom '[]'
     if isinstance(t, PredicateMeta):
         return True
     return is_term_instance(t) and not isinstance(t, nodes.Node)
 
 
+def _is_nonempty_list(t: Any) -> bool:
+    """A non-empty or partial list, or a non-empty string (the list of its
+    chars), in any Clausal spelling."""
+    from clausal.terms import SegList, SegString  # noqa: PLC0415
+    from clausal.logic.cells import chars_text  # noqa: PLC0415
+    if type(t) is list:
+        return bool(t)
+    if is_chars(t):
+        return bool(chars_text(t))
+    return isinstance(t, (SegList, SegString))
+
+
 def _type_check(t: Any, what: str) -> None:
     if not _is_callable(t):
         from clausal.logic.builtins.call_body import _culprit  # noqa: PLC0415
-        culprit = _culprit(t)
+        from clausal.logic.cells import chars_text  # noqa: PLC0415
+        # A string's culprit is the LIST of its chars, as Scryer reports
+        # clause("ab", _): type_error(callable, [a,b]).
+        culprit = list(chars_text(t)) if is_chars(t) else _culprit(t)
         raise LogicException(type_error(
             "callable", culprit,
             f"{_CONTEXT}: the {what} {culprit!r} is not a callable term"))
@@ -508,7 +533,7 @@ def _resolve(db, head):
         cell = _as_cell(head)
         name, arity = (cell, 0) if type(cell) is str else (cell[0], len(cell) - 1)
     else:
-        return None          # a list or string: '.'/2, which nothing defines
+        return None          # [] or "": the atom '[]', which nothing defines
     if name in CELL_GOAL_CONTROL_FUNCTORS or (
             arity == 0 and name in _ZERO_ARITY_CONTROL):
         raise _private(name, arity, "is a control construct")

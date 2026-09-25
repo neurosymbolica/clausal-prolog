@@ -36,11 +36,16 @@ this program::
     clause("ab", _)           both: type_error(callable, [a,b])
     clause(d(_,_), [x])       Scryer: type_error(callable, [x]); Trealla: fail
 
-ISO decides the last two against Scryer: a non-empty list IS callable (the
-compound '.'/2), so ``clause([a], B)`` names the procedure '.'/2, which is
-not defined -- it FAILS -- and a list Body is callable, so ``clause(d(_,_),
-[x])`` just fails to match.  (Step 1 made the same ISO-over-Scryer call for
-``call([a])``.)
+    clause([a|_], _)          Scryer: type_error(callable, [a|_]); Trealla: fail
+    clause(d(_,_), [x|_])     Scryer: type_error(callable, [x|_]); Trealla: fail
+    clause([], _)             both: fail;  clause(d(_,_), [])  both: fail
+
+The list rows are an EXPLICIT EXCEPTION to "ISO first" (operator ruling
+2026-09-25): ISO makes a non-empty list the callable compound '.'/2, so
+``clause([a], B)`` would name an undefined procedure and fail.  clause/2
+follows Scryer instead -- a non-empty (or partial) list or string, as Head
+or as Body, is ``type_error(callable, List)``.  ``[]`` is the atom '[]':
+callable, and it fails.
 """
 from __future__ import annotations
 
@@ -203,17 +208,32 @@ def test_a_dynamic_procedure_with_no_clauses_fails(lm):
     assert _clause(lm, ("none", Var())) == []
 
 
-def test_a_list_or_string_head_fails(lm):
-    """ISO: a list is the callable '.'/2 (and ``[]`` the atom '[]'), which
-    names no procedure -- clause/2 fails.  Scryer/Trealla give type_error
-    for ``clause("ab", _)``; ISO decides, as step 1 did for call/1."""
+@pytest.mark.parametrize("where", ["head", "body"])
+def test_a_non_empty_list_or_string_is_a_type_error(lm, where):
+    """Operator ruling 2026-09-25, an explicit exception to ISO first:
+    follow Scryer -- ``clause("ab", _)`` -> type_error(callable, [a,b]) and
+    ``clause(d(_,_), [x])`` -> type_error(callable, [x]).  (ISO would make a
+    list the callable '.'/2 and fail; Trealla fails for a list Body.)"""
     from clausal.logic.cells import chars
-    assert _clause(lm, [1, 2]) == []
+    from clausal.terms import ConcreteSeg, SegList, VarSeg
+    partial = SegList([ConcreteSeg(["a"]), VarSeg(Var())])
+    for term, culprit in (([1, 2], [1, 2]), (chars("ab"), ["a", "b"]),
+                          (["x"], ["x"])):
+        formal = (_error(lm, term) if where == "head"
+                  else _error(lm, ("d", Var(), Var()), term))
+        assert formal.functor == "type_error", formal
+        assert formal.args[0] == "callable" and formal.args[1] == culprit
+    formal = (_error(lm, partial) if where == "head"
+              else _error(lm, ("d", Var(), Var()), partial))
+    assert formal.functor == "type_error" and formal.args[0] == "callable"
+
+
+def test_the_empty_list_is_the_atom_and_fails(lm):
+    """Scryer + Trealla: clause([], _) and clause(d(_,_), []) fail."""
+    from clausal.logic.cells import chars
     assert _clause(lm, []) == []
-    assert _clause(lm, chars("ab")) == []
-    # A list Body is callable too, so it only fails to match
-    # (Scryer: type_error(callable, [x]); Trealla: fails).
-    assert _clause(lm, ("d", Var(), Var()), ["x"]) == []
+    assert _clause(lm, chars("")) == []
+    assert _clause(lm, ("d", Var(), Var()), []) == []
 
 
 # ── heads ───────────────────────────────────────────────────────────────────
