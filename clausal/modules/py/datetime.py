@@ -69,7 +69,6 @@ from typing import Any
 from clausal.logic.variables import (  # noqa: F401
     Var, deref as _deref, is_var, unify as _unify,
 )
-from clausal.logic.predicate import PredicateMeta
 from clausal.logic.exceptions import LogicException, domain_error, type_error
 from clausal.terms import Compound
 from clausal.logic.trampoline import DONE
@@ -201,65 +200,14 @@ def _today_1(d, trail, k):
 # max_list (see the Ordering note in this module's docstring).
 
 
-class _DatePattern(metaclass=PredicateMeta):
-    """`date(Y, M, D)` with at least one component still unbound.
-
-    Only a partially-instantiated date needs a term object at all: a fully
-    ground one is simply the datetime.date. This exists so the SAME source
-    form works in decompose mode, and it disappears the moment it unifies
-    against a real date.
-
-    STALE PREMISE (found in W4b-1 Task 2, corrected 2026-09-22): this used to
-    justify ``metaclass=PredicateMeta`` on the grounds that the engine's
-    clause copier rebuilds *term instances* with fresh variables on each
-    resolution step, and recognises them via PredicateMeta or @dataclass
-    (``c_is_term_instance`` in logic/variables/_variables.c). W4a (commit
-    ``5879b0be``) deleted that instance-recognition arm entirely, and
-    ``PredicateMeta.__call__`` already built a CELL rather than an instance
-    for every in-tree caller (P2 Task 3, 2026-09-19) -- so ``_DatePattern(...)``
-    would now build a cell like any other PredicateMeta class, not the kind of
-    term instance this reasoning describes. In practice nothing constructs a
-    ``_DatePattern`` instance any more: ``date/3`` builds a raw cell directly
-    (see below), and a repo-wide grep for ``_DatePattern(`` finds only this
-    class statement. See
-    ``todo/datepattern-metaclass-premise-is-stale-2026-09-22.md`` -- the class
-    is left as-is pending a decision to delete or convert it; that is out of
-    scope here.
-    """
-
-    _fields = ("year", "month", "day")
-
-    # Unifies with datetime.date, a foreign type, so it must never be
-    # indexed by its own class identity. See arg_index._arg_to_index_key.
-    _index_transparent = True
-
-
-# PredicateMeta GENERATES a structural ``__unify__`` in its ``__new__`` and
-# installs it over anything of that name in the class body -- defining the
-# hook inline above would have been silently discarded. So take the
-# generated one and layer the date case on top, delegating everything else
-# back to it unchanged.
-_date_pattern_structural_unify = _DatePattern.__dict__["__unify__"]
-
-
-def _date_pattern_unify(self, other, *rest):
-    if not rest:
-        # Class-side call (PredicateMeta passes a sentinel default rather
-        # than a trail). Nothing date-specific to add -- delegate.
-        return _date_pattern_structural_unify(self, other)
-    trail = rest[0]
-    o = deref(other)
-    # A datetime IS-A date in Python; it is not one here. The ordering
-    # builtins raise type_error(orderable, ...) when the two meet, so
-    # letting them unify would turn a loud failure into a quiet one.
-    if isinstance(o, _dt.date) and not isinstance(o, _dt.datetime):
-        return (unify(self.year, o.year, trail)
-                and unify(self.month, o.month, trail)
-                and unify(self.day, o.day, trail))
-    return _date_pattern_structural_unify(self, other, trail)
-
-
-_DatePattern.__unify__ = _date_pattern_unify
+# (``_DatePattern`` -- a ``metaclass=PredicateMeta`` class with a
+# hand-rolled ``__unify__`` bridging a pattern to a real ``datetime.date`` and
+# an ``_index_transparent`` flag -- was DELETED at W4b-3 slice 7 (2026-09-26).
+# Measured over the full suite first: nothing constructed it, called its
+# ``__unify__``, ``isinstance``-tested it or read an attribute of it (0 of
+# each; the instrument's positive control fired).  ``date/3`` below builds a
+# cell for every mode.  See implementation_plans/w4b3-slice7-datepattern-
+# 2026-09-26.md.)
 
 
 def date(year, month, day):

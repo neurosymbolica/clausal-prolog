@@ -186,8 +186,10 @@ def _arg_to_index_key(arg: Any, env: "dict | None" = None) -> Any:
     # class, but kept adjacent for clarity).
     if is_declared_predicate_name(arg):
         return (arg.__name__, 0)
-    # A term class may unify with values of a FOREIGN type -- date/3's
-    # pattern unifies with a real datetime.date. Keying such a term by its
+    # A term class may unify with values of a FOREIGN type (date/3's pattern
+    # class did, against a real datetime.date, until W4b-3 slice 7 deleted
+    # it; no in-tree type sets the flag now -- the hook stays for any type
+    # that does). Keying such a term by its
     # own (class_name, field_count) sends a caller to a bucket that no
     # stored value can ever land in, and the predicate silently yields no
     # solutions once _INDEX_THRESHOLD clauses make indexing kick in. These

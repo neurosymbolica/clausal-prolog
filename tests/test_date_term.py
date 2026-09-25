@@ -147,3 +147,58 @@ class TestOrdering:
     def test_sorted_is_chronological_not_lexicographic(self):
         got = sorted([date(2026, 1, 15), date(2026, 1, 2), date(2026, 1, 9)])
         assert got == [_T(dt.date(2026, 1, 2)), _T(dt.date(2026, 1, 9)), _T(dt.date(2026, 1, 15))]
+
+
+class TestDateTermShapesInAModule:
+    """The three shapes a date-consuming module relies on, end to end in a
+    loaded module (W4b-3 slice 7 deleted the unused ``_DatePattern`` class;
+    these pin that the date TERM behaves as before): construct, decompose a
+    real date term, and the ``ground(V), date(_, _, _) is V`` test REFUSING
+    an unbound ``V`` (it would otherwise bind ``V`` to a pattern)."""
+
+    SRC = (
+        "-import_from(date_time, [date])\n"
+        "-module(s7_dates, [mk(D), parts(D, Y, M, DD), is_day(V), shape(V)])\n"
+        "mk(D) <- (D is date(2026, 1, 15))\n"
+        "parts(D, Y, M, DD) <- (date(Y, M, DD) is D)\n"
+        "is_day(V) <- (ground(V), date(_, _, _) is V)\n"
+        "shape(V) <- (date(_, _, _) is V)\n"
+    )
+
+    @pytest.fixture
+    def mod(self, tmp_path):
+        import sys
+        from clausal.import_hook import _load_module
+        path = tmp_path / "s7_dates.clausal"
+        path.write_text(self.SRC)
+        sys.modules.pop("s7_dates", None)
+        try:
+            yield _load_module("s7_dates", str(path)).__dict__["$module"]
+        finally:
+            sys.modules.pop("s7_dates", None)
+
+    def _all(self, mod, goal, *args):
+        from clausal.logic.solve import solve
+        from clausal.logic.variables import walk
+        return [tuple(walk(a) for a in args)
+                for _ in solve((goal, *args), module=mod)]
+
+    def test_construct(self, mod):
+        D = Var()
+        assert self._all(mod, "mk", D) == [(("date", 2026, 1, 15),)]
+
+    def test_decompose_a_real_date_term(self, mod):
+        Y, M, DD = Var(), Var(), Var()
+        got = self._all(mod, "parts", ("date", 2026, 1, 15), Y, M, DD)
+        assert [g[1:] for g in got] == [(2026, 1, 15)]
+
+    def test_the_ground_guard_refuses_an_unbound_value(self, mod):
+        assert self._all(mod, "is_day", Var()) == []
+        assert len(self._all(mod, "is_day", ("date", 2026, 1, 15))) == 1
+        assert self._all(mod, "is_day", [2026, 1, 15]) == []
+
+    def test_without_the_guard_an_unbound_value_is_BOUND_to_a_pattern(self, mod):
+        """Why the guard is load-bearing: ``date(_, _, _) is V`` on an unbound
+        V does not test, it binds V to a pattern cell."""
+        (v,), = self._all(mod, "shape", Var())
+        assert v[0] == "date" and len(v) == 4
