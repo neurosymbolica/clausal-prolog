@@ -8,6 +8,12 @@ the import failed silently.  These tests flip the binding the way the flip
 will (ruling D1: an imported name binds the OWNER's handle), both with the
 owner loaded and with it popped from ``sys.modules`` as the ``.clausal``
 runner pops what it loads.
+
+Handle era (W4b-2d flip): the LOAD binds the owner's handle now, so the
+stand-in ``_flip`` (which re-bound a class the load no longer leaves) and the
+``flipped=False`` class arm are gone.  ``_the_load_bound_the_owner_handle``
+asserts the binding each test depends on, so no arm runs on a class by
+accident or on a binding nothing set.
 """
 
 from __future__ import annotations
@@ -22,7 +28,6 @@ from clausal.import_hook import _load_module
 from clausal.logic.atoms import mangle
 from clausal.logic.builtins.database_ops import _find_pred_cls, _home_db
 from clausal.logic.builtins.higher_order import _namespace_dispatch
-from clausal.logic.predicate import PredicateMeta
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
 
@@ -47,10 +52,11 @@ def pair():
         sys.modules.pop(_OWNER, None)
 
 
-def _flip(user):
-    md = user.__dict__
-    assert isinstance(md["gd_p"], PredicateMeta), "fixture no longer binds a class"
-    md["gd_p"] = mangle(_OWNER, "gd_p")
+def _the_load_bound_the_owner_handle(user):
+    """Ruling D1, done by the load: the imported name binds the OWNER's
+    handle."""
+    assert user.__dict__["gd_p"] == mangle(_OWNER, "gd_p"), (
+        "the load did not bind the owner's handle")
 
 
 def _owner_answers(owner):
@@ -60,17 +66,14 @@ def _owner_answers(owner):
 
 
 @pytest.mark.parametrize("owner_popped", [False, True])
-@pytest.mark.parametrize("flipped", [False, True])
-def test_an_assert_through_the_import_lands_on_the_owner(
-        pair, flipped, owner_popped):
+def test_an_assert_through_the_import_lands_on_the_owner(pair, owner_popped):
     owner, user = pair
     odb = owner.__dict__["$module"].db
     udb = user.__dict__["$module"].db
     twin = udb.row("gd_p", 1)
     assert twin is not None and twin.db is udb, "no dual record: no hazard"
     before_owner, before_twin = len(odb.row("gd_p", 1).clauses), len(twin.clauses)
-    if flipped:
-        _flip(user)
+    _the_load_bound_the_owner_handle(user)
     if owner_popped:
         sys.modules.pop(_OWNER, None)
 
@@ -82,12 +85,10 @@ def test_an_assert_through_the_import_lands_on_the_owner(
 
 
 @pytest.mark.parametrize("owner_popped", [False, True])
-@pytest.mark.parametrize("flipped", [False, True])
-def test_call_n_reaches_the_imported_predicate(pair, flipped, owner_popped):
+def test_call_n_reaches_the_imported_predicate(pair, owner_popped):
     owner, user = pair
     udb = user.__dict__["$module"].db
-    if flipped:
-        _flip(user)
+    _the_load_bound_the_owner_handle(user)
     if owner_popped:
         sys.modules.pop(_OWNER, None)
     binding = _find_pred_cls("gd_p", 1, user.__dict__)
@@ -146,9 +147,9 @@ def test_retract_follows_the_handle_to_the_owner(pair, owner_popped):
     owner, user = pair
     odb = owner.__dict__["$module"].db
     lm = user.__dict__["$module"]
-    next(call("gd_add", 7, module=lm), None)          # on the owner (class era)
+    _the_load_bound_the_owner_handle(user)
+    next(call("gd_add", 7, module=lm), None)          # on the owner
     assert 7 in _owner_answers(owner)
-    _flip(user)
     if owner_popped:
         sys.modules.pop(_OWNER, None)
     # (listing/_indicator_row, F1 row 60, now resolves through the binding

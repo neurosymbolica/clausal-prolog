@@ -321,7 +321,7 @@ class TestVarVsNonNumericOperand:
             f.write(src)
         mod = _load_module("strcmp_repro", path)
         with pytest.raises(LogicException) as ei:
-            list(solve(mod.strlt_ok(Var()), mod.__dict__["$module"]))
+            list(solve(("strlt_ok", Var()), mod.__dict__["$module"]))
         _assert_orderable_error(ei, "(<)/2")
 
 

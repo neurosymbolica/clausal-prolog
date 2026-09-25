@@ -6,7 +6,7 @@ find a predicate's plans by (functor, arity) without the class.
 """
 from clausal import Var
 from clausal.import_hook import _load_module
-from clausal.logic.predicate import PredicateMeta
+from clausal.logic.predicate import PredicateMeta, resolve_predicate_row
 
 
 def _load(tmp_path, name, src):
@@ -20,14 +20,18 @@ SRC = (
 )   # enough clauses to be indexed; -private declares the bare colour atoms
 
 
-def test_the_class_attribute_reads_through_to_the_row(tmp_path):
+def test_the_module_binding_reads_through_to_the_row(tmp_path):
+    """W4b-2d: the module binding is a handle; the plans it reaches are the
+    row's (it used to be the class's ``_state_row()``)."""
     mod = _load(tmp_path, "ip_a", SRC)
-    cls = mod.module_dict["colour"]
+    via_binding = resolve_predicate_row(mod.module_dict["colour"], arity=2,
+                                        db=mod.db)
     row = mod.db.row("colour", 2)
-    assert row is not None
-    assert cls._state_row().index_plans is row.index_plans
-    assert cls._state_row().index_plans_joint is row.index_plans_joint
-    assert cls._state_row().index_plans_hierarchical is row.index_plans_hierarchical
+    assert row is not None and via_binding is row
+    assert row.index_plans, "first-arg index expected, or this compares {} to {}"
+    assert via_binding.index_plans is row.index_plans
+    assert via_binding.index_plans_joint is row.index_plans_joint
+    assert via_binding.index_plans_hierarchical is row.index_plans_hierarchical
 
 
 def test_the_compiler_wrote_plans_onto_the_row(tmp_path):
@@ -37,10 +41,11 @@ def test_the_compiler_wrote_plans_onto_the_row(tmp_path):
     assert isinstance(row.index_plans, dict) and row.index_plans, "first-arg index expected"
 
 
-def test_assignment_on_the_class_lands_on_the_row(tmp_path):
+def test_assignment_through_the_binding_lands_on_the_row(tmp_path):
     mod = _load(tmp_path, "ip_c", SRC)
-    cls = mod.module_dict["colour"]
-    cls._state_row().index_plans = {"marker": {}}
+    via_binding = resolve_predicate_row(mod.module_dict["colour"], arity=2,
+                                        db=mod.db)
+    via_binding.index_plans = {"marker": {}}
     assert mod.db.row("colour", 2).index_plans == {"marker": {}}
 
 

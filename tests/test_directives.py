@@ -21,7 +21,11 @@ from clausal.logic.atoms import mint
 import clausal.import_hook
 from clausal.import_hook import _load_module
 from clausal.logic.database import Database, Clause
-from clausal.logic.predicate import PredicateMeta
+from clausal.logic.exceptions import LogicException
+from clausal.logic.predicate import (
+    is_declared_predicate, resolve_predicate_row,
+)
+from clausal.terms import Compound
 from clausal.templating.term_rewriting import EmbedTransformer
 
 
@@ -144,36 +148,51 @@ class TestDirectiveParsing:
 # ── Import-level: -dynamic allows runtime assertz ────────────────────────────
 
 
+def _predicate_row(mod, name, arity):
+    """The module's own row for the predicate bound under *name*.
+
+    After the W4b-2d flip the binding is a mangled HANDLE (a str): it is
+    checked to be a declared predicate at *arity*, and its row is read
+    through the module's Database, not a class."""
+    db = mod.__dict__["$module"].db
+    binding = mod.__dict__[name]
+    assert is_declared_predicate(binding, arity=arity, db=db), binding
+    row = resolve_predicate_row(binding, arity=arity, db=db)
+    assert row is not None and row is db.row(name, arity)
+    return row
+
+
 class TestDynamicImport:
     def test_dynamic_predicate_is_unlocked(self):
         # nv
         mod = _load_fixture("dynamic_pred.clausal")
-        color_cls = mod.__dict__["color"]
-        assert isinstance(color_cls, PredicateMeta)
-        assert not color_cls._state_row().locked
+        assert not _predicate_row(mod, "color", 2).locked
 
     def test_dynamic_predicate_allows_runtime_assertz(self):
         # nv
         mod = _load_fixture("dynamic_pred.clausal")
-        color_cls = mod.__dict__["color"]
+        row = _predicate_row(mod, "color", 2)
         logic_mod = mod.__dict__["$module"]
         initial_count = len(logic_mod.db.clauses_for("color", 2))
-        color_cls._assertz(Clause(head=color_cls("fire", "red"), body=[]))
-        assert len(color_cls._state_row().clauses) == initial_count + 1
+        logic_mod.db.assertz(
+            Clause(head=Compound("color", ("fire", "red")), body=[]))
+        assert len(row.clauses) == initial_count + 1
 
     def test_static_predicate_is_locked(self):
         # nv
         mod = _load_fixture("static_pred.clausal")
-        fact_cls = mod.__dict__["fact"]
-        assert isinstance(fact_cls, PredicateMeta)
-        assert fact_cls._state_row().locked
+        assert _predicate_row(mod, "fact", 2).locked
 
     def test_static_predicate_rejects_runtime_assertz(self):
         # nv
         mod = _load_fixture("static_pred.clausal")
-        fact_cls = mod.__dict__["fact"]
-        with pytest.raises(RuntimeError, match="locked"):
-            fact_cls._assertz(Clause(head=fact_cls("c", 3), body=[]))
+        row = _predicate_row(mod, "fact", 2)
+        before = len(row.clauses)
+        db = mod.__dict__["$module"].db
+        with pytest.raises(LogicException, match="locked") as exc_info:
+            db.assertz(Clause(head=Compound("fact", ("c", 3)), body=[]))
+        assert exc_info.value.term.args[0].functor == "permission_error"
+        assert len(row.clauses) == before, "and nothing was written"
 
     def test_dynamic_flag_recorded_on_db(self):
         # nv

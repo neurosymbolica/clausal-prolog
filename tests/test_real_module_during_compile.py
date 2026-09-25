@@ -10,9 +10,9 @@ any handle to the module being compiled that was resolved MID-compile
 placeholder: after the flip, ``-specialize`` over a local source program
 raised ``existence_error(natnum_program/1)``.
 
-These tests build the post-flip shape by hand
-(``mint_predicate_handle(db, name)``), so they bite today, with every
-binding still a class.
+These tests were written to build the post-flip shape by hand
+(``mint_predicate_handle(db, name)``) while every binding was still a class;
+after the W4b-2d flip the load produces that shape itself, and they check it.
 """
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ import clausal.import_hook  # noqa: F401 -- installs the meta-path finder
 from clausal.import_hook import _load_module
 from clausal.logic import compiler_v2
 from clausal.logic.predicate import (
-    PredicateMeta, _db_for_module_name, mint_predicate_handle,
+    _db_for_module_name, mint_predicate_handle, resolve_predicate_row,
 )
 from clausal.logic.solve import call, resolve_module
 from clausal.logic.variables import Var, deref, walk
@@ -86,19 +86,22 @@ def test_specialize_over_a_local_source_program_bound_to_a_handle(
     ``-specialize`` calls it at step 6b through ``call()`` /
     ``resolve_module``; before the fix that found the placeholder's empty
     store and the load raised existence_error(natnum_program/1)."""
+    # After the W4b-2d flip the load itself binds the source program to its
+    # handle; this spy used to REBIND it by hand (a stand-in flip).  It now
+    # only confirms, at step 6b, that the binding already IS the handle --
+    # so the end-to-end check below is over a handle-bound source program.
     original = compiler_v2._run_specialization
-    rebound = []
+    observed = []
 
-    def flip_source(module_items, predicate_nodes, module_dict, db):
-        assert isinstance(module_dict["natnum_program"], PredicateMeta)
-        module_dict["natnum_program"] = mint_predicate_handle(
-            db, "natnum_program")
-        rebound.append(module_dict["natnum_program"])
+    def see_source(module_items, predicate_nodes, module_dict, db):
+        binding = module_dict["natnum_program"]
+        assert binding == mint_predicate_handle(db, "natnum_program"), binding
+        observed.append(binding)
         return original(module_items, predicate_nodes, module_dict, db)
 
-    monkeypatch.setattr(compiler_v2, "_run_specialization", flip_source)
+    monkeypatch.setattr(compiler_v2, "_run_specialization", see_source)
     module = load_natnum()
-    assert rebound, "the source program was never rebound: nothing tested"
+    assert observed, "step 6b never ran over the source program: nothing tested"
     spec = module.__dict__["solve_count_natnum"]
     n = Var()
     counts = [walk(deref(n)) for _ in call(
@@ -107,13 +110,16 @@ def test_specialize_over_a_local_source_program_bound_to_a_handle(
 
 
 def test_class_bindings_see_the_same_module_objects(load_natnum):
-    """Nothing observable changes today: the load's end state is the one
-    module object under both names, and its bindings are still classes."""
+    """The load's end state is the one module object under both names, and
+    its predicate bindings (handles, after the W4b-2d flip) resolve to that
+    module's own Database."""
     module = load_natnum()
     lm = module.__clausal_module__
     assert module.__dict__["$module"] is lm
-    assert isinstance(module.__dict__["natnum_program"], PredicateMeta)
-    assert module.__dict__["natnum_program"]._row.db is lm.db
+    binding = module.__dict__["natnum_program"]
+    assert binding == mint_predicate_handle(lm.db, "natnum_program")
+    row = resolve_predicate_row(binding, arity=1, db=lm.db)
+    assert row is not None and row.db is lm.db
 
 
 def test_a_bare_dict_compile_is_not_given_module_names():

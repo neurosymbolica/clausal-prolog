@@ -136,7 +136,7 @@ def test_hidden_atom_unifies_within_its_module():
     # deref INSIDE the loop -- call()'s generator undoes trail bindings on
     # backtrack past the last yield (see test_global_atoms_default.py's
     # matching note).
-    vals = [(deref(out_x), deref(out_y)) for _ in solve(mod.same(out_x, out_y), mod)]
+    vals = [(deref(out_x), deref(out_y)) for _ in solve(("same", out_x, out_y), mod)]
     assert len(vals) == 1
     val_x, val_y = vals[0]
     expected = mint(mangle("hide_owner", "hide_secret"))
@@ -158,9 +158,9 @@ def test_cross_module_same_spelling_does_not_unify():
     other = _load_fixture("hide_other.clausal", "tests.fixtures.hide_other")
 
     out_owner = Var()
-    owner_vals = [deref(out_owner) for _ in solve(owner.holds(out_owner), owner)]
+    owner_vals = [deref(out_owner) for _ in solve(("holds", out_owner), owner)]
     out_other = Var()
-    other_vals = [deref(out_other) for _ in solve(other.reaches(out_other), other)]
+    other_vals = [deref(out_other) for _ in solve(("reaches", out_other), other)]
 
     assert owner_vals == [mint(mangle("hide_owner", "hide_secret"))]
     assert other_vals == [mint("hide_secret")]
@@ -186,11 +186,11 @@ def test_importer_cannot_spell_hidden_atom():
 
     out_imported = Var()
     imported_vals = [
-        deref(out_imported) for _ in solve(importer.imported_secret(out_imported), importer)
+        deref(out_imported) for _ in solve(("imported_secret", out_imported), importer)
     ]
     out_local = Var()
     local_vals = [
-        deref(out_local) for _ in solve(importer.local_secret(out_local), importer)
+        deref(out_local) for _ in solve(("local_secret", out_local), importer)
     ]
 
     assert imported_vals == [mint(mangle("hide_owner", "hide_secret"))]
@@ -257,7 +257,7 @@ def test_end_to_end_solved_value_renders_human_form():
     the near-miss renderer."""
     mod = _load_fixture("hide_owner.clausal", "tests.fixtures.hide_owner")
     out = Var()
-    vals = [deref(out) for _ in solve(mod.holds(out), mod)]
+    vals = [deref(out) for _ in solve(("holds", out), mod)]
     assert len(vals) == 1
     text = _render_value(vals[0], path=_fixture_path("hide_owner.clausal"))
     assert text == "hide_owner.hide_secret"
@@ -292,7 +292,7 @@ def test_write_to_string_renders_human_form_for_hidden_atom():
     human ``module.name`` form -- no raw HIDDEN_SEP in the output."""
     mod = _load_fixture("hide_owner.clausal", "tests.fixtures.hide_owner")
     out = Var()
-    vals = [deref(out) for _ in solve(mod.holds(out), mod)]
+    vals = [deref(out) for _ in solve(("holds", out), mod)]
     assert len(vals) == 1
     val = vals[0]
     assert is_mangled(val)
@@ -309,7 +309,7 @@ def test_term_to_string_renders_human_form_for_hidden_atom():
     ``print_term/1``) renders the same human form -- no raw HIDDEN_SEP."""
     mod = _load_fixture("hide_owner.clausal", "tests.fixtures.hide_owner")
     out = Var()
-    vals = [deref(out) for _ in solve(mod.holds(out), mod)]
+    vals = [deref(out) for _ in solve(("holds", out), mod)]
     val = vals[0]
 
     result = Var()
@@ -327,7 +327,7 @@ def test_portray_clause_spot_check_renders_human_form():
     HIDDEN_SEP anywhere in its output."""
     mod = _load_fixture("hide_owner.clausal", "tests.fixtures.hide_owner")
     out = Var()
-    vals = [deref(out) for _ in solve(mod.holds(out), mod)]
+    vals = [deref(out) for _ in solve(("holds", out), mod)]
     val = vals[0]
 
     trail = Trail()
@@ -452,7 +452,7 @@ def test_hide_without_functor_collision_still_works():
     control for the three collision tests above)."""
     mod = _load_fixture("hide_owner.clausal", "tests.fixtures.hide_owner")
     out = Var()
-    vals = [deref(out) for _ in solve(mod.holds(out), mod)]
+    vals = [deref(out) for _ in solve(("holds", out), mod)]
     assert len(vals) == 1
     assert is_mangled(vals[0])
 

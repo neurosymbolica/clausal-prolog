@@ -7,6 +7,11 @@ Also pins the pre-existing twin bug
 ``gate_dyn_user`` imports ``gd_p`` and re-declares it ``-dynamic``, so its
 database holds an EMPTY local twin under the same key; listing the import
 used to print the twin's "no clauses".
+
+Handle era (W4b-2d flip): the load binds the handles itself, so the class
+arm and the stand-in ``_flip`` (which re-bound a class the load no longer
+leaves) are gone.  ``_the_load_bound`` asserts each binding the tests
+depend on instead of setting it.
 """
 
 from __future__ import annotations
@@ -20,7 +25,7 @@ import clausal.import_hook  # noqa: F401 — installs the meta-path finder
 from clausal.import_hook import _load_module
 from clausal.logic.atoms import mangle
 from clausal.logic.exceptions import LogicException
-from clausal.logic.predicate import PredicateMeta, make_predicate
+from clausal.logic.predicate import make_predicate
 from clausal.logic.solve import call
 from clausal.terms import Div
 
@@ -57,10 +62,10 @@ def hide():
         sys.modules[_HIDE] = saved
 
 
-def _flip(user):
-    md = user.__dict__
-    assert isinstance(md["gd_p"], PredicateMeta), "fixture no longer binds a class"
-    md["gd_p"] = mangle(_OWNER, "gd_p")
+def _the_load_bound(module, name="gd_p", functor="gd_p"):
+    """The load bound *name* to the owner's handle (ruling D1)."""
+    assert module.__dict__[name] == mangle(_OWNER, functor), (
+        f"the load did not bind {name} to the owner's handle")
 
 
 def _listing(indicator, module, capsys):
@@ -94,55 +99,49 @@ def _prime(owner, user):
     return lm
 
 
-_ERAS = [pytest.param(f, p, id=f"{'flipped' if f else 'class'}-"
-                              f"{'popped' if p else 'loaded'}")
-         for f in (False, True) for p in (False, True)]
+_ERAS = [pytest.param(p, id=f"{'popped' if p else 'loaded'}")
+         for p in (False, True)]
 
 
-@pytest.mark.parametrize("flipped,owner_popped", _ERAS)
+@pytest.mark.parametrize("owner_popped", _ERAS)
 def test_the_atom_indicator_lists_the_owner_not_the_importer_twin(
-        pair, capsys, flipped, owner_popped):
+        pair, capsys, owner_popped):
     owner, user = pair
     lm = _prime(owner, user)
-    if flipped:
-        _flip(user)
+    _the_load_bound(user)
     if owner_popped:
         sys.modules.pop(_OWNER, None)
     out = _listing(("/", "gd_p", 1), lm, capsys)
     assert "% gd_p/1 — 2 clause(s)" in out, out
 
 
-@pytest.mark.parametrize("flipped,owner_popped", _ERAS)
+@pytest.mark.parametrize("owner_popped", _ERAS)
 def test_the_binding_indicator_lists_the_owner(
-        pair, capsys, flipped, owner_popped):
+        pair, capsys, owner_popped):
     """``listing(gd_p/1)`` as source compiles it: a Div whose left operand is
-    the module's binding for ``gd_p`` -- the class, or after the flip the
-    owner's handle (ruling D1)."""
+    the module's binding for ``gd_p`` -- the owner's handle (ruling D1)."""
     owner, user = pair
     lm = _prime(owner, user)
-    if flipped:
-        _flip(user)
+    _the_load_bound(user)
     if owner_popped:
         sys.modules.pop(_OWNER, None)
     binding = user.__dict__["gd_p"]
-    assert isinstance(binding, str) is flipped
+    assert isinstance(binding, str)
     out = _listing(Div(left=binding, right=1), lm, capsys)
     assert "% gd_p/1 — 2 clause(s)" in out, out
 
 
-@pytest.mark.parametrize("flipped,owner_popped", _ERAS)
+@pytest.mark.parametrize("owner_popped", _ERAS)
 def test_a_module_still_lists_its_own_predicates(
-        pair, capsys, flipped, owner_popped):
+        pair, capsys, owner_popped):
     """Popped, the owner's own handle resolves only through the caller's
     ``db`` (ruling Q0's local short-circuit)."""
     owner, user = pair
     lm = _prime(owner, user)
-    if flipped:
-        _flip(user)
+    _the_load_bound(user)
     assert "% gd_add/1 — 1 clause(s)" in _listing(("/", "gd_add", 1), lm, capsys)
     om = owner.__dict__["$module"]
-    if flipped:
-        owner.__dict__["gd_p"] = mangle(_OWNER, "gd_p")
+    _the_load_bound(owner)
     if owner_popped:
         sys.modules.pop(_OWNER, None)
     for ind in (("/", "gd_p", 1), Div(left=owner.__dict__["gd_p"], right=1)):
@@ -160,9 +159,9 @@ def aliased(pair):
     sys.modules.pop(_ALIAS, None)
 
 
-@pytest.mark.parametrize("flipped,owner_popped", _ERAS)
+@pytest.mark.parametrize("owner_popped", _ERAS)
 def test_an_aliased_import_lists_the_owner(
-        aliased, capsys, flipped, owner_popped):
+        aliased, capsys, owner_popped):
     owner, user = aliased
     lm = user.__dict__["$module"]
     # Primed through the OWNER, so this test does not depend on the alias
@@ -173,10 +172,7 @@ def test_an_aliased_import_lists_the_owner(
     assert twin is not None and twin.db is lm.db and twin.clauses == []
     assert lm.db.adopted_row("gd_loc", 1) is not None
     assert lm.db.adopted_row("gd_p", 1) is None, "keyed by the owner's name"
-    if flipped:
-        md = user.__dict__
-        assert isinstance(md["gd_loc"], PredicateMeta)
-        md["gd_loc"] = mangle(_OWNER, "gd_p")
+    _the_load_bound(user, "gd_loc", "gd_p")
     if owner_popped:
         sys.modules.pop(_OWNER, None)
     for ind in (("/", "gd_loc", 1), Div(left=user.__dict__["gd_loc"], right=1)):

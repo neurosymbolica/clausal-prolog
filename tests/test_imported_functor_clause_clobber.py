@@ -225,7 +225,10 @@ class TestDeclarationOnlyExporterIsRefused:
         _load_fixture("impclob_implements")
         use = _load_fixture("impclob_implements")  # again
         assert _solutions(use.impclob_check, 1) == [(mint("ok"),)]
-        assert len(use.impclob_verdict._state_row().clauses) == 1
+        row = resolve_predicate_row(use.impclob_verdict, arity=2,
+                                    db=use.__dict__["$module"].db)
+        assert row is not None
+        assert len(row.clauses) == 1
 
 
 class TestOneFileLoadedTwiceUnderTwoNames:
@@ -309,7 +312,7 @@ class TestRuntimeAssertzIsAlreadySafe:
         az = _load_module("tests.fixtures.impclob_az",
                           str(tmp_path / "impclob_az.clausal"))
         with pytest.raises(LogicException) as exc_info:
-            next(solve(az.go(Var()), az), None)
+            next(solve(("go", Var()), az), None)
         assert "permission_error" in str(exc_info.value)
         assert sorted(_solutions(owner.impclob_colour, 1)) == [
             (mint("green"),), (mint("red"),)]

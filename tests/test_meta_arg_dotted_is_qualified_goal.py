@@ -32,7 +32,6 @@ import pytest
 
 from clausal.logic.atoms import mangle, mint
 from clausal.logic.exceptions import LogicException
-from clausal.logic.predicate import PredicateMeta
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, walk
 from clausal.terms import Compound
@@ -46,25 +45,6 @@ def _load(tmp_path, monkeypatch, name, body):
     mod = _load_module(name, str(p))
     assert sys.modules[name] is mod
     return mod
-
-
-def _bind_imports_as_owner_handles(monkeypatch, owner):
-    """The handle era for ``-import_from`` (an import binds the OWNER's
-    handle) -- the emulation test_meta_predicate_directive_both_eras uses."""
-    import clausal.logic.compiler_v2 as cv
-    orig = cv._process_imports
-    seen = []
-
-    def flipped(items, module_dict, db=None):
-        orig(items, module_dict, db)
-        for k, v in list(module_dict.items()):
-            if (isinstance(v, PredicateMeta) and v._row is not None
-                    and v._row._db is owner.db):
-                module_dict[k] = mangle(owner.name, v._row._key[0])
-                seen.append(k)
-
-    monkeypatch.setattr(cv, "_process_imports", flipped)
-    return seen
 
 
 _LIB = """
@@ -110,17 +90,16 @@ _DOM = """
 """
 
 
-@pytest.fixture(params=["class", "handle"])
+@pytest.fixture(params=["handle"])
 def dq(request, tmp_path, monkeypatch):
+    # W4b-2d flip: the load itself binds an import to the OWNER's handle, so
+    # the class-era arm and the stand-in flip are gone (task-9 brief rule 3);
+    # the positive control asserts the real flip happened.
     era = request.param
-    lib = _load(tmp_path, monkeypatch, f"mdqlib_{era}", _LIB.replace("ERA", era))
-    if era == "handle":
-        seen = _bind_imports_as_owner_handles(monkeypatch, lib.__dict__["$module"])
+    _load(tmp_path, monkeypatch, f"mdqlib_{era}", _LIB.replace("ERA", era))
     dom = _load(tmp_path, monkeypatch, f"mdqdom_{era}", _DOM.replace("ERA", era))
     D = dom.__dict__["$module"]
-    if era == "handle":
-        assert "e1" in seen, "the handle era must really be exercised"
-        assert D.module_dict["e1"] == mangle(f"mdqlib_{era}", "e1")
+    assert D.module_dict["e1"] == mangle(f"mdqlib_{era}", "e1")
     return era, D
 
 

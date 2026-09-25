@@ -7,6 +7,11 @@ owner's row, in both eras, owner loaded or popped.
 ``terms_to_ast._functor_spelling``, so the owner's clauses can match it), and
 the assert looked ``gd_p/1`` up in the importer, where only ``gd_loc`` is
 bound and adopted: ``existence_error(procedure, gd_p/1)``.
+
+Handle era (W4b-2d flip): the load binds ``gd_loc`` to the OWNER's handle
+itself (ruling D1), so the class arm and the stand-in re-binding in
+``_setup`` are gone; ``_setup`` asserts the binding instead, so the arm can
+never run on a binding nothing set.
 """
 from __future__ import annotations
 
@@ -18,7 +23,7 @@ import pytest
 import clausal.import_hook  # noqa: F401 -- installs the meta-path finder
 from clausal.import_hook import _load_module
 from clausal.logic.exceptions import LogicException
-from clausal.logic.predicate import PredicateMeta, mint_predicate_handle
+from clausal.logic.predicate import mint_predicate_handle
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
 
@@ -53,9 +58,8 @@ def aliased(tmp_path):
         sys.modules.pop(_OWNER, None)
 
 
-_ERAS = [pytest.param(f, p, id=f"{'flipped' if f else 'class'}-"
-                              f"{'popped' if p else 'loaded'}")
-         for f in (False, True) for p in (False, True)]
+_ERAS = [pytest.param(p, id=f"{'popped' if p else 'loaded'}")
+         for p in (False, True)]
 
 
 def _owner_answers(owner):
@@ -64,48 +68,46 @@ def _owner_answers(owner):
                                          module=owner.__dict__["$module"]))
 
 
-def _setup(owner, user, flipped, owner_popped):
+def _setup(owner, user, owner_popped):
     lm = user.__dict__["$module"]
     assert lm.db.adopted_row("gd_loc", 1) is not None
     assert lm.db.adopted_row("gd_p", 1) is None, "keyed by the importer's name"
-    if flipped:
-        md = user.__dict__
-        assert isinstance(md["gd_loc"], PredicateMeta)
-        # Ruling D1: an imported name binds the OWNER's handle.
-        md["gd_loc"] = mint_predicate_handle(owner.__dict__["$module"].db, "gd_p")
+    # Ruling D1, done by the load: an imported name binds the OWNER's handle.
+    assert user.__dict__["gd_loc"] == mint_predicate_handle(
+        owner.__dict__["$module"].db, "gd_p"), "the load did not flip gd_loc"
     if owner_popped:
         sys.modules.pop(_OWNER, None)
     return lm
 
 
-@pytest.mark.parametrize("flipped,owner_popped", _ERAS)
+@pytest.mark.parametrize("owner_popped", _ERAS)
 def test_assertz_through_the_alias_lands_on_the_owner(
-        aliased, flipped, owner_popped):
+        aliased, owner_popped):
     owner, user = aliased
-    lm = _setup(owner, user, flipped, owner_popped)
+    lm = _setup(owner, user, owner_popped)
     assert next(call("gd_loc_add", 42, module=lm), None) is not None
     assert _owner_answers(owner) == [1, 42]
     assert lm.db.row("gd_loc", 1).clauses == [], "wrote the importer's twin"
 
 
-@pytest.mark.parametrize("flipped,owner_popped", _ERAS)
+@pytest.mark.parametrize("owner_popped", _ERAS)
 def test_retract_through_the_alias_removes_from_the_owner(
-        aliased, flipped, owner_popped):
+        aliased, owner_popped):
     owner, user = aliased
-    lm = _setup(owner, user, flipped, owner_popped)
+    lm = _setup(owner, user, owner_popped)
     assert next(call("gd_loc_add", 42, module=lm), None) is not None
     assert next(call("gd_loc_del", 1, module=lm), None) is not None
     assert _owner_answers(owner) == [42]
 
 
-@pytest.mark.parametrize("flipped,owner_popped", _ERAS)
+@pytest.mark.parametrize("owner_popped", _ERAS)
 def test_call_of_the_alias_cell_answers_from_the_owner(
-        aliased, flipped, owner_popped):
+        aliased, owner_popped):
     """``call(gd_loc(X))`` hands call/1 the same owner-spelled cell; it used
     to answer NOTHING, silently (higher_order resolves through the same
     ``_find_pred_cls``)."""
     owner, user = aliased
-    lm = _setup(owner, user, flipped, owner_popped)
+    lm = _setup(owner, user, owner_popped)
     x = Var()
     assert [deref(x) for _ in call("gd_loc_call", x, module=lm)] == [1]
 

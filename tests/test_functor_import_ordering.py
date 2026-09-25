@@ -270,16 +270,37 @@ class TestZeroArityAtomThenPredicate:
         assert results == [(mint("a"), 1), (mint("b"), 2)]
 
 
-class TestGenuineArityDisagreementStillRaises:
-    """Field names can be reconciled by position; arity cannot."""
+class TestALocalHeadAtANewArityLoadsBesideTheImport:
+    """A head for an imported name at an arity the owner does not define
+    builds the IMPORTER's own predicate at that arity.
 
-    def test_the_pair_raises_an_attributable_error(self):
-        _load_fixture("impord_arity_vocab")
-        with pytest.raises(ClausalTermConstructionError) as exc_info:
-            _load_fixture("impord_arity_clash")
-        msg = str(exc_info.value)
-        assert "impord_narrow/1" in msg
-        assert "2 positional argument(s)" in msg
-        assert "impord_arity_vocab.clausal:" in msg
-        assert "impord_arity_clash.clausal:" in msg
-        assert "exactly one arity" in msg
+    Re-pinned 2026-09-25 to the operator's name + arity ruling
+    (2026-09-24: "a local p/2 beside an imported p/1 LOADS";
+    ``predicate._foreign_head_verdict`` answers ``"local"``).  Until then
+    this class was ``TestGenuineArityDisagreementStillRaises`` and pinned
+    the owner's arity ``ClausalTermConstructionError``.  A genuine clash --
+    a clause for the imported predicate at the OWNER's arity -- is still
+    refused, attributably, by the load gate
+    (``tests/test_heads_without_calling_binding_both_eras.py::
+    test_a_head_naming_an_imported_predicate_reaches_the_gate``)."""
+
+    def test_the_pair_loads_and_each_arity_answers_its_own_clauses(self):
+        own = _load_fixture("impord_arity_vocab")
+        use = _load_fixture("impord_arity_clash")        # no error
+        lm = use.__dict__["$module"]
+        om = own.__dict__["$module"]
+        # the importer's own impord_narrow/2 answers its own clause
+        s, c = Var(), Var()
+        assert [(walk(deref(s)), walk(deref(c)))
+                for _ in call("impord_narrow", s, c, module=lm)] == [("ok", [])]
+        assert lm.db.head_signatures("impord_narrow")[2] == (
+            "STATUS", "CITATIONS")
+        # the owner is unchanged: one arity, its own clause ...
+        assert om.db.head_signatures("impord_narrow") == {1: ("ONLY",)}
+        x = Var()
+        assert [walk(deref(x))
+                for _ in call("impord_narrow", x, module=om)] == ["solo"]
+        # ... and it still answers through the import at its own arity
+        y = Var()
+        assert [walk(deref(y))
+                for _ in call("impord_narrow", y, module=lm)] == ["solo"]

@@ -1,7 +1,11 @@
 # clausal: no-collect
-# Declares impord_narrow/2 locally and imports impord_narrow/1.  Field names
-# are a module-local labelling of slots, so they can be reconciled by emitting
-# the head positionally — ARITY cannot.  This must still raise, attributably.
+# Declares impord_narrow/2 locally and imports impord_narrow/1.  Under the
+# name + arity ruling (operator, 2026-09-24; re-pinned 2026-09-25) this LOADS:
+# impord_narrow/2 is this module's OWN predicate beside the imported
+# impord_narrow/1, which stays the owner's.  (Until 2026-09-25 this fixture
+# pinned an arity error, which fired while the body ran and so pre-empted the
+# strict-atoms check -- `ok` was never declared.)
+-private([ok])
 -module(impord_arity_clash, [impord_narrow(STATUS, CITATIONS)])
 -import_from(tests.fixtures.impord_arity_vocab, [impord_narrow])
 

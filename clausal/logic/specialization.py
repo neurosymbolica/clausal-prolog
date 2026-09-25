@@ -438,7 +438,18 @@ def _install_specialized(
     # to remove, re-created on the failure path.
     with db.mutate(new_name, arity, author=author, kind=WRITE_LOAD_CLAUSES,
                    detail="-specialize", through=pred_cls) as row:
-        globals_[new_name] = pred_cls
+        # THE FLIP (W4b-2d task 8): the NAMESPACE gets the predicate's
+        # handle, minted from the defining db, exactly what
+        # ``compiler_v2._flip_bindings`` binds for every other predicate.
+        # This is the one runtime path that installs a predicate binding
+        # outside ``compile_module`` (the direct Python API,
+        # ``specialize_mi(..., module_dict, db=...)`` on a LOADED module);
+        # inside a load, step 6c's flip would rebind it anyway.  The class is
+        # still what this function returns and what the row is bound
+        # through.  A db that names no module cannot own a handle, so there
+        # the class stays -- a throwaway namespace nobody resolves by name.
+        globals_[new_name] = _namespace_binding(pred_cls, db, new_name,
+                                                module_dict)
         # Residual goal dispatcher, if the object program left goals this
         # specialization cannot unfold.  Resolved by NAME out of the compile
         # namespace, exactly as before -- and it is also the ONE route by
@@ -464,6 +475,31 @@ def _install_specialized(
         )
 
     return pred_cls
+
+
+def _namespace_binding(pred_cls, db, new_name: str, module_dict):
+    """What ``_install_specialized`` binds *new_name* to in the namespace:
+    the handle post-flip; the class when the flip is off, or when the
+    namespace is not *db*'s own module dict (a handle minted there would
+    name a module the namespace is not), or *db* names no module."""
+    from clausal.logic import compiler_v2  # noqa: PLC0415
+    if (not compiler_v2._FLIP or module_dict is None
+            or getattr(db, "module_dict", None) is not module_dict):
+        return pred_cls
+    from clausal.logic.predicate import (  # noqa: PLC0415
+        mint_predicate_handle, register_handle_owner)
+    try:
+        handle = mint_predicate_handle(db, new_name)
+    except ValueError:
+        return pred_cls
+    # The namespace now holds a handle naming *db*'s module, and the
+    # compiled bodies in it (a recursive specialized predicate) dispatch it
+    # with no caller db.  A ``Module`` built from Python is in no
+    # ``sys.modules`` and never went through ``compile_module``'s
+    # registration, so register it as the handle's owner (ruling Q0, weak
+    # and idempotent) -- or the first recursive call is a dangling handle.
+    register_handle_owner(db)
+    return handle
 
 
 def specialize_mi(

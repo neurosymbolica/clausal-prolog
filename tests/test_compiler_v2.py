@@ -22,9 +22,11 @@ from clausal.import_hook import (
     predicate_builtins,
     runtime_builtins,
 )
-from clausal.logic.compiler_v2 import compile_module
+from clausal.logic.compiler_v2 import compile_module, mark_import_placeholder
 from clausal.logic.database import Module as LogicModule, head_key
-from clausal.logic.predicate import PredicateMeta
+from clausal.logic.predicate import (
+    is_declared_predicate, resolve_predicate_row,
+)
 from clausal.logic.solve import call, solve
 from clausal.logic.variables import Var, Trail, deref
 
@@ -59,7 +61,14 @@ def _load_via_v2(path: str, mod_name: str):
     # Collect Predicate nodes by executing bytecode.
     predicate_nodes = []
     from clausal.pythonic_ast.nodes import Predicate, BoolLiteral
-    dummy_lm = LogicModule(mod_name, module_dict=module_dict)
+    # Marked as the import hook's exec-time PLACEHOLDER, exactly as
+    # ``import_hook._run_v2_pipeline`` does: ``compile_module`` swaps the real
+    # module in for it before step 0 (``_install_real_module``).  Unmarked,
+    # the placeholder's empty store stays ``$module`` for the whole compile,
+    # and once a predicate binding is a HANDLE (the W4b-2d flip) a handle to
+    # this module resolves to nothing mid-compile.
+    dummy_lm = mark_import_placeholder(
+        LogicModule(mod_name, module_dict=module_dict))
     module_dict["$module"] = dummy_lm
     module_dict["$define_predicate"] = lambda pred, lm: predicate_nodes.append(pred)
     module_dict["$assert_fact"] = lambda term: predicate_nodes.append(
@@ -264,16 +273,33 @@ class TestV2CompileModule:
         db = md["$module"].db
 
         # THE REQUIREMENT: held by this Database, not dynamic => locked.
-        checked = 0
-        for obj in md.values():
-            if isinstance(obj, PredicateMeta) and hasattr(obj, "_fields"):
-                key = (obj.__name__, len(obj._fields))
-                if db.row(*key) is None:
+        # The population is the module dict's predicate HANDLES (after the
+        # W4b-2d flip a binding is a mangled atom, not a class), each read
+        # at every arity this Database knows its name at -- deliberately NOT
+        # step 7's own ``db.owned_keys()``, so the test does not mirror the
+        # implementation.
+        from clausal.logic.atoms import demangle, is_mangled
+        population = 0
+        checked = []
+        for obj in list(md.values()):
+            if not isinstance(obj, str) or not is_mangled(obj):
+                continue
+            _owner, name = demangle(obj)
+            for arity in sorted(db.arities_for(name)):
+                if not is_declared_predicate(obj, arity=arity, db=db):
                     continue
-                if not db.is_dynamic(*key):
-                    assert obj._state_row().locked, key
-                    checked += 1
+                row = resolve_predicate_row(obj, arity=arity, db=db)
+                if row is None or row.db is not db:
+                    continue
+                population += 1
+                if not db.is_dynamic(name, arity):
+                    assert row.locked, (name, arity)
+                    checked.append((name, arity))
+        print(f"locking population: {population} handle rows, "
+              f"{len(checked)} static checked: {checked}")
+        assert population, "the selector found no predicate handle at all"
         assert checked, "fixture exercised no non-dynamic predicate at all"
+        assert ("fact", 2) in checked, checked
 
     def test_a_class_this_database_has_no_row_for_is_not_locked(self):
         """The other half of step 7's narrowing, pinned directly.
@@ -307,5 +333,10 @@ class TestV2CompileModule:
         path = os.path.join(FIXTURES_DIR, "dynamic_pred.clausal")
         md = _load_via_v2(path, "_v2_dynamic_pred2")
         Color = md.get("color")
-        assert Color is not None and isinstance(Color, PredicateMeta)
-        assert not Color._state_row().locked
+        db = md["$module"].db
+        assert Color is not None
+        assert is_declared_predicate(Color, arity=2, db=db), Color
+        row = resolve_predicate_row(Color, arity=2, db=db)
+        assert row is not None and row is db.row("color", 2)
+        assert db.is_dynamic("color", 2)
+        assert not row.locked

@@ -18,7 +18,7 @@ import pytest
 from clausal.import_hook import _load_module
 from clausal.logic.atoms import mangle, mint
 from clausal.logic.compiler.terms_to_ast import lowering_scope, term_to_ast_expr
-from clausal.logic.predicate import PredicateMeta, mint_predicate_handle
+from clausal.logic.predicate import mint_predicate_handle
 from clausal.logic.solve import call, solve
 from clausal.logic.variables import Var, deref
 from clausal.logic.exceptions import LogicException
@@ -93,26 +93,27 @@ def test_the_reified_list_builtins_drive_a_named_goal(mod):
     assert _answers(lm, "g_tp", 2) == [([1, 3], [-2])]
 
 
-@pytest.mark.parametrize("flipped", [False, True], ids=["class", "flipped"])
-def test_a_query_passing_the_binding_or_the_atom_answers(mod, flipped):
+def test_a_query_passing_the_binding_or_the_atom_answers(mod):
     """The query side (``_ground_value``) already lowered a class/handle to
-    the atom; maplist answered 0 for it until the atom resolved by name."""
+    the atom; maplist answered 0 for it until the atom resolved by name.
+
+    After the W4b-2d flip the load binds ``b`` to its HANDLE, so there is no
+    class era left to parametrize over, and the stand-in flip that rebound
+    it by hand is gone: the binding is asserted to be the handle instead."""
     lm = mod.__dict__["$module"]
     md = mod.__dict__
-    assert isinstance(md["b"], PredicateMeta)
-    binding = mint_predicate_handle(lm.db, "b") if flipped else md["b"]
-    if flipped:
-        md["b"] = binding
+    binding = md["b"]
+    assert binding == mint_predicate_handle(lm.db, "b"), binding
     for goal in (binding, "b"):
         assert len(list(solve(("maplist", goal, [1]), lm))) == 1, goal
         assert len(list(solve(("maplist", goal, [2]), lm))) == 0, goal
 
 
-@pytest.mark.parametrize("flipped", [False, True], ids=["class", "flipped"])
-def test_the_lowering_bakes_the_plain_atom_in_both_eras(mod, flipped):
+def test_the_lowering_bakes_the_plain_atom_in_both_eras(mod):
+    # Post-flip the load already binds the handle (no stand-in flip, no
+    # class arm -- that arm would silently run the handle era too).
     md = dict(mod.__dict__)
-    if flipped:
-        md["b"] = mint_predicate_handle(md["$module"].db, "b")
+    assert md["b"] == mint_predicate_handle(md["$module"].db, "b"), md["b"]
     with lowering_scope(md):
         expr = term_to_ast_expr(LoadName(name="b"), {})
     assert isinstance(expr, ast.Constant) and expr.value == "b"

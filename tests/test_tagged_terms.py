@@ -292,6 +292,27 @@ def _logic_module(mod):
     return mod.__dict__["$module"]
 
 
+def _own_row(mod, name):
+    """The one row the module's Database owns for *name* (W4b-2d: the module
+    dict binds a handle, so the row is read from the Database, not a class).
+    Exactly one owned arity with clauses is required -- more, or none, is a
+    harness failure rather than a guess."""
+    db = _logic_module(mod).db
+    rows = [db.row(f, a) for (f, a) in sorted(db.owned_keys()) if f == name]
+    rows = [r for r in rows if r is not None and r.clauses]
+    assert len(rows) == 1, (name, [r.key for r in rows])
+    return rows[0]
+
+
+def _recompile(mod, name):
+    """Drop *name*'s memoised dispatch and re-drive it through the row's own
+    lazy recompile (the class era's ``_state_row().dispatch_fn = None`` +
+    ``_get_dispatch()``)."""
+    row = _own_row(mod, name)
+    row.invalidate()
+    return row.db.get_dispatch(*row.key)
+
+
 
 
 class TestCellEmission:
@@ -1111,16 +1132,16 @@ class TestHeadPatternReachability:
                 return _counting("fallback", fn)
             return fn
 
-        pred = getattr(module, "kind")
+        row = _own_row(module, "kind")
         predicate_mod.functiondef_to_function = _spy
         try:
-            pred._state_row().dispatch_fn = None
+            row.invalidate()
             lm = _logic_module(module)
             K = Var()
             got = [deref(K) for _t in call("kind", ("point", 1, 2), K, module=lm)]
         finally:
             predicate_mod.functiondef_to_function = original
-            pred._state_row().dispatch_fn = None  # don't leak the instrumented closures
+            row.invalidate()  # don't leak the instrumented closures
 
         assert got == [mint("pt")]
         assert calls == {"bucket": 1, "fallback": 0}, calls
@@ -1822,9 +1843,7 @@ def _capture_bucket_functions(module_name: str, pred_name: str) -> dict:
 
     predicate_mod.functiondef_to_function = _spy
     try:
-        pred = getattr(module, pred_name)
-        pred._state_row().dispatch_fn = None
-        pred._get_dispatch()
+        _recompile(module, pred_name)
     finally:
         predicate_mod.functiondef_to_function = original
     return out
@@ -1983,11 +2002,13 @@ class TestGateSymmetry:
         """
         from clausal.logic.compiler.head_match import head_to_match_pattern
         from clausal.logic.compiler.terms_to_ast import lowering_scope
-        from clausal.logic.predicate import PredicateMeta
+        from clausal.logic.predicate import resolve_predicate_row
 
         tagged = _fixture(_TAGGED)
         assert tagged.point == mint("point")                    # the premise ...
-        assert isinstance(tagged.kind, PredicateMeta)     # ... both halves
+        kind_row = resolve_predicate_row(                  # ... both halves
+            tagged.kind, arity=2, db=_logic_module(tagged).db)
+        assert kind_row is not None and kind_row.clauses, tagged.kind
         term = self._source_compound_for("point", 2)
         with lowering_scope(tagged.__dict__):
             got = _unparse_pattern(head_to_match_pattern(

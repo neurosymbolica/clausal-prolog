@@ -32,6 +32,16 @@ def hop_mod():
     return mod
 
 
+def _row(mod, name, arity):
+    """The row the module-dict binding *name* reads -- through the module's
+    Database, since after the W4b-2d flip the binding is a mangled handle."""
+    from clausal.logic.predicate import resolve_predicate_row
+    db = mod.__dict__["$module"].db
+    row = resolve_predicate_row(mod.__dict__[name], arity=arity, db=db)
+    assert row is not None and row is db.row(name, arity), (name, arity)
+    return row
+
+
 def _solutions(mod, *args):
     lm = mod.__dict__["$module"]
     vals = [Var() if a is None else a for a in args]
@@ -48,16 +58,14 @@ class TestSecondaryDispatchTro:
         analysis changes and this stops holding, the TRO coverage below
         silently stops exercising the secondary path."""
         # nv
-        hop = hop_mod.__dict__["hop"]
-        assert hop._state_row().index_plans_hierarchical
+        assert _row(hop_mod, "hop", 4).index_plans_hierarchical
 
     def test_tro_is_active(self, hop_mod):
         """Pin TRO eligibility of the tail-recursive clause — the compiled
         predicate's base_globals carry $tro_state only when the sweep
         selected it. Guards against the test passing vacuously."""
         # nv
-        hop = hop_mod.__dict__["hop"]
-        for idx_dict in hop._state_row().index_plans.values():
+        for idx_dict in _row(hop_mod, "hop", 4).index_plans.values():
             for wrapper in idx_dict.values():
                 for cell in wrapper.__closure__ or ():
                     g = getattr(cell.cell_contents, "__globals__", None)
@@ -103,8 +111,7 @@ class TestSecondaryDispatchTroBucketLanding:
 
     def test_strategy_is_hierarchical(self, hop_mod):
         # nv
-        hop2 = hop_mod.__dict__["hop2"]
-        assert hop2._state_row().index_plans_hierarchical
+        assert _row(hop_mod, "hop2", 4).index_plans_hierarchical
 
     def test_redispatch_lands_in_bucket(self, hop_mod):
         """Unbound start signals from the fallback; the updated args are

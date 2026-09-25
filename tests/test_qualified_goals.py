@@ -329,7 +329,7 @@ class TestQualifiedDottedParity:
         by_cell = [deref(X)
                    for _ in solve((":", EXPORTER, ("p", X)), mods.importer)]
         by_dotted = [deref(Y)
-                     for _ in solve(mods.importer_py.dotted_p(Y), mods.importer)]
+                     for _ in solve(("dotted_p", Y), mods.importer)]
         assert by_cell == by_dotted == [11, 12]
 
     def test_the_two_spellings_answer_alike_as_goal_nodes(self, mods):
@@ -387,10 +387,17 @@ class TestSolveModuleDesignator:
         unify(("p", Var()), inner.args[1], Trail())
         assert deref(Q) is Q
 
-    def test_a_class_term_goal_without_a_module_still_infers(self, mods):
-        """``_infer_module``'s legacy customers are untouched."""
+    def test_a_binding_built_goal_without_a_module_still_infers(self, mods):
+        """The goal built from a module BINDING -- a class term pre-flip (the
+        ``_infer_module`` legacy customer), the handle-headed cell post
+        W4b-2d -- still answers, with its module passed and without one (a
+        handle is its own module designator)."""
+        handle = mods.exporter_py.p
+        assert handle != "p"
         X = Var()
-        assert [deref(X) for _ in solve(mods.exporter_py.p(X), mods.exporter_py)] == [11, 12]
+        assert [deref(X) for _ in solve((handle, X), mods.exporter_py)] == [11, 12]
+        X = Var()
+        assert [deref(X) for _ in solve((handle, X))] == [11, 12]
 
     def test_infer_module_documents_that_cells_never_reach_it(self):
         from clausal.logic.solve import _infer_module

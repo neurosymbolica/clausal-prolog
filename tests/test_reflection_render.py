@@ -646,7 +646,7 @@ class TestComprehensions:
 
         result = Var()
         bindings = []
-        for _ in solve(module.sq([1, 2, 3], result), module):
+        for _ in solve(("sq", [1, 2, 3], result), module):
             bindings.append(deref(result))
 
         assert len(bindings) == 1, "the clause must yield exactly one solution"

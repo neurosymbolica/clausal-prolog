@@ -13,6 +13,15 @@ also pins that the class binding still answers (the population is not empty)
 and that a mangled DATA atom (``-hide``) is still not taken for a handle --
 the reason the accessor is ``is_declared_predicate_name``, never
 ``is_mangled``.
+
+Handle era (W4b-2d flip): the LOAD binds the handle now, so every
+``[class]`` arm is gone (after the flip it silently ran the handle again),
+and every stand-in that re-bound a name to its handle (``monkeypatch.setitem``
+of the handle, ``_inject(flip=...)``, the specializer's ``md[n] = handle``)
+became an assertion that the binding already IS the handle.  Where a test
+compared the handle's answer with the class's, the class's answer is pinned
+(captured under ``CLAUSAL_NO_FLIP=1`` on 9e6c2633).  The ``stale`` fixture's
+hand-built stale CLASS is gone with the class; its module keeps both rows.
 """
 from __future__ import annotations
 
@@ -96,12 +105,13 @@ last <- (1 > 0)
 
 @pytest.fixture
 def stale(tmp_path):
-    """A module whose ``last`` CLASS has STALE ``_fields``: it is authored as
-    ``last/0``, then a real ``assertz(last(1, 1))`` adds a ``last/2`` row and
-    the class is re-bound to it -- ``_fields == ()`` while the row (and its
-    clause heads) are ``last/2``.  ``last/2`` is also a BUILTIN, so a lookup
-    that trusts ``_fields`` hands the module's own predicate to the builtin.
-    (The staleness is what ``PredicateMeta._clause_arity`` exists for.)"""
+    """A module whose ``last`` is authored as ``last/0``, then a real
+    ``assertz(last(1, 1))`` adds a ``last/2`` row.  ``last/2`` is also a
+    BUILTIN, so a lookup that trusts the authored arity hands the module's
+    own predicate to the builtin.  (Class era: the class was then hand-bound
+    to the ``last/2`` row to make its ``_fields`` STALE.  Handle era: there
+    is no class to go stale; the binding is the handle, which names both
+    rows.)"""
     from clausal.terms import Compound
     name = f"w4b3stale_{next(_counter)}"
     p = tmp_path / f"{name}.clausal"
@@ -110,15 +120,9 @@ def stale(tmp_path):
     m = mod.__dict__["$module"]
     try:
         assert len(list(call("assertz", Compound("last", (1, 1)), module=m))) == 1
-        cls = m.module_dict["last"]
-        assert isinstance(cls, PredicateMeta)
-        # The assert no longer MOVES the class (fixed 2026-09-24,
-        # todo/done/zero-field-class-bound-to-another-aritys-row-crashes-call-
-        # 2026-09-24.md), so the stale state is built by hand: the guards
-        # under test must still handle a class whose row disagrees with it.
-        assert cls._row._key == ("last", 0), "the assert moved the class again"
-        cls._bind_row(m.db, "last", 2, authorized=True)
-        assert cls._fields == () and cls._row._key == ("last", 2)   # STALE
+        assert m.module_dict["last"] == mangle(m.name, "last")
+        assert m.db.row("last", 0) is not None
+        assert len(m.db.row("last", 2).clauses) == 1
         yield m
     finally:
         sys.modules.pop(name, None)
@@ -142,12 +146,12 @@ def _handle(lm, name):
     return h
 
 
-def _both(lm, name):
-    """(class binding today, handle binding post-flip), with the class
-    checked to be a class -- so the 'today' arm really is the class arm."""
-    cls = lm.module_dict[name]
-    assert isinstance(cls, PredicateMeta)
-    return cls, _handle(lm, name)
+def _bound_handle(lm, name):
+    """The module-dict binding for *name*, checked to be the handle the LOAD
+    bound (never set here)."""
+    h = _handle(lm, name)
+    assert lm.module_dict[name] == h, f"the load did not bind {name}'s handle"
+    return lm.module_dict[name]
 
 
 def _secret(lm):
@@ -175,16 +179,14 @@ class TestSolveCallPhase5:
         # today: the user's last/2 (one fact, last(1, 1)) answers
         assert len(list(call("last", 1, 1, module=lm))) == 1
         assert len(list(call("last", [5], 5, module=lm))) == 0
-        _, h = _both(lm, "last")
-        monkeypatch.setitem(lm.module_dict, "last", h)
+        _bound_handle(lm, "last")
         assert len(list(call("last", 1, 1, module=lm))) == 1
         # the builtin would say yes here; the user predicate says no
         assert len(list(call("last", [5], 5, module=lm))) == 0
 
     def test_ordinary_predicate_same_answer(self, lm, monkeypatch):
         assert len(list(call("is_pos", 3, module=lm))) == 1
-        _, h = _both(lm, "is_pos")
-        monkeypatch.setitem(lm.module_dict, "is_pos", h)
+        _bound_handle(lm, "is_pos")
         assert len(list(call("is_pos", 3, module=lm))) == 1
         assert len(list(call("is_pos", -3, module=lm))) == 0
 
@@ -199,15 +201,13 @@ class TestSolveCallPhase5:
     # below pins the refusal.  The class-era refusal ahead of a live answer
     # was an artefact of the predicate being a class.
 
-    @pytest.mark.parametrize("era", ["class", "handle"])
+    @pytest.mark.parametrize("era", ["handle"])  # the class era is gone
     def test_a_builtin_answers_at_another_arity(self, lm, owner, monkeypatch,
                                                  era):
         """``owner`` has a user ``last/1``; ``call("last", L, X)`` is
         ``last/2`` and reaches the builtin."""
         b = TestInjectResolvedTargets._owner_binding(owner, "last", era)
         assert len(list(call("last", 1, module=owner))) == 1   # last/1 is live
-        if era == "handle":
-            monkeypatch.setitem(owner.module_dict, "last", b)
         assert owner.module_dict["last"] is b
         x = Var()
         assert _answers("last", ([4, 5], x), owner, [x]) == [(5,)]
@@ -215,7 +215,7 @@ class TestSolveCallPhase5:
         assert len(list(call("last", 1, module=owner))) == 1
         assert len(list(call("last", 2, module=owner))) == 0
 
-    @pytest.mark.parametrize("era", ["class", "handle"])
+    @pytest.mark.parametrize("era", ["handle"])  # the class era is gone
     def test_the_local_row_answers_at_another_arity(self, lm, owner,
                                                      monkeypatch, era):
         """``lm`` binds ``ping`` to ``owner``'s ``ping/0``; ``lm``'s own
@@ -226,7 +226,7 @@ class TestSolveCallPhase5:
         assert len(list(call("ping", 1, 2, module=lm))) == 1
         assert len(list(call("ping", 1, 3, module=lm))) == 0
 
-    @pytest.mark.parametrize("era", ["class", "handle"])
+    @pytest.mark.parametrize("era", ["handle"])  # the class era is gone
     def test_the_local_row_beats_a_builtin_at_another_arity(
             self, lm, owner, monkeypatch, era):
         """Review round: ``lm`` binds ``last`` to ``owner``'s ``last/1`` and
@@ -238,15 +238,13 @@ class TestSolveCallPhase5:
         assert len(list(call("last", 1, 1, module=lm))) == 1
         assert len(list(call("last", [5], 5, module=lm))) == 0
 
-    @pytest.mark.parametrize("era", ["class", "handle"])
+    @pytest.mark.parametrize("era", ["handle"])  # the class era is gone
     def test_a_stale_fields_class_keeps_its_local_predicate(
             self, stale, monkeypatch, era):
         """Review round: the ``last`` class says ``/0`` but its clauses are
         ``/2``.  ``call("last", A, B)`` must reach the module's own ``last/2``,
         not the builtin ``last/2`` -- both eras (the handle is not stale)."""
-        if era == "handle":
-            monkeypatch.setitem(stale.module_dict, "last",
-                                _handle(stale, "last"))
+        assert stale.module_dict["last"] == _handle(stale, "last")
         assert len(list(call("last", 1, 1, module=stale))) == 1
         assert len(list(call("last", [5], 5, module=stale))) == 0
         assert len(list(call("last", module=stale))) == 1       # last/0
@@ -254,8 +252,7 @@ class TestSolveCallPhase5:
     def test_wrong_arity_still_refuses(self, lm, monkeypatch):
         with pytest.raises(PredicateArityMismatchError):
             list(call("is_pos", 1, 2, module=lm))
-        _, h = _both(lm, "is_pos")
-        monkeypatch.setitem(lm.module_dict, "is_pos", h)
+        _bound_handle(lm, "is_pos")
         # unconverted: KeyError "not defined in module"
         with pytest.raises(PredicateArityMismatchError):
             list(call("is_pos", 1, 2, module=lm))
@@ -268,27 +265,24 @@ class TestPhrase:
     """Unconverted, a handle rule reaches ``_resolve_nonterminal``, which
     answers None for an atom: phrase fails silently."""
 
-    @pytest.mark.parametrize("which", ["class", "handle"])
+    @pytest.mark.parametrize("which", ["handle"])  # the class era is gone
     def test_phrase_2(self, lm, which):
-        cls, h = _both(lm, "greeting")
-        rule = cls if which == "class" else h
+        rule = _bound_handle(lm, "greeting")
         assert len(list(call("phrase", rule, [mint("hi")], module=lm))) == 1
         assert len(list(call("phrase", rule, [mint("bye")], module=lm))) == 0
 
-    @pytest.mark.parametrize("which", ["class", "handle"])
+    @pytest.mark.parametrize("which", ["handle"])  # the class era is gone
     def test_phrase_3(self, lm, which):
-        cls, h = _both(lm, "greeting")
-        rule = cls if which == "class" else h
+        rule = _bound_handle(lm, "greeting")
         rest = Var()
         got = _answers("phrase", (rule, [mint("hi"), mint("x")], rest), lm, [rest])
         assert got == [([mint("x")],)]
 
-    @pytest.mark.parametrize("which", ["class", "handle"])
+    @pytest.mark.parametrize("which", ["handle"])  # the class era is gone
     def test_phrase_2_wrong_arity_refuses(self, lm, which):
         """``is_pos/1`` used as a nonterminal is called at 2 (S0, S): the
         refusal names the arity, in both eras."""
-        cls, h = _both(lm, "is_pos")
-        rule = cls if which == "class" else h
+        rule = _bound_handle(lm, "is_pos")
         with pytest.raises(PredicateArityMismatchError):
             list(call("phrase", rule, [mint("hi")], module=lm))
 
@@ -329,6 +323,28 @@ _LIST_CASES = [
 ]
 
 
+# What each list builtin answered for the CLASS binding (CLAUSAL_NO_FLIP=1,
+# 9e6c2633) -- the comparison the class arm used to make live.
+_CLASS_ERA_LIST_ANSWERS = {
+    'maplist/2': [()],
+    'maplist/3': [([10, 20],)],
+    'include/3': [([1, 2],)],
+    'exclude/3': [([-1],)],
+    'foldl/4': [(2,)],
+    'take_while/3': [([1, 2],)],
+    'drop_while/3': [([-1],)],
+    'span/4': [([1, 2], [-1])],
+    'group_by/3': [([[1], [2], [-1]],)],
+    'sort_by/3': [([-1, 1, 2],)],
+    'max_by/3': [(2,)],
+    'min_by/3': [(-1,)],
+    'filter_map/3': [([10, 20, 5],)],
+    'partition/4': [([1, 2], [-1])],
+    'tfilter/3': [([1, 2],)],
+    'tpartition/4': [([1, 2], [-1])],
+}
+
+
 def test_the_list_case_table_covers_all_sixteen_builtins():
     """Positive control on the population: 16 distinct builtin/arity pairs,
     each a registered builtin.  Since the aliased-import ruling (2026-09-24)
@@ -348,12 +364,17 @@ def test_the_list_case_table_covers_all_sixteen_builtins():
     "builtin,goal,inputs,n_out", _LIST_CASES,
     ids=[f"{b}/{1 + len(a) + n}" for b, _, a, n in _LIST_CASES])
 def test_list_builtin_answers_the_same_for_a_handle(lm, builtin, goal, inputs, n_out):
-    cls, h = _both(lm, goal)
-    outs = [Var() for _ in range(n_out)]
-    today = _answers(builtin, (cls, *inputs, *outs), lm, outs)
-    assert len(today) >= 1, "the class arm must answer, or the comparison is vacuous"
+    h = _bound_handle(lm, goal)
+    today = _CLASS_ERA_LIST_ANSWERS[f"{builtin}/{1 + len(inputs) + n_out}"]
+    assert len(today) >= 1, "the class answer must be non-empty, or the comparison is vacuous"
     outs = [Var() for _ in range(n_out)]
     assert _answers(builtin, (h, *inputs, *outs), lm, outs) == today
+
+
+def test_the_pinned_class_answers_cover_every_list_case():
+    """Positive control on the pinned population: one answer per case."""
+    keys = {f"{b}/{1 + len(a) + n}" for b, _, a, n in _LIST_CASES}
+    assert len(keys) == 16 and keys == set(_CLASS_ERA_LIST_ANSWERS)
 
 
 def test_a_data_atom_is_still_not_a_list_goal(lm):
@@ -368,27 +389,31 @@ def test_a_data_atom_is_still_not_a_list_goal(lm):
     assert tuple(exc.value.term.args[0].args[1].args) == ("secret", 1)
 
 
-@pytest.mark.parametrize("which", ["class", "handle"])
+@pytest.mark.parametrize("which", ["handle"])  # the class era is gone
 def test_time_goal_runs_a_handle(lm, which, capsys):
-    cls, h = _both(lm, "go")
-    goal = cls if which == "class" else h
+    goal = _bound_handle(lm, "go")
     assert len(list(call("time_goal", goal, module=lm))) == 1
     capsys.readouterr()   # time_goal's timing line
 
 
-@pytest.mark.parametrize("which", ["class", "handle"])
+@pytest.mark.parametrize("which", ["handle"])  # the class era is gone
 def test_time_goal_wrong_arity_still_refuses(lm, which):
     """greeting is arity 2 (a nonterminal); time_goal calls it at 0."""
-    cls, h = _both(lm, "greeting")
-    goal = cls if which == "class" else h
+    goal = _bound_handle(lm, "greeting")
     with pytest.raises(PredicateArityMismatchError):
         list(call("time_goal", goal, module=lm))
 
 
 def test_ensure_trampoline_dispatch_resolves_a_handle(lm):
     from clausal.logic.builtins._registry import _ensure_trampoline_dispatch
-    cls, h = _both(lm, "is_pos")
-    assert _ensure_trampoline_dispatch(h, 1) is _ensure_trampoline_dispatch(cls, 1)
+    from clausal.logic.solve import _drive_trampoline
+    from clausal.logic.variables import Trail
+    h = _bound_handle(lm, "is_pos")
+    fn = _ensure_trampoline_dispatch(h, 1)
+    # the class era's answer was the row's own dispatch (CLAUSAL_NO_FLIP=1)
+    assert fn is lm.db.get_dispatch("is_pos", 1) is lm.db.row("is_pos", 1).dispatch_fn
+    assert len(list(_drive_trampoline(fn, Trail(), 3))) == 1
+    assert len(list(_drive_trampoline(fn, Trail(), -3))) == 0
 
 
 def test_ensure_trampoline_dispatch_refuses_a_handle_without_an_arity(lm):
@@ -411,15 +436,17 @@ class TestInjectResolvedTargets:
 
     @staticmethod
     def _inject(lm, targets, flip=()):
+        """*flip* names the bindings the test relies on being handles; they
+        are ASSERTED (the load flipped them), never set here."""
         from clausal.logic.compiler.globals_env import _inject_resolved_targets
         globals_ = dict(lm.module_dict)
         for name in flip:
-            globals_[name] = _handle(lm, name)
+            assert globals_[name] == _handle(lm, name), name
         base_globals = dict(globals_)
         _inject_resolved_targets(set(targets), base_globals, lm.db, globals_)
         return base_globals
 
-    @pytest.mark.parametrize("flip", [(), ("last",)], ids=["class", "handle"])
+    @pytest.mark.parametrize("flip", [("last",)], ids=["handle"])
     def test_user_predicate_not_the_same_named_builtin(self, lm, flip):
         from clausal.logic.builtins import BuiltinPredicate
         from clausal.logic.predicate import _dispatch_at
@@ -428,12 +455,13 @@ class TestInjectResolvedTargets:
         bg = self._inject(lm, {("last", 2)}, flip)
         target = bg["last"]
         assert not isinstance(target, BuiltinPredicate)
-        assert target is (_handle(lm, "last") if flip else lm.module_dict["last"])
+        assert target is lm.module_dict["last"]
+        assert target == _handle(lm, "last")
         fn = _dispatch_at(target, 2)
         assert len(list(_drive_trampoline(fn, Trail(), 1, 1))) == 1
         assert len(list(_drive_trampoline(fn, Trail(), [5], 5))) == 0
 
-    @pytest.mark.parametrize("flip", [(), ("key",)], ids=["class", "handle"])
+    @pytest.mark.parametrize("flip", [("key",)], ids=["handle"])
     def test_locked_local_predicate_keeps_its_cached_dispatch(self, lm, flip):
         from clausal.logic.compiler.globals_env import _disp_key
         list(call("key", 1, Var(), module=lm))   # compile it
@@ -457,15 +485,13 @@ class TestInjectResolvedTargets:
 
     @staticmethod
     def _owner_binding(owner, name, era):
-        cls = owner.module_dict[name]
-        assert isinstance(cls, PredicateMeta)
-        if era == "class":
-            return cls
-        h = mangle(owner.name, name)
+        """*owner*'s binding for *name*: the handle its load bound."""
+        h = owner.module_dict[name]
+        assert h == mangle(owner.name, name), "the load did not bind the handle"
         assert is_declared_predicate_name(h)
         return h
 
-    @pytest.mark.parametrize("era", ["class", "handle"])
+    @pytest.mark.parametrize("era", ["handle"])  # the class era is gone
     def test_a_local_predicate_beats_an_owner_binding_at_another_arity(
             self, lm, owner, era):
         from clausal.logic.compiler.globals_env import (
@@ -488,7 +514,7 @@ class TestInjectResolvedTargets:
         fn = base_globals[_disp_key("ping", 2)]
         assert len(list(_drive_trampoline(fn, Trail(), 1, 2))) == 1
 
-    @pytest.mark.parametrize("era", ["class", "handle"])
+    @pytest.mark.parametrize("era", ["handle"])  # the class era is gone
     def test_a_local_row_beats_a_builtin_at_another_arity(self, lm, owner, era):
         """Review round: ``lm`` has its own ``last/2``; the binding is
         ``owner``'s ``last/1``.  The local row wins AHEAD of the builtin
@@ -508,7 +534,7 @@ class TestInjectResolvedTargets:
         assert len(list(_drive_trampoline(fn, Trail(), [5], 5))) == 0
 
     @pytest.mark.parametrize("order", ["1-then-2", "2-then-1"])
-    @pytest.mark.parametrize("era", ["class", "handle"])
+    @pytest.mark.parametrize("era", ["handle"])  # the class era is gone
     def test_one_clause_set_using_the_name_at_two_arities_and_as_a_term(
             self, lm, owner, era, order):
         """Roborev round 4 (MEDIUM): one clause set with
@@ -549,12 +575,10 @@ class TestInjectResolvedTargets:
         f2 = _site_dispatch(base_globals, "last", 2)
         assert len(list(_drive_trampoline(f2, Trail(), 1, 1))) == 1
         assert len(list(_drive_trampoline(f2, Trail(), [5], 5))) == 0
-        # r: the term last(1) still builds from the name key (class era: the
-        # class constructs it; handle era: the key is the handle, unchanged)
-        if era == "class":
-            assert base_globals["last"](1) == ("last", 1)
+        # r: the term last(1) still builds from the name key: the key is the
+        # handle, unchanged (the class era called the class to build it)
 
-    @pytest.mark.parametrize("era", ["class", "handle"])
+    @pytest.mark.parametrize("era", ["handle"])  # the class era is gone
     def test_a_stale_fields_class_is_not_shadowed_by_a_builtin(
             self, stale, era):
         """Review round: compile-time twin of the ``solve.call`` stale test.
@@ -566,8 +590,7 @@ class TestInjectResolvedTargets:
         from clausal.logic.solve import _drive_trampoline
         from clausal.logic.variables import Trail
         globals_ = dict(stale.module_dict)
-        if era == "handle":
-            globals_["last"] = _handle(stale, "last")
+        assert globals_["last"] == _handle(stale, "last")
         base_globals = dict(globals_)
         _inject_resolved_targets({("last", 2)}, base_globals, stale.db, globals_)
         assert base_globals["last"] is globals_["last"]  # round 4: name kept
@@ -575,7 +598,7 @@ class TestInjectResolvedTargets:
         assert len(list(_drive_trampoline(fn, Trail(), 1, 1))) == 1
         assert len(list(_drive_trampoline(fn, Trail(), [5], 5))) == 0
 
-    @pytest.mark.parametrize("era", ["class", "handle"])
+    @pytest.mark.parametrize("era", ["handle"])  # the class era is gone
     def test_a_builtin_beats_a_binding_at_another_arity(self, lm, owner, era):
         from clausal.logic.builtins import BuiltinPredicate
         from clausal.logic.compiler.globals_env import _inject_resolved_targets
@@ -594,7 +617,7 @@ class TestInjectResolvedTargets:
         assert len(list(_drive_trampoline(fn, Trail(), [4, 5], 5))) == 1
         assert len(list(_drive_trampoline(fn, Trail(), [4, 5], 4))) == 0
 
-    @pytest.mark.parametrize("era", ["class", "handle"])
+    @pytest.mark.parametrize("era", ["handle"])  # the class era is gone
     def test_the_other_arity_entry_caches_only_what_cannot_go_stale(
             self, lm, owner, monkeypatch, era):
         """Review round 5 (LOW 1): the ``$disp_`` entry resolves once and
@@ -643,7 +666,7 @@ class TestInjectResolvedTargets:
             assert len(list(_drive_trampoline(fn, Trail(), 1, 1))) == 1
         assert calls == [("last", 2)] * 3
 
-    @pytest.mark.parametrize("era", ["class", "handle"])
+    @pytest.mark.parametrize("era", ["handle"])  # the class era is gone
     def test_a_local_row_asserted_after_the_first_call_outranks_the_cached_builtin(
             self, owner, era):
         """Round 6 (LOW 1): the entry cached the builtin ``last/2`` on its
@@ -671,7 +694,7 @@ class TestInjectResolvedTargets:
         assert len(list(_drive_trampoline(fn, Trail(), [4, 5], 5))) == 0
         assert len(list(call("last", [4, 5], 5, module=owner))) == 0
 
-    @pytest.mark.parametrize("era", ["class", "handle"])
+    @pytest.mark.parametrize("era", ["handle"])  # the class era is gone
     def test_with_nothing_else_to_answer_the_arity_is_reported(
             self, lm, owner, era):
         """No builtin ping/2 and no ping/2 row in the compiling db: the
@@ -697,7 +720,7 @@ class TestInjectResolvedTargets:
         with pytest.raises(PredicateArityMismatchError, match="ping"):
             list(_drive_trampoline(fn, Trail(), 1, 2))
 
-    @pytest.mark.parametrize("era", ["class", "handle"])
+    @pytest.mark.parametrize("era", ["handle"])  # the class era is gone
     def test_a_binding_at_its_own_arity_is_still_accepted(self, lm, owner, era):
         from clausal.logic.compiler.globals_env import _inject_resolved_targets
         b = self._owner_binding(owner, "last", era)
@@ -706,7 +729,7 @@ class TestInjectResolvedTargets:
         _inject_resolved_targets({("last", 1)}, base_globals, owner.db, globals_)
         assert base_globals["last"] is b
 
-    @pytest.mark.parametrize("era", ["class", "handle"])
+    @pytest.mark.parametrize("era", ["handle"])  # the class era is gone
     def test_a_data_reference_keeps_the_binding(self, lm, owner, era):
         from clausal.logic.compiler.globals_env import _inject_resolved_targets
         b = self._owner_binding(owner, "ping", era)
@@ -715,7 +738,7 @@ class TestInjectResolvedTargets:
         _inject_resolved_targets({("ping", -1)}, base_globals, lm.db, globals_)
         assert base_globals["ping"] is b
 
-    @pytest.mark.parametrize("era", ["class", "handle"])
+    @pytest.mark.parametrize("era", ["handle"])  # the class era is gone
     def test_dotted_applied_at_another_arity_takes_the_attribute_walk(
             self, lm, owner, era):
         """The dotted key holds a /0 binding; the call is /2; the walk finds
@@ -727,7 +750,8 @@ class TestInjectResolvedTargets:
         list(call("ping", 1, 2, module=lm))   # compile it
         row = lm.db.row("ping", 2)
         assert row.locked and row.dispatch_fn is not None
-        attr = lm.module_dict["ping"] if era == "class" else _handle(lm, "ping")
+        attr = lm.module_dict["ping"]
+        assert attr == _handle(lm, "ping")
         globals_ = {"X": types.SimpleNamespace(ping=attr),
                     "X.ping": self._owner_binding(owner, "ping", era)}
         base_globals = dict(globals_)
@@ -735,7 +759,7 @@ class TestInjectResolvedTargets:
         assert base_globals["X.ping"] is attr
         assert base_globals.get(_disp_key("X.ping", 2)) is row.dispatch_fn
 
-    @pytest.mark.parametrize("era", ["class", "handle"])
+    @pytest.mark.parametrize("era", ["handle"])  # the class era is gone
     def test_dotted_sys_modules_route_at_another_arity(
             self, lm, owner, monkeypatch, era):
         """``owner.last`` is last/1; the call is /2.  No builtin is dotted, so
@@ -760,7 +784,7 @@ class TestInjectResolvedTargets:
         from clausal.logic.solve import _drive_trampoline
         from clausal.logic.variables import Trail
         b = self._owner_binding(owner, "last", era)
-        monkeypatch.setitem(sys.modules[owner.name].__dict__, "last", b)
+        assert sys.modules[owner.name].__dict__["last"] is b   # the load's flip
         dotted = f"{owner.name}.last"
         base_globals: dict = {}
         _inject_resolved_targets({(dotted, 2)}, base_globals, lm.db, {})
@@ -784,7 +808,7 @@ class TestInjectResolvedTargets:
     @pytest.mark.parametrize("targets", [(2,), (-1,), (2, -1)],
                              ids=["applied", "data", "both"])
     @pytest.mark.parametrize("route", ["dotted-key", "attr-walk", "sys-modules"])
-    @pytest.mark.parametrize("era", ["class", "handle"])
+    @pytest.mark.parametrize("era", ["handle"])  # the class era is gone
     def test_dotted_target(self, lm, monkeypatch, era, route, targets):
         from clausal.logic.builtins import BuiltinPredicate
         from clausal.logic.compiler.globals_env import (
@@ -794,9 +818,10 @@ class TestInjectResolvedTargets:
         row = lm.db.row("last", 2)
         assert row is not None and row.locked and row.dispatch_fn is not None
         pymod = sys.modules[lm.name]
-        binding = lm.module_dict["last"] if era == "class" else _handle(lm, "last")
-        # the module attribute IS the module dict entry: this is the flip
-        monkeypatch.setitem(pymod.__dict__, "last", binding)
+        binding = lm.module_dict["last"]
+        # the module attribute IS the module dict entry, flipped by the load
+        assert binding == _handle(lm, "last")
+        assert pymod.__dict__["last"] is binding
         dotted = f"{lm.name}.last"
         globals_ = {}
         if route in ("dotted-key", "attr-walk"):
@@ -828,13 +853,11 @@ class TestSpecializerSolveGoal:
     def _dispatcher(lm, era):
         from clausal.logic.specialization import _make_solve_goal_predicate
         md = dict(lm.module_dict)
-        if era == "handle":
-            for n in ("is_pos", "last"):
-                _both(lm, n)
-                md[n] = _handle(lm, n)
+        for n in ("is_pos", "last"):
+            assert md[n] == _bound_handle(lm, n)
         return _make_solve_goal_predicate("SG_w4b3", None, md)
 
-    @pytest.mark.parametrize("era", ["class", "handle"])
+    @pytest.mark.parametrize("era", ["handle"])  # the class era is gone
     def test_residual_goal_reaches_the_user_predicate(self, lm, era):
         sg = self._dispatcher(lm, era)
         assert len(list(call(sg, ["is_pos", 3]))) == 1
@@ -844,7 +867,7 @@ class TestSpecializerSolveGoal:
         assert len(list(call(sg, ["last", 1, 1]))) == 1
         assert len(list(call(sg, ["last", [5], 5]))) == 0
 
-    @pytest.mark.parametrize("era", ["class", "handle"])
+    @pytest.mark.parametrize("era", ["handle"])  # the class era is gone
     def test_wrong_arity_raises_in_both_eras(self, lm, era):
         """Both shapes resolve through ``_dispatch_at`` at the goal's arity,
         so both raise PredicateArityMismatchError (a TypeError subclass, so

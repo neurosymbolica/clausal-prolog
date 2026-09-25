@@ -33,7 +33,7 @@ from clausal.logic.database import (
     Clause, Database, PredRow, WRITE_LOAD_CLAUSES,
 )
 from clausal.logic.exceptions import LogicException
-from clausal.logic.predicate import make_predicate
+from clausal.logic.predicate import make_predicate, resolve_predicate_row
 from clausal.terms import Compound
 
 
@@ -99,7 +99,12 @@ def test_positive_control_the_fixture_pair_diverges():
     owner_row = owner_db.row("gd_p", 1)
     user_row = user_db.row("gd_p", 1)
     assert owner_row is not None and user_row is not None
-    assert cls._row is owner_row, "the shared class reads the OWNER's row"
+    # Post-flip the shared binding is a handle; the row it reads is the db's
+    # answer -- from the owner and from the importer alike.
+    assert resolve_predicate_row(cls, arity=1, db=owner_db) is owner_row, (
+        "the shared binding reads the OWNER's row")
+    assert resolve_predicate_row(user.gd_p, arity=1, db=user_db) is owner_row, (
+        "and so does the importer's binding")
     assert user_row is not owner_row, (
         "the fixture pair no longer diverges -- construct a different "
         "aliased-import scenario before trusting the tests below"

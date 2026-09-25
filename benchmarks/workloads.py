@@ -38,7 +38,7 @@ def bench_fib(n: int = 25) -> int:
     from clausal.logic.solve import solve
 
     F = Var()
-    for _ in solve(fib.fib(n, F), fib):
+    for _ in solve(("fib", n, F), fib):
         return int(deref(F))
     raise RuntimeError(f"fib({n}) produced no solutions")
 
@@ -55,7 +55,7 @@ def bench_nqueens(n: int = 8) -> int:
 
     count = 0
     QS = Var()
-    for _ in solve(nq.queens(n, QS), nq):
+    for _ in solve(("queens", n, QS), nq):
         count += 1
     return count
 
@@ -75,7 +75,7 @@ def bench_qsort(list_size: int = 20, reps: int = 200) -> int:
     result_len = 0
     for _ in range(reps):
         SORTED = Var()
-        for _ in solve(srt.qsort(lst, SORTED), srt):
+        for _ in solve(("qsort", lst, SORTED), srt):
             result_len = len(_deref_walk(deref(SORTED)))
             break
     return result_len
@@ -96,7 +96,7 @@ def bench_graph(reps: int = 500) -> int:
     total = 0
     for _ in range(reps):
         Y, PATH = Var(), Var()
-        for _ in solve(g.path(1, Y, PATH), g):
+        for _ in solve(("path", 1, Y, PATH), g):
             total += 1
     return total
 

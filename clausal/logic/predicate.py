@@ -2876,9 +2876,10 @@ def _handle_head_cell(handle: str, args: tuple, kwargs: dict,
     written arity, in written order, and the gate gives the verdict.
 
     Only at an arity the OWNER knows: that is a clause for the imported
-    predicate, which the gate refuses.  A head at another arity keeps the
-    arity error both eras raise today
-    (``test_an_imported_head_at_the_wrong_arity_raises_the_arity_error``).
+    predicate, which the gate refuses.  A head at another arity is the
+    importer's OWN predicate (the name + arity ruling; see
+    :func:`_foreign_head_verdict` and
+    ``test_an_imported_head_at_a_new_arity_builds_the_importers_own_predicate``).
     A head in the owner's own module, or with no module to tell (*home*
     carries no ``$module``), keeps every construction error.
 
@@ -2892,17 +2893,48 @@ def _handle_head_cell(handle: str, args: tuple, kwargs: dict,
     try:
         return _owner_head_cell(handle, args, dict(kwargs))
     except ClausalTermConstructionError:
-        if not _defers_to_the_gate(handle, home, len(args) + len(kwargs)):
+        verdict = _foreign_head_verdict(handle, home, len(args) + len(kwargs))
+        if verdict is None:
             raise
     functor = demangle(handle)[1]
     written = (*args, *kwargs.values())
+    if verdict == "local":
+        # The name + ARITY ruling (operator, 2026-09-24): a local ``p/2``
+        # beside an imported ``p/1`` LOADS -- a different predicate, this
+        # module's own.  The class era got there by the rewriter's guard
+        # re-minting a LOCAL class when the imported class's ``_fields`` did
+        # not match the head (``_make_functor_class_ast``); after the flip
+        # the binding is the owner's handle, the guard does not fire, and
+        # the owner's one signature would refuse the head.  Built at the
+        # written arity in written order -- the rewriter's field names for
+        # this head, which step 4 stamps on the LOCAL row
+        # (``HeadFieldNames``) -- and NOT recorded as deferred: no gate
+        # refusal is owed, the row is this module's.
+        #
+        # "Written order" is safe for keyword arguments too: the only
+        # keywords that reach a ``$head`` are the rewriter's own, derived
+        # from the head (``arg_0=``, ``colour=COLOUR``) and emitted in HEAD
+        # order.  A user-written keyword head (``p(b=1, a=2)``) is refused
+        # by the rewriter before the body runs, in both eras
+        # (``test_w4b2d_flip``: the keyword head and the differently-named
+        # heads cases).
+        return (functor, *written) if written else functor
     home.setdefault("$deferred_heads", set()).add((functor, len(written)))
     return (functor, *written) if written else functor
 
 
-def _defers_to_the_gate(handle: str, home: "dict | None", written: int) -> bool:
-    """True when the module *home* (a namespace) is not *handle*'s owner and
-    the head is written at an arity the owner knows.
+def _foreign_head_verdict(handle: str, home: "dict | None",
+                          written: int) -> "str | None":
+    """How :func:`_handle_head_cell` treats a head the owner's signature
+    refused, from ONE owner resolution:
+
+    * ``"defer"`` -- *home* is not the owner and the head is written at an
+      arity the owner knows: an importer's clause for the imported
+      predicate, which the load gate refuses;
+    * ``"local"`` -- *home* is not the owner and the owner does not know
+      the arity: the importer's OWN predicate (the name + arity ruling);
+    * ``None`` -- the owner's own module, or no module to tell: keep the
+      construction error.
 
     The owner is compared by DATABASE IDENTITY, with *home*'s db as the
     ruling-Q0 hint: ``_resolve_mangled_owner(handle, db=home_db)`` answers
@@ -2910,15 +2942,20 @@ def _defers_to_the_gate(handle: str, home: "dict | None", written: int) -> bool:
     a module, not a load, so a handle minted by an EARLIER load under the same
     module name (the twin-reload case) is, by ruling Q0, this module's own:
     it keeps its construction error, exactly as a local handle does."""
-    if home is None:
-        return False
-    home_db = namespace_db(home)
+    home_db = namespace_db(home) if home is not None else None
     if home_db is None:
-        return False
+        return None
     resolved = _resolve_mangled_owner(handle, db=home_db)
     if resolved is None or resolved[0] is home_db:
-        return False
-    return written in resolved[0].head_signatures(resolved[1])
+        return None
+    if written in resolved[0].head_signatures(resolved[1]):
+        return "defer"
+    return "local"
+
+
+def _defers_to_the_gate(handle: str, home: "dict | None", written: int) -> bool:
+    """True when :func:`_foreign_head_verdict` answers ``"defer"``."""
+    return _foreign_head_verdict(handle, home, written) == "defer"
 
 
 def _owner_head_cell(handle: str, args: tuple, kwargs: dict) -> Any:

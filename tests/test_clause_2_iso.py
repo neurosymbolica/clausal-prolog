@@ -548,9 +548,10 @@ def test_a_predicate_handle_head_resolves_in_its_module(lm, other):
 _OWNER = "tests.fixtures.gate_dyn_owner"
 _USER = "_clause2_gate_dyn_user"
 
-_ERAS = [pytest.param(f, p, id=f"{'flipped' if f else 'class'}-"
-                              f"{'popped' if p else 'loaded'}")
-         for f in (False, True) for p in (False, True)]
+# The flip (W4b-2d) binds an imported predicate to its owner's HANDLE; the
+# class era, and the stand-in flip this test used to apply by hand, are gone.
+_OWNER_STATES = [pytest.param(p, id="popped" if p else "loaded")
+                 for p in (False, True)]
 
 
 @pytest.fixture
@@ -572,20 +573,20 @@ def pair():
         sys.modules.pop(_OWNER, None)
 
 
-@pytest.mark.parametrize("flipped,owner_popped", _ERAS)
-def test_an_imported_dynamic_predicate_reads_the_owner_in_both_eras(
-        pair, flipped, owner_popped):
+@pytest.mark.parametrize("owner_popped", _OWNER_STATES)
+def test_an_imported_dynamic_predicate_reads_the_owner(pair, owner_popped):
+    """clause/2 through an -import_from'd -dynamic predicate reads the
+    OWNER's clauses, not the importer's empty local twin -- with the owner
+    loaded, and popped from sys.modules (the handle's own route lost)."""
     from clausal.logic.atoms import mangle
-    from clausal.logic.predicate import PredicateMeta
     from clausal.logic.solve import call
     owner, user = pair
     ulm = user.__dict__["$module"]
     next(call("gd_add", 42, module=ulm), None)
     assert len(owner.__dict__["$module"].db.row("gd_p", 1).clauses) == 2
     assert ulm.db.row("gd_p", 1).clauses == [], "no empty twin: no hazard"
-    if flipped:
-        assert isinstance(user.__dict__["gd_p"], PredicateMeta)
-        user.__dict__["gd_p"] = mangle(_OWNER, "gd_p")
+    # Positive control: the import really is bound to the owner's handle.
+    assert user.__dict__["gd_p"] == mangle(_OWNER, "gd_p")
     if owner_popped:
         sys.modules.pop(_OWNER, None)
     got = _clause(ulm, ("gd_p", Var()))

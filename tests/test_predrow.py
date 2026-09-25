@@ -849,12 +849,15 @@ def test_predicate_functor_names_says_predicate_and_the_database_agrees(
     row = db.row("pfn_greeting", 1)
     assert row is not None, "step 3 called it a predicate; the db has no row"
     assert len(row.clauses) == 1
-    # ... and the binding shape that answer produced is the class, reading
-    # through that very row.
-    cls = getattr(module, "pfn_greeting")
-    assert isinstance(cls, PredicateMeta)
-    assert cls._row is row
-    assert cls._state_row().clauses is row.clauses
+    # ... and the binding shape that answer produced is the predicate's
+    # HANDLE (W4b-2d; it was the class), resolving to that very row.
+    from clausal.logic.predicate import (
+        mint_predicate_handle, resolve_predicate_row,
+    )
+    binding = getattr(module, "pfn_greeting")
+    assert binding == mint_predicate_handle(db, "pfn_greeting")
+    assert resolve_predicate_row(binding, arity=1, db=db) is row
+    assert resolve_predicate_row(binding, arity=1, db=db).clauses is row.clauses
 
 
 def test_predicate_functor_names_says_data_and_the_database_agrees(
@@ -1099,21 +1102,23 @@ def test_low_level_db_assertz_is_refused_on_a_locked_static_predicate(
         f3_static(1)
         """,
     )
-    cls = getattr(module, "f3_static")
-    assert cls._state_row().locked is True, "step 7 must have locked it, or this pins nothing"
+    row = db.row("f3_static", 1)
+    assert row.locked is True, "step 7 must have locked it, or this pins nothing"
     assert _one_arg_answers(module, "f3_static") == [1]
 
     with pytest.raises(LogicException) as exc_info:
-        db.assertz(Clause(head=cls(2), body=[]))
+        db.assertz(Clause(head=("f3_static", 2), body=[]))
     assert "may not write f3_static/1" in str(exc_info.value.term.args[1])
 
-    assert len(cls._state_row().clauses) == 1, "nothing was written"
+    assert len(db.row("f3_static", 1).clauses) == 1, "nothing was written"
     assert _one_arg_answers(module, "f3_static") == [1], (
         "the answers did not move — this is the door Task 2 left open"
     )
-    # The enforcement doors the dual store never covered are still shut.
-    with pytest.raises(RuntimeError):
-        cls._assertz(Clause(head=cls(3), body=[]))
+    # The class-side door (``cls._assertz``) the dual store never covered
+    # does not exist post-flip: the module binding is a handle (a str), which
+    # carries no write channel of its own.
+    binding = getattr(module, "f3_static")
+    assert type(binding) is str and not hasattr(binding, "_assertz")
 
 
 # ── F4: retract/1's last-clause path must invalidate the dispatch ───────────
@@ -1140,19 +1145,18 @@ def test_retract_builtin_of_the_last_clause_leaves_no_answers(
         f4_fact(7)
         """,
     )
-    cls = getattr(module, "f4_fact")
     assert _one_arg_answers(module, "f4_fact") == [7]
 
-    assert _run_goal(module, "retract", cls(7)) == 1
+    assert _run_goal(module, "retract", ("f4_fact", 7)) == 1
     assert db.clauses_for("f4_fact", 1) == []
-    assert cls._state_row().clauses == []
+    assert db.row("f4_fact", 1).clauses == []
     assert _one_arg_answers(module, "f4_fact") == [], (
         "a retracted last clause must not keep answering from the stale "
         "dispatch it was compiled into"
     )
 
     # ... and the predicate comes back when a clause does.
-    assert _run_goal(module, "assertz", cls(9)) == 1
+    assert _run_goal(module, "assertz", ("f4_fact", 9)) == 1
     assert _one_arg_answers(module, "f4_fact") == [9]
 
 

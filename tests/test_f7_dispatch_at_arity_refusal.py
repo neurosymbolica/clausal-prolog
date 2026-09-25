@@ -81,7 +81,7 @@ def _numlist_answers(fn, *args):
     return [deref(out) for _ in _drive_trampoline(fn, Trail(), *args, out)]
 
 
-@pytest.mark.parametrize("era", ["class", "handle"])
+@pytest.mark.parametrize("era", ["handle"])  # W4b-2d: the class era is gone
 def test_wrong_arity_resolves_normally_to_the_builtin_at_the_call_arity(
         tmp_path, monkeypatch, era):
     """REVERSED by the name + ARITY ruling (operator, 2026-09-24).
@@ -98,15 +98,13 @@ def test_wrong_arity_resolves_normally_to_the_builtin_at_the_call_arity(
     arity_refusal`` above).  Both eras -- the class binding and the
     module-qualified handle -- must agree."""
     from clausal.logic.builtins._registry import _BUILTINS, _DB_BUILTINS
-    from clausal.logic.predicate import PredicateMeta
     assert ("numlist", 2) in _BUILTINS or ("numlist", 2) in _DB_BUILTINS
     mod = _load(tmp_path, monkeypatch, f"f7_shadow_{era}", """
         -module(f7_shadow_ERA, [numlist(A)])
         numlist(1),
     """.replace("ERA", era))
-    cls = mod.__dict__["$module"].module_dict["numlist"]
-    assert isinstance(cls, PredicateMeta)
-    target = cls if era == "class" else mangle(f"f7_shadow_{era}", "numlist")
+    target = mod.__dict__["$module"].module_dict["numlist"]
+    assert target == mangle(f"f7_shadow_{era}", "numlist")
     fn = _dispatch_at(target, 2)
     # the builtin numlist(High, List): numlist(3, L) gives L = [1, 2, 3]
     assert _numlist_answers(fn, 3) == [[1, 2, 3]]
@@ -120,7 +118,7 @@ def test_wrong_arity_resolves_normally_to_the_builtin_at_the_call_arity(
     assert len(list(_drive_trampoline(fn1, Trail(), 2))) == 0
 
 
-@pytest.mark.parametrize("era", ["class", "handle"])
+@pytest.mark.parametrize("era", ["handle"])  # W4b-2d: the class era is gone
 def test_wrong_arity_with_nothing_else_answering_still_refuses(
         tmp_path, monkeypatch, era):
     """The half of F7 the ruling keeps: ``pred/1`` called at 2, with no
@@ -133,15 +131,13 @@ def test_wrong_arity_with_nothing_else_answering_still_refuses(
     Name/CalledArity), Message)`` as well as a ``TypeError``
     (tests/test_arity_mismatch_is_iso_existence_error_both_eras.py).  It used to say "not an existence error" here."""
     from clausal.logic.builtins._registry import _BUILTINS, _DB_BUILTINS
-    from clausal.logic.predicate import PredicateMeta
     mod = _load(tmp_path, monkeypatch, f"f7_nothing_{era}", """
         -module(f7_nothing_ERA, [pred(A)])
         pred(1),
     """.replace("ERA", era))
     assert ("pred", 2) not in _BUILTINS and ("pred", 2) not in _DB_BUILTINS
-    cls = mod.__dict__["$module"].module_dict["pred"]
-    assert isinstance(cls, PredicateMeta)
-    target = cls if era == "class" else mangle(f"f7_nothing_{era}", "pred")
+    target = mod.__dict__["$module"].module_dict["pred"]
+    assert target == mangle(f"f7_nothing_{era}", "pred")
     with pytest.raises(PredicateArityMismatchError, match="takes 1 argument") as info:
         _dispatch_at(target, 2)
     formal = info.value.term.args[0]
@@ -149,7 +145,7 @@ def test_wrong_arity_with_nothing_else_answering_still_refuses(
     assert tuple(formal.args[1].args) == ("pred", 2)
 
 
-@pytest.mark.parametrize("era", ["class", "handle"])
+@pytest.mark.parametrize("era", ["handle"])  # W4b-2d: the class era is gone
 def test_wrong_arity_reaches_the_modules_own_row_at_the_call_arity(
         tmp_path, monkeypatch, era):
     """Name + ARITY ruling: a module's ``ping/0`` and its ``ping/2`` are two
@@ -164,7 +160,6 @@ def test_wrong_arity_reaches_the_modules_own_row_at_the_call_arity(
     one arity per file.)  The assertz RE-BINDS the ``ping`` class to the
     ``ping/2`` row, so the class-era ``ping/0`` call is the one the class-arm
     fallback has to rescue."""
-    from clausal.logic.predicate import PredicateMeta
     from clausal.logic.solve import _drive_trampoline, call as _call
     from clausal.logic.variables import Trail
     from clausal.terms import Compound
@@ -177,9 +172,9 @@ def test_wrong_arity_reaches_the_modules_own_row_at_the_call_arity(
     assert M.db.row("ping", 2) is None
     assert len(list(_call("assertz", Compound("ping", (1, 2)), module=M))) == 1
     assert len(M.db.row("ping", 2).clauses) == 1
-    cls = M.module_dict["ping"]
-    assert isinstance(cls, PredicateMeta) and cls._fields == ()
-    target = cls if era == "class" else mangle(name, "ping")
+    target = M.module_dict["ping"]
+    assert target == mangle(name, "ping")
+    assert M.db.row("ping", 0) is not None
     fn = _dispatch_at(target, 2)
     assert len(list(_drive_trampoline(fn, Trail(), 1, 2))) == 1
     assert len(list(_drive_trampoline(fn, Trail(), 1, 3))) == 0
@@ -187,29 +182,16 @@ def test_wrong_arity_reaches_the_modules_own_row_at_the_call_arity(
     assert len(list(_drive_trampoline(_dispatch_at(target, 0), Trail()))) == 1
 
 
-def _bind_imports_as_owner_handles(monkeypatch, owner):
-    """Emulate the handle era for ``-import_from`` (D1: an import binds the
-    OWNER's handle): after ``_process_imports`` runs, every name it bound to
-    one of *owner*'s predicate classes is re-bound to ``mangle(owner, name)``
-    -- dotted key and local (possibly aliased) name alike."""
-    import clausal.logic.compiler_v2 as cv
-    from clausal.logic.predicate import PredicateMeta
-    orig = cv._process_imports
-    seen = []
-
-    def flipped(items, module_dict, db=None):
-        orig(items, module_dict, db)
-        for k, v in list(module_dict.items()):
-            if (isinstance(v, PredicateMeta) and v._row is not None
-                    and v._row._db is owner.db):
-                module_dict[k] = mangle(owner.name, v._row._key[0])
-                seen.append(k)
-
-    monkeypatch.setattr(cv, "_process_imports", flipped)
-    return seen
+def _assert_import_bound_owner_handle(module, name, owner_name, functor):
+    """Ruling D1, done by the LOAD since the W4b-2d flip: the imported
+    *name* is bound to the owner's handle.  (This replaces the stand-in
+    ``_bind_imports_as_owner_handles``, which re-bound classes the load no
+    longer leaves -- after the flip it re-bound nothing.)"""
+    assert module.module_dict[name] == mangle(owner_name, functor), (
+        f"the load did not bind {name} to {owner_name}'s handle")
 
 
-@pytest.mark.parametrize("era", ["class", "handle"])
+@pytest.mark.parametrize("era", ["handle"])  # W4b-2d: the class era is gone
 def test_an_unqualified_call_at_another_arity_resolves_only_under_the_name_used(
         tmp_path, monkeypatch, era):
     """Operator ruling 2026-09-24 (closing the aliased-import leak): an
@@ -231,7 +213,7 @@ def test_an_unqualified_call_at_another_arity_resolves_only_under_the_name_used(
     * the imported arity ``nl(1)`` is untouched.
 
     Both eras: the handle era binds the import to the OWNER handle (D1)."""
-    from clausal.logic.predicate import PredicateMeta, is_declared_predicate_name
+    from clausal.logic.predicate import is_declared_predicate_name
     from clausal.logic.solve import _drive_trampoline, call as _call
     from clausal.logic.variables import Trail, Var, deref
     ow = _load(tmp_path, monkeypatch, f"f7_alow_{era}", """
@@ -239,8 +221,6 @@ def test_an_unqualified_call_at_another_arity_resolves_only_under_the_name_used(
         numlist(1),
     """.replace("ERA", era))
     O = ow.__dict__["$module"]
-    flipped = (_bind_imports_as_owner_handles(monkeypatch, O)
-               if era == "handle" else None)
     imp = _load(tmp_path, monkeypatch, f"f7_alim_{era}", """
         -module(f7_alim_ERA, [])
         -import_from(f7_alow_ERA, [alias(numlist, nl)])
@@ -250,12 +230,8 @@ def test_an_unqualified_call_at_another_arity_resolves_only_under_the_name_used(
     """.replace("ERA", era))
     I = imp.__dict__["$module"]
     b = I.module_dict["nl"]
-    if era == "class":
-        assert isinstance(b, PredicateMeta) and b._row._key == ("numlist", 1)
-    else:
-        assert "nl" in flipped, "the handle era must really be exercised"
-        assert b == mangle(f"f7_alow_{era}", "numlist")
-        assert is_declared_predicate_name(b)
+    _assert_import_bound_owner_handle(I, "nl", f"f7_alow_{era}", "numlist")
+    assert is_declared_predicate_name(b)
 
     def _sols(goal, *args):
         return [[deref(a) for a in args if isinstance(a, Var)]
@@ -274,14 +250,15 @@ def test_an_unqualified_call_at_another_arity_resolves_only_under_the_name_used(
     # qualified: the qualifier's module, under that name -> builtin numlist/2
     assert _sols("q", Var()) == [[[1, 2, 3]]]
     # held directly: the class and the owner handle resolve in the owner
-    for t in (O.module_dict["numlist"], mangle(f"f7_alow_{era}", "numlist")):
+    assert O.module_dict["numlist"] == mangle(f"f7_alow_{era}", "numlist")
+    for t in (O.module_dict["numlist"],):
         out = Var()
         got = [deref(out) for _ in
                _drive_trampoline(_dispatch_at(t, 2), Trail(), 3, out)]
         assert got == [[1, 2, 3]]
 
 
-@pytest.mark.parametrize("era", ["class", "handle"])
+@pytest.mark.parametrize("era", ["handle"])  # W4b-2d: the class era is gone
 def test_a_meta_call_through_an_unqualified_name_resolves_under_that_name(
         tmp_path, monkeypatch, capsys, era):
     """Roborev MEDIUM on the aliased-import ruling (2026-09-24): a META-call
@@ -303,8 +280,6 @@ def test_a_meta_call_through_an_unqualified_name_resolves_under_that_name(
         numlist(1),
     """.replace("ERA", era))
     O = ow.__dict__["$module"]
-    if era == "handle":
-        _bind_imports_as_owner_handles(monkeypatch, O)
     imp = _load(tmp_path, monkeypatch, f"f7_mc_im_{era}", """
         -module(f7_mc_im_ERA, [])
         -import_from(f7_mc_ow_ERA, [alias(numlist, nl)])
@@ -316,8 +291,7 @@ def test_a_meta_call_through_an_unqualified_name_resolves_under_that_name(
         mm1 <- maplist(nl, [1])
     """.replace("ERA", era))
     I = imp.__dict__["$module"]
-    if era == "handle":
-        assert I.module_dict["nl"] == mangle(f"f7_mc_ow_{era}", "numlist")
+    _assert_import_bound_owner_handle(I, "nl", f"f7_mc_ow_{era}", "numlist")
     for goal in ("m", "mm", "ph"):
         with pytest.raises(PredicateArityMismatchError, match=r"\bnl\b"):
             list(_call(goal, Var(), module=I))
@@ -331,12 +305,12 @@ def test_a_meta_call_through_an_unqualified_name_resolves_under_that_name(
     assert got == [[1, 2, 3]]
 
 
-@pytest.mark.parametrize("era", ["class", "handle"])
+@pytest.mark.parametrize("era", ["handle"])  # W4b-2d: the class era is gone
 def test_an_owner_arity_added_after_the_import_is_not_imported(
         tmp_path, monkeypatch, era):
     """Roborev LOW 1: the import binds ONE predicate.  ``alow`` gains a
     ``numlist/2`` row by ``assertz`` after ``alim`` imported ``numlist/1``
-    as ``nl``; ``nl(3, L)`` in ``alim`` still refuses in BOTH eras (the
+    as ``nl``; ``nl(3, L)`` in ``alim`` still refuses (the
     handle's owner would call itself a predicate at 2; the import record --
     the adopted rows -- says only 1 was imported).  Direct and through
     ``solve.call`` and a meta-call; the qualified reference sees the new
@@ -349,8 +323,6 @@ def test_an_owner_arity_added_after_the_import_is_not_imported(
         numlist(1),
     """.replace("ERA", era))
     O = ow.__dict__["$module"]
-    if era == "handle":
-        _bind_imports_as_owner_handles(monkeypatch, O)
     imp = _load(tmp_path, monkeypatch, f"f7_late_im_{era}", """
         -module(f7_late_im_ERA, [])
         -import_from(f7_late_ow_ERA, [alias(numlist, nl)])
@@ -358,6 +330,7 @@ def test_an_owner_arity_added_after_the_import_is_not_imported(
         m(L) <- call(nl, 3, L)
     """.replace("ERA", era))
     I = imp.__dict__["$module"]
+    _assert_import_bound_owner_handle(I, "nl", f"f7_late_ow_{era}", "numlist")
     assert len(list(_call("assertz", Compound("numlist", (3, "own")),
                           module=O))) == 1
     assert O.db.row("numlist", 2) is not None
@@ -373,7 +346,7 @@ def test_an_owner_arity_added_after_the_import_is_not_imported(
     assert got == ["own"]
 
 
-@pytest.mark.parametrize("era", ["class", "handle"])
+@pytest.mark.parametrize("era", ["handle"])  # W4b-2d: the class era is gone
 def test_an_imported_stale_class_does_not_answer_from_its_owner(
         tmp_path, monkeypatch, era):
     """Roborev LOW 2: ``_refuse_unqualified_other_arity``'s stale-``_fields``
@@ -381,8 +354,14 @@ def test_an_imported_stale_class_does_not_answer_from_its_owner(
     ``ping`` class goes stale AFTER the import (a runtime ``assertz(ping(1,
     2))`` re-binds it to the owner's ``ping/2`` row, ``_fields == ()``); the
     importer imported ``ping/0`` only, so ``ping(1, 2)`` there refuses -- it
-    must not answer from the owner's row.  Both eras."""
-    from clausal.logic.predicate import PredicateMeta
+    must not answer from the owner's row.
+
+    Handle era (W4b-2d flip): there is no class to go stale -- the owner's
+    binding is its handle, which names a MODULE, not a row -- so the
+    hand-built stale class (``cls._bind_row(..., "ping", 2)``) is gone with
+    it.  What remains is the property itself: after the owner gains
+    ``ping/2``, the importer (which imported ``ping/0`` only) still refuses
+    ``ping(1, 2)`` and does not answer from the owner's row."""
     from clausal.logic.solve import call as _call
     from clausal.terms import Compound
     ow = _load(tmp_path, monkeypatch, f"f7_st_ow_{era}", """
@@ -390,29 +369,22 @@ def test_an_imported_stale_class_does_not_answer_from_its_owner(
         ping <- (1 > 0)
     """.replace("ERA", era))
     O = ow.__dict__["$module"]
-    if era == "handle":
-        _bind_imports_as_owner_handles(monkeypatch, O)
     imp = _load(tmp_path, monkeypatch, f"f7_st_im_{era}", """
         -module(f7_st_im_ERA, [])
         -import_from(f7_st_ow_ERA, [ping])
     """.replace("ERA", era))
     I = imp.__dict__["$module"]
+    _assert_import_bound_owner_handle(I, "ping", f"f7_st_ow_{era}", "ping")
     assert len(list(_call("assertz", Compound("ping", (1, 2)), module=O))) == 1
-    cls = O.module_dict["ping"]
-    assert isinstance(cls, PredicateMeta)
-    # The assert no longer MOVES the class (fixed 2026-09-24, todo/done/
-    # zero-field-class-bound-to-another-aritys-row-crashes-call-2026-09-24.md);
-    # the stale state this pins is built by hand.
-    assert cls._row._key == ("ping", 0), "the assert moved the class again"
-    cls._bind_row(O.db, "ping", 2, authorized=True)
-    assert cls._fields == () and cls._row._key == ("ping", 2)   # STALE, owner's
+    assert O.module_dict["ping"] == mangle(f"f7_st_ow_{era}", "ping")
+    assert len(O.db.row("ping", 2).clauses) == 1   # the owner's row IS there
     with pytest.raises(PredicateArityMismatchError, match="ping"):
         list(_call("ping", 1, 2, module=I))
     assert len(list(_call("ping", module=I))) == 1             # ping/0 intact
     assert len(list(_call("ping", 1, 2, module=O))) == 1        # owner's own
 
 
-@pytest.mark.parametrize("era", ["class", "handle"])
+@pytest.mark.parametrize("era", ["handle"])  # W4b-2d: the class era is gone
 def test_an_unaliased_import_at_another_arity_resolves_under_its_own_name(
         tmp_path, monkeypatch, era):
     """The ruling's unaliased check: ``-import_from(alow, [numlist])`` then
@@ -424,8 +396,6 @@ def test_an_unaliased_import_at_another_arity_resolves_under_its_own_name(
         -module(f7_unal_ow_ERA, [numlist(A)])
         numlist(1),
     """.replace("ERA", era))
-    if era == "handle":
-        _bind_imports_as_owner_handles(monkeypatch, ow.__dict__["$module"])
     imp = _load(tmp_path, monkeypatch, f"f7_unal_im_{era}", """
         -module(f7_unal_im_ERA, [])
         -import_from(f7_unal_ow_ERA, [numlist])
@@ -433,8 +403,7 @@ def test_an_unaliased_import_at_another_arity_resolves_under_its_own_name(
         use1 <- numlist(1)
     """.replace("ERA", era))
     I = imp.__dict__["$module"]
-    if era == "handle":
-        assert I.module_dict["numlist"] == mangle(f"f7_unal_ow_{era}", "numlist")
+    _assert_import_bound_owner_handle(I, "numlist", f"f7_unal_ow_{era}", "numlist")
     out = Var()
     assert [deref(out) for _ in _call("use", out, module=I)] == [[1, 2, 3]]
     out = Var()
@@ -570,7 +539,7 @@ def test_the_aliased_spelling_of_a_double_import_resolves_under_the_alias(
         list(_call("v", Var(), module=I))
 
 
-@pytest.mark.parametrize("era", ["class", "handle"])
+@pytest.mark.parametrize("era", ["handle"])  # W4b-2d: the class era is gone
 def test_a_cell_named_by_an_aliased_owner_functor(
         tmp_path, monkeypatch, capsys, era):
     """Rounds 5-6.  A term built through an imported binding keeps the
@@ -603,8 +572,6 @@ def test_a_cell_named_by_an_aliased_owner_functor(
         -module(f7_pa_ow_ERA, [numlist(A)])
         numlist(1),
     """.replace("ERA", era))
-    if era == "handle":
-        _bind_imports_as_owner_handles(monkeypatch, ow.__dict__["$module"])
     imp = _load(tmp_path, monkeypatch, f"f7_pa_im_{era}", """
         -module(f7_pa_im_ERA, [])
         -import_from(f7_pa_ow_ERA, [alias(numlist, nl)])
@@ -615,6 +582,7 @@ def test_a_cell_named_by_an_aliased_owner_functor(
         two <- call(nl(2))
     """.replace("ERA", era))
     I = imp.__dict__["$module"]
+    _assert_import_bound_owner_handle(I, "nl", f"f7_pa_ow_{era}", "numlist")
     t = Var()
     assert [deref(t) for _ in _call("t", t, module=I)] == [("numlist", 3)]
     # the imported arity: remapped to the alias, the import answers
@@ -635,7 +603,7 @@ def test_a_cell_named_by_an_aliased_owner_functor(
     assert [deref(out) for _ in _call("mm", out, module=I)] == [[1, 2, 3]]
 
 
-@pytest.mark.parametrize("era", ["class", "handle"])
+@pytest.mark.parametrize("era", ["handle"])  # W4b-2d: the class era is gone
 def test_an_aliased_partial_application_at_the_imported_arity_runs(
         tmp_path, monkeypatch, era):
     """``call(dd(N, M))`` with ``alias(dec, dd)``: the cell is ``("dec", N,
@@ -648,19 +616,18 @@ def test_an_aliased_partial_application_at_the_imported_arity_runs(
         -module(f7_dd_ow_ERA, [dec(A, B)])
         dec(N, M) <- eval_(N - 1, M)
     """.replace("ERA", era))
-    if era == "handle":
-        _bind_imports_as_owner_handles(monkeypatch, ow.__dict__["$module"])
     imp = _load(tmp_path, monkeypatch, f"f7_dd_im_{era}", """
         -module(f7_dd_im_ERA, [])
         -import_from(f7_dd_ow_ERA, [alias(dec, dd)])
         c(M) <- call(dd(5, M))
     """.replace("ERA", era))
     I = imp.__dict__["$module"]
+    _assert_import_bound_owner_handle(I, "dd", f"f7_dd_ow_{era}", "dec")
     out = Var()
     assert [deref(out) for _ in _call("c", out, module=I)] == [4]
 
 
-@pytest.mark.parametrize("era", ["class", "handle"])
+@pytest.mark.parametrize("era", ["handle"])  # W4b-2d: the class era is gone
 def test_an_owner_arity_added_later_is_not_reachable_through_a_cell_goal(
         tmp_path, monkeypatch, era):
     """Review round 5 (MEDIUM 2, second half): ``_namespace_dispatch`` found
@@ -681,8 +648,6 @@ def test_an_owner_arity_added_later_is_not_reachable_through_a_cell_goal(
         pk(1),
     """.replace("ERA", era))
     O = ow.__dict__["$module"]
-    if era == "handle":
-        _bind_imports_as_owner_handles(monkeypatch, O)
     imp = _load(tmp_path, monkeypatch, f"f7_pk_im_{era}", """
         -module(f7_pk_im_ERA, [])
         -import_from(f7_pk_ow_ERA, [pk])
@@ -690,6 +655,7 @@ def test_an_owner_arity_added_later_is_not_reachable_through_a_cell_goal(
         one <- call(pk(1))
     """.replace("ERA", era))
     I = imp.__dict__["$module"]
+    _assert_import_bound_owner_handle(I, "pk", f"f7_pk_ow_{era}", "pk")
     assert len(list(_call("assertz", Compound("pk", (3, "own")), module=O))) == 1
     assert O.db.row("pk", 2) is not None
     with pytest.raises(PredicateArityMismatchError, match="pk takes 1"):

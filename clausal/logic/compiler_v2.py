@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import contextlib
 import importlib
+import os
 import warnings
 from typing import Any
 
@@ -501,6 +502,14 @@ def compile_module(
                 else:
                     pending[key] = None
 
+    # ── Step 4a-bis: THE FLIP (W4b-2d task 8) ────────────────────────────
+    #    Every predicate binding in the module dict becomes its mangled
+    #    HANDLE, before anything from step 4b on reads the dict.  The
+    #    classes step 4/4a bound stay alive in ``pending`` (step 5 hands them
+    #    to the compiler) and ``origins``; nothing reads them off the dict
+    #    again.  See ``_flip_bindings``.
+    _flip_bindings(module_dict, db)
+
     # ── Step 4b: validate directive targets (A12-F003) ───────────────────
     _validate_directive_targets(module_items, db, module_dict)
 
@@ -565,6 +574,11 @@ def compile_module(
     #    called.  Specialized predicates compile themselves internally.
     _run_specialization(module_items, predicate_nodes, module_dict, db)
 
+    # ── Step 6c: THE FLIP again -- ``-specialize`` re-binds classes ──────
+    #    ``_install_specialized`` binds the specialized predicate's CLASS
+    #    under its name at step 6b, after the first flip ran.
+    _flip_bindings(module_dict, db)
+
     # ── Step 7: Lock non-dynamic predicates ──────────────────────────────
     _lock_static_predicates(db)
 
@@ -576,6 +590,97 @@ def compile_module(
     register_handle_owner(db)
 
     return logic_module
+
+
+# ── W4b-2d task 8: THE FLIP ───────────────────────────────────────────────
+# ``CLAUSAL_NO_FLIP=1`` switches it off, for A/B runs only: the class era
+# is otherwise gone from the load path.  Read once at import.
+_FLIP = os.environ.get("CLAUSAL_NO_FLIP", "") in ("", "0")
+
+
+def _flip_owner(value: "PredicateMeta", db,
+                module_dict: dict) -> "tuple[Any, str] | None":
+    """``(owner_db, functor)`` the handle for the class *value* is minted
+    from (ruling X3: from a DATABASE, never from ``__module__``), or
+    ``None`` when *value* is not a Clausal database's predicate and must
+    stay bound AS IT IS.
+
+    * A class bound to a real row names its owner through the row (ruling
+      D1: an ``-import_from``'d class is bound to the EXPORTER's row, so an
+      import binds the owner's handle, and an aliased import binds it under
+      the alias with the owner's functor).
+    * A class on no row whose ``__module__`` is a LOADED Clausal module:
+      that module's db.
+    * A class on no row minted by THIS module's body (``__module__`` is the
+      compiling module -- a clause-less ``-dynamic`` under option D, a
+      declared name with no clauses), or one this db already holds a row or
+      a ``-dynamic`` mark for at the class's arity (a step-1c ``-specialize``
+      target, minted by ``make_predicate`` in ``clausal.logic.predicate``
+      but row-planted by ruling QB): the compiling db.
+    * Anything else -- a class a plain PYTHON module exports
+      (``-import_from(py_mod, [p])``), a ``make_predicate`` class compiled
+      with ``db=None`` onto its private row -- has no Database a handle
+      could name.  Its own ``_get_dispatch()`` is what answers it (the
+      frozen duck-typed protocol), so it is left bound: a handle minted
+      from the compiling db would name a predicate that db does not have,
+      and every call through it would be ``PredicateNotFoundError``
+      (roborev, 2026-09-25).
+    """
+    row = value.__dict__.get("_row")
+    if row is not None and not row.detached:
+        return row.db, row.key[0]
+    functor = value.__name__
+    origin = getattr(value, "__module__", None)
+    if origin and origin not in (db.module_name(),
+                                 module_dict.get("__name__")):
+        owner = _db_for_module_name(origin)
+        if owner is not None:
+            return owner, functor
+    elif origin:
+        return db, functor
+    fields = value.__dict__.get("_fields")
+    if fields is not None:
+        arity = len(fields)
+        if db.row(functor, arity) is not None or db.is_dynamic(functor, arity):
+            return db, functor
+    return None
+
+
+def _flip_bindings(module_dict: dict, db) -> None:
+    """THE FLIP (W4b-2d task 8): rebind every ``PredicateMeta`` value in
+    *module_dict* to ``mint_predicate_handle(owner_db, functor)``.
+
+    Runs twice in ``compile_module``: after step 4a (every class step 4/4a
+    bound is on its row, so the owner is readable), and after step 6b,
+    because ``-specialize`` installs a class at 6b.  ``$``-names are the
+    engine's own runtime bindings, never a predicate the user named, and
+    are left alone.  An owner that belongs to no module (``<anonymous>``)
+    cannot own a handle (``mint_predicate_handle`` refuses it); the handle
+    is then minted from the compiling db, the X3 fallback.
+
+    Also registers *db* as a handle owner (ruling Q0) right away: a handle
+    minted here may be RUN before ``compile_module`` returns (a
+    ``-specialize`` source program at step 6b, an ``-initialization`` goal),
+    and the end-of-load registration would be too late for a module the
+    caller never put in ``sys.modules``.  Idempotent and weak.
+    """
+    if not _FLIP:
+        return
+    from clausal.logic.predicate import (  # noqa: PLC0415
+        mint_predicate_handle, register_handle_owner)
+    register_handle_owner(db)
+    for key, value in list(module_dict.items()):
+        if not isinstance(value, PredicateMeta) or key.startswith("$"):
+            continue
+        found = _flip_owner(value, db, module_dict)
+        if found is None:
+            continue
+        owner, functor = found
+        try:
+            handle = mint_predicate_handle(owner, functor)
+        except ValueError:
+            handle = mint_predicate_handle(db, functor)
+        module_dict[key] = handle
 
 
 _IMPORT_PLACEHOLDER = "_clausal_import_placeholder"

@@ -14,6 +14,15 @@ it: load the owner for real, then replace its module attribute with
 ``mint_predicate_handle(owner_db, name)`` so the importer's ``-import_from``
 binds the handle.  Every comparison also asserts that the class era answers
 at all, so a check that quietly agrees with itself cannot pass.
+
+Handle era (W4b-2d flip): the LOAD binds the handle now, so the stand-in
+``_flip`` (which asserted a class and re-bound it) is gone, and the class
+side of every class-vs-handle comparison is replaced by the value the
+class era answered, captured under ``CLAUSAL_NO_FLIP=1`` on 9e6c2633 and
+pinned here -- so each check still compares the handle against something
+other than itself.  The wrong-arity import test, which waited on an
+operator decision, was re-pinned 2026-09-25 to the name + arity ruling
+(``test_an_imported_head_at_a_new_arity_builds_the_importers_own_predicate``).
 """
 
 from __future__ import annotations
@@ -28,15 +37,12 @@ import clausal.import_hook  # noqa: F401 -- installs the meta-path finder
 from clausal.import_hook import _load_module
 from clausal.logic.atoms import mangle
 from clausal.logic.predicate import (
-    AmbiguousArityConstructionError, ClausalTermConstructionError, PredicateMeta, field_names_for, head_cell,
+    AmbiguousArityConstructionError, ClausalTermConstructionError, field_names_for, head_cell,
     mint_predicate_handle, resolve_predicate_row,
 )
 from clausal.logic.variables import Var, deref
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
-ERAS = ("class", "handle")
-
-
 # ── the end-to-end loads: an importer's head names an imported predicate ────
 
 
@@ -58,32 +64,27 @@ def fixture_modules():
     sys.modules.update(saved)
 
 
-def _flip(owner, name, arity):
-    """Rebind *owner*'s attribute *name* to its predicate HANDLE."""
-    cls = owner.__dict__[name]
-    assert isinstance(cls, PredicateMeta), "the class era precondition"
-    row = resolve_predicate_row(cls, arity=arity)
-    db = row.db if row is not None else owner.__dict__["$module"].db
-    owner.__dict__[name] = mint_predicate_handle(db, name)
-    return owner.__dict__[name]
-
-
 def _load_importer(load, era, owner_stem, name, arity, importer_stem):
+    """Load *owner_stem*, assert the LOAD bound *name* to its handle (the
+    handle era's precondition; nothing here sets it), then the importer.
+    *era* is not consulted: there is no class era to select."""
     for k in [k for k in sys.modules if k.startswith("tests.fixtures.")]:
         del sys.modules[k]
     owner = load(owner_stem)
-    if era == "handle":
-        handle = _flip(owner, name, arity)
-        assert type(handle) is str and handle == mangle(
-            f"tests.fixtures.{owner_stem}", name)
+    handle = owner.__dict__[name]
+    assert type(handle) is str and handle == mangle(
+        f"tests.fixtures.{owner_stem}", name), "the load did not bind the handle"
+    row = resolve_predicate_row(handle, arity=arity,
+                                db=owner.__dict__["$module"].db)
+    assert row is None or row.key == (name, arity)
     return load(importer_stem)
 
 
-@pytest.mark.parametrize("era", ERAS)
 @pytest.mark.parametrize("importer", ["impclob_redefine",
                                       "impclob_alias_redefine"])
 def test_a_head_naming_an_imported_predicate_reaches_the_gate(
-        fixture_modules, era, importer):
+        fixture_modules, importer):
+    era = "handle"
     """The gate's clobber refusal, not ``'str' object is not callable``."""
     with pytest.raises(SyntaxError) as exc_info:
         _load_importer(fixture_modules, era, "impclob_owner",
@@ -95,32 +96,42 @@ def test_a_head_naming_an_imported_predicate_reaches_the_gate(
     assert "not callable" not in msg
 
 
-@pytest.mark.parametrize("era", ERAS)
-def test_an_imported_head_at_the_wrong_arity_raises_the_arity_error(
-        fixture_modules, era):
-    """``impord_narrow(ok, [])`` against an imported ``impord_narrow/1``: the
-    class constructor's arity check, answered in both eras by
-    ``build_term_cell``."""
-    with pytest.raises(ClausalTermConstructionError) as exc_info:
-        _load_importer(fixture_modules, era, "impord_arity_vocab",
-                       "impord_narrow", 1, "impord_arity_clash")
-    msg = str(exc_info.value)
-    assert "impord_narrow/1" in msg
-    assert "2 positional argument(s)" in msg
-    assert "exactly one arity" in msg
-    assert "impord_arity_clash.clausal:" in msg      # constructed at
-    if era == "class":
-        # The declaration SITE lives only on the class (todo: declaration
-        # site); a handle's "registered by" reads <unknown> until it moves.
-        assert "impord_arity_vocab.clausal:" in msg
+def test_an_imported_head_at_a_new_arity_builds_the_importers_own_predicate(
+        fixture_modules):
+    """``impord_narrow(ok, [])`` against an imported ``impord_narrow/1``:
+    the head builds the IMPORTER's own ``impord_narrow/2`` and the load goes
+    through; the owner's ``impord_narrow/1`` is untouched.
+
+    Re-pinned 2026-09-25 to the operator's name + arity ruling (2026-09-24:
+    "a local p/2 beside an imported p/1 LOADS"; ``predicate.
+    _foreign_head_verdict`` -> ``"local"``).  Until then this test was
+    ``test_an_imported_head_at_the_wrong_arity_raises_the_arity_error`` and
+    pinned the owner's arity error in a [class] and a [handle] arm; the
+    class arm is gone with the class era, as in the rest of this file."""
+    from clausal.logic.solve import call
+    from clausal.logic.variables import walk
+    mod = _load_importer(fixture_modules, "handle", "impord_arity_vocab",
+                         "impord_narrow", 1, "impord_arity_clash")
+    lm = mod.__dict__["$module"]
+    owner_db = sys.modules["tests.fixtures.impord_arity_vocab"].__dict__[
+        "$module"].db
+    s, c = Var(), Var()
+    assert [(walk(deref(s)), walk(deref(c)))
+            for _ in call("impord_narrow", s, c, module=lm)] == [("ok", [])]
+    assert lm.db.row("impord_narrow", 2) is not None
+    assert owner_db.row("impord_narrow", 2) is None
+    assert owner_db.head_signatures("impord_narrow") == {1: ("ONLY",)}
+    x = Var()
+    assert [walk(deref(x))
+            for _ in call("impord_narrow", x, module=lm)] == ["solo"]
 
 
-@pytest.mark.parametrize("era", ERAS)
 def test_implementing_a_declared_only_predicate_reaches_the_vocabulary_drop(
-        fixture_modules, era):
+        fixture_modules):
     """Declare-then-import-then-define against a FIELDED declaration: the
     vocabulary drop's refusal (0c8f5839), in both eras -- not a TypeError
     from calling a str at the head."""
+    era = "handle"
     with pytest.raises(SyntaxError) as exc_info:
         _load_importer(fixture_modules, era, "fnmismatch_schema",
                        "fnm_verdict", 2, "fnmismatch_use")
@@ -130,13 +141,11 @@ def test_implementing_a_declared_only_predicate_reaches_the_vocabulary_drop(
     assert "only declares fnm_verdict/2" in msg
 
 
-@pytest.mark.parametrize("era", ERAS)
-def test_implementing_an_arity_only_export_loads_in_both_eras(
-        fixture_modules, era):
+def test_implementing_an_arity_only_export_loads(fixture_modules):
     """``impclob_verdict/2`` is a bare export entry (the ``gv_free`` idiom
     the vocabulary drop keeps): the importer's head is BUILT, not called,
-    and the load goes through in both eras."""
-    mod = _load_importer(fixture_modules, era, "impclob_decl_vocab",
+    and the load goes through."""
+    mod = _load_importer(fixture_modules, "handle", "impclob_decl_vocab",
                          "impclob_verdict", 2, "impclob_implements")
     assert mod is not None
 
@@ -177,9 +186,11 @@ def _db(owner):
 
 
 def _both(owner, name):
-    cls = owner.__dict__[name]
-    assert isinstance(cls, PredicateMeta), name
-    return {"class": cls, "handle": mint_predicate_handle(_db(owner), name)}
+    """The owner's binding for *name*: the handle the LOAD bound (asserted).
+    The class entry is gone with the class era."""
+    binding = owner.__dict__[name]
+    assert binding == mint_predicate_handle(_db(owner), name), name
+    return {"handle": binding}
 
 
 def _shape(term):
@@ -202,10 +213,37 @@ def _without_registered_by(msg):
     ("q", (), {"B": 8}, ("q", "<var>", 8)),
     ("q", (7, 8), {}, ("q", 7, 8)),
 ])
-def test_the_same_cell_in_both_eras(owner, name, args, kwargs, expected):
+def test_the_same_cell_as_the_class_built(owner, name, args, kwargs, expected):
     built = {era: _shape(head_cell(b, *args, **dict(kwargs)))
              for era, b in _both(owner, name).items()}
-    assert built == {"class": expected, "handle": expected}
+    assert built == {"handle": expected}
+
+
+# What the CLASS raised for each construction (CLAUSAL_NO_FLIP=1, 9e6c2633):
+# the message's first two lines and the error's fields.  The class and the
+# handle answered identically then; the handle must still answer this.
+_CLASS_ERA_ERRORS = {
+    ("p", (1, 2), ()): (
+        "functor p/1 was constructed with 2 positional argument(s)\n"
+        "but its class was registered with 1 field(s) (A)",
+        "p", 1, ("A", "arg_1"), ("A",)),
+    ("q", (1, 2, 3), ()): (
+        "functor q/2 was constructed with 3 positional argument(s)\n"
+        "but its class was registered with 2 field(s) (A, B)",
+        "q", 2, ("A", "B", "arg_2"), ("A", "B")),
+    ("q", (7,), ()): (
+        "functor q/2 was constructed with 1 positional argument(s)\n"
+        "but its class was registered with 2 field(s) (A, B)",
+        "q", 2, ("A",), ("A", "B")),
+    ("q", (), (("C", 1),)): (
+        "functor q/2 was constructed with field names (C)\n"
+        "but its class was registered with (A, B)",
+        "q", 2, ("C",), ("A", "B")),
+    ("q", (1,), (("arg_1", 1),)): (
+        "functor q/2 was constructed with 1 positional argument(s)\n"
+        "but its class was registered with 2 field(s) (A, B)",
+        "q", 2, ("A", "arg_1"), ("A", "B")),
+}
 
 
 @pytest.mark.parametrize("name,args,kwargs", [
@@ -215,21 +253,24 @@ def test_the_same_cell_in_both_eras(owner, name, args, kwargs, expected):
     ("q", (), {"C": 1}),                   # a field it does not have
     ("q", (1,), {"arg_1": 1}),             # placeholder spelling
 ])
-def test_the_same_construction_error_in_both_eras(owner, name, args, kwargs):
+def test_the_same_construction_error_as_the_class_raised(owner, name, args, kwargs):
     msgs = {}
     for era, binding in _both(owner, name).items():
         with pytest.raises(ClausalTermConstructionError) as exc_info:
             head_cell(binding, *args, **dict(kwargs))
         exc = exc_info.value
-        msgs[era] = (_without_registered_by(str(exc)), exc.functor,
+        text = _without_registered_by(str(exc))
+        assert f"constructed at: {__file__}:" in text, text
+        msgs[era] = ("\n".join(text.splitlines()[:2]), exc.functor,
                      exc.arity, exc.supplied_fields, exc.registered_fields)
-    assert msgs["class"] == msgs["handle"]
+    assert msgs == {"handle": _CLASS_ERA_ERRORS[
+        (name, args, tuple(kwargs.items()))]}
 
 
 def test_a_zero_arity_head_is_the_atom_of_its_name(owner):
     both = _both(owner, "z")
-    assert head_cell(both["class"]) is both["class"]    # unchanged
-    assert head_cell(both["handle"]) == "z"             # the atom IS the str
+    # (the class returned ITSELF here; post-flip the atom IS the str)
+    assert head_cell(both["handle"]) == "z"
 
 
 def test_arity_only_placeholders_are_answered_for_a_handle(owner):
@@ -239,7 +280,6 @@ def test_arity_only_placeholders_are_answered_for_a_handle(owner):
     for name, arity in (("dx", 1), ("e", 2)):
         both = _both(owner, name)
         placeholders = tuple(f"arg_{i}" for i in range(arity))
-        assert both["class"]._fields == placeholders
         assert db.placeholder_fields(name, arity) == placeholders
         assert field_names_for(both["handle"], arity=arity) == placeholders
         assert field_names_for(both["handle"]) == placeholders
@@ -248,8 +288,7 @@ def test_arity_only_placeholders_are_answered_for_a_handle(owner):
         # a plain name keeps its old answer
         assert field_names_for(name, arity=arity, db=db) is None
         kw = {placeholders[-1]: 5}
-        assert (_shape(head_cell(both["class"], **dict(kw)))
-                == _shape(head_cell(both["handle"], **dict(kw)))
+        assert (_shape(head_cell(both["handle"], **dict(kw)))
                 == (name, *(["<var>"] * (arity - 1)), 5))
 
 
@@ -264,7 +303,6 @@ def test_after_a_clause_the_handle_answers_the_heads_names(
     stamps them as the row's signature -- which the handle reads first."""
     db = _db(owner)
     both = _both(owner, name)
-    assert both["class"]._fields == derived            # the class era
     assert db.row(name, arity).signature == derived     # what the handle reads
     assert db.placeholder_fields(name, arity) is None
     assert field_names_for(both["handle"], arity=arity) == derived
@@ -275,7 +313,7 @@ def test_after_a_clause_the_handle_answers_the_heads_names(
     kw = {derived[-1]: 9}
     built = {era: _shape(head_cell(b, **dict(kw)))
              for era, b in both.items()}
-    assert built["class"] == built["handle"] == (
+    assert built["handle"] == (
         name, *(["<var>"] * (arity - 1)), 9)
     for binding in both.values():
         with pytest.raises(ClausalTermConstructionError):
@@ -317,7 +355,7 @@ def test_by_name_at_several_arities_answers_nothing_for_a_handle(owner):
     assert field_names_for(handle, arity=2) == ("u", "v")
     # a fielded declaration still answers by name, as the class does
     both = _both(owner, "m")
-    assert field_names_for(both["handle"]) == both["class"]._fields == ("A",)
+    assert field_names_for(both["handle"]) == ("A",)   # the class's _fields
 
 
 def test_a_handle_naming_nothing_raises_loudly(owner):
