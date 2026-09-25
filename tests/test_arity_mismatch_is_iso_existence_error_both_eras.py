@@ -17,8 +17,10 @@ is its context) and a ``TypeError`` (ADD, not replace: ``except TypeError``,
 ``except PredicateArityMismatchError`` and a ``++TypeError`` catcher keep
 working).
 
-Both eras: the class binding and the module-qualified handle (emulated the
-way ``tests/test_f7_dispatch_at_arity_refusal.py`` does).
+Handle era (W4b-2d flip): the load binds the module-qualified handle
+itself, so the class arm and the stand-in ``_bind_imports_as_owner_handles``
+(which re-bound classes the load no longer leaves -- after the flip it
+re-bound nothing) are gone.  ``pair`` asserts the handles it depends on.
 """
 from __future__ import annotations
 
@@ -46,25 +48,6 @@ def _load(tmp_path, monkeypatch, name, body):
     return mod
 
 
-def _bind_imports_as_owner_handles(monkeypatch, owner):
-    """The handle era for ``-import_from`` (D1: an import binds the OWNER's
-    handle) -- the same emulation as test_f7_dispatch_at_arity_refusal.py."""
-    import clausal.logic.compiler_v2 as cv
-    orig = cv._process_imports
-    seen = []
-
-    def flipped(items, module_dict, db=None):
-        orig(items, module_dict, db)
-        for k, v in list(module_dict.items()):
-            if (isinstance(v, PredicateMeta) and v._row is not None
-                    and v._row._db is owner.db):
-                module_dict[k] = mangle(owner.name, v._row._key[0])
-                seen.append(k)
-
-    monkeypatch.setattr(cv, "_process_imports", flipped)
-    return seen
-
-
 def _assert_iso(term, name, arity):
     """``error(existence_error(procedure, Name/Arity), Context)``."""
     assert isinstance(term, Compound) and term.functor == "error", term
@@ -78,9 +61,9 @@ def _assert_iso(term, name, arity):
     assert f"{name} takes 1 argument, but this call passes {arity}" in term.args[1]
 
 
-@pytest.fixture(params=["class", "handle"])
-def pair(request, tmp_path, monkeypatch):
-    era = request.param
+@pytest.fixture
+def pair(tmp_path, monkeypatch):
+    era = "handle"
     ow = _load(tmp_path, monkeypatch, f"aie_ow_{era}", """
         -module(aie_ow_ERA, [pk(A), local_goal(PI), local_call(PI)])
         -private([procedure])
@@ -89,8 +72,8 @@ def pair(request, tmp_path, monkeypatch):
         local_call(PI) <- catch(call(pk(3), _X), error(existence_error(procedure, PI), _), True)
     """.replace("ERA", era))
     O = ow.__dict__["$module"]
-    seen = (_bind_imports_as_owner_handles(monkeypatch, O)
-            if era == "handle" else None)
+    assert O.module_dict["pk"] == mangle(f"aie_ow_{era}", "pk"), (
+        "the load did not bind the owner's own handle")
     imp = _load(tmp_path, monkeypatch, f"aie_im_{era}", """
         -module(aie_im_ERA, [])
         -import_from(aie_ow_ERA, [pk])
@@ -102,9 +85,8 @@ def pair(request, tmp_path, monkeypatch):
         by_type(E) <- catch(pk(3, _X), ++TypeError, E is caught)
     """.replace("ERA", era))
     I = imp.__dict__["$module"]
-    if era == "handle":
-        assert "pk" in seen, "the handle era must really be exercised"
-        assert I.module_dict["pk"] == mangle(f"aie_ow_{era}", "pk")
+    assert I.module_dict["pk"] == mangle(f"aie_ow_{era}", "pk"), (
+        "the load did not bind the import to the owner's handle")
     return era, O, I
 
 
@@ -126,13 +108,9 @@ def test_catch_3_catches_the_iso_term_in_the_importer(pair, goal):
 def test_a_dotted_qualified_goal_reaches_the_handle_arm(tmp_path, monkeypatch):
     """PATH pin for ``owner.pk(3, _)`` in the handle era.
 
-    ``pair``'s handle era flips only the IMPORTER's ``-import_from`` binding,
-    so its ``by_qual`` still reads the OWNER's attribute -- a class, baked
-    into the compiled body at the importer's compile time -- and is refused
-    by ``_dispatch_at``'s CLASS arm (``_refuse_call_at``): an outcome-only
-    pin that never touches the handle arm.  Here the owner's own attribute is
-    the handle (what it becomes after the flip) BEFORE the importer
-    compiles, and the refusal must come from the handle arm
+    Since the flip the owner's own attribute is the handle BEFORE the
+    importer compiles (asserted here; this used to set it by hand), and the
+    refusal must come from the handle arm
     (``_refuse_if_known_at_another_arity`` on the owner's Database), still
     ``error(existence_error(procedure, pk/2), _)`` and caught by catch/3,
     while the right-arity dotted call keeps answering."""
@@ -143,7 +121,7 @@ def test_a_dotted_qualified_goal_reaches_the_handle_arm(tmp_path, monkeypatch):
     """)
     O = ow.__dict__["$module"]
     handle = mangle(O.name, "pk")
-    monkeypatch.setitem(O.module_dict, "pk", handle)
+    assert O.module_dict["pk"] == handle, "the load did not bind the handle"
     imp = _load(tmp_path, monkeypatch, "aie_dq_im", """
         -module(aie_dq_im, [])
         -import_module(aie_dq_ow)
@@ -192,8 +170,8 @@ def test_python_except_type_error_still_catches_it(pair):
     ``TypeError``, and a ``LogicException`` whose ``.term`` is the ISO one;
     ``str()`` is the diagnostic alone, as before."""
     era, O, _I = pair
-    target = (O.module_dict["pk"] if era == "class"
-              else mangle(f"aie_ow_{era}", "pk"))
+    target = O.module_dict["pk"]
+    assert target == mangle(f"aie_ow_{era}", "pk")
     with pytest.raises(TypeError) as info:
         _dispatch_at(target, 2)
     exc = info.value
