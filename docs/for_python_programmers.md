@@ -42,11 +42,14 @@ kind) is a related but distinct, list-shaped value — see
 
 **The runtime is Python.** Clausal runs on the Python VM. You can call any
 Python library from within a logic predicate using `++()`, and call logic
-predicates from Python by iterating directly over predicate terms.
+predicates from Python with `solve(("my_predicate", X), module=my_module)` —
+a goal is a tuple, run against the module that defines it.
 
-**Import works as expected.** `from my_module import my_predicate` loads
+**Import works as expected.** `import my_module` loads
 `my_module.clausal` through Python's [import system](import.md). Bytecode is [cached](caching.md) in
-`__pycache__` like any other Python module.
+`__pycache__` like any other Python module. The module's attribute for a
+predicate is that predicate's handle, used to name it — not a function to
+call.
 
 ---
 
@@ -104,10 +107,10 @@ color(blue),
 
 ```python
 # From Python, iterate over all answers:
-from clausal import Var
-from my_module import color
+from clausal import Var, solve
+import my_module
 
-for trail in color(X := Var()):
+for trail in solve(("color", X := Var()), module=my_module):
     print(X.value)  # red, green, blue
 ```
 

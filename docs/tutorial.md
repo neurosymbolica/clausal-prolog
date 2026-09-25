@@ -32,18 +32,20 @@ expression).
 Query it from Python:
 
 ```python
-from clausal import Var
-from hello import greeting
+from clausal import Var, solve
+import hello
 
-for trail in greeting("hello"):
+for trail in solve(("greeting", "hello"), module=hello):
     print("yes")
 ```
 
-This prints `yes` — one solution, confirming the fact. Try querying with a
-variable:
+A goal is a **cell**: a tuple of the predicate's name followed by its
+arguments. `solve` runs it against the module you pass, and yields once per
+solution. This prints `yes` — one solution, confirming the fact. Try querying
+with a variable:
 
 ```python
-for trail in greeting(X := Var()):
+for trail in solve(("greeting", X := Var()), module=hello):
     print(X.value)
 ```
 
@@ -89,10 +91,10 @@ the body is wrapped in parentheses.
 Query it from Python:
 
 ```python
-from clausal import Var
-from family import grandparent
+from clausal import Var, solve
+import family
 
-for trail in grandparent("alice", X := Var()):
+for trail in solve(("grandparent", "alice", X := Var()), module=family):
     print(X.value)
 ```
 
@@ -100,13 +102,14 @@ Result: `dave` then `eve` — both of alice's grandchildren.
 
 ### Multiple solutions and backtracking
 
-Predicate term instances are directly iterable — `for trail in goal:` yields
-the Trail after each solution. Clausal finds all clauses whose heads unify
+`solve(goal, module=…)` yields the Trail after each solution. Clausal finds
+all clauses whose heads unify
 with the goal — these represent logical alternatives. If a condition in the body
 does not hold, Clausal explores the remaining alternatives.
 
-To get just the first answer use `once(goal)`. To iterate all solutions
-use a `for trail in goal:` loop and read `X.value` on your Var objects.
+To get just the first answer use `once(goal, module=…)`. To iterate all
+solutions use a `for trail in solve(goal, module=…):` loop and read `X.value`
+on your Var objects inside the loop.
 
 ---
 
@@ -262,11 +265,11 @@ Query it from Python:
 
 ```python
 from clausal import Var, once
-from fizzbuzz import fizzbuzz
+import fizzbuzz
 
 results = []
 for n in range(1, 16):
-    once(fizzbuzz(n, X := Var()))
+    once(("fizzbuzz", n, X := Var()), module=fizzbuzz)
     results.append(X.value)
 ```
 
@@ -361,11 +364,16 @@ A typical Python test wrapper looks like:
 
 ```python
 from clausal import once
-from mymodule import test
+import mymodule
 
 def test_sum():
-    assert once(test("sum [1,2,3,4] = 10")) is not None
+    assert once(("test", "sum [1,2,3,4] = 10"), module=mymodule) is not None
 ```
+
+A wrapper that runs more than a couple of goals should build them through one
+helper function of its own rather than repeating the tuple and the `module=`
+at every call site — see
+[Driving Clausal from a test or scoring harness](python_integration.md#driving-clausal-from-a-test-or-scoring-harness).
 
 See [Testing](testing.md) for the full testing guide, including how to use fixtures
 and parametrize.
@@ -399,11 +407,11 @@ logical alternatives — together they define the complete reachability relation
 Query it from Python:
 
 ```python
-from clausal import Var
-from graph import reachable
+from clausal import Var, solve
+import graph
 
 results = set()
-for trail in reachable("a", DEST := Var()):
+for trail in solve(("reachable", "a", DEST := Var()), module=graph):
     results.add(DEST.value)
 print(sorted(results))
 # ['b', 'c', 'd']
