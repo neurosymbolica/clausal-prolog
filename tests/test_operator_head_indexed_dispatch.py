@@ -100,25 +100,25 @@ class TestOperatorHeadUnderArgIndexing:
     def test_indexed_operator_head_matches(self, indexed):
         """The bug: raises NameError '$headlit_<id>' instead of matching."""
         n = Var()
-        got = [deref(n) for _ in solve(indexed.chk(n), indexed)]
+        got = [deref(n) for _ in solve(("chk", n), indexed)]
         assert got == [mint("plus_")]
 
     def test_indexed_agrees_with_unindexed(self, indexed, unindexed):
         a, b = Var(), Var()
-        got_idx = [deref(a) for _ in solve(indexed.chk(a), indexed)]
-        got_plain = [deref(b) for _ in solve(unindexed.chk(b), unindexed)]
+        got_idx = [deref(a) for _ in solve(("chk", a), indexed)]
+        got_plain = [deref(b) for _ in solve(("chk", b), unindexed)]
         assert got_idx == got_plain
 
     def test_distinct_operators_still_discriminate(self, indexed):
         """Guard against an over-broad fix: a * b must not match the + clause."""
         n = Var()
-        goal = indexed.kind(Mult(left=indexed.p, right=indexed.q), n)
+        goal = ("kind", Mult(left=indexed.p, right=indexed.q), n)
         got = [deref(n) for _ in solve(goal, indexed)]
         assert got == [mint("times_")]
 
     def test_non_operator_clause_unaffected(self, indexed):
         n = Var()
-        got = [deref(n) for _ in solve(indexed.kind(9, n), indexed)]
+        got = [deref(n) for _ in solve(("kind", 9, n), indexed)]
         assert got == [mint("other_")]
 
 
