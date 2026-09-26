@@ -409,6 +409,7 @@ def _probe_var_free(value, budget: int = _PROBE_BUDGET) -> bool:
     from clausal.logic.to_python import term_children
     from clausal.terms import SegBytes, SegList, SegString
     stack = [value]
+    visited = set()          # container ids: a cyclic term is entered once
     seen = 0
     while stack:
         v = stack.pop()
@@ -421,7 +422,13 @@ def _probe_var_free(value, budget: int = _PROBE_BUDGET) -> bool:
             return False
         if isinstance(v, (SegList, SegString, SegBytes)):
             return False
-        stack.extend(term_children(v))
+        children = term_children(v)
+        if children:
+            key = id(v)
+            if key in visited:
+                continue
+            visited.add(key)
+            stack.extend(children)
     return True
 
 

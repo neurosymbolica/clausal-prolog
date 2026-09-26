@@ -171,3 +171,30 @@ class TestEveryContainerIsWalked:
         assert not has_atom_tag(deep)
         assert _python_entry(deep) is deep
         assert _python_entry(("=", Var(), deep))[2] is deep
+
+
+class TestCyclicTerms:
+    """The door's scan must terminate on a CYCLIC goal: the engine builds
+    one on purpose (unify without the occurs check), and the adversarial
+    suite hands such goals to solve().  The first cut grew its stack without
+    bound and the gate was OOM-killed at exactly that test, twice."""
+
+    def test_has_atom_tag_terminates_on_a_cycle(self):
+        from clausal.logic.to_python import has_atom_tag
+        cyc = ["c"]; cyc.append(cyc)
+        assert has_atom_tag(cyc) is False
+        tagged = ["c", atom("a")]; tagged.append(tagged)
+        assert has_atom_tag(tagged) is True
+
+    def test_the_probe_terminates_on_a_cycle(self):
+        from clausal.logic.seam import _probe_var_free
+        cyc = ["c"]; cyc.append(cyc)
+        assert _probe_var_free(cyc) is True        # no Var reachable, walked once
+        cycv = ["c", Var()]; cycv.append(cycv)
+        assert _probe_var_free(cycv) is False
+
+    def test_a_cyclic_goal_passes_the_door(self):
+        from clausal.logic.solve import _python_entry
+        cyc = ["c"]; cyc.append(cyc)
+        assert _python_entry(("=", Var(), cyc))[2] is cyc
+

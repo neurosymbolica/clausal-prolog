@@ -296,16 +296,27 @@ def wrap_text(val):
 def has_atom_tag(val) -> bool:
     """True iff an ``atom`` INSTANCE is reachable from *val* through the term
     containers.  ITERATIVE (a cons-like goal thousands of levels deep must
-    not raise RecursionError at solve()), read-only, no allocation beyond
-    the stack: the cheap scan every Python entry runs before deciding
-    whether the rebuild is needed at all."""
+    not raise RecursionError at solve()), read-only: the cheap scan every
+    Python entry runs before deciding whether the rebuild is needed at all.
+
+    CYCLE-SAFE: a container is entered once, by id.  A cyclic term -- the
+    engine builds one on purpose in unify without the occurs check, and the
+    adversarial tests hand such goals to solve() -- otherwise grew the
+    walk's stack without bound until the OOM killer took the process (the
+    gate died twice at the same test, 2026-09-26).  The ids are only held
+    for the duration of the scan, while every object is alive."""
     stack = [val]
+    seen = set()
     while stack:
         v = stack.pop()
         if type(v) is atom:
             return True
         children = term_children(v)
         if children:
+            key = id(v)
+            if key in seen:
+                continue
+            seen.add(key)
             stack.extend(children)
     return False
 
