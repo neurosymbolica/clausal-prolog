@@ -2129,29 +2129,19 @@ static PyObject *KWTerm_type = NULL;
 static int
 init_term_inspection_cache(void)
 {
-    if (!str_dataclass_fields) {
-        str_dataclass_fields = PyUnicode_InternFromString("__dataclass_fields__");
-        if (!str_dataclass_fields) return -1;
-    }
-    if (!str_name) {
-        str_name = PyUnicode_InternFromString("name");
-        if (!str_name) return -1;
-    }
-    if (!str_functor) {
-        str_functor = PyUnicode_InternFromString("functor");
-        if (!str_functor) return -1;
-    }
-    if (!str_args) {
-        str_args = PyUnicode_InternFromString("args");
-        if (!str_args) return -1;
-    }
-    if (!dc_fields_func) {
-        PyObject *mod = PyImport_ImportModule("dataclasses");
-        if (!mod) return -1;
-        dc_fields_func = PyObject_GetAttrString(mod, "fields");
-        Py_DECREF(mod);
-        if (!dc_fields_func) return -1;
-    }
+    str_dataclass_fields = PyUnicode_InternFromString("__dataclass_fields__");
+    if (!str_dataclass_fields) return -1;
+    str_name = PyUnicode_InternFromString("name");
+    if (!str_name) return -1;
+    str_functor = PyUnicode_InternFromString("functor");
+    if (!str_functor) return -1;
+    str_args = PyUnicode_InternFromString("args");
+    if (!str_args) return -1;
+    PyObject *mod = PyImport_ImportModule("dataclasses");
+    if (!mod) return -1;
+    dc_fields_func = PyObject_GetAttrString(mod, "fields");
+    Py_DECREF(mod);
+    if (!dc_fields_func) return -1;
     return 0;
 }
 
@@ -2217,12 +2207,8 @@ py_term_field_names(PyObject *Py_UNUSED(module), PyObject *obj)
 {
     /* W4a: the PredicateMeta-INSTANCE arm is gone (see c_is_term_instance);
      * a @dataclass instance is the only term instance there is. */
-    /* @dataclass fallback — uses module-level dc_fields_func (Fix #5) */
-    if (!dc_fields_func) {
-        PyErr_SetString(PyExc_RuntimeError,
-                        "term_field_names: dataclasses.fields not initialized");
-        return NULL;
-    }
+    /* @dataclass route — dc_fields_func is set in PyInit__variables
+     * (init_term_inspection_cache), which fails the import if it cannot. */
     {
         PyObject *dc_fields = PyObject_CallOneArg(dc_fields_func, obj);
         if (!dc_fields) return NULL;
@@ -2877,7 +2863,6 @@ c_copy_term(PyObject *term, PyObject *var_map, int depth)
         return term;
     }
 
-
     /* List: copy element-by-element */
     if (PyList_Check(term)) {
         Py_ssize_t n = PyList_GET_SIZE(term);
@@ -3192,7 +3177,6 @@ c_collect_vars(PyObject *term, UIntSet *seen, PyObject *result, int depth)
     if (term == Py_None || PyBool_Check(term) || PyLong_Check(term) ||
         PyFloat_Check(term) || PyUnicode_Check(term) || PyBytes_Check(term))
         return 0;
-
 
     /* List */
     if (PyList_Check(term)) {

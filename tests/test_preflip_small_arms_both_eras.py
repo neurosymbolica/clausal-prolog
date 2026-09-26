@@ -631,8 +631,10 @@ def test_a_host_head_pattern_matches_an_owner_built_term(
 
 
 def _bindings_seen_before_step_4(monkeypatch):
-    """OBSERVE the module dict at step 3d, BEFORE steps 4 and 4a, and return
-    ``{key: value}`` for every key already bound to its own module's handle.
+    """OBSERVE the module dict at step 3d, BEFORE steps 4 and 4a.  Returns
+    ``(calls, seen)``: ``calls`` gets one entry per time the observer ran,
+    and ``seen`` is ``{key: value}`` for every key already bound to its own
+    module's handle -- so "never ran" and "ran, found nothing" differ.
 
     Nothing is rebound: since W4b-3 slice 5 the module body binds this
     module's own HANDLE (``$declare_head``), so step 4a meets a LOCAL handle
@@ -642,9 +644,11 @@ def _bindings_seen_before_step_4(monkeypatch):
     but the handle fails rather than passing under the handle test's name."""
     import clausal.logic.compiler_v2 as cv2
     real = cv2._refuse_foreign_writes
+    calls = []
     seen = {}
 
     def _observe_then_gate(db, predicate_nodes, module_dict, *rest):
+        calls.append(module_dict.get("__name__"))
         for key, value in list(module_dict.items()):
             if key.startswith("$"):
                 continue
@@ -653,7 +657,7 @@ def _bindings_seen_before_step_4(monkeypatch):
         return real(db, predicate_nodes, module_dict, *rest)
 
     monkeypatch.setattr(cv2, "_refuse_foreign_writes", _observe_then_gate)
-    return seen
+    return calls, seen
 
 
 def test_step_4a_a_local_dynamic_handle_is_compiled_from_its_own_row(
@@ -663,14 +667,17 @@ def test_step_4a_a_local_dynamic_handle_is_compiled_from_its_own_row(
     row is this db's), the entry a clause-less class gets -- not the class
     test answering None for a str by accident."""
     from clausal.logic.variables import Var, deref
-    seen = _bindings_seen_before_step_4(monkeypatch)
+    calls, seen = _bindings_seen_before_step_4(monkeypatch)
     mod = lister("sa_ld", """
         -module(sa_ld, [sa_ld_p/1, add(X)])
         -dynamic(sa_ld_p/1)
         add(X) <- assertz(sa_ld_p(X))
     """)
     binding = mod.__dict__["sa_ld_p"]
-    assert seen, "the step-3d observer never ran"
+    assert calls, "the step-3d observer never ran"
+    assert seen, (
+        f"the step-3d observer ran ({calls}) but found no key bound to its "
+        f"own module's handle")
     assert seen.get("sa_ld_p") == binding, (
         f"step 4a did not meet sa_ld_p as its handle: {seen}")
     assert type(binding) is str

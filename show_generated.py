@@ -410,22 +410,22 @@ print("# GENERATED (trampoline, Phase 10 — direct bucket ref):")
 print(raw)
 
 # Compare: the same caller compiled with no bucket-ref hints.
-ctx_phase7 = CompilationContext(
+ctx_no_hint = CompilationContext(
     db=db_phase10, var_context={}, trail_name="trail",
 )
-body_compiler_p7 = _make_body_compiler_trampoline(
-    db_phase10, ctx_template=ctx_phase7,
+body_compiler_no_hint = _make_body_compiler_trampoline(
+    db_phase10, ctx_template=ctx_no_hint,
 )
-func_def2 = _build_predicate_trampoline_funcdef(
-    "find_red", 1, caller_clauses, db_phase10, body_compiler_p7,
+func_def_no_hint = _build_predicate_trampoline_funcdef(
+    "find_red", 1, caller_clauses, db_phase10, body_compiler_no_hint,
 )
-raw2 = ast.unparse(func_def2)
+raw_no_hint = ast.unparse(func_def_no_hint)
 try:
-    raw2 = black.format_str(raw2, mode=black.Mode())
+    raw_no_hint = black.format_str(raw_no_hint, mode=black.Mode())
 except Exception:
     pass
 print("# GENERATED (trampoline, no bucket-ref hint — ordinary dispatch):")
-print(raw2)
+print(raw_no_hint)
 
 print("# NOTES:")
 print("""

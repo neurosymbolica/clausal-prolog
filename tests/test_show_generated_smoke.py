@@ -10,6 +10,7 @@ checks that section 7 (Phase 10) still prints the direct bucket reference.
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -34,6 +35,11 @@ def test_show_generated_runs_and_prints_the_phase_10_bucket_reference():
     for n in range(1, 8):
         assert f"# {n}." in out, f"section {n} missing"
     # Phase 10: the call site references the bucket function directly ...
-    assert "StepGenerator(color.bucket(pos=0, ('red', 0))" in out
+    # Matched on whitespace-free text with either quote style, so the check
+    # survives the script's optional ``black`` pass reformatting the output
+    # (today ``black`` rejects the ``$``-names and the script prints the
+    # ``ast.unparse`` text unchanged).
+    flat = re.sub(r"\s+", "", out).replace('"', "'")
+    assert "StepGenerator(color.bucket(pos=0,('red',0))" in flat
     # ... and the no-hint comparison goes through the dispatch.
-    assert "StepGenerator($dispatch_at(color, 1)" in out
+    assert "StepGenerator($dispatch_at(color,1)" in flat
