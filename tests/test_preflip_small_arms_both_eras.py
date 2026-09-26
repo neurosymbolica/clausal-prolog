@@ -31,10 +31,9 @@ Handle era (W4b-2d flip): the LOAD binds every handle now (ruling D1 for an
 import), so the class arms and the stand-in ``flipped_loads`` /
 ``era_loads`` / ``_flip_all_bindings`` load-time flip are gone -- after the
 flip they found no class and flipped nothing.  Tests assert the handle
-binding they depend on.  The one stand-in kept is
-``_flip_bindings_before_step_4``: the real flip runs AFTER step 4a, so a
-local handle reaching step 4a still needs it, and it now asserts that it
-flipped the binding under test.
+binding they depend on.  ``_bindings_seen_before_step_4`` (it was the
+last stand-in flip) now only OBSERVES the module dict before step 4, so the
+step-4a test can assert the local handle was already there.
 """
 
 from __future__ import annotations
@@ -631,34 +630,30 @@ def test_a_host_head_pattern_matches_an_owner_built_term(
 # ── review Lows on 176584ec ──────────────────────────────────────────────────
 
 
-def _flip_bindings_before_step_4(monkeypatch, must_flip):
-    """Flip every binding at step 3d, BEFORE steps 4 and 4a, so step 4a
-    meets this module's OWN ``-dynamic`` as a handle.  (The real flip ran
-    after step 4a until W4b-3; the module body binds the handle itself
-    now.)  This stand-in records the keys already bound to their handle and
-    returns them.  It ASSERTS it flipped *must_flip*: a
-    stand-in that silently flips nothing would leave the test checking the
-    class path under the handle test's name."""
+def _bindings_seen_before_step_4(monkeypatch):
+    """OBSERVE the module dict at step 3d, BEFORE steps 4 and 4a, and return
+    ``{key: value}`` for every key already bound to its own module's handle.
+
+    Nothing is rebound: since W4b-3 slice 5 the module body binds this
+    module's own HANDLE (``$declare_head``), so step 4a meets a LOCAL handle
+    on a real load.  (This helper used to REBIND classes to handles here --
+    the flip ran after step 4a -- until W4b-3 deleted the class.)  The test
+    asserts on what it saw, so a load that reached step 4a with anything
+    but the handle fails rather than passing under the handle test's name."""
     import clausal.logic.compiler_v2 as cv2
     real = cv2._refuse_foreign_writes
-    flipped = []
+    seen = {}
 
-    def _flip_then_gate(db, predicate_nodes, module_dict, *rest):
-        # Since W4b-3 slice 5 the module body binds this module's own
-        # HANDLE (``$declare_head``), so a real load shows step 4a a LOCAL
-        # handle with no rebinding at all; this records the keys that are
-        # (it rebound PredicateMeta classes until slice 7 deleted the class).
+    def _observe_then_gate(db, predicate_nodes, module_dict, *rest):
         for key, value in list(module_dict.items()):
             if key.startswith("$"):
                 continue
             if type(value) is str and value == mint_predicate_handle(db, key):
-                flipped.append(key)
-        assert must_flip in flipped, (
-            f"the step-3d stand-in flip did not flip {must_flip!r}: {flipped}")
+                seen[key] = value
         return real(db, predicate_nodes, module_dict, *rest)
 
-    monkeypatch.setattr(cv2, "_refuse_foreign_writes", _flip_then_gate)
-    return flipped
+    monkeypatch.setattr(cv2, "_refuse_foreign_writes", _observe_then_gate)
+    return seen
 
 
 def test_step_4a_a_local_dynamic_handle_is_compiled_from_its_own_row(
@@ -668,15 +663,17 @@ def test_step_4a_a_local_dynamic_handle_is_compiled_from_its_own_row(
     row is this db's), the entry a clause-less class gets -- not the class
     test answering None for a str by accident."""
     from clausal.logic.variables import Var, deref
-    flipped = _flip_bindings_before_step_4(monkeypatch, "sa_ld_p")
+    seen = _bindings_seen_before_step_4(monkeypatch)
     mod = lister("sa_ld", """
         -module(sa_ld, [sa_ld_p/1, add(X)])
         -dynamic(sa_ld_p/1)
         add(X) <- assertz(sa_ld_p(X))
     """)
     binding = mod.__dict__["sa_ld_p"]
-    assert "sa_ld_p" in flipped, "the stand-in never ran"
-    assert type(binding) is str, "the flip did not happen"
+    assert seen, "the step-3d observer never ran"
+    assert seen.get("sa_ld_p") == binding, (
+        f"step 4a did not meet sa_ld_p as its handle: {seen}")
+    assert type(binding) is str
     lm = _lm(mod)
     row = lm.db.row("sa_ld_p", 1, create=False)
     assert row is not None and row.db is lm.db and row.dynamic

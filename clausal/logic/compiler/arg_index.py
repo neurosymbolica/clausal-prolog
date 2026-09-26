@@ -26,7 +26,7 @@ from clausal.terms import (
     DictTerm, SetTerm, KWTerm, SegList,
 )
 from clausal.pythonic_ast.nodes import StarUnpack  # noqa: F401
-from clausal.logic.predicate import (  # noqa: F401
+from clausal.logic.predicate import (
     is_term_instance, term_field_names, resolve_predicate_row,
 )
 from clausal.logic.database import Clause

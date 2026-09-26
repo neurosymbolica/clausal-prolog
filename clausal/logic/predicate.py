@@ -518,7 +518,8 @@ def _head_arity(head: Any) -> int | None:
         # STAGE 2: an atom head is name/0 (``database.head_key`` agrees).
         # Since W4b-3 slice 5 this is how a module's own 0-arity fact
         # (``myflag,``) stores its head -- the atom, where it used to be the
-        # rewriter's zero-field class, whose ``_fields`` answered 0 below.
+        # rewriter's zero-field class (answered from its ``_fields`` until
+        # W4b-3 slice 7 deleted the class).
         return 0
     from clausal.logic.cells import _cell_shape  # noqa: PLC0415
     if _cell_shape(head)[0]:                        # P2: a head is a cell
@@ -2425,11 +2426,11 @@ else:
 
 
 # DEPRECATED alias, kept for ONE release (Task 12, atoms-as-cells/strings).
-# ``predicate.is_atom`` is the zero-field-CLASS test and always was; the TERM
-# test of the same name lives in ``clausal.logic.atoms``.  Every in-tree
-# caller now imports ``is_zero_field_class``; this name survives only because
-# the C extension registers its accelerator as ``is_atom`` and out-of-tree
-# code may still import it from here.  Delete it, not the C symbol, when the
+# ``predicate.is_atom`` is the zero-field-CLASS test and always was -- it
+# answers ``False`` for everything since W4b-3 slice 7 deleted the class; the
+# TERM test of the same name lives in ``clausal.logic.atoms``.  No in-tree
+# caller uses either class-test name; this one survives only because
+# out-of-tree code may still import it from here.  Delete it when the
 # release window closes.
 is_atom = is_zero_field_class
 
@@ -2443,8 +2444,9 @@ def is_atom_value(obj: Any) -> bool:
     ``PredicateMeta`` class (the declared-atom form of the cell era); that
     widening is retired, and the two are one question now.  It stays as the
     name the runtime readers (``atom/1``, ``functor_arity``) call, so a future
-    widening has one place to land.  ``predicate.is_zero_field_class`` above
-    remains the separate CLASS question the compiler keys on.
+    widening has one place to land.  (``predicate.is_zero_field_class`` above
+    asked the separate CLASS question; it answers ``False`` for everything
+    since W4b-3 slice 7, and nothing in-tree asks it.)
     """
     from clausal.logic.atoms import is_atom as _term_is_atom
     return _term_is_atom(obj)          # STAGE 2 (spec §4): no class is an atom

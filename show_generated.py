@@ -57,7 +57,7 @@ from clausal.logic.compiler import compile_predicate_trampoline
 from clausal.logic.compiler.predicate import (
     _build_predicate_trampoline_funcdef, _make_body_compiler_trampoline,
 )
-from clausal.logic.compiler.arg_index import _bucket_key
+from clausal.logic.compiler.arg_index import _bucket_key, hint_row
 from clausal.logic.compiler.goal_trampoline import _inject_bucket_refs_trampoline
 from clausal.logic.compiler.compile_ctx import CompilationContext
 from clausal.logic.database import Database
@@ -362,6 +362,13 @@ compile_predicate_trampoline(
     pred_cls=mint_predicate_handle(db_phase10, "color"),
 )
 db_phase10.row("color", 1).locked = True
+# Fail LOUDLY if the hint pass cannot see the callee: otherwise the "Phase
+# 10" output below silently shows the ordinary dispatch call instead.
+if hint_row(db_phase10, "color", 1) is None:
+    raise SystemExit(
+        "show_generated: hint_row(db, 'color', 1) is None -- the callee row "
+        "is missing or unlocked, so section 7 would print no bucket "
+        "reference")
 
 # Build find_red/1 caller clause
 X2_ = Var()
@@ -375,19 +382,23 @@ caller_clauses = [
 # Inject bucket refs, then generate AST with the context in place.
 # The body_compiler captures ctx_template by reference; mutating
 # ctx_template.bucket_ref_map after construction is visible at compile time.
-base_globals = {}
-db_placeholder = db_phase10
-
+# The pass also stores each bucket function in the globals dict it is
+# handed, under its readable key; only the AST is printed here, so that
+# dict is a throwaway.
 ctx_phase10 = CompilationContext(
-    db=db_placeholder, var_context={}, trail_name="trail",
+    db=db_phase10, var_context={}, trail_name="trail",
 )
-_inject_bucket_refs_trampoline(ctx_phase10, caller_clauses, base_globals)
+_inject_bucket_refs_trampoline(ctx_phase10, caller_clauses, {})
+if not ctx_phase10.bucket_ref_map:
+    raise SystemExit(
+        "show_generated: the bucket-ref pass recorded no hint for "
+        "color(\"red\") -- section 7 would print no bucket reference")
 
 body_compiler_p10 = _make_body_compiler_trampoline(
-    db_placeholder, ctx_template=ctx_phase10,
+    db_phase10, ctx_template=ctx_phase10,
 )
 func_def = _build_predicate_trampoline_funcdef(
-    "find_red", 1, caller_clauses, db_placeholder, body_compiler_p10,
+    "find_red", 1, caller_clauses, db_phase10, body_compiler_p10,
 )
 raw = ast.unparse(func_def)
 try:
@@ -398,48 +409,51 @@ except Exception:
 print("# GENERATED (trampoline, Phase 10 — direct bucket ref):")
 print(raw)
 
-# Compare: same caller with only Phase 7 (locked dispatch, no static key).
+# Compare: the same caller compiled with no bucket-ref hints.
 ctx_phase7 = CompilationContext(
-    db=db_placeholder, var_context={}, trail_name="trail",
-    locked_dispatch_keys=frozenset(["_disp_color_1"]),
+    db=db_phase10, var_context={}, trail_name="trail",
 )
 body_compiler_p7 = _make_body_compiler_trampoline(
-    db_placeholder, ctx_template=ctx_phase7,
+    db_phase10, ctx_template=ctx_phase7,
 )
 func_def2 = _build_predicate_trampoline_funcdef(
-    "find_red", 1, caller_clauses, db_placeholder, body_compiler_p7,
+    "find_red", 1, caller_clauses, db_phase10, body_compiler_p7,
 )
 raw2 = ast.unparse(func_def2)
 try:
     raw2 = black.format_str(raw2, mode=black.Mode())
 except Exception:
     pass
-print("# GENERATED (trampoline, Phase 7 only — cached dispatch closure):")
+print("# GENERATED (trampoline, no bucket-ref hint — ordinary dispatch):")
 print(raw2)
 
 print("# NOTES:")
 print("""
-  The two versions differ by exactly one identifier in the StepGenerator call:
+  The two versions differ only in the callee expression of the StepGenerator
+  call:
 
-    Phase 10:  StepGenerator(color.bucket(pos=0, 'red'), this_generator, ...)
-    Phase 7:   StepGenerator(_disp_color_1,             this_generator, ...)
+    Phase 10:  StepGenerator(color.bucket(pos=0, ('red', 0)), ...)
+    no hint:   StepGenerator($dispatch_at(color, 1),        ...)
 
-  Phase 7 (_disp_color_1) is the pre-captured dispatch closure for color/1.
-  At runtime it calls deref(args[0]), then does a dict lookup to find the
-  right bucket.  That's one deref + one dict.get per call.
+  `$dispatch_at(color, 1)` resolves the predicate named by the `color`
+  binding (its handle) to the Database row color/1 and returns that row's
+  dispatch function.  At runtime the dispatch derefs args[0] and does a dict
+  lookup to find the right bucket.
 
-  Phase 10 (color.bucket(pos=0, 'red')) is the bucket function itself,
-  looked up once at compile time and stored in base_globals under that string
-  key.  At runtime there is no dispatch at all — the bucket is called directly.
+  Phase 10 (`color.bucket(pos=0, ('red', 0))`) is the bucket function itself,
+  read from the callee ROW's index plans at compile time (the atom 'red'
+  keys as ('red', 0), name/0) and stored in the compiled function's globals
+  under that string key.  At runtime there is no dispatch at all -- the
+  bucket is called directly.
 
-  The key `color.bucket(pos=0, 'red')` is not a valid Python identifier, but
-  Python's `compile(ast_tree, ...)` resolves `ast.Name(id=k)` via a plain dict
-  lookup on the function's globals dict, so any string works.  `ast.unparse`
+  The key is not a valid Python identifier, but Python's
+  `compile(ast_tree, ...)` resolves `ast.Name(id=k)` via a plain dict lookup
+  on the function's globals dict, so any string works.  `ast.unparse`
   renders it verbatim, making the generated code self-documenting.
 
-  This only fires for *locked* predicates (predicates whose clauses are frozen
-  at compile time of the caller).  Dynamic predicates always go through
-  `._get_dispatch()` because their clause set may change at runtime.
+  This only fires for a *locked* row (a predicate whose clauses are frozen
+  at compile time of the caller).  A dynamic predicate always goes through
+  its dispatch, because its clause set may change at runtime.
 """)
 
 print(SEP)
