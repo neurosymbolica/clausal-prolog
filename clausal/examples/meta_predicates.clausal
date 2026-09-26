@@ -93,9 +93,9 @@ test("positives all negative") <- positives([-1, -2], [])
 test("positives with zero") <- positives([0, 1, -1], [1])
 test("evens") <- evens([1, 2, 3, 4, 5, 6], [2, 4, 6])
 test("evens none") <- evens([1, 3, 5], [])
-test("pairs cartesian") <- pairs(["a", "b"], [1, 2], [["a", 1], ["a", 2], ["b", 1], ["b", 2]])
+test("pairs cartesian") <- pairs(['a', 'b'], [1, 2], [['a', 1], ['a', 2], ['b', 1], ['b', 2]])
 test("pairs empty first") <- pairs([], [1, 2], [])
-test("pairs empty second") <- pairs(["a"], [], [])
+test("pairs empty second") <- pairs(['a'], [], [])
 
 # setof
 test("unique dedup") <- unique_members([1, 2, 1, 3, 2], [1, 2, 3])

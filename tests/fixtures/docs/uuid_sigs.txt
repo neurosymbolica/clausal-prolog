@@ -1,8 +1,8 @@
 # Display snippets for docs/uuid.md
 
 --8<-- [start:generation_examples]
-uuid_v3("dns", "example.com", U)
-uuid_v5("url", "https://example.com", U)
+uuid_v3('dns', "example.com", U)
+uuid_v5('url', "https://example.com", U)
 --8<-- [end:generation_examples]
 
 --8<-- [start:conversion_examples]
@@ -37,7 +37,7 @@ new_session(USERID, TOKEN) <- (
 -import_from(uuid, [uuid_v5, uuid_str])
 
 resource_id(TYPE, NAME, ID) <- (
-    uuid_v5("url", NAME, U),
+    uuid_v5('url', NAME, U),
     uuid_str(U, ID)
 )
 --8<-- [end:deterministic_ids]

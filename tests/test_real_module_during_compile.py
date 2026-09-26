@@ -145,10 +145,10 @@ def test_import_module_still_brings_no_term_expansion_rules(tmp_path,
     from clausal.logic.atoms import mint
     monkeypatch.syspath_prepend(FIXTURES)
     (tmp_path / "te_imod.clausal").write_text(
-        "-import_module(expansion_provider)\n\n"
+        "-double_quotes(atom)\n-import_module(expansion_provider)\n\n"
         'color("red"),\ncolor("green"),\n')
     (tmp_path / "te_ifrom.clausal").write_text(
-        "-import_from(expansion_provider, [term_expansion])\n\n"
+        "-double_quotes(atom)\n-import_from(expansion_provider, [term_expansion])\n\n"
         'color("red"),\ncolor("green"),\n')
     names = ("expansion_provider", "_realmod_te_imod", "_realmod_te_ifrom")
     try:

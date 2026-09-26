@@ -42,6 +42,7 @@ class TestByteListCanonicaliser:
 
 # Four+ clauses so the first-arg index actually builds (_INDEX_THRESHOLD == 4).
 _SRC = """\
+-double_quotes(atom)
 helper(1),
 
 code(b"red") <- (helper(1))

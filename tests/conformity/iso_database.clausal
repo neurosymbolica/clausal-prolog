@@ -14,6 +14,7 @@
 # does not always re-index).  These tests therefore verify state changes
 # via direct membership queries, which is a more faithful mirror of what
 # the Python test suite was asserting anyway.
+-double_quotes(atom)
 
 -module(iso_database, [test(DESC)])
 

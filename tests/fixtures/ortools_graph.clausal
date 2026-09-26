@@ -3,6 +3,7 @@
 # Covers: max_flow, min_cost_flow, assignment, knapsack.
 
 # ── Max flow ──────────────────────────────────────────────────────────────
+-double_quotes(atom)
 
 test("max flow single arc") <- (
     ortools.graph.max_flow([[0, 1, 42]], 0, 1, FLOW),

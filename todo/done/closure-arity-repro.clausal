@@ -1,3 +1,4 @@
+-double_quotes(atom)
 double(A, B) <- (B == A * 2)
 
 # A: closure passed DIRECTLY as an argument, then called -> expected to work

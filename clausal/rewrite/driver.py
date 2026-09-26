@@ -114,7 +114,18 @@ def rewrite_source(source, rule_paths):
     rules = load_rules(rule_paths)
     tree, table = CommentTable.capture(source)
     fired = []
+    # The file's ``-double_quotes`` mode at the statement being reified.
+    # Each clause is reified from its own SEGMENT, which never contains the
+    # directive, so the mode is tracked here and handed to the reifier --
+    # without it a ``-double_quotes(atom)`` file's ``"t"`` reified as a
+    # string under the chars default (and a chars file's as an atom before
+    # the flip), and the folded head came back respelled.
+    double_quotes = None
     for index, statement in enumerate(tree.body):
+        mode = _double_quotes_directive(statement)
+        if mode is not None:
+            double_quotes = mode
+            continue
         items, _comma = statement_items(statement)
         if len(items) != 1 or not is_clause(items[0]):
             continue
@@ -126,7 +137,8 @@ def rewrite_source(source, rule_paths):
             continue
         segment = ast.get_source_segment(source, statement)
         try:
-            reified = reify_ast(statement, source=segment)
+            reified = reify_ast(statement, source=segment,
+                                double_quotes=double_quotes)
         except (ReifyError, SyntaxError):
             # A shape reification does not model is a shape the rules cannot
             # have an opinion about.  Leaving it byte-stable is the honest
@@ -157,6 +169,29 @@ def _head_has_keywords(clause):
         isinstance(node, ast.Call) and node.keywords
         for node in ast.walk(clause.left)
     )
+
+
+def _double_quotes_directive(statement):
+    """``"atom"`` / ``"chars"`` when *statement* is ``-double_quotes(mode)``
+    with a mode the loader accepts (``DOUBLE_QUOTES_MODES``, the loader's
+    own list), else ``None``.  Any other argument
+    (``codes``, a typo) is a load error in the compiler
+    (``_handle_double_quotes_directive``); the driver does not second-guess
+    it, and does not silently rewrite the file under a mode the loader
+    would refuse -- it leaves the mode as it was, and the file's load will
+    say what is wrong."""
+    from clausal.templating.term_rewriting import DOUBLE_QUOTES_MODES  # noqa: PLC0415
+    value = getattr(statement, "value", None)
+    if (isinstance(statement, ast.Expr) and isinstance(value, ast.UnaryOp)
+            and isinstance(value.op, ast.USub)
+            and isinstance(value.operand, ast.Call)
+            and isinstance(value.operand.func, ast.Name)
+            and value.operand.func.id == "double_quotes"
+            and len(value.operand.args) == 1
+            and isinstance(value.operand.args[0], ast.Name)
+            and value.operand.args[0].id in DOUBLE_QUOTES_MODES):
+        return value.operand.args[0].id
+    return None
 
 
 def _position(statement):

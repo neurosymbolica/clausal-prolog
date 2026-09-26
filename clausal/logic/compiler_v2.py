@@ -50,6 +50,8 @@ from clausal.logic.predicate import (
 from clausal.pythonic_ast.nodes import (
     AtomAppliedAsFunctor as AtomAppliedAsFunctorItem,
     BareAtomRefs as BareAtomRefsItem,
+    CrossModeLiteralSites as CrossModeLiteralSitesItem,
+    DoubleQuotesMode as DoubleQuotesModeItem,
     HeadFieldNames as HeadFieldNamesItem,
     Directive as DirectiveItem,
     HideDeclaration as HideDeclItem,
@@ -192,6 +194,13 @@ def compile_module(
     # ── Step 0: Process imports (before term expansion, so imported TE
     #    rules are available) ──────────────────────────────────────────────
     _process_imports(module_items, module_dict, db)
+
+    # ── Step 0b: the -double_quotes facts, and the cross-mode literal lint ─
+    #    The mode is recorded for this module's IMPORTERS; the lint judges
+    #    this module's own seam sites, which name callees whose mode is the
+    #    OWNER's fact -- answerable only now that the imports have run.
+    _record_double_quotes_mode(module_items, db)
+    _lint_cross_mode_literals(module_items, module_dict)
 
     # ── Step 1: Term expansion (after imports, before directives) ────────
     from clausal.logic.term_expansion import run_term_expansion
@@ -2113,6 +2122,121 @@ def _check_atoms_applied_as_functors(
             )
             if functor_signature_for(name, module_dict) is None:
                 raise SyntaxError(message)
+
+
+def _record_double_quotes_mode(module_items: list, db) -> None:
+    """Record the ``DoubleQuotesMode`` item on *db* for the module's importers.
+
+    The modes that governed at least one ``"..."`` literal; a file with no
+    such literal reports the mode in force at its end, so an importer can
+    still compare against it.
+    """
+    for item in module_items:
+        if isinstance(item, DoubleQuotesModeItem) and db is not None:
+            db.double_quotes_modes = frozenset(item.modes_used or (item.mode,))
+            return
+
+
+def _double_quotes_modes_of_target(kind: str, target, module_dict: dict):
+    """``(owner_name, modes)`` for a cross-mode site's callee, or ``(None,
+    None)`` when the callee cannot be resolved at load -- an import that is
+    not a predicate handle (a Python module's function, say), an owner with
+    no Database, or one compiled before its Database recorded a mode.  A
+    dotted base reaches here only when the transformer saw this file bind
+    it with ``-import_module`` (``_import_module_bases``), so the global it
+    names IS the module the goal runs against; a base bound by hosted Python
+    -- possibly rebound at run time through ``seam.with_bases`` -- is never
+    recorded as a site.  Never raises: the lint must not turn a working load
+    into an error."""
+    from clausal.logic.predicate import (  # noqa: PLC0415
+        predicate_owner_module, namespace_db,
+    )
+    try:
+        if kind == "imported":
+            local_name, dotted = target
+            # A predicate's binding is a mangled handle naming its owner; an
+            # imported data FUNCTOR binds the plain atom, so its owner is the
+            # module half of the ``-import_from`` key (``a.b.q`` -> ``a.b``).
+            # Either way a module that is not a loaded .clausal module (a
+            # ``py.*`` wrapper) has no Database and is not judged.
+            owner = predicate_owner_module(module_dict.get(local_name))
+            if owner is None:
+                # The key holds the path AS WRITTEN; an aliased path
+                # (``thailand`` -> ``clausal.modules.countries.thailand``)
+                # resolves through the same resolver ``_process_imports``
+                # used, so the module found is the one the import bound.
+                owner = _resolve_module(dotted.rsplit(".", 1)[0]).__name__
+            db = _db_for_module_name(owner) if owner else None
+        else:
+            base, chain = target
+            obj = module_dict.get(base)
+            for attr in chain[:-1]:
+                obj = getattr(obj, attr, None)
+            if obj is None:
+                return None, None
+            db = getattr(obj, "db", None)
+            if db is None:
+                db = namespace_db(getattr(obj, "__dict__", None))
+            owner = db.module_name() if db is not None else None
+    except Exception:  # noqa: BLE001 -- a lint never breaks a load
+        return None, None
+    if db is None:
+        return None, None
+    return owner, getattr(db, "double_quotes_modes", None)
+
+
+def _lint_cross_mode_literals(module_items: list, module_dict: dict) -> None:
+    """Warn for a goal-position seam literal whose callee's ``-double_quotes``
+    mode differs from the host file's (``ClausalCrossModeLiteralWarning``).
+
+    The sites were collected by ``EmbedTransformer._collect_cross_mode_sites``
+    with the host's mode; the callee's mode is read off the owner's Database
+    (``_record_double_quotes_mode``), which the ``-import_from`` /
+    ``-import_module`` execution in Step 0 has just made reachable.  A
+    callee whose literals were read under BOTH modes has no single mode to
+    compare against and is not judged; neither is one that cannot be
+    resolved at load.
+
+    THE GAP, documented rather than closed: a ``--m.pred(...)`` whose base
+    is bound at RUN time (``module = _RULE.get()`` inside a function --
+    ``seam.with_bases``) has no module here.  A check at first call was
+    priced and declined: by then the argument is a term, and a chars
+    carrier reaching an atom-mode module is not evidence of a written
+    ``"..."`` -- a string may be passed on purpose -- so the check would
+    fire on working code.
+    """
+    from clausal.lint_warnings import ClausalCrossModeLiteralWarning  # noqa: PLC0415
+    for item in module_items:
+        if not isinstance(item, CrossModeLiteralSitesItem):
+            continue
+        for kind, target, literals, host_mode, location, goal, shown in item.sites:
+            owner, modes = _double_quotes_modes_of_target(kind, target, module_dict)
+            if not modes or len(modes) != 1:
+                continue
+            (target_mode,) = modes
+            if target_mode == host_mode:
+                continue
+            quoted = ", ".join(f'"{text}"' for text in literals)
+            plural = "s are" if len(literals) > 1 else " is"
+            if host_mode == "chars":
+                what = ("a STRING under this file's -double_quotes(chars), but "
+                        f"`{shown}` is defined in module `{owner}`, whose "
+                        f'-double_quotes(atom) reads "..." as an ATOM')
+                remedy = ("write the atom with single quotes ("
+                          + ", ".join(f"'{text}'" for text in literals)
+                          + "), which is an atom in every mode")
+            else:
+                what = ("an ATOM under this file's -double_quotes(atom), but "
+                        f"`{shown}` is defined in module `{owner}`, whose "
+                        f'-double_quotes(chars) reads "..." as a STRING')
+                remedy = ("declare -double_quotes(chars) in this file, or "
+                          "pass the string as its char list")
+            warnings.warn(ClausalCrossModeLiteralWarning(
+                f"{location}: {goal}: the literal{plural} {quoted} {what}; "
+                f"the goal compares a string with an atom and never "
+                f"matches, and nothing raises. To send what `{shown}` "
+                f"matches, {remedy}."
+            ), stacklevel=2)
 
 
 def _local_functor_arities(

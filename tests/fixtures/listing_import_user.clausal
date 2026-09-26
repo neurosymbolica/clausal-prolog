@@ -2,6 +2,7 @@
 # Final review M-a: the IMPORTER.  All three spellings of the same listing
 # must agree -- the bare class, the class-left indicator, and the str-left
 # indicator -- because they name one predicate.
+-double_quotes(atom)
 -module(listing_import_user, [list_by_name(), list_by_class_indicator(),
                               list_by_str_indicator()])
 -import_from(tests.fixtures.listing_import_owner, [qq])

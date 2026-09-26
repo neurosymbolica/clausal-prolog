@@ -1,4 +1,5 @@
 # Companion tests for docs/scipy_integrate.md signature blocks.
+-double_quotes(atom)
 -import_from(scipy_integrate, [Quad, Trapezoid, Simpson, ResultGet])
 
 test("trapezoid exists") <- (

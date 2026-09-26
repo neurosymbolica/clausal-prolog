@@ -9,9 +9,9 @@ key-value processing operations. For proper key-value mappings with unification 
 
 ```clausal
 test("unzip") <- (
-    pairs_keys_values([[1, "a"], [2, "b"], [3, "c"]], KEYS, VALUES),
+    pairs_keys_values([[1, 'a'], [2, 'b'], [3, 'c']], KEYS, VALUES),
     KEYS == [1, 2, 3],
-    VALUES == ["a", "b", "c"]
+    VALUES == ['a', 'b', 'c']
 )
 ```
 
@@ -28,9 +28,9 @@ and separate key/value lists.
 
 ```clausal
 test("decompose") <- (
-    pairs_keys_values([["name", "alice"], ["age", 30]], KS, VS),
-    KS == ["name", "age"],
-    VS == ["alice", 30]
+    pairs_keys_values([['name', 'alice'], ['age', 30]], KS, VS),
+    KS == ['name', 'age'],
+    VS == ['alice', 30]
 )
 ```
 
@@ -38,8 +38,8 @@ test("decompose") <- (
 
 ```clausal
 test("construct") <- (
-    pairs_keys_values(PAIRS, ["x", "y", "z"], [1, 2, 3]),
-    PAIRS == [["x", 1], ["y", 2], ["z", 3]]
+    pairs_keys_values(PAIRS, ['x', 'y', 'z'], [1, 2, 3]),
+    PAIRS == [['x', 1], ['y', 2], ['z', 3]]
 )
 ```
 
@@ -50,7 +50,7 @@ Keys and Values must have equal length when constructing.
 `pairs_keys(Pairs, Keys)` — extract the first element from each pair.
 
 ```clausal
-test("keys") <- pairs_keys([[1, "a"], [2, "b"], [3, "c"]], [1, 2, 3])
+test("keys") <- pairs_keys([[1, 'a'], [2, 'b'], [3, 'c']], [1, 2, 3])
 ```
 
 ### pairs_values/2
@@ -58,7 +58,7 @@ test("keys") <- pairs_keys([[1, "a"], [2, "b"], [3, "c"]], [1, 2, 3])
 `pairs_values(Pairs, Values)` — extract the second element from each pair.
 
 ```clausal
-test("values") <- pairs_values([[1, "a"], [2, "b"], [3, "c"]], ["a", "b", "c"])
+test("values") <- pairs_values([[1, 'a'], [2, 'b'], [3, 'c']], ['a', 'b', 'c'])
 ```
 
 ---
@@ -70,15 +70,15 @@ test("values") <- pairs_values([[1, "a"], [2, "b"], [3, "c"]], ["a", "b", "c"])
 ```clausal
 lookup(KEY, PAIRS, VALUE) <- in_([KEY, VALUE], PAIRS)
 
-test("lookup") <- lookup("b", [["a", 1], ["b", 2], ["c", 3]], 2)
+test("lookup") <- lookup('b', [['a', 1], ['b', 2], ['c', 3]], 2)
 ```
 
 ### sort pairs by key
 
 ```clausal
 test("sort by key") <- (
-    sort_by((P, K) <- list_item(0, P, K), [["b", 2], ["a", 1], ["c", 3]], SORTED),
-    pairs_keys(SORTED, ["a", "b", "c"])
+    sort_by((P, K) <- list_item(0, P, K), [['b', 2], ['a', 1], ['c', 3]], SORTED),
+    pairs_keys(SORTED, ['a', 'b', 'c'])
 )
 ```
 
@@ -91,7 +91,7 @@ invert(PAIRS, INVERTED) <- (
     maplist(swap_pair, PAIRS, INVERTED)
 )
 
-test("invert") <- invert([["a", 1], ["b", 2]], [[1, "a"], [2, "b"]])
+test("invert") <- invert([['a', 1], ['b', 2]], [[1, 'a'], [2, 'b']])
 ```
 
 ---

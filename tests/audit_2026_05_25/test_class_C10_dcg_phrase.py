@@ -136,7 +136,7 @@ def test_F069_phrase2_rejects_segstring():
     arm fires.
     """
     # Register a simple DCG rule.
-    source = 'hi >> (["h", "i"])\n'
+    source = '-double_quotes(atom)\nhi >> (["h", "i"])\n'
     mod = load_inline_clausal("c10_f069_phrase2", source).__dict__["$module"]
     hi = load_inline_clausal("c10_f069_phrase2", source).__dict__["hi"]
 

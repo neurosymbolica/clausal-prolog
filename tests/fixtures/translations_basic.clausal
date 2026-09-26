@@ -1,3 +1,4 @@
+-double_quotes(atom)
 -private([hello, th])
 -translations(th, {
     append(LIST, ELEMENT, NEWLIST): ต่อท้าย(รายการ, สมาชิก, รายการใหม่),

@@ -936,7 +936,7 @@ class _ClausalToProlog:
         # alone decides. Position-sensitive like the compiler's: the mode
         # governs the literals BELOW the directive, so it is walk state.
         self._quote_map = build_quote_map(source_lines) if source_lines else {}
-        self._double_quotes = "atom"
+        self._double_quotes = "chars"
         # Dotted path of the module being translated. When set, use_module
         # file paths are emitted relative to this module's package directory
         # (Scryer resolves a consulted path against the consulting file).
@@ -1719,6 +1719,13 @@ class _ClausalToProlog:
         ``atom`` emits nothing: every literal below it is emitted as an atom,
         so the target engine has no string to misread. ``codes`` is refused
         exactly as the compiler refuses it (codes are spelled ``b"..."``).
+
+        Since the engine default flipped to ``chars`` (2026-09-26) a file
+        that opens with ``-double_quotes(chars)`` says what a file that
+        declares nothing already says; the flag is STILL emitted for it --
+        the directive is a statement of the module's dependency, and the
+        emission stays a faithful transcription of the source rather than
+        of the walk state (pinned by tests/test_prolog_literal_rule.py).
         """
         args = call.args
         if len(args) != 1 or not isinstance(args[0], python_ast.Name):
@@ -2234,10 +2241,10 @@ class _ClausalToProlog:
         2026-09-07), the compiler's own rule mirrored:
 
         * ``'...'`` is an ATOM in every mode (ISO 6.4.2 quoted token);
-        * ``"..."`` is an ATOM under ``-double_quotes(atom)`` -- the engine
-          default -- and a STRING (a Prolog double-quoted token; both target
+        * ``"..."`` is a STRING (a Prolog double-quoted token; both target
           engines default to ``double_quotes=chars``) under
-          ``-double_quotes(chars)``.
+          ``-double_quotes(chars)`` -- the engine default since 2026-09-26
+          -- and an ATOM under ``-double_quotes(atom)``.
 
         Before this rule the translator lowered every str literal one way
         regardless of mode: to a string (the flip) or to an atom (bda6b039).

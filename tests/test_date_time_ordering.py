@@ -315,7 +315,7 @@ class TestVarVsNonNumericOperand:
         import os
         from clausal.import_hook import _load_module
         from clausal.logic.solve import solve
-        src = 'strlt_ok(X) <- ( X < "banana", X is "apple" )\n'
+        src = '-double_quotes(atom)\nstrlt_ok(X) <- ( X < "banana", X is "apple" )\n'
         path = os.path.join(str(tmp_path), "strcmp_repro.clausal")
         with open(path, "w") as f:
             f.write(src)

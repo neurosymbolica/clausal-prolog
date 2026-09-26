@@ -447,7 +447,7 @@ class TestNamePositionsAreAtoms:
 
     Each of these positions used to pass the term straight through, so the
     cell a source-written ``"QF_LIA"``/``"timeout"``/``"IntList"`` produces in
-    the default ``-double_quotes(atom)`` mode reached the z3 C bindings and
+    ``-double_quotes(atom)`` mode reached the z3 C bindings and
     came back as a bare ``ArgumentError``/``Z3Exception`` — not a logic error
     a program can catch.  A STRING is now the same ``type_error(atom, …)``
     ``z3_named/2`` has always given, and an unbound name fails.

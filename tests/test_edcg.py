@@ -130,7 +130,7 @@ class TestDirectiveErrors:
     def test_edcg_pred_wrong_arity_type(self, tmp_path):
         # nv
         src = (
-            '-module(e3, [])\n'
+            '-double_quotes(atom)\n-module(e3, [])\n'
             '-edcg_acc(counter, _x, _in, _out, {_out == _in + _x})\n'
             '-edcg_pred(foo, "one", [counter])\n'
         )
@@ -443,7 +443,7 @@ class TestEdcgPatterns:
         """Simulate compiler: parse tokens + emit instructions + count ops."""
         # nv
         src = (
-            '-module(comp1, [compile_all(_code0, _code, _ops0, _ops, _toks, _rest)])\n'
+            '-double_quotes(atom)\n-module(comp1, [compile_all(_code0, _code, _ops0, _ops, _toks, _rest)])\n'
             '-edcg_acc(code, _instr, _in, _out, {_out is [_instr, *_in]})\n'
             '-edcg_acc(ops, _x, _in, _out, {_out == _in + _x})\n'
             '-edcg_pred(emit, 1, [code, ops])\n'
@@ -561,7 +561,7 @@ class TestEdcgEdgeCases:
         """Two accumulators updated independently in different sub-rules."""
         # nv
         src = (
-            '-module(ti1, [run(_cnt0, _cnt, _items0, _items)])\n'
+            '-double_quotes(atom)\n-module(ti1, [run(_cnt0, _cnt, _items0, _items)])\n'
             '-edcg_acc(counter, _x, _in, _out, {_out == _in + _x})\n'
             '-edcg_acc(items, _item, _in, _out, {_out is [_item, *_in]})\n'
             '-edcg_pred(inc_only, 0, [counter])\n'

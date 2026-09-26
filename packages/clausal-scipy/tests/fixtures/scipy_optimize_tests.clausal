@@ -1,3 +1,4 @@
+-double_quotes(atom)
 -import_from(scipy_optimize, [Minimize, MinimizeScalar, Root, RootScalar,
     LinearProgram, CurveFit, NonlinearLeastSquares, ResultGet])
 

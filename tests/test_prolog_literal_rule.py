@@ -8,9 +8,9 @@ position-sensitive ``-double_quotes`` mode), so translator and runtime agree
 by construction:
 
 * ``'...'`` is an ATOM in every mode (ISO 6.4.2 quoted token);
-* ``"..."`` is an ATOM under ``atom`` mode (the engine default today) and a
-  STRING -- a Prolog double-quoted token, ``double_quotes=chars`` on both
-  target engines -- under ``chars`` mode;
+* ``"..."`` is a STRING -- a Prolog double-quoted token, ``double_quotes=chars``
+  on both target engines -- under ``chars`` mode (the engine default since
+  2026-09-26) and an ATOM under ``atom`` mode, the opt-out;
 * the mode governs the literals BELOW the directive (position-sensitive,
   the same shape as the compiler's).
 
@@ -29,11 +29,11 @@ def _t(src: str) -> str:
 # ── atom mode (the default) ─────────────────────────────────────────────
 
 def test_double_quoted_is_an_atom_in_default_mode():
-    assert "p(x)." in _t('p("x"),\n')
+    assert "p(x)." in _t('-double_quotes(atom)\np("x"),\n')
 
 
 def test_double_quoted_text_is_a_quoted_atom_in_default_mode():
-    assert "p('a b')." in _t('p("a b"),\n')
+    assert "p('a b')." in _t('-double_quotes(atom)\np("a b"),\n')
 
 
 def test_single_quoted_is_an_atom_in_default_mode():
@@ -42,7 +42,7 @@ def test_single_quoted_is_an_atom_in_default_mode():
 
 def test_default_mode_newline_is_escaped_inside_the_quoted_atom():
     # class G: a RAW newline inside a quoted token is syntax_error(missing_quote)
-    out = _t('p("a\\nb"),\n')
+    out = _t('-double_quotes(atom)\np("a\\nb"),\n')
     assert "p('a\\nb')." in out
     assert "\np(" not in out.replace("\np('a\\nb')", "")
 
@@ -79,11 +79,32 @@ def test_atom_mode_directive_emits_nothing():
 # ── position sensitivity ────────────────────────────────────────────────
 
 def test_the_mode_governs_only_the_literals_below_the_directive():
-    out = _t('p("x"),\n-double_quotes(chars)\nq("x"),\n')
-    assert "p(x)." in out
-    assert 'q("x").' in out
+    # The default is chars (2026-09-26): p's literal is a string, and only
+    # q's, below the directive, is an atom.
+    out = _t('p("x"),\n-double_quotes(atom)\nq("x"),\n')
+    assert 'p("x").' in out
+    assert "q(x)." in out
 
 
 def test_the_flag_directive_is_emitted_where_the_mode_changes():
-    out = _t('p("x"),\n-double_quotes(chars)\nq("x"),\n')
+    out = _t('-double_quotes(atom)\np("x"),\n-double_quotes(chars)\nq("x"),\n')
     assert out.index("p(x).") < out.index("set_prolog_flag") < out.index('q("x").')
+
+
+def test_an_explicit_leading_chars_directive_still_emits_the_flag():
+    """``-double_quotes(chars)`` at the top says what the default already
+    says, and the literal lowers identically -- but the directive is a
+    statement of the module's dependency, and its flag is transcribed
+    (pinned here so the flip did not silently change the emission)."""
+    declared = _t('-double_quotes(chars)\np("x"),\n')
+    assert 'p("x").' in declared
+    assert declared.index(":- set_prolog_flag(double_quotes, chars).") < declared.index('p("x").')
+
+
+def test_the_default_needs_no_flag_directive():
+    """A module that declares nothing emits its ``"..."`` literals as Prolog
+    strings and NO ``set_prolog_flag``: both target engines already read a
+    double-quoted token as chars, which is the engine default too."""
+    out = _t('p("x"),\n')
+    assert 'p("x").' in out
+    assert "set_prolog_flag" not in out

@@ -265,7 +265,7 @@ class TestUntranslatable:
     def test_dict_iso_lowers_to_attribute_list(self):
         """Dict literal lowers to an attribute-list in ISO dialect (no warning)."""
         # nv
-        result = clausal_source_to_prolog('Test() <- (_x is {"a": 1})')
+        result = clausal_source_to_prolog('-double_quotes(atom)\nTest() <- (_x is {"a": 1})')
         assert "WARNING" not in result
         # The dict KEY is a str literal, so it lowers to an atom like any
         # other (R2). Both sides of a profile_get/tri_get/attrs_put

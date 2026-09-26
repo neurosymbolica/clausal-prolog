@@ -1,4 +1,5 @@
 # Companion tests for docs/sklearn.md display snippets.
+-double_quotes(atom)
 
 -import_from(sklearn, [Est, Dataset, Fitted, Split, LoadDataset, Fit, Predict,
                        Score, Algorithm, Learned, MakeDataset, SplitData,

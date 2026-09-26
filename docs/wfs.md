@@ -130,9 +130,9 @@ A position wins if there is a move to a position that does NOT win:
 ```clausal
 -table(wins/1)
 
-move("a", "b"),
-move("b", "c"),
-move("c", "a"),
+move('a', 'b'),
+move('b', 'c'),
+move('c', 'a'),
 
 wins(X) <- (move(X, Y), not wins(Y))
 ```
@@ -146,13 +146,13 @@ Add a non-cyclic escape and the picture changes:
 ```clausal
 -table(wins/1)
 
-move("a", "b"),
-move("b", "a"),
-move("a", "c"),
+move('a', 'b'),
+move('b', 'a'),
+move('a', 'c'),
 
 wins(X) <- (move(X, Y), not wins(Y))
 
-test("a wins") <- wins("a")
+test("a wins") <- wins('a')
 ```
 
 Now:

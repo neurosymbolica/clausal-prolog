@@ -597,7 +597,7 @@ class TestClausalIntegration:
         # nv
         src = tmp_path / "io_test.clausal"
         src.write_text(
-            "greet(_name) <- writeln_text(f\"hello, {_name}!\")\n"
+            "-double_quotes(atom)\ngreet(_name) <- writeln_text(f\"hello, {_name}!\")\n"
         )
         from clausal.logic.solve import call
         from clausal.import_hook import _load_module
@@ -618,7 +618,7 @@ class TestClausalIntegration:
         # nv
         src = tmp_path / "io_fstr.clausal"
         src.write_text(
-            "show_pair(_a, _b) <- writeln_text(f\"{_a} and {_b}\")\n"
+            "-double_quotes(atom)\nshow_pair(_a, _b) <- writeln_text(f\"{_a} and {_b}\")\n"
         )
         from clausal.logic.solve import call
         from clausal.import_hook import _load_module
@@ -639,7 +639,7 @@ class TestClausalIntegration:
         # nv
         src = tmp_path / "io_len.clausal"
         src.write_text(
-            "show_len(_l) <- writeln_text(f\"length is {len(_l)}\")\n"
+            "-double_quotes(atom)\nshow_len(_l) <- writeln_text(f\"length is {len(_l)}\")\n"
         )
         from clausal.logic.solve import call
         from clausal.import_hook import _load_module
@@ -660,7 +660,7 @@ class TestClausalIntegration:
         # nv
         src = tmp_path / "io_arith.clausal"
         src.write_text(
-            "show_next(_n) <- writeln_text(f\"next is {_n + 1}\")\n"
+            "-double_quotes(atom)\nshow_next(_n) <- writeln_text(f\"next is {_n + 1}\")\n"
         )
         from clausal.logic.solve import call
         from clausal.import_hook import _load_module
@@ -681,7 +681,7 @@ class TestClausalIntegration:
         # nv
         src = tmp_path / "io_upper.clausal"
         src.write_text(
-            "show_upper(_s) <- writeln_text(f\"{_s.upper()}\")\n"
+            "-double_quotes(atom)\nshow_upper(_s) <- writeln_text(f\"{_s.upper()}\")\n"
         )
         from clausal.logic.solve import call
         from clausal.import_hook import _load_module
@@ -726,7 +726,7 @@ class TestClausalIntegration:
         # nv
         src = tmp_path / "io_spec.clausal"
         src.write_text(
-            "show_float(_x) <- writeln_text(f\"{_x:.2f}\")\n"
+            "-double_quotes(atom)\nshow_float(_x) <- writeln_text(f\"{_x:.2f}\")\n"
         )
         from clausal.logic.solve import call
         from clausal.import_hook import _load_module
@@ -747,7 +747,7 @@ class TestClausalIntegration:
         # nv
         src = tmp_path / "io_novar.clausal"
         src.write_text(
-            "hello() <- writeln_text(f\"hello world\")\n"
+            "-double_quotes(atom)\nhello() <- writeln_text(f\"hello world\")\n"
         )
         from clausal.logic.solve import call
         from clausal.import_hook import _load_module

@@ -1,3 +1,4 @@
+-double_quotes(atom)
 -module(static_pred, [fact(X, Y)])
 -private([a, b])
 

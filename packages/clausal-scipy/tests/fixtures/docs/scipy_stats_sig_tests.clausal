@@ -1,4 +1,5 @@
 # Companion tests for docs/scipy_stats.md signature blocks.
+-double_quotes(atom)
 -import_from(scipy_stats, [StatsMean, StatsNormalPdf, StatsNormalCdf, ResultGet])
 
 test("stats mean exists") <- (

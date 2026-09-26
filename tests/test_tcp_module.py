@@ -341,7 +341,7 @@ class TestAtomArguments:
     ``py.tcp`` was never migrated onto ``to_text``: the host of
     ``connect/3``/``listen/3`` and the payload of ``send/2`` gated on
     ``isinstance(x, str)``, so a source-written ``connect('127.0.0.1', P, S)``
-    — an atom in the default ``-double_quotes(atom)`` mode — failed silently.
+    — an atom under ``-double_quotes(atom)`` — failed silently.
     """
 
     def test_connect_and_send_accept_atoms(self, echo_server):

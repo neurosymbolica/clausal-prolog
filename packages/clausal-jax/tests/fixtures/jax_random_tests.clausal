@@ -1,3 +1,4 @@
+-double_quotes(atom)
 -import_from(jax, [
     shape, dtype, element_count, sum, mean, max, min,
     array_list, array, bool_

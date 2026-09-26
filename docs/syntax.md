@@ -177,7 +177,7 @@ spelling: `_UNUSED` (uppercase, exact) is recognised; `_unused`, `_Unused`, and 
 casing are not exempt — one spelling, one grep target, no guessing which files opted out.
 
 ```clausal
-handle(EVENT, REASON_UNUSED) <- (EVENT == "click")   # REASON_UNUSED never read — fine
+handle(EVENT, REASON_UNUSED) <- (EVENT == 'click')   # REASON_UNUSED never read — fine
 ```
 
 If you don't need the name at all, prefer the bare anonymous variable `_` — it never warns,
@@ -530,8 +530,8 @@ the walrus operator:
 # VALUE is named to demonstrate the inline-naming feature itself — that
 # it *can* be named is the point, not any further use of it here.
 test("name a term inline") <- (
-    D is {"k": [1, 2]},
-    VALUE is [1, X] is D["k"],
+    D is {'k': [1, 2]},
+    VALUE is [1, X] is D['k'],
     X == 2
 )
 ```
@@ -693,16 +693,16 @@ Python dict literals in `.clausal` files create `DictTerm` objects — unificati
 
 ```clausal
 # Ground dict fact
-point({"x": 0, "y": 0}),
+point({'x': 0, 'y': 0}),
 
 # Dict pattern in head — X binds during unification
-get_x({"x": X, "y": _}, X),
+get_x({'x': X, 'y': _}, X),
 
 # Dict construction in body
-make_point(X, Y, P) <- (P is {"x": X, "y": Y})
+make_point(X, Y, P) <- (P is {'x': X, 'y': Y})
 
 # Nested dicts
-get_city({"address": {"city": C}}, C),
+get_city({'address': {'city': C}}, C),
 ```
 
 Two dicts unify iff they have the same keys and values unify pairwise. A variable unifies with a dict by binding to it.
@@ -717,7 +717,7 @@ Python set literals in `.clausal` files create `SetTerm` objects — unification
 
 ```clausal
 colors({1, 2, 3}),
-primary({"red", "green", "blue"}),
+primary({'red', 'green', 'blue'}),
 ```
 
 Two sets unify iff they contain the same elements (order irrelevant). Variables in set elements are not supported.
@@ -1006,7 +1006,7 @@ DCG rules provide syntactic sugar for difference-list grammars. Each `>>` rule c
 
 ```clausal
 # Terminal — consume literal tokens from the input list
-greeting >> (["hello", "world"])
+greeting >> (['hello', 'world'])
 
 # Non-terminal — call another DCG rule (state threaded automatically)
 sentence >> (noun_phrase, verb_phrase, noun_phrase)
@@ -1033,14 +1033,14 @@ Inline goals are written with `{...}` (Python set literal syntax). They execute 
 rule >> (a, b, c)
 
 # Disjunction
-letter >> (["a"] or ["b"] or ["c"])
+letter >> (['a'] or ['b'] or ['c'])
 ```
 
 ### Negation
 
 ```clausal
 # Negation as failure — state passes through
-not_a >> (not ["a"], [X])
+not_a >> (not ['a'], [X])
 ```
 
 ### Pushback / semicontext
@@ -1082,10 +1082,10 @@ The `>>` rewriting is purely syntactic — it transforms DCG rules into ordinary
 
 ```clausal
 # This DCG rule:
-greeting >> (["hello", "world"])
+greeting >> (['hello', 'world'])
 
 # Rewrites to this ordinary clause:
-greeting(S0, S) <- (S0 is ["hello", "world", *S])
+greeting(S0, S) <- (S0 is ['hello', 'world', *S])
 ```
 
 ```clausal
@@ -1134,7 +1134,7 @@ phrase(count3, [10], [N])  # → N = 13
 
 ```clausal
 # Trees as "leaf" or [Left, Right]
-count_leaves("leaf") >> (state(N0), {N == N0 + 1}, state(_, N))
+count_leaves('leaf') >> (state(N0), {N == N0 + 1}, state(_, N))
 count_leaves([L, R]) >> (count_leaves(L), count_leaves(R))
 
 # API: wrap with phrase/3

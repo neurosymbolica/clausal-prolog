@@ -1,3 +1,4 @@
+-double_quotes(atom)
 -import_from(sklearn, [Est, Dataset, Fitted, Split, LoadDataset, Fit, Predict,
                        Score, Transform, Algorithm, Learned, Param, MakeEst,
                        FitTransform, PredictProba, DecisionFunction])

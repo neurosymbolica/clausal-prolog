@@ -26,6 +26,7 @@ def write(tmp_path, name, src):
 # ── fixtures ─────────────────────────────────────────────────────────────────
 
 BO_SRC = """
+-double_quotes(atom)
 -private([verdict(A, B, C), cite(D), art52, beneficial_owner, not_beneficial_owner])
 
 chain_subject("parallel_below_threshold"),
@@ -43,6 +44,7 @@ test("public interface resolves on the parallel_below_threshold fixture") <- (
 """
 
 FIRST_GOAL_SRC = """
+-double_quotes(atom)
 chain_subject("simple"),
 
 test("first conjunct fails") <- (
@@ -52,6 +54,7 @@ test("first conjunct fails") <- (
 """
 
 BINDINGS_SRC = """
+-double_quotes(atom)
 prc("alpha", 10),
 prc("beta", 20),
 
@@ -62,6 +65,7 @@ test("later goal fails after a binding") <- (
 """
 
 PASSING_SRC = """
+-double_quotes(atom)
 prc("alpha", 10),
 
 test("passes") <- (
@@ -71,6 +75,7 @@ test("passes") <- (
 """
 
 ERROR_SRC = """
+-double_quotes(atom)
 prc("alpha", 10),
 
 test("raises") <- (
@@ -158,6 +163,7 @@ def test_unsatisfiable_goal_says_so(capsys, tmp_path):
 
 def test_predicate_with_no_solutions_at_all(capsys, tmp_path):
     p = write(tmp_path, "none.clausal", """
+        -double_quotes(atom)
         chk(X) <- (X > 0, X < 0),
 
         test("never") <- (
@@ -172,6 +178,7 @@ def test_predicate_with_no_solutions_at_all(capsys, tmp_path):
 
 def test_long_goal_is_wrapped_at_argument_boundaries(capsys, tmp_path):
     p = write(tmp_path, "long.clausal", """
+        -double_quotes(atom)
         -private([bo_verdict(A, B, C), cite(D), art52_1, beneficial_owner, not_beneficial_owner])
 
         bo_chain_subject("parallel_below_threshold"),
@@ -199,6 +206,7 @@ def test_long_goal_is_wrapped_at_argument_boundaries(capsys, tmp_path):
 def test_side_effecting_test_is_flagged(capsys, tmp_path):
     """The re-run genuinely re-applies assertz; say so rather than hide it."""
     p = write(tmp_path, "sfx.clausal", """
+        -double_quotes(atom)
         -dynamic(seen/1)
 
         test("side effects") <- (
@@ -214,6 +222,7 @@ def test_side_effecting_test_is_flagged(capsys, tmp_path):
 
 def test_diagnostic_output_is_not_polluted_by_test_writes(capsys, tmp_path):
     p = write(tmp_path, "noisy.clausal", """
+        -double_quotes(atom)
         test("noisy") <- (
             writeln("NOISE-FROM-BODY"),
             1 == 2
@@ -296,6 +305,7 @@ def test_runaway_probe_is_bounded(capsys, tmp_path, monkeypatch):
     """
     monkeypatch.setenv("CLAUSAL_TEST_DIAG_BUDGET", "1")
     p = write(tmp_path, "loop.clausal", """
+        -double_quotes(atom)
         -private([alfa, bravo, okay, deeper, other])
 
         chk(alfa, other),
@@ -365,6 +375,7 @@ def test_run_test_does_not_diagnose_by_default():
 # declared term perfectly well — that route no longer produces the confusion
 # this note exists for.  A ``Compound`` handed in from Python still does.
 COMPOUND_CONFUSION_SRC = """
+-double_quotes(atom)
 -private([cite(A)])
 
 make(T) <- (
@@ -395,6 +406,7 @@ def test_no_confusion_note_without_a_declared_class(capsys, tmp_path):
     # — no note.  Same Python-escape producer as above (§6.4: functor/3 builds
     # a cell now, not a generic Compound).
     src = """
+-double_quotes(atom)
     make(T) <- (
         T is ++(__import__("clausal.terms", fromlist=["Compound"]).Compound("zote", (1,)))
     ),

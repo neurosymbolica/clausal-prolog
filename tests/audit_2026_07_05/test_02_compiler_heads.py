@@ -28,6 +28,7 @@ from clausal.terms import ConcreteSeg, SegList, VarSeg
 # the first load's clauses).
 
 FIXTURE = '''
+-double_quotes(atom)
 # first-arg indexing: 4 clauses trigger _INDEX_THRESHOLD; 3-clause twins are
 # linear-scan controls.
 kind4(1, "one"),

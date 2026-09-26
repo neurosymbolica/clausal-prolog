@@ -57,11 +57,14 @@ main <- (
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `"url"` | string | *required* | request URL |
-| `"method"` | string | `"GET"` | HTTP method |
-| `"headers"` | DictTerm | `{}` | request headers |
-| `"data"` | string | `None` | request body |
-| `"timeout"` | number | `30` | Timeout in seconds |
+| `url` | string | *required* | request URL |
+| `method` | string | `"GET"` | HTTP method |
+| `headers` | DictTerm | `{}` | request headers |
+| `data` | string | `None` | request body |
+| `timeout` | number | `30` | Timeout in seconds |
+
+The keys are names: write them bare (declared) or single-quoted (`'url'`);
+a double-quoted `"url"` is matched by its text too.
 
 Unlike `get` and `post`, `request` does **not** fail on 4xx/5xx — it returns
 the status code so you can handle errors explicitly.

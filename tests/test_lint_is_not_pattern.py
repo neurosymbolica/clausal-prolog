@@ -48,7 +48,7 @@ def test_warns_on_nested_compound_with_var(tmp_path):
 
 def test_no_warn_on_scalar_rhs(tmp_path):
     assert _lint_warnings(tmp_path, "ok_int", "ok(S) <- (S is not 0)\n") == []
-    assert _lint_warnings(tmp_path, "ok_str", 'ok(K) <- (K is not "key")\n') == []
+    assert _lint_warnings(tmp_path, "ok_str", '-double_quotes(atom)\nok(K) <- (K is not "key")\n') == []
 
 
 def test_no_warn_on_empty_list(tmp_path):
@@ -61,5 +61,5 @@ def test_no_warn_on_bare_var_rhs(tmp_path):
 
 def test_no_warn_on_ground_compound(tmp_path):
     ws = _lint_warnings(tmp_path, "ok_ground",
-                        '-private([tag(X)])\nok(S) <- (S is not tag("a"))\n')
+                        '-double_quotes(atom)\n-private([tag(X)])\nok(S) <- (S is not tag("a"))\n')
     assert ws == []

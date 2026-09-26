@@ -96,7 +96,7 @@ class TestBytesDCGBinaryProtocol:
 
     def test_phrase_sequence_literal(self):
         # nv  — sequence(b"GET ") non-terminal matches a bytes literal span
-        cls, m = _load_rule("bp_dcg2", 'g >> (sequence(b"GET "))\n')
+        cls, m = _load_rule("bp_dcg2", '-double_quotes(atom)\ng >> (sequence(b"GET "))\n')
         rest = Var()
         snap = _first(call("phrase", cls, b"GET /index", rest, module=m),
                       lambda: (deref(rest), type(deref(rest))))

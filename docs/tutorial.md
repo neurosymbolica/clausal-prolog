@@ -20,9 +20,9 @@ required.
 Create a file called `hello.clausal`:
 
 ```clausal
-greeting("hello"),
-greeting("hi"),
-greeting("hey there"),
+greeting('hello'),
+greeting('hi'),
+greeting('hey there'),
 ```
 
 Each line is a **fact** — an unconditional statement that something is true.
@@ -67,10 +67,10 @@ This prints every greeting in turn: `hello`, `hi`, `hey there`.
 Let's model a small family tree. Create `family.clausal`:
 
 ```clausal
-parent("alice", "bob"),
-parent("alice", "carol"),
-parent("bob", "dave"),
-parent("bob", "eve"),
+parent('alice', 'bob'),
+parent('alice', 'carol'),
+parent('bob', 'dave'),
+parent('bob', 'eve'),
 
 grandparent(GRANDPARENT, GRANDCHILD) <- (
     parent(GRANDPARENT, MIDDLE),
@@ -78,7 +78,7 @@ grandparent(GRANDPARENT, GRANDCHILD) <- (
 )
 ```
 
-The first four lines are **facts**: `parent("alice", "bob")` means "alice is a parent
+The first four lines are **facts**: `parent('alice', 'bob')` means "alice is a parent
 of bob".
 
 The last block is a **rule**. Read it as: "GRANDPARENT is a grandparent of GRANDCHILD
@@ -127,8 +127,8 @@ sibling(A, B) <- (
 
 `A` and `B` are logic variables — they stand for any term at all. when Clausal
 searches for clauses whose heads unify with a goal, variables are bound to make
-the terms identical: if `A` is unbound and unifies with `"bob"`, then `A`
-becomes `"bob"` for the rest of that branch.
+the terms identical: if `A` is unbound and unifies with `'bob'`, then `A`
+becomes `'bob'` for the rest of that branch.
 
 The **anonymous variable** `_` unifies with anything and is never reported in
 results:
@@ -145,9 +145,9 @@ Unification finds the most general way to make two terms identical. Both terms
 can contain variables, and variables on **either side** can be bound. This
 bidirectionality is what makes relations work in all directions.
 
-when you query `parent("alice", CHILD)`, Clausal searches for clauses whose
-heads unify with the goal. The clause `parent("alice", "bob")` unifies when
-CHILD is bound to `"bob"`. No assignment, no mutation — each branch of the
+when you query `parent('alice', CHILD)`, Clausal searches for clauses whose
+heads unify with the goal. The clause `parent('alice', 'bob')` unifies when
+CHILD is bound to `'bob'`. No assignment, no mutation — each branch of the
 search has its own consistent set of bindings.
 
 ---
@@ -296,7 +296,7 @@ bachelor(PERSON) <- (
 )
 ```
 
-If `married("alice")` is not in the database, `not married("alice")` succeeds.
+If `married('alice')` is not in the database, `not married('alice')` succeeds.
 
 ### when not to use it
 
@@ -386,10 +386,10 @@ Let's put it all together with a classic logic programming problem — finding r
 nodes in a directed graph.
 
 ```clausal
-edge("a", "b"),
-edge("b", "c"),
-edge("c", "d"),
-edge("b", "d"),
+edge('a', 'b'),
+edge('b', 'c'),
+edge('c', 'd'),
+edge('b', 'd'),
 
 reachable(SOURCE, DEST) <- edge(SOURCE, DEST)
 

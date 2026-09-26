@@ -4,6 +4,7 @@
 # Expected (the bug): the two "var" tests for int and float FAIL; everything else passes.
 
 # --- numeric literals in head, queried as var: BUG (no solution) ---
+-double_quotes(atom)
 fine_int(DAYS, 20000) <- (DAYS >= 40)
 test("int literal head, query as var")   <- (fine_int(50, F), F == 20000)
 

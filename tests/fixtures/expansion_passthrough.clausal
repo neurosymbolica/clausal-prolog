@@ -1,5 +1,6 @@
 # Term expansion: identity pass-through
 # term_expansion that passes all items through unchanged.
+-double_quotes(atom)
 term_expansion(TERM, TERM, STATE, STATE) <- True
 
 foo("a"),

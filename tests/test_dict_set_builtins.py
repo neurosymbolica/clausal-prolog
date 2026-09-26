@@ -713,7 +713,7 @@ class TestInOperatorDictSet:
     def _setup(self, tmp_path):
         src = tmp_path / "in_dict.clausal"
         src.write_text(
-            "# predicates\n"
+            "-double_quotes(atom)\n# predicates\n"
             "\n"
             "# Enumerate keys\n"
             "enum_keys(KEY, DICT) <- (KEY in DICT)\n"

@@ -27,6 +27,7 @@ from clausal.logic.variables import Var, deref
 from clausal.terms import Call, LoadName
 
 _SRC = """\
+-double_quotes(atom)
 -module({name}, [v(STATUS, CITATION), w(A, B), mk(T), mk_head(T), tok/3, p1(X), p3(X, R)])
 -private([ok, cited, solo])
 v(ok, cited),

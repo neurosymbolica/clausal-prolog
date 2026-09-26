@@ -443,6 +443,7 @@ class TestShorterHeadAfterLongerIsRefused:
     def test_dcg_nonterminals_are_untouched(self, tmp_path):
         """A DCG rule's written arity is below its class arity by design."""
         mod = _load(tmp_path, "merge_dcg", """
+            -double_quotes(atom)
             greeting >> (["hello", "world"])
         """)
         assert "greeting" in dir(mod)
@@ -534,6 +535,7 @@ class TestTheRemedyPrintsTheTemplateEdit:
     def test_the_template_reuses_the_head_variable_names(self, tmp_path):
         """A head written with real variables gets them back, uppercased."""
         msg = self._msg(tmp_path, "remedy_vars", """
+            -double_quotes(atom)
             -private([
                 verdict(STATUS)
             ])

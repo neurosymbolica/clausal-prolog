@@ -1,4 +1,5 @@
 # OR-Tools MIP integration tests (CBC solver)
+-double_quotes(atom)
 
 test("cbc integer maximize 3x+5y s.t. x+y<=10") <- (
     ortools.lp.int_var(X, 0, 100),

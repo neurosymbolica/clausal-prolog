@@ -2565,8 +2565,9 @@ def _op_spelling(op, context):
     """The SPELLING of an operator ATOM (``#=``, ``#<``, ``<``, …), or None.
 
     Spec §6.4: an operator name is an ATOM.  ``#=`` cannot be written bare in
-    the surface (``#`` opens a comment), so source spells it ``"#="`` — which
-    in the default ``-double_quotes(atom)`` mode is the atom ``("#=",)``.
+    the surface (``#`` opens a comment), so source spells it ``'#='`` -- or
+    ``"#="`` under ``-double_quotes(atom)``; under the chars default that
+    spelling is a STRING and is refused with the type_error below.
     Before THE FLIP (2026-09-06-atoms-as-cells-strings) this library gated on
     ``isinstance(op, str)``, which after the flip matches a STRING and nothing
     a source program can write, so every source-written call failed silently.

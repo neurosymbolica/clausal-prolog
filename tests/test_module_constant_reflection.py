@@ -24,6 +24,7 @@ def _load(tmp_path, name, text):
 def test_lookup_module_and_name_bound(tmp_path):
     _load(tmp_path, "owner1", "-constant_value(c_pi, 3.14159)\n")
     m = _load(tmp_path, "user1", """
+        -double_quotes(atom)
         -import_module(tmc_owner1)
         got(X) <- module_constant(tmc_owner1, "c_pi", X)
     """)
@@ -35,6 +36,7 @@ def test_lookup_module_and_name_bound(tmp_path):
 def test_lookup_missing_name_fails(tmp_path):
     _load(tmp_path, "owner2", "-constant_value(c_pi, 3.14159)\n")
     m = _load(tmp_path, "user2", """
+        -double_quotes(atom)
         -import_module(tmc_owner2)
         got(X) <- module_constant(tmc_owner2, "c_nope", X)
     """)
@@ -45,6 +47,7 @@ def test_lookup_missing_name_fails(tmp_path):
 def test_check_mode_true_and_false(tmp_path):
     _load(tmp_path, "owner3", "-constant_value(c_a, 1)\n")
     m = _load(tmp_path, "user3", """
+        -double_quotes(atom)
         -import_module(tmc_owner3)
         ok <- module_constant(tmc_owner3, "c_a", 1)
         bad <- module_constant(tmc_owner3, "c_a", 2)
@@ -76,6 +79,7 @@ def test_module_unbound_enumerates_across_loaded_modules(tmp_path):
     module_constant/3 searches every loaded Clausal module."""
     owner = _load(tmp_path, "owner5", "-constant_value(c_unique5, 777)\n")
     m = _load(tmp_path, "user5", """
+        -double_quotes(atom)
         find(M, V) <- module_constant(M, "c_unique5", V)
     """)
     mv, vv = Var(), Var()

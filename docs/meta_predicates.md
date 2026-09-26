@@ -40,9 +40,9 @@ adults(PEOPLE, ADULTS) <- (
 The only difference between bagof and findall is how they handle the empty case:
 
 ```clausal
-age("alice", 30),
-age("bob", 25),
-age("carol", 30),
+age('alice', 30),
+age('bob', 25),
+age('carol', 30),
 
 all_people(PEOPLE) <- bagof(NAME, age(NAME, _), PEOPLE)
 
@@ -224,7 +224,7 @@ split_pos(XS, YES, NO) <- span((X <- (X > 0)), XS, YES, NO)
 `group_by(Goal, List, Groups)` — group consecutive elements by key projected via `Goal(Elem, Key)`.
 
 ```clausal
-by_sign(XS, GS) <- group_by(((X, K) <- if_(X > 0, K is "pos", K is "neg")), XS, GS)
+by_sign(XS, GS) <- group_by(((X, K) <- if_(X > 0, K is 'pos', K is 'neg')), XS, GS)
 ```
 
 ### sort_by/3

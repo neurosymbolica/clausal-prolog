@@ -108,9 +108,9 @@ The extra arguments are passed as positional parameters to the lambda:
 A lambda can produce multiple solutions. If the lambda body calls a multi-solution predicate, each solution is propagated to the caller:
 
 ```clausal
-color("red"),
-color("green"),
-color("blue"),
+color('red'),
+color('green'),
+color('blue'),
 
 get_color(C) <- call_goal((X <- (color(X), C is X)), _)
 ```

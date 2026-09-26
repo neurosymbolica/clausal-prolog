@@ -1,4 +1,5 @@
 # OR-Tools LP integration tests (GLOP only — one LP solver per trail)
+-double_quotes(atom)
 
 test("glop simple feasible") <- (
     ortools.lp.var(X, 0.0, 100.0),

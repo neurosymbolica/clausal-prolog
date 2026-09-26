@@ -1,8 +1,8 @@
 # === Predicate Indexing ===
 
 # --8<-- [start:color_query_modes]
-color("red", TEMP)       # first arg ground  -> first-arg index handles this
-color(NAME, "warm")      # second arg ground -> first-arg index can't help
+color('red', TEMP)       # first arg ground  -> first-arg index handles this
+color(NAME, 'warm')      # second arg ground -> first-arg index can't help
 color(NAME, TEMP)        # neither ground    -> full scan either way
 # --8<-- [end:color_query_modes]
 

@@ -131,6 +131,7 @@ def test_the_first_registration_wins_and_signature_3_reports_it(tmp_path):
     the first real head, a repeated variable is numbered, a non-variable
     argument is ``arg_<i>``, and a DCG head carries its two list slots."""
     module = _write_module(tmp_path, "s4rs_multi", """
+        -double_quotes(atom)
         -private([s4rs_decl(Q, W)])
         -dynamic(s4rs_dyn/2)
 

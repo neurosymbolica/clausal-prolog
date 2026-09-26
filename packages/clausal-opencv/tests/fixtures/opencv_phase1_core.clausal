@@ -1,3 +1,4 @@
+-double_quotes(atom)
 -import_module(numpy)
 -import_from(opencv, [
     imread, imwrite, image_encoded,

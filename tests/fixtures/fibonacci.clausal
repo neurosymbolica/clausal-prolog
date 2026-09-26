@@ -11,6 +11,7 @@
 # built positionally as of 2026-09-19 and a keyword argument in a term or a
 # head is a load-time error.  Write -private([fib(n, result)]) to name them.)
 
+-double_quotes(atom)
 
 fib(0, 0),
 fib(1, 1),

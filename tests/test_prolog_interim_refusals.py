@@ -68,7 +68,7 @@ class TestNegatedMembershipRefusal:
         ("p(K, L) <- (sort(L, XS), K not in XS)\n", "\\+ member(K, XS)"),
         # sort/4: `@<` is not Python-parseable, so Clausal spells the order
         # argument as a string.
-        ('p(K, L) <- (sort(0, "@<", L, XS), K not in XS)\n', "\\+ member(K, XS)"),
+        ('-double_quotes(atom)\np(K, L) <- (sort(0, "@<", L, XS), K not in XS)\n', "\\+ member(K, XS)"),
         ("p(K, G) <- (setof(X, q(X), XS), K not in XS)\n", "\\+ member(K, XS)"),
         ("p(K, G) <- (bagof(X, q(X), XS), K not in XS)\n", "\\+ member(K, XS)"),
     ])

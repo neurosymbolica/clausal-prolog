@@ -1,3 +1,4 @@
+-double_quotes(atom)
 -import_from(jax, [
     array, array_list, shape, allclose,
     median, std, var, percentile, quantile, cov, corrcoef,

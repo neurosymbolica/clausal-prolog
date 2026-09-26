@@ -86,6 +86,7 @@ _OWNER = """
 """
 
 _IMPORTER = """
+    -double_quotes(atom)
     -module(mpm_ERA, [])
     -hide([secret])
     -import_from(mpu_ERA, [apply_all, apply_all_raw, call_it, parse_with,
@@ -338,6 +339,7 @@ _GRULES = """
 """
 
 _GDOM = """
+    -double_quotes(atom)
     -module(mgdom_ERA, [check(A, B, C, D), g1a(X), g2a(X, Y), g3a(X, Y, Z),
                         greet/2])
     -import_module(mglib_ERA)

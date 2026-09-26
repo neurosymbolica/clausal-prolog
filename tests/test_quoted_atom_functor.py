@@ -137,7 +137,7 @@ def test_bare_titlecase_body_goal_is_still_refused(tmp_path):
 
 @pytest.mark.parametrize("name, text", [
     ("dqfact", '"Foo"(1),\n'),
-    ("dqbody", 'bar(1),\np(X) <- ("Foo"(X))\n'),
+    ("dqbody", '-double_quotes(atom)\nbar(1),\np(X) <- ("Foo"(X))\n'),
     ("dqlower", '"foo"(1),\n'),
 ])
 def test_double_quoted_functor_is_still_refused_by_iso_633(

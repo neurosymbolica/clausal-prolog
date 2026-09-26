@@ -251,6 +251,7 @@ def test_an_imported_predicate_is_reached_through_the_adopted_row(tmp_path,
 
 
 GENERIC_COMPOUND_SRC = '''\
+-double_quotes(atom)
 -dynamic(cite/1)
 
 make(T) <- (

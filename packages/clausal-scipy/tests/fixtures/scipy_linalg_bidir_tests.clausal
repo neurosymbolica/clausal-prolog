@@ -1,3 +1,4 @@
+-double_quotes(atom)
 -import_from(scipy_linalg, [Solve, Inverse, MatrixExpLog,
                              QrDecompose, SingularValueDecompose,
                              LuDecompose, Cholesky,

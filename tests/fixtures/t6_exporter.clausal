@@ -10,6 +10,7 @@
 #   pair/2  the locality pin at a second arity
 #   ready/0 the zero-argument goal a bare-str inner goal names
 #   libp/1  imported from t6_lib — reached only through the namespace route
+-double_quotes(atom)
 -module(t6_exporter, [p(X), tp(X), home(W), pair(A, B), ready(), libp(X)])
 -import_from(tests.fixtures.t6_lib, [libp])
 -table(tp/1)

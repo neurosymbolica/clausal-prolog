@@ -29,6 +29,7 @@ from clausal.import_hook import (
     runtime_builtins,
 )
 from clausal.logic.compiler_v2 import compile_module
+from clausal.logic.exceptions import LogicException
 from clausal.logic.database import Module as LogicModule, head_key
 from clausal.logic.solve import call
 from clausal.logic.term_expansion import (
@@ -87,7 +88,7 @@ class TestPassThrough:
     def test_no_expansion_returns_same(self):
         """Without term_expansion clauses, items pass through unchanged."""
         # nv
-        source = 'foo("a"),\nfoo("b"),\n'
+        source = '-double_quotes(atom)\nfoo("a"),\nfoo("b"),\n'
         preds, _, md = _parse_and_collect(source)
         result = run_term_expansion(preds, md)
         assert result is preds  # exact same list object (no copy)
@@ -118,7 +119,7 @@ class TestTermExpansionDetection:
     def test_non_te_not_detected(self):
         """Regular clauses are not detected as term_expansion."""
         # nv
-        source = 'foo("a"),\n'
+        source = '-double_quotes(atom)\nfoo("a"),\n'
         preds, _, md = _parse_and_collect(source)
         assert len(preds) == 1
         assert not _is_term_expansion_clause(preds[0])
@@ -131,7 +132,7 @@ class TestIdentityExpansion:
         """term_expansion(T, T, M, M) passes all items through."""
         # nv
         source = (
-            'term_expansion(_term, _term, _m0, _m0) <- True\n'
+            '-double_quotes(atom)\nterm_expansion(_term, _term, _m0, _m0) <- True\n'
             'foo("a"),\n'
             'foo("b"),\n'
         )
@@ -163,7 +164,7 @@ class TestSuppression:
         """term_expansion(T, 'none', M, M) suppresses all items."""
         # nv
         source = (
-            'term_expansion(_term, "none", _m0, _m0) <- True\n'
+            '-double_quotes(atom)\nterm_expansion(_term, "none", _m0, _m0) <- True\n'
             'foo("a"),\n'
             'foo("b"),\n'
         )
@@ -188,7 +189,7 @@ class TestTeNotExpanded:
         """TE clauses are separated, not passed through expansion."""
         # nv
         source = (
-            'term_expansion(_term, _term, _m0, _m0) <- True\n'
+            '-double_quotes(atom)\nterm_expansion(_term, _term, _m0, _m0) <- True\n'
             'foo("x"),\n'
         )
         preds, _, md = _parse_and_collect(source)
@@ -206,7 +207,7 @@ class TestOneToMany:
         """term_expansion(T, [T, T], M, M) duplicates each item."""
         # nv
         source = (
-            'term_expansion(_term, [_term, _term], _m0, _m0) <- True\n'
+            '-double_quotes(atom)\nterm_expansion(_term, [_term, _term], _m0, _m0) <- True\n'
             'foo("a"),\n'
         )
         preds, _, md = _parse_and_collect(source)
@@ -219,7 +220,7 @@ class TestOneToMany:
         """Full pipeline: duplicate items → double the clauses."""
         # nv
         source = (
-            'term_expansion(_term, [_term, _term], _m0, _m0) <- True\n'
+            '-double_quotes(atom)\nterm_expansion(_term, [_term, _term], _m0, _m0) <- True\n'
             'item("x"),\n'
             'item("y"),\n'
         )
@@ -246,7 +247,7 @@ class TestModuleState:
         # ``test_state_body_arith_error_propagates`` below.)
         # nv
         source = (
-            'term_expansion(_term, _term, module_expansion_state(_i, _f, _count), '
+            '-double_quotes(atom)\nterm_expansion(_term, _term, module_expansion_state(_i, _f, _count), '
             'module_expansion_state(_i, _f, _next)) <- '
             '(_count == 0, _next == _count + 1)\n'
             'foo("a"),\n'
@@ -272,7 +273,7 @@ class TestModuleState:
         """
         # nv
         source = (
-            'term_expansion(_term, _term, module_expansion_state(_i, _f, _count), '
+            '-double_quotes(atom)\nterm_expansion(_term, _term, module_expansion_state(_i, _f, _count), '
             'module_expansion_state(_i, _f, _next)) <- eval_(_count + 1, _next)\n'
             'foo("a"),\n'
         )
@@ -560,7 +561,7 @@ class TestModuleItemsUnchanged:
         """Directives in module_items survive term expansion."""
         # nv
         from clausal.pythonic_ast.nodes import Directive
-        source = '-dynamic(color/2)\ncolor("sky", "blue"),\n'
+        source = '-double_quotes(atom)\n-dynamic(color/2)\ncolor("sky", "blue"),\n'
         preds, items, md = _parse_and_collect(source)
         directives = [i for i in items if isinstance(i, Directive)]
         assert len(directives) == 1
@@ -573,7 +574,7 @@ class TestIntegrationWithCompileModule:
     def test_no_expansion_full_pipeline(self):
         """Full pipeline with no term_expansion clauses works normally."""
         # nv
-        source = 'foo("a"),\nfoo("b"),\n'
+        source = '-double_quotes(atom)\nfoo("a"),\nfoo("b"),\n'
         preds, items, md = _parse_and_collect(source)
         lm = compile_module(preds, items, md, "_test_no_te")
         md["$module"] = lm
@@ -588,7 +589,7 @@ class TestIntegrationWithCompileModule:
         """Full pipeline with identity TE — all clauses survive."""
         # nv
         source = (
-            'term_expansion(_term, _term, _m0, _m0) <- True\n'
+            '-double_quotes(atom)\nterm_expansion(_term, _term, _m0, _m0) <- True\n'
             'bar("x"),\n'
             'bar("y"),\n'
         )
@@ -606,7 +607,7 @@ class TestIntegrationWithCompileModule:
         """Full pipeline with suppression TE — no clauses compiled."""
         # nv
         source = (
-            'term_expansion(_term, "none", _m0, _m0) <- True\n'
+            '-double_quotes(atom)\nterm_expansion(_term, "none", _m0, _m0) <- True\n'
             'baz("a"),\n'
         )
         preds, items, md = _parse_and_collect(source)
@@ -675,7 +676,7 @@ class TestNewFunctorsFromExpansion:
         # result is a new Predicate node with head dst(...).
         # nv
         source = (
-            'term_expansion(_term, _exp, _m0, _m0) <- (\n'
+            '-double_quotes(atom)\nterm_expansion(_term, _exp, _m0, _m0) <- (\n'
             '    _term is _exp,\n'  # identity — passes item through
             '    _m0 is _m0\n'
             ')\n'
@@ -695,7 +696,7 @@ class TestNewFunctorsFromExpansion:
         """
         # nv
         source = (
-            'term_expansion(_term, [_term, _term], _m0, _m0) <- True\n'
+            '-double_quotes(atom)\nterm_expansion(_term, [_term, _term], _m0, _m0) <- True\n'
             'color("red"),\n'
             'color("blue"),\n'
         )
@@ -720,7 +721,7 @@ class TestInitFinalInjection:
         # init list (prepended items).
         # nv
         source = (
-            'term_expansion(_term, _term, module_expansion_state(_init, _final, _s), '
+            '-double_quotes(atom)\nterm_expansion(_term, _term, module_expansion_state(_init, _final, _s), '
             'module_expansion_state([_term | _init], _final, _s)) <- True\n'
             'item("a"),\n'
             'item("b"),\n'
@@ -735,7 +736,7 @@ class TestInitFinalInjection:
         """term_expansion accumulates final items via module state."""
         # nv
         source = (
-            'term_expansion(_term, _term, module_expansion_state(_init, _final, _s), '
+            '-double_quotes(atom)\nterm_expansion(_term, _term, module_expansion_state(_init, _final, _s), '
             'module_expansion_state(_init, [_term | _final], _s)) <- True\n'
             'item("x"),\n'
         )
@@ -748,7 +749,7 @@ class TestInitFinalInjection:
         """Full pipeline with init/final injection — all items compiled."""
         # nv
         source = (
-            'term_expansion(_term, _term, module_expansion_state(_init, _final, _s), '
+            '-double_quotes(atom)\nterm_expansion(_term, _term, module_expansion_state(_init, _final, _s), '
             'module_expansion_state([_term | _init], [_term | _final], _s)) <- True\n'
             'val("one"),\n'
         )
@@ -786,3 +787,167 @@ class TestNestedVarSubstitution:
         assert names == [mint("income"), mint("stays")], (
             f"matched KEY must flow into the output; got {results!r}"
         )
+
+
+class TestExpansionResultIsValidated:
+    """A term_expansion/4 answer that is not a clause, a list of clauses or
+    the atom ``none`` is an ISO type error at load -- not an AttributeError
+    from deep inside goal expansion.
+
+    Measured 2026-09-26 while preparing the -double_quotes default flip: a
+    chars-mode module writing the suppression sentinel as ``"none"`` (a
+    STRING under that mode) crashed with ``'tuple' object has no attribute
+    'body'`` at goal_expansion.py, naming neither the rule nor the fix.
+    """
+
+    def test_a_chars_string_none_is_a_type_error_that_names_the_atom(
+            self, tmp_path):
+        # A file load, not ``_parse_and_collect``: the quote map that tells
+        # ``"none"`` from ``'none'`` is built from the SOURCE LINES, which
+        # the bare EmbedTransformer() there is never handed.
+        path = tmp_path / "te_chars_none.clausal"
+        path.write_text(
+            '-double_quotes(chars)\n'
+            'term_expansion(_, "none", _m0, _m0) <- True\n'
+            'foo("a"),\n'
+        )
+        with pytest.raises(LogicException) as exc:
+            _load_module("_te_chars_none_shape", str(path))
+        term = exc.value.term
+        assert term.functor == "error"
+        formal, context = term.args
+        assert formal.functor == "type_error"
+        assert formal.args[0] == mint("callable")
+        assert formal.args[1] == ("$chars", "none")
+        assert "the suppression sentinel is the ATOM none" in context
+        assert "write none or 'none'" in context
+
+    def test_a_number_answer_is_a_type_error(self):
+        source = (
+            '-double_quotes(atom)\nterm_expansion(_term, 42, _m0, _m0) <- True\n'
+            'foo("a"),\n'
+        )
+        preds, _, md = _parse_and_collect(source)
+        with pytest.raises(LogicException) as exc:
+            run_term_expansion(preds, md)
+        formal = exc.value.term.args[0]
+        assert formal.functor == "type_error" and formal.args[1] == 42
+
+    def test_a_bad_element_inside_a_list_answer_is_a_type_error(self):
+        source = (
+            '-double_quotes(atom)\nterm_expansion(foo(X), [foo(X), 7], _m0, _m0) <- True\n'
+            'foo("a"),\n'
+        )
+        preds, _, md = _parse_and_collect(source)
+        with pytest.raises(LogicException) as exc:
+            run_term_expansion(preds, md)
+        formal = exc.value.term.args[0]
+        assert formal.functor == "type_error" and formal.args[1] == 7
+
+    def test_an_unbound_answer_is_an_instantiation_error(self):
+        source = (
+            'term_expansion(_, _E, _m0, _m0) <- True\n'
+            'foo("a"),\n'
+        )
+        preds, _, md = _parse_and_collect(source)
+        with pytest.raises(LogicException) as exc:
+            run_term_expansion(preds, md)
+        formal, context = exc.value.term.args
+        assert formal == mint("instantiation_error")
+        assert "term_expansion/4: the expansion is unbound" in context
+
+    def test_an_unbound_answer_on_the_head_retry_names_a_head_term(self):
+        source = (
+            'term_expansion(foo(_), _E, _m0, _m0) <- True\n'
+            'foo("a"),\n'
+        )
+        preds, _, md = _parse_and_collect(source)
+        with pytest.raises(LogicException) as exc:
+            run_term_expansion(preds, md)
+        assert "a head term" in exc.value.term.args[1]
+
+    def test_a_bad_item_in_the_final_list_is_a_type_error_naming_the_slot(self):
+        source = (
+            'term_expansion(_term, _term, module_expansion_state(_i, _final, _s), '
+            'module_expansion_state(_i, [42 | _final], _s)) <- True\n'
+            'foo("a"),\n'
+        )
+        preds, _, md = _parse_and_collect(source)
+        with pytest.raises(LogicException) as exc:
+            run_term_expansion(preds, md)
+        formal, context = exc.value.term.args
+        assert formal.functor == "type_error" and formal.args[1] == 42
+        assert "Final list" in context and "none" not in context
+
+    def test_an_unbound_item_in_the_init_list_is_an_instantiation_error(self):
+        source = (
+            'term_expansion(_term, _term, module_expansion_state(_init, _f, _s), '
+            'module_expansion_state([_U | _init], _f, _s)) <- True\n'
+            'foo("a"),\n'
+        )
+        preds, _, md = _parse_and_collect(source)
+        with pytest.raises(LogicException) as exc:
+            run_term_expansion(preds, md)
+        formal, context = exc.value.term.args
+        assert formal == mint("instantiation_error") and "Init list" in context
+
+    def test_the_none_atom_in_the_init_list_is_refused_not_a_fact(self):
+        source = (
+            'term_expansion(_term, _term, module_expansion_state(_init, _f, _s), '
+            "module_expansion_state(['none' | _init], _f, _s)) <- True\n"
+            'foo("a"),\n'
+        )
+        preds, _, md = _parse_and_collect(source)
+        with pytest.raises(LogicException) as exc:
+            run_term_expansion(preds, md)
+        formal, context = exc.value.term.args
+        assert formal.functor == "type_error" and formal.args[1] == mint("none")
+        assert "suppression has no meaning" in context
+
+    def test_a_head_term_in_the_init_list_becomes_a_fact(self):
+        source = (
+            '-private([bar])\n'
+            'term_expansion(_term, _term, module_expansion_state(_init, _f, _s), '
+            'module_expansion_state([bar | _init], _f, _s)) <- True\n'
+            'foo("a"),\n'
+        )
+        preds, _, md = _parse_and_collect(source)
+        result = run_term_expansion(preds, md)
+        assert deref(result[0].head) == mint("bar") and result[0].body is True
+
+    def test_the_chars_none_error_surfaces_through_a_full_load(self, tmp_path):
+        path = tmp_path / "te_chars_none_load.clausal"
+        path.write_text(
+            '-double_quotes(chars)\n'
+            'term_expansion(_, "none", _m0, _m0) <- True\n'
+            'foo("a"),\n'
+        )
+        with pytest.raises(LogicException, match="the suppression sentinel is the ATOM none"):
+            _load_module("_te_chars_none_load", str(path))
+
+    def test_a_bad_item_in_the_init_list_is_a_type_error_naming_the_slot(self):
+        source = (
+            'term_expansion(_term, _term, module_expansion_state(_init, _f, _s), '
+            'module_expansion_state([42 | _init], _f, _s)) <- True\n'
+            'foo("a"),\n'
+        )
+        preds, _, md = _parse_and_collect(source)
+        with pytest.raises(LogicException) as exc:
+            run_term_expansion(preds, md)
+        formal, context = exc.value.term.args
+        assert formal.functor == "type_error" and formal.args[1] == 42
+        assert "Init list" in context
+
+    def test_a_head_pattern_answer_that_is_an_atom_becomes_a_fact(self):
+        """The positive side of the gate: an atom head, and a list of head
+        terms, still wrap into facts on the head-pattern retry."""
+        source = (
+            '-private([flag, foo])\n'
+            'term_expansion(foo(X), [foo(X), flag], _m0, _m0) <- True\n'
+            'foo(1),\n'
+        )
+        preds, _, md = _parse_and_collect(source)
+        result = run_term_expansion(preds, md)
+        assert _head_functor(result[0].head) == "foo"
+        assert deref(result[1].head) == mint("flag")   # the atom head, wrapped
+        assert all(r.body is True for r in result)

@@ -111,7 +111,7 @@ def test_subscript_goal_position_is_rhs_str_key_lowers_same_as_name_key():
     bare-Name key -- both denote the SAME atom post str-literal migration
     (R2), so `P["ground"]` and `P[ground]` must lower identically."""
     out = clausal_source_to_prolog(
-        'x(P, V) <- (V is P["ground"])\n', strict=True)
+        '-double_quotes(atom)\nx(P, V) <- (V is P["ground"])\n', strict=True)
     assert "profile_get_strict(P, ground, V)" in out
 
 

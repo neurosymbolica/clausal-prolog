@@ -475,6 +475,7 @@ class TestTaxWitnessWorkedExample:
 # ── §6.2 -- date-ordering witness (au/aml_ctf, re-derived) ───────────────────────
 
 _DATE_SOURCE = (
+    "-double_quotes(atom)\n"
     "-import_from(date_time, [\n"
     "    date])\n"
     "\n"
@@ -570,7 +571,8 @@ profile_key(exception_f),
 profile_key(harm),
 """
 
-_ASKER_CLAUSAL = """-import_from(keys, [profile_key])
+_ASKER_CLAUSAL = """-double_quotes(atom)
+-import_from(keys, [profile_key])
 hit(K) <- (K is "exception_f", profile_key(K))
 """
 
@@ -680,7 +682,8 @@ class TestNewlineBearingLiteralConsults:
 # this literal is gone (item J, 2026-09-07). This pin records the
 # agreement and goes RED the day the two sides part again.
 
-_NIL_SOURCE = """empty_list([]),
+_NIL_SOURCE = """-double_quotes(atom)
+empty_list([]),
 hit(K) <- (K is "[]", empty_list(K))
 """
 

@@ -1,3 +1,4 @@
+-double_quotes(atom)
 squares(NUMBERS, SQUARES) <- (
     findall(
         SQUARE,

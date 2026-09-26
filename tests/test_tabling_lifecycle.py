@@ -199,7 +199,8 @@ class TestTableTargetRefused:
 
     def test_specialize_alias_target_refused(self, load):
         with pytest.raises(SyntaxError) as exc:
-            load("""-import_from(clausal.examples.metainterpreters, [solve])
+            load("""-double_quotes(atom)
+-import_from(clausal.examples.metainterpreters, [solve])
 
 tiny_program(PROGRAM) <- (
     PROGRAM is [

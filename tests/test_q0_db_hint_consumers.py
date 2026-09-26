@@ -197,6 +197,7 @@ def test_compile_time_cell_signature_lets_a_predicate_binding_win(tmp_path):
 # only in ``sys.modules``.
 
 _RT_SRC = """\
+-double_quotes(atom)
 -module({name}, [])
 {name}_p(1, 10),
 {name}_p(2, 20),

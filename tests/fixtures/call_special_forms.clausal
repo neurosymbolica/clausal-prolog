@@ -2,6 +2,7 @@
 # tests/test_call_runs_special_form_cells.py.  For every row N: b(N, X, Y) is
 # the goal written as a clause BODY, and g(N, X, Y, G) builds the SAME text in
 # TERM position; run(N, X, Y) calls that term.  Both must answer alike.
+-double_quotes(atom)
 -module(call_special_forms, [oops, boom(A), caught, done, foo])
 -import_from(py.re, [match, search])
 -allow_singletons

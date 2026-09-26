@@ -194,6 +194,7 @@ class TestReifiedClauseRewrite:
     # DEFAULT-mode source (no ``-double_quotes(chars)``): ``"GtE"``/``"Gt"``
     # are class NAMES, so they are atoms (§6.4) — the only literals here.
     _MATCHERS = """\
+-double_quotes(atom)
 -import_from(reflection, [
     reified_clause, reified_subterm, op_node, replace_subterm,
 ])

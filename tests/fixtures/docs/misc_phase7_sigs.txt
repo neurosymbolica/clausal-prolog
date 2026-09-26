@@ -5,8 +5,8 @@
 --8<-- [start:metainterp_graph_test]
 test("tree path(a,c) transitive") <- (
     graph_program(P),
-    tree_solve(P, path("a", "c")),
-    TREE is solve_tree(P, path("a", "c")),
+    tree_solve(P, path('a', 'c')),
+    TREE is solve_tree(P, path('a', 'c')),
     nonvar(TREE)
 )
 --8<-- [end:metainterp_graph_test]
@@ -26,9 +26,9 @@ TREE is [
 --8<-- [start:wfs_example]
 -table(wins/1)
 
-move("a", "b"),
-move("b", "c"),
-move("c", "a"),
+move('a', 'b'),
+move('b', 'c'),
+move('c', 'a'),
 
 wins(X) <- (move(X, Y), (not wins(Y)))
 --8<-- [end:wfs_example]

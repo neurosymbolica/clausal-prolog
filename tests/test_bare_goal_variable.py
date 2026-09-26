@@ -46,7 +46,7 @@ def test_bare_var_goal_load_error_is_located(tmp_path):
 
     src = tmp_path / "attvar_min.clausal"
     src.write_text(
-        "go(R) <- (\n"
+        "-double_quotes(atom)\ngo(R) <- (\n"
         "    X == 5,\n"
         "    R == X - 2,\n"
         "    R\n"

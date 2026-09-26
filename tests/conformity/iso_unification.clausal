@@ -11,6 +11,7 @@
 #
 # Note: 'literal is literal' triggers Python SyntaxWarning in 3.12+.
 # Use variable binding + == to test unification of ground values.
+-double_quotes(atom)
 
 -module(iso_unification, [test(DESC)])
 

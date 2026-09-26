@@ -1,4 +1,5 @@
 # Companion tests for docs/scipy_differentiate.md signature blocks.
+-double_quotes(atom)
 -import_from(scipy_differentiate, [Derivative, Jacobian, ResultGet])
 
 test("derivative exists") <- (

@@ -10,6 +10,7 @@
 # back an UNBOUND variable. `ground/1` is therefore the assertion that separates
 # the bug from the controls; `==` cannot be used (a list is not evaluable) and
 # `is` would BIND the unbound variable and mask the defect.
+-double_quotes(atom)
 
 -module(head_list_local_atoms_repro, [a, b, rr, kk, f, unk(A0)])
 -import_from(todo.done.head_list_local_atoms_vocab, [met, unmet])

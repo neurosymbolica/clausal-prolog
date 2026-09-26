@@ -4,11 +4,11 @@
 
 natnum_program(PROGRAM) <- (
     PROGRAM is [
-        [["natnum", 0], []],
-        [["natnum", ["s", X]], [["natnum", X]]]
+        [['natnum', 0], []],
+        [['natnum', ['s', X]], [['natnum', X]]]
     ]
 )
 
 -specialize(solve_count, natnum_program, alias=solve_count_natnum)
 
-test("count natnum(s(s(0)))") <- solve_count_natnum([["natnum", ["s", ["s", 0]]]], 3)  # nv
+test("count natnum(s(s(0)))") <- solve_count_natnum([['natnum', ['s', ['s', 0]]]], 3)  # nv

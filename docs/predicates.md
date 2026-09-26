@@ -87,9 +87,9 @@ The first clause states that the factorial of 0 is 1. The second clause states t
 Guards are conditions in the rule body that state when a clause holds:
 
 ```clausal
-classify(N, "positive") <- (N > 0)
-classify(0, "zero"),
-classify(N, "negative") <- (N < 0)
+classify(N, 'positive') <- (N > 0)
+classify(0, 'zero'),
+classify(N, 'negative') <- (N < 0)
 ```
 
 The condition `N > 0` ensures the first clause only holds for positive numbers. Without it, the clause head would unify with any N.
@@ -115,12 +115,12 @@ For `maximum(3, 5, R)`: the first clause's condition `3 >= 5` does not hold, so 
 Start with a simple family tree:
 
 ```clausal
-parent("alice", "bob"),
-parent("bob", "carol"),
-parent("carol", "dave"),
+parent('alice', 'bob'),
+parent('bob', 'carol'),
+parent('carol', 'dave'),
 ```
 
-**Direct parent query**: `parent("alice", "bob")` succeeds.
+**Direct parent query**: `parent('alice', 'bob')` succeeds.
 
 **Ancestor relation** — generalize parent to any depth:
 

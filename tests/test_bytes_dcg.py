@@ -176,7 +176,7 @@ class TestPhraseBytesGrammar:
     def test_phrase3_bytes_binds_remainder_as_bytes(self):
         # nv — phrase(g, b"GET /x", Rest) → Rest = b"/x" (bytes)
         # Grammar: match b"GET " via sequence non-terminal
-        src = "g >> (sequence(b\"GET \"))\n"
+        src = "-double_quotes(atom)\ng >> (sequence(b\"GET \"))\n"
         loaded = _load_inline("phrase_bytes_seq_a", src)
         mod = loaded.__dict__["$module"]
         cls = loaded.__dict__["g"]

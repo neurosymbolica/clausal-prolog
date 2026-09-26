@@ -1,6 +1,7 @@
 # Z3 table constraint tests — exercises z3.table.
 
 # ── Table constraint ────────────────────────────────────────────────────────
+-double_quotes(atom)
 
 table_solve(X, Y) <- (
     z3.integer((

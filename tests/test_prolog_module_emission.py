@@ -74,12 +74,14 @@ def test_discontiguous_directive_not_duplicated_when_hand_written():
 # Two DCG rules of one nonterminal interrupted by an ordinary clause —
 # the emitted indicator carries the +2 hidden difference-list state args
 # (the same arity module_export_signature would report for this rule).
-DCG_INTERRUPTED_SRC = """greeting >> (["hi"])
+DCG_INTERRUPTED_SRC = """-double_quotes(atom)
+greeting >> (["hi"])
 other(x),
 greeting >> (["yo"])
 """
 
-DCG_CONTIGUOUS_SRC = """greeting >> (["hi"])
+DCG_CONTIGUOUS_SRC = """-double_quotes(atom)
+greeting >> (["hi"])
 greeting >> (["yo"])
 """
 

@@ -2,6 +2,7 @@
 # This is the key example from Neumerkel & Kral (arXiv:1607.01590, §6).
 # Ground queries are deterministic (no leftover choicepoints).
 # Partial queries explore both branches with correct constraints.
+-double_quotes(atom)
 
 memberd(X, [ELEMENT, *REST]) <- (
     if_(X is not ELEMENT, memberd(X, REST), True)

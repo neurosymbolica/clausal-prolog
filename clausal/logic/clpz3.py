@@ -1858,8 +1858,8 @@ def z3_declare_datatype(name: Any, constructors: list, trail: Trail) -> Any:
     positions (§6.4): each is an ATOM, read by spelling through
     :func:`_constraint_name`, and a STRING there is ``type_error(atom, …)``.
     Before that funnel the term went straight to ``_z3.Datatype(...)`` /
-    ``dt.declare(...)``, so a source-written ``"IntList"`` — a cell in the
-    default ``-double_quotes(atom)`` mode — surfaced as a raw z3
+    ``dt.declare(...)``, so a source-written ``"IntList"`` — a cell under
+    ``-double_quotes(atom)`` — surfaced as a raw z3
     ``ArgumentError`` from the C bindings.  An unbound name answers ``None``
     and the caller fails, as everywhere else in this module.
 
@@ -1931,8 +1931,8 @@ def _constraint_name(name: Any, context: str = "z3_named/2") -> str | None:
     The sites that lacked it passed the raw term to Z3 and got a bare
     ``ArgumentError``/``Z3Exception`` out of the C bindings for the atom a
     source program writes — ``z3_set_option("timeout", 5000)`` and
-    ``z3_set_logic("QF_LIA")`` are the documented spellings, and in the
-    default ``-double_quotes(atom)`` mode both arrive as cells.
+    ``z3_set_logic('QF_LIA')`` are the documented spellings (``"..."`` only
+    under ``-double_quotes(atom)``), and both arrive as cells.
 
     *context* is the predicate indicator that appears in the ``type_error``.
     """
@@ -2137,8 +2137,8 @@ def z3_set_option(key: Any, value: Any, trail: Trail) -> bool:
     ``type_error(atom, …)`` and an unbound key fails.  A VALUE that is an
     atom (``memory_high_watermark``-style symbolic settings) crosses as its
     spelling; numbers and booleans cross as themselves.  Both used to go to
-    ``solver.set`` raw, so the cell a source-written literal produces in the
-    default ``-double_quotes(atom)`` mode raised a bare z3 ``Z3Exception``.
+    ``solver.set`` raw, so the cell a source-written literal produces under
+    ``-double_quotes(atom)`` raised a bare z3 ``Z3Exception``.
     """
     state = get_z3_state(trail)
     key = _constraint_name(key, "z3.set_option/2")

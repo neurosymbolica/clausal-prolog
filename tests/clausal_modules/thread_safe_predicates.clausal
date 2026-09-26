@@ -6,6 +6,7 @@
 # tests/test_free_threading.py.
 
 # ── Pure list predicates ─────────────────────────────────────────────────────
+-double_quotes(atom)
 
 my_append([], YS, YS),
 my_append([H, *XS], YS, [H, *ZS]) <- my_append(XS, YS, ZS)

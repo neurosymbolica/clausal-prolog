@@ -35,6 +35,7 @@ from clausal.logic.variables import deref
 
 
 _SRC = """\
+-double_quotes(atom)
 -module(cpe, [ raise_ve(X), c_class(R), c_inst(M), c_wrong(R), c_super(R),
                c_logic(R), c_inst_wrong(R),
                c_logic_super(R) ])
@@ -98,7 +99,7 @@ def test_structural_titlecase_catcher_is_a_syntax_error(tmp_path):
     it is TitleCase in a Clausal position, and the error names the escape."""
     src = tmp_path / "cpe_struct.clausal"
     src.write_text(
-        "-module(cpe_struct, [raise_ve(X), c_structural(M)])\n"
+        "-double_quotes(atom)\n-module(cpe_struct, [raise_ve(X), c_structural(M)])\n"
         "raise_ve(X) <- (X is ++int(\"nope\"))\n"
         "c_structural(M) <- (catch(raise_ve(_E), ValueError(M), true))\n")
     with pytest.raises(SyntaxError, match="reach it as `\\+\\+ValueError`"):

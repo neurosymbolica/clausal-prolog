@@ -120,6 +120,7 @@ def test_F002_guard_lowercase_python_code_ok(tmp_path):
 
 def test_F003_edcg_sequence_of_plain_dcg_nonterminals(tmp_path):
     m = _load(tmp_path, """
+        -double_quotes(atom)
         a >> (["a"])
         b >> (["b"])
         -edcg_pred(p, 0, [dcg])
@@ -132,6 +133,7 @@ def test_F003_edcg_sequence_of_plain_dcg_nonterminals(tmp_path):
 
 def test_F003_guard_plain_dcg_sequence(tmp_path):
     m = _load(tmp_path, """
+        -double_quotes(atom)
         a >> (["a"])
         b >> (["b"])
         p >> (a, b)
@@ -144,6 +146,7 @@ def test_F003_guard_plain_dcg_sequence(tmp_path):
 def test_F003_guard_edcg_accumulator_with_plain_call(tmp_path):
     """A single plain-DCG call between accumulator pushes threads correctly."""
     m = _load(tmp_path, """
+        -double_quotes(atom)
         -edcg_acc(cnt, V_, in_, out_, {out_ == in_ + V_})
         w >> (["w"])
         -edcg_pred(q, 0, [cnt, dcg])
@@ -179,6 +182,7 @@ def test_F004_local_clause_does_not_clobber_imported_predicate(tmp_path):
 
     with pytest.raises(SyntaxError) as exc_info:
         _load(tmp_path, """
+            -double_quotes(atom)
             -import_from(a10_f004_lib, [twice])
             twice(0, "zero") <- (1 is 1)
             use(A, B) <- twice(A, B)
@@ -214,6 +218,7 @@ def test_F004_guard_plain_import_does_not_disturb_source(tmp_path):
                    "binds a fresh Var and the binding is silently lost")
 def test_F005_regex_body_only_group_binds(tmp_path):
     m = _load(tmp_path, """
+        -double_quotes(atom)
         -import_from(regex, [match])
         grab(S, R) <- (
             match(r"(?P<VAL>\\d+)x", S),
@@ -227,6 +232,7 @@ def test_F005_regex_body_only_group_binds(tmp_path):
 
 def test_F005_guard_regex_head_var_group_binds(tmp_path):
     m = _load(tmp_path, """
+        -double_quotes(atom)
         -import_from(regex, [match])
         year_of(S, YEAR) <- (
             match(r"(?P<YEAR>\\d{4})-\\d{2}", S)
@@ -238,6 +244,7 @@ def test_F005_guard_regex_head_var_group_binds(tmp_path):
 
 def test_F005_guard_regex_pattern_precompiled(tmp_path):
     m = _load(tmp_path, """
+        -double_quotes(atom)
         -import_from(regex, [match])
         chk(S) <- match(r"a+b", S)
     """)
@@ -337,6 +344,7 @@ def test_F008_te_doc_quick_example(tmp_path):
 
 def test_F008_te_doc_suppression_example(tmp_path):
     m = _load(tmp_path, """
+        -double_quotes(atom)
         term_expansion(debug(X), [], STATE, STATE) <- True
         debug("x"),
         keep(1),
@@ -349,6 +357,7 @@ def test_F008_te_doc_suppression_example(tmp_path):
 def test_F008_guard_te_var_pattern_one_to_many(tmp_path):
     """The tested-and-working TE idiom: a plain variable pattern."""
     m = _load(tmp_path, """
+        -double_quotes(atom)
         term_expansion(TERM, [TERM, TERM], STATE, STATE) <- True
         color("red"),
     """)
@@ -603,6 +612,7 @@ def test_guard_bare_atom_automint(tmp_path):
 
 def test_guard_dcg_parse_generate_if_not_str(tmp_path):
     m = _load(tmp_path, """
+        -double_quotes(atom)
         greeting >> (["hello"], name)
         name >> (["world"])
         opt >> if_(["a"], ["b"], ["c"])
@@ -628,6 +638,7 @@ def test_guard_dcg_parse_generate_if_not_str(tmp_path):
 
 def test_guard_dcg_pushback_and_meta_nonterminal(tmp_path):
     m = _load(tmp_path, """
+        -double_quotes(atom)
         v >> (["x"])
         (u, ["p"]) >> (v)
         run(G) >> (G)

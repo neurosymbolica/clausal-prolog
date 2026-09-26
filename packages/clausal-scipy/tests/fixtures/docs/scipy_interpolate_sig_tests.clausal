@@ -1,4 +1,5 @@
 # Companion tests for docs/scipy_interpolate.md signature blocks.
+-double_quotes(atom)
 -import_from(scipy_interpolate, [MakeSpline, MakeCubic, EvalSpline, Free])
 
 test("make spline exists") <- (

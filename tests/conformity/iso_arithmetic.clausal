@@ -7,6 +7,7 @@
 #   == posts an arithmetic constraint (Prolog: is), clausal 'is' = unification
 #   -7 // 2 = -4 (Python floor), some Prologs = -3 (truncate)
 #   -7 % 2 = 1 (Python floor mod), some Prologs = -1
+-double_quotes(atom)
 
 -module(iso_arithmetic, [test(DESC)])
 

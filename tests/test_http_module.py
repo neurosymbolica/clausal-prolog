@@ -403,6 +403,25 @@ class TestAtomArguments:
         assert req.full_url == "http://example.com"
 
     @patch("clausal.modules.py.http._urlopen")
+    def test_request_reads_a_string_keyed_options_dict(self, mock_urlopen):
+        """``{"url": ...}`` written in a module that declares no mode has
+        chars-carrier keys (the default is chars since 2026-09-26); the
+        option lookup matches them by text, as docs/http.md says."""
+        mock_urlopen.return_value = _mock_response(b"ok")
+        status, body = Var(), Var()
+        opts = DictTerm({
+            chars("url"): chars("http://example.com/s"),
+            chars("method"): chars("POST"),
+            chars("timeout"): 5,
+        })
+        sols, _ = simple_solutions(_request_3, opts, status, body)
+        assert len(sols) == 1
+        assert deref(body) == chars("ok")
+        req = mock_urlopen.call_args[0][0]
+        assert req.full_url == "http://example.com/s"
+        assert req.get_method() == "POST"
+
+    @patch("clausal.modules.py.http._urlopen")
     def test_request_reads_an_atom_keyed_options_dict(self, mock_urlopen):
         # nv
         mock_urlopen.return_value = _mock_response(b"ok")

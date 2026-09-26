@@ -69,8 +69,8 @@ bound through unification. once bound, it cannot be reassigned (within that
 branch of search). Logic variables are written in ALLCAPS:
 
 ```clausal
-# X is unbound; unification with "hello" binds it
-greeting(X) <- (X is "hello")
+# X is unbound; unification with 'hello' binds it
+greeting(X) <- (X is 'hello')
 ```
 
 This is closer to variables in algebra than variables in Python: `X` stands
@@ -195,8 +195,9 @@ class test, not the atom test) — import `is_zero_field_class` if you mean
 the class and `clausal.logic.atoms.is_atom` if you mean the atom.
 
 **Strings are the other kind — a list, not a bare `str`.** A `"hello"`
-literal is a string only under [`-double_quotes(chars)`](directives.md#-double_quotes)
-— today's default still reads it as the atom `hello` — and a string is the
+literal is a string by default ([`-double_quotes(chars)`](directives.md#-double_quotes),
+the engine default since 2026-09-26; a module that declares
+`-double_quotes(atom)` reads it as the atom `hello` instead) — and a string is the
 list of its character atoms: internally a compact carrier around the text,
 not literally a bare `str`. Atoms and strings never unify: under
 `-double_quotes(chars)`, `atom(hello)` holds for the bare atom but
@@ -252,9 +253,9 @@ def classify(n):
 
 ```clausal
 # Clausal: three clauses, three cases
-classify(N, "positive") <- (N > 0)
-classify(0, "zero"),
-classify(N, "negative") <- (N < 0)
+classify(N, 'positive') <- (N > 0)
+classify(0, 'zero'),
+classify(N, 'negative') <- (N < 0)
 ```
 
 Each clause is a logical alternative — a separate condition under which the
@@ -290,9 +291,9 @@ capitals = {"france": "paris", "germany": "berlin", "japan": "tokyo"}
 
 ```clausal
 # Clausal: facts that can be queried in any direction
-capital("france", "paris"),
-capital("germany", "berlin"),
-capital("japan", "tokyo"),
+capital('france', 'paris'),
+capital('germany', 'berlin'),
+capital('japan', 'tokyo'),
 ```
 
 The Clausal version can be queried both ways: "What is the capital of France?"

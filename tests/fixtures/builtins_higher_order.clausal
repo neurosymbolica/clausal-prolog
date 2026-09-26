@@ -2,6 +2,7 @@
 # Goals are passed as references to named predicates defined in this file.
 
 # Helper predicates used as goals
+-double_quotes(atom)
 
 is_positive(X) <- (X > 0)
 

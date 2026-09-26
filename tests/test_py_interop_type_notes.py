@@ -175,6 +175,7 @@ def test_diagnose_failure_survives_broken_interop_import(
     monkeypatch.setitem(sys.modules, "clausal.modules.py",
                         types.ModuleType("clausal.modules.py"))
     p = write(tmp_path, "plain.clausal", """
+    -double_quotes(atom)
     prc("alpha", 10),
 
     test("fails plainly") <- (
@@ -190,6 +191,7 @@ def test_diagnose_failure_survives_broken_interop_import(
 
 
 DATE_ADD_INT_SRC = """
+-double_quotes(atom)
 -import_from(date_time, [date_add, date])
 
 test("window end computes") <- (
@@ -208,6 +210,7 @@ def test_date_add_int_note_in_failure_report(capsys, tmp_path):
 
 
 DATE_ADD_DEEP_SRC = """
+-double_quotes(atom)
 -import_from(date_time, [date_add, date])
 
 window_end(START, END) <- (
@@ -232,6 +235,7 @@ def test_note_survives_descent_into_user_predicate(capsys, tmp_path):
 
 
 CONSTRUCT_REJECT_SRC = """
+-double_quotes(atom)
 -import_from(date_time, [date])
 
 test("month 13") <- (
@@ -255,6 +259,7 @@ def test_constructor_rejection_noted(capsys, tmp_path):
 
 
 UNBOUND_TD_SRC = """
+-double_quotes(atom)
 -import_from(date_time, [date_add, date])
 
 test("unbound timedelta is a mode, not a type error") <- (

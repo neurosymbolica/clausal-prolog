@@ -1,6 +1,7 @@
 # Ordering of date/datetime/time via the standard comparison operators,
 # plus min_list/max_list on dates and catchability of an incomparable
 # comparison. Companion to tests/test_date_time_ordering.py.
+-double_quotes(atom)
 
 -import_from(date_time, [date, datetime, time])
 

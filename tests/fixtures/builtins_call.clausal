@@ -1,6 +1,7 @@
 # Tests for call/N and call_goal/N higher-order call predicates
 
 # apply_goal/2: call a unary goal with an argument
+-double_quotes(atom)
 apply_goal(GOAL, X) <- call(GOAL, X)
 
 # apply_binary/3: call a binary goal with two arguments

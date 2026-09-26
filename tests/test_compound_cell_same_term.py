@@ -463,6 +463,7 @@ def test_a_tuple_tag_compound_is_not_tuple_data(M):
 # or-pattern doubled every level: 45,046 pattern nodes at depth 12.
 
 SINK_SRC = """
+-double_quotes(atom)
 -module(ccst_sink, [rv(X), nl2(X, Y), dd(X, Y), deep(X)])
 -private([z, w, f(A), h(A, B), g(A)])
 rv(h(X, X)),

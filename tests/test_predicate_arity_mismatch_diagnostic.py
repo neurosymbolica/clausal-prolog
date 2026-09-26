@@ -49,6 +49,7 @@ def write(tmp_path, name, src):
 
 
 CITATIONS = """
+    -double_quotes(atom)
     -private([art_1_2, meta])
 
     citation(art_1_2, "Reg-Z Article 1(2)", meta),
@@ -99,6 +100,7 @@ class TestTheMessage:
         same /3 predicate cannot all be satisfied by a constant.
         """
         out = _report(tmp_path, f"""
+            -double_quotes(atom)
             -private([art_1_2, meta])
 
             citation(art_1_2, "Reg-Z Article 1(2)", meta),
@@ -117,7 +119,7 @@ class TestTheMessage:
 
     def test_points_at_the_definition(self, tmp_path):
         out = _report(tmp_path, CITATIONS)
-        assert "t.clausal:3" in out
+        assert "t.clausal:4" in out
 
     def test_offers_a_remedy(self, tmp_path):
         out = _report(tmp_path, CITATIONS)
@@ -148,6 +150,7 @@ class TestForwardReference:
 
     def test_still_diagnosed(self, tmp_path):
         out = _report(tmp_path, """
+            -double_quotes(atom)
             -private([art_1_2, meta])
 
             test("forward") <- citation(REF, META),
@@ -167,6 +170,7 @@ class TestOtherGoalPositions:
 
     def _out(self, tmp_path, goal, name):
         return _report(tmp_path, f"""
+            -double_quotes(atom)
             -private([art_1_2, meta])
 
             citation(art_1_2, "Reg-Z Article 1(2)", meta),
@@ -206,6 +210,7 @@ class TestHigherOrderFamily:
 
     def _out(self, tmp_path, goal, name):
         return _report(tmp_path, f"""
+            -double_quotes(atom)
             -private([art_1_2, meta])
 
             citation(art_1_2, "Reg-Z Article 1(2)", meta),
@@ -259,6 +264,7 @@ class TestHigherOrderFamily:
     def test_element_only_at_its_arity_still_runs(self, tmp_path):
         # cite_one/1 is not in the shared preamble; run a dedicated source.
         out = _report(tmp_path, """
+            -double_quotes(atom)
             -private([art_1_2])
 
             cite_one(art_1_2),
@@ -366,6 +372,7 @@ class TestTermConstructionUnaffected:
         nonterminal at /1); ``tests/test_dcg.py`` covers that instance.
         """
         out = _report(tmp_path, """
+            -double_quotes(atom)
             -private([art_1_2, meta])
 
             citation(art_1_2, "Reg-Z Article 1(2)", meta),
@@ -425,6 +432,7 @@ class TestCorrectCallsUnaffected:
 
     def test_right_arity_still_runs(self, tmp_path):
         out = _report(tmp_path, """
+            -double_quotes(atom)
             -private([art_1_2, meta])
 
             citation(art_1_2, "Reg-Z Article 1(2)", meta),
@@ -551,6 +559,7 @@ class TestDynamicDeclaredArity:
     def test_clause_free_dynamic_names_the_declared_arity(self, tmp_path):
         """The todo's repro, verbatim in spirit."""
         out = _report(tmp_path, """
+            -double_quotes(atom)
             -dynamic(dfact/3)
 
             test("dyn wrong arity") <- dfact(_A, _B),
@@ -562,6 +571,7 @@ class TestDynamicDeclaredArity:
     def test_correct_arity_still_fails_cleanly_with_no_clauses(self, tmp_path):
         """Declare-then-assertz: a pre-assertz call at /3 is 0 solutions."""
         out = _report(tmp_path, """
+            -double_quotes(atom)
             -dynamic(dfact/3)
 
             test("dyn empty") <- dfact(_A, _B, _C),
@@ -573,6 +583,7 @@ class TestDynamicDeclaredArity:
     def test_clauses_outrank_the_declaration(self, tmp_path):
         """With a clause asserted the head walk answers, same as before."""
         out = _report(tmp_path, """
+            -double_quotes(atom)
             -dynamic(dfact/3)
 
             test("dyn assertz") <- (assertz(dfact(1, 2, 3)), dfact(_A, _B)),
@@ -583,6 +594,7 @@ class TestDynamicDeclaredArity:
     def test_higher_order_position_reports_it_too(self, tmp_path):
         """The meta-call family funnels into the same refusal."""
         out = _report(tmp_path, """
+            -double_quotes(atom)
             -dynamic(dfact/3)
 
             test("dyn maplist") <- maplist(dfact, [1]),
@@ -613,6 +625,7 @@ class TestRuntimeFunnels:
     def test_time_goal_names_the_arity(self, tmp_path):
         """``time_goal(citation)`` calls the goal with no arguments at all."""
         out = _report(tmp_path, """
+            -double_quotes(atom)
             -private([art_1_2, meta])
 
             citation(art_1_2, "Reg-Z Article 1(2)", meta),
@@ -630,6 +643,7 @@ class TestRuntimeFunnels:
         be told it passed 2 — not 0, which is what the source says.
         """
         out = _report(tmp_path, """
+            -double_quotes(atom)
             arcmp_five(A, B, C, S0, S) <- (S0 == S),
 
             test("phrased") <- phrase(arcmp_five, [], []),
@@ -645,6 +659,7 @@ class TestRuntimeFunnels:
         the whole reason that is not reported as a mismatch.
         """
         out = _report(tmp_path, """
+            -double_quotes(atom)
             greeting >> (["hello", "world"])
 
             test("greets") <- phrase(greeting, ["hello", "world"]),
@@ -787,6 +802,7 @@ class TestTwoAritiesInOneFile:
         runtime refusal that followed.  The absorption is now refused at
         load, in the same run the test file's report captures."""
         out = _report(tmp_path, """
+            -double_quotes(atom)
             -private([art_1_2, meta])
 
             citation(art_1_2, "Reg-Z Article 1(2)", meta),
@@ -800,6 +816,7 @@ class TestTwoAritiesInOneFile:
 
     def test_the_shorter_head_first_is_a_load_error(self, tmp_path):
         out = _report(tmp_path, """
+            -double_quotes(atom)
             -private([art_1_2, meta])
 
             citation(art_1_2, meta),

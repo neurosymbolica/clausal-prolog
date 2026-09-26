@@ -159,8 +159,8 @@ with `replace_subterm/4` that never came from source text:
 swapped_source(SRC, TEXT) <- (
     reified_clause(SRC, CLAUSE),
     reified_subterm(CLAUSE, SUB),
-    op_node(SUB, "GtE", ARGS),
-    op_node(NEW, "Gt", ARGS),
+    op_node(SUB, 'GtE', ARGS),
+    op_node(NEW, 'Gt', ARGS),
     replace_subterm(CLAUSE, SUB, NEW, CLAUSE2),
     clause_source(CLAUSE2, TEXT)
 )
@@ -188,15 +188,17 @@ is rewritten at compile time (goal expansion) into
 -import_from(reflection, [reified_clause, Clause, Goal])
 
 shape_xy(SRC) <- reified_clause(SRC,
-    Clause(Goal("my_pred", [A, B], []),
-           [Goal("goalx", [A], []), Goal("goaly", [B], [])]))
+    Clause(Goal('my_pred', [A, B], []),
+           [Goal('goalx', [A], []), Goal('goaly', [B], [])]))
 ```
 
-(The expansion is built by the compiler, so its `"my_pred"` is the raw
-spelling *string* the reified `Goal.name` field holds, whatever
-`-double_quotes` mode the matcher's module is in. Writing that vocabulary
-form by hand under the default `atom` mode would give you atoms and match
-nothing — use the arrow sugar, or `goal_functor/3`.)
+(The expansion is built by the compiler, so its `'my_pred'` is the raw
+spelling the reified `Goal.name` field holds — a plain `str`, which is
+exactly the atom `'my_pred'`, whatever `-double_quotes` mode the matcher's
+module is in. Writing the vocabulary form by hand works with single-quoted
+names, as shown; a double-quoted `"my_pred"` under the default `chars`
+mode is a *string*, which the field never holds, and matches nothing —
+prefer the arrow sugar, or `goal_functor/3`.)
 
 Semantics:
 
@@ -265,7 +267,7 @@ A clause body is a plain list of goals, so [DCGs](dcg.md) match goal
 `edge/2` call":
 
 ```clausal
-edge_goal >> ([GOAL], {goal_functor(GOAL, "edge", _)})
+edge_goal >> ([GOAL], {goal_functor(GOAL, 'edge', _)})
 any_goal >> ([_])
 any_goals >> ([])
 any_goals >> (any_goal, any_goals)

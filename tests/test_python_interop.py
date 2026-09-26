@@ -112,7 +112,7 @@ class TestPyThunkValue:
         """++str.join() works."""
         # nv
         src = tmp_path / "interop_join.clausal"
-        src.write_text('join_words(_w, _r) <- (_r is ++", ".join(_w))\n')
+        src.write_text('-double_quotes(atom)\njoin_words(_w, _r) <- (_r is ++", ".join(_w))\n')
         mod = _load_module("interop_join", str(src))
         logic_mod = mod.__dict__["$module"]
         results = _call_and_capture("join_words", [chars("a"), chars("b"), chars("c")], module=logic_mod)

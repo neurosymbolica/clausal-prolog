@@ -3,6 +3,7 @@
 # Covers lcm, exp_mod, popcount, msb, lsb, numlist, same_length, transpose.
 # Quantity arithmetic cases stay in tests/test_phase5_builtins.py because
 # Quantity literals can't be constructed at clausal surface.
+-double_quotes(atom)
 
 -module(phase5_builtins, [test(DESC)])
 -private([a, b, c])

@@ -1,5 +1,6 @@
 # Test fixture for eq/3 builtin integration
 # Simple wrapper that calls eq/3
+-double_quotes(atom)
 
 check_eq(X, Y, TRUTH) <- eq(X, Y, TRUTH)
 

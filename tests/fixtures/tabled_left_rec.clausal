@@ -1,3 +1,4 @@
+-double_quotes(atom)
 -table(path/2)
 
 edge(1, 2),

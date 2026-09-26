@@ -234,7 +234,7 @@ def test_no_source_lines_means_no_quote_map():
 
     transformer = EmbedTransformer(implicit_atoms_default=True, interactive=True)
     assert transformer._quote_map == {}
-    assert transformer._double_quotes_mode == "atom"
+    assert transformer._double_quotes_mode == "chars"   # the default since 2026-09-26
 
 
 def test_mixed_quote_styles_error_is_attributed_to_the_file():

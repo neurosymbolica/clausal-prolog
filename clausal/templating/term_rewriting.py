@@ -19,6 +19,8 @@ from .quote_map import build_quote_map, quote_of
 from clausal.pythonic_ast.nodes import (
     AtomAppliedAsFunctor as AtomAppliedAsFunctorItem,
     BareAtomRefs as BareAtomRefsItem,
+    CrossModeLiteralSites as CrossModeLiteralSitesItem,
+    DoubleQuotesMode as DoubleQuotesModeItem,
     HeadFieldNames as HeadFieldNamesItem,
     Directive as DirectiveItem,
     EdcgAccDecl,
@@ -943,6 +945,14 @@ def _strip_variable_markers(node):
             return self.generic_visit(unary_op)
 
     return _Stripper().visit(deepcopy(node))
+
+
+#: Control forms whose every argument is a goal, for the cross-mode literal
+#: lint.  The meta-predicates proper (``findall``, ``maplist``, ``catch``,
+#: ...) are asked position by position through
+#: ``clause_ops._goal_positions``, the compiler's own per-arity table, so a
+#: ``findall`` TEMPLATE or a ``catch`` catcher stays data.
+_GOAL_CONTROL_FORMS = frozenset({"if_", "not_", "ignore"})
 
 
 def _clause_scope_exclusions(import_remap) -> frozenset:
@@ -1926,7 +1936,6 @@ def _visit_nested_seam_operands(node, collector) -> None:
 from clausal.lint_warnings import (  # noqa: E402, F401
     ClausalLintWarning,
     ClausalSingletonWarning,
-    ClausalSeamLiteralWarning,
     ClausalShadowedVariableWarning,
     ClausalBooleanSeamWarning,
     ClausalDeprecatedSpellingWarning,
@@ -2311,19 +2320,32 @@ class TermTransformer(NodeTransformer):
                  reify=False, hidden_atoms=frozenset(), module_name=None,
                  declared_functors=None, atom_functor_sites=None,
                  zero_arity_heads=frozenset(),
-                 quote_map=None, double_quotes_mode="atom",
-                 seam=False, double_quotes_explicit=True,
+                 quote_map=None, double_quotes_mode="chars",
+                 seam=False,
                  python_visitor=None, titlecase_python_bound=None,
-                 clause_var_names=None):
+                 clause_var_names=None, modes_used=None):
         transformer.seen_vars = set()
+        # The file's SHARED "which -double_quotes modes governed a literal"
+        # sink (``EmbedTransformer.__init__``), a constructor parameter so
+        # that no TermTransformer -- per-clause, seam, or arrow-lambda body
+        # -- can be built without it (flip review M2: the lambda transformer
+        # was built by hand and recorded nothing, so a file whose only
+        # literals sat in lambda bodies reported no mode, and a file that
+        # switched mode with one mode's literals only in lambdas reported a
+        # single mode and was judged when it should have been left alone).
+        # A caller with no file (the REPL, reflection) gets a private set.
+        transformer._double_quotes_modes_used = (
+            modes_used if modes_used is not None else set())
         # THE SEAM (``--term`` in Python-hosted code): ``seam`` marks a
         # transformer serving one seam expression; ``python_visitor`` is the
         # enclosing EmbedTransformer's ``visit``, run over every ``++``
-        # operand so seams nest (a ``--`` inside a ``++`` inside a ``--``);
-        # ``double_quotes_explicit`` is False when the module never declared
-        # ``-double_quotes``, which makes a ``"..."`` inside the seam warn.
+        # operand so seams nest (a ``--`` inside a ``++`` inside a ``--``).
+        # Whether the module DECLARED its ``-double_quotes`` mode is the
+        # EmbedTransformer's fact alone (``_double_quotes_explicit``, which
+        # the DoubleQuotesMode item reports to importers); the per-clause
+        # copy that drove the seam "no mode declared" warning went with the
+        # warning at the 2026-09-26 flip.
         transformer._seam = seam
-        transformer._double_quotes_explicit = double_quotes_explicit
         transformer._python_visitor = python_visitor
         # The TitleCase names this file's own hosted Python binds (``from x
         # import Foo``, ``class Foo``, ``Foo = ...``) -- the SAME live set
@@ -2887,10 +2909,9 @@ class TermTransformer(NodeTransformer):
         """A literal is a term directly — except a text literal, which is an
         ATOM or a STRING depending on how it was quoted (spec §7).
 
-        ``'foo'`` is an atom in every mode; ``"foo"`` is an atom under
-        ``-double_quotes(atom)`` (today's default) and a string under
-        ``-double_quotes(chars)``.  An atom is the arity-0 cell
-        ``("foo",)``; a string is the ``str`` itself.
+        ``'foo'`` is an atom in every mode; ``"foo"`` is a string under
+        ``-double_quotes(chars)`` (the default since 2026-09-26) and an atom
+        under ``-double_quotes(atom)``, the opt-out.
 
         The quote character is not in the AST, so it comes from the file's
         quote map (``quote_map.py``), keyed by position.  A SYNTHETIC
@@ -2917,14 +2938,10 @@ class TermTransformer(NodeTransformer):
             # ANSWER is exempt.
             if getattr(constant, "_dcg_terminal_text", False):
                 return constant
-            if (quote == '"' and transformer._seam
-                    and not transformer._double_quotes_explicit):
-                import warnings  # noqa: PLC0415
-                warnings.warn(ClausalSeamLiteralWarning(
-                    f"--: \"{value}\" inside a seam denotes an ATOM under the "
-                    f"engine default -double_quotes(atom); declare "
-                    f"-double_quotes(chars) (a string) or -double_quotes(atom) "
-                    f"explicitly in this module"), stacklevel=2)
+            if quote == '"':
+                # Cross-mode lint (2026-09-26): tell the file's importers
+                # which modes its ``"..."`` literals were read under.
+                transformer._double_quotes_modes_used.add(transformer._double_quotes_mode)
             if quote == '"' and transformer._double_quotes_mode == "chars":
                 # STAGE 1 of the atoms-as-str flip (spec 2026-09-18): a chars
                 # string is the CARRIER ``('$chars', text)``, not a bare str.
@@ -3112,6 +3129,7 @@ class TermTransformer(NodeTransformer):
             atom_functor_sites=transformer._atom_functor_sites,
             quote_map=transformer._quote_map,
             double_quotes_mode=transformer._double_quotes_mode,
+            modes_used=transformer._double_quotes_modes_used,
             # Inherited for the same reason ``_import_remap`` is: a ``++``
             # or f-string INSIDE a lambda body resolves its free names in
             # the same module namespace, so it must exclude the same ones.
@@ -4046,6 +4064,29 @@ class TermTransformer(NodeTransformer):
 
 
 # ─── Functor class generator ──────────────────────────────────────────────────
+
+
+#: The modes ``-double_quotes(...)`` accepts -- the ONE list, read by the
+#: loader (``_handle_double_quotes_directive``) and by the rewrite driver.
+DOUBLE_QUOTES_MODES = ("atom", "chars")
+
+
+def _import_module_prepass(module) -> set:
+    """The dotted paths of every top-level ``-import_module(path)`` in the
+    file, read before the walk so a seam ABOVE its directive is judged too
+    (the cross-mode literal lint's dotted bases)."""
+    found = set()
+    for stmt in getattr(module, "body", ()):
+        value = getattr(stmt, "value", None)
+        if (isinstance(stmt, Expr) and isinstance(value, UnaryOp)
+                and isinstance(value.op, USub) and isinstance(value.operand, Call)
+                and isinstance(value.operand.func, Name)
+                and value.operand.func.id == "import_module"
+                and len(value.operand.args) == 1):
+            path = _dotted_name_from_ast(value.operand.args[0])
+            if path is not None:
+                found.add(path)
+    return found
 
 
 def _dotted_name_from_ast(node):
@@ -5595,9 +5636,28 @@ class EmbedTransformer(NodeTransformer):
         # file.  Unlike the module-item directives (drained after the walk,
         # so they cannot govern only the literals below them) this is
         # position-sensitive state on the instance, the ``-allow_singletons``
-        # shape.  ``atom`` is the engine default until the flip.
-        transformer._double_quotes_mode = "atom"
+        # shape.  ``chars`` is the engine default (THE FLIP, 2026-09-26: a
+        # ``"..."`` literal is a STRING, as in Scryer/Trealla);
+        # ``-double_quotes(atom)`` is the opt-out.
+        transformer._double_quotes_mode = "chars"
         transformer._double_quotes_explicit = False
+        # The modes that governed at least one ``"..."`` literal in this
+        # file -- a SHARED sink every per-clause TermTransformer adds to
+        # (``visit_Constant``), reported to importers as a
+        # ``DoubleQuotesMode`` item -- and the goal-position seam literals
+        # whose target module's mode is decided after the imports execute
+        # (``_collect_cross_mode_sites`` -> ``CrossModeLiteralSites``).
+        transformer._double_quotes_modes_used: set[str] = set()
+        transformer._cross_mode_sites: list = []
+        # The dotted paths this file's ``-import_module`` directives bind
+        # (``a.b`` for ``-import_module(a.b)``), filled by a PRE-PASS in
+        # ``visit_Module`` so a seam above its directive still sees it: the
+        # only dotted bases the cross-mode lint may judge, and a seam's base
+        # must match one of them whole (``a.b.p`` for ``a.b``, not ``a.c.p``).
+        # Any other base is bound by hosted Python -- possibly a module-level
+        # default later rebound at run time through ``seam.with_bases`` --
+        # and judging the global would judge the wrong module.
+        transformer._import_module_bases: set[str] = set()
         # Logic-variable names bound by the seams enclosing the expression
         # being rewritten (innermost last) — see visit_UnaryOp's ``--``.
         transformer._seam_bound: list[set] = []
@@ -6109,7 +6169,7 @@ class EmbedTransformer(NodeTransformer):
         same Phase 2 (auto-mint) collection without each call site having
         to remember the plumbing.
         """
-        return TermTransformer(
+        term_tf = TermTransformer(
             atoms=atoms if atoms is not None else transformer._atoms,
             import_remap=transformer._import_remap,
             source_lines=transformer._source_lines,
@@ -6126,11 +6186,12 @@ class EmbedTransformer(NodeTransformer):
             quote_map=transformer._quote_map,
             double_quotes_mode=transformer._double_quotes_mode,
             seam=seam,
-            double_quotes_explicit=transformer._double_quotes_explicit,
             python_visitor=transformer.visit if seam else None,
             titlecase_python_bound=transformer._titlecase_python_bound,
             clause_var_names=clause_var_names,
+            modes_used=transformer._double_quotes_modes_used,
         )
+        return term_tf
 
     def _seam_term_ast(transformer, expression, anchor):
         """Lower *expression* through a seam TermTransformer.  Returns
@@ -6226,6 +6287,7 @@ class EmbedTransformer(NodeTransformer):
         comment on the ``return`` below for why this differs from term
         position's ``$seam(...)`` wrapping."""
         term_ast, fresh = transformer._seam_term_ast(expression, anchor)
+        transformer._collect_cross_mode_sites(expression, anchor)
         rename = {n: f"$v_{n}" for n in fresh}
 
         class _Rename(NodeTransformer):
@@ -6267,6 +6329,118 @@ class EmbedTransformer(NodeTransformer):
         transformer._warn_shadowed_variables(fresh, expression, anchor,
                                              goal_ast)
         return pre, goal_ast, fresh
+
+    def _collect_cross_mode_sites(transformer, expression, anchor):
+        """Record every ``"..."`` literal in a goal-position seam whose
+        callee lives in ANOTHER module, for the cross-mode literal lint.
+
+        THE HAZARD (seam review, 2026-09-26).  ``visit_Constant`` reads a
+        seam literal under the HOST file's ``-double_quotes`` mode, and the
+        callee's clauses were compiled under the callee's.  When the two
+        differ the goal compares a string with an atom (or the reverse) and
+        never matches -- silently.  After the default flips to ``chars``
+        every module that pins ``-double_quotes(atom)`` is such a callee.
+
+        The callee's mode is the OWNER's fact, known only once the imports
+        have executed, so this records the site and ``compiler_v2.
+        _lint_cross_mode_literals`` judges it.  Two statically known
+        shapes: a call to a name an ``-import_from`` remapped, and
+        ``--base.pred(...)`` over a dotted base (an ``-import_module``'d
+        module; a base bound at RUN time -- ``module = _RULE.get()`` inside
+        a function -- resolves to nothing at load and is the documented
+        gap).  A ``++`` escape is Python, not a Clausal literal, and is
+        skipped; a local callee shares the host's mode and is not a site.
+        """
+        exclusions = _clause_scope_exclusions(transformer._import_remap)
+
+        def _callee(call):
+            """``(kind, target, shown)`` when *call*'s callee lives in
+            another module and is statically known, else ``None``."""
+            func = call.func
+            if isinstance(func, Name):
+                dotted = transformer._import_remap.get(func.id)
+                if dotted is None:
+                    return None
+                # The local name AND the owner's dotted key: a predicate's
+                # binding names its owner itself (a mangled handle), but an
+                # imported data FUNCTOR binds the plain atom, and its owner
+                # is only knowable from the ``-import_from`` that brought it.
+                return "imported", (func.id, dotted), func.id
+            if not isinstance(func, Attribute):
+                return None
+            chain, root = [], func
+            while isinstance(root, Attribute):
+                chain.append(root.attr)
+                root = root.value
+            if not isinstance(root, Name):
+                return None
+            if _is_logic_var_name(root.id) and root.id not in exclusions:
+                return None            # dict-attribute sugar, not a module
+            chain.reverse()
+            if ".".join([root.id, *chain[:-1]]) not in transformer._import_module_bases:
+                return None            # not this file's -import_module: the gap
+            return "dotted", (root.id, tuple(chain)), ".".join([root.id, *chain])
+
+        def _literals_under(node):
+            """Every ``"..."`` literal below *node*, a ``++`` escape excepted."""
+            out, stack = [], [node]
+            while stack:
+                n = stack.pop()
+                if _double_prefix_operand(n, UAdd) is not None:
+                    continue
+                if (isinstance(n, Constant) and type(n.value) is str
+                        and _quote_of_positioned(transformer, n) == '"'):
+                    out.append(n.value)
+                stack.extend(reversed(list(iter_child_nodes(n))))
+            return out
+
+        # Only the GOAL-POSITION call runs: a nested ``q("x")`` inside
+        # ``p(...)`` is DATA, and ``"x"`` is unified against p's clauses,
+        # compiled under p's module's mode -- so every literal below a goal
+        # call is that call's (flip review M1 on 571ffb0c, correcting the
+        # earlier "innermost callee" reading).  Goal position descends
+        # through the control forms -- a conjunction tuple, and/or, not,
+        # if_ -- and through exactly the goal ARGUMENTS of a meta-predicate
+        # (``_goal_positions``: findall/3's second, catch/3's first and
+        # third, maplist's first, ...); its data arguments are data.  A
+        # meta-predicate NAME this file rebinds by ``-import_from`` is the
+        # import's predicate, not the builtin, and is an ordinary goal.
+        # Sites are emitted in source order.
+        from clausal.logic.builtins.clause_ops import _goal_positions  # noqa: PLC0415
+        sites = []
+        stack = [expression]
+        while stack:
+            node = stack.pop()
+            if _double_prefix_operand(node, UAdd) is not None:
+                continue
+            if isinstance(node, (Tuple, BoolOp)):
+                stack.extend(reversed(node.elts if isinstance(node, Tuple) else node.values))
+                continue
+            if isinstance(node, UnaryOp) and isinstance(node.op, Not):
+                stack.append(node.operand)
+                continue
+            if isinstance(node, Call) and isinstance(node.func, Name) \
+                    and node.func.id not in transformer._import_remap:
+                name = node.func.id
+                positions = (range(len(node.args)) if name in _GOAL_CONTROL_FORMS
+                             else _goal_positions(name, len(node.args), None))
+                if positions:
+                    stack.extend(reversed([node.args[i] for i in positions
+                                           if i < len(node.args)]))
+                    continue
+            if not isinstance(node, Call):
+                continue
+            callee = _callee(node)
+            if callee is None:
+                continue
+            literals = _literals_under(node)
+            if literals:
+                sites.append((callee, literals))
+        for (kind, target, shown), literals in sites:
+            transformer._cross_mode_sites.append((
+                kind, target, tuple(literals), transformer._double_quotes_mode,
+                f"{transformer._filename}:{getattr(anchor, 'lineno', '?')}",
+                f"--{unparse(expression)}", shown))
 
     def _wrap_runtime_bases(transformer, expression, goal_ast, anchor):
         """Wrap *goal_ast* in ``$with_bases(goal, {"m": lambda: m})`` when the
@@ -7362,6 +7536,7 @@ class EmbedTransformer(NodeTransformer):
         # like a hosted binding and the constant/atom pair this design is
         # built around would be refused. See _check_constant_name_is_free.
         transformer._hosted_names = set(_hosted_python_bindings(module))
+        transformer._import_module_bases.update(_import_module_prepass(module))
         transformer._expand_currency_tables(module)
         transformer._titlecase_prepass(module)
         result = transformer.generic_visit(module)
@@ -7390,6 +7565,20 @@ class EmbedTransformer(NodeTransformer):
             for it in transformer._module_items
         ):
             transformer._module_items.append(ImplicitAtomsItem())
+        # Cross-mode literal lint (2026-09-26): what this file's importers
+        # need to know about its ``-double_quotes`` mode, and the seam
+        # sites this file could not judge before its own imports ran.
+        # Only when the file SAYS something about its mode -- a declaration
+        # or a governed literal -- so a file with neither carries no item
+        # and its importers' lint reads its mode as unknown, not as a guess.
+        if transformer._double_quotes_modes_used or transformer._double_quotes_explicit:
+            transformer._module_items.append(DoubleQuotesModeItem(
+                mode=transformer._double_quotes_mode,
+                explicit=transformer._double_quotes_explicit,
+                modes_used=tuple(sorted(transformer._double_quotes_modes_used))))
+        if transformer._cross_mode_sites:
+            transformer._module_items.append(CrossModeLiteralSitesItem(
+                sites=tuple(transformer._cross_mode_sites)))
         return result
 
     def _check_constant_name_is_free(transformer):
@@ -8305,9 +8494,9 @@ class EmbedTransformer(NodeTransformer):
         ``todo/strings-lost-in-the-atom-pivot-double-quotes-are-char-lists-2026-09-06.md``,
         ruling R-S4): a module that still relies on ``"..."`` denoting an
         ATOM declares ``-double_quotes(atom)`` so it keeps that meaning
-        after the engine flips the default to ``chars`` (``"..."`` = a
-        string unifying with its char list).  ``atom`` remains the engine
-        default, so declaring it is still a no-op that states a dependency.
+        now that the engine default is ``chars`` (``"..."`` = a string
+        unifying with its char list; flipped 2026-09-26, as in Scryer and
+        Trealla).  ``-double_quotes(atom)`` is the opt-out.
 
         THE FLIP (2026-09-06-atoms-as-cells-strings §7) makes ``chars`` real:
         below a ``-double_quotes(chars)`` directive a ``"..."`` literal
@@ -8331,14 +8520,14 @@ class EmbedTransformer(NodeTransformer):
                 "`-double_quotes(atom)`"
             )
         mode = args[0].id
-        if mode in ("atom", "chars"):
+        if mode in DOUBLE_QUOTES_MODES:
             transformer._double_quotes_mode = mode
             transformer._double_quotes_explicit = True
             return replace(Pass(), expr_stmt)
         raise SyntaxError(
             f"-double_quotes({mode}): unknown mode; the accepted modes are "
-            f"`atom` (the engine default: \"...\" is an atom) and `chars` "
-            f"(\"...\" is a string — the list of its char atoms).  Codes are "
+            f"`chars` (the engine default: \"...\" is a string — the list of "
+            f"its char atoms) and `atom` (\"...\" is an atom).  Codes are "
             f"spelled b\"...\" and have no mode."
         )
 
@@ -9565,6 +9754,7 @@ class EmbedTransformer(NodeTransformer):
         transformer._module_items.append(
             ImportModuleItem(module=module_path)
         )
+        transformer._import_module_bases.add(module_path)
         resolved = _resolve_import_path(module_path)
         if resolved != module_path:
             # Aliased module: ``import clausal.modules.uuid_mod as uuid``

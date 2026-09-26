@@ -3,6 +3,7 @@
 # literal.  Before the fix K reached dict construction as the Var object (the
 # DictTerm lowering, unlike the DictLiteral one, did not $dict_key-wrap it), so
 # the built dict was keyed by the variable and get(OUT, <value>) missed.
+-double_quotes(atom)
 -module(dict_nonsplat_var_key, [nonsplat_var_key(GOT), nonsplat_literal_key(GOT),
                                 nonsplat_headarg_key(KEY, VAL, GOT),
                                 nonsplat_var_value(GOT), nonsplat_unbound_key(GOT)])

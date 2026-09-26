@@ -220,7 +220,7 @@ def test_an_aliased_mi_import_specializes(tmp_path, monkeypatch):
     monkeypatch.syspath_prepend(str(tmp_path))
     sys.modules.pop("spec_alias_mi", None)
     (tmp_path / "spec_alias_mi.clausal").write_text(
-        "-import_from(clausal.examples.metainterpreters, "
+        "-double_quotes(atom)\n-import_from(clausal.examples.metainterpreters, "
         "[alias(solve_count, sc)])\n\n"
         "natnum_program(PROGRAM) <- (\n"
         "    PROGRAM is [\n"

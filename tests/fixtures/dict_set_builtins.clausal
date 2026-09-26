@@ -2,6 +2,7 @@
 
 # Extract the 'name' key from any dict that has it.
 # TODO: Discuss syntax: PERSON["name"] is NAME
+-double_quotes(atom)
 get_name(PERSON, NAME) <- sub_dict({"name": NAME}, PERSON)
 
 # Succeed if PERSON has role == "admin".

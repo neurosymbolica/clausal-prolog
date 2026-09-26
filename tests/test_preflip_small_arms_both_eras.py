@@ -612,6 +612,7 @@ def test_a_host_head_pattern_matches_an_owner_built_term(
         make(hf(5)),
     """)
     host = lister("sa_hhost", f"""
+        -double_quotes(atom)
         -module(sa_hhost, [patq(T, X), owner_built(X)])
         {"-import_from(sa_hlib, [hf])" if by_name else ""}
         -import_module(sa_hlib)

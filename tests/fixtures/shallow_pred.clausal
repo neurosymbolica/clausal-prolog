@@ -1,3 +1,4 @@
+-double_quotes(atom)
 -module(shallow_pred, [color(name, hue)])
 -shallow([color/2])
 
