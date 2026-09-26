@@ -493,12 +493,48 @@ def _try_te_match(item, match_target, expansion_module, module_state, wrap_head)
     if expansion == _NONE_ATOM:
         return None, new_state
     if isinstance(expansion, list):
-        if wrap_head:
-            expansion = [_wrap_as_predicate(e) for e in expansion]
-        return expansion, new_state
-    if wrap_head:
-        return _wrap_as_predicate(expansion), new_state
-    return expansion, new_state
+        return ([_validated_expansion(e, wrap_head) for e in expansion],
+                new_state)
+    return _validated_expansion(expansion, wrap_head), new_state
+
+
+def _validated_expansion(term, wrap_head):
+    """One item of a term_expansion/4 answer, checked against the protocol.
+
+    An answer item is a clause (a ``Predicate`` node) or, on the head-pattern
+    retry (*wrap_head*), a head TERM that becomes a fact.  Anything else --
+    a string, a number, an unbound variable -- is refused HERE with an ISO
+    ``type_error(callable, Culprit)`` that names the rule's contract.
+    Measured 2026-09-26: without this, a chars-mode module writing the
+    suppression sentinel as ``"none"`` (a STRING under
+    ``-double_quotes(chars)``) sailed through and crashed goal expansion
+    with ``'tuple' object has no attribute 'body'``, naming neither the rule
+    nor the fix; the message below says to write the ATOM ``none``.
+    """
+    from clausal.logic.exceptions import LogicException, type_error  # noqa: PLC0415
+    from clausal.logic.cells import is_chars, compound_cell_shape  # noqa: PLC0415
+    from clausal.logic.atoms import is_atom  # noqa: PLC0415
+    from clausal.logic.predicate import is_term_instance  # noqa: PLC0415
+    from clausal.logic.variables import is_var  # noqa: PLC0415
+
+    term = deref(term)
+    if isinstance(term, PredicateItem):
+        return term
+    if wrap_head and not is_var(term) and not is_chars(term) and (
+            compound_cell_shape(term)[0] or is_atom(term)
+            or is_term_instance(term)):
+        return PredicateItem(head=term, body=True)
+    what = ("a clause, a list of clauses, or the atom `none` (suppress)"
+            if not wrap_head else
+            "a head term, a list of head terms, or the atom `none` (suppress)")
+    hint = ""
+    if is_chars(term):
+        hint = (f' -- "{term[1]}" is a STRING under -double_quotes(chars); '
+                f"the suppression sentinel is the ATOM none: write none or "
+                f"'none'")
+    raise LogicException(type_error(
+        "callable", term,
+        f"term_expansion/4: the expansion must be {what}, got {term!r}{hint}"))
 
 
 def _wrap_as_predicate(term):

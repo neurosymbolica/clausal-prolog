@@ -29,6 +29,7 @@ from clausal.import_hook import (
     runtime_builtins,
 )
 from clausal.logic.compiler_v2 import compile_module
+from clausal.logic.exceptions import LogicException
 from clausal.logic.database import Module as LogicModule, head_key
 from clausal.logic.solve import call
 from clausal.logic.term_expansion import (
@@ -786,3 +787,68 @@ class TestNestedVarSubstitution:
         assert names == [mint("income"), mint("stays")], (
             f"matched KEY must flow into the output; got {results!r}"
         )
+
+
+class TestExpansionResultIsValidated:
+    """A term_expansion/4 answer that is not a clause, a list of clauses or
+    the atom ``none`` is an ISO type error at load -- not an AttributeError
+    from deep inside goal expansion.
+
+    Measured 2026-09-26 while preparing the -double_quotes default flip: a
+    chars-mode module writing the suppression sentinel as ``"none"`` (a
+    STRING under that mode) crashed with ``'tuple' object has no attribute
+    'body'`` at goal_expansion.py, naming neither the rule nor the fix.
+    """
+
+    def test_a_chars_string_none_is_a_type_error_that_names_the_atom(
+            self, tmp_path):
+        # A file load, not ``_parse_and_collect``: the quote map that tells
+        # ``"none"`` from ``'none'`` is built from the SOURCE LINES, which
+        # the bare EmbedTransformer() there is never handed.
+        path = tmp_path / "te_chars_none.clausal"
+        path.write_text(
+            '-double_quotes(chars)\n'
+            'term_expansion(_, "none", _m0, _m0) <- True\n'
+            'foo("a"),\n'
+        )
+        with pytest.raises(LogicException) as exc:
+            _load_module("_te_chars_none_shape", str(path))
+        term = exc.value.term
+        assert term.functor == "error"
+        formal, context = term.args
+        assert formal.functor == "type_error"
+        assert formal.args[0] == mint("callable")
+        assert formal.args[1] == ("$chars", "none")
+        assert "none" in context and "'none'" in context
+
+    def test_a_number_answer_is_a_type_error(self):
+        source = (
+            'term_expansion(_term, 42, _m0, _m0) <- True\n'
+            'foo("a"),\n'
+        )
+        preds, _, md = _parse_and_collect(source)
+        with pytest.raises(LogicException) as exc:
+            run_term_expansion(preds, md)
+        formal = exc.value.term.args[0]
+        assert formal.functor == "type_error" and formal.args[1] == 42
+
+    def test_a_bad_element_inside_a_list_answer_is_a_type_error(self):
+        source = (
+            'term_expansion(foo(X), [foo(X), 7], _m0, _m0) <- True\n'
+            'foo("a"),\n'
+        )
+        preds, _, md = _parse_and_collect(source)
+        with pytest.raises(LogicException) as exc:
+            run_term_expansion(preds, md)
+        formal = exc.value.term.args[0]
+        assert formal.functor == "type_error" and formal.args[1] == 7
+
+    def test_the_error_reaches_a_full_module_load(self, tmp_path):
+        path = tmp_path / "te_chars_none.clausal"
+        path.write_text(
+            '-double_quotes(chars)\n'
+            'term_expansion(_, "none", _m0, _m0) <- True\n'
+            'foo("a"),\n'
+        )
+        with pytest.raises(LogicException, match="the suppression sentinel is the ATOM none"):
+            _load_module("_te_chars_none", str(path))
