@@ -203,7 +203,9 @@ do_normalize(PyObject *term, int depth)
             }
             Py_ssize_t n = PyTuple_GET_SIZE(args);
             PyObject *df = VarAPI->deref(functor);   /* borrowed */
-            int as_cell = n > 0 && PyUnicode_Check(df);
+            int as_cell = n > 0 && PyUnicode_Check(df)
+                && PyUnicode_CompareWithASCIIString(df, "$chars") != 0
+                && PyUnicode_CompareWithASCIIString(df, "()") != 0;
             Py_ssize_t off = as_cell ? 2 : 1;
             PyObject *result = PyTuple_New(n + off);
             if (!result) { Py_DECREF(functor); Py_DECREF(args); return NULL; }

@@ -1080,7 +1080,9 @@ static PyObject *str_args;
  * compound_to_cell(obj, &out) -- C twin of ``clausal.terms.compound_as_cell``.
  *
  * Ruling 2026-09-26: a Compound whose functor dereferences to an atom (a str)
- * and whose arity is >= 1 IS the cell (functor, *args).  Returns 1 with *out a
+ * and whose arity is >= 1 IS the cell (functor, *args) -- except the functors
+ * '$chars' (its cell is the chars carrier) and '()' (TUPLE_TAG: its cell is
+ * tuple data).  Returns 1 with *out a
  * NEW reference to that cell; 0 (and *out NULL) when obj is not a Compound or
  * has no cell equivalent (Var / non-atom functor, arity 0); -1 on error.
  * Before ``_register_term_types`` runs, Compound_type is NULL and this answers
@@ -1095,7 +1097,14 @@ compound_to_cell(PyObject *obj, PyObject **out)
     PyObject *functor = PyObject_GetAttr(obj, str_functor);
     if (!functor) return -1;
     PyObject *f = var_deref(functor);          /* borrowed */
-    if (!PyUnicode_Check(f)) { Py_DECREF(functor); return 0; }
+    /* '$chars' and '()' are excluded: their cells are the chars CARRIER
+     * (text) and tuple DATA, not compounds -- see compound_as_cell. */
+    if (!PyUnicode_Check(f)
+            || PyUnicode_CompareWithASCIIString(f, "$chars") == 0
+            || PyUnicode_CompareWithASCIIString(f, "()") == 0) {
+        Py_DECREF(functor);
+        return 0;
+    }
     PyObject *args = PyObject_GetAttr(obj, str_args);
     if (!args) { Py_DECREF(functor); return -1; }
     if (!PyTuple_Check(args) || PyTuple_GET_SIZE(args) == 0) {

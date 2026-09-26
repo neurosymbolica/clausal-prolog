@@ -797,8 +797,10 @@ class TestHeadPatterns:
 
     def test_arity_is_part_of_the_pattern(self):
         """``seg/3`` and ``point/2`` differ in sequence LENGTH as well as tag."""
-        two = self._pattern(self._source_compound("point", 2))
-        three = self._pattern(self._source_compound("seg", 3))
+        # Ruling 2026-09-26: the cell pattern is or-ed with its Compound
+        # spelling; the arity claim is about the sequence alternative.
+        two = self._pattern(self._source_compound("point", 2)).split(" | ")[0]
+        three = self._pattern(self._source_compound("seg", 3)).split(" | ")[0]
         assert two.count(",") == 2      # tag + 2 args
         assert three.count(",") == 3    # tag + 3 args
         assert three.startswith("case ['seg', ")
@@ -966,7 +968,8 @@ class TestBucketPatternIntegration:
         way its ``Compound`` analog is matched.
         """
         _db, src = self._compile_cell_headed_kind()
-        assert "case [['point', _ncap0, _ncap1]," in src
+        assert ("case [['point', _ncap0, _ncap1] | "
+                "$Compound(functor='point', args=[_ncap0, _ncap1]),") in src
         assert "case [['seg', " in src
         assert "case [point(" not in src
         # ... and no cell is left riding the opaque-literal capture.

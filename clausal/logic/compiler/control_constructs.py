@@ -709,11 +709,19 @@ def _lower_catcher(ctx: CompilationContext, catcher: Any) -> ast.expr:
 
     A functor whose name the throw site lowers to a TERM — a class instance
     for a predicate/Python-minted functor, a CELL for a declared data functor
-    (P3-2 Task 2) — must be lowered the same way here, or the catcher never
-    matches what was thrown: ``unify(Compound('kab',(N,)), kab(7))`` is False,
-    and so is ``unify(Compound('kab',(N,)), ('kab', 7))``.  Only names the
-    throw site does NOT lower to a term (builtin ``error(...)`` terms, thrown
-    as ``Compound``) fall back to ``_catcher_to_structural``.
+    (P3-2 Task 2) — is lowered the same way here, so the catcher is built in
+    the very spelling the throw site builds.  Only names the throw site does
+    NOT lower to a term (builtin ``error(...)`` terms, thrown as ``Compound``)
+    fall back to ``_catcher_to_structural``.
+
+    Since the 2026-09-26 ruling (an atom-functor ``Compound`` of arity >= 1
+    IS its cell) ``unify(Compound('kab', (N,)), ('kab', 7))`` is True, so for
+    a CELL throw the cell-literal lowering is no longer what makes the catcher
+    match -- the ``Compound`` fallback would match too.  It is kept because it
+    still builds the catcher in the throw site's own spelling (one route, not
+    two that happen to agree), and a class-instance throw still needs it:
+    ``unify(Compound('kab', (N,)), kab(7))`` against a term INSTANCE is still
+    False -- the ruling covers cells only.
 
     Both halves of the test are the throw site's own questions, asked in the
     throw site's own way: ``PredicateMeta`` binding -> class construction,

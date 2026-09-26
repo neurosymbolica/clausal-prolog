@@ -37,7 +37,7 @@ from clausal.logic.predicate import (
     is_term_instance, term_field_names, term_field_names_of_class,
     is_declared_predicate_name, namespace_db,
 )
-from clausal.logic.cells import TUPLE_TAG, CELLS_NAMESPACE_KEY, _cell_shape, is_chars
+from clausal.logic.cells import TUPLE_TAG, CHARS_TAG, CELLS_NAMESPACE_KEY, _cell_shape, is_chars
 from clausal.logic.atoms import is_atom as _term_is_atom
 from clausal.logic.generated_names import dollar_ref
 
@@ -76,8 +76,50 @@ _SetLiteral = SetLiteral
 _AST_CONST_TYPES = (type(None), bool, int, float, str, bytes, complex)
 
 
-def _cell_match_pattern(functor: str, arg_patterns: list) -> ast.MatchSequence:
+def _compound_class_pattern(functor: Any, arg_patterns: list) -> ast.MatchClass:
+    """``case $Compound(functor=<functor>, args=(<p0>, ...))``."""
+    return ast.MatchClass(
+        cls=_name("$Compound"),
+        patterns=[],
+        kwd_attrs=["functor", "args"],
+        kwd_patterns=[
+            ast.MatchValue(value=ast.Constant(value=functor)),
+            ast.MatchSequence(patterns=arg_patterns),
+        ],
+    )
+
+
+def _cell_or_compound_pattern(functor: str, arg_patterns: list) -> ast.MatchOr:
+    """Match the term ``functor(<p0>, ...)`` in EITHER spelling.
+
+    Ruling 2026-09-26: a ``Compound`` whose functor is an atom and whose arity
+    is >= 1 IS the cell ``(functor, *args)`` (``terms.compound_as_cell``), and
+    ``=``/2 says so.  A head pattern must answer as ``=`` does -- the argument-
+    index bucket path LIFTS a hoisted head ``Unify`` back into this pattern, so
+    a pattern that saw only one spelling would reject a caller ``=`` accepts.
+    The two alternatives bind the same capture names (the sub-patterns are the
+    same, deep-copied), so the or-pattern is well formed; the guards the
+    sub-patterns appended to the sinks are shared by both.
+
+    Not covered: a ``Compound`` whose functor is a Var BOUND to the atom --
+    ``MatchValue`` compares the raw attribute.  That was already true of the
+    ``Compound`` head pattern (Var functors are parked, A01-D004).
+    """
+    import copy  # noqa: PLC0415
+    return ast.MatchOr(patterns=[
+        ast.MatchSequence(
+            patterns=[ast.MatchValue(value=ast.Constant(value=functor)),
+                      *arg_patterns],
+        ),
+        _compound_class_pattern(functor, copy.deepcopy(arg_patterns)),
+    ])
+
+
+def _cell_match_pattern(functor: str, arg_patterns: list) -> ast.pattern:
     """The cell pattern ``case ('functor', <p0>, ...)`` for a flagged module.
+
+    Since 2026-09-26 it also accepts the ``Compound`` spelling of the same term
+    whenever the cell has an argument: see :func:`_cell_or_compound_pattern`.
 
     A ``MatchSequence`` whose first element is a ``MatchValue`` on the functor
     string: the sequence length discriminates ARITY and the first element
@@ -93,6 +135,9 @@ def _cell_match_pattern(functor: str, arg_patterns: list) -> ast.MatchSequence:
     reaches no tuple-data head pattern, so no such branch is emitted; see
     ``implementation_plans/tagged-tuple-term-representation.md`` section 4.
     """
+    if (arg_patterns and type(functor) is str
+            and functor != CHARS_TAG and functor != TUPLE_TAG):
+        return _cell_or_compound_pattern(functor, arg_patterns)
     return ast.MatchSequence(
         patterns=[ast.MatchValue(value=ast.Constant(value=functor)),
                   *arg_patterns],
@@ -632,15 +677,12 @@ def head_to_match_pattern(
             # Variable functor: cannot match statically → wildcard
             return ast.MatchAs(pattern=None, name=None)
         sub_patterns = [head_to_match_pattern(a, var_context, dup_guards, list_guards, _list_reg_ids, globals_=globals_) for a in term.args]
-        return ast.MatchClass(
-            cls=_name("$Compound"),
-            patterns=[],
-            kwd_attrs=["functor", "args"],
-            kwd_patterns=[
-                ast.MatchValue(value=ast.Constant(value=f)),
-                ast.MatchSequence(patterns=sub_patterns),
-            ],
-        )
+        # Ruling 2026-09-26: an atom-functor Compound of arity >= 1 IS its
+        # cell, so the pattern accepts both spellings (as ``=`` does).
+        if (isinstance(f, str) and sub_patterns
+                and f != CHARS_TAG and f != TUPLE_TAG):
+            return _cell_or_compound_pattern(f, sub_patterns)
+        return _compound_class_pattern(f, sub_patterns)
 
     # Call(func=LoadName(qualified_name), args=[...]) — emitted whenever a
     # rule head references an imported-compound functor (e.g. ``Item(...)``

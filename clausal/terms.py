@@ -31,7 +31,7 @@ from .logic.atoms import (
     as_dict_key as _as_dict_key, char_atom, demangle_for_display,
     is_char_atom, is_mangled, is_nil as _is_nil, spelling,
 )
-from .logic.cells import TUPLE_TAG, chars, is_chars, chars_text, refuse_reserved_1tuple
+from .logic.cells import TUPLE_TAG, CHARS_TAG, chars, is_chars, chars_text, refuse_reserved_1tuple
 from .logic.variables import Var, deref
 
 # Re-export operator/expression classes already defined in pythonic_ast.
@@ -106,12 +106,23 @@ def compound_as_cell(term: "Compound") -> "tuple | None":
     one function, so they cannot disagree about which Compounds qualify.
 
     None for the Compounds with no cell equivalent: a Var or non-atom functor,
-    and arity 0 (``foo()``, not an ISO term -- the arity-0 cell is RESERVED).
+    arity 0 (``foo()``, not an ISO term -- the arity-0 cell is RESERVED), and
+    the functor ``'$chars'``.  The cell ``('$chars', s)`` is not a compound at
+    all: it is the chars CARRIER, the text ``s``, equal to its char list.  A
+    ``Compound('$chars', (s,))`` cannot be that text without every relation
+    learning the carrier's list equivalence too, so it stays an ordinary
+    compound -- or ``=`` would stop being transitive (Compound = carrier =
+    char list, but Compound != char list; roborev 201 Low (a)).  The
+    functor ``TUPLE_TAG`` (``'()'``) is excluded for the same reason: its
+    cell is tuple DATA, keyed and unified as data, not a compound named
+    ``'()'``.  Other ``$``-functors are NOT excluded: ``'$VAR'(1)`` is an
+    ordinary ISO term.
     Those stay distinct from every cell.  The C twins (``_variables.c``
     ``compound_to_cell``, ``_tabling_core.c``) apply the same test.
     """
     functor = deref(term.functor)
-    if isinstance(functor, str) and term.args:
+    if (isinstance(functor, str) and term.args
+            and functor != CHARS_TAG and functor != TUPLE_TAG):
         return (functor, *term.args)
     return None
 

@@ -189,6 +189,12 @@ class TestHeadToMatchPattern:
         ctx: dict[int, str] = {}
         term = Compound("foo", (v, 42))
         p = head_to_match_pattern(term, ctx)
+        # Ruling 2026-09-26: an atom-functor Compound IS its cell, so the
+        # pattern accepts both spellings -- the cell sequence OR the class.
+        assert isinstance(p, ast.MatchOr)
+        seq, p = p.patterns
+        assert isinstance(seq, ast.MatchSequence)
+        assert seq.patterns[0].value.value == "foo" and len(seq.patterns) == 3
         assert isinstance(p, ast.MatchClass)
         assert isinstance(p.cls, ast.Name)
         assert p.cls.id == "$Compound"

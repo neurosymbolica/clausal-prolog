@@ -319,3 +319,137 @@ def test_python_and_c_twins_agree(tmp_path):
     # positive control: the matrix actually carries the answers we expect
     first = outs["c"].splitlines()[0]
     assert first == "True True True", outs["c"]
+
+
+# ── clause-head matching and first-argument indexing (roborev 201 MEDIUM) ──
+#
+# The argument-index bucket path LIFTS a hoisted head ``Unify`` back into a
+# ``match`` pattern.  Before the fix that pattern was ``case ['f', x]`` for a
+# cell head and ``case $Compound(functor='f', ...)`` for a Compound head, so a
+# caller in the OTHER spelling missed a clause ``=`` says it matches.
+
+HEAD_SRC = """
+-module(ccst_head, [p(X), w(X), w3(X), m(X, Y), j(X, Y), t(X), dz(X)])
+-private([a, b, z, f(A), g(A), k(A)])
+-dynamic(dz/1)
+p(f(X)) <- (X == 1)
+w(f(1)),
+w(f(2)),
+w(g(1)),
+w(1),
+w(a),
+w3(k(f(1))),
+w3(k(f(2))),
+w3(k(g(1))),
+w3(z),
+m([f(X), *_], X),
+m([g(X), *_], X),
+j(f(1), a),
+j(g(1), a),
+j(f(2), b),
+t([f(X), *_]) <- (X == 1)
+"""
+
+
+@pytest.fixture(scope="module")
+def H(tmp_path_factory):
+    from clausal.import_hook import _load_module
+    d = tmp_path_factory.mktemp("ccst_head")
+    p = d / "ccst_head.clausal"
+    p.write_text(textwrap.dedent(HEAD_SRC).lstrip())
+    sys.path.insert(0, str(d))
+    try:
+        mod = _load_module("ccst_head", str(p))
+    finally:
+        sys.path.remove(str(d))
+    return mod.__dict__["$module"]
+
+
+def _n(M, name, *args):
+    return len(list(call(name, *args, module=M)))
+
+
+@pytest.mark.parametrize("name,args", [
+    ("p", (C("f", 1),)),
+    ("w", (C("f", 2),)),                       # indexed, 2-clause bucket
+    ("w", (C("g", 1),)),                       # indexed, 1-clause bucket
+    ("w3", (("k", C("f", 2)),)),               # nested, inner Compound
+    ("w3", (C("k", ("f", 2)),)),               # nested, outer Compound
+    ("w3", (C("k", C("f", 2)),)),              # nested, both
+    ("m", ([C("g", 1), 2], Var())),            # list dispatch
+    ("j", (C("f", 2), "b")),                   # two indexed positions
+    ("t", ([C("f", 1), 3],)),                  # list-dispatch head rebuild
+], ids=["rule", "idx-bucket2", "idx-bucket1", "nested-inner", "nested-outer",
+        "nested-both", "list-dispatch", "joint", "list-head"])
+def test_a_compound_caller_matches_a_cell_head(H, name, args):
+    assert _n(H, name, *args) == 1
+
+
+def test_a_partial_compound_caller_enumerates_the_bucket(H):
+    assert _n(H, "w", ("f", Var())) == 2
+    assert _n(H, "w", C("f", Var())) == 2
+
+
+def test_a_bound_var_functor_compound_caller_matches(H):
+    F = Var()
+    unify(F, "f", Trail())
+    assert _n(H, "w", Compound(F, (2,))) == 1
+
+
+def test_no_cell_compound_callers_still_miss(H):
+    assert _n(H, "w", Compound("a", ())) == 0
+    assert _n(H, "w", Compound(Var(), (1,))) == 0
+
+
+def test_a_compound_head_matches_a_cell_caller_and_the_reverse(H):
+    """The reverse direction: a clause HEAD holding a Compound (asserted from
+    Python), called with the cell, and a cell head called with a Compound."""
+    list(call("assertz", ("dz", C("f", 1)), module=H))
+    list(call("assertz", ("dz", C("g", 1)), module=H))
+    list(call("assertz", ("dz", ("f", 2)), module=H))
+    assert _n(H, "dz", ("f", 1)) == 1
+    assert _n(H, "dz", ("g", 1)) == 1
+    assert _n(H, "dz", C("f", 2)) == 1
+    assert _n(H, "dz", C("g", 1)) == 1
+    assert _n(H, "dz", ("f", 3)) == 0
+
+
+def test_runtime_index_key_is_the_cell_key():
+    from clausal.logic.compiler.arg_index import _runtime_arg_key, _INDEX_VAR
+    assert _runtime_arg_key(C("f", 1)) == _runtime_arg_key(("f", 1)) == ("f", 1)
+    # the deep-ground gate applies to the Compound exactly as to its cell
+    assert _runtime_arg_key(C("f", Var())) is _INDEX_VAR
+    assert _runtime_arg_key(("f", Var())) is _INDEX_VAR
+
+
+# ── '$chars' is not a cell functor (roborev 201 Low (a)) ──────────────────
+
+def test_a_chars_compound_is_not_the_carrier(M):
+    """``('$chars', s)`` is the chars CARRIER (text, equal to its char list),
+    so ``Compound('$chars', (s,))`` must not become it: ``=`` would stop being
+    transitive (Compound = carrier = char list, Compound != char list)."""
+    from clausal.logic.cells import chars
+    k, text, charlist = Compound("$chars", ("abc",)), chars("abc"), ["a", "b", "c"]
+    assert compound_as_cell(k) is None
+    assert unify(text, charlist, Trail())            # control: the carrier IS text
+    for other in (text, charlist):
+        assert not unify(k, other, Trail())
+        assert _q(M, "==", k, other) == []
+        assert _cmp(M, k, other) != "="
+        assert TB._normalize_for_key(k) != TB._normalize_for_key(other)
+        assert TB._normalize_for_key_py(k) != TB._normalize_for_key_py(other)
+    # an ordinary '$'-functor is NOT excluded: '$VAR'(1) is an ISO term
+    assert unify(C("$VAR", 1), ("$VAR", 1), Trail())
+
+
+def test_a_tuple_tag_compound_is_not_tuple_data(M):
+    """The cell ``('()', a, b)`` is tuple DATA (``TUPLE_TAG``), keyed and
+    unified as data -- a ``Compound('()', ...)`` stays an ordinary compound."""
+    from clausal.logic.cells import TUPLE_TAG
+    k, data = Compound(TUPLE_TAG, (1, 2)), (TUPLE_TAG, 1, 2)
+    assert compound_as_cell(k) is None
+    assert not unify(k, data, Trail())
+    assert _q(M, "==", k, data) == []
+    assert _cmp(M, k, data) != "="
+    assert TB._normalize_for_key(k) != TB._normalize_for_key(data)
+    assert TB._normalize_for_key_py(k) != TB._normalize_for_key_py(data)
