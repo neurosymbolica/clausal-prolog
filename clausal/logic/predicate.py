@@ -914,6 +914,33 @@ def localize_owner_functor(db: Any, functor: str, arity: int):
     return None
 
 
+def _atom_goal_message(name: str, arity: int, db: Any) -> str:
+    """The message for an ATOM called as a goal at *arity*.
+
+    The ISO term is ``existence_error(procedure, name/arity)`` either way;
+    this is only its message.  When the caller's Database declares
+    ``name/arity`` as DATA -- a field-carrying export entry such as
+    ``-module(m, [edge(A, B)])`` with no clauses (ruling R6/R6b) -- the
+    message says so and names the ISO spelling that exports a PROCEDURE
+    with no clauses (``edge/2``), instead of an unexplained "data
+    reference".  *db* may be a name-only shim or ``None``; anything without
+    ``declared_kind`` gets the general message."""
+    declared_kind = getattr(db, "declared_kind", None)
+    if declared_kind is not None and declared_kind(name, arity) == "data":
+        fields = db.declared_fields(name, arity) or ()
+        entry = f"{name}({', '.join(str(f) for f in fields)})"
+        return (
+            f"{name}/{arity} is declared as DATA, not as a procedure: the "
+            f"export entry {entry} declares a term constructor, and it has "
+            f"no clauses to call.  To export a procedure (clauses may live "
+            f"in an importer, or be asserted with -dynamic), write "
+            f"{name}/{arity} in the export list; to call it here, define "
+            f"its clauses")
+    return (f"atom {name!r} is not callable at arity {arity} "
+            f"(resolved via a data reference; define or import the "
+            f"predicate, or call it by its local name)")
+
+
 def _dispatch_at(obj: Any, arity: int, db: Any = None) -> Callable:
     """Resolve *obj*'s dispatch function for a call of *arity* arguments.
 
@@ -1081,9 +1108,7 @@ def _dispatch_at(obj: Any, arity: int, db: Any = None) -> Callable:
         raise LogicException(
             existence_error(
                 "procedure", indicator,
-                f"atom {name!r} is not callable at arity {arity} "
-                f"(resolved via a data reference; define or import the "
-                f"predicate, or call it by its local name)",
+                _atom_goal_message(name, arity, db),
             )
         )
     getter = getattr(obj, "_get_dispatch", None)
