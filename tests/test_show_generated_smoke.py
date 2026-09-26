@@ -35,10 +35,12 @@ def test_show_generated_runs_and_prints_the_phase_10_bucket_reference():
     for n in range(1, 8):
         assert f"# {n}." in out, f"section {n} missing"
     # Phase 10: the call site references the bucket function directly ...
-    # Matched on whitespace-free text with either quote style, so the check
-    # survives the script's optional ``black`` pass reformatting the output
-    # (today ``black`` rejects the ``$``-names and the script prints the
-    # ``ast.unparse`` text unchanged).
+    # Matched on whitespace-free text with either quote style.  Today the
+    # script's optional ``black`` pass never applies (black rejects the
+    # ``$``-names and the script prints the ``ast.unparse`` text as is); the
+    # normalisation covers whitespace and quote changes only, so a
+    # reformatter that did more (e.g. dropping or adding parentheses) could
+    # still break these asserts.
     flat = re.sub(r"\s+", "", out).replace('"', "'")
     assert "StepGenerator(color.bucket(pos=0,('red',0))" in flat
     # ... and the no-hint comparison goes through the dispatch.
