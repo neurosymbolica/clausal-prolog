@@ -126,8 +126,11 @@ def test_the_same_indicator_is_refused_at_load(load, kind, local_decl, alias):
     # it here because LOCALS gives them clauses); everything else is the
     # import/local clash check's.
     if kind != "data" and local_decl in ("clauses", "discontiguous", "table"):
-        assert re.search(r"defines (a clause|clauses) for edge/2", message), message
-        assert f"declares {local}/2 locally" not in message
+        assert re.search(r"defines (a clause|clauses) for \w+/2, which it "
+                         r"-import_from's", message), message
+        # Measured: the gate names the OWNER's spelling even under an alias,
+        # because an aliased head compiles to the owner's functor.
+        assert "for edge/2" in message
     else:
         assert message.startswith(f"clash_imp declares {local}/2 locally ("), message
         assert "A predicate cannot be both imported and defined" in message
@@ -215,12 +218,14 @@ def test_the_existing_table_refusal_runs_first_with_its_own_message(load):
 
 
 @pytest.mark.parametrize("alias", [False, True], ids=["plain", "alias"])
-def test_table_on_an_imported_clauseless_target_points_at_the_owner(
+def test_table_on_an_imported_target_whose_owner_has_no_clauses_points_at_the_owner(
         load, alias):
-    """The older ``-table`` refusal told the author to "declare
-    -dynamic(edge/2)" -- which, for an IMPORTED target, is exactly what the
-    import/local clash check refuses (a local -dynamic plus -table beside a
-    dynamic import).  For an imported target it now points at the owner."""
+    """The OWNER-HAS-NO-CLAUSES case (``own_pi``: a dynamic ``edge/2`` with
+    no clauses yet).  The older ``-table`` refusal told the author to
+    "declare -dynamic(edge/2)" -- which, for an IMPORTED target, is exactly
+    what the import/local clash check refuses (a local -dynamic plus -table
+    beside a dynamic import).  For an imported target it now points at the
+    owner, under the owner's spelling."""
     load("own_pi", OWNERS["proc_pi"][1])
     local = "e" if alias else "edge"
     imported = "alias(edge, e)" if alias else "edge"
@@ -231,6 +236,27 @@ def test_table_on_an_imported_clauseless_target_points_at_the_owner(
     assert f"-table({local}/2)" in message
     assert "imported from own_pi" in message
     assert "-table(edge/2) in own_pi" in message
+    assert "-dynamic" not in message
+
+
+@pytest.mark.parametrize("alias", [False, True], ids=["plain", "alias"])
+def test_table_on_an_imported_target_whose_owner_has_clauses_points_at_the_owner(
+        load, alias):
+    """The OWNER-HAS-CLAUSES case (``own_proc``: a static ``edge/2`` with a
+    clause) -- the common static import.  The refusal's remedy names the
+    target as the OWNER spells it and the owner module: under
+    ``alias(edge, e)`` the local ``e`` is not a name ``own_proc`` knows
+    (roborev 213)."""
+    load("own_proc", OWNERS["proc"][1])
+    local = "e" if alias else "edge"
+    imported = "alias(edge, e)" if alias else "edge"
+    with pytest.raises(SyntaxError) as info:
+        load("table_clauses_imp", f"-import_from(own_proc, [{imported}])\n"
+             f"-module(table_clauses_imp, [z(X)])\n-table({local}/2)\nz(1),\n")
+    message = str(info.value)
+    assert message.startswith(f"-table({local}/2): {local}/2 is defined in "
+                              f"another module (defined in own_proc)")
+    assert "Move -table(edge/2) into own_proc." in message
     assert "-dynamic" not in message
 
 

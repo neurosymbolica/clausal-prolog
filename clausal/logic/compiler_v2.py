@@ -1408,12 +1408,13 @@ def _import_clash(kind: str, declarations: list) -> "str | None":
       assert-through idiom, and takes effect.
 
     Accepted: ``-discontiguous`` on a procedure import (pinned).  Left to the
-    older refusals, with their own messages: clauses against a procedure
-    import are refused by the load gate at step 3d, which runs BEFORE this
-    check; ``-table`` on an imported target with no local clauses and no
-    local ``-dynamic`` gets ``None`` here on purpose, so the load goes on to
-    step 6's ``_validate_directive_targets``, whose refusal names the
-    owner."""
+    older refusals, with their own messages, for a PROCEDURE import only:
+    clauses against it are refused by the load gate at step 3d, which runs
+    BEFORE this check; ``-table`` on it with no local clauses and no local
+    ``-dynamic`` gets ``None`` here on purpose, so the load goes on to step
+    6's ``_validate_directive_targets``, whose refusal names the owner.
+    Against a DATA import every local declaration, a lone ``-table``
+    included, is refused here (the first bullet)."""
     if kind == "data":
         return declarations[0]
     if kind == "static":
@@ -1448,9 +1449,8 @@ _IMPORT_KIND_TEXT = {
     "static": "a static procedure, so the local declaration would be ignored "
               "(its clauses and properties are the owner's)",
     "dynamic": "a dynamic procedure, so the local declaration would be "
-               "ignored (only a local -dynamic of it, the assert-through "
-               "idiom where an assertz lands on the owner, and "
-               "-discontiguous are accepted)",
+               "ignored (only a local -dynamic of it, which lets assertz add "
+               "to the owner's predicate, and -discontiguous are accepted)",
 }
 
 
@@ -1635,14 +1635,19 @@ def _refuse_untablable_target(
     row = (resolve_predicate_row(binding, arity=arity, db=db)
            if is_pred else None)
     if row is not None and row.clauses:
+        # The remedy names the target as its OWNER spells it: under an
+        # aliased import (``alias(double, dbl)``) the local ``dbl`` is not a
+        # name the owner knows (roborev 213).
         origin = predicate_owner_module(binding)
+        spelling = predicate_binding_name(binding, db=db) or functor
         where = f" (defined in {origin})" if origin else ""
+        into = f"into {origin}" if origin else "into the module that defines it"
         raise SyntaxError(
             f"-table({functor}/{arity}): {functor}/{arity} is defined in "
             f"another module{where}, and -table only tables the dispatch "
             f"function compiled by the module that declares it — the directive "
-            f"would have no effect here.  Move -table({functor}/{arity}) into "
-            f"the module that defines {functor}/{arity}."
+            f"would have no effect here.  Move -table({spelling}/{arity}) "
+            f"{into}."
         )
 
     if is_pred:

@@ -14,9 +14,10 @@ table):
   -discontiguous are accepted).
 
 The census calls the engine's own ``_import_local_clashes``: one copy of
-the rule.  Clauses against a procedure import, and -table on an imported
-target with no local -dynamic, are the older refusals and are not counted
-here.  This loads every ``.clausal`` / ``.seam`` / ``.pl`` file under the given roots, each
+the rule.  For a PROCEDURE import, clauses against it and a -table on it
+with no local -dynamic are the older refusals and are not counted here;
+for a DATA import every local declaration, a lone -table included, is the
+clash check's and IS counted.  This loads every ``.clausal`` / ``.seam`` / ``.pl`` file under the given roots, each
 in a FRESH subprocess, with the check patched into REPORT mode: it records
 the clashes it would refuse and lets the load continue, so a file is still
 counted if it fails later for an unrelated reason.
