@@ -274,8 +274,53 @@ def as_dict_key(key):
     return key
 
 
+#: Call sites ``(filename, lineno)`` that have already been told ``atom`` is
+#: deprecated -- the once-per-call-site guard, kept here rather than left to
+#: the warnings registry so it is exactly-once regardless of the consumer's
+#: filters (the house pattern: ``compiler_v2._warn_implicit_atoms_deprecated``).
+_atom_class_warned_sites: set = set()
+
+_ATOM_CLASS_DEPRECATION = (
+    "clausal.logic.atoms.atom is deprecated (dumb seam, 2026-09-27) and is "
+    "removed in 2.0. An atom IS a plain str: write 'x', not atom('x'). Test "
+    "for an atom with `type(v) is str` or clausal.logic.atoms.is_atom(v) -- "
+    "NOT isinstance(v, atom), which is False for every value the engine hands "
+    "out. Compare an answer with the str itself or with a `--`-wrapped term "
+    "(V == --result(permitted, ...)); use clausal.to_python(V) for a Python "
+    "value. See docs/python_integration.md. (Shown once per call site.)")
+
+
+def _warn_atom_class_deprecated() -> None:
+    """Emit :class:`ClausalAtomClassDeprecationWarning` for the code that
+    constructed an ``atom`` -- the caller of ``atom.__new__`` -- once per
+    (file, line).  A construction from C (unpickling) is attributed to the
+    nearest Python frame, the ``pickle.loads`` caller."""
+    try:
+        f = sys._getframe(2)             # 0: here, 1: atom.__new__, 2: the constructing code
+    except ValueError:                   # no Python caller at all
+        site = None
+    else:
+        site = (f.f_code.co_filename, f.f_lineno)
+    if site in _atom_class_warned_sites:
+        return
+    _atom_class_warned_sites.add(site)
+    import warnings
+    from clausal.lint_warnings import ClausalAtomClassDeprecationWarning
+    warnings.warn(_ATOM_CLASS_DEPRECATION, ClausalAtomClassDeprecationWarning,
+                  stacklevel=3)
+
+
 class atom(str):
-    """An atom at the PYTHON BOUNDARY: a ``str`` that is TAGGED as an atom.
+    """DEPRECATED (2026-09-27, dumb seam step (f); removed in 2.0).  An atom IS
+    the plain ``str``: write ``'x'``, test with ``type(v) is str`` /
+    :func:`is_atom`.  Constructing one emits
+    ``clausal.lint_warnings.ClausalAtomClassDeprecationWarning`` once per call
+    site; the class, its equality, hashing, interning and pickling are
+    otherwise unchanged, and the engine still strips an instance to its
+    ``str`` at every Python entry (the LEAK RULE, ``to_python.strip_atom_tags``
+    / ``wrap_text``).  The engine itself never constructs one.
+
+    An atom at the PYTHON BOUNDARY: a ``str`` that is TAGGED as an atom.
 
     Spec: ``docs/superpowers/specs/2026-09-21-python-boundary-atom-and-string-
     design.md``, ruled by the operator 2026-09-21, amended the same day to the
@@ -329,6 +374,7 @@ class atom(str):
     _interned: dict = {}
 
     def __new__(cls, spelling: str):
+        _warn_atom_class_deprecated()    # step (f): user code only; the engine never constructs one
         got = cls._interned.get(spelling)
         if got is None:
             got = cls._interned[spelling] = str.__new__(cls, spelling)

@@ -212,3 +212,23 @@ class ClausalRetiredQuasiQuoteWarning(ClausalDeprecatedSpellingWarning):
     a real ``q/1`` term can silence it with ``warnings.filterwarnings`` on
     this class.
     """
+
+
+class ClausalAtomClassDeprecationWarning(DeprecationWarning):
+    """Constructing the boundary class ``clausal.logic.atoms.atom`` (a ``str``
+    subclass).  Deprecated 2026-09-27 (dumb seam, step (f)); removed in 2.0.
+
+    Under the dumb seam an atom IS the plain ``str`` and nothing the engine
+    hands out is an ``atom`` instance any more, so the class only ever comes
+    from user code.  Write ``'x'`` for the atom ``x``; test with
+    ``type(v) is str`` or ``clausal.logic.atoms.is_atom(v)`` -- an
+    ``isinstance(v, atom)`` test is now simply False for every answer.
+
+    A Python-API deprecation, so a ``DeprecationWarning`` subclass, like
+    ``ClausalStrictAtomsDeprecationWarning``: shown by default in
+    ``__main__`` and under pytest, silenced by default elsewhere.  Emitted
+    once per CALL SITE (file, line), guarded in ``clausal.logic.atoms`` rather
+    than by the warnings registry.  The engine's own leak strips test the
+    type and never construct, so they never emit it.  Not the builtin
+    ``atom/1`` (``from clausal import atom``), which is unaffected.
+    """

@@ -224,7 +224,9 @@ def test_a_scalar_subclass_is_not_on_the_fast_path_and_crosses_unchanged():
         A = 1
     assert to_python(E.A) is E.A
     from clausal.logic.atoms import atom
-    a = atom("x")
+    from clausal.lint_warnings import ClausalAtomClassDeprecationWarning
+    with pytest.warns(ClausalAtomClassDeprecationWarning):   # deprecated (step (f)); still crosses untouched
+        a = atom("x")
     assert to_python(a) is a           # a boundary tag crosses OUT untouched
 
 

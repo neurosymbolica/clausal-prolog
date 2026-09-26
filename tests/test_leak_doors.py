@@ -8,9 +8,18 @@ tested with the repro the 2026-09-26 design review found.
 import os
 import tempfile
 
+import pytest
+
 from clausal.import_hook import _load_module
 from clausal.logic.atoms import atom
 from clausal.terms import Var
+
+# The deprecated boundary class (dumb seam step (f), 2026-09-27): this file
+# constructs ``atom`` ON PURPOSE -- it pins the class / the leak strips that
+# must keep working through 1.x -- so its deprecation warning is expected
+# here and is asserted in tests/test_atom_class_deprecation.py.
+pytestmark = pytest.mark.filterwarnings(
+    "ignore::clausal.lint_warnings.ClausalAtomClassDeprecationWarning")
 
 
 def _load(name, source):

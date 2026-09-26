@@ -17,7 +17,7 @@ import tempfile
 import pytest
 
 from clausal.import_hook import _load_module
-from clausal.logic.atoms import atom, is_atom
+from clausal.logic.atoms import is_atom
 from clausal.logic.cells import chars, is_chars
 from clausal.terms import DictTerm, Var
 

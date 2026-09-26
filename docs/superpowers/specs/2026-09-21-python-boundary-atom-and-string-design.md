@@ -3,6 +3,11 @@
 **RULED by the operator 2026-09-21. NOT IMPLEMENTED — this is the spec, not a
 description of the engine.**
 
+> **SUPERSEDED** by the dumb seam (2026-09-26): values cross in the engine's
+> raw form, an atom is the plain `str`. The `atom` class this spec introduced
+> is DEPRECATED as of 2026-09-27 (step (f)) and removed in 2.0 — see
+> `docs/python_integration.md`, "Deprecated: the `atom` boundary class".
+
 ## The ruling
 
 | | `--` (out, to Python) | `++` (in, to a term) |
