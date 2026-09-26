@@ -1427,8 +1427,12 @@ class _ClausalToProlog:
         # So nothing is known to need to precede `:- module`, and three things
         # are known to break there. A meta_predicate written above -module thus
         # lands below the module line but AHEAD of the generated prelude (clpz,
-        # library(lambda)); measured the same day, that position and the one
-        # after the prelude give identical answers on both engines.
+        # library(lambda)). Measured 2026-09-26 on Scryer and Trealla: a library
+        # imported via use_module, its meta declarations placed ahead of vs
+        # behind the clpz + library(lambda) imports, exercised by a
+        # caller-module goal through a 1-meta and a 2-meta, a library(lambda)
+        # `\X^Goal` passed through the meta predicate, and #= in the body --
+        # identical answers in both positions on both engines.
         module_item: PItem | None = None
         before_module: list[PItem] = []
         rest: list[PItem] = []
@@ -1734,12 +1738,34 @@ class _ClausalToProlog:
     def _convert_module_directive(self, call: python_ast.Call) -> PDirective:
         """Convert -module(name, [exports]).
 
-        Three export spellings, all engine-accepted: a CALL TEMPLATE
-        ``edge(A, B)`` and the ISO predicate indicator ``edge/2`` both cross as
-        ``edge/2``; a bare name crosses as ``Name/0``. Anything else is REFUSED.
-        It used to be dropped without a word, so ``-module(m, [edge/2])`` --
-        the ISO spelling the engine accepts and pins (ruling R6b) -- exported
-        nothing at all: a module whose export list silently shrank.
+        Every export spelling the engine reads (term_rewriting's
+        ``_handle_module_directive`` / ``_predicate_export_spec``) crosses:
+
+        * the ISO predicate indicator ``edge/2`` -> ``edge/2``;
+        * a call template ``edge(A, B)`` -> ``edge/2``;
+        * a bare name ``edge`` -> ``edge/0``;
+        * the QUOTED forms of the first two, ``'Edge'/2`` and ``'edge'(A, B)``.
+          A capital-initial predicate can only be written quoted -- bare
+          ``Edge`` is a logic variable -- and a quoted name crosses AS WRITTEN,
+          never through the snake-case name mapping. A quoted name is a name
+          only when the literal rule makes it an ATOM: ``'...'`` always,
+          ``"..."`` only under ``-double_quotes(atom)``; under ``chars`` it is
+          a char list and names nothing, so it is refused like anything else.
+
+        Anything else is REFUSED. It used to be dropped without a word, so the
+        module's export list silently shrank.
+
+        What the engine DECLARES by each spelling differs, and the export does
+        not carry that difference: under R6/R6b a bare name or call template
+        with NO clauses in the file is DATA (an atom, a data functor), while
+        ``name/arity`` always declares a procedure. The export keeps an entry
+        only when the file defines clauses at that name/arity
+        (``_filter_module_exports``), which is exactly the engine's rule for
+        when a data-spelled entry is in fact a predicate (measured on the
+        engine 2026-09-26: an exported call template or bare name WITH clauses
+        is ``declared_kind == predicate`` and an importer's call resolves it).
+        So data exports never reach the Prolog -- ISO terms need no export --
+        and every export that does is a predicate on both sides.
         """
         mod_name = self._get_string_or_name(call.args[0])
         self._module_name = mod_name
@@ -1759,15 +1785,38 @@ class _ClausalToProlog:
                       and type(elt.right.value) is int and elt.right.value >= 0):
                     functor = resolve_name(elt.left.id, self.dialect)
                     exports.append(PCompound("/", (PAtom(functor), PNumber(elt.right.value))))
+                elif (isinstance(elt, python_ast.BinOp) and isinstance(elt.op, python_ast.Div)
+                      and self._quoted_export_name(elt.left) is not None
+                      and isinstance(elt.right, python_ast.Constant)
+                      and type(elt.right.value) is int and elt.right.value >= 0):
+                    exports.append(PCompound("/", (
+                        PAtom(self._quoted_export_name(elt.left)), PNumber(elt.right.value))))
+                elif (isinstance(elt, python_ast.Call)
+                      and self._quoted_export_name(elt.func) is not None):
+                    exports.append(PCompound("/", (
+                        PAtom(self._quoted_export_name(elt.func)), PNumber(len(elt.args)))))
                 else:
                     raise NotImplementedError(
                         f"clausal_to_prolog: -module({mod_name}, [...]) export "
                         f"`{python_ast.unparse(elt)}` is not an export element -- "
                         "write a call template `name(A, B)`, a predicate indicator "
-                        "`name/2`, or a bare name. It used to be dropped silently, "
+                        "`name/2` (either may quote the name), or a bare name. It used to be dropped silently, "
                         "exporting less than the source declares.")
         export_list = PList(tuple(exports))
         return PDirective(PCompound("module", (PAtom(mod_name), export_list)))
+
+    def _quoted_export_name(self, node) -> str | None:
+        """The functor a QUOTED export name denotes, or None.
+
+        Decided by the literal rule, as the engine decides it: a str literal
+        that lowers to an ATOM names a functor, written exactly as quoted; one
+        that lowers to a string (``"..."`` under -double_quotes(chars)) names
+        nothing.
+        """
+        if not (isinstance(node, python_ast.Constant) and isinstance(node.value, str)):
+            return None
+        term = self._convert_str_literal(node.value, node)
+        return term.name if isinstance(term, PAtom) else None
 
     def _module_reference(self, mod_path: str) -> PTerm | None:
         """The term naming *mod_path* in a use_module directive.
