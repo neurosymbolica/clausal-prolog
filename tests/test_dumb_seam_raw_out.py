@@ -300,3 +300,26 @@ class TestSnapshot:
         assert not _probe_var_free(("f", Var()))
         assert not _probe_var_free(list(range(600)), budget=512), "budget exhausted is not proven"
         assert not _probe_var_free(DictTerm({"k": Var()}))
+
+
+def test_the_constant_registry_is_bounded_and_dropping_is_sound(monkeypatch):
+    from clausal.logic import cells
+    monkeypatch.setattr(cells, "_COMPILED_GROUND_CAP", 10)
+    saved = dict(cells._COMPILED_GROUND)
+    cells._COMPILED_GROUND.clear()
+    try:
+        consts = [(("k", i),) for i in range(12)]
+        code = compile("x = 1", "<t>", "exec")
+        class C:                       # a stand-in code object: only co_consts is read
+            co_consts = tuple(consts)
+        cells.register_compiled_constants(C)
+        assert len(cells._COMPILED_GROUND) <= 12 and len(cells._COMPILED_GROUND) >= 6
+        # a dropped constant is simply no longer certified -- never a wrong answer
+        from clausal.logic.seam import export
+        from clausal.logic.variables import Var, Trail, unify
+        for c in consts:
+            v = Var(); unify(v, c, Trail())
+            assert export(v) == c
+    finally:
+        cells._COMPILED_GROUND.clear(); cells._COMPILED_GROUND.update(saved)
+

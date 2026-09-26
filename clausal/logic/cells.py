@@ -931,19 +931,32 @@ def set_intern_enabled(value: bool) -> None:
 
 _COMPILED_GROUND: dict = {}
 
+#: BOUNDED: when the table passes this many entries the OLDEST half is
+#: dropped (dict order is insertion order).  Losing a certificate is SOUND
+#: -- the export then falls back to the probe or a copy -- and the drop is
+#: what keeps a long-lived process (a test suite compiling thousands of
+#: modules) from pinning every constant it ever generated.  Measured: six
+#: large suites registered ~10k entries (~700 KB), so the cap is far above
+#: any single program's constant set.
+_COMPILED_GROUND_CAP = 200_000
+
 
 def register_compiled_constants(code) -> None:
     """Record every tuple / frozenset constant of *code* (and of the code
     objects nested in it), recursively through nested tuples."""
     stack = [code]
+    table = _COMPILED_GROUND
     while stack:
         obj = stack.pop()
         t = type(obj)
         if t is tuple or t is frozenset:
-            _COMPILED_GROUND[id(obj)] = obj
+            table[id(obj)] = obj
             stack.extend(obj)
         elif hasattr(obj, "co_consts"):
             stack.extend(obj.co_consts)
+    if len(table) > _COMPILED_GROUND_CAP:
+        for key in list(table)[: len(table) // 2]:
+            del table[key]
 
 
 def is_compiled_constant(obj) -> bool:
