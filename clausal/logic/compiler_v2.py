@@ -215,6 +215,8 @@ def compile_module(
     #    spelling.  "Has clauses" cannot be read off the class here -- Step 4
     #    is what attaches them -- so it is read off the clause nodes and the
     #    predicate-shaped directives instead.
+    _warn_atom_exports_defined_as_predicates(
+        module_items, predicate_nodes, module_name)
     _process_declarations(
         module_items, module_dict,
         _predicate_functor_names(predicate_nodes, module_items), db=db,
@@ -2688,6 +2690,53 @@ def _module_constants(module_dict: dict) -> dict:
     no registry, so callers can test membership unconditionally.
     """
     return getattr(module_dict.get("$module"), "constants", None) or {}
+
+
+def _warn_atom_exports_defined_as_predicates(module_items: list,
+                                            predicate_nodes: list,
+                                            module_name: str) -> None:
+    """Warn, once per (module, name), when a bare name exported as an ATOM
+    (``-module(m, [..., foo, ...])``) is also defined here as the predicate
+    ``foo/0``.  Operator ruling 2026-09-26: ISO allows both, so a warning;
+    see ``ClausalAtomExportDefinedAsPredicateWarning`` for the harm.  An ISO
+    ``foo/0`` export entry is a predicate export, not an atom, and never
+    warns."""
+    exported_atoms = []
+    for item in module_items:
+        if isinstance(item, ModuleDeclItem):
+            exported_atoms.extend(e for e in item.exports if isinstance(e, str))
+    if not exported_atoms:
+        return
+    kinds: dict[str, list[str]] = {}
+    for node in predicate_nodes:
+        functor, arity = head_key(node.head)
+        if arity == 0 and functor in exported_atoms:
+            kind = "fact" if node.body is True else "rule"
+            if kind not in kinds.setdefault(functor, []):
+                kinds[functor].append(kind)
+    if not kinds:
+        return
+    import warnings  # noqa: PLC0415
+    from clausal.lint_warnings import (  # noqa: PLC0415
+        ClausalAtomExportDefinedAsPredicateWarning,
+    )
+    for name in dict.fromkeys(exported_atoms):
+        if name not in kinds:
+            continue
+        shapes = " and ".join(
+            f"a fact `{name},`" if k == "fact" else f"a rule `{name} <- ...`"
+            for k in kinds[name])
+        warnings.warn(ClausalAtomExportDefinedAsPredicateWarning(
+            f"{module_name} exports `{name}` as an ATOM (the bare `{name}` in "
+            f"its -module export list) and also defines the predicate "
+            f"{name}/0 ({shapes}).  ISO allows both, but here the module "
+            f"attribute `{name}` -- in this module and in every importer -- "
+            f"is the predicate's handle, not the atom '{name}', so data keyed "
+            f"by the atom that is read through `{module_name}.{name}` no "
+            f"longer matches.  Drop the {name}/0 clauses if they are only "
+            f"there for conformance, or rename one of the two; to export the "
+            f"predicate, write {name}/0 in the export list instead of "
+            f"`{name}`."), stacklevel=2)
 
 
 def _process_declarations(module_items: list, module_dict: dict,
