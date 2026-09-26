@@ -624,6 +624,18 @@ class Database:
         return (self._clauses, self._dispatch, self._lazy_recompile,
                 self._signatures, self._dynamic)
 
+    def declared_arities_for(self, functor: str) -> "set[int]":
+        """Every arity this database knows OR declares *functor* at: the
+        :meth:`arities_for` population plus a fielded (DATA) declaration and
+        a bare ``name/arity`` export entry -- everything
+        :meth:`declared_kind` gives an answer for.  What an ``-import_from``
+        of *functor* brings, arity by arity, for the import/local clash
+        check (``compiler_v2._refuse_import_local_clashes``)."""
+        found = self.arities_for(functor)
+        found |= {a for (f, a) in self._declared if f == functor}
+        found |= {a for (f, a) in self._predicate_export if f == functor}
+        return found
+
     def arities_for(self, functor: str) -> "set[int]":
         """Every arity this database knows *functor* at.
 
