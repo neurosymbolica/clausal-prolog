@@ -11,7 +11,13 @@ the module under test only -- loading a file also loads what it imports.
 Usage::
 
     PYTHONPATH=<engine tree> <engine tree>/venv/bin/python \\
-        tools/atom_export_predicate_census/census.py [--jobs N] [--json OUT] ROOT...
+        tools/atom_export_predicate_census/census.py [--jobs N] [--json OUT] \\
+        [--path IMPORT_DIR ...] ROOT...
+
+``--path`` adds a directory to the import path without searching it for
+files: the tree root when ROOT is one subdirectory whose modules import
+each other by dotted paths from that root, or a directory of shared
+library modules the files import.
 
 It prints the SIZE of every population: files found, files whose own module
 reached the check (the denominator), files not evaluated (a load error
@@ -38,7 +44,8 @@ SKIP_DIRS = {"venv", ".venv", "build", "dist", ".git", "__pycache__",
 _CHILD = r'''
 import json, os, sys, warnings
 path, roots = sys.argv[1], sys.argv[2:]
-sys.path[:0] = [os.path.dirname(path)] + roots
+extra = [p for p in os.environ.get("CENSUS_EXTRA_PATH", "").split(os.pathsep) if p]
+sys.path[:0] = [os.path.dirname(path)] + roots + extra
 stem = os.path.splitext(os.path.basename(path))[0]
 out = {"path": path, "module": stem, "reached": False, "names": [],
        "error": None}
@@ -79,12 +86,14 @@ def find_files(roots):
                     yield os.path.join(dirpath, name)
 
 
-def run_one(path, roots, timeout):
+def run_one(path, roots, timeout, extra_path=()):
+    env = dict(os.environ)
+    env["CENSUS_EXTRA_PATH"] = os.pathsep.join(extra_path)
     try:
         proc = subprocess.run(
             [sys.executable, "-c", _CHILD, path, *roots],
             capture_output=True, text=True, timeout=timeout,
-            cwd=os.path.dirname(path) or ".")
+            cwd=os.path.dirname(path) or ".", env=env)
     except subprocess.TimeoutExpired:
         return {"path": path, "reached": False, "names": [],
                 "error": f"timeout after {timeout}s"}
@@ -95,10 +104,11 @@ def run_one(path, roots, timeout):
             "error": f"child exited {proc.returncode} with no result"}
 
 
-def census(roots, jobs, timeout):
+def census(roots, jobs, timeout, extra_path=()):
     files = sorted(set(find_files(roots)))
     with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as pool:
-        results = list(pool.map(lambda p: run_one(p, roots, timeout), files))
+        results = list(pool.map(
+            lambda p: run_one(p, roots, timeout, extra_path), files))
     return files, results
 
 
@@ -139,13 +149,19 @@ def main(argv=None):
     parser.add_argument("--timeout", type=int, default=120)
     parser.add_argument("--json", help="write per-file results here")
     parser.add_argument("--self-test", action="store_true")
+    parser.add_argument(
+        "--path", action="append", default=[], metavar="DIR",
+        help="an extra directory for imports only, NOT searched for files "
+             "(repeatable) -- e.g. the tree root when ROOT is one "
+             "subdirectory, or a directory of shared library modules")
     args = parser.parse_args(argv)
     if args.self_test:
         return self_test(args.jobs, args.timeout)
     if not args.roots:
         parser.error("give at least one ROOT")
     roots = [os.path.abspath(r) for r in args.roots]
-    files, results = census(roots, args.jobs, args.timeout)
+    extra = [os.path.abspath(p) for p in args.path]
+    files, results = census(roots, args.jobs, args.timeout, extra)
     if not files:
         print("REFUSING: no .clausal/.seam/.pl files found under the roots")
         return 2
