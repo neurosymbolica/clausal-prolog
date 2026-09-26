@@ -1,5 +1,5 @@
 -double_quotes(chars)
--private([abc, hello])
+-private([abc, e, h, hello, l, o])
 
 -module(iso_type_checking, [test/1])
 
@@ -31,7 +31,7 @@ test("atom: declared atom abc") <- (atom(abc))
 
 test("atom: string fails") <- (not atom("hello"))
 
-test("atom: char list fails") <- (not atom(["h", "e", "l", "l", "o"]))
+test("atom: char list fails") <- (not atom([h, e, l, l, o]))
 
 test("atom: integer fails") <- (not atom(1))
 
