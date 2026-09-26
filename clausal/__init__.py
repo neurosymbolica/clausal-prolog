@@ -25,6 +25,9 @@ from clausal.logic.predicate import (
     make_predicate, MakePredicateRetiredError,
 )
 from clausal.logic.exceptions import LogicException
+from clausal.logic.to_python import to_python
+from clausal.logic.python_terms import to_clausal
+from clausal.logic.builtins._helpers import term_key
 from clausal.repl import Solutions
 import clausal._lazy_hook as _lazy_hook  # registers lightweight stub finder
 
@@ -85,6 +88,11 @@ __all__ = [
     "make_predicate",
     "MakePredicateRetiredError",
     "LogicException",
+    # The Python boundary converters (dumb-seam step (b), 2026-09-26):
+    # deep OUT, deep IN, and the standard-order sort key.
+    "to_python",
+    "to_clausal",
+    "term_key",
     "get_builtin_class",
     "Solutions",
     # All builtin predicate classes

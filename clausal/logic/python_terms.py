@@ -77,7 +77,7 @@ from typing import Any
 
 from clausal.logic.cells import TUPLE_TAG, chars, is_chars, chars_text
 
-__all__ = ["to_term", "from_term", "register", "TO_TERM", "FROM_TERM",
+__all__ = ["to_term", "from_term", "to_clausal", "register", "TO_TERM", "FROM_TERM",
            "to_transfer", "from_transfer", "register_transfer",
            "TO_TRANSFER", "FROM_TRANSFER"]
 
@@ -546,6 +546,8 @@ def _already_a_term(value: tuple) -> bool:
     """
     if not value or type(value[0]) is not str:
         return False
+    if is_chars(value):
+        return True                    # the chars carrier IS the string, never data
     head = value[0]
     if head == TUPLE_TAG:
         return True
@@ -594,6 +596,32 @@ def to_term(value: Any, *, strict: bool = True) -> Any:
         f"functor, to_fn, from_fn) -- because only the class's own function "
         f"knows how its attributes convert."
     )
+
+
+def to_clausal(value: Any) -> Any:
+    """THE PUBLIC DEEP IN CONVERTER (dumb-seam step (b), 2026-09-26; exported
+    as ``clausal.to_clausal``): the TERM of a Python object, all the way
+    down, driven by the ONE registry -- the same ``TO_TERM``/``FROM_TERM``
+    tables ``clausal.to_python`` consults on the way out, so a type
+    registered once serves both directions.
+
+    Exactly :func:`to_term` with ``strict=True``: a scalar passes through
+    (a ``str`` IS the atom -- text is written ``chars(...)``), a logic
+    variable or engine term is left alone, a registered type takes its
+    canonical shape, a list/dict converts its contents, a tuple becomes the
+    ``('()', ...)`` data cell, and an UNREGISTERED class RAISES ``TypeError``
+    naming the fix.  The implicit ``++`` hook is the lenient twin; this is
+    the one a caller asks for by name, so silence would be wrong here.
+
+    THE DOCUMENTED HAZARD (module docstring): a tuple ALREADY in
+    functor-first form is left alone rather than wrapped as data, and the
+    test is by SHAPE -- ``('date', 2023, 6, 1)`` stays a date term while
+    ``('date', "x", "y")`` becomes ``('()', 'date', 'x', 'y')``.  A Python
+    tuple that happens to spell a well-formed registered term is therefore
+    read as that term.  If that residue ever bites, the fix is an explicit
+    wrapper at the call site (``(TUPLE_TAG, *t)``), not a cleverer guess.
+    """
+    return to_term(value, strict=True)
 
 
 def from_term(value: Any) -> Any:

@@ -752,7 +752,7 @@ class _OpaqueOrder:
             return repr(self.value) < repr(other.value)
 
 
-def _standard_order_key(term: Any) -> tuple:
+def term_key(term: Any) -> tuple:
     """Sort key implementing the standard order of terms.
 
     Total over every value a term can hold, so ``sorted(xs, key=...)`` never
@@ -765,6 +765,17 @@ def _standard_order_key(term: Any) -> tuple:
     and a code list key as the ``'.'/2`` compound they denote (Task 15
     item 1, :func:`_cons_key`); ``[]``/``""``/``b""`` key as the atom
     ``'[]'``.
+
+    PUBLIC as ``clausal.term_key`` (dumb-seam step (b), 2026-09-26): the
+    one sort key for terms a Python caller holds, so ``sorted(xs,
+    key=term_key)`` is the engine's ``msort/2`` order and never raises on a
+    mixed list.  ``_standard_order_key`` is the in-tree alias.  A GROUND
+    ``Seg*`` keys as the term it walks to (a text Seg* as its string, a
+    SegList as its list), the same answer the type checks give
+    (``normalize_seg_input``); a NON-ground one holds unbound variables and
+    keeps the opaque band.  The walk sits on the fallthrough branch only, so
+    every other key costs what it did (todo
+    seg-star-keys-in-the-opaque-standard-order-band-2026-09-07).
     """
     term = deref(term)
     if is_var(term):
@@ -820,24 +831,24 @@ def _standard_order_key(term: Any) -> tuple:
         # (ISO 7.2.1), positional flavour — never as a sequence.
         refuse_reserved_1tuple(term)   # STAGE 2: the arity-0 cell is RESERVED
         return (_ORD_COMPOUND, len(term) - 1, (0, term[0]), _CF_POSITIONAL,
-                tuple(_standard_order_key(a) for a in term[1:]))
+                tuple(term_key(a) for a in term[1:]))
     if type(term) is tuple and term and term[0] == TUPLE_TAG:
         return (_ORD_COMPOUND, len(term) - 1, (1, ""), _CF_POSITIONAL,
-                tuple(_standard_order_key(a) for a in term[1:]))
+                tuple(term_key(a) for a in term[1:]))
     if isinstance(term, (list, tuple)):
         # A LIST — the ``'.'/2`` compound it denotes, or the atom ``'[]'``
         # when empty (Task 15 item 1).  A plain ``tuple`` that is neither a
         # cell nor tuple-data keeps the list treatment it has always shared.
         if not term:
             return _ORD_EMPTY_LIST_KEY
-        return _cons_key(tuple(_standard_order_key(e) for e in term))
+        return _cons_key(tuple(term_key(e) for e in term))
     if isinstance(term, Compound):
         # Ruling 2026-09-26: an atom-functor Compound of arity >= 1 IS the
         # cell (f, *args) -- it keys as that cell, exactly (ISO has one term
         # f(1, 2)), so compare/3 says '=' where ==/2 and =/2 now agree.
         cell = compound_as_cell(term)
         if cell is not None:
-            return _standard_order_key(cell)
+            return term_key(cell)
         functor = deref(term.functor)
         # No cell equivalent -- not an ISO term, so ISO 7.2 does not place it;
         # a deterministic Clausal position that is never '=' to a cell:
@@ -853,37 +864,43 @@ def _standard_order_key(term: Any) -> tuple:
         if isinstance(functor, str):
             name_key = (0, functor)
         else:
-            name_key = (2, _standard_order_key(functor))
+            name_key = (2, term_key(functor))
         return (_ORD_COMPOUND, len(term.args), name_key, _CF_POSITIONAL,
-                tuple(_standard_order_key(a) for a in term.args))
+                tuple(term_key(a) for a in term.args))
     if isinstance(term, KWTerm):
         # KWTerm equality is by keyword *name*, not position, so the key must
         # be too — otherwise two equal terms could sort to different places.
         by_name = dict(term.items())
         fields = tuple(
-            (name, _standard_order_key(by_name[name])) for name in sorted(by_name)
+            (name, term_key(by_name[name])) for name in sorted(by_name)
         )
         return (_ORD_COMPOUND, len(fields), (0, term.functor), _CF_KEYWORD, fields)
     if is_term_instance(term):
         names = term_field_names(term)
         return (_ORD_COMPOUND, len(names), (0, type(term).__name__), _CF_DECLARED,
-                tuple(_standard_order_key(getattr(term, n)) for n in names))
+                tuple(term_key(getattr(term, n)) for n in names))
     if isinstance(term, (dict, DictTerm)):
         # DictTerm and a plain dict compare equal, so they share one key shape.
-        pairs = [(_standard_order_key(k), _standard_order_key(v))
+        pairs = [(term_key(k), term_key(v))
                  for k, v in term.items()]
         return (_ORD_DICT, tuple(sorted(pairs)))
     if isinstance(term, (set, frozenset, SetTerm)):
-        return (_ORD_SET, tuple(sorted(_standard_order_key(e) for e in term)))
-    # DEFERRED (Task 15 fix round 1, ledger): a ``Seg*`` reaches here and
-    # keys in the OPAQUE band, while the type checks
-    # (``type_checks._is_atom_term`` and friends) walk it first with
-    # ``normalize_seg_input`` and answer for what it walks to.  So a ground
-    # ``SegString(["ab"])`` is ``string``/``compound`` but does not sort
-    # beside the equal ``"ab"``.  Filed as a todo rather than fixed here:
-    # walking inside the key changes the cost of every sort, and no in-tree
-    # caller sorts Seg* values.
+        return (_ORD_SET, tuple(sorted(term_key(e) for e in term)))
+    if isinstance(term, (SegList, SegString, SegBytes)):
+        # A ground Seg* IS the string / list / bytes it walks to (the type
+        # checks already answer for the walked form), so it keys as that
+        # term -- ``walk_seg`` keeps the chars CARRIER, which keys as the
+        # char list above, never as an atom.  A non-ground one has no
+        # better key than the opaque band.
+        from clausal.logic.runtime._seg_helpers import walk_seg  # noqa: PLC0415
+        walked = walk_seg(term)
+        if not isinstance(walked, (SegList, SegString, SegBytes)):
+            return term_key(walked)
     return (_ORD_OTHER, _OpaqueOrder(term))
+
+
+#: In-tree alias; every builtin that sorts imports this name.
+_standard_order_key = term_key
 
 
 # Exact types whose native ``<`` is KNOWN to agree with

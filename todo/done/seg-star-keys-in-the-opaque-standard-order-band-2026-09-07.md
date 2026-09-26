@@ -33,3 +33,14 @@ shape, not something a program builds and sorts — so the cost is certain
 and the benefit is not. Measure before adopting: the cheap version is a
 `isinstance(term, (SegList, SegString, SegBytes))` guard immediately before
 the opaque fallthrough, which pays nothing on the common paths.
+
+## Fixed 2026-09-26 (dumb-seam step (b), branch feat/dumb-seam-step-a-b-2026-09-26)
+
+The cheap version: an ``isinstance(term, (SegList, SegString, SegBytes))``
+guard immediately before the opaque fallthrough in what is now the public
+``clausal.term_key`` (``_standard_order_key`` kept as the in-tree alias).
+A ground ``Seg*`` is walked with ``walk_seg`` (keeps the chars carrier, so a
+text Seg* keys as its char list, never as an atom) and keyed as the term it
+walks to; a non-ground one keeps the opaque band.  No cost on any other
+path.  Tests: ``tests/test_public_converters.py`` (``sort/2`` now says a
+ground ``SegString(["ab"])`` and ``"ab"`` are one term).
