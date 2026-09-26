@@ -301,3 +301,54 @@ class TestPythonExports:
         assert isinstance(reflection.op_node, ModulePredicate)
         # registered at arity 3 under the reflection module
         assert repr(reflection.op_node) == "reflection.op_node/[3]"
+
+
+# ── 2026-09-26: a STRING in the CLASS_NAME position is a type error, in BOTH
+# modes.  Under the chars default a source-written ``op_node(SUB, "GtE", ARGS)``
+# hands over the chars carrier; before this, decompose silently failed to
+# unify it with the atom and construct fell through ``_class_name_spelling``'s
+# unreachable ``type(name) is str`` arm to a silent None.
+
+_CHARS_MATCHERS = """\
+-import_from(reflection, [reified_clause, reified_subterm, op_node])
+has_gt_e_str(SRC) <- (
+    reified_clause(SRC, CLAUSE),
+    reified_subterm(CLAUSE, SUB),
+    op_node(SUB, "GtE", _)
+)
+has_gt_e_atom(SRC) <- (
+    reified_clause(SRC, CLAUSE),
+    reified_subterm(CLAUSE, SUB),
+    op_node(SUB, 'GtE', _)
+)
+build_gt_str(NEW, L, R) <- op_node(NEW, "Gt", [L, R])
+"""
+
+
+@pytest.fixture(scope="module")
+def chars_matchers(tmp_path_factory):
+    path = tmp_path_factory.mktemp("op_node_chars") / "matchers.clausal"
+    path.write_text(_CHARS_MATCHERS)
+    mod = _load_module("_test_op_node_chars_matchers", str(path))
+    return mod.__dict__["$module"]
+
+
+class TestStringClassNameIsATypeError:
+    SRC = "p(X) <- (X >= 1)\n"
+
+    def test_the_quoted_atom_still_matches(self, chars_matchers):
+        assert list(call("has_gt_e_atom", chars(self.SRC), module=chars_matchers))
+
+    def test_decompose_with_a_string_name_raises(self, chars_matchers):
+        from clausal.logic.exceptions import LogicException
+        with pytest.raises(LogicException) as exc:
+            list(call("has_gt_e_str", chars(self.SRC), module=chars_matchers))
+        formal = exc.value.term.args[0]
+        assert formal.functor == "type_error"
+        assert formal.args[0] == mint("atom") and formal.args[1] == chars("GtE")
+
+    def test_construct_with_a_string_name_raises(self, chars_matchers):
+        from clausal.logic.exceptions import LogicException
+        with pytest.raises(LogicException) as exc:
+            list(call("build_gt_str", Var(), 1, 2, module=chars_matchers))
+        assert exc.value.term.args[0].args[1] == chars("Gt")

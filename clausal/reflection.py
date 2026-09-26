@@ -477,7 +477,7 @@ class _ClauseReifier:
         if isinstance(node, ast.Constant):
             value = node.value
             # THE FLIP (spec §5.1): a quoted atom literal (``'widget'``, or
-            # ``"widget"`` in the default ``-double_quotes(atom)`` mode)
+            # ``"widget"`` under ``-double_quotes(atom)``)
             # compiles to the arity-0 CELL constant, and the reified
             # vocabulary spells an atom ``Atom(name)`` -- the same term a
             # BARE name reifies to below.  Without this the two spellings of

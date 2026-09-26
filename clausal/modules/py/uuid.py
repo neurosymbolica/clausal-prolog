@@ -56,8 +56,9 @@ def _resolve_namespace(ns):
     """
     if isinstance(ns, _uuid.UUID):
         return ns
-    # Spec §9.4: the alias is TEXT -- a string or an ATOM (``dns`` written
-    # bare, or ``"dns"`` in the default ``-double_quotes(atom)`` mode).
+    # Spec §9.4: the alias is TEXT -- a string (``"dns"`` under the chars
+    # default) or an ATOM (``dns`` written bare, ``'dns'``, or ``"dns"``
+    # under ``-double_quotes(atom)``).
     text = to_text(ns)
     if text is not None:
         return _NAMESPACE_ALIASES.get(text.lower())

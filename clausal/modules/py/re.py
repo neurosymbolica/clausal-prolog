@@ -100,7 +100,8 @@ def _compile_pattern(pat: Any) -> "_re.Pattern":
     """Compile a pattern, accepting a pre-compiled pattern, a string or an ATOM.
 
     THE FLIP (spec §9.4): ``r"\\d+"`` in a ``.clausal`` file is an atom under
-    the default ``-double_quotes(atom)``, so the text funnel ``to_text`` is
+    ``-double_quotes(atom)`` (and a string under the chars default), so the
+    text funnel ``to_text`` is
     what turns it back into the ``str`` ``re`` wants -- never ``str()``,
     which would compile the tuple repr.
 

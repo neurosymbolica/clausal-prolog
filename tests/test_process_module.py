@@ -361,3 +361,51 @@ class TestResultDictKeysAreAtoms:
         assert len(sols) == 1
         assert set(deref(result).data) == {
             mint("exit_code"), mint("stdout"), mint("stderr")}
+
+
+# ── 2026-09-26: an option key is matched by TEXT, whichever way it was quoted ─
+#
+# The -double_quotes default is chars, so ``{"input": ...}`` in a module that
+# declares no mode has a chars-carrier key.  Before this, option()/has_option()
+# tried only the atom and the plain str, the option was dropped silently, and
+# process_create ran with no stdin (measured: stdout came back empty).
+
+class TestOptionKeySpellings:
+
+    def test_option_and_has_option_read_the_chars_carrier_key(self):
+        from clausal.modules.py import has_option, option
+        opts = DictTerm({chars("cwd"): 1, mint("timeout"): 2, "input": 3})
+        assert option(opts, "cwd") == 1
+        assert option(opts, "timeout") == 2
+        assert option(opts, "input") == 3
+        assert has_option(opts, "cwd") and has_option(opts, "timeout") \
+            and has_option(opts, "input")
+        assert not has_option(opts, "env")
+        assert option(opts, "env", "dflt") == chars("dflt")
+
+    def test_process_create_reads_a_string_keyed_options_dict(self):
+        # nv
+        result = Var()
+        opts = DictTerm({chars("input"): chars("t12b stdin")})
+        sols, _ = simple_solutions(
+            _process_create_4, mint("cat"), [], opts, result)
+        assert len(sols) == 1
+        assert deref(result).data[mint("stdout")] == chars("t12b stdin")
+
+    def test_a_default_mode_module_writing_string_keys_is_heard(self, tmp_path):
+        """End to end, the shape docs/process.md shows: no -double_quotes
+        directive, ``{"input": ...}`` written in source."""
+        from clausal.import_hook import _load_module
+        from clausal.logic.solve import call
+        p = tmp_path / "opt_keys.clausal"
+        p.write_text(
+            "-import_from(py.process, [process_create])\n"
+            'by_string(R) <- process_create("cat", [], {"input": "hello"}, R)\n'
+            "by_quoted(R) <- process_create('cat', [], {'input': 'hello'}, R)\n"
+        )
+        m = _load_module("_opt_keys_chars", str(p)).__dict__["$module"]
+        for pred in ("by_string", "by_quoted"):
+            R = Var()
+            rows = [deref(R) for _ in call(pred, R, module=m)]
+            assert len(rows) == 1, pred
+            assert rows[0].data[mint("stdout")] == chars("hello"), pred

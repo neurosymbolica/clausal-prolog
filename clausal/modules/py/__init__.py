@@ -247,29 +247,45 @@ def option(mapping, name, default=None):
     wrapper's option table has to read both, or a source-written options dict
     silently reads as empty and the predicate fails with no diagnosis.
 
+    A third spelling since the ``-double_quotes`` default flipped to chars
+    (2026-09-26): ``{"cwd": DIR}`` in a module that declares no mode has a
+    STRING key, the chars carrier ``('$chars', 'cwd')``.  An option key is a
+    NAME whichever way it was quoted, so the lookup compares by text and
+    accepts all three -- measured 2026-09-26: without this, ``process_create``
+    with ``{"input": ...}`` ran with no stdin and raised nothing.
+
     The atom is tried first, because that is what a program actually writes;
     the ``str`` spelling is the Python-side fallback.  *name* is the plain
     spelling — callers never build the key themselves.
     """
+    got = _option_lookup(mapping, name)
+    # stage 1: a module's own str DEFAULT is text, so it crosses as the carrier
+    return text_result(default) if got is _OPTION_MISSING else got
+
+
+def _option_lookup(mapping, name):
+    """*mapping*'s value under the option NAME in any of its three spellings
+    -- the atom, the chars carrier, the plain ``str`` -- or ``_OPTION_MISSING``."""
     # ``key_of``, not ``mint``: an option named ``[]`` is the atom ``'[]'``,
     # whose ``mint`` answer is the unhashable empty LIST and would crash the
     # lookup outright (fix round 2, item 2).
     from clausal.logic.atoms import key_of  # noqa: PLC0415
-    got = mapping.get(key_of(name), _OPTION_MISSING)
-    if got is _OPTION_MISSING:
-        got = mapping.get(name, _OPTION_MISSING)
-    # stage 1: a module's own str DEFAULT is text, so it crosses as the carrier
-    return text_result(default) if got is _OPTION_MISSING else got
+    from clausal.logic.cells import chars  # noqa: PLC0415
+    for key in (key_of(name), chars(name), name):
+        got = mapping.get(key, _OPTION_MISSING)
+        if got is not _OPTION_MISSING:
+            return got
+    return _OPTION_MISSING
 
 
 def has_option(mapping, name) -> bool:
     """Whether an options dict carries *name* under either spelling.
 
     The companion to :func:`option` for the ``"x" in opts`` shape, where a
-    missing key and a key holding ``None`` must stay distinguishable.
+    missing key and a key holding ``None`` must stay distinguishable.  The
+    same three spellings as :func:`option`.
     """
-    from clausal.logic.atoms import key_of  # noqa: PLC0415
-    return key_of(name) in mapping or name in mapping
+    return _option_lookup(mapping, name) is not _OPTION_MISSING
 
 
 def text_or_str(val):
@@ -319,8 +335,8 @@ def require_text(val, pred, arg=1):
     ``str``, so ``read_file('/tmp/x', T)``, ``read_file("/tmp/x", T)`` and a
     ``-double_quotes(chars)`` string all reach the library identically.  THE
     FLIP (2026-09-06-atoms-as-cells-strings) is why this has to be a funnel
-    and not an ``isinstance`` gate: in the default ``-double_quotes(atom)``
-    mode a source-written ``"…"`` IS the arity-0 cell, so a bare
+    and not an ``isinstance`` gate: under ``-double_quotes(atom)`` a
+    source-written ``"…"`` IS the arity-0 cell, so a bare
     ``expect_type(x, str, …)`` rejected every documented call, silently.
 
     *pred* is the registered predicate name/arity (e.g. ``"read_file/2"``)
