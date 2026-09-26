@@ -19,7 +19,7 @@ from clausal.logic.exceptions import LogicException, instantiation_error, type_e
 from clausal.logic.predicate import is_term_instance, term_field_names
 from clausal.logic.variables import deref, is_var
 from clausal.logic.variables import unify as _unify
-from clausal.terms import Compound, DictTerm, SetTerm
+from clausal.terms import Compound, DictTerm, SetTerm, compound_as_cell
 
 
 def _clpfd_leaf_culprit(exc: LogicException):
@@ -285,6 +285,14 @@ def _numeric_types_agree(a, b) -> bool:
     """
     a = deref(a)
     b = deref(b)
+    # Ruling 2026-09-26: an atom-functor Compound of arity >= 1 IS its cell,
+    # so descend into it as that cell -- otherwise `f(1) == f(1.0)` across
+    # the two spellings would stop at the type mismatch with no objection.
+    if type(a) is not type(b):
+        if isinstance(a, Compound):
+            a = compound_as_cell(a) or a
+        if isinstance(b, Compound):
+            b = compound_as_cell(b) or b
     ta = _numeric_tag(a)
     tb = _numeric_tag(b)
     if ta is not None or tb is not None:

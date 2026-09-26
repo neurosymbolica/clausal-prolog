@@ -21,7 +21,7 @@ from clausal.logic.atoms import (
     char_atom, is_nil as _is_nil, NIL_SPELLING as _NIL_SPELLING,
 )
 from clausal.terms import (
-    Compound, KWTerm, DictTerm, SetTerm, Quantity,
+    Compound, KWTerm, DictTerm, SetTerm, Quantity, compound_as_cell,
     SegList, SegString, SegBytes, VarSeg, ConcreteSeg,
 )
 
@@ -832,10 +832,28 @@ def _standard_order_key(term: Any) -> tuple:
             return _ORD_EMPTY_LIST_KEY
         return _cons_key(tuple(_standard_order_key(e) for e in term))
     if isinstance(term, Compound):
+        # Ruling 2026-09-26: an atom-functor Compound of arity >= 1 IS the
+        # cell (f, *args) -- it keys as that cell, exactly (ISO has one term
+        # f(1, 2)), so compare/3 says '=' where ==/2 and =/2 now agree.
+        cell = compound_as_cell(term)
+        if cell is not None:
+            return _standard_order_key(cell)
         functor = deref(term.functor)
-        # A Var functor has no name to order by; park all of them after the
-        # named ones and let the arguments decide between them.
-        name_key = (0, functor) if isinstance(functor, str) else (1, "")
+        # No cell equivalent -- not an ISO term, so ISO 7.2 does not place it;
+        # a deterministic Clausal position that is never '=' to a cell:
+        #  * arity 0 (``foo()``, functor a str): the compound band at arity 0,
+        #    named -- after every atom, before every arity >= 1 compound.  No
+        #    cell has arity 0 (the 1-tuple is RESERVED), so nothing collides.
+        #  * a Var or non-atom functor: name slot ``(2, key(functor))``, after
+        #    every named compound (0) and every tuple-data cell (1) of the same
+        #    arity, ordered among themselves by the standard order of the
+        #    functor, so two different Var functors are two different terms.
+        #    (Before 2026-09-26 these took ``(1, "")``, the tuple-data slot, so
+        #    compare/3 said '=' to a tuple-data cell and to each other.)
+        if isinstance(functor, str):
+            name_key = (0, functor)
+        else:
+            name_key = (2, _standard_order_key(functor))
         return (_ORD_COMPOUND, len(term.args), name_key, _CF_POSITIONAL,
                 tuple(_standard_order_key(a) for a in term.args))
     if isinstance(term, KWTerm):

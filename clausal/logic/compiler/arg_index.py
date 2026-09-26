@@ -20,7 +20,7 @@ from clausal.logic.generated_names import bare_name_of
 from clausal.logic.variables import Var, is_var, deref  # noqa: F401
 from clausal.logic.trampoline import DONE, StepGenerator  # noqa: F401
 from clausal.terms import (
-    Compound,
+    Compound, compound_as_cell,
     Call, LoadName, LoadAttr,
     Unify,
     DictTerm, SetTerm, KWTerm, SegList,
@@ -366,6 +366,15 @@ def _runtime_arg_key(a: Any, deep_gate: bool = True) -> Any:
             return b
         return _INDEX_VAR
     if isinstance(a, Compound):
+        # Ruling 2026-09-26: an atom-functor Compound of arity >= 1 IS its
+        # cell -- key it (and gate it) exactly as that cell, so it reaches the
+        # same bucket the cell does.
+        # A functor that is a Var BOUND to the atom is the same term too: the
+        # bucket's ``match`` subject is normalised through ``$as_cells``
+        # (``terms.as_cells_for_match``), which derefs the functor.
+        cell = compound_as_cell(a)
+        if cell is not None:
+            return _runtime_arg_key(cell, deep_gate)
         return (a.functor, len(a.args))
     if is_term_instance(a):
         cls = type(a)

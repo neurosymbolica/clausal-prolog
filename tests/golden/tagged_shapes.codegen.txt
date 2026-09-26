@@ -169,7 +169,7 @@ def kind__all__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
 # ----
 
 def kind__p0_b0__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
-    _d0 = $deref(arg0)
+    _d0 = $as_cells(arg0, 1)
     _d1 = $deref(arg1)
     match (_d0, _d1):
         case [['point', _v9, _v10], _v8]:
@@ -181,7 +181,7 @@ def kind__p0_b0__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail)
 # ----
 
 def kind__p0_b1__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
-    _d0 = $deref(arg0)
+    _d0 = $as_cells(arg0, 1)
     _d1 = $deref(arg1)
     match (_d0, _d1):
         case [['circle', _v13, _v14], _v12]:
@@ -193,7 +193,7 @@ def kind__p0_b1__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail)
 # ----
 
 def kind__p0_b2__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
-    _d0 = $deref(arg0)
+    _d0 = $as_cells(arg0, 1)
     _d1 = $deref(arg1)
     match (_d0, _d1):
         case [['seg', _v17, _v18, _v19], _v16]:
