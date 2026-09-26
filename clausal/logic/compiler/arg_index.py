@@ -139,7 +139,12 @@ def _arg_to_index_key(arg: Any, env: "dict | None" = None) -> Any:
         return (arg.functor, len(arg.args))
     if isinstance(arg, Call) and isinstance(arg.func, LoadName):
         basename = arg.func.name.rsplit(".", 1)[-1]
-        return (basename, len(arg.args))
+        # The arity counts KEYWORD arguments too: ``box(Lo=g(1), Hi=2)`` is
+        # box/2 (a data term is never padded, so every declared slot is
+        # written).  Counting positional arguments alone keyed it ('box', 0)
+        # while a caller keys ('box', 2), so the index sent callers past it.
+        # The same count ``_static_call_key`` and ``globals_env`` use.
+        return (basename, len(arg.args) + len(arg.kwargs or []))
     # Bare/dotted name reference (``LoadName('Red')`` / ``LoadName('pkg.mod.Red')``
     # / ``LoadAttr(mod, 'Red')``) — a 0-arity reference used as a value, e.g. the
     # RHS of the ``Unify`` body goal that a keyword-atom fact ``Color(C=Red)``

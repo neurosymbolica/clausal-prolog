@@ -43,9 +43,22 @@ def _normalize_fact_clause(term: Any):
                 new_args.append(arg_val)
         return Clause(head=Compound(term.functor, tuple(new_args)), body=body,
                       hoisted=len(body))
+    # A CELL head (the P2 head shape) gets the lowering the compiler gives a
+    # source clause (``database._normalize_structural_head_args``): each
+    # STRUCTURED argument -- a cell, a Compound, a list holding one -- is
+    # replaced by a fresh Var and a prepended ``Unify`` body goal.  Before
+    # 2026-09-26 an asserted cell head kept ``dz(f(1))`` as the head itself,
+    # compiled to ``case ['f', x]``, which an unbound caller never matches:
+    # ``dz(X)`` did not answer ``f(1)``.  Atomic arguments keep the head's
+    # capture-and-unify guard, which already binds an unbound caller.
+    # ``hoisted`` lets clause/2 put the lowered arguments back.
+    from clausal.logic.cells import compound_cell_shape  # noqa: PLC0415
+    if compound_cell_shape(term)[0]:
+        from clausal.logic.database import _normalize_structural_head_args  # noqa: PLC0415
+        head, body = _normalize_structural_head_args(term, [])
+        return Clause(head=head, body=body, hoisted=len(body))
     # Dataclass and KWTerm facts are passed as-is; their field patterns work
     # correctly since they use Python structural matching.
-    from clausal.logic.database import Clause  # already imported above
     return Clause(head=term, body=[])
 
 

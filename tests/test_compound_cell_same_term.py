@@ -569,9 +569,29 @@ def test_subject_normaliser_twins_agree():
         (Compound(3, (C("g", 1),)), 2), (Compound(3, (C("g", 1),)), 1),
         (_Box(C("g", 1)), 2), (_Box(("g", 1)), 2), (("k", _Box(C("g", 1))), 3),
     ]
+    bound_cell = Var()
+    unify(bound_cell, ("f", 2), Trail())
+    cases += [
+        # a slot Var bound to a structure becomes the structure (2026-09-26)
+        (("k", bound_cell), 2), (("k", bound_cell), 1), (("k", (bound_cell,)), 2),
+        (("k", bound_cell, 3, "x", None, 2.5, b"b", True), 2),
+    ]
     for term, depth in cases:
+        for classes in (False, True):
+            a, b = c_twin(term, depth, classes), py_twin(term, depth, classes)
+            assert type(a) is type(b) and a == b, (term, depth, classes, a, b)
         a, b = c_twin(term, depth), py_twin(term, depth)
         assert type(a) is type(b) and a == b, (term, depth, a, b)
+    # the bound slot is replaced by the structure, not left as the Var
+    assert c_twin(("k", bound_cell), 2)[1] == ("f", 2)
+    assert type(c_twin(("k", bound_cell), 2)[1]) is tuple
+    # no class pattern: an instance is never copied, a no-cell Compound never
+    # rebuilt (roborev 205)
+    box = _Box(C("g", 1))
+    assert c_twin(box, 2) is box and py_twin(box, 2) is box
+    assert c_twin(box, 2, True) is not box
+    odd = Compound(3, (C("g", 1),))
+    assert c_twin(odd, 2) is odd and py_twin(odd, 2) is odd
     # nothing copied when there is nothing to convert
     assert c_twin(plain, 3) is plain and py_twin(plain, 3) is plain
     # depth bounds the walk: a Compound below it is left alone
@@ -642,7 +662,7 @@ def test_a_keyword_data_head_counts_its_keyword_slots(KW):
         head_to_match_pattern, pattern_structure_depth)
     pat = head_to_match_pattern(_kw_box(_g(Var()), 2), {}, [], [], None,
                                 globals_=KW)
-    assert pattern_structure_depth(pat) == 2
+    assert pattern_structure_depth(pat) == (2, False)
 
 
 def test_a_keyword_data_head_matches_the_compound_spelling(KW):

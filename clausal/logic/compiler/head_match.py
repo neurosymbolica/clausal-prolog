@@ -76,11 +76,12 @@ _SetLiteral = SetLiteral
 _AST_CONST_TYPES = (type(None), bool, int, float, str, bytes, complex)
 
 
-def pattern_structure_depth(pat: ast.pattern) -> int:
-    """How many STRUCTURE levels the built head pattern *pat* destructures:
-    a sequence pattern (a cell) or a class pattern (a ``Compound`` with no
-    cell, a term instance) is a level; an or-/as-pattern is as deep as its
-    deepest part; a value, singleton, capture or star is 0.
+def pattern_structure_depth(pat: ast.pattern) -> tuple[int, bool]:
+    """``(depth, classes)`` for the built head pattern *pat*: how many
+    STRUCTURE levels it destructures -- a sequence pattern (a cell) or a class
+    pattern (a ``Compound`` with no cell, a term instance) is a level; an
+    or-/as-pattern is as deep as its deepest part; a value, singleton,
+    capture or star is 0 -- and whether it holds any CLASS pattern.
 
     Read off the FINAL pattern rather than re-derived from the head term, so
     the normaliser's depth and the pattern cannot disagree by construction
@@ -88,9 +89,12 @@ def pattern_structure_depth(pat: ast.pattern) -> int:
     class sub-patterns, and capped at 64).  Over-counting is harmless -- the
     normaliser stops at the first non-structure -- so a class pattern's
     ``args`` sequence may count as a level of its own.  Iterative, so a head
-    of any depth is measured without recursion limits.
+    of any depth is measured without recursion limits.  The builder never
+    emits a mapping pattern (a dict head argument is captured and unified),
+    so there is no mapping branch (roborev 205).
     """
     best = 0
+    classes = False
     stack = [(pat, 0)]
     while stack:
         node, depth = stack.pop()
@@ -99,6 +103,7 @@ def pattern_structure_depth(pat: ast.pattern) -> int:
             best = max(best, depth)
             stack.extend((p, depth) for p in node.patterns)
         elif isinstance(node, ast.MatchClass):
+            classes = True
             depth += 1
             best = max(best, depth)
             stack.extend((p, depth) for p in node.patterns)
@@ -107,9 +112,7 @@ def pattern_structure_depth(pat: ast.pattern) -> int:
             stack.extend((p, depth) for p in node.patterns)
         elif isinstance(node, ast.MatchAs) and node.pattern is not None:
             stack.append((node.pattern, depth))
-        elif isinstance(node, ast.MatchMapping):
-            stack.extend((p, depth) for p in node.patterns)
-    return best
+    return best, classes
 
 
 def finalize_subject_depths(assigns: list, stmts: list, subject: ast.expr) -> None:
@@ -120,9 +123,12 @@ def finalize_subject_depths(assigns: list, stmts: list, subject: ast.expr) -> No
     before any pattern existed; *stmts* is everything it emitted after; every
     ``match`` on *subject* (the one shared tuple object, so identity finds
     them even inside list-dispatch branches) contributes its case patterns.
-    An argument whose patterns have no structure keeps ``$deref``.
+    An argument whose patterns have no structure keeps ``$deref``; one with a
+    CLASS pattern also gets ``classes=True``, the only case in which the
+    normaliser walks a no-cell Compound's args or an instance's fields.
     """
     depths = [0] * len(assigns)
+    classes = [False] * len(assigns)
     for stmt in stmts:
         for node in ast.walk(stmt):
             if not (isinstance(node, ast.Match) and node.subject is subject):
@@ -133,13 +139,16 @@ def finalize_subject_depths(assigns: list, stmts: list, subject: ast.expr) -> No
                         and len(outer.patterns) == len(assigns)):
                     continue
                 for i, p in enumerate(outer.patterns):
-                    d = pattern_structure_depth(p)
+                    d, c = pattern_structure_depth(p)
                     if d > depths[i]:
                         depths[i] = d
-    for assign, depth in zip(assigns, depths):
+                    classes[i] = classes[i] or c
+    for assign, depth, cls in zip(assigns, depths, classes):
         if depth > 0:
             arg = assign.value.args[0]
-            assign.value = _call(_name("$as_cells"), arg, ast.Constant(value=depth))
+            extra = [ast.Constant(value=True)] if cls else []
+            assign.value = _call(_name("$as_cells"), arg,
+                                 ast.Constant(value=depth), *extra)
 
 
 def subject_assign(name: str, arg: str, depth: int) -> ast.stmt:

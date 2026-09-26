@@ -15,6 +15,7 @@ statement.
 from __future__ import annotations
 
 import re as _re
+import dataclasses as _dataclasses
 from dataclasses import dataclass, field
 from fractions import Fraction
 
@@ -95,62 +96,69 @@ def _slice_within_prefix(index, prefix_len: int) -> bool:
 
 # ── New term types ─────────────────────────────────────────────────────────────
 
-def as_cells_for_match(term: Any, depth: int) -> Any:
-    """``term`` dereferenced, with every atom-functor ``Compound`` in its top
-    *depth* CELL levels replaced by its cell (``compound_as_cell``).
+def as_cells_for_match(term: Any, depth: int, classes: bool = False) -> Any:
+    """``term`` dereferenced and made ready for a compiled clause-head
+    ``match``, down to *depth* structure levels:
 
-    The subject normaliser for compiled clause-head ``match`` statements
-    (ruling 2026-09-26): a head pattern is written in the CELL spelling only,
-    so a caller's ``Compound`` spelling of the same term is turned into the
-    cell before the ``match`` -- linear in the pattern's own depth, where
-    doubling every pattern level with a ``$Compound`` alternative was
-    exponential (roborev 203).  The compiler emits a call only at argument
-    positions whose BUILT patterns have structure, with *depth* the deepest
-    structure nesting of those patterns (``head_match.pattern_structure_
-    depth``), so no level a pattern never inspects is walked and every level
-    it does inspect is.
+    * every atom-functor ``Compound`` becomes its cell (``compound_as_cell``)
+      -- a head pattern is written in the CELL spelling only (ruling
+      2026-09-26; doubling every pattern level with a ``$Compound``
+      alternative was exponential, roborev 203);
+    * a slot holding a Var BOUND to a structure becomes that structure -- a
+      ``match`` does not dereference, so a sequence pattern never matched the
+      Var (``w3(('k', V))`` with ``V = f(2)`` missed its bucket).
 
-    Nothing is copied unless a Compound is actually converted: the result is
-    ``deref(term)`` itself, and an unconverted element keeps its original
-    object (so a bound Var inside a cell stays the Var, exactly as a plain
-    ``deref`` subject presents it).
+    *depth* and *classes* come from the BUILT patterns at that argument
+    position (``head_match.finalize_subject_depths``): *depth* is their
+    deepest structure nesting, and *classes* says whether any of them is a
+    CLASS pattern (a ``Compound`` with no cell, a term instance).  Only then
+    are a no-cell Compound's args and a dataclass instance's fields walked --
+    otherwise no class pattern can inspect them, and copying the instance
+    would be waste (roborev 205).
+
+    Nothing is copied unless something is converted: the result is
+    ``deref(term)`` itself, and an unconverted slot keeps its original object.
+    The C twin is ``as_cells_for_match`` in ``_variables.c``; it hands term
+    instances back to :func:`_cells_below`.
     """
     term = deref(term)
     if depth <= 0:
         return term
-    converted = _cells_below(term, depth)
+    converted = _cells_below(term, depth, classes)
     return term if converted is None else converted
 
 
-def _cells_below(term: Any, depth: int) -> Any:
-    """The converted form of the (already dereferenced) *term*, or None when
-    no Compound within *depth* structure levels needed converting.
+# Slot values a head pattern never destructures: skipped without a deref or a
+# dataclass probe (roborev 205).  Exact types only -- a subclass takes the
+# general path.
+_SCALAR_SLOT_TYPES = frozenset({int, float, str, bool, bytes, type(None)})
 
-    A LEVEL is one structure node a head pattern can destructure: a cell
-    (tuple), a ``Compound`` -- with a cell (converted, then walked as that
-    cell) or without one (its args walked) -- or a dataclass term instance
-    (its fields walked).  *depth* comes from the built pattern
-    (``head_match.pattern_structure_depth``), so it is exact, not capped.
-    The C twin ``cells_below`` (``_variables.c``) hands term instances back
-    to this function.
-    """
+
+def _cells_below(term: Any, depth: int, classes: bool = False) -> Any:
+    """The converted form of the (already dereferenced) *term*, or None when
+    nothing within *depth* structure levels needed converting.  A LEVEL is a
+    cell (tuple), a ``Compound`` -- with a cell (converted, then walked as
+    that cell) or, when *classes*, without one (its args walked) -- or, when
+    *classes*, a dataclass term instance (its fields walked)."""
     if depth <= 0:
         return None
     if type(term) is tuple:
-        new = _cells_in_slots(term, 1, depth)
+        new = _cells_in_slots(term, 1, depth, classes)
         return None if new is None else tuple(new)
     if isinstance(term, Compound):
         cell = compound_as_cell(term)
         if cell is not None:
-            return _cells_below(cell, depth) or cell
-        new = _cells_in_slots(term.args, 0, depth)
+            return _cells_below(cell, depth, classes) or cell
+        if not classes:
+            return None
+        new = _cells_in_slots(term.args, 0, depth, classes)
         return None if new is None else Compound(term.functor, tuple(new))
-    if _is_structure_instance(term):
+    if classes and _is_structure_instance(term):
         if depth <= 1:
             return None
         changed = {}
-        for f in _dataclass_fields(term):
-            sub = _cells_of(getattr(term, f.name), depth - 1)
+        for f in _dataclasses.fields(term):
+            sub = _cells_of(getattr(term, f.name), depth - 1, classes)
             if sub is not None:
                 changed[f.name] = sub
         if not changed:
@@ -163,22 +171,29 @@ def _cells_below(term: Any, depth: int) -> Any:
     return None
 
 
-def _cells_of(elt: Any, depth: int) -> Any:
-    """``_cells_below`` of one (not yet dereferenced) slot value."""
-    elt = deref(elt)
-    if type(elt) is tuple or isinstance(elt, Compound) or _is_structure_instance(elt):
-        return _cells_below(elt, depth)
+def _cells_of(slot: Any, depth: int, classes: bool) -> Any:
+    """The replacement for one slot value at *depth*, or None to keep it."""
+    if type(slot) in _SCALAR_SLOT_TYPES:
+        return None
+    elt = deref(slot)
+    if (type(elt) is tuple or isinstance(elt, Compound)
+            or (classes and _is_structure_instance(elt))):
+        sub = _cells_below(elt, depth, classes)
+        if sub is not None:
+            return sub
+        if elt is not slot:
+            return elt          # a Var bound to a structure: the structure
     return None
 
 
-def _cells_in_slots(seq: Any, start: int, depth: int) -> "list | None":
+def _cells_in_slots(seq: Any, start: int, depth: int, classes: bool) -> "list | None":
     """*seq* as a list with its slots from *start* converted one level down,
     or None when none needed converting."""
     if depth <= 1 or len(seq) <= start:
         return None
     new = None
     for i in range(start, len(seq)):
-        sub = _cells_of(seq[i], depth - 1)
+        sub = _cells_of(seq[i], depth - 1, classes)
         if sub is not None:
             if new is None:
                 new = list(seq)
@@ -187,13 +202,7 @@ def _cells_in_slots(seq: Any, start: int, depth: int) -> "list | None":
 
 
 def _is_structure_instance(x: Any) -> bool:
-    import dataclasses  # noqa: PLC0415
-    return dataclasses.is_dataclass(x) and not isinstance(x, type)
-
-
-def _dataclass_fields(x: Any):
-    import dataclasses  # noqa: PLC0415
-    return dataclasses.fields(x)
+    return _dataclasses.is_dataclass(x) and not isinstance(x, type)
 
 
 def compound_as_cell(term: "Compound") -> "tuple | None":
