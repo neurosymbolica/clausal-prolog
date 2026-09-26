@@ -195,8 +195,9 @@ class test, not the atom test) — import `is_zero_field_class` if you mean
 the class and `clausal.logic.atoms.is_atom` if you mean the atom.
 
 **Strings are the other kind — a list, not a bare `str`.** A `"hello"`
-literal is a string only under [`-double_quotes(chars)`](directives.md#-double_quotes)
-— today's default still reads it as the atom `hello` — and a string is the
+literal is a string by default ([`-double_quotes(chars)`](directives.md#-double_quotes),
+the engine default since 2026-09-26; a module that declares
+`-double_quotes(atom)` reads it as the atom `hello` instead) — and a string is the
 list of its character atoms: internally a compact carrier around the text,
 not literally a bare `str`. Atoms and strings never unify: under
 `-double_quotes(chars)`, `atom(hello)` holds for the bare atom but

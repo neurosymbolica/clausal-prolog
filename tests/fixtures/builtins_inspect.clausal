@@ -28,8 +28,8 @@ list_to_term(LIST, TERM) <- unpack(TERM, LIST)
 #   arg(2, [a,b,c], X)      → X=[b,c]         (cons-cell tail, list unaffected)
 #   unpack("foo", L)        → L=["foo"]       (str is its own atom, was [".","f","oo"])
 test("functor str is its own atom") <- (get_functor("hello", FUNCTOR, ARITY), FUNCTOR == "hello", ARITY == 0)  # nv
-# THE FLIP: "" is the ATOM with the empty spelling in this (default
-# ``-double_quotes(atom)``) module, and an atom is its own functor at
+# THE FLIP: "" is the ATOM with the empty spelling in this
+# ``-double_quotes(atom)`` module, and an atom is its own functor at
 # arity 0.  The empty STRING, which decomposes as the empty list does, is
 # spelled [] here.
 test("functor empty atom") <- (get_functor("", FUNCTOR, ARITY), FUNCTOR is "", ARITY == 0)  # nv

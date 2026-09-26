@@ -82,8 +82,8 @@ cited_ok(C) <- verdict(ok, C)
 --8<-- [end:hide]
 
 --8<-- [start:double_quotes]
--double_quotes(chars)      # "hello" is the string ['h','e','l','l','o']
-# -double_quotes(atom)     # "hello" is the atom hello (today's default)
+-double_quotes(chars)      # "hello" is the string ['h','e','l','l','o'] (the default)
+# -double_quotes(atom)     # "hello" is the atom hello (the opt-out)
 
 greeting("hello"),         # a string under chars, an atom under atom
 tag('hello'),              # ALWAYS the atom hello, in either mode

@@ -1928,7 +1928,6 @@ def _visit_nested_seam_operands(node, collector) -> None:
 from clausal.lint_warnings import (  # noqa: E402, F401
     ClausalLintWarning,
     ClausalSingletonWarning,
-    ClausalSeamLiteralWarning,
     ClausalShadowedVariableWarning,
     ClausalBooleanSeamWarning,
     ClausalDeprecatedSpellingWarning,
@@ -2313,7 +2312,7 @@ class TermTransformer(NodeTransformer):
                  reify=False, hidden_atoms=frozenset(), module_name=None,
                  declared_functors=None, atom_functor_sites=None,
                  zero_arity_heads=frozenset(),
-                 quote_map=None, double_quotes_mode="atom",
+                 quote_map=None, double_quotes_mode="chars",
                  seam=False, double_quotes_explicit=True,
                  python_visitor=None, titlecase_python_bound=None,
                  clause_var_names=None):
@@ -2323,7 +2322,9 @@ class TermTransformer(NodeTransformer):
         # enclosing EmbedTransformer's ``visit``, run over every ``++``
         # operand so seams nest (a ``--`` inside a ``++`` inside a ``--``);
         # ``double_quotes_explicit`` is False when the module never declared
-        # ``-double_quotes``, which makes a ``"..."`` inside the seam warn.
+        # ``-double_quotes`` (reported to importers by the DoubleQuotesMode
+        # item; the seam "no mode declared" warning it used to drive was
+        # retired with the 2026-09-26 flip, when the last trigger went).
         transformer._seam = seam
         transformer._double_quotes_explicit = double_quotes_explicit
         transformer._python_visitor = python_visitor
@@ -2889,10 +2890,9 @@ class TermTransformer(NodeTransformer):
         """A literal is a term directly — except a text literal, which is an
         ATOM or a STRING depending on how it was quoted (spec §7).
 
-        ``'foo'`` is an atom in every mode; ``"foo"`` is an atom under
-        ``-double_quotes(atom)`` (today's default) and a string under
-        ``-double_quotes(chars)``.  An atom is the arity-0 cell
-        ``("foo",)``; a string is the ``str`` itself.
+        ``'foo'`` is an atom in every mode; ``"foo"`` is a string under
+        ``-double_quotes(chars)`` (the default since 2026-09-26) and an atom
+        under ``-double_quotes(atom)``, the opt-out.
 
         The quote character is not in the AST, so it comes from the file's
         quote map (``quote_map.py``), keyed by position.  A SYNTHETIC
@@ -2925,14 +2925,6 @@ class TermTransformer(NodeTransformer):
                 modes_used = getattr(transformer, "_double_quotes_modes_used", None)
                 if modes_used is not None:
                     modes_used.add(transformer._double_quotes_mode)
-            if (quote == '"' and transformer._seam
-                    and not transformer._double_quotes_explicit):
-                import warnings  # noqa: PLC0415
-                warnings.warn(ClausalSeamLiteralWarning(
-                    f"--: \"{value}\" inside a seam denotes an ATOM under the "
-                    f"engine default -double_quotes(atom); declare "
-                    f"-double_quotes(chars) (a string) or -double_quotes(atom) "
-                    f"explicitly in this module"), stacklevel=2)
             if quote == '"' and transformer._double_quotes_mode == "chars":
                 # STAGE 1 of the atoms-as-str flip (spec 2026-09-18): a chars
                 # string is the CARRIER ``('$chars', text)``, not a bare str.
@@ -5603,8 +5595,10 @@ class EmbedTransformer(NodeTransformer):
         # file.  Unlike the module-item directives (drained after the walk,
         # so they cannot govern only the literals below them) this is
         # position-sensitive state on the instance, the ``-allow_singletons``
-        # shape.  ``atom`` is the engine default until the flip.
-        transformer._double_quotes_mode = "atom"
+        # shape.  ``chars`` is the engine default (THE FLIP, 2026-09-26: a
+        # ``"..."`` literal is a STRING, as in Scryer/Trealla);
+        # ``-double_quotes(atom)`` is the opt-out.
+        transformer._double_quotes_mode = "chars"
         transformer._double_quotes_explicit = False
         # The modes that governed at least one ``"..."`` literal in this
         # file -- a SHARED sink every per-clause TermTransformer adds to
@@ -8410,9 +8404,9 @@ class EmbedTransformer(NodeTransformer):
         ``todo/strings-lost-in-the-atom-pivot-double-quotes-are-char-lists-2026-09-06.md``,
         ruling R-S4): a module that still relies on ``"..."`` denoting an
         ATOM declares ``-double_quotes(atom)`` so it keeps that meaning
-        after the engine flips the default to ``chars`` (``"..."`` = a
-        string unifying with its char list).  ``atom`` remains the engine
-        default, so declaring it is still a no-op that states a dependency.
+        now that the engine default is ``chars`` (``"..."`` = a string
+        unifying with its char list; flipped 2026-09-26, as in Scryer and
+        Trealla).  ``-double_quotes(atom)`` is the opt-out.
 
         THE FLIP (2026-09-06-atoms-as-cells-strings §7) makes ``chars`` real:
         below a ``-double_quotes(chars)`` directive a ``"..."`` literal
@@ -8442,8 +8436,8 @@ class EmbedTransformer(NodeTransformer):
             return replace(Pass(), expr_stmt)
         raise SyntaxError(
             f"-double_quotes({mode}): unknown mode; the accepted modes are "
-            f"`atom` (the engine default: \"...\" is an atom) and `chars` "
-            f"(\"...\" is a string — the list of its char atoms).  Codes are "
+            f"`chars` (the engine default: \"...\" is a string — the list of "
+            f"its char atoms) and `atom` (\"...\" is an atom).  Codes are "
             f"spelled b\"...\" and have no mode."
         )
 

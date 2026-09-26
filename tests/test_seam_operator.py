@@ -147,15 +147,23 @@ class TestHostModuleRulesApply:
         ))
         assert mod.build() == ("nosuch", 1, 2, 3)
 
-    def test_a_double_quoted_literal_with_no_explicit_mode_warns(self):
-        with pytest.warns(Warning, match="double_quotes"):
+    def test_a_double_quoted_literal_with_no_explicit_mode_is_a_string(self):
+        # The default is chars (2026-09-26): a seam literal in a module that
+        # declares no mode is a STRING, and the "no mode declared" warning
+        # that used to fire here is retired -- there is nothing left to warn
+        # about.
+        import warnings
+        from clausal.logic.cells import chars
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
             mod = _load_inline("_seam_warn", (
                 "-module(_seam_warn, [verdict(A, B)])\n"
                 "-implicit_atoms\n"
                 "def build():\n"
                 "    return --verdict(good, \"baz\")\n"
             ))
-        assert mod.build() == ("verdict", "good", "baz")
+        assert not [w for w in caught if "double_quotes" in str(w.message)]
+        assert mod.build() == ("verdict", "good", chars("baz"))
 
 
 class TestNoClassInstances:

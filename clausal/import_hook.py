@@ -490,7 +490,7 @@ def _preseed_py_submodules(module_items) -> None:
 # turns it. See todo/clausal-bytecode-tag-is-manual-and-goes-stale-2026-09-11.md
 # for making it automatic, which is the real fix; this bump only closes the
 # accumulated gap.
-CLAUSAL_BYTECODE_TAG = 13
+CLAUSAL_BYTECODE_TAG = 14
 
 #: Engine sources whose CONTENT decides emitted code. Narrow on purpose: every
 #: file here invalidates every user's cached bytecode when it changes, so a

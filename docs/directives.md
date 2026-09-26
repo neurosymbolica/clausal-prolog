@@ -627,8 +627,8 @@ mode, and `b"…"`/`b'…'` are always [codes](bytes_as_lists.md).
 
 | Mode | `"hello"` means | Status |
 |---|---|---|
-| `atom` | the atom `hello` — the same term as bare `hello` and as `'hello'` | the engine **default today**; becomes the opt-out after the default flips |
-| `chars` | the string `"hello"`, which *is* the list `['h','e','l','l','o']`; `atom("hello")` is false, `string("hello")` is true | the **destination**; opt in now |
+| `chars` | the string `"hello"`, which *is* the list `['h','e','l','l','o']`; `atom("hello")` is false, `string("hello")` is true | the engine **default** (since 2026-09-26, as in Scryer and Trealla) |
+| `atom` | the atom `hello` — the same term as bare `hello` and as `'hello'` | the **opt-out** for a module that still relies on the old reading |
 | `codes` | — | **refused**. Codes are spelled `b"…"`. Any other argument is likewise an error. |
 
 The directive is **file-scoped and position-sensitive**: it governs the
@@ -637,12 +637,12 @@ clauses. It is not inherited by importers — each file declares its own.
 
 The whole lifetime is a three-step **ratchet**, not a compatibility flag:
 
-1. **Now.** The default is `atom`. Add `-double_quotes(atom)` to a module to
-   record that it still relies on that meaning — a no-op today, and the thing
-   that keeps it working when the default moves. Add `-double_quotes(chars)`
-   to a module that is ready for strings.
-2. **When every module carries one of the two**, the default flips to `chars`.
-   `-double_quotes(atom)` becomes the opt-out.
+1. ~~**Now.** The default is `atom`.~~ Done: every in-tree module that relied
+   on the atom reading carries `-double_quotes(atom)`.
+2. ~~**When every module carries one of the two**, the default flips to
+   `chars`.~~ Done (2026-09-26). The default **is** `chars`;
+   `-double_quotes(atom)` is the opt-out. A module that declares nothing reads
+   `"hello"` as a string.
 3. **When every module has dropped the directive**, `-double_quotes/1` is
    deleted from the engine and writing it becomes a load error.
 

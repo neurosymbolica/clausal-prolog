@@ -600,8 +600,29 @@ class TestEvalBuiltinExport:
 # faithful to the RETIRED pre-P3-1 semantics, in which ``str`` was Clausal's
 # string type.
 
+class TestStrLiteralIsAStringByDefault:
+    """The default -double_quotes mode is ``chars`` (2026-09-26): a ``"..."``
+    literal in a module that declares nothing is a STRING, emitted as the
+    Prolog double-quoted token both target engines read as chars."""
+
+    def test_plain_str_literal_emits_a_prolog_string(self):
+        out = clausal_source_to_prolog('ok(X) <- (X is "hello")\n')
+        assert 'X = "hello".' in out, out
+
+    def test_str_literal_is_a_pstring_in_the_ast(self):
+        from clausal.tools.prolog_ast import PString
+        pmod = clausal_source_to_prolog_ast('ok(X) <- (X is "hello")\n')
+        rhs = pmod.items[0].body.args[1]
+        assert isinstance(rhs, PString), rhs
+
+    def test_single_quoted_is_still_an_atom(self):
+        out = clausal_source_to_prolog("ok(X) <- (X is 'a b')\n")
+        assert "X = 'a b'." in out, out
+
+
 class TestStrLiteralIsAtom:
-    """`_convert_constant`'s str branch emits an ATOM, not a char list."""
+    """`_convert_constant`'s str branch emits an ATOM, not a char list, under
+    ``-double_quotes(atom)`` -- the opt-out since the 2026-09-26 flip."""
 
     def test_plain_str_literal_emits_bare_atom(self):
         out = clausal_source_to_prolog('-double_quotes(atom)\nok(X) <- (X is "hello")\n')

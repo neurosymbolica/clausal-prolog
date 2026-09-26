@@ -23,14 +23,6 @@ class ClausalSingletonWarning(ClausalLintWarning):
     """
 
 
-class ClausalSeamLiteralWarning(ClausalLintWarning):
-    """A ``"..."`` literal inside a ``--`` seam in a module that never said
-    which meaning it wants.  Under the engine default ``-double_quotes(atom)``
-    the literal is an ATOM; a Python author reads it as a string.  The
-    silent version of that mistake is a term that unifies with nothing, so
-    the seam says so once and points at the directive."""
-
-
 class ClausalCrossModeLiteralWarning(ClausalLintWarning):
     """A ``"..."`` literal inside a goal-position ``--`` seam that targets a
     module whose ``-double_quotes`` mode differs from the host file's.

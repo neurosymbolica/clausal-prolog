@@ -935,7 +935,7 @@ class _ClausalToProlog:
         # alone decides. Position-sensitive like the compiler's: the mode
         # governs the literals BELOW the directive, so it is walk state.
         self._quote_map = build_quote_map(source_lines) if source_lines else {}
-        self._double_quotes = "atom"
+        self._double_quotes = "chars"
         # Dotted path of the module being translated. When set, use_module
         # file paths are emitted relative to this module's package directory
         # (Scryer resolves a consulted path against the consulting file).
@@ -2145,10 +2145,10 @@ class _ClausalToProlog:
         2026-09-07), the compiler's own rule mirrored:
 
         * ``'...'`` is an ATOM in every mode (ISO 6.4.2 quoted token);
-        * ``"..."`` is an ATOM under ``-double_quotes(atom)`` -- the engine
-          default -- and a STRING (a Prolog double-quoted token; both target
+        * ``"..."`` is a STRING (a Prolog double-quoted token; both target
           engines default to ``double_quotes=chars``) under
-          ``-double_quotes(chars)``.
+          ``-double_quotes(chars)`` -- the engine default since 2026-09-26
+          -- and an ATOM under ``-double_quotes(atom)``.
 
         Before this rule the translator lowered every str literal one way
         regardless of mode: to a string (the flip) or to an atom (bda6b039).

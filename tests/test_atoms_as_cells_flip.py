@@ -955,14 +955,16 @@ def test_row_29_the_bytecode_tag_invalidates_a_pre_flip_pyc():
     removes.
 
     That this assertion exists is what makes a bump a decision rather than a
-    slip -- it is the reason the 12 -> 13 change could not be made quietly.
+    slip -- it is the reason the 12 -> 13 change could not be made quietly
+    (and 13 -> 14, the -double_quotes default flip of 2026-09-26, which
+    changes the code emitted for every file that declares no mode).
     What it cannot do is notice the CONVERSE: fifty-five transformer commits
     that should have bumped the tag and did not, because nothing here fails
     when the tag stays still. See
     todo/clausal-bytecode-tag-is-manual-and-goes-stale-2026-09-11.md for
     deriving the tag from an engine fingerprint, which closes that side."""
     from clausal.import_hook import CLAUSAL_BYTECODE_TAG
-    assert CLAUSAL_BYTECODE_TAG == 13
+    assert CLAUSAL_BYTECODE_TAG == 14
 
 
 def test_row_30_listing_takes_an_atom_and_refuses_a_string(capsys):

@@ -57,10 +57,16 @@ def test_embed_float_is_native_float():
     assert isinstance(ns["result"], float)
 
 
-def test_embed_double_quoted_is_an_atom():
-    # nv — THE FLIP (spec §7): ``"hello"`` is an ATOM under the default
-    # ``-double_quotes(atom)`` mode the embed cell compiles under.
+def test_embed_double_quoted_is_a_string():
+    # nv — the -double_quotes default is ``chars`` (2026-09-26): ``"hello"``
+    # in an embed cell is a STRING, the chars carrier.
     ns = run_cell('result = --"hello"')
+    assert ns["result"] == chars("hello")
+
+
+def test_embed_double_quoted_is_an_atom_under_atom_mode():
+    # nv — the opt-out: a cell that declares ``-double_quotes(atom)``.
+    ns = run_cell('-double_quotes(atom)\nresult = --"hello"\n')
     assert ns["result"] == mint("hello")
 
 
@@ -275,10 +281,10 @@ def test_chars_mode_leaves_single_quoted_literals_atoms():
     assert ns["result"] == mint("bar")
 
 
-def test_default_mode_in_a_cell_still_makes_an_atom():
-    # nv
+def test_default_mode_in_a_cell_makes_a_string():
+    # nv — the default is chars (2026-09-26); the cell and a file agree.
     ns = run_cell('result = --"foo"\n')
-    assert ns["result"] == mint("foo")
+    assert ns["result"] == chars("foo")
 
 
 def test_ipython_path_reads_the_lines_the_input_transformer_recorded():
