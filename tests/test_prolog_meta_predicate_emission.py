@@ -121,6 +121,12 @@ def test_a_second_module_directive_is_still_filtered():
         ":- meta_predicate(bar(?, 2)).",
         ":- module(lib2, [bar/2]).",
     ]
+    # ...and where it was written relative to the CLAUSES, not only to the
+    # other directives: the source puts it above both clauses.
+    lines = [line for line in out.splitlines() if line.strip()]
+    second = lines.index(":- module(lib2, [bar/2]).")
+    first_clause = next(i for i, line in enumerate(lines) if not line.startswith(":- "))
+    assert second < first_clause
 
 
 def test_meta_above_module_lands_ahead_of_the_generated_prelude():
