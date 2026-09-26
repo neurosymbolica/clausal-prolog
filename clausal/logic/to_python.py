@@ -384,7 +384,7 @@ def strip_atom_tags(val):
     reach = _tag_reachability(val)
     if not reach:
         return val
-    return _strip(val, reach, set())
+    return _strip(val, reach, set(), {})
 
 
 def _tag_reachability(root) -> dict:
@@ -427,12 +427,19 @@ def _tag_reachability(root) -> dict:
     return reach
 
 
-def _strip(val, reach: dict, active: set):
+def _strip(val, reach: dict, active: set, done: dict):
+    """Rebuild *val* with its tags stripped.  *done* memoises by id for the
+    one call, so a tagged subterm SHARED by several paths is rebuilt once
+    and the result keeps the sharing (roborev on 3ee9c7d6: without it a
+    tagged DAG with nested sharing took exponential time).  *reach* keeps
+    every container alive for the call, so an id cannot be reused."""
     if type(val) is atom:
         return str.__str__(val)
     key = id(val)
     if key not in reach:
         return val                    # no tag below: by identity, not entered
+    if key in done:
+        return done[key]
     if key in active:
         raise TypeError(
             "the goal holds a boundary `atom` inside a CYCLIC term; a cyclic "
@@ -440,9 +447,11 @@ def _strip(val, reach: dict, active: set):
             "IS the str) or break the cycle")
     active.add(key)
     try:
-        return map_term(val, lambda v: _strip(v, reach, active))
+        out = map_term(val, lambda v: _strip(v, reach, active, done))
     finally:
         active.discard(key)
+    done[key] = out
+    return out
 
 
 def unwrap_atom(val):

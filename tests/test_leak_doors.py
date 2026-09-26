@@ -87,6 +87,23 @@ class TestLeakDoors:
         assert strip_atom_tags(("f", atom("a"))) == ("f", "a")
         assert type(strip_atom_tags(("f", atom("a")))[1]) is str
 
+    def test_a_shared_tagged_subterm_is_rebuilt_once_and_stays_shared(self):
+        """A tagged DAG with nested sharing: t(i+1) = (t(i), t(i)).  Without
+        a memo the rebuild visits 2**40 paths; with it, each node once."""
+        import time
+        from clausal.logic.to_python import strip_atom_tags
+        t = ("leaf", atom("a"))
+        for _ in range(40):
+            t = ("node", t, t)
+        start = time.perf_counter()
+        out = strip_atom_tags(t)
+        assert time.perf_counter() - start < 1.0
+        assert out[1] is out[2]                 # sharing kept
+        leaf = out
+        while leaf[0] == "node":
+            leaf = leaf[1]
+        assert leaf == ("leaf", "a") and type(leaf[1]) is str
+
     def test_an_atom_instance_handed_to_a_seams_bare_name_enters_as_a_str(self):
         m = _rb("_ld_h", (
             "from clausal.logic.atoms import atom\n"
