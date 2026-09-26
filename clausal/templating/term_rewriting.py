@@ -2313,7 +2313,7 @@ class TermTransformer(NodeTransformer):
                  declared_functors=None, atom_functor_sites=None,
                  zero_arity_heads=frozenset(),
                  quote_map=None, double_quotes_mode="chars",
-                 seam=False, double_quotes_explicit=True,
+                 seam=False,
                  python_visitor=None, titlecase_python_bound=None,
                  clause_var_names=None, modes_used=None):
         transformer.seen_vars = set()
@@ -2331,13 +2331,13 @@ class TermTransformer(NodeTransformer):
         # THE SEAM (``--term`` in Python-hosted code): ``seam`` marks a
         # transformer serving one seam expression; ``python_visitor`` is the
         # enclosing EmbedTransformer's ``visit``, run over every ``++``
-        # operand so seams nest (a ``--`` inside a ``++`` inside a ``--``);
-        # ``double_quotes_explicit`` is False when the module never declared
-        # ``-double_quotes`` (reported to importers by the DoubleQuotesMode
-        # item; the seam "no mode declared" warning it used to drive was
-        # retired with the 2026-09-26 flip, when the last trigger went).
+        # operand so seams nest (a ``--`` inside a ``++`` inside a ``--``).
+        # Whether the module DECLARED its ``-double_quotes`` mode is the
+        # EmbedTransformer's fact alone (``_double_quotes_explicit``, which
+        # the DoubleQuotesMode item reports to importers); the per-clause
+        # copy that drove the seam "no mode declared" warning went with the
+        # warning at the 2026-09-26 flip.
         transformer._seam = seam
-        transformer._double_quotes_explicit = double_quotes_explicit
         transformer._python_visitor = python_visitor
         # The TitleCase names this file's own hosted Python binds (``from x
         # import Foo``, ``class Foo``, ``Foo = ...``) -- the SAME live set
@@ -6153,7 +6153,6 @@ class EmbedTransformer(NodeTransformer):
             quote_map=transformer._quote_map,
             double_quotes_mode=transformer._double_quotes_mode,
             seam=seam,
-            double_quotes_explicit=transformer._double_quotes_explicit,
             python_visitor=transformer.visit if seam else None,
             titlecase_python_bound=transformer._titlecase_python_bound,
             clause_var_names=clause_var_names,

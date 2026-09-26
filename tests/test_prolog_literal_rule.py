@@ -91,6 +91,17 @@ def test_the_flag_directive_is_emitted_where_the_mode_changes():
     assert out.index("p(x).") < out.index("set_prolog_flag") < out.index('q("x").')
 
 
+def test_an_explicit_leading_chars_directive_still_emits_the_flag():
+    """``-double_quotes(chars)`` at the top says what the default already
+    says, and the literal lowers identically -- but the directive is a
+    statement of the module's dependency, and its flag is transcribed
+    (pinned here so the flip did not silently change the emission)."""
+    declared = _t('-double_quotes(chars)\np("x"),\n')
+    assert 'p("x").' in declared
+    assert ":- set_prolog_flag(double_quotes, chars)." in declared
+    assert "set_prolog_flag" not in _t('p("x"),\n')
+
+
 def test_the_default_needs_no_flag_directive():
     """A module that declares nothing emits its ``"..."`` literals as Prolog
     strings and NO ``set_prolog_flag``: both target engines already read a

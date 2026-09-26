@@ -699,7 +699,7 @@ class TestCellHeadDispatch:
             (lambda m: m.nil, [mint("empty")]),
             (lambda m: 42, [mint("num")]),
             # THE FLIP: the fixture's ``kind("s", "str")`` head literal is the
-            # ATOM ``("s",)`` under the default ``-double_quotes(atom)``, so
+            # ATOM ``("s",)`` under this file's ``-double_quotes(atom)``, so
             # the caller passes the atom; a Python ``str`` is a STRING and
             # selects no clause.
             (lambda m: mint("s"), [mint("str")]),

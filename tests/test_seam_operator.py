@@ -153,17 +153,22 @@ class TestHostModuleRulesApply:
         # that used to fire here is retired -- there is nothing left to warn
         # about.
         import warnings
+        from clausal.lint_warnings import ClausalLintWarning
+        from clausal.logic.atoms import mint
         from clausal.logic.cells import chars
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
             mod = _load_inline("_seam_warn", (
-                "-module(_seam_warn, [verdict(A, B)])\n"
+                "-module(_seam_warn, [verdict(A, B), tag(A)])\n"
                 "-implicit_atoms\n"
                 "def build():\n"
                 "    return --verdict(good, \"baz\")\n"
+                "def build_atom():\n"
+                "    return --tag('baz')\n"
             ))
-        assert not [w for w in caught if "double_quotes" in str(w.message)]
+        assert [w for w in caught if isinstance(w.message, ClausalLintWarning)] == []
         assert mod.build() == ("verdict", "good", chars("baz"))
+        assert mod.build_atom() == ("tag", mint("baz"))   # '...' stays an atom
 
 
 class TestNoClassInstances:

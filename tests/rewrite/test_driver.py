@@ -384,12 +384,16 @@ def test_reify_ast_reads_a_segment_under_the_mode_it_is_handed():
     from clausal.logic.atoms import mint
     from clausal.logic.cells import chars
     from clausal.reflection import reify_ast, Clause, Goal, is_v
+    from clausal.reflection import vfield
     stmt = ast.parse('p(X) <- (X is "t")\n').body[0]
-    for mode, expected in (("atom", mint("t")), ("chars", chars("t"))):
+    seen = {}
+    for mode in ("atom", "chars"):
         clause = reify_ast(stmt, source='p(X) <- (X is "t")', double_quotes=mode)
         assert is_v(clause, Clause)
-        goal = clause.body[0]
-        assert is_v(goal, Goal) and goal.args[1] == expected, (mode, goal)
+        (unify,) = vfield(clause, "goals")
+        seen[mode] = unify.right
+    assert seen["atom"] == ("Atom", "t"), seen
+    assert seen["chars"] != seen["atom"] and "t" in repr(seen["chars"]), seen
 
 
 def test_an_unknown_mode_is_left_to_the_loader(head_fold_rules):

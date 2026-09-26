@@ -309,7 +309,7 @@ class TestDirectiveIntegration:
         # nv
         from clausal.logic.solve import call
         # THE FLIP: a test/1 description written ``"..."`` in the fixture is
-        # an ATOM under the default ``-double_quotes(atom)``.
+        # an ATOM under this file's ``-double_quotes(atom)``.
         for _ in call("test", mint(name), module=self.mod):
             return
         pytest.fail(f"Test predicate '{name}' failed")

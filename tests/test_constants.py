@@ -1170,7 +1170,7 @@ def test_constant_value_2_reads_the_name_as_an_atom(tmp_path):
     """The NAME POSITION speaks atoms in and atoms out (spec §6.4).
 
     Written with the double-quoted spelling deliberately: under the engine
-    default ``-double_quotes(atom)`` that IS an atom, so it matches -- and
+    ``-double_quotes(atom)`` mode that IS an atom, so it matches -- and
     the same source under ``-double_quotes(chars)`` is a string, which names
     no constant and fails. Both halves asserted, because the first alone
     would pass on an implementation that ignored the argument's type.

@@ -581,7 +581,7 @@ class TestAtomArguments:
     namespace alias and name only; the CONSTRUCT direction of
     ``uuid_str/2``, ``uuid_hex/2`` and ``uuid_urn/2`` still gated on
     ``isinstance(x, str)``, so a source-written UUID literal — an atom in the
-    default ``-double_quotes(atom)`` mode — silently failed.
+    ``-double_quotes(atom)`` mode — silently failed.
     """
 
     def test_uuid5_accepts_an_atom_namespace_and_name(self):

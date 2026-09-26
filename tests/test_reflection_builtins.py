@@ -189,7 +189,7 @@ class TestDcgMatching:
 class TestSourceWrittenTextArgument:
     """The SOURCE/PATH argument is a TEXT position (§9.4).
 
-    In the default ``-double_quotes(atom)`` mode a source-written ``"…"`` is
+    Under ``-double_quotes(atom)`` (which this source pins) a source-written ``"…"`` is
     the atom ``("…",)``, so the old ``isinstance(source, str)`` gate made
     every source-written call fail silently — no error, no solutions.  Each
     row here writes the argument as a literal in DEFAULT-mode source and

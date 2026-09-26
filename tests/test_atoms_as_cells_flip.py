@@ -1347,7 +1347,7 @@ def test_sum_and_scalar_product_read_the_operator_as_an_atom():
     """``sum_/3`` and ``scalar_product/4`` take an ISO operator ATOM.
 
     ``#=`` cannot be written bare in the surface (``#`` opens a comment), so
-    source spells it ``"#="``, which in the default ``-double_quotes(atom)``
+    source spells it ``"#="``, which under ``-double_quotes(atom)``
     mode is the atom ``("#=",)``.  ``clpfd`` gated on ``isinstance(op, str)``,
     so every source-written call failed silently.
     """

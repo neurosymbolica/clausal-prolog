@@ -638,7 +638,7 @@ kv_key(_k) <- (setup() and query("db6", "SELECT k FROM kv", _k))
 
     def test_a_path_written_as_a_quoted_atom_opens_that_database(self, tmp_path):
         """THE FLIP (spec §9.4): every text argument here is an ATOM under
-        the default ``-double_quotes(atom)``, and ``':memory:'`` is one in
+        ``-double_quotes(atom)``, and ``':memory:'`` is one in
         EVERY mode.  Before the wrappers routed text through ``to_text``,
         ``str()`` handed sqlite the atom's Python tuple repr and it opened a
         file literally named ``(':memory:',)`` in the working directory.
