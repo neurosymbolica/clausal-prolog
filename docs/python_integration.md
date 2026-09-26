@@ -193,6 +193,62 @@ A module-level `--goal:` over a predicate defined in the same file fails
 during that file's load — the Python body runs before the file's own
 clauses are compiled. Over an imported predicate it works.
 
+## The converters: `to_python`, `to_clausal`, `term_key`
+
+Three names, exported from `clausal`, are the explicit conversions between a
+term and a Python value. They are driven by ONE registry
+(`clausal.logic.python_terms`: `TO_TERM` by exact Python type, `FROM_TERM` by
+functor), so a class registered once — `register(cls, functor, to_fn,
+from_fn)` — crosses in both directions.
+
+```python
+import datetime as dt
+from clausal import to_python, to_clausal, term_key
+from clausal.logic.cells import chars
+
+to_clausal(dt.date(2023, 6, 1))        # ('date', 2023, 6, 1)   the term
+to_python(("date", 2023, 6, 1))        # datetime.date(2023, 6, 1)
+to_clausal((1, 2))                     # ('()', 1, 2)           tuple DATA cell
+to_python(("()", 1, chars("t")))       # (1, 't')
+to_python(("cite", "art52", chars("s")))   # ('cite', 'art52', 's')  unregistered: a tuple
+to_clausal(object())                   # TypeError: no registered conversion
+sorted([("f", 1), "a", 1], key=term_key)   # [1, 'a', ('f', 1)]  the standard order
+```
+
+**`to_python(term)` — deep OUT.** Every engine shape converts all the way
+down: an atom is its `str`, a string (the chars carrier, a ground
+`SegString`, an all-chars `SegList`) its text, a cell a tuple of converted
+elements — unless its functor is registered, in which case the registered
+rebuild answers (`('date', …)` is a `datetime.date`, `('()', …)` a Python
+tuple; a look-alike whose components do not rebuild stays a cell). A
+`Compound` with a cell equivalent converts as the cell; a `KWTerm` keeps its
+shape with converted fields; a `SetTerm` is a `frozenset`; a `DictTerm` is a
+`dict` with keys converted and normalised — an atom key and the string of its
+spelling become **one** Python key. A non-ground `Seg*` crosses raw (there is
+no text yet). This is what every `py.*` wrapper argument gets.
+
+**`to_clausal(obj)` — deep IN.** `python_terms.to_term(strict=True)`: a `str`
+is the atom (text is written `chars("…")`), a `Var` or engine term is left
+alone, a registered type takes its shape, a list or dict converts its
+contents, a tuple becomes the `('()', …)` data cell, and an unregistered class
+**raises** `TypeError` naming the fix. The documented hazard: a tuple that
+already spells a well-formed registered term — `("date", 2023, 6, 1)` — is
+read as that term, not wrapped as data; wrap it yourself (`("()", *t)`) if you
+meant data.
+
+**`term_key(term)`** is the standard order of terms as a sort key: total over
+every value a term can hold (a mixed list never raises), the same order
+`msort/2`, `sort/2` and `compare/3` use. A `SegString`/`SegList`/`SegBytes`
+keys as the string/list/code list it walks to — so `compare/3` answers `=`
+for a ground `SegString` against its string, and `sort/2` keeps one of them;
+one that still holds an unbound hole keys in an opaque band after everything
+else.
+
+`to_python` and `to_clausal` are NOT what `++`/`--` do. The seams have their
+own, narrower rules — a `++` argument is unwrapped one level, a goal-position
+`--` answer is exported (both below) — and you call a converter by name when
+you want the whole value in the other representation.
+
 ## Crossing the boundary: atoms and strings
 
 An atom **is** a Python `str` (`bar` is `'bar'`); a string is the cell
@@ -212,9 +268,11 @@ wrapper argument goes through it:
 | string `"bar"` (the cell `('$chars', 'bar')`) | the `str` `'bar'` — its text |
 | a partial string that has become ground | the `str` it walks to |
 | compound cell `foo("x", 1)` | the tuple `('foo', 'x', 1)` (converted elementwise) |
+| a cell whose functor is REGISTERED — `date(2023, 6, 1)`, the data cell `('()', 1, 2)` | the registered Python object — `datetime.date(2023, 6, 1)`, `(1, 2)` |
+| `Compound` / `KWTerm` / `SetTerm` / ground `SegList` | its cell (converted) / itself with converted fields / a `frozenset` / the list |
 | list `[bar, "x"]` | `['bar', 'x']` |
-| `DictTerm` / dict | a `dict`, **keys converted too** |
-| anything else | itself |
+| `DictTerm` / dict | a `dict`, **keys converted and normalised** (an atom key and its text merge into one) |
+| a non-ground `Seg*`, anything else | itself |
 
 `clausal.logic.to_python.unwrap_atom` is the **shallow** one, and it is what
 a `++` escape or an f-string argument gets: a string **argument** becomes its

@@ -77,7 +77,7 @@ from typing import Any
 
 from clausal.logic.cells import TUPLE_TAG, chars, is_chars, chars_text
 
-__all__ = ["to_term", "from_term", "register", "TO_TERM", "FROM_TERM",
+__all__ = ["to_term", "from_term", "to_clausal", "register", "TO_TERM", "FROM_TERM",
            "to_transfer", "from_transfer", "register_transfer",
            "TO_TRANSFER", "FROM_TRANSFER"]
 
@@ -153,7 +153,14 @@ def _tuple_to_term(v: tuple) -> tuple:
 
 
 def _tuple_from_term(t: tuple) -> tuple:
-    return tuple(from_term(e) for e in t[1:])
+    """SHALLOW: the components arrive ALREADY converted (see ``from_term``),
+    so this only drops the head.  It used to recurse with ``from_term``, and
+    ``to_python`` -- which converts elements before it rebuilds -- then
+    rebuilt an inner data tuple TWICE: ``('()', ('()', 'date', 2023, 6, 1))``
+    came out as ``(datetime.date(2023, 6, 1),)`` because the inner tuple,
+    already the Python tuple ``('date', 2023, 6, 1)``, was read again as a
+    date term (roborev 231, 2026-09-26)."""
+    return tuple(t[1:])
 
 
 #: Python type -> the function that yields its TERM.
@@ -192,6 +199,11 @@ FROM_TRANSFER: "dict[str, Any]" = {}
 
 def register(cls: type, functor: str, to_fn, from_fn) -> None:
     """Add a bidirectional conversion. OVERRIDING IS REFUSED.
+
+    ``from_fn`` must be SHALLOW: it is handed the term with its components
+    already converted and only reshapes them (``from_term``'s docstring, ONE
+    OWNER OF RECURSION).  ``to_fn`` receives the raw Python object and may
+    recurse through ``to_term`` for components only it knows about.
 
     Global and immutable by the operator's ruling (2026-09-15): a per-module
     registry would let two ``.seam`` files disagree about what ``('date', ...)``
@@ -546,6 +558,8 @@ def _already_a_term(value: tuple) -> bool:
     """
     if not value or type(value[0]) is not str:
         return False
+    if is_chars(value):
+        return True                    # the chars carrier IS the string, never data
     head = value[0]
     if head == TUPLE_TAG:
         return True
@@ -596,6 +610,32 @@ def to_term(value: Any, *, strict: bool = True) -> Any:
     )
 
 
+def to_clausal(value: Any) -> Any:
+    """THE PUBLIC DEEP IN CONVERTER (dumb-seam step (b), 2026-09-26; exported
+    as ``clausal.to_clausal``): the TERM of a Python object, all the way
+    down, driven by the ONE registry -- the same ``TO_TERM``/``FROM_TERM``
+    tables ``clausal.to_python`` consults on the way out, so a type
+    registered once serves both directions.
+
+    Exactly :func:`to_term` with ``strict=True``: a scalar passes through
+    (a ``str`` IS the atom -- text is written ``chars(...)``), a logic
+    variable or engine term is left alone, a registered type takes its
+    canonical shape, a list/dict converts its contents, a tuple becomes the
+    ``('()', ...)`` data cell, and an UNREGISTERED class RAISES ``TypeError``
+    naming the fix.  The implicit ``++`` hook is the lenient twin; this is
+    the one a caller asks for by name, so silence would be wrong here.
+
+    THE DOCUMENTED HAZARD (module docstring): a tuple ALREADY in
+    functor-first form is left alone rather than wrapped as data, and the
+    test is by SHAPE -- ``('date', 2023, 6, 1)`` stays a date term while
+    ``('date', "x", "y")`` becomes ``('()', 'date', 'x', 'y')``.  A Python
+    tuple that happens to spell a well-formed registered term is therefore
+    read as that term.  If that residue ever bites, the fix is an explicit
+    wrapper at the call site (``(TUPLE_TAG, *t)``), not a cleverer guess.
+    """
+    return to_term(value, strict=True)
+
+
 def from_term(value: Any) -> Any:
     """A TERM back to its Python value, recursively. The reverse of ``to_term``.
 
@@ -607,6 +647,14 @@ def from_term(value: Any) -> Any:
     at. Most terms are not Python values in disguise -- ``('cite', ('art52',))``
     is a term and should stay one -- so silence is the correct default and the
     registry is the whole of the opt-in.
+
+    ONE OWNER OF RECURSION (roborev 231): a registered ``from_fn`` is SHALLOW
+    -- it receives the term with its components ALREADY converted by the
+    caller and only reshapes them.  This function converts the components of
+    a registered head before rebuilding, and ``to_python`` does the same, so
+    every value is converted exactly once whichever door it leaves by.  A
+    ``from_fn`` that recursed on its own would convert twice under
+    ``to_python`` and read a converted inner tuple as a term.
     """
     if isinstance(value, _SCALARS):
         return value
@@ -622,7 +670,7 @@ def from_term(value: Any) -> Any:
     if rebuild is None:
         return value
     try:
-        return rebuild(value)
+        return rebuild((value[0], *[from_term(e) for e in value[1:]]))
     except (TypeError, ValueError, OverflowError):
         # A look-alike, not a term: ("date", "x", "y") has the head but not the
         # components. Unchanged, for the same reason an unregistered functor is.

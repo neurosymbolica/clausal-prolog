@@ -63,7 +63,10 @@ def seam_term(node: Any, module_globals: dict, loose: bool = False) -> Any:
         cur: Any = attr
         while isinstance(cur, LoadAttr):
             parts.append(cur.attr)
-            cur = cur.value
+            # ``AttrNode`` holds its receiver as ``.object`` (as ``with_bases``
+            # reads it); ``.value`` raised AttributeError on EVERY dotted
+            # term-position seam (design review 2026-09-26).
+            cur = cur.object
         if not isinstance(cur, LoadName):
             raise SyntaxError(
                 f"--: unsupported qualified reference {attr!r} in a term")
