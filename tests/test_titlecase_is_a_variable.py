@@ -216,6 +216,7 @@ def test_fstring_still_captures_an_ordinary_clause_variable(tmp_path):
     """The other half: excluding TitleCase from the capture must not stop an
     ordinary variable being captured."""
     mod = _load(tmp_path, "fstrvar", """
+        -double_quotes(atom)
         -module(ttiav_fstrvar, [p(N, S)])
         p(N, S) <- (S is f"n={N}")
     """)
@@ -342,6 +343,7 @@ def test_a_captured_titlecase_variable_is_not_reported_as_a_singleton(
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter("always")
         _load(tmp_path, "nosingle", """
+            -double_quotes(atom)
             -module(ttiav_nosingle, [p(S)])
             bar(7),
             p(S) <- (bar(Total), S is f"{Total}")
@@ -480,6 +482,7 @@ def test_a_clause_variable_named_like_an_ast_node_is_still_captured(tmp_path):
     """``Node`` is bound by ``tree/1`` here, so the f-string must format the
     BINDING (7), not ``<class '...nodes.Node'>``."""
     mod = _load(tmp_path, "nodevar", """
+        -double_quotes(atom)
         -module(ttiav_nodevar, [p(S)])
         tree(7),
         p(S) <- (tree(Node), S is f"{Node}")
@@ -524,6 +527,7 @@ def test_capture_does_not_depend_on_where_the_thunk_sits_in_the_clause(
     rendered = []
     for spelling in ("Node", "NODE"):
         mod = _load(tmp_path, f"orderindep_{spelling}", f"""
+            -double_quotes(atom)
             -module(ttiav_orderindep_{spelling}, [p(S)])
             tree(7),
             p(S) <- (S is f"{{{spelling}}}", tree({spelling}))
@@ -540,6 +544,7 @@ def test_a_captured_namespace_named_variable_is_not_a_singleton(tmp_path):
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter("always")
         _load(tmp_path, "nodesingle", """
+            -double_quotes(atom)
             -module(ttiav_nodesingle, [p(S)])
             tree(7),
             p(S) <- (tree(Node), S is f"{Node}")
@@ -627,6 +632,7 @@ def test_a_thunk_in_the_HEAD_sees_the_variables_the_body_binds(
     """``q(f"{Node}") <- (tree(Node))``: ``Node`` is a clause variable, so
     the head thunk must capture it, not leave it to the AST node class."""
     decisions = _excluded_at_thunks(monkeypatch, tmp_path, "Node", """
+        -double_quotes(atom)
         -module(ttiav_headscope, [q(S)])
         tree(7),
         q(f"{Node}") <- (tree(Node))
@@ -638,8 +644,8 @@ def test_a_thunk_in_one_head_argument_sees_another_argument(
         tmp_path, monkeypatch):
     """Within a head, argument order must not decide it either."""
     for source in (
-        '-module(ttiav_ha, [r(S, N)])\ntree(7),\nr(f"{Node}", Node) <- (tree(Node))\n',
-        '-module(ttiav_hb, [r(N, S)])\ntree(7),\nr(Node, f"{Node}") <- (tree(Node))\n',
+        '-double_quotes(atom)\n-module(ttiav_ha, [r(S, N)])\ntree(7),\nr(f"{Node}", Node) <- (tree(Node))\n',
+        '-double_quotes(atom)\n-module(ttiav_hb, [r(N, S)])\ntree(7),\nr(Node, f"{Node}") <- (tree(Node))\n',
     ):
         decisions = _excluded_at_thunks(monkeypatch, tmp_path, "Node", source)
         assert decisions and not any(decisions), (source, decisions)
@@ -647,6 +653,7 @@ def test_a_thunk_in_one_head_argument_sees_another_argument(
 
 def test_a_thunk_in_a_DCG_head_sees_the_body(tmp_path, monkeypatch):
     decisions = _excluded_at_thunks(monkeypatch, tmp_path, "Node", """
+        -double_quotes(atom)
         -module(ttiav_dcgscope, [])
         tree(7),
         d(f"{Node}") >> (tree(Node))
@@ -658,6 +665,7 @@ def test_a_thunk_in_a_FACT_argument_sees_the_other_arguments(
         tmp_path, monkeypatch):
     """A fact has no body, but its arguments are still one scope."""
     decisions = _excluded_at_thunks(monkeypatch, tmp_path, "Node", """
+        -double_quotes(atom)
         -module(ttiav_factscope, [])
         f(Node, f"{Node}"),
     """)
@@ -670,6 +678,7 @@ def test_a_thunk_in_a_LAMBDA_body_sees_the_enclosing_clause(
     otherwise one spelling means two things depending only on whether it
     sits inside a lambda, which is the divergence the sibling test names."""
     decisions = _excluded_at_thunks(monkeypatch, tmp_path, "Node", """
+        -double_quotes(atom)
         -module(ttiav_lamscope, [p(S)])
         tree(7),
         p(S) <- (tree(Node), S is (_x <- (f"{Node}")))
@@ -682,6 +691,7 @@ def test_the_namespace_name_is_still_excluded_when_no_clause_binds_it(
     """The negative control on the same instrument: without this, deleting
     the exclusion entirely would pass every test above."""
     decisions = _excluded_at_thunks(monkeypatch, tmp_path, "Node", """
+        -double_quotes(atom)
         -module(ttiav_nsexcl, [p(S)])
         p(S) <- (S is f"{Node}")
     """)
@@ -694,6 +704,7 @@ def test_head_and_body_thunks_agree_across_all_three_spellings(tmp_path):
     rendered = {}
     for spelling in ("Node", "Nodex", "NODE"):
         mod = _load(tmp_path, f"agree_{spelling}", f"""
+            -double_quotes(atom)
             -module(ttiav_agree_{spelling}, [q(S)])
             tree(7),
             q(f"{{{spelling}}}") <- (tree({spelling}))

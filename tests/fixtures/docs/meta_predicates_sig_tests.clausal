@@ -1,4 +1,5 @@
 # Companion tests for docs/meta_predicates.md display snippets.
+-double_quotes(atom)
 
 test("filter_map exists") <- (
     filter_map(((X, Y) <- (X > 0, Y == X * 2)), [3, -1, 5], RS),

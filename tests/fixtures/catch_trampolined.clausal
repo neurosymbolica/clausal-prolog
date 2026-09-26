@@ -9,6 +9,7 @@
 #
 # Asserted from tests/test_catch_trampolined.py; the Test clauses below are the
 # surface-level half.
+-double_quotes(atom)
 -module(catch_trampolined, [
     raise_value_error(X),
     catch_from_callee(E),

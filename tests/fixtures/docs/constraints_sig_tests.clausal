@@ -1,4 +1,5 @@
 # Companion tests for docs/constraints.md signature blocks.
+-double_quotes(atom)
 
 test("dif exists") <- dif(1, 2)  # nv
 

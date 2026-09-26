@@ -10,6 +10,7 @@
 
 # ── my_len/2: list length ──────────────────────────────────────────────────────
 # Base case on [], recursive on [_|TAIL]. Index target: arg0.
+-double_quotes(atom)
 
 my_len([], 0),
 my_len([_, *TAIL], N) <- (my_len(TAIL, N1), eval_(N1 + 1, N))

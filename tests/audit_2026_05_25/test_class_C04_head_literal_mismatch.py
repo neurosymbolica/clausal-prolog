@@ -81,6 +81,7 @@ def test_F046_str_head_no_longer_matches_charlist_caller():
     """
     # Register fixtures inline.
     source = """\
+-double_quotes(atom)
 foo("abc"),
 bar(['a', 'b', 'c']),
 
@@ -152,6 +153,7 @@ def test_F046_str_literal_dispatch_table_charlist_caller_retired():
     clause; that was the retired cross-type behaviour.)
     """
     source = """\
+-double_quotes(atom)
 helper(1),
 
 color("red") <- (helper(1))
@@ -281,6 +283,7 @@ def test_F048_compound_str_head_inner_arg_hoisted_to_body_unify():
     from clausal.terms import Unify
 
     source = """\
+-double_quotes(atom)
 helper(1),
 
 quux(foo("abc")) <- (helper(1))
@@ -324,6 +327,7 @@ def test_F046_bytes_literal_head_matches_int_list():
     cross into the bytes domain.
     """
     source = """\
+-double_quotes(atom)
 helper(1),
 
 quux(b"abc") <- (helper(1))
@@ -345,6 +349,7 @@ def test_F046_same_type_str_fast_path():
     relying on the unify() fallback.
     """
     source = """\
+-double_quotes(atom)
 helper(1),
 
 quux("hello") <- (helper(1))

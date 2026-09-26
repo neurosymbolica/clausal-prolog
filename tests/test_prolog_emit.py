@@ -410,7 +410,7 @@ reach(X, Y) <- (edge(X, Z), reach(Z, Y))
         # nv -- a str literal DENOTES AN ATOM (R2); "hello world" needs
         # quoting only because of the space, and is a QUOTED ATOM, not a
         # double-quoted char list. See TestStrLiteralIsAtom below.
-        source = 'test("hello world"),\n'
+        source = '-double_quotes(atom)\ntest("hello world"),\n'
         result = clausal_source_to_prolog(source)
         assert "'hello world'" in result
         assert '"hello world"' not in result
@@ -604,36 +604,36 @@ class TestStrLiteralIsAtom:
     """`_convert_constant`'s str branch emits an ATOM, not a char list."""
 
     def test_plain_str_literal_emits_bare_atom(self):
-        out = clausal_source_to_prolog('ok(X) <- (X is "hello")\n')
+        out = clausal_source_to_prolog('-double_quotes(atom)\nok(X) <- (X is "hello")\n')
         assert "X = hello." in out, out
         assert '"hello"' not in out, out
 
     def test_str_literal_is_a_patom_in_the_ast(self):
-        pmod = clausal_source_to_prolog_ast('ok(X) <- (X is "hello")\n')
+        pmod = clausal_source_to_prolog_ast('-double_quotes(atom)\nok(X) <- (X is "hello")\n')
         rhs = pmod.items[0].body.args[1]
         assert isinstance(rhs, PAtom), rhs
         assert rhs.name == "hello"
 
     def test_str_literal_needing_quotes_is_quoted(self):
-        out = clausal_source_to_prolog('ok(X) <- (X is "a b")\n')
+        out = clausal_source_to_prolog('-double_quotes(atom)\nok(X) <- (X is "a b")\n')
         assert "X = 'a b'." in out, out
 
     def test_str_literal_in_argument_position(self):
-        out = clausal_source_to_prolog('fact(X) <- p("k", X)\n')
+        out = clausal_source_to_prolog('-double_quotes(atom)\nfact(X) <- p("k", X)\n')
         assert "p(k, X)" in out, out
 
     def test_test_clause_head_name_becomes_quoted_atom(self):
         # The G3 driver addresses test clauses BY NAME; head and generated
         # name list come from one emission source, so they move together.
-        out = clausal_source_to_prolog('test("fib 0") <- fib(0, 0)\n')
+        out = clausal_source_to_prolog('-double_quotes(atom)\ntest("fib 0") <- fib(0, 0)\n')
         assert "test('fib 0')" in out, out
 
     def test_dict_key_and_value_both_become_atoms(self):
-        out = clausal_source_to_prolog('ok(X) <- (X is {"label": "hi there"})\n')
+        out = clausal_source_to_prolog('-double_quotes(atom)\nok(X) <- (X is {"label": "hi there"})\n')
         assert "attribute(label, 'hi there')" in out, out
 
     def test_dcg_terminal_list_of_str_becomes_atoms(self):
-        out = clausal_source_to_prolog('greeting() >> (["hello", "world"])\n')
+        out = clausal_source_to_prolog('-double_quotes(atom)\ngreeting() >> (["hello", "world"])\n')
         assert "[hello, world]" in out, out
 
 
@@ -728,7 +728,7 @@ class TestBracketAtomLiteralIsFaithful:
         assert f"K = {literal}" in out, out
 
     def test_strict_mode_accepts_it(self):
-        out = clausal_source_to_prolog('ok(K) <- (K is "[]")', strict=True)
+        out = clausal_source_to_prolog('-double_quotes(atom)\nok(K) <- (K is "[]")', strict=True)
         assert "K = []" in out, out
 
 

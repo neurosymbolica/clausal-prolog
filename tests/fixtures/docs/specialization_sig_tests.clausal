@@ -1,4 +1,5 @@
 # Companion tests for docs/specialization.md signature blocks.
+-double_quotes(atom)
 
 -import_from(clausal.examples.metainterpreters, [solve_count])
 

@@ -317,7 +317,7 @@ class TestMetaDirectivePredSpecs:
     def test_live_site_shape_from_kit_validate_props(self):
         """The exact corpus shape: <downstream>/validate_props.clausal:60."""
         src = (
-            "-dynamic(vacuous_property/1)\n"
+            "-double_quotes(atom)\n-dynamic(vacuous_property/1)\n"
             'vacuous_property("__init__"),\n'
         )
         out = clausal_source_to_prolog(src, strict=True)

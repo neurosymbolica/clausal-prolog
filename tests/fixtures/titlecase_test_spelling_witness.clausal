@@ -3,4 +3,5 @@
 # `test/1` predicate.  TitleCase has no role in Clausal code, so this file
 # must NOT load — the TitleCase lint raises a located SyntaxError at line 6
 # naming the rename.  Asserted by tests/test_testing_cli.py.
+-double_quotes(atom)
 Test("one is one") <- (1 == 1)

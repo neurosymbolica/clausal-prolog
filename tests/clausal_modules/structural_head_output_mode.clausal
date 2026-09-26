@@ -6,6 +6,7 @@
 # Var in that position must BIND it to the full structural term — exactly as for
 # the atomic head literals covered by numeric_head_literal.clausal. These were
 # the "known gap" in todo/audit-tests-input-output-mode-coverage.md.
+-double_quotes(atom)
 
 -private([point(X, Y), rgb(R, G, B), line(A, B)])
 

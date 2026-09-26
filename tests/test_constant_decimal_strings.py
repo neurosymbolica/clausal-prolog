@@ -48,6 +48,7 @@ def test_a_decimal_string_keeps_the_scale_a_float_literal_loses(tmp_path):
     so once the engine holds it. If the conversion were wrong in a way that
     produced the right NUMBER, every other test here would still pass."""
     m = _load(tmp_path, "scale", """
+        -double_quotes(atom)
         -import_from(united_states, [usd])
         -constant_number_units(s_from_string, "292.00", usd)
         -constant_number_units(s_from_float, 292.00, usd)
@@ -59,6 +60,7 @@ def test_a_decimal_string_keeps_the_scale_a_float_literal_loses(tmp_path):
 
 def test_the_string_form_stores_a_decimal_not_a_string(tmp_path):
     m = _load(tmp_path, "kind", """
+        -double_quotes(atom)
         -import_from(united_states, [usd])
         -constant_number_units(s_fee, "19.99", usd)
     """)
@@ -70,6 +72,7 @@ def test_the_string_form_stores_a_decimal_not_a_string(tmp_path):
 
 def test_the_currency_directive_takes_it_too(tmp_path):
     m = _load(tmp_path, "currency", """
+        -double_quotes(atom)
         -import_from(united_states, [usd])
         -constant_number_currency(s_sga, "1550.00", usd)
     """)
@@ -80,6 +83,7 @@ def test_a_non_currency_unit_takes_it_too(tmp_path):
     """A string is an explicit request for exactness, whatever the dimension
     -- it is not a currency special case."""
     m = _load(tmp_path, "metre", """
+        -double_quotes(atom)
         -import_from(py.units, [metre])
         -constant_number_units(s_span, "5.00", metre)
     """)
@@ -97,6 +101,7 @@ def test_slash_3_reports_the_decimal_not_the_string(tmp_path):
     twice. Filed as todo/constant-number-units-3-answers-across-modules.
     """
     m = _load(tmp_path, "declared", """
+        -double_quotes(atom)
         -module(declared, [look/2, s_declared_fee])
         -import_from(united_states, [usd])
         -constant_number_units(s_declared_fee, "292.00", usd)
@@ -117,6 +122,7 @@ def test_slash_3_reports_the_decimal_not_the_string(tmp_path):
 
 def test_a_money_table_takes_decimal_strings(tmp_path):
     m = _load(tmp_path, "table_money", """
+        -double_quotes(atom)
         -module(table_money, [s_max/2])
         -import_from(united_states, [usd])
         -constants_number_currency(s_max/2,
@@ -129,6 +135,7 @@ def test_a_money_table_takes_decimal_strings(tmp_path):
 
 def test_a_units_table_takes_decimal_strings(tmp_path):
     m = _load(tmp_path, "table_units", """
+        -double_quotes(atom)
         -module(table_units, [s_span/2])
         -import_from(py.units, [metre])
         -constants_number_units(s_span/2, [(short, "5.00")], metre,
@@ -143,6 +150,7 @@ def test_a_table_may_mix_written_numbers_and_strings(tmp_path):
     """Rows are independent: adopting the string form for the row that needs
     it does not force a rewrite of the rest of the table."""
     m = _load(tmp_path, "table_mixed", """
+        -double_quotes(atom)
         -module(table_mixed, [s_mix/2])
         -import_from(united_states, [usd])
         -constants_number_currency(s_mix/2, [(1, "292.00"), (2, 536)], usd,
@@ -160,6 +168,7 @@ def test_a_non_numeric_string_is_still_refused(tmp_path):
     name exists to refuse -- only numbers carry units."""
     with pytest.raises(SyntaxError, match="is not a number"):
         _load(tmp_path, "bad", """
+            -double_quotes(atom)
             -import_from(united_states, [usd])
             -constant_number_units(s_bad, "abc", usd)
         """)
@@ -168,6 +177,7 @@ def test_a_non_numeric_string_is_still_refused(tmp_path):
 def test_the_refusal_still_names_the_directive_and_the_value(tmp_path):
     with pytest.raises(SyntaxError) as exc:
         _load(tmp_path, "bad_msg", """
+            -double_quotes(atom)
             -import_from(united_states, [usd])
             -constant_number_currency(s_bad2, "twelve", usd)
         """)
@@ -182,6 +192,7 @@ def test_decimal_special_values_are_not_amounts(tmp_path, bad):
     answers False."""
     with pytest.raises(SyntaxError, match="is not a number"):
         _load(tmp_path, f"special_{bad.strip('-')}", f"""
+            -double_quotes(atom)
             -import_from(united_states, [usd])
             -constant_number_units(s_inf, "{bad}", usd)
         """)
@@ -190,6 +201,7 @@ def test_decimal_special_values_are_not_amounts(tmp_path, bad):
 def test_a_table_still_refuses_a_non_numeric_string(tmp_path):
     with pytest.raises(SyntaxError, match="not a number literal"):
         _load(tmp_path, "table_bad", """
+            -double_quotes(atom)
             -module(table_bad, [s_t/2])
             -import_from(united_states, [usd])
             -constants_number_currency(s_t/2, [(1, "abc")], usd, money_at(2))
@@ -201,6 +213,7 @@ def test_constant_value_keeps_a_string_a_string(tmp_path):
     value, and a string there is a string constant -- reading it as a number
     would silently retype every text constant in the corpus."""
     m = _load(tmp_path, "plain", """
+        -double_quotes(atom)
         -constant_value(s_greeting, "292.00")
     """)
     assert m.s_greeting == "292.00"
@@ -212,6 +225,7 @@ def test_the_currency_precision_check_still_applies(tmp_path):
     an exact Decimal instead of a float, which if anything makes it sharper."""
     with pytest.raises(Exception) as exc:
         _load(tmp_path, "precision", """
+            -double_quotes(atom)
             -import_from(united_states, [usd])
             -constant_number_currency(s_over, "19.999", usd)
         """)
@@ -228,6 +242,7 @@ def test_a_scale_named_constant_declared_as_a_string_is_silent(tmp_path):
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         _load(tmp_path, "scalename", """
+            -double_quotes(atom)
             -import_from(united_states, [usd])
             -constant_number_units(s_fee_cents, "292.00", usd)
         """)

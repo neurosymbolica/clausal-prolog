@@ -1,6 +1,7 @@
 # Companion tests for docs/import.md signature blocks.
 
 # --- import_from_directive ---
+-double_quotes(atom)
 -import_from(tests.fixtures.importable_utils, [helper])
 
 use_imported(X, Y) <- helper(X, Y)

@@ -8,6 +8,7 @@
 #   No partial lists
 #   sort/2 removes duplicates (like ISO sort/2)
 #   msort/2 preserves duplicates
+-double_quotes(atom)
 
 -module(iso_list_operations, [test(DESC)])
 

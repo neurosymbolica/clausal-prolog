@@ -1,3 +1,4 @@
+-double_quotes(atom)
 -import_module(jax)
 -import_from(jax, [array, array_list, zeros, shape, allclose, NaN, null])
 -import_from(jax_random, [key])

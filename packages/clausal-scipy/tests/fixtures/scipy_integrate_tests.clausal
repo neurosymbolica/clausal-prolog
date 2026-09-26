@@ -1,3 +1,4 @@
+-double_quotes(atom)
 -import_from(scipy_integrate, [Quad, SolveInitialValueProblem, Trapezoid, Simpson, CumulativeTrapezoid, ResultGet])
 
 # Quad: integral of sin(x) from 0 to pi ≈ 2.0

@@ -3,6 +3,7 @@
 # maplist/2, maplist/3, include/3, exclude/3, foldl/4
 
 # doubles/2 — double each element via maplist/3 + lambda
+-double_quotes(atom)
 doubles(XS, YS) <- maplist(((X, Y) <- (Y == X * 2)), XS, YS)
 
 # all_positive/1 — check all positive via maplist/2 + lambda

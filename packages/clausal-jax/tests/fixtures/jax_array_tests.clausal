@@ -1,3 +1,4 @@
+-double_quotes(atom)
 -import_module(numpy)
 -import_from(jax, [
     array, zeros, ones, full, arange, linspace, eye,

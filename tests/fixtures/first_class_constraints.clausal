@@ -3,6 +3,7 @@
 # exercising the deref-before-isinstance fix in all constraint block handlers.
 
 # ── Z3 integer ─────────────────────────────────────────────────────────────
+-double_quotes(atom)
 
 test("z3 first-class single constraint") <- (
     C is (1 <= X <= 10),

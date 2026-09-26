@@ -1,4 +1,5 @@
 # Companion tests for docs/control.md display snippets.
+-double_quotes(atom)
 
 test("time_goal 1 exists") <- time_goal(append([1, 2], [3, 4], _))  # nv
 

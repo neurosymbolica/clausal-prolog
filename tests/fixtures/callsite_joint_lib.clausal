@@ -4,6 +4,7 @@
 # predicate takes the FLAT JOINT dispatch path and exposes
 # _index_plans_joint. An importing call site with BOTH args ground compiles
 # to a direct joint bucket ref (the _joint_exposed wrapping path).
+-double_quotes(atom)
 -module(callsite_joint_lib, [j_cat(A, B)])
 
 j_cat("x", 1),

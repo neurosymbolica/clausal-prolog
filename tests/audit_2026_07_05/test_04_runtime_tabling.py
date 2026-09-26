@@ -233,7 +233,8 @@ ee(3, 4),
 ee(4, 5),
 """
 
-NAF_SRC = """-table(tp/2)
+NAF_SRC = """-double_quotes(atom)
+-table(tp/2)
 
 tp(1, 2),
 
@@ -243,7 +244,8 @@ ntp(R) <- (
 )
 """
 
-WIN_ASYM_SRC = """-table(win/1)
+WIN_ASYM_SRC = """-double_quotes(atom)
+-table(win/1)
 
 move("a", "b"),
 move("b", "a"),
@@ -339,7 +341,8 @@ tz(2),
 TRAIL_SRC = """tr7(Y) <- (([Y, *T, 6] is [5, 8, 7]) or (Y is 1))
 """
 
-WHEN_SRC = """w8(R) <- (
+WHEN_SRC = """-double_quotes(atom)
+w8(R) <- (
     when((nonvar(X) or nonvar(Y)), R is "fired"),
     ((X is 1, 1 == 2) or (Y is 2))
 )
@@ -351,7 +354,8 @@ FREEZE_SRC = """f9(X, Y) <- (
 )
 """
 
-THROW_SRC = """lethrow(X) <- (
+THROW_SRC = """-double_quotes(atom)
+lethrow(X) <- (
     X is 1,
     throw("kaboom")
 )
@@ -362,7 +366,8 @@ TS_LIST_SRC = """-table(ts/1)
 ts([1, *T]) <- (T is [2, 3])
 """
 
-TD_DICT_SRC = """-table(td/1)
+TD_DICT_SRC = """-double_quotes(atom)
+-table(td/1)
 
 td(D) <- (
     D is ++{"k": X},
@@ -1130,7 +1135,7 @@ class TestF010WhenDisjunctionFiredFlag:
         # Regression guard: when both disjuncts become true in a SURVIVING
         # branch, the goal still fires (at most once — the second fire sees the
         # bound flag and yields silently), giving exactly one solution.
-        m = load("f010b", 'w8b(R) <- (when((nonvar(A) or nonvar(B)), '
+        m = load("f010b", '-double_quotes(atom)\nw8b(R) <- (when((nonvar(A) or nonvar(B)), '
                           'R is "fired"), (A is 1, B is 2))\n')
         R = Var()
         got = [deref(R) for _ in call("w8b", R, module=m)]

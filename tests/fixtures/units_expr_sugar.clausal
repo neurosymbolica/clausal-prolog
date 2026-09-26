@@ -2,6 +2,7 @@
 # fixture kept on the TitleCase unit spelling; the TitleCase lint is an
 # error now, and the deprecation-window witness for the old spelling is
 # tests/fixtures/titlecase_unit_spelling_witness.clausal.
+-double_quotes(atom)
 -import_from(py.units, [metre, second, newton])
 
 # [1,2,3](metre) - list with unit annotation

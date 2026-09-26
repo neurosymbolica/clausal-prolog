@@ -1,4 +1,5 @@
 # Companion tests for docs/torch_distributions.md signature blocks.
+-double_quotes(atom)
 -import_from(torch, [tensor, shape, tensor_list, allclose])
 -import_from(torch_distributions, [
     distribution, make_distribution,

@@ -1,4 +1,5 @@
 # Companion tests for docs/exceptions.md signature blocks.
+-double_quotes(atom)
 
 test("throw/catch exist") <- (
     catch(

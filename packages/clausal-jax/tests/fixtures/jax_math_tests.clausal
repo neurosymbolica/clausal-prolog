@@ -1,3 +1,4 @@
+-double_quotes(atom)
 -import_from(jax, [
     array, zeros, ones, shape, array_list, allclose,
     einsum,

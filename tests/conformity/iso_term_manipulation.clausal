@@ -9,6 +9,7 @@
 # goal position is a predicate call, not a term.  Only construction-mode
 # tests and tests with string/integer arguments can be expressed here.
 # Inspection-mode tests remain in the Python test file.
+-double_quotes(atom)
 
 -module(iso_term_manipulation, [test(DESC)])
 

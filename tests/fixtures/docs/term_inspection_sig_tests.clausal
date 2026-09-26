@@ -1,4 +1,5 @@
 # Companion tests for docs/term_inspection.md display snippets.
+-double_quotes(atom)
 
 test("gensym generates unique") <- (
     gensym("test_doc_", A1),

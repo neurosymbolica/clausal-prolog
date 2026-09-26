@@ -1,4 +1,5 @@
 # Companion tests for docs/scipy_constants.md signature blocks.
+-double_quotes(atom)
 -import_from(scipy_constants, [SpeedOfLight, Pi, Kilo])
 
 test("speed of light exists") <- nonvar(SpeedOfLight)  # nv

@@ -1,4 +1,5 @@
 # OR-Tools routing integration tests
+-double_quotes(atom)
 
 test("tsp 4 cities optimal tour") <- (
     ortools.routing.tsp(

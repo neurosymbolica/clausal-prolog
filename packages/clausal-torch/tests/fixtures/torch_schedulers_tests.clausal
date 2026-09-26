@@ -1,3 +1,4 @@
+-double_quotes(atom)
 -import_from(torch_nn, [scheduler_type])
 
 # --- scheduler_type/2: registry enumeration ---

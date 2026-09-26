@@ -91,6 +91,7 @@ def test_a_cross_module_leaf_names_its_defining_file_after_the_owner_is_popped(
         r4_lib_check(N) <- (N > 100, N < 0)
     """)
     p = _write(tmp_path, "r4_use.clausal", """
+        -double_quotes(atom)
         -import_from(r4_popped_lib, [r4_lib_check])
 
         test("cross-module, owner popped") <- (

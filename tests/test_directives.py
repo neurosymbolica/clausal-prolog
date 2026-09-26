@@ -137,7 +137,7 @@ class TestDirectiveParsing:
     def test_malformed_arg_string_arity_raises(self):
         # nv
         with pytest.raises(SyntaxError, match="Malformed argument"):
-            _transform_source('-dynamic(foo/"two")\n')
+            _transform_source('-double_quotes(atom)\n-dynamic(foo/"two")\n')
 
     def test_empty_args_raises(self):
         # nv

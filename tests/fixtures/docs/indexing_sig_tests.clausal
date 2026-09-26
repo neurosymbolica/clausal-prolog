@@ -1,6 +1,7 @@
 # Companion tests for docs/indexing.md signature blocks.
 
 # --- color_query_modes ---
+-double_quotes(atom)
 
 color("red",    "warm"),
 color("blue",   "cool"),

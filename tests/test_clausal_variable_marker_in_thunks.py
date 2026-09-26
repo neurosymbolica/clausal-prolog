@@ -61,6 +61,7 @@ def test_marker_at_the_top_of_an_fstring_slot(tmp_path):
     (double unary minus) raised ``TypeError: bad operand type for unary -``
     rather than quietly agreeing the way a numeric fixture would."""
     mod = _load(tmp_path, "slot_top", """
+        -double_quotes(atom)
         -private([red])
         -module(cvmit_slot_top, [p(S)])
         tree(red),
@@ -72,12 +73,14 @@ def test_marker_at_the_top_of_an_fstring_slot(tmp_path):
 def test_marker_and_bare_name_agree_in_an_fstring_slot(tmp_path):
     """The additivity contract: one position, both spellings, one answer."""
     marked = _load(tmp_path, "slot_marked", """
+        -double_quotes(atom)
         -private([red])
         -module(cvmit_slot_marked, [p(S)])
         tree(red),
         p(S) <- (tree(Node), S is f"{--Node}")
     """)
     bare = _load(tmp_path, "slot_bare", """
+        -double_quotes(atom)
         -private([red])
         -module(cvmit_slot_bare, [p(S)])
         tree(red),
@@ -100,12 +103,14 @@ def test_marker_below_the_top_of_a_slot_and_its_bare_twin(tmp_path):
     general.  Adjacency settles it instead, which is the test ``++`` already
     used — see ``test_the_arrow_lookalike_is_not_a_marker``."""
     marked = _load(tmp_path, "deep_marked", """
+        -double_quotes(atom)
         -private([red])
         -module(cvmit_deep_marked, [p(S)])
         tree(red),
         p(S) <- (tree(Node), S is f"{str(--Node).upper()}")
     """)
     bare = _load(tmp_path, "deep_bare", """
+        -double_quotes(atom)
         -private([red])
         -module(cvmit_deep_bare, [p(S)])
         tree(red),
@@ -117,6 +122,7 @@ def test_marker_below_the_top_of_a_slot_and_its_bare_twin(tmp_path):
 def test_marker_in_a_slot_carrying_a_format_spec(tmp_path):
     """A format spec applies to the VALUE, so the marker must survive one."""
     mod = _load(tmp_path, "slot_spec", """
+        -double_quotes(atom)
         -private([red])
         -module(cvmit_slot_spec, [p(S)])
         tree(red),
@@ -174,6 +180,7 @@ def test_marker_on_a_name_no_goal_binds_is_a_load_error(tmp_path):
     (``_lint_titlecase`` returns early on ``JoinedStr``)."""
     with pytest.raises(SyntaxError) as excinfo:
         _load(tmp_path, "unbound", """
+            -double_quotes(atom)
             -module(cvmit_unbound, [p(S)])
             p(S) <- (S is f"{--Node}")
         """)
@@ -181,10 +188,11 @@ def test_marker_on_a_name_no_goal_binds_is_a_load_error(tmp_path):
     assert "--Node" in message, message
     # Located, with the offending line and a caret — the diagnostic has
     # to be reachable from the file, not just true.
-    assert "unbound.clausal, line 2" in message, message
+    assert "unbound.clausal, line 3" in message, message
     assert 'f"{--Node}"' in message, message
 
     bare = _load(tmp_path, "unbound_bare", """
+        -double_quotes(atom)
         -module(cvmit_unbound_bare, [p(S)])
         p(S) <- (S is f"{Node}")
     """)
@@ -207,6 +215,7 @@ def test_the_load_error_names_the_bare_spelling_as_the_remedy(tmp_path):
     name, dropping the marker is the spelling that reaches it."""
     with pytest.raises(SyntaxError) as excinfo:
         _load(tmp_path, "unbound_remedy", """
+            -double_quotes(atom)
             -module(cvmit_unbound_remedy, [p(S)])
             p(S) <- (S is f"{--Node}")
         """)
@@ -226,6 +235,7 @@ def test_the_arrow_lookalike_is_not_a_marker(tmp_path):
     the answer would be ``red``; the ``TypeError`` is double negation, which
     is what a non-marker must still be."""
     mod = _load(tmp_path, "spaced", """
+        -double_quotes(atom)
         -private([red])
         -module(cvmit_spaced, [p(S)])
         tree(red),
@@ -262,6 +272,7 @@ def test_two_markers_and_a_bare_name_in_one_thunk(tmp_path):
     marked name — the lambda has ONE parameter namespace, so a spelling that
     is captured must be captured for every occurrence in the body."""
     mod = _load(tmp_path, "two", """
+        -double_quotes(atom)
         -private([red, blue])
         -module(cvmit_two, [p(S)])
         tree(red),
@@ -281,12 +292,14 @@ def test_a_marker_in_the_head_sees_what_the_body_binds(tmp_path):
     before ``tree/1`` runs; the point is that the marker and the bare name
     agree about that, rather than one of them refusing to load."""
     marked = _load(tmp_path, "head_marked", """
+        -double_quotes(atom)
         -private([red])
         -module(cvmit_head_marked, [p(S)])
         tree(red),
         p(f"{--Node}") <- (tree(Node))
     """)
     bare = _load(tmp_path, "head_bare", """
+        -double_quotes(atom)
         -private([red])
         -module(cvmit_head_bare, [p(S)])
         tree(red),
@@ -318,6 +331,7 @@ def test_a_marker_in_a_format_spec_is_a_load_error(tmp_path):
     spellings apart in exactly the place a reader reaches for the marker."""
     with pytest.raises(SyntaxError) as excinfo:
         _load(tmp_path, "spec_marker", """
+            -double_quotes(atom)
             -private([red])
             -module(cvmit_spec_marker, [p(S)])
             tree(red),
@@ -327,7 +341,7 @@ def test_a_marker_in_a_format_spec_is_a_load_error(tmp_path):
     message = str(excinfo.value)
     assert "--Width" in message, message
     assert "format spec" in message, message
-    assert "spec_marker.clausal, line 5" in message, message
+    assert "spec_marker.clausal, line 6" in message, message
 
 
 def test_the_format_spec_refusal_fires_on_an_unbindable_name_too(tmp_path):
@@ -336,6 +350,7 @@ def test_the_format_spec_refusal_fires_on_an_unbindable_name_too(tmp_path):
     check nor anything else would have spoken."""
     with pytest.raises(SyntaxError) as excinfo:
         _load(tmp_path, "spec_class", """
+            -double_quotes(atom)
             -private([red])
             -module(cvmit_spec_class, [p(S)])
             tree(red),
@@ -350,6 +365,7 @@ def test_a_marker_in_the_value_slot_of_a_formatted_value_still_works(
     slot that also carries a spec is untouched -- pinned so the refusal
     cannot widen into the position the feature is for."""
     mod = _load(tmp_path, "spec_value_ok", """
+        -double_quotes(atom)
         -private([red])
         -module(cvmit_spec_value_ok, [p(S)])
         tree(red),

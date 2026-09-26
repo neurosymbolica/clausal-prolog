@@ -571,7 +571,7 @@ class TestPartialHeadReferenceIndexing:
     """
 
     _SRC = (
-        "-module(_tt_partial_head_idx, [\n"
+        "-double_quotes(atom)\n-module(_tt_partial_head_idx, [\n"
         "    pt(x, y),\n"
         "    probe_sat(S, K),\n"
         "])\n"
@@ -600,7 +600,7 @@ class TestPartialHeadReferenceIndexing:
     def test_a_partial_head_reference_is_refused_at_load(self):
         with pytest.raises(SyntaxError, match=r"pt/2 was constructed with 1"):
             _load_inline("_tt_partial_head_idx_short", (
-                "-module(_tt_partial_head_idx_short, [pt(x, y), probe(S, K)])\n"
+                "-double_quotes(atom)\n-module(_tt_partial_head_idx_short, [pt(x, y), probe(S, K)])\n"
                 'probe(pt(1), "hit"),\n'))
 
 
@@ -1195,6 +1195,7 @@ def _case_lines(src: str) -> list[str]:
 #: are predicate instances and ``_normalize_fact_clause`` passes them through
 #: unhoisted: the cell sits in the head from the start.
 _OPAQUE_ASSERTZ_SRC = """
+-double_quotes(atom)
 -allow_singletons
 -import_from(date_time, [date])
 -module(_tt_opaque_assertz, [pt(X, Y), q(S, K), n(S, K)])
@@ -1216,6 +1217,7 @@ setup <- (
 #: nested inside the compound reference.  See
 #: ``test_a_reference_carrying_a_nested_thunk_is_not_lifted``.
 _NESTED_THUNK_SRC = """
+-double_quotes(atom)
 -allow_singletons
 -module(_tt_nested_thunk, [pt(X, Y), wrap(V), kind(S, K)])
 

@@ -1,6 +1,7 @@
 # V3-5: Extended list predicates — fixture tests
 
 # ── take/3 ───────────────────────────────────────────────────────────────────
+-double_quotes(atom)
 
 test("take basic") <- (take(2, [1, 2, 3, 4], RESULT), RESULT == [1, 2])  # nv
 test("take zero") <- (take(0, [1, 2, 3], RESULT), RESULT == [])  # nv

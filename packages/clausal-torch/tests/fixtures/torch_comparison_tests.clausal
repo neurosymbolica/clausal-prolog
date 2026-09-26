@@ -1,3 +1,4 @@
+-double_quotes(atom)
 -import_from(torch, [
     tensor, zeros, ones, shape, tensor_list,
     eq, ne, gt, lt, ge, le, equal, allclose,

@@ -1,6 +1,7 @@
 # Doc snippet fixtures for docs/lists.md
 
 # --8<-- [start:partition_example]
+-double_quotes(atom)
 partition([], _, [], []) <- True
 partition([X, *XS], PRED, [X, *YES], NO) <- (
     call(PRED, X),

@@ -69,6 +69,7 @@ f(X) <- (
 """
 
 TEST_LOAD_SRC = """
+-double_quotes(atom)
 -import_from(m, [f])
 
 test("t") <- (

@@ -1,3 +1,4 @@
+-double_quotes(atom)
 -import_from(torch, [
     tensor, zeros, shape, tensor_list,
     fft_transform, real_fft,

@@ -113,6 +113,7 @@ class TestClausalSourceRepro:
     def test_functor_3_decomposition_names_the_functor_as_a_string(self, tmp_path):
         """What the same body *does* yield, once nothing raises."""
         mod = _load(tmp_path, "functor3", """
+            -double_quotes(atom)
             -private([cite(KEY), art_6_1, roundtrip(OK)])
 
             roundtrip(OK) <- (

@@ -89,6 +89,7 @@ def test_money_at_names_a_column_other_than_the_last(tmp_path):
     """corpus-lane's shape C: `threshold_entry(revenue, date, 2500000000,
     "s45A ...")` — money is arg 3 of 4, with a citation after it."""
     m = _load(tmp_path, "at3", """
+        -double_quotes(atom)
         -module(at3, [entry/4])
         -implicit_atoms
         -import_from(united_states, [usd, usd_cent])

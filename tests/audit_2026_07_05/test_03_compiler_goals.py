@@ -25,6 +25,7 @@ from clausal.logic.variables import Var, deref, is_var, walk
 # load would mint distinct functor classes that never unify with the first).
 
 FIXTURE = '''
+-double_quotes(atom)
 -import_from(clausal.examples.metainterpreters, [solve, solve_count, solve_limit, solve_tree])
 -private([kab(KA)])
 
@@ -542,6 +543,7 @@ class TestF004CatchFunctorCatcher:
 thrower(TX) <- throw(kex(TX))
 '''
     _F004_CATCH_IMPORTER = '''
+-double_quotes(atom)
 -import_from(a03_f004_catchlib, [kex, thrower])
 cimp(N, R) <- catch(thrower(7), kex(N), R is "caught")
 '''
@@ -595,6 +597,7 @@ class TestF005F006FindallFamily:
 # asserted here in a dedicated module rather than the shared fixture (whose
 # whole load would otherwise abort).
 _SOLVEGUARD_SPEC_FIXTURE = '''
+-double_quotes(atom)
 match_clause(GOAL, FRESH_BODY, PROGRAM) <- (
     CLAUSE in PROGRAM,
     copy_term(CLAUSE, [FRESH_HEAD, FRESH_BODY]),

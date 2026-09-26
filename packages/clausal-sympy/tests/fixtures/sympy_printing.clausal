@@ -1,3 +1,4 @@
+-double_quotes(atom)
 -import_from(sympy, [Latex, Pretty, Sym])
 
 # ── Latex/2 ──────────────────────────────────────────────────────────────────

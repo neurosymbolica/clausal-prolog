@@ -287,8 +287,8 @@ class TestArrowLambda:
 
 class TestFormatString:
     @pytest.mark.parametrize("src", [
-        'greet(name, M) <- (M is f"hi {name}")\n',
-        'msg(X, S) <- (S is f"val={X}")\n',
+        '-double_quotes(atom)\ngreet(name, M) <- (M is f"hi {name}")\n',
+        '-double_quotes(atom)\nmsg(X, S) <- (S is f"val={X}")\n',
     ])
     def test_format_string_round_trips(self, src):
         assert_round_trips(src)

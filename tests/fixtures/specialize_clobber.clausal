@@ -23,6 +23,7 @@
 # `goals`), which is the name solve declares and therefore the name the
 # specializer builds its heads with.  Without the declaration the load fails
 # earlier, on a field-name disagreement, and never reaches the gate.
+-double_quotes(atom)
 
 -import_from(clausal.examples.metainterpreters, [solve])
 

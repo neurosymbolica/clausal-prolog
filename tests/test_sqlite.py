@@ -569,6 +569,7 @@ class TestSQLiteClausalIntegration:
     def test_connect_exec_query(self, tmp_path):
         # nv
         mod = _load("sq1", """
+-double_quotes(atom)
 setup(_db) <- (connect(":memory:", _db) and exec(_db, "CREATE TABLE items (name TEXT, qty INTEGER)") and exec(_db, "INSERT INTO items VALUES ('apple', 3)") and exec(_db, "INSERT INTO items VALUES ('banana', 5)"))
 
 item_name(_n) <- (setup("testdb") and query("testdb", "SELECT name FROM items", _n))
@@ -579,6 +580,7 @@ item_name(_n) <- (setup("testdb") and query("testdb", "SELECT name FROM items", 
     def test_parameterized_query(self, tmp_path):
         # nv
         mod = _load("sq2", """
+-double_quotes(atom)
 setup <- (connect(":memory:", "db2") and exec("db2", "CREATE TABLE nums (v INTEGER)") and exec("db2", "INSERT INTO nums VALUES (10)") and exec("db2", "INSERT INTO nums VALUES (20)") and exec("db2", "INSERT INTO nums VALUES (30)"))
 
 big_num(_n) <- (setup() and query("db2", "SELECT v FROM nums WHERE v > ?", [15], _n))
@@ -589,6 +591,7 @@ big_num(_n) <- (setup() and query("db2", "SELECT v FROM nums WHERE v > ?", [15],
     def test_table_introspection(self, tmp_path):
         # nv
         mod = _load("sq3", """
+-double_quotes(atom)
 setup <- (connect(":memory:", "db3") and exec("db3", "CREATE TABLE alpha (x TEXT)") and exec("db3", "CREATE TABLE beta (y INTEGER)"))
 
 table_name(_t) <- (setup() and table("db3", _t))
@@ -599,6 +602,7 @@ table_name(_t) <- (setup() and table("db3", _t))
     def test_column_introspection(self, tmp_path):
         # nv
         mod = _load("sq4", """
+-double_quotes(atom)
 setup <- (connect(":memory:", "db4") and exec("db4", "CREATE TABLE things (id INTEGER, label TEXT, weight REAL)"))
 
 col(_name, _type) <- (setup() and column("db4", "things", _name, _type))
@@ -615,6 +619,7 @@ col(_name, _type) <- (setup() and column("db4", "things", _name, _type))
     def test_disconnect(self, tmp_path):
         # nv
         mod = _load("sq5", """
+-double_quotes(atom)
 open_close <- (connect(":memory:", "db5") and disconnect("db5"))
 """, tmp_path)
         assert _succeeds("open_close", module=mod)
@@ -623,6 +628,7 @@ open_close <- (connect(":memory:", "db5") and disconnect("db5"))
     def test_exec_with_params(self, tmp_path):
         # nv
         mod = _load("sq6", """
+-double_quotes(atom)
 setup <- (connect(":memory:", "db6") and exec("db6", "CREATE TABLE kv (k TEXT, v INTEGER)") and exec("db6", "INSERT INTO kv VALUES (?, ?)", ["x", 1]) and exec("db6", "INSERT INTO kv VALUES (?, ?)", ["y", 2]))
 
 kv_key(_k) <- (setup() and query("db6", "SELECT k FROM kv", _k))

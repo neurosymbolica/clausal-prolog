@@ -1,3 +1,4 @@
+-double_quotes(atom)
 -import_from(tests.fixtures.importable_utils, [helper, double])
 
 use_helper(X, Y) <- helper(X, Y)

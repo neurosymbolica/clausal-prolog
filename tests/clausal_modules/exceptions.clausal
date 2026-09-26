@@ -5,6 +5,7 @@
 # ── Basic throw and catch ────────────────────────────────────────────────────
 
 # catch_all/2 — variable catcher matches any thrown term
+-double_quotes(atom)
 catch_all(TERM, CAUGHT) <- (
     catch(
         throw(TERM),

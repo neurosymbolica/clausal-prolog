@@ -1,4 +1,5 @@
 # Companion tests for docs/scipy_signal.md signature blocks.
+-double_quotes(atom)
 -import_from(scipy_signal, [Convolve, Correlate, Butterworth, Resample])
 
 test("convolve exists") <- (

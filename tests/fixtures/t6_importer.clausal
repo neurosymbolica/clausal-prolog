@@ -3,6 +3,7 @@
 # Defines its OWN p/1, tp/1 and home/1 with different facts from
 # t6_exporter.clausal's, and imports the exporter as a module so the dotted
 # call-node spelling of a cross-module goal is available for the parity pin.
+-double_quotes(atom)
 -import_module(tests.fixtures.t6_exporter)
 -table(tp/1)
 

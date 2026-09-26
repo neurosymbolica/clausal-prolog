@@ -38,6 +38,7 @@ def _clear_query_cache():
 # ``str``, which is why the DCG terminal below goes through ``goal_functor``
 # rather than destructuring ``Goal("Edge", _, _)`` directly.
 _MATCHERS = """\
+-double_quotes(atom)
 -import_from(reflection, [
     reified_item, reified_clause, reified_file_item,
     clause_head, clause_body, goal_functor, reified_subterm,
@@ -199,6 +200,7 @@ class TestSourceWrittenTextArgument:
     def literal_matchers(self, tmp_path_factory):
         example = os.path.join(EXAMPLES_DIR, "graph.clausal")
         source = f'''\
+-double_quotes(atom)
 -import_from(reflection, [
     reified_item, reified_clause, reified_file_item,
     clause_head, goal_functor, Clause,

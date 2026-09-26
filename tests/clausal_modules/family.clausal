@@ -1,6 +1,7 @@
 # Family relationships
 #
 # parent/2 facts + ancestor/2 rules + sibling/2 rule
+-double_quotes(atom)
 
 parent("tom", "bob"),
 parent("tom", "liz"),

@@ -10,6 +10,7 @@
 # declared here.  (Compound data crossing a module boundary is fine post-P3-1
 # / R5 — functors are global by spelling — this fixture just doesn't need
 # it.)
+-double_quotes(atom)
 -allow_singletons
 -module(tagged_shapes, [
     point(X, Y),

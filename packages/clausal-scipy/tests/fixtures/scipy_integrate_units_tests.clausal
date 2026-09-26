@@ -1,3 +1,4 @@
+-double_quotes(atom)
 -import_from(scipy_integrate, [Quad, Trapezoid, CumulativeTrapezoid, Simpson, ResultGet])
 
 # no units on x - plain fast path (verify existing behaviour is preserved)

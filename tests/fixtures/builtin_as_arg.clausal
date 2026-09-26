@@ -1,4 +1,5 @@
 # Test passing builtin predicates as arguments to meta-predicates.
+-double_quotes(atom)
 
 keep_numbers(XS, NS) <- (
     include(number, XS, NS)

@@ -1,3 +1,4 @@
+-double_quotes(atom)
 -import_from(provenance, [bottom_up_, solve, recover, boolean, add_mult_prob])
 
 -module(provenance_reach, [

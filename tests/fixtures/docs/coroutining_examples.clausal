@@ -2,6 +2,7 @@
 
 # --8<-- [start:supported_conditions]
 # equivalent to freeze(X, Goal)
+-double_quotes(atom)
 test("when isbound") <- (
     when(nonvar(X), Y is X),
     X is 42,

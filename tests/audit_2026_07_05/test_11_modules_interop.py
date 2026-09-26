@@ -85,6 +85,7 @@ def test_F002_search_unbound_subject_no_solution():
 def test_F002_match_charlist_equals_string(tmp_path):
     # A11-F002 (fixed): char-list subject joined per strings-as-lists Liskov.
     m = _load(tmp_path, '''
+        -double_quotes(atom)
         -import_from(regex, [match, replace])
         M2(S) <- match(r"\\d+", S)
         R4(S, R) <- replace(r"b", "X", S, R)
@@ -99,6 +100,7 @@ def test_F002_match_charlist_equals_string(tmp_path):
 def test_F002_charlist_repr_false_positive(tmp_path):
     # A11-F002 (fixed): char-list joins to "a", no repr-quote false positive.
     m = _load(tmp_path, '''
+        -double_quotes(atom)
         -import_from(regex, [search])
         SQ(S) <- search(r"'", S)
     ''', "f002b")
@@ -110,6 +112,7 @@ def test_F002_charlist_repr_false_positive(tmp_path):
 def test_F003_user_defined_match_not_hijacked(tmp_path):
     # A11-F003 (fixed): regex expansion gated on object identity, not name.
     m = _load(tmp_path, '''
+        -double_quotes(atom)
         match(A, B) <- (A is B)
         caller(X) <- match("hello", X)
     ''', "f003")
@@ -120,6 +123,7 @@ def test_F003_user_defined_match_not_hijacked(tmp_path):
 def test_F004_invalid_pattern_catchable(tmp_path):
     # A11-F004 (fixed): module-predicate errors are catchable via catch/3.
     m = _load(tmp_path, '''
+        -double_quotes(atom)
         -private([caught])
         -import_from(regex, [match])
         catch_regex(R) <- catch(match("(", "x"), _, (R is caught))
@@ -142,6 +146,7 @@ def test_F005_wrong_arity_is_an_error_not_silent_failure(tmp_path):
     from clausal.logic.exceptions import LogicException
     from clausal.terms import Compound
     m = _load(tmp_path, '''
+        -double_quotes(atom)
         -import_from(regex, [match])
         bad(S) <- match(r"x", S, G, H)
     ''', "f005")
@@ -158,6 +163,7 @@ def test_F005_wrong_arity_is_an_error_not_silent_failure(tmp_path):
 def test_F006_mixed_groups_expose_positional_values(tmp_path):
     # A11-F006 (fixed): unnamed groups added under 1-based int keys.
     m = _load(tmp_path, '''
+        -double_quotes(atom)
         -import_from(regex, [match])
         M(S, G) <- match(r"(?P<A>\\d+)-(\\d+)", S, G)
     ''', "f006")
@@ -182,6 +188,7 @@ def test_F007_dynamic_autobind_no_aliasing_across_activations(tmp_path):
     # that would alias every activation through one shared variable. Two
     # differently-instantiated Dyn calls in one derivation must both succeed.
     m = _load(tmp_path, '''
+        -double_quotes(atom)
         -import_from(regex, [match])
         dyn(P, S, YEAR) <- match(P, S)
         pair(X) <- (dyn(r"x", "x", "one"), dyn(r"x", "x", "two"), X is "ok")
@@ -194,6 +201,7 @@ def test_F007_dynamic_autobind_group_present_two_activations(tmp_path):
     # A11-F007 regression companion: the group-PRESENT path stays per-
     # activation too — two calls binding different years in one derivation.
     m = _load(tmp_path, '''
+        -double_quotes(atom)
         -import_from(regex, [match])
         dyn(P, S, YEAR) <- match(P, S)
         two(A, B) <- (dyn(r"(?P<YEAR>\\d+)", "2025", A),
@@ -223,6 +231,7 @@ def test_F008_guard_unmatched_optional_group_binds_none(tmp_path):
     """A11-F008 (design, current behavior guard): unmatched optional named
     group auto-binds Python None — Python-consistent, undocumented."""
     m = _load(tmp_path, '''
+        -double_quotes(atom)
         -import_from(regex, [match])
         opt_g(S, TAG) <- match(r"(?P<TAG>\\d+)?x", S)
     ''', "f008")
@@ -234,6 +243,7 @@ def test_F009_guard_findall_single_group_is_string(tmp_path):
     """A11-F009 (doc-drift guard): single-group findall yields bare strings
     (matches the re.findall oracle; the docstring claims tuples)."""
     m = _load(tmp_path, '''
+        -double_quotes(atom)
         -import_from(regex, [findall])
         FA(S, M) <- findall(r"(\\d)x", S, M)
     ''', "f009")
@@ -243,6 +253,7 @@ def test_F009_guard_findall_single_group_is_string(tmp_path):
 
 def test_guard_regex_ground_modes_match_re_oracle(tmp_path):
     m = _load(tmp_path, '''
+        -double_quotes(atom)
         -import_from(regex, [match, replace, split])
         G1(S) <- match(r"\\d+", S)
         G2(S, R) <- replace(r"b", "X", S, R)
@@ -297,10 +308,11 @@ def test_F012_reify_ast_preserves_lt_negative():
 def test_F013_dict_literal_pattern_matches(tmp_path):
     # A11-F013 (fixed): dict literals reify as raw dicts, matching patterns.
     m = _load(tmp_path, '''
+        -double_quotes(atom)
         -import_from(reflection, [reified_clause])
         dict_pattern(SRC) <- reified_clause(SRC, pt({"k": 5}) <- True)
     ''', "f013")
-    assert len(list(solve(("dict_pattern", chars('pt({"k": 5}),\n')), module=m))) == 1
+    assert len(list(solve(("dict_pattern", chars('-double_quotes(atom)\npt({"k": 5}),\n')), module=m))) == 1
 
 
 def test_F014_reified_item_unbound_source_instantiation_error(tmp_path):
@@ -950,6 +962,7 @@ def test_F059_docs_quickstart_import_line(tmp_path):
     # through the imported name (the first registration wrapped a builtin-
     # style fn with a k-less trampoline, so every call raised).
     mod = _load(tmp_path, '''
+        -double_quotes(atom)
         -import_from(py.units, [m, kg, s, newton, kilo, has_units, strip_units])
         T(V) <- strip_units(5(m), V)
         hu(R) <- (has_units(5(m), m), R is "yes")

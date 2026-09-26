@@ -1,4 +1,5 @@
 # Companion tests for docs/scipy_spatial.md signature blocks.
+-double_quotes(atom)
 -import_from(scipy_spatial, [CrossDistance, PairwiseDistance, PointDistance,
     MakeKdTree, KdTreeQuery, MakeConvexHull, ConvexHullAttr, Free])
 

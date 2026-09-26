@@ -1,3 +1,4 @@
+-double_quotes(atom)
 -module(importable_utils, [double(X, R), helper(X, Y)])
 
 double(0, 0),

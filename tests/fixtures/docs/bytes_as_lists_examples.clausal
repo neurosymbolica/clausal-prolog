@@ -4,6 +4,7 @@
 # an int in [0, 255]).
 
 # --8<-- [start:unification]
+-double_quotes(atom)
 test("bytes is code list") <- (b"abc" is [97, 98, 99])  # nv
 test("with vars") <- (b"abc" is [X, Y, Z], X == 97, Y == 98, Z == 99)  # nv
 test("partial") <- (b"GET" is [71, E, 84], E == 69)  # nv

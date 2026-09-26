@@ -212,6 +212,7 @@ class TestTrailElisionBehavioral:
         """Predicate with distinct first-arg keys returns correct values."""
         # nv
         mod = _load_module("""\
+-double_quotes(atom)
 color(1, "warm"),
 color(2, "cool"),
 color(3, "cool"),
@@ -228,6 +229,7 @@ color(3, "cool"),
         """Each distinct first-arg key yields exactly one solution (deterministic)."""
         # nv
         mod = _load_module("""\
+-double_quotes(atom)
 map(1, "one"),
 map(2, "two"),
 map(3, "three"),
@@ -248,6 +250,7 @@ map(4, "four"),
         """
         # nv
         mod = _load_module("""\
+-double_quotes(atom)
 color(1, "warm"),
 color(2, "cool"),
 color(3, "cool"),
@@ -386,6 +389,7 @@ lookup(X, 0),
         per key, and backtracking undoes bindings correctly."""
         # nv
         mod = _load_module("""\
+-double_quotes(atom)
 info(1, "specific_1"),
 info(2, "specific_2"),
 info(X, "default"),

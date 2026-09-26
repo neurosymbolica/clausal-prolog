@@ -2,6 +2,7 @@
 #
 # Uses -specialize directive to produce solve_graph — a specialized vanilla
 # MI with MI overhead removed.
+-double_quotes(atom)
 
 -import_from(clausal.examples.metainterpreters, [solve])
 

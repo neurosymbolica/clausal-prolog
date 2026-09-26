@@ -32,6 +32,7 @@ def _clear_query_cache():
 # class NAME, so it must be an ATOM — that is the position ``op_node/3`` reads
 # and answers (§6.4), and it is how ``docs/reflection.md`` writes the calls.
 _MATCHERS = """\
+-double_quotes(atom)
 -import_from(reflection, [
     reified_clause, reified_subterm, op_node,
 ])

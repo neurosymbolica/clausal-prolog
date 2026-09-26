@@ -29,11 +29,11 @@ def _t(src: str) -> str:
 # ── atom mode (the default) ─────────────────────────────────────────────
 
 def test_double_quoted_is_an_atom_in_default_mode():
-    assert "p(x)." in _t('p("x"),\n')
+    assert "p(x)." in _t('-double_quotes(atom)\np("x"),\n')
 
 
 def test_double_quoted_text_is_a_quoted_atom_in_default_mode():
-    assert "p('a b')." in _t('p("a b"),\n')
+    assert "p('a b')." in _t('-double_quotes(atom)\np("a b"),\n')
 
 
 def test_single_quoted_is_an_atom_in_default_mode():
@@ -42,7 +42,7 @@ def test_single_quoted_is_an_atom_in_default_mode():
 
 def test_default_mode_newline_is_escaped_inside_the_quoted_atom():
     # class G: a RAW newline inside a quoted token is syntax_error(missing_quote)
-    out = _t('p("a\\nb"),\n')
+    out = _t('-double_quotes(atom)\np("a\\nb"),\n')
     assert "p('a\\nb')." in out
     assert "\np(" not in out.replace("\np('a\\nb')", "")
 

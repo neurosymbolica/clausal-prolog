@@ -21,6 +21,7 @@ def write(tmp_path, name, src):
 # ── rung 2: satisfiable, but 2+ arguments differ ─────────────────────────────
 
 PAIR_SRC = """
+-double_quotes(atom)
 pairx("a", 1),
 pairx("b", 2),
 
@@ -42,6 +43,7 @@ def test_two_plus_args_differ_shows_example_solutions(capsys, tmp_path):
 # ── rung 3: descent into the failing predicate ───────────────────────────────
 
 GUARD_SRC = """
+-double_quotes(atom)
 chk_range(PCT) <- (
     PCT >= 0,
     PCT > 100,
@@ -70,6 +72,7 @@ def test_contradictory_guard_named_with_value(capsys, tmp_path):
 # (`X < 0, X > 100`) is what forces rung 3.  X = 5 still makes each clause fail
 # at the asserted conjunct.
 TWO_ROUTES_SRC = """
+-double_quotes(atom)
 -private([small, big])
 
 classify(X, small) <- (X < 10, X < 0, X > 100),
@@ -91,6 +94,7 @@ def test_each_clause_route_gets_a_leaf(capsys, tmp_path):
 
 
 DYN_SRC = """
+-double_quotes(atom)
 -dynamic(dynp/1)
 
 test("zero-clause predicate") <- (
@@ -115,6 +119,7 @@ def test_zero_clause_predicate_keeps_old_message(capsys, tmp_path):
 # The contradictory pair `N > 100, N < 0` forces descent; N = 5 still fails at
 # the first conjunct, `N > 100`.
 NESTED_SRC = """
+-double_quotes(atom)
 inner_rule(N) <- (N > 100, N < 0),
 outer_rule(N) <- (inner_rule(N)),
 
@@ -142,6 +147,7 @@ def test_cross_module_descent(capsys, tmp_path, monkeypatch):
         lib_check(N) <- (N > 100, N < 0)
     """)
     p = write(tmp_path, "use.clausal", """
+        -double_quotes(atom)
         -import_from(descent_lib, [lib_check])
 
         test("cross-module") <- (
@@ -165,6 +171,7 @@ def test_cross_module_descent(capsys, tmp_path, monkeypatch):
 # lvl3(N) is a Call at depth 2 and is rendered as-is — lvl3's body is never
 # entered, so `N > 100` never surfaces.
 DEEP_SRC = """
+-double_quotes(atom)
 lvl3(N) <- (N > 100, N < 0),
 lvl2(N) <- (lvl3(N)),
 lvl1(N) <- (lvl2(N)),
@@ -199,6 +206,7 @@ def test_depth_cap_stops_at_two_levels(capsys, tmp_path):
 # cleanly, descent runs, and every clause head still mismatches the concrete
 # non-empty-list goal, yielding the head listing.
 CONS_SRC = """
+-double_quotes(atom)
 -private([work])
 
 wk_totals([], 0) <- (1 > 2),
@@ -229,6 +237,7 @@ def test_all_heads_fail_lists_the_heads(capsys, tmp_path):
 # reaches the `wkn_totals(WEEKS, _TOTAL)` leaf, where every clause head mismatches
 # the concrete WEEKS and the head listing attaches beneath the leaf.
 CONS_NESTED_SRC = """
+-double_quotes(atom)
 -private([work])
 
 wkn_totals([], 0) <- (1 > 2),
@@ -268,6 +277,7 @@ def test_head_listing_attaches_beneath_parent_leaf(capsys, tmp_path):
 # for each of the 4 walked clauses -> `out.count("N > 100") == 4` holds (the
 # other two clauses are truncated by the cap and never walked).
 SIX_SRC = """
+-double_quotes(atom)
 -private([r1, r2, r3, r4, r5, r6])
 
 sixway(N, r1) <- (N > 100, N < 0),
@@ -306,6 +316,7 @@ def test_clause_cap_is_applied_and_noted(capsys, tmp_path):
 # FIRST failing conjunct of its route, so it is the leaf rendered.  Verified
 # against the live engine: 8 findings, capped to 6 (3x each conjunct).
 FANOUT_SRC = """
+-double_quotes(atom)
 -private([a, b, c, d])
 
 inner(N) <- (N > 100, N < 0),
@@ -341,6 +352,7 @@ def test_leaves_cap_bounds_total_findings_across_fanout(capsys, tmp_path):
 # probe fails cleanly (rung 2 does not intercept) and descent runs.  Verified
 # against the live engine: softened headline + cap note, only 4 heads listed.
 SIX_HEADS_SRC = """
+-double_quotes(atom)
 -private([a, b, c, d, e, f, zzz])
 
 sixhead(a, N) <- (1 > 2),
@@ -382,6 +394,7 @@ def test_capped_head_listing_softens_headline_and_notes_cap(capsys, tmp_path):
 # never fired.  See
 # `todo/done/D-rung2-unbound-arg-solutions-weaken-diagnosis.md`.
 CONS_PINNED_SRC = """
+-double_quotes(atom)
 -private([work])
 
 wtq_totals([], 0, 0),
@@ -415,6 +428,7 @@ def test_unbound_near_miss_descends_to_head_listing(capsys, tmp_path):
 # degenerate near-miss now descends instead and names the failing conjunct
 # with its concrete binding.
 LONE_BOUND_SRC = """
+-double_quotes(atom)
 classify(X, "small") <- (X < 10, X < 0),
 classify(X, "big") <- (X > 10, X < 0),
 
@@ -441,6 +455,7 @@ def test_unbound_near_miss_descends_to_clause_leaves(capsys, tmp_path):
 # (todo D): any cheap "trivial match" discriminator regresses fact-table
 # predicates, where a ground near-miss is exactly the right diagnosis.
 CONS_OUTPUT_SRC = """
+-double_quotes(atom)
 -private([work])
 
 wto_totals([], 0, 0),
@@ -468,6 +483,7 @@ def test_ground_base_case_near_miss_keeps_rung_1(capsys, tmp_path):
 
 def test_ground_fact_near_miss_keeps_rung_1(capsys, tmp_path):
     p = write(tmp_path, "gpair.clausal", """
+        -double_quotes(atom)
         gpair("a", 1),
         gpair("b", 2),
 
@@ -487,6 +503,7 @@ def test_ground_fact_near_miss_keeps_rung_1(capsys, tmp_path):
 # which says nothing.  When NO example binds every argument, descend; the head
 # listing shows the coupling that the anonymous-hole render hid.
 COUPLED_FACT_SRC = """
+-double_quotes(atom)
 pairq(A, B, A, B),
 
 test("both couplings differ") <- (
@@ -526,6 +543,7 @@ def test_degenerate_near_miss_falls_back_when_descent_finds_nothing(
 # before.  The degenerate hit must neither win nor leave its (never-final)
 # rendering behind.
 MIXED_SLOTS_SRC = """
+-double_quotes(atom)
 mixf(A | B, 7),
 mixf([1, 2], 8),
 
@@ -549,6 +567,7 @@ def test_concrete_near_miss_in_a_later_slot_wins_over_degenerate(
 # The keyword-argument slot path builds its own label; the degenerate intro
 # must carry it through to the descent headline.
 KWARG_DEG_SRC = """
+-double_quotes(atom)
 kdeg(R=A | B),
 
 test("kwarg degenerate") <- (
@@ -596,6 +615,7 @@ def test_degenerate_rung2_falls_back_when_descent_finds_nothing(
 # failure, re-run Body per element (bounded) and report the elements for which
 # Body has no solution, by name.
 FORALL_ONE_SRC = """
+-double_quotes(atom)
 positivep(1),
 positivep(2),
 positivep(4),
@@ -619,6 +639,7 @@ def test_forall_names_the_single_failing_element(capsys, tmp_path):
 
 
 FORALL_MANY_SRC = """
+-double_quotes(atom)
 positivem(2),
 positivem(4),
 
@@ -643,6 +664,7 @@ def test_forall_names_every_failing_element_within_the_bound(capsys, tmp_path):
 # DIAG_MAX_DESCENT_LEAVES failing elements and states the truncation, rather
 # than walking (and re-solving Body over) an unbounded list.
 FORALL_LONG_SRC = """
+-double_quotes(atom)
 noneofthem(_X) <- (1 > 2),
 
 test("long list, all fail") <- (
@@ -672,6 +694,7 @@ def test_forall_bounds_the_number_of_named_elements(capsys, tmp_path):
 # measured incident's shape: ``forall(SUBJECT in LIST, (...))``); the headline
 # still identifies the culprit element rather than the whole list.
 FORALL_CONJ_SRC = """
+-double_quotes(atom)
 test("all in range") <- (
     forall(V in [0, 1, 7, 2], (V >= 0, V <= 3))
 ),
@@ -702,6 +725,7 @@ def test_forall_names_element_with_conjunction_body(capsys, tmp_path):
 # machinery the ordinary descent already uses.
 
 WINDOW_SHAPE_SRC = """
+-double_quotes(atom)
 -private([bad_atom])
 
 # window_days_used wants its first argument as a list [Y, M, D]; the caller
@@ -751,6 +775,7 @@ def test_findall_collapse_behind_wrong_value_is_named(capsys, tmp_path):
 # the descent must go one level deeper than the direct case above to reach the
 # findall — exercising the recursive `_descend` step, not just the top clause.
 NESTED_PRODUCER_SRC = """
+-double_quotes(atom)
 -private([bad_atom])
 
 window_days_used([Y, M, D], DAYS) <- (
@@ -792,6 +817,7 @@ def test_findall_collapse_via_nested_producer(capsys, tmp_path):
 # A findall whose body DOES solve for at least one candidate is not blamed:
 # the collapse sentinel is specific to a body that failed for EVERY candidate.
 HEALTHY_FINDALL_SRC = """
+-double_quotes(atom)
 candidate(10),
 candidate(20),
 
@@ -836,6 +862,7 @@ def test_healthy_findall_is_not_blamed(capsys, tmp_path):
 # repair loop needs at this level, and a repair that binds the element and
 # re-runs will meet the collapse sentinel one level down.
 FORALL_COLLAPSED_FINDALL_SRC = """
+-double_quotes(atom)
 cand(9),
 big(X) <- (X > 10),
 
@@ -872,6 +899,7 @@ def test_forall_over_collapsed_findall_composes_element_first(capsys, tmp_path):
 # second findall's empty bag (the same nesting pattern: `length(DS, L)` with
 # `DS = []`), the inner collapse is named beneath it as well.
 TRIVIAL_COLLAPSE_SRC = """
+-double_quotes(atom)
 hit(99),
 
 usable(0),
@@ -933,6 +961,7 @@ def test_dotted_atom_comparison_reaches_producer(capsys, tmp_path, monkeypatch):
         verdict(MAX, ineligible) <- (MAX <= 0)
     """)
     p = write(tmp_path, "dotted.clausal", """
+        -double_quotes(atom)
         -import_from(verdict_lib, [eligible, assess])
 
         test("dotted atom comparison") <- (
@@ -959,6 +988,7 @@ def test_dotted_atom_comparison_reaches_producer(capsys, tmp_path, monkeypatch):
 # incident).  The collapse scan follows satisfiable calls beyond the 2-level
 # failing-call descent bound — up to DIAG_MAX_COLLAPSE_DEPTH levels.
 DEEP_WRAPPER_SRC = """
+-double_quotes(atom)
 usable2(0),
 
 maxdays2(MAX) <- (
@@ -991,6 +1021,7 @@ def test_collapse_scan_descends_past_failing_call_depth_bound(capsys, tmp_path):
 # When the chain is deeper than DIAG_MAX_COLLAPSE_DEPTH, the scan must not go
 # SILENT (the original bug's failure mode): it stops, and says that it stopped.
 OVERDEEP_WRAPPER_SRC = """
+-double_quotes(atom)
 usable3(0),
 
 maxdays3(MAX) <- (

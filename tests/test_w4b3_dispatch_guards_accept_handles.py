@@ -39,6 +39,7 @@ from clausal.predicate_diagnostics import PredicateArityMismatchError
 
 
 _SRC = """\
+-double_quotes(atom)
 -module({name}, [])
 -hide([secret])
 is_pos(X) <- (X > 0)

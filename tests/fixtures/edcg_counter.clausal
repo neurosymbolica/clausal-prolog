@@ -1,6 +1,7 @@
 # EDCG counter example: multiple accumulators, passed arguments
 #
 # Demonstrates: counter accumulator, list accumulator, passed scale factor
+-double_quotes(atom)
 
 -module(edcg_counter, [run_scaled(INPUT_LIST, SCALE_FACTOR, COUNT, OUTPUT_ITEMS)])
 

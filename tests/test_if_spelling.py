@@ -35,7 +35,7 @@ def _load_quietly(name, src_text, tmp_path):
         return _load(name, src_text, tmp_path)
 
 
-CLASSIFY = 'classify(X, LABEL) <- {ite}(X >= 0, LABEL is "positive", LABEL is "negative")\n'
+CLASSIFY = '-double_quotes(atom)\nclassify(X, LABEL) <- {ite}(X >= 0, LABEL is "positive", LABEL is "negative")\n'
 
 
 # ── The canonical spelling ───────────────────────────────────────────────────
@@ -127,7 +127,7 @@ class TestLegacyIf:
         with pytest.raises(SyntaxError) as caught:
             _load("legacy_where", src, tmp_path)
         message = str(caught.value)
-        assert "legacy_where.clausal:2" in message
+        assert "legacy_where.clausal:3" in message
         assert "classify(X, LABEL)" in message  # the offending source line
 
     def test_dcg_body_is_rejected(self, tmp_path):

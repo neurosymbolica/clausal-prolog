@@ -68,7 +68,7 @@ def test_warning_names_the_line(tmp_path):
 
 def test_warns_on_cons_in_dcg_head(tmp_path):
     ws = _lint_warnings(tmp_path, "cons_dcg",
-                        'takes([H | T]) >> (["x"])\n')
+                        '-double_quotes(atom)\ntakes([H | T]) >> (["x"])\n')
     assert len(ws) == 1
     assert "[H, *T]" in str(ws[0].message)
 
@@ -77,7 +77,7 @@ def test_no_warn_on_clean_dcg_head(tmp_path):
     # The DCG path appends the synthetic _dcg0/_dcg1 state args to the
     # head before the lint runs — bare Names must not trip it.
     ws = _lint_warnings(tmp_path, "ok_dcg",
-                        'takes([H, *T]) >> (["x"])\n')
+                        '-double_quotes(atom)\ntakes([H, *T]) >> (["x"])\n')
     assert ws == []
 
 

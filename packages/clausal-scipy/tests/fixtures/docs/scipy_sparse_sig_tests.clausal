@@ -1,4 +1,5 @@
 # Companion tests for docs/scipy_sparse.md signature blocks.
+-double_quotes(atom)
 -import_from(scipy_sparse, [MakeCSR, MakeEye, ToDense, Shape, NonzeroCount, Free])
 
 test("makecsr exists") <- (

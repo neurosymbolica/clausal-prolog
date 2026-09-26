@@ -2,6 +2,7 @@
 # clpq.minimize, clpq.supremum, clpq.infimum.
 
 # ── Basic rational constraints ──────────────────────────────────────────────
+-double_quotes(atom)
 
 test("clpq rational equality") <- (
     clpq.rational(X == 1/3),

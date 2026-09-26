@@ -3,6 +3,7 @@
 # Arrow syntax, variable capture, conjunction bodies, predicate calls
 
 # apply_val/2 — basic lambda: identity via call_goal
+-double_quotes(atom)
 apply_val(RESULT, VAL) <- call_goal((X <- (RESULT is X)), VAL)
 
 # add_one/2 — lambda with arithmetic

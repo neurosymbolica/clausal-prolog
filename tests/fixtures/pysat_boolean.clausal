@@ -2,6 +2,7 @@
 # pysat.check, pysat.count, pysat.at_most, pysat.at_least, pysat.exactly.
 
 # ── Basic constraint blocks ─────────────────────────────────────────────────
+-double_quotes(atom)
 
 xor_solve(X, Y) <- (
     pysat.cadical(X ^ Y),

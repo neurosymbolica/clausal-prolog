@@ -7,6 +7,7 @@
 #
 # Not available:
 #   cut (!), if-then-else (->)
+-double_quotes(atom)
 
 -module(iso_control, [test(DESC)])
 

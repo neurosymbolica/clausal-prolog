@@ -1,6 +1,7 @@
 # Companion tests for docs/tutorial_parallel_clausal.md signature blocks.
 
 # --- pure_predicates ---
+-double_quotes(atom)
 
 append([], YS, YS),
 append([H, *XS], YS, [H, *ZS]) <- append(XS, YS, ZS)

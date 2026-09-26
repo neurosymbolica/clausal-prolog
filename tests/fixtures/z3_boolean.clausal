@@ -2,6 +2,7 @@
 # z3.exactly.
 
 # ── Basic boolean constraints ───────────────────────────────────────────────
+-double_quotes(atom)
 
 or_solve(A, B) <- (
     z3.boolean(A | B),

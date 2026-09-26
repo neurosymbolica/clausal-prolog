@@ -1,4 +1,5 @@
 # Companion tests for docs/scipy_ndimage.md signature blocks.
+-double_quotes(atom)
 -import_from(scipy_ndimage, [GaussianFilter, UniformFilter, MedianFilter, label])
 
 test("gaussian filter exists") <- (

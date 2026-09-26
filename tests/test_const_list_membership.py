@@ -48,6 +48,7 @@ from clausal.logic.runtime.const_set import (
 # ── Harness ───────────────────────────────────────────────────────────────────
 
 _SRC = """\
+-double_quotes(atom)
 -private([a, b, c, d, e])
 
 # ── order: an unbound left operand enumerates the list, in list order

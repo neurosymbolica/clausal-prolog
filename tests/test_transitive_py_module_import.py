@@ -93,6 +93,7 @@ def test_transitive_python_backed_module_import(tmp_path):
             S is date(Y1,M1,D1), E is date(Y2,M2,D2), date_diff(E, S, TD), N is ++TD.days)
     """))
     (tmp_path / "use_dt.clausal").write_text(textwrap.dedent("""\
+        -double_quotes(atom)
         -import_from(mod_dt, [days_between])
         test("transitive import of a date_time module") <- (days_between(2026,1,1, 2026,4,1, N), N == 90)
     """))
@@ -120,6 +121,7 @@ def test_transitive_python_backed_module_import(tmp_path):
 def test_direct_python_backed_module_import(tmp_path):
     """A single .clausal file importing a py-backed module also works from any cwd."""
     (tmp_path / "direct_dt.clausal").write_text(textwrap.dedent("""\
+        -double_quotes(atom)
         -import_from(date_time, [date, date_diff])
         test("direct date_time import") <- (
             S is date(2026,1,1), E is date(2026,4,1), date_diff(E, S, TD), ++TD.days == 90)

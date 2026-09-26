@@ -1,6 +1,7 @@
 # CLP(R) module API tests — exercises clpr.real, clpr.label.
 
 # ── Basic real constraints ──────────────────────────────────────────────────
+-double_quotes(atom)
 
 test("clpr real equality") <- (
     clpr.real(X == 3.0),

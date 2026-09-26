@@ -1,4 +1,5 @@
 # Companion tests for docs/graphs.md display snippets.
+-double_quotes(atom)
 
 -import_from(graphs, [
     vertices, neighbors, degree, has_edge,

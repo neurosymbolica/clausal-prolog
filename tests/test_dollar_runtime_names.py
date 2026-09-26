@@ -152,7 +152,7 @@ class TestDollarTwinsAreBound:
 # ── (a) generated code references the $ twins ───────────────────────────────
 
 _EMIT_SOURCE = (
-    "-allow_singletons\n"
+    "-double_quotes(atom)\n-allow_singletons\n"
     "-module(dollar_emit_probe, [speed(V), fresh(L), esc(X, Y), dct(D), "
     "sett(S), fs(X, S), arith(X, Y), go(Y), lam(F), lam0(F)])\n"
     "-import_from(py.units, [m])\n"

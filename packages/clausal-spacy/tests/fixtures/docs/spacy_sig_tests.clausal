@@ -1,4 +1,5 @@
 # Companion tests for docs/spacy.md display snippets.
+-double_quotes(atom)
 
 -import_from(spacy, [LoadModel, UnloadModel, CurrentModel, Process,
                      Token, TokenText, TokenList,

@@ -3,6 +3,7 @@
 # it in both rule-head and fact-head positions, alongside a catch-all
 # clause.  A correct compiler should only fire the wrap-headed clause
 # when the caller passes an actual wrap-shaped term.
+-double_quotes(atom)
 
 -import_from(tests.fixtures.head_compound_owner, [wrap, item, met, direct])
 -module(head_compound_importer, [check(ITEM, RESULT),

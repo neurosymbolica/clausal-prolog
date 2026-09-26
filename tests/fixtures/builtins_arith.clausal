@@ -1,6 +1,7 @@
 # Tests for arithmetic predicates: between/3, succ/2, plus/3, abs_/2, max_/3, min_/3
 
 # between/3: enumerate integers in a range
+-double_quotes(atom)
 in_range(LOW, HIGH, X) <- between(LOW, HIGH, X)
 
 # between/3: check mode

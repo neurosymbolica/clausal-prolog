@@ -66,6 +66,7 @@ FAILING_MD = """
 # Sample tutorial
 
 ```clausal
+-double_quotes(atom)
 prc("alpha", 10),
 prc("beta", 20),
 
@@ -80,6 +81,7 @@ PASSING_MD = """
 # Sample tutorial
 
 ```clausal
+-double_quotes(atom)
 prc("alpha", 10),
 
 test("passes") <- (
@@ -93,6 +95,7 @@ ERROR_MD = """
 # Sample tutorial
 
 ```clausal
+-double_quotes(atom)
 prc("alpha", 10),
 
 test("raises") <- (

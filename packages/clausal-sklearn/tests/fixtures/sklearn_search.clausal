@@ -1,3 +1,4 @@
+-double_quotes(atom)
 -import_from(sklearn, [Est, Dataset, LoadDataset, Fit, Score, GridSearch,
                        RandomSearch, BestParams, BestScore, SearchResults,
                        kfold])

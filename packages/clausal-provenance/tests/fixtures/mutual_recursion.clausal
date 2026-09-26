@@ -1,3 +1,4 @@
+-double_quotes(atom)
 -import_from(provenance, [bottom_up_, solve, boolean])
 
 -module(mutual_recursion, [
