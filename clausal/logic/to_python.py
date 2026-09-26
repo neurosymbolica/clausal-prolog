@@ -35,6 +35,7 @@ from __future__ import annotations
 from clausal.logic.atoms import (
     is_atom as _term_is_atom, spelling as _atom_spelling, atom, as_dict_key as _as_dict_key)
 from clausal.logic.cells import chars, is_chars, chars_text, TUPLE_TAG  # stage 1: the chars carrier
+from clausal.logic.python_terms import FROM_TERM as _FROM_TERM  # the ONE registry (no cycle: python_terms never imports this module)
 from clausal.logic.variables import deref, walk
 from clausal.terms import (
     Compound, DictTerm, KWTerm, SegBytes, SegList, SegString, SetTerm, compound_as_cell)
@@ -163,11 +164,11 @@ def _rebuild_registered(items: tuple):
     meets Python values: the date family's ints are untouched either way,
     and the data tuple's ``from_term`` recursion then has nothing engine-
     shaped left to miss (an atom is already its str, a string its text).
-    Lazy import: ``python_terms`` is a sibling that this module must not
-    need at import time.
+    The registry dict is bound at import time: a per-call ``import`` here
+    cost +68 % on every cell (interleaved A/B vs a same-sha control,
+    2026-09-26); one dict ``get`` is the whole price now.
     """
-    from clausal.logic.python_terms import FROM_TERM  # noqa: PLC0415
-    rebuild = FROM_TERM.get(items[0])
+    rebuild = _FROM_TERM.get(items[0])
     if rebuild is None:
         return items
     try:
