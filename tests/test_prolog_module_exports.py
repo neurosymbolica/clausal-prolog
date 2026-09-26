@@ -132,31 +132,65 @@ _PARITY = [
     ("sq_kwd_tmpl", "", "'class'(A)", "p(X) <- (X == 1)\n"),
     ("sq_tmpl_kwarg", "", "'Edge'(A, b=B)", _HEAD2),
     ("bare_tmpl_kwarg", "", "edge(A, b=B)", "edge(A, B) <- (A == B)\n"),
+    # reserved truth names -- the engine refuses them before looking at shape
+    ("tv_true", "", "true", "p(X) <- (X == 1)\n"),
+    ("tv_true_call", "", "true(X)", "p(X) <- (X == 1)\n"),
+    ("tv_true_pi", "", "true/0", "p(X) <- (X == 1)\n"),
+    ("tv_True", "", "True", "p(X) <- (X == 1)\n"),
+    ("tv_True_call", "", "True(X)", "p(X) <- (X == 1)\n"),
+    ("tv_false", "", "false", "p(X) <- (X == 1)\n"),
+    ("tv_undefined", "", "undefined", "p(X) <- (X == 1)\n"),
+    ("tv_Undefined", "", "Undefined", "p(X) <- (X == 1)\n"),
+    ("tv_undefined_pi", "", "undefined/1", "p(X) <- (X == 1)\n"),
+    ("tv_sq_true_pi", "", "'true'/0", "p(X) <- (X == 1)\n"),
+    ("tv_sq_true_call", "", "'true'(X)", "p(X) <- (X == 1)\n"),
+    ("tv_sq_false_call", "", "'false'(X)", "p(X) <- (X == 1)\n"),
+    # a mixed-quote literal
+    ("mixed_quote_pi", "", "'Ed' \"ge\"/2", _HEAD2),
 ]
 
 
 @pytest.mark.parametrize("cid,prefix,element,clauses", _PARITY, ids=[c[0] for c in _PARITY])
-def test_export_acceptance_matches_the_engine(tmp_path, monkeypatch, cid, prefix, element, clauses):
+def test_export_acceptance_matches_the_engine(tmp_path, cid, prefix, element, clauses):
+    """Any load error counts as an engine refusal, recorded by type; the
+    exporter must refuse with NotImplementedError. The engine loads through
+    ``import_hook._load_module``, which compiles privately and does not claim
+    the ``_MODULES_BY_PATH`` registry, so nothing but ``sys.modules`` needs
+    undoing."""
     # nv
-    import importlib
     import sys
+    from clausal.import_hook import _load_module
     name = f"expparity_{cid}"
     src = f"{prefix}-module({name}, [{element}])\n\n{clauses}"
-    (tmp_path / f"{name}.clausal").write_text(src)
-    monkeypatch.syspath_prepend(str(tmp_path))
-    monkeypatch.delitem(sys.modules, name, raising=False)
+    path = tmp_path / f"{name}.clausal"
+    path.write_text(src)
+    sys.modules.pop(name, None)
     try:
-        importlib.import_module(name)
-        engine_accepts = True
-    except SyntaxError:
-        engine_accepts = False
+        _load_module(name, str(path))
+        engine = "accepts"
+    except Exception as exc:          # any load failure is a refusal
+        engine = f"refuses ({type(exc).__name__})"
     finally:
         sys.modules.pop(name, None)
     try:
         clausal_source_to_prolog(src)
-        exporter_accepts = True
+        exporter = "accepts"
     except NotImplementedError:
-        exporter_accepts = False
-    assert exporter_accepts == engine_accepts, (
-        f"{element!r}: engine {'accepts' if engine_accepts else 'refuses'}, "
-        f"exporter {'accepts' if exporter_accepts else 'refuses'}")
+        exporter = "refuses"
+    assert (engine == "accepts") == (exporter == "accepts"), (
+        f"{element!r}: engine {engine}, exporter {exporter}")
+
+
+@pytest.mark.parametrize("element", ["true", "true(X)", "true/0", "'true'/0", "Undefined", "False"])
+def test_a_truth_value_is_not_an_export(element):
+    # nv
+    with pytest.raises(NotImplementedError, match="truth values"):
+        clausal_source_to_prolog(f"-module(m, [{element}])\n\np(X) <- (X == 1)\n")
+
+
+def test_a_mixed_quote_name_is_refused_as_an_export_element():
+    """``quote_of`` raises a positionless SyntaxError for it; the exporter
+    folds that into its own refusal, which names the element."""
+    # nv
+    with pytest.raises(NotImplementedError, match="is not an export element"):
+        clausal_source_to_prolog("-module(m, ['Ed' \"ge\"/2])\n\n" + _HEAD2)
