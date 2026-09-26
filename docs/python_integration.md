@@ -242,9 +242,10 @@ every value a term can hold (a mixed list never raises), the same order
 as the string/list it walks to; a non-ground one keys in an opaque band after
 everything else.
 
-`to_python` and `to_clausal` are NOT what `++`/`--` do. The seams pass what
-they hold (see below and "The Python atom API"); you call a converter when you
-want the other representation.
+`to_python` and `to_clausal` are NOT what `++`/`--` do. The seams have their
+own, narrower rules — a `++` argument is unwrapped one level, a goal-position
+`--` answer is exported (both below) — and you call a converter by name when
+you want the whole value in the other representation.
 
 ## Crossing the boundary: atoms and strings
 
