@@ -76,50 +76,77 @@ _SetLiteral = SetLiteral
 _AST_CONST_TYPES = (type(None), bool, int, float, str, bytes, complex)
 
 
-def _cell_pattern_depth(term: Any, _budget: int = 64) -> int:
-    """How many CELL-pattern levels ``head_to_match_pattern`` builds for the
-    head argument *term*: 0 when its pattern has no structure (a Var, an
-    atomic literal, a list or dict -- those capture and unify), else
-    1 + the deepest argument.  Feeds :func:`subject_cell_depths`."""
-    if _budget <= 0 or is_var(term):
-        return 0
-    if (type(term) is tuple and len(term) > 1 and _cell_shape(term)[0]
-            and not is_chars(term)):          # a chars carrier is TEXT
-        return 1 + max(_cell_pattern_depth(a, _budget - 1) for a in term[1:])
-    if isinstance(term, Compound):
-        if compound_as_cell(term) is None:
-            return 0
-        return 1 + max(_cell_pattern_depth(a, _budget - 1) for a in term.args)
-    if isinstance(term, Call) and term.args:
-        return 1 + max(_cell_pattern_depth(a, _budget - 1) for a in term.args)
-    return 0
+def pattern_structure_depth(pat: ast.pattern) -> int:
+    """How many STRUCTURE levels the built head pattern *pat* destructures:
+    a sequence pattern (a cell) or a class pattern (a ``Compound`` with no
+    cell, a term instance) is a level; an or-/as-pattern is as deep as its
+    deepest part; a value, singleton, capture or star is 0.
+
+    Read off the FINAL pattern rather than re-derived from the head term, so
+    the normaliser's depth and the pattern cannot disagree by construction
+    (roborev 204: a parallel analysis of the head missed keyword slots and
+    class sub-patterns, and capped at 64).  Over-counting is harmless -- the
+    normaliser stops at the first non-structure -- so a class pattern's
+    ``args`` sequence may count as a level of its own.  Iterative, so a head
+    of any depth is measured without recursion limits.
+    """
+    best = 0
+    stack = [(pat, 0)]
+    while stack:
+        node, depth = stack.pop()
+        if isinstance(node, ast.MatchSequence):
+            depth += 1
+            best = max(best, depth)
+            stack.extend((p, depth) for p in node.patterns)
+        elif isinstance(node, ast.MatchClass):
+            depth += 1
+            best = max(best, depth)
+            stack.extend((p, depth) for p in node.patterns)
+            stack.extend((p, depth) for p in node.kwd_patterns)
+        elif isinstance(node, ast.MatchOr):
+            stack.extend((p, depth) for p in node.patterns)
+        elif isinstance(node, ast.MatchAs) and node.pattern is not None:
+            stack.append((node.pattern, depth))
+        elif isinstance(node, ast.MatchMapping):
+            stack.extend((p, depth) for p in node.patterns)
+    return best
 
 
-def subject_cell_depths(clauses: list, arity: int) -> list[int]:
-    """Per argument position, the deepest cell-pattern nesting any clause's
-    head pattern has there -- the *depth* each ``match`` subject is
-    normalised to (``$as_cells``, ruling 2026-09-26).  0 means the subject
-    stays a plain ``$deref``: nothing there can meet a cell-only pattern."""
-    depths = [0] * arity
-    for clause in clauses:
-        head = clause.head
-        if isinstance(head, Compound):
-            args = head.args
-        elif _cell_shape(head)[0]:
-            args = head[1:]
-        else:
-            continue
-        for i in range(min(arity, len(args))):
-            d = _cell_pattern_depth(args[i])
-            if d > depths[i]:
-                depths[i] = d
-    return depths
+def finalize_subject_depths(assigns: list, stmts: list, subject: ast.expr) -> None:
+    """Point each argument's subject assignment at ``$as_cells`` with the
+    structure depth its BUILT head patterns need (ruling 2026-09-26).
+
+    *assigns* are the ``_dN = $deref(argN)`` statements the builder emitted
+    before any pattern existed; *stmts* is everything it emitted after; every
+    ``match`` on *subject* (the one shared tuple object, so identity finds
+    them even inside list-dispatch branches) contributes its case patterns.
+    An argument whose patterns have no structure keeps ``$deref``.
+    """
+    depths = [0] * len(assigns)
+    for stmt in stmts:
+        for node in ast.walk(stmt):
+            if not (isinstance(node, ast.Match) and node.subject is subject):
+                continue
+            for case in node.cases:
+                outer = case.pattern
+                if not (isinstance(outer, ast.MatchSequence)
+                        and len(outer.patterns) == len(assigns)):
+                    continue
+                for i, p in enumerate(outer.patterns):
+                    d = pattern_structure_depth(p)
+                    if d > depths[i]:
+                        depths[i] = d
+    for assign, depth in zip(assigns, depths):
+        if depth > 0:
+            arg = assign.value.args[0]
+            assign.value = _call(_name("$as_cells"), arg, ast.Constant(value=depth))
 
 
 def subject_assign(name: str, arg: str, depth: int) -> ast.stmt:
     """``<name> = $deref(<arg>)``, or ``$as_cells(<arg>, depth)`` where a
     cell-only head pattern could meet a Compound (see
-    :func:`subject_cell_depths`)."""
+    :func:`finalize_subject_depths`, which rewrites a depth-0 assignment
+    once the patterns are built)."""
     if depth <= 0:
         return _assign(name, _call(_name("$deref"), _name(arg)))
     return _assign(name, _call(_name("$as_cells"), _name(arg),
@@ -146,7 +173,7 @@ def _cell_match_pattern(functor: str, arg_patterns: list) -> ast.MatchSequence:
     cell): the pattern stays cell-only, and the SUBJECT is normalised instead
     -- the predicate builders assign each ``match`` subject through
     ``$as_cells`` (``terms.as_cells_for_match``) at the positions and to the
-    depth where a cell pattern exists (:func:`subject_cell_depths`), so a
+    depth the built patterns need (:func:`finalize_subject_depths`), so a
     caller's Compound spelling arrives as the cell.  Doubling the pattern
     with a ``$Compound`` alternative at every level instead cost 2**depth
     nodes (roborev 203: 45,046 nodes for a head nested 12 deep).

@@ -3548,48 +3548,125 @@ py_unify_census_stop(PyObject *self, PyObject *Py_UNUSED(ignored))
  * positions whose head patterns have cell structure, so the common case
  * costs one C call, as before.
  */
+static int cells_below(PyObject *term, long depth, PyObject **out);
+
+/* The Python twin's ``_cells_below``, for term INSTANCES (fields are walked
+ * there; a dataclass copy is not worth doing twice).  Imported lazily. */
+static PyObject *py_cells_below_fn = NULL;
+
+static int
+is_compound_obj(PyObject *x)
+{
+    return Compound_type && PyType_Check(Compound_type)
+        && PyObject_TypeCheck(x, (PyTypeObject *)Compound_type);
+}
+
+/* 1 if *x* is a structure level a head pattern can destructure: a tuple, a
+ * Compound, or a dataclass term instance.  Scalars are rejected first. */
+static int
+is_structure_level(PyObject *x)
+{
+    if (PyTuple_CheckExact(x)) return 1;
+    if (PyLong_CheckExact(x) || PyUnicode_CheckExact(x) || PyFloat_CheckExact(x)
+            || x == Py_None || PyList_CheckExact(x) || Var_Check(x))
+        return 0;
+    if (is_compound_obj(x)) return 1;
+    return c_is_term_instance(x);
+}
+
+/* The slots of *seq* (a tuple) from *start* converted one level down: 1 with
+ * *out a NEW tuple, 0 when none needed converting, -1 on error. */
+static int
+cells_in_slots(PyObject *seq, Py_ssize_t start, long depth, PyObject **out)
+{
+    *out = NULL;
+    Py_ssize_t n = PyTuple_GET_SIZE(seq);
+    if (depth <= 1 || n <= start) return 0;
+    PyObject *copy = NULL;
+    for (Py_ssize_t i = start; i < n; i++) {
+        PyObject *elt = var_deref(PyTuple_GET_ITEM(seq, i));   /* borrowed */
+        int lvl = is_structure_level(elt);
+        if (lvl < 0) { Py_XDECREF(copy); return -1; }
+        if (!lvl) continue;
+        PyObject *sub;
+        int r = cells_below(elt, depth - 1, &sub);
+        if (r < 0) { Py_XDECREF(copy); return -1; }
+        if (!r) continue;
+        if (!copy) {
+            copy = PyTuple_New(n);
+            if (!copy) { Py_DECREF(sub); return -1; }
+            for (Py_ssize_t j = 0; j < n; j++) {
+                PyObject *it = PyTuple_GET_ITEM(seq, j);
+                Py_INCREF(it);
+                PyTuple_SET_ITEM(copy, j, it);
+            }
+        }
+        Py_DECREF(PyTuple_GET_ITEM(copy, i));
+        PyTuple_SET_ITEM(copy, i, sub);   /* steals */
+    }
+    if (!copy) return 0;
+    *out = copy;
+    return 1;
+}
+
+/* Twin of ``clausal.terms._cells_below``: 1 with *out a NEW reference to the
+ * converted *term* (already dereferenced), 0 when nothing within *depth*
+ * structure levels needed converting, -1 on error. */
 static int
 cells_below(PyObject *term, long depth, PyObject **out)
 {
     *out = NULL;
-    if (PyTuple_CheckExact(term)) {
-        Py_ssize_t n = PyTuple_GET_SIZE(term);
-        if (depth <= 1 || n < 2) return 0;
-        PyObject *copy = NULL;
-        for (Py_ssize_t i = 1; i < n; i++) {
-            PyObject *elt = var_deref(PyTuple_GET_ITEM(term, i));   /* borrowed */
-            if (!PyTuple_CheckExact(elt)
-                    && !(Compound_type && PyType_Check(Compound_type)
-                         && PyObject_TypeCheck(elt, (PyTypeObject *)Compound_type)))
-                continue;
+    if (depth <= 0) return 0;
+    if (PyTuple_CheckExact(term))
+        return cells_in_slots(term, 1, depth, out);
+    if (is_compound_obj(term)) {
+        PyObject *cell;
+        int c = compound_to_cell(term, &cell);
+        if (c < 0) return -1;
+        if (c) {
             PyObject *sub;
-            int r = cells_below(elt, depth - 1, &sub);
-            if (r < 0) { Py_XDECREF(copy); return -1; }
-            if (!r) continue;
-            if (!copy) {
-                copy = PyTuple_New(n);
-                if (!copy) { Py_DECREF(sub); return -1; }
-                for (Py_ssize_t j = 0; j < n; j++) {
-                    PyObject *it = PyTuple_GET_ITEM(term, j);
-                    Py_INCREF(it);
-                    PyTuple_SET_ITEM(copy, j, it);
-                }
-            }
-            Py_DECREF(PyTuple_GET_ITEM(copy, i));
-            PyTuple_SET_ITEM(copy, i, sub);   /* steals */
+            int r = cells_below(cell, depth, &sub);
+            if (r < 0) { Py_DECREF(cell); return -1; }
+            if (r) { Py_DECREF(cell); *out = sub; }
+            else   { *out = cell; }
+            return 1;
         }
-        if (!copy) return 0;
-        *out = copy;
+        /* no cell equivalent: walk its args, rebuild only on a change */
+        if (depth <= 1) return 0;
+        PyObject *args = PyObject_GetAttr(term, str_args);
+        if (!args) return -1;
+        if (!PyTuple_Check(args)) { Py_DECREF(args); return 0; }
+        PyObject *newargs;
+        int r = cells_in_slots(args, 0, depth, &newargs);
+        Py_DECREF(args);
+        if (r <= 0) return r;
+        PyObject *functor = PyObject_GetAttr(term, str_functor);
+        if (!functor) { Py_DECREF(newargs); return -1; }
+        PyObject *res = PyObject_CallFunctionObjArgs(Compound_type, functor,
+                                                     newargs, NULL);
+        Py_DECREF(functor);
+        Py_DECREF(newargs);
+        if (!res) return -1;
+        *out = res;
         return 1;
     }
-    PyObject *cell;
-    int c = compound_to_cell(term, &cell);
-    if (c <= 0) return c;
-    PyObject *sub;
-    int r = cells_below(cell, depth, &sub);
-    if (r < 0) { Py_DECREF(cell); return -1; }
-    if (r) { Py_DECREF(cell); *out = sub; }
-    else   { *out = cell; }
+    if (depth <= 1) return 0;
+    int ti = c_is_term_instance(term);
+    if (ti <= 0) return ti;
+    if (!py_cells_below_fn) {
+        PyObject *mod = PyImport_ImportModule("clausal.terms");
+        if (!mod) return -1;
+        py_cells_below_fn = PyObject_GetAttrString(mod, "_cells_below");
+        Py_DECREF(mod);
+        if (!py_cells_below_fn) return -1;
+    }
+    PyObject *d = PyLong_FromLong(depth);
+    if (!d) return -1;
+    PyObject *res = PyObject_CallFunctionObjArgs(py_cells_below_fn, term, d, NULL);
+    Py_DECREF(d);
+    if (!res) return -1;
+    if (res == Py_None) { Py_DECREF(res); return 0; }
+    *out = res;
     return 1;
 }
 

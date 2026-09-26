@@ -565,6 +565,9 @@ def test_subject_normaliser_twins_agree():
         (C("k", C("f", C("g", 1))), 3), (Compound(F, (2,)), 1), (("k", bound), 2),
         (plain, 3), (Compound("$chars", ("a",)), 2), (Compound("()", (1,)), 1),
         (Compound("a", ()), 1), (Var(), 2), (7, 3),
+        # below a class pattern: a no-cell Compound's args, an instance's fields
+        (Compound(3, (C("g", 1),)), 2), (Compound(3, (C("g", 1),)), 1),
+        (_Box(C("g", 1)), 2), (_Box(("g", 1)), 2), (("k", _Box(C("g", 1))), 3),
     ]
     for term, depth in cases:
         a, b = c_twin(term, depth), py_twin(term, depth)
@@ -573,3 +576,144 @@ def test_subject_normaliser_twins_agree():
     assert c_twin(plain, 3) is plain and py_twin(plain, 3) is plain
     # depth bounds the walk: a Compound below it is left alone
     assert c_twin(("k", C("f", 2)), 1) == ("k", C("f", 2))
+
+
+# ── depth read off the BUILT pattern (roborev 204) ─────────────────────────
+#
+# The normaliser's depth used to come from a parallel analysis of the head
+# term: it missed keyword slots of a data reference, stopped at class
+# patterns (a Compound with no cell, a term instance), and was capped at 64.
+# It is now read off the final match AST (``head_match.pattern_structure_
+# depth`` / ``finalize_subject_depths``), so the two agree by construction.
+
+from dataclasses import dataclass as _dataclass
+from typing import Any as _Any
+
+
+@_dataclass
+class _Box:
+    a: _Any
+
+
+def _run_fn(fn, *args):
+    from tests.test_compiler_optimizations import _run_trampoline
+    return _run_trampoline(fn, *args)
+
+
+def _compile(functor, clauses, globals_):
+    from clausal.logic.compiler import compile_predicate_trampoline
+    from clausal.logic.database import Database
+    return compile_predicate_trampoline(functor, 2, clauses, Database(),
+                                        globals_=globals_)
+
+
+@pytest.fixture(scope="module")
+def KW(tmp_path_factory):
+    """A module declaring the data functors ``box/2`` and ``g/1``."""
+    from clausal.import_hook import _load_module
+    d = tmp_path_factory.mktemp("ccst_kw")
+    p = d / "ccst_kw.clausal"
+    p.write_text("-module(ccst_kw, [])\n-private([box(Lo, Hi), g(A)])\n")
+    sys.path.insert(0, str(d))
+    try:
+        mod = _load_module("ccst_kw", str(p))
+    finally:
+        sys.path.remove(str(d))
+    return dict(mod.__dict__)
+
+
+def _kw_box(lo, hi):
+    from clausal.terms import Call, LoadName
+    from clausal.pythonic_ast.nodes import Keyword
+    return Call(func=LoadName(name="box"), args=[], kwargs=[
+        Keyword(name="Lo", value=lo), Keyword(name="Hi", value=hi)])
+
+
+def _g(x):
+    from clausal.terms import Call, LoadName
+    return Call(func=LoadName(name="g"), args=[x], kwargs=[])
+
+
+def test_a_keyword_data_head_counts_its_keyword_slots(KW):
+    """Keyword data terms are refused in source since 2026-09-19, so this
+    head is built programmatically.  Its keyword slot holds a nested cell
+    pattern: the depth must be 2 (the old head analysis said 0)."""
+    from clausal.logic.compiler.head_match import (
+        head_to_match_pattern, pattern_structure_depth)
+    pat = head_to_match_pattern(_kw_box(_g(Var()), 2), {}, [], [], None,
+                                globals_=KW)
+    assert pattern_structure_depth(pat) == 2
+
+
+def test_a_keyword_data_head_matches_the_compound_spelling(KW):
+    from clausal.logic.database import Clause
+    clauses = [Clause(head=("kq", _kw_box(_g(1), 2), "a"), body=[]),
+               Clause(head=("kq", _kw_box(_g(2), 3), "b"), body=[]),
+               Clause(head=("kq", ("g", 9), "c"), body=[]),
+               Clause(head=("kq", 7, "d"), body=[])]
+    fn = _compile("kq", clauses, KW)
+    # The second argument is bound so the call reaches the keyword clause:
+    # with it unbound, first-argument indexing keys the keyword head as
+    # ('box', 0) (it counts positional args only) -- a separate, older gap.
+    for arg in (("box", ("g", 1), 2), C("box", ("g", 1), 2),
+                ("box", C("g", 1), 2), C("box", C("g", 1), 2)):
+        assert len(_run_fn(fn, arg, "a")) == 1, arg
+
+
+def test_a_cell_pattern_under_a_class_pattern_meets_a_compound():
+    """A no-cell Compound head (functor 3) and a term-instance head each hold
+    a cell pattern below their class pattern."""
+    from clausal.logic.database import Clause
+    X1, X2 = Var(), Var()
+    clauses = [Clause(head=Compound("cq", (Compound(3, (("g", X1),)), X1)), body=[]),
+               Clause(head=Compound("cq", (_Box(("g", X2)), X2)), body=[]),
+               Clause(head=Compound("cq", (("h", 1), 0)), body=[]),
+               Clause(head=Compound("cq", (9, 0)), body=[])]
+    fn = _compile("cq", clauses, {"_Box": _Box})
+    for arg, want in ((Compound(3, (("g", 5),)), 5),
+                      (Compound(3, (C("g", 5),)), 5),
+                      (_Box(("g", 6)), 6),
+                      (_Box(C("g", 6)), 6)):
+        Y = Var()
+        assert [r[0] for r in _run_fn(fn, arg, Y)] == [want], arg
+
+
+def _nest_s(d, mk):
+    t = "z"
+    for _ in range(d):
+        t = mk(t)
+    return t
+
+
+def test_a_pattern_deeper_than_64_meets_an_all_compound_caller():
+    """No cap: an 80-deep head pattern normalises all 80 levels."""
+    from clausal.logic.database import Clause
+    cell = lambda t: ("s", t)
+    clauses = [Clause(head=Compound("dq", (_nest_s(80, cell), "a")), body=[]),
+               Clause(head=Compound("dq", (_nest_s(79, cell), "b")), body=[]),
+               Clause(head=Compound("dq", ("z", "c")), body=[]),
+               Clause(head=Compound("dq", (7, "d")), body=[])]
+    fn = _compile("dq", clauses, {})
+    for mk in (cell, lambda t: Compound("s", (t,))):
+        Y = Var()
+        assert [r[0] for r in _run_fn(fn, _nest_s(80, mk), Y)] == ["a"]
+
+
+def test_an_80_deep_lifted_source_fact_meets_an_all_compound_caller(tmp_path):
+    from clausal.import_hook import _load_module
+    d = 80
+    src = ("-module(ccst_nat, [nat(X, Y)])\n-private([z, s(A), a, b, c, d])\n"
+           f"nat({'s(' * d}z{')' * d}, a),\n"
+           f"nat({'s(' * (d - 1)}z{')' * (d - 1)}, b),\n"
+           "nat(z, c),\nnat(7, d),\n")
+    p = tmp_path / "ccst_nat.clausal"
+    p.write_text(src)
+    sys.path.insert(0, str(tmp_path))
+    try:
+        M = _load_module("ccst_nat", str(p)).__dict__["$module"]
+    finally:
+        sys.path.remove(str(tmp_path))
+    assert M.db.row("nat", 2).index_plans
+    for mk in (lambda t: ("s", t), lambda t: Compound("s", (t,))):
+        Y = Var()
+        assert [walk(Y) for _ in call("nat", _nest_s(d, mk), Y, module=M)] == ["a"]

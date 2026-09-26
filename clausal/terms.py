@@ -105,8 +105,10 @@ def as_cells_for_match(term: Any, depth: int) -> Any:
     cell before the ``match`` -- linear in the pattern's own depth, where
     doubling every pattern level with a ``$Compound`` alternative was
     exponential (roborev 203).  The compiler emits a call only at argument
-    positions whose patterns have structure, with *depth* the deepest cell
-    pattern nesting there, so no level a pattern never inspects is walked.
+    positions whose BUILT patterns have structure, with *depth* the deepest
+    structure nesting of those patterns (``head_match.pattern_structure_
+    depth``), so no level a pattern never inspects is walked and every level
+    it does inspect is.
 
     Nothing is copied unless a Compound is actually converted: the result is
     ``deref(term)`` itself, and an unconverted element keeps its original
@@ -120,28 +122,78 @@ def as_cells_for_match(term: Any, depth: int) -> Any:
     return term if converted is None else converted
 
 
-def _cells_below(term: Any, depth: int) -> "tuple | None":
+def _cells_below(term: Any, depth: int) -> Any:
     """The converted form of the (already dereferenced) *term*, or None when
-    no Compound within *depth* cell levels needed converting."""
+    no Compound within *depth* structure levels needed converting.
+
+    A LEVEL is one structure node a head pattern can destructure: a cell
+    (tuple), a ``Compound`` -- with a cell (converted, then walked as that
+    cell) or without one (its args walked) -- or a dataclass term instance
+    (its fields walked).  *depth* comes from the built pattern
+    (``head_match.pattern_structure_depth``), so it is exact, not capped.
+    The C twin ``cells_below`` (``_variables.c``) hands term instances back
+    to this function.
+    """
+    if depth <= 0:
+        return None
     if type(term) is tuple:
-        if depth <= 1 or len(term) < 2:
-            return None
-        new = None
-        for i in range(1, len(term)):
-            elt = deref(term[i])
-            if type(elt) is tuple or isinstance(elt, Compound):
-                sub = _cells_below(elt, depth - 1)
-                if sub is not None:
-                    if new is None:
-                        new = list(term)
-                    new[i] = sub
+        new = _cells_in_slots(term, 1, depth)
         return None if new is None else tuple(new)
     if isinstance(term, Compound):
         cell = compound_as_cell(term)
-        if cell is None:
+        if cell is not None:
+            return _cells_below(cell, depth) or cell
+        new = _cells_in_slots(term.args, 0, depth)
+        return None if new is None else Compound(term.functor, tuple(new))
+    if _is_structure_instance(term):
+        if depth <= 1:
             return None
-        return _cells_below(cell, depth) or cell
+        changed = {}
+        for f in _dataclass_fields(term):
+            sub = _cells_of(getattr(term, f.name), depth - 1)
+            if sub is not None:
+                changed[f.name] = sub
+        if not changed:
+            return None
+        import copy  # noqa: PLC0415
+        new = copy.copy(term)
+        for name, value in changed.items():
+            object.__setattr__(new, name, value)
+        return new
     return None
+
+
+def _cells_of(elt: Any, depth: int) -> Any:
+    """``_cells_below`` of one (not yet dereferenced) slot value."""
+    elt = deref(elt)
+    if type(elt) is tuple or isinstance(elt, Compound) or _is_structure_instance(elt):
+        return _cells_below(elt, depth)
+    return None
+
+
+def _cells_in_slots(seq: Any, start: int, depth: int) -> "list | None":
+    """*seq* as a list with its slots from *start* converted one level down,
+    or None when none needed converting."""
+    if depth <= 1 or len(seq) <= start:
+        return None
+    new = None
+    for i in range(start, len(seq)):
+        sub = _cells_of(seq[i], depth - 1)
+        if sub is not None:
+            if new is None:
+                new = list(seq)
+            new[i] = sub
+    return new
+
+
+def _is_structure_instance(x: Any) -> bool:
+    import dataclasses  # noqa: PLC0415
+    return dataclasses.is_dataclass(x) and not isinstance(x, type)
+
+
+def _dataclass_fields(x: Any):
+    import dataclasses  # noqa: PLC0415
+    return dataclasses.fields(x)
 
 
 def compound_as_cell(term: "Compound") -> "tuple | None":
