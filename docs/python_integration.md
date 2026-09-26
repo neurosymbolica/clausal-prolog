@@ -147,11 +147,42 @@ while --next(++cur, N):                      # re-run each iteration
 Exported names are ordinary locals: on success they survive the block; on
 failure nothing is assigned (a later read is an `UnboundLocalError`). A
 `for` exports exactly its target names, which must be variables of the goal.
-Values are copies; two seams never share a variable — goals that must share
-one go in one seam as a conjunction. An export that is unbound and
-constrained raises `ResidualConstraints` (keep the store with an explicit
-`Trail`, or ask for the residue inside the goal). Everywhere else `--` is
-still the term.
+Two seams never share a variable — goals that must share one go in one seam
+as a conjunction. An export that is unbound and constrained raises
+`ResidualConstraints` (keep the store with an explicit `Trail`, or ask for
+the residue inside the goal). Everywhere else `--` is still the term.
+
+**What comes out is the engine's own term** (the dumb seam, 2026-09-26).
+An atom is the plain `str`, a string is the carrier `('$chars', text)`, a
+compound is its cell, a dict is the `DictTerm` — nothing is walked or
+converted. Compare an answer against a `--`-wrapped term, and ask for a
+Python value by name:
+
+```clausal
+-double_quotes(chars)
+for V in --verdict(V):
+    if V == --result(permitted, "Article 6(1)", art_6):   # the same term
+        ...
+    text = to_python(V)            # ('result', 'permitted', 'Article 6(1)', 'art_6')
+for T in --txt(T):
+    T == "some text"               # FALSE: a carrier is not a Python str
+    T == --"some text"             # True under -double_quotes(chars)
+    to_python(T)                   # 'some text'
+```
+
+An answer crosses **by identity** only when it is proven to hold no logic
+variable at all — it is atomic, it is a constant the compiler baked into a
+clause (a fact's cell, however large: `if --g(X, DOC)` over a stored cell
+never walks `DOC`), or a bounded probe walked it completely and met none.
+Anything else — a compound built from body variables, a large `++`-built
+object — is deref-walked into a **copy** first, because a term holding a
+variable would neither compare equal to its `--` literal nor survive
+backtracking. Do not mutate what you are handed; it may be the engine's own
+stored term.
+
+The same holds in a comprehension or generator expression whose FIRST
+`for` clause is a `--` goal (`{K: V for K, V in --kv(K, V)}`), and for the
+dotted runtime form `--m.pred(X)`.
 
 A term is a non-empty tuple, so it is always true: `assert --edge(zzz, X)`,
 `if --g and ready:`, `x if --g else y`, `bool(--g)`, `not --g` outside an
@@ -324,8 +355,11 @@ test("text crosses back as an atom, not a string") <- (
 ```
 
 A program that needs a string back **makes one**: `atom_chars(Y, Text)` in
-Clausal. (The ruled boundary design has `++` read a plain `str` as TEXT and
-an `atom(...)`-tagged value as the atom; that step has not landed.)
+Clausal, or hands the carrier itself back — a goal-position answer that is a
+string comes out as the carrier, and `++` passes it in unchanged, so
+`for T in --txt(T): ... if --txt(++T)` is the identity round trip. (The
+2026-09-21 design that tagged atoms on the way out and read a plain `str` as
+text on the way in was superseded by the dumb seam on 2026-09-26.)
 
 ### The Python atom API
 

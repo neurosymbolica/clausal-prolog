@@ -32,6 +32,8 @@ need an atom back mint one.
 
 from __future__ import annotations
 
+import copy
+
 from clausal.logic.atoms import (
     is_atom as _term_is_atom, spelling as _atom_spelling, atom, as_dict_key as _as_dict_key)
 from clausal.logic.cells import chars, is_chars, chars_text, TUPLE_TAG  # stage 1: the chars carrier
@@ -39,8 +41,11 @@ from clausal.logic.python_terms import FROM_TERM as _FROM_TERM  # the ONE regist
 from clausal.logic.variables import deref, walk
 from clausal.terms import (
     Compound, DictTerm, KWTerm, SegBytes, SegList, SegString, SetTerm, compound_as_cell)
+from clausal.logic.predicate import is_term_instance, term_field_names
+from clausal.pythonic_ast.nodes import Node as _Node
 
-__all__ = ["to_python", "unwrap_atom"]
+__all__ = ["to_python", "unwrap_atom", "strip_atom_tags", "has_atom_tag",
+           "term_children", "map_term", "TERM_CONTAINER_TYPES"]
 
 
 def to_python(val):
@@ -169,6 +174,126 @@ def to_python(val):
         return frozenset(to_python(e) for e in val)
     if isinstance(val, (set, frozenset)):
         return t(to_python(e) for e in val)
+    if is_term_instance(val):
+        # A dataclass term class is rebuilt with converted fields (dumb seam
+        # step (c), 2026-09-26; before that it crossed unchanged, insides
+        # and all).  A pythonic_ast Node crosses as itself: it is code, not
+        # data, and its ``++`` values already passed through wrap_text.
+        if isinstance(val, _Node):
+            return val
+        return t(**{n: to_python(getattr(val, n)) for n in term_field_names(val)})
+    return val
+
+
+#: Every type the engine treats as a TERM CONTAINER -- the shapes to_python
+#: converts, map_term rebuilds and term_children walks.  One list, so the
+#: three cannot drift (tests/test_leak_doors.py pins each entry against all
+#: three); a dataclass term class is the open-ended member, recognised by
+#: ``is_term_instance``.  Seg* are containers too but hold str/VarSeg
+#: segments, not arbitrary terms: map_term leaves them alone, to_python walks
+#: them to their ground form.
+TERM_CONTAINER_TYPES = (tuple, list, dict, DictTerm, Compound, KWTerm, SetTerm, set, frozenset)
+
+
+def term_children(val):
+    """The direct children of a term container, or ``()`` for a leaf.  A
+    dict-like container yields keys and values; a Compound its functor and
+    args; a NamedTuple its fields."""
+    if isinstance(val, (tuple, list)):
+        return val
+    if isinstance(val, (dict, DictTerm)):
+        out = []
+        for k, v in val.items():
+            out.append(k); out.append(v)
+        return out
+    if isinstance(val, Compound):
+        return (val.functor, *val.args)
+    if isinstance(val, KWTerm):
+        return list(val.values())
+    if isinstance(val, (SetTerm, set, frozenset)):
+        return list(val)
+    if is_term_instance(val):
+        return [getattr(val, n) for n in term_field_names(val)]
+    return ()
+
+
+def map_term(val, fn):
+    """*val* rebuilt with *fn* applied to each direct child, for every
+    container in TERM_CONTAINER_TYPES; the SAME OBJECT when no child
+    changed (identity is the "unchanged" signal, so callers allocate
+    nothing on the common path).  A leaf is returned as it is.  A dict or
+    list SUBCLASS is rebuilt as its own type when its constructor takes
+    the rebuilt contents, and a NamedTuple through its own constructor;
+    when that raises TypeError the plain type is the documented fallback."""
+    t = type(val)
+    if t is tuple or t is list:
+        out = [fn(v) for v in val]
+        if all(a is b for a, b in zip(out, val)):
+            return val
+        return tuple(out) if t is tuple else out
+    if isinstance(val, tuple):                         # NamedTuple
+        out = [fn(v) for v in val]
+        if all(a is b for a, b in zip(out, val)):
+            return val
+        try:
+            return t(*out)
+        except TypeError:
+            return tuple(out)
+    if isinstance(val, list):                          # a list subclass
+        out = [fn(v) for v in val]
+        if all(a is b for a, b in zip(out, val)):
+            return val
+        # a shallow copy keeps the instance's own state; list's slot
+        # assignment bypasses a subclass constructor or __setitem__ whose
+        # one-argument form means something else (roborev 257)
+        new = copy.copy(val)
+        list.__setitem__(new, slice(None), out)
+        return new
+    if isinstance(val, DictTerm):
+        items = list(val.items())
+        out = [(fn(k), fn(v)) for k, v in items]
+        if all(k1 is k2 and v1 is v2 for (k1, v1), (k2, v2) in zip(out, items)):
+            return val
+        return DictTerm(dict(out), _position=val._position)
+    if isinstance(val, dict):                          # dict and its subclasses
+        items = list(val.items())
+        out = [(fn(k), fn(v)) for k, v in items]
+        if all(k1 is k2 and v1 is v2 for (k1, v1), (k2, v2) in zip(out, items)):
+            return val
+        if t is dict:
+            return dict(out)
+        # a shallow copy keeps default_factory and any other instance state;
+        # dict's own update bypasses a subclass whose constructor reads a
+        # pair list differently (Counter counts the pairs; roborev 257)
+        new = copy.copy(val)
+        dict.clear(new)
+        dict.update(new, out)
+        return new
+    if isinstance(val, Compound):
+        functor = fn(val.functor)
+        args = tuple(fn(a) for a in val.args)
+        if functor is val.functor and all(a is b for a, b in zip(args, val.args)):
+            return val
+        return Compound(functor, args, _position=val._position)
+    if isinstance(val, KWTerm):
+        fields = {k: fn(v) for k, v in val.items()}
+        if all(fields[k] is v for k, v in val.items()):
+            return val
+        return KWTerm(val.functor, _position=val._position, **fields)
+    if isinstance(val, SetTerm):
+        elems = [fn(e) for e in val]
+        if all(a is b for a, b in zip(elems, val)):
+            return val
+        return SetTerm(elems, _position=val._position)
+    if isinstance(val, (set, frozenset)):
+        elems = [fn(e) for e in val]
+        return val if all(a is b for a, b in zip(elems, val)) else t(elems)
+    if is_term_instance(val):
+        names = term_field_names(val)
+        fields = {n: fn(getattr(val, n)) for n in names}
+        if all(fields[n] is getattr(val, n) for n in names):
+            return val
+        return t(**fields)
     return val
 
 
@@ -198,6 +323,135 @@ def wrap_text(val):
     if type(val) is atom:
         return str.__str__(val)        # the LEAK RULE: a boundary tag never enters a term
     return val                         # STAGE 2: a str a thunk hands back IS the atom (identity)
+
+
+def has_atom_tag(val) -> bool:
+    """True iff an ``atom`` INSTANCE is reachable from *val* through the term
+    containers.  ITERATIVE (a cons-like goal thousands of levels deep must
+    not raise RecursionError at solve()), read-only: the cheap scan every
+    Python entry runs before deciding whether the rebuild is needed at all.
+
+    CYCLE-SAFE: a container is entered once, by id, and a reference to it
+    is kept for the scan so a computed child (a property that returns a
+    fresh container) cannot die and hand its id to a later one.  A cyclic
+    term -- the engine builds one on purpose in unify without the occurs
+    check, and the adversarial tests hand such goals to solve() -- otherwise
+    grew the walk's stack without bound until the OOM killer took the
+    process (the gate died twice at the same test, 2026-09-26).  A
+    pythonic_ast Node (a rewriter-built goal) is a leaf: it is code, and its
+    ``++`` values already passed through wrap_text, so a goal-position seam
+    pays one type test here, not a walk of its tree."""
+    stack = [val]
+    seen: dict = {}          # id -> the container: a reference is KEPT, so no id can be reused mid-scan
+    while stack:
+        v = stack.pop()
+        if type(v) is atom:
+            return True
+        if isinstance(v, _Node):
+            continue         # a rewriter goal is code, not data; its ++ values passed wrap_text
+        children = term_children(v)
+        if children:
+            key = id(v)
+            if key in seen:
+                continue
+            seen[key] = v
+            stack.extend(children)
+    return False
+
+
+def strip_atom_tags(val):
+    """*val* with every ``atom`` INSTANCE -- at any depth of any term
+    container (TERM_CONTAINER_TYPES, via map_term) -- replaced by the plain
+    ``str`` it tags.  THE LEAK RULE, deep.
+
+    ``wrap_text`` applies the rule to a ``++`` value, one level.  The doors
+    it never sees are a seam's bare-name lookup (``seam.build``) and a Python
+    caller's goal/arguments at ``solve``/``call`` (and so ``once``, ``query``,
+    ``each``); both call this (dumb seam step (d), 2026-09-26).  Returns the
+    SAME OBJECT when nothing needed changing; callers on a hot path run
+    :func:`has_atom_tag` first, so the rebuild only ever runs on a value
+    that holds a tag.
+
+    ONLY A SUBTREE THAT HOLDS A TAG IS REBUILT (roborev 257): one linear,
+    cycle-safe pass (:func:`_tag_reachability`) marks every container from
+    which a tag is reachable; every other subtree -- an unrelated cyclic
+    answer beside a tag, a big untagged list -- is handed back by identity
+    without being entered.  A CYCLE that itself holds a tag cannot be
+    rebuilt (an immutable cycle has no first element to build) and is
+    refused with a ``TypeError``."""
+    if type(val) is atom:
+        return str.__str__(val)
+    reach = _tag_reachability(val)
+    if not reach:
+        return val
+    return _strip(val, reach, set(), {})
+
+
+def _tag_reachability(root) -> dict:
+    """``{id(container): container}`` for every container reachable from
+    *root* from which an ``atom`` instance is reachable.  Linear: one
+    iterative DFS records containers, their parent links and which hold a
+    tag directly; one reverse BFS from those propagates "holds a tag" to
+    every ancestor.  Cycle-safe by construction (ids, references kept)."""
+    nodes: dict = {}          # id -> container (kept alive for the pass)
+    parents: dict = {}        # id -> [parent ids]
+    direct: list = []         # ids of containers with a tag as a direct child
+    stack = [(root, None)]
+    while stack:
+        v, parent = stack.pop()
+        if type(v) is atom:
+            if parent is not None:
+                direct.append(parent)
+            continue
+        if isinstance(v, _Node):
+            continue
+        children = term_children(v)
+        if not children:
+            continue
+        key = id(v)
+        if parent is not None:
+            parents.setdefault(key, []).append(parent)
+        if key in nodes:
+            continue
+        nodes[key] = v
+        for c in children:
+            stack.append((c, key))
+    reach: dict = {}
+    todo = list(direct)
+    while todo:
+        key = todo.pop()
+        if key in reach:
+            continue
+        reach[key] = nodes[key]
+        todo.extend(parents.get(key, ()))
+    return reach
+
+
+def _strip(val, reach: dict, active: set, done: dict):
+    """Rebuild *val* with its tags stripped.  *done* memoises by id for the
+    one call, so a tagged subterm SHARED by several paths is rebuilt once
+    and the result keeps the sharing (roborev on 3ee9c7d6: without it a
+    tagged DAG with nested sharing took exponential time).  *reach* keeps
+    every container alive for the call, so an id cannot be reused."""
+    if type(val) is atom:
+        return str.__str__(val)
+    key = id(val)
+    if key not in reach:
+        return val                    # no tag below: by identity, not entered
+    if key in done:
+        return done[key]
+    if key in active:
+        raise TypeError(
+            "the goal holds a boundary `atom` inside a CYCLIC term; a cyclic "
+            "term cannot be rebuilt -- build it from plain str atoms (the atom "
+            "IS the str) or break the cycle")
+    active.add(key)
+    try:
+        out = map_term(val, lambda v: _strip(v, reach, active, done))
+    finally:
+        active.discard(key)
+    done[key] = out
+    return out
 
 
 def unwrap_atom(val):

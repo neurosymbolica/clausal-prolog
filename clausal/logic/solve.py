@@ -48,6 +48,7 @@ from dataclasses import fields as _dc_fields, is_dataclass as _is_dataclass
 from typing import Any, Iterator
 
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
+from clausal.logic.to_python import strip_atom_tags as _strip_atom_tags, has_atom_tag as _has_atom_tag
 from clausal.logic.atoms import (
     is_atom as _term_is_atom, mint as _mint_atom, spelling as _spelling, is_mangled, demangle,
 )
@@ -1087,6 +1088,7 @@ def call(
             module = resolve_module(_q[1], module, "call/N")
             functor = _q[2]
     # Fast path: predicate class passed directly — no module lookup needed.
+    args = _python_entry(args)
     if hasattr(functor, '_get_dispatch'):
         dispatch_fn = functor._get_dispatch()
         if trail is None:
@@ -1222,6 +1224,26 @@ def call(
     yield from _drive_trampoline(dispatch_fn, trail, *args)
 
 
+def _python_entry(value):
+    """THE LEAK RULE at a Python caller's door (dumb seam step (d),
+    2026-09-26): an ``atom`` instance anywhere in a goal or argument list
+    built by Python becomes the plain str before it can reach term space
+    (or crash ``compile`` as an ast.Constant of the wrong type).
+
+    ONE definition for the two entries Python has -- ``solve`` (a goal term;
+    ``once``, ``query``, ``query_wfs`` and every goal-position seam go
+    through it) and ``call`` (a functor and arguments handed straight to the
+    dispatch; there is no funnel below the two that sees Python's values as
+    terms).  An iterative, cycle-safe read-only scan decides first: a
+    rewriter-built goal (a Node) is a leaf and costs one type test; a plain
+    cell costs one pass plus a small visited table; a cons-like goal
+    thousands of levels deep cannot raise RecursionError here.  Only a goal
+    that holds a tag is rebuilt (a tagged CYCLE is refused, TypeError)."""
+    if _has_atom_tag(value):
+        return _strip_atom_tags(value)
+    return value
+
+
 def solve(
     goal: Any,
     module=None,
@@ -1249,6 +1271,7 @@ def solve(
     Trail after each solution (bindings are live on the trail).
     """
     goal, module = _resolved_goal_and_module(goal, module, "solve/2")
+    goal = _python_entry(goal)
     if trail is None:
         trail = Trail()
 

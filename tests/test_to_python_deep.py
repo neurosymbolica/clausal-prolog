@@ -235,3 +235,23 @@ def test_the_carrier_is_tested_before_the_generic_tuple_arm():
     assert type(out) is str and out == "x"
     out = to_python([chars("x")])
     assert out == ["x"] and type(out[0]) is str
+
+
+
+def test_a_dataclass_term_instance_is_rebuilt_with_converted_fields():
+    """Dumb seam step (c): a dataclass term class converts through (it used
+    to cross unchanged); a pythonic_ast Node -- code, not data -- does not."""
+    import dataclasses
+    from clausal.logic.predicate import is_term_instance
+    @dataclasses.dataclass
+    class P:
+        x: object
+        y: object = 1
+    inst = P(chars("x"))
+    assert is_term_instance(inst)
+    out = to_python(inst)
+    assert type(out) is P and out is not inst
+    assert out.x == "x" and type(out.x) is str and out.y == 1
+    from clausal.pythonic_ast.nodes import LoadName
+    node = LoadName(name=chars("x"))
+    assert to_python(node) is node, "a Node is code and crosses as itself"

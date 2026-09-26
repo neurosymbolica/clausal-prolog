@@ -36,6 +36,8 @@ from clausal.pythonic_ast.nodes import Call, LoadAttr, LoadName, Node
 from clausal.terms import PyThunk, Var
 from clausal.logic.cells import QUALIFIED_GOAL_FUNCTOR
 from clausal.logic.atoms import is_atom, is_mangled
+from clausal.logic.to_python import strip_atom_tags as _strip_atom_tags
+from clausal.logic.cells import is_compiled_constant
 
 
 def seam_term(node: Any, module_globals: dict, loose: bool = False) -> Any:
@@ -186,9 +188,11 @@ def seam_term(node: Any, module_globals: dict, loose: bool = False) -> Any:
                 f"module (add it to -module/-private, -import_from it, or "
                 f"declare -implicit_functors)")
         if isinstance(term, LoadName):
-            return lookup(term.name)
+            # THE LEAK RULE at the bare-name door (step (d)): a module global
+            # bound to an exported ``atom`` enters as the plain str.
+            return _strip_atom_tags(lookup(term.name))
         if isinstance(term, LoadAttr):
-            return lookup(dotted(term))
+            return _strip_atom_tags(lookup(dotted(term)))
         if isinstance(term, list):
             return [build(e) for e in term]
         if isinstance(term, tuple):
@@ -342,68 +346,95 @@ class ResidualConstraints(Exception):
 
 
 def export(var: Any) -> Any:
-    """The fully dereferenced copy of *var*'s value for Python to keep, in the
-    PYTHON BOUNDARY representation.
+    """The value of *var* for Python to keep: THE INTERNAL FORM.
 
-    THE OUT BOUNDARY (spec 2026-09-21).  This is the one place a term becomes a
-    value Python keeps, so it is where the representation stops::
+    THE DUMB SEAM (operator GO 2026-09-26, superseding the 2026-09-21 tagged
+    boundary): a goal-position seam hands back what the engine holds -- an
+    atom is the plain ``str``, a string the carrier ``('$chars', s)``, a dict
+    the ``DictTerm`` -- with no conversion.  Python text is ``to_python(T)``;
+    a comparison is against a ``--``-wrapped term.
 
-        an atom    ->  atom('x')   a ``str`` SUBCLASS, advisory: == its text
-        a string   ->  'text'      a plain Python ``str``
+    BY IDENTITY OR BY COPY -- THE SOUND RULE.  ``Var`` equality is identity
+    and backtracking rebinds, so a value may cross by identity only if NO
+    ``Var`` object -- bound or unbound -- is reachable from it.  Three ways
+    to know that, in cost order, and otherwise a deref-walked copy:
 
-    Both directions matter.  Tagging the atom is what lets a caller — and
-    ``++`` on the way back — tell an atom from text when Python has only one
-    string form.  Rendering the string as plain text is what stops the carrier
-    tuple leaking into code that sorts, hashes or dict-keys it: a downstream
-    sweep met exactly that as ``TypeError: '<' not supported between instances
-    of 'tuple' and 'str'``, and as two key spaces that silently never joined.
+    1. the value is atomic (a str, a number, bytes, None);
+    2. the value is a COMPILED CONSTANT (``cells.is_compiled_constant``): a
+       tuple the compiler baked into a clause -- a fact's cell, a chars
+       carrier -- can hold no Var, is immutable, and is the object every
+       call hands out.  O(1), and the reason ``if --g(X, DOC)`` over a
+       stored 100k-row cell never walks DOC;
+    3. a BOUNDED probe (``_probe_var_free``): the value is walked for at
+       most ``_PROBE_BUDGET`` nodes; a Var met, or the budget exhausted,
+       means "not proven" and the value is copied.  This is what makes a
+       small body-built ground answer free and a large ``++``-built one a
+       single copy (a Python object carries no certificate).
 
-    Applied at EVERY DEPTH, not just the top: an answer is usually a compound,
-    and a caller reading ``v[2]`` has crossed the boundary just as much as one
-    reading ``v``."""
-    from clausal.logic.solve import _deref_walk
+    Not a trail heuristic: the previous rule ("only the goal's own variables
+    were bound") read ``P is pair(A, A), between(1, 2, A)`` as safe and
+    handed out a cell holding the live ``A`` (roborev 243).  Every
+    certificate above is a property of the OBJECT, checked at export.
+
+    An unbound, constrained variable is refused: exports are answers; a
+    constraint store crossing a seam is the lower level (``solve`` with an
+    explicit ``Trail``) or, once it exists, ``copy_term/3`` inside the goal.
+    An unbound, unattributed variable is the variable itself."""
     from clausal.logic.variables import deref, is_var
     d = deref(var)
-    if is_var(d) and getattr(d, "attrs", None):
-        raise ResidualConstraints(
-            f"--: exported variable is unbound and constrained "
-            f"({sorted(d.attrs)}); exports are answers. Keep the store alive "
-            f"with an explicit Trail, or ask for the residue inside the goal")
-    return _to_boundary(_deref_walk(var))
+    if is_var(d):
+        if getattr(d, "attrs", None):
+            raise ResidualConstraints(
+                f"--: exported variable is unbound and constrained "
+                f"({sorted(d.attrs)}); exports are answers. Keep the store alive "
+                f"with an explicit Trail, or ask for the residue inside the goal")
+        return d
+    if type(d) in _ATOMIC or is_compiled_constant(d) or _probe_var_free(d):
+        return d
+    return _deref_walk(d)
 
 
-def _to_boundary(value: Any) -> Any:
-    """*value* in the Python boundary representation, recursively.
+_ATOMIC = frozenset((str, int, float, bool, bytes, complex, type(None)))
+_PROBE_BUDGET = 512
 
-    Ordering matters: the chars carrier is a TUPLE, so it must be recognised
-    before the generic tuple walk, or a string would be rebuilt element-wise
-    as a 2-tuple of ('$chars', text).  That is the generic-branch-ahead-of-the-
-    specific-one mirror, and it is why this is a chain rather than a dispatch
-    table."""
-    from clausal.logic.atoms import atom as _atom, is_atom as _is_atom
-    from clausal.logic.cells import is_chars, chars_text
-    if _is_atom(value):
-        return _atom(value)
-    if is_chars(value):
-        return chars_text(value)
-    if type(value) is tuple:
-        if len(value) == 1:
-            # THE RESERVED 1-TUPLE crosses OPAQUE.  ``('x',)`` is reserved —
-            # ``compound_cell_shape`` REFUSES it, and the reservation is for a
-            # future opaque Python object reference — so it is neither an atom
-            # nor a compound and must not be walked.  Recursing produced
-            # ``(atom('c'),)``, which READS as a legitimate compound with
-            # functor ``c`` and no arguments: the generic-tuple branch
-            # swallowing a shape that has a specific meaning, which is the
-            # mirror this codebase keeps meeting.  Pass-through matches
-            # ``to_python``, the engine's other deep converter, which also
-            # leaves it alone rather than raising — ``export`` is not the place
-            # to start refusing a shape the rest of the engine tolerates.
-            return value
-        return tuple(_to_boundary(v) for v in value)
-    if type(value) is list:
-        return [_to_boundary(v) for v in value]
-    return value
+
+def _probe_var_free(value, budget: int = _PROBE_BUDGET) -> bool:
+    """True iff *value* was walked COMPLETELY within *budget* nodes and no
+    ``Var`` object was met.  Iterative, read-only.  ``Var`` here is the
+    OBJECT test (``isinstance``), never ``is_var``: a bound Var is exactly
+    what must not cross by identity.  Every container the engine knows
+    (``to_python.term_children``) is entered; a Seg* is not, and counts as
+    not proven (it holds holes by construction)."""
+    from clausal.logic.variables import Var
+    from clausal.logic.to_python import term_children
+    from clausal.terms import SegBytes, SegList, SegString
+    stack = [value]
+    visited: dict = {}       # id -> container: entered once, and KEPT alive for the walk
+    seen = 0
+    while stack:
+        v = stack.pop()
+        seen += 1
+        if seen > budget:
+            return False
+        if type(v) in _ATOMIC:
+            continue
+        if isinstance(v, Var):
+            return False
+        if isinstance(v, (SegList, SegString, SegBytes)):
+            return False
+        children = term_children(v)
+        if children:
+            key = id(v)
+            if key in visited:
+                continue
+            visited[key] = v
+            stack.extend(children)
+    return True
+
+
+def _deref_walk(term):
+    from clausal.logic.solve import _deref_walk as walk  # noqa: PLC0415
+    return walk(term)
 
 
 def _module_of(module_globals: dict):
@@ -847,7 +878,7 @@ def once_bind(goal: Any, module_globals: dict) -> bool:
         #
         # Closing does NOT undo the trail — ``_definite_answers`` owns a
         # private ``Trail`` and nothing in the close path rewinds it — which
-        # is exactly what the two ``$export`` lines the rewriter emits right
+        # is exactly what the ``$export`` lines the rewriter emits right
         # after this call depend on: the goal's variables are still bound when
         # they run.  (Spec §4: the seam's own variables are discarded WITH
         # their bindings; nothing undoes a trail on the caller's behalf.)
@@ -857,7 +888,10 @@ def once_bind(goal: Any, module_globals: dict) -> bool:
 
 def each(goal: Any, variables: tuple, module_globals: dict):
     """Yield the exported values of *variables* once per unconditional answer:
-    the bare value for one variable, else a tuple in *variables* order."""
+    the bare value for one variable, else a tuple in *variables* order -- in
+    the INTERNAL form, by identity when the value is proven Var-free and as
+    a copy otherwise (``export``): the engine backtracks past every answer,
+    so a value it could rebind must never cross by identity."""
     single = len(variables) == 1
     for _ in _definite_answers(goal, _module_of(module_globals), module_globals):
         if single:
