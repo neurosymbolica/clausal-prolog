@@ -281,6 +281,11 @@ def compile_module(
                            module_name)
     _refuse_unrefused_deferred_heads(predicate_nodes, module_dict, module_name)
 
+    # ── Step 3e: a name imported AND declared here as a procedure ────────
+    #    Operator ruling 2026-09-26.  After step 3d, so a procedure import
+    #    met by local CLAUSES keeps the gate's own refusal message.
+    _refuse_import_local_clashes(module_items, predicate_nodes, module_name)
+
     # ── Step 4: assertz all clauses ───────────────────────────────────────
     pending: dict[tuple[str, int], "str | None"] = {}
     head_fields = _head_field_names(module_items)
@@ -1312,6 +1317,94 @@ def _load_gate(db, functor: str, arity: int, author: str, kind: str,
             raise
     else:
         ctx.__exit__(None, None, None)
+
+
+_CLASHING_DIRECTIVES = ("dynamic", "discontiguous", "table")
+
+
+def _imported_indicators(module_items: list) -> dict:
+    """``{(local_name, arity): (directive_text, owner, kind)}`` for every
+    predicate indicator an ``-import_from`` of a CLAUSAL module brings.
+
+    *kind* is ``"data"`` (a field-carrying export entry, R6/R6b) or
+    ``"procedure"``.  The arities are the OWNER's for the imported spelling
+    (``Database.declared_arities_for``); an import names a predicate but
+    carries no arity.  A Python module (``py.json``) has no Database and
+    brings no indicator."""
+    from clausal.logic.predicate import namespace_db  # noqa: PLC0415
+    found: dict = {}
+    for item in module_items:
+        if not isinstance(item, ImportFromItem):
+            continue
+        try:
+            mod = _resolve_module(item.module)
+        except ImportError:
+            continue
+        owner_db = namespace_db(vars(mod))
+        if owner_db is None:
+            continue
+        for name_spec in item.names:
+            if isinstance(name_spec, tuple):
+                spelling, local = name_spec
+                text = f"-import_from({item.module}, [alias({spelling}, {local})])"
+            else:
+                spelling = local = name_spec
+                text = f"-import_from({item.module}, [{spelling}])"
+            for arity in owner_db.declared_arities_for(spelling):
+                kind = ("data" if owner_db.declared_kind(spelling, arity) == "data"
+                        else "procedure")
+                found.setdefault((local, arity), (text, item.module, kind))
+    return found
+
+
+def _local_procedure_declarations(module_items: list,
+                                  predicate_nodes: list) -> dict:
+    """``{(name, arity): description}`` for every procedure this file
+    declares itself: a ``-dynamic``/``-discontiguous``/``-table`` directive
+    (named first -- it is the explicit declaration) or clauses."""
+    found: dict = {}
+    for item in module_items:
+        if isinstance(item, DirectiveItem) and item.name in _CLASHING_DIRECTIVES:
+            for functor, arity in item.specs:
+                found.setdefault((functor, arity),
+                                 f"-{item.name}({functor}/{arity})")
+    for node in predicate_nodes:
+        functor, arity = head_key(node.head)
+        found.setdefault((functor, arity), f"(clauses for {functor}/{arity})")
+    return found
+
+
+def _refuse_import_local_clashes(module_items: list, predicate_nodes: list,
+                                 module_name: str) -> None:
+    """Refuse a load that imports a predicate indicator and ALSO declares it
+    here as a procedure (operator ruling 2026-09-26, in the spirit of ISO
+    13211-2: a local definition that clashes with an import is an error).
+
+    Before this the local declaration was never reached: ``_process_imports``
+    rebinds each imported name AFTER the module body ran, so a call to a
+    local ``-dynamic(edge/2)`` beside an imported ``edge`` reached the import
+    instead (an ``existence_error`` for a DATA import, the owner's clauses
+    for a procedure import) where ISO's clause-less dynamic procedure fails.
+
+    By indicator, like Scryer: a local ``edge/3`` beside an imported
+    ``edge/2`` is a different predicate and loads.  An aliased import
+    ``alias(edge, e)`` clashes on its LOCAL name ``e``."""
+    imported = _imported_indicators(module_items)
+    if not imported:
+        return
+    local = _local_procedure_declarations(module_items, predicate_nodes)
+    for key in sorted(set(imported) & set(local)):
+        name, arity = key
+        text, owner, kind = imported[key]
+        what = "a DATA functor" if kind == "data" else "a procedure"
+        raise SyntaxError(
+            f"{module_name} declares {name}/{arity} locally ({local[key]}), "
+            f"but it also imports {name}/{arity} from {owner} ({text}), "
+            f"where it is {what}.  A predicate cannot be both imported and "
+            f"defined in the same module.  Either remove {name} from the "
+            f"-import_from list to define {name}/{arity} here, or drop the "
+            f"local declaration to use {owner}'s; to keep both, import it "
+            f"under another name (alias({name}, other)).")
 
 
 def _redefinition_error(exc, functor: str, arity: int, pred_cls,
