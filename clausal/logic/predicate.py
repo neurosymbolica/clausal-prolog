@@ -1931,7 +1931,13 @@ def _declares_over(namespace, functor: str, fields: tuple) -> bool:
       body re-run into a namespace that already finished a load);
     * the name is bound to the pooled ATOM of its own spelling (an earlier
       module declared the atom; the predicate wins in the file that
-      declares it -- Phenomenon A).
+      declares it -- Phenomenon A);
+    * the name is an ALIASED import of a DATA functor (``alias(edge, e)``
+      binds ``e`` to the atom ``edge``, and the -import_from put ``e`` in
+      the functor-signature carrier).  Building the head from that atom
+      raised ``TypeError: 'str' object is not callable``; binding the local
+      handle instead lets the load reach ``compiler_v2``'s import/local
+      clash check, which refuses it by name (ruling 2026-09-26).
 
     Anything else -- an imported handle, a user's own value -- is left
     alone, and the head is built from that binding as before."""
@@ -1944,6 +1950,11 @@ def _declares_over(namespace, functor: str, fields: tuple) -> bool:
     if type(value) is not str:
         return False
     if value == functor:
+        return True
+    from clausal.logic.atoms import is_mangled  # noqa: PLC0415
+    from clausal.logic.cells import FUNCTOR_SIGNATURES_KEY  # noqa: PLC0415
+    if not is_mangled(value) and functor in (
+            namespace.get(FUNCTOR_SIGNATURES_KEY) or {}):
         return True
     if value == local_predicate_handle(namespace, functor):
         entry = (namespace.get(PREDICATE_HEADS_KEY) or {}).get(functor)
