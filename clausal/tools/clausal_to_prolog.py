@@ -13,6 +13,7 @@ Public API:
 from __future__ import annotations
 
 import ast as python_ast
+import keyword as _keyword_module
 import posixpath
 import re
 from typing import Iterator
@@ -1747,10 +1748,11 @@ class _ClausalToProlog:
         * the QUOTED forms of the first two, ``'Edge'/2`` and ``'edge'(A, B)``.
           A capital-initial predicate can only be written quoted -- bare
           ``Edge`` is a logic variable -- and a quoted name crosses AS WRITTEN,
-          never through the snake-case name mapping. A quoted name is a name
-          only when the literal rule makes it an ATOM: ``'...'`` always,
-          ``"..."`` only under ``-double_quotes(atom)``; under ``chars`` it is
-          a char list and names nothing, so it is refused like anything else.
+          never through the snake-case name mapping. Accepted exactly when the
+          ENGINE accepts it (``_quoted_export_name``): never double-quoted, in
+          any mode, and a plain name. A quoted template's keyword arguments
+          count toward its arity, as in the engine; a BARE template with
+          keyword arguments is refused, as in the engine.
 
         Anything else is REFUSED. It used to be dropped without a word, so the
         module's export list silently shrank.
@@ -1772,7 +1774,11 @@ class _ClausalToProlog:
         exports = []
         if len(call.args) > 1 and isinstance(call.args[1], python_ast.List):
             for elt in call.args[1].elts:
-                if isinstance(elt, python_ast.Call) and isinstance(elt.func, python_ast.Name):
+                if (isinstance(elt, python_ast.Call) and isinstance(elt.func, python_ast.Name)
+                        and not elt.keywords):
+                    # A bare template with keyword arguments is REFUSED by the
+                    # engine ("written with keyword arguments"), so it falls
+                    # through to the refusal below rather than being counted.
                     functor = resolve_name(elt.func.id, self.dialect)
                     arity = len(elt.args)
                     exports.append(PCompound("/", (PAtom(functor), PNumber(arity))))
@@ -1793,8 +1799,12 @@ class _ClausalToProlog:
                         PAtom(self._quoted_export_name(elt.left)), PNumber(elt.right.value))))
                 elif (isinstance(elt, python_ast.Call)
                       and self._quoted_export_name(elt.func) is not None):
+                    # The engine counts keyword arguments into the arity here:
+                    # 'Edge'(A, b=B) is declared Edge/2 (measured 2026-09-26,
+                    # declared_kind('Edge', 2) == 'predicate').
                     exports.append(PCompound("/", (
-                        PAtom(self._quoted_export_name(elt.func)), PNumber(len(elt.args)))))
+                        PAtom(self._quoted_export_name(elt.func)),
+                        PNumber(len(elt.args) + len(elt.keywords)))))
                 else:
                     raise NotImplementedError(
                         f"clausal_to_prolog: -module({mod_name}, [...]) export "
@@ -1806,17 +1816,33 @@ class _ClausalToProlog:
         return PDirective(PCompound("module", (PAtom(mod_name), export_list)))
 
     def _quoted_export_name(self, node) -> str | None:
-        """The functor a QUOTED export name denotes, or None.
+        """The functor a QUOTED export name denotes, or None -- the ENGINE's rule.
 
-        Decided by the literal rule, as the engine decides it: a str literal
-        that lowers to an ATOM names a functor, written exactly as quoted; one
-        that lowers to a string (``"..."`` under -double_quotes(chars)) names
-        nothing.
+        Mirrors term_rewriting's ``_quoted_head_functor_name`` /
+        ``_refuse_double_quoted_functor``, which a quoted ``-module`` entry
+        goes through (``_resolved_export_spec``), so the exporter accepts
+        exactly what the engine accepts:
+
+        * a name whose quote is KNOWN to be ``"`` is refused in EVERY
+          -double_quotes mode (ISO 6.3.3: a double-quoted literal is never an
+          atom spelling). An UNKNOWN quote (no source lines) is accepted, as
+          the engine accepts it;
+        * the spelling must be a plain name -- ``str.isidentifier()`` and not a
+          Python keyword -- because the engine binds a declared functor as a
+          module-level name. ``'foo bar'`` and ``'class'`` are refused.
+
+        The -double_quotes MODE plays no part. (The first version of this
+        helper used the translator's literal rule, which is mode-sensitive,
+        and so accepted ``"Edge"/2`` in atom mode where the engine refuses it.)
         """
         if not (isinstance(node, python_ast.Constant) and isinstance(node.value, str)):
             return None
-        term = self._convert_str_literal(node.value, node)
-        return term.name if isinstance(term, PAtom) else None
+        if quote_of(self._quote_map, node) == '"':
+            return None
+        spelling = node.value
+        if not spelling.isidentifier() or _keyword_module.iskeyword(spelling):
+            return None
+        return spelling
 
     def _module_reference(self, mod_path: str) -> PTerm | None:
         """The term naming *mod_path* in a use_module directive.

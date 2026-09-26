@@ -69,14 +69,94 @@ def test_a_quoted_lowercase_name_is_the_same_atom_as_the_bare_one():
     assert _module_line(out) == ":- module(m, [edge/2])."
 
 
-def test_a_double_quoted_name_is_an_atom_only_in_atom_mode():
-    """The literal rule, as the engine applies it: ``"..."`` is an atom under
-    the default -double_quotes(atom) and a char list under chars, where it
-    names no functor and is refused like any other non-name."""
+@pytest.mark.parametrize("mode", ["", "-double_quotes(atom)\n", "-double_quotes(chars)\n"],
+                         ids=["default", "atom", "chars"])
+def test_a_double_quoted_name_is_refused_in_every_mode(mode):
+    """As the engine refuses it (``_refuse_double_quoted_functor``, ISO 6.3.3):
+    a double-quoted literal is never an atom spelling, whatever the mode. The
+    first version of this accepted it in atom mode -- the translator's literal
+    rule is mode-sensitive, the engine's functor rule is not."""
     # nv
-    atom_mode = clausal_source_to_prolog(
-        '-module(m, ["Edge"/2])\n\n\'Edge\'(A, B) <- (A == B)\n')
-    assert _module_line(atom_mode) == ":- module(m, ['Edge'/2])."
     with pytest.raises(NotImplementedError, match="is not an export element"):
         clausal_source_to_prolog(
-            '-double_quotes(chars)\n-module(m, ["Edge"/2])\n\n\'Edge\'(A, B) <- (A == B)\n')
+            mode + '-module(m, ["Edge"/2])\n\n\'Edge\'(A, B) <- (A == B)\n')
+
+
+@pytest.mark.parametrize("element", ["'foo bar'/2", "'foo bar'(A, B)", "'class'/1", "'class'(A)"])
+def test_a_quoted_name_must_be_a_plain_name(element):
+    """As the engine requires (``_quoted_head_functor_name``: ``isidentifier()``
+    and not a Python keyword), because it binds a declared functor as a
+    module-level name."""
+    # nv
+    with pytest.raises(NotImplementedError, match="is not an export element"):
+        clausal_source_to_prolog(f"-module(m, [{element}])\n\n" + _BODY)
+
+
+def test_a_quoted_template_counts_keyword_arguments_into_its_arity():
+    """The engine declares ``'Edge'(A, b=B)`` as Edge/2 -- measured
+    2026-09-26, ``declared_kind('Edge', 2) == 'predicate'``, and a clause at
+    arity 3 then conflicts with it."""
+    # nv
+    out = clausal_source_to_prolog("-module(m, ['Edge'(A, b=B)])\n\n'Edge'(A, B) <- (A == B)\n")
+    assert _module_line(out) == ":- module(m, ['Edge'/2])."
+
+
+def test_a_bare_template_with_keyword_arguments_is_refused():
+    """The engine refuses it ("written with keyword arguments"), so counting
+    it would accept an entry the engine rejects."""
+    # nv
+    with pytest.raises(NotImplementedError, match="is not an export element"):
+        clausal_source_to_prolog("-module(m, [edge(A, b=B)])\n\n" + _BODY)
+
+
+# ── Parity: the exporter accepts exactly the export entries the ENGINE accepts ──
+#
+# Each case is loaded by the engine AND translated by the exporter, and the two
+# verdicts must agree. This is the check that would have caught the first
+# version of the quoted-name rule, which followed the translator's own literal
+# rule and so accepted "Edge"/2 in atom mode where the engine refuses it.
+
+_HEAD2 = "'Edge'(A, B) <- (A == B)\n"
+_PARITY = [
+    ("iso_pi", "", "edge/2", "edge(A, B) <- (A == B)\n"),
+    ("template", "", "edge(A, B)", "edge(A, B) <- (A == B)\n"),
+    ("sq_pi_cap", "", "'Edge'/2", _HEAD2),
+    ("sq_tmpl_cap", "", "'Edge'(A, B)", _HEAD2),
+    ("sq_tmpl_lower", "", "'edge'(A, B)", "edge(A, B) <- (A == B)\n"),
+    ("dq_pi_default", "", '"Edge"/2', _HEAD2),
+    ("dq_pi_atom", "-double_quotes(atom)\n", '"Edge"/2', _HEAD2),
+    ("dq_pi_chars", "-double_quotes(chars)\n", '"Edge"/2', _HEAD2),
+    ("sq_space_pi", "", "'foo bar'/2", "p(X) <- (X == 1)\n"),
+    ("sq_space_tmpl", "", "'foo bar'(A, B)", "p(X) <- (X == 1)\n"),
+    ("sq_kwd_pi", "", "'class'/1", "p(X) <- (X == 1)\n"),
+    ("sq_kwd_tmpl", "", "'class'(A)", "p(X) <- (X == 1)\n"),
+    ("sq_tmpl_kwarg", "", "'Edge'(A, b=B)", _HEAD2),
+    ("bare_tmpl_kwarg", "", "edge(A, b=B)", "edge(A, B) <- (A == B)\n"),
+]
+
+
+@pytest.mark.parametrize("cid,prefix,element,clauses", _PARITY, ids=[c[0] for c in _PARITY])
+def test_export_acceptance_matches_the_engine(tmp_path, monkeypatch, cid, prefix, element, clauses):
+    # nv
+    import importlib
+    import sys
+    name = f"expparity_{cid}"
+    src = f"{prefix}-module({name}, [{element}])\n\n{clauses}"
+    (tmp_path / f"{name}.clausal").write_text(src)
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.delitem(sys.modules, name, raising=False)
+    try:
+        importlib.import_module(name)
+        engine_accepts = True
+    except SyntaxError:
+        engine_accepts = False
+    finally:
+        sys.modules.pop(name, None)
+    try:
+        clausal_source_to_prolog(src)
+        exporter_accepts = True
+    except NotImplementedError:
+        exporter_accepts = False
+    assert exporter_accepts == engine_accepts, (
+        f"{element!r}: engine {'accepts' if engine_accepts else 'refuses'}, "
+        f"exporter {'accepts' if exporter_accepts else 'refuses'}")
