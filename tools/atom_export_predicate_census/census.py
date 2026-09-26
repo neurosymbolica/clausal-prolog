@@ -45,10 +45,14 @@ _CHILD = r'''
 import json, os, sys, warnings
 path, roots = sys.argv[1], sys.argv[2:]
 extra = [p for p in os.environ.get("CENSUS_EXTRA_PATH", "").split(os.pathsep) if p]
-sys.path[:0] = [os.path.dirname(path)] + roots + extra
+sys.path[:0] = [os.path.dirname(path)] + roots
+# AFTER everything else, PYTHONPATH included: an import-only directory must
+# never shadow the engine under test.
+sys.path.extend(extra)
+out_extra = extra
 stem = os.path.splitext(os.path.basename(path))[0]
 out = {"path": path, "module": stem, "reached": False, "names": [],
-       "error": None}
+       "error": None, "extra_path": out_extra}
 try:
     import clausal.logic.compiler_v2 as cv2
     from clausal.lint_warnings import ClausalAtomExportDefinedAsPredicateWarning as W
@@ -62,6 +66,7 @@ try:
             real(module_items, predicate_nodes, module_name)
         out["names"] = [str(w.message).split("`")[1] for w in caught
                         if issubclass(w.category, W)]
+        out["engine"] = cv2.__file__
     cv2._warn_atom_exports_defined_as_predicates = spy
     from clausal.import_hook import _load_module, _load_prolog_module
     with warnings.catch_warnings():
@@ -124,20 +129,63 @@ def report(files, results, stream=sys.stdout):
     return hits
 
 
+def check_extra_path(paths):
+    """Refuse an import-only directory that does not exist, or that holds a
+    ``clausal`` package: the census must run the engine under test, and a
+    second copy on the path is exactly the kind of fail-open that makes two
+    trees report the same number.  Returns the absolute paths."""
+    checked = []
+    for p in paths:
+        p = os.path.abspath(p)
+        if not os.path.isdir(p):
+            raise SystemExit(f"REFUSING: --path {p} does not exist")
+        if os.path.exists(os.path.join(p, "clausal", "__init__.py")):
+            raise SystemExit(
+                f"REFUSING: --path {p} contains a `clausal` package, which "
+                f"could shadow the engine under test")
+        checked.append(p)
+    return checked
+
+
 def self_test(jobs, timeout):
     with tempfile.TemporaryDirectory() as d:
-        Path(d, "aw_warns.clausal").write_text(
+        roots, lib = os.path.join(d, "root"), os.path.join(d, "lib")
+        os.makedirs(roots)
+        os.makedirs(lib)
+        # The must-warn module imports a helper that lives ONLY under the
+        # --path directory, so it reaches the check only if --path reaches
+        # the child (CENSUS_EXTRA_PATH).
+        Path(lib, "aw_helper.clausal").write_text(
+            "-module(aw_helper, [helper(X)])\nhelper(1),\n")
+        Path(roots, "aw_warns.clausal").write_text(
+            "-import_from(aw_helper, [helper])\n"
             "-module(aw_warns, [foo, kind(X)])\nfoo,\nkind(foo),\n")
-        Path(d, "aw_quiet.clausal").write_text(
+        Path(roots, "aw_quiet.clausal").write_text(
             "-module(aw_quiet, [foo, kind(X)])\nkind(foo),\n")
-        files, results = census([d], jobs, timeout)
+        files, results = census([roots], jobs, timeout, [lib])
         hits = report(files, results)
         by_name = {os.path.basename(r["path"]): r for r in results}
         quiet = by_name.get("aw_quiet.clausal", {})
+        warns = by_name.get("aw_warns.clausal", {})
+        # And without --path the importing module must NOT reach the check.
+        _, bare = census([roots], jobs, timeout)
+        bare_warns = {os.path.basename(r["path"]): r for r in bare}.get(
+            "aw_warns.clausal", {})
+        # The children must run THIS tree's engine (the tool's own tree,
+        # two levels up), not another copy on the path.
+        tree = os.path.dirname(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__))))
+        engine_ok = all(
+            r.get("engine", "").startswith(tree + os.sep)
+            for r in results if r.get("reached"))
+        print(f"engine under test: {tree} (children agree: {engine_ok})")
         ok = (len(files) == 2 and all(r["reached"] for r in results)
               and len(hits) == 1 and hits[0]["names"] == ["foo"]
-              and hits[0]["path"].endswith("aw_warns.clausal")
-              and quiet.get("reached") and not quiet.get("names"))
+              and warns.get("extra_path") == [lib]
+              and quiet.get("reached") and not quiet.get("names")
+              and not bare_warns.get("reached") and engine_ok)
+        print(f"--path control: with it reached={warns.get('reached')}, "
+              f"without it reached={bare_warns.get('reached')}")
         print("SELF-TEST", "PASS" if ok else "FAIL")
         return 0 if ok else 1
 
@@ -160,7 +208,7 @@ def main(argv=None):
     if not args.roots:
         parser.error("give at least one ROOT")
     roots = [os.path.abspath(r) for r in args.roots]
-    extra = [os.path.abspath(p) for p in args.path]
+    extra = check_extra_path(args.path)
     files, results = census(roots, args.jobs, args.timeout, extra)
     if not files:
         print("REFUSING: no .clausal/.seam/.pl files found under the roots")
