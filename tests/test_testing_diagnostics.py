@@ -379,19 +379,15 @@ test("citation term mismatch") <- (
 
 
 def test_generic_compound_vs_declared_term_is_named(capsys, tmp_path):
-    # `T2 = cite(_)` failing on the goal `T2 is cite(_)` reads as a
-    # contradiction: the binding renders character-for-character as what the
-    # author asked for. The only thing that matters — one side is a generic
-    # Compound, the other the declared term class — must be said out loud.
-    # (todo/a-generic-compound-renders-identically-to-a-declared-term.md,
-    # option 1: only in failure diagnostics.)
+    # This was the confusion the note exists for: `T2 = cite(_)` failed
+    # although the binding rendered character-for-character as `cite(1)`.
+    # Ruling 2026-09-26 removes the confusion at its source: an atom-functor
+    # Compound of arity >= 1 IS the cell, so the goal now SUCCEEDS and there
+    # is nothing to diagnose.  (The note code stays; see the ruling's todo.)
     p = write(tmp_path, "cc.clausal", COMPOUND_CONFUSION_SRC)
-    assert main([str(p)]) == 1
+    assert main([str(p)]) == 0
     out = capsys.readouterr().out
-    assert "goal 2 of 2 failed" in out
-    assert "generic compound" in out
-    assert "cite/1" in out
-    assert "T2" in out
+    assert "generic compound" not in out
 
 
 def test_no_confusion_note_without_a_declared_class(capsys, tmp_path):

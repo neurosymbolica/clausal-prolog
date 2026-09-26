@@ -24,7 +24,7 @@ from clausal.logic.trampoline import Step, DONE, StepGenerator, _drive_until_yie
 from clausal.logic import cells as _cells_module
 from clausal.logic.cells import CELLS_NAMESPACE_KEY as _CELLS_NAMESPACE_KEY
 from clausal.terms import (
-    Compound,
+    Compound, as_cells_for_match as _as_cells_for_match,
     Call, LoadName, LoadAttr,
     SegList, ConcreteSeg, VarSeg,
     SegString,
@@ -112,9 +112,17 @@ from .globals_env import (
     _merge_builtin, _inject_resolved_targets,
     _collect_globals_info, _preallocate_body_vars,
 )
+try:  # the C twin; the Python one (terms.as_cells_for_match) is the fallback
+    from clausal.logic.variables._variables import (
+        as_cells_for_match as _as_cells_for_match_c,
+    )
+except ImportError:  # pragma: no cover
+    _as_cells_for_match_c = None
 from .head_match import (
     head_to_match_pattern, compile_head_to_match_case, _head_arg_patterns,
     _wrap_yields_with_output_guards,
+    finalize_subject_depths as _finalize_subject_depths,
+    subject_assign as _subject_assign,
 )
 from .list_dispatch import (
     _get_head_arg, _lift_clause_at_pos,
@@ -365,6 +373,10 @@ INJECTED_RUNTIME_BUILTINS: dict = {
     # bound (A12-F004); generated code references them ``$``-prefixed.
     "$walk": _walk_fn,
     "$deref": deref,
+    # Ruling 2026-09-26: the clause-head ``match`` subject normaliser -- a
+    # caller's atom-functor Compound becomes its cell before a cell-only
+    # head pattern sees it (``terms.as_cells_for_match``).
+    "$as_cells": _as_cells_for_match_c or _as_cells_for_match,
     # One element of a possibly-``str`` sequence target, as a TERM: a str's
     # element is its char ATOM, a list's is itself, a bytes' is the int code
     # (spec §6.2).  Emitted by the multi-star head guard, which used to index
@@ -677,9 +689,14 @@ def _build_predicate_trampoline_funcdef(
 
     if clauses and arity > 0:
         # Deref each argument once into a local before the clause match arms.
+        # Ruling 2026-09-26: where a head pattern has structure, the subject
+        # goes through ``$as_cells`` so a Compound caller meets the cell-only
+        # pattern as its cell.  Emitted as ``$deref`` here; the depth is read
+        # off the BUILT patterns below (``head_match.finalize_subject_depths``).
         deref_names = [f"_d{i}" for i in range(arity)]
-        for i, arg in enumerate(arg_names):
-            loop_stmts.append(_assign(deref_names[i], _call(_name("$deref"), _name(arg))))
+        _subject_assigns = [_subject_assign(deref_names[i], arg, 0)
+                            for i, arg in enumerate(arg_names)]
+        loop_stmts.extend(_subject_assigns)
         subject = ast.Tuple(elts=[_name(n) for n in deref_names], ctx=ast.Load())
     else:
         subject = ast.Tuple(
@@ -829,6 +846,9 @@ def _build_predicate_trampoline_funcdef(
             finally:
                 _pop_position()
             loop_stmts.append(ast.Match(subject=subject, cases=[case_arm]))
+
+    if clauses and arity > 0:
+        _finalize_subject_depths(_subject_assigns, loop_stmts, subject)
 
     if use_tro and tro_mode == "loop":
         # After all match arms: if _tro was set, reassign args and continue.
@@ -1740,9 +1760,11 @@ def _build_predicate_funcdef(
 
     if clauses and arity > 0:
         # Deref each argument once into a local before the clause match arms.
+        # Ruling 2026-09-26: see the trampoline builder's twin above.
         deref_names = [f"_d{i}" for i in range(arity)]
-        for i, arg in enumerate(arg_names):
-            all_stmts.append(_assign(deref_names[i], _call(_name("$deref"), _name(arg))))
+        _subject_assigns = [_subject_assign(deref_names[i], arg, 0)
+                            for i, arg in enumerate(arg_names)]
+        all_stmts.extend(_subject_assigns)
         subject = ast.Tuple(elts=[_name(n) for n in deref_names], ctx=ast.Load())
     else:
         subject = ast.Tuple(
@@ -1768,6 +1790,9 @@ def _build_predicate_funcdef(
         finally:
             _pop_position()
         all_stmts.append(ast.Match(subject=subject, cases=[case_arm]))
+
+    if clauses and arity > 0:
+        _finalize_subject_depths(_subject_assigns, all_stmts, subject)
 
     # Empty body is invalid Python; use return+yield to make a no-op generator.
     if not all_stmts:
