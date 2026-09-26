@@ -27,10 +27,6 @@ def _meta_lines(text):
     return [line for line in text.splitlines() if "meta_predicate" in line]
 
 
-def _first_directive(text):
-    return next(line for line in text.splitlines() if line.strip())
-
-
 def test_multi_spec_directive_splits_one_per_spec():
     # nv
     out = clausal_source_to_prolog(
@@ -75,9 +71,9 @@ def test_meta_predicate_above_module_is_emitted_below_it():
     # nv
     out = clausal_source_to_prolog(
         "-meta_predicate(foo('?', 1), bar('?', 2))\n\n"
-        "-module(lib, [foo, bar])\n\n" + _BODY)
+        "-module(lib, [foo(A, B), bar(A, B)])\n\n" + _BODY)
     directives = _directives(out)
-    assert directives[0].startswith(":- module(lib, ")
+    assert directives[0] == ":- module(lib, [foo/2, bar/2])."
     assert directives[1:] == [
         ":- meta_predicate(foo(?, 1)).",
         ":- meta_predicate(bar(?, 2)).",
@@ -95,9 +91,9 @@ def test_only_the_module_line_moves():
     out = clausal_source_to_prolog(
         "-op(700, xfx, implies)\n"
         "-double_quotes(chars)\n"
-        "-module(lib, [foo, bar])\n\n" + _BODY)
+        "-module(lib, [foo(A, B), bar(A, B)])\n\n" + _BODY)
     directives = _directives(out)
-    assert directives[0].startswith(":- module(lib, ")
+    assert directives[0] == ":- module(lib, [foo/2, bar/2])."
     assert directives[1:3] == [
         ":- op(700, xfx, implies).",
         ":- set_prolog_flag(double_quotes, chars).",
@@ -110,10 +106,39 @@ def test_only_the_module_line_moves():
 
 def test_a_second_module_directive_is_still_filtered():
     """Every module directive goes through the export filter, as it always
-    did. The first rewrite of the reorder let a second one through unfiltered."""
+    did; the first rewrite of the reorder let a second one through unfiltered.
+    The second one stays where it was written, and the generated block is NOT
+    repeated after it. Exports are written as Clausal call templates -- a bare
+    name crosses as Name/0, and ``foo/2`` is not an export element at all --
+    so the filter has something to keep and something to drop."""
     # nv
     out = clausal_source_to_prolog(
-        "-module(lib, [foo])\n-module(lib2, [bar, nothere])\n\n" + _BODY)
-    modules = [d for d in _directives(out) if d.startswith(":- module(")]
-    assert len(modules) == 2
-    assert "nothere" not in modules[1]
+        "-module(lib, [foo(A, B)])\n"
+        "-module(lib2, [bar(A, B), nothere(X)])\n\n" + _BODY)
+    assert _directives(out) == [
+        ":- module(lib, [foo/2]).",
+        ":- meta_predicate(foo(?, 1)).",
+        ":- meta_predicate(bar(?, 2)).",
+        ":- module(lib2, [bar/2]).",
+    ]
+
+
+def test_meta_above_module_lands_ahead_of_the_generated_prelude():
+    """A -meta_predicate written above -module comes out BELOW the module line
+    but AHEAD of the generated prelude (here the clpz import). Measured
+    2026-09-26 on both engines, through use_module with a caller-module goal, a
+    2-meta, a library(lambda) goal passed through the meta predicate and #= in
+    the body: the answer is identical with the meta declaration ahead of or
+    behind the generated imports. So this order is harmless -- pinned so a
+    change to it is a decision, not an accident."""
+    # nv
+    out = clausal_source_to_prolog(
+        "-meta_predicate(apply1(1, '?'))\n\n"
+        "-module(lib, [apply1(G, X), five(Z)])\n\n"
+        "apply1(G, X) <- (call(G, X))\n"
+        "five(Z) <- (Z == 2 + 3)\n")
+    assert _directives(out) == [
+        ":- module(lib, [apply1/2, five/1]).",
+        ":- meta_predicate(apply1(1, ?)).",
+        ":- use_module(library(clpz), [(#=)/2]).",
+    ]
