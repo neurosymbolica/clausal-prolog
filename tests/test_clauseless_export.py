@@ -323,3 +323,70 @@ def test_a_second_module_directive_after_a_private_list_is_attributed_to_it(
         "-private([helper/1])\n"
         "-module(cle_two, [late/3, pt(X)])\n")
     assert line == "cle_two exports: edge/2, late/3, pt/1"
+
+
+# ── an origin speaks only for a key that is STILL data (roborev 200) ─────────
+
+
+def test_an_origin_is_ignored_once_the_key_has_a_row(load):
+    """REPRODUCED 2026-09-26: an importer that imports the DATA ``edge`` and
+    ALSO declares ``-dynamic(edge/2)`` has a ROW for ``edge/2``
+    (``declared_kind`` answers ``"predicate"``), but its binding is still the
+    owner's atom, so a call reaches the atom arm -- and the message said
+    "declared as DATA ... imported from cle_owner".  The recorded origin must
+    only speak while the key is still DATA."""
+    load("cle_owner", FIELDED)
+    imp = load("cle_dynimp", "-import_from(cle_owner, [edge])\n"
+               "-module(cle_dynimp, [q(X)])\n-dynamic(edge/2)\n"
+               "q(X) <- edge(1, X)\n")
+    db = _lm(imp).db
+    assert db.row("edge", 2) is not None
+    assert db.declared_kind("edge", 2) == "predicate"
+    formal, message = _error(imp, ("q", Var()))
+    assert formal == Compound("existence_error",
+                              ("procedure", Compound("/", ("edge", 2))))
+    assert "declared as DATA" not in message
+
+
+def test_an_aliased_origin_is_ignored_once_the_local_key_has_a_row(load):
+    load("cle_owner", FIELDED)
+    imp = load("cle_dynalias", "-import_from(cle_owner, [alias(edge, e)])\n"
+               "-module(cle_dynalias, [q(X)])\n-dynamic(e/2)\n"
+               "q(X) <- e(1, X)\n")
+    assert _lm(imp).db.declared_kind("e", 2) == "predicate"
+    _, message = _error(imp, ("q", Var()))
+    assert "declared as DATA" not in message
+
+
+def test_two_aliased_imports_of_the_same_spelling_name_both_owners(load):
+    """``alias(edge, e1)`` from one module and ``alias(edge, e2)`` from
+    another both bind the atom ``edge``: a call through either reaches
+    ``edge/2``, and nothing tells the two apart, so the message names both
+    owners rather than guessing one."""
+    load("cle_own1", "-module(cle_own1, [edge(A, B)])\n")
+    load("cle_own2", "-module(cle_own2, [edge(X, Y)])\n")
+    imp = load("cle_twoalias",
+               "-import_from(cle_own1, [alias(edge, e1)])\n"
+               "-import_from(cle_own2, [alias(edge, e2)])\n"
+               "-module(cle_twoalias, [q(X)])\nq(X) <- e1(1, X)\n")
+    _, message = _error(imp, ("q", Var()))
+    assert "cle_own1" in message and "cle_own2" in message
+    assert "edge(A, B)" in message and "edge(X, Y)" in message
+
+
+def test_a_placeholder_module_name_is_not_put_in_the_message():
+    """A Database with no real module name answers ``<detached>`` /
+    ``<anonymous>``; that placeholder must not appear in user text."""
+    from clausal.logic.compiler_v2 import _process_directives
+    from clausal.logic.database import Database
+    from clausal.logic.predicate import _atom_goal_message
+    from clausal.pythonic_ast.nodes import ModuleDeclaration
+    for db in (Database(), Database(module_dict={})):
+        assert db.module_name() in ("<detached>", "<anonymous>")
+        _process_directives(
+            [ModuleDeclaration(module_name="x", exports=[("edge", ["A", "B"])])],
+            db)
+        message = _atom_goal_message("edge", 2, db)
+        assert message.startswith("edge/2 is declared as DATA")
+        assert "<" not in message
+        assert "the -module export entry edge(A, B) declares" in message

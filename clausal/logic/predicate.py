@@ -926,24 +926,29 @@ def _atom_goal_message(name: str, arity: int, db: Any) -> str:
     the ``name/arity`` spelling that declares a procedure instead.  *db* may
     be a name-only shim or ``None``; anything that cannot answer gets the
     general message."""
-    origin_of = getattr(db, "declaration_origin", None)
-    origin = origin_of(name, arity) if origin_of is not None else None
+    origins_of = getattr(db, "declaration_origins", None)
+    origins = origins_of(name, arity) if origins_of is not None else []
     pi = f"{name}/{arity}"
-    if origin is not None:
-        kind, module, spelling, fields = origin
-        entry = f"{spelling}({', '.join(str(f) for f in fields)})"
+
+    def _entry(spelling, fields):
+        return f"{spelling}({', '.join(str(f) for f in fields)})"
+
+    if len(origins) == 1:
+        kind, module, spelling, fields = origins[0]
+        entry = _entry(spelling, fields)
+        where = f" in {module}" if module else ""
         if kind == "module":
             return (
                 f"{pi} is declared as DATA, not as a procedure: the -module "
-                f"export entry {entry} in {module} declares a term "
-                f"constructor, and it has no clauses to call.  To export a "
-                f"procedure with no clauses, write {pi} in that export list "
-                f"instead; to call it here, define its clauses")
+                f"export entry {entry}{where} declares a term constructor, "
+                f"and it has no clauses to call.  To export a procedure with "
+                f"no clauses, write {pi} in that export list instead; to "
+                f"call it here, define its clauses")
         if kind == "private":
             return (
                 f"{pi} is declared as DATA, not as a procedure: the -private "
-                f"entry {entry} in {module} declares a term constructor, and "
-                f"it has no clauses to call.  To declare a procedure, write "
+                f"entry {entry}{where} declares a term constructor, and it "
+                f"has no clauses to call.  To declare a procedure, write "
                 f"{pi} in that -private list instead; to call it here, "
                 f"define its clauses")
         return (
@@ -953,6 +958,15 @@ def _atom_goal_message(name: str, arity: int, db: Any) -> str:
             f"export a procedure, its export list writes "
             f"{spelling}/{arity} instead, and its clauses are defined there "
             f"or asserted with -dynamic")
+    if origins:
+        owners = "; ".join(f"{module} (export entry {_entry(spelling, fields)})"
+                           for _k, module, spelling, fields in origins)
+        return (
+            f"{pi} is declared as DATA, not as a procedure: it is imported, "
+            f"under aliases of the same spelling, from {owners}, and a call "
+            f"through any of them reaches {pi}, which has no clauses.  For an "
+            f"owner to export a procedure, its export list writes {pi} "
+            f"instead")
     declared_kind = getattr(db, "declared_kind", None)
     if declared_kind is not None and declared_kind(name, arity) == "data":
         return (f"{pi} is declared as DATA (a term constructor), not as a "

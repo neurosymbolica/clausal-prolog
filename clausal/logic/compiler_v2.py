@@ -1515,7 +1515,12 @@ def _process_directives(module_items: list, db: Any, module_dict: dict | None = 
         "shallow": "mark_shallow",
     }
     declared: set[tuple[str, int]] = set()
+    # For diagnostics only (``Database.declaration_origins``): a Database
+    # with no real module name answers a placeholder, which is not a name
+    # to put in user text.
     own_module = db.module_name()
+    if own_module in ("<anonymous>", "<detached>"):
+        own_module = None
     for item in module_items:
         if isinstance(item, (ModuleDeclItem, PrivateDeclItem)):
             is_module = isinstance(item, ModuleDeclItem)
