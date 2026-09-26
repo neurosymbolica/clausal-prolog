@@ -122,3 +122,39 @@ therefore needs an atom case outside the functor table.
   is what falls out; it means a sort cannot be relied on to separate them);
 * migration sequencing downstream, which needs the count of sites currently
   using a string as a dict key or set member.
+
+## SUPERSEDED 2026-09-26 — the dumb seam (operator GO)
+
+Kept as history. The operator ruled the seam "dumb": **terms come out in
+their internal form**, and are converted explicitly or compared against other
+`--`-wrapped terms. What changes against the table at the top of this spec:
+
+| | `--` (out, to Python) | `++` (in, to a term) |
+|---|---|---|
+| **atom** | the plain `str` — no tag | a plain `str` is the atom (main's meaning, kept) |
+| **string** | `('$chars', text)` — the carrier, unconverted | a carrier is the string |
+| compound / dict | the cell / the `DictTerm`, nothing inside converted | raw |
+
+* `seam.export` no longer converts (`_to_boundary` is gone). It derefs,
+  refuses an unbound constrained variable as before, and hands the value out
+  BY IDENTITY only when it is proven to hold no `Var` object: atomic, a
+  compiled constant (`cells.is_compiled_constant`, registered by
+  `codegen.functiondef_to_function` — a tuple baked into a clause can hold
+  no Var and is the same object every call), or walked completely within a
+  bounded probe; otherwise it deref-walks a copy. (A first cut read the
+  trail — "only the goal's own variables were bound" — and was unsound for
+  `P is pair(A, A), between(1, 2, A)`; roborev 243.)
+* Python text is `clausal.to_python(T)`; the deep IN converter is
+  `clausal.to_clausal(obj)`; the sort key is `clausal.term_key`. All three
+  are driven by the `python_terms` registry (one table, both directions).
+* The leak rule survives and is now applied at every door: `wrap_text` (`++`
+  values), the seam's bare-name lookup (`seam.build`), and a Python caller's
+  goal at `solve`/`once`/`call` (`to_python.strip_atom_tags`, deep).
+* Why: with the tagged boundary the STRING round trip `++(--T)` was broken
+  on main (export flattened the carrier to a str and `++` read the str as an
+  atom), and the tagged export was not deep (DictTerm/SetTerm values crossed
+  raw anyway). Raw out is the only form under which both `++(--X)` round
+  trips are identity.
+* The `atom` class remains for now (its retirement is a later step); the
+  `-double_quotes` default is unchanged here.
+

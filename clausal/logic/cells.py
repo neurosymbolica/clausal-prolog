@@ -84,6 +84,7 @@ __all__ = [
     "CELLS_NAMESPACE_KEY",
     "TUPLE_TAG",
     "CHARS_TAG", "chars", "is_chars", "chars_text",
+    "register_compiled_constants", "is_compiled_constant",
     "is_reserved_1tuple", "refuse_reserved_1tuple",
     "make_cell",
     "make_tuple_cell",
@@ -910,3 +911,65 @@ def set_intern_enabled(value: bool) -> None:
     no production code path calls this."""
     global _INTERN_ENABLED
     _INTERN_ENABLED = bool(value)
+
+
+# ── Compiled-constant certificate (dumb seam, 2026-09-26) ──────────────────
+#
+# A goal-position seam hands an answer back BY IDENTITY only when it can
+# prove the object holds no ``Var`` -- bound or unbound -- because Var
+# equality is identity and backtracking rebinds.  The one certificate that
+# costs nothing at export time is PROVENANCE: a tuple or frozenset that the
+# compiler baked into a clause's code object as an ``ast.Constant`` can never
+# contain a Var (``compile`` refuses one), is immutable, and is the very
+# object every call hands out (probe 2026-09-26: a fact's cell answer is the
+# same object across calls).  ``codegen.functiondef_to_function`` registers
+# every such constant here, recursively; ``seam.export`` asks
+# ``is_compiled_constant``.
+#
+# LEAK-FREE BY CONSTRUCTION (roborev 252/253): an entry maps the constant's
+# id to a WEAK reference to the code object that owns it, with a callback
+# that removes the entry when that code object dies.  Nothing here keeps a
+# constant alive: a dynamic predicate that recompiles on every assertz
+# drops its old code objects, and their entries go with them.  Sound
+# because an entry whose referent is alive names a code object that holds
+# the constant in ``co_consts`` (or inside a constant it holds), so the
+# constant is alive and its id cannot belong to any other object; an entry
+# whose referent is gone answers False, and losing a certificate only costs
+# the export a probe or a copy.
+
+_COMPILED_GROUND: dict = {}
+
+
+def register_compiled_constants(code) -> None:
+    """Record every tuple / frozenset constant of *code*, recursively
+    through nested tuples; a nested code object is registered on its own
+    weak reference (it can outlive or predecease its parent)."""
+    import weakref  # noqa: PLC0415
+    table = _COMPILED_GROUND
+    ids: list = []
+    stack = list(code.co_consts)
+    while stack:
+        obj = stack.pop()
+        t = type(obj)
+        if t is tuple or t is frozenset:
+            ids.append(id(obj))
+            stack.extend(obj)
+        elif hasattr(obj, "co_consts"):
+            register_compiled_constants(obj)
+    if not ids:
+        return
+
+    def _drop(ref, ids=ids, table=table):
+        for i in ids:
+            if table.get(i) is ref:
+                del table[i]        # only our own entry: a re-registration may own it now
+
+    ref = weakref.ref(code, _drop)
+    for i in ids:
+        table[i] = ref
+
+
+def is_compiled_constant(obj) -> bool:
+    """True iff *obj* IS a constant of a LIVE generated code object."""
+    ref = _COMPILED_GROUND.get(id(obj))
+    return ref is not None and ref() is not None

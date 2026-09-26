@@ -129,6 +129,11 @@ def functiondef_to_function(
     module = ast.Module(body=[node], type_ignores=[])
     ast.fix_missing_locations(module)
     code = compile(module, filename, "exec")
+    # Every tuple/frozenset constant of generated code is Var-free and
+    # immutable: certify it so a goal-position seam can hand it out by
+    # identity (clausal.logic.cells, the compiled-constant certificate).
+    from clausal.logic.cells import register_compiled_constants  # noqa: PLC0415
+    register_compiled_constants(code)
     ns = dict(globals_ or {})
     exec(code, ns)
     return ns[node.name]
