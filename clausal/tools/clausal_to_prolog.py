@@ -3930,11 +3930,18 @@ def clausal_source_to_prolog_ast(source: str, *,
         dialect = Dialect.iso()
     tree = python_ast.parse(source)
     _expand_table_directives(tree)
+    # keepends=True is load-bearing, not style. build_quote_map feeds tokenize
+    # through readline, which reads a bare "" -- any blank line without its
+    # ending -- as end of file. Plain splitlines() cut the quote map short at
+    # the first blank line (empty for most files), every quote lookup then
+    # answered "unknown", and a single-quoted atom fell back to the file's
+    # -double_quotes mode: a STRING wherever that mode is chars. See
+    # tests/test_prolog_quote_map_line_endings.py.
     converter = _ClausalToProlog(dialect, strict=strict,
                                  module_path=module_path,
                                  module_signatures=module_signatures,
                                  meta_modes=meta_modes,
-                                 source_lines=source.splitlines())
+                                 source_lines=source.splitlines(keepends=True))
     return converter.convert_module(tree)
 
 

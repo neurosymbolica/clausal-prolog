@@ -47,7 +47,7 @@ test("atom: string fails") :-
     \+ atom("hello").
 
 test("atom: char list fails") :-
-    \+ atom(["h", "e", "l", "l", "o"]).
+    \+ atom([h, e, l, l, o]).
 
 test("atom: integer fails") :-
     \+ atom(1).
