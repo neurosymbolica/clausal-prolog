@@ -1,5 +1,4 @@
 # Doc snippet fixtures for docs/lists.md
--double_quotes(atom)
 
 # --8<-- [start:partition_example]
 partition([], _, [], []) <- True

@@ -2,7 +2,6 @@
 
 # --8<-- [start:supported_conditions]
 # equivalent to freeze(X, Goal)
--double_quotes(atom)
 test("when isbound") <- (
     when(nonvar(X), Y is X),
     X is 42,
@@ -11,18 +10,18 @@ test("when isbound") <- (
 
 # Conjunction: fire when both X and Y are bound
 test("when conjunction") <- (
-    when((nonvar(X), nonvar(Y)), R is "done"),
+    when((nonvar(X), nonvar(Y)), R is 'done'),
     X is 1,
     Y is 2,
-    R is "done"
+    R is 'done'
 )  # nv
 
 # ground: fire when term is fully ground
 test("when ground") <- (
-    when(ground([X, Y]), R is "all ground"),
+    when(ground([X, Y]), R is 'all ground'),
     X is 1,
     Y is 2,
-    R is "all ground"
+    R is 'all ground'
 )  # nv
 # --8<-- [end:supported_conditions]
 
@@ -60,7 +59,7 @@ test("too few") <- (
 # --8<-- [start:count_all_2_ex2]
 # Count members
 test("count") <- (
-    count_all(in_(X_UNUSED, ["a", "b", "c", "d"]), N),
+    count_all(in_(X_UNUSED, ['a', 'b', 'c', 'd']), N),
     N is 4
 )  # nv
 
@@ -89,9 +88,9 @@ test("catch+callnth") <- (
     catch(
         call_nth(in_(X_UNUSED, [1, 2, 3]), 0),
         _,
-        R is "caught"
+        R is 'caught'
     ),
-    R is "caught"
+    R is 'caught'
 )  # nv
 
 # freeze inside findall
@@ -108,7 +107,7 @@ test("findall+freeze") <- (
 test("findall+countall") <- (
     findall(
         N,
-        count_all(in_(X_UNUSED, ["a", "b", "c"]), N),
+        count_all(in_(X_UNUSED, ['a', 'b', 'c']), N),
         BAG
     ),
     BAG is [3]

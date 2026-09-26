@@ -33,8 +33,9 @@ Three jobs, one per subcommand:
     ``"..."`` literal that meant an atom is respelled ``'...'``, which is an
     atom in every mode.  Left alone: a ``test("...")`` description (a string
     is the natural spelling of human text and the runner accepts both), a
-    DCG terminal (the right side of ``>>``, chars in every mode), hosted
-    Python, docstrings and comments.
+    bare-string DCG terminal (``x >> ("abc")``, a char sequence in every
+    mode; a list terminal's elements follow the mode and ARE converted),
+    ``++`` escapes and hosted Python, docstrings and comments.
 
 Every subcommand prints the SIZE of what it scanned and what it changed;
 ``--check`` reports without writing.
@@ -91,6 +92,14 @@ def _is_seam(n) -> bool:
             and isinstance(n.operand.op, ast.USub))
 
 
+def _is_escape(n) -> bool:
+    """A ``++expr`` escape: its operand is PYTHON, and a ``"..."`` in it is a
+    Python str the -double_quotes mode never reads."""
+    return (isinstance(n, ast.UnaryOp) and isinstance(n.op, ast.UAdd)
+            and isinstance(n.operand, ast.UnaryOp)
+            and isinstance(n.operand.op, ast.UAdd))
+
+
 def _dq_literals(source: str, path: str):
     """``[(node, in_dcg_body, is_test_name)]`` for every double-quoted str
     literal that the compiler would read by the -double_quotes mode: top-level
@@ -105,7 +114,7 @@ def _dq_literals(source: str, path: str):
         stack = [(node, in_seam, in_dcg)]
         while stack:
             n, s, d = stack.pop()
-            if isinstance(n, ast.JoinedStr):
+            if isinstance(n, ast.JoinedStr) or _is_escape(n):
                 continue
             if _is_seam(n):
                 s = True
@@ -121,16 +130,16 @@ def _dq_literals(source: str, path: str):
                 stack.append((c, s, d))
 
     def _walk_dcg_body(body, walk):
+        # Only a BARE string body element (``x >> ("abc")``) is the
+        # char-sequence terminal the compiler exempts from the mode.  A
+        # list terminal's elements (``["hello", "world"]``) are ordinary
+        # terms read by the mode -- measured 2026-09-26 under the chars
+        # default: ``phrase(g, ["hello"])`` matches ``g >> (["hello"])``
+        # and ``phrase(g, ['hello'])`` does not -- as are a nonterminal
+        # call's arguments and the terms inside a ``{...}`` goal.
         elements = body.elts if isinstance(body, ast.Tuple) else [body]
         for element in elements:
-            if isinstance(element, ast.Constant):
-                walk(element, False, False, True)         # a terminal
-            elif isinstance(element, ast.List):
-                for item in element.elts:
-                    walk(item, False, False,
-                         isinstance(item, ast.Constant))  # ["a", X, f("b")]
-            else:
-                walk(element, False, False, False)        # call, {goal}, ...
+            walk(element, False, False, isinstance(element, ast.Constant))
 
     for st in tree.body:
         if isinstance(st, _HOSTED):

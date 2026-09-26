@@ -1,7 +1,6 @@
 # Companion tests for miscellaneous Phase 7 doc files.
 
 # ── wfs ──────────────────────────────────────────────────────────────────────
--double_quotes(atom)
 
 test("tabling exists") <- (
     findall(X, in_(X, [1, 2, 3]), BAG),

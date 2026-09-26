@@ -1,5 +1,4 @@
 # Companion tests for docs/clpr.md signature blocks.
--double_quotes(atom)
 
 test("clpr real equality") <- (
     clpr.real(X == 3.0),

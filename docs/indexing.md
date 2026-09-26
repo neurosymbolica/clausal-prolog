@@ -5,9 +5,9 @@
 Without indexing, every query against a predicate tries all clauses sequentially. For a predicate with N fact clauses, a ground lookup costs O(N) — each clause's `match` block is entered and compared. This is acceptable for small predicates but becomes a bottleneck for large fact tables (100+ clauses).
 
 ```clausal
-color("red",   [255,   0,   0]),
-color("green", [  0, 128,   0]),
-color("blue",  [  0,   0, 255]),
+color('red',   [255,   0,   0]),
+color('green', [  0, 128,   0]),
+color('blue',  [  0,   0, 255]),
 ...  # 200 more colors
 ```
 
@@ -339,11 +339,11 @@ With groundness-keyed dispatch, querying `color(NAME, "warm")` uses a second-arg
 ## Example: colour database
 
 ```clausal
-color("red",    "warm"),
-color("blue",   "cool"),
-color("green",  "cool"),
-color("yellow", "warm"),
-color("white",  "neutral"),
+color('red',    'warm'),
+color('blue',   'cool'),
+color('green',  'cool'),
+color('yellow', 'warm'),
+color('white',  'neutral'),
 ```
 
 Analysis finds both positions indexable:

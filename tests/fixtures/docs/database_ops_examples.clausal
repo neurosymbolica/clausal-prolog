@@ -1,15 +1,14 @@
 # Doc snippet fixtures for docs/database_ops.md
--double_quotes(atom)
 
 # --8<-- [start:quick_example]
 -dynamic(color/1)
 
-color("red"),
-color("blue"),
+color('red'),
+color('blue'),
 
 test("assert and query") <- (
-    assertz(color("green")),
-    color("green")
+    assertz(color('green')),
+    color('green')
 )  # nv
 # --8<-- [end:quick_example]
 
@@ -21,7 +20,7 @@ test("assert and query") <- (
 # --8<-- [start:assertz_example]
 -dynamic(fact/1)
 
-fact("init"),
+fact('init'),
 
 test("assert") <- (
     assertz(fact(42)),
@@ -32,39 +31,39 @@ test("assert") <- (
 # --8<-- [start:asserta_example]
 -dynamic(priority/1)
 
-priority("low"),
+priority('low'),
 
 test("assert first") <- (
-    asserta(priority("high")),
-    priority("high")
+    asserta(priority('high')),
+    priority('high')
 )  # nv
 # --8<-- [end:asserta_example]
 
 # --8<-- [start:retract_example]
 -dynamic(item/1)
 
-item("a"),
-item("b"),
-item("c"),
+item('a'),
+item('b'),
+item('c'),
 
 test("retract") <- (
-    retract(item("b")),
-    (not item("b")),
-    item("a"),
-    item("c")
+    retract(item('b')),
+    (not item('b')),
+    item('a'),
+    item('c')
 )  # nv
 # --8<-- [end:retract_example]
 
 # --8<-- [start:retract_pattern]
 -dynamic(pair/2)
 
-pair("x", 1),
-pair("y", 2),
-pair("z", 3),
+pair('x', 1),
+pair('y', 2),
+pair('z', 3),
 
 test("retract by pattern") <- (
-    retract(pair("y", _)),
-    (not pair("y", 2))
+    retract(pair('y', _)),
+    (not pair('y', 2))
 )  # nv
 # --8<-- [end:retract_pattern]
 
@@ -74,5 +73,5 @@ test("retract by pattern") <- (
 memo_fib(0, 0),
 memo_fib(1, 1),
 
-test("clear") <- abolish_table("memo_fib", 2)  # nv
+test("clear") <- abolish_table('memo_fib', 2)  # nv
 # --8<-- [end:abolish_table_example]

@@ -175,9 +175,9 @@ is truly relational.
 when the user provides structured data, encode it as facts:
 
 ```clausal
-employee("alice", "engineering", 95000),
-employee("bob", "marketing", 72000),
-employee("carol", "engineering", 105000),
+employee('alice', 'engineering', 95000),
+employee('bob', 'marketing', 72000),
+employee('carol', 'engineering', 105000),
 
 department_employee(DEPT, NAME) <- employee(NAME, DEPT, _)
 high_earner(NAME) <- (employee(NAME, _, SALARY), SALARY > 90000)

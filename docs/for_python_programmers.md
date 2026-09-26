@@ -69,8 +69,8 @@ bound through unification. once bound, it cannot be reassigned (within that
 branch of search). Logic variables are written in ALLCAPS:
 
 ```clausal
-# X is unbound; unification with "hello" binds it
-greeting(X) <- (X is "hello")
+# X is unbound; unification with 'hello' binds it
+greeting(X) <- (X is 'hello')
 ```
 
 This is closer to variables in algebra than variables in Python: `X` stands
@@ -253,9 +253,9 @@ def classify(n):
 
 ```clausal
 # Clausal: three clauses, three cases
-classify(N, "positive") <- (N > 0)
-classify(0, "zero"),
-classify(N, "negative") <- (N < 0)
+classify(N, 'positive') <- (N > 0)
+classify(0, 'zero'),
+classify(N, 'negative') <- (N < 0)
 ```
 
 Each clause is a logical alternative — a separate condition under which the
@@ -291,9 +291,9 @@ capitals = {"france": "paris", "germany": "berlin", "japan": "tokyo"}
 
 ```clausal
 # Clausal: facts that can be queried in any direction
-capital("france", "paris"),
-capital("germany", "berlin"),
-capital("japan", "tokyo"),
+capital('france', 'paris'),
+capital('germany', 'berlin'),
+capital('japan', 'tokyo'),
 ```
 
 The Clausal version can be queried both ways: "What is the capital of France?"

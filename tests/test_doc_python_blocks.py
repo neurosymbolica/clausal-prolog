@@ -103,7 +103,7 @@ _CASES = [
     ("metainterpreters", "metainterpreters.md", "natnum_program", {},
      "print(len(result))", ["1"]),
     ("ipython-solve", "ipython.md", 'solve(("greeting"',
-     {"hello": '-double_quotes(atom)\ngreeting("hello"),\ngreeting("hi"),\n'}, "", ["hello", "hi"]),
+     {"hello": "greeting('hello'),\ngreeting('hi'),\n"}, "", ["hello", "hi"]),
     ("ipython-solutions-call", "ipython.md", "def gen():", {},
      "_show(_doc_value)",
      ["ROWS is [[1, 5, 6, 8, 9, 4, 3, 2, 7], [9, 2, 8, 7, 3, 1, 4, 5, 6], "

@@ -313,11 +313,11 @@ them at runtime. But some programs need to add or remove facts during execution
 ```clausal
 -dynamic(color/1)
 
-color("red"),
+color('red'),
 
 test("add at runtime") <- (
-    assertz(color("blue")),
-    color("blue")
+    assertz(color('blue')),
+    color('blue')
 )
 ```
 
@@ -405,12 +405,12 @@ simple dispatches), this overhead is unnecessary.
 ```clausal
 -shallow(lookup/2)
 
-lookup("a", 1),
-lookup("b", 2),
-lookup("c", 3),
+lookup('a', 1),
+lookup('b', 2),
+lookup('c', 3),
 
-test("lookup a") <- (lookup("a", V), V == 1)
-test("lookup c") <- (lookup("c", V), V == 3)
+test("lookup a") <- (lookup('a', V), V == 1)
+test("lookup c") <- (lookup('c', V), V == 3)
 ```
 
 `-shallow` compiles in simple mode (direct generator calls) instead of

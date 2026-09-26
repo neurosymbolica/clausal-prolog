@@ -8,8 +8,8 @@ term_expansion(
     STATE, STATE
 ),
 
-fact("a"),
-fact("b"),
+fact('a'),
+fact('b'),
 # After expansion, the module also contains:
 # logged_fact("a"), logged_fact("b")
 --8<-- [end:quick_example]
@@ -56,8 +56,8 @@ term_expansion(TERM, [TERM, TERM], STATE, STATE) <- True
 # my_module.clausal — imports TE rules from provider
 -import_from(expansion_provider, [term_expansion])
 
-color("red"),
-color("green"),
+color('red'),
+color('green'),
 # Each color fact is duplicated by the imported expansion rule
 --8<-- [end:importing_expansion_rules_ex2]
 

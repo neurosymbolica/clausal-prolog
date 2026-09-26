@@ -151,11 +151,11 @@ and reason about it with the full power of logic programming.
 ```clausal
 # Describe the output as a term:
 greeting_text(NAME, TEXT) <- (
-    TEXT is ++"Hello, " ++ NAME ++ "!"
+    TEXT is ++"Hello, " ++ NAME ++ '!'
 )
 
 # Test it without side effects:
-test("greeting") <- greeting_text("world", "Hello, world!")
+test("greeting") <- greeting_text('world', 'Hello, world!')
 
 # Emit it only at the boundary:
 greet(NAME) <- (
@@ -193,15 +193,15 @@ type tests to distinguish cases.
 
 ```clausal
 # Defaulty: need a guard to tell if the value is special
-handle(0, "zero"),
-handle(N, "positive") <- (N > 0)
-handle(N, "negative") <- (N < 0)
+handle(0, 'zero'),
+handle(N, 'positive') <- (N > 0)
+handle(N, 'negative') <- (N < 0)
 
 # Clean: cases are distinguished by the functor — the wrapped value
 # doesn't matter here, only which functor it's wrapped in
-classify(zero, "zero"),
-classify(positive(_), "positive"),
-classify(negative(_), "negative"),
+classify(zero, 'zero'),
+classify(positive(_), 'positive'),
+classify(negative(_), 'negative'),
 ```
 
 Clean representations are not only good for semantic reasons — they also enable

@@ -1,5 +1,4 @@
 # Companion tests for docs/clpb.md signature blocks.
--double_quotes(atom)
 
 test("sat exists") <- sat(X | ~X)  # nv
 
