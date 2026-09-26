@@ -233,3 +233,50 @@ def test_a_scale_named_constant_declared_as_a_string_is_silent(tmp_path):
         """)
     assert not [w for w in caught
                 if issubclass(w.category, ClausalScaleInNameWarning)]
+
+
+# ── the chars-mode module (the -double_quotes default after the flip) ────────
+
+
+def test_a_chars_mode_table_takes_decimal_strings(tmp_path):
+    """Under ``-double_quotes(chars)`` a ``"292.00"`` row value arrives as the
+    chars CARRIER ``('$chars', '292.00')``, not a bare str. The table path
+    must read the digits through it -- measured 2026-09-26: rejecting the
+    carrier made every currency/units table of decimal strings fail to load
+    in a chars-mode module with ``('$chars', '292.00') is not a decimal
+    number``."""
+    m = _load(tmp_path, "chars_table", """
+        -double_quotes(chars)
+        -module(chars_table, [s_max/2, s_span/2])
+        -import_from(united_states, [usd])
+        -import_from(py.units, [metre])
+        -constants_number_currency(s_max/2,
+                                   [(1, "292.00"), (2, 536)],
+                                   usd, money_at(2))
+        -constants_number_units(s_span/2, [(short, "5.00")], metre,
+                                number_at(2))
+        -private([short])
+    """)
+    rows = _rows(m, "s_max", 2)
+    assert [str(v.value) for _, v in rows] == ["292.00", "536"]
+    rows = _rows(m, "s_span", 2)
+    assert [str(v.value) for _, v in rows] == ["5.00"]
+
+
+def test_a_chars_mode_single_value_takes_a_decimal_string(tmp_path):
+    m = _load(tmp_path, "chars_single", """
+        -double_quotes(chars)
+        -import_from(united_states, [usd])
+        -constant_number_currency(s_fee, "292.00", usd)
+    """)
+    assert str(m.s_fee.value) == "292.00"
+
+
+def test_a_chars_mode_table_still_refuses_a_non_numeric_string(tmp_path):
+    with pytest.raises(SyntaxError, match="is not a number"):
+        _load(tmp_path, "chars_bad", """
+            -double_quotes(chars)
+            -import_from(united_states, [usd])
+            -constants_number_currency(s_bad/2, [(1, "abc")], usd,
+                                       money_at(2))
+        """)
