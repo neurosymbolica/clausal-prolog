@@ -84,6 +84,7 @@ __all__ = [
     "CELLS_NAMESPACE_KEY",
     "TUPLE_TAG",
     "CHARS_TAG", "chars", "is_chars", "chars_text",
+    "register_compiled_constants", "is_compiled_constant",
     "is_reserved_1tuple", "refuse_reserved_1tuple",
     "make_cell",
     "make_tuple_cell",
@@ -910,3 +911,42 @@ def set_intern_enabled(value: bool) -> None:
     no production code path calls this."""
     global _INTERN_ENABLED
     _INTERN_ENABLED = bool(value)
+
+
+# ── Compiled-constant certificate (dumb seam, 2026-09-26) ──────────────────
+#
+# A goal-position seam hands an answer back BY IDENTITY only when it can
+# prove the object holds no ``Var`` -- bound or unbound -- because Var
+# equality is identity and backtracking rebinds.  The one certificate that
+# costs nothing at export time is PROVENANCE: a tuple or frozenset that the
+# compiler baked into a clause's code object as an ``ast.Constant`` can never
+# contain a Var (``compile`` refuses one), is immutable, and is the very
+# object every call hands out (probe 2026-09-26: a fact's cell answer is the
+# same object across calls).  ``codegen.functiondef_to_function`` registers
+# every such constant here, recursively; ``seam.export`` asks ``is_compiled_
+# constant``.  The table holds a STRONG reference so an id can never be
+# reused by another object while the entry exists -- the price is that a
+# reloaded module's old constants stay pinned, bounded by what its code
+# objects held anyway.
+
+_COMPILED_GROUND: dict = {}
+
+
+def register_compiled_constants(code) -> None:
+    """Record every tuple / frozenset constant of *code* (and of the code
+    objects nested in it), recursively through nested tuples."""
+    stack = [code]
+    while stack:
+        obj = stack.pop()
+        t = type(obj)
+        if t is tuple or t is frozenset:
+            _COMPILED_GROUND[id(obj)] = obj
+            stack.extend(obj)
+        elif hasattr(obj, "co_consts"):
+            stack.extend(obj.co_consts)
+
+
+def is_compiled_constant(obj) -> bool:
+    """True iff *obj* IS an object the compiler baked in as a constant."""
+    return _COMPILED_GROUND.get(id(obj)) is obj
+

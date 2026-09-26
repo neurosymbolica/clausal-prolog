@@ -39,8 +39,10 @@ from clausal.logic.python_terms import FROM_TERM as _FROM_TERM  # the ONE regist
 from clausal.logic.variables import deref, walk
 from clausal.terms import (
     Compound, DictTerm, KWTerm, SegBytes, SegList, SegString, SetTerm, compound_as_cell)
+from clausal.logic.predicate import is_term_instance, term_field_names
 
-__all__ = ["to_python", "unwrap_atom", "strip_atom_tags"]
+__all__ = ["to_python", "unwrap_atom", "strip_atom_tags", "has_atom_tag",
+           "term_children", "map_term", "TERM_CONTAINER_TYPES"]
 
 
 def to_python(val):
@@ -169,6 +171,97 @@ def to_python(val):
         return frozenset(to_python(e) for e in val)
     if isinstance(val, (set, frozenset)):
         return t(to_python(e) for e in val)
+    if is_term_instance(val):
+        # a dataclass term class: rebuilt with converted fields
+        return t(**{n: to_python(getattr(val, n)) for n in term_field_names(val)})
+    return val
+
+
+#: Every type the engine treats as a TERM CONTAINER -- the shapes to_python
+#: converts, map_term rebuilds and term_children walks.  One list, so the
+#: three cannot drift (tests/test_leak_doors.py pins each entry against all
+#: three); a dataclass term class is the open-ended member, recognised by
+#: ``is_term_instance``.  Seg* are containers too but hold str/VarSeg
+#: segments, not arbitrary terms: map_term leaves them alone, to_python walks
+#: them to their ground form.
+TERM_CONTAINER_TYPES = (tuple, list, dict, DictTerm, Compound, KWTerm, SetTerm, set, frozenset)
+
+
+def term_children(val):
+    """The direct children of a term container, or ``()`` for a leaf.  A
+    dict-like container yields keys and values; a Compound its functor and
+    args; a NamedTuple its fields."""
+    if isinstance(val, (tuple, list)):
+        return val
+    if isinstance(val, (dict, DictTerm)):
+        out = []
+        for k, v in val.items():
+            out.append(k); out.append(v)
+        return out
+    if isinstance(val, Compound):
+        return (val.functor, *val.args)
+    if isinstance(val, KWTerm):
+        return list(val.values())
+    if isinstance(val, (SetTerm, set, frozenset)):
+        return list(val)
+    if is_term_instance(val):
+        return [getattr(val, n) for n in term_field_names(val)]
+    return ()
+
+
+def map_term(val, fn):
+    """*val* rebuilt with *fn* applied to each direct child, for every
+    container in TERM_CONTAINER_TYPES; the SAME OBJECT when no child
+    changed (identity is the "unchanged" signal, so callers allocate
+    nothing on the common path).  A leaf is returned as it is."""
+    t = type(val)
+    if t is tuple or t is list:
+        out = [fn(v) for v in val]
+        if all(a is b for a, b in zip(out, val)):
+            return val
+        return tuple(out) if t is tuple else out
+    if isinstance(val, tuple):                         # NamedTuple
+        out = [fn(v) for v in val]
+        if all(a is b for a, b in zip(out, val)):
+            return val
+        try:
+            return t(*out)
+        except TypeError:
+            return tuple(out)
+    if isinstance(val, list):
+        out = [fn(v) for v in val]
+        return val if all(a is b for a, b in zip(out, val)) else out
+    if isinstance(val, (dict, DictTerm)):
+        items = list(val.items())
+        out = [(fn(k), fn(v)) for k, v in items]
+        if all(k1 is k2 and v1 is v2 for (k1, v1), (k2, v2) in zip(out, items)):
+            return val
+        return DictTerm(dict(out), _position=val._position) if isinstance(val, DictTerm) else dict(out)
+    if isinstance(val, Compound):
+        functor = fn(val.functor)
+        args = tuple(fn(a) for a in val.args)
+        if functor is val.functor and all(a is b for a, b in zip(args, val.args)):
+            return val
+        return Compound(functor, args, _position=val._position)
+    if isinstance(val, KWTerm):
+        fields = {k: fn(v) for k, v in val.items()}
+        if all(fields[k] is v for k, v in val.items()):
+            return val
+        return KWTerm(val.functor, _position=val._position, **fields)
+    if isinstance(val, SetTerm):
+        elems = [fn(e) for e in val]
+        if all(a is b for a, b in zip(elems, val)):
+            return val
+        return SetTerm(elems, _position=val._position)
+    if isinstance(val, (set, frozenset)):
+        elems = [fn(e) for e in val]
+        return val if all(a is b for a, b in zip(elems, val)) else t(elems)
+    if is_term_instance(val):
+        names = term_field_names(val)
+        fields = {n: fn(getattr(val, n)) for n in names}
+        if all(fields[n] is getattr(val, n) for n in names):
+            return val
+        return t(**fields)
     return val
 
 
@@ -200,32 +293,38 @@ def wrap_text(val):
     return val                         # STAGE 2: a str a thunk hands back IS the atom (identity)
 
 
-def strip_atom_tags(val):
-    """*val* with every ``atom`` INSTANCE -- at any depth of a tuple, list or
-    dict -- replaced by the plain ``str`` it tags.  THE LEAK RULE, deep.
+def has_atom_tag(val) -> bool:
+    """True iff an ``atom`` INSTANCE is reachable from *val* through the term
+    containers.  ITERATIVE (a cons-like goal thousands of levels deep must
+    not raise RecursionError at solve()), read-only, no allocation beyond
+    the stack: the cheap scan every Python entry runs before deciding
+    whether the rebuild is needed at all."""
+    stack = [val]
+    while stack:
+        v = stack.pop()
+        if type(v) is atom:
+            return True
+        children = term_children(v)
+        if children:
+            stack.extend(children)
+    return False
 
-    ``wrap_text`` applies the rule to a ``++`` value, one level.  The doors it
-    never sees are a seam's bare-name lookup (``seam.build``: a module global
-    bound to an exported ``atom``) and a Python caller's goal at
-    ``solve``/``once``/``call``; both call this (dumb seam step (d),
-    2026-09-26).  Returns the SAME OBJECT when nothing needed changing, so the
-    common case allocates nothing and a rewriter-built goal (a Node tree,
-    neither tuple nor list nor dict) costs one type test."""
-    t = type(val)
-    if t is atom:
+
+def strip_atom_tags(val):
+    """*val* with every ``atom`` INSTANCE -- at any depth of any term
+    container (TERM_CONTAINER_TYPES, via map_term) -- replaced by the plain
+    ``str`` it tags.  THE LEAK RULE, deep.
+
+    ``wrap_text`` applies the rule to a ``++`` value, one level.  The doors
+    it never sees are a seam's bare-name lookup (``seam.build``) and a Python
+    caller's goal/arguments at ``solve``/``call`` (and so ``once``, ``query``,
+    ``each``); both call this (dumb seam step (d), 2026-09-26).  Returns the
+    SAME OBJECT when nothing needed changing; callers on a hot path run
+    :func:`has_atom_tag` first, so the recursive rebuild only ever runs on
+    a value that holds a tag."""
+    if type(val) is atom:
         return str.__str__(val)
-    if t is tuple or t is list:
-        out = [strip_atom_tags(v) for v in val]
-        if all(a is b for a, b in zip(out, val)):
-            return val
-        return tuple(out) if t is tuple else out
-    if t is dict:
-        out = {strip_atom_tags(k): strip_atom_tags(v) for k, v in val.items()}
-        if all(k1 is k2 and v1 is v2
-               for (k1, v1), (k2, v2) in zip(out.items(), val.items())):
-            return val
-        return out
-    return val
+    return map_term(val, strip_atom_tags)
 
 
 def unwrap_atom(val):

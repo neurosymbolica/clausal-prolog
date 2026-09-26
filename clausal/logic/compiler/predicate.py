@@ -321,7 +321,6 @@ from clausal.logic.seam import (
     text_of as _text_of,
     text_value as _text_value,
     once_bind as _once_bind,
-    once_answer as _once_answer,
     each as _each,
     each_fresh as _each_fresh,
     with_bases as _with_bases,
@@ -430,7 +429,6 @@ INJECTED_RUNTIME_BUILTINS: dict = {
     "$text_value": _text_value,
     # Goal-position `--`: if/for/while/not run the goal (clausal.logic.seam).
     "$once_bind": _once_bind,
-    "$once_answer": _once_answer,
     "$each": _each,
     # The RE-ENTRANT each: mints the goal's variables per evaluation, for a
     # comprehension iterable, which has no statement to hoist them to.

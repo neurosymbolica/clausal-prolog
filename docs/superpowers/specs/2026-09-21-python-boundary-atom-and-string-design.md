@@ -135,12 +135,15 @@ their internal form**, and are converted explicitly or compared against other
 | **string** | `('$chars', text)` — the carrier, unconverted | a carrier is the string |
 | compound / dict | the cell / the `DictTerm`, nothing inside converted | raw |
 
-* `seam.export` no longer walks or converts (`_to_boundary` is gone). It
-  derefs, refuses an unbound constrained variable as before, and snapshots
-  (deref-walks) ONLY when the derivation bound something below the goal's own
-  variables (`seam._snapshot_needed`, read off the private trail with the
-  query's parameter bindings excluded via `solve(params_bound=...)`). A
-  stored ground answer crosses by identity.
+* `seam.export` no longer converts (`_to_boundary` is gone). It derefs,
+  refuses an unbound constrained variable as before, and hands the value out
+  BY IDENTITY only when it is proven to hold no `Var` object: atomic, a
+  compiled constant (`cells.is_compiled_constant`, registered by
+  `codegen.functiondef_to_function` — a tuple baked into a clause can hold
+  no Var and is the same object every call), or walked completely within a
+  bounded probe; otherwise it deref-walks a copy. (A first cut read the
+  trail — "only the goal's own variables were bound" — and was unsound for
+  `P is pair(A, A), between(1, 2, A)`; roborev 243.)
 * Python text is `clausal.to_python(T)`; the deep IN converter is
   `clausal.to_clausal(obj)`; the sort key is `clausal.term_key`. All three
   are driven by the `python_terms` registry (one table, both directions).

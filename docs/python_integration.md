@@ -170,12 +170,15 @@ for T in --txt(T):
     to_python(T)                   # 'some text'
 ```
 
-The one copy ever made is a **snapshot**, taken only when the derivation
-bound something *below* the goal's own variables — a compound built from
-body variables that the engine will unbind again on backtracking. A stored
-fact, a table row or a `++` value is handed back by identity, however large:
-`if --g(X, DOC)` never walks `DOC`. Do not mutate what you are handed; it may
-be the engine's own stored term.
+An answer crosses **by identity** only when it is proven to hold no logic
+variable at all — it is atomic, it is a constant the compiler baked into a
+clause (a fact's cell, however large: `if --g(X, DOC)` over a stored cell
+never walks `DOC`), or a bounded probe walked it completely and met none.
+Anything else — a compound built from body variables, a large `++`-built
+object — is deref-walked into a **copy** first, because a term holding a
+variable would neither compare equal to its `--` literal nor survive
+backtracking. Do not mutate what you are handed; it may be the engine's own
+stored term.
 
 The same holds in a comprehension or generator expression whose FIRST
 `for` clause is a `--` goal (`{K: V for K, V in --kv(K, V)}`), and for the

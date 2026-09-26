@@ -48,7 +48,7 @@ from dataclasses import fields as _dc_fields, is_dataclass as _is_dataclass
 from typing import Any, Iterator
 
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
-from clausal.logic.to_python import strip_atom_tags as _strip_atom_tags
+from clausal.logic.to_python import strip_atom_tags as _strip_atom_tags, has_atom_tag as _has_atom_tag
 from clausal.logic.atoms import (
     is_atom as _term_is_atom, mint as _mint_atom, spelling as _spelling, is_mangled, demangle,
 )
@@ -1088,6 +1088,7 @@ def call(
             module = resolve_module(_q[1], module, "call/N")
             functor = _q[2]
     # Fast path: predicate class passed directly — no module lookup needed.
+    args = _python_entry(args)
     if hasattr(functor, '_get_dispatch'):
         dispatch_fn = functor._get_dispatch()
         if trail is None:
@@ -1223,12 +1224,29 @@ def call(
     yield from _drive_trampoline(dispatch_fn, trail, *args)
 
 
+def _python_entry(value):
+    """THE LEAK RULE at a Python caller's door (dumb seam step (d),
+    2026-09-26): an ``atom`` instance anywhere in a goal or argument list
+    built by Python becomes the plain str before it can reach term space
+    (or crash ``compile`` as an ast.Constant of the wrong type).
+
+    ONE definition for the two entries Python has -- ``solve`` (a goal term;
+    ``once``, ``query``, ``query_wfs`` and every goal-position seam go
+    through it) and ``call`` (a functor and arguments handed straight to the
+    dispatch; there is no funnel below the two that sees Python's values as
+    terms).  An iterative read-only scan decides first, so the common goal
+    -- a rewriter Node tree, or a cell with no tag -- costs one pass and no
+    allocation, and a cons-like goal thousands of levels deep cannot raise
+    RecursionError here."""
+    if _has_atom_tag(value):
+        return _strip_atom_tags(value)
+    return value
+
+
 def solve(
     goal: Any,
     module=None,
     trail: Trail | None = None,
-    *,
-    params_bound=None,
 ) -> Iterator[Trail]:
     """Drive an arbitrary goal; yield the Trail after each solution.
 
@@ -1246,23 +1264,13 @@ def solve(
              else is auto-inferred from the predicate classes in the goal.
              See ``resolve_module`` and ``_module_for_moduleless_solve``.
     trail:   optional Trail; a fresh one is created if not provided
-    params_bound: optional callable, called ONCE with the trail's length
-             right after the query's parameterised ground arguments are
-             bound and before the drive starts.  The goal-position seam
-             uses it to tell a derivation's own bindings from those
-             parameter bindings (``seam._snapshot_needed``).
 
     Yields
     ------
     Trail after each solution (bindings are live on the trail).
     """
     goal, module = _resolved_goal_and_module(goal, module, "solve/2")
-    # THE LEAK RULE at a Python caller's door (dumb seam step (d),
-    # 2026-09-26): an ``atom`` instance in a goal built by Python becomes the
-    # plain str before it can reach term space (or crash ``compile`` as an
-    # ast.Constant of the wrong type).  Same object back when nothing needed
-    # changing; a rewriter-built goal (a Node tree) is not walked.
-    goal = _strip_atom_tags(goal)
+    goal = _python_entry(goal)
     if trail is None:
         trail = Trail()
 
@@ -1278,8 +1286,6 @@ def solve(
     # value-independent compiled query sees the concrete arguments.
     for param_var, value in param_pairs:
         unify(param_var, value, trail)
-    if params_bound is not None:
-        params_bound(len(trail))
     yield from _drive_trampoline(dispatch_fn, trail)
 
 
