@@ -1070,6 +1070,54 @@ unwrap_chars(PyObject *t)
     return is_chars_carrier(t) ? PyTuple_GET_ITEM(t, 1) : t;
 }
 
+/* Forward declarations: defined with the term-inspection cache further down
+ * (``Compound_type`` is set by ``_register_term_types``). */
+static PyObject *Compound_type;
+static PyObject *str_functor;
+static PyObject *str_args;
+
+/*
+ * compound_to_cell(obj, &out) -- C twin of ``clausal.terms.compound_as_cell``.
+ *
+ * Ruling 2026-09-26: a Compound whose functor dereferences to an atom (a str)
+ * and whose arity is >= 1 IS the cell (functor, *args).  Returns 1 with *out a
+ * NEW reference to that cell; 0 (and *out NULL) when obj is not a Compound or
+ * has no cell equivalent (Var / non-atom functor, arity 0); -1 on error.
+ * Before ``_register_term_types`` runs, Compound_type is NULL and this answers
+ * 0 -- the Python ``Compound.__unify__`` tuple arm then decides instead.
+ */
+static int
+compound_to_cell(PyObject *obj, PyObject **out)
+{
+    *out = NULL;
+    if (Compound_type == NULL || !PyType_Check(Compound_type)) return 0;
+    if (!PyObject_TypeCheck(obj, (PyTypeObject *)Compound_type)) return 0;
+    PyObject *functor = PyObject_GetAttr(obj, str_functor);
+    if (!functor) return -1;
+    PyObject *f = var_deref(functor);          /* borrowed */
+    if (!PyUnicode_Check(f)) { Py_DECREF(functor); return 0; }
+    PyObject *args = PyObject_GetAttr(obj, str_args);
+    if (!args) { Py_DECREF(functor); return -1; }
+    if (!PyTuple_Check(args) || PyTuple_GET_SIZE(args) == 0) {
+        Py_DECREF(functor); Py_DECREF(args);
+        return 0;
+    }
+    Py_ssize_t n = PyTuple_GET_SIZE(args);
+    PyObject *cell = PyTuple_New(n + 1);
+    if (!cell) { Py_DECREF(functor); Py_DECREF(args); return -1; }
+    Py_INCREF(f);
+    PyTuple_SET_ITEM(cell, 0, f);
+    for (Py_ssize_t i = 0; i < n; i++) {
+        PyObject *a = PyTuple_GET_ITEM(args, i);
+        Py_INCREF(a);
+        PyTuple_SET_ITEM(cell, i + 1, a);
+    }
+    Py_DECREF(functor);
+    Py_DECREF(args);
+    *out = cell;
+    return 1;
+}
+
 static int
 do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
 {
@@ -1211,6 +1259,25 @@ do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
         return do_unify(PyTuple_GET_ITEM(t1, n-1),
                         PyTuple_GET_ITEM(t2, n-1),
                         trail, depth + 1, oc);
+    }
+
+    /* A Compound meeting a tuple (ruling 2026-09-26): an atom-functor
+     * Compound of arity >= 1 IS its cell, so unify the cell -- here, before
+     * the __unify__ hooks, so the occurs-check flag carries through (the
+     * Python hook cannot see it).  A Compound with no cell equivalent falls
+     * through and fails against the tuple as before. */
+    if (PyTuple_CheckExact(t1) != PyTuple_CheckExact(t2)) {
+        PyObject *comp = PyTuple_CheckExact(t1) ? t2 : t1;
+        PyObject *cell;
+        int c = compound_to_cell(comp, &cell);
+        if (c < 0) return -1;
+        if (c) {
+            int r = (comp == t1)
+                ? do_unify(cell, t2, trail, depth + 1, oc)
+                : do_unify(t1, cell, trail, depth + 1, oc);
+            Py_DECREF(cell);
+            return r;
+        }
     }
 
     /* STAGE 2 (spec 2026-09-18): the chars carrier is the ONLY text.  It

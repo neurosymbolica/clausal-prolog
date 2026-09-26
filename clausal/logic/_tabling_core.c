@@ -182,7 +182,11 @@ do_normalize(PyObject *term, int depth)
         return result;
     }
 
-    /* Compound → (functor, arg0, arg1, ...) */
+    /* Compound → (functor, arg0, arg1, ...).
+     * Ruling 2026-09-26: a Compound whose functor derefs to an atom (str)
+     * and whose arity is >= 1 IS the cell (functor, *args), so it keys
+     * exactly as that tuple does: ("__tuple__", functor, arg0, ...).  Twin
+     * of ``compound_as_cell`` in the Python ``_normalize_for_key_py``. */
     if (Compound_type) {
         int r = PyObject_IsInstance(term, Compound_type);
         if (r < 0) return NULL;
@@ -198,13 +202,24 @@ do_normalize(PyObject *term, int depth)
                 return NULL;
             }
             Py_ssize_t n = PyTuple_GET_SIZE(args);
-            PyObject *result = PyTuple_New(n + 1);
+            PyObject *df = VarAPI->deref(functor);   /* borrowed */
+            int as_cell = n > 0 && PyUnicode_Check(df);
+            Py_ssize_t off = as_cell ? 2 : 1;
+            PyObject *result = PyTuple_New(n + off);
             if (!result) { Py_DECREF(functor); Py_DECREF(args); return NULL; }
-            PyTuple_SET_ITEM(result, 0, functor);  /* steals ref */
+            if (as_cell) {
+                Py_INCREF(str___tuple__);
+                PyTuple_SET_ITEM(result, 0, str___tuple__);
+                Py_INCREF(df);
+                PyTuple_SET_ITEM(result, 1, df);
+                Py_DECREF(functor);
+            } else {
+                PyTuple_SET_ITEM(result, 0, functor);  /* steals ref */
+            }
             for (Py_ssize_t i = 0; i < n; i++) {
                 PyObject *elem = do_normalize(PyTuple_GET_ITEM(args, i), depth + 1);
                 if (!elem) { Py_DECREF(args); Py_DECREF(result); return NULL; }
-                PyTuple_SET_ITEM(result, i + 1, elem);
+                PyTuple_SET_ITEM(result, i + off, elem);
             }
             Py_DECREF(args);
             return result;

@@ -95,6 +95,27 @@ def _slice_within_prefix(index, prefix_len: int) -> bool:
 
 # ── New term types ─────────────────────────────────────────────────────────────
 
+def compound_as_cell(term: "Compound") -> "tuple | None":
+    """The cell ``(functor, *args)`` that *term* IS, or None if it has none.
+
+    Operator ruling 2026-09-26 (Compound retires in favour of cells before
+    1.0; ISO has one term ``f(1, 2)``): a ``Compound`` whose functor
+    dereferences to an atom (a ``str``) and whose arity is >= 1 is the SAME
+    TERM as that cell -- in ``=``/2, ``==``/2, compare/3, dif/2 and the tabling
+    variant key.  Every one of those relations routes a Compound through this
+    one function, so they cannot disagree about which Compounds qualify.
+
+    None for the Compounds with no cell equivalent: a Var or non-atom functor,
+    and arity 0 (``foo()``, not an ISO term -- the arity-0 cell is RESERVED).
+    Those stay distinct from every cell.  The C twins (``_variables.c``
+    ``compound_to_cell``, ``_tabling_core.c``) apply the same test.
+    """
+    functor = deref(term.functor)
+    if isinstance(functor, str) and term.args:
+        return (functor, *term.args)
+    return None
+
+
 @dataclass
 class Compound:
     """Fallback for runtime-constructed or unknown-functor compound terms.
@@ -126,11 +147,24 @@ class Compound:
         mode) is out of scope for the deref-only floor, so two differing
         functors — including an unbound Var vs a str — simply fail to unify.
         """
+        from .logic.variables import unify
+        if type(other) is tuple:
+            # Ruling 2026-09-26: an atom-functor Compound of arity >= 1 IS the
+            # cell (f, *args), so it unifies with a tuple as that cell does.
+            # The C unifier converts before it reaches this hook (so the
+            # occurs check survives); this arm is the Python twin of that.
+            cell = compound_as_cell(self)
+            if cell is None:
+                return False
+            mark = trail.mark()
+            if unify(cell, other, trail):
+                return True
+            trail.undo(mark)
+            return False
         if not isinstance(other, Compound):
             return NotImplemented
         if deref(self.functor) != deref(other.functor) or len(self.args) != len(other.args):
             return False
-        from .logic.variables import unify
         mark = trail.mark()
         for a, b in zip(self.args, other.args):
             if not unify(a, b, trail):

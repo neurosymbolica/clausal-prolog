@@ -70,8 +70,28 @@ def _set_of_sort_dedup(items: list) -> list:
     shared ``_standard_order_sorted`` — so there is only one standard term
     order in the system.
     """
-    from clausal.logic.builtins._helpers import _standard_order_sorted  # noqa: PLC0415
-    return _set_of_dedup(_standard_order_sorted(items))
+    from clausal.logic.builtins._helpers import (  # noqa: PLC0415
+        _standard_order_key, _standard_order_sorted,
+    )
+    # The Python-``==`` dedup is kept as it was; on top of it, two items with
+    # EQUAL standard-order keys are one term too -- a Compound and its cell
+    # (ruling 2026-09-26) are not Python-``==``, but sort/2 already treats
+    # them as one and ISO 8.10.3 has setof sort as sort/2 does.  The list is
+    # sorted by that key, so equal keys are adjacent; the first survives.
+    # (Deliberately NOT a pure key dedup: that would also stop setof merging
+    # ``1`` and ``1.0``, a parked decision, A01-D001.)
+    out: list = []
+    last = _NO_KEY
+    for item in _set_of_dedup(_standard_order_sorted(items)):
+        key = _standard_order_key(item)
+        if out and key == last:
+            continue
+        out.append(item)
+        last = key
+    return out
+
+
+_NO_KEY = object()
 
 
 def _findall_copy_row(template):

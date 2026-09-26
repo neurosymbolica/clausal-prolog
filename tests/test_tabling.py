@@ -264,9 +264,14 @@ class TestKeyComputation:
 
     def test_compound(self):
         # nv
+        # Ruling 2026-09-26: an atom-functor Compound of arity >= 1 IS the
+        # cell ("f", 1, 2) and keys exactly as that tuple does.
         c = Compound("f", (1, 2))
         result = _normalize_for_key(c)
-        assert result == ("f", 1, 2)
+        assert result == ("__tuple__", "f", 1, 2)
+        assert result == _normalize_for_key(("f", 1, 2))
+        # no cell equivalent (arity 0): the old functor-first shape
+        assert _normalize_for_key(Compound("f", ())) == ("f",)
 
     def test_make_subgoal_key_ground(self):
         # nv
