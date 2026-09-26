@@ -1,6 +1,6 @@
-:- set_prolog_flag(double_quotes, chars).
-
 :- module(iso_type_checking, [test/1]).
+
+:- set_prolog_flag(double_quotes, chars).
 
 :- use_module(library(clpz), [(#=)/2]).
 

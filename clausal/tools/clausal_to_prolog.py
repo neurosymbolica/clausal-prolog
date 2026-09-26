@@ -1411,21 +1411,51 @@ class _ClausalToProlog:
                     "discontiguous",
                     (PCompound("/", (PAtom(functor), PNumber(arity))),))))
 
-        rewritten: list[PItem] = []
-        module_seen = False
+        # Only the `:- module` directive moves: it goes FIRST. Everything the
+        # source wrote above it keeps its relative order, still ahead of the
+        # generated prelude, exactly as before -- only the module line changes
+        # position. Measured 2026-09-26 on both engines, a library imported via
+        # use_module, each item placed ABOVE vs BELOW `:- module`:
+        #
+        #   meta_predicate    above: Scryer ok, Trealla a caller-module goal
+        #                     FAILS silently.            below: both ok
+        #   op/3 (body use)   above: Trealla syntax_error. below: both ok
+        #   op/3 (exported)   above: BOTH syntax_error.   below: both ok
+        #   use_module        above: Scryer existence_error. below: both ok
+        #   double_quotes     either: both ok
+        #
+        # So nothing is known to need to precede `:- module`, and three things
+        # are known to break there.
+        module_item: PItem | None = None
+        before_module: list[PItem] = []
+        rest: list[PItem] = []
         for item in self._items:
             if _is_module_directive(item):
-                rewritten.append(_filter_module_exports(item, defined))
-                rewritten.extend(prelude_directives)
-                rewritten.extend(meta_directives)
-                rewritten.extend(discontiguous_directives)
-                module_seen = True
+                # EVERY module directive is filtered, as it always was; a
+                # second one stays where it was written (no generated block is
+                # repeated after it -- two module directives is not a valid
+                # file on either engine whatever follows them).
+                filtered = _filter_module_exports(item, defined)
+                if module_item is None:
+                    module_item = filtered
+                else:
+                    rest.append(filtered)
+            elif module_item is None:
+                before_module.append(item)
             else:
-                rewritten.append(item)
-        if not module_seen:
-            rewritten = (prelude_directives + meta_directives
-                         + discontiguous_directives + rewritten)
-        self._items = rewritten
+                rest.append(item)
+        generated = prelude_directives + meta_directives + discontiguous_directives
+        if module_item is None:
+            self._items = generated + before_module
+        else:
+            self._items = [module_item] + before_module + generated + rest
+
+        # A hand-written `-meta_predicate(a(...), b(...))` reaches here as N
+        # arguments; both engines need one directive PER SPEC. Normalised at the
+        # last moment so every path that can put such a directive in _items is
+        # covered, rather than only the one that was noticed.
+        self._items = [out for item in self._items
+                       for out in _split_meta_predicate_directive(item)]
 
         if self.strict and self._all_warnings:
             raise UntranslatableConstructError(list(self._all_warnings))
@@ -3609,21 +3639,31 @@ def _mode_term(mode: int | str) -> PTerm:
 def _existing_meta_predicate_indicators(item: PItem) -> set[tuple[str, int]]:
     """(name, arity) already declared by a hand-written :- meta_predicate directive.
 
-    Both spellings count. ISO allows one directive to carry a COMMA-SEPARATED list of
-    specs -- ``:- meta_predicate(foo(0, ?), bar(?, 2)).`` parses as a single ``,``/2
-    argument -- and a hand-written directive in either spelling must suppress the
-    generated one for every predicate it names, or the emitted file ends up carrying
-    two directives for the same predicate.
+    THREE spellings count, and the third is the one this missed. ISO permits one
+    directive to carry a COMMA-SEPARATED list of specs --
+    ``:- meta_predicate(foo(0, ?), bar(?, 2)).`` parses as a single ``,``/2
+    argument -- but a Clausal source directive ``-meta_predicate(foo(...),
+    bar(...))`` arrives here as meta_predicate/2, N separate arguments, and the
+    old ``len(body.args) == 1`` guard returned the empty set for it. Nothing was
+    then suppressed, so the emitted file carried BOTH a generated directive per
+    predicate AND the hand-written one -- and the hand-written one is invalid
+    ISO at arity > 1, which is the half that actually broke the export (Scryer:
+    ``domain_error(directive, meta_predicate/4)``; Trealla: unknown directive).
+    Read all three; EMIT only one directive per spec -- Scryer rejects the
+    comma-list outright. See :func:`_split_meta_predicate_directive`.
+
+    A hand-written directive in ANY of the three spellings must suppress the
+    generated one for every predicate it names.
     """
     if not isinstance(item, PDirective):
         return set()
     body = item.body
     if not (isinstance(body, PCompound) and body.functor == "meta_predicate"
-            and len(body.args) == 1):
+            and len(body.args) >= 1):
         return set()
 
     found: set[tuple[str, int]] = set()
-    pending = [body.args[0]]
+    pending = list(body.args)
     while pending:
         spec = pending.pop()
         if not isinstance(spec, PCompound):
@@ -3633,6 +3673,52 @@ def _existing_meta_predicate_indicators(item: PItem) -> set[tuple[str, int]]:
             continue
         found.add((spec.functor, len(spec.args)))
     return found
+
+
+def _split_meta_predicate_directive(item: PItem) -> list[PItem]:
+    """Split ``meta_predicate(A, B, C)`` into one directive PER SPEC.
+
+    MEASURED on both target engines 2026-09-26, because the obvious readings are
+    both wrong and one of them was my first fix:
+
+        :- meta_predicate(a(?, 1)).            }  one per spec
+        :- meta_predicate(b(?, 2)).            }  scryer OK, trealla OK
+        :- meta_predicate((a(?,1), b(?,2))).      scryer syntax_error(
+                                                    invalid_meta_predicate_decl)
+        :- meta_predicate a(?,1), b(?,2).         BOTH syntax_error
+        :- meta_predicate(a(?,1), b(?,2)).        scryer domain_error(directive,
+                                                    meta_predicate/2); trealla
+                                                    warns and DROPS it
+
+    So one directive per spec is the only spelling both engines accept, and the
+    comma-list that ISO permits is not usable here whatever the standard says.
+
+    A Clausal ``-meta_predicate(a(...), b(...))`` translates literally to the
+    last of those, so a library that declared several meta specs in one
+    directive -- to get Scryer's callee-module meta-call resolution -- failed to
+    consult in Scryer and silently lost the declarations in Trealla.
+
+    The ONE-argument comma-list spelling is split too, and must be: the
+    indicator reader counts every spec it names as already declared, so a
+    comma-list that passed through unsplit would suppress the generated
+    fallback and leave the file with only the spelling Scryer rejects.
+    """
+    if not isinstance(item, PDirective):
+        return [item]
+    body = item.body
+    if not (isinstance(body, PCompound) and body.functor == "meta_predicate"):
+        return [item]
+    specs: list[PTerm] = []
+    pending = list(body.args)
+    while pending:                      # left-to-right, descending `,`/2
+        spec = pending.pop(0)
+        if isinstance(spec, PCompound) and spec.functor == "," and len(spec.args) == 2:
+            pending[0:0] = list(spec.args)
+        else:
+            specs.append(spec)
+    if len(specs) == 1 and len(body.args) == 1:
+        return [item]
+    return [PDirective(PCompound("meta_predicate", (spec,))) for spec in specs]
 
 
 def _is_module_directive(item: PItem) -> bool:
