@@ -287,7 +287,10 @@ def test_a_chars_mode_single_value_takes_a_decimal_string(tmp_path):
     assert str(m.s_fee.value) == "292.00"
 
 
-def test_a_chars_mode_table_still_refuses_a_non_numeric_string(tmp_path):
+def test_a_chars_mode_table_is_still_refused_by_the_transformer_gate(tmp_path):
+    """The compile-time gate, one mode over: `"abc"` never reaches
+    ``decimal_value`` -- the transformer refuses it from the raw AST.  The
+    helper's own refusal of a carrier is tested below."""
     with pytest.raises(SyntaxError, match="is not a number"):
         _load(tmp_path, "chars_bad", """
             -double_quotes(chars)
@@ -295,3 +298,20 @@ def test_a_chars_mode_table_still_refuses_a_non_numeric_string(tmp_path):
             -constants_number_currency(s_bad/2, [(1, "abc")], usd,
                                        money_at(2))
         """)
+
+
+# ── the helper itself, one shape at a time ───────────────────────────────────
+
+
+def test_decimal_value_reads_every_spelling_of_the_same_digits():
+    from clausal.logic.constants import decimal_value
+    assert decimal_value("292.00") == Decimal("292.00")
+    assert decimal_value(("$chars", "292.00")) == Decimal("292.00")
+    assert str(decimal_value(("$chars", "292.00"))) == "292.00"   # scale kept
+    assert decimal_value(("292.00",)) == Decimal("292.00")
+
+
+def test_decimal_value_refuses_a_non_numeric_carrier_by_its_text():
+    from clausal.logic.constants import decimal_value
+    with pytest.raises(ValueError, match="'abc' is not a decimal number"):
+        decimal_value(("$chars", "abc"))

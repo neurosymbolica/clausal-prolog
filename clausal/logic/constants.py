@@ -319,8 +319,15 @@ def constant_functor_term(name: str, args, kwargs, namespace):
     return (functor, *slots)
 
 
-def decimal_value(text: str):
+def decimal_value(text: "str | tuple"):
     """The exact ``Decimal`` a declared decimal STRING names.
+
+    *text* arrives in three shapes and all name the same digits: a bare
+    ``str`` (the single-value directives, folded at compile time), the
+    chars carrier ``('$chars', '292.00')`` (a table row under
+    ``-double_quotes(chars)``, the default since 2026-09-26), and the
+    one-element tuple ``('292.00',)`` (a table row's fact-layer atom under
+    ``-double_quotes(atom)``).
 
     ``-constant_number_units(fee, "292.00", usd)``. A written ``292.00`` is a
     Python float literal and has already lost its trailing zero by the time

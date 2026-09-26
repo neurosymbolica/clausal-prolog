@@ -136,8 +136,18 @@ def run_term_expansion(
         else:
             expanded.append(result)
 
-    # Step 6: Extract Init + Final items from final module state.
+    # Step 6: Extract Init + Final items from final module state.  They
+    # join the module's items exactly as an expansion answer does, so they
+    # are checked the same way (flip review, job 238): an unchecked string,
+    # number or bare head term there crashed goal expansion just as an
+    # unchecked answer did.
     init_items, final_items = _extract_init_final(module_state)
+    init_items = [_validated_expansion(i, False, slot="the Init list of "
+                                       "module_expansion_state/3")
+                  for i in init_items]
+    final_items = [_validated_expansion(i, False, slot="the Final list of "
+                                        "module_expansion_state/3")
+                   for i in final_items]
 
     return init_items + expanded + final_items
 
@@ -498,31 +508,42 @@ def _try_te_match(item, match_target, expansion_module, module_state, wrap_head)
     return _validated_expansion(expansion, wrap_head), new_state
 
 
-def _validated_expansion(term, wrap_head):
+def _validated_expansion(term, wrap_head, slot=None):
     """One item of a term_expansion/4 answer, checked against the protocol.
 
     An answer item is a clause (a ``Predicate`` node) or, on the head-pattern
     retry (*wrap_head*), a head TERM that becomes a fact.  Anything else --
-    a string, a number, an unbound variable -- is refused HERE with an ISO
-    ``type_error(callable, Culprit)`` that names the rule's contract.
+    a string, a number -- is refused HERE with an ISO ``type_error(callable,
+    Culprit)`` that names the rule's contract; an UNBOUND item is ISO's
+    ``instantiation_error``.  *slot* names where the item came from when it
+    is not the answer itself (the Init/Final lists).
     Measured 2026-09-26: without this, a chars-mode module writing the
     suppression sentinel as ``"none"`` (a STRING under
     ``-double_quotes(chars)``) sailed through and crashed goal expansion
     with ``'tuple' object has no attribute 'body'``, naming neither the rule
     nor the fix; the message below says to write the ATOM ``none``.
     """
-    from clausal.logic.exceptions import LogicException, type_error  # noqa: PLC0415
+    from clausal.logic.exceptions import (  # noqa: PLC0415
+        LogicException, instantiation_error, type_error,
+    )
     from clausal.logic.cells import is_chars, compound_cell_shape  # noqa: PLC0415
     from clausal.logic.atoms import is_atom  # noqa: PLC0415
     from clausal.logic.predicate import is_term_instance  # noqa: PLC0415
     from clausal.logic.variables import is_var  # noqa: PLC0415
 
     term = deref(term)
+    where = f"term_expansion/4: {slot}" if slot else "term_expansion/4: the expansion"
+    if is_var(term):
+        raise LogicException(instantiation_error(
+            f"{where} is unbound; a rule must bind it to a clause, a list "
+            f"of clauses, or the atom `none`"))
     if isinstance(term, PredicateItem):
         return term
-    if wrap_head and not is_var(term) and not is_chars(term) and (
-            compound_cell_shape(term)[0] or is_atom(term)
-            or is_term_instance(term)):
+    # A chars carrier is a 2-tuple headed by CHARS_TAG: compound_cell_shape
+    # answers False for it, and it is neither an atom nor a term instance,
+    # so no separate guard is needed to keep a STRING out of a fact head.
+    if wrap_head and (compound_cell_shape(term)[0] or is_atom(term)
+                      or is_term_instance(term)):
         return PredicateItem(head=term, body=True)
     what = ("a clause, a list of clauses, or the atom `none` (suppress)"
             if not wrap_head else
@@ -534,15 +555,7 @@ def _validated_expansion(term, wrap_head):
                 f"'none'")
     raise LogicException(type_error(
         "callable", term,
-        f"term_expansion/4: the expansion must be {what}, got {term!r}{hint}"))
-
-
-def _wrap_as_predicate(term):
-    """Wrap a head term into a fact Predicate; pass a Predicate through."""
-    term = deref(term)
-    if isinstance(term, PredicateItem):
-        return term
-    return PredicateItem(head=term, body=True)
+        f"{where} must be {what}, got {term!r}{hint}"))
 
 
 def _extract_init_final(module_state):

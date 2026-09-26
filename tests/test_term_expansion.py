@@ -819,7 +819,8 @@ class TestExpansionResultIsValidated:
         assert formal.functor == "type_error"
         assert formal.args[0] == mint("callable")
         assert formal.args[1] == ("$chars", "none")
-        assert "none" in context and "'none'" in context
+        assert "the suppression sentinel is the ATOM none" in context
+        assert "write none or 'none'" in context
 
     def test_a_number_answer_is_a_type_error(self):
         source = (
@@ -843,12 +844,39 @@ class TestExpansionResultIsValidated:
         formal = exc.value.term.args[0]
         assert formal.functor == "type_error" and formal.args[1] == 7
 
-    def test_the_error_reaches_a_full_module_load(self, tmp_path):
-        path = tmp_path / "te_chars_none.clausal"
-        path.write_text(
-            '-double_quotes(chars)\n'
-            'term_expansion(_, "none", _m0, _m0) <- True\n'
+    def test_an_unbound_answer_is_an_instantiation_error(self):
+        source = (
+            'term_expansion(_, _E, _m0, _m0) <- True\n'
             'foo("a"),\n'
         )
-        with pytest.raises(LogicException, match="the suppression sentinel is the ATOM none"):
-            _load_module("_te_chars_none", str(path))
+        preds, _, md = _parse_and_collect(source)
+        with pytest.raises(LogicException) as exc:
+            run_term_expansion(preds, md)
+        assert exc.value.term.args[0] == mint("instantiation_error")
+
+    def test_a_bad_item_in_the_init_list_is_a_type_error_naming_the_slot(self):
+        source = (
+            'term_expansion(_term, _term, module_expansion_state(_init, _f, _s), '
+            'module_expansion_state([42 | _init], _f, _s)) <- True\n'
+            'foo("a"),\n'
+        )
+        preds, _, md = _parse_and_collect(source)
+        with pytest.raises(LogicException) as exc:
+            run_term_expansion(preds, md)
+        formal, context = exc.value.term.args
+        assert formal.functor == "type_error" and formal.args[1] == 42
+        assert "Init list" in context
+
+    def test_a_head_pattern_answer_that_is_an_atom_becomes_a_fact(self):
+        """The positive side of the gate: an atom head, and a list of head
+        terms, still wrap into facts on the head-pattern retry."""
+        source = (
+            '-private([flag, foo])\n'
+            'term_expansion(foo(X), [foo(X), flag], _m0, _m0) <- True\n'
+            'foo(1),\n'
+        )
+        preds, _, md = _parse_and_collect(source)
+        result = run_term_expansion(preds, md)
+        assert _head_functor(result[0].head) == "foo"
+        assert deref(result[1].head) == mint("flag")   # the atom head, wrapped
+        assert all(r.body is True for r in result)
