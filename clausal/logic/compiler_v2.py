@@ -1408,10 +1408,12 @@ def _import_clash(kind: str, declarations: list) -> "str | None":
       assert-through idiom, and takes effect.
 
     Accepted: ``-discontiguous`` on a procedure import (pinned).  Left to the
-    older refusals, which run first with their own messages: clauses against
-    a procedure import (the load gate, step 3d) and ``-table`` on an
-    imported target with no local clauses and no local ``-dynamic``
-    (``_validate_directive_targets``)."""
+    older refusals, with their own messages: clauses against a procedure
+    import are refused by the load gate at step 3d, which runs BEFORE this
+    check; ``-table`` on an imported target with no local clauses and no
+    local ``-dynamic`` gets ``None`` here on purpose, so the load goes on to
+    step 6's ``_validate_directive_targets``, whose refusal names the
+    owner."""
     if kind == "data":
         return declarations[0]
     if kind == "static":
@@ -1446,8 +1448,9 @@ _IMPORT_KIND_TEXT = {
     "static": "a static procedure, so the local declaration would be ignored "
               "(its clauses and properties are the owner's)",
     "dynamic": "a dynamic procedure, so the local declaration would be "
-               "ignored (only a local -dynamic of it takes effect: an assertz "
-               "then lands on the owner)",
+               "ignored (only a local -dynamic of it, the assert-through "
+               "idiom where an assertz lands on the owner, and "
+               "-discontiguous are accepted)",
 }
 
 

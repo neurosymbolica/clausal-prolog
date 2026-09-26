@@ -3,15 +3,20 @@
 The refusal (``compiler_v2._refuse_import_local_clashes``, ruling
 2026-09-26, narrowed the same day) rejects a module that imports a predicate
 indicator AND declares it locally where the local declaration would be
-silently unreachable or ignored: any local procedure declaration (clauses,
--dynamic, -discontiguous, -table) against a DATA import, and a local
--dynamic against a STATIC procedure import (``compiler_v2._import_clash``,
-which has the full table, including -shallow, -meta_predicate and -table).
+silently unreachable or ignored (``compiler_v2._import_clash`` has the
+table):
+
+* a DATA import: any local declaration -- clauses, -dynamic,
+  -discontiguous, -table, -shallow, -meta_predicate;
+* a STATIC procedure import: -dynamic, -shallow, -meta_predicate;
+* a DYNAMIC procedure import: -shallow, -meta_predicate, and -table beside
+  a local -dynamic (a local -dynamic alone, the assert-through idiom, and
+  -discontiguous are accepted).
+
 The census calls the engine's own ``_import_local_clashes``: one copy of
-the rule.
-Clauses against a procedure import are the load gate's older refusal and
-are not counted here.  This
-loads every ``.clausal`` / ``.seam`` / ``.pl`` file under the given roots, each
+the rule.  Clauses against a procedure import, and -table on an imported
+target with no local -dynamic, are the older refusals and are not counted
+here.  This loads every ``.clausal`` / ``.seam`` / ``.pl`` file under the given roots, each
 in a FRESH subprocess, with the check patched into REPORT mode: it records
 the clashes it would refuse and lets the load continue, so a file is still
 counted if it fails later for an unrelated reason.

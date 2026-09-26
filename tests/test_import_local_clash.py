@@ -38,6 +38,7 @@ Clausal directive.
 
 from __future__ import annotations
 
+import re
 import sys
 
 import pytest
@@ -118,9 +119,18 @@ def test_the_same_indicator_is_refused_at_load(load, kind, local_decl, alias):
                                         alias, 2))
     message = str(info.value)
     local = "e" if alias else "edge"
-    # It names the local predicate and the module the import comes from.
-    assert f"{local}/2" in message or "edge/2" in message
     assert owner_mod in message
+    # WHICH refusal fired, by its own text, so another failure cannot pass
+    # for it: clauses against a PROCEDURE import are the load gate's older
+    # refusal (step 3d, which runs first -- -discontiguous and -table reach
+    # it here because LOCALS gives them clauses); everything else is the
+    # import/local clash check's.
+    if kind != "data" and local_decl in ("clauses", "discontiguous", "table"):
+        assert re.search(r"defines (a clause|clauses) for edge/2", message), message
+        assert f"declares {local}/2 locally" not in message
+    else:
+        assert message.startswith(f"clash_imp declares {local}/2 locally ("), message
+        assert "A predicate cannot be both imported and defined" in message
 
 
 @pytest.mark.parametrize("kind, local_decl", [
