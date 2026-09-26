@@ -1,8 +1,13 @@
 """Census: which modules does the import/local clash refusal hit?
 
 The refusal (``compiler_v2._refuse_import_local_clashes``, ruling
-2026-09-26) rejects a module that imports a predicate indicator AND declares
-it locally as a procedure (clauses, -dynamic, -discontiguous, -table).  This
+2026-09-26, narrowed the same day) rejects a module that imports a predicate
+indicator AND declares it locally where the local declaration would be
+silently unreachable or ignored: any local procedure declaration (clauses,
+-dynamic, -discontiguous, -table) against a DATA import, and a local
+-dynamic against a STATIC procedure import (``compiler_v2._import_clash``).
+Clauses against a procedure import are the load gate's older refusal and
+are not counted here.  This
 loads every ``.clausal`` / ``.seam`` / ``.pl`` file under the given roots, each
 in a FRESH subprocess, with the check patched into REPORT mode: it records
 the clashes it would refuse and lets the load continue, so a file is still
@@ -16,8 +21,9 @@ Usage::
 It prints the SIZE of every population: files found, files whose load
 reached the check (the denominator), files hit, and files that never
 reached it (not evaluated -- a load error before step 3e, or not a module).
-``--self-test`` runs a positive control: a generated owner/importer pair that
-must be reported as a hit.
+``--self-test`` runs the controls: a generated DATA-import clash that must be
+reported as a hit, and the allowed assert-through idiom (a local -dynamic of
+an imported dynamic procedure) that must NOT be.
 
 Each file is loaded under its stem as the module name, with its own
 directory and every ROOT on ``sys.path`` so sibling ``-import_from``s
@@ -55,9 +61,12 @@ try:
         local = cv2._local_procedure_declarations(module_items, predicate_nodes)
         for key in sorted(set(imported) & set(local)):
             text, owner, kind = imported[key]
+            declaration = cv2._import_clash(kind, local[key])
+            if declaration is None:
+                continue
             out["clashes"].append({"module": module_name,
                                    "indicator": f"{key[0]}/{key[1]}",
-                                   "local": local[key], "import": text,
+                                   "local": declaration, "import": text,
                                    "kind": kind})
     cv2._refuse_import_local_clashes = report
     from clausal.import_hook import _load_module, _load_prolog_module
@@ -128,9 +137,15 @@ def self_test(jobs, timeout):
         Path(d, "cen_importer.clausal").write_text(
             "-import_from(cen_owner, [edge])\n-module(cen_importer, [z(X)])\n"
             "-dynamic(edge/2)\nz(1),\n")
+        Path(d, "cen_dyn_owner.clausal").write_text(
+            "-module(cen_dyn_owner, [link/2])\n-dynamic(link/2)\n")
+        Path(d, "cen_idiom.clausal").write_text(
+            "-import_from(cen_dyn_owner, [link])\n-module(cen_idiom, [z(X)])\n"
+            "-dynamic(link/2)\nz(1),\n")
         files, results = census([d], jobs, timeout)
         hits = report(files, results)
-        ok = (len(files) == 2 and len(hits) == 1
+        reached = [r for r in results if r["reached"]]
+        ok = (len(files) == 4 and len(reached) == 4 and len(hits) == 1
               and hits[0]["path"].endswith("cen_importer.clausal"))
         print("SELF-TEST", "PASS" if ok else "FAIL")
         return 0 if ok else 1

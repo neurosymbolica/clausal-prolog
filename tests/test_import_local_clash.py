@@ -77,9 +77,22 @@ def _importer_src(name, owner_mod, local_decl, alias, arity):
             + "z(1),\n")
 
 
+# (kind, local declaration) pairs refused at the SAME indicator.  The
+# narrowed ruling: every local declaration against a DATA import; a local
+# -dynamic against a STATIC procedure import; clauses against a procedure
+# import (the load gate's existing refusal -- -discontiguous and -table
+# reach it here because LOCALS gives them clauses).  NOT refused: a local
+# -dynamic of an imported DYNAMIC procedure (``proc_pi``), the
+# assert-through idiom -- see test_a_local_dynamic_of_an_imported_dynamic_...
+REFUSED = [(k, d) for k in ("data",) for d in LOCALS] + [
+    ("proc", "dynamic"), ("proc", "clauses"), ("proc", "discontiguous"),
+    ("proc", "table"), ("proc_pi", "clauses"), ("proc_pi", "discontiguous"),
+    ("proc_pi", "table"),
+]
+
+
 @pytest.mark.parametrize("alias", [False, True], ids=["plain", "alias"])
-@pytest.mark.parametrize("local_decl", list(LOCALS))
-@pytest.mark.parametrize("kind", list(OWNERS))
+@pytest.mark.parametrize("kind, local_decl", REFUSED)
 def test_the_same_indicator_is_refused_at_load(load, kind, local_decl, alias):
     owner_mod, owner_src = OWNERS[kind]
     load(owner_mod, owner_src)
@@ -95,7 +108,7 @@ def test_the_same_indicator_is_refused_at_load(load, kind, local_decl, alias):
 
 @pytest.mark.parametrize("kind, local_decl", [
     ("data", "dynamic"), ("data", "discontiguous"), ("data", "table"),
-    ("data", "clauses"), ("proc", "dynamic"), ("proc_pi", "dynamic"),
+    ("data", "clauses"), ("proc", "dynamic"),
 ])
 def test_the_refusal_names_the_import_the_declaration_and_both_remedies(
         load, kind, local_decl):
@@ -113,6 +126,44 @@ def test_the_refusal_names_the_import_the_declaration_and_both_remedies(
         assert f"-{local_decl}(edge/2)" in message
     assert "remove edge from the -import_from list" in message
     assert "alias(edge, " in message
+
+
+@pytest.mark.parametrize("alias", [False, True], ids=["plain", "alias"])
+def test_a_local_dynamic_of_an_imported_dynamic_procedure_loads(load, alias):
+    """The assert-through idiom stays allowed (operator ruling 2026-09-26):
+    the local ``-dynamic`` names the owner's dynamic procedure, and an
+    ``assertz`` through it lands on the owner."""
+    owner = load("own_pi", OWNERS["proc_pi"][1])
+    local = "e" if alias else "edge"
+    imported = "alias(edge, e)" if alias else "edge"
+    imp = load("assert_through",
+               f"-import_from(own_pi, [{imported}])\n"
+               f"-module(assert_through, [add(X), q(X)])\n"
+               f"-dynamic({local}/2)\n"
+               f"add(X) <- assertz({local}(X, 9))\n"
+               f"q(X) <- {local}(X, 9)\n")
+    lm = imp.__dict__["$module"]
+    assert [None for _ in solve(("q", Var()), module=lm)] == []
+    assert list(solve(("add", 4), module=lm)) != []
+    assert [walk(g)[1] for g in [("q", Var())] for _ in solve(g, module=lm)] == [4]
+    assert len(owner.__dict__["$module"].db.row("edge", 2).clauses) == 1
+
+
+def test_the_existing_table_refusal_runs_first_with_its_own_message(load):
+    """``-table`` on an imported procedure with no local clauses keeps the
+    refusal ``_validate_directive_targets`` gives it."""
+    load("own_proc", OWNERS["proc"][1])
+    with pytest.raises(SyntaxError) as info:
+        load("table_imp", "-import_from(own_proc, [edge])\n"
+             "-module(table_imp, [z(X)])\n-table(edge/2)\nz(1),\n")
+    assert "declares edge/2 locally" not in str(info.value)
+    assert "-table(edge/2)" in str(info.value)
+
+
+def test_discontiguous_on_an_imported_procedure_target_is_accepted(load):
+    load("own_proc", OWNERS["proc"][1])
+    load("discontig_imp", "-import_from(own_proc, [edge])\n"
+         "-module(discontig_imp, [z(X)])\n-discontiguous(edge/2)\nz(1),\n")
 
 
 def test_an_aliased_import_clashes_on_its_local_name(load):
