@@ -25,7 +25,7 @@ from typing import Any
 
 from clausal.logic.variables import Var, is_var, deref, unify  # noqa: F401
 from clausal.terms import (
-    Compound,
+    Compound, compound_as_cell,
     Call, LoadName, LoadAttr,
     DictTerm, SetTerm, KWTerm,
     SegList, VarSeg,  # noqa: F401
@@ -76,8 +76,107 @@ _SetLiteral = SetLiteral
 _AST_CONST_TYPES = (type(None), bool, int, float, str, bytes, complex)
 
 
+def pattern_structure_depth(pat: ast.pattern) -> int:
+    """How many STRUCTURE levels the built head pattern *pat* destructures:
+    a sequence pattern (a cell) or a class pattern (a ``Compound`` with no
+    cell, a term instance) is a level; an or-/as-pattern is as deep as its
+    deepest part; a value, singleton, capture or star is 0.
+
+    Read off the FINAL pattern rather than re-derived from the head term, so
+    the normaliser's depth and the pattern cannot disagree by construction
+    (roborev 204: a parallel analysis of the head missed keyword slots and
+    class sub-patterns, and capped at 64).  Over-counting is harmless -- the
+    normaliser stops at the first non-structure -- so a class pattern's
+    ``args`` sequence may count as a level of its own.  Iterative, so a head
+    of any depth is measured without recursion limits.
+    """
+    best = 0
+    stack = [(pat, 0)]
+    while stack:
+        node, depth = stack.pop()
+        if isinstance(node, ast.MatchSequence):
+            depth += 1
+            best = max(best, depth)
+            stack.extend((p, depth) for p in node.patterns)
+        elif isinstance(node, ast.MatchClass):
+            depth += 1
+            best = max(best, depth)
+            stack.extend((p, depth) for p in node.patterns)
+            stack.extend((p, depth) for p in node.kwd_patterns)
+        elif isinstance(node, ast.MatchOr):
+            stack.extend((p, depth) for p in node.patterns)
+        elif isinstance(node, ast.MatchAs) and node.pattern is not None:
+            stack.append((node.pattern, depth))
+        elif isinstance(node, ast.MatchMapping):
+            stack.extend((p, depth) for p in node.patterns)
+    return best
+
+
+def finalize_subject_depths(assigns: list, stmts: list, subject: ast.expr) -> None:
+    """Point each argument's subject assignment at ``$as_cells`` with the
+    structure depth its BUILT head patterns need (ruling 2026-09-26).
+
+    *assigns* are the ``_dN = $deref(argN)`` statements the builder emitted
+    before any pattern existed; *stmts* is everything it emitted after; every
+    ``match`` on *subject* (the one shared tuple object, so identity finds
+    them even inside list-dispatch branches) contributes its case patterns.
+    An argument whose patterns have no structure keeps ``$deref``.
+    """
+    depths = [0] * len(assigns)
+    for stmt in stmts:
+        for node in ast.walk(stmt):
+            if not (isinstance(node, ast.Match) and node.subject is subject):
+                continue
+            for case in node.cases:
+                outer = case.pattern
+                if not (isinstance(outer, ast.MatchSequence)
+                        and len(outer.patterns) == len(assigns)):
+                    continue
+                for i, p in enumerate(outer.patterns):
+                    d = pattern_structure_depth(p)
+                    if d > depths[i]:
+                        depths[i] = d
+    for assign, depth in zip(assigns, depths):
+        if depth > 0:
+            arg = assign.value.args[0]
+            assign.value = _call(_name("$as_cells"), arg, ast.Constant(value=depth))
+
+
+def subject_assign(name: str, arg: str, depth: int) -> ast.stmt:
+    """``<name> = $deref(<arg>)``, or ``$as_cells(<arg>, depth)`` where a
+    cell-only head pattern could meet a Compound (see
+    :func:`finalize_subject_depths`, which rewrites a depth-0 assignment
+    once the patterns are built)."""
+    if depth <= 0:
+        return _assign(name, _call(_name("$deref"), _name(arg)))
+    return _assign(name, _call(_name("$as_cells"), _name(arg),
+                               ast.Constant(value=depth)))
+
+
+def _compound_class_pattern(functor: Any, arg_patterns: list) -> ast.MatchClass:
+    """``case $Compound(functor=<functor>, args=(<p0>, ...))``."""
+    return ast.MatchClass(
+        cls=_name("$Compound"),
+        patterns=[],
+        kwd_attrs=["functor", "args"],
+        kwd_patterns=[
+            ast.MatchValue(value=ast.Constant(value=functor)),
+            ast.MatchSequence(patterns=arg_patterns),
+        ],
+    )
+
+
 def _cell_match_pattern(functor: str, arg_patterns: list) -> ast.MatchSequence:
     """The cell pattern ``case ('functor', <p0>, ...)`` for a flagged module.
+
+    Ruling 2026-09-26 (an atom-functor ``Compound`` of arity >= 1 IS its
+    cell): the pattern stays cell-only, and the SUBJECT is normalised instead
+    -- the predicate builders assign each ``match`` subject through
+    ``$as_cells`` (``terms.as_cells_for_match``) at the positions and to the
+    depth the built patterns need (:func:`finalize_subject_depths`), so a
+    caller's Compound spelling arrives as the cell.  Doubling the pattern
+    with a ``$Compound`` alternative at every level instead cost 2**depth
+    nodes (roborev 203: 45,046 nodes for a head nested 12 deep).
 
     A ``MatchSequence`` whose first element is a ``MatchValue`` on the functor
     string: the sequence length discriminates ARITY and the first element
@@ -632,15 +731,12 @@ def head_to_match_pattern(
             # Variable functor: cannot match statically → wildcard
             return ast.MatchAs(pattern=None, name=None)
         sub_patterns = [head_to_match_pattern(a, var_context, dup_guards, list_guards, _list_reg_ids, globals_=globals_) for a in term.args]
-        return ast.MatchClass(
-            cls=_name("$Compound"),
-            patterns=[],
-            kwd_attrs=["functor", "args"],
-            kwd_patterns=[
-                ast.MatchValue(value=ast.Constant(value=f)),
-                ast.MatchSequence(patterns=sub_patterns),
-            ],
-        )
+        # Ruling 2026-09-26: an atom-functor Compound of arity >= 1 IS its
+        # cell, so its pattern is the CELL pattern -- the only spelling a
+        # bucket pattern ever meets (see ``_cell_match_pattern``).
+        if compound_as_cell(term) is not None:
+            return _cell_match_pattern(f, sub_patterns)
+        return _compound_class_pattern(f, sub_patterns)
 
     # Call(func=LoadName(qualified_name), args=[...]) — emitted whenever a
     # rule head references an imported-compound functor (e.g. ``Item(...)``

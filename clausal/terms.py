@@ -31,7 +31,7 @@ from .logic.atoms import (
     as_dict_key as _as_dict_key, char_atom, demangle_for_display,
     is_char_atom, is_mangled, is_nil as _is_nil, spelling,
 )
-from .logic.cells import TUPLE_TAG, chars, is_chars, chars_text, refuse_reserved_1tuple
+from .logic.cells import TUPLE_TAG, CHARS_TAG, chars, is_chars, chars_text, refuse_reserved_1tuple
 from .logic.variables import Var, deref
 
 # Re-export operator/expression classes already defined in pythonic_ast.
@@ -95,6 +95,139 @@ def _slice_within_prefix(index, prefix_len: int) -> bool:
 
 # ── New term types ─────────────────────────────────────────────────────────────
 
+def as_cells_for_match(term: Any, depth: int) -> Any:
+    """``term`` dereferenced, with every atom-functor ``Compound`` in its top
+    *depth* CELL levels replaced by its cell (``compound_as_cell``).
+
+    The subject normaliser for compiled clause-head ``match`` statements
+    (ruling 2026-09-26): a head pattern is written in the CELL spelling only,
+    so a caller's ``Compound`` spelling of the same term is turned into the
+    cell before the ``match`` -- linear in the pattern's own depth, where
+    doubling every pattern level with a ``$Compound`` alternative was
+    exponential (roborev 203).  The compiler emits a call only at argument
+    positions whose BUILT patterns have structure, with *depth* the deepest
+    structure nesting of those patterns (``head_match.pattern_structure_
+    depth``), so no level a pattern never inspects is walked and every level
+    it does inspect is.
+
+    Nothing is copied unless a Compound is actually converted: the result is
+    ``deref(term)`` itself, and an unconverted element keeps its original
+    object (so a bound Var inside a cell stays the Var, exactly as a plain
+    ``deref`` subject presents it).
+    """
+    term = deref(term)
+    if depth <= 0:
+        return term
+    converted = _cells_below(term, depth)
+    return term if converted is None else converted
+
+
+def _cells_below(term: Any, depth: int) -> Any:
+    """The converted form of the (already dereferenced) *term*, or None when
+    no Compound within *depth* structure levels needed converting.
+
+    A LEVEL is one structure node a head pattern can destructure: a cell
+    (tuple), a ``Compound`` -- with a cell (converted, then walked as that
+    cell) or without one (its args walked) -- or a dataclass term instance
+    (its fields walked).  *depth* comes from the built pattern
+    (``head_match.pattern_structure_depth``), so it is exact, not capped.
+    The C twin ``cells_below`` (``_variables.c``) hands term instances back
+    to this function.
+    """
+    if depth <= 0:
+        return None
+    if type(term) is tuple:
+        new = _cells_in_slots(term, 1, depth)
+        return None if new is None else tuple(new)
+    if isinstance(term, Compound):
+        cell = compound_as_cell(term)
+        if cell is not None:
+            return _cells_below(cell, depth) or cell
+        new = _cells_in_slots(term.args, 0, depth)
+        return None if new is None else Compound(term.functor, tuple(new))
+    if _is_structure_instance(term):
+        if depth <= 1:
+            return None
+        changed = {}
+        for f in _dataclass_fields(term):
+            sub = _cells_of(getattr(term, f.name), depth - 1)
+            if sub is not None:
+                changed[f.name] = sub
+        if not changed:
+            return None
+        import copy  # noqa: PLC0415
+        new = copy.copy(term)
+        for name, value in changed.items():
+            object.__setattr__(new, name, value)
+        return new
+    return None
+
+
+def _cells_of(elt: Any, depth: int) -> Any:
+    """``_cells_below`` of one (not yet dereferenced) slot value."""
+    elt = deref(elt)
+    if type(elt) is tuple or isinstance(elt, Compound) or _is_structure_instance(elt):
+        return _cells_below(elt, depth)
+    return None
+
+
+def _cells_in_slots(seq: Any, start: int, depth: int) -> "list | None":
+    """*seq* as a list with its slots from *start* converted one level down,
+    or None when none needed converting."""
+    if depth <= 1 or len(seq) <= start:
+        return None
+    new = None
+    for i in range(start, len(seq)):
+        sub = _cells_of(seq[i], depth - 1)
+        if sub is not None:
+            if new is None:
+                new = list(seq)
+            new[i] = sub
+    return new
+
+
+def _is_structure_instance(x: Any) -> bool:
+    import dataclasses  # noqa: PLC0415
+    return dataclasses.is_dataclass(x) and not isinstance(x, type)
+
+
+def _dataclass_fields(x: Any):
+    import dataclasses  # noqa: PLC0415
+    return dataclasses.fields(x)
+
+
+def compound_as_cell(term: "Compound") -> "tuple | None":
+    """The cell ``(functor, *args)`` that *term* IS, or None if it has none.
+
+    Operator ruling 2026-09-26 (Compound retires in favour of cells before
+    1.0; ISO has one term ``f(1, 2)``): a ``Compound`` whose functor
+    dereferences to an atom (a ``str``) and whose arity is >= 1 is the SAME
+    TERM as that cell -- in ``=``/2, ``==``/2, compare/3, dif/2 and the tabling
+    variant key.  Every one of those relations routes a Compound through this
+    one function, so they cannot disagree about which Compounds qualify.
+
+    None for the Compounds with no cell equivalent: a Var or non-atom functor,
+    arity 0 (``foo()``, not an ISO term -- the arity-0 cell is RESERVED), and
+    the functor ``'$chars'``.  The cell ``('$chars', s)`` is not a compound at
+    all: it is the chars CARRIER, the text ``s``, equal to its char list.  A
+    ``Compound('$chars', (s,))`` cannot be that text without every relation
+    learning the carrier's list equivalence too, so it stays an ordinary
+    compound -- or ``=`` would stop being transitive (Compound = carrier =
+    char list, but Compound != char list; roborev 201 Low (a)).  The
+    functor ``TUPLE_TAG`` (``'()'``) is excluded for the same reason: its
+    cell is tuple DATA, keyed and unified as data, not a compound named
+    ``'()'``.  Other ``$``-functors are NOT excluded: ``'$VAR'(1)`` is an
+    ordinary ISO term.
+    Those stay distinct from every cell.  The C twins (``_variables.c``
+    ``compound_to_cell``, ``_tabling_core.c``) apply the same test.
+    """
+    functor = deref(term.functor)
+    if (isinstance(functor, str) and term.args
+            and functor != CHARS_TAG and functor != TUPLE_TAG):
+        return (functor, *term.args)
+    return None
+
+
 @dataclass
 class Compound:
     """Fallback for runtime-constructed or unknown-functor compound terms.
@@ -126,11 +259,24 @@ class Compound:
         mode) is out of scope for the deref-only floor, so two differing
         functors — including an unbound Var vs a str — simply fail to unify.
         """
+        from .logic.variables import unify
+        if type(other) is tuple:
+            # Ruling 2026-09-26: an atom-functor Compound of arity >= 1 IS the
+            # cell (f, *args), so it unifies with a tuple as that cell does.
+            # The C unifier converts before it reaches this hook (so the
+            # occurs check survives); this arm is the Python twin of that.
+            cell = compound_as_cell(self)
+            if cell is None:
+                return False
+            mark = trail.mark()
+            if unify(cell, other, trail):
+                return True
+            trail.undo(mark)
+            return False
         if not isinstance(other, Compound):
             return NotImplemented
         if deref(self.functor) != deref(other.functor) or len(self.args) != len(other.args):
             return False
-        from .logic.variables import unify
         mark = trail.mark()
         for a, b in zip(self.args, other.args):
             if not unify(a, b, trail):
