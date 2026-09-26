@@ -34,7 +34,7 @@ from __future__ import annotations
 
 from clausal.logic.atoms import (
     is_atom as _term_is_atom, spelling as _atom_spelling, atom, as_dict_key as _as_dict_key)
-from clausal.logic.cells import chars, is_chars, chars_text, CHARS_TAG, TUPLE_TAG  # stage 1: the chars carrier
+from clausal.logic.cells import chars, is_chars, chars_text, TUPLE_TAG  # stage 1: the chars carrier
 from clausal.logic.python_terms import FROM_TERM as _FROM_TERM  # the ONE registry (no cycle: python_terms never imports this module)
 from clausal.logic.variables import deref, walk
 from clausal.terms import (
@@ -111,14 +111,16 @@ def to_python(val):
         # 2026-09-26).
         return val
     if t is tuple:
-        if len(val) == 2 and val[0] == _CHARS_TAG and type(val[1]) is str:
+        if is_chars(val):
             return val[1]              # stage 1: a chars string crosses out as its text
         items = tuple([to_python(x) for x in val])
         if items and type(items[0]) is str:
             # THE ONE REGISTRY: a registered functor rebuilds its Python
-            # object from the already-converted elements; a look-alike whose
-            # components do not rebuild stays a cell.  Inline, because a
-            # miss (an ordinary cell) is the common case.
+            # object from the ALREADY-CONVERTED elements -- a from_fn is
+            # shallow (python_terms.from_term: one owner of recursion), so
+            # nothing is converted twice; a look-alike whose components do
+            # not rebuild stays a cell.  Inline, because a miss (an ordinary
+            # cell) is the common case.
             rebuild = _FROM_TERM.get(items[0])
             if rebuild is not None:
                 try:
@@ -128,8 +130,8 @@ def to_python(val):
         return items
     if t is list:
         return [to_python(x) for x in val]
-    # Atom before the generic tuple arm, which would otherwise turn the
-    # arity-0 cell ``("bar",)`` into a 1-tuple of its spelling.
+    # A Var BOUND to an atom: the ``type(val) is str`` hot case above ran
+    # before the deref, so the dereferenced str arrives here.
     if _term_is_atom(val):
         return _atom_spelling(val)
     if isinstance(val, _SEG_TYPES):
@@ -174,7 +176,6 @@ def to_python(val):
 #: are here).  ``str`` is handled first, above, as the thunk-path hot case.
 _SCALAR_TYPES = frozenset((int, float, bool, type(None), bytes, complex))
 _SEG_TYPES = (SegString, SegList, SegBytes)
-_CHARS_TAG = CHARS_TAG
 
 
 def wrap_text(val):

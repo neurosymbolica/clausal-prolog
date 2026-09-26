@@ -122,8 +122,55 @@ def test_a_non_ground_seg_still_keys_in_the_opaque_band_and_sorts():
     sorted([seg, "a", 1, ("f", 1)], key=clausal.term_key)
 
 
+def _mod():
+    import os, tempfile
+    from clausal.import_hook import _load_module
+    with tempfile.NamedTemporaryFile(suffix=".clausal", mode="w", delete=False) as f:
+        f.write("noop(1),\n")
+        path = f.name
+    try:
+        return _load_module("tpc_builtins", path).__dict__["$module"]
+    finally:
+        os.unlink(path)
+
+
 def test_sort_2_dedups_a_ground_segstring_against_its_string():
-    """The engine-visible consequence: ``sort/2`` says the two are one term."""
-    from clausal.logic.builtins._helpers import _standard_order_sorted
-    out = _standard_order_sorted([chars("ab"), SegString(["ab"])])
-    assert clausal.term_key(out[0]) == clausal.term_key(out[1])
+    """THE ENGINE-VISIBLE change of this branch: ``sort/2`` says a ground
+    SegString and its string are ONE term (ISO: a string is its char list;
+    a ground SegString IS that string)."""
+    from clausal.logic.solve import call
+    from clausal.logic.variables import deref
+    m = _mod()
+    out = Var()
+    got = [deref(out) for _ in call("sort", [chars("ab"), SegString(["ab"])], out, module=m)]
+    assert len(got) == 1 and len(got[0]) == 1, got
+    assert clausal.term_key(got[0][0]) == clausal.term_key(chars("ab"))
+
+
+def test_compare_3_says_equal_for_a_ground_segstring_and_its_string():
+    from clausal.logic.solve import call
+    from clausal.logic.variables import deref
+    m = _mod()
+    o = Var()
+    got = [deref(o) for _ in call("compare", o, SegString(["a", "b"]), chars("ab"), module=m)]
+    assert got == ["="], got
+    got = [deref(o) for _ in call("compare", o, chars("ab"), SegString(["ab"]), module=m)]
+    assert got == ["="], got
+
+
+def test_a_ground_segbytes_keys_as_its_code_list():
+    from clausal.terms import SegBytes
+    seg = SegBytes([b"a", b"b"])
+    assert clausal.term_key(seg) == clausal.term_key(b"ab")
+    assert clausal.term_key(seg) == clausal.term_key([97, 98])
+
+
+def test_a_seg_that_still_walks_to_a_seg_keys_opaque_but_a_bound_one_does_not():
+    """The rule as the code states it: what ``walk_seg`` yields decides."""
+    from clausal.logic.builtins._helpers import _ORD_OTHER
+    v = Var()
+    seg = SegString(["a", VarSeg(v)])
+    assert clausal.term_key(seg)[0] == _ORD_OTHER
+    trail = Trail()
+    assert unify(v, chars("b"), trail)
+    assert clausal.term_key(seg) == clausal.term_key(chars("ab"))

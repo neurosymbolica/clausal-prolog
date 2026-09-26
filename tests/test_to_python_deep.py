@@ -149,25 +149,89 @@ def test_an_unregistered_cell_is_a_tuple_converted_elementwise():
     assert to_python(("cite", mint("art52"), chars("s"))) == ("cite", "art52", "s")
 
 
-def test_to_python_and_the_registry_agree_on_every_registered_functor():
-    """No second table: every ``FROM_TERM`` entry is what ``to_python``
-    consults, so registering a type once serves both converters."""
+def test_every_registered_type_round_trips_and_every_functor_has_an_owner():
+    """The ONE registry, both ways, for EVERY entry: each TO_TERM class has a
+    sample here (a new registration without one FAILS this test, on purpose),
+    its term's head is in FROM_TERM, and to_python rebuilds the sample -- same
+    value AND same exact type.  Every FROM_TERM functor except the data tuple
+    is produced by some TO_TERM entry, so no rebuild is orphaned."""
     from clausal.logic import python_terms as pt
-    for functor, rebuild in pt.FROM_TERM.items():
-        if functor == TUPLE_TAG:
+    produced = set()
+    for cls, to_fn in pt.TO_TERM.items():
+        if cls is tuple:
             continue
-        # build a value through TO_TERM, cross it back through to_python
-        cls = next(c for c, fn in pt.TO_TERM.items()
-                   if fn is not None and pt.FROM_TERM.get(functor) is rebuild
-                   and c is not tuple and fn(_sample(c))[0] == functor)
-        sample = _sample(cls)
-        assert to_python(pt.to_term(sample)) == sample, functor
+        assert cls in _SAMPLES, f"{cls.__name__} is registered but has no sample here"
+        sample = _SAMPLES[cls]
+        term = to_fn(sample)
+        assert type(term) is tuple and term[0] in pt.FROM_TERM, (cls, term)
+        produced.add(term[0])
+        back = to_python(term)
+        assert back == sample and type(back) is cls, (cls, back)
+    assert produced == set(pt.FROM_TERM) - {TUPLE_TAG}, (produced, set(pt.FROM_TERM))
 
 
-def _sample(cls):
-    return {
-        dt.datetime: dt.datetime(2023, 6, 1, 2, 3, 4, 5),
-        dt.date: dt.date(2023, 6, 1),
-        dt.time: dt.time(1, 2, 3, 4),
-        dt.timedelta: dt.timedelta(1, 2, 3),
-    }[cls]
+_SAMPLES = {
+    dt.datetime: dt.datetime(2023, 6, 1, 2, 3, 4, 5),
+    dt.date: dt.date(2023, 6, 1),
+    dt.time: dt.time(1, 2, 3, 4),
+    dt.timedelta: dt.timedelta(1, 2, 3),
+}
+
+
+# ── ONE OWNER OF RECURSION (roborev 231, MEDIUM) ────────────────────────────
+
+def test_a_nested_data_tuple_is_converted_exactly_once():
+    """The inner data cell ('()', 'date', 2023, 6, 1) is the PYTHON TUPLE
+    ('date', 2023, 6, 1).  Converting the outer cell used to hand that
+    already-converted tuple to a recursive from_fn, which read it as a date
+    TERM: the answer was (datetime.date(2023, 6, 1),)."""
+    inner = (TUPLE_TAG, "date", 2023, 6, 1)
+    assert to_python(inner) == ("date", 2023, 6, 1)
+    out = to_python((TUPLE_TAG, inner))
+    assert out == (("date", 2023, 6, 1),), out
+    assert type(out[0]) is tuple and not isinstance(out[0], dt.date)
+    # and the same through from_term, the other door out of the registry
+    from clausal.logic.python_terms import from_term
+    assert from_term((TUPLE_TAG, inner)) == (("date", 2023, 6, 1),)
+
+
+def test_a_registered_from_fn_is_shallow():
+    """The rule every from_fn must keep: components arrive converted."""
+    from clausal.logic.python_terms import FROM_TERM
+    # an element a RECURSIVE from_fn would turn into a date: shallow keeps it
+    out = FROM_TERM[TUPLE_TAG]((TUPLE_TAG, ("date", 2023, 6, 1), 2))
+    assert out == (("date", 2023, 6, 1), 2) and type(out[0]) is tuple
+
+
+# ── the exact-type fast path (roborev 235c): dispatch ORDER ─────────────────
+
+def test_a_plain_str_never_derefs_and_a_bound_var_to_an_atom_does():
+    v = Var()
+    trail = Trail()
+    assert unify(v, mint("bar"), trail)
+    assert to_python(v) == "bar" and type(to_python(v)) is str
+
+
+def test_exact_scalars_cross_as_themselves_bool_stays_bool():
+    for x in (True, 0, 1.5, None, b"ab", 2j):
+        assert to_python(x) is x, x
+    assert to_python(True) is True and type(to_python(False)) is bool
+
+
+def test_a_scalar_subclass_is_not_on_the_fast_path_and_crosses_unchanged():
+    import enum
+    class E(enum.IntEnum):
+        A = 1
+    assert to_python(E.A) is E.A
+    from clausal.logic.atoms import atom
+    a = atom("x")
+    assert to_python(a) is a           # a boundary tag crosses OUT untouched
+
+
+def test_the_carrier_is_tested_before_the_generic_tuple_arm():
+    # ('$chars', 'x') is a 2-tuple whose head is a str: it must be text, never
+    # the cell ('$chars', 'x') with a registry lookup on '$chars'
+    out = to_python(chars("x"))
+    assert type(out) is str and out == "x"
+    out = to_python([chars("x")])
+    assert out == ["x"] and type(out[0]) is str

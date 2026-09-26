@@ -238,9 +238,11 @@ meant data.
 
 **`term_key(term)`** is the standard order of terms as a sort key: total over
 every value a term can hold (a mixed list never raises), the same order
-`msort/2`, `sort/2` and `compare/3` use. A ground `SegString`/`SegList` keys
-as the string/list it walks to; a non-ground one keys in an opaque band after
-everything else.
+`msort/2`, `sort/2` and `compare/3` use. A `SegString`/`SegList`/`SegBytes`
+keys as the string/list/code list it walks to — so `compare/3` answers `=`
+for a ground `SegString` against its string, and `sort/2` keeps one of them;
+one that still holds an unbound hole keys in an opaque band after everything
+else.
 
 `to_python` and `to_clausal` are NOT what `++`/`--` do. The seams have their
 own, narrower rules — a `++` argument is unwrapped one level, a goal-position

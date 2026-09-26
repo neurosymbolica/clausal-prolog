@@ -769,11 +769,12 @@ def term_key(term: Any) -> tuple:
     PUBLIC as ``clausal.term_key`` (dumb-seam step (b), 2026-09-26): the
     one sort key for terms a Python caller holds, so ``sorted(xs,
     key=term_key)`` is the engine's ``msort/2`` order and never raises on a
-    mixed list.  ``_standard_order_key`` is the in-tree alias.  A GROUND
-    ``Seg*`` keys as the term it walks to (a text Seg* as its string, a
-    SegList as its list), the same answer the type checks give
-    (``normalize_seg_input``); a NON-ground one holds unbound variables and
-    keeps the opaque band.  The walk sits on the fallthrough branch only, so
+    mixed list.  ``_standard_order_key`` is the in-tree alias.  A ``Seg*``
+    is walked (``walk_seg``) and keys as whatever that yields when it is no
+    longer a ``Seg*`` -- a text Seg* as its string, a SegList as its list, a
+    SegBytes as its code list -- the same answer the type checks give
+    (``normalize_seg_input``); one that still walks to a ``Seg*`` (it holds
+    an unbound hole) keeps the opaque band.  The walk sits on the fallthrough branch only, so
     every other key costs what it did (todo
     seg-star-keys-in-the-opaque-standard-order-band-2026-09-07).
     """
@@ -887,11 +888,12 @@ def term_key(term: Any) -> tuple:
     if isinstance(term, (set, frozenset, SetTerm)):
         return (_ORD_SET, tuple(sorted(term_key(e) for e in term)))
     if isinstance(term, (SegList, SegString, SegBytes)):
-        # A ground Seg* IS the string / list / bytes it walks to (the type
-        # checks already answer for the walked form), so it keys as that
-        # term -- ``walk_seg`` keeps the chars CARRIER, which keys as the
-        # char list above, never as an atom.  A non-ground one has no
-        # better key than the opaque band.
+        # A Seg* that walks to something else IS that string / list / bytes
+        # (the type checks already answer for the walked form), so it keys
+        # as that term -- ``walk_seg`` keeps the chars CARRIER, which keys as
+        # the char list above, never as an atom.  One that still walks to a
+        # Seg* holds an unbound hole and has no better key than the opaque
+        # band.
         from clausal.logic.runtime._seg_helpers import walk_seg  # noqa: PLC0415
         walked = walk_seg(term)
         if not isinstance(walked, (SegList, SegString, SegBytes)):
