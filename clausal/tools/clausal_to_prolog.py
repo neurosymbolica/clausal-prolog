@@ -1411,28 +1411,44 @@ class _ClausalToProlog:
                     "discontiguous",
                     (PCompound("/", (PAtom(functor), PNumber(arity))),))))
 
-        # The `:- module` directive goes FIRST, whatever order the source wrote
-        # its directives in. Not cosmetic -- measured 2026-09-26 with a library
-        # imported via use_module and a caller-module goal handed to it: a
-        # `:- meta_predicate` written ABOVE `:- module` still works in Scryer
-        # but silently does not take in Trealla, where the call then FAILS
-        # with no error. A source that writes -meta_predicate above -module is
-        # enough to trigger it.
-        header: list[PItem] = []
+        # Only the `:- module` directive moves: it goes FIRST. Everything the
+        # source wrote above it keeps its relative order, still ahead of the
+        # generated prelude, exactly as before -- only the module line changes
+        # position. Measured 2026-09-26 on both engines, a library imported via
+        # use_module, each item placed ABOVE vs BELOW `:- module`:
+        #
+        #   meta_predicate    above: Scryer ok, Trealla a caller-module goal
+        #                     FAILS silently.            below: both ok
+        #   op/3 (body use)   above: Trealla syntax_error. below: both ok
+        #   op/3 (exported)   above: BOTH syntax_error.   below: both ok
+        #   use_module        above: Scryer existence_error. below: both ok
+        #   double_quotes     either: both ok
+        #
+        # So nothing is known to need to precede `:- module`, and three things
+        # are known to break there.
+        module_item: PItem | None = None
+        before_module: list[PItem] = []
         rest: list[PItem] = []
-        module_seen = False
         for item in self._items:
-            if _is_module_directive(item) and not module_seen:
-                header.append(_filter_module_exports(item, defined))
-                header.extend(prelude_directives)
-                header.extend(meta_directives)
-                header.extend(discontiguous_directives)
-                module_seen = True
+            if _is_module_directive(item):
+                # EVERY module directive is filtered, as it always was; a
+                # second one stays where it was written (no generated block is
+                # repeated after it -- two module directives is not a valid
+                # file on either engine whatever follows them).
+                filtered = _filter_module_exports(item, defined)
+                if module_item is None:
+                    module_item = filtered
+                else:
+                    rest.append(filtered)
+            elif module_item is None:
+                before_module.append(item)
             else:
                 rest.append(item)
-        if not module_seen:
-            header = prelude_directives + meta_directives + discontiguous_directives
-        self._items = header + rest
+        generated = prelude_directives + meta_directives + discontiguous_directives
+        if module_item is None:
+            self._items = generated + before_module
+        else:
+            self._items = [module_item] + before_module + generated + rest
 
         # A hand-written `-meta_predicate(a(...), b(...))` reaches here as N
         # arguments; both engines need one directive PER SPEC. Normalised at the
@@ -3681,14 +3697,28 @@ def _split_meta_predicate_directive(item: PItem) -> list[PItem]:
     last of those, so a library that declared several meta specs in one
     directive -- to get Scryer's callee-module meta-call resolution -- failed to
     consult in Scryer and silently lost the declarations in Trealla.
+
+    The ONE-argument comma-list spelling is split too, and must be: the
+    indicator reader counts every spec it names as already declared, so a
+    comma-list that passed through unsplit would suppress the generated
+    fallback and leave the file with only the spelling Scryer rejects.
     """
     if not isinstance(item, PDirective):
         return [item]
     body = item.body
-    if not (isinstance(body, PCompound) and body.functor == "meta_predicate"
-            and len(body.args) > 1):
+    if not (isinstance(body, PCompound) and body.functor == "meta_predicate"):
         return [item]
-    return [PDirective(PCompound("meta_predicate", (spec,))) for spec in body.args]
+    specs: list[PTerm] = []
+    pending = list(body.args)
+    while pending:                      # left-to-right, descending `,`/2
+        spec = pending.pop(0)
+        if isinstance(spec, PCompound) and spec.functor == "," and len(spec.args) == 2:
+            pending[0:0] = list(spec.args)
+        else:
+            specs.append(spec)
+    if len(specs) == 1 and len(body.args) == 1:
+        return [item]
+    return [PDirective(PCompound("meta_predicate", (spec,))) for spec in specs]
 
 
 def _is_module_directive(item: PItem) -> bool:
