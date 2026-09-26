@@ -53,8 +53,9 @@ class TestIsTermInstanceFallback:
 
 
 class TestIsZeroFieldClassFallback:
-    """Task 12 renamed the zero-field-CLASS test; the C symbol stays
-    ``is_atom`` and is imported under the new name in ``predicate.py``."""
+    """Task 12 renamed the zero-field-CLASS test.  Its C twin (``is_atom``
+    in the extension) went at W4b-3 slice 8, with the class it tested; the
+    Python function is the only implementation, and it answers False."""
 
     def test_no_object_is_a_zero_field_class_any_more(self):
         """W4b-3 slice 7 deleted the class: the question always answers

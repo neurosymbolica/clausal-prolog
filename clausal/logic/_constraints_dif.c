@@ -233,7 +233,7 @@ collect_walk(PyObject *term, PyObject *seen, PyObject *result, int depth)
         return rc;
     }
 
-    /* Term instance (PredicateMeta / dataclass) */
+    /* Term instance (a @dataclass instance) */
     int iti = call_is_term_instance(t);
     if (iti < 0) return -1;
     if (iti) {

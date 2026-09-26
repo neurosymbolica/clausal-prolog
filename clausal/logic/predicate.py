@@ -2394,35 +2394,19 @@ is_term_instance = _is_term_instance_py
 is_zero_field_class = _is_zero_field_class_py
 term_field_names = _term_field_names_py
 
-# The C accelerators.  ``_register_predicate_meta`` MUST still be called: it is
-# also where the extension initialises its interned attribute names and its
-# ``dataclasses.fields`` cache, which ``is_term_instance`` and
-# ``term_field_names`` read -- measured: skipping the call segfaults the first
-# ``head_key`` on a load.  What it registers is the metaclass its class-as-term
-# arms test with ``PyObject_IsInstance``; the ``PredicateMeta`` class was
-# deleted at W4b-3 slice 7, so it is handed ``_NoPredicateClasses``, a
-# metaclass nothing is an instance of, and every such arm answers "not a
-# class".  The registration and those arms go with the C tail (slice 8).
-# A second copy of the package re-registering is harmless now: no object is
-# an instance of either copy's placeholder.
-
-
-class _NoPredicateClasses(type):
-    """The metaclass handed to the C slot that held ``PredicateMeta`` (see
-    above).  Never used as a metaclass: no class, and so no object, is an
-    instance of it."""
-
-
+# The C accelerators, with the pure-Python twins above as the fallback.
+# (Until W4b-3 slice 8 the extension also needed a ``_register_predicate_meta``
+# call here: it held the ``PredicateMeta`` class for its class-as-term arms,
+# and the call was where it set up the interned names ``is_term_instance``
+# reads.  Slice 7 deleted the class; slice 8 moved that setup into the
+# extension's module init and removed the slot, the arms and the call.)
 try:
     from clausal.logic.variables._variables import (
-        _register_predicate_meta,
         is_term_instance,
         term_field_names,
     )
 except ImportError:
     pass
-else:
-    _register_predicate_meta(_NoPredicateClasses)
 
 
 # DEPRECATED alias, kept for ONE release (Task 12, atoms-as-cells/strings).

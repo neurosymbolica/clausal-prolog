@@ -1807,7 +1807,7 @@ do_walk(PyObject *term, int depth)
         }
         PyErr_Clear();
     }
-    /* Term instance (PredicateMeta or @dataclass) — A01-F008: rebuild with
+    /* Term instance (a @dataclass instance) — A01-F008: rebuild with
      * walked fields so walk() deep-substitutes term-instance children, keeping
      * walk consistent with _deref_walk (the tabling/findall snapshot walker).
      * Without this, a term instance nested inside a Compound would not be
@@ -2093,11 +2093,13 @@ py_register_attr_hook(PyObject *Py_UNUSED(module), PyObject *args)
  * Predicate helpers — term inspection moved from Python to C
  * ================================================================ */
 
-/* Cached reference to PredicateMeta (set by _register_predicate_meta) */
-static PyObject *PredicateMeta_type = NULL;
+/* (The cached ``PredicateMeta`` slot and its ``_register_predicate_meta``
+ * entry point were removed at W4b-3 slice 8, 2026-09-26: the class was
+ * deleted at slice 7, and every arm that tested the slot answered "not a
+ * class" for every object.) */
 
-/* Cached interned strings for fast attr lookup */
-static PyObject *str_fields = NULL;
+/* Cached interned strings for fast attr lookup -- set in PyInit__variables
+ * (init_term_inspection_cache), before anything can inspect a term. */
 static PyObject *str_dataclass_fields = NULL;  /* "__dataclass_fields__" */
 static PyObject *str_name = NULL;              /* "name" */
 static PyObject *str_functor = NULL;           /* "functor" */
@@ -2111,44 +2113,46 @@ static PyObject *Compound_type = NULL;
 static PyObject *KWTerm_type = NULL;
 
 /*
- * _register_predicate_meta(cls) — called from predicate.py at import time
+ * init_term_inspection_cache() — the interned attribute names and the
+ * ``dataclasses.fields`` reference the term-inspection helpers read
+ * (``c_is_term_instance``, ``py_term_field_names``, ``c_is_ground``'s
+ * Compound arm).  Called ONCE from PyInit__variables.
+ *
+ * This used to be the second job of ``_register_predicate_meta(cls)``, which
+ * predicate.py called at import time (Fix #5).  Anything that inspected a
+ * term before that call -- including another extension through the
+ * ``_C_API`` capsule's ``is_term_instance`` -- read a NULL interned name and
+ * crashed; skipping the call segfaulted the first ``head_key`` on a load
+ * (measured, W4b-3 slice 7).  Module init removes the ordering dependency.
+ * Returns 0, or -1 with an exception set.
  */
-static PyObject *
-py_register_predicate_meta(PyObject *Py_UNUSED(module), PyObject *cls)
+static int
+init_term_inspection_cache(void)
 {
-    Py_XDECREF(PredicateMeta_type);
-    Py_INCREF(cls);
-    PredicateMeta_type = cls;
-    /* Initialize all interned strings and dataclasses cache at registration
-     * time (single-threaded module init) rather than lazily. (Fix #5) */
-    if (!str_fields) {
-        str_fields = PyUnicode_InternFromString("_fields");
-        if (!str_fields) return NULL;
-    }
     if (!str_dataclass_fields) {
         str_dataclass_fields = PyUnicode_InternFromString("__dataclass_fields__");
-        if (!str_dataclass_fields) return NULL;
+        if (!str_dataclass_fields) return -1;
     }
     if (!str_name) {
         str_name = PyUnicode_InternFromString("name");
-        if (!str_name) return NULL;
+        if (!str_name) return -1;
     }
     if (!str_functor) {
         str_functor = PyUnicode_InternFromString("functor");
-        if (!str_functor) return NULL;
+        if (!str_functor) return -1;
     }
     if (!str_args) {
         str_args = PyUnicode_InternFromString("args");
-        if (!str_args) return NULL;
+        if (!str_args) return -1;
     }
     if (!dc_fields_func) {
         PyObject *mod = PyImport_ImportModule("dataclasses");
-        if (!mod) return NULL;
+        if (!mod) return -1;
         dc_fields_func = PyObject_GetAttrString(mod, "fields");
         Py_DECREF(mod);
-        if (!dc_fields_func) return NULL;
+        if (!dc_fields_func) return -1;
     }
-    Py_RETURN_NONE;
+    return 0;
 }
 
 /*
@@ -2169,7 +2173,7 @@ py_register_term_types(PyObject *Py_UNUSED(module), PyObject *args)
     Py_RETURN_NONE;
 }
 
-/* Internal: check if obj is instance of PredicateMeta-created class.
+/* Internal: check if obj is a term instance (a @dataclass instance).
  * Returns 1 (yes), 0 (no), or -1 (error with exception set). */
 static int
 c_is_term_instance(PyObject *obj)
@@ -2184,8 +2188,8 @@ c_is_term_instance(PyObject *obj)
     /* W4a (2026-09-22): the PredicateMeta-INSTANCE arm that stood here is
      * gone with the instance path -- a predicate class builds a CELL, and a
      * cell is a tuple, not a term instance.  A @dataclass instance is the
-     * one shape left, and its probe is below.  The CLASS arms elsewhere in
-     * this file, and the registration above, stay: they are W4b's. */
+     * one shape left, and its probe is below.  (The CLASS arms elsewhere in
+     * this file and the registration went at W4b-3 slice 8.) */
     /* Fix #2: C-level fast-reject for dataclass check.
      * dataclasses.is_dataclass() internally checks for __dataclass_fields__.
      * We do the same attribute probe at C level — no Python call needed. */
@@ -2244,25 +2248,6 @@ py_term_field_names(PyObject *Py_UNUSED(module), PyObject *obj)
 }
 
 /*
- * is_atom(obj) -> bool
- */
-static PyObject *
-py_is_atom(PyObject *Py_UNUSED(module), PyObject *obj)
-{
-    if (PredicateMeta_type == NULL)
-        Py_RETURN_FALSE;
-    int r = PyObject_IsInstance(obj, PredicateMeta_type);
-    if (r < 0) return NULL;  /* Fix #3 */
-    if (!r) Py_RETURN_FALSE;
-    PyObject *fields = PyObject_GetAttr(obj, str_fields);
-    if (!fields) { PyErr_Clear(); Py_RETURN_FALSE; }
-    if (!PyTuple_Check(fields)) { Py_DECREF(fields); Py_RETURN_FALSE; }  /* Fix #4 */
-    Py_ssize_t n = PyTuple_GET_SIZE(fields);
-    Py_DECREF(fields);
-    return PyBool_FromLong(n == 0);
-}
-
-/*
  * _is_ground(term) -> bool — recursive groundness check
  */
 static int
@@ -2280,14 +2265,6 @@ c_is_ground(PyObject *term, int depth)
     if (term == Py_None || PyBool_Check(term) || PyLong_Check(term) ||
         PyFloat_Check(term) || PyUnicode_Check(term) || PyBytes_Check(term))
         return 1;
-    /* PredicateMeta classes are always ground — they're types, not terms
-     * containing Vars.  This covers both zero-arity atoms and predicate
-     * classes.  (Fix #6: removed dead `empty ? 1 : 1` ternary.) */
-    if (PyType_Check(term) && PredicateMeta_type) {
-        int r = PyObject_IsInstance(term, PredicateMeta_type);
-        if (r < 0) return -1;  /* Fix #3 */
-        if (r) return 1;
-    }
     /* Lists */
     if (PyList_Check(term)) {
         Py_ssize_t n = PyList_GET_SIZE(term);
@@ -2900,15 +2877,6 @@ c_copy_term(PyObject *term, PyObject *var_map, int depth)
         return term;
     }
 
-    /* PredicateMeta class (zero-arity atom or predicate class): ground, return as-is */
-    if (PyType_Check(term) && PredicateMeta_type) {
-        int r = PyObject_IsInstance(term, PredicateMeta_type);
-        if (r < 0) return NULL;
-        if (r) {
-            Py_INCREF(term);
-            return term;
-        }
-    }
 
     /* List: copy element-by-element */
     if (PyList_Check(term)) {
@@ -3225,12 +3193,6 @@ c_collect_vars(PyObject *term, UIntSet *seen, PyObject *result, int depth)
         PyFloat_Check(term) || PyUnicode_Check(term) || PyBytes_Check(term))
         return 0;
 
-    /* PredicateMeta classes: no variables */
-    if (PyType_Check(term) && PredicateMeta_type) {
-        int r = PyObject_IsInstance(term, PredicateMeta_type);
-        if (r < 0) return -1;
-        if (r) return 0;
-    }
 
     /* List */
     if (PyList_Check(term)) {
@@ -3619,21 +3581,15 @@ static PyMethodDef module_methods[] = {
      "Analogous to SWI/Scryer's attr_unify_hook/2 (per module key) and\n"
      "SICStus's verify_attributes/3."},
     /* Predicate helpers */
-    {"_register_predicate_meta", py_register_predicate_meta, METH_O,
-     "_register_predicate_meta(cls)\n"
-     "Register the PredicateMeta metaclass for C-level term checks."},
     {"_register_term_types", py_register_term_types, METH_VARARGS,
      "_register_term_types(compound_cls, kwterm_cls)\n"
      "Register Compound and KWTerm types for C-level term inspection."},
     {"is_term_instance", py_is_term_instance, METH_O,
      "is_term_instance(obj) -> bool\n"
-     "True if obj is a term instance (PredicateMeta or @dataclass)."},
+     "True if obj is a term instance (a @dataclass instance)."},
     {"term_field_names", py_term_field_names, METH_O,
      "term_field_names(obj) -> tuple\n"
      "Return field name strings for a term instance."},
-    {"is_atom", py_is_atom, METH_O,
-     "is_atom(obj) -> bool\n"
-     "True if obj is a zero-arity PredicateMeta class (atom)."},
     {"_is_ground", py_is_ground, METH_O,
      "_is_ground(term) -> bool\n"
      "True if term contains no unbound Vars."},
@@ -3697,6 +3653,9 @@ PyInit__variables(void)
     /* Interned before any unify can run — do_unify's hook probe uses it. */
     str_dunder_unify = PyUnicode_InternFromString("__unify__");
     if (!str_dunder_unify) return NULL;
+
+    /* The term-inspection helpers' interned names + dataclasses.fields. */
+    if (init_term_inspection_cache() < 0) return NULL;
 
     /* The ASCII char-atom cache the str↔list unification arms read. */
     for (int i = 0; i < 128; i++) {

@@ -211,7 +211,7 @@ do_normalize(PyObject *term, int depth)
         }
     }
 
-    /* Term instance (PredicateMeta or @dataclass) → (class_name, field0, ...) */
+    /* Term instance (a @dataclass instance) → (class_name, field0, ...) */
     {
         int ti = VarAPI->is_term_instance(term);
         if (ti < 0) return NULL;
@@ -420,7 +420,7 @@ do_deref_walk(PyObject *term, int depth)
         PyErr_Clear();
     }
 
-    /* Term instance (PredicateMeta or @dataclass) */
+    /* Term instance (a @dataclass instance) */
     {
         int ti = VarAPI->is_term_instance(term);
         if (ti < 0) return NULL;

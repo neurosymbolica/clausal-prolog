@@ -37,14 +37,30 @@ class TestTheClassIsGone:
         assert isinstance(info.value, TypeError)
         assert "retired" in str(info.value)
 
-    def test_the_c_slot_holds_a_metaclass_nothing_is_an_instance_of(self):
-        """``_register_predicate_meta`` is still called (it initialises the
-        extension's interned names); what it holds answers "not a class"
-        for every object."""
-        placeholder = predicate_mod._NoPredicateClasses
-        for value in ("atom", ("pt", 1), int, type, predicate_mod):
-            assert not isinstance(value, placeholder)
+    def test_the_c_extension_has_no_predicate_class_slot(self):
+        """W4b-3 slice 8: the extension's ``PredicateMeta`` slot, its
+        ``_register_predicate_meta`` entry point and the class-only ``is_atom``
+        are gone, and so is the Python placeholder that fed the slot.  The
+        term helpers work with no Python-side registration: module init sets
+        up what they read.  (A stale ``.so`` still has the entry point -- this
+        is also the check that the rebuilt extension is the one imported.)"""
+        import dataclasses
+        from clausal.logic.variables import _variables as C
+        assert not hasattr(C, "_register_predicate_meta")
+        assert not hasattr(C, "is_atom")
+        assert not hasattr(predicate_mod, "_NoPredicateClasses")
+        assert predicate_mod.is_term_instance is C.is_term_instance
         assert predicate_mod.is_zero_field_class(int) is False
+
+        @dataclasses.dataclass
+        class pt:
+            x: int
+            y: int
+
+        assert C.is_term_instance(pt(1, 2)) is True
+        assert C.is_term_instance(("pt", 1, 2)) is False
+        assert C.is_term_instance(pt) is False
+        assert C.term_field_names(pt(1, 2)) == ("x", "y")
 
 
 class TestMakeAtom:
