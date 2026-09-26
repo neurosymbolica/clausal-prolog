@@ -180,6 +180,17 @@ variable would neither compare equal to its `--` literal nor survive
 backtracking. Do not mutate what you are handed; it may be the engine's own
 stored term.
 
+**The lint.** Because `T == "x"` is silently False for a string answer and
+silently True for an atom answer, a name bound by a goal-position seam that
+meets a Python str **literal** in the same function — `==`, `!=`, `in` /
+`not in` a literal list/tuple/set of str, a `match`/`case` str pattern, also
+through a plain alias `y = T` — raises `ClausalSeamTextCompareWarning` at
+load, naming the site and both right spellings (`T == --"x"`, or
+`to_python(T) == "x"`). It does not catch `d[T]`, `T in some_dict`,
+`json.dumps(T)`, `len(T)`, str methods, a comparison inside a helper or in
+another function, or a container built at runtime: those follow the raw-out
+contract above.
+
 The same holds in a comprehension or generator expression whose FIRST
 `for` clause is a `--` goal (`{K: V for K, V in --kv(K, V)}`), and for the
 dotted runtime form `--m.pred(X)`.

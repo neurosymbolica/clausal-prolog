@@ -1938,6 +1938,7 @@ from clausal.lint_warnings import (  # noqa: E402, F401
     ClausalSingletonWarning,
     ClausalShadowedVariableWarning,
     ClausalBooleanSeamWarning,
+    ClausalSeamTextCompareWarning,
     ClausalDeprecatedSpellingWarning,
     ClausalTitleCaseIdentifierWarning,
     ClausalScaleInNameWarning,
@@ -5580,6 +5581,12 @@ class EmbedTransformer(NodeTransformer):
         # Names the AUTHOR bound as Python locals in each enclosing scope, for
         # the shadowed-variable lint — see ``_author_bound_locals``.
         transformer._python_locals: list[set] = []
+        # Names EXPORTED by a goal-position seam, per Python scope (the
+        # module body is the outermost): name -> the seam's line.  Read
+        # after each scope is rewritten by ``_lint_seam_text_compare``.
+        # (``_seam_bound`` below is the term transformer's own stack of the
+        # logic-variable names visible to nested seams -- a different thing.)
+        transformer._seam_exports: list[dict] = [{}]
         transformer._seen_functors: dict[str, list[str]] = {}
         # Filled by visit_Module's pre-pass; a transformer used outside a module
         # walk (the REPL's seam term, a one-off clause) keeps the empty set.
@@ -6565,6 +6572,7 @@ class EmbedTransformer(NodeTransformer):
             if_false = transformer._declare_locals(fresh, node.test)
             body = [if_false] + transformer._visit_stmts(node.body)
         else:
+            transformer._note_seam_bound(fresh, node.test)
             exports = transformer._export_stmts(fresh, node.test)
             body = exports + transformer._visit_stmts(node.body)
         node.test = test
@@ -6606,6 +6614,7 @@ class EmbedTransformer(NodeTransformer):
         # ``UnboundLocalError`` rather than reading a same-named module
         # global left over from some earlier definition.
         non_targets = [n for n in fresh if n not in targets]
+        transformer._note_seam_bound(targets, node.iter)
         declare = transformer._declare_locals(non_targets, node.iter)
         var_refs = replace(Tuple(
             elts=[replace(Name(id=f"$v_{t}", ctx=Load()), node.iter) for t in targets],
@@ -6681,6 +6690,7 @@ class EmbedTransformer(NodeTransformer):
                     f"got {unparse(target)}")
             pre, goal_ast, fresh = transformer._goal_seam(
                 expression, generator.iter)
+            transformer._note_seam_bound(targets, generator.iter)
             for t in targets:
                 if t not in fresh:
                     raise SyntaxError(
@@ -6771,6 +6781,7 @@ class EmbedTransformer(NodeTransformer):
             exports = [declare]
         else:
             node.test = call
+            transformer._note_seam_bound(fresh, node.test)
             exports = transformer._export_stmts(fresh, node.test)
         node.body = exports + transformer._visit_stmts(node.body)
         node.orelse = transformer._visit_stmts(node.orelse)
@@ -7540,6 +7551,7 @@ class EmbedTransformer(NodeTransformer):
         transformer._expand_currency_tables(module)
         transformer._titlecase_prepass(module)
         result = transformer.generic_visit(module)
+        transformer._lint_seam_text_compare(result, transformer._seam_exports[0])
         transformer._check_var_shaped_predicate_names()
         transformer._check_constant_name_is_free()
         transformer._settle_atom_functor_sites()
@@ -7708,9 +7720,12 @@ class EmbedTransformer(NodeTransformer):
         # correct site in the corpus.
         transformer._python_locals.append(
             transformer._author_bound_locals(node))
+        transformer._seam_exports.append({})
         try:
             result = transformer.generic_visit(node)
+            transformer._lint_seam_text_compare(result, transformer._seam_exports[-1])
         finally:
+            transformer._seam_exports.pop()
             transformer._python_locals.pop()
             transformer._scope_depth -= 1
         return result
@@ -7817,6 +7832,86 @@ class EmbedTransformer(NodeTransformer):
     visit_AsyncFunctionDef = visit_FunctionDef
 
     # ── boolean-context lint ───────────────────────────────────────────
+    def _note_seam_bound(transformer, names, anchor):
+        """Record *names* as bound by a goal-position seam in the current
+        Python scope (the innermost ``def``, else the module body)."""
+        scope = transformer._seam_exports[-1]
+        for n in names:
+            scope.setdefault(n, anchor.lineno)
+
+    def _lint_seam_text_compare(transformer, scope_node, bound):
+        """Warn for each comparison of a seam-bound name with a Python str
+        LITERAL inside *scope_node* (a rewritten ``def``, or the module).
+        See ``ClausalSeamTextCompareWarning`` for the shapes and the
+        deliberate gaps.  Runs AFTER the scope is rewritten: a ``--"x"`` on
+        the other side is a ``$seam(...)`` call by now, so it cannot be
+        mistaken for a literal, and a plain Python literal is still a
+        ``Constant``.  Nested ``def``s are their own scopes and were scanned
+        (and their names popped) before this runs, so they are skipped."""
+        if not bound:
+            return
+        import warnings  # noqa: PLC0415
+        names = dict(bound)
+        # a plain alias ``y = T`` in this scope shares the diagnosis
+        for node in walk(scope_node):
+            if (isinstance(node, Assign) and len(node.targets) == 1
+                    and isinstance(node.targets[0], Name)
+                    and isinstance(node.value, Name) and node.value.id in names):
+                names.setdefault(node.targets[0].id, names[node.value.id])
+
+        def is_str_lit(n):
+            return isinstance(n, Constant) and type(n.value) is str
+
+        def str_lits(n):
+            if is_str_lit(n):
+                return [n.value]
+            if isinstance(n, (List, Tuple, Set)) and n.elts and all(is_str_lit(e) for e in n.elts):
+                return [e.value for e in n.elts]
+            return None
+
+        def warn(anchor, name, spelled, lit):
+            warnings.warn(ClausalSeamTextCompareWarning(
+                f"{transformer._filename}:{anchor.lineno}:{anchor.col_offset + 1}: "
+                f"`{name}` comes from the seam at line {names[name]} and is a "
+                f"Clausal term, so `{spelled}` is False for a STRING answer and "
+                f"True only for an ATOM: compare with --\"{lit}\" (or "
+                f"to_python({name}) == \"{lit}\")"), stacklevel=2)
+
+        skip = set()
+        for node in walk(scope_node):
+            if node is scope_node:
+                continue
+            if isinstance(node, (FunctionDef, AsyncFunctionDef, Lambda, ClassDef)):
+                for inner in walk(node):
+                    skip.add(id(inner))
+        for node in walk(scope_node):
+            if id(node) in skip:
+                continue
+            if isinstance(node, Compare):
+                left = node.left
+                for op, right in zip(node.ops, node.comparators):
+                    if isinstance(op, (Eq, NotEq)):
+                        for a, b in ((left, right), (right, left)):
+                            if isinstance(a, Name) and a.id in names and is_str_lit(b):
+                                sym = "==" if isinstance(op, Eq) else "!="
+                                warn(node, a.id, f"{a.id} {sym} {b.value!r}", b.value)
+                    elif isinstance(op, (In, NotIn)):
+                        lits = str_lits(right)
+                        if isinstance(left, Name) and left.id in names and lits:
+                            sym = "in" if isinstance(op, In) else "not in"
+                            warn(node, left.id, f"{left.id} {sym} {unparse(right)}", lits[0])
+                    left = right
+            elif isinstance(node, Match) and isinstance(node.subject, Name) and node.subject.id in names:
+                for case in node.cases:
+                    pats = [case.pattern]
+                    if isinstance(case.pattern, MatchOr):
+                        pats = list(case.pattern.patterns)
+                    lits = [p.value.value for p in pats
+                            if isinstance(p, MatchValue) and is_str_lit(p.value)]
+                    if lits:
+                        warn(case.pattern, node.subject.id,
+                             f"match {node.subject.id}: case {unparse(case.pattern)}", lits[0])
+
     def _lint_boolean_seam(transformer, operand, context):
         """Warn when *operand* is a ``--`` seam read as a truth value.
 
