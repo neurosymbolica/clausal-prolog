@@ -1425,7 +1425,10 @@ class _ClausalToProlog:
         #   double_quotes     either: both ok
         #
         # So nothing is known to need to precede `:- module`, and three things
-        # are known to break there.
+        # are known to break there. A meta_predicate written above -module thus
+        # lands below the module line but AHEAD of the generated prelude (clpz,
+        # library(lambda)); measured the same day, that position and the one
+        # after the prelude give identical answers on both engines.
         module_item: PItem | None = None
         before_module: list[PItem] = []
         rest: list[PItem] = []
