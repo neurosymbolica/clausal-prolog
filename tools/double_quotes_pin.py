@@ -120,6 +120,18 @@ def _dq_literals(source: str, path: str):
             for c in ast.iter_child_nodes(n):
                 stack.append((c, s, d))
 
+    def _walk_dcg_body(body, walk):
+        elements = body.elts if isinstance(body, ast.Tuple) else [body]
+        for element in elements:
+            if isinstance(element, ast.Constant):
+                walk(element, False, False, True)         # a terminal
+            elif isinstance(element, ast.List):
+                for item in element.elts:
+                    walk(item, False, False,
+                         isinstance(item, ast.Constant))  # ["a", X, f("b")]
+            else:
+                walk(element, False, False, False)        # call, {goal}, ...
+
     for st in tree.body:
         if isinstance(st, _HOSTED):
             walk(st, False, True, False)
@@ -134,11 +146,14 @@ def _dq_literals(source: str, path: str):
             elif isinstance(v, ast.Tuple) and v.elts:
                 head = v.elts[0]
             elif isinstance(v, ast.BinOp) and isinstance(v.op, ast.RShift):
-                # A DCG rule: the body's literals are terminals in every
-                # mode; only the head is read by the -double_quotes mode.
+                # A DCG rule: a literal that IS a body element, or an
+                # element of a body list, is a terminal in every mode;
+                # every other literal in the body -- an argument of a
+                # nonterminal call, a term inside a ``{...}`` goal -- is an
+                # ordinary term read by the -double_quotes mode.
                 head = v.left
                 walk(v.left, False, False, False)
-                walk(v.right, False, False, True)
+                _walk_dcg_body(v.right, walk)
                 continue
             if (isinstance(head, ast.Call) and isinstance(head.func, ast.Name)
                     and head.func.id in ("test", "Test") and head.args
@@ -156,6 +171,21 @@ def _dq_literals(source: str, path: str):
         else:
             walk(st, False, True, False)
     return out
+
+
+def _has_mode_sensitive_literal(text: str) -> bool:
+    """Whether *text* holds a double-quoted, non-bytes STRING token --
+    the only kind of literal the -double_quotes mode reads.  Tokenized, so a
+    ``b"GET "`` codes literal and a ``"`` inside a comment do not count."""
+    try:
+        for tok in tokenize.generate_tokens(io.StringIO(text).readline):
+            if tok.type == tokenize.STRING:
+                m = re.match(r"([rRbBfFuU]*)(\"|')", tok.string)
+                if m and "b" not in m.group(1).lower() and m.group(2) == '"':
+                    return True
+    except (tokenize.TokenError, SyntaxError):
+        return False
+    return False
 
 
 def _clausal_files(paths):
@@ -186,11 +216,19 @@ def _py_files(paths):
 
 # ── pin: .clausal / .seam files ──────────────────────────────────────────────
 
+_SNIPPET_MARKER = "--8<--"
+
+
 def _insertion_line(lines: list[str]) -> int:
     """Index of the line the directive goes BEFORE: after the leading run of
-    comment and blank lines (a shebang-style header stays a header)."""
+    comment and blank lines (a shebang-style header stays a header), but
+    never past a mkdocs snippet marker (``# --8<-- [start:name]``): a
+    directive inside a snippet region is RENDERED into the docs, teaching
+    every reader to opt out of the default (flip review M3)."""
     i = 0
     while i < len(lines) and (not lines[i].strip() or lines[i].lstrip().startswith("#")):
+        if _SNIPPET_MARKER in lines[i]:
+            break
         i += 1
     return i
 
@@ -287,7 +325,7 @@ def _pin_segment(raw: str) -> str | None:
     lines = [l for l in value.splitlines() if l.strip() and not l.lstrip().startswith("#")]
     if not lines or not _CLAUSAL_SHAPE.match(lines[0]):
         return None
-    if value.count('"') < 2:
+    if not _has_mode_sensitive_literal(value):
         return None                      # no double-quoted literal inside
     head, rest = raw[:m.end()], raw[m.end():]
     if quote in ("'", '"'):
@@ -325,20 +363,41 @@ def pin_py_file(path: str, check: bool) -> int:
 
 # ── convert: "..." -> '...' for user-facing sources ──────────────────────────
 
-def _respell(text: str) -> str:
+def _respell(text: str) -> str | None:
     """The single-quoted spelling of a double-quoted literal's SOURCE text
-    (quotes included)."""
-    inner = text[1:-1]
-    inner = inner.replace('\\"', '"').replace("'", "\\'")
+    (quotes included), or ``None`` for a literal this does not respell: a
+    triple-quoted, prefixed (``r"…"``) or implicitly concatenated one, whose
+    quote rewrite is not a two-character edit.  Re-tokenized rather than
+    sliced, so the shape is decided by the tokenizer, not by ``text[0]``."""
+    try:
+        toks = [t for t in tokenize.generate_tokens(io.StringIO(text).readline)
+                if t.type not in (tokenize.NEWLINE, tokenize.NL, tokenize.ENDMARKER,
+                                  tokenize.INDENT, tokenize.DEDENT)]
+    except (tokenize.TokenError, SyntaxError):
+        return None
+    if len(toks) != 1 or toks[0].type != tokenize.STRING:
+        return None
+    raw = toks[0].string
+    if not (raw.startswith('"') and raw.endswith('"')) or raw.startswith('"""'):
+        return None
+    inner = raw[1:-1]
+    # ``\"`` was an escaped delimiter and needs none now; a bare ``'`` needs
+    # escaping now; an already-escaped ``\'`` must not be escaped twice.
+    inner = inner.replace('\\"', '"').replace("\\'", "'").replace("'", "\\'")
     return "'" + inner + "'"
 
 
 def convert_file(path: str, check: bool) -> tuple[int, int]:
-    """``(converted, kept)`` literal counts for *path*."""
+    """``(converted, kept)`` literal counts for *path*; a file that fails to
+    parse is reported and skipped, never a run-ending exception."""
     source = open(path, encoding="utf-8").read()
     if _MODE_RE.search(source):
         return 0, 0
-    lits = _dq_literals(source, path)
+    try:
+        lits = _dq_literals(source, path)
+    except SyntaxError as exc:
+        print(f"    {path}: SKIPPED, does not parse: {exc}")
+        return 0, 0
     lines = source.splitlines(keepends=True)
     line_starts = [0]
     for line in lines:
@@ -354,11 +413,17 @@ def convert_file(path: str, check: bool) -> tuple[int, int]:
         end_line = lines[node.end_lineno - 1]
         b = line_starts[node.end_lineno - 1] + len(end_line.encode("utf-8")[:node.end_col_offset].decode("utf-8", "replace"))
         edits.append((a, b))
+    converted = 0
     for a, b in sorted(edits, reverse=True):
-        source = source[:a] + _respell(source[a:b]) + source[b:]
-    if edits and not check:
+        new = _respell(source[a:b])
+        if new is None:
+            kept += 1                    # a shape convert leaves alone
+            continue
+        source = source[:a] + new + source[b:]
+        converted += 1
+    if converted and not check:
         open(path, "w", encoding="utf-8").write(source)
-    return len(edits), kept
+    return converted, kept
 
 
 # ── main ─────────────────────────────────────────────────────────────────────

@@ -1,7 +1,7 @@
 # Doc snippet fixtures for docs/database_ops.md
+-double_quotes(atom)
 
 # --8<-- [start:quick_example]
--double_quotes(atom)
 -dynamic(color/1)
 
 color("red"),
