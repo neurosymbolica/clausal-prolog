@@ -633,10 +633,10 @@ def test_a_host_head_pattern_matches_an_owner_built_term(
 
 def _flip_bindings_before_step_4(monkeypatch, must_flip):
     """Flip every binding at step 3d, BEFORE steps 4 and 4a, so step 4a
-    meets this module's OWN ``-dynamic`` as a handle.  The real flip
-    (``compiler_v2._flip_bindings``) runs after step 4a, so a real load
-    never shows 4a a LOCAL handle; this stand-in still does real work and
-    returns the keys it flipped.  It ASSERTS it flipped *must_flip*: a
+    meets this module's OWN ``-dynamic`` as a handle.  (The real flip ran
+    after step 4a until W4b-3; the module body binds the handle itself
+    now.)  This stand-in records the keys already bound to their handle and
+    returns them.  It ASSERTS it flipped *must_flip*: a
     stand-in that silently flips nothing would leave the test checking the
     class path under the handle test's name."""
     import clausal.logic.compiler_v2 as cv2

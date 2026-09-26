@@ -201,7 +201,7 @@ def _defined_names(mod):
     non-predicate callable, a data functor's ``@dataclass`` class, or a
     mangled atom naming a DATA atom (e.g. one hidden via ``-hide``).
     See ``test_import_diagnostics_defined_names.py`` for the population
-    (non-empty, both eras) and false-positive evidence.
+    (non-empty) and false-positive evidence.
     """
     from clausal.import_hook import predicate_builtins
     from clausal.logic.atoms import demangle

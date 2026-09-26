@@ -27,8 +27,7 @@ from clausal.terms import (
 )
 from clausal.pythonic_ast.nodes import StarUnpack  # noqa: F401
 from clausal.logic.predicate import (  # noqa: F401
-    is_term_instance, term_field_names, is_declared_predicate_name,
-    resolve_predicate_row,
+    is_term_instance, term_field_names, resolve_predicate_row,
 )
 from clausal.logic.database import Clause
 
@@ -177,24 +176,6 @@ def _arg_to_index_key(arg: Any, env: "dict | None" = None) -> Any:
             return _INDEX_VAR
         if env is not None and dotted in env:
             return _runtime_arg_key(env[dotted])
-        return _INDEX_VAR
-    # PredicateMeta atom (zero-arity predicate class used as a value). Keyed as
-    # ``(name, 0)`` so atom-headed clauses are indexable again — the string→
-    # PredicateMeta migration (commit 92ce2636) dropped atoms out of the
-    # indexable set, forcing a linear scan. Matches the runtime key emitted by
-    # :func:`_runtime_arg_key`. Must precede ``is_term_instance`` (False for a
-    # class, but kept adjacent for clarity).
-    if is_declared_predicate_name(arg):
-        return (arg.__name__, 0)
-    # A term class may unify with values of a FOREIGN type (date/3's pattern
-    # class did, against a real datetime.date, until W4b-3 slice 7 deleted
-    # it; no in-tree type sets the flag now -- the hook stays for any type
-    # that does). Keying such a term by its
-    # own (class_name, field_count) sends a caller to a bucket that no
-    # stored value can ever land in, and the predicate silently yields no
-    # solutions once _INDEX_THRESHOLD clauses make indexing kick in. These
-    # are index-transparent: treat them as a Var and let the scan unify.
-    if getattr(type(arg), "_index_transparent", False):
         return _INDEX_VAR
     if is_term_instance(arg):
         cls = type(arg)
@@ -386,13 +367,6 @@ def _runtime_arg_key(a: Any, deep_gate: bool = True) -> Any:
         return _INDEX_VAR
     if isinstance(a, Compound):
         return (a.functor, len(a.args))
-    # PredicateMeta atom: mirror _arg_to_index_key so a runtime atom argument
-    # routes to the same bucket as its head key.
-    if is_declared_predicate_name(a):
-        return (a.__name__, 0)
-    # Mirror of the index-transparent branch in _arg_to_index_key.
-    if getattr(type(a), "_index_transparent", False):
-        return _INDEX_VAR
     if is_term_instance(a):
         cls = type(a)
         # P3-3 Task 4 fold-in: the same gate the cell branch above carries,

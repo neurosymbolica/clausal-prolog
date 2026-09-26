@@ -14,7 +14,7 @@ from typing import Any
 
 from clausal.logic.variables import deref, is_var, exact_cell_number
 from clausal.logic.predicate import (
-    is_zero_field_class, is_atom_value, is_term_instance, term_field_names,
+    is_atom_value, is_term_instance, term_field_names,
 )
 from clausal.logic.cells import TUPLE_TAG, chars, is_chars, chars_text, refuse_reserved_1tuple
 from clausal.logic.atoms import (
@@ -203,8 +203,6 @@ def _is_ground_py(term: Any) -> bool:
     if is_var(term):
         return False
     if isinstance(term, (bool, int, float, str, bytes)) or term is None:
-        return True
-    if is_zero_field_class(term):
         return True
     if isinstance(term, list):
         return all(_is_ground_py(e) for e in term)

@@ -13,7 +13,7 @@ import pytest
 
 from clausal.logic.atoms import mint, spelling
 from clausal.logic.database import Clause, Database
-from clausal.logic.compiler import compile_predicate_trampoline as _compile_predicate
+from clausal.logic.compiler import compile_predicate_trampoline as compile_predicate
 from clausal.logic.compiler.arg_index import (
     _extract_arg_key,
     _INDEX_THRESHOLD,
@@ -23,7 +23,7 @@ from clausal.logic.compiler.arg_index import (
 )
 from clausal.logic.compiler.goal_trampoline import _inject_bucket_refs_trampoline
 from clausal.logic.compiler.globals_env import _disp_key
-from tests.predicate_api_support import RowPredicate, compile_through
+from tests.predicate_api_support import RowPredicate
 from clausal.logic.variables import Var, Trail, deref, is_var
 from clausal.logic.trampoline import StepGenerator, solutions, DONE
 from clausal.terms import Compound, Unify, Call, LoadName
@@ -64,10 +64,9 @@ def _trampoline_solutions(dispatch, args, trail=None):
 
 # W4b-3 slice 7: a predicate is a row named by a handle.  ``_make_pred_cls``
 # made a ``PredicateMeta`` class to compile into; it now makes a
-# ``RowPredicate`` (a handle on a fresh module Database), and
-# ``compile_predicate`` hands the compiler that Database and handle -- the
-# load path's own arguments -- so every plan read below reads the same row.
-compile_predicate = compile_through(_compile_predicate)
+# ``RowPredicate`` (a handle on a fresh module Database), and each compile
+# below passes that Database and ``pred_cls=<its handle>`` -- the load
+# path's own arguments -- so every plan read below reads the same row.
 
 
 def _make_pred_cls(name, fields, db=None):
@@ -86,8 +85,8 @@ class TestIndexPlansExposed:
             (mint("yellow"),), (mint("purple"),),
         ])
         pred_cls = _make_pred_cls("color", ["name"])
-        compile_predicate("color", 1, clauses, pred_cls=pred_cls)
-        assert pred_cls._row is not None, "no db was passed: _install minted the class's private detached row"
+        compile_predicate("color", 1, clauses, pred_cls.db, pred_cls=pred_cls.handle)
+        assert pred_cls._row is not None, "the compile did not write the handle's row"
         assert isinstance(pred_cls._state_row().index_plans, dict)
 
     def test_index_plans_keys_are_positions(self):
@@ -98,7 +97,7 @@ class TestIndexPlansExposed:
             (mint("yellow"),), (mint("purple"),),
         ])
         pred_cls = _make_pred_cls("color", ["name"])
-        compile_predicate("color", 1, clauses, pred_cls=pred_cls)
+        compile_predicate("color", 1, clauses, pred_cls.db, pred_cls=pred_cls.handle)
         for pos in pred_cls._state_row().index_plans:
             assert isinstance(pos, int)
 
@@ -110,7 +109,7 @@ class TestIndexPlansExposed:
             (mint("yellow"),), (mint("purple"),),
         ])
         pred_cls = _make_pred_cls("color", ["name"])
-        compile_predicate("color", 1, clauses, pred_cls=pred_cls)
+        compile_predicate("color", 1, clauses, pred_cls.db, pred_cls=pred_cls.handle)
         for pos, idx_dict in pred_cls._state_row().index_plans.items():
             assert isinstance(idx_dict, dict)
             for key, bucket_fn in idx_dict.items():
@@ -122,7 +121,7 @@ class TestIndexPlansExposed:
         atoms = [mint(a) for a in ("red", "green", "blue", "yellow", "purple")]
         clauses = _make_fact_clauses("color", [(a,) for a in atoms])
         pred_cls = _make_pred_cls("color", ["name"])
-        compile_predicate("color", 1, clauses, pred_cls=pred_cls)
+        compile_predicate("color", 1, clauses, pred_cls.db, pred_cls=pred_cls.handle)
         assert 0 in pred_cls._state_row().index_plans
         # An atom keys as the arity-0 CELL it is: (spelling, 0) — spec §6.9.
         assert set(pred_cls._state_row().index_plans[0].keys()) == {
@@ -135,7 +134,7 @@ class TestIndexPlansExposed:
             (0, 0), (1, 1), (2, 1), (3, 2), (4, 3), (5, 5),
         ])
         pred_cls = _make_pred_cls("fib", ["n", "f"])
-        compile_predicate("fib", 2, clauses, pred_cls=pred_cls)
+        compile_predicate("fib", 2, clauses, pred_cls.db, pred_cls=pred_cls.handle)
         assert 0 in pred_cls._state_row().index_plans
         assert set(pred_cls._state_row().index_plans[0].keys()) == {0, 1, 2, 3, 4, 5}
 
@@ -146,8 +145,8 @@ class TestIndexPlansExposed:
         assert _INDEX_THRESHOLD > 1
         clauses = _make_fact_clauses("tiny", [("a",)])
         pred_cls = _make_pred_cls("tiny", ["x"])
-        compile_predicate("tiny", 1, clauses, pred_cls=pred_cls)
-        assert pred_cls._row is not None, "no db was passed: _install minted the class's private detached row"
+        compile_predicate("tiny", 1, clauses, pred_cls.db, pred_cls=pred_cls.handle)
+        assert pred_cls._row is not None, "the compile did not write the handle's row"
         assert pred_cls._state_row().index_plans == {}
 
     def test_index_plans_not_set_when_no_pred_cls(self):
@@ -166,7 +165,7 @@ class TestIndexPlansExposed:
         atoms = [mint(a) for a in ("red", "green", "blue", "yellow", "purple")]
         clauses = _make_fact_clauses("color", [(a,) for a in atoms])
         pred_cls = _make_pred_cls("color", ["name"])
-        dispatch = compile_predicate("color", 1, clauses, pred_cls=pred_cls)
+        dispatch = compile_predicate("color", 1, clauses, pred_cls.db, pred_cls=pred_cls.handle)
 
         trail = Trail()
         arg = mint("green")
@@ -180,7 +179,7 @@ class TestIndexPlansExposed:
         atoms = [mint(a) for a in ("red", "green", "blue", "yellow", "purple")]
         clauses = _make_fact_clauses("color", [(a,) for a in atoms])
         pred_cls = _make_pred_cls("color", ["name"])
-        dispatch = compile_predicate("color", 1, clauses, pred_cls=pred_cls)
+        dispatch = compile_predicate("color", 1, clauses, pred_cls.db, pred_cls=pred_cls.handle)
 
         trail = Trail()
         arg = mint("orange")
@@ -196,12 +195,12 @@ class TestIndexPlansExposed:
         clauses5 = _make_fact_clauses("tiny", [
             (mint("a"),), (mint("b"),), (mint("c"),), (mint("d"),),
             (mint("e"),)])
-        compile_predicate("tiny", 1, clauses5, pred_cls=pred_cls)
+        compile_predicate("tiny", 1, clauses5, pred_cls.db, pred_cls=pred_cls.handle)
         assert pred_cls._state_row().index_plans != {}
 
         # Second compile: just one clause — should clear _index_plans
         clauses1 = _make_fact_clauses("tiny", [("a",)])
-        compile_predicate("tiny", 1, clauses1, pred_cls=pred_cls)
+        compile_predicate("tiny", 1, clauses1, pred_cls.db, pred_cls=pred_cls.handle)
         assert pred_cls._state_row().index_plans == {}
 
     def test_two_arg_predicate_indexes_first_arg(self):
@@ -213,7 +212,7 @@ class TestIndexPlansExposed:
             (mint("c"), mint("d")), (mint("d"), mint("a")),
         ])
         pred_cls = _make_pred_cls("edge", ["from_node", "to_node"])
-        compile_predicate("edge", 2, clauses, pred_cls=pred_cls)
+        compile_predicate("edge", 2, clauses, pred_cls.db, pred_cls=pred_cls.handle)
         assert 0 in pred_cls._state_row().index_plans
         assert set(pred_cls._state_row().index_plans[0].keys()) == {
             ("a", 0), ("b", 0), ("c", 0), ("d", 0)}
@@ -226,8 +225,8 @@ class TestIndexPlansExposed:
             ("same", 1), ("same", 2), ("same", 3), ("same", 4), ("same", 5),
         ])
         pred_cls = _make_pred_cls("lookup", ["key", "val"])
-        compile_predicate("lookup", 2, clauses, pred_cls=pred_cls)
-        assert pred_cls._row is not None, "no db was passed: _install minted the class's private detached row"
+        compile_predicate("lookup", 2, clauses, pred_cls.db, pred_cls=pred_cls.handle)
+        assert pred_cls._row is not None, "the compile did not write the handle's row"
         # Position 1 should be indexed (all values distinct)
         assert 1 in pred_cls._state_row().index_plans
 
@@ -245,7 +244,7 @@ class TestIndexPlansJoint:
             (i, j) for i in range(5) for j in range(5)
         ])
         pred_cls = _make_pred_cls("pair", ["x", "y"])
-        compile_predicate("pair", 2, clauses, pred_cls=pred_cls)
+        compile_predicate("pair", 2, clauses, pred_cls.db, pred_cls=pred_cls.handle)
         # May or may not use joint dispatch depending on coverage threshold;
         # just check that if it's set it has the right structure.
         if pred_cls._state_row().index_plans_joint:
@@ -265,7 +264,7 @@ class TestIndexPlansJoint:
             (i, j) for i in range(5) for j in range(5)
         ])
         pred_cls = _make_pred_cls("pair", ["x", "y"])
-        compile_predicate("pair", 2, clauses, pred_cls=pred_cls)
+        compile_predicate("pair", 2, clauses, pred_cls.db, pred_cls=pred_cls.handle)
         if pred_cls._state_row().index_plans_joint:
             for (pi, pj), jdict in pred_cls._state_row().index_plans_joint.items():
                 for jk in jdict:
@@ -437,7 +436,7 @@ def _make_locked_pred_cls(name, facts, db=None):
         name, [f"arg{i}" for i in range(len(facts[0]))], db)
     arity = len(facts[0])
     clauses = _make_fact_clauses(name, facts)
-    compile_predicate(name, arity, clauses, pred_cls=pred_cls)
+    compile_predicate(name, arity, clauses, pred_cls.db, pred_cls=pred_cls.handle)
     pred_cls._state_row().locked = True
     return pred_cls, arity
 
@@ -686,7 +685,7 @@ class TestCallsiteCorrectnessAndFallback:
         atoms = [mint(a) for a in ("red", "green", "blue", "yellow", "purple")]
         callee_cls = _make_pred_cls("dyn_color", ["name"])
         clauses = _make_fact_clauses("dyn_color", [(a,) for a in atoms])
-        compile_predicate("dyn_color", 1, clauses, pred_cls=callee_cls)
+        compile_predicate("dyn_color", 1, clauses, callee_cls.db, pred_cls=callee_cls.handle)
         # Ensure it's NOT locked
         callee_cls._state_row().locked = False
 

@@ -55,8 +55,10 @@ def test_tro_recursive_countdown_under_each_disable(enabled):
       perturb the TRO compile path (catches accidental coupling).
     """
     from clausal.logic.database import Module
-    db = Module(f"_toggle_{abs(hash(enabled))}",
-                module_dict={"__name__": f"_toggle_{abs(hash(enabled))}"}).db
+    # A deterministic module name per parameter (``hash`` of a frozenset of
+    # strs varies with PYTHONHASHSEED): the sorted enabled set, joined.
+    name = "_toggle_" + "_".join(sorted(enabled))
+    db = Module(name, module_dict={"__name__": name}).db
     # compiled through its handle, as a loaded module's predicate is
     # (a PredicateMeta class until W4b-3 slice 7)
     CountDown = RowPredicate('CountDown', ('n',), db)

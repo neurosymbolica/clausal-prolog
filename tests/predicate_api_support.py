@@ -86,12 +86,17 @@ class RowPredicate:
     naming a row of a module's Database.  For tests that used to compile
     into a ``PredicateMeta`` class (the retired class-era fixture) only to
     read back the row the compile wrote -- index plans, the lock, the
-    dispatch.  ``compile_predicate(..., pred_cls=<RowPredicate>)`` through
-    :func:`compile_through` hands the compiler the handle and the Database,
-    exactly the arguments ``compiler_v2`` step 5 passes for a loaded module.
+    dispatch.
 
-    ``_state_row()`` / ``_row`` answer that row, so a test body written
-    against the class reads the same state from the same place."""
+    ONE convention: compile with ``compile_predicate_*(functor, arity,
+    clauses, pred.db, pred_cls=pred.handle)`` -- the Database and the
+    handle, exactly the arguments ``compiler_v2`` step 5 passes for a
+    loaded module.  The compiler never sees this object.
+
+    ``_state_row()`` (creating) / ``_row`` (or ``None``) answer that row, and
+    calling the object builds a head cell (``build_term_cell``), so a test
+    body written against the class reads the same state from the same
+    place."""
 
     _serial = 0
 
@@ -123,23 +128,3 @@ class RowPredicate:
     def _assertz(self, clause) -> None:
         """Append *clause* to the row (``Database.assertz``)."""
         self.db.assertz(clause)
-
-
-def compile_through(compile_fn):
-    """Wrap a ``compile_predicate_*`` function so a :class:`RowPredicate`
-    passed as ``pred_cls`` compiles into ITS Database through its handle (a
-    ``db`` passed explicitly must be that same Database)."""
-    import functools
-
-    @functools.wraps(compile_fn)
-    def compile_(functor, arity, clauses, db=None, *args, pred_cls=None,
-                 **kwargs):
-        if isinstance(pred_cls, RowPredicate):
-            if db is not None and db is not pred_cls.db:
-                raise AssertionError(
-                    "compile_through: a RowPredicate compiles into its own "
-                    "Database")
-            db, pred_cls = pred_cls.db, pred_cls.handle
-        return compile_fn(functor, arity, clauses, db, *args,
-                          pred_cls=pred_cls, **kwargs)
-    return compile_

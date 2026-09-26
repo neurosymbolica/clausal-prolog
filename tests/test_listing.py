@@ -625,8 +625,7 @@ class TestCellValuedClauseArgument:
         assert _format_clause_term((TUPLE_TAG, 1, 2)) == "(1, 2)"
 
     def test_listing_prints_a_cell_valued_field_as_a_term_not_a_repr(self):
-        color._state_row().clauses = []
-        color._state_row().locked = False
+        _fresh_preds()
         color._assertz(Clause(color("red", ("rgb", 255, 0, 0)), []))
         output = _capture_listing(color.handle)
         assert "rgb(255, 0, 0)" in output

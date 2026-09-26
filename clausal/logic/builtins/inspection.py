@@ -7,14 +7,12 @@ from typing import Any
 
 from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.logic.predicate import (
-    is_declared_predicate_name, is_zero_field_class,
+    is_declared_predicate_name,
     is_term_instance, term_field_names, field_names_for,
 )
-# ``predicate.is_zero_field_class`` above is the zero-field-CLASS test;
 # ``atoms.is_atom`` is the TERM test (spec §6.1) and the one the name position
-# speaks.  They are different questions; Task 12 gave the class test a name
-# that says which one it asks, so ``is_atom`` here is unambiguously the term
-# test.
+# speaks (``predicate.is_zero_field_class`` asked about a class that W4b-3
+# slice 7 deleted).
 from clausal.logic.cells import chars, is_chars, chars_text  # stage 1: the chars carrier
 from clausal.logic.atoms import (
     char_atom,

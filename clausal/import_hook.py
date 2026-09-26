@@ -257,7 +257,7 @@ def _run_v2_pipeline(loader, module, module_dict, filename, recover_module_items
     # which names the file but not its vocabulary.  This is the raise site at
     # which the Clausal context is known, so enrich it here.
     # The body's ``$declare_head`` record (W4b-3 slice 5): started empty for
-    # every run, and retired at compile_module's flip point -- or here, if
+    # every run, and retired at compile_module's step 4a-bis -- or here, if
     # the load fails before it gets there.
     begin_loading_declarations(module_dict)
     try:

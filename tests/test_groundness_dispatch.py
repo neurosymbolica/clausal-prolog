@@ -473,7 +473,7 @@ class TestBackwardCompat:
         assert results == [(1, mint("a"))]
 
 
-# ── PredicateMeta integration ───────────────────────────────────────────────
+# ── keyword-built term facts (a PredicateMeta class until W4b-3 slice 7) ────
 
 
 class TestPredicateMetaGroundness:

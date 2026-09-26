@@ -297,7 +297,7 @@ def compile_module(
         # class was bound to the row here until W4b-3 slice 7 deleted it.)
         local, declared = _local_binding(module_dict, functor)
         with _load_gate(db, functor, arity, author, WRITE_LOAD_CLAUSES,
-                        _load_through(local, origins, functor, db, arity),
+                        _load_through(local, origins, functor),
                         origins, module_name, module_dict):
             logic_module.define_predicate(pred_node)
             pending[key] = local
@@ -438,13 +438,19 @@ def compile_module(
                 # W4b-3 slice 7 deleted the class.)
                 pending[key] = None
 
-    # ── Step 4a-bis: the flip point (W4b-2d task 8) ──────────────────────
-    #    Every predicate binding in the module dict is already its HANDLE
-    #    (the body's ``$declare_head``, an ``-import_from``); the flip that
-    #    rebound classes to handles here has nothing left to rebind.  What
-    #    remains is registering this db as a handle owner.  See
-    #    ``_flip_bindings``.
-    _flip_bindings(module_dict, db)
+    # ── Step 4a-bis: register this db as a handle owner, EARLY ───────────
+    #    (This was the flip point, W4b-2d task 8, which rebound classes to
+    #    handles; since W4b-3 slices 5-7 every predicate binding in the
+    #    module dict is already its HANDLE -- the body's ``$declare_head``,
+    #    an ``-import_from`` -- so there is nothing to rebind.)  The db
+    #    becomes an owner for handles naming its module (ruling Q0) NOW,
+    #    not only at the end of the load: a handle may be RUN before
+    #    ``compile_module`` returns (a ``-specialize`` source program at
+    #    step 6b, an ``-initialization`` goal), and a module the caller
+    #    never put in ``sys.modules`` would otherwise resolve to nothing.
+    #    Idempotent and weak.
+    from clausal.logic.predicate import register_handle_owner  # noqa: PLC0415
+    register_handle_owner(db)
     # The module body's ``$declare_head`` record retires here too (W4b-3
     # slice 5): it answered for the handles this load declared exactly as
     # long as the rewriter's classes did, and from here on the Database is
@@ -471,7 +477,7 @@ def compile_module(
     for (functor, arity), pred_cls in pending.items():
         clauses = db.clauses_for(functor, arity)
         with _load_gate(db, functor, arity, author, WRITE_LOAD_DISPATCH,
-                        _load_through(pred_cls, origins, functor, db, arity),
+                        _load_through(pred_cls, origins, functor),
                         origins, module_name, module_dict):
             if db.is_shallow(functor, arity):
                 compile_predicate_shallow(
@@ -508,10 +514,6 @@ def compile_module(
     #    called.  Specialized predicates compile themselves internally.
     _run_specialization(module_items, predicate_nodes, module_dict, db)
 
-    # ── Step 6c: the flip point again (W4b-2d; ``-specialize`` bound a
-    #    CLASS at step 6b until W4b-3 slice 4 -- it binds a handle now) ──
-    _flip_bindings(module_dict, db)
-
     # ── Step 7: Lock non-dynamic predicates ──────────────────────────────
     _lock_static_predicates(db)
 
@@ -523,31 +525,6 @@ def compile_module(
     register_handle_owner(db)
 
     return logic_module
-
-
-# ── W4b-2d task 8: THE FLIP ───────────────────────────────────────────────
-# There is no off switch: ``CLAUSAL_NO_FLIP`` went with W4b-3 slice 1
-# (operator ruling 2026-09-25 -- the class era ends).
-
-
-def _flip_bindings(module_dict: dict, db) -> None:
-    """The flip point (W4b-2d task 8): register *db* as a handle owner.
-
-    The flip rebound every ``PredicateMeta`` class in the module dict to its
-    owner's HANDLE, and refused a class no Clausal database owned (a class
-    made in Python, W4b-3 slice 1).  Since W4b-3 slices 5-7 there is no class
-    to rebind or refuse -- the module body binds handles (``$declare_head``),
-    ``-specialize`` installs a handle, and the ``PredicateMeta`` class itself
-    is deleted -- so what remains is the registration: *db* becomes an owner
-    for handles naming its module (ruling Q0) right away, because a handle
-    may be RUN before ``compile_module`` returns (a ``-specialize`` source
-    program at step 6b, an ``-initialization`` goal), and the end-of-load
-    registration would be too late for a module the caller never put in
-    ``sys.modules``.  Idempotent and weak.  Still called at both flip points
-    (after step 4a, after step 6b)."""
-    from clausal.logic.predicate import register_handle_owner  # noqa: PLC0415
-    del module_dict  # the flip's input; nothing in it needs rebinding now
-    register_handle_owner(db)
 
 
 _IMPORT_PLACEHOLDER = "_clausal_import_placeholder"
@@ -1096,7 +1073,7 @@ def _refuse_foreign_writes(db, predicate_nodes: list, module_dict: dict,
             continue
         checked.add((functor, arity))
         pred_cls = _local_binding(module_dict, functor)[0]
-        pred_cls = _load_through(pred_cls, origins, functor, db, arity)
+        pred_cls = _load_through(pred_cls, origins, functor)
         exc = db.refusal_for(
             functor, arity, author=author, kind=WRITE_LOAD_CLAUSES,
             detail=_LOAD_SITES[WRITE_LOAD_CLAUSES], through=pred_cls,
@@ -1259,18 +1236,16 @@ def _local_binding(module_dict: dict, functor: str):
     return None, None
 
 
-def _load_through(pred_cls, origins: dict, functor: str, db, arity: int):
+def _load_through(pred_cls, origins: dict, functor: str):
     """The ``through=`` a load write of ``functor/arity`` hands the gate: the
     module's own binding for the name, else the ``-import_from`` binding.
 
     Operator ruling 2026-09-24: a local ``p/2`` beside an imported ``p/1``
     LOADS -- name and arity make a different predicate.  ``through=``
     resolves a handle at the written arity, so a's ``p/1`` is never in the
-    blast radius.  (An imported CLASS at another arity was dropped here
-    until W4b-3 slice 7 deleted the class; *db* and *arity* are kept for
-    the callers' signature.)
+    blast radius.  (An imported CLASS at another arity was dropped here,
+    reading *db* and *arity*, until W4b-3 slice 7 deleted the class.)
     """
-    del db, arity
     return pred_cls if pred_cls is not None else _imported_binding(
         origins, functor)
 

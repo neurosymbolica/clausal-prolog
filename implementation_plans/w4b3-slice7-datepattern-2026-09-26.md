@@ -34,8 +34,15 @@ a real zero.
 
 `arg_index`'s `_index_transparent` hook is a generic protocol
 (`getattr(type(arg), "_index_transparent", False)`). No in-tree type sets it
-now. It stays in place for any type that sets it; removing it would be a
-separate change.
+now. It stayed in 7a; review 188 had it removed in the slice 7 review-fix
+commit (both branches, the compile-time key and the runtime key), since
+nothing can reach them.
+
+A raw Python `datetime.date` is not a term, before 7a and after: a pattern
+cell does not unify with one, and a goal holding one is refused ("a Python
+date is not a term"). What `_DatePattern.__unify__` described never
+happened on 3a8697c2 either, because nothing built a `_DatePattern`.
+`tests/test_date_term.py::TestARawPythonDateIsNotATerm` pins this.
 
 ## Answers are identical
 

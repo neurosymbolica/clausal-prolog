@@ -1,10 +1,12 @@
 """W4b-2d task 8: THE FLIP -- every predicate binding a load leaves in a
 module dict is a mangled HANDLE, not a ``PredicateMeta`` class.
 
-``compiler_v2._flip_bindings`` runs after step 4a and again after step 6b
-(``-specialize`` binds a class there).  The owner is the class's ROW's
-database (ruling D1: an import binds the OWNER's handle), a row-less class
-takes the compiling db (ruling X3).  There is no off switch any more:
+The flip ran in ``compiler_v2`` after step 4a and again after step 6b
+until W4b-3 (slices 5-7): the module body binds handles now
+(``$declare_head``), ``-specialize`` installs one, and the class is
+deleted, so what is left at step 4a-bis is registering the db as a handle
+owner.  The owner of a handle is its module's database (ruling D1: an
+import binds the OWNER's handle; ruling X3).  There is no off switch any more:
 ``CLAUSAL_NO_FLIP`` went with W4b-3 slice 1 (operator ruling 2026-09-25),
 and so did the branch that left a class no Clausal database owns bound as
 it was -- such a class is REFUSED at load now (see the last section).

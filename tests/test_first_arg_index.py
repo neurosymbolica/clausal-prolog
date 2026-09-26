@@ -1182,12 +1182,13 @@ class TestDynamicReindex:
         assert results == [("purple", 5)]
 
 
-# ── PredicateMeta integration ────────────────────────────────────────────────
+# ── keyword-built term facts (a PredicateMeta class until W4b-3 slice 7) ─────
 
 
 class TestPredicateMetaIndexing:
     def test_predicate_meta_facts(self):
-        """PredicateMeta class facts with normalized Var+Unify heads."""
+        """Facts built with keyword fields (``term_ctor``, a cell per head)
+        with normalized Var+Unify heads."""
         # nv
         fruit = term_ctor("fruit", ("name", "count"))
 
@@ -1273,9 +1274,10 @@ class TestEdgeCases:
 
 
 class TestAtomInListHead:
-    """atoms (zero-arity PredicateMeta classes) appearing inside a list
-    pattern in the clause head — regression for the indexer-driven bucket
-    compile that emitted the atom class into an ``ast.Constant`` node and
+    """atoms (plain strs now; zero-arity PredicateMeta classes when this
+    was written) appearing inside a list pattern in the clause head —
+    regression for the indexer-driven bucket compile that emitted the atom
+    class into an ``ast.Constant`` node and
     triggered ``TypeError: got an invalid type in Constant: PredicateMeta``.
 
     The bug surfaced only when indexing fired (>= _INDEX_THRESHOLD clauses)
@@ -1339,9 +1341,8 @@ class TestAtomInListHead:
         results = _simple_solutions(fn, [a, b, c, d], trail)
         assert len(results) == 4
         # The list-pattern clauses round-trip the atom-bearing last arg.
-        # THE FLIP: the atom round-trips as the arity-0 CELL ("usd",), not
-        # the `usd` PredicateMeta class object passed in as a compile-time
-        # value (and no longer as the P3-1 bare str either).
+        # The atom round-trips as the atom ``usd`` (a str), the value
+        # passed in as a compile-time global.
         last_args = [r[3] for r in results]
         assert [mint("usd"), 50000] in last_args
         assert [mint("usd"), 100000] in last_args

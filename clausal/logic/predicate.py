@@ -17,7 +17,6 @@ that raises ``MakePredicateRetiredError``.
 
 from __future__ import annotations
 
-import contextlib
 import dataclasses
 import os
 import re
@@ -493,15 +492,16 @@ def build_term_cell(functor: str, fields: tuple[str, ...], args: tuple,
 def _head_arity(head: Any) -> int | None:
     """How many arguments the clause head *head* has, or ``None`` if unreadable.
 
-    Three head shapes reach here and the third one used to crash:
+    The head shapes that reach here:
 
+    - an atom (a ``str``), which is how a 0-arity fact (``myflag,``) stores
+      its head -- name/0;
+    - a cell ``(functor, *args)``;
     - a ``Compound``-style head with an ``args`` sequence;
-    - a term instance, whose arity is its field count;
-    - the **class itself**, which is how a 0-arity fact atom (``myflag,``)
-      stores its head — ``red() is red``, so the class IS the value.  That one
-      reached ``term_field_names`` and raised ``TypeError: must be called with
-      a dataclass type or instance``, which is nonsense in the mouth of an
-      arity diagnostic.  ``_fields`` answers it directly.
+    - a term instance, whose arity is its field count.
+
+    (A zero-field ``PredicateMeta`` class was a fourth, answered from its
+    ``_fields``, until W4b-3 slice 7 deleted the class.)
 
     ``None`` means *unknown*, never *zero*: a head shape nobody anticipated
     must make the predicate's arity unknown — and so unrefusable — rather than
@@ -520,9 +520,6 @@ def _head_arity(head: Any) -> int | None:
         # (``myflag,``) stores its head -- the atom, where it used to be the
         # rewriter's zero-field class, whose ``_fields`` answered 0 below.
         return 0
-    fields = field_names_for(head)
-    if fields is not None:
-        return len(fields)
     from clausal.logic.cells import _cell_shape  # noqa: PLC0415
     if _cell_shape(head)[0]:                        # P2: a head is a cell
         return len(head) - 1
@@ -1761,7 +1758,7 @@ PREDICATE_HEADS_KEY = "$predicate_heads"
 
 def local_predicate_handle(namespace, functor: str) -> "str | None":
     """The handle *namespace*'s own module binds *functor* to: the value
-    ``compiler_v2._flip_bindings`` binds for a local predicate
+    the module body's ``$declare_head`` binds for a local predicate
     (``mint_predicate_handle`` over the module's Database, whose
     ``module_name()`` is this same ``__name__``).  ``None`` for a namespace
     that names no module."""
@@ -1804,7 +1801,7 @@ def is_local_predicate_binding(namespace, name: str) -> bool:
 
 
 #: Module name -> namespace, for every module whose body has run under the
-#: import hook and whose compile has not yet reached the flip point.  See
+#: import hook and whose compile has not yet reached step 4a-bis.  See
 #: :func:`loading_head_fields`.
 _LOADING_NAMESPACES: dict = {}
 
@@ -1821,10 +1818,10 @@ def begin_loading_declarations(namespace: dict) -> None:
 
 
 def end_loading_declarations(namespace: dict) -> None:
-    """Retire *namespace*'s ``$declare_head`` record: the flip point of
-    ``compiler_v2.compile_module`` (step 4a-bis), where the rewriter's class
-    became the handle and the Database became the sole authority for it --
-    and, on a failed load, the import hook's cleanup.  Idempotent."""
+    """Retire *namespace*'s ``$declare_head`` record: step 4a-bis of
+    ``compiler_v2.compile_module``, from which the Database is the sole
+    authority for the handles the load declared (step 4 gave each its row)
+    -- and, on a failed load, the import hook's cleanup.  Idempotent."""
     namespace.pop(PREDICATE_HEADS_KEY, None)
     name = namespace.get("__name__")
     if name and _LOADING_NAMESPACES.get(name) is namespace:
@@ -1840,9 +1837,9 @@ def loading_head_fields(binding) -> "tuple | None":
     body ran, before step 4 of ``compiler_v2.compile_module`` gave the
     Database a row to answer from -- goal expansion's auto-binding reads a
     head's names at step 1b, for one.  The declaration record answers the
-    same question for the handle until the flip point (step 4a-bis), where
+    same question for the handle until step 4a-bis, where
     ``end_loading_declarations`` retires it and the Database is the sole
-    authority, exactly as it became for the class-turned-handle.
+    authority.
 
     O(1) and allocation-free when no load is in progress: the resolvers
     that ask this sit on runtime paths too."""
@@ -2362,10 +2359,11 @@ def term_field_names_of_class(cls: Any) -> tuple[str, ...] | None:
     """Field names for a term CLASS, or None.
 
     RETAINED ALIAS (W4b-1): ``field_names_for`` is the accessor now.  This
-    name is in ``__all__`` and out-of-tree callers use it, so it survives
-    until W4b-3 retires it with the class.  A ``str`` reaching here would
-    take arm 3 with no db and no namespace, which is the same ``None`` the
-    old class-only implementation gave -- no caller changes behaviour.
+    name is in ``__all__`` and out-of-tree callers use it, so it is kept
+    after W4b-3 slice 7 deleted the predicate class it was named for; it
+    answers exactly what ``field_names_for(cls)`` answers (a ``@dataclass``
+    class's fields; a predicate handle's declared fields; ``None`` for
+    anything else, including a ``str`` with no db or namespace).
     """
     return field_names_for(cls)
 

@@ -858,13 +858,13 @@ def _module_for_moduleless_solve(goal) -> tuple[Any, Module]:
         ``None`` is passed as one rather than a guess.
       - any other CELL goal has no module at all, and none can be guessed:
         a cell is a plain tuple, so there is no defining class to walk back to
-        (which is what ``_infer_module`` does) and the tuple's functor is a
-        bare name that any number of modules may define.  Guessing here is
-        exactly the module-locality bug this task exists to prevent, so the
-        gap is REPORTED.
-      - anything else keeps the legacy behaviour: ``_infer_module`` walks the
-        goal for class-instance terms, and its failure is the same ``TypeError``
-        it has always raised.
+        and the tuple's functor is a bare name that any number of modules may
+        define.  Guessing here is exactly the module-locality bug this task
+        exists to prevent, so the gap is REPORTED.
+      - anything else raises the ``TypeError`` it always has.  (It used to
+        walk the goal for an instance of a ``PredicateMeta`` class and answer
+        that class's module first; W4a made such an instance impossible and
+        W4b-3 slice 7 deleted the class and that walk, ``_infer_module``.)
     """
     _, _pre_functor = compound_cell_shape(goal)
     # W4: a mangled functor names its module.  No hint: a module-less solve
@@ -908,13 +908,10 @@ def _module_for_moduleless_solve(goal) -> tuple[Any, Module]:
             f"predicate but carries no module of its own, so there is nothing "
             f"here to infer one from",
         ))
-    module = _infer_module(goal)
-    if module is None:
-        raise TypeError(
-            "Cannot infer module from goal. Pass the module explicitly, e.g.:\n"
-            "  solve(goal, my_module)"
-        )
-    return goal, module
+    raise TypeError(
+        "Cannot infer module from goal. Pass the module explicitly, e.g.:\n"
+        "  solve(goal, my_module)"
+    )
 
 
 def _resolved_goal_and_module(goal, module, context: str):
@@ -1031,24 +1028,6 @@ def dangling_handle_exception(
         why += " (reached through a module-qualified predicate handle)"
     return LogicException(existence_error(
         "procedure", indicator, f"{context}: {why}"))
-
-
-def _infer_module(goal) -> Module | None:
-    """The Module a goal's own terms name, or None -- always None now.
-
-    It walked the goal for a term INSTANCE of a ``PredicateMeta`` class and
-    answered that class's defining module.  W4a made such an instance
-    impossible and W4b-3 slice 7 deleted the class, so there is nothing to
-    walk back to; the function stays as the one place the moduleless-solve
-    path asks.
-
-    A CELL goal never reaches here: a cell is a plain tuple with a bare-name
-    functor, so there is no defining class to walk back to and any number of
-    modules may define that name.  ``_module_for_moduleless_solve`` refuses
-    it with an ``existence_error`` naming the gap instead of guessing — see
-    the module-locality rule R10.
-    """
-    return None
 
 
 def call(

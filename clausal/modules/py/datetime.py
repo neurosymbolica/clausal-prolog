@@ -202,7 +202,8 @@ def _today_1(d, trail, k):
 
 # (``_DatePattern`` -- a ``metaclass=PredicateMeta`` class with a
 # hand-rolled ``__unify__`` bridging a pattern to a real ``datetime.date`` and
-# an ``_index_transparent`` flag -- was DELETED at W4b-3 slice 7 (2026-09-26).
+# an ``_index_transparent`` flag -- was DELETED at W4b-3 slice 7 (2026-09-26),
+# and ``arg_index``'s branches reading that flag with it.
 # Measured over the full suite first: nothing constructed it, called its
 # ``__unify__``, ``isinstance``-tested it or read an attribute of it (0 of
 # each; the instrument's positive control fired).  ``date/3`` below builds a
