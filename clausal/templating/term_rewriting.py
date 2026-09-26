@@ -2315,8 +2315,19 @@ class TermTransformer(NodeTransformer):
                  quote_map=None, double_quotes_mode="chars",
                  seam=False, double_quotes_explicit=True,
                  python_visitor=None, titlecase_python_bound=None,
-                 clause_var_names=None):
+                 clause_var_names=None, modes_used=None):
         transformer.seen_vars = set()
+        # The file's SHARED "which -double_quotes modes governed a literal"
+        # sink (``EmbedTransformer.__init__``), a constructor parameter so
+        # that no TermTransformer -- per-clause, seam, or arrow-lambda body
+        # -- can be built without it (flip review M2: the lambda transformer
+        # was built by hand and recorded nothing, so a file whose only
+        # literals sat in lambda bodies reported no mode, and a file that
+        # switched mode with one mode's literals only in lambdas reported a
+        # single mode and was judged when it should have been left alone).
+        # A caller with no file (the REPL, reflection) gets a private set.
+        transformer._double_quotes_modes_used = (
+            modes_used if modes_used is not None else set())
         # THE SEAM (``--term`` in Python-hosted code): ``seam`` marks a
         # transformer serving one seam expression; ``python_visitor`` is the
         # enclosing EmbedTransformer's ``visit``, run over every ``++``
@@ -2922,9 +2933,7 @@ class TermTransformer(NodeTransformer):
             if quote == '"':
                 # Cross-mode lint (2026-09-26): tell the file's importers
                 # which modes its ``"..."`` literals were read under.
-                modes_used = getattr(transformer, "_double_quotes_modes_used", None)
-                if modes_used is not None:
-                    modes_used.add(transformer._double_quotes_mode)
+                transformer._double_quotes_modes_used.add(transformer._double_quotes_mode)
             if quote == '"' and transformer._double_quotes_mode == "chars":
                 # STAGE 1 of the atoms-as-str flip (spec 2026-09-18): a chars
                 # string is the CARRIER ``('$chars', text)``, not a bare str.
@@ -3112,6 +3121,7 @@ class TermTransformer(NodeTransformer):
             atom_functor_sites=transformer._atom_functor_sites,
             quote_map=transformer._quote_map,
             double_quotes_mode=transformer._double_quotes_mode,
+            modes_used=transformer._double_quotes_modes_used,
             # Inherited for the same reason ``_import_remap`` is: a ``++``
             # or f-string INSIDE a lambda body resolves its free names in
             # the same module namespace, so it must exclude the same ones.
@@ -5608,6 +5618,13 @@ class EmbedTransformer(NodeTransformer):
         # (``_collect_cross_mode_sites`` -> ``CrossModeLiteralSites``).
         transformer._double_quotes_modes_used: set[str] = set()
         transformer._cross_mode_sites: list = []
+        # The top-level names this file's ``-import_module`` directives bind
+        # (``a`` for ``-import_module(a.b)``): the only dotted bases the
+        # cross-mode lint may judge.  Any other base is bound by hosted
+        # Python -- possibly a module-level default later rebound at run
+        # time through ``seam.with_bases`` -- and judging the global would
+        # judge the wrong module.
+        transformer._import_module_bases: set[str] = set()
         # Logic-variable names bound by the seams enclosing the expression
         # being rewritten (innermost last) — see visit_UnaryOp's ``--``.
         transformer._seam_bound: list[set] = []
@@ -6140,12 +6157,8 @@ class EmbedTransformer(NodeTransformer):
             python_visitor=transformer.visit if seam else None,
             titlecase_python_bound=transformer._titlecase_python_bound,
             clause_var_names=clause_var_names,
+            modes_used=transformer._double_quotes_modes_used,
         )
-        # The shared "modes used" sink (see ``__init__``): an attribute
-        # rather than a constructor parameter, so a TermTransformer built
-        # elsewhere (the REPL, a query compile) simply has none and
-        # ``visit_Constant`` records nothing.
-        term_tf._double_quotes_modes_used = transformer._double_quotes_modes_used
         return term_tf
 
     def _seam_term_ast(transformer, expression, anchor):
@@ -6308,44 +6321,55 @@ class EmbedTransformer(NodeTransformer):
         """
         exclusions = _clause_scope_exclusions(transformer._import_remap)
 
-        def _walk(node):
-            """Every descendant, not descending into a ``++`` escape."""
-            stack = [node]
-            while stack:
-                n = stack.pop()
-                if _double_prefix_operand(n, UAdd) is not None:
-                    continue
-                yield n
-                stack.extend(iter_child_nodes(n))
-
-        for call in _walk(expression):
-            if not isinstance(call, Call):
-                continue
+        def _callee(call):
+            """``(kind, target, shown)`` when *call*'s callee lives in
+            another module and is statically known, else ``None``."""
             func = call.func
             if isinstance(func, Name):
-                if func.id not in transformer._import_remap:
-                    continue
-                kind, target, shown = "imported", func.id, func.id
-            elif isinstance(func, Attribute):
-                chain, root = [], func
-                while isinstance(root, Attribute):
-                    chain.append(root.attr)
-                    root = root.value
-                if not isinstance(root, Name):
-                    continue
-                if _is_logic_var_name(root.id) and root.id not in exclusions:
-                    continue           # dict-attribute sugar, not a module
-                chain.reverse()
-                kind, target = "dotted", (root.id, tuple(chain))
-                shown = ".".join([root.id, *chain])
-            else:
+                dotted = transformer._import_remap.get(func.id)
+                if dotted is None:
+                    return None
+                # The local name AND the owner's dotted key: a predicate's
+                # binding names its owner itself (a mangled handle), but an
+                # imported data FUNCTOR binds the plain atom, and its owner
+                # is only knowable from the ``-import_from`` that brought it.
+                return "imported", (func.id, dotted), func.id
+            if not isinstance(func, Attribute):
+                return None
+            chain, root = [], func
+            while isinstance(root, Attribute):
+                chain.append(root.attr)
+                root = root.value
+            if not isinstance(root, Name):
+                return None
+            if _is_logic_var_name(root.id) and root.id not in exclusions:
+                return None            # dict-attribute sugar, not a module
+            if root.id not in transformer._import_module_bases:
+                return None            # not this file's -import_module: the gap
+            chain.reverse()
+            return "dotted", (root.id, tuple(chain)), ".".join([root.id, *chain])
+
+        # Each literal is attributed to the INNERMOST enclosing call whose
+        # callee is known -- in ``--p(q("x"))`` with both imported, ``"x"``
+        # is an argument of ``q``, and ``q``'s module is the one it meets.
+        # One site per call, in source order; a ``++`` escape is Python.
+        sites: dict = {}
+        stack = [(expression, None)]
+        while stack:
+            node, owner = stack.pop()
+            if _double_prefix_operand(node, UAdd) is not None:
                 continue
-            literals = []
-            for arg in [*call.args, *(kw.value for kw in call.keywords)]:
-                for node in _walk(arg):
-                    if (isinstance(node, Constant) and type(node.value) is str
-                            and _quote_of_positioned(transformer, node) == '"'):
-                        literals.append(node.value)
+            if isinstance(node, Call):
+                callee = _callee(node)
+                if callee is not None:
+                    owner = id(node)
+                    sites.setdefault(owner, (callee, []))
+            elif (owner is not None and isinstance(node, Constant)
+                    and type(node.value) is str
+                    and _quote_of_positioned(transformer, node) == '"'):
+                sites[owner][1].append(node.value)
+            stack.extend((child, owner) for child in iter_child_nodes(node))
+        for (kind, target, shown), literals in sites.values():
             if not literals:
                 continue
             transformer._cross_mode_sites.append((
@@ -9664,6 +9688,7 @@ class EmbedTransformer(NodeTransformer):
         transformer._module_items.append(
             ImportModuleItem(module=module_path)
         )
+        transformer._import_module_bases.add(module_path.split(".")[0])
         resolved = _resolve_import_path(module_path)
         if resolved != module_path:
             # Aliased module: ``import clausal.modules.uuid_mod as uuid``

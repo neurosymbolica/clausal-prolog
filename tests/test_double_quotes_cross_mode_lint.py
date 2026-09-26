@@ -183,3 +183,128 @@ def test_every_offending_literal_in_the_goal_is_named_once(
     assert len(hits) == 1
     msg = str(hits[0].message)
     assert '"a"' in msg and '"b"' in msg
+
+
+# ── flip review (job 239): the paths the first tests left uncovered ──────────
+
+
+def test_an_aliased_import_is_judged_under_its_local_name(tmp_path, monkeypatch):
+    _load(tmp_path, monkeypatch, "xm_owner_alias", ATOM_OWNER.format(name="xm_owner_alias"))
+    host, hits = _load(tmp_path, monkeypatch, "xm_host_alias", """
+        -double_quotes(chars)
+        -import_from(xm_owner_alias, [alias(p, pp)])
+
+        def go():
+            if --pp("x"):
+                return True
+            return False
+    """)
+    assert host.go() is False
+    assert len(hits) == 1 and "`pp`" in str(hits[0].message)
+
+
+# No keyword-argument case: a term written with keyword arguments
+# (``pt(x="a")``) has been a load error since 2026-09-19, so a goal seam
+# can never carry one and the collector's walk over ``call.keywords`` is
+# reached only for the directive/EDCG shapes that keep their keywords.
+
+
+def test_a_nested_imported_call_is_one_site_per_literal(tmp_path, monkeypatch):
+    """``--p(q("x"))`` with both imported: ``"x"`` is an argument of ``q``
+    and meets ``q``'s module, so it is reported once, against ``q``."""
+    _load(tmp_path, monkeypatch, "xm_owner_nest", """
+        -double_quotes(atom)
+        -module(xm_owner_nest, [p/1, q(v)])
+        p(q("x")),
+    """)
+    _, hits = _load(tmp_path, monkeypatch, "xm_host_nest", """
+        -double_quotes(chars)
+        -import_from(xm_owner_nest, [p, q])
+
+        def go():
+            if --p(q("x")):
+                return True
+            return False
+    """)
+    assert len(hits) == 1
+    assert "`q`" in str(hits[0].message) and "`p`" not in str(hits[0].message)
+
+
+def test_a_literal_only_inside_an_arrow_lambda_still_counts_as_a_mode(
+        tmp_path, monkeypatch):
+    """M2: the arrow-lambda TermTransformer must feed the same modes sink.
+    This owner switches to chars after ``p``, and its only chars literal is
+    inside a lambda body -- so it is MIXED and must not be judged.  Before
+    the fix the lambda literal went unrecorded, the owner reported ``atom``
+    alone, and a chars host calling ``p("x")`` was warned falsely."""
+    _load(tmp_path, monkeypatch, "xm_owner_lam", """
+        -double_quotes(atom)
+        -module(xm_owner_lam, [p/1, q/1])
+        p("x"),
+        -double_quotes(chars)
+        q(L) <- maplist((E <- (E == "y")), L)
+    """)
+    _, hits = _load(tmp_path, monkeypatch, "xm_host_lam",
+                    HOST.format(mode="chars", owner="xm_owner_lam", lit='"x"'))
+    assert hits == []
+
+
+def test_every_term_transformer_shares_the_modes_sink():
+    """The unit half of M2: a file whose only ``"..."`` literal sits in an
+    arrow-lambda body reports that mode."""
+    import ast
+    from clausal.templating.term_rewriting import EmbedTransformer
+    src = 'q(L) <- maplist((E <- (E == "y")), L)\n'
+    t = EmbedTransformer(source_lines=src.splitlines(keepends=True),
+                         filename="lam.clausal")
+    t.visit(ast.parse(src))
+    assert t._double_quotes_modes_used == {"chars"}
+
+
+def test_a_dotted_base_bound_by_hosted_python_is_not_judged(tmp_path, monkeypatch):
+    """The documented gap stays silent: a base that is a module-level Python
+    binding (here, of the atom-mode module itself) rather than an
+    ``-import_module`` is not this file's import and is left alone."""
+    _load(tmp_path, monkeypatch, "xm_owner_rt", ATOM_OWNER.format(name="xm_owner_rt"))
+    _, hits = _load(tmp_path, monkeypatch, "xm_host_rt", """
+        -double_quotes(chars)
+        import xm_owner_rt as base
+
+        def go():
+            if --base.p("x"):
+                return True
+            return False
+    """)
+    assert hits == []
+
+
+def test_a_callee_with_no_recorded_mode_is_not_judged(tmp_path, monkeypatch):
+    """A Python module's predicate has no Database and no mode: unknown, not
+    a mode to compare against."""
+    _, hits = _load(tmp_path, monkeypatch, "xm_host_pymod", """
+        -double_quotes(chars)
+        -import_from(py.re, [match])
+
+        def go():
+            if --match("a+", "aaa"):
+                return True
+            return False
+    """)
+    assert hits == []
+
+
+def test_the_warning_survives_the_bytecode_cache(tmp_path, monkeypatch):
+    """A second load of the same host file is a cache hit: its module items
+    are recovered by re-transforming the source, so the sites and the
+    warning come back."""
+    _load(tmp_path, monkeypatch, "xm_owner_cache", ATOM_OWNER.format(name="xm_owner_cache"))
+    _, first = _load(tmp_path, monkeypatch, "xm_host_cache",
+                     HOST.format(mode="chars", owner="xm_owner_cache", lit='"x"'))
+    assert len(first) == 1
+    from clausal.import_hook import _load_module
+    p = tmp_path / "xm_host_cache.clausal"
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        _load_module("xm_host_cache_again", str(p))
+    again = [w for w in caught if isinstance(w.message, ClausalCrossModeLiteralWarning)]
+    assert len(again) == 1

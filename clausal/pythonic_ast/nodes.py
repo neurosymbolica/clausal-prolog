@@ -1226,9 +1226,10 @@ class CrossModeLiteralSites(Node):
 
     Each site is ``(kind, target, literals, host_mode, location, goal,
     shown)``:
-    ``kind`` is ``"imported"`` (``target`` the local name an
-    ``-import_from`` bound) or ``"dotted"`` (``target`` is ``(base,
-    chain)`` for ``--base.chain...(...)``); ``literals`` the double-quoted
+    ``kind`` is ``"imported"`` (``target`` is ``(local_name, dotted_key)``
+    for a name an ``-import_from`` bound) or ``"dotted"`` (``target`` is
+    ``(base, chain)`` for ``--base.chain...(...)`` over an
+    ``-import_module`` base); ``literals`` the double-quoted
     texts in the call's arguments; ``host_mode`` the host file's mode at
     the seam; ``location`` ``file:line``; ``goal`` the seam's source text;
     ``shown`` the callee as written (``p`` or ``m.p``).

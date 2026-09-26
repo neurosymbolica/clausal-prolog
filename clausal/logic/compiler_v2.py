@@ -2133,17 +2133,29 @@ def _record_double_quotes_mode(module_items: list, db) -> None:
 
 def _double_quotes_modes_of_target(kind: str, target, module_dict: dict):
     """``(owner_name, modes)`` for a cross-mode site's callee, or ``(None,
-    None)`` when the callee cannot be resolved at load -- an unbound dotted
-    base (bound at run time: the documented gap), an import that is not a
-    predicate handle, or an owner compiled before its Database recorded a
-    mode.  Never raises: the lint must not turn a working load into an
-    error."""
+    None)`` when the callee cannot be resolved at load -- an import that is
+    not a predicate handle (a Python module's function, say), an owner with
+    no Database, or one compiled before its Database recorded a mode.  A
+    dotted base reaches here only when the transformer saw this file bind
+    it with ``-import_module`` (``_import_module_bases``), so the global it
+    names IS the module the goal runs against; a base bound by hosted Python
+    -- possibly rebound at run time through ``seam.with_bases`` -- is never
+    recorded as a site.  Never raises: the lint must not turn a working load
+    into an error."""
     from clausal.logic.predicate import (  # noqa: PLC0415
         predicate_owner_module, namespace_db,
     )
     try:
         if kind == "imported":
-            owner = predicate_owner_module(module_dict.get(target))
+            local_name, dotted = target
+            # A predicate's binding is a mangled handle naming its owner; an
+            # imported data FUNCTOR binds the plain atom, so its owner is the
+            # module half of the ``-import_from`` key (``a.b.q`` -> ``a.b``).
+            # Either way a module that is not a loaded .clausal module (a
+            # ``py.*`` wrapper) has no Database and is not judged.
+            owner = predicate_owner_module(module_dict.get(local_name))
+            if owner is None:
+                owner = dotted.rsplit(".", 1)[0]
             db = _db_for_module_name(owner) if owner else None
         else:
             base, chain = target
