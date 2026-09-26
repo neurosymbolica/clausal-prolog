@@ -73,7 +73,9 @@ class TestTermInspectionNeedsNoRegistration:
     another extension through the ``_C_API`` capsule, or a script importing
     the extension directly -- read NULL and dumped core on the first
     ``is_term_instance``.  Module init sets them up now.  Measured against
-    the pre-slice-8 ``.so``: exit 139; the rebuilt one: exit 0."""
+    the pre-slice-8 ``.so``: killed by SIGSEGV, which ``subprocess.run``
+    reports as ``returncode == -11`` (a shell shows it as exit 139); the
+    rebuilt one: exit 0."""
 
     # Loads the extension FILE by itself: importing it by its dotted name
     # would run ``clausal/__init__`` and so ``predicate.py`` first.

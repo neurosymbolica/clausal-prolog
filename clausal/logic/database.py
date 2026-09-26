@@ -555,6 +555,13 @@ class Database:
         # -import_from'd ones.  A declared functor is DATA until a row exists
         # for it (clauses, -dynamic, a directive naming it); see declared_kind.
         self._declared: dict[tuple[str, int], tuple[str, ...]] = {}
+        # Where each ``_declared`` entry came from, for diagnostics only:
+        # (functor, arity) -> (kind, module, spelling), kind one of
+        # "module" / "private" (this file's own -module / -private entry) or
+        # "import" (an -import_from; module and spelling are the OWNER's,
+        # which differ from the local key under an alias).  See
+        # :meth:`declaration_origins`.
+        self._declared_origin: dict[tuple[str, int], tuple[str, str, str]] = {}
         # dynfix 2026-09-23 (todo/dynamic-declarations-are-invisible-to-arm-3-
         # 2026-09-22.md): a bare ``name/arity`` entry in a ``-module``/
         # ``-private`` export list (R6b) -- ``gv_free/1`` in
@@ -1244,11 +1251,49 @@ class Database:
 
     # -- the declaration registry (P2 Task 2, R-P2-1) ------------------------
 
-    def declare_functor(self, functor: str, fields: tuple[str, ...]) -> None:
+    def declare_functor(self, functor: str, fields: tuple[str, ...],
+                        origin: tuple[str, str, str] | None = None) -> None:
         """Record that this module declares ``functor/len(fields)`` with these
         field names.  Declaring is not defining: ``row()`` stays None until a
-        row is minted (clauses, ``mark_dynamic``, a directive naming it)."""
+        row is minted (clauses, ``mark_dynamic``, a directive naming it).
+
+        *origin*, when known, is ``(kind, module, spelling)`` -- see
+        :meth:`declaration_origins`; it changes no answer, only what a
+        diagnostic can say."""
         self._declared[(functor, len(fields))] = tuple(fields)
+        if origin is not None:
+            self._declared_origin[(functor, len(fields))] = origin
+
+    def declaration_origins(
+            self, functor: str, arity: int,
+    ) -> list[tuple[str, str | None, str, tuple[str, ...]]]:
+        """``[(kind, module, spelling, fields), ...]`` for the DATA
+        declaration(s) a call of ``functor/arity`` reached; empty if none.
+
+        *kind* is ``"module"`` or ``"private"`` (this file's own -module or
+        -private entry; *module* is this module, or ``None`` when the
+        Database has no real module name) or ``"import"`` (*module* and
+        *spelling* are the OWNER's).  Looked up under the local key first,
+        then as imported declarations whose OWNER spelling is *functor*: an
+        aliased import ``alias(edge, e)`` is declared here as ``e/2``, but
+        the binding ``e`` holds is the owner's atom ``edge``, so a call
+        through it reaches ``edge/2``.  Two such aliases of the same
+        spelling from different owners are indistinguishable at the call,
+        so both are returned.
+
+        Only a key that is STILL data counts (:meth:`declared_kind` is
+        ``"data"``: declared, no row).  Once a key has a row -- clauses,
+        ``-dynamic``, a directive -- it is a procedure, and its recorded
+        origin no longer describes it."""
+        key = (functor, arity)
+        found = self._declared_origin.get(key)
+        if found is not None and self.declared_kind(functor, arity) == "data":
+            return [(*found, self._declared[key])]
+        return [(*origin, self._declared[k])
+                for k, origin in self._declared_origin.items()
+                if k[1] == arity and origin[0] == "import"
+                and origin[2] == functor
+                and self.declared_kind(*k) == "data"]
 
     def declared_fields(self, functor: str, arity: int) -> tuple[str, ...] | None:
         return self._declared.get((functor, arity))
