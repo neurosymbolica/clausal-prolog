@@ -34,7 +34,7 @@ from __future__ import annotations
 
 from clausal.logic.atoms import (
     is_atom as _term_is_atom, spelling as _atom_spelling, atom, as_dict_key as _as_dict_key)
-from clausal.logic.cells import chars, is_chars, chars_text, TUPLE_TAG  # stage 1: the chars carrier
+from clausal.logic.cells import chars, is_chars, chars_text, CHARS_TAG, TUPLE_TAG  # stage 1: the chars carrier
 from clausal.logic.python_terms import FROM_TERM as _FROM_TERM  # the ONE registry (no cycle: python_terms never imports this module)
 from clausal.logic.variables import deref, walk
 from clausal.terms import (
@@ -103,13 +103,36 @@ def to_python(val):
     if type(val) is str:
         return val
     val = deref(val)
-    if is_chars(val):
-        return chars_text(val)         # stage 1: a chars string crosses out as its text
-    # Atom before the tuple arm, which would otherwise turn the arity-0 cell
-    # ``("bar",)`` into a 1-tuple of its spelling.
+    t = type(val)
+    if t in _SCALAR_TYPES:
+        # A number / None / bytes crosses as itself.  Exact-type dispatch
+        # FIRST: the ``isinstance`` chain below is walked only by the term
+        # shapes, and an int that walked all of it cost 5x (in-process A/B,
+        # 2026-09-26).
+        return val
+    if t is tuple:
+        if len(val) == 2 and val[0] == _CHARS_TAG and type(val[1]) is str:
+            return val[1]              # stage 1: a chars string crosses out as its text
+        items = tuple([to_python(x) for x in val])
+        if items and type(items[0]) is str:
+            # THE ONE REGISTRY: a registered functor rebuilds its Python
+            # object from the already-converted elements; a look-alike whose
+            # components do not rebuild stays a cell.  Inline, because a
+            # miss (an ordinary cell) is the common case.
+            rebuild = _FROM_TERM.get(items[0])
+            if rebuild is not None:
+                try:
+                    return rebuild(items)
+                except (TypeError, ValueError, OverflowError):
+                    pass
+        return items
+    if t is list:
+        return [to_python(x) for x in val]
+    # Atom before the generic tuple arm, which would otherwise turn the
+    # arity-0 cell ``("bar",)`` into a 1-tuple of its spelling.
     if _term_is_atom(val):
         return _atom_spelling(val)
-    if isinstance(val, (SegString, SegList, SegBytes)):
+    if isinstance(val, _SEG_TYPES):
         # ``deref`` follows Var bindings only; a Seg* normalises under
         # ``walk``, which yields the ground form exactly when every hole is
         # bound: the carrier (text Seg*), a list, or bytes.  Non-ground: the
@@ -117,24 +140,18 @@ def to_python(val):
         walked = walk(val)
         if is_chars(walked):
             return chars_text(walked)  # stage 1: a ground text Seg* walks to the carrier
-        if isinstance(walked, (SegString, SegList, SegBytes)):
+        if isinstance(walked, _SEG_TYPES):
             return val
         return to_python(walked)
-    if isinstance(val, list):
-        return [to_python(x) for x in val]
     if isinstance(val, tuple):
-        items = tuple(to_python(x) for x in val)
-        if type(val) is tuple:
-            if items and type(items[0]) is str:
-                rebuilt = _rebuild_registered(items)
-                if rebuilt is not items:
-                    return rebuilt
-            return items
         # NamedTuple — preserve subclass so attribute access survives.
+        items = tuple(to_python(x) for x in val)
         try:
-            return type(val)(*items)
+            return t(*items)
         except TypeError:
             return items
+    if isinstance(val, list):
+        return [to_python(x) for x in val]
     if isinstance(val, Compound):
         cell = compound_as_cell(val)
         if cell is not None:
@@ -149,32 +166,15 @@ def to_python(val):
     if isinstance(val, SetTerm):
         return frozenset(to_python(e) for e in val)
     if isinstance(val, (set, frozenset)):
-        return type(val)(to_python(e) for e in val)
+        return t(to_python(e) for e in val)
     return val
 
 
-def _rebuild_registered(items: tuple):
-    """*items* -- a str-headed tuple whose elements are ALREADY converted --
-    rebuilt through the ONE registry when its head is a registered functor
-    and its components rebuild; otherwise *items* itself (identity is the
-    "not rebuilt" signal, so a rebuild that legitimately answers a tuple is
-    still distinguishable).
-
-    Elements are converted BEFORE the rebuild so the registered function
-    meets Python values: the date family's ints are untouched either way,
-    and the data tuple's ``from_term`` recursion then has nothing engine-
-    shaped left to miss (an atom is already its str, a string its text).
-    The registry dict is bound at import time: a per-call ``import`` here
-    cost +68 % on every cell (interleaved A/B vs a same-sha control,
-    2026-09-26); one dict ``get`` is the whole price now.
-    """
-    rebuild = _FROM_TERM.get(items[0])
-    if rebuild is None:
-        return items
-    try:
-        return rebuild(items)
-    except (TypeError, ValueError, OverflowError):
-        return items                   # a look-alike, not a term: stays a cell
+#: Exact types that cross as themselves (bool before int matters not: both
+#: are here).  ``str`` is handled first, above, as the thunk-path hot case.
+_SCALAR_TYPES = frozenset((int, float, bool, type(None), bytes, complex))
+_SEG_TYPES = (SegString, SegList, SegBytes)
+_CHARS_TAG = CHARS_TAG
 
 
 def wrap_text(val):
