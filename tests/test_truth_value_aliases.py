@@ -95,7 +95,7 @@ def test_spellings_unify_across_the_divide():
     in both directions and for all three values."""
     mod = _load(
         "_alias_cross_unify",
-        "-private([f(X), g(X)])\n"
+        "-double_quotes(atom)\n-private([f(X), g(X)])\n"
         "f(true),\n"
         "f(false),\n"
         "f(undefined),\n"
@@ -118,7 +118,7 @@ def test_true_and_false_in_goal_position():
     which the goal lowering already handles."""
     mod = _load(
         "_alias_goal_position",
-        "-private([p(X)])\n"
+        "-double_quotes(atom)\n-private([p(X)])\n"
         "p(1),\n"
         'test("true is the unit") <- (true, p(1), true),\n'
         'test("false fails") <- (not (false)),\n'
@@ -154,7 +154,7 @@ def test_alias_dict_keys_match_canonical_keys():
     guard or ``{true: 1}`` and ``{True: 1}`` would build non-unifying dicts."""
     mod = _load(
         "_alias_dict_keys",
-        "-private([d(X)])\n"
+        "-double_quotes(atom)\n-private([d(X)])\n"
         "d({true: 1, false: 2, undefined: 3}),\n"
         'test("canonical keys unify") <- d({True: 1, False: 2, Undefined: 3}),\n'
         'test("read back through aliases") <- '

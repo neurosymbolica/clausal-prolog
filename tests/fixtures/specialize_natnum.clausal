@@ -2,6 +2,7 @@
 #
 # Uses -specialize directive to produce solve_count_natnum — a specialized
 # counting MI with MI overhead removed.  The MI pattern is auto-detected.
+-double_quotes(atom)
 
 -import_from(clausal.examples.metainterpreters, [solve_count])
 

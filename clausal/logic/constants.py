@@ -319,8 +319,15 @@ def constant_functor_term(name: str, args, kwargs, namespace):
     return (functor, *slots)
 
 
-def decimal_value(text: str):
+def decimal_value(text: "str | tuple"):
     """The exact ``Decimal`` a declared decimal STRING names.
+
+    *text* arrives in three shapes and all name the same digits: a bare
+    ``str`` (the single-value directives, folded at compile time), the
+    chars carrier ``('$chars', '292.00')`` (a table row under
+    ``-double_quotes(chars)``, the default since 2026-09-26), and the
+    one-element tuple ``('292.00',)`` (a table row's fact-layer atom under
+    ``-double_quotes(atom)``).
 
     ``-constant_number_units(fee, "292.00", usd)``. A written ``292.00`` is a
     Python float literal and has already lost its trailing zero by the time
@@ -338,7 +345,16 @@ def decimal_value(text: str):
     silent failure would be worst.
     """
     from decimal import Decimal, InvalidOperation      # noqa: PLC0415
-    if (isinstance(text, tuple) and len(text) == 1
+    from clausal.logic.cells import is_chars, chars_text  # noqa: PLC0415
+    if is_chars(text):
+        # Under ``-double_quotes(chars)`` (the engine default since the
+        # 2026-09-26 flip) a written ``"292.00"`` is the chars CARRIER
+        # ``('$chars', '292.00')``.  The digits are the same digits; only
+        # the wrapping differs.  Measured 2026-09-26: without this arm every
+        # currency/units TABLE of decimal strings in a chars-mode module
+        # failed to load with ``('$chars', '292.00') is not a decimal number``.
+        text = chars_text(text)
+    elif (isinstance(text, tuple) and len(text) == 1
             and isinstance(text[0], str)):
         # A table row is a FACT, and the fact layer interns a bare string
         # argument as an ATOM -- the one-element tuple form. The single-value

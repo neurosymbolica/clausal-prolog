@@ -56,7 +56,7 @@ roll_die(N) <- integer_between(1, 6, N)
 `choice(List, X)` — bind X to a randomly chosen element of [List](lists.md). Deterministic (one solution). Fails if List is empty or unbound.
 
 ```clausal
-pick_color(COLOR) <- choice(["red", "green", "blue"], COLOR)
+pick_color(COLOR) <- choice(['red', 'green', 'blue'], COLOR)
 ```
 
 ### permutation/2
@@ -104,7 +104,7 @@ risky_action(X) <- (maybe(0.1), writeln_text(X))
 
 roll_die(N) <- integer_between(1, 6, N)
 
-pick_color(COLOR) <- choice(["red", "green", "blue"], COLOR)
+pick_color(COLOR) <- choice(['red', 'green', 'blue'], COLOR)
 
 maybe_greet(NAME) <- (maybe(), writeln_text(f"Hello, {NAME}!"))
 ```

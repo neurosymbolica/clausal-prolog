@@ -1,3 +1,4 @@
+-double_quotes(atom)
 -import_from(scipy_stats, [StatsFreezeDist, StatsFrozenCdf, StatsFrozenFree])
 
 # StatsFrozenCdf: forward

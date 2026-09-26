@@ -1,3 +1,4 @@
+-double_quotes(atom)
 -import_from(jax, [
     array, zeros, shape, array_list, at_get, complex_split,
     fft_transform, real_fft,

@@ -74,9 +74,11 @@ run_python(CODE, RESULT) <- process_create("python3", ["-c", CODE], RESULT)
 | `input` | string | String to send to stdin |
 | `env` | DictTerm | Extra environment variables (merged with current env) |
 
-The option keys are atoms, so declare the ones you write (or spell them
-`"cwd"`/`"input"`, which under the default `-double_quotes(atom)` are the same
-atoms):
+The option keys are names: write them bare and declare them, or single-quote
+them (`'cwd'`, `'input'`, no declaration needed). A double-quoted `"cwd"` is
+also found -- an option key is matched by its text whichever way it was
+quoted -- but under the default `-double_quotes(chars)` it is a string, so
+prefer the atom spellings:
 
 ```clausal
 -private([cwd, input])
@@ -111,7 +113,7 @@ git_status(STATUS) <- shell_output("git status --porcelain", STATUS)
 
 run_tests(RESULT) <- process_create(
     "python3", ["-m", "pytest", "-x"],
-    {"timeout": 60.0}, RESULT
+    {'timeout': 60.0}, RESULT
 )
 
 poll_until_ready(URL) <- (shell_output(f"curl -sf {URL}", _))

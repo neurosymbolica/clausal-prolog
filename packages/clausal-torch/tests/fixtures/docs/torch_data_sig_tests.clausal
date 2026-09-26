@@ -1,4 +1,5 @@
 # Companion tests for docs/torch_data.md signature blocks.
+-double_quotes(atom)
 -import_from(torch, [tensor, shape, tensor_list])
 -import_from(torch_data, [tensor_dataset, dataset_length,
                               dataset_item, dataset_element])

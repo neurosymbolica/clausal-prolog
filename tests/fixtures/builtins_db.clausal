@@ -1,4 +1,5 @@
 # Tests for runtime database predicates: assertz/1, asserta/1, retract/1
+-double_quotes(atom)
 
 -dynamic(colour/1)
 

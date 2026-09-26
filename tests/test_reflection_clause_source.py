@@ -32,6 +32,7 @@ def _clear_query_cache():
 # against — is passed in from Python as a ``str`` instead of being written as a
 # literal, because a text literal cannot be written in this mode.
 _MATCHERS = """\
+-double_quotes(atom)
 -import_from(reflection, [
     reified_item, reified_clause, reified_subterm,
     op_node, replace_subterm, clause_source,

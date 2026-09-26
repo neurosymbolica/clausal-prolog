@@ -80,6 +80,7 @@ def test_an_unhashable_expected_type_still_renders():
 
 
 SUM_LIST_SRC = """
+-double_quotes(atom)
 z(0),
 
 test("term reaches a numeric builtin") <- (
@@ -101,6 +102,7 @@ def test_note_reaches_the_test_report(capsys, tmp_path):
 # ── site 2: nearest-solution diff is an arith node, the goal wanted a number ──
 
 NEAREST_SRC = """
+-double_quotes(atom)
 eff(R) <- (
     R is 2500 + 0
 ),
@@ -120,6 +122,7 @@ def test_nearest_solution_arith_term_names_the_operator(capsys, tmp_path):
 
 
 MIRROR_SRC = """
+-double_quotes(atom)
 eff(2500),
 
 test("caller wrote the expression") <- (
@@ -138,6 +141,7 @@ def test_nearest_solution_names_it_when_the_caller_wrote_the_expression(
 
 
 COMPOUND_SRC = """
+-double_quotes(atom)
 -private([verdict(A, B, C), beneficial_owner, not_beneficial_owner])
 
 chain_assess("simple", verdict(beneficial_owner, 2500, [])),
@@ -158,6 +162,7 @@ def test_ordinary_near_miss_says_nothing_about_arithmetic(capsys, tmp_path):
 
 
 NUMERIC_SRC = """
+-double_quotes(atom)
 eff(2500),
 
 test("plain numeric near miss") <- (
@@ -191,6 +196,7 @@ def test_site1_fires_for_an_integer_expectation_too():
 
 
 KEYWORD_SRC = """
+-double_quotes(atom)
 eff(R=RESULT) <- (
     RESULT is 2500 + 0
 ),

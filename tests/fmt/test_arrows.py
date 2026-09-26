@@ -121,7 +121,7 @@ def test_a_non_ascii_line_does_not_shift_the_splice():
     then eat the operand instead of tightening the arrow -- silently, since
     the result is still valid source.
     """
-    source = 'p(B) <- (\n    fold(f("caf\u00e9", ((X) <- p(X))), B)\n)\n'
+    source = '-double_quotes(atom)\np(B) <- (\n    fold(f("caf\u00e9", ((X) <- p(X))), B)\n)\n'
     out = format_source(source)
     assert "caf\u00e9" in out
     assert "<- p(X)" in out

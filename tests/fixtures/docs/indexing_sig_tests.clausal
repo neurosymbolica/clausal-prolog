@@ -2,11 +2,11 @@
 
 # --- color_query_modes ---
 
-color("red",    "warm"),
-color("blue",   "cool"),
-color("green",  "cool"),
-color("yellow", "warm"),
-color("white",  "neutral")
+color('red',    'warm'),
+color('blue',   'cool'),
+color('green',  'cool'),
+color('yellow', 'warm'),
+color('white',  'neutral')
 
-test("color first arg ground") <- color("red", TEMP_UNUSED)  # nv
-test("color second arg ground") <- color(NAME_UNUSED, "warm")  # nv
+test("color first arg ground") <- color('red', TEMP_UNUSED)  # nv
+test("color second arg ground") <- color(NAME_UNUSED, 'warm')  # nv

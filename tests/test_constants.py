@@ -153,7 +153,7 @@ def test_the_directive_family_rejects_a_wrong_argument_count(tmp_path):
 def test_the_units_form_refuses_something_that_is_not_a_unit(tmp_path):
     with pytest.raises(SyntaxError, match="not a unit expression"):
         _load(tmp_path, "e6",
-              "-constant_number_units(f, 1, \"euro\")\np(X) <- (X == 1)\n")
+              "-double_quotes(atom)\n-constant_number_units(f, 1, \"euro\")\np(X) <- (X == 1)\n")
 
 
 def test_unground_rhs_raises_at_load(tmp_path):
@@ -334,6 +334,7 @@ def test_structured_list_constant_mutation_via_plusplus_raises_typeerror(tmp_pat
 
 def test_structured_dict_constant_mutation_via_plusplus_raises_typeerror(tmp_path):
     m = _load(tmp_path, "s13", """
+        -double_quotes(atom)
         -constant_value(c_d, {'k': 1})
         bad(X) <- (X is ++(c_d.data.__setitem__("k", 2)))
     """)
@@ -347,6 +348,7 @@ def test_structured_dict_constant_ior_mutation_raises_typeerror(tmp_path):
     """dict.__ior__ (the ``|=`` operator) mutates in place — a distinct
     code path from __setitem__, and easy to miss when blocking mutators."""
     m = _load(tmp_path, "s13b", """
+        -double_quotes(atom)
         -constant_value(c_d, {'a': 1})
         bad(X) <- (X is ++(c_d.data.__ior__({"b": 2})))
     """)
@@ -906,6 +908,7 @@ def test_one_name_is_the_atom_bare_and_the_constant_through_the_escape(tmp_path)
     cell literal rather than reading that global.
     """
     m = _load(tmp_path, "c_both", """
+        -double_quotes(atom)
         -module(c_both, [constant_is/1, atom_is/1, agrees/0, pi])
         -constant_value(pi, 5000)
 
@@ -1167,12 +1170,13 @@ def test_constant_value_2_reads_the_name_as_an_atom(tmp_path):
     """The NAME POSITION speaks atoms in and atoms out (spec §6.4).
 
     Written with the double-quoted spelling deliberately: under the engine
-    default ``-double_quotes(atom)`` that IS an atom, so it matches -- and
+    ``-double_quotes(atom)`` mode that IS an atom, so it matches -- and
     the same source under ``-double_quotes(chars)`` is a string, which names
     no constant and fails. Both halves asserted, because the first alone
     would pass on an implementation that ignored the argument's type.
     """
     m = _load(tmp_path, "cvref2", """
+        -double_quotes(atom)
         -module(cvref2, [by_quoted/0, cvref2_pi])
         -constant_value(cvref2_pi, 3.14159)
 

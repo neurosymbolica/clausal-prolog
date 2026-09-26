@@ -23,9 +23,9 @@ relation hold?" — is what gives logic programming its extraordinary power.
 A relation is a set of tuples for which a statement is true.
 
 ```clausal
-parent("alice", "bob"),
-parent("alice", "carol"),
-parent("bob", "dave"),
+parent('alice', 'bob'),
+parent('alice', 'carol'),
+parent('bob', 'dave'),
 ```
 
 Each fact states that the `parent` relation holds between two people. This is
@@ -158,7 +158,7 @@ A fact is a clause with no body. It states something that is unconditionally
 true:
 
 ```clausal
-edge("a", "b"),
+edge('a', 'b'),
 ```
 
 Read: "It is true that the edge relation holds between 'a' and 'b'."

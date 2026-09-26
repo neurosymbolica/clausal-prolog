@@ -1,3 +1,4 @@
+-double_quotes(atom)
 -import_from(jax, [array, array_list, allclose, null])
 -import_from(jax_scipy, [
     gamma_fn, gammaln, digamma,

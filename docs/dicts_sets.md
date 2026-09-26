@@ -133,16 +133,16 @@ reader already knows:
 | membership | `"k" in P` | `k in d` | fails |
 | set (functional) | `P2 is {**P, "k": V}` | `{**d, k: v}` | always succeeds; last-wins |
 | default-merge | `P2 is {"k": Default, **P}` | `{k: default, **d}` | `P` wins if present |
-| delete (functional) | `delete(P, "k", P2)` | `del d[k]` | **throws** |
+| delete (functional) | `delete(P, 'k', P2)` | `del d[k]` | **throws** |
 
 ```clausal
-role_of(PROFILE, R) <- (R is PROFILE["role"])
+role_of(PROFILE, R) <- (R is PROFILE['role'])
 
-city_or_default(PROFILE, C) <- get(PROFILE, "city", C, "unknown")
+city_or_default(PROFILE, C) <- get(PROFILE, 'city', C, 'unknown')
 
-promote(PROFILE, P2) <- (P2 is {**PROFILE, "role": "admin"})
+promote(PROFILE, P2) <- (P2 is {**PROFILE, 'role': 'admin'})
 
-drop_draft(PROFILE, P2) <- delete(PROFILE, "draft", P2)
+drop_draft(PROFILE, P2) <- delete(PROFILE, 'draft', P2)
 ```
 
 Choosing a read: the strict subscript is for keys the clause is entitled to

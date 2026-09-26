@@ -60,6 +60,7 @@ def run_plugin(tmp_path: Path, source: str, filename: str = "case.clausal") -> s
 
 
 BINDINGS_SRC = """
+-double_quotes(atom)
 prc("alpha", 10),
 prc("beta", 20),
 
@@ -70,6 +71,7 @@ test("later goal fails after a binding") <- (
 """
 
 ERROR_SRC = """
+-double_quotes(atom)
 prc("alpha", 10),
 
 test("raises") <- (
@@ -80,6 +82,7 @@ test("raises") <- (
 """
 
 PASSING_SRC = """
+-double_quotes(atom)
 prc("alpha", 10),
 
 test("passes") <- (

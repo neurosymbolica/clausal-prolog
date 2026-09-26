@@ -1,3 +1,4 @@
+-double_quotes(atom)
 -import_from(scipy_differentiate, [Derivative, Jacobian, Hessian, ResultGet])
 
 # no units on x - plain fast path (verify existing behaviour is preserved)

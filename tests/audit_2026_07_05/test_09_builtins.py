@@ -47,6 +47,7 @@ def run_snippet(code: str) -> subprocess.CompletedProcess:
 
 
 FIXTURE_SRC = """\
+-double_quotes(atom)
 -module(a09fix, [])
 -private([pair(A, B)])
 -dynamic(seen2/1)

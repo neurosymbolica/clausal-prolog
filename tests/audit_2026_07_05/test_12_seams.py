@@ -154,6 +154,7 @@ tf(X) <- in_domain(X, 1, 3)
 
 class TestF002EqNonNumericOperand:
     SRC = """\
+-double_quotes(atom)
 -private([myatom])
 
 badeq(X) <- (X == myatom)
@@ -402,6 +403,7 @@ class TestF002NeNonRealOperand:
         # The silent-loss shape: X != "banana", X is "apple" had 0 solutions.
         from clausal.logic.exceptions import LogicException
         m = load("f002_ne", """\
+-double_quotes(atom)
 badne(X) <- ( X != "banana", X is "apple" )
 """)
         with pytest.raises(LogicException):
@@ -503,6 +505,7 @@ class TestF002ExprTreeVsNonNumericOperand:
         # The reported repro: X + 1 == "banana" posted, then accepted X is 4.
         from clausal.logic.exceptions import LogicException
         m = load("f002_exprtree", """\
+-double_quotes(atom)
 badexpr(X) <- ( X + 1 == "banana", X is 4 )
 """)
         with pytest.raises(LogicException):
@@ -703,6 +706,7 @@ class TestNonNumericLeafInsideExprTree:
     def test_compiled_repro_raises_instead_of_wrong_answer(self, load):
         from clausal.logic.exceptions import LogicException
         m = load("leafguard", """\
+-double_quotes(atom)
 badleaf(X) <- ( X + "a" == 5, X is 4 )
 """)
         with pytest.raises(LogicException):
@@ -712,6 +716,7 @@ badleaf(X) <- ( X + "a" == 5, X is 4 )
         # catch/3 must catch it, and the error term must be a proper ground
         # term that round-trips through unification with the catcher var.
         m = load("leafguard_catch", """\
+-double_quotes(atom)
 safeleaf(SX, SE) <- catch((SX + "a" == 5), SE, 1 == 1)
 """)
         e = Var()
@@ -828,7 +833,7 @@ class TestF004EngineNamespaceLeak:
     def test_user_predicate_named_after_engine_helper(self, load, name):
         # A12-F004 fixed: walk/deref/unify are injected $-prefixed only, so
         # a user predicate can use those public names.
-        m = load(f"f004_{name}", f'{name}("a", "b"),\n')
+        m = load(f"f004_{name}", f'-double_quotes(atom)\n{name}("a", "b"),\n')
         x = Var()
         # R-P2-2: the goal is a cell, which carries no module — ``solve``
         # refuses to guess one rather than break module locality.  (The
@@ -852,7 +857,7 @@ class TestF004EngineNamespaceLeak:
 
     def test_solve_named_predicate_currently_works(self, load):
         # control: 'solve' is NOT leaked, so a solve/2 user predicate is fine
-        m = load("f004_solve", 'solve("a", "b"),\n')
+        m = load("f004_solve", '-double_quotes(atom)\nsolve("a", "b"),\n')
         x = Var()
         assert [deref(x) for _ in solve(("solve", mint("a"), x), m)] == [mint("b")]
 
@@ -865,6 +870,7 @@ class TestF004EngineNamespaceLeak:
         # returns a truthy term), so a non-matching exotic literal matched.
         import datetime
         m = load("f004_headlit", """\
+-double_quotes(atom)
 unify(1, 2, 3),
 
 -dynamic(hl_date/2)
@@ -895,6 +901,7 @@ hl_date("seed", 0),
 
 class TestF005DynamicForwardDeclaration:
     SRC = """\
+-double_quotes(atom)
 -dynamic(ghost/1)
 
 seed <- assertz(ghost("x"))
@@ -942,6 +949,7 @@ probe(PX) <- ghost2(PX)
         # ('arg_0','arg_1') and m.pers(name=..., age=...) raised TypeError.
         # The first real clause's derived head-var names must win.
         m = load("f005_fields", """\
+-double_quotes(atom)
 -dynamic(pers/2)
 
 likes("bob", 42),
@@ -971,6 +979,7 @@ pers(NAME, AGE) <- likes(NAME, AGE)
     def test_dynamic_with_seed_fact_works(self, load):
         # control: with one initial fact the same workflow is fine
         m = load("f005_ctrl", """\
+-double_quotes(atom)
 -dynamic(ghost/1)
 
 ghost("init"),
@@ -996,6 +1005,7 @@ class TestKnownFamilySeams:
                               "A09-F012/A09-D002/A11-D001)")
     def test_catch_over_fd_builtin_raw_valueerror(self, load):
         m = load("kf_catch", """\
+-double_quotes(atom)
 guarded(R) <- catch(bad_elem(R), _, R is "caught")
 
 bad_elem(R) <- (
@@ -1013,6 +1023,7 @@ bad_elem(R) <- (
         # whose answer contains a list used to crash (unhashable) when
         # queried with the char-list form of a str key.
         m = load("kf_unhash", """\
+-double_quotes(atom)
 -table(sl/2)
 
 sl(["a", "b"], R) <- (R is "matched")
@@ -1061,6 +1072,7 @@ class TestDispatchWithConstrainedVars:
     """Indexed first-arg dispatch (A02) filters through attr hooks (A05/A06)."""
 
     SRC = """\
+-double_quotes(atom)
 p(1, "one"),
 p(2, "two"),
 p(3, "three"),
@@ -1192,6 +1204,7 @@ reach(X, Y) <- (
 
     def test_deterministic_tail_recursion_under_table(self, load):
         m = load("tcnt", """\
+-double_quotes(atom)
 -table(cnt/2)
 
 cnt(0, R) <- (R is "done")
@@ -1210,6 +1223,7 @@ class TestStringsAsListsDispatchParity:
     and head-pattern dispatch (A01 Liskov contract x A02 list dispatch)."""
 
     GUARD_SRC = """\
+-double_quotes(atom)
 r(L, R) <- (
     L is [],
     R is "empty"
@@ -1228,6 +1242,7 @@ r(L, R) <- (
 )
 """
     HEAD_SRC = """\
+-double_quotes(atom)
 h([], R) <- (R is "empty")
 h([_], R) <- (R is "one")
 h([_, _], R) <- (R is "two")
@@ -1269,6 +1284,7 @@ h([_, _, _, *_], R) <- (R is "many")
 
     def test_tabled_str_query_against_list_head(self, load):
         m = load("liskov_tabled", """\
+-double_quotes(atom)
 -table(sl/2)
 
 sl(["a", "b"], R) <- (R is "matched")
@@ -1285,6 +1301,7 @@ class TestAssertzReindexSeam:
     about stale dispatch after assertz did NOT reproduce on this build."""
 
     SRC = """\
+-double_quotes(atom)
 -dynamic(f/2)
 
 f("a", 1),

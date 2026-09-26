@@ -10,6 +10,7 @@
 # to raise — it is driven from tests/test_exceptions.py, which asserts the
 # raise reaches the RAISED diagnostic path.  Auto-collection would report it
 # as a spurious failure.
+-double_quotes(atom)
 
 -private([is_ymd_triple(REF), wf_bad_shape(MSG, CULPRIT)])
 

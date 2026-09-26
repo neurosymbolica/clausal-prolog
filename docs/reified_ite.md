@@ -33,19 +33,19 @@ a located `SyntaxError` at the first `If(...)` naming the rewrite
 
 **Ground branching — deterministic:**
 ```clausal
-classify(X, L) <- if_(X >= 0, L is "positive", L is "negative")
+classify(X, L) <- if_(X >= 0, L is 'positive', L is 'negative')
 ```
 
 **Undetermined branching — explores both paths:**
 ```clausal
-check(X, R) <- if_(X is 1, R is "equal", R is "different")
+check(X, R) <- if_(X is 1, R is 'equal', R is 'different')
 ```
 
-when `X` is unbound, this produces two solutions: `X=1, R="equal"` and `dif(X,1), R="different"`.
+when `X` is unbound, this produces two solutions: `X=1, R='equal'` and `dif(X,1), R='different'`.
 
 **Nested ITE:**
 ```clausal
-grade(S, G) <- if_(S >= 90, G is "A", if_(S >= 80, G is "B", G is "C"))
+grade(S, G) <- if_(S >= 90, G is 'A', if_(S >= 80, G is 'B', G is 'C'))
 ```
 
 ---

@@ -53,9 +53,9 @@ apply_pred(X, Y) <- call_goal((V <- (helper(V, Y))), X)
 
 # ── Multi-solution via find_all ──────────────────────────────────────────────
 
-color("red"),
-color("green"),
-color("blue"),
+color('red'),
+color('green'),
+color('blue'),
 
 all_colors(COLORS) <- (
     findall(C, color(C), COLORS)
@@ -65,7 +65,7 @@ all_colors(COLORS) <- (
 
 # Basic
 test("apply_val 42") <- apply_val(42, 42)
-test("apply_val string") <- apply_val("hello", "hello")
+test("apply_val string") <- apply_val('hello', 'hello')
 test("add_one 5") <- add_one(5, 6)
 test("add_one -1") <- add_one(-1, 0)
 test("double_val 5") <- double_val(5, 10)
@@ -85,4 +85,4 @@ test("apply_pred 3 -> 30") <- apply_pred(3, 30)
 test("apply_pred 0 -> 0") <- apply_pred(0, 0)
 
 # Multi-solution
-test("all_colors") <- all_colors(["red", "green", "blue"])
+test("all_colors") <- all_colors(['red', 'green', 'blue'])

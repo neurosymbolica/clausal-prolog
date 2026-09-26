@@ -3,6 +3,7 @@
 # must be refused at step 4b (`_validate_directive_targets` →
 # `_refuse_untablable_target`), which runs BEFORE step 6b installs the
 # specialized dispatch, so the refusal cannot half-install anything.
+-double_quotes(atom)
 -import_from(clausal.examples.metainterpreters, [solve_count])
 
 natnum_program(PROGRAM) <- (

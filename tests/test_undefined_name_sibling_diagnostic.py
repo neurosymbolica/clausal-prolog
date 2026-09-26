@@ -74,6 +74,7 @@ def pkg(tmp_path):
 # from the sibling, `cite` not.  The NameError fires at solve time, from inside
 # the compiled predicate.
 SOLVE_TIME_SRC = """
+    -double_quotes(atom)
     -import_from(undefsib_citations, [art_9])
 
     -private([ground_a])
@@ -122,6 +123,7 @@ class TestSolveTimeRaise:
         an entry it cannot spell would read as an instruction to delete an
         import the file needs."""
         _run(pkg, """
+            -double_quotes(atom)
             -import_from(undefsib_citations, [alias(art_9, a9)])
 
             -private([ground_a])
@@ -139,6 +141,7 @@ class TestSolveTimeRaise:
     def test_writes_a_new_directive_when_there_is_none_to_extend(self, capsys,
                                                                  pkg):
         _run(pkg, """
+            -double_quotes(atom)
             -private([ground_a])
 
             grounds({ground_a: cite(1)}),
@@ -161,6 +164,7 @@ class TestLoadTimeRaise:
     """The same mistake at module-exec time, before any goal runs."""
 
     SRC = """
+        -double_quotes(atom)
         -import_from(undefsib_citations, [art_9])
 
         REF = cite(art_9)
@@ -190,6 +194,7 @@ class TestTermClassShape:
     """
 
     SRC = """
+        -double_quotes(atom)
         -import_from(undefsib_citations, [art_9])
 
         grounds([cite(art_9)]),
@@ -212,6 +217,7 @@ class TestTermClassShape:
 class TestUndecidableStaysBare:
 
     NO_OWNER_SRC = """
+        -double_quotes(atom)
         -private([ground_a])
 
         grounds({ground_a: zzz_nobody_exports_this(1)}),

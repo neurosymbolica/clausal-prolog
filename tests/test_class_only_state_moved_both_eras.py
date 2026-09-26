@@ -253,7 +253,7 @@ def test_imported_te_rules_expand_through_either_binding(te_provider):
     from clausal.logic.solve import call
     from clausal.logic.variables import deref
     from tests.test_term_expansion import _parse_and_collect
-    preds, items, md = _parse_and_collect('color("red"),\ncolor("green"),\n')
+    preds, items, md = _parse_and_collect('-double_quotes(atom)\ncolor("red"),\ncolor("green"),\n')
     md["term_expansion"] = _te_binding(te_provider)
     lm = compile_module(preds, items, md, "_r6_te_importer")
     x = Var()

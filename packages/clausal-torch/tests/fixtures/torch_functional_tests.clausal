@@ -1,3 +1,4 @@
+-double_quotes(atom)
 -import_from(torch, [tensor, randn, shape, tensor_list, zeros, ones])
 -import_from(torch_functional, [
     leaky_relu, elu, selu, gelu, silu, mish, hardswish, hardsigmoid,

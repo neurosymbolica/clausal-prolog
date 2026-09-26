@@ -590,6 +590,11 @@ class Database:
         # ``term_expansion`` can apply them.  ``None`` when it defines none.
         # W4b-2d R6: this used to be a stash on the term_expansion CLASS.
         self.te_predicate_nodes: "list | None" = None
+        # The ``-double_quotes`` modes that governed this module's ``"..."``
+        # literals (``DoubleQuotesMode`` item, recorded by ``compiler_v2``),
+        # read by an IMPORTER's cross-mode literal lint.  ``None`` until
+        # recorded, which the lint treats as "unknown", not as a mode.
+        self.double_quotes_modes: "frozenset[str] | None" = None
         self._shallow: set[tuple[str, int]] = set()
         self._table_store: dict = {}
         self._rows: dict[tuple[str, int], PredRow] = {}

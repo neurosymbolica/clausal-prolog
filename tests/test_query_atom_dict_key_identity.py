@@ -55,6 +55,7 @@ echo(P, P),
 """
 
 STR_READER_SRC = """\
+-double_quotes(atom)
 -module(qk_str_reader, [query_date(P, X), soft_read(P, V)])
 query_date(P, X) <- ( X is 99 )
 soft_read(P, V) <- ( get(P, "query_date", V) )

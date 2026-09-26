@@ -2,6 +2,7 @@
 # z3.entailed, z3.disentailed.
 
 # ── Basic real constraints ──────────────────────────────────────────────────
+-double_quotes(atom)
 
 bounded(X) <- (
     z3.real((

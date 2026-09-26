@@ -47,9 +47,9 @@ Similarly, a graph reachability program:
 ```clausal
 graph_program(PROGRAM) <- (
     PROGRAM is [
-        [edge("a", "b"), []],
-        [edge("b", "c"), []],
-        [edge("b", "d"), []],
+        [edge('a', 'b'), []],
+        [edge('b', 'c'), []],
+        [edge('b', 'd'), []],
         [path(X, Y), [edge(X, Y)]],
         [path(X, Y), [edge(X, Z), path(Z, Y)]]
     ]
@@ -188,8 +188,8 @@ solve_iterative_deepening(GOALS, PROGRAM) <- (
 ```clausal
 cyclic_program(PROGRAM) <- (
     PROGRAM is [
-        [edge("a", "b"), []],
-        [edge("b", "a"), []],
+        [edge('a', 'b'), []],
+        [edge('b', 'a'), []],
         [path(X, Y), [edge(X, Z), path(Z, Y)]],   # recursive — tried first
         [path(X, Y), [edge(X, Y)]]                  # base — tried second
     ]

@@ -1296,6 +1296,7 @@ def test_a_code_binds_its_currency_in_every_spelling(tmp_path):
     """`eur` is <downstream-domain>'s spelling, `"EUR"` the one a reader writes, `++"EUR"`
     the Python string. All three must reach the same currency."""
     m = _load(tmp_path, "code_rev", """
+        -double_quotes(atom)
         -module(code_rev, [lower/1, upper/1, pystr/1])
         -implicit_atoms
         -import_from(currency, [currency_code])
@@ -1655,6 +1656,7 @@ def test_sum_list_still_accepts_every_numeric_kind(tmp_path):
     """
     from fractions import Fraction
     m = _load(tmp_path, "numkinds", """
+        -double_quotes(atom)
         -module(numkinds, [fracs/1, decs/1, ints/1])
 
         fracs(S) <- sum_list([++__import__("fractions").Fraction(1, 2),

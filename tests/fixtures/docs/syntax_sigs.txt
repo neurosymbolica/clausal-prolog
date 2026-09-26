@@ -137,7 +137,7 @@ utils.Double(X, Y),    # qualified call after -import_module(utils)
 valid_sentence(S) <- phrase(sentence, S)
 
 # phrase/3 — partial parse, remaining input bound to REST
-phrase(digit(D), [3, "plus", 4], REST)
+phrase(digit(D), [3, 'plus', 4], REST)
 --8<-- [end:invoking_dcgs_with_phrase]
 
 --8<-- [start:dcgs_as_general_state_passing]

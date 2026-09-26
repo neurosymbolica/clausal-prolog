@@ -2,6 +2,7 @@
 # z3.concat, z3.zero_extend, z3.sign_extend.
 
 # ── Basic BV constraints ────────────────────────────────────────────────────
+-double_quotes(atom)
 
 small_bv(X) <- (
     z3.bitvector(4, X < 3),

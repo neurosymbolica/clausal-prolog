@@ -666,7 +666,7 @@ class TestLambdaImport:
         # nv
         clausal_file = tmp_path / "lambda_multi.clausal"
         clausal_file.write_text(
-            "-module(lambda_multi, [color/1, get_color/1])\n"
+            "-double_quotes(atom)\n-module(lambda_multi, [color/1, get_color/1])\n"
             "\n"
             'color("red"),\n'
             'color("green"),\n'
@@ -713,7 +713,7 @@ class TestLambdaImport:
         from clausal.logic.exceptions import LogicException
         clausal_file = tmp_path / "bad_goal.clausal"
         clausal_file.write_text(
-            "-implicit_atoms\n"  # St is a mixed-case bare atom, not a logic var
+            "-double_quotes(atom)\n-implicit_atoms\n"  # St is a mixed-case bare atom, not a logic var
             "-module(bad_goal, [run/1])\n"
             "\n"
             "loc(K, V) <- (K is \"a\", V is 1)\n"

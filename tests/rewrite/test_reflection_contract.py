@@ -214,6 +214,7 @@ def test_engine_lambda_param_shadows_the_enclosing_binding(tmp_path):
     """docs/lambdas.md 'Parameter shadowing': a param named like an enclosing
     variable shadows it, so eta-reduction stays sound in the collision case."""
     module = _clausal_module(tmp_path, "_spike_eta_shadow", """\
+        -double_quotes(atom)
         big(X) <- (X > 3)
 
         shadow_case(L, R) <- (X is 99, maplist((X <- big(X)), L), R is "yes")

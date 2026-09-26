@@ -2,15 +2,15 @@
 
 test("throw/catch exist") <- (
     catch(
-        throw("test_error"),
+        throw('test_error'),
         ERR,
-        ERR == "test_error"
+        ERR == 'test_error'
     )
 )  # nv
 
 test("catch_recover exists") <- (
     catch_recover(
-        throw("err"),
+        throw('err'),
         _,
         (1 == 1)
     )

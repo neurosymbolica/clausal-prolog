@@ -180,6 +180,7 @@ class TestF001DifContainerBlindSpots:
 
     def test_language_level_dict_is_not(self, load):
         m = load("f001dict", """
+-double_quotes(atom)
 dictpred(D, V) <- (
     D is not {"k": 1},
     D is {"k": V},
@@ -683,6 +684,7 @@ class TestReifBuiltinsRegression:
 
 
 LANG_SRC = """
+-double_quotes(atom)
 color("red"),
 color("green"),
 

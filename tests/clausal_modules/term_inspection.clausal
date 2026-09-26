@@ -3,6 +3,7 @@
 # copy_term/2, term_variables/2, numbervars/3
 
 # copy_fresh/2 — copy a term, returning the fresh copy
+-double_quotes(atom)
 copy_fresh(TERM, COPY) <- copy_term(TERM, COPY)
 
 # has_no_vars/1 — succeed if term contains no unbound vars

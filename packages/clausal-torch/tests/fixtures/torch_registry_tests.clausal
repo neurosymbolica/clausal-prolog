@@ -1,3 +1,4 @@
+-double_quotes(atom)
 -import_module(torch)
 -import_from(torch_nn, [layer, activation, loss_fn, optimizer_type,
                             named_parameter])

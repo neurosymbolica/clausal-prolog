@@ -51,7 +51,7 @@ on backtracking.
 
 ```clausal
 test("member") <- in_(2, [1, 2, 3])
-test("generate") <- (in_(X, ["a", "b", "c"]), X == "b")
+test("generate") <- (in_(X, ['a', 'b', 'c']), X == 'b')
 ```
 
 ### in_check/2
@@ -61,7 +61,7 @@ unifying element only). Use when you need to confirm membership without
 enumerating alternatives.
 
 ```clausal
-test("check") <- in_check("b", ["a", "b", "c"])
+test("check") <- in_check('b', ['a', 'b', 'c'])
 ```
 
 ---
@@ -99,7 +99,7 @@ test("suffix") <- (
 `replicate(N, Elem, List)` — `List` is `N` copies of `Elem`.
 
 ```clausal
-test("replicate") <- replicate(3, "x", ["x", "x", "x"])
+test("replicate") <- replicate(3, 'x', ['x', 'x', 'x'])
 ```
 
 ### zip_/3
@@ -108,7 +108,7 @@ test("replicate") <- replicate(3, "x", ["x", "x", "x"])
 list.
 
 ```clausal
-test("zip") <- zip_([1, 2, 3], ["a", "b", "c"], [[1, "a"], [2, "b"], [3, "c"]])
+test("zip") <- zip_([1, 2, 3], ['a', 'b', 'c'], [[1, 'a'], [2, 'b'], [3, 'c']])
 ```
 
 ---
@@ -129,7 +129,7 @@ test("length") <- length([10, 20, 30], 3)
 `list_item(N, List, Elem)` — relates a 0-based index, a list, and an element.
 
 ```clausal
-test("get") <- list_item(1, ["a", "b", "c"], "b")
+test("get") <- list_item(1, ['a', 'b', 'c'], 'b')
 test("enumerate") <- (list_item(I, [10, 20, 30], 20), I == 1)
 ```
 

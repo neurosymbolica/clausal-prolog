@@ -25,6 +25,7 @@ from clausal.logic.exceptions import LogicException
 from clausal.terms import Compound, LoadName
 
 _SRC = """\
+-double_quotes(atom)
 -module({name}, [z/0, b/1, add/3, q/1, r/1, l/1, g_map/0, g_call/0,
                  g_fold/1, g_part/2, g_phrase/0, greet/2, tpos/2,
                  g_tf/1, g_tp/2])

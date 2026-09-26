@@ -44,7 +44,7 @@ def test_testless_file_strict_fails(capsys, tmp_path):
 
 def test_passing_file_still_passes(capsys, tmp_path):
     p = tmp_path / "ok.clausal"
-    p.write_text('test("one is one") <- (1 == 1)\n')
+    p.write_text('-double_quotes(atom)\ntest("one is one") <- (1 == 1)\n')
     rc = main([str(p)])
     out = capsys.readouterr().out
     assert rc == 0
@@ -53,7 +53,7 @@ def test_passing_file_still_passes(capsys, tmp_path):
 
 def test_failing_file_still_fails(capsys, tmp_path):
     p = tmp_path / "bad.clausal"
-    p.write_text('test("one is two") <- (1 == 2)\n')
+    p.write_text('-double_quotes(atom)\ntest("one is two") <- (1 == 2)\n')
     rc = main([str(p)])
     assert rc == 1
     assert "[FAILED]" in capsys.readouterr().out
@@ -91,7 +91,7 @@ def _load_recording(path):
 
 
 LOWER = (
-    'test("zeta") <- (1 == 1)\n'
+    '-double_quotes(atom)\ntest("zeta") <- (1 == 1)\n'
     'test("alpha") <- (2 == 2)\n'
     'test("mid") <- (3 == 3)\n'
 )
@@ -120,8 +120,8 @@ def test_uppercase_file_does_not_load_and_names_the_rename(tmp_path):
     message = str(ei.value)
     assert "`Test` is TitleCase" in message
     assert "Rename `Test` -> `test`" in message
-    assert "upper.clausal:1" in message  # the first offending site
-    assert ei.value.lineno == 1
+    assert "upper.clausal:2" in message  # the first offending site
+    assert ei.value.lineno == 2
 
 
 def test_uppercase_file_is_a_load_failure_for_the_runner(tmp_path):
@@ -144,7 +144,7 @@ def test_witness_fixture_on_the_old_spelling_does_not_load():
     with pytest.raises(SyntaxError) as ei:
         load_clausal_module(p)
     assert "Rename `Test` -> `test`" in str(ei.value)
-    assert ei.value.lineno == 6
+    assert ei.value.lineno == 7
     assert [(r.name, r.passed) for r in run_file(p).results] == [("<load>", False)]
 
 
@@ -154,14 +154,14 @@ def test_mixed_file_fails_at_the_first_uppercase_clause(tmp_path):
     # nv
     p = tmp_path / "mixed.clausal"
     p.write_text(
-        'test("a") <- (1 == 1)\n'
+        '-double_quotes(atom)\ntest("a") <- (1 == 1)\n'
         'Test("b") <- (1 == 1)\n'
         'test("c") <- (1 == 1)\n'
     )
     with pytest.raises(SyntaxError) as ei:
         load_clausal_module(p)
-    assert "mixed.clausal:2" in str(ei.value)
-    assert ei.value.lineno == 2
+    assert "mixed.clausal:3" in str(ei.value)
+    assert ei.value.lineno == 3
 
 
 def test_cli_messages_name_the_lowercase_predicate(capsys, tmp_path):
@@ -184,7 +184,7 @@ def test_cli_messages_name_the_lowercase_predicate(capsys, tmp_path):
 
 def test_seam_file_is_run(capsys, tmp_path):
     p = tmp_path / "ok.seam"
-    p.write_text('test("one is one") <- (1 == 1)\n')
+    p.write_text('-double_quotes(atom)\ntest("one is one") <- (1 == 1)\n')
     rc = main([str(p)])
     out = capsys.readouterr().out
     assert rc == 0
@@ -193,9 +193,9 @@ def test_seam_file_is_run(capsys, tmp_path):
 
 def test_seam_files_are_discovered_under_a_directory(capsys, tmp_path):
     (tmp_path / "sub").mkdir()
-    (tmp_path / "sub" / "a.seam").write_text('test("seam") <- (1 == 1)\n')
-    (tmp_path / "sub" / "b.clausal").write_text('test("clausal") <- (1 == 1)\n')
-    (tmp_path / "sub" / "c.txt").write_text('test("txt") <- (1 == 1)\n')
+    (tmp_path / "sub" / "a.seam").write_text('-double_quotes(atom)\ntest("seam") <- (1 == 1)\n')
+    (tmp_path / "sub" / "b.clausal").write_text('-double_quotes(atom)\ntest("clausal") <- (1 == 1)\n')
+    (tmp_path / "sub" / "c.txt").write_text('-double_quotes(atom)\ntest("txt") <- (1 == 1)\n')
     rc = main(["-v", str(tmp_path)])
     out = capsys.readouterr().out
     assert rc == 0

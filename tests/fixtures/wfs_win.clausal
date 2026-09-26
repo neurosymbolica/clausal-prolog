@@ -1,3 +1,4 @@
+-double_quotes(atom)
 -table(win/1)
 
 move(1, 2),

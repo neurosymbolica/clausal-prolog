@@ -97,18 +97,18 @@ is automatically tested by the documentation test runner.
 ### Family tree
 
 ```clausal
-parent("alice", "bob"),
-parent("alice", "carol"),
-parent("bob", "dave"),
-parent("bob", "eve"),
+parent('alice', 'bob'),
+parent('alice', 'carol'),
+parent('bob', 'dave'),
+parent('bob', 'eve'),
 
 grandparent(GP, GC) <- (
     parent(GP, MID),
     parent(MID, GC)
 )
 
-test("alice is grandparent of dave") <- (grandparent("alice", "dave"))
-test("alice is grandparent of eve") <- (grandparent("alice", "eve"))
+test("alice is grandparent of dave") <- (grandparent('alice', 'dave'))
+test("alice is grandparent of eve") <- (grandparent('alice', 'eve'))
 ```
 
 In a notebook you would query this as:
@@ -141,7 +141,7 @@ my_len([_, *T], N) <- (
 )
 
 test("length of empty list") <- (my_len([], 0))
-test("length of three-element list") <- (my_len(["a", "b", "c"], 3))
+test("length of three-element list") <- (my_len(['a', 'b', 'c'], 3))
 ```
 
 ### Accumulator pattern

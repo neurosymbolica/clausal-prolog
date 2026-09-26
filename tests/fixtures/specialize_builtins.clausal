@@ -3,6 +3,7 @@
 # Phase 3: object programs whose body goals include builtins (gt, sub, mul,
 # add) that are not part of the object program.  The specializer adds a
 # catch-all clause that dispatches unknown goals through _SolveGoal.
+-double_quotes(atom)
 
 -import_from(clausal.examples.metainterpreters, [solve, solve_count, solve_limit])
 

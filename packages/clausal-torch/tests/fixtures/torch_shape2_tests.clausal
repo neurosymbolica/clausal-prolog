@@ -1,4 +1,5 @@
 # Phase 8 — Additional shape operations integration tests.
+-double_quotes(atom)
 
 -import_from(torch, [tensor, zeros, ones, split, chunk, unbind, narrow,
                          expand, repeat, tile, flip, roll,

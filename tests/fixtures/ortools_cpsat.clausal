@@ -1,6 +1,7 @@
 # OR-Tools CP-SAT integration tests
 
 # ── Domain declaration & basic labeling ────────────────────────────────────
+-double_quotes(atom)
 
 test("cpsat in_ contiguous domain") <- (
     ortools.cpsat.in_(X, 1, 5),

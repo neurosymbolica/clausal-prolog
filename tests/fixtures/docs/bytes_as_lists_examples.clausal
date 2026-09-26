@@ -27,8 +27,8 @@ test("int list unifies with bytes") <- (b"\x01\x02\x03" is [1, 2, 3])  # nv
 
 # --8<-- [start:out_of_scope]
 # str and bytes are distinct domains and never cross-unify.
-test("str does not unify with bytes") <- (not (b"abc" is "abc"))  # nv
-test("char list does not unify with bytes") <- (not (b"abc" is ["a", "b", "c"]))  # nv
+test("str does not unify with bytes") <- (not (b"abc" is 'abc'))  # nv
+test("char list does not unify with bytes") <- (not (b"abc" is ['a', 'b', 'c']))  # nv
 # An int out of [0, 255] simply fails to unify (it is not an error).
 test("out of range fails") <- (not (b"a" is [256]))  # nv
 # --8<-- [end:out_of_scope]

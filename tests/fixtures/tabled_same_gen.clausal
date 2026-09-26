@@ -1,3 +1,4 @@
+-double_quotes(atom)
 -table(sg/2)
 
 parent(1, 2),

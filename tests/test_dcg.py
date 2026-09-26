@@ -69,7 +69,7 @@ class TestAtomHeadDispatch:
     def test_dcg_atom_head_dispatch(self, tmp_path):
         """Two DCG clauses keyed on distinct atoms each return only their own."""
         src = (
-            "-module(x, [r(T, S0, S), foo, bar])\n"
+            "-double_quotes(atom)\n-module(x, [r(T, S0, S), foo, bar])\n"
             'r(foo) >> (["F"])\n'
             'r(bar) >> (["B"])\n'
         )
@@ -85,7 +85,7 @@ class TestAtomHeadDispatch:
     def test_dcg_atom_head_no_compound_match(self, tmp_path):
         """An atom-head clause must NOT match a compound input."""
         src = (
-            "-module(x, [r(T, S0, S), foo, ve(V)])\n"
+            "-double_quotes(atom)\n-module(x, [r(T, S0, S), foo, ve(V)])\n"
             'r(foo) >> (["atom"])\n'
             'r(ve(V)) >> (["compound"])\n'
         )
@@ -159,13 +159,13 @@ class TestAtomHeadDispatch:
 class TestTerminals:
     def test_single_terminal(self, tmp_path):
         # nv
-        mod = _load("t1", 'hi >> (["hello"])\n', tmp_path)
+        mod = _load("t1", '-double_quotes(atom)\nhi >> (["hello"])\n', tmp_path)
         cls = mod.module_dict["hi"]
         assert _succeeds("phrase", cls, [mint("hello")], module=mod)
 
     def test_multi_terminal(self, tmp_path):
         # nv
-        mod = _load("t2", 'greet >> (["hello", "world"])\n', tmp_path)
+        mod = _load("t2", '-double_quotes(atom)\ngreet >> (["hello", "world"])\n', tmp_path)
         cls = mod.module_dict["greet"]
         assert _succeeds("phrase", cls, [mint("hello"), mint("world")], module=mod)
 
@@ -177,7 +177,7 @@ class TestTerminals:
 
     def test_terminal_no_match(self, tmp_path):
         # nv
-        mod = _load("t4", 'hi >> (["hello"])\n', tmp_path)
+        mod = _load("t4", '-double_quotes(atom)\nhi >> (["hello"])\n', tmp_path)
         cls = mod.module_dict["hi"]
         assert not _succeeds("phrase", cls, ["goodbye"], module=mod)
 
@@ -189,7 +189,7 @@ class TestNonTerminals:
     def test_chained_non_terminals(self, tmp_path):
         # nv
         src = (
-            'ab_rule >> (["a"])\n'
+            '-double_quotes(atom)\nab_rule >> (["a"])\n'
             'cd_rule >> (["c"])\n'
             'abcd >> (ab_rule, cd_rule)\n'
         )
@@ -308,7 +308,7 @@ class TestConjunction:
     def test_tuple_conjunction(self, tmp_path):
         # nv
         src = (
-            'x_rule >> (["x"])\n'
+            '-double_quotes(atom)\nx_rule >> (["x"])\n'
             'y_rule >> (["y"])\n'
             'xy >> (x_rule, y_rule)\n'
         )
@@ -319,7 +319,7 @@ class TestConjunction:
     def test_and_conjunction(self, tmp_path):
         # nv
         src = (
-            'a_rule >> (["a"])\n'
+            '-double_quotes(atom)\na_rule >> (["a"])\n'
             'b_rule >> (["b"])\n'
             'ab_and >> (a_rule and b_rule)\n'
         )
@@ -334,7 +334,7 @@ class TestConjunction:
 class TestDisjunction:
     def test_or_branches(self, tmp_path):
         # nv
-        src = 'letter >> (["a"] or ["b"] or ["c"])\n'
+        src = '-double_quotes(atom)\nletter >> (["a"] or ["b"] or ["c"])\n'
         mod = _load("dj1", src, tmp_path)
         cls = mod.module_dict["letter"]
         assert _succeeds("phrase", cls, [mint("a")], module=mod)
@@ -349,7 +349,7 @@ class TestDisjunction:
 class TestNegation:
     def test_not_terminal(self, tmp_path):
         # nv
-        src = 'not_a >> (not ["a"], [_x])\n'
+        src = '-double_quotes(atom)\nnot_a >> (not ["a"], [_x])\n'
         mod = _load("neg1", src, tmp_path)
         cls = mod.module_dict["not_a"]
         # Should succeed for non-'a' inputs.
@@ -366,7 +366,7 @@ class TestIfThenElse:
         """If-then-else with non-terminal conditions (no star-list in if_)."""
         # nv
         src = (
-            'a_rule >> (["a"])\n'
+            '-double_quotes(atom)\na_rule >> (["a"])\n'
             'b_rule >> (["b"])\n'
             'c_rule >> (["c"])\n'
             'a_or_c >> (if_(a_rule, b_rule, c_rule))\n'
@@ -446,14 +446,14 @@ class TestPushback:
 class TestPhrase:
     def test_phrase_2_success(self, tmp_path):
         # nv
-        src = 'hi >> (["hello", "world"])\n'
+        src = '-double_quotes(atom)\nhi >> (["hello", "world"])\n'
         mod = _load("ph1", src, tmp_path)
         cls = mod.module_dict["hi"]
         assert _succeeds("phrase", cls, [mint("hello"), mint("world")], module=mod)
 
     def test_phrase_2_fail(self, tmp_path):
         # nv
-        src = 'hi >> (["hello", "world"])\n'
+        src = '-double_quotes(atom)\nhi >> (["hello", "world"])\n'
         mod = _load("ph2", src, tmp_path)
         cls = mod.module_dict["hi"]
         # Extra elements — must consume entire list.
@@ -676,7 +676,7 @@ class TestStateThreading:
         """Count leaves in a single-leaf tree."""
         # nv
         src = (
-            '-module(tc1, [state(_s, _s0, S_2), state2(_s0, _s, S0_2, S_2),'
+            '-double_quotes(atom)\n-module(tc1, [state(_s, _s0, S_2), state2(_s0, _s, S0_2, S_2),'
             ' count_leaves(_t, _s0, _s), num_leaves(_t, _n)])\n'
             '(state(_s), [_s]) >> ([_s])\n'
             '(state2(_s0, _s), [_s]) >> ([_s0])\n'
@@ -693,7 +693,7 @@ class TestStateThreading:
         """Count leaves in a two-leaf tree: [leaf, leaf]."""
         # nv
         src = (
-            '-module(tc2, [state(_s, _s0, S_2), state2(_s0, _s, S0_2, S_2),'
+            '-double_quotes(atom)\n-module(tc2, [state(_s, _s0, S_2), state2(_s0, _s, S0_2, S_2),'
             ' count_leaves(_t, _s0, _s), num_leaves(_t, _n)])\n'
             '(state(_s), [_s]) >> ([_s])\n'
             '(state2(_s0, _s), [_s]) >> ([_s0])\n'
@@ -710,7 +710,7 @@ class TestStateThreading:
         """Count leaves in nested tree: [leaf, [leaf, leaf]] = 3."""
         # nv
         src = (
-            '-module(tc3, [state(_s, _s0, S_2), state2(_s0, _s, S0_2, S_2),'
+            '-double_quotes(atom)\n-module(tc3, [state(_s, _s0, S_2), state2(_s0, _s, S0_2, S_2),'
             ' count_leaves(_t, _s0, _s), num_leaves(_t, _n)])\n'
             '(state(_s), [_s]) >> ([_s])\n'
             '(state2(_s0, _s), [_s]) >> ([_s0])\n'
@@ -835,7 +835,7 @@ class TestStateThreading:
         """phrase/3 called from clause body with instance arg (Call fix)."""
         # nv
         src = (
-            '-module(pi, [count_leaves(_t, _s0, _s), state(_s, _s0, S_2),'
+            '-double_quotes(atom)\n-module(pi, [count_leaves(_t, _s0, _s), state(_s, _s0, S_2),'
             ' state2(_s0, _s, S0_2, S_2), num_leaves(_t, _n)])\n'
             '(state(_s), [_s]) >> ([_s])\n'
             '(state2(_s0, _s), [_s]) >> ([_s0])\n'
@@ -914,7 +914,7 @@ class TestDCGStringInput:
     def test_phrase2_string_match(self, tmp_path):
         """phrase(rule, "hi") works — string converted to char list."""
         # nv
-        src = 'hi >> (["h", "i"])\n'
+        src = '-double_quotes(atom)\nhi >> (["h", "i"])\n'
         mod = _load("ds1", src, tmp_path)
         cls = mod.module_dict["hi"]
         assert _succeeds("phrase", cls, chars("hi"), module=mod)
@@ -922,7 +922,7 @@ class TestDCGStringInput:
     def test_phrase2_string_no_match(self, tmp_path):
         """phrase(rule, "ho") fails when grammar expects "hi"."""
         # nv
-        src = 'hi >> (["h", "i"])\n'
+        src = '-double_quotes(atom)\nhi >> (["h", "i"])\n'
         mod = _load("ds2", src, tmp_path)
         cls = mod.module_dict["hi"]
         assert not _succeeds("phrase", cls, chars("ho"), module=mod)
@@ -938,7 +938,7 @@ class TestDCGStringInput:
     def test_phrase2_string_multi_terminal(self, tmp_path):
         """phrase(rule, "hello") matches multi-char terminal sequence."""
         # nv
-        src = 'hello >> (["h", "e", "l", "l", "o"])\n'
+        src = '-double_quotes(atom)\nhello >> (["h", "e", "l", "l", "o"])\n'
         mod = _load("ds4", src, tmp_path)
         cls = mod.module_dict["hello"]
         assert _succeeds("phrase", cls, chars("hello"), module=mod)
@@ -954,7 +954,7 @@ class TestDCGStringInput:
         a str slice rather than a list of 1-char strs.
         """
         # nv
-        src = 'hi >> (["h", "i"])\n'
+        src = '-double_quotes(atom)\nhi >> (["h", "i"])\n'
         mod = _load("ds5", src, tmp_path)
         cls = mod.module_dict["hi"]
         rest = Var()
@@ -967,7 +967,7 @@ class TestDCGStringInput:
         """Chained non-terminals consume a string."""
         # nv
         src = (
-            'a_rule >> (["a"])\n'
+            '-double_quotes(atom)\na_rule >> (["a"])\n'
             'b_rule >> (["b"])\n'
             'ab >> (a_rule, b_rule)\n'
         )
@@ -980,7 +980,7 @@ class TestDCGStringInput:
         """Recursive DCG parses a string character by character."""
         # nv
         src = (
-            'chars >> (["a"], chars)\n'
+            '-double_quotes(atom)\nchars >> (["a"], chars)\n'
             'chars >> ([])\n'
         )
         mod = _load("ds7", src, tmp_path)
@@ -1004,7 +1004,7 @@ class TestDCGStringInput:
     def test_phrase2_inline_goal_string(self, tmp_path):
         """DCG with inline goal on string input."""
         # nv
-        src = 'vowel(_v) >> ([_v], {in_(_v, ["a", "e", "i", "o", "u"])})\n'
+        src = '-double_quotes(atom)\nvowel(_v) >> ([_v], {in_(_v, ["a", "e", "i", "o", "u"])})\n'
         mod = _load("ds9", src, tmp_path)
         cls = mod.module_dict["vowel"]
         v = Var()
@@ -1021,7 +1021,7 @@ class TestDCGStringInput:
     def test_list_input_still_works(self, tmp_path):
         """List input is unchanged (no regression)."""
         # nv
-        src = 'hi >> (["h", "i"])\n'
+        src = '-double_quotes(atom)\nhi >> (["h", "i"])\n'
         mod = _load("ds10", src, tmp_path)
         cls = mod.module_dict["hi"]
         assert _succeeds("phrase", cls, [mint("h"), mint("i")], module=mod)
@@ -1070,7 +1070,7 @@ class TestConsRuleRetirementDCGAudit:
         # nv — pin: an explicit char-list caller is untouched by the
         # retirement (it was never going through the retired str~list
         # branch — list-vs-list unify is unaffected).
-        src = 'hi >> (["h", "i"])\n'
+        src = '-double_quotes(atom)\nhi >> (["h", "i"])\n'
         mod = _load("t5_dcg1", src, tmp_path)
         cls = mod.module_dict["hi"]
         assert _succeeds("phrase", cls, [mint("h"), mint("i")], module=mod)
@@ -1082,7 +1082,7 @@ class TestConsRuleRetirementDCGAudit:
         # predicate name in data position is now its PLAIN atom, so the atom
         # is exactly what source ``phrase(hi, L)`` passes; it names hi//0 and
         # resolves in the calling module like call/N.
-        src = 'hi >> (["h", "i"])\n'
+        src = '-double_quotes(atom)\nhi >> (["h", "i"])\n'
         mod = _load("t5_dcg2", src, tmp_path)
         assert _succeeds("phrase", "hi", ["h", "i"], module=mod)
         assert not _succeeds("phrase", "hi", ["h", "o"], module=mod)
@@ -1106,7 +1106,7 @@ class TestStringTerminals:
     """
 
     def test_string_terminal_string_input(self, tmp_path):
-        src = 'hi >> ("hi")\n'
+        src = '-double_quotes(atom)\nhi >> ("hi")\n'
         mod = _load("st1", src, tmp_path)
         cls = mod.module_dict["hi"]
         assert _succeeds("phrase", cls, chars("hi"), module=mod)
@@ -1119,7 +1119,7 @@ class TestStringTerminals:
         The pre-flip list of 1-char STRINGS is a different term (a list of two
         one-character strings) and no longer matches.
         """
-        src = 'hi >> ("hi")\n'
+        src = '-double_quotes(atom)\nhi >> ("hi")\n'
         mod = _load("st2", src, tmp_path)
         cls = mod.module_dict["hi"]
         assert _succeeds("phrase", cls, [char_atom("h"), char_atom("i")], module=mod)
@@ -1127,13 +1127,13 @@ class TestStringTerminals:
 
     def test_string_terminal_in_sequence(self, tmp_path):
         """String terminal threaded between other terminals."""
-        src = 'greet >> ("he", ["l"], "lo")\n'
+        src = '-double_quotes(atom)\ngreet >> ("he", ["l"], "lo")\n'
         mod = _load("st3", src, tmp_path)
         cls = mod.module_dict["greet"]
         assert _succeeds("phrase", cls, chars("hello"), module=mod)
 
     def test_bytes_terminal(self, tmp_path):
-        src = "hi >> (b\"hi\")\n"
+        src = "-double_quotes(atom)\nhi >> (b\"hi\")\n"
         mod = _load("st4", src, tmp_path)
         cls = mod.module_dict["hi"]
         assert _succeeds("phrase", cls, b"hi", module=mod)
@@ -1147,7 +1147,7 @@ class TestCallNonterminal:
 
     def test_call_variable_nonterminal(self, tmp_path):
         src = (
-            "-module(x, [run(G, S0, S), greeting(S0, S)])\n"
+            "-double_quotes(atom)\n-module(x, [run(G, S0, S), greeting(S0, S)])\n"
             'greeting >> (["hello"])\n'
             "run(_g) >> (_g)\n"
         )

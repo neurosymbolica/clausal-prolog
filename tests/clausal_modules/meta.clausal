@@ -3,6 +3,7 @@
 # findall/3, bagof/3, setof/3, forall/2 as compiler special forms
 
 # squares/2 — square each element via findall
+-double_quotes(atom)
 squares(NS, SQUARES) <- (
     findall(
         SQ,

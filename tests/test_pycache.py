@@ -40,6 +40,7 @@ def tmp_clausal(tmp_path):
     """
     src = tmp_path / "test_cached.clausal"
     src.write_text(textwrap.dedent("""\
+        -double_quotes(atom)
         greet("hello"),
         greet("world"),
     """))
@@ -112,6 +113,7 @@ class TestPycacheInvalidation:
 
         # Modify source — add a third fact.
         src.write_text(textwrap.dedent("""\
+            -double_quotes(atom)
             greet("hello"),
             greet("world"),
             greet("again"),
@@ -223,6 +225,7 @@ class TestDynamicAfterCache:
         # nv
         src = tmp_path / "dyn_cached.clausal"
         src.write_text(textwrap.dedent("""\
+            -double_quotes(atom)
             -dynamic(color/1)
             color("red"),
         """))
@@ -281,6 +284,7 @@ class TestDeferredCompilation:
         # nv
         src = tmp_path / "deferred.clausal"
         src.write_text(textwrap.dedent("""\
+            -double_quotes(atom)
             item("a"),
             item("b"),
             item("c"),
@@ -311,6 +315,7 @@ class TestDeferredCompilation:
         # nv
         src = tmp_path / "multi_pred.clausal"
         src.write_text(textwrap.dedent("""\
+            -double_quotes(atom)
             foo("a"),
             foo("b"),
             bar("x"),

@@ -10,6 +10,6 @@ test("call_goal two args") <- (
 test("maplist with number") <- maplist(number, [1, 2, 3])  # nv
 
 test("include with integer") <- (
-    include(integer, [1, "a", 2, "b", 3], IS),
+    include(integer, [1, 'a', 2, 'b', 3], IS),
     IS == [1, 2, 3]
 )  # nv

@@ -308,9 +308,9 @@ def _test_description_name(desc) -> str:
     """The display NAME of a test description term.
 
     A description is human text, so the name is that text: the SPELLING of
-    an atom (the common case — an unquoted ``test("...")`` literal compiles
-    to an atom under the engine's default ``-double_quotes(atom)`` mode) or
-    the string itself under ``-double_quotes(chars)``.  Both spellings of
+    an atom (an unquoted ``test("...")`` literal compiles to an atom under
+    ``-double_quotes(atom)``) or the string itself under
+    ``-double_quotes(chars)``, the default since 2026-09-26.  Both spellings of
     one description therefore name the same test, which is what a reader,
     a report and a ``-k`` selector all expect.
 

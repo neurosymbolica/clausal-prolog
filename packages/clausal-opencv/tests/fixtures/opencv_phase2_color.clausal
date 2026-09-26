@@ -1,3 +1,4 @@
+-double_quotes(atom)
 -import_from(opencv, [
     imread, shape, channels_count, is_grayscale, is_color,
     absdiff, min_max_loc,

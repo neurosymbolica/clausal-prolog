@@ -17,6 +17,7 @@ def _load_inline(name, source):
 
 
 _SRC = """\
+-double_quotes(atom)
 helper(1),
 
 quux(b"abc") <- (helper(1))

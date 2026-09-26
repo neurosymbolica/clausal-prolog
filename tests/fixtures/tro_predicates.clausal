@@ -3,6 +3,7 @@
 # ── Accumulator sum ──────────────────────────────────────────────────────────
 # sum_(List, Accumulator, Result): sum elements of List starting from Accumulator.
 # TRO-eligible: prefix is deterministic (eager `eval_/2`), tail call is self-recursive.
+-double_quotes(atom)
 
 acc_sum([], ACC, ACC),
 acc_sum([H, *T], ACC, RESULT) <- (

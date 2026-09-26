@@ -48,6 +48,7 @@ from clausal.logic.runtime.const_set import (
 # ── Harness ───────────────────────────────────────────────────────────────────
 
 _SRC = """\
+-double_quotes(atom)
 -private([a, b, c, d, e])
 
 # ── order: an unbound left operand enumerates the list, in list order
@@ -69,8 +70,8 @@ atoms4(X) <- (X in [a, b, c, d])
 strings4(X) <- (X in ["acquire", "dispose", "amend", "cancel"])
 notin4(X) <- (X not in [a, b, c, d])
 mixed(X) <- (X in [a, "a", 1, None])
-# genuinely mixed KINDS.  ``mixed`` above is not one any more: under the
-# default -double_quotes(atom) its "a" is the atom a, so the list holds a
+# genuinely mixed KINDS.  ``mixed`` above is not one any more: under this
+# file's -double_quotes(atom) its "a" is the atom a, so the list holds a
 # duplicate and $const_set refuses the callsite outright.
 mixed_kinds(X) <- (X in [a, 1, None])
 
@@ -222,7 +223,7 @@ def test_bool_matches_int_element(build):
 
 
 def test_a_string_query_does_not_match_the_atom_elements(build):
-    """THE FLIP (spec §7): in the fixture's default ``-double_quotes(atom)``
+    """THE FLIP (spec §7): in the fixture's declared ``-double_quotes(atom)``
     mode BOTH ``a`` and ``"a"`` in ``mixed``'s list are the ATOM ``("a",)``
     -- two occurrences of one term, per the duplicates contract this module
     pins elsewhere -- so the ATOM matches both positions and a Python

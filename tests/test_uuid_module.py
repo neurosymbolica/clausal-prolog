@@ -519,12 +519,12 @@ class TestClausalInline:
 
     def test_uuid3_clausal(self, tmp_path):
         # nv
-        mod = _load("ui3", 'test <- (uuid_v3("dns", "example.com", _u) and uuid_version(_u, 3))\n', tmp_path)
+        mod = _load("ui3", '-double_quotes(atom)\ntest <- (uuid_v3("dns", "example.com", _u) and uuid_version(_u, 3))\n', tmp_path)
         assert _succeeds("test", module=mod)
 
     def test_uuid5_clausal(self, tmp_path):
         # nv
-        mod = _load("ui4", 'test <- (uuid_v5("url", "test", _u) and uuid_version(_u, 5))\n', tmp_path)
+        mod = _load("ui4", '-double_quotes(atom)\ntest <- (uuid_v5("url", "test", _u) and uuid_version(_u, 5))\n', tmp_path)
         assert _succeeds("test", module=mod)
 
     def test_uuid_int_clausal(self, tmp_path):
@@ -581,7 +581,7 @@ class TestAtomArguments:
     namespace alias and name only; the CONSTRUCT direction of
     ``uuid_str/2``, ``uuid_hex/2`` and ``uuid_urn/2`` still gated on
     ``isinstance(x, str)``, so a source-written UUID literal — an atom in the
-    default ``-double_quotes(atom)`` mode — silently failed.
+    ``-double_quotes(atom)`` mode — silently failed.
     """
 
     def test_uuid5_accepts_an_atom_namespace_and_name(self):

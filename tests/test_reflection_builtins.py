@@ -32,12 +32,13 @@ def _clear_query_cache():
     yield
 
 
-# DEFAULT-mode source (no ``-double_quotes(chars)``): every ``"…"`` below is a
+# Atom-mode source (this file pins ``-double_quotes(atom)``): every ``"…"`` below is a
 # NAME — the functor name ``goal_functor/3`` reads and answers (§6.4) — so it
 # must be an atom.  The reified ``Goal.name`` FIELD is still the raw spelling
 # ``str``, which is why the DCG terminal below goes through ``goal_functor``
 # rather than destructuring ``Goal("Edge", _, _)`` directly.
 _MATCHERS = """\
+-double_quotes(atom)
 -import_from(reflection, [
     reified_item, reified_clause, reified_file_item,
     clause_head, clause_body, goal_functor, reified_subterm,
@@ -188,10 +189,10 @@ class TestDcgMatching:
 class TestSourceWrittenTextArgument:
     """The SOURCE/PATH argument is a TEXT position (§9.4).
 
-    In the default ``-double_quotes(atom)`` mode a source-written ``"…"`` is
+    Under ``-double_quotes(atom)`` (which this source pins) a source-written ``"…"`` is
     the atom ``("…",)``, so the old ``isinstance(source, str)`` gate made
     every source-written call fail silently — no error, no solutions.  Each
-    row here writes the argument as a literal in DEFAULT-mode source and
+    row here writes the argument as a literal in that atom-mode source and
     asserts the real effect, not just "did not raise".
     """
 
@@ -199,6 +200,7 @@ class TestSourceWrittenTextArgument:
     def literal_matchers(self, tmp_path_factory):
         example = os.path.join(EXAMPLES_DIR, "graph.clausal")
         source = f'''\
+-double_quotes(atom)
 -import_from(reflection, [
     reified_item, reified_clause, reified_file_item,
     clause_head, goal_functor, Clause,

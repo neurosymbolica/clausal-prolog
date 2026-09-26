@@ -2,6 +2,7 @@
 #
 # Uses -specialize with cpd=True to produce deforested specialized predicates.
 # Verifies that CPD produces correct results for natnum, graph, and counting.
+-double_quotes(atom)
 
 -import_from(clausal.examples.metainterpreters, [solve, solve_count, solve_limit])
 

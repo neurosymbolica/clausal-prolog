@@ -37,9 +37,9 @@ natnum_program(PROGRAM) <- (
 # path(X,Y) :- edge(X,Z), path(Z,Y).
 graph_program(PROGRAM) <- (
     PROGRAM is [
-        [edge("a", "b"), []],
-        [edge("b", "c"), []],
-        [edge("b", "d"), []],
+        [edge('a', 'b'), []],
+        [edge('b', 'c'), []],
+        [edge('b', 'd'), []],
         [path(X, Y), [edge(X, Y)]],
         [path(X, Y), [edge(X, Z), path(Z, Y)]]
     ]
@@ -51,8 +51,8 @@ graph_program(PROGRAM) <- (
 # path(X,Y) :- edge(X,Y).
 cyclic_program(PROGRAM) <- (
     PROGRAM is [
-        [edge("a", "b"), []],
-        [edge("b", "a"), []],
+        [edge('a', 'b'), []],
+        [edge('b', 'a'), []],
         [path(X, Y), [edge(X, Z), path(Z, Y)]],
         [path(X, Y), [edge(X, Y)]]
     ]
@@ -156,27 +156,27 @@ test("solve natnum(s(s(0)))") <- (
 
 test("solve edge(a,b)") <- (
     graph_program(P),
-    solve([edge("a", "b")], P),
+    solve([edge('a', 'b')], P),
 )
 
 test("solve path(a,b) direct") <- (
     graph_program(P),
-    solve([path("a", "b")], P),
+    solve([path('a', 'b')], P),
 )
 
 test("solve path(a,c) transitive") <- (
     graph_program(P),
-    solve([path("a", "c")], P),
+    solve([path('a', 'c')], P),
 )
 
 test("solve path(a,d) transitive") <- (
     graph_program(P),
-    solve([path("a", "d")], P),
+    solve([path('a', 'd')], P),
 )
 
 test("solve no path(c,a)") <- (
     graph_program(P),
-    not solve([path("c", "a")], P),
+    not solve([path('c', 'a')], P),
 )
 
 # -- Inference counting --
@@ -198,17 +198,17 @@ test("count natnum(s(s(0))) = 3 steps") <- (
 
 test("count edge(a,b) = 1 step") <- (
     graph_program(P),
-    solve_count([edge("a", "b")], P, 1),
+    solve_count([edge('a', 'b')], P, 1),
 )
 
 test("count path(a,b) direct = 2 steps") <- (
     graph_program(P),
-    solve_count([path("a", "b")], P, 2),
+    solve_count([path('a', 'b')], P, 2),
 )
 
 test("count path(a,c) = 4 steps") <- (
     graph_program(P),
-    solve_count([path("a", "c")], P, 4),
+    solve_count([path('a', 'c')], P, 4),
 )
 
 # -- Depth-limited MI --
@@ -235,24 +235,24 @@ test("limit natnum(s(s(0))) depth 3 succeeds") <- (
 
 test("limit path(a,c) depth 3 fails") <- (
     graph_program(P),
-    not solve_limit([path("a", "c")], P, 3),
+    not solve_limit([path('a', 'c')], P, 3),
 )
 
 test("limit path(a,c) depth 4 succeeds") <- (
     graph_program(P),
-    solve_limit([path("a", "c")], P, 4),
+    solve_limit([path('a', 'c')], P, 4),
 )
 
 # -- Iterative deepening: completes where naive DFS would loop --
 
 test("iterative deepening on cyclic graph") <- (
     cyclic_program(P),
-    solve_iterative_deepening([path("a", "b")], P),
+    solve_iterative_deepening([path('a', 'b')], P),
 )
 
 test("iterative deepening path(a,c) acyclic") <- (
     graph_program(P),
-    solve_iterative_deepening([path("a", "c")], P),
+    solve_iterative_deepening([path('a', 'c')], P),
 )
 
 # -- Proof tree MI --
@@ -271,24 +271,24 @@ test("tree natnum(s(0)) has nested proof") <- (
 
 test("tree edge(a,b) is leaf") <- (
     graph_program(P),
-    solve_tree([edge("a", "b")], P, TREE),
-    TREE is [[edge("a", "b"), []]],
+    solve_tree([edge('a', 'b')], P, TREE),
+    TREE is [[edge('a', 'b'), []]],
 )
 
 test("tree path(a,b) direct") <- (
     graph_program(P),
-    solve_tree([path("a", "b")], P, TREE),
-    TREE is [[path("a", "b"), [[edge("a", "b"), []]]]],
+    solve_tree([path('a', 'b')], P, TREE),
+    TREE is [[path('a', 'b'), [[edge('a', 'b'), []]]]],
 )
 
 test("tree path(a,c) transitive") <- (
     graph_program(P),
-    solve_tree([path("a", "c")], P, TREE),
+    solve_tree([path('a', 'c')], P, TREE),
     TREE is [
-        [path("a", "c"), [
-            [edge("a", "b"), []],
-            [path("b", "c"), [
-                [edge("b", "c"), []]
+        [path('a', 'c'), [
+            [edge('a', 'b'), []],
+            [path('b', 'c'), [
+                [edge('b', 'c'), []]
             ]]
         ]]
     ],

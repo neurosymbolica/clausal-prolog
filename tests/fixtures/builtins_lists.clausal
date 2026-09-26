@@ -2,6 +2,7 @@
 # Each wrapper exercises a single builtin so Python tests can call it by name.
 
 # in_/2, in_check/2
+-double_quotes(atom)
 has_member(ELEMENT, LIST) <- in_(ELEMENT, LIST)
 has_member_check(ELEMENT, LIST) <- in_check(ELEMENT, LIST)
 

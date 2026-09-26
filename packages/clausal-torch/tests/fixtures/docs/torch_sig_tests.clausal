@@ -1,5 +1,6 @@
 # Companion tests for docs/torch.md signature blocks.
 # Validates that documented predicates exist and accept the documented arities.
+-double_quotes(atom)
 
 -import_from(torch, [
     tensor, zeros, ones, randn, arange, linspace, full, eye,

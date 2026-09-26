@@ -1,4 +1,5 @@
 # Companion tests for docs/scipy_special.md signature blocks.
+-double_quotes(atom)
 -import_from(scipy_special, [Gamma, Erf, ErfComplement, Factorial, Comb])
 
 test("gamma exists") <- (

@@ -118,6 +118,7 @@ class TestOtherArity:
 
 
 CITATIONS_SRC = """
+-double_quotes(atom)
 # clausal: no-collect
 -module(prednf_citations, [citation(REF, TEXT, NOTE), cite(REF)])
 
@@ -129,6 +130,7 @@ cite(art_1_2),
 """
 
 SIBLING_USE_SRC = """
+-double_quotes(atom)
 -private([art_1_2])
 
 local_ref(art_1_2),
@@ -176,6 +178,7 @@ class TestOtherModule:
 
 
 NOTHING_SRC = """
+-double_quotes(atom)
 -private([art_1_2])
 
 local_ref(art_1_2),
@@ -226,6 +229,7 @@ def test_module_defining_nothing_says_so():
 
 
 BUILTIN_SRC = """
+-double_quotes(atom)
 test("builtin at the wrong arity") <- (
     atom_length("abc", LEN, EXTRA)
 ),
@@ -254,6 +258,7 @@ class TestBuiltinArity:
 
 
 NEAR_MISS_SRC = """
+-double_quotes(atom)
 exceeds_limit(10),
 
 test("near miss on the name") <- (

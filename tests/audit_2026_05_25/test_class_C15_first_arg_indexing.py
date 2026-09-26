@@ -46,6 +46,7 @@ def test_F095_first_arg_index_coalesces_str_and_charlist():
     # Register fixtures inline. We need 5+ clauses to cross _INDEX_THRESHOLD=4.
     # Three scalar pads (on ints), one str-headed, one list-headed.
     source = """\
+-double_quotes(atom)
 pad_helper(1),
 
 test_pred(1),

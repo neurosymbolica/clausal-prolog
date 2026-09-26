@@ -174,7 +174,7 @@ test("span") <- (
 first_char(S, C) <- (C is ++S[0])
 
 test("group by first char") <- (
-    group_by(first_char, ["apple", "avocado", "banana", "blueberry", "cherry"], [["apple", "avocado"], ["banana", "blueberry"], ["cherry"]])
+    group_by(first_char, ['apple', 'avocado', 'banana', 'blueberry', 'cherry'], [['apple', 'avocado'], ['banana', 'blueberry'], ['cherry']])
 )
 ```
 
@@ -202,7 +202,7 @@ largest/smallest projected key.
 str_len(S, K) <- (K is ++len(S))    # see [Python interop](python_integration.md)
 
 test("longest") <- (
-    max_by(str_len, ["hi", "hello", "hey"], "hello")
+    max_by(str_len, ['hi', 'hello', 'hey'], 'hello')
 )
 ```
 

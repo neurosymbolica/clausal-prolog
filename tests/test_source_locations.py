@@ -141,11 +141,11 @@ class TestSourceLocationsG6:
         logic_mod, _ = _build(
             tmp_path,
             "g_catch_goal",
-            'catch_goal(X) <- catch((X is ++(1/0)), "unrelated", X is 0)\n',
+            '-double_quotes(atom)\ncatch_goal(X) <- catch((X is ++(1/0)), "unrelated", X is 0)\n',
         )
         with pytest.raises(ZeroDivisionError) as exc_info:
             list(call("catch_goal", None, module=logic_mod))
-        _assert_frame_line(exc_info.value, "catch_goal", 3)
+        _assert_frame_line(exc_info.value, "catch_goal", 4)
 
     def test_findall_inner_raises(self, tmp_path):
         from clausal.logic.solve import call

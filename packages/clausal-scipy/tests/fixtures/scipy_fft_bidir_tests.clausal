@@ -1,3 +1,4 @@
+-double_quotes(atom)
 -import_from(scipy_fft, [FFTransform, FFTransform2D, FFTransformND,
                           RealFFT, DiscreteCosineTransform,
                           DiscreteSineTransform, FFTShift])

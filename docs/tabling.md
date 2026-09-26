@@ -280,9 +280,9 @@ win(X) <- (move(X, Y), not win(Y))
 ```clausal
 -table(win/1)
 
-move("a", "b"),
-move("b", "a"),
-move("a", "c"),
+move('a', 'b'),
+move('b', 'a'),
+move('a', 'c'),
 
 win(X) <- (move(X, Y), not win(Y))
 ```

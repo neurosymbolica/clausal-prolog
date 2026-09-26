@@ -630,7 +630,7 @@ class TestTheNilAtomInAKeyPosition:
         ``DictTerm`` ever saw the key."""
         mod = _load_inline_clausal(
             "_fix4_constants_ref_nil",
-            "-private([a])\n"
+            "-double_quotes(atom)\n-private([a])\n"
             "-constant_value(c_n, [])\n"
             "-constant_value(c_s, \"\")\n"
             "-constant_value(c_d, {c_n: 1, a: 2})\n"
@@ -879,7 +879,7 @@ def test_row_23_an_atom_crossing_to_python_comes_back_a_string():
 def test_row_24_a_double_quoted_functor_is_refused():
     with pytest.raises(SyntaxError) as exc:
         _load_inline_clausal(
-            "_flip_row24", "-private([p])\nr24() <- \"foo\"(1),\n")
+            "_flip_row24", "-double_quotes(atom)\n-private([p])\nr24() <- \"foo\"(1),\n")
     assert "functor" in str(exc.value)
 
 
@@ -955,14 +955,16 @@ def test_row_29_the_bytecode_tag_invalidates_a_pre_flip_pyc():
     removes.
 
     That this assertion exists is what makes a bump a decision rather than a
-    slip -- it is the reason the 12 -> 13 change could not be made quietly.
+    slip -- it is the reason the 12 -> 13 change could not be made quietly
+    (and 13 -> 14, the -double_quotes default flip of 2026-09-26, which
+    changes the code emitted for every file that declares no mode).
     What it cannot do is notice the CONVERSE: fifty-five transformer commits
     that should have bumped the tag and did not, because nothing here fails
     when the tag stays still. See
     todo/clausal-bytecode-tag-is-manual-and-goes-stale-2026-09-11.md for
     deriving the tag from an engine fingerprint, which closes that side."""
     from clausal.import_hook import CLAUSAL_BYTECODE_TAG
-    assert CLAUSAL_BYTECODE_TAG == 13
+    assert CLAUSAL_BYTECODE_TAG == 14
 
 
 def test_row_30_listing_takes_an_atom_and_refuses_a_string(capsys):
@@ -1345,13 +1347,13 @@ def test_sum_and_scalar_product_read_the_operator_as_an_atom():
     """``sum_/3`` and ``scalar_product/4`` take an ISO operator ATOM.
 
     ``#=`` cannot be written bare in the surface (``#`` opens a comment), so
-    source spells it ``"#="``, which in the default ``-double_quotes(atom)``
+    source spells it ``"#="``, which under ``-double_quotes(atom)``
     mode is the atom ``("#=",)``.  ``clpfd`` gated on ``isinstance(op, str)``,
     so every source-written call failed silently.
     """
     mod = _load_inline_clausal(
         "_t12b_clpfd",
-        's_eq(N) <- sum_([1, 2, 3], "#=", N),\n'
+        '-double_quotes(atom)\ns_eq(N) <- sum_([1, 2, 3], "#=", N),\n'
         's_lt() <- sum_([1, 2, 3], "#<", 10),\n'
         's_lt_fails() <- sum_([1, 2, 3], "#<", 5),\n'
         'sp(N) <- scalar_product([2, 3], [4, 5], "#=", N),\n',
@@ -1522,7 +1524,7 @@ def test_process_create_answers_an_atom_keyed_result_dict():
     source program reads it with ``R.stdout``, which looks up ``("stdout",)``."""
     mod = _load_inline_clausal(
         "_t12c_process",
-        "-import_from(py.process, [process_create])\n"
+        "-double_quotes(atom)\n-import_from(py.process, [process_create])\n"
         "-private([exit_code, stdout, stderr, input])\n"
         "run3(OUT, CODE) <- (process_create(\"echo\", [\"t12c\"], R), "
         "OUT is R.stdout, CODE is R.exit_code),\n"
@@ -1551,7 +1553,7 @@ def test_url_parse_answers_an_atom_keyed_dict_that_join_reads_back():
         # ``-double_quotes(chars)`` because ``parse/2`` still gated its Url on
         # ``isinstance(u, str)``; Task 12d put that argument on ``to_text``,
         # so the documented spelling is what the test drives.
-        "-import_from(py.url, [parse, join])\n"
+        "-double_quotes(atom)\n-import_from(py.url, [parse, join])\n"
         "-private([scheme, host, port, path])\n"
         "scheme_of(S) <- (parse(\"https://example.com:8080/p?q=1\", P), "
         "S is P.scheme),\n"
@@ -1578,7 +1580,7 @@ def test_csv_records_answer_atom_keyed_dicts_and_atom_headers():
         # Default atom mode, as above: Task 12d put ``parse_records/3``'s
         # String argument on ``to_text``, so the ``-double_quotes(chars)``
         # workaround Task 12c needed here is gone.
-        "-import_from(py.csv, [parse_records, generate_records])\n"
+        "-double_quotes(atom)\n-import_from(py.csv, [parse_records, generate_records])\n"
         "-private([name, age])\n"
         "first_name(N) <- (parse_records(\"name,age\\nalice,30\\n\", _, RS), "
         "RS is [R, *_], N is R.name),\n"
@@ -1683,7 +1685,7 @@ def test_datetime_string_predicates_take_atom_text():
 
     mod = _load_inline_clausal(
         "_t12d_datetime",
-        "-import_from(py.datetime, [datetime_string, date_string_iso, "
+        "-double_quotes(atom)\n-import_from(py.datetime, [datetime_string, date_string_iso, "
         "datetime_string_iso])\n"
         "parsed(DT) <- datetime_string(DT, \"2026-09-07 08:30\", "
         "\"%Y-%m-%d %H:%M\"),\n"
@@ -1708,7 +1710,7 @@ def test_hash_takes_an_atom_algorithm_name():
     ``"('sha256',)"`` cannot pass by failing quietly."""
     mod = _load_inline_clausal(
         "_t12d_hash",
-        "-import_from(py.hash, [hash, hash_bytes])\n"
+        "-double_quotes(atom)\n-import_from(py.hash, [hash, hash_bytes])\n"
         "-private([sha256])\n"
         "hex_of(H) <- hash(sha256, \"abc\", H),\n"
         "raw_of(B) <- hash_bytes(sha256, \"abc\", B),\n",
@@ -1729,7 +1731,7 @@ def test_hmac_takes_an_atom_algorithm_and_an_atom_digest():
     expected = "7c0e03d85b6ccac680ea6500e7dc506720bd332aa9aa8e24e6cbf8e0afeea228"
     mod = _load_inline_clausal(
         "_t12d_hmac",
-        "-import_from(py.hmac, [sign, verify])\n"
+        "-double_quotes(atom)\n-import_from(py.hmac, [sign, verify])\n"
         "-private([sha256])\n"
         "signed(H) <- sign(sha256, \"k3y\", \"msg\", H),\n"
         "ok() <- verify(sha256, \"k3y\", \"msg\", \"" + expected + "\"),\n"
@@ -1749,7 +1751,7 @@ def test_csv_reading_predicates_take_atom_text():
         path = os.path.join(tmpdir, "t12d.csv")
         mod = _load_inline_clausal(
             "_t12d_csv",
-            "-import_from(py.csv, [parse_row, parse, parse_records, "
+            "-double_quotes(atom)\n-import_from(py.csv, [parse_row, parse, parse_records, "
             "read_file, write_file])\n"
             "-private([name])\n"
             "row(R) <- parse_row(\"a,b,c\", R),\n"
@@ -1779,7 +1781,7 @@ def test_json_parse_and_file_predicates_take_atom_text():
         path = os.path.join(tmpdir, "t12d.json")
         mod = _load_inline_clausal(
             "_t12d_json",
-            "-import_from(py.json, [parse, read_file, write_file])\n"
+            "-double_quotes(atom)\n-import_from(py.json, [parse, read_file, write_file])\n"
             "-private([a])\n"
             "parsed(V) <- (parse('{\"a\": 1}', T), V is T.a),\n"
             "parsed3(V) <- (parse('{\"a\": 1}', T, []), V is T.a),\n"
@@ -1803,7 +1805,7 @@ def test_url_predicates_take_atom_text_including_the_port():
     into the netloc."""
     mod = _load_inline_clausal(
         "_t12d_url",
-        "-import_from(py.url, [encode, decode, parse, join])\n"
+        "-double_quotes(atom)\n-import_from(py.url, [encode, decode, parse, join])\n"
         "-private([scheme, host, port, path])\n"
         "enc(E) <- encode(\"hello world\", E),\n"
         "dec(S) <- decode(\"hello%20world\", S),\n"

@@ -1,3 +1,4 @@
+-double_quotes(atom)
 -import_module(tests.fixtures.importable_utils)
 
 use_imported(X, Y) <- tests.fixtures.importable_utils.double(X, Y)

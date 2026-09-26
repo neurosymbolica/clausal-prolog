@@ -3,6 +3,7 @@
 # body goals, so the throwing call must sit in an intermediate predicate of
 # the importing module — a call nested inside catch(...) is never
 # specialised.
+-double_quotes(atom)
 -module(callsite_throw_lib, [throw_cat(P, C)])
 
 throw_cat(P, "a") <- (P == 1)

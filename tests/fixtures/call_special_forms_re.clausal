@@ -1,6 +1,7 @@
 # A module that IMPORTS py.re's findall/3: in a clause body, `findall(P, S, L)`
 # is then the REGEX predicate (the import rewrites the call to py.re.findall),
 # not the special form -- tests/test_call_runs_special_form_cells.py.
+-double_quotes(atom)
 -module(call_special_forms_re, [])
 -import_from(py.re, [findall, match, alias(search, rs)])
 -import_from(py.random, [permutation])

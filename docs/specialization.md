@@ -37,8 +37,8 @@ Object programs are represented as lists of `[Head, BodyGoals]` pairs, where ter
 
 natnum_program(PROGRAM) <- (
     PROGRAM is [
-        [["natnum", 0], []],
-        [["natnum", ["s", X]], [["natnum", X]]]
+        [['natnum', 0], []],
+        [['natnum', ['s', X]], [['natnum', X]]]
     ]
 )
 

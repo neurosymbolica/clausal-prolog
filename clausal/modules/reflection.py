@@ -110,20 +110,25 @@ def _class_name_spelling(name, context):
     The ``clpfd._op_spelling`` shape, for ``op_node/3``'s CLASS_NAME in
     construct mode.  Before THE FLIP (2026-09-06-atoms-as-cells-strings) the
     gate was ``isinstance(name, str)``, which after the flip matches a STRING
-    and nothing a source program can write: in the default
-    ``-double_quotes(atom)`` mode ``op_node(NEW, "Gt", ARGS)`` — the form
-    ``docs/reflection.md`` documents — hands over the atom ``("Gt",)``, so
-    every documented call silently built nothing.
+    and nothing a source program can write: under ``-double_quotes(atom)``
+    ``op_node(NEW, "Gt", ARGS)`` hands over the atom ``("Gt",)``, so every
+    such call silently built nothing.
 
     - an atom → its spelling, which ``_OP_NODE_CLASSES`` keys on;
-    - a plain ``str`` → ``type_error(atom, …)``: a string is not a name, and a
-      silent failure is exactly what hid this;
+    - a STRING (the chars carrier -- what ``"Gt"`` is under the chars
+      default since 2026-09-26) → ``type_error(atom, …)``: a string is not
+      a name, and a silent failure is exactly what hid this.  Stage 2 of the
+      atoms-as-str flip made an atom the ``str`` itself, so the old
+      ``type(name) is str`` arm had become unreachable and a string fell
+      through to the silent ``None`` -- measured 2026-09-26, in BOTH modes
+      of ``op_node/3``;
     - anything else (an unbound Var, a number, a compound) → ``None``, and the
       caller fails cleanly as it always has on an unknown class name.
     """
+    from clausal.logic.cells import is_chars  # noqa: PLC0415
     if is_atom(name):
         return spelling(name)
-    if type(name) is str:
+    if is_chars(name):
         raise LogicException(type_error("atom", name, context))
     return None
 
@@ -345,14 +350,21 @@ def _op_node_3(node, class_name, args, trail, k):
     # *class identity*, not name — a foreign object that merely shares an
     # operator's name (e.g. CPython ``ast.Gt``) must fail cleanly, not crash in
     # ``_op_operand_fields`` or false-match.
+    # CLASS_NAME is a NAME position (§6.4) on both sides: decompose answers the
+    # ATOM ``("GtE",)``, which is what a source-written ``op_node(SUB, 'GtE',
+    # ARGS)`` (or ``"GtE"`` under ``-double_quotes(atom)``) hands construct
+    # back.  A BOUND string here is the same type error construct raises,
+    # not a silent non-match -- checked BEFORE the node is looked at, so the
+    # mistake surfaces on the first subterm ``reified_subterm`` hands over,
+    # not only when the search happens to reach an operator node.
+    bound_name = deref(class_name)
+    if not is_var(bound_name):
+        _class_name_spelling(bound_name, "op_node/3")
     cls = _OP_NODE_CLASSES.get(_functor_name(node))
     if cls is None or type(node) is not cls:
         return  # not a renderable operator node -> fail cleanly
     operands = [getattr(node, field) for field in _op_operand_fields(cls)]
     mark = trail.mark()
-    # CLASS_NAME is a NAME position (§6.4) on both sides: decompose answers the
-    # ATOM ``("GtE",)``, which is what a source-written ``op_node(SUB, "GtE",
-    # ARGS)`` hands construct back in the default ``-double_quotes(atom)`` mode.
     if unify(class_name, mint(cls.__name__), trail) and unify(args, operands, trail):
         yield None
     else:

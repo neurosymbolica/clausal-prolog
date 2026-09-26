@@ -1,4 +1,5 @@
 # Companion tests for docs/torch_functional.md signature blocks.
+-double_quotes(atom)
 -import_from(torch, [tensor, randn, shape, zeros, ones])
 -import_from(torch_functional, [
     gelu, leaky_relu,

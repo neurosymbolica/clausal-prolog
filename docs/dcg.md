@@ -20,13 +20,13 @@ The implementation lives in `clausal/templating/term_rewriting.py` (source-level
 Grammar rules use `>>` instead of `<-`:
 
 ```clausal
-greeting >> (["hello", "world"])
+greeting >> (['hello', 'world'])
 ```
 
 This rewrites to a clause with two hidden arguments (the input list and the remainder list):
 
 ```clausal
-greeting(S0, S) <- append(["hello", "world"], S, S0)
+greeting(S0, S) <- append(['hello', 'world'], S, S0)
 ```
 
 ### Terminals
@@ -34,7 +34,7 @@ greeting(S0, S) <- append(["hello", "world"], S, S0)
 Terminals are list literals — they consume tokens from the input:
 
 ```clausal
-greeting >> (["hello", "world"])
+greeting >> (['hello', 'world'])
 ```
 
 The empty list `[]` matches without consuming any input:
@@ -92,8 +92,8 @@ sentence >> (noun_phrase, verb_phrase, noun_phrase)
 Alternatives use `or`:
 
 ```clausal
-noun_phrase >> (["the", "dog"] or ["the", "cat"] or ["a", "bird"])
-verb_phrase >> (["chases"] or ["sees"] or ["likes"])
+noun_phrase >> (['the', 'dog'] or ['the', 'cat'] or ['a', 'bird'])
+verb_phrase >> (['chases'] or ['sees'] or ['likes'])
 ```
 
 ### Negation
@@ -101,10 +101,10 @@ verb_phrase >> (["chases"] or ["sees"] or ["likes"])
 `not` tests that a terminal does NOT match:
 
 ```clausal
-not_a >> (not ["a"], [X])
+not_a >> (not ['a'], [X])
 ```
 
-This matches any single token that is not `"a"`.
+This matches any single token that is not `'a'`.
 
 ### Pushback (Semicontext)
 
@@ -121,8 +121,8 @@ The left side `(look_ahead(T), [T])` means: match `look_ahead(T)` and push back 
 DCG rules can be recursive:
 
 ```clausal
-ab >> (["a"], ab)
-ab >> (["b"], ab)
+ab >> (['a'], ab)
+ab >> (['b'], ab)
 ab >> ([])
 ```
 
@@ -227,7 +227,7 @@ The initial state `[0]` is passed as the input list; the final state `[N]` is th
 Thread a counter to count leaves in a binary tree:
 
 ```clausal
-count_leaves("leaf") >> (state(N0), {N == N0 + 1}, state2(_, N))
+count_leaves('leaf') >> (state(N0), {N == N0 + 1}, state2(_, N))
 count_leaves([L, R]) >> (count_leaves(L), count_leaves(R))
 
 num_leaves(T, N) <- phrase(count_leaves(T), [0], [N])

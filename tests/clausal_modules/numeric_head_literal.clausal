@@ -1,6 +1,7 @@
 # Fixture for the numeric-head-literal var-binding bug.
 # A numeric literal in a ruled-clause head must bind into a caller's Var
 # (output mode), exactly like a string/atom literal or a bare fact.
+-double_quotes(atom)
 
 fine_int(DAYS, 20000) <- (DAYS >= 40)
 

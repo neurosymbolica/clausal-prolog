@@ -3,6 +3,7 @@
 # Uses -specialize with depth=5 to enable deeper partial deduction.
 # Verifies that deep unfolding produces correct results identical
 # to shallow specialization.
+-double_quotes(atom)
 
 -import_from(clausal.examples.metainterpreters, [solve, solve_count])
 

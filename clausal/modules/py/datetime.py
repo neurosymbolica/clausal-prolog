@@ -444,8 +444,9 @@ def _datetime_string_3(dt_obj, s, fmt, trail, k):
 
     Format must be ground TEXT in both modes -- a string or an ATOM, which is
     the same ``str`` (spec §9.4): a strftime format is a literal handed to a
-    library, so ``'%Y-%m-%d'`` and (in the default ``-double_quotes(atom)``
-    mode) ``"%Y-%m-%d"`` both name it.  So is the String in parse mode.  Note:
+    library, so ``'%Y-%m-%d'`` and ``"%Y-%m-%d"`` (a string under the chars
+    default, an atom under ``-double_quotes(atom)``) both name it.  So is the
+    String in parse mode.  Note:
     ``strftime`` accepts a ``date``/``time``/``datetime`` but ``strptime``
     always yields a ``datetime``, so a date round-trips to a midnight
     datetime.
