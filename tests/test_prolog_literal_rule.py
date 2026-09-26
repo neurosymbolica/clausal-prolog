@@ -98,8 +98,7 @@ def test_an_explicit_leading_chars_directive_still_emits_the_flag():
     (pinned here so the flip did not silently change the emission)."""
     declared = _t('-double_quotes(chars)\np("x"),\n')
     assert 'p("x").' in declared
-    assert ":- set_prolog_flag(double_quotes, chars)." in declared
-    assert "set_prolog_flag" not in _t('p("x"),\n')
+    assert declared.index(":- set_prolog_flag(double_quotes, chars).") < declared.index('p("x").')
 
 
 def test_the_default_needs_no_flag_directive():

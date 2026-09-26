@@ -852,7 +852,65 @@ class TestExpansionResultIsValidated:
         preds, _, md = _parse_and_collect(source)
         with pytest.raises(LogicException) as exc:
             run_term_expansion(preds, md)
-        assert exc.value.term.args[0] == mint("instantiation_error")
+        formal, context = exc.value.term.args
+        assert formal == mint("instantiation_error")
+        assert "term_expansion/4: the expansion is unbound" in context
+
+    def test_an_unbound_answer_on_the_head_retry_names_a_head_term(self):
+        source = (
+            'term_expansion(foo(_), _E, _m0, _m0) <- True\n'
+            'foo("a"),\n'
+        )
+        preds, _, md = _parse_and_collect(source)
+        with pytest.raises(LogicException) as exc:
+            run_term_expansion(preds, md)
+        assert "a head term" in exc.value.term.args[1]
+
+    def test_a_bad_item_in_the_final_list_is_a_type_error_naming_the_slot(self):
+        source = (
+            'term_expansion(_term, _term, module_expansion_state(_i, _final, _s), '
+            'module_expansion_state(_i, [42 | _final], _s)) <- True\n'
+            'foo("a"),\n'
+        )
+        preds, _, md = _parse_and_collect(source)
+        with pytest.raises(LogicException) as exc:
+            run_term_expansion(preds, md)
+        formal, context = exc.value.term.args
+        assert formal.functor == "type_error" and formal.args[1] == 42
+        assert "Final list" in context and "none" not in context
+
+    def test_an_unbound_item_in_the_init_list_is_an_instantiation_error(self):
+        source = (
+            'term_expansion(_term, _term, module_expansion_state(_init, _f, _s), '
+            'module_expansion_state([_U | _init], _f, _s)) <- True\n'
+            'foo("a"),\n'
+        )
+        preds, _, md = _parse_and_collect(source)
+        with pytest.raises(LogicException) as exc:
+            run_term_expansion(preds, md)
+        formal, context = exc.value.term.args
+        assert formal == mint("instantiation_error") and "Init list" in context
+
+    def test_a_head_term_in_the_init_list_becomes_a_fact(self):
+        source = (
+            '-private([bar])\n'
+            'term_expansion(_term, _term, module_expansion_state(_init, _f, _s), '
+            'module_expansion_state([bar | _init], _f, _s)) <- True\n'
+            'foo("a"),\n'
+        )
+        preds, _, md = _parse_and_collect(source)
+        result = run_term_expansion(preds, md)
+        assert deref(result[0].head) == mint("bar") and result[0].body is True
+
+    def test_the_chars_none_error_surfaces_through_a_full_load(self, tmp_path):
+        path = tmp_path / "te_chars_none_load.clausal"
+        path.write_text(
+            '-double_quotes(chars)\n'
+            'term_expansion(_, "none", _m0, _m0) <- True\n'
+            'foo("a"),\n'
+        )
+        with pytest.raises(LogicException, match="the suppression sentinel is the ATOM none"):
+            _load_module("_te_chars_none_load", str(path))
 
     def test_a_bad_item_in_the_init_list_is_a_type_error_naming_the_slot(self):
         source = (

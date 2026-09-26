@@ -133,7 +133,7 @@ reader already knows:
 | membership | `"k" in P` | `k in d` | fails |
 | set (functional) | `P2 is {**P, "k": V}` | `{**d, k: v}` | always succeeds; last-wins |
 | default-merge | `P2 is {"k": Default, **P}` | `{k: default, **d}` | `P` wins if present |
-| delete (functional) | `delete(P, "k", P2)` | `del d[k]` | **throws** |
+| delete (functional) | `delete(P, 'k', P2)` | `del d[k]` | **throws** |
 
 ```clausal
 role_of(PROFILE, R) <- (R is PROFILE['role'])

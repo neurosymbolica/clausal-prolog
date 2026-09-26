@@ -2155,7 +2155,11 @@ def _double_quotes_modes_of_target(kind: str, target, module_dict: dict):
             # ``py.*`` wrapper) has no Database and is not judged.
             owner = predicate_owner_module(module_dict.get(local_name))
             if owner is None:
-                owner = dotted.rsplit(".", 1)[0]
+                # The key holds the path AS WRITTEN; an aliased path
+                # (``thailand`` -> ``clausal.modules.countries.thailand``)
+                # resolves through the same resolver ``_process_imports``
+                # used, so the module found is the one the import bound.
+                owner = _resolve_module(dotted.rsplit(".", 1)[0]).__name__
             db = _db_for_module_name(owner) if owner else None
         else:
             base, chain = target

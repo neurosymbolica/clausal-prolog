@@ -192,11 +192,13 @@ shape_xy(SRC) <- reified_clause(SRC,
            [Goal('goalx', [A], []), Goal('goaly', [B], [])]))
 ```
 
-(The expansion is built by the compiler, so its `"my_pred"` is the raw
-spelling *string* the reified `Goal.name` field holds, whatever
-`-double_quotes` mode the matcher's module is in. Writing that vocabulary
-form by hand under the default `atom` mode would give you atoms and match
-nothing — use the arrow sugar, or `goal_functor/3`.)
+(The expansion is built by the compiler, so its `'my_pred'` is the raw
+spelling the reified `Goal.name` field holds — a plain `str`, which is
+exactly the atom `'my_pred'`, whatever `-double_quotes` mode the matcher's
+module is in. Writing the vocabulary form by hand works with single-quoted
+names, as shown; a double-quoted `"my_pred"` under the default `chars`
+mode is a *string*, which the field never holds, and matches nothing —
+prefer the arrow sugar, or `goal_functor/3`.)
 
 Semantics:
 

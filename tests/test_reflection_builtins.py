@@ -32,7 +32,7 @@ def _clear_query_cache():
     yield
 
 
-# DEFAULT-mode source (no ``-double_quotes(chars)``): every ``"…"`` below is a
+# Atom-mode source (this file pins ``-double_quotes(atom)``): every ``"…"`` below is a
 # NAME — the functor name ``goal_functor/3`` reads and answers (§6.4) — so it
 # must be an atom.  The reified ``Goal.name`` FIELD is still the raw spelling
 # ``str``, which is why the DCG terminal below goes through ``goal_functor``
@@ -192,7 +192,7 @@ class TestSourceWrittenTextArgument:
     Under ``-double_quotes(atom)`` (which this source pins) a source-written ``"…"`` is
     the atom ``("…",)``, so the old ``isinstance(source, str)`` gate made
     every source-written call fail silently — no error, no solutions.  Each
-    row here writes the argument as a literal in DEFAULT-mode source and
+    row here writes the argument as a literal in that atom-mode source and
     asserts the real effect, not just "did not raise".
     """
 

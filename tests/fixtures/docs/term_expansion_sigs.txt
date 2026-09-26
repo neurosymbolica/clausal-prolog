@@ -11,7 +11,7 @@ term_expansion(
 fact('a'),
 fact('b'),
 # After expansion, the module also contains:
-# logged_fact("a"), logged_fact("b")
+# logged_fact('a'), logged_fact('b')
 --8<-- [end:quick_example]
 
 --8<-- [start:writing_expansion_rules]

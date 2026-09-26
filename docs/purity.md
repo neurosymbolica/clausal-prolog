@@ -151,7 +151,7 @@ and reason about it with the full power of logic programming.
 ```clausal
 # Describe the output as a term:
 greeting_text(NAME, TEXT) <- (
-    TEXT is ++"Hello, " ++ NAME ++ '!'
+    TEXT is ++"Hello, " ++ NAME ++ "!"
 )
 
 # Test it without side effects:

@@ -347,6 +347,14 @@ class TestStringClassNameIsATypeError:
         assert formal.functor == "type_error"
         assert formal.args[0] == mint("atom") and formal.args[1] == chars("GtE")
 
+    def test_decompose_with_a_string_name_raises_even_with_no_operator_subterm(
+            self, chars_matchers):
+        """The name is checked before the node: a source with no operator
+        node at all still surfaces the string mistake on its first subterm."""
+        from clausal.logic.exceptions import LogicException
+        with pytest.raises(LogicException):
+            list(call("has_gt_e_str", chars("p(X) <- q(X)\n"), module=chars_matchers))
+
     def test_construct_with_a_string_name_raises(self, chars_matchers):
         from clausal.logic.exceptions import LogicException
         with pytest.raises(LogicException) as exc:

@@ -350,19 +350,20 @@ def _op_node_3(node, class_name, args, trail, k):
     # *class identity*, not name — a foreign object that merely shares an
     # operator's name (e.g. CPython ``ast.Gt``) must fail cleanly, not crash in
     # ``_op_operand_fields`` or false-match.
-    cls = _OP_NODE_CLASSES.get(_functor_name(node))
-    if cls is None or type(node) is not cls:
-        return  # not a renderable operator node -> fail cleanly
-    operands = [getattr(node, field) for field in _op_operand_fields(cls)]
     # CLASS_NAME is a NAME position (§6.4) on both sides: decompose answers the
     # ATOM ``("GtE",)``, which is what a source-written ``op_node(SUB, 'GtE',
     # ARGS)`` (or ``"GtE"`` under ``-double_quotes(atom)``) hands construct
     # back.  A BOUND string here is the same type error construct raises,
-    # not a silent non-match: ``op_node(SUB, "GtE", ARGS)`` in a chars-mode
-    # module would otherwise fail with no diagnosis.
+    # not a silent non-match -- checked BEFORE the node is looked at, so the
+    # mistake surfaces on the first subterm ``reified_subterm`` hands over,
+    # not only when the search happens to reach an operator node.
     bound_name = deref(class_name)
     if not is_var(bound_name):
         _class_name_spelling(bound_name, "op_node/3")
+    cls = _OP_NODE_CLASSES.get(_functor_name(node))
+    if cls is None or type(node) is not cls:
+        return  # not a renderable operator node -> fail cleanly
+    operands = [getattr(node, field) for field in _op_operand_fields(cls)]
     mark = trail.mark()
     if unify(class_name, mint(cls.__name__), trail) and unify(args, operands, trail):
         yield None

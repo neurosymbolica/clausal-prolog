@@ -384,7 +384,6 @@ class TestOptionKeySpellings:
         assert option(opts, "env", "dflt") == chars("dflt")
 
     def test_process_create_reads_a_string_keyed_options_dict(self):
-        # nv
         result = Var()
         opts = DictTerm({chars("input"): chars("t12b stdin")})
         sols, _ = simple_solutions(

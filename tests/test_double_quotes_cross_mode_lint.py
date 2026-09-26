@@ -209,25 +209,91 @@ def test_an_aliased_import_is_judged_under_its_local_name(tmp_path, monkeypatch)
 # reached only for the directive/EDCG shapes that keep their keywords.
 
 
-def test_a_nested_imported_call_is_one_site_per_literal(tmp_path, monkeypatch):
-    """``--p(q("x"))`` with both imported: ``"x"`` is an argument of ``q``
-    and meets ``q``'s module, so it is reported once, against ``q``."""
-    _load(tmp_path, monkeypatch, "xm_owner_nest", """
+def test_a_nested_literal_is_judged_against_the_goal_position_callee(
+        tmp_path, monkeypatch):
+    """Only the goal-position call runs: in ``--p(q("x"))`` the ``q("x")``
+    is DATA and ``"x"`` is unified against p's clauses, compiled under p's
+    module's mode.  So the literal is judged against p -- warned when p's
+    mode differs even though q's matches, and silent in the reverse case."""
+    _load(tmp_path, monkeypatch, "xm_q_chars", """
+        -double_quotes(chars)
+        -module(xm_q_chars, [q(v), r/1])
+        r(q("y")),
+    """)
+    _load(tmp_path, monkeypatch, "xm_p_atom", """
         -double_quotes(atom)
-        -module(xm_owner_nest, [p/1, q(v)])
+        -module(xm_p_atom, [p/1])
+        -import_from(xm_q_chars, [q])
         p(q("x")),
     """)
-    _, hits = _load(tmp_path, monkeypatch, "xm_host_nest", """
+    host, hits = _load(tmp_path, monkeypatch, "xm_host_nested", """
         -double_quotes(chars)
-        -import_from(xm_owner_nest, [p, q])
+        -import_from(xm_p_atom, [p])
+        -import_from(xm_q_chars, [q, r])
 
         def go():
             if --p(q("x")):
                 return True
             return False
+
+        def go_rev():
+            if --r(q("y")):
+                return True
+            return False
     """)
+    assert host.go() is False          # the hazard: silent non-match
+    assert host.go_rev() is True
     assert len(hits) == 1
-    assert "`q`" in str(hits[0].message) and "`p`" not in str(hits[0].message)
+    msg = str(hits[0].message)
+    assert "`p`" in msg and "xm_p_atom" in msg and "`q`" not in msg
+
+
+def test_a_meta_predicate_argument_is_goal_position(tmp_path, monkeypatch):
+    _load(tmp_path, monkeypatch, "xm_owner_meta", ATOM_OWNER.format(name="xm_owner_meta"))
+    _, hits = _load(tmp_path, monkeypatch, "xm_host_meta", """
+        -double_quotes(chars)
+        -import_from(xm_owner_meta, [p])
+
+        def go():
+            return [X for X in --findall(X, p("x"), X)]
+    """)
+    assert len(hits) == 1 and "`p`" in str(hits[0].message)
+
+
+def test_two_goal_calls_in_one_seam_are_reported_in_source_order(
+        tmp_path, monkeypatch):
+    _load(tmp_path, monkeypatch, "xm_owner_two2", """
+        -double_quotes(atom)
+        -module(xm_owner_two2, [p/1, r/1])
+        p("a"),
+        r("b"),
+    """)
+    _, hits = _load(tmp_path, monkeypatch, "xm_host_two2", """
+        -double_quotes(chars)
+        -import_from(xm_owner_two2, [p, r])
+
+        def go():
+            if --(p("a"), r("b")):
+                return True
+            return False
+    """)
+    assert [("`p`" in str(h.message), "`r`" in str(h.message)) for h in hits] == [(True, False), (False, True)]
+
+
+def test_a_dotted_seam_above_its_import_module_directive_is_judged(
+        tmp_path, monkeypatch):
+    _load(tmp_path, monkeypatch, "xm_owner_pre", ATOM_OWNER.format(name="xm_owner_pre"))
+    _, hits = _load(tmp_path, monkeypatch, "xm_host_pre", """
+        -double_quotes(chars)
+
+        def go():
+            if --xm_owner_pre.p("x"):
+                return True
+            return False
+
+        -import_module(xm_owner_pre)
+    """)
+    assert len(hits) == 1 and "xm_owner_pre.p" in str(hits[0].message)
 
 
 def test_a_literal_only_inside_an_arrow_lambda_still_counts_as_a_mode(

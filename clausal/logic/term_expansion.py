@@ -142,10 +142,13 @@ def run_term_expansion(
     # number or bare head term there crashed goal expansion just as an
     # unchecked answer did.
     init_items, final_items = _extract_init_final(module_state)
-    init_items = [_validated_expansion(i, False, slot="the Init list of "
+    # A bare head term there becomes a fact, as it does on the head-pattern
+    # retry -- a rule that matched a head and consed ``bar(X)`` into Init
+    # meant a fact -- so the check is the head-wrapping one.
+    init_items = [_validated_expansion(i, True, slot="the Init list of "
                                        "module_expansion_state/3")
                   for i in init_items]
-    final_items = [_validated_expansion(i, False, slot="the Final list of "
+    final_items = [_validated_expansion(i, True, slot="the Final list of "
                                         "module_expansion_state/3")
                    for i in final_items]
 
@@ -533,10 +536,15 @@ def _validated_expansion(term, wrap_head, slot=None):
 
     term = deref(term)
     where = f"term_expansion/4: {slot}" if slot else "term_expansion/4: the expansion"
+    if slot:
+        what = "a clause (`H <- Body`, or a fact `H <- True`) or a head term"
+    elif wrap_head:
+        what = "a head term, a list of head terms, or the atom `none` (suppress)"
+    else:
+        what = "a clause, a list of clauses, or the atom `none` (suppress)"
     if is_var(term):
         raise LogicException(instantiation_error(
-            f"{where} is unbound; a rule must bind it to a clause, a list "
-            f"of clauses, or the atom `none`"))
+            f"{where} is unbound; a rule must bind it to {what}"))
     if isinstance(term, PredicateItem):
         return term
     # A chars carrier is a 2-tuple headed by CHARS_TAG: compound_cell_shape
@@ -545,11 +553,8 @@ def _validated_expansion(term, wrap_head, slot=None):
     if wrap_head and (compound_cell_shape(term)[0] or is_atom(term)
                       or is_term_instance(term)):
         return PredicateItem(head=term, body=True)
-    what = ("a clause, a list of clauses, or the atom `none` (suppress)"
-            if not wrap_head else
-            "a head term, a list of head terms, or the atom `none` (suppress)")
     hint = ""
-    if is_chars(term):
+    if is_chars(term) and not slot:
         hint = (f' -- "{term[1]}" is a STRING under -double_quotes(chars); '
                 f"the suppression sentinel is the ATOM none: write none or "
                 f"'none'")

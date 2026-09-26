@@ -271,6 +271,9 @@ def _option_lookup(mapping, name):
     # lookup outright (fix round 2, item 2).
     from clausal.logic.atoms import key_of  # noqa: PLC0415
     from clausal.logic.cells import chars  # noqa: PLC0415
+    # Since stage 2 of the atoms-as-str flip ``key_of(name)`` IS the interned
+    # ``str`` for every name but ``'[]'`` (which keys as NIL), so the plain
+    # ``name`` probe is distinct only for that one spelling; it stays for it.
     for key in (key_of(name), chars(name), name):
         got = mapping.get(key, _OPTION_MISSING)
         if got is not _OPTION_MISSING:
@@ -279,7 +282,7 @@ def _option_lookup(mapping, name):
 
 
 def has_option(mapping, name) -> bool:
-    """Whether an options dict carries *name* under either spelling.
+    """Whether an options dict carries *name* under any of its spellings.
 
     The companion to :func:`option` for the ``"x" in opts`` shape, where a
     missing key and a key holding ``None`` must stay distinguishable.  The

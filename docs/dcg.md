@@ -104,7 +104,7 @@ verb_phrase >> (['chases'] or ['sees'] or ['likes'])
 not_a >> (not ['a'], [X])
 ```
 
-This matches any single token that is not `"a"`.
+This matches any single token that is not `'a'`.
 
 ### Pushback (Semicontext)
 

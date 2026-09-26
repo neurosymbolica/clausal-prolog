@@ -94,10 +94,20 @@ def _is_seam(n) -> bool:
 
 def _is_escape(n) -> bool:
     """A ``++expr`` escape: its operand is PYTHON, and a ``"..."`` in it is a
-    Python str the -double_quotes mode never reads."""
-    return (isinstance(n, ast.UnaryOp) and isinstance(n.op, ast.UAdd)
+    Python str the -double_quotes mode never reads.  A ``++`` CHAIN
+    (``++"Hello, " ++ NAME ++ "!"``, which parses as ``(++"Hello, ") + (+NAME)
+    + (+"!")``) is one Python text expression: every operand along the
+    ``+`` spine is Python too."""
+    if (isinstance(n, ast.UnaryOp) and isinstance(n.op, ast.UAdd)
             and isinstance(n.operand, ast.UnaryOp)
-            and isinstance(n.operand.op, ast.UAdd))
+            and isinstance(n.operand.op, ast.UAdd)):
+        return True
+    if isinstance(n, ast.BinOp) and isinstance(n.op, ast.Add):
+        left = n.left
+        while isinstance(left, ast.BinOp) and isinstance(left.op, ast.Add):
+            left = left.left
+        return _is_escape(left)
+    return False
 
 
 def _dq_literals(source: str, path: str):
@@ -137,9 +147,22 @@ def _dq_literals(source: str, path: str):
         # default: ``phrase(g, ["hello"])`` matches ``g >> (["hello"])``
         # and ``phrase(g, ['hello'])`` does not -- as are a nonterminal
         # call's arguments and the terms inside a ``{...}`` goal.
-        elements = body.elts if isinstance(body, ast.Tuple) else [body]
-        for element in elements:
-            walk(element, False, False, isinstance(element, ast.Constant))
+        # ``_rewrite_dcg_body`` recurses through the control forms, so a
+        # bare string under ``or`` / ``not`` / ``if_(...)`` is a terminal too.
+        stack = [body]
+        while stack:
+            element = stack.pop()
+            if isinstance(element, ast.Tuple):
+                stack.extend(element.elts)
+            elif isinstance(element, ast.BoolOp):
+                stack.extend(element.values)
+            elif isinstance(element, ast.UnaryOp) and isinstance(element.op, ast.Not):
+                stack.append(element.operand)
+            elif (isinstance(element, ast.Call) and isinstance(element.func, ast.Name)
+                    and element.func.id == "if_"):
+                stack.extend(element.args)
+            else:
+                walk(element, False, False, isinstance(element, ast.Constant))
 
     for st in tree.body:
         if isinstance(st, _HOSTED):
@@ -155,9 +178,10 @@ def _dq_literals(source: str, path: str):
             elif isinstance(v, ast.Tuple) and v.elts:
                 head = v.elts[0]
             elif isinstance(v, ast.BinOp) and isinstance(v.op, ast.RShift):
-                # A DCG rule: a literal that IS a body element, or an
-                # element of a body list, is a terminal in every mode;
-                # every other literal in the body -- an argument of a
+                # A DCG rule: only a BARE string body element (also under
+                # ``or`` / ``not`` / ``if_``) is the char-sequence terminal
+                # the compiler exempts from the mode; every other literal in
+                # the body -- a list terminal's elements, an argument of a
                 # nonterminal call, a term inside a ``{...}`` goal -- is an
                 # ordinary term read by the -double_quotes mode.
                 head = v.left
@@ -389,10 +413,17 @@ def _respell(text: str) -> str | None:
     raw = toks[0].string
     if not (raw.startswith('"') and raw.endswith('"')) or raw.startswith('"""'):
         return None
-    inner = raw[1:-1]
-    # ``\"`` was an escaped delimiter and needs none now; a bare ``'`` needs
-    # escaping now; an already-escaped ``\'`` must not be escaped twice.
-    inner = inner.replace('\\"', '"').replace("\\'", "'").replace("'", "\\'")
+    # The VALUE, then re-quoted: escapes are parsed by the tokenizer's own
+    # rules rather than by a replace chain (``"a\\'b"`` -- backslash,
+    # apostrophe -- must stay two characters, not lose its backslash).
+    try:
+        value = ast.literal_eval(raw)
+    except (SyntaxError, ValueError):
+        return None
+    if not isinstance(value, str):
+        return None
+    inner = value.replace("\\", "\\\\").replace("'", "\\'")
+    inner = inner.replace("\n", "\\n").replace("\t", "\\t").replace("\r", "\\r")
     return "'" + inner + "'"
 
 

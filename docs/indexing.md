@@ -197,7 +197,7 @@ Querying `color("blue", X)` without indexing tries all 203 match blocks. With fi
         finally: trail.undo(_mark)
     ```
 
-    The **fallback function** (called for unbound first arguments) always uses the original, unlifted clauses — so output-mode queries (`color(NAME, "warm")`) remain fully correct. Only bucket functions are affected.
+    The **fallback function** (called for unbound first arguments) always uses the original, unlifted clauses — so output-mode queries (`color(NAME, 'warm')`) remain fully correct. Only bucket functions are affected.
 
     ### Lazy recompile integration
 
@@ -243,7 +243,7 @@ First-argument indexing only helps when the first argument is ground. Many predi
 --8<-- "tests/fixtures/docs/indexing_sigs.txt:color_query_modes"
 ```
 
-With groundness-keyed dispatch, querying `color(NAME, "warm")` uses a second-argument index and jumps directly to the clauses whose second arg is `"warm"`, skipping all others.
+With groundness-keyed dispatch, querying `color(NAME, 'warm')` uses a second-argument index and jumps directly to the clauses whose second arg is `'warm'`, skipping all others.
 
 ??? abstract "Design"
 

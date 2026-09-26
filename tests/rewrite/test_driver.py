@@ -381,10 +381,7 @@ def test_a_mid_file_directive_governs_only_the_clauses_below_it(head_fold_rules)
 def test_reify_ast_reads_a_segment_under_the_mode_it_is_handed():
     """The ``double_quotes=`` parameter itself, without the driver."""
     import ast
-    from clausal.logic.atoms import mint
-    from clausal.logic.cells import chars
-    from clausal.reflection import reify_ast, Clause, Goal, is_v
-    from clausal.reflection import vfield
+    from clausal.reflection import reify_ast, Clause, is_v, vfield
     stmt = ast.parse('p(X) <- (X is "t")\n').body[0]
     seen = {}
     for mode in ("atom", "chars"):
@@ -393,7 +390,7 @@ def test_reify_ast_reads_a_segment_under_the_mode_it_is_handed():
         (unify,) = vfield(clause, "goals")
         seen[mode] = unify.right
     assert seen["atom"] == ("Atom", "t"), seen
-    assert seen["chars"] != seen["atom"] and "t" in repr(seen["chars"]), seen
+    assert seen["chars"] == "t", seen      # the carrier reifies as its plain str
 
 
 def test_an_unknown_mode_is_left_to_the_loader(head_fold_rules):

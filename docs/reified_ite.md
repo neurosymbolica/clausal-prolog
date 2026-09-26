@@ -41,7 +41,7 @@ classify(X, L) <- if_(X >= 0, L is 'positive', L is 'negative')
 check(X, R) <- if_(X is 1, R is 'equal', R is 'different')
 ```
 
-when `X` is unbound, this produces two solutions: `X=1, R="equal"` and `dif(X,1), R="different"`.
+when `X` is unbound, this produces two solutions: `X=1, R='equal'` and `dif(X,1), R='different'`.
 
 **Nested ITE:**
 ```clausal

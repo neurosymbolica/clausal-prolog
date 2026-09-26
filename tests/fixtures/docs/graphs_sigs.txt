@@ -62,5 +62,5 @@ min_spanning_tree([['a', 'b', 1], ['b', 'c', 2], ['a', 'c', 4]], T, C)
 
 --8<-- [start:transform_example]
 reverse_edges([['a', 'b'], ['c', 'd']], R)
-# R = [["b", "a"], ["d", "c"]]
+# R = [['b', 'a'], ['d', 'c']]
 --8<-- [end:transform_example]

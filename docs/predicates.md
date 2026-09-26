@@ -120,7 +120,7 @@ parent('bob', 'carol'),
 parent('carol', 'dave'),
 ```
 
-**Direct parent query**: `parent("alice", "bob")` succeeds.
+**Direct parent query**: `parent('alice', 'bob')` succeeds.
 
 **Ancestor relation** — generalize parent to any depth:
 

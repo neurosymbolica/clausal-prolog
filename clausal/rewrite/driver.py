@@ -173,12 +173,14 @@ def _head_has_keywords(clause):
 
 def _double_quotes_directive(statement):
     """``"atom"`` / ``"chars"`` when *statement* is ``-double_quotes(mode)``
-    with a mode the loader accepts, else ``None``.  Any other argument
+    with a mode the loader accepts (``DOUBLE_QUOTES_MODES``, the loader's
+    own list), else ``None``.  Any other argument
     (``codes``, a typo) is a load error in the compiler
     (``_handle_double_quotes_directive``); the driver does not second-guess
     it, and does not silently rewrite the file under a mode the loader
     would refuse -- it leaves the mode as it was, and the file's load will
     say what is wrong."""
+    from clausal.templating.term_rewriting import DOUBLE_QUOTES_MODES  # noqa: PLC0415
     value = getattr(statement, "value", None)
     if (isinstance(statement, ast.Expr) and isinstance(value, ast.UnaryOp)
             and isinstance(value.op, ast.USub)
@@ -187,7 +189,7 @@ def _double_quotes_directive(statement):
             and value.operand.func.id == "double_quotes"
             and len(value.operand.args) == 1
             and isinstance(value.operand.args[0], ast.Name)
-            and value.operand.args[0].id in ("atom", "chars")):
+            and value.operand.args[0].id in DOUBLE_QUOTES_MODES):
         return value.operand.args[0].id
     return None
 
