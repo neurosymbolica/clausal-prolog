@@ -15,7 +15,9 @@ A record is a summary, not the authority. The authority is:
 
     docs/superpowers/specs/            the reasoning, the measurements, the rulings
     implementation_plans/SESSION-HANDOFF-*.md   what is landed, open, and next
-    tools/predmeta_census/             the instruments, and their controls
+    tools/predmeta_census/             the instruments, and their controls (deleted
+                                       2026-09-26 with the class they measured;
+                                       in the git history)
 
 Keep the record's status line (branch, head, gate) current when you republish. A design
 record that is four hours stale will mislead on exactly the things that changed.

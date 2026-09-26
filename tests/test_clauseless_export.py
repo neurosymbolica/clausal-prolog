@@ -328,34 +328,44 @@ def test_a_second_module_directive_after_a_private_list_is_attributed_to_it(
 # ── an origin speaks only for a key that is STILL data (roborev 200) ─────────
 
 
-def test_an_origin_is_ignored_once_the_key_has_a_row(load):
-    """REPRODUCED 2026-09-26: an importer that imports the DATA ``edge`` and
-    ALSO declares ``-dynamic(edge/2)`` has a ROW for ``edge/2``
-    (``declared_kind`` answers ``"predicate"``), but its binding is still the
-    owner's atom, so a call reaches the atom arm -- and the message said
-    "declared as DATA ... imported from cle_owner".  The recorded origin must
-    only speak while the key is still DATA."""
-    load("cle_owner", FIELDED)
-    imp = load("cle_dynimp", "-import_from(cle_owner, [edge])\n"
-               "-module(cle_dynimp, [q(X)])\n-dynamic(edge/2)\n"
-               "q(X) <- edge(1, X)\n")
-    db = _lm(imp).db
-    assert db.row("edge", 2) is not None
-    assert db.declared_kind("edge", 2) == "predicate"
-    formal, message = _error(imp, ("q", Var()))
-    assert formal == Compound("existence_error",
-                              ("procedure", Compound("/", ("edge", 2))))
-    assert "declared as DATA" not in message
+@pytest.mark.parametrize("local_key", ["edge", "e"], ids=["plain", "aliased"])
+def test_an_origin_is_ignored_once_the_key_has_a_row(local_key):
+    """REPRODUCED 2026-09-26 through a load: an importer that imported the
+    DATA ``edge`` and ALSO declared ``-dynamic(edge/2)`` had a ROW for
+    ``edge/2``, but its binding was still the owner's atom, so a call reached
+    the atom arm and the message said "declared as DATA ... imported from
+    cle_owner".  That load is now REFUSED (the import/local clash ruling,
+    2026-09-26; see the next test), so the guard is pinned here on the
+    Database directly, once per lookup route: a recorded origin speaks only
+    while the key is still DATA.  ``edge`` is the direct key; ``e`` is an
+    aliased import (``alias(edge, e)``), found through the owner's
+    spelling."""
+    from clausal.logic.database import Database
+    from clausal.logic.predicate import _atom_goal_message
+    db = Database(module_dict={"__name__": "cle_dynimp"})
+    db.declare_functor(local_key, ("A", "B"),
+                       origin=("import", "cle_owner", "edge"))
+    assert db.declaration_origins("edge", 2)          # positive control
+    assert "declared as DATA" in _atom_goal_message("edge", 2, db)
+    db.mark_dynamic(local_key, 2)
+    assert db.declared_kind(local_key, 2) == "predicate"
+    assert db.declaration_origins("edge", 2) == []
+    assert "declared as DATA" not in _atom_goal_message("edge", 2, db)
 
 
-def test_an_aliased_origin_is_ignored_once_the_local_key_has_a_row(load):
+@pytest.mark.parametrize("src", [
+    "-import_from(cle_owner, [edge])\n-module(cle_dynimp, [q(X)])\n"
+    "-dynamic(edge/2)\nq(X) <- edge(1, X)\n",
+    "-import_from(cle_owner, [alias(edge, e)])\n-module(cle_dynimp, [q(X)])\n"
+    "-dynamic(e/2)\nq(X) <- e(1, X)\n",
+], ids=["plain", "aliased"])
+def test_a_local_dynamic_beside_a_data_import_is_refused_at_load(load, src):
+    """The configuration that reached the guard above: refused at load since
+    the import/local clash ruling (tests/test_import_local_clash.py)."""
     load("cle_owner", FIELDED)
-    imp = load("cle_dynalias", "-import_from(cle_owner, [alias(edge, e)])\n"
-               "-module(cle_dynalias, [q(X)])\n-dynamic(e/2)\n"
-               "q(X) <- e(1, X)\n")
-    assert _lm(imp).db.declared_kind("e", 2) == "predicate"
-    _, message = _error(imp, ("q", Var()))
-    assert "declared as DATA" not in message
+    with pytest.raises(SyntaxError) as info:
+        load("cle_dynimp", src)
+    assert "where it is a DATA functor" in str(info.value)
 
 
 def test_two_aliased_imports_of_the_same_spelling_name_both_owners(load):
