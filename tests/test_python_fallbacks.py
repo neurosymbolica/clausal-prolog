@@ -11,7 +11,6 @@ import pytest
 from clausal.logic.cells import chars
 
 from clausal.logic.variables import Var, Trail, deref, unify, is_var
-from clausal.logic.predicate import PredicateMeta
 from clausal.terms import Compound, KWTerm
 
 
@@ -27,19 +26,17 @@ from clausal.logic.predicate import (
 )
 
 
-class Pt(metaclass=PredicateMeta):
-    _fields = ("x", "y")
-
-
-class Atom(metaclass=PredicateMeta):
-    _fields = ()
+# (``Pt``/``Atom``, a two-field and a zero-field ``PredicateMeta`` class, were
+# the class rows of these twin checks; the class was deleted at W4b-3 slice 7
+# and their rows and class-only tests went with it.)
 
 
 class TestIsTermInstanceFallback:
 
     def test_class_not_instance(self):
-        # nv
-        assert _is_term_instance_py(Pt) == is_term_instance(Pt) == False
+        # nv -- a class is never a term instance (a plain class stands in
+        # for the retired PredicateMeta class row)
+        assert _is_term_instance_py(Compound) == is_term_instance(Compound) == False
 
     def test_int_not_instance(self):
         # nv
@@ -59,13 +56,12 @@ class TestIsZeroFieldClassFallback:
     """Task 12 renamed the zero-field-CLASS test; the C symbol stays
     ``is_atom`` and is imported under the new name in ``predicate.py``."""
 
-    def test_zero_arity(self):
-        # nv
-        assert _is_zero_field_class_py(Atom) == is_zero_field_class(Atom) == True
-
-    def test_non_zero_arity(self):
-        # nv
-        assert _is_zero_field_class_py(Pt) == is_zero_field_class(Pt) == False
+    def test_no_object_is_a_zero_field_class_any_more(self):
+        """W4b-3 slice 7 deleted the class: the question always answers
+        False (it answered True for a zero-field ``PredicateMeta`` class)."""
+        for value in ("atom", ("pt", 1), Compound, type("X", (), {})):
+            assert _is_zero_field_class_py(value) is False
+            assert is_zero_field_class(value) is False
 
     def test_not_predicate_meta(self):
         # nv
@@ -150,11 +146,6 @@ class TestArityFallback:
     def test_int(self):
         # nv
         assert _arity_py(42) == _arity(42) == 0
-
-    def test_atom(self):
-        # nv
-        # STAGE 2 (spec §4): no class is a term -- both twins answer None
-        assert _arity_py(Atom) is None and _arity(Atom) is None
 
     def test_string_nonempty_is_arity_two(self):
         # nv
@@ -286,15 +277,15 @@ class TestIsGroundFallback:
         t = KWTerm("r", a=1)
         assert _is_ground_py(t) == _is_ground(t) == True
 
-    def test_predicate_instance_with_var(self):
-        # nv
+    def test_predicate_cell_with_var(self):
+        # nv -- what a predicate class built (a cell), since W4b-3 slice 7
         v = Var()
-        t = Pt(x=v, y=1)
+        t = ("pt", v, 1)
         assert _is_ground_py(t) == _is_ground(t) == False
 
-    def test_predicate_instance_ground(self):
+    def test_predicate_cell_ground(self):
         # nv
-        t = Pt(x=1, y=2)
+        t = ("pt", 1, 2)
         assert _is_ground_py(t) == _is_ground(t) == True
 
     def test_bound_var_ground(self):
@@ -305,8 +296,8 @@ class TestIsGroundFallback:
         assert _is_ground_py(v) == _is_ground(v) == True
 
     def test_atom_ground(self):
-        # nv
-        assert _is_ground_py(Atom) == _is_ground(Atom) == True
+        # nv -- the atom (a zero-field class stood here until W4b-3 slice 7)
+        assert _is_ground_py("red") == _is_ground("red") == True
 
 
 # ── inspection.py fallbacks ──────────────────────────────────────────────────
@@ -495,8 +486,6 @@ def _corpus():
         ("compound", Compound("f", (1, X))),
         ("compound_var_functor", Compound(X, (1, 2))),
         ("kwterm", KWTerm("r", a=X, b=2)),
-        ("atom_class", Atom),
-        ("class_with_fields", Pt),
         # --- cells ---
         ("cell_ground", ("pt", 1, 2)),
         ("cell_with_var", ("pt", 1, X)),

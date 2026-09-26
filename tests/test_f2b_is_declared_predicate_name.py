@@ -30,7 +30,6 @@ from clausal.logic.database import Database
 from clausal.logic.predicate import (
     is_declared_predicate_name,
 )
-from tests.predicate_api_support import class_arm_predicate
 
 
 def _fixture_path(name: str) -> str:
@@ -145,27 +144,6 @@ def test_1f_arbitrary_object_is_not_a_predicate_name():
 
 # ── Class arm: today's era, a PredicateMeta binding, ARITY-BLIND ──────────
 
-def test_kind_predicate_class_is_a_predicate_name_regardless_of_arity():
-    P1 = class_arm_predicate("F2bArity1", ["a"])
-    P3 = class_arm_predicate("F2bArity3", ["a", "b", "c"])
-    P0 = class_arm_predicate("F2bArity0", [])
-    assert is_declared_predicate_name(P1) is True
-    assert is_declared_predicate_name(P3) is True
-    assert is_declared_predicate_name(P0) is True
-
-
-def test_kind_predicate_class_is_true_unconditionally_row_bound_or_not():
-    P = class_arm_predicate("F2bUnbound", ["a", "b"])
-    assert is_declared_predicate_name(P) is True
-    P._state_row()
-    assert is_declared_predicate_name(P) is True
-
-
-def test_kind_bare_predicate_class_with_no_fields_of_its_own_is_still_true():
-    from clausal.logic.predicate import PredicateMeta
-    bare = PredicateMeta("F2bBareNoFields", (), {})
-    assert not hasattr(bare, "_fields")
-    assert is_declared_predicate_name(bare) is True
 
 
 # ── Positive control ────────────────────────────────────────────────────────

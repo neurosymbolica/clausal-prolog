@@ -31,7 +31,7 @@ import pytest
 
 from clausal.logic.atoms import mangle, mint
 from clausal.logic.exceptions import LogicException
-from clausal.logic.predicate import PredicateMeta, _dispatch_at
+from clausal.logic.predicate import _dispatch_at
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, walk
 from clausal.predicate_diagnostics import PredicateArityMismatchError
@@ -132,20 +132,16 @@ def test_a_dotted_qualified_goal_reaches_the_handle_arm(tmp_path, monkeypatch):
     I = imp.__dict__["$module"]
     arms = []
     handle_arm = predicate_mod._refuse_if_known_at_another_arity
-    class_arm = PredicateMeta._refuse_call_at
+    # (A class-arm spy, ``PredicateMeta._refuse_call_at``, stood beside this
+    # one; the class was deleted at W4b-3 slice 7, so the handle arm is the
+    # only one there is.)
 
     def spy_handle(db, functor, arity):
         arms.append(("handle", functor, arity, db is O.db))
         return handle_arm(db, functor, arity)
 
-    def spy_class(cls, arity):
-        if cls.__name__ == "pk":
-            arms.append(("class", arity))
-        return class_arm(cls, arity)
-
     monkeypatch.setattr(predicate_mod, "_refuse_if_known_at_another_arity",
                         spy_handle)
-    monkeypatch.setattr(PredicateMeta, "_refuse_call_at", spy_class)
     assert _pi("by_qual", I) == Compound("/", (mint("pk"), 2))
     assert arms == [("handle", "pk", 2, True)], arms
     assert _pi("ok", I) == 1

@@ -30,7 +30,6 @@ from clausal.import_hook import (
 )
 from clausal.logic.compiler_v2 import compile_module
 from clausal.logic.database import Module as LogicModule, head_key
-from clausal.logic.predicate import PredicateMeta
 from clausal.logic.solve import call
 from clausal.logic.term_expansion import (
     run_term_expansion,

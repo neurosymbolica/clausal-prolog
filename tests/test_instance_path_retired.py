@@ -4,15 +4,8 @@ A predicate class builds CELLS, and every door that built an instance is
 a loud refusal, so an out-of-tree minter fails rather than drifting."""
 import pytest
 
-from clausal.logic.predicate import PredicateMeta, RetiredStateError
+from clausal.logic.predicate import RetiredStateError
 from clausal.logic.variables import Var
-from tests.predicate_api_support import class_arm_predicate
-
-
-def test_clausal_head_is_a_raising_tombstone():
-    Pt = class_arm_predicate("Pt", ["x", "y"])
-    with pytest.raises(RetiredStateError, match="_clausal_head"):
-        Pt._clausal_head(x=1, y=2)
 
 
 def test_make_predicate_is_retired_whatever_its_arguments():
@@ -28,30 +21,6 @@ def test_make_predicate_is_retired_whatever_its_arguments():
             call_it()
         assert isinstance(exc.value, TypeError)
         assert "retired (W4b-3 slice 6)" in str(exc.value)
-
-
-def test_calling_a_class_always_builds_the_cell():
-    Pt = class_arm_predicate("Pt2", ["x", "y"])
-    cell = Pt(x=1, y=Var())
-    assert cell[0] == "Pt2" and cell[1] == 1 and isinstance(cell[2], Var)
-    assert type(cell) is tuple, "never an instance, whatever the class carries"
-
-
-def test_no_fast_instance_constructor_is_attached():
-    Pt = class_arm_predicate("Pt3", ["x"])
-    assert not hasattr(Pt, "_clausal_new")
-
-
-def test_is_term_instance_is_dataclass_only():
-    import dataclasses
-    from clausal.logic.predicate import is_term_instance, term_field_names
-    @dataclasses.dataclass
-    class D:
-        a: int
-    assert is_term_instance(D(1)) is True and term_field_names(D(1)) == ("a",)
-    Pt = class_arm_predicate("Pt4", ["x"])
-    assert is_term_instance(Pt(1)) is False, "a cell is not an instance"
-    assert is_term_instance(Pt) is False, "nor is the class"
 
 
 def test_the_python_twins_no_longer_carry_a_predicatemeta_instance_arm():
@@ -121,38 +90,6 @@ def test_a_dataclass_node_is_emitted_as_a_keyword_call():
 def _c_module():
     from clausal.logic.variables import _variables as C
     return C
-
-
-def test_c_and_python_twins_agree_and_neither_knows_an_instance():
-    """A positive control that OBSERVES the C arm's removal.
-
-    The retirement closed every door that BUILDS an instance, so no ordinary
-    term can tell the two twins apart -- which would make a corpus-parity
-    probe here pass on the old ``.so`` as happily as on the new one.  So the
-    probe smuggles one past the constructors (``cls.__new__(cls)`` touches
-    neither ``__call__`` nor ``_clausal_head``) and asks the C entry point
-    directly: with the arm present it answers True while the Python twin
-    answers False, and that disagreement is exactly what the rebuilt ``.so``
-    removes.  A ``@dataclass`` instance must still be a term instance on both
-    sides -- the arm that stays.
-    """
-    import dataclasses
-
-    C = _c_module()
-    from clausal.logic import predicate as P
-
-    @dataclasses.dataclass
-    class D:
-        a: int
-
-    Pt = class_arm_predicate("Pt5", ["x"])
-    smuggled = Pt.__new__(Pt)          # no constructor was called
-    for obj in (D(1), Pt, Pt(x=1), "atom", ("f", 1), smuggled):
-        assert bool(C.is_term_instance(obj)) == P._is_term_instance_py(obj), obj
-    assert C.is_term_instance(smuggled) is False, (
-        "the C PredicateMeta-instance arm is still live in the loaded .so"
-    )
-    assert bool(C.is_term_instance(D(1))) is True, "the dataclass arm stays"
 
 
 def test_the_c_source_no_longer_carries_the_instance_arm():

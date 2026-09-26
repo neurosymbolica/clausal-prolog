@@ -37,7 +37,6 @@ from clausal.predicate_diagnostics import (
     describe_arity_mismatch,
 )
 from clausal.testing import load_clausal_module, main
-from tests.predicate_api_support import class_arm_predicate
 
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
@@ -347,23 +346,7 @@ class TestExceptionType:
         """It was a TypeError before; anything catching that keeps working."""
         assert issubclass(PredicateArityMismatchError, TypeError)
 
-    def test_the_raise_is_that_class(self):
-        """A static ``issubclass`` pins nothing about what is raised.
 
-        With only that assertion, making ``predicate_arity_mismatch`` return a
-        plain ``TypeError(msg)`` — the failure this fix exists to replace —
-        passed the whole file.
-        """
-        pair = class_arm_predicate("arcm_typed", ["k", "v"])
-        pair._state_row().clauses.append(Clause(head=pair(1, 2), body=[]))
-        with pytest.raises(PredicateArityMismatchError):
-            pair._get_dispatch(1)
-
-    def test_caught_as_a_type_error_at_the_raise_site(self):
-        pair = class_arm_predicate("arcm_typed_te", ["k", "v"])
-        pair._state_row().clauses.append(Clause(head=pair(1, 2), body=[]))
-        with pytest.raises(TypeError):
-            pair._get_dispatch(3)
 
 
 # ── false positives: a Call in a body is not necessarily a goal ──────────────
@@ -524,23 +507,6 @@ class TestForeignSingleArgumentImplementor:
         assert value is not DONE, "the foreign goal must have produced a solution"
         assert deref(out) == 1
 
-    def test_dispatch_at_routes_by_type_not_by_hasattr(self):
-        """``_dispatch_at`` is the only place that knows which protocol to use."""
-        from clausal.logic.predicate import _dispatch_at
-        from tests.fixtures.foreign_dispatch_impl import (
-            _foreign_pair_dispatch, foreign_pair,
-        )
-        # A foreign implementor: the arity is dropped, never forwarded.
-        assert _dispatch_at(foreign_pair, 2) is _foreign_pair_dispatch
-        assert _dispatch_at(foreign_pair, 99) is _foreign_pair_dispatch
-        # A PredicateMeta: the arity is forwarded and a disagreement refused.
-        pair = class_arm_predicate("arcm_routed", ["k", "v"])
-        pair._state_row().clauses.append(Clause(head=pair(1, 2), body=[]))
-        with pair._mutate("test", "recompile"):    # the gate, P3-3 Task 3
-            pair._state_row().dispatch_fn = lambda *a: None
-        assert _dispatch_at(pair, 2) is pair._state_row().dispatch_fn
-        with pytest.raises(PredicateArityMismatchError):
-            _dispatch_at(pair, 3)
 
     def test_only_predicate_meta_takes_an_arity(self):
         """No second implementor may quietly grow an ``arity`` parameter.
@@ -568,31 +534,6 @@ class TestForeignSingleArgumentImplementor:
 
 # ── a -dynamic declaration is an arity source clause heads cannot be ─────────
 
-
-
-def _declared(name, fields, arities):
-    """A class declared ``-dynamic`` at *arities*, the way the compiler does.
-
-    ``_declared_arity`` derives the declaration from the OWNER's Database via
-    the class's row (option D, 2026-09-22), so a test has to DECLARE rather
-    than assign ``_dynamic_arities``: that property lost its only production
-    writer when the step-4a stamp went, and assigning it no longer declares
-    anything.  Binding at the class's OWN arity is what the compiler does --
-    the declared arity may legitimately differ, which several tests below rely
-    on.
-    """
-    db = Database()
-    cls = class_arm_predicate(name, fields)
-    for arity in arities:
-        db.mark_dynamic(name, arity)
-    cls._bind_row(db, name, len(fields))
-    # POSITIVE CONTROL, here so all five callers get it: four of them assert
-    # only that `_refuse_call_at` DECLINES, which a declaration that never
-    # took would also satisfy.  This makes "declined for the right reason"
-    # distinguishable from "nothing was declared".
-    assert all(db.is_dynamic(name, a) for a in arities), \
-        f"the -dynamic declaration did not take for {name}"
-    return cls
 
 
 class TestDynamicDeclaredArity:
@@ -649,59 +590,10 @@ class TestDynamicDeclaredArity:
         assert "dfact takes 3 arguments, but this call passes 1" in out
         assert "positional argument" not in out
 
-    def test_retracting_back_to_empty_keeps_the_declaration(self):
-        """assertz → retract → the declared arity still refuses."""
-        pair = class_arm_predicate("arcm_dynpair", ["k", "v", "w"])
-        moving = _declared("arcm_dyndecl", ["a", "b", "c"], {3})
-        with pytest.raises(PredicateArityMismatchError):
-            moving._refuse_call_at(2)
-        moving._assertz(Clause(head=pair(1, 2, 3), body=[]))
-        with pytest.raises(PredicateArityMismatchError):
-            moving._refuse_call_at(2)            # via the heads now
-        assert moving._retract(pair(1, 2, 3)) is True
-        with pytest.raises(PredicateArityMismatchError) as exc:
-            moving._refuse_call_at(2)            # via the declaration again
-        assert "takes 3 arguments, but this call passes 2" in str(exc.value)
 
-    def test_two_declared_arities_decline(self):
-        """One number in the message means one declared arity, or nothing.
 
-        The multi-arity ``-dynamic`` name has its own dispatch tangle; a
-        refusal that guessed which declared arity to blame would be wrong
-        half the time, so the fallback declines exactly like an unreadable
-        head shape does.
-        """
-        both = _declared("arcm_dynboth", ["a", "b", "c"], {2, 3})
-        both._refuse_call_at(4)                  # must not raise
-        both._refuse_call_at(1)
 
-    def test_a_declared_arity_is_never_itself_refused(self):
-        one = _declared("arcm_dynself", ["a", "b", "c"], {2})
-                                                 # declaration disagrees with
-        one._refuse_call_at(2)                   # _fields: the call wins
 
-    def test_a_declaration_for_a_differently_shaped_class_declines(self):
-        """The stamp can land on a same-named class of another arity.
-
-        ``-dynamic(f/3)`` in a module that imported a 0-arity vocabulary
-        atom ``f`` stamps {3} onto a class whose authored shape is /0.  Two
-        authored sources disagree, so refusing with either number would be
-        confidently wrong half the time — the fallback declines instead
-        (roborev job 9).  ``_fields`` acts only as a VETO here, never as
-        the arity source, so the stale-``_fields`` hazard cannot return.
-        """
-        atom = _declared("arcm_dynatom", [], {3})   # authored /0, declared /3
-        atom._refuse_call_at(1)                  # must not raise
-        pair = _declared("arcm_dynpair2", ["k", "v"], {3})
-                                                 # /2 class, /3 declaration
-        pair._refuse_call_at(1)                  # must not raise
-
-    def test_undeclared_stays_declined(self):
-        """The default is ``None`` — every pre-existing decline is untouched."""
-        plain = class_arm_predicate("arcm_dynnone", ["a", "b", "c"])
-        # No Database has a mark for it, so the derived set is EMPTY -- which
-        # is what the old class-stamped `None` meant.
-        plain._refuse_call_at(2)                 # must not raise
 
 
 # ── the two runtime funnels that know their own arity ────────────────────────
@@ -776,97 +668,6 @@ class _CountingClause:
     def head(self):
         self.reads += 1
         return self._head
-
-
-def _stale_predicate(name, n_clauses):
-    """A predicate shaped the way a downstream rulebase's are: ``_arity`` 0,
-    heads at /2.
-
-    Real code gets here by importing a 0-arity vocabulary atom and then
-    defining a same-named predicate; ``TestTermConstructionUnaffected.
-    test_atom_vocabulary_then_predicate_local_name_call`` (and its dotted-path
-    sibling ``..._dotted_path_raises_cleanly``) pin that
-    ``tests/fixtures/impord_atom_then_pred.clausal`` really is that shape
-    (split in two by the P3-1 Task 2 fix round 1 ruling -- see
-    ``task-2-report.md``; this helper's hand-built stale-arity shape is
-    orthogonal to that ruling, since it builds a live ``PredicateMeta`` atom
-    directly via ``make_predicate(name, [])``, never a str).
-    Built by hand here so the clause count can be a fact table's, and so no
-    shared fixture class is mutated.
-    """
-    pair = class_arm_predicate(name + "_pair", ["k", "v"])
-    stale = class_arm_predicate(name, [])
-    stale._state_row().clauses.extend(_CountingClause(pair(i, i)) for i in range(n_clauses))
-    assert stale._arity == 0          # stale, permanently
-    return stale
-
-
-class TestTheWalkIsNotPerCall:
-    """``arity != len(_fields)`` is permanent for those, so the walk cannot be.
-
-    ``_refuse_call_at`` read every clause head on every invocation of a
-    stale-``_arity`` predicate and never refused: 108 µs per call on a 2000-fact
-    one against 0.10 µs for an honest ``_arity``, i.e. the whole cost of the
-    diagnostic fell on exactly the predicates that made the clause walk
-    necessary.  One head is enough — if the first head has the call's arity then
-    either all of them do or they disagree, and both answers decline.
-    """
-
-    def test_an_agreeing_call_reads_one_head(self):
-        stale = _stale_predicate("arcm_hot", 2000)
-        stale._refuse_call_at(2)        # the call the corpus makes, every time
-        assert sum(c.reads for c in stale._state_row().clauses) == 1
-
-    def test_the_cost_does_not_grow_with_the_clause_list(self):
-        small = _stale_predicate("arcm_small", 2)
-        big = _stale_predicate("arcm_big", 2000)
-        small._refuse_call_at(2)
-        big._refuse_call_at(2)
-        assert (sum(c.reads for c in small._state_row().clauses)
-                == sum(c.reads for c in big._state_row().clauses) == 1)
-
-    def test_a_real_mismatch_is_still_refused(self):
-        """The short-circuit must not cost the refusal it is guarding."""
-        stale = _stale_predicate("arcm_refused", 50)
-        with pytest.raises(PredicateArityMismatchError) as exc:
-            stale._refuse_call_at(1)
-        assert "takes 2 arguments, but this call passes 1" in str(exc.value)
-
-
-class TestClauseListChangesAreObeyed:
-    """Re-derived, not memoised, so ``assertz``/``retract`` land immediately.
-
-    A cached "2 is acceptable" that outlived its clause list would refuse a call
-    that had become correct, or — worse — stay silent about one that had become
-    wrong.  ``_clauses`` is mutated in place by ``_assertz``/``_retract`` and
-    replaced wholesale by three load-time paths, so the answer is read off the
-    heads at every call instead of being remembered.
-    """
-
-    def test_assertz_of_another_arity_flips_the_decision(self):
-        pair = class_arm_predicate("arcm_dyn_pair", ["k", "v"])
-        one = class_arm_predicate("arcm_dyn_one", ["k"])
-        moving = class_arm_predicate("arcm_dyn", [])
-
-        moving._assertz(Clause(head=pair(1, 2), body=[]))
-        moving._refuse_call_at(2)                    # /2 heads: accepted
-        with pytest.raises(PredicateArityMismatchError):
-            moving._refuse_call_at(1)
-
-        assert moving._retract(pair(1, 2)) is True
-        moving._assertz(Clause(head=one(1), body=[]))
-        moving._refuse_call_at(1)                    # /1 heads now: accepted
-        with pytest.raises(PredicateArityMismatchError):
-            moving._refuse_call_at(2)
-
-    def test_retracting_the_last_clause_stops_refusing(self):
-        pair = class_arm_predicate("arcm_empty_pair", ["k", "v"])
-        moving = class_arm_predicate("arcm_empty", [])
-        moving._assertz(Clause(head=pair(1, 2), body=[]))
-        with pytest.raises(PredicateArityMismatchError):
-            moving._refuse_call_at(1)
-        assert moving._retract(pair(1, 2)) is True
-        moving._refuse_call_at(1)   # no clauses: nothing known, nothing refused
 
 
 # ── head shapes: a diagnostic that can crash is worse than no diagnostic ─────
@@ -967,67 +768,6 @@ class TestZeroArityFactAtomHead:
         assert indicator.args == ("arcm_pure_tag", 1)
         assert "not callable at arity 1" in term.args[1]
         assert "AttributeError" not in term.args[1]
-
-
-class TestCompoundHead:
-    """A head with an ``args`` sequence, which is read from ``args``.
-
-    Pinned because reading the class's ``_fields`` first — the fix for the
-    0-arity fact atom — put a second branch in front of this one, and because a
-    ``Compound`` whose functor is a ``Var`` still has a countable arity even
-    though ``database.head_key`` refuses to name it.
-    """
-
-    def test_str_functor(self):
-        from clausal.terms import Compound
-        pred = class_arm_predicate("arcm_compound", [])
-        pred._state_row().clauses.append(Clause(head=Compound("arcm_compound", (1, 2)),
-                                    body=[]))
-        assert pred._clause_arity() == 2
-        with pytest.raises(PredicateArityMismatchError) as exc:
-            pred._refuse_call_at(1)
-        assert "takes 2 arguments, but this call passes 1" in str(exc.value)
-
-    def test_var_functor(self):
-        from clausal.logic.variables import Var
-        from clausal.terms import Compound
-        pred = class_arm_predicate("arcm_compound_var", [])
-        pred._state_row().clauses.append(Clause(head=Compound(Var(), (1, 2, 3)), body=[]))
-        assert pred._clause_arity() == 3
-        pred._refuse_call_at(3)          # agrees: nothing refused
-
-
-class TestAHeadShapeNobodyAnticipated:
-    """Undefined arity means *nothing is refused*, never *something is raised*."""
-
-    def test_an_unreadable_head_refuses_nothing(self):
-        junk = class_arm_predicate("arcm_junk", [])
-        junk._state_row().clauses.append(Clause(head=object(), body=[]))
-        assert junk._clause_arity() is None
-        junk._refuse_call_at(3)          # must not raise at all
-
-    def test_one_unreadable_head_makes_the_whole_arity_unknown(self):
-        pair = class_arm_predicate("arcm_mixed_pair", ["k", "v"])
-        mixed = class_arm_predicate("arcm_mixed", [])
-        mixed._state_row().clauses.append(Clause(head=pair(1, 2), body=[]))
-        mixed._state_row().clauses.append(Clause(head=object(), body=[]))
-        assert mixed._clause_arity() is None
-        mixed._refuse_call_at(1)         # refusable on the first head alone
-
-    def test_a_clause_list_that_explodes_refuses_nothing(self):
-        """``_refuse_call_at`` raises ``PredicateArityMismatchError`` or nothing.
-
-        Not the RuntimeError from here, and not a ``TypeError`` from a head shape
-        the walk did not expect.
-        """
-        class Exploding:
-            @property
-            def head(self):
-                raise RuntimeError("a diagnostic must survive this")
-
-        boom = class_arm_predicate("arcm_boom", [])
-        boom._state_row().clauses.append(Exploding())
-        boom._refuse_call_at(2)
 
 
 # ── what the docs may claim ──────────────────────────────────────────────────

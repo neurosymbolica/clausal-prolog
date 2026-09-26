@@ -38,13 +38,12 @@ from clausal.logic.compiler_v2 import (
     _refuse_foreign_writes,
 )
 from clausal.logic.database import Database
-from clausal.logic.predicate import PredicateMeta, is_declared_predicate
+from clausal.logic.predicate import is_declared_predicate
 from clausal.logic.solve import call, solve
 from clausal.logic.variables import Var, deref, walk
 from clausal.pythonic_ast.nodes import ImportFromDirective
 from clausal.terms import Compound
 from tests.load_write_spy_support import record_load_writes
-from tests.predicate_api_support import class_arm_predicate
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
 
@@ -419,60 +418,6 @@ def test_an_exporter_row_a_load_wrote_and_emptied_keeps_the_clobber_message(
     assert "may not write bo_p/1: it is owned by " in last
 
 
-def test_an_authorized_bind_never_moves_a_predicate_off_another_database():
-    """The steal itself is gone: ``_bind_row(..., authorized=True)`` onto a
-    class already reading ANOTHER Database's real row raises instead of
-    moving it (it used to move -- the idiom's mechanism).  An unauthorized
-    bind still leaves the class where it is, silently, and a first bind off
-    the private detached row is still free."""
-    owner_db, other_db = Database(), Database()
-    cls = class_arm_predicate("vocabdrop_steal_probe", ["x"])
-    assert cls._row is None or cls._row.detached
-    cls._bind_row(owner_db, "vocabdrop_steal_probe", 1)       # first bind: free
-    home = cls._row
-    assert home is owner_db.row("vocabdrop_steal_probe", 1)
-
-    with pytest.raises(RuntimeError, match="never changes its defining module"):
-        cls._bind_row(other_db, "vocabdrop_steal_probe", 1, authorized=True)
-    assert cls._row is home
-
-    cls._bind_row(other_db, "vocabdrop_steal_probe", 1)       # policed: no-op
-    assert cls._row is home
-
-
-def test_a_python_module_exporting_a_predicate_class_gets_its_own_message(
-        tmp_path, monkeypatch, private_module):
-    """Round-4 review: a ``.clausal`` file importing a ``make_predicate``
-    class from a PYTHON module and writing its clauses used to work (the
-    class's first bind was off its detached row).  One defining module still
-    holds -- refused -- but the message must not be ``.clausal``-shaped
-    ("only declares", "-module export list"): the exporter is Python."""
-    monkeypatch.syspath_prepend(str(tmp_path))
-    # The metaclass called -- the shape ``make_predicate`` built, retired at
-    # W4b-3 slice 6 (it raises); Python can still spell it until slice 7.
-    (tmp_path / "vocabdrop_pyexp.py").write_text(textwrap.dedent("""\
-        from clausal.logic.predicate import PredicateMeta
-        vocabdrop_pyverdict = PredicateMeta(
-            "vocabdrop_pyverdict", (), {"_fields": ("a", "b")})
-        """))
-    sys.modules.pop("vocabdrop_pyexp", None)
-    import vocabdrop_pyexp  # noqa: F401 -- the exporter is loaded, as in use
-    try:
-        assert isinstance(vocabdrop_pyexp.vocabdrop_pyverdict, PredicateMeta)
-        with pytest.raises(SyntaxError) as exc_info:
-            private_module(None, "_vocabdrop_py_use", path=_importer(
-                tmp_path, "_vocabdrop_py_use", "vocabdrop_pyexp",
-                "vocabdrop_pyverdict", "vocabdrop_pyverdict(ok, yes)"))
-    finally:
-        sys.modules.pop("vocabdrop_pyexp", None)
-    flat = _flat(exc_info.value)
-    assert ("vocabdrop_pyverdict/2 is a predicate class created in Python "
-            "module vocabdrop_pyexp") in flat
-    assert "or have vocabdrop_pyexp define it" in flat
-    assert "only declares" not in flat
-    assert "-module export list" not in flat
-    assert "asserted at runtime" not in flat
-
 
 def test_a_specialize_over_an_imported_mi_still_binds(monkeypatch,
                                                       private_module):
@@ -695,55 +640,6 @@ def test_a_python_alias_of_a_clausal_declaration_is_not_python(
     assert "only declares impclob_verdict/2" in flat
 
 
-def test_a_python_made_class_on_a_real_clausal_row_is_not_python(
-        monkeypatch, private_module):
-    """The row decides first: a class made in Python (``make_predicate``,
-    whose ``__module__`` is not a Clausal module) that is BOUND to a real
-    Clausal row is a Clausal predicate, however it is re-exported."""
-    owner = private_module("impclob_decl_vocab", "_vocabdrop_r5_real_row")
-    owner_db = owner.__dict__["$module"].db
-    cls = class_arm_predicate("vocabdrop_mp", ["a", "b"])
-    cls._bind_row(owner_db, "vocabdrop_mp", 2)
-    assert not cls._row.detached and not cls._row.clauses
-    assert cls._row.source is None
-    fake = type(sys)("vocabdrop_py_reexporter")
-    fake.vocabdrop_mp = cls
-    monkeypatch.setitem(sys.modules, "vocabdrop_py_reexporter", fake)
-    origins = _import_from_origins(
-        [ImportFromDirective(module="vocabdrop_py_reexporter",
-                             names=["vocabdrop_mp"])],
-        {"vocabdrop_mp": cls})
-    text = _flat(_implements_an_imported_declaration(
-        origins, {"vocabdrop_mp": cls}, "vocabdrop_mp", 2, "some_implementer"))
-    assert "created in Python module" not in text
-    assert "only declares vocabdrop_mp/2" in text
-
-
-def test_a_python_made_class_with_clauses_on_its_detached_row_is_python(
-        monkeypatch):
-    """Round-6 LOW 1: a class made in Python holding clauses on its PRIVATE
-    detached row has no Clausal row at all -- the detached row is checked
-    first, so it gets the Python message, not "a -dynamic predicate holding
-    runtime clauses" (there is no exporter row to hold them)."""
-    from clausal.logic.database import Clause
-    cls = class_arm_predicate("vocabdrop_detached", ["a"])
-    cls._assertz(Clause(head=Compound("vocabdrop_detached", (1,)), body=[]))
-    assert cls._row.detached and cls._row.clauses, "not the shape under test"
-    fake = type(sys)("vocabdrop_py_detached")
-    fake.vocabdrop_detached = cls
-    monkeypatch.setitem(sys.modules, "vocabdrop_py_detached", fake)
-    origins = _import_from_origins(
-        [ImportFromDirective(module="vocabdrop_py_detached",
-                             names=["vocabdrop_detached"])],
-        {"vocabdrop_detached": cls})
-    text = _flat(_implements_an_imported_declaration(
-        origins, {"vocabdrop_detached": cls}, "vocabdrop_detached", 1,
-        "some_implementer"))
-    assert ("vocabdrop_detached/1 is a predicate class created in Python "
-            "module vocabdrop_py_detached") in text
-    assert "asserted at runtime" not in text
-
-
 def test_the_self_import_exemption_is_keyed_on_the_source_path(owners):
     """Round-6 LOW 2: the gate decides ownership by canonical SOURCE PATH
     (``write_refusal`` rule 1, "under any module name"), and so does the
@@ -767,79 +663,3 @@ def test_the_self_import_exemption_is_keyed_on_the_source_path(owners):
             "_clausal_test_impclob_decl_vocab",
             author="/elsewhere/other.clausal") is not None, era
 
-
-def test_the_other_arity_test_reads_the_bound_rows_arity_not_the_fields():
-    """Round-6 LOW 3: a class can be bound at an arity its ``_fields`` do not
-    spell (a name at two arities re-binds it within its database).  The
-    bound ROW's key is the arity that counts."""
-    from clausal.logic.predicate import (
-        is_foreign_class_at_other_arity,
-    )
-    owner_db, other_db = Database(), Database()
-    cls = class_arm_predicate("vocabdrop_two_arities", ["a"])
-    cls._bind_row(owner_db, "vocabdrop_two_arities", 1)
-    cls._bind_row(owner_db, "vocabdrop_two_arities", 3)     # same db: moves
-    assert cls._row.key == ("vocabdrop_two_arities", 3)
-    assert len(cls._fields) == 1
-    assert is_foreign_class_at_other_arity(cls, other_db, 3) is False
-    assert is_foreign_class_at_other_arity(cls, other_db, 1) is True
-    # Its own database is never "foreign"; an unbound class never is either.
-    assert is_foreign_class_at_other_arity(cls, owner_db, 1) is False
-    assert is_foreign_class_at_other_arity(
-        class_arm_predicate("vocabdrop_unbound", ["a"]), other_db, 2) is False
-
-
-@pytest.mark.parametrize("b_arity", [1, 2])
-def test_a_class_whose_fields_and_row_disagree_never_hits_the_internal_raise(
-        tmp_path, private_module, b_arity):
-    """Round-7 LOW 1: one arity source.  a exports ``r7q/1`` (a load clause),
-    and a's class -- minted with ONE field -- is then re-bound within a's own
-    database to a's ``r7q/2`` row.  Before, the pre-pass read ``_fields`` (1)
-    and step 4 read the row (2), so B writing ``r7q/2`` slipped past every
-    refusal into step 4's authorized bind and the INTERNAL ``RuntimeError``.
-    Now both read the row, and B's load ends in a user-facing load error at
-    either arity, with nothing of a's moved:
-
-    * ``r7q/2`` -- the class's row: the imported predicate, clause-free and
-      never loaded, so the drop-the-idiom refusal;
-    * ``r7q/1`` -- a's EXPORTED, adopted, load-owned row: the clobber
-      refusal (it is the imported predicate at that arity).
-
-    Post-flip a ``.clausal`` load binds a HANDLE, never a class, so the class
-    is planted explicitly: a ``make_predicate`` class (the shape a Python
-    module still exports) is bound to a's ``r7q/1`` row and put in a's
-    module dict where the import reads it.  The binding shape under test is
-    unchanged -- a class whose ``_fields`` (1) and bound row (2) disagree."""
-    owner_name = f"_vocabdrop_r7_owner_{b_arity}"
-    use_name = f"_vocabdrop_r7_use_{b_arity}"
-    owner = private_module(None, owner_name, path=_write(
-        tmp_path, owner_name,
-        f"-module({owner_name}, [r7q/1])\n-private([one])\nr7q(one),\n"))
-    olm = owner.__dict__["$module"]
-    assert owner.r7q == mangle(owner_name, "r7q")   # what the load bound
-    cls = class_arm_predicate("r7q", ["a"])
-    cls._bind_row(olm.db, "r7q", 1)                 # first bind: free
-    assert cls._row is olm.db.row("r7q", 1)
-    owner.__dict__["r7q"] = cls                     # the import reads this
-    cls._bind_row(olm.db, "r7q", 2)                 # same db: allowed
-    # The move carries ``locked``/``source`` over; clear them so a's r7q/2 is
-    # a clause-free row no load owns -- the shape the gate PERMITS, which is
-    # what used to reach step 4's bind.
-    cls._row.locked = False
-    cls._row.source = None
-    assert len(cls._fields) == 1 and cls._row.key == ("r7q", 2)
-    assert cls._row.db is olm.db and not cls._row.clauses
-    fact = "r7q(5, 6)," if b_arity == 2 else "r7q(5),"
-    path = _write(tmp_path, use_name, (
-        f"-module({use_name}, [])\n"
-        f"-import_from({owner_name}, [r7q])\n\n{fact}\n"))
-    with pytest.raises(SyntaxError) as exc_info:     # never RuntimeError
-        private_module(None, use_name, path=path)
-    text = _flat(exc_info.value)
-    if b_arity == 2:
-        assert f"{owner_name} only declares r7q/2" in text
-    else:
-        assert "may not write r7q/1" in text
-    assert cls._row.key == ("r7q", 2) and cls._row.db is olm.db
-    assert not cls._row.clauses
-    assert len(olm.db.row("r7q", 1).clauses) == 1

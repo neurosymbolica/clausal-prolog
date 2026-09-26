@@ -49,7 +49,6 @@ from clausal.logic.atoms import mangle
 from clausal.logic.predicate import (
     is_declared_predicate, resolve_predicate_row,
 )
-from tests.predicate_api_support import class_arm_predicate
 
 
 def _fixture_path(name: str) -> str:
@@ -151,63 +150,6 @@ def test_1f_kind_arbitrary_object_is_not_a_predicate():
 
 # ── Class arm: today's era, a PredicateMeta binding ─────────────────────────
 
-def test_row_unbound_predicate_class_has_no_row_yet():
-    """``cls._row`` is None until first use (``__init__``) -- the resolver
-    must read it directly, not mint one via ``_state_row()``, or every F1
-    call site that today tests ``cls._row is not None`` as a bailout would
-    silently start seeing a row that was never really there."""
-    P = class_arm_predicate("W4b2bUnbound", ["a", "b"])
-    assert resolve_predicate_row(P, arity=2) is None
-
-
-def test_row_bound_predicate_class_returns_the_live_row_object():
-    P = class_arm_predicate("W4b2bBound", ["a", "b"])
-    row = P._state_row()
-    assert resolve_predicate_row(P, arity=2) is row
-
-
-def test_kind_predicate_class_is_a_predicate_regardless_of_row_binding():
-    """F2's question is identity (a PredicateMeta class IS a predicate by
-    construction), not row state -- matches today's bare ``isinstance``,
-    at the class's OWN (matching) arity."""
-    P = class_arm_predicate("W4b2bKind", ["a"])
-    assert is_declared_predicate(P, arity=1) is True
-    P._state_row()
-    assert is_declared_predicate(P, arity=1) is True
-
-
-def test_kind_predicate_class_is_arity_strict_in_both_eras():
-    """RULED 2026-09-23 (review round): the class arm is arity-STRICT, same
-    as the mangled-atom arm -- not arity-blind like today's bare
-    ``isinstance(x, PredicateMeta)``.
-
-    F2's own question is "is this a predicate AT THIS EXACT ARITY"; a
-    migrated call site that kept arity-blind behaviour today would have
-    silently turned arity-strict the moment the SAME site met a mangled
-    atom instead of a class (arm 2 already requires an exact match) -- a
-    behaviour change landing at the one moment no gate covers it.  Ruling
-    it strict in both eras up front means any site that actually depended
-    on arity-blindness fails the full suite NOW, not at the flip."""
-    P = class_arm_predicate("W4b2bArityStrict", ["a", "b"])
-    assert is_declared_predicate(P, arity=2) is True
-    assert is_declared_predicate(P, arity=99) is False
-    assert is_declared_predicate(P, arity=0) is False
-
-
-def test_kind_bare_predicate_class_with_no_fields_of_its_own_does_not_raise():
-    """A bare ``class X(metaclass=PredicateMeta): pass`` never gets
-    ``cls._fields`` set as a class attribute unless its own body declares
-    it (row 5 of the site-classification table verifies this with
-    ``X._fields`` raising ``AttributeError``) -- the arity-strict class arm
-    must answer ``False`` gracefully for it, not crash the 15 F2 call
-    sites this accessor now serves."""
-    from clausal.logic.predicate import PredicateMeta
-    bare = PredicateMeta("W4b2bBareNoFields", (), {})
-    assert not hasattr(bare, "_fields")
-    # getattr(..., "_fields", ()) -> (), so arity 0 matches -- and,
-    # critically, arity 3 does NOT raise, it answers False.
-    assert is_declared_predicate(bare, arity=0) is True
-    assert is_declared_predicate(bare, arity=3) is False
 
 
 # ── Positive control: the fixture declares what this suite assumes ─────────

@@ -35,9 +35,9 @@ import pytest
 from clausal.logic.atoms import mint
 from clausal.logic.cells import is_cell, cell_functor, cell_arity
 from clausal.logic.builtins.inspection import _functor__3, _univ__2
-from clausal.logic.predicate import PredicateMeta
+
 from clausal.logic.variables import Var, Trail, deref, unify
-from tests.predicate_api_support import class_arm_predicate
+from tests.predicate_api_support import term_ctor
 
 
 def built_by(builtin, *args):
@@ -62,30 +62,13 @@ def built_by(builtin, *args):
 
 @pytest.fixture
 def cite():
-    """A declared functor of arity 1 — the shape from the field report."""
-    return class_arm_predicate("tfcdt_cite", ["key"])
+    """A declared functor of arity 1 — the shape from the field report.  A
+    term constructor (``term_ctor``); it was a ``make_predicate`` class,
+    whose class-as-NAME tests went with the class at W4b-3 slice 7."""
+    return term_ctor("tfcdt_cite", ["key"])
 
 
 # ── functor/3 construction ─────────────────────────────────────────────────
-
-
-def test_class_name_builds_the_declared_term(cite):
-    """The case that motivated this: hand construction the class itself."""
-    built = built_by(_functor__3, cite, 1)
-    # P2: construction yields a CELL, so the class-name / atom-name
-    # distinction these tests used to draw has COLLAPSED -- both name
-    # positions build the same term.  What is still worth pinning is that
-    # it is the DECLARED functor at the declared arity; the property that
-    # motivated the original fix is stated as unification in the sibling
-    # test below, and it passes unchanged.
-    assert is_cell(built) and cell_functor(built) == cite._functor
-    assert cell_arity(built) == 1
-
-
-def test_constructed_term_unifies_with_the_real_thing(cite):
-    """The property that was broken, stated as unification rather than type:
-    what construction builds must unify with a term written out longhand."""
-    assert unify(built_by(_functor__3, cite, 1), cite(Var()), Trail())
 
 
 def test_atom_name_builds_a_generic_cell(cite):
@@ -100,20 +83,6 @@ def test_atom_name_builds_a_generic_cell(cite):
     """
     built = built_by(_functor__3, mint("tfcdt_cite"), 1)
     assert type(built) is tuple and built[0] == "tfcdt_cite" and len(built) == 2
-    assert not isinstance(built, cite)
-
-
-def test_arity_mismatch_falls_through_to_a_generic_cell(cite):
-    """A declared arity-1 class asked for at arity 2 is not that term, so the
-    generic shape remains the honest answer — as today, and not an error.
-
-    The functor spelling is pinned too: A09-F027 exists because a fall-through
-    that stringified the name the wrong way once built a bogus functor like
-    ``"f(1)"``, and a type-only assertion would not notice that.
-    """
-    built = built_by(_functor__3, cite, 2)
-    assert type(built) is tuple and len(built) == 3
-    assert built[0] == "tfcdt_cite"
 
 
 def test_arity_zero_atom_asked_at_arity_one_is_still_generic():
@@ -122,7 +91,7 @@ def test_arity_zero_atom_asked_at_arity_one_is_still_generic():
     ``entry_key/2`` then decomposes it to get the name.  Pinned so this fix
     cannot break that library; the generic term is a cell (§6.4), which
     decomposes through the same funnel a Compound did."""
-    schema_atom = class_arm_predicate("tfcdt_applicant_age", [])
+    schema_atom = mint("tfcdt_applicant_age")   # the atom (a class until W4b-3 slice 7)
     built = built_by(_functor__3, schema_atom, 1)
     assert type(built) is tuple and len(built) == 2
     assert built[0] == "tfcdt_applicant_age"
@@ -145,64 +114,18 @@ def test_builtin_name_atom_builds_a_generic_cell_not_a_type_error():
 def test_arity_zero_still_yields_the_name_itself():
     """``functor(T, Name, 0)`` binds T to Name unchanged — the A09-F027
     round-trip property for atomic constants."""
-    atom = class_arm_predicate("tfcdt_zed", [])
-    assert built_by(_functor__3, atom, 0) is atom
-
-
-def test_metaclass_minted_class_also_rebuilds():
-    """The fixtures above use ``make_predicate``, but an in-file predicate is
-    minted as a generated ``class <functor>(metaclass=PredicateMeta)`` block
-    (``_make_functor_class_ast``) — the route real ``.clausal`` source takes.
-    The gate reads ``_fields``, which both origins carry, so cover the one the
-    corpus actually uses."""
-    class tfcdt_minted(metaclass=PredicateMeta):
-        _fields = ("key",)
-
-    built = built_by(_functor__3, tfcdt_minted, 1)
-    assert is_cell(built) and cell_functor(built) == "tfcdt_minted"
-    assert unify(built, tfcdt_minted(Var()), Trail())
+    atom = mint("tfcdt_zed")        # the atom (a class until W4b-3 slice 7)
+    assert built_by(_functor__3, atom, 0) == atom
 
 
 # ── the round trip ─────────────────────────────────────────────────────────
 
 
-def test_decompose_then_reconstruct_round_trips(cite):
-    """Decomposition yields an ATOM name, so rebuilding from that name yields
-    the generic cell — but rebuilding from the class round-trips."""
-    from clausal.logic.atoms import mint
-
-    original = cite(Var())
-    N, A, trail = Var(), Var(), Trail()
-    gen = _functor__3(original, N, A, trail, None)
-    next(gen)
-    assert deref(N) == mint("tfcdt_cite")  # §6.4: the name position is atoms
-    assert deref(A) == 1
-
-    assert unify(built_by(_functor__3, cite, 1), original, Trail())
-
-
 # ── unpack/2 construction (the sibling site) ───────────────────────────────
-
-
-def test_unpack_class_name_builds_the_declared_term(cite):
-    """``unpack/2`` shares the defect and must move with ``functor/3``."""
-    built = built_by(_univ__2, [cite, 42])
-    assert is_cell(built) and cell_functor(built) == cite._functor
-    assert cell_arity(built) == 1
-
-
-def test_unpack_carries_the_argument_values(cite):
-    """Unlike functor/3's fresh Vars, unpack supplies real arguments."""
-    assert unify(built_by(_univ__2, [cite, 42]), cite(42), Trail())
 
 
 def test_unpack_atom_name_builds_a_generic_cell(cite):
     assert built_by(_univ__2, [mint("tfcdt_cite"), 42]) == ("tfcdt_cite", 42)
-
-
-def test_unpack_arity_mismatch_falls_through_to_a_generic_cell(cite):
-    built = built_by(_univ__2, [cite, 1, 2, 3])
-    assert built == ("tfcdt_cite", 1, 2, 3)
 
 
 # ── the shared error arm ───────────────────────────────────────────────────

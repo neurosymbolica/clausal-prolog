@@ -27,7 +27,6 @@ from clausal.logic.atoms import mangle
 from clausal.logic.exceptions import LogicException
 from clausal.logic.solve import call
 from clausal.terms import Div
-from tests.predicate_api_support import class_arm_predicate
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
 _OWNER = "tests.fixtures.gate_dyn_owner"
@@ -178,22 +177,6 @@ def test_an_aliased_import_lists_the_owner(
     for ind in (("/", "gd_loc", 1), Div(left=user.__dict__["gd_loc"], right=1)):
         out = _listing(ind, lm, capsys)
         assert "— 2 clause(s)" in out, (ind, out)
-
-
-@pytest.mark.parametrize("detached", [False, True])
-def test_a_standalone_class_bound_under_another_name_does_not_redirect(
-        pair, capsys, detached):
-    """The namespace leg is taken only when the binding reads a REAL row.  A
-    standalone class named ``gd_p`` bound under ``gd_add`` has no row (or a
-    private detached one); it must not send ``listing(gd_add/1)`` to the
-    local ``gd_p`` twin."""
-    owner, user = pair
-    lm = _prime(owner, user)
-    stray = class_arm_predicate("gd_p", ["x"])
-    if detached:
-        assert stray._state_row().detached
-    user.__dict__["gd_add"] = stray
-    assert "% gd_add/1 — 1 clause(s)" in _listing(("/", "gd_add", 1), lm, capsys)
 
 
 def test_a_mangled_predicate_handle_lists_its_predicate(hide, capsys):

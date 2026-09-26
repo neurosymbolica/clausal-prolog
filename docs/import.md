@@ -57,7 +57,7 @@ The `Module` also holds `module_dict: dict | None` — a reference to the Python
 
 ### PredicateLoader.exec_module
 
-1. **Inject builtins** — all `simple_ast` names (term constructors), plus `PredicateMeta`, `Var`, `Compound`, `Trail`, `unify`, `deref`, `walk`, and `$ast` are merged into the module's `__dict__`. This makes them available in clause bodies without explicit imports.
+1. **Inject builtins** — all `simple_ast` names (term constructors), plus `Var`, `Compound`, `Trail`, `unify`, `deref`, `walk`, and `$ast` are merged into the module's `__dict__`. This makes them available in clause bodies without explicit imports.
 
 2. **Create LogicModule** — a `clausal.logic.database.Module` is created with `module_dict=module.__dict__`. It is stored as `$module` in the globals.
 
@@ -79,12 +79,11 @@ Called once per `head <- body` clause as the module executes. Steps:
 
 1. `logic_module.define_predicate(predicate_node)` — flattens the `And`-chain body, normalises fact heads (ground values → `Var + Is`), asserts the resulting `Clause` to the database, and registers the keyword signature.
 
-2. Look up the predicate class from `module_dict` by functor name. If it is a `PredicateMeta` instance:
-   - Replace the class's clause list in place (`pred_cls._ensure_clauses()[:] = ...`) with the DB's full clause list (the DB performs normalisation; the class reads the DB row, so it stays in sync).
+2. Look up the binding the module body declared for the functor (`$declare_head` bound the module's own predicate HANDLE; it was a `PredicateMeta` class, bound to the row here, until W4b-3 slices 5 and 7).
 
 3. Whatever the name is bound to, stamp the row the clause landed on: its owner (`record_clause_source`) and, if it has no signature yet, the head's field names from the rewriter's `HeadFieldNames` module item (the snapshot of `EmbedTransformer._seen_functors`, first registration wins). The class is not the source of the signature.
 
-4. Record `(functor, arity) → pred_cls` in the pending dict. Compilation is deferred until all clauses have been asserted.
+4. Record `(functor, arity) → handle` in the pending dict. Compilation is deferred until all clauses have been asserted.
 
 ---
 
@@ -110,7 +109,7 @@ This is safe because no predicate is queried during module load — `.clausal` f
 
 ## Importing predicates between `.clausal` files
 
-`.clausal` files can import predicates from other `.clausal` files (or from Python modules that define `PredicateMeta` classes) using two directives: `-import_from` and `-import_module`.
+`.clausal` files can import predicates from other `.clausal` files (or from Python modules that bind a plain object with a `_get_dispatch()` method) using two directives: `-import_from` and `-import_module`.
 
 ### `-import_from` — selective import
 
@@ -564,7 +563,7 @@ The following names are injected into every predicate module's namespace by the 
 
 **Simple AST constructors**: all names from `clausal.pythonic_ast.__all__` — `LoadName`, `Call`, `Compound`, `IntLiteral`, `Is`, `And`, `Or`, `Not`, etc.
 
-**Runtime types**: `PredicateMeta`, `Var`, `Compound`, `Trail`, `unify`, `deref`, `walk` — needed by generated functor class code (`__call__` uses `Var()`) and by compiled predicate bodies.
+**Runtime types**: `Var`, `Compound`, `Trail`, `unify`, `deref`, `walk` — needed by generated code (`Var()` for logic variables) and by compiled predicate bodies.
 
 **Hidden globals** (inaccessible as normal identifiers):
 - `$module` — the `LogicModule` for this file

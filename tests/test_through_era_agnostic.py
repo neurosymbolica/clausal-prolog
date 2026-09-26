@@ -35,7 +35,6 @@ from clausal.logic.database import (
 from clausal.logic.exceptions import LogicException
 from clausal.logic.predicate import resolve_predicate_row
 from clausal.terms import Compound
-from tests.predicate_api_support import class_arm_predicate
 
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
@@ -145,54 +144,12 @@ def test_aliased_import_blast_radius_contains_both_rows_for_refusal_for():
 
 # ── The class arm, today's era ───────────────────────────────────────────────
 
-def test_unbound_class_through_yields_just_the_target():
-    """A class whose ``_row`` is ``None`` (never bound) genuinely has no
-    second row -- that must stay a silent, legitimate no-op, not an error."""
-    db = Database()
-    target = db.row("solo", 1, create=True)
-    unbound = class_arm_predicate("ThroughEraUnbound", ["x"])
-    assert unbound._row is None
-
-    assert _is_exactly(db._write_rows("solo", 1, through=unbound), target)
-    assert _is_exactly(
-        db._write_rows("solo", 1, through=unbound, create=False), target)
 
 
 def test_none_through_yields_just_the_target():
     db = Database()
     target = db.row("solo2", 1, create=True)
     assert _is_exactly(db._write_rows("solo2", 1, through=None), target)
-
-
-def test_bound_class_in_a_different_database_adds_its_row():
-    """A synthetic version of the aliased-import shape, built directly from
-    ``Database``/``_bind_row`` rather than a real load -- pins the same
-    contract at the unit level."""
-    home_db = Database()
-    cls = class_arm_predicate("ThroughEraBound", ["x"])
-    cls._bind_row(home_db, "shared", 1, authorized=True)
-    home_row = cls._row
-    assert home_row is not None
-
-    local_db = Database()
-    local_row = local_db.row("shared", 1, create=True)
-    assert local_row is not home_row
-
-    assert _row_ids(local_db._write_rows("shared", 1, through=cls)) == {
-        id(local_row), id(home_row),
-    }
-
-
-def test_bound_class_reading_the_target_row_is_not_duplicated():
-    """When the class's row IS the target row (the ordinary, non-aliased
-    case), the blast radius still has exactly one entry."""
-    db = Database()
-    cls = class_arm_predicate("ThroughEraSameRow", ["x"])
-    cls._bind_row(db, "same", 1, authorized=True)
-    row = db.row("same", 1)
-    assert cls._row is row
-
-    assert _is_exactly(db._write_rows("same", 1, through=cls), row)
 
 
 # ── The mangled-atom arm, post-flip ──────────────────────────────────────────
@@ -280,46 +237,3 @@ def test_unrecognised_through_shape_raises_from_refusal_for(bad):
 
 # ── mutate and refusal_for must agree ────────────────────────────────────────
 
-
-def test_mutate_and_refusal_for_agree_when_only_through_s_row_refuses():
-    """The refusal comes ONLY from the row ``through=`` adds -- the target
-    row itself is unowned and would never refuse on its own -- so a pass
-    here is proof the gate is really consulting the second row, not just
-    the target, and that ``mutate``/``refusal_for`` see the same thing."""
-    db = Database()
-    target = db.row("agree", 1, create=True)
-    assert target.source is None
-
-    home_db = Database()
-    home_row = home_db.row("agree", 1, create=True)
-    home_row.source = ("home_module", "the-owner")
-    home_row.ensure_clauses().append(_clause("agree", 1))
-
-    cls = class_arm_predicate("ThroughEraAgree", ["x"])
-    cls._bind_row(home_db, "agree", 1, authorized=True)
-    assert cls._row is home_row
-
-    exc = db.refusal_for("agree", 1, author="intruder",
-                         kind=WRITE_LOAD_CLAUSES, through=cls)
-    assert exc is not None, "refusal_for must see the owned row through="  \
-                            " adds"
-
-    with pytest.raises(LogicException):
-        with db.mutate("agree", 1, author="intruder",
-                       kind=WRITE_LOAD_CLAUSES, through=cls):
-            pass  # pragma: no cover -- refusal happens on entry
-
-
-def test_mutate_and_refusal_for_agree_when_nothing_refuses():
-    db = Database()
-    db.row("agree2", 1, create=True)
-    unbound = class_arm_predicate("ThroughEraAgreeClean", ["x"])
-
-    exc = db.refusal_for("agree2", 1, author="me",
-                         kind=WRITE_LOAD_CLAUSES, through=unbound)
-    assert exc is None
-
-    with db.mutate("agree2", 1, author="me",
-                   kind=WRITE_LOAD_CLAUSES, through=unbound) as row:
-        row.ensure_clauses().append(_clause("agree2", 1))
-    assert len(db.row("agree2", 1).clauses) == 1

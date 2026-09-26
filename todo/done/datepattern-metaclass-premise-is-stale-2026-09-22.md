@@ -66,3 +66,22 @@ should happen before deletion, not be assumed by this todo.
 - `.superpowers/sdd/2026-09-22-w4b1-term-shape-rehome/task-2-brief.md` — step 5
 - `clausal/modules/py/datetime.py:204-251`
 - W4a landing: commit `5879b0be`, "W4a: delete the C instance arms"
+
+## Closed 2026-09-26 (W4b-3 slice 7a, `fc4de6a6`)
+
+`_DatePattern` was deleted, with `_date_pattern_structural_unify`,
+`_date_pattern_unify` and the `__unify__` rebind. The audit this todo asked
+for ran before the deletion: a full-suite census found zero constructions,
+zero `__unify__` calls, zero `isinstance` checks and zero attribute reads of
+the class (its positive control fired). Date answers were compared before and
+after: an 18-query battery, the in-repo date_time modules, and the date test
+files all agree.
+
+What the `__unify__` hook claimed (a pattern binding Y/M/D against a raw
+`datetime.date`, a raw `datetime.datetime` excluded) was already NOT the
+engine's behaviour before the deletion: a pattern is the cell
+`("date", Y, M, D)`, which never reached the hook, so a raw Python date does
+not unify with it and a goal holding one is refused ("a Python date is not a
+term"). Measured the same on 3a8697c2 and after.
+`tests/test_date_term.py::TestARawPythonDateIsNotATerm` pins that; the date
+TERM's bind / partial / datetime-excluded cases are `TestDecompose`.

@@ -44,7 +44,7 @@ from clausal.pythonic_ast.nodes import (
 )
 from clausal.logic.meta_predicate import MetaArg as _MetaArg
 from clausal.logic.predicate import (
-    is_declared_predicate_name, is_zero_field_class,
+    is_declared_predicate_name,
     construction_arity_fault,
     namespace_db,
     is_term_instance, predicate_binding_name, term_field_names, term_field_names_of_class,
@@ -102,16 +102,6 @@ def _is_opaque_head_literal(term: Any) -> bool:
         return False
     if is_term_instance(term):
         return False
-    # F5 (row 18): era-agnostic swap for the arity-blind
-    # `isinstance(term, type) and isinstance(term, PredicateMeta)` test --
-    # `is_declared_predicate_name` answers the identical question (a bare
-    # predicate-class reference, today's era) and additionally covers the
-    # post-flip mangled-atom shape, though that shape is already caught by
-    # the `str` check above in practice.  MUST move in the same commit as
-    # the head_match.py:858 (row 39) branch this pairs with -- see that
-    # branch's comment for why.
-    if is_declared_predicate_name(term):
-        return False
     # Ground containers with a nested unbound Var stay structural (a captured
     # literal can't bind the inner Var) — keep the degraded wildcard for them.
     if isinstance(term, (tuple, set, frozenset)):
@@ -156,8 +146,7 @@ class PredicateAsTermError(Exception):
 # atom-CLASS object from being silently re-resolved onto a same-named
 # predicate in the callee namespace (see the retired
 # ``todo/query-template-rebinds-atom-dict-keys.md``). An atom lowers to an
-# ``ast.Constant`` unconditionally (below, and in the
-# ``is_zero_field_class(term)`` branch further down) and is never looked up
+# ``ast.Constant`` unconditionally (below) and is never looked up
 # by name at all, so the hazard this machinery guarded against cannot occur
 # any more.)
 
@@ -881,9 +870,9 @@ def term_to_ast_expr(
     # ruling 2026-09-24: "the default in Prolog is global, but be cognizant
     # of directive hide/1").  Post-flip a predicate's module binding is its
     # mangled handle (``module\x1fname``), a ``str`` -- so without this arm
-    # the generic ``str`` arm below bakes the MANGLED spelling, where today's
-    # class arms (``is_zero_field_class`` / ``is_declared_predicate_name``
-    # further down) bake ``term.__name__``.  ``predicate_binding_name`` is
+    # the generic ``str`` arm below bakes the MANGLED spelling, where the
+    # class arms baked ``term.__name__`` (deleted with the class, W4b-3
+    # slice 7).  ``predicate_binding_name`` is
     # gated on ``is_declared_predicate_name``, NOT ``is_mangled``: a ``-hide`` DATA
     # atom is mangled too, and its mangled spelling IS its identity (every
     # reference in the owning module compiles to that same spelling), so it
@@ -1292,29 +1281,10 @@ def term_to_ast_expr(
             keywords=kw_exprs,
         )
 
-    # Zero-arity PredicateMeta class reaching the compiler as a live term
-    # object.  Atoms are global strs post-pivot (§1b/R2) — no module mints
-    # this class any more, but one can still ARRIVE here from old code
-    # (another package, a test) constructing one directly, so this branch
-    # stays as a compatibility lowering: emit the class's NAME as a str
-    # Constant (the identical literal a bare atom of that spelling would
-    # produce), not a bare Name reference into a namespace.  There is no
-    # by-identity special case any more (that machinery is deleted, §1b/R2)
-    # — a plain-str atom and a live zero-field class of the same spelling
-    # both lower to the identical ``ast.Constant``.
-    #
-    # 2026-09-06-atoms-as-cells-strings, Task 9: the constant is
-    # ``atoms.mint(term.__name__)`` — under Plan 0 byte-identical output, and
-    # at Stage B this becomes the arity-0 cell without a second edit here.
-    # ``ast.Constant`` takes the cell directly (a 1-tuple of a str folds into
-    # ``co_consts`` and is marshal-clean — spec §5.2).
-    if is_zero_field_class(term):
-        return ast.Constant(value=_mint_atom(term.__name__))
-
     # A builtin's OBJECT in term position (``clausal.succ`` handed to
     # ``maplist`` from Python) is the ATOM of its name -- what its
-    # ``PredicateMeta`` class lowered to until W4b-3 slice 3 (the zero-field
-    # arm above, or the STAGE 2 predicate-name arm below).  Slice 3 made it a
+    # ``PredicateMeta`` class lowered to until W4b-3 slice 3 (through the
+    # class arms slice 7 deleted).  Slice 3 made it a
     # ``BuiltinTerm`` and lost the arm: such a goal raised
     # ``NotImplementedError: unsupported term type BuiltinTerm``.  Lazy
     # import: the builtins package imports the compiler.
@@ -1431,23 +1401,6 @@ def term_to_ast_expr(
         raise NotImplementedError(
             "Lambdas are currently only supported as predicate call arguments"
         )
-
-    # A predicate CLASS (arity ≥ 1 — the zero-arity/atom case returned above)
-    # in term position.  Almost always the atom/predicate name clash.
-    #
-    # F2b: is_declared_predicate_name, not a bare isinstance -- but `term`
-    # can never be a mangled atom here regardless: a mangled PREDICATE
-    # binding returns its plain name from the self-denoting-atom arm above
-    # the generic ``str`` arm (operator ruling 2026-09-24), and any other
-    # str returns from the ``str`` arm itself.  This line's own class arm
-    # stays reachable only for today's-era PredicateMeta class object, so
-    # `term.__name__` below is always safe.
-    if is_declared_predicate_name(term):
-        # STAGE 2 (spec 2026-09-18 §4): a predicate referenced BY NAME in
-        # argument position is the ATOM of that name -- the str.  The
-        # name-clash diagnostic is gone: an atom foo and a predicate foo/N
-        # coexist as in Prolog.
-        return ast.Constant(value=term.__name__)
 
     # A live BOUND Var whose value has no literal lowering (e.g. a
     # ``datetime.date`` produced by an earlier goal): reference the Var itself

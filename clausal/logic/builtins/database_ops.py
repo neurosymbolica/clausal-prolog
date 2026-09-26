@@ -7,7 +7,6 @@ from typing import Any
 
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
 from clausal.logic.atoms import is_atom as _term_is_atom, spelling as _spelling
-from clausal.logic.predicate import PredicateMeta
 from clausal.terms import Compound
 from clausal.logic.exceptions import LogicException, permission_error
 
@@ -301,8 +300,7 @@ def _declared_here_at_arity(module_dict: "dict | None", functor: str,
 def _find_pred_cls(functor: str, arity: int,
                    module_dict: "dict | None", _seen: "frozenset" = frozenset()) -> "Any":
     """The predicate BINDING the goal's name denotes at *arity* -- a
-    ``PredicateMeta`` class today, a module-qualified handle (mangled atom)
-    after the flip -- or ``None``.
+    module-qualified handle (mangled atom) -- or ``None``.
 
     ARITY-CHECKED (P3-3 Task 3): ``module_dict`` holds one binding per NAME,
     so a ``p/1`` assert must not be handed ``p/3``'s predicate; a name bound
@@ -484,9 +482,8 @@ def _assertz_factory(db):
 
     Ground facts are automatically normalized to Var+Is form so they are
     queryable in output mode (matching standard Prolog assert semantics).
-    when a module dict is available on the database, also syncs to the
-    PredicateMeta class and recompiles with module globals for cross-predicate
-    resolution.
+    when a module dict is available on the database, also recompiles with
+    module globals for cross-predicate resolution.
     """
     from clausal.logic.database import head_key
     from clausal.logic.compiler import compile_predicate_trampoline
@@ -526,8 +523,8 @@ def _assertz_factory(db):
 def _asserta_factory(db):
     """asserta(Term) — add Term as a fact at front of its predicate's clause list.
 
-    when a module dict is available on the database, also syncs to the
-    PredicateMeta class and recompiles with module globals.
+    when a module dict is available on the database, also recompiles with
+    module globals.
     """
     from clausal.logic.database import head_key
     from clausal.logic.compiler import compile_predicate_trampoline
@@ -563,8 +560,8 @@ def _retract_factory(db):
     normalized facts whose heads contain Var placeholders.  Bindings
     from the head unification are undone after the clause is removed
     (retract is not backtrackable in this implementation).
-    when a module dict is available on the database, also syncs to the
-    PredicateMeta class.
+    when a module dict is available on the database, also recompiles
+    through the predicate's binding.
     """
     from clausal.logic.database import head_key
     from clausal.logic.compiler import compile_predicate_trampoline

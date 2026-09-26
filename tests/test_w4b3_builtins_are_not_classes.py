@@ -23,7 +23,7 @@ import clausal.import_hook  # noqa: F401 -- installs the meta-path finder
 from clausal.import_hook import _load_module
 from clausal.logic.builtins import BuiltinTerm
 from clausal.logic.builtins import _registry as R
-from clausal.logic.predicate import PredicateMeta, _dispatch_at
+from clausal.logic.predicate import _dispatch_at
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref, walk
 
@@ -36,7 +36,7 @@ def _population():
 
 def test_no_builtin_object_is_a_class():
     pop = _population()
-    classes = [n for n, o in pop if isinstance(o, (type, PredicateMeta))]
+    classes = [n for n, o in pop if isinstance(o, type)]
     assert classes == []
     assert all(type(o) is BuiltinTerm for _, o in pop)
     # every exported ``clausal.<builtin>`` is the registry's object

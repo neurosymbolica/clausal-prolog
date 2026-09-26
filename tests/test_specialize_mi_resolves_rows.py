@@ -27,7 +27,6 @@ from clausal.logic.database import Clause, Database
 from clausal.logic.predicate import resolve_predicate_row
 from clausal.logic.specialization import CannotSpecialize, analyze_mi
 from clausal.terms import Compound
-from tests.predicate_api_support import class_arm_predicate
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
 _MIS = "clausal.examples.metainterpreters"
@@ -106,19 +105,6 @@ def test_a_predicate_bound_only_by_a_python_import_is_still_found(mis):
     found = _meta_interpreter_row(Database(), {"solve": mis.solve}, "solve",
                                   refuse_ambiguous=True)
     assert found is _mi_row(mis, "solve")    # resolved to the owner's row
-
-
-def test_a_python_built_mi_keeps_its_class_fields_and_its_refusal():
-    """A class with fields but no registered signature, and one with no row
-    at all, answer as they did through the class route."""
-    cls = class_arm_predicate("pybuilt_mi", ["GOALS", "PROGRAM"])
-    assert cls._row is None
-    found = _meta_interpreter_row(Database(), {"pybuilt_mi": cls},
-                                  "pybuilt_mi", refuse_ambiguous=True)
-    assert found is cls
-    with pytest.raises(CannotSpecialize, match=r"pybuilt_mi: expected at "
-                                               r"least 2 clauses .*got 0"):
-        analyze_mi(found)
 
 
 def _two_arity_db():
@@ -218,24 +204,6 @@ def _two_arity_owner(monkeypatch, name):
     return db
 
 
-@pytest.mark.parametrize("shape", ["mangled", "class"])
-def test_the_binding_route_refuses_several_arities_too(monkeypatch, shape):
-    """QA holds on every route and for both binding shapes, with the same
-    message, against an owner that really defines two arities."""
-    _two_arity_owner(monkeypatch, "_amb_owner")
-    if shape == "mangled":
-        binding = mangle("_amb_owner", "amb_mi")
-    else:
-        binding = class_arm_predicate("amb_mi", ["G", "P"])
-        binding.__module__ = "_amb_owner"
-    md = {"amb_mi": binding}
-    with pytest.raises(RuntimeError,
-                       match=r"defined at 2 arities \(amb_mi/2, amb_mi/3\)"):
-        _meta_interpreter_row(Database(), md, "amb_mi", refuse_ambiguous=True)
-    assert _meta_interpreter_row(Database(), md, "amb_mi",
-                                 refuse_ambiguous=False) is None
-
-
 def test_a_second_arity_without_clauses_is_still_ambiguous():
     """QA across tiers: clauses at one arity and a bare row at another."""
     db = Database()
@@ -244,28 +212,6 @@ def test_a_second_arity_without_clauses_is_still_ambiguous():
     db.mark_dynamic("tier_mi", 3)
     with pytest.raises(RuntimeError, match=r"tier_mi/2, tier_mi/3"):
         _meta_interpreter_row(db, {}, "tier_mi", refuse_ambiguous=True)
-
-
-def test_a_row_without_a_signature_uses_the_bound_class_s_fields(mis):
-    """A Python-built MI: clauses in the db, field names only on the class."""
-    db = Database()
-    solve_row = _mi_row(mis, "solve")
-    fields = solve_row.db.signature_for(*solve_row.key)
-    assert fields
-    cls = class_arm_predicate("sigless_mi", list(fields))
-    for clause in solve_row.clauses:
-        assert isinstance(clause.head, tuple)       # a head is a cell (P2)
-        db.assertz(Clause(head=("sigless_mi",) + clause.head[1:],
-                          body=clause.body))
-    cls._bind_row(db, "sigless_mi", 2)
-    assert db.signature_for("sigless_mi", 2) is None
-    found = _meta_interpreter_row(db, {"sigless_mi": cls}, "sigless_mi",
-                                  refuse_ambiguous=True)
-    # The class -- whose _fields analyze_mi reads -- not the signature-less
-    # row, which analyze_mi would refuse for want of field names.
-    assert found is cls and found._row is db.row("sigless_mi", 2)
-    with pytest.raises(CannotSpecialize, match="no field names are registered"):
-        analyze_mi(db.row("sigless_mi", 2))
 
 
 def test_an_aliased_mi_import_specializes(tmp_path, monkeypatch):

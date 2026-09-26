@@ -181,14 +181,13 @@ module's Database; the module binds its name to a predicate handle. There is
 no way to make one from Python any more: `make_predicate` was retired
 (W4b-3 slice 6) and raises `MakePredicateRetiredError`, pointing at a
 `.clausal` module, `solve((name, *args), module=m)`, or a plain object with a
-`_get_dispatch()` method for a predicate implemented in Python. A
-`PredicateMeta` class and an atom are disjoint kinds (no class is an atom),
-so a helper that used to answer either question no longer does:
+`_get_dispatch()` method for a predicate implemented in Python. The
+`PredicateMeta` class itself was deleted at W4b-3 slice 7. The atom helpers:
 
 | Helper | Question |
 |---|---|
 | `clausal.logic.atoms.is_atom(x)` | Is this the **atom term** — an interned `str`? |
-| `clausal.logic.predicate.is_zero_field_class(x)` | Is this a zero-field `PredicateMeta` **class**? |
+| `clausal.logic.predicate.is_zero_field_class(x)` | Always `False` now: it asked "is this a zero-field `PredicateMeta` class?", and the class is gone |
 | `clausal.logic.predicate.is_atom_value(x)` | The same question as `atoms.is_atom` — no class is an atom value |
 
 `predicate.is_atom` is a **deprecated alias** for `is_zero_field_class` (the

@@ -36,9 +36,6 @@ the following hold.
   identity, which keeps ``nan`` out of a set that holds a *different*
   ``nan``, matching ``unify``'s ``==``-based failure).
 * ``str``/``bytes``/``NoneType`` — value equality, hash total.
-* ``PredicateMeta`` — a zero-field predicate class, whose ``==`` and
-  ``hash`` are ``type``'s identity ones and whose ``unify()`` is likewise
-  identity.
 
 **An atom is eligible too, and is not a type test.**  After the
 atoms-as-cells flip an atom is the arity-0 cell ``("bar",)`` — a ``tuple``,
@@ -85,7 +82,6 @@ from fractions import Fraction
 
 from clausal.logic.atoms import is_atom as _term_is_atom
 from clausal.logic.cells import is_chars
-from clausal.logic.predicate import PredicateMeta
 
 __all__ = [
     "_CONST_SET_TYPES", "_const_set", "_cset_atom", "_AtomSpellings",
@@ -161,7 +157,6 @@ _CONST_SET_TYPES: frozenset[type] = frozenset({
     bytes,
     type(None),
     Fraction,
-    PredicateMeta,
 })
 
 

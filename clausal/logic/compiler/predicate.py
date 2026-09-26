@@ -35,9 +35,8 @@ from clausal.terms import (
 from clausal.pythonic_ast.nodes import StarUnpack  # noqa: F401
 from clausal.logic.database import Clause, Database
 from clausal.logic.predicate import (
-    PredicateMeta, _dispatch_at, head_cell as _head_cell,
+    _dispatch_at, head_cell as _head_cell,
     declare_head as _declare_head, keeps_predicate as _keeps_predicate,
-    is_foreign_class_at_other_arity,
 )
 from clausal.codegen import functiondef_to_function
 
@@ -338,7 +337,6 @@ INJECTED_RUNTIME_BUILTINS: dict = {
     # bare spellings stay bound for the deprecation window).  ``$``-prefixed
     # names can never be shadowed by user identifiers (``$`` is not a legal
     # identifier char).
-    "PredicateMeta": PredicateMeta,
     "Var": Var,
     "Compound": Compound,
     "DictTerm": _DictTerm,
@@ -931,9 +929,7 @@ def _build_predicate_trampoline_funcdef(
 def _plan_row_for(pred_cls, db, functor: str, arity: int):
     """The row the compile's index plans are written to.
 
-    A ``PredicateMeta`` class answers the row it currently faces, exactly as
-    before (its private detached row on a ``db=None`` compile).  A predicate
-    HANDLE (F1 rows 58/59 hand one to the runtime recompile after an
+    A predicate HANDLE (F1 rows 58/59 hand one to the runtime recompile after an
     ``assertz`` through an import) has no class-side row: its plans belong
     on the row the dispatch is installed on, ``db.row(functor, arity)`` in
     the database being compiled into -- the same row ``_install``'s handle
@@ -941,8 +937,6 @@ def _plan_row_for(pred_cls, db, functor: str, arity: int):
     """
     if pred_cls is None:
         return None
-    if isinstance(pred_cls, PredicateMeta):
-        return pred_cls._state_row()
     if db is not None:
         return db.row(functor, arity, create=True)
     return None
@@ -955,7 +949,7 @@ def _compile_predicate_trampoline_impl(
     db: "Database | None" = None,
     body_compiler: Callable[[Clause, dict[int, str]], list[ast.stmt]] | None = None,
     globals_: dict | None = None,
-    pred_cls: "PredicateMeta | None" = None,
+    pred_cls: "str | None" = None,
     enabled_optimisations: "frozenset[str] | None" = None,
 ) -> Callable:
     """Compile all clauses into a trampoline tuple-protocol generator.
@@ -1026,15 +1020,9 @@ def _compile_predicate_trampoline_impl(
         def body_compiler(clause, var_context, _bc=_custom_body_compiler):
             return _bc(clause, var_context, ctx_template=ctx_template)
 
-    # Resolve pred_cls: explicit param > globals_ > auto-detect later.
-    if pred_cls is None:
-        pred_cls = (globals_ or {}).get(functor)
-        if not isinstance(pred_cls, PredicateMeta):
-            pred_cls = None
-        elif is_foreign_class_at_other_arity(pred_cls, db, arity):
-            # An imported class at another arity: this predicate is the
-            # module's own, not the import (vocabulary-implements drop).
-            pred_cls = None
+    # (A ``PredicateMeta`` class found under the name in *globals_* was
+    # taken as ``pred_cls`` here until W4b-3 slice 7 deleted the class; a
+    # predicate is compiled through its handle, passed explicitly.)
 
     if not clauses:
         fn = _compile_always_fail_trampoline(functor, arity)
@@ -1165,14 +1153,6 @@ def _compile_predicate_trampoline_impl(
             isinstance(existing, BuiltinPredicate) and existing._factory is None
         ):
             base_globals[_bc_name] = _bc_val
-    if pred_cls is None:
-        pred_cls = base_globals.get(functor)
-        if not isinstance(pred_cls, PredicateMeta):
-            pred_cls = None
-        elif is_foreign_class_at_other_arity(pred_cls, db, arity):
-            # An imported class at another arity: this predicate is the
-            # module's own, not the import (vocabulary-implements drop).
-            pred_cls = None
 
     # Destructive-reuse: inject DR dispatch functions into base_globals so
     # that rewritten goal names (e.g. _dr_append__3) resolve at runtime via
@@ -1607,9 +1587,9 @@ def _compile_predicate_trampoline_impl(
         if db is not None:
             next_clauses = db.clauses_for(functor, arity)
         else:
-            # The ``db=None`` path: the class's own row is the only store.
-            next_clauses = (pred_cls._state_row().clauses
-                            if pred_cls is not None else clauses)
+            # The ``db=None`` path: the clauses this compile was given are the
+            # only store (a class's private row was, until W4b-3 slice 7).
+            next_clauses = clauses
         return compile_predicate_trampoline(
             functor, arity, next_clauses, db,
             body_compiler=body_compiler, globals_=globals_, pred_cls=pred_cls,
@@ -1849,7 +1829,7 @@ def _compile_predicate_shallow_impl(
     db: "Database | None" = None,
     body_compiler: Callable[[Clause, dict[int, str]], list[ast.stmt]] | None = None,
     globals_: dict | None = None,
-    pred_cls: "PredicateMeta | None" = None,
+    pred_cls: "str | None" = None,
 ) -> Callable:
     """Compile a predicate in shallow / short-stack mode.
 
@@ -1865,8 +1845,8 @@ def _compile_predicate_shallow_impl(
             …
             yield None   # ← one solution
 
-    Also installs on the PredicateMeta class (and ``db.set_dispatch()``) so
-    subsequent ``_get_dispatch()`` / ``db.get_dispatch()`` calls work.
+    Also installs via ``db.set_dispatch()`` so subsequent
+    ``db.get_dispatch()`` calls work.
     """
     # Choose the effective db for body compilation (may be a no-db proxy).
     _effective_db = db if db is not None else _GlobalsDb(globals_ or {})
@@ -1887,15 +1867,9 @@ def _compile_predicate_shallow_impl(
     if body_compiler is None:
         body_compiler = _make_body_compiler(_effective_db, ctx_template=ctx_template)
 
-    # Resolve pred_cls: explicit param > globals_ > auto-detect later.
-    if pred_cls is None:
-        pred_cls = (globals_ or {}).get(functor)
-        if not isinstance(pred_cls, PredicateMeta):
-            pred_cls = None
-        elif is_foreign_class_at_other_arity(pred_cls, db, arity):
-            # An imported class at another arity: this predicate is the
-            # module's own, not the import (vocabulary-implements drop).
-            pred_cls = None
+    # (A ``PredicateMeta`` class found under the name in *globals_* was
+    # taken as ``pred_cls`` here until W4b-3 slice 7 deleted the class; a
+    # predicate is compiled through its handle, passed explicitly.)
 
     if not clauses:
         fn = _compile_always_fail(functor, arity)
@@ -2015,15 +1989,6 @@ def _compile_predicate_shallow_impl(
             isinstance(existing, BuiltinPredicate) and existing._factory is None
         ):
             base_globals[_bc_name] = _bc_val
-    # Resolve Predicate class — explicit param > globals_ > _collect_head_types.
-    if pred_cls is None:
-        pred_cls = base_globals.get(functor)
-        if not isinstance(pred_cls, PredicateMeta):
-            pred_cls = None
-        elif is_foreign_class_at_other_arity(pred_cls, db, arity):
-            # An imported class at another arity: this predicate is the
-            # module's own, not the import (vocabulary-implements drop).
-            pred_cls = None
 
     # Phase 7: set compile context so _dispatch_call_iter can emit cached
     # dispatch names instead of fname._get_dispatch() for locked predicates.
@@ -2217,9 +2182,9 @@ def _compile_predicate_shallow_impl(
         if db is not None:
             next_clauses = db.clauses_for(functor, arity)
         else:
-            # The ``db=None`` path: the class's own row is the only store.
-            next_clauses = (pred_cls._state_row().clauses
-                            if pred_cls is not None else clauses)
+            # The ``db=None`` path: the clauses this compile was given are the
+            # only store (a class's private row was, until W4b-3 slice 7).
+            next_clauses = clauses
         return compile_predicate_shallow(
             functor, arity, next_clauses, db,
             body_compiler=body_compiler, globals_=globals_, pred_cls=pred_cls,
@@ -2261,7 +2226,7 @@ def compile_predicate(
     db: "Database | None" = None,
     body_compiler: Callable[[Clause, dict[int, str]], list[ast.stmt]] | None = None,
     globals_: dict | None = None,
-    pred_cls: "PredicateMeta | None" = None,
+    pred_cls: "str | None" = None,
 ) -> Callable:
     """Deprecated alias for ``compile_predicate_shallow``.
 
@@ -2337,15 +2302,15 @@ def _install(
     arity: int,
     fn: Callable,
     lazy_recompile: Callable | None = None,
-    pred_cls: PredicateMeta | None = None,
+    pred_cls: "str | None" = None,
 ) -> Callable:
     """Install fn as the compiled dispatch function.
 
     If ``db`` is provided, stores the dispatch fn via ``db.set_dispatch()``
-    so that ``db.get_dispatch()`` works for test/non-PredicateMeta usage.
+    so that ``db.get_dispatch()`` works.
 
-    If ``pred_cls`` is a PredicateMeta class, installs fn and lazy_recompile
-    directly on the class so that ``pred_cls._get_dispatch()`` works.
+    If ``pred_cls`` is a predicate HANDLE, the install also goes through the
+    mutation gate onto the row it names.
 
     A ``-table``d predicate is installed *wrapped*, never raw.  This is the
     single choke point every recompile funnels through —
@@ -2393,64 +2358,11 @@ def _install(
         fn = wrapped
     if db is not None:
         db.set_dispatch(functor, arity, fn, lazy_recompile=lazy_recompile)
-    if (
-        db is not None
-        and isinstance(pred_cls, PredicateMeta)
-        and pred_cls._row is not None
-        and not pred_cls._row.detached
-        and pred_cls._row.db is db
-        and pred_cls._row.key[1] != arity
-    ):
-        # The class is this database's face of the SAME NAME at ANOTHER
-        # arity -- the callers resolve ``pred_cls`` by name, which is
-        # arity-blind, so ``-dynamic(ping/2)`` beside ``ping <- True`` handed
-        # ping/0's class to ping/2's install.  Binding it here moved the class
-        # onto ping/2's row and every ping/0 call then ran ping__2 (a raw
-        # TypeError).  The dispatch is on the row already (above); the class
-        # stays where its clauses are.
-        pred_cls = None
-    if pred_cls is not None and isinstance(pred_cls, PredicateMeta):
-        # P3-3 Task 2: bind first, then write the ROW the class faces —
-        # the Database's once bound, the class's private detached row on the
-        # ``db=None`` path (W2 retired the per-attribute facades that used to
-        # spell this).  Binding here as well as at
-        # ``compiler_v2`` step 4 covers the paths that install a dispatch
-        # without ever going through a load (a bare-query compile, a
-        # specialization target, a runtime recompile after assertz), and is a
-        # no-op whenever the class is already on this row.
-        #
-        # P3-3 Task 3: THROUGH THE GATE.  The class's row is the
-        # second door onto the same state — gating ``Database.mutate`` alone
-        # would leave the very channel the aliased-import clobber came through
-        # wide open — so the install runs inside a transaction.  When this is
-        # itself part of a load or a runtime assert the transaction is already
-        # open and this one nests into it, inheriting its authorization and
-        # its stamp; standalone (a bare-query compile) it opens its own, as a
-        # ``recompile``, which the policy never refuses.
-        if db is not None:
-            ctx = db.mutate(functor, arity, author=db.load_author(),
-                            kind="recompile", detail="install",
-                            through=pred_cls)
-        else:
-            ctx = pred_cls._mutate(
-                f"compile:{functor}/{arity}", "recompile", "install")
-        with ctx:
-            if db is not None:
-                pred_cls._bind_row(db, functor, arity)
-            row = pred_cls._state_row()
-            row.dispatch_fn = fn
-            if lazy_recompile is not None:
-                row.lazy_recompile = lazy_recompile
-    elif pred_cls is not None and db is not None:
-        # W4b2b re-audit (F1 row 57), additive: the post-flip shape of
-        # ``pred_cls`` -- a mangled atom naming THIS SAME (functor, arity)
-        # -- reaching here in place of a class.  There is no class to
-        # ``_bind_row`` onto or mint a private detached row for (that
-        # machinery is what a class-era caller needs to keep ``cls._row``
-        # in sync with the Database; a mangled atom carries no such
-        # class-side cache to synchronize), so this widens only the
-        # ``db is not None`` half of the block above through the now
-        # era-agnostic mutation gate (``through=pred_cls`` --
+    if pred_cls is not None and db is not None:
+        # W4b2b re-audit (F1 row 57): ``pred_cls`` is a HANDLE -- a mangled
+        # atom naming THIS SAME (functor, arity) (a ``PredicateMeta`` class
+        # was bound to the row and written here until W4b-3 slice 7).  The
+        # install goes through the mutation gate (``through=pred_cls`` --
         # ``_resolve_through_row`` in ``database.py`` already accepts a
         # mangled atom, resolving it via its owner's db) and reads the
         # SAME row ``Database.mutate`` itself yields as ``target``, rather

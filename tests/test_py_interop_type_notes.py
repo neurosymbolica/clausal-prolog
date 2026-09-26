@@ -92,7 +92,7 @@ def test_constructor_with_unbound_component_records_nothing():
     from clausal.logic.trampoline import DONE  # noqa: F401 - engine import path
     from clausal.logic.variables import Trail, Var
     # The _date_4 half was deleted with the predicate (2026-09-01). date/3 has
-    # no equivalent hazard: an unbound component yields a _DatePattern for
+    # no equivalent hazard: an unbound component yields a pattern CELL for
     # unification rather than calling the stdlib constructor at all, so there is
     # no TypeError to mis-record. _timedelta_3 still takes this path.
     from clausal.modules.py.datetime import _timedelta_3

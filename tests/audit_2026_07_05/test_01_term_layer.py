@@ -59,8 +59,11 @@ def trail():
 
 
 def _fresh_pred_class(fields=("a", "b")):
-    from clausal.logic.predicate import PredicateMeta
-    return PredicateMeta("audit_pt", (), {"_fields": fields})
+    """A constructor for the ``audit_pt`` term: it builds the CELL a
+    ``PredicateMeta`` class built (the class was deleted at W4b-3 slice 7;
+    the claims below were already asked of the cell)."""
+    from tests.predicate_api_support import term_ctor
+    return term_ctor("audit_pt", fields)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -352,7 +355,7 @@ class TestF008WalkFunctorTerms:
         # the bound value the trail is about to take back -- is asked of the
         # cell the class actually builds.
         cell = _fresh_pred_class()(X, 2)
-        assert type(cell) is tuple, "the class builds a cell, not an instance"
+        assert type(cell) is tuple, "a predicate term is a cell"
         snap = walk(cell)
         trail.reset()
         assert deref(snap[1]) == 1 and snap[2] == 2

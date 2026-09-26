@@ -13,10 +13,11 @@ with N fields, so the module blew up at load with a bare, unattributable
 ``TypeError``.  A functor name has exactly one arity in Clausal, so this is now
 a ``SyntaxError`` at rewrite time naming both sites.
 
-**Run time.**  ``PredicateMeta.__call__`` silently *discarded* positional
-arguments past ``len(_fields)``, so ``some_atom(A, B)`` on a zero-arity class
-returned a bogus, wrong term with no error at all.  It now raises the same
-attributable ``ClausalTermConstructionError`` the keyword path raises.
+**Run time.**  Construction silently *discarded* positional arguments past
+``len(_fields)``, so ``some_atom(A, B)`` on a zero-arity class returned a
+bogus, wrong term with no error at all.  It now raises the same attributable
+``ClausalTermConstructionError`` the keyword path raises -- from
+``build_term_cell``, the one raise site since the class went (W4b-3 slice 7).
 """
 
 from __future__ import annotations
@@ -29,7 +30,6 @@ import pytest
 from clausal.import_hook import _load_module
 from clausal.logic.predicate import (
     ClausalTermConstructionError,
-    PredicateMeta,
     field_names_for,
     is_declared_predicate,
     resolve_predicate_row,
@@ -37,7 +37,7 @@ from clausal.logic.predicate import (
 from clausal.logic.solve import call
 from clausal.logic.variables import deref
 from clausal import Var
-from tests.predicate_api_support import class_arm_predicate
+from tests.predicate_api_support import term_ctor
 
 
 # ── Run time: positional overflow ──────────────────────────────────────────
@@ -56,12 +56,12 @@ class TestPositionalOverflowRaises:
     """Positional arguments past ``len(_fields)`` are an error, not silence."""
 
     def test_zero_arity_class_called_with_positionals_raises(self):
-        cls = PredicateMeta("fac_zero", (), {"_fields": ()})
+        cls = term_ctor("fac_zero", ())
         with pytest.raises(ClausalTermConstructionError):
             cls("a", "b")
 
     def test_overflow_names_functor_and_both_arities(self):
-        cls = class_arm_predicate("fac_pair", ["left", "right"])
+        cls = term_ctor("fac_pair", ["left", "right"])
         with pytest.raises(ClausalTermConstructionError) as exc_info:
             cls(1, 2, 3)
         msg = str(exc_info.value)
@@ -70,7 +70,7 @@ class TestPositionalOverflowRaises:
         assert "(left, right)" in msg
 
     def test_overflow_carries_the_same_structured_attributes(self):
-        cls = class_arm_predicate("fac_attrs", ["only"])
+        cls = term_ctor("fac_attrs", ["only"])
         with pytest.raises(ClausalTermConstructionError) as exc_info:
             cls(1, 2)
         err = exc_info.value
@@ -84,7 +84,7 @@ class TestPositionalOverflowRaises:
         assert err.constructed_at is not None
 
     def test_overflow_reports_both_source_locations(self):
-        cls = class_arm_predicate("fac_where", ["only"])
+        cls = term_ctor("fac_where", ["only"])
         with pytest.raises(ClausalTermConstructionError) as exc_info:
             cls(1, 2)
         msg = str(exc_info.value)
@@ -94,7 +94,7 @@ class TestPositionalOverflowRaises:
 
     def test_overflow_on_a_zero_arity_class_names_the_shadowing_cause(self):
         """An atom called with arguments is Phenomenon A — say so."""
-        atom = class_arm_predicate("fac_bare_atom", [])
+        atom = term_ctor("fac_bare_atom", [])
         with pytest.raises(ClausalTermConstructionError) as exc_info:
             atom(1, 2)
         msg = str(exc_info.value)
@@ -102,7 +102,7 @@ class TestPositionalOverflowRaises:
         assert "0-arity atom" in msg
 
     def test_exact_arity_still_constructs(self):
-        cls = class_arm_predicate("fac_ok", ["left", "right"])
+        cls = term_ctor("fac_ok", ["left", "right"])
         term = cls(1, 2)
         assert _cf(term, cls, "left") == 1 and _cf(term, cls, "right") == 2
 
@@ -110,7 +110,7 @@ class TestPositionalOverflowRaises:
         """FLIPPED 2026-09-24 (ruling C): too FEW positional arguments used to
         pad with fresh variables; it is now refused exactly like too many.
         A missing slot named by keyword still completes the term."""
-        cls = class_arm_predicate("fac_partial", ["left", "right"])
+        cls = term_ctor("fac_partial", ["left", "right"])
         with pytest.raises(ClausalTermConstructionError) as exc_info:
             cls(1)
         assert "1 positional argument(s)" in str(exc_info.value)
@@ -118,13 +118,15 @@ class TestPositionalOverflowRaises:
         assert _cf(term, cls, "right") == 2
 
     def test_mixed_positional_and_keyword_within_arity_still_constructs(self):
-        cls = class_arm_predicate("fac_mixed", ["left", "right"])
+        cls = term_ctor("fac_mixed", ["left", "right"])
         term = cls(1, right=2)
         assert _cf(term, cls, "left") == 1 and _cf(term, cls, "right") == 2
 
-    def test_zero_arity_no_args_still_returns_the_class_itself(self):
-        atom = class_arm_predicate("fac_identity", [])
-        assert atom() is atom
+    def test_zero_arity_no_args_is_the_atom(self):
+        """(A zero-field CLASS returned itself; the class is gone at W4b-3
+        slice 7 and the construction is the atom of its name.)"""
+        atom = term_ctor("fac_identity", [])
+        assert atom() == "fac_identity"
 
 
 # ── Compile time: declaration/clause arity conflict ────────────────────────

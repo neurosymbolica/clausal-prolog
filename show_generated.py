@@ -60,7 +60,8 @@ from clausal.logic.compiler.predicate import (
 from clausal.logic.compiler.arg_index import _bucket_key
 from clausal.logic.compiler.goal_trampoline import _inject_bucket_refs_trampoline
 from clausal.logic.compiler.compile_ctx import CompilationContext
-from clausal.logic.predicate import PredicateMeta
+from clausal.logic.database import Database
+from clausal.logic.predicate import mint_predicate_handle
 from clausal.logic.builtins import _normalize_fact_clause
 from clausal.terms import (
     Unify as Is,
@@ -350,10 +351,17 @@ print("# CLAUSAL (caller with literal arg):")
 print("""  find_red(X_) <- color("red").
 """)
 
-# Build and lock color/1
-color_pred = PredicateMeta("color", (), {"_fields": ("name",)})
-compile_predicate_trampoline("color", 1, clauses_color, pred_cls=color_pred)
-color_pred._locked = True
+# Build and lock color/1.  A predicate is a Database row keyed by
+# (functor, arity); the call-site hint pass reads the callee's index plans
+# from that row, and only from a LOCKED one.
+# The handle (``module\x1fcolor``) is what a load passes as ``pred_cls``;
+# the compile writes the bucket functions onto the row it names.
+db_phase10 = Database(module_dict={"__name__": "show_generated_demo"})
+compile_predicate_trampoline(
+    "color", 1, clauses_color, db_phase10,
+    pred_cls=mint_predicate_handle(db_phase10, "color"),
+)
+db_phase10.row("color", 1).locked = True
 
 # Build find_red/1 caller clause
 X2_ = Var()
@@ -367,8 +375,8 @@ caller_clauses = [
 # Inject bucket refs, then generate AST with the context in place.
 # The body_compiler captures ctx_template by reference; mutating
 # ctx_template.bucket_ref_map after construction is visible at compile time.
-base_globals = {"color": color_pred}
-db_placeholder = None
+base_globals = {}
+db_placeholder = db_phase10
 
 ctx_phase10 = CompilationContext(
     db=db_placeholder, var_context={}, trail_name="trail",

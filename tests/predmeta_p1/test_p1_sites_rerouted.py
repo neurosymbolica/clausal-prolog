@@ -18,7 +18,6 @@ from clausal.import_hook import _load_module
 from clausal.logic.atoms import is_atom
 from clausal.logic.solve import call
 from clausal.logic.variables import deref
-from tests.predicate_api_support import class_arm_predicate
 
 
 def _write(tmp_path, name, src):
@@ -58,31 +57,6 @@ def test_signature_for_is_arity_exact(tmp_path):
     env = _GlobalsDb(mod.module_dict)
     assert env.signature_for("p", 3) is None
     assert env.signature_for("nope", 2) is None
-
-
-def test_signature_for_falls_back_to_the_class_for_a_hand_built_dict():
-    """A globals dict with NO ``$module`` (the documented hand-built shape at
-    ``predicate.make_predicate``) still answers for a class it holds — roborev
-    M2: the reroute made it ``None``, and a keyword-call body compiled against
-    such a dict then raises ``RuntimeError`` for a predicate that is right
-    there.  The fallback is the CLASS read, arity-checked, because a module
-    dict holds one class per NAME and the shim is handed the arity.
-    """
-    from clausal.logic.compiler.globals_env import _GlobalsDb
-
-
-    cls = class_arm_predicate("foo", ["a", "b"])
-    # The DETACHED row explicitly: this test is the hand-built-dict, no-
-    # Database case, so the class has no row and `_state_row()` mints what
-    # the retired `_signature` facade would have minted here.
-    cls._state_row().signature = cls._fields
-    env = _GlobalsDb({"foo": cls})
-    assert env.signature_for("foo", 2) == ("a", "b")
-    # the arity check M2 was conditioned on: same name, wrong arity, no answer
-    assert env.signature_for("foo", 3) is None
-    assert env.signature_for("foo", 1) is None
-    # and a non-class binding is not a predicate
-    assert _GlobalsDb({"foo": 42}).signature_for("foo", 2) is None
 
 
 def test_signature_for_answers_None_without_a_module_handle():
@@ -348,8 +322,7 @@ def test_a_clause_block_may_find_a_non_class_under_its_own_name(tmp_path,
     # dict.  Dropping the guard hands this tuple to ``_bind_row``.
     binding = mod.module_dict["shared_name"]
     assert is_atom(binding), type(binding)
-    from clausal.logic.predicate import PredicateMeta
-    assert not isinstance(binding, PredicateMeta)
+    assert not isinstance(binding, type)
     # And the load survived: the clause block got its own predicate anyway.
     assert _answers(mod, "shared_name") == [1]
 

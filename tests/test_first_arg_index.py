@@ -20,8 +20,7 @@ from clausal.logic.compiler.arg_index import (
     _INDEX_VAR,
     _INDEX_THRESHOLD,
 )
-from clausal.logic.predicate import PredicateMeta
-from tests.predicate_api_support import class_arm_predicate, term_ctor
+from tests.predicate_api_support import term_ctor
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.logic.trampoline import StepGenerator, solutions, DONE
 from clausal.terms import Compound, Unify
@@ -91,8 +90,7 @@ class TestExtractFirstArgKey:
 
     def test_predicate_meta_head(self):
         # nv
-        class color(metaclass=PredicateMeta):
-            _fields = ("name", "code")
+        color = term_ctor("color", ("name", "code"))
 
         v = Var()
         head = color(name=v, code=Var())
@@ -123,30 +121,6 @@ class TestExtractFirstArgKey:
         c = Clause(head=Compound("f", (None,)), body=[True])
         assert _extract_first_arg_key(c, 1) is None
 
-    def test_atom_reference_key_from_unify(self):
-        """A keyword-atom fact (``color(C=Red)``) compiles to a Var head with a
-        ``Unify(field_var, LoadName('Red'))`` body.  When ``Red`` resolves (via
-        the threaded compile-time *env*) to a ``PredicateMeta`` atom, the
-        extracted key must be the 0-arity atom key ``('Red', 0)`` — matching
-        the runtime ``PredicateMeta`` key emitted by ``_runtime_arg_key`` —
-        not the compound-term key ``('LoadName', 2)`` for the reference node
-        itself.
-
-        P3-1 atom-pivot hotfix (arg_index.py's LoadName/LoadAttr branch):
-        this key can no longer be GUESSED from the reference's bare spelling
-        — see ``TestImportedAtomIndexKey`` below for the post-pivot atom
-        (plain ``str``) case this regression is actually about.  This test
-        keeps its original ``PredicateMeta``-atom scenario
-        (``make_predicate(name, [])``, which is where P3-3 Task 7 moved that
-        spelling), now resolved through *env* instead of guessed at.
-        """
-        # nv — regression for map_coloring private-atom-fact indexing bug
-        from clausal.terms import LoadName
-        red = class_arm_predicate("red", [])   # the class arm (W4b-3 slice 7)
-        v = Var()
-        c = Clause(head=Compound("color", (v,)),
-                   body=[Unify(left=v, right=LoadName(name="red"))])
-        assert _extract_first_arg_key(c, 1, env={"red": red}) == ("red", 0)
 
     def test_atom_reference_key_from_unify_unresolvable_without_env(self):
         """Without a compile-time *env* (or when the name isn't in it), the
@@ -1208,15 +1182,15 @@ class TestDynamicReindex:
         assert results == [("purple", 5)]
 
 
-# ── PredicateMeta integration ────────────────────────────────────────────────
+# ── keyword-built term facts (a PredicateMeta class until W4b-3 slice 7) ─────
 
 
 class TestPredicateMetaIndexing:
     def test_predicate_meta_facts(self):
-        """PredicateMeta class facts with normalized Var+Unify heads."""
+        """Facts built with keyword fields (``term_ctor``, a cell per head)
+        with normalized Var+Unify heads."""
         # nv
-        class fruit(metaclass=PredicateMeta):
-            _fields = ("name", "count")
+        fruit = term_ctor("fruit", ("name", "count"))
 
         db = Database()
         for name, count in [("apple", 5), ("banana", 3), ("cherry", 8),
@@ -1228,7 +1202,6 @@ class TestPredicateMetaIndexing:
 
         fn = compile_predicate(
             "fruit", 2, db.clauses_for("fruit", 2), db,
-            globals_={"fruit": fruit},
         )
 
         trail = Trail()
@@ -1301,9 +1274,10 @@ class TestEdgeCases:
 
 
 class TestAtomInListHead:
-    """atoms (zero-arity PredicateMeta classes) appearing inside a list
-    pattern in the clause head — regression for the indexer-driven bucket
-    compile that emitted the atom class into an ``ast.Constant`` node and
+    """atoms (plain strs now; zero-arity PredicateMeta classes when this
+    was written) appearing inside a list pattern in the clause head —
+    regression for the indexer-driven bucket compile that emitted the atom
+    class into an ``ast.Constant`` node and
     triggered ``TypeError: got an invalid type in Constant: PredicateMeta``.
 
     The bug surfaced only when indexing fired (>= _INDEX_THRESHOLD clauses)
@@ -1330,12 +1304,12 @@ class TestAtomInListHead:
         back as the plain str ``'usd'``, not the ``usd`` class object.
         """
         # nv
-        usd = class_arm_predicate("usd", [])
-        non_o_a = class_arm_predicate("non_o_a", [])
-        non_o_x = class_arm_predicate("non_o_x", [])
-        ltr = class_arm_predicate("ltr", [])
-        smart_t = class_arm_predicate("smart_t", [])
-        unrestricted = class_arm_predicate("unrestricted", [])
+        # The atoms are the atoms (W4b-3 slice 7): they were zero-field
+        # PredicateMeta classes, the shape of the original bug below, which
+        # left with the class.  What stays pinned is the mixed scalar/list
+        # last-argument compile.
+        usd, non_o_a, non_o_x = "usd", "non_o_a", "non_o_x"
+        ltr, smart_t, unrestricted = "ltr", "smart_t", "unrestricted"
 
         db = Database()
         clauses = [
@@ -1367,9 +1341,8 @@ class TestAtomInListHead:
         results = _simple_solutions(fn, [a, b, c, d], trail)
         assert len(results) == 4
         # The list-pattern clauses round-trip the atom-bearing last arg.
-        # THE FLIP: the atom round-trips as the arity-0 CELL ("usd",), not
-        # the `usd` PredicateMeta class object passed in as a compile-time
-        # value (and no longer as the P3-1 bare str either).
+        # The atom round-trips as the atom ``usd`` (a str), the value
+        # passed in as a compile-time global.
         last_args = [r[3] for r in results]
         assert [mint("usd"), 50000] in last_args
         assert [mint("usd"), 100000] in last_args

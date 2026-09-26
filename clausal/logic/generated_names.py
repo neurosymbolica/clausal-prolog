@@ -37,7 +37,7 @@ BARE_ONLY: frozenset[str] = frozenset({"Undefined"})
 #: knows every twin by name.  :func:`register_generated_names` asserts the
 #: runtime table matches this list, so drift between the two is loud.
 INJECTED_TITLECASE_NAMES: frozenset[str] = frozenset({
-    "PredicateMeta", "Var", "Compound", "DictTerm", "SetTerm", "KWTerm",
+    "Var", "Compound", "DictTerm", "SetTerm", "KWTerm",
     "Trail", "PyThunk", "FStringThunk", "Quantity", "BoolEq", "BoolImpl",
 })
 

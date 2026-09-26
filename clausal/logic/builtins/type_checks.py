@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from clausal.logic.variables import deref, is_var
 from clausal.logic.predicate import (
-    is_declared_predicate_name, is_zero_field_class, is_atom_value,
+    is_declared_predicate_name, is_atom_value,
     is_term_instance, term_field_names,
 )
 from clausal.logic.atoms import (

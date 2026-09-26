@@ -24,7 +24,6 @@ from clausal.logic.builtins.database_ops import _find_pred_cls
 from clausal.logic.predicate import (
     mint_predicate_handle, resolve_predicate_row,
 )
-from tests.predicate_api_support import class_arm_predicate
 
 
 def _write(tmp_path, name, src):
@@ -38,40 +37,6 @@ def _load(tmp_path, name, src):
 
 
 # -- the row-matched leg is arity-checked (I1) -------------------------------
-
-
-def test_a_class_sitting_on_another_aritys_row_is_not_returned_for_that_arity(
-        tmp_path):
-    """``-dynamic(d/2)`` beside ``d(1),`` USED TO move ``d/1``'s class onto
-    the ``('d', 2)`` row (fixed 2026-09-24,
-    ``todo/done/dynamic-at-another-arity-moves-the-class-2026-09-17.md``).
-    The row-matched leg must still not hand a ONE-field class to a ``d/2``
-    assert: the caller locks it, recompiles through it and builds terms with
-    it.  The misplaced state is now built by hand so the guard stays tested.
-    """
-    mod = _load(tmp_path, "fpc_ar", "-dynamic(d/1)\n-dynamic(d/2)\nd(1),\n")
-    md = mod.module_dict
-    # After the W4b-2d flip the load binds ``d`` to its HANDLE, which has no
-    # arity to be wrong about: both d/1 and d/2 are this module's predicates,
-    # so the handle is the binding at each.
-    handle = md["d"]
-    assert handle == mint_predicate_handle(mod.db, "d"), handle
-    assert _find_pred_cls("d", 1, md) == handle
-    assert _find_pred_cls("d", 2, md) == handle
-    # The class arm of the guard is still engine code; the misplaced class
-    # is built by hand -- a ONE-field class on d/1's row, then moved onto
-    # the ('d', 2) row -- and bound under the name.
-    cls = class_arm_predicate("d", ["x"])
-    cls._bind_row(mod.db, "d", 1, authorized=True)
-    assert cls._row.key == ("d", 1)
-    cls._bind_row(mod.db, "d", 2, authorized=True)
-    md["d"] = cls
-    # the state this test is built on, pinned so the test cannot go vacuous
-    assert len(cls._fields) == 1 and cls._row.key == ("d", 2)
-    assert mod.db.row("d", 2) is cls._row
-    assert _find_pred_cls("d", 2, md) is None
-    # ... and the honest arity still resolves
-    assert _find_pred_cls("d", 1, md) is cls
 
 
 # -- the last leg is symmetric with the no-row leg (L3) ----------------------

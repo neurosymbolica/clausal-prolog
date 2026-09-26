@@ -72,24 +72,6 @@ class TestIdentityMachineryDeleted:
         assert "$atom" not in INJECTED_RUNTIME_BUILTINS
 
 
-class TestEnvFlagHasNoEffect:
-    """``CLAUSAL_WARN_ATOM_IDENTITY`` is inert: no reads left anywhere, so a
-    freshly minted zero-field class carries no diagnostic ``__unify__``
-    regardless of the flag."""
-
-    def test_flag_on_installs_no_unify_hook(self, monkeypatch):
-        from clausal.logic.predicate import PredicateMeta
-        monkeypatch.setenv("CLAUSAL_WARN_ATOM_IDENTITY", "1")
-        atom = PredicateMeta("t3_flag_on_atom", (), {"_fields": ()})
-        assert "__unify__" not in atom.__dict__
-
-    def test_flag_off_installs_no_unify_hook(self, monkeypatch):
-        from clausal.logic.predicate import PredicateMeta
-        monkeypatch.delenv("CLAUSAL_WARN_ATOM_IDENTITY", raising=False)
-        atom = PredicateMeta("t3_flag_off_atom", (), {"_fields": ()})
-        assert "__unify__" not in atom.__dict__
-
-
 class TestAtomsAreGlobal:
     """Cross-module same-spelled atoms are the identical object and unify."""
 

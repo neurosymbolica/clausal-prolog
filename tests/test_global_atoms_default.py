@@ -35,13 +35,12 @@ from clausal import Var
 from clausal.import_hook import _load_module, predicate_builtins
 from clausal.logic.solve import solve   # P2: a cell goal is driven, never iterated
 from clausal.logic.predicate import (
-    PredicateMeta, is_declared_predicate, is_zero_field_class, is_atom_value,
+    is_declared_predicate, is_zero_field_class, is_atom_value,
     resolve_predicate_row,
 )
 from clausal.logic.variables import Trail, deref, unify
 from clausal.logic.solve import call
 from clausal.logic.builtins._helpers import functor_arity
-from tests.predicate_api_support import class_arm_predicate
 
 
 def _fixture_path(filename: str) -> str:
@@ -465,21 +464,7 @@ class TestStrAtomAcceptance:
         mod = _atoms_mod("tsaa_atom_empty")
         assert _succeeds("atom", mint(""), mod=mod)
 
-    def test_atom_false_for_zero_field_class(self):
-        # STAGE 2 of the atoms-as-str flip (spec §4): no class is an atom.
-        # The class route the transitional dual-accept kept open is closed;
-        # the atom of that name is the str, and ``atom/1`` says so.
-        atom_cls = class_arm_predicate("tsaa_class_atom", [])
-        mod = _atoms_mod("tsaa_atom_class")
-        assert not _succeeds("atom", atom_cls, mod=mod)
-        assert _succeeds("atom", mint("tsaa_class_atom"), mod=mod)
 
-    def test_atom_false_for_int_var_compound_and_1field_class(self):
-        mod = _atoms_mod("tsaa_atom_neg")
-        assert not _succeeds("atom", 42, mod=mod)
-        assert not _succeeds("atom", Var(), mod=mod)
-        pt = class_arm_predicate("tsaa_pt", ["x"])
-        assert not _succeeds("atom", pt(x=1), mod=mod)
 
     def test_atomic_true_for_plain_str(self):
         # Already-true behavior (F082) -- pinned here alongside atom/1 per
@@ -516,14 +501,6 @@ class TestIsAtomValueHelper:
         assert is_atom_value(chars("red")) is False
         assert is_atom_value(chars("")) is False
 
-    def test_false_for_zero_field_class(self):
-        # STAGE 2 (spec §4): no class is an atom -- the value-level widening
-        # that admitted a zero-field class is retired with the cell.
-        atom_cls = class_arm_predicate("tiav_class_atom", [])
-        assert is_atom_value(atom_cls) is False
-        # it is still a zero-field CLASS, which is a different question
-        assert is_zero_field_class(atom_cls) is True
-        assert is_atom_value(mint("tiav_class_atom")) is True
 
     def test_false_for_int_float_none_bytes(self):
         assert is_atom_value(42) is False
@@ -534,13 +511,6 @@ class TestIsAtomValueHelper:
     def test_false_for_unbound_var(self):
         assert is_atom_value(Var()) is False
 
-    def test_false_for_compound_and_1field_class_instance(self):
-        from clausal.terms import Compound
-        assert is_atom_value(Compound("f", (1, 2))) is False
-        pt = class_arm_predicate("tiav_pt", ["x"])
-        assert is_atom_value(pt(x=1)) is False
-        # ...but the zero-field CLASS itself (not an instance) is an atom.
-        assert is_atom_value(pt) is False  # 1-field class is not an atom
 
 
 class TestFunctorArityAtomCell:
@@ -563,12 +533,6 @@ class TestFunctorArityAtomCell:
         assert functor_arity(chars("red")) is None
         assert functor_arity(chars("")) is None
 
-    def test_functor_arity_none_for_zero_field_class(self):
-        # STAGE 2 (spec §4): no class is an atom, so a zero-field class is
-        # outside ``functor_arity``'s domain; the atom of its name is name/0.
-        atom_cls = class_arm_predicate("tfasa_class_atom", [])
-        assert functor_arity(atom_cls) is None
-        assert functor_arity(mint("tfasa_class_atom")) == ("tfasa_class_atom", 0)
 
 
 class TestStrAtomUnification:

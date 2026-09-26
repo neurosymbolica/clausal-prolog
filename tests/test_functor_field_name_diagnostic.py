@@ -29,9 +29,11 @@ import pytest
 from clausal.import_hook import _load_module
 from clausal.logic.predicate import (
     ClausalTermConstructionError,
-    PredicateMeta,
 )
-from tests.predicate_api_support import class_arm_predicate
+# W4b-3 slice 7: the PredicateMeta class is deleted; ``build_term_cell`` is
+# the one raise site, reached here through ``term_ctor`` (which records its
+# creation site as the "registered by:" line, as a declaration does).
+from tests.predicate_api_support import term_ctor
 
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
@@ -56,7 +58,7 @@ class TestConstructionErrorShape:
         assert issubclass(ClausalTermConstructionError, TypeError)
 
     def test_names_functor_arity_and_both_field_tuples(self):
-        cls = class_arm_predicate("fnd_verdict", ["status", "citations"])
+        cls = term_ctor("fnd_verdict", ["status", "citations"])
         with pytest.raises(ClausalTermConstructionError) as exc_info:
             cls(arg_0="ok", arg_1=[])
         msg = str(exc_info.value)
@@ -65,7 +67,7 @@ class TestConstructionErrorShape:
         assert "(status, citations)" in msg
 
     def test_carries_structured_attributes(self):
-        cls = class_arm_predicate("fnd_pair", ["left", "right"])
+        cls = term_ctor("fnd_pair", ["left", "right"])
         with pytest.raises(ClausalTermConstructionError) as exc_info:
             cls(alpha=1, beta=2)
         err = exc_info.value
@@ -75,44 +77,26 @@ class TestConstructionErrorShape:
         assert err.registered_fields == ("left", "right")
 
     def test_reports_the_construction_source_location(self):
-        cls = class_arm_predicate("fnd_where", ["only"])
+        cls = term_ctor("fnd_where", ["only"])
         with pytest.raises(ClausalTermConstructionError) as exc_info:
             cls(nope=1)
         msg = str(exc_info.value)
         assert "constructed at:" in msg
         assert os.path.basename(__file__) in msg
 
-    def test_registered_location_is_recorded_on_the_class(self):
-        cls = class_arm_predicate("fnd_regsite", ["only"])
-        assert isinstance(cls._registered_at, tuple)
-        filename, lineno = cls._registered_at
+    def test_the_registered_location_names_the_declaring_file(self):
+        cls = term_ctor("fnd_regsite", ["only"])
+        with pytest.raises(ClausalTermConstructionError) as exc_info:
+            cls(nope=1)
+        assert isinstance(exc_info.value.registered_at, tuple)
+        filename, lineno = exc_info.value.registered_at
         assert os.path.basename(__file__) == os.path.basename(filename)
         assert lineno > 0
 
     def test_matching_field_names_still_construct(self):
-        cls = class_arm_predicate("fnd_ok", ["left", "right"])
+        cls = term_ctor("fnd_ok", ["left", "right"])
         term = cls(left=1, right=2)
         assert _cf(term, cls, "left") == 1 and _cf(term, cls, "right") == 2
-
-    def test_init_is_not_consulted_at_all_any_more(self):
-        """P2 INVERTS this pin, and means to.
-
-        It used to pin that a TypeError raised by ``__init__`` -- whose
-        kwargs all ARE fields, so the field-name diagnostic must not claim
-        it -- is re-raised untouched.  Construction no longer makes an
-        INSTANCE: it builds a cell, and ``__init__`` is never called, so
-        there is no longer any such TypeError to swallow or re-raise.  The
-        pin becomes the fact that replaced it."""
-
-        class fnd_raiser(metaclass=PredicateMeta):
-            _fields = ("boom",)
-
-        def _explode(self, boom=None):
-            raise TypeError("something else entirely")
-
-        fnd_raiser.__init__ = _explode
-        # No raise, and the cell is built from the kwargs as usual.
-        assert _cf(fnd_raiser(boom=1), fnd_raiser, "boom") == 1
 
 
 # ── Cause 1: directive-minted arg_N placeholders vs derived names ──────────
@@ -198,7 +182,7 @@ class TestAtomShadowsPredicate:
             )
 
     def test_atom_cause_is_detected_at_unit_level_too(self):
-        atom = class_arm_predicate("fnd_bare_atom", [])
+        atom = term_ctor("fnd_bare_atom", [])
         with pytest.raises(ClausalTermConstructionError) as exc_info:
             atom(PROFILE=1, VALUE=2)
         msg = str(exc_info.value)
@@ -211,7 +195,7 @@ class TestCauseDiscrimination:
     """Neither hint fires for a plain rename mismatch."""
 
     def test_generic_mismatch_gets_neither_specific_hint(self):
-        cls = class_arm_predicate("fnd_generic", ["left", "right"])
+        cls = term_ctor("fnd_generic", ["left", "right"])
         with pytest.raises(ClausalTermConstructionError) as exc_info:
             cls(alpha=1, beta=2)
         msg = str(exc_info.value)

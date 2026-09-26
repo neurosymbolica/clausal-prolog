@@ -26,7 +26,6 @@ from clausal.logic.atoms import (
 )
 from clausal.logic.variables import Var, deref, is_var, unify, Trail
 from clausal.logic.predicate import (
-    PredicateMeta,
     is_term_instance,
     term_field_names,
     is_declared_predicate_name, namespace_db,
@@ -111,18 +110,17 @@ def _row_for_handle(handle: str, db=None) -> "PredRow":
     return row
 
 
-def analyze_mi(pred_cls: "PredRow | PredicateMeta | str",
+def analyze_mi(pred_cls: "PredRow | str",
                program_arg: int | None = None, *, db=None) -> MIPattern:
     """Analyze a meta-interpreter's clauses and return a structured pattern.
 
     Parameters
     ----------
-    pred_cls : PredRow, PredicateMeta or a predicate handle (str)
+    pred_cls : PredRow or a predicate handle (str)
         The MI predicate: its ROW (what the compiler passes, F1 rows 32/33 --
         found in the importing module's own database, so it works whatever
-        the module-dict binding looks like), or a ``PredicateMeta`` class
-        (the direct Python API; a thin adapter until W4b-3 deletes classes
-        -- TODO(W4b-3): drop the class arm with ``_meta_interpreter_row``'s).
+        the module-dict binding looks like).  (A ``PredicateMeta`` class, the
+        direct Python API's old shape, went at W4b-3 slice 7.)
         A predicate HANDLE (the same module attribute once the binding flips)
         resolves to its row at its one defined arity.
         From a row the name and arity are its key and the field names its
@@ -152,17 +150,9 @@ def analyze_mi(pred_cls: "PredRow | PredicateMeta | str",
         # Several arities is ruling QA's open question: refuse, naming them,
         # rather than guess.
         pred_cls = _row_for_handle(pred_cls, db=db)
-    if isinstance(pred_cls, PredicateMeta):
-        # The ROW's clauses (W2); a class on no row has none, and this read
-        # must not mint one.
-        _row = pred_cls._row
-        clauses = _row.clauses if _row is not None else []
-        fields = pred_cls._fields
-        name = pred_cls.__name__
-    else:
-        name, arity = pred_cls.key
-        clauses = pred_cls.clauses
-        fields = None
+    name, arity = pred_cls.key
+    clauses = pred_cls.clauses
+    fields = None
 
     # Before the field names are needed: a clause-less or one-clause MI is
     # refused with THIS message whichever shape it arrived in (the compiler

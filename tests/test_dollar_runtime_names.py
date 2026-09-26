@@ -36,7 +36,6 @@ from clausal.pythonic_ast import nodes as simple_ast
 from clausal.templating.term_rewriting import EmbedTransformer
 
 from tests.tagged_terms_support import capture_predicate_codegen
-from tests.predicate_api_support import class_arm_predicate
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -102,7 +101,7 @@ def temp_fixture_module():
 
 _INJECTED_BARE = [
     "Var", "Compound", "DictTerm", "SetTerm", "KWTerm", "Trail", "PyThunk",
-    "FStringThunk", "Quantity", "PredicateMeta", "BoolEq", "BoolImpl",
+    "FStringThunk", "Quantity", "BoolEq", "BoolImpl",
 ]
 _NODE_CLASSES = ["Predicate", "Call", "LoadName", "Add", "Sub", "Node", "Module"]
 
@@ -466,12 +465,6 @@ class TestDollarRefFallsBackToTheTwinByName:
             warnings.simplefilter("error")
             assert dollar_ref(simple_ast.Add) == "$Add"
 
-    def test_a_user_class_keeps_its_bare_name(self):
-        from clausal.logic.generated_names import dollar_ref
-        cls = class_arm_predicate("MyOwnPred", ["a"])
-        with warnings.catch_warnings():
-            warnings.simplefilter("error")
-            assert dollar_ref(cls) == "MyOwnPred"
 
     def test_a_subclass_of_var_compiles_through_the_twin(self):
         from clausal.logic.compiler.terms_to_ast import term_to_ast_expr

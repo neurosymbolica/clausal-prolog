@@ -29,7 +29,6 @@ from clausal.logic.predicate import (
 )
 from clausal.logic.solve import call, solve
 from clausal.logic.variables import Var, Trail, deref
-from tests.predicate_api_support import class_arm_predicate
 
 
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
@@ -302,40 +301,6 @@ class TestV2CompileModule:
         assert checked, "fixture exercised no non-dynamic predicate at all"
         assert ("fact", 2) in checked, checked
 
-    def test_a_class_this_database_has_no_row_for_is_refused(self):
-        """A row-less class in the module dict is REFUSED at load (W4b-3
-        slice 1, operator ruling 2026-09-25), and the refusal leaves the
-        dict exactly as it found it: nothing flipped, the orphan still bound
-        (roborev 2026-09-25 -- a raise mid-flip used to leave a caller's live
-        dict half-flipped).
-
-        This used to pin step 7's narrowing (locking a row-less class minted
-        a detached row); after the flip the class was left bound, and that
-        branch is gone.  Pinned with a class minted HERE rather than with
-        one the fixture happens to contain, because a pin that depends on
-        incidental module-dict contents goes vacuous without failing.
-        """
-        # nv
-        path = os.path.join(FIXTURES_DIR, "static_pred.clausal")
-        md = _load_via_v2(path, "_v2_static_pred_norow")
-        db = md["$module"].db
-
-        orphan = class_arm_predicate("zz_no_row_here", ["a"])
-        assert db.row("zz_no_row_here", 1) is None, "fixture must not define it"
-        # A second class that WOULD flip (it names this db's module and a
-        # row this db holds), so a half-flip is observable.
-        owned = class_arm_predicate("zz_owned_here", ["a"])
-        owned.__module__ = md["__name__"]
-        md["zz_owned_here"] = owned
-        md["zz_no_row_here"] = orphan
-        before = dict(md)
-
-        with pytest.raises(SyntaxError, match=r"binds zz_no_row_here to "
-                           r"zz_no_row_here/1, a PredicateMeta class "
-                           r"created in Python"):
-            compile_module([], [], md, md["__name__"])
-        assert md == before
-        assert md["zz_owned_here"] is owned
 
     def test_dynamic_not_locked(self):
         """Dynamic predicates are NOT locked after compile_module."""

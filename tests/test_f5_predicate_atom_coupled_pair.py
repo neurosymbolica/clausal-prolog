@@ -54,17 +54,11 @@ import dataclasses
 from clausal.logic.compiler.head_match import head_to_match_pattern
 from clausal.logic.compiler.terms_to_ast import _is_opaque_head_literal
 from clausal.logic.predicate import is_declared_predicate_name
-from tests.predicate_api_support import class_arm_predicate
+
 
 
 # ── Shared fixtures ──────────────────────────────────────────────────────
 
-def _a_predicate_class():
-    return class_arm_predicate("F5CoupledPairPred", ["a", "b"])
-
-
-def _a_zero_arity_predicate_class():
-    return class_arm_predicate("F5CoupledPairZeroArity", [])
 
 
 @dataclasses.dataclass
@@ -75,21 +69,8 @@ class _NotAPredicate:
 # ── terms_to_ast._is_opaque_head_literal: PredicateMeta class -> not opaque ──
 
 class TestOpaqueHeadLiteralPredicateClass:
-    def test_predicate_class_is_not_opaque(self):
-        P = _a_predicate_class()
-        assert _is_opaque_head_literal(P) is False
 
-    def test_zero_arity_predicate_class_is_not_opaque(self):
-        P0 = _a_zero_arity_predicate_class()
-        assert _is_opaque_head_literal(P0) is False
 
-    def test_agrees_with_is_declared_predicate_name(self):
-        """The population this branch answers False for must be exactly
-        the population is_declared_predicate_name answers True for (the
-        swapped call) -- confirmed directly, not just by reading the diff."""
-        P = _a_predicate_class()
-        assert is_declared_predicate_name(P) is True
-        assert _is_opaque_head_literal(P) is False
 
     def test_unrelated_dataclass_class_is_still_opaque(self):
         """A bare dataclass CLASS (never a predicate) must NOT be swept
@@ -101,32 +82,6 @@ class TestOpaqueHeadLiteralPredicateClass:
 
 # ── head_match.head_to_match_pattern: PredicateMeta atom -> capture+unify ──
 
-class TestHeadMatchPredicateAtomBranch:
-    def test_predicate_class_gives_wildcard_capture_with_atom_guard(self):
-        P = _a_predicate_class()
-        list_guards: list = []
-        p = head_to_match_pattern(P, {}, list_guards=list_guards)
-        assert isinstance(p, ast.MatchAs)
-        assert p.name.startswith("_acap")
-        assert list_guards == [("atom", p.name, P)]
-
-    def test_zero_arity_predicate_class_gives_wildcard_capture_with_atom_guard(self):
-        P0 = _a_zero_arity_predicate_class()
-        list_guards: list = []
-        p = head_to_match_pattern(P0, {}, list_guards=list_guards)
-        assert isinstance(p, ast.MatchAs)
-        assert list_guards == [("atom", p.name, P0)]
-
-    def test_output_mode_caller_would_bind_not_reject(self):
-        """The whole point of the guard route (vs a bare MatchValue, which
-        compares with == / identity and silently fails an unbound Var
-        caller): the capture name is a plain wildcard pattern, so an
-        unbound-Var caller matches structurally and the guard's unify()
-        (assembled by compile_head_to_match_case, not exercised at this
-        unit level) is what would bind it."""
-        P = _a_predicate_class()
-        p = head_to_match_pattern(P, {}, list_guards=[])
-        assert p.pattern is None  # bare capture, not a value-comparing pattern
 
 
 # ── Cross-function mirror: both sites must agree on every input ────────────
@@ -148,10 +103,6 @@ class TestCoupledPairMirror:
             and list_guards[0][2] is term
         )
 
-    def test_predicate_class_both_sites_agree_true(self):
-        P = _a_predicate_class()
-        assert _is_opaque_head_literal(P) is False
-        assert self._head_match_takes_atom_branch(P) is True
 
     def test_non_predicate_dataclass_both_sites_agree_false(self):
         assert _is_opaque_head_literal(_NotAPredicate) is True

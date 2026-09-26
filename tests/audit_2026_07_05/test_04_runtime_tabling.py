@@ -549,16 +549,17 @@ class TestF008DerefWalkTemplateFreeze:
         assert snap._position == (1, 2, 3, 4)  # was dropped by the Compound arm
 
     def test_predicate_cell_nested_in_compound_frozen(self):
-        from clausal.logic.predicate import PredicateMeta
         from clausal.terms import Compound
+        from tests.predicate_api_support import term_ctor
         _deref_walk, t, X = self._bound()
         # W4a (2026-09-22): a predicate class builds the CELL and the
         # instance path is retired, so F008's freeze claim is asked of the
         # cell -- nested inside a Compound, which is the shape that made the
         # original arm reachable.
-        pt = PredicateMeta("audit_f008", (), {"_fields": ("a", "b")})
+        # (the class itself was deleted at W4b-3 slice 7; its cell remains)
+        pt = term_ctor("audit_f008", ("a", "b"))
         cell = pt(X, 2)
-        assert type(cell) is tuple, "the class builds a cell, not an instance"
+        assert type(cell) is tuple, "a predicate term is a cell"
         snap = _deref_walk(Compound("f", (cell,)))
         t.reset()
         assert deref(snap.args[0][1]) == 1 and snap.args[0][2] == 2

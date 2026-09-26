@@ -25,10 +25,7 @@ from clausal.logic.exceptions import (
 )
 from clausal.logic.atoms import is_mangled
 from clausal.logic.predicate import (
-    PredicateMeta,
-    describe_term_identity_mismatch,
     is_term_instance,
-    is_zero_field_class,
     module_source_path,
     resolve_predicate_row,
     term_field_names,
@@ -417,37 +414,30 @@ def _resolve_through_row(through: Any, arity: int,
     the target row, on exactly the write ``through=`` exists to widen.
 
     So the discriminator here is on the INPUT'S SHAPE, not on the result.
-    Two shapes are RECOGNISED, and each may legitimately answer no row:
-
-    1. a ``PredicateMeta`` class (today's era) -- ``None`` when the class is
-       not yet bound to any row;
-    2. a mangled atom naming a loaded module's predicate (the post-flip
-       binding) -- ``None`` when that module is not loaded, or is loaded but
-       has no row at exactly *arity*.
-
-    Both are resolved by :func:`resolve_predicate_row` (``predicate.py``,
-    F1), which already carries this exact class/mangled-atom distinction for
-    its other era-agnostic call sites -- its own docstring names "a mutation
-    gate's ``through=``" as an intended consumer, so this reuses it rather
-    than re-deriving the same two cases a second time, differently.
+    One shape is RECOGNISED, and it may legitimately answer no row: a
+    mangled atom naming a loaded module's predicate (a HANDLE) -- ``None``
+    when that module is not loaded, or is loaded but has no row at exactly
+    *arity*.  (A ``PredicateMeta`` class was the other, until W4b-3 slice 7
+    deleted the class.)  It is resolved by :func:`resolve_predicate_row`
+    (``predicate.py``, F1), whose docstring names "a mutation gate's
+    ``through=``" as an intended consumer.
 
     Anything ELSE -- a bare ``PredRow``, an un-mangled string, a dataclass
     instance, ``None`` is handled above this and is the one silent case --
     is UNRECOGNISED and raises, naming the value and its type.  Nothing here
-    widens past what a caller actually passes today (a ``PredicateMeta``
-    class, always); a bare row is deliberately not accepted merely because it
+    widens past what a caller actually passes (a handle); a bare row is deliberately not accepted merely because it
     would be easy to resolve -- accepting it would make a typo'd or
     stale-shaped ``through=`` indistinguishable from a real one, which is the
     exact failure mode this function exists to end.
     """
     if through is None:
         return None
-    if isinstance(through, PredicateMeta) or is_mangled(through):
+    if is_mangled(through):
         return resolve_predicate_row(through, arity=arity, db=db)
     raise TypeError(
         f"through= does not recognise this value: {through!r} "
-        f"(a {type(through).__name__}); expected a PredicateMeta class or "
-        f"a mangled atom naming a loaded module's predicate, or None"
+        f"(a {type(through).__name__}); expected a predicate handle (a "
+        f"mangled atom naming a loaded module's predicate), or None"
     )
 
 
@@ -1860,14 +1850,9 @@ def head_key(head: Any) -> tuple[str, int]:
         return head.functor, len(head)
     if is_term_instance(head):
         return type(head).__name__, len(term_field_names(head))
-    # Zero-arity PredicateMeta class in the HEAD channel -- kept deliberately
-    # (STAGE 2, spec §4 made the class no TERM: the functor/arity twins answer
-    # None for it).  A head names a PREDICATE, and a clause-less DECLARED
-    # 0-arity predicate is still its class with no row (P1: declared
-    # clause-less = class), so its first assertz'd clause arrives here as
-    # that class and must key name/0.
-    if is_zero_field_class(head):
-        return head.__name__, 0
+    # (A zero-arity ``PredicateMeta`` class head, keyed name/0, stood here;
+    # the class was deleted at W4b-3 slice 7 -- a 0-arity head is the atom,
+    # below.)
     # A CELL names its predicate in slot 0 (P3-3 Task 5, R11).  Last, because
     # every branch above is a cheaper and far commoner shape and this one only
     # fires for a tuple.  A ``TUPLE_TAG`` cell and a slot-0-Var tuple are DATA,
@@ -1882,7 +1867,6 @@ def head_key(head: Any) -> tuple[str, int]:
         f"Cannot extract (functor, arity) from head term: {head!r}\n"
         "Expected Compound, Call(LoadName(...), ...), a functor dataclass "
         "instance, or a cell ('f', a, b)."
-        + describe_term_identity_mismatch(head)
     )
 
 

@@ -45,7 +45,6 @@ import pytest
 from clausal.logic.atoms import mint
 from clausal.logic.cells import chars
 from clausal.logic.predicate import (
-    PredicateMeta,
     is_zero_field_class,
     is_term_instance,
     term_field_dict,
@@ -67,7 +66,7 @@ from clausal.logic.cells import TUPLE_TAG, make_cell, make_tuple_cell
 from clausal.logic.variables import Var, deref, is_var
 from clausal.terms import Compound, KWTerm
 from clausal.pythonic_ast.nodes import Add
-from tests.predicate_api_support import class_arm_predicate
+from tests.predicate_api_support import term_ctor
 
 
 # ── Corpus ─────────────────────────────────────────────────────────────────
@@ -75,8 +74,9 @@ from tests.predicate_api_support import class_arm_predicate
 # A PredicateMeta term whose declared field order is NOT alphabetical, so a
 # naive "sort the fields" implementation would silently pass while an
 # order-sensitive one would not.
-bar = class_arm_predicate("bar", ["b", "a"])
-foo_atom = class_arm_predicate("foo", [])
+bar = term_ctor("bar", ["b", "a"])     # builds the cell a class built
+# (``foo_atom``, a zero-field PredicateMeta CLASS, and the tests of the
+# class arms that took it went with the class at W4b-3 slice 7.)
 
 
 class NotADataclass:
@@ -90,13 +90,7 @@ class NotADataclass:
 
 
 class TestTermFieldNamesOfClass:
-    def test_predicate_meta_class_preserves_declared_order(self):
-        # nv
-        assert term_field_names_of_class(bar) == ("b", "a")
 
-    def test_predicate_meta_atom_class_is_empty_tuple(self):
-        # nv
-        assert term_field_names_of_class(foo_atom) == ()
 
     def test_dataclass_class_matches_instance_field_set(self):
         # nv — must be the SAME set term_field_names yields for an instance,
@@ -212,7 +206,7 @@ class TestFunctorArity:
             mint("foo"),
             Add(left=1, right=2),
             mint("baz"),
-            class_arm_predicate("qux", ["x", "y", "z"])(x=1, y=2, z=3),
+            term_ctor("qux", ["x", "y", "z"])(x=1, y=2, z=3),
         ],
         ids=[
             "compound-nullary",
@@ -233,64 +227,6 @@ class TestFunctorArity:
 # ── is_zero_field_class adoption regression (4 migrated _helpers.py sites) ───
 
 
-class TestIsZeroFieldClassAdoptionRegression:
-    """The four hand-rolled ``isinstance(x, PredicateMeta) and not x._fields``
-    sites in ``_helpers.py`` now route through the funnel's zero-field-CLASS
-    test. Behavior at each call site must be unchanged.
-
-    Task 12 renamed that test ``predicate.is_atom`` -> ``is_zero_field_class``
-    (``atoms.is_atom`` is the TERM test and owns the plain stem now); the
-    sites and their answers are the same ones.
-    """
-
-    def test_functor_name_of_atom_class_is_none(self):
-        # STAGE 2 of the atoms-as-str flip (spec §4): no class is a term, so
-        # neither twin answers for a zero-field class -- the atom of that name
-        # is the str.  It is still a zero-field CLASS, a different question.
-        assert _functor_name(foo_atom) is None
-        assert _functor_name(mint("foo")) == "foo"
-        assert is_zero_field_class(foo_atom)
-
-    def test_arity_of_atom_class_is_none(self):
-        # STAGE 2 (spec §4): as above, for the arity twin
-        assert _arity(foo_atom) is None
-        assert _arity(mint("foo")) == 0
-
-    def test_is_ground_of_atom_class_is_true(self):
-        # nv — _is_ground_py line ~172 (checked isinstance(term, type) AND
-        # isinstance(term, PredicateMeta) AND not term._fields;
-        # is_zero_field_class covers the same shape since PredicateMeta
-        # instances are classes)
-        assert _is_ground(foo_atom) is True
-
-    def test_is_ground_of_nonatom_class_is_not_short_circuited_true(self):
-        # nv — a PredicateMeta class WITH fields is not an atom, and is not
-        # itself ground-checkable the same way (it's a class, not a term
-        # instance); confirms the is_zero_field_class guard doesn't
-        # over-match.
-        assert is_zero_field_class(bar) is False
-
-    def test_standard_order_key_of_atom_class(self):
-        # nv — _standard_order_key line ~368.  P3-1 Task 4 (standard-order
-        # collapse, §1b/R2): the trailing 0/1 discriminator that used to
-        # break str-vs-same-spelled-class ties is gone — a class atom keys
-        # IDENTICALLY to the same-spelled str now, since post-pivot they are
-        # the same atom.
-        key = _standard_order_key(mint("foo"))
-        assert key == (2, "foo")  # (_ORD_ATOM, name)
-
-    def test_standard_order_key_atom_sorts_adjacent_to_same_named_str(self):
-        # nv — atoms and same-named strings interleave in standard order
-        from clausal.logic.cells import chars
-        foo_str = chars("foo")
-        items = [foo_atom, foo_str]
-        from clausal.logic.builtins._helpers import _standard_order_sorted
-
-        result = _standard_order_sorted(items)
-        assert result == [foo_str, foo_atom] or result == [foo_atom, foo_str]
-        # both orderings are stable/valid — assert it did not raise and
-        # both elements are present
-        assert set(id(x) for x in result) == {id(foo_atom), id(foo_str)}
 
 
 # ── Task 2 migration regression (sites with no existing direct coverage) ─────
@@ -310,7 +246,7 @@ class TestMigrationRegression:
         from types import SimpleNamespace
         from clausal.logic.term_expansion import _is_term_expansion_clause
 
-        te = class_arm_predicate("term_expansion", ("a", "b", "c", "d"))
+        te = term_ctor("term_expansion", ("a", "b", "c", "d"))
         head = te(a=1, b=2, c=3, d=4)                 # a head is a CELL (W4a)
         pred_node = SimpleNamespace(head=head)
         assert _is_term_expansion_clause(pred_node)
@@ -320,7 +256,7 @@ class TestMigrationRegression:
         from types import SimpleNamespace
         from clausal.logic.term_expansion import _is_term_expansion_clause
 
-        other = class_arm_predicate("NotTermExpansion", ("a", "b", "c", "d"))
+        other = term_ctor("NotTermExpansion", ("a", "b", "c", "d"))
         head = other(a=1, b=2, c=3, d=4)
         pred_node = SimpleNamespace(head=head)
         assert not _is_term_expansion_clause(pred_node)
@@ -330,7 +266,7 @@ class TestMigrationRegression:
         from types import SimpleNamespace
         from clausal.logic.term_expansion import _is_term_expansion_clause
 
-        te3 = class_arm_predicate("term_expansion", ("a", "b", "c"))
+        te3 = term_ctor("term_expansion", ("a", "b", "c"))
         head = te3(a=1, b=2, c=3)
         pred_node = SimpleNamespace(head=head)
         assert not _is_term_expansion_clause(pred_node)
@@ -380,7 +316,6 @@ class TestMigrationRegressionBatchB:
         now drives and yields bindings instead of raising — it round-trips.
         """
         import dataclasses as _dc
-        from clausal.logic.predicate import PredicateMeta
         from clausal.logic.variables import Var
         from clausal.repl import _iter_from_goal
 
@@ -398,8 +333,8 @@ class TestMigrationRegressionBatchB:
         # Concretely document the guard widening this fix depends on: a
         # dataclass instance's type is never a PredicateMeta instance, so
         # the OLD guard would have rejected DCMember unconditionally.
-        probe = DCMember(elem=1, lst=[1, 2, 3])
-        assert not isinstance(type(probe), PredicateMeta)
+        # (The class is gone -- W4b-3 slice 7 -- so the guard can only be
+        # the term-instance test; a dataclass instance passes it.)
 
         x = Var()
         goal = DCMember(elem=x, lst=[1, 2, 3])
@@ -707,7 +642,7 @@ class TestCellGroundnessRegression:
         # nv
         from clausal.logic.builtins._helpers import _is_ground
 
-        pt = class_arm_predicate("pt", ["a", "b"])
+        pt = term_ctor("pt", ["a", "b"])
         free = Var()
         assert _is_ground(pt(1, free)) is False
         assert _is_ground(make_cell("pt", 1, free)) is False

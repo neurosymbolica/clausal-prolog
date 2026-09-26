@@ -31,8 +31,8 @@ What a qualified goal now means, and what each pin here is for:
   - ``solve(goal, module=...)`` accepts the same designators, so
     ``module="dotted.name"`` is a spelling of the module argument.  A cell goal
     with no module and no qualification is an ``existence_error`` naming the
-    gap: cells never reach ``_infer_module``, which keeps serving legacy
-    class-instance goals only.
+    gap (there is no class-instance goal to walk back to any more, W4b-3
+    slice 7).
 
   - ``call/N`` resolves a qualified goal and dispatches in the EXPORTING db,
     through the exporter's own dispatch table or — for a predicate the
@@ -371,7 +371,7 @@ class TestSolveModuleDesignator:
         assert inner == Compound("existence_error", (mint("module"), "'t6_nope'"))
 
     def test_an_unqualified_cell_goal_without_a_module_names_the_gap(self):
-        """Cells never reach ``_infer_module`` — the gap is reported, not guessed."""
+        """A cell names no module -- the gap is reported, not guessed."""
         Q = Var()
         goal = ("p", Q)
         with pytest.raises(LogicException) as exc_info:
@@ -388,9 +388,8 @@ class TestSolveModuleDesignator:
         assert deref(Q) is Q
 
     def test_a_binding_built_goal_without_a_module_still_infers(self, mods):
-        """The goal built from a module BINDING -- a class term pre-flip (the
-        ``_infer_module`` legacy customer), the handle-headed cell post
-        W4b-2d -- still answers, with its module passed and without one (a
+        """The goal built from a module BINDING -- the handle-headed cell
+        (a class term before W4b-2d) -- still answers, with its module passed and without one (a
         handle is its own module designator)."""
         handle = mods.exporter_py.p
         assert handle != "p"
@@ -398,10 +397,6 @@ class TestSolveModuleDesignator:
         assert [deref(X) for _ in solve((handle, X), mods.exporter_py)] == [11, 12]
         X = Var()
         assert [deref(X) for _ in solve((handle, X))] == [11, 12]
-
-    def test_infer_module_documents_that_cells_never_reach_it(self):
-        from clausal.logic.solve import _infer_module
-        assert "cell" in _infer_module.__doc__.lower()
 
 
 # ── call/N over a qualified goal ───────────────────────────────────────────

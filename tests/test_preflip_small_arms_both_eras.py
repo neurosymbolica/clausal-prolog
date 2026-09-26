@@ -633,37 +633,26 @@ def test_a_host_head_pattern_matches_an_owner_built_term(
 
 def _flip_bindings_before_step_4(monkeypatch, must_flip):
     """Flip every binding at step 3d, BEFORE steps 4 and 4a, so step 4a
-    meets this module's OWN ``-dynamic`` as a handle.  The real flip
-    (``compiler_v2._flip_bindings``) runs after step 4a, so a real load
-    never shows 4a a LOCAL handle; this stand-in still does real work and
-    returns the keys it flipped.  It ASSERTS it flipped *must_flip*: a
+    meets this module's OWN ``-dynamic`` as a handle.  (The real flip ran
+    after step 4a until W4b-3; the module body binds the handle itself
+    now.)  This stand-in records the keys already bound to their handle and
+    returns them.  It ASSERTS it flipped *must_flip*: a
     stand-in that silently flips nothing would leave the test checking the
     class path under the handle test's name."""
     import clausal.logic.compiler_v2 as cv2
-    from clausal.logic.predicate import PredicateMeta
     real = cv2._refuse_foreign_writes
     flipped = []
 
     def _flip_then_gate(db, predicate_nodes, module_dict, *rest):
+        # Since W4b-3 slice 5 the module body binds this module's own
+        # HANDLE (``$declare_head``), so a real load shows step 4a a LOCAL
+        # handle with no rebinding at all; this records the keys that are
+        # (it rebound PredicateMeta classes until slice 7 deleted the class).
         for key, value in list(module_dict.items()):
             if key.startswith("$"):
                 continue
-            if (type(value) is str and not isinstance(value, PredicateMeta)
-                    and value == mint_predicate_handle(db, key)):
-                # Already this module's own handle: since W4b-3 slice 5 the
-                # module body binds it (``$declare_head``), so a real load
-                # shows step 4a a LOCAL handle with no stand-in at all.
+            if type(value) is str and value == mint_predicate_handle(db, key):
                 flipped.append(key)
-                continue
-            if not isinstance(value, PredicateMeta):
-                continue
-            row = value.__dict__.get("_row")
-            if row is not None and not row.detached:
-                owner, functor = row.db, row.key[0]
-            else:
-                owner, functor = db, value.__name__
-            module_dict[key] = mint_predicate_handle(owner, functor)
-            flipped.append(key)
         assert must_flip in flipped, (
             f"the step-3d stand-in flip did not flip {must_flip!r}: {flipped}")
         return real(db, predicate_nodes, module_dict, *rest)

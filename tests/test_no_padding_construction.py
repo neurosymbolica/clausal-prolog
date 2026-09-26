@@ -27,7 +27,6 @@ from clausal.logic.predicate import (
 )
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref, walk
-from tests.predicate_api_support import class_arm_predicate
 
 
 def _load(tmp_path, name, src):
@@ -60,21 +59,6 @@ def test_a_stray_keyword_still_gets_its_own_message():
     with pytest.raises(ClausalTermConstructionError,
                        match=r"constructed with field names \(c\)"):
         build_term_cell("q", ("a", "b"), (), {"c": 1})
-
-
-def test_a_class_call_and_a_handle_head_refuse_it_alike(tmp_path):
-    Pt = class_arm_predicate("np_pt", ["x", "y"])
-    with pytest.raises(ClausalTermConstructionError):
-        Pt(x=1)
-    with pytest.raises(ClausalTermConstructionError):
-        Pt()
-    mod = _load(tmp_path, "_np_owner", """
-        -module(_np_owner, [np_q(a, b)])
-        np_q(1, 2),
-    """)
-    with pytest.raises(ClausalTermConstructionError):
-        head_cell(mod.np_q, a=1)
-    assert head_cell(mod.np_q, b=2, a=1) == ("np_q", 1, 2)
 
 
 def test_the_compile_time_placer_refuses_it():

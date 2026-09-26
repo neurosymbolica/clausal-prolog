@@ -27,7 +27,7 @@ from clausal.logic.database import Module as LogicModule, Clause, head_key
 from clausal.logic.compiler import compile_predicate_trampoline
 from clausal.logic.variables import Var as _Var
 from clausal.logic.predicate import (
-    PredicateMeta, _db_for_module_name, predicate_owner_module,
+    _db_for_module_name, predicate_owner_module,
 )
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.pythonic_ast.nodes import Predicate as PredicateItem
@@ -169,22 +169,19 @@ def _collect_imported_te_clauses(module_dict: dict) -> list:
 def _te_nodes_of_binding(value) -> "list | None":
     """The term_expansion clauses recorded by the module that OWNS *value*,
     when *value* is a binding of the predicate ``term_expansion`` -- a
-    ``PredicateMeta`` class of that name or a mangled handle whose functor
-    half is ``term_expansion`` -- else ``None``.
+    mangled handle whose functor half is ``term_expansion`` (a
+    ``PredicateMeta`` class of that name until W4b-3 slice 7) -- else
+    ``None``.
 
-    Era-agnostic: the owner is ``predicate_owner_module`` (a class's
-    ``__module__``, a handle's module half) and the clauses are read off
+    The owner is ``predicate_owner_module`` (a handle's module half) and the
+    clauses are read off
     that module's Database, never off the class.  The term_expansion
     predicate itself has no row -- its clauses are consumed by expansion,
     not compiled -- so the owner is found by module name.
     """
-    if isinstance(value, PredicateMeta):
-        if getattr(value, "__name__", "") != "term_expansion":
-            return None
-    elif type(value) is str:
-        if not is_mangled(value) or demangle(value)[1] != "term_expansion":
-            return None
-    else:
+    if type(value) is not str:
+        return None
+    if not is_mangled(value) or demangle(value)[1] != "term_expansion":
         return None
     owner = predicate_owner_module(value)
     owner_db = _db_for_module_name(owner) if owner else None

@@ -19,7 +19,7 @@ from clausal.logic.variables import Var, Trail, deref, unify, is_var
 from clausal.logic.constraints import reify_eq, dif
 from clausal.logic.clpfd import reify_fd, fd_eq, fd_lt, in_domain
 from clausal.terms import Compound
-from clausal.logic.predicate import PredicateMeta
+from tests.predicate_api_support import term_ctor
 from clausal.logic.database import Clause, Database
 from clausal.logic.compiler import compile_predicate_shallow as compile_predicate, compile_predicate_trampoline
 from clausal.pythonic_ast.nodes import (
@@ -127,20 +127,18 @@ class TestReifyEq:
         b = Compound("f", (1, 2))
         assert reify_eq(a, b, trail) is None
 
-    def test_predicate_meta_same(self):
+    def test_compound_cell_same(self):
         # nv
-        class point(metaclass=PredicateMeta):
-            _fields = ("x", "y")
+        point = term_ctor("point", ("x", "y"))
 
         trail = Trail()
         a = point(x=1, y=2)
         b = point(x=1, y=2)
         assert reify_eq(a, b, trail) is True
 
-    def test_predicate_meta_different(self):
+    def test_compound_cell_different(self):
         # nv
-        class point(metaclass=PredicateMeta):
-            _fields = ("x", "y")
+        point = term_ctor("point", ("x", "y"))
 
         trail = Trail()
         a = point(x=1, y=2)
