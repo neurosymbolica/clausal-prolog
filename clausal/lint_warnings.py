@@ -171,6 +171,25 @@ class ClausalBooleanSeamWarning(ClausalLintWarning):
 
 
 
+class ClausalAtomExportDefinedAsPredicateWarning(ClausalLintWarning):
+    """A bare name exported as an ATOM (``-module(m, [..., foo, ...])``) that
+    the same module also makes a PREDICATE, at any arity: clauses (``foo,``,
+    ``foo <- ...``, ``foo(1),``), a clause-free ``-dynamic``/``-table``/
+    ``-discontiguous``/``-shallow``, or a ``-specialize`` alias.
+
+    ISO allows the atom ``foo`` and the predicate ``foo/0`` together, so this
+    is a WARNING, not a refusal (operator ruling 2026-09-26).  The harm is at
+    the binding, which is by NAME: once ``foo`` is a predicate at any arity,
+    the module attribute ``foo`` --
+    in the module and in every importer -- is the predicate's HANDLE, not the
+    atom ``'foo'``, so data keyed by the atom that reaches it through
+    ``module.foo`` silently stops matching.  Emitted at load, once per
+    (module, name).  Remedies: drop the predicate's definition if it is only
+    there "for conformance", or rename one of the two; to export the
+    predicate, write ``foo/N`` in the export list instead of ``foo``.
+    """
+
+
 class ClausalRetiredQuasiQuoteWarning(ClausalDeprecatedSpellingWarning):
     """``q(...)`` inside a ``term_expansion/4`` clause.
 
