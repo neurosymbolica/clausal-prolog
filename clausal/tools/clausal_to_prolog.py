@@ -1774,6 +1774,13 @@ class _ClausalToProlog:
         exports = []
         if len(call.args) > 1 and isinstance(call.args[1], python_ast.List):
             for elt in call.args[1].elts:
+                reserved = _reserved_truth_export_name(elt)
+                if reserved is not None:
+                    raise NotImplementedError(
+                        f"clausal_to_prolog: -module({mod_name}, [...]) cannot export "
+                        f"`{reserved}`: the truth values True, False and Undefined "
+                        "(aliases true, false, undefined) are builtins, not predicates "
+                        "-- the engine refuses to declare them. Rename it.")
                 if (isinstance(elt, python_ast.Call) and isinstance(elt.func, python_ast.Name)
                         and not elt.keywords):
                     # A bare template with keyword arguments is REFUSED by the
@@ -1837,7 +1844,14 @@ class _ClausalToProlog:
         """
         if not (isinstance(node, python_ast.Constant) and isinstance(node.value, str)):
             return None
-        if quote_of(self._quote_map, node) == '"':
+        try:
+            quote = quote_of(self._quote_map, node)
+        except SyntaxError:
+            # A mixed-quote literal (`'Ed' "ge"`) -- the engine refuses it too.
+            # quote_of's own SyntaxError carries no position, so it is folded
+            # into the export-element refusal, which names the element.
+            return None
+        if quote == '"':
             return None
         spelling = node.value
         if not spelling.isidentifier() or _keyword_module.iskeyword(spelling):
@@ -3818,6 +3832,36 @@ def _split_meta_predicate_directive(item: PItem) -> list[PItem]:
     if len(specs) == 1 and len(body.args) == 1:
         return [item]
     return [PDirective(PCompound("meta_predicate", (spec,))) for spec in specs]
+
+
+_RESERVED_TRUTH_EXPORT_NAMES = {"true", "false", "undefined", "Undefined"}
+
+
+def _reserved_truth_export_name(elt) -> str | None:
+    """The truth value a -module export entry would declare, or None.
+
+    Mirrors the engine's ``_reserved_truth_decl_name``, which its -module
+    handler applies BEFORE looking at an entry's shape: ``True``/``False``
+    arrive as bool ``Constant``s, ``true``/``false``/``undefined``/
+    ``Undefined`` as ``Name``s, bare or applied. Extended to the indicator
+    forms ``true/0`` and ``'true'/0`` and the quoted template ``'true'(X)``,
+    which the engine also refuses (measured 2026-09-26 -- the indicator forms
+    by a different route, a NameError at load), so that every spelling of a
+    truth value is refused here as it is there.
+    """
+    if isinstance(elt, python_ast.BinOp) and isinstance(elt.op, python_ast.Div):
+        elt = elt.left
+    elif isinstance(elt, python_ast.Call):
+        elt = elt.func
+    if isinstance(elt, python_ast.Constant):
+        if isinstance(elt.value, bool):
+            return "True" if elt.value else "False"
+        if isinstance(elt.value, str) and elt.value in _RESERVED_TRUTH_EXPORT_NAMES:
+            return elt.value
+        return None
+    if isinstance(elt, python_ast.Name) and elt.id in _RESERVED_TRUTH_EXPORT_NAMES:
+        return elt.id
+    return None
 
 
 def _is_module_directive(item: PItem) -> bool:
