@@ -1515,21 +1515,38 @@ def _process_directives(module_items: list, db: Any, module_dict: dict | None = 
         "shallow": "mark_shallow",
     }
     declared: set[tuple[str, int]] = set()
+    own_module = db.module_name()
     for item in module_items:
         if isinstance(item, (ModuleDeclItem, PrivateDeclItem)):
-            entries = (item.exports if isinstance(item, ModuleDeclItem)
-                       else item.items)
+            is_module = isinstance(item, ModuleDeclItem)
+            entries = item.exports if is_module else item.items
             for entry in entries:
                 if isinstance(entry, tuple) and entry[1]:
                     declared.add((entry[0], len(entry[1])))
-                    db.declare_functor(entry[0], tuple(entry[1]))   # P2 Task 2: the registry
+                    db.declare_functor(                              # P2 Task 2: the registry
+                        entry[0], tuple(entry[1]),
+                        origin=("module" if is_module else "private",
+                                own_module, entry[0]))
     if module_dict is not None:
         # -import_from'd fielded names arrive through the exec-time carrier map
-        # (``_make_import_signatures_update_ast``), keyed by LOCAL name.
+        # (``_make_import_signatures_update_ast``), keyed by LOCAL name.  The
+        # owner module and the owner's spelling (an alias renames) come from
+        # the -import_from items, for diagnostics.
+        imported_from: dict[str, tuple[str, str]] = {}
+        for item in module_items:
+            if isinstance(item, ImportFromItem):
+                for name_spec in item.names:
+                    if isinstance(name_spec, tuple):
+                        imported_from[name_spec[1]] = (item.module, name_spec[0])
+                    else:
+                        imported_from[name_spec] = (item.module, name_spec)
         from clausal.logic.cells import FUNCTOR_SIGNATURES_KEY  # noqa: PLC0415
         for name, fields in (module_dict.get(FUNCTOR_SIGNATURES_KEY) or {}).items():
             if fields and db.declared_fields(name, len(fields)) is None:
-                db.declare_functor(name, tuple(fields))
+                owner = imported_from.get(name)
+                db.declare_functor(
+                    name, tuple(fields),
+                    origin=None if owner is None else ("import", *owner))
     for item in module_items:
         if isinstance(item, DirectiveItem):
             if item.name == "predicate_export":

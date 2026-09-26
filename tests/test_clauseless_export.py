@@ -105,9 +105,8 @@ class TestISOAnswers:
     def test_dynamic_makes_the_call_fail_instead(self, load, src):
         mod = load("cle_owner", src + "-dynamic(edge/2)\n")
         assert _answers(mod, ("edge", 1, Var())) == []
-        load("cle_owner_imp", "-import_from(cle_owner, [edge])\n"
-             "-module(cle_owner_imp, [q(X)])\nq(X) <- edge(1, X)\n")
-        assert _answers(sys.modules["cle_owner_imp"], ("q", Var())) == []
+        imp = _importer(load, "cle_owner")
+        assert _answers(imp, ("q", Var())) == []
 
     def test_clause_2_fails(self, load, src):
         mod = load("cle_owner", src)
@@ -139,11 +138,15 @@ def test_a_clauseless_fielded_export_is_declared_data(load):
 
 
 def test_an_importer_of_a_clauseless_fielded_export_gets_the_atom(load):
-    """The importer sees the same DATA declaration, not a predicate handle."""
+    """The importer sees the same DATA declaration, not a predicate handle:
+    its binding is the atom, and its OWN Database declares ``edge/2`` as
+    data (the -import_from carrier registers the owner's field names under
+    the local name)."""
     load("cle_owner", FIELDED)
     imp = _importer(load, "cle_owner")
     assert imp.__dict__["edge"] == "edge"
     assert imp.__dict__["edge"] != mangle("cle_owner", "edge")
+    assert _lm(imp).db.declared_kind("edge", 2) == "data"
 
 
 def test_an_exported_bare_atom_stays_an_atom(load):
@@ -157,25 +160,62 @@ def test_an_exported_bare_atom_stays_an_atom(load):
                               ("procedure", Compound("/", ("foo", 0))))
 
 
-# ── the message (behaviour-preserving part of the ruling) ───────────────────
+# ── the message: names the DATA declaration by its source ───────────────────
 
 
-def test_the_message_says_the_name_is_declared_data_and_how_to_export_a_procedure(
-        load):
+def test_a_module_export_entry_is_named_as_this_files_export(load):
     mod = load("cle_owner", FIELDED)
     _, message = _error(mod, ("edge", 1, Var()))
     assert "data reference" not in message
-    assert "edge/2 is declared as DATA" in message
-    assert "edge(A, B)" in message
-    assert "write edge/2 in the export list" in message
+    assert message.startswith("edge/2 is declared as DATA")
+    assert "the -module export entry edge(A, B) in cle_owner" in message
+    assert "write edge/2 in that export list instead" in message
 
 
-def test_the_importer_gets_the_same_message(load):
+def test_a_private_entry_is_named_as_a_private_entry_not_an_export(load):
+    mod = load("cle_priv", "-module(cle_priv, [q(X)])\n"
+               "-private([hid(A, B)])\nq(X) <- hid(1, X)\n")
+    formal, message = _error(mod, ("q", Var()))
+    assert formal == Compound("existence_error",
+                              ("procedure", Compound("/", ("hid", 2))))
+    assert "the -private entry hid(A, B) in cle_priv" in message
+    assert "write hid/2 in that -private list instead" in message
+    assert "export" not in message
+
+
+def test_an_import_names_the_owner_module_and_its_export_entry(load):
     load("cle_owner", FIELDED)
     imp = _importer(load, "cle_owner")
     _, message = _error(imp, ("q", Var()))
     assert "data reference" not in message
-    assert "edge/2 is declared as DATA" in message
+    assert message.startswith("edge/2 is declared as DATA")
+    assert "imported from cle_owner, whose export entry edge(A, B)" in message
+    assert "its export list writes edge/2 instead" in message
+
+
+def test_an_aliased_import_names_the_owners_spelling_not_the_alias(load):
+    """``alias(edge, e)`` declares ``e/2`` in the importer, but ``e`` is bound
+    to the owner's atom ``edge``, so the call reaches ``edge/2`` -- and the
+    message must name ``edge`` and ``cle_owner``, never tell the user to
+    write ``e/2`` in an export list (the owner exports ``edge``)."""
+    load("cle_owner", FIELDED)
+    imp = load("cle_alias", "-import_from(cle_owner, [alias(edge, e)])\n"
+               "-module(cle_alias, [q(X)])\nq(X) <- e(1, X)\n")
+    assert imp.__dict__["e"] == "edge"
+    assert _lm(imp).db.declared_kind("e", 2) == "data"
+    formal, message = _error(imp, ("q", Var()))
+    assert formal == Compound("existence_error",
+                              ("procedure", Compound("/", ("edge", 2))))
+    assert "imported from cle_owner, whose export entry edge(A, B)" in message
+    assert "e/2" not in message.replace("edge/2", "")
+    assert "data reference" not in message
+
+
+def test_the_iso_spelling_does_not_get_the_data_message(load):
+    mod = load("cle_owner", ISO_PI)
+    _, message = _error(mod, ("edge", 1, Var()))
+    assert "DATA" not in message
+    assert "edge/2 is not defined in module 'cle_owner'" in message
 
 
 def test_an_undeclared_atom_keeps_the_general_message(load):
@@ -218,3 +258,68 @@ def test_a_private_name_arity_entry_is_not_listed_as_an_export(load):
     assert "cle_priv exports: edge/2" in message
     exports_line = next(l for l in message.splitlines() if "exports:" in l)
     assert "helper" not in exports_line
+
+
+def _module_items(src, name):
+    from clausal.import_hook import _parse_clausal_source
+    _code, transformer = _parse_clausal_source(src, f"/nonexistent/{name}.clausal")
+    return transformer._module_items
+
+
+def test_the_rewriter_records_name_arity_entries_just_before_their_declaration():
+    """``import_diagnostics._declared_exports`` attributes a
+    ``predicate_export`` item to the -module or -private declaration that
+    FOLLOWS it.  That relies on the rewriter appending each list's
+    ``name/arity`` items while it walks the list, before the declaration
+    item itself.  Pinned directly, so a rewriter change that moves them
+    fails here instead of silently misattributing an export."""
+    from clausal.pythonic_ast.nodes import (
+        Directive, ModuleDeclaration, PrivateDeclaration,
+    )
+    src = ("-module(cle_ord, [edge/2, pt(X, Y), foo, walk/1])\n"
+           "-private([helper/1, rec(A)])\n")
+    shapes = []
+    for item in _module_items(src, "cle_ord"):
+        if isinstance(item, Directive) and item.name == "predicate_export":
+            shapes.append(("pi", tuple(item.specs)))
+        elif isinstance(item, ModuleDeclaration):
+            shapes.append(("module", tuple(
+                e if isinstance(e, str) else e[0] for e in item.exports)))
+        elif isinstance(item, PrivateDeclaration):
+            shapes.append(("private", tuple(
+                e if isinstance(e, str) else e[0] for e in item.items)))
+    assert shapes == [
+        ("pi", (("edge", 2),)), ("pi", (("walk", 1),)),
+        ("module", ("pt", "foo")),
+        ("pi", (("helper", 1),)),
+        ("private", ("rec",)),
+    ]
+
+
+def _exports_line(load, owner_name, owner_src):
+    load(owner_name, owner_src)
+    with pytest.raises(ImportError) as info:
+        load(f"{owner_name}_bad", f"-import_from({owner_name}, [nope])\n"
+             f"-module({owner_name}_bad, [z(X)])\nz(1),\n")
+    return next(l.strip() for l in str(info.value).splitlines()
+                if "exports:" in l)
+
+
+def test_a_mixed_export_list_lists_every_entry(load):
+    """Fielded, ISO and atom entries in one list: all listed, the
+    ``name/arity`` group first (the documented order), -private ones not."""
+    line = _exports_line(
+        load, "cle_mix",
+        "-module(cle_mix, [edge/2, pt(X, Y), foo, walk/1])\n"
+        "-private([helper/1, rec(A)])\n")
+    assert line == "cle_mix exports: edge/2, walk/1, pt/2, foo"
+
+
+def test_a_second_module_directive_after_a_private_list_is_attributed_to_it(
+        load):
+    line = _exports_line(
+        load, "cle_two",
+        "-module(cle_two, [edge/2])\n"
+        "-private([helper/1])\n"
+        "-module(cle_two, [late/3, pt(X)])\n")
+    assert line == "cle_two exports: edge/2, late/3, pt/1"

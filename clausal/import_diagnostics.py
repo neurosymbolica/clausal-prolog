@@ -165,8 +165,12 @@ def _render_entry(entry):
 def _declared_exports(module_items):
     """``(entries, saw_module_directive)`` from every ``-module(...)``.
 
-    ``entries`` is a list of ``(bare_name, rendered)`` in declaration order,
-    deduplicated on the bare name.
+    ``entries`` is a list of ``(bare_name, rendered)``, deduplicated on the
+    bare name.  Per ``-module`` directive, in directive order: its ISO
+    ``name/arity`` entries first, then its field-carrying and atom entries,
+    each group in source order.  (The ``name/arity`` entries are not in the
+    declaration's ``exports``, so their positions relative to the others are
+    not recorded; see below.)
     """
     from clausal.pythonic_ast.nodes import (
         Directive, ModuleDeclaration, PrivateDeclaration,

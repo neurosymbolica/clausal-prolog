@@ -917,25 +917,46 @@ def localize_owner_functor(db: Any, functor: str, arity: int):
 def _atom_goal_message(name: str, arity: int, db: Any) -> str:
     """The message for an ATOM called as a goal at *arity*.
 
-    The ISO term is ``existence_error(procedure, name/arity)`` either way;
-    this is only its message.  When the caller's Database declares
-    ``name/arity`` as DATA -- a field-carrying export entry such as
-    ``-module(m, [edge(A, B)])`` with no clauses (ruling R6/R6b) -- the
-    message says so and names the ISO spelling that exports a PROCEDURE
-    with no clauses (``edge/2``), instead of an unexplained "data
-    reference".  *db* may be a name-only shim or ``None``; anything without
-    ``declared_kind`` gets the general message."""
+    The ISO term is ``existence_error(procedure, name/arity)`` whatever this
+    says; this is only its message.  When *name*/*arity* is declared as DATA
+    (ruling R6/R6b: a field-carrying entry declares a term constructor) the
+    message names the declaration by its SOURCE -- this file's -module or
+    -private entry, or the OWNER module's export entry for an import (under
+    the owner's spelling: an aliased import calls the owner's atom) -- and
+    the ``name/arity`` spelling that declares a procedure instead.  *db* may
+    be a name-only shim or ``None``; anything that cannot answer gets the
+    general message."""
+    origin_of = getattr(db, "declaration_origin", None)
+    origin = origin_of(name, arity) if origin_of is not None else None
+    pi = f"{name}/{arity}"
+    if origin is not None:
+        kind, module, spelling, fields = origin
+        entry = f"{spelling}({', '.join(str(f) for f in fields)})"
+        if kind == "module":
+            return (
+                f"{pi} is declared as DATA, not as a procedure: the -module "
+                f"export entry {entry} in {module} declares a term "
+                f"constructor, and it has no clauses to call.  To export a "
+                f"procedure with no clauses, write {pi} in that export list "
+                f"instead; to call it here, define its clauses")
+        if kind == "private":
+            return (
+                f"{pi} is declared as DATA, not as a procedure: the -private "
+                f"entry {entry} in {module} declares a term constructor, and "
+                f"it has no clauses to call.  To declare a procedure, write "
+                f"{pi} in that -private list instead; to call it here, "
+                f"define its clauses")
+        return (
+            f"{pi} is declared as DATA, not as a procedure: it is imported "
+            f"from {module}, whose export entry {entry} declares a term "
+            f"constructor, and it has no clauses to call.  For {module} to "
+            f"export a procedure, its export list writes "
+            f"{spelling}/{arity} instead, and its clauses are defined there "
+            f"or asserted with -dynamic")
     declared_kind = getattr(db, "declared_kind", None)
     if declared_kind is not None and declared_kind(name, arity) == "data":
-        fields = db.declared_fields(name, arity) or ()
-        entry = f"{name}({', '.join(str(f) for f in fields)})"
-        return (
-            f"{name}/{arity} is declared as DATA, not as a procedure: the "
-            f"export entry {entry} declares a term constructor, and it has "
-            f"no clauses to call.  To export a procedure (clauses may live "
-            f"in an importer, or be asserted with -dynamic), write "
-            f"{name}/{arity} in the export list; to call it here, define "
-            f"its clauses")
+        return (f"{pi} is declared as DATA (a term constructor), not as a "
+                f"procedure, and it has no clauses to call")
     return (f"atom {name!r} is not callable at arity {arity} "
             f"(resolved via a data reference; define or import the "
             f"predicate, or call it by its local name)")

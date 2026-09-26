@@ -1,19 +1,28 @@
-# A clause-less FIELDED export: procedure (ruling 2026-09-26) or data (R6/R6b)?
+# A clause-less FIELDED export stays DATA (R6/R6b stands, ruled 2026-09-26)
 
-## The question
+## The ruling
 
-The 2026-09-26 operator ruling: a predicate exported by `-module(m, [edge(A, B)])`
-with no clauses stays a PROCEDURE, "if it agrees with ISO", and does not
-become data: the module binding should be the module's handle, not the atom.
+`-module(m, [edge(A, B)])` with no clauses declares a DATA functor, as
+ruling R6/R6b (P3-2 Task 2, `term_rewriting._predicate_export_spec`) says:
+the binding is the atom of its spelling, references compile to cells, and
+`db.declared_kind` answers `"data"`. The ISO spelling `edge/2` is how a
+module exports a PROCEDURE with no clauses, and it already stays one (the
+module's handle). ISO 13211-1 module exports are predicate indicators only,
+so the field-carrying spelling is a Clausal extension that ISO does not
+constrain.
 
-That contradicts ruling R6/R6b (P3-2 Task 2,
-`term_rewriting._predicate_export_spec`): a field-carrying export entry
-declares a DATA functor (it binds the atom of its spelling, references
-compile to cells, `db.declared_kind` says `"data"`). R6b made the ISO
-spelling `edge/2` the way to export a procedure with no clauses.
+The ISO-visible answers were already right for both spellings and did not
+change. What changed is the call's message, which now names the DATA
+declaration by its source (this file's -module or -private entry, or the
+owner module's export entry for an import) and the `name/arity` spelling
+that declares a procedure instead.
 
-ISO 13211-1 module exports are predicate indicators; a field-carrying entry
-is not an ISO spelling, so "if it agrees with ISO" does not decide it.
+## Rejected: make a clause-less fielded export a procedure
+
+Asked first (2026-09-26): rebind a clause-less fielded `-module` export to
+the module's handle, "if it agrees with ISO". Rejected by the ruling above:
+it contradicts R6/R6b, ISO does not decide it, and it would turn the in-repo
+DATA exports (measured below) into procedures.
 
 ## Measured (0427c5e3)
 
@@ -37,16 +46,20 @@ in 151 module files. 23 are referenced as data in their own file; the other
 provenance fixtures' `edge`). Reclassifying them as procedures would change
 those files, and the corpus has not been measured.
 
-## Landed instead (behaviour-preserving)
+## What landed
 
-- The call's MESSAGE says `edge/2 is declared as DATA` and names the ISO
-  spelling (`write edge/2 in the export list`); the ISO term is unchanged.
+- The call's MESSAGE says `edge/2 is declared as DATA` and names the
+  declaration by its source: this file's -module export entry, its -private
+  entry, or (for an import, aliased or not) the OWNER module and the owner's
+  spelling. It names the `name/arity` spelling that declares a procedure.
+  The ISO term is unchanged, and the ISO `edge/2` spelling never gets it.
 - The import diagnostic lists `edge/2` exports (it used to report the ISO
-  spelling as an EMPTY export list).
-- Two `xfail(strict=True)` tests in `tests/test_clauseless_export.py` pin
-  the ruling's binding; they flip when this is decided.
+  spelling as an EMPTY export list); -private `name/arity` entries are not
+  listed as exports.
+- `tests/test_clauseless_export.py` pins the DATA binding (the two strict
+  xfails written before the ruling became positive pins).
 
-## Options
+## Options considered (the ruling chose 1)
 
 1. Keep R6/R6b: the fielded entry is data, `edge/2` exports a procedure.
    Nothing more to do; drop the two xfails.

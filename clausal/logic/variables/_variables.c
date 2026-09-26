@@ -2121,7 +2121,8 @@ static PyObject *KWTerm_type = NULL;
  *   dc_fields_func        py_term_field_names
  *   str_name              py_term_field_names
  *   str_functor           the Compound arms of c_is_ground, c_copy_term and
- *                         c_collect_vars; py_functor_name
+ *                         c_collect_vars; c_copy_term's KWTerm arm;
+ *                         py_functor_name (Compound and KWTerm)
  *   str_args              the Compound arms of c_is_ground, c_copy_term and
  *                         c_collect_vars; py_arity, py_nth_arg, py_args_list
  *
