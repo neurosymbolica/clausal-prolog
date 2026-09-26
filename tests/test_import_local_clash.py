@@ -204,6 +204,37 @@ def test_the_existing_table_refusal_runs_first_with_its_own_message(load):
     assert "-table(edge/2)" in str(info.value)
 
 
+@pytest.mark.parametrize("alias", [False, True], ids=["plain", "alias"])
+def test_table_on_an_imported_clauseless_target_points_at_the_owner(
+        load, alias):
+    """The older ``-table`` refusal told the author to "declare
+    -dynamic(edge/2)" -- which, for an IMPORTED target, is exactly what the
+    import/local clash check refuses (a local -dynamic plus -table beside a
+    dynamic import).  For an imported target it now points at the owner."""
+    load("own_pi", OWNERS["proc_pi"][1])
+    local = "e" if alias else "edge"
+    imported = "alias(edge, e)" if alias else "edge"
+    with pytest.raises(SyntaxError) as info:
+        load("table_owner_imp", f"-import_from(own_pi, [{imported}])\n"
+             f"-module(table_owner_imp, [z(X)])\n-table({local}/2)\nz(1),\n")
+    message = str(info.value)
+    assert f"-table({local}/2)" in message
+    assert "imported from own_pi" in message
+    assert "-table(edge/2) in own_pi" in message
+    assert "-dynamic" not in message
+
+
+def test_table_on_a_local_clauseless_target_keeps_the_dynamic_advice(load):
+    """Unchanged for a LOCAL target: a -dynamic here is what makes it
+    tablable."""
+    with pytest.raises(SyntaxError) as info:
+        load("table_local", "-module(table_local, [p/1, z(X)])\n"
+             "-table(p/1)\nz(1),\n")
+    message = str(info.value)
+    assert "p/1 is declared but has no clauses in this module" in message
+    assert "declare -dynamic(p/1) if the clauses arrive at runtime" in message
+
+
 def test_discontiguous_on_an_imported_procedure_target_is_accepted(load):
     load("own_proc", OWNERS["proc"][1])
     load("discontig_imp", "-import_from(own_proc, [edge])\n"

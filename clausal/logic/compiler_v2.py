@@ -1643,6 +1643,21 @@ def _refuse_untablable_target(
         )
 
     if is_pred:
+        # An IMPORTED target (its handle names another module): the -dynamic
+        # advice below would lead straight into the import/local clash
+        # refusal (a local -dynamic plus -table beside an import), so point
+        # at the owner instead.  Coordinator ruling 2026-09-26.
+        owner = predicate_owner_module(binding)
+        if owner and owner != db.module_name():
+            spelling = predicate_binding_name(binding, db=db) or functor
+            raise SyntaxError(
+                f"-table({functor}/{arity}): {functor}/{arity} is imported "
+                f"from {owner} and has no clauses here, and -table only "
+                f"tables the dispatch function compiled by the module that "
+                f"declares it.  Table it in its owner (-table({spelling}/"
+                f"{arity}) in {owner}), or define {functor}/{arity} here "
+                f"without importing it, or under a different name."
+            )
         raise SyntaxError(
             f"-table({functor}/{arity}): {functor}/{arity} is declared but has "
             f"no clauses in this module, so there is nothing to table.  Give it "
