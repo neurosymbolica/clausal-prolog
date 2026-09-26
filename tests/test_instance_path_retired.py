@@ -99,10 +99,12 @@ def test_the_c_source_no_longer_carries_the_instance_arm():
 
     src = (pathlib.Path(P.__file__).parent / "variables" / "_variables.c").read_text()
     assert "Fast path: PredicateMeta instance" not in src
-    # ... and the registration and the CLASS arms are NOT what W4a takes:
-    # arms 4-7 and py_register_predicate_meta belong to W4b.
-    assert "py_register_predicate_meta" in src
-    assert "PyType_Check(term) && PredicateMeta_type" in src
+    # ... and W4b-3 slice 8 took the rest: the registration entry point, the
+    # slot it filled and the CLASS arms that tested the slot.
+    assert "py_register_predicate_meta" not in src
+    assert "PredicateMeta_type" not in src
+    # positive control: the file read is the extension source
+    assert "PyInit__variables" in src and "init_term_inspection_cache" in src
 
 
 def test_a_dataclass_head_is_not_liftable_and_the_clause_comes_back_unchanged():

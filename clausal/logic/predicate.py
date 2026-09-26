@@ -518,7 +518,8 @@ def _head_arity(head: Any) -> int | None:
         # STAGE 2: an atom head is name/0 (``database.head_key`` agrees).
         # Since W4b-3 slice 5 this is how a module's own 0-arity fact
         # (``myflag,``) stores its head -- the atom, where it used to be the
-        # rewriter's zero-field class, whose ``_fields`` answered 0 below.
+        # rewriter's zero-field class (answered from its ``_fields`` until
+        # W4b-3 slice 7 deleted the class).
         return 0
     from clausal.logic.cells import _cell_shape  # noqa: PLC0415
     if _cell_shape(head)[0]:                        # P2: a head is a cell
@@ -2393,43 +2394,27 @@ is_term_instance = _is_term_instance_py
 is_zero_field_class = _is_zero_field_class_py
 term_field_names = _term_field_names_py
 
-# The C accelerators.  ``_register_predicate_meta`` MUST still be called: it is
-# also where the extension initialises its interned attribute names and its
-# ``dataclasses.fields`` cache, which ``is_term_instance`` and
-# ``term_field_names`` read -- measured: skipping the call segfaults the first
-# ``head_key`` on a load.  What it registers is the metaclass its class-as-term
-# arms test with ``PyObject_IsInstance``; the ``PredicateMeta`` class was
-# deleted at W4b-3 slice 7, so it is handed ``_NoPredicateClasses``, a
-# metaclass nothing is an instance of, and every such arm answers "not a
-# class".  The registration and those arms go with the C tail (slice 8).
-# A second copy of the package re-registering is harmless now: no object is
-# an instance of either copy's placeholder.
-
-
-class _NoPredicateClasses(type):
-    """The metaclass handed to the C slot that held ``PredicateMeta`` (see
-    above).  Never used as a metaclass: no class, and so no object, is an
-    instance of it."""
-
-
+# The C accelerators, with the pure-Python twins above as the fallback.
+# (Until W4b-3 slice 8 the extension also needed a ``_register_predicate_meta``
+# call here: it held the ``PredicateMeta`` class for its class-as-term arms,
+# and the call was where it set up the interned names ``is_term_instance``
+# reads.  Slice 7 deleted the class; slice 8 moved that setup into the
+# extension's module init and removed the slot, the arms and the call.)
 try:
     from clausal.logic.variables._variables import (
-        _register_predicate_meta,
         is_term_instance,
         term_field_names,
     )
 except ImportError:
     pass
-else:
-    _register_predicate_meta(_NoPredicateClasses)
 
 
 # DEPRECATED alias, kept for ONE release (Task 12, atoms-as-cells/strings).
-# ``predicate.is_atom`` is the zero-field-CLASS test and always was; the TERM
-# test of the same name lives in ``clausal.logic.atoms``.  Every in-tree
-# caller now imports ``is_zero_field_class``; this name survives only because
-# the C extension registers its accelerator as ``is_atom`` and out-of-tree
-# code may still import it from here.  Delete it, not the C symbol, when the
+# ``predicate.is_atom`` is the zero-field-CLASS test and always was -- it
+# answers ``False`` for everything since W4b-3 slice 7 deleted the class; the
+# TERM test of the same name lives in ``clausal.logic.atoms``.  No in-tree
+# caller uses either class-test name; this one survives only because
+# out-of-tree code may still import it from here.  Delete it when the
 # release window closes.
 is_atom = is_zero_field_class
 
@@ -2443,8 +2428,9 @@ def is_atom_value(obj: Any) -> bool:
     ``PredicateMeta`` class (the declared-atom form of the cell era); that
     widening is retired, and the two are one question now.  It stays as the
     name the runtime readers (``atom/1``, ``functor_arity``) call, so a future
-    widening has one place to land.  ``predicate.is_zero_field_class`` above
-    remains the separate CLASS question the compiler keys on.
+    widening has one place to land.  (``predicate.is_zero_field_class`` above
+    asked the separate CLASS question; it answers ``False`` for everything
+    since W4b-3 slice 7, and nothing in-tree asks it.)
     """
     from clausal.logic.atoms import is_atom as _term_is_atom
     return _term_is_atom(obj)          # STAGE 2 (spec §4): no class is an atom
