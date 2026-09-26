@@ -6332,17 +6332,30 @@ class EmbedTransformer(NodeTransformer):
         fix_missing_locations(wrapped)
         return wrapped
 
-    def _export_stmts(transformer, names, anchor):
-        """``NAME = $export($v_NAME)`` — one assignment per exported name."""
+    def _export_stmts(transformer, names, anchor, answer=False):
+        """``NAME = $export($v_NAME, $answer)`` — one assignment per exported
+        name.  ``$answer`` is the handle ``$once_bind`` returned (bound by
+        the ``if``/``while`` test, see :meth:`_answer_bind`); it tells the
+        export whether to snapshot.  *answer* False emits the one-argument
+        form for a block that never runs (``_declare_locals``)."""
         out = []
         for n in names:
+            args = [replace(Name(id=f"$v_{n}", ctx=Load()), anchor)]
+            if answer:
+                args.append(replace(Name(id="$answer", ctx=Load()), anchor))
             out.append(replace(Assign(
                 targets=[replace(Name(id=n, ctx=Store()), anchor)],
                 value=replace(Call(func=replace(Name(id="$export", ctx=Load()), anchor),
-                                   args=[replace(Name(id=f"$v_{n}", ctx=Load()), anchor)],
-                                   keywords=[]), anchor),
+                                   args=args, keywords=[]), anchor),
             ), anchor))
         return out
+
+    def _answer_bind(transformer, call, anchor):
+        """``($answer := <call>)``: the ``$once_bind`` result, kept for the
+        export lines that follow the test."""
+        return replace(NamedExpr(
+            target=replace(Name(id="$answer", ctx=Store()), anchor),
+            value=call), anchor)
 
     def _globals_call(transformer, anchor):
         return replace(Call(func=Name(id="globals", ctx=Load()), args=[], keywords=[]), anchor)
@@ -6381,7 +6394,7 @@ class EmbedTransformer(NodeTransformer):
         expression, negated = found
         transformer._lint_titlecase(expression)
         pre, goal_ast, fresh = transformer._goal_seam(expression, node.test)
-        test = replace(Call(func=Name(id="$once_bind", ctx=Load()),
+        test = replace(Call(func=Name(id="$once_answer", ctx=Load()),
                             args=[goal_ast, transformer._globals_call(node.test)],
                             keywords=[]), node.test)
         if negated:
@@ -6391,7 +6404,8 @@ class EmbedTransformer(NodeTransformer):
             if_false = transformer._declare_locals(fresh, node.test)
             body = [if_false] + transformer._visit_stmts(node.body)
         else:
-            exports = transformer._export_stmts(fresh, node.test)
+            test = transformer._answer_bind(test, node.test)
+            exports = transformer._export_stmts(fresh, node.test, answer=True)
             body = exports + transformer._visit_stmts(node.body)
         node.test = test
         node.body = body
@@ -6575,7 +6589,7 @@ class EmbedTransformer(NodeTransformer):
         # emitted INSIDE the loop test (as a bind-then-call tuple index)
         # rather than once before the loop.
         _pre, goal_ast, fresh = transformer._goal_seam(expression, node.test)
-        call = replace(Call(func=Name(id="$once_bind", ctx=Load()),
+        call = replace(Call(func=Name(id="$once_answer", ctx=Load()),
                             args=[goal_ast, transformer._globals_call(node.test)],
                             keywords=[]), node.test)
         if fresh:
@@ -6596,8 +6610,8 @@ class EmbedTransformer(NodeTransformer):
             declare = transformer._declare_locals(fresh, node.test)
             exports = [declare]
         else:
-            node.test = call
-            exports = transformer._export_stmts(fresh, node.test)
+            node.test = transformer._answer_bind(call, node.test)
+            exports = transformer._export_stmts(fresh, node.test, answer=True)
         node.body = exports + transformer._visit_stmts(node.body)
         node.orelse = transformer._visit_stmts(node.orelse)
         fix_missing_locations(node)

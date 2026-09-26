@@ -36,6 +36,7 @@ from clausal.pythonic_ast.nodes import Call, LoadAttr, LoadName, Node
 from clausal.terms import PyThunk, Var
 from clausal.logic.cells import QUALIFIED_GOAL_FUNCTOR
 from clausal.logic.atoms import is_atom, is_mangled
+from clausal.logic.to_python import strip_atom_tags as _strip_atom_tags
 
 
 def seam_term(node: Any, module_globals: dict, loose: bool = False) -> Any:
@@ -186,9 +187,11 @@ def seam_term(node: Any, module_globals: dict, loose: bool = False) -> Any:
                 f"module (add it to -module/-private, -import_from it, or "
                 f"declare -implicit_functors)")
         if isinstance(term, LoadName):
-            return lookup(term.name)
+            # THE LEAK RULE at the bare-name door (step (d)): a module global
+            # bound to an exported ``atom`` enters as the plain str.
+            return _strip_atom_tags(lookup(term.name))
         if isinstance(term, LoadAttr):
-            return lookup(dotted(term))
+            return _strip_atom_tags(lookup(dotted(term)))
         if isinstance(term, list):
             return [build(e) for e in term]
         if isinstance(term, tuple):
@@ -341,69 +344,83 @@ class ResidualConstraints(Exception):
     """
 
 
-def export(var: Any) -> Any:
-    """The fully dereferenced copy of *var*'s value for Python to keep, in the
-    PYTHON BOUNDARY representation.
+def export(var: Any, answer: "Answer | None" = None) -> Any:
+    """The value of *var* for Python to keep: THE INTERNAL FORM.
 
-    THE OUT BOUNDARY (spec 2026-09-21).  This is the one place a term becomes a
-    value Python keeps, so it is where the representation stops::
+    THE DUMB SEAM (operator GO 2026-09-26, superseding the 2026-09-21 tagged
+    boundary): a goal-position seam hands back what the engine holds -- an
+    atom is the plain ``str``, a string the carrier ``('$chars', s)``, a dict
+    the ``DictTerm`` -- with no conversion.  Python text is ``to_python(T)``;
+    a comparison is against a ``--``-wrapped term.
 
-        an atom    ->  atom('x')   a ``str`` SUBCLASS, advisory: == its text
-        a string   ->  'text'      a plain Python ``str``
+    No walk either, unless a SNAPSHOT is needed for correctness: *answer* is
+    the handle ``once_bind`` returned (``each`` decides for itself), and its
+    ``snapshot`` flag says whether the derivation bound anything BELOW the
+    goal's own variables -- a compound built from body variables that the
+    engine will unbind again on backtracking.  Then, and only then, the value
+    is deref-walked into a stable copy (``_snapshot_needed``).  A stored
+    ground answer -- ``if --g(X, DOC)`` with a large DOC -- is handed back by
+    identity, never walked.
 
-    Both directions matter.  Tagging the atom is what lets a caller — and
-    ``++`` on the way back — tell an atom from text when Python has only one
-    string form.  Rendering the string as plain text is what stops the carrier
-    tuple leaking into code that sorts, hashes or dict-keys it: a downstream
-    sweep met exactly that as ``TypeError: '<' not supported between instances
-    of 'tuple' and 'str'``, and as two key spaces that silently never joined.
-
-    Applied at EVERY DEPTH, not just the top: an answer is usually a compound,
-    and a caller reading ``v[2]`` has crossed the boundary just as much as one
-    reading ``v``."""
-    from clausal.logic.solve import _deref_walk
+    An unbound, constrained variable is refused: exports are answers; a
+    constraint store crossing a seam is the lower level (``solve`` with an
+    explicit ``Trail``) or, once it exists, ``copy_term/3`` inside the goal.
+    An unbound, unattributed variable is the variable itself."""
     from clausal.logic.variables import deref, is_var
     d = deref(var)
-    if is_var(d) and getattr(d, "attrs", None):
-        raise ResidualConstraints(
-            f"--: exported variable is unbound and constrained "
-            f"({sorted(d.attrs)}); exports are answers. Keep the store alive "
-            f"with an explicit Trail, or ask for the residue inside the goal")
-    return _to_boundary(_deref_walk(var))
+    if is_var(d):
+        if getattr(d, "attrs", None):
+            raise ResidualConstraints(
+                f"--: exported variable is unbound and constrained "
+                f"({sorted(d.attrs)}); exports are answers. Keep the store alive "
+                f"with an explicit Trail, or ask for the residue inside the goal")
+        return d
+    if answer is not None and answer.snapshot:
+        return _deref_walk(d)
+    return d
 
 
-def _to_boundary(value: Any) -> Any:
-    """*value* in the Python boundary representation, recursively.
+class Answer:
+    """What ``once_bind`` returns on success: truthy, and the carrier of the
+    one fact the export lines need -- whether the answer must be SNAPSHOT
+    (see :func:`_snapshot_needed`).  The rewriter binds it as ``$answer``
+    in the ``if``/``while`` test and hands it to each ``$export``."""
 
-    Ordering matters: the chars carrier is a TUPLE, so it must be recognised
-    before the generic tuple walk, or a string would be rebuilt element-wise
-    as a 2-tuple of ('$chars', text).  That is the generic-branch-ahead-of-the-
-    specific-one mirror, and it is why this is a chain rather than a dispatch
-    table."""
-    from clausal.logic.atoms import atom as _atom, is_atom as _is_atom
-    from clausal.logic.cells import is_chars, chars_text
-    if _is_atom(value):
-        return _atom(value)
-    if is_chars(value):
-        return chars_text(value)
-    if type(value) is tuple:
-        if len(value) == 1:
-            # THE RESERVED 1-TUPLE crosses OPAQUE.  ``('x',)`` is reserved —
-            # ``compound_cell_shape`` REFUSES it, and the reservation is for a
-            # future opaque Python object reference — so it is neither an atom
-            # nor a compound and must not be walked.  Recursing produced
-            # ``(atom('c'),)``, which READS as a legitimate compound with
-            # functor ``c`` and no arguments: the generic-tuple branch
-            # swallowing a shape that has a specific meaning, which is the
-            # mirror this codebase keeps meeting.  Pass-through matches
-            # ``to_python``, the engine's other deep converter, which also
-            # leaves it alone rather than raising — ``export`` is not the place
-            # to start refusing a shape the rest of the engine tolerates.
-            return value
-        return tuple(_to_boundary(v) for v in value)
-    if type(value) is list:
-        return [_to_boundary(v) for v in value]
-    return value
+    __slots__ = ("snapshot",)
+
+    def __init__(self, snapshot: bool) -> None:
+        self.snapshot = snapshot
+
+    def __bool__(self) -> bool:
+        return True
+
+
+def _snapshot_needed(goal_vars, trail, base: int) -> bool:
+    """True iff the derivation bound something OTHER than the goal's own
+    variables -- i.e. a value the export would hand out could hold a
+    variable that backtracking (``each``) will unbind, or that Python's
+    ``==`` (identity on a Var) would not see through.
+
+    The trail is private to this solve, so every binding the derivation
+    made is on it; *base* is its length after the query's parameter
+    bindings (``solve(params_bound=...)``), which are not the derivation's.
+    If the entries beyond *base* are exactly the goal variables now bound,
+    every exported value is a term that was already complete when it was
+    bound -- a stored fact, a frozen table row, a ``++`` value -- and it is
+    handed back untouched.  Anything else (a ``trail.record`` entry, an
+    attribute put, a body-bound inner variable) counts as "more" and forces
+    the walk: over-counting only costs a copy, never correctness."""
+    from clausal.logic.variables import is_var
+    bound = 0
+    for v in goal_vars:
+        if not is_var(v):
+            bound += 1
+    return len(trail) - base > bound
+
+
+def _deref_walk(term):
+    from clausal.logic.solve import _deref_walk as walk  # noqa: PLC0415
+    return walk(term)
 
 
 def _module_of(module_globals: dict):
@@ -476,7 +493,8 @@ def _goal_vars(goal: Any) -> list:
     return out
 
 
-def judged_answers(goal: Any, module, exported_vars, trail) -> "Iterator[tuple]":
+def judged_answers(goal: Any, module, exported_vars, trail,
+                   snapshot_flag: "list | None" = None) -> "Iterator[tuple]":
     """Solve *goal* and yield ``(truth, delays)`` per WFS-surviving answer,
     with the answer's bindings live on *trail* at the yield.  ``truth`` is
     ``True`` or ``Undefined``; an answer that resolution makes WFS-false is
@@ -541,6 +559,8 @@ def judged_answers(goal: Any, module, exported_vars, trail) -> "Iterator[tuple]"
     # ``ModulePredicate`` call object holds its arguments privately), where
     # they are all there is to go on.
     judge_vars = _goal_vars(goal)
+    if snapshot_flag is None:
+        snapshot_flag = [False]      # a caller that does not ask still gets the bookkeeping
     seen = {id(v) for v in judge_vars}
     for v in exported_vars or ():
         if isinstance(v, Var) and id(v) not in seen:
@@ -592,8 +612,11 @@ def judged_answers(goal: Any, module, exported_vars, trail) -> "Iterator[tuple]"
     driven: list = []             # every table store driven beneath us
     _leader_ctx.driven_stores.append(driven)
     push_leader(leader)
+    base = [0]
+    def _params_bound(n):
+        base[0] = n
     try:
-        for _ in solve(goal, module, trail):
+        for _ in solve(goal, module, trail, params_bound=_params_bound):
             # Both channels are usually empty (an unconditional derivation),
             # and the emptiness test is what keeps this off the hot path:
             # copying the accumulated source map per answer would be
@@ -602,6 +625,7 @@ def judged_answers(goal: Any, module, exported_vars, trail) -> "Iterator[tuple]"
             answer = freeze_args(judge_vars, trail)
             if not conditional:
                 streamed.add(make_subgoal_key(answer, None))
+                snapshot_flag[0] = _snapshot_needed(judge_vars, trail, base[0])
                 seg = detach()
                 try:
                     yield True, frozenset()
@@ -659,6 +683,9 @@ def judged_answers(goal: Any, module, exported_vars, trail) -> "Iterator[tuple]"
                 continue          # a definite derivation already delivered it
             mark = trail.mark()
             if _unify_answer(judge_vars, leader.answers[i], trail):
+                # a frozen row re-bound onto the goal's variables: complete
+                # terms, nothing below them bound here
+                snapshot_flag[0] = False
                 seg = detach()
                 try:
                     if truth is Undefined:
@@ -703,12 +730,13 @@ def _definite_answers(goal: Any, module,
             f"--: {goal!r}: a ++ over a goal variable in a tabled call has no "
             f"value to judge the call by; bind it in Python first or write "
             f"the term in the goal")
-    for truth, _delays in judged_answers(goal, module, (), trail):
+    flag = [False]
+    for truth, _delays in judged_answers(goal, module, (), trail, flag):
         if truth is Undefined:
             raise UndefinedAnswer(
                 f"--: {goal!r} has a conditional (undefined) answer; use "
                 f"clausal.query_wfs for truth values and delays")
-        yield
+        yield flag[0]
 
 
 def each_fresh(make, module_globals: dict):
@@ -833,10 +861,20 @@ def _module_designator(value: Any) -> Any:
 
 def once_bind(goal: Any, module_globals: dict) -> bool:
     """True on the first unconditional answer, leaving the goal's variables
-    bound for the caller's ``$export`` lines; False if the goal fails."""
+    bound for the caller's ``export`` calls; False if the goal fails.  The
+    direct-call form; the rewriter uses :func:`once_answer`, which also says
+    whether those exports must snapshot."""
+    return once_answer(goal, module_globals) is not False
+
+
+def once_answer(goal: Any, module_globals: dict) -> "Answer | bool":
+    """An :class:`Answer` (truthy) on the first unconditional answer, leaving
+    the goal's variables bound for the caller's ``$export`` lines and telling
+    them whether to snapshot; False if the goal fails.  Bound as
+    ``$once_answer`` for the ``if``/``while`` lowering."""
     gen = _definite_answers(goal, _module_of(module_globals), module_globals)
     try:
-        next(gen)
+        snapshot = next(gen)
     except StopIteration:
         return False
     finally:
@@ -852,15 +890,19 @@ def once_bind(goal: Any, module_globals: dict) -> bool:
         # they run.  (Spec §4: the seam's own variables are discarded WITH
         # their bindings; nothing undoes a trail on the caller's behalf.)
         gen.close()
-    return True
+    return Answer(snapshot)
 
 
 def each(goal: Any, variables: tuple, module_globals: dict):
     """Yield the exported values of *variables* once per unconditional answer:
-    the bare value for one variable, else a tuple in *variables* order."""
+    the bare value for one variable, else a tuple in *variables* order.  In
+    the INTERNAL form, snapshot only when the derivation bound something
+    below the goal's variables (``_snapshot_needed``): the engine backtracks
+    past every answer, so a value it would unbind must be copied first."""
     single = len(variables) == 1
-    for _ in _definite_answers(goal, _module_of(module_globals), module_globals):
+    for snapshot in _definite_answers(goal, _module_of(module_globals), module_globals):
+        answer = Answer(snapshot)
         if single:
-            yield export(variables[0])
+            yield export(variables[0], answer)
         else:
-            yield tuple(export(v) for v in variables)
+            yield tuple(export(v, answer) for v in variables)

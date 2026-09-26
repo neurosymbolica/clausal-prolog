@@ -40,7 +40,7 @@ from clausal.logic.variables import deref, walk
 from clausal.terms import (
     Compound, DictTerm, KWTerm, SegBytes, SegList, SegString, SetTerm, compound_as_cell)
 
-__all__ = ["to_python", "unwrap_atom"]
+__all__ = ["to_python", "unwrap_atom", "strip_atom_tags"]
 
 
 def to_python(val):
@@ -198,6 +198,34 @@ def wrap_text(val):
     if type(val) is atom:
         return str.__str__(val)        # the LEAK RULE: a boundary tag never enters a term
     return val                         # STAGE 2: a str a thunk hands back IS the atom (identity)
+
+
+def strip_atom_tags(val):
+    """*val* with every ``atom`` INSTANCE -- at any depth of a tuple, list or
+    dict -- replaced by the plain ``str`` it tags.  THE LEAK RULE, deep.
+
+    ``wrap_text`` applies the rule to a ``++`` value, one level.  The doors it
+    never sees are a seam's bare-name lookup (``seam.build``: a module global
+    bound to an exported ``atom``) and a Python caller's goal at
+    ``solve``/``once``/``call``; both call this (dumb seam step (d),
+    2026-09-26).  Returns the SAME OBJECT when nothing needed changing, so the
+    common case allocates nothing and a rewriter-built goal (a Node tree,
+    neither tuple nor list nor dict) costs one type test."""
+    t = type(val)
+    if t is atom:
+        return str.__str__(val)
+    if t is tuple or t is list:
+        out = [strip_atom_tags(v) for v in val]
+        if all(a is b for a, b in zip(out, val)):
+            return val
+        return tuple(out) if t is tuple else out
+    if t is dict:
+        out = {strip_atom_tags(k): strip_atom_tags(v) for k, v in val.items()}
+        if all(k1 is k2 and v1 is v2
+               for (k1, v1), (k2, v2) in zip(out.items(), val.items())):
+            return val
+        return out
+    return val
 
 
 def unwrap_atom(val):

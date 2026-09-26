@@ -1,14 +1,21 @@
-"""Step 2: the OUT boundary — what `--` hands to Python.
+"""The OUT boundary — what a goal-position `--` hands to Python.
 
-Spec: docs/superpowers/specs/2026-09-21-python-boundary-atom-and-string-design.md
+THE DUMB SEAM (operator GO 2026-09-26), superseding the 2026-09-21 tagged
+boundary this file used to pin (`atom('x')` out, plain text for a string):
 
-    atom   ->  atom('x')   a str subclass, advisory
-    string ->  'text'      a plain Python str
+    atom     ->  the plain str          (the atom IS the str)
+    string   ->  ('$chars', text)       (the carrier, unconverted)
+    compound ->  the cell               (nothing inside converted)
+    dict     ->  the DictTerm
 
-Step 2 changes the OUT direction only.  The IN direction (`++`) keeps today's
-meaning — a plain `str` a thunk hands back is still the atom — EXCEPT that it
-now normalises an `atom` instance back to a plain `str`, which is the LEAK
-RULE and is tested here because step 2 is what first makes a leak possible.
+No walk and no conversion: what the engine holds is what Python gets.  Text
+is `to_python(T)`; a comparison is against a `--`-wrapped term.  The only
+copy ever made is a SNAPSHOT of a value the engine would unbind again on
+backtracking (tests/test_dumb_seam_raw_out.py::TestSnapshot).
+
+The IN direction (`++`) keeps its meaning — a plain `str` is the atom — and
+the LEAK RULE stays: an `atom` instance handed back through `++` is
+normalised to a plain `str`, so no term ever holds one.
 """
 import os
 import tempfile
@@ -17,6 +24,8 @@ import pytest
 
 from clausal.import_hook import _load_module
 from clausal.logic.atoms import atom, is_atom
+from clausal.logic.cells import chars, is_chars
+from clausal.terms import DictTerm
 
 
 def _load(name, source):
@@ -28,19 +37,21 @@ def _load(name, source):
 
 
 RB = (
-    "-module({name}, [verdict(V), result(A, B, C), sp(X), txt(T), pair(K, N)])\n"
+    "-module({name}, [verdict(V), result(A, B, C), sp(X), txt(T), pair(K, N), dct(D)])\n"
     "-double_quotes(chars)\n"
-    "-private([permitted, art_6])\n"
+    "-private([permitted, art_6, k])\n"
+    "from clausal import to_python\n"
     "\n"
     "verdict(result(permitted, \"Article 6(1)\", art_6)),\n"
     "sp(permitted),\n"
     "txt(\"some text\"),\n"
     "pair(permitted, 1),\n"
     "pair(art_6, 2),\n"
+    "dct({{k: \"text\"}}),\n"
 )
 
 
-class TestAnAtomComesOutTagged:
+class TestAnAtomComesOutAsTheStr:
     def test_a_bare_atom_answer(self):
         m = _load("_out_a", RB.format(name="_out_a") + (
             "def go():\n"
@@ -48,9 +59,8 @@ class TestAnAtomComesOutTagged:
             "        return X, type(X).__name__\n"
         ))
         v, kind = m.go()
-        assert v == 'permitted', "advisory: still equal to its text"
-        assert kind == 'atom', f"expected the tag, got {kind}"
-        assert isinstance(v, atom)
+        assert v == 'permitted' and kind == 'str', kind
+        assert is_atom(v) and not isinstance(v, atom), "the atom IS the plain str; no tag"
 
     def test_atoms_nested_in_a_compound(self):
         m = _load("_out_b", RB.format(name="_out_b") + (
@@ -59,59 +69,54 @@ class TestAnAtomComesOutTagged:
             "        return V\n"
         ))
         v = m.go()
-        assert v[0] == 'result'
-        assert isinstance(v[1], atom) and v[1] == 'permitted'
-        assert isinstance(v[3], atom) and v[3] == 'art_6'
+        assert v[0] == 'result' and type(v[1]) is str and type(v[3]) is str
+        assert v[1] == 'permitted' and v[3] == 'art_6'
 
 
-class TestAStringComesOutAsPlainText:
+class TestAStringComesOutAsTheCarrier:
     def test_a_bare_string_answer(self):
         m = _load("_out_c", RB.format(name="_out_c") + (
             "def go():\n"
             "    for T in --txt(T):\n"
-            "        return T, type(T).__name__\n"
+            "        return T, T == --\"some text\", to_python(T)\n"
         ))
-        v, kind = m.go()
-        assert v == 'some text'
-        assert kind == 'str', f"a string must cross as plain text, got {kind}"
-        assert not isinstance(v, atom)
+        t, same, text = m.go()
+        assert is_chars(t) and t == chars('some text')
+        assert same is True, "a string answer IS the seam literal under -double_quotes(chars)"
+        assert text == 'some text' and type(text) is str, "text is asked for by name"
 
     def test_a_string_nested_in_a_compound(self):
-        """THE CLASS-2 FAILURE, fixed at the boundary: a string used to arrive
-        as the carrier tuple and land in `sorted`/dict-key code as a 2-tuple."""
+        """The class-2 failure of the 2026-09-18 flip (a carrier reaching
+        sorted/dict-key code) is now the DOCUMENTED shape, not a leak: the
+        answer is the cell, and the converter is one call away."""
         m = _load("_out_d", RB.format(name="_out_d") + (
             "def go():\n"
             "    for V in --verdict(V):\n"
-            "        return V\n"
+            "        return V, V == --result(permitted, \"Article 6(1)\", art_6), to_python(V)\n"
         ))
-        v = m.go()
-        assert v[2] == 'Article 6(1)', f"expected plain text, got {v[2]!r}"
-        assert type(v[2]) is str
+        v, same, py = m.go()
+        assert is_chars(v[2]) and same is True
+        assert py == ('result', 'permitted', 'Article 6(1)', 'art_6') and type(py[2]) is str
 
-    def test_a_string_is_hashable_and_sorts_with_text(self):
+    def test_a_dict_answer_is_the_dictterm(self):
         m = _load("_out_e", RB.format(name="_out_e") + (
             "def go():\n"
-            "    for T in --txt(T):\n"
-            "        return {T: 1}, sorted([T, 'a'])\n"
+            "    for D in --dct(D):\n"
+            "        return D, to_python(D)\n"
         ))
-        d, order = m.go()
-        assert d == {'some text': 1}
-        assert order == ['a', 'some text']
+        d, py = m.go()
+        assert isinstance(d, DictTerm) and is_chars(d['k'])
+        assert py == {'k': 'text'} and type(py['k']) is str
 
 
 class TestTheLeakRule:
-    """`atom` must never reach term space.  Step 2 makes a leak possible for
-    the first time — an exported `atom` handed straight back through `++` —
-    so the normalisation and its test land together."""
+    """`atom` must never reach term space, whichever door a value enters by."""
 
-    def test_an_exported_atom_fed_back_through_the_escape_does_not_leak(self):
+    def test_an_exported_atom_fed_back_through_the_escape_round_trips(self):
         """The local is LOWER CASE deliberately.  Written `++X` on an ALL_CAPS
         name, the escape rebinds `X` to a fresh logic variable — the hazard
         `ClausalShadowedVariableWarning` exists for — and the goal then matches
-        VACUOUSLY.  The first draft of this test did exactly that and passed
-        while measuring nothing, which is why `pair` has two clauses now: a
-        vacuous match would return either, so asserting the RIGHT one is what
-        makes the round trip real."""
+        VACUOUSLY; `pair` has two clauses so the RIGHT one is asserted."""
         m = _load("_out_f", RB.format(name="_out_f") + (
             "def go():\n"
             "    for X in --sp(X):\n"
@@ -121,72 +126,53 @@ class TestTheLeakRule:
             "    return None\n"
         ))
         got = m.go()
-        assert got is not None, (
-            "the round trip failed to match: an atom fed back through ++ did "
-            "not unify with the atom it came from"
-        )
+        assert got is not None, "an atom fed back through ++ did not unify with the atom it came from"
         n, kind = got
-        assert n == 1, (
-            "the atom must match ITS OWN clause (1), not the other one (2) — "
-            f"got {n}, which would also be what a vacuous match returns"
-        )
-        assert kind == 'atom', "and it was tagged on the way out"
+        assert n == 1 and kind == 'str'
+
+    def test_a_string_answer_fed_back_through_the_escape_round_trips(self):
+        """THE trip the tagged boundary broke (export flattened the carrier to
+        a str, ++ read the str as an atom): under raw out it is identity."""
+        m = _load("_out_g", RB.format(name="_out_g") + (
+            "def go():\n"
+            "    for T in --txt(T):\n"
+            "        t = T\n"
+            "        if --txt(++t):\n"
+            "            return 'round-trip'\n"
+            "    return None\n"
+        ))
+        assert m.go() == 'round-trip'
 
     def test_wrap_text_normalises_an_atom_to_plain_str(self):
-        """The normalisation itself, unit-level: whatever a thunk hands back,
-        no `atom` instance may enter a term."""
         from clausal.logic.to_python import wrap_text
         out = wrap_text(atom('permitted'))
-        assert type(out) is str, f"an atom leaked into term space as {type(out).__name__}"
-        assert is_atom(out), "and it must still BE an atom once normalised"
+        assert type(out) is str and is_atom(out)
 
     def test_wrap_text_leaves_a_plain_str_alone(self):
-        """Step 2 does NOT change what `++` means for ordinary text — that is
-        step 4.  A plain str a thunk hands back is still the atom."""
         from clausal.logic.to_python import wrap_text
-        assert wrap_text('text') == 'text'
-        assert type(wrap_text('text')) is str
+        assert wrap_text('text') == 'text' and type(wrap_text('text')) is str
 
 
-class TestShapesTheWalkMustNotInvent:
-    """The boundary walk converts atoms and strings and recurses through
-    compounds.  Two shapes are NEITHER, and a generic tuple branch will
-    swallow both if it is allowed to go first."""
+class TestNothingIsInvented:
+    """There is no walk any more, so there are no shapes for it to get
+    wrong: the reserved 1-tuple and nil cross exactly as the engine holds
+    them, because everything does."""
 
-    def test_a_reserved_1_tuple_crosses_opaque(self):
-        """``('x',)`` is RESERVED — ``compound_cell_shape`` refuses it, and the
-        reservation is for a future opaque Python object reference.  Recursing
-        into it produced ``(atom('c'),)``, which reads as a legitimate compound
-        with functor ``c`` and no arguments.  It must cross untouched, which is
-        also what ``to_python``, the engine's other deep converter, does."""
-        from clausal.logic.seam import _to_boundary
-        assert _to_boundary(('c',)) == ('c',)
-        assert type(_to_boundary(('c',))[0]) is str, "not tagged as an atom"
+    def test_the_boundary_walk_is_gone(self):
+        import clausal.logic.seam as seam
+        assert not hasattr(seam, "_to_boundary")
 
-    def test_a_reserved_1_tuple_nested_inside_a_compound(self):
-        from clausal.logic.seam import _to_boundary
-        from clausal.logic.atoms import atom
-        out = _to_boundary(('a', ('b', ('c',))))
-        assert out == (atom('a'), (atom('b'), ('c',)))
-        assert type(out[1][1]) is tuple and type(out[1][1][0]) is str, (
-            "the reserved tuple must be untouched INSIDE a compound too — the "
-            "walk recurses, so this is where it would be missed"
-        )
+    def test_export_is_deref_only(self):
+        from clausal.logic.seam import export
+        from clausal.logic.variables import Var, Trail, unify
+        v = Var()
+        assert unify(v, ('c',), Trail())
+        assert export(v) == ('c',) and type(export(v)[0]) is str
+        w = Var()
+        assert unify(w, [], Trail())
+        assert export(w) == []
 
-    def test_the_engine_itself_refuses_that_shape(self):
-        """Pinned so the reason above cannot quietly stop being true."""
-        import pytest
+    def test_the_engine_itself_refuses_the_reserved_shape(self):
         from clausal.logic.cells import compound_cell_shape
         with pytest.raises(TypeError, match="reserved"):
             compound_cell_shape(('c',))
-
-    def test_nil_crosses_unchanged_for_now(self):
-        """``()`` and ``[]`` are NIL, which IS an atom (spelling ``[]``) — but
-        rendering it as ``atom('[]')`` would turn an empty sequence into a
-        string for every Python caller, and that is a separate decision.
-        Pinned as UNCHANGED so the choice is visible rather than accidental."""
-        from clausal.logic.seam import _to_boundary
-        from clausal.logic.atoms import is_nil
-        assert is_nil(()) and is_nil([])
-        assert _to_boundary(()) == ()
-        assert _to_boundary([]) == []
