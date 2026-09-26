@@ -32,7 +32,7 @@ def _load(name, source):
 
 RB = (
     "-module({name}, [verdict(V), result(A, B, C), sp(X), txt(T), pair(K, N), "
-    "dct(D), kv(K, V), mk(P), color(C), big(X, D), mk2(P, A), mk3(P, A), al(X, Y), al2(X, Y), attr(P), bigmk(P, A), tp(P), nxt(N, M)])\n"
+    "dct(D), kv(K, V), mk(P), color(C), big(X, D), mk2(P, A), mk3(P, A), al(X, Y), al2(X, Y), attr(P), bigmk(P, A), tp(P), nxt(N, M), big2(D)])\n"
     "-double_quotes(chars)\n"
     "-private([permitted, art_6, k, red, blue, x])\n"
     "from clausal import to_python\n"
@@ -235,16 +235,6 @@ class TestSnapshot:
         can hold no Var and is the same object every call -- so it is handed
         out by identity, never walked, however large."""
         calls = self._walks(monkeypatch)
-        rows = ", ".join(f'("row", {i}, ("cell", "a", {i * 2}))' for i in range(3000))
-        m = _rb("_ss_cc", (
-            f"-private([stored])\n"
-            f"stored_doc = (\"doc\", {rows})\n"
-            "def first():\n"
-            "    if --lst(L):\n"
-            "        return L\n"
-        ))
-        # the fact lst([permitted, "text"]) holds a LIST (fresh per call) --
-        # the cell inside it is the constant; verdict/1's answer IS a constant:
         m2 = _rb("_ss_cc2", (
             "def go():\n"
             "    if --verdict(V):\n"
@@ -284,12 +274,26 @@ class TestSnapshot:
         assert d == m.doc and d is not m.doc
         assert len(calls) == 1
 
-    def test_a_small_body_built_ground_answer_is_proven_by_the_probe(self, monkeypatch):
+    def test_a_body_built_answer_holding_bound_vars_is_copied(self, monkeypatch):
         calls = self._walks(monkeypatch)
         m = _rb("_ss_pr", "def go():\n    return [P for P in --mk(P)]\n")
         assert m.go() == [("pair", 1, 1), ("pair", 2, 2)]
         # pair(A, B) with A, B BOUND holds Var objects -> not proven -> copied
         assert len(calls) == 2
+
+    def test_a_small_plusplus_built_ground_value_is_proven_by_the_probe(self, monkeypatch):
+        """The probe's success path at the seam: a small Python-built ground
+        value comes back IS the original, with zero walks."""
+        calls = self._walks(monkeypatch)
+        m = _rb("_ss_ps", (
+            "small = [(\"row\", i) for i in range(20)]\n"
+            "def go():\n"
+            "    if --big2(D):\n"
+            "        return D\n"
+            "big2(D) <- (D is ++small),\n"
+        ))
+        assert m.go() is m.small
+        assert calls == []
 
     def test_probe_semantics(self):
         from clausal.logic.seam import _probe_var_free
@@ -302,24 +306,39 @@ class TestSnapshot:
         assert not _probe_var_free(DictTerm({"k": Var()}))
 
 
-def test_the_constant_registry_is_bounded_and_dropping_is_sound(monkeypatch):
+def test_the_constant_registry_dies_with_the_code_object():
+    """LEAK-FREE: an entry lives exactly as long as the code object that owns
+    the constant; nothing is pinned."""
+    import gc
     from clausal.logic import cells
-    monkeypatch.setattr(cells, "_COMPILED_GROUND_CAP", 10)
-    saved = dict(cells._COMPILED_GROUND)
-    cells._COMPILED_GROUND.clear()
-    try:
-        consts = [(("k", i),) for i in range(12)]
-        code = compile("x = 1", "<t>", "exec")
-        class C:                       # a stand-in code object: only co_consts is read
-            co_consts = tuple(consts)
-        cells.register_compiled_constants(C)
-        assert len(cells._COMPILED_GROUND) <= 12 and len(cells._COMPILED_GROUND) >= 6
-        # a dropped constant is simply no longer certified -- never a wrong answer
-        from clausal.logic.seam import export
-        from clausal.logic.variables import Var, Trail, unify
-        for c in consts:
-            v = Var(); unify(v, c, Trail())
-            assert export(v) == c
-    finally:
-        cells._COMPILED_GROUND.clear(); cells._COMPILED_GROUND.update(saved)
+    code = compile("x = (('k', 1), ('k', 2))", "<t>", "exec")
+    consts = [c for c in code.co_consts if type(c) is tuple]
+    outer = consts[0]
+    cells.register_compiled_constants(code)
+    assert cells.is_compiled_constant(outer) and cells.is_compiled_constant(outer[0])
+    n_before = len(cells._COMPILED_GROUND)
+    del code; gc.collect()
+    assert not cells.is_compiled_constant(outer), "the code is gone: no certificate"
+    assert len(cells._COMPILED_GROUND) == n_before - 3, "its three entries are gone too"
 
+
+def test_a_recompiling_dynamic_predicate_does_not_grow_the_registry():
+    """The worst case roborev 252 named: assertz recompiles the predicate
+    every time, and every old code object's constants must go with it."""
+    import gc
+    from clausal.logic import cells
+    from clausal.logic.solve import call
+    m = _load("_ss_dyn", (
+        "-module(_ss_dyn, [d(X, Y), pt(A, B)])\n-dynamic(d/2)\n-private([a])\n"
+        "d(0, pt(a, 0)),\n"
+    ))
+    mod = m.__dict__["$module"]
+    sizes = []
+    for i in range(1, 301):
+        for _ in call("assertz", ("d", i, ("pt", "a", i)), module=mod):
+            pass
+        if i % 100 == 0:
+            gc.collect()
+            sizes.append(len(cells._COMPILED_GROUND))
+    # linear in the LIVE program at most, never quadratic in the assert count
+    assert sizes[-1] - sizes[0] < 3 * (sizes[1] - sizes[0]) + 50, sizes

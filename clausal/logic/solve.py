@@ -1234,10 +1234,11 @@ def _python_entry(value):
     ``once``, ``query``, ``query_wfs`` and every goal-position seam go
     through it) and ``call`` (a functor and arguments handed straight to the
     dispatch; there is no funnel below the two that sees Python's values as
-    terms).  An iterative read-only scan decides first, so the common goal
-    -- a rewriter Node tree, or a cell with no tag -- costs one pass and no
-    allocation, and a cons-like goal thousands of levels deep cannot raise
-    RecursionError here."""
+    terms).  An iterative, cycle-safe read-only scan decides first: a
+    rewriter-built goal (a Node) is a leaf and costs one type test; a plain
+    cell costs one pass plus a small visited table; a cons-like goal
+    thousands of levels deep cannot raise RecursionError here.  Only a goal
+    that holds a tag is rebuilt (a tagged CYCLE is refused, TypeError)."""
     if _has_atom_tag(value):
         return _strip_atom_tags(value)
     return value

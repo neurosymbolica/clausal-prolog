@@ -923,43 +923,53 @@ def set_intern_enabled(value: bool) -> None:
 # contain a Var (``compile`` refuses one), is immutable, and is the very
 # object every call hands out (probe 2026-09-26: a fact's cell answer is the
 # same object across calls).  ``codegen.functiondef_to_function`` registers
-# every such constant here, recursively; ``seam.export`` asks ``is_compiled_
-# constant``.  The table holds a STRONG reference so an id can never be
-# reused by another object while the entry exists -- the price is that a
-# reloaded module's old constants stay pinned, bounded by what its code
-# objects held anyway.
+# every such constant here, recursively; ``seam.export`` asks
+# ``is_compiled_constant``.
+#
+# LEAK-FREE BY CONSTRUCTION (roborev 252/253): an entry maps the constant's
+# id to a WEAK reference to the code object that owns it, with a callback
+# that removes the entry when that code object dies.  Nothing here keeps a
+# constant alive: a dynamic predicate that recompiles on every assertz
+# drops its old code objects, and their entries go with them.  Sound
+# because an entry whose referent is alive names a code object that holds
+# the constant in ``co_consts`` (or inside a constant it holds), so the
+# constant is alive and its id cannot belong to any other object; an entry
+# whose referent is gone answers False, and losing a certificate only costs
+# the export a probe or a copy.
 
 _COMPILED_GROUND: dict = {}
 
-#: BOUNDED: when the table passes this many entries the OLDEST half is
-#: dropped (dict order is insertion order).  Losing a certificate is SOUND
-#: -- the export then falls back to the probe or a copy -- and the drop is
-#: what keeps a long-lived process (a test suite compiling thousands of
-#: modules) from pinning every constant it ever generated.  Measured: six
-#: large suites registered ~10k entries (~700 KB), so the cap is far above
-#: any single program's constant set.
-_COMPILED_GROUND_CAP = 200_000
-
 
 def register_compiled_constants(code) -> None:
-    """Record every tuple / frozenset constant of *code* (and of the code
-    objects nested in it), recursively through nested tuples."""
-    stack = [code]
+    """Record every tuple / frozenset constant of *code*, recursively
+    through nested tuples; a nested code object is registered on its own
+    weak reference (it can outlive or predecease its parent)."""
+    import weakref  # noqa: PLC0415
     table = _COMPILED_GROUND
+    ids: list = []
+    stack = list(code.co_consts)
     while stack:
         obj = stack.pop()
         t = type(obj)
         if t is tuple or t is frozenset:
-            table[id(obj)] = obj
+            ids.append(id(obj))
             stack.extend(obj)
         elif hasattr(obj, "co_consts"):
-            stack.extend(obj.co_consts)
-    if len(table) > _COMPILED_GROUND_CAP:
-        for key in list(table)[: len(table) // 2]:
-            del table[key]
+            register_compiled_constants(obj)
+    if not ids:
+        return
+
+    def _drop(ref, ids=ids, table=table):
+        for i in ids:
+            if table.get(i) is ref:
+                del table[i]        # only our own entry: a re-registration may own it now
+
+    ref = weakref.ref(code, _drop)
+    for i in ids:
+        table[i] = ref
 
 
 def is_compiled_constant(obj) -> bool:
-    """True iff *obj* IS an object the compiler baked in as a constant."""
-    return _COMPILED_GROUND.get(id(obj)) is obj
-
+    """True iff *obj* IS a constant of a LIVE generated code object."""
+    ref = _COMPILED_GROUND.get(id(obj))
+    return ref is not None and ref() is not None

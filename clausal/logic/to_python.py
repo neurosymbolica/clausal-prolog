@@ -40,6 +40,7 @@ from clausal.logic.variables import deref, walk
 from clausal.terms import (
     Compound, DictTerm, KWTerm, SegBytes, SegList, SegString, SetTerm, compound_as_cell)
 from clausal.logic.predicate import is_term_instance, term_field_names
+from clausal.pythonic_ast.nodes import Node as _Node
 
 __all__ = ["to_python", "unwrap_atom", "strip_atom_tags", "has_atom_tag",
            "term_children", "map_term", "TERM_CONTAINER_TYPES"]
@@ -172,7 +173,12 @@ def to_python(val):
     if isinstance(val, (set, frozenset)):
         return t(to_python(e) for e in val)
     if is_term_instance(val):
-        # a dataclass term class: rebuilt with converted fields
+        # A dataclass term class is rebuilt with converted fields (dumb seam
+        # step (c), 2026-09-26; before that it crossed unchanged, insides
+        # and all).  A pythonic_ast Node crosses as itself: it is code, not
+        # data, and its ``++`` values already passed through wrap_text.
+        if isinstance(val, _Node):
+            return val
         return t(**{n: to_python(getattr(val, n)) for n in term_field_names(val)})
     return val
 
@@ -213,7 +219,10 @@ def map_term(val, fn):
     """*val* rebuilt with *fn* applied to each direct child, for every
     container in TERM_CONTAINER_TYPES; the SAME OBJECT when no child
     changed (identity is the "unchanged" signal, so callers allocate
-    nothing on the common path).  A leaf is returned as it is."""
+    nothing on the common path).  A leaf is returned as it is.  A dict or
+    list SUBCLASS is rebuilt as its own type when its constructor takes
+    the rebuilt contents, and a NamedTuple through its own constructor;
+    when that raises TypeError the plain type is the documented fallback."""
     t = type(val)
     if t is tuple or t is list:
         out = [fn(v) for v in val]
@@ -228,15 +237,31 @@ def map_term(val, fn):
             return t(*out)
         except TypeError:
             return tuple(out)
-    if isinstance(val, list):
+    if isinstance(val, list):                          # a list subclass
         out = [fn(v) for v in val]
-        return val if all(a is b for a, b in zip(out, val)) else out
-    if isinstance(val, (dict, DictTerm)):
+        if all(a is b for a, b in zip(out, val)):
+            return val
+        try:
+            return t(out)
+        except TypeError:
+            return out
+    if isinstance(val, DictTerm):
         items = list(val.items())
         out = [(fn(k), fn(v)) for k, v in items]
         if all(k1 is k2 and v1 is v2 for (k1, v1), (k2, v2) in zip(out, items)):
             return val
-        return DictTerm(dict(out), _position=val._position) if isinstance(val, DictTerm) else dict(out)
+        return DictTerm(dict(out), _position=val._position)
+    if isinstance(val, dict):                          # dict and its subclasses
+        items = list(val.items())
+        out = [(fn(k), fn(v)) for k, v in items]
+        if all(k1 is k2 and v1 is v2 for (k1, v1), (k2, v2) in zip(out, items)):
+            return val
+        if t is dict:
+            return dict(out)
+        try:
+            return t(out)
+        except TypeError:
+            return dict(out)
     if isinstance(val, Compound):
         functor = fn(val.functor)
         args = tuple(fn(a) for a in val.args)
@@ -299,24 +324,30 @@ def has_atom_tag(val) -> bool:
     not raise RecursionError at solve()), read-only: the cheap scan every
     Python entry runs before deciding whether the rebuild is needed at all.
 
-    CYCLE-SAFE: a container is entered once, by id.  A cyclic term -- the
-    engine builds one on purpose in unify without the occurs check, and the
-    adversarial tests hand such goals to solve() -- otherwise grew the
-    walk's stack without bound until the OOM killer took the process (the
-    gate died twice at the same test, 2026-09-26).  The ids are only held
-    for the duration of the scan, while every object is alive."""
+    CYCLE-SAFE: a container is entered once, by id, and a reference to it
+    is kept for the scan so a computed child (a property that returns a
+    fresh container) cannot die and hand its id to a later one.  A cyclic
+    term -- the engine builds one on purpose in unify without the occurs
+    check, and the adversarial tests hand such goals to solve() -- otherwise
+    grew the walk's stack without bound until the OOM killer took the
+    process (the gate died twice at the same test, 2026-09-26).  A
+    pythonic_ast Node (a rewriter-built goal) is a leaf: it is code, and its
+    ``++`` values already passed through wrap_text, so a goal-position seam
+    pays one type test here, not a walk of its tree."""
     stack = [val]
-    seen = set()
+    seen: dict = {}          # id -> the container: a reference is KEPT, so no id can be reused mid-scan
     while stack:
         v = stack.pop()
         if type(v) is atom:
             return True
+        if isinstance(v, _Node):
+            continue         # a rewriter goal is code, not data; its ++ values passed wrap_text
         children = term_children(v)
         if children:
             key = id(v)
             if key in seen:
                 continue
-            seen.add(key)
+            seen[key] = v
             stack.extend(children)
     return False
 
@@ -332,10 +363,36 @@ def strip_atom_tags(val):
     ``each``); both call this (dumb seam step (d), 2026-09-26).  Returns the
     SAME OBJECT when nothing needed changing; callers on a hot path run
     :func:`has_atom_tag` first, so the recursive rebuild only ever runs on
-    a value that holds a tag."""
+    a value that holds a tag.  A tagged CYCLIC container is refused with a
+    ``TypeError`` (it cannot be rebuilt); an untagged cycle never reaches
+    the rebuild."""
+    return _strip(val, set())
+
+
+def _strip(val, active: set):
     if type(val) is atom:
         return str.__str__(val)
-    return map_term(val, strip_atom_tags)
+    if isinstance(val, _Node):
+        return val
+    children = term_children(val)
+    if not children:
+        return val
+    key = id(val)
+    if key in active:
+        # A CYCLIC container that also holds a tag cannot be rebuilt
+        # (an immutable cycle has no first element to build), and a
+        # cyclic goal with a boundary tag inside is not a term anyone
+        # means: refuse it loudly rather than recurse until the stack
+        # gives out (roborev 254).
+        raise TypeError(
+            "the goal holds a boundary `atom` inside a CYCLIC term; a cyclic "
+            "term cannot be rebuilt -- build it from plain str atoms (the atom "
+            "IS the str) or break the cycle")
+    active.add(key)
+    try:
+        return map_term(val, lambda v: _strip(v, active))
+    finally:
+        active.discard(key)
 
 
 def unwrap_atom(val):

@@ -133,6 +133,17 @@ class TestEveryContainerIsWalked:
         clean = ("f", ["a", {"k": ("g", 1)}])
         assert strip_atom_tags(clean) is clean
 
+    def test_dict_and_list_subclasses_keep_their_type(self):
+        import collections
+        from clausal.logic.to_python import strip_atom_tags
+        od = collections.OrderedDict([("k", atom("a"))])
+        out = strip_atom_tags(od)
+        assert type(out) is collections.OrderedDict and out["k"] == "a" and type(out["k"]) is str
+        class L(list):
+            pass
+        out = strip_atom_tags(L([atom("a")]))
+        assert type(out) is L and type(out[0]) is str
+
     def test_to_python_converts_through_every_shape(self):
         """No drift: the same list of shapes converts, so a container the
         strip knows is one to_python knows."""
@@ -150,14 +161,20 @@ class TestEveryContainerIsWalked:
             assert "$chars" not in flat, t
 
     def test_a_dataclass_term_instance_is_walked_too(self):
+        """A caller's own dataclass term (is_term_instance) is a container;
+        a pythonic_ast Node is NOT entered -- it is code (see TestCyclicTerms)."""
+        import dataclasses
         from clausal.logic.predicate import is_term_instance
-        from clausal.pythonic_ast.nodes import LoadName
-        node = LoadName(name=atom("a"))
-        assert is_term_instance(node)
+        @dataclasses.dataclass
+        class P:
+            x: object
+            y: object = 1
+        inst = P(atom("a"))
+        assert is_term_instance(inst)
         from clausal.logic.to_python import strip_atom_tags, has_atom_tag
-        assert has_atom_tag(node)
-        out = strip_atom_tags(node)
-        assert type(out) is LoadName and type(out.name) is str
+        assert has_atom_tag(inst)
+        out = strip_atom_tags(inst)
+        assert type(out) is P and type(out.x) is str and out.y == 1
 
     def test_the_door_does_not_recurse_on_a_deep_goal(self):
         """The scan is iterative; a cons-like goal thousands of levels deep
@@ -197,4 +214,37 @@ class TestCyclicTerms:
         from clausal.logic.solve import _python_entry
         cyc = ["c"]; cyc.append(cyc)
         assert _python_entry(("=", Var(), cyc))[2] is cyc
+        d = {"k": 1}; d["self"] = d                     # a dict self-cycle
+        assert _python_entry(("=", Var(), d))[2] is d
+        from clausal.terms import Compound
+        inner = []
+        c = Compound("f", (inner,)); inner.append(c)     # a Compound whose arg holds it
+        assert _python_entry(("=", Var(), c))[2] is c
 
+    def test_a_tagged_cycle_is_refused_loudly(self):
+        """The rebuild after the scan cannot reproduce an immutable cycle;
+        a cyclic goal holding a boundary tag is refused with a clear error
+        rather than recursing until the stack gives out (roborev 254)."""
+        import pytest
+        from clausal.logic.solve import _python_entry
+        tagged = ["c", atom("a")]; tagged.append(tagged)
+        with pytest.raises(TypeError, match="CYCLIC"):
+            _python_entry(("=", Var(), tagged))
+
+    def test_a_dag_is_certified_within_budget_and_a_shared_node_entered_once(self):
+        """The budget counts pops (each reference to the shared node is one
+        pop), the visited table stops it being ENTERED again: 100 references
+        = 1 + 100 + 100 pops, under the budget, and the shared node's own
+        child is pushed once."""
+        from clausal.logic.seam import _probe_var_free
+        shared = ("s", ("t", 1))
+        dag = tuple((shared,) for _ in range(100))
+        assert _probe_var_free(dag, budget=512)
+        assert not _probe_var_free(dag, budget=150), "and the budget is honest: pops are counted"
+
+    def test_a_rewriter_goal_is_a_leaf_for_the_scan(self):
+        from clausal.logic.to_python import has_atom_tag
+        from clausal.pythonic_ast.nodes import LoadName, Call
+        node = Call(func=LoadName(name="g"), args=[LoadName(name=atom("x"))], kwargs=[])
+        assert not has_atom_tag(node), "a Node is code: not entered"
+        assert not has_atom_tag((":", None, node))
