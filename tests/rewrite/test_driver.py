@@ -348,19 +348,28 @@ def test_modified_goal_rewrite_is_idempotent(tmp_path):
 def test_folds_a_single_char_atom(head_fold_rules):
     # THE FLIP (spec §7): ``"t"`` in the default ``-double_quotes(atom)``
     # mode is the ATOM ("t",), so the folded head renders as the bare name.
-    result = rewrite_source('p(TAG) <- (TAG is "t", m(1))\n', head_fold_rules)
-    assert result.text == 'p(t) <- (\n    m(1)\n)\n'
+    result = rewrite_source('-double_quotes(atom)\np(TAG) <- (TAG is "t", m(1))\n', head_fold_rules)
+    assert result.text == '-double_quotes(atom)\n\np(t) <- (\n    m(1)\n)\n'
     assert len(result.fired) == 1
 
 
+def test_the_file_mode_reaches_each_clause_segment(head_fold_rules):
+    """The driver reifies each clause from its own SEGMENT, which never
+    contains the file's ``-double_quotes`` directive, so the mode is tracked
+    statement by statement and handed to the reifier.  Without that a
+    chars file's ``"t"`` reified as an atom (before the flip) and an atom
+    file's as a string (after it), and the folded head came back respelled
+    -- the corpus idempotency test caught it on the first flipped run."""
+    result = rewrite_source('-double_quotes(chars)\np(TAG) <- (TAG is "t", m(1))\n', head_fold_rules)
+    assert result.text == '-double_quotes(chars)\n\np("t") <- (\n    m(1)\n)\n'
+    result = rewrite_source('-double_quotes(atom)\np(TAG) <- (TAG is "t", m(1))\n', head_fold_rules)
+    assert result.text == '-double_quotes(atom)\n\np(t) <- (\n    m(1)\n)\n'
+
+
 def test_folds_a_single_char_string(head_fold_rules):
-    # The chars twin, written as the STRING the ``is`` goal binds rather than
-    # through ``-double_quotes(chars)``: the driver reifies each clause
-    # SEGMENT on its own (``reify_ast(statement, source=segment)``), so a
-    # module-level directive does not reach it -- recorded as a parked
-    # follow-up, invisible before THE FLIP because both modes agreed then.
-    # What this pins is the renderer's half: a folded STRING head argument
-    # comes back DOUBLE-quoted, and is not demoted to an atom.
+    # The chars twin, written as the STRING the ``is`` goal binds.  What this
+    # pins is the renderer's half: a folded STRING head argument comes back
+    # DOUBLE-quoted, and is not demoted to an atom.
     from clausal.reflection import Clause, Goal, render_source
     folded = Clause(Goal("p", ["t"], []), [Goal("m", [1], [])], None)
     assert render_source(folded) == 'p("t") <- (m(1))'

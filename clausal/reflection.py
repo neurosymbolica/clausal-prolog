@@ -1492,14 +1492,21 @@ def _is_directive_stmt(stmt):
 # ── Public API ───────────────────────────────────────────────────────────────
 
 
-def reify_source(text, filename="<reflected>"):
+def reify_source(text, filename="<reflected>", double_quotes=None):
     """Parse ``.clausal`` source text and reify every top-level item.
 
     Pure: no directive execution, no imports of the target's dependencies,
     no predicate compilation, and no evaluation of embedded Python or ``++``
     escapes.  Returns a list of ``ModuleDirective`` / ``Clause`` /
     ``PythonCode`` terms ordered by source position (directives, whose
-    positions are not tracked, sort first)."""
+    positions are not tracked, sort first).
+
+    *double_quotes* is the ``-double_quotes`` mode in force where *text*
+    was cut from its file (``"atom"`` / ``"chars"``), for a caller that
+    reifies one clause SEGMENT at a time -- the rewriter -- and whose
+    segments therefore never contain the file's own directive.  ``None``
+    means the engine default, as for a whole file that declares nothing.
+    """
     from clausal.templating.term_rewriting import EmbedTransformer
 
     source_lines = text.splitlines(keepends=True)
@@ -1512,6 +1519,11 @@ def reify_source(text, filename="<reflected>"):
             tree = ast.parse(text, filename=filename)
             transformer = EmbedTransformer(
                 source_lines=source_lines, filename=filename, reify=True)
+            if double_quotes is not None:
+                # The same instance state ``-double_quotes(...)`` sets when
+                # the directive is read (``_handle_double_quotes_directive``).
+                transformer._double_quotes_mode = double_quotes
+                transformer._double_quotes_explicit = True
             transformed = transformer.visit(tree)
     except SyntaxError as exc:
         # Same treatment as the loader gives a broken .clausal file: the source
@@ -1675,19 +1687,20 @@ def _tighten_nested_arrows(text):
     return text
 
 
-def reify_ast(node, source=None):
+def reify_ast(node, source=None, double_quotes=None):
     """Reify a single parsed Python AST node of ``.clausal`` surface syntax.
 
     Statements round-trip through ``ast.unparse`` + :func:`reify_source`
     (``unparse`` renders the ``<-`` arrow as ``< -``, which is repaired);
-    expressions reify directly in term context."""
+    expressions reify directly in term context.  *double_quotes* is the
+    file's mode at the node (see :func:`reify_source`)."""
     if isinstance(node, ast.Module):
         node = node.body[0]
     if isinstance(node, ast.Expression):
         node = node.body
     if isinstance(node, ast.stmt):
         text = source if source is not None else _unparse_clause(node)
-        items = reify_source(text)
+        items = reify_source(text, double_quotes=double_quotes)
         if not items:
             raise ReifyError(f"no reifiable item in: {text}")
         return items[0]
