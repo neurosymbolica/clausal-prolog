@@ -1,8 +1,9 @@
 """The P1 category-A sites route to the Database row (spec 2026-09-17 §2.2).
 
 Every test here drives a real ``.clausal`` load, so what it pins is the
-BEHAVIOUR of a rerouted site, not the spelling of its line — the spelling is
-``tools/predmeta_census/check_p1.py``'s business.
+BEHAVIOUR of a rerouted site, not the spelling of its line — the spelling
+was ``tools/predmeta_census/check_p1.py``'s business (deleted 2026-09-26 with
+the other PredicateMeta census tools; it is in the git history).
 
 Three of the tests pin a site the pass deliberately LEFT on the class, because
 the measured row answer is not the one the site asks for.  They are
