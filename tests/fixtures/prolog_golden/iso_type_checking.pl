@@ -1,8 +1,8 @@
-:- set_prolog_flag(double_quotes, chars).
-
 :- module(iso_type_checking, [test/1]).
 
 :- use_module(library(clpz), [(#=)/2]).
+
+:- set_prolog_flag(double_quotes, chars).
 
 is_bound_number(X) :-
     nonvar(X),
