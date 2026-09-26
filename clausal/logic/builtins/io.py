@@ -35,9 +35,7 @@ from clausal.terms import (
 )
 from clausal.logic.runtime._seg_helpers import normalize_seg_input
 from clausal.logic.predicate import (
-    PredicateMeta, is_term_instance, term_field_names,
-    term_field_names_of_class, resolve_predicate_row,
-    is_declared_predicate_name,
+    is_term_instance, term_field_names, is_declared_predicate_name,
 )
 from clausal.logic.exceptions import (
     LogicException, type_error, domain_error, existence_error,
@@ -128,7 +126,7 @@ def _format_term_as_text(val):
 
 #: Term shapes ``term_str`` renders as TERMS rather than falling back to
 #: ``repr``.  Everything here goes through the ISO renderer; everything else
-#: (``date``, ``Quantity``, a ``PredicateMeta`` class, an opaque Python
+#: (``date``, ``Quantity``, an opaque Python
 #: object, an unbound ``Var``) keeps the exact ``str()`` rendering ``write/1``
 #: has always produced -- a ``date`` prints ``2020-01-01``, not its ``repr``,
 #: and an unbound ``Var`` prints ``_N`` rather than the style's anonymous
@@ -600,10 +598,7 @@ def _indicator_row(db, name, arity, pred_cls):
        (``database_ops._binding_row``, era-agnostic).  A shared
        ``-import_from``'d predicate reads the exporter's row, which is the
        whole point: ``listing(qq/1)`` must print what ``listing(qq)`` prints.
-       A DETACHED row is skipped -- it is nobody's predicate (same rule
-       ``PredicateMeta._bind_row`` applies), so a standalone class of the
-       same name must not shadow the caller's real one.  A HANDLE is
-       authoritative (ruling QE): when neither its row nor the row this
+       A HANDLE is authoritative (ruling QE): when neither its row nor the row this
        database adopted for it answers at *arity*, the answer is ``None``
        (an ``existence_error``), never a bare-name lookup that could list a
        different local ``name/N``;
@@ -629,11 +624,7 @@ def _indicator_row(db, name, arity, pred_cls):
         _binding_row, _canonical_functor, _find_pred_cls,
     )
     if pred_cls is not None:
-        if not isinstance(pred_cls, PredicateMeta):
-            return _handle_row(db, pred_cls, arity)
-        row = _binding_row(db, pred_cls, name, arity)
-        if row is not None and row.key[1] == arity:
-            return row
+        return _handle_row(db, pred_cls, arity)
     if db is None:
         return None
     module_dict = getattr(db, "module_dict", None)
@@ -682,7 +673,7 @@ def _checked_indicator(parts, db):
     atomic non-atom name ``type_error(atom, N)`` (``type_error(callable, N)``
     at arity 0, which ``clause/2`` reports for ``functor(H, 3, 0)``).
     ``Name//A`` names ``Name/(A+2)``.  *binding* is the predicate binding
-    the name WAS (a ``PredicateMeta`` class, or a predicate HANDLE), else
+    the name WAS (a predicate HANDLE), else
     ``None``: the name alone is not enough to find an ``-import_from``'d
     predicate, which lives on the EXPORTER's row (final review M-a).  A mangled
     name is a handle only when it denotes a PREDICATE (F1 row 60): a ``-hide``
@@ -700,9 +691,7 @@ def _checked_indicator(parts, db):
     if sep == "//":
         arity += 2
     binding = None
-    if isinstance(name, PredicateMeta):
-        binding, name = name, name.__name__
-    elif isinstance(name, BuiltinTerm):
+    if isinstance(name, BuiltinTerm):
         # A builtin's object from Python (``clausal.between / 3``) names the
         # builtin, as its CLASS did before W4b-3 slice 3 (roborev Low on
         # slice 3).  It is no binding: the class's private row was nobody's,
@@ -728,9 +717,8 @@ def _make_listing__1(db):
     """Factory for ``listing/1`` — captures *db* so a ``Name/Arity``
     indicator can be resolved to a row.
 
-    The class/instance/``BuiltinPredicate`` argument shapes are the PYTHON
-    API and need no database at all (a ``PredicateMeta``'s clauses are its
-    row's), so ``db=None`` (``get_builtin_dispatch("listing", 1, None)``)
+    The handle/``BuiltinPredicate`` argument shapes are the PYTHON API, and a
+    handle names its own module's Database, so ``db=None`` (``get_builtin_dispatch("listing", 1, None)``)
     keeps working for those.  An indicator with no database to resolve it
     against names no clauses, and fails.
     """
@@ -758,9 +746,10 @@ def _make_listing__1(db):
             (``_checked_indicator``);
           - anything else -- a bare atom, a compound term, a string, a
             number -- is ``type_error(predicate_indicator, PI)``.
-        Kept (the Python API, retired at a later flip): a ``PredicateMeta``
-        class or instance lists its own clauses, a ``BuiltinPredicate``
-        prints its "% name/arity — builtin" line.
+        From Python, a predicate HANDLE lists its predicate (each arity), and
+        a ``BuiltinPredicate`` prints its "% name/arity — builtin" line.
+        (A ``PredicateMeta`` class or instance listed its own clauses until
+        W4b-3 slice 7 deleted the class.)
         """
         val = deref(pred)
         if is_var(val):
@@ -768,8 +757,8 @@ def _make_listing__1(db):
 
         # A predicate HANDLE passed DIRECTLY -- the Python API,
         # ``listing(mod.fib)`` once the binding is a handle -- lists its
-        # predicate, as the class arm below lists a class (operator ruling
-        # 2026-09-25).  A class names one arity; a handle names none, so a
+        # predicate, as the class arm listed a class until W4b-3 slice 7
+        # (operator ruling 2026-09-25).  A class names one arity; a handle names none, so a
         # name that is a predicate at several arities lists each, in arity
         # order: Scryer refuses a bare name only because it is ambiguous, and
         # listing them all is the Python API's answer.  SOURCE ``listing(fib)``
@@ -818,17 +807,10 @@ def _make_listing__1(db):
                     print(f"% {val._functor}/{_a} — builtin")
                 yield None
                 return
-            if not isinstance(val, PredicateMeta):
-                raise LogicException(type_error(
-                    "predicate_indicator", culprit, "listing/1"))
-            name = val.__name__
-            arity = len(term_field_names_of_class(val))
-            # A class made in user Python (a class statement or metaclass
-            # call; ``make_predicate`` until W4b-3 slice 6) may be on NO
-            # row, and a listing must not mint one: resolve_predicate_row's
-            # class arm is a raw, non-minting ``val._row`` read.
-            _row = resolve_predicate_row(val, arity=arity, db=db)
-            clauses = _row.clauses if _row is not None else []
+            # (A ``PredicateMeta`` class listed its own clauses here until
+            # W4b-3 slice 7 deleted the class.)
+            raise LogicException(type_error(
+                "predicate_indicator", culprit, "listing/1"))
 
         if not clauses:
             print(f"% {name}/{arity} — no clauses")

@@ -26,7 +26,6 @@ from clausal.logic.atoms import mint
 import clausal.import_hook
 from clausal.import_hook import PredicateLoader, _load_module
 from clausal.logic.compiler import compile_predicate_trampoline
-from clausal.logic.predicate import PredicateMeta
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
 

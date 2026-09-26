@@ -3,7 +3,7 @@
 # Ported from Markus Triska's "A Couple of Meta-interpreters in Prolog"
 # (https://www.metalevel.at/acomip/).
 #
-# Object-level terms are represented as actual terms (PredicateMeta instances),
+# Object-level terms are represented as actual terms (cells),
 # matching the approach on Triska's metalevel page.
 #
 # A clause is [Head, BodyGoals] where BodyGoals is a list of goals.

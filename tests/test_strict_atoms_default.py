@@ -18,7 +18,6 @@ import clausal.import_hook  # noqa: F401 — installs the meta-path finder
 import clausal.logic.compiler_v2 as _compiler_v2
 from clausal.import_hook import _load_module, predicate_builtins, runtime_builtins
 from clausal.logic.compiler_v2 import ClausalStrictAtomsDeprecationWarning
-from clausal.logic.predicate import PredicateMeta
 from clausal.pythonic_ast import nodes as simple_ast
 from clausal.pythonic_ast.nodes import ImplicitAtomsDeclaration
 from clausal.templating import term_rewriting

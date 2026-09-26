@@ -42,7 +42,6 @@ from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
 from clausal.terms import Compound
 from tests.load_write_spy_support import record_load_writes
-from tests.predicate_api_support import class_arm_predicate
 
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
@@ -144,42 +143,6 @@ def test_a_dispatch_install_through_the_row_outside_a_txn_raises():
     assert "Database.mutate" in msg, "and the door that is open"
 
 
-def test_a_dispatch_install_through_the_class_property_outside_a_txn_raises():
-    """THE SECOND DOOR (P3-3 Task 2 carry-forward). ``PredicateMeta.
-    _dispatch_fn`` is a class-property onto the same row; gating
-    ``Database.mutate`` alone would leave it wide open, and it is the door
-    ``compiler._install`` writes through."""
-    db = Database()
-    cls = class_arm_predicate("gd", ["x"])
-    cls._bind_row(db, "gd", 1)
-    with pytest.raises(RuntimeError) as exc_info:
-        cls._state_row().dispatch_fn = lambda *a: iter(())
-    assert "dispatch_fn" in str(exc_info.value)
-    assert db.row("gd", 1).dispatch_fn is None, "and nothing was written"
-
-
-def test_a_dispatch_install_through_the_class_gate_is_allowed():
-    db = Database()
-    cls = class_arm_predicate("gd2", ["x"])
-    cls._bind_row(db, "gd2", 1)
-    fn = lambda *a: iter(())  # noqa: E731
-    with cls._mutate("test", "recompile"):
-        cls._state_row().dispatch_fn = fn
-    assert db.row("gd2", 1).dispatch_fn is fn
-
-
-def test_assigning_none_is_invalidation_and_needs_no_txn():
-    """``invalidate()`` stays THE one invalidation point, and it is not a
-    clobber: a cleared dispatch recompiles from the OWNER's clause list."""
-    db = Database()
-    cls = class_arm_predicate("gd3", ["x"])
-    cls._bind_row(db, "gd3", 1)
-    with cls._mutate("test", "recompile"):
-        cls._state_row().dispatch_fn = lambda *a: iter(())
-    cls._state_row().dispatch_fn = None                      # no txn — allowed
-    assert db.row("gd3", 1).dispatch_fn is None
-
-
 # ── The policy: may this author write this row ─────────────────────────────
 
 
@@ -204,21 +167,6 @@ def test_channel_1_low_level_db_assertz_from_a_non_owner_is_refused(tmp_path):
         db.assertz(_clause("gate_c1_p", 2))
     assert "may not write gate_c1_p/1" in _refusal_text(exc_info.value)
     assert _answers(module, "gate_c1_p") == [1], "and the answers did not move"
-
-
-def test_channel_3_the_class_mutator_from_a_non_owner_is_refused(tmp_path):
-    # After the flip the module binds a HANDLE, which has no mutator; the
-    # class-mutator channel is still open to a ``make_predicate`` class bound
-    # to the same (locked) row, so that is the class this channel goes through.
-    module, db, _binding = _locked_module(tmp_path, "gate_c3")
-    cls = class_arm_predicate("gate_c3_p", ["x"])
-    cls._bind_row(db, "gate_c3_p", 1)
-    assert cls._row is db.row("gate_c3_p", 1)
-    assert cls._row.locked is True
-    with pytest.raises(RuntimeError) as exc_info:
-        cls._assertz(Clause(head=cls(2), body=[]))
-    assert "may not write gate_c3_p/1" in str(exc_info.value)
-    assert _answers(module, "gate_c3_p") == [1]
 
 
 def test_channel_4_the_assertz_builtin_from_a_non_owner_is_refused(tmp_path):

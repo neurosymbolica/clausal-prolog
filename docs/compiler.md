@@ -443,13 +443,13 @@ compile_predicate(
     db: Database | None = None,
     *,
     globals_: dict | None = None,
-    pred_cls: PredicateMeta | None = None,
+    pred_cls: str | None = None,
     body_compiler = None,
 ) -> Callable
 ```
 
 - `db=None` is allowed; a `_GlobalsDb` proxy is used for signature lookups from `globals_`.
-- `pred_cls` identifies a `PredicateMeta` class to install the dispatch function on — only for a class no Clausal database owns (a loaded module's predicates are rows in its `Database`, bound to handles, and are compiled with `db`).
+- `pred_cls` is the predicate's HANDLE (a loaded module's predicates are rows in its `Database`, bound to handles); the install goes through the mutation gate onto the row it names. (It was a `PredicateMeta` class until W4b-3 slice 7 deleted the class.)
 - `globals_` is the module globals dict; predicate names in the body resolve from this dict.
 - Returns the compiled dispatch function and also installs it via `_install(db, functor, arity, fn, lazy_fn, pred_cls)`.
 
@@ -522,7 +522,7 @@ compile_module(predicate_nodes, module_items, module_dict, module_name)
 | 2. [Directives](directives.md) | `_process_directives()` — apply `-dynamic`, `-discontiguous`, `-table`, `-shallow` metadata to the database |
 | 3. Declarations | `_process_declarations()` — process `-module` and `-private` declarations: a declared atom binds its spelling, a declared data functor its interned name; a predicate keeps the handle the module body bound |
 | 4. assertz clauses | Each `Predicate` node is asserted via `logic_module.define_predicate()` onto the Database row; the row's signature is stamped from the rewriter's head field names and its `declared_at` from the `$declare_head` record |
-| 4a-bis. The flip | `_flip_bindings()` — a `PredicateMeta` class still bound in `module_dict` (only a Python-made one can be, and it is REFUSED) is checked; the module body's `$declare_head` record retires here, so the Database answers alone from now on |
+| 4a-bis. The flip point | `_flip_bindings()` registers the Database as a handle owner (every binding is already a handle; the class it rebound is deleted); the module body's `$declare_head` record retires here, so the Database answers alone from now on |
 | 5. Compile | Each `(functor, arity)` is compiled via `compile_predicate_trampoline` (or `compile_predicate_shallow` for shallow predicates) |
 | 6. [Tabling](tabling.md) | Tabled predicates are wrapped with `make_tabled_wrapper_trampoline` from `clausal.logic.tabling` |
 | 7. Locking | Non-[dynamic](directives.md) predicates' rows are locked (`_lock_static_predicates(db)`) to prevent runtime modification |

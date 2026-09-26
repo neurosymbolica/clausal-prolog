@@ -38,12 +38,12 @@ from clausal.logic.compiler import (
     compile_predicate_shallow,
 )
 from clausal.logic.predicate import (
-    PredicateMeta, record_clause_source,
+    record_clause_source,
     field_names_for, is_declared_predicate, is_declared_predicate_name,
     binding_grants_arity,
     predicate_arities_for, predicate_binding_name, predicate_owner_module,
     resolve_predicate_row, _db_for_module_name,
-    is_foreign_class_at_other_arity, module_source_path,
+    module_source_path,
     is_bound_predicate_at, declared_head, is_local_predicate_binding,
     end_loading_declarations,
 )
@@ -170,8 +170,8 @@ def compile_module(
         transform time: DirectiveItem, ImportFromItem, ImportModuleItem,
         ModuleDeclItem, PrivateDeclItem.
     module_dict : dict
-        The Python module's __dict__.  PredicateMeta classes are injected
-        here and used for cross-predicate resolution.
+        The Python module's __dict__: each predicate name is bound to its
+        handle here, and the dict is used for cross-predicate resolution.
     module_name : str
         Module name for the LogicModule.
 
@@ -282,85 +282,27 @@ def compile_module(
     _refuse_unrefused_deferred_heads(predicate_nodes, module_dict, module_name)
 
     # ── Step 4: assertz all clauses ───────────────────────────────────────
-    pending: dict[tuple[str, int], PredicateMeta | None] = {}
+    pending: dict[tuple[str, int], "str | None"] = {}
     head_fields = _head_field_names(module_items)
     for pred_node in predicate_nodes:
         functor, arity = head_key(pred_node.head)
         key = (functor, arity)
 
-        # Bind the PredicateMeta class to this predicate's Database ROW
-        # (P3-3 Task 2).  This is the one place a class becomes the compiled
-        # face of a stored predicate at load: after it, ``pred_cls._clauses``
-        # IS ``db._clauses[key]`` and ``pred_cls._signature`` IS
-        # ``db._signatures[key]``, so there is no second store for a later
-        # ``assertz`` to leave stale — and no arity-blind mirror needed to
-        # keep one in step.  The slice-assign below is consequently a
-        # self-copy in the ordinary case; it is kept because ``clauses_for``
-        # is a snapshot and the write is what the row's contract names as the
-        # deliberate clause-list minting site.
         # The same rule as step 3d (``_local_binding``).  This module's own
-        # predicate HANDLE (``$declare_head``, W4b-3 slice 5) stands where
-        # the rewriter's class stood for the gate's ``through=``: the write
-        # goes through the LOCAL binding, never falls back to an
-        # ``-import_from`` of the same spelling.
-        pred_cls, declared = _local_binding(module_dict, functor)
-        local = pred_cls if declared is not None else None
-        # P1 2026-09-17: this guard is NOT redundant and stays.  Measured over
-        # the whole suite (14,615 arrivals here), 34 of them find something
-        # other than a predicate class under a functor that HAS clause nodes —
-        # an interned atom ``tuple`` and an absent binding — so dropping the
-        # test would hand a tuple to ``_bind_row`` below.
-        if not isinstance(pred_cls, PredicateMeta):
-            pred_cls = None
-        elif is_foreign_class_at_other_arity(pred_cls, db, arity):
-            # An IMPORTED class at ANOTHER arity (``-import_from(a, [p])``
-            # binds a's ``p/1`` class; this file defines its own ``p/2``).
-            # The head is this module's own predicate -- its row is this
-            # module's, exactly as the handle era resolves it -- so there is
-            # no class to bind here: binding a's class would move it off a's
-            # row (``_bind_row`` raises on that).  Same-arity foreign classes
-            # never get here: step 3d refused them.  Step 5 compiles it with
-            # no class for the same reason (the compiler's own fallback
-            # lookup applies the same test).
-            pred_cls = None
+        # predicate HANDLE (``$declare_head``, W4b-3 slice 5) is what the
+        # write goes THROUGH for the gate's ``through=`` -- never an
+        # ``-import_from`` of the same spelling -- and what step 5 compiles
+        # through, so the compile writes its index plans onto this row
+        # (``_plan_row_for``) and installs through it.  (A ``PredicateMeta``
+        # class was bound to the row here until W4b-3 slice 7 deleted it.)
+        local, declared = _local_binding(module_dict, functor)
         with _load_gate(db, functor, arity, author, WRITE_LOAD_CLAUSES,
-                        _load_through(pred_cls if pred_cls is not None
-                                      else local, origins, functor, db,
-                                      arity),
+                        _load_through(local, origins, functor, db, arity),
                         origins, module_name, module_dict):
             logic_module.define_predicate(pred_node)
-            if pred_cls is not None:
-                db_clauses = db.clauses_for(functor, arity)
-                # GUARANTEE: this bind never moves a predicate off another
-                # module's row.  Step 3d refuses every load write through an
-                # ``-import_from`` of another module's predicate before this
-                # loop runs (``_implements_an_imported_declaration``, after the
-                # gate), so the class here is this module's own or unbound;
-                # and ``authorized`` makes ``PredicateMeta._bind_row`` RAISE,
-                # not steal, if some other route ever hands it a class bound to
-                # another Database's row -- rather than skip the bind silently
-                # and leave the class reading a row these clauses never reach.
-                pred_cls._bind_row(db, functor, arity, authorized=True)
-                # ``_ensure_clauses``, not a plain ``_clauses`` read: a read
-                # mints nothing (P3-3 Task 2 fix round 1), and this IS the
-                # sanctioned clause-install site — the slice-assign below has
-                # to land in the Database, not in an unminted per-row list.
-                pred_cls._ensure_clauses()[:] = db_clauses
-                pending[key] = pred_cls
-            elif local is not None:
-                # This module's own predicate HANDLE (``$declare_head``,
-                # W4b-3 slice 5): the key the rewriter's class was bound to
-                # here and handed to step 5.  The handle goes in its place,
-                # so the compile writes its index plans onto this row
-                # (``_plan_row_for``) and installs through it, as it did
-                # through the class.
-                pending[key] = local
-            else:
-                pending[key] = None
-            # Whatever the name is bound to -- a class today, a mangled atom
-            # after the flip, an atom or nothing in the 34 arrivals measured
-            # where a clause-bearing name is not bound to a class -- the
-            # clauses just written are this load's, and the gate reads the
+            pending[key] = local
+            # Whatever the name is bound to -- this module's handle, an
+            # imported one, an atom or nothing -- the clauses just written are this load's, and the gate reads the
             # owner off the ROW.  ``create=True`` because that never answers
             # an ADOPTED row (another database's): this load owns what it
             # just wrote, never what it imported.
@@ -397,9 +339,7 @@ def compile_module(
     #    A declared-but-clause-less dynamic predicate must still compile to
     #    a dispatch (the always-fail trampoline) so querying it fails
     #    cleanly with 0 solutions instead of raising NotImplementedError
-    #    from _get_dispatch(). The minted class (term_rewriting mints it at
-    #    directive processing) is attached only when its arity matches the
-    #    spec, so a same-name predicate at another arity keeps its dispatch.
+    #    from _get_dispatch().
     for item in module_items:
         if isinstance(item, DirectiveItem) and item.name == "dynamic":
             for functor, arity in item.specs:
@@ -494,44 +434,16 @@ def compile_module(
                             f"Database's row")
                     pending[key] = None
                     continue
-                cls_row = getattr(pred_cls, "_row", None)
-                if cls_row is not None and cls_row.key[1] == arity:
-                    if _belongs_elsewhere(pred_cls, db, arity):
-                        # A ``-dynamic`` declaration for a predicate this
-                        # module IMPORTED (P3-3 Task 3 fix round 1).  The
-                        # declaration is legitimate — it is how a module says
-                        # "I intend to assert against this" — but the
-                        # predicate is not ours to bind or to compile: doing
-                        # either would hand the owner's shared class this
-                        # module's (empty) clause list and its always-fail
-                        # trampoline.  The mark on this database is enough;
-                        # asserts resolve through the class to the owner's
-                        # row.
-                        continue
-                    # Same binding as step 4 (P3-3 Task 2): a declared-but-
-                    # clause-less dynamic predicate is exactly the shape whose
-                    # first clause arrives by runtime assertz, so its class
-                    # must already be reading the row that assertz appends to.
-                    pred_cls._bind_row(db, functor, arity, authorized=True)
-                    # NO SIGNATURE STAMP HERE (2026-09-24).  This used to copy
-                    # ``pred_cls._fields`` onto the row, and it was dead: since
-                    # option D a clause-less ``-dynamic`` class has no row yet,
-                    # so it never reaches this branch -- 0 arrivals measured
-                    # over the design's 2,735-test sample and again over 2,751
-                    # tests with a probe on this line.  A row that gets its
-                    # first clause later (runtime assertz) is not a step-4
-                    # arrival either way; step 4 above stamps the rows this
-                    # load writes clauses to, from ``HeadFieldNames``.
-                    pending[key] = pred_cls
-                else:
-                    pending[key] = None
+                # (A ``PredicateMeta`` class bound to its row here until
+                # W4b-3 slice 7 deleted the class.)
+                pending[key] = None
 
-    # ── Step 4a-bis: THE FLIP (W4b-2d task 8) ────────────────────────────
-    #    Every predicate binding in the module dict becomes its mangled
-    #    HANDLE, before anything from step 4b on reads the dict.  The
-    #    classes step 4/4a bound stay alive in ``pending`` (step 5 hands them
-    #    to the compiler) and ``origins``; nothing reads them off the dict
-    #    again.  See ``_flip_bindings``.
+    # ── Step 4a-bis: the flip point (W4b-2d task 8) ──────────────────────
+    #    Every predicate binding in the module dict is already its HANDLE
+    #    (the body's ``$declare_head``, an ``-import_from``); the flip that
+    #    rebound classes to handles here has nothing left to rebind.  What
+    #    remains is registering this db as a handle owner.  See
+    #    ``_flip_bindings``.
     _flip_bindings(module_dict, db)
     # The module body's ``$declare_head`` record retires here too (W4b-3
     # slice 5): it answered for the handles this load declared exactly as
@@ -580,10 +492,8 @@ def compile_module(
     for (functor, arity), pred_cls in pending.items():
         if db.is_tabled(functor, arity):
             from clausal.logic.tabling import ensure_tabled_wrapper
-            # THE ROW, not the class (W3): every class in ``pending`` was
-            # bound to this db's row at step 4/4a, so ``db.get_dispatch`` is
-            # the same three-step ``PredicateMeta._get_dispatch`` ran (installed
-            # -> lazy recompile -> registry), read off the store both share.
+            # THE ROW (W3): ``db.get_dispatch`` -- installed -> lazy
+            # recompile -> registry.
             original_fn = db.get_dispatch(functor, arity)
             wrapped = ensure_tabled_wrapper(db, functor, arity, original_fn)
             if wrapped is original_fn:
@@ -591,13 +501,6 @@ def compile_module(
             with db.mutate(functor, arity, author=author,
                            kind=WRITE_LOAD_DISPATCH, detail="table-wrap",
                            through=pred_cls):
-                if isinstance(pred_cls, PredicateMeta):
-                    # ``_row``, not a facade: every class in ``pending`` was
-                    # bound to THIS db's row at step 4/4a, so this is the
-                    # same store ``set_dispatch`` writes on the next line.
-                    # (A local HANDLE in ``pending`` has no class-side row:
-                    # ``set_dispatch`` is the whole write.)
-                    pred_cls._row.dispatch_fn = wrapped
                 db.set_dispatch(functor, arity, wrapped)
 
     # ── Step 6b: Meta-interpreter specialization ────────────────────────
@@ -605,9 +508,8 @@ def compile_module(
     #    called.  Specialized predicates compile themselves internally.
     _run_specialization(module_items, predicate_nodes, module_dict, db)
 
-    # ── Step 6c: THE FLIP again -- ``-specialize`` re-binds classes ──────
-    #    ``_install_specialized`` binds the specialized predicate's CLASS
-    #    under its name at step 6b, after the first flip ran.
+    # ── Step 6c: the flip point again (W4b-2d; ``-specialize`` bound a
+    #    CLASS at step 6b until W4b-3 slice 4 -- it binds a handle now) ──
     _flip_bindings(module_dict, db)
 
     # ── Step 7: Lock non-dynamic predicates ──────────────────────────────
@@ -628,108 +530,24 @@ def compile_module(
 # (operator ruling 2026-09-25 -- the class era ends).
 
 
-def _flip_owner(value: "PredicateMeta", db,
-                module_dict: dict) -> "tuple[Any, str] | None":
-    """``(owner_db, functor)`` the handle for the class *value* is minted
-    from (ruling X3: from a DATABASE, never from ``__module__``), or
-    ``None`` when *value* is not a Clausal database's predicate -- which
-    ``_flip_bindings`` REFUSES (W4b-3 slice 1).
-
-    * A class bound to a real row names its owner through the row (ruling
-      D1: an ``-import_from``'d class is bound to the EXPORTER's row, so an
-      import binds the owner's handle, and an aliased import binds it under
-      the alias with the owner's functor).
-    * A class on no row whose ``__module__`` is a LOADED Clausal module:
-      that module's db.
-    * A class on no row minted by THIS module's body (``__module__`` is the
-      compiling module -- a clause-less ``-dynamic`` under option D, a
-      declared name with no clauses), or one this db already holds a row or
-      a ``-dynamic`` mark for at the class's arity (a step-1c ``-specialize``
-      target, minted by ``make_predicate`` in ``clausal.logic.predicate``
-      until W4b-3 slice 4, row-planted by ruling QB): the compiling db.
-    * Anything else -- a class a plain PYTHON module exports
-      (``-import_from(py_mod, [p])``), a metaclass-called class (the
-      retired ``make_predicate``'s shape) compiled with ``db=None`` onto
-      its private row -- has no Database a handle
-      could name: ``None``.  A handle minted from the compiling db would
-      name a predicate that db does not have (``PredicateNotFoundError`` on
-      every call, roborev 2026-09-25).  W4b-2d left such a class bound as it
-      was; W4b-3 slice 1 refuses it (operator ruling 2026-09-25), pointing
-      at the duck-typed ``_get_dispatch`` protocol on a plain object, which
-      is frozen and untouched.
-    """
-    row = value.__dict__.get("_row")
-    if row is not None and not row.detached:
-        return row.db, row.key[0]
-    functor = value.__name__
-    origin = getattr(value, "__module__", None)
-    if origin and origin not in (db.module_name(),
-                                 module_dict.get("__name__")):
-        owner = _db_for_module_name(origin)
-        if owner is not None:
-            return owner, functor
-    elif origin:
-        return db, functor
-    fields = value.__dict__.get("_fields")
-    if fields is not None:
-        arity = len(fields)
-        if db.row(functor, arity) is not None or db.is_dynamic(functor, arity):
-            return db, functor
-    return None
-
-
 def _flip_bindings(module_dict: dict, db) -> None:
-    """THE FLIP (W4b-2d task 8): rebind every ``PredicateMeta`` value in
-    *module_dict* to ``mint_predicate_handle(owner_db, functor)``.
+    """The flip point (W4b-2d task 8): register *db* as a handle owner.
 
-    Runs twice in ``compile_module``: after step 4a (every class step 4/4a
-    bound is on its row, so the owner is readable), and after step 6b,
-    because ``-specialize`` installs a class at 6b.  ``$``-names are the
-    engine's own runtime bindings, never a predicate the user named, and
-    are left alone.  An owner that belongs to no module (``<anonymous>``)
-    cannot own a handle (``mint_predicate_handle`` refuses it); the handle
-    is then minted from the compiling db, the X3 fallback.
-
-    Also registers *db* as a handle owner (ruling Q0) right away: a handle
-    minted here may be RUN before ``compile_module`` returns (a
-    ``-specialize`` source program at step 6b, an ``-initialization`` goal),
-    and the end-of-load registration would be too late for a module the
-    caller never put in ``sys.modules``.  Idempotent and weak.
-
-    A class NO Clausal database owns (``_flip_owner`` answers ``None``: a
-    ``PredicateMeta`` class created in Python) is REFUSED with a
-    ``SyntaxError`` naming the binding (W4b-3 slice 1, operator ruling
-    2026-09-25; the message is ``import_diagnostics.
-    describe_unowned_predicate_class``).  It used to stay bound as it was.
-    The refusal is decided by a SCAN before anything changes: no binding
-    flipped, *db* not registered as a handle owner, and every offending
-    binding named in one error (roborev, 2026-09-25).
-    """
-    from clausal.logic.predicate import (  # noqa: PLC0415
-        mint_predicate_handle, register_handle_owner)
-    plan = []
-    unowned = []
-    for key, value in list(module_dict.items()):
-        if not isinstance(value, PredicateMeta) or key.startswith("$"):
-            continue
-        found = _flip_owner(value, db, module_dict)
-        if found is None:
-            unowned.append((key, value))
-        else:
-            plan.append((key, found))
-    if unowned:
-        from clausal import import_diagnostics as diag  # noqa: PLC0415
-        module_name = module_dict.get("__name__") or db.module_name()
-        raise SyntaxError("\n".join(
-            diag.describe_unowned_predicate_class(key, value, module_name)
-            for key, value in unowned))
+    The flip rebound every ``PredicateMeta`` class in the module dict to its
+    owner's HANDLE, and refused a class no Clausal database owned (a class
+    made in Python, W4b-3 slice 1).  Since W4b-3 slices 5-7 there is no class
+    to rebind or refuse -- the module body binds handles (``$declare_head``),
+    ``-specialize`` installs a handle, and the ``PredicateMeta`` class itself
+    is deleted -- so what remains is the registration: *db* becomes an owner
+    for handles naming its module (ruling Q0) right away, because a handle
+    may be RUN before ``compile_module`` returns (a ``-specialize`` source
+    program at step 6b, an ``-initialization`` goal), and the end-of-load
+    registration would be too late for a module the caller never put in
+    ``sys.modules``.  Idempotent and weak.  Still called at both flip points
+    (after step 4a, after step 6b)."""
+    from clausal.logic.predicate import register_handle_owner  # noqa: PLC0415
+    del module_dict  # the flip's input; nothing in it needs rebinding now
     register_handle_owner(db)
-    for key, (owner, functor) in plan:
-        try:
-            handle = mint_predicate_handle(owner, functor)
-        except ValueError:
-            handle = mint_predicate_handle(db, functor)
-        module_dict[key] = handle
 
 
 _IMPORT_PLACEHOLDER = "_clausal_import_placeholder"
@@ -1391,12 +1209,9 @@ def _implements_an_imported_declaration(origins: dict, module_dict: dict,
             functor, arity, module_name, exporter, len(row.clauses),
             imported_as=imported_as,
         ))
-    python_exporter = _python_module_that_created(bound, row, exporter)
-    if python_exporter is not None:
-        return SyntaxError(diag.describe_imported_python_predicate_implemented(
-            functor, arity, module_name, python_exporter,
-            imported_as=imported_as,
-        ))
+    # (A predicate CLASS made in a Python module had its own message here;
+    # the class was deleted at W4b-3 slice 7, and a Python module supplies a
+    # predicate only as a ``_get_dispatch`` object, which is no declaration.)
     return SyntaxError(diag.describe_imported_declaration_implemented(
         functor, arity, module_name, exporter, imported_as=imported_as,
     ))
@@ -1423,37 +1238,6 @@ def _is_self_import(exporter: str, module_name: str, author: str) -> bool:
     return path is not None and path == author
 
 
-def _python_module_that_created(bound, row, exporter: str) -> "str | None":
-    """The name of the PYTHON module an imported predicate class came from,
-    when no Clausal module owns it -- else ``None``.
-
-    Only a predicate with no real Clausal row qualifies (``row`` None or the
-    class's private detached row): a real row means a Clausal module's
-    Database holds the predicate, whoever re-exported the name (the
-    ``clausal/modules/*.py`` alias-module pattern re-exports Clausal
-    predicates from Python).  A class DECLARED by a Clausal module (a
-    clause-free export) carries that module as its ``__module__``, so it is
-    a Clausal declaration, not a Python one.  The exporter is resolved the
-    way the ``-import_from`` resolved it (``_resolve_module``: alias map,
-    then ``clausal.modules.*``, then the raw dotted name), never by the raw
-    string alone.
-    """
-    if row is not None and not row.detached:
-        return None
-    if not isinstance(bound, PredicateMeta):
-        return None
-    if _db_for_module_name(getattr(bound, "__module__", None) or "") is not None:
-        return None
-    try:
-        mod = _resolve_module(exporter)
-    except ImportError:
-        return None
-    name = getattr(mod, "__name__", exporter)
-    if _db_for_module_name(name) is not None:
-        return None
-    return name
-
-
 _LOAD_SITES = {
     WRITE_LOAD_CLAUSES: "compile_module step 4",
     WRITE_LOAD_DISPATCH: "compile_module step 5",
@@ -1462,16 +1246,13 @@ _LOAD_SITES = {
 
 def _local_binding(module_dict: dict, functor: str):
     """``(binding, declared)`` for the binding a load write of *functor*
-    goes THROUGH when this module itself holds the name: a ``PredicateMeta``
-    class (the Python-API arm, until slice 6; *declared* is ``None``) or the
-    module's own predicate HANDLE (``$declare_head``, W4b-3 slice 5 -- where
-    the rewriter's class used to be; *declared* is ``declared_head``'s
+    goes THROUGH when this module itself holds the name: the module's own
+    predicate HANDLE (``$declare_head``, W4b-3 slice 5 -- where the
+    rewriter's class used to be; *declared* is ``declared_head``'s
     ``(functor, fields, site)``).  ``(None, None)`` otherwise, and
     ``_load_through`` falls back to an ``-import_from`` of the name.  The ONE
     rule step 3d and step 4 share."""
     binding = module_dict.get(functor)
-    if isinstance(binding, PredicateMeta):
-        return binding, None
     declared = declared_head(module_dict, binding)
     if declared is not None:
         return binding, declared
@@ -1480,22 +1261,18 @@ def _local_binding(module_dict: dict, functor: str):
 
 def _load_through(pred_cls, origins: dict, functor: str, db, arity: int):
     """The ``through=`` a load write of ``functor/arity`` hands the gate: the
-    class the name is bound to, else the ``-import_from`` binding -- except
-    an imported CLASS reading another database's row at ANOTHER arity.
+    module's own binding for the name, else the ``-import_from`` binding.
 
     Operator ruling 2026-09-24: a local ``p/2`` beside an imported ``p/1``
-    LOADS, in both eras -- name and arity make a different predicate.  In the
-    handle era ``through=`` resolves the handle at the written arity, so a's
-    ``p/1`` is never in the blast radius; in the class era the shared class
-    carried a's ``p/1`` row in regardless of arity, and the gate refused the
-    write with "may not write p/1 (reached by writing p/2)".  Dropping that
-    class here gives the class era the handle era's answer.
+    LOADS -- name and arity make a different predicate.  ``through=``
+    resolves a handle at the written arity, so a's ``p/1`` is never in the
+    blast radius.  (An imported CLASS at another arity was dropped here
+    until W4b-3 slice 7 deleted the class; *db* and *arity* are kept for
+    the callers' signature.)
     """
-    binding = pred_cls if pred_cls is not None else _imported_binding(
+    del db, arity
+    return pred_cls if pred_cls is not None else _imported_binding(
         origins, functor)
-    if is_foreign_class_at_other_arity(binding, db, arity):
-        return None
-    return binding
 
 
 def _imported_binding(origins: dict, functor: str):
@@ -1596,8 +1373,8 @@ def _validate_directive_targets(module_items: list, db: Any, module_dict: dict) 
     just runs untabled). The check runs after all clauses are collected, so
     forward declaration stays legal. ``-dynamic`` is exempt — it mints its own
     empty predicate (A12-F005) and a clause-less dynamic predicate is legit
-    ISO. A target that is a defined PredicateMeta class (e.g. an imported or
-    -private-declared predicate) also counts as defined.
+    ISO. A target that is a declared predicate binding (e.g. an imported or
+    -private-declared predicate's handle) also counts as defined.
 
     ``-table`` is held to a stricter standard than its two siblings, because
     unlike them it is not a property of *this* module's view of the predicate
@@ -1823,11 +1600,10 @@ def _ambiguous_mi(mi_name: str, arities) -> RuntimeError:
 
 def _meta_interpreter_row(db, module_dict: dict, mi_name: str, *,
                           refuse_ambiguous: bool
-                          ) -> "PredRow | PredicateMeta | None":
+                          ) -> "PredRow | None":
     """The ROW of the meta-interpreter a ``-specialize`` names, or ``None``
-    -- or, in two class-era arms below, the ``PredicateMeta`` class bound to
-    it.  Its one consumer, ``analyze_mi``, accepts both.  TODO(W4b-3): the
-    class arms go with the class, leaving ``PredRow | None``.
+    (two class-era arms that returned a bound ``PredicateMeta`` class went
+    with the class at W4b-3 slice 7).
 
     F1 rows 32/33: found in the specializing module's OWN database -- a local
     MI or an ``-import_from``'d one (an adopted row) both answer there -- so
@@ -1849,11 +1625,7 @@ def _meta_interpreter_row(db, module_dict: dict, mi_name: str, *,
     3. failing that, a module-dict binding that denotes a predicate -- one
        bound by a plain Python import has no row here -- with the same
        ambiguity refusal over its owner's arities.  A mangled atom is
-       resolved to its owner's row.  A ``PredicateMeta`` class is returned
-       AS THE CLASS: ``analyze_mi`` reads its ``_fields`` (a Python-built
-       predicate may have no registered signature) and refuses it when it
-       has no row, exactly as before.  That arm goes with the class at
-       W4b-3.
+       resolved to its owner's row.
     """
     rows = {a: r for a in db.predicate_arities(mi_name)
             if (r := db.row(mi_name, a)) is not None}
@@ -1863,15 +1635,7 @@ def _meta_interpreter_row(db, module_dict: dict, mi_name: str, *,
         return None
     binding = module_dict.get(mi_name)
     if rows:
-        row = next(iter(rows.values()))
-        # A Python-built MI whose clauses reached this database without a
-        # registered signature: its field names live only on the class
-        # bound to it, which the class route read.  Hand that class over
-        # (W4b-3 removes this arm with the class).
-        if (row.db.signature_for(*row.key) is None
-                and isinstance(binding, PredicateMeta) and binding._row is row):
-            return binding
-        return row
+        return next(iter(rows.values()))
     if not is_declared_predicate_name(binding, db=db):
         return None
     arities = predicate_arities_for(binding, db=db)
@@ -1879,8 +1643,6 @@ def _meta_interpreter_row(db, module_dict: dict, mi_name: str, *,
         if refuse_ambiguous:
             raise _ambiguous_mi(mi_name, arities)
         return None
-    if isinstance(binding, PredicateMeta):
-        return binding
     if arities:
         return resolve_predicate_row(binding, arity=next(iter(arities)),
                                      db=db)
@@ -1892,11 +1654,12 @@ def _preregister_specializations(
     module_dict: dict,
     db: Any,
 ) -> None:
-    """Pre-register specialized predicate classes for -specialize directives.
+    """Pre-register specialized predicates for -specialize directives.
 
-    Creates empty PredicateMeta classes (no clauses, no dispatch) so that
-    later clauses can reference the specialized predicate by name during
-    compilation at Step 5.
+    Registers each target's empty ROW and binds its HANDLE (no clauses, no
+    dispatch) so that later clauses can reference the specialized predicate
+    by name during compilation at Step 5.  (It minted empty PredicateMeta
+    classes until W4b-3 slice 4.)
     """
     from clausal.logic.specialization import analyze_mi, _specialized_fields
 

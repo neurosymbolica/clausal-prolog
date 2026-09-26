@@ -23,7 +23,6 @@ from clausal.logic.variables import Var, Trail, unify, deref, is_var
 from clausal.logic.database import Database, Clause, Module, head_key
 from clausal.logic.trampoline import StepGenerator, DONE, solutions
 from clausal.logic.solve import call, query, query_wfs
-from clausal.logic.predicate import PredicateMeta
 from clausal.terms import Compound, Undefined
 
 

@@ -19,7 +19,6 @@ from clausal.logic.cells import FUNCTOR_SIGNATURES_KEY
 from clausal.logic.predicate import (
     field_names_for, term_field_names_of_class,
 )
-from tests.predicate_api_support import class_arm_predicate
 
 
 @dataclasses.dataclass
@@ -30,11 +29,6 @@ class Point:
 
 def test_arm1_dataclass_class_yields_declared_fields():
     assert field_names_for(Point) == ("x", "y")
-
-
-def test_arm2_predicate_class_yields_its_fields():
-    Pt = class_arm_predicate("Pt", ["x", "y"])
-    assert field_names_for(Pt) == ("x", "y")
 
 
 def test_arm3_name_resolves_through_the_database():
@@ -127,14 +121,6 @@ def test_arm4_a_non_class_non_name_value_is_None():
     assert field_names_for(object()) is None
 
 
-def test_zero_field_declaration_is_empty_tuple_not_None():
-    """The contract's sharp edge: ``p()`` is DECLARED with no fields, and
-    that is not the same answer as 'nothing declared'."""
-    P = class_arm_predicate("P0", [])
-    assert field_names_for(P) == ()
-    assert field_names_for("never_declared", arity=0, db=Database()) is None
-
-
 def test_two_arities_exact_read_beats_the_by_name_fallback():
     db = Database()
     db.declare_functor("p", ("a",))
@@ -181,9 +167,3 @@ def test_field_named_clause_free_declaration_is_unaffected():
     assert field_names_for("zonkish", arity=2, db=db) == ("X", "Y")
     assert db.declared_kind("zonkish", 2) == "data"
 
-
-def test_term_field_names_of_class_still_answers_for_its_callers():
-    Pt = class_arm_predicate("PtAlias", ["x"])
-    assert term_field_names_of_class(Pt) == ("x",)
-    assert term_field_names_of_class(Point) == ("x", "y")
-    assert term_field_names_of_class(42) is None

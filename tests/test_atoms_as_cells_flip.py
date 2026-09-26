@@ -26,7 +26,6 @@ from clausal.logic.variables import Trail, Var, deref, unify
 from clausal.terms import Compound, term_canonical, term_str
 from clausal.modules.py.datetime import _dt_to_term as _T
 from clausal.modules.py.datetime import _term_to_dt as _P  # py datetime -> its TERM
-from tests.predicate_api_support import class_arm_predicate
 
 
 def _load_inline_clausal(name: str, source: str):
@@ -1299,43 +1298,6 @@ def _class_test_offenders(root, repo_root, skip):
                     and node.value.id in module_aliases):
                 offenders.append(f"{path}:{node.lineno}: attribute")
     return offenders
-
-
-def test_the_zero_field_class_test_is_named_is_zero_field_class():
-    """``predicate.is_atom`` was the zero-field-CLASS test while
-    ``atoms.is_atom`` is the TERM test — one stem, two questions.  The class
-    test is ``is_zero_field_class`` now; ``is_atom`` survives in
-    ``predicate.py`` only as a deprecated alias for the C symbol.
-
-    The guard below walks the AST of every ``*.py`` under BOTH ``clausal/``
-    and ``tests/`` (fix round 1: scanning only the package let
-    ``tests/test_funnel_accessors.py`` keep importing the old name) and fails
-    on any of the three ways the class test can be reached under that name:
-    an absolute import, a relative one, or attribute access on a name bound
-    to the predicate module.  Two files are exempt and named explicitly —
-    ``predicate.py``, which DEFINES the alias, and this file, which must
-    mention it to assert it still exists."""
-    import pathlib
-
-    from clausal.logic import predicate
-    from clausal.logic.atoms import is_atom as term_is_atom
-
-    assert predicate.is_zero_field_class is predicate.is_atom
-    assert predicate.is_zero_field_class(class_arm_predicate("t12_zero", []))
-    assert not predicate.is_zero_field_class(mint("t12_zero"))
-    # The TERM test keeps the plain name.
-    assert term_is_atom(mint("t12_zero"))
-
-    definition = pathlib.Path(predicate.__file__).resolve()
-    package_root = definition.parent.parent          # clausal/
-    repo_root = package_root.parent
-    tests_root = repo_root / "tests"
-    assert tests_root.is_dir(), tests_root           # the root must exist
-    skip = {definition, pathlib.Path(__file__).resolve()}
-
-    offenders = (_class_test_offenders(package_root, repo_root, skip)
-                 + _class_test_offenders(tests_root, repo_root, skip))
-    assert offenders == []
 
 
 def test_the_class_test_pin_actually_bites(tmp_path):

@@ -20,7 +20,7 @@ from types import SimpleNamespace
 import clausal.import_hook  # noqa: F401 — installs the meta-path finder
 from clausal.import_hook import _load_module
 from clausal.logic.atoms import mangle
-from clausal.logic.predicate import PredicateMeta
+from clausal.logic.atoms import is_mangled
 from clausal.pythonic_ast.nodes import Call, Keyword, StarUnpack
 from clausal.terms import LoadName
 from clausal.testing import _resolve_predicate, main
@@ -51,9 +51,12 @@ def test_resolution_does_not_read_the_module_dict_bindings(tmp_path):
     assert before is not None, "nothing resolved: nothing compared"
     assert before[0] is lm.db.row("r4_check", 1)
 
-    flipped_md = {k: (mangle("r4flip", k) if isinstance(v, PredicateMeta)
-                      else v) for k, v in lm.module_dict.items()}
-    assert not isinstance(flipped_md["r4_check"], PredicateMeta)
+    # Rebind every predicate HANDLE to one naming another module (it
+    # rebound PredicateMeta classes until W4b-3 slice 7 deleted the class).
+    flipped_md = {k: (mangle("r4flip", k)
+                      if type(v) is str and is_mangled(v) else v)
+                  for k, v in lm.module_dict.items()}
+    assert flipped_md["r4_check"] == mangle("r4flip", "r4_check")
     flipped = SimpleNamespace(db=lm.db, module_dict=flipped_md, name=lm.name)
     after = _resolve_predicate(goal, flipped, "caller.clausal")
     assert after is not None

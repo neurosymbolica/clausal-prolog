@@ -101,7 +101,7 @@ from clausal.logic.cells import (
 from clausal.logic.exceptions import (
     LogicException, instantiation_error, permission_error, type_error,
 )
-from clausal.logic.predicate import PredicateMeta, is_term_instance, term_field_names
+from clausal.logic.predicate import is_term_instance, term_field_names
 from clausal.pythonic_ast import nodes
 from clausal.terms import Compound
 
@@ -158,7 +158,7 @@ def _is_callable(t: Any) -> bool:
         return False
     if type(t) is list or is_chars(t):
         return True                      # [] / "": the atom '[]'
-    if isinstance(t, (PredicateMeta, _BuiltinTerm)):
+    if isinstance(t, _BuiltinTerm):
         # A builtin's object (``clausal.between``) is what its CLASS was
         # before W4b-3 slice 3: callable here, as the class was.
         return True
@@ -211,7 +211,7 @@ def _is_goal_object(binding: Any) -> bool:
     Constructing ``match(P, S)`` calls ``match(...)``, and such an object
     raises ``TypeError`` -- its term is the cell."""
     return (hasattr(binding, "_get_dispatch")
-            and not isinstance(binding, (PredicateMeta, _BuiltinTerm)))
+            and not isinstance(binding, _BuiltinTerm))
 
 
 _MISSING = object()
@@ -241,7 +241,7 @@ def _needs_cell(name: str, arity: int, namespace: dict, db=None) -> bool:
         return (name, arity) not in _BUILTINS and (name, arity) not in _DB_BUILTINS
     if _is_goal_object(binding):
         return True
-    if isinstance(binding, PredicateMeta) or is_declared_predicate_name(binding, db=db):
+    if is_declared_predicate_name(binding, db=db):
         return not binding_grants_arity(binding, arity, db, name)
     return False
 
@@ -683,9 +683,7 @@ def _resolve(db, head):
         raise _private(name, arity, "is a control construct")
     if isinstance(head, Compound):
         head = _as_cell(head)
-    if isinstance(head, PredicateMeta):
-        head = head.__name__
-    elif isinstance(head, _BuiltinTerm):
+    if isinstance(head, _BuiltinTerm):
         head = head._functor           # its class's __name__ before slice 3
     if type(head) is str:
         name, arity, cell = head, 0, head

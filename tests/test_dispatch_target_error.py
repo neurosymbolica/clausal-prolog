@@ -17,8 +17,7 @@ import types
 import pytest
 
 from clausal.logic.exceptions import DispatchTargetError, LogicException
-from clausal.logic.predicate import PredicateMeta, _dispatch_at
-from tests.predicate_api_support import class_arm_predicate
+from clausal.logic.predicate import _dispatch_at
 
 
 def test_a_module_target_raises_dispatch_target_error():
@@ -79,17 +78,6 @@ def test_a_foreign_implementor_is_still_called_bare():
             return sentinel
 
     assert _dispatch_at(Foreign(), 3) is sentinel
-
-
-def test_a_predicate_class_is_still_arity_aware():
-    cls = class_arm_predicate("W3Pred", ["a", "b"])
-    assert isinstance(cls, PredicateMeta)
-    with pytest.raises(NotImplementedError) as info:
-        _dispatch_at(cls, 5)
-    # The CLASS arm was taken: a clause-less predicate has no dispatch and
-    # says so its own way.  Had the value arm been taken, this would have been
-    # a DispatchTargetError -- a predicate class is never "not a predicate".
-    assert not isinstance(info.value, DispatchTargetError)
 
 
 def test_the_atom_case_keeps_its_own_shape():

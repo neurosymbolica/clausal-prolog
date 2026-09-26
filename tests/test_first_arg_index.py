@@ -20,8 +20,7 @@ from clausal.logic.compiler.arg_index import (
     _INDEX_VAR,
     _INDEX_THRESHOLD,
 )
-from clausal.logic.predicate import PredicateMeta
-from tests.predicate_api_support import class_arm_predicate, term_ctor
+from tests.predicate_api_support import term_ctor
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.logic.trampoline import StepGenerator, solutions, DONE
 from clausal.terms import Compound, Unify
@@ -122,30 +121,6 @@ class TestExtractFirstArgKey:
         c = Clause(head=Compound("f", (None,)), body=[True])
         assert _extract_first_arg_key(c, 1) is None
 
-    def test_atom_reference_key_from_unify(self):
-        """A keyword-atom fact (``color(C=Red)``) compiles to a Var head with a
-        ``Unify(field_var, LoadName('Red'))`` body.  When ``Red`` resolves (via
-        the threaded compile-time *env*) to a ``PredicateMeta`` atom, the
-        extracted key must be the 0-arity atom key ``('Red', 0)`` — matching
-        the runtime ``PredicateMeta`` key emitted by ``_runtime_arg_key`` —
-        not the compound-term key ``('LoadName', 2)`` for the reference node
-        itself.
-
-        P3-1 atom-pivot hotfix (arg_index.py's LoadName/LoadAttr branch):
-        this key can no longer be GUESSED from the reference's bare spelling
-        — see ``TestImportedAtomIndexKey`` below for the post-pivot atom
-        (plain ``str``) case this regression is actually about.  This test
-        keeps its original ``PredicateMeta``-atom scenario
-        (``make_predicate(name, [])``, which is where P3-3 Task 7 moved that
-        spelling), now resolved through *env* instead of guessed at.
-        """
-        # nv — regression for map_coloring private-atom-fact indexing bug
-        from clausal.terms import LoadName
-        red = class_arm_predicate("red", [])   # the class arm (W4b-3 slice 7)
-        v = Var()
-        c = Clause(head=Compound("color", (v,)),
-                   body=[Unify(left=v, right=LoadName(name="red"))])
-        assert _extract_first_arg_key(c, 1, env={"red": red}) == ("red", 0)
 
     def test_atom_reference_key_from_unify_unresolvable_without_env(self):
         """Without a compile-time *env* (or when the name isn't in it), the

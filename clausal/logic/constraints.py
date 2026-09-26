@@ -23,7 +23,7 @@ from clausal.logic.variables import (
     register_attr_hook,
     Trail,
 )
-from clausal.logic.predicate import PredicateMeta, is_term_instance, term_field_names
+from clausal.logic.predicate import is_term_instance, term_field_names
 from clausal.terms import (
     Compound,
     SegList,
@@ -161,14 +161,14 @@ def _collect_free_vars(term: Any) -> list:
 def _structural_unify_oc(t1: Any, t2: Any, trail: Trail) -> bool:
     """Unify t1 and t2 structurally with occurs check.
 
-    Handles Compound and PredicateMeta instances that the C extension's
+    Handles Compound and term (dataclass) instances that the C extension's
     ``unify_with_occurs_check`` does not (it falls through to ``==``).
     """
     t1 = deref(t1)
     t2 = deref(t2)
 
     # Let the C extension handle Var, tuple, list, scalars.
-    # But if both are Compound or PredicateMeta, recurse.
+    # But if both are Compound or term instances, recurse.
     if isinstance(t1, Compound) and isinstance(t2, Compound):
         if t1.functor != t2.functor or len(t1.args) != len(t2.args):
             return False

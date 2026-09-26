@@ -6,13 +6,18 @@ build one are timed:
   (A) ``build_term_cell``  -- ``clausal.logic.predicate.build_term_cell``,
                               the one home of construction against a
                               registered signature (the arity check and the
-                              keyword/positional placement), as a clause
-                              head's ``$head`` reaches it;
-  (B) keyword placement    -- ``build_term_cell`` with every slot NAMED, the
-                              placement path a keyword construction takes;
-  (C) tuple literal        -- a bare ``(name, v0, .., vn)``, the floor: what
-                              construction costs when Python does the
-                              absolute minimum.
+                              placement), called with POSITIONAL arguments;
+  (B) keyword placement    -- ``build_term_cell`` with every slot NAMED.  A
+                              module body's clause heads come through this
+                              path: the rewriter emits ``$head(p, arg_0=..,
+                              ..)`` with keywords.  ``build_term_cell``
+                              consumes its kwargs dict, so each call hands
+                              it a fresh copy; (D) times that copy alone,
+                              so B - D is the placement cost;
+  (C) tuple literal        -- a bare ``(name, v0, .., vn)`` written out per
+                              arity, the floor: what construction costs
+                              when Python does the absolute minimum;
+  (D) dict copy            -- the ``dict(keywords)`` B pays per call.
 
 Measured at arities 1, 3 and 8.  Batches for (A), (B), (C) are interleaved
 within a single process run (this repo's perf-gate convention), so GC and
@@ -56,6 +61,7 @@ BATCHES = 5
 A = "A: build_term_cell(pos)"
 B = "B: build_term_cell(kw)"
 C = "C: tuple literal"
+D = "D: dict copy (B's share)"
 
 
 def _make_variants(arity: int):
@@ -72,12 +78,24 @@ def _make_variants(arity: int):
         # build_term_cell consumes its kwargs dict: hand it a fresh one.
         return build_term_cell(name, fields, (), dict(keywords))
 
-    def literal():
-        return (name, *values)
+    if arity == 1:
+        (v0,) = values
+        literal = lambda: (name, v0)                                # noqa: E731
+    elif arity == 3:
+        v0, v1, v2 = values
+        literal = lambda: (name, v0, v1, v2)                        # noqa: E731
+    elif arity == 8:
+        v0, v1, v2, v3, v4, v5, v6, v7 = values
+        literal = lambda: (name, v0, v1, v2, v3, v4, v5, v6, v7)    # noqa: E731
+    else:
+        raise ValueError(f"unsupported arity {arity}")
 
-    # Sanity: all three build the same term.
+    def dict_copy():
+        return dict(keywords)
+
+    # Sanity: all three constructions build the same term.
     assert by_position() == by_keyword() == literal() == (name, *values)
-    return {A: by_position, B: by_keyword, C: literal}
+    return {A: by_position, B: by_keyword, C: literal, D: dict_copy}
 
 
 def _interleaved_timings(variants: dict) -> dict:

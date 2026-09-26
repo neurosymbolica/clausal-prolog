@@ -191,26 +191,22 @@ def _defined_names(mod):
     still importable (``from M import f`` is a plain ``getattr``), so this is
     the honest answer to "what may I import from here?".
 
-    Era-agnostic (PredicateMeta retirement, W4b-2d): TODAY a module-dict
-    predicate binding is a ``PredicateMeta`` CLASS; after the flip it is a
-    module-qualified MANGLED ATOM (a plain ``str``).  The population test
-    is ``is_declared_predicate_name`` -- NOT a bare ``is_mangled`` swap,
-    which would select nothing at all until the flip lands (every binding
-    is still a class today) and silently empty this diagnostic with no test
-    to catch it.  ``is_declared_predicate_name`` answers correctly in BOTH
-    eras: ``True`` for a ``PredicateMeta`` class or a mangled atom naming a
-    declared predicate, ``False`` for anything else -- a plain module-level
-    string or int, an imported non-predicate callable, a data functor's
-    ``@dataclass`` class, or a mangled atom naming a DATA atom (e.g. one
-    hidden via ``-hide``, which is registered as neither "predicate" nor
-    "data" anywhere) -- so none of those false-positive shapes can appear.
+    A predicate binding is a module-qualified MANGLED ATOM (a handle; it was
+    a ``PredicateMeta`` class until the flip, and the class arm here went
+    with the class at W4b-3 slice 7).  The population test is
+    ``is_declared_predicate_name``, which answers ``True`` for a handle
+    naming a declared predicate -- or one its LOADING module declared (a
+    circular import reads a partially initialised module) -- and ``False``
+    for anything else: a plain module-level string or int, an imported
+    non-predicate callable, a data functor's ``@dataclass`` class, or a
+    mangled atom naming a DATA atom (e.g. one hidden via ``-hide``).
     See ``test_import_diagnostics_defined_names.py`` for the population
     (non-empty, both eras) and false-positive evidence.
     """
     from clausal.import_hook import predicate_builtins
     from clausal.logic.atoms import demangle
     from clausal.logic.predicate import (
-        PredicateMeta, field_names_for, is_declared_predicate_name,
+        field_names_for, is_declared_predicate_name,
         namespace_db,
     )
 
@@ -230,38 +226,32 @@ def _defined_names(mod):
         # for the mangled arm below.)
         if predicate_builtins.get(name) == value:
             continue
-        if isinstance(value, PredicateMeta):
-            if getattr(value, "__module__", None) != mod.__name__:
-                continue  # re-exported from elsewhere; not this module's own
-            fields = getattr(value, "_fields", ()) or ()
+        # ``is_declared_predicate_name`` only ever answers True for a
+        # mangled atom (a handle; a PredicateMeta class answered too
+        # until W4b-3 slice 7).
+        owner_module, functor = demangle(value)
+        if owner_module != mod.__name__:
+            continue  # re-exported from elsewhere; not this module's own
+        fields = field_names_for(value) or ()
+        if fields:
             arity = len(fields)
         else:
-            # ``is_declared_predicate_name`` only ever answers True for a
-            # PredicateMeta class (handled above) or a mangled atom -- so
-            # this is the mangled-atom arm by elimination.
-            owner_module, functor = demangle(value)
-            if owner_module != mod.__name__:
-                continue  # re-exported from elsewhere; not this module's own
-            fields = field_names_for(value) or ()
-            if fields:
-                arity = len(fields)
-            else:
-                # ``field_names_for`` answers None for an ordinary clause-
-                # defined predicate -- it only records names for an
-                # explicit structural declaration, never a bare
-                # ``p(X, Y) <- ...`` head (see its own docstring).  Fall
-                # back to the owner db's arity registry so an N-ary
-                # predicate still renders ``name/N`` rather than silently
-                # dropping the suffix and reading as 0-ary.  Same idiom as
-                # ``testing.py``/``compiler_v2.py``: a loaded module's
-                # Database lives at ``mod.__dict__["$module"].db``.
-                owner_mod = sys.modules.get(owner_module)
-                owner_db = getattr(
-                    getattr(owner_mod, "__dict__", {}).get("$module"),
-                    "db", None,
-                )
-                arities = owner_db.arities_for(functor) if owner_db else set()
-                arity = arities.pop() if len(arities) == 1 else 0
+            # ``field_names_for`` answers None for an ordinary clause-
+            # defined predicate -- it only records names for an
+            # explicit structural declaration, never a bare
+            # ``p(X, Y) <- ...`` head (see its own docstring).  Fall
+            # back to the owner db's arity registry so an N-ary
+            # predicate still renders ``name/N`` rather than silently
+            # dropping the suffix and reading as 0-ary.  Same idiom as
+            # ``testing.py``/``compiler_v2.py``: a loaded module's
+            # Database lives at ``mod.__dict__["$module"].db``.
+            owner_mod = sys.modules.get(owner_module)
+            owner_db = getattr(
+                getattr(owner_mod, "__dict__", {}).get("$module"),
+                "db", None,
+            )
+            arities = owner_db.arities_for(functor) if owner_db else set()
+            arity = arities.pop() if len(arities) == 1 else 0
         entries.append((name, f"{name}/{arity}" if arity else name))
     entries.sort()
     return entries
@@ -706,88 +696,6 @@ def describe_imported_declaration_implemented(
         f"then have the modules that use it import it from {importer}, "
         f"not from {exporter} (and remove the declaration from {exporter} "
         f"if nothing else needs it).",
-    ]))
-    return "\n".join(lines)
-
-
-def describe_imported_python_predicate_implemented(
-    functor, arity, importer, exporter, imported_as=None,
-):
-    """Why clauses for a predicate CLASS a Python module exports are refused.
-
-    The class was created in Python (``make_predicate``, or a class with
-    ``metaclass=PredicateMeta``); no Clausal module defines it, and a load
-    may not become its defining module from the outside (the
-    vocabulary-implements drop, 2026-09-24).  The remedies are Python-shaped:
-    there is no ``-module`` export list on the exporter's side.
-    """
-    spelled = (f"{functor} (imported as {imported_as})"
-               if imported_as else functor)
-    lines = [
-        f"{importer} defines clauses for {functor}/{arity}, which it "
-        f"-import_from's from {exporter} -- but {functor}/{arity} is a "
-        f"predicate class created in Python module {exporter}, not a "
-        f"predicate a Clausal module defines."
-    ]
-    lines.extend(textwrap.wrap(
-        "A load cannot supply the clauses of a predicate that another module "
-        "hands out: a predicate has exactly one defining module.",
-        width=_WIDTH, initial_indent=_INDENT, subsequent_indent=_INDENT,
-        break_long_words=False, break_on_hyphens=False,
-    ))
-    lines.extend(_arrow([
-        f"define the clauses in a Clausal module that owns the predicate: "
-        f"drop {spelled} from the -import_from({exporter}, [...]) list and "
-        f"define {functor}/{arity} in {importer} (export it from there);",
-        f"or have {exporter} define it -- give the Python-side predicate "
-        f"its clauses where it is created.",
-    ]))
-    return "\n".join(lines)
-
-
-def describe_unowned_predicate_class(key, cls, module_name):
-    """Why a load REFUSES a ``PredicateMeta`` class no Clausal module owns.
-
-    W4b-3 slice 1 (operator ruling 2026-09-25): after the flip every
-    predicate binding a load leaves is a handle, minted from the owning
-    Database.  A class created in Python -- a ``metaclass=PredicateMeta``
-    class statement, or ``make_predicate`` (compiled with ``db=None``) --
-    has no Database to name, and ``PredicateMeta`` is being deleted.  The
-    remedies: a Clausal module, or the frozen duck-typed ``_get_dispatch``
-    protocol on a plain object, which is untouched.
-    """
-    name = cls.__name__
-    fields = cls.__dict__.get("_fields")
-    indicator = f"{name}/{len(fields)}" if fields is not None else name
-    # WHERE it was created: the class's registration site (the Python
-    # caller of ``make_predicate``, or the class statement), which names the
-    # user's file.  ``__module__`` alone would name ``clausal.logic.predicate``
-    # for every ``make_predicate`` class.
-    site = cls.__dict__.get("_registered_at")
-    if isinstance(site, tuple) and len(site) == 2:
-        where = f"at {site[0]}:{site[1]}"
-    else:
-        where = f"in module {getattr(cls, '__module__', None) or '<unknown>'}"
-    lines = [
-        f"{module_name} binds {key} to {indicator}, a PredicateMeta class "
-        f"created in Python {where} -- no Clausal module defines it, and a "
-        f"load no longer accepts a predicate CLASS."
-    ]
-    lines.extend(textwrap.wrap(
-        "PredicateMeta is retired: a predicate is a Database row, and a "
-        "module binds the owner's handle.  A class created in Python "
-        "(a metaclass=PredicateMeta class statement, or make_predicate) has "
-        "no Database a handle could name.",
-        width=_WIDTH, initial_indent=_INDENT, subsequent_indent=_INDENT,
-        break_long_words=False, break_on_hyphens=False,
-    ))
-    lines.extend(_arrow([
-        f"to supply {indicator} from Python, bind a plain object (not a "
-        f"class) with a _get_dispatch() method returning the predicate's "
-        f"dispatch function -- e.g. compile_predicate_trampoline("
-        f"{name!r}, arity, clauses, None) -- and -import_from that object;",
-        f"or define {indicator} in a Clausal module and -import_from it "
-        f"from there.",
     ]))
     return "\n".join(lines)
 

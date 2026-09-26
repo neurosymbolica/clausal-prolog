@@ -32,7 +32,7 @@ import pytest
 
 from clausal.import_hook import _load_module
 from clausal.logic.atoms import is_mangled, mangle, mint
-from clausal.logic.predicate import PredicateMeta, is_declared_predicate_name
+from clausal.logic.predicate import is_declared_predicate_name
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
 from clausal.predicate_diagnostics import PredicateArityMismatchError
@@ -884,7 +884,7 @@ class TestSpecializerSolveGoal:
         from clausal.logic.builtins import get_builtin_predicate
         from clausal.logic.specialization import _make_solve_goal_predicate
         bp = get_builtin_predicate("last", 2, lm.db)
-        assert bp is not None and not isinstance(bp, PredicateMeta)
+        assert bp is not None and not isinstance(bp, type)
         md = dict(lm.module_dict)
         md["my_last"] = bp
         sg = _make_solve_goal_predicate("SG_w4b3", None, md)

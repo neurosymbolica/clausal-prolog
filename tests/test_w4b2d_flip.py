@@ -35,7 +35,6 @@ import clausal.import_hook  # noqa: F401 -- installs the meta-path finder
 from clausal.import_hook import _load_module
 from clausal.logic import compiler_v2
 from clausal.logic.atoms import mangle
-from clausal.logic.predicate import PredicateMeta
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref, walk
 from clausal.testing import load_clausal_module
@@ -55,8 +54,13 @@ def _load(tmp_path, name, src):
 
 
 def _classes(module):
+    """Predicate names a module binds to a CLASS.  (It looked for
+    ``PredicateMeta`` classes; that class is deleted -- W4b-3 slice 7 -- so
+    a class bound under a predicate's name would be the regression.)"""
+    db = module.__dict__["$module"].db
     return sorted(k for k, v in vars(module).items()
-                  if isinstance(v, PredicateMeta) and not k.startswith("$"))
+                  if isinstance(v, type) and not k.startswith("$")
+                  and db.is_predicate_name(k))
 
 
 def test_every_predicate_binding_is_its_owner_s_handle(tmp_path, monkeypatch):
@@ -114,11 +118,10 @@ def test_the_off_switch_is_gone():
         import sys, os
         import clausal.import_hook
         from clausal.import_hook import _load_module
-        from clausal.logic.predicate import PredicateMeta
         m = _load_module("_flip_off_probe", os.path.join(
             "tests", "fixtures", "specialize_natnum.clausal"))
         print(type(m.natnum_program).__name__,
-              isinstance(m.natnum_program, PredicateMeta))
+              isinstance(m.natnum_program, type))
     """)
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     env = dict(os.environ, CLAUSAL_NO_FLIP="1")
@@ -205,37 +208,17 @@ def test_a_local_predicate_at_another_arity_than_an_import_loads():
     assert lm.db.row("t5b_kfact", 2).clauses
 
 
-# ── A predicate CLASS no Clausal Database owns is REFUSED at load (W4b-3) ──
+# ── A predicate supplied from PYTHON: the duck-typed ``_get_dispatch`` ──────
 #
-# Operator ruling 2026-09-25: the flip's class-preserving branch goes.  A
-# ``PredicateMeta`` class a plain PYTHON module creates (a class statement,
-# or the metaclass called -- ``make_predicate``'s shape -- compiled with
-# ``db=None``) has no Database a handle
-# could name; it used to stay bound and answer through its own
-# ``_get_dispatch()``.  Now the load refuses it and points at what still
-# works: the duck-typed ``_get_dispatch`` protocol on a plain object (the
-# frozen protocol ~22 out-of-tree implementors use), or a Clausal module.
+# W4b-3 slice 1 refused a ``PredicateMeta`` class a plain Python module
+# created; slice 7 deleted the class, so there is nothing left to refuse
+# (and the refusal tests went with it).  What a Python module supplies is
+# the frozen duck-typed ``_get_dispatch`` protocol on a plain object (the
+# protocol ~22 out-of-tree implementors use) -- pinned below.
 
 _PY_EXPORTER = '''
-from clausal.logic.predicate import PredicateMeta
 from clausal.logic.compiler import compile_predicate_trampoline
 from clausal.logic.database import Clause
-
-
-class w4b3_pycls(metaclass=PredicateMeta):   # a class statement in Python
-    _fields = ("x",)
-
-
-# The metaclass CALLED -- the shape ``make_predicate`` built (retired at
-# W4b-3 slice 6; it raises now), which Python can still spell until the
-# class is deleted at slice 7.
-w4b3_pymk = PredicateMeta("w4b3_pymk", (), {"_fields": ("x",)})
-
-for _p, _vals in ((w4b3_pycls, (1, 2)), (w4b3_pymk, (7, 8))):
-    compile_predicate_trampoline(
-        _p.__name__, 1,
-        [Clause(head=(_p.__name__, v), body=[]) for v in _vals],
-        None, pred_cls=_p)
 
 
 class _Duck:
@@ -266,25 +249,6 @@ def _py_exporter(tmp_path, monkeypatch):
         monkeypatch.delitem(sys.modules, name)
 
 
-@pytest.mark.parametrize("name", ["w4b3_pycls", "w4b3_pymk"])
-def test_a_python_made_predicate_class_is_refused_at_load(
-        tmp_path, monkeypatch, name):
-    """Both Python minters, imported and CALLED from a body (no clauses of
-    the importer's own for it: that is step 3d's refusal, pinned in
-    test_vocabulary_implements_refused)."""
-    _py_exporter(tmp_path, monkeypatch)
-    modname = f"w4b3_use_{name}"
-    with pytest.raises(SyntaxError) as exc_info:
-        _load(tmp_path, modname, f"""
-            -import_from(w4b3_pyexp, [{name}])
-            via(X) <- {name}(X),
-        """)
-    msg = str(exc_info.value)
-    assert (f"{modname} binds {name} to {name}/1, a PredicateMeta class "
-            f"created in Python at ") in msg, msg
-    assert "w4b3_pyexp.py:" in msg, msg
-    assert "_get_dispatch" in msg, msg
-    assert "-import_from" in msg, msg
 
 
 def test_the_duck_typed_protocol_the_refusal_points_at_still_loads(
@@ -306,46 +270,8 @@ def test_the_duck_typed_protocol_the_refusal_points_at_still_loads(
             [3, 4], goal
 
 
-def test_the_refusal_is_about_the_binding_not_the_exporter(
-        tmp_path, monkeypatch):
-    """Importing ONLY the duck from a module that also creates predicate
-    classes loads: what is refused is a class BOUND in the loading module,
-    not a Python module that happens to hold one."""
-    _py_exporter(tmp_path, monkeypatch)
-    import w4b3_pyexp  # noqa: F401 -- the exporter is loaded, as in use
-    assert isinstance(w4b3_pyexp.w4b3_pycls, PredicateMeta)
-    user = _load(tmp_path, "w4b3_use_duck_only", """
-        -import_from(w4b3_pyexp, [w4b3_duck])
-        only(X) <- w4b3_duck(X),
-    """)
-    assert "w4b3_pycls" not in vars(user)
 
 
-def test_the_refusal_is_atomic_and_names_every_offender(tmp_path,
-                                                        monkeypatch):
-    """The refusal is decided by a scan BEFORE the flip changes anything:
-    both offending bindings are named in one error, the failed module is
-    not left in ``sys.modules``, and its database was never registered as a
-    handle owner (roborev 2026-09-25: it used to raise mid-loop, after
-    earlier bindings flipped and the registration ran)."""
-    import importlib
-    from clausal.logic.predicate import _live_handle_owners
-    _py_exporter(tmp_path, monkeypatch)
-    _write(tmp_path, "w4b3_use_both.clausal", """
-        -import_from(w4b3_pyexp, [w4b3_pycls, w4b3_pymk])
-        local_fact(1),
-        via(X) <- (w4b3_pycls(X), w4b3_pymk(X)),
-    """)
-    # The REAL import path (importlib drops a module whose exec raised).
-    # The ``_load_module`` test helper leaves any failed load in
-    # ``sys.modules`` -- for every load error, not only this one.
-    with pytest.raises(SyntaxError) as exc_info:
-        importlib.import_module("w4b3_use_both")
-    msg = str(exc_info.value)
-    assert "binds w4b3_pycls to w4b3_pycls/1" in msg, msg
-    assert "binds w4b3_pymk to w4b3_pymk/1" in msg, msg
-    assert sys.modules.get("w4b3_use_both") is None
-    assert _live_handle_owners("w4b3_use_both") == []
 
 
 def _outcome(fn):

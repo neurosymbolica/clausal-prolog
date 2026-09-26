@@ -1034,52 +1034,20 @@ def dangling_handle_exception(
 
 
 def _infer_module(goal) -> Module | None:
-    """Try to find a Module from PredicateMeta classes in the goal term.
+    """The Module a goal's own terms name, or None -- always None now.
 
-    Walks the goal tree looking for term instances whose type was defined in an
-    imported .clausal module.  Returns the first Module found, or None.
+    It walked the goal for a term INSTANCE of a ``PredicateMeta`` class and
+    answered that class's defining module.  W4a made such an instance
+    impossible and W4b-3 slice 7 deleted the class, so there is nothing to
+    walk back to; the function stays as the one place the moduleless-solve
+    path asks.
 
-    LEGACY CUSTOMERS ONLY (P3-3 Task 6).  A CELL goal never reaches here: a
-    cell is a plain tuple with a bare-name functor, so there is no defining
-    class to walk back to and any number of modules may define that name.
-    ``_module_for_moduleless_solve`` refuses it with an ``existence_error``
-    naming the gap instead of guessing — see the module-locality rule R10.
+    A CELL goal never reaches here: a cell is a plain tuple with a bare-name
+    functor, so there is no defining class to walk back to and any number of
+    modules may define that name.  ``_module_for_moduleless_solve`` refuses
+    it with an ``existence_error`` naming the gap instead of guessing — see
+    the module-locality rule R10.
     """
-    import sys
-    from clausal.logic.predicate import PredicateMeta
-
-    def _find_pred_class(term):
-        if isinstance(type(term), PredicateMeta):
-            return type(term)
-        # Walk simple_ast compound nodes (And, Or, Not, etc.)
-        for attr in ('left', 'right', 'operand', 'goal', 'condition',
-                     'then_goal', 'else_goal', 'args'):
-            child = getattr(term, attr, None)
-            if child is not None:
-                if isinstance(child, (list, tuple)):
-                    for c in child:
-                        cls = _find_pred_class(c)
-                        if cls is not None:
-                            return cls
-                else:
-                    cls = _find_pred_class(child)
-                    if cls is not None:
-                        return cls
-        return None
-
-    pred_cls = _find_pred_class(goal)
-    if pred_cls is None:
-        return None
-
-    mod_name = getattr(pred_cls, '__module__', None)
-    if mod_name is not None:
-        py_mod = sys.modules.get(mod_name)
-        if py_mod is not None:
-            cm = getattr(py_mod, '__clausal_module__', None)
-            if cm is not None:
-                return cm
-            # Fall back to wrapping the module namespace.
-            return Module(mod_name, module_dict=vars(py_mod))
     return None
 
 

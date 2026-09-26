@@ -27,10 +27,9 @@ import pytest
 
 from clausal.import_hook import _load_module
 from clausal.logic.atoms import mangle
-from clausal.logic.predicate import PredicateMeta, predicate_arities_for
+from clausal.logic.predicate import predicate_arities_for
 from clausal.predicate_diagnostics import describe_missing_predicate
 import clausal.predicate_diagnostics as pd
-from tests.predicate_api_support import class_arm_predicate
 
 
 LIB = "f4arity_lib"
@@ -69,17 +68,6 @@ REV_SRC = f"""
 
 probe_it(1),
 """
-
-
-def _old_arity_of(obj):
-    """The reader as it was before F4, verbatim -- the measurement baseline."""
-    if not isinstance(obj, PredicateMeta):
-        return None
-    fields = getattr(obj, "_fields", None)
-    if fields is not None:
-        return len(fields)
-    arity = getattr(obj, "_arity", None)
-    return arity if isinstance(arity, int) else None
 
 
 @pytest.fixture(scope="module")
@@ -307,17 +295,6 @@ def test_non_predicates_answer_the_empty_set(value, mods):
     assert predicate_arities_for(value) == set()
 
 
-def test_class_whose_owner_is_not_loaded_keeps_its_own_arity():
-    """The class arm's own ``_fields`` count is kept: measured over the
-    fixture population, a db-only reader loses 59 of 910 old answers
-    (partially loaded modules, ``make_predicate`` classes, and
-    ``term_expansion/4``, which no db records)."""
-    cls = class_arm_predicate("f4arity_floating", ["a", "b", "c"])
-    assert predicate_arities_for(cls) == {3}
-    nullary = class_arm_predicate("f4arity_nullary", [])
-    assert predicate_arities_for(nullary) == {0}
-
-
 def test_unloaded_owner_answers_the_empty_set():
     assert predicate_arities_for(mangle("f4arity_never_loaded", "p")) == set()
 
@@ -327,45 +304,6 @@ def test_unloaded_owner_answers_the_empty_set():
 
 class TestNothingLost:
 
-    def test_new_set_contains_every_old_answer(self, mods, monkeypatch):
-        """Every namespace binding of every loaded module: where the old
-        reader answered an arity, the new set contains it.
-
-        W4b-3 slice 5 took away most of the old reader's population: it
-        answered only for a ``PredicateMeta`` class, and nearly all the
-        classes in loaded module namespaces were the rewriter's.  The
-        rewriter mints none now, so the population is SEEDED with the one
-        class shape still made (``make_predicate``, the Python-API arm
-        retired at slice 6), bound into a loaded module the way a Python
-        caller binds one -- a population of at least one, so ``not lost`` is
-        never vacuous -- and no loaded module binds a class of its OWN
-        (``__module__`` is the module itself for a class statement in its
-        body)."""
-        seeded = class_arm_predicate("f4arity_seeded", ["a", "b"])
-        monkeypatch.setitem(vars(sys.modules[LIB]), "f4arity_seeded", seeded)
-        scanned = 0
-        population = 0
-        rewriter_made = []
-        lost = []
-        for modname, mod in list(sys.modules.items()):
-            ns = getattr(mod, "__dict__", None)
-            if not isinstance(ns, dict) or "$module" not in ns:
-                continue
-            scanned += 1
-            for name, value in list(ns.items()):
-                old = _old_arity_of(value)
-                if old is None:
-                    continue
-                population += 1
-                if getattr(value, "__module__", None) == ns.get("__name__"):
-                    rewriter_made.append((modname, name))
-                if old not in predicate_arities_for(value):
-                    lost.append((modname, name, old))
-        assert scanned >= 3, (
-            f"scanned {scanned} Clausal modules -- the fixture did not load")
-        assert population >= 1, "population is EMPTY -- the filter is stale"
-        assert rewriter_made == [], rewriter_made
-        assert not lost, lost
 
     def test_predicate_arities_agrees_with_is_predicate_name(self, mods):
         """Non-empty iff ``is_predicate_name`` -- same containers."""

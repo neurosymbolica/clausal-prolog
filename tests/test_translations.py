@@ -23,7 +23,6 @@ from clausal.logic.translations import (
     get_languages,
     _clear,
 )
-from clausal.logic.predicate import PredicateMeta
 from tests.predicate_api_support import term_ctor
 from clausal.logic.variables import Var, Trail, deref
 from clausal.logic.cells import chars, is_chars, chars_text

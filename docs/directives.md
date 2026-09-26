@@ -692,7 +692,7 @@ queens(N, QS) <- (
 )
 ```
 
-when `-backend(scryer)` is present, the import hook translates the entire file to Prolog and loads it into an embedded Scryer session. Exported predicates become bridge `PredicateMeta` classes that look like native clausal predicates to callers but execute on Scryer under the hood:
+when `-backend(scryer)` is present, the import hook translates the entire file to Prolog and loads it into an embedded Scryer session. Exported predicates become bridge predicates that look like native clausal predicates to callers but execute on Scryer under the hood:
 
 ```python
 from queens import queens

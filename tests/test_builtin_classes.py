@@ -17,7 +17,7 @@ from clausal.logic.builtins import (
     get_builtin_class,
 )
 from clausal.logic.cells import is_cell, cell_functor, cell_args, cell_arity
-from clausal.logic.predicate import PredicateMeta, is_term_instance
+from clausal.logic.predicate import is_term_instance
 from clausal.logic.variables import Var, deref
 
 
@@ -137,7 +137,7 @@ class TestSingleArityConstruction:
         3; the class era handed back the class itself, which is no term)."""
         # nv
         nl = get_builtin_class("nl")
-        assert not isinstance(nl, PredicateMeta)
+        assert not isinstance(nl, type)
         assert nl.arities == (0,)
         assert nl() == "nl"
 
@@ -203,7 +203,7 @@ class TestBuiltinObjectProtocol:
         from clausal.logic.builtins import BuiltinTerm
         append = get_builtin_class("append")
         assert isinstance(append, BuiltinTerm)
-        assert not isinstance(append, (type, PredicateMeta))
+        assert not isinstance(append, type)
 
     def test_functor_property(self):
         # nv

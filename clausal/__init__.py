@@ -22,7 +22,7 @@ from clausal.logic.builtins import (
     _BUILTIN_CLASSES,
 )
 from clausal.logic.predicate import (
-    PredicateMeta, make_predicate, MakePredicateRetiredError,
+    make_predicate, MakePredicateRetiredError,
 )
 from clausal.logic.exceptions import LogicException
 from clausal.repl import Solutions
@@ -41,7 +41,8 @@ if _os.environ.get('CLAUSAL_IPYTHON', '').lower() in ('1', 'true', 'yes', 'y'):
 # This lets users write: from clausal import append, between, in_, length, ...
 
 def _export_builtin_classes():
-    """Inject all builtin PredicateMeta classes into this module's namespace."""
+    """Inject every builtin's object (a ``BuiltinTerm``) into this module's
+    namespace (they were PredicateMeta classes until W4b-3 slice 3)."""
     import sys
     mod = sys.modules[__name__]
     # A10-F013: never overwrite the documented query API — the builtin call/N
@@ -81,7 +82,6 @@ __all__ = [
     "unify",
     "UnboundVarCoercionError",
     "structural_unify",
-    "PredicateMeta",
     "make_predicate",
     "MakePredicateRetiredError",
     "LogicException",

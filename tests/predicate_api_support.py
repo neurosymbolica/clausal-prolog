@@ -8,58 +8,49 @@
   ``PredicateMeta.__call__`` and a handle's ``$head`` both use, so the cell,
   the arity check and the construction errors are the ones the class gave.
 
-* :func:`class_arm_predicate` -- for a test of the CLASS MACHINERY itself
-  (``_bind_row``, detached rows, the class arm of an era-agnostic accessor,
-  ``_refuse_call_at``, ...).  That code is still in the engine until the class
-  is deleted (W4b-3 slice 7), which deletes these tests with it; until then
-  they keep covering it.  It builds the class exactly as ``make_predicate``
-  did (``PredicateMeta(name, (), {"_fields": ...})``).  Every caller is one
-  grep away: ``class_arm_predicate``.
+* :class:`RowPredicate` -- a HANDLE on a row of a named module Database, for
+  a test that compiled into a class only to read back the row (W4b-3 slice
+  7).  (``class_arm_predicate`` built a ``PredicateMeta`` class for the
+  class-machinery tests; the class and those tests were retired together
+  at W4b-3 slice 7.)
 """
 from __future__ import annotations
 
 from typing import Any
 
-from clausal.logic.predicate import PredicateMeta, build_term_cell
-
-
-def class_arm_predicate(name: str, fields) -> "PredicateMeta":
-    """A ``PredicateMeta`` class, as the retired ``make_predicate`` built it.
-    For tests of the class machinery only; see the module docstring."""
-    from clausal.logic.predicate import _source_site
-    cls = PredicateMeta(name, (), {"_fields": tuple(fields)})
-    # ``make_predicate`` lived in the clausal package, so the class's
-    # ``_registered_at`` (the "registered by:" line) skipped it and named its
-    # CALLER; this helper is outside the package, so name the caller here.
-    if "_registered_at" not in cls._fields:
-        cls._registered_at = _source_site(2)
-    return cls
+from clausal.logic.predicate import build_term_cell
 
 
 class TermCtor:
     """A term constructor for *name* with the signature *fields*: calling it
     builds the cell ``(name, slot, ...)`` (the ATOM *name* for a zero-field
-    one called with nothing).  Not a class, so no class arm ever sees it."""
+    one called with nothing) through ``build_term_cell`` -- the one home of
+    construction against a signature, so its arity/field errors are the ones
+    a module's clause heads raise.  It records where it was made, as the
+    rewriter's declaration record does, so a construction error carries a
+    "registered by:" site.  Not a class, so no class arm ever sees it."""
 
-    __slots__ = ("__name__", "_fields")
+    __slots__ = ("__name__", "_fields", "_site")
 
-    def __init__(self, name: str, fields) -> None:
+    def __init__(self, name: str, fields, _depth: int = 1) -> None:
+        from clausal.logic.predicate import _source_site
         self.__name__ = name
         self._fields = tuple(fields)
+        self._site = _source_site(_depth + 1)
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         if not self._fields and not args and not kwargs:
             return self.__name__
         return build_term_cell(self.__name__, self._fields, args,
-                               dict(kwargs))
+                               dict(kwargs), site=self._site)
 
     def __repr__(self) -> str:
         return f"TermCtor({self.__name__!r}, {self._fields!r})"
 
 
 def term_ctor(name: str, fields) -> TermCtor:
-    """See :class:`TermCtor`."""
-    return TermCtor(name, fields)
+    """See :class:`TermCtor` (its site is *term_ctor*'s caller)."""
+    return TermCtor(name, fields, _depth=2)
 
 
 def dispatch_solutions(dispatch, *args, trail=None) -> list:

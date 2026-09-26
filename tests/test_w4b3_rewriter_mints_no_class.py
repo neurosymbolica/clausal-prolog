@@ -27,7 +27,7 @@ import clausal.import_hook  # noqa: F401 -- installs the meta-path finder
 from clausal.import_hook import _load_module
 from clausal.logic import predicate as predicate_mod
 from clausal.logic.atoms import mangle
-from clausal.logic.predicate import ClausalTermConstructionError, PredicateMeta
+from clausal.logic.predicate import ClausalTermConstructionError
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
 
@@ -43,18 +43,27 @@ def _load(tmp_path, name, src):
     return _load_module(name, _write(tmp_path, f"{name}.clausal", src))
 
 
+def _metaclass_instances():
+    """Every live CLASS whose metaclass is a predicate metaclass -- one
+    named ``PredicateMeta`` (a class statement against a stale copy), or
+    the placeholder the C slot holds (``_NoPredicateClasses``).  Since W4b-3
+    slice 7 deleted the class this must stay empty: the census counts by
+    walking the live objects, because there is no ``__new__`` left to hook."""
+    import gc
+    placeholder = predicate_mod._NoPredicateClasses
+    return [o.__name__ for o in gc.get_objects()
+            if isinstance(o, type) and (isinstance(o, placeholder)
+                                        or type(o).__name__ == "PredicateMeta")]
+
+
 @pytest.fixture
-def class_census(monkeypatch):
-    """Every ``PredicateMeta`` class created while the fixture is live."""
-    created = []
-    original = PredicateMeta.__new__
-
-    def counting_new(mcs, name, bases, namespace, **kwargs):
-        created.append(name)
-        return original(mcs, name, bases, namespace, **kwargs)
-
-    monkeypatch.setattr(PredicateMeta, "__new__", counting_new)
-    return created
+def class_census():
+    """The predicate-metaclass instances created while the fixture is live
+    (a gc census before and after; see ``_metaclass_instances``)."""
+    before = set(_metaclass_instances())
+    created: list = []
+    yield created
+    created.extend(sorted(set(_metaclass_instances()) - before))
 
 
 def _answers(module, name, arity):
@@ -100,8 +109,20 @@ def test_loading_a_module_creates_no_predicate_class(tmp_path, monkeypatch,
     n = Var()
     assert [deref(n) for _ in call("count3", 0, n, module=mod)] == [3]
     assert mod.fib == mangle("s5_shapes", "fib")
-    assert class_census == [], (
-        f"the load created PredicateMeta classes: {class_census}")
+    assert _metaclass_instances() == [], (
+        f"predicate metaclass instances are alive: {_metaclass_instances()}")
+
+
+def test_the_metaclass_census_sees_an_instance_when_there_is_one():
+    """POSITIVE CONTROL for ``_metaclass_instances``: a class made with the
+    placeholder metaclass (the only predicate metaclass left) is counted,
+    so the zero above is a census of something that can be non-zero."""
+    placeholder = predicate_mod._NoPredicateClasses
+    probe = placeholder("s7_census_probe", (), {})
+    try:
+        assert "s7_census_probe" in _metaclass_instances()
+    finally:
+        del probe
 
 
 def test_the_rewriter_output_names_no_predicate_class(tmp_path):

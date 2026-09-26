@@ -52,7 +52,6 @@ from clausal.logic.builtins._helpers import _is_ground_py
 from clausal.logic.compiler.terms_to_ast import term_to_ast_expr
 from clausal.logic.predicate import is_zero_field_class
 from clausal.logic.solve import _templatize_query_goal
-from tests.predicate_api_support import class_arm_predicate
 
 
 def _mangled_self_atom() -> str:
@@ -69,42 +68,13 @@ def test_is_zero_field_class_false_for_mangled_atom():
     assert is_zero_field_class(_mangled_self_atom()) is False
 
 
-def test_is_zero_field_class_true_for_the_class_it_replaces():
-    P0 = class_arm_predicate("F3ProbeZeroArityA", [])
-    assert is_zero_field_class(P0) is True
-
-
 # ── _ground_value (via _templatize_query_goal): verbatim pass-through ──────
 
-class TestGroundValuePassesThroughVerbatimInBothEras:
-    def test_class_field_is_parameterized_with_its_plain_name(self):
-        """Superseded pin (operator ruling 2026-09-24, see
-        tests/test_self_denoting_predicate_atom_plain.py): a predicate
-        binding is parameterized as the PLAIN atom of its name, not as the
-        class object itself."""
-        P0 = class_arm_predicate("F3ProbeZeroArityB", [])
-        Goal = class_arm_predicate("F3ProbeGoalB", ["a"])
-        _, params = _templatize_query_goal(Goal(a=P0))
-        assert len(params) == 1
-        _var, value = params[0]
-        assert value == "F3ProbeZeroArityB" and type(value) is str
-
-    def test_mangled_atom_field_is_parameterized_with_the_string_itself(self):
-        mangled = _mangled_self_atom()
-        Goal = class_arm_predicate("F3ProbeGoalC", ["a"])
-        _, params = _templatize_query_goal(Goal(a=mangled))
-        assert len(params) == 1
-        _var, value = params[0]
-        assert value == mangled
-        assert isinstance(value, str)
 
 
 # ── _is_ground_py: identical boolean in both eras ───────────────────────────
 
 class TestIsGroundIdenticalInBothEras:
-    def test_class_is_ground(self):
-        P0 = class_arm_predicate("F3ProbeZeroArityD", [])
-        assert _is_ground_py(P0) is True
 
     def test_mangled_atom_is_ground(self):
         assert _is_ground_py(_mangled_self_atom()) is True
@@ -113,11 +83,6 @@ class TestIsGroundIdenticalInBothEras:
 # ── term_to_ast_expr: no exception either era, but spelling DIVERGES ───────
 
 class TestTermToAstExprNoCrashButSpellingDiverges:
-    def test_class_mints_the_plain_name(self):
-        P0 = class_arm_predicate("F3ProbeZeroArityE", [])
-        expr = term_to_ast_expr(P0, {})
-        assert isinstance(expr, ast.Constant)
-        assert expr.value == "F3ProbeZeroArityE"
 
     def test_mangled_atom_bakes_the_mangled_spelling_verbatim(self):
         """No exception (the brief's claim, confirmed) -- but the baked

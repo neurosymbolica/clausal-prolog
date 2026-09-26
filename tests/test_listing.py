@@ -16,7 +16,7 @@ from clausal.logic.trampoline import StepGenerator, solutions
 from clausal.logic.database import Clause
 from clausal.logic.exceptions import LogicException
 from clausal.terms import Compound
-from tests.predicate_api_support import RowPredicate, class_arm_predicate
+from tests.predicate_api_support import RowPredicate
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -393,20 +393,6 @@ class TestListingDivIndicatorArgument:
         assert "pt/2" in output
         assert "1 clause(s)" in output
 
-    def test_div_of_a_predicate_class_lists_the_predicate(self):
-        """The runtime shape ``Div(left=<PredicateMeta class>, right=int)``
-        -- what ``fib/2`` compiles to when ``fib`` is a declared predicate
-        in the calling module (probed and reproduced directly here without
-        compiling a module; the end-to-end compiled case is pinned by
-        ``test_div_end_to_end_matches_class_form_byte_identically``)."""
-        from clausal.terms import Div
-
-        db = _db_with_fact("qr", 1)
-        cls = class_arm_predicate("qr", ["x"])
-        dispatch = get_builtin_dispatch("listing", 1, db)
-        output = _run_listing(dispatch, Div(left=cls, right=1))
-        assert "qr/1" in output
-        assert "1 clause(s)" in output
 
     def test_div_end_to_end_matches_class_form_byte_identically(self):
         """Compile a real ``.clausal`` module and drive ``listing(fib/2)``

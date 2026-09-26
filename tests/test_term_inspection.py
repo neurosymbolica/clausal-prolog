@@ -14,7 +14,6 @@ from clausal.logic.database import Module
 from clausal.logic.solve import solve
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
 from clausal.terms import Compound, Call, LoadName, KWTerm, DictTerm, SegList, ConcreteSeg, VarSeg
-from tests.predicate_api_support import class_arm_predicate
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -834,16 +833,6 @@ class TestGlobalAtom:
         results = _global_atom_call(mint(name), cls)
         assert len(results) == 1
 
-    def test_guard_fails_when_atom_mismatches(self):
-        """(+name, +atom) — fails when atom is NOT the global class for that name."""
-        # nv
-        name = "_test_global_atom_guard_mismatch_xyz"
-        # Mint the global atom for 'name'.
-        _global_atom_call(mint(name), Var())
-        # Create a separate (non-global) PredicateMeta with the same name.
-        impostor = class_arm_predicate(name, [])
-        results = _global_atom_call(mint(name), impostor)
-        assert results == []
 
     def test_reverse_lookup_returns_name(self):
         """(-name, +atom) — yields cls.__name__ when cls is a global atom."""
@@ -859,27 +848,17 @@ class TestGlobalAtom:
         # The NAME position answers an ATOM (spec §6.4).
         assert results[0][0] == mint(name)
 
-    def test_reverse_lookup_fails_for_non_global_class(self):
-        """(-name, +atom) — fails if atom is not the global class registered for its name."""
-        # nv
-        # A PredicateMeta NOT placed into predicate_builtins.
-        local_only = class_arm_predicate("_test_global_atom_local_only_xyz", [])
-        n_out = Var()
-        results = _global_atom_call(n_out, local_only)
-        assert results == []
 
     def test_enumerate_yields_minted_atoms(self):
         """(-name, -atom) — enumerates global atoms; minted one appears.
 
         THE FLIP (spec §5.1, §6.4): a registered atom is the arity-0 CELL
         whose slot 0 is the pool KEY, and the enumerated Name is that atom.
-        A legacy 0-arity PredicateMeta (``make_predicate(n, [])``'s shape) is
-        still accepted by the reader if anything installs one manually, so
-        the enumerate assertion below allows either shape.
+        Every yielded value is the atom (the reader also accepted a legacy
+        0-arity PredicateMeta class until W4b-3 slice 7 deleted the class).
         """
         # nv
         from clausal.import_hook import predicate_builtins
-        from clausal.logic.predicate import PredicateMeta
         name = "_test_global_atom_enumerate_xyz"
         # Mint to ensure presence.
         _global_atom_call(mint(name), Var())
@@ -891,15 +870,10 @@ class TestGlobalAtom:
         results = _global_atom_call(n_out, a_out)
         # Our minted entry must appear.
         assert (mint(name), val) in results
-        # Every yielded pair is (atom, atom-of-the-same-spelling) or, for
-        # backward compatibility, (atom, 0-arity PredicateMeta).
+        # Every yielded pair is (atom, atom-of-the-same-spelling).
         for n, v in results:
             assert is_atom(n)
-            if is_atom(v):
-                assert v == n
-            else:
-                assert isinstance(v, PredicateMeta)
-                assert v._fields == ()
+            assert is_atom(v) and v == n
 
     def test_round_trip(self):
         """Mint with (+name, -atom); reverse-lookup with (-name, +atom) returns name."""

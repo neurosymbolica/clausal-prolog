@@ -28,7 +28,6 @@ from clausal.logic.predicate import (
     mint_predicate_handle, predicate_arities_for, predicate_binding_name,
     resolve_predicate_row,
 )
-from tests.predicate_api_support import class_arm_predicate
 
 
 def _load_popped(tmp_path, name, source):
@@ -85,16 +84,6 @@ def test_a_handle_to_another_module_is_not_captured_by_the_caller(tmp_path):
         sys.modules.pop("q0_there", None)
 
 
-def test_a_handle_is_minted_from_the_database(tmp_path):
-    db = _load_popped(tmp_path, "q0_mint", "q0_m(1),\n")
-    handle = mint_predicate_handle(db, "q0_m")
-    assert demangle(handle) == ("q0_mint", "q0_m")
-    # The shape X3 forbids: a make_predicate class names its MINTER.
-    cls = class_arm_predicate("q0_m", ["x"])
-    wrong = mangle(cls.__module__, "q0_m")
-    assert resolve_predicate_row(wrong, arity=1, db=db) is None
-
-
 def test_a_database_with_no_module_cannot_mint():
     with pytest.raises(ValueError, match="belongs to no module"):
         mint_predicate_handle(Database(), "q0_orphan")
@@ -110,29 +99,6 @@ def test_a_local_handle_to_an_undefined_functor_answers_nothing(tmp_path):
     assert not is_declared_predicate_name(handle, db=db)
     assert predicate_binding_name(handle, db=db) is None
     assert predicate_arities_for(handle, db=db) == set()
-
-
-def test_the_class_arm_uses_the_hint_too(tmp_path):
-    """A class whose owner was popped: with the hint its owner's defined
-    arities are found, exactly as the mangled arm finds them."""
-    path = tmp_path / "q0_cls.clausal"
-    path.write_text("-dynamic(q0_two/1, q0_two/2)\n\nq0_other(1),\n")
-    sys.modules.pop("q0_cls", None)
-    module = _load_module("q0_cls", str(path))
-    sys.modules.pop("q0_cls", None)
-    _HANDLE_OWNERS.pop("q0_cls", None)      # isolate the hint (see above)
-    db = module.__dict__["$module"].db
-    handle = mint_predicate_handle(db, "q0_two")
-    # After the W4b-2d flip the load binds the HANDLE; the class arm is still
-    # engine code, so its class -- one the popped module owns -- is built by
-    # hand, exactly the shape the load used to bind.
-    assert module.__dict__["q0_two"] == handle
-    cls = class_arm_predicate("q0_two", ["x"])
-    cls.__module__ = "q0_cls"
-    assert cls.__module__ == "q0_cls"
-    assert predicate_arities_for(handle, db=db) == {1, 2}
-    assert predicate_arities_for(cls, db=db) == {1, 2}
-    assert predicate_arities_for(cls) == {len(cls._fields)}   # popped, no hint
 
 
 def test_a_string_named_database_does_not_capture_a_loaded_module_s_handle(

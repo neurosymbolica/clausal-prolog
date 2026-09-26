@@ -32,7 +32,6 @@ from clausal.pythonic_ast.nodes import (
     IfExpr, Lambda, StarUnpack, TupleLiteral,
 )
 from clausal.logic.database import Clause, Database
-from clausal.logic.predicate import PredicateMeta
 from clausal.terms import PyThunk
 from clausal.pythonic_ast.nodes import Keyword as KWNode
 
@@ -73,7 +72,7 @@ def _dispatch_call_iter(
 
     Bridges simple-mode callers to trampoline-mode dispatch functions.
     ``fname`` is resolved from the compiled function's globals, where it
-    refers to either a PredicateMeta class or a _DbDispatchAdapter shim.
+    refers to a predicate handle or a _DbDispatchAdapter shim.
 
     Phase 7: if the predicate is locked (its dispatch fn pre-cached in
     ``base_globals`` under ``_disp_Foo_N``), emits that direct name
@@ -85,7 +84,7 @@ def _dispatch_call_iter(
         dispatch_expr: ast.expr = _name(dk)
     else:
         # The arity is the call site's, not the callee's: passing it is what
-        # lets a PredicateMeta refuse a call no clause could match, instead of
+        # lets the callee refuse a call no clause could match, instead of
         # handing back a dispatch function that runs out of arguments and
         # blames `trail`.  It goes through $dispatch_at rather than straight
         # into ``fname._get_dispatch(N)`` because ``fname`` may be a foreign

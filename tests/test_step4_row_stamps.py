@@ -32,7 +32,7 @@ import pytest
 import clausal.import_hook  # noqa: F401 — installs the meta-path finder
 from clausal.import_hook import _load_module
 from clausal.logic.atoms import mint, mangle
-from clausal.logic.predicate import PredicateMeta, module_source_path
+from clausal.logic.predicate import module_source_path
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
 
@@ -63,7 +63,7 @@ def test_a_predicate_whose_name_is_bound_to_an_atom_is_owned_by_its_load():
     module = _load_module("tests.fixtures.t5b_local_pred",
                           os.path.join(FIXTURES, "t5b_local_pred.clausal"))
     lm = module.__dict__["$module"]
-    assert not isinstance(module.__dict__.get("t5b_slot"), PredicateMeta), (
+    assert not isinstance(module.__dict__.get("t5b_slot"), type), (
         "the fixture no longer exercises a non-class binding")
     row = lm.db.row("t5b_slot", 2)
     assert row.clauses, "the local definition wrote no clauses"
@@ -220,7 +220,7 @@ def test_a_name_bound_to_an_imported_atom_still_gets_its_signature(
     signature at all."""
     module = _load_module("tests.fixtures.t5b_local_pred",
                           os.path.join(FIXTURES, "t5b_local_pred.clausal"))
-    assert not isinstance(module.__dict__.get("t5b_slot"), PredicateMeta)
+    assert not isinstance(module.__dict__.get("t5b_slot"), type)
     lm = module.__dict__["$module"]
     assert lm.db.row("t5b_slot", 2).signature == ("arg_0", "arg_1")
     assert _signature_3(lm, "t5b_slot", 2) == ("arg_0", "arg_1")
@@ -234,7 +234,7 @@ def test_a_name_bound_to_an_imported_atom_still_gets_its_signature(
 
         s4rs_aslot(7, 1),
     """)
-    assert not isinstance(owned.__dict__.get("s4rs_aslot"), PredicateMeta)
+    assert not isinstance(owned.__dict__.get("s4rs_aslot"), type)
     assert owned.__dict__["$module"].db.row("s4rs_aslot", 2).signature == (
         "arg_0", "arg_1")
 

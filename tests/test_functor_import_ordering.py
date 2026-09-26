@@ -34,7 +34,7 @@ import pytest
 from clausal.logic.atoms import mint
 import clausal.import_hook  # noqa: F401 — installs the meta-path finder
 from clausal.import_hook import _load_module
-from clausal.logic.predicate import ClausalTermConstructionError, PredicateMeta
+from clausal.logic.predicate import ClausalTermConstructionError
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref, walk
 from clausal.templating.term_rewriting import EmbedTransformer
