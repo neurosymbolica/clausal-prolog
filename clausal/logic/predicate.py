@@ -914,6 +914,68 @@ def localize_owner_functor(db: Any, functor: str, arity: int):
     return None
 
 
+def _atom_goal_message(name: str, arity: int, db: Any) -> str:
+    """The message for an ATOM called as a goal at *arity*.
+
+    The ISO term is ``existence_error(procedure, name/arity)`` whatever this
+    says; this is only its message.  When *name*/*arity* is declared as DATA
+    (ruling R6/R6b: a field-carrying entry declares a term constructor) the
+    message names the declaration by its SOURCE -- this file's -module or
+    -private entry, or the OWNER module's export entry for an import (under
+    the owner's spelling: an aliased import calls the owner's atom) -- and
+    the ``name/arity`` spelling that declares a procedure instead.  *db* may
+    be a name-only shim or ``None``; anything that cannot answer gets the
+    general message."""
+    origins_of = getattr(db, "declaration_origins", None)
+    origins = origins_of(name, arity) if origins_of is not None else []
+    pi = f"{name}/{arity}"
+
+    def _entry(spelling, fields):
+        return f"{spelling}({', '.join(str(f) for f in fields)})"
+
+    if len(origins) == 1:
+        kind, module, spelling, fields = origins[0]
+        entry = _entry(spelling, fields)
+        where = f" in {module}" if module else ""
+        if kind == "module":
+            return (
+                f"{pi} is declared as DATA, not as a procedure: the -module "
+                f"export entry {entry}{where} declares a term constructor, "
+                f"and it has no clauses to call.  To export a procedure with "
+                f"no clauses, write {pi} in that export list instead; to "
+                f"call it here, define its clauses")
+        if kind == "private":
+            return (
+                f"{pi} is declared as DATA, not as a procedure: the -private "
+                f"entry {entry}{where} declares a term constructor, and it "
+                f"has no clauses to call.  To declare a procedure, write "
+                f"{pi} in that -private list instead; to call it here, "
+                f"define its clauses")
+        return (
+            f"{pi} is declared as DATA, not as a procedure: it is imported "
+            f"from {module}, whose export entry {entry} declares a term "
+            f"constructor, and it has no clauses to call.  For {module} to "
+            f"export a procedure, its export list writes "
+            f"{spelling}/{arity} instead, and its clauses are defined there "
+            f"or asserted with -dynamic")
+    if origins:
+        owners = "; ".join(f"{module} (export entry {_entry(spelling, fields)})"
+                           for _k, module, spelling, fields in origins)
+        return (
+            f"{pi} is declared as DATA, not as a procedure: it is imported, "
+            f"under aliases of the same spelling, from {owners}, and a call "
+            f"through any of them reaches {pi}, which has no clauses.  For an "
+            f"owner to export a procedure, its export list writes {pi} "
+            f"instead")
+    declared_kind = getattr(db, "declared_kind", None)
+    if declared_kind is not None and declared_kind(name, arity) == "data":
+        return (f"{pi} is declared as DATA (a term constructor), not as a "
+                f"procedure, and it has no clauses to call")
+    return (f"atom {name!r} is not callable at arity {arity} "
+            f"(resolved via a data reference; define or import the "
+            f"predicate, or call it by its local name)")
+
+
 def _dispatch_at(obj: Any, arity: int, db: Any = None) -> Callable:
     """Resolve *obj*'s dispatch function for a call of *arity* arguments.
 
@@ -1081,9 +1143,7 @@ def _dispatch_at(obj: Any, arity: int, db: Any = None) -> Callable:
         raise LogicException(
             existence_error(
                 "procedure", indicator,
-                f"atom {name!r} is not callable at arity {arity} "
-                f"(resolved via a data reference; define or import the "
-                f"predicate, or call it by its local name)",
+                _atom_goal_message(name, arity, db),
             )
         )
     getter = getattr(obj, "_get_dispatch", None)

@@ -165,18 +165,39 @@ def _render_entry(entry):
 def _declared_exports(module_items):
     """``(entries, saw_module_directive)`` from every ``-module(...)``.
 
-    ``entries`` is a list of ``(bare_name, rendered)`` in declaration order,
-    deduplicated on the bare name.
+    ``entries`` is a list of ``(bare_name, rendered)``, deduplicated on the
+    bare name.  Per ``-module`` directive, in directive order: its ISO
+    ``name/arity`` entries first, then its field-carrying and atom entries,
+    each group in source order.  (The ``name/arity`` entries are not in the
+    declaration's ``exports``, so their positions relative to the others are
+    not recorded; see below.)
     """
-    from clausal.pythonic_ast.nodes import ModuleDeclaration
+    from clausal.pythonic_ast.nodes import (
+        Directive, ModuleDeclaration, PrivateDeclaration,
+    )
 
     entries, seen, saw = [], set(), False
+    # An ISO ``name/arity`` entry is not in the declaration's ``exports``: the
+    # rewriter records it as a ``predicate_export`` directive item, appended
+    # while it walks the list and so just BEFORE the -module/-private item
+    # it belongs to (``term_rewriting._declare_predicate_export``).  Held
+    # here until that item says which list it was in: a -module entry is an
+    # export, a -private one is not.
+    pending = []
     for item in module_items or ():
+        if isinstance(item, Directive) and item.name == "predicate_export":
+            pending.extend((functor, f"{functor}/{arity}")
+                           for functor, arity, *_ in item.specs)
+            continue
+        if isinstance(item, PrivateDeclaration):
+            pending = []
+            continue
         if not isinstance(item, ModuleDeclaration):
             continue
         saw = True
-        for export in item.exports:
-            rendered = _render_entry(export)
+        rendered_all = pending + [_render_entry(e) for e in item.exports]
+        pending = []
+        for rendered in rendered_all:
             if rendered is None or rendered[0] in seen:
                 continue
             seen.add(rendered[0])

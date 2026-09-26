@@ -2190,9 +2190,17 @@ static PyObject *KWTerm_type = NULL;
 
 /*
  * init_term_inspection_cache() — the interned attribute names and the
- * ``dataclasses.fields`` reference the term-inspection helpers read
- * (``c_is_term_instance``, ``py_term_field_names``, ``c_is_ground``'s
- * Compound arm).  Called ONCE from PyInit__variables.
+ * ``dataclasses.fields`` reference the term-inspection helpers read.  Called
+ * ONCE from PyInit__variables.  The readers:
+ *
+ *   str_dataclass_fields  c_is_term_instance
+ *   dc_fields_func        py_term_field_names
+ *   str_name              py_term_field_names
+ *   str_functor           the Compound arms of c_is_ground, c_copy_term and
+ *                         c_collect_vars; c_copy_term's KWTerm arm;
+ *                         py_functor_name (Compound and KWTerm)
+ *   str_args              the Compound arms of c_is_ground, c_copy_term and
+ *                         c_collect_vars; py_arity, py_nth_arg, py_args_list
  *
  * This used to be the second job of ``_register_predicate_meta(cls)``, which
  * predicate.py called at import time (Fix #5).  Anything that inspected a
