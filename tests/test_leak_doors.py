@@ -143,6 +143,13 @@ class TestEveryContainerIsWalked:
             pass
         out = strip_atom_tags(L([atom("a")]))
         assert type(out) is L and type(out[0]) is str
+        # a constructor that reads a pair list differently must not be used
+        c = collections.Counter({"k": atom("a")})
+        out = strip_atom_tags(c)
+        assert type(out) is collections.Counter and out == {"k": "a"} and type(out["k"]) is str
+        dd = collections.defaultdict(list, {"k": atom("a")})
+        out = strip_atom_tags(dd)
+        assert type(out) is collections.defaultdict and out.default_factory is list and out["k"] == "a"
 
     def test_to_python_converts_through_every_shape(self):
         """No drift: the same list of shapes converts, so a container the
@@ -220,6 +227,20 @@ class TestCyclicTerms:
         inner = []
         c = Compound("f", (inner,)); inner.append(c)     # a Compound whose arg holds it
         assert _python_entry(("=", Var(), c))[2] is c
+
+    def test_a_tag_beside_an_untagged_cycle_is_fine(self):
+        """Only a subtree that HOLDS a tag is rebuilt; an unrelated cyclic
+        term beside it (a cyclic answer from unify without the occurs check)
+        is handed back by identity, not entered (roborev 257)."""
+        from clausal.logic.solve import _python_entry
+        cyc = ["c"]; cyc.append(cyc)
+        goal = _python_entry(("=", Var(), (atom("a"), cyc)))
+        assert type(goal[2][0]) is str and goal[2][0] == "a"
+        assert goal[2][1] is cyc
+        # the same with the untagged cycle as a sibling argument, and deep
+        big = [("row", i) for i in range(50)]
+        goal = _python_entry(("f", cyc, big, [atom("b")]))
+        assert goal[1] is cyc and goal[2] is big and goal[3] == ["b"] and type(goal[3][0]) is str
 
     def test_a_tagged_cycle_is_refused_loudly(self):
         """The rebuild after the scan cannot reproduce an immutable cycle;

@@ -32,6 +32,8 @@ need an atom back mint one.
 
 from __future__ import annotations
 
+import copy
+
 from clausal.logic.atoms import (
     is_atom as _term_is_atom, spelling as _atom_spelling, atom, as_dict_key as _as_dict_key)
 from clausal.logic.cells import chars, is_chars, chars_text, TUPLE_TAG  # stage 1: the chars carrier
@@ -241,10 +243,12 @@ def map_term(val, fn):
         out = [fn(v) for v in val]
         if all(a is b for a, b in zip(out, val)):
             return val
-        try:
-            return t(out)
-        except TypeError:
-            return out
+        # a shallow copy keeps the instance's own state; list's slot
+        # assignment bypasses a subclass constructor or __setitem__ whose
+        # one-argument form means something else (roborev 257)
+        new = copy.copy(val)
+        list.__setitem__(new, slice(None), out)
+        return new
     if isinstance(val, DictTerm):
         items = list(val.items())
         out = [(fn(k), fn(v)) for k, v in items]
@@ -258,10 +262,13 @@ def map_term(val, fn):
             return val
         if t is dict:
             return dict(out)
-        try:
-            return t(out)
-        except TypeError:
-            return dict(out)
+        # a shallow copy keeps default_factory and any other instance state;
+        # dict's own update bypasses a subclass whose constructor reads a
+        # pair list differently (Counter counts the pairs; roborev 257)
+        new = copy.copy(val)
+        dict.clear(new)
+        dict.update(new, out)
+        return new
     if isinstance(val, Compound):
         functor = fn(val.functor)
         args = tuple(fn(a) for a in val.args)
@@ -362,35 +369,78 @@ def strip_atom_tags(val):
     caller's goal/arguments at ``solve``/``call`` (and so ``once``, ``query``,
     ``each``); both call this (dumb seam step (d), 2026-09-26).  Returns the
     SAME OBJECT when nothing needed changing; callers on a hot path run
-    :func:`has_atom_tag` first, so the recursive rebuild only ever runs on
-    a value that holds a tag.  A tagged CYCLIC container is refused with a
-    ``TypeError`` (it cannot be rebuilt); an untagged cycle never reaches
-    the rebuild."""
-    return _strip(val, set())
+    :func:`has_atom_tag` first, so the rebuild only ever runs on a value
+    that holds a tag.
 
-
-def _strip(val, active: set):
+    ONLY A SUBTREE THAT HOLDS A TAG IS REBUILT (roborev 257): one linear,
+    cycle-safe pass (:func:`_tag_reachability`) marks every container from
+    which a tag is reachable; every other subtree -- an unrelated cyclic
+    answer beside a tag, a big untagged list -- is handed back by identity
+    without being entered.  A CYCLE that itself holds a tag cannot be
+    rebuilt (an immutable cycle has no first element to build) and is
+    refused with a ``TypeError``."""
     if type(val) is atom:
         return str.__str__(val)
-    if isinstance(val, _Node):
+    reach = _tag_reachability(val)
+    if not reach:
         return val
-    children = term_children(val)
-    if not children:
-        return val
+    return _strip(val, reach, set())
+
+
+def _tag_reachability(root) -> dict:
+    """``{id(container): container}`` for every container reachable from
+    *root* from which an ``atom`` instance is reachable.  Linear: one
+    iterative DFS records containers, their parent links and which hold a
+    tag directly; one reverse BFS from those propagates "holds a tag" to
+    every ancestor.  Cycle-safe by construction (ids, references kept)."""
+    nodes: dict = {}          # id -> container (kept alive for the pass)
+    parents: dict = {}        # id -> [parent ids]
+    direct: list = []         # ids of containers with a tag as a direct child
+    stack = [(root, None)]
+    while stack:
+        v, parent = stack.pop()
+        if type(v) is atom:
+            if parent is not None:
+                direct.append(parent)
+            continue
+        if isinstance(v, _Node):
+            continue
+        children = term_children(v)
+        if not children:
+            continue
+        key = id(v)
+        if parent is not None:
+            parents.setdefault(key, []).append(parent)
+        if key in nodes:
+            continue
+        nodes[key] = v
+        for c in children:
+            stack.append((c, key))
+    reach: dict = {}
+    todo = list(direct)
+    while todo:
+        key = todo.pop()
+        if key in reach:
+            continue
+        reach[key] = nodes[key]
+        todo.extend(parents.get(key, ()))
+    return reach
+
+
+def _strip(val, reach: dict, active: set):
+    if type(val) is atom:
+        return str.__str__(val)
     key = id(val)
+    if key not in reach:
+        return val                    # no tag below: by identity, not entered
     if key in active:
-        # A CYCLIC container that also holds a tag cannot be rebuilt
-        # (an immutable cycle has no first element to build), and a
-        # cyclic goal with a boundary tag inside is not a term anyone
-        # means: refuse it loudly rather than recurse until the stack
-        # gives out (roborev 254).
         raise TypeError(
             "the goal holds a boundary `atom` inside a CYCLIC term; a cyclic "
             "term cannot be rebuilt -- build it from plain str atoms (the atom "
             "IS the str) or break the cycle")
     active.add(key)
     try:
-        return map_term(val, lambda v: _strip(v, active))
+        return map_term(val, lambda v: _strip(v, reach, active))
     finally:
         active.discard(key)
 

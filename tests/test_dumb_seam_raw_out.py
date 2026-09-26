@@ -314,17 +314,23 @@ def test_the_constant_registry_dies_with_the_code_object():
     code = compile("x = (('k', 1), ('k', 2))", "<t>", "exec")
     consts = [c for c in code.co_consts if type(c) is tuple]
     outer = consts[0]
+    ids = [id(outer), id(outer[0]), id(outer[1])]
     cells.register_compiled_constants(code)
+    assert all(i in cells._COMPILED_GROUND for i in ids)
     assert cells.is_compiled_constant(outer) and cells.is_compiled_constant(outer[0])
-    n_before = len(cells._COMPILED_GROUND)
     del code; gc.collect()
     assert not cells.is_compiled_constant(outer), "the code is gone: no certificate"
-    assert len(cells._COMPILED_GROUND) == n_before - 3, "its three entries are gone too"
+    assert not any(i in cells._COMPILED_GROUND for i in ids), "and its entries are gone too"
 
 
 def test_a_recompiling_dynamic_predicate_does_not_grow_the_registry():
     """The worst case roborev 252 named: assertz recompiles the predicate
-    every time, and every old code object's constants must go with it."""
+    every time, and every old code object's constants must go with it.
+    DISCRIMINATING (roborev 257): the growth over two EQUAL intervals is the
+    same for linear growth and ~1.7x for quadratic (a*i^2: 30000a vs 50000a),
+    the total is bounded by the live clause count, and the table must have
+    grown at all.  Mutation-checked: the pin-everything registration fails
+    the ratio (1.66) and the absolute bound (~30k entries vs 302 clauses)."""
     import gc
     from clausal.logic import cells
     from clausal.logic.solve import call
@@ -333,12 +339,15 @@ def test_a_recompiling_dynamic_predicate_does_not_grow_the_registry():
         "d(0, pt(a, 0)),\n"
     ))
     mod = m.__dict__["$module"]
-    sizes = []
+    gc.collect()
+    sizes = [len(cells._COMPILED_GROUND)]
     for i in range(1, 301):
         for _ in call("assertz", ("d", i, ("pt", "a", i)), module=mod):
             pass
         if i % 100 == 0:
             gc.collect()
             sizes.append(len(cells._COMPILED_GROUND))
-    # linear in the LIVE program at most, never quadratic in the assert count
-    assert sizes[-1] - sizes[0] < 3 * (sizes[1] - sizes[0]) + 50, sizes
+    d1, d2 = sizes[2] - sizes[1], sizes[3] - sizes[2]
+    assert d1 > 0, sizes                                  # not vacuous: the facts register constants
+    assert d2 <= 1.2 * d1 + 10, (d1, d2, sizes)            # linear: equal intervals, equal growth
+    assert sizes[3] - sizes[0] <= 3 * 301 + 50, sizes     # bounded by the LIVE program (2/clause measured)
