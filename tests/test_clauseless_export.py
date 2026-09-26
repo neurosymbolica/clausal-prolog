@@ -192,3 +192,36 @@ def test_an_undeclared_atom_keeps_the_general_message(load):
     _, message = _error(mod, "foo")
     assert "is declared as DATA" not in message
     assert "is not callable at arity 0" in message
+
+
+# ── import diagnostics ───────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("src", [FIELDED, ISO_PI], ids=["fielded", "iso-pi"])
+def test_a_bad_import_lists_the_export_whichever_spelling_declared_it(
+        load, src):
+    """A failed ``-import_from`` names what the module exports.  For the ISO
+    ``edge/2`` spelling it used to say the module had "an EMPTY -module(...)
+    export list": the ``name/arity`` entries are recorded as
+    ``predicate_export`` directive items, which the diagnostic did not read."""
+    load("cle_owner", src)
+    with pytest.raises(ImportError) as info:
+        load("cle_imp_bad", "-import_from(cle_owner, [edge, nope])\n"
+             "-module(cle_imp_bad, [z(X)])\nz(1),\n")
+    message = str(info.value)
+    assert "cannot import name 'nope'" in message
+    assert "EMPTY" not in message
+    assert "cle_owner exports: edge/2" in message
+
+
+def test_a_private_name_arity_entry_is_not_listed_as_an_export(load):
+    """``-private([helper/1])`` is not public API: the diagnostic must not
+    list it under "exports"."""
+    load("cle_priv", "-module(cle_priv, [edge/2])\n-private([helper/1])\n")
+    with pytest.raises(ImportError) as info:
+        load("cle_priv_imp", "-import_from(cle_priv, [nope])\n"
+             "-module(cle_priv_imp, [z(X)])\nz(1),\n")
+    message = str(info.value)
+    assert "cle_priv exports: edge/2" in message
+    exports_line = next(l for l in message.splitlines() if "exports:" in l)
+    assert "helper" not in exports_line
