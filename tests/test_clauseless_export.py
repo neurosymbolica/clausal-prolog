@@ -328,26 +328,27 @@ def test_a_second_module_directive_after_a_private_list_is_attributed_to_it(
 # ── an origin speaks only for a key that is STILL data (roborev 200) ─────────
 
 
-def test_an_origin_is_ignored_once_the_key_has_a_row():
+@pytest.mark.parametrize("local_key", ["edge", "e"], ids=["plain", "aliased"])
+def test_an_origin_is_ignored_once_the_key_has_a_row(local_key):
     """REPRODUCED 2026-09-26 through a load: an importer that imported the
     DATA ``edge`` and ALSO declared ``-dynamic(edge/2)`` had a ROW for
     ``edge/2``, but its binding was still the owner's atom, so a call reached
     the atom arm and the message said "declared as DATA ... imported from
     cle_owner".  That load is now REFUSED (the import/local clash ruling,
     2026-09-26; see the next test), so the guard is pinned here on the
-    Database directly: a recorded origin speaks only while the key is still
-    DATA."""
+    Database directly, once per lookup route: a recorded origin speaks only
+    while the key is still DATA.  ``edge`` is the direct key; ``e`` is an
+    aliased import (``alias(edge, e)``), found through the owner's
+    spelling."""
     from clausal.logic.database import Database
     from clausal.logic.predicate import _atom_goal_message
     db = Database(module_dict={"__name__": "cle_dynimp"})
-    db.declare_functor("edge", ("A", "B"),
+    db.declare_functor(local_key, ("A", "B"),
                        origin=("import", "cle_owner", "edge"))
-    db.declare_functor("e", ("A", "B"), origin=("import", "cle_owner", "edge"))
     assert db.declaration_origins("edge", 2)          # positive control
-    db.mark_dynamic("edge", 2)
-    db.mark_dynamic("e", 2)
-    assert db.declared_kind("edge", 2) == "predicate"
-    assert db.declared_kind("e", 2) == "predicate"
+    assert "declared as DATA" in _atom_goal_message("edge", 2, db)
+    db.mark_dynamic(local_key, 2)
+    assert db.declared_kind(local_key, 2) == "predicate"
     assert db.declaration_origins("edge", 2) == []
     assert "declared as DATA" not in _atom_goal_message("edge", 2, db)
 

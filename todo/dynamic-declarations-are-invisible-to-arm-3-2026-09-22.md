@@ -1,6 +1,8 @@
 # `-dynamic`/arity-only declarations are invisible to `field_names_for` arm 3
 
-**Found by:** the W4b-1 completeness census (`tools/w4b1_census`), fix round 1,
+**Found by:** the W4b-1 completeness census (`tools/w4b1_census`, deleted
+2026-09-26 with the PredicateMeta class it measured; in the git history at
+8b8135f0^), fix round 1,
 2026-09-22. Not a defect in the census — the census did exactly its job by
 surfacing it. Do not fix here; W4b-2 owns it.
 
@@ -47,8 +49,20 @@ Contrast with a **field-named** clause-free declaration —
 (`db.declared_fields_by_name('zonkish') == ('X', 'Y')`), just not
 reachable from `zonkish`'s own class (`cls._row` there is a *detached*
 private row, not the real module's). That case IS a probe-derivation
-artifact, genuinely distinct from this one — see
-`tools/w4b1_census/README.md`'s residue section for both.
+artifact, genuinely distinct from this one.  The census README's residue
+section (deleted with the tool; `git show 8b8135f0^:tools/w4b1_census/README.md`)
+told the two apart, and its point is carried here:
+
+- **This todo (a real declaredness gap).** `-dynamic(functor/arity)` and a
+  bare `name/arity` export entry declare an ARITY, never field names.
+  Measured on the real module db for `-dynamic(dfact/3)` and
+  `-module(gate_vocab, [gv_free/1, ...])`: `db.signature_for` and
+  `db.declared_fields_by_name` both `None`, while the class answered
+  synthesized `('arg_0', ...)`.  No signature was registered on any db.
+- **Not this todo (a probe artifact).** A field-NAMED clause-free
+  declaration such as `-private([zonkish(X, Y)])` DOES register its names
+  on the compiling module's db; the census read `None` only because it
+  derived the db from the class's detached private row.
 
 ## Why it matters
 

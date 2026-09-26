@@ -5,7 +5,10 @@ The refusal (``compiler_v2._refuse_import_local_clashes``, ruling
 indicator AND declares it locally where the local declaration would be
 silently unreachable or ignored: any local procedure declaration (clauses,
 -dynamic, -discontiguous, -table) against a DATA import, and a local
--dynamic against a STATIC procedure import (``compiler_v2._import_clash``).
+-dynamic against a STATIC procedure import (``compiler_v2._import_clash``,
+which has the full table, including -shallow, -meta_predicate and -table).
+The census calls the engine's own ``_import_local_clashes``: one copy of
+the rule.
 Clauses against a procedure import are the load gate's older refusal and
 are not counted here.  This
 loads every ``.clausal`` / ``.seam`` / ``.pl`` file under the given roots, each
@@ -18,8 +21,9 @@ Usage::
     PYTHONPATH=<engine tree> <engine tree>/venv/bin/python \\
         tools/import_local_clash_census/census.py [--jobs N] [--json OUT] ROOT...
 
-It prints the SIZE of every population: files found, files whose load
-reached the check (the denominator), files hit, and files that never
+It prints the SIZE of every population: files found, files whose OWN module
+reached the check (the denominator -- per module, not per subprocess, since
+loading a file also loads what it imports), files hit, and files that never
 reached it (not evaluated -- a load error before step 3e, or not a module).
 ``--self-test`` runs the controls: a generated DATA-import clash that must be
 reported as a hit, and the allowed assert-through idiom (a local -dynamic of
@@ -47,36 +51,36 @@ SKIP_DIRS = {"venv", ".venv", "build", "dist", ".git", "__pycache__",
              "node_modules", "site-packages"}
 
 _CHILD = r'''
-import json, sys, traceback
+import json, os, sys
 path, roots = sys.argv[1], sys.argv[2:]
-import os
 sys.path[:0] = [os.path.dirname(path)] + roots
-out = {"path": path, "reached": False, "clashes": [], "error": None}
+stem = os.path.splitext(os.path.basename(path))[0]
+out = {"path": path, "module": stem, "reached": False, "clashes": [],
+       "error": None}
 try:
     import clausal.logic.compiler_v2 as cv2
-    real = cv2._refuse_import_local_clashes
     def report(module_items, predicate_nodes, module_name):
+        # Per MODULE: loading the file under test also loads what it
+        # imports, and an owner reaching the check says nothing about the
+        # file itself.
+        if module_name != stem:
+            return
         out["reached"] = True
-        imported = cv2._imported_indicators(module_items)
-        local = cv2._local_procedure_declarations(module_items, predicate_nodes)
-        for key in sorted(set(imported) & set(local)):
-            text, owner, kind = imported[key]
-            declaration = cv2._import_clash(kind, local[key])
-            if declaration is None:
-                continue
+        for name, arity, declaration, text, owner, kind in \
+                cv2._import_local_clashes(module_items, predicate_nodes):
             out["clashes"].append({"module": module_name,
-                                   "indicator": f"{key[0]}/{key[1]}",
+                                   "indicator": f"{name}/{arity}",
                                    "local": declaration, "import": text,
                                    "kind": kind})
     cv2._refuse_import_local_clashes = report
     from clausal.import_hook import _load_module, _load_prolog_module
-    stem = os.path.splitext(os.path.basename(path))[0]
     if path.endswith(".pl"):
         _load_prolog_module(stem, path)
     else:
         _load_module(stem, path)
 except BaseException as exc:  # noqa: BLE001 -- recorded, never fatal
-    out["error"] = f"{type(exc).__name__}: {str(exc).splitlines()[0][:200] if str(exc) else ''}"
+    msg = str(exc).splitlines()[0][:200] if str(exc) else ""
+    out["error"] = f"{type(exc).__name__}: {msg}"
 print("CENSUS-RESULT " + json.dumps(out))
 '''
 
@@ -144,9 +148,17 @@ def self_test(jobs, timeout):
             "-dynamic(link/2)\nz(1),\n")
         files, results = census([d], jobs, timeout)
         hits = report(files, results)
-        reached = [r for r in results if r["reached"]]
-        ok = (len(files) == 4 and len(reached) == 4 and len(hits) == 1
+        by_name = {os.path.basename(r["path"]): r for r in results}
+        idiom = by_name.get("cen_idiom.clausal", {})
+        # The negative control counts only if the idiom file ITSELF reached
+        # the check (not just the owner it imports).
+        ok = (len(files) == 4
+              and all(r["reached"] for r in results)
+              and idiom.get("reached") and not idiom.get("clashes")
+              and len(hits) == 1
               and hits[0]["path"].endswith("cen_importer.clausal"))
+        print(f"negative control cen_idiom.clausal: reached="
+              f"{idiom.get('reached')} clashes={len(idiom.get('clashes', []))}")
         print("SELF-TEST", "PASS" if ok else "FAIL")
         return 0 if ok else 1
 

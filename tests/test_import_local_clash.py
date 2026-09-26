@@ -1,27 +1,39 @@
-"""A name both IMPORTED and declared LOCALLY as a procedure is refused at
-load (operator ruling 2026-09-26, in the spirit of ISO 13211-2: a local
-definition that clashes with an import is an error).
+"""A name both IMPORTED and declared LOCALLY is refused at load where the
+local declaration would be silently unreachable or ignored (operator ruling
+2026-09-26, in the spirit of ISO 13211-2: a local definition that clashes
+with an import is an error; narrowed the same day).
 
 The clash is by PREDICATE INDICATOR: the local name at the arity the
 import brings.  A local ``edge/3`` beside an imported ``edge/2`` is a
 different predicate and loads.  That follows Scryer, measured 2026-09-26
 (``use_module(own, [edge/2])`` plus local ``edge(5, 6, 7)``: both answer).
 For the SAME indicator Scryer is lax: it warns and overwrites for clauses,
-and silently ignores a local ``:- dynamic(edge/2)``.  The ruling refuses
-both.
+and silently ignores a local ``:- dynamic(edge/2)``.
 
 Before this, a local ``-dynamic(edge/2)`` beside an imported ``edge`` was
 never reached: the import rebinds the name after the module body runs, so a
 call got ``existence_error`` (DATA import) or the imported clauses
 (procedure import) where the local dynamic procedure should have failed.
 
-Local declarations that clash: clauses, ``-dynamic``, ``-discontiguous``,
-``-table``.  A PROCEDURE import met by local CLAUSES at the same indicator
-was already refused by the load gate (``describe_imported_predicate_
-redefinition``), and keeps that message; the new check covers the rest.  (``-multifile`` is not a Clausal directive.)  Import kinds: a
-DATA functor (a field-carrying export entry, R6/R6b) and a procedure (with
-clauses, or a clause-less ``name/arity`` export).  An ALIASED import clashes
-on its LOCAL name.
+The rule, by import kind (``compiler_v2._import_clash``), same indicator:
+
+* a DATA import (a field-carrying export entry, R6/R6b): every local
+  declaration -- clauses, ``-dynamic``, ``-discontiguous``, ``-table``,
+  ``-shallow``, ``-meta_predicate`` -- is refused: the import rebinds the
+  name after the body runs, so the local procedure is unreachable;
+* a STATIC procedure import: ``-dynamic``, ``-shallow`` and
+  ``-meta_predicate`` are refused (ignored: the owner's row answers, and
+  this module compiles only its own rows); clauses keep the load gate's
+  older refusal (``describe_imported_predicate_redefinition``) and
+  ``-table`` keeps ``_validate_directive_targets``'s, both running first;
+  ``-discontiguous`` is accepted (pinned);
+* a DYNAMIC procedure import: ``-dynamic`` (the assert-through idiom) and
+  ``-discontiguous`` are accepted; ``-table`` is refused where the local
+  ``-dynamic`` would otherwise make the existing refusal step aside
+  (roborev 207), and ``-shallow``/``-meta_predicate`` are refused (ignored).
+
+An ALIASED import clashes on its LOCAL name.  ``-multifile`` is not a
+Clausal directive.
 """
 
 from __future__ import annotations
@@ -49,6 +61,9 @@ LOCALS = {
     "table": lambda n, a: (
         f"-table({n}/{a})\n"
         f"{n}({', '.join(str(i + 5) for i in range(a))}),\n"),
+    "shallow": lambda n, a: f"-shallow({n}/{a})\n",
+    "meta_predicate": lambda n, a: (
+        f"-meta_predicate({n}({', '.join(['0'] + [chr(39) + '?' + chr(39)] * (a - 1))}))\n"),
 }
 
 
@@ -68,12 +83,12 @@ def load(tmp_path):
         sys.modules.pop(name, None)
 
 
-def _importer_src(name, owner_mod, local_decl, alias, arity):
+def _importer_src(name, owner_mod, local_decl, alias, arity, table=None):
     local = "e" if alias else "edge"
     imported = "alias(edge, e)" if alias else "edge"
     return (f"-import_from({owner_mod}, [{imported}])\n"
             f"-module({name}, [z(X)])\n"
-            + LOCALS[local_decl](local, arity)
+            + (table or LOCALS)[local_decl](local, arity)
             + "z(1),\n")
 
 
@@ -86,8 +101,10 @@ def _importer_src(name, owner_mod, local_decl, alias, arity):
 # assert-through idiom -- see test_a_local_dynamic_of_an_imported_dynamic_...
 REFUSED = [(k, d) for k in ("data",) for d in LOCALS] + [
     ("proc", "dynamic"), ("proc", "clauses"), ("proc", "discontiguous"),
-    ("proc", "table"), ("proc_pi", "clauses"), ("proc_pi", "discontiguous"),
-    ("proc_pi", "table"),
+    ("proc", "table"), ("proc", "shallow"), ("proc", "meta_predicate"),
+    ("proc_pi", "clauses"), ("proc_pi", "discontiguous"),
+    ("proc_pi", "table"), ("proc_pi", "shallow"),
+    ("proc_pi", "meta_predicate"),
 ]
 
 
@@ -149,6 +166,33 @@ def test_a_local_dynamic_of_an_imported_dynamic_procedure_loads(load, alias):
     assert len(owner.__dict__["$module"].db.row("edge", 2).clauses) == 1
 
 
+@pytest.mark.parametrize("alias", [False, True], ids=["plain", "alias"])
+def test_table_beside_the_assert_through_idiom_is_refused(load, alias):
+    """roborev 207, REPRODUCED 2026-09-26: a local ``-dynamic(edge/2)`` of an
+    imported DYNAMIC ``edge/2`` makes ``_refuse_untablable_target`` step
+    aside, so a ``-table(edge/2)`` beside it loaded and was IGNORED
+    (measured: two duplicate facts answered twice, where a local dynamic
+    tabled predicate answers once)."""
+    load("own_pi", OWNERS["proc_pi"][1])
+    local = "e" if alias else "edge"
+    imported = "alias(edge, e)" if alias else "edge"
+    with pytest.raises(SyntaxError) as info:
+        load("table_idiom", f"-import_from(own_pi, [{imported}])\n"
+             f"-module(table_idiom, [z(X)])\n-dynamic({local}/2)\n"
+             f"-table({local}/2)\nz(1),\n")
+    message = str(info.value)
+    assert f"table_idiom declares {local}/2 locally (-table({local}/2))" in message
+    assert "a dynamic procedure" in message
+
+
+@pytest.mark.parametrize("extra", ["", "-discontiguous(edge/2)\n"],
+                         ids=["dynamic", "dynamic+discontiguous"])
+def test_the_assert_through_idiom_with_discontiguous_still_loads(load, extra):
+    load("own_pi", OWNERS["proc_pi"][1])
+    load("idiom_ok", "-import_from(own_pi, [edge])\n"
+         "-module(idiom_ok, [z(X)])\n-dynamic(edge/2)\n" + extra + "z(1),\n")
+
+
 def test_the_existing_table_refusal_runs_first_with_its_own_message(load):
     """``-table`` on an imported procedure with no local clauses keeps the
     refusal ``_validate_directive_targets`` gives it."""
@@ -201,14 +245,21 @@ def test_under_an_alias_the_owners_spelling_is_the_local_predicate(load):
     assert [None for _ in solve(("r", Var()), module=lm)] == []
 
 
-@pytest.mark.parametrize("local_decl", list(LOCALS))
+# A bare ``-shallow(edge/3)`` with no local ``edge/3`` is refused as an
+# undefined target (``_validate_directive_targets``), not as a clash, so the
+# other-arity shallow case gives it a clause.
+OTHER_ARITY = dict(LOCALS, shallow=lambda n, a: (
+    f"-shallow({n}/{a})\n{n}({', '.join(str(i + 5) for i in range(a))}),\n"))
+
+
+@pytest.mark.parametrize("local_decl", list(OTHER_ARITY))
 @pytest.mark.parametrize("kind", list(OWNERS))
 def test_another_arity_is_a_different_predicate_and_loads(
         load, kind, local_decl):
     owner_mod, owner_src = OWNERS[kind]
     load(owner_mod, owner_src)
     load("arity_imp", _importer_src("arity_imp", owner_mod, local_decl,
-                                    False, 3))
+                                    False, 3, table=OTHER_ARITY))
 
 
 def test_a_procedure_import_and_a_local_other_arity_both_answer(load):
