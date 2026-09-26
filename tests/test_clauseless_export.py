@@ -17,14 +17,14 @@ fails (ISO 8.8.1: no such procedure); ``listing/1`` fails (Scryer's
 ``\\+ \\+ clause(Head, _)``).  ``current_predicate/1`` is not a Clausal
 builtin, so it has no answer to pin.
 
-Operator ruling 2026-09-26: a field-carrying export with no clauses "stays a
-PROCEDURE, if it agrees with ISO".  Reclassifying it contradicts R6/R6b
-and would turn the in-repo DATA exports (tagged terms, constant functors)
-into procedures, so that part is PARKED as an open question.  The binding
-tests for it are ``xfail(strict=True)``, and flip when it is decided.  What
-lands now is behaviour-preserving: the call's MESSAGE says the name is
-declared as DATA and names the ISO spelling that exports a procedure,
-where it used to blame an unexplained "data reference".
+Operator ruling 2026-09-26: R6/R6b STANDS.  The ISO spelling ``edge/2`` is
+the procedure export and already stays a procedure with no clauses; ISO
+module exports are predicate indicators only, so the field-carrying spelling
+is a Clausal extension ISO does not constrain, and it stays a DATA functor
+(the in-repo tagged-term and constant-functor exports rely on it).  What
+changed is the call's MESSAGE: it says the name is declared as DATA and names
+the ISO spelling that exports a procedure, where it used to blame an
+unexplained "data reference".
 """
 
 from __future__ import annotations
@@ -129,28 +129,21 @@ def test_the_iso_spelling_binds_the_module_handle(load):
     assert imp.__dict__["edge"] == mangle("cle_owner", "edge")
 
 
-def test_a_fielded_export_is_declared_data_today(load):
-    """R6/R6b, unchanged: the binding is the atom, the Database says DATA."""
+def test_a_clauseless_fielded_export_is_declared_data(load):
+    """R6/R6b (reaffirmed 2026-09-26): the binding is the atom, the Database
+    says DATA -- it does not become a procedure for lack of clauses."""
     mod = load("cle_owner", FIELDED)
     assert mod.__dict__["edge"] == "edge"
+    assert mod.__dict__["edge"] != mangle("cle_owner", "edge")
     assert _lm(mod).db.declared_kind("edge", 2) == "data"
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "PARKED (operator ruling 2026-09-26 vs R6/R6b): a clause-less "
-    "field-carrying export stays DATA until the conflict is decided"))
-def test_ruling_a_clauseless_fielded_export_binds_the_module_handle(load):
-    mod = load("cle_owner", FIELDED)
-    assert mod.__dict__["edge"] == mangle("cle_owner", "edge")
-
-
-@pytest.mark.xfail(strict=True, reason=(
-    "PARKED (operator ruling 2026-09-26 vs R6/R6b): see above"))
-def test_ruling_an_importer_of_a_clauseless_fielded_export_binds_the_handle(
-        load):
+def test_an_importer_of_a_clauseless_fielded_export_gets_the_atom(load):
+    """The importer sees the same DATA declaration, not a predicate handle."""
     load("cle_owner", FIELDED)
     imp = _importer(load, "cle_owner")
-    assert imp.__dict__["edge"] == mangle("cle_owner", "edge")
+    assert imp.__dict__["edge"] == "edge"
+    assert imp.__dict__["edge"] != mangle("cle_owner", "edge")
 
 
 def test_an_exported_bare_atom_stays_an_atom(load):

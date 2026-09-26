@@ -56,3 +56,12 @@ those files, and the corpus has not been measured.
 3. Split by use: a clause-less fielded export that no file references as
    data becomes a procedure. Not decidable per module (an importer may be
    the one constructing it).
+
+## RESOLVED 2026-09-26: R6/R6b stands
+
+Operator ruling: keep R6/R6b. The ISO spelling `edge/2` is the procedure
+export and already stays a procedure with no clauses; the field-carrying
+spelling is a Clausal extension that ISO does not constrain, and stays a DATA
+functor. The strict xfails became positive pins of the DATA binding
+(`test_a_clauseless_fielded_export_is_declared_data`,
+`test_an_importer_of_a_clauseless_fielded_export_gets_the_atom`).
