@@ -3548,7 +3548,7 @@ py_unify_census_stop(PyObject *self, PyObject *Py_UNUSED(ignored))
  * positions whose head patterns have cell structure, so the common case
  * costs one C call, as before.
  */
-static int cells_below(PyObject *term, long depth, PyObject **out);
+static int cells_below(PyObject *term, long depth, int classes, PyObject **out);
 
 /* The Python twin's ``_cells_below``, for term INSTANCES (fields are walked
  * there; a dataclass copy is not worth doing twice).  Imported lazily. */
@@ -3561,37 +3561,55 @@ is_compound_obj(PyObject *x)
         && PyObject_TypeCheck(x, (PyTypeObject *)Compound_type);
 }
 
-/* 1 if *x* is a structure level a head pattern can destructure: a tuple, a
- * Compound, or a dataclass term instance.  Scalars are rejected first. */
-static int
-is_structure_level(PyObject *x)
+/* A slot value no head pattern destructures -- skipped without a probe.
+ * Twin of ``_SCALAR_SLOT_TYPES`` (exact types). */
+static inline int
+is_scalar_slot(PyObject *x)
 {
-    if (PyTuple_CheckExact(x)) return 1;
-    if (PyLong_CheckExact(x) || PyUnicode_CheckExact(x) || PyFloat_CheckExact(x)
-            || x == Py_None || PyList_CheckExact(x) || Var_Check(x))
-        return 0;
-    if (is_compound_obj(x)) return 1;
-    return c_is_term_instance(x);
+    return PyLong_CheckExact(x) || PyUnicode_CheckExact(x)
+        || PyFloat_CheckExact(x) || PyBool_Check(x) || x == Py_None
+        || PyBytes_CheckExact(x);
 }
 
-/* The slots of *seq* (a tuple) from *start* converted one level down: 1 with
- * *out a NEW tuple, 0 when none needed converting, -1 on error. */
+/* 1 if *x* (dereferenced) is a structure level a head pattern can
+ * destructure: a tuple, a Compound, or -- only when *classes* -- a dataclass
+ * term instance. */
 static int
-cells_in_slots(PyObject *seq, Py_ssize_t start, long depth, PyObject **out)
+is_structure_level(PyObject *x, int classes)
+{
+    if (PyTuple_CheckExact(x)) return 1;
+    if (is_scalar_slot(x) || PyList_CheckExact(x) || Var_Check(x)) return 0;
+    if (is_compound_obj(x)) return 1;
+    return classes ? c_is_term_instance(x) : 0;
+}
+
+/* The slots of *seq* (a tuple) from *start* made ready one level down: 1
+ * with *out a NEW tuple, 0 when none needed replacing, -1 on error.  A slot
+ * is replaced by its converted form, or -- when it is a Var BOUND to a
+ * structure -- by that structure, since a match does not dereference. */
+static int
+cells_in_slots(PyObject *seq, Py_ssize_t start, long depth, int classes,
+               PyObject **out)
 {
     *out = NULL;
     Py_ssize_t n = PyTuple_GET_SIZE(seq);
     if (depth <= 1 || n <= start) return 0;
     PyObject *copy = NULL;
     for (Py_ssize_t i = start; i < n; i++) {
-        PyObject *elt = var_deref(PyTuple_GET_ITEM(seq, i));   /* borrowed */
-        int lvl = is_structure_level(elt);
+        PyObject *raw = PyTuple_GET_ITEM(seq, i);
+        if (is_scalar_slot(raw)) continue;
+        PyObject *elt = var_deref(raw);   /* borrowed */
+        int lvl = is_structure_level(elt, classes);
         if (lvl < 0) { Py_XDECREF(copy); return -1; }
         if (!lvl) continue;
         PyObject *sub;
-        int r = cells_below(elt, depth - 1, &sub);
+        int r = cells_below(elt, depth - 1, classes, &sub);
         if (r < 0) { Py_XDECREF(copy); return -1; }
-        if (!r) continue;
+        if (!r) {
+            if (elt == raw) continue;
+            Py_INCREF(elt);          /* a bound Var: the structure itself */
+            sub = elt;
+        }
         if (!copy) {
             copy = PyTuple_New(n);
             if (!copy) { Py_DECREF(sub); return -1; }
@@ -3613,31 +3631,32 @@ cells_in_slots(PyObject *seq, Py_ssize_t start, long depth, PyObject **out)
  * converted *term* (already dereferenced), 0 when nothing within *depth*
  * structure levels needed converting, -1 on error. */
 static int
-cells_below(PyObject *term, long depth, PyObject **out)
+cells_below(PyObject *term, long depth, int classes, PyObject **out)
 {
     *out = NULL;
     if (depth <= 0) return 0;
     if (PyTuple_CheckExact(term))
-        return cells_in_slots(term, 1, depth, out);
+        return cells_in_slots(term, 1, depth, classes, out);
+    if (is_scalar_slot(term)) return 0;
     if (is_compound_obj(term)) {
         PyObject *cell;
         int c = compound_to_cell(term, &cell);
         if (c < 0) return -1;
         if (c) {
             PyObject *sub;
-            int r = cells_below(cell, depth, &sub);
+            int r = cells_below(cell, depth, classes, &sub);
             if (r < 0) { Py_DECREF(cell); return -1; }
             if (r) { Py_DECREF(cell); *out = sub; }
             else   { *out = cell; }
             return 1;
         }
-        /* no cell equivalent: walk its args, rebuild only on a change */
-        if (depth <= 1) return 0;
+        /* no cell equivalent: only a CLASS pattern inspects its args */
+        if (!classes || depth <= 1) return 0;
         PyObject *args = PyObject_GetAttr(term, str_args);
         if (!args) return -1;
         if (!PyTuple_Check(args)) { Py_DECREF(args); return 0; }
         PyObject *newargs;
-        int r = cells_in_slots(args, 0, depth, &newargs);
+        int r = cells_in_slots(args, 0, depth, classes, &newargs);
         Py_DECREF(args);
         if (r <= 0) return r;
         PyObject *functor = PyObject_GetAttr(term, str_functor);
@@ -3650,7 +3669,7 @@ cells_below(PyObject *term, long depth, PyObject **out)
         *out = res;
         return 1;
     }
-    if (depth <= 1) return 0;
+    if (!classes || depth <= 1) return 0;
     int ti = c_is_term_instance(term);
     if (ti <= 0) return ti;
     if (!py_cells_below_fn) {
@@ -3662,7 +3681,8 @@ cells_below(PyObject *term, long depth, PyObject **out)
     }
     PyObject *d = PyLong_FromLong(depth);
     if (!d) return -1;
-    PyObject *res = PyObject_CallFunctionObjArgs(py_cells_below_fn, term, d, NULL);
+    PyObject *res = PyObject_CallFunctionObjArgs(py_cells_below_fn, term, d,
+                                                 Py_True, NULL);
     Py_DECREF(d);
     if (!res) return -1;
     if (res == Py_None) { Py_DECREF(res); return 0; }
@@ -3674,17 +3694,22 @@ static PyObject *
 py_as_cells_for_match(PyObject *Py_UNUSED(module), PyObject *const *args,
                       Py_ssize_t nargs)
 {
-    if (nargs != 2) {
+    if (nargs != 2 && nargs != 3) {
         PyErr_SetString(PyExc_TypeError,
-                        "as_cells_for_match(term, depth) takes 2 arguments");
+                        "as_cells_for_match(term, depth[, classes]) takes 2 or 3 arguments");
         return NULL;
     }
     long depth = PyLong_AsLong(args[1]);
     if (depth == -1 && PyErr_Occurred()) return NULL;
+    int classes = 0;
+    if (nargs == 3) {
+        classes = PyObject_IsTrue(args[2]);
+        if (classes < 0) return NULL;
+    }
     PyObject *d = var_deref(args[0]);   /* borrowed */
     if (depth > 0) {
         PyObject *conv;
-        int r = cells_below(d, depth, &conv);
+        int r = cells_below(d, depth, classes, &conv);
         if (r < 0) return NULL;
         if (r) return conv;
     }
@@ -3730,7 +3755,7 @@ static PyMethodDef module_methods[] = {
      "unify_census_stop() -> None\n\nStop counting. Results are retained."},
     {"as_cells_for_match", (PyCFunction)(void (*)(void))py_as_cells_for_match,
      METH_FASTCALL,
-     "as_cells_for_match(term, depth) -> term\n\n"
+     "as_cells_for_match(term, depth[, classes]) -> term\n\n"
      "deref(term) with atom-functor Compounds in its top depth cell levels\n"
      "replaced by their cells (C twin of clausal.terms.as_cells_for_match)."},
     {"unify_census", py_unify_census, METH_NOARGS,
