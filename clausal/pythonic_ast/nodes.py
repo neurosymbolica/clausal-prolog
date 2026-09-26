@@ -88,7 +88,7 @@ __all__ = [
     "Directive", "ImportFromDirective", "ImportModuleDirective",
     "ModuleDeclaration", "PrivateDeclaration", "TranslationsDirective",
     "BareAtomRefs", "HeadFieldNames", "StrictAtomsDeclaration",
-    "ImplicitAtomsDeclaration",
+    "ImplicitAtomsDeclaration", "DoubleQuotesMode", "CrossModeLiteralSites",
     # A10-F016: these were defined but absent from __all__.
     "SpecializeDirective", "EdcgAccDecl", "EdcgPassDecl", "EdcgPredDecl",
     # Imports
@@ -1199,6 +1199,41 @@ class AtomAppliedAsFunctor(Node):
     Each entry is a ``(name, message)`` pair: the message is built at the
     rewrite, where the call site's file and line are known, and raised
     verbatim if no functor signature turns up for the name.
+    """
+    sites: tuple = ()
+
+
+@node_class
+class DoubleQuotesMode(Node):
+    """Module item: the file's ``-double_quotes`` facts, for its IMPORTERS.
+
+    ``mode`` is the mode in force at the end of the file; ``modes_used`` the
+    modes that governed at least one ``"..."`` literal in it (a file that
+    switches mode mid-way has two).  ``compiler_v2`` records this on the
+    module's Database so the cross-mode literal lint can compare a caller's
+    mode with the callee's -- the literal rule is per FILE, and a seam
+    literal takes the host's mode, so the two can silently disagree.
+    """
+    mode: str = "atom"
+    explicit: bool = False
+    modes_used: tuple = ()
+
+
+@node_class
+class CrossModeLiteralSites(Node):
+    """Module item: goal-position seam literals whose TARGET module's
+    ``-double_quotes`` mode is only knowable once the imports have executed.
+
+    Each site is ``(kind, target, literals, host_mode, location, goal,
+    shown)``:
+    ``kind`` is ``"imported"`` (``target`` the local name an
+    ``-import_from`` bound) or ``"dotted"`` (``target`` is ``(base,
+    chain)`` for ``--base.chain...(...)``); ``literals`` the double-quoted
+    texts in the call's arguments; ``host_mode`` the host file's mode at
+    the seam; ``location`` ``file:line``; ``goal`` the seam's source text;
+    ``shown`` the callee as written (``p`` or ``m.p``).
+    ``EmbedTransformer._goal_seam`` collects them, ``compiler_v2.
+    _lint_cross_mode_literals`` judges them.
     """
     sites: tuple = ()
 

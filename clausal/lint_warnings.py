@@ -31,6 +31,20 @@ class ClausalSeamLiteralWarning(ClausalLintWarning):
     the seam says so once and points at the directive."""
 
 
+class ClausalCrossModeLiteralWarning(ClausalLintWarning):
+    """A ``"..."`` literal inside a goal-position ``--`` seam that targets a
+    module whose ``-double_quotes`` mode differs from the host file's.
+
+    A seam literal takes the HOST file's mode (``visit_Constant``), not the
+    target's.  So a chars-mode host calling ``--p("x")`` into an atom-mode
+    module sends the STRING ``"x"`` to clauses written against the ATOM
+    ``x``: the goal compares a string with an atom, never matches, and
+    nothing raises.  Fired at load, where the target is statically known
+    (an ``-import_from``'d predicate or ``--m.pred(...)`` over an
+    ``-import_module``'d base); a base bound at run time is the documented
+    gap -- see ``compiler_v2._lint_cross_mode_literals``."""
+
+
 class ClausalDeprecatedSpellingWarning(ClausalLintWarning):
     """A construct written with a superseded surface spelling.
 

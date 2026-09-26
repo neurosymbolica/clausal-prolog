@@ -1412,7 +1412,11 @@ _DIRECTIVE_NAMES = {
 # functor with a local atom declaration.  ``_reify_module_item`` falls
 # through to a generic ``ModuleDirective`` for anything not listed here, so
 # a new worklist item has to be added deliberately.
-_SKIPPED_ITEMS = {"BareAtomRefs", "AtomAppliedAsFunctor", "HeadFieldNames"}
+_SKIPPED_ITEMS = {"BareAtomRefs", "AtomAppliedAsFunctor", "HeadFieldNames",
+                  # The -double_quotes facts and the cross-mode literal
+                  # sites (2026-09-26): compiler bookkeeping for the
+                  # importer's lint, not source.
+                  "DoubleQuotesMode", "CrossModeLiteralSites"}
 
 
 def _plain_data(value):

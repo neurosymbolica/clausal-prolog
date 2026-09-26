@@ -19,6 +19,8 @@ from .quote_map import build_quote_map, quote_of
 from clausal.pythonic_ast.nodes import (
     AtomAppliedAsFunctor as AtomAppliedAsFunctorItem,
     BareAtomRefs as BareAtomRefsItem,
+    CrossModeLiteralSites as CrossModeLiteralSitesItem,
+    DoubleQuotesMode as DoubleQuotesModeItem,
     HeadFieldNames as HeadFieldNamesItem,
     Directive as DirectiveItem,
     EdcgAccDecl,
@@ -2917,6 +2919,12 @@ class TermTransformer(NodeTransformer):
             # ANSWER is exempt.
             if getattr(constant, "_dcg_terminal_text", False):
                 return constant
+            if quote == '"':
+                # Cross-mode lint (2026-09-26): tell the file's importers
+                # which modes its ``"..."`` literals were read under.
+                modes_used = getattr(transformer, "_double_quotes_modes_used", None)
+                if modes_used is not None:
+                    modes_used.add(transformer._double_quotes_mode)
             if (quote == '"' and transformer._seam
                     and not transformer._double_quotes_explicit):
                 import warnings  # noqa: PLC0415
@@ -5598,6 +5606,14 @@ class EmbedTransformer(NodeTransformer):
         # shape.  ``atom`` is the engine default until the flip.
         transformer._double_quotes_mode = "atom"
         transformer._double_quotes_explicit = False
+        # The modes that governed at least one ``"..."`` literal in this
+        # file -- a SHARED sink every per-clause TermTransformer adds to
+        # (``visit_Constant``), reported to importers as a
+        # ``DoubleQuotesMode`` item -- and the goal-position seam literals
+        # whose target module's mode is decided after the imports execute
+        # (``_collect_cross_mode_sites`` -> ``CrossModeLiteralSites``).
+        transformer._double_quotes_modes_used: set[str] = set()
+        transformer._cross_mode_sites: list = []
         # Logic-variable names bound by the seams enclosing the expression
         # being rewritten (innermost last) — see visit_UnaryOp's ``--``.
         transformer._seam_bound: list[set] = []
@@ -6109,7 +6125,7 @@ class EmbedTransformer(NodeTransformer):
         same Phase 2 (auto-mint) collection without each call site having
         to remember the plumbing.
         """
-        return TermTransformer(
+        term_tf = TermTransformer(
             atoms=atoms if atoms is not None else transformer._atoms,
             import_remap=transformer._import_remap,
             source_lines=transformer._source_lines,
@@ -6131,6 +6147,12 @@ class EmbedTransformer(NodeTransformer):
             titlecase_python_bound=transformer._titlecase_python_bound,
             clause_var_names=clause_var_names,
         )
+        # The shared "modes used" sink (see ``__init__``): an attribute
+        # rather than a constructor parameter, so a TermTransformer built
+        # elsewhere (the REPL, a query compile) simply has none and
+        # ``visit_Constant`` records nothing.
+        term_tf._double_quotes_modes_used = transformer._double_quotes_modes_used
+        return term_tf
 
     def _seam_term_ast(transformer, expression, anchor):
         """Lower *expression* through a seam TermTransformer.  Returns
@@ -6226,6 +6248,7 @@ class EmbedTransformer(NodeTransformer):
         comment on the ``return`` below for why this differs from term
         position's ``$seam(...)`` wrapping."""
         term_ast, fresh = transformer._seam_term_ast(expression, anchor)
+        transformer._collect_cross_mode_sites(expression, anchor)
         rename = {n: f"$v_{n}" for n in fresh}
 
         class _Rename(NodeTransformer):
@@ -6267,6 +6290,74 @@ class EmbedTransformer(NodeTransformer):
         transformer._warn_shadowed_variables(fresh, expression, anchor,
                                              goal_ast)
         return pre, goal_ast, fresh
+
+    def _collect_cross_mode_sites(transformer, expression, anchor):
+        """Record every ``"..."`` literal in a goal-position seam whose
+        callee lives in ANOTHER module, for the cross-mode literal lint.
+
+        THE HAZARD (seam review, 2026-09-26).  ``visit_Constant`` reads a
+        seam literal under the HOST file's ``-double_quotes`` mode, and the
+        callee's clauses were compiled under the callee's.  When the two
+        differ the goal compares a string with an atom (or the reverse) and
+        never matches -- silently.  After the default flips to ``chars``
+        every module that pins ``-double_quotes(atom)`` is such a callee.
+
+        The callee's mode is the OWNER's fact, known only once the imports
+        have executed, so this records the site and ``compiler_v2.
+        _lint_cross_mode_literals`` judges it.  Two statically known
+        shapes: a call to a name an ``-import_from`` remapped, and
+        ``--base.pred(...)`` over a dotted base (an ``-import_module``'d
+        module; a base bound at RUN time -- ``module = _RULE.get()`` inside
+        a function -- resolves to nothing at load and is the documented
+        gap).  A ``++`` escape is Python, not a Clausal literal, and is
+        skipped; a local callee shares the host's mode and is not a site.
+        """
+        exclusions = _clause_scope_exclusions(transformer._import_remap)
+
+        def _walk(node):
+            """Every descendant, not descending into a ``++`` escape."""
+            stack = [node]
+            while stack:
+                n = stack.pop()
+                if _double_prefix_operand(n, UAdd) is not None:
+                    continue
+                yield n
+                stack.extend(iter_child_nodes(n))
+
+        for call in _walk(expression):
+            if not isinstance(call, Call):
+                continue
+            func = call.func
+            if isinstance(func, Name):
+                if func.id not in transformer._import_remap:
+                    continue
+                kind, target, shown = "imported", func.id, func.id
+            elif isinstance(func, Attribute):
+                chain, root = [], func
+                while isinstance(root, Attribute):
+                    chain.append(root.attr)
+                    root = root.value
+                if not isinstance(root, Name):
+                    continue
+                if _is_logic_var_name(root.id) and root.id not in exclusions:
+                    continue           # dict-attribute sugar, not a module
+                chain.reverse()
+                kind, target = "dotted", (root.id, tuple(chain))
+                shown = ".".join([root.id, *chain])
+            else:
+                continue
+            literals = []
+            for arg in [*call.args, *(kw.value for kw in call.keywords)]:
+                for node in _walk(arg):
+                    if (isinstance(node, Constant) and type(node.value) is str
+                            and _quote_of_positioned(transformer, node) == '"'):
+                        literals.append(node.value)
+            if not literals:
+                continue
+            transformer._cross_mode_sites.append((
+                kind, target, tuple(literals), transformer._double_quotes_mode,
+                f"{transformer._filename}:{getattr(anchor, 'lineno', '?')}",
+                f"--{unparse(expression)}", shown))
 
     def _wrap_runtime_bases(transformer, expression, goal_ast, anchor):
         """Wrap *goal_ast* in ``$with_bases(goal, {"m": lambda: m})`` when the
@@ -7390,6 +7481,20 @@ class EmbedTransformer(NodeTransformer):
             for it in transformer._module_items
         ):
             transformer._module_items.append(ImplicitAtomsItem())
+        # Cross-mode literal lint (2026-09-26): what this file's importers
+        # need to know about its ``-double_quotes`` mode, and the seam
+        # sites this file could not judge before its own imports ran.
+        # Only when the file SAYS something about its mode -- a declaration
+        # or a governed literal -- so a file with neither carries no item
+        # and its importers' lint reads its mode as unknown, not as a guess.
+        if transformer._double_quotes_modes_used or transformer._double_quotes_explicit:
+            transformer._module_items.append(DoubleQuotesModeItem(
+                mode=transformer._double_quotes_mode,
+                explicit=transformer._double_quotes_explicit,
+                modes_used=tuple(sorted(transformer._double_quotes_modes_used))))
+        if transformer._cross_mode_sites:
+            transformer._module_items.append(CrossModeLiteralSitesItem(
+                sites=tuple(transformer._cross_mode_sites)))
         return result
 
     def _check_constant_name_is_free(transformer):
