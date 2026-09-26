@@ -183,34 +183,30 @@ class TestHeadToMatchPattern:
 
     # ── Compound ──
 
-    def test_compound_gives_match_class_on_compound(self):
-        # nv
+    def test_compound_gives_the_cell_pattern(self):
+        # nv -- ruling 2026-09-26: an atom-functor Compound of arity >= 1 IS
+        # its cell, so its head pattern is the CELL pattern (the match subject
+        # is normalised through ``$as_cells``, so a Compound caller arrives
+        # as the cell too).
         v = Var()
         ctx: dict[int, str] = {}
         term = Compound("foo", (v, 42))
         p = head_to_match_pattern(term, ctx)
-        # Ruling 2026-09-26: an atom-functor Compound IS its cell, so the
-        # pattern accepts both spellings -- the cell sequence OR the class.
-        assert isinstance(p, ast.MatchOr)
-        seq, p = p.patterns
-        assert isinstance(seq, ast.MatchSequence)
-        assert seq.patterns[0].value.value == "foo" and len(seq.patterns) == 3
+        assert isinstance(p, ast.MatchSequence)
+        assert len(p.patterns) == 3
+        assert isinstance(p.patterns[0], ast.MatchValue)
+        assert p.patterns[0].value.value == "foo"
+        assert isinstance(p.patterns[1], ast.MatchAs)   # v
+        assert isinstance(p.patterns[2], ast.MatchValue)  # 42
+        assert v._id in ctx
+
+    def test_a_compound_with_no_cell_keeps_the_class_pattern(self):
+        # nv -- arity 0 has no cell equivalent (the 1-tuple is RESERVED)
+        p = head_to_match_pattern(Compound("foo", ()), {})
         assert isinstance(p, ast.MatchClass)
-        assert isinstance(p.cls, ast.Name)
         assert p.cls.id == "$Compound"
         assert p.kwd_attrs == ["functor", "args"]
-        assert len(p.kwd_patterns) == 2
-        # functor pattern
-        functor_pat = p.kwd_patterns[0]
-        assert isinstance(functor_pat, ast.MatchValue)
-        assert functor_pat.value.value == "foo"
-        # args pattern: MatchSequence([MatchAs, MatchValue(42)])
-        args_pat = p.kwd_patterns[1]
-        assert isinstance(args_pat, ast.MatchSequence)
-        assert len(args_pat.patterns) == 2
-        assert isinstance(args_pat.patterns[0], ast.MatchAs)   # v
-        assert isinstance(args_pat.patterns[1], ast.MatchValue)  # 42
-        assert v._id in ctx
+        assert p.kwd_patterns[0].value.value == "foo"
 
     def test_compound_with_var_functor_gives_wildcard(self):
         # nv

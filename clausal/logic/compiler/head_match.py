@@ -25,7 +25,7 @@ from typing import Any
 
 from clausal.logic.variables import Var, is_var, deref, unify  # noqa: F401
 from clausal.terms import (
-    Compound,
+    Compound, compound_as_cell,
     Call, LoadName, LoadAttr,
     DictTerm, SetTerm, KWTerm,
     SegList, VarSeg,  # noqa: F401
@@ -37,7 +37,7 @@ from clausal.logic.predicate import (
     is_term_instance, term_field_names, term_field_names_of_class,
     is_declared_predicate_name, namespace_db,
 )
-from clausal.logic.cells import TUPLE_TAG, CHARS_TAG, CELLS_NAMESPACE_KEY, _cell_shape, is_chars
+from clausal.logic.cells import TUPLE_TAG, CELLS_NAMESPACE_KEY, _cell_shape, is_chars
 from clausal.logic.atoms import is_atom as _term_is_atom
 from clausal.logic.generated_names import dollar_ref
 
@@ -76,6 +76,56 @@ _SetLiteral = SetLiteral
 _AST_CONST_TYPES = (type(None), bool, int, float, str, bytes, complex)
 
 
+def _cell_pattern_depth(term: Any, _budget: int = 64) -> int:
+    """How many CELL-pattern levels ``head_to_match_pattern`` builds for the
+    head argument *term*: 0 when its pattern has no structure (a Var, an
+    atomic literal, a list or dict -- those capture and unify), else
+    1 + the deepest argument.  Feeds :func:`subject_cell_depths`."""
+    if _budget <= 0 or is_var(term):
+        return 0
+    if (type(term) is tuple and len(term) > 1 and _cell_shape(term)[0]
+            and not is_chars(term)):          # a chars carrier is TEXT
+        return 1 + max(_cell_pattern_depth(a, _budget - 1) for a in term[1:])
+    if isinstance(term, Compound):
+        if compound_as_cell(term) is None:
+            return 0
+        return 1 + max(_cell_pattern_depth(a, _budget - 1) for a in term.args)
+    if isinstance(term, Call) and term.args:
+        return 1 + max(_cell_pattern_depth(a, _budget - 1) for a in term.args)
+    return 0
+
+
+def subject_cell_depths(clauses: list, arity: int) -> list[int]:
+    """Per argument position, the deepest cell-pattern nesting any clause's
+    head pattern has there -- the *depth* each ``match`` subject is
+    normalised to (``$as_cells``, ruling 2026-09-26).  0 means the subject
+    stays a plain ``$deref``: nothing there can meet a cell-only pattern."""
+    depths = [0] * arity
+    for clause in clauses:
+        head = clause.head
+        if isinstance(head, Compound):
+            args = head.args
+        elif _cell_shape(head)[0]:
+            args = head[1:]
+        else:
+            continue
+        for i in range(min(arity, len(args))):
+            d = _cell_pattern_depth(args[i])
+            if d > depths[i]:
+                depths[i] = d
+    return depths
+
+
+def subject_assign(name: str, arg: str, depth: int) -> ast.stmt:
+    """``<name> = $deref(<arg>)``, or ``$as_cells(<arg>, depth)`` where a
+    cell-only head pattern could meet a Compound (see
+    :func:`subject_cell_depths`)."""
+    if depth <= 0:
+        return _assign(name, _call(_name("$deref"), _name(arg)))
+    return _assign(name, _call(_name("$as_cells"), _name(arg),
+                               ast.Constant(value=depth)))
+
+
 def _compound_class_pattern(functor: Any, arg_patterns: list) -> ast.MatchClass:
     """``case $Compound(functor=<functor>, args=(<p0>, ...))``."""
     return ast.MatchClass(
@@ -89,37 +139,17 @@ def _compound_class_pattern(functor: Any, arg_patterns: list) -> ast.MatchClass:
     )
 
 
-def _cell_or_compound_pattern(functor: str, arg_patterns: list) -> ast.MatchOr:
-    """Match the term ``functor(<p0>, ...)`` in EITHER spelling.
-
-    Ruling 2026-09-26: a ``Compound`` whose functor is an atom and whose arity
-    is >= 1 IS the cell ``(functor, *args)`` (``terms.compound_as_cell``), and
-    ``=``/2 says so.  A head pattern must answer as ``=`` does -- the argument-
-    index bucket path LIFTS a hoisted head ``Unify`` back into this pattern, so
-    a pattern that saw only one spelling would reject a caller ``=`` accepts.
-    The two alternatives bind the same capture names (the sub-patterns are the
-    same, deep-copied), so the or-pattern is well formed; the guards the
-    sub-patterns appended to the sinks are shared by both.
-
-    Not covered: a ``Compound`` whose functor is a Var BOUND to the atom --
-    ``MatchValue`` compares the raw attribute.  That was already true of the
-    ``Compound`` head pattern (Var functors are parked, A01-D004).
-    """
-    import copy  # noqa: PLC0415
-    return ast.MatchOr(patterns=[
-        ast.MatchSequence(
-            patterns=[ast.MatchValue(value=ast.Constant(value=functor)),
-                      *arg_patterns],
-        ),
-        _compound_class_pattern(functor, copy.deepcopy(arg_patterns)),
-    ])
-
-
-def _cell_match_pattern(functor: str, arg_patterns: list) -> ast.pattern:
+def _cell_match_pattern(functor: str, arg_patterns: list) -> ast.MatchSequence:
     """The cell pattern ``case ('functor', <p0>, ...)`` for a flagged module.
 
-    Since 2026-09-26 it also accepts the ``Compound`` spelling of the same term
-    whenever the cell has an argument: see :func:`_cell_or_compound_pattern`.
+    Ruling 2026-09-26 (an atom-functor ``Compound`` of arity >= 1 IS its
+    cell): the pattern stays cell-only, and the SUBJECT is normalised instead
+    -- the predicate builders assign each ``match`` subject through
+    ``$as_cells`` (``terms.as_cells_for_match``) at the positions and to the
+    depth where a cell pattern exists (:func:`subject_cell_depths`), so a
+    caller's Compound spelling arrives as the cell.  Doubling the pattern
+    with a ``$Compound`` alternative at every level instead cost 2**depth
+    nodes (roborev 203: 45,046 nodes for a head nested 12 deep).
 
     A ``MatchSequence`` whose first element is a ``MatchValue`` on the functor
     string: the sequence length discriminates ARITY and the first element
@@ -135,9 +165,6 @@ def _cell_match_pattern(functor: str, arg_patterns: list) -> ast.pattern:
     reaches no tuple-data head pattern, so no such branch is emitted; see
     ``implementation_plans/tagged-tuple-term-representation.md`` section 4.
     """
-    if (arg_patterns and type(functor) is str
-            and functor != CHARS_TAG and functor != TUPLE_TAG):
-        return _cell_or_compound_pattern(functor, arg_patterns)
     return ast.MatchSequence(
         patterns=[ast.MatchValue(value=ast.Constant(value=functor)),
                   *arg_patterns],
@@ -678,10 +705,10 @@ def head_to_match_pattern(
             return ast.MatchAs(pattern=None, name=None)
         sub_patterns = [head_to_match_pattern(a, var_context, dup_guards, list_guards, _list_reg_ids, globals_=globals_) for a in term.args]
         # Ruling 2026-09-26: an atom-functor Compound of arity >= 1 IS its
-        # cell, so the pattern accepts both spellings (as ``=`` does).
-        if (isinstance(f, str) and sub_patterns
-                and f != CHARS_TAG and f != TUPLE_TAG):
-            return _cell_or_compound_pattern(f, sub_patterns)
+        # cell, so its pattern is the CELL pattern -- the only spelling a
+        # bucket pattern ever meets (see ``_cell_match_pattern``).
+        if compound_as_cell(term) is not None:
+            return _cell_match_pattern(f, sub_patterns)
         return _compound_class_pattern(f, sub_patterns)
 
     # Call(func=LoadName(qualified_name), args=[...]) — emitted whenever a

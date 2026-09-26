@@ -34,7 +34,7 @@ import pytest
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, Trail, walk, deref, unify, \
     unify_with_occurs_check
-from clausal.terms import Compound, compound_as_cell
+from clausal.terms import Compound, DictTerm, compound_as_cell
 import clausal.logic.constraints as CS
 import clausal.logic.tabling as TB
 from clausal.logic.builtins._helpers import _standard_order_key
@@ -453,3 +453,123 @@ def test_a_tuple_tag_compound_is_not_tuple_data(M):
     assert _cmp(M, k, data) != "="
     assert TB._normalize_for_key(k) != TB._normalize_for_key(data)
     assert TB._normalize_for_key_py(k) != TB._normalize_for_key_py(data)
+
+
+# ── subject normalisation (roborev 203): linear, and the sinks still work ──
+#
+# Head patterns are cell-only; the compiled ``match`` subject goes through
+# ``$as_cells`` (``terms.as_cells_for_match``, C twin in ``_variables.c``) at
+# the positions and depth where a cell pattern exists.  The previous
+# or-pattern doubled every level: 45,046 pattern nodes at depth 12.
+
+SINK_SRC = """
+-module(ccst_sink, [rv(X), nl2(X, Y), dd(X, Y), deep(X)])
+-private([z, w, f(A), h(A, B), g(A)])
+rv(h(X, X)),
+rv(g(1)),
+rv(g(2)),
+rv(3),
+nl2(f([1, X]), X),
+nl2(f("ab"), z),
+nl2(g(1), w),
+nl2(4, w),
+dd(f({"a": X}), X),
+dd(g(2), w),
+dd(g(3), w),
+dd(5, w),
+deep(f(f(f(f(f(f(f(f(f(f(f(f(1))))))))))))),
+deep(f(f(f(f(f(f(f(f(f(f(f(f(2))))))))))))),
+deep(g(1)),
+deep(0),
+"""
+
+
+@pytest.fixture(scope="module")
+def SK(tmp_path_factory):
+    from clausal.import_hook import _load_module
+    d = tmp_path_factory.mktemp("ccst_sink")
+    p = d / "ccst_sink.clausal"
+    p.write_text(textwrap.dedent(SINK_SRC).lstrip())
+    sys.path.insert(0, str(d))
+    try:
+        mod = _load_module("ccst_sink", str(p))
+    finally:
+        sys.path.remove(str(d))
+    M = mod.__dict__["$module"]
+    for name, arity in (("rv", 1), ("nl2", 2), ("dd", 2), ("deep", 1)):
+        assert M.db.row(name, arity).index_plans, f"{name} is not indexed"
+    return M
+
+
+def _answers(M, name, arg):
+    Y = Var()
+    args = (arg,) if name in ("rv", "deep") else (arg, Y)
+    return [walk(Y) for _ in call(name, *args, module=M)]
+
+
+def _nest(d, leaf, mk):
+    t = leaf
+    for _ in range(d):
+        t = mk("f", t)
+    return t
+
+
+@pytest.mark.parametrize("name,cell,expected", [
+    ("rv", ("h", 1, 1), 1),                         # repeated variable
+    ("rv", ("h", 1, 2), 0),
+    ("nl2", ("f", [1, 5]), [5]),                    # list literal in a cell
+    ("nl2", ("f", [2, 5]), []),
+    ("nl2", ("f", "ab"), ["z"]),                    # str (atom) literal
+    ("dd", ("f", DictTerm({"a": 3})), [3]),         # dict literal
+], ids=["repeated-var", "repeated-var-miss", "list", "list-miss", "str", "dict"])
+def test_head_sinks_answer_alike_for_both_spellings(SK, name, cell, expected):
+    comp = Compound(cell[0], tuple(cell[1:]))
+    assert unify(comp, cell, Trail())                # the two ARE one term
+    got_cell, got_comp = _answers(SK, name, cell), _answers(SK, name, comp)
+    if isinstance(expected, int):
+        assert len(got_cell) == len(got_comp) == expected
+    else:
+        assert got_cell == got_comp == expected
+
+
+def test_a_deep_compound_caller_matches_a_deep_cell_head(SK):
+    for mk in (lambda f, a: (f, a), lambda f, a: Compound(f, (a,))):
+        assert len(_answers(SK, "deep", _nest(12, 2, mk))) == 1
+        assert len(_answers(SK, "deep", _nest(12, 3, mk))) == 0
+    # a mixed spelling, Compound only in the middle
+    mixed = ("f", ("f", Compound("f", (_nest(9, 1, lambda f, a: (f, a)),))))
+    assert len(_answers(SK, "deep", mixed)) == 1
+
+
+def test_head_patterns_are_linear_in_depth():
+    from clausal.logic.compiler.head_match import head_to_match_pattern
+    import ast as _ast
+    sizes = []
+    for d in (4, 8, 12):
+        pat = head_to_match_pattern(_nest(d, 1, lambda f, a: (f, a)), {}, [], [],
+                                    None, globals_={})
+        sizes.append(sum(1 for _ in _ast.walk(pat)))
+    assert sizes[2] - sizes[1] == sizes[1] - sizes[0], sizes
+
+
+def test_subject_normaliser_twins_agree():
+    from clausal.logic.variables._variables import as_cells_for_match as c_twin
+    from clausal.terms import as_cells_for_match as py_twin
+    F = Var()
+    unify(F, "f", Trail())
+    bound = Var()
+    unify(bound, C("g", 1), Trail())
+    plain = ("k", ("f", 2), 9)
+    cases = [
+        (C("f", 1), 1), (("k", C("f", 2)), 1), (("k", C("f", 2)), 2),
+        (C("k", C("f", C("g", 1))), 3), (Compound(F, (2,)), 1), (("k", bound), 2),
+        (plain, 3), (Compound("$chars", ("a",)), 2), (Compound("()", (1,)), 1),
+        (Compound("a", ()), 1), (Var(), 2), (7, 3),
+    ]
+    for term, depth in cases:
+        a, b = c_twin(term, depth), py_twin(term, depth)
+        assert type(a) is type(b) and a == b, (term, depth, a, b)
+    # nothing copied when there is nothing to convert
+    assert c_twin(plain, 3) is plain and py_twin(plain, 3) is plain
+    # depth bounds the walk: a Compound below it is left alone
+    assert c_twin(("k", C("f", 2)), 1) == ("k", C("f", 2))

@@ -95,6 +95,55 @@ def _slice_within_prefix(index, prefix_len: int) -> bool:
 
 # ── New term types ─────────────────────────────────────────────────────────────
 
+def as_cells_for_match(term: Any, depth: int) -> Any:
+    """``term`` dereferenced, with every atom-functor ``Compound`` in its top
+    *depth* CELL levels replaced by its cell (``compound_as_cell``).
+
+    The subject normaliser for compiled clause-head ``match`` statements
+    (ruling 2026-09-26): a head pattern is written in the CELL spelling only,
+    so a caller's ``Compound`` spelling of the same term is turned into the
+    cell before the ``match`` -- linear in the pattern's own depth, where
+    doubling every pattern level with a ``$Compound`` alternative was
+    exponential (roborev 203).  The compiler emits a call only at argument
+    positions whose patterns have structure, with *depth* the deepest cell
+    pattern nesting there, so no level a pattern never inspects is walked.
+
+    Nothing is copied unless a Compound is actually converted: the result is
+    ``deref(term)`` itself, and an unconverted element keeps its original
+    object (so a bound Var inside a cell stays the Var, exactly as a plain
+    ``deref`` subject presents it).
+    """
+    term = deref(term)
+    if depth <= 0:
+        return term
+    converted = _cells_below(term, depth)
+    return term if converted is None else converted
+
+
+def _cells_below(term: Any, depth: int) -> "tuple | None":
+    """The converted form of the (already dereferenced) *term*, or None when
+    no Compound within *depth* cell levels needed converting."""
+    if type(term) is tuple:
+        if depth <= 1 or len(term) < 2:
+            return None
+        new = None
+        for i in range(1, len(term)):
+            elt = deref(term[i])
+            if type(elt) is tuple or isinstance(elt, Compound):
+                sub = _cells_below(elt, depth - 1)
+                if sub is not None:
+                    if new is None:
+                        new = list(term)
+                    new[i] = sub
+        return None if new is None else tuple(new)
+    if isinstance(term, Compound):
+        cell = compound_as_cell(term)
+        if cell is None:
+            return None
+        return _cells_below(cell, depth) or cell
+    return None
+
+
 def compound_as_cell(term: "Compound") -> "tuple | None":
     """The cell ``(functor, *args)`` that *term* IS, or None if it has none.
 

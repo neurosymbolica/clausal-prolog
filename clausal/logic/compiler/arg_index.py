@@ -369,13 +369,11 @@ def _runtime_arg_key(a: Any, deep_gate: bool = True) -> Any:
         # Ruling 2026-09-26: an atom-functor Compound of arity >= 1 IS its
         # cell -- key it (and gate it) exactly as that cell, so it reaches the
         # same bucket the cell does.
-        # A functor that is a Var BOUND to the atom is the same term too, but
-        # the bucket's lifted head pattern compares the raw functor slot, so
-        # it keys a full scan (whose clauses unify) instead.
+        # A functor that is a Var BOUND to the atom is the same term too: the
+        # bucket's ``match`` subject is normalised through ``$as_cells``
+        # (``terms.as_cells_for_match``), which derefs the functor.
         cell = compound_as_cell(a)
         if cell is not None:
-            if type(a.functor) is not str:
-                return _INDEX_VAR
             return _runtime_arg_key(cell, deep_gate)
         return (a.functor, len(a.args))
     if is_term_instance(a):

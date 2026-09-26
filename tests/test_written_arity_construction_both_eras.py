@@ -139,7 +139,4 @@ def test_a_short_predicate_head_pattern_matches_the_written_arity(mod):
     pat = head_to_match_pattern(term, {}, [], [], None,
                                 globals_=dict(mod.__dict__))
     src = ast.unparse(ast.match_case(pattern=pat, body=[ast.Pass()]))
-    # Ruling 2026-09-26: or-ed with the Compound spelling; the arity claim
-    # is about the cell alternative.
-    src = src.split(" | ")[0]
     assert src.startswith("case ['v', ") and src.count(",") == 1, src

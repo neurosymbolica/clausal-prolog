@@ -3534,6 +3534,87 @@ py_unify_census_stop(PyObject *self, PyObject *Py_UNUSED(ignored))
     Py_RETURN_NONE;
 }
 
+/*
+ * as_cells_for_match(term, depth) -- C twin of
+ * ``clausal.terms.as_cells_for_match`` (keep the two in step; parity is
+ * tested in tests/test_compound_cell_same_term.py).
+ *
+ * The clause-head ``match`` subject normaliser (ruling 2026-09-26): ``term``
+ * dereferenced, with every atom-functor Compound in its top *depth* cell
+ * levels replaced by its cell (compound_to_cell), so a caller's Compound
+ * spelling meets a cell-only head pattern as the cell.  Nothing is copied
+ * unless a Compound is converted; an unconverted element keeps its original
+ * object.  Generated code calls this INSTEAD of ``$deref`` at the argument
+ * positions whose head patterns have cell structure, so the common case
+ * costs one C call, as before.
+ */
+static int
+cells_below(PyObject *term, long depth, PyObject **out)
+{
+    *out = NULL;
+    if (PyTuple_CheckExact(term)) {
+        Py_ssize_t n = PyTuple_GET_SIZE(term);
+        if (depth <= 1 || n < 2) return 0;
+        PyObject *copy = NULL;
+        for (Py_ssize_t i = 1; i < n; i++) {
+            PyObject *elt = var_deref(PyTuple_GET_ITEM(term, i));   /* borrowed */
+            if (!PyTuple_CheckExact(elt)
+                    && !(Compound_type && PyType_Check(Compound_type)
+                         && PyObject_TypeCheck(elt, (PyTypeObject *)Compound_type)))
+                continue;
+            PyObject *sub;
+            int r = cells_below(elt, depth - 1, &sub);
+            if (r < 0) { Py_XDECREF(copy); return -1; }
+            if (!r) continue;
+            if (!copy) {
+                copy = PyTuple_New(n);
+                if (!copy) { Py_DECREF(sub); return -1; }
+                for (Py_ssize_t j = 0; j < n; j++) {
+                    PyObject *it = PyTuple_GET_ITEM(term, j);
+                    Py_INCREF(it);
+                    PyTuple_SET_ITEM(copy, j, it);
+                }
+            }
+            Py_DECREF(PyTuple_GET_ITEM(copy, i));
+            PyTuple_SET_ITEM(copy, i, sub);   /* steals */
+        }
+        if (!copy) return 0;
+        *out = copy;
+        return 1;
+    }
+    PyObject *cell;
+    int c = compound_to_cell(term, &cell);
+    if (c <= 0) return c;
+    PyObject *sub;
+    int r = cells_below(cell, depth, &sub);
+    if (r < 0) { Py_DECREF(cell); return -1; }
+    if (r) { Py_DECREF(cell); *out = sub; }
+    else   { *out = cell; }
+    return 1;
+}
+
+static PyObject *
+py_as_cells_for_match(PyObject *Py_UNUSED(module), PyObject *const *args,
+                      Py_ssize_t nargs)
+{
+    if (nargs != 2) {
+        PyErr_SetString(PyExc_TypeError,
+                        "as_cells_for_match(term, depth) takes 2 arguments");
+        return NULL;
+    }
+    long depth = PyLong_AsLong(args[1]);
+    if (depth == -1 && PyErr_Occurred()) return NULL;
+    PyObject *d = var_deref(args[0]);   /* borrowed */
+    if (depth > 0) {
+        PyObject *conv;
+        int r = cells_below(d, depth, &conv);
+        if (r < 0) return NULL;
+        if (r) return conv;
+    }
+    Py_INCREF(d);
+    return d;
+}
+
 static PyObject *
 py_unify_census(PyObject *self, PyObject *Py_UNUSED(ignored))
 {
@@ -3570,6 +3651,11 @@ static PyMethodDef module_methods[] = {
      "Off by default; costs a not-taken branch on the fallback path."},
     {"unify_census_stop", py_unify_census_stop, METH_NOARGS,
      "unify_census_stop() -> None\n\nStop counting. Results are retained."},
+    {"as_cells_for_match", (PyCFunction)(void (*)(void))py_as_cells_for_match,
+     METH_FASTCALL,
+     "as_cells_for_match(term, depth) -> term\n\n"
+     "deref(term) with atom-functor Compounds in its top depth cell levels\n"
+     "replaced by their cells (C twin of clausal.terms.as_cells_for_match)."},
     {"unify_census", py_unify_census, METH_NOARGS,
      "unify_census() -> dict\n\n"
      "{'conflations': int, 'by_type_pair': {'int/float': n, ...},\n"

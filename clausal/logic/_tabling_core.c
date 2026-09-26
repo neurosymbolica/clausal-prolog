@@ -185,8 +185,11 @@ do_normalize(PyObject *term, int depth)
     /* Compound → (functor, arg0, arg1, ...).
      * Ruling 2026-09-26: a Compound whose functor derefs to an atom (str)
      * and whose arity is >= 1 IS the cell (functor, *args), so it keys
-     * exactly as that tuple does: ("__tuple__", functor, arg0, ...).  Twin
-     * of ``compound_as_cell`` in the Python ``_normalize_for_key_py``. */
+     * exactly as that tuple does: ("__tuple__", functor, arg0, ...).  The
+     * functors '$chars' (its cell is the chars carrier, i.e. text) and '()'
+     * (TUPLE_TAG: its cell is tuple data) are excluded and keep the plain
+     * (functor, arg0, ...) shape.  Twin of ``compound_as_cell`` in the
+     * Python ``_normalize_for_key_py``. */
     if (Compound_type) {
         int r = PyObject_IsInstance(term, Compound_type);
         if (r < 0) return NULL;

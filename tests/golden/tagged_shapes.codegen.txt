@@ -169,10 +169,10 @@ def kind__all__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
 # ----
 
 def kind__p0_b0__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
-    _d0 = $deref(arg0)
+    _d0 = $as_cells(arg0, 1)
     _d1 = $deref(arg1)
     match (_d0, _d1):
-        case [['point', _v9, _v10] | $Compound(functor='point', args=[_v9, _v10]), _v8]:
+        case [['point', _v9, _v10], _v8]:
             _m15 = trail.mark()
             if $unify(_v8, 'pt', trail):
                 yield (_proceed, None)
@@ -181,10 +181,10 @@ def kind__p0_b0__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail)
 # ----
 
 def kind__p0_b1__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
-    _d0 = $deref(arg0)
+    _d0 = $as_cells(arg0, 1)
     _d1 = $deref(arg1)
     match (_d0, _d1):
-        case [['circle', _v13, _v14] | $Compound(functor='circle', args=[_v13, _v14]), _v12]:
+        case [['circle', _v13, _v14], _v12]:
             _m16 = trail.mark()
             if $unify(_v12, 'circ', trail):
                 yield (_proceed, None)
@@ -193,10 +193,10 @@ def kind__p0_b1__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail)
 # ----
 
 def kind__p0_b2__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
-    _d0 = $deref(arg0)
+    _d0 = $as_cells(arg0, 1)
     _d1 = $deref(arg1)
     match (_d0, _d1):
-        case [['seg', _v17, _v18, _v19] | $Compound(functor='seg', args=[_v17, _v18, _v19]), _v16]:
+        case [['seg', _v17, _v18, _v19], _v16]:
             _m17 = trail.mark()
             if $unify(_v16, 'seg3', trail):
                 yield (_proceed, None)
