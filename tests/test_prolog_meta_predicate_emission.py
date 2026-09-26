@@ -11,6 +11,9 @@ Three defects, one fixture each, all measured on both target engines:
 * The hand-written directive did not suppress the generated one, because the
   indicator reader only understood the one-argument shape -- so every
   predicate it named was declared twice.
+* The ONE-argument comma-list spelling, ``meta_predicate((a, b))``, must be
+  split as well: it is the spelling Scryer rejects, and left whole it would
+  also suppress the generated fallback.
 * A ``-meta_predicate`` written above ``-module`` stayed above it. Imported via
   use_module, that declaration still takes in Scryer but silently does NOT in
   Trealla, where a caller-module goal handed to the meta predicate then FAILS
@@ -47,12 +50,70 @@ def test_single_spec_directive_is_unchanged():
     assert _meta_lines(out) == [":- meta_predicate(foo(?, 1))."]
 
 
+def _directives(text):
+    return [line for line in text.splitlines() if line.startswith(":- ")]
+
+
+_BODY = "foo(A, B) <- (call(B, A))\nbar(A, B) <- (call(B, A, A))\n"
+
+
+def test_one_argument_comma_list_is_split_too():
+    """The ISO comma-list spelling is exactly the one Scryer rejects
+    (syntax_error(invalid_meta_predicate_decl)). It must be split, not passed
+    through -- the indicator reader counts its specs as declared, so an unsplit
+    comma-list would also suppress the generated fallback."""
+    # nv
+    out = clausal_source_to_prolog(
+        "-meta_predicate((foo('?', 1), bar('?', 2)))\n\n" + _BODY)
+    assert _meta_lines(out) == [
+        ":- meta_predicate(foo(?, 1)).",
+        ":- meta_predicate(bar(?, 2)).",
+    ]
+
+
 def test_meta_predicate_above_module_is_emitted_below_it():
     # nv
     out = clausal_source_to_prolog(
         "-meta_predicate(foo('?', 1), bar('?', 2))\n\n"
-        "-module(lib, [foo, bar])\n\n"
-        "foo(A, B) <- (call(B, A))\n"
-        "bar(A, B) <- (call(B, A, A))\n")
-    assert _first_directive(out).startswith(":- module(lib, ")
-    assert len(_meta_lines(out)) == 2
+        "-module(lib, [foo, bar])\n\n" + _BODY)
+    directives = _directives(out)
+    assert directives[0].startswith(":- module(lib, ")
+    assert directives[1:] == [
+        ":- meta_predicate(foo(?, 1)).",
+        ":- meta_predicate(bar(?, 2)).",
+    ]
+
+
+def test_only_the_module_line_moves():
+    """Everything written above -module keeps its relative order and stays
+    ahead of the generated prelude; only the module line moves to the top.
+    Pinned for op/3 and a flag because those were the reorder's open question:
+    measured on both engines, an op above `:- module` is a syntax error in
+    Trealla (and in both when the op is exported), and a use_module above it is
+    an existence_error in Scryer. Below the module line all of them work."""
+    # nv
+    out = clausal_source_to_prolog(
+        "-op(700, xfx, implies)\n"
+        "-double_quotes(chars)\n"
+        "-module(lib, [foo, bar])\n\n" + _BODY)
+    directives = _directives(out)
+    assert directives[0].startswith(":- module(lib, ")
+    assert directives[1:3] == [
+        ":- op(700, xfx, implies).",
+        ":- set_prolog_flag(double_quotes, chars).",
+    ]
+    assert directives[3:] == [
+        ":- meta_predicate(foo(?, 1)).",
+        ":- meta_predicate(bar(?, 2)).",
+    ]
+
+
+def test_a_second_module_directive_is_still_filtered():
+    """Every module directive goes through the export filter, as it always
+    did. The first rewrite of the reorder let a second one through unfiltered."""
+    # nv
+    out = clausal_source_to_prolog(
+        "-module(lib, [foo])\n-module(lib2, [bar, nothere])\n\n" + _BODY)
+    modules = [d for d in _directives(out) if d.startswith(":- module(")]
+    assert len(modules) == 2
+    assert "nothere" not in modules[1]
