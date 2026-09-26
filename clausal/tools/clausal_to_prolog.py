@@ -1732,7 +1732,15 @@ class _ClausalToProlog:
                                     (PAtom("double_quotes"), PAtom("chars"))))
 
     def _convert_module_directive(self, call: python_ast.Call) -> PDirective:
-        """Convert -module(name, [exports])."""
+        """Convert -module(name, [exports]).
+
+        Three export spellings, all engine-accepted: a CALL TEMPLATE
+        ``edge(A, B)`` and the ISO predicate indicator ``edge/2`` both cross as
+        ``edge/2``; a bare name crosses as ``Name/0``. Anything else is REFUSED.
+        It used to be dropped without a word, so ``-module(m, [edge/2])`` --
+        the ISO spelling the engine accepts and pins (ruling R6b) -- exported
+        nothing at all: a module whose export list silently shrank.
+        """
         mod_name = self._get_string_or_name(call.args[0])
         self._module_name = mod_name
         exports = []
@@ -1745,6 +1753,19 @@ class _ClausalToProlog:
                 elif isinstance(elt, python_ast.Name):
                     functor = resolve_name(elt.id, self.dialect)
                     exports.append(PCompound("/", (PAtom(functor), PNumber(0))))
+                elif (isinstance(elt, python_ast.BinOp) and isinstance(elt.op, python_ast.Div)
+                      and isinstance(elt.left, python_ast.Name)
+                      and isinstance(elt.right, python_ast.Constant)
+                      and type(elt.right.value) is int and elt.right.value >= 0):
+                    functor = resolve_name(elt.left.id, self.dialect)
+                    exports.append(PCompound("/", (PAtom(functor), PNumber(elt.right.value))))
+                else:
+                    raise NotImplementedError(
+                        f"clausal_to_prolog: -module({mod_name}, [...]) export "
+                        f"`{python_ast.unparse(elt)}` is not an export element -- "
+                        "write a call template `name(A, B)`, a predicate indicator "
+                        "`name/2`, or a bare name. It used to be dropped silently, "
+                        "exporting less than the source declares.")
         export_list = PList(tuple(exports))
         return PDirective(PCompound("module", (PAtom(mod_name), export_list)))
 
