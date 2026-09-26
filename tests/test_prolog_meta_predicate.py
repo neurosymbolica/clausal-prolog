@@ -670,12 +670,22 @@ def test_a_hand_written_directive_suppresses_the_generated_one():
 
 
 def test_the_conjunction_spelling_suppresses_every_predicate_it_names():
-    """ISO allows one directive to carry a comma-separated list of specs."""
+    """A comma-separated list of specs names every predicate in it, so none of
+    them also gets a generated directive -- and it crosses as ONE DIRECTIVE PER
+    SPEC, never as the comma-list. ISO permits the comma-list, but Scryer
+    rejects it (syntax_error(invalid_meta_predicate_decl)); one directive per
+    spec is the only spelling both target engines accept (measured
+    2026-09-26). This test used to pin the passthrough, count == 1, which was
+    the spelling Scryer refuses."""
     src = ("-meta_predicate((host(0), other(0)))\n\n"
            "host(G) <- call_goal(G)\n"
            "other(G) <- call_goal(G)\n")
     out = clausal_source_to_prolog(src, strict=True)
-    assert out.count("meta_predicate") == 1
+    meta = [line for line in out.splitlines() if "meta_predicate" in line]
+    assert meta == [
+        ":- meta_predicate(host(0)).",
+        ":- meta_predicate(other(0)).",
+    ]
 
 
 def test_existing_indicators_read_both_spellings():
