@@ -46,6 +46,8 @@ class TestRespell:
         ('"a\'b"', "'a\\'b'"),
         ('"x\\"y"', "'x\"y'"),
         ('"a\\\\\'b"', "'a\\\\\\'b'"),       # backslash, apostrophe: both kept
+        ('"\\x00"', "'\\x00'"),                # a control character stays an escape
+        ('"tab\\tnl\\n"', "'tab\\tnl\\n'"),
     ])
     def test_simple_literals(self, raw, want):
         assert d._respell(raw) == want
@@ -63,8 +65,12 @@ class TestLiteralClassification:
     def test_a_python_escape_is_not_a_literal(self):
         assert _lits('p(X) <- (X is ++"py")\n') == []
 
-    def test_a_python_escape_chain_is_python_throughout(self):
-        assert _lits('p(T) <- (T is ++"Hello, " ++ NAME ++ "!")\n') == []
+    def test_only_the_adjacent_escape_operand_is_python(self):
+        """``++"a" ++ NAME ++ "!"`` is ``(++"a") + (+NAME) + (+"!")``: the
+        compiler escapes only the operand right after an adjacent ``++``, so
+        the trailing ``"!"`` is a literal the mode reads."""
+        assert _lits('p(T) <- (T is ++"Hello, " ++ NAME ++ "!")\n') == [("!", False, False)]
+        assert _lits('p(T) <- (T is + +"spaced")\n') == [("spaced", False, False)]
 
     def test_dcg_bare_terminal_is_kept_list_elements_follow_the_mode(self):
         lits = _lits('g >> ("abc", ["hello", X, f("b")], word("hi"), {Y == "z"})\n')

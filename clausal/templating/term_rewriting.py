@@ -947,14 +947,12 @@ def _strip_variable_markers(node):
     return _Stripper().visit(deepcopy(node))
 
 
-#: Control forms and meta-predicates whose ARGUMENTS are goals in goal
-#: position (their calls run), for the cross-mode literal lint.  Anything
-#: else called in a goal seam is a goal whose arguments are DATA.
-_GOAL_POSITION_META = frozenset({
-    "if_", "not_", "once", "ignore", "call", "findall", "forall", "bagof",
-    "setof", "aggregate_all", "maplist", "foldl", "catch", "when",
-    "include", "exclude", "partition",
-})
+#: Control forms whose every argument is a goal, for the cross-mode literal
+#: lint.  The meta-predicates proper (``findall``, ``maplist``, ``catch``,
+#: ...) are asked position by position through
+#: ``clause_ops._goal_positions``, the compiler's own per-arity table, so a
+#: ``findall`` TEMPLATE or a ``catch`` catcher stays data.
+_GOAL_CONTROL_FORMS = frozenset({"if_", "not_", "ignore"})
 
 
 def _clause_scope_exclusions(import_remap) -> frozenset:
@@ -6402,9 +6400,13 @@ class EmbedTransformer(NodeTransformer):
         # call is that call's (flip review M1 on 571ffb0c, correcting the
         # earlier "innermost callee" reading).  Goal position descends
         # through the control forms -- a conjunction tuple, and/or, not,
-        # if_ -- and through the goal arguments of the known
-        # meta-predicates, whose calls are real calls.  Sites are emitted in
-        # source order.
+        # if_ -- and through exactly the goal ARGUMENTS of a meta-predicate
+        # (``_goal_positions``: findall/3's second, catch/3's first and
+        # third, maplist's first, ...); its data arguments are data.  A
+        # meta-predicate NAME this file rebinds by ``-import_from`` is the
+        # import's predicate, not the builtin, and is an ordinary goal.
+        # Sites are emitted in source order.
+        from clausal.logic.builtins.clause_ops import _goal_positions  # noqa: PLC0415
         sites = []
         stack = [expression]
         while stack:
@@ -6418,9 +6420,14 @@ class EmbedTransformer(NodeTransformer):
                 stack.append(node.operand)
                 continue
             if isinstance(node, Call) and isinstance(node.func, Name) \
-                    and node.func.id in _GOAL_POSITION_META:
-                stack.extend(reversed([arg for arg in node.args if isinstance(arg, (Call, Tuple, BoolOp, UnaryOp))]))
-                continue
+                    and node.func.id not in transformer._import_remap:
+                name = node.func.id
+                positions = (range(len(node.args)) if name in _GOAL_CONTROL_FORMS
+                             else _goal_positions(name, len(node.args), None))
+                if positions:
+                    stack.extend(reversed([node.args[i] for i in positions
+                                           if i < len(node.args)]))
+                    continue
             if not isinstance(node, Call):
                 continue
             callee = _callee(node)

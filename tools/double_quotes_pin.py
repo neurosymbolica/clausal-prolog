@@ -52,6 +52,7 @@ import tokenize
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from clausal.templating.quote_map import build_quote_map, quote_of  # noqa: E402
+from clausal.templating.term_rewriting import _python_escape_operand  # noqa: E402
 
 DIRECTIVE = "-double_quotes(atom)"
 _MODE_RE = re.compile(r"(?m)^\s*-\s*double_quotes\s*\(")
@@ -94,20 +95,13 @@ def _is_seam(n) -> bool:
 
 def _is_escape(n) -> bool:
     """A ``++expr`` escape: its operand is PYTHON, and a ``"..."`` in it is a
-    Python str the -double_quotes mode never reads.  A ``++`` CHAIN
-    (``++"Hello, " ++ NAME ++ "!"``, which parses as ``(++"Hello, ") + (+NAME)
-    + (+"!")``) is one Python text expression: every operand along the
-    ``+`` spine is Python too."""
-    if (isinstance(n, ast.UnaryOp) and isinstance(n.op, ast.UAdd)
-            and isinstance(n.operand, ast.UnaryOp)
-            and isinstance(n.operand.op, ast.UAdd)):
-        return True
-    if isinstance(n, ast.BinOp) and isinstance(n.op, ast.Add):
-        left = n.left
-        while isinstance(left, ast.BinOp) and isinstance(left.op, ast.Add):
-            left = left.left
-        return _is_escape(left)
-    return False
+    Python str the -double_quotes mode never reads.  Exactly the compiler's
+    own test (``_python_escape_operand``): an ADJACENT ``++`` and nothing
+    more.  In particular a ``+`` chain is not one escape -- ``++"a" ++ NAME
+    ++ "!"`` parses as ``(++"a") + (+NAME) + (+"!")``, the binary ``+``
+    spine is Clausal arithmetic, and the trailing ``"!"`` is an ordinary
+    literal read by the mode (flip review, job 255)."""
+    return _python_escape_operand(n) is not None
 
 
 def _dq_literals(source: str, path: str):
@@ -423,7 +417,10 @@ def _respell(text: str) -> str | None:
     if not isinstance(value, str):
         return None
     inner = value.replace("\\", "\\\\").replace("'", "\\'")
-    inner = inner.replace("\n", "\\n").replace("\t", "\\t").replace("\r", "\\r")
+    # Every non-printable character is written as an escape, so no NUL or
+    # control byte ever lands raw in the new literal.
+    inner = "".join(ch if ch.isprintable() else ch.encode("unicode_escape").decode("ascii")
+                    for ch in inner)
     return "'" + inner + "'"
 
 

@@ -352,8 +352,11 @@ class TestStringClassNameIsATypeError:
         """The name is checked before the node: a source with no operator
         node at all still surfaces the string mistake on its first subterm."""
         from clausal.logic.exceptions import LogicException
-        with pytest.raises(LogicException):
+        with pytest.raises(LogicException) as exc:
             list(call("has_gt_e_str", chars("p(X) <- q(X)\n"), module=chars_matchers))
+        formal = exc.value.term.args[0]
+        assert formal.functor == "type_error"
+        assert formal.args[0] == mint("atom") and formal.args[1] == chars("GtE")
 
     def test_construct_with_a_string_name_raises(self, chars_matchers):
         from clausal.logic.exceptions import LogicException

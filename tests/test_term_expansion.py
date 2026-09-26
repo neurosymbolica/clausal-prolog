@@ -891,6 +891,19 @@ class TestExpansionResultIsValidated:
         formal, context = exc.value.term.args
         assert formal == mint("instantiation_error") and "Init list" in context
 
+    def test_the_none_atom_in_the_init_list_is_refused_not_a_fact(self):
+        source = (
+            'term_expansion(_term, _term, module_expansion_state(_init, _f, _s), '
+            "module_expansion_state(['none' | _init], _f, _s)) <- True\n"
+            'foo("a"),\n'
+        )
+        preds, _, md = _parse_and_collect(source)
+        with pytest.raises(LogicException) as exc:
+            run_term_expansion(preds, md)
+        formal, context = exc.value.term.args
+        assert formal.functor == "type_error" and formal.args[1] == mint("none")
+        assert "suppression has no meaning" in context
+
     def test_a_head_term_in_the_init_list_becomes_a_fact(self):
         source = (
             '-private([bar])\n'

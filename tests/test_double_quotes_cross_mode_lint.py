@@ -260,6 +260,26 @@ def test_a_meta_predicate_argument_is_goal_position(tmp_path, monkeypatch):
     assert len(hits) == 1 and "`p`" in str(hits[0].message)
 
 
+def test_a_meta_predicate_data_argument_stays_data(tmp_path, monkeypatch):
+    """``findall(f("x"), p(X), L)``: the template is data, so ``f`` -- an
+    imported atom-mode data functor -- is not a site; only ``p`` runs."""
+    _load(tmp_path, monkeypatch, "xm_owner_tmpl", """
+        -double_quotes(atom)
+        -module(xm_owner_tmpl, [f(v), p/1])
+        p("x"),
+    """)
+    _, hits = _load(tmp_path, monkeypatch, "xm_host_tmpl", """
+        -double_quotes(chars)
+        -import_from(xm_owner_tmpl, [f, p])
+
+        def go():
+            return [L for L in --findall(f("t"), p("x"), L)]
+    """)
+    assert len(hits) == 1
+    msg = str(hits[0].message)
+    assert "`p`" in msg and '"x"' in msg and '"t"' not in msg and "`f`" not in msg
+
+
 def test_two_goal_calls_in_one_seam_are_reported_in_source_order(
         tmp_path, monkeypatch):
     _load(tmp_path, monkeypatch, "xm_owner_two2", """

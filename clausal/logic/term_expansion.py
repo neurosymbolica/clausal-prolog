@@ -547,6 +547,13 @@ def _validated_expansion(term, wrap_head, slot=None):
             f"{where} is unbound; a rule must bind it to {what}"))
     if isinstance(term, PredicateItem):
         return term
+    if slot and term == _NONE_ATOM:
+        # ``none`` suppresses an ANSWER; inside Init/Final it would wrap into
+        # a stray ``none/0`` fact with no diagnostic, so it is refused by name.
+        raise LogicException(type_error(
+            "callable", term,
+            f"{where} holds the atom `none`, but suppression has no meaning "
+            f"there -- a list item is {what}; leave the list shorter instead"))
     # A chars carrier is a 2-tuple headed by CHARS_TAG: compound_cell_shape
     # answers False for it, and it is neither an atom nor a term instance,
     # so no separate guard is needed to keep a STRING out of a fact head.

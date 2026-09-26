@@ -149,9 +149,9 @@ easily reason about it. If it exists as a term, you can test it, transform it,
 and reason about it with the full power of logic programming.
 
 ```clausal
-# Describe the output as a term:
+# Describe the output as a term (an f-string builds the text in one step):
 greeting_text(NAME, TEXT) <- (
-    TEXT is ++"Hello, " ++ NAME ++ "!"
+    TEXT is f"Hello, {NAME}!"
 )
 
 # Test it without side effects:
