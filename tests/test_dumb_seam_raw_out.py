@@ -75,11 +75,17 @@ class TestRawOut:
         assert v == "permitted" and type(v) is str and is_atom(v)
 
     def test_a_string_is_the_carrier_and_compares_with_a_seam_literal(self):
-        m = _rb("_ro_b", (
-            "def go():\n"
-            "    for T in --txt(T):\n"
-            "        return T, (T == --\"some text\"), (T == \"some text\"), to_python(T)\n"
-        ))
+        # ``T == "some text"`` is written here ON PURPOSE to show it is False;
+        # the text-compare lint (step (g)) fires on exactly that spelling, so
+        # this is also its seam-level positive control.
+        import pytest
+        from clausal.lint_warnings import ClausalSeamTextCompareWarning
+        with pytest.warns(ClausalSeamTextCompareWarning):
+            m = _rb("_ro_b", (
+                "def go():\n"
+                "    for T in --txt(T):\n"
+                "        return T, (T == --\"some text\"), (T == \"some text\"), to_python(T)\n"
+            ))
         t, eq_seam, eq_py, text = m.go()
         assert is_chars(t) and t == chars("some text")
         assert eq_seam is True, "a string answer IS the seam literal under -double_quotes(chars)"

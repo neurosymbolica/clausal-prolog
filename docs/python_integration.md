@@ -165,10 +165,13 @@ for V in --verdict(V):
         ...
     text = to_python(V)            # ('result', 'permitted', 'Article 6(1)', 'art_6')
 for T in --txt(T):
-    T == "some text"               # FALSE: a carrier is not a Python str
-    T == --"some text"             # True under -double_quotes(chars)
+    T == --"some text"             # True: the same string term
     to_python(T)                   # 'some text'
 ```
+
+A plain Python literal on the other side — `T == "some text"` — is **False**
+for a string answer (a carrier is not a Python `str`) and True only for an
+atom answer; the lint below warns at load wherever that is written.
 
 An answer crosses **by identity** only when it is proven to hold no logic
 variable at all — it is atomic, it is a constant the compiler baked into a
