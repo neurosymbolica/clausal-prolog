@@ -209,6 +209,12 @@ def compile_module(
     # ── Step 2: Process directives ───────────────────────────────────────
     _process_directives(module_items, db, module_dict)
 
+    # ── Step 2b: warn on an exported ATOM also made a predicate ──────────
+    #    Operator ruling 2026-09-26 (a warning, not a refusal: ISO allows
+    #    the atom foo beside a predicate foo/N).
+    _warn_atom_exports_defined_as_predicates(
+        module_items, predicate_nodes, module_name)
+
     # ── Step 3: Process module/private declarations ──────────────────────
     #    Needs to know which declared functors are PREDICATES (P3-2 Task 2 /
     #    R6): a predicate keeps its class, a data functor binds its interned
@@ -2688,6 +2694,80 @@ def _module_constants(module_dict: dict) -> dict:
     no registry, so callers can test membership unconditionally.
     """
     return getattr(module_dict.get("$module"), "constants", None) or {}
+
+
+_PREDICATE_DIRECTIVES = ("dynamic", "table", "discontiguous", "shallow")
+
+
+def _warn_atom_exports_defined_as_predicates(module_items: list,
+                                            predicate_nodes: list,
+                                            module_name: str) -> None:
+    """Warn, once per (module, name), when a bare name exported as an ATOM
+    (``-module(m, [..., foo, ...])``) is also made a PREDICATE here, at any
+    arity: clauses (``foo,`` / ``foo <- ...`` / ``foo(1),``), a clause-free
+    ``-dynamic``/``-table``/``-discontiguous``/``-shallow``, or a
+    ``-specialize`` alias.  Operator ruling 2026-09-26: ISO allows both, so
+    a warning; see ``ClausalAtomExportDefinedAsPredicateWarning`` for the
+    harm.  Any arity (roborev 228): the module attribute is bound by NAME,
+    so ``foo/1`` makes ``m.foo`` the handle just as ``foo/0`` does.  An ISO
+    ``foo/N`` export entry is a predicate export, not an atom, and never
+    warns."""
+    exported_atoms = []
+    for item in module_items:
+        if isinstance(item, ModuleDeclItem):
+            exported_atoms.extend(e for e in item.exports if isinstance(e, str))
+    if not exported_atoms:
+        return
+    atoms = set(exported_atoms)
+    # name -> {arity -> [shape, ...]} in source order.
+    made: dict[str, dict[int, list[str]]] = {}
+
+    def note(name, arity, shape):
+        shapes = made.setdefault(name, {}).setdefault(arity, [])
+        if shape not in shapes:
+            shapes.append(shape)
+
+    for node in predicate_nodes:
+        functor, arity = head_key(node.head)
+        if functor in atoms:
+            if arity:
+                note(functor, arity, f"clauses for {functor}/{arity}")
+            else:
+                note(functor, 0, f"a fact `{functor},`" if node.body is True
+                     else f"a rule `{functor} <- ...`")
+    for item in module_items:
+        if isinstance(item, DirectiveItem) and item.name in _PREDICATE_DIRECTIVES:
+            for spec in item.specs:
+                if spec[0] in atoms:
+                    note(spec[0], spec[1], f"-{item.name}({spec[0]}/{spec[1]})")
+        elif isinstance(item, SpecializeItem) and item.new_name in atoms:
+            note(item.new_name, None,
+                 f"-specialize(..., alias={item.new_name})")
+    if not made:
+        return
+    from clausal.lint_warnings import (  # noqa: PLC0415
+        ClausalAtomExportDefinedAsPredicateWarning,
+    )
+    for name in dict.fromkeys(exported_atoms):
+        by_arity = made.get(name)
+        if not by_arity:
+            continue
+        arities = sorted(a for a in by_arity if a is not None)
+        indicators = ", ".join(f"{name}/{a}" for a in arities) or name
+        shapes = "; ".join(s for a in by_arity for s in by_arity[a])
+        export = (f"{name}/{arities[0]}" if len(arities) == 1
+                  else f"{name}/N")
+        warnings.warn(ClausalAtomExportDefinedAsPredicateWarning(
+            f"{module_name} exports `{name}` as an ATOM (the bare `{name}` in "
+            f"its -module export list) and also defines the predicate "
+            f"{indicators} ({shapes}).  ISO allows both, but here the module "
+            f"attribute `{name}` -- in this module and in every importer -- "
+            f"is the predicate's handle, not the atom '{name}', so data keyed "
+            f"by the atom that is read through `{module_name}.{name}` no "
+            f"longer matches.  Drop the {indicators} definition if it is only "
+            f"there for conformance, or rename one of the two; to export the "
+            f"predicate, write {export} in the export list instead of "
+            f"`{name}`."), stacklevel=2)
 
 
 def _process_declarations(module_items: list, module_dict: dict,
