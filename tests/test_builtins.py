@@ -13,7 +13,9 @@ from __future__ import annotations
 import dataclasses
 import pytest
 
+from clausal import cell_args, cell_functor
 from clausal.logic.atoms import mint
+from clausal.logic.exceptions import error_context_text
 from clausal.logic.cells import chars
 from clausal.logic.database import Clause, Database, Module
 from clausal.logic.solve import solve
@@ -482,9 +484,9 @@ class TestWK5:
         )
         with pytest.raises(LogicException) as exc:
             sol_var(goal, names, mod=mod)
-        formal = exc.value.term.args[0]
-        assert formal.functor == "type_error"
-        assert formal.args[0] == mint("atom")
+        formal = cell_args(exc.value.term)[0]
+        assert cell_functor(formal) == "type_error"
+        assert cell_args(formal)[0] == mint("atom")
 
 
 
@@ -602,9 +604,9 @@ class TestBetweenArithmeticBounds:
         with pytest.raises(LogicException) as exc:
             sol_var(self._between(0, Div(left=7, right=2), x), x)
         err = exc.value.term
-        assert err.functor == "error"
-        assert err.args[0].functor == "type_error"
-        assert err.args[0].args[0] == mint("integer")
+        assert cell_functor(err) == "error"
+        assert cell_functor(cell_args(err)[0]) == "type_error"
+        assert cell_args(cell_args(err)[0])[0] == mint("integer")
 
     def test_ground_non_numeric_expression_raises_type_error(self):
         """An arith term over non-numeric ground leaves cannot evaluate:
@@ -615,8 +617,8 @@ class TestBetweenArithmeticBounds:
         with pytest.raises(LogicException) as exc:
             sol_var(self._between(0, Add(left="a", right="b"), x), x)
         err = exc.value.term
-        assert err.args[0].functor == "type_error"
-        assert err.args[0].args[0] == mint("integer")
+        assert cell_functor(cell_args(err)[0]) == "type_error"
+        assert cell_args(cell_args(err)[0])[0] == mint("integer")
 
     @pytest.mark.parametrize("shape", ["var_first", "garbage_first"])
     def test_unbound_var_mixed_with_garbage_still_raises(self, shape):
@@ -632,7 +634,7 @@ class TestBetweenArithmeticBounds:
                  else Sub(left="a", right=n))
         with pytest.raises(LogicException) as exc:
             sol_var(self._between(0, bound, x), x)
-        assert exc.value.term.args[0].functor == "type_error"
+        assert cell_functor(cell_args(exc.value.term)[0]) == "type_error"
 
     def test_ground_zero_divisor_raises_with_between_context(self):
         """``1 // 0`` evaluates to nothing while fully ground — the LOCAL
@@ -644,9 +646,9 @@ class TestBetweenArithmeticBounds:
         with pytest.raises(LogicException) as exc:
             sol_var(self._between(0, FloorDiv(left=1, right=0), x), x)
         err = exc.value.term
-        assert err.args[0].functor == "type_error"
-        assert err.args[0].args[0] == mint("integer")
-        assert "between/3" in str(err)
+        assert cell_functor(cell_args(err)[0]) == "type_error"
+        assert cell_args(cell_args(err)[0])[0] == mint("integer")
+        assert "between/3" in error_context_text(err)
 
     def test_expression_with_unbound_leaf_keeps_mode_failure(self):
         """A bound expression still containing an unbound Var behaves like a

@@ -29,7 +29,8 @@ from clausal.import_hook import (
     runtime_builtins,
 )
 from clausal.logic.compiler_v2 import compile_module
-from clausal.logic.exceptions import LogicException
+from clausal import cell_args, cell_functor
+from clausal.logic.exceptions import LogicException, error_context_text
 from clausal.logic.database import Module as LogicModule, head_key
 from clausal.logic.solve import call
 from clausal.logic.term_expansion import (
@@ -814,11 +815,11 @@ class TestExpansionResultIsValidated:
         with pytest.raises(LogicException) as exc:
             _load_module("_te_chars_none_shape", str(path))
         term = exc.value.term
-        assert term.functor == "error"
-        formal, context = term.args
-        assert formal.functor == "type_error"
-        assert formal.args[0] == mint("callable")
-        assert formal.args[1] == ("$chars", "none")
+        assert type(term) is tuple and cell_functor(term) == "error"
+        formal, context = cell_args(term)[0], error_context_text(term)
+        assert cell_functor(formal) == "type_error"
+        assert cell_args(formal)[0] == mint("callable")
+        assert cell_args(formal)[1] == ("$chars", "none")
         assert "the suppression sentinel is the ATOM none" in context
         assert "write none or 'none'" in context
 
@@ -830,8 +831,8 @@ class TestExpansionResultIsValidated:
         preds, _, md = _parse_and_collect(source)
         with pytest.raises(LogicException) as exc:
             run_term_expansion(preds, md)
-        formal = exc.value.term.args[0]
-        assert formal.functor == "type_error" and formal.args[1] == 42
+        formal = cell_args(exc.value.term)[0]
+        assert cell_functor(formal) == "type_error" and cell_args(formal)[1] == 42
 
     def test_a_bad_element_inside_a_list_answer_is_a_type_error(self):
         source = (
@@ -841,8 +842,8 @@ class TestExpansionResultIsValidated:
         preds, _, md = _parse_and_collect(source)
         with pytest.raises(LogicException) as exc:
             run_term_expansion(preds, md)
-        formal = exc.value.term.args[0]
-        assert formal.functor == "type_error" and formal.args[1] == 7
+        formal = cell_args(exc.value.term)[0]
+        assert cell_functor(formal) == "type_error" and cell_args(formal)[1] == 7
 
     def test_an_unbound_answer_is_an_instantiation_error(self):
         source = (
@@ -852,7 +853,7 @@ class TestExpansionResultIsValidated:
         preds, _, md = _parse_and_collect(source)
         with pytest.raises(LogicException) as exc:
             run_term_expansion(preds, md)
-        formal, context = exc.value.term.args
+        formal, context = cell_args(exc.value.term)[0], error_context_text(exc.value.term)
         assert formal == mint("instantiation_error")
         assert "term_expansion/4: the expansion is unbound" in context
 
@@ -864,7 +865,7 @@ class TestExpansionResultIsValidated:
         preds, _, md = _parse_and_collect(source)
         with pytest.raises(LogicException) as exc:
             run_term_expansion(preds, md)
-        assert "a head term" in exc.value.term.args[1]
+        assert "a head term" in error_context_text(exc.value.term)
 
     def test_a_bad_item_in_the_final_list_is_a_type_error_naming_the_slot(self):
         source = (
@@ -875,8 +876,8 @@ class TestExpansionResultIsValidated:
         preds, _, md = _parse_and_collect(source)
         with pytest.raises(LogicException) as exc:
             run_term_expansion(preds, md)
-        formal, context = exc.value.term.args
-        assert formal.functor == "type_error" and formal.args[1] == 42
+        formal, context = cell_args(exc.value.term)[0], error_context_text(exc.value.term)
+        assert cell_functor(formal) == "type_error" and cell_args(formal)[1] == 42
         assert "Final list" in context and "none" not in context
 
     def test_an_unbound_item_in_the_init_list_is_an_instantiation_error(self):
@@ -888,7 +889,7 @@ class TestExpansionResultIsValidated:
         preds, _, md = _parse_and_collect(source)
         with pytest.raises(LogicException) as exc:
             run_term_expansion(preds, md)
-        formal, context = exc.value.term.args
+        formal, context = cell_args(exc.value.term)[0], error_context_text(exc.value.term)
         assert formal == mint("instantiation_error") and "Init list" in context
 
     def test_the_none_atom_in_the_init_list_is_refused_not_a_fact(self):
@@ -900,8 +901,8 @@ class TestExpansionResultIsValidated:
         preds, _, md = _parse_and_collect(source)
         with pytest.raises(LogicException) as exc:
             run_term_expansion(preds, md)
-        formal, context = exc.value.term.args
-        assert formal.functor == "type_error" and formal.args[1] == mint("none")
+        formal, context = cell_args(exc.value.term)[0], error_context_text(exc.value.term)
+        assert cell_functor(formal) == "type_error" and cell_args(formal)[1] == mint("none")
         assert "suppression has no meaning" in context
 
     def test_a_head_term_in_the_init_list_becomes_a_fact(self):
@@ -934,8 +935,8 @@ class TestExpansionResultIsValidated:
         preds, _, md = _parse_and_collect(source)
         with pytest.raises(LogicException) as exc:
             run_term_expansion(preds, md)
-        formal, context = exc.value.term.args
-        assert formal.functor == "type_error" and formal.args[1] == 42
+        formal, context = cell_args(exc.value.term)[0], error_context_text(exc.value.term)
+        assert cell_functor(formal) == "type_error" and cell_args(formal)[1] == 42
         assert "Init list" in context
 
     def test_a_head_pattern_answer_that_is_an_atom_becomes_a_fact(self):

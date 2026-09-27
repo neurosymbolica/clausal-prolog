@@ -141,10 +141,11 @@ class TestMapList2:
         it used to fail silently.  ``maplist(42, [])`` never calls it and
         succeeds, as in Scryer."""
         # nv
+        from clausal import cell_args, cell_functor
         from clausal.logic.exceptions import LogicException
         with pytest.raises(LogicException) as info:
             run_trampoline(_map_list__2, 42, [1, 2, 3])
-        assert info.value.term.args[0].functor == "type_error"
+        assert cell_functor(cell_args(info.value.term)[0]) == "type_error"
         assert run_trampoline(_map_list__2, 42, []) == 1
 
 

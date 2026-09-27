@@ -19,7 +19,9 @@ import textwrap
 
 import pytest
 
+from clausal import cell_args, cell_functor
 from clausal.logic.atoms import mangle
+from clausal.logic.exceptions import error_context_text
 from clausal.logic.variables import Var, deref
 
 
@@ -126,7 +128,7 @@ def test_a_qualified_atom_for_a_missing_predicate_is_an_existence_error(lib):
     from clausal.logic.predicate import _dispatch_at
     with pytest.raises(LogicException) as info:
         _dispatch_at(mangle(LIB, "nope"), 1)
-    assert info.value.term.args[0].functor == "existence_error"
+    assert cell_functor(cell_args(info.value.term)[0]) == "existence_error"
 
 
 def test_a_compiled_body_calling_a_held_qualified_handle_runs_it(lib, tmp_path):
@@ -181,8 +183,8 @@ def test_a_mangled_atom_whose_module_is_not_loaded_keeps_the_atom_error(lib):
     from clausal.logic.predicate import _dispatch_at
     with pytest.raises(LogicException) as info:
         _dispatch_at(mangle("no_such_module_anywhere", "secret"), 1)
-    inner = info.value.term.args[0]
-    assert inner.functor == "existence_error" and inner.args[0] == "procedure"
+    inner = cell_args(info.value.term)[0]
+    assert cell_functor(inner) == "existence_error" and cell_args(inner)[0] == "procedure"
 
 
 def test_the_funnel_resolves_a_handle_to_an_imported_predicate(lib, tmp_path):
@@ -233,9 +235,9 @@ def test_a_missing_predicate_error_names_the_module_in_its_indicator(lib):
     from clausal.logic.predicate import _dispatch_at
     with pytest.raises(LogicException) as info:
         _dispatch_at(mangle(LIB, "nope"), 2)
-    inner = info.value.term.args[0]
-    assert inner.functor == "existence_error"
-    obj_type, indicator = inner.args
+    inner = cell_args(info.value.term)[0]
+    assert cell_functor(inner) == "existence_error"
+    obj_type, indicator = cell_args(inner)
     assert obj_type == "procedure"
-    assert indicator.functor == "/" and tuple(indicator.args) == ("nope", 2)
-    assert LIB in info.value.term.args[1], "the module is named in the message"
+    assert cell_functor(indicator) == "/" and cell_args(indicator) == ("nope", 2)
+    assert LIB in error_context_text(info.value.term), "the module is named in the message"

@@ -46,6 +46,7 @@ import textwrap
 import pytest
 
 import clausal.import_hook  # noqa: F401 -- installs the meta-path finder
+from clausal import cell_args, cell_functor
 from clausal.import_hook import _load_module
 from clausal.logic.atoms import mangle
 from clausal.logic.exceptions import LogicException
@@ -189,10 +190,10 @@ _FIB = """
 def _predicate_indicator_culprit(goal, args, lm):
     with pytest.raises(LogicException) as exc:
         list(call(goal, *args, module=lm))
-    err = exc.value.term.args[0]
-    assert err.functor == "type_error", err
-    assert err.args[0] == "predicate_indicator", err
-    return err.args[1]
+    err = cell_args(exc.value.term)[0]
+    assert cell_functor(err) == "type_error", err
+    assert cell_args(err)[0] == "predicate_indicator", err
+    return cell_args(err)[1]
 
 
 def _listed(goal, args, lm, capsys):
@@ -273,9 +274,9 @@ def test_bare_listing_of_a_hide_data_atom_keeps_its_own_spelling():
         secret = mangle("hide_owner", "hide_secret")
         with pytest.raises(LogicException) as exc:
             list(call("listing", secret, module=_lm(mod)))
-        err = exc.value.term.args[0]
-        assert err.functor == "type_error"
-        assert err.args == ("predicate_indicator", secret)
+        err = cell_args(exc.value.term)[0]
+        assert cell_functor(err) == "type_error"
+        assert cell_args(err) == ("predicate_indicator", secret)
     finally:
         sys.modules.pop("hide_owner", None)
         if saved is not None:
@@ -338,9 +339,9 @@ def _all(goal, lm):
 def _existence_culprit(goal, arg, lm):
     with pytest.raises(LogicException) as exc:
         list(call(goal, arg, module=lm))
-    err = exc.value.term.args[0]
-    assert err.functor == "existence_error", err
-    return err.args[1]
+    err = cell_args(exc.value.term)[0]
+    assert cell_functor(err) == "existence_error", err
+    return cell_args(err)[1]
 
 
 @pytest.fixture
@@ -376,7 +377,7 @@ def test_a_plain_cell_writes_only_through_the_caller_s_namespace(clib_pair):
     before = list(owner_row.clauses)
     for goal in ("add_h", "add_d"):
         culprit = _existence_culprit(goal, 11, lm)
-        assert culprit.args == ("dfact", 1), (goal, culprit)
+        assert cell_args(culprit) == ("dfact", 1), (goal, culprit)
     assert owner_row.clauses == before
     assert lm.db.row("dfact", 1, create=False) is None, "written locally"
 
@@ -399,7 +400,7 @@ def test_a_plain_cell_runs_in_the_owner_only_when_qualified(clib_pair, lister):
         run(G) <- call(G)
     """)
     # ISO since main ae1a456d: an unknown procedure is existence_error.
-    assert _existence_culprit("run", ("dfact", Var()), _lm(bare)).args == ("dfact", 1)
+    assert cell_args(_existence_culprit("run", ("dfact", Var()), _lm(bare))) == ("dfact", 1)
     # Qualified, it runs in the owner: M:G, or solve(cell, M).
     X = Var()
     assert [deref(X) for _ in solve((":", "sa_clib", ("dfact", X)))] == [0]

@@ -29,7 +29,8 @@ from pathlib import Path
 
 import pytest
 
-from clausal.logic.exceptions import LogicException
+from clausal import cell_args, cell_functor
+from clausal.logic.exceptions import LogicException, error_context_text
 from clausal.logic.variables import Var, deref, is_var
 from clausal.pythonic_ast import nodes
 
@@ -90,8 +91,8 @@ def _row_answers(module, name, n, x):
     try:
         return [[_norm(X), _norm(Y)] for _ in call(name, n, X, Y, module=module)]
     except LogicException as e:
-        formal = e.term.args[0]
-        return f"raise {getattr(formal, 'functor', formal)}"
+        formal = cell_args(e.term)[0]
+        return f"raise {cell_functor(formal) if type(formal) is tuple else formal}"
     except TypeError as e:
         # Only a DATE / Opaque input may meet a Python TypeError (``date > 0``
         # is one in BOTH spellings).  Anything else -- a converter crash --
@@ -107,8 +108,8 @@ def _term(exc_info):
 
 def _formal(term):
     """``error(Formal, Context)`` -> Formal."""
-    assert term.functor == "error"
-    return term.args[0]
+    assert type(term) is tuple and cell_functor(term) == "error"
+    return cell_args(term)[0]
 
 
 # ── the row table: term position answers exactly as the clause body ─────────
@@ -226,9 +227,9 @@ def _type_error_culprit(host, goal):
     with pytest.raises(LogicException) as info:
         _answers(host, "call_it", goal)
     formal = _formal(_term(info))
-    assert formal.functor == "type_error"
-    assert formal.args[0] == "callable"
-    return formal.args[1]
+    assert cell_functor(formal) == "type_error"
+    assert cell_args(formal)[0] == "callable"
+    return cell_args(formal)[1]
 
 
 def test_a_number_in_a_conjunction_is_a_type_error_naming_the_whole_body(host):
@@ -272,11 +273,11 @@ def _existence_indicator(host, pred, *args):
     with pytest.raises(LogicException) as info:
         _answers(host, pred, *args)
     formal = _formal(_term(info))
-    assert formal.functor == "existence_error"
-    assert formal.args[0] == "procedure"
-    ind = formal.args[1]
-    assert ind.functor == "/"
-    return tuple(ind.args)
+    assert cell_functor(formal) == "existence_error"
+    assert cell_args(formal)[0] == "procedure"
+    ind = cell_args(formal)[1]
+    assert cell_functor(ind) == "/"
+    return tuple(cell_args(ind))
 
 
 def test_the_iso_control_construct_cells_run_as_bodies(host):
@@ -309,8 +310,8 @@ def test_committed_choice_cells_are_refused(host, functor):
     assert _existence_indicator(host, "call_it", cell) == (functor, 2)
     with pytest.raises(LogicException) as info:
         _answers(host, "call_it", cell)
-    assert "no committed choice" in _term(info).args[1]
-    assert "if_(" in _term(info).args[1]
+    assert "no committed choice" in error_context_text(_term(info))
+    assert "if_(" in error_context_text(_term(info))
 
 
 @pytest.mark.parametrize("goal, indicator", [
@@ -357,7 +358,7 @@ def test_a_non_callable_top_level_goal_is_a_type_error(host, goal):
     with pytest.raises(LogicException) as info:
         _answers(host, "call_it", goal)
     formal = _formal(_term(info))
-    assert formal.functor == "type_error" and formal.args[0] == "callable"
+    assert cell_functor(formal) == "type_error" and cell_args(formal)[0] == "callable"
 
 
 def test_a_list_or_string_goal_names_the_missing_procedure(host):
@@ -533,8 +534,8 @@ def test_a_list_builtin_with_a_non_callable_goal_raises(host, name, args):
     with pytest.raises(LogicException) as info:
         list(solve(goal, host))
     formal = _formal(_term(info))
-    assert formal.functor == "type_error"
-    assert formal.args[0] == "callable" and formal.args[1] == 42
+    assert cell_functor(formal) == "type_error"
+    assert cell_args(formal)[0] == "callable" and cell_args(formal)[1] == 42
 
 
 def test_the_goal_is_checked_only_when_called_as_in_scryer(host):
@@ -553,7 +554,7 @@ def test_phrase_of_a_non_callable_is_a_type_error(host, rule, arity):
     with pytest.raises(LogicException) as info:
         list(solve(goal, host))
     formal = _formal(_term(info))
-    assert formal.functor == "type_error" and formal.args[0] == "callable"
+    assert cell_functor(formal) == "type_error" and cell_args(formal)[0] == "callable"
 
 
 @pytest.mark.parametrize("arity", [2, 3])
@@ -585,7 +586,7 @@ def test_time_goal_is_call_1_timed(host, capsys):
         with pytest.raises(LogicException) as info:
             list(solve(("time_goal", goal), host))
         f = _formal(_term(info))
-        assert getattr(f, "functor", f) == functor
+        assert (cell_functor(f) if type(f) is tuple else f) == functor
 
 
 # ── round 4: runtime cells / atoms / unbound goals in the list builtins ─────
@@ -625,8 +626,8 @@ def test_a_body_term_goal_is_call_n_of_it(host):
     with pytest.raises(LogicException) as info:
         _ml(host, nodes.Gt(left=Var(), right=0), [1])
     formal = _formal(_term(info))
-    assert formal.functor == "existence_error"
-    assert tuple(formal.args[1].args) == (">", 3)
+    assert cell_functor(formal) == "existence_error"
+    assert tuple(cell_args(cell_args(formal)[1])) == (">", 3)
 
 
 @pytest.mark.parametrize("name, args", _LIST_BUILTIN_CALLS,
@@ -677,8 +678,8 @@ def test_list_and_string_goals_answer_as_call_n_does(host):
         with pytest.raises(LogicException) as info:
             _ml(host, goal, [1])
         formal = _formal(_term(info))
-        assert formal.functor == "existence_error"
-        assert tuple(formal.args[1].args) == (".", 3)
+        assert cell_functor(formal) == "existence_error"
+        assert tuple(cell_args(cell_args(formal)[1])) == (".", 3)
         assert _existence_indicator(host, "call_it2", goal, 1) == (".", 3)
 
 
@@ -717,8 +718,8 @@ def test_compound_and_body_goals_in_maplist_include_foldl(host):
         with pytest.raises(LogicException) as info:
             _solve_all(host, goal)
         formal = _formal(_term(info))
-        assert formal.functor == "existence_error", goal
-        assert tuple(formal.args[1].args) == ind
+        assert cell_functor(formal) == "existence_error", goal
+        assert tuple(cell_args(cell_args(formal)[1])) == ind
 
 
 def test_a_handle_to_the_callers_own_module(host):

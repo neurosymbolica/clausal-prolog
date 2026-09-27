@@ -29,13 +29,13 @@ import textwrap
 
 import pytest
 
+from clausal import cell_args, cell_functor
 from clausal.logic.atoms import mangle, mint
-from clausal.logic.exceptions import LogicException
+from clausal.logic.exceptions import LogicException, error_context_text
 from clausal.logic.predicate import _dispatch_at
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, walk
 from clausal.predicate_diagnostics import PredicateArityMismatchError
-from clausal.terms import Compound
 
 
 def _load(tmp_path, monkeypatch, name, body):
@@ -50,15 +50,16 @@ def _load(tmp_path, monkeypatch, name, body):
 
 def _assert_iso(term, name, arity):
     """``error(existence_error(procedure, Name/Arity), Context)``."""
-    assert isinstance(term, Compound) and term.functor == "error", term
-    formal = term.args[0]
-    assert formal.functor == "existence_error"
-    assert formal.args[0] == mint("procedure")
-    pi = formal.args[1]
-    assert isinstance(pi, Compound) and pi.functor == "/"
-    assert tuple(pi.args) == (mint(name), arity)
+    assert type(term) is tuple and cell_functor(term) == "error", term
+    formal = cell_args(term)[0]
+    assert cell_functor(formal) == "existence_error"
+    assert cell_args(formal)[0] == mint("procedure")
+    pi = cell_args(formal)[1]
+    assert type(pi) is tuple and cell_functor(pi) == "/"
+    assert cell_args(pi) == (mint(name), arity)
     # the diagnostic survives as the context
-    assert f"{name} takes 1 argument, but this call passes {arity}" in term.args[1]
+    assert (f"{name} takes 1 argument, but this call passes {arity}"
+            in error_context_text(term))
 
 
 @pytest.fixture
@@ -102,7 +103,7 @@ def test_catch_3_catches_the_iso_term_in_the_importer(pair, goal):
     """call/N, a direct wrong-arity goal, and a module-qualified goal all
     raise the ISO term, the indicator at the CALLED arity."""
     _era, _O, I = pair
-    assert _pi(goal, I) == Compound("/", (mint("pk"), 2))
+    assert _pi(goal, I) == ("/", mint("pk"), 2)
 
 
 def test_a_dotted_qualified_goal_reaches_the_handle_arm(tmp_path, monkeypatch):
@@ -142,7 +143,7 @@ def test_a_dotted_qualified_goal_reaches_the_handle_arm(tmp_path, monkeypatch):
 
     monkeypatch.setattr(predicate_mod, "_refuse_if_known_at_another_arity",
                         spy_handle)
-    assert _pi("by_qual", I) == Compound("/", (mint("pk"), 2))
+    assert _pi("by_qual", I) == ("/", mint("pk"), 2)
     assert arms == [("handle", "pk", 2, True)], arms
     assert _pi("ok", I) == 1
 
@@ -150,7 +151,7 @@ def test_a_dotted_qualified_goal_reaches_the_handle_arm(tmp_path, monkeypatch):
 @pytest.mark.parametrize("goal", ["local_goal", "local_call"])
 def test_catch_3_catches_the_iso_term_in_the_owner(pair, goal):
     _era, O, _I = pair
-    assert _pi(goal, O) == Compound("/", (mint("pk"), 2))
+    assert _pi(goal, O) == ("/", mint("pk"), 2)
 
 
 def test_a_plus_plus_type_error_catcher_still_catches_it(pair):
@@ -183,9 +184,9 @@ def test_a_message_only_construction_keeps_the_old_ball():
     ball ``catch/3`` bound before 2026-09-25, not a malformed ISO term."""
     exc = PredicateArityMismatchError("p takes 1 argument, but this call passes 2")
     assert isinstance(exc, TypeError) and isinstance(exc, LogicException)
-    assert exc.term == Compound(
+    assert exc.term == (
         "PredicateArityMismatchError",
-        ("p takes 1 argument, but this call passes 2",))
+        "p takes 1 argument, but this call passes 2")
     assert str(exc) == "p takes 1 argument, but this call passes 2"
 
 

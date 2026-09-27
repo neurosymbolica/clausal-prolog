@@ -21,8 +21,9 @@ from clausal.logic.compiler.terms_to_ast import lowering_scope, term_to_ast_expr
 from clausal.logic.predicate import mint_predicate_handle
 from clausal.logic.solve import call, solve
 from clausal.logic.variables import Var, deref
+from clausal import cell_args, cell_functor
 from clausal.logic.exceptions import LogicException
-from clausal.terms import Compound, LoadName
+from clausal.terms import LoadName
 
 _SRC = """\
 -double_quotes(atom)
@@ -186,17 +187,16 @@ def test_a_named_goal_at_a_missing_arity_raises_iso_existence_error(
     other-arity refusal -- rather than failing silently.  Pinned for every
     builtin sharing that resolver."""
     from clausal.predicate_diagnostics import PredicateArityMismatchError
-    from clausal.terms import Compound
     lm = mod.__dict__["$module"]
     with pytest.raises(PredicateArityMismatchError) as exc:
         list(solve(goal(), lm))
     term = exc.value.term
-    assert isinstance(term, Compound) and term.functor == "error", term
-    formal = term.args[0]
-    assert formal.functor == "existence_error" and formal.args[0] == mint("procedure")
-    pi = formal.args[1]
-    assert isinstance(pi, Compound) and pi.functor == "/"
-    assert tuple(pi.args) == (mint(name), arity)
+    assert type(term) is tuple and cell_functor(term) == "error", term
+    formal = cell_args(term)[0]
+    assert cell_functor(formal) == "existence_error" and cell_args(formal)[0] == mint("procedure")
+    pi = cell_args(formal)[1]
+    assert type(pi) is tuple and cell_functor(pi) == "/"
+    assert cell_args(pi) == (mint(name), arity)
 
 
 
@@ -222,10 +222,10 @@ def test_a_named_goal_naming_an_unknown_procedure_raises_iso_existence_error(
     with pytest.raises(LogicException) as exc:
         list(solve(_renamed(goal(), name, "nosuch"), lm))
     term = exc.value.term
-    assert term.functor == "error", term
-    formal = term.args[0]
-    assert formal.functor == "existence_error" and formal.args[0] == mint("procedure")
-    assert formal.args[1] == Compound("/", (mint("nosuch"), arity))
+    assert cell_functor(term) == "error", term
+    formal = cell_args(term)[0]
+    assert cell_functor(formal) == "existence_error" and cell_args(formal)[0] == mint("procedure")
+    assert cell_args(formal)[1] == ("/", mint("nosuch"), arity)
 
 
 def test_the_unknown_procedure_raise_is_catchable_in_source(tmp_path):
@@ -242,7 +242,7 @@ def test_the_unknown_procedure_raise_is_catchable_in_source(tmp_path):
     lm = _load_module(name, str(p)).__dict__["$module"]
     pi = Var()
     assert [deref(pi) for _ in call("caught", pi, module=lm)] == [
-        Compound("/", (mint("bpn_absent_proc"), 1))]
+        ("/", mint("bpn_absent_proc"), 1)]
 
 
 def test_listing_a_bare_name_is_not_a_predicate_indicator(mod):
@@ -254,7 +254,7 @@ def test_listing_a_bare_name_is_not_a_predicate_indicator(mod):
     lm = mod.__dict__["$module"]
     with pytest.raises(LogicException) as exc:
         list(solve(("listing", "b"), lm))
-    formal = exc.value.term.args[0]
-    assert formal.functor == "type_error"
-    assert formal.args == (mint("predicate_indicator"), mint("b"))
+    formal = cell_args(exc.value.term)[0]
+    assert cell_functor(formal) == "type_error"
+    assert cell_args(formal) == (mint("predicate_indicator"), mint("b"))
     assert len(list(solve(("listing", ("/", "b", 1)), lm))) == 1

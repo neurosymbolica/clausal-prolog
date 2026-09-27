@@ -25,7 +25,8 @@ from clausal.import_hook import _load_module
 from clausal.logic.solve import call
 from clausal.logic import solve as solve_mod
 from clausal.logic.variables import Var, deref, is_var
-from clausal.logic.exceptions import LogicException
+from clausal import cell_args, cell_functor
+from clausal.logic.exceptions import LogicException, error_context_text
 from clausal.terms import Compound, SegString, SetTerm
 
 PYTHON = sys.executable
@@ -240,11 +241,11 @@ def test_F005_assertz_rule(fix):
     # rule must raise, propagating out of azrule.
     with pytest.raises(LogicException) as ei:
         _first(m, "azrule", Var())
-    inner = ei.value.term.args[0]
-    assert getattr(inner, "functor", None) == "permission_error"
+    inner = cell_args(ei.value.term)[0]
+    assert type(inner) is tuple and cell_functor(inner) == "permission_error"
     # A09-F005 nit: the error context names the actual caller — there is no
     # assert/1 builtin, only assertz/1 and asserta/1.
-    assert ei.value.term.args[1] == "assertz/1"
+    assert error_context_text(ei.value.term) == "assertz/1"
     V = Var()
     got = set()
     try:
@@ -269,11 +270,11 @@ def _assert_static_procedure_error(ei, context):
     Equality became ``startswith`` for that reason; the ISO term itself is
     unchanged.
     """
-    inner = ei.value.term.args[0]
-    assert getattr(inner, "functor", None) == "permission_error"
-    assert inner.args[0] == mint("modify")
-    assert inner.args[1] == mint("static_procedure")
-    assert str(ei.value.term.args[1]).startswith(context)
+    inner = cell_args(ei.value.term)[0]
+    assert type(inner) is tuple and cell_functor(inner) == "permission_error"
+    assert cell_args(inner)[0] == mint("modify")
+    assert cell_args(inner)[1] == mint("static_procedure")
+    assert error_context_text(ei.value.term).startswith(context)
 
 
 def test_F006_assertz_locked_raises(locked_mod):
@@ -425,18 +426,18 @@ def test_F012_set_add_unhashable(fix):
     _, m = fix
     with pytest.raises(LogicException) as ei:
         _first(m, "set_add", [9], SetTerm([1, 2]), Var())
-    inner = ei.value.term.args[0]
-    assert getattr(inner, "functor", None) == "type_error"
-    assert inner.args[0] == mint("hashable")
+    inner = cell_args(ei.value.term)[0]
+    assert type(inner) is tuple and cell_functor(inner) == "type_error"
+    assert cell_args(inner)[0] == mint("hashable")
 
 
 def test_F012_set_remove_unhashable(fix):
     _, m = fix
     with pytest.raises(LogicException) as ei:
         _first(m, "set_remove", [9], SetTerm([1, 2]), Var())
-    inner = ei.value.term.args[0]
-    assert getattr(inner, "functor", None) == "type_error"
-    assert inner.args[0] == mint("hashable")
+    inner = cell_args(ei.value.term)[0]
+    assert type(inner) is tuple and cell_functor(inner) == "type_error"
+    assert cell_args(inner)[0] == mint("hashable")
 
 
 def test_F012_regression_set_add_remove_hashable(fix):
@@ -827,8 +828,8 @@ def test_F028_must_be_unknown_type_domain_error(fix):
     _, m = fix
     with pytest.raises(LogicException) as ei:
         _first(m, "must_be", mint("nonsense"), 5)
-    inner = ei.value.term.args[0]
-    assert getattr(inner, "functor", None) == "domain_error"
+    inner = cell_args(ei.value.term)[0]
+    assert type(inner) is tuple and cell_functor(inner) == "domain_error"
 
 
 def test_F028_must_be_unbound_type_raises(fix):
@@ -956,7 +957,7 @@ def test_regression_numbervars(fix):
     assert _first(m, "numbervars", t, 0, E)
     assert deref(E) == 2
     a, b, c = (deref(e) for e in t)
-    assert a.args == (0,) and b.args == (1,) and c.args == (0,)
+    assert a == ("$VAR", 0) and b == ("$VAR", 1) and c == ("$VAR", 0)
 
 
 def test_regression_replicate_str_promotion(fix):

@@ -39,7 +39,8 @@ import pytest
 
 import clausal
 from clausal.logic.atoms import mangle, mint
-from clausal.logic.exceptions import LogicException
+from clausal import cell_args, cell_functor
+from clausal.logic.exceptions import LogicException, error_context_text
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, walk
 from clausal.predicate_diagnostics import PredicateNotFoundError
@@ -57,17 +58,25 @@ def _load(tmp_path, monkeypatch, name, body):
 
 
 def _pi(name, arity):
-    return Compound("/", (mint(name), arity))
+    return ("/", mint(name), arity)
 
 
 def _assert_iso(term, name, arity):
     """``error(existence_error(procedure, Name/Arity), Context)``."""
-    assert isinstance(term, Compound) and term.functor == "error", term
-    formal = term.args[0]
-    assert isinstance(formal, Compound), formal
-    assert formal.functor == "existence_error"
-    assert formal.args[0] == mint("procedure")
-    assert formal.args[1] == _pi(name, arity)
+    assert type(term) is tuple and cell_functor(term) == "error", term
+    formal = cell_args(term)[0]
+    assert type(formal) is tuple, formal
+    assert cell_functor(formal) == "existence_error"
+    assert cell_args(formal)[0] == mint("procedure")
+    assert cell_args(formal)[1] == _pi(name, arity)
+
+
+def _context_message(term):
+    """The Message of ``error(_, context(Name/Arity, Message))`` -- the
+    engine's diagnostic text, verbatim."""
+    context = cell_args(term)[1]
+    assert cell_functor(context) == "context", context
+    return cell_args(context)[1]
 
 
 def _answers(goal, module, n=1):
@@ -181,7 +190,8 @@ def test_python_except_still_catches_it(pair):
     text = str(exc)
     assert "Uncaught logic exception" not in text
     assert exc.args == (text,)
-    assert exc.term.args[1] == text
+    assert cell_args(cell_args(exc.term)[1])[0] == _pi("ghost", 1)
+    assert _context_message(exc.term) == text
     if era == "class":
         # the diagnostic survives verbatim: as str(), and as the context
         assert text.startswith("Predicate ghost/1 not found")
@@ -196,9 +206,9 @@ def test_the_class_era_message_is_the_context(pair):
     era, _O, I = pair
     [(e,)] = _answers("whole", I)
     if era == "class":
-        assert "-> define ghost/1 in udc_caller_class" in e.args[1]
+        assert "-> define ghost/1 in udc_caller_class" in _context_message(e)
     else:
-        assert "is not defined in module 'udc_owner_handle'" in e.args[1]
+        assert "is not defined in module 'udc_owner_handle'" in _context_message(e)
 
 
 # ── module-qualified calls ───────────────────────────────────────────────────
@@ -215,7 +225,7 @@ def test_a_qualified_unknown_call_names_the_module_in_the_context(pair):
     era, _O, I = pair
     [(e,)] = _answers("qualified_whole", I)
     _assert_iso(e, "nosuch", 2)
-    assert f"nosuch/2 is not defined in module 'udc_owner_{era}'" in e.args[1]
+    assert f"nosuch/2 is not defined in module 'udc_owner_{era}'" in _context_message(e)
 
 
 def test_a_qualified_call_into_an_unloaded_module_is_the_same_iso_term(pair):
@@ -252,7 +262,7 @@ def test_the_refusal_for_a_base_that_resolves_to_nothing(tmp_path, monkeypatch):
     with pytest.raises(PredicateNotFoundError) as info:
         fn(None, None, None, None, 1)
     _assert_iso(info.value.term, "p", 1)
-    assert "udc_nomod" in info.value.term.args[1]
+    assert "udc_nomod" in error_context_text(info.value.term)
 
 
 def test_a_qualified_unknown_call_raises_the_same_python_type(pair):
@@ -297,7 +307,7 @@ def test_a_base_that_is_a_python_module_is_the_same_iso_term(tmp_path, monkeypat
     I = im.__dict__["$module"]
     [(e,)] = _answers("q", I)
     _assert_iso(e, "nosuch", 1)
-    assert e.args[1] == ("nosuch/1 is not a predicate of 'math' "
+    assert _context_message(e) == ("nosuch/1 is not a predicate of 'math' "
                          "(a module-qualified call math.nosuch/1)")
 
 
@@ -326,8 +336,7 @@ def test_a_message_only_construction_keeps_the_old_ball():
     ball ``catch/3`` bound before 2026-09-25, not a malformed ISO term."""
     exc = PredicateNotFoundError("Predicate p/1 not found")
     assert isinstance(exc, KeyError) and isinstance(exc, LogicException)
-    assert exc.term == Compound(
-        "PredicateNotFoundError", ("Predicate p/1 not found",))
+    assert exc.term == ("PredicateNotFoundError", "Predicate p/1 not found")
     assert str(exc) == "Predicate p/1 not found"
 
 
@@ -343,6 +352,7 @@ import clausal
 assert clausal.__file__.startswith(REPO), clausal.__file__
 import clausal.logic.trampoline as t
 from clausal.import_hook import _load_module
+from clausal import cell_args
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, walk
 sys.path.insert(1, TMP)
@@ -358,7 +368,7 @@ try:
     list(call("uncaught", module=M))
     out["uncaught"] = "no error"
 except KeyError as e:
-    out["uncaught"] = [type(e).__name__, repr(e.term.args[0])]
+    out["uncaught"] = [type(e).__name__, repr(cell_args(e.term)[0])]
 print("RESULT" + json.dumps(out))
 """
 

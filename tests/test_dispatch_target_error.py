@@ -16,7 +16,10 @@ import types
 
 import pytest
 
-from clausal.logic.exceptions import DispatchTargetError, LogicException
+from clausal import cell_args, cell_functor
+from clausal.logic.exceptions import (
+    DispatchTargetError, LogicException, error_context_text,
+)
 from clausal.logic.predicate import _dispatch_at
 
 
@@ -27,17 +30,17 @@ def test_a_module_target_raises_dispatch_target_error():
     exc = info.value
     assert isinstance(exc, LogicException), "catch/3 must see it"
     term = exc.term
-    assert term.functor == "error"
-    inner = term.args[0]
-    assert inner.functor == "type_error"
-    assert inner.args[0] == "callable"
+    assert type(term) is tuple and cell_functor(term) == "error"
+    inner = cell_args(term)[0]
+    assert cell_functor(inner) == "type_error"
+    assert cell_args(inner)[0] == "callable"
     rendered = str(exc)
     assert "DispatchTargetError" in rendered, "the token the downstream gates key on"
-    assert "module 'some.package'" in term.args[1], "what the goal actually resolved to"
+    assert "module 'some.package'" in error_context_text(term), "what the goal actually resolved to"
     # The message prints the term as Scryer would (ruling R2, 2026-09-27): the
     # context is an atom, so its apostrophes are escaped inside its quotes.
     assert "module \\'some.package\\'" in rendered
-    assert inner.args[1] == "some.package", "the culprit is the module's name"
+    assert cell_args(inner)[1] == "some.package", "the culprit is the module's name"
 
 
 def test_any_object_without_the_protocol_raises_the_same_class():
@@ -47,8 +50,8 @@ def test_any_object_without_the_protocol_raises_the_same_class():
         _dispatch_at(object(), 1)
     with pytest.raises(DispatchTargetError) as info:
         _dispatch_at(42, 0)
-    inner = info.value.term.args[0]
-    assert inner.args[1] == 42, "the culprit is the offending VALUE, not its type"
+    inner = cell_args(info.value.term)[0]
+    assert cell_args(inner)[1] == 42, "the culprit is the offending VALUE, not its type"
     assert "a int value 42" in str(info.value)
 
 
@@ -62,7 +65,7 @@ def test_a_huge_or_hostile_repr_cannot_break_the_diagnostic():
     with pytest.raises(DispatchTargetError) as info:
         _dispatch_at(Hostile(), 1)
     assert "Hostile" in str(info.value)
-    assert info.value.term.args[0].args[1] == "Hostile", (
+    assert cell_args(cell_args(info.value.term)[0])[1] == "Hostile", (
         "a value whose repr raises cannot be the culprit; its type stands in")
     with pytest.raises(DispatchTargetError) as info:
         _dispatch_at(list(range(100_000)), 1)
@@ -90,7 +93,7 @@ def test_the_atom_case_keeps_its_own_shape():
     with pytest.raises(LogicException) as info:
         _dispatch_at("just_an_atom", 1)
     assert not isinstance(info.value, DispatchTargetError)
-    assert info.value.term.args[0].functor == "existence_error"
+    assert cell_functor(cell_args(info.value.term)[0]) == "existence_error"
 
 
 def _write(tmp_path, name, src):
@@ -126,5 +129,5 @@ def test_a_compiled_dotted_goal_that_lands_on_a_submodule_raises_it(tmp_path, mo
     with pytest.raises(LogicException) as info:
         list(call("w3_use", Var(), module=mod.__dict__["$module"]))
     assert isinstance(info.value, DispatchTargetError)
-    assert "module 'w3shadowpkg.shadow'" in info.value.term.args[1]
+    assert "module 'w3shadowpkg.shadow'" in error_context_text(info.value.term)
     assert "module \\'w3shadowpkg.shadow\\'" in str(info.value)

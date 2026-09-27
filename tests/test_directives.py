@@ -17,6 +17,7 @@ import ast
 
 import pytest
 
+from clausal import cell_args, cell_functor
 from clausal.logic.atoms import mint
 import clausal.import_hook
 from clausal.import_hook import _load_module
@@ -191,7 +192,7 @@ class TestDynamicImport:
         db = mod.__dict__["$module"].db
         with pytest.raises(LogicException, match="locked") as exc_info:
             db.assertz(Clause(head=Compound("fact", ("c", 3)), body=[]))
-        assert exc_info.value.term.args[0].functor == "permission_error"
+        assert cell_functor(cell_args(exc_info.value.term)[0]) == "permission_error"
         assert len(row.clauses) == before, "and nothing was written"
 
     def test_dynamic_flag_recorded_on_db(self):

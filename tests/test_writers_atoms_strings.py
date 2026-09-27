@@ -14,6 +14,7 @@ import tempfile
 import pytest
 
 import clausal.import_hook  # noqa: F401 — installs the meta-path finder
+from clausal import cell_args, cell_functor
 from clausal.import_hook import _load_module
 from clausal.terms import (
     atom_needs_quotes,
@@ -256,10 +257,10 @@ class TestWriteTerm2:
 
         with pytest.raises(LogicException) as exc:
             list(solve(("write_term", "a", [("bogus", True)]), mod))
-        formal = exc.value.term.args[0]
-        assert formal.functor == "domain_error"
-        assert formal.args[0] == mint("write_option")
-        assert formal.args[1] == ("bogus", True)
+        formal = cell_args(exc.value.term)[0]
+        assert cell_functor(formal) == "domain_error"
+        assert cell_args(formal)[0] == mint("write_option")
+        assert cell_args(formal)[1] == ("bogus", True)
 
     def test_a_non_list_option_argument_is_a_type_error(self, mod):
         from clausal.logic.atoms import mint
@@ -267,9 +268,9 @@ class TestWriteTerm2:
 
         with pytest.raises(LogicException) as exc:
             list(solve(("write_term", "a", "foo"), mod))
-        formal = exc.value.term.args[0]
-        assert formal.functor == "type_error"
-        assert formal.args[0] == mint("list")
+        formal = cell_args(exc.value.term)[0]
+        assert cell_functor(formal) == "type_error"
+        assert cell_args(formal)[0] == mint("list")
 
     def test_an_unbound_option_list_is_an_instantiation_error(self, mod):
         from clausal.logic.atoms import mint
@@ -278,7 +279,7 @@ class TestWriteTerm2:
 
         with pytest.raises(LogicException) as exc:
             list(solve(("write_term", "a", Var()), mod))
-        assert exc.value.term.args[0] == mint("instantiation_error")
+        assert cell_args(exc.value.term)[0] == mint("instantiation_error")
 
     def test_a_partial_option_list_is_an_instantiation_error(self, mod):
         """Fix round 1, item 7: ``[quoted(true) | _]`` reaches the reader as
@@ -297,7 +298,7 @@ class TestWriteTerm2:
         partial = SegList([ConcreteSeg([("quoted", True)]), VarSeg(Var())])
         with pytest.raises(LogicException) as exc:
             list(call("write_term", "a", partial, module=mod))
-        assert exc.value.term.args[0] == mint("instantiation_error")
+        assert cell_args(exc.value.term)[0] == mint("instantiation_error")
 
     def test_a_ground_seg_option_list_is_read_normally(self, mod):
         """The other half of item 7: a GROUND ``Seg*`` walks to the plain

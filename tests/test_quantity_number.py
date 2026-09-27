@@ -6,7 +6,7 @@ Driven through the engine, not through Python calls: every test loads a
 """
 import pytest
 
-from clausal import Var
+from clausal import Var, cell_args, cell_functor
 from clausal.import_hook import _load_module
 from clausal.logic.atoms import mint
 from clausal.logic.exceptions import LogicException
@@ -79,7 +79,7 @@ def test_both_unbound_is_an_instantiation_error(tmp_path):
     mod = _load(tmp_path, PRELUDE + "bad(T, Q) <- quantity_number(T, Q)\n", "qn_inst")
     with pytest.raises(LogicException) as ei:
         list(call("bad", Var(), Var(), module=mod))
-    assert ei.value.term.args[0] == mint("instantiation_error")
+    assert cell_args(ei.value.term)[0] == mint("instantiation_error")
 
 
 def test_a_malformed_term_RAISES_a_type_error_rather_than_failing_quietly(tmp_path):
@@ -87,9 +87,9 @@ def test_a_malformed_term_RAISES_a_type_error_rather_than_failing_quietly(tmp_pa
         "bad(Q) <- quantity_number(quantity(5, units(1, dimensionless)), Q)\n", "qn_type")
     with pytest.raises(LogicException) as ei:
         list(call("bad", Var(), module=mod))
-    inner = ei.value.term.args[0]
-    assert inner.functor == "type_error" and inner.args[0] == mint("quantity")
-    assert inner.args[1] == ("quantity", 5, ("units", 1, "dimensionless"))
+    inner = cell_args(ei.value.term)[0]
+    assert cell_functor(inner) == "type_error" and cell_args(inner)[0] == mint("quantity")
+    assert cell_args(inner)[1] == ("quantity", 5, ("units", 1, "dimensionless"))
 
 
 def test_a_term_slot_holding_a_bound_variable_still_reads(tmp_path):
@@ -108,7 +108,7 @@ def test_a_term_slot_holding_an_UNBOUND_variable_is_an_instantiation_error(tmp_p
         "qn_partial")
     with pytest.raises(LogicException) as ei:
         list(call("partial", Var(), module=mod))
-    assert ei.value.term.args[0] == mint("instantiation_error")
+    assert cell_args(ei.value.term)[0] == mint("instantiation_error")
 
 
 def test_the_object_on_the_term_side_is_taken_as_itself(tmp_path):

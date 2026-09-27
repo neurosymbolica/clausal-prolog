@@ -23,6 +23,7 @@ import textwrap
 
 import pytest
 
+from clausal import cell_args, cell_functor
 from clausal.logic.atoms import mangle
 from clausal.logic.predicate import _dispatch_at
 from clausal.predicate_diagnostics import PredicateArityMismatchError
@@ -59,9 +60,9 @@ def test_wrong_arity_call_on_a_user_predicate_is_the_arity_refusal(tmp_path, mon
     assert "1 argument" in str(info.value) or "takes 1" in str(info.value)
     # 2026-09-25: and it is the ISO existence error at the CALLED arity.
     assert isinstance(info.value, LogicException)
-    formal = info.value.term.args[0]
-    assert formal.functor == "existence_error"
-    assert tuple(formal.args[1].args) == ("pred", 2)
+    formal = cell_args(info.value.term)[0]
+    assert cell_functor(formal) == "existence_error"
+    assert cell_args(cell_args(formal)[1]) == ("pred", 2)
 
 
 def test_correct_arity_call_is_unchanged(tmp_path, monkeypatch):
@@ -140,9 +141,9 @@ def test_wrong_arity_with_nothing_else_answering_still_refuses(
     assert target == mangle(f"f7_nothing_{era}", "pred")
     with pytest.raises(PredicateArityMismatchError, match="takes 1 argument") as info:
         _dispatch_at(target, 2)
-    formal = info.value.term.args[0]
-    assert formal.functor == "existence_error"
-    assert tuple(formal.args[1].args) == ("pred", 2)
+    formal = cell_args(info.value.term)[0]
+    assert cell_functor(formal) == "existence_error"
+    assert cell_args(cell_args(formal)[1]) == ("pred", 2)
 
 
 @pytest.mark.parametrize("era", ["handle"])  # W4b-2d: the class era is gone

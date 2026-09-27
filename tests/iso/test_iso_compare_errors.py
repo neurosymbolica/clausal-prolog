@@ -16,8 +16,8 @@ oracle-less box must still run the engine half.
 import pytest
 
 from clausal.logic.atoms import is_atom, spelling
-from clausal.logic.exceptions import LogicException
-from clausal.terms import Compound
+from clausal import cell_args, cell_functor
+from clausal.logic.exceptions import LogicException, error_context_text
 
 
 def _src(goal, extra_atoms=()):
@@ -78,11 +78,11 @@ def test_non_evaluable_operand_is_never_the_clpfd_integer_shape(run_clausal):
 
 def _evaluable_culprit_of(term):
     """The culprit out of `error(type_error(evaluable, Culprit), Context)`."""
-    assert isinstance(term, Compound) and term.functor == "error", term
-    inner = term.args[0]
-    assert isinstance(inner, Compound) and inner.functor == "type_error", inner
-    assert spelling(inner.args[0]) == "evaluable", inner
-    return inner.args[1]
+    assert type(term) is tuple and cell_functor(term) == "error", term
+    inner = cell_args(term)[0]
+    assert type(inner) is tuple and cell_functor(inner) == "type_error", inner
+    assert spelling(cell_args(inner)[0]) == "evaluable", inner
+    return cell_args(inner)[1]
 
 
 def test_compound_evaluable_culprit_is_a_name_arity_indicator_OPEN_iso_divergence(
@@ -112,8 +112,8 @@ def test_compound_evaluable_culprit_is_a_name_arity_indicator_OPEN_iso_divergenc
     culprit = _evaluable_culprit_of(
         _err_term(run_clausal, "'=:='(1, foo(bar))",
                   extra_atoms=("foo(a)", "bar")))
-    assert isinstance(culprit, Compound) and culprit.functor == "/", culprit
-    name, arity = culprit.args
+    assert type(culprit) is tuple and cell_functor(culprit) == "/", culprit
+    name, arity = cell_args(culprit)
     assert is_atom(name) and spelling(name) == "foo", culprit
     assert arity == 1, culprit
 
@@ -175,17 +175,17 @@ def test_hash_family_error_surface_OPEN_iso_divergence(run_clausal):
     assert yesno("'#\\\\='(1, foo)") == [yes], "'#\\\\='(1, foo) succeeds"
 
     lt = _err_term(run_clausal, "'#<'(1, foo)", extra_atoms=("foo",))
-    assert isinstance(lt, Compound) and lt.functor == "error", lt
-    assert spelling(lt.args[0].args[0]) == "orderable", lt
-    assert spelling(lt.args[0].args[1]) == "foo", lt
-    assert lt.args[1] == "(<)/2", lt
+    assert type(lt) is tuple and cell_functor(lt) == "error", lt
+    assert spelling(cell_args(cell_args(lt)[0])[0]) == "orderable", lt
+    assert spelling(cell_args(cell_args(lt)[0])[1]) == "foo", lt
+    assert error_context_text(lt) == "(<)/2", lt
 
     eq = _err_term(run_clausal, "'#='(X_UNUSED, foo)", extra_atoms=("foo",))
-    assert isinstance(eq, Compound) and eq.functor == "error", eq
-    assert spelling(eq.args[0].args[0]) == "evaluable", eq
-    assert spelling(eq.args[0].args[1]) == "foo", eq
+    assert type(eq) is tuple and cell_functor(eq) == "error", eq
+    assert spelling(cell_args(cell_args(eq)[0])[0]) == "evaluable", eq
+    assert spelling(cell_args(cell_args(eq)[0])[1]) == "foo", eq
     # The wart: a '#=' call reports its context as (==)/2.
-    assert eq.args[1] == "(==)/2", eq
+    assert error_context_text(eq) == "(==)/2", eq
 
 
 def test_hash_family_error_surface_OPEN_iso_divergence_oracle(scryer):

@@ -11,6 +11,7 @@ z3 = pytest.importorskip("z3")
 
 from clausal.logic.atoms import is_atom, mint
 from clausal.logic.cells import chars
+from clausal import cell_args, cell_functor
 from clausal.logic.exceptions import LogicException
 from clausal.logic.variables import Var, Trail, deref, is_var
 from clausal.logic.clpz3 import (
@@ -147,10 +148,10 @@ class TestNamedConstraintNamesAreAtoms:
         in_z3(x, 1, 10, trail)
         with pytest.raises(LogicException) as exc:
             z3_named(Gt(left=x, right=5), chars("x_big"), trail)
-        formal = exc.value.term.args[0]
-        assert formal.functor == "type_error"
-        assert formal.args[0] == mint("atom")
-        assert formal.args[1] == chars("x_big")
+        formal = cell_args(exc.value.term)[0]
+        assert cell_functor(formal) == "type_error"
+        assert cell_args(formal)[0] == mint("atom")
+        assert cell_args(formal)[1] == chars("x_big")
 
     def test_an_unbound_name_fails_rather_than_raising(self):
         """Fix round 1: a variable Name is a MODE signal, not a type fault —
@@ -439,7 +440,7 @@ class TestSolverConfig:
 
 def _formal_type(exc_info):
     """The TYPE argument of a raised ``error(type_error(Type, X), Context)``."""
-    return exc_info.value.term.args[0].args[0]
+    return cell_args(cell_args(exc_info.value.term)[0])[0]
 
 
 class TestNamePositionsAreAtoms:

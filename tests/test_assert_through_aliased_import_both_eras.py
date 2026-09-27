@@ -21,6 +21,7 @@ import sys
 import pytest
 
 import clausal.import_hook  # noqa: F401 -- installs the meta-path finder
+from clausal import cell_args, cell_functor
 from clausal.import_hook import _load_module
 from clausal.logic.exceptions import LogicException
 from clausal.logic.predicate import mint_predicate_handle
@@ -119,7 +120,7 @@ def test_an_unrelated_cell_is_still_refused(aliased):
     lm = user.__dict__["$module"]
     with pytest.raises(LogicException) as exc:
         next(call("assertz", ("gd_nothing", 1), module=lm), None)
-    assert exc.value.term.args[0].functor == "existence_error"
+    assert cell_functor(cell_args(exc.value.term)[0]) == "existence_error"
 
 
 def test_the_reverse_spelling_refuses_to_guess_between_two_owners():

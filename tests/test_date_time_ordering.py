@@ -20,7 +20,8 @@ from clausal.logic.clpfd import (
 from clausal.logic.builtins.lists import (
     _sort__2, _msort__2, _min_list__2, _max_list__2,
 )
-from clausal.logic.exceptions import LogicException
+from clausal import cell_args, cell_functor
+from clausal.logic.exceptions import LogicException, error_context_text
 from clausal.logic.trampoline import DONE
 
 
@@ -60,11 +61,11 @@ def _run_list_builtin(fn, in_list):
 
 def _assert_orderable_error(exc_info, context):
     term = exc_info.value.term
-    assert term.functor == "error"
-    inner = term.args[0]
-    assert inner.functor == "type_error"
-    assert inner.args[0] == mint("orderable")
-    assert term.args[1] == context
+    assert type(term) is tuple and cell_functor(term) == "error"
+    inner = cell_args(term)[0]
+    assert cell_functor(inner) == "type_error"
+    assert cell_args(inner)[0] == mint("orderable")
+    assert error_context_text(term) == context
 
 
 # ── Comparison operators order dates/datetimes/times ─────────────────────
@@ -142,7 +143,7 @@ class TestIncomparableRaises:
         target = dt.datetime(2020, 1, 1, 0, 0, 0)
         with pytest.raises(LogicException) as ei:
             fd_lt(dt.date(2020, 1, 1), target, Trail())
-        assert ei.value.term.args[0].args[1] == target
+        assert cell_args(cell_args(ei.value.term)[0])[1] == target
 
 
 class TestVarVsNonNumericOperand:
@@ -159,14 +160,14 @@ class TestVarVsNonNumericOperand:
         with pytest.raises(LogicException) as ei:
             fd_lt(Var(), "banana", Trail())
         _assert_orderable_error(ei, "(<)/2")
-        assert ei.value.term.args[0].args[1] == "banana"
+        assert cell_args(cell_args(ei.value.term)[0])[1] == "banana"
 
     def test_str_lt_var(self):
         # the offending ground side may also be the LEFT operand
         with pytest.raises(LogicException) as ei:
             fd_lt("apple", Var(), Trail())
         _assert_orderable_error(ei, "(<)/2")
-        assert ei.value.term.args[0].args[1] == "apple"
+        assert cell_args(cell_args(ei.value.term)[0])[1] == "apple"
 
     def test_var_le_str(self):
         with pytest.raises(LogicException) as ei:
@@ -347,11 +348,11 @@ class TestHelper:
         culprit = dt.datetime(2020, 1, 1)
         exc = _incomparable_order_error(culprit, "(<)/2")
         assert isinstance(exc, LogicException)
-        assert exc.term.functor == "error"
-        assert exc.term.args[0].functor == "type_error"
-        assert exc.term.args[0].args[0] == mint("orderable")
-        assert exc.term.args[0].args[1] == culprit
-        assert exc.term.args[1] == "(<)/2"
+        assert type(exc.term) is tuple and cell_functor(exc.term) == "error"
+        assert cell_functor(cell_args(exc.term)[0]) == "type_error"
+        assert cell_args(cell_args(exc.term)[0])[0] == mint("orderable")
+        assert cell_args(cell_args(exc.term)[0])[1] == culprit
+        assert error_context_text(exc.term) == "(<)/2"
 
 
 class TestEndToEnd:

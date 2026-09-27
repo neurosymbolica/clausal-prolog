@@ -27,6 +27,7 @@ import os
 import pytest
 
 import clausal.import_hook  # noqa: F401 -- installs the meta-path finder
+from clausal import cell_args, cell_functor
 from clausal.import_hook import _load_module
 from clausal.logic.atoms import HIDDEN_SEP, mangle
 from clausal.logic.exceptions import LogicException
@@ -79,10 +80,10 @@ def _assert_clean_procedure_existence_error(exc, expected_name, expected_arity):
     assert not _walk_for_hidden_sep(term), (
         f"the mangled \\x1f spelling must never appear in a catchable term: {term!r}"
     )
-    assert term.functor == "error"
-    inner = term.args[0]
-    assert inner.functor == "existence_error"
-    obj_type, culprit = inner.args
+    assert cell_functor(term) == "error"
+    inner = cell_args(term)[0]
+    assert cell_functor(inner) == "existence_error"
+    obj_type, culprit = cell_args(inner)
     assert obj_type == "procedure", "ruled vocabulary: procedure, never module"
     # The culprit is a proper Prolog indicator Name/Arity, not a Python repr
     # string and not a module-qualified compound (":"/2) -- the module lives
@@ -90,8 +91,8 @@ def _assert_clean_procedure_existence_error(exc, expected_name, expected_arity):
     assert not isinstance(culprit, str), (
         f"culprit must be a Name/Arity indicator term, not a repr string: {culprit!r}"
     )
-    assert culprit.functor == "/", f"expected an unqualified Name/Arity indicator, got {culprit!r}"
-    name, arity = culprit.args
+    assert cell_functor(culprit) == "/", f"expected an unqualified Name/Arity indicator, got {culprit!r}"
+    name, arity = cell_args(culprit)
     assert name == expected_name
     assert arity == expected_arity
 
