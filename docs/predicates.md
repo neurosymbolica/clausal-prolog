@@ -245,8 +245,8 @@ citation takes 3 arguments, but this call passes 2
 
 This is a `PredicateArityMismatchError`, which is a `TypeError` and, since
 2026-09-25, also a `LogicException` carrying the ISO term Scryer raises for the
-same call: `error(existence_error(procedure, citation/2), Message)` -- the
-indicator at the *called* arity, the message above as the context. So
+same call: `error(existence_error(procedure, citation/2), context(citation/2, Message))` -- the
+indicator at the *called* arity, with the message above in the context. So
 `catch(G, error(existence_error(procedure, PI), _), Recovery)` catches it, as do
 `except TypeError` in Python and a `++TypeError` catcher. If the name is
 not in scope at *any* arity, the failure is a `PredicateNotFoundError` instead

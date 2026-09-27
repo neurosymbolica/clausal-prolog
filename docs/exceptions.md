@@ -69,7 +69,7 @@ safe_div(X, Y, R) <- catch(
 
 `catch/3` also intercepts **plain Python exceptions** raised inside the goal
 (including from [`++()` escapes](python_integration.md)). These are wrapped as `ClassName(Message)` — a
-`Compound` whose functor is the exception class name — so the catcher can match
+term whose functor is the exception class name — so the catcher can match
 them the same way as logic throw terms:
 
 ```clausal
@@ -132,8 +132,9 @@ done_with_code() <- halt(1)
 ## Unified Exception Representation
 
 Both logic `throw/1` terms and Python exceptions are represented as plain
-Clausal terms during catch. Python exceptions become `Compound(ClassName,
-(message,))` — the same structural shape as any predicate term — so there is
+Clausal terms during catch. Python exceptions become the term
+`ClassName(Message)` (the cell `('ClassName', message)` in Python) — the same
+structural shape as any predicate term — so there is
 no distinction between catching a logic throw and catching a Python exception:
 
 ```clausal
@@ -153,8 +154,42 @@ Clausal follows the [ISO Prolog](iso_prolog_compatibility_report.md) convention 
 | `existence_error(object_type, culprit)` | `error(existence_error(Type, Culprit), ...)` |
 | `permission_error(op, type, culprit)` | `error(permission_error(Op, Type, Culprit), ...)` |
 | `evaluation_error(kind)` | `error(evaluation_error(Kind), ...)` |
+| `domain_error(domain, culprit)` | `error(domain_error(Domain, Culprit), ...)` |
 
-The context field is typically a string identifying where the error occurred.
+The second argument is ISO `context(Culprit, Message)`. `Culprit` is the
+predicate indicator of the builtin that raised the error (`atom_length/2`), and
+`Message` is free text; either is an unbound variable when there is none. Every
+builder takes the context as text: `"atom_length/2"` gives
+`context(atom_length/2, _)`, `"solve/1: the goal is unbound"` gives
+`context(solve/1, 'the goal is unbound')`, and text without a leading
+`Name/Arity` becomes the message alone, `context(_, 'text')`.
+
+```clausal
+catch(atom_length(1, _), error(type_error(T, V), _), true)          % T = atom, V = 1
+catch(atom_length(1, _), error(_, context(PI, _)), true)            % PI = atom_length/2
+```
+
+### Reading an error term from Python
+
+An error term is a plain **cell**: a tuple whose first element is the functor.
+`clausal.cell_functor` and `clausal.cell_args` read it, and `clausal.make_cell`
+builds one. They replace the `.functor` / `.args` attributes of the retired
+`Compound` class.
+
+```python
+from clausal import LogicException, cell_args, cell_functor
+
+try:
+    ...  # a query that raises
+except LogicException as e:
+    assert cell_functor(e.term) == "error"
+    formal, context = cell_args(e.term)
+    # formal  == ('type_error', 'atom', 1)
+    # context == ('context', ('/', 'atom_length', 2), _)
+```
+
+`clausal.logic.exceptions.error_context_text(term)` gives the context back as
+the text it was built from (`"atom_length/2"`, `"solve/1: the goal is unbound"`).
 
 ---
 
@@ -285,14 +320,16 @@ Uncaught `Throw` goals surface as `LogicException` in Python code. Caught except
     from clausal.logic.exceptions import LogicException, type_error, instantiation_error
 
     # Build an error term
-    err = type_error("integer", "foo")
-    # → Compound('error', (Compound('type_error', ('integer', 'foo')), ...))
+    err = type_error("integer", "foo", "succ/2")
+    # → ('error', ('type_error', 'integer', 'foo'),
+    #    ('context', ('/', 'succ', 2), _))
 
     # Raise from Python
     raise LogicException(err)
     # The message shows the term as Scryer prints an uncaught error
-    # (writeq text with operators), not its Python repr:
-    #   Uncaught logic exception: error(type_error(integer,foo),'')
+    # (writeq text with operators), not its Python repr; a variable that
+    # occurs once prints as `_`:
+    #   Uncaught logic exception: error(type_error(integer,foo),context(succ/2,_))
     ```
 
     ---

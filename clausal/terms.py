@@ -3817,6 +3817,8 @@ def _seg_canonical(seg) -> str:
 # with no Prolog spelling (dicts, sets, keyword terms, ``foo()``, Python
 # objects) are handed to ``term_str`` in its ISO spelling.
 
+import collections as _collections
+import contextvars as _contextvars
 import functools as _functools
 import unicodedata as _unicodedata
 
@@ -3916,11 +3918,48 @@ def _wq_list(elems: list, tail) -> str:
     return "[" + body + "]"
 
 
+#: While ``term_writeq(..., local_vars=True)`` renders, the variables seen so
+#: far, by identity, in order of first appearance.  Each renders as a
+#: placeholder that cannot occur in any other token (a NUL is escaped inside
+#: every quoted token), resolved once the whole term is written.
+_WQ_LOCAL_VARS: _contextvars.ContextVar = _contextvars.ContextVar(
+    "_WQ_LOCAL_VARS", default=None)
+
+
+def _wq_var(v) -> str:
+    seen = _WQ_LOCAL_VARS.get()
+    if seen is None:
+        return _canonical_var(v)
+    n = seen.setdefault(id(v), len(seen))
+    return f"\x00{n}\x00"
+
+
+def _wq_local_names(text: str, seen: dict) -> str:
+    """Resolve the ``_wq_var`` placeholders in *text*: ``_`` for a variable
+    written once, ``_1``, ``_2``, ... (by first appearance) for one written
+    more than once."""
+    if not seen:
+        return text
+    counts = _collections.Counter(_WQ_PLACEHOLDER.findall(text))
+    names: dict[str, str] = {}
+    shared = 0
+    for n in sorted(counts, key=int):
+        if counts[n] == 1:
+            names[n] = "_"
+        else:
+            shared += 1
+            names[n] = f"_{shared}"
+    return _WQ_PLACEHOLDER.sub(lambda m: names[m.group(1)], text)
+
+
+_WQ_PLACEHOLDER = _re.compile("\x00(\\d+)\x00")
+
+
 def _wq(t: Any, prec: int, operand: bool = False) -> str:
     if not isinstance(t, (str, bytes, int, float, tuple, list)):
         t = deref(t)
     if isinstance(t, Var):
-        return _canonical_var(t)
+        return _wq_var(t)
     if isinstance(t, bool) or t is None:
         return term_str(t, quoted=True, double_quotes=True, sep=",")
     if isinstance(t, float):
@@ -3993,7 +4032,7 @@ def _wq(t: Any, prec: int, operand: bool = False) -> str:
     return _wq_atom(name) + "(" + ",".join(_wq(a, 999) for a in args) + ")"
 
 
-def term_writeq(t: Any) -> str:
+def term_writeq(t: Any, *, local_vars: bool = False) -> str:
     """Render *t* as Scryer prints an uncaught error term.
 
     ``writeq``-style with operators: ``error(type_error(evaluable,(+)/2),
@@ -4004,8 +4043,20 @@ def term_writeq(t: Any) -> str:
     ``foo()``, a partial list with an interior hole) is printed whole by
     ``term_str``, so terms nested inside it lose the operator layout and the
     distinct ``_N`` variables.
+
+    *local_vars* names the variables within this term instead of by the
+    engine's global identity: one written once is ``_``, one written more
+    than once ``_1``, ``_2``, ... in order of first appearance.  The text is
+    then the same for every copy of the term, which ``_N`` is not.
     """
-    return _wq(t, 1200)
+    if not local_vars:
+        return _wq(t, 1200)
+    token = _WQ_LOCAL_VARS.set({})
+    try:
+        seen = _WQ_LOCAL_VARS.get()
+        return _wq_local_names(_wq(t, 1200), seen)
+    finally:
+        _WQ_LOCAL_VARS.reset(token)
 
 
 # ── Pretty-formatted term representation ──────────────────────────────────────

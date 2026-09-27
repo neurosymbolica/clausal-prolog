@@ -49,7 +49,9 @@ import textwrap
 import types
 
 from clausal._suffixes import SOURCE_SUFFIXES
-from clausal.logic.exceptions import LogicException, existence_error
+from clausal.logic.exceptions import (
+    LogicException, error_context, existence_error,
+)
 from clausal.import_diagnostics import (
     _INDENT,
     _WIDTH,
@@ -87,10 +89,10 @@ def procedure_existence_term(functor, arity, message):
     dual-typed lookup errors below.
     """
     from clausal.logic.atoms import demangle, is_mangled, mint  # noqa: PLC0415
-    from clausal.terms import Compound  # noqa: PLC0415
     name = demangle(functor)[1] if is_mangled(functor) else functor
+    indicator = ("/", mint(name), arity)
     return existence_error(
-        "procedure", Compound("/", (mint(name), arity)), message)
+        "procedure", indicator, error_context(indicator, message))
 
 
 class PredicateNotFoundError(LogicException, KeyError):

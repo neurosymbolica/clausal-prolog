@@ -240,7 +240,7 @@ def date(year, month, day):
         # _), fail)` recovers date/4's failure semantics where a caller wants
         # them.
         note_rejected_call("date/3", exc)
-        culprit = Compound("date", (y, m, d))
+        culprit = ("date", y, m, d)
         if isinstance(exc, TypeError):
             # Wrong TYPE of component (a float, a string) -> type_error.
             raise LogicException(

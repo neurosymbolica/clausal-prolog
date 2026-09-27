@@ -94,10 +94,9 @@ class ModulePredicate:
             from clausal.logic.exceptions import (
                 LogicException, existence_error,
             )
-            from clausal.terms import Compound
-            indicator = Compound("/", (self._name, arity))
+            indicator = ("/", self._name, arity)
             raise LogicException(
-                existence_error("procedure", indicator, self._name)
+                existence_error("procedure", indicator, indicator)
             )
         yield from fn(this_generator, _proceed, _fail, _catcher, *args)
 
