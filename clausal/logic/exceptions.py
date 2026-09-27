@@ -153,8 +153,12 @@ class LogicException(Exception):
     (``"solve/1: the goal is unbound"``), which stays off the term because
     the second argument of ``error/2`` is only what Scryer puts there.  Pass
     *message* to set it; otherwise it is the prose a builder recorded for
-    *term* (:func:`error_prose`).  The rendered message is the term, then
-    ``": "`` and the prose when there is any::
+    *term* (:func:`error_prose`).  The prose belongs to the Python
+    exception, not to the term: a ball that ``catch/3`` binds and ``throw/1``
+    raises again finds it only while the term is still among the last
+    ``_PROSE_MAX`` error terms built or raised (the term itself is Scryer's
+    and carries none).  The rendered message is the term, then ``": "`` and
+    the prose when there is any::
 
         Uncaught logic exception: error(instantiation_error,solve/1): the goal is unbound
     """
@@ -242,6 +246,15 @@ def python_error_term(exc: Exception) -> tuple:
     return (type(exc).__name__, str(exc))
 
 
+def _is_python_error_term_of(term: Any, cause: BaseException) -> bool:
+    """True when *term* is :func:`python_error_term`'s ``ClassName(Message)``
+    for *cause* -- a cell (or hand-built ``Compound``) of arity exactly 1
+    whose functor is the cause's class name, never a bare atom."""
+    fa = term_functor_args(term)
+    return (fa is not None and len(fa[1]) == 1
+            and fa[0] == type(cause).__name__)
+
+
 def _dual_typed_match(exc: BaseException, cls: type) -> bool:
     """True when the logic ball *exc* is ALSO an instance of the non-logic
     exception class *cls* by a base of its own -- never for a class that is
@@ -296,8 +309,7 @@ def catch_match(catcher: Any, term: Any, exc: BaseException, trail: Any) -> bool
             and isinstance(exc, LogicException)
             and isinstance(cause, BaseException)
             and not isinstance(cause, LogicException)
-            and (term_functor_args(getattr(exc, "term", None))
-                 or (None,))[0] == type(cause).__name__):
+            and _is_python_error_term_of(getattr(exc, "term", None), cause)):
         exc = cause
     if isinstance(catcher, type) and issubclass(catcher, BaseException):
         # A ++ catcher is the PYTHON side of the boundary only: a logic

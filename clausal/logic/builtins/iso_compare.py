@@ -47,7 +47,10 @@ def _clpfd_leaf_culprit(exc: LogicException):
     expected, leaf = inner[1]
     if not (is_atom(expected) and spelling(expected) == "integer"):
         return None
-    if exc.message != "clpfd expression":
+    # The clpfd leaf error has no culprit indicator: its second argument is
+    # an unbound variable (Scryer's form) and "clpfd expression" is the
+    # exception's prose, set when the exception was built.
+    if not is_var(outer[1][1]) or exc.message != "clpfd expression":
         return None
     return leaf
 

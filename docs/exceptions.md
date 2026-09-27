@@ -178,6 +178,11 @@ exception's `.message`, and `str()` prints it after the term, separated by
 Uncaught logic exception: error(instantiation_error,solve/1): the goal is unbound
 ```
 
+The prose belongs to the Python exception. A term caught with `catch/3` is
+exactly the Scryer term and carries no prose of its own; when it is thrown
+again the new exception recovers the prose on a best-effort basis (it is kept
+for the most recent error terms only).
+
 ```clausal
 catch(atom_length(1, _), error(type_error(T, V), _), true)   % T = atom, V = 1
 catch(atom_length(1, _), error(_, PI), true)                 % PI = atom_length/2
