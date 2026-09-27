@@ -823,23 +823,22 @@ def _is_ground_real_scalar(x) -> bool:
     return isinstance(x, float) and not math.isnan(x)
 
 
-def _cells_as_real_nodes(l, r, context: str) -> tuple:
-    """``(l, r)`` with arithmetic CELLS rewritten as operator nodes, which is
-    what the CLP(R) propagators walk (ruling R9 A1, 2026-09-27): a cell was
-    invisible to them, so ``clpr.real(X == T)`` with ``T = +(1, 2)`` left X
-    unbound with no error.  An atom or a non-evaluable compound raises
-    ``type_error(evaluable, F/N)`` for the same reason."""
-    from clausal.logic.clpfd import _arith_cells_to_nodes  # noqa: PLC0415
-    cl = _arith_cells_to_nodes(l, context)
-    cr = _arith_cells_to_nodes(r, context)
-    return (l if cl is None else cl), (r if cr is None else cr)
+def _cells_as_nodes(l, r, context):
+    """clpfd's post-boundary rewrite, STRICT (ruling R9 A1, 2026-09-27): an
+    arithmetic cell becomes its operator node, which is what the CLP(R) propagators
+    walk; an atom or a non-evaluable compound raises ``type_error(evaluable,
+    F/N)`` -- the CLP(R) propagators had no diagnosis of their own for it."""
+    global _cells_as_nodes
+    from clausal.logic.clpfd import _cells_as_nodes as impl  # noqa: PLC0415 -- clpfd imports this module lazily
+    _cells_as_nodes = impl
+    return impl(l, r, context)
 
 
 def real_eq(l, r, trail: Trail) -> bool:
     """Post lhs == rhs as a real constraint."""
     l = deref(l)
     r = deref(r)
-    l, r = _cells_as_real_nodes(l, r, "(==)/2")   # ruling R9 A1
+    l, r = _cells_as_nodes(l, r, "(==)/2")   # ruling R9 A1
     # Ground check
     if not is_var(l) and not _is_expr(l) and not is_var(r) and not _is_expr(r):
         if isinstance(l, int) and not isinstance(l, bool) and isinstance(r, int) and not isinstance(r, bool):
@@ -865,7 +864,7 @@ def real_ne(l, r, trail: Trail) -> bool:
     """Post lhs != rhs as a real constraint."""
     l = deref(l)
     r = deref(r)
-    l, r = _cells_as_real_nodes(l, r, "(!=)/2")   # ruling R9 A1
+    l, r = _cells_as_nodes(l, r, "(!=)/2")   # ruling R9 A1
     if not is_var(l) and not _is_expr(l) and not is_var(r) and not _is_expr(r):
         if isinstance(l, int) and not isinstance(l, bool) and isinstance(r, int) and not isinstance(r, bool):
             return l != r
@@ -882,7 +881,7 @@ def real_lt(l, r, trail: Trail) -> bool:
     """Post lhs < rhs as a real constraint."""
     l = deref(l)
     r = deref(r)
-    l, r = _cells_as_real_nodes(l, r, "(<)/2")   # ruling R9 A1
+    l, r = _cells_as_nodes(l, r, "(<)/2")   # ruling R9 A1
     if not is_var(l) and not _is_expr(l) and not is_var(r) and not _is_expr(r):
         if isinstance(l, int) and not isinstance(l, bool) and isinstance(r, int) and not isinstance(r, bool):
             return l < r
@@ -899,7 +898,7 @@ def real_le(l, r, trail: Trail) -> bool:
     """Post lhs <= rhs as a real constraint."""
     l = deref(l)
     r = deref(r)
-    l, r = _cells_as_real_nodes(l, r, "(=<)/2")   # ruling R9 A1
+    l, r = _cells_as_nodes(l, r, "(=<)/2")   # ruling R9 A1
     if not is_var(l) and not _is_expr(l) and not is_var(r) and not _is_expr(r):
         if isinstance(l, int) and not isinstance(l, bool) and isinstance(r, int) and not isinstance(r, bool):
             return l <= r

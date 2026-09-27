@@ -298,6 +298,18 @@ def not_evaluable(term, context: str = "eval_/2"):
     return LogicException(type_error("evaluable", culprit, context))
 
 
+_deref = _is_var = _exact_cell_number = None
+
+
+def _bind_variables() -> None:
+    """Bind the variable-layer helpers once (``clausal.logic.variables``
+    imports this module's neighbours; binding at first use avoids the cycle
+    without an import statement per evaluated operand)."""
+    global _deref, _is_var, _exact_cell_number
+    from clausal.logic.variables import deref, exact_cell_number, is_var  # noqa: PLC0415
+    _deref, _is_var, _exact_cell_number = deref, is_var, exact_cell_number
+
+
 def evaluate(x, context: str = "eval_/2"):
     """Evaluate the arithmetic TERM *x* to a number -- ``eval_/2``'s evaluator.
 
@@ -313,18 +325,19 @@ def evaluate(x, context: str = "eval_/2"):
     * a Python value that is not a term (a ``Quantity``, a ``date``, a
       ``bool``, a list) passes through, to meet Python's operators as before.
     """
-    from clausal.logic.variables import deref, exact_cell_number, is_var  # noqa: PLC0415
-    x = deref(x)
+    if _deref is None:
+        _bind_variables()
+    x = _deref(x)
     t = type(x)
     if t is int or t is float or t is Fraction or t is Decimal:
         return x
-    if is_var(x):
+    if _is_var(x):
         from clausal.logic.exceptions import LogicException, instantiation_error  # noqa: PLC0415
         raise LogicException(instantiation_error(context))
     ka = node_key_args(x)
     if ka is None:
         if t is tuple:
-            num = exact_cell_number(x)
+            num = _exact_cell_number(x)
             if num is not None:
                 return num
         ka = cell_key_args(x)

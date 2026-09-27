@@ -306,10 +306,12 @@ class TestA2Keeps:
             "k9": "(L is [1, 2], eval_(L * 2, X))",
             "k10": "eval_(++(\"%d\") % 5, X)",
             "k11": "(L is [1, 2], eval_(L, X))",
+            # a QUALIFIED call is Python's own value, like ++ (roborev job 266)
+            "k12": "eval_(os.getcwd(), X)",
         }
         body = "\n".join(f"{n}(X) <- {b}" for n, b in rows.items())
         return _module(tmp, body, [f"{n}(X)" for n in rows],
-                       extra="-import_module(math)\n-import_from(py.units, [m])\n")
+                       extra="-import_module(math)\n-import_module(os)\n-import_from(py.units, [m])\n")
 
     def test_quantity_operand(self, mod):
         from clausal.terms import Quantity
@@ -330,6 +332,8 @@ class TestA2Keeps:
         assert _answers(mod, "k9") == [[1, 2, 1, 2]]
         assert _answers(mod, "k10") == ["5"]
         assert _answers(mod, "k11") == [[1, 2]]
+        import os
+        assert _answers(mod, "k12") == [os.getcwd()]
 
     def test_exact_number_cell_is_its_number(self, mod):
         from decimal import Decimal

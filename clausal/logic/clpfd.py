@@ -1611,11 +1611,12 @@ def _arith_cells_to_nodes(x, strict=None):
     return None
 
 
-def _cells_as_nodes(l, r):
-    """``(l, r)`` with arithmetic cells rewritten (see _arith_cells_to_nodes)."""
+def _cells_as_nodes(l, r, strict=None):
+    """``(l, r)`` with arithmetic cells rewritten (see _arith_cells_to_nodes;
+    CLP(Q) and CLP(R) pass their context as *strict*)."""
     tl, tr = type(l), type(r)
-    cl = None if tl is int or tl is float else _arith_cells_to_nodes(l)
-    cr = None if tr is int or tr is float else _arith_cells_to_nodes(r)
+    cl = None if tl is int or tl is float else _arith_cells_to_nodes(l, strict)
+    cr = None if tr is int or tr is float else _arith_cells_to_nodes(r, strict)
     return (l if cl is None else cl), (r if cr is None else cr)
 
 

@@ -55,8 +55,9 @@ Prefer `==` for ordinary relational arithmetic — it works in all directions.
   `type_error(evaluable, foo/1)`. Before 2026-09-27 these were handed back
   unevaluated (`X = foo(1)`), a silent wrong answer.
 - A Python value — a [`Quantity`](units.md), a `date`, a list, the result of a
-  `++` escape — keeps Python's own operators, as before: `eval_(L + [3], X)`
-  concatenates and `eval_(++("%d") % 5, X)` formats.
+  `++` escape or of a qualified Python call such as `math.sqrt(X)` — keeps
+  Python's own operators, as before: `eval_(L + [3], X)` concatenates and
+  `eval_(++("%d") % 5, X)` formats.
 
 Reach for `eval_/2` when you specifically need *eager* evaluation:
 

@@ -1518,18 +1518,30 @@ _NATIVE_OPS = {FloorDiv: ast.FloorDiv(), Mod: ast.Mod(), Pow: ast.Pow()}
 
 
 def _yields_non_term(term: Any) -> bool:
-    """True when *term*'s compiled arithmetic can only produce a Python value,
-    never a term: a number literal, an arithmetic sub-tree (whose helpers
-    evaluate any term operand), or a ``++`` escape (Python's own value, which
-    keeps Python's operators -- ``++("%d") % 5`` formats).  A variable or a
-    literal compound may be a term at runtime and is not."""
+    """True when *term*'s compiled arithmetic produces a Python VALUE, never a
+    term that still needs evaluating: a number literal, an arithmetic sub-tree
+    (whose helpers evaluate any term operand), a ``++`` escape, or a QUALIFIED
+    call (``math.sqrt(X)``, ``prolog.TruncDiv(A, B)``) -- the last two are
+    Python's own values and keep Python's operators and results, as before
+    (``++("%d") % 5`` formats).  A variable, or a literal compound such as a
+    bare-name ``foo(1)`` (always a term constructor), may be a term at
+    runtime and is not.  The ONE answer to "is this eval_ operand a Python
+    value?" -- ``_lower_goalop_shared`` wraps exactly the others in ``$eval``."""
     term = deref(term)
     if is_var(term):
         return False
     if isinstance(term, (Add, Sub, Mult, Div, FloorDiv, Mod, Pow, Negate, PyThunk)):
         return True
+    if isinstance(term, Call) and isinstance(term.func, LoadAttr):
+        return True
     term = literal_value(term)
     return isinstance(term, (int, float, Fraction)) and not isinstance(term, bool)
+
+
+def needs_runtime_eval(term: Any) -> bool:
+    """``eval_``'s operand must be evaluated at runtime (``$eval``): it is a
+    variable, whatever it will hold, or a literal term (ruling R9 A2)."""
+    return not _yields_non_term(term)
 
 
 def arith_to_ast_expr(term: Any, var_context: dict[int, str]) -> ast.expr:
