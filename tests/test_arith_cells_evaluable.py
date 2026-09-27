@@ -196,6 +196,10 @@ _SRC_ROWS = {
     "p3": ("(unpack(T, ['+', 1, 2]), X == 1, T != 3)", []),
     "p4": ("(unpack(T, ['+', X, 2]), clpq.rational(T == 5))", [3]),
     "p6": ("(unpack(T, ['+', X, 2]), '#='(T, 5))", [3]),
+    # a between/3 bound holding an unbound variable: no answer, no error,
+    # exactly as the node spelling between(1, Y + 1, X) and a bare Y
+    "b1": ("(unpack(T, ['+', Y, 1]), between(1, T, X))", []),
+    "b2": ("between(1, Y + 1, X)", []),
 }
 
 
@@ -280,6 +284,9 @@ class TestA2Errors:
             # an unbound operand of a NATIVE operator
             "e16": "eval_(Y // 2, X)",
             "e17": "eval_(-Y, X)",
+            # the strict path reached through the < / > swaps
+            "e18": "clpq.rational(X < bar)",
+            "e19": "clpr.real(X > bar)",
         }
         body = "\n".join(f"{n}(X) <- {b}" for n, b in rows.items())
         return _module(tmp, body, [f"{n}(X)" for n in rows] + ["bar2(X)"],
@@ -289,7 +296,7 @@ class TestA2Errors:
         ("e1", "foo/1"), ("e4", "bar/0"), ("e5", "foo/1"), ("e8", "foo/1"),
         ("e6", "foo/1"), ("e7", "foo/1"), ("e9", "&/2"), ("e10", "&/2"),
         ("e11", "bar/0"), ("e12", "bar/0"), ("e13", "bar2/1"), ("e14", "bar2/1"),
-        ("e15", "'.'/2")])
+        ("e15", "'.'/2"), ("e18", "bar/0"), ("e19", "bar/0")])
     def test_non_evaluable(self, mod, name, culprit):
         text = _error_text(lambda: _answers(mod, name))
         assert _culprit_rendered(culprit) in text, text
@@ -327,6 +334,8 @@ class TestA2Keeps:
             "k13": "(N == 3, eval_(++(\"%d items\") % N, X))",
             # two variable operands of native operators, one after the other
             "k14": "(A == 7, B == 2, eval_(A // B + A ** B - -A + A % B, X))",
+            # the non-int branch of a native operator's variable operand
+            "k15": "(Y == 7.5, eval_(Y // 2 + -Y, X))",
         }
         body = "\n".join(f"{n}(X) <- {b}" for n, b in rows.items())
         return _module(tmp, body, [f"{n}(X)" for n in rows],
@@ -355,6 +364,7 @@ class TestA2Keeps:
         assert _answers(mod, "k12") == [os.getcwd()]
         assert _answers(mod, "k13") == ["3 items"]
         assert _answers(mod, "k14") == [3 + 49 + 7 + 1]
+        assert _answers(mod, "k15") == [3.0 - 7.5]
 
     def test_exact_number_cell_is_its_number(self, mod):
         from decimal import Decimal
