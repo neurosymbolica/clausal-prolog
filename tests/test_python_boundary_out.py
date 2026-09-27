@@ -145,7 +145,10 @@ class TestTheLeakRule:
 
     def test_wrap_text_normalises_an_atom_to_plain_str(self):
         from clausal.logic.to_python import wrap_text
-        out = wrap_text(atom('permitted'))
+        from clausal.lint_warnings import ClausalAtomClassDeprecationWarning
+        with pytest.warns(ClausalAtomClassDeprecationWarning):   # the class is deprecated (step (f)); the strip still works
+            tagged = atom('permitted')
+        out = wrap_text(tagged)
         assert type(out) is str and is_atom(out)
 
     def test_wrap_text_leaves_a_plain_str_alone(self):

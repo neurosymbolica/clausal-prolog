@@ -212,3 +212,62 @@ class ClausalRetiredQuasiQuoteWarning(ClausalDeprecatedSpellingWarning):
     a real ``q/1`` term can silence it with ``warnings.filterwarnings`` on
     this class.
     """
+
+
+class ClausalAtomClassDeprecationWarning(ClausalLintWarning):
+    """Constructing the boundary class ``clausal.logic.atoms.atom`` (a ``str``
+    subclass).  Deprecated 2026-09-27 (dumb seam, step (f)); removed in 2.0.
+
+    Under the dumb seam an atom IS the plain ``str`` and nothing the engine
+    hands out is an ``atom`` instance any more, so the class only ever comes
+    from user code.  Write ``'x'`` for the atom ``x``; test with
+    ``type(v) is str`` or ``clausal.logic.atoms.is_atom(v)`` -- an
+    ``isinstance(v, atom)`` test is now simply False for every answer.
+
+    VISIBLE BY DEFAULT (operator ruling 2026-09-27): a ``UserWarning``
+    through ``ClausalLintWarning``, the same base as
+    ``ClausalDeprecatedSpellingWarning`` and for the same reason -- a
+    ``DeprecationWarning`` is silenced by default outside ``__main__``, and
+    a deprecation nobody sees is no notice at all.  Suppress it the way the
+    other lints are suppressed: ``warnings.filterwarnings`` on this class.
+    Emitted
+    once per CALL SITE (file, line), guarded in ``clausal.logic.atoms`` rather
+    than by the warnings registry.  The engine's own leak strips test the
+    type and never construct, so they never emit it.  Not the builtin
+    ``atom/1`` (``from clausal import atom``), which is unaffected.
+    """
+
+
+class ClausalSeamTextCompareWarning(ClausalLintWarning):
+    """A name bound by a goal-position ``--`` seam compared with a Python
+    ``str`` LITERAL in the same function.
+
+    Under the dumb seam (2026-09-26) a goal-position answer is the engine's
+    own term: a string is the carrier ``('$chars', s)`` and an atom is the
+    plain ``str``.  So in hosted Python
+
+        for T in --txt(T):
+            if T == "some text":       # False for a STRING answer ...
+        for X in --colour(X):
+            if X == "red":             # ... and True for an ATOM answer
+
+    the same spelling silently answers differently by the answer's type,
+    which is the trap.  The right spellings are a seam literal on the other
+    side (``T == --"some text"``) or the converter (``to_python(T) ==
+    "some text"``).  Emitted at load, once per site (the message names the
+    file, line and column, the name, the seam that bound it and both
+    spellings), for a seam-bound name -- from ``if``/``elif``/``while``, a
+    ``for``, a comprehension's first clause, or a plain alias of one
+    (``y = T``) -- that meets a str literal through ``==``, ``!=``, ``in`` /
+    ``not in`` a literal list/tuple/set of str, or a ``match``/``case`` str
+    pattern.
+
+    NOT CAUGHT, by design (same function, literal on the other side):
+    ``d[T]`` and ``T in some_dict`` (a str key never joins a carrier key),
+    ``json.dumps(T)``, ``len(T)``, ``T[0]``, str methods and ``+``, a
+    comparison inside a helper the name is passed to, a comparison in
+    another function, a container built at runtime (``T in NAMES``), and a
+    name rebound by plain Python after the seam (still flagged).  Those are
+    the seam's documented raw-out contract (docs/python_integration.md).
+    """
+

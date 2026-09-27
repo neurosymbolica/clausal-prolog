@@ -7,10 +7,21 @@ yet, so this file pins the class's own behaviour, the DISCRIMINATOR that later
 steps read, and the LEAK RULE they depend on.
 
 Lower case by operator ruling: a Python class at the same level as ``str``.
+
+DEPRECATED 2026-09-27 (dumb seam step (f); removed in 2.0): this file keeps
+pinning the class's behaviour through 1.x, so constructing it here is
+deliberate.  The warning itself is tests/test_atom_class_deprecation.py.
 """
 import pytest
 
 from clausal.logic.atoms import atom, is_atom
+
+# The deprecated boundary class (dumb seam step (f), 2026-09-27): this file
+# constructs ``atom`` ON PURPOSE -- it pins the class / the leak strips that
+# must keep working through 1.x -- so its deprecation warning is expected
+# here and is asserted in tests/test_atom_class_deprecation.py.
+pytestmark = pytest.mark.filterwarnings(
+    "ignore::clausal.lint_warnings.ClausalAtomClassDeprecationWarning")
 
 
 class TestItIsAdvisory:

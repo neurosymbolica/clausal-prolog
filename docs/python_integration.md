@@ -165,10 +165,13 @@ for V in --verdict(V):
         ...
     text = to_python(V)            # ('result', 'permitted', 'Article 6(1)', 'art_6')
 for T in --txt(T):
-    T == "some text"               # FALSE: a carrier is not a Python str
-    T == --"some text"             # True under -double_quotes(chars)
+    T == --"some text"             # True: the same string term
     to_python(T)                   # 'some text'
 ```
+
+A plain Python literal on the other side — `T == "some text"` — is **False**
+for a string answer (a carrier is not a Python `str`) and True only for an
+atom answer; the lint below warns at load wherever that is written.
 
 An answer crosses **by identity** only when it is proven to hold no logic
 variable at all — it is atomic, it is a constant the compiler baked into a
@@ -179,6 +182,17 @@ object — is deref-walked into a **copy** first, because a term holding a
 variable would neither compare equal to its `--` literal nor survive
 backtracking. Do not mutate what you are handed; it may be the engine's own
 stored term.
+
+**The lint.** Because `T == "x"` is silently False for a string answer and
+silently True for an atom answer, a name bound by a goal-position seam that
+meets a Python str **literal** in the same function — `==`, `!=`, `in` /
+`not in` a literal list/tuple/set of str, a `match`/`case` str pattern, also
+through a plain alias `y = T` — raises `ClausalSeamTextCompareWarning` at
+load, naming the site and both right spellings (`T == --"x"`, or
+`to_python(T) == "x"`). It does not catch `d[T]`, `T in some_dict`,
+`json.dumps(T)`, `len(T)`, str methods, a comparison inside a helper or in
+another function, or a container built at runtime: those follow the raw-out
+contract above.
 
 The same holds in a comprehension or generator expression whose FIRST
 `for` clause is a `--` goal (`{K: V for K, V in --kv(K, V)}`), and for the
@@ -360,6 +374,41 @@ string comes out as the carrier, and `++` passes it in unchanged, so
 `for T in --txt(T): ... if --txt(++T)` is the identity round trip. (The
 2026-09-21 design that tagged atoms on the way out and read a plain `str` as
 text on the way in was superseded by the dumb seam on 2026-09-26.)
+
+#### Deprecated: the `atom` boundary class
+
+`clausal.logic.atoms.atom` — the `str` subclass that tagged a value as an
+atom under the 2026-09-21 design — is **deprecated** as of 2026-09-27 and is
+**removed in 2.0**. The engine no longer hands one out: every answer's atom is
+the plain `str`. Constructing one emits `ClausalAtomClassDeprecationWarning`
+(in `clausal.lint_warnings`), once per call
+site. It is a `UserWarning` (via `ClausalLintWarning`), not a
+`DeprecationWarning`, so it is **shown by default** in library code too;
+silence it with `warnings.filterwarnings("ignore",
+category=ClausalAtomClassDeprecationWarning)`. Until 2.0 the class keeps working exactly as before — equality, hashing,
+interning and pickling are unchanged — and an instance handed in through
+`++`, a seam's bare name or `solve`/`once`/`call` is still stripped to its
+`str` (the leak rule), without a warning.
+
+| Old | Now |
+|---|---|
+| `atom('permitted')` | `'permitted'` — the atom **is** the `str` |
+| `isinstance(v, atom)` | `type(v) is str`, or `clausal.logic.atoms.is_atom(v)` |
+| `v == atom('x')` | `v == 'x'`, or `v == --x` for a whole term (`V == --result(permitted, art_6)`) |
+| reading an answer's text | `clausal.to_python(v)` |
+
+`isinstance(v, atom)` does **not** warn, and it is now `False` for every value
+the engine produces — a collector that filtered on it goes silently empty
+rather than failing. Find those sites with the census tool, which reads source
+by AST and never imports or runs it:
+
+```
+PYTHONDONTWRITEBYTECODE=1 python3 tools/atom_class_census/census.py --self-test
+PYTHONDONTWRITEBYTECODE=1 python3 tools/atom_class_census/census.py --sites <your tree>
+```
+
+`from clausal import atom` is a different object — the builtin `atom/1` goal —
+and is not deprecated.
 
 ### The Python atom API
 
