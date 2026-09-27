@@ -3920,8 +3920,9 @@ def _wq_list(elems: list, tail) -> str:
 
 #: While ``term_writeq(..., local_vars=True)`` renders, the variables seen so
 #: far, by identity, in order of first appearance.  Each renders as a
-#: placeholder that cannot occur in any other token (a NUL is escaped inside
-#: every quoted token), resolved once the whole term is written.
+#: placeholder, NUL + digits + NUL, resolved once the whole term is written.
+#: ``_wq_quote`` escapes a NUL inside every quoted token; only a raw NUL-digits-
+#: NUL run inside a ``term_str`` fallback (a dict key, say) could collide.
 _WQ_LOCAL_VARS: _contextvars.ContextVar = _contextvars.ContextVar(
     "_WQ_LOCAL_VARS", default=None)
 
@@ -4047,7 +4048,9 @@ def term_writeq(t: Any, *, local_vars: bool = False) -> str:
     *local_vars* names the variables within this term instead of by the
     engine's global identity: one written once is ``_``, one written more
     than once ``_1``, ``_2``, ... in order of first appearance.  The text is
-    then the same for every copy of the term, which ``_N`` is not.
+    then the same for every copy of the term, which ``_N`` is not.  A
+    subterm handed whole to ``term_str`` (see above) prints its variables
+    as ``_`` itself, so sharing with such a subterm is not shown.
     """
     if not local_vars:
         return _wq(t, 1200)

@@ -16,7 +16,7 @@ from clausal.logic.builtins._registry import _builtin
 from clausal.logic.builtins.inspection import _univ__2 as _iso_univ_impl
 from clausal.logic.constraints import structural_eq as _structural_eq
 from clausal.logic.exceptions import (
-    LogicException, error_context_text, instantiation_error, term_functor_args,
+    LogicException, error_context_message, instantiation_error, term_functor_args,
     type_error,
 )
 from clausal.logic.predicate import is_term_instance, term_field_names
@@ -47,7 +47,7 @@ def _clpfd_leaf_culprit(exc: LogicException):
     expected, leaf = inner[1]
     if not (is_atom(expected) and spelling(expected) == "integer"):
         return None
-    if error_context_text(term) != "clpfd expression":
+    if error_context_message(term) != "clpfd expression":
         return None
     return leaf
 

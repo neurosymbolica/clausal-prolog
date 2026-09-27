@@ -27,6 +27,7 @@ import re
 from typing import Any
 
 from clausal.logic.cells import chars as _chars  # stage 1: the chars carrier
+from clausal.logic.cells import chars_text, is_chars
 from clausal.logic.atoms import is_atom, mint, spelling
 from clausal.logic.variables import Var, deref
 from clausal.terms import Add, Compound, Div, FloorDiv, Mod, Mult, Negate, Pow, Sub
@@ -385,10 +386,14 @@ def error_context_text(term: Any) -> str:
     """The context of ``error(Formal, Context)`` as text:
     ``context(solve/1, 'why')`` reads ``"solve/1: why"``,
     ``context(atom_length/2, _)`` reads ``"atom_length/2"``,
-    ``context(_, 'why')`` reads ``"why"``.  The indicator is written as
-    ``writeq`` writes it, so an operator name is in parentheses
-    (``"(<)/2"``, ``"(is)/2"``).  A context that is not ``context/2`` reads
-    as its ``str``; a term that is not ``error/2`` reads as ``""``.
+    ``context(_, 'why')`` reads ``"why"``.  The indicator is RE-RENDERED
+    as ``writeq`` writes it, so an operator name is in parentheses
+    (``"(<)/2"``, and ``"(is)/2"`` for a context built from ``"is/2"``):
+    this is display text, not the raise site's string -- compare the
+    structured term (:func:`error_context_message`) to select on it.  An
+    atom or string message reads as its characters, any other term as its
+    ``writeq`` text; so does a context that is not ``context/2``.  A term
+    that is not ``error/2`` reads as ``""``.
     """
     outer = term_functor_args(term)
     if outer is None or outer[0] != "error" or len(outer[1]) != 2:
@@ -396,14 +401,37 @@ def error_context_text(term: Any) -> str:
     context = outer[1][1]
     fa = term_functor_args(context)
     if fa is None or fa[0] != "context" or len(fa[1]) != 2:
-        return str(context)
+        return _text(context)
     culprit, message = (deref(a) for a in fa[1])
     parts = []
     if _is_indicator(culprit):
         parts.append(render_error_term(culprit))
     if not isinstance(message, Var):
-        parts.append(str(message))
+        parts.append(_text(message))
     return ": ".join(parts)
+
+
+def error_context_message(term: Any) -> Any:
+    """The ``Message`` of ``error(_, context(_, Message))``, dereferenced, or
+    None when *term* has no such context."""
+    outer = term_functor_args(term)
+    if outer is None or outer[0] != "error" or len(outer[1]) != 2:
+        return None
+    fa = term_functor_args(outer[1][1])
+    if fa is None or fa[0] != "context" or len(fa[1]) != 2:
+        return None
+    return deref(fa[1][1])
+
+
+def _text(value: Any) -> str:
+    """*value* as prose: an atom or a string as its characters, any other
+    term as ``writeq`` writes it."""
+    value = deref(value)
+    if type(value) is str:
+        return value
+    if is_chars(value):
+        return chars_text(value)
+    return render_error_term(value)
 
 
 # ── Structured error term helpers ─────────────────────────────────────────────

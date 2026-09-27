@@ -300,3 +300,14 @@ def test_error_context_text_reads_the_context_back(text, expected):
     from clausal.logic.exceptions import error_context_text
     assert error_context_text(type_error("atom", 1, text)) == expected
     assert error_context_text("not an error term") == ""
+
+
+def test_error_context_text_renders_a_string_message_as_its_text():
+    from clausal.logic.cells import chars
+    from clausal.logic.exceptions import error_context_message, error_context_text
+    term = ("error", "instantiation_error",
+            ("context", ("/", "foo", 1), chars("why")))
+    assert error_context_text(term) == "foo/1: why"
+    assert error_context_message(term) == chars("why")
+    assert error_context_message(type_error("atom", 1, "x/1: m")) == "m"
+    assert error_context_message(("not", "error")) is None

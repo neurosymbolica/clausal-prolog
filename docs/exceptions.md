@@ -188,8 +188,11 @@ except LogicException as e:
     # context == ('context', ('/', 'atom_length', 2), _)
 ```
 
-`clausal.logic.exceptions.error_context_text(term)` gives the context back as
-the text it was built from (`"atom_length/2"`, `"solve/1: the goal is unbound"`).
+`clausal.logic.exceptions.error_context_text(term)` gives the context as display
+text (`"atom_length/2"`, `"solve/1: the goal is unbound"`); the indicator is
+re-rendered the way `writeq` writes it, so an operator name is in parentheses
+(`"(is)/2"`). To select on the message, read the term itself
+(`error_context_message(term)`).
 
 ---
 
