@@ -25,6 +25,7 @@ from fractions import Fraction
 from clausal.logic.exact_arith import (
     exact_add as _exact_add, exact_sub as _exact_sub,
     exact_mul as _exact_mul, exact_div as _exact_div,
+    evaluate as _evaluate, evaluate_python_result as _evaluate_python_result,
 )
 from typing import Any
 
@@ -749,7 +750,7 @@ def term_to_ast_expr(
     var_context (body-only Vars) are introduced via walrus ``(_vN := Var())``.
 
     when *eval_arith* is True (the default), arithmetic term nodes
-    (Add, Sub, …) are compiled to native Python operators so they evaluate
+    (Add, Sub, …) are compiled to the exact-arithmetic helpers so they evaluate
     at runtime.  when False, they are kept as structural term constructors
     (e.g. ``Add(left=x, right=1)``).
 
@@ -1473,17 +1474,6 @@ def _source_form(term_repr: str) -> str:
 
 # ── Arithmetic term → AST expression ──────────────────────────────────────────
 
-_ARITH_BINOP_MAP: list[tuple[type, ast.operator]] = [
-    (Add,      ast.Add()),
-    (Sub,      ast.Sub()),
-    (Mult,     ast.Mult()),
-    (Div,      ast.Div()),
-    (FloorDiv, ast.FloorDiv()),
-    (Mod,      ast.Mod()),
-    (Pow,      ast.Pow()),
-]
-
-
 def exact_div(l, r):
     """``$exact_div``: a literal int/int Div in compiled arithmetic — exact
     (``3/2`` is ``Fraction(3, 2)``), an integral quotient as int."""
@@ -1506,16 +1496,85 @@ ARITH_RUNTIME_NAMES: dict = {
     "$sub": _exact_sub,
     "$mul": _exact_mul,
     "$div": _exact_div,
+    # Ruling R9 (2026-09-27): an operand that may be a TERM at runtime --
+    # ``eval_``'s whole operand when it is a variable or a literal term, or an
+    # operand of the native ``//``, ``%``, ``**``, unary ``-`` -- is evaluated
+    # through the one evaluable table; an atom or a non-evaluable compound
+    # raises type_error(evaluable, F/N).
+    "$eval": _evaluate,
+    "$eval_py": _evaluate_python_result,
+    # the inline int test on a native operator's variable operand
+    # (``_native_operand``): builtins under names a module cannot shadow
+    "$type": type,
+    "$int": int,
 }
 _EXACT_BINOP_NAMES = ((Add, "$add"), (Sub, "$sub"), (Mult, "$mul"), (Div, "$div"))
+_NATIVE_OPS = {FloorDiv: ast.FloorDiv(), Mod: ast.Mod(), Pow: ast.Pow()}
+
+
+def _native_operand(term: Any, var_context: dict[int, str]) -> ast.expr:
+    """An operand of a native ``//``/``%``/``**``/unary ``-``: as compiled, or
+    wrapped in ``$eval`` when it may be a term at runtime.  A variable goes to
+    ``$eval`` directly (it dereferences), one call as ``$deref`` was."""
+    t = deref(term)
+    if is_var(t):
+        # ``(v if type(v := $deref(V)) is int else $eval(v))``: an int -- the
+        # overwhelmingly common operand -- costs the one C ``$deref`` call it
+        # always did; anything else goes to the evaluator.  ``$arith_tmp`` is
+        # consumed by its own conditional before any other operand assigns it.
+        var = _name(var_context.get(t._id, _var_python_name(t)))
+        tmp_store = ast.Name(id="$arith_tmp", ctx=ast.Store())
+        return ast.IfExp(
+            test=ast.Compare(
+                left=_call(_name("$type"), ast.NamedExpr(
+                    target=tmp_store, value=_call(_name("$deref"), var))),
+                ops=[ast.Is()], comparators=[_name("$int")]),
+            body=_name("$arith_tmp"),
+            orelse=_call(_name("$eval"), _name("$arith_tmp")),
+        )
+    expr = arith_to_ast_expr(term, var_context)
+    wrapper = runtime_eval_wrapper(term)
+    return expr if wrapper is None else _call(_name(wrapper), expr)
+
+
+def runtime_eval_wrapper(term: Any) -> "str | None":
+    """How an arithmetic operand's compiled value is checked at runtime --
+    the ONE answer, used for ``eval_``'s whole operand and for an operand of
+    a native ``//``/``%``/``**``/unary ``-`` (ruling R9):
+
+    * ``None`` -- it can only be a Python value: a number literal, an
+      arithmetic sub-tree (whose helpers evaluate any term operand), or a
+      ``++`` escape, which keeps Python's operators (``++("%d") % 5``);
+    * ``"$eval_py"`` -- a QUALIFIED call (``math.sqrt(X)``, ``os.getcwd()``,
+      but also a qualified term constructor ``utils.double(3)``): a str
+      result is Python's (it formats, it binds), a term result is evaluated
+      or refused like any other;
+    * ``"$eval"`` -- a variable, whatever it will hold, or a literal term
+      such as a bare-name ``foo(1)``.  (A bare-name Python builtin is not
+      callable there: ``eval_(str(5), X)`` is a NameError, "Predicate
+      'str/1' is not in scope as a term class".)
+    """
+    term = deref(term)
+    if is_var(term):
+        return "$eval"
+    if isinstance(term, (Add, Sub, Mult, Div, FloorDiv, Mod, Pow, Negate, PyThunk)):
+        return None
+    if isinstance(term, Call) and isinstance(term.func, LoadAttr):
+        return "$eval_py"
+    term = literal_value(term)
+    if isinstance(term, (int, float, Fraction)) and not isinstance(term, bool):
+        return None
+    return "$eval"
 
 
 def arith_to_ast_expr(term: Any, var_context: dict[int, str]) -> ast.expr:
     """Convert an arithmetic term to a Python arithmetic AST expression.
 
     Generates code that evaluates the expression to a Python number at runtime.
-    Vars are dereferenced.  Arithmetic binary operators are unboxed to native
-    Python ``ast.BinOp`` nodes.
+    Vars are dereferenced.  ``+``, ``-``, ``*``, ``/`` become calls to the
+    exact helpers (``$add`` & co.); ``//``, ``%``, ``**`` and unary ``-`` stay
+    native Python operators, with an operand that may be a term at runtime
+    evaluated first through ``$eval`` (ruling R9).
     """
     term = deref(term)
 
@@ -1541,14 +1600,23 @@ def arith_to_ast_expr(term: Any, var_context: dict[int, str]) -> ast.expr:
                 keywords=[],
             )
 
+    # ``//``, ``%``, ``**`` and unary ``-`` stay native Python operators; an
+    # operand that may be a TERM at runtime (a variable, a literal compound)
+    # is evaluated first through the one evaluable table (``$eval``, ruling
+    # R9) -- it used to meet Python's tuple/dataclass operators and raise a
+    # raw TypeError.  A Python-value operand (a ``++`` escape, a qualified
+    # call) is left as it is, so ``++("%d items") % N`` still formats.
     if isinstance(term, Negate):
-        return ast.UnaryOp(
-            op=ast.USub(),
-            operand=arith_to_ast_expr(term.operand, var_context),
-        )
+        return ast.UnaryOp(op=ast.USub(),
+                           operand=_native_operand(term.operand, var_context))
+    native = _NATIVE_OPS.get(type(term))
+    if native is not None:
+        return ast.BinOp(left=_native_operand(term.left, var_context),
+                         op=native,
+                         right=_native_operand(term.right, var_context))
 
-    # ``+``, ``-``, ``*``, ``/`` go through the exact helpers (a call, ~30 ns,
-    # measured); ``//``, ``%``, ``**`` stay native Python operators.
+    # ``+``, ``-``, ``*``, ``/`` go through their exact helper (a call, ~30 ns,
+    # measured): exactness, Decimal scale and term-operand evaluation live there.
     for cls, runtime_name in _EXACT_BINOP_NAMES:
         if isinstance(term, cls):
             return ast.Call(
@@ -1556,13 +1624,6 @@ def arith_to_ast_expr(term: Any, var_context: dict[int, str]) -> ast.expr:
                 args=[arith_to_ast_expr(term.left, var_context),
                       arith_to_ast_expr(term.right, var_context)],
                 keywords=[],
-            )
-    for cls, ast_op in _ARITH_BINOP_MAP:
-        if isinstance(term, cls):
-            return ast.BinOp(
-                left=arith_to_ast_expr(term.left, var_context),
-                op=ast_op,
-                right=arith_to_ast_expr(term.right, var_context),
             )
 
     # Fallback: treat as a plain term (e.g. a Var holding a number at runtime)

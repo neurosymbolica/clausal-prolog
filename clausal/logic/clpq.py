@@ -1140,9 +1140,26 @@ def in_q(var_or_list: Any, lo: Any = None, hi: Any = None,
 # ── Public API: constraint posting ───────────────────────────────────────────
 
 
+def _cells_as_nodes(l, r, context):
+    """clpfd's post-boundary rewrite, STRICT (ruling R9 A1, 2026-09-27): an
+    arithmetic cell becomes its operator node, which is what the _linearize
+    walk; an atom or a non-evaluable compound raises ``type_error(evaluable,
+    F/N)`` -- the _linearize had no diagnosis of their own for it."""
+    global _cells_as_nodes
+    from clausal.logic.clpfd import _cells_as_nodes as impl  # noqa: PLC0415 -- clpfd imports this module lazily
+    _cells_as_nodes = impl
+    return impl(l, r, context)
+
+
+def _cell_as_node(expr: Any, context: str) -> Any:
+    """One operand's :func:`_cells_as_nodes` -- an objective or a bound."""
+    return _cells_as_nodes(expr, 0, context)[0]
+
+
 def q_eq(l: Any, r: Any, trail: Trail) -> bool:
     """Post l == r as a rational equality constraint."""
     l, r = deref(l), deref(r)
+    l, r = _cells_as_nodes(l, r, "(==)/2")   # ruling R9 A1
     if _is_ground_q(l) and _is_ground_q(r):
         return Fraction(l) == Fraction(r)
     # If one side is ground and other is a bare var, use unify for speed
@@ -1182,6 +1199,7 @@ def q_ne(l: Any, r: Any, trail: Trail) -> bool:
     posting time, it's checked immediately.
     """
     l, r = deref(l), deref(r)
+    l, r = _cells_as_nodes(l, r, "(!=)/2")   # ruling R9 A1
     if _is_ground_q(l) and _is_ground_q(r):
         return Fraction(l) != Fraction(r)
     _ensure_q_for_expr(l, trail)
@@ -1212,6 +1230,7 @@ def q_ne(l: Any, r: Any, trail: Trail) -> bool:
 def q_le(l: Any, r: Any, trail: Trail) -> bool:
     """Post l <= r as a rational inequality constraint."""
     l, r = deref(l), deref(r)
+    l, r = _cells_as_nodes(l, r, "(=<)/2")   # ruling R9 A1
     if _is_ground_q(l) and _is_ground_q(r):
         return Fraction(l) <= Fraction(r)
     _ensure_q_for_expr(l, trail)
@@ -1263,6 +1282,7 @@ def sup(expr: Any, result_var: Any, trail: Trail) -> bool:
     the bound.  Useful for testing entailment and computing ranges.
     """
     expr = deref(expr)
+    expr = _cell_as_node(expr, "sup/2")   # ruling R9 A1: a cell objective is its node
     result_var = deref(result_var)
     lc = _linearize(expr, trail)
     if lc is None:
@@ -1283,6 +1303,7 @@ def inf(expr: Any, result_var: Any, trail: Trail) -> bool:
     the bound.
     """
     expr = deref(expr)
+    expr = _cell_as_node(expr, "inf/2")   # ruling R9 A1: a cell objective is its node
     result_var = deref(result_var)
     lc = _linearize(expr, trail)
     if lc is None:
@@ -1306,6 +1327,7 @@ def entailed(constraint_type: str, l: Any, r: Any, trail: Trail) -> bool:
     otherwise.  Does not modify the constraint store.
     """
     l, r = deref(l), deref(r)
+    l, r = _cells_as_nodes(l, r, "entailed/1")   # ruling R9 A1
     # Do NOT call _ensure_q_for_expr — entailed must be read-only.
     # If variables aren't in the Q domain, linearize will still work
     # (it just uses var._id as the key), but optimize won't know about
@@ -1397,6 +1419,7 @@ def maximize(expr: Any, result_var: Any, trail: Trail) -> bool:
     constrained variables to their optimal assignments.
     """
     expr = deref(expr)
+    expr = _cell_as_node(expr, "maximize/2")   # ruling R9 A1: a cell objective is its node
     result_var = deref(result_var)
     lc = _linearize(expr, trail)
     if lc is None:
@@ -1419,6 +1442,7 @@ def minimize(expr: Any, result_var: Any, trail: Trail) -> bool:
     constrained variables to their optimal assignments.
     """
     expr = deref(expr)
+    expr = _cell_as_node(expr, "minimize/2")   # ruling R9 A1: a cell objective is its node
     result_var = deref(result_var)
     lc = _linearize(expr, trail)
     if lc is None:
@@ -1613,6 +1637,7 @@ def bb_inf(int_vars: list, expr: Any, result_var: Any,
     integer variable.
     """
     expr = deref(expr)
+    expr = _cell_as_node(expr, "bb_inf/3")   # ruling R9 A1: a cell objective is its node
     result_var = deref(result_var)
     int_ids = set()
     for v in int_vars:

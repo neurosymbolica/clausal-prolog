@@ -562,7 +562,7 @@ fib(N, RESULT) <- (
 The distinction from `is`:
 - `X is Y` — pure structural unification; neither side is evaluated arithmetically
 - `(X == expr)` — posts an arithmetic constraint (CLP(ℤ) or CLP(ℝ))
-- `eval_(expr, X)` — eager arithmetic evaluation; evaluates `expr` as an arithmetic expression with Python semantics and binds the result to `X` (Prolog's `is/2`). See [Arithmetic](arithmetic.md) for when to prefer it over `==`.
+- `eval_(expr, X)` — eager arithmetic evaluation; evaluates `expr` as an arithmetic expression and binds the result to `X` (Prolog's `is/2`). A variable operand is evaluated at runtime, whatever arithmetic term it holds; an unbound one raises `instantiation_error`, and an atom or a non-evaluable compound raises `type_error(evaluable, Name/Arity)`. See [Arithmetic](arithmetic.md) for the evaluable table and for when to prefer it over `==`.
 
 ---
 
