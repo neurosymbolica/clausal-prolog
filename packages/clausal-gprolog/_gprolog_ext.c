@@ -439,29 +439,18 @@ term_to_py(PlTerm term)
         PlTerm *cargs = Pl_Rd_Compound(term, &functor_id, &arity);
         char *functor = Pl_Atom_Name(functor_id);
 
-        PyObject *py_args = PyTuple_New(arity);
-        if (!py_args) return NULL;
+        /* A compound term is the cell (functor, arg1, ..., argN). */
+        PyObject *cell = PyTuple_New(arity + 1);
+        if (!cell) return NULL;
+        PyObject *name = PyUnicode_FromString(functor);
+        if (!name) { Py_DECREF(cell); return NULL; }
+        PyTuple_SET_ITEM(cell, 0, name);
         for (int i = 0; i < arity; i++) {
             PyObject *a = term_to_py(cargs[i]);
-            if (!a) { Py_DECREF(py_args); return NULL; }
-            PyTuple_SET_ITEM(py_args, i, a);
+            if (!a) { Py_DECREF(cell); return NULL; }
+            PyTuple_SET_ITEM(cell, i + 1, a);
         }
-
-        /* Import clausal.terms.Compound */
-        PyObject *mod = PyImport_ImportModule("clausal.terms");
-        if (!mod) { Py_DECREF(py_args); return NULL; }
-        PyObject *cls = PyObject_GetAttrString(mod, "Compound");
-        Py_DECREF(mod);
-        if (!cls) { Py_DECREF(py_args); return NULL; }
-
-        PyObject *ctor_args = PyTuple_Pack(2, PyUnicode_FromString(functor), py_args);
-        Py_DECREF(py_args);
-        if (!ctor_args) { Py_DECREF(cls); return NULL; }
-
-        PyObject *result = PyObject_Call(cls, ctor_args, NULL);
-        Py_DECREF(cls);
-        Py_DECREF(ctor_args);
-        return result;
+        return cell;
     }
 
     case PL_REF:

@@ -280,7 +280,10 @@ ALLOWLIST: tuple[AllowEntry, ...] = (
     # Range shifted 2331-2443 -> 2377-2489 by F1 row 4 (2026-09-24):
     # ``_goal_arity`` and the row-based ``_resolve_predicate`` above the site
     # (mechanical again).
-    AllowEntry("clausal/testing.py", (2377, 2489),
+    # Range shifted 2377-2489 -> 2271-2383 by the Compound class's removal
+    # (2026-09-27): the generic-compound confusion note above the site went
+    # with the class (mechanical again).
+    AllowEntry("clausal/testing.py", (2271, 2383),
                "task-3 skip: diagnostic head-name fallback, semantics diverge "
                "from _functor_name (see task-3-report.md determination)"),
     # task-2-report.md / plan Task 2 text: "leave head_key itself as-is (it
@@ -614,7 +617,8 @@ def test_lint_catches_dotted_receiver_functor_fallback(tmp_path):
 
 
 def test_testing_py_allowlist_entry_is_load_bearing():
-    """clausal/testing.py:2459 (2413 before F1 row 4 added ``_goal_arity``
+    """clausal/testing.py:2353 (2459 before the Compound class's removal
+    took the generic-compound note above it, 2026-09-27; 2413 before F1 row 4 added ``_goal_arity``
     and the row-based ``_resolve_predicate`` above it, 2026-09-24; 2407 before the final fix wave's IMPORTANT 2
     (2026-09-23) added a 6-line comment above the ``field_names_for(declared)``
     call in ``_note_generic_compound_confusion``, now passing ``arity``/``db``;
@@ -645,7 +649,7 @@ def test_testing_py_allowlist_entry_is_load_bearing():
         "allowlist entry is a dead no-op again"
     )
     assert any(
-        v.pattern == "functor_fallback" and v.line == 2459
+        v.pattern == "functor_fallback" and v.line == 2353
         for v in testing_violations
     ), testing_violations
 

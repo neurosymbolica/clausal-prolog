@@ -3,7 +3,7 @@
 Ruling (2026-09-09): TitleCase has no role in Clausal code -- a Python class
 is reached via ``++ClassName``.  The names generated code needs bound in a
 module's namespace (the ``simple_ast`` node classes ``Predicate``/``Call``/
-``Add``/..., and the injected runtime types ``Var``/``Compound``/
+``Add``/..., and the injected runtime types ``Var``/
 ``Quantity``/``PyThunk``/...) are therefore referenced ``$``-prefixed, the
 convention ``$unify``/``$deref``/``$mint`` already follow: ``$`` is not a
 legal identifier character, so a user predicate spelled ``Sub`` or ``Var``
@@ -37,7 +37,7 @@ BARE_ONLY: frozenset[str] = frozenset({"Undefined"})
 #: knows every twin by name.  :func:`register_generated_names` asserts the
 #: runtime table matches this list, so drift between the two is loud.
 INJECTED_TITLECASE_NAMES: frozenset[str] = frozenset({
-    "Var", "Compound", "DictTerm", "SetTerm", "KWTerm",
+    "Var", "DictTerm", "SetTerm", "KWTerm",
     "Trail", "PyThunk", "FStringThunk", "Quantity", "BoolEq", "BoolImpl",
 })
 

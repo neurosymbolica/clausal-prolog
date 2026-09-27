@@ -234,7 +234,6 @@ def or_vrptw(distances: Any, time_windows: Any, depot: Any,
     n_vehicles: int
     Returns (routes, total_time) or None.
     """
-    from clausal.terms import Compound
     _require_routing()
 
     dist_matrix = []
@@ -247,8 +246,8 @@ def or_vrptw(distances: Any, time_windows: Any, depot: Any,
         tw = deref(tw)
         if isinstance(tw, (list, tuple)) and len(tw) == 2:
             tw_list.append((int(deref(tw[0])), int(deref(tw[1]))))
-        elif isinstance(tw, Compound) and len(tw.args) == 2:
-            tw_list.append((int(deref(tw.args[0])), int(deref(tw.args[1]))))
+        elif type(tw) is tuple and len(tw) == 3 and type(tw[0]) is str:
+            tw_list.append((int(deref(tw[1])), int(deref(tw[2]))))
         else:
             raise TypeError(f"Expected time window (Earliest, Latest), got {tw}")
 

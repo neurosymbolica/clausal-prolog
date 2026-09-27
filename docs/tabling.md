@@ -101,7 +101,7 @@ The builtins `abolish_table/2` and `abolish_all_tables/0` are also available fro
 
     - derefs bound variables
     - replaces unbound `Var` with the `_VAR` sentinel
-    - recursively normalises lists, `Compound` terms, and `PredicateMeta` instances
+    - recursively normalises lists, cells, and `PredicateMeta` instances
 
     The table store maps `(functor, arity, variant_key)` → `TableEntry`.
 

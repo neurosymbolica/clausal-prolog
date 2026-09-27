@@ -473,7 +473,7 @@ def resolve_qualified_goal_cell(
     that the unqualified top-level cell path cannot yet spell (see
     ``todo/bare-zero-arity-predicate-body-goal-does-not-compile``).
 
-    Any other inner goal shape (a ``Compound``, a class-term instance, an
+    Any other inner goal shape (a class-term instance, an
     already-lowered goal node) is handed back UNCHANGED -- deciding what is
     callable is the caller's job, and each caller already has that rule.
 

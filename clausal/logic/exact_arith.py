@@ -228,27 +228,19 @@ def key_nodes() -> dict:
     return _KEY_NODES
 
 
-_Compound = None
 _Node = None
 _KWTerm = None
 
 
 def cell_key_args(x):
-    """``((name, arity), args)`` for a compound CELL or ``Compound``, else None.
+    """``((name, arity), args)`` for a compound CELL, else None.
 
     A cell is ``(name, *args)`` with a str name and at least one argument;
     ``('x',)`` is reserved and is not a compound here.  The key is returned
     whether or not it is in :data:`EVALUABLE` -- the caller decides."""
-    global _Compound
     if type(x) is tuple:
         if len(x) >= 2 and type(x[0]) is str:
             return (x[0], len(x) - 1), x[1:]
-        return None
-    if _Compound is None:
-        from clausal.terms import Compound  # noqa: PLC0415
-        _Compound = Compound
-    if isinstance(x, _Compound) and type(x.functor) is str and x.args:
-        return (x.functor, len(x.args)), tuple(x.args)
     return None
 
 
@@ -265,7 +257,7 @@ def node_key_args(x):
 def _is_term(x) -> bool:
     """True for a value that is a TERM (and so must be evaluable to be used
     as a number): an atom, a cell (a declared term such as ``z(1)`` is one; so
-    is a string, the ``('$chars', Text)`` carrier), a ``Compound``, a
+    is a string, the ``('$chars', Text)`` carrier), a
     ``KWTerm`` or a pythonic-AST node.
     Every tuple counts, even one without a str head: a tuple is a term (a cell,
     or the ``('$chars', Text)`` string carrier), never a Python value here.
@@ -275,15 +267,12 @@ def _is_term(x) -> bool:
     separate question from the cells ruling R9 settled."""
     if type(x) is str or type(x) is tuple:
         return True
-    global _Compound, _Node, _KWTerm
-    if _Compound is None:
-        from clausal.terms import Compound  # noqa: PLC0415
-        _Compound = Compound
+    global _Node, _KWTerm
     if _Node is None:
         from clausal.pythonic_ast.nodes import Node  # noqa: PLC0415
         from clausal.terms import KWTerm  # noqa: PLC0415
         _Node, _KWTerm = Node, KWTerm
-    return isinstance(x, (_Compound, _Node, _KWTerm))
+    return isinstance(x, (_Node, _KWTerm))
 
 
 def not_evaluable(term, context: str = "eval_/2"):

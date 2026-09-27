@@ -505,22 +505,6 @@ class TestF004CatchFunctorCatcher:
         N, R = Var(), Var()
         assert sols(mod, ("targ", ("kab", N), R), N, R) == [(7, mint("caught"))]
 
-    @pytest.mark.compound_retirement_slice8
-    def test_compound_vs_cell_unify_is_the_root_cause(self, mod):
-        """A ``Compound`` catcher cannot match the thrown term — the reason
-        ``_lower_catcher`` must lower a catcher the way the throw site does.
-
-        R6: the thrown term is a cell now rather than a class instance; the
-        mismatch it demonstrates is the same one, one representation later.
-        """
-        from clausal.logic.variables import Trail, unify
-        from clausal.terms import Compound
-        thrown = ("kab", 7)
-        ok = unify(Compound("kab", (Var(),)), thrown, Trail())
-        if not ok:
-            pytest.xfail(
-                "A03-F004: unify(Compound('kab',(N,)), ('kab', 7)) is False")
-
     def test_rethrow_on_catcher_mismatch(self, mod):
         from clausal.logic.exceptions import LogicException
         with pytest.raises(LogicException):

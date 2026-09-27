@@ -69,10 +69,9 @@ class TestGnuPrologBasics:
 
     def test_compound_term(self, g):
         # nv
-        from clausal.terms import Compound
         g.consult_string("data_e(point(1, 2)).")
         sol = g.query_one("data_e(X).")
-        assert sol["X"] == Compound("point", (1, 2))
+        assert sol["X"] == ("point", 1, 2)
 
     def test_no_bindings_goal(self, g):
         """A goal that succeeds with no variables returns empty dict."""

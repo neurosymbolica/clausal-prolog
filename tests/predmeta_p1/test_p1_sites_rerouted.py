@@ -247,39 +247,6 @@ def test_an_imported_predicate_is_reached_through_the_adopted_row(tmp_path,
     assert _answers(mod, "p1_use_q") == [1]
 
 
-# ── clausal/testing.py: _note_generic_compound_confusion ───────────────────
-
-
-GENERIC_COMPOUND_SRC = '''\
--double_quotes(atom)
--dynamic(cite/1)
-
-make(T) <- (
-    T is ++(__import__("clausal.terms", fromlist=["Compound"]).Compound("cite", (1,)))
-),
-
-test("citation term mismatch") <- (
-    make(T2),
-    T2 is cite(_)
-),
-'''
-
-
-@pytest.mark.compound_retirement_slice8
-def test_the_generic_compound_note_fires_for_a_row_backed_functor(tmp_path,
-                                                                  capsys):
-    """``cite/1`` is a class AND a row here (``-dynamic`` mints the row).
-    Ruling 2026-09-26: the generic ``Compound("cite", (1,))`` IS the cell
-    ``cite(1)``, so the goal succeeds -- there is no confusion left for the
-    note to name."""
-    from clausal.testing import main
-
-    p = _write(tmp_path, "p1_note", GENERIC_COMPOUND_SRC)
-    assert main([str(p)]) == 0
-    out = capsys.readouterr().out
-    assert "generic compound" not in out
-
-
 # ── the sites this pass LEFT, with the measurement that left them ──────────
 
 

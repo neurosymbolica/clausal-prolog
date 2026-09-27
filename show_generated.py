@@ -69,7 +69,6 @@ from clausal.terms import (
     Gt, Lt, GtE, LtE,
     Or, Not, And,
     Call, LoadName,
-    Compound,
     ArithEq,
 )
 
@@ -95,7 +94,7 @@ def show(title, clausal_src, notes, functor, arity, clauses, db=None):
 # ── 1. Simple facts ──────────────────────────────────────────────────────────
 
 clauses_color = [
-    _normalize_fact_clause(Compound("color", (a,)))
+    _normalize_fact_clause(("color", a))
     for a in ["red", "green", "blue", "yellow", "purple"]
 ]
 show(
@@ -131,10 +130,10 @@ routes ground calls directly to the right bucket, bypassing these matches.
 
 N_ = Var(); F_ = Var(); N1_ = Var(); F1_ = Var(); N2_ = Var(); F2_ = Var()
 clauses_fib = [
-    Clause(head=Compound("fib", (0, 0)), body=[]),
-    Clause(head=Compound("fib", (1, 1)), body=[]),
+    Clause(head=("fib", 0, 0), body=[]),
+    Clause(head=("fib", 1, 1), body=[]),
     Clause(
-        head=Compound("fib", (N_, F_)),
+        head=("fib", N_, F_),
         body=[
             Gt(left=N_, right=1),
             Is(left=N1_, right=Sub(left=N_, right=1)),
@@ -189,9 +188,9 @@ regardless of how deep the recursion goes.  No Python stack overflow.
 
 X_ = Var(); H_ = Var(); T_ = Var(); REST_ = Var()
 clauses_member = [
-    Clause(head=Compound("member", (X_, [X_, REST_])), body=[]),
+    Clause(head=("member", X_, [X_, REST_]), body=[]),
     Clause(
-        head=Compound("member", (X_, [H_, T_])),
+        head=("member", X_, [H_, T_]),
         body=[Call(func=LoadName(name="member"), args=[X_, T_])],
     ),
 ]
@@ -229,9 +228,9 @@ cached at compile time (that would be Phase 7 / Phase 10 territory).
 L_ = Var(); R_ = Var(); OUT_ = Var()
 H2_ = Var(); T2_ = Var(); REST2_ = Var()
 clauses_append = [
-    Clause(head=Compound("append", ([], L_, L_)), body=[]),
+    Clause(head=("append", [], L_, L_), body=[]),
     Clause(
-        head=Compound("append", ([H2_, T2_], R_, [H2_, REST2_])),
+        head=("append", [H2_, T2_], R_, [H2_, REST2_]),
         body=[Call(func=LoadName(name="append"), args=[T2_, R_, REST2_])],
     ),
 ]
@@ -266,7 +265,7 @@ phases, then ANDs their guards: `if _lr0 is not False and _lr1 is not False`.
 V_ = Var()
 clauses_primary = [
     Clause(
-        head=Compound("primary", (V_,)),
+        head=("primary", V_),
         body=[Or(
             left=ArithEq(left=V_, right="red"),
             right=Or(
@@ -306,7 +305,7 @@ same match arm's trail scope.
 Q_ = Var()
 clauses_not_blue = [
     Clause(
-        head=Compound("not_blue", (Q_,)),
+        head=("not_blue", Q_),
         body=[
             Call(func=LoadName(name="color"), args=[Q_]),
             Not(operand=ArithEq(left=Q_, right="blue")),
@@ -374,7 +373,7 @@ if hint_row(db_phase10, "color", 1) is None:
 X2_ = Var()
 caller_clauses = [
     Clause(
-        head=Compound("find_red", (X2_,)),
+        head=("find_red", X2_),
         body=[Call(func=LoadName(name="color"), args=["red"])],
     ),
 ]

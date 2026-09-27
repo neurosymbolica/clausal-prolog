@@ -7,7 +7,6 @@ from typing import Any
 
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
 from clausal.logic.atoms import is_atom as _term_is_atom, spelling as _spelling
-from clausal.terms import Compound
 from clausal.logic.exceptions import LogicException, permission_error
 
 from clausal.logic.builtins._registry import (
@@ -40,30 +39,24 @@ def _hoist_every_argument(args, build_head):
 
 
 def _normalize_fact_clause(term: Any, hoist_all: bool = False):
-    """Convert a ground Compound fact to Var+Is form for output-mode queries.
+    """Lower an asserted fact so it answers output-mode queries.
 
-    ``Compound("f", (1, 2))`` → head=("f", v0, v1), body=[Is(v0,1), Is(v1,2)]
+    With *hoist_all*, ``("f", 1, 2)`` → head=("f", v0, v1),
+    body=[Unify(v0, 1), Unify(v1, 2)]; without it only STRUCTURED arguments
+    are hoisted (below).
 
     This makes dynamically asserted facts queryable in output mode (with unbound
     Var arguments), matching standard Prolog semantics for assert.
     Facts asserted via the DSL already use Var+Is form via the term transformer.
 
-    The head is the CELL (Compound retirement slice 3): a ``Compound`` handed
-    in from Python is still READ here until slice 8, but the engine no longer
-    builds one (``compound_with_args`` copies only a Compound with no cell).
-    *hoist_all* gives a CELL this same every-argument lowering -- the cell a
-    no-class dynamic predicate receives (``_resolve_cell_head``), which was
-    rebuilt as a ``Compound`` to get it before the head became a cell.
+    The head is the CELL.  *hoist_all* gives it the every-argument lowering
+    -- the cell a no-class dynamic predicate receives (``_resolve_cell_head``).
     """
     from clausal.logic.database import Clause  # avoid top-level import cycle
-    from clausal.terms import compound_with_args  # noqa: PLC0415
 
-    if isinstance(term, Compound):
-        return _hoist_every_argument(
-            term.args, lambda new: compound_with_args(term, new))
     # A CELL head (the P2 head shape) gets the lowering the compiler gives a
     # source clause (``database._normalize_structural_head_args``): each
-    # STRUCTURED argument -- a cell, a Compound, a list holding one -- is
+    # STRUCTURED argument -- a cell, a list holding one -- is
     # replaced by a fresh Var and a prepended ``Unify`` body goal.  Before
     # 2026-09-26 an asserted cell head kept ``dz(f(1))`` as the head itself,
     # compiled to ``case ['f', x]``, which an unbound caller never matches:
@@ -89,8 +82,8 @@ def _build_clause(term_val: Any, context: str, db, module_dict) -> "Any":
     *context* is the calling builtin's indicator ("assertz/1" or
     "asserta/1"), used as the error context on rejection.
 
-    Only plain terms (facts) are accepted; ground Compound facts are
-    normalized to Var+Is form.
+    Only plain terms (facts) are accepted; a cell fact is normalized by
+    ``_normalize_fact_clause``.
 
     A09-F005 (decision b): a Predicate node (a rule, ``h(X) <- b(X)``) is
     rejected with a typed ``permission_error`` — its body cannot be lowered
@@ -123,7 +116,7 @@ def _freeze_asserted_head_args(head: Any) -> Any:
     holds the value a variable had at assert time rather than the variable.
 
     P3-3 Task 5 fix round 1 (F1).  The gate normalizes a cell by handing its
-    slots straight to the class constructor or to ``Compound``, and
+    slots straight to the class constructor, and
     ``_normalize_fact_clause`` passes a class term through untouched -- so the
     stored head held the CALLER'S LIVE ``Var``.  The collect-by-assert idiom
     then stored one clause per solution, all of them the same variable::
@@ -132,14 +125,14 @@ def _freeze_asserted_head_args(head: Any) -> Any:
             assertz(("seen", X))
         # seen(X) answered [2, 2], not [1, 2]
 
-    The ``Compound`` path never had that shape because
+    The every-argument lowering never had that shape because
     ``_normalize_fact_clause`` derefs each argument and rebuilds a bound one as
     a fresh ``Var`` plus a ``Unify`` body goal.  This is that same freeze, one
     step earlier, so the class-term head gets it too: a SHALLOW ``deref``,
     deliberately matching what that machinery does rather than a deep walk.
 
     An UNBOUND argument still comes through as the caller's ``Var`` -- again
-    matching the ``Compound`` path, which keeps an unbound argument live.  That
+    matching the every-argument lowering, which keeps an unbound argument live.  That
     residual, and the identical defect in the class-term spelling
     ``assertz(m.seen(X))`` (ruled out of scope for this round), are recorded in
     ``todo/assert-stores-live-vars-for-class-term-and-cell-spellings-2026-09-06.md``;
@@ -206,11 +199,9 @@ def _resolve_cell_head(term_val: Any, context: str, db,
     that class's instance -- so the clause list stays homogeneous, first-arg
     indexing sees the shape it sees for every other clause, and a later
     ``retract`` by cell pattern can unify with a clause loaded from source.
-    With no class (a Compound-headed predicate, a bare ``Database()``) it is
-    the cell with the canonical functor, and the flag returned beside it is
-    True: ``_normalize_fact_clause`` gives it the every-argument lowering
-    ``assertz(Compound(...))`` gets -- the lowering this path had when it
-    rebuilt the cell as a ``Compound`` (before Compound retirement slice 3).
+    With no class (a bare ``Database()`` row) it is the cell with the
+    canonical functor, and the flag returned beside it is True:
+    ``_normalize_fact_clause`` gives it the every-argument lowering.
     Either way ``_normalize_fact_clause`` does the rest, and the ARG OBJECTS
     are shared with the caller's cell, so bindings made against the
     normalized term reach the caller's variables.

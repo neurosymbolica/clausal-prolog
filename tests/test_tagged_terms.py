@@ -313,8 +313,6 @@ def _recompile(mod, name):
     return row.db.get_dispatch(*row.key)
 
 
-
-
 class TestCellEmission:
     def test_a_module_constructs_cells(self):
         """A saturated declared-functor construction lowers to a tuple."""
@@ -1507,16 +1505,6 @@ class TestLiveCellHeadArg:
         assert self._ask(m, ("other", 1, 2)) == ["catchall"]
         assert self._ask(m, ("pt", 1, 2)) == ["yes", "catchall"]
 
-    @pytest.mark.compound_retirement_slice8
-    def test_a_non_ground_cell_answers_what_its_compound_twin_answers(self):
-        from clausal.terms import Compound
-
-        cell = self._fact_module(("pt", 1, Var()))
-        comp = self._fact_module(Compound("pt", (1, Var())))
-        assert self._ask(cell, 42) == self._ask(comp, 42)
-        assert self._ask(cell, ("pt", 1, 2)) == self._ask(
-            comp, Compound("pt", (1, 2)))
-
     def test_the_inner_var_is_fresh_per_invocation(self):
         """A captured literal cannot carry an inner Var -- it would be SHARED
         across invocations.  The sequence pattern captures into per-call
@@ -1531,37 +1519,6 @@ class TestLiveCellHeadArg:
         assert self._ask(m, ("pt", 1, 2)) == ["yes", "catchall"]
         assert self._ask(m, 42) == ["catchall"]
         assert self._ask(m, ("pt", 1, 3)) == ["catchall"]
-
-    @pytest.mark.compound_retirement_slice8
-    def test_the_cell_and_compound_rows_agree_in_every_argument_mode(self):
-        """The parity table, asserted rather than argued.
-
-        For each of the four head-arg shapes, what the clause accepts, what it
-        rejects, and whether an unbound caller gets an answer.  Cells answer
-        what their ``Compound`` analog answers -- including the part nobody
-        likes, that a structural head arg asserted through ``assertz`` has no
-        output mode (the hoist that provides one runs on the ``.clausal``
-        loading path, not here, and it has never run for ``Compound`` either).
-        """
-        from clausal.terms import Compound
-
-        def row(arg, self_shaped):
-            m = self._fact_module(arg)
-            S, K = Var(), Var()
-            return (
-                self._ask(m, 42),
-                self._ask(m, self_shaped),
-                [deref(K) for _t in call("qq", S, K, module=m)],
-            )
-
-        comp_ground = row(Compound("pt", (1, 2)), Compound("pt", (1, 2)))
-        comp_open = row(Compound("pt", (1, Var())), Compound("pt", (1, 2)))
-        cell_ground = row(("pt", 1, 2), ("pt", 1, 2))
-        cell_open = row(("pt", 1, Var()), ("pt", 1, 2))
-
-        assert cell_ground == comp_ground
-        assert cell_open == comp_open
-        assert comp_ground == (["catchall"], ["yes", "catchall"], ["catchall"])
 
     def test_a_var_functor_cell_head_arg_stays_a_wildcard(self):
         """Nothing can be decided statically about ``(X, 1, 2)`` -- the same
@@ -1744,22 +1701,16 @@ class TestCellHeadArgOpaqueSlots:
         K = Var()
         return [deref(K) for _t in call(functor, probe, K, module=m)]
 
-    @pytest.mark.compound_retirement_slice8
     @pytest.mark.parametrize("kind", ["date", "Decimal", "frozenset",
                                       "nested cell"])
-    def test_an_opaque_value_in_a_cell_slot_answers_like_its_compound_twin(
-            self, kind):
-        from clausal.terms import Compound
+    def test_an_opaque_value_in_a_cell_slot_is_matched(self, kind):
 
         value = self._opaque_values()[kind]
         cell_mod = self._module("oc", ("pt", 1, value))
-        comp_mod = self._module("od", Compound("pt", (1, value)))
 
         assert self._ask(cell_mod, "oc", ("pt", 1, value)) == \
-            self._ask(comp_mod, "od", Compound("pt", (1, value))) == \
             [mint("yes"), mint("catchall")]
-        assert self._ask(cell_mod, "oc", 42) == \
-            self._ask(comp_mod, "od", 42) == [mint("catchall")]
+        assert self._ask(cell_mod, "oc", 42) == [mint("catchall")]
         # ... and a DIFFERENT value in the slot is rejected, so the guard is
         # really testing the value rather than accepting anything.
         assert self._ask(cell_mod, "oc", ("pt", 1, "other")) == [mint("catchall")]
@@ -2176,7 +2127,6 @@ class TestCellWriterSurfaceFixRound(TestCellsAtTheBuiltinSurface):
         assert "pt(1, 2)" not in out
 
 
-@pytest.mark.compound_retirement_slice8
 class TestCallableAndTheTupleDataEdge:
     """``callable_/1`` (ISO ``callable``) — fix round 2.
 
@@ -2184,9 +2134,7 @@ class TestCallableAndTheTupleDataEdge:
     one my own sweep MISSED: the probe called it ``callable``, the ISO name,
     while it is REGISTERED as ``callable_``, so both halves of the comparison
     raised the same ``KeyError`` and compared equal.  Every probe in this
-    class therefore asserts the predicate is registered first, and asserts the
-    cell and its twin SIDE BY SIDE rather than against a hard-coded expected
-    value — a divergence is the failure, whichever way it points.
+    class therefore asserts the predicate is registered first.
     """
 
     def _module(self):
@@ -2203,98 +2151,37 @@ class TestCallableAndTheTupleDataEdge:
         )
         return len(list(call(goal, arg, module=self._module())))
 
-    def test_a_str_functor_cell_is_callable_like_its_compound_twin(self):
-        from clausal.terms import Compound
-
+    def test_a_str_functor_cell_is_callable(self):
         assert self._nsol("callable_", ("pt", 1, 2)) == 1
-        assert (self._nsol("callable_", ("pt", 1, 2))
-                == self._nsol("callable_", Compound("pt", (1, 2))))
 
-    def test_a_var_functor_tuple_is_no_longer_callable_unlike_its_compound_twin(self):
-        """INVERTED (P3-2 Task 5, §1b): the bridge's higher-order
-        Var-functor CELL is DEPRECATED — a slot-0-Var tuple is no longer
-        cell-shaped at all (``_is_compound`` no longer counts it), so it is
-        not ``callable_``. ``Compound`` is a wholly separate representation
-        untouched by this narrowing — a ``Compound`` with a Var functor is
-        still compound/callable via its own (unrelated) branch, same as
-        before. The two representations DIVERGE here now, which is the
-        point: §1b routes higher-order metaprogramming over CELLS through
-        ``functor/3``/``=../2``/``call/N`` instead, not through a
-        Var-functor cell reaching this callable check.
-
-        (Formerly ``test_a_var_functor_cell_is_callable_like_its_compound_
-        twin``, asserting both answered 1.)
-        """
-        from clausal.terms import Compound
-
+    def test_a_var_functor_tuple_is_not_callable(self):
+        """P3-2 Task 5, §1b: the bridge's higher-order Var-functor CELL is
+        DEPRECATED — a slot-0-Var tuple is not cell-shaped at all
+        (``_is_compound`` does not count it), so it is not ``callable_``.
+        Higher-order metaprogramming over cells goes through
+        ``functor/3``/``=../2``/``call/N``."""
         v = Var()
         assert self._nsol("callable_", (v, 1, 2)) == 0
-        assert self._nsol("callable_", Compound(v, (1, 2))) == 1
 
-    def test_a_zero_arity_cell_is_callable_like_its_compound_twin(self):
-        """``callable_`` yields for a 0-arity Compound, so its cell branch
-        carries no arity gate — unlike ``compound/1``'s, whose Compound branch
-        does gate.  Each cell branch mirrors the branch it is the twin OF."""
-        from clausal.terms import Compound
+    def test_a_zero_arity_cell_is_callable(self):
+        """``callable_``'s cell branch carries no arity gate, unlike
+        ``compound/1``'s."""
+        assert self._nsol("callable_", ("f",)) == 1
 
-        assert (self._nsol("callable_", ("f",))
-                == self._nsol("callable_", Compound("f", ())) == 1)
-
-    def test_tuple_data_matches_a_plain_tuple_not_a_tagged_compound(self):
-        """The tuple-DATA tag's analog is a plain Python tuple, and both
-        answers are pinned side by side.
+    def test_tuple_data_matches_a_plain_tuple(self):
+        """The tuple-DATA tag's analog is a plain Python tuple.
 
         ``(tuple, 1, 2)`` means "the Python tuple (1, 2) as term data" —
-        ``cells.py`` is explicit that it is NOT a compound — so its class-world
-        analog is ``(1, 2)``, not ``Compound(TUPLE_TAG, (1, 2))``, which
-        nothing constructs.  Under the plain-tuple analog every predicate
-        agrees; under the tagged-Compound one, three disagree — INCLUDING
-        ``ground/1``, whose cell branch was reviewed and accepted as correct.
-        The ORIGINAL evidence was a ground/1 divergence, which came from the
-        tag being a type object -- ``Compound`` treats any non-str functor as
-        non-ground (``_is_ground_py`` tests ``isinstance(term.functor, str)``),
-        predating cells entirely. Under the reserved-atom tag that divergence
-        is gone and the point is made more directly: ``Compound('()', (1, 2))``
-        is the compound ``'()'/2``, and tuple DATA is not a compound at all.
-        """
+        ``cells.py`` is explicit that it is NOT a compound — so every type
+        check answers for it what it answers for ``(1, 2)``."""
         from clausal.logic.cells import TUPLE_TAG
-        from clausal.terms import Compound
 
         data = (TUPLE_TAG, 1, 2)
         plain = (1, 2)
-        tagged_compound = Compound(TUPLE_TAG, (1, 2))
-
-        # The real analog: tuple data behaves as the tuple it denotes.
         for name in ("callable_", "compound", "ground"):
             assert self._nsol(name, data) == self._nsol(name, plain), name
 
-        # The tagged Compound, pinned side by side so the divergence is on
-        # record rather than silent -- and so a future change to either side
-        # shows up here.
-        assert self._nsol("callable_", tagged_compound) == 1
-        assert self._nsol("compound", tagged_compound) == 1
-        # MOVED when the tag became the reserved atom ``'()'``: the ground/1
-        # quirk used to fall on ``Compound(TUPLE_TAG, ...)`` too, because a
-        # type object is not a str and ``_is_ground_py``'s Compound branch
-        # tests ``isinstance(term.functor, str)``. With a str tag the tagged
-        # Compound is now ordinarily ground -- it is simply the compound
-        # ``'()'/2``, which is precisely what tuple DATA is not. The quirk
-        # itself is unchanged and still lives on any non-str functor.
-        assert self._nsol("ground", tagged_compound) == 1
-        assert self._nsol("ground", Compound(123, (1, 2))) == 0  # the quirk
-
-    def test_compound_1_still_gates_on_arity_and_diverges_at_zero(self):
-        """A pre-existing wart, pinned rather than copied.
-
-        ``compound(Compound("f", ()))`` answers TRUE — not through the
-        Compound branch (which requires ``len(args) > 0``) but through the
-        ``is_term_instance`` branch, since ``Compound`` is itself a dataclass
-        with two fields.  ISO says a 0-arity term is an atom, not a compound,
-        so the cell branch deliberately does NOT reproduce that: it gates on
-        arity, as its own Compound branch means to.  Recorded here so the
-        difference is a decision on record, not an oversight.
-        """
-        from clausal.terms import Compound
-
+    def test_compound_1_gates_on_arity(self):
+        """ISO says a 0-arity term is an atom, not a compound, so the cell
+        branch of ``compound/1`` gates on arity."""
         assert self._nsol("compound", ("f",)) == 0
-        assert self._nsol("compound", Compound("f", ())) == 1

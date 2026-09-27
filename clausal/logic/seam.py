@@ -458,14 +458,11 @@ def _module_of(module_globals: dict):
 def _has_var_thunk(term: Any) -> bool:
     """True if *term* holds a ``++`` thunk that reads a logic variable."""
     import dataclasses
-    from clausal.terms import Compound
     if isinstance(term, PyThunk):
         return bool(term.var_objects)
     if isinstance(term, Node) and dataclasses.is_dataclass(term):
         return any(_has_var_thunk(getattr(term, f.name))
                    for f in dataclasses.fields(term))
-    if isinstance(term, Compound):
-        return any(_has_var_thunk(a) for a in term.args)
     if isinstance(term, (list, tuple)):
         return any(_has_var_thunk(e) for e in term)
     if isinstance(term, dict):
@@ -479,7 +476,6 @@ def _goal_vars(goal: Any) -> list:
     once.  These are the variables an answer binds and a deferred answer
     must be frozen by and re-bound from."""
     import dataclasses
-    from clausal.terms import Compound
     seen: set = set()
     out: list = []
     def walk(t):
@@ -493,9 +489,6 @@ def _goal_vars(goal: Any) -> list:
         elif isinstance(t, Node) and dataclasses.is_dataclass(t):
             for f in dataclasses.fields(t):
                 walk(getattr(t, f.name))
-        elif isinstance(t, Compound):
-            for a in t.args:
-                walk(a)
         elif isinstance(t, (list, tuple)):
             for e in t:
                 walk(e)

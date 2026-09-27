@@ -497,7 +497,6 @@ def _head_arity(head: Any) -> int | None:
     - an atom (a ``str``), which is how a 0-arity fact (``myflag,``) stores
       its head -- name/0;
     - a cell ``(functor, *args)``;
-    - a ``Compound``-style head with an ``args`` sequence;
     - a term instance, whose arity is its field count.
 
     (A zero-field ``PredicateMeta`` class was a fourth, answered from its
@@ -509,10 +508,8 @@ def _head_arity(head: Any) -> int | None:
 
     ``database.head_key`` reads the same shapes and knows two more (``KWTerm``,
     ``Call``), but it is not what this wants: it lives downstream of this module
-    so reaching it means a per-call local import, it *raises* on anything else,
-    and it rejects ``Compound(functor_var, args)`` — whose functor is unknown but
-    whose arity is right there — because it needs a str functor and this needs
-    only a count.
+    so reaching it means a per-call local import, and it *raises* on anything
+    else.
     """
     if type(head) is str:
         # STAGE 2: an atom head is name/0 (``database.head_key`` agrees).

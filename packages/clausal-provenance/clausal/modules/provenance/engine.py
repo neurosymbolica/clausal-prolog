@@ -41,7 +41,6 @@ from clausal.logic.predicate import (
 from clausal.logic.database import Clause, head_key
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
 from clausal.logic.trampoline import DONE
-from clausal.terms import Compound
 
 from clausal.modules.provenance.protocol import Provenance, NonGroundTupleError
 from clausal.modules.provenance.stratify import stratify, StratificationError
@@ -70,16 +69,14 @@ def _clauses_of(cls) -> list:
 
 def _term_args(term: Any) -> tuple:
     """The ARGUMENT tuple of a term -- positions for a cell, fields for an
-    instance, ``args`` for a ``Compound``.  Raises for anything else."""
+    instance.  Raises for anything else."""
     if type(term) is tuple:
         return term[1:]
     if is_term_instance(term):
         return tuple(getattr(term, n) for n in term_field_names(term))
-    if isinstance(term, Compound):
-        return tuple(term.args)
     raise TypeError(
-        f"Cannot read the arguments of {term!r}; expected a cell, a "
-        "PredicateMeta instance or a Compound."
+        f"Cannot read the arguments of {term!r}; expected a cell or a "
+        "PredicateMeta instance."
     )
 
 
@@ -134,8 +131,6 @@ def _walk_term(term: Any) -> Any:
         return [_walk_term(e) for e in term]
     if isinstance(term, tuple):
         return tuple(_walk_term(e) for e in term)
-    if isinstance(term, Compound):
-        return Compound(term.functor, tuple(_walk_term(a) for a in term.args))
     if is_term_instance(term):
         cls = type(term)
         return cls(**{n: _walk_term(getattr(term, n)) for n in term_field_names(term)})
@@ -154,8 +149,6 @@ def _is_ground(term: Any) -> bool:
         return all(_is_ground(e) for e in term)
     if isinstance(term, tuple):
         return all(_is_ground(e) for e in term)
-    if isinstance(term, Compound):
-        return all(_is_ground(a) for a in term.args)
     if is_term_instance(term):
         return all(_is_ground(getattr(term, n)) for n in term_field_names(term))
     return True
@@ -171,11 +164,11 @@ def _term_to_tuple(term: Any) -> tuple:
     # Test the shape, do not catch _term_args' TypeError: catching would also
     # swallow one raised from INSIDE a legitimate read and report it as the
     # wrong diagnostic.
-    if type(term) is tuple or is_term_instance(term) or isinstance(term, Compound):
+    if type(term) is tuple or is_term_instance(term):
         return _term_args(term)
     raise TypeError(
-        f"Cannot ground-key non-term value {term!r}; expected a cell, a "
-        "PredicateMeta instance or Compound."
+        f"Cannot ground-key non-term value {term!r}; expected a cell or a "
+        "PredicateMeta instance."
     )
 
 
@@ -337,7 +330,7 @@ class PurityError(Exception):
 def _renew_clause(clause: Clause) -> Clause:
     """Return a copy of the clause with all variables renamed to fresh ones.
 
-    Walks both runtime terms (Compound, KWTerm, PredicateMeta instances,
+    Walks both runtime terms (cells, KWTerm, PredicateMeta instances,
     lists, tuples) and ``pythonic_ast`` Node subclasses (``Call``,
     ``Unify``, ``BinOp``, etc.) so that variables shared between head and
     body — including those nested inside arithmetic expressions like
@@ -371,8 +364,6 @@ def _renew_term(term: Any, var_map: dict) -> Any:
         return [_renew_term(e, var_map) for e in term]
     if isinstance(term, tuple):
         return tuple(_renew_term(e, var_map) for e in term)
-    if isinstance(term, Compound):
-        return Compound(term.functor, tuple(_renew_term(a, var_map) for a in term.args))
     if is_term_instance(term) and not isinstance(term, Node):
         cls = type(term)
         return cls(**{

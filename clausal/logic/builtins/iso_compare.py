@@ -22,7 +22,7 @@ from clausal.logic.exceptions import (
 from clausal.logic.predicate import is_term_instance, term_field_names
 from clausal.logic.variables import deref, is_var
 from clausal.logic.variables import unify as _unify
-from clausal.terms import Compound, DictTerm, SetTerm, compound_as_cell
+from clausal.terms import DictTerm, SetTerm
 
 
 def _clpfd_leaf_culprit(exc: LogicException):
@@ -62,15 +62,15 @@ def _evaluable_culprit(leaf):
     never the offending term itself, so this maps whatever `_eval_ground`
     handed back onto that shape with the engine's own functor/arity
     accessors — the same `_helpers._functor_name` / `_helpers._arity` pair
-    `functor/3` uses, so an atom, a cell, a `Compound`, a term instance and a
+    `functor/3` uses, so an atom, a cell, a term instance and a
     list all answer consistently. Measured directly: `_ is foo + 1` gives
     Scryer `error(type_error(evaluable,foo/0),(is)/2)`, and this yields
     `foo/0`.
 
-    Previously this tested `isinstance(leaf, Compound)`, which is DEAD for a
-    compound reaching here from `.clausal` source. Measured 2026-09-09:
-    `'=:='(1, foo(bar))` hands this function the cell tuple
-    `('foo', ('bar',))`, NOT a `clausal.terms.Compound`, so the branch never
+    Previously this tested for the (since retired) `Compound` class, which
+    was DEAD for a compound reaching here from `.clausal` source. Measured
+    2026-09-09: `'=:='(1, foo(bar))` hands this function the cell tuple
+    `('foo', ('bar',))`, not a class instance, so the branch never
     fired and the raw term leaked out as the culprit —
     `type_error(evaluable, foo(bar))`, which is not a legal ISO indicator at
     all.
@@ -290,14 +290,6 @@ def _numeric_types_agree(a, b) -> bool:
     """
     a = deref(a)
     b = deref(b)
-    # Ruling 2026-09-26: an atom-functor Compound of arity >= 1 IS its cell,
-    # so descend into it as that cell -- otherwise `f(1) == f(1.0)` across
-    # the two spellings would stop at the type mismatch with no objection.
-    if type(a) is not type(b):
-        if isinstance(a, Compound):
-            a = compound_as_cell(a) or a
-        if isinstance(b, Compound):
-            b = compound_as_cell(b) or b
     ta = _numeric_tag(a)
     tb = _numeric_tag(b)
     if ta is not None or tb is not None:
@@ -323,10 +315,6 @@ def _numeric_types_agree(a, b) -> bool:
         if len(a) != len(b):
             return True
         return all(_numeric_types_agree(x, y) for x, y in zip(a, b))
-    if isinstance(a, Compound):
-        if a.functor != b.functor or len(a.args) != len(b.args):
-            return True
-        return all(_numeric_types_agree(x, y) for x, y in zip(a.args, b.args))
     if isinstance(a, DictTerm):
         return _dict_numeric_types_agree(a.data, b.data)
     if isinstance(a, dict):

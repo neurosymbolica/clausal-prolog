@@ -4,7 +4,7 @@ Verifies that importing a ``.clausal`` predicate module:
   - Creates a LogicModule (database.Module) as ``$module``
   - Asserts all clauses into the database
   - Compiles every predicate so ``dispatch_fn`` is non-None
-  - Injects Var, Compound, Trail, unify, deref, walk into the module namespace
+  - Injects Var, Trail, unify, deref, walk into the module namespace
   - Produces dispatch functions that correctly match/fail on ground queries
   - Handles recursive predicates (reach via edge)
   - Supports runtime assertz after import via lazy recompile
@@ -133,14 +133,6 @@ def test_var_injected():
     from clausal.logic.variables import Var
     mod = _load_fixture("edge_graph.clausal")
     assert mod.__dict__["Var"] is Var
-
-
-@pytest.mark.compound_retirement_slice8
-def test_compound_injected():
-    # nv
-    from clausal.terms import Compound
-    mod = _load_fixture("edge_graph.clausal")
-    assert mod.__dict__["Compound"] is Compound
 
 
 def test_trail_injected():

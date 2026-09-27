@@ -70,11 +70,10 @@ class TestScryerBasics:
     def test_compound_term(self):
         # nv
         from clausal.scryer import Scryer
-        from clausal.terms import Compound
         with Scryer() as s:
             s.load_string("data(point(1, 2)).")
             sol = s.query_one("data(X).")
-            assert sol["X"] == Compound("point", (1, 2))
+            assert sol["X"] == ("point", 1, 2)
 
     def test_no_bindings_goal(self):
         """A goal that succeeds with no variables returns empty dict."""
@@ -361,8 +360,7 @@ class TestToProlog:
     def test_compound(self):
         # nv
         from clausal.scryer import to_prolog
-        from clausal.terms import Compound
-        assert to_prolog(Compound("f", (1, 2))) == "f(1, 2)"
+        assert to_prolog(("f", 1, 2)) == "f(1, 2)"
 
     def test_unsupported_type_raises(self):
         # nv

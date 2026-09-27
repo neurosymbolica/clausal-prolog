@@ -1,10 +1,10 @@
 """Tests for structural_unify — Step 9.
 
 structural_unify (clausal.logic.builtins) extends the C-extension unify with
-Python-level recursive unification for Compound, KWTerm, and dataclass terms.
+Python-level recursive unification for cells, KWTerm, and dataclass terms.
 
 Covers:
-  - Compound ↔ Compound: same functor/arity, mismatches, recursive, with Var
+  - cell ↔ cell: same functor/arity, mismatches, recursive, with Var
   - list ↔ list: element-wise unification
   - Dataclass ↔ dataclass: same-type field-by-field unification
   - KWTerm ↔ KWTerm: order-independent key-matching unification
@@ -20,7 +20,7 @@ import pytest
 
 from clausal.logic.builtins import structural_unify
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
-from clausal.terms import Compound, KWTerm
+from clausal.terms import KWTerm
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -52,10 +52,10 @@ class pair:
     right: object = None
 
 
-# ── TestStructuralUnifyCompound ────────────────────────────────────────────────
+# ── TestStructuralUnifyCell ────────────────────────────────────────────────
 
 
-class TestStructuralUnifyCompound:
+class TestStructuralUnifyCell:
     def test_same_ground_succeeds(self):
         # nv
         t = fresh()
@@ -108,15 +108,9 @@ class TestStructuralUnifyCompound:
         rhs = ("f", ("h", 1))
         assert not structural_unify(lhs, rhs, t)
 
-    @pytest.mark.compound_retirement_slice8
-    def test_arity_zero(self):
-        # nv
-        t = fresh()
-        assert structural_unify(Compound("nil", ()), Compound("nil", ()), t)
-        assert not structural_unify(Compound("nil", ()), Compound("cons", ()), t)
 
     def test_trail_undo_on_failure(self):
-        """Partial bindings inside a Compound unify are rolled back on failure."""
+        """Partial bindings inside a cell unify are rolled back on failure."""
         # nv
         t = fresh()
         v1, v2 = Var(), Var()

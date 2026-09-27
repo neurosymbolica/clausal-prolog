@@ -39,7 +39,7 @@ from typing import Any, Callable
 
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.predicate import is_term_instance, tabled_home_of, term_field_names
-from clausal.terms import Compound, Undefined, compound_as_cell
+from clausal.terms import Undefined
 from clausal.logic.cells import is_cell, intern_cell, is_intern_enabled
 
 # ── Sentinels ──────────────────────────────────────────────────────────────
@@ -461,7 +461,7 @@ def _normalize_for_key_py(term):
     (``bool``/``float``/``complex``) are type-tagged as ``(type, value)`` so
     ``1``/``True``/``1.0`` do not conflate in variant keys or answer dedup
     (A04-F006 — semantics-neutral; unification is untouched, see A01-D001).
-    Containers (``list``/``tuple``/``dict``/``set``, ``Compound``, term
+    Containers (``list``/``tuple``/``dict``/``set``, term
     instances) are rebuilt into hashable forms so answers/keys holding them
     can live in the dedup set (A04-F005).
 
@@ -491,13 +491,6 @@ def _normalize_for_key_py(term):
             for k, v in term.items()))
     if isinstance(term, (set, frozenset)):
         return ("__set__", frozenset(_normalize_for_key_py(e) for e in term))
-    if isinstance(term, Compound):
-        # Ruling 2026-09-26: an atom-functor Compound of arity >= 1 IS the
-        # cell (f, *args) and keys exactly as that tuple (C twin: do_normalize)
-        cell = compound_as_cell(term)
-        if cell is not None:
-            return ("__tuple__",) + tuple(_normalize_for_key_py(e) for e in cell)
-        return (term.functor,) + tuple(_normalize_for_key_py(a) for a in term.args)
     if is_term_instance(term):
         return (type(term).__name__,) + tuple(
             _normalize_for_key_py(getattr(term, f)) for f in term_field_names(term)

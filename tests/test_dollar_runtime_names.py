@@ -5,7 +5,7 @@ class is reached via ``++ClassName``).
 Every compiled ``.clausal`` module's namespace used to carry ~170 bare
 TitleCase names that exist only for GENERATED code: the AST node classes
 seeded from ``simple_ast.__all__`` (``Predicate``, ``Call``, ``Add``, ...)
-and ``INJECTED_RUNTIME_BUILTINS`` (``Var``, ``Compound``, ``Quantity``,
+and ``INJECTED_RUNTIME_BUILTINS`` (``Var``, ``Quantity``,
 ``PyThunk``, ...).  Because they were plain globals, a user predicate named
 like one of them (``Sub/2``, ``Node/1``, ``Var/1``) shadowed the class the
 generated code needed and the module failed to load.
@@ -100,7 +100,7 @@ def temp_fixture_module():
 
 
 _INJECTED_BARE = [
-    "Var", "Compound", "DictTerm", "SetTerm", "KWTerm", "Trail", "PyThunk",
+    "Var", "DictTerm", "SetTerm", "KWTerm", "Trail", "PyThunk",
     "FStringThunk", "Quantity", "BoolEq", "BoolImpl",
 ]
 _NODE_CLASSES = ["Predicate", "Call", "LoadName", "Add", "Sub", "Node", "Module"]

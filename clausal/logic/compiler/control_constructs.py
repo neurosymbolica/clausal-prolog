@@ -28,7 +28,6 @@ from typing import Any
 from clausal.logic.variables import Var, is_var, deref, unify  # noqa: F401
 from clausal.logic.trampoline import Step, DONE, StepGenerator  # noqa: F401
 from clausal.terms import (
-    Compound, compound_with_args,
     And, Or, Not,
     Unify, DoesNotUnify, Evaluate, ArithEq, ArithNeq, StructuralEq, StructuralNeq,
     Lt, LtE, Gt, GtE,
@@ -701,9 +700,7 @@ def _catcher_to_structural(term: Any) -> Any:
     """Recursively convert Call nodes to CELLS in a catcher term.
 
     ``f(A, B)`` becomes the cell ``('f', A, B)`` -- the term the throw site
-    raises (every engine error term is a cell since Compound retirement
-    slice 2).  It was a ``Compound`` until slice 3, which the 2026-09-26
-    ruling already made the same term.  A ``Call`` with no arguments
+    raises (every engine error term is a cell).  A ``Call`` with no arguments
     (``foo()``) becomes the ATOM ``foo``: ``foo()`` is not a term (ruling
     R4), the arity-0 cell is reserved, and the atom is its successor.  (Left
     as the ``Call`` node it would lower to a predicate-class lookup that
@@ -723,17 +720,14 @@ def _lower_catcher(ctx: CompilationContext, catcher: Any) -> ast.expr:
     for a predicate/Python-minted functor, a CELL for a declared data functor
     (P3-2 Task 2) — is lowered the same way here, so the catcher is built in
     the very spelling the throw site builds.  Only names the throw site does
-    NOT lower to a term (builtin ``error(...)`` terms, thrown as ``Compound``)
+    NOT lower to a term (builtin ``error(...)`` terms, thrown as cells)
     fall back to ``_catcher_to_structural``.
 
-    Since the 2026-09-26 ruling (an atom-functor ``Compound`` of arity >= 1
-    IS its cell) ``unify(Compound('kab', (N,)), ('kab', 7))`` is True, so for
-    a CELL throw the cell-literal lowering is no longer what makes the catcher
-    match -- the ``Compound`` fallback would match too.  It is kept because it
-    still builds the catcher in the throw site's own spelling (one route, not
-    two that happen to agree), and a class-instance throw still needs it:
-    ``unify(Compound('kab', (N,)), kab(7))`` against a term INSTANCE is still
-    False -- the ruling covers cells only.
+    For a CELL throw the fallback builds the same cell, so the cell-literal
+    lowering is not what makes the catcher match.  It is kept because it
+    builds the catcher in the throw site's own spelling (one route, not two
+    that happen to agree), and a class-instance throw still needs it: a cell
+    catcher does not unify with a term INSTANCE.
 
     Both halves of the test are the throw site's own questions, asked in the
     throw site's own way: ``PredicateMeta`` binding -> class construction,
@@ -1024,13 +1018,6 @@ def _hoist_lambdas_in_term(
         inner = _hoist_lambdas_in_term(ctx, term.value, lambda_defs)
         return (term if inner is term.value
                 else _MetaArg(inner, term.spec, term.module))
-    if isinstance(term, Compound):
-        new_args = tuple(
-            _hoist_lambdas_in_term(ctx, a, lambda_defs) for a in term.args
-        )
-        if new_args == term.args:
-            return term
-        return compound_with_args(term, new_args)     # its cell, if it has one
     if isinstance(term, Call):
         new_args = [
             _hoist_lambdas_in_term(ctx, a, lambda_defs) for a in term.args
@@ -1049,7 +1036,7 @@ def _hoist_lambdas_in_term(
         # No-op case (the overwhelming majority — a -constants list can
         # never contain a Lambda, since Lambdas aren't ground and would
         # already have failed the -constants groundness gate) returns the
-        # ORIGINAL object, mirroring the Compound/Call branches above.
+        # ORIGINAL object, mirroring the Call branch above.
         # This matters beyond identity: a -constants list is a frozen
         # subclass (_FrozenList — clausal.logic.constants._freeze), and an
         # unconditional ``[... for e in term]`` rebuild silently downgrades

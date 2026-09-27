@@ -101,8 +101,7 @@ def test_raw_compound():
     m = _scryer_ext.RawScryerMachine()
     m.load_module_string("user", "data(point(1, 2)).")
     sol = next(iter(m.query("data(X).")))
-    from clausal.terms import Compound
-    assert sol["X"] == Compound("point", (1, 2))
+    assert sol["X"] == ("point", 1, 2)
 
 
 @needs_ext

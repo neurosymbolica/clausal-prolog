@@ -14,7 +14,6 @@ from typing import Any
 
 from clausal.logic.variables import Var, is_var, deref
 from clausal.terms import (
-    Compound,
     DictTerm,
     SetTerm,
     KWTerm,
@@ -133,11 +132,6 @@ def _collect_vars(term: Any, seen: set[int] | None = None,
             result.extend(_collect_vars(v, seen, include_bound))
         return result
 
-    if isinstance(term, Compound):
-        result = pre + _collect_vars(term.functor, seen, include_bound)
-        for a in term.args:
-            result.extend(_collect_vars(a, seen, include_bound))
-        return result
 
     if is_term_instance(term):
         result = pre
@@ -173,9 +167,6 @@ def _collect_var_ids(term: Any, ids: set[int]) -> None:
     elif is_term_instance(term):
         for fname in term_field_names(term):
             _collect_var_ids(getattr(term, fname), ids)
-    elif isinstance(term, Compound):
-        for a in term.args:
-            _collect_var_ids(a, ids)
     # StarUnpack and other single-child wrappers
     elif hasattr(term, 'value'):
         _collect_var_ids(term.value, ids)

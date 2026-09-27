@@ -496,7 +496,7 @@ Built-in predicates are lowercase `snake_case` (e.g. `findall`, `assertz`, `var`
 
 The trailing underscore keeps the builtin namespace cleanly separate from Python keywords and builtins. User predicates follow the same `snake_case` convention, and only need the underscore where they would hit the same collision.
 
-3. **A few engine-provided type names are reserved.** For convenience in embedded Python, `Var`, `Trail`, `Compound`, `PredicateMeta`, `DictTerm`, `SetTerm`, `PyThunk`, and `Quantity` are injected into every module's namespace, so a predicate named after one of these (e.g. `Var/2`) collides. The engine *functions* `walk`, `deref`, and `unify` used to be reserved the same way, but no longer are — they are now injected under an internal `$`-prefix, so `walk/2`, `deref/2`, and `unify/2` are free for user predicates.
+3. **A few engine-provided type names are reserved.** For convenience in embedded Python, `Var`, `Trail`, `PredicateMeta`, `DictTerm`, `SetTerm`, `PyThunk`, and `Quantity` are injected into every module's namespace, so a predicate named after one of these (e.g. `Var/2`) collides. The engine *functions* `walk`, `deref`, and `unify` used to be reserved the same way, but no longer are — they are now injected under an internal `$`-prefix, so `walk/2`, `deref/2`, and `unify/2` are free for user predicates.
 
 ---
 

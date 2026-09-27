@@ -22,7 +22,7 @@ thread safety.
 | Object | Why it's safe |
 |--------|---------------|
 | `Var` / `AttVar` | Binding slots use atomic loads/stores. `unify()` uses per-object critical sections to prevent double-binding. |
-| Ground terms (`int`, `str`, `list` of ground, `Compound` of ground) | Immutable once constructed. No synchronization needed. |
+| Ground terms (`int`, `str`, `list` of ground, cells of ground) | Immutable once constructed. No synchronization needed. |
 | Clause database (reads) | Compiled dispatch tables are immutable snapshots. Concurrent goal resolution is safe. |
 | Attribute hook registry | `register_attr_hook` / `unregister_attr_hook` are protected by a critical section on the internal dict. |
 

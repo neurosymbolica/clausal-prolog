@@ -49,9 +49,11 @@ def test_base_namespace_has_set_style():
     assert "set_style" in _base_namespace()
 
 
-def test_base_namespace_has_compound():
-    # nv
-    assert "Compound" in _base_namespace()
+def test_base_namespace_has_var_and_no_compound_class():
+    # nv -- the Compound class was removed (a compound term is a cell)
+    ns = _base_namespace()
+    assert "Var" in ns
+    assert "Compound" not in ns
 
 
 # ── ClausalConsole — completeness detection ───────────────────────────────────

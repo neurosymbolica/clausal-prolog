@@ -60,7 +60,6 @@ from clausal import cell_args, cell_functor
 from clausal.logic.exceptions import LogicException
 from clausal.logic.variables import Var, deref, is_var
 from clausal.pythonic_ast import nodes
-from clausal.terms import Compound
 
 FIXTURES = Path(__file__).parent / "fixtures"
 NAME = "clause_2_iso"
@@ -408,17 +407,17 @@ def test_the_logical_update_view(lm):
     assert [h[1] for h, _ in _clause(lm, ("lu", Var()))] == [1, 11, 12]
 
 
-# Stays a Compound (slice 5 finding): assertz/asserta of a CELL whose
-# predicate is not known yet raises existence_error; a Compound creates it.
-@pytest.mark.compound_retirement_slice8
-def test_an_assertz_created_procedure_is_dynamic(lm):
+# R12 (2026-09-27, declare first): assertz/asserta add clauses only to a
+# predicate declared -dynamic, so the predicate is declared before the write.
+def test_an_assertz_into_a_declared_dynamic_procedure(lm):
     """Scryer + Trealla: assertz(nd(1)), clause(nd(X), B) -> X = 1, B = true.
-    A procedure assertz creates is unlocked, and an unlocked row is one a
-    runtime write may change: dynamic in ISO's sense."""
+    The procedure is declared -dynamic first (R12); the asserted fact reads
+    back through clause/2 with its hoisted argument put back."""
     from clausal.logic.solve import call
-    next(call("assertz", Compound("nd_new", (1, Var())), module=lm))
+    lm.db.mark_dynamic("nd_new", 2)
+    next(call("assertz", ("nd_new", 1, Var()), module=lm))
     row = lm.db.row("nd_new", 2)
-    assert not row.dynamic and not row.locked
+    assert row.dynamic and not row.locked
     assert row.clauses[0].hoisted == 1
     (h, b), = _clause(lm, ("nd_new", Var(), Var()))
     assert h[1] == 1 and is_var(h[2]) and b is True
@@ -502,9 +501,9 @@ def test_the_special_form_round_trip_covers_every_clause(lm):
 # ── Clause.hoisted from every normalizer ────────────────────────────────────
 
 
-# Stays a Compound (slice 5 finding): _normalize_fact_clause hoists a
-# Compound head's arguments into the body, and leaves a cell head untouched.
-@pytest.mark.compound_retirement_slice8
+# _normalize_fact_clause hoists every bound argument of a cell head into the
+# body under hoist_all (a classless dynamic row -- what assertz of the retired
+# Compound class got), and otherwise only its STRUCTURED arguments.
 def test_hoisted_counts_from_every_normalizer(lm):
     from clausal.logic.builtins.database_ops import _normalize_fact_clause
     counts = [c.hoisted for c in lm.db.row("d", 2).clauses]
@@ -513,8 +512,10 @@ def test_hoisted_counts_from_every_normalizer(lm):
     # d(pt(X,Y), a)=1 (a rule's atom stays)
     assert counts[:5] == [2, 0, 1, 1, 1]
     assert all(n == 0 for n in counts[5:14]) and counts[14] == 0
-    assert _normalize_fact_clause(Compound("q", (1, Var(), "a"))).hoisted == 2
-    assert _normalize_fact_clause(("q", 1)).hoisted == 0   # a cell: untouched
+    assert _normalize_fact_clause(("q", 1, Var(), "a"),
+                                  hoist_all=True).hoisted == 2
+    assert _normalize_fact_clause(("q", 1)).hoisted == 0   # atomic: in the head
+    assert _normalize_fact_clause(("q", ("pt", 1), "a")).hoisted == 1
 
 
 def test_hoisted_is_not_part_of_clause_equality():
@@ -680,16 +681,17 @@ def test_a_body_call_at_another_arity_is_its_cell(lm):
     assert got[2][:2] == ("mp", 1) and len(got[2]) == 3
 
 
-# Stays a Compound (slice 5 finding): assertz/asserta of a CELL whose
-# predicate is not known yet raises existence_error; a Compound creates it.
-@pytest.mark.compound_retirement_slice8
+# R12 (2026-09-27, declare first): assertz/asserta add clauses only to a
+# predicate declared -dynamic, so the predicate is declared before the write.
 def test_a_body_calling_a_procedure_defined_later(lm):
     """``late(Y) <- later_def(Y)``: nothing defines later_def at load, so
-    its term is the cell; once assertz defines it, call(B) runs it."""
+    its term is the cell; once it is declared and assertz gives it a clause,
+    call(B) runs it."""
     from clausal.logic.solve import call
     (h, b), = _clause(lm, ("late", Var()))
     assert b == ("later_def", h[1])
-    next(call("assertz", Compound("later_def", (7,)), module=lm))
+    lm.db.mark_dynamic("later_def", 1)
+    next(call("assertz", ("later_def", 7), module=lm))
     Y, B = Var(), Var()
     got = [deref(Y) for _ in call("cl", ("late", Y), B, module=lm)
            for _ in call("call", B, module=lm)]
@@ -702,13 +704,13 @@ def test_a_name_bound_to_none_is_not_an_unbound_name():
     assert _needs_cell("nothing_here", 1, {"nothing_here": None}) is False
 
 
-# Stays a Compound (slice 5 finding): assertz/asserta of a CELL whose
-# predicate is not known yet raises existence_error; a Compound creates it.
-@pytest.mark.compound_retirement_slice8
+# R12 (2026-09-27, declare first): assertz/asserta add clauses only to a
+# predicate declared -dynamic, so the predicate is declared before the write.
 def test_an_asserta_fact_has_its_hoisted_arguments_put_back(lm):
     from clausal.logic.solve import call
-    next(call("asserta", Compound("aa_new", (1, "x", Var())), module=lm))
-    next(call("asserta", Compound("aa_new", (2, "y", Var())), module=lm))
+    lm.db.mark_dynamic("aa_new", 3)
+    next(call("asserta", ("aa_new", 1, "x", Var()), module=lm))
+    next(call("asserta", ("aa_new", 2, "y", Var()), module=lm))
     row = lm.db.row("aa_new", 3)
     assert [c.hoisted for c in row.clauses] == [2, 2]
     got = _clause(lm, ("aa_new", Var(), Var(), Var()))

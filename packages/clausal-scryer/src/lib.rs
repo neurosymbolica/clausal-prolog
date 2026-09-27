@@ -263,17 +263,13 @@ fn scryer_term_to_py(py: Python<'_>, term: &ScryerTerm) -> PyResult<PyObject> {
             Ok(PyList::new(py, &items)?.into_any().unbind())
         }
         ScryerTerm::Compound(functor, args) => {
-            // Convert to clausal.terms.Compound(functor, tuple(args)).
-            let compound_cls =
-                py.import("clausal.terms")?.getattr("Compound")?;
-            let py_args: Vec<PyObject> = args
-                .iter()
-                .map(|t| scryer_term_to_py(py, t))
-                .collect::<PyResult<_>>()?;
-            let args_tuple = PyTuple::new(py, &py_args)?;
-            Ok(compound_cls
-                .call1((functor, args_tuple))?
-                .unbind())
+            // A compound term is the cell (functor, arg1, ..., argN).
+            let mut items: Vec<PyObject> = Vec::with_capacity(args.len() + 1);
+            items.push(functor.into_pyobject(py)?.into_any().unbind());
+            for t in args.iter() {
+                items.push(scryer_term_to_py(py, t)?);
+            }
+            Ok(PyTuple::new(py, &items)?.into_any().unbind())
         }
         ScryerTerm::Var(name) => {
             // Unbound / aliased variable — return the name as a string.

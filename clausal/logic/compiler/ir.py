@@ -19,7 +19,7 @@ Design choices baked into this file:
 
 - **Tagged union via base class + subclass dataclasses.**  Each op is a
   frozen-in-spirit record; passes pattern-match with ``match``/``case``.
-- **Operands are logic-level terms** (``Var``, ``Compound``,
+- **Operands are logic-level terms** (``Var``, cells,
   ``DictTerm``, ``TupleLiteral``, scalars, …), not AST expressions.
   Lowering from term to AST is a backend concern.
 - **Arithmetic uses ``clausal.terms`` arith nodes directly** (``Add``,
@@ -50,7 +50,7 @@ from typing import Any, Callable, Literal, Union
 # does not reshape them — goal-position / expression-position
 # polymorphism is resolved during ``terms_to_goalop`` (D2), not here.
 Term = Any
-"""Alias for logic-level term operands — ``Var | Compound | int | str |
+"""Alias for logic-level term operands — ``Var | tuple | int | str |
 DictTerm | SetTerm | TupleLiteral | StarUnpack | ...``.  Deliberately
 loose: the IR does not restrict which concrete term shapes may appear
 in operand position — that is a per-op contract documented on each

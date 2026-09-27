@@ -1,7 +1,7 @@
 """Tests for clausal.logic.compiler — Step 5: body goal compilation.
 
 Tests cover:
-  - term_to_ast_expr: Var, literals, list, Compound, functor dataclass
+  - term_to_ast_expr: Var, literals, list, functor dataclass
   - arith_to_ast_expr: scalars, arithmetic operators, Var deref
   - compile_goal: each goal type → correct statements / runtime behaviour
   - compile_body: flat conjunction with yield at leaf
@@ -28,7 +28,6 @@ from clausal.terms import (
     in_, NotIn,
     Add, Sub, Mult, FloorDiv, Mod, Negate,
     Call, LoadName,
-    Compound,
 )
 
 
@@ -139,20 +138,6 @@ class TestTermToAstExpr:
         assert isinstance(expr, ast.List)
         assert isinstance(expr.elts[0], ast.NamedExpr)   # body-only Var → walrus
         assert isinstance(expr.elts[1], ast.Constant)
-
-    @pytest.mark.compound_retirement_slice8
-    def test_compound_gives_call_to_compound(self):
-        # nv
-        term = Compound("foo", (1, 2))
-        expr = term_to_ast_expr(term, {})
-        assert isinstance(expr, ast.Call)
-        assert isinstance(expr.func, ast.Name)
-        assert expr.func.id == "$Compound"
-        # first arg is the functor string constant
-        assert isinstance(expr.args[0], ast.Constant)
-        assert expr.args[0].value == "foo"
-        # second arg is a Tuple of sub-expressions
-        assert isinstance(expr.args[1], ast.Tuple)
 
     def test_dataclass_gives_call_to_cls(self):
         # nv
@@ -352,7 +337,6 @@ class TestCompileGoalStructure:
         assert isinstance(stmts[0], ast.Assign)   # _found = False
         assert isinstance(stmts[1], ast.For)
         assert isinstance(stmts[2], ast.If)
-
 
     def test_unknown_goal_raises(self):
         # nv

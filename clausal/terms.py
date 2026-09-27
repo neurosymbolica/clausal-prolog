@@ -4,8 +4,8 @@ functor types and value types for the clausal logic programming system.
 
 Python built-in types (int, float, str, bool, None, list) are terms directly —
 no wrapper needed.  Logic variables are Var objects.  Structured terms are
-instances of user-defined dataclasses (one class per functor) or Compound for
-runtime-constructed terms.
+cells: tuples ``(functor, *args)`` whose slot 0 is the functor atom, e.g.
+``('f', 1, 2)`` for ``f(1, 2)``.
 
 Goal types are term types: the same classes serve as goal nodes when they appear
 in a predicate body.  The compiler dispatches on the class via Python's match
@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import re as _re
 import dataclasses as _dataclasses
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from fractions import Fraction
 
 from clausal.logic.exact_arith import exact_add, exact_mul, exact_sub  # ONE spelling of + - * (2026-09-18)
@@ -26,13 +26,13 @@ from decimal import (
     ROUND_UP, ROUND_DOWN, ROUND_CEILING, ROUND_FLOOR,
 )
 from types import MappingProxyType
-from typing import Any, Optional
+from typing import Any
 
 from .logic.atoms import (
     as_dict_key as _as_dict_key, char_atom, demangle_for_display,
     is_char_atom, is_mangled, is_nil as _is_nil, spelling,
 )
-from .logic.cells import TUPLE_TAG, CHARS_TAG, chars, is_chars, chars_text, refuse_reserved_1tuple, make_cell
+from .logic.cells import TUPLE_TAG, CHARS_TAG, chars, is_chars, chars_text, refuse_reserved_1tuple
 from .logic.variables import Var, deref
 # Operator table for ``term_writeq``; this module imports nothing from clausal.
 from clausal.tools.prolog_operators import OperatorTable as _OperatorTable
@@ -100,23 +100,17 @@ def _slice_within_prefix(index, prefix_len: int) -> bool:
 
 def as_cells_for_match(term: Any, depth: int, classes: bool = False) -> Any:
     """``term`` dereferenced and made ready for a compiled clause-head
-    ``match``, down to *depth* structure levels:
-
-    * every atom-functor ``Compound`` becomes its cell (``compound_as_cell``)
-      -- a head pattern is written in the CELL spelling only (ruling
-      2026-09-26; doubling every pattern level with a ``$Compound``
-      alternative was exponential, roborev 203);
-    * a slot holding a Var BOUND to a structure becomes that structure -- a
-      ``match`` does not dereference, so a sequence pattern never matched the
-      Var (``w3(('k', V))`` with ``V = f(2)`` missed its bucket).
+    ``match``, down to *depth* structure levels: a slot holding a Var BOUND
+    to a structure becomes that structure -- a ``match`` does not
+    dereference, so a sequence pattern never matched the Var
+    (``w3(('k', V))`` with ``V = f(2)`` missed its bucket).
 
     *depth* and *classes* come from the BUILT patterns at that argument
     position (``head_match.finalize_subject_depths``): *depth* is their
     deepest structure nesting, and *classes* says whether any of them is a
-    CLASS pattern (a ``Compound`` with no cell, a term instance).  Only then
-    are a no-cell Compound's args and a dataclass instance's fields walked --
-    otherwise no class pattern can inspect them, and copying the instance
-    would be waste (roborev 205).
+    CLASS pattern (a term instance).  Only then are a dataclass instance's
+    fields walked -- otherwise no class pattern can inspect them, and copying
+    the instance would be waste (roborev 205).
 
     Nothing is copied unless something is converted: the result is
     ``deref(term)`` itself, and an unconverted slot keeps its original object.
@@ -139,22 +133,13 @@ _SCALAR_SLOT_TYPES = frozenset({int, float, str, bool, bytes, type(None)})
 def _cells_below(term: Any, depth: int, classes: bool = False) -> Any:
     """The converted form of the (already dereferenced) *term*, or None when
     nothing within *depth* structure levels needed converting.  A LEVEL is a
-    cell (tuple), a ``Compound`` -- with a cell (converted, then walked as
-    that cell) or, when *classes*, without one (its args walked) -- or, when
-    *classes*, a dataclass term instance (its fields walked)."""
+    cell (tuple) or, when *classes*, a dataclass term instance (its fields
+    walked)."""
     if depth <= 0:
         return None
     if type(term) is tuple:
         new = _cells_in_slots(term, 1, depth, classes)
         return None if new is None else tuple(new)
-    if isinstance(term, Compound):
-        cell = compound_as_cell(term)
-        if cell is not None:
-            return _cells_below(cell, depth, classes) or cell
-        if not classes:
-            return None
-        new = _cells_in_slots(term.args, 0, depth, classes)
-        return None if new is None else Compound(term.functor, tuple(new))
     if classes and _is_structure_instance(term):
         if depth <= 1:
             return None
@@ -178,7 +163,7 @@ def _cells_of(slot: Any, depth: int, classes: bool) -> Any:
     if type(slot) in _SCALAR_SLOT_TYPES:
         return None
     elt = deref(slot)
-    if (type(elt) is tuple or isinstance(elt, Compound)
+    if (type(elt) is tuple
             or (classes and _is_structure_instance(elt))):
         sub = _cells_below(elt, depth, classes)
         if sub is not None:
@@ -205,154 +190,6 @@ def _cells_in_slots(seq: Any, start: int, depth: int, classes: bool) -> "list | 
 
 def _is_structure_instance(x: Any) -> bool:
     return _dataclasses.is_dataclass(x) and not isinstance(x, type)
-
-
-def compound_as_cell(term: "Compound") -> "tuple | None":
-    """The cell ``(functor, *args)`` that *term* IS, or None if it has none.
-
-    Operator ruling 2026-09-26 (Compound retires in favour of cells before
-    1.0; ISO has one term ``f(1, 2)``): a ``Compound`` whose functor
-    dereferences to an atom (a ``str``) and whose arity is >= 1 is the SAME
-    TERM as that cell -- in ``=``/2, ``==``/2, compare/3, dif/2 and the tabling
-    variant key.  Every one of those relations routes a Compound through this
-    one function, so they cannot disagree about which Compounds qualify.
-
-    None for the Compounds with no cell equivalent: a Var or non-atom functor,
-    arity 0 (``foo()``, not an ISO term -- the arity-0 cell is RESERVED), and
-    the functor ``'$chars'``.  The cell ``('$chars', s)`` is not a compound at
-    all: it is the chars CARRIER, the text ``s``, equal to its char list.  A
-    ``Compound('$chars', (s,))`` cannot be that text without every relation
-    learning the carrier's list equivalence too, so it stays an ordinary
-    compound -- or ``=`` would stop being transitive (Compound = carrier =
-    char list, but Compound != char list; roborev 201 Low (a)).  The
-    functor ``TUPLE_TAG`` (``'()'``) is excluded for the same reason: its
-    cell is tuple DATA, keyed and unified as data, not a compound named
-    ``'()'``.  Other ``$``-functors are NOT excluded: ``'$VAR'(1)`` is an
-    ordinary ISO term.
-    Those stay distinct from every cell.  The C twins (``_variables.c``
-    ``compound_to_cell``, ``_tabling_core.c``) apply the same test.
-    """
-    functor = _cell_functor_of(term.functor, term.args)
-    return None if functor is None else (functor, *term.args)
-
-
-def _cell_functor_of(functor: Any, args: tuple) -> "str | None":
-    """The dereferenced atom that is slot 0 of ``Compound(functor, args)``'s
-    CELL, or None when it has no cell.  The one Python statement of the rule,
-    shared by ``compound_as_cell`` and ``compound_with_args``; the C twins
-    restate it."""
-    functor = deref(functor)
-    if (isinstance(functor, str) and args
-            and functor != CHARS_TAG and functor != TUPLE_TAG):
-        return functor
-    return None
-
-
-def compound_with_args(term: "Compound", args: tuple) -> Any:
-    """*term* with its arguments replaced by *args*, as the CELL it is.
-
-    The engine's rebuild of a ``Compound`` it was handed (a clause head a
-    compile pass edits, an asserted fact whose arguments are hoisted): the
-    result is ``(functor, *args)`` whenever *term* has a cell at all -- the
-    test is ``compound_as_cell``'s (both ask ``_cell_functor_of``) -- and the two
-    spellings are the same term in every relation (ruling 2026-09-26).  A
-    ``Compound`` with no cell (Var or non-atom functor, ``foo()``, the
-    ``'$chars'`` / ``'()'`` functors) is COPIED as a ``Compound``: those
-    shapes have no successor and go with the class (Compound retirement
-    slice 8), and building a cell for one would change what it means.
-    ``_position`` is not carried to a cell (ruling R6: nothing reads it).
-    """
-    if len(args) != len(term.args):
-        raise ValueError(
-            f"compound_with_args: {len(args)} argument(s) for a term of "
-            f"arity {len(term.args)}")
-    functor = _cell_functor_of(term.functor, args)
-    if functor is not None:
-        return make_cell(functor, *args)
-    return Compound(term.functor, tuple(args), term._position)
-
-
-@dataclass
-class Compound:
-    """Fallback for runtime-constructed or unknown-functor compound terms.
-
-    Use when no compile-time dataclass exists for the functor, e.g.:
-        Compound("cons", (head, tail))
-        Compound(functor_var, args)
-    """
-    functor: str | Var
-    args: tuple
-    # Slice G — source position (start_line, start_col, end_line, end_col).
-    # ``compare=False`` / ``repr=False`` keeps structural equality and
-    # printing unaffected — position is cosmetic metadata only.
-    # Underscore prefix: Clausal treats ``_name`` as a logic variable,
-    # so this attribute is unreachable as a user field name.
-    _position: Optional[tuple] = field(default=None, compare=False, repr=False)
-
-    def __str__(self) -> str:
-        args_str = ", ".join(term_str(a) for a in self.args)
-        f = self.functor if isinstance(self.functor, str) else term_str(self.functor)
-        return f"{f}({args_str})"
-
-    def __unify__(self, other, trail) -> bool:
-        """Structural unification: same functor and arity, args unified pairwise.
-
-        Functors are dereferenced before comparison (A01-F003 deref-only floor,
-        parked decision A01-D004): a functor Var *bound* to a str matches the
-        corresponding str functor. Binding an *unbound* functor Var (output
-        mode) is out of scope for the deref-only floor, so two differing
-        functors — including an unbound Var vs a str — simply fail to unify.
-        """
-        from .logic.variables import unify
-        if type(other) is tuple:
-            # Ruling 2026-09-26: an atom-functor Compound of arity >= 1 IS the
-            # cell (f, *args), so it unifies with a tuple as that cell does.
-            # The C unifier converts before it reaches this hook (so the
-            # occurs check survives); this arm is the Python twin of that.
-            cell = compound_as_cell(self)
-            if cell is None:
-                return False
-            mark = trail.mark()
-            if unify(cell, other, trail):
-                return True
-            trail.undo(mark)
-            return False
-        if not isinstance(other, Compound):
-            return NotImplemented
-        if deref(self.functor) != deref(other.functor) or len(self.args) != len(other.args):
-            return False
-        mark = trail.mark()
-        for a, b in zip(self.args, other.args):
-            if not unify(a, b, trail):
-                trail.undo(mark)
-                return False
-        return True
-
-    def __occurs_check__(self, var) -> bool:
-        """Called by C do_occurs_check: check if var appears in any arg.
-
-        Without this hook do_occurs_check falls through to ``return 0`` for
-        Compound, so unify_with_occurs_check would build the very cyclic term
-        the check exists to prevent (A01-F001). The functor slot is not
-        traversed here — Var functors are gated on parked decision A01-D004;
-        a str functor is a no-op for occurs_check regardless.
-        """
-        from .logic.variables import occurs_check
-        return any(occurs_check(var, a) for a in self.args)
-
-    def __walk__(self):
-        """Deep-substitute bindings (A01-F008): rebuild with walked args so a
-        snapshot survives trail backtracking. The functor is dereferenced
-        (F003 deref-only floor) and ``_position`` (Slice G) is preserved.
-        Unbound Vars are left in place (walk sharing contract).
-        """
-        from .logic.variables import walk, deref
-        return Compound(
-            deref(self.functor),
-            tuple(walk(a) for a in self.args),
-            _position=self._position,
-        )
-
 
 
 # ── Open-world keyword term ────────────────────────────────────────────────────
@@ -3555,8 +3392,8 @@ def term_str(t: Any, style: TermStyle | None = None, _bd: int = 0,
         # A CELL -- ``("pt", 1, 2)``.  P3-2 Task 2 (THE FLIP) makes this how
         # every compound term is represented, so the reader must see
         # ``pt(1, 2)``, the term they wrote, not a Python tuple repr.
-        # Rendered exactly like the ``Compound`` branch below (same locale
-        # name, same rainbow brackets), which is the shape it replaced.
+        # Same locale name and rainbow brackets the retired ``Compound``
+        # class rendered with, which is the shape it replaced.
         #
         # Slot 0 is read RAW -- no deref -- exactly ``_helpers._cell_functor``'s
         # rule (P3-2 Task 5/Task 7 review): a bound-Var functor is not a legal
@@ -3588,14 +3425,6 @@ def term_str(t: Any, style: TermStyle | None = None, _bd: int = 0,
         cb = _c(')', 'bracket', style, _bd)
         return ob + sep.join(
             term_str(e, style, _bd + 1, quoted=quoted, double_quotes=double_quotes, sep=sep) for e in elems) + cb
-    if isinstance(t, Compound):
-        functor = deref(t.functor)  # A01-F003: bound functor Var renders as its value, not anon
-        functor_raw = _locale_name(functor, style, len(t.args)) if isinstance(functor, str) else term_str(functor, style, _bd, quoted=quoted, double_quotes=double_quotes, sep=sep)
-        functor_s = _c(functor_raw, 'atom', style) if isinstance(functor, str) else functor_raw
-        ob = _c('(', 'bracket', style, _bd)
-        cb = _c(')', 'bracket', style, _bd)
-        args_str = sep.join(term_str(a, style, _bd + 1, quoted=quoted, double_quotes=double_quotes, sep=sep) for a in t.args)
-        return functor_s + ob + args_str + cb
     if isinstance(t, KWTerm):
         functor_s = _c(_locale_name(t.functor, style, len(t)), 'atom', style)
         ob = _c('(', 'bracket', style, _bd)
@@ -3726,10 +3555,6 @@ def term_canonical(t: Any) -> str:
         return head + "(" + ",".join(term_canonical(a) for a in t[1:]) + ")"
     if type(t) is tuple and t and t[0] == TUPLE_TAG:
         return "(" + ",".join(term_canonical(e) for e in t[1:]) + ")"
-    if isinstance(t, Compound):
-        f = deref(t.functor)
-        head = _quoted_atom_spelling(f) if isinstance(f, str) else term_canonical(f)
-        return head + "(" + ",".join(term_canonical(a) for a in t.args) + ")"
     # Operator nodes -- recognised exactly as ``term_str`` recognises them
     # (an ``op`` class attribute plus ``left``/``right`` or ``operand``),
     # but canonical form has NO operator syntax: ``1 + 2`` is the term
@@ -3900,15 +3725,10 @@ def _wq_glue(left: str, right: str) -> bool:
 
 def _wq_cell(t):
     """``(name, args)`` when *t* is a compound with an atom functor and at
-    least one argument (a cell, a ``Compound`` or an operator node), else
+    least one argument (a cell or an operator node), else
     None."""
     if type(t) is tuple and len(t) > 1 and type(t[0]) is str and t[0] != TUPLE_TAG:
         return t[0], t[1:]
-    if isinstance(t, Compound):
-        f = deref(t.functor)
-        if isinstance(f, str) and isinstance(t.args, tuple) and t.args:
-            return f, t.args
-        return None
     op = getattr(type(t), "op", None)
     if isinstance(op, str):
         if hasattr(t, "left") and hasattr(t, "right"):
@@ -4130,22 +3950,12 @@ def term_pformat(
         items = [_r(e) for e in t]
         return ob + "\n" + ipad + _join(items) + "\n" + pad + cb
 
-    if isinstance(t, Compound):
-        if not t.args:
-            return flat
-        functor = deref(t.functor)  # A01-F003: bound functor Var renders as its value, not anon
-        functor_raw = functor if isinstance(functor, str) else term_pformat(functor, child, width, style, _bd)
-        functor_s = _c(functor_raw, 'atom', style) if isinstance(functor, str) else functor_raw
-        ob = _c('(', 'bracket', style, _bd)
-        cb = _c(')', 'bracket', style, _bd)
-        items = [_r(a) for a in t.args]
-        return functor_s + ob + "\n" + ipad + _join(items) + "\n" + pad + cb
 
     if type(t) is tuple and t and type(t[0]) is str and t[0] != TUPLE_TAG:
-        # A str-functor CELL -- the Compound-equivalent multi-line treatment
-        # (P3-2 Task 7): a wide cell used to fall through every isinstance
-        # branch above straight to ``return flat``, so a long ``pt(1, 2)``
-        # never got the indented form a wide ``Compound`` gets.  Slot 0 read
+        # A str-functor CELL -- the multi-line treatment (P3-2 Task 7): a
+        # wide cell used to fall through every isinstance branch above
+        # straight to ``return flat``, so a long ``pt(1, 2)`` never got the
+        # indented form.  Slot 0 read
         # RAW, no deref, matching every other cell recognition site (Task 5).
         args = t[1:]
         if not args:
@@ -4293,17 +4103,8 @@ def term_html(t: Any, _bd: int = 0) -> str:
         return ob + ", ".join(term_html(e, _bd + 1) for e in t) + cb
     if isinstance(t, Var):
         return _html_c('_', 'var')
-    if isinstance(t, Compound):
-        functor = deref(t.functor)  # A01-F003: bound functor Var renders as its value, not anon
-        functor_raw = functor if isinstance(functor, str) else term_html(functor, _bd)
-        functor_s = _html_c(esc(functor_raw), 'atom') if isinstance(functor, str) else functor_raw
-        ob = _html_c('(', 'bracket', _bd)
-        cb = _html_c(')', 'bracket', _bd)
-        args_str = ", ".join(term_html(a, _bd + 1) for a in t.args)
-        return functor_s + ob + args_str + cb
     if type(t) is tuple and t and type(t[0]) is str and t[0] != TUPLE_TAG:
-        # A str-functor CELL -- the ``Compound`` branch above's exact
-        # counterpart (P3-2 Task 7); without this a cell fell through to the
+        # A str-functor CELL (P3-2 Task 7); without this a cell fell through to the
         # ``esc(repr(t))`` tail, leaking the Python tuple repr into Jupyter
         # output.  Slot 0 read RAW, no deref (Task 5's rule).
         if len(t) == 1:
@@ -4387,7 +4188,6 @@ __all__ = [
     # Logic variable
     "Var",
     # New term types
-    "Compound",
     "DictTerm",
     "SetTerm",
     "KWTerm",

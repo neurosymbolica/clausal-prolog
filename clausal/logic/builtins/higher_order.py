@@ -10,7 +10,6 @@ from clausal.logic.atoms import demangle, is_mangled
 from clausal.logic.exceptions import (
     LogicException, existence_error, instantiation_error, string_goal_error,
 )
-from clausal.terms import Compound
 from clausal.logic.meta_predicate import is_goal_object as _is_goal_object
 from clausal.logic.trampoline import DONE, StepGenerator
 from clausal.logic.builtins.lists import _as_items, _seq_result, _was_string
@@ -39,7 +38,6 @@ from clausal.logic.builtins.call_body import (
     non_callable_goal_error, iso_control_cell_dispatch, folded_existence_error,
     needs_meta_call, MetaCallGoal,
 )
-from clausal.terms import Compound
 
 
 # ── call_goal/1,2,3 — invoke a goal closure (V2-9 lambdas) ──────────────────
@@ -182,13 +180,6 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
         # ``call((A, B), X)`` -> existence_error(procedure, ','/3).
         raise LogicException(body_with_extras_error(
             goal_val, len(extra_args), context))
-    if isinstance(goal_val, Compound):
-        # A Compound goal is the cell of the same shape (``solve`` lowers it
-        # the same way); it used to fall to the silent-failure tail.
-        cell = (goal_val.functor,) + tuple(goal_val.args)
-        return _resolve_named_goal(
-            db, cell if goal_val.args else goal_val.functor, extra_args,
-            context)
     is_cell, functor = compound_cell_shape(goal_val)
     if is_cell:
         goal_args = list(goal_val[1:])

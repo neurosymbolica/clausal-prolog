@@ -50,7 +50,7 @@ test("decompose compound") <- (
 
 **Construct mode** (Term unbound, Name + Arity bound). The result is a
 **cell** — the same term a source-written data functor `pair(A, B)` compiles
-to, not a `Compound` object:
+to (a plain tuple):
 
 ```clausal
 -implicit_functors
@@ -230,9 +230,8 @@ test("count") <- var_count([X_, 1, Y_, Z_], 3)
 - **`numbervars` mutates the term** — it binds variables in place. Use
   `copy_term` first if you need the original term unchanged.
 - **`unpack` constructs CELLS** — when building from a list, the result is a
-  plain tuple `("point", 10, 20)`, not a `Compound` object and not a known
-  predicate class. Python code that tested `isinstance(x, Compound)` on a
-  constructed term needs a cell-shape test instead. `functor/3` in construct
+  plain tuple `("point", 10, 20)`, not a known predicate class. Python code
+  reads it with `clausal.cell_functor` / `clausal.cell_args`. `functor/3` in construct
   mode does the same.
 - **The name position is an atom** — `functor/3` and `unpack/2` hand back an
   atom for the name and require one to build with; a string there raises

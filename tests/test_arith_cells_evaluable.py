@@ -2,7 +2,7 @@
 
 Slices A1 and A2 of the Compound retirement plan (ruling R9, 2026-09-27):
 
-* A1 -- the evaluator accepts ``('+', 1, 2)`` (and ``Compound('+', (1, 2))``)
+* A1 -- the evaluator accepts ``('+', 1, 2)``
   through ONE closed evaluable table keyed ``(name, arity)``, the same table
   the operator nodes (``Add`` & co.) dispatch through, so a cell and a node
   have one semantics.  A cell whose ``name/arity`` is not in the table raises
@@ -26,7 +26,7 @@ from clausal.import_hook import _load_module
 from clausal.logic.exceptions import LogicException
 from clausal.logic.solve import call, solve
 from clausal.logic.variables import Var, walk
-from clausal.terms import Add, Compound, term_str
+from clausal.terms import Add, term_str
 
 _N = itertools.count()
 
@@ -71,20 +71,16 @@ def _run(mod, goal, out):
 
 
 # ---------------------------------------------------------------------------
-# A1 from the Python API: cell, Compound and node spellings agree.
+# A1 from the Python API: cell and node spellings agree.
 # ---------------------------------------------------------------------------
 
 _SPELLINGS = {
     "cell": lambda: ("+", 1, 2),
-    "Compound": lambda: Compound("+", (1, 2)),
     "Add": lambda: Add(None, 1, 2),
 }
 
 
-# The "Compound" spelling's subject is the class (compound retirement slice 8).
-_SPELLING_PARAMS = [
-    pytest.param(s, marks=pytest.mark.compound_retirement_slice8) if s == "Compound" else s
-    for s in sorted(_SPELLINGS)]
+_SPELLING_PARAMS = sorted(_SPELLINGS)
 
 
 @pytest.mark.parametrize("spelling", _SPELLING_PARAMS)

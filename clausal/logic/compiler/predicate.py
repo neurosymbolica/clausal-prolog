@@ -24,7 +24,7 @@ from clausal.logic.trampoline import Step, DONE, StepGenerator, _drive_until_yie
 from clausal.logic import cells as _cells_module
 from clausal.logic.cells import CELLS_NAMESPACE_KEY as _CELLS_NAMESPACE_KEY
 from clausal.terms import (
-    Compound, as_cells_for_match as _as_cells_for_match,
+    as_cells_for_match as _as_cells_for_match,
     Call, LoadName, LoadAttr,
     SegList, ConcreteSeg, VarSeg,
     SegString,
@@ -279,7 +279,7 @@ from .tro import (  # noqa: E402,F401
 # ── Injected runtime builtins (name-referenceable in compiled bodies) ────────
 #
 # ``term_to_ast_expr`` can emit a *bare Name* for a runtime value (not just a
-# module-declared predicate): the term-constructor helpers ``Var``/``Compound``/
+# module-declared predicate): the term-constructor helpers ``Var``/
 # ``DictTerm``/``SetTerm``/``KWTerm``, the Kleene ``Undefined`` singleton, and any
 # ``is_term_instance`` runtime type referenced as ``Cls(...)`` — e.g. ``Quantity``,
 # a ``PyThunk``/``FStringThunk`` wrapper, or a CLP(B) ``BoolEq``/``BoolImpl``.
@@ -346,7 +346,6 @@ INJECTED_RUNTIME_BUILTINS: dict = {
     # names can never be shadowed by user identifiers (``$`` is not a legal
     # identifier char).
     "Var": Var,
-    "Compound": Compound,
     "DictTerm": _DictTerm,
     "SetTerm": _SetTerm,
     "KWTerm": _KWTerm,
@@ -373,9 +372,9 @@ INJECTED_RUNTIME_BUILTINS: dict = {
     # bound (A12-F004); generated code references them ``$``-prefixed.
     "$walk": _walk_fn,
     "$deref": deref,
-    # Ruling 2026-09-26: the clause-head ``match`` subject normaliser -- a
-    # caller's atom-functor Compound becomes its cell before a cell-only
-    # head pattern sees it (``terms.as_cells_for_match``).
+    # The clause-head ``match`` subject normaliser -- a slot holding a Var
+    # bound to a structure becomes the structure before a head pattern sees
+    # it (``terms.as_cells_for_match``).
     "$as_cells": _as_cells_for_match_c or _as_cells_for_match,
     # One element of a possibly-``str`` sequence target, as a TERM: a str's
     # element is its char ATOM, a list's is itself, a bytes' is the int code
@@ -689,9 +688,9 @@ def _build_predicate_trampoline_funcdef(
 
     if clauses and arity > 0:
         # Deref each argument once into a local before the clause match arms.
-        # Ruling 2026-09-26: where a head pattern has structure, the subject
-        # goes through ``$as_cells`` so a Compound caller meets the cell-only
-        # pattern as its cell.  Emitted as ``$deref`` here; the depth is read
+        # Where a head pattern has structure, the subject goes through
+        # ``$as_cells`` so a bound-Var slot meets the pattern as the
+        # structure it is bound to.  Emitted as ``$deref`` here; the depth is read
         # off the BUILT patterns below (``head_match.finalize_subject_depths``).
         deref_names = [f"_d{i}" for i in range(arity)]
         _subject_assigns = [_subject_assign(deref_names[i], arg, 0)
@@ -1050,7 +1049,7 @@ def _compile_predicate_trampoline_impl(
 
     base_globals: dict = {
         # Seed with the injected runtime builtins so every name term_to_ast_expr
-        # can emit (Var/Compound/DictTerm/SetTerm/KWTerm, Undefined, Quantity,
+        # can emit (Var/DictTerm/SetTerm/KWTerm, Undefined, Quantity,
         # PyThunk/FStringThunk, BoolEq/BoolImpl, plus $-prefixed engine helpers)
         # resolves even on the bare-query path — whose globals derive only from
         # the module dict, which need not carry the injections.  See

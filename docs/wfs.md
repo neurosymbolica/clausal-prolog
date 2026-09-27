@@ -92,7 +92,7 @@ therefore report *which* atoms form the unresolved pair, not merely that
 something is undefined.
 
 The annotation is independent of how the goal is asked: the same atom reports
-the same truth value whether the goal is a reified `Call`, a `Compound`, a
+the same truth value whether the goal is a reified `Call`, a cell, a
 term instance, and whether the query is ground or unbound — and answer sets
 are stable across query order (see the implementation overview below). It is
 also independent of the goal's SHAPE: an untabled wrapper over a tabled
@@ -270,7 +270,7 @@ Non-tabled predicates with negation use standard negation-as-failure (which can 
     - **WFS integration**: symmetric win (all undefined), asymmetric win (true/false/undefined)
     - **query_wfs API**: truth annotations, list return type
     - **Query-surface consistency**: the symmetric cycle reports `Undefined`
-      for every goal shape (reified `Call`, `Compound`) and every query order
+      for every goal shape (reified `Call`, cell) and every query order
       (unbound/ground, either atom first), with `_delays` naming the partner
     - **Disjunctive derivations**: a fact inside a negation cycle wins
       (true), and its cycle partner correctly fails; asymmetric win reports

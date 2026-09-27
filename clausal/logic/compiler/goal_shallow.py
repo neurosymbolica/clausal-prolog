@@ -19,7 +19,6 @@ from typing import Any, Callable
 from clausal.logic.variables import Var, is_var, deref, unify  # noqa: F401
 from clausal.logic.trampoline import StepGenerator  # noqa: F401
 from clausal.terms import (
-    Compound,
     Add, Sub, Mult, Div, FloorDiv, Mod, Pow,
     Negate,
     And, Or, Not,
@@ -253,7 +252,7 @@ def _head_has_deferred_pattern(head) -> bool:
     """
     if head is None:
         return False
-    from clausal.terms import SegList, Compound
+    from clausal.terms import SegList
     from clausal.pythonic_ast.nodes import StarUnpack
     try:
         from clausal.logic.predicate import term_field_names, is_term_instance
@@ -268,8 +267,6 @@ def _head_has_deferred_pattern(head) -> bool:
             return True
         if isinstance(val, tuple):
             return any(_walk(x) for x in val)
-        if isinstance(val, Compound):
-            return any(_walk(x) for x in val.args)
         if is_term_instance(val):
             names = term_field_names(val)
             return any(_walk(getattr(val, n)) for n in names if hasattr(val, n))

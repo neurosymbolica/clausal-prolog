@@ -72,7 +72,6 @@ def or_max_flow(arcs: Any, source: Any, sink: Any, trail: Trail) -> tuple:
     arcs: list of [From, To, Capacity] or arc(From, To, Capacity) terms
     Returns (max_flow_value, flow_per_arc) or None if infeasible.
     """
-    from clausal.terms import Compound
     _require_graph()
     smf = _SimpleMaxFlow()
 
@@ -82,8 +81,8 @@ def or_max_flow(arcs: Any, source: Any, sink: Any, trail: Trail) -> tuple:
         arc = deref(arc)
         if isinstance(arc, (list, tuple)) and len(arc) == 3:
             f, t, c = int(deref(arc[0])), int(deref(arc[1])), int(deref(arc[2]))
-        elif isinstance(arc, Compound) and arc.functor == 'arc' and len(arc.args) == 3:
-            f, t, c = int(deref(arc.args[0])), int(deref(arc.args[1])), int(deref(arc.args[2]))
+        elif type(arc) is tuple and len(arc) == 4 and arc[0] == 'arc':
+            f, t, c = int(deref(arc[1])), int(deref(arc[2])), int(deref(arc[3]))
         else:
             raise TypeError(f"Expected arc(From, To, Capacity), got {arc}")
         idx = smf.add_arc_with_capacity(f, t, c)
@@ -124,7 +123,6 @@ def or_min_cost_flow(arcs: Any, supplies: Any, trail: Trail) -> tuple:
     supplies: list of [Node, Supply] (negative = demand)
     Returns (total_cost, flow_per_arc) or None if infeasible.
     """
-    from clausal.terms import Compound
     _require_graph()
     smcf = _SimpleMinCostFlow()
 
@@ -134,8 +132,8 @@ def or_min_cost_flow(arcs: Any, supplies: Any, trail: Trail) -> tuple:
         arc = deref(arc)
         if isinstance(arc, (list, tuple)) and len(arc) == 4:
             f, t, c, cost = [int(deref(x)) for x in arc]
-        elif isinstance(arc, Compound) and arc.functor == 'arc' and len(arc.args) == 4:
-            f, t, c, cost = [int(deref(x)) for x in arc.args]
+        elif type(arc) is tuple and len(arc) == 5 and arc[0] == 'arc':
+            f, t, c, cost = [int(deref(x)) for x in arc[1:]]
         else:
             raise TypeError(f"Expected arc(From, To, Capacity, UnitCost), got {arc}")
         idx = smcf.add_arc_with_capacity_and_unit_cost(f, t, c, cost)
@@ -146,8 +144,8 @@ def or_min_cost_flow(arcs: Any, supplies: Any, trail: Trail) -> tuple:
         s = deref(s)
         if isinstance(s, (list, tuple)) and len(s) == 2:
             node, supply = int(deref(s[0])), int(deref(s[1]))
-        elif isinstance(s, Compound) and s.functor == 'supply' and len(s.args) == 2:
-            node, supply = int(deref(s.args[0])), int(deref(s.args[1]))
+        elif type(s) is tuple and len(s) == 3 and s[0] == 'supply':
+            node, supply = int(deref(s[1])), int(deref(s[2]))
         else:
             raise TypeError(f"Expected supply(Node, Supply), got {s}")
         smcf.set_node_supply(node, supply)

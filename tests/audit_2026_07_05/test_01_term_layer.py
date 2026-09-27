@@ -36,7 +36,6 @@ from clausal.logic.variables import (
 )
 from clausal.logic.variables import _variables as _c
 from clausal.terms import (
-    Compound,
     ConcreteSeg,
     DictTerm,
     KWTerm,
@@ -67,19 +66,17 @@ def _fresh_pred_class(fields=("a", "b")):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# A01-F001 — occurs-check blind to Compound / KWTerm / PredicateMeta instances
+# A01-F001 — occurs-check blind to cells / KWTerm / PredicateMeta instances
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TestF001OccursCheckBlindness:
-    @pytest.mark.compound_retirement_slice8
-    def test_occurs_check_sees_var_in_compound_args(self, trail):
+    def test_occurs_check_sees_var_in_cell_args(self, trail):
         X = Var()
-        assert occurs_check(X, Compound("f", (X,))) is True
+        assert occurs_check(X, ("f", X)) is True
 
-    @pytest.mark.compound_retirement_slice8
-    def test_uoc_rejects_cyclic_compound(self, trail):
+    def test_uoc_rejects_cyclic_cell(self, trail):
         X = Var()
-        assert unify_with_occurs_check(X, Compound("f", (X,)), trail) is False
+        assert unify_with_occurs_check(X, ("f", X), trail) is False
 
     @pytest.mark.compound_retirement_slice9
     def test_occurs_check_sees_var_in_kwterm(self, trail):
@@ -103,82 +100,8 @@ class TestF001OccursCheckBlindness:
         assert occurs_check(X, Y)  # through a binding chain
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# A01-F003 — Compound Var-functor support broken across the layer
-# ─────────────────────────────────────────────────────────────────────────────
-
-class TestF003CompoundVarFunctor:
-    # A01-F003 deref-only floor (parked decision A01-D004, options a/b): a
-    # functor Var *bound* to a str behaves as that str across unify, copy_term,
-    # _is_ground, _collect_vars and the render functions. The one output-mode
-    # case (binding an *unbound* functor Var) stays xfail — it needs D004→(a).
-    @pytest.mark.compound_retirement_slice8
-    def test_bound_var_functor_unifies(self, trail):
-        F = Var()
-        assert unify(F, "f", trail)
-        assert unify(Compound(F, (1,)), Compound("f", (1,)), trail) is True
-
-    @pytest.mark.compound_retirement_slice8
-    @pytest.mark.xfail(strict=False,
-                       reason="A01-F003/D004: unbound functor var binding (output mode) "
-                              "is out of scope for the deref-only floor; needs D004→(a)")
-    def test_unbound_var_functor_binds(self, trail):
-        F = Var()
-        assert unify(Compound(F, (1,)), Compound("f", (1,)), trail) is True
-        assert deref(F) == "f"
-
-    @pytest.mark.compound_retirement_slice8
-    def test_copy_term_freshens_functor_var(self):
-        F, X = Var(), Var()
-        copied = _c._copy_term_impl(Compound(F, (X,)), {})
-        assert copied.args[0] is not X          # args are freshened (control)
-        assert copied.functor is not F          # functor should be too
-
-    @pytest.mark.compound_retirement_slice8
-    def test_is_ground_derefs_functor(self, trail):
-        F = Var()
-        assert unify(F, "f", trail)
-        assert _c._is_ground(Compound(F, (1,))) is True
-
-    @pytest.mark.compound_retirement_slice8
-    def test_collect_vars_sees_functor_var(self):
-        F = Var()
-        out = []
-        _c._collect_vars_impl(Compound(F, (1,)), out)
-        assert F in out
-
-    @pytest.mark.compound_retirement_slice8
-    def test_term_str_derefs_bound_functor(self, trail):
-        F = Var()
-        assert unify(F, "f", trail)
-        assert term_str(Compound(F, (1,))) == "f(1)"
-
-    @pytest.mark.compound_retirement_slice8
-    def test_term_html_derefs_bound_functor(self, trail):
-        from clausal.terms import term_html
-        F = Var()
-        assert unify(F, "f", trail)
-        assert ">f<" in term_html(Compound(F, (1,)))
-        assert ">_<" not in term_html(Compound(F, (1,)))
-
-    @pytest.mark.compound_retirement_slice8
-    def test_term_pformat_derefs_bound_functor(self, trail):
-        from clausal.terms import term_pformat
-        F = Var()
-        assert unify(F, "f", trail)
-        # force the multi-line expansion path (narrow width) so the functor is
-        # rendered by term_pformat's own Compound arm, not term_str's flat form
-        out = term_pformat(Compound(F, (1, 2, 3)), width=4)
-        assert out.startswith("f(")
-
-    @pytest.mark.compound_retirement_slice8
-    def test_control_str_functor_semantics(self, trail):
-        assert unify(Compound("f", ()), Compound("f", ()), trail)
-        assert not unify(Compound("f", (1,)), Compound("g", (1,)), trail)
-        assert not unify(Compound("f", (1,)), Compound("f", (1, 2)), trail)
-        X = Var()
-        assert unify(Compound("f", (X, 2)), Compound("f", (1, 2)), trail)
-        assert deref(X) == 1
+# (A01-F003 -- Compound Var-functor support -- went with the Compound class:
+# a variable functor has no successor; ``T =.. [F|Args]`` is the ISO route.)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -343,17 +266,16 @@ class TestF007SegListVsBytes:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# A01-F008 — C walk() blind to Compound/KWTerm/PredicateMeta instances
+# A01-F008 — C walk() blind to cells/KWTerm/PredicateMeta instances
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TestF008WalkFunctorTerms:
-    @pytest.mark.compound_retirement_slice8
-    def test_walk_snapshot_of_compound_survives_undo(self, trail):
+    def test_walk_snapshot_of_cell_survives_undo(self, trail):
         X = Var()
         assert unify(X, 1, trail)
-        snap = walk(Compound("f", (X,)))
+        snap = walk(("f", X))
         trail.reset()
-        assert deref(snap.args[0]) == 1  # snapshot must not decay to unbound
+        assert deref(snap[1]) == 1  # snapshot must not decay to unbound
 
     @pytest.mark.compound_retirement_slice9
     def test_walk_snapshot_of_kwterm_survives_undo(self, trail):
@@ -377,18 +299,10 @@ class TestF008WalkFunctorTerms:
         trail.reset()
         assert deref(snap[1]) == 1 and snap[2] == 2
 
-    @pytest.mark.compound_retirement_slice8
-    def test_walk_preserves_compound_position(self, trail):
-        X = Var()
-        assert unify(X, 1, trail)
-        snap = walk(Compound("f", (X,), _position=(1, 2, 3, 4)))
-        assert snap._position == (1, 2, 3, 4)  # Slice G metadata not dropped
-
-    @pytest.mark.compound_retirement_slice8
     def test_walk_shares_unbound_vars(self, trail):
         X = Var()  # unbound
-        snap = walk(Compound("f", (X,)))
-        assert snap.args[0] is X  # unbound Vars left in place, not copied
+        snap = walk(("f", X))
+        assert snap[1] is X  # unbound Vars left in place, not copied
 
     def test_control_walk_rebuilds_list_tuple_and_segs(self, trail):
         X = Var()
@@ -746,13 +660,12 @@ class TestLeaks:
             t.undo(m)
         refcount_stable(thunk, iterations=2000)
 
-    @pytest.mark.compound_retirement_slice8
-    def test_compound_unify_loop_stable(self, refcount_stable):
+    def test_cell_unify_loop_stable(self, refcount_stable):
         def thunk():
             t = Trail()
             X = Var()
             m = t.mark()
-            unify(Compound("f", (X, 2)), Compound("f", (1, 2)), t)
+            unify(("f", X, 2), ("f", 1, 2), t)
             t.undo(m)
         refcount_stable(thunk, iterations=2000)
 

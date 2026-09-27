@@ -6,7 +6,6 @@ from __future__ import annotations
 from clausal.logic.variables import deref, is_var, unify, put_attr, get_attr, del_attr
 from clausal.logic.predicate import is_term_instance, term_field_names
 from clausal.terms import (
-    Compound,
     DictTerm,
     SetTerm,
     SegList,
@@ -228,9 +227,6 @@ def _collect_attvars(term, seen, result):
     if isinstance(term, (list, tuple)):
         for item in term:
             _collect_attvars(deref(item), seen, result)
-    elif isinstance(term, Compound):
-        for arg in term.args:
-            _collect_attvars(deref(arg), seen, result)
     elif is_term_instance(term):
         for f in term_field_names(term):
             _collect_attvars(deref(getattr(term, f)), seen, result)

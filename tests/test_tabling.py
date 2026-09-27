@@ -23,7 +23,6 @@ from clausal.logic.variables import Var, Trail, unify, deref, is_var
 from clausal.logic.database import Database, Clause, Module, head_key
 from clausal.logic.trampoline import StepGenerator, DONE, solutions
 from clausal.logic.solve import call, _deref_walk
-from clausal.terms import Compound
 
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
@@ -262,17 +261,10 @@ class TestKeyComputation:
         result = _normalize_for_key([1, 2, 3])
         assert result == ("__list__", 1, 2, 3)
 
-    @pytest.mark.compound_retirement_slice8
     def test_compound(self):
         # nv
-        # Ruling 2026-09-26: an atom-functor Compound of arity >= 1 IS the
-        # cell ("f", 1, 2) and keys exactly as that tuple does.
-        c = Compound("f", (1, 2))
-        result = _normalize_for_key(c)
-        assert result == ("__tuple__", "f", 1, 2)
-        assert result == _normalize_for_key(("f", 1, 2))
-        # no cell equivalent (arity 0): the old functor-first shape
-        assert _normalize_for_key(Compound("f", ())) == ("f",)
+        # A compound term is the cell ("f", 1, 2); it keys as that tuple.
+        assert _normalize_for_key(("f", 1, 2)) == ("__tuple__", "f", 1, 2)
 
     def test_make_subgoal_key_ground(self):
         # nv

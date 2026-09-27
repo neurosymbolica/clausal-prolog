@@ -7,7 +7,7 @@ import sympy as sp
 
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.logic.trampoline import DONE
-from clausal.terms import Add, Sub, Mult, Div, Pow, Negate, Compound
+from clausal.terms import Add, Sub, Mult, Div, Pow, Negate
 from clausal.modules.py.sympy import (
     to_sympy, from_sympy, _ConversionContext,
     Sym, ToSympy, FromSympy,
@@ -120,12 +120,12 @@ class TestToSympy:
         v = Var()
         ctx._var_to_sym[v._id] = x
         ctx._sym_to_var["x"] = v
-        result = to_sympy(Compound("sin", (v,)), ctx)
+        result = to_sympy(("sin", v), ctx)
         assert result == sp.sin(x)
 
     def test_compound_unknown(self):
         # nv
-        result = to_sympy(Compound("foo", (1, 2)))
+        result = to_sympy(("foo", 1, 2))
         assert str(result) == "foo(1, 2)"
 
     def test_nested(self):
@@ -225,8 +225,8 @@ class TestFromSympy:
         x = sp.Symbol("x")
         ctx = _ConversionContext()
         result = from_sympy(sp.sin(x), ctx)
-        assert isinstance(result, Compound)
-        assert result.functor == "sin"
+        assert type(result) is tuple
+        assert result[0] == "sin"
 
     def test_float(self):
         # nv
@@ -275,15 +275,15 @@ def _find_var(term):
     """Recursively find the first Var in a term tree."""
     if isinstance(term, Var):
         return term
+    if type(term) is tuple:
+        for a in term[1:]:
+            v = _find_var(a)
+            if v is not None:
+                return v
     for attr in ("left", "right", "operand"):
         child = getattr(term, attr, None)
         if child is not None:
             v = _find_var(child)
-            if v is not None:
-                return v
-    if isinstance(term, Compound):
-        for a in term.args:
-            v = _find_var(a)
             if v is not None:
                 return v
     return None
@@ -326,8 +326,8 @@ class TestSimplify:
         x = sp.Symbol("x")
         # sin(x)^2 + cos(x)^2 → 1
         term = Add(
-            left=Pow(left=Compound("sin", (x,)), right=2),
-            right=Pow(left=Compound("cos", (x,)), right=2),
+            left=Pow(left=("sin", x), right=2),
+            right=Pow(left=("cos", x), right=2),
         )
         result = Var()
         sol = _first_solution(Simplify, term, result)
@@ -422,7 +422,7 @@ class TestDiff:
     def test_diff_explicit_var(self):
         # nv
         x = sp.Symbol("x")
-        term = Compound("sin", (x,))
+        term = ("sin", x)
         result = Var()
         sol = _first_solution(Diff, term, x, result)
         assert sol is not None
@@ -457,7 +457,7 @@ class TestIntegrate:
         # nv
         x = sp.Symbol("x")
         result = Var()
-        sol = _first_solution(Integrate, Compound("cos", (x,)), x, result)
+        sol = _first_solution(Integrate, ("cos", x), x, result)
         assert sol is not None
         r = deref(result)
         assert r == sp.sin(x)
@@ -468,7 +468,7 @@ class TestLimit:
         # nv
         x = sp.Symbol("x")
         # lim x→0 sin(x)/x = 1
-        term = Div(left=Compound("sin", (x,)), right=x)
+        term = Div(left=("sin", x), right=x)
         result = Var()
         sol = _first_solution(Limit, term, x, 0, result)
         assert sol is not None
@@ -480,7 +480,7 @@ class TestSeries:
         # nv
         x = sp.Symbol("x")
         # exp(x) around 0 to 4 terms: 1 + x + x^2/2 + x^3/6
-        term = Compound("exp", (x,))
+        term = ("exp", x)
         result = Var()
         sol = _first_solution(Series, term, x, 4, result)
         assert sol is not None

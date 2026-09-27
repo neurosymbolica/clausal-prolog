@@ -67,7 +67,7 @@ from clausal.logic.builtins._registry import _builtin, _trampoline_builtin
 
 
 def _pair_key(pair):
-    """Extract key from a (Key: Value) pair represented as a 2-tuple or Compound."""
+    """Extract key from a (Key: Value) pair represented as a 2-tuple or cell."""
     # Pairs are represented as Python 2-tuples (key, value) in list context.
     # We use Python tuples: (key, value).
     if isinstance(pair, (list, tuple)) and len(pair) == 2:

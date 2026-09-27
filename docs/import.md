@@ -57,7 +57,7 @@ The `Module` also holds `module_dict: dict | None` — a reference to the Python
 
 ### PredicateLoader.exec_module
 
-1. **Inject builtins** — all `simple_ast` names (term constructors), plus `Var`, `Compound`, `Trail`, `unify`, `deref`, `walk`, and `$ast` are merged into the module's `__dict__`. This makes them available in clause bodies without explicit imports.
+1. **Inject builtins** — all `simple_ast` names (term constructors), plus `Var`, `Trail`, `unify`, `deref`, `walk`, and `$ast` are merged into the module's `__dict__`. This makes them available in clause bodies without explicit imports.
 
 2. **Create LogicModule** — a `clausal.logic.database.Module` is created with `module_dict=module.__dict__`. It is stored as `$module` in the globals.
 
@@ -561,9 +561,9 @@ already raises `permission_error(modify, static_procedure, F/N)`.
 
 The following names are injected into every predicate module's namespace by the import hook:
 
-**Simple AST constructors**: all names from `clausal.pythonic_ast.__all__` — `LoadName`, `Call`, `Compound`, `IntLiteral`, `Is`, `And`, `Or`, `Not`, etc.
+**Simple AST constructors**: all names from `clausal.pythonic_ast.__all__` — `LoadName`, `Call`, `IntLiteral`, `Is`, `And`, `Or`, `Not`, etc.
 
-**Runtime types**: `Var`, `Compound`, `Trail`, `unify`, `deref`, `walk` — needed by generated code (`Var()` for logic variables) and by compiled predicate bodies.
+**Runtime types**: `Var`, `Trail`, `unify`, `deref`, `walk` — needed by generated code (`Var()` for logic variables) and by compiled predicate bodies.
 
 **Hidden globals** (inaccessible as normal identifiers):
 - `$module` — the `LogicModule` for this file

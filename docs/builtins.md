@@ -526,7 +526,7 @@ Decompose a term to a `[functor | args]` list, or construct a term from such a l
 | `unpack(T, ["foo", 1])` | `type_error(atom, "foo")` |
 | `unpack(T, ["foo"])` | `type_error(atomic, "foo")` |
 
-Constructed compounds are **cells** (plain tuples), not `Compound` objects — Python code that tested `isinstance(x, Compound)` on a constructed term needs a cell-shape test instead.
+Constructed compounds are **cells** (plain tuples) — Python code tests a constructed term's shape with `clausal.cell_functor` / `clausal.cell_args`.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins.py:413`
@@ -565,7 +565,7 @@ Unify `Vars` with a list of all unbound `Var`s in `Term`, collected left-to-righ
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:numbervars_3"
 ```
-Number all unbound `Var`s in `Term` left-to-right, binding each to `Compound("$VAR", (N,))` where `N` starts at `Start` and increments. `End` is unified with the next unused number after all variables are numbered. Useful for pretty-printing terms with named variables. `Start` must be a bound integer.
+Number all unbound `Var`s in `Term` left-to-right, binding each to the cell `("$VAR", N)` where `N` starts at `Start` and increments. `End` is unified with the next unused number after all variables are numbered. Useful for pretty-printing terms with named variables. `Start` must be a bound integer.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins.py` (`numbervars/3`)
@@ -1058,7 +1058,7 @@ Post an all-different constraint on a list of integer-constrained variables. Pro
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:structural_eq_2"
 ```
-True structural equality (Prolog `==/2`). Succeeds if `T1` and `T2` are identical after dereferencing variables, **without** binding any variables and **without** evaluating arithmetic. Recursively walks Compound terms, lists, SegLists, DictTerms, and user-defined term dataclasses.
+True structural equality (Prolog `==/2`). Succeeds if `T1` and `T2` are identical after dereferencing variables, **without** binding any variables and **without** evaluating arithmetic. Recursively walks compound terms (cells), lists, SegLists, DictTerms, and user-defined term dataclasses.
 
 For structural inequality use `not structural_eq(T1, T2)`.
 
@@ -1290,7 +1290,7 @@ Succeeds if `X` is a Python `float`.
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:compound_1"
 ```
-Succeeds if `X` is a compound term with arity > 0 (a cell `("f", …)`, `Compound`, `KWTerm`, or term instance with at least one field). An **atom** is arity 0, so `compound/1` rejects it; a list (a string included) is not compound either.
+Succeeds if `X` is a compound term with arity > 0 (a cell `("f", …)`, `KWTerm`, or term instance with at least one field). An **atom** is arity 0, so `compound/1` rejects it; a list (a string included) is not compound either.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins.py:921`
@@ -2685,7 +2685,7 @@ Unify `String` with the Clausal **display** rendering of `Term`, as a string —
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:listing_1"
 ```
-Print all clauses of a predicate to stdout in readable Clausal syntax. Follows Scryer Prolog's contract (operator ruling 2026-09-25): the argument is a predicate indicator, `Name/Arity` or `Name//Arity` (the latter names `Name/(Arity+2)`); an unbound argument, or an indicator naming no predicate or one with no clauses, FAILS; any other term (a bare atom, a compound, a string, a number) raises `type_error(predicate_indicator, PI)`; a malformed operand raises `functor/3`'s error (`instantiation_error`, `type_error(integer, A)`, `domain_error(not_less_than_zero, A)`, `type_error(atomic, N)` for a string name, `type_error(atom, N)` for a number name). A user-written `foo/2` / `foo // 2` compiles to a runtime `Div` / `FloorDiv` node (`/` and `//` are arithmetic operators); the cells `('/', Name, Arity)` / `('//', Name, Arity)` and `Compound("/", (Name, Arity))` are also accepted. Prints a header comment with clause count, followed by each clause formatted as `head.` (fact) or `head <- (body).` (rule). An indicator naming an IMPORTED predicate resolves to the exporter's predicate, so `listing(qq/1)` from a module that `-import_from`s `qq` prints what the exporter's `listing(qq/1)` prints. From Python it also takes a predicate HANDLE (each arity it is defined at is listed) or a builtin predicate (`"% name/arity — builtin"`).
+Print all clauses of a predicate to stdout in readable Clausal syntax. Follows Scryer Prolog's contract (operator ruling 2026-09-25): the argument is a predicate indicator, `Name/Arity` or `Name//Arity` (the latter names `Name/(Arity+2)`); an unbound argument, or an indicator naming no predicate or one with no clauses, FAILS; any other term (a bare atom, a compound, a string, a number) raises `type_error(predicate_indicator, PI)`; a malformed operand raises `functor/3`'s error (`instantiation_error`, `type_error(integer, A)`, `domain_error(not_less_than_zero, A)`, `type_error(atomic, N)` for a string name, `type_error(atom, N)` for a number name). A user-written `foo/2` / `foo // 2` compiles to a runtime `Div` / `FloorDiv` node (`/` and `//` are arithmetic operators); the cells `('/', Name, Arity)` / `('//', Name, Arity)` are also accepted. Prints a header comment with clause count, followed by each clause formatted as `head.` (fact) or `head <- (body).` (rule). An indicator naming an IMPORTED predicate resolves to the exporter's predicate, so `listing(qq/1)` from a module that `-import_from`s `qq` prints what the exporter's `listing(qq/1)` prints. From Python it also takes a predicate HANDLE (each arity it is defined at is listed) or a builtin predicate (`"% name/arity — builtin"`).
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/io.py` (`listing/1`)

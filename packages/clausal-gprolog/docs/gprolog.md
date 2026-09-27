@@ -219,7 +219,7 @@ Each solution is a `dict` mapping Prolog variable names (strings) to Python valu
 | float | `float` |
 | atom | `str` |
 | list | `list` |
-| compound `f(a, b)` | `Compound("f", (a, b))` from `clausal.terms` |
+| compound `f(a, b)` | the cell `("f", a, b)` |
 | unbound variable | `str` (`"_"`) |
 | FD variable | `str` (`"_FD"`) |
 
@@ -292,7 +292,7 @@ with GnuProlog() as g:
     # True
 ```
 
-`to_prolog` handles `int`, `float`, `str` (quoted as atoms), `bool`, `None` (→ `[]`), `list`, and `Compound`.
+`to_prolog` handles `int`, `float`, `str` (quoted as atoms), `bool`, `None` (→ `[]`), `list`, and a cell `("f", a, b)`.
 
 ---
 

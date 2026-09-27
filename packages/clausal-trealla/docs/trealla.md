@@ -184,7 +184,7 @@ t.query_bool("parent(tom, bob).")
 | float | `float` |
 | atom | `str` |
 | list | `list` |
-| compound `f(a, b)` | `Compound("f", (a, b))` from `clausal.terms` |
+| compound `f(a, b)` | the cell `("f", a, b)` |
 
 Ground goals that succeed with no variables return `{}` (empty dict).
 

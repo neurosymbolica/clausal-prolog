@@ -114,10 +114,9 @@ def test_raw_list_term(machine):
 @needs_ext
 def test_raw_compound_term(machine):
     # nv
-    from clausal.terms import Compound
     machine.consult_string("data_raw(point(1, 2)).")
     sol = next(iter(machine.query("data_raw(X).")))
-    assert sol["X"] == Compound("point", (1, 2))
+    assert sol["X"] == ("point", 1, 2)
 
 
 @needs_ext

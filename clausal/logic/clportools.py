@@ -847,16 +847,15 @@ def or_cumulative(intervals: list, demands: list, capacity: Any,
 
 def _intervals_from_clausal(interval_terms: list, trail: Trail) -> list:
     """Convert a list of Clausal interval terms to CP-SAT IntervalVars."""
-    from clausal.terms import Compound
     result = []
     for term in interval_terms:
         term = deref(term)
-        if isinstance(term, Compound) and term.functor == 'interval' and len(term.args) == 3:
-            start, size, end = term.args
+        if type(term) is tuple and len(term) == 4 and term[0] == 'interval':
+            start, size, end = term[1:]
             iv = or_interval_scoped(start, size, end, trail)
             result.append(iv)
-        elif isinstance(term, Compound) and term.functor == 'optional_interval' and len(term.args) == 4:
-            start, size, end, presence = term.args
+        elif type(term) is tuple and len(term) == 5 and term[0] == 'optional_interval':
+            start, size, end, presence = term[1:]
             iv = or_optional_interval(start, size, end, presence, trail)
             result.append(iv)
         else:
@@ -873,15 +872,14 @@ def or_circuit(arcs: list, trail: Trail) -> bool:
 
     arcs: list of (tail, head, literal) triples.
     """
-    from clausal.terms import Compound
     state = get_cpsat_state(trail)
     cpsat_arcs = []
     for arc in arcs:
         arc = deref(arc)
         if isinstance(arc, (list, tuple)) and len(arc) == 3:
             tail, head, lit = arc
-        elif isinstance(arc, Compound) and arc.functor == 'arc' and len(arc.args) == 3:
-            tail, head, lit = arc.args
+        elif type(arc) is tuple and len(arc) == 4 and arc[0] == 'arc':
+            tail, head, lit = arc[1:]
         else:
             raise TypeError(f"Expected arc(Tail, Head, Lit), got {arc}")
         cpsat_arcs.append((int(deref(tail)), int(deref(head)),
@@ -935,7 +933,6 @@ def or_inverse(vars1: Any, vars2: Any, trail: Trail) -> bool:
 def or_automaton(vars_list: Any, start: int, accepting: list,
                  transitions: list, trail: Trail) -> bool:
     """Post an automaton (regular language) constraint."""
-    from clausal.terms import Compound
     state = get_cpsat_state(trail)
     cpsat_vars = [_to_cpsat(v, trail) for v in _as_list(vars_list)]
     start = int(start)
@@ -945,8 +942,8 @@ def or_automaton(vars_list: Any, start: int, accepting: list,
         t = deref(t)
         if isinstance(t, (list, tuple)) and len(t) == 3:
             s, v, ns = t
-        elif isinstance(t, Compound) and len(t.args) == 3:
-            s, v, ns = t.args
+        elif type(t) is tuple and len(t) == 4 and type(t[0]) is str:
+            s, v, ns = t[1:]
         else:
             raise TypeError(f"Expected transition(State, Value, NextState), got {t}")
         trans.append((int(deref(s)), int(deref(v)), int(deref(ns))))

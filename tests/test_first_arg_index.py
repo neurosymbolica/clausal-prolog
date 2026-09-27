@@ -23,7 +23,7 @@ from clausal.logic.compiler.arg_index import (
 from tests.predicate_api_support import term_ctor
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.logic.trampoline import StepGenerator, solutions, DONE
-from clausal.terms import Compound, Unify
+from clausal.terms import Unify
 from clausal.logic.builtins import _normalize_fact_clause
 
 
@@ -121,7 +121,6 @@ class TestExtractFirstArgKey:
         c = Clause(head=("f", None), body=[True])
         assert _extract_first_arg_key(c, 1) is None
 
-
     def test_atom_reference_key_from_unify_unresolvable_without_env(self):
         """Without a compile-time *env* (or when the name isn't in it), the
         reference cannot be resolved to a runtime value, so the key must be
@@ -199,30 +198,26 @@ class TestCellIndexKey:
         assert _arg_to_index_key(["a", "b", "c"]) is _INDEX_VAR
         assert _runtime_arg_key(["a", "b", "c"]) is _INDEX_VAR
 
-    @pytest.mark.compound_retirement_slice8
     def test_bucket_sharing_across_producers(self):
         """A clause with a live cell arg (``assertz``-style) and one with a
-        compile-time ``Compound`` node in the same argument position select
+        compile-time compound reference (``Call(LoadName('point'), args)``,
+        the ``.clausal``-source shape) in the same argument position select
         the SAME bucket key — the mechanism ``_build_arg_index`` relies on
         to merge clauses from different producers into one bucket.
 
         End-to-end proof (real predicate, real bucket function, driven
         through ``call()``) lives in
         ``tests/test_tagged_terms.py::TestBucketPatternIntegration::
-        test_asserted_cell_and_compile_time_compound_share_a_bucket``,
-        which uses the REALISTIC ``.clausal``-source shape for a compound
-        reference (``Call(LoadName('point'), args)``, hoisted to a body
-        ``Unify`` — see ``_lift_clause_at_pos``'s docstring) rather than a
-        bare ``Compound`` object, which no reachable ``.clausal`` clause
-        head carries directly. This unit-level test isolates the KEY
-        function itself against the plain ``Compound`` branch instead.
+        test_asserted_cell_and_compile_time_compound_share_a_bucket``.
         """
+        from clausal.terms import Call, LoadName
         source_clause = Clause(
-            head=Compound("kind", (Compound("point", (1, 2)), "pt")),
+            head=("kind", Call(func=LoadName(name="point"), args=[1, 2],
+                               kwargs=[]), "pt"),
             body=[True],
         )
         asserted_clause = Clause(
-            head=Compound("kind", (("point", 3, 4), "pt2")),
+            head=("kind", ("point", 3, 4), "pt2"),
             body=[True],
         )
         source_key = _extract_first_arg_key(source_clause, 2)
@@ -628,18 +623,6 @@ class TestDeepGateFlagComputation:
         assert _lifted_head_arg_needs_deep_gate(
             ("g", Var())
         ) is False
-
-    @pytest.mark.compound_retirement_slice8
-    def test_compound_ground_arg_needs_the_gate(self):
-        """The pre-existing (not cell-specific) hazard: a lifted
-        ``Compound`` literal arg is exactly as risky as a lifted cell
-        literal arg -- the flag computation covers it the same way."""
-        from clausal.logic.compiler.list_dispatch import (
-            _lifted_head_arg_needs_deep_gate,
-        )
-        assert _lifted_head_arg_needs_deep_gate(
-            Compound("g", (1,))
-        ) is True
 
     def test_term_instance_ground_field_needs_the_gate(self):
         """Same pre-existing hazard, for a resolved term-INSTANCE literal

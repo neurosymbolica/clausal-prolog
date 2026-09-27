@@ -14,7 +14,7 @@ from clausal.logic.atoms import (
     spelling as _spelling,
 )
 from clausal.terms import (
-    Compound, KWTerm, Quantity, SegList, SegString, SegBytes)
+    KWTerm, Quantity, SegList, SegString, SegBytes)
 
 from clausal.logic.builtins._registry import _builtin, _db_builtin
 from clausal.logic.builtins._helpers import (
@@ -218,9 +218,7 @@ def _compound__1(x, trail, k):
     if _is_non_empty_list(x_val):
         yield None
         return
-    if isinstance(x_val, Compound) and len(x_val.args) > 0:
-        yield None
-    elif isinstance(x_val, KWTerm) and len(x_val) > 0:
+    if isinstance(x_val, KWTerm) and len(x_val) > 0:
         yield None
     elif is_term_instance(x_val) and len(term_field_names(x_val)) > 0:
         yield None
@@ -238,7 +236,7 @@ def _compound__1(x, trail, k):
 # F082 (audit 2026-05-25): register ``atomic/1``, the ISO Prolog
 # type-check for "any non-variable, non-compound term".  STAGE 2: accepts
 # an atom (a ``str``), ``int`` / ``float`` / ``bool`` / ``None`` and the
-# empty list; rejects Var, Compound, KWTerm, term-instance, list, dict, a
+# empty list; rejects Var, cell, KWTerm, term-instance, list, dict, a
 # non-empty STRING (the carrier), every class, and SegList / SegString —
 # every Seg* shape is structurally compound. See [[F082]].
 def _is_atomic_term(x) -> bool:
@@ -249,7 +247,7 @@ def _is_atomic_term(x) -> bool:
 
     True for an atom (STAGE 2: a ``str``), the empty list in any spelling,
     ``int``, ``float``, ``bool`` and ``None``.  False for ``Var``,
-    ``Compound``, ``KWTerm``, term-instances, ``list``, ``SegList``,
+    a cell, ``KWTerm``, term-instances, ``list``, ``SegList``,
     ``SegString``, a non-empty STRING (the chars carrier: it is the LIST of
     its char atoms, spec §6.3, so no more atomic than that list) — and any
     class (STAGE 2, spec §4: no class is an atom).
@@ -272,7 +270,7 @@ def _is_atomic_term(x) -> bool:
         return False                   # a non-empty string is the '.'/2 compound
     # Reject compound shapes explicitly so we don't accidentally accept
     # them via the "anything else" fallthrough.
-    if isinstance(x, (Compound, KWTerm, list, bytes,
+    if isinstance(x, (KWTerm, list, bytes,
                       SegList, SegString, SegBytes)):
         return False
     if is_term_instance(x):
@@ -311,7 +309,7 @@ def _atomic__1(x, trail, k):
 # arbitrary Python strs: a str had to be a valid identifier naming a
 # registered predicate.  THE FLIP (2026-09-06-atoms-as-cells-strings §6.3)
 # retires that check entirely — a ``str`` is a STRING, and no string is
-# callable, whatever it spells.  Compound, KWTerm, term-instance, cell and
+# callable, whatever it spells.  KWTerm, term-instance, cell and
 # zero-arity PredicateMeta classes continue to succeed unchanged.
 @_db_builtin("callable_", 1, fields=("x",))
 def _callable__1_factory(db):
@@ -334,7 +332,7 @@ def _callable__1_factory(db):
         if _is_atom_term(x_val):           # STAGE 2: an atom (a str) is callable -- ISO 3.24
             yield None
             return
-        if isinstance(x_val, (Compound, KWTerm)):
+        if isinstance(x_val, KWTerm):
             yield None
             return
         if is_term_instance(x_val):
@@ -342,17 +340,16 @@ def _callable__1_factory(db):
             return
         if _is_compound(x_val):
             # P3-2 Task 2 (THE FLIP): a CELL is a compound term, so it is
-            # callable for exactly the reason a Compound is.  This was the
+            # callable.  This was the
             # second type check in this file found blind to cells (after
             # ``compound/1``), and the review probe that missed it did so
             # because it called the predicate ``callable`` — the ISO name —
             # while it is REGISTERED as ``callable_``, so both halves of the
             # comparison raised the same KeyError and compared equal.
             #
-            # No arity gate here, deliberately: the ``Compound``/``KWTerm``
-            # branch above yields for a 0-arity Compound too, and this branch
-            # mirrors the branch it is the cell twin OF, not ``compound/1``'s
-            # (which does gate, because its Compound branch does).
+            # No arity gate here, deliberately: the ``KWTerm`` branch above
+            # yields for a 0-arity KWTerm too, and this branch mirrors it,
+            # not ``compound/1``'s (which does gate).
             #
             # ``_is_compound`` is the funnel's shared definition, so a
             # ``(tuple, ...)`` tuple-DATA cell is NOT compound and does not
@@ -493,7 +490,7 @@ def _check_type(type_name: str, term) -> bool:
             _is_empty_list(walked)
             or _is_non_empty_list(walked)
             or _is_atom_term(walked)       # STAGE 2: the same atom arm callable_/1 has (review round 1)
-            or isinstance(term, (Compound, KWTerm))
+            or isinstance(term, KWTerm)
             or is_term_instance(term)
             or (isinstance(term, type) and hasattr(term, '_get_dispatch'))
             or hasattr(term, '_get_dispatch')
@@ -513,8 +510,6 @@ def _check_type(type_name: str, term) -> bool:
         # compound only above arity 0, matching the compound/1 builtin's
         # own cell branch (P3-2 Task 2, THE FLIP).
         if _is_compound(term) and (_arity(term) or 0) > 0:
-            return True
-        if isinstance(term, Compound) and len(term.args) > 0:
             return True
         if isinstance(term, KWTerm) and len(term) > 0:
             return True

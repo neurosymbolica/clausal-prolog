@@ -597,7 +597,6 @@ def _diagnose_into(diag, mod, description, path, error, budget) -> None:
                 named = _collect_named(
                     prefix, reified and reified[:failing - 1])
                 _report_bindings(diag, prefix, named, failing, path)
-                _note_generic_compound_confusion(diag, mod.__dict__, named)
                 _report_nearest(diag, goal, reified_goal, logic_module, deadline, path)
                 _report_wrong_value(
                     diag, goal, prefix, logic_module, deadline, path)
@@ -827,105 +826,6 @@ def _report_bindings(diag, prefix, named, failing, path=None) -> None:
     if not diag.bindings:
         span = "goal 1" if failing == 2 else f"goals 1..{failing - 1}"
         diag.bindings_note = f"(none from {span})"
-
-
-def _generic_compounds_in(value, depth: int = 0):
-    """Yield every generic ``Compound`` inside *value* (bounded depth)."""
-    from clausal.logic.variables import deref, is_var
-    from clausal.terms import Compound
-
-    if depth > 6:
-        return
-    value = deref(value)
-    if is_var(value):
-        return
-    if isinstance(value, Compound):
-        yield value
-        for arg in value.args:
-            yield from _generic_compounds_in(arg, depth + 1)
-    elif isinstance(value, (list, tuple)):
-        for element in value:
-            yield from _generic_compounds_in(element, depth + 1)
-
-
-def _note_generic_compound_confusion(diag, namespace, named) -> None:
-    """Say out loud when a binding holds a generic ``Compound`` shadowing a
-    declared term class of the same name/arity.
-
-    ``T2 = cite(_)`` failing on the goal ``T2 is cite(_)`` reads as a
-    contradiction: the two render identically, and the only thing that
-    matters — one side is a ``clausal.terms.Compound``, the other a declared
-    ``PredicateMeta`` instance, and they never unify — is invisible.  Option 1
-    of todo/done/a-generic-compound-renders-identically-to-a-declared-term.md:
-    draw the distinction only here, in failure diagnostics, where the reader
-    pays for it exactly when confused."""
-    from clausal.logic.variables import deref
-
-    if not named:
-        return
-    # P1 (spec 2026-09-17 §2.2): "is a PREDICATE declared here at this arity"
-    # is a Database row, reached through the module's own ``$module`` handle —
-    # never a predicate's ``_row.db``, a different Database for an imported
-    # name.
-    db = getattr(namespace.get("$module"), "db", None)
-    from clausal.logic.predicate import field_names_for
-    seen: set[str] = set()
-    for name, var in named:
-        for compound in _generic_compounds_in(deref(var)):
-            functor = compound.functor
-            if not isinstance(functor, str):
-                continue
-            arity = len(compound.args)
-            declared = namespace.get(functor)
-            # A row is keyed ``(functor, arity)``, so the key IS the
-            # field-count check the class read had to make for itself.
-            #
-            # THE CLASS LEG, kept as a FALLBACK (roborev L4, 2026-09-17).  A
-            # predicate DECLARED here with fields and given no clauses has no
-            # row at all -- the measured limit of the row/isinstance
-            # equivalence, pinned by ``tests/predmeta_p1/
-            # test_membership_equivalence.py``.  Its declared term is exactly
-            # the thing a generic ``Compound`` of the same name/arity shadows,
-            # so dropping the class read silenced this note for the shape it
-            # was written for.  Arity-checked here, because the class read has
-            # no key to do it for it.
-            # IMPORTANT 2 (final fix wave, 2026-09-23): arity and db are
-            # already in hand here (arity computed just above, db at the
-            # top of this function) -- pass them so arm 3 can use the
-            # exact-arity read instead of falling through the no-arity,
-            # no-db, no-namespace call that answers None unconditionally
-            # for a NAME.
-            declared_fields = field_names_for(declared, arity=arity, db=db)
-            declared_here = (
-                (db is not None and db.row(functor, arity) is not None)
-                or (declared_fields is not None and len(declared_fields) == arity)
-            )
-            if not declared_here:
-                # THE FLIP (spec §5.1): a declared DATA functor binds the
-                # arity-0 ATOM of its spelling, not a class, and the term
-                # this module constructs for it is the cell ``("cite", _)``.
-                # The confusion this note exists for is unchanged -- a
-                # generic ``Compound("cite", (_,))`` still renders
-                # identically and still never unifies -- so the declaredness
-                # test reads the signature registry when the binding is that
-                # atom.
-                from clausal.logic.atoms import mint as _mint
-                from clausal.logic.compiler.terms_to_ast import functor_signature_for
-                fields = functor_signature_for(functor, namespace)   # P2: the Database first
-                if not (declared == _mint(functor) and fields is not None
-                        and len(fields) == arity):
-                    continue
-            key = f"{functor}/{arity}"
-            if key in seen:
-                continue
-            seen.add(key)
-            diag.notes.append(
-                f"`{name}` holds a GENERIC compound {key}, not the declared "
-                f"{key} term this module constructs — the two render "
-                f"identically and never unify. A generic compound comes from "
-                f"a Compound handed in from Python, or a term built against "
-                f"another module's classes (functor/3 and =.. build cells)."
-            )
 
 
 def _pair_vars(runtime, reified, out) -> bool:
@@ -1675,7 +1575,7 @@ def _reify_value(value, depth: int = 0, path=None):
     )
     from clausal.logic.variables import deref, is_var
     from clausal.reflection import Atom, Goal, Variable, is_v, vfield
-    from clausal.terms import Compound, KWTerm
+    from clausal.terms import KWTerm
 
     if depth > DIAG_MAX_DEPTH:
         raise _Unrenderable("term too deep to render")
@@ -1695,8 +1595,7 @@ def _reify_value(value, depth: int = 0, path=None):
     if type(value) is tuple and value and type(value[0]) is str and value[0] != TUPLE_TAG:
         # A CELL -- ``("cite", art52)``.  P3-2 Task 2 (THE FLIP): this is how
         # a compound term is represented, so it reifies as a ``Goal`` and
-        # prints as ``cite(art52)``, exactly as the ``Compound`` branch below
-        # does for the generic shape.  Rendering it as a bare Python tuple
+        # prints as ``cite(art52)``.  Rendering it as a bare Python tuple
         # would show the reader a representation detail instead of the term
         # they wrote.  (A tuple whose slot 0 is not a str -- ordinary tuple
         # data, or the ``(tuple, ...)`` data tag -- keeps the tuple form.)
@@ -1708,11 +1607,6 @@ def _reify_value(value, depth: int = 0, path=None):
         return tuple(_reify_value(v, depth + 1, path) for v in value)
     if field_names_for(value) is not None:
         return Atom(name=value.__name__)
-    if isinstance(value, Compound):
-        return Goal(name=str(value.functor),
-                    args=[_reify_value(a, depth + 1, path)
-                          for a in value.args],
-                    kwargs=[])
     if isinstance(value, KWTerm):
         return Goal(name=str(value.functor), args=[],
                     kwargs=[[k, _reify_value(v, depth + 1, path)]

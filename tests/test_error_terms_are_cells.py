@@ -31,7 +31,7 @@ from clausal.logic.exceptions import (
 )
 from clausal.logic.solve import _deref_walk, solve
 from clausal.logic.variables import Var, deref
-from clausal.terms import Compound, FloorDiv
+from clausal.terms import FloorDiv
 
 
 def _is_unbound(x) -> bool:
@@ -39,7 +39,9 @@ def _is_unbound(x) -> bool:
 
 
 def _no_compound(t) -> bool:
-    if isinstance(t, Compound):
+    """No class-shaped compound (a ``functor``/``args`` object, the retired
+    ``Compound``'s shape) anywhere in *t*: every compound is a cell."""
+    if hasattr(t, "functor") and hasattr(t, "args"):
         return False
     if type(t) in (tuple, list):
         return all(_no_compound(a) for a in t)
@@ -149,10 +151,9 @@ def test_context_text_splits_into_indicator_and_prose(text, second, prose):
     assert LogicException(term).message == prose
 
 
-@pytest.mark.compound_retirement_slice8
 def test_an_indicator_given_as_the_context_is_the_second_argument():
-    for pi in (("/", "foo", 1), Compound("/", ("foo", 1))):
-        assert cell_args(instantiation_error(pi))[1] is pi
+    pi = ("/", "foo", 1)
+    assert cell_args(instantiation_error(pi))[1] is pi
 
 
 def test_a_missing_procedure_names_itself_as_scryer_does():
@@ -217,14 +218,10 @@ def test_message_names_shared_variables_and_blanks_singletons():
     assert _msg(("f", x, y, x)) == "Uncaught logic exception: f(_1,_,_1)"
 
 
-@pytest.mark.compound_retirement_slice8
-def test_hint_reads_a_cell_and_a_compound_alike():
+def test_hint_reads_a_cell():
     culprit = FloorDiv(left=10000, right=4)
     cell = type_error("number", culprit, "sum_list/2")
-    legacy = Compound("error", (Compound("type_error", ("number", culprit)),
-                                "sum_list/2"))
-    for term in (cell, legacy):
-        assert "note: `10000 // 4` is an unevaluated" in str(LogicException(term))
+    assert "note: `10000 // 4` is an unevaluated" in str(LogicException(cell))
 
 
 # ── real raises, from source ─────────────────────────────────────────────────

@@ -389,14 +389,10 @@ tw(W) <- (
 
 
 class TestModeMatrixGuards:
-    @pytest.mark.compound_retirement_slice8
     def test_solve_call_once_query_matrix(self, load, clear_query_cache):
         m = load("mode", PA_SRC)
         Y = Var()
         assert answers(solve(("pa", 1, Y), m), Y) == [(2,)]
-        from clausal.terms import Compound
-        Y2 = Var()
-        assert answers(solve(Compound("pa", (1, Y2)), m), Y2) == [(2,)]
         assert sum(1 for _ in solve(True, m)) == 1
         assert sum(1 for _ in solve(False, m)) == 0
         assert once(("pa", 1, Var()), m) is not None
@@ -547,31 +543,18 @@ class TestF008DerefWalkTemplateFreeze:
         t.reset()
         assert snap == chars("hi!")  # F018 promotion preserved through _deref_walk
 
-    @pytest.mark.compound_retirement_slice8
-    def test_compound_position_preserved(self):
-        from clausal.terms import Compound
-        _deref_walk, t, X = self._bound()
-        snap = _deref_walk(Compound("f", (X,), _position=(1, 2, 3, 4)))
-        t.reset()
-        assert deref(snap.args[0]) == 1
-        assert snap._position == (1, 2, 3, 4)  # was dropped by the Compound arm
-
-    @pytest.mark.compound_retirement_slice8
-    def test_predicate_cell_nested_in_compound_frozen(self):
-        from clausal.terms import Compound
+    def test_predicate_cell_nested_in_a_cell_frozen(self):
         from tests.predicate_api_support import term_ctor
         _deref_walk, t, X = self._bound()
         # W4a (2026-09-22): a predicate class builds the CELL and the
         # instance path is retired, so F008's freeze claim is asked of the
-        # cell -- nested inside a Compound, which is the shape that made the
-        # original arm reachable.
-        # (the class itself was deleted at W4b-3 slice 7; its cell remains)
+        # cell -- nested inside another cell.
         pt = term_ctor("audit_f008", ("a", "b"))
         cell = pt(X, 2)
         assert type(cell) is tuple, "a predicate term is a cell"
-        snap = _deref_walk(Compound("f", (cell,)))
+        snap = _deref_walk(("f", cell))
         t.reset()
-        assert deref(snap.args[0][1]) == 1 and snap.args[0][2] == 2
+        assert deref(snap[1][1]) == 1 and snap[1][2] == 2
 
 
 class TestCToolkitGuards:

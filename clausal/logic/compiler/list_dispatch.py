@@ -31,7 +31,6 @@ from typing import Any
 
 from clausal.logic.variables import is_var, deref  # noqa: F401
 from clausal.terms import (
-    Compound, compound_with_args,
     Call, LoadName, LoadAttr,  # noqa: F401
     PyThunk, Unify,
     DictTerm, SetTerm, KWTerm,
@@ -59,22 +58,20 @@ def _get_head_arg(clause: Clause, pos: int) -> Any:
     """Return the argument at position *pos* from the clause head (or None).
 
     Three head shapes, and the CELL is one of them (P2 head flip, 2026-09-19).
-    It was not, for two releases: a stored head was a predicate instance or a
-    ``Compound``, ``database._stored_head_key`` refused a cell-headed
+    It was not, for two releases: a stored head was a predicate instance,
+    ``database._stored_head_key`` refused a cell-headed
     ``Clause`` outright, and this function's missing cell branch was the
     reason it named — a cell head compiled to a predicate that answered with
     its argument UNBOUND.  Both are gone now: a head IS the functor-first cell
     and this reads it positionally, like the other two.
     """
     head = clause.head
-    if isinstance(head, Compound):
-        return head.args[pos] if pos < len(head.args) else None
     if _cell_shape(head)[0]:                        # P2: a head is a cell
         args = cell_args(head)
         return args[pos] if pos < len(args) else None
     # W4a: no third head shape.  The predicate-INSTANCE arm that stood here
     # went with the instance path, and it never served the OTHER shape
-    # `is_term_instance` admits -- a non-Compound @dataclass head -- because
+    # `is_term_instance` admits -- a @dataclass head -- because
     # the rebuild it fed called `_clausal_head`, which a dataclass has not
     # got.  So an unsupported head is "not liftable", which is what the
     # callers already handle.
@@ -101,10 +98,7 @@ def _carries_an_uninjected_head_literal(term: Any) -> bool:
     pattern would guard against the thunk OBJECT and the clause could never
     fire.  This is that skip, applied one level down.
 
-    Deliberately scoped to the ``Call`` branch that Task 3 opened.  The same
-    hazard exists in principle for a lifted ``Compound`` carrying a nested
-    ``date``, but that lift predates this task and changing it would change
-    answers outside Task 3's remit; it is recorded in the report instead.
+    Deliberately scoped to the ``Call`` branch that Task 3 opened.
 
     A CELL nested inside the reference is recursed INTO rather than treated
     as a leaf: the live-cell branch of ``head_to_match_pattern`` matches it
@@ -120,8 +114,6 @@ def _carries_an_uninjected_head_literal(term: Any) -> bool:
             or any(_carries_an_uninjected_head_literal(kw.value)
                    for kw in (term.kwargs or []))
         )
-    if isinstance(term, Compound):
-        return any(_carries_an_uninjected_head_literal(a) for a in term.args)
     if isinstance(term, list):
         return any(_carries_an_uninjected_head_literal(e) for e in term)
     if _cell_shape(term)[0]:
@@ -165,17 +157,13 @@ def _lift_clause_at_pos(clause: Clause, pos: int,
     """
     head = clause.head
     # Extract the head arg at pos
-    if isinstance(head, Compound):
-        if pos >= len(head.args):
-            return clause
-        head_arg = deref(head.args[pos])
-    elif _cell_shape(head)[0]:                      # P2: a head is a cell
+    if _cell_shape(head)[0]:                      # P2: a head is a cell
         cargs = cell_args(head)
         if pos >= len(cargs):
             return clause
         head_arg = deref(cargs[pos])
     else:
-        return clause          # W4a: see _head_arg_at -- Compound or cell
+        return clause          # W4a: see _head_arg_at -- a cell
 
     # Only lift when the head arg is an unbound Var
     if not is_var(head_arg):
@@ -354,23 +342,17 @@ def _lift_clause_at_pos(clause: Clause, pos: int,
             return clause
 
     # Rebuild head with lift_term at pos
-    if isinstance(head, Compound):
-        # A Compound head handed in from Python (read until Compound
-        # retirement slice 8): the rebuilt head is its CELL.
-        new_args = list(head.args)
-        new_args[pos] = lift_term
-        new_head = compound_with_args(head, tuple(new_args))
-    elif _cell_shape(head)[0]:                      # P2: a head is a cell
+    if _cell_shape(head)[0]:                      # P2: a head is a cell
         new_args = list(cell_args(head))
         new_args[pos] = lift_term
         new_head = make_cell(cell_functor(head), *new_args)
     else:
         # Unreachable: the gate above returned `clause` for every head that is
-        # neither a Compound nor a cell.  Loud rather than silent if the two
+        # not a cell.  Loud rather than silent if the two
         # ever drift apart again -- which is the defect this shape had before
         # W4a, when the gate admitted a shape the rebuild could not build.
         raise TypeError(
-            f"head is neither a Compound nor a cell: {head!r}")
+            f"head is not a cell: {head!r}")
 
     # Remove the matched Unify from the body
     new_body = clause.body[:unify_idx] + clause.body[unify_idx + 1:]
@@ -380,13 +362,13 @@ def _lift_clause_at_pos(clause: Clause, pos: int,
 def _nested_term_carries_a_literal(term):
     """True if a compiled head_to_match_pattern for term (a value already
     known to be BELOW some indexed root's functor/tag slot -- an element
-    of a cell, a Compound's arg, a Call's arg, a dict/set/instance
+    of a cell, a Call's arg, a dict/set/instance
     field, ...) would itself compile to a non-wildcard (literal-valued)
     sub-pattern.
 
     Recursive helper for :func:`_lifted_head_arg_needs_deep_gate` -- see
     that function's docstring for the design rationale.  A bare Var (or
-    StarUnpack) is a pure capture: False.  A nested cell/Compound/Call
+    StarUnpack) is a pure capture: False.  A nested cell/Call
     recurses the SAME way (its own functor/tag slot excluded); a bare
     name reference (LoadName/LoadAttr, e.g. a nested imported atom
     argument) or any other scalar/opaque leaf resolves to a MatchValue
@@ -408,8 +390,6 @@ def _nested_term_carries_a_literal(term):
         )
     if isinstance(term, (LoadName, LoadAttr)):
         return True
-    if isinstance(term, Compound):
-        return any(_nested_term_carries_a_literal(a) for a in term.args)
     if isinstance(term, list):
         return any(_nested_term_carries_a_literal(e) for e in term)
     if isinstance(term, DictTerm):
@@ -446,7 +426,7 @@ def _lifted_head_arg_needs_deep_gate(term):
     _runtime_arg_key's bounded walk (round 1) only has to run for the
     predicate/position pairs that actually carry it.
 
-    Only a CELL, a compound reference (Call(LoadName)/Compound), or a
+    Only a CELL, a compound reference (Call(LoadName)), or a
     resolved term instance can EVER reach ``_runtime_arg_key``'s
     deep-groundness-gated branch at all -- a bare scalar, atom
     (LoadName/LoadAttr with no surrounding Call), or unlifted Var keys
@@ -473,8 +453,6 @@ def _lifted_head_arg_needs_deep_gate(term):
             or any(_nested_term_carries_a_literal(kw.value)
                    for kw in (term.kwargs or []))
         )
-    if isinstance(term, Compound):
-        return any(_nested_term_carries_a_literal(a) for a in term.args)
     # A bare 0-arity atom reference (LoadName/LoadAttr with no surrounding
     # Call): no sub-slots at all, so no partial-groundness risk -- must be
     # excluded explicitly, BEFORE the is_term_instance catch-all below,
@@ -497,7 +475,7 @@ def _classify_list_key(arg: Any) -> str:
     - ``"nil"``  — argument is the empty list ``[]``
     - ``"cons"`` — argument is a non-empty Python list (may contain Vars)
     - ``"var"``  — argument is an unbound Var (wildcard, matches anything)
-    - ``"other"``— anything else (integer, string, Compound, …)
+    - ``"other"``— anything else (integer, string, …)
     """
     arg = deref(arg)
     if is_var(arg):

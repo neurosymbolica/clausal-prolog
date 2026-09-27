@@ -3,7 +3,7 @@
 Files with the ``.clausal`` extension (or its alias ``.seam``, which carries
 exactly the same syntax) are intercepted by this hook, which:
 
-  1. Injects predicate builtins (all simple_ast names, Var, Compound, unify,
+  1. Injects predicate builtins (all simple_ast names, Var, unify,
      deref, Trail, walk) plus the hidden globals ``$module``,
      ``$define_predicate``, ``$assert_fact``, and ``$ast`` into the module
      namespace.  Names starting with ``$`` are intentionally not valid Python
@@ -59,7 +59,7 @@ from .logic.atoms import (
     mint as _mint_atom,
     spelling as _atom_spelling,
 )
-from .terms import Compound, KWTerm, DictTerm, SetTerm
+from .terms import KWTerm, DictTerm, SetTerm
 from .logic.generated_names import with_dollar_twins
 
 
@@ -341,7 +341,7 @@ runtime_builtins = with_dollar_twins(
 # (they need closures over the per-module LogicModule and module_dict).
 #
 # The runtime *value* bindings injected into every predicate module —
-# ``$ast``, ``PredicateMeta``, ``Var``, ``Compound``, ``DictTerm``, ``SetTerm``,
+# ``$ast``, ``PredicateMeta``, ``Var``, ``DictTerm``, ``SetTerm``,
 # ``Trail``, ``PyThunk``, ``FStringThunk``, ``Quantity``, ``Undefined``,
 # ``BoolEq``/``BoolImpl``, and the ``$``-prefixed engine helpers
 # ``$walk``/``$deref``/``$unify`` — live in a SINGLE source of truth,
@@ -1072,7 +1072,7 @@ sys.meta_path[:] = [PredicateFinder(), PrologFinder(), ModulesFinder(), *sys.met
 # copies ``runtime_builtins`` directly rather than recomputing the same
 # simple_ast.__all__ + INJECTED_RUNTIME_BUILTINS merge a second time.
 # Inject the runtime types so that functor class code (which calls Var()) and
-# compiled goals work in IPython cells: $ast, PredicateMeta, Var/Compound/
+# compiled goals work in IPython cells: $ast, PredicateMeta, Var/
 # DictTerm/SetTerm, Trail, PyThunk/FStringThunk, Quantity, Undefined,
 # BoolEq/BoolImpl, and the $-prefixed engine helpers ($walk/$deref/$unify).
 _simple_ast_builtins = dict(runtime_builtins)

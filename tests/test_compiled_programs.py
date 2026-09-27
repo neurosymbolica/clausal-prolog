@@ -13,12 +13,12 @@ must be a Var, and the clause body must unify that Var with the intended value
 via an Is goal.
 
     WRONG (literal in output position):
-        Clause(head=Compound("fib", (0, 0)), body=[])
+        Clause(head=("fib", 0, 0), body=[])
         # fib(n=0, result_var) → match [0, 0] fails; result_var is a Var not 0.
 
     RIGHT (Var in output position + Is in body):
         rv = Var()
-        Clause(head=Compound("fib", (0, rv)), body=[Is(left=rv, right=0)])
+        Clause(head=("fib", 0, rv), body=[Is(left=rv, right=0)])
         # fib(n=0, result_var) → match [0, _v] succeeds; body unifies _v (=result_var) with 0.
 
 Programs covered

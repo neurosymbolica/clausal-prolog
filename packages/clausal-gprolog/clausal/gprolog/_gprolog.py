@@ -133,7 +133,7 @@ class GnuProlog:
         """Run a Prolog query. Returns an iterator over solution dicts.
 
         Each solution is a dict mapping variable names (str) to Python
-        values (int, float, str, list, Compound).
+        values (int, float, str, list, cell).
 
         Iteration is lazy — each call to next() resumes Prolog
         backtracking for one more solution.  Breaking out of the loop

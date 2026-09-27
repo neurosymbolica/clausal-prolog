@@ -146,9 +146,8 @@ def test_wrong_arity_with_nothing_else_answering_still_refuses(
     assert cell_args(cell_args(formal)[1]) == ("pred", 2)
 
 
-# Stays a Compound (slice 5 finding): assertz/asserta of a CELL whose
-# predicate is not known yet raises existence_error; a Compound creates it.
-@pytest.mark.compound_retirement_slice8
+# R12 (2026-09-27, declare first): assertz adds clauses only to a predicate
+# declared -dynamic, so the new arity is declared before the write.
 @pytest.mark.parametrize("era", ["handle"])  # W4b-2d: the class era is gone
 def test_wrong_arity_reaches_the_modules_own_row_at_the_call_arity(
         tmp_path, monkeypatch, era):
@@ -166,7 +165,6 @@ def test_wrong_arity_reaches_the_modules_own_row_at_the_call_arity(
     fallback has to rescue."""
     from clausal.logic.solve import _drive_trampoline, call as _call
     from clausal.logic.variables import Trail
-    from clausal.terms import Compound
     name = f"f7_ownrow_{era}"
     mod = _load(tmp_path, monkeypatch, name, """
         -module(NAME, [])
@@ -174,7 +172,8 @@ def test_wrong_arity_reaches_the_modules_own_row_at_the_call_arity(
     """.replace("NAME", name))
     M = mod.__dict__["$module"]
     assert M.db.row("ping", 2) is None
-    assert len(list(_call("assertz", Compound("ping", (1, 2)), module=M))) == 1
+    M.db.mark_dynamic("ping", 2)
+    assert len(list(_call("assertz", ("ping", 1, 2), module=M))) == 1
     assert len(M.db.row("ping", 2).clauses) == 1
     target = M.module_dict["ping"]
     assert target == mangle(name, "ping")
@@ -309,9 +308,8 @@ def test_a_meta_call_through_an_unqualified_name_resolves_under_that_name(
     assert got == [[1, 2, 3]]
 
 
-# Stays a Compound (slice 5 finding): assertz/asserta of a CELL whose
-# predicate is not known yet raises existence_error; a Compound creates it.
-@pytest.mark.compound_retirement_slice8
+# R12 (2026-09-27, declare first): assertz adds clauses only to a predicate
+# declared -dynamic, so the new arity is declared before the write.
 @pytest.mark.parametrize("era", ["handle"])  # W4b-2d: the class era is gone
 def test_an_owner_arity_added_after_the_import_is_not_imported(
         tmp_path, monkeypatch, era):
@@ -324,7 +322,6 @@ def test_an_owner_arity_added_after_the_import_is_not_imported(
     row."""
     from clausal.logic.solve import _drive_trampoline, call as _call
     from clausal.logic.variables import Trail, Var, deref
-    from clausal.terms import Compound
     ow = _load(tmp_path, monkeypatch, f"f7_late_ow_{era}", """
         -module(f7_late_ow_ERA, [numlist(A)])
         numlist(1),
@@ -338,7 +335,8 @@ def test_an_owner_arity_added_after_the_import_is_not_imported(
     """.replace("ERA", era))
     I = imp.__dict__["$module"]
     _assert_import_bound_owner_handle(I, "nl", f"f7_late_ow_{era}", "numlist")
-    assert len(list(_call("assertz", Compound("numlist", (3, "own")),
+    O.db.mark_dynamic("numlist", 2)
+    assert len(list(_call("assertz", ("numlist", 3, "own"),
                           module=O))) == 1
     assert O.db.row("numlist", 2) is not None
     for goal in ("use", "m"):
@@ -353,9 +351,8 @@ def test_an_owner_arity_added_after_the_import_is_not_imported(
     assert got == ["own"]
 
 
-# Stays a Compound (slice 5 finding): assertz/asserta of a CELL whose
-# predicate is not known yet raises existence_error; a Compound creates it.
-@pytest.mark.compound_retirement_slice8
+# R12 (2026-09-27, declare first): assertz adds clauses only to a predicate
+# declared -dynamic, so the new arity is declared before the write.
 @pytest.mark.parametrize("era", ["handle"])  # W4b-2d: the class era is gone
 def test_an_imported_stale_class_does_not_answer_from_its_owner(
         tmp_path, monkeypatch, era):
@@ -373,7 +370,6 @@ def test_an_imported_stale_class_does_not_answer_from_its_owner(
     ``ping/2``, the importer (which imported ``ping/0`` only) still refuses
     ``ping(1, 2)`` and does not answer from the owner's row."""
     from clausal.logic.solve import call as _call
-    from clausal.terms import Compound
     ow = _load(tmp_path, monkeypatch, f"f7_st_ow_{era}", """
         -module(f7_st_ow_ERA, [ping])
         ping <- (1 > 0)
@@ -385,7 +381,8 @@ def test_an_imported_stale_class_does_not_answer_from_its_owner(
     """.replace("ERA", era))
     I = imp.__dict__["$module"]
     _assert_import_bound_owner_handle(I, "ping", f"f7_st_ow_{era}", "ping")
-    assert len(list(_call("assertz", Compound("ping", (1, 2)), module=O))) == 1
+    O.db.mark_dynamic("ping", 2)
+    assert len(list(_call("assertz", ("ping", 1, 2), module=O))) == 1
     assert O.module_dict["ping"] == mangle(f"f7_st_ow_{era}", "ping")
     assert len(O.db.row("ping", 2).clauses) == 1   # the owner's row IS there
     with pytest.raises(PredicateArityMismatchError, match="ping"):
@@ -637,9 +634,8 @@ def test_an_aliased_partial_application_at_the_imported_arity_runs(
     assert [deref(out) for _ in _call("c", out, module=I)] == [4]
 
 
-# Stays a Compound (slice 5 finding): assertz/asserta of a CELL whose
-# predicate is not known yet raises existence_error; a Compound creates it.
-@pytest.mark.compound_retirement_slice8
+# R12 (2026-09-27, declare first): assertz adds clauses only to a predicate
+# declared -dynamic, so the new arity is declared before the write.
 @pytest.mark.parametrize("era", ["handle"])  # W4b-2d: the class era is gone
 def test_an_owner_arity_added_later_is_not_reachable_through_a_cell_goal(
         tmp_path, monkeypatch, era):
@@ -655,7 +651,6 @@ def test_an_owner_arity_added_later_is_not_reachable_through_a_cell_goal(
     else answers) -- still never the owner's pk/2."""
     from clausal.logic.solve import call as _call
     from clausal.logic.variables import Var
-    from clausal.terms import Compound
     ow = _load(tmp_path, monkeypatch, f"f7_pk_ow_{era}", """
         -module(f7_pk_ow_ERA, [pk(A)])
         pk(1),
@@ -669,7 +664,8 @@ def test_an_owner_arity_added_later_is_not_reachable_through_a_cell_goal(
     """.replace("ERA", era))
     I = imp.__dict__["$module"]
     _assert_import_bound_owner_handle(I, "pk", f"f7_pk_ow_{era}", "pk")
-    assert len(list(_call("assertz", Compound("pk", (3, "own")), module=O))) == 1
+    O.db.mark_dynamic("pk", 2)
+    assert len(list(_call("assertz", ("pk", 3, "own"), module=O))) == 1
     assert O.db.row("pk", 2) is not None
     with pytest.raises(PredicateArityMismatchError, match="pk takes 1"):
         list(_call("c", Var(), module=I))

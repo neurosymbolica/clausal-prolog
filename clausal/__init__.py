@@ -15,7 +15,7 @@ for _sp in _site.getsitepackages():
 from clausal.logic.solve import call, solve, query, once, _deref_walk
 from clausal.logic.database import Module, Database, Clause
 from clausal.logic.variables import Var, Trail, deref, unify, UnboundVarCoercionError
-from clausal.terms import Compound, KWTerm, Quantity, UnitsMismatch
+from clausal.terms import KWTerm, Quantity, UnitsMismatch
 from clausal.logic.builtins import (
     structural_unify,
     get_builtin_class,
@@ -78,7 +78,6 @@ __all__ = [
     "Clause",
     "Var",
     "Trail",
-    "Compound",
     "KWTerm",
     "Quantity",
     "UnitsMismatch",
@@ -89,8 +88,8 @@ __all__ = [
     "make_predicate",
     "MakePredicateRetiredError",
     "LogicException",
-    # Reading and building a term from Python (ruling R10 of the Compound
-    # retirement, 2026-09-27): an error term is the cell
+    # Reading and building a term from Python (a compound term is the cell
+    # ``(functor, *args)``, 2026-09-27): an error term is the cell
     # ``('error', Formal, Context)``, read with these.
     "cell_functor",
     "cell_args",

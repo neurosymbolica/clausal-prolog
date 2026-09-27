@@ -4,8 +4,7 @@ Ruling R2 of the Compound retirement (2026-09-27): the message is
 ``Uncaught logic exception: <term>`` where ``<term>`` is what Scryer's toplevel
 prints for an uncaught error -- ``writeq`` text with operator syntax, no space
 after a comma, ``"..."`` for a string, a distinct ``_N`` per variable -- not the
-Python ``repr`` of the object.  So the message reads the same whether the term
-is a ``Compound`` or the cell it is becoming.
+Python ``repr`` of the object.
 
 Two halves, per ``tests/iso/conftest.py``: the ENGINE table runs anywhere; the
 ORACLE test feeds the same rows to Scryer and checks that the expected column
@@ -27,7 +26,7 @@ from clausal.logic.exceptions import (
 )
 from clausal.logic.variables import Var
 from clausal.terms import (
-    Add, Compound, ConcreteSeg, FloorDiv, SegList, VarSeg, term_writeq,
+    Add, ConcreteSeg, FloorDiv, SegList, VarSeg, term_writeq,
 )
 
 from .conftest import SCRYER
@@ -136,12 +135,11 @@ def _msg(term) -> str:
     return str(LogicException(term)).split("\n", 1)[0]
 
 
-@pytest.mark.compound_retirement_slice8
 def test_message_is_the_scryer_text_not_the_repr():
-    msg = _msg(type_error("evaluable", Compound("/", (mint("+"), 2)), "is/2"))
+    msg = _msg(type_error("evaluable", ("/", mint("+"), 2), "is/2"))
     # Exactly what Scryer prints for ``X is 1 + a`` (probed 2026-09-27).
     assert msg == "Uncaught logic exception: error(type_error(evaluable,(+)/2),(is)/2)"
-    assert "Compound(" not in msg
+    assert "('" not in msg       # not the Python tuple repr
 
 
 BUILDERS = [
@@ -152,25 +150,6 @@ BUILDERS = [
     lambda: evaluation_error("zero_divisor", "(/)/2"),
     lambda: permission_error("modify", "static_procedure", ("/", "p", 1)),
 ]
-
-
-def _as_compound(t):
-    """The ``Compound`` spelling of a cell-built term, recursively -- what a
-    Python caller that still builds ``Compound``s would raise."""
-    if type(t) is tuple and t and type(t[0]) is str:
-        return Compound(t[0], tuple(_as_compound(a) for a in t[1:]))
-    return t
-
-
-@pytest.mark.compound_retirement_slice8
-@pytest.mark.parametrize("build", BUILDERS)
-def test_compound_and_cell_spellings_give_the_same_message(build):
-    cell = build()
-    assert type(cell) is tuple      # slice 2: the builders build cells
-    term = _as_compound(cell)
-    assert isinstance(term, Compound)
-    assert _msg(term) == _msg(cell)
-    assert _msg(term).startswith("Uncaught logic exception: error(")
 
 
 def test_operator_node_culprit_uses_its_iso_functor():

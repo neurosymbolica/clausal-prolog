@@ -160,14 +160,14 @@ def _convert(goal: Any, db: Any) -> GoalOp:
     position from the originating term.
 
     Slice G threads :attr:`pythonic_ast.nodes.Node.position` (and the
-    matching attribute now carried by ``terms.Compound`` /
+    matching attribute carried by
     ``DictTerm`` / etc.) onto the produced op.  When the goal is a
     Python literal that carries no position (e.g. bare ``True`` /
     ``False``), the op's ``position`` stays ``None`` — call sites that
     care must scope the surrounding term's position.
     """
     op = _convert_inner(goal, db)
-    # Terms (Compound/KWTerm/DictTerm/SetTerm/PyThunk) carry ``_position``
+    # Terms (KWTerm/DictTerm/SetTerm/PyThunk) carry ``_position``
     # (underscore-prefixed — reserved, unreachable as a Clausal field name).
     # pythonic_ast Nodes still use ``position``; check both so this helper
     # works for either flavour of source node.

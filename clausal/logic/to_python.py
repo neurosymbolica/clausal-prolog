@@ -40,7 +40,7 @@ from clausal.logic.cells import chars, is_chars, chars_text, TUPLE_TAG  # stage 
 from clausal.logic.python_terms import FROM_TERM as _FROM_TERM  # the ONE registry (no cycle: python_terms never imports this module)
 from clausal.logic.variables import deref, walk
 from clausal.terms import (
-    Compound, DictTerm, KWTerm, SegBytes, SegList, SegString, SetTerm, compound_as_cell)
+    DictTerm, KWTerm, SegBytes, SegList, SegString, SetTerm)
 from clausal.logic.predicate import is_term_instance, term_field_names
 from clausal.pythonic_ast.nodes import Node as _Node
 
@@ -71,9 +71,6 @@ def to_python(val):
       Tuples are preserved as tuples (not converted to lists) -- library
       code that distinguishes tuple-of-ints from list-of-ints relies on
       this, e.g. ``a.at[(1, 2)]`` vs ``a.at[[1, 2]]`` in JAX;
-    - a ``Compound`` with a cell equivalent (atom functor, arity >= 1;
-      ruling 2026-09-26: it IS that cell) converts as the cell; one without
-      (arity 0, or a Var functor) keeps its shape with converted arguments;
     - a ``KWTerm`` keeps its shape with converted field values -- Python has
       no keyword-term type to become;
     - a ``SetTerm`` becomes a ``frozenset`` of converted elements (a
@@ -159,12 +156,6 @@ def to_python(val):
             return items
     if isinstance(val, list):
         return [to_python(x) for x in val]
-    if isinstance(val, Compound):
-        cell = compound_as_cell(val)
-        if cell is not None:
-            return to_python(cell)
-        return Compound(deref(val.functor), tuple(to_python(a) for a in val.args),
-                        _position=val._position)
     if isinstance(val, KWTerm):
         return KWTerm(val.functor, _position=val._position,
                       **{k: to_python(v) for k, v in val.items()})
@@ -192,13 +183,12 @@ def to_python(val):
 #: ``is_term_instance``.  Seg* are containers too but hold str/VarSeg
 #: segments, not arbitrary terms: map_term leaves them alone, to_python walks
 #: them to their ground form.
-TERM_CONTAINER_TYPES = (tuple, list, dict, DictTerm, Compound, KWTerm, SetTerm, set, frozenset)
+TERM_CONTAINER_TYPES = (tuple, list, dict, DictTerm, KWTerm, SetTerm, set, frozenset)
 
 
 def term_children(val):
     """The direct children of a term container, or ``()`` for a leaf.  A
-    dict-like container yields keys and values; a Compound its functor and
-    args; a NamedTuple its fields."""
+    dict-like container yields keys and values; a NamedTuple its fields."""
     if isinstance(val, (tuple, list)):
         return val
     if isinstance(val, (dict, DictTerm)):
@@ -206,8 +196,6 @@ def term_children(val):
         for k, v in val.items():
             out.append(k); out.append(v)
         return out
-    if isinstance(val, Compound):
-        return (val.functor, *val.args)
     if isinstance(val, KWTerm):
         return list(val.values())
     if isinstance(val, (SetTerm, set, frozenset)):
@@ -269,12 +257,6 @@ def map_term(val, fn):
         dict.clear(new)
         dict.update(new, out)
         return new
-    if isinstance(val, Compound):
-        functor = fn(val.functor)
-        args = tuple(fn(a) for a in val.args)
-        if functor is val.functor and all(a is b for a, b in zip(args, val.args)):
-            return val
-        return Compound(functor, args, _position=val._position)
     if isinstance(val, KWTerm):
         fields = {k: fn(v) for k, v in val.items()}
         if all(fields[k] is v for k, v in val.items()):

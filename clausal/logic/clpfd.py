@@ -1235,20 +1235,18 @@ _NODE_KEYS: dict = {}
 #: same table, pre-resolved for _eval_ground's hot path.
 _NODE_OPS: dict = {}
 _Node = None
-_Compound = None
 
 
 def _ensure_term_imports():
-    global _Add, _Sub, _Mult, _Div, _FloorDiv, _Mod, _Pow, _Negate, _Node, _Compound
+    global _Add, _Sub, _Mult, _Div, _FloorDiv, _Mod, _Pow, _Negate, _Node
     if _Add is None:
-        from clausal.terms import Add, Sub, Mult, Div, FloorDiv, Mod, Pow, Negate, Compound
+        from clausal.terms import Add, Sub, Mult, Div, FloorDiv, Mod, Pow, Negate
         from clausal.pythonic_ast.nodes import Node
         # the table views first: ``_Add`` is the "imports done" flag, so it
         # must not be set while they could still be empty
         _NODE_KEYS.update(_node_keys())
         _NODE_OPS.update({cls: (_EVALUABLE[k], k[1] == 2, k in _ZERO_DIVISOR_KEYS)
                           for cls, k in _NODE_KEYS.items()})
-        _Compound = Compound
         _Add = Add
         _Sub = Sub
         _Mult = Mult
@@ -1900,7 +1898,7 @@ def _resolve(x):
         val = _eval_ground(x)
         if val is not None:
             return val
-    if type(x) is tuple or isinstance(x, _Compound):
+    if type(x) is tuple:
         # an arithmetic CELL (ruling R9 A1) folds EXACTLY as its node does:
         # rewrite it, then resolve the node (``**`` is not folded, above).  A
         # data term that merely uses an arithmetic functor (``-(a, 1)``) is

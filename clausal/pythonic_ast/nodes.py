@@ -195,7 +195,7 @@ class BinOp(Node):
         ``do_unify`` falls back to ``==``, which never binds a variable, so a
         clause that builds e.g. ``DA + DB`` cannot unify against another
         operator term of the same shape.  The non-semantic ``position`` field
-        is ignored (it is ``compare=False``).  Mirrors ``Compound.__unify__``.
+        is ignored (it is ``compare=False``).  
         """
         if not isinstance(other, BinOp):
             return NotImplemented

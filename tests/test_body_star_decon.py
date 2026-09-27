@@ -35,7 +35,6 @@ from clausal.terms import (
     in_, NotIn,
     Add, Sub, Mult, Negate,
     Call, LoadName,
-    Compound,
 )
 from clausal.pythonic_ast.nodes import StarUnpack
 

@@ -17,7 +17,6 @@ from typing import Any, Callable
 from clausal.logic.variables import Var, is_var, deref, unify  # noqa: F401
 from clausal.logic.trampoline import Step, DONE, StepGenerator  # noqa: F401
 from clausal.terms import (
-    Compound,
     Add, Sub, Mult, Div, FloorDiv, Mod, Pow,
     Negate,
     And, Or, Not,

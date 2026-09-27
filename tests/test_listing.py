@@ -16,7 +16,6 @@ from clausal.logic.trampoline import StepGenerator, solutions
 from clausal.logic.database import Clause
 from clausal.logic.exceptions import LogicException
 from clausal import cell_args, cell_functor
-from clausal.terms import Compound
 from tests.predicate_api_support import RowPredicate
 
 
@@ -124,15 +123,20 @@ class TestListing:
         assert cell_functor(formal) == "type_error"
         assert cell_args(formal) == (mint("predicate_indicator"), cell)
 
-    @pytest.mark.compound_retirement_slice8
     def test_a_term_instance_is_named_as_itself_not_its_class(self):
-        """``listing(Compound("foo", (1,)))``: a term INSTANCE is not an
-        indicator either, and the refusal's culprit is the term PASSED --
-        the Python-object arm swapped it for ``type(val)`` before raising,
-        so the error named the ``Compound`` CLASS (roborev Low, 2026-09-25)."""
+        """A term INSTANCE (a dataclass term) is not an indicator either, and
+        the refusal's culprit is the term PASSED -- the Python-object arm
+        swapped it for ``type(val)`` before raising, so the error named the
+        CLASS (roborev Low, 2026-09-25)."""
+        from dataclasses import dataclass
+
+        @dataclass
+        class foo:
+            x: object
+
         db = _db_with_fact("color", 2)
         dispatch = get_builtin_dispatch("listing", 1, db)
-        term = Compound("foo", (1,))
+        term = foo(1)
         with pytest.raises(LogicException) as exc_info:
             _run_listing(dispatch, term)
         formal = _formal(exc_info)
@@ -395,7 +399,6 @@ class TestListingDivIndicatorArgument:
         assert "pt/2" in output
         assert "1 clause(s)" in output
 
-
     def test_div_end_to_end_matches_class_form_byte_identically(self):
         """Compile a real ``.clausal`` module and drive ``listing(fib/2)``
         (the doc's exact form) against it -- output must be byte-identical
@@ -578,39 +581,10 @@ class TestListingBuiltinClassHasDispatch:
         assert _stateless_dispatch("listing", 1) is not None
 
 
-# ── _format_clause_head / Compound heads ─────────────────────────────────────
-#
-# functor_arity() (clausal/logic/builtins/_helpers.py) treats a Compound as a
-# term shape it resolves directly, in preference to falling through to the
-# generic is_term_instance()/type name path.  _format_clause_head must NOT
-# route a Compound head through functor_arity(): a str-functor Compound would
-# then print its functor name instead of "Compound(...)", and a var-functor
-# Compound makes functor_arity() return None, which crashes the 2-tuple
-# unpack.  These pin the pre-funnel behavior: the type name, not the funneled
-# functor, is what a Compound head prints as.
-
-@pytest.mark.compound_retirement_slice8
-class TestFormatClauseHeadCompound:
-    def test_str_functor_compound_prints_type_name(self):
-        head = Compound("foo", (1, 2))
-        result = _format_clause_head(head)
-        # Old shape: "Compound(<functor repr>, <args repr>, <position repr>)"
-        # — the funneled functor ("foo") must NOT stand in for the type name.
-        assert result == 'Compound("foo", (1, 2), None)'
-        assert not result.startswith("foo(")
-
-    def test_var_functor_compound_does_not_crash(self):
-        head = Compound(Var(), (1, 2))
-        result = _format_clause_head(head)
-        assert result.startswith("Compound(")
-        assert "(1, 2)" in result
-
-
 # ── Cell-valued clause arguments (P3-2 Task 7) ────────────────────────────────
 #
 # ``_format_clause_term`` fell to plain ``str(val)`` for any value it did not
-# specially recognize -- correct for a ``Compound`` (which has its own
-# ``__str__``) but wrong for a CELL, a plain tuple with no custom ``__str__``,
+# specially recognize -- wrong for a CELL, a plain tuple with no custom ``__str__``,
 # so ``str()`` on it is the Python tuple repr: an argument like
 # ``("rgb", 255, 0, 0)`` printed ``('rgb', 255, 0, 0)`` in listing/1 output
 # instead of ``rgb(255, 0, 0)``.
@@ -737,11 +711,9 @@ class TestListingFollowsScryersContract:
 
     @pytest.mark.parametrize("make", [
         lambda: ("//", mint("greet"), 0),
-        pytest.param(lambda: Compound("//", (mint("greet"), 0)),
-                     marks=pytest.mark.compound_retirement_slice8),
         lambda: __import__("clausal.terms", fromlist=["FloorDiv"]).FloorDiv(
             left=mint("greet"), right=0),
-    ], ids=["cell", "compound", "floordiv-node"])
+    ], ids=["cell", "floordiv-node"])
     def test_name_dcg_arity_lists_the_arity_plus_two(self, make):
         n, out = _listing_answers(self._dispatch(), make())
         assert n == 1

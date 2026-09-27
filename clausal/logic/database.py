@@ -13,7 +13,7 @@ import dataclasses
 from collections import namedtuple
 from typing import Any, Callable
 
-from clausal.terms import And, Call, Compound, KWTerm, LoadName, PyThunk
+from clausal.terms import And, Call, KWTerm, LoadName, PyThunk
 from clausal.pythonic_ast.nodes import TupleLiteral, StarUnpack
 from clausal.logic.cells import (TUPLE_TAG, compound_cell_shape, is_chars,
                                  cell_args, make_cell)
@@ -1208,8 +1208,8 @@ class Database:
 
         ``_stored_head_key``, symmetrically with ``assertz``/``asserta`` (final
         review M-c): a CELL head read by plain ``head_key`` produced a key,
-        matched no stored clause (stored heads are class terms or
-        ``Compound``s, never cells) and returned a bare ``False`` — "nothing
+        matched no stored clause (stored heads were class terms, never
+        cells) and returned a bare ``False`` — "nothing
         matched", indistinguishable from a genuine miss, for a head this door
         cannot store in the first place.  The same refusal the assert side
         gives points at the same remedy: go through the ``retract/1`` builtin,
@@ -1624,7 +1624,7 @@ class Module:
             # unchanged one comes back as ``[True]``, which hoisted nothing.
             hoisted = 0 if body_goals == [True] else len(body_goals)
         else:
-            # Ruled clause: hoist structural head args (Compound / Call(LoadName)
+            # Ruled clause: hoist structural head args (cell / Call(LoadName)
             # / functor-instance) into prepended Unify goals so an unbound caller
             # binds in output mode — the same Var+Unify shape facts use. Atomic
             # head literals keep the match-guard path.
@@ -1690,7 +1690,7 @@ def _is_normalizable_fact(head: Any) -> bool:
         return any(_is_ground_value(a) for a in cell_args(head))
     if not is_term_instance(head):
         return False
-    if isinstance(head, (Compound, Call, KWTerm)):
+    if isinstance(head, (Call, KWTerm)):
         return False
     return any(
         _is_ground_value(getattr(head, name))
@@ -1747,7 +1747,7 @@ def _normalize_dataclass_fact(head: Any) -> tuple[Any, list]:
         for name in fields
     }
     # W4a: the tail of this function is the DATACLASS path (its gate,
-    # ``_is_normalizable_fact``, excludes cells and the Compound/Call/KWTerm
+    # ``_is_normalizable_fact``, excludes cells and the Call/KWTerm
     # shapes), so the rebuild is the class's own
     # constructor.  It used to be ``_clausal_head``, for the predicate
     # INSTANCE that path also carried until W4a retired it.
@@ -1757,7 +1757,7 @@ def _normalize_dataclass_fact(head: Any) -> tuple[Any, list]:
 
 def _is_structural_head_value(val: Any) -> bool:
     """True if val is a structural term that head_to_match_pattern would compile
-    to a value-rejecting MatchClass or sequence pattern (Compound /
+    to a value-rejecting MatchClass or sequence pattern (
     Call(LoadName) / functor instance / CELL). Such head args must be hoisted
     into a Var + Unify body goal so an unbound caller binds in output mode.
     Atomics, Vars, StarUnpack and lists are handled by other compiler paths and
@@ -1765,15 +1765,13 @@ def _is_structural_head_value(val: Any) -> bool:
     from clausal.logic.variables import is_var
     if is_var(val) or isinstance(val, (StarUnpack, list, KWTerm)):
         return False
-    if isinstance(val, Compound):
-        return True
     if isinstance(val, Call):
         return isinstance(val.func, LoadName)
     if is_term_instance(val):
         return True
     # A live CELL — ``("point", 1, X)``.  P3-2 Task 3: post-flip this is the
-    # compiled representation of the very same term ``Compound`` is on this
-    # list for, and it needs hoisting for the identical reason.  A cell
+    # compiled representation of a compound term, and it needs hoisting like
+    # any other structural value.  A cell
     # containing a Var is the sharp case: its inner Var has to couple to the
     # clause's body, and a head pattern captures into per-call locals while
     # the hoisted ``Unify`` also freshens it (``_preallocate_body_vars``) —
@@ -1821,7 +1819,7 @@ def _is_structural_head_value(val: Any) -> bool:
 
 def _contains_structural_head_value(val: Any) -> bool:
     """Recursively True if *val* is, or contains, a structural term that needs
-    hoisting (a Compound / Call(LoadName) / functor instance). Used to detect
+    hoisting (a cell / Call(LoadName) / functor instance). Used to detect
     structural literals nested inside a head *list* (or compound), e.g. the
     ``item2(S)`` in a head arg ``[item2(S)]`` — whose inner var would otherwise
     stay decoupled from a body goal that binds it."""
@@ -1829,8 +1827,6 @@ def _contains_structural_head_value(val: Any) -> bool:
         return True
     if isinstance(val, list):
         return any(_contains_structural_head_value(e) for e in val)
-    if isinstance(val, Compound):
-        return any(_contains_structural_head_value(a) for a in val.args)
     return False
 
 
@@ -1841,7 +1837,7 @@ def _normalize_structural_head_args(head: Any, body: list) -> tuple[Any, list]:
     the match-guard path). Each structural field is replaced by a fresh Var and a
     Unify(var, value) goal is prepended to body (prepended so destructured inner
     vars are bound before the original body runs). No-op for non-functor-instance
-    heads (bare Compound/Call/KWTerm) or heads with no structural fields."""
+    heads (bare Call/KWTerm) or heads with no structural fields."""
     from clausal.logic.variables import Var
     from clausal.terms import Unify
 
@@ -1861,7 +1857,7 @@ def _normalize_structural_head_args(head: Any, body: list) -> tuple[Any, list]:
             return head, body
         return make_cell(functor, *args), prepend + list(body)
 
-    if not is_term_instance(head) or isinstance(head, (Compound, Call, KWTerm)):
+    if not is_term_instance(head) or isinstance(head, (Call, KWTerm)):
         return head, body
     fields = term_field_names(head)
     replacements: dict[str, Any] = {}
@@ -1892,18 +1888,10 @@ def head_key(head: Any) -> tuple[str, int]:
     """Extract (functor_name, arity) from a head term.
 
     Handles:
-    - Compound(functor, args)              → (functor, len(args))
     - Call(func=LoadName(name), args)      → (name, len(args))
     - functor dataclass instance           → (type.__name__, len(fields))
     - cell ``("f", a, b)``                 → ("f", len(cell) - 1)
     """
-    if isinstance(head, Compound):
-        f = head.functor
-        if not isinstance(f, str):
-            raise TypeError(
-                f"Compound functor must be a str at database level, got {f!r}"
-            )
-        return f, len(head.args)
     if isinstance(head, Call):
         if isinstance(head.func, LoadName):
             return head.func.name, len(head.args)
@@ -1927,7 +1915,7 @@ def head_key(head: Any) -> tuple[str, int]:
         return cell_functor_name, len(head) - 1
     raise TypeError(
         f"Cannot extract (functor, arity) from head term: {head!r}\n"
-        "Expected Compound, Call(LoadName(...), ...), a functor dataclass "
+        "Expected Call(LoadName(...), ...), a functor dataclass "
         "instance, or a cell ('f', a, b)."
     )
 
@@ -1937,7 +1925,7 @@ def _stored_head_key(head: Any, channel: str) -> tuple[str, int]:
 
     This used to REFUSE a cell head, and the refusal was load-bearing for two
     releases: no lowering path read a cell as a head (``head_match`` and
-    ``list_dispatch._get_head_arg`` both wanted a ``Compound`` or a class
+    ``list_dispatch._get_head_arg`` both wanted a class
     term), so a cell-headed clause compiled to a predicate that answered with
     its arguments UNBOUND -- a silent wrong answer, which is why the door
     raised instead.  The head flip (2026-09-19) made every one of those
@@ -1956,7 +1944,7 @@ def _extract_param_names(head: Any) -> tuple[str, ...] | None:
     """Extract keyword parameter names from a head term.
 
     Returns a tuple of field name strings if the head is a user-defined functor
-    dataclass instance; None for built-in term types (Compound, Call) and
+    dataclass instance; None for built-in term types (Call) and
     non-dataclass values.
     """
     if compound_cell_shape(head)[0]:
@@ -1970,7 +1958,7 @@ def _extract_param_names(head: Any) -> tuple[str, ...] | None:
     if not is_term_instance(head):
         return None
     # exclude built-in term types that happen to be dataclasses.
-    if isinstance(head, (Compound, Call)):
+    if isinstance(head, Call):
         return None
     return term_field_names(head)
 
