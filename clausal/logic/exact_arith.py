@@ -262,9 +262,12 @@ def node_key_args(x):
 
 def _is_term(x) -> bool:
     """True for a value that is a TERM (and so must be evaluable to be used
-    as a number): an atom, a cell, a list, a ``Compound`` or a pythonic-AST
-    node.  Anything else is a Python value and keeps Python semantics."""
-    if type(x) is str or type(x) is tuple or type(x) is list:
+    as a number): an atom, a cell, a ``Compound`` or a pythonic-AST node.
+    Anything else is a Python value and keeps Python semantics -- including a
+    LIST, deliberately: ``eval_`` has always concatenated and repeated Python
+    lists (``eval_(L + [3], X)``), and an ISO-strict refusal of lists is a
+    separate question from the cells ruling R9 settled."""
+    if type(x) is str or type(x) is tuple:
         return True
     global _Compound, _Node
     if _Compound is None:
@@ -304,11 +307,11 @@ def evaluate(x, context: str = "eval_/2"):
     * an operator node or a cell whose ``name/arity`` is in
       :data:`EVALUABLE` applies that entry to its evaluated arguments; a
       canonical exact-number cell (``rdiv/2``, ``decimal/2``) is its number;
-    * any other TERM -- an atom, a non-evaluable compound, a list -- raises
+    * any other TERM -- an atom, a non-evaluable compound -- raises
       ``type_error(evaluable, Name/Arity)``, where it used to be handed back
       unevaluated (ruling R9 A2);
     * a Python value that is not a term (a ``Quantity``, a ``date``, a
-      ``bool``) passes through, to meet Python's operators as before.
+      ``bool``, a list) passes through, to meet Python's operators as before.
     """
     from clausal.logic.variables import deref, exact_cell_number, is_var  # noqa: PLC0415
     x = deref(x)

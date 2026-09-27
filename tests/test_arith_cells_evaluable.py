@@ -300,6 +300,12 @@ class TestA2Keeps:
             "k5": "(Y == 7, eval_(Y // 2, X))",
             "k6": "(Y == 1.5, eval_(Y, X))",
             "k7": "(unpack(T, ['decimal', 1001, 2]), eval_(T, X))",
+            # Python values keep Python's operators (roborev job 265): a list
+            # concatenates/repeats, a ++ escape formats
+            "k8": "(L is [1, 2], eval_(L + [3], X))",
+            "k9": "(L is [1, 2], eval_(L * 2, X))",
+            "k10": "eval_(++(\"%d\") % 5, X)",
+            "k11": "(L is [1, 2], eval_(L, X))",
         }
         body = "\n".join(f"{n}(X) <- {b}" for n, b in rows.items())
         return _module(tmp, body, [f"{n}(X)" for n in rows],
@@ -319,6 +325,12 @@ class TestA2Keeps:
         assert _answers(mod, "k5") == [3]
         assert _answers(mod, "k6") == [1.5]
 
+    def test_python_lists_and_escapes(self, mod):
+        assert _answers(mod, "k8") == [[1, 2, 3]]
+        assert _answers(mod, "k9") == [[1, 2, 1, 2]]
+        assert _answers(mod, "k10") == ["5"]
+        assert _answers(mod, "k11") == [[1, 2]]
+
     def test_exact_number_cell_is_its_number(self, mod):
         from decimal import Decimal
         assert _answers(mod, "k7") == [Decimal("10.01")]
@@ -327,6 +339,34 @@ class TestA2Keeps:
         mod = _module(tmp_path, "t(X) <- (unpack(T, ['div', 1, 0]), eval_(T, X))", ["t(X)"])
         with pytest.raises(ZeroDivisionError):
             _answers(mod, "t")
+
+
+def test_deep_sum_still_posts():
+    """The cell rewrite at the CLP post boundary walks the operand tree; it
+    must not hit the recursion limit before the solver's own walkers do
+    (roborev job 265).  900 levels post on main as well."""
+    from clausal.logic.clpfd import fd_eq
+    from clausal.logic.variables import Trail
+    vs = [Var() for _ in range(900)]
+    e = vs[0]
+    for v in vs[1:]:
+        e = Add(None, e, v)
+    assert fd_eq(e, 5, Trail())
+
+
+def test_pow_cell_and_node_post_alike(api_mod):
+    """``**`` is not folded ahead of the post for the node spelling, so the
+    cell spelling must not be either (roborev job 265): both reach the
+    solver as the Pow node and answer alike."""
+    from clausal.pythonic_ast.nodes import Pow
+    for goal_op in ("#=", "#<"):
+        X = Var()
+        node = _run(api_mod, (goal_op, X, Pow(None, 2, 3)), X) if goal_op == "#=" else \
+            bool(_run(api_mod, (goal_op, Pow(None, 2, 3), 9), None))
+        X = Var()
+        cell = _run(api_mod, (goal_op, X, ("**", 2, 3)), X) if goal_op == "#=" else \
+            bool(_run(api_mod, (goal_op, ("**", 2, 3), 9), None))
+        assert cell == node, (goal_op, cell, node)
 
 
 @pytest.mark.xfail(strict=True, reason=(

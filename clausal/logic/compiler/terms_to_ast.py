@@ -1519,13 +1519,14 @@ _NATIVE_OPS = {FloorDiv: ast.FloorDiv(), Mod: ast.Mod(), Pow: ast.Pow()}
 
 def _yields_non_term(term: Any) -> bool:
     """True when *term*'s compiled arithmetic can only produce a Python value,
-    never a term: a number literal, or an arithmetic sub-tree (whose helpers
-    evaluate any term operand).  A variable, a ``++`` escape or a literal
-    compound may be a term at runtime and is not."""
+    never a term: a number literal, an arithmetic sub-tree (whose helpers
+    evaluate any term operand), or a ``++`` escape (Python's own value, which
+    keeps Python's operators -- ``++("%d") % 5`` formats).  A variable or a
+    literal compound may be a term at runtime and is not."""
     term = deref(term)
     if is_var(term):
         return False
-    if isinstance(term, (Add, Sub, Mult, Div, FloorDiv, Mod, Pow, Negate)):
+    if isinstance(term, (Add, Sub, Mult, Div, FloorDiv, Mod, Pow, Negate, PyThunk)):
         return True
     term = literal_value(term)
     return isinstance(term, (int, float, Fraction)) and not isinstance(term, bool)

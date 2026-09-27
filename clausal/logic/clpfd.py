@@ -1579,15 +1579,21 @@ def _arith_cells_to_nodes(x, strict=None):
         _ensure_term_imports()
     key = _NODE_KEYS.get(t)
     if key is not None:
+        # One frame per level, like _linearise: a number operand is answered
+        # inline, anything else by the recursive call (a deep left-leaning
+        # sum must not hit the recursion limit here first).
         if key[1] == 1:
-            o = _child_cells_to_nodes(x.operand, strict)
-            return None if o is None else t(operand=o)
-        lc = _child_cells_to_nodes(x.left, strict)
-        rc = _child_cells_to_nodes(x.right, strict)
+            o = x.operand
+            to = type(o)
+            oc = None if to is int or to is float else _arith_cells_to_nodes(o, strict)
+            return None if oc is None else t(operand=oc)
+        a, b = x.left, x.right
+        ta, tb = type(a), type(b)
+        lc = None if ta is int or ta is float else _arith_cells_to_nodes(a, strict)
+        rc = None if tb is int or tb is float else _arith_cells_to_nodes(b, strict)
         if lc is None and rc is None:
             return None
-        return t(left=x.left if lc is None else lc,
-                 right=x.right if rc is None else rc)
+        return t(left=a if lc is None else lc, right=b if rc is None else rc)
     if is_var(x) or exact_cell_number(x) is not None:
         return None
     ka = _cell_key_args(x)
@@ -1605,24 +1611,11 @@ def _arith_cells_to_nodes(x, strict=None):
     return None
 
 
-def _child_cells_to_nodes(a, strict):
-    """_arith_cells_to_nodes for one operand, with the common leaves -- a
-    number, an unbound variable -- answered without a recursive call (this
-    runs on every CLP post that reaches the solver)."""
-    ta = type(a)
-    if ta is int or ta is float:
-        return None
-    a = deref(a)
-    ta = type(a)
-    if ta is int or ta is float or is_var(a):
-        return None
-    return _arith_cells_to_nodes(a, strict)
-
-
 def _cells_as_nodes(l, r):
     """``(l, r)`` with arithmetic cells rewritten (see _arith_cells_to_nodes)."""
-    cl = _child_cells_to_nodes(l, None)
-    cr = _child_cells_to_nodes(r, None)
+    tl, tr = type(l), type(r)
+    cl = None if tl is int or tl is float else _arith_cells_to_nodes(l)
+    cr = None if tr is int or tr is float else _arith_cells_to_nodes(r)
     return (l if cl is None else cl), (r if cr is None else cr)
 
 
@@ -1881,9 +1874,11 @@ def _resolve(x):
         if val is not None:
             return val
     if type(x) is tuple or isinstance(x, _Compound):
-        # an arithmetic CELL (ruling R9 A1): ground, it folds like its node
+        # an arithmetic CELL (ruling R9 A1): ground, it folds like its node --
+        # and only where its node folds (``**`` does not, above), so the two
+        # spellings take one path through the posts
         ka = _cell_key_args(x)
-        if ka is not None and ka[0] in _EVALUABLE:
+        if ka is not None and ka[0] in _EVALUABLE and ka[0] != ("**", 2):
             val = _eval_ground(x)
             if val is not None:
                 return val
