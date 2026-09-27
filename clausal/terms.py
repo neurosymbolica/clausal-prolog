@@ -3818,21 +3818,14 @@ def _seg_canonical(seg) -> str:
 import functools as _functools
 import unicodedata as _unicodedata
 
-_WQ_OPS = None
+from clausal.tools.prolog_operators import OperatorTable as _OperatorTable
+
+#: Scryer's operator table with no library loaded (ISO Table 7 plus ``+``
+#: fy 200, ``div`` and ``rdiv`` yfx 400).
+_WQ_OPS = _OperatorTable.scryer_builtin_default()
 
 
 def _wq_ops():
-    """Scryer's default operator table: ISO Table 7 plus the three
-    operators Scryer adds without a library (``+`` fy 200, ``div`` and
-    ``rdiv`` yfx 400), each verified against Scryer's toplevel."""
-    global _WQ_OPS
-    if _WQ_OPS is None:
-        from clausal.tools.prolog_operators import OperatorTable
-        t = OperatorTable.iso_default()
-        t.define(200, "fy", "+")
-        t.define(400, "yfx", "div")
-        t.define(400, "yfx", "rdiv")
-        _WQ_OPS = t
     return _WQ_OPS
 
 

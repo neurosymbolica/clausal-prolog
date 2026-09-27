@@ -111,20 +111,23 @@ T.KWTerm.__init__ = _kwterm_init
 EX.LogicException.__init__ = _exc_init
 
 # ── positive controls: each must move its counter, or the plugin refuses ────
+# Every control builds its own objects, so none depends on what the engine
+# still builds as a Compound -- the retirement this measures changes that.
 CONTROLS = {}
 _b = sum(sites.values())
-EX.type_error("integer", "x")                 # error(type_error(...), _): 2
-CONTROLS["engine_error_builder"] = sum(sites.values()) - _b
+T.Compound("f", (T.Compound("g", (1,)),))
+CONTROLS["construct"] = sum(sites.values()) - _b
 T.Compound(Var(), (1,))
 CONTROLS["var_functor"] = kinds["var_functor_unbound"]
 T.Compound("z", ())
 CONTROLS["arity0"] = kinds["atom_functor/arity0"]
 T.KWTerm("r", a=1)
 CONTROLS["kwterm"] = sum(kw_sites.values())
-EX.LogicException("x")
+EX.LogicException(("error", "x", "c"))
 CONTROLS["logic_exception"] = err["total"]
-_expect = {"engine_error_builder": 2, "var_functor": 1, "arity0": 1,
-           "kwterm": 1, "logic_exception": 1}
+CONTROLS["logic_exception_cell"] = err["term_cell"]
+_expect = {"construct": 2, "var_functor": 1, "arity0": 1, "kwterm": 1,
+           "logic_exception": 1, "logic_exception_cell": 1}
 if CONTROLS != _expect:
     raise RuntimeError(f"compound census positive controls failed: "
                        f"{CONTROLS} != {_expect}")

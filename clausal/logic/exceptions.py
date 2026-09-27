@@ -20,6 +20,7 @@ from typing import Any
 from clausal.logic.cells import chars as _chars  # stage 1: the chars carrier
 from clausal.logic.atoms import is_atom, mint, spelling
 from clausal.terms import Add, Compound, Div, FloorDiv, Mod, Mult, Negate, Pow, Sub
+from clausal.terms import term_writeq
 
 # ── The is/== hint ────────────────────────────────────────────────────────────
 #
@@ -107,7 +108,6 @@ def render_error_term(term: Any) -> str:
     so a term the renderer cannot handle falls back to its ``repr``.
     """
     try:
-        from clausal.terms import term_writeq
         return term_writeq(term)
     except Exception:  # noqa: BLE001 - a message may not out-fail its error
         return repr(term)

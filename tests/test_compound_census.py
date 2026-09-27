@@ -66,12 +66,13 @@ def test_static_census_sees_the_engine():
 def test_runtime_plugin_counts_a_synthetic_run(tmp_path):
     (tmp_path / "test_synthetic.py").write_text(
         "from clausal.terms import Compound, KWTerm\n"
-        "from clausal.logic.exceptions import LogicException, type_error\n"
+        "from clausal.logic.exceptions import LogicException\n"
         "def test_builds():\n"
         "    Compound('f', (1,))\n"
         "    Compound('g', ())\n"
         "    KWTerm('r', a=1)\n"
-        "    LogicException(type_error('integer', 'x'))\n")
+        "    LogicException(Compound('error', ('x', 'c')))\n"
+        "    LogicException(('error', 'y', 'c'))\n")
     out = tmp_path / "cc.json"
     env = {**os.environ, "CC_OUT": str(out), "PYTHONDONTWRITEBYTECODE": "1",
            "PYTHONPATH": os.pathsep.join([str(REPO), str(TOOL)])}
@@ -83,10 +84,12 @@ def test_runtime_plugin_counts_a_synthetic_run(tmp_path):
     rep = json.loads(out.read_text())
     assert Path(rep["engine"]).resolve() == (REPO / "clausal" / "__init__.py").resolve()
     assert rep["tests_run"] == 1 and rep["tests_constructing"] == 1
-    # 2 test-site constructions + the 2 the error builder makes
-    assert rep["compound_total"] == 4, rep
+    # only what the synthetic test plants: no engine builder is involved, so
+    # this does not move as the engine stops building Compound
+    assert rep["compound_total"] == 3, rep
     assert rep["kinds"]["atom_functor/arity0"] == 1
     assert any(s.startswith("test_synthetic.py:4") for s, _ in rep["compound_sites"])
     assert rep["kwterm_total"] == 1
-    assert rep["logic_exceptions"] == {"total": 1, "term_Compound": 1}
-    assert "compound census: Compound 4 constructions" in r.stdout
+    assert rep["logic_exceptions"] == {"total": 2, "term_Compound": 1,
+                                       "term_cell": 1}
+    assert "compound census: Compound 3 constructions" in r.stdout
