@@ -165,10 +165,13 @@ for V in --verdict(V):
         ...
     text = to_python(V)            # ('result', 'permitted', 'Article 6(1)', 'art_6')
 for T in --txt(T):
-    T == "some text"               # FALSE: a carrier is not a Python str
-    T == --"some text"             # True under -double_quotes(chars)
+    T == --"some text"             # True: the same string term
     to_python(T)                   # 'some text'
 ```
+
+A plain Python literal on the other side — `T == "some text"` — is **False**
+for a string answer (a carrier is not a Python `str`) and True only for an
+atom answer; the lint below warns at load wherever that is written.
 
 An answer crosses **by identity** only when it is proven to hold no logic
 variable at all — it is atomic, it is a constant the compiler baked into a
@@ -179,6 +182,17 @@ object — is deref-walked into a **copy** first, because a term holding a
 variable would neither compare equal to its `--` literal nor survive
 backtracking. Do not mutate what you are handed; it may be the engine's own
 stored term.
+
+**The lint.** Because `T == "x"` is silently False for a string answer and
+silently True for an atom answer, a name bound by a goal-position seam that
+meets a Python str **literal** in the same function — `==`, `!=`, `in` /
+`not in` a literal list/tuple/set of str, a `match`/`case` str pattern, also
+through a plain alias `y = T` — raises `ClausalSeamTextCompareWarning` at
+load, naming the site and both right spellings (`T == --"x"`, or
+`to_python(T) == "x"`). It does not catch `d[T]`, `T in some_dict`,
+`json.dumps(T)`, `len(T)`, str methods, a comparison inside a helper or in
+another function, or a container built at runtime: those follow the raw-out
+contract above.
 
 The same holds in a comprehension or generator expression whose FIRST
 `for` clause is a `--` goal (`{K: V for K, V in --kv(K, V)}`), and for the
