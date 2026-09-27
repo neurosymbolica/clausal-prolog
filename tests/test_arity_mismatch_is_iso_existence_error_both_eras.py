@@ -13,7 +13,7 @@ module-qualified goal alike.  Before 2026-09-25 Clausal raised
 it only as the transliterated ``PredicateArityMismatchError(Message)``
 compound, which no ISO catcher matches.  The error is now BOTH a
 ``LogicException`` carrying the ISO term (the "takes 1 argument" diagnostic
-is its context) and a ``TypeError`` (ADD, not replace: ``except TypeError``,
+is its message) and a ``TypeError`` (ADD, not replace: ``except TypeError``,
 ``except PredicateArityMismatchError`` and a ``++TypeError`` catcher keep
 working).
 
@@ -31,7 +31,7 @@ import pytest
 
 from clausal import cell_args, cell_functor
 from clausal.logic.atoms import mangle, mint
-from clausal.logic.exceptions import LogicException, error_context_text
+from clausal.logic.exceptions import LogicException
 from clausal.logic.predicate import _dispatch_at
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, walk
@@ -48,8 +48,10 @@ def _load(tmp_path, monkeypatch, name, body):
     return mod
 
 
-def _assert_iso(term, name, arity):
-    """``error(existence_error(procedure, Name/Arity), Context)``."""
+def _assert_iso(exc, name, arity):
+    """``exc.term`` is ``error(existence_error(procedure, Name/Arity),
+    Name/Arity)`` (Scryer); the diagnostic is ``exc.message``."""
+    term = exc.term
     assert type(term) is tuple and cell_functor(term) == "error", term
     formal = cell_args(term)[0]
     assert cell_functor(formal) == "existence_error"
@@ -57,9 +59,11 @@ def _assert_iso(term, name, arity):
     pi = cell_args(formal)[1]
     assert type(pi) is tuple and cell_functor(pi) == "/"
     assert cell_args(pi) == (mint(name), arity)
-    # the diagnostic survives as the context
+    # the second argument is the PI itself; the diagnostic survives as the
+    # exception's message
+    assert cell_args(term)[1] == pi
     assert (f"{name} takes 1 argument, but this call passes {arity}"
-            in error_context_text(term))
+            in exc.message)
 
 
 @pytest.fixture
@@ -174,7 +178,7 @@ def test_python_except_type_error_still_catches_it(pair):
     exc = info.value
     assert isinstance(exc, PredicateArityMismatchError)
     assert isinstance(exc, LogicException)
-    _assert_iso(exc.term, "pk", 2)
+    _assert_iso(exc, "pk", 2)
     assert str(exc).startswith("pk takes 1 argument, but this call passes 2")
     assert "Uncaught logic exception" not in str(exc)
 

@@ -30,7 +30,7 @@ from pathlib import Path
 import pytest
 
 from clausal import cell_args, cell_functor
-from clausal.logic.exceptions import LogicException, error_context_text
+from clausal.logic.exceptions import LogicException
 from clausal.logic.variables import Var, deref, is_var
 from clausal.pythonic_ast import nodes
 
@@ -305,13 +305,13 @@ def test_the_iso_control_construct_cells_run_as_bodies(host):
 def test_committed_choice_cells_are_refused(host, functor):
     """``->`` and ``*->``: cut-free, no committed choice (ruled forever).
     existence_error(procedure, '->'/2) -- what an ISO system that lacks a
-    construct answers -- with the reason in the context."""
+    construct answers -- with the reason in the message."""
     cell = (functor, ("p", Var()), ("s", Var()))
     assert _existence_indicator(host, "call_it", cell) == (functor, 2)
     with pytest.raises(LogicException) as info:
         _answers(host, "call_it", cell)
-    assert "no committed choice" in error_context_text(_term(info))
-    assert "if_(" in error_context_text(_term(info))
+    assert "no committed choice" in info.value.message
+    assert "if_(" in info.value.message
 
 
 @pytest.mark.parametrize("goal, indicator", [

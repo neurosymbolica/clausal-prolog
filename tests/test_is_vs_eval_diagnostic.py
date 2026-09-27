@@ -19,7 +19,7 @@ import textwrap
 
 from clausal.logic.atoms import mint
 from clausal import cell_args, cell_functor
-from clausal.logic.exceptions import LogicException, error_context_text, type_error
+from clausal.logic.exceptions import LogicException, type_error
 from clausal.terms import Add, FloorDiv
 from clausal.testing import main
 
@@ -55,7 +55,7 @@ def test_the_note_does_not_disturb_the_error_term():
     exc = LogicException(type_error("number", culprit, "sum_list/2"))
     assert cell_functor(exc.term) == "error"
     assert cell_args(exc.term)[0] == ("type_error", mint("number"), culprit)
-    assert error_context_text(exc.term) == "sum_list/2"
+    assert cell_args(exc.term)[1] == ("/", "sum_list", 2)
 
 
 def test_type_error_number_on_a_non_arith_culprit_says_nothing():

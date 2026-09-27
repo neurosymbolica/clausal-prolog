@@ -20,7 +20,7 @@ import pytest
 
 import clausal.import_hook  # noqa: F401 — installs the meta-path finder
 from clausal import cell_args
-from clausal.logic.exceptions import error_context_text
+from clausal.logic.exceptions import error_prose
 from clausal.import_hook import _load_module
 from clausal.logic.atoms import char_atom, mint
 from clausal.logic.cells import chars
@@ -197,7 +197,7 @@ def test_type_error_term_carries_atom_args():
     from clausal.logic.exceptions import type_error
     t = type_error("atom", 3, "who")
     assert cell_args(cell_args(t)[0])[0] == mint("atom")
-    assert error_context_text(t) == "who"              # the context reads back as the text given
+    assert error_prose(t) == "who"                     # no leading Name/Arity: the text is the prose
 
 
 def test_listing_takes_the_indicator_of_a_zero_arity_predicate(mod, capsys):

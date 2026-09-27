@@ -26,7 +26,7 @@ from clausal.logic.solve import call
 from clausal.logic import solve as solve_mod
 from clausal.logic.variables import Var, deref, is_var
 from clausal import cell_args, cell_functor
-from clausal.logic.exceptions import LogicException, error_context_text
+from clausal.logic.exceptions import LogicException
 from clausal.terms import Compound, SegString, SetTerm
 
 PYTHON = sys.executable
@@ -243,9 +243,10 @@ def test_F005_assertz_rule(fix):
         _first(m, "azrule", Var())
     inner = cell_args(ei.value.term)[0]
     assert type(inner) is tuple and cell_functor(inner) == "permission_error"
-    # A09-F005 nit: the error context names the actual caller — there is no
-    # assert/1 builtin, only assertz/1 and asserta/1.
-    assert error_context_text(ei.value.term) == "assertz/1"
+    # A09-F005 nit: error/2's second argument names the actual caller — there
+    # is no assert/1 builtin, only assertz/1 and asserta/1.
+    assert cell_args(ei.value.term)[1] == ("/", "assertz", 1)
+    assert ei.value.message is None
     V = Var()
     got = set()
     try:
@@ -261,20 +262,19 @@ def test_F005_assertz_rule(fix):
 # (RuntimeError raised, then swallowed by the trampoline drive loop)
 # ═══════════════════════════════════════════════════════════════════════════
 
-def _assert_static_procedure_error(ei, context):
-    """The term is error(permission_error(modify, static_procedure, F/A), Ctx).
+def _assert_static_procedure_error(ei, indicator):
+    """The term is error(permission_error(modify, static_procedure, F/A), PI).
 
     REWORDED for P3-3 Task 3: the refusal comes from the ONE mutation gate
-    now, so the context still LEADS with the calling builtin — which is what
-    a reader uses it for — and then says who was refused, which row, and why.
-    Equality became ``startswith`` for that reason; the ISO term itself is
-    unchanged.
+    now; error/2's second argument is the calling builtin's indicator — which
+    is what a reader uses it for — and the exception's message says who was
+    refused, which row, and why.  The ISO formal itself is unchanged.
     """
     inner = cell_args(ei.value.term)[0]
     assert type(inner) is tuple and cell_functor(inner) == "permission_error"
     assert cell_args(inner)[0] == mint("modify")
     assert cell_args(inner)[1] == mint("static_procedure")
-    assert error_context_text(ei.value.term).startswith(context)
+    assert cell_args(ei.value.term)[1] == indicator
 
 
 def test_F006_assertz_locked_raises(locked_mod):
@@ -284,14 +284,14 @@ def test_F006_assertz_locked_raises(locked_mod):
     _, m = locked_mod
     with pytest.raises(LogicException) as ei:
         _first(m, "lockassert", Var())
-    _assert_static_procedure_error(ei, "assertz/1")
+    _assert_static_procedure_error(ei, ("/", "assertz", 1))
 
 
 def test_F006_retract_locked_raises(locked_mod):
     _, m = locked_mod
     with pytest.raises(LogicException) as ei:
         _first(m, "lockretract", Var())
-    _assert_static_procedure_error(ei, "retract/1")
+    _assert_static_procedure_error(ei, ("/", "retract", 1))
 
 
 # ═══════════════════════════════════════════════════════════════════════════

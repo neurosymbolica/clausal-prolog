@@ -18,7 +18,7 @@ import pytest
 
 from clausal import cell_args, cell_functor
 from clausal.logic.exceptions import (
-    DispatchTargetError, LogicException, error_context_text,
+    DispatchTargetError, LogicException,
 )
 from clausal.logic.predicate import _dispatch_at
 
@@ -36,10 +36,12 @@ def test_a_module_target_raises_dispatch_target_error():
     assert cell_args(inner)[0] == "callable"
     rendered = str(exc)
     assert "DispatchTargetError" in rendered, "the token the downstream gates key on"
-    assert "module 'some.package'" in error_context_text(term), "what the goal actually resolved to"
-    # The message prints the term as Scryer would (ruling R2, 2026-09-27): the
-    # context is an atom, so its apostrophes are escaped inside its quotes.
-    assert "module \\'some.package\\'" in rendered
+    assert "module 'some.package'" in exc.message, "what the goal actually resolved to"
+    # The rendering is the term as Scryer writes it -- no indicator leads the
+    # prose, so error/2's second argument is unbound -- then the prose.
+    assert rendered == (
+        "Uncaught logic exception: error(type_error(callable,'some.package'),_): "
+        + exc.message)
     assert cell_args(inner)[1] == "some.package", "the culprit is the module's name"
 
 
@@ -57,7 +59,7 @@ def test_any_object_without_the_protocol_raises_the_same_class():
 
 def test_a_huge_or_hostile_repr_cannot_break_the_diagnostic():
     """Building an exception must never itself raise, and must not render a
-    multi-megabyte message: the context repr is bounded and guarded."""
+    multi-megabyte message: the repr in the prose is bounded and guarded."""
     class Hostile:
         def __repr__(self):
             raise RuntimeError("repr exploded")
@@ -70,7 +72,7 @@ def test_a_huge_or_hostile_repr_cannot_break_the_diagnostic():
     with pytest.raises(DispatchTargetError) as info:
         _dispatch_at(list(range(100_000)), 1)
     assert "a list value [0, 1, 2, 3, 4, 5, ...]" in str(info.value), (
-        "the context shows a BOUNDED repr")
+        "the message shows a BOUNDED repr")
 
 
 def test_a_foreign_implementor_is_still_called_bare():
@@ -129,5 +131,5 @@ def test_a_compiled_dotted_goal_that_lands_on_a_submodule_raises_it(tmp_path, mo
     with pytest.raises(LogicException) as info:
         list(call("w3_use", Var(), module=mod.__dict__["$module"]))
     assert isinstance(info.value, DispatchTargetError)
-    assert "module 'w3shadowpkg.shadow'" in error_context_text(info.value.term)
-    assert "module \\'w3shadowpkg.shadow\\'" in str(info.value)
+    assert "module 'w3shadowpkg.shadow'" in info.value.message
+    assert "module 'w3shadowpkg.shadow'" in str(info.value)

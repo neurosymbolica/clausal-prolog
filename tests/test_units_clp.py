@@ -11,7 +11,7 @@ import pytest
 from clausal.logic.atoms import mint
 from clausal.logic.cells import chars
 from clausal import cell_args, cell_functor
-from clausal.logic.exceptions import LogicException, error_context_text
+from clausal.logic.exceptions import LogicException, error_prose
 from clausal.terms import Quantity
 from clausal.modules.countries.european_union import euro
 from clausal.modules.countries.japan import yen
@@ -33,7 +33,8 @@ class TestSystemErrorHelper:
         assert cell_functor(term) == "error"
         assert cell_functor(cell_args(term)[0]) == "system_error"
         assert cell_args(cell_args(term)[0]) == (mint("units_mismatch"),)
-        assert error_context_text(term) == "(==)/2: metre vs second"
+        assert cell_args(term)[1] == ("/", "==", 2)
+        assert error_prose(term) == "metre vs second"
 
 
 _MODES = [ROUND_HALF_UP, ROUND_HALF_EVEN, ROUND_HALF_DOWN, ROUND_UP,
@@ -223,8 +224,8 @@ class TestInference:
         # 2026-09-12, and `dollar` has not resolved since the ISO-code rename.
         # The property this asserts — the message names BOTH currencies — is
         # unchanged, and is now unambiguous by construction.
-        assert ("euro" in error_context_text(ei.value.term)
-                and "usd" in error_context_text(ei.value.term))
+        assert ("euro" in ei.value.message
+                and "usd" in ei.value.message)
 
     def test_declared_units_var_disagreeing_with_operand_mismatches(self):
         from clausal.logic.units_clp import analyse
@@ -622,7 +623,7 @@ class TestReviewRoundOne:
         with pytest.raises(LogicException) as ei:
             analyse(_bin(Pow, Var(), 2), Quantity(3, M), "(==)/2")
         _assert_system_error(ei, "units_mismatch")
-        assert "share a name" not in error_context_text(ei.value.term)
+        assert "share a name" not in ei.value.message
 
     # F4: non-integral quantity bounds are rejected like non-integer plain ones
     def test_in_domain_non_integral_money_bounds_rejected(self):
@@ -636,10 +637,10 @@ class TestReviewRoundOne:
         import clausal.logic.clpfd as clpfd
         with pytest.raises(LogicException) as ei:
             clpfd.fd_gt(Quantity(5, M), Quantity(3, S), Trail())
-        assert error_context_text(ei.value.term).startswith("(>)/2")
+        assert cell_args(ei.value.term)[1] == ("/", ">", 2)
         with pytest.raises(LogicException) as ei:
             clpfd.fd_ge(Quantity(5, M), Quantity(3, S), Trail())
-        assert error_context_text(ei.value.term).startswith("(>=)/2")
+        assert cell_args(ei.value.term)[1] == ("/", ">=", 2)
 
     # F6: ground arithmetic has // and % on quantities, matching divmod_/4
     def test_quantity_floordiv_and_mod(self):
@@ -757,7 +758,7 @@ class TestReviewRoundThree:
         import clausal.logic.clpfd as clpfd
         with pytest.raises(LogicException) as ei:
             clpfd.in_domain([Var()], 1, Quantity(3, {}), Trail())
-        assert "share a name" not in error_context_text(ei.value.term)
+        assert "share a name" not in ei.value.message
 
     def test_sum_bad_operator_wins_over_units(self):
         import clausal.logic.clpfd as clpfd
@@ -924,7 +925,7 @@ class TestReviewRoundSeven:
         with pytest.raises(LogicException) as ei:
             clpfd.reify_fd("lt", Quantity(1, M), Quantity(2, S), Trail())
         _assert_system_error(ei, "units_mismatch")
-        assert error_context_text(ei.value.term).startswith("reify(lt)/3")
+        assert ei.value.message.startswith("reify(lt)/3")
         assert clpfd.reify_fd("lt", Quantity(1, M), Quantity(2, M), Trail()) is True
         t, x = Trail(), Var()
         assert clpfd.reify_fd("eq", x, Quantity(2, M), t) is None

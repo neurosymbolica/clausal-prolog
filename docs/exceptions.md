@@ -156,17 +156,31 @@ Clausal follows the [ISO Prolog](iso_prolog_compatibility_report.md) convention 
 | `evaluation_error(kind)` | `error(evaluation_error(Kind), ...)` |
 | `domain_error(domain, culprit)` | `error(domain_error(Domain, Culprit), ...)` |
 
-The second argument is ISO `context(Culprit, Message)`. `Culprit` is the
-predicate indicator of the builtin that raised the error (`atom_length/2`), and
-`Message` is free text; either is an unbound variable when there is none. Every
-builder takes the context as text: `"atom_length/2"` gives
-`context(atom_length/2, _)`, `"solve/1: the goal is unbound"` gives
-`context(solve/1, 'the goal is unbound')`, and text without a leading
-`Name/Arity` becomes the message alone, `context(_, 'text')`.
+The second argument of `error/2` is **what Scryer puts there**. The rule for
+this engine's error terms: where Scryer and SWI-Prolog differ, follow Scryer.
+
+- For a builtin, it is that builtin's predicate indicator:
+  `error(type_error(atom,1),atom_length/2)`, `error(evaluation_error(zero_divisor),(/)/2)`.
+- For a missing procedure, it is the missing indicator itself, whichever
+  builtin found it missing: `error(existence_error(procedure,foo/1),foo/1)`.
+- When there is no single culprit indicator, it is an unbound variable, as
+  Scryer's own library code throws `error(E, _)`.
+
+It is not SWI-Prolog's `context(Culprit, Message)`. Explanatory text stays off
+the term. Every builder takes the context as text: `"atom_length/2"` gives
+`atom_length/2`, `"solve/1: the goal is unbound"` gives `solve/1` with the
+prose `the goal is unbound`, and text without a leading `Name/Arity` gives an
+unbound variable with the whole text as prose. The prose is the Python
+exception's `.message`, and `str()` prints it after the term, separated by
+`": "`:
+
+```text
+Uncaught logic exception: error(instantiation_error,solve/1): the goal is unbound
+```
 
 ```clausal
-catch(atom_length(1, _), error(type_error(T, V), _), true)          % T = atom, V = 1
-catch(atom_length(1, _), error(_, context(PI, _)), true)            % PI = atom_length/2
+catch(atom_length(1, _), error(type_error(T, V), _), true)   % T = atom, V = 1
+catch(atom_length(1, _), error(_, PI), true)                 % PI = atom_length/2
 ```
 
 ### Reading an error term from Python
@@ -183,16 +197,11 @@ try:
     ...  # a query that raises
 except LogicException as e:
     assert cell_functor(e.term) == "error"
-    formal, context = cell_args(e.term)
-    # formal  == ('type_error', 'atom', 1)
-    # context == ('context', ('/', 'atom_length', 2), _)
+    formal, indicator = cell_args(e.term)
+    # formal    == ('type_error', 'atom', 1)
+    # indicator == ('/', 'atom_length', 2)
+    # e.message == None, or the explanatory prose
 ```
-
-`clausal.logic.exceptions.error_context_text(term)` gives the context as display
-text (`"atom_length/2"`, `"solve/1: the goal is unbound"`); the indicator is
-re-rendered the way `writeq` writes it, so an operator name is in parentheses
-(`"(is)/2"`). To select on the message, read the term itself
-(`error_context_message(term)`).
 
 ---
 
@@ -323,16 +332,15 @@ Uncaught `Throw` goals surface as `LogicException` in Python code. Caught except
     from clausal.logic.exceptions import LogicException, type_error, instantiation_error
 
     # Build an error term
-    err = type_error("integer", "foo", "succ/2")
-    # → ('error', ('type_error', 'integer', 'foo'),
-    #    ('context', ('/', 'succ', 2), _))
+    err = type_error("integer", "foo", "succ/2: the first argument")
+    # → ('error', ('type_error', 'integer', 'foo'), ('/', 'succ', 2))
 
     # Raise from Python
     raise LogicException(err)
     # The message shows the term as Scryer prints an uncaught error
-    # (writeq text with operators), not its Python repr; a variable that
-    # occurs once prints as `_`:
-    #   Uncaught logic exception: error(type_error(integer,foo),context(succ/2,_))
+    # (writeq text with operators), not its Python repr, then the prose;
+    # a variable that occurs once prints as `_`:
+    #   Uncaught logic exception: error(type_error(integer,foo),succ/2): the first argument
     ```
 
     ---

@@ -9,7 +9,7 @@ import pytest
 from clausal.logic.atoms import mint
 from clausal.logic.cells import chars, chars_text
 from clausal import cell_args, cell_functor
-from clausal.logic.exceptions import LogicException, error_context_text
+from clausal.logic.exceptions import LogicException
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.modules.py.json import (
     parse, generate, pretty_generate, get, read_file, write_file,
@@ -488,23 +488,23 @@ class TestGenerateRejectsCells:
     def test_the_type_error_context_names_the_calling_predicate(self):
         # One converter serves generate/2, pretty_generate/2, write_file/2
         # and py.http.json_post/3; the error must say which one failed.
-        # The context reads back as writeq writes the indicator, so a
-        # dotted name is quoted.
-        for context, written in (
-                ("py.json.generate/2", "'py.json.generate'/2"),
-                ("py.json.pretty_generate/2", "'py.json.pretty_generate'/2"),
-                ("py.json.write_file/2", "'py.json.write_file'/2"),
-                ("py.http.json_post/3", "'py.http.json_post'/3")):
+        # The second argument of error/2 is the indicator cell itself,
+        # the dotted name kept whole.
+        for context, indicator in (
+                ("py.json.generate/2", ("/", "py.json.generate", 2)),
+                ("py.json.pretty_generate/2", ("/", "py.json.pretty_generate", 2)),
+                ("py.json.write_file/2", ("/", "py.json.write_file", 2)),
+                ("py.http.json_post/3", ("/", "py.http.json_post", 3))):
             with pytest.raises(LogicException) as exc:
                 _clausal_to_python(("point", 1, 2), context)
-            assert error_context_text(exc.value.term) == written
+            assert cell_args(exc.value.term)[1] == indicator
 
     def test_pretty_generate_and_write_file_carry_their_own_context(self, tmp_path):
         with pytest.raises(LogicException) as exc:
             list(_pretty_generate_2(("point", 1, 2), Var(), Trail(), None))
-        assert error_context_text(exc.value.term) == "'py.json.pretty_generate'/2"
+        assert cell_args(exc.value.term)[1] == ("/", "py.json.pretty_generate", 2)
 
         path = str(tmp_path / "out.json")
         with pytest.raises(LogicException) as exc:
             list(_write_file_2(chars(path), ("point", 1, 2), Trail(), None))
-        assert error_context_text(exc.value.term) == "'py.json.write_file'/2"
+        assert cell_args(exc.value.term)[1] == ("/", "py.json.write_file", 2)

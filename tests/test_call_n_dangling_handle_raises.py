@@ -15,8 +15,9 @@ still fails, and an ordinary (un-mangled) unknown name keeps the translator's
 pinned §4.2 contract -- ``call(nosuch, X)`` fails rather than raising.
 
 The comparison is of the ERROR TERMS, not "both raise": the formal part
-``existence_error(procedure, Name/Arity)`` must be identical, and the context
-must be solve's context with only the entry-point prefix (``solve/1`` vs
+``existence_error(procedure, Name/Arity)`` must be identical, the second
+argument of error/2 is that same indicator (as in Scryer), and the message
+must be solve's message with only the entry-point prefix (``solve/1`` vs
 ``call/2``) changed.
 
 Ruling 2 extended (operator, 2026-09-24): ``phrase/2``, ``phrase/3`` and
@@ -32,7 +33,7 @@ import pytest
 
 from clausal.logic.atoms import HIDDEN_SEP, mangle
 from clausal import cell_args, cell_functor
-from clausal.logic.exceptions import LogicException, error_context_text
+from clausal.logic.exceptions import LogicException
 from clausal.logic.variables import Var
 
 
@@ -74,29 +75,33 @@ def host(tmp_path_factory):
 
 
 def _raised(gen):
+    """The raised LogicException (its ``.term`` and ``.message``)."""
     with pytest.raises(LogicException) as info:
         list(gen)
-    return info.value.term
+    return info.value
 
 
 def _answers(gen):
     return list(gen)
 
 
-def _split_context(context: str, prefix: str) -> str:
-    assert context.startswith(prefix + ": "), (
-        f"context should open with the entry point {prefix!r}: {context!r}")
-    return context[len(prefix) + 2:]
+def _split_context(message: str, prefix: str) -> str:
+    assert message.startswith(prefix + ": "), (
+        f"message should open with the entry point {prefix!r}: {message!r}")
+    return message[len(prefix) + 2:]
 
 
-def _assert_ruled_shape(term, name, arity):
+def _assert_ruled_shape(exc, name, arity):
+    term = exc.term
     assert type(term) is tuple and cell_functor(term) == "error"
     inner = cell_args(term)[0]
     assert cell_functor(inner) == "existence_error"
     assert cell_args(inner)[0] == "procedure"
     culprit = cell_args(inner)[1]
     assert culprit == ("/", name, arity)
-    assert HIDDEN_SEP not in error_context_text(term), "never the raw mangled spelling"
+    # Scryer: error(existence_error(procedure, PI), PI).
+    assert cell_args(term)[1] == ("/", name, arity)
+    assert HIDDEN_SEP not in exc.message, "never the raw mangled spelling"
 
 
 @pytest.mark.parametrize("module_name, name", [
@@ -106,15 +111,15 @@ def _assert_ruled_shape(term, name, arity):
 def test_call_n_raises_the_same_error_term_solve_raises(host, module_name, name):
     from clausal.logic.solve import call, solve
     handle = mangle(module_name, name)
-    solve_term = _raised(solve((handle, Var())))
-    call_term = _raised(call("use1", handle, Var(), module=host))
-    _assert_ruled_shape(solve_term, name, 1)
-    _assert_ruled_shape(call_term, name, 1)
+    solve_exc = _raised(solve((handle, Var())))
+    call_exc = _raised(call("use1", handle, Var(), module=host))
+    _assert_ruled_shape(solve_exc, name, 1)
+    _assert_ruled_shape(call_exc, name, 1)
     # The formal part -- what a catch/3 pattern matches -- is IDENTICAL.
-    assert cell_args(call_term)[0] == cell_args(solve_term)[0]
-    # The context differs only in naming the entry point.
-    assert (_split_context(error_context_text(call_term), "call/2")
-            == _split_context(error_context_text(solve_term), "solve/1"))
+    assert cell_args(call_exc.term)[0] == cell_args(solve_exc.term)[0]
+    # The message differs only in naming the entry point.
+    assert (_split_context(call_exc.message, "call/2")
+            == _split_context(solve_exc.message, "solve/1"))
 
 
 @pytest.mark.parametrize("module_name, name", [
@@ -126,9 +131,9 @@ def test_call_1_on_a_bare_dangling_handle_raises(host, module_name, name):
     yet give the ruled shape -- a separate, pre-existing gap -- so this pins
     the shape rather than comparing with solve.)"""
     from clausal.logic.solve import call
-    term = _raised(call("use0", mangle(module_name, name), module=host))
-    _assert_ruled_shape(term, name, 0)
-    assert error_context_text(term).startswith("call/1: ")
+    exc = _raised(call("use0", mangle(module_name, name), module=host))
+    _assert_ruled_shape(exc, name, 0)
+    assert exc.message.startswith("call/1: ")
 
 
 # ── controls: what must NOT change ────────────────────────────────────────────
@@ -153,7 +158,7 @@ def test_an_unmangled_unknown_name_raises_existence_error(host):
     from clausal.logic.solve import call
     for gen, arity in ((call("use1", "calln_nosuch_plain", Var(), module=host), 1),
                        (call("use0", "calln_nosuch_plain", module=host), 0)):
-        formal = cell_args(_raised(gen))[0]
+        formal = cell_args(_raised(gen).term)[0]
         assert cell_functor(formal) == "existence_error"
         assert cell_args(formal)[0] == "procedure"
         assert cell_args(formal)[1] == ("/", "calln_nosuch_plain", arity)
@@ -169,12 +174,12 @@ def test_call_3_extras_fold_into_a_dangling_handle(host, module_name, name):
     """``call(H, A, B)`` is the goal ``H(A, B)``: arity 2 in the culprit."""
     from clausal.logic.solve import call, solve
     handle = mangle(module_name, name)
-    solve_term = _raised(solve((handle, 1, Var())))
-    call_term = _raised(call("use2", handle, 1, Var(), module=host))
-    _assert_ruled_shape(call_term, name, 2)
-    assert cell_args(call_term)[0] == cell_args(solve_term)[0]
-    assert (_split_context(error_context_text(call_term), "call/3")
-            == _split_context(error_context_text(solve_term), "solve/1"))
+    solve_exc = _raised(solve((handle, 1, Var())))
+    call_exc = _raised(call("use2", handle, 1, Var(), module=host))
+    _assert_ruled_shape(call_exc, name, 2)
+    assert cell_args(call_exc.term)[0] == cell_args(solve_exc.term)[0]
+    assert (_split_context(call_exc.message, "call/3")
+            == _split_context(solve_exc.message, "solve/1"))
 
 
 @pytest.mark.parametrize("module_name, name", [
@@ -185,10 +190,10 @@ def test_call_2_on_a_handle_cell_folds_its_own_args_first(host, module_name, nam
     """``call(H(1), X)`` is ``H(1, X)``: the cell's argument, then the extra."""
     from clausal.logic.solve import call, solve
     handle = mangle(module_name, name)
-    solve_term = _raised(solve((handle, 1, Var())))
-    call_term = _raised(call("use1", (handle, 1), Var(), module=host))
-    _assert_ruled_shape(call_term, name, 2)
-    assert cell_args(call_term)[0] == cell_args(solve_term)[0]
+    solve_exc = _raised(solve((handle, 1, Var())))
+    call_exc = _raised(call("use1", (handle, 1), Var(), module=host))
+    _assert_ruled_shape(call_exc, name, 2)
+    assert cell_args(call_exc.term)[0] == cell_args(solve_exc.term)[0]
 
 
 def test_call_3_and_a_handle_cell_still_answer_when_the_handle_resolves(host):
@@ -211,12 +216,12 @@ def test_call_3_and_a_handle_cell_still_answer_when_the_handle_resolves(host):
 def test_time_goal_raises_the_same_error_term_solve_raises(host, module_name, name):
     from clausal.logic.solve import call, solve
     handle = mangle(module_name, name)
-    solve_term = _raised(solve((handle, 1)))
-    term = _raised(call("tg", (handle, 1), module=host))
-    _assert_ruled_shape(term, name, 1)
-    assert cell_args(term)[0] == cell_args(solve_term)[0]
-    assert (_split_context(error_context_text(term), "time_goal/1")
-            == _split_context(error_context_text(solve_term), "solve/1"))
+    solve_exc = _raised(solve((handle, 1)))
+    exc = _raised(call("tg", (handle, 1), module=host))
+    _assert_ruled_shape(exc, name, 1)
+    assert cell_args(exc.term)[0] == cell_args(solve_exc.term)[0]
+    assert (_split_context(exc.message, "time_goal/1")
+            == _split_context(solve_exc.message, "solve/1"))
 
 
 @pytest.mark.parametrize("module_name, name", [
@@ -230,12 +235,12 @@ def test_phrase_2_raises_the_same_error_term_solve_raises(host, module_name, nam
     the pair, which phrase dropped."""
     from clausal.logic.solve import call, solve
     handle = mangle(module_name, name)
-    solve_term = _raised(solve((handle, Var(), Var())))
-    term = _raised(call("ph2", handle, [], module=host))
-    _assert_ruled_shape(term, name, 2)
-    assert cell_args(term)[0] == cell_args(solve_term)[0]
-    assert (_split_context(error_context_text(term), "phrase/2")
-            == _split_context(error_context_text(solve_term), "solve/1"))
+    solve_exc = _raised(solve((handle, Var(), Var())))
+    exc = _raised(call("ph2", handle, [], module=host))
+    _assert_ruled_shape(exc, name, 2)
+    assert cell_args(exc.term)[0] == cell_args(solve_exc.term)[0]
+    assert (_split_context(exc.message, "phrase/2")
+            == _split_context(solve_exc.message, "solve/1"))
 
 
 @pytest.mark.parametrize("module_name, name", [
@@ -247,12 +252,12 @@ def test_phrase_3_raises_the_same_error_term_solve_raises(host, module_name, nam
     phrase's S0/S pair."""
     from clausal.logic.solve import call, solve
     handle = mangle(module_name, name)
-    solve_term = _raised(solve((handle, 5, Var(), Var())))
-    term = _raised(call("ph3", (handle, 5), [], Var(), module=host))   # written arity (ruling C)
-    _assert_ruled_shape(term, name, 3)
-    assert cell_args(term)[0] == cell_args(solve_term)[0]
-    assert (_split_context(error_context_text(term), "phrase/3")
-            == _split_context(error_context_text(solve_term), "solve/1"))
+    solve_exc = _raised(solve((handle, 5, Var(), Var())))
+    exc = _raised(call("ph3", (handle, 5), [], Var(), module=host))   # written arity (ruling C)
+    _assert_ruled_shape(exc, name, 3)
+    assert cell_args(exc.term)[0] == cell_args(solve_exc.term)[0]
+    assert (_split_context(exc.message, "phrase/3")
+            == _split_context(solve_exc.message, "solve/1"))
 
 
 def test_time_goal_still_runs_a_resolvable_handle(host):
@@ -299,8 +304,8 @@ def test_a_mangled_spelling_the_calling_db_defines_resolves_and_does_not_raise(h
     X = Var()
     assert [deref(X) for _ in call("use1", h, X, module=host)] == [7]
     # ...and a DIFFERENT name under the same unloaded module half still raises.
-    term = _raised(call("use1", mangle(decl, "other"), Var(), module=host))
-    _assert_ruled_shape(term, "other", 1)
+    exc = _raised(call("use1", mangle(decl, "other"), Var(), module=host))
+    _assert_ruled_shape(exc, "other", 1)
 
 
 # ── call/N reached with NO db (the factory's ``_db_optional`` path) ──────────
@@ -311,8 +316,8 @@ def test_no_db_a_dangling_unloaded_handle_raises():
     from clausal.logic.builtins.higher_order import _resolve_named_goal
     with pytest.raises(LogicException) as info:
         _resolve_named_goal(None, mangle(NOT_LOADED, "whatever"), (Var(),), "call/2")
-    _assert_ruled_shape(info.value.term, "whatever", 1)
-    assert error_context_text(info.value.term).startswith("call/2: module ")
+    _assert_ruled_shape(info.value, "whatever", 1)
+    assert info.value.message.startswith("call/2: module ")
 
 
 def test_no_db_through_the_call_goal_factory_raises():
@@ -323,7 +328,7 @@ def test_no_db_through_the_call_goal_factory_raises():
     dispatch = _DB_BUILTINS[("call_goal", 2)](None)
     with pytest.raises(LogicException) as info:
         list(_drive_trampoline(dispatch, Trail(), mangle(NOT_LOADED, "whatever"), Var()))
-    _assert_ruled_shape(info.value.term, "whatever", 1)
+    _assert_ruled_shape(info.value, "whatever", 1)
 
 
 def test_no_db_an_unmangled_name_still_fails():

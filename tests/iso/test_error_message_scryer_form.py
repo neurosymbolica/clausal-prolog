@@ -138,8 +138,8 @@ def _msg(term) -> str:
 
 def test_message_is_the_scryer_text_not_the_repr():
     msg = _msg(type_error("evaluable", Compound("/", (mint("+"), 2)), "is/2"))
-    assert msg == ("Uncaught logic exception: "
-                   "error(type_error(evaluable,(+)/2),context((is)/2,_))")
+    # Exactly what Scryer prints for ``X is 1 + a`` (probed 2026-09-27).
+    assert msg == "Uncaught logic exception: error(type_error(evaluable,(+)/2),(is)/2)"
     assert "Compound(" not in msg
 
 
@@ -173,8 +173,7 @@ def test_compound_and_cell_spellings_give_the_same_message(build):
 
 def test_operator_node_culprit_uses_its_iso_functor():
     msg = _msg(type_error("number", FloorDiv(left=10000, right=4), "sum_list/2"))
-    assert msg == ("Uncaught logic exception: "
-                   "error(type_error(number,10000//4),context(sum_list/2,_))")
+    assert msg == "Uncaught logic exception: error(type_error(number,10000//4),sum_list/2)"
     assert "a+1" in _msg(("f", Add(left="a", right=1)))
 
 

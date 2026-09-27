@@ -1115,7 +1115,7 @@ def _dispatch_at(obj: Any, arity: int, db: Any = None) -> Callable:
         # special-case dispatch-to-local-predicate here; that routing is
         # P3-3's qualified-goal design.
         from clausal.logic.exceptions import (  # noqa: PLC0415
-            LogicException, error_context, existence_error,
+            LogicException, existence_error,
             dangling_handle_indicator_and_why,
         )
         from clausal.logic.atoms import is_mangled, demangle  # noqa: PLC0415
@@ -1142,7 +1142,7 @@ def _dispatch_at(obj: Any, arity: int, db: Any = None) -> Callable:
         raise LogicException(
             existence_error(
                 "procedure", indicator,
-                error_context(indicator, _atom_goal_message(name, arity, db)),
+                _atom_goal_message(name, arity, db),
             )
         )
     getter = getattr(obj, "_get_dispatch", None)

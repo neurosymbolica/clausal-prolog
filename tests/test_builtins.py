@@ -15,7 +15,6 @@ import pytest
 
 from clausal import cell_args, cell_functor
 from clausal.logic.atoms import mint
-from clausal.logic.exceptions import error_context_text
 from clausal.logic.cells import chars
 from clausal.logic.database import Clause, Database, Module
 from clausal.logic.solve import solve
@@ -638,7 +637,7 @@ class TestBetweenArithmeticBounds:
 
     def test_ground_zero_divisor_raises_with_between_context(self):
         """``1 // 0`` evaluates to nothing while fully ground — the LOCAL
-        raise (context "between/3"), the one path non-numeric leaves no
+        raise (indicator between/3), the one path non-numeric leaves no
         longer reach (they raise inside _eval_ground first)."""
         from clausal.terms import FloorDiv
         from clausal.logic.exceptions import LogicException
@@ -648,7 +647,7 @@ class TestBetweenArithmeticBounds:
         err = exc.value.term
         assert cell_functor(cell_args(err)[0]) == "type_error"
         assert cell_args(cell_args(err)[0])[0] == mint("integer")
-        assert "between/3" in error_context_text(err)
+        assert cell_args(err)[1] == ("/", "between", 3)
 
     def test_expression_with_unbound_leaf_keeps_mode_failure(self):
         """A bound expression still containing an unbound Var behaves like a

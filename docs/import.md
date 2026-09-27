@@ -368,7 +368,7 @@ test_dynamic(X) <- (run_check(X))    # asks the library to call hook
 Querying `test_dynamic(X)` raises `Predicate hook/1 not found` (a
 `PredicateNotFoundError`, which is a `KeyError` and, since 2026-09-25, also a
 `LogicException` carrying the ISO term Scryer raises for the same call:
-`error(existence_error(procedure, hook/1), context(hook/1, Message))`, so
+`error(existence_error(procedure, hook/1), hook/1)`, so
 `catch(G, error(existence_error(procedure, PI), _), Recovery)` catches it, as do
 `except KeyError` in Python and a `++KeyError` catcher). The message goes on to name
 the namespace it searched and list what `lib` *does* define — which is the

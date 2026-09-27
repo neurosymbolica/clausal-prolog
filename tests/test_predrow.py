@@ -13,7 +13,6 @@ import pytest
 
 from clausal.logic.atoms import mint
 from clausal.logic.database import Clause, Database, PredRow, WriteStamp
-from clausal.logic.exceptions import error_context_text
 from clausal.terms import Compound
 
 
@@ -573,7 +572,7 @@ def test_low_level_db_assertz_is_refused_on_a_locked_static_predicate(
 
     with pytest.raises(LogicException) as exc_info:
         db.assertz(Clause(head=("f3_static", 2), body=[]))
-    assert "may not write f3_static/1" in error_context_text(exc_info.value.term)
+    assert "may not write f3_static/1" in exc_info.value.message
 
     assert len(db.row("f3_static", 1).clauses) == 1, "nothing was written"
     assert _one_arg_answers(module, "f3_static") == [1], (

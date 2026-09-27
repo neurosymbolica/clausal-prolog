@@ -36,7 +36,7 @@ import pytest
 from clausal.import_hook import _load_module
 from clausal.logic.atoms import mangle
 from clausal import cell_args, cell_functor
-from clausal.logic.exceptions import LogicException, error_context_text
+from clausal.logic.exceptions import LogicException
 from clausal.logic.solve import solve
 from clausal.logic.variables import Var, walk
 
@@ -70,7 +70,8 @@ def _error(mod, goal):
         list(solve(goal, module=_lm(mod)))
     term = info.value.term
     assert type(term) is tuple and cell_functor(term) == "error"
-    return cell_args(term)[0], error_context_text(term)
+    # (formal, error/2's second argument -- the missing PI, as in Scryer --, prose)
+    return cell_args(term)[0], cell_args(term)[1], info.value.message
 
 
 FIELDED = "-module(cle_owner, [edge(A, B)])\n"
@@ -91,13 +92,13 @@ def _importer(load, owner):
 class TestISOAnswers:
     def test_a_call_is_an_existence_error_for_the_procedure(self, load, src):
         mod = load("cle_owner", src)
-        formal, _ = _error(mod, ("edge", 1, Var()))
+        formal, _, _ = _error(mod, ("edge", 1, Var()))
         assert formal == ("existence_error", "procedure", ("/", "edge", 2))
 
     def test_a_call_through_an_importer_is_the_same_error(self, load, src):
         load("cle_owner", src)
         imp = _importer(load, "cle_owner")
-        formal, _ = _error(imp, ("q", Var()))
+        formal, _, _ = _error(imp, ("q", Var()))
         assert formal == ("existence_error", "procedure", ("/", "edge", 2))
 
     def test_dynamic_makes_the_call_fail_instead(self, load, src):
@@ -153,7 +154,7 @@ def test_an_exported_bare_atom_stays_an_atom(load):
     mod = load("cle_atom", "-module(cle_atom, [foo, bar(X)])\nbar(foo)\n")
     assert mod.__dict__["foo"] == "foo"
     assert _answers(mod, ("bar", Var())) == [("bar", "foo")]
-    formal, _ = _error(mod, "foo")
+    formal, _, _ = _error(mod, "foo")
     assert formal == ("existence_error", "procedure", ("/", "foo", 0))
 
 
@@ -162,9 +163,10 @@ def test_an_exported_bare_atom_stays_an_atom(load):
 
 def test_a_module_export_entry_is_named_as_this_files_export(load):
     mod = load("cle_owner", FIELDED)
-    _, message = _error(mod, ("edge", 1, Var()))
+    _, _pi, message = _error(mod, ("edge", 1, Var()))
     assert "data reference" not in message
-    assert message.startswith("edge/2: edge/2 is declared as DATA")
+    assert _pi == ("/", "edge", 2)
+    assert message.startswith("edge/2 is declared as DATA")
     assert "the -module export entry edge(A, B) in cle_owner" in message
     assert "write edge/2 in that export list instead" in message
 
@@ -172,7 +174,7 @@ def test_a_module_export_entry_is_named_as_this_files_export(load):
 def test_a_private_entry_is_named_as_a_private_entry_not_an_export(load):
     mod = load("cle_priv", "-module(cle_priv, [q(X)])\n"
                "-private([hid(A, B)])\nq(X) <- hid(1, X)\n")
-    formal, message = _error(mod, ("q", Var()))
+    formal, _pi, message = _error(mod, ("q", Var()))
     assert formal == ("existence_error", "procedure", ("/", "hid", 2))
     assert "the -private entry hid(A, B) in cle_priv" in message
     assert "write hid/2 in that -private list instead" in message
@@ -182,9 +184,10 @@ def test_a_private_entry_is_named_as_a_private_entry_not_an_export(load):
 def test_an_import_names_the_owner_module_and_its_export_entry(load):
     load("cle_owner", FIELDED)
     imp = _importer(load, "cle_owner")
-    _, message = _error(imp, ("q", Var()))
+    _, _pi, message = _error(imp, ("q", Var()))
     assert "data reference" not in message
-    assert message.startswith("edge/2: edge/2 is declared as DATA")
+    assert _pi == ("/", "edge", 2)
+    assert message.startswith("edge/2 is declared as DATA")
     assert "imported from cle_owner, whose export entry edge(A, B)" in message
     assert "its export list writes edge/2 instead" in message
 
@@ -199,7 +202,7 @@ def test_an_aliased_import_names_the_owners_spelling_not_the_alias(load):
                "-module(cle_alias, [q(X)])\nq(X) <- e(1, X)\n")
     assert imp.__dict__["e"] == "edge"
     assert _lm(imp).db.declared_kind("e", 2) == "data"
-    formal, message = _error(imp, ("q", Var()))
+    formal, _pi, message = _error(imp, ("q", Var()))
     assert formal == ("existence_error", "procedure", ("/", "edge", 2))
     assert "imported from cle_owner, whose export entry edge(A, B)" in message
     assert "e/2" not in message.replace("edge/2", "")
@@ -208,7 +211,7 @@ def test_an_aliased_import_names_the_owners_spelling_not_the_alias(load):
 
 def test_the_iso_spelling_does_not_get_the_data_message(load):
     mod = load("cle_owner", ISO_PI)
-    _, message = _error(mod, ("edge", 1, Var()))
+    _, _pi, message = _error(mod, ("edge", 1, Var()))
     assert "DATA" not in message
     assert "edge/2 is not defined in module 'cle_owner'" in message
 
@@ -217,7 +220,7 @@ def test_an_undeclared_atom_keeps_the_general_message(load):
     """A plain atom called as a goal -- no DATA declaration at that arity --
     is not told about export lists."""
     mod = load("cle_atom", "-module(cle_atom, [foo, bar(X)])\nbar(foo)\n")
-    _, message = _error(mod, "foo")
+    _, _pi, message = _error(mod, "foo")
     assert "is declared as DATA" not in message
     assert "is not callable at arity 0" in message
 
@@ -374,7 +377,7 @@ def test_two_aliased_imports_of_the_same_spelling_name_both_owners(load):
                "-import_from(cle_own1, [alias(edge, e1)])\n"
                "-import_from(cle_own2, [alias(edge, e2)])\n"
                "-module(cle_twoalias, [q(X)])\nq(X) <- e1(1, X)\n")
-    _, message = _error(imp, ("q", Var()))
+    _, _pi, message = _error(imp, ("q", Var()))
     assert "cle_own1" in message and "cle_own2" in message
     assert "edge(A, B)" in message and "edge(X, Y)" in message
 

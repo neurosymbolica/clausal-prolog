@@ -36,7 +36,7 @@ from clausal.logic.atoms import mint
 import clausal.import_hook  # noqa: F401 — installs the meta-path finder
 from clausal.import_hook import _load_module
 from clausal.logic.database import Clause, Database, WriteStamp
-from clausal.logic.exceptions import LogicException, error_context_text
+from clausal.logic.exceptions import LogicException
 from clausal.logic.predicate import resolve_predicate_row
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
@@ -86,7 +86,7 @@ def _row_of(module, binding, arity):
 def _refusal_text(exc) -> str:
     """The gate's one refusal line, wherever a channel surfaced it."""
     if isinstance(exc, LogicException):
-        return error_context_text(exc.term)
+        return exc.message
     return str(exc)
 
 

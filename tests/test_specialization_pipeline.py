@@ -764,7 +764,7 @@ class TestSpecializedPredicateIsARow:
         Pins Task 7's report concern 2, which is a NEW refusal.
         """
         from clausal import cell_args, cell_functor
-        from clausal.logic.exceptions import LogicException, error_context_text
+        from clausal.logic.exceptions import LogicException
 
         with pytest.raises(LogicException) as exc:
             import tests.fixtures.specialize_clobber  # noqa: F401
@@ -778,8 +778,8 @@ class TestSpecializedPredicateIsARow:
         )
         # The channel names the DIRECTIVE and the author names the
         # specializer; they are no longer the same word (fix round 1, F3).
-        assert error_context_text(term).startswith("-specialize: specialize:")
-        assert "may not write my_alias/1" in error_context_text(term)
+        assert exc.value.message.startswith("-specialize: specialize:")
+        assert "may not write my_alias/1" in exc.value.message
 
     def test_sibling_specializations_are_the_row_linked_classes(
         self, specialize_deep,

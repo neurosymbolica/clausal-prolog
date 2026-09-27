@@ -24,7 +24,6 @@ from clausal.logic.exceptions import LogicException
 from clausal.logic.solve import solve, _deref_walk
 from clausal.logic.variables import Trail, Var, deref, unify
 from clausal import cell_args, cell_functor
-from clausal.logic.exceptions import error_context_text
 from clausal.terms import Compound, term_canonical, term_str
 from clausal.modules.py.datetime import _dt_to_term as _T
 from clausal.modules.py.datetime import _term_to_dt as _P  # py datetime -> its TERM
@@ -234,7 +233,7 @@ def test_row_13b_a_string_goal_in_solve_has_no_procedure(builtins_mod):
     assert cell_functor(formal) == "existence_error"
     assert cell_args(formal)[0] == mint("procedure")
     assert cell_args(formal)[1] == ("/", mint("."), 2)
-    assert "solve/1" in error_context_text(exc.value.term)
+    assert "solve/1" in exc.value.message
 
 
 def test_row_13c_the_empty_string_goal_names_the_nil_atom(builtins_mod):
@@ -738,12 +737,12 @@ class TestTheNilAtomInAKeyPosition:
         assert SegString([""]) == b"" and SegBytes([b""]) == chars("")
 
     def test_the_nil_goal_error_is_worded_for_nil(self, builtins_mod):
-        """Fix round 3, item 6: the shared context said "a string goal is the
+        """Fix round 3, item 6: the shared message said "a string goal is the
         list of its characters" for ``[]``, which has no characters."""
         from clausal.logic.solve import call
         with pytest.raises(LogicException) as exc:
             list(call("call_goal", [], module=builtins_mod))
-        context = error_context_text(exc.value.term)
+        context = exc.value.message
         assert "the empty list is not a callable term" in context
         assert "list of its characters" not in context
         # …and a real string still gets the string wording, at call/1 and
@@ -751,10 +750,10 @@ class TestTheNilAtomInAKeyPosition:
         # type_error; FLIPPED back, operator rule 2026-09-25, ISO first: a non-empty list or string is the callable compound '.'/2, so call/1 of one names the missing procedure '.'/2; Scryer disagrees with itself (literal call([a]) -> existence_error, run-time G = [a], call(G) -> type_error).)
         with pytest.raises(LogicException) as exc:
             list(call("call_goal", chars("foo"), Var(), module=builtins_mod))
-        assert "list of its characters" in error_context_text(exc.value.term)
+        assert "list of its characters" in exc.value.message
         with pytest.raises(LogicException) as exc:
             list(call("call_goal", chars("foo"), module=builtins_mod))
-        assert "list of its characters" in error_context_text(exc.value.term)
+        assert "list of its characters" in exc.value.message
         assert cell_functor(cell_args(exc.value.term)[0]) == "existence_error"
 
     def test_a_py_wrapper_option_table_survives_a_nil_name(self):
@@ -1197,7 +1196,7 @@ def test_vary_and_extend_refuse_a_malformed_field_key(builtins_mod):
         assert cell_functor(formal) == "type_error"
         assert cell_args(formal)[0] == mint("atom")
         assert cell_args(formal)[1] == 1
-        assert f"{goal_name}/3" in error_context_text(exc.value.term)
+        assert cell_args(exc.value.term)[1] == ("/", goal_name, 3)
 
 
 def test_vary_and_extend_report_an_unbound_field_key_as_uninstantiated(
@@ -1212,7 +1211,8 @@ def test_vary_and_extend_report_an_unbound_field_key_as_uninstantiated(
             list(solve((goal_name, {Var(): 2}, mint("t12_term"), Var()),
                        builtins_mod))
         assert _formal(exc) == mint("instantiation_error")
-        assert error_context_text(exc.value.term) == f"{goal_name}/3"
+        assert cell_args(exc.value.term)[1] == ("/", goal_name, 3)
+        assert exc.value.message is None
 
 
 _PREDICATE_MODULE = "clausal.logic.predicate"

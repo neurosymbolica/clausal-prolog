@@ -17,7 +17,7 @@ import pytest
 
 from clausal.logic.atoms import is_atom, spelling
 from clausal import cell_args, cell_functor
-from clausal.logic.exceptions import LogicException, error_context_text
+from clausal.logic.exceptions import LogicException
 
 
 def _src(goal, extra_atoms=()):
@@ -157,7 +157,7 @@ def test_hash_family_error_surface_OPEN_iso_divergence(run_clausal):
 
     Two warts are pinned deliberately rather than fixed. First, the family is
     not internally consistent: `'#='` fails where `'#\\='` succeeds where
-    `'#<'` raises. Second, the last row's error CONTEXT names `(==)/2` for a
+    `'#<'` raises. Second, the last row's error INDICATOR names `(==)/2` for a
     goal written `'#='` — the context string comes from the shared ArithEq
     implementation, which knows only its Clausal spelling. Both follow from
     `#=` being a NAME for `==`'s existing behaviour; correcting either means
@@ -178,14 +178,14 @@ def test_hash_family_error_surface_OPEN_iso_divergence(run_clausal):
     assert type(lt) is tuple and cell_functor(lt) == "error", lt
     assert spelling(cell_args(cell_args(lt)[0])[0]) == "orderable", lt
     assert spelling(cell_args(cell_args(lt)[0])[1]) == "foo", lt
-    assert error_context_text(lt) == "(<)/2", lt
+    assert cell_args(lt)[1] == ("/", "<", 2), lt
 
     eq = _err_term(run_clausal, "'#='(X_UNUSED, foo)", extra_atoms=("foo",))
     assert type(eq) is tuple and cell_functor(eq) == "error", eq
     assert spelling(cell_args(cell_args(eq)[0])[0]) == "evaluable", eq
     assert spelling(cell_args(cell_args(eq)[0])[1]) == "foo", eq
-    # The wart: a '#=' call reports its context as (==)/2.
-    assert error_context_text(eq) == "(==)/2", eq
+    # The wart: a '#=' call reports its indicator as (==)/2.
+    assert cell_args(eq)[1] == ("/", "==", 2), eq
 
 
 def test_hash_family_error_surface_OPEN_iso_divergence_oracle(scryer):

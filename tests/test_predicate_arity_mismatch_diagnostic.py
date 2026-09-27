@@ -30,7 +30,6 @@ import pytest
 
 from clausal import cell_args, cell_functor
 from clausal.logic.atoms import mint
-from clausal.logic.exceptions import error_context_text
 from clausal.logic.database import Clause, Database
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref, walk
@@ -783,8 +782,8 @@ class TestZeroArityFactAtomHead:
         assert cell_args(cell_args(term)[0])[0] == mint("procedure")
         assert cell_functor(indicator) == "/"
         assert cell_args(indicator) == ("arcm_pure_tag", 1)
-        assert "not callable at arity 1" in error_context_text(term)
-        assert "AttributeError" not in error_context_text(term)
+        assert "not callable at arity 1" in exc_info.value.message
+        assert "AttributeError" not in exc_info.value.message
 
 
 # ── what the docs may claim ──────────────────────────────────────────────────

@@ -25,7 +25,7 @@ import pytest
 
 from clausal import cell_args, cell_functor
 from clausal.logic.atoms import mint
-from clausal.logic.exceptions import error_context_text
+from clausal.logic.exceptions import error_prose
 from clausal.logic.cells import chars
 from clausal.import_hook import _load_module
 from clausal.logic.solve import solve, call, _query_cache
@@ -256,7 +256,8 @@ class TestF002EqNonRealOperand:
         assert cell_functor(inner) == "type_error"
         assert cell_args(inner)[0] == mint("evaluable")
         assert cell_args(inner)[1] == culprit
-        assert error_context_text(term) == "(==)/2"
+        assert cell_args(term)[1] == ("/", "==", 2)
+        assert exc_info.value.message is None
 
     def test_eq_date_operand_raises_catchable_type_error(self):
         import datetime as dt
@@ -356,10 +357,10 @@ class TestF002NeNonRealOperand:
     ``X != "banana", X is "apple"`` silently lost its solution.  Same
     exactly-one-var + ``numbers.Real`` allowlist as ``==``/the ordering
     comparators, with the ``evaluable`` kind (``!=`` is ``==``'s arithmetic
-    sibling; ``dif/2`` remains the structural disequality) and context
-    ``"(!=)/2"`` (the clausal surface operator, matching ``"(==)/2"``); it
-    reads back as ``'!='/2``, the writeq form of a name that is not an ISO
-    operator.
+    sibling; ``dif/2`` remains the structural disequality) and error/2's
+    second argument the indicator ``'!='/2`` (the clausal surface operator,
+    matching ``(==)/2``; ``'!='`` is the writeq form of a name that is not an
+    ISO operator).
     Fixed: todo/arith-disequality-on-unbound-var-rejects-all-later-bindings.md
     """
 
@@ -370,7 +371,8 @@ class TestF002NeNonRealOperand:
         assert cell_functor(inner) == "type_error"
         assert cell_args(inner)[0] == mint("evaluable")
         assert cell_args(inner)[1] == culprit
-        assert error_context_text(term) == "'!='/2"
+        assert cell_args(term)[1] == ("/", "!=", 2)
+        assert exc_info.value.message is None
 
     def test_ne_str_operand_raises_catchable_type_error(self):
         from clausal.logic.exceptions import LogicException
@@ -486,7 +488,8 @@ class TestF002ExprTreeVsNonNumericOperand:
         assert cell_functor(cell_args(term)[0]) == "type_error"
         assert cell_args(cell_args(term)[0])[0] == mint("evaluable")
         assert cell_args(cell_args(term)[0])[1] == "banana"
-        assert error_context_text(term) == "(==)/2"
+        assert cell_args(term)[1] == ("/", "==", 2)
+        assert ei.value.message is None
 
     def test_eq_str_vs_var_tree_raises(self):
         from clausal.logic.exceptions import LogicException
@@ -503,7 +506,8 @@ class TestF002ExprTreeVsNonNumericOperand:
         from clausal.logic.exceptions import LogicException
         with pytest.raises(LogicException) as ei:
             fd_ne(self._add(Var(), 1), "banana", Trail())
-        assert error_context_text(ei.value.term) == "'!='/2"
+        assert cell_args(ei.value.term)[1] == ("/", "!=", 2)
+        assert ei.value.message is None
 
     def test_eq_compiled_repro_raises_instead_of_wrong_answer(self, load):
         # The reported repro: X + 1 == "banana" posted, then accepted X is 4.
@@ -582,7 +586,10 @@ class TestNonNumericLeafInsideExprTree:
         # written as ``"a"`` in .clausal source is an ATOM — see
         # ``test_compiled_leaf_error_is_catchable``, which expects one.
         assert cell_args(inner)[1] == culprit
-        assert error_context_text(term) == "clpfd expression"
+        # No leading indicator: Scryer's error(E, _) -- an unbound second
+        # argument, the text on the exception.
+        assert type(deref(cell_args(term)[1])) is Var
+        assert exc_info.value.message == "clpfd expression"
 
     # ── the repro: eq / ne / orderings with a garbage leaf ───────────────
 
@@ -731,7 +738,8 @@ safeleaf(SX, SE) <- catch((SX + "a" == 5), SE, 1 == 1)
         assert cell_functor(cell_args(term)[0]) == "type_error"
         assert cell_args(cell_args(term)[0])[0] == mint("integer")
         assert cell_args(cell_args(term)[0])[1] == mint("a")
-        assert error_context_text(term) == "clpfd expression"
+        assert type(deref(cell_args(term)[1])) is Var
+        assert error_prose(term) == "clpfd expression"
 
     # ── controls: legitimate leaves and nodes keep working ───────────────
 

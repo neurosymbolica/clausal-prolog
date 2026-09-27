@@ -21,7 +21,6 @@ import pytest
 
 from clausal import cell_args, cell_functor
 from clausal.logic.atoms import mangle
-from clausal.logic.exceptions import error_context_text
 from clausal.logic.variables import Var, deref
 
 
@@ -240,4 +239,4 @@ def test_a_missing_predicate_error_names_the_module_in_its_indicator(lib):
     obj_type, indicator = cell_args(inner)
     assert obj_type == "procedure"
     assert cell_functor(indicator) == "/" and cell_args(indicator) == ("nope", 2)
-    assert LIB in error_context_text(info.value.term), "the module is named in the message"
+    assert LIB in info.value.message, "the module is named in the message"

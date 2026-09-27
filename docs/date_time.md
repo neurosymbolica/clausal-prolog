@@ -80,7 +80,7 @@ The same values sort chronologically through `sort/2`, `msort/2`,
 
 Only *comparable* values can be ordered against each other. Comparing a `date`
 with a `datetime`, a naive `datetime` with a tz-aware one, or a date with a
-number throws `error(type_error(orderable, Culprit), context((<)/2, _))` — the same error
+number throws `error(type_error(orderable, Culprit), (<)/2)` — the same error
 `min_list/2` and `max_list/2` raise for a non-orderable list. `catch/3`
 intercepts it and binds the error term:
 

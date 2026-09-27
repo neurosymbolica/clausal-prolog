@@ -16,7 +16,6 @@ from clausal.logic.trampoline import StepGenerator, solutions
 from clausal.logic.database import Clause
 from clausal.logic.exceptions import LogicException
 from clausal import cell_args, cell_functor
-from clausal.logic.exceptions import error_context_text
 from clausal.terms import Compound
 from tests.predicate_api_support import RowPredicate
 
@@ -517,7 +516,7 @@ class TestListingIndicatorInstantiation:
         err = self._instantiation_error_for(Div(left=Var(), right=2))
         assert type(err) is tuple and cell_functor(err) == "error"
         assert cell_args(err)[0] == mint("instantiation_error")
-        assert "listing/1" in error_context_text(err)
+        assert cell_args(err)[1] == ("/", "listing", 1)
 
     def test_an_unbound_arity_is_an_instantiation_error_too(self):
         err = self._instantiation_error_for(("/", "pt", Var()))

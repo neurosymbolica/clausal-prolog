@@ -18,7 +18,7 @@ ADD, not replace: ``PredicateNotFoundError`` is a ``LogicException`` AND a
 ``except KeyError`` / ``except PredicateNotFoundError`` and a ``++KeyError``
 catcher keep working, ``++Exception`` still never catches a logic ball, and
 the "defines: ... / -> define it or import it" diagnostic is kept, as the
-message and as the term's context.
+message and as the prose recorded for the term.
 
 Both eras: an UNBOUND name (the class era's only shape for a predicate that
 does not exist) and a name bound to a module-qualified HANDLE whose owner
@@ -40,7 +40,7 @@ import pytest
 import clausal
 from clausal.logic.atoms import mangle, mint
 from clausal import cell_args, cell_functor
-from clausal.logic.exceptions import LogicException, error_context_text
+from clausal.logic.exceptions import LogicException, error_prose
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, walk
 from clausal.predicate_diagnostics import PredicateNotFoundError
@@ -72,11 +72,20 @@ def _assert_iso(term, name, arity):
 
 
 def _context_message(term):
-    """The Message of ``error(_, context(Name/Arity, Message))`` -- the
-    engine's diagnostic text, verbatim."""
-    context = cell_args(term)[1]
-    assert cell_functor(context) == "context", context
-    return cell_args(context)[1]
+    """The engine's diagnostic text, verbatim, for
+    ``error(existence_error(procedure, PI), PI)`` -- the second argument is
+    the PI itself (Scryer); the text is the prose recorded for the term."""
+    assert cell_args(term)[1] == cell_args(cell_args(term)[0])[1], term
+    return error_prose(term)
+
+
+def _uncaught_message(goal, module):
+    """The diagnostic of the Python exception *goal* raises.  A term caught
+    by ``catch/3`` is Scryer's ``error(existence_error(procedure, PI), PI)``
+    and carries no prose; the diagnostic travels on the exception."""
+    with pytest.raises(LogicException) as info:
+        list(call(goal, module=module))
+    return info.value.message
 
 
 def _answers(goal, module, n=1):
@@ -105,6 +114,7 @@ _CALLER = """
     qualified_unloaded(PI) <- catch(udc_never_loaded.nosuch(1), error(existence_error(procedure, PI), _), True)
     uncaught() <- ghost(1)
     qualified_uncaught() <- udc_owner_ERA.nosuch(1)
+    qualified_whole_uncaught() <- udc_owner_ERA.nosuch(1, 2)
 """
 
 
@@ -190,10 +200,10 @@ def test_python_except_still_catches_it(pair):
     text = str(exc)
     assert "Uncaught logic exception" not in text
     assert exc.args == (text,)
-    assert cell_args(cell_args(exc.term)[1])[0] == _pi("ghost", 1)
+    assert cell_args(exc.term)[1] == _pi("ghost", 1)
     assert _context_message(exc.term) == text
     if era == "class":
-        # the diagnostic survives verbatim: as str(), and as the context
+        # the diagnostic survives verbatim: as str(), and as the prose
         assert text.startswith("Predicate ghost/1 not found")
         assert "udc_caller_class defines:" in text
         assert "-> define ghost/1 in udc_caller_class" in text
@@ -202,13 +212,15 @@ def test_python_except_still_catches_it(pair):
                         "(reached through a module-qualified handle)")
 
 
-def test_the_class_era_message_is_the_context(pair):
+def test_the_class_era_message_is_the_exception_message(pair):
     era, _O, I = pair
     [(e,)] = _answers("whole", I)
+    assert cell_args(e)[1] == _pi("ghost", 1)
+    message = _uncaught_message("uncaught", I)
     if era == "class":
-        assert "-> define ghost/1 in udc_caller_class" in _context_message(e)
+        assert "-> define ghost/1 in udc_caller_class" in message
     else:
-        assert "is not defined in module 'udc_owner_handle'" in _context_message(e)
+        assert "is not defined in module 'udc_owner_handle'" in message
 
 
 # ── module-qualified calls ───────────────────────────────────────────────────
@@ -221,11 +233,13 @@ def test_a_qualified_unknown_call_is_the_same_iso_term(pair):
     assert _answers("qualified", I) == [(_pi("nosuch", 1),)]
 
 
-def test_a_qualified_unknown_call_names_the_module_in_the_context(pair):
+def test_a_qualified_unknown_call_names_the_module_in_the_message(pair):
     era, _O, I = pair
     [(e,)] = _answers("qualified_whole", I)
     _assert_iso(e, "nosuch", 2)
-    assert f"nosuch/2 is not defined in module 'udc_owner_{era}'" in _context_message(e)
+    assert cell_args(e)[1] == _pi("nosuch", 2)
+    assert (f"nosuch/2 is not defined in module 'udc_owner_{era}'"
+            in _uncaught_message("qualified_whole_uncaught", I))
 
 
 def test_a_qualified_call_into_an_unloaded_module_is_the_same_iso_term(pair):
@@ -256,13 +270,13 @@ def test_a_qualified_call_resolves_a_predicate_asserted_later(tmp_path, monkeypa
 
 def test_the_refusal_for_a_base_that_resolves_to_nothing(tmp_path, monkeypatch):
     """The dispatch itself, for a dotted base that names nothing at all: the
-    same ISO term, the base named in the context."""
+    same ISO term, the base named in the message."""
     from clausal.logic.compiler.globals_env import _unresolved_qualified_dispatch
     fn = _unresolved_qualified_dispatch("udc_nomod.p", 1, {}, None)
     with pytest.raises(PredicateNotFoundError) as info:
         fn(None, None, None, None, 1)
     _assert_iso(info.value.term, "p", 1)
-    assert "udc_nomod" in error_context_text(info.value.term)
+    assert "udc_nomod" in info.value.message
 
 
 def test_a_qualified_unknown_call_raises_the_same_python_type(pair):
@@ -298,16 +312,18 @@ def test_a_base_module_loaded_after_the_caller_compiled_answers(tmp_path, monkey
 
 def test_a_base_that_is_a_python_module_is_the_same_iso_term(tmp_path, monkeypatch):
     """A base that resolves to a loaded NON-Clausal object (the ``math``
-    module): same term, the context says it is not a predicate of it."""
+    module): same term, the message says it is not a predicate of it."""
     import math  # noqa: F401 -- the base must be loaded
     im = _load(tmp_path, monkeypatch, "udc_pybase", """
         -module(udc_pybase, [])
         q(E) <- catch(math.nosuch(1), E, True)
+        q_uncaught() <- math.nosuch(1)
     """)
     I = im.__dict__["$module"]
     [(e,)] = _answers("q", I)
     _assert_iso(e, "nosuch", 1)
-    assert _context_message(e) == ("nosuch/1 is not a predicate of 'math' "
+    assert cell_args(e)[1] == _pi("nosuch", 1)
+    assert _uncaught_message("q_uncaught", I) == ("nosuch/1 is not a predicate of 'math' "
                          "(a module-qualified call math.nosuch/1)")
 
 
