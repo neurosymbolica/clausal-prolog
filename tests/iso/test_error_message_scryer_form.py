@@ -136,6 +136,7 @@ def _msg(term) -> str:
     return str(LogicException(term)).split("\n", 1)[0]
 
 
+@pytest.mark.compound_retirement_slice8
 def test_message_is_the_scryer_text_not_the_repr():
     msg = _msg(type_error("evaluable", Compound("/", (mint("+"), 2)), "is/2"))
     # Exactly what Scryer prints for ``X is 1 + a`` (probed 2026-09-27).
@@ -146,10 +147,10 @@ def test_message_is_the_scryer_text_not_the_repr():
 BUILDERS = [
     lambda: type_error("integer", "x", "arg/3"),
     lambda: instantiation_error("atom_length/2"),
-    lambda: existence_error("procedure", Compound("/", (mint("foo"), 0)), "foo/0"),
+    lambda: existence_error("procedure", ("/", mint("foo"), 0), "foo/0"),
     lambda: domain_error("not_less_than_zero", -1, "atom_length/2"),
     lambda: evaluation_error("zero_divisor", "(/)/2"),
-    lambda: permission_error("modify", "static_procedure", Compound("/", ("p", 1))),
+    lambda: permission_error("modify", "static_procedure", ("/", "p", 1)),
 ]
 
 
@@ -161,6 +162,7 @@ def _as_compound(t):
     return t
 
 
+@pytest.mark.compound_retirement_slice8
 @pytest.mark.parametrize("build", BUILDERS)
 def test_compound_and_cell_spellings_give_the_same_message(build):
     cell = build()

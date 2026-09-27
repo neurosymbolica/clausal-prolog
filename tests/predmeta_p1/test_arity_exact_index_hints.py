@@ -26,7 +26,7 @@ from clausal.logic.database import Clause, Database
 from tests.predicate_api_support import RowPredicate
 from clausal.logic.solve import call
 from clausal.logic.variables import deref
-from clausal.terms import Call, Compound, LoadName
+from clausal.terms import Call, LoadName
 
 
 # ── fixture: one locked, indexed callee living in a real Database ────────────
@@ -41,7 +41,7 @@ def _locked_indexed_callee(db, name, arity, facts):
     to the row until W4b-3 slice 7.)  Returns a ``RowPredicate``: its
     ``handle`` is the binding a module's globals hold."""
     pred = RowPredicate(name, [f"arg{i}" for i in range(arity)], db)
-    clauses = [_normalize_fact_clause(Compound(name, tuple(a))) for a in facts]
+    clauses = [_normalize_fact_clause((name, *a)) for a in facts]
     compile_predicate_trampoline(name, arity, clauses, db, pred_cls=pred.handle)
     pred._state_row().locked = True
     return pred
@@ -91,7 +91,7 @@ def test_inject_hints_at_the_matching_arity():
     from clausal.logic.compiler.goal_trampoline import _inject_bucket_refs_trampoline
     db, pred = _callee_db()
     base_globals = {"colour": pred.handle}
-    clause = Clause(head=Compound("caller", (Var(),)), body=_body(2))
+    clause = Clause(head=("caller", Var()), body=_body(2))
     ctx = _mkctx(db)
     _inject_bucket_refs_trampoline(ctx, [clause], base_globals, db=db)
     assert [k for k in ctx.bucket_ref_map if k[1] == 2], ctx.bucket_ref_map
@@ -102,7 +102,7 @@ def test_inject_skips_a_call_at_an_arity_with_no_row():
     from clausal.logic.compiler.goal_trampoline import _inject_bucket_refs_trampoline
     db, pred = _callee_db()
     base_globals = {"colour": pred.handle}
-    clause = Clause(head=Compound("caller", (Var(),)), body=_body(1))
+    clause = Clause(head=("caller", Var()), body=_body(1))
     ctx = _mkctx(db)
     _inject_bucket_refs_trampoline(ctx, [clause], base_globals, db=db)
     assert not ctx.bucket_ref_map, (
@@ -122,7 +122,7 @@ def test_inject_without_a_db_falls_back_to_the_binding_handle():
     from clausal.logic.compiler.goal_trampoline import _inject_bucket_refs_trampoline
     db, pred = _callee_db()
     base_globals = {"colour": pred.handle}
-    clause = Clause(head=Compound("caller", (Var(),)), body=_body(2))
+    clause = Clause(head=("caller", Var()), body=_body(2))
     ctx = _mkctx(None)
     _inject_bucket_refs_trampoline(ctx, [clause], base_globals, db=None)
     assert [k for k in ctx.bucket_ref_map if k[1] == 2], ctx.bucket_ref_map
@@ -133,7 +133,7 @@ def test_inject_without_a_db_or_a_binding_emits_no_hints():
     name the callee with."""
     from clausal.logic.compiler.goal_trampoline import _inject_bucket_refs_trampoline
     db, pred = _callee_db()
-    clause = Clause(head=Compound("caller", (Var(),)), body=_body(2))
+    clause = Clause(head=("caller", Var()), body=_body(2))
     ctx = _mkctx(None)
     _inject_bucket_refs_trampoline(ctx, [clause], {}, db=None)
     assert not ctx.bucket_ref_map
@@ -145,7 +145,7 @@ def test_inject_without_a_db_or_a_binding_emits_no_hints():
 def test_ir_walker_hints_at_the_matching_arity():
     from clausal.logic.compiler.goal_trampoline import analyse_ir_bucket_refs
     db, pred = _callee_db()
-    clause = Clause(head=Compound("caller", (Var(),)), body=_body(2))
+    clause = Clause(head=("caller", Var()), body=_body(2))
     br, _jbr = analyse_ir_bucket_refs([clause], {"colour": pred.handle}, db=db)
     assert [k for k in br if k[1] == 2], br
 
@@ -153,7 +153,7 @@ def test_ir_walker_hints_at_the_matching_arity():
 def test_ir_walker_skips_a_call_at_an_arity_with_no_row():
     from clausal.logic.compiler.goal_trampoline import analyse_ir_bucket_refs
     db, pred = _callee_db()
-    clause = Clause(head=Compound("caller", (Var(),)), body=_body(1))
+    clause = Clause(head=("caller", Var()), body=_body(1))
     br, jbr = analyse_ir_bucket_refs([clause], {"colour": pred.handle}, db=db)
     assert not br and not jbr, br
 
@@ -352,7 +352,7 @@ def test_the_analysers_refuse_a_positional_or_missing_db():
     from clausal.logic.compiler.optimisations import call_site
 
     db, pred = _callee_db()
-    clause = Clause(head=Compound("caller", (Var(),)), body=_body(2))
+    clause = Clause(head=("caller", Var()), body=_body(2))
     with pytest.raises(TypeError):
         analyse_ir_bucket_refs([clause], {"colour": pred.handle})
     with pytest.raises(TypeError):

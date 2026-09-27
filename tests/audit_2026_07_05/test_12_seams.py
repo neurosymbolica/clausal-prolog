@@ -215,11 +215,10 @@ oklin(LX, LY) <- (LX == LY * 2, LY == 3)
 
     def test_eq_runtime_compound_operand_raises_catchable_type_error(self):
         from clausal.logic.exceptions import LogicException
-        from clausal.terms import Compound
         tr = Trail()
         x = Var()
         with pytest.raises(LogicException):
-            fd_eq(x, Compound("pt", (1, 2)), tr)
+            fd_eq(x, ("pt", 1, 2), tr)
 
     def test_eq_arith_expression_operands_still_legal(self, load):
         # controls: expression trees must NOT be caught by the compound guard

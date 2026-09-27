@@ -55,7 +55,6 @@ from clausal.logic.units_constraint import (
     _has_units,
 )
 from clausal.terms import (
-    Compound,
     DictTerm,
     SetTerm,
     SegList,
@@ -163,7 +162,7 @@ class TestF001DifContainerBlindSpots:
     def test_control_dif_compound_enforced(self):
         t = Trail()
         v = Var()
-        assert dif(Compound("f", (v, 2)), Compound("f", (1, 2)), t) is True
+        assert dif(("f", v, 2), ("f", 1, 2), t) is True
         assert unify(v, 1, t) is False
 
     def test_control_setterm_consistent_with_unifier(self):
@@ -299,8 +298,8 @@ class TestF003StructuralEqInconsistencies:
 
     def test_control_compound(self):
         x = Var()
-        assert structural_eq(Compound("f", (x, 1)), Compound("f", (x, 1)))
-        assert not structural_eq(Compound("f", (x,)), Compound("g", (x,)))
+        assert structural_eq(("f", x, 1), ("f", x, 1))
+        assert not structural_eq(("f", x), ("g", x))
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -343,7 +342,7 @@ class TestF004TermAttvarsBlindSpots:
     def test_control_list_compound_dictterm(self):
         t = Trail()
         v = _attvar_with_attr(t)
-        for term in ([v], Compound("f", (v,)), DictTerm({"a": v})):
+        for term in ([v], ("f", v), DictTerm({"a": v})):
             out = Var()
             assert list(_term_attributed_variables__2(term, out, t, [])) == [None]
             assert deref(out) == [v]
@@ -451,7 +450,7 @@ class TestF006DifOccursCheckCompound:
     def test_dif_x_fx_immediately_satisfied(self):
         t = Trail()
         x = Var()
-        assert dif(x, Compound("f", (x,)), t) is True
+        assert dif(x, ("f", x), t) is True
         assert get_attr(x, DIF_KEY) is None   # docs: no pending constraint
 
     def test_control_dif_x_listx_immediately_satisfied(self):
@@ -489,7 +488,7 @@ class TestDifCoreRegression:
     def test_structural_incompatibility_immediate(self):
         t = Trail()
         x = Var()
-        assert dif(Compound("f", (x,)), Compound("g", (x,)), t) is True
+        assert dif(("f", x), ("g", x), t) is True
         assert get_attr(x, DIF_KEY) is None
         assert dif((1, x), (1, 2, 3), t) is True   # arity mismatch
         assert get_attr(x, DIF_KEY) is None

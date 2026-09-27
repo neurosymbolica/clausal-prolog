@@ -265,6 +265,7 @@ test("citation term mismatch") <- (
 '''
 
 
+@pytest.mark.compound_retirement_slice8
 def test_the_generic_compound_note_fires_for_a_row_backed_functor(tmp_path,
                                                                   capsys):
     """``cite/1`` is a class AND a row here (``-dynamic`` mints the row).

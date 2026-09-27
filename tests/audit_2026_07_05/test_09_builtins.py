@@ -27,7 +27,7 @@ from clausal.logic import solve as solve_mod
 from clausal.logic.variables import Var, deref, is_var
 from clausal import cell_args, cell_functor
 from clausal.logic.exceptions import LogicException
-from clausal.terms import Compound, SegString, SetTerm
+from clausal.terms import SegString, SetTerm
 
 PYTHON = sys.executable
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -895,7 +895,7 @@ def test_F032_regression_reverse_segstring_promotion(fix):
 def test_regression_arg_bounds(fix):
     """arg/3 rejects n=0 and negative n — no Python-indexing leak (C path)."""
     _, m = fix
-    t = Compound("f", (1, 2))
+    t = ("f", 1, 2)
     assert not _first(m, "arg", 0, t, Var())
     assert not _first(m, "arg", -1, t, Var())
     assert not _first(m, "arg", 0, [10, 20], Var())

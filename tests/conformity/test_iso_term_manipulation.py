@@ -27,7 +27,6 @@ from clausal.logic.atoms import char_atom, mint
 from clausal.logic.database import Module
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
-from clausal.terms import Compound
 
 
 def _call_binding(functor, *args, var_indices=None, mod=None):
@@ -51,7 +50,7 @@ class TestFunctor:
         """ISO: functor(f(a,b), X, Y) → X = f, Y = 2."""
         # nv
         name, arity = Var(), Var()
-        result = _call_binding("functor", Compound("f", (char_atom("a"), char_atom("b"))), name, arity)
+        result = _call_binding("functor", ("f", char_atom("a"), char_atom("b")), name, arity)
         assert result is not None
         assert result == (char_atom("f"), 2)
 
@@ -71,7 +70,7 @@ class TestFunctor:
         """functor(f(x), Name, Arity) → Name = f, Arity = 1."""
         # nv
         name, arity = Var(), Var()
-        result = _call_binding("functor", Compound("f", (char_atom("x"),)), name, arity)
+        result = _call_binding("functor", ("f", char_atom("x")), name, arity)
         assert result is not None
         assert result == (char_atom("f"), 1)
 
@@ -105,7 +104,7 @@ class TestFunctor:
         name, arity = Var(), Var()
         result = _call_binding(
             "functor",
-            Compound("f", (char_atom("a"), char_atom("b"), char_atom("c"), char_atom("d"), char_atom("e"))),
+            ("f", char_atom("a"), char_atom("b"), char_atom("c"), char_atom("d"), char_atom("e")),
             name, arity,
         )
         assert result is not None
@@ -122,7 +121,7 @@ class TestArg:
         """ISO: arg(1, f(a,b,c), X) → X = a."""
         # nv
         x = Var()
-        result = _call_binding("arg", 1, Compound("f", (char_atom("a"), char_atom("b"), char_atom("c"))), x)
+        result = _call_binding("arg", 1, ("f", char_atom("a"), char_atom("b"), char_atom("c")), x)
         assert result is not None
         assert result[0] == mint("a")
 
@@ -130,14 +129,14 @@ class TestArg:
         """ISO: arg(2, f(a,b,c), X) → X = b."""
         # nv
         x = Var()
-        result = _call_binding("arg", 2, Compound("f", (char_atom("a"), char_atom("b"), char_atom("c"))), x)
+        result = _call_binding("arg", 2, ("f", char_atom("a"), char_atom("b"), char_atom("c")), x)
         assert result is not None
         assert result[0] == mint("b")
 
     def test_third_arg(self):
         # nv
         x = Var()
-        result = _call_binding("arg", 3, Compound("f", (char_atom("a"), char_atom("b"), char_atom("c"))), x)
+        result = _call_binding("arg", 3, ("f", char_atom("a"), char_atom("b"), char_atom("c")), x)
         assert result is not None
         assert result[0] == mint("c")
 
@@ -145,28 +144,28 @@ class TestArg:
         """ISO: arg(4, f(a,b,c), X) fails."""
         # nv
         x = Var()
-        result = _call_binding("arg", 4, Compound("f", (char_atom("a"), char_atom("b"), char_atom("c"))), x)
+        result = _call_binding("arg", 4, ("f", char_atom("a"), char_atom("b"), char_atom("c")), x)
         assert result is None
 
     def test_zero_fails(self):
         """ISO: arg(0, f(a), X) fails."""
         # nv
         x = Var()
-        result = _call_binding("arg", 0, Compound("f", (char_atom("a"),)), x)
+        result = _call_binding("arg", 0, ("f", char_atom("a")), x)
         assert result is None
 
     def test_negative_fails(self):
         # nv
         x = Var()
-        result = _call_binding("arg", -1, Compound("f", (char_atom("a"),)), x)
+        result = _call_binding("arg", -1, ("f", char_atom("a")), x)
         assert result is None
 
     def test_nested_compound(self):
         """arg(1, f(g(x)), A) → A = g(x)."""
         # nv
         a = Var()
-        inner = Compound("g", (char_atom("x"),))
-        result = _call_binding("arg", 1, Compound("f", (inner,)), a)
+        inner = ("g", char_atom("x"))
+        result = _call_binding("arg", 1, ("f", inner), a)
         assert result is not None
         assert result[0] == inner
 
@@ -181,7 +180,7 @@ class TestUniv:
         """ISO: f(a,b) =.. X → X = [f, a, b]."""
         # nv
         x = Var()
-        result = _call_binding("unpack", Compound("f", (char_atom("a"), char_atom("b"))), x)
+        result = _call_binding("unpack", ("f", char_atom("a"), char_atom("b")), x)
         assert result is not None
         assert result[0] == [char_atom("f"), char_atom("a"), char_atom("b")]
 
@@ -201,7 +200,7 @@ class TestUniv:
         """f(x) =.. L → L = [f, x]."""
         # nv
         lst = Var()
-        result = _call_binding("unpack", Compound("f", (char_atom("x"),)), lst)
+        result = _call_binding("unpack", ("f", char_atom("x")), lst)
         assert result is not None
         assert result[0] == [char_atom("f"), char_atom("x")]
 
