@@ -335,3 +335,10 @@ def test_prose_survives_catch_and_rethrow_twice():
 
 def test_a_string_goal_error_without_a_context_has_no_leading_separator():
     assert not error_prose(string_goal_error("ab", 0)).startswith(":")
+
+
+def test_a_ratio_is_prose_and_an_explicit_procedure_context_is_kept():
+    term = instantiation_error("1/2: ratio must be reduced")
+    assert _is_unbound(cell_args(term)[1])
+    ctx = ("/", "call", 2)
+    assert cell_args(existence_error("procedure", ("/", "f", 1), ctx))[1] is ctx

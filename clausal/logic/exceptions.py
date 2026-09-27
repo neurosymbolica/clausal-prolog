@@ -347,9 +347,9 @@ def catch_match(catcher: Any, term: Any, exc: BaseException, trail: Any) -> bool
 #: A predicate indicator spelled as text: ``name/N``, or ``(op)/N`` for an
 #: operator name as Scryer prints one.  An unparenthesised name has no
 #: whitespace, parenthesis, ``/`` or ``:``, so free prose that merely contains
-#: a slash (``a/b/2``, ``m:p/2``, or a pseudo indicator such as
-#: ``reify(lt)/3``) never reads as an indicator.
-_PI_TEXT = re.compile(r"(?:\((?P<op>[^\s()]+)\)|(?P<name>[^\s()/:]+))/(?P<arity>\d+)")
+#: a slash (``a/b/2``, ``m:p/2``, a ratio ``1/2``, or a pseudo indicator
+#: such as ``reify(lt)/3``) never reads as an indicator.
+_PI_TEXT = re.compile(r"(?:\((?P<op>[^\s()]+)\)|(?P<name>(?!\d+/)[^\s()/:]+))/(?P<arity>\d+)")
 
 
 def indicator_from_text(text: str) -> tuple | None:
@@ -496,7 +496,8 @@ def existence_error(obj_type: str, culprit: Any, context: Any = "") -> tuple:
     and the whole context text becomes prose.
     """
     formal = ("existence_error", _name_atom(obj_type), culprit)
-    if obj_type == "procedure" and _is_indicator(culprit):
+    if (obj_type == "procedure" and _is_indicator(culprit)
+            and (context is None or type(context) is str)):
         prose = None
         if type(context) is str and context:
             head, sep, rest = context.partition(": ")

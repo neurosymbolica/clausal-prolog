@@ -70,7 +70,6 @@ from clausal.logic.variables import (  # noqa: F401
     Var, deref as _deref, is_var, unify as _unify,
 )
 from clausal.logic.exceptions import LogicException, domain_error, type_error
-from clausal.terms import Compound
 from clausal.logic.trampoline import DONE
 
 
