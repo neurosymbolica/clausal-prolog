@@ -59,13 +59,9 @@ def _as_list(val: Any) -> list:
         return list(val)
     if is_var(val) or isinstance(val, int):
         return [val]
-    try:
-        from clausal.terms import cons_to_list
-        return cons_to_list(val)
-    except (ValueError, TypeError, ImportError):
-        raise TypeError(
-            f"Expected a list, got {type(val).__name__!r}: {val!r}"
-        )
+    raise TypeError(
+        f"Expected a list, got {type(val).__name__!r}: {val!r}"
+    )
 
 
 # ── Max Flow ──────────────────────────────────────────────────────────────

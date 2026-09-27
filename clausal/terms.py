@@ -32,7 +32,7 @@ from .logic.atoms import (
     as_dict_key as _as_dict_key, char_atom, demangle_for_display,
     is_char_atom, is_mangled, is_nil as _is_nil, spelling,
 )
-from .logic.cells import TUPLE_TAG, CHARS_TAG, chars, is_chars, chars_text, refuse_reserved_1tuple
+from .logic.cells import TUPLE_TAG, CHARS_TAG, chars, is_chars, chars_text, refuse_reserved_1tuple, make_cell
 from .logic.variables import Var, deref
 # Operator table for ``term_writeq``; this module imports nothing from clausal.
 from clausal.tools.prolog_operators import OperatorTable as _OperatorTable
@@ -232,11 +232,44 @@ def compound_as_cell(term: "Compound") -> "tuple | None":
     Those stay distinct from every cell.  The C twins (``_variables.c``
     ``compound_to_cell``, ``_tabling_core.c``) apply the same test.
     """
-    functor = deref(term.functor)
-    if (isinstance(functor, str) and term.args
+    functor = _cell_functor_of(term.functor, term.args)
+    return None if functor is None else (functor, *term.args)
+
+
+def _cell_functor_of(functor: Any, args: tuple) -> "str | None":
+    """The dereferenced atom that is slot 0 of ``Compound(functor, args)``'s
+    CELL, or None when it has no cell.  The one Python statement of the rule,
+    shared by ``compound_as_cell`` and ``compound_with_args``; the C twins
+    restate it."""
+    functor = deref(functor)
+    if (isinstance(functor, str) and args
             and functor != CHARS_TAG and functor != TUPLE_TAG):
-        return (functor, *term.args)
+        return functor
     return None
+
+
+def compound_with_args(term: "Compound", args: tuple) -> Any:
+    """*term* with its arguments replaced by *args*, as the CELL it is.
+
+    The engine's rebuild of a ``Compound`` it was handed (a clause head a
+    compile pass edits, an asserted fact whose arguments are hoisted): the
+    result is ``(functor, *args)`` whenever *term* has a cell at all -- the
+    test is ``compound_as_cell``'s (both ask ``_cell_functor_of``) -- and the two
+    spellings are the same term in every relation (ruling 2026-09-26).  A
+    ``Compound`` with no cell (Var or non-atom functor, ``foo()``, the
+    ``'$chars'`` / ``'()'`` functors) is COPIED as a ``Compound``: those
+    shapes have no successor and go with the class (Compound retirement
+    slice 8), and building a cell for one would change what it means.
+    ``_position`` is not carried to a cell (ruling R6: nothing reads it).
+    """
+    if len(args) != len(term.args):
+        raise ValueError(
+            f"compound_with_args: {len(args)} argument(s) for a term of "
+            f"arity {len(term.args)}")
+    functor = _cell_functor_of(term.functor, args)
+    if functor is not None:
+        return make_cell(functor, *args)
+    return Compound(term.functor, tuple(args), term._position)
 
 
 @dataclass
@@ -3118,30 +3151,6 @@ class quantity:  # noqa: N801 -- see the naming note below
 #: any function that uses both.
 Quantity = quantity
 
-def list_to_cons(lst: list) -> object:
-    """Convert a Python list to explicit Prolog-style cons structure.
-
-    list_to_cons([1, 2, 3])  →  Compound("cons", (1, Compound("cons", (2, ...))))
-    """
-    result: object = Compound("nil", ())
-    for elem in reversed(lst):
-        result = Compound("cons", (elem, result))
-    return result
-
-
-def cons_to_list(term: object) -> list:
-    """Convert a Prolog-style cons structure back to a Python list.
-
-    Raises ValueError if term is not a proper nil-terminated cons chain.
-    """
-    result = []
-    while isinstance(term, Compound) and term.functor == "cons" and len(term.args) == 2:
-        result.append(term.args[0])
-        term = term.args[1]
-    if not (isinstance(term, Compound) and term.functor == "nil" and len(term.args) == 0):
-        raise ValueError(f"Not a proper list: {term!r}")
-    return result
-
 
 # ── Kleene truth value: Undefined ─────────────────────────────────────────────
 
@@ -4403,8 +4412,6 @@ __all__ = [
     "get_style",
     "set_style",
     # Helpers
-    "list_to_cons",
-    "cons_to_list",
     "term_str",
     "term_pformat",
     # Canonical (write_canonical/1) rendering and ISO 6.4.2 quoting

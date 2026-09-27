@@ -298,8 +298,7 @@ def not_evaluable(term, context: str = "eval_/2"):
     from clausal.pythonic_ast.nodes import BinOp, UnaryOp  # noqa: PLC0415
     op = getattr(type(term), "op", None)
     if type(op) is str and isinstance(term, (BinOp, UnaryOp)):
-        from clausal.terms import Compound  # noqa: PLC0415
-        culprit = Compound("/", (op, 2 if isinstance(term, BinOp) else 1))
+        culprit = ("/", op, 2 if isinstance(term, BinOp) else 1)
     else:
         culprit = _evaluable_culprit(term)
     return LogicException(type_error("evaluable", culprit, context))

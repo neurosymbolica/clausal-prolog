@@ -841,15 +841,7 @@ def bool_labeling(vars_list, trail: Trail):
     Generator: yields None for each satisfying assignment.
     """
     vars_list = deref(vars_list)
-    if isinstance(vars_list, list):
-        vars_ = vars_list
-    else:
-        # Try to convert cons list
-        from clausal.terms import cons_to_list
-        try:
-            vars_ = cons_to_list(vars_list)
-        except (ValueError, TypeError):
-            vars_ = [vars_list]
+    vars_ = vars_list if isinstance(vars_list, list) else [vars_list]
 
     yield from _label_bools(vars_, trail)
 

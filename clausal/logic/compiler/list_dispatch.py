@@ -31,7 +31,7 @@ from typing import Any
 
 from clausal.logic.variables import is_var, deref  # noqa: F401
 from clausal.terms import (
-    Compound,
+    Compound, compound_with_args,
     Call, LoadName, LoadAttr,  # noqa: F401
     PyThunk, Unify,
     DictTerm, SetTerm, KWTerm,
@@ -355,9 +355,11 @@ def _lift_clause_at_pos(clause: Clause, pos: int,
 
     # Rebuild head with lift_term at pos
     if isinstance(head, Compound):
+        # A Compound head handed in from Python (read until Compound
+        # retirement slice 8): the rebuilt head is its CELL.
         new_args = list(head.args)
         new_args[pos] = lift_term
-        new_head = Compound(head.functor, tuple(new_args))
+        new_head = compound_with_args(head, tuple(new_args))
     elif _cell_shape(head)[0]:                      # P2: a head is a cell
         new_args = list(cell_args(head))
         new_args[pos] = lift_term

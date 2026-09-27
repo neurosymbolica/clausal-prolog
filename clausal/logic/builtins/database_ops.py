@@ -18,31 +18,49 @@ from clausal.logic.builtins._registry import (
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
 
-def _normalize_fact_clause(term: Any):
+def _hoist_every_argument(args, build_head):
+    """The Var+Unify lowering of a fact: each bound argument of *args* becomes
+    a fresh ``Var`` in the head plus a prepended ``Unify`` body goal, and
+    *build_head* makes the head from the new argument tuple."""
+    from clausal.logic.database import Clause  # avoid top-level import cycle
+    from clausal.terms import Unify as _Unify
+
+    new_args = []
+    body: list = []
+    for arg in args:
+        arg_val = deref(arg)
+        if not is_var(arg_val):
+            v = Var()
+            new_args.append(v)
+            body.append(_Unify(left=v, right=arg_val))
+        else:
+            new_args.append(arg_val)
+    return Clause(head=build_head(tuple(new_args)), body=body,
+                  hoisted=len(body))
+
+
+def _normalize_fact_clause(term: Any, hoist_all: bool = False):
     """Convert a ground Compound fact to Var+Is form for output-mode queries.
 
-    ``Compound("f", (1, 2))`` → head=Compound("f", (v0, v1)), body=[Is(v0,1), Is(v1,2)]
+    ``Compound("f", (1, 2))`` → head=("f", v0, v1), body=[Is(v0,1), Is(v1,2)]
 
     This makes dynamically asserted facts queryable in output mode (with unbound
     Var arguments), matching standard Prolog semantics for assert.
     Facts asserted via the DSL already use Var+Is form via the term transformer.
+
+    The head is the CELL (Compound retirement slice 3): a ``Compound`` handed
+    in from Python is still READ here until slice 8, but the engine no longer
+    builds one (``compound_with_args`` copies only a Compound with no cell).
+    *hoist_all* gives a CELL this same every-argument lowering -- the cell a
+    no-class dynamic predicate receives (``_resolve_cell_head``), which was
+    rebuilt as a ``Compound`` to get it before the head became a cell.
     """
     from clausal.logic.database import Clause  # avoid top-level import cycle
-    from clausal.terms import Unify as _Unify
+    from clausal.terms import compound_with_args  # noqa: PLC0415
 
     if isinstance(term, Compound):
-        new_args = []
-        body: list = []
-        for arg in term.args:
-            arg_val = deref(arg)
-            if not is_var(arg_val):
-                v = Var()
-                new_args.append(v)
-                body.append(_Unify(left=v, right=arg_val))
-            else:
-                new_args.append(arg_val)
-        return Clause(head=Compound(term.functor, tuple(new_args)), body=body,
-                      hoisted=len(body))
+        return _hoist_every_argument(
+            term.args, lambda new: compound_with_args(term, new))
     # A CELL head (the P2 head shape) gets the lowering the compiler gives a
     # source clause (``database._normalize_structural_head_args``): each
     # STRUCTURED argument -- a cell, a Compound, a list holding one -- is
@@ -52,7 +70,10 @@ def _normalize_fact_clause(term: Any):
     # ``dz(X)`` did not answer ``f(1)``.  Atomic arguments keep the head's
     # capture-and-unify guard, which already binds an unbound caller.
     # ``hoisted`` lets clause/2 put the lowered arguments back.
-    from clausal.logic.cells import compound_cell_shape  # noqa: PLC0415
+    from clausal.logic.cells import compound_cell_shape, make_cell  # noqa: PLC0415
+    if hoist_all and compound_cell_shape(term)[0]:
+        return _hoist_every_argument(
+            term[1:], lambda new: make_cell(term[0], *new))
     if compound_cell_shape(term)[0]:
         from clausal.logic.database import _normalize_structural_head_args  # noqa: PLC0415
         head, body = _normalize_structural_head_args(term, [])
@@ -90,10 +111,11 @@ def _build_clause(term_val: Any, context: str, db, module_dict) -> "Any":
         raise LogicException(
             permission_error("assert", "rule", term_val.head, context))
     was_cell, _cell_functor = compound_cell_shape(term_val)
-    term_val = _check_cell_head_permission(term_val, context, db, module_dict)
+    term_val, hoist_all = _resolve_cell_head(term_val, context, db,
+                                             module_dict)
     if was_cell:
         term_val = _freeze_asserted_head_args(term_val)
-    return _normalize_fact_clause(term_val)
+    return _normalize_fact_clause(term_val, hoist_all=hoist_all)
 
 
 def _freeze_asserted_head_args(head: Any) -> Any:
@@ -123,8 +145,6 @@ def _freeze_asserted_head_args(head: Any) -> Any:
     ``todo/assert-stores-live-vars-for-class-term-and-cell-spellings-2026-09-06.md``;
     ISO ``assert/1`` copies its argument outright, which is the eventual fix.
     """
-    if isinstance(head, Compound):
-        return Compound(head.functor, tuple(deref(a) for a in head.args))
     from clausal.logic.cells import compound_cell_shape, make_cell  # noqa: PLC0415
     is_cell, functor = compound_cell_shape(head)
     if is_cell:                                     # P2: a head is a cell
@@ -134,6 +154,13 @@ def _freeze_asserted_head_args(head: Any) -> Any:
 
 def _check_cell_head_permission(term_val: Any, context: str, db,
                                 module_dict: "dict | None") -> Any:
+    """The term ``_resolve_cell_head`` answers, without its lowering flag
+    (retract/1, which unifies against the stored heads and lowers nothing)."""
+    return _resolve_cell_head(term_val, context, db, module_dict)[0]
+
+
+def _resolve_cell_head(term_val: Any, context: str, db,
+                       module_dict: "dict | None") -> "tuple[Any, bool]":
     """Decide whether a CELL may be asserted/retracted, and return the term to
     use as the clause head/pattern.  Non-cells are returned unchanged.
 
@@ -179,18 +206,23 @@ def _check_cell_head_permission(term_val: Any, context: str, db,
     that class's instance -- so the clause list stays homogeneous, first-arg
     indexing sees the shape it sees for every other clause, and a later
     ``retract`` by cell pattern can unify with a clause loaded from source.
-    With no class (a Compound-headed predicate, a bare ``Database()``) it is a
-    ``Compound``, which is exactly what ``assertz(Compound(...))`` builds
-    today.  Either way ``_normalize_fact_clause`` does the rest, and the ARG
-    OBJECTS are shared with the caller's cell, so bindings made against the
+    With no class (a Compound-headed predicate, a bare ``Database()``) it is
+    the cell with the canonical functor, and the flag returned beside it is
+    True: ``_normalize_fact_clause`` gives it the every-argument lowering
+    ``assertz(Compound(...))`` gets -- the lowering this path had when it
+    rebuilt the cell as a ``Compound`` (before Compound retirement slice 3).
+    Either way ``_normalize_fact_clause`` does the rest, and the ARG OBJECTS
+    are shared with the caller's cell, so bindings made against the
     normalized term reach the caller's variables.
+
+    Returns ``(term, hoist_all)``; *hoist_all* is False except in that case.
     """
     from clausal.logic.cells import compound_cell_shape, make_cell  # noqa: PLC0415
     from clausal.logic.exceptions import existence_error  # noqa: PLC0415
 
     ok, functor = compound_cell_shape(term_val)
     if not ok:
-        return term_val
+        return term_val, False
     arity = len(term_val) - 1
     args = tuple(term_val[1:])
     pred_cls = _find_pred_cls(functor, arity, module_dict)
@@ -204,9 +236,8 @@ def _check_cell_head_permission(term_val: Any, context: str, db,
         # P2 head flip (2026-09-19): a head IS the cell, so a cell reaching a
         # dynamic predicate needs no normalisation at all -- it only needs the
         # CANONICAL functor, which an -import_from alias can differ from.
-        if pred_cls is not None:
-            return term_val if functor == term_val[0] else make_cell(functor, *args)
-        return Compound(functor, args)
+        cell = term_val if functor == term_val[0] else make_cell(functor, *args)
+        return cell, pred_cls is None
     foreign = row is not None and row.db is not db
     if foreign:
         # THE OWNERSHIP REFUSAL SPEAKS FIRST for somebody else's row

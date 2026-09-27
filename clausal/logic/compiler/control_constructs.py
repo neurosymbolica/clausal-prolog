@@ -28,13 +28,14 @@ from typing import Any
 from clausal.logic.variables import Var, is_var, deref, unify  # noqa: F401
 from clausal.logic.trampoline import Step, DONE, StepGenerator  # noqa: F401
 from clausal.terms import (
-    Compound,
+    Compound, compound_with_args,
     And, Or, Not,
     Unify, DoesNotUnify, Evaluate, ArithEq, ArithNeq, StructuralEq, StructuralNeq,
     Lt, LtE, Gt, GtE,
     Call, LoadName, LoadAttr,
 )
 from clausal.pythonic_ast.nodes import IfExpr, Lambda
+from clausal.logic.cells import make_cell
 from clausal.logic.database import Clause, Database
 from clausal.logic.meta_predicate import MetaArg as _MetaArg
 
@@ -697,10 +698,21 @@ def _compile_find_all_core(
 
 
 def _catcher_to_structural(term: Any) -> Any:
-    """Recursively convert Call nodes to Compound in a catcher term."""
+    """Recursively convert Call nodes to CELLS in a catcher term.
+
+    ``f(A, B)`` becomes the cell ``('f', A, B)`` -- the term the throw site
+    raises (every engine error term is a cell since Compound retirement
+    slice 2).  It was a ``Compound`` until slice 3, which the 2026-09-26
+    ruling already made the same term.  A ``Call`` with no arguments
+    (``foo()``) becomes the ATOM ``foo``: ``foo()`` is not a term (ruling
+    R4), the arity-0 cell is reserved, and the atom is its successor.  (Left
+    as the ``Call`` node it would lower to a predicate-class lookup that
+    raises ``NameError`` while the catcher is built.)"""
     if isinstance(term, Call) and isinstance(term.func, LoadName) and not term.kwargs:
+        if not term.args:
+            return term.func.name
         new_args = [_catcher_to_structural(a) for a in term.args]
-        return Compound(term.func.name, tuple(new_args))
+        return make_cell(term.func.name, *new_args)
     return term
 
 
@@ -1018,7 +1030,7 @@ def _hoist_lambdas_in_term(
         )
         if new_args == term.args:
             return term
-        return Compound(term.functor, new_args, term._position)
+        return compound_with_args(term, new_args)     # its cell, if it has one
     if isinstance(term, Call):
         new_args = [
             _hoist_lambdas_in_term(ctx, a, lambda_defs) for a in term.args

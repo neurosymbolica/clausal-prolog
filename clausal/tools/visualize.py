@@ -169,7 +169,8 @@ def _cli_main() -> None:  # pragma: no cover
     import argparse
     from clausal.logic.variables import Var
     from clausal.logic.database import Clause, Database
-    from clausal.terms import Unify, Compound
+    from clausal.terms import Unify
+    from clausal.logic.cells import make_cell
 
     parser = argparse.ArgumentParser(
         description="Show compiled clausal predicate source code.",
@@ -196,7 +197,9 @@ Examples:
     # Build a small demo predicate: demo(X) :- X = 42.
     x = Var()
     db.assertz(Clause(
-        head=Compound(args.functor, tuple(Var() for _ in range(args.arity))),
+        # A head is the cell, or the atom at arity 0 (Compound retirement).
+        head=(make_cell(args.functor, *(Var() for _ in range(args.arity)))
+              if args.arity else args.functor),
         body=[],
     ))
     clauses = db.clauses_for(args.functor, args.arity)
