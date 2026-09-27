@@ -32,7 +32,7 @@ from .logic.atoms import (
     as_dict_key as _as_dict_key, char_atom, demangle_for_display,
     is_char_atom, is_mangled, is_nil as _is_nil, spelling,
 )
-from .logic.cells import TUPLE_TAG, CHARS_TAG, chars, is_chars, chars_text, refuse_reserved_1tuple
+from .logic.cells import TUPLE_TAG, CHARS_TAG, chars, is_chars, chars_text, refuse_reserved_1tuple, make_cell
 from .logic.variables import Var, deref
 # Operator table for ``term_writeq``; this module imports nothing from clausal.
 from clausal.tools.prolog_operators import OperatorTable as _OperatorTable
@@ -237,6 +237,31 @@ def compound_as_cell(term: "Compound") -> "tuple | None":
             and functor != CHARS_TAG and functor != TUPLE_TAG):
         return (functor, *term.args)
     return None
+
+
+def compound_with_args(term: "Compound", args: tuple) -> Any:
+    """*term* with its arguments replaced by *args*, as the CELL it is.
+
+    The engine's rebuild of a ``Compound`` it was handed (a clause head a
+    compile pass edits, an asserted fact whose arguments are hoisted): the
+    result is ``(functor, *args)`` whenever *term* has a cell at all -- the
+    test is ``compound_as_cell``'s, so the two cannot disagree -- and the two
+    spellings are the same term in every relation (ruling 2026-09-26).  A
+    ``Compound`` with no cell (Var or non-atom functor, ``foo()``, the
+    ``'$chars'`` / ``'()'`` functors) is COPIED as a ``Compound``: those
+    shapes have no successor and go with the class (Compound retirement
+    slice 8), and building a cell for one would change what it means.
+    ``_position`` is not carried to a cell (ruling R6: nothing reads it).
+    """
+    if len(args) != len(term.args):
+        raise ValueError(
+            f"compound_with_args: {len(args)} argument(s) for a term of "
+            f"arity {len(term.args)}")
+    functor = deref(term.functor)
+    if (isinstance(functor, str) and args
+            and functor != CHARS_TAG and functor != TUPLE_TAG):
+        return make_cell(functor, *args)
+    return Compound(term.functor, tuple(args), term._position)
 
 
 @dataclass

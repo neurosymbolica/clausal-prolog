@@ -791,7 +791,7 @@ class TestLiftClauseAtPos:
         v = Var()
         c = Clause(head=Compound("f", (v,)), body=[Unify(left=v, right="abc")])
         lifted = _lift_clause_at_pos(c, 0)
-        assert lifted.head.args[0] == "abc"
+        assert lifted.head[1] == "abc"      # the head is a cell (slice 3)
         assert lifted.body == []
 
     def test_bytes_literal_is_still_not_lifted(self):
@@ -843,7 +843,7 @@ class TestLiftClauseAtPos:
         v = Var()
         c = Clause(head=Compound("f", (v,)), body=[Unify(left=v, right=[1, 2, 3])])
         lifted = _lift_clause_at_pos(c, 0)
-        assert lifted.head.args[0] == [1, 2, 3]
+        assert lifted.head[1] == [1, 2, 3]  # the head is a cell (slice 3)
         assert lifted.body == []
 
 

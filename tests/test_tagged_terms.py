@@ -1268,7 +1268,7 @@ class TestTheBucketLift:
         from clausal.terms import Call as TCall
 
         out = self._lift(self._call("point", 2))
-        assert isinstance(out.head.args[0], TCall)
+        assert isinstance(out.head[1], TCall)   # the head is a cell (slice 3)
         assert out.body == [], "the lifted Unify must leave the body"
 
     def test_a_partial_data_functor_reference_is_lifted_too(self):
@@ -1298,7 +1298,7 @@ class TestTheBucketLift:
 
         out = self._lift(self._call("kind", 2))
         assert out.body == [], "the lifted Unify must leave the body"
-        assert isinstance(out.head.args[0], TCall)
+        assert isinstance(out.head[1], TCall)   # the head is a cell (slice 3)
 
     def test_an_unresolvable_name_is_still_refused(self):
         out = self._lift(self._call("no_such_functor_anywhere", 2))

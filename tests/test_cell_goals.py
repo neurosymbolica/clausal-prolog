@@ -727,9 +727,11 @@ class TestCellAssertRetract:
         X = Var()
         assert [deref(X) for _ in pcall("fresh", X, module=lm)] == [1]
 
-    def test_a_cell_assert_into_a_classless_dynamic_row_uses_a_compound_head(self):
-        """No class in scope (a bare Database) — the head is the Compound
-        ``assertz(Compound(...))`` would have built."""
+    def test_a_cell_assert_into_a_classless_dynamic_row_uses_a_cell_head(self):
+        """No class in scope (a bare Database) — the head is the cell
+        ``assertz(Compound(...))`` would have built (a cell since Compound
+        retirement slice 3; a ``Compound`` before), with every argument
+        hoisted: the head argument is a fresh Var, 5 is in the body."""
         db = Database()
         db.mark_dynamic("r", 1)
         from clausal.logic.builtins import get_builtin_dispatch
@@ -737,8 +739,10 @@ class TestCellAssertRetract:
         from clausal.logic.variables import Trail
         dispatch = get_builtin_dispatch("assertz", 1, db)
         list(_drive_trampoline(dispatch, Trail(), ("r", 5)))
-        head = db.clauses_for("r", 1)[-1].head
-        assert isinstance(head, Compound) and head.functor == "r"
+        clause = db.clauses_for("r", 1)[-1]
+        head = clause.head
+        assert type(head) is tuple and head[0] == "r" and len(head) == 2
+        assert clause.hoisted == 1 and len(clause.body) == 1
 
 
 class TestTheLowLevelDoorTakesACellHead:

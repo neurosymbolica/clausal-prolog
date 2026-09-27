@@ -693,8 +693,9 @@ def _compile_as_query(goal: Any, module: Module) -> Any:
 
     _query_body_compiler.accepts_ctx_template = True
 
-    dummy_head = Compound("_query", ())
-    clause = Clause(head=dummy_head, body=[goal])
+    # The dummy head is the ATOM ``_query``: an arity-0 head is its name
+    # (Compound retirement slice 3; ``foo()`` is not a term, ruling R4).
+    clause = Clause(head="_query", body=[goal])
     dispatch_fn = compile_predicate_trampoline(
         "_query", 0, [clause], db,
         body_compiler=_query_body_compiler,
