@@ -199,11 +199,11 @@ class TestFunctorArity:
         assert functor_arity(chars("abc")) is None
         assert functor_arity(chars("")) is None
 
-    @pytest.mark.compound_retirement_slice8
     @pytest.mark.parametrize(
         "term",
         [
-            Compound("foo", ()),
+            pytest.param(Compound("foo", ()),
+                         marks=pytest.mark.compound_retirement_slice8),
             ("bar", 1, 2, 3),
             bar(b=1, a=2),
             mint("foo"),

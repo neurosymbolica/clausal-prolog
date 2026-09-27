@@ -124,6 +124,7 @@ class TestListing:
         assert cell_functor(formal) == "type_error"
         assert cell_args(formal) == (mint("predicate_indicator"), cell)
 
+    @pytest.mark.compound_retirement_slice8
     def test_a_term_instance_is_named_as_itself_not_its_class(self):
         """``listing(Compound("foo", (1,)))``: a term INSTANCE is not an
         indicator either, and the refusal's culprit is the term PASSED --
@@ -131,7 +132,7 @@ class TestListing:
         so the error named the ``Compound`` CLASS (roborev Low, 2026-09-25)."""
         db = _db_with_fact("color", 2)
         dispatch = get_builtin_dispatch("listing", 1, db)
-        term = ("foo", 1)
+        term = Compound("foo", (1,))
         with pytest.raises(LogicException) as exc_info:
             _run_listing(dispatch, term)
         formal = _formal(exc_info)
@@ -736,7 +737,8 @@ class TestListingFollowsScryersContract:
 
     @pytest.mark.parametrize("make", [
         lambda: ("//", mint("greet"), 0),
-        lambda: ("//", mint("greet"), 0),
+        pytest.param(lambda: Compound("//", (mint("greet"), 0)),
+                     marks=pytest.mark.compound_retirement_slice8),
         lambda: __import__("clausal.terms", fromlist=["FloorDiv"]).FloorDiv(
             left=mint("greet"), right=0),
     ], ids=["cell", "compound", "floordiv-node"])

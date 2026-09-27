@@ -1160,7 +1160,7 @@ def test_listing_refuses_a_string_indicator_name(capsys):
     assert len(list(_run(("/", mint("t12_pt"), 2)))) == 1
     assert "t12_pt/2" in capsys.readouterr().out
     # …and the STRING name half is refused, not read as the spelling.
-    for shape in (("/", chars("t12_pt"), 2), ("/", chars("t12_pt"), 2)):
+    for shape in (("/", chars("t12_pt"), 2),):
         with pytest.raises(LogicException) as exc:
             list(_run(shape))
         formal = cell_args(exc.value.term)[0]
