@@ -701,6 +701,7 @@ def test_qualified_goals_in_include_and_foldl(host):
     assert len(_solve_all(host, ("maplist", (":", OTHER, "p"), [10]))) == 1
 
 
+@pytest.mark.compound_retirement_slice8
 def test_compound_and_body_goals_in_maplist_include_foldl(host):
     """A Compound goal folds like its cell; a body term is ``call(Body, E)``
     -- the fold names ``(>)/3`` etc., existence_error, as call/N says."""

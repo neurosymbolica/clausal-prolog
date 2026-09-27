@@ -26,7 +26,7 @@ from clausal.logic.compiler.globals_env import _disp_key
 from tests.predicate_api_support import RowPredicate
 from clausal.logic.variables import Var, Trail, deref, is_var
 from clausal.logic.trampoline import StepGenerator, solutions, DONE
-from clausal.terms import Compound, Unify, Call, LoadName
+from clausal.terms import Unify, Call, LoadName
 from clausal.logic.builtins import _normalize_fact_clause
 
 
@@ -35,7 +35,7 @@ from clausal.logic.builtins import _normalize_fact_clause
 
 def _make_fact_clauses(functor, facts):
     return [
-        _normalize_fact_clause(Compound(functor, tuple(args)))
+        _normalize_fact_clause((functor, *args))
         for args in facts
     ]
 
@@ -459,7 +459,7 @@ class TestInjectBucketRefs:
         x = Var()
         call_goal = Call(func=LoadName(name="color"), args=[mint("red")])
         caller_clause = Clause(
-            head=Compound("caller", (x,)),
+            head=("caller", x),
             body=[call_goal],
         )
 
@@ -501,7 +501,7 @@ class TestInjectBucketRefs:
         arg_term = dog(name="fixed", age=9)
         call_goal = Call(func=LoadName(name="shape"), args=[arg_term])
         caller_clause = Clause(
-            head=Compound("caller", (x,)),
+            head=("caller", x),
             body=[call_goal],
         )
 
@@ -522,7 +522,7 @@ class TestInjectBucketRefs:
         x = Var()
         call_goal = Call(func=LoadName(name="color"), args=[mint("red")])
         caller_clause = Clause(
-            head=Compound("caller", (x,)),
+            head=("caller", x),
             body=[call_goal],
         )
         base_globals = {"color": callee_cls.handle}
@@ -545,7 +545,7 @@ class TestInjectBucketRefs:
         # variable-argument guard it names.
         call_goal = Call(func=LoadName(name="color"), args=[y])
         caller_clause = Clause(
-            head=Compound("caller", (x,)),
+            head=("caller", x),
             body=[call_goal],
         )
         base_globals = {"color": callee_cls.handle}
@@ -568,7 +568,7 @@ class TestInjectBucketRefs:
         # At the callee's arity, so the LOCKED guard is what fires here.
         call_goal = Call(func=LoadName(name="color"), args=[mint("red")])
         caller_clause = Clause(
-            head=Compound("caller", (x,)),
+            head=("caller", x),
             body=[call_goal],
         )
         base_globals = {"color": callee_cls.handle}
@@ -588,7 +588,7 @@ class TestInjectBucketRefs:
         # At the callee's arity, so the UNKNOWN-KEY guard is what fires here.
         call_goal = Call(func=LoadName(name="color"), args=[mint("orange")])
         caller_clause = Clause(
-            head=Compound("caller", (x,)),
+            head=("caller", x),
             body=[call_goal],
         )
         base_globals = {"color": callee_cls.handle}
@@ -667,7 +667,7 @@ class TestCallsiteCorrectnessAndFallback:
         x = Var()
         call_goal = Call(func=LoadName(name="color"), args=[mint("red")])
         caller_clause = Clause(
-            head=Compound("find_red", (x,)),
+            head=("find_red", x),
             body=[call_goal],
         )
         base_globals = {"color": callee_cls.handle}
@@ -692,7 +692,7 @@ class TestCallsiteCorrectnessAndFallback:
         x = Var()
         call_goal = Call(func=LoadName(name="dyn_color"), args=[mint("red")])
         caller_clause = Clause(
-            head=Compound("caller", (x,)),
+            head=("caller", x),
             body=[call_goal],
         )
         base_globals = {"dyn_color": callee_cls.handle}
@@ -714,7 +714,7 @@ class TestCallsiteCorrectnessAndFallback:
         x = Var()
         call_goal = Call(func=LoadName(name="color"), args=[mint("red")])
         caller_clause = Clause(
-            head=Compound("color", (x,)),
+            head=("color", x),
             body=[call_goal],
         )
         base_globals = {"color": pred_cls.handle}
@@ -733,7 +733,7 @@ class TestCallsiteCorrectnessAndFallback:
         x = Var()
         clauses = [
             Clause(
-                head=Compound("caller", (x,)),
+                head=("caller", x),
                 body=[Call(func=LoadName(name="color"), args=[mint(a)])],
             )
             for a in ["red", "green", "blue"]
@@ -754,7 +754,7 @@ class TestCallsiteCorrectnessAndFallback:
         x = Var()
         call_goal = Call(func=LoadName(name="color"), args=[mint("blue")])
         caller_clause = Clause(
-            head=Compound("find_blue", (x,)),
+            head=("find_blue", x),
             body=[call_goal],
         )
         base_globals = {"color": callee_cls.handle}
@@ -777,7 +777,7 @@ class TestCallsiteCorrectnessAndFallback:
         x = Var()
         call_goal = Call(func=LoadName(name="color"), args=[mint("red")])
         caller_clause = Clause(
-            head=Compound("f", (x,)),
+            head=("f", x),
             body=[call_goal],
         )
         base_globals = {"color": callee_cls.handle}
@@ -811,7 +811,7 @@ class TestDirectBucketCallSiteExecution:
         x = Var()
         args = [x if a is None else a for a in body_args]
         caller_clause = Clause(
-            head=Compound("caller", (x,)),
+            head=("caller", x),
             body=[Call(func=LoadName(name=callee_name), args=args)],
         )
         # The callee's own Database: the bucket-ref pass resolves the callee

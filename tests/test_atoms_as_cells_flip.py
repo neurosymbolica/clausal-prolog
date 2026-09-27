@@ -24,7 +24,7 @@ from clausal.logic.exceptions import LogicException
 from clausal.logic.solve import solve, _deref_walk
 from clausal.logic.variables import Trail, Var, deref, unify
 from clausal import cell_args, cell_functor
-from clausal.terms import Compound, term_canonical, term_str
+from clausal.terms import term_canonical, term_str
 from clausal.modules.py.datetime import _dt_to_term as _T
 from clausal.modules.py.datetime import _term_to_dt as _P  # py datetime -> its TERM
 
@@ -1147,10 +1147,9 @@ def test_listing_refuses_a_string_indicator_name(capsys):
     from clausal.logic.builtins import get_builtin_dispatch
     from clausal.logic.database import Clause, Database
     from clausal.logic.trampoline import StepGenerator, solutions
-    from clausal.terms import Compound
 
     db = Database()
-    db.assertz(Clause(Compound("t12_pt", (Var(), Var())), []))
+    db.assertz(Clause(("t12_pt", Var(), Var()), []))
     dispatch = get_builtin_dispatch("listing", 1, db)
 
     def _run(val):
@@ -1161,7 +1160,7 @@ def test_listing_refuses_a_string_indicator_name(capsys):
     assert len(list(_run(("/", mint("t12_pt"), 2)))) == 1
     assert "t12_pt/2" in capsys.readouterr().out
     # …and the STRING name half is refused, not read as the spelling.
-    for shape in (("/", chars("t12_pt"), 2), Compound("/", (chars("t12_pt"), 2))):
+    for shape in (("/", chars("t12_pt"), 2), ("/", chars("t12_pt"), 2)):
         with pytest.raises(LogicException) as exc:
             list(_run(shape))
         formal = cell_args(exc.value.term)[0]

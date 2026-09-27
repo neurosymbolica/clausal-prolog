@@ -81,7 +81,13 @@ _SPELLINGS = {
 }
 
 
-@pytest.mark.parametrize("spelling", sorted(_SPELLINGS))
+# The "Compound" spelling's subject is the class (compound retirement slice 8).
+_SPELLING_PARAMS = [
+    pytest.param(s, marks=pytest.mark.compound_retirement_slice8) if s == "Compound" else s
+    for s in sorted(_SPELLINGS)]
+
+
+@pytest.mark.parametrize("spelling", _SPELLING_PARAMS)
 class TestA1PythonApi:
     def test_is(self, api_mod, spelling):
         X = Var()

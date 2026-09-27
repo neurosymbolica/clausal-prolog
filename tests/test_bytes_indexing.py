@@ -8,7 +8,6 @@ from clausal.logic.compiler.arg_index import (
     _build_first_arg_index,
 )
 from clausal.logic.database import Clause
-from clausal.terms import Compound
 
 
 def _load_inline(name, source):
@@ -60,10 +59,10 @@ class TestBytesIndexBuckets:
 
     def _clauses(self):
         return [
-            Clause(head=Compound("code", (b"red",)), body=[True]),
-            Clause(head=Compound("code", (b"green",)), body=[True]),
-            Clause(head=Compound("code", (b"blue",)), body=[True]),
-            Clause(head=Compound("code", (b"cyan",)), body=[True]),
+            Clause(head=("code", b"red"), body=[True]),
+            Clause(head=("code", b"green"), body=[True]),
+            Clause(head=("code", b"blue"), body=[True]),
+            Clause(head=("code", b"cyan"), body=[True]),
         ]
 
     def test_index_builds_with_bytes_literal_buckets(self):
@@ -75,7 +74,7 @@ class TestBytesIndexBuckets:
     def test_intlist_head_canonicalises_into_bytes_bucket(self):
         # nv  — an int-list-literal head buckets under the same key as bytes
         clauses = self._clauses() + [
-            Clause(head=Compound("code", ([97, 97],)), body=[True])  # == b"aa"
+            Clause(head=("code", [97, 97]), body=[True])  # == b"aa"
         ]
         index = _build_first_arg_index(clauses, 1)
         assert b"aa" in index["buckets"]

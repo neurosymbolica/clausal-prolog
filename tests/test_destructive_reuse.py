@@ -48,10 +48,7 @@ from clausal.logic.database import Clause, Database
 from clausal.logic.trampoline import StepGenerator
 from clausal.logic.variables import Var, Trail, deref, unify, is_var
 from clausal.logic.cells import chars
-from clausal.terms import (
-    And, Call, LoadName, Compound, Unify, Evaluate, Add,
-    DictTerm, SetTerm,
-)
+from clausal.terms import And, Call, LoadName, Unify, Evaluate, Add, DictTerm, SetTerm
 
 from clausal.logic.builtins.lists import _append_dr__3, _append__3
 from clausal.logic.builtins.dict_set import (
@@ -120,7 +117,7 @@ class TestFindDestructiveReuseGoals:
         """append(Temp, Extra, Out) where Temp is created by Evaluate."""
         # nv
         Temp, Extra, Out = Var(), Var(), Var()
-        head = Compound("process", (Out,))
+        head = ("process", Out)
         body = [
             Evaluate(left=Temp, right=[1, 2, 3]),  # deterministic, no alias
             self._append_call(Temp, Extra, Out),
@@ -133,7 +130,7 @@ class TestFindDestructiveReuseGoals:
         """Temp = In where In is a head var → Temp aliases caller data."""
         # nv
         In, Temp, Extra, Out = Var(), Var(), Var(), Var()
-        head = Compound("process", (In, Out))
+        head = ("process", In, Out)
         body = [
             Unify(left=Temp, right=In),  # alias!
             self._append_call(Temp, Extra, Out),
@@ -147,7 +144,7 @@ class TestFindDestructiveReuseGoals:
         """Temp2 = Temp, Temp = In → Temp2 transitively aliases head var In."""
         # nv
         In, Temp, Temp2, Extra, Out = Var(), Var(), Var(), Var(), Var()
-        head = Compound("process", (In, Out))
+        head = ("process", In, Out)
         body = [
             Unify(left=Temp, right=In),
             Unify(left=Temp2, right=Temp),
@@ -161,7 +158,7 @@ class TestFindDestructiveReuseGoals:
         """append(HeadVar, Extra, Out) — HeadVar is in the clause head."""
         # nv
         Old, Extra, Out = Var(), Var(), Var()
-        head = Compound("process", (Old, Out))
+        head = ("process", Old, Out)
         body = [self._append_call(Old, Extra, Out)]
         clause = Clause(head=head, body=body)
         eligible = _find_destructive_reuse_goals(clause)
@@ -171,7 +168,7 @@ class TestFindDestructiveReuseGoals:
         """append(Temp, Extra, Mid) followed by another use of Temp."""
         # nv
         Temp, Extra, Mid, Out = Var(), Var(), Var(), Var()
-        head = Compound("process", (Out,))
+        head = ("process", Out)
         body = [
             self._append_call(Temp, Extra, Mid),
             # Temp is used again here — NOT dead
@@ -187,7 +184,7 @@ class TestFindDestructiveReuseGoals:
         """If a preceding goal is non-deterministic, optimization is suppressed."""
         # nv
         X, Y, Temp, Extra, Out = Var(), Var(), Var(), Var(), Var()
-        head = Compound("process", (X, Out))
+        head = ("process", X, Out)
         body = [
             Call(func=LoadName(name="in_"), args=[Y, X], kwargs=[]),
             Evaluate(left=Temp, right=[Y]),
@@ -201,7 +198,7 @@ class TestFindDestructiveReuseGoals:
         """Known-deterministic builtins (length, dict_get, etc.) allow DR."""
         # nv
         T, Len, Out = Var(), Var(), Var()
-        head = Compound("process", (Out,))
+        head = ("process", Out)
         body = [
             Evaluate(left=T, right=[1, 2, 3]),
             # length/2 is known deterministic — should NOT block DR
@@ -223,7 +220,7 @@ class TestFindDestructiveReuseGoals:
         """once(X) wrapped calls are deterministic."""
         # nv
         T, Mid, Out = Var(), Var(), Var()
-        head = Compound("process", (Out,))
+        head = ("process", Out)
         body = [
             Evaluate(left=T, right=[1, 2]),
             Call(func=LoadName(name="once"),
@@ -240,7 +237,7 @@ class TestFindDestructiveReuseGoals:
         """dict_put(Key, Value, Temp, Out) where Temp is from Evaluate."""
         # nv
         Temp, Key, Value, Out = Var(), Var(), Var(), Var()
-        head = Compound("update", (Out,))
+        head = ("update", Out)
         body = [
             Evaluate(left=Temp, right=DictTerm({"a": 1})),
             self._dict_put_call(Key, Value, Temp, Out),
@@ -253,7 +250,7 @@ class TestFindDestructiveReuseGoals:
         """dict_put with Temp aliased to head var."""
         # nv
         In, Temp, Key, Value, Out = Var(), Var(), Var(), Var(), Var()
-        head = Compound("update", (In, Out))
+        head = ("update", In, Out)
         body = [
             Unify(left=Temp, right=In),
             self._dict_put_call(Key, Value, Temp, Out),
@@ -266,7 +263,7 @@ class TestFindDestructiveReuseGoals:
         """set_union(Temp, S2, Out) where Temp is from Evaluate."""
         # nv
         Temp, S2, Out = Var(), Var(), Var()
-        head = Compound("merge", (Out,))
+        head = ("merge", Out)
         body = [
             Evaluate(left=Temp, right=SetTerm([1, 2])),
             self._set_union_call(Temp, S2, Out),
@@ -279,7 +276,7 @@ class TestFindDestructiveReuseGoals:
         """set_union with Temp aliased to head var."""
         # nv
         In, Temp, S2, Out = Var(), Var(), Var(), Var()
-        head = Compound("merge", (In, Out))
+        head = ("merge", In, Out)
         body = [
             Unify(left=Temp, right=In),
             self._set_union_call(Temp, S2, Out),
@@ -292,7 +289,7 @@ class TestFindDestructiveReuseGoals:
         """append([1,2,3], Extra, Out) — source is a literal, not a Var."""
         # nv
         Extra, Out = Var(), Var()
-        head = Compound("process", (Out,))
+        head = ("process", Out)
         body = [self._append_call([1, 2, 3], Extra, Out)]
         clause = Clause(head=head, body=body)
         eligible = _find_destructive_reuse_goals(clause)
@@ -301,7 +298,7 @@ class TestFindDestructiveReuseGoals:
     def test_empty_body(self):
         """Facts have no body — nothing to optimize."""
         # nv
-        head = Compound("fact", (1,))
+        head = ("fact", 1)
         clause = Clause(head=head, body=[])
         eligible = _find_destructive_reuse_goals(clause)
         assert eligible == set()
@@ -310,7 +307,7 @@ class TestFindDestructiveReuseGoals:
         """Only the eligible goal is marked, not others."""
         # nv
         T1, T2, X, Out = Var(), Var(), Var(), Var()
-        head = Compound("multi", (X, Out))
+        head = ("multi", X, Out)
         body = [
             Evaluate(left=T1, right=[1, 2, 3]),
             Evaluate(left=T2, right=[4, 5]),
@@ -325,7 +322,7 @@ class TestFindDestructiveReuseGoals:
         """Unify between two body-only vars does NOT create a head alias."""
         # nv
         T1, T2, Out = Var(), Var(), Var()
-        head = Compound("process", (Out,))
+        head = ("process", Out)
         body = [
             Evaluate(left=T1, right=[1, 2]),
             Unify(left=T2, right=T1),  # both body-only, no head alias
@@ -340,7 +337,7 @@ class TestFindDestructiveReuseGoals:
         """Alias inside And() conjunction is detected."""
         # nv
         In, Temp, Extra, Out = Var(), Var(), Var(), Var()
-        head = Compound("process", (In, Out))
+        head = ("process", In, Out)
         body = [
             And(left=Unify(left=Temp, right=In),
                 right=Evaluate(left=Extra, right=[99])),
@@ -359,7 +356,7 @@ class TestFindDestructiveReuseGoals:
         """append inside And() is found by flattening."""
         # nv
         T, Extra, Out = Var(), Var(), Var()
-        head = Compound("process", (Out,))
+        head = ("process", Out)
         body = [
             And(left=Evaluate(left=T, right=[1, 2]),
                 right=self._append_call(T, Extra, Out)),
@@ -565,7 +562,7 @@ class TestDestructiveReuseIntegration:
         """
         # nv
         T, Out = Var(), Var()
-        head = Compound("make", (Out,))
+        head = ("make", Out)
         body = [
             Evaluate(left=T, right=[1, 2, 3]),
             Call(func=LoadName(name="append"),
@@ -585,7 +582,7 @@ class TestDestructiveReuseIntegration:
         """
         # nv
         T, Out = Var(), Var()
-        head = Compound("make", (Out,))
+        head = ("make", Out)
         body = [
             Evaluate(left=T, right=DictTerm({"a": 1})),
             Call(func=LoadName(name="dict_put"),
@@ -606,7 +603,7 @@ class TestDestructiveReuseIntegration:
         """
         # nv
         T, Out = Var(), Var()
-        head = Compound("make", (Out,))
+        head = ("make", Out)
         body = [
             Evaluate(left=T, right=SetTerm([1, 2])),
             Call(func=LoadName(name="set_union"),
@@ -627,7 +624,7 @@ class TestDestructiveReuseIntegration:
         """
         # nv
         In, Temp, Out = Var(), Var(), Var()
-        head = Compound("build", (In, Out))
+        head = ("build", In, Out)
         body = [
             Unify(left=Temp, right=In),
             Call(func=LoadName(name="append"),
@@ -650,7 +647,7 @@ class TestDestructiveReuseIntegration:
         """
         # nv
         Old, Out = Var(), Var()
-        head = Compound("process", (Old, Out))
+        head = ("process", Old, Out)
         body = [
             Call(func=LoadName(name="append"),
                  args=[Old, [4], Out], kwargs=[]),
@@ -674,7 +671,7 @@ class TestDestructiveReuseIntegration:
         """
         # nv
         T1, T2, Out = Var(), Var(), Var()
-        head = Compound("chain", (Out,))
+        head = ("chain", Out)
         body = [
             Evaluate(left=T1, right=[1, 2]),
             Call(func=LoadName(name="append"),
@@ -697,10 +694,10 @@ class TestDestructiveReuseIntegration:
         """
         # nv
         Old, Out1, Out2 = Var(), Var(), Var()
-        head1 = Compound("add", ([], Out1))
+        head1 = ("add", [], Out1)
         body1 = [Unify(left=Out1, right=[])]
 
-        head2 = Compound("add", (Old, Out2))
+        head2 = ("add", Old, Out2)
         body2 = [
             Call(func=LoadName(name="append"),
                  args=[Old, ["x"], Out2], kwargs=[]),
@@ -783,7 +780,7 @@ class TestReverseEligibility:
         """reverse(Temp, Out) where Temp is created by Evaluate."""
         # nv
         Temp, Out = Var(), Var()
-        head = Compound("process", (Out,))
+        head = ("process", Out)
         body = [
             Evaluate(left=Temp, right=[1, 2, 3]),
             Call(func=LoadName(name="reverse"), args=[Temp, Out], kwargs=[]),
@@ -794,7 +791,7 @@ class TestReverseEligibility:
     def test_reverse_head_var_not_eligible(self):
         # nv
         In, Out = Var(), Var()
-        head = Compound("process", (In, Out))
+        head = ("process", In, Out)
         body = [Call(func=LoadName(name="reverse"), args=[In, Out], kwargs=[])]
         clause = Clause(head=head, body=body)
         assert 0 not in _find_destructive_reuse_goals(clause)
@@ -803,7 +800,7 @@ class TestReverseEligibility:
         """make(Out) <- T = [1, 2, 3], reverse(T, Out)."""
         # nv
         T, Out = Var(), Var()
-        head = Compound("make", (Out,))
+        head = ("make", Out)
         body = [
             Evaluate(left=T, right=[1, 2, 3]),
             Call(func=LoadName(name="reverse"), args=[T, Out], kwargs=[]),
@@ -829,7 +826,7 @@ class TestSameGoalAlias:
     def test_reverse_source_aliased_to_output_not_eligible(self):
         # nv
         L, W = Var(), Var()
-        head = Compound("is_pal", (W,))
+        head = ("is_pal", W)
         body = [
             Evaluate(left=L, right=[1, 2, 3]),
             Call(func=LoadName(name="reverse"), args=[L, L], kwargs=[]),
@@ -840,7 +837,7 @@ class TestSameGoalAlias:
     def test_append_source_aliased_to_output_not_eligible(self):
         # nv
         T, W = Var(), Var()
-        head = Compound("app_alias", (W,))
+        head = ("app_alias", W)
         body = [
             Evaluate(left=T, right=[1, 2]),
             Call(func=LoadName(name="append"), args=[T, [3], T], kwargs=[]),
@@ -852,7 +849,7 @@ class TestSameGoalAlias:
         """is_pal(W) <- L = list(W), reverse(L, L) — sound again."""
         # nv
         L, W = Var(), Var()
-        head = Compound("is_pal", (W,))
+        head = ("is_pal", W)
         body = [
             Evaluate(left=L, right=[1, 2, 3]),
             Call(func=LoadName(name="reverse"), args=[L, L], kwargs=[]),

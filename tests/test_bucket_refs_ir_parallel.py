@@ -23,7 +23,7 @@ import pytest
 
 from clausal.logic.database import Clause
 from clausal.logic.variables import Var
-from clausal.terms import Compound, Call, LoadName
+from clausal.terms import Call, LoadName
 
 # Re-use helpers from the legacy callsite test file.
 from tests.test_callsite_specialization import (
@@ -38,7 +38,7 @@ def _case_literal_arg():
     x = Var()
     body = [Call(func=LoadName(name="color_lit"), args=["red"], kwargs=[])]
     return ("literal_arg", callee_cls, "color_lit", Clause(
-        head=Compound("caller", (x,)), body=body,
+        head=("caller", x), body=body,
     ))
 
 
@@ -49,7 +49,7 @@ def _case_variable_arg():
     x, y = Var(), Var()
     body = [Call(func=LoadName(name="color_var"), args=[y], kwargs=[])]
     return ("variable_arg", callee_cls, "color_var", Clause(
-        head=Compound("caller", (x,)), body=body,
+        head=("caller", x), body=body,
     ))
 
 
@@ -61,7 +61,7 @@ def _case_unlocked_predicate():
     x = Var()
     body = [Call(func=LoadName(name="color_unl"), args=["red"], kwargs=[])]
     return ("unlocked_predicate", callee_cls, "color_unl", Clause(
-        head=Compound("caller", (x,)), body=body,
+        head=("caller", x), body=body,
     ))
 
 
@@ -72,7 +72,7 @@ def _case_unknown_key():
     x = Var()
     body = [Call(func=LoadName(name="color_unk"), args=["orange"], kwargs=[])]
     return ("unknown_key", callee_cls, "color_unk", Clause(
-        head=Compound("caller", (x,)), body=body,
+        head=("caller", x), body=body,
     ))
 
 

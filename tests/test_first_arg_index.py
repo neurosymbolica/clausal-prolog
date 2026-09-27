@@ -52,40 +52,40 @@ def _trampoline_solutions(dispatch, args, trail=None):
 class TestExtractFirstArgKey:
     def test_compound_literal(self):
         # nv
-        c = Clause(head=Compound("f", (42,)), body=[True])
+        c = Clause(head=("f", 42), body=[True])
         assert _extract_first_arg_key(c, 1) == 42
 
     def test_compound_string(self):
         # nv
-        c = Clause(head=Compound("f", (mint("hello"), 1)), body=[True])
+        c = Clause(head=("f", mint("hello"), 1), body=[True])
         assert _extract_first_arg_key(c, 2) == ("hello", 0)
         # ...and the STRING of the same text is unindexable (spec §6.9).
-        c_str = Clause(head=Compound("f", (chars("hello"), 1)), body=[True])
+        c_str = Clause(head=("f", chars("hello"), 1), body=[True])
         assert _extract_first_arg_key(c_str, 2) is _INDEX_VAR
 
     def test_compound_var(self):
         # nv
         v = Var()
-        c = Clause(head=Compound("f", (v, 1)), body=[True])
+        c = Clause(head=("f", v, 1), body=[True])
         assert _extract_first_arg_key(c, 2) is _INDEX_VAR
 
     def test_compound_var_with_unify(self):
         """Var + Unify pattern from _normalize_dataclass_fact."""
         # nv
         v = Var()
-        c = Clause(head=Compound("f", (v, Var())), body=[Unify(left=v, right=99)])
+        c = Clause(head=("f", v, Var()), body=[Unify(left=v, right=99)])
         assert _extract_first_arg_key(c, 2) == 99
 
     def test_compound_var_with_unify_reversed(self):
         """Unify with reversed left/right."""
         # nv
         v = Var()
-        c = Clause(head=Compound("f", (v,)), body=[Unify(left=mint("abc"), right=v)])
+        c = Clause(head=("f", v), body=[Unify(left=mint("abc"), right=v)])
         assert _extract_first_arg_key(c, 1) == ("abc", 0)
 
     def test_zero_arity(self):
         # nv
-        c = Clause(head=Compound("f", ()), body=[True])
+        c = Clause(head="f", body=[True])
         assert _extract_first_arg_key(c, 0) is _INDEX_VAR
 
     def test_predicate_meta_head(self):
@@ -100,25 +100,25 @@ class TestExtractFirstArgKey:
     def test_non_indexable_first_arg(self):
         """Term instances are not indexed; int-lists are now bytes-indexed (Task 11)."""
         # nv — [1, 2] is a valid codes list: canonicalises to b'\x01\x02'
-        c = Clause(head=Compound("f", ([1, 2], "x")), body=[True])
+        c = Clause(head=("f", [1, 2], "x"), body=[True])
         assert _extract_first_arg_key(c, 2) == b'\x01\x02'
 
     def test_bool_key(self):
         # nv
-        c = Clause(head=Compound("f", (True,)), body=[True])
+        c = Clause(head=("f", True), body=[True])
         assert _extract_first_arg_key(c, 1) is True
 
     def test_none_key(self):
         """None is indexable — extracted from Var+Unify pattern."""
         # nv
         v = Var()
-        c = Clause(head=Compound("f", (v,)), body=[Unify(left=v, right=None)])
+        c = Clause(head=("f", v), body=[Unify(left=v, right=None)])
         assert _extract_first_arg_key(c, 1) is None
 
     def test_none_key_direct(self):
-        """None directly in Compound head is also indexable."""
+        """None directly in a cell head is also indexable."""
         # nv
-        c = Clause(head=Compound("f", (None,)), body=[True])
+        c = Clause(head=("f", None), body=[True])
         assert _extract_first_arg_key(c, 1) is None
 
 
@@ -132,7 +132,7 @@ class TestExtractFirstArgKey:
         """
         from clausal.terms import LoadName
         v = Var()
-        c = Clause(head=Compound("color", (v,)),
+        c = Clause(head=("color", v),
                    body=[Unify(left=v, right=LoadName(name="red"))])
         assert _extract_first_arg_key(c, 1) is _INDEX_VAR
         assert _extract_first_arg_key(c, 1, env=None) is _INDEX_VAR
@@ -199,6 +199,7 @@ class TestCellIndexKey:
         assert _arg_to_index_key(["a", "b", "c"]) is _INDEX_VAR
         assert _runtime_arg_key(["a", "b", "c"]) is _INDEX_VAR
 
+    @pytest.mark.compound_retirement_slice8
     def test_bucket_sharing_across_producers(self):
         """A clause with a live cell arg (``assertz``-style) and one with a
         compile-time ``Compound`` node in the same argument position select
@@ -370,7 +371,7 @@ class TestImportedAtomIndexKey:
         for i in range(4):
             v = Var()
             clauses.append(Clause(
-                head=Compound("f", (v, "tag")),
+                head=("f", v, "tag"),
                 body=[Unify(left=v, right=LoadName(name=f"py.sympy.const{i}"))],
             ))
         for c in clauses:
@@ -405,6 +406,7 @@ class TestGroundnessWalkCompleteness:
         assert _is_deeply_ground(("W", DictTerm({"a": v}))) is False
         assert _is_deeply_ground(("W", DictTerm({"a": 1}))) is True
 
+    @pytest.mark.compound_retirement_slice9
     def test_nested_kwterm_with_a_var_field_is_not_ground(self):
         from clausal.logic.compiler.arg_index import _is_deeply_ground
         from clausal.terms import KWTerm
@@ -415,8 +417,8 @@ class TestGroundnessWalkCompleteness:
     def test_nested_compound_with_a_var_arg_is_not_ground(self):
         from clausal.logic.compiler.arg_index import _is_deeply_ground
         v = Var()
-        assert _is_deeply_ground(("W", Compound("g", (v,)))) is False
-        assert _is_deeply_ground(("W", Compound("g", (1,)))) is True
+        assert _is_deeply_ground(("W", ("g", v))) is False
+        assert _is_deeply_ground(("W", ("g", 1))) is True
 
     def test_nested_seglist_with_an_open_hole_is_not_ground(self):
         from clausal.logic.compiler.arg_index import _is_deeply_ground
@@ -473,9 +475,9 @@ class TestGroundnessWalkCompleteness:
         # cell fact, to cross _INDEX_THRESHOLD and give the cell fact's
         # functor its own bucket.
         for i in range(4):
-            db.assertz(Clause(head=Compound("Probe", (i, "pad")), body=[True]))
+            db.assertz(Clause(head=("Probe", i, "pad"), body=[True]))
         db.assertz(Clause(
-            head=Compound("Probe", (("Box", DictTerm({"a": 1})), "boxed")),
+            head=("Probe", ("Box", DictTerm({"a": 1})), "boxed"),
             body=[True],
         ))
         predicate_mod.compile_predicate_trampoline(
@@ -624,9 +626,10 @@ class TestDeepGateFlagComputation:
             _lifted_head_arg_needs_deep_gate,
         )
         assert _lifted_head_arg_needs_deep_gate(
-            Compound("g", (Var(),))
+            ("g", Var())
         ) is False
 
+    @pytest.mark.compound_retirement_slice8
     def test_compound_ground_arg_needs_the_gate(self):
         """The pre-existing (not cell-specific) hazard: a lifted
         ``Compound`` literal arg is exactly as risky as a lifted cell
@@ -704,13 +707,13 @@ class TestDeepGateWiredThroughCompiler:
         db = Database()
         for name in ("pad1", "pad2", "pad3"):
             db.assertz(Clause(
-                head=Compound("depth", (Call(func=LoadName(name=name), args=[], kwargs=[]), 0)),
+                head=("depth", Call(func=LoadName(name=name), args=[], kwargs=[]), 0),
                 body=[True],
             ))
-        db.assertz(Clause(head=Compound("depth", ("nil", 0)), body=[True]))
+        db.assertz(Clause(head=("depth", "nil", 0), body=[True]))
         h, t, n1 = Var(), Var(), Var()
         db.assertz(Clause(
-            head=Compound("depth", (("cons", h, t), Var())),
+            head=("depth", ("cons", h, t), Var()),
             body=[Unify(left=Var(), right=n1)],
         ))
         plans = self._plans_for("depth", 2, db)
@@ -727,9 +730,9 @@ class TestDeepGateWiredThroughCompiler:
 
         db = Database()
         for i in range(3):
-            db.assertz(Clause(head=Compound("Boxed", (i, "pad")), body=[True]))
+            db.assertz(Clause(head=("Boxed", i, "pad"), body=[True]))
         db.assertz(Clause(
-            head=Compound("Boxed", (("wrap", "direct"), "boxed")),
+            head=("Boxed", ("wrap", "direct"), "boxed"),
             body=[True],
         ))
         plans = self._plans_for("Boxed", 2, db)
@@ -747,9 +750,9 @@ class TestDeepGateWiredThroughCompiler:
         Wrap = term_ctor("wrap", ["sub"])
         db = Database()
         for i in range(3):
-            db.assertz(Clause(head=Compound("Boxed2", (i, "pad")), body=[True]))
+            db.assertz(Clause(head=("Boxed2", i, "pad"), body=[True]))
         db.assertz(Clause(
-            head=Compound("Boxed2", (Wrap(sub="direct"), "boxed")),
+            head=("Boxed2", Wrap(sub="direct"), "boxed"),
             body=[True],
         ))
         plans = self._plans_for("Boxed2", 2, db)
@@ -772,11 +775,11 @@ class TestLiftClauseAtPos:
         from clausal.terms import LoadName
         from clausal.logic.compiler.list_dispatch import _lift_clause_at_pos
         v = Var()
-        c = Clause(head=Compound("color", (v,)),
+        c = Clause(head=("color", v),
                    body=[Unify(left=v, right=LoadName(name="red"))])
         lifted = _lift_clause_at_pos(c, 0)
         # Unchanged: head still a Var, body Unify retained.
-        assert lifted.head.args[0] is v
+        assert lifted.head[1] is v
         assert len(lifted.body) == 1
 
     def test_str_literal_is_now_lifted(self):
@@ -789,7 +792,7 @@ class TestLiftClauseAtPos:
         """
         from clausal.logic.compiler.list_dispatch import _lift_clause_at_pos
         v = Var()
-        c = Clause(head=Compound("f", (v,)), body=[Unify(left=v, right="abc")])
+        c = Clause(head=("f", v), body=[Unify(left=v, right="abc")])
         lifted = _lift_clause_at_pos(c, 0)
         assert lifted.head[1] == "abc"      # the head is a cell (slice 3)
         assert lifted.body == []
@@ -801,9 +804,9 @@ class TestLiftClauseAtPos:
         check inside a merged byte-list bucket, exactly as before R8."""
         from clausal.logic.compiler.list_dispatch import _lift_clause_at_pos
         v = Var()
-        c = Clause(head=Compound("f", (v,)), body=[Unify(left=v, right=b"abc")])
+        c = Clause(head=("f", v), body=[Unify(left=v, right=b"abc")])
         lifted = _lift_clause_at_pos(c, 0)
-        assert lifted.head.args[0] is v
+        assert lifted.head[1] is v
         assert len(lifted.body) == 1
 
     def test_ground_str_content_list_literal_is_not_lifted(self):
@@ -824,11 +827,11 @@ class TestLiftClauseAtPos:
         """
         from clausal.logic.compiler.list_dispatch import _lift_clause_at_pos
         v = Var()
-        c = Clause(head=Compound("f", (v,)),
+        c = Clause(head=("f", v),
                    body=[Unify(left=v, right=["a", "b", "c"])])
         lifted = _lift_clause_at_pos(c, 0)
         # Unchanged: head still a Var, body Unify retained.
-        assert lifted.head.args[0] is v
+        assert lifted.head[1] is v
         assert len(lifted.body) == 1
 
     def test_ground_int_list_literal_is_still_lifted(self):
@@ -841,7 +844,7 @@ class TestLiftClauseAtPos:
         relies on exactly this."""
         from clausal.logic.compiler.list_dispatch import _lift_clause_at_pos
         v = Var()
-        c = Clause(head=Compound("f", (v,)), body=[Unify(left=v, right=[1, 2, 3])])
+        c = Clause(head=("f", v), body=[Unify(left=v, right=[1, 2, 3])])
         lifted = _lift_clause_at_pos(c, 0)
         assert lifted.head[1] == [1, 2, 3]  # the head is a cell (slice 3)
         assert lifted.body == []
@@ -853,19 +856,19 @@ class TestLiftClauseAtPos:
 class TestBuildFirstArgIndex:
     def test_too_few_clauses(self):
         # nv
-        clauses = [Clause(head=Compound("f", (i,)), body=[True]) for i in range(3)]
+        clauses = [Clause(head=("f", i), body=[True]) for i in range(3)]
         assert _build_first_arg_index(clauses, 1) is None
 
     def test_zero_arity(self):
         # nv
-        clauses = [Clause(head=Compound("f", ()), body=[True]) for _ in range(10)]
+        clauses = [Clause(head="f", body=[True]) for _ in range(10)]
         assert _build_first_arg_index(clauses, 0) is None
 
     def test_all_defaults(self):
         """All clauses have variable first arg — no index."""
         # nv
         clauses = [
-            Clause(head=Compound("f", (Var(), Var())), body=[True])
+            Clause(head=("f", Var(), Var()), body=[True])
             for _ in range(5)
         ]
         assert _build_first_arg_index(clauses, 2) is None
@@ -873,10 +876,10 @@ class TestBuildFirstArgIndex:
     def test_basic_partition(self):
         # nv
         clauses = [
-            Clause(head=Compound("f", (1,)), body=[True]),
-            Clause(head=Compound("f", (2,)), body=[True]),
-            Clause(head=Compound("f", (3,)), body=[True]),
-            Clause(head=Compound("f", (4,)), body=[True]),
+            Clause(head=("f", 1), body=[True]),
+            Clause(head=("f", 2), body=[True]),
+            Clause(head=("f", 3), body=[True]),
+            Clause(head=("f", 4), body=[True]),
         ]
         index = _build_first_arg_index(clauses, 1)
         assert index is not None
@@ -890,10 +893,10 @@ class TestBuildFirstArgIndex:
         # nv
         v1, v2 = Var(), Var()
         clauses = [
-            Clause(head=Compound("f", (1, Var())), body=[True]),   # idx 0, key=1
-            Clause(head=Compound("f", (v1, v2)), body=[True]),     # idx 1, default
-            Clause(head=Compound("f", (2, Var())), body=[True]),   # idx 2, key=2
-            Clause(head=Compound("f", (3, Var())), body=[True]),   # idx 3, key=3
+            Clause(head=("f", 1, Var()), body=[True]),   # idx 0, key=1
+            Clause(head=("f", v1, v2), body=[True]),     # idx 1, default
+            Clause(head=("f", 2, Var()), body=[True]),   # idx 2, key=2
+            Clause(head=("f", 3, Var()), body=[True]),   # idx 3, key=3
         ]
         index = _build_first_arg_index(clauses, 2)
         assert index is not None
@@ -914,7 +917,7 @@ class TestIndexedDispatchSimple:
         """Build a Database with normalized fact clauses."""
         db = Database()
         for fact_args in facts:
-            clause = _normalize_fact_clause(Compound(functor, tuple(fact_args)))
+            clause = _normalize_fact_clause((functor, *fact_args))
             db.assertz(clause)
         return db
 
@@ -963,11 +966,11 @@ class TestIndexedDispatchSimple:
         # All ground values normalized to Var+Unify for output-mode queries.
         # nv
         db = Database()
-        db.assertz(_normalize_fact_clause(Compound("f", (1, "a"))))
-        db.assertz(_normalize_fact_clause(Compound("f", (Var(), "b"))))
-        db.assertz(_normalize_fact_clause(Compound("f", (2, "c"))))
-        db.assertz(_normalize_fact_clause(Compound("f", (3, "d"))))
-        db.assertz(_normalize_fact_clause(Compound("f", (Var(), "e"))))
+        db.assertz(_normalize_fact_clause(("f", 1, "a")))
+        db.assertz(_normalize_fact_clause(("f", Var(), "b")))
+        db.assertz(_normalize_fact_clause(("f", 2, "c")))
+        db.assertz(_normalize_fact_clause(("f", 3, "d")))
+        db.assertz(_normalize_fact_clause(("f", Var(), "e")))
         fn = compile_predicate("f", 2, db.clauses_for("f", 2), db)
         trail = Trail()
 
@@ -1038,7 +1041,7 @@ class TestIndexedDispatchTrampoline:
     def _make_fact_db(self, functor, facts):
         db = Database()
         for fact_args in facts:
-            clause = _normalize_fact_clause(Compound(functor, tuple(fact_args)))
+            clause = _normalize_fact_clause((functor, *fact_args))
             db.assertz(clause)
         return db
 
@@ -1087,11 +1090,11 @@ class TestIndexedDispatchTrampoline:
     def test_mixed_var_and_specific(self):
         # nv
         db = Database()
-        db.assertz(_normalize_fact_clause(Compound("f", (1, "a"))))
-        db.assertz(_normalize_fact_clause(Compound("f", (Var(), "b"))))
-        db.assertz(_normalize_fact_clause(Compound("f", (2, "c"))))
-        db.assertz(_normalize_fact_clause(Compound("f", (3, "d"))))
-        db.assertz(_normalize_fact_clause(Compound("f", (Var(), "e"))))
+        db.assertz(_normalize_fact_clause(("f", 1, "a")))
+        db.assertz(_normalize_fact_clause(("f", Var(), "b")))
+        db.assertz(_normalize_fact_clause(("f", 2, "c")))
+        db.assertz(_normalize_fact_clause(("f", 3, "d")))
+        db.assertz(_normalize_fact_clause(("f", Var(), "e")))
         fn = compile_predicate_trampoline("f", 2, db.clauses_for("f", 2), db)
         trail = Trail()
 
@@ -1140,7 +1143,7 @@ class TestDynamicReindex:
         db = Database()
         db.mark_dynamic("color", 2)
         for args in [("red", 1), ("green", 2), ("blue", 3), ("white", 4)]:
-            db.assertz(_normalize_fact_clause(Compound("color", args)))
+            db.assertz(_normalize_fact_clause(("color", *args)))
         fn = compile_predicate("color", 2, db.clauses_for("color", 2), db)
 
         # Initial lookup works
@@ -1150,7 +1153,7 @@ class TestDynamicReindex:
         assert results == [("red", 1)]
 
         # Add a new clause — triggers lazy recompile on next use
-        db.assertz(_normalize_fact_clause(Compound("color", ("purple", 5))))
+        db.assertz(_normalize_fact_clause(("color", "purple", 5)))
 
         # The dispatch fn stored in db should now lazily recompile
         new_fn = db.get_dispatch("color", 2)
@@ -1164,7 +1167,7 @@ class TestDynamicReindex:
         db = Database()
         db.mark_dynamic("color", 2)
         for args in [("red", 1), ("green", 2), ("blue", 3), ("white", 4)]:
-            db.assertz(_normalize_fact_clause(Compound("color", args)))
+            db.assertz(_normalize_fact_clause(("color", *args)))
         fn = compile_predicate_trampoline(
             "color", 2, db.clauses_for("color", 2), db,
         )
@@ -1174,7 +1177,7 @@ class TestDynamicReindex:
         results = _trampoline_solutions(fn, ["red", v], trail)
         assert results == [("red", 1)]
 
-        db.assertz(_normalize_fact_clause(Compound("color", ("purple", 5))))
+        db.assertz(_normalize_fact_clause(("color", "purple", 5)))
         new_fn = db.get_dispatch("color", 2)
         trail = Trail()
         v = Var()
@@ -1229,7 +1232,7 @@ class TestEdgeCases:
         # nv
         db = Database()
         for i in range(5):
-            db.assertz(_normalize_fact_clause(Compound("p", (i,))))
+            db.assertz(_normalize_fact_clause(("p", i)))
         fn = compile_predicate("p", 1, db.clauses_for("p", 1), db)
         trail = Trail()
         results = _simple_solutions(fn, [3], trail)
@@ -1240,7 +1243,7 @@ class TestEdgeCases:
         # nv
         db = Database()
         for args in [(1, "a"), (1, "b"), (2, "c"), (2, "d"), (1, "e")]:
-            db.assertz(_normalize_fact_clause(Compound("f", args)))
+            db.assertz(_normalize_fact_clause(("f", *args)))
         fn = compile_predicate("f", 2, db.clauses_for("f", 2), db)
         trail = Trail()
         y = Var()
@@ -1252,7 +1255,7 @@ class TestEdgeCases:
         # nv
         db = Database()
         for v in [None, 1, 2, 3]:
-            db.assertz(_normalize_fact_clause(Compound("f", (v, str(v)))))
+            db.assertz(_normalize_fact_clause(("f", v, str(v))))
         fn = compile_predicate("f", 2, db.clauses_for("f", 2), db)
         trail = Trail()
         y = Var()
@@ -1264,7 +1267,7 @@ class TestEdgeCases:
         # nv
         db = Database()
         for v in [True, False, 0, 1, 2]:
-            db.assertz(_normalize_fact_clause(Compound("f", (v,))))
+            db.assertz(_normalize_fact_clause(("f", v)))
         fn = compile_predicate("f", 1, db.clauses_for("f", 1), db)
         trail = Trail()
         # True == 1 and False == 0 in Python, so querying with True finds both
@@ -1319,7 +1322,7 @@ class TestAtomInListHead:
             (smart_t, unrestricted, unrestricted, [usd, 100000]),
         ]
         for args in clauses:
-            db.assertz(_normalize_fact_clause(Compound("InsuranceRequired", args)))
+            db.assertz(_normalize_fact_clause(("InsuranceRequired", *args)))
 
         # Before the fix this raised
         # ``TypeError: got an invalid type in Constant: PredicateMeta``.
@@ -1390,7 +1393,7 @@ class TestNonAtomNestedInCellHeadArgUnreachable:
                 kwargs=(),
             )
             clauses.append(Clause(
-                head=Compound("level", (n_var, l_var)),
+                head=("level", n_var, l_var),
                 body=[
                     Unify(left=n_var, right=i),
                     Unify(left=l_var, right=wrap_call),
@@ -1452,7 +1455,7 @@ class TestCellAtomHeadReference:
                 kwargs=(),
             )
             clauses.append(Clause(
-                head=Compound("level", (n_var, l_var)),
+                head=("level", n_var, l_var),
                 body=[
                     Unify(left=n_var, right=i),
                     Unify(left=l_var, right=wrap_call),

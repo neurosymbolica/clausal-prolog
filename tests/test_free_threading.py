@@ -192,7 +192,7 @@ class TestConcurrentDatabaseReads:
         from clausal.logic.compiler import compile_predicate_trampoline
         from clausal.logic.database import Clause, Module
         from clausal.logic.solve import call
-        from clausal.terms import Compound, Unify as Is
+        from clausal.terms import Unify as Is
 
         mod = Module("test_concurrent")
         db = mod.db
@@ -201,7 +201,7 @@ class TestConcurrentDatabaseReads:
         for i in range(100):
             v = Var()
             db.assertz(Clause(
-                head=Compound("num", (v,)),
+                head=("num", v),
                 body=[Is(left=v, right=i)],
             ))
         compile_predicate_trampoline("num", 1,

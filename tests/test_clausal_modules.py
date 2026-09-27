@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import os
 
+from clausal import cell_args
 from clausal.logic.atoms import mint
 from clausal.logic.database import Module
 from clausal.logic.solve import call, _deref_walk
@@ -55,26 +56,24 @@ class TestTermInspectionCopyFresh:
 
     def test_copy_ground_term(self):
         # nv
-        from clausal.terms import Compound
-        term = Compound("foo", (1, 2))
+        term = ("foo", 1, 2)
         r = Var()
         result = _call_collect("copy_fresh", term, r, mod=self.mod)
         assert len(result) == 1
-        assert result[0] == Compound("foo", (1, 2))
+        assert result[0] == ("foo", 1, 2)
 
     def test_copy_returns_fresh_copy(self):
         # nv
-        from clausal.terms import Compound
         from clausal.logic.variables import is_var
         x = Var()
-        term = Compound("f", (x,))
+        term = ("f", x)
         r = Var()
         result = _call_collect("copy_fresh", term, r, mod=self.mod)
         assert len(result) == 1
         c = result[0]
-        assert isinstance(c, Compound)
-        assert is_var(c.args[0])
-        assert c.args[0] is not x
+        assert type(c) is tuple
+        assert is_var(cell_args(c)[0])
+        assert cell_args(c)[0] is not x
 
     def test_copy_atom(self):
         # nv
@@ -101,8 +100,7 @@ class TestTermInspectionHasNoVars:
 
     def test_ground_term_no_vars(self):
         # nv
-        from clausal.terms import Compound
-        assert _call_succeeds("has_no_vars", Compound("f", (1, 2)), mod=self.mod) == 1
+        assert _call_succeeds("has_no_vars", ("f", 1, 2), mod=self.mod) == 1
 
     def test_ground_atom(self):
         # nv
@@ -110,8 +108,7 @@ class TestTermInspectionHasNoVars:
 
     def test_term_with_var_fails(self):
         # nv
-        from clausal.terms import Compound
-        term = Compound("f", (Var(),))
+        term = ("f", Var())
         assert _call_succeeds("has_no_vars", term, mod=self.mod) == 0
 
     def test_ground_list(self):
@@ -129,31 +126,27 @@ class TestTermInspectionCountVars:
 
     def test_no_vars(self):
         # nv
-        from clausal.terms import Compound
         r = Var()
-        result = _call_collect("count_vars", Compound("f", (1, 2)), r, mod=self.mod)
+        result = _call_collect("count_vars", ("f", 1, 2), r, mod=self.mod)
         assert result == [0]
 
     def test_one_var(self):
         # nv
-        from clausal.terms import Compound
         r = Var()
-        result = _call_collect("count_vars", Compound("f", (Var(),)), r, mod=self.mod)
+        result = _call_collect("count_vars", ("f", Var()), r, mod=self.mod)
         assert result == [1]
 
     def test_two_vars(self):
         # nv
-        from clausal.terms import Compound
         r = Var()
-        result = _call_collect("count_vars", Compound("f", (Var(), Var())), r, mod=self.mod)
+        result = _call_collect("count_vars", ("f", Var(), Var()), r, mod=self.mod)
         assert result == [2]
 
     def test_repeated_var_counts_once(self):
         # nv
-        from clausal.terms import Compound
         x = Var()
         r = Var()
-        result = _call_collect("count_vars", Compound("f", (x, x)), r, mod=self.mod)
+        result = _call_collect("count_vars", ("f", x, x), r, mod=self.mod)
         assert result == [1]
 
     def test_list_vars(self):
@@ -169,23 +162,20 @@ class TestTermInspectionNumberAndCount:
 
     def test_no_vars(self):
         # nv
-        from clausal.terms import Compound
         r = Var()
-        result = _call_collect("number_and_count", Compound("f", (1, 2)), 0, r, mod=self.mod)
+        result = _call_collect("number_and_count", ("f", 1, 2), 0, r, mod=self.mod)
         assert result == [0]
 
     def test_one_var(self):
         # nv
-        from clausal.terms import Compound
         r = Var()
-        result = _call_collect("number_and_count", Compound("f", (Var(),)), 0, r, mod=self.mod)
+        result = _call_collect("number_and_count", ("f", Var()), 0, r, mod=self.mod)
         assert result == [1]
 
     def test_start_offset(self):
         # nv
-        from clausal.terms import Compound
         r = Var()
-        result = _call_collect("number_and_count", Compound("f", (Var(), Var())), 5, r, mod=self.mod)
+        result = _call_collect("number_and_count", ("f", Var(), Var()), 5, r, mod=self.mod)
         assert result == [7]
 
     def test_two_vars_consecutive(self):
@@ -202,10 +192,9 @@ class TestTermInspectionCopyShared:
     def test_sharing_preserved(self):
         """f(X, X) copied: the two args in copy should be the same fresh Var."""
         # nv
-        from clausal.terms import Compound
         from clausal.logic.variables import is_var
         x = Var()
-        term = Compound("f", (x, x))
+        term = ("f", x, x)
         a, b = Var(), Var()
         shared = []
         for _ in call("copy_shared", term, a, b, module=self.mod):
@@ -218,10 +207,9 @@ class TestTermInspectionCopyShared:
     def test_sharing_independent_from_original(self):
         """Fresh vars in copy are distinct from original Var."""
         # nv
-        from clausal.terms import Compound
         from clausal.logic.variables import is_var
         x = Var()
-        term = Compound("f", (x, x))
+        term = ("f", x, x)
         a, b = Var(), Var()
         captured = []
         for _ in call("copy_shared", term, a, b, module=self.mod):

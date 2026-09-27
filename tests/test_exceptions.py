@@ -16,7 +16,7 @@ from clausal.logic.solve import solve, _deref_walk
 from clausal.logic.variables import Var, Trail, deref
 from clausal import cell_args, cell_functor
 from clausal.logic.exceptions import LogicException
-from clausal.terms import And, Call, LoadName, Compound, Unify as Is, in_
+from clausal.terms import And, Call, LoadName, Unify as Is, in_
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -53,8 +53,8 @@ class TestLogicException:
 
     def test_carries_term(self):
         # nv
-        exc = LogicException(Compound("error", ("type_error", "foo")))
-        assert exc.term == Compound("error", ("type_error", "foo"))
+        exc = LogicException(("error", "type_error", "foo"))
+        assert exc.term == ("error", "type_error", "foo")
 
     def test_str(self):
         # nv
@@ -77,11 +77,11 @@ class TestThrow:
     def test_throw_with_compound_term(self):
         """throw(error(type_error, foo)) raises with compound term."""
         # nv
-        term = Compound("error", ("type_error", "foo"))
+        term = ("error", "type_error", "foo")
         goal = Call(func=LoadName(name="throw"), args=[term], kwargs=[])
         with pytest.raises(LogicException) as exc_info:
             solutions_of(goal)
-        assert exc_info.value.term.functor == "error"
+        assert cell_functor(exc_info.value.term) == "error"
 
     def test_throw_with_integer(self):
         """throw(42) raises with integer term."""
@@ -244,13 +244,13 @@ class TestCatch:
         x_a, x_b = Var(), Var()
         compile_predicate_trampoline("a", 1, [
             Clause(
-                head=Compound("a", (x_a,)),
+                head=("a", x_a),
                 body=[Call(func=LoadName(name="b"), args=[x_a], kwargs=[])],
             ),
         ], db)
         compile_predicate_trampoline("b", 1, [
             Clause(
-                head=Compound("b", (x_b,)),
+                head=("b", x_b),
                 body=[Call(func=LoadName(name="throw"), args=["deep_error"], kwargs=[])],
             ),
         ], db)
