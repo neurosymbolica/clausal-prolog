@@ -3950,7 +3950,7 @@ def _wq_local_names(text: str, seen: dict) -> str:
         else:
             shared += 1
             names[n] = f"_{shared}"
-    return _WQ_PLACEHOLDER.sub(lambda m: names[m.group(1)], text)
+    return _WQ_PLACEHOLDER.sub(lambda m: names.get(m.group(1), m.group(0)), text)
 
 
 _WQ_PLACEHOLDER = _re.compile("\x00(\\d+)\x00")

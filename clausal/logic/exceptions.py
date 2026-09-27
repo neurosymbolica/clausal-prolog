@@ -162,6 +162,11 @@ class LogicException(Exception):
     def __init__(self, term: Any, message: str | None = None) -> None:
         self.term = term
         self.message = message if message is not None else error_prose(term)
+        if self.message and type(term) is tuple:
+            # Registered for the term this exception carries, so a ball that
+            # ``catch/3`` binds and ``throw/1`` raises again, any number of
+            # times, still finds its prose.
+            _with_prose(term, self.message)
         text = f"Uncaught logic exception: {render_error_term(term)}"
         if self.message:
             text = f"{text}: {self.message}"
@@ -563,9 +568,10 @@ def string_goal_error(goal: str, extra_arity: int = 0,
         why = (f"the empty list is not a callable term — it is the atom "
                f"{name!r}, and no procedure {name!r}/{arity} is defined")
     indicator = ("/", mint(name), arity)
+    prefix = f"{context}: " if context else ""
     return existence_error(
         "procedure", indicator,
-        f"{context}: {why}; write the ATOM (a bare name, or mint(...) from "
+        f"{prefix}{why}; write the ATOM (a bare name, or mint(...) from "
         f"Python) or a cell goal such as ('name', Arg)",
     )
 

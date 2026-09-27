@@ -321,3 +321,17 @@ def test_a_nested_plain_writeq_inside_a_local_render_keeps_its_own_names():
     finally:
         _WQ_LOCAL_VARS.reset(token)
     assert "\x00" not in inner and inner.startswith("f(_")
+
+
+def test_prose_survives_catch_and_rethrow_twice():
+    """``catch(catch(catch(G, E, throw(E)), E2, throw(E2)), E3, true)``: each
+    throw/1 raises a copy of the ball; the prose follows every copy."""
+    from clausal.logic.compiler.globals_env import _throw_ball
+    first = LogicException(instantiation_error("solve/1: the goal is unbound"))
+    second = _throw_ball(first.term)
+    third = _throw_ball(second.term)
+    assert first.message == second.message == third.message == "the goal is unbound"
+
+
+def test_a_string_goal_error_without_a_context_has_no_leading_separator():
+    assert not error_prose(string_goal_error("ab", 0)).startswith(":")
