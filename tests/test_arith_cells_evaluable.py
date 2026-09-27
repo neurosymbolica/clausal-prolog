@@ -462,3 +462,22 @@ def test_pow_cell_and_node_post_alike(api_mod):
 def test_structural_eq_cell_vs_source_arith_is_a3(tmp_path):
     mod = _module(tmp_path, "h(X) <- (unpack(T, ['+', 1, 2]), '=='(T, 1 + 2), X == 1)", ["h(X)"])
     assert _answers(mod, "h") == [1]
+
+
+def test_qualified_term_constructor_is_evaluated(tmp_path, monkeypatch):
+    """A qualified call can be a TERM constructor (``lib.pt(3)``), not only a
+    Python function: its result is evaluated or refused like any other term,
+    while a qualified Python call's str result still binds (roborev job 276)."""
+    lib = f"arith_qlib_{next(_N)}"
+    (tmp_path / f"{lib}.clausal").write_text(f"-module({lib}, [pt(X)])\npt(1),\n")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    mod = _module(tmp_path, (
+        f"q1(X) <- eval_({lib}.pt(3), X)\n"
+        f"q2(X) <- eval_({lib}.pt(3) // 2, X)\n"
+        "q3(X) <- eval_(os.getcwd(), X)"),
+        ["q1(X)", "q2(X)", "q3(X)"], extra=f"-import_module({lib})\n-import_module(os)\n")
+    for name in ("q1", "q2"):
+        text = _error_text(lambda: _answers(mod, name))
+        assert _culprit_rendered("pt/1") in text, text
+    import os
+    assert _answers(mod, "q3") == [os.getcwd()]

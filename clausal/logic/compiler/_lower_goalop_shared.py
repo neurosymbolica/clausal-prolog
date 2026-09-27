@@ -53,7 +53,7 @@ from clausal.logic.compiler._ast_helpers import (
 )
 from clausal.logic.compiler.terms_to_ast import (
     arith_to_ast_expr,
-    needs_runtime_eval,
+    runtime_eval_wrapper,
     term_to_ast_expr,
 )
 from clausal.logic.atoms import is_atom as _term_is_atom
@@ -417,12 +417,13 @@ def _lower_shared_body(
             # ``$present``: an integral Fraction produced anywhere in the
             # compiled tree is handed to unify as an int (predicate.py).
             r_expr = arith_to_ast_expr(r, var_context)
-            if needs_runtime_eval(r):
+            wrapper = runtime_eval_wrapper(r)
+            if wrapper is not None:
                 # Ruling R9 A2 (2026-09-27): an operand that is not a literal
                 # arithmetic tree -- a VARIABLE, whatever it is bound to at
                 # runtime, or a literal term -- is evaluated through the one
                 # evaluable table; it used to be unified unevaluated.
-                r_expr = _call(_name("$eval"), r_expr)
+                r_expr = _call(_name(wrapper), r_expr)
             r_expr = _call(_name("$present"), r_expr)
             return [
                 _assign_mark(mark, trail_name),

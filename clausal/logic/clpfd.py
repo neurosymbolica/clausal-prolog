@@ -34,6 +34,7 @@ from fractions import Fraction
 from typing import Any
 
 from clausal.logic.atoms import is_atom, mint, spelling
+from dataclasses import replace as _replace   # a rebuilt node keeps its position
 from clausal.logic.exact_arith import EVALUABLE as _EVALUABLE, ZERO_DIVISOR_KEYS as _ZERO_DIVISOR_KEYS
 from clausal.logic.exact_arith import cell_key_args as _cell_key_args, node_keys as _node_keys
 from clausal.logic.exact_arith import key_nodes as _key_nodes, not_evaluable as _not_evaluable
@@ -1588,14 +1589,14 @@ def _arith_cells_to_nodes(x, strict=None):
             o = x.operand
             to = type(o)
             oc = None if to is int or to is float else _arith_cells_to_nodes(o, strict)
-            return None if oc is None else t(operand=oc)
+            return None if oc is None else _replace(x, operand=oc)
         a, b = x.left, x.right
         ta, tb = type(a), type(b)
         lc = None if ta is int or ta is float else _arith_cells_to_nodes(a, strict)
         rc = None if tb is int or tb is float else _arith_cells_to_nodes(b, strict)
         if lc is None and rc is None:
             return None
-        return t(left=a if lc is None else lc, right=b if rc is None else rc)
+        return _replace(x, left=a if lc is None else lc, right=b if rc is None else rc)
     if is_var(x) or exact_cell_number(x) is not None:
         return None
     ka = _cell_key_args(x)

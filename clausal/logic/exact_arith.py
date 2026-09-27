@@ -43,7 +43,7 @@ from types import MappingProxyType
 
 __all__ = ["exact_add", "exact_sub", "exact_mul", "exact_div", "exact_floordiv",
            "exact_mod", "exact_pow", "exact_neg", "decimal_parts", "EVALUABLE",
-           "evaluate"]
+           "evaluate", "evaluate_python_result"]
 
 
 def _float_beside_decimal(f, context: str):
@@ -315,6 +315,16 @@ def _bind_variables() -> None:
     global _deref, _is_var, _exact_cell_number
     from clausal.logic.variables import deref, exact_cell_number, is_var  # noqa: PLC0415
     _deref, _is_var, _exact_cell_number = deref, is_var, exact_cell_number
+
+
+def evaluate_python_result(x, context: str = "eval_/2"):
+    """:func:`evaluate` for the result of a QUALIFIED call (``os.getcwd()``,
+    ``math.sqrt(X)``): a ``str`` there is Python's string, not an atom, and
+    passes through as it always did; a term result (a qualified term
+    constructor's cell) is evaluated or refused like any other term."""
+    if type(x) is str:
+        return x
+    return evaluate(x, context)
 
 
 def evaluate(x, context: str = "eval_/2"):

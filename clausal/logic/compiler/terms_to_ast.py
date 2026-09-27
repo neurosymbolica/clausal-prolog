@@ -25,7 +25,7 @@ from fractions import Fraction
 from clausal.logic.exact_arith import (
     exact_add as _exact_add, exact_sub as _exact_sub,
     exact_mul as _exact_mul, exact_div as _exact_div,
-    evaluate as _evaluate,
+    evaluate as _evaluate, evaluate_python_result as _evaluate_python_result,
 )
 from typing import Any
 
@@ -1502,6 +1502,7 @@ ARITH_RUNTIME_NAMES: dict = {
     # through the one evaluable table; an atom or a non-evaluable compound
     # raises type_error(evaluable, F/N).
     "$eval": _evaluate,
+    "$eval_py": _evaluate_python_result,
     # the inline int test on a native operator's variable operand
     # (``_native_operand``): builtins under names a module cannot shadow
     "$type": type,
@@ -1532,37 +1533,38 @@ def _native_operand(term: Any, var_context: dict[int, str]) -> ast.expr:
             orelse=_call(_name("$eval"), _name("$arith_tmp")),
         )
     expr = arith_to_ast_expr(term, var_context)
-    if _yields_non_term(term):
-        return expr
-    return _call(_name("$eval"), expr)
+    wrapper = runtime_eval_wrapper(term)
+    return expr if wrapper is None else _call(_name(wrapper), expr)
 
 
-def _yields_non_term(term: Any) -> bool:
-    """True when *term*'s compiled arithmetic produces a Python VALUE, never a
-    term that still needs evaluating: a number literal, an arithmetic sub-tree
-    (whose helpers evaluate any term operand), a ``++`` escape, or a QUALIFIED
-    call (``math.sqrt(X)``, ``prolog.TruncDiv(A, B)``) -- the last two are
-    Python's own values and keep Python's operators and results, as before
-    (``++("%d") % 5`` formats).  A variable, or a literal compound such as a
-    bare-name ``foo(1)``, may be a term at runtime and is not.  (A bare-name
-    Python builtin is not callable there: ``eval_(str(5), X)`` is a
-    NameError, "Predicate 'str/1' is not in scope as a term class".)  The ONE answer to "is this eval_ operand a Python
-    value?" -- ``_lower_goalop_shared`` wraps exactly the others in ``$eval``."""
+def runtime_eval_wrapper(term: Any) -> "str | None":
+    """How an arithmetic operand's compiled value is checked at runtime --
+    the ONE answer, used for ``eval_``'s whole operand and for an operand of
+    a native ``//``/``%``/``**``/unary ``-`` (ruling R9):
+
+    * ``None`` -- it can only be a Python value: a number literal, an
+      arithmetic sub-tree (whose helpers evaluate any term operand), or a
+      ``++`` escape, which keeps Python's operators (``++("%d") % 5``);
+    * ``"$eval_py"`` -- a QUALIFIED call (``math.sqrt(X)``, ``os.getcwd()``,
+      but also a qualified term constructor ``utils.double(3)``): a str
+      result is Python's (it formats, it binds), a term result is evaluated
+      or refused like any other;
+    * ``"$eval"`` -- a variable, whatever it will hold, or a literal term
+      such as a bare-name ``foo(1)``.  (A bare-name Python builtin is not
+      callable there: ``eval_(str(5), X)`` is a NameError, "Predicate
+      'str/1' is not in scope as a term class".)
+    """
     term = deref(term)
     if is_var(term):
-        return False
+        return "$eval"
     if isinstance(term, (Add, Sub, Mult, Div, FloorDiv, Mod, Pow, Negate, PyThunk)):
-        return True
+        return None
     if isinstance(term, Call) and isinstance(term.func, LoadAttr):
-        return True
+        return "$eval_py"
     term = literal_value(term)
-    return isinstance(term, (int, float, Fraction)) and not isinstance(term, bool)
-
-
-def needs_runtime_eval(term: Any) -> bool:
-    """``eval_``'s operand must be evaluated at runtime (``$eval``): it is a
-    variable, whatever it will hold, or a literal term (ruling R9 A2)."""
-    return not _yields_non_term(term)
+    if isinstance(term, (int, float, Fraction)) and not isinstance(term, bool):
+        return None
+    return "$eval"
 
 
 def arith_to_ast_expr(term: Any, var_context: dict[int, str]) -> ast.expr:
