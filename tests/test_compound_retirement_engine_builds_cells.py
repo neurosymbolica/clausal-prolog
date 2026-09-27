@@ -160,3 +160,34 @@ def test_a_query_builds_no_compound(tmp_path, monkeypatch):
         got = [deref(x) for _ in S.solve(("p", x), module=mod)]
     assert got == [1, 2]
     assert seen == []
+
+
+# ── retract/1 against the cell heads ─────────────────────────────────────────
+
+
+def _run_builtin(db, name, term):
+    from clausal.logic.builtins import get_builtin_dispatch
+    from clausal.logic.solve import _drive_trampoline
+    dispatch = get_builtin_dispatch(name, 1, db)
+    return _drive_trampoline(dispatch, Trail(), term)
+
+
+@pytest.mark.parametrize("stored", ["cell", "compound_fact", "compound_clause"])
+def test_retract_by_cell_pattern_from_a_classless_dynamic_row(stored):
+    """A classless dynamic row now holds CELL heads (every argument hoisted);
+    retract by a cell pattern still finds the clause, binds the pattern and
+    empties the row.  ``compound_clause`` is a ``Compound`` head stored
+    directly from Python, which is still read (until slice 8)."""
+    db = Database()
+    db.mark_dynamic("r", 1)
+    if stored == "cell":
+        list(_run_builtin(db, "assertz", ("r", 5)))
+    elif stored == "compound_fact":
+        list(_run_builtin(db, "assertz", Compound("r", (5,))))
+    else:
+        db.assertz(Clause(head=Compound("r", (5,)), body=[]))
+    assert len(db.clauses_for("r", 1)) == 1
+    x = Var()
+    got = [deref(x) for _ in _run_builtin(db, "retract", ("r", x))]
+    assert got == [5]
+    assert db.clauses_for("r", 1) == []

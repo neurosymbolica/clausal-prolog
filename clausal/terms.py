@@ -232,10 +232,19 @@ def compound_as_cell(term: "Compound") -> "tuple | None":
     Those stay distinct from every cell.  The C twins (``_variables.c``
     ``compound_to_cell``, ``_tabling_core.c``) apply the same test.
     """
-    functor = deref(term.functor)
-    if (isinstance(functor, str) and term.args
+    functor = _cell_functor_of(term.functor, term.args)
+    return None if functor is None else (functor, *term.args)
+
+
+def _cell_functor_of(functor: Any, args: tuple) -> "str | None":
+    """The dereferenced atom that is slot 0 of ``Compound(functor, args)``'s
+    CELL, or None when it has no cell.  The one Python statement of the rule,
+    shared by ``compound_as_cell`` and ``compound_with_args``; the C twins
+    restate it."""
+    functor = deref(functor)
+    if (isinstance(functor, str) and args
             and functor != CHARS_TAG and functor != TUPLE_TAG):
-        return (functor, *term.args)
+        return functor
     return None
 
 
@@ -245,7 +254,7 @@ def compound_with_args(term: "Compound", args: tuple) -> Any:
     The engine's rebuild of a ``Compound`` it was handed (a clause head a
     compile pass edits, an asserted fact whose arguments are hoisted): the
     result is ``(functor, *args)`` whenever *term* has a cell at all -- the
-    test is ``compound_as_cell``'s, so the two cannot disagree -- and the two
+    test is ``compound_as_cell``'s (both ask ``_cell_functor_of``) -- and the two
     spellings are the same term in every relation (ruling 2026-09-26).  A
     ``Compound`` with no cell (Var or non-atom functor, ``foo()``, the
     ``'$chars'`` / ``'()'`` functors) is COPIED as a ``Compound``: those
@@ -257,9 +266,8 @@ def compound_with_args(term: "Compound", args: tuple) -> Any:
         raise ValueError(
             f"compound_with_args: {len(args)} argument(s) for a term of "
             f"arity {len(term.args)}")
-    functor = deref(term.functor)
-    if (isinstance(functor, str) and args
-            and functor != CHARS_TAG and functor != TUPLE_TAG):
+    functor = _cell_functor_of(term.functor, args)
+    if functor is not None:
         return make_cell(functor, *args)
     return Compound(term.functor, tuple(args), term._position)
 
