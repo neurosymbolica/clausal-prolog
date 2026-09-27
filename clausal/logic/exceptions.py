@@ -11,14 +11,26 @@ Structured error term helpers follow ISO Prolog conventions:
     error(instantiation_error, Context)
     error(existence_error(ObjType, Culprit), Context)
     error(permission_error(Operation, ObjType, Culprit), Context)
+
+Every term is a plain CELL (slice 2 of the Compound retirement,
+2026-09-27): ``('error', ('type_error', 'atom', 1), Context)``.  Read one
+from Python with ``clausal.cell_functor`` / ``clausal.cell_args``.
+``Context`` is what Scryer puts there (operator ruling 2026-09-27: when
+Scryer and SWI differ, Scryer): the predicate indicator of the builtin that
+raised (``atom_length/2``), the missing indicator itself for a missing
+procedure, or an unbound variable when there is none.  Explanatory prose
+stays off the term, on the exception's ``.message``.
 """
 
 from __future__ import annotations
 
+import re
+import threading
 from typing import Any
 
 from clausal.logic.cells import chars as _chars  # stage 1: the chars carrier
 from clausal.logic.atoms import is_atom, mint, spelling
+from clausal.logic.variables import Var
 from clausal.terms import Add, Compound, Div, FloorDiv, Mod, Mult, Negate, Pow, Sub
 from clausal.terms import term_writeq
 
@@ -68,6 +80,20 @@ def render_arith_operator_term(value: Any) -> str:
         return repr(value)
 
 
+def term_functor_args(term: Any) -> tuple[Any, tuple] | None:
+    """``(functor, args)`` of a compound error-term node, or None.
+
+    Reads a cell (the spelling every engine builder uses since slice 2 of
+    the Compound retirement) and, at the Python boundary, a ``Compound`` a
+    caller built by hand, alike.  An atom or any other shape is None.
+    """
+    if type(term) is tuple and term and type(term[0]) is str:
+        return term[0], term[1:]
+    if isinstance(term, Compound):
+        return term.functor, tuple(term.args)
+    return None
+
+
 def arith_in_numeric_position_hint(term: Any) -> str | None:
     """The is/== note for ``error(type_error(number, <arith term>), _)``, else None.
 
@@ -75,14 +101,13 @@ def arith_in_numeric_position_hint(term: Any) -> str | None:
     which goal built the culprit, and none is needed: that it is an unevaluated
     operator term where a number was required is a structural fact.
     """
-    if not (isinstance(term, Compound) and term.functor == "error"
-            and len(term.args) == 2):
+    outer = term_functor_args(term)
+    if outer is None or outer[0] != "error" or len(outer[1]) != 2:
         return None
-    inner = term.args[0]
-    if not (isinstance(inner, Compound) and inner.functor == "type_error"
-            and len(inner.args) == 2):
+    inner = term_functor_args(outer[1][0])
+    if inner is None or inner[0] != "type_error" or len(inner[1]) != 2:
         return None
-    expected, culprit = inner.args
+    expected, culprit = inner[1]
     # THE FLIP (spec §6.4): the formal term's TYPE NAME is an ATOM -- read its
     # spelling.  A ``str`` is still accepted (a hand-built term, or one thrown
     # from ``.clausal`` under ``-double_quotes(chars)``); anything else, and
@@ -106,19 +131,50 @@ def render_error_term(term: Any) -> str:
     TERM, not the Python object, so it reads the same whether the term is a
     ``Compound`` or a cell.  Building an exception must never itself raise,
     so a term the renderer cannot handle falls back to its ``repr``.
+
+    Variables are named within the term (``local_vars``): a variable that
+    occurs once prints ``_``, one that occurs more than once ``_1``, ``_2``,
+    ...  Scryer prints its own internal ``_N`` there, but ``N`` would be the
+    engine's global variable counter, and an error with no culprit indicator
+    carries a fresh variable (``error(type_error(atom,1),_)``), so two raises
+    of the same error would read differently.
     """
     try:
-        return term_writeq(term)
+        return term_writeq(term, local_vars=True)
     except Exception:  # noqa: BLE001 - a message may not out-fail its error
         return repr(term)
 
 
 class LogicException(Exception):
-    """Exception carrying a logic term for throw/catch."""
+    """Exception carrying a logic term for throw/catch.
 
-    def __init__(self, term: Any) -> None:
+    ``.term`` is the thrown term.  ``.message`` is the explanatory prose, or
+    None: the text a builder's raise site wrote after the indicator
+    (``"solve/1: the goal is unbound"``), which stays off the term because
+    the second argument of ``error/2`` is only what Scryer puts there.  Pass
+    *message* to set it; otherwise it is the prose a builder recorded for
+    *term* (:func:`error_prose`).  The prose belongs to the Python
+    exception, not to the term: a ball that ``catch/3`` binds and ``throw/1``
+    raises again finds it only while the term is still among the last
+    ``_PROSE_MAX`` error terms built or raised (the term itself is Scryer's
+    and carries none).  The rendered message is the term, then ``": "`` and
+    the prose when there is any::
+
+        Uncaught logic exception: error(instantiation_error,solve/1): the goal is unbound
+    """
+
+    def __init__(self, term: Any, message: str | None = None) -> None:
         self.term = term
-        super().__init__(f"Uncaught logic exception: {render_error_term(term)}")
+        self.message = message if message is not None else error_prose(term)
+        if self.message and type(term) is tuple:
+            # Registered for the term this exception carries, so a ball that
+            # ``catch/3`` binds and ``throw/1`` raises again, any number of
+            # times, still finds its prose.
+            _with_prose(term, self.message)
+        text = f"Uncaught logic exception: {render_error_term(term)}"
+        if self.message:
+            text = f"{text}: {self.message}"
+        super().__init__(text)
 
     def __str__(self) -> str:
         """The stored message, plus the is/== note when the term earns it.
@@ -161,11 +217,12 @@ class DispatchTargetError(LogicException):
     """
 
 
-def python_error_term(exc: Exception) -> Compound:
+def python_error_term(exc: Exception) -> tuple:
     """Convert a Python exception to a catchable logic term.
 
-    Produces ``ClassName(Message)`` — a Compound whose functor is the
-    exception class name and whose single argument is the message string.
+    Produces ``ClassName(Message)`` — the cell ``('ClassName', Message)``
+    whose functor is the exception class name and whose single argument is
+    the message string.
     The functor is TitleCase, so no ``.clausal`` catcher can be WRITTEN
     against it (TitleCase in a Clausal position is a load-time error); the
     term is observable only through a catch-all variable, or via the
@@ -186,7 +243,16 @@ def python_error_term(exc: Exception) -> Compound:
     exception alongside this structural term (and unwraps the module-predicate
     boundary wrapper for it).
     """
-    return Compound(type(exc).__name__, (str(exc),))
+    return (type(exc).__name__, str(exc))
+
+
+def _is_python_error_term_of(term: Any, cause: BaseException) -> bool:
+    """True when *term* is :func:`python_error_term`'s ``ClassName(Message)``
+    for *cause* -- a cell (or hand-built ``Compound``) of arity exactly 1
+    whose functor is the cause's class name, never a bare atom."""
+    fa = term_functor_args(term)
+    return (fa is not None and len(fa[1]) == 1
+            and fa[0] == type(cause).__name__)
 
 
 def _dual_typed_match(exc: BaseException, cls: type) -> bool:
@@ -243,8 +309,7 @@ def catch_match(catcher: Any, term: Any, exc: BaseException, trail: Any) -> bool
             and isinstance(exc, LogicException)
             and isinstance(cause, BaseException)
             and not isinstance(cause, LogicException)
-            and getattr(getattr(exc, "term", None), "functor", None)
-                == type(cause).__name__):
+            and _is_python_error_term_of(getattr(exc, "term", None), cause)):
         exc = cause
     if isinstance(catcher, type) and issubclass(catcher, BaseException):
         # A ++ catcher is the PYTHON side of the boundary only: a logic
@@ -279,6 +344,97 @@ def catch_match(catcher: Any, term: Any, exc: BaseException, trail: Any) -> bool
     return unify(catcher, term, trail)
 
 
+#: A predicate indicator spelled as text: ``name/N``, or ``(op)/N`` for an
+#: operator name as Scryer prints one.  An unparenthesised name has no
+#: whitespace, parenthesis, ``/`` or ``:``, so free prose that merely contains
+#: a slash (``a/b/2``, ``m:p/2``, a ratio ``1/2``, or a pseudo indicator
+#: such as ``reify(lt)/3``) never reads as an indicator.
+_PI_TEXT = re.compile(r"(?:\((?P<op>[^\s()]+)\)|(?P<name>(?!\d+/)[^\s()/:]+))/(?P<arity>\d+)")
+
+
+def indicator_from_text(text: str) -> tuple | None:
+    """The indicator cell ``('/', Name, Arity)`` that *text* spells, or None.
+
+    ``"atom_length/2"`` -> ``atom_length/2``; ``"(is)/2"`` and ``"is/2"``
+    -> ``(is)/2``; ``"call/N"`` or ``"clpfd expression"`` -> None.
+    """
+    m = _PI_TEXT.fullmatch(text)
+    if m is None:
+        return None
+    return ("/", mint(m.group("op") or m.group("name")), int(m.group("arity")))
+
+
+def _is_indicator(term: Any) -> bool:
+    fa = term_functor_args(term)
+    return fa is not None and fa[0] == "/" and len(fa[1]) == 2
+
+
+#: The prose a builder's raise site wrote, kept OFF the term (operator
+#: ruling 2026-09-27: the second argument of ``error/2`` is what Scryer puts
+#: there, the bare indicator).  A builder returns a plain cell, which cannot
+#: carry an attribute, so the prose waits here, keyed by the term's identity,
+#: for the ``LogicException`` that carries the term to pick it up as its
+#: ``.message``.  Each entry holds the term itself, so its ``id`` cannot be
+#: reused while the entry lives; the table is bounded (oldest out first) so a
+#: term that is built and never raised, and whatever its culprit holds, is
+#: kept alive for at most ``_PROSE_MAX`` later builds.
+_PROSE: dict[int, tuple[Any, str]] = {}
+_PROSE_MAX = 128
+_PROSE_LOCK = threading.Lock()
+
+
+def _with_prose(term: tuple, prose: str | None) -> tuple:
+    if prose:
+        with _PROSE_LOCK:
+            _PROSE[id(term)] = (term, prose)
+            while len(_PROSE) > _PROSE_MAX:
+                del _PROSE[next(iter(_PROSE))]
+    return term
+
+
+def error_prose(term: Any) -> str | None:
+    """The explanatory prose a builder recorded for *term*, or None."""
+    with _PROSE_LOCK:
+        entry = _PROSE.get(id(term))
+    return entry[1] if entry is not None and entry[0] is term else None
+
+
+def _context(context: Any) -> tuple[Any, str | None]:
+    """``(Context, Prose)`` for a builder's *context*: the second argument
+    of ``error/2`` as Scryer puts it there, and the explanatory text that
+    goes to the Python exception instead.
+
+    Raise sites pass TEXT, in one of three forms:
+
+    * an indicator alone, ``"atom_length/2"`` -> ``atom_length/2``, no prose;
+    * an indicator, ``": "``, prose, ``"solve/1: the goal is unbound"`` ->
+      ``solve/1``, prose ``"the goal is unbound"``;
+    * prose with no leading indicator, ``"clpfd expression"`` -> an unbound
+      variable (Scryer's library code throws ``error(E, _)`` when there is
+      no culprit indicator), prose the whole text; the empty text -> an
+      unbound variable, no prose.
+
+    Any other value (an indicator term, a variable, a context term a caller
+    built) IS the second argument, with no prose.
+    """
+    if type(context) is str:
+        if not context:
+            return Var(), None
+        head, sep, rest = context.partition(": ")
+        pi = indicator_from_text(head)
+        if pi is not None:
+            return pi, (rest if sep and rest else None)
+        return Var(), context
+    if context is None:
+        return Var(), None
+    return context, None
+
+
+def _error(formal: Any, context: Any) -> tuple:
+    second, prose = _context(context)
+    return _with_prose(("error", formal, second), prose)
+
+
 # ── Structured error term helpers ─────────────────────────────────────────────
 
 
@@ -295,26 +451,27 @@ def _name_atom(name: Any) -> Any:
     return mint(name) if type(name) is str else name
 
 
-def type_error(expected_type: str, culprit: Any, context: str = "") -> Compound:
-    """Build error(type_error(Type, Culprit), Context).
+def type_error(expected_type: str, culprit: Any, context: Any = "") -> tuple:
+    """Build error(type_error(Type, Culprit), PI).
 
     Spec §6.4 (2026-09-06-atoms-as-cells-strings): the formal term's
     type/domain/operation NAMES are atoms, minted here so a ``catch/3``
     pattern written in source matches them.  *Culprit* is whatever term was
-    at fault and *Context* is human text — a string, not an atom — so
-    neither is touched.
+    at fault and is not touched.  *context* is the raise site's text
+    (``"atom_length/2"``, ``"solve/1: why"``): its leading indicator becomes
+    the second argument, as Scryer puts it, and any prose goes to the
+    exception's ``.message`` (:func:`_context`); so for every builder below.
     """
-    inner = Compound("type_error", (_name_atom(expected_type), culprit))
-    return Compound("error", (inner, context))
+    return _error(("type_error", _name_atom(expected_type), culprit), context)
 
 
-def instantiation_error(context: str = "") -> Compound:
-    """Build error(instantiation_error, Context)."""
-    return Compound("error", (mint("instantiation_error"), context))
+def instantiation_error(context: Any = "") -> tuple:
+    """Build error(instantiation_error, PI)."""
+    return _error(mint("instantiation_error"), context)
 
 
-def system_error(code: str, context: str = "") -> Compound:
-    """Build error(system_error(Code), Context).
+def system_error(code: str, context: Any = "") -> tuple:
+    """Build error(system_error(Code), PI).
 
     ISO 13211-1 §7.12.2 lists ``system_error`` for errors outside the
     standard's own catalogue — as a bare ATOM. This engine puts its own
@@ -324,21 +481,40 @@ def system_error(code: str, context: str = "") -> Compound:
     a deliberate, recorded deviation (operator's ruling 2026-09-12 after
     discussion with Markus Triska): a portable ``error(system_error, _)``
     pattern does not match these terms. *Code* is minted as an atom like
-    the names in :func:`type_error`; *Context* is human text.
+    the names in :func:`type_error`; *context* as in :func:`type_error`.
     """
-    inner = Compound("system_error", (_name_atom(code),))
-    return Compound("error", (inner, context))
+    return _error(("system_error", _name_atom(code)), context)
 
 
-def existence_error(obj_type: str, culprit: Any, context: str = "") -> Compound:
-    """Build error(existence_error(ObjType, Culprit), Context)."""
-    inner = Compound("existence_error", (_name_atom(obj_type), culprit))
-    return Compound("error", (inner, context))
+def existence_error(obj_type: str, culprit: Any, context: Any = "") -> tuple:
+    """Build error(existence_error(ObjType, Culprit), PI).
+
+    For a missing PROCEDURE, Scryer's second argument is the missing
+    indicator itself, whichever builtin found it missing
+    (``call(nosuch, 1)`` -> ``error(existence_error(procedure,nosuch/1),
+    nosuch/1)``), so an indicator *culprit* is the second argument here too
+    and the whole context text becomes prose.
+    """
+    formal = ("existence_error", _name_atom(obj_type), culprit)
+    if (obj_type == "procedure" and _is_indicator(culprit)
+            and (context is None or type(context) is str)):
+        prose = None
+        if type(context) is str and context:
+            head, sep, rest = context.partition(": ")
+            same = indicator_from_text(head) == _as_cell(culprit)
+            prose = (rest or None) if same else context
+        return _with_prose(("error", formal, culprit), prose)
+    return _error(formal, context)
+
+
+def _as_cell(t: Any) -> Any:
+    fa = term_functor_args(t)
+    return t if fa is None else (fa[0], *fa[1])
 
 
 def dangling_handle_indicator_and_why(
     module_name: str, name: str, arity: int, loaded: bool,
-) -> tuple[Compound, str]:
+) -> tuple[tuple, str]:
     """The ``Name/Arity`` indicator and situation phrase for a MANGLED
     predicate-handle atom (``module<US>name``, W4's ``-hide`` spelling) that
     failed to resolve at a goal-dispatch entry point -- either its owning
@@ -356,7 +532,7 @@ def dangling_handle_indicator_and_why(
     term, and no conforming program can write the mangled spelling anyway,
     so it must never appear in anything a ``catch/3`` pattern can match.
     """
-    indicator = Compound("/", (mint(name), arity))
+    indicator = ("/", mint(name), arity)
     if loaded:
         why = f"{name}/{arity} is not defined in module {module_name!r}"
     else:
@@ -366,7 +542,7 @@ def dangling_handle_indicator_and_why(
 
 
 def string_goal_error(goal: str, extra_arity: int = 0,
-                      context: str = "") -> Compound:
+                      context: str = "") -> tuple:
     """The error a STRING in goal position raises (Task 15 item 3, ruled
     2026-09-07).
 
@@ -392,6 +568,10 @@ def string_goal_error(goal: str, extra_arity: int = 0,
     ``b""`` is the reserved atom ``'[]'`` and has no characters to speak of,
     so the "list of its characters" sentence read as nonsense for it.
     """
+    if context == "call/N":
+        # The builtin that raised is call/N at this N: ISO names it
+        # (Scryer: ``call(_, 1)`` -> context ``call/2``).
+        context = f"call/{extra_arity + 1}"
     if goal:
         name, arity = ".", 2 + extra_arity
         why = (f"a string goal is the list of its characters — the compound "
@@ -400,38 +580,36 @@ def string_goal_error(goal: str, extra_arity: int = 0,
         name, arity = "[]", extra_arity
         why = (f"the empty list is not a callable term — it is the atom "
                f"{name!r}, and no procedure {name!r}/{arity} is defined")
-    indicator = Compound("/", (mint(name), arity))
+    indicator = ("/", mint(name), arity)
+    prefix = f"{context}: " if context else ""
     return existence_error(
         "procedure", indicator,
-        f"{context}: {why}; write the ATOM (a bare name, or mint(...) from "
+        f"{prefix}{why}; write the ATOM (a bare name, or mint(...) from "
         f"Python) or a cell goal such as ('name', Arg)",
     )
 
 
 def permission_error(
-    operation: str, obj_type: str, culprit: Any, context: str = ""
-) -> Compound:
-    """Build error(permission_error(Op, ObjType, Culprit), Context)."""
-    inner = Compound("permission_error",
-                     (_name_atom(operation), _name_atom(obj_type), culprit))
-    return Compound("error", (inner, context))
+    operation: str, obj_type: str, culprit: Any, context: Any = ""
+) -> tuple:
+    """Build error(permission_error(Op, ObjType, Culprit), PI)."""
+    return _error(("permission_error", _name_atom(operation),
+                   _name_atom(obj_type), culprit), context)
 
 
-def domain_error(domain: str, culprit: Any, context: str = "") -> Compound:
-    """Build error(domain_error(Domain, Culprit), Context).
+def domain_error(domain: str, culprit: Any, context: Any = "") -> tuple:
+    """Build error(domain_error(Domain, Culprit), PI).
 
     ISO domain error: *culprit* is the right Python/logic type but its value is
     outside the set the operation admits (e.g. an unknown type name given to
     must_be/2, where the TYPE — not the term — is wrong)."""
-    inner = Compound("domain_error", (_name_atom(domain), culprit))
-    return Compound("error", (inner, context))
+    return _error(("domain_error", _name_atom(domain), culprit), context)
 
 
-def evaluation_error(error_type: str, context: str = "") -> Compound:
-    """Build error(evaluation_error(ErrorType), Context).
+def evaluation_error(error_type: str, context: Any = "") -> tuple:
+    """Build error(evaluation_error(ErrorType), PI).
 
     ISO evaluation errors: ``zero_divisor``, ``undefined``, ``float_overflow``,
     ``int_overflow``, ``underflow`` — a numeric operation is mathematically
     undefined for its operands (e.g. a non-invertible modular inverse)."""
-    inner = Compound("evaluation_error", (_name_atom(error_type),))
-    return Compound("error", (inner, context))
+    return _error(("evaluation_error", _name_atom(error_type)), context)

@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 
+from clausal import cell_args, cell_functor
 from clausal.logic.atoms import mint
 from clausal.logic.cells import chars
 from clausal.logic.solve import call, query
@@ -669,7 +670,7 @@ got(_v) <- (setup() and query('db7', 'SELECT v FROM t', _v))
 
         with pytest.raises(LogicException) as exc:
             _text(Compound("db", (1,)), "path")
-        formal = exc.value.term.args[0]
-        assert formal.functor == "type_error"
-        assert formal.args[0] == mint("text")
+        formal = cell_args(exc.value.term)[0]
+        assert cell_functor(formal) == "type_error"
+        assert cell_args(formal)[0] == mint("text")
         assert not list(Path.cwd().glob("*('db', 1)*"))

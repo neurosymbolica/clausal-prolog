@@ -236,7 +236,7 @@ def _check_cell_head_permission(term_val: Any, context: str, db,
                                 channel=context)
     if row is None and not _declared_here_at_arity(module_dict, functor, arity):
         raise LogicException(existence_error(
-            "procedure", Compound("/", (functor, arity)),
+            "procedure", ("/", functor, arity),
             f"{context}: no predicate {functor}/{arity} is known here, and a "
             f"cell argument does not create one — a cell is indistinguishable "
             f"from a plain data tuple, so the target must already be declared "
@@ -269,7 +269,7 @@ def _check_cell_head_permission(term_val: Any, context: str, db,
                   f"this write belongs there, not here")
     raise LogicException(permission_error(
         "modify", "static_procedure",
-        Compound("/", (functor, arity)),
+        ("/", functor, arity),
         f"{context}: {functor}/{arity} "
         + ("is a static procedure" if row is not None and row.clauses else
            "is a data functor (declared with fields and given no clauses), "

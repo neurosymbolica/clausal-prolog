@@ -20,6 +20,7 @@ from clausal.logic.clpfd import (
 from clausal.logic.builtins.lists import (
     _sort__2, _msort__2, _min_list__2, _max_list__2,
 )
+from clausal import cell_args, cell_functor
 from clausal.logic.exceptions import LogicException
 from clausal.logic.trampoline import DONE
 
@@ -58,13 +59,15 @@ def _run_list_builtin(fn, in_list):
     return results
 
 
-def _assert_orderable_error(exc_info, context):
+def _assert_orderable_error(exc_info, indicator):
     term = exc_info.value.term
-    assert term.functor == "error"
-    inner = term.args[0]
-    assert inner.functor == "type_error"
-    assert inner.args[0] == mint("orderable")
-    assert term.args[1] == context
+    assert type(term) is tuple and cell_functor(term) == "error"
+    inner = cell_args(term)[0]
+    assert cell_functor(inner) == "type_error"
+    assert cell_args(inner)[0] == mint("orderable")
+    # error(type_error(orderable, X), Name/Arity): the indicator alone, no prose.
+    assert cell_args(term)[1] == indicator
+    assert exc_info.value.message is None
 
 
 # ── Comparison operators order dates/datetimes/times ─────────────────────
@@ -117,32 +120,32 @@ class TestIncomparableRaises:
     def test_date_vs_datetime(self):
         with pytest.raises(LogicException) as ei:
             fd_lt(dt.date(2020, 1, 1), dt.datetime(2020, 1, 1, 0, 0, 0), Trail())
-        _assert_orderable_error(ei, "(<)/2")
+        _assert_orderable_error(ei, ("/", "<", 2))
 
     def test_naive_vs_aware(self):
         naive = dt.datetime(2020, 1, 1)
         aware = dt.datetime(2020, 1, 1, tzinfo=dt.timezone.utc)
         with pytest.raises(LogicException) as ei:
             fd_le(naive, aware, Trail())
-        _assert_orderable_error(ei, "(=<)/2")
+        _assert_orderable_error(ei, ("/", "=<", 2))
 
     def test_date_vs_int(self):
         with pytest.raises(LogicException) as ei:
             fd_lt(dt.date(2020, 1, 1), 5, Trail())
-        _assert_orderable_error(ei, "(<)/2")
+        _assert_orderable_error(ei, ("/", "<", 2))
 
     def test_gt_surfaces_lt_context(self):
-        # fd_gt(l, r) delegates to fd_lt(r, l), so the context is (<)/2 and
+        # fd_gt(l, r) delegates to fd_lt(r, l), so the indicator is (<)/2 and
         # the culprit is the original left operand (dt.date here).
         with pytest.raises(LogicException) as ei:
             fd_gt(dt.date(2020, 1, 1), dt.datetime(2020, 1, 1), Trail())
-        _assert_orderable_error(ei, "(<)/2")
+        _assert_orderable_error(ei, ("/", "<", 2))
 
     def test_culprit_is_second_operand(self):
         target = dt.datetime(2020, 1, 1, 0, 0, 0)
         with pytest.raises(LogicException) as ei:
             fd_lt(dt.date(2020, 1, 1), target, Trail())
-        assert ei.value.term.args[0].args[1] == target
+        assert cell_args(cell_args(ei.value.term)[0])[1] == target
 
 
 class TestVarVsNonNumericOperand:
@@ -158,41 +161,41 @@ class TestVarVsNonNumericOperand:
     def test_var_lt_str(self):
         with pytest.raises(LogicException) as ei:
             fd_lt(Var(), "banana", Trail())
-        _assert_orderable_error(ei, "(<)/2")
-        assert ei.value.term.args[0].args[1] == "banana"
+        _assert_orderable_error(ei, ("/", "<", 2))
+        assert cell_args(cell_args(ei.value.term)[0])[1] == "banana"
 
     def test_str_lt_var(self):
         # the offending ground side may also be the LEFT operand
         with pytest.raises(LogicException) as ei:
             fd_lt("apple", Var(), Trail())
-        _assert_orderable_error(ei, "(<)/2")
-        assert ei.value.term.args[0].args[1] == "apple"
+        _assert_orderable_error(ei, ("/", "<", 2))
+        assert cell_args(cell_args(ei.value.term)[0])[1] == "apple"
 
     def test_var_le_str(self):
         with pytest.raises(LogicException) as ei:
             fd_le(Var(), "banana", Trail())
-        _assert_orderable_error(ei, "(=<)/2")
+        _assert_orderable_error(ei, ("/", "=<", 2))
 
     def test_var_gt_str_surfaces_lt_context(self):
         # fd_gt delegates to fd_lt with swapped args, like the ground path
         with pytest.raises(LogicException) as ei:
             fd_gt(Var(), "banana", Trail())
-        _assert_orderable_error(ei, "(<)/2")
+        _assert_orderable_error(ei, ("/", "<", 2))
 
     def test_var_ge_str_surfaces_le_context(self):
         with pytest.raises(LogicException) as ei:
             fd_ge(Var(), "banana", Trail())
-        _assert_orderable_error(ei, "(=<)/2")
+        _assert_orderable_error(ei, ("/", "=<", 2))
 
     def test_var_lt_date(self):
         with pytest.raises(LogicException) as ei:
             fd_lt(Var(), dt.date(2026, 6, 1), Trail())
-        _assert_orderable_error(ei, "(<)/2")
+        _assert_orderable_error(ei, ("/", "<", 2))
 
     def test_var_lt_datetime(self):
         with pytest.raises(LogicException) as ei:
             fd_lt(Var(), dt.datetime(2026, 6, 1, 12, 0), Trail())
-        _assert_orderable_error(ei, "(<)/2")
+        _assert_orderable_error(ei, ("/", "<", 2))
 
     def test_var_lt_quantity(self):
         # 2026-09-12: quantities order through the units side channel now
@@ -209,7 +212,7 @@ class TestVarVsNonNumericOperand:
         from decimal import Decimal
         with pytest.raises(LogicException) as ei:
             fd_lt(Var(), Decimal("2.5"), Trail())
-        _assert_orderable_error(ei, "(<)/2")
+        _assert_orderable_error(ei, ("/", "<", 2))
 
     def test_real_attr_var_lt_str(self):
         # A var already carrying a CLP(R) attribute triggers the real
@@ -222,7 +225,7 @@ class TestVarVsNonNumericOperand:
         assert fd_lt(x, 2.5, trail)  # gives x a REAL attribute
         with pytest.raises(LogicException) as ei:
             fd_lt(x, "banana", trail)
-        _assert_orderable_error(ei, "(<)/2")
+        _assert_orderable_error(ei, ("/", "<", 2))
 
     def test_rational_attr_var_le_str(self):
         trail = Trail()
@@ -230,7 +233,7 @@ class TestVarVsNonNumericOperand:
         assert fd_le(x, Fraction(5, 2), trail)  # gives x a CLP(Q) attribute
         with pytest.raises(LogicException) as ei:
             fd_le(x, "banana", trail)
-        _assert_orderable_error(ei, "(=<)/2")
+        _assert_orderable_error(ei, ("/", "=<", 2))
 
     # ── var inside an expr tree (same defect, one level down) ────────────
 
@@ -238,19 +241,19 @@ class TestVarVsNonNumericOperand:
         from clausal.terms import Add
         with pytest.raises(LogicException) as ei:
             fd_lt(Add(left=Var(), right=1), "banana", Trail())
-        _assert_orderable_error(ei, "(<)/2")
+        _assert_orderable_error(ei, ("/", "<", 2))
 
     def test_var_tree_le_date(self):
         from clausal.terms import Add
         with pytest.raises(LogicException) as ei:
             fd_le(Add(left=Var(), right=1), dt.date(2026, 6, 1), Trail())
-        _assert_orderable_error(ei, "(=<)/2")
+        _assert_orderable_error(ei, ("/", "=<", 2))
 
     def test_var_tree_gt_str_surfaces_lt_context(self):
         from clausal.terms import Add
         with pytest.raises(LogicException) as ei:
             fd_gt(Add(left=Var(), right=1), "banana", Trail())
-        _assert_orderable_error(ei, "(<)/2")
+        _assert_orderable_error(ei, ("/", "<", 2))
 
     def test_var_tree_lt_int_still_posts(self):
         from clausal.terms import Add
@@ -262,7 +265,7 @@ class TestVarVsNonNumericOperand:
         from clausal.terms import Add
         with pytest.raises(LogicException) as ei:
             fd_lt(Add(left=2, right=3), "banana", Trail())
-        _assert_orderable_error(ei, "(<)/2")
+        _assert_orderable_error(ei, ("/", "<", 2))
 
     def test_ground_tree_lt_int_still_python_compare(self):
         from clausal.terms import Add
@@ -322,7 +325,7 @@ class TestVarVsNonNumericOperand:
         mod = _load_module("strcmp_repro", path)
         with pytest.raises(LogicException) as ei:
             list(solve(("strlt_ok", Var()), mod.__dict__["$module"]))
-        _assert_orderable_error(ei, "(<)/2")
+        _assert_orderable_error(ei, ("/", "<", 2))
 
 
 class TestLegitimateTypeErrorPreserved:
@@ -347,11 +350,12 @@ class TestHelper:
         culprit = dt.datetime(2020, 1, 1)
         exc = _incomparable_order_error(culprit, "(<)/2")
         assert isinstance(exc, LogicException)
-        assert exc.term.functor == "error"
-        assert exc.term.args[0].functor == "type_error"
-        assert exc.term.args[0].args[0] == mint("orderable")
-        assert exc.term.args[0].args[1] == culprit
-        assert exc.term.args[1] == "(<)/2"
+        assert type(exc.term) is tuple and cell_functor(exc.term) == "error"
+        assert cell_functor(cell_args(exc.term)[0]) == "type_error"
+        assert cell_args(cell_args(exc.term)[0])[0] == mint("orderable")
+        assert cell_args(cell_args(exc.term)[0])[1] == culprit
+        assert cell_args(exc.term)[1] == ("/", "<", 2)
+        assert exc.message is None
 
 
 class TestEndToEnd:

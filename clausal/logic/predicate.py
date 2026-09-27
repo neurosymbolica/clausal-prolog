@@ -1119,7 +1119,6 @@ def _dispatch_at(obj: Any, arity: int, db: Any = None) -> Callable:
             dangling_handle_indicator_and_why,
         )
         from clausal.logic.atoms import is_mangled, demangle  # noqa: PLC0415
-        from clausal.terms import Compound  # noqa: PLC0415
         if is_mangled(obj):
             # *obj* IS a predicate handle (``qualify_mangled_goal`` above
             # left it untouched only because its module half is not a
@@ -1139,7 +1138,7 @@ def _dispatch_at(obj: Any, arity: int, db: Any = None) -> Callable:
             )
             raise PredicateNotFoundError(why, _name, arity)
         name = obj
-        indicator = Compound("/", (name, arity))
+        indicator = ("/", name, arity)
         raise LogicException(
             existence_error(
                 "procedure", indicator,

@@ -214,7 +214,7 @@ class TestNumberVars3RegistrationAndCellParity:
         assert labels_p is not None
 
         assert labels_c == labels_p == (
-            Compound("$VAR", (0,)), Compound("$VAR", (1,)), 2,
+            ("$VAR", 0), ("$VAR", 1), 2,
         )
 
 

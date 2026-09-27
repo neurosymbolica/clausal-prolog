@@ -28,6 +28,7 @@ import textwrap
 
 import pytest
 
+from clausal import cell_args, cell_functor
 from clausal.logic.atoms import mint
 from clausal.logic.database import Clause, Database
 from clausal.logic.solve import call
@@ -777,12 +778,12 @@ class TestZeroArityFactAtomHead:
         with pytest.raises(LogicException) as exc_info:
             list(call("arcm_pure_use", Var(), module=mod.__dict__["$module"]))
         term = exc_info.value.term
-        indicator = term.args[0].args[1]
-        assert term.args[0].args[0] == mint("procedure")
-        assert indicator.functor == "/"
-        assert indicator.args == ("arcm_pure_tag", 1)
-        assert "not callable at arity 1" in term.args[1]
-        assert "AttributeError" not in term.args[1]
+        indicator = cell_args(cell_args(term)[0])[1]
+        assert cell_args(cell_args(term)[0])[0] == mint("procedure")
+        assert cell_functor(indicator) == "/"
+        assert cell_args(indicator) == ("arcm_pure_tag", 1)
+        assert "not callable at arity 1" in exc_info.value.message
+        assert "AttributeError" not in exc_info.value.message
 
 
 # ── what the docs may claim ──────────────────────────────────────────────────

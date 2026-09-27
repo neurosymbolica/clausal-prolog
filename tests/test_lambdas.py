@@ -13,6 +13,7 @@ import dataclasses
 import pytest
 
 from clausal.logic.generated_names import with_dollar_twins
+from clausal import cell_args, cell_functor
 from clausal.logic.atoms import mint
 from clausal.pythonic_ast import nodes as sa
 from clausal.templating.term_rewriting import TermTransformer, _is_logic_var_name
@@ -731,10 +732,10 @@ class TestLambdaImport:
             list(query(goal, {"r": r}, logic_mod))
         # The wrapped term should be an ISO type_error(callable, _).
         term = exc_info.value.term
-        assert isinstance(term, Compound) and term.functor == "error"
-        inner = term.args[0]
-        assert isinstance(inner, Compound) and inner.functor == "type_error"
-        assert inner.args[0] == mint("callable")
+        assert type(term) is tuple and cell_functor(term) == "error"
+        inner = cell_args(term)[0]
+        assert type(inner) is tuple and cell_functor(inner) == "type_error"
+        assert cell_args(inner)[0] == mint("callable")
 
 
 # ── Phase 5: Arrow lambda syntax  (_x, _y) <- (body) ─────────────────────────

@@ -30,11 +30,11 @@ import textwrap
 
 import pytest
 
+from clausal import cell_args, cell_functor
 from clausal.logic.atoms import mangle, mint
 from clausal.logic.exceptions import LogicException
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, walk
-from clausal.terms import Compound
 
 
 def _load(tmp_path, monkeypatch, name, body):
@@ -150,9 +150,9 @@ def test_a_missing_owner_predicate_raises_existence_error(dq, goal):
     _era, D = dq
     with pytest.raises(LogicException) as exc:
         list(call(goal, module=D))
-    formal = exc.value.term.args[0]
-    assert formal.functor == "existence_error"
-    assert formal.args == (mint("procedure"), Compound("/", (mint("nosuch"), 1)))
+    formal = cell_args(exc.value.term)[0]
+    assert cell_functor(formal) == "existence_error"
+    assert cell_args(formal) == (mint("procedure"), ("/", mint("nosuch"), 1))
 
 
 def test_a_lambda_inside_the_dotted_call_is_hoisted_and_stays_owner_qualified(dq):

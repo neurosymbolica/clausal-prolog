@@ -15,6 +15,7 @@ from clausal.logic.builtins.io import _format_clause_head
 from clausal.logic.trampoline import StepGenerator, solutions
 from clausal.logic.database import Clause
 from clausal.logic.exceptions import LogicException
+from clausal import cell_args, cell_functor
 from clausal.terms import Compound
 from tests.predicate_api_support import RowPredicate
 
@@ -120,8 +121,8 @@ class TestListing:
         with pytest.raises(LogicException) as exc_info:
             _run_listing(dispatch, cell)
         formal = _formal(exc_info)
-        assert formal.functor == "type_error"
-        assert formal.args == (mint("predicate_indicator"), cell)
+        assert cell_functor(formal) == "type_error"
+        assert cell_args(formal) == (mint("predicate_indicator"), cell)
 
     def test_a_term_instance_is_named_as_itself_not_its_class(self):
         """``listing(Compound("foo", (1,)))``: a term INSTANCE is not an
@@ -134,9 +135,9 @@ class TestListing:
         with pytest.raises(LogicException) as exc_info:
             _run_listing(dispatch, term)
         formal = _formal(exc_info)
-        assert formal.functor == "type_error"
-        assert formal.args[0] == mint("predicate_indicator")
-        assert formal.args[1] is term
+        assert cell_functor(formal) == "type_error"
+        assert cell_args(formal)[0] == mint("predicate_indicator")
+        assert cell_args(formal)[1] is term
 
     def test_non_predicate_error(self):
         # nv
@@ -219,8 +220,8 @@ def _listing_answers(dispatch, pred):
 def _formal(exc_info):
     """The formal term of a caught ``error(Formal, Context)``."""
     err = exc_info.value.term
-    assert isinstance(err, Compound) and err.functor == "error"
-    return err.args[0]
+    assert type(err) is tuple and cell_functor(err) == "error"
+    return cell_args(err)[0]
 
 
 def _db_with_fact(name, arity):
@@ -251,8 +252,8 @@ class TestListingAtomArgument:
         with pytest.raises(LogicException) as exc_info:
             _run_listing(dispatch, mint("greet"))
         formal = _formal(exc_info)
-        assert formal.functor == "type_error"
-        assert formal.args == (mint("predicate_indicator"), mint("greet"))
+        assert cell_functor(formal) == "type_error"
+        assert cell_args(formal) == (mint("predicate_indicator"), mint("greet"))
         n, output = _listing_answers(dispatch, ("/", mint("greet"), 0))
         assert n == 1 and "greet/0" in output and "1 clause(s)" in output
 
@@ -273,8 +274,8 @@ class TestListingAtomArgument:
         with pytest.raises(LogicException) as exc_info:
             _run_listing(dispatch, mint("no_such_predicate"))
         formal = _formal(exc_info)
-        assert formal.functor == "type_error"
-        assert formal.args[0] == mint("predicate_indicator")
+        assert cell_functor(formal) == "type_error"
+        assert cell_args(formal)[0] == mint("predicate_indicator")
 
 
 class TestListingNameArityIndicatorArgument:
@@ -447,8 +448,8 @@ class TestListingDivIndicatorArgument:
         with pytest.raises(LogicException) as exc_info:
             _run_listing(dispatch, Div(left=3, right=2))
         formal = _formal(exc_info)
-        assert formal.functor == "type_error"
-        assert formal.args == (mint("atom"), 3)
+        assert cell_functor(formal) == "type_error"
+        assert cell_args(formal) == (mint("atom"), 3)
 
     def test_div_with_a_non_int_right_operand_raises_type_error(self):
         """``fib/"oops"`` -- a predicate-denoting (atom) left operand but a
@@ -513,13 +514,13 @@ class TestListingIndicatorInstantiation:
         from clausal.terms import Div
 
         err = self._instantiation_error_for(Div(left=Var(), right=2))
-        assert err.functor == "error"
-        assert err.args[0] == mint("instantiation_error")
-        assert "listing/1" in err.args[1]
+        assert type(err) is tuple and cell_functor(err) == "error"
+        assert cell_args(err)[0] == mint("instantiation_error")
+        assert cell_args(err)[1] == ("/", "listing", 1)
 
     def test_an_unbound_arity_is_an_instantiation_error_too(self):
         err = self._instantiation_error_for(("/", "pt", Var()))
-        assert err.args[0] == mint("instantiation_error")
+        assert cell_args(err)[0] == mint("instantiation_error")
 
     def test_a_bound_but_wrong_operand_is_still_a_type_error(self):
         """Only the UNBOUND case moved: ``3/2`` and ``fib/"oops"`` are
@@ -529,7 +530,7 @@ class TestListingIndicatorInstantiation:
         dispatch = get_builtin_dispatch("listing", 1, None)
         with pytest.raises(LogicException) as exc_info:
             _run_listing(dispatch, Div(left=3, right=2))
-        assert exc_info.value.term.args[0].functor == "type_error"
+        assert cell_functor(cell_args(exc_info.value.term)[0]) == "type_error"
 
 
 class TestListingSpecializedAliasByIndicator:
@@ -696,8 +697,8 @@ class TestListingFollowsScryersContract:
         with pytest.raises(LogicException) as exc_info:
             _run_listing(self._dispatch(), pi)
         formal = _formal(exc_info)
-        assert formal.functor == "type_error"
-        assert formal.args == (mint("predicate_indicator"), pi)
+        assert cell_functor(formal) == "type_error"
+        assert cell_args(formal) == (mint("predicate_indicator"), pi)
 
     @pytest.mark.parametrize("pi", [
         lambda: ("/", Var(), 2), lambda: ("/", mint("greet"), Var()),
@@ -706,7 +707,7 @@ class TestListingFollowsScryersContract:
     def test_an_unbound_operand_is_an_instantiation_error(self, pi):
         with pytest.raises(LogicException) as exc_info:
             _run_listing(self._dispatch(), pi())
-        assert exc_info.value.term.args[0] == mint("instantiation_error")
+        assert cell_args(exc_info.value.term)[0] == mint("instantiation_error")
 
     @pytest.mark.parametrize("pi, formal", [
         (("/", mint("greet"), mint("x")), ("type_error", "integer", "x")),
@@ -721,9 +722,9 @@ class TestListingFollowsScryersContract:
             _run_listing(self._dispatch(), pi)
         got = _formal(exc_info)
         kind, what, culprit = formal
-        assert got.functor == kind
-        assert got.args[0] == mint(what)
-        assert got.args[1] == (pi[1] if culprit is None else culprit)
+        assert cell_functor(got) == kind
+        assert cell_args(got)[0] == mint(what)
+        assert cell_args(got)[1] == (pi[1] if culprit is None else culprit)
 
     @pytest.mark.parametrize("pi", [
         ("/", mint("greet"), 1), ("/", mint("nosuch"), 2),

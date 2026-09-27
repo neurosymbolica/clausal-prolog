@@ -70,7 +70,6 @@ from clausal.logic.variables import (  # noqa: F401
     Var, deref as _deref, is_var, unify as _unify,
 )
 from clausal.logic.exceptions import LogicException, domain_error, type_error
-from clausal.terms import Compound
 from clausal.logic.trampoline import DONE
 
 
@@ -240,7 +239,7 @@ def date(year, month, day):
         # _), fail)` recovers date/4's failure semantics where a caller wants
         # them.
         note_rejected_call("date/3", exc)
-        culprit = Compound("date", (y, m, d))
+        culprit = ("date", y, m, d)
         if isinstance(exc, TypeError):
             # Wrong TYPE of component (a float, a string) -> type_error.
             raise LogicException(

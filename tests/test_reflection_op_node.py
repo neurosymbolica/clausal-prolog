@@ -11,6 +11,7 @@ than Python.  See ``todo/done/op-node-reflection-decompose-construct.md``.
 
 import pytest
 
+from clausal import cell_args, cell_functor
 from clausal.import_hook import _load_module
 from clausal.logic.atoms import mint
 from clausal.logic.cells import chars
@@ -343,9 +344,9 @@ class TestStringClassNameIsATypeError:
         from clausal.logic.exceptions import LogicException
         with pytest.raises(LogicException) as exc:
             list(call("has_gt_e_str", chars(self.SRC), module=chars_matchers))
-        formal = exc.value.term.args[0]
-        assert formal.functor == "type_error"
-        assert formal.args[0] == mint("atom") and formal.args[1] == chars("GtE")
+        formal = cell_args(exc.value.term)[0]
+        assert cell_functor(formal) == "type_error"
+        assert cell_args(formal)[0] == mint("atom") and cell_args(formal)[1] == chars("GtE")
 
     def test_decompose_with_a_string_name_raises_even_with_no_operator_subterm(
             self, chars_matchers):
@@ -354,12 +355,12 @@ class TestStringClassNameIsATypeError:
         from clausal.logic.exceptions import LogicException
         with pytest.raises(LogicException) as exc:
             list(call("has_gt_e_str", chars("p(X) <- q(X)\n"), module=chars_matchers))
-        formal = exc.value.term.args[0]
-        assert formal.functor == "type_error"
-        assert formal.args[0] == mint("atom") and formal.args[1] == chars("GtE")
+        formal = cell_args(exc.value.term)[0]
+        assert cell_functor(formal) == "type_error"
+        assert cell_args(formal)[0] == mint("atom") and cell_args(formal)[1] == chars("GtE")
 
     def test_construct_with_a_string_name_raises(self, chars_matchers):
         from clausal.logic.exceptions import LogicException
         with pytest.raises(LogicException) as exc:
             list(call("build_gt_str", Var(), 1, 2, module=chars_matchers))
-        assert exc.value.term.args[0].args[1] == chars("Gt")
+        assert cell_args(cell_args(exc.value.term)[0])[1] == chars("Gt")

@@ -49,7 +49,9 @@ import textwrap
 import types
 
 from clausal._suffixes import SOURCE_SUFFIXES
-from clausal.logic.exceptions import LogicException, existence_error
+from clausal.logic.exceptions import (
+    LogicException, existence_error,
+)
 from clausal.import_diagnostics import (
     _INDENT,
     _WIDTH,
@@ -77,9 +79,10 @@ _SOURCE_SUFFIXES = SOURCE_SUFFIXES
 
 
 def procedure_existence_term(functor, arity, message):
-    """``error(existence_error(procedure, Name/Arity), Message)`` -- the ISO
-    term Scryer raises for a call to a procedure that does not exist, with the
-    engine's own diagnostic *message* as the context (its "why").
+    """``error(existence_error(procedure, Name/Arity), Name/Arity)`` -- the
+    ISO term Scryer raises for a call to a procedure that does not exist.
+    The engine's own diagnostic *message* (its "why") stays off the term: it
+    is the exception's ``.message`` and its ``str()``.
 
     *functor* may be a mangled predicate handle; only its demangled NAME goes
     into the indicator (ruling 2026-09-24: the culprit is the bare
@@ -87,10 +90,9 @@ def procedure_existence_term(functor, arity, message):
     dual-typed lookup errors below.
     """
     from clausal.logic.atoms import demangle, is_mangled, mint  # noqa: PLC0415
-    from clausal.terms import Compound  # noqa: PLC0415
     name = demangle(functor)[1] if is_mangled(functor) else functor
-    return existence_error(
-        "procedure", Compound("/", (mint(name), arity)), message)
+    indicator = ("/", mint(name), arity)
+    return existence_error("procedure", indicator, message)
 
 
 class PredicateNotFoundError(LogicException, KeyError):
@@ -107,8 +109,9 @@ class PredicateNotFoundError(LogicException, KeyError):
     unknown procedure raises ISO ``existence_error``, like Scryer, whose
     ``catch(nosuch(1), E, true)`` gives
     ``E = error(existence_error(procedure, nosuch/1), nosuch/1)``).  ``.term``
-    is ``error(existence_error(procedure, Name/Arity), Message)``, the "defines:
-    ... / -> define it or import it" candidate list as the context, so
+    is ``error(existence_error(procedure, Name/Arity), Name/Arity)``, and the
+    "defines: ... / -> define it or import it" candidate list is ``.message``
+    (and ``str()``), so
     ``catch/3`` binds the ISO term where it bound the transliterated
     ``PredicateNotFoundError(Message)`` compound before.  ADD, not replace:
     ``except KeyError`` / ``except PredicateNotFoundError`` and a
@@ -132,6 +135,7 @@ class PredicateNotFoundError(LogicException, KeyError):
             from clausal.logic.exceptions import python_error_term  # noqa: PLC0415
             term = python_error_term(self)
         self.term = term
+        self.message = message
         self.functor = functor
         self.arity = arity
 
@@ -167,7 +171,7 @@ class PredicateArityMismatchError(LogicException, TypeError):
     ``catch(call(pk(3), _), E, true)`` with
     ``E = error(existence_error(procedure, pk/2), pk/2)``, the indicator at
     the CALLED arity.  ``.term`` is that ISO term, with this message (the
-    "takes 1 argument" diagnostic) as its context, the way an unknown
+    "takes 1 argument" diagnostic) as ``.message``, the way an unknown
     procedure's ``existence_error`` carries its "why" text
     (``predicate._dispatch_at``).  ``catch/3`` reads ``.term`` of any
     ``LogicException``, so a source catcher
@@ -193,6 +197,7 @@ class PredicateArityMismatchError(LogicException, TypeError):
             from clausal.logic.exceptions import python_error_term  # noqa: PLC0415
             term = python_error_term(self)
         self.term = term
+        self.message = message
         self.functor = functor
         self.called_arity = called_arity
 

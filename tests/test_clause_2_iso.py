@@ -56,6 +56,7 @@ from pathlib import Path
 
 import pytest
 
+from clausal import cell_args, cell_functor
 from clausal.logic.exceptions import LogicException
 from clausal.logic.variables import Var, deref, is_var
 from clausal.pythonic_ast import nodes
@@ -105,17 +106,17 @@ def _error(lm, head, body=None):
     with pytest.raises(LogicException) as info:
         list(call("clause", head, Var() if body is None else body, module=lm))
     term = info.value.term
-    assert term.functor == "error"
-    return term.args[0]
+    assert type(term) is tuple and cell_functor(term) == "error"
+    return cell_args(term)[0]
 
 
 def _pi(formal):
     """``permission_error(access, private_procedure, N/A)`` -> ``(N, A)``."""
-    assert formal.functor == "permission_error", formal
-    assert formal.args[0] == "access" and formal.args[1] == "private_procedure"
-    ind = formal.args[2]
-    assert ind.functor == "/"
-    return ind.args[0], ind.args[1]
+    assert cell_functor(formal) == "permission_error", formal
+    assert cell_args(formal)[0] == "access" and cell_args(formal)[1] == "private_procedure"
+    ind = cell_args(formal)[2]
+    assert cell_functor(ind) == "/"
+    return cell_args(ind)[0], cell_args(ind)[1]
 
 
 # ── errors (ISO 8.8.1.3) ────────────────────────────────────────────────────
@@ -130,20 +131,20 @@ def test_an_unbound_head_is_an_instantiation_error(lm):
 def test_a_non_callable_head_is_a_type_error(lm, head):
     # Scryer + Trealla: clause(4, true) -> type_error(callable, 4)
     formal = _error(lm, head, True)
-    assert formal.functor == "type_error"
-    assert formal.args[0] == "callable" and formal.args[1] == head
+    assert cell_functor(formal) == "type_error"
+    assert cell_args(formal)[0] == "callable" and cell_args(formal)[1] == head
 
 
 def test_a_non_callable_body_is_a_type_error(lm):
     # Scryer + Trealla: clause(d(_,_), 4) -> type_error(callable, 4)
     formal = _error(lm, ("d", Var(), Var()), 4)
-    assert formal.functor == "type_error"
-    assert formal.args[0] == "callable" and formal.args[1] == 4
+    assert cell_functor(formal) == "type_error"
+    assert cell_args(formal)[0] == "callable" and cell_args(formal)[1] == 4
 
 
 def test_the_head_is_checked_before_the_body(lm):
     formal = _error(lm, 4, 5)
-    assert formal.args[1] == 4
+    assert cell_args(formal)[1] == 4
 
 
 def test_only_the_top_of_the_body_is_checked(lm):
@@ -221,11 +222,11 @@ def test_a_non_empty_list_or_string_is_a_type_error(lm, where):
                           (["x"], ["x"])):
         formal = (_error(lm, term) if where == "head"
                   else _error(lm, ("d", Var(), Var()), term))
-        assert formal.functor == "type_error", formal
-        assert formal.args[0] == "callable" and formal.args[1] == culprit
+        assert cell_functor(formal) == "type_error", formal
+        assert cell_args(formal)[0] == "callable" and cell_args(formal)[1] == culprit
     formal = (_error(lm, partial) if where == "head"
               else _error(lm, ("d", Var(), Var()), partial))
-    assert formal.functor == "type_error" and formal.args[0] == "callable"
+    assert cell_functor(formal) == "type_error" and cell_args(formal)[0] == "callable"
 
 
 def test_the_empty_list_is_the_atom_and_fails(lm):
@@ -536,7 +537,7 @@ def test_a_qualified_head_reads_that_module(lm, other):
     assert _pi(_error(lm, (":", "call_body_terms_other", ("p", Var())))) == ("p", 1)
     # M:H with H unbound is an instantiation_error; non-callable a type_error.
     assert _error(lm, (":", NAME, Var())) == "instantiation_error"
-    assert _error(lm, (":", NAME, 7)).functor == "type_error"
+    assert cell_functor(_error(lm, (":", NAME, 7))) == "type_error"
 
 
 def test_a_predicate_handle_head_resolves_in_its_module(lm, other):

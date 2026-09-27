@@ -41,6 +41,7 @@ import clausal.import_hook  # noqa: F401 — installs the meta-path finder
 from clausal.import_hook import _load_module
 from clausal.logic.atoms import mint
 from clausal.logic.database import Database, head_key
+from clausal import cell_args, cell_functor
 from clausal.logic.exceptions import LogicException
 from clausal.logic.solve import call as pcall, solve
 from clausal.logic.variables import Var, deref
@@ -58,8 +59,10 @@ def _lm(module):
 
 
 def _error_term(exc: LogicException):
-    """``(inner_error_term, context_message)`` from a raised LogicException."""
-    return exc.term.args[0], exc.term.args[1]
+    """``(inner_error_term, indicator, message)`` from a raised LogicException:
+    the formal, error/2's second argument (the Name/Arity cell, or the missing
+    PI for existence_error(procedure, PI)), and the prose."""
+    return cell_args(exc.term)[0], cell_args(exc.term)[1], exc.message
 
 
 @pytest.fixture
@@ -198,15 +201,15 @@ class TestCallNOverCells:
         for goal in (42, 3.5):
             with pytest.raises(LogicException) as exc_info:
                 list(pcall("cg1", goal, module=_lm(mod)))
-            inner, _ = _error_term(exc_info.value)
-            assert inner.functor == "type_error"
-            assert inner.args[0] == mint("callable") and inner.args[1] == goal
+            inner, _, _ = _error_term(exc_info.value)
+            assert cell_functor(inner) == "type_error"
+            assert cell_args(inner) == (mint("callable"), goal)
         # FLIPPED again, operator rule 2026-09-25, ISO first: a non-empty list or string is the callable compound '.'/2, so call/1 of one names the missing procedure '.'/2; Scryer disagrees with itself (literal call([a]) -> existence_error, run-time G = [a], call(G) -> type_error): ``[1, 2]`` is existence_error '.'/2.
         with pytest.raises(LogicException) as exc_info:
             list(pcall("cg1", [1, 2], module=_lm(mod)))
-        inner, _ = _error_term(exc_info.value)
-        assert inner.functor == "existence_error"
-        assert tuple(inner.args[1].args) == (".", 2)
+        inner, _, _ = _error_term(exc_info.value)
+        assert cell_functor(inner) == "existence_error"
+        assert cell_args(inner)[1] == ("/", ".", 2)
 
     def test_a_tuple_tag_data_cell_goal_is_a_type_error(self, mod):
         """FLIPPED, operator ruling 2026-09-25 (call-runs-body-terms round 2: follow Scryer): tuple DATA is not a goal, and a
@@ -214,7 +217,7 @@ class TestCallNOverCells:
         for goal in ((tuple, 1, 2), ("()", 1, 2)):
             with pytest.raises(LogicException) as exc_info:
                 list(pcall("cg1", goal, module=_lm(mod)))
-            assert _error_term(exc_info.value)[0].functor == "type_error"
+            assert cell_functor(_error_term(exc_info.value)[0]) == "type_error"
 
     def test_an_unknown_cell_goal_raises_existence_error(self, mod):
         """FLIPPED 2026-09-25 -- operator ruling 2 ("like Scryer"): a meta-call naming an UNKNOWN procedure raises ISO existence_error(procedure, Name/Arity), catchable; it used to fail silently (the retired §4.2 contract).
@@ -223,9 +226,9 @@ class TestCallNOverCells:
         from clausal.logic.exceptions import LogicException
         with pytest.raises(LogicException) as exc:
             list(pcall("cg1", ("no_such_pred", 1), module=_lm(mod)))
-        formal = exc.value.term.args[0]
-        assert formal.functor == "existence_error"
-        assert tuple(formal.args[1].args) == ("no_such_pred", 1)
+        formal = cell_args(exc.value.term)[0]
+        assert cell_functor(formal) == "existence_error"
+        assert cell_args(formal)[1] == ("/", "no_such_pred", 1)
 
     def test_call_over_a_predicate_class_is_untouched(self, mod):
         """The pre-existing route — a goal OBJECT answering ``_get_dispatch``
@@ -284,9 +287,9 @@ class TestCallNOverCells:
         existence_error(procedure, ','/0) -- ``,`` is a construct of arity 2."""
         with pytest.raises(LogicException) as exc_info:
             list(pcall("cg1", ",", module=_lm(mod)))
-        inner, _ = _error_term(exc_info.value)
-        assert inner.functor == "existence_error"
-        assert tuple(inner.args[1].args) == (",", 0)
+        inner, _, _ = _error_term(exc_info.value)
+        assert cell_functor(inner) == "existence_error"
+        assert cell_args(inner)[1] == ("/", ",", 0)
 
     def test_the_atom_spelling_of_a_qualified_goal_folds_the_same_way(
             self, mod):
@@ -310,7 +313,7 @@ class TestCallNOverCells:
     def test_both_spellings_of_an_unresolvable_qualified_goal_raise_alike(
             self, mod):
         """The other half of F4's pin: the two spellings share the DIAGNOSTIC
-        too, and only the context differs (call/3 vs call/1)."""
+        too, and only the indicator differs (call/3 vs call/1)."""
         lm = _lm(mod)
         errors = []
         for goal_args in ((mint(":"), "nosuchmodule", ("p", 1)),
@@ -318,9 +321,10 @@ class TestCallNOverCells:
             with pytest.raises(LogicException) as exc_info:
                 list(pcall("cg" + str(len(goal_args)), *goal_args, module=lm))
             errors.append(_error_term(exc_info.value))
-        assert errors[0][0] == errors[1][0] == Compound(
-            "existence_error", (mint("module"), "'nosuchmodule'"))
-        assert "call/3" in errors[0][1] and "call/1" in errors[1][1]
+        assert errors[0][0] == errors[1][0] == (
+            "existence_error", mint("module"), "'nosuchmodule'")
+        assert errors[0][1] == ("/", "call", 3) and errors[1][1] == ("/", "call", 1)
+        assert errors[0][2] == errors[1][2]
 
     def test_the_atom_spelling_of_a_control_construct_hits_the_same_refusal(
             self, mod):
@@ -370,10 +374,10 @@ class TestDeferredCellGoalForms:
         cell = (functor, ("p", 1), ("p", 2))
         with pytest.raises(LogicException) as exc_info:
             list(solve(cell, _lm(mod)))
-        inner, context = _error_term(exc_info.value)
-        assert inner == Compound(
-            "type_error", (mint("callable_control_construct_unsupported"),
-                           cell))
+        inner, _pi, context = _error_term(exc_info.value)
+        assert inner == (
+            "type_error", mint("callable_control_construct_unsupported"),
+            cell)
         assert f"{functor}/2 is a control construct" in context
 
     def test_a_control_construct_cell_goal_runs_under_call(self, mod):
@@ -385,14 +389,14 @@ class TestDeferredCellGoalForms:
         assert len(list(pcall("cg1", cell, module=_lm(mod)))) == 1
         with pytest.raises(LogicException) as exc_info:
             list(pcall("cg1", ("->", ("p", 1), ("p", 2)), module=_lm(mod)))
-        inner, context = _error_term(exc_info.value)
-        assert inner.functor == "existence_error"
+        inner, _pi, context = _error_term(exc_info.value)
+        assert cell_functor(inner) == "existence_error"
         assert "call/1" in context
 
     def test_the_refusal_names_the_compile_time_form(self, mod):
         with pytest.raises(LogicException) as exc_info:
             list(solve((",", ("p", 1), ("p", 2)), _lm(mod)))
-        _inner, context = _error_term(exc_info.value)
+        _inner, _pi, context = _error_term(exc_info.value)
         assert "And" in context and "clause body" in context
 
     def test_a_qualified_goal_cell_now_resolves_instead_of_being_refused(
@@ -411,9 +415,9 @@ class TestDeferredCellGoalForms:
             self, mod):
         with pytest.raises(LogicException) as exc_info:
             list(solve((":", "nosuchmodule", ("p", 1)), _lm(mod)))
-        inner, context = _error_term(exc_info.value)
-        assert inner == Compound(
-            "existence_error", (mint("module"), "'nosuchmodule'"))
+        inner, _pi, context = _error_term(exc_info.value)
+        assert inner == (
+            "existence_error", mint("module"), "'nosuchmodule'")
         assert "sys.modules" in context
 
     def test_a_qualified_goal_cell_resolves_through_call_too(self, mod):
@@ -501,9 +505,9 @@ class TestZeroArityControlConstructsByName:
         to fail silently, as an unknown name does)."""
         with pytest.raises(LogicException) as exc_info:
             list(pcall("cg2", mint("true"), 1, module=_lm(mod)))
-        inner, _ = _error_term(exc_info.value)
-        assert inner.functor == "existence_error"
-        assert tuple(inner.args[1].args) == ("true", 1)
+        inner, _, _ = _error_term(exc_info.value)
+        assert cell_functor(inner) == "existence_error"
+        assert cell_args(inner)[1] == ("/", "true", 1)
 
     def test_they_answer_without_a_database_too(self):
         """Decided before the db lookups, like the control-construct refusal,
@@ -646,12 +650,11 @@ class TestCellAssertRetract:
             self, mod):
         with pytest.raises(LogicException) as exc_info:
             list(pcall("assertz", ("stat", 3), module=_lm(mod)))
-        inner, context = _error_term(exc_info.value)
-        assert inner == Compound(
+        inner, pi, context = _error_term(exc_info.value)
+        assert inner == (
             "permission_error",
-            (mint("modify"), mint("static_procedure"),
-             Compound("/", ("stat", 1))))
-        assert "assertz/1" in context and "-dynamic(stat/1)" in context
+            mint("modify"), mint("static_procedure"), ("/", "stat", 1))
+        assert pi == ("/", "assertz", 1) and "-dynamic(stat/1)" in context
 
     def test_a_cell_assert_against_an_unknown_predicate_is_an_existence_error(
             self, mod):
@@ -660,10 +663,9 @@ class TestCellAssertRetract:
         target must not silently become state."""
         with pytest.raises(LogicException) as exc_info:
             list(pcall("assertz", ("nope", 3), module=_lm(mod)))
-        inner, context = _error_term(exc_info.value)
-        assert inner == Compound(
-            "existence_error",
-            (mint("procedure"), Compound("/", ("nope", 1))))
+        inner, _pi, context = _error_term(exc_info.value)
+        assert inner == (
+            "existence_error", mint("procedure"), ("/", "nope", 1))
         assert "does not create one" in context
 
     def test_a_cell_assert_against_a_declared_data_functor_is_a_permission_error(
@@ -681,11 +683,10 @@ class TestCellAssertRetract:
         """)
         with pytest.raises(LogicException) as exc_info:
             list(pcall("go", 7, module=_lm(m)))
-        inner, context = _error_term(exc_info.value)
-        assert inner == Compound(
+        inner, _pi, context = _error_term(exc_info.value)
+        assert inner == (
             "permission_error",
-            (mint("modify"), mint("static_procedure"),
-             Compound("/", ("d", 1))))
+            mint("modify"), mint("static_procedure"), ("/", "d", 1))
         assert "data functor" in context and "-dynamic(d/1)" in context
 
     def test_the_declaration_check_is_arity_checked(self, tmp_path):
@@ -700,24 +701,24 @@ class TestCellAssertRetract:
         """)
         with pytest.raises(LogicException) as exc_info:
             list(pcall("assertz", ("d", 7, 8), module=_lm(m)))
-        inner, _context = _error_term(exc_info.value)
-        assert inner == Compound(
-            "existence_error", (mint("procedure"), Compound("/", ("d", 2))))
+        inner, _pi, _context = _error_term(exc_info.value)
+        assert inner == (
+            "existence_error", mint("procedure"), ("/", "d", 2))
         # ...while arity 1, the declared one, is the permission_error.
         with pytest.raises(LogicException) as exc_info:
             list(pcall("assertz", ("d", 7), module=_lm(m)))
-        assert _error_term(exc_info.value)[0].functor == "permission_error"
+        assert cell_functor(_error_term(exc_info.value)[0]) == "permission_error"
 
     def test_a_cell_retract_follows_the_same_gate(self, mod):
         lm = _lm(mod)
         with pytest.raises(LogicException) as exc_info:
             list(pcall("retract", ("stat", 9), module=lm))
-        inner, context = _error_term(exc_info.value)
-        assert inner.functor == "permission_error"
-        assert "retract/1" in context
+        inner, pi, _context = _error_term(exc_info.value)
+        assert cell_functor(inner) == "permission_error"
+        assert pi == ("/", "retract", 1)
         with pytest.raises(LogicException) as exc_info:
             list(pcall("retract", ("nope", 3), module=lm))
-        assert _error_term(exc_info.value)[0].functor == "existence_error"
+        assert cell_functor(_error_term(exc_info.value)[0]) == "existence_error"
 
     def test_a_non_cell_assert_is_untouched_by_the_gate(self, mod):
         """A Compound assert still creates its predicate, as it always has."""

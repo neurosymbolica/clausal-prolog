@@ -133,12 +133,14 @@ def _throw_ball(ball):
     catch(call(G), E, true)`` bound E to an unbound variable, not ``oops``.
     """
     from clausal.logic.exceptions import (  # noqa: PLC0415
-        LogicException, instantiation_error,
+        LogicException, error_prose, instantiation_error,
     )
     if is_var(deref(ball)):
         return LogicException(instantiation_error(
             "throw/1: the ball is unbound (ISO 7.8.10.3)"))
-    return LogicException(_findall_copy_row(ball))
+    # A ball an engine builder made (caught, then thrown again) keeps the
+    # explanatory prose its builder recorded, which lives off the term.
+    return LogicException(_findall_copy_row(ball), error_prose(deref(ball)))
 
 
 def _is_list_or_partial_list(term) -> bool:

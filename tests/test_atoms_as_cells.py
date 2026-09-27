@@ -19,6 +19,8 @@ import tempfile
 import pytest
 
 import clausal.import_hook  # noqa: F401 — installs the meta-path finder
+from clausal import cell_args
+from clausal.logic.exceptions import error_prose
 from clausal.import_hook import _load_module
 from clausal.logic.atoms import char_atom, mint
 from clausal.logic.cells import chars
@@ -194,8 +196,8 @@ def test_gensym_and_global_atom_mint_atoms(mod):
 def test_type_error_term_carries_atom_args():
     from clausal.logic.exceptions import type_error
     t = type_error("atom", 3, "who")
-    assert t.args[0].args[0] == mint("atom")
-    assert t.args[1] == "who"                                  # context stays a string
+    assert cell_args(cell_args(t)[0])[0] == mint("atom")
+    assert error_prose(t) == "who"                     # no leading Name/Arity: the text is the prose
 
 
 def test_listing_takes_the_indicator_of_a_zero_arity_predicate(mod, capsys):
@@ -205,7 +207,7 @@ def test_listing_takes_the_indicator_of_a_zero_arity_predicate(mod, capsys):
     from clausal.logic.exceptions import LogicException
     with pytest.raises(LogicException) as exc:
         list(solve(("listing", "z0"), _lm(mod)))
-    assert exc.value.term.args[0].args[0] == "predicate_indicator"
+    assert cell_args(cell_args(exc.value.term)[0])[0] == "predicate_indicator"
     assert len(list(solve(("listing", ("/", "z0", 0)), _lm(mod)))) == 1
     assert "z0/0" in capsys.readouterr().out
 

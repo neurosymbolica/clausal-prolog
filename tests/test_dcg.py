@@ -1089,10 +1089,11 @@ class TestConsRuleRetirementDCGAudit:
         # FLIPPED 2026-09-25 -- operator ruling 2 ("like Scryer"): an unknown
         # nonterminal N//0 raises existence_error(procedure, N/2); it used to
         # fail silently.
+        from clausal import cell_args
         from clausal.logic.exceptions import LogicException
         with pytest.raises(LogicException) as exc:
             _succeeds("phrase", "nosuch", ["h", "i"], module=mod)
-        assert tuple(exc.value.term.args[0].args[1].args) == ("nosuch", 2)
+        assert tuple(cell_args(cell_args(cell_args(exc.value.term)[0])[1])) == ("nosuch", 2)
 
 
 # ── String / bytes terminals in rule bodies (R3) ─────────────────────────────

@@ -143,7 +143,7 @@ def test_the_load_channel_s_refusal_text_is_the_same_in_both_eras(owner):
     becomes a row."""
     from types import SimpleNamespace
     from clausal.logic.compiler_v2 import _redefinition_error
-    gate = SimpleNamespace(term=SimpleNamespace(args=(None, "GATE LINE")))
+    gate = SimpleNamespace(message="GATE LINE")
     texts = {}
     for era, binding in _eras(owner).items():
         origins = _import_from_origins(_aliased_import(), {"hue": binding})

@@ -91,14 +91,12 @@ class ModulePredicate:
         if fn is None:
             # Unregistered arity is an existence error, not a silent failure —
             # consistent whether the predicate has one arity or several (F005).
+            from clausal.logic.atoms import mint
             from clausal.logic.exceptions import (
                 LogicException, existence_error,
             )
-            from clausal.terms import Compound
-            indicator = Compound("/", (self._name, arity))
-            raise LogicException(
-                existence_error("procedure", indicator, self._name)
-            )
+            indicator = ("/", mint(self._name), arity)
+            raise LogicException(existence_error("procedure", indicator))
         yield from fn(this_generator, _proceed, _fail, _catcher, *args)
 
     def __repr__(self) -> str:

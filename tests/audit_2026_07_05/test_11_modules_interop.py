@@ -143,8 +143,8 @@ def test_F004_replace_unbound_repl_fails_cleanly():
 def test_F005_wrong_arity_is_an_error_not_silent_failure(tmp_path):
     # A11-F005 (fixed): unregistered arity raises a catchable existence error
     # whose term is error(existence_error(procedure, match/4), _).
+    from clausal import cell_args, cell_functor
     from clausal.logic.exceptions import LogicException
-    from clausal.terms import Compound
     m = _load(tmp_path, '''
         -double_quotes(atom)
         -import_from(regex, [match])
@@ -153,11 +153,11 @@ def test_F005_wrong_arity_is_an_error_not_silent_failure(tmp_path):
     with pytest.raises(LogicException) as excinfo:
         list(solve(("bad", "x"), module=m))
     term = excinfo.value.term
-    assert isinstance(term, Compound) and term.functor == "error"
-    inner = term.args[0]
-    assert inner.functor == "existence_error"
-    assert inner.args[0] == mint("procedure")
-    assert inner.args[1] == Compound("/", ("match", 4))
+    assert type(term) is tuple and cell_functor(term) == "error"
+    inner = cell_args(term)[0]
+    assert cell_functor(inner) == "existence_error"
+    assert cell_args(inner)[0] == mint("procedure")
+    assert cell_args(inner)[1] == ("/", "match", 4)
 
 
 def test_F006_mixed_groups_expose_positional_values(tmp_path):

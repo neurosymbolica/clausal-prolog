@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import pytest
 
+from clausal import cell_args, cell_functor
 from clausal.logic.atoms import char_atom, mint, spelling
 from clausal.logic.variables import Var, Trail, unify, deref
 from clausal.logic.builtins import get_builtin_dispatch
@@ -354,20 +355,20 @@ class TestAtomConcat:
         """
         with pytest.raises(LogicException) as exc:
             _run("atom_concat", 3, 1, 2, Var())
-        formal = exc.value.term.args[0]
-        assert formal.functor == "type_error"
-        assert formal.args[0] == mint("atom")
-        assert formal.args[1] == 1
+        formal = cell_args(exc.value.term)[0]
+        assert cell_functor(formal) == "type_error"
+        assert cell_args(formal)[0] == mint("atom")
+        assert cell_args(formal)[1] == 1
 
     def test_second_arg_number_type_error(self):
         """atom_concat(a, 1, X) -> type_error(atom, 1); the culprit is the
         offending number, not the whole call."""
         with pytest.raises(LogicException) as exc:
             _run("atom_concat", 3, mint("a"), 1, Var())
-        formal = exc.value.term.args[0]
-        assert formal.functor == "type_error"
-        assert formal.args[0] == mint("atom")
-        assert formal.args[1] == 1
+        formal = cell_args(exc.value.term)[0]
+        assert cell_functor(formal) == "type_error"
+        assert cell_args(formal)[0] == mint("atom")
+        assert cell_args(formal)[1] == 1
 
     def test_atoms_still_concat(self):
         """atom_concat(a, b, X) -> X = ab still works (regression guard next

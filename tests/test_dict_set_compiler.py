@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import os
 import pytest
+from clausal import cell_args, cell_functor
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.logic.atoms import mint
 from clausal.logic.cells import chars
@@ -646,9 +647,9 @@ class TestDictSubscriptRead:
                       module=logic_mod))
         term = exc.value.term
         # error(existence_error(_, "z"), _)
-        assert term.functor == "error"
-        assert term.args[0].functor == "existence_error"
-        assert term.args[0].args[1] == "z"
+        assert cell_functor(term) == "error"
+        assert cell_functor(cell_args(term)[0]) == "existence_error"
+        assert cell_args(cell_args(term)[0])[1] == "z"
 
     def test_nonground_key_raises_instantiation_error(self, mod, logic_mod):
         # nv
@@ -658,8 +659,8 @@ class TestDictSubscriptRead:
             list(call("subscript_get", DictTerm({"a": 1}), Var(), v,
                       module=logic_mod))
         term = exc.value.term
-        assert term.functor == "error"
-        assert term.args[0] == mint("instantiation_error")
+        assert cell_functor(term) == "error"
+        assert cell_args(term)[0] == mint("instantiation_error")
 
     def test_unbound_object_raises_instantiation_error(self, mod, logic_mod):
         """An unbound base is under-instantiated, not wrong-typed — it used to
@@ -670,8 +671,8 @@ class TestDictSubscriptRead:
         with pytest.raises(LogicException) as exc:
             list(call("subscript_get", Var(), "a", v, module=logic_mod))
         term = exc.value.term
-        assert term.functor == "error"
-        assert term.args[0] == mint("instantiation_error")
+        assert cell_functor(term) == "error"
+        assert cell_args(term)[0] == mint("instantiation_error")
 
     def test_subscript_folds_the_nil_key_on_a_plain_dict(self, mod, logic_mod):
         """Task 15 fix round 4, item 1.  ``_subscript`` normalised the LOOKUP
@@ -695,7 +696,7 @@ class TestDictSubscriptRead:
             with pytest.raises(LogicException) as exc:
                 list(call("subscript_get", DictTerm({"a": 1}), key, Var(),
                           module=logic_mod))
-            assert exc.value.term.args[0].functor == "existence_error"
+            assert cell_functor(cell_args(exc.value.term)[0]) == "existence_error"
 
 
 # ── Backtracking tests ──────────────────────────────────────────────────────

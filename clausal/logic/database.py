@@ -525,7 +525,7 @@ def refusal_error(functor: str, arity: int, author: str, kind: str,
     if attempted is not None and tuple(attempted) != (functor, arity):
         where = f"{where} (reached by writing {attempted[0]}/{attempted[1]})"
     return LogicException(permission_error(
-        "modify", "static_procedure", Compound("/", (functor, arity)),
+        "modify", "static_procedure", ("/", functor, arity),
         f"{channel or kind}: {author} may not write {where}: "
         f"{reason}",
     ))

@@ -307,7 +307,7 @@ class TestNumberVars:
         trail = Trail()
         for _ in solve(goal("numbervars", term, 0, end), mod, trail):
             xv = deref(x)
-            assert xv == Compound("$VAR", (0,))
+            assert xv == ("$VAR", 0)
             assert deref(end) == 1
 
     def test_two_vars(self):
@@ -318,8 +318,8 @@ class TestNumberVars:
         mod = fresh_module()
         trail = Trail()
         for _ in solve(goal("numbervars", term, 0, end), mod, trail):
-            assert deref(x) == Compound("$VAR", (0,))
-            assert deref(y) == Compound("$VAR", (1,))
+            assert deref(x) == ("$VAR", 0)
+            assert deref(y) == ("$VAR", 1)
             assert deref(end) == 2
 
     def test_start_offset(self):
@@ -330,7 +330,7 @@ class TestNumberVars:
         mod = fresh_module()
         trail = Trail()
         for _ in solve(goal("numbervars", term, 5, end), mod, trail):
-            assert deref(x) == Compound("$VAR", (5,))
+            assert deref(x) == ("$VAR", 5)
             assert deref(end) == 6
 
     def test_repeated_var_numbered_once(self):
@@ -341,7 +341,7 @@ class TestNumberVars:
         mod = fresh_module()
         trail = Trail()
         for _ in solve(goal("numbervars", term, 0, end), mod, trail):
-            assert deref(x) == Compound("$VAR", (0,))
+            assert deref(x) == ("$VAR", 0)
             assert deref(end) == 1
 
     def test_unbound_start_fails(self):
@@ -359,8 +359,8 @@ class TestNumberVars:
         mod = fresh_module()
         trail = Trail()
         for _ in solve(goal("numbervars", lst, 0, end), mod, trail):
-            assert deref(x) == Compound("$VAR", (0,))
-            assert deref(y) == Compound("$VAR", (1,))
+            assert deref(x) == ("$VAR", 0)
+            assert deref(y) == ("$VAR", 1)
             assert deref(end) == 2
 
     def test_exactly_one_solution(self):

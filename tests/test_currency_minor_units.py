@@ -25,6 +25,7 @@ from decimal import Decimal
 
 import pytest
 
+from clausal import cell_args, cell_functor
 from clausal.logic.cells import chars, chars_text
 from clausal.import_hook import _load_module
 from clausal.logic.solve import call
@@ -1471,8 +1472,8 @@ def test_a_guard_followed_by_BARE_arithmetic_raises(tmp_path):
     """)
     with pytest.raises(LogicException) as ei:
         list(call("cmp", module=m.__dict__["$module"]))
-    inner = ei.value.term.args[0]
-    assert inner.functor == "system_error" and inner.args[0] == mint("units_mismatch")
+    inner = cell_args(ei.value.term)[0]
+    assert cell_functor(inner) == "system_error" and cell_args(inner)[0] == mint("units_mismatch")
 
 
 def test_quantity_1_is_the_affirmative_test(tmp_path):

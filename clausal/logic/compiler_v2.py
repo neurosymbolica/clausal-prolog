@@ -1505,7 +1505,7 @@ def _redefinition_error(exc, functor: str, arity: int, pred_cls,
                         origins: dict, module_name: str,
                         module_dict: dict, db=None) -> SyntaxError:
     """The load channel's surface exception for a gate refusal."""
-    gate_line = str(exc.term.args[1])
+    gate_line = exc.message or ""
     origin = origins.get(functor)
     # P1 (spec 2026-09-17 §2.2), simplification: *pred_cls* arrives already
     # resolved.  Both ``_load_gate`` call sites pass either step 4's

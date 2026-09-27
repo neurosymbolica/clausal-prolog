@@ -34,10 +34,10 @@ import textwrap
 import pytest
 
 from clausal.logic.atoms import mangle, mint
+from clausal import cell_args, cell_functor
 from clausal.logic.exceptions import LogicException
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref, is_var, walk
-from clausal.terms import Compound
 
 
 def _load(tmp_path, monkeypatch, name, body):
@@ -164,9 +164,9 @@ def test_undeclared_the_name_resolves_in_the_callee_and_raises(pair):
     _era, _O, I = pair
     with pytest.raises(LogicException) as exc:
         _n(I, "go_raw")
-    formal = exc.value.term.args[0]
-    assert formal.functor == "existence_error"
-    assert formal.args == (mint("procedure"), Compound("/", (mint("my_pred"), 1)))
+    formal = cell_args(exc.value.term)[0]
+    assert cell_functor(formal) == "existence_error"
+    assert cell_args(formal) == (mint("procedure"), ("/", mint("my_pred"), 1))
 
 
 def test_declared_the_meta_argument_resolves_in_the_caller(pair):
@@ -426,9 +426,9 @@ def test_a_qualified_goal_naming_a_missing_predicate_raises(glib):
     era, D = glib
     with pytest.raises(LogicException) as exc:
         _one_with(D, "pass4", (":", f"mgdom_{era}", "nosuch"))
-    formal = exc.value.term.args[0]
-    assert formal.functor == "existence_error"
-    assert formal.args[1] == Compound("/", (mint("nosuch"), 4))
+    formal = cell_args(exc.value.term)[0]
+    assert cell_functor(formal) == "existence_error"
+    assert cell_args(formal)[1] == ("/", mint("nosuch"), 4)
 
 
 def _one_with(module, goal, arg):
@@ -786,9 +786,9 @@ def test_a_unit_quantity_in_a_goal_position_is_qualified_then_refused(llib):
     assert qualify("m", byte, 1) == (":", "m", byte)
     with pytest.raises(LogicException) as exc:
         list(call("e1", byte, Var(), module=D))
-    formal = exc.value.term.args[0]
-    assert formal.functor == "type_error" and formal.args[0] == "callable"
-    assert formal.args[1] is byte
+    formal = cell_args(exc.value.term)[0]
+    assert cell_functor(formal) == "type_error" and cell_args(formal)[0] == "callable"
+    assert cell_args(formal)[1] is byte
 
 
 @pytest.mark.parametrize("goal", [(":", "somewhere", Var()), (":", "somewhere", 5)])
@@ -799,11 +799,11 @@ def test_a_qualified_non_goal_raises_like_scryer(llib, goal):
     goal = (":", f"mldom_{era}", goal[2])
     with pytest.raises(LogicException) as exc:
         list(call("e0", goal, module=D))
-    formal = exc.value.term.args[0]
+    formal = cell_args(exc.value.term)[0]
     if is_var(goal[2]):
         assert formal == "instantiation_error"
     else:
-        assert formal.functor == "type_error" and formal.args == ("callable", 5)
+        assert cell_functor(formal) == "type_error" and cell_args(formal) == ("callable", 5)
 
 
 # ── An aliased import passed as data: the WRITTEN name (2026-09-25) ────────
