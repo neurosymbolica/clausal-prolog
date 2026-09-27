@@ -267,6 +267,8 @@ def _is_term(x) -> bool:
     as a number): an atom, a cell (a declared term such as ``z(1)`` is one; so
     is a string, the ``('$chars', Text)`` carrier), a ``Compound``, a
     ``KWTerm`` or a pythonic-AST node.
+    Every tuple counts, even one without a str head: a tuple is a term (a cell,
+    or the ``('$chars', Text)`` string carrier), never a Python value here.
     Anything else is a Python value and keeps Python semantics -- including a
     LIST, deliberately: ``eval_`` has always concatenated and repeated Python
     lists (``eval_(L + [3], X)``), and an ISO-strict refusal of lists is a

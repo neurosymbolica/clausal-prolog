@@ -1900,21 +1900,13 @@ def _resolve(x):
         if val is not None:
             return val
     if type(x) is tuple or isinstance(x, _Compound):
-        if _LogicException is None:
-            _ensure_exc_imports()
-        # an arithmetic CELL (ruling R9 A1): ground, it folds like its node --
-        # and only where its node folds (``**`` does not, above), so the two
-        # spellings take one path through the posts
-        ka = _cell_key_args(x)
-        if ka is not None and ka[0] in _EVALUABLE and ka[0] != ("**", 2):
-            try:
-                val = _eval_ground(x)
-            except _LogicException:
-                # a DATA term with an arithmetic functor (``-(a, 1)``): not
-                # arithmetic, so it keeps the ground fallback it always had
-                return x
-            if val is not None:
-                return val
+        # an arithmetic CELL (ruling R9 A1) folds EXACTLY as its node does:
+        # rewrite it, then resolve the node (``**`` is not folded, above).  A
+        # data term that merely uses an arithmetic functor (``-(a, 1)``) is
+        # not rewritten and keeps the ground fallback it always had.
+        node = _arith_cells_to_nodes(x)
+        if node is not None:
+            return _resolve(node)
     return x
 
 
