@@ -75,6 +75,12 @@ is_chars(v)     # a string
 type(v) is tuple and len(v) == 1     # RESERVED — not an atom, not a string
 ```
 
+`isinstance(v, atom)` with `clausal.logic.atoms.atom` — the 2026-09-21
+boundary class, deprecated 2026-09-27 and removed in 2.0 — is `False` for
+every value the engine hands out now; replace it with `is_atom(v)`.
+`tools/atom_class_census/census.py` finds those sites (see
+`docs/python_integration.md`).
+
 And grep your own tree for the three shapes above before trusting a green run:
 a scoring gate cannot see shape 3, and it sees shape 1 only where the code
 happened to validate instead of filter.

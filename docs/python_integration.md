@@ -361,6 +361,41 @@ string comes out as the carrier, and `++` passes it in unchanged, so
 2026-09-21 design that tagged atoms on the way out and read a plain `str` as
 text on the way in was superseded by the dumb seam on 2026-09-26.)
 
+#### Deprecated: the `atom` boundary class
+
+`clausal.logic.atoms.atom` — the `str` subclass that tagged a value as an
+atom under the 2026-09-21 design — is **deprecated** as of 2026-09-27 and is
+**removed in 2.0**. The engine no longer hands one out: every answer's atom is
+the plain `str`. Constructing one emits `ClausalAtomClassDeprecationWarning`
+(in `clausal.lint_warnings`), once per call
+site. It is a `UserWarning` (via `ClausalLintWarning`), not a
+`DeprecationWarning`, so it is **shown by default** in library code too;
+silence it with `warnings.filterwarnings("ignore",
+category=ClausalAtomClassDeprecationWarning)`. Until 2.0 the class keeps working exactly as before — equality, hashing,
+interning and pickling are unchanged — and an instance handed in through
+`++`, a seam's bare name or `solve`/`once`/`call` is still stripped to its
+`str` (the leak rule), without a warning.
+
+| Old | Now |
+|---|---|
+| `atom('permitted')` | `'permitted'` — the atom **is** the `str` |
+| `isinstance(v, atom)` | `type(v) is str`, or `clausal.logic.atoms.is_atom(v)` |
+| `v == atom('x')` | `v == 'x'`, or `v == --x` for a whole term (`V == --result(permitted, art_6)`) |
+| reading an answer's text | `clausal.to_python(v)` |
+
+`isinstance(v, atom)` does **not** warn, and it is now `False` for every value
+the engine produces — a collector that filtered on it goes silently empty
+rather than failing. Find those sites with the census tool, which reads source
+by AST and never imports or runs it:
+
+```
+PYTHONDONTWRITEBYTECODE=1 python3 tools/atom_class_census/census.py --self-test
+PYTHONDONTWRITEBYTECODE=1 python3 tools/atom_class_census/census.py --sites <your tree>
+```
+
+`from clausal import atom` is a different object — the builtin `atom/1` goal —
+and is not deprecated.
+
 ### The Python atom API
 
 ```python
