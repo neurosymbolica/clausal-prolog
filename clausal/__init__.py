@@ -25,6 +25,7 @@ from clausal.logic.predicate import (
     make_predicate, MakePredicateRetiredError,
 )
 from clausal.logic.exceptions import LogicException
+from clausal.logic.cells import cell_args, cell_functor, make_cell
 from clausal.logic.to_python import to_python
 from clausal.logic.python_terms import to_clausal
 from clausal.logic.builtins._helpers import term_key
@@ -88,6 +89,12 @@ __all__ = [
     "make_predicate",
     "MakePredicateRetiredError",
     "LogicException",
+    # Reading and building a term from Python (ruling R10 of the Compound
+    # retirement, 2026-09-27): an error term is the cell
+    # ``('error', Formal, Context)``, read with these.
+    "cell_functor",
+    "cell_args",
+    "make_cell",
     # The Python boundary converters (dumb-seam step (b), 2026-09-26):
     # deep OUT, deep IN, and the standard-order sort key.
     "to_python",

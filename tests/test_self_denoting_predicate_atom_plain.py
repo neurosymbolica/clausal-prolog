@@ -31,6 +31,7 @@ import textwrap
 import pytest
 
 import clausal.import_hook  # noqa: F401 -- installs the meta-path finder
+from clausal import cell_args
 from clausal.import_hook import _load_module
 from clausal.logic.atoms import is_mangled, mangle
 from clausal.logic.compiler.terms_to_ast import lowering_scope, term_to_ast_expr
@@ -305,7 +306,7 @@ def test_goal_argument_must_be_qualified_to_reach_another_module():
     for g in ("z", *bindings):
         with pytest.raises(LogicException) as exc:
             answers(("run", g), caller)
-        assert tuple(exc.value.term.args[0].args[1].args) == ("z", 0), g
+        assert cell_args(cell_args(cell_args(exc.value.term)[0])[1]) == ("z", 0), g
     # A caller WITH its own z (two solutions): the binding resolves to THAT
     # one, never to sa_goal_other's (one solution).
     assert answers(("run", "z"), local) == 2

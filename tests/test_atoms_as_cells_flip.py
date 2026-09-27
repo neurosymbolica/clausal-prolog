@@ -23,6 +23,7 @@ from clausal.logic.cells import chars, chars_text, is_chars
 from clausal.logic.exceptions import LogicException
 from clausal.logic.solve import solve, _deref_walk
 from clausal.logic.variables import Trail, Var, deref, unify
+from clausal import cell_args, cell_functor
 from clausal.terms import Compound, term_canonical, term_str
 from clausal.modules.py.datetime import _dt_to_term as _T
 from clausal.modules.py.datetime import _term_to_dt as _P  # py datetime -> its TERM
@@ -48,7 +49,7 @@ def _formal(exc_info):
     context string that merely mentions "atom"; every refusal row here goes
     through this and names the formal term and its type ATOM (spec §6.4).
     """
-    return exc_info.value.term.args[0]
+    return cell_args(exc_info.value.term)[0]
 
 
 def _answers(goal, mod, *vars_):
@@ -191,15 +192,15 @@ def test_row_12_unpack_refuses_a_string_name(builtins_mod):
     with pytest.raises(LogicException) as exc:
         list(solve(("unpack", Var(), [chars("foo"), 1]), builtins_mod))
     formal = _formal(exc)
-    assert formal.functor == "type_error"
-    assert formal.args[0] == mint("atom")
-    assert formal.args[1] == chars("foo")   # the culprit is the STRING
+    assert cell_functor(formal) == "type_error"
+    assert cell_args(formal)[0] == mint("atom")
+    assert cell_args(formal)[1] == chars("foo")   # the culprit is the STRING
     with pytest.raises(LogicException) as exc:
         list(solve(("unpack", Var(), [chars("foo")]), builtins_mod))
     formal = _formal(exc)
-    assert formal.functor == "type_error"
-    assert formal.args[0] == mint("atomic")
-    assert formal.args[1] == chars("foo")
+    assert cell_functor(formal) == "type_error"
+    assert cell_args(formal)[0] == mint("atomic")
+    assert cell_args(formal)[1] == chars("foo")
 
 
 def test_row_13_call_takes_an_atom_and_a_string_goal_has_no_procedure():
@@ -219,20 +220,20 @@ def test_row_13_call_takes_an_atom_and_a_string_goal_has_no_procedure():
     with pytest.raises(LogicException) as exc:
         list(solve(("r13_call", chars("r13_foo"), Var()), mod))
     formal = _formal(exc)
-    assert formal.functor == "existence_error"
-    assert formal.args[0] == mint("procedure")
+    assert cell_functor(formal) == "existence_error"
+    assert cell_args(formal)[0] == mint("procedure")
     # call/2 folds one extra argument onto the ``'.'/2`` goal, as Scryer does.
-    assert formal.args[1] == Compound("/", (mint("."), 3))
+    assert cell_args(formal)[1] == ("/", mint("."), 3)
 
 
 def test_row_13b_a_string_goal_in_solve_has_no_procedure(builtins_mod):
     with pytest.raises(LogicException) as exc:
         list(solve(chars("r13_nope"), builtins_mod))
     formal = _formal(exc)
-    assert formal.functor == "existence_error"
-    assert formal.args[0] == mint("procedure")
-    assert formal.args[1] == Compound("/", (mint("."), 2))
-    assert "solve/1" in exc.value.term.args[1]
+    assert cell_functor(formal) == "existence_error"
+    assert cell_args(formal)[0] == mint("procedure")
+    assert cell_args(formal)[1] == ("/", mint("."), 2)
+    assert "solve/1" in exc.value.message
 
 
 def test_row_13c_the_empty_string_goal_names_the_nil_atom(builtins_mod):
@@ -241,8 +242,8 @@ def test_row_13c_the_empty_string_goal_names_the_nil_atom(builtins_mod):
     with pytest.raises(LogicException) as exc:
         list(solve(chars(""), builtins_mod))
     formal = _formal(exc)
-    assert formal.functor == "existence_error"
-    assert formal.args[1] == Compound("/", (mint("[]"), 0))
+    assert cell_functor(formal) == "existence_error"
+    assert cell_args(formal)[1] == ("/", mint("[]"), 0)
 
 
 # ── Rows 14-15: the chars family ────────────────────────────────────────────
@@ -395,7 +396,7 @@ def test_must_be_string_agrees_with_the_string_builtin(builtins_mod):
     assert list(solve(("must_be", mint("str"), []), builtins_mod))
     with pytest.raises(LogicException) as exc_info:
         list(solve(("must_be", mint("string"), [1, 2]), builtins_mod))
-    assert _formal(exc_info).args[0] == mint("string")
+    assert cell_args(_formal(exc_info))[0] == mint("string")
 
 
 # ── Task 15 item 2: the ISO type table for [] and for lists (§6.3) ──────────
@@ -435,7 +436,7 @@ class TestEmptyListIsTheAtomNil:
         for culprit in (chars("abc"), [1, 2], b"ab", ("f", 1)):
             with pytest.raises(LogicException) as exc:
                 list(solve(("must_be", mint("atomic"), culprit), builtins_mod))
-            assert _formal(exc).args[0] == mint("atomic"), culprit
+            assert cell_args(_formal(exc))[0] == mint("atomic"), culprit
         with pytest.raises(LogicException):
             list(solve(("must_be", mint("compound"), []), builtins_mod))
 
@@ -484,12 +485,12 @@ class TestEmptyListIsTheAtomNil:
             with pytest.raises(LogicException) as exc:
                 list(call("call_goal", nil, module=builtins_mod))
             formal = _formal(exc)
-            assert formal.functor == "existence_error", nil
-            assert formal.args[1] == Compound("/", (mint("[]"), 0)), nil
+            assert cell_functor(formal) == "existence_error", nil
+            assert cell_args(formal)[1] == ("/", mint("[]"), 0), nil
         for nil in ([], chars("")):
             with pytest.raises(LogicException) as exc:
                 list(solve(nil, builtins_mod))
-            assert _formal(exc).functor == "existence_error", nil
+            assert cell_functor(_formal(exc)) == "existence_error", nil
 
 
 class TestTheNilAtomInAKeyPosition:
@@ -736,12 +737,12 @@ class TestTheNilAtomInAKeyPosition:
         assert SegString([""]) == b"" and SegBytes([b""]) == chars("")
 
     def test_the_nil_goal_error_is_worded_for_nil(self, builtins_mod):
-        """Fix round 3, item 6: the shared context said "a string goal is the
+        """Fix round 3, item 6: the shared message said "a string goal is the
         list of its characters" for ``[]``, which has no characters."""
         from clausal.logic.solve import call
         with pytest.raises(LogicException) as exc:
             list(call("call_goal", [], module=builtins_mod))
-        context = exc.value.term.args[1]
+        context = exc.value.message
         assert "the empty list is not a callable term" in context
         assert "list of its characters" not in context
         # …and a real string still gets the string wording, at call/1 and
@@ -749,11 +750,11 @@ class TestTheNilAtomInAKeyPosition:
         # type_error; FLIPPED back, operator rule 2026-09-25, ISO first: a non-empty list or string is the callable compound '.'/2, so call/1 of one names the missing procedure '.'/2; Scryer disagrees with itself (literal call([a]) -> existence_error, run-time G = [a], call(G) -> type_error).)
         with pytest.raises(LogicException) as exc:
             list(call("call_goal", chars("foo"), Var(), module=builtins_mod))
-        assert "list of its characters" in exc.value.term.args[1]
+        assert "list of its characters" in exc.value.message
         with pytest.raises(LogicException) as exc:
             list(call("call_goal", chars("foo"), module=builtins_mod))
-        assert "list of its characters" in exc.value.term.args[1]
-        assert exc.value.term.args[0].functor == "existence_error"
+        assert "list of its characters" in exc.value.message
+        assert cell_functor(cell_args(exc.value.term)[0]) == "existence_error"
 
     def test_a_py_wrapper_option_table_survives_a_nil_name(self):
         """``modules/py/__init__.py``'s ``option``/``has_option`` looked the
@@ -985,17 +986,17 @@ def test_row_30_listing_takes_an_atom_and_refuses_a_string(capsys):
     with pytest.raises(LogicException) as exc:
         list(solve(("r30_list", mint("r30_foo")), mod))
     formal = _formal(exc)
-    assert formal.functor == "type_error"
-    assert formal.args == (mint("predicate_indicator"), mint("r30_foo"))
+    assert cell_functor(formal) == "type_error"
+    assert cell_args(formal) == (mint("predicate_indicator"), mint("r30_foo"))
     capsys.readouterr()
     # A STRING is not a predicate indicator either (it was
     # type_error(predicate, "…") before 2026-09-25).
     with pytest.raises(LogicException) as exc:
         list(solve(("r30_list", chars("r30_foo")), mod))
     formal = _formal(exc)
-    assert formal.functor == "type_error"
-    assert formal.args[0] == mint("predicate_indicator")
-    assert formal.args[1] == chars("r30_foo")
+    assert cell_functor(formal) == "type_error"
+    assert cell_args(formal)[0] == mint("predicate_indicator")
+    assert cell_args(formal)[1] == chars("r30_foo")
 
 
 # ── Carry-forward pins (items Stage A deferred to THE FLIP) ─────────────────
@@ -1116,14 +1117,14 @@ def test_dispatch_at_refuses_a_string_goal():
     with pytest.raises(LogicException) as exc:
         _dispatch_at(chars("t12_str_goal"), 1)
     formal = _formal(exc)
-    assert formal.functor == "existence_error"
-    assert formal.args[0] == mint("procedure")
-    assert formal.args[1] == Compound("/", (mint("."), 3))
+    assert cell_functor(formal) == "existence_error"
+    assert cell_args(formal)[0] == mint("procedure")
+    assert cell_args(formal)[1] == ("/", mint("."), 3)
     # The ATOM of the same spelling keeps its clean, positioned
     # existence_error — the arm this task leaves in place.
     with pytest.raises(LogicException) as exc:
         _dispatch_at(mint("t12_str_goal"), 1)
-    assert _formal(exc).functor == "existence_error"
+    assert cell_functor(_formal(exc)) == "existence_error"
 
 
 def test_translate_refuses_a_string_language(builtins_mod):
@@ -1132,9 +1133,9 @@ def test_translate_refuses_a_string_language(builtins_mod):
     with pytest.raises(LogicException) as exc:
         list(solve(("translate", chars("th"), mint("hi"), Var()), builtins_mod))
     formal = _formal(exc)
-    assert formal.functor == "type_error"
-    assert formal.args[0] == mint("atom")
-    assert formal.args[1] == chars("th")
+    assert cell_functor(formal) == "type_error"
+    assert cell_args(formal)[0] == mint("atom")
+    assert cell_args(formal)[1] == chars("th")
 
 
 def test_listing_refuses_a_string_indicator_name(capsys):
@@ -1163,9 +1164,9 @@ def test_listing_refuses_a_string_indicator_name(capsys):
     for shape in (("/", chars("t12_pt"), 2), Compound("/", (chars("t12_pt"), 2))):
         with pytest.raises(LogicException) as exc:
             list(_run(shape))
-        formal = exc.value.term.args[0]
-        assert formal.functor == "type_error"
-        assert formal.args == (mint("atomic"), chars("t12_pt"))
+        formal = cell_args(exc.value.term)[0]
+        assert cell_functor(formal) == "type_error"
+        assert cell_args(formal) == (mint("atomic"), chars("t12_pt"))
 
 
 def test_re_pattern_that_is_not_text_raises_type_error():
@@ -1178,9 +1179,9 @@ def test_re_pattern_that_is_not_text_raises_type_error():
     with pytest.raises(LogicException) as exc:
         _compile_pattern(("t12_pat", 1))
     formal = _formal(exc)
-    assert formal.functor == "type_error"
-    assert formal.args[0] == mint("text")
-    assert formal.args[1] == ("t12_pat", 1)
+    assert cell_functor(formal) == "type_error"
+    assert cell_args(formal)[0] == mint("text")
+    assert cell_args(formal)[1] == ("t12_pat", 1)
 
 
 def test_vary_and_extend_refuse_a_malformed_field_key(builtins_mod):
@@ -1192,10 +1193,10 @@ def test_vary_and_extend_refuse_a_malformed_field_key(builtins_mod):
             list(solve((goal_name, {1: 2}, mint("t12_term"), Var()),
                        builtins_mod))
         formal = _formal(exc)
-        assert formal.functor == "type_error"
-        assert formal.args[0] == mint("atom")
-        assert formal.args[1] == 1
-        assert f"{goal_name}/3" in exc.value.term.args[1]
+        assert cell_functor(formal) == "type_error"
+        assert cell_args(formal)[0] == mint("atom")
+        assert cell_args(formal)[1] == 1
+        assert cell_args(exc.value.term)[1] == ("/", goal_name, 3)
 
 
 def test_vary_and_extend_report_an_unbound_field_key_as_uninstantiated(
@@ -1210,7 +1211,8 @@ def test_vary_and_extend_report_an_unbound_field_key_as_uninstantiated(
             list(solve((goal_name, {Var(): 2}, mint("t12_term"), Var()),
                        builtins_mod))
         assert _formal(exc) == mint("instantiation_error")
-        assert exc.value.term.args[1] == f"{goal_name}/3"
+        assert cell_args(exc.value.term)[1] == ("/", goal_name, 3)
+        assert exc.value.message is None
 
 
 _PREDICATE_MODULE = "clausal.logic.predicate"
@@ -1373,9 +1375,9 @@ def test_sum_and_scalar_product_refuse_a_string_operator(builtins_mod):
         with pytest.raises(LogicException) as exc:
             list(solve(goal, builtins_mod))
         formal = _formal(exc)
-        assert formal.functor == "type_error"
-        assert formal.args[0] == mint("atom")
-        assert formal.args[1] == chars("#=")
+        assert cell_functor(formal) == "type_error"
+        assert cell_args(formal)[0] == mint("atom")
+        assert cell_args(formal)[1] == chars("#=")
 
 
 def test_zcompare_binds_an_atom_and_reads_one():
@@ -1414,9 +1416,9 @@ def test_zcompare_binds_an_atom_and_reads_one():
         with pytest.raises(LogicException) as exc:
             zcompare(chars("<"), shape[0], shape[1], Trail())
         formal = _formal(exc)
-        assert formal.functor == "type_error"
-        assert formal.args[0] == mint("atom")
-        assert formal.args[1] == chars("<")
+        assert cell_functor(formal) == "type_error"
+        assert cell_args(formal)[0] == mint("atom")
+        assert cell_args(formal)[1] == chars("<")
 
 
 def test_attribute_keys_are_atoms():
@@ -1447,9 +1449,9 @@ def test_a_string_attribute_key_is_refused(builtins_mod):
         with pytest.raises(LogicException) as exc:
             list(solve(goal, builtins_mod))
         formal = _formal(exc)
-        assert formal.functor == "type_error"
-        assert formal.args[0] == mint("atom")
-        assert formal.args[1] == chars("t12b_str_key")
+        assert cell_functor(formal) == "type_error"
+        assert cell_args(formal)[0] == mint("atom")
+        assert cell_args(formal)[1] == chars("t12b_str_key")
 
 
 def _ground_segstring(text):
@@ -1481,10 +1483,10 @@ def test_both_string_shapes_are_refused_the_same_way_in_a_name_position():
         for value in (chars(text), _ground_segstring(text)):
             with pytest.raises(LogicException) as exc:
                 funnel(value, context)
-            formal = exc.value.term.args[0]
-            assert formal.functor == "type_error"
-            assert formal.args[0] == mint("atom")
-            assert formal.args[1] == chars(text)
+            formal = cell_args(exc.value.term)[0]
+            assert cell_functor(formal) == "type_error"
+            assert cell_args(formal)[0] == mint("atom")
+            assert cell_args(formal)[1] == chars(text)
 
 
 def test_bulk_attributes_round_trip_through_atom_keys():

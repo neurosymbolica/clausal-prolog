@@ -25,6 +25,7 @@ import os
 
 import pytest
 
+from clausal import cell_args, cell_functor
 from clausal.logic.atoms import mint
 from clausal.import_hook import _load_module
 from clausal.logic.database import Database
@@ -240,11 +241,11 @@ class TestBackendSeam:
         with pytest.raises(LogicException) as exc:
             _install(db, "p", 1, _dummy_dispatch)
         term = exc.value.term
-        assert term.functor == "error"
-        inner = term.args[0]
-        assert inner.functor == "existence_error"
-        assert inner.args[0] == mint("backend")
-        assert inner.args[1] == "no-such-backend"
+        assert cell_functor(term) == "error"
+        inner = cell_args(term)[0]
+        assert cell_functor(inner) == "existence_error"
+        assert cell_args(inner)[0] == mint("backend")
+        assert cell_args(inner)[1] == "no-such-backend"
         assert "no-such-backend" in str(exc.value)
         assert "p/1" in str(exc.value)
 

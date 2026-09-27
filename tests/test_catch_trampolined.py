@@ -23,10 +23,10 @@ import importlib
 
 import pytest
 
+from clausal import cell_args, cell_functor
 from clausal.logic.atoms import mint
 from clausal.logic.solve import _deref_walk
 from clausal.logic.variables import Var
-from clausal.terms import Compound
 
 _INT_NOPE = "invalid literal for int() with base 10: 'nope'"
 
@@ -54,7 +54,7 @@ def _answers(pred, arity=1):
 
 def test_catch_catches_python_error_from_trampolined_callee(mod):
     """A plain ValueError raised by a trampolined callee reaches catch/3."""
-    assert _answers(mod.catch_from_callee) == [(Compound("ValueError", (_INT_NOPE,)),)]
+    assert _answers(mod.catch_from_callee) == [(("ValueError", _INT_NOPE),)]
 
 
 def test_catch_catches_undefined_name_from_trampolined_callee(mod):
@@ -69,9 +69,9 @@ def test_catch_catches_undefined_name_from_trampolined_callee(mod):
     handler.
     """
     (term,), = _answers(mod.catch_undefined_name)
-    assert isinstance(term, Compound)
-    assert term.functor == "NameError"
-    assert "cite" in term.args[0]
+    assert type(term) is tuple
+    assert cell_functor(term) == "NameError"
+    assert "cite" in cell_args(term)[0]
 
 
 def test_uncaught_undefined_name_still_reaches_the_enrichment_seam(mod):
@@ -95,7 +95,7 @@ def test_uncaught_undefined_name_still_reaches_the_enrichment_seam(mod):
 
 def test_catch_still_catches_the_same_error_raised_inline(mod):
     """The identical exception raised in the catch frame itself."""
-    assert _answers(mod.catch_inline) == [(Compound("ValueError", (_INT_NOPE,)),)]
+    assert _answers(mod.catch_inline) == [(("ValueError", _INT_NOPE),)]
 
 
 # ── a catcher that does not match must still propagate ───────────────────────
@@ -165,13 +165,13 @@ def test_catch_around_a_many_solution_callee_yields_all(mod):
 
 def test_catch_inside_a_predicate_called_through_once(mod):
     assert _answers(mod.catch_from_callee_via_once) == [
-        (Compound("ValueError", (_INT_NOPE,)),)
+        (("ValueError", _INT_NOPE),)
     ]
 
 
 def test_catch_inside_a_predicate_called_through_findall(mod):
     assert _answers(mod.catch_from_callee_via_findall) == [
-        ([Compound("ValueError", (_INT_NOPE,))],)
+        ([("ValueError", _INT_NOPE)],)
     ]
 
 
@@ -198,7 +198,7 @@ def test_catch_inside_a_negated_goal_absorbs_the_exception(mod):
 def test_catch_inside_a_goal_lambda_absorbs_the_exception(mod):
     """A goal lambda reaches a trampoline-mode callee through _tramp_call."""
     assert _answers(mod.catch_from_callee_via_lambda) == [
-        (Compound("ValueError", (_INT_NOPE,)),)]
+        (("ValueError", _INT_NOPE),)]
 
 
 # ── the general-ITE condition driver (the seventh loop copy) ─────────────────
@@ -242,7 +242,7 @@ def test_an_exception_from_a_recovery_goal_reaches_the_outer_catch(mod):
     """
     also_nope = "invalid literal for int() with base 10: 'also_nope'"
     assert _answers(mod.outer_catches_a_raising_recovery) == [
-        (Compound("ValueError", (also_nope,)),)]
+        (("ValueError", also_nope),)]
 
 
 # ── the routing policy itself ────────────────────────────────────────────────

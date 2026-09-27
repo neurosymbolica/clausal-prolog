@@ -382,7 +382,7 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
         # "a non-callable goal fails" contract, retired for this case).
         _where = getattr(_calling_module(db), "name", None)
         raise LogicException(existence_error(
-            "procedure", Compound("/", (functor, arity)),
+            "procedure", ("/", functor, arity),
             f"{context}: no procedure {functor}/{arity} is defined in "
             + (f"module {_where}" if _where else "the calling module")))
     return dispatch, _meta_qualified(db, functor, arity, call_args)

@@ -37,6 +37,7 @@ from pathlib import Path
 
 import pytest
 
+from clausal import cell_args, cell_functor
 from clausal.logic.exceptions import LogicException
 from clausal.logic.variables import Var, deref, is_var
 from clausal.pythonic_ast import nodes
@@ -104,8 +105,8 @@ def _call(module, *args, out=()):
 
 def _formal(exc_info):
     term = exc_info.value.term
-    assert term.functor == "error"
-    return term.args[0]
+    assert type(term) is tuple and cell_functor(term) == "error"
+    return cell_args(term)[0]
 
 
 # ── the row table: term position answers exactly as the clause body ─────────
@@ -251,8 +252,8 @@ def test_a_module_predicate_at_an_unregistered_arity_is_its_existence_error(host
     with pytest.raises(LogicException) as ei:
         _call(host, ("match", "a"))
     formal = _formal(ei)
-    assert formal.functor == "existence_error"
-    assert formal.args[1].args == ("match", 1)
+    assert cell_functor(formal) == "existence_error"
+    assert cell_args(formal)[1] == ("/", "match", 1)
 
 
 def test_a_module_predicate_goal_is_built_as_its_cell(host):
@@ -314,15 +315,15 @@ def test_findall_of_an_unbound_goal_is_an_instantiation_error(host):
 def test_findall_of_a_number_is_a_type_error(host):
     with pytest.raises(LogicException) as ei:
         _call(host, ("findall", Var(), 4, Var()))
-    assert _formal(ei).functor == "type_error"
-    assert _formal(ei).args == ("callable", 4)
+    assert cell_functor(_formal(ei)) == "type_error"
+    assert cell_args(_formal(ei)) == ("callable", 4)
 
 
 def test_findall_of_a_body_with_a_number_names_the_whole_body(host):
     """Scryer: findall(_, (fail, 4), _) -> type_error(callable, (fail, 4))."""
     with pytest.raises(LogicException) as ei:
         _call(host, ("findall", Var(), (False, 4), Var()))
-    assert _formal(ei).args == ("callable", (False, 4))
+    assert cell_args(_formal(ei)) == ("callable", (False, 4))
 
 
 @pytest.mark.parametrize("goal", [("once", None), ("forall", None, True),
@@ -337,7 +338,7 @@ def test_once_and_forall_of_an_unbound_goal(host, goal):
 def test_once_of_a_number_is_a_type_error(host):
     with pytest.raises(LogicException) as ei:
         _call(host, ("once", 4))
-    assert _formal(ei).args == ("callable", 4)
+    assert cell_args(_formal(ei)) == ("callable", 4)
 
 
 def test_throw_of_an_unbound_ball_is_an_instantiation_error(host):
@@ -348,7 +349,7 @@ def test_throw_of_an_unbound_ball_is_an_instantiation_error(host):
     Y = Var()
     from clausal.logic.solve import call
     got = [_norm(Y) for _ in call("b", 32, Var(), Y, module=host)]
-    assert got[0].args[0] == "instantiation_error"
+    assert cell_args(got[0])[0] == "instantiation_error"
 
 
 def test_the_ball_is_a_copy(host):
@@ -377,11 +378,11 @@ def test_a_ball_bound_through_the_trail_survives_the_unwind(host):
 def test_catch_catches_the_error_of_its_own_goal(host):
     E = Var()
     [(e,)] = _call(host, ("catch", Var(), E, True), out=(E,))
-    assert e.functor == "error" and e.args[0] == "instantiation_error"
+    assert cell_functor(e) == "error" and cell_args(e)[0] == "instantiation_error"
     E = Var()
     goal = ("catch", ("findall", Var(), 4, Var()), E, True)
     [(e,)] = _call(host, goal, out=(E,))
-    assert e.args[0].functor == "type_error"
+    assert cell_functor(cell_args(e)[0]) == "type_error"
 
 
 @pytest.mark.parametrize("args, indicator", [
@@ -395,8 +396,8 @@ def test_call_n_extras_past_a_special_form_name_no_procedure(host, args,
     with pytest.raises(LogicException) as ei:
         _call(host, *args)
     formal = _formal(ei)
-    assert formal.functor == "existence_error"
-    assert formal.args[1].args == indicator
+    assert cell_functor(formal) == "existence_error"
+    assert cell_args(formal)[1] == ("/", *indicator)
 
 
 # ── the result of findall/bagof/setof must be a list or a partial list ─────
@@ -416,8 +417,8 @@ def test_a_non_list_result_is_a_type_error(host, pred, n):
     with pytest.raises(LogicException) as ei:
         list(call(pred, n, module=host))
     formal = _formal(ei)
-    assert formal.functor == "type_error"
-    assert formal.args == ("list", NON_LIST_ROWS[n])
+    assert cell_functor(formal) == "type_error"
+    assert cell_args(formal) == ("list", NON_LIST_ROWS[n])
 
 
 def test_the_result_is_checked_before_the_goal_runs(host):
@@ -425,7 +426,7 @@ def test_the_result_is_checked_before_the_goal_runs(host):
     instantiation_error of its goal."""
     with pytest.raises(LogicException) as ei:
         _call(host, ("findall", Var(), Var(), "foo"))
-    assert _formal(ei).args == ("list", "foo")
+    assert cell_args(_formal(ei)) == ("list", "foo")
 
 
 @pytest.mark.parametrize("n, expected", [
@@ -461,7 +462,7 @@ def test_a_string_is_the_list_of_its_chars(host, text, answers):
     assert len(_call(host, goal)) == answers
     with pytest.raises(LogicException) as ei:
         _call(host, ("findall", C, nodes.in_(left=C, right=["a"]), "ab"))
-    assert _formal(ei).args == ("list", "ab")
+    assert cell_args(_formal(ei)) == ("list", "ab")
 
 
 def test_a_constant_list_is_a_frozen_list_subclass(host):

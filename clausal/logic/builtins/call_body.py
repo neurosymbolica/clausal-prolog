@@ -408,8 +408,7 @@ def special_form_dispatch(db, folded, context: str):
 
 def _indicator(name, arity):
     from clausal.logic.atoms import mint  # noqa: PLC0415
-    from clausal.terms import Compound  # noqa: PLC0415
-    return Compound("/", (mint(name), arity))
+    return ("/", mint(name), arity)
 
 
 # The construct a body term spells, as ``(name, arity)`` -- what call/N's

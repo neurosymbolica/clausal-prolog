@@ -591,11 +591,11 @@ def _number_vars__3(term, start, end, trail, k):
     term_val = deref(term)
     vars_list: list = []
     _collect_vars_impl(term_val, vars_list)
-    # Bind each unbound var to Compound("$VAR", (N,))
+    # Bind each unbound var to the cell '$VAR'(N)
     marks = []
     for i, v in enumerate(vars_list):
         m = trail.mark()
-        atom = Compound("$VAR", (start_val + i,))
+        atom = ("$VAR", start_val + i)
         if not unify(v, atom, trail):
             for mk in reversed(marks):
                 trail.undo(mk)

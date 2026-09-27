@@ -18,8 +18,9 @@ import pytest
 import textwrap
 
 from clausal.logic.atoms import mint
+from clausal import cell_args, cell_functor
 from clausal.logic.exceptions import LogicException, type_error
-from clausal.terms import Add, Compound, FloorDiv
+from clausal.terms import Add, FloorDiv
 from clausal.testing import main
 
 
@@ -52,10 +53,9 @@ def test_the_note_does_not_disturb_the_error_term():
     """The note is message-only: ``catch/3`` matches on ``.term``."""
     culprit = FloorDiv(left=10000, right=4)
     exc = LogicException(type_error("number", culprit, "sum_list/2"))
-    assert exc.term == Compound(
-        "error",
-        (Compound("type_error", (mint("number"), culprit)), "sum_list/2"),
-    )
+    assert cell_functor(exc.term) == "error"
+    assert cell_args(exc.term)[0] == ("type_error", mint("number"), culprit)
+    assert cell_args(exc.term)[1] == ("/", "sum_list", 2)
 
 
 def test_type_error_number_on_a_non_arith_culprit_says_nothing():

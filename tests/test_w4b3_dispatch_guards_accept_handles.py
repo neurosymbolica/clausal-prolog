@@ -30,6 +30,7 @@ import sys
 
 import pytest
 
+from clausal import cell_args
 from clausal.import_hook import _load_module
 from clausal.logic.atoms import is_mangled, mangle, mint
 from clausal.logic.predicate import is_declared_predicate_name
@@ -295,7 +296,7 @@ class TestPhrase:
         from clausal.logic.exceptions import LogicException
         with pytest.raises(LogicException) as exc:
             list(call("phrase", _secret(lm), [mint("hi")], module=lm))
-        assert tuple(exc.value.term.args[0].args[1].args) == ("secret", 2)
+        assert tuple(cell_args(cell_args(cell_args(exc.value.term)[0])[1])) == ("secret", 2)
 
 
 # ── 3. the 16 list builtins, time_goal, _ensure_trampoline_dispatch ─────────
@@ -387,7 +388,7 @@ def test_a_data_atom_is_still_not_a_list_goal(lm):
     from clausal.logic.exceptions import LogicException
     with pytest.raises(LogicException) as exc:
         list(call("maplist", _secret(lm), [1], module=lm))
-    assert tuple(exc.value.term.args[0].args[1].args) == ("secret", 1)
+    assert tuple(cell_args(cell_args(cell_args(exc.value.term)[0])[1])) == ("secret", 1)
 
 
 @pytest.mark.parametrize("which", ["handle"])  # the class era is gone

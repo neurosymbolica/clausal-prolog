@@ -236,10 +236,11 @@ class TestCallN:
         # call/1 with an unbound goal is ISO's instantiation_error (Scryer:
         # ``call(_)``), not a silent failure -- 2026-09-25, call-runs-body-terms.
         import pytest
+        from clausal import cell_args
         from clausal.logic.exceptions import LogicException
         with pytest.raises(LogicException) as info:
             list(call("call", x, module=mod))
-        assert info.value.term.args[0] == "instantiation_error"
+        assert cell_args(info.value.term)[0] == "instantiation_error"
 
     def test_call_goal_4(self):
         """call_goal with 3 extra args."""

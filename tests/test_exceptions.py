@@ -14,6 +14,7 @@ from clausal.logic.compiler import (
 from clausal.logic.database import Clause, Module
 from clausal.logic.solve import solve, _deref_walk
 from clausal.logic.variables import Var, Trail, deref
+from clausal import cell_args, cell_functor
 from clausal.logic.exceptions import LogicException
 from clausal.terms import And, Call, LoadName, Compound, Unify as Is, in_
 
@@ -336,34 +337,35 @@ class TestStructuredErrors:
         # nv
         from clausal.logic.exceptions import type_error
         t = type_error("integer", "foo", "bar/1")
-        assert t.functor == "error"
-        assert t.args[0].functor == "type_error"
-        # The TYPE name is an atom; the culprit and the CONTEXT are as the
-        # caller passed them — here plain Python strings (spec §6.4).
-        assert t.args[0].args == (mint("integer"), "foo")
-        assert t.args[1] == "bar/1"
+        assert cell_functor(t) == "error"
+        assert cell_functor(cell_args(t)[0]) == "type_error"
+        # The TYPE name is an atom; the culprit is as the caller passed it
+        # — here a plain Python string (spec §6.4). The second argument is
+        # the indicator cell read from the context text.
+        assert cell_args(cell_args(t)[0]) == (mint("integer"), "foo")
+        assert cell_args(t)[1] == ("/", "bar", 1)
 
     def test_instantiation_error_helper(self):
         # nv
         from clausal.logic.exceptions import instantiation_error
         t = instantiation_error("is/2")
-        assert t.functor == "error"
-        assert t.args[0] == mint("instantiation_error")
-        assert t.args[1] == "is/2"
+        assert cell_functor(t) == "error"
+        assert cell_args(t)[0] == mint("instantiation_error")
+        assert cell_args(t)[1] == ("/", "is", 2)
 
     def test_existence_error_helper(self):
         # nv
         from clausal.logic.exceptions import existence_error
         t = existence_error("procedure", "foo/2")
-        assert t.functor == "error"
-        assert t.args[0].functor == "existence_error"
+        assert cell_functor(t) == "error"
+        assert cell_functor(cell_args(t)[0]) == "existence_error"
 
     def test_permission_error_helper(self):
         # nv
         from clausal.logic.exceptions import permission_error
         t = permission_error("modify", "static_procedure", "foo/2")
-        assert t.functor == "error"
-        assert t.args[0].functor == "permission_error"
+        assert cell_functor(t) == "error"
+        assert cell_functor(cell_args(t)[0]) == "permission_error"
 
 
 # ── .clausal integration tests ──────────────────────────────────────────────
@@ -521,16 +523,16 @@ class TestAssertzAgainstADataFunctor:
         with pytest.raises(LogicException) as excinfo:
             list(call("go", 7, module=mod.__dict__["$module"]))
         term = excinfo.value.term
-        assert term.functor == "error"
-        inner = term.args[0]
-        assert inner.functor == "permission_error"
-        assert inner.args[0] == mint("modify")
-        assert inner.args[1] == mint("static_procedure")
-        indicator = inner.args[2]
-        assert indicator.functor == "/"
+        assert cell_functor(term) == "error"
+        inner = cell_args(term)[0]
+        assert cell_functor(inner) == "permission_error"
+        assert cell_args(inner)[0] == mint("modify")
+        assert cell_args(inner)[1] == mint("static_procedure")
+        indicator = cell_args(inner)[2]
+        assert cell_functor(indicator) == "/"
         # The indicator the engine builds holds the SPELLING (a str) and the
         # arity, as it always has.
-        assert indicator.args == ("f", 1)
+        assert cell_args(indicator) == ("f", 1)
 
     def test_the_message_points_at_dynamic(self, tmp_path):
         from clausal.logic.exceptions import LogicException
@@ -539,10 +541,10 @@ class TestAssertzAgainstADataFunctor:
         mod = self._module(tmp_path)
         with pytest.raises(LogicException) as excinfo:
             list(call("go", 7, module=mod.__dict__["$module"]))
-        context = excinfo.value.term.args[1]
-        assert "assertz/1" in context
-        assert "-dynamic" in context
-        assert "data functor" in context
+        assert cell_args(excinfo.value.term)[1] == ("/", "assertz", 1)
+        message = excinfo.value.message
+        assert "-dynamic" in message
+        assert "data functor" in message
 
     def test_a_dynamic_declaration_makes_the_assert_work(self, tmp_path):
         """The remedy the message names actually works: ``-dynamic`` keeps

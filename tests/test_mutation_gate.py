@@ -86,7 +86,7 @@ def _row_of(module, binding, arity):
 def _refusal_text(exc) -> str:
     """The gate's one refusal line, wherever a channel surfaced it."""
     if isinstance(exc, LogicException):
-        return str(exc.term.args[1])
+        return exc.message
     return str(exc)
 
 

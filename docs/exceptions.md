@@ -69,7 +69,7 @@ safe_div(X, Y, R) <- catch(
 
 `catch/3` also intercepts **plain Python exceptions** raised inside the goal
 (including from [`++()` escapes](python_integration.md)). These are wrapped as `ClassName(Message)` — a
-`Compound` whose functor is the exception class name — so the catcher can match
+term whose functor is the exception class name — so the catcher can match
 them the same way as logic throw terms:
 
 ```clausal
@@ -132,8 +132,9 @@ done_with_code() <- halt(1)
 ## Unified Exception Representation
 
 Both logic `throw/1` terms and Python exceptions are represented as plain
-Clausal terms during catch. Python exceptions become `Compound(ClassName,
-(message,))` — the same structural shape as any predicate term — so there is
+Clausal terms during catch. Python exceptions become the term
+`ClassName(Message)` (the cell `('ClassName', message)` in Python) — the same
+structural shape as any predicate term — so there is
 no distinction between catching a logic throw and catching a Python exception:
 
 ```clausal
@@ -153,8 +154,59 @@ Clausal follows the [ISO Prolog](iso_prolog_compatibility_report.md) convention 
 | `existence_error(object_type, culprit)` | `error(existence_error(Type, Culprit), ...)` |
 | `permission_error(op, type, culprit)` | `error(permission_error(Op, Type, Culprit), ...)` |
 | `evaluation_error(kind)` | `error(evaluation_error(Kind), ...)` |
+| `domain_error(domain, culprit)` | `error(domain_error(Domain, Culprit), ...)` |
 
-The context field is typically a string identifying where the error occurred.
+The second argument of `error/2` is **what Scryer puts there**. The rule for
+this engine's error terms: where Scryer and SWI-Prolog differ, follow Scryer.
+
+- For a builtin, it is that builtin's predicate indicator:
+  `error(type_error(atom,1),atom_length/2)`, `error(evaluation_error(zero_divisor),(/)/2)`.
+- For a missing procedure, it is the missing indicator itself, whichever
+  builtin found it missing: `error(existence_error(procedure,foo/1),foo/1)`.
+- When there is no single culprit indicator, it is an unbound variable, as
+  Scryer's own library code throws `error(E, _)`.
+
+It is not SWI-Prolog's `context(Culprit, Message)`. Explanatory text stays off
+the term. Every builder takes the context as text: `"atom_length/2"` gives
+`atom_length/2`, `"solve/1: the goal is unbound"` gives `solve/1` with the
+prose `the goal is unbound`, and text without a leading `Name/Arity` gives an
+unbound variable with the whole text as prose. The prose is the Python
+exception's `.message`, and `str()` prints it after the term, separated by
+`": "`:
+
+```text
+Uncaught logic exception: error(instantiation_error,solve/1): the goal is unbound
+```
+
+The prose belongs to the Python exception. A term caught with `catch/3` is
+exactly the Scryer term and carries no prose of its own; when it is thrown
+again the new exception recovers the prose on a best-effort basis (it is kept
+for the most recent error terms only).
+
+```clausal
+catch(atom_length(1, _), error(type_error(T, V), _), true)   % T = atom, V = 1
+catch(atom_length(1, _), error(_, PI), true)                 % PI = atom_length/2
+```
+
+### Reading an error term from Python
+
+An error term is a plain **cell**: a tuple whose first element is the functor.
+`clausal.cell_functor` and `clausal.cell_args` read it, and `clausal.make_cell`
+builds one. They replace the `.functor` / `.args` attributes of the retired
+`Compound` class.
+
+```python
+from clausal import LogicException, cell_args, cell_functor
+
+try:
+    ...  # a query that raises
+except LogicException as e:
+    assert cell_functor(e.term) == "error"
+    formal, indicator = cell_args(e.term)
+    # formal    == ('type_error', 'atom', 1)
+    # indicator == ('/', 'atom_length', 2)
+    # e.message == None, or the explanatory prose
+```
 
 ---
 
@@ -285,14 +337,15 @@ Uncaught `Throw` goals surface as `LogicException` in Python code. Caught except
     from clausal.logic.exceptions import LogicException, type_error, instantiation_error
 
     # Build an error term
-    err = type_error("integer", "foo")
-    # → Compound('error', (Compound('type_error', ('integer', 'foo')), ...))
+    err = type_error("integer", "foo", "succ/2: the first argument")
+    # → ('error', ('type_error', 'integer', 'foo'), ('/', 'succ', 2))
 
     # Raise from Python
     raise LogicException(err)
     # The message shows the term as Scryer prints an uncaught error
-    # (writeq text with operators), not its Python repr:
-    #   Uncaught logic exception: error(type_error(integer,foo),'')
+    # (writeq text with operators), not its Python repr, then the prose;
+    # a variable that occurs once prints as `_`:
+    #   Uncaught logic exception: error(type_error(integer,foo),succ/2): the first argument
     ```
 
     ---

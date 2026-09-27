@@ -23,7 +23,9 @@ name (atoms/functors and table state are module-scoped).
 """
 import pytest
 
+from clausal import cell_args, cell_functor
 from clausal.logic.atoms import mint
+from clausal.logic.exceptions import error_prose
 from clausal.logic.cells import chars
 from clausal.import_hook import _load_module
 from clausal.logic.solve import solve, call, _query_cache
@@ -249,12 +251,13 @@ class TestF002EqNonRealOperand:
 
     def _assert_evaluable_error(self, exc_info, culprit):
         term = exc_info.value.term
-        assert term.functor == "error"
-        inner = term.args[0]
-        assert inner.functor == "type_error"
-        assert inner.args[0] == mint("evaluable")
-        assert inner.args[1] == culprit
-        assert term.args[1] == "(==)/2"
+        assert type(term) is tuple and cell_functor(term) == "error"
+        inner = cell_args(term)[0]
+        assert cell_functor(inner) == "type_error"
+        assert cell_args(inner)[0] == mint("evaluable")
+        assert cell_args(inner)[1] == culprit
+        assert cell_args(term)[1] == ("/", "==", 2)
+        assert exc_info.value.message is None
 
     def test_eq_date_operand_raises_catchable_type_error(self):
         import datetime as dt
@@ -354,19 +357,22 @@ class TestF002NeNonRealOperand:
     ``X != "banana", X is "apple"`` silently lost its solution.  Same
     exactly-one-var + ``numbers.Real`` allowlist as ``==``/the ordering
     comparators, with the ``evaluable`` kind (``!=`` is ``==``'s arithmetic
-    sibling; ``dif/2`` remains the structural disequality) and context
-    ``"(!=)/2"`` (the clausal surface operator, matching ``"(==)/2"``).
+    sibling; ``dif/2`` remains the structural disequality) and error/2's
+    second argument the indicator ``'!='/2`` (the clausal surface operator,
+    matching ``(==)/2``; ``'!='`` is the writeq form of a name that is not an
+    ISO operator).
     Fixed: todo/arith-disequality-on-unbound-var-rejects-all-later-bindings.md
     """
 
     def _assert_evaluable_error(self, exc_info, culprit):
         term = exc_info.value.term
-        assert term.functor == "error"
-        inner = term.args[0]
-        assert inner.functor == "type_error"
-        assert inner.args[0] == mint("evaluable")
-        assert inner.args[1] == culprit
-        assert term.args[1] == "(!=)/2"
+        assert type(term) is tuple and cell_functor(term) == "error"
+        inner = cell_args(term)[0]
+        assert cell_functor(inner) == "type_error"
+        assert cell_args(inner)[0] == mint("evaluable")
+        assert cell_args(inner)[1] == culprit
+        assert cell_args(term)[1] == ("/", "!=", 2)
+        assert exc_info.value.message is None
 
     def test_ne_str_operand_raises_catchable_type_error(self):
         from clausal.logic.exceptions import LogicException
@@ -479,10 +485,11 @@ class TestF002ExprTreeVsNonNumericOperand:
         with pytest.raises(LogicException) as ei:
             fd_eq(self._add(Var(), 1), "banana", Trail())
         term = ei.value.term
-        assert term.args[0].functor == "type_error"
-        assert term.args[0].args[0] == mint("evaluable")
-        assert term.args[0].args[1] == "banana"
-        assert term.args[1] == "(==)/2"
+        assert cell_functor(cell_args(term)[0]) == "type_error"
+        assert cell_args(cell_args(term)[0])[0] == mint("evaluable")
+        assert cell_args(cell_args(term)[0])[1] == "banana"
+        assert cell_args(term)[1] == ("/", "==", 2)
+        assert ei.value.message is None
 
     def test_eq_str_vs_var_tree_raises(self):
         from clausal.logic.exceptions import LogicException
@@ -499,7 +506,8 @@ class TestF002ExprTreeVsNonNumericOperand:
         from clausal.logic.exceptions import LogicException
         with pytest.raises(LogicException) as ei:
             fd_ne(self._add(Var(), 1), "banana", Trail())
-        assert ei.value.term.args[1] == "(!=)/2"
+        assert cell_args(ei.value.term)[1] == ("/", "!=", 2)
+        assert ei.value.message is None
 
     def test_eq_compiled_repro_raises_instead_of_wrong_answer(self, load):
         # The reported repro: X + 1 == "banana" posted, then accepted X is 4.
@@ -569,16 +577,19 @@ class TestNonNumericLeafInsideExprTree:
 
     def _assert_integer_leaf_error(self, exc_info, culprit):
         term = exc_info.value.term
-        assert term.functor == "error"
-        inner = term.args[0]
-        assert inner.functor == "type_error"
-        assert inner.args[0] == mint("integer")
+        assert type(term) is tuple and cell_functor(term) == "error"
+        inner = cell_args(term)[0]
+        assert cell_functor(inner) == "type_error"
+        assert cell_args(inner)[0] == mint("integer")
         # The culprit is the operand AS THE CALLER PASSED IT: a Python
         # ``str`` operand stays a STRING (THE FLIP), while an operand
         # written as ``"a"`` in .clausal source is an ATOM — see
         # ``test_compiled_leaf_error_is_catchable``, which expects one.
-        assert inner.args[1] == culprit
-        assert term.args[1] == "clpfd expression"
+        assert cell_args(inner)[1] == culprit
+        # No leading indicator: Scryer's error(E, _) -- an unbound second
+        # argument, the text on the exception.
+        assert type(deref(cell_args(term)[1])) is Var
+        assert exc_info.value.message == "clpfd expression"
 
     # ── the repro: eq / ne / orderings with a garbage leaf ───────────────
 
@@ -637,8 +648,8 @@ class TestNonNumericLeafInsideExprTree:
         q = Quantity(2, {metre: 1})
         with pytest.raises(LogicException) as ei:
             fd_eq(self._add(Var(), q), 5, Trail())
-        inner = ei.value.term.args[0]
-        assert inner.functor == "system_error" and inner.args[0] == mint("units_mismatch")
+        inner = cell_args(ei.value.term)[0]
+        assert cell_functor(inner) == "system_error" and cell_args(inner)[0] == mint("units_mismatch")
 
     def test_ground_quantity_tree_vs_var_raises(self):
         # X == Quantity(2, m) * 2: the tree is fully ground but not
@@ -723,11 +734,12 @@ safeleaf(SX, SE) <- catch((SX + "a" == 5), SE, 1 == 1)
         caught = [deref(e) for _ in solve(("safeleaf", Var(), e), m)]
         assert len(caught) == 1
         term = caught[0]
-        assert term.functor == "error"
-        assert term.args[0].functor == "type_error"
-        assert term.args[0].args[0] == mint("integer")
-        assert term.args[0].args[1] == mint("a")
-        assert term.args[1] == "clpfd expression"
+        assert type(term) is tuple and cell_functor(term) == "error"
+        assert cell_functor(cell_args(term)[0]) == "type_error"
+        assert cell_args(cell_args(term)[0])[0] == mint("integer")
+        assert cell_args(cell_args(term)[0])[1] == mint("a")
+        assert type(deref(cell_args(term)[1])) is Var
+        assert error_prose(term) == "clpfd expression"
 
     # ── controls: legitimate leaves and nodes keep working ───────────────
 

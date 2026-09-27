@@ -15,7 +15,10 @@ from clausal.logic.builtins._helpers import _standard_order_key
 from clausal.logic.builtins._registry import _builtin
 from clausal.logic.builtins.inspection import _univ__2 as _iso_univ_impl
 from clausal.logic.constraints import structural_eq as _structural_eq
-from clausal.logic.exceptions import LogicException, instantiation_error, type_error
+from clausal.logic.exceptions import (
+    LogicException, instantiation_error, term_functor_args,
+    type_error,
+)
 from clausal.logic.predicate import is_term_instance, term_field_names
 from clausal.logic.variables import deref, is_var
 from clausal.logic.variables import unify as _unify
@@ -35,17 +38,19 @@ def _clpfd_leaf_culprit(exc: LogicException):
     re-raised as-is instead of being mislabelled `evaluable`.
     """
     term = exc.term
-    if not (isinstance(term, Compound) and term.functor == "error"
-            and len(term.args) == 2):
+    outer = term_functor_args(term)
+    if outer is None or outer[0] != "error" or len(outer[1]) != 2:
         return None
-    inner, context = term.args
-    if not (isinstance(inner, Compound) and inner.functor == "type_error"
-            and len(inner.args) == 2):
+    inner = term_functor_args(outer[1][0])
+    if inner is None or inner[0] != "type_error" or len(inner[1]) != 2:
         return None
-    expected, leaf = inner.args
+    expected, leaf = inner[1]
     if not (is_atom(expected) and spelling(expected) == "integer"):
         return None
-    if context != "clpfd expression":
+    # The clpfd leaf error has no culprit indicator: its second argument is
+    # an unbound variable (Scryer's form) and "clpfd expression" is the
+    # exception's prose, set when the exception was built.
+    if not is_var(outer[1][1]) or exc.message != "clpfd expression":
         return None
     return leaf
 
@@ -99,7 +104,7 @@ def _evaluable_culprit(leaf):
     name = _term_functor_name(leaf)
     if isinstance(name, str):
         name = mint(name)
-    return Compound("/", (name, arity))
+    return ("/", name, arity)
 
 
 def _iso_eval(term, context: str):

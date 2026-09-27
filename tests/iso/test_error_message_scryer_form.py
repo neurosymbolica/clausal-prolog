@@ -138,7 +138,8 @@ def _msg(term) -> str:
 
 def test_message_is_the_scryer_text_not_the_repr():
     msg = _msg(type_error("evaluable", Compound("/", (mint("+"), 2)), "is/2"))
-    assert msg == "Uncaught logic exception: error(type_error(evaluable,(+)/2),'is/2')"
+    # Exactly what Scryer prints for ``X is 1 + a`` (probed 2026-09-27).
+    assert msg == "Uncaught logic exception: error(type_error(evaluable,(+)/2),(is)/2)"
     assert "Compound(" not in msg
 
 
@@ -152,26 +153,27 @@ BUILDERS = [
 ]
 
 
-def _as_cell(t):
-    """The cell spelling of a ``Compound``-built term, recursively."""
-    if isinstance(t, Compound):
-        return (t.functor, *(_as_cell(a) for a in t.args))
+def _as_compound(t):
+    """The ``Compound`` spelling of a cell-built term, recursively -- what a
+    Python caller that still builds ``Compound``s would raise."""
+    if type(t) is tuple and t and type(t[0]) is str:
+        return Compound(t[0], tuple(_as_compound(a) for a in t[1:]))
     return t
 
 
 @pytest.mark.parametrize("build", BUILDERS)
 def test_compound_and_cell_spellings_give_the_same_message(build):
-    term = build()
+    cell = build()
+    assert type(cell) is tuple      # slice 2: the builders build cells
+    term = _as_compound(cell)
     assert isinstance(term, Compound)
-    cell = _as_cell(term)
-    assert type(cell) is tuple
     assert _msg(term) == _msg(cell)
     assert _msg(term).startswith("Uncaught logic exception: error(")
 
 
 def test_operator_node_culprit_uses_its_iso_functor():
     msg = _msg(type_error("number", FloorDiv(left=10000, right=4), "sum_list/2"))
-    assert msg == "Uncaught logic exception: error(type_error(number,10000//4),'sum_list/2')"
+    assert msg == "Uncaught logic exception: error(type_error(number,10000//4),sum_list/2)"
     assert "a+1" in _msg(("f", Add(left="a", right=1)))
 
 
