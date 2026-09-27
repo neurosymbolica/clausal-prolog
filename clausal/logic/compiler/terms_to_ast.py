@@ -25,8 +25,6 @@ from fractions import Fraction
 from clausal.logic.exact_arith import (
     exact_add as _exact_add, exact_sub as _exact_sub,
     exact_mul as _exact_mul, exact_div as _exact_div,
-    exact_floordiv as _exact_floordiv, exact_mod as _exact_mod,
-    exact_pow as _exact_pow, exact_neg as _exact_neg,
     evaluate as _evaluate,
 )
 from typing import Any
@@ -1498,23 +1496,45 @@ ARITH_RUNTIME_NAMES: dict = {
     "$sub": _exact_sub,
     "$mul": _exact_mul,
     "$div": _exact_div,
-    # Ruling R9 (2026-09-27): ``//``, ``%``, ``**`` and unary ``-`` were
-    # native Python operators, so an operand that was a TERM -- a variable
-    # bound to ``+(1, 2)`` -- met Python's tuple/dataclass operators and
-    # raised a raw TypeError.  They are helpers with the same int fast path
-    # as the four above; a term operand is evaluated through the one table.
-    "$floordiv": _exact_floordiv,
-    "$mod": _exact_mod,
-    "$pow": _exact_pow,
-    "$neg": _exact_neg,
-    # ``eval_/2``'s operand when it is not a literal arithmetic tree: a
-    # variable (evaluated at RUNTIME, whatever it holds) or a literal term
-    # (an atom or a non-evaluable compound raises type_error(evaluable, F/N)).
+    # Ruling R9 (2026-09-27): an operand that may be a TERM at runtime --
+    # ``eval_``'s whole operand when it is a variable or a literal term, or an
+    # operand of the native ``//``, ``%``, ``**``, unary ``-`` -- is evaluated
+    # through the one evaluable table; an atom or a non-evaluable compound
+    # raises type_error(evaluable, F/N).
     "$eval": _evaluate,
+    # the inline int test on a native operator's variable operand
+    # (``_native_operand``): builtins under names a module cannot shadow
+    "$type": type,
+    "$int": int,
 }
-_EXACT_BINOP_NAMES = ((Add, "$add"), (Sub, "$sub"), (Mult, "$mul"), (Div, "$div"),
-                      (FloorDiv, "$floordiv"), (Mod, "$mod"), (Pow, "$pow"))
+_EXACT_BINOP_NAMES = ((Add, "$add"), (Sub, "$sub"), (Mult, "$mul"), (Div, "$div"))
 _NATIVE_OPS = {FloorDiv: ast.FloorDiv(), Mod: ast.Mod(), Pow: ast.Pow()}
+
+
+def _native_operand(term: Any, var_context: dict[int, str]) -> ast.expr:
+    """An operand of a native ``//``/``%``/``**``/unary ``-``: as compiled, or
+    wrapped in ``$eval`` when it may be a term at runtime.  A variable goes to
+    ``$eval`` directly (it dereferences), one call as ``$deref`` was."""
+    t = deref(term)
+    if is_var(t):
+        # ``(v if type(v := $deref(V)) is int else $eval(v))``: an int -- the
+        # overwhelmingly common operand -- costs the one C ``$deref`` call it
+        # always did; anything else goes to the evaluator.  ``$arith_tmp`` is
+        # consumed by its own conditional before any other operand assigns it.
+        var = _name(var_context.get(t._id, _var_python_name(t)))
+        tmp_store = ast.Name(id="$arith_tmp", ctx=ast.Store())
+        return ast.IfExp(
+            test=ast.Compare(
+                left=_call(_name("$type"), ast.NamedExpr(
+                    target=tmp_store, value=_call(_name("$deref"), var))),
+                ops=[ast.Is()], comparators=[_name("$int")]),
+            body=_name("$arith_tmp"),
+            orelse=_call(_name("$eval"), _name("$arith_tmp")),
+        )
+    expr = arith_to_ast_expr(term, var_context)
+    if _yields_non_term(term):
+        return expr
+    return _call(_name("$eval"), expr)
 
 
 def _yields_non_term(term: Any) -> bool:
@@ -1575,29 +1595,31 @@ def arith_to_ast_expr(term: Any, var_context: dict[int, str]) -> ast.expr:
                 keywords=[],
             )
 
+    # ``//``, ``%``, ``**`` and unary ``-`` stay native Python operators; an
+    # operand that may be a TERM at runtime (a variable, a literal compound)
+    # is evaluated first through the one evaluable table (``$eval``, ruling
+    # R9) -- it used to meet Python's tuple/dataclass operators and raise a
+    # raw TypeError.  A Python-value operand (a ``++`` escape, a qualified
+    # call) is left as it is, so ``++("%d items") % N`` still formats.
     if isinstance(term, Negate):
-        operand = arith_to_ast_expr(term.operand, var_context)
-        if _yields_non_term(term.operand):
-            return ast.UnaryOp(op=ast.USub(), operand=operand)
-        return ast.Call(func=_name("$neg"), args=[operand], keywords=[])
+        return ast.UnaryOp(op=ast.USub(),
+                           operand=_native_operand(term.operand, var_context))
+    native = _NATIVE_OPS.get(type(term))
+    if native is not None:
+        return ast.BinOp(left=_native_operand(term.left, var_context),
+                         op=native,
+                         right=_native_operand(term.right, var_context))
 
-    # ``+``, ``-``, ``*``, ``/`` always go through their exact helper (a call,
-    # ~30 ns, measured): exactness and Decimal scale live there.  ``//``, ``%``
-    # and ``**`` need their helper only for an operand that may be a TERM at
-    # runtime (a variable, a literal compound): the helper evaluates it through
-    # the one evaluable table (ruling R9).  Between two operands that are
-    # literal numbers or arithmetic sub-trees, the native operator is the
-    # same answer without the call.
+    # ``+``, ``-``, ``*``, ``/`` go through their exact helper (a call, ~30 ns,
+    # measured): exactness, Decimal scale and term-operand evaluation live there.
     for cls, runtime_name in _EXACT_BINOP_NAMES:
         if isinstance(term, cls):
-            left = arith_to_ast_expr(term.left, var_context)
-            right = arith_to_ast_expr(term.right, var_context)
-            native = _NATIVE_OPS.get(cls)
-            if (native is not None and _yields_non_term(term.left)
-                    and _yields_non_term(term.right)):
-                return ast.BinOp(left=left, op=native, right=right)
-            return ast.Call(func=_name(runtime_name), args=[left, right],
-                            keywords=[])
+            return ast.Call(
+                func=_name(runtime_name),
+                args=[arith_to_ast_expr(term.left, var_context),
+                      arith_to_ast_expr(term.right, var_context)],
+                keywords=[],
+            )
 
     # Fallback: treat as a plain term (e.g. a Var holding a number at runtime)
     return term_to_ast_expr(term, var_context)

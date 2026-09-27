@@ -1,10 +1,10 @@
 """Exact arithmetic over the engine's number kinds -- ONE spelling, shared by
 the interpreted evaluator (``clpfd._eval_ground``) and the compiled tree
-(``terms_to_ast.arith_to_ast_expr`` emits ``$add``/``$sub``/``$mul``/``$div``
-and, since ruling R9 of 2026-09-27, ``$floordiv``/``$mod``/``$pow``/``$neg``).
+(``terms_to_ast.arith_to_ast_expr`` emits ``$add``/``$sub``/``$mul``/``$div``).
 It also holds the ONE evaluable functor table (:data:`EVALUABLE`) that the
-operator nodes and the plain arithmetic cells both evaluate through, and
-``eval_/2``'s runtime evaluator (:func:`evaluate`).
+operator nodes and the plain arithmetic cells both evaluate through, and the
+runtime evaluator (:func:`evaluate`, emitted as ``$eval``) for ``eval_/2``'s
+operand and for a term operand of the native ``//``, ``%``, ``**``, ``-``.
 
 Design 2026-09-17 (``docs/superpowers/specs/2026-09-17-rdiv-decimal-arithmetic-design.md``,
 step 2) and the rulings of the same day:

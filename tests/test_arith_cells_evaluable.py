@@ -269,13 +269,17 @@ class TestA2Errors:
             # node itself (X = BitAnd(5, 3)); it is named by its operator
             "e9": "eval_(5 & 3, X)",
             "e10": "(Y == 5, eval_(Y & 3, X))",
+            # CLP(Q)/CLP(R) refuse an atom operand the ISO way
+            "e11": "clpq.rational(X == bar)",
+            "e12": "clpr.real(X == bar)",
         }
         body = "\n".join(f"{n}(X) <- {b}" for n, b in rows.items())
         return _module(tmp, body, [f"{n}(X)" for n in rows], extra="-private([bar])\n")
 
     @pytest.mark.parametrize("name,culprit", [
         ("e1", "foo/1"), ("e4", "bar/0"), ("e5", "foo/1"), ("e8", "foo/1"),
-        ("e6", "foo/1"), ("e7", "foo/1"), ("e9", "&/2"), ("e10", "&/2")])
+        ("e6", "foo/1"), ("e7", "foo/1"), ("e9", "&/2"), ("e10", "&/2"),
+        ("e11", "bar/0"), ("e12", "bar/0")])
     def test_non_evaluable(self, mod, name, culprit):
         text = _error_text(lambda: _answers(mod, name))
         assert _culprit_rendered(culprit) in text, text
@@ -308,6 +312,9 @@ class TestA2Keeps:
             "k11": "(L is [1, 2], eval_(L, X))",
             # a QUALIFIED call is Python's own value, like ++ (roborev job 266)
             "k12": "eval_(os.getcwd(), X)",
+            # a Python-value operand beside a variable keeps the native
+            # operator (roborev job 267)
+            "k13": "(N == 3, eval_(++(\"%d items\") % N, X))",
         }
         body = "\n".join(f"{n}(X) <- {b}" for n, b in rows.items())
         return _module(tmp, body, [f"{n}(X)" for n in rows],
@@ -334,6 +341,7 @@ class TestA2Keeps:
         assert _answers(mod, "k11") == [[1, 2]]
         import os
         assert _answers(mod, "k12") == [os.getcwd()]
+        assert _answers(mod, "k13") == ["3 items"]
 
     def test_exact_number_cell_is_its_number(self, mod):
         from decimal import Decimal
@@ -356,6 +364,29 @@ def test_deep_sum_still_posts():
     for v in vs[1:]:
         e = Add(None, e, v)
     assert fd_eq(e, 5, Trail())
+
+
+def test_clp_posts_after_the_ground_fold_answer_as_before():
+    """The C-accelerated fd_* wrappers go on with the RESOLVED operands once
+    the ground fold has run (roborev job 267): a ground tree beside an
+    unbound variable binds or constrains it exactly as the tree did.
+    Measured identical on main for every row."""
+    from fractions import Fraction
+    from clausal.logic.clpfd import fd_eq, fd_le, fd_lt, fd_ne
+    from clausal.logic.variables import Trail, deref, get_attr, is_var
+    from clausal.pythonic_ast.nodes import Div, Mult
+    for f, e, want in ((fd_eq, Add(None, 1.5, 1), 2.5),
+                       (fd_eq, Div(None, 1, 2), Fraction(1, 2)),
+                       (fd_eq, Div(None, 4, 2), 2),
+                       (fd_eq, Mult(None, 2, Div(None, 1, 3)), Fraction(2, 3))):
+        X = Var()
+        assert f(X, e, Trail())
+        assert deref(X) == want and type(deref(X)) is type(want)
+    for f, e, key in ((fd_lt, Add(None, 0.5, 1), "real"), (fd_le, Div(None, 1, 2), "clpq"),
+                      (fd_ne, Add(None, 1.5, 1), "real")):
+        X = Var()
+        assert f(X, e, Trail())
+        assert is_var(deref(X)) and get_attr(deref(X), key) is not None
 
 
 def test_pow_cell_and_node_post_alike(api_mod):
