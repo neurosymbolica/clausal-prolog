@@ -272,19 +272,29 @@ class TestA2Errors:
             # CLP(Q)/CLP(R) refuse an atom operand the ISO way
             "e11": "clpq.rational(X == bar)",
             "e12": "clpr.real(X == bar)",
+            # a declared term is a cell too (roborev job 268)
+            "e13": "(T is bar2(1), eval_(T, X))",
+            "e14": "eval_(bar2(1) + 1, X)",
+            # a string is the chars carrier; refused, culprit a list
+            "e15": "(S is \"ab\", eval_(S, X))",
+            # an unbound operand of a NATIVE operator
+            "e16": "eval_(Y // 2, X)",
+            "e17": "eval_(-Y, X)",
         }
         body = "\n".join(f"{n}(X) <- {b}" for n, b in rows.items())
-        return _module(tmp, body, [f"{n}(X)" for n in rows], extra="-private([bar])\n")
+        return _module(tmp, body, [f"{n}(X)" for n in rows] + ["bar2(X)"],
+                       extra="-private([bar])\nbar2(1),\n")
 
     @pytest.mark.parametrize("name,culprit", [
         ("e1", "foo/1"), ("e4", "bar/0"), ("e5", "foo/1"), ("e8", "foo/1"),
         ("e6", "foo/1"), ("e7", "foo/1"), ("e9", "&/2"), ("e10", "&/2"),
-        ("e11", "bar/0"), ("e12", "bar/0")])
+        ("e11", "bar/0"), ("e12", "bar/0"), ("e13", "bar2/1"), ("e14", "bar2/1"),
+        ("e15", "'.'/2")])
     def test_non_evaluable(self, mod, name, culprit):
         text = _error_text(lambda: _answers(mod, name))
         assert _culprit_rendered(culprit) in text, text
 
-    @pytest.mark.parametrize("name", ["e2", "e3"])
+    @pytest.mark.parametrize("name", ["e2", "e3", "e16", "e17"])
     def test_unbound_operand_is_instantiation_error(self, mod, name):
         text = _error_text(lambda: _answers(mod, name))
         assert text.startswith("error(instantiation_error"), text
@@ -315,6 +325,8 @@ class TestA2Keeps:
             # a Python-value operand beside a variable keeps the native
             # operator (roborev job 267)
             "k13": "(N == 3, eval_(++(\"%d items\") % N, X))",
+            # two variable operands of native operators, one after the other
+            "k14": "(A == 7, B == 2, eval_(A // B + A ** B - -A + A % B, X))",
         }
         body = "\n".join(f"{n}(X) <- {b}" for n, b in rows.items())
         return _module(tmp, body, [f"{n}(X)" for n in rows],
@@ -342,6 +354,7 @@ class TestA2Keeps:
         import os
         assert _answers(mod, "k12") == [os.getcwd()]
         assert _answers(mod, "k13") == ["3 items"]
+        assert _answers(mod, "k14") == [3 + 49 + 7 + 1]
 
     def test_exact_number_cell_is_its_number(self, mod):
         from decimal import Decimal

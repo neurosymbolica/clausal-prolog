@@ -229,6 +229,7 @@ def key_nodes() -> dict:
 
 _Compound = None
 _Node = None
+_KWTerm = None
 
 
 def cell_key_args(x):
@@ -262,21 +263,24 @@ def node_key_args(x):
 
 def _is_term(x) -> bool:
     """True for a value that is a TERM (and so must be evaluable to be used
-    as a number): an atom, a cell, a ``Compound`` or a pythonic-AST node.
+    as a number): an atom, a cell (a declared term such as ``z(1)`` is one; so
+    is a string, the ``('$chars', Text)`` carrier), a ``Compound``, a
+    ``KWTerm`` or a pythonic-AST node.
     Anything else is a Python value and keeps Python semantics -- including a
     LIST, deliberately: ``eval_`` has always concatenated and repeated Python
     lists (``eval_(L + [3], X)``), and an ISO-strict refusal of lists is a
     separate question from the cells ruling R9 settled."""
     if type(x) is str or type(x) is tuple:
         return True
-    global _Compound, _Node
+    global _Compound, _Node, _KWTerm
     if _Compound is None:
         from clausal.terms import Compound  # noqa: PLC0415
         _Compound = Compound
     if _Node is None:
         from clausal.pythonic_ast.nodes import Node  # noqa: PLC0415
-        _Node = Node
-    return isinstance(x, (_Compound, _Node))
+        from clausal.terms import KWTerm  # noqa: PLC0415
+        _Node, _KWTerm = Node, KWTerm
+    return isinstance(x, (_Compound, _Node, _KWTerm))
 
 
 def not_evaluable(term, context: str = "eval_/2"):

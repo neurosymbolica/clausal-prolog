@@ -50,7 +50,7 @@ Prefer `==` for ordinary relational arithmetic — it works in all directions.
   or an arithmetic term such as `+(1, 2)` built by `unpack/2` (`=..`) or
   `functor/3`. `unpack(T, ['+', 1, 2]), eval_(T, X)` gives `X = 3`.
 - An **unbound** variable raises `instantiation_error`.
-- An **atom** or a **compound that is not evaluable** raises
+- An **atom**, a **string** or a **compound that is not evaluable** raises
   `type_error(evaluable, Name/Arity)` — `eval_(foo(1), X)` raises
   `type_error(evaluable, foo/1)`. Before 2026-09-27 these were handed back
   unevaluated (`X = foo(1)`), a silent wrong answer.

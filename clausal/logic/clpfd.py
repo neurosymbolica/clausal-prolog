@@ -1241,8 +1241,13 @@ def _ensure_term_imports():
     global _Add, _Sub, _Mult, _Div, _FloorDiv, _Mod, _Pow, _Negate, _Node, _Compound
     if _Add is None:
         from clausal.terms import Add, Sub, Mult, Div, FloorDiv, Mod, Pow, Negate, Compound
-        _Compound = Compound
         from clausal.pythonic_ast.nodes import Node
+        # the table views first: ``_Add`` is the "imports done" flag, so it
+        # must not be set while they could still be empty
+        _NODE_KEYS.update(_node_keys())
+        _NODE_OPS.update({cls: (_EVALUABLE[k], k[1] == 2, k in _ZERO_DIVISOR_KEYS)
+                          for cls, k in _NODE_KEYS.items()})
+        _Compound = Compound
         _Add = Add
         _Sub = Sub
         _Mult = Mult
@@ -1252,9 +1257,6 @@ def _ensure_term_imports():
         _Pow = Pow
         _Negate = Negate
         _Node = Node
-        _NODE_KEYS.update(_node_keys())
-        _NODE_OPS.update({cls: (_EVALUABLE[k], k[1] == 2, k in _ZERO_DIVISOR_KEYS)
-                          for cls, k in _NODE_KEYS.items()})
 
 
 # Lazily cached exception machinery (same circular-import caution as above).
