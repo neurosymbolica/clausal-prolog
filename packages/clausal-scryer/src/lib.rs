@@ -263,7 +263,11 @@ fn scryer_term_to_py(py: Python<'_>, term: &ScryerTerm) -> PyResult<PyObject> {
             Ok(PyList::new(py, &items)?.into_any().unbind())
         }
         ScryerTerm::Compound(functor, args) => {
-            // A compound term is the cell (functor, arg1, ..., argN).
+            // A compound term is the cell (functor, arg1, ..., argN); with no
+            // arguments it is the atom (the 1-tuple is reserved).
+            if args.is_empty() {
+                return Ok(functor.into_pyobject(py)?.into_any().unbind());
+            }
             let mut items: Vec<PyObject> = Vec::with_capacity(args.len() + 1);
             items.push(functor.into_pyobject(py)?.into_any().unbind());
             for t in args.iter() {

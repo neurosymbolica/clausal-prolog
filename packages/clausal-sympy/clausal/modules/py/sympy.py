@@ -290,13 +290,13 @@ def _from_sympy(expr: _sp.Expr, ctx: _ConversionContext) -> Any:
             hasattr(sp_fn, "__name__") and type(expr).__name__ == sp_fn.__name__
         ):
             c_args = tuple(_from_sympy(a, ctx) for a in expr.args)
-            return (name, *c_args)
+            return (name, *c_args) if c_args else name   # arity 0: the atom
 
     # Applied function -> cell
     if isinstance(expr, _sp.Function):
         name = type(expr).__name__
         c_args = tuple(_from_sympy(a, ctx) for a in expr.args)
-        return (name, *c_args)
+        return (name, *c_args) if c_args else name   # arity 0: the atom
 
     # Derivative, Integral -> cell representation
     if isinstance(expr, _sp.Derivative):
@@ -1143,7 +1143,7 @@ class _MathFunc:
         self._name = name
 
     def __call__(self, *args):
-        return (self._name, *args)
+        return (self._name, *args) if args else self._name   # arity 0: the atom
 
     def __repr__(self) -> str:
         return self._name

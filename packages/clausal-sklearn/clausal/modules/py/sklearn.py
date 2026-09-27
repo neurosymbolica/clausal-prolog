@@ -150,7 +150,7 @@ class _CVFunc:
         self._name = name
 
     def __call__(self, *args):
-        return (self._name, *args)
+        return (self._name, *args) if args else self._name   # arity 0: the atom
 
     def __repr__(self) -> str:
         return self._name
