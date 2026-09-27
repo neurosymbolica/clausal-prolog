@@ -47,7 +47,7 @@ class TestConstruct:
         with pytest.raises(LogicException) as exc:
             date(2025, 2, 29)          # not a leap year
         err = exc.value.args[0] if exc.value.args else None
-        assert "domain_error" in repr(err) and "2025, 2, 29" in repr(err)
+        assert "domain_error" in err and "date(2025,2,29)" in err
 
     def test_a_wrong_typed_component_is_a_type_error_not_a_domain_error(self):
         """ISO's distinction, and the one a reader needs: a typo in the SHAPE

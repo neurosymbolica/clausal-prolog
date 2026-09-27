@@ -33,7 +33,10 @@ def test_a_module_target_raises_dispatch_target_error():
     assert inner.args[0] == "callable"
     rendered = str(exc)
     assert "DispatchTargetError" in rendered, "the token the downstream gates key on"
-    assert "module 'some.package'" in rendered, "what the goal actually resolved to"
+    assert "module 'some.package'" in term.args[1], "what the goal actually resolved to"
+    # The message prints the term as Scryer would (ruling R2, 2026-09-27): the
+    # context is an atom, so its apostrophes are escaped inside its quotes.
+    assert "module \\'some.package\\'" in rendered
     assert inner.args[1] == "some.package", "the culprit is the module's name"
 
 
@@ -123,4 +126,5 @@ def test_a_compiled_dotted_goal_that_lands_on_a_submodule_raises_it(tmp_path, mo
     with pytest.raises(LogicException) as info:
         list(call("w3_use", Var(), module=mod.__dict__["$module"]))
     assert isinstance(info.value, DispatchTargetError)
-    assert "module 'w3shadowpkg.shadow'" in str(info.value)
+    assert "module 'w3shadowpkg.shadow'" in info.value.term.args[1]
+    assert "module \\'w3shadowpkg.shadow\\'" in str(info.value)

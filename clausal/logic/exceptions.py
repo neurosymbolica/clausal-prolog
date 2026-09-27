@@ -97,12 +97,28 @@ def arith_in_numeric_position_hint(term: Any) -> str | None:
             f"arithmetic term, not a number. {IS_VS_EQ_HINT}")
 
 
+def render_error_term(term: Any) -> str:
+    """The term as Scryer prints an uncaught error: ``writeq`` text with
+    operators, e.g. ``error(type_error(evaluable,foo/0),(is)/2)``.
+
+    Ruling R2 of the Compound retirement (2026-09-27): the message shows the
+    TERM, not the Python object, so it reads the same whether the term is a
+    ``Compound`` or a cell.  Building an exception must never itself raise,
+    so a term the renderer cannot handle falls back to its ``repr``.
+    """
+    try:
+        from clausal.terms import term_writeq
+        return term_writeq(term)
+    except Exception:  # noqa: BLE001 - a message may not out-fail its error
+        return repr(term)
+
+
 class LogicException(Exception):
     """Exception carrying a logic term for throw/catch."""
 
     def __init__(self, term: Any) -> None:
         self.term = term
-        super().__init__(f"Uncaught logic exception: {term!r}")
+        super().__init__(f"Uncaught logic exception: {render_error_term(term)}")
 
     def __str__(self) -> str:
         """The stored message, plus the is/== note when the term earns it.
