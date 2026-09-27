@@ -214,7 +214,7 @@ class ClausalRetiredQuasiQuoteWarning(ClausalDeprecatedSpellingWarning):
     """
 
 
-class ClausalAtomClassDeprecationWarning(DeprecationWarning):
+class ClausalAtomClassDeprecationWarning(ClausalLintWarning):
     """Constructing the boundary class ``clausal.logic.atoms.atom`` (a ``str``
     subclass).  Deprecated 2026-09-27 (dumb seam, step (f)); removed in 2.0.
 
@@ -224,9 +224,13 @@ class ClausalAtomClassDeprecationWarning(DeprecationWarning):
     ``type(v) is str`` or ``clausal.logic.atoms.is_atom(v)`` -- an
     ``isinstance(v, atom)`` test is now simply False for every answer.
 
-    A Python-API deprecation, so a ``DeprecationWarning`` subclass, like
-    ``ClausalStrictAtomsDeprecationWarning``: shown by default in
-    ``__main__`` and under pytest, silenced by default elsewhere.  Emitted
+    VISIBLE BY DEFAULT (operator ruling 2026-09-27): a ``UserWarning``
+    through ``ClausalLintWarning``, the same base as
+    ``ClausalDeprecatedSpellingWarning`` and for the same reason -- a
+    ``DeprecationWarning`` is silenced by default outside ``__main__``, and
+    a deprecation nobody sees is no notice at all.  Suppress it the way the
+    other lints are suppressed: ``warnings.filterwarnings`` on this class.
+    Emitted
     once per CALL SITE (file, line), guarded in ``clausal.logic.atoms`` rather
     than by the warnings registry.  The engine's own leak strips test the
     type and never construct, so they never emit it.  Not the builtin

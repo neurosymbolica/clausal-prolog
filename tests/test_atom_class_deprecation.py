@@ -33,8 +33,35 @@ def _recorded(fn):
 
 
 class TestConstructionWarns:
-    def test_it_is_a_deprecation_warning(self):
-        assert issubclass(ClausalAtomClassDeprecationWarning, DeprecationWarning)
+    def test_it_is_a_visible_user_warning_not_a_deprecation_warning(self):
+        """Operator ruling 2026-09-27: visible by default -- the
+        ClausalDeprecatedSpellingWarning pattern (a ClausalLintWarning, so a
+        UserWarning), not a DeprecationWarning, which Python silences
+        outside __main__."""
+        from clausal.lint_warnings import ClausalLintWarning
+        assert issubclass(ClausalAtomClassDeprecationWarning, ClausalLintWarning)
+        assert issubclass(ClausalAtomClassDeprecationWarning, UserWarning)
+        assert not issubclass(ClausalAtomClassDeprecationWarning, DeprecationWarning)
+
+    def test_shown_by_default_from_library_code(self, tmp_path):
+        """Under the interpreter's DEFAULT filters, a construction in an
+        imported (non-__main__) module is printed -- once for a site hit
+        twice.  A DeprecationWarning here would print nothing."""
+        import os
+        import subprocess
+        import sys
+        (tmp_path / "userlib.py").write_text(
+            "from clausal.logic.atoms import atom\n"
+            "def make():\n"
+            "    return atom('from_a_library')\n")
+        env = {k: v for k, v in os.environ.items() if k not in ("PYTHONWARNINGS",)}
+        env["PYTHONPATH"] = os.pathsep.join([str(tmp_path), str(REPO)])
+        env["PYTHONDONTWRITEBYTECODE"] = "1"
+        r = subprocess.run([sys.executable, "-c", "import userlib; userlib.make(); userlib.make()"],
+                           capture_output=True, text=True, env=env, timeout=120)
+        assert r.returncode == 0, r.stderr
+        assert r.stderr.count("ClausalAtomClassDeprecationWarning") == 1, r.stderr
+        assert "userlib.py:3" in r.stderr, r.stderr
 
     def test_constructing_warns_and_says_what_to_use_instead(self):
         got = _recorded(lambda: atom("permitted"))

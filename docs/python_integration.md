@@ -367,8 +367,11 @@ text on the way in was superseded by the dumb seam on 2026-09-26.)
 atom under the 2026-09-21 design — is **deprecated** as of 2026-09-27 and is
 **removed in 2.0**. The engine no longer hands one out: every answer's atom is
 the plain `str`. Constructing one emits `ClausalAtomClassDeprecationWarning`
-(a `DeprecationWarning` subclass in `clausal.lint_warnings`), once per call
-site. Until 2.0 the class keeps working exactly as before — equality, hashing,
+(in `clausal.lint_warnings`), once per call
+site. It is a `UserWarning` (via `ClausalLintWarning`), not a
+`DeprecationWarning`, so it is **shown by default** in library code too;
+silence it with `warnings.filterwarnings("ignore",
+category=ClausalAtomClassDeprecationWarning)`. Until 2.0 the class keeps working exactly as before — equality, hashing,
 interning and pickling are unchanged — and an instance handed in through
 `++`, a seam's bare name or `solve`/`once`/`call` is still stripped to its
 `str` (the leak rule), without a warning.
