@@ -3,7 +3,6 @@
 Covers:
   - Compound construction and repr
   - Python literals as terms (direct — no wrappers)
-  - list_to_cons / cons_to_list helpers
   - term_str for all term types
   - KWTerm term_str (WK-3)
 """
@@ -18,8 +17,6 @@ from clausal.logic.cells import chars
 from clausal.terms import (
     Compound,
     KWTerm,
-    list_to_cons,
-    cons_to_list,
     term_str,
     term_pformat,
     Var,
@@ -155,73 +152,18 @@ class TestPythonLiteralsAreTerms:
 
 
 
-# ── TestConsHelpers ────────────────────────────────────────────────────────────
+# ── The cons helpers are gone ─────────────────────────────────────────────────
 
 
-class TestConsHelpers:
-    def test_empty_list_to_cons(self):
-        # nv
-        c = list_to_cons([])
-        assert isinstance(c, Compound)
-        assert c.functor == "nil"
-        assert c.args == ()
-
-    def test_single_element(self):
-        # nv
-        c = list_to_cons([42])
-        assert c.functor == "cons"
-        assert c.args[0] == 42
-        assert isinstance(c.args[1], Compound)
-        assert c.args[1].functor == "nil"
-
-    def test_three_elements(self):
-        # nv
-        c = list_to_cons([1, 2, 3])
-        assert c.functor == "cons"
-        assert c.args[0] == 1
-        assert c.args[1].functor == "cons"
-        assert c.args[1].args[0] == 2
-        assert c.args[1].args[1].functor == "cons"
-        assert c.args[1].args[1].args[0] == 3
-        assert c.args[1].args[1].args[1].functor == "nil"
-
-    def test_cons_to_list_empty(self):
-        # nv
-        nil = Compound("nil", ())
-        assert cons_to_list(nil) == []
-
-    def test_cons_to_list_single(self):
-        # nv
-        c = list_to_cons([99])
-        assert cons_to_list(c) == [99]
-
-    def test_roundtrip(self):
-        # nv
-        original = [1, "two", 3.0, None]
-        assert cons_to_list(list_to_cons(original)) == original
-
-    def test_roundtrip_empty(self):
-        # nv
-        assert cons_to_list(list_to_cons([])) == []
-
-    def test_cons_to_list_improper_raises(self):
-        # nv
-        improper = Compound("cons", (1, 2))  # tail is 2, not nil
-        with pytest.raises(ValueError):
-            cons_to_list(improper)
-
-    def test_cons_to_list_non_cons_raises(self):
-        # nv
-        with pytest.raises(ValueError):
-            cons_to_list(Compound("foo", (1,)))
-
-    def test_non_nil_tail_raises(self):
-        # list_to_cons always produces proper lists, but cons_to_list
-        # rejects improper ones
-        # nv
-        improper = Compound("cons", (1, Compound("cons", (2, 3))))
-        with pytest.raises(ValueError):
-            cons_to_list(improper)
+def test_cons_helpers_are_removed():
+    """``list_to_cons`` / ``cons_to_list`` built and read a ``cons``/``nil``
+    chain of ``Compound`` terms, ``nil`` being the non-term ``nil()``.  They
+    were removed with no successor (Compound retirement slice 4, ruling R4):
+    a list is a Python list."""
+    import clausal.terms as T
+    for name in ("list_to_cons", "cons_to_list"):
+        assert not hasattr(T, name), name
+        assert name not in T.__all__, name
 
 
 # ── TestTermStr ────────────────────────────────────────────────────────────────

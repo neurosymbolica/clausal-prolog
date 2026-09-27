@@ -401,7 +401,6 @@ def _as_list(val: Any) -> list:
 
     - Python list → returned as-is.
     - Scalar (Var/AttVar, int, float, Fraction) → wrapped in [val].
-    - Cons-list / SegList → converted via cons_to_list().
     - Anything else → TypeError.
     """
     val = deref(val)
@@ -409,14 +408,9 @@ def _as_list(val: Any) -> list:
         return val
     if is_var(val) or isinstance(val, (int, float, Fraction)):
         return [val]
-    # May be a Clausal cons-list (compound term)
-    try:
-        from clausal.terms import cons_to_list  # type: ignore[attr-defined]
-        return cons_to_list(val)
-    except (ValueError, TypeError):
-        raise TypeError(
-            f"Expected a list, got {type(val).__name__!r}: {val!r}"
-        )
+    raise TypeError(
+        f"Expected a list, got {type(val).__name__!r}: {val!r}"
+    )
 
 
 def in_z3(var_or_list: Any, lo: Any, hi: Any, trail: Trail) -> bool:

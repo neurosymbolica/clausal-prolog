@@ -3143,30 +3143,6 @@ class quantity:  # noqa: N801 -- see the naming note below
 #: any function that uses both.
 Quantity = quantity
 
-def list_to_cons(lst: list) -> object:
-    """Convert a Python list to explicit Prolog-style cons structure.
-
-    list_to_cons([1, 2, 3])  →  Compound("cons", (1, Compound("cons", (2, ...))))
-    """
-    result: object = Compound("nil", ())
-    for elem in reversed(lst):
-        result = Compound("cons", (elem, result))
-    return result
-
-
-def cons_to_list(term: object) -> list:
-    """Convert a Prolog-style cons structure back to a Python list.
-
-    Raises ValueError if term is not a proper nil-terminated cons chain.
-    """
-    result = []
-    while isinstance(term, Compound) and term.functor == "cons" and len(term.args) == 2:
-        result.append(term.args[0])
-        term = term.args[1]
-    if not (isinstance(term, Compound) and term.functor == "nil" and len(term.args) == 0):
-        raise ValueError(f"Not a proper list: {term!r}")
-    return result
-
 
 # ── Kleene truth value: Undefined ─────────────────────────────────────────────
 
@@ -4428,8 +4404,6 @@ __all__ = [
     "get_style",
     "set_style",
     # Helpers
-    "list_to_cons",
-    "cons_to_list",
     "term_str",
     "term_pformat",
     # Canonical (write_canonical/1) rendering and ISO 6.4.2 quoting
