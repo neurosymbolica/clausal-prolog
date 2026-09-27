@@ -567,7 +567,7 @@ class TestDestructiveReuseIntegration:
         T, Out = Var(), Var()
         head = Compound("make", (Out,))
         body = [
-            Evaluate(left=T, right=[1, 2, 3]),
+            Unify(left=T, right=[1, 2, 3]),  # was Evaluate: eval_ of a list now raises type_error(evaluable, '.'/2) (ruling R9 A2)
             Call(func=LoadName(name="append"),
                  args=[T, [4], Out], kwargs=[]),
         ]
@@ -676,7 +676,7 @@ class TestDestructiveReuseIntegration:
         T1, T2, Out = Var(), Var(), Var()
         head = Compound("chain", (Out,))
         body = [
-            Evaluate(left=T1, right=[1, 2]),
+            Unify(left=T1, right=[1, 2]),  # was Evaluate: eval_ of a list now raises type_error(evaluable, '.'/2) (ruling R9 A2)
             Call(func=LoadName(name="append"),
                  args=[T1, ["a"], T2], kwargs=[]),
             Call(func=LoadName(name="append"),
@@ -805,7 +805,7 @@ class TestReverseEligibility:
         T, Out = Var(), Var()
         head = Compound("make", (Out,))
         body = [
-            Evaluate(left=T, right=[1, 2, 3]),
+            Unify(left=T, right=[1, 2, 3]),  # was Evaluate: eval_ of a list now raises type_error(evaluable, '.'/2) (ruling R9 A2)
             Call(func=LoadName(name="reverse"), args=[T, Out], kwargs=[]),
         ]
         db, fn = make_pred("make", 1, [(head, body)])
@@ -854,7 +854,7 @@ class TestSameGoalAlias:
         L, W = Var(), Var()
         head = Compound("is_pal", (W,))
         body = [
-            Evaluate(left=L, right=[1, 2, 3]),
+            Unify(left=L, right=[1, 2, 3]),  # was Evaluate: eval_ of a list now raises type_error(evaluable, '.'/2) (ruling R9 A2)
             Call(func=LoadName(name="reverse"), args=[L, L], kwargs=[]),
         ]
         db, fn = make_pred("is_pal", 1, [(head, body)])

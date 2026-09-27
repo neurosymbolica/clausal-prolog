@@ -1140,9 +1140,22 @@ def in_q(var_or_list: Any, lo: Any = None, hi: Any = None,
 # ── Public API: constraint posting ───────────────────────────────────────────
 
 
+def _cells_as_q_nodes(l: Any, r: Any, context: str) -> tuple:
+    """``(l, r)`` with arithmetic CELLS rewritten as operator nodes, which is
+    what ``_linearize`` walks (ruling R9 A1, 2026-09-27).  An atom or a
+    compound that is not evaluable raises ``type_error(evaluable, F/N)``
+    here: the lineariser could only answer it with a raw Python TypeError
+    ("requires linear constraints"), which is the wrong diagnosis."""
+    from clausal.logic.clpfd import _arith_cells_to_nodes  # noqa: PLC0415
+    cl = _arith_cells_to_nodes(l, context)
+    cr = _arith_cells_to_nodes(r, context)
+    return (l if cl is None else cl), (r if cr is None else cr)
+
+
 def q_eq(l: Any, r: Any, trail: Trail) -> bool:
     """Post l == r as a rational equality constraint."""
     l, r = deref(l), deref(r)
+    l, r = _cells_as_q_nodes(l, r, "(==)/2")   # ruling R9 A1
     if _is_ground_q(l) and _is_ground_q(r):
         return Fraction(l) == Fraction(r)
     # If one side is ground and other is a bare var, use unify for speed
@@ -1182,6 +1195,7 @@ def q_ne(l: Any, r: Any, trail: Trail) -> bool:
     posting time, it's checked immediately.
     """
     l, r = deref(l), deref(r)
+    l, r = _cells_as_q_nodes(l, r, "(!=)/2")   # ruling R9 A1
     if _is_ground_q(l) and _is_ground_q(r):
         return Fraction(l) != Fraction(r)
     _ensure_q_for_expr(l, trail)
@@ -1212,6 +1226,7 @@ def q_ne(l: Any, r: Any, trail: Trail) -> bool:
 def q_le(l: Any, r: Any, trail: Trail) -> bool:
     """Post l <= r as a rational inequality constraint."""
     l, r = deref(l), deref(r)
+    l, r = _cells_as_q_nodes(l, r, "(=<)/2")   # ruling R9 A1
     if _is_ground_q(l) and _is_ground_q(r):
         return Fraction(l) <= Fraction(r)
     _ensure_q_for_expr(l, trail)

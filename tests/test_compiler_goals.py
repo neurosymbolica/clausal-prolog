@@ -203,7 +203,8 @@ class TestArithToAstExpr:
     # (one spelling shared with the interpreted evaluator) rather than to
     # native ``ast.BinOp`` -- so a Decimal operand is exact and a runtime
     # ``7 / 2`` is ``Fraction(7, 2)`` on both paths.  ``//``, ``%``, ``**``
-    # stay native (test_nested_add below covers the Add shape end to end).
+    # have helpers too since ruling R9 (test_nested_add below covers the Add
+    # shape end to end).
     def test_add_gives_exact_helper_call(self):
         # nv
         expr = arith_to_ast_expr(Add(left=1, right=2), {})
@@ -221,11 +222,30 @@ class TestArithToAstExpr:
         expr = arith_to_ast_expr(Mult(left=2, right=3), {})
         assert isinstance(expr, ast.Call) and expr.func.id == "$mul"
 
-    def test_floordiv_stays_a_native_binop(self):
+    def test_floordiv_goes_through_its_helper_for_a_variable_operand(self):
+        # ``//``, ``%``, ``**`` and unary ``-`` were always native Python
+        # operators, so a TERM operand (a variable bound to +(1, 2)) met
+        # Python's tuple operators.  An operand that may be a term at runtime
+        # now goes through the helper (ruling R9); two number literals or
+        # arithmetic sub-trees keep the native operator (the same answer,
+        # without the call).
         # nv
-        from clausal.pythonic_ast.nodes import FloorDiv
-        expr = arith_to_ast_expr(FloorDiv(left=7, right=2), {})
-        assert isinstance(expr, ast.BinOp) and isinstance(expr.op, ast.FloorDiv)
+        from clausal.pythonic_ast.nodes import FloorDiv, Mod, Pow
+        for cls, name, op in ((FloorDiv, "$floordiv", ast.FloorDiv),
+                              (Mod, "$mod", ast.Mod), (Pow, "$pow", ast.Pow)):
+            v = Var()
+            expr = arith_to_ast_expr(cls(left=v, right=2), {v._id: "v"})
+            assert isinstance(expr, ast.Call) and expr.func.id == name
+            expr = arith_to_ast_expr(cls(left=7, right=2), {})
+            assert isinstance(expr, ast.BinOp) and isinstance(expr.op, op)
+            expr = arith_to_ast_expr(cls(left=Add(left=v, right=1), right=2), {v._id: "v"})
+            assert isinstance(expr, ast.BinOp) and isinstance(expr.op, op)
+
+    def test_negate_of_a_variable_goes_through_its_helper(self):
+        # nv
+        v = Var()
+        expr = arith_to_ast_expr(Negate(operand=v), {v._id: "v"})
+        assert isinstance(expr, ast.Call) and expr.func.id == "$neg"
 
     def test_negate(self):
         # nv

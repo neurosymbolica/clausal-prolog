@@ -634,18 +634,30 @@ if _USE_C_ARITH:
 
 # ── Register builtins (C-accelerated if available, else Python) ───────────
 
+def _cell_bound_as_node(bound):
+    """A between/3 bound written as an arithmetic CELL (``+(1, 2)``, built by
+    ``=..`` at runtime) as its operator node, so it evaluates like the node
+    (ruling R9 A1); it used to fail silently.  Anything else is unchanged."""
+    if type(bound) is not int:
+        from clausal.logic.clpfd import _arith_cells_to_nodes  # lazy: clpfd is heavy
+        node = _arith_cells_to_nodes(bound)
+        if node is not None:
+            return node
+    return bound
+
+
 @_builtin("between", 3)
 def _between__3(low, high, x, trail, k):
     # Evaluate expression bounds here, at the dispatch boundary (the same
     # placement as plus/3's A09-F011 guard), so the C fast path and the
     # Python reference implementation see identical already-evaluated ints
     # in both enumeration and check mode.
-    low_d = deref(low)
+    low_d = _cell_bound_as_node(deref(low))
     if isinstance(low_d, ARITH_OPERATOR_TERMS):
         low = _eval_between_bound(low_d)
         if low is None:
             return
-    high_d = deref(high)
+    high_d = _cell_bound_as_node(deref(high))
     if isinstance(high_d, ARITH_OPERATOR_TERMS):
         high = _eval_between_bound(high_d)
         if high is None:

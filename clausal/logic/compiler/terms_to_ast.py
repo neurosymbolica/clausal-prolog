@@ -25,6 +25,9 @@ from fractions import Fraction
 from clausal.logic.exact_arith import (
     exact_add as _exact_add, exact_sub as _exact_sub,
     exact_mul as _exact_mul, exact_div as _exact_div,
+    exact_floordiv as _exact_floordiv, exact_mod as _exact_mod,
+    exact_pow as _exact_pow, exact_neg as _exact_neg,
+    evaluate as _evaluate,
 )
 from typing import Any
 
@@ -749,7 +752,7 @@ def term_to_ast_expr(
     var_context (body-only Vars) are introduced via walrus ``(_vN := Var())``.
 
     when *eval_arith* is True (the default), arithmetic term nodes
-    (Add, Sub, …) are compiled to native Python operators so they evaluate
+    (Add, Sub, …) are compiled to the exact-arithmetic helpers so they evaluate
     at runtime.  when False, they are kept as structural term constructors
     (e.g. ``Add(left=x, right=1)``).
 
@@ -1473,17 +1476,6 @@ def _source_form(term_repr: str) -> str:
 
 # ── Arithmetic term → AST expression ──────────────────────────────────────────
 
-_ARITH_BINOP_MAP: list[tuple[type, ast.operator]] = [
-    (Add,      ast.Add()),
-    (Sub,      ast.Sub()),
-    (Mult,     ast.Mult()),
-    (Div,      ast.Div()),
-    (FloorDiv, ast.FloorDiv()),
-    (Mod,      ast.Mod()),
-    (Pow,      ast.Pow()),
-]
-
-
 def exact_div(l, r):
     """``$exact_div``: a literal int/int Div in compiled arithmetic — exact
     (``3/2`` is ``Fraction(3, 2)``), an integral quotient as int."""
@@ -1506,8 +1498,37 @@ ARITH_RUNTIME_NAMES: dict = {
     "$sub": _exact_sub,
     "$mul": _exact_mul,
     "$div": _exact_div,
+    # Ruling R9 (2026-09-27): ``//``, ``%``, ``**`` and unary ``-`` were
+    # native Python operators, so an operand that was a TERM -- a variable
+    # bound to ``+(1, 2)`` -- met Python's tuple/dataclass operators and
+    # raised a raw TypeError.  They are helpers with the same int fast path
+    # as the four above; a term operand is evaluated through the one table.
+    "$floordiv": _exact_floordiv,
+    "$mod": _exact_mod,
+    "$pow": _exact_pow,
+    "$neg": _exact_neg,
+    # ``eval_/2``'s operand when it is not a literal arithmetic tree: a
+    # variable (evaluated at RUNTIME, whatever it holds) or a literal term
+    # (an atom or a non-evaluable compound raises type_error(evaluable, F/N)).
+    "$eval": _evaluate,
 }
-_EXACT_BINOP_NAMES = ((Add, "$add"), (Sub, "$sub"), (Mult, "$mul"), (Div, "$div"))
+_EXACT_BINOP_NAMES = ((Add, "$add"), (Sub, "$sub"), (Mult, "$mul"), (Div, "$div"),
+                      (FloorDiv, "$floordiv"), (Mod, "$mod"), (Pow, "$pow"))
+_NATIVE_OPS = {FloorDiv: ast.FloorDiv(), Mod: ast.Mod(), Pow: ast.Pow()}
+
+
+def _yields_non_term(term: Any) -> bool:
+    """True when *term*'s compiled arithmetic can only produce a Python value,
+    never a term: a number literal, or an arithmetic sub-tree (whose helpers
+    evaluate any term operand).  A variable, a ``++`` escape or a literal
+    compound may be a term at runtime and is not."""
+    term = deref(term)
+    if is_var(term):
+        return False
+    if isinstance(term, (Add, Sub, Mult, Div, FloorDiv, Mod, Pow, Negate)):
+        return True
+    term = literal_value(term)
+    return isinstance(term, (int, float, Fraction)) and not isinstance(term, bool)
 
 
 def arith_to_ast_expr(term: Any, var_context: dict[int, str]) -> ast.expr:
@@ -1542,28 +1563,28 @@ def arith_to_ast_expr(term: Any, var_context: dict[int, str]) -> ast.expr:
             )
 
     if isinstance(term, Negate):
-        return ast.UnaryOp(
-            op=ast.USub(),
-            operand=arith_to_ast_expr(term.operand, var_context),
-        )
+        operand = arith_to_ast_expr(term.operand, var_context)
+        if _yields_non_term(term.operand):
+            return ast.UnaryOp(op=ast.USub(), operand=operand)
+        return ast.Call(func=_name("$neg"), args=[operand], keywords=[])
 
-    # ``+``, ``-``, ``*``, ``/`` go through the exact helpers (a call, ~30 ns,
-    # measured); ``//``, ``%``, ``**`` stay native Python operators.
+    # ``+``, ``-``, ``*``, ``/`` always go through their exact helper (a call,
+    # ~30 ns, measured): exactness and Decimal scale live there.  ``//``, ``%``
+    # and ``**`` need their helper only for an operand that may be a TERM at
+    # runtime (a variable, a literal compound): the helper evaluates it through
+    # the one evaluable table (ruling R9).  Between two operands that are
+    # literal numbers or arithmetic sub-trees, the native operator is the
+    # same answer without the call.
     for cls, runtime_name in _EXACT_BINOP_NAMES:
         if isinstance(term, cls):
-            return ast.Call(
-                func=_name(runtime_name),
-                args=[arith_to_ast_expr(term.left, var_context),
-                      arith_to_ast_expr(term.right, var_context)],
-                keywords=[],
-            )
-    for cls, ast_op in _ARITH_BINOP_MAP:
-        if isinstance(term, cls):
-            return ast.BinOp(
-                left=arith_to_ast_expr(term.left, var_context),
-                op=ast_op,
-                right=arith_to_ast_expr(term.right, var_context),
-            )
+            left = arith_to_ast_expr(term.left, var_context)
+            right = arith_to_ast_expr(term.right, var_context)
+            native = _NATIVE_OPS.get(cls)
+            if (native is not None and _yields_non_term(term.left)
+                    and _yields_non_term(term.right)):
+                return ast.BinOp(left=left, op=native, right=right)
+            return ast.Call(func=_name(runtime_name), args=[left, right],
+                            keywords=[])
 
     # Fallback: treat as a plain term (e.g. a Var holding a number at runtime)
     return term_to_ast_expr(term, var_context)

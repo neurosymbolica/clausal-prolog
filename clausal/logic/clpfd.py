@@ -34,7 +34,9 @@ from fractions import Fraction
 from typing import Any
 
 from clausal.logic.atoms import is_atom, mint, spelling
-from clausal.logic.exact_arith import exact_add, exact_sub, exact_mul, exact_div
+from clausal.logic.exact_arith import EVALUABLE as _EVALUABLE, ZERO_DIVISOR_KEYS as _ZERO_DIVISOR_KEYS
+from clausal.logic.exact_arith import cell_key_args as _cell_key_args, node_keys as _node_keys
+from clausal.logic.exact_arith import key_nodes as _key_nodes, not_evaluable as _not_evaluable
 from clausal.logic.variables import (
     present_number,
     exact_cell_number,
@@ -1225,13 +1227,21 @@ class CircuitConstraint(Constraint):
 
 # Import term node types lazily to avoid circular imports
 _Add = _Sub = _Mult = _Div = _FloorDiv = _Mod = _Pow = _Negate = None
+#: ``{operator node class: evaluable-table key}`` (exact_arith.node_keys),
+#: filled with the node imports below.
+_NODE_KEYS: dict = {}
+#: ``{node class: (table entry, binary?, screens a zero divisor?)}`` -- the
+#: same table, pre-resolved for _eval_ground's hot path.
+_NODE_OPS: dict = {}
 _Node = None
+_Compound = None
 
 
 def _ensure_term_imports():
-    global _Add, _Sub, _Mult, _Div, _FloorDiv, _Mod, _Pow, _Negate, _Node
+    global _Add, _Sub, _Mult, _Div, _FloorDiv, _Mod, _Pow, _Negate, _Node, _Compound
     if _Add is None:
-        from clausal.terms import Add, Sub, Mult, Div, FloorDiv, Mod, Pow, Negate
+        from clausal.terms import Add, Sub, Mult, Div, FloorDiv, Mod, Pow, Negate, Compound
+        _Compound = Compound
         from clausal.pythonic_ast.nodes import Node
         _Add = Add
         _Sub = Sub
@@ -1242,6 +1252,9 @@ def _ensure_term_imports():
         _Pow = Pow
         _Negate = Negate
         _Node = Node
+        _NODE_KEYS.update(_node_keys())
+        _NODE_OPS.update({cls: (_EVALUABLE[k], k[1] == 2, k in _ZERO_DIVISOR_KEYS)
+                          for cls, k in _NODE_KEYS.items()})
 
 
 # Lazily cached exception machinery (same circular-import caution as above).
@@ -1460,66 +1473,44 @@ def _eval_ground(expr):
             return None  # bools are deliberately not FD numbers; keep pending
         # An exact-number CELL (the transfer form of a Fraction or a Decimal,
         # RULED 2026-09-17) evaluates as the number it denotes: an ``rdiv``
-        # cell is its Fraction and is accepted above on re-entry; a
-        # ``decimal`` cell becomes its Decimal, which this evaluator still
-        # REFUSES -- loudly, through the same leaf error as the object --
-        # until the arithmetic half lands (design 2026-09-17 §3, step 2).
-        # A look-alike stays a compound and raises like any other leaf.
+        # cell is its Fraction and a ``decimal`` cell its Decimal, both
+        # accepted above on re-entry.  A look-alike stays a compound.
         num = exact_cell_number(expr)
         if num is not None:
             return _eval_ground(num)
-        raise _unknown_expr_leaf_error(expr)
-    # The four exact operators are ONE spelling shared with the compiled
-    # tree (``exact_arith``): Decimal +,-,* exact and scale-keeping, ``/``
-    # rational over any exact operand, a float beside a Decimal refused.
-    if isinstance(expr, _Add):
-        l = _eval_ground(expr.left)
-        r = _eval_ground(expr.right)
-        if l is None or r is None:
-            return None
-        result = exact_add(l, r)
-    elif isinstance(expr, _Sub):
-        l = _eval_ground(expr.left)
-        r = _eval_ground(expr.right)
-        if l is None or r is None:
-            return None
-        result = exact_sub(l, r)
-    elif isinstance(expr, _Mult):
-        l = _eval_ground(expr.left)
-        r = _eval_ground(expr.right)
-        if l is None or r is None:
-            return None
-        result = exact_mul(l, r)
-    elif isinstance(expr, _Div):
-        l = _eval_ground(expr.left)
-        r = _eval_ground(expr.right)
-        if l is None or r is None or r == 0:
-            return None
-        result = exact_div(l, r)
-    elif isinstance(expr, _FloorDiv):
-        l = _eval_ground(expr.left)
-        r = _eval_ground(expr.right)
-        if l is None or r is None or r == 0:
-            return None
-        result = l // r
-    elif isinstance(expr, _Mod):
-        l = _eval_ground(expr.left)
-        r = _eval_ground(expr.right)
-        if l is None or r is None or r == 0:
-            return None
-        result = l % r
-    elif isinstance(expr, _Pow):
-        l = _eval_ground(expr.left)
-        r = _eval_ground(expr.right)
-        if l is None or r is None:
-            return None
-        result = l ** r
-    elif isinstance(expr, _Negate):
-        o = _eval_ground(expr.operand)
-        if o is None:
-            return None
-        result = -o
+        # An arithmetic CELL -- ``('+', 1, 2)``, as ``=..``/``functor/3``
+        # build at runtime -- evaluates through the SAME table as the node
+        # arms below (ruling R9 A1, 2026-09-27).  A compound whose
+        # ``name/arity`` is not in the table is the leaf error, as before.
+        ka = _cell_key_args(expr)
+        fn = _EVALUABLE.get(ka[0]) if ka is not None else None
+        if fn is None:
+            raise _unknown_expr_leaf_error(expr)
+        result = _apply_evaluable(ka[0], fn, ka[1])
     else:
+        # An operator NODE: its table key (``node_keys``), then the one
+        # table.  A node the table does not know (``UnaryPlus``, the bitwise
+        # nodes, ...) stays "not evaluable yet" (None), as it always was.
+        op = _NODE_OPS.get(type(expr))
+        if op is None:
+            return None
+        # (inlined _apply_evaluable: this is the hot path of is/2 and of
+        # every ground fold in the CLP posts)
+        fn, binary, screens_zero = op
+        if binary:
+            l = _eval_ground(expr.left)
+            r = _eval_ground(expr.right)
+            if l is None or r is None:
+                return None
+            if screens_zero and r == 0:
+                return None
+            result = fn(l, r)
+        else:
+            o = _eval_ground(expr.operand)
+            if o is None:
+                return None
+            result = fn(o)
+    if result is None:
         return None
     # The single choke point for "no evaluated expression yields an integral
     # Fraction": ``int/int`` is exact (``3/2`` is ``Fraction(3, 2)``, never
@@ -1537,6 +1528,102 @@ def _eval_ground(expr):
     if type(result) is Fraction or type(result) is Decimal:
         return present_number(result)
     return result
+
+
+def _apply_evaluable(key, fn, args):
+    """Apply one evaluable-table entry to its evaluated *args*.
+
+    None when an argument is still unbound, or -- as the node arms always
+    answered -- when the divisor of ``/``, ``div`` or ``mod`` is zero.  Every
+    argument is evaluated before that check, so a garbage leaf on either
+    side raises whatever the other side holds."""
+    if len(args) == 1:
+        o = _eval_ground(args[0])
+        if o is None:
+            return None
+        return fn(o)
+    l = _eval_ground(args[0])
+    r = _eval_ground(args[1])
+    if l is None or r is None:
+        return None
+    if r == 0 and key in _ZERO_DIVISOR_KEYS:
+        return None
+    return fn(l, r)
+
+
+def _arith_cells_to_nodes(x, strict=None):
+    """*x* with every arithmetic CELL rewritten as its operator node, or None
+    when *x* holds none (the common case: nothing is allocated).
+
+    The CLP posts -- ``==``/``!=``/``<``/``=<`` over CLP(FD), CLP(Q) and
+    CLP(R), and ``between/3``'s bounds -- walk operator NODES (linearising,
+    bounds, residual constraints over unbound variables), so an arithmetic
+    cell such as ``+(X, 2)`` built by ``=..`` at runtime was invisible to
+    them: silently unposted, or a raw TypeError.  Rewriting it at the post
+    boundary through the SAME table as the evaluator (``exact_arith``'s
+    ``EVALUABLE``, whose keys map back to node classes) gives the cell the
+    node's semantics without teaching every walker a second spelling (ruling
+    R9 A1, 2026-09-27).  Bound variables inside a rewritten subtree are
+    replaced by their values; an untouched subtree is returned as is.
+
+    A compound that is NOT evaluable is left alone, so each post keeps its
+    own diagnosis -- unless *strict* is a context string: then an atom or a
+    non-evaluable compound raises ``type_error(evaluable, Name/Arity)``
+    (CLP(Q)/CLP(R), whose linearisers had no diagnosis of their own).
+    """
+    x = deref(x)
+    t = type(x)
+    if t is int or t is float:
+        return None
+    if _Add is None:
+        _ensure_term_imports()
+    key = _NODE_KEYS.get(t)
+    if key is not None:
+        if key[1] == 1:
+            o = _child_cells_to_nodes(x.operand, strict)
+            return None if o is None else t(operand=o)
+        lc = _child_cells_to_nodes(x.left, strict)
+        rc = _child_cells_to_nodes(x.right, strict)
+        if lc is None and rc is None:
+            return None
+        return t(left=x.left if lc is None else lc,
+                 right=x.right if rc is None else rc)
+    if is_var(x) or exact_cell_number(x) is not None:
+        return None
+    ka = _cell_key_args(x)
+    if ka is not None and ka[0] in _EVALUABLE:
+        args = []
+        for a in ka[1]:
+            c = _arith_cells_to_nodes(a, strict)
+            args.append(deref(a) if c is None else c)
+        cls = _key_nodes()[ka[0]]
+        if len(args) == 1:
+            return cls(operand=args[0])
+        return cls(left=args[0], right=args[1])
+    if strict is not None and (ka is not None or t is str):
+        raise _not_evaluable(x, strict)
+    return None
+
+
+def _child_cells_to_nodes(a, strict):
+    """_arith_cells_to_nodes for one operand, with the common leaves -- a
+    number, an unbound variable -- answered without a recursive call (this
+    runs on every CLP post that reaches the solver)."""
+    ta = type(a)
+    if ta is int or ta is float:
+        return None
+    a = deref(a)
+    ta = type(a)
+    if ta is int or ta is float or is_var(a):
+        return None
+    return _arith_cells_to_nodes(a, strict)
+
+
+def _cells_as_nodes(l, r):
+    """``(l, r)`` with arithmetic cells rewritten (see _arith_cells_to_nodes)."""
+    cl = _child_cells_to_nodes(l, None)
+    cr = _child_cells_to_nodes(r, None)
+    return (l if cl is None else cl), (r if cr is None else cr)
 
 
 # ── Variable collection ──────────────────────────────────────────────────────
@@ -1793,6 +1880,13 @@ def _resolve(x):
         val = _eval_ground(x)
         if val is not None:
             return val
+    if type(x) is tuple or isinstance(x, _Compound):
+        # an arithmetic CELL (ruling R9 A1): ground, it folds like its node
+        ka = _cell_key_args(x)
+        if ka is not None and ka[0] in _EVALUABLE:
+            val = _eval_ground(x)
+            if val is not None:
+                return val
     return x
 
 
@@ -2042,6 +2136,9 @@ def fd_eq(l, r, trail: Trail, *, _units_done: bool = False) -> bool:
         r = _resolve(r)
     if _ground_number_pair(l, r):
         return l == r
+    # ruling R9 A1: an arithmetic CELL (``+(X, 2)`` built by ``=..``) posts
+    # as its operator node -- every walker below reads nodes
+    l, r = _cells_as_nodes(l, r)
     _check_no_mixed_rational_real(l, r)
     # A12-F002: a ground non-numeric operand against a Var made a broken FD
     # var (one that equals anything EXCEPT the operand). Reject it as a
@@ -2106,6 +2203,9 @@ def fd_ne(l, r, trail: Trail, *, _units_done: bool = False) -> bool:
         r = _resolve(r)
     if _ground_number_pair(l, r):
         return l != r
+    # ruling R9 A1: an arithmetic CELL (``+(X, 2)`` built by ``=..``) posts
+    # as its operator node -- every walker below reads nodes
+    l, r = _cells_as_nodes(l, r)
     _check_no_mixed_rational_real(l, r)
     # A ground non-numeric operand against a Var made the same broken var as
     # == (A12-F002 family): the NeConstraint's hook rejects every non-integer
@@ -2146,6 +2246,9 @@ def fd_lt(l, r, trail: Trail, *, _units_done: bool = False) -> bool:
         r = _resolve(r)
     if _ground_number_pair(l, r):
         return l < r
+    # ruling R9 A1: an arithmetic CELL (``+(X, 2)`` built by ``=..``) posts
+    # as its operator node -- every walker below reads nodes
+    l, r = _cells_as_nodes(l, r)
     _check_no_mixed_rational_real(l, r)
     # BEFORE the CLP(Q)/CLP(R) dispatch, not after: a var carrying a
     # rational/real attribute triggers the dispatch on its own, and q_lt /
@@ -2192,6 +2295,9 @@ def fd_le(l, r, trail: Trail, *, _units_done: bool = False) -> bool:
         r = _resolve(r)
     if _ground_number_pair(l, r):
         return l <= r
+    # ruling R9 A1: an arithmetic CELL (``+(X, 2)`` built by ``=..``) posts
+    # as its operator node -- every walker below reads nodes
+    l, r = _cells_as_nodes(l, r)
     _check_no_mixed_rational_real(l, r)
     # Guard before the dispatch, matching fd_lt and the C wrapper.
     _reject_nonnumeric_order(l, r, "(=<)/2")
@@ -3598,6 +3704,10 @@ if _USE_C_PROPAGATE:
         _dl, _dr = _resolve(deref(l)), _resolve(deref(r))
         if _ground_number_pair(_dl, _dr):
             return _dl == _dr
+        # ruling R9 A1: go on with the resolved operands (a ground cell has
+        # folded to its number) and any arithmetic cell left as its node,
+        # exactly as the Python twin does
+        l, r = _cells_as_nodes(_dl, _dr)
         # A12-F002: the C fd_eq does not type-check operands, so guard here
         # (cheap: only touches the two derefs) before delegating.
         _reject_nonnumeric_eq(l, r)
@@ -3625,6 +3735,10 @@ if _USE_C_PROPAGATE:
         _dl, _dr = _resolve(deref(l)), _resolve(deref(r))
         if _ground_number_pair(_dl, _dr):
             return _dl != _dr
+        # ruling R9 A1: go on with the resolved operands (a ground cell has
+        # folded to its number) and any arithmetic cell left as its node,
+        # exactly as the Python twin does
+        l, r = _cells_as_nodes(_dl, _dr)
         # Same broken-var guard as fd_eq above; the C impl posts unchecked.
         _reject_nonnumeric_eq(l, r, "(!=)/2")
         _eq = _text_list_eq(deref(l), deref(r))
@@ -3648,6 +3762,10 @@ if _USE_C_PROPAGATE:
         _dl, _dr = _resolve(deref(l)), _resolve(deref(r))
         if _ground_number_pair(_dl, _dr):
             return _dl < _dr
+        # ruling R9 A1: go on with the resolved operands (a ground cell has
+        # folded to its number) and any arithmetic cell left as its node,
+        # exactly as the Python twin does
+        l, r = _cells_as_nodes(_dl, _dr)
         # The C fd_lt does no clean type-checking: an incomparable ground
         # comparison escapes as a raw Python TypeError. Convert those to a
         # catchable type_error, while preserving the legitimate mixed
@@ -3681,6 +3799,10 @@ if _USE_C_PROPAGATE:
         _dl, _dr = _resolve(deref(l)), _resolve(deref(r))
         if _ground_number_pair(_dl, _dr):
             return _dl <= _dr
+        # ruling R9 A1: go on with the resolved operands (a ground cell has
+        # folded to its number) and any arithmetic cell left as its node,
+        # exactly as the Python twin does
+        l, r = _cells_as_nodes(_dl, _dr)
         _reject_nonnumeric_order(l, r, "(=<)/2")
         try:
             return _c_impl(l, r, trail)

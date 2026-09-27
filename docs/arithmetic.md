@@ -36,15 +36,28 @@ Supported operators: `+`, `-`, `*`, `/`, `//` (integer division), `%` (modulo),
 
 ### eval_/2 — eager evaluation
 
-`eval_(EXPR, RESULT)` evaluates `EXPR` immediately with Python semantics and
-unifies the value with `RESULT` (Prolog's `is/2`):
+`eval_(EXPR, RESULT)` evaluates `EXPR` immediately and unifies the value with
+`RESULT` (Prolog's `is/2`):
 
 ```clausal
 test("eval") <- (eval_(6 * 7, X), X == 42)
 ```
 
 Prefer `==` for ordinary relational arithmetic — it works in all directions.
-Reach for `eval_/2` when you specifically need *eager Python evaluation*:
+`EXPR` is evaluated the way ISO `is/2` evaluates:
+
+- A **variable** is evaluated at runtime, whatever it is bound to — a number,
+  or an arithmetic term such as `+(1, 2)` built by `unpack/2` (`=..`) or
+  `functor/3`. `unpack(T, ['+', 1, 2]), eval_(T, X)` gives `X = 3`.
+- An **unbound** variable raises `instantiation_error`.
+- An **atom**, a **list**, or a **compound that is not evaluable** raises
+  `type_error(evaluable, Name/Arity)` — `eval_(foo(1), X)` raises
+  `type_error(evaluable, foo/1)`. Before 2026-09-27 these were handed back
+  unevaluated (`X = foo(1)`), a silent wrong answer.
+- A Python value that is not a term — a [`Quantity`](units.md), a `date`, the
+  result of a `++` escape — keeps Python's own operators, as before.
+
+Reach for `eval_/2` when you specifically need *eager* evaluation:
 
 - **Unit-carrying values** — `eval_(20(metre), D)`, `eval_(D / T, V)`; CLP
   constraints don't operate on [`Quantity`](units.md) objects.
@@ -59,9 +72,34 @@ Choosing an arithmetic idiom:
 | Goal | Use |
 |---|---|
 | Relational arithmetic, any direction | `X == EXPR` |
-| Eager Python-semantics arithmetic | `eval_(EXPR, X)` |
+| Eager arithmetic (Prolog `is/2`) | `eval_(EXPR, X)` |
 | Structural unification (no evaluation) | `X is TERM` |
 | Arbitrary Python expression | `X is ++(PYEXPR)` |
+
+### Arithmetic terms built at runtime — the evaluable table
+
+Arithmetic written in source (`1 + 2`) and arithmetic built as a term at
+runtime (`unpack(T, ['+', 1, 2])`) evaluate through **one** table, keyed by
+name and arity. `eval_/2`, the ISO `'is'`/`'=:='`/`'<'`… builtins, `==`/`!=`/
+`<`/`<=` (CLP(ℤ)), `clpq.rational/1`, `clpr.real/1` and `between/3` all accept
+both spellings. The table is closed — there is no way to register a new
+evaluable functor:
+
+| Term | Source spelling | Meaning |
+|---|---|---|
+| `+(A, B)`, `-(A, B)`, `*(A, B)` | `A + B`, `A - B`, `A * B` | exact (a `Decimal` keeps its scale) |
+| `/(A, B)` | `A / B` | exact division: `7 / 2` is the rational 7/2 |
+| `div(A, B)` | `A // B` | division rounded toward negative infinity |
+| `mod(A, B)` | `A % B` | modulo, sign of the divisor |
+| `**(A, B)` | `A ** B` | power: `2 ** 3` is the integer 8 |
+| `-(A)` | `-A` | negation |
+
+The ISO spelling `//(A, B)` is **not** in the table: ISO `//` rounds toward
+zero in Scryer and SWI, while Clausal's `//` floors, so a term `//(-7, 2)`
+raises `type_error(evaluable, (//)/2)` instead of answering -4 where Scryer
+answers -3. Use `div` (floored) or `prolog.TruncDiv` (toward zero). The
+exact-number terms `rdiv(N, D)` and `decimal(M, S)` evaluate as the number they
+denote.
 
 ### Comparison operators
 
@@ -232,8 +270,8 @@ test("digit sum") <- digit_sum(123, 6)
 ## Gotchas
 
 - **`==` posts a constraint** — `X == 3 + 4` constrains X to 7 and works even
-  when X is unbound. Use `eval_/2` only when you need eager Python-side
-  evaluation (units, catchable exceptions, accumulator recursion), and
+  when X is unbound. Use `eval_/2` only when you need eager evaluation
+  (units, catchable exceptions, accumulator recursion), and
   [`++`](python_integration.md) for arbitrary Python such as string operations.
 - **Both sides of comparisons must be ground** — `X > 3` fails if `X` is
   unbound. Use [CLP(ℤ)](constraints.md) for constraints over unbound variables.

@@ -363,7 +363,7 @@ sendmoney_fast(S, E, N, D, M, O, R, Y) <- (
 
 `==` with unbound variables posts a CLP(ℤ) constraint. The equation is normalised to a `ScalarProductConstraint` and propagated via AC-3 before the first value is tried. This reduces the effective search space from ~40,000 to a handful of candidates, cutting solve time by ~70×.
 
-**Rule of thumb:** use `==` for arithmetic — it posts constraints that propagate before labeling. Reserve `eval_/2` for eager Python-semantics evaluation, and `is` with `++` for [Python interop](python_integration.md) (e.g., string operations).
+**Rule of thumb:** use `==` for arithmetic — it posts constraints that propagate before labeling. Reserve `eval_/2` for eager evaluation (Prolog `is/2`), and `is` with `++` for [Python interop](python_integration.md) (e.g., string operations).
 
 ??? example "Python API"
 

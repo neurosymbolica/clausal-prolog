@@ -110,6 +110,24 @@ _CONST_SET_MIN_ELEMENTS = 2
 _CONST_SET_LITERALS = (int, float, bool, complex, str, bytes, Fraction)
 
 
+
+def _needs_runtime_eval(expr) -> bool:
+    """True when ``eval_``'s operand is not a literal arithmetic tree or a
+    number, so what it denotes is only known at runtime: a variable, or a
+    literal term (an atom, a compound).  A ``++`` escape (``PyThunk``) is
+    Python's own value and keeps Python semantics, unevaluated."""
+    from clausal.terms import (  # noqa: PLC0415
+        Add, Sub, Mult, Div, FloorDiv, Mod, Pow, Negate, PyThunk)
+    e = deref(expr)
+    if is_var(e):
+        return True
+    if isinstance(e, (Add, Sub, Mult, Div, FloorDiv, Mod, Pow, Negate, PyThunk)):
+        return False
+    e = literal_value(e)
+    if isinstance(e, (int, float, Fraction)) and not isinstance(e, bool):
+        return False
+    return True
+
 def _is_const_element(term) -> bool:
     """True if *term* is a scalar literal, a zero-arity atom, or a global name.
 
@@ -415,7 +433,14 @@ def _lower_shared_body(
             l_expr = term_to_ast_expr(l, var_context)
             # ``$present``: an integral Fraction produced anywhere in the
             # compiled tree is handed to unify as an int (predicate.py).
-            r_expr = _call(_name("$present"), arith_to_ast_expr(r, var_context))
+            r_expr = arith_to_ast_expr(r, var_context)
+            if _needs_runtime_eval(r):
+                # Ruling R9 A2 (2026-09-27): an operand that is not a literal
+                # arithmetic tree -- a VARIABLE, whatever it is bound to at
+                # runtime, or a literal term -- is evaluated through the one
+                # evaluable table; it used to be unified unevaluated.
+                r_expr = _call(_name("$eval"), r_expr)
+            r_expr = _call(_name("$present"), r_expr)
             return [
                 _assign_mark(mark, trail_name),
                 _if(_call(_name("$unify"), l_expr, r_expr, _name(trail_name)), k_stmts),
