@@ -212,11 +212,12 @@ def node_keys() -> dict:
     if not _NODE_KEYS:
         from clausal.pythonic_ast.nodes import (  # noqa: PLC0415
             Add, Div, FloorDiv, Mod, Mult, Negate, Pow, Sub)
-        _NODE_KEYS.update({
-            Add: ("+", 2), Sub: ("-", 2), Mult: ("*", 2), Div: ("/", 2),
-            FloorDiv: ("div", 2), Mod: ("mod", 2), Pow: ("**", 2),
-            Negate: ("-", 1)})
-        _KEY_NODES.update({k: c for c, k in _NODE_KEYS.items()})
+        keys = {Add: ("+", 2), Sub: ("-", 2), Mult: ("*", 2), Div: ("/", 2),
+                FloorDiv: ("div", 2), Mod: ("mod", 2), Pow: ("**", 2),
+                Negate: ("-", 1)}
+        # the inverse first: _NODE_KEYS non-empty is the "filled" flag
+        _KEY_NODES.update({k: c for c, k in keys.items()})
+        _NODE_KEYS.update(keys)
     return _NODE_KEYS
 
 

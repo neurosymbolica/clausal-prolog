@@ -1544,9 +1544,9 @@ def _yields_non_term(term: Any) -> bool:
     call (``math.sqrt(X)``, ``prolog.TruncDiv(A, B)``) -- the last two are
     Python's own values and keep Python's operators and results, as before
     (``++("%d") % 5`` formats).  A variable, or a literal compound such as a
-    bare-name ``foo(1)``, may be a term at runtime and is not (a bare-name
-    Python builtin is not callable there: ``eval_(str(5), X)`` is a NameError,
-    ``Predicate 'str/1' is not in scope as a term class``, on main as here).  The ONE answer to "is this eval_ operand a Python
+    bare-name ``foo(1)``, may be a term at runtime and is not.  (A bare-name
+    Python builtin is not callable there: ``eval_(str(5), X)`` is a
+    NameError, "Predicate 'str/1' is not in scope as a term class".)  The ONE answer to "is this eval_ operand a Python
     value?" -- ``_lower_goalop_shared`` wraps exactly the others in ``$eval``."""
     term = deref(term)
     if is_var(term):

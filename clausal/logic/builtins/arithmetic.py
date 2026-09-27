@@ -634,12 +634,18 @@ if _USE_C_ARITH:
 
 # ── Register builtins (C-accelerated if available, else Python) ───────────
 
+_arith_cells_to_nodes = None
+
+
 def _cell_bound_as_node(bound):
     """A between/3 bound written as an arithmetic CELL (``+(1, 2)``, built by
     ``=..`` at runtime) as its operator node, so it evaluates like the node
     (ruling R9 A1); it used to fail silently.  Anything else is unchanged."""
+    global _arith_cells_to_nodes
     if type(bound) is not int:
-        from clausal.logic.clpfd import _arith_cells_to_nodes  # lazy: clpfd is heavy
+        if _arith_cells_to_nodes is None:
+            from clausal.logic.clpfd import _arith_cells_to_nodes as f  # lazy: clpfd is heavy
+            _arith_cells_to_nodes = f
         node = _arith_cells_to_nodes(bound)
         if node is not None:
             return node

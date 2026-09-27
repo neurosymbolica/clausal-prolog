@@ -1151,6 +1151,11 @@ def _cells_as_nodes(l, r, context):
     return impl(l, r, context)
 
 
+def _cell_as_node(expr: Any, context: str) -> Any:
+    """One operand's :func:`_cells_as_nodes` -- an objective or a bound."""
+    return _cells_as_nodes(expr, 0, context)[0]
+
+
 def q_eq(l: Any, r: Any, trail: Trail) -> bool:
     """Post l == r as a rational equality constraint."""
     l, r = deref(l), deref(r)
@@ -1277,6 +1282,7 @@ def sup(expr: Any, result_var: Any, trail: Trail) -> bool:
     the bound.  Useful for testing entailment and computing ranges.
     """
     expr = deref(expr)
+    expr = _cell_as_node(expr, "sup/2")   # ruling R9 A1: a cell objective is its node
     result_var = deref(result_var)
     lc = _linearize(expr, trail)
     if lc is None:
@@ -1297,6 +1303,7 @@ def inf(expr: Any, result_var: Any, trail: Trail) -> bool:
     the bound.
     """
     expr = deref(expr)
+    expr = _cell_as_node(expr, "inf/2")   # ruling R9 A1: a cell objective is its node
     result_var = deref(result_var)
     lc = _linearize(expr, trail)
     if lc is None:
@@ -1320,6 +1327,7 @@ def entailed(constraint_type: str, l: Any, r: Any, trail: Trail) -> bool:
     otherwise.  Does not modify the constraint store.
     """
     l, r = deref(l), deref(r)
+    l, r = _cells_as_nodes(l, r, "entailed/1")   # ruling R9 A1
     # Do NOT call _ensure_q_for_expr — entailed must be read-only.
     # If variables aren't in the Q domain, linearize will still work
     # (it just uses var._id as the key), but optimize won't know about
@@ -1411,6 +1419,7 @@ def maximize(expr: Any, result_var: Any, trail: Trail) -> bool:
     constrained variables to their optimal assignments.
     """
     expr = deref(expr)
+    expr = _cell_as_node(expr, "maximize/2")   # ruling R9 A1: a cell objective is its node
     result_var = deref(result_var)
     lc = _linearize(expr, trail)
     if lc is None:
@@ -1433,6 +1442,7 @@ def minimize(expr: Any, result_var: Any, trail: Trail) -> bool:
     constrained variables to their optimal assignments.
     """
     expr = deref(expr)
+    expr = _cell_as_node(expr, "minimize/2")   # ruling R9 A1: a cell objective is its node
     result_var = deref(result_var)
     lc = _linearize(expr, trail)
     if lc is None:
@@ -1627,6 +1637,7 @@ def bb_inf(int_vars: list, expr: Any, result_var: Any,
     integer variable.
     """
     expr = deref(expr)
+    expr = _cell_as_node(expr, "bb_inf/3")   # ruling R9 A1: a cell objective is its node
     result_var = deref(result_var)
     int_ids = set()
     for v in int_vars:

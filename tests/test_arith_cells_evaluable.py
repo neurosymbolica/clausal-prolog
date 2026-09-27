@@ -200,6 +200,10 @@ _SRC_ROWS = {
     # exactly as the node spelling between(1, Y + 1, X) and a bare Y
     "b1": ("(unpack(T, ['+', Y, 1]), between(1, T, X))", []),
     "b2": ("between(1, Y + 1, X)", []),
+    # CLP(Q) objectives and entailment take a cell too (roborev job 271)
+    "o1": ("(unpack(T, ['+', Y, 2]), clpq.rational(Y >= 1), clpq.minimize(T, X))", [3]),
+    "o2": ("(unpack(T, ['+', Y, 2]), clpq.rational(Y <= 4), clpq.supremum(T, X))", [6]),
+    "o3": ("(unpack(T, ['+', Y, 2]), clpq.rational(Y >= 1), clpq.entailed(T >= 3), X == 1)", [1]),
 }
 
 
