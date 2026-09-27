@@ -8,12 +8,13 @@ Tests for:
 
 import pytest
 
+from clausal import cell_args, cell_functor
 from clausal.logic.atoms import is_atom, mint
 from clausal.logic.cells import chars
 from clausal.logic.database import Module
 from clausal.logic.solve import solve
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
-from clausal.terms import Compound, Call, LoadName, KWTerm, DictTerm, SegList, ConcreteSeg, VarSeg
+from clausal.terms import Call, LoadName, KWTerm, DictTerm, SegList, ConcreteSeg, VarSeg
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -73,14 +74,14 @@ class TestCopyTerm:
 
     def test_copy_compound_ground(self):
         # nv
-        term = Compound("foo", (1, 2))
+        term = ("foo", 1, 2)
         copy = Var()
         vals = sol_var(goal("copy_term", term, copy), copy)
         assert len(vals) == 1
         c = vals[0]
-        assert isinstance(c, Compound)
-        assert c.functor == "foo"
-        assert c.args == (1, 2)
+        assert type(c) is tuple
+        assert cell_functor(c) == "foo"
+        assert cell_args(c) == (1, 2)
 
     def test_copy_var_gets_fresh_var(self):
         # nv
@@ -97,41 +98,41 @@ class TestCopyTerm:
         """Two occurrences of the same Var → same fresh Var in copy."""
         # nv
         x = Var()
-        term = Compound("f", (x, x))
+        term = ("f", x, x)
         copy = Var()
         mod = fresh_module()
         trail = Trail()
         for _ in solve(goal("copy_term", term, copy), mod, trail):
             c = deref(copy)
-            assert isinstance(c, Compound)
-            a0, a1 = deref(c.args[0]), deref(c.args[1])
+            assert type(c) is tuple
+            a0, a1 = deref(cell_args(c)[0]), deref(cell_args(c)[1])
             assert is_var(a0) and is_var(a1)
             assert a0 is a1
 
     def test_copy_fresh_var_distinct_from_original(self):
         # nv
         x = Var()
-        term = Compound("f", (x,))
+        term = ("f", x)
         copy = Var()
         mod = fresh_module()
         trail = Trail()
         for _ in solve(goal("copy_term", term, copy), mod, trail):
             c = deref(copy)
-            fresh = deref(c.args[0])
+            fresh = deref(cell_args(c)[0])
             assert fresh is not x
 
     def test_copy_nested_compound(self):
         # nv
-        inner = Compound("bar", (Var(),))
-        term = Compound("foo", (inner, 99))
+        inner = ("bar", Var())
+        term = ("foo", inner, 99)
         copy = Var()
         mod = fresh_module()
         trail = Trail()
         for _ in solve(goal("copy_term", term, copy), mod, trail):
             c = deref(copy)
-            assert isinstance(c, Compound) and c.functor == "foo"
-            c_inner = deref(c.args[0])
-            assert isinstance(c_inner, Compound) and c_inner.functor == "bar"
+            assert type(c) is tuple and cell_functor(c) == "foo"
+            c_inner = deref(cell_args(c)[0])
+            assert type(c_inner) is tuple and cell_functor(c_inner) == "bar"
 
     def test_copy_list_with_vars(self):
         # nv
@@ -161,14 +162,14 @@ class TestCopyTerm:
     def test_copy_exactly_one_solution(self):
         # nv
         copy = Var()
-        sols = solutions(goal("copy_term", Compound("f", (1,)), copy))
+        sols = solutions(goal("copy_term", ("f", 1), copy))
         assert len(sols) == 1
 
     def test_copy_no_side_effects_on_original(self):
         """copy_term does not bind original Vars."""
         # nv
         x = Var()
-        term = Compound("f", (x,))
+        term = ("f", x)
         copy = Var()
         solutions(goal("copy_term", term, copy))
         assert is_var(deref(x))
@@ -188,7 +189,7 @@ class TestTermVariables:
     def test_ground_compound_empty(self):
         # nv
         out = Var()
-        vals = sol_var(goal("term_variables", Compound("f", (1, 2)), out), out)
+        vals = sol_var(goal("term_variables", ("f", 1, 2), out), out)
         assert vals == [[]]
 
     def test_single_var(self):
@@ -206,7 +207,7 @@ class TestTermVariables:
     def test_compound_with_vars(self):
         # nv
         x, y = Var(), Var()
-        term = Compound("f", (x, y))
+        term = ("f", x, y)
         out = Var()
         mod = fresh_module()
         trail = Trail()
@@ -219,7 +220,7 @@ class TestTermVariables:
     def test_repeated_var_only_once(self):
         # nv
         x = Var()
-        term = Compound("f", (x, x))
+        term = ("f", x, x)
         out = Var()
         mod = fresh_module()
         trail = Trail()
@@ -231,7 +232,7 @@ class TestTermVariables:
     def test_left_to_right_order(self):
         # nv
         x, y, z = Var(), Var(), Var()
-        term = Compound("f", (x, Compound("g", (y,)), z))
+        term = ("f", x, ("g", y), z)
         out = Var()
         mod = fresh_module()
         trail = Trail()
@@ -259,7 +260,7 @@ class TestTermVariables:
         x = Var()
         unify(x, 99, trail)
         y = Var()
-        term = Compound("f", (x, y))
+        term = ("f", x, y)
         out = Var()
         mod = fresh_module()
         for _ in solve(goal("term_variables", term, out), mod, trail):
@@ -270,7 +271,7 @@ class TestTermVariables:
     def test_nested_vars(self):
         # nv
         x = Var()
-        term = Compound("a", (Compound("b", (Compound("c", (x,)),)),))
+        term = ("a", ("b", ("c", x)))
         out = Var()
         mod = fresh_module()
         trail = Trail()
@@ -294,14 +295,14 @@ class TestNumberVars:
     def test_ground_term_no_vars(self):
         # nv
         end = Var()
-        term = Compound("f", (1, 2))
+        term = ("f", 1, 2)
         vals = sol_var(goal("numbervars", term, 0, end), end)
         assert vals == [0]
 
     def test_single_var(self):
         # nv
         x = Var()
-        term = Compound("f", (x,))
+        term = ("f", x)
         end = Var()
         mod = fresh_module()
         trail = Trail()
@@ -313,7 +314,7 @@ class TestNumberVars:
     def test_two_vars(self):
         # nv
         x, y = Var(), Var()
-        term = Compound("f", (x, y))
+        term = ("f", x, y)
         end = Var()
         mod = fresh_module()
         trail = Trail()
@@ -325,7 +326,7 @@ class TestNumberVars:
     def test_start_offset(self):
         # nv
         x = Var()
-        term = Compound("f", (x,))
+        term = ("f", x)
         end = Var()
         mod = fresh_module()
         trail = Trail()
@@ -336,7 +337,7 @@ class TestNumberVars:
     def test_repeated_var_numbered_once(self):
         # nv
         x = Var()
-        term = Compound("f", (x, x))
+        term = ("f", x, x)
         end = Var()
         mod = fresh_module()
         trail = Trail()
@@ -373,7 +374,7 @@ class TestNumberVars:
         """If End is already bound to wrong value, predicate fails."""
         # nv
         x = Var()
-        term = Compound("f", (x,))
+        term = ("f", x)
         # one var → end should be 1; bind end to 99 → should fail
         trail = Trail()
         end = Var()
@@ -386,7 +387,7 @@ class TestNumberVars:
         """numbervars binds vars via trail; bindings are undone on backtrack."""
         # nv
         x = Var()
-        term = Compound("f", (x,))
+        term = ("f", x)
         end = Var()
         mod = fresh_module()
         trail = Trail()
@@ -498,6 +499,7 @@ class TestGenSym:
 
 class TestCopyTermKWTerm:
 
+    @pytest.mark.compound_retirement_slice9
     def test_copy_kwterm_ground(self):
         """copy_term(KWTerm('r', a=1), Y) → Y is KWTerm('r', a=1)."""
         # nv
@@ -509,6 +511,7 @@ class TestCopyTermKWTerm:
         assert c.functor == "r"
         assert c._fields == {"a": 1, "b": 2}
 
+    @pytest.mark.compound_retirement_slice9
     def test_copy_kwterm_preserves_functor(self):
         """Functor name is preserved correctly (not replaced by fields dict)."""
         # nv
@@ -517,6 +520,7 @@ class TestCopyTermKWTerm:
         assert len(vals) == 1
         assert vals[0].functor == "myrel"
 
+    @pytest.mark.compound_retirement_slice9
     def test_copy_kwterm_var_field_gets_fresh_var(self):
         """Var in a KWTerm field → fresh Var in copy, not the original."""
         # nv
@@ -533,6 +537,7 @@ class TestCopyTermKWTerm:
             assert is_var(fresh)
             assert fresh is not x
 
+    @pytest.mark.compound_retirement_slice9
     def test_copy_kwterm_sharing_preserved(self):
         """Two fields referencing the same Var → same fresh Var in copy."""
         # nv
@@ -549,6 +554,7 @@ class TestCopyTermKWTerm:
             assert is_var(fa) and is_var(fb)
             assert fa is fb
 
+    @pytest.mark.compound_retirement_slice9
     def test_copy_kwterm_no_side_effects_on_original(self):
         """copy_term does not bind Vars in the original KWTerm."""
         # nv

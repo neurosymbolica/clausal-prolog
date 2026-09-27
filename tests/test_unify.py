@@ -59,55 +59,56 @@ class TestStructuralUnifyCompound:
     def test_same_ground_succeeds(self):
         # nv
         t = fresh()
-        assert structural_unify(Compound("f", (1, 2)), Compound("f", (1, 2)), t)
+        assert structural_unify(("f", 1, 2), ("f", 1, 2), t)
 
     def test_different_functor_fails(self):
         # nv
         t = fresh()
-        assert not structural_unify(Compound("f", (1,)), Compound("g", (1,)), t)
+        assert not structural_unify(("f", 1), ("g", 1), t)
 
     def test_different_arity_fails(self):
         # nv
         t = fresh()
-        assert not structural_unify(Compound("f", (1,)), Compound("f", (1, 2)), t)
+        assert not structural_unify(("f", 1), ("f", 1, 2), t)
 
     def test_unify_with_var_arg(self):
         # nv
         t = fresh()
         v = Var()
-        assert structural_unify(Compound("f", (v, 2)), Compound("f", (99, 2)), t)
+        assert structural_unify(("f", v, 2), ("f", 99, 2), t)
         assert deref(v) == 99
 
     def test_var_on_right_side(self):
         # nv
         t = fresh()
         v = Var()
-        assert structural_unify(Compound("f", (1,)), Compound("f", (v,)), t)
+        assert structural_unify(("f", 1), ("f", v), t)
         assert deref(v) == 1
 
     def test_var_var_in_compound(self):
         # nv
         t = fresh()
         v1, v2 = Var(), Var()
-        assert structural_unify(Compound("f", (v1,)), Compound("f", (v2,)), t)
+        assert structural_unify(("f", v1), ("f", v2), t)
         assert deref(v1) is deref(v2)
 
     def test_nested_compound(self):
         # nv
         t = fresh()
         v = Var()
-        lhs = Compound("f", (Compound("g", (v,)),))
-        rhs = Compound("f", (Compound("g", (42,)),))
+        lhs = ("f", ("g", v))
+        rhs = ("f", ("g", 42))
         assert structural_unify(lhs, rhs, t)
         assert deref(v) == 42
 
     def test_nested_mismatch_fails(self):
         # nv
         t = fresh()
-        lhs = Compound("f", (Compound("g", (1,)),))
-        rhs = Compound("f", (Compound("h", (1,)),))
+        lhs = ("f", ("g", 1))
+        rhs = ("f", ("h", 1))
         assert not structural_unify(lhs, rhs, t)
 
+    @pytest.mark.compound_retirement_slice8
     def test_arity_zero(self):
         # nv
         t = fresh()
@@ -120,8 +121,8 @@ class TestStructuralUnifyCompound:
         t = fresh()
         v1, v2 = Var(), Var()
         # f(V1, 99) vs f(42, 100) — V1 would bind to 42 but 99 != 100 → fail
-        lhs = Compound("f", (v1, 99))
-        rhs = Compound("f", (42, 100))
+        lhs = ("f", v1, 99)
+        rhs = ("f", 42, 100)
         mark = t.mark()
         result = structural_unify(lhs, rhs, t)
         assert not result
@@ -243,6 +244,7 @@ class TestStructuralUnifyDataclass:
 
 
 class TestStructuralUnifyKWTerm:
+    @pytest.mark.compound_retirement_slice9
     def test_same_ground_succeeds(self):
         # nv
         t = fresh()
@@ -250,6 +252,7 @@ class TestStructuralUnifyKWTerm:
         k2 = KWTerm("r", a=1, b=2)
         assert structural_unify(k1, k2, t)
 
+    @pytest.mark.compound_retirement_slice9
     def test_order_independent(self):
         """KWTerm unification matches by key name, not insertion order."""
         # nv
@@ -258,21 +261,25 @@ class TestStructuralUnifyKWTerm:
         k2 = KWTerm("r", b=2, a=1)
         assert structural_unify(k1, k2, t)
 
+    @pytest.mark.compound_retirement_slice9
     def test_different_functor_fails(self):
         # nv
         t = fresh()
         assert not structural_unify(KWTerm("r", a=1), KWTerm("s", a=1), t)
 
+    @pytest.mark.compound_retirement_slice9
     def test_different_keys_fail(self):
         # nv
         t = fresh()
         assert not structural_unify(KWTerm("r", a=1), KWTerm("r", b=1), t)
 
+    @pytest.mark.compound_retirement_slice9
     def test_value_mismatch_fails(self):
         # nv
         t = fresh()
         assert not structural_unify(KWTerm("r", a=1), KWTerm("r", a=2), t)
 
+    @pytest.mark.compound_retirement_slice9
     def test_with_var_field(self):
         # nv
         t = fresh()
@@ -280,6 +287,7 @@ class TestStructuralUnifyKWTerm:
         assert structural_unify(KWTerm("r", a=v, b=2), KWTerm("r", a=99, b=2), t)
         assert deref(v) == 99
 
+    @pytest.mark.compound_retirement_slice9
     def test_trail_undo_on_failure(self):
         # nv
         t = fresh()
@@ -291,6 +299,7 @@ class TestStructuralUnifyKWTerm:
         assert not result
         assert not v.is_bound
 
+    @pytest.mark.compound_retirement_slice9
     def test_extra_keys_in_one_fails(self):
         # nv
         t = fresh()
@@ -307,8 +316,8 @@ class TestStructuralUnifyVarArgs:
         # nv
         t = fresh()
         v = Var()
-        assert structural_unify(v, Compound("f", (1,)), t)
-        assert deref(v) == Compound("f", (1,))
+        assert structural_unify(v, ("f", 1), t)
+        assert deref(v) == ("f", 1)
 
     def test_var_var_binds(self):
         # nv

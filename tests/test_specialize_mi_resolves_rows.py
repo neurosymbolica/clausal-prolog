@@ -26,7 +26,6 @@ from clausal.logic.compiler_v2 import _meta_interpreter_row
 from clausal.logic.database import Clause, Database
 from clausal.logic.predicate import resolve_predicate_row
 from clausal.logic.specialization import CannotSpecialize, analyze_mi
-from clausal.terms import Compound
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
 _MIS = "clausal.examples.metainterpreters"
@@ -109,8 +108,8 @@ def test_a_predicate_bound_only_by_a_python_import_is_still_found(mis):
 
 def _two_arity_db():
     db = Database()
-    db.assertz(Clause(head=Compound("mi2", (1,)), body=[]))
-    db.assertz(Clause(head=Compound("mi2", (1, 2)), body=[]))
+    db.assertz(Clause(head=("mi2", 1), body=[]))
+    db.assertz(Clause(head=("mi2", 1, 2), body=[]))
     return db
 
 
@@ -153,7 +152,7 @@ def test_the_specialized_target_is_a_predicate_from_pre_registration(
 def test_a_row_with_clauses_but_no_field_names_is_refused():
     db = Database()
     for n in (1, 2):
-        db.assertz(Clause(head=Compound("nosig_mi", (n,)), body=[]))
+        db.assertz(Clause(head=("nosig_mi", n), body=[]))
     assert db.signature_for("nosig_mi", 1) is None
     with pytest.raises(CannotSpecialize, match="no field names are registered"):
         analyze_mi(db.row("nosig_mi", 1))
@@ -196,8 +195,8 @@ def _two_arity_owner(monkeypatch, name):
     from types import SimpleNamespace
     db = Database({"__name__": name})
     for n in (1, 2):
-        db.assertz(Clause(head=Compound("amb_mi", (n, n)), body=[]))
-        db.assertz(Clause(head=Compound("amb_mi", (n, n, n)), body=[]))
+        db.assertz(Clause(head=("amb_mi", n, n), body=[]))
+        db.assertz(Clause(head=("amb_mi", n, n, n), body=[]))
     mod = types.ModuleType(name)
     mod.__dict__["$module"] = SimpleNamespace(db=db)
     monkeypatch.setitem(sys.modules, name, mod)
@@ -208,7 +207,7 @@ def test_a_second_arity_without_clauses_is_still_ambiguous():
     """QA across tiers: clauses at one arity and a bare row at another."""
     db = Database()
     for n in (1, 2):
-        db.assertz(Clause(head=Compound("tier_mi", (n, n)), body=[]))
+        db.assertz(Clause(head=("tier_mi", n, n), body=[]))
     db.mark_dynamic("tier_mi", 3)
     with pytest.raises(RuntimeError, match=r"tier_mi/2, tier_mi/3"):
         _meta_interpreter_row(db, {}, "tier_mi", refuse_ambiguous=True)

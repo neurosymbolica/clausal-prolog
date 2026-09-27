@@ -491,7 +491,7 @@ class TestForeignSingleArgumentImplementor:
         from clausal.logic.database import Database
         from clausal.logic.trampoline import DONE, StepGenerator
         from clausal.logic.variables import Trail, Var, deref
-        from clausal.terms import Call as TCall, Compound, LoadName
+        from clausal.terms import Call as TCall, LoadName
         from tests.fixtures.foreign_dispatch_impl import foreign_pair
 
         # No inherited _get_dispatch anywhere on the MRO to soften the blow.
@@ -499,7 +499,7 @@ class TestForeignSingleArgumentImplementor:
 
         k, v = Var(), Var()
         clauses = [Clause(
-            head=Compound("fordisp_body", (k, v)),
+            head=("fordisp_body", k, v),
             body=[TCall(func=LoadName(name="foreign_pair"),
                         args=[k, v], kwargs=[])],
         )]

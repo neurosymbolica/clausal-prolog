@@ -34,7 +34,6 @@ from clausal.logic.database import (
 )
 from clausal.logic.exceptions import LogicException
 from clausal.logic.predicate import resolve_predicate_row
-from clausal.terms import Compound
 
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
@@ -53,7 +52,7 @@ def _db_of(module):
 
 
 def _clause(functor, *args):
-    return Clause(head=Compound(functor, tuple(args)), body=[])
+    return Clause(head=(functor, *args) if args else functor, body=[])
 
 
 def _row_ids(rows):

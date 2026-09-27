@@ -11,13 +11,7 @@ from clausal.logic.compiler import compile_predicate_trampoline
 from clausal.logic.database import Clause, Database, Module
 from clausal.logic.variables import Var, Trail, deref
 from clausal.logic.solve import call, solve, query, once, _deref_walk
-from clausal.terms import (
-    And, Or, Not,
-    Unify as Is, ArithEq, Lt,
-    in_,
-    Call, LoadName,
-    Compound,
-)
+from clausal.terms import And, Or, Not, Unify as Is, ArithEq, Lt, in_, Call, LoadName
 
 
 # ── Shared fixtures ────────────────────────────────────────────────────────────
@@ -35,7 +29,7 @@ def _make_edge_module() -> Module:
     for src, dst in [("a", "b"), ("b", "c"), ("c", "d"), ("b", "d")]:
         dv = Var()
         db.assertz(Clause(
-            head=Compound("edge", (src, dv)),
+            head=("edge", src, dv),
             body=[Is(left=dv, right=dst)],
         ))
     compile_predicate_trampoline("edge", 2, db.clauses_for("edge", 2), db)
@@ -43,14 +37,14 @@ def _make_edge_module() -> Module:
     # path(X, Y) :- edge(X, Y).
     px, py = Var(), Var()
     db.assertz(Clause(
-        head=Compound("path", (px, py)),
+        head=("path", px, py),
         body=[Call(func=LoadName(name="edge"), args=[px, py], kwargs=[])],
     ))
 
     # path(X, Y) :- edge(X, Z), path(Z, Y).
     rx, ry, rz = Var(), Var(), Var()
     db.assertz(Clause(
-        head=Compound("path", (rx, ry)),
+        head=("path", rx, ry),
         body=[
             Call(func=LoadName(name="edge"), args=[rx, rz], kwargs=[]),
             Call(func=LoadName(name="path"), args=[rz, ry], kwargs=[]),
@@ -69,7 +63,7 @@ def _make_member_module() -> Module:
     # member(X, [X | _Rest]) :- true.
     x1, rest1 = Var(), Var()
     db.assertz(Clause(
-        head=Compound("member", (x1, [x1, rest1])),
+        head=("member", x1, [x1, rest1]),
         body=[],
     ))
 
@@ -78,7 +72,7 @@ def _make_member_module() -> Module:
     # member(X, L) :- X in L
     x2, l2 = Var(), Var()
     db.assertz(Clause(
-        head=Compound("member2", (x2, l2)),
+        head=("member2", x2, l2),
         body=[in_(left=x2, right=l2)],
     ))
     compile_predicate_trampoline("member2", 2, db.clauses_for("member2", 2), db)
@@ -93,7 +87,7 @@ def _make_arith_module() -> Module:
 
     x, y = Var(), Var()
     db.assertz(Clause(
-        head=Compound("lt_check", (x, y)),
+        head=("lt_check", x, y),
         body=[Lt(left=x, right=y)],
     ))
     compile_predicate_trampoline("lt_check", 2, db.clauses_for("lt_check", 2), db)
@@ -420,9 +414,9 @@ class TestDerefWalk:
         t = Trail()
         from clausal.logic.variables import unify
         unify(v, 99, t)
-        c = Compound("foo", (1, v, "bar"))
+        c = ("foo", 1, v, "bar")
         result = _deref_walk(c)
-        assert result == Compound("foo", (1, 99, "bar"))
+        assert result == ("foo", 1, 99, "bar")
 
     def test_nested(self):
         # nv

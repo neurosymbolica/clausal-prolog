@@ -29,7 +29,6 @@ from clausal.logic.database import Clause, Database
 from clausal.logic.exceptions import LogicException
 from clausal.logic.solve import solve
 from clausal.logic.variables import Var, deref
-from clausal.terms import Compound
 
 
 def _write_module(tmp_path, name: str, source: str):
@@ -75,8 +74,8 @@ def test_the_lock_reads_the_database_not_the_module_dict():
     """The step takes the Database alone -- there is no module-dict binding
     whose shape could empty its population."""
     db = Database()
-    db.assertz(Clause(head=Compound("st", (1,)), body=[]))
-    db.assertz(Clause(head=Compound("dy", (1,)), body=[]))
+    db.assertz(Clause(head=("st", 1), body=[]))
+    db.assertz(Clause(head=("dy", 1), body=[]))
     db.mark_dynamic("dy", 1)
 
     assert _lock_static_predicates(db) == 1

@@ -389,6 +389,7 @@ test("citation term mismatch") <- (
 """
 
 
+@pytest.mark.compound_retirement_slice8
 def test_generic_compound_vs_declared_term_is_named(capsys, tmp_path):
     # This was the confusion the note exists for: `T2 = cite(_)` failed
     # although the binding rendered character-for-character as `cite(1)`.
@@ -401,6 +402,7 @@ def test_generic_compound_vs_declared_term_is_named(capsys, tmp_path):
     assert "generic compound" not in out
 
 
+@pytest.mark.compound_retirement_slice8
 def test_no_confusion_note_without_a_declared_class(capsys, tmp_path):
     # A generic compound whose name matches nothing declared is not confusing
     # — no note.  Same Python-escape producer as above (§6.4: functor/3 builds

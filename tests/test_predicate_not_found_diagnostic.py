@@ -25,7 +25,7 @@ import pytest
 from clausal.logic.compiler import compile_predicate_trampoline
 from clausal.logic.database import Clause, Database, Module
 from clausal.logic.solve import call
-from clausal.terms import Call, Compound, LoadName
+from clausal.terms import Call, LoadName
 from clausal.logic.variables import Var
 from clausal.predicate_diagnostics import (
     PredicateNotFoundError,
@@ -51,13 +51,13 @@ def _wrong_arity_module() -> Module:
     mod = Module("prednf_db")
     db = mod.db
     a, b, c = Var(), Var(), Var()
-    db.assertz(Clause(head=Compound("citation", (a, b, c)), body=[]))
+    db.assertz(Clause(head=("citation", a, b, c), body=[]))
     compile_predicate_trampoline("citation", 3, db.clauses_for("citation", 3), db)
-    db.assertz(Clause(head=Compound("cite", (a,)), body=[]))
+    db.assertz(Clause(head=("cite", a), body=[]))
     compile_predicate_trampoline("cite", 1, db.clauses_for("cite", 1), db)
     x, y = Var(), Var()
     db.assertz(Clause(
-        head=Compound("uses", (x, y)),
+        head=("uses", x, y),
         body=[Call(func=LoadName(name="citation"), args=[x, y], kwargs=[])],
     ))
     compile_predicate_trampoline("uses", 2, db.clauses_for("uses", 2), db)

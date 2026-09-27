@@ -217,10 +217,9 @@ class TestOutputCapture:
         reachable.  A Python ``repr`` here would print ``('foo', 1)``.
         """
         # nv
-        from clausal.terms import Compound
 
         logger, buf = _make_capture_handler("test.unit.cap.compound")
-        _run_simple(_info_2, logger, Compound("foo", (1,)))
+        _run_simple(_info_2, logger, ("foo", 1))
         assert buf.getvalue() == "INFO:foo(1)\n"
 
     def test_atom_message_logs_its_spelling(self):

@@ -18,7 +18,6 @@ from clausal.logic.atoms import mint
 from clausal.logic.variables import Var, Trail, deref, unify, is_var
 from clausal.logic.constraints import reify_eq, dif
 from clausal.logic.clpfd import reify_fd, fd_eq, fd_lt, in_domain
-from clausal.terms import Compound
 from tests.predicate_api_support import term_ctor
 from clausal.logic.database import Clause, Database
 from clausal.logic.compiler import compile_predicate_shallow as compile_predicate, compile_predicate_trampoline
@@ -101,30 +100,30 @@ class TestReifyEq:
     def test_compound_same(self):
         # nv
         trail = Trail()
-        a = Compound("f", (1, 2))
-        b = Compound("f", (1, 2))
+        a = ("f", 1, 2)
+        b = ("f", 1, 2)
         assert reify_eq(a, b, trail) is True
 
     def test_compound_different(self):
         # nv
         trail = Trail()
-        a = Compound("f", (1, 2))
-        b = Compound("f", (1, 3))
+        a = ("f", 1, 2)
+        b = ("f", 1, 3)
         assert reify_eq(a, b, trail) is False
 
     def test_compound_different_functor(self):
         # nv
         trail = Trail()
-        a = Compound("f", (1,))
-        b = Compound("g", (1,))
+        a = ("f", 1)
+        b = ("g", 1)
         assert reify_eq(a, b, trail) is False
 
     def test_compound_with_var(self):
         # nv
         trail = Trail()
         x = Var()
-        a = Compound("f", (x, 2))
-        b = Compound("f", (1, 2))
+        a = ("f", x, 2)
+        b = ("f", 1, 2)
         assert reify_eq(a, b, trail) is None
 
     def test_compound_cell_same(self):
@@ -309,7 +308,7 @@ def _compile_ite_clause(test, then, else_, head_args=None, arity=1):
         head_args = tuple(Var() for _ in range(arity))
 
     body = IfExpr(test=test, body=then, orelse=else_)
-    head = Compound("ite_test", head_args)
+    head = ("ite_test", *head_args)
     return Clause(head=head, body=[body])
 
 
@@ -352,7 +351,7 @@ class TestReifiedIteEquality:
         # nv
         r = Var()
         clause = Clause(
-            head=Compound("ite_test", (r,)),
+            head=("ite_test", r),
             body=[IfExpr(
                 test=Unify(left=1, right=1),
                 body=Unify(left=r, right="yes"),
@@ -367,7 +366,7 @@ class TestReifiedIteEquality:
         # nv
         r = Var()
         clause = Clause(
-            head=Compound("ite_test", (r,)),
+            head=("ite_test", r),
             body=[IfExpr(
                 test=Unify(left=1, right=2),
                 body=Unify(left=r, right="yes"),
@@ -383,7 +382,7 @@ class TestReifiedIteEquality:
         x = Var()
         r = Var()
         clause = Clause(
-            head=Compound("ite_test", (x, r)),
+            head=("ite_test", x, r),
             body=[IfExpr(
                 test=Unify(left=x, right=1),
                 body=Unify(left=r, right="eq"),
@@ -400,7 +399,7 @@ class TestReifiedIteEquality:
         # nv
         r = Var()
         clause = Clause(
-            head=Compound("ite_test", (r,)),
+            head=("ite_test", r),
             body=[IfExpr(
                 test=Unify(left=1, right=1),
                 body=Unify(left=r, right="yes"),
@@ -414,7 +413,7 @@ class TestReifiedIteEquality:
         # nv
         r = Var()
         clause = Clause(
-            head=Compound("ite_test", (r,)),
+            head=("ite_test", r),
             body=[IfExpr(
                 test=Unify(left=1, right=2),
                 body=Unify(left=r, right="yes"),
@@ -429,7 +428,7 @@ class TestReifiedIteEquality:
         x = Var()
         r = Var()
         clause = Clause(
-            head=Compound("ite_test", (x, r)),
+            head=("ite_test", x, r),
             body=[IfExpr(
                 test=Unify(left=x, right=1),
                 body=Unify(left=r, right="eq"),
@@ -461,7 +460,7 @@ class TestReifiedIteDif:
         # nv
         r = Var()
         clause = Clause(
-            head=Compound("ite_test", (r,)),
+            head=("ite_test", r),
             body=[IfExpr(
                 test=DoesNotUnify(left=1, right=2),
                 body=Unify(left=r, right="yes"),
@@ -476,7 +475,7 @@ class TestReifiedIteDif:
         # nv
         r = Var()
         clause = Clause(
-            head=Compound("ite_test", (r,)),
+            head=("ite_test", r),
             body=[IfExpr(
                 test=DoesNotUnify(left=1, right=1),
                 body=Unify(left=r, right="yes"),
@@ -492,7 +491,7 @@ class TestReifiedIteDif:
         x = Var()
         r = Var()
         clause = Clause(
-            head=Compound("ite_test", (x, r)),
+            head=("ite_test", x, r),
             body=[IfExpr(
                 test=DoesNotUnify(left=x, right=1),
                 body=Unify(left=r, right="diff"),
@@ -550,7 +549,7 @@ class TestReifiedIteFd:
         # nv
         r = Var()
         clause = Clause(
-            head=Compound("ite_test", (r,)),
+            head=("ite_test", r),
             body=[IfExpr(
                 test=Lt(left=2, right=5),
                 body=Unify(left=r, right="yes"),
@@ -565,7 +564,7 @@ class TestReifiedIteFd:
         # nv
         r = Var()
         clause = Clause(
-            head=Compound("ite_test", (r,)),
+            head=("ite_test", r),
             body=[IfExpr(
                 test=Lt(left=5, right=2),
                 body=Unify(left=r, right="yes"),
@@ -580,7 +579,7 @@ class TestReifiedIteFd:
         # nv
         r = Var()
         clause = Clause(
-            head=Compound("ite_test", (r,)),
+            head=("ite_test", r),
             body=[IfExpr(
                 test=ArithEq(left=3, right=3),
                 body=Unify(left=r, right="yes"),
@@ -595,7 +594,7 @@ class TestReifiedIteFd:
         # nv
         r = Var()
         clause = Clause(
-            head=Compound("ite_test", (r,)),
+            head=("ite_test", r),
             body=[IfExpr(
                 test=ArithEq(left=3, right=4),
                 body=Unify(left=r, right="yes"),
@@ -610,7 +609,7 @@ class TestReifiedIteFd:
         # nv
         r = Var()
         clause = Clause(
-            head=Compound("ite_test", (r,)),
+            head=("ite_test", r),
             body=[IfExpr(
                 test=ArithNeq(left=3, right=4),
                 body=Unify(left=r, right="yes"),
@@ -625,7 +624,7 @@ class TestReifiedIteFd:
         # nv
         r = Var()
         clause = Clause(
-            head=Compound("ite_test", (r,)),
+            head=("ite_test", r),
             body=[IfExpr(
                 test=ArithNeq(left=3, right=3),
                 body=Unify(left=r, right="yes"),
@@ -640,7 +639,7 @@ class TestReifiedIteFd:
         # nv
         r = Var()
         clause = Clause(
-            head=Compound("ite_test", (r,)),
+            head=("ite_test", r),
             body=[IfExpr(
                 test=LtE(left=3, right=3),
                 body=Unify(left=r, right="yes"),
@@ -655,7 +654,7 @@ class TestReifiedIteFd:
         # nv
         r = Var()
         clause = Clause(
-            head=Compound("ite_test", (r,)),
+            head=("ite_test", r),
             body=[IfExpr(
                 test=LtE(left=4, right=3),
                 body=Unify(left=r, right="yes"),
@@ -670,7 +669,7 @@ class TestReifiedIteFd:
         # nv
         r = Var()
         clause = Clause(
-            head=Compound("ite_test", (r,)),
+            head=("ite_test", r),
             body=[IfExpr(
                 test=Gt(left=5, right=3),
                 body=Unify(left=r, right="yes"),
@@ -685,7 +684,7 @@ class TestReifiedIteFd:
         # nv
         r = Var()
         clause = Clause(
-            head=Compound("ite_test", (r,)),
+            head=("ite_test", r),
             body=[IfExpr(
                 test=Gt(left=3, right=5),
                 body=Unify(left=r, right="yes"),
@@ -700,7 +699,7 @@ class TestReifiedIteFd:
         # nv
         r = Var()
         clause = Clause(
-            head=Compound("ite_test", (r,)),
+            head=("ite_test", r),
             body=[IfExpr(
                 test=GtE(left=5, right=5),
                 body=Unify(left=r, right="yes"),
@@ -715,7 +714,7 @@ class TestReifiedIteFd:
         # nv
         r = Var()
         clause = Clause(
-            head=Compound("ite_test", (r,)),
+            head=("ite_test", r),
             body=[IfExpr(
                 test=GtE(left=4, right=5),
                 body=Unify(left=r, right="yes"),
@@ -731,7 +730,7 @@ class TestReifiedIteFd:
         # nv
         r = Var()
         clause = Clause(
-            head=Compound("ite_test", (r,)),
+            head=("ite_test", r),
             body=[IfExpr(
                 test=Lt(left=2, right=5),
                 body=Unify(left=r, right="yes"),
@@ -745,7 +744,7 @@ class TestReifiedIteFd:
         # nv
         r = Var()
         clause = Clause(
-            head=Compound("ite_test", (r,)),
+            head=("ite_test", r),
             body=[IfExpr(
                 test=Lt(left=5, right=2),
                 body=Unify(left=r, right="yes"),
@@ -759,7 +758,7 @@ class TestReifiedIteFd:
         # nv
         r = Var()
         clause = Clause(
-            head=Compound("ite_test", (r,)),
+            head=("ite_test", r),
             body=[IfExpr(
                 test=GtE(left=5, right=5),
                 body=Unify(left=r, right="yes"),
@@ -773,7 +772,7 @@ class TestReifiedIteFd:
         # nv
         r = Var()
         clause = Clause(
-            head=Compound("ite_test", (r,)),
+            head=("ite_test", r),
             body=[IfExpr(
                 test=ArithNeq(left=1, right=2),
                 body=Unify(left=r, right="yes"),
@@ -793,7 +792,7 @@ class TestReifiedIteFd:
         trail = Trail()
         in_domain(x, 1, 10, trail)
         clause = Clause(
-            head=Compound("ite_test", (x, r)),
+            head=("ite_test", x, r),
             body=[IfExpr(
                 test=Lt(left=x, right=5),
                 body=Unify(left=r, right="lo"),
@@ -821,7 +820,7 @@ class TestReifiedIteFd:
         trail = Trail()
         in_domain(x, 1, 5, trail)
         clause = Clause(
-            head=Compound("ite_test", (x, r)),
+            head=("ite_test", x, r),
             body=[IfExpr(
                 test=ArithEq(left=x, right=3),
                 body=Unify(left=r, right="hit"),
@@ -847,7 +846,7 @@ class TestReifiedIteFd:
         trail = Trail()
         in_domain(x, 1, 10, trail)
         clause = Clause(
-            head=Compound("ite_test", (x, r)),
+            head=("ite_test", x, r),
             body=[IfExpr(
                 test=GtE(left=x, right=5),
                 body=Unify(left=r, right="hi"),
@@ -883,7 +882,7 @@ class TestReifiedIteFd:
         trail = Trail()
         in_domain(x, 1, 8, trail)
         clause = Clause(
-            head=Compound("ite_test", (x, r)),
+            head=("ite_test", x, r),
             body=[IfExpr(
                 test=Lt(left=x, right=5),
                 body=Unify(left=r, right="lo"),
@@ -925,7 +924,7 @@ class TestReifiedIteFd:
         # nv
         r = Var()
         clause = Clause(
-            head=Compound("ite_test", (r,)),
+            head=("ite_test", r),
             body=[IfExpr(
                 test=Lt(left=3, right=10),
                 body=IfExpr(
@@ -986,7 +985,7 @@ class TestGeneralIte:
         # nv
         r = Var()
         clause = Clause(
-            head=Compound("ite_test", (r,)),
+            head=("ite_test", r),
             body=[IfExpr(
                 test=in_(left=1, right=[1, 2, 3]),
                 body=Unify(left=r, right="yes"),
@@ -1006,7 +1005,7 @@ class TestGeneralIte:
         # nv
         r = Var()
         clause = Clause(
-            head=Compound("ite_test", (r,)),
+            head=("ite_test", r),
             body=[IfExpr(
                 test=in_(left=99, right=[1, 2, 3]),
                 body=Unify(left=r, right="yes"),
@@ -1020,7 +1019,7 @@ class TestGeneralIte:
         # nv
         r = Var()
         clause = Clause(
-            head=Compound("ite_test", (r,)),
+            head=("ite_test", r),
             body=[IfExpr(
                 test=in_(left=1, right=[1, 2, 3]),
                 body=Unify(left=r, right="yes"),
@@ -1034,7 +1033,7 @@ class TestGeneralIte:
         # nv
         r = Var()
         clause = Clause(
-            head=Compound("ite_test", (r,)),
+            head=("ite_test", r),
             body=[IfExpr(
                 test=in_(left=99, right=[1, 2, 3]),
                 body=Unify(left=r, right="yes"),
@@ -1064,7 +1063,7 @@ class TestIteControlFlow:
         # nv
         r = Var()
         clause = Clause(
-            head=Compound("ite_test", (r,)),
+            head=("ite_test", r),
             body=[IfExpr(
                 test=Unify(left=1, right=1),
                 body=IfExpr(
@@ -1083,7 +1082,7 @@ class TestIteControlFlow:
         # nv
         r = Var()
         clause = Clause(
-            head=Compound("ite_test", (r,)),
+            head=("ite_test", r),
             body=[IfExpr(
                 test=Unify(left=1, right=1),
                 body=IfExpr(
@@ -1103,7 +1102,7 @@ class TestIteControlFlow:
         x = Var()
         r = Var()
         clause = Clause(
-            head=Compound("ite_test", (x, r)),
+            head=("ite_test", x, r),
             body=[IfExpr(
                 test=Unify(left=x, right=42),
                 body=Unify(left=r, right="bound"),
@@ -1122,7 +1121,7 @@ class TestIteControlFlow:
         x = Var()
         y = Var()
         clause = Clause(
-            head=Compound("ite_test", (x, y)),
+            head=("ite_test", x, y),
             body=[IfExpr(
                 test=Unify(left=1, right=1),
                 body=And(
@@ -1179,7 +1178,7 @@ class TestGeneralIteMultiSolution:
         x = Var()
         r = Var()
         clause = Clause(
-            head=Compound("ite_test", (x, r)),
+            head=("ite_test", x, r),
             body=[IfExpr(
                 test=in_(left=x, right=[1, 2, 3]),
                 body=Unify(left=r, right=x),
@@ -1199,7 +1198,7 @@ class TestGeneralIteMultiSolution:
         x = Var()
         r = Var()
         clause = Clause(
-            head=Compound("ite_test", (x, r)),
+            head=("ite_test", x, r),
             body=[IfExpr(
                 test=in_(left=x, right=[1, 2, 3]),
                 body=Unify(left=r, right=x),
@@ -1217,7 +1216,7 @@ class TestGeneralIteMultiSolution:
         r = Var()
         # if_(X in [10, 20], R is X, R is 0) — then branch sees X bound by condition
         clause = Clause(
-            head=Compound("ite_test", (x, r)),
+            head=("ite_test", x, r),
             body=[IfExpr(
                 test=in_(left=x, right=[10, 20]),
                 body=Unify(left=r, right=x),
@@ -1256,7 +1255,7 @@ class TestIteDifInteraction:
         assert dif(x, 1, trail)
 
         clause = Clause(
-            head=Compound("ite_test", (x, r)),
+            head=("ite_test", x, r),
             body=[IfExpr(
                 test=Unify(left=x, right=1),
                 body=Unify(left=r, right="eq"),
@@ -1280,7 +1279,7 @@ class TestIteDifInteraction:
         assert dif(x, 2, trail)
 
         clause = Clause(
-            head=Compound("ite_test", (x, r)),
+            head=("ite_test", x, r),
             body=[IfExpr(
                 test=Unify(left=x, right=1),
                 body=Unify(left=r, right="eq"),
@@ -1476,7 +1475,7 @@ class TestOnce:
         # nv
         x = Var()
         clause = Clause(
-            head=Compound("once_test", (x,)),
+            head=("once_test", x),
             body=[_once(in_(left=x, right=[1, 2, 3]))],
         )
         results = self._run_simple([clause])
@@ -1487,7 +1486,7 @@ class TestOnce:
         # nv
         x = Var()
         clause = Clause(
-            head=Compound("once_test", (x,)),
+            head=("once_test", x),
             body=[_once(in_(left=x, right=[1, 2, 3]))],
         )
         results = self._run_trampoline([clause])
@@ -1498,7 +1497,7 @@ class TestOnce:
         # nv
         r = Var()
         clause = Clause(
-            head=Compound("once_test", (r,)),
+            head=("once_test", r),
             body=[
                 _once(in_(left=99, right=[1, 2, 3])),
                 Unify(left=r, right="reached"),
@@ -1512,7 +1511,7 @@ class TestOnce:
         # nv
         r = Var()
         clause = Clause(
-            head=Compound("once_test", (r,)),
+            head=("once_test", r),
             body=[
                 _once(in_(left=99, right=[1, 2, 3])),
                 Unify(left=r, right="reached"),
@@ -1527,7 +1526,7 @@ class TestOnce:
         # nv
         x, y = Var(), Var()
         clause = Clause(
-            head=Compound("once_test", (x, y)),
+            head=("once_test", x, y),
             body=[
                 _once(in_(left=x, right=[1, 2])),
                 in_(left=y, right=["a", "b"]),
@@ -1541,7 +1540,7 @@ class TestOnce:
         # nv
         x, y = Var(), Var()
         clause = Clause(
-            head=Compound("once_test", (x, y)),
+            head=("once_test", x, y),
             body=[
                 _once(in_(left=x, right=[1, 2])),
                 in_(left=y, right=["a", "b"]),
@@ -1555,7 +1554,7 @@ class TestOnce:
         # nv
         x, r = Var(), Var()
         clause = Clause(
-            head=Compound("once_test", (r,)),
+            head=("once_test", r),
             body=[
                 _once(Unify(left=x, right=42)),
                 Unify(left=r, right=x),
@@ -1568,7 +1567,7 @@ class TestOnce:
         # nv
         x, r = Var(), Var()
         clause = Clause(
-            head=Compound("once_test", (r,)),
+            head=("once_test", r),
             body=[
                 _once(Unify(left=x, right=42)),
                 Unify(left=r, right=x),
@@ -1583,7 +1582,7 @@ class TestOnce:
         r = Var()
         x = Var()
         clause = Clause(
-            head=Compound("once_test", (r,)),
+            head=("once_test", r),
             body=[IfExpr(
                 test=_once(in_(left=x, right=[1, 2, 3])),
                 body=Unify(left=r, right="found"),
@@ -1598,7 +1597,7 @@ class TestOnce:
         r = Var()
         x = Var()
         clause = Clause(
-            head=Compound("once_test", (r,)),
+            head=("once_test", r),
             body=[IfExpr(
                 test=_once(in_(left=x, right=[1, 2, 3])),
                 body=Unify(left=r, right="found"),

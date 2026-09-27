@@ -40,7 +40,6 @@ from clausal.logic.exceptions import LogicException
 from clausal.logic.predicate import resolve_predicate_row
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
-from clausal.terms import Compound
 from tests.load_write_spy_support import record_load_writes
 
 
@@ -56,7 +55,7 @@ def _load_fixture(stem: str, as_name: str | None = None):
 
 
 def _clause(functor, *args):
-    return Clause(head=Compound(functor, tuple(args)), body=[])
+    return Clause(head=(functor, *args) if args else functor, body=[])
 
 
 def _write_module(tmp_path, name: str, source: str):

@@ -135,20 +135,20 @@ class TestDisplayLocale:
 
     def test_compound_with_locale(self):
         # nv
-        t = Compound("append", (1, 2, 3))
+        t = ("append", 1, 2, 3)
         s = term_str(t, TermStyle(locale="th"))
         assert "ต่อท้าย" in s
         assert "append" not in s
 
     def test_compound_without_locale(self):
         # nv
-        t = Compound("append", (1, 2, 3))
+        t = ("append", 1, 2, 3)
         s = term_str(t)
         assert "append" in s
 
     def test_nested_with_locale(self):
         # nv
-        t = Compound("append", ("x", Compound("append", (1, 2, 3)), []))
+        t = ("append", "x", ("append", 1, 2, 3), [])
         s = term_str(t, TermStyle(locale="th"))
         assert "ต่อท้าย" in s
         assert "append" not in s
@@ -163,14 +163,14 @@ class TestDisplayLocale:
 
     def test_no_translation_passthrough(self):
         # nv
-        t = Compound("Undefined", (1, 2))
+        t = ("Undefined", 1, 2)
         s = term_str(t, TermStyle(locale="th"))
         assert "Undefined" in s
 
     def test_atom_in_compound_arg(self):
         """Atom names inside compound args are NOT translated (strings are data)."""
         # nv
-        t = Compound("append", (chars("nil"), chars("hello"), []))
+        t = ("append", chars("nil"), chars("hello"), [])
         s = term_str(t, TermStyle(locale="th"))
         # "nil" is a STRING (chars) value here, rendered DOUBLE-quoted (spec
         # §6.7) -- not an atom, which would render bare (or translated).
@@ -200,7 +200,7 @@ class TestTranslateBuiltin:
         from clausal.logic.builtins.translations_builtin import _translate__3
         trail = Trail()
         result_var = Var()
-        t = Compound("append", (1, 2, 3))
+        t = ("append", 1, 2, 3)
         gen = _translate__3(mint("th"), t, result_var, trail, None)
         sol = next(gen, "NO_SOLUTION")
         assert sol is None
@@ -213,7 +213,7 @@ class TestTranslateBuiltin:
         from clausal.logic.builtins.translations_builtin import _translate__3
         trail = Trail()
         result_var = Var()
-        t = Compound("append", (1, 2, 3))
+        t = ("append", 1, 2, 3)
         gen = _translate__3(mint("th"), t, result_var, trail, None)
         next(gen, None)
         result = deref(result_var)
@@ -225,7 +225,7 @@ class TestTranslateBuiltin:
         # nv
         from clausal.logic.builtins.translations_builtin import _translate__3
         trail = Trail()
-        t = Compound("append", (1, 2, 3))
+        t = ("append", 1, 2, 3)
         solutions = list(_translate__3(Var(), t, Var(), trail, None))
         assert len(solutions) == 0
 
@@ -237,7 +237,7 @@ class TestTranslateBuiltin:
         result_var = Var()
         # the atom (a make_predicate class until W4b-3 slice 6)
         th_atom = "th"
-        t = Compound("append", (1, 2, 3))
+        t = ("append", 1, 2, 3)
         gen = _translate__3(th_atom, t, result_var, trail, None)
         sol = next(gen, "NO_SOLUTION")
         assert sol is None
@@ -251,7 +251,7 @@ class TestTranslateBuiltin:
         register_predicate("th", "member", "สมาชิกของ", 2)
         trail = Trail()
         result_var = Var()
-        t = Compound("append", ("x", Compound("member", ("a", "b")), []))
+        t = ("append", "x", ("member", "a", "b"), [])
         gen = _translate__3(mint("th"), t, result_var, trail, None)
         next(gen, None)
         result = deref(result_var)

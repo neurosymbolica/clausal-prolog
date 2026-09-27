@@ -247,6 +247,9 @@ def test_a_qualified_call_into_an_unloaded_module_is_the_same_iso_term(pair):
     assert _answers("qualified_unloaded", I) == [(_pi("nosuch", 1),)]
 
 
+# Stays a Compound (slice 5 finding): assertz/asserta of a CELL whose
+# predicate is not known yet raises existence_error; a Compound creates it.
+@pytest.mark.compound_retirement_slice8
 def test_a_qualified_call_resolves_a_predicate_asserted_later(tmp_path, monkeypatch):
     """The refusal re-resolves per call through the owner's handle, so it
     cannot go stale: a clause added to the owner afterwards answers."""

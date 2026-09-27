@@ -21,7 +21,7 @@ from clausal.logic.compiler.arg_index import (
 from tests.predicate_api_support import term_ctor
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.logic.trampoline import StepGenerator, solutions, DONE
-from clausal.terms import Compound, Unify
+from clausal.terms import Unify
 from clausal.logic.builtins import _normalize_fact_clause
 
 
@@ -40,7 +40,7 @@ def _make_fact_db(functor, facts):
     """Build a Database with normalized fact clauses."""
     db = Database()
     for fact_args in facts:
-        clause = _normalize_fact_clause(Compound(functor, tuple(fact_args)))
+        clause = _normalize_fact_clause((functor, *fact_args))
         db.assertz(clause)
     return db
 
@@ -51,18 +51,18 @@ def _make_fact_db(functor, facts):
 class TestExtractArgKey:
     def test_position_zero(self):
         # nv
-        c = Clause(head=Compound("f", (42, mint("hello"))), body=[True])
+        c = Clause(head=("f", 42, mint("hello")), body=[True])
         assert _extract_arg_key(c, 0, 2) == 42
 
     def test_position_one(self):
         # nv
-        c = Clause(head=Compound("f", (42, mint("hello"))), body=[True])
+        c = Clause(head=("f", 42, mint("hello")), body=[True])
         assert _extract_arg_key(c, 1, 2) == ("hello", 0)
 
     def test_var_at_position(self):
         # nv
         v = Var()
-        c = Clause(head=Compound("f", (42, v)), body=[True])
+        c = Clause(head=("f", 42, v), body=[True])
         assert _extract_arg_key(c, 1, 2) is _INDEX_VAR
 
     def test_var_with_unify_at_position(self):
@@ -70,7 +70,7 @@ class TestExtractArgKey:
         # nv
         v0, v1 = Var(), Var()
         c = Clause(
-            head=Compound("f", (v0, v1)),
+            head=("f", v0, v1),
             body=[Unify(left=v0, right=1), Unify(left=v1, right=mint("abc"))],
         )
         assert _extract_arg_key(c, 0, 2) == 1
@@ -78,7 +78,7 @@ class TestExtractArgKey:
 
     def test_out_of_range(self):
         # nv
-        c = Clause(head=Compound("f", (1,)), body=[True])
+        c = Clause(head=("f", 1), body=[True])
         assert _extract_arg_key(c, 1, 1) is _INDEX_VAR
         assert _extract_arg_key(c, 5, 1) is _INDEX_VAR
 
@@ -104,7 +104,7 @@ class TestBuildArgIndex:
         """Position 0 index matches _build_first_arg_index behavior."""
         # nv
         clauses = [
-            Clause(head=Compound("f", (i, mint("x"))), body=[True])
+            Clause(head=("f", i, mint("x")), body=[True])
             for i in range(5)
         ]
         idx = _build_arg_index(clauses, 2, 0)
@@ -115,10 +115,10 @@ class TestBuildArgIndex:
         """Second argument has indexable values."""
         # nv
         clauses = [
-            Clause(head=Compound("f", (Var(), mint("a"))), body=[True]),
-            Clause(head=Compound("f", (Var(), mint("b"))), body=[True]),
-            Clause(head=Compound("f", (Var(), mint("c"))), body=[True]),
-            Clause(head=Compound("f", (Var(), mint("d"))), body=[True]),
+            Clause(head=("f", Var(), mint("a")), body=[True]),
+            Clause(head=("f", Var(), mint("b")), body=[True]),
+            Clause(head=("f", Var(), mint("c")), body=[True]),
+            Clause(head=("f", Var(), mint("d")), body=[True]),
         ]
         idx = _build_arg_index(clauses, 2, 1)
         assert idx is not None
@@ -128,7 +128,7 @@ class TestBuildArgIndex:
     def test_no_index_all_vars(self):
         # nv
         clauses = [
-            Clause(head=Compound("f", (Var(), Var())), body=[True])
+            Clause(head=("f", Var(), Var()), body=[True])
             for _ in range(5)
         ]
         assert _build_arg_index(clauses, 2, 0) is None
@@ -137,10 +137,10 @@ class TestBuildArgIndex:
     def test_n_distinct(self):
         # nv
         clauses = [
-            Clause(head=Compound("f", (1, mint("a"))), body=[True]),
-            Clause(head=Compound("f", (1, mint("b"))), body=[True]),
-            Clause(head=Compound("f", (2, mint("c"))), body=[True]),
-            Clause(head=Compound("f", (3, mint("d"))), body=[True]),
+            Clause(head=("f", 1, mint("a")), body=[True]),
+            Clause(head=("f", 1, mint("b")), body=[True]),
+            Clause(head=("f", 2, mint("c")), body=[True]),
+            Clause(head=("f", 3, mint("d")), body=[True]),
         ]
         idx = _build_arg_index(clauses, 2, 0)
         assert idx is not None
@@ -167,7 +167,7 @@ class TestAnalyzeIndexPositions:
         """First arg is always Var, second has distinct values."""
         # nv
         clauses = [
-            Clause(head=Compound("f", (Var(), val)), body=[True])
+            Clause(head=("f", Var(), val), body=[True])
             for val in [mint("a"), mint("b"), mint("c"), mint("d")]
         ]
         positions = _analyze_index_positions(clauses, 2)
@@ -179,10 +179,10 @@ class TestAnalyzeIndexPositions:
         # Position 0: 2 distinct values; Position 1: 4 distinct values
         # nv
         clauses = [
-            Clause(head=Compound("f", (1, mint("a"))), body=[True]),
-            Clause(head=Compound("f", (1, mint("b"))), body=[True]),
-            Clause(head=Compound("f", (2, mint("c"))), body=[True]),
-            Clause(head=Compound("f", (2, mint("d"))), body=[True]),
+            Clause(head=("f", 1, mint("a")), body=[True]),
+            Clause(head=("f", 1, mint("b")), body=[True]),
+            Clause(head=("f", 2, mint("c")), body=[True]),
+            Clause(head=("f", 2, mint("d")), body=[True]),
         ]
         positions = _analyze_index_positions(clauses, 2)
         assert len(positions) == 2
@@ -192,7 +192,7 @@ class TestAnalyzeIndexPositions:
 
     def test_empty_for_few_clauses(self):
         # nv
-        clauses = [Clause(head=Compound("f", (i,)), body=[True]) for i in range(2)]
+        clauses = [Clause(head=("f", i), body=[True]) for i in range(2)]
         assert _analyze_index_positions(clauses, 1) == []
 
     def test_three_arg_predicate(self):
@@ -368,11 +368,11 @@ class TestMixedClauses:
         db = Database()
         # Position 0: specific keys 1, 2, 3 plus 2 catch-all (Var) clauses
         # Position 1: all specific ("a" through "e") — no defaults
-        db.assertz(_normalize_fact_clause(Compound("f", (1, mint("a")))))
-        db.assertz(_normalize_fact_clause(Compound("f", (Var(), mint("b")))))
-        db.assertz(_normalize_fact_clause(Compound("f", (2, mint("c")))))
-        db.assertz(_normalize_fact_clause(Compound("f", (3, mint("d")))))
-        db.assertz(_normalize_fact_clause(Compound("f", (Var(), mint("e")))))
+        db.assertz(_normalize_fact_clause(("f", 1, mint("a"))))
+        db.assertz(_normalize_fact_clause(("f", Var(), mint("b"))))
+        db.assertz(_normalize_fact_clause(("f", 2, mint("c"))))
+        db.assertz(_normalize_fact_clause(("f", 3, mint("d"))))
+        db.assertz(_normalize_fact_clause(("f", Var(), mint("e"))))
         fn = compile_predicate("f", 2, db.clauses_for("f", 2), db)
 
         # Query by first arg 1: should get (1, a) + catch-alls (_, b), (_, e)
@@ -391,11 +391,11 @@ class TestMixedClauses:
         """Clauses with Var at ALL positions are defaults for every index."""
         # nv
         db = Database()
-        db.assertz(_normalize_fact_clause(Compound("f", (1, mint("a")))))
-        db.assertz(_normalize_fact_clause(Compound("f", (2, mint("b")))))
-        db.assertz(_normalize_fact_clause(Compound("f", (3, mint("c")))))
+        db.assertz(_normalize_fact_clause(("f", 1, mint("a"))))
+        db.assertz(_normalize_fact_clause(("f", 2, mint("b"))))
+        db.assertz(_normalize_fact_clause(("f", 3, mint("c"))))
         # This clause has Var at position 0 AND Var at position 1 (no Unify)
-        db.assertz(Clause(head=Compound("f", (Var(), Var())), body=[True]))
+        db.assertz(Clause(head=("f", Var(), Var()), body=[True]))
         fn = compile_predicate("f", 2, db.clauses_for("f", 2), db)
 
         # Query by first arg: gets specific + catch-all
@@ -421,7 +421,7 @@ class TestDynamicReindexGroundness:
         db.mark_dynamic("color", 2)
         for args in [(mint("red"), mint("warm")), (mint("green"), mint("cool")),
                      (mint("blue"), mint("cool")), (mint("white"), mint("neutral"))]:
-            db.assertz(_normalize_fact_clause(Compound("color", args)))
+            db.assertz(_normalize_fact_clause(("color", *args)))
         fn = compile_predicate("color", 2, db.clauses_for("color", 2), db)
 
         # Initial second-arg lookup
@@ -431,7 +431,7 @@ class TestDynamicReindexGroundness:
         assert sorted(r[0] for r in results) == [mint("blue"), mint("green")]
 
         # Add new fact and trigger recompile
-        db.assertz(_normalize_fact_clause(Compound("color", (mint("purple"), mint("cool")))))
+        db.assertz(_normalize_fact_clause(("color", mint("purple"), mint("cool"))))
         new_fn = db.get_dispatch("color", 2)
         trail = Trail()
         v = Var()
@@ -448,7 +448,7 @@ class TestBackwardCompat:
         # All second args are Var → only position 0 is indexable
         # nv
         clauses = [
-            Clause(head=Compound("f", (i, Var())), body=[True])
+            Clause(head=("f", i, Var()), body=[True])
             for i in range(5)
         ]
         db = Database()

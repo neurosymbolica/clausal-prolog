@@ -666,10 +666,9 @@ got(_v) <- (setup() and query('db7', 'SELECT v FROM t', _v))
         # nv
         from clausal.logic.exceptions import LogicException
         from clausal.modules.py.sqlite import _text
-        from clausal.terms import Compound
 
         with pytest.raises(LogicException) as exc:
-            _text(Compound("db", (1,)), "path")
+            _text(("db", 1), "path")
         formal = cell_args(exc.value.term)[0]
         assert cell_functor(formal) == "type_error"
         assert cell_args(formal)[0] == mint("text")

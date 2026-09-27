@@ -663,6 +663,7 @@ class TestQueryWfsUndefinedSurface:
             for i in range(len(entry.answers)):
                 assert entry.truth_value(i) is Undefined
 
+    @pytest.mark.compound_retirement_slice8
     def test_compound_goal_undefined(self):
         """A Compound goal reaches its table entry (it used to be shadowed by
         the is_term_instance branch and always read True)."""

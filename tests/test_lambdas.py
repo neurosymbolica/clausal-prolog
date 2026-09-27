@@ -31,8 +31,7 @@ from clausal.terms import (
     And, Or, Not,
     Unify, DoesNotUnify, Evaluate,
     Call, LoadName,
-    Add, Compound,
-)
+    Add, )
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -404,7 +403,7 @@ class TestCompiledLambdaExecution:
 
         body = [Call(func=LoadName(name="call_goal"), args=[lam, x], kwargs=[])]
         clause = Clause(
-            head=Compound("test", (x, result)),
+            head=("test", x, result),
             body=body,
         )
         db = Database("test")
@@ -431,7 +430,7 @@ class TestCompiledLambdaExecution:
 
         body = [Call(func=LoadName(name="call_goal"), args=[lam, 10], kwargs=[])]
         clause = Clause(
-            head=Compound("test", (z, result)),
+            head=("test", z, result),
             body=body,
         )
         db = Database("test")
@@ -456,7 +455,7 @@ class TestCompiledLambdaExecution:
 
         body = [Call(func=LoadName(name="call_goal"), args=[lam, r], kwargs=[])]
         clause = Clause(
-            head=Compound("test_unify", (r,)),
+            head=("test_unify", r),
             body=body,
         )
         db = Database("test")
@@ -478,7 +477,7 @@ class TestCompiledLambdaExecution:
 
         body = [Call(func=LoadName(name="call_goal"), args=[lam, 42], kwargs=[])]
         clause = Clause(
-            head=Compound("test_fail", ()),
+            head="test_fail",
             body=body,
         )
         db = Database("test")
@@ -507,7 +506,7 @@ class TestCompiledLambdaExecution:
 
         body = [Call(func=LoadName(name="call_goal"), args=[lam, 5, r], kwargs=[])]
         clause = Clause(
-            head=Compound("test_conj", (r,)),
+            head=("test_conj", r),
             body=body,
         )
         db = Database("test")

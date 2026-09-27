@@ -19,16 +19,12 @@ from __future__ import annotations
 
 from clausal.logic.database import Clause
 from clausal.logic.variables import Var
-from clausal.terms import (
-    Compound,
-    Evaluate,
-    Call, LoadName,
-)
+from clausal.terms import Evaluate, Call, LoadName
 
 
 def _body_dr_eligible():
     Temp, Extra, Out = Var(), Var(), Var()
-    head = Compound("process", (Out,))
+    head = ("process", Out)
     body = [
         Evaluate(left=Temp, right=[1, 2, 3]),
         Call(func=LoadName(name="append"),
@@ -40,7 +36,7 @@ def _body_dr_eligible():
 def _body_dr_ineligible():
     """No DR-candidate Call — append(HeadVar, ...) where source is head-var."""
     Old, Extra, Out = Var(), Var(), Var()
-    head = Compound("process", (Old, Out))
+    head = ("process", Old, Out)
     body = [Call(func=LoadName(name="append"),
                  args=[Old, Extra, Out], kwargs=[])]
     return head, body
@@ -49,7 +45,7 @@ def _body_dr_ineligible():
 def _body_no_dr_calls_at_all():
     """Body with no DR-candidate calls (not append/dict_put/set_union)."""
     x, y = Var(), Var()
-    head = Compound("other", (x, y))
+    head = ("other", x, y)
     body = [Call(func=LoadName(name="Helper"), args=[x, y], kwargs=[])]
     return head, body
 

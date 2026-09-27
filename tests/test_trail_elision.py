@@ -40,7 +40,6 @@ from clausal.logic.compiler.head_match import compile_head_to_match_case
 from clausal.logic.database import Clause, Database
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, Trail, deref, unify
-from clausal.terms import Compound
 
 
 # ── AST walking helpers ──────────────────────────────────────────────────────
@@ -72,7 +71,7 @@ def _make_db(*clauses_specs):
     """
     db = Database()
     for functor, args in clauses_specs:
-        db.assertz(Clause(head=Compound(functor, args), body=[]))
+        db.assertz(Clause(head=(functor, *args) if args else functor, body=[]))
     return db
 
 
@@ -123,7 +122,7 @@ class TestTrailElisionStructural:
         # (those are compiled separately), so we inspect via compile_head_to_match_case.
         # Instead, verify the skip_trail parameter works at the unit level.
         v = Var()
-        head = Compound("t", (v,))
+        head = ("t", v)
         case_arm = compile_head_to_match_case(
             head=head,
             body_stmts=[ast.Pass()],
@@ -141,7 +140,7 @@ class TestTrailElisionStructural:
         """With skip_trail=False (default), var-headed clauses get mark/undo."""
         # nv
         v = Var()
-        head = Compound("t", (v,))
+        head = ("t", v)
         case_arm = compile_head_to_match_case(
             head=head,
             body_stmts=[ast.Pass()],
@@ -159,7 +158,7 @@ class TestTrailElisionStructural:
         # nv
         v = Var()
         # head = t(X, X) — duplicate var triggers dup_guard with unify()
-        head = Compound("t", (v, v))
+        head = ("t", v, v)
         case_arm = compile_head_to_match_case(
             head=head,
             body_stmts=[ast.Pass()],
@@ -184,7 +183,7 @@ class TestTrailElisionStructural:
         see ``test_single_clause_bucket_no_mark_undo``.
         """
         # nv
-        head = Compound("t", (1, 2))
+        head = ("t", 1, 2)
         case_arm = compile_head_to_match_case(
             head=head,
             body_stmts=[ast.Pass()],

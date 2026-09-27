@@ -164,8 +164,7 @@ def test_the_load_refusal_fires_through_the_real_gate_in_both_eras(owner):
     unresolved ``through=`` would let the write pass silently."""
     from types import SimpleNamespace
     from clausal.logic.compiler_v2 import _refuse_foreign_writes
-    from clausal.terms import Compound
-    node = SimpleNamespace(head=Compound("impclob_colour", ("teal",)))
+    node = SimpleNamespace(head=("impclob_colour", "teal"))
     strip = lambda t: t     # nothing era-specific left (ruling B)
     texts = {}
     for era, binding in _eras(owner).items():

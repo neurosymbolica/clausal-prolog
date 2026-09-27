@@ -135,6 +135,7 @@ def test_var_injected():
     assert mod.__dict__["Var"] is Var
 
 
+@pytest.mark.compound_retirement_slice8
 def test_compound_injected():
     # nv
     from clausal.terms import Compound

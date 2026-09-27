@@ -2,7 +2,7 @@ from decimal import Decimal
 
 import pytest
 
-from clausal.terms import term_str, Compound, Quantity
+from clausal.terms import term_str, Quantity
 
 
 class TestDecimalRendering:
@@ -14,7 +14,7 @@ class TestDecimalRendering:
         assert term_str(Decimal("7.90")) == "7.90"
 
     def test_decimal_nested_in_compound(self):
-        s = term_str(Compound("price", (Decimal("1.50"),)))
+        s = term_str(("price", Decimal("1.50")))
         assert "1.50" in s
         assert "Decimal(" not in s
 

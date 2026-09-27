@@ -13,7 +13,7 @@ from clausal.logic.cells import chars, chars_text
 from clausal.logic.variables import Var, Trail, unify, deref
 from clausal.logic.builtins import get_builtin_dispatch
 from clausal.logic.trampoline import StepGenerator, solutions
-from clausal.terms import Compound, term_str
+from clausal.terms import term_str
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -200,7 +200,7 @@ class TestWrite:
     def test_write_compound(self):
         # nv
         t = Trail()
-        out = _capture_stdout("write", 1, Compound("f", (1, 2)), t)
+        out = _capture_stdout("write", 1, ("f", 1, 2), t)
         assert "f" in out
 
     def test_write_tuple_data_cell(self):
@@ -375,7 +375,7 @@ class TestPrintTerm:
     def test_print_term_compound(self):
         # nv
         t = Trail()
-        c = Compound("foo", (1, "bar"))
+        c = ("foo", 1, "bar")
         out = _capture_stdout("print_term", 1, c, t)
         assert "foo" in out
 
@@ -582,7 +582,7 @@ class TestTermToString:
         result = Var()
         t = Trail()
         dispatch = get_builtin_dispatch("term_to_string", 2, None)
-        vals = solutions(StepGenerator(dispatch, None, None, None, Compound("f", (1, 2)), result, t),
+        vals = solutions(StepGenerator(dispatch, None, None, None, ("f", 1, 2), result, t),
                          snapshot=lambda: deref(result))
         assert vals == [chars("f(1, 2)")]
 

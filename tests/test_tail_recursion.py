@@ -44,7 +44,6 @@ from clausal.terms import (
     in_, NotIn,
     ArithEq, ArithNeq,
     Call, LoadName,
-    Compound,
 )
 from clausal.pythonic_ast.nodes import IfExpr, StarUnpack
 
@@ -295,7 +294,7 @@ class TestDetectTroClause(unittest.TestCase):
                 Gt(left=n, right=0),
                 Evaluate(left=n1, right=Sub(left=n, right=1)),
                 Call(func=LoadName(name='Acc'),
-                     args=[n1, Compound("s", (n, acc))], kwargs=[]),
+                     args=[n1, ("s", n, acc)], kwargs=[]),
             ],
         )
         # n and acc are head vars, n1 is Evaluate-bound; with prefix, allowed.
@@ -313,7 +312,7 @@ class TestDetectTroClause(unittest.TestCase):
             head=P(x, y),
             body=[
                 Call(func=LoadName(name='P'),
-                     args=[Compound("f", (x,)), y], kwargs=[]),
+                     args=[("f", x), y], kwargs=[]),
             ],
         )
         # No prefix goals. x is in Compound, not passthrough (different structure).

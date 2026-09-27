@@ -43,6 +43,7 @@ class point:
 # ── TestCompound ───────────────────────────────────────────────────────────────
 
 
+@pytest.mark.compound_retirement_slice8
 class TestCompound:
     def test_construction(self):
         # nv
@@ -225,9 +226,10 @@ class TestTermStr:
 
     def test_compound(self):
         # nv
-        assert term_str(Compound("foo", (1, 2))) == "foo(1, 2)"
+        assert term_str(("foo", 1, 2)) == "foo(1, 2)"
 
 
+    @pytest.mark.compound_retirement_slice9
     def test_kwterm(self):
         # nv
         t = KWTerm("point", x=1, y=2)
@@ -343,6 +345,7 @@ class TestCellTermStr:
     ``"foo(1, 2)"``'s sibling for a ``point`` functor.
     """
 
+    @pytest.mark.compound_retirement_slice8
     def test_cell_matches_the_class_era_rendering_byte_for_byte(self):
         # The class-era anchor: term_str(Compound("point", (1, 2))) would
         # have printed exactly this (see TestTermStr.test_compound's
@@ -402,6 +405,7 @@ class TestCellTermPformat:
     def test_short_cell_stays_flat(self):
         assert term_pformat(("pt", 1, 2), width=80) == "pt(1, 2)"
 
+    @pytest.mark.compound_retirement_slice8
     def test_wide_cell_gets_the_compound_equivalent_multiline_form(self):
         wide = ("bigfunctor",) + tuple(range(1, 20))
         compound_equivalent = Compound("bigfunctor", tuple(range(1, 20)))

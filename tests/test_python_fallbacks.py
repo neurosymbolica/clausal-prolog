@@ -42,6 +42,7 @@ class TestIsTermInstanceFallback:
         # nv
         assert _is_term_instance_py(42) == is_term_instance(42) == False
 
+    @pytest.mark.compound_retirement_slice8
     def test_compound_is_dataclass(self):
         # nv
         c = Compound("f", (1,))
@@ -71,6 +72,7 @@ class TestIsZeroFieldClassFallback:
 
 class TestTermFieldNamesFallback:
 
+    @pytest.mark.compound_retirement_slice8
     def test_compound_dataclass(self):
         # nv
         c = Compound("f", (1, 2))
@@ -96,11 +98,13 @@ from clausal.logic.builtins._helpers import (
 
 class TestFunctorNameFallback:
 
+    @pytest.mark.compound_retirement_slice8
     def test_compound(self):
         # nv
         c = Compound("f", (1, 2))
         assert _functor_name_py(c) == _functor_name(c) == "f"
 
+    @pytest.mark.compound_retirement_slice9
     def test_kwterm(self):
         # nv
         t = KWTerm("rel", a=1)
@@ -139,6 +143,7 @@ class TestFunctorNameFallback:
 
 class TestArityFallback:
 
+    @pytest.mark.compound_retirement_slice8
     def test_compound(self):
         # nv
         c = Compound("f", (1, 2, 3))
@@ -164,16 +169,19 @@ class TestArityFallback:
 
 class TestNthArgFallback:
 
+    @pytest.mark.compound_retirement_slice8
     def test_compound_first(self):
         # nv
         c = Compound("f", (10, 20))
         assert _nth_arg_py(c, 1) == _nth_arg(c, 1) == 10
 
+    @pytest.mark.compound_retirement_slice8
     def test_compound_second(self):
         # nv
         c = Compound("f", (10, 20))
         assert _nth_arg_py(c, 2) == _nth_arg(c, 2) == 20
 
+    @pytest.mark.compound_retirement_slice8
     def test_out_of_range(self):
         # nv
         c = Compound("f", (10,))
@@ -199,6 +207,7 @@ class TestNthArgFallback:
 
 class TestArgsListFallback:
 
+    @pytest.mark.compound_retirement_slice8
     def test_compound(self):
         # nv
         c = Compound("f", (1, 2, 3))
@@ -221,11 +230,13 @@ class TestArgsListFallback:
 
 class TestIsCompoundFallback:
 
+    @pytest.mark.compound_retirement_slice8
     def test_compound(self):
         # nv
         c = Compound("f", (1,))
         assert _is_compound_py(c) == _is_compound(c) == True
 
+    @pytest.mark.compound_retirement_slice9
     def test_kwterm(self):
         # nv
         t = KWTerm("r", a=1)
@@ -256,23 +267,27 @@ class TestIsGroundFallback:
         v = Var()
         assert _is_ground_py([1, v]) == _is_ground([1, v]) == False
 
+    @pytest.mark.compound_retirement_slice8
     def test_compound_with_var(self):
         # nv
         v = Var()
         c = Compound("f", (1, v))
         assert _is_ground_py(c) == _is_ground(c) == False
 
+    @pytest.mark.compound_retirement_slice8
     def test_compound_ground(self):
         # nv
         c = Compound("f", (1, 2))
         assert _is_ground_py(c) == _is_ground(c) == True
 
+    @pytest.mark.compound_retirement_slice9
     def test_kwterm_with_var(self):
         # nv
         v = Var()
         t = KWTerm("r", a=v)
         assert _is_ground_py(t) == _is_ground(t) == False
 
+    @pytest.mark.compound_retirement_slice9
     def test_kwterm_ground(self):
         # nv
         t = KWTerm("r", a=1)
@@ -329,6 +344,7 @@ class TestCopyTermFallback:
         assert is_var(py_result) and py_result is not x
         assert is_var(c_result) and c_result is not x
 
+    @pytest.mark.compound_retirement_slice8
     def test_compound_copied(self):
         # nv
         c = Compound("f", (1, Var()))
@@ -338,6 +354,7 @@ class TestCopyTermFallback:
         assert py.args[0] == 1
         assert is_var(py.args[1])
 
+    @pytest.mark.compound_retirement_slice9
     def test_kwterm_functor_preserved(self):
         """KWTerm copy preserves functor (bug fix verification)."""
         # nv
@@ -347,6 +364,7 @@ class TestCopyTermFallback:
         assert py.functor == "rel"
         assert c.functor == "rel"
 
+    @pytest.mark.compound_retirement_slice9
     def test_kwterm_var_freshened(self):
         # nv
         x = Var()
@@ -391,6 +409,7 @@ class TestCollectVarsFallback:
         _collect_vars_impl([x, x, x], c_result)
         assert len(py_result) == len(c_result) == 1
 
+    @pytest.mark.compound_retirement_slice8
     def test_compound_vars(self):
         # nv
         x, y = Var(), Var()
@@ -525,6 +544,24 @@ def _corpus():
 # record rather than silent.
 _KNOWN_COMPOUND_FUNCTOR_DIVERGENCE = {"compound_var_functor"}
 
+# Compound retirement: these rows hold a ``Compound`` / ``KWTerm``, so what
+# they pin is the twins' Compound / KWTerm ARMS (removed in slices 7-9).  The
+# marks let those slices select exactly these rows.
+_SLICE8_ROWS = {"compound", "compound_var_functor", "cell_in_compound",
+                "compound_in_cell"}
+_SLICE9_ROWS = {"kwterm", "cell_in_kwterm"}
+
+
+def _row_params(exclude=frozenset()):
+    out = []
+    for n, _ in _corpus():
+        if n in exclude:
+            continue
+        marks = ([pytest.mark.compound_retirement_slice8] if n in _SLICE8_ROWS else []) + \
+                ([pytest.mark.compound_retirement_slice9] if n in _SLICE9_ROWS else [])
+        out.append(pytest.param(n, marks=marks) if marks else n)
+    return out
+
 
 def _shape(term):
     """Structural fingerprint: fresh Vars compare by FIRST-OCCURRENCE POSITION.
@@ -595,7 +632,7 @@ class TestTheCorpusRowsAreTheShapesTheyAreNamedFor:
 class TestCellCopyTermTwinParity:
     """``c_copy_term`` vs ``_copy_term_py`` over the whole corpus."""
 
-    @pytest.mark.parametrize("name", [n for n, _ in _corpus()])
+    @pytest.mark.parametrize("name", _row_params())
     def test_copy_is_structurally_identical(self, name):
         # nv
         term_py = dict(_corpus())[name]
@@ -603,7 +640,7 @@ class TestCellCopyTermTwinParity:
         assert _shape(term_py) == _shape(term_c), "corpus builder is not deterministic"
         assert _shape(_copy_term_py(term_py, {})) == _shape(_c_copy_raw(term_c, {}))
 
-    @pytest.mark.parametrize("name", [n for n, _ in _corpus()])
+    @pytest.mark.parametrize("name", _row_params())
     def test_copy_shares_no_variable_with_the_original(self, name):
         """The bug: a cell "copy" that handed back the original's Vars."""
         # nv
@@ -703,7 +740,7 @@ class TestCellCollectVarsTwinParity:
 
     @pytest.mark.parametrize(
         "name",
-        [n for n, _ in _corpus() if n not in _KNOWN_COMPOUND_FUNCTOR_DIVERGENCE],
+        _row_params(_KNOWN_COMPOUND_FUNCTOR_DIVERGENCE),
     )
     def test_same_variables_in_the_same_order(self, name):
         # nv
@@ -757,6 +794,7 @@ class TestCellCollectVarsTwinParity:
         _c_collect_raw(term, result)
         assert result == [x]
 
+    @pytest.mark.compound_retirement_slice8
     def test_a_var_functor_compound_is_a_known_twin_divergence(self):
         """Pre-existing, not a cell question — see the note at
         ``_KNOWN_COMPOUND_FUNCTOR_DIVERGENCE``.  The C twin visits the functor
@@ -782,7 +820,7 @@ class TestCellCollectVarsTwinParity:
 class TestCellIsGroundTwinParity:
     """``c_is_ground`` vs ``_is_ground_py`` over the whole corpus."""
 
-    @pytest.mark.parametrize("name", [n for n, _ in _corpus()])
+    @pytest.mark.parametrize("name", _row_params())
     def test_same_answer(self, name):
         # nv
         term = dict(_corpus())[name]
@@ -794,6 +832,7 @@ class TestCellIsGroundTwinParity:
         assert _c_is_ground_raw(("pt", 1, Var())) is False
         assert _c_is_ground_raw(("pt", 1, 2)) is True
 
+    @pytest.mark.compound_retirement_slice8
     def test_a_cell_nested_in_a_compound_is_reached(self):
         # nv
         assert _c_is_ground_raw(Compound("f", (("pt", Var()),))) is False
@@ -870,7 +909,7 @@ class TestWrapperUsesTheCPathAgain:
 
     @pytest.mark.parametrize(
         "name",
-        [n for n, _ in _corpus() if n not in _KNOWN_COMPOUND_FUNCTOR_DIVERGENCE],
+        _row_params(_KNOWN_COMPOUND_FUNCTOR_DIVERGENCE),
     )
     def test_wrapper_agrees_with_the_python_twin(self, name):
         # nv
@@ -1013,6 +1052,7 @@ class TestTheWrapperActuallyReachesC:
     #     visits the functor slot too (A01-F003), so the answer names the
     #     implementation that ran.
 
+    @pytest.mark.compound_retirement_slice8
     @requires_c
     def test_term_variables_wrapper_returns_the_c_answer(self):
         # nv
@@ -1027,6 +1067,7 @@ class TestTheWrapperActuallyReachesC:
         _collect_vars_impl(term, result)
         assert result == [f], "the wrapper ran the PYTHON twin, not C"
 
+    @pytest.mark.compound_retirement_slice8
     @requires_c
     def test_copy_term_wrapper_returns_the_c_answer(self):
         # nv

@@ -181,11 +181,10 @@ class TestQueryGlobalsInjectedBuiltins:
         # are referenced only under the $ name; see A12-F004).
         from clausal.logic.compiler.predicate import INJECTED_RUNTIME_BUILTINS
         from clausal.logic.solve import _compile_as_query
-        from clausal.terms import Compound
 
         mod = Module("_qg_globals", module_dict={})
         # A trivial always-true goal is enough to force query compilation.
-        goal = Compound("=", (Var(), Var()))
+        goal = ("=", Var(), Var())
         # _compile_as_query returns (dispatch_fn, param_pairs); the dispatch fn's
         # __globals__ are the seeded base_globals (+ module dict, empty here).
         dispatch_fn, _ = _compile_as_query(goal, mod)

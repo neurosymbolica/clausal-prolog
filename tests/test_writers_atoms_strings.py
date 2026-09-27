@@ -353,14 +353,16 @@ class TestTheThreeWriterFamilies:
         """Scryer 0.10.0, byte for byte: ``write([1,2])`` → ``[1,2]``,
         ``write(f(a,b))`` → ``f(a,b)``, ``writeq(f(a,"b"))`` → ``f(a,[b])``.
         """
-        from clausal.terms import Compound, DictTerm
+        from clausal.terms import DictTerm
 
         assert _out(mod, ("write", ("f", "a", "b"))) == "f(a,b)"
         assert _out(mod, ("writeq", ("f", "a", chars("b")))) == "f(a,[b])"
-        assert _out(mod, ("write", Compound("f", (1, 2)))) == "f(1,2)"
+        assert _out(mod, ("write", ("f", 1, 2))) == "f(1,2)"
         assert _out(mod, ("write", DictTerm({"k": "v"}))) == "{k:v}"
         assert _out(mod, ("write_term", [1, 2], [])) == "[1,2]"
 
+    @pytest.mark.compound_retirement_slice9
+    @pytest.mark.compound_retirement_slice8
     def test_the_iso_family_routes_every_term_shape_through_term_str(self, mod):
         """Fix round 1, item 1: ``Compound``/``KWTerm``/``DictTerm`` used to
         fall to ``str()``, which routes back through ``term_str``'s DISPLAY
@@ -372,6 +374,8 @@ class TestTheThreeWriterFamilies:
         assert _out(mod, ("write", KWTerm("p", a=chars("ab")))) == "p(a=[a,b])"
         assert _out(mod, ("write", DictTerm({"k": chars("ab")}))) == "{k:[a,b]}"
 
+    @pytest.mark.compound_retirement_slice9
+    @pytest.mark.compound_retirement_slice8
     def test_write_equals_the_option_free_write_term(self, mod):
         from clausal.terms import Compound, DictTerm, KWTerm
 

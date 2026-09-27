@@ -10,7 +10,7 @@ from __future__ import annotations
 from clausal.logic.atoms import mint
 from clausal.logic.database import Clause
 from clausal.logic.variables import Var
-from clausal.terms import Compound, Call, LoadName
+from clausal.terms import Call, LoadName
 
 # Re-use helpers from the legacy callsite test file.
 from tests.test_callsite_specialization import _make_locked_pred_cls
@@ -29,7 +29,7 @@ def _case_eligible_literal_arg():
     ])
     x = Var()
     body = [Call(func=LoadName(name="color_e3"), args=[mint("red")], kwargs=[])]
-    clause = Clause(head=Compound("caller", (x,)), body=body)
+    clause = Clause(head=("caller", x), body=body)
     base_globals = {"color_e3": callee_cls.handle}
     return clause, base_globals, callee_cls._row.db
 
@@ -41,7 +41,7 @@ def _case_ineligible_variable_arg():
     ])
     x, y = Var(), Var()
     body = [Call(func=LoadName(name="color_e3v"), args=[y], kwargs=[])]
-    clause = Clause(head=Compound("caller", (x,)), body=body)
+    clause = Clause(head=("caller", x), body=body)
     base_globals = {"color_e3v": callee_cls.handle}
     return clause, base_globals, callee_cls._row.db
 

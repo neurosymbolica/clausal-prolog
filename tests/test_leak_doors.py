@@ -144,12 +144,16 @@ class TestEveryContainerIsWalked:
             "frozenset": frozenset({a}), "NamedTuple": NT(a), "nested": ("f", [{"k": (a,)}]),
         }
 
+    @pytest.mark.compound_retirement_slice8
+    @pytest.mark.compound_retirement_slice9
     def test_has_atom_tag_sees_every_shape(self):
         from clausal.logic.to_python import has_atom_tag
         for name, shape in self._shapes().items():
             assert has_atom_tag(shape), name
         assert not has_atom_tag(("f", ["a", {"k": ("g", 1)}]))
 
+    @pytest.mark.compound_retirement_slice8
+    @pytest.mark.compound_retirement_slice9
     def test_strip_removes_the_tag_from_every_shape_and_keeps_the_shape(self):
         from clausal.logic.to_python import strip_atom_tags, has_atom_tag
         for name, shape in self._shapes().items():
@@ -177,6 +181,8 @@ class TestEveryContainerIsWalked:
         out = strip_atom_tags(dd)
         assert type(out) is collections.defaultdict and out.default_factory is list and out["k"] == "a"
 
+    @pytest.mark.compound_retirement_slice9
+    @pytest.mark.compound_retirement_slice8
     def test_to_python_converts_through_every_shape(self):
         """No drift: the same list of shapes converts, so a container the
         strip knows is one to_python knows."""
@@ -243,6 +249,7 @@ class TestCyclicTerms:
         cycv = ["c", Var()]; cycv.append(cycv)
         assert _probe_var_free(cycv) is False
 
+    @pytest.mark.compound_retirement_slice8
     def test_a_cyclic_goal_passes_the_door(self):
         from clausal.logic.solve import _python_entry
         cyc = ["c"]; cyc.append(cyc)

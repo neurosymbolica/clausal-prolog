@@ -908,14 +908,14 @@ class TestBucketPatternIntegration:
     P3-2 Task 3 closed the gap this class used to record: a cell head arg now
     has its own branch in ``head_to_match_pattern`` and matches as a sequence.
     Note the clauses here are asserted straight into a ``Database`` with a
-    ``Compound`` head, which is the ONE route that runs no hoist at all --
+    cell head, which is the ONE route that runs no hoist at all --
     neither ``Module.define_predicate`` nor ``database_ops``' fact
     normalisation -- so the cell sits in the head from the start and there is
     nothing for the bucket lift to lift.  The lift's own reach is covered by
     ``TestCellHeadReachability``.
     """
 
-    #: Head functor for the probe predicate.  A ``Compound`` head under a
+    #: Head functor for the probe predicate.  A cell head under a
     #: name the fixture does not define, so nothing here mutates the shared
     #: module's own predicates (an earlier draft asserted onto ``mod.kind``
     #: and silently polluted every later test in the file).
@@ -924,7 +924,6 @@ class TestBucketPatternIntegration:
     def _compile_cell_headed_kind(self):
         from clausal.logic.compiler import predicate as predicate_mod
         from clausal.logic.database import Clause, Database
-        from clausal.terms import Compound
 
         mod = _fixture(_TAGGED)
         db = Database()
@@ -935,7 +934,7 @@ class TestBucketPatternIntegration:
             (("seg", 1, 2, 3), "d"),
             (("point", 9, 9), "e"),
         ]:
-            db.assertz(Clause(head=Compound(self.PROBE, (shape, k)), body=[]))
+            db.assertz(Clause(head=(self.PROBE, shape, k), body=[]))
 
         captured = []
         original = predicate_mod.functiondef_to_function
@@ -1012,7 +1011,7 @@ class TestBucketPatternIntegration:
         """
         from clausal.logic.compiler import predicate as predicate_mod
         from clausal.logic.database import Clause, Database, Module
-        from clausal.terms import Compound, Call, LoadName, Unify
+        from clausal.terms import Call, LoadName, Unify
 
         mod = _fixture(_TAGGED)
         db = Database()
@@ -1023,14 +1022,14 @@ class TestBucketPatternIntegration:
             (("seg", 1, 2, 3), "d"),
             (("point", 9, 9), "e"),
         ]:
-            db.assertz(Clause(head=Compound(self.PROBE, (shape, k)), body=[]))
+            db.assertz(Clause(head=(self.PROBE, shape, k), body=[]))
         # The sixth clause: a source-shaped compound reference -- Var head
         # arg + body Unify(Var, Call(LoadName('point'), (7, 8))) -- exactly
         # what ``_normalize_structural_head_args`` hoists a written
         # ``kind_probe(point(7, 8), "f")`` fact to.
         v = Var()
         db.assertz(Clause(
-            head=Compound(self.PROBE, (v, "f")),
+            head=(self.PROBE, v, "f"),
             body=[Unify(left=v, right=Call(
                 func=LoadName(name="point"), args=[7, 8], kwargs=[]))],
         ))
@@ -1243,10 +1242,10 @@ class TestTheBucketLift:
 
     def _clause(self, arg_term):
         from clausal.logic.database import Clause
-        from clausal.terms import Compound, Unify
+        from clausal.terms import Unify
 
         v = Var()
-        return Clause(head=Compound("p", (v, "k")),
+        return Clause(head=("p", v, "k"),
                       body=[Unify(left=v, right=arg_term)])
 
     def _call(self, name, n_args=2, kwargs=None):
@@ -1508,6 +1507,7 @@ class TestLiveCellHeadArg:
         assert self._ask(m, ("other", 1, 2)) == ["catchall"]
         assert self._ask(m, ("pt", 1, 2)) == ["yes", "catchall"]
 
+    @pytest.mark.compound_retirement_slice8
     def test_a_non_ground_cell_answers_what_its_compound_twin_answers(self):
         from clausal.terms import Compound
 
@@ -1532,6 +1532,7 @@ class TestLiveCellHeadArg:
         assert self._ask(m, 42) == ["catchall"]
         assert self._ask(m, ("pt", 1, 3)) == ["catchall"]
 
+    @pytest.mark.compound_retirement_slice8
     def test_the_cell_and_compound_rows_agree_in_every_argument_mode(self):
         """The parity table, asserted rather than argued.
 
@@ -1743,6 +1744,7 @@ class TestCellHeadArgOpaqueSlots:
         K = Var()
         return [deref(K) for _t in call(functor, probe, K, module=m)]
 
+    @pytest.mark.compound_retirement_slice8
     @pytest.mark.parametrize("kind", ["date", "Decimal", "frozenset",
                                       "nested cell"])
     def test_an_opaque_value_in_a_cell_slot_answers_like_its_compound_twin(
@@ -2174,6 +2176,7 @@ class TestCellWriterSurfaceFixRound(TestCellsAtTheBuiltinSurface):
         assert "pt(1, 2)" not in out
 
 
+@pytest.mark.compound_retirement_slice8
 class TestCallableAndTheTupleDataEdge:
     """``callable_/1`` (ISO ``callable``) — fix round 2.
 

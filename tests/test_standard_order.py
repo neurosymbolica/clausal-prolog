@@ -27,7 +27,7 @@ from clausal.logic.compiler.globals_env import _set_of_sort_dedup
 from clausal.logic.solve import solve
 from clausal.logic.trampoline import DONE
 from clausal.logic.variables import Var, Trail, deref
-from clausal.terms import Compound, DictTerm, KWTerm, SetTerm
+from clausal.terms import DictTerm, KWTerm, SetTerm
 from clausal.logic.atoms import char_atom, is_atom, mint, spelling
 from clausal.logic.cells import chars
 
@@ -53,7 +53,7 @@ def _key_sorted(items):
 
 
 def _c(f, *args):
-    return Compound(f, tuple(args))
+    return (f, *args) if args else f
 
 
 # ── The reported defect ──────────────────────────────────────────────────
@@ -85,6 +85,7 @@ class TestCompoundIntegerArguments:
                 == _run_list_builtin(_msort__2, [c, a, b])
                 == [b, c, a])
 
+    @pytest.mark.compound_retirement_slice9
     def test_kwterm_integer_fields(self):
         k15 = KWTerm("pt", x=1, y=15)
         k2 = KWTerm("pt", x=1, y=2)
@@ -162,6 +163,7 @@ class TestStandardOrderShape:
         ordered = [deref(x) for x in _key_sorted([_c("s", 15), v])]
         assert ordered == [_c("s", 2), _c("s", 15)]
 
+    @pytest.mark.compound_retirement_slice9
     def test_key_is_total_over_mixed_junk(self):
         """Every pair of keys must be comparable — no TypeError may escape."""
         items = [
