@@ -86,8 +86,7 @@ def test_term_html_ampersand_in_string():
 
 def test_term_html_compound():
     # nv
-    from clausal.terms import Compound
-    result = term_html(Compound("foo", (1, 2)))
+    result = term_html(("foo", 1, 2))
     assert 'class="clausal-atom"' in result
     assert "foo" in result
     assert "1" in result
@@ -96,6 +95,7 @@ def test_term_html_compound():
 
 # ── Cells (P3-2 Task 7) ────────────────────────────────────────────────────────
 
+@pytest.mark.compound_retirement_slice8
 def test_term_html_str_functor_cell():
     """A str-functor CELL used to fall through every branch to the
     ``esc(repr(t))`` tail, leaking the Python tuple repr into Jupyter

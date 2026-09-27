@@ -15,6 +15,13 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
+# Compound retirement slice 5: NOT converted to cells.  The subject is the
+# class itself -- it is the self-test of the Compound/KWTerm census instruments, whose
+# positive controls construct both classes -- so slice 8 deletes or rewrites this module.
+pytestmark = pytest.mark.compound_retirement_slice8
+
 REPO = Path(__file__).resolve().parent.parent
 TOOL = REPO / "tools" / "compound_census"
 

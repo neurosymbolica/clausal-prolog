@@ -149,6 +149,7 @@ def test_context_text_splits_into_indicator_and_prose(text, second, prose):
     assert LogicException(term).message == prose
 
 
+@pytest.mark.compound_retirement_slice8
 def test_an_indicator_given_as_the_context_is_the_second_argument():
     for pi in (("/", "foo", 1), Compound("/", ("foo", 1))):
         assert cell_args(instantiation_error(pi))[1] is pi
@@ -216,6 +217,7 @@ def test_message_names_shared_variables_and_blanks_singletons():
     assert _msg(("f", x, y, x)) == "Uncaught logic exception: f(_1,_,_1)"
 
 
+@pytest.mark.compound_retirement_slice8
 def test_hint_reads_a_cell_and_a_compound_alike():
     culprit = FloorDiv(left=10000, right=4)
     cell = type_error("number", culprit, "sum_list/2")

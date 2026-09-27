@@ -19,6 +19,8 @@ What stays here:
 
 from __future__ import annotations
 
+import pytest
+
 from clausal.logic.atoms import mint
 from clausal.logic.cells import chars
 from clausal.logic.database import Module
@@ -57,20 +59,21 @@ class TestVarPostBinding:
 
 class TestCompoundArgs:
     def test_var_fails_compound(self):
-        assert _fails("var", Compound("f", (1, 2)))
+        assert _fails("var", ("f", 1, 2))
 
     def test_nonvar_succeeds_compound(self):
-        assert _succeeds("nonvar", Compound("f", (1,)))
+        assert _succeeds("nonvar", ("f", 1))
 
     def test_atom_fails_for_compound(self):
-        assert _fails("is_str", Compound("f", ("x",)))
+        assert _fails("is_str", ("f", "x"))
 
     def test_compound_succeeds(self):
-        assert _succeeds("compound", Compound("f", ("a",)))
+        assert _succeeds("compound", ("f", "a"))
 
     def test_compound_arity2(self):
-        assert _succeeds("compound", Compound("g", (1, 2)))
+        assert _succeeds("compound", ("g", 1, 2))
 
+    @pytest.mark.compound_retirement_slice9
     def test_compound_kwterm(self):
         assert _succeeds("compound", KWTerm("point", x=1, y=2))
 
@@ -93,15 +96,16 @@ class TestCompoundArgs:
         assert _fails("compound", [])
         assert _fails("compound", chars(""))
 
+    @pytest.mark.compound_retirement_slice8
     def test_arity0_compound_still_compound(self):
         """DIFFERS from ISO: arity-0 Compound is still compound in clausal."""
         assert _succeeds("compound", Compound("f", ()))
 
     def test_callable_compound(self):
-        assert _succeeds("callable_", Compound("f", ("x",)))
+        assert _succeeds("callable_", ("f", "x"))
 
     def test_ground_compound_with_var(self):
-        assert _fails("ground", Compound("f", (Var(),)))
+        assert _fails("ground", ("f", Var()))
 
 
 # ── bool / complex edge cases (Python-level literals) ──────────────────────

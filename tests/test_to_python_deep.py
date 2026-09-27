@@ -36,17 +36,20 @@ def test_a_namedtuple_survives():
 
 # ── Compound ────────────────────────────────────────────────────────────────
 
+@pytest.mark.compound_retirement_slice8
 def test_an_atom_functor_compound_is_its_cell_converted():
     c = Compound("pair", (mint("a"), chars("text")))
     assert to_python(c) == ("pair", "a", "text")
     assert type(to_python(c)[2]) is str
 
 
+@pytest.mark.compound_retirement_slice8
 def test_a_compound_nested_in_a_list_converts_too():
     out = to_python([Compound("f", (chars("x"),))])
     assert out == [("f", "x")] and type(out[0][1]) is str
 
 
+@pytest.mark.compound_retirement_slice8
 def test_a_compound_with_no_cell_keeps_its_shape_with_converted_args():
     # arity 0 is not an ISO term and has no cell (the 1-tuple is reserved)
     c0 = Compound("foo", ())
@@ -62,6 +65,7 @@ def test_a_compound_with_no_cell_keeps_its_shape_with_converted_args():
 
 # ── KWTerm ──────────────────────────────────────────────────────────────────
 
+@pytest.mark.compound_retirement_slice9
 def test_a_kwterm_keeps_its_shape_with_converted_fields():
     k = KWTerm("r", a=chars("t"), b=[mint("x"), chars("y")])
     out = to_python(k)
@@ -123,7 +127,7 @@ def test_dict_keys_are_normalised():
 
 
 def test_dict_values_convert_at_depth():
-    d = DictTerm({mint("k"): [Compound("f", (chars("x"),))]})
+    d = DictTerm({mint("k"): [("f", chars("x"))]})
     assert to_python(d) == {"k": [("f", "x")]}
 
 

@@ -13,11 +13,10 @@ import pytest
 
 from clausal.logic.atoms import mint
 from clausal.logic.database import Clause, Database, PredRow, WriteStamp
-from clausal.terms import Compound
 
 
 def _clause(functor, *args):
-    return Clause(head=Compound(functor, tuple(args)), body=[])
+    return Clause(head=(functor, *args) if args else functor, body=[])
 
 
 # ── row() identity + create semantics ───────────────────────────────────────
@@ -144,7 +143,7 @@ def test_row_clauses_retract_visible_through_row():
     db.assertz(c1)
     row = db.row("k", 1)
     assert row.clauses == [c1]
-    assert db.retract(Compound("k", (1,))) is True
+    assert db.retract(("k", 1)) is True
     assert row.clauses == []
 
 

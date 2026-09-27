@@ -85,7 +85,6 @@ from clausal.logic.compiler import compile_predicate_trampoline_ast
 from clausal.logic.database import Clause, Database
 from clausal.logic.trampoline import StepGenerator, DONE as _DONE
 from clausal.logic.variables import Var, Trail, deref
-from clausal.terms import Compound
 from clausal.testing import load_clausal_module
 
 _FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
@@ -183,7 +182,7 @@ def _make_list_pred(
     db = Database()
     for list_val in list_heads:
         other_args = tuple(Var() for _ in range(arity - 1))
-        db.assertz(Clause(head=Compound(functor, (list_val, *other_args)), body=[]))
+        db.assertz(Clause(head=(functor, list_val, *other_args), body=[]))
     clauses = db.clauses_for(functor, arity)
     return compile_predicate_trampoline_ast(functor, arity, clauses, db)
 
@@ -450,7 +449,7 @@ class TestDeepIndexStructural:
         # nv
         db = Database()
         for i in range(4):
-            db.assertz(Clause(head=Compound("r", (Var(), Var())), body=[]))
+            db.assertz(Clause(head=("r", Var(), Var()), body=[]))
         clauses = db.clauses_for("r", 2)
         func_def = compile_predicate_trampoline_ast("r", 2, clauses, db)
         assert not _has_isinstance_check(func_def, "list"), (
@@ -566,8 +565,8 @@ class TestDeepIndexEdgeCases:
         """Arity-0 predicates have no arguments to dispatch on."""
         # nv
         db = Database()
-        db.assertz(Clause(head=Compound("z", ()), body=[]))
-        db.assertz(Clause(head=Compound("z", ()), body=[]))
+        db.assertz(Clause(head="z", body=[]))
+        db.assertz(Clause(head="z", body=[]))
         clauses = db.clauses_for("z", 0)
         func_def = compile_predicate_trampoline_ast("z", 0, clauses, db)
         assert not _has_isinstance_check(func_def, "list")
@@ -577,7 +576,7 @@ class TestDeepIndexEdgeCases:
         """Single [] clause: no dispatch needed (nothing to dispatch to)."""
         # nv
         db = Database()
-        db.assertz(Clause(head=Compound("p1", ([],)), body=[]))
+        db.assertz(Clause(head=("p1", []), body=[]))
         clauses = db.clauses_for("p1", 1)
         func_def = compile_predicate_trampoline_ast("p1", 1, clauses, db)
         assert not _has_isinstance_check(func_def, "list")
@@ -587,7 +586,7 @@ class TestDeepIndexEdgeCases:
         # nv
         db = Database()
         for _ in range(3):
-            db.assertz(Clause(head=Compound("allvar", (Var(),)), body=[]))
+            db.assertz(Clause(head=("allvar", Var()), body=[]))
         clauses = db.clauses_for("allvar", 1)
         func_def = compile_predicate_trampoline_ast("allvar", 1, clauses, db)
         assert not _has_isinstance_check(func_def, "list"), (
@@ -602,8 +601,8 @@ class TestDeepIndexEdgeCases:
         # p([], _v)  and  p([1,2], _v2)
         db = Database()
         v1, v2 = Var(), Var()
-        db.assertz(Clause(head=Compound("mylen", ([], v1)), body=[]))
-        db.assertz(Clause(head=Compound("mylen", ([1, 2], v2)), body=[]))
+        db.assertz(Clause(head=("mylen", [], v1), body=[]))
+        db.assertz(Clause(head=("mylen", [1, 2], v2), body=[]))
         clauses = db.clauses_for("mylen", 2)
         dispatch = compile_predicate_trampoline("mylen", 2, clauses, db)
 
@@ -620,8 +619,8 @@ class TestDeepIndexEdgeCases:
 
         db = Database()
         v1, v2 = Var(), Var()
-        db.assertz(Clause(head=Compound("mylen", ([], v1)), body=[]))
-        db.assertz(Clause(head=Compound("mylen", ([1, 2], v2)), body=[]))
+        db.assertz(Clause(head=("mylen", [], v1), body=[]))
+        db.assertz(Clause(head=("mylen", [1, 2], v2), body=[]))
         clauses = db.clauses_for("mylen", 2)
         dispatch = compile_predicate_trampoline("mylen", 2, clauses, db)
 
@@ -638,8 +637,8 @@ class TestDeepIndexEdgeCases:
 
         db = Database()
         v1, v2 = Var(), Var()
-        db.assertz(Clause(head=Compound("mylen", ([], v1)), body=[]))
-        db.assertz(Clause(head=Compound("mylen", ([1], v2)), body=[]))
+        db.assertz(Clause(head=("mylen", [], v1), body=[]))
+        db.assertz(Clause(head=("mylen", [1], v2), body=[]))
         clauses = db.clauses_for("mylen", 2)
         dispatch = compile_predicate_trampoline("mylen", 2, clauses, db)
 
@@ -656,8 +655,8 @@ class TestDeepIndexEdgeCases:
 
         db = Database()
         v1, v2 = Var(), Var()
-        db.assertz(Clause(head=Compound("mylen", ([], v1)), body=[]))
-        db.assertz(Clause(head=Compound("mylen", ([1, 2], v2)), body=[]))
+        db.assertz(Clause(head=("mylen", [], v1), body=[]))
+        db.assertz(Clause(head=("mylen", [1, 2], v2), body=[]))
         clauses = db.clauses_for("mylen", 2)
         dispatch = compile_predicate_trampoline("mylen", 2, clauses, db)
 
@@ -682,8 +681,8 @@ class TestDeepIndexEdgeCases:
         # Two clauses with non-empty list heads (both "cons" bucket)
         db = Database()
         v1, v2 = Var(), Var()
-        db.assertz(Clause(head=Compound("pick", (v1, [1])), body=[]))
-        db.assertz(Clause(head=Compound("pick", (v2, [1, 2])), body=[]))
+        db.assertz(Clause(head=("pick", v1, [1]), body=[]))
+        db.assertz(Clause(head=("pick", v2, [1, 2]), body=[]))
         clauses = db.clauses_for("pick", 2)
         dispatch = compile_predicate_trampoline("pick", 2, clauses, db)
 

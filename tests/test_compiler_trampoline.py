@@ -36,7 +36,6 @@ from clausal.terms import (
     Unify as Is, Evaluate, ArithEq, ArithNeq, Lt, Gt,
     in_, NotIn,
     Call, LoadName,
-    Compound,
     Add,
 )
 
@@ -168,7 +167,7 @@ class TestCompileGoalTrampolineCallStructure:
         # nv
         import ast
         db = Database()
-        db.assertz(Clause(head=Compound("foo", (1,)), body=[]))
+        db.assertz(Clause(head=("foo", 1), body=[]))
         x = Var()
         vc = {x._id: "_v1"}
         goal = Call(func=LoadName(name="foo"), args=[x], kwargs=[])
@@ -184,7 +183,7 @@ class TestCompileGoalTrampolineCallStructure:
         # nv
         import ast
         db = Database()
-        db.assertz(Clause(head=Compound("bar", (42,)), body=[]))
+        db.assertz(Clause(head=("bar", 42), body=[]))
         x = Var()
         vc = {x._id: "_vX"}
         goal = Call(func=LoadName(name="bar"), args=[x], kwargs=[])
@@ -209,21 +208,21 @@ class TestTrampolineIntegrationFacts:
 
     def test_single_fact_matches(self):
         # nv
-        _, fn = make_pred("foo", 1, [(Compound("foo", (1,)), [])])
+        _, fn = make_pred("foo", 1, [(("foo", 1), [])])
         trail = fresh_trail()
         assert _count_solutions(fn, 1, trail) == 1
 
     def test_single_fact_no_match(self):
         # nv
-        _, fn = make_pred("foo", 1, [(Compound("foo", (1,)), [])])
+        _, fn = make_pred("foo", 1, [(("foo", 1), [])])
         trail = fresh_trail()
         assert _count_solutions(fn, 2, trail) == 0
 
     def test_two_facts_one_solution_each(self):
         # nv
         db = Database()
-        db.assertz(Clause(head=Compound("foo", (1,)), body=[]))
-        db.assertz(Clause(head=Compound("foo", (2,)), body=[]))
+        db.assertz(Clause(head=("foo", 1), body=[]))
+        db.assertz(Clause(head=("foo", 2), body=[]))
         fn = compile_predicate_trampoline("foo", 1, db.clauses_for("foo", 1), db)
         trail1, trail2 = fresh_trail(), fresh_trail()
         assert _count_solutions(fn, 1, trail1) == 1
@@ -241,8 +240,8 @@ class TestTrampolineIntegrationFacts:
         # nv
         a, b = Var(), Var()
         db = Database()
-        db.assertz(Clause(head=Compound("digit", (a,)), body=[Is(left=a, right=1)]))
-        db.assertz(Clause(head=Compound("digit", (b,)), body=[Is(left=b, right=2)]))
+        db.assertz(Clause(head=("digit", a), body=[Is(left=a, right=1)]))
+        db.assertz(Clause(head=("digit", b), body=[Is(left=b, right=2)]))
         fn = compile_predicate_trampoline("digit", 1, db.clauses_for("digit", 1), db)
         x = Var()
         trail = fresh_trail()
@@ -254,7 +253,7 @@ class TestTrampolineIntegrationFacts:
         # nv
         x = Var()
         db = Database()
-        db.assertz(Clause(head=Compound("color", (x,)), body=[Is(left=x, right="red")]))
+        db.assertz(Clause(head=("color", x), body=[Is(left=x, right="red")]))
         fn = compile_predicate_trampoline("color", 1, db.clauses_for("color", 1), db)
         v = Var()
         trail = fresh_trail()
@@ -266,7 +265,7 @@ class TestTrampolineIntegrationFacts:
         # nv
         x = Var()
         db = Database()
-        db.assertz(Clause(head=Compound("val", (x,)), body=[Is(left=x, right=99)]))
+        db.assertz(Clause(head=("val", x), body=[Is(left=x, right=99)]))
         fn = compile_predicate_trampoline("val", 1, db.clauses_for("val", 1), db)
         v = Var()
         trail = fresh_trail()
@@ -283,7 +282,7 @@ class TestTrampolineIntegrationUnification:
         # nv
         x = Var()
         db = Database()
-        db.assertz(Clause(head=Compound("is_x", (x,)), body=[Is(left=x, right=5)]))
+        db.assertz(Clause(head=("is_x", x), body=[Is(left=x, right=5)]))
         fn = compile_predicate_trampoline("is_x", 1, db.clauses_for("is_x", 1), db)
         v = Var()
         trail = fresh_trail()
@@ -293,7 +292,7 @@ class TestTrampolineIntegrationUnification:
     def test_failed_is_goal_zero_solutions(self):
         # nv
         db = Database()
-        db.assertz(Clause(head=Compound("bad", (2,)), body=[Is(left=2, right=3)]))
+        db.assertz(Clause(head=("bad", 2), body=[Is(left=2, right=3)]))
         fn = compile_predicate_trampoline("bad", 1, db.clauses_for("bad", 1), db)
         trail = fresh_trail()
         assert _count_solutions(fn, 2, trail) == 0
@@ -303,7 +302,7 @@ class TestTrampolineIntegrationUnification:
         x, y = Var(), Var()
         db = Database()
         db.assertz(Clause(
-            head=Compound("two_vals", (x, y)),
+            head=("two_vals", x, y),
             body=[Is(left=x, right=1), Is(left=y, right=2)],
         ))
         fn = compile_predicate_trampoline("two_vals", 2, db.clauses_for("two_vals", 2), db)
@@ -327,10 +326,10 @@ class TestTrampolineIntegrationPredicateCall:
         # nv
         db = Database()
         ix = Var()
-        db.assertz(Clause(head=Compound("inner", (ix,)), body=[Is(left=ix, right=42)]))
+        db.assertz(Clause(head=("inner", ix), body=[Is(left=ix, right=42)]))
         x = Var()
         db.assertz(Clause(
-            head=Compound("wrap", (x,)),
+            head=("wrap", x),
             body=[Call(func=LoadName(name="inner"), args=[x], kwargs=[])],
         ))
         compile_predicate_trampoline("inner", 1, db.clauses_for("inner", 1), db)
@@ -350,14 +349,14 @@ class TestTrampolineIntegrationPredicateCall:
         db = Database()
         c1, c2 = Var(), Var()
         s1, s2 = Var(), Var()
-        db.assertz(Clause(head=Compound("color", (c1,)), body=[Is(left=c1, right="red")]))
-        db.assertz(Clause(head=Compound("color", (c2,)), body=[Is(left=c2, right="blue")]))
-        db.assertz(Clause(head=Compound("size", (s1,)), body=[Is(left=s1, right="big")]))
-        db.assertz(Clause(head=Compound("size", (s2,)), body=[Is(left=s2, right="small")]))
+        db.assertz(Clause(head=("color", c1), body=[Is(left=c1, right="red")]))
+        db.assertz(Clause(head=("color", c2), body=[Is(left=c2, right="blue")]))
+        db.assertz(Clause(head=("size", s1), body=[Is(left=s1, right="big")]))
+        db.assertz(Clause(head=("size", s2), body=[Is(left=s2, right="small")]))
 
         cx, sy = Var(), Var()
         db.assertz(Clause(
-            head=Compound("combo", (cx, sy)),
+            head=("combo", cx, sy),
             body=[
                 Call(func=LoadName(name="color"), args=[cx], kwargs=[]),
                 Call(func=LoadName(name="size"), args=[sy], kwargs=[]),
@@ -387,7 +386,7 @@ class TestTrampolineIntegrationPredicateCall:
         db = Database()
         for i in range(N):
             hv = Var()
-            db.assertz(Clause(head=Compound("step", (hv,)), body=[Is(left=hv, right=i)]))
+            db.assertz(Clause(head=("step", hv), body=[Is(left=hv, right=i)]))
         fn = compile_predicate_trampoline("step", 1, db.clauses_for("step", 1), db)
         v = Var()
         trail = fresh_trail()
@@ -401,11 +400,11 @@ class TestTrampolineIntegrationPredicateCall:
         db = Database()
         for i in range(N):
             hv = Var()
-            db.assertz(Clause(head=Compound("step2", (hv,)), body=[Is(left=hv, right=i)]))
+            db.assertz(Clause(head=("step2", hv), body=[Is(left=hv, right=i)]))
 
         x = Var()
         db.assertz(Clause(
-            head=Compound("chain2", (x,)),
+            head=("chain2", x),
             body=[Call(func=LoadName(name="step2"), args=[x], kwargs=[])],
         ))
         compile_predicate_trampoline("step2", 1, db.clauses_for("step2", 1), db)
@@ -425,7 +424,7 @@ class TestTrampolineIntegrationDisjunction:
         x = Var()
         db = Database()
         db.assertz(Clause(
-            head=Compound("or_pred", (x,)),
+            head=("or_pred", x),
             body=[Or(left=Is(left=x, right=1), right=Is(left=x, right=2))],
         ))
         fn = compile_predicate_trampoline("or_pred", 1, db.clauses_for("or_pred", 1), db)
@@ -439,7 +438,7 @@ class TestTrampolineIntegrationDisjunction:
         x = Var()
         db = Database()
         db.assertz(Clause(
-            head=Compound("or2", (x,)),
+            head=("or2", x),
             body=[Or(left=Is(left=x, right=99), right=Is(left=x, right=7))],  # 99 != bound 5; 7 succeeds only if x free
         ))
         fn = compile_predicate_trampoline("or2", 1, db.clauses_for("or2", 1), db)
@@ -462,7 +461,7 @@ class TestTrampolineIntegrationNegation:
         db = Database()
         compile_predicate_trampoline("fail_pred", 1, [], db)
         db.assertz(Clause(
-            head=Compound("naf_test", (x,)),
+            head=("naf_test", x),
             body=[Not(operand=Call(func=LoadName(name="fail_pred"), args=[x], kwargs=[]))],
         ))
         fn = compile_predicate_trampoline("naf_test", 1, db.clauses_for("naf_test", 1), db)
@@ -474,10 +473,10 @@ class TestTrampolineIntegrationNegation:
         # nv
         x = Var()
         db = Database()
-        db.assertz(Clause(head=Compound("succeed_pred", (42,)), body=[]))
+        db.assertz(Clause(head=("succeed_pred", 42), body=[]))
         compile_predicate_trampoline("succeed_pred", 1, db.clauses_for("succeed_pred", 1), db)
         db.assertz(Clause(
-            head=Compound("naf_test2", (x,)),
+            head=("naf_test2", x),
             body=[Not(operand=Call(func=LoadName(name="succeed_pred"), args=[x], kwargs=[]))],
         ))
         fn = compile_predicate_trampoline(
@@ -497,7 +496,7 @@ class TestTrampolineIntegrationMembership:
         x = Var()
         db = Database()
         db.assertz(Clause(
-            head=Compound("member_t", (x,)),
+            head=("member_t", x),
             body=[in_(left=x, right=[1, 2, 3])],
         ))
         fn = compile_predicate_trampoline("member_t", 1, db.clauses_for("member_t", 1), db)
@@ -511,7 +510,7 @@ class TestTrampolineIntegrationMembership:
         x = Var()
         db = Database()
         db.assertz(Clause(
-            head=Compound("not_mem", (x,)),
+            head=("not_mem", x),
             body=[NotIn(left=x, right=[1, 2])],
         ))
         fn = compile_predicate_trampoline("not_mem", 1, db.clauses_for("not_mem", 1), db)
@@ -523,7 +522,7 @@ class TestTrampolineIntegrationMembership:
         x = Var()
         db = Database()
         db.assertz(Clause(
-            head=Compound("not_mem2", (x,)),
+            head=("not_mem2", x),
             body=[NotIn(left=x, right=[1, 2])],
         ))
         fn = compile_predicate_trampoline("not_mem2", 1, db.clauses_for("not_mem2", 1), db)
@@ -540,7 +539,7 @@ class TestTrampolineIntegrationComparisons:
         # nv
         x = Var()
         db = Database()
-        db.assertz(Clause(head=Compound("big", (x,)), body=[Gt(left=x, right=10)]))
+        db.assertz(Clause(head=("big", x), body=[Gt(left=x, right=10)]))
         fn = compile_predicate_trampoline("big", 1, db.clauses_for("big", 1), db)
         trail = fresh_trail()
         assert _count_solutions(fn, 15, trail) == 1
@@ -549,7 +548,7 @@ class TestTrampolineIntegrationComparisons:
         # nv
         x = Var()
         db = Database()
-        db.assertz(Clause(head=Compound("big2", (x,)), body=[Gt(left=x, right=10)]))
+        db.assertz(Clause(head=("big2", x), body=[Gt(left=x, right=10)]))
         fn = compile_predicate_trampoline("big2", 1, db.clauses_for("big2", 1), db)
         trail = fresh_trail()
         assert _count_solutions(fn, 5, trail) == 0
@@ -561,7 +560,7 @@ class TestTrampolineIntegrationComparisons:
         x1, x2 = Var(), Var()
         db = Database()
         db.assertz(Clause(
-            head=Compound("same", (x1, x2)),
+            head=("same", x1, x2),
             body=[ArithEq(left=x1, right=x2)],
         ))
         fn = compile_predicate_trampoline("same", 2, db.clauses_for("same", 2), db)
@@ -576,7 +575,7 @@ class TestTrampolineIntegrationComparisons:
         x, y = Var(), Var()
         db = Database()
         db.assertz(Clause(
-            head=Compound("add_one", (x, y)),
+            head=("add_one", x, y),
             body=[Evaluate(left=y, right=Add(left=x, right=1))],
         ))
         fn = compile_predicate_trampoline("add_one", 2, db.clauses_for("add_one", 2), db)
@@ -637,7 +636,7 @@ class TestLazyRecompile:
         # nv
         db = Database()
         hv = Var()
-        db.assertz(Clause(head=Compound("dyn", (hv,)), body=[Is(left=hv, right=1)]))
+        db.assertz(Clause(head=("dyn", hv), body=[Is(left=hv, right=1)]))
         fn = compile_predicate_trampoline("dyn", 1, db.clauses_for("dyn", 1), db)
         v = Var()
         trail = fresh_trail()
@@ -645,7 +644,7 @@ class TestLazyRecompile:
 
         # Add a second clause at runtime
         hv2 = Var()
-        db.assertz(Clause(head=Compound("dyn", (hv2,)), body=[Is(left=hv2, right=2)]))
+        db.assertz(Clause(head=("dyn", hv2), body=[Is(left=hv2, right=2)]))
         # dispatch is now None; get_dispatch() should lazy-recompile
         v2 = Var()
         trail2 = fresh_trail()
@@ -658,11 +657,11 @@ class TestLazyRecompile:
         # nv
         db = Database()
         hv = Var()
-        db.assertz(Clause(head=Compound("sdyn", (hv,)), body=[Is(left=hv, right=10)]))
+        db.assertz(Clause(head=("sdyn", hv), body=[Is(left=hv, right=10)]))
         compile_predicate_trampoline("sdyn", 1, db.clauses_for("sdyn", 1), db)
 
         hv2 = Var()
-        db.assertz(Clause(head=Compound("sdyn", (hv2,)), body=[Is(left=hv2, right=20)]))
+        db.assertz(Clause(head=("sdyn", hv2), body=[Is(left=hv2, right=20)]))
         fn = db.get_dispatch("sdyn", 1)
         v = Var()
         trail = fresh_trail()

@@ -10,6 +10,7 @@ import pytest
 from clausal.logic.database import Clause, Database, Module
 from clausal.logic.solve import call, solve, query, once, _deref_walk
 from clausal.logic.variables import Var, Trail, deref, unify
+from clausal import cell_functor
 from clausal.logic.exceptions import LogicException
 from clausal.terms import (
     And, Or, Not,
@@ -17,7 +18,6 @@ from clausal.terms import (
     Lt, LtE, Gt, GtE,
     in_, NotIn,
     Call, LoadName,
-    Compound,
 )
 
 import clausal.import_hook
@@ -286,7 +286,7 @@ class TestSetupCallCleanup:
         # nv
         c = Var()
         throw_goal = Call(func=LoadName(name="throw"), args=[
-            Compound("my_error", ("oops",))
+            ("my_error", "oops")
         ], kwargs=[])
         goal = _scc_goal(
             True,
@@ -295,7 +295,7 @@ class TestSetupCallCleanup:
         )
         with pytest.raises(LogicException) as exc_info:
             solutions_of(goal)
-        assert exc_info.value.term.functor == "my_error"
+        assert cell_functor(exc_info.value.term) == "my_error"
 
     def test_scc_setup_fails_no_cleanup(self):
         """when Setup fails, Cleanup does NOT run."""
@@ -332,7 +332,7 @@ class TestCallCleanup:
         """call_cleanup(throw(err), true) — cleanup runs, exception re-raised."""
         # nv
         throw_goal = Call(func=LoadName(name="throw"), args=[
-            Compound("err", ("test",))
+            ("err", "test")
         ], kwargs=[])
         goal = _cc_goal(throw_goal, True)
         with pytest.raises(LogicException):

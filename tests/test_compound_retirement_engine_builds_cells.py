@@ -26,6 +26,11 @@ from clausal.logic.trampoline import StepGenerator, solutions
 from clausal.logic.variables import Var, Trail, deref
 from clausal.terms import Compound, Unify, Call, LoadName, compound_with_args
 
+# Compound retirement slice 5: NOT converted to cells.  The subject is the
+# class itself -- it pins what the engine does with a ``Compound`` it is HANDED (copies it)
+# and counts ``Compound`` constructions -- so slice 8 deletes or rewrites this module.
+pytestmark = pytest.mark.compound_retirement_slice8
+
 
 @contextlib.contextmanager
 def _counting_compound_constructions():

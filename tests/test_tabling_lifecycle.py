@@ -29,7 +29,6 @@ from clausal.import_hook import _load_module
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
 from clausal.logic.database import Clause
-from clausal.terms import Compound
 
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
@@ -109,14 +108,14 @@ class TestWrapperSurvivesRecompile:
         m = load(DEDUP_SRC)
         lm = _lm(m)
         assert len(list(call("dup", 1, module=lm))) == 1
-        lm.db.assertz(Clause(head=Compound("dup", (9,)), body=[]))
+        lm.db.assertz(Clause(head=("dup", 9), body=[]))
         assert len(list(call("dup", 1, module=lm))) == 1
 
     def test_asserta_keeps_dedup(self, load):
         m = load(DEDUP_SRC)
         lm = _lm(m)
         assert len(list(call("dup", 1, module=lm))) == 1
-        lm.db.asserta(Clause(head=Compound("dup", (9,)), body=[]))
+        lm.db.asserta(Clause(head=("dup", 9), body=[]))
         assert len(list(call("dup", 1, module=lm))) == 1
 
     def test_assertz_builtin_keeps_dedup(self, load):
@@ -170,7 +169,7 @@ path(X, Y) <- (
             return sorted(deref(Y) for _ in call("path", 1, Y, module=lm))
 
         assert _bounded(3.0, _reach) == [2, 3]
-        lm.db.assertz(Clause(head=Compound("path", (9, 9)), body=[]))
+        lm.db.assertz(Clause(head=("path", 9, 9), body=[]))
         try:
             after = _bounded(3.0, _reach)
         except _Timeout:

@@ -71,14 +71,17 @@ def _fresh_pred_class(fields=("a", "b")):
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TestF001OccursCheckBlindness:
+    @pytest.mark.compound_retirement_slice8
     def test_occurs_check_sees_var_in_compound_args(self, trail):
         X = Var()
         assert occurs_check(X, Compound("f", (X,))) is True
 
+    @pytest.mark.compound_retirement_slice8
     def test_uoc_rejects_cyclic_compound(self, trail):
         X = Var()
         assert unify_with_occurs_check(X, Compound("f", (X,)), trail) is False
 
+    @pytest.mark.compound_retirement_slice9
     def test_occurs_check_sees_var_in_kwterm(self, trail):
         X = Var()
         assert occurs_check(X, KWTerm("r", a=X)) is True
@@ -109,11 +112,13 @@ class TestF003CompoundVarFunctor:
     # functor Var *bound* to a str behaves as that str across unify, copy_term,
     # _is_ground, _collect_vars and the render functions. The one output-mode
     # case (binding an *unbound* functor Var) stays xfail — it needs D004→(a).
+    @pytest.mark.compound_retirement_slice8
     def test_bound_var_functor_unifies(self, trail):
         F = Var()
         assert unify(F, "f", trail)
         assert unify(Compound(F, (1,)), Compound("f", (1,)), trail) is True
 
+    @pytest.mark.compound_retirement_slice8
     @pytest.mark.xfail(strict=False,
                        reason="A01-F003/D004: unbound functor var binding (output mode) "
                               "is out of scope for the deref-only floor; needs D004→(a)")
@@ -122,28 +127,33 @@ class TestF003CompoundVarFunctor:
         assert unify(Compound(F, (1,)), Compound("f", (1,)), trail) is True
         assert deref(F) == "f"
 
+    @pytest.mark.compound_retirement_slice8
     def test_copy_term_freshens_functor_var(self):
         F, X = Var(), Var()
         copied = _c._copy_term_impl(Compound(F, (X,)), {})
         assert copied.args[0] is not X          # args are freshened (control)
         assert copied.functor is not F          # functor should be too
 
+    @pytest.mark.compound_retirement_slice8
     def test_is_ground_derefs_functor(self, trail):
         F = Var()
         assert unify(F, "f", trail)
         assert _c._is_ground(Compound(F, (1,))) is True
 
+    @pytest.mark.compound_retirement_slice8
     def test_collect_vars_sees_functor_var(self):
         F = Var()
         out = []
         _c._collect_vars_impl(Compound(F, (1,)), out)
         assert F in out
 
+    @pytest.mark.compound_retirement_slice8
     def test_term_str_derefs_bound_functor(self, trail):
         F = Var()
         assert unify(F, "f", trail)
         assert term_str(Compound(F, (1,))) == "f(1)"
 
+    @pytest.mark.compound_retirement_slice8
     def test_term_html_derefs_bound_functor(self, trail):
         from clausal.terms import term_html
         F = Var()
@@ -151,6 +161,7 @@ class TestF003CompoundVarFunctor:
         assert ">f<" in term_html(Compound(F, (1,)))
         assert ">_<" not in term_html(Compound(F, (1,)))
 
+    @pytest.mark.compound_retirement_slice8
     def test_term_pformat_derefs_bound_functor(self, trail):
         from clausal.terms import term_pformat
         F = Var()
@@ -160,6 +171,7 @@ class TestF003CompoundVarFunctor:
         out = term_pformat(Compound(F, (1, 2, 3)), width=4)
         assert out.startswith("f(")
 
+    @pytest.mark.compound_retirement_slice8
     def test_control_str_functor_semantics(self, trail):
         assert unify(Compound("f", ()), Compound("f", ()), trail)
         assert not unify(Compound("f", (1,)), Compound("g", (1,)), trail)
@@ -174,11 +186,13 @@ class TestF003CompoundVarFunctor:
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TestF004KWTermUnify:
+    @pytest.mark.compound_retirement_slice9
     def test_kwterm_var_field_binds(self, trail):
         Y = Var()
         assert unify(KWTerm("r", a=Y, b=2), KWTerm("r", a=1, b=2), trail) is True
         assert deref(Y) == 1
 
+    @pytest.mark.compound_retirement_slice9
     def test_control_ground_kwterm(self, trail):
         assert unify(KWTerm("r", a=1), KWTerm("r", a=1), trail)
         assert not unify(KWTerm("r", a=1), KWTerm("r", a=2), trail)
@@ -186,6 +200,7 @@ class TestF004KWTermUnify:
         # keyword-order independence (documented)
         assert KWTerm("r", a=1, b=2) == KWTerm("r", b=2, a=1)
 
+    @pytest.mark.compound_retirement_slice9
     def test_kwterm_reserved_position_and_mutators(self):
         k = KWTerm("r", a=1, _position=(1, 2, 3, 4))
         assert list(k.keys()) == ["a"] and k._position == (1, 2, 3, 4)
@@ -332,6 +347,7 @@ class TestF007SegListVsBytes:
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TestF008WalkFunctorTerms:
+    @pytest.mark.compound_retirement_slice8
     def test_walk_snapshot_of_compound_survives_undo(self, trail):
         X = Var()
         assert unify(X, 1, trail)
@@ -339,6 +355,7 @@ class TestF008WalkFunctorTerms:
         trail.reset()
         assert deref(snap.args[0]) == 1  # snapshot must not decay to unbound
 
+    @pytest.mark.compound_retirement_slice9
     def test_walk_snapshot_of_kwterm_survives_undo(self, trail):
         X = Var()
         assert unify(X, 1, trail)
@@ -360,12 +377,14 @@ class TestF008WalkFunctorTerms:
         trail.reset()
         assert deref(snap[1]) == 1 and snap[2] == 2
 
+    @pytest.mark.compound_retirement_slice8
     def test_walk_preserves_compound_position(self, trail):
         X = Var()
         assert unify(X, 1, trail)
         snap = walk(Compound("f", (X,), _position=(1, 2, 3, 4)))
         assert snap._position == (1, 2, 3, 4)  # Slice G metadata not dropped
 
+    @pytest.mark.compound_retirement_slice8
     def test_walk_shares_unbound_vars(self, trail):
         X = Var()  # unbound
         snap = walk(Compound("f", (X,)))
@@ -727,6 +746,7 @@ class TestLeaks:
             t.undo(m)
         refcount_stable(thunk, iterations=2000)
 
+    @pytest.mark.compound_retirement_slice8
     def test_compound_unify_loop_stable(self, refcount_stable):
         def thunk():
             t = Trail()

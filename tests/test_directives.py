@@ -26,7 +26,6 @@ from clausal.logic.exceptions import LogicException
 from clausal.logic.predicate import (
     is_declared_predicate, resolve_predicate_row,
 )
-from clausal.terms import Compound
 from clausal.templating.term_rewriting import EmbedTransformer
 
 
@@ -176,7 +175,7 @@ class TestDynamicImport:
         logic_mod = mod.__dict__["$module"]
         initial_count = len(logic_mod.db.clauses_for("color", 2))
         logic_mod.db.assertz(
-            Clause(head=Compound("color", ("fire", "red")), body=[]))
+            Clause(head=("color", "fire", "red"), body=[]))
         assert len(row.clauses) == initial_count + 1
 
     def test_static_predicate_is_locked(self):
@@ -191,7 +190,7 @@ class TestDynamicImport:
         before = len(row.clauses)
         db = mod.__dict__["$module"].db
         with pytest.raises(LogicException, match="locked") as exc_info:
-            db.assertz(Clause(head=Compound("fact", ("c", 3)), body=[]))
+            db.assertz(Clause(head=("fact", "c", 3), body=[]))
         assert cell_functor(cell_args(exc_info.value.term)[0]) == "permission_error"
         assert len(row.clauses) == before, "and nothing was written"
 

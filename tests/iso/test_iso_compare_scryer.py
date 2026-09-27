@@ -507,7 +507,7 @@ def test_hash_constraint_oracle(scryer, sym, clausal_goal,
 def _identity_table():
     from decimal import Decimal
     from fractions import Fraction
-    from clausal.terms import Compound, SegList
+    from clausal.terms import SegList
     from clausal.logic.cells import chars
     return [
         # (a, b, structural_eq, iso '==')
@@ -518,7 +518,7 @@ def _identity_table():
         ([1], [1.0], True, False),             # strictness survives nesting
         ([1, 2], [1, 2], True, True),
         ((1, 2), (1, 2.0), True, False),
-        (Compound("f", (1,)), Compound("f", (1.0,)), True, False),
+        (("f", 1), ("f", 1.0), True, False),
         ({"a": 1}, {"a": 1.0}, True, False),
         ({1}, {1.0}, True, False),
         # Representation, not type: these must stay identical.

@@ -40,9 +40,10 @@ class bar:
 class TestHeadKey:
     def test_compound_ground(self):
         # nv
-        h = Compound("likes", (1, 2))
+        h = ("likes", 1, 2)
         assert head_key(h) == ("likes", 2)
 
+    @pytest.mark.compound_retirement_slice8
     def test_compound_arity_zero(self):
         # nv
         h = Compound("true", ())
@@ -74,6 +75,7 @@ class TestHeadKey:
             head_key(3.5)                  # stage 2: a str head is the ATOM name/0, so the non-term here is a float
         assert head_key("an_atom") == ("an_atom", 0)
 
+    @pytest.mark.compound_retirement_slice8
     def test_compound_var_functor_raises(self):
         # nv
         v = Var()
@@ -126,13 +128,13 @@ class TestFlattenBody:
 class TestClause:
     def test_fact_has_empty_body(self):
         # nv
-        head = Compound("true", ())
+        head = "true"
         c = Clause(head=head, body=[])
         assert c.is_fact()
 
     def test_rule_is_not_fact(self):
         # nv
-        head = Compound("foo", (1,))
+        head = ("foo", 1)
         body = [Is(left=Var(), right=1)]
         c = Clause(head=head, body=body)
         assert not c.is_fact()
@@ -147,7 +149,7 @@ class TestDatabase:
         return Database()
 
     def fact(self, name, *args):
-        return Clause(head=Compound(name, args), body=[])
+        return Clause(head=(name, *args) if args else name, body=[])
 
     def test_assertz_and_clauses_for(self):
         # nv
@@ -190,13 +192,13 @@ class TestDatabase:
         db = self.db()
         c = self.fact("foo", 1)
         db.assertz(c)
-        assert db.retract(Compound("foo", (1,))) is True
+        assert db.retract(("foo", 1)) is True
         assert db.clauses_for("foo", 1) == []
 
     def test_retract_undefined_predicate(self):
         # nv
         db = self.db()
-        assert db.retract(Compound("ghost", (1,))) is False
+        assert db.retract(("ghost", 1)) is False
 
     def test_multiple_functors_independent(self):
         # nv
@@ -239,7 +241,7 @@ class TestModule:
     def test_assert_fact_compound(self):
         # nv
         m = Module("test")
-        m.assert_fact(Compound("foo", (1, 2)))
+        m.assert_fact(("foo", 1, 2))
         clauses = m.db.clauses_for("foo", 2)
         assert len(clauses) == 1
         assert clauses[0].is_fact()
@@ -262,7 +264,7 @@ class TestModule:
             body: object
 
         m = Module("test")
-        head = Compound("foo", (1,))
+        head = ("foo", 1)
         m.define_predicate(MockPredicate(head=head, body=None))
         clauses = m.db.clauses_for("foo", 1)
         assert len(clauses) == 1
@@ -276,7 +278,7 @@ class TestModule:
             body: object
 
         m = Module("test")
-        head = Compound("append", (1, 2, 3))
+        head = ("append", 1, 2, 3)
         goal1 = Is(left=Var(), right=1)
         goal2 = Is(left=Var(), right=2)
         body = And(left=goal1, right=goal2)
@@ -330,7 +332,7 @@ class TestExtractParamNames:
 
     def test_compound_returns_none(self):
         # nv
-        h = Compound("foo", (1, 2))
+        h = ("foo", 1, 2)
         assert _extract_param_names(h) is None
 
     def test_call_returns_none(self):
@@ -404,7 +406,7 @@ class TestModuleSignatureRegistration:
     def test_compound_head_no_signature(self):
         # nv
         m = Module("test")
-        m.define_predicate(self._pred(Compound("foo", (1, 2))))
+        m.define_predicate(self._pred(("foo", 1, 2)))
         assert m.db.signature_for("foo", 2) is None
 
     def test_call_head_no_signature(self):

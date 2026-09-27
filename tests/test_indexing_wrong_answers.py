@@ -68,6 +68,7 @@ def _bound(value):
 
 # ── 1. a bound Var inside a cell caller ─────────────────────────────────────
 
+@pytest.mark.compound_retirement_slice8
 @pytest.mark.parametrize("arg", [
     ("k", ("f", 2)),                                       # control
     ("k", "BOUND_CELL"),
@@ -99,6 +100,7 @@ def test_a_bound_var_to_a_non_matching_cell_still_misses(M):
 
 # ── 2. an asserted structured head, unbound caller ──────────────────────────
 
+@pytest.mark.compound_retirement_slice8
 def test_an_asserted_structured_head_answers_an_unbound_caller(M):
     for term in (("dz", ("f", 1)), ("dz", Compound("g", (1,))),
                  ("dz", ("k", ("f", Var()))), ("dz", [1, 2])):
@@ -141,6 +143,7 @@ def test_a_keyword_head_keys_by_its_full_arity():
     assert _arg_to_index_key(_kw_box(_g(1), 2)) == _runtime_arg_key(("box", ("g", 1), 2))
 
 
+@pytest.mark.compound_retirement_slice8
 def test_a_keyword_head_answers_with_an_unbound_second_argument(M):
     """Keyword data terms are refused in source since 2026-09-19, so the
     clause is added through the database API (the shape a programmatic

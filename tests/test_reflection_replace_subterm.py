@@ -16,7 +16,7 @@ from clausal.logic.cells import chars
 from clausal.import_hook import _load_module
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
-from clausal.terms import Compound
+from clausal.terms import term_str
 from clausal.pythonic_ast import nodes as simple_ast
 from clausal import reflection as R
 
@@ -40,14 +40,14 @@ _c = "c"
 
 
 def _g(x):
-    return Compound("g", (x,))
+    return ("g", x)
 
 
 def _resolve(term):
-    """Deep-deref into Compounds so ``str`` shows bound-var values, not ``_``."""
+    """Deep-deref into cells so rendering shows bound-var values, not ``_``."""
     term = deref(term)
-    if isinstance(term, Compound):
-        return Compound(term.functor, tuple(_resolve(a) for a in term.args))
+    if type(term) is tuple and term and isinstance(term[0], str):
+        return (term[0], *(_resolve(a) for a in term[1:]))
     return term
 
 
@@ -64,38 +64,38 @@ def _replace(term, old, new):
 
 class TestStructuralRewrite:
     def test_two_occurrences_enumerate_in_dfs_order(self):
-        term = Compound("f", (_a, _g(_a)))
+        term = ("f", _a, _g(_a))
         results = _replace(term, _a, _b)
-        assert [str(r) for r in results] == ["f(b, g(a))", "f(a, g(b))"]
+        assert [term_str(r) for r in results] == ["f(b, g(a))", "f(a, g(b))"]
 
     def test_zero_occurrences_fails_cleanly(self):
-        term = Compound("f", (_a, _g(_a)))
+        term = ("f", _a, _g(_a))
         assert _replace(term, _c, _b) == []  # no `c` anywhere -> no solutions
 
     def test_whole_term_can_be_the_occurrence(self):
-        term = Compound("f", (_a,))
+        term = ("f", _a)
         results = _replace(term, term, _b)  # OLD unifies the whole term
-        assert [str(r) for r in results] == ["b"]
+        assert [term_str(r) for r in results] == ["b"]
 
     def test_old_pattern_vars_bind_and_new_reuses_them(self):
         # OLD = g(X) is a pattern; each match captures the operand and NEW = box(X)
         # rebuilds around it — the pattern-rewrite path (no op_node needed).
         x = Var()
-        term = Compound("outer", (_g(_a), _g(_b)))
-        results = _replace(term, Compound("g", (x,)), Compound("box", (x,)))
-        assert [str(r) for r in results] == [
+        term = ("outer", _g(_a), _g(_b))
+        results = _replace(term, ("g", x), ("box", x))
+        assert [term_str(r) for r in results] == [
             "outer(box(a), g(b))", "outer(g(a), box(b))"
         ]
 
     def test_unaffected_variable_keeps_identity(self):
         x = Var()
-        term = Compound("f", (x, _a))
+        term = ("f", x, _a)
         results = _replace(term, _a, _b)
         assert len(results) == 1
         r = results[0]
         # the untouched first arg is the *same* Var object, not a copy
-        assert r.args[0] is x
-        assert str(r.args[1]) == "b"
+        assert r[1] is x
+        assert term_str(r[2]) == "b"
 
 
 class TestOtherTermKinds:
@@ -110,6 +110,7 @@ class TestOtherTermKinds:
             out.append(str(deref(result)))  # these kinds have no bound-var operands
         return out
 
+    @pytest.mark.compound_retirement_slice9
     def test_kwterm_value_is_rewritten_position_preservingly(self):
         from clausal.terms import KWTerm
 
@@ -123,7 +124,7 @@ class TestOtherTermKinds:
     def test_unbound_old_matches_every_non_var_subterm(self):
         # OLD is an unbound var: it unifies every ground subterm (root included),
         # but not bare vars.  f(a, g(b)) has 4 ground subterms.
-        results = _replace(Compound("f", (_a, _g(_b))), Var(), _c)
+        results = _replace(("f", _a, _g(_b)), Var(), _c)
         assert len(results) == 4
 
 
@@ -183,8 +184,8 @@ class TestNonGroundTermSemantics:
         y = Var()
         # OLD = g(a) matches g(Y) by binding Y=a; the second (unaffected) slot,
         # which shares Y, is instantiated as a result of that same match.
-        results = _replace(Compound("f", (_g(y), y)), _g(_a), _b)
-        assert [str(r) for r in results] == ["f(b, a)"]
+        results = _replace(("f", _g(y), y), _g(_a), _b)
+        assert [term_str(r) for r in results] == ["f(b, a)"]
 
 
 class TestReifiedClauseRewrite:

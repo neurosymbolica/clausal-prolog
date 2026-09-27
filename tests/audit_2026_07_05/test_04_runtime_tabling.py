@@ -389,6 +389,7 @@ tw(W) <- (
 
 
 class TestModeMatrixGuards:
+    @pytest.mark.compound_retirement_slice8
     def test_solve_call_once_query_matrix(self, load, clear_query_cache):
         m = load("mode", PA_SRC)
         Y = Var()
@@ -521,6 +522,7 @@ class TestF008DerefWalkTemplateFreeze:
         t.reset()
         assert snap == (1, "tag")  # was (unbound, "tag") after reset
 
+    @pytest.mark.compound_retirement_slice9
     def test_kwterm_template_frozen(self):
         from clausal.terms import KWTerm
         _deref_walk, t, X = self._bound()
@@ -545,6 +547,7 @@ class TestF008DerefWalkTemplateFreeze:
         t.reset()
         assert snap == chars("hi!")  # F018 promotion preserved through _deref_walk
 
+    @pytest.mark.compound_retirement_slice8
     def test_compound_position_preserved(self):
         from clausal.terms import Compound
         _deref_walk, t, X = self._bound()
@@ -553,6 +556,7 @@ class TestF008DerefWalkTemplateFreeze:
         assert deref(snap.args[0]) == 1
         assert snap._position == (1, 2, 3, 4)  # was dropped by the Compound arm
 
+    @pytest.mark.compound_retirement_slice8
     def test_predicate_cell_nested_in_compound_frozen(self):
         from clausal.terms import Compound
         from tests.predicate_api_support import term_ctor

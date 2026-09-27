@@ -146,6 +146,9 @@ def test_wrong_arity_with_nothing_else_answering_still_refuses(
     assert cell_args(cell_args(formal)[1]) == ("pred", 2)
 
 
+# Stays a Compound (slice 5 finding): assertz/asserta of a CELL whose
+# predicate is not known yet raises existence_error; a Compound creates it.
+@pytest.mark.compound_retirement_slice8
 @pytest.mark.parametrize("era", ["handle"])  # W4b-2d: the class era is gone
 def test_wrong_arity_reaches_the_modules_own_row_at_the_call_arity(
         tmp_path, monkeypatch, era):
@@ -306,6 +309,9 @@ def test_a_meta_call_through_an_unqualified_name_resolves_under_that_name(
     assert got == [[1, 2, 3]]
 
 
+# Stays a Compound (slice 5 finding): assertz/asserta of a CELL whose
+# predicate is not known yet raises existence_error; a Compound creates it.
+@pytest.mark.compound_retirement_slice8
 @pytest.mark.parametrize("era", ["handle"])  # W4b-2d: the class era is gone
 def test_an_owner_arity_added_after_the_import_is_not_imported(
         tmp_path, monkeypatch, era):
@@ -347,6 +353,9 @@ def test_an_owner_arity_added_after_the_import_is_not_imported(
     assert got == ["own"]
 
 
+# Stays a Compound (slice 5 finding): assertz/asserta of a CELL whose
+# predicate is not known yet raises existence_error; a Compound creates it.
+@pytest.mark.compound_retirement_slice8
 @pytest.mark.parametrize("era", ["handle"])  # W4b-2d: the class era is gone
 def test_an_imported_stale_class_does_not_answer_from_its_owner(
         tmp_path, monkeypatch, era):
@@ -628,6 +637,9 @@ def test_an_aliased_partial_application_at_the_imported_arity_runs(
     assert [deref(out) for _ in _call("c", out, module=I)] == [4]
 
 
+# Stays a Compound (slice 5 finding): assertz/asserta of a CELL whose
+# predicate is not known yet raises existence_error; a Compound creates it.
+@pytest.mark.compound_retirement_slice8
 @pytest.mark.parametrize("era", ["handle"])  # W4b-2d: the class era is gone
 def test_an_owner_arity_added_later_is_not_reachable_through_a_cell_goal(
         tmp_path, monkeypatch, era):

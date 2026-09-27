@@ -396,10 +396,9 @@ def test_atom_shadows_row_accepts_cell_atom():
     cannot be a call target, whether it is spelled as a str or as a cell."""
     from clausal.logic.compiler.globals_env import _atom_shadows_row
     from clausal.logic.database import Clause, Database
-    from clausal.terms import Compound
 
     db = Database()
-    db.assertz(Clause(head=Compound("shade", (1,)), body=[True]))
+    db.assertz(Clause(head=("shade", 1), body=[True]))
     assert _atom_shadows_row("shade", db, "shade", 1)
     # A STRING binding is not an atom, and is trusted as before.
     assert not _atom_shadows_row(chars("shade"), db, "shade", 1)

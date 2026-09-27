@@ -141,6 +141,7 @@ class TestCellAsGoal:
         X = Var()
         assert [deref(X) for _ in solve(("q", X), _lm(mod))] == [1, 2]
 
+    @pytest.mark.compound_retirement_slice8
     def test_a_cell_goal_lowers_to_the_same_node_a_compound_goal_does(self):
         from clausal.logic.solve import _term_to_goal
         v = Var()
@@ -522,6 +523,7 @@ class TestZeroArityControlConstructsByName:
 # ── a bare str goal IS the atom (stage 2, atoms-as-str) ────────────────────
 
 
+@pytest.mark.compound_retirement_slice8
 class TestBareStrGoalInSolve:
     """STAGE 2 (atoms-as-str, spec §3 Q1): a bare ``str`` IS the atom, so
     ``solve("z0", m)`` is the call of ``z0/0`` -- the same goal the
@@ -593,6 +595,7 @@ class TestCellAssertRetract:
         Y = Var()
         assert [deref(Y) for _ in solve(("seen", Y), lm)] == [1, 2]
 
+    @pytest.mark.compound_retirement_slice8
     def test_the_cell_spelling_agrees_with_the_compound_spelling(self, mod):
         """The Compound path has always frozen (``_normalize_fact_clause``
         rebuilds a bound argument as a fresh Var + Unify); the cell path now
@@ -720,6 +723,7 @@ class TestCellAssertRetract:
             list(pcall("retract", ("nope", 3), module=lm))
         assert cell_functor(_error_term(exc_info.value)[0]) == "existence_error"
 
+    @pytest.mark.compound_retirement_slice8
     def test_a_non_cell_assert_is_untouched_by_the_gate(self, mod):
         """A Compound assert still creates its predicate, as it always has."""
         lm = _lm(mod)

@@ -408,6 +408,9 @@ def test_the_logical_update_view(lm):
     assert [h[1] for h, _ in _clause(lm, ("lu", Var()))] == [1, 11, 12]
 
 
+# Stays a Compound (slice 5 finding): assertz/asserta of a CELL whose
+# predicate is not known yet raises existence_error; a Compound creates it.
+@pytest.mark.compound_retirement_slice8
 def test_an_assertz_created_procedure_is_dynamic(lm):
     """Scryer + Trealla: assertz(nd(1)), clause(nd(X), B) -> X = 1, B = true.
     A procedure assertz creates is unlocked, and an unlocked row is one a
@@ -499,6 +502,9 @@ def test_the_special_form_round_trip_covers_every_clause(lm):
 # ── Clause.hoisted from every normalizer ────────────────────────────────────
 
 
+# Stays a Compound (slice 5 finding): _normalize_fact_clause hoists a
+# Compound head's arguments into the body, and leaves a cell head untouched.
+@pytest.mark.compound_retirement_slice8
 def test_hoisted_counts_from_every_normalizer(lm):
     from clausal.logic.builtins.database_ops import _normalize_fact_clause
     counts = [c.hoisted for c in lm.db.row("d", 2).clauses]
@@ -625,7 +631,7 @@ def test_only_the_selected_clause_is_built(lm, monkeypatch):
     # recompile the dispatch after every one (quadratic), and clause/2 reads
     # the clause list, never the dispatch.
     for i in range(1000):
-        lm.db.assertz(_normalize_fact_clause(Compound("big", (i, i * 2))))
+        lm.db.assertz(_normalize_fact_clause(("big", i, i * 2)))
     counts = _count_builds(monkeypatch)
     V = Var()
     got = _clause(lm, ("big", 500, V))
@@ -674,6 +680,9 @@ def test_a_body_call_at_another_arity_is_its_cell(lm):
     assert got[2][:2] == ("mp", 1) and len(got[2]) == 3
 
 
+# Stays a Compound (slice 5 finding): assertz/asserta of a CELL whose
+# predicate is not known yet raises existence_error; a Compound creates it.
+@pytest.mark.compound_retirement_slice8
 def test_a_body_calling_a_procedure_defined_later(lm):
     """``late(Y) <- later_def(Y)``: nothing defines later_def at load, so
     its term is the cell; once assertz defines it, call(B) runs it."""
@@ -693,6 +702,9 @@ def test_a_name_bound_to_none_is_not_an_unbound_name():
     assert _needs_cell("nothing_here", 1, {"nothing_here": None}) is False
 
 
+# Stays a Compound (slice 5 finding): assertz/asserta of a CELL whose
+# predicate is not known yet raises existence_error; a Compound creates it.
+@pytest.mark.compound_retirement_slice8
 def test_an_asserta_fact_has_its_hoisted_arguments_put_back(lm):
     from clausal.logic.solve import call
     next(call("asserta", Compound("aa_new", (1, "x", Var())), module=lm))

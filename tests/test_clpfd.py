@@ -23,7 +23,7 @@ from clausal.logic.database import Clause, Database, Module
 from clausal.logic.solve import solve, once, query
 from clausal.logic.trampoline import StepGenerator, DONE
 from clausal.terms import (
-    Compound, And, Add, Sub,
+    And, Add, Sub,
     Unify as Is, DoesNotUnify as IsNot, Evaluate,
     ArithEq, ArithNeq, Lt as LtNode, LtE as LtENode,
     Gt as GtNode, GtE as GtENode,
@@ -307,12 +307,12 @@ class TestStructuralEq:
     def test_same_compound(self):
         # nv
         trail = fresh_trail()
-        assert structural_eq(Compound("f", (1, 2)), Compound("f", (1, 2)), trail)
+        assert structural_eq(("f", 1, 2), ("f", 1, 2), trail)
 
     def test_different_compound(self):
         # nv
         trail = fresh_trail()
-        assert not structural_eq(Compound("f", (1,)), Compound("f", (2,)), trail)
+        assert not structural_eq(("f", 1), ("f", 2), trail)
 
     def test_var_vs_var_different(self):
         """structural_eq: different Vars are NOT equal."""

@@ -140,10 +140,9 @@ class TestDollarTwinsAreBound:
         """The bare-query path derives its globals from the module dict plus
         the compiler's own base_globals; the twins must reach it too."""
         from clausal.logic.solve import Module, _compile_as_query
-        from clausal.terms import Compound
 
         mod = Module("_dollar_qg", module_dict={})
-        dispatch_fn, _ = _compile_as_query(Compound("=", (Var(), Var())), mod)
+        dispatch_fn, _ = _compile_as_query(("=", Var(), Var()), mod)
         g = dispatch_fn.__globals__
         for name in _INJECTED_BARE:
             assert g[f"${name}"] is INJECTED_RUNTIME_BUILTINS[name], name
@@ -468,11 +467,10 @@ class TestDollarRefFallsBackToTheTwinByName:
 
     def test_a_subclass_of_var_compiles_through_the_twin(self):
         from clausal.logic.compiler.terms_to_ast import term_to_ast_expr
-        from clausal.terms import Compound
 
         class MyVar(Var):
             pass
 
-        src = ast.unparse(term_to_ast_expr(Compound("f", (MyVar(), 1)), {}))
+        src = ast.unparse(term_to_ast_expr(("f", MyVar(), 1), {}))
         assert "$Var()" in src, src
         assert "MyVar" not in src, src

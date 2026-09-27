@@ -505,6 +505,7 @@ class TestF004CatchFunctorCatcher:
         N, R = Var(), Var()
         assert sols(mod, ("targ", ("kab", N), R), N, R) == [(7, mint("caught"))]
 
+    @pytest.mark.compound_retirement_slice8
     def test_compound_vs_cell_unify_is_the_root_cause(self, mod):
         """A ``Compound`` catcher cannot match the thrown term — the reason
         ``_lower_catcher`` must lower a catcher the way the throw site does.

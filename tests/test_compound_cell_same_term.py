@@ -39,6 +39,11 @@ import clausal.logic.constraints as CS
 import clausal.logic.tabling as TB
 from clausal.logic.builtins._helpers import _standard_order_key
 
+# Compound retirement slice 5: NOT converted to cells.  The subject is the
+# class itself -- it pins that an atom-functor ``Compound`` and its cell are one term, and
+# the Compound shapes with no cell (var / non-atom functor, arity 0) -- so slice 8 deletes or rewrites this module.
+pytestmark = pytest.mark.compound_retirement_slice8
+
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 

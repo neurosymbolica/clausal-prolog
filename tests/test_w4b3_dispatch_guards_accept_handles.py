@@ -121,6 +121,7 @@ def stale(tmp_path):
     mod = _load_module(name, str(p))
     m = mod.__dict__["$module"]
     try:
+        # a Compound, not a cell: a cell would not create last/2 (slice 5 finding)
         assert len(list(call("assertz", Compound("last", (1, 1)), module=m))) == 1
         assert m.module_dict["last"] == mangle(m.name, "last")
         assert m.db.row("last", 0) is not None
@@ -240,6 +241,9 @@ class TestSolveCallPhase5:
         assert len(list(call("last", 1, 1, module=lm))) == 1
         assert len(list(call("last", [5], 5, module=lm))) == 0
 
+    # Stays a Compound (slice 5 finding): assertz/asserta of a CELL whose
+    # predicate is not known yet raises existence_error; a Compound creates it.
+    @pytest.mark.compound_retirement_slice8
     @pytest.mark.parametrize("era", ["handle"])  # the class era is gone
     def test_a_stale_fields_class_keeps_its_local_predicate(
             self, stale, monkeypatch, era):
@@ -580,6 +584,9 @@ class TestInjectResolvedTargets:
         # r: the term last(1) still builds from the name key: the key is the
         # handle, unchanged (the class era called the class to build it)
 
+    # Stays a Compound (slice 5 finding): assertz/asserta of a CELL whose
+    # predicate is not known yet raises existence_error; a Compound creates it.
+    @pytest.mark.compound_retirement_slice8
     @pytest.mark.parametrize("era", ["handle"])  # the class era is gone
     def test_a_stale_fields_class_is_not_shadowed_by_a_builtin(
             self, stale, era):
@@ -668,6 +675,9 @@ class TestInjectResolvedTargets:
             assert len(list(_drive_trampoline(fn, Trail(), 1, 1))) == 1
         assert calls == [("last", 2)] * 3
 
+    # Stays a Compound (slice 5 finding): assertz/asserta of a CELL whose
+    # predicate is not known yet raises existence_error; a Compound creates it.
+    @pytest.mark.compound_retirement_slice8
     @pytest.mark.parametrize("era", ["handle"])  # the class era is gone
     def test_a_local_row_asserted_after_the_first_call_outranks_the_cached_builtin(
             self, owner, era):

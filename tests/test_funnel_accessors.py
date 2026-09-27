@@ -145,9 +145,10 @@ class TestTermFieldDict:
 class TestFunctorArity:
     def test_compound_with_str_functor(self):
         # nv
-        c = Compound("foo", (1, 2, 3))
+        c = ("foo", 1, 2, 3)
         assert functor_arity(c) == ("foo", 3)
 
+    @pytest.mark.compound_retirement_slice8
     def test_compound_with_var_functor_is_none(self):
         # nv — documented divergence from the composed accessors: a
         # non-str functor makes the WHOLE pair unresolvable, whereas
@@ -173,6 +174,7 @@ class TestFunctorArity:
         node = Add(left=1, right=2)
         assert functor_arity(node) == ("Add", 3)  # (position, left, right)
 
+    @pytest.mark.compound_retirement_slice9
     def test_kwterm_is_none(self):
         # nv — out of functor_arity's declared domain (term instances,
         # Compound, PredicateMeta atom classes only); KWTerm is a distinct
@@ -200,8 +202,9 @@ class TestFunctorArity:
     @pytest.mark.parametrize(
         "term",
         [
-            Compound("foo", ()),
-            Compound("bar", (1, 2, 3)),
+            pytest.param(Compound("foo", ()),
+                         marks=pytest.mark.compound_retirement_slice8),
+            ("bar", 1, 2, 3),
             bar(b=1, a=2),
             mint("foo"),
             Add(left=1, right=2),
@@ -635,7 +638,7 @@ class TestCellGroundnessRegression:
         from clausal.logic.builtins._helpers import _is_ground
 
         assert _is_ground([1, make_cell("pt", 1, Var())]) is False
-        assert _is_ground(Compound("f", (make_cell("pt", Var()),))) is False
+        assert _is_ground(("f", make_cell("pt", Var()))) is False
 
     def test_it_agrees_with_the_class_twin(self):
         """The whole point: cell and class term answer the same."""

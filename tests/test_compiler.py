@@ -183,6 +183,7 @@ class TestHeadToMatchPattern:
 
     # ── Compound ──
 
+    @pytest.mark.compound_retirement_slice8
     def test_compound_gives_the_cell_pattern(self):
         # nv -- ruling 2026-09-26: an atom-functor Compound of arity >= 1 IS
         # its cell, so its head pattern is the CELL pattern (the match subject
@@ -200,6 +201,7 @@ class TestHeadToMatchPattern:
         assert isinstance(p.patterns[2], ast.MatchValue)  # 42
         assert v._id in ctx
 
+    @pytest.mark.compound_retirement_slice8
     def test_a_compound_with_no_cell_keeps_the_class_pattern(self):
         # nv -- arity 0 has no cell equivalent (the 1-tuple is RESERVED)
         p = head_to_match_pattern(Compound("foo", ()), {})
@@ -208,6 +210,7 @@ class TestHeadToMatchPattern:
         assert p.kwd_attrs == ["functor", "args"]
         assert p.kwd_patterns[0].value.value == "foo"
 
+    @pytest.mark.compound_retirement_slice8
     def test_compound_with_var_functor_gives_wildcard(self):
         # nv
         v_functor = Var()
@@ -449,7 +452,7 @@ class TestCompilePredicate:
 
     def test_arity_zero_function_name(self):
         # nv
-        db = _make_db_with_clause(Compound("truth", ()))
+        db = _make_db_with_clause("truth")
         clauses = db.clauses_for("truth", 0)
         fn = compile_predicate("truth", 0, clauses, db)
         assert fn.__name__ == "truth__0"
@@ -474,7 +477,7 @@ class TestCompilePredicate:
 
     def test_singleton_head_none(self):
         # nv
-        head = Compound("nil", ())
+        head = "nil"
         db = _make_db_with_clause(head)
         clauses = db.clauses_for("nil", 0)
         fn = compile_predicate("nil", 0, clauses, db)
@@ -506,7 +509,7 @@ class TestCompilePredicate:
     def test_compound_head_matches_compound_term(self):
         # nv
         v = Var()
-        head = Compound("edge", (v, 42))
+        head = ("edge", v, 42)
         db = _make_db_with_clause(head)
         clauses = db.clauses_for("edge", 2)
         fn = compile_predicate("edge", 2, clauses, db)
@@ -515,7 +518,7 @@ class TestCompilePredicate:
     def test_compound_head_fails_wrong_second_arg(self):
         # nv
         v = Var()
-        head = Compound("edge", (v, 42))
+        head = ("edge", v, 42)
         db = _make_db_with_clause(head)
         clauses = db.clauses_for("edge", 2)
         fn = compile_predicate("edge", 2, clauses, db)
@@ -555,7 +558,7 @@ class TestCompilePredicate:
         # nv
         db = Database()
         for color_name in ("red", "green", "blue"):
-            db.assertz(Clause(head=Compound("color", (color_name,)), body=[]))
+            db.assertz(Clause(head=("color", color_name), body=[]))
         clauses = db.clauses_for("color", 1)
         fn = compile_predicate("color", 1, clauses, db)
         t = _trail()
@@ -568,8 +571,8 @@ class TestCompilePredicate:
         """A specific arg matches exactly one literal clause, not multiple."""
         # nv
         db = Database()
-        db.assertz(Clause(head=Compound("x", (1,)), body=[]))
-        db.assertz(Clause(head=Compound("x", (2,)), body=[]))
+        db.assertz(Clause(head=("x", 1), body=[]))
+        db.assertz(Clause(head=("x", 2), body=[]))
         clauses = db.clauses_for("x", 1)
         fn = compile_predicate("x", 1, clauses, db)
         assert list(_run_dispatch(fn, 1, _trail())) == [None]   # matches clause 1 only
@@ -599,8 +602,8 @@ class TestCompilePredicate:
         """body_compiler is called once per clause with (clause, var_context)."""
         # nv
         db = Database()
-        db.assertz(Clause(head=Compound("a", (1,)), body=[]))
-        db.assertz(Clause(head=Compound("a", (2,)), body=[]))
+        db.assertz(Clause(head=("a", 1), body=[]))
+        db.assertz(Clause(head=("a", 2), body=[]))
         clauses = db.clauses_for("a", 1)
 
         call_log = []
@@ -620,7 +623,7 @@ class TestCompilePredicate:
     def test_custom_body_compiler_can_yield_multiple(self):
         """A body_compiler that yields twice gives 2 results per clause match."""
         # nv
-        db = _make_db_with_clause(Compound("multi", ()))
+        db = _make_db_with_clause("multi")
 
         def double_yield(clause, var_context):
             # Trampoline protocol: yield (_proceed, value)
@@ -653,7 +656,7 @@ class TestCompilePredicate:
                 undo_calls.append(mark)
 
         v = Var()
-        head = Compound("t", (v,))
+        head = ("t", v)
         db = _make_db_with_clause(head)
         clauses = db.clauses_for("t", 1)
         fn = compile_predicate("t", 1, clauses, db)
@@ -676,7 +679,7 @@ class TestCompilePredicate:
                 undo_calls.append(mark)
 
         v = Var()
-        head = Compound("u", (v,))
+        head = ("u", v)
         db = _make_db_with_clause(head)
         clauses = db.clauses_for("u", 1)
 

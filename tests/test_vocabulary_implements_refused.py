@@ -42,7 +42,6 @@ from clausal.logic.predicate import is_declared_predicate
 from clausal.logic.solve import call, solve
 from clausal.logic.variables import Var, deref, walk
 from clausal.pythonic_ast.nodes import ImportFromDirective
-from clausal.terms import Compound
 from tests.load_write_spy_support import record_load_writes
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
@@ -158,8 +157,8 @@ def _eras(module, functor, owner_name):
 
 
 def _head(functor, arity):
-    return SimpleNamespace(head=Compound(functor, tuple(
-        f"a{i}" for i in range(arity))))
+    return SimpleNamespace(head=(functor, *(
+        f"a{i}" for i in range(arity))) if arity else functor)
 
 
 @pytest.mark.parametrize("owner_name", [_VOCAB, _SCHEMA])
@@ -340,7 +339,7 @@ def test_a_dynamic_exporter_holding_runtime_clauses_is_refused_and_keeps_them(
     schema = private_module("fnmismatch_schema", owner_name)
     owner_db = schema.__dict__["$module"].db
     # A RUNTIME assert (the assertz/1 builtin, in the owner), not a load.
-    assert list(call("assertz", Compound("fnm_verdict", (mint("early"), ())),
+    assert list(call("assertz", ("fnm_verdict", mint("early"), ()),
                      module=schema.__dict__["$module"]))
     row = owner_db.row("fnm_verdict", 2)
     assert row.clauses and row.source is None, "not the shape under test"
@@ -508,7 +507,7 @@ def test_a_local_predicate_at_another_arity_than_an_imported_class_loads(
         tmp_path, owner_name, template.format(name=owner_name)))
     olm = owner.__dict__["$module"]
     if kind == "runtime":
-        assert list(call("assertz", Compound("r5p", (7,)), module=olm))
+        assert list(call("assertz", ("r5p", 7), module=olm))
         expected_owner = [7]
     else:
         row = olm.db.row("r5p", 1)
@@ -599,7 +598,7 @@ def test_a_python_alias_module_re_exporting_a_clausal_predicate_is_not_python(
     the one for that row, never "created in Python module ..."."""
     owner_name = "_vocabdrop_r5_alias_owner"
     owner = private_module("fnmismatch_schema", owner_name)
-    assert list(call("assertz", Compound("fnm_verdict", (mint("early"), ())),
+    assert list(call("assertz", ("fnm_verdict", mint("early"), ()),
                      module=owner.__dict__["$module"]))
     monkeypatch.syspath_prepend(str(tmp_path))
     (tmp_path / "vocabdrop_alias_mod.py").write_text(

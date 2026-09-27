@@ -25,6 +25,8 @@ whichever way it points.
 
 from __future__ import annotations
 
+import pytest
+
 from clausal.logic.atoms import mint
 from clausal.logic.database import Module
 from clausal.logic.solve import solve
@@ -98,6 +100,7 @@ class TestFunctor3RegistrationAndCellParity:
     def test_functor_3_is_registered(self):
         _assert_registered("functor", 3)
 
+    @pytest.mark.compound_retirement_slice8
     def test_decompose_cell_matches_decompose_compound(self):
         name_c, arity_c = Var(), Var()
         [(nc, ac)] = _sol_vars(
@@ -117,6 +120,7 @@ class TestArg3RegistrationAndCellParity:
     def test_arg_3_is_registered(self):
         _assert_registered("arg", 3)
 
+    @pytest.mark.compound_retirement_slice8
     def test_first_arg_of_cell_matches_first_arg_of_compound(self):
         out_c = Var()
         vals_c = _sol_var(_goal("arg", 1, ("pt", 1, 2), out_c), out_c)
@@ -124,6 +128,7 @@ class TestArg3RegistrationAndCellParity:
         vals_p = _sol_var(_goal("arg", 1, Compound("pt", (1, 2)), out_p), out_p)
         assert vals_c == vals_p == [1]
 
+    @pytest.mark.compound_retirement_slice8
     def test_second_arg_of_cell_matches_second_arg_of_compound(self):
         out_c = Var()
         vals_c = _sol_var(_goal("arg", 2, ("pt", 1, 2), out_c), out_c)
@@ -139,6 +144,7 @@ class TestCopyTerm2RegistrationAndCellParity:
     def test_copy_term_2_is_registered(self):
         _assert_registered("copy_term", 2)
 
+    @pytest.mark.compound_retirement_slice8
     def test_copy_of_cell_is_a_cell_copy_of_compound_is_a_compound(self):
         """Each representation keeps its own shape across the copy — the
         point of the P3-2 Task 2 tuple branch in ``_copy_term_py`` (a cell
@@ -153,6 +159,7 @@ class TestCopyTerm2RegistrationAndCellParity:
         assert isinstance(result_p, Compound)
         assert result_p.functor == "pt" and result_p.args == (1, 2)
 
+    @pytest.mark.compound_retirement_slice8
     def test_copy_of_cell_with_a_var_gets_a_fresh_var_like_compound_does(self):
         x = Var()
         copy_c = Var()
@@ -173,6 +180,7 @@ class TestTermVariables2RegistrationAndCellParity:
     def test_term_variables_2_is_registered(self):
         _assert_registered("term_variables", 2)
 
+    @pytest.mark.compound_retirement_slice8
     def test_vars_collected_from_a_cell_match_the_same_vars_in_a_compound(self):
         v1, v2 = Var(), Var()
         vars_c = Var()
@@ -194,6 +202,7 @@ class TestNumberVars3RegistrationAndCellParity:
     def test_numbervars_3_is_registered(self):
         _assert_registered("numbervars", 3)
 
+    @pytest.mark.compound_retirement_slice8
     def test_numbering_a_cells_vars_matches_numbering_a_compounds_vars(self):
         v1, v2 = Var(), Var()
         end_c = Var()
@@ -225,6 +234,7 @@ class TestDif2RegistrationAndCellParity:
     def test_dif_2_is_registered(self):
         _assert_registered("dif", 2)
 
+    @pytest.mark.compound_retirement_slice8
     def test_unresolvable_dif_over_cells_matches_over_compounds(self):
         """Two structurally-open cells that COULD still unify: dif/2 posts a
         (deferred) constraint and succeeds, same as the Compound twin."""
@@ -234,6 +244,7 @@ class TestDif2RegistrationAndCellParity:
         nsol_p = len(_solutions(_goal("dif", Compound("pt", (p,)), Compound("pt", (q,)))))
         assert nsol_c == nsol_p == 1
 
+    @pytest.mark.compound_retirement_slice8
     def test_definitely_equal_cells_fail_dif_like_definitely_equal_compounds(self):
         nsol_c = len(_solutions(_goal("dif", ("pt", 1), ("pt", 1))))
         nsol_p = len(_solutions(_goal("dif", Compound("pt", (1,)), Compound("pt", (1,)))))
@@ -284,6 +295,7 @@ class TestUnivIsRegisteredAsUnpackAndCellParity:
     def test_unpack_2_is_registered(self):
         _assert_registered("unpack", 2)
 
+    @pytest.mark.compound_retirement_slice8
     def test_decompose_cell_matches_decompose_compound(self):
         lst_c = Var()
         [result_c] = _sol_var(_goal("unpack", ("pt", 1, 2), lst_c), lst_c)

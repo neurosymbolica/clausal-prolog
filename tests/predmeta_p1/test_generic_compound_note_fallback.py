@@ -23,6 +23,10 @@ import pytest
 from clausal.terms import Compound
 from clausal.testing import _note_generic_compound_confusion
 
+# Compound retirement slice 5: NOT converted to cells.  The subject is the
+# class itself -- the diagnostic under test exists to name a generic ``Compound`` binding -- so slice 8 deletes or rewrites this module.
+pytestmark = pytest.mark.compound_retirement_slice8
+
 
 @pytest.fixture
 def declared_only(tmp_path, monkeypatch):

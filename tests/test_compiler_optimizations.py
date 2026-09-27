@@ -88,7 +88,6 @@ from clausal.logic.compiler.goal_trampoline import compile_goal_trampoline
 from clausal.logic.database import Clause, Database
 from tests.predicate_api_support import term_ctor
 from clausal.logic.variables import Var, Trail, deref, unify
-from clausal.terms import Compound
 from clausal.pythonic_ast.nodes import (
     Or, Unify as Is, IfExpr, Gt,
     Call, LoadName,
@@ -167,7 +166,7 @@ def _make_multi_clause_predicate(n_clauses: int, arity: int = 2) -> tuple:
     db = Database()
     for i in range(n_clauses):
         args = tuple(range(i * arity, i * arity + arity))
-        db.assertz(Clause(head=Compound("foo", args), body=[]))
+        db.assertz(Clause(head=("foo", *args), body=[]))
     clauses = db.clauses_for("foo", arity)
     func_def = compile_predicate_trampoline_ast("foo", arity, clauses, db)
     return db, clauses, func_def
@@ -237,8 +236,8 @@ class TestDerefOnce:
         """Arity-0 predicates have no arguments to deref."""
         # nv
         db = Database()
-        db.assertz(Clause(head=Compound("fact0", ()), body=[]))
-        db.assertz(Clause(head=Compound("fact0", ()), body=[]))
+        db.assertz(Clause(head="fact0", body=[]))
+        db.assertz(Clause(head="fact0", body=[]))
         clauses = db.clauses_for("fact0", 0)
         func_def = compile_predicate_trampoline_ast("fact0", 0, clauses, db)
         # Should have zero deref calls
@@ -513,7 +512,7 @@ class TestOrMarkElimination:
         x = Var()
         clauses = [
             Clause(
-                head=Compound("choose", (x,)),
+                head=("choose", x),
                 body=[Or(left=Is(left=x, right=1), right=Is(left=x, right=2))],
             )
         ]
@@ -547,10 +546,10 @@ class TestSinglePassTraversal:
         """Two-clause predicate Foo/1 whose body calls Bar/1."""
         x, y = Var(), Var()
         clauses = [
-            Clause(head=Compound("Foo", (x,)), body=[
+            Clause(head=("Foo", x), body=[
                 Call(func=LoadName(name="Bar"), args=[x], kwargs=[]),
             ]),
-            Clause(head=Compound("Foo", (y,)), body=[]),
+            Clause(head=("Foo", y), body=[]),
         ]
         return clauses
 
@@ -586,7 +585,7 @@ class TestSinglePassTraversal:
         thunk = PyThunk(fn=lambda x: x, var_objects=[v])
         clauses = [
             Clause(
-                head=Compound("F", (v,)),
+                head=("F", v),
                 body=[thunk],
             )
         ]
@@ -632,7 +631,7 @@ class TestLockedDispatchCaching:
         db = Module("tco_locked_callee",
                     module_dict={"__name__": "tco_locked_callee"}).db
         v = Var()
-        db.assertz(Clause(head=Compound("Bar", (v,)), body=[]))
+        db.assertz(Clause(head=("Bar", v), body=[]))
         compile_predicate_trampoline("Bar", 1, db.clauses_for("Bar", 1), db)
         db.row("Bar", 1).locked = True
         register_handle_owner(db)
@@ -646,7 +645,7 @@ class TestLockedDispatchCaching:
         v = Var()
         clauses = [
             Clause(
-                head=Compound("Foo", (v,)),
+                head=("Foo", v),
                 body=[Call(func=LoadName(name="Bar"), args=[v], kwargs=[])],
             )
         ]
@@ -664,7 +663,7 @@ class TestLockedDispatchCaching:
         v = Var()
         clauses = [
             Clause(
-                head=Compound("Foo", (v,)),
+                head=("Foo", v),
                 body=[Call(func=LoadName(name="Bar"), args=[v], kwargs=[])],
             )
         ]
@@ -698,7 +697,7 @@ class TestLockedDispatchCaching:
         db = Module("tco_unlocked_callee",
                     module_dict={"__name__": "tco_unlocked_callee"}).db
         w = Var()
-        db.assertz(Clause(head=Compound("Baz", (w,)), body=[]))
+        db.assertz(Clause(head=("Baz", w), body=[]))
         compile_predicate_trampoline("Baz", 1, db.clauses_for("Baz", 1), db)
         register_handle_owner(db)
         Baz = mint_predicate_handle(db, "Baz")
@@ -707,7 +706,7 @@ class TestLockedDispatchCaching:
         v = Var()
         clauses = [
             Clause(
-                head=Compound("Foo", (v,)),
+                head=("Foo", v),
                 body=[Call(func=LoadName(name="Baz"), args=[v], kwargs=[])],
             )
         ]
@@ -735,7 +734,7 @@ class TestLockedDispatchCaching:
         result_var = Var()
         clauses = [
             Clause(
-                head=Compound("Foo", (v,)),
+                head=("Foo", v),
                 body=[Call(func=LoadName(name="Bar"), args=[v], kwargs=[])],
             )
         ]
@@ -796,7 +795,7 @@ class TestCompoundKeyIndexing:
         Shape(triangle(A,B,C), A)    <- true
         Shape(sq(S),           S)    <- true
 
-        The first arg is always a Compound, so compound-key indexing applies.
+        The first arg is always a cell, so compound-key indexing applies.
         Each clause's second arg is a Var shared with the inner arg of the
         first compound — i.e. Shape is called with a concrete compound and
         the second arg receives the first inner argument.
@@ -805,10 +804,10 @@ class TestCompoundKeyIndexing:
         db = Database()
         r, w, h, a, b, c, s = [Var() for _ in range(7)]
         clauses = [
-            Clause(head=Compound("Shape", (Compound("circle", (r,)), r)), body=[]),
-            Clause(head=Compound("Shape", (Compound("rect", (w, h)), w)), body=[]),
-            Clause(head=Compound("Shape", (Compound("triangle", (a, b, c)), a)), body=[]),
-            Clause(head=Compound("Shape", (Compound("sq", (s,)), s)), body=[]),
+            Clause(head=("Shape", ("circle", r), r), body=[]),
+            Clause(head=("Shape", ("rect", w, h), w), body=[]),
+            Clause(head=("Shape", ("triangle", a, b, c), a), body=[]),
+            Clause(head=("Shape", ("sq", s), s), body=[]),
         ]
         for cl in clauses:
             db.assertz(cl)
@@ -816,11 +815,11 @@ class TestCompoundKeyIndexing:
         return fn, clauses, db
 
     def test_compound_keys_extracted_at_compile_time(self):
-        """_extract_arg_key returns (functor, arity) tuples for Compound heads."""
+        """_extract_arg_key returns (functor, arity) tuples for cell head args."""
         from clausal.logic.compiler.arg_index import _extract_arg_key
         r, w, h = Var(), Var(), Var()
-        cl_circle = Clause(head=Compound("Shape", (Compound("circle", (r,)), r)), body=[])
-        cl_rect   = Clause(head=Compound("Shape", (Compound("rect", (w, h)), w)), body=[])
+        cl_circle = Clause(head=("Shape", ("circle", r), r), body=[])
+        cl_rect   = Clause(head=("Shape", ("rect", w, h), w), body=[])
         key_circle = _extract_arg_key(cl_circle, 0, 2)
         key_rect   = _extract_arg_key(cl_rect,   0, 2)
         assert key_circle == ("circle", 1), \
@@ -833,10 +832,10 @@ class TestCompoundKeyIndexing:
         from clausal.logic.compiler.arg_index import _build_arg_index
         r, w, h, a, b, c, s2 = [Var() for _ in range(7)]
         clauses = [
-            Clause(head=Compound("Shape", (Compound("circle", (r,)), r)), body=[]),
-            Clause(head=Compound("Shape", (Compound("rect", (w, h)), w)), body=[]),
-            Clause(head=Compound("Shape", (Compound("triangle", (a, b, c)), a)), body=[]),
-            Clause(head=Compound("Shape", (Compound("sq", (s2,)), s2)), body=[]),
+            Clause(head=("Shape", ("circle", r), r), body=[]),
+            Clause(head=("Shape", ("rect", w, h), w), body=[]),
+            Clause(head=("Shape", ("triangle", a, b, c), a), body=[]),
+            Clause(head=("Shape", ("sq", s2), s2), body=[]),
         ]
         idx = _build_arg_index(clauses, 2, 0)
         assert idx is not None, "Expected an index for compound-headed clauses"
@@ -851,7 +850,7 @@ class TestCompoundKeyIndexing:
         # nv
         fn, _, _ = self._make_shape_predicate()
         q = Var()
-        solutions = _run_trampoline(fn, Compound("circle", (42,)), q)
+        solutions = _run_trampoline(fn, ("circle", 42), q)
         assert solutions == [(42,)], f"Expected [(42,)], got {solutions}"
 
     def test_compound_key_dispatch_rect(self):
@@ -859,7 +858,7 @@ class TestCompoundKeyIndexing:
         # nv
         fn, _, _ = self._make_shape_predicate()
         q = Var()
-        solutions = _run_trampoline(fn, Compound("rect", (3, 4)), q)
+        solutions = _run_trampoline(fn, ("rect", 3, 4), q)
         assert solutions == [(3,)], f"Expected [(3,)], got {solutions}"
 
     def test_compound_key_dispatch_wrong_functor(self):
@@ -867,7 +866,7 @@ class TestCompoundKeyIndexing:
         # nv
         fn, _, _ = self._make_shape_predicate()
         q = Var()
-        solutions = _run_trampoline(fn, Compound("cylinder", (5,)), q)
+        solutions = _run_trampoline(fn, ("cylinder", 5), q)
         assert solutions == [], f"Expected [], got {solutions}"
 
     def test_compound_key_distinct_from_scalar_keys(self):
@@ -876,10 +875,10 @@ class TestCompoundKeyIndexing:
         v = Var()
         # Mix: scalar keys and compound keys in same predicate
         clauses = [
-            Clause(head=Compound("F", (1, v)), body=[]),
-            Clause(head=Compound("F", (2, v)), body=[]),
-            Clause(head=Compound("F", (Compound("a", (v,)), v)), body=[]),
-            Clause(head=Compound("F", (Compound("b", (v,)), v)), body=[]),
+            Clause(head=("F", 1, v), body=[]),
+            Clause(head=("F", 2, v), body=[]),
+            Clause(head=("F", ("a", v), v), body=[]),
+            Clause(head=("F", ("b", v), v), body=[]),
         ]
         idx = _build_arg_index(clauses, 2, 0)
         assert idx is not None
@@ -893,7 +892,7 @@ class TestCompoundKeyIndexing:
         from clausal.logic.compiler.arg_index import _extract_arg_key
         MyTerm = term_ctor("MyTerm", ("val",))
         t = MyTerm(val=1)
-        cl = Clause(head=Compound("Foo", (t, Var())), body=[])
+        cl = Clause(head=("Foo", t, Var()), body=[])
         key = _extract_arg_key(cl, 0, 2)
         assert key == ("MyTerm", 1), f"Expected ('MyTerm', 1), got {key!r}"
 
@@ -938,7 +937,7 @@ class TestSecondaryIndexing:
         ]
         clauses = [
             _normalize_fact_clause(
-                Compound("Color", (mint(n), mint(c), mint(b))))
+                ("Color", mint(n), mint(c), mint(b)))
             for n, c, b in facts
         ]
         for cl in clauses:
@@ -959,7 +958,7 @@ class TestSecondaryIndexing:
         ]
         clauses = [
             _normalize_fact_clause(
-                Compound("Color", (mint(n), mint(c), mint(b))))
+                ("Color", mint(n), mint(c), mint(b)))
             for n, c, b in facts
         ]
         sec = _build_secondary_index(clauses, 3, 1, 2)
@@ -1053,7 +1052,7 @@ class TestJointKeyIndexing:
         ]
         clauses = [
             _normalize_fact_clause(
-                Compound("Combo", (mint(g), mint(s), mint(r))))
+                ("Combo", mint(g), mint(s), mint(r)))
             for g, s, r in facts
         ]
         for cl in clauses:
@@ -1071,7 +1070,7 @@ class TestJointKeyIndexing:
         ]
         clauses = [
             _normalize_fact_clause(
-                Compound("Combo", (mint(g), mint(s), mint(r))))
+                ("Combo", mint(g), mint(s), mint(r)))
             for g, s, r in facts
         ]
         idx = _build_joint_arg_index(clauses, 3, 0, 1)
@@ -1093,7 +1092,7 @@ class TestJointKeyIndexing:
         ]
         clauses = [
             _normalize_fact_clause(
-                Compound("Combo", (mint(g), mint(s), mint(r))))
+                ("Combo", mint(g), mint(s), mint(r)))
             for g, s, r in facts
         ]
         singles = _analyze_index_positions(clauses, 3)

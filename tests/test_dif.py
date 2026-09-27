@@ -15,7 +15,7 @@ from clausal.logic.database import Clause, Database, Module
 from clausal.logic.solve import solve, once, query
 from clausal.logic.trampoline import StepGenerator, DONE
 from clausal.terms import (
-    Compound, And,
+    And,
     Unify as Is, DoesNotUnify as IsNot, Evaluate,
     Call, LoadName,
 )
@@ -103,14 +103,14 @@ class TestCollectFreeVars:
     def test_compound_with_vars(self):
         # nv
         x, y = Var(), Var()
-        c = Compound("f", (x, 42, y))
+        c = ("f", x, 42, y)
         result = _collect_free_vars(c)
         assert len(result) == 2
 
     def test_nested_structures(self):
         # nv
         x = Var()
-        c = Compound("f", ([1, (x, 2)],))
+        c = ("f", [1, (x, 2)])
         result = _collect_free_vars(c)
         assert len(result) == 1
         assert result[0] is x
@@ -176,12 +176,12 @@ class TestDifDirect:
     def test_compound_structurally_different(self):
         # nv
         t = fresh_trail()
-        assert dif(Compound("f", (1,)), Compound("g", (1,)), t) is True
+        assert dif(("f", 1), ("g", 1), t) is True
 
     def test_compound_structurally_equal_fails(self):
         # nv
         t = fresh_trail()
-        assert dif(Compound("f", (1,)), Compound("f", (1,)), t) is False
+        assert dif(("f", 1), ("f", 1), t) is False
 
 
 # ── Occurs check ─────────────────────────────────────────────────────────────
@@ -194,7 +194,7 @@ class TestDifOccursCheck:
         # nv
         t = fresh_trail()
         x = Var()
-        assert dif(x, Compound("f", (x,)), t) is True
+        assert dif(x, ("f", x), t) is True
 
 
 # ── Constraint propagation ───────────────────────────────────────────────────
@@ -262,7 +262,7 @@ class TestDifPropagation:
         # nv
         t = fresh_trail()
         x, y = Var(), Var()
-        assert dif(Compound("f", (x,)), Compound("f", (y,)), t) is True
+        assert dif(("f", x), ("f", y), t) is True
         assert unify(x, 1, t) is True
         assert unify(y, 1, t) is False  # f(1) = f(1) violates dif
 
@@ -271,7 +271,7 @@ class TestDifPropagation:
         # nv
         t = fresh_trail()
         x, y = Var(), Var()
-        assert dif(Compound("f", (x,)), Compound("f", (y,)), t) is True
+        assert dif(("f", x), ("f", y), t) is True
         assert unify(x, 1, t) is True
         assert unify(y, 2, t) is True
 

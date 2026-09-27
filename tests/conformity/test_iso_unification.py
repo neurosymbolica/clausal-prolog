@@ -16,7 +16,7 @@ from clausal.logic.database import Module
 from clausal.logic.solve import once
 from clausal.logic.variables import Var, Trail, deref, unify, is_var
 from clausal.logic.builtins import structural_unify
-from clausal.terms import Compound, StructuralEq, SegList, ConcreteSeg, VarSeg, DictTerm, SetTerm
+from clausal.terms import StructuralEq, SegList, ConcreteSeg, VarSeg, DictTerm, SetTerm
 
 
 def _goal_succeeds(goal, mod=None):
@@ -39,8 +39,8 @@ class TestStructuralUnify:
     def test_compound_var_args(self):
         x, y = Var(), Var()
         trail = Trail()
-        left = Compound("f", (x, "b"))
-        right = Compound("f", ("a", y))
+        left = ("f", x, "b")
+        right = ("f", "a", y)
         assert structural_unify(left, right, trail)
         assert deref(x) == "a"
         assert deref(y) == "b"
@@ -48,30 +48,30 @@ class TestStructuralUnify:
     def test_nested_compound(self):
         x = Var()
         trail = Trail()
-        left = Compound("f", (Compound("g", (x,)),))
-        right = Compound("f", (Compound("g", ("a",)),))
+        left = ("f", ("g", x))
+        right = ("f", ("g", "a"))
         assert structural_unify(left, right, trail)
         assert deref(x) == "a"
 
     def test_different_functors_fail(self):
         trail = Trail()
-        assert not structural_unify(Compound("f", (1,)), Compound("g", (1,)), trail)
+        assert not structural_unify(("f", 1), ("g", 1), trail)
 
     def test_different_arity_fail(self):
         trail = Trail()
-        assert not structural_unify(Compound("f", (1,)), Compound("f", (1, 2)), trail)
+        assert not structural_unify(("f", 1), ("f", 1, 2), trail)
 
     def test_var_aliases(self):
         x = Var()
         trail = Trail()
-        assert structural_unify(Compound("f", (x, x)), Compound("f", ("a", "a")), trail)
+        assert structural_unify(("f", x, x), ("f", "a", "a"), trail)
         assert deref(x) == "a"
 
     def test_var_aliases_fail(self):
         x = Var()
         trail = Trail()
         assert not structural_unify(
-            Compound("f", (x, x)), Compound("f", ("a", "b")), trail
+            ("f", x, x), ("f", "a", "b"), trail
         )
 
 

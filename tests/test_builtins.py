@@ -19,7 +19,7 @@ from clausal.logic.cells import chars
 from clausal.logic.database import Clause, Database, Module
 from clausal.logic.solve import solve
 from clausal.logic.variables import Var, Trail, deref
-from clausal.terms import Compound, KWTerm, Call, LoadName
+from clausal.terms import KWTerm, Call, LoadName
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -48,6 +48,7 @@ def sol_var(goal, var, *, limit=50, mod=None):
 # ── KWTerm tests ───────────────────────────────────────────────────────────────
 
 
+@pytest.mark.compound_retirement_slice9
 class TestKWTerm:
     def test_construction_and_access(self):
         # nv
@@ -138,7 +139,7 @@ class TestFunctor:
         # nv
         mod = fresh_module()
         f, a = Var(), Var()
-        goal = Call(func=LoadName(name="functor"), args=[Compound("foo", (1, 2)), f, a], kwargs=[])
+        goal = Call(func=LoadName(name="functor"), args=[("foo", 1, 2), f, a], kwargs=[])
         results = sol_var(goal, f, mod=mod)
         assert results == [mint("foo")]
         results_a = sol_var(goal, a, mod=mod)
@@ -227,21 +228,21 @@ class TestArg:
         # nv
         mod = fresh_module()
         a = Var()
-        goal = Call(func=LoadName(name="arg"), args=[1, Compound("f", (10, 20)), a], kwargs=[])
+        goal = Call(func=LoadName(name="arg"), args=[1, ("f", 10, 20), a], kwargs=[])
         assert sol_var(goal, a, mod=mod) == [10]
 
     def test_second_arg(self):
         # nv
         mod = fresh_module()
         a = Var()
-        goal = Call(func=LoadName(name="arg"), args=[2, Compound("f", (10, 20)), a], kwargs=[])
+        goal = Call(func=LoadName(name="arg"), args=[2, ("f", 10, 20), a], kwargs=[])
         assert sol_var(goal, a, mod=mod) == [20]
 
     def test_out_of_range(self):
         # nv
         mod = fresh_module()
         a = Var()
-        goal = Call(func=LoadName(name="arg"), args=[3, Compound("f", (10, 20)), a], kwargs=[])
+        goal = Call(func=LoadName(name="arg"), args=[3, ("f", 10, 20), a], kwargs=[])
         assert sol_var(goal, a, mod=mod) == []
 
     def test_var_n_enumerates_argument_pairs(self):
@@ -253,7 +254,7 @@ class TestArg:
         mod = fresh_module()
         n, a = Var(), Var()
         goal = Call(func=LoadName(name="arg"),
-                    args=[n, Compound("f", (10, 20)), a], kwargs=[])
+                    args=[n, ("f", 10, 20), a], kwargs=[])
         trail = Trail()
         pairs = [(deref(n), deref(a)) for _ in solve(goal, mod, trail)]
         assert pairs == [(1, 10), (2, 20)]
@@ -263,7 +264,7 @@ class TestArg:
         mod = fresh_module()
         n = Var()
         goal = Call(func=LoadName(name="arg"),
-                    args=[n, Compound("f", (10, 20)), 20], kwargs=[])
+                    args=[n, ("f", 10, 20), 20], kwargs=[])
         assert sol_var(goal, n, mod=mod) == [2]
 
     def test_list_arg_cons_cell_head(self):
@@ -302,7 +303,7 @@ class TestUniv:
         # nv
         mod = fresh_module()
         lst = Var()
-        goal = Call(func=LoadName(name="unpack"), args=[Compound("f", (1, 2)), lst], kwargs=[])
+        goal = Call(func=LoadName(name="unpack"), args=[("f", 1, 2), lst], kwargs=[])
         results = sol_var(goal, lst, mod=mod)
         assert results == [[mint("f"), 1, 2]]
 
@@ -382,6 +383,7 @@ class TestWK5:
         assert len(results) == 1
         assert results[0] == point(x=1, y=99)
 
+    @pytest.mark.compound_retirement_slice9
     def test_vary_kwterm(self):
         # nv
         mod = fresh_module()
@@ -394,6 +396,7 @@ class TestWK5:
         assert len(results) == 1
         assert results[0] == KWTerm("r", a=1, b=99)
 
+    @pytest.mark.compound_retirement_slice9
     def test_vary_unknown_key(self):
         # nv
         mod = fresh_module()
@@ -404,6 +407,7 @@ class TestWK5:
         )
         assert sol_var(goal, new_t, mod=mod) == []
 
+    @pytest.mark.compound_retirement_slice9
     def test_extend_kwterm(self):
         # nv
         mod = fresh_module()
@@ -432,6 +436,7 @@ class TestWK5:
         # THE FLIP (spec §6.4): a field NAME answered to the program is an atom.
         assert results == [[mint("y")]]
 
+    @pytest.mark.compound_retirement_slice9
     def test_unbound_keys_kwterm(self):
         # nv
         v = Var()
@@ -507,7 +512,7 @@ class TestBuiltinsInCompiledPredicates:
         # range_check(N) :- between(1, 10, N).
         n = Var()
         db.assertz(Clause(
-            head=Compound("range_check", (n,)),
+            head=("range_check", n),
             body=[Call(func=LoadName(name="between"), args=[1, 5, n], kwargs=[])],
         ))
         compile_predicate_trampoline("range_check", 1, db.clauses_for("range_check", 1), db)
@@ -530,7 +535,7 @@ class TestBuiltinsInCompiledPredicates:
         # pick(X) :- member(X, [a, b, c]).
         x = Var()
         db.assertz(Clause(
-            head=Compound("pick", (x,)),
+            head=("pick", x),
             body=[Call(func=LoadName(name="in_"), args=[x, ["a", "b", "c"]], kwargs=[])],
         ))
         compile_predicate_trampoline("pick", 1, db.clauses_for("pick", 1), db)

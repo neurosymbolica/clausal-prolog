@@ -35,7 +35,6 @@ from clausal.terms import (
     in_, NotIn,
     Add, Sub, Mult, Negate,
     Call, LoadName,
-    Compound,
 )
 
 # Ensure the import hook is active.
@@ -440,7 +439,7 @@ def _make_queens_module(n: int) -> Module:
     # ── safe/1 ──
     # safe([]).
     sv = Var()
-    db.assertz(Clause(head=Compound("safe", (sv,)), body=[Is(left=sv, right=[])]))
+    db.assertz(Clause(head=("safe", sv), body=[Is(left=sv, right=[])]))
 
     # safe([Q|Qs]) :- no_attack(Q, Qs, 1), safe(Qs).
     q, qs, rest = Var(), Var(), Var()
@@ -450,7 +449,7 @@ def _make_queens_module(n: int) -> Module:
     q2, qs2 = Var(), Var()
     safe_head_var = Var()
     db.assertz(Clause(
-        head=Compound("safe", (safe_head_var,)),
+        head=("safe", safe_head_var),
         body=[
             # Decompose list: safe_head_var = [Q2 | Qs2]
             Is(left=safe_head_var, right=[q2, qs2]),  # this won't work for nested — use compound

@@ -15,7 +15,7 @@ from clausal.logic.variables import (
 # The low-level ``clausal.logic.variables`` functions used throughout this
 # file take the STORAGE key, which is the atom's spelling — a plain ``str``
 # there is deliberate, not a leftover.
-from clausal.terms import Compound, DictTerm
+from clausal.terms import DictTerm
 from clausal.logic.builtins.attributes import (
     _put_attr__3, _get_attr__3, _del_attr__2,
     _get_attrs__2, _put_attrs__2,
@@ -297,7 +297,7 @@ class TestTermAttributedVariables:
         v = Var()
         trail = Trail()
         put_attr(v, "k", 1, trail)
-        term = Compound("f", (v, 42))
+        term = ("f", v, 42)
         result = Var()
         results = [deref(result)
                    for _ in _term_attributed_variables__2(term, result, trail, None)]

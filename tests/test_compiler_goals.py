@@ -140,6 +140,7 @@ class TestTermToAstExpr:
         assert isinstance(expr.elts[0], ast.NamedExpr)   # body-only Var → walrus
         assert isinstance(expr.elts[1], ast.Constant)
 
+    @pytest.mark.compound_retirement_slice8
     def test_compound_gives_call_to_compound(self):
         # nv
         term = Compound("foo", (1, 2))
@@ -438,7 +439,7 @@ class TestIntegrationFacts:
     def test_fact_matches_and_yields(self):
         # nv
         db = Database()
-        db.assertz(Clause(head=Compound("ok", (1,)), body=[]))
+        db.assertz(Clause(head=("ok", 1), body=[]))
         clauses = db.clauses_for("ok", 1)
         fn = compile_predicate("ok", 1, clauses, db)
         assert _run(fn, 1) == [None]
@@ -452,7 +453,7 @@ class TestIntegrationUnification:
         # nv
         x = Var()
         db = Database()
-        db.assertz(Clause(head=Compound("foo", (x,)), body=[Is(left=x, right=42)]))
+        db.assertz(Clause(head=("foo", x), body=[Is(left=x, right=42)]))
         clauses = db.clauses_for("foo", 1)
         fn = compile_predicate("foo", 1, clauses, db)
 
@@ -464,7 +465,7 @@ class TestIntegrationUnification:
         # nv
         x, y = Var(), Var()
         db = Database()
-        db.assertz(Clause(head=Compound("unify_xy", (x, y)), body=[Is(left=x, right=y)]))
+        db.assertz(Clause(head=("unify_xy", x, y), body=[Is(left=x, right=y)]))
         clauses = db.clauses_for("unify_xy", 2)
         fn = compile_predicate("unify_xy", 2, clauses, db)
 
@@ -481,7 +482,7 @@ class TestIntegrationUnification:
         # nv
         x = Var()
         db = Database()
-        db.assertz(Clause(head=Compound("foo", (x,)), body=[Is(left=x, right=1)]))
+        db.assertz(Clause(head=("foo", x), body=[Is(left=x, right=1)]))
         clauses = db.clauses_for("foo", 1)
         fn = compile_predicate("foo", 1, clauses, db)
 
@@ -492,7 +493,7 @@ class TestIntegrationUnification:
         # nv
         x = Var()
         db = Database()
-        db.assertz(Clause(head=Compound("foo", (x,)), body=[Is(left=x, right=99)]))
+        db.assertz(Clause(head=("foo", x), body=[Is(left=x, right=99)]))
         clauses = db.clauses_for("foo", 1)
         fn = compile_predicate("foo", 1, clauses, db)
 
@@ -508,7 +509,7 @@ class TestIntegrationUnification:
         x, y = Var(), Var()
         db = Database()
         db.assertz(Clause(
-            head=Compound("both", (x, y)),
+            head=("both", x, y),
             body=[Is(left=x, right=10), Is(left=y, right=20)],
         ))
         clauses = db.clauses_for("both", 2)
@@ -535,7 +536,7 @@ class TestIntegrationComparisons:
     def _make_gt_pred(self, threshold):
         x = Var()
         db = Database()
-        db.assertz(Clause(head=Compound("big", (x,)), body=[Gt(left=x, right=threshold)]))
+        db.assertz(Clause(head=("big", x), body=[Gt(left=x, right=threshold)]))
         clauses = db.clauses_for("big", 1)
         return compile_predicate("big", 1, clauses, db)
 
@@ -555,7 +556,7 @@ class TestIntegrationComparisons:
         # nv
         x = Var()
         db = Database()
-        db.assertz(Clause(head=Compound("small", (x,)), body=[Lt(left=x, right=10)]))
+        db.assertz(Clause(head=("small", x), body=[Lt(left=x, right=10)]))
         clauses = db.clauses_for("small", 1)
         fn = compile_predicate("small", 1, clauses, db)
         assert _run(fn, 5) == [None]
@@ -569,7 +570,7 @@ class TestIntegrationComparisons:
         db = Database()
         # same(X, Y) <- X is Y, X == Y  (unify then check structural eq)
         db.assertz(Clause(
-            head=Compound("same", (x, y)),
+            head=("same", x, y),
             body=[Is(left=x, right=y), ArithEq(left=x, right=y)],
         ))
         clauses = db.clauses_for("same", 2)
@@ -584,7 +585,7 @@ class TestIntegrationComparisons:
         # nv
         x = Var()
         db = Database()
-        db.assertz(Clause(head=Compound("lte10", (x,)), body=[LtE(left=x, right=10)]))
+        db.assertz(Clause(head=("lte10", x), body=[LtE(left=x, right=10)]))
         clauses = db.clauses_for("lte10", 1)
         fn = compile_predicate("lte10", 1, clauses, db)
         assert _run(fn, 10) == [None]
@@ -599,7 +600,7 @@ class TestIntegrationDisjunction:
         x = Var()
         db = Database()
         db.assertz(Clause(
-            head=Compound("either", (x,)),
+            head=("either", x),
             body=[Or(left=Is(left=x, right=1), right=Is(left=x, right=2))],
         ))
         clauses = db.clauses_for("either", 1)
@@ -617,7 +618,7 @@ class TestIntegrationDisjunction:
         x = Var()
         db = Database()
         db.assertz(Clause(
-            head=Compound("d", (x,)),
+            head=("d", x),
             body=[Or(left=Is(left=x, right="nope"), right=Is(left=x, right="yes"))],
         ))
         clauses = db.clauses_for("d", 1)
@@ -643,12 +644,12 @@ class TestIntegrationNegation:
         # nv
         db = Database()
         no_v = Var()
-        db.assertz(Clause(head=Compound("no_such", (no_v,)), body=[Is(left=no_v, right=None)]))
+        db.assertz(Clause(head=("no_such", no_v), body=[Is(left=no_v, right=None)]))
         compile_predicate("no_such", 1, db.clauses_for("no_such", 1), db)
 
         x = Var()
         db.assertz(Clause(
-            head=Compound("naf_test", (x,)),
+            head=("naf_test", x),
             body=[Not(operand=Call(func=LoadName(name="no_such"), args=[x], kwargs=[]))],
         ))
         fn = compile_predicate("naf_test", 1, db.clauses_for("naf_test", 1), db)
@@ -661,12 +662,12 @@ class TestIntegrationNegation:
         # nv
         db = Database()
         any_v = Var()
-        db.assertz(Clause(head=Compound("always_ok", (any_v,)), body=[]))
+        db.assertz(Clause(head=("always_ok", any_v), body=[]))
         compile_predicate("always_ok", 1, db.clauses_for("always_ok", 1), db)
 
         x = Var()
         db.assertz(Clause(
-            head=Compound("naf_test2", (x,)),
+            head=("naf_test2", x),
             body=[Not(operand=Call(func=LoadName(name="always_ok"), args=[x], kwargs=[]))],
         ))
         fn = compile_predicate("naf_test2", 1, db.clauses_for("naf_test2", 1), db)
@@ -682,7 +683,7 @@ class TestIntegrationMembership:
         x = Var()
         db = Database()
         db.assertz(Clause(
-            head=Compound("member", (x,)),
+            head=("member", x),
             body=[in_(left=x, right=[1, 2, 3])],
         ))
         clauses = db.clauses_for("member", 1)
@@ -700,7 +701,7 @@ class TestIntegrationMembership:
         x = Var()
         db = Database()
         db.assertz(Clause(
-            head=Compound("mem", (x,)),
+            head=("mem", x),
             body=[in_(left=x, right=[10, 20, 30])],
         ))
         clauses = db.clauses_for("mem", 1)
@@ -715,7 +716,7 @@ class TestIntegrationMembership:
         x = Var()
         db = Database()
         db.assertz(Clause(
-            head=Compound("absent", (x,)),
+            head=("absent", x),
             body=[NotIn(left=x, right=[1, 2, 3])],
         ))
         clauses = db.clauses_for("absent", 1)
@@ -734,12 +735,12 @@ class TestIntegrationPredicateCall:
         db = Database()
 
         bar_x = Var()
-        db.assertz(Clause(head=Compound("bar", (bar_x,)), body=[Is(left=bar_x, right=7)]))
+        db.assertz(Clause(head=("bar", bar_x), body=[Is(left=bar_x, right=7)]))
         compile_predicate("bar", 1, db.clauses_for("bar", 1), db)
 
         foo_x = Var()
         db.assertz(Clause(
-            head=Compound("foo", (foo_x,)),
+            head=("foo", foo_x),
             body=[Call(func=LoadName(name="bar"), args=[foo_x], kwargs=[])],
         ))
         fn = compile_predicate("foo", 1, db.clauses_for("foo", 1), db)
@@ -753,7 +754,7 @@ class TestIntegrationPredicateCall:
         # nv
         db = Database()
         for col in ("red", "green", "blue"):
-            db.assertz(Clause(head=Compound("color", (col,)), body=[]))
+            db.assertz(Clause(head=("color", col), body=[]))
         fn = compile_predicate("color", 1, db.clauses_for("color", 1), db)
 
         # Calling with a ground arg matches the appropriate clause
@@ -770,20 +771,20 @@ class TestIntegrationPredicateCall:
             _n: object = None
 
         # nat(0) <- True
-        db.assertz(Clause(head=Compound("nat", (0,)), body=[]))
+        db.assertz(Clause(head=("nat", 0), body=[]))
         # nat(s(X)) <- nat(X)
         inner_x = Var()
         db.assertz(Clause(
-            head=Compound("nat", (Compound("s", (inner_x,)),)),
+            head=("nat", ("s", inner_x)),
             body=[Call(func=LoadName(name="nat"), args=[inner_x], kwargs=[])],
         ))
         clauses = db.clauses_for("nat", 1)
         fn = compile_predicate("nat", 1, clauses, db)
 
         assert _run(fn, 0) == [None]
-        assert _run(fn, Compound("s", (0,))) == [None]
-        assert _run(fn, Compound("s", (Compound("s", (0,)),))) == [None]
-        assert _run(fn, Compound("s", (1,))) == []   # 1 is not nat
+        assert _run(fn, ("s", 0)) == [None]
+        assert _run(fn, ("s", ("s", 0))) == [None]
+        assert _run(fn, ("s", 1)) == []   # 1 is not nat
 
 
 class TestIntegrationArithmetic:
@@ -795,7 +796,7 @@ class TestIntegrationArithmetic:
         db = Database()
         # big_enough(X) <- X + 1 > 5  (i.e. X > 4)
         db.assertz(Clause(
-            head=Compound("big_enough", (x,)),
+            head=("big_enough", x),
             body=[Gt(left=Add(left=x, right=1), right=5)],
         ))
         clauses = db.clauses_for("big_enough", 1)

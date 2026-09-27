@@ -19,7 +19,6 @@ from clausal.logic.clpfd import (
     _ensure_fd, in_domain,
 )
 from clausal.logic.compiler.arg_index import _INDEX_VAR, _runtime_arg_key
-from clausal.terms import Compound
 
 
 def fresh_trail() -> Trail:
@@ -179,7 +178,7 @@ class TestRuntimeArgKey:
 
     def test_compound_returns_functor_arity(self):
         # nv
-        c = Compound("f", (1, 2))
+        c = ("f", 1, 2)
         assert _runtime_arg_key(c) == ("f", 2)
 
     def test_empty_string(self):

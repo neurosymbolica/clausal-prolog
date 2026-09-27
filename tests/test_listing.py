@@ -124,6 +124,7 @@ class TestListing:
         assert cell_functor(formal) == "type_error"
         assert cell_args(formal) == (mint("predicate_indicator"), cell)
 
+    @pytest.mark.compound_retirement_slice8
     def test_a_term_instance_is_named_as_itself_not_its_class(self):
         """``listing(Compound("foo", (1,)))``: a term INSTANCE is not an
         indicator either, and the refusal's culprit is the term PASSED --
@@ -228,7 +229,7 @@ def _db_with_fact(name, arity):
     from clausal.logic.database import Database
 
     db = Database()
-    head = Compound(name, tuple(Var() for _ in range(arity)))
+    head = (name, *(Var() for _ in range(arity))) if arity else name
     db.assertz(Clause(head, []))
     return db
 
@@ -296,7 +297,7 @@ class TestListingNameArityIndicatorArgument:
     def test_name_arity_compound_lists_the_predicate(self):
         db = _db_with_fact("pt", 2)
         dispatch = get_builtin_dispatch("listing", 1, db)
-        output = _run_listing(dispatch, Compound("/", (mint("pt"), 2)))
+        output = _run_listing(dispatch, ("/", mint("pt"), 2))
         assert "pt/2" in output
         assert "1 clause(s)" in output
 
@@ -360,7 +361,7 @@ class TestListingNameArityIndicatorArgument:
         try:
             solutions(StepGenerator(
                 dispatch, None, None, None,
-                Compound("/", (name_v, arity_v)), trail,
+                ("/", name_v, arity_v), trail,
             ))
         finally:
             sys.stdout = old
@@ -588,6 +589,7 @@ class TestListingBuiltinClassHasDispatch:
 # unpack.  These pin the pre-funnel behavior: the type name, not the funneled
 # functor, is what a Compound head prints as.
 
+@pytest.mark.compound_retirement_slice8
 class TestFormatClauseHeadCompound:
     def test_str_functor_compound_prints_type_name(self):
         head = Compound("foo", (1, 2))
@@ -735,7 +737,8 @@ class TestListingFollowsScryersContract:
 
     @pytest.mark.parametrize("make", [
         lambda: ("//", mint("greet"), 0),
-        lambda: Compound("//", (mint("greet"), 0)),
+        pytest.param(lambda: Compound("//", (mint("greet"), 0)),
+                     marks=pytest.mark.compound_retirement_slice8),
         lambda: __import__("clausal.terms", fromlist=["FloorDiv"]).FloorDiv(
             left=mint("greet"), right=0),
     ], ids=["cell", "compound", "floordiv-node"])

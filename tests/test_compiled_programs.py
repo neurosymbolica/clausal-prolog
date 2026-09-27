@@ -46,7 +46,6 @@ from clausal.terms import (
     in_, NotIn,
     Add, Sub, Mult, Negate,
     Call, LoadName,
-    Compound,
 )
 
 
@@ -110,7 +109,7 @@ class TestGraphReachability:
         for src, dst in [("a", "b"), ("b", "c"), ("c", "d"), ("b", "d")]:
             dv = Var()
             db.assertz(Clause(
-                head=Compound("edge", (src, dv)),
+                head=("edge", src, dv),
                 body=[Is(left=dv, right=dst)],
             ))
 
@@ -119,14 +118,14 @@ class TestGraphReachability:
         # path(X, Y) :- edge(X, Y).
         px, py = Var(), Var()
         db.assertz(Clause(
-            head=Compound("path", (px, py)),
+            head=("path", px, py),
             body=[Call(func=LoadName(name="edge"), args=[px, py], kwargs=[])],
         ))
 
         # path(X, Y) :- edge(X, Z), path(Z, Y).
         rx, ry, rz = Var(), Var(), Var()
         db.assertz(Clause(
-            head=Compound("path", (rx, ry)),
+            head=("path", rx, ry),
             body=[
                 Call(func=LoadName(name="edge"), args=[rx, rz], kwargs=[]),
                 Call(func=LoadName(name="path"), args=[rz, ry], kwargs=[]),
@@ -222,7 +221,7 @@ class TestClassification:
             nv = Var()   # wildcard for name field
             cv = Var()   # output: category
             db.assertz(Clause(
-                head=Compound("animal", (cls_(name=nv), cv)),
+                head=("animal", cls_(name=nv), cv),
                 body=[Is(left=cv, right=category)],
             ))
 
@@ -314,17 +313,17 @@ class TestFibonacci:
 
         # fib(0, R) :- R = 0.
         r0 = Var()
-        db.assertz(Clause(head=Compound("fib", (0, r0)), body=[Is(left=r0, right=0)]))
+        db.assertz(Clause(head=("fib", 0, r0), body=[Is(left=r0, right=0)]))
 
         # fib(1, R) :- R = 1.
         r1 = Var()
-        db.assertz(Clause(head=Compound("fib", (1, r1)), body=[Is(left=r1, right=1)]))
+        db.assertz(Clause(head=("fib", 1, r1), body=[Is(left=r1, right=1)]))
 
         # fib(N, R) :- N > 1, eval_(N-1, N1), eval_(N-2, N2),
         #              fib(N1, R1), fib(N2, R2), eval_(R1+R2, R).
         n, r, n1, n2, ra, rb = Var(), Var(), Var(), Var(), Var(), Var()
         db.assertz(Clause(
-            head=Compound("fib", (n, r)),
+            head=("fib", n, r),
             body=[
                 Gt(left=n, right=1),
                 Evaluate(left=n1, right=Sub(left=n, right=1)),
@@ -384,7 +383,7 @@ class TestNQueens4:
         #   C3 in [1..4], all distinct.
         c0, c1, c2, c3 = Var(), Var(), Var(), Var()
         db.assertz(Clause(
-            head=Compound("perm4", (c0, c1, c2, c3)),
+            head=("perm4", c0, c1, c2, c3),
             body=[
                 in_(left=c0, right=[1, 2, 3, 4]),
                 in_(left=c1, right=[1, 2, 3, 4]),
@@ -407,7 +406,7 @@ class TestNQueens4:
         ci, cj, dist = Var(), Var(), Var()
         diff1, diff2 = Var(), Var()
         db.assertz(Clause(
-            head=Compound("no_attack", (ci, cj, dist)),
+            head=("no_attack", ci, cj, dist),
             body=[
                 IsNot(left=ci, right=cj),
                 Evaluate(left=diff1, right=Sub(left=ci, right=cj)),
@@ -423,7 +422,7 @@ class TestNQueens4:
         #   no_attack(C1,C2,1), no_attack(C1,C3,2), no_attack(C2,C3,1).
         q0, q1, q2, q3 = Var(), Var(), Var(), Var()
         db.assertz(Clause(
-            head=Compound("queens4", (q0, q1, q2, q3)),
+            head=("queens4", q0, q1, q2, q3),
             body=[
                 Call(func=LoadName(name="perm4"), args=[q0, q1, q2, q3], kwargs=[]),
                 Call(func=LoadName(name="no_attack"), args=[q0, q1, 1], kwargs=[]),
@@ -513,20 +512,20 @@ class TestCombinationSearch:
         for colour in ("red", "green", "blue"):
             cv = Var()
             db.assertz(Clause(
-                head=Compound("colour", (cv,)),
+                head=("colour", cv),
                 body=[Is(left=cv, right=colour)],
             ))
 
         for size in ("small", "medium", "large"):
             sv = Var()
             db.assertz(Clause(
-                head=Compound("size", (sv,)),
+                head=("size", sv),
                 body=[Is(left=sv, right=size)],
             ))
 
         cx, sy = Var(), Var()
         db.assertz(Clause(
-            head=Compound("combo", (cx, sy)),
+            head=("combo", cx, sy),
             body=[
                 Call(func=LoadName(name="colour"), args=[cx], kwargs=[]),
                 Call(func=LoadName(name="size"), args=[sy], kwargs=[]),
@@ -595,7 +594,7 @@ class TestDisjunctionAndOr:
         db = Database()
         x = Var()
         db.assertz(Clause(
-            head=Compound("or_val", (x,)),
+            head=("or_val", x),
             body=[Or(
                 left=Is(left=x, right=10),
                 right=Or(
@@ -608,7 +607,7 @@ class TestDisjunctionAndOr:
 
         a, b = Var(), Var()
         db.assertz(Clause(
-            head=Compound("or_pair", (a, b)),
+            head=("or_pair", a, b),
             body=[
                 Call(func=LoadName(name="or_val"), args=[a], kwargs=[]),
                 Call(func=LoadName(name="or_val"), args=[b], kwargs=[]),
@@ -673,20 +672,20 @@ class TestNegationAsFailure:
         for colour in ("red", "green", "blue"):
             cv = Var()
             db.assertz(Clause(
-                head=Compound("colour_naf", (cv,)),
+                head=("colour_naf", cv),
                 body=[Is(left=cv, right=colour)],
             ))
         compile_predicate("colour_naf", 1, db.clauses_for("colour_naf", 1), db)
 
         # is_red(red).
         rv = Var()
-        db.assertz(Clause(head=Compound("is_red", (rv,)), body=[Is(left=rv, right="red")]))
+        db.assertz(Clause(head=("is_red", rv), body=[Is(left=rv, right="red")]))
         compile_predicate("is_red", 1, db.clauses_for("is_red", 1), db)
 
         # not_red(C) :- colour_naf(C), not is_red(C).
         c = Var()
         db.assertz(Clause(
-            head=Compound("not_red", (c,)),
+            head=("not_red", c),
             body=[
                 Call(func=LoadName(name="colour_naf"), args=[c], kwargs=[]),
                 Not(operand=Call(func=LoadName(name="is_red"), args=[c], kwargs=[])),
@@ -736,7 +735,7 @@ class TestVisualizer:
         from clausal.tools.visualize import show
         db = Database()
         x = Var()
-        db.assertz(Clause(head=Compound("demo", (x,)), body=[Is(left=x, right=42)]))
+        db.assertz(Clause(head=("demo", x), body=[Is(left=x, right=42)]))
         clauses = db.clauses_for("demo", 1)
         show("demo", 1, clauses, db)
         captured = capsys.readouterr()
@@ -748,7 +747,7 @@ class TestVisualizer:
         from clausal.tools.visualize import show
         db = Database()
         x = Var()
-        db.assertz(Clause(head=Compound("demo", (x,)), body=[Is(left=x, right=42)]))
+        db.assertz(Clause(head=("demo", x), body=[Is(left=x, right=42)]))
         clauses = db.clauses_for("demo", 1)
         show("demo", 1, clauses, db, trampoline=True)
         captured = capsys.readouterr()
@@ -764,7 +763,7 @@ class TestVisualizer:
         db = Database()
         x, y = Var(), Var()
         db.assertz(Clause(
-            head=Compound("add1", (x, y)),
+            head=("add1", x, y),
             body=[Evaluate(left=y, right=Add(left=x, right=1))],
         ))
         src = predicate_to_source("add1", 2, db.clauses_for("add1", 2), db)
@@ -778,7 +777,7 @@ class TestVisualizer:
         from clausal.tools.visualize import predicate_to_ast_str
         db = Database()
         x = Var()
-        db.assertz(Clause(head=Compound("p", (x,)), body=[]))
+        db.assertz(Clause(head=("p", x), body=[]))
         s = predicate_to_ast_str("p", 1, db.clauses_for("p", 1), db)
         assert "FunctionDef" in s or "p__1" in s
 
@@ -788,12 +787,12 @@ class TestVisualizer:
         from clausal.tools.visualize import show
         db = Database()
         r0 = Var()
-        db.assertz(Clause(head=Compound("fib", (0, r0)), body=[Is(left=r0, right=0)]))
+        db.assertz(Clause(head=("fib", 0, r0), body=[Is(left=r0, right=0)]))
         r1 = Var()
-        db.assertz(Clause(head=Compound("fib", (1, r1)), body=[Is(left=r1, right=1)]))
+        db.assertz(Clause(head=("fib", 1, r1), body=[Is(left=r1, right=1)]))
         n, r, n1, n2, ra, rb = Var(), Var(), Var(), Var(), Var(), Var()
         db.assertz(Clause(
-            head=Compound("fib", (n, r)),
+            head=("fib", n, r),
             body=[
                 Gt(left=n, right=1),
                 Evaluate(left=n1, right=Sub(left=n, right=1)),

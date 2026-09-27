@@ -262,6 +262,7 @@ class TestKeyComputation:
         result = _normalize_for_key([1, 2, 3])
         assert result == ("__list__", 1, 2, 3)
 
+    @pytest.mark.compound_retirement_slice8
     def test_compound(self):
         # nv
         # Ruling 2026-09-26: an atom-functor Compound of arity >= 1 IS the
@@ -777,14 +778,14 @@ class TestDatabaseTabling:
         db = Database()
         db.mark_tabled("foo", 1)
         db._table_store[("foo", 1, (1,))] = TableEntry()
-        db.assertz(Clause(head=Compound("foo", (99,)), body=[]))
+        db.assertz(Clause(head=("foo", 99), body=[]))
         assert len(db._table_store) == 0
 
     def test_retract_auto_invalidates_tabled(self):
         # nv
         db = Database()
         db.mark_tabled("foo", 1)
-        head = Compound("foo", (1,))
+        head = ("foo", 1)
         db.assertz(Clause(head=head, body=[]))
         db._table_store[("foo", 1, (1,))] = TableEntry()
         db.retract(head)
@@ -794,7 +795,7 @@ class TestDatabaseTabling:
         # nv
         db = Database()
         db._table_store[("bar", 1, (1,))] = TableEntry()
-        db.assertz(Clause(head=Compound("foo", (1,)), body=[]))
+        db.assertz(Clause(head=("foo", 1), body=[]))
         assert len(db._table_store) == 1
 
 

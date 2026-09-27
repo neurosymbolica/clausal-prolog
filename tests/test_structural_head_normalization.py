@@ -8,7 +8,7 @@ from clausal.logic.database import (
     _is_structural_head_value,
     _normalize_structural_head_args,
 )
-from clausal.terms import Call, Compound, LoadName, Unify
+from clausal.terms import Call, LoadName, Unify
 from clausal.logic.variables import Var, is_var
 from tests.predicate_api_support import term_ctor
 from clausal.import_hook import _load_module
@@ -17,8 +17,7 @@ from clausal.logic.solve import call
 
 class TestIsStructuralHeadValue:
     def test_compound_is_structural(self):
-        # Compound signature is Compound(functor, args) — args is one sequence.
-        assert _is_structural_head_value(Compound("point", [1, 2])) is True
+        assert _is_structural_head_value(("point", 1, 2)) is True
 
     def test_loadname_call_is_structural(self):
         assert _is_structural_head_value(
