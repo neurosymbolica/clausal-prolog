@@ -203,7 +203,8 @@ class TestArithToAstExpr:
     # (one spelling shared with the interpreted evaluator) rather than to
     # native ``ast.BinOp`` -- so a Decimal operand is exact and a runtime
     # ``7 / 2`` is ``Fraction(7, 2)`` on both paths.  ``//``, ``%``, ``**``
-    # stay native (test_nested_add below covers the Add shape end to end).
+    # stay native; since ruling R9 only an operand that may be a term is
+    # evaluated first (test_nested_add below covers the Add shape end to end).
     def test_add_gives_exact_helper_call(self):
         # nv
         expr = arith_to_ast_expr(Add(left=1, right=2), {})
@@ -221,11 +222,33 @@ class TestArithToAstExpr:
         expr = arith_to_ast_expr(Mult(left=2, right=3), {})
         assert isinstance(expr, ast.Call) and expr.func.id == "$mul"
 
-    def test_floordiv_stays_a_native_binop(self):
+    def test_floordiv_stays_native_and_evaluates_a_variable_operand(self):
+        # ``//``, ``%``, ``**`` and unary ``-`` stay native Python operators,
+        # but an operand that may be a TERM at runtime (a variable bound to
+        # +(1, 2)) is evaluated first, ``$eval(v)`` (ruling R9) -- it used to
+        # meet Python's tuple operators.  An int keeps the one ``$deref``
+        # call; number literals and arithmetic sub-trees are used as they are.
         # nv
-        from clausal.pythonic_ast.nodes import FloorDiv
-        expr = arith_to_ast_expr(FloorDiv(left=7, right=2), {})
-        assert isinstance(expr, ast.BinOp) and isinstance(expr.op, ast.FloorDiv)
+        from clausal.pythonic_ast.nodes import FloorDiv, Mod, Pow
+        for cls, op in ((FloorDiv, ast.FloorDiv), (Mod, ast.Mod), (Pow, ast.Pow)):
+            v = Var()
+            expr = arith_to_ast_expr(cls(left=v, right=2), {v._id: "v"})
+            assert isinstance(expr, ast.BinOp) and isinstance(expr.op, op)
+            # an int stays on the $deref path; anything else goes to $eval
+            assert isinstance(expr.left, ast.IfExp)
+            assert expr.left.orelse.func.id == "$eval"
+            assert isinstance(expr.right, ast.Constant)
+            expr = arith_to_ast_expr(cls(left=7, right=2), {})
+            assert isinstance(expr, ast.BinOp) and isinstance(expr.left, ast.Constant)
+            expr = arith_to_ast_expr(cls(left=Add(left=v, right=1), right=2), {v._id: "v"})
+            assert isinstance(expr, ast.BinOp) and expr.left.func.id == "$add"
+
+    def test_negate_of_a_variable_evaluates_it(self):
+        # nv
+        v = Var()
+        expr = arith_to_ast_expr(Negate(operand=v), {v._id: "v"})
+        assert isinstance(expr, ast.UnaryOp) and isinstance(expr.operand, ast.IfExp)
+        assert expr.operand.orelse.func.id == "$eval"
 
     def test_negate(self):
         # nv

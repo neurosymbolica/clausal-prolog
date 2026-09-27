@@ -397,7 +397,8 @@ def _convert_inner(goal: Any, db: Any) -> GoalOp:
                         args=[expr_arg, target_arg], kwargs=[]):
             # eval_(EXPR, RESULT) — eager arithmetic evaluate-and-bind
             # (Prolog is/2).  Successor of the deprecated ':=' operator;
-            # same backend (ArithEval), Python evaluation semantics.
+            # same backend (ArithEval).  Evaluates like ISO is/2: a variable
+            # operand at runtime, a non-evaluable term raises (ruling R9 A2).
             return ArithEval(target=target_arg, expr=expr_arg)
 
         # ``Call(LoadName | LoadAttr)`` → ``SubCall``.  Meta-predicate

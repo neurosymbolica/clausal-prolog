@@ -1,6 +1,10 @@
 """Exact arithmetic over the engine's number kinds -- ONE spelling, shared by
 the interpreted evaluator (``clpfd._eval_ground``) and the compiled tree
 (``terms_to_ast.arith_to_ast_expr`` emits ``$add``/``$sub``/``$mul``/``$div``).
+It also holds the ONE evaluable functor table (:data:`EVALUABLE`) that the
+operator nodes and the plain arithmetic cells both evaluate through, and the
+runtime evaluator (:func:`evaluate`, emitted as ``$eval``) for ``eval_/2``'s
+operand and for a term operand of the native ``//``, ``%``, ``**``, ``-``.
 
 Design 2026-09-17 (``docs/superpowers/specs/2026-09-17-rdiv-decimal-arithmetic-design.md``,
 step 2) and the rulings of the same day:
@@ -35,8 +39,11 @@ from __future__ import annotations
 
 from decimal import Decimal
 from fractions import Fraction
+from types import MappingProxyType
 
-__all__ = ["exact_add", "exact_sub", "exact_mul", "exact_div", "decimal_parts"]
+__all__ = ["exact_add", "exact_sub", "exact_mul", "exact_div", "exact_floordiv",
+           "exact_mod", "exact_pow", "exact_neg", "decimal_parts", "EVALUABLE",
+           "evaluate", "evaluate_python_result"]
 
 
 def _float_beside_decimal(f, context: str):
@@ -123,25 +130,243 @@ def _dec_binop(l, r, op: str):
 
 
 def _operand(x, op: str):
-    """A tuple operand is either a CANONICAL exact-number cell -- the
-    transfer form of a Decimal or a Fraction, which a spelling written in
-    source (``decimal(1001, 2)``, ``rdiv(1, 3)``) reaches the compiled tree
-    as -- and evaluates as that number, or it is not a number at all and is
-    refused LOUDLY.  Found 2026-09-18: ``eval_(decimal(1001, 2) * 2, R)``
-    answered the tuple REPEATED, Python's ``tuple * int``, silently, while
-    ``is/2`` converted the leaf; an atom cell ``('yes',) * 2`` did the same.
-    Python's tuple operators must never see an operand here."""
-    if type(x) is str:                 # STAGE 2: an atom -- Python's str operators must never see it
-        from clausal.logic.exceptions import LogicException, type_error  # noqa: PLC0415
-        raise LogicException(type_error("evaluable", x, f"{op}: not a number"))
+    """An operand that is not a plain number: EVALUATE it, or refuse it.
+
+    Python's operators must never see a term here.  Found 2026-09-18:
+    ``eval_(decimal(1001, 2) * 2, R)`` answered the tuple REPEATED (Python's
+    ``tuple * int``) and an atom cell did the same; found 2026-09-27: a
+    variable bound to ``+(1, 2)`` -- built by ``=..`` at runtime, or an
+    operator node from ``Y is 1 + 2`` -- reached the compiled tree through
+    ``$deref`` and raised a raw Python ``TypeError`` or passed through.  So
+    every term operand goes to :func:`evaluate`, which knows the one
+    evaluable table; a canonical exact-number cell is its number there too.
+    A Python value that is not a term (a ``Quantity``, a ``date``) passes
+    through to Python's own operators, as it always has.  *op* is unused
+    and kept for the call sites' readability."""
+    t = type(x)
+    if t is int or t is float or t is Fraction or t is Decimal:
+        return x
+    return evaluate(x)
+
+
+# ── The evaluable functor table (ruling R9, 2026-09-27) ─────────────────────
+#
+# ONE table, keyed ``(name, arity)``, for every spelling of arithmetic: the
+# operator nodes (``Add`` & co., mapped onto their key by ``node_keys``) and
+# the plain cells ``('+', 1, 2)`` that ``=..``/``functor/3``/``copy_term``
+# build at runtime.  CLOSED and STATIC: it holds exactly the evaluable
+# functors the engine already evaluated through its nodes, under their ISO
+# 13211-1 §9 names, and there is no registration API (ISO and Scryer have
+# none) -- the mapping is read-only.
+#
+# The names are the ISO names of the NODE semantics, not the source spellings:
+#
+# * ``FloorDiv`` (source ``//``) FLOORS, which is ISO ``div/2`` (Cor.2), not
+#   ISO ``(//)/2`` -- that one truncates in Scryer and SWI, and the ``.pl``
+#   translator already routes it to ``prolog.TruncDiv``.  Aliasing ``//`` onto
+#   the floored op would answer ``-7 // 2`` as -4 where Scryer says -3, so
+#   ``//`` is left OUT and raises ``type_error(evaluable, (//)/2)``.
+# * ``Mod`` (source ``%``) is floored, sign of the divisor: ISO ``mod/2``.
+# * ``Pow`` (source ``**``) keeps the node's Python semantics (``2 ** 3`` is
+#   the integer 8; Scryer answers 8.0) -- one semantics for both spellings.
+#
+# ``/`` is exact (a Fraction for int/int, RULED 2026-09-17), as on the nodes.
+
+def exact_floordiv(l, r):
+    if type(l) is int and type(r) is int:
+        return l // r
+    return _operand(l, "div") // _operand(r, "div")
+
+
+def exact_mod(l, r):
+    if type(l) is int and type(r) is int:
+        return l % r
+    return _operand(l, "mod") % _operand(r, "mod")
+
+
+def exact_pow(l, r):
+    if type(l) is int and type(r) is int:
+        return l ** r
+    return _operand(l, "pow") ** _operand(r, "pow")
+
+
+def exact_neg(x):
+    if type(x) is int:
+        return -x
+    return -_operand(x, "neg")
+
+
+#: Keys whose second operand is a divisor.  The interpreted evaluator
+#: (``clpfd._eval_ground``) answers "not yet evaluable" (None) for a zero
+#: divisor, as its node arms always did; the compiled tree and ``evaluate``
+#: let Python's ``ZeroDivisionError`` propagate, as ``eval_`` always did.
+ZERO_DIVISOR_KEYS = frozenset({("/", 2), ("div", 2), ("mod", 2)})
+
+_NODE_KEYS: dict = {}
+_KEY_NODES: dict = {}
+
+
+def node_keys() -> dict:
+    """``{operator node class: table key}`` -- every node the evaluator knows.
+    Filled lazily: ``clausal.pythonic_ast`` imports back into the engine."""
+    if not _NODE_KEYS:
+        from clausal.pythonic_ast.nodes import (  # noqa: PLC0415
+            Add, Div, FloorDiv, Mod, Mult, Negate, Pow, Sub)
+        keys = {Add: ("+", 2), Sub: ("-", 2), Mult: ("*", 2), Div: ("/", 2),
+                FloorDiv: ("div", 2), Mod: ("mod", 2), Pow: ("**", 2),
+                Negate: ("-", 1)}
+        # the inverse first: _NODE_KEYS non-empty is the "filled" flag
+        _KEY_NODES.update({k: c for c, k in keys.items()})
+        _NODE_KEYS.update(keys)
+    return _NODE_KEYS
+
+
+def key_nodes() -> dict:
+    """The inverse of :func:`node_keys`: ``{table key: node class}``."""
+    if not _KEY_NODES:
+        node_keys()
+    return _KEY_NODES
+
+
+_Compound = None
+_Node = None
+_KWTerm = None
+
+
+def cell_key_args(x):
+    """``((name, arity), args)`` for a compound CELL or ``Compound``, else None.
+
+    A cell is ``(name, *args)`` with a str name and at least one argument;
+    ``('x',)`` is reserved and is not a compound here.  The key is returned
+    whether or not it is in :data:`EVALUABLE` -- the caller decides."""
+    global _Compound
     if type(x) is tuple:
-        from clausal.logic.variables import exact_cell_number  # noqa: PLC0415
-        num = exact_cell_number(x)
-        if num is None:
-            from clausal.logic.exceptions import LogicException, type_error  # noqa: PLC0415
-            raise LogicException(type_error("evaluable", x, f"{op}: not a number"))
-        return num
-    return x
+        if len(x) >= 2 and type(x[0]) is str:
+            return (x[0], len(x) - 1), x[1:]
+        return None
+    if _Compound is None:
+        from clausal.terms import Compound  # noqa: PLC0415
+        _Compound = Compound
+    if isinstance(x, _Compound) and type(x.functor) is str and x.args:
+        return (x.functor, len(x.args)), tuple(x.args)
+    return None
+
+
+def node_key_args(x):
+    """``(key, args)`` for an evaluable operator NODE, else None."""
+    key = (_NODE_KEYS or node_keys()).get(type(x))
+    if key is None:
+        return None
+    if key[1] == 1:
+        return key, (x.operand,)
+    return key, (x.left, x.right)
+
+
+def _is_term(x) -> bool:
+    """True for a value that is a TERM (and so must be evaluable to be used
+    as a number): an atom, a cell (a declared term such as ``z(1)`` is one; so
+    is a string, the ``('$chars', Text)`` carrier), a ``Compound``, a
+    ``KWTerm`` or a pythonic-AST node.
+    Every tuple counts, even one without a str head: a tuple is a term (a cell,
+    or the ``('$chars', Text)`` string carrier), never a Python value here.
+    Anything else is a Python value and keeps Python semantics -- including a
+    LIST, deliberately: ``eval_`` has always concatenated and repeated Python
+    lists (``eval_(L + [3], X)``), and an ISO-strict refusal of lists is a
+    separate question from the cells ruling R9 settled."""
+    if type(x) is str or type(x) is tuple:
+        return True
+    global _Compound, _Node, _KWTerm
+    if _Compound is None:
+        from clausal.terms import Compound  # noqa: PLC0415
+        _Compound = Compound
+    if _Node is None:
+        from clausal.pythonic_ast.nodes import Node  # noqa: PLC0415
+        from clausal.terms import KWTerm  # noqa: PLC0415
+        _Node, _KWTerm = Node, KWTerm
+    return isinstance(x, (_Compound, _Node, _KWTerm))
+
+
+def not_evaluable(term, context: str = "eval_/2"):
+    """``type_error(evaluable, Name/Arity)`` for *term* (ISO 13211-1 7.9.2).
+
+    An operator node the table does not know (``5 & 3``, ``~5``, ``+3``) is
+    named by its operator and operand count -- ``(&)/2`` -- rather than by
+    its dataclass (``'BitAnd'/3``, which counts the position field): the
+    culprit names what the user wrote."""
+    from clausal.logic.builtins.iso_compare import _evaluable_culprit  # noqa: PLC0415
+    from clausal.logic.exceptions import LogicException, type_error  # noqa: PLC0415
+    from clausal.pythonic_ast.nodes import BinOp, UnaryOp  # noqa: PLC0415
+    op = getattr(type(term), "op", None)
+    if type(op) is str and isinstance(term, (BinOp, UnaryOp)):
+        from clausal.terms import Compound  # noqa: PLC0415
+        culprit = Compound("/", (op, 2 if isinstance(term, BinOp) else 1))
+    else:
+        culprit = _evaluable_culprit(term)
+    return LogicException(type_error("evaluable", culprit, context))
+
+
+_deref = _is_var = _exact_cell_number = None
+
+
+def _bind_variables() -> None:
+    """Bind the variable-layer helpers once (``clausal.logic.variables``
+    imports this module's neighbours; binding at first use avoids the cycle
+    without an import statement per evaluated operand)."""
+    global _deref, _is_var, _exact_cell_number
+    from clausal.logic.variables import deref, exact_cell_number, is_var  # noqa: PLC0415
+    _deref, _is_var, _exact_cell_number = deref, is_var, exact_cell_number
+
+
+def evaluate_python_result(x, context: str = "eval_/2"):
+    """:func:`evaluate` for the result of a QUALIFIED call (``os.getcwd()``,
+    ``math.sqrt(X)``): a ``str`` there is Python's string, not an atom, and
+    passes through as it always did; a term result (a qualified term
+    constructor's cell) is evaluated or refused like any other term."""
+    if type(x) is str:
+        return x
+    return evaluate(x, context)
+
+
+def evaluate(x, context: str = "eval_/2"):
+    """Evaluate the arithmetic TERM *x* to a number -- ``eval_/2``'s evaluator.
+
+    * a number is itself (an integral result is presented as int by the
+      caller's ``$present``);
+    * an unbound variable raises ``instantiation_error`` (ISO 9.1.1);
+    * an operator node or a cell whose ``name/arity`` is in
+      :data:`EVALUABLE` applies that entry to its evaluated arguments; a
+      canonical exact-number cell (``rdiv/2``, ``decimal/2``) is its number;
+    * any other TERM -- an atom, a non-evaluable compound -- raises
+      ``type_error(evaluable, Name/Arity)``, where it used to be handed back
+      unevaluated (ruling R9 A2);
+    * a Python value that is not a term (a ``Quantity``, a ``date``, a
+      ``bool``, a list) passes through, to meet Python's operators as before.
+    """
+    if _deref is None:
+        _bind_variables()
+    x = _deref(x)
+    t = type(x)
+    if t is int or t is float or t is Fraction or t is Decimal:
+        return x
+    if _is_var(x):
+        from clausal.logic.exceptions import LogicException, instantiation_error  # noqa: PLC0415
+        raise LogicException(instantiation_error(context))
+    ka = node_key_args(x)
+    if ka is None:
+        if t is tuple:
+            num = _exact_cell_number(x)
+            if num is not None:
+                return num
+        ka = cell_key_args(x)
+        if ka is None:
+            if _is_term(x):
+                raise not_evaluable(x, context)
+            return x
+    key, args = ka
+    fn = EVALUABLE.get(key)
+    if fn is None:
+        raise not_evaluable(x, context)
+    return fn(*[evaluate(a, context) for a in args])
 
 
 def exact_add(l, r):
@@ -192,3 +417,12 @@ def exact_div(l, r):
                 return l / r            # Decimal's own non-finite semantics
         return Fraction(l) / Fraction(r)
     return l / r
+
+
+#: The evaluable functor table (see the block comment above ``exact_floordiv``);
+#: defined last because it names the four exact operators.
+EVALUABLE = MappingProxyType({
+    ("+", 2): exact_add, ("-", 2): exact_sub, ("*", 2): exact_mul,
+    ("/", 2): exact_div, ("div", 2): exact_floordiv, ("mod", 2): exact_mod,
+    ("**", 2): exact_pow, ("-", 1): exact_neg,
+})

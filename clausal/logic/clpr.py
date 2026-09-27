@@ -823,10 +823,22 @@ def _is_ground_real_scalar(x) -> bool:
     return isinstance(x, float) and not math.isnan(x)
 
 
+def _cells_as_nodes(l, r, context):
+    """clpfd's post-boundary rewrite, STRICT (ruling R9 A1, 2026-09-27): an
+    arithmetic cell becomes its operator node, which is what the CLP(R) propagators
+    walk; an atom or a non-evaluable compound raises ``type_error(evaluable,
+    F/N)`` -- the CLP(R) propagators had no diagnosis of their own for it."""
+    global _cells_as_nodes
+    from clausal.logic.clpfd import _cells_as_nodes as impl  # noqa: PLC0415 -- clpfd imports this module lazily
+    _cells_as_nodes = impl
+    return impl(l, r, context)
+
+
 def real_eq(l, r, trail: Trail) -> bool:
     """Post lhs == rhs as a real constraint."""
     l = deref(l)
     r = deref(r)
+    l, r = _cells_as_nodes(l, r, "(==)/2")   # ruling R9 A1
     # Ground check
     if not is_var(l) and not _is_expr(l) and not is_var(r) and not _is_expr(r):
         if isinstance(l, int) and not isinstance(l, bool) and isinstance(r, int) and not isinstance(r, bool):
@@ -852,6 +864,7 @@ def real_ne(l, r, trail: Trail) -> bool:
     """Post lhs != rhs as a real constraint."""
     l = deref(l)
     r = deref(r)
+    l, r = _cells_as_nodes(l, r, "(!=)/2")   # ruling R9 A1
     if not is_var(l) and not _is_expr(l) and not is_var(r) and not _is_expr(r):
         if isinstance(l, int) and not isinstance(l, bool) and isinstance(r, int) and not isinstance(r, bool):
             return l != r
@@ -868,6 +881,7 @@ def real_lt(l, r, trail: Trail) -> bool:
     """Post lhs < rhs as a real constraint."""
     l = deref(l)
     r = deref(r)
+    l, r = _cells_as_nodes(l, r, "(<)/2")   # ruling R9 A1
     if not is_var(l) and not _is_expr(l) and not is_var(r) and not _is_expr(r):
         if isinstance(l, int) and not isinstance(l, bool) and isinstance(r, int) and not isinstance(r, bool):
             return l < r
@@ -884,6 +898,7 @@ def real_le(l, r, trail: Trail) -> bool:
     """Post lhs <= rhs as a real constraint."""
     l = deref(l)
     r = deref(r)
+    l, r = _cells_as_nodes(l, r, "(=<)/2")   # ruling R9 A1
     if not is_var(l) and not _is_expr(l) and not is_var(r) and not _is_expr(r):
         if isinstance(l, int) and not isinstance(l, bool) and isinstance(r, int) and not isinstance(r, bool):
             return l <= r
