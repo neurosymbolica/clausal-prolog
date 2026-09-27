@@ -287,6 +287,11 @@ class TestA2Errors:
             # the strict path reached through the < / > swaps
             "e18": "clpq.rational(X < bar)",
             "e19": "clpr.real(X > bar)",
+            # an atom IS its str: a str reached through a variable is an
+            # atom to eval_, even when a ++ escape produced it (roborev 270;
+            # it formatted before -- do string work inside the escape)
+            "e20": "(F is ++(\"%d items\"), N == 3, eval_(F % N, X))",
+            "e21": "(F is ++(\"%d items\"), eval_(F, X))",
         }
         body = "\n".join(f"{n}(X) <- {b}" for n, b in rows.items())
         return _module(tmp, body, [f"{n}(X)" for n in rows] + ["bar2(X)"],
@@ -296,7 +301,9 @@ class TestA2Errors:
         ("e1", "foo/1"), ("e4", "bar/0"), ("e5", "foo/1"), ("e8", "foo/1"),
         ("e6", "foo/1"), ("e7", "foo/1"), ("e9", "&/2"), ("e10", "&/2"),
         ("e11", "bar/0"), ("e12", "bar/0"), ("e13", "bar2/1"), ("e14", "bar2/1"),
-        ("e15", "'.'/2"), ("e18", "bar/0"), ("e19", "bar/0")])
+        ("e15", "'.'/2"), ("e18", "bar/0"), ("e19", "bar/0"),
+        # (compared with spaces stripped, as _error_text renders)
+        ("e20", "'%ditems'/0"), ("e21", "'%ditems'/0")])
     def test_non_evaluable(self, mod, name, culprit):
         text = _error_text(lambda: _answers(mod, name))
         assert _culprit_rendered(culprit) in text, text

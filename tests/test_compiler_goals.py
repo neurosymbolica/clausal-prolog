@@ -203,8 +203,8 @@ class TestArithToAstExpr:
     # (one spelling shared with the interpreted evaluator) rather than to
     # native ``ast.BinOp`` -- so a Decimal operand is exact and a runtime
     # ``7 / 2`` is ``Fraction(7, 2)`` on both paths.  ``//``, ``%``, ``**``
-    # have helpers too since ruling R9 (test_nested_add below covers the Add
-    # shape end to end).
+    # stay native; since ruling R9 only an operand that may be a term is
+    # evaluated first (test_nested_add below covers the Add shape end to end).
     def test_add_gives_exact_helper_call(self):
         # nv
         expr = arith_to_ast_expr(Add(left=1, right=2), {})

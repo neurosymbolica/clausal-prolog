@@ -58,6 +58,11 @@ Prefer `==` for ordinary relational arithmetic — it works in all directions.
   `++` escape or of a qualified Python call such as `math.sqrt(X)` — keeps
   Python's own operators, as before: `eval_(L + [3], X)` concatenates and
   `eval_(++("%d") % 5, X)` formats.
+- A Python `str` that reaches `eval_` through a **variable** or a qualified
+  **name** (`os.sep`) is an atom — an atom *is* its str — and raises like any
+  atom: `F is ++("%d items"), eval_(F % N, X)` raises
+  `type_error(evaluable, '%d items'/0)`. Do string work in the escape:
+  `X is ++(F % N)`.
 
 Reach for `eval_/2` when you specifically need *eager* evaluation:
 
