@@ -15,7 +15,7 @@
  * SAFE TO SHARE between threads (read-only, or internally synchronized):
  *   - Var / AttVar objects  — bindings use atomic stores; unify() uses
  *     per-object critical sections to prevent double-binding.
- *   - Ground terms (int, str, tuple of ground, Compound of ground) —
+ *   - Ground terms (int, str, tuple of ground) —
  *     immutable once constructed.
  *   - Clause database (for reads) — compiled dispatch tables are
  *     immutable snapshots; assert/retract use copy-on-write with a

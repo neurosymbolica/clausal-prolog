@@ -295,8 +295,8 @@ try:
         _is_ground as _c_is_ground,
         _register_term_types,
     )
-    # Register Compound and KWTerm types with the C extension
-    _register_term_types(Compound, KWTerm)
+    # Register the KWTerm type with the C extension
+    _register_term_types(KWTerm)
 
     # F083 (audit 2026-05-25): the C ``_is_ground`` does not know about
     # SegList / SegString / SegBytes and falls through to "True" for any

@@ -1070,63 +1070,6 @@ unwrap_chars(PyObject *t)
     return is_chars_carrier(t) ? PyTuple_GET_ITEM(t, 1) : t;
 }
 
-/* Forward declarations: defined with the term-inspection cache further down
- * (``Compound_type`` is set by ``_register_term_types``). */
-static PyObject *Compound_type;
-static PyObject *str_functor;
-static PyObject *str_args;
-
-/*
- * compound_to_cell(obj, &out) -- C twin of ``clausal.terms.compound_as_cell``.
- *
- * Ruling 2026-09-26: a Compound whose functor dereferences to an atom (a str)
- * and whose arity is >= 1 IS the cell (functor, *args) -- except the functors
- * '$chars' (its cell is the chars carrier) and '()' (TUPLE_TAG: its cell is
- * tuple data).  Returns 1 with *out a
- * NEW reference to that cell; 0 (and *out NULL) when obj is not a Compound or
- * has no cell equivalent (Var / non-atom functor, arity 0); -1 on error.
- * Before ``_register_term_types`` runs, Compound_type is NULL and this answers
- * 0 -- the Python ``Compound.__unify__`` tuple arm then decides instead.
- */
-static int
-compound_to_cell(PyObject *obj, PyObject **out)
-{
-    *out = NULL;
-    if (Compound_type == NULL || !PyType_Check(Compound_type)) return 0;
-    if (!PyObject_TypeCheck(obj, (PyTypeObject *)Compound_type)) return 0;
-    PyObject *functor = PyObject_GetAttr(obj, str_functor);
-    if (!functor) return -1;
-    PyObject *f = var_deref(functor);          /* borrowed */
-    /* '$chars' and '()' are excluded: their cells are the chars CARRIER
-     * (text) and tuple DATA, not compounds -- see compound_as_cell. */
-    if (!PyUnicode_Check(f)
-            || PyUnicode_CompareWithASCIIString(f, "$chars") == 0
-            || PyUnicode_CompareWithASCIIString(f, "()") == 0) {
-        Py_DECREF(functor);
-        return 0;
-    }
-    PyObject *args = PyObject_GetAttr(obj, str_args);
-    if (!args) { Py_DECREF(functor); return -1; }
-    if (!PyTuple_Check(args) || PyTuple_GET_SIZE(args) == 0) {
-        Py_DECREF(functor); Py_DECREF(args);
-        return 0;
-    }
-    Py_ssize_t n = PyTuple_GET_SIZE(args);
-    PyObject *cell = PyTuple_New(n + 1);
-    if (!cell) { Py_DECREF(functor); Py_DECREF(args); return -1; }
-    Py_INCREF(f);
-    PyTuple_SET_ITEM(cell, 0, f);
-    for (Py_ssize_t i = 0; i < n; i++) {
-        PyObject *a = PyTuple_GET_ITEM(args, i);
-        Py_INCREF(a);
-        PyTuple_SET_ITEM(cell, i + 1, a);
-    }
-    Py_DECREF(functor);
-    Py_DECREF(args);
-    *out = cell;
-    return 1;
-}
-
 static int
 do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
 {
@@ -1268,25 +1211,6 @@ do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
         return do_unify(PyTuple_GET_ITEM(t1, n-1),
                         PyTuple_GET_ITEM(t2, n-1),
                         trail, depth + 1, oc);
-    }
-
-    /* A Compound meeting a tuple (ruling 2026-09-26): an atom-functor
-     * Compound of arity >= 1 IS its cell, so unify the cell -- here, before
-     * the __unify__ hooks, so the occurs-check flag carries through (the
-     * Python hook cannot see it).  A Compound with no cell equivalent falls
-     * through and fails against the tuple as before. */
-    if (PyTuple_CheckExact(t1) != PyTuple_CheckExact(t2)) {
-        PyObject *comp = PyTuple_CheckExact(t1) ? t2 : t1;
-        PyObject *cell;
-        int c = compound_to_cell(comp, &cell);
-        if (c < 0) return -1;
-        if (c) {
-            int r = (comp == t1)
-                ? do_unify(cell, t2, trail, depth + 1, oc)
-                : do_unify(t1, cell, trail, depth + 1, oc);
-            Py_DECREF(cell);
-            return r;
-        }
     }
 
     /* STAGE 2 (spec 2026-09-18): the chars carrier is the ONLY text.  It
@@ -1872,7 +1796,7 @@ do_walk(PyObject *term, int depth)
         return result;
     }
     /* __walk__ protocol: delegate to Python method if present.
-     * Compound, KWTerm, the Seg types and DictTerm all supply __walk__
+     * KWTerm, the Seg types and DictTerm all supply __walk__
      * (A01-F008). */
     {
         PyObject *hook = PyObject_GetAttrString(term, "__walk__");
@@ -1886,7 +1810,7 @@ do_walk(PyObject *term, int depth)
     /* Term instance (a @dataclass instance) — A01-F008: rebuild with
      * walked fields so walk() deep-substitutes term-instance children, keeping
      * walk consistent with _deref_walk (the tabling/findall snapshot walker).
-     * Without this, a term instance nested inside a Compound would not be
+     * Without this, a term instance nested inside a cell would not be
      * frozen and would decay after backtracking. */
     {
         int ti = c_is_term_instance(term);
@@ -2179,13 +2103,11 @@ py_register_attr_hook(PyObject *Py_UNUSED(module), PyObject *args)
 static PyObject *str_dataclass_fields = NULL;  /* "__dataclass_fields__" */
 static PyObject *str_name = NULL;              /* "name" */
 static PyObject *str_functor = NULL;           /* "functor" */
-static PyObject *str_args = NULL;              /* "args" */
 
 /* Cached reference to dataclasses.fields() for dataclass field introspection */
 static PyObject *dc_fields_func = NULL;
 
-/* Cached references for Compound and KWTerm types */
-static PyObject *Compound_type = NULL;
+/* Cached reference for the KWTerm type */
 static PyObject *KWTerm_type = NULL;
 
 /*
@@ -2196,11 +2118,7 @@ static PyObject *KWTerm_type = NULL;
  *   str_dataclass_fields  c_is_term_instance
  *   dc_fields_func        py_term_field_names
  *   str_name              py_term_field_names
- *   str_functor           the Compound arms of c_is_ground, c_copy_term and
- *                         c_collect_vars; c_copy_term's KWTerm arm;
- *                         py_functor_name (Compound and KWTerm)
- *   str_args              the Compound arms of c_is_ground, c_copy_term and
- *                         c_collect_vars; py_arity, py_nth_arg, py_args_list
+ *   str_functor           c_copy_term's KWTerm arm; py_functor_name (KWTerm)
  *
  * This used to be the second job of ``_register_predicate_meta(cls)``, which
  * predicate.py called at import time (Fix #5).  Anything that inspected a
@@ -2219,8 +2137,6 @@ init_term_inspection_cache(void)
     if (!str_name) return -1;
     str_functor = PyUnicode_InternFromString("functor");
     if (!str_functor) return -1;
-    str_args = PyUnicode_InternFromString("args");
-    if (!str_args) return -1;
     PyObject *mod = PyImport_ImportModule("dataclasses");
     if (!mod) return -1;
     dc_fields_func = PyObject_GetAttrString(mod, "fields");
@@ -2230,20 +2146,16 @@ init_term_inspection_cache(void)
 }
 
 /*
- * _register_term_types(compound_cls, kwterm_cls) — called at import time
+ * _register_term_types(kwterm_cls) — called at import time.  The KWTerm
+ * class is the one term class the C inspection helpers still special-case
+ * (Compound retirement slice 7 removed the Compound arms; KWTerm's go in
+ * slice 9).
  */
 static PyObject *
-py_register_term_types(PyObject *Py_UNUSED(module), PyObject *args)
+py_register_term_types(PyObject *Py_UNUSED(module), PyObject *kw)
 {
-    PyObject *comp, *kw;
-    if (!PyArg_ParseTuple(args, "OO", &comp, &kw))
-        return NULL;
-    Py_XDECREF(Compound_type);
-    Py_XDECREF(KWTerm_type);
-    Py_INCREF(comp);
     Py_INCREF(kw);
-    Compound_type = comp;
-    KWTerm_type = kw;
+    Py_XSETREF(KWTerm_type, kw);
     Py_RETURN_NONE;
 }
 
@@ -2370,35 +2282,6 @@ c_is_ground(PyObject *term, int depth)
         }
         return 1;
     }
-    /* Compound */
-    if (Compound_type) {
-        int r = PyObject_IsInstance(term, Compound_type);
-        if (r < 0) return -1;  /* Fix #3 */
-        if (r) {
-            PyObject *functor = PyObject_GetAttr(term, str_functor);
-            if (!functor) return -1;
-            /* A01-F003: deref a functor Var before the str check — a functor
-             * bound to a str is ground; an unbound functor Var is not. */
-            int is_str = PyUnicode_Check(var_deref(functor));
-            Py_DECREF(functor);
-            if (!is_str) return 0;
-            PyObject *args = PyObject_GetAttr(term, str_args);
-            if (!args) return -1;
-            /* Fix #4: guard against non-tuple args */
-            if (!PyTuple_Check(args)) {
-                Py_DECREF(args);
-                PyErr_SetString(PyExc_TypeError, "Compound.args is not a tuple");
-                return -1;
-            }
-            Py_ssize_t n = PyTuple_GET_SIZE(args);
-            for (Py_ssize_t i = 0; i < n; i++) {
-                int gr = c_is_ground(PyTuple_GET_ITEM(args, i), depth + 1);
-                if (gr <= 0) { Py_DECREF(args); return gr; }
-            }
-            Py_DECREF(args);
-            return 1;
-        }
-    }
     /* KWTerm */
     if (KWTerm_type) {
         int r = PyObject_IsInstance(term, KWTerm_type);
@@ -2462,18 +2345,6 @@ static PyObject *
 py_functor_name(PyObject *Py_UNUSED(module), PyObject *term)
 {
     int r;
-    /* Compound */
-    if (Compound_type) {
-        r = PyObject_IsInstance(term, Compound_type);
-        if (r < 0) return NULL;
-        if (r) {
-            PyObject *functor = PyObject_GetAttr(term, str_functor);
-            if (!functor) return NULL;
-            if (PyUnicode_Check(functor)) return functor;
-            Py_DECREF(functor);
-            Py_RETURN_NONE;
-        }
-    }
     /* KWTerm */
     if (KWTerm_type) {
         r = PyObject_IsInstance(term, KWTerm_type);
@@ -2540,24 +2411,6 @@ static PyObject *
 py_arity(PyObject *Py_UNUSED(module), PyObject *term)
 {
     int r;
-    /* Compound */
-    if (Compound_type) {
-        r = PyObject_IsInstance(term, Compound_type);
-        if (r < 0) return NULL;
-        if (r) {
-            PyObject *args = PyObject_GetAttr(term, str_args);
-            if (!args) return NULL;
-            if (!PyTuple_Check(args)) {
-                Py_ssize_t n = PyObject_Length(args);
-                Py_DECREF(args);
-                if (n < 0) return NULL;
-                return PyLong_FromSsize_t(n);
-            }
-            Py_ssize_t n = PyTuple_GET_SIZE(args);
-            Py_DECREF(args);
-            return PyLong_FromSsize_t(n);
-        }
-    }
     /* KWTerm */
     if (KWTerm_type) {
         r = PyObject_IsInstance(term, KWTerm_type);
@@ -2644,36 +2497,6 @@ py_nth_arg(PyObject *Py_UNUSED(module), PyObject *args)
     int r;
     if (!PyArg_ParseTuple(args, "On", &term, &n))
         return NULL;
-    /* Compound */
-    if (Compound_type) {
-        r = PyObject_IsInstance(term, Compound_type);
-        if (r < 0) return NULL;
-        if (r) {
-            PyObject *cargs = PyObject_GetAttr(term, str_args);
-            if (!cargs) return NULL;
-            /* Fix #4: handle non-tuple args gracefully */
-            if (!PyTuple_Check(cargs)) {
-                Py_ssize_t len = PyObject_Length(cargs);
-                if (len < 0) { Py_DECREF(cargs); return NULL; }
-                if (n < 1 || n > len) {
-                    Py_DECREF(cargs);
-                    return raise_arg_index_error(n, term);
-                }
-                PyObject *result = PySequence_GetItem(cargs, n - 1);
-                Py_DECREF(cargs);
-                return result;
-            }
-            Py_ssize_t len = PyTuple_GET_SIZE(cargs);
-            if (n < 1 || n > len) {
-                Py_DECREF(cargs);
-                return raise_arg_index_error(n, term);
-            }
-            PyObject *result = PyTuple_GET_ITEM(cargs, n - 1);
-            Py_INCREF(result);
-            Py_DECREF(cargs);
-            return result;
-        }
-    }
     /* KWTerm */
     if (KWTerm_type) {
         r = PyObject_IsInstance(term, KWTerm_type);
@@ -2772,18 +2595,6 @@ static PyObject *
 py_args_list(PyObject *Py_UNUSED(module), PyObject *term)
 {
     int r;
-    /* Compound */
-    if (Compound_type) {
-        r = PyObject_IsInstance(term, Compound_type);
-        if (r < 0) return NULL;
-        if (r) {
-            PyObject *args = PyObject_GetAttr(term, str_args);
-            if (!args) return NULL;
-            PyObject *result = PySequence_List(args);
-            Py_DECREF(args);
-            return result;
-        }
-    }
     /* KWTerm */
     if (KWTerm_type) {
         r = PyObject_IsInstance(term, KWTerm_type);
@@ -2878,11 +2689,6 @@ static PyObject *
 py_is_compound(PyObject *Py_UNUSED(module), PyObject *term)
 {
     int r;
-    if (Compound_type) {
-        r = PyObject_IsInstance(term, Compound_type);
-        if (r < 0) return NULL;
-        if (r) Py_RETURN_TRUE;
-    }
     if (KWTerm_type) {
         r = PyObject_IsInstance(term, KWTerm_type);
         if (r < 0) return NULL;
@@ -2979,8 +2785,8 @@ c_copy_term(PyObject *term, PyObject *var_map, int depth)
      * Slot 0 needs no special case: a str functor and the TUPLE_TAG type
      * object both contain no Vars and are returned by identity, while an
      * unbound functor Var must be freshened like any other — the same
-     * reasoning as the A01-F003 functor recursion in the Compound branch
-     * below, but for free.
+     * reasoning as the A01-F003 functor recursion a structure's functor
+     * slot always needed, but for free.
      *
      * The reuse-if-unchanged tail mirrors the twin's identity short-circuit
      * (``if all(new is old ...): return term``), so a GROUND cell — the
@@ -3003,45 +2809,6 @@ c_copy_term(PyObject *term, PyObject *var_map, int depth)
             return term;
         }
         return result;
-    }
-
-    /* Compound: copy args tuple, construct new Compound(functor, new_args) */
-    if (Compound_type) {
-        int r = PyObject_IsInstance(term, Compound_type);
-        if (r < 0) return NULL;
-        if (r) {
-            PyObject *functor = PyObject_GetAttr(term, str_functor);
-            if (!functor) return NULL;
-            PyObject *args = PyObject_GetAttr(term, str_args);
-            if (!args) { Py_DECREF(functor); return NULL; }
-            if (!PyTuple_Check(args)) {
-                Py_DECREF(functor); Py_DECREF(args);
-                PyErr_SetString(PyExc_TypeError, "Compound.args is not a tuple");
-                return NULL;
-            }
-            Py_ssize_t n = PyTuple_GET_SIZE(args);
-            PyObject *new_args = PyTuple_New(n);
-            if (!new_args) { Py_DECREF(functor); Py_DECREF(args); return NULL; }
-            for (Py_ssize_t i = 0; i < n; i++) {
-                PyObject *copied = c_copy_term(PyTuple_GET_ITEM(args, i), var_map, depth + 1);
-                if (!copied) {
-                    Py_DECREF(functor); Py_DECREF(args); Py_DECREF(new_args);
-                    return NULL;
-                }
-                PyTuple_SET_ITEM(new_args, i, copied);  /* steals ref */
-            }
-            Py_DECREF(args);
-            /* A01-F003: freshen the functor too — an unbound functor Var must
-             * be remapped like any arg Var; a str functor derefs to itself and
-             * is returned as-is by c_copy_term. */
-            PyObject *new_functor = c_copy_term(functor, var_map, depth + 1);
-            Py_DECREF(functor);
-            if (!new_functor) { Py_DECREF(new_args); return NULL; }
-            PyObject *result = PyObject_CallFunctionObjArgs(Compound_type, new_functor, new_args, NULL);
-            Py_DECREF(new_functor);
-            Py_DECREF(new_args);
-            return result;
-        }
     }
 
     /* KWTerm: copy each value, construct new KWTerm(functor, **{k: copied_v, ...}) */
@@ -3290,38 +3057,6 @@ c_collect_vars(PyObject *term, UIntSet *seen, PyObject *result, int depth)
         return 0;
     }
 
-    /* Compound */
-    if (Compound_type) {
-        int r = PyObject_IsInstance(term, Compound_type);
-        if (r < 0) return -1;
-        if (r) {
-            /* A01-F003: visit the functor slot first — an unbound functor Var
-             * is a variable of the term; a str functor derefs to a primitive
-             * and collects nothing. */
-            PyObject *functor = PyObject_GetAttr(term, str_functor);
-            if (!functor) return -1;
-            int fr = c_collect_vars(functor, seen, result, depth + 1);
-            Py_DECREF(functor);
-            if (fr < 0) return -1;
-            PyObject *args = PyObject_GetAttr(term, str_args);
-            if (!args) return -1;
-            if (!PyTuple_Check(args)) {
-                Py_DECREF(args);
-                PyErr_SetString(PyExc_TypeError, "Compound.args is not a tuple");
-                return -1;
-            }
-            Py_ssize_t n = PyTuple_GET_SIZE(args);
-            for (Py_ssize_t i = 0; i < n; i++) {
-                if (c_collect_vars(PyTuple_GET_ITEM(args, i), seen, result, depth + 1) < 0) {
-                    Py_DECREF(args);
-                    return -1;
-                }
-            }
-            Py_DECREF(args);
-            return 0;
-        }
-    }
-
     /* KWTerm */
     if (KWTerm_type) {
         int r = PyObject_IsInstance(term, KWTerm_type);
@@ -3537,29 +3272,21 @@ py_unify_census_stop(PyObject *self, PyObject *Py_UNUSED(ignored))
 /*
  * as_cells_for_match(term, depth) -- C twin of
  * ``clausal.terms.as_cells_for_match`` (keep the two in step; parity is
- * tested in tests/test_compound_cell_same_term.py).
+ * tested in tests/test_as_cells_for_match_parity.py).
  *
- * The clause-head ``match`` subject normaliser (ruling 2026-09-26): ``term``
- * dereferenced, with every atom-functor Compound in its top *depth* cell
- * levels replaced by its cell (compound_to_cell), so a caller's Compound
- * spelling meets a cell-only head pattern as the cell.  Nothing is copied
- * unless a Compound is converted; an unconverted element keeps its original
- * object.  Generated code calls this INSTEAD of ``$deref`` at the argument
- * positions whose head patterns have cell structure, so the common case
- * costs one C call, as before.
+ * The clause-head ``match`` subject normaliser: ``term`` dereferenced, with
+ * every slot in its top *depth* cell levels that holds a Var BOUND to a
+ * structure replaced by that structure -- a ``match`` does not dereference.
+ * Nothing is copied unless a slot is replaced; an unreplaced element keeps
+ * its original object.  Generated code calls this INSTEAD of ``$deref`` at
+ * the argument positions whose head patterns have cell structure, so the
+ * common case costs one C call, as before.
  */
 static int cells_below(PyObject *term, long depth, int classes, PyObject **out);
 
 /* The Python twin's ``_cells_below``, for term INSTANCES (fields are walked
  * there; a dataclass copy is not worth doing twice).  Imported lazily. */
 static PyObject *py_cells_below_fn = NULL;
-
-static int
-is_compound_obj(PyObject *x)
-{
-    return Compound_type && PyType_Check(Compound_type)
-        && PyObject_TypeCheck(x, (PyTypeObject *)Compound_type);
-}
 
 /* A slot value no head pattern destructures -- skipped without a probe.
  * Twin of ``_SCALAR_SLOT_TYPES`` (exact types). */
@@ -3572,14 +3299,13 @@ is_scalar_slot(PyObject *x)
 }
 
 /* 1 if *x* (dereferenced) is a structure level a head pattern can
- * destructure: a tuple, a Compound, or -- only when *classes* -- a dataclass
- * term instance. */
+ * destructure: a tuple, or -- only when *classes* -- a dataclass term
+ * instance. */
 static int
 is_structure_level(PyObject *x, int classes)
 {
     if (PyTuple_CheckExact(x)) return 1;
     if (is_scalar_slot(x) || PyList_CheckExact(x) || Var_Check(x)) return 0;
-    if (is_compound_obj(x)) return 1;
     return classes ? c_is_term_instance(x) : 0;
 }
 
@@ -3638,37 +3364,6 @@ cells_below(PyObject *term, long depth, int classes, PyObject **out)
     if (PyTuple_CheckExact(term))
         return cells_in_slots(term, 1, depth, classes, out);
     if (is_scalar_slot(term)) return 0;
-    if (is_compound_obj(term)) {
-        PyObject *cell;
-        int c = compound_to_cell(term, &cell);
-        if (c < 0) return -1;
-        if (c) {
-            PyObject *sub;
-            int r = cells_below(cell, depth, classes, &sub);
-            if (r < 0) { Py_DECREF(cell); return -1; }
-            if (r) { Py_DECREF(cell); *out = sub; }
-            else   { *out = cell; }
-            return 1;
-        }
-        /* no cell equivalent: only a CLASS pattern inspects its args */
-        if (!classes || depth <= 1) return 0;
-        PyObject *args = PyObject_GetAttr(term, str_args);
-        if (!args) return -1;
-        if (!PyTuple_Check(args)) { Py_DECREF(args); return 0; }
-        PyObject *newargs;
-        int r = cells_in_slots(args, 0, depth, classes, &newargs);
-        Py_DECREF(args);
-        if (r <= 0) return r;
-        PyObject *functor = PyObject_GetAttr(term, str_functor);
-        if (!functor) { Py_DECREF(newargs); return -1; }
-        PyObject *res = PyObject_CallFunctionObjArgs(Compound_type, functor,
-                                                     newargs, NULL);
-        Py_DECREF(functor);
-        Py_DECREF(newargs);
-        if (!res) return -1;
-        *out = res;
-        return 1;
-    }
     if (!classes || depth <= 1) return 0;
     int ti = c_is_term_instance(term);
     if (ti <= 0) return ti;
@@ -3756,8 +3451,8 @@ static PyMethodDef module_methods[] = {
     {"as_cells_for_match", (PyCFunction)(void (*)(void))py_as_cells_for_match,
      METH_FASTCALL,
      "as_cells_for_match(term, depth[, classes]) -> term\n\n"
-     "deref(term) with atom-functor Compounds in its top depth cell levels\n"
-     "replaced by their cells (C twin of clausal.terms.as_cells_for_match)."},
+     "deref(term) with bound-Var slots in its top depth cell levels\n"
+     "replaced by their structures (C twin of clausal.terms.as_cells_for_match)."},
     {"unify_census", py_unify_census, METH_NOARGS,
      "unify_census() -> dict\n\n"
      "{'conflations': int, 'by_type_pair': {'int/float': n, ...},\n"
@@ -3837,9 +3532,9 @@ static PyMethodDef module_methods[] = {
      "Analogous to SWI/Scryer's attr_unify_hook/2 (per module key) and\n"
      "SICStus's verify_attributes/3."},
     /* Predicate helpers */
-    {"_register_term_types", py_register_term_types, METH_VARARGS,
-     "_register_term_types(compound_cls, kwterm_cls)\n"
-     "Register Compound and KWTerm types for C-level term inspection."},
+    {"_register_term_types", py_register_term_types, METH_O,
+     "_register_term_types(kwterm_cls)\n"
+     "Register the KWTerm type for C-level term inspection."},
     {"is_term_instance", py_is_term_instance, METH_O,
      "is_term_instance(obj) -> bool\n"
      "True if obj is a term instance (a @dataclass instance)."},
