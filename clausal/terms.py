@@ -4052,12 +4052,10 @@ def term_writeq(t: Any, *, local_vars: bool = False) -> str:
     subterm handed whole to ``term_str`` (see above) prints its variables
     as ``_`` itself, so sharing with such a subterm is not shown.
     """
-    if not local_vars:
-        return _wq(t, 1200)
-    token = _WQ_LOCAL_VARS.set({})
+    token = _WQ_LOCAL_VARS.set({} if local_vars else None)
     try:
-        seen = _WQ_LOCAL_VARS.get()
-        return _wq_local_names(_wq(t, 1200), seen)
+        text = _wq(t, 1200)
+        return _wq_local_names(text, _WQ_LOCAL_VARS.get()) if local_vars else text
     finally:
         _WQ_LOCAL_VARS.reset(token)
 

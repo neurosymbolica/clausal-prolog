@@ -312,10 +312,11 @@ def catch_match(catcher: Any, term: Any, exc: BaseException, trail: Any) -> bool
 
 
 #: A predicate indicator spelled as text: ``name/N``, or ``(op)/N`` for an
-#: operator name as Scryer prints one.  The name has no whitespace and no
-#: parenthesis, so free prose that merely contains a slash (or a pseudo
-#: indicator such as ``reify(lt)/3``) never reads as an indicator.
-_PI_TEXT = re.compile(r"(?:\((?P<op>[^\s()]+)\)|(?P<name>[^\s()]+?))/(?P<arity>\d+)")
+#: operator name as Scryer prints one.  An unparenthesised name has no
+#: whitespace, parenthesis, ``/`` or ``:``, so free prose that merely contains
+#: a slash (``a/b/2``, ``m:p/2``, or a pseudo indicator such as
+#: ``reify(lt)/3``) never reads as an indicator.
+_PI_TEXT = re.compile(r"(?:\((?P<op>[^\s()]+)\)|(?P<name>[^\s()/:]+))/(?P<arity>\d+)")
 
 
 def indicator_from_text(text: str) -> tuple | None:
@@ -471,7 +472,7 @@ def instantiation_error(context: Any = "") -> tuple:
 
 
 def system_error(code: str, context: Any = "") -> tuple:
-    """Build error(system_error(Code), Context).
+    """Build error(system_error(Code), context(PI, Message)).
 
     ISO 13211-1 §7.12.2 lists ``system_error`` for errors outside the
     standard's own catalogue — as a bare ATOM. This engine puts its own
@@ -481,7 +482,8 @@ def system_error(code: str, context: Any = "") -> tuple:
     a deliberate, recorded deviation (operator's ruling 2026-09-12 after
     discussion with Markus Triska): a portable ``error(system_error, _)``
     pattern does not match these terms. *Code* is minted as an atom like
-    the names in :func:`type_error`; *Context* is human text.
+    the names in :func:`type_error`; *context* is the raise site's text,
+    made into ``context(PI, Message)`` as in :func:`type_error`.
     """
     return ("error", ("system_error", _name_atom(code)), _context(context))
 
@@ -578,7 +580,7 @@ def permission_error(
 
 
 def domain_error(domain: str, culprit: Any, context: Any = "") -> tuple:
-    """Build error(domain_error(Domain, Culprit), Context).
+    """Build error(domain_error(Domain, Culprit), context(PI, Message)).
 
     ISO domain error: *culprit* is the right Python/logic type but its value is
     outside the set the operation admits (e.g. an unknown type name given to
@@ -588,7 +590,7 @@ def domain_error(domain: str, culprit: Any, context: Any = "") -> tuple:
 
 
 def evaluation_error(error_type: str, context: Any = "") -> tuple:
-    """Build error(evaluation_error(ErrorType), Context).
+    """Build error(evaluation_error(ErrorType), context(PI, Message)).
 
     ISO evaluation errors: ``zero_divisor``, ``undefined``, ``float_overflow``,
     ``int_overflow``, ``underflow`` — a numeric operation is mathematically

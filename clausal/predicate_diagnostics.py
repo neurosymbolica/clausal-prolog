@@ -79,9 +79,11 @@ _SOURCE_SUFFIXES = SOURCE_SUFFIXES
 
 
 def procedure_existence_term(functor, arity, message):
-    """``error(existence_error(procedure, Name/Arity), Message)`` -- the ISO
-    term Scryer raises for a call to a procedure that does not exist, with the
-    engine's own diagnostic *message* as the context (its "why").
+    """``error(existence_error(procedure, Name/Arity), context(Name/Arity,
+    Message))`` -- the ISO term Scryer raises for a call to a procedure that
+    does not exist, with the engine's own diagnostic *message* as the
+    context's Message (its "why"; read it with
+    ``exceptions.error_context_message``).
 
     *functor* may be a mangled predicate handle; only its demangled NAME goes
     into the indicator (ruling 2026-09-24: the culprit is the bare
@@ -109,8 +111,9 @@ class PredicateNotFoundError(LogicException, KeyError):
     unknown procedure raises ISO ``existence_error``, like Scryer, whose
     ``catch(nosuch(1), E, true)`` gives
     ``E = error(existence_error(procedure, nosuch/1), nosuch/1)``).  ``.term``
-    is ``error(existence_error(procedure, Name/Arity), Message)``, the "defines:
-    ... / -> define it or import it" candidate list as the context, so
+    is ``error(existence_error(procedure, Name/Arity), context(Name/Arity,
+    Message))``, the "defines: ... / -> define it or import it" candidate
+    list as the context's Message, so
     ``catch/3`` binds the ISO term where it bound the transliterated
     ``PredicateNotFoundError(Message)`` compound before.  ADD, not replace:
     ``except KeyError`` / ``except PredicateNotFoundError`` and a
@@ -169,7 +172,8 @@ class PredicateArityMismatchError(LogicException, TypeError):
     ``catch(call(pk(3), _), E, true)`` with
     ``E = error(existence_error(procedure, pk/2), pk/2)``, the indicator at
     the CALLED arity.  ``.term`` is that ISO term, with this message (the
-    "takes 1 argument" diagnostic) as its context, the way an unknown
+    "takes 1 argument" diagnostic) as the Message of its ``context(Name/Arity,
+    Message)``, the way an unknown
     procedure's ``existence_error`` carries its "why" text
     (``predicate._dispatch_at``).  ``catch/3`` reads ``.term`` of any
     ``LogicException``, so a source catcher

@@ -311,3 +311,21 @@ def test_error_context_text_renders_a_string_message_as_its_text():
     assert error_context_message(term) == chars("why")
     assert error_context_message(type_error("atom", 1, "x/1: m")) == "m"
     assert error_context_message(("not", "error")) is None
+
+
+@pytest.mark.parametrize("text", ["a/b/2", "m:p/2", "reify(lt)/3"])
+def test_a_name_with_a_slash_colon_or_paren_is_prose_not_an_indicator(text):
+    culprit, message = cell_args(instantiation_error(text)[2])
+    assert _is_unbound(culprit)
+    assert message == text
+
+
+def test_a_nested_plain_writeq_inside_a_local_render_keeps_its_own_names():
+    from clausal.terms import _WQ_LOCAL_VARS, term_writeq
+    v = Var()
+    token = _WQ_LOCAL_VARS.set({})
+    try:
+        inner = term_writeq(("f", v))
+    finally:
+        _WQ_LOCAL_VARS.reset(token)
+    assert "\x00" not in inner and inner.startswith("f(_")
