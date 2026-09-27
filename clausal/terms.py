@@ -34,6 +34,8 @@ from .logic.atoms import (
 )
 from .logic.cells import TUPLE_TAG, CHARS_TAG, chars, is_chars, chars_text, refuse_reserved_1tuple
 from .logic.variables import Var, deref
+# Operator table for ``term_writeq``; this module imports nothing from clausal.
+from clausal.tools.prolog_operators import OperatorTable as _OperatorTable
 
 # Re-export operator/expression classes already defined in pythonic_ast.
 # They are plain dataclasses that work as both terms and goal nodes.
@@ -3818,15 +3820,9 @@ def _seg_canonical(seg) -> str:
 import functools as _functools
 import unicodedata as _unicodedata
 
-from clausal.tools.prolog_operators import OperatorTable as _OperatorTable
-
 #: Scryer's operator table with no library loaded (ISO Table 7 plus ``+``
 #: fy 200, ``div`` and ``rdiv`` yfx 400).
 _WQ_OPS = _OperatorTable.scryer_builtin_default()
-
-
-def _wq_ops():
-    return _WQ_OPS
 
 
 #: Named escapes Scryer writes inside a quoted token; every other control or
@@ -3876,7 +3872,7 @@ def _wq_float(x: float) -> str:
 
 
 def _wq_is_op_atom(name: str) -> bool:
-    ops = _wq_ops()
+    ops = _WQ_OPS
     return (ops.lookup_infix(name) is not None
             or ops.lookup_prefix(name) is not None)
 
@@ -3960,7 +3956,7 @@ def _wq(t: Any, prec: int, operand: bool = False) -> str:
     if cell is None:
         return term_str(t, quoted=True, double_quotes=True, sep=",")
     name, args = cell
-    ops = _wq_ops()
+    ops = _WQ_OPS
     if len(args) == 2:
         e = ops.lookup_infix(name)
         if e is not None:
@@ -4002,8 +3998,12 @@ def term_writeq(t: Any) -> str:
 
     ``writeq``-style with operators: ``error(type_error(evaluable,(+)/2),
     (is)/2)``, ``- (1)``, ``a- -1``, ``"abc"`` for a string, ``_N`` for each
-    variable, ``'$VAR'(N)`` as a letter.  See the comment above
-    ``_wq_ops`` for what it does and does not share with ``writeq/1``.
+    variable, ``'$VAR'(N)`` as a letter.  The comment that opens the
+    "Scryer-style writeq" section says what it does and does not share with
+    ``writeq/1``.  A shape with no Prolog spelling (dict, set, keyword term,
+    ``foo()``, a partial list with an interior hole) is printed whole by
+    ``term_str``, so terms nested inside it lose the operator layout and the
+    distinct ``_N`` variables.
     """
     return _wq(t, 1200)
 
