@@ -1603,7 +1603,19 @@ def _arith_cells_to_nodes(x, strict=None):
         args = []
         for a in ka[1]:
             c = _arith_cells_to_nodes(a, strict)
-            args.append(deref(a) if c is None else c)
+            if c is None:
+                a = deref(a)
+                if not _arith_leaf(a):
+                    # A DATA term that merely uses an arithmetic functor --
+                    # a key-value pair ``-(a, 1)`` from =.. or keysort -- is
+                    # left exactly as it was: ``==`` on two ground pairs
+                    # keeps its ground fallback (roborev job 273).  Strict
+                    # posts refuse the offending leaf instead.
+                    if strict is not None:
+                        raise _not_evaluable(a, strict)
+                    return None
+                c = a
+            args.append(c)
         cls = _key_nodes()[ka[0]]
         if len(args) == 1:
             return cls(operand=args[0])
@@ -1611,6 +1623,17 @@ def _arith_cells_to_nodes(x, strict=None):
     if strict is not None and (ka is not None or t is str):
         raise _not_evaluable(x, strict)
     return None
+
+
+def _arith_leaf(a) -> bool:
+    """*a* (dereferenced) can stand under an arithmetic node: a number, an
+    unbound variable, an operator node, or an exact-number cell."""
+    t = type(a)
+    if t is int or t is float or t is Fraction or t is Decimal:
+        return True
+    if is_var(a) or t in _NODE_KEYS:
+        return True
+    return exact_cell_number(a) is not None
 
 
 def _cells_as_nodes(l, r, strict=None):
@@ -1877,12 +1900,19 @@ def _resolve(x):
         if val is not None:
             return val
     if type(x) is tuple or isinstance(x, _Compound):
+        if _LogicException is None:
+            _ensure_exc_imports()
         # an arithmetic CELL (ruling R9 A1): ground, it folds like its node --
         # and only where its node folds (``**`` does not, above), so the two
         # spellings take one path through the posts
         ka = _cell_key_args(x)
         if ka is not None and ka[0] in _EVALUABLE and ka[0] != ("**", 2):
-            val = _eval_ground(x)
+            try:
+                val = _eval_ground(x)
+            except _LogicException:
+                # a DATA term with an arithmetic functor (``-(a, 1)``): not
+                # arithmetic, so it keeps the ground fallback it always had
+                return x
             if val is not None:
                 return val
     return x

@@ -1569,8 +1569,10 @@ def arith_to_ast_expr(term: Any, var_context: dict[int, str]) -> ast.expr:
     """Convert an arithmetic term to a Python arithmetic AST expression.
 
     Generates code that evaluates the expression to a Python number at runtime.
-    Vars are dereferenced.  Arithmetic binary operators are unboxed to native
-    Python ``ast.BinOp`` nodes.
+    Vars are dereferenced.  ``+``, ``-``, ``*``, ``/`` become calls to the
+    exact helpers (``$add`` & co.); ``//``, ``%``, ``**`` and unary ``-`` stay
+    native Python operators, with an operand that may be a term at runtime
+    evaluated first through ``$eval`` (ruling R9).
     """
     term = deref(term)
 

@@ -423,6 +423,23 @@ def test_clp_posts_after_the_ground_fold_answer_as_before():
         assert is_var(deref(X)) and get_attr(deref(X), key) is not None
 
 
+def test_ground_data_pairs_keep_the_ground_fallback():
+    """A data term that merely uses an arithmetic functor -- a key-value pair
+    ``-(a, 1)`` built by =.. or keysort -- is not arithmetic: ``==``/``!=``/
+    ``<`` over two ground pairs keep the ground fallback they always had,
+    and a pair beside a variable keeps its diagnosis (roborev job 273; every
+    row measured on main)."""
+    from clausal.logic.clpfd import fd_eq, fd_lt, fd_ne
+    from clausal.logic.variables import Trail
+    assert fd_eq(("-", "a", 1), ("-", "a", 1), Trail()) is True
+    assert fd_eq(("-", "a", 1), ("-", "b", 1), Trail()) is False
+    assert fd_ne(("-", "a", 1), ("-", "b", 1), Trail()) is True
+    assert fd_lt(("-", "a", 1), ("-", "b", 1), Trail()) is True
+    assert fd_eq(("-", Var(), "a"), 3, Trail()) is False
+    text = _error_text(lambda: fd_eq(Var(), ("-", "a", 1), Trail()))
+    assert text.startswith("error(type_error(evaluable,-(a,1))"), text
+
+
 def test_pow_cell_and_node_post_alike(api_mod):
     """``**`` is not folded ahead of the post for the node spelling, so the
     cell spelling must not be either (roborev job 265): both reach the
