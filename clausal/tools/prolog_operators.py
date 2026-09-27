@@ -89,6 +89,18 @@ class OperatorTable:
         return t
 
     @classmethod
+    def scryer_builtin_default(cls) -> OperatorTable:
+        """What Scryer's toplevel has with NO library loaded: ISO plus
+        ``+`` fy 200, ``div`` and ``rdiv`` yfx 400 (each verified against
+        Scryer).  ``scryer_default`` adds library(clpz)'s operators, which a
+        consulted file imports; this table is what an uncaught error prints
+        with, so it has none of them."""
+        t = cls()
+        _load_iso(t)
+        _load_scryer_builtin(t)
+        return t
+
+    @classmethod
     def gprolog_default(cls) -> OperatorTable:
         t = cls()
         _load_iso(t)
@@ -193,6 +205,13 @@ def _load_scryer(t: OperatorTable) -> None:
     d(700, "xfx", "#>")
     d(700, "xfx", "#=<")
     d(700, "xfx", "#>=")
+
+
+def _load_scryer_builtin(t: OperatorTable) -> None:
+    d = t._define_default
+    d(200, "fy", "+")
+    d(400, "yfx", "div")
+    d(400, "yfx", "rdiv")
 
 
 # ── GNU Prolog additions ──────────────────────────────────────────────

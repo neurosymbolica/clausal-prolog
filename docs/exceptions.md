@@ -290,6 +290,9 @@ Uncaught `Throw` goals surface as `LogicException` in Python code. Caught except
 
     # Raise from Python
     raise LogicException(err)
+    # The message shows the term as Scryer prints an uncaught error
+    # (writeq text with operators), not its Python repr:
+    #   Uncaught logic exception: error(type_error(integer,foo),'')
     ```
 
     ---

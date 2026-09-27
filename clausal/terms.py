@@ -34,6 +34,8 @@ from .logic.atoms import (
 )
 from .logic.cells import TUPLE_TAG, CHARS_TAG, chars, is_chars, chars_text, refuse_reserved_1tuple
 from .logic.variables import Var, deref
+# Operator table for ``term_writeq``; this module imports nothing from clausal.
+from clausal.tools.prolog_operators import OperatorTable as _OperatorTable
 
 # Re-export operator/expression classes already defined in pythonic_ast.
 # They are plain dataclasses that work as both terms and goal nodes.
@@ -3801,6 +3803,209 @@ def _seg_canonical(seg) -> str:
     for r in reversed(rendered):
         out = "'.'(" + r + "," + out + ")"
     return out
+
+
+# ── Scryer-style writeq (the uncaught-error rendering) ────────────────────────
+#
+# ``term_writeq`` prints a term the way Scryer's toplevel prints an uncaught
+# error term: ``write_term(T, [quoted(true), double_quotes(true),
+# numbervars(true)])`` WITH operator syntax, no space after a comma, a
+# distinct ``_N`` per variable.  ``LogicException``'s message uses it
+# (ruling R2 of the Compound retirement, 2026-09-27).  It is its own entry
+# point rather than a ``term_str`` switch: ``term_str`` has no operator
+# layout, and giving ``writeq/1`` one is a separate, visible change.  Shapes
+# with no Prolog spelling (dicts, sets, keyword terms, ``foo()``, Python
+# objects) are handed to ``term_str`` in its ISO spelling.
+
+import functools as _functools
+import unicodedata as _unicodedata
+
+#: Scryer's operator table with no library loaded (ISO Table 7 plus ``+``
+#: fy 200, ``div`` and ``rdiv`` yfx 400).
+_WQ_OPS = _OperatorTable.scryer_builtin_default()
+
+
+#: Named escapes Scryer writes inside a quoted token; every other control or
+#: non-printing character is ``\xHH\`` (lower-case hex, no padding).
+_WQ_ESCAPES = {"\\": "\\\\", "\n": "\\n", "\t": "\\t", "\r": "\\r",
+               "\a": "\\a", "\b": "\\b", "\f": "\\f", "\v": "\\v"}
+
+
+def _wq_quote(s: str, q: str) -> str:
+    out = []
+    for c in s:
+        if c == q:
+            out.append("\\" + q)
+        elif c in _WQ_ESCAPES:
+            out.append(_WQ_ESCAPES[c])
+        elif c != " " and _unicodedata.category(c)[0] in "CZ":
+            out.append(f"\\x{ord(c):x}\\")
+        else:
+            out.append(c)
+    return q + "".join(out) + q
+
+
+@_functools.lru_cache(maxsize=1024)
+def _wq_atom(s: str) -> str:
+    if is_mangled(s):
+        return demangle_for_display(s)
+    # ``/*`` opens a comment at the start of a token, so Scryer quotes it.
+    if atom_needs_quotes(s) or s.startswith("/*"):
+        return _wq_quote(s, "'")
+    return s
+
+
+def _wq_float(x: float) -> str:
+    """Scryer's float spelling: shortest round-trip digits, always a ``.0``
+    mantissa, exponent without ``+`` or padding (``1.0e16``, ``1.5e-7``),
+    positional for magnitudes in [1e-5, 1e16)."""
+    r = repr(x)
+    if "e" not in r:
+        return r
+    mant, exp = r.split("e")
+    e = int(exp)
+    if e == -5:
+        return format(Decimal(r), "f")
+    if "." not in mant:
+        mant += ".0"
+    return f"{mant}e{e}"
+
+
+def _wq_is_op_atom(name: str) -> bool:
+    ops = _WQ_OPS
+    return (ops.lookup_infix(name) is not None
+            or ops.lookup_prefix(name) is not None)
+
+
+def _wq_glue(left: str, right: str) -> bool:
+    """True when *left* followed directly by *right* would read as one
+    token: two graphic characters, or two alphanumerics."""
+    if not left or not right:
+        return False
+    a, b = left[-1], right[0]
+    return ((a in _GRAPHIC_CHARS and b in _GRAPHIC_CHARS)
+            or ((a.isalnum() or a == "_") and (b.isalnum() or b == "_")))
+
+
+def _wq_cell(t):
+    """``(name, args)`` when *t* is a compound with an atom functor and at
+    least one argument (a cell, a ``Compound`` or an operator node), else
+    None."""
+    if type(t) is tuple and len(t) > 1 and type(t[0]) is str and t[0] != TUPLE_TAG:
+        return t[0], t[1:]
+    if isinstance(t, Compound):
+        f = deref(t.functor)
+        if isinstance(f, str) and isinstance(t.args, tuple) and t.args:
+            return f, t.args
+        return None
+    op = getattr(type(t), "op", None)
+    if isinstance(op, str):
+        if hasattr(t, "left") and hasattr(t, "right"):
+            return _iso_op_functor(type(t)), (t.left, t.right)
+        if hasattr(t, "operand"):
+            return _iso_op_functor(type(t)), (t.operand,)
+    return None
+
+
+def _wq_list(elems: list, tail) -> str:
+    if tail is None and elems and all(is_char_atom(deref(e)) for e in elems):
+        return _wq_quote("".join(spelling(deref(e)) for e in elems), '"')
+    body = ",".join(_wq(e, 999) for e in elems)
+    if tail is not None:
+        body += "|" + _wq(tail, 999)
+    return "[" + body + "]"
+
+
+def _wq(t: Any, prec: int, operand: bool = False) -> str:
+    if not isinstance(t, (str, bytes, int, float, tuple, list)):
+        t = deref(t)
+    if isinstance(t, Var):
+        return _canonical_var(t)
+    if isinstance(t, bool) or t is None:
+        return term_str(t, quoted=True, double_quotes=True, sep=",")
+    if isinstance(t, float):
+        return _wq_float(t)
+    if isinstance(t, int):
+        return str(t)
+    if is_chars(t):
+        text = chars_text(t)
+        return _wq_quote(text, '"') if text else "[]"
+    if isinstance(t, str):
+        s = _wq_atom(t)
+        return "(" + s + ")" if operand and _wq_is_op_atom(t) else s
+    if isinstance(t, bytes):
+        return "[" + ",".join(str(b) for b in t) + "]"
+    if isinstance(t, list) or (type(t) is tuple and not t):
+        return _wq_list(list(t), None)
+    if isinstance(t, (SegList, SegString)):
+        walked = t.__walk__()
+        if not isinstance(walked, (SegList, SegString)):
+            return _wq(walked, prec, operand)
+        if isinstance(walked, SegList):
+            segs = list(walked.segments)
+            tail = None
+            if segs and isinstance(segs[-1], VarSeg):
+                tail = segs.pop().var
+            if not any(isinstance(s, VarSeg) for s in segs):
+                elems = [e for s in segs for e in s.elements]
+                if not elems:
+                    return _wq(tail, prec, operand)
+                return _wq_list(elems, tail)
+        return term_str(walked, quoted=True, double_quotes=True, sep=",")
+    cell = _wq_cell(t)
+    if cell is None:
+        return term_str(t, quoted=True, double_quotes=True, sep=",")
+    name, args = cell
+    ops = _WQ_OPS
+    if len(args) == 2:
+        e = ops.lookup_infix(name)
+        if e is not None:
+            p, spec = e.precedence, e.specifier
+            left = _wq(args[0], p if spec[0] == "y" else p - 1, True)
+            right = _wq(args[1], p if spec[2] == "y" else p - 1, True)
+            if name == ",":
+                s = left + "," + right
+            elif name[0].isalpha():
+                s = left + " " + name + " " + right
+            else:
+                s = (left + (" " if _wq_glue(left, name) else "") + name
+                     + (" " if _wq_glue(name, right) else "") + right)
+            return "(" + s + ")" if p > prec else s
+    if len(args) == 1:
+        arg = deref(args[0])
+        if name == "{}":
+            return "{" + _wq(arg, 1200) + "}"
+        if name == "$VAR" and type(arg) is int and arg >= 0:
+            return chr(ord("A") + arg % 26) + (str(arg // 26) if arg >= 26 else "")
+        e = ops.lookup_prefix(name)
+        if e is not None:
+            p, spec = e.precedence, e.specifier
+            if (name == "-" and not isinstance(arg, bool)
+                    and isinstance(arg, (int, float)) and arg >= 0):
+                # ``-(1)`` is not the number ``-1``: Scryer writes ``- (1)``.
+                a = "(" + _wq(arg, 1200) + ")"
+            else:
+                a = _wq(arg, p if spec == "fy" else p - 1, True)
+            sep = " " if (a[0] == "(" or name[0].isalpha()
+                          or _wq_glue(name, a)) else ""
+            s = _wq_atom(name) + sep + a
+            return "(" + s + ")" if p > prec else s
+    return _wq_atom(name) + "(" + ",".join(_wq(a, 999) for a in args) + ")"
+
+
+def term_writeq(t: Any) -> str:
+    """Render *t* as Scryer prints an uncaught error term.
+
+    ``writeq``-style with operators: ``error(type_error(evaluable,(+)/2),
+    (is)/2)``, ``- (1)``, ``a- -1``, ``"abc"`` for a string, ``_N`` for each
+    variable, ``'$VAR'(N)`` as a letter.  The comment that opens the
+    "Scryer-style writeq" section says what it does and does not share with
+    ``writeq/1``.  A shape with no Prolog spelling (dict, set, keyword term,
+    ``foo()``, a partial list with an interior hole) is printed whole by
+    ``term_str``, so terms nested inside it lose the operator layout and the
+    distinct ``_N`` variables.
+    """
+    return _wq(t, 1200)
 
 
 # ── Pretty-formatted term representation ──────────────────────────────────────
