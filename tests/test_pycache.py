@@ -467,3 +467,73 @@ class TestEngineFingerprintInvalidation:
                     "a changed compiler must recompile, not reuse")
             finally:
                 ih._FINGERPRINT_CACHE = original
+
+
+# ── D18(b): set_data writes atomically ───────────────────────────────────────
+
+
+class TestAtomicCacheWrite:
+    """Several engines can share one ``__pycache__`` (kit/corpus trees run by
+    parallel lanes), so a reader must never see a half-written ``.pyc``.
+    ``set_data`` writes a temp file beside the target and ``os.replace``s it
+    in, as CPython's ``importlib._bootstrap_external._write_atomic`` does."""
+
+    def _loader(self, tmp_path):
+        src = tmp_path / "m.clausal"
+        src.write_text("p(1),\n")
+        return PredicateLoader("m", str(src))
+
+    def test_the_write_goes_through_a_temp_file_and_replace(
+            self, tmp_path, monkeypatch):
+        loader = self._loader(tmp_path)
+        target = tmp_path / "__pycache__" / "m.cpython-313.pyc"
+        target.parent.mkdir()
+        target.write_bytes(b"OLD")
+        seen = []
+        real_replace = os.replace
+
+        def spy(src, dst):
+            # At the moment of the swap the reader still sees the OLD file,
+            # and the temp file already holds the COMPLETE new bytes.
+            seen.append((src, dst, target.read_bytes(),
+                         open(src, "rb").read()))
+            return real_replace(src, dst)
+
+        monkeypatch.setattr(clausal.import_hook.os, "replace", spy)
+        loader.set_data(str(target), b"NEW-COMPLETE-BYTES")
+        assert len(seen) == 1, seen
+        src, dst, visible, staged = seen[0]
+        assert os.fspath(dst) == str(target)
+        assert os.path.dirname(src) == str(target.parent)
+        assert src != str(target)
+        assert visible == b"OLD"
+        assert staged == b"NEW-COMPLETE-BYTES"
+        assert target.read_bytes() == b"NEW-COMPLETE-BYTES"
+        assert sorted(os.listdir(target.parent)) == [target.name]
+
+    def test_a_failed_write_leaves_no_stray_temp_file(
+            self, tmp_path, monkeypatch):
+        loader = self._loader(tmp_path)
+        target = tmp_path / "__pycache__" / "m.cpython-313.pyc"
+
+        def boom(src, dst):
+            raise OSError("disk full")
+
+        monkeypatch.setattr(clausal.import_hook.os, "replace", boom)
+        loader.set_data(str(target), b"NEW")      # swallowed, as before
+        assert os.listdir(target.parent) == []
+
+    def test_a_write_that_fails_midway_leaves_no_stray_temp_file(
+            self, tmp_path, monkeypatch):
+        loader = self._loader(tmp_path)
+        target = tmp_path / "__pycache__" / "m.cpython-313.pyc"
+        target.parent.mkdir()
+        target.write_bytes(b"OLD")
+
+        def boom(fd, data):
+            raise OSError("I/O error")
+
+        monkeypatch.setattr(clausal.import_hook.os, "write", boom)
+        loader.set_data(str(target), b"NEW")
+        assert sorted(os.listdir(target.parent)) == [target.name]
+        assert target.read_bytes() == b"OLD"

@@ -631,14 +631,40 @@ class _ClausalSourceLoader(SourceLoader):
                 "size": st.st_size}
 
     def set_data(self, path, data):
-        # Write .pyc file; create __pycache__/ dir if needed.
+        """Write a ``.pyc`` ATOMICALLY; create ``__pycache__/`` if needed.
+
+        Several engines may share one ``__pycache__`` (parallel lanes over a
+        shared kit or corpus tree), so the bytes go to a uniquely named temp
+        file in the SAME directory and ``os.replace`` swaps it in: a reader
+        sees the old file or the complete new one, never a torn one. This
+        mirrors CPython's ``importlib._bootstrap_external._write_atomic``.
+        The temp file is removed on any failure, and a failure is swallowed:
+        the cache is an optimisation, never a reason to fail an import.
+        """
         try:
-            dir_ = os.path.dirname(path)
-            os.makedirs(dir_, exist_ok=True)
-            with open(path, "wb") as f:
-                f.write(data)
+            os.makedirs(os.path.dirname(path), exist_ok=True)
         except OSError:
-            pass  # silently skip if we cannot write cache
+            return
+        # pid + random: unique across the processes sharing the directory
+        # and across threads of one process; O_EXCL refuses any collision.
+        path_tmp = f"{path}.{os.getpid()}.{os.urandom(4).hex()}.tmp"
+        try:
+            fd = os.open(path_tmp, os.O_EXCL | os.O_CREAT | os.O_WRONLY, 0o666)
+        except OSError:
+            return
+        try:
+            try:
+                view = memoryview(data)
+                while view:
+                    view = view[os.write(fd, view):]
+            finally:
+                os.close(fd)
+            os.replace(path_tmp, path)
+        except OSError:
+            try:
+                os.unlink(path_tmp)
+            except OSError:
+                pass
 
 
 def _parse_clausal_source(source, filename):
