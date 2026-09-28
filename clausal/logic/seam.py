@@ -188,6 +188,13 @@ def seam_term(node: Any, module_globals: dict, loose: bool = False) -> Any:
                 f"module (add it to -module/-private, -import_from it, or "
                 f"declare -implicit_functors)")
         if isinstance(term, LoadName):
+            # Ruling R12: a bare builtin name in a term is the atom, as it is
+            # in a clause (``term_to_ast_expr``'s LoadName arm).
+            from clausal.logic.compiler.terms_to_ast import (  # noqa: PLC0415
+                _is_unshadowed_builtin_name)
+            if ("." not in term.name
+                    and _is_unshadowed_builtin_name(term.name, module_globals)):
+                return sys.intern(term.name)
             # THE LEAK RULE at the bare-name door (step (d)): a module global
             # bound to an exported ``atom`` enters as the plain str.
             return _strip_atom_tags(lookup(term.name))

@@ -292,6 +292,12 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
   `1` from `1.0`.
 - **Validation:** `global_atom/2` raises `type_error(atom, Name)` instead of
   failing silently.
+- **A bare builtin name in a data position is the atom** (`integer`,
+  `assertz`, `in_`), as in every Prolog: `must_be(integer, 3)` succeeds
+  (it raised `type_error(atom, <builtin integer/1>)`), `X is assertz` binds
+  the atom `assertz`, and `call(in_, X, [1])` answers `X = 1` instead of
+  leaking a Python `TypeError`. A meta-argument (`call/N`, `maplist`'s
+  closure) receives the atom and resolves it when called.
 
 ### Migration guide: 0.x to 1.0
 
