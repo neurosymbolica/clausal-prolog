@@ -194,8 +194,48 @@ def _ensure_trampoline_dispatch(goal_val, arity: int | None = None, db=None):
             f"an anonymous predicate (lambda) needs logic-variable head names "
             f"(ALL-CAPS like X, or _leading)",
         ))
+    info = getattr(goal_val, "__clausal_lambda__", None)
+    if info is not None:
+        return _lambda_to_trampoline(goal_val, info)
     # Assume simple-mode callable
     return _simple_to_trampoline(goal_val)
+
+
+def _lambda_arity_error(info, n_args: int):
+    """The error for a lambda ``(P1, ..., Pn) <- Body`` called with *n_args*
+    arguments, n_args != n (library(lambda) in Scryer is the model):
+
+    * too MANY: call/N adds the surplus to the body goal, so the error is
+      ``existence_error(procedure, Name/(Arity + surplus))`` for the body's
+      principal goal (``maplist(\\S^(S > 0), [1, 2], _)`` in Scryer is
+      existence_error ``(>)/3``);
+    * too FEW: ``existence_error(lambda_parameter, Lambda)``, as Scryer's
+      ``call(\\X^Y^true, 1)``."""
+    from clausal.logic.builtins.call_body import folded_existence_error  # noqa: PLC0415
+    from clausal.logic.exceptions import LogicException, existence_error  # noqa: PLC0415
+    n_params, name, arity, text = info
+    if n_args > n_params and name is not None:
+        return LogicException(folded_existence_error(
+            name, arity + n_args - n_params, f"call/{n_args + 1}"))
+    return LogicException(existence_error(
+        "lambda_parameter", text,
+        f"call/{n_args + 1}: the lambda takes {n_params} argument(s), "
+        f"called with {n_args}"))
+
+
+def _lambda_to_trampoline(fn, info):
+    """:func:`_simple_to_trampoline` for a compiled lambda, refusing a call
+    with the wrong number of arguments by an ISO error term (it used to be
+    Python's ``TypeError: takes 3 positional arguments but 4 were given``)."""
+    n_params = info[0]
+    def trampoline_fn(this_generator, _proceed, _fail, _catcher, *args):
+        # args = (*pred_args, trail)  -- trail is always last
+        if len(args) - 1 != n_params:
+            raise _lambda_arity_error(info, len(args) - 1)
+        for _ in fn(*args, None):
+            yield (_proceed, None)
+        yield (_fail, DONE)
+    return trampoline_fn
 
 
 def _db_builtin(functor: str, arity: int, *, fields: tuple[str, ...] | None = None,
