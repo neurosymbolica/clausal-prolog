@@ -156,8 +156,10 @@ Most standard Prolog translates cleanly:
 
 - Facts and rules (`:- body` becomes `<- (body)`)
 - Arithmetic (`is`, comparison operators)
-- Unification (`=` becomes `is`; `\=` becomes `is not`, which is `dif/2`,
-  so it only agrees with `\=` when both sides are ground)
+- Unification (`=` becomes `is`; `\=` becomes the quoted ISO builtin
+  `'\\='(X, Y)`, a test run once, and `\==` becomes `'\\=='(X, Y)` --
+  not the delayed `is not` (`dif/2`) and `!=` (CLP) constraints, which answer
+  differently when an argument is unbound)
 - Lists (`[H|T]` becomes `[H, *T]`)
 - DCG rules (`-->` becomes `>>`)
 - Directives (`dynamic`, `discontiguous`, `table`, `module`, `use_module`),
@@ -301,7 +303,8 @@ The key operator mappings:
 |---|---|
 | `:-` | `<-` |
 | `=` | `is` |
-| `\=` | `is not` (a `dif/2` constraint: the same as `\=` on ground terms, weaker when an argument is unbound) |
+| `\=` | `'\\='(X, Y)` (ISO "not unifiable", a test; not `is not`, which is the delayed `dif/2`) |
+| `\==` | `'\\=='(X, Y)` (ISO term non-identity, a test; not `!=`, which is the CLP disequality) |
 | `is` | `eval_/2` |
 | `=:=` | `==` |
 | `=\=` | `!=` |

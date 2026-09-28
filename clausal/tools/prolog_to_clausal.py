@@ -123,18 +123,26 @@ _REVERSE_BUILTIN_MAP = _build_reverse_builtin_map()
 
 # ── Operator mapping: Prolog operators → clausal syntax ──────────────
 
+# ISO ``\=`` (not unifiable, 8.2.3) and ``\==`` (term non-identity, 8.4.1)
+# are TESTS, run once on the terms as they stand.  Clausal's infix ``is not``
+# and ``!=`` are the delayed dif/2 and CLP disequality CONSTRAINTS, which
+# answer differently as soon as an operand is unbound, so the translation
+# emits the quoted ISO builtins, spelled as Clausal source text.
+_QUOTED_NOT_UNIFIABLE = "'\\\\='"
+_QUOTED_NOT_IDENTICAL = "'\\\\=='"
+
 # Prolog infix → clausal equivalent
 _INFIX_MAP = {
     ":-":   "<-",       # clause arrow (body context)
 # (Prolog ``is``/2 is handled as a special case → ``eval_(E, R)``, not infix.)
     "=":    "is",       # unification
-    "\\=":  "is not",   # dis-unification
+# (Prolog ``\=``/2 and ``\==``/2 are emitted as the QUOTED ISO builtins
+# ``'\='``/``'\=='`` -- see ``_QUOTED_NOT_UNIFIABLE`` below.)
     "\\+":  "not",      # negation-as-failure (prefix, but listed here)
     ";":    "or",       # disjunction
 # (Prolog ``==``/2 and ``#=``/2 are handled as special cases in
 # ``_emit_compound`` -- ``==`` is not infix in Clausal any more, see the
 # 2026-09-18 ruling.)
-    "\\==": "!=",       # structural inequality
     "=<":   "<=",       # arithmetic less-or-equal (Prolog =< → Python <=)
     ">=":   ">=",
     "<":    "<",
@@ -496,22 +504,28 @@ class _PrologToClausal:
             left = self._emit_term(goal.args[0])
             right = self._emit_term(goal.args[1])
             return f"{left} is {right}"
-        # Dis-unification: X \= Y → X is not Y
+        # Dis-unification: X \= Y → '\='(X, Y), ISO "not unifiable" (8.2.3).
+        # NOT ``X is not Y``: that is dif/2, a DELAYED constraint, so
+        # ``X \= 1, X = 2`` succeeded where ISO fails (the test runs once,
+        # on the terms as they are now).
         if isinstance(goal, PCompound) and goal.functor == "\\=" and len(goal.args) == 2:
             left = self._emit_term(goal.args[0])
             right = self._emit_term(goal.args[1])
-            return f"{left} is not {right}"
+            return f"{_QUOTED_NOT_UNIFIABLE}({left}, {right})"
         # Arithmetic is: R is Expr → eval_(Expr, R) — the eager arithmetic
         # builtin (the former ':=' operator, now deprecated).
         if isinstance(goal, PCompound) and goal.functor == "is" and len(goal.args) == 2:
             result = self._emit_term(goal.args[0])
             expr = self._emit_expr(goal.args[1])
             return f"eval_({expr}, {result})"
-        # Structural inequality: X \== Y → X != Y
+        # Structural inequality: X \== Y → '\=='(X, Y), ISO term
+        # non-identity (8.4.1).  NOT ``X != Y``: unquoted ``!=`` is the CLP
+        # disequality constraint, which DELAYS on unbound operands -- so
+        # ``X \== Y, X = 1, Y = 1`` failed where ISO succeeds.
         if isinstance(goal, PCompound) and goal.functor == "\\==" and len(goal.args) == 2:
             left = self._emit_term(goal.args[0])
             right = self._emit_term(goal.args[1])
-            return f"{left} != {right}"
+            return f"{_QUOTED_NOT_IDENTICAL}({left}, {right})"
         # Comparison operators
         if isinstance(goal, PCompound) and goal.functor in ("<", ">", ">=", "=<") and len(goal.args) == 2:
             left = self._emit_expr(goal.args[0])
@@ -983,11 +997,16 @@ class _PrologToClausal:
             right = self._emit_term(args[1])
             return f"{left} is {right}"
 
-        # Dis-unification: X \= Y → X is not Y
+        # Dis-unification and term non-identity: the QUOTED ISO builtins, for
+        # the reasons given at the goal-position arms above.
         if functor == "\\=" and len(args) == 2:
             left = self._emit_term(args[0])
             right = self._emit_term(args[1])
-            return f"{left} is not {right}"
+            return f"{_QUOTED_NOT_UNIFIABLE}({left}, {right})"
+        if functor == "\\==" and len(args) == 2:
+            left = self._emit_term(args[0])
+            right = self._emit_term(args[1])
+            return f"{_QUOTED_NOT_IDENTICAL}({left}, {right})"
 
         # Arithmetic is: R is Expr → eval_(Expr, R)
         if functor == "is" and len(args) == 2:
