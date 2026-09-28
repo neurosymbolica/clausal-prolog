@@ -126,3 +126,30 @@ def test_a_string_outside_error_formal_does_not_warn(tmp_path, monkeypatch):
         mode="",
         form='catch(atom_length(1, _), my_ball("x"), R is caught)'))
     assert hits == []
+
+
+def test_identical_sites_each_show_under_the_default_filter(tmp_path):
+    """Three identical catch sites in one file print THREE warnings under
+    the interpreter's DEFAULT filters (no -W, no PYTHONWARNINGS).  The default
+    action dedups on (message, category, module, lineno), and every firing is
+    attributed to the same Python frame, so each message must carry its own
+    .clausal file:line:column to stay distinct."""
+    import os
+    import pathlib
+    import subprocess
+    repo = pathlib.Path(__file__).resolve().parent.parent
+    site = ('catch(atom_length(1, _), error(type_error("atom", _), _), '
+            'R is caught)')
+    (tmp_path / "scp_three.clausal").write_text(
+        "-private([caught])\n"
+        + "".join(f"g{i}(R) <- {site}\n" for i in (1, 2, 3)))
+    env = {k: v for k, v in os.environ.items() if k != "PYTHONWARNINGS"}
+    env["PYTHONPATH"] = os.pathsep.join([str(tmp_path), str(repo)])
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
+    r = subprocess.run([sys.executable, "-c", "import clausal; import scp_three"],
+                       capture_output=True, text=True, env=env, timeout=120,
+                       cwd=str(tmp_path))
+    assert r.returncode == 0, r.stderr
+    assert r.stderr.count("ClausalStringInCatchPatternWarning") == 3, r.stderr
+    for line in (2, 3, 4):
+        assert f"scp_three.clausal:{line}:" in r.stderr, r.stderr
