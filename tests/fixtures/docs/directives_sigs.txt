@@ -15,10 +15,6 @@
 
 # === Predicate Property Directives ===
 
---8<-- [start:meta_predicate]
--meta_predicate(my_map(2, +, -))
---8<-- [end:meta_predicate]
-
 
 # === Specialization Directive ===
 
