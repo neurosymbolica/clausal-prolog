@@ -83,7 +83,7 @@ def parse(source: str, *, dialect: Dialect | None = None,
         if dialect is not None:
             op_table = dialect.operator_table
         else:
-            op_table = OperatorTable.swi_default()
+            op_table = OperatorTable.scryer_builtin_default()
     tokens = tokenize(source)
     parser = PrologParser(tokens, op_table)
     return parser.parse_program()
@@ -95,7 +95,7 @@ def parse_term(source: str, *, op_table: OperatorTable | None = None) -> PTerm:
     Useful for testing and REPL-style interaction.
     """
     if op_table is None:
-        op_table = OperatorTable.swi_default()
+        op_table = OperatorTable.scryer_builtin_default()
     tokens = tokenize(source)
     parser = PrologParser(tokens, op_table)
     return parser.parse_term_public(1200)

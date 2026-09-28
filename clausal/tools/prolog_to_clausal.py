@@ -217,10 +217,11 @@ def prolog_to_clausal(source: str, *, dialect: Dialect | None = None) -> str:
         Complete Prolog (.pl) source text.
     dialect : Dialect, optional
         Dialect for operator table and name resolution.
-        Defaults to SWI-Prolog.
+        Defaults to Scryer's operator table (``Dialect.scryer_reader``,
+        ruling R11).
     """
     if dialect is None:
-        dialect = Dialect.swi()
+        dialect = Dialect.scryer_reader()
     pmodule = parse(source, dialect=dialect)
     return prolog_ast_to_clausal(pmodule, dialect=dialect)
 
@@ -229,7 +230,7 @@ def prolog_ast_to_clausal(pmodule: PModule, *,
                           dialect: Dialect | None = None) -> str:
     """Translate a Prolog AST module to clausal source text."""
     if dialect is None:
-        dialect = Dialect.swi()
+        dialect = Dialect.scryer_reader()
     emitter = _PrologToClausal(dialect)
     return emitter.emit_module(pmodule)
 
@@ -237,7 +238,7 @@ def prolog_ast_to_clausal(pmodule: PModule, *,
 def emit_clausal_term(term: PTerm, dialect: Dialect | None = None) -> str:
     """Render a single Prolog AST term as clausal syntax."""
     if dialect is None:
-        dialect = Dialect.swi()
+        dialect = Dialect.scryer_reader()
     emitter = _PrologToClausal(dialect)
     return emitter._emit_term(term)
 
@@ -245,7 +246,7 @@ def emit_clausal_term(term: PTerm, dialect: Dialect | None = None) -> str:
 def emit_clausal_item(item: PItem, dialect: Dialect | None = None) -> str:
     """Render a single Prolog AST item as clausal syntax."""
     if dialect is None:
-        dialect = Dialect.swi()
+        dialect = Dialect.scryer_reader()
     emitter = _PrologToClausal(dialect)
     return emitter._emit_item(item)
 
@@ -1256,8 +1257,8 @@ def _main() -> None:
     )
     parser.add_argument("input", nargs="?", help="Input .pl file (stdin if omitted)")
     parser.add_argument("-o", "--output", help="Output .clausal file (stdout if omitted)")
-    parser.add_argument("--dialect", choices=["swi", "scryer", "iso"], default="swi",
-                        help="Prolog dialect (default: swi)")
+    parser.add_argument("--dialect", choices=["swi", "scryer", "iso"], default=None,
+                        help="Prolog dialect (default: Scryer's operator table)")
     parser.add_argument("--operator-map", help="JSON file with user-defined operator mappings")
 
     args = parser.parse_args()
@@ -1270,7 +1271,8 @@ def _main() -> None:
 
     # Dialect
     dialect_factories = {"swi": Dialect.swi, "scryer": Dialect.scryer, "iso": Dialect.iso}
-    dialect = dialect_factories[args.dialect]()
+    dialect = (dialect_factories[args.dialect]() if args.dialect
+               else Dialect.scryer_reader())
 
     # Translate
     result = prolog_to_clausal(source, dialect=dialect)

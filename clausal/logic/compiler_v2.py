@@ -1006,8 +1006,8 @@ def _imported_binding_by_canonical_name(origins: dict, db, functor: str,
     *arity* — or None.
 
     A predicate keeps the exporter's name wherever it goes, so an
-    ``-import_from(m, [alias(bo_p, AliasS)])`` leaves the canonical spelling
-    bound to nothing in ``module_dict`` and ``AliasS`` bound to a predicate
+    ``-import_from(m, [alias(bo_p, alias_s)])`` leaves the canonical spelling
+    bound to nothing in ``module_dict`` and ``alias_s`` bound to a predicate
     that calls itself ``bo_p``.  ``_import_from_origins`` has ALREADY seen
     through that — it indexes an aliased import under both the alias and
     the predicate's own name — so this is ``_imported_binding`` plus the two
@@ -2485,7 +2485,10 @@ def _route_other_arity_imported_calls_to_local(
 #: Builtin GOAL names that are ATOMS in term position and so need no
 #: declaration under strict atoms (operator ruling 2026-09-25).  ``true`` and
 #: ``false`` are not here: they fold to ``True``/``False`` in the rewriter.
-BUILTIN_GOAL_ATOMS = frozenset({"fail"})
+#: ``halt`` is a control construct with no builtin-table row, so the builtin
+#: name check below does not see it; without it here a bare ``halt`` goal
+#: (``q <- halt``) was refused as an undeclared atom.
+BUILTIN_GOAL_ATOMS = frozenset({"fail", "halt"})
 
 
 def _process_bare_atom_refs(
@@ -2772,7 +2775,9 @@ def _build_strict_atoms_diagnostic(names: list[str], module_name: str) -> str:
         "    - listed in -private([atom, ...])",
         "    - imported via -import_from(from_module, [atom])",
         "    - qualified (e.g. other_module.atom)",
-        "    - obtained via global_atom(\"atom\", Atom)",
+        # SINGLE quotes: ``"atom"`` is a string since the flip, and
+        # global_atom/2 refuses it with type_error(atom, "atom").
+        "    - obtained via global_atom('atom', Atom)",
     ]
     return "\n".join(lines)
 

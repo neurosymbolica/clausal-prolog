@@ -72,10 +72,10 @@ class TestBoundaries:
         ))
         s = Var()
         for _ in call("label", "ok", s, module=mod.__dict__["$module"]):
-            # STAGE 2 (atoms-as-str, spec §3 Q1): the f-string's Python str
-            # result crosses the seam as the ATOM ``'v=ok'`` (as ``++`` does),
+            # An f-string in a clause is a STRING (ruling R2, 2026-09-28):
+            # the chars carrier under -double_quotes(chars), as "..." is,
             # interpolating the atom's spelling ``ok``, not its repr.
-            assert deref(s) == "v=ok"
+            assert deref(s) == chars("v=ok")
             break
         else:
             raise AssertionError("no solution")

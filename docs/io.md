@@ -260,10 +260,10 @@ back.
 
 In `.clausal` files, f-strings build text with logic variable interpolation. Variables are automatically dereferenced before the f-string is evaluated, and a string interpolates as its text.
 
-An f-string is Python, so its value is a Python `str` — which is an **atom**
-in Clausal, not a string. Compare it with a quoted atom (`'...'`, an atom in
-every `-double_quotes` mode), or convert it with `atom_chars/2` when you need
-the string:
+An f-string is a **string**: the same term a `"..."` literal is under the
+module's `-double_quotes` mode — the chars string by default, and an atom
+under `-double_quotes(atom)` (ruled 2026-09-28; it used to be an atom in every
+mode). Compare it with a `"..."` literal:
 
 ```clausal
 -double_quotes(chars)
@@ -274,14 +274,12 @@ describe(NAME, AGE, S) <- (
 
 test("describe") <- (
     describe("Alice", 30, S),
-    S is 'Name: Alice, Age: 30'
+    S is "Name: Alice, Age: 30"
 )
 
-test("an f-string is an atom") <- (
+test("an f-string is a string") <- (
     describe("Alice", 30, S),
-    atom(S),
-    atom_chars(S, TEXT),
-    TEXT == "Name: Alice, Age: 30"
+    string(S)
 )
 ```
 
@@ -299,7 +297,7 @@ summarize(XS, S) <- (
 
 test("summarize") <- (
     summarize([1, 2, 3], S),
-    S is 'List has 3 element(s)'
+    S is "List has 3 element(s)"
 )
 ```
 
@@ -316,7 +314,7 @@ full_name(FIRST, LAST, S) <- (
 
 test("full name") <- (
     full_name("Alice", "Smith", S),
-    S is 'Alice Smith'
+    S is "Alice Smith"
 )
 ```
 
@@ -338,7 +336,7 @@ describe_color(S) <- (
 
 test("deferred f-string") <- (
     describe_color(S),
-    S is 'The color is red'
+    S is "The color is red"
 )
 ```
 

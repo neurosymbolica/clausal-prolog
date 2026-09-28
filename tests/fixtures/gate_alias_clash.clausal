@@ -5,7 +5,7 @@
 # gate_alias_user for the case with no local clauses.
 -dynamic(bo_p/1)
 -module(gate_alias_clash, [bo_p/1, gc_add(X)])
--import_from(tests.fixtures.gate_alias_owner, [alias(bo_p, AliasC)])
+-import_from(tests.fixtures.gate_alias_owner, [alias(bo_p, alias_c)])
 
 bo_p(7),
 

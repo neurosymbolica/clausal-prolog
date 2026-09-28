@@ -21,6 +21,7 @@ import pytest
 
 from clausal.import_hook import _load_module
 from clausal.logic.atoms import spelling as atom_spelling
+from clausal.logic.cells import chars
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
 from clausal.templating.term_rewriting import ClausalSingletonWarning
@@ -185,7 +186,7 @@ def test_fstring_interpolation_of_a_python_class_still_evaluates(tmp_path):
         -module(ttiav_fstr, [p(S)])
         p(S) <- (S is f"{Fraction(1, 3)}")
     """)
-    assert _answers(mod, "p") == [("1/3",)]
+    assert _answers(mod, "p") == [(chars("1/3"),)]  # an f-string is a string (R2)
 
 
 def test_plus_plus_operand_of_a_python_class_still_evaluates(tmp_path):
@@ -209,6 +210,8 @@ def test_plus_plus_operand_of_a_python_class_still_evaluates(tmp_path):
         -module(ttiav_ppclass, [p(S)])
         p(S) <- (S is ++str(Fraction(1, 3)))
     """)
+    # (a ``++`` result stays the Python str -- an atom; the f-string twin is
+    # a string since ruling R2, so the pair now differs in exactly that)
     assert _answers(mod, "p") == [("1/3",)]
 
 
@@ -324,7 +327,7 @@ def test_fstring_captures_a_titlecase_clause_variable(tmp_path):
         tmp_path, "fscap",
         'bar(Total), S is f"{Total}"',
         'bar(TOTAL), S is f"{TOTAL}"')
-    assert titlecase == allcaps == [("7",)]
+    assert titlecase == allcaps == [(chars("7"),)]  # an f-string is a string (R2)
 
 
 def test_python_escape_captures_a_titlecase_clause_variable(tmp_path):
@@ -362,7 +365,7 @@ def test_hosted_python_name_is_still_excluded_from_capture(tmp_path):
         -module(ttiav_stillpy, [p(S)])
         p(S) <- (S is f"{Fraction(1, 3)}")
     """)
-    assert _answers(mod, "p") == [("1/3",)]
+    assert _answers(mod, "p") == [(chars("1/3"),)]  # an f-string is a string (R2)
 
 
 def test_hosted_python_name_and_clause_variable_in_one_thunk(tmp_path):
@@ -375,7 +378,7 @@ def test_hosted_python_name_and_clause_variable_in_one_thunk(tmp_path):
         bar(3),
         p(S) <- (bar(Total), S is f"{Fraction(1, Total)}")
     """)
-    assert _answers(mod, "p") == [("1/3",)]
+    assert _answers(mod, "p") == [(chars("1/3"),)]  # an f-string is a string (R2)
 
 
 # ── The seam must bind exactly what visit_Name reads as a variable ─────────
@@ -487,6 +490,7 @@ def test_a_clause_variable_named_like_an_ast_node_is_still_captured(tmp_path):
         tree(7),
         p(S) <- (tree(Node), S is f"{Node}")
     """)
+    # -double_quotes(atom): an f-string follows the module's mode (R2)
     assert _answers(mod, "p") == [("7",)]
 
 
@@ -509,7 +513,7 @@ def test_the_namespace_name_still_wins_when_the_clause_never_binds_it(
         -module(ttiav_nsonly, [p(S)])
         p(S) <- (S is f"{Fraction(1, 3)}")
     """)
-    assert _answers(mod, "p") == [("1/3",)]
+    assert _answers(mod, "p") == [(chars("1/3"),)]  # an f-string is a string (R2)
 
 
 def test_capture_does_not_depend_on_where_the_thunk_sits_in_the_clause(
@@ -945,7 +949,7 @@ def test_an_fstring_in_a_seam_does_not_capture_its_names_either(tmp_path):
             return a, t[2]
     """)
     from fractions import Fraction
-    assert mod.probe() == (Fraction(1, 3), "1/2")
+    assert mod.probe() == (Fraction(1, 3), chars("1/2"))  # R2: a string
 
 
 # ── The sibling paths, pinned either way ───────────────────────────────────

@@ -135,13 +135,24 @@ def test_python_truth_constants_do_not_warn(tmp_path):
 
 def test_import_from_list_names_are_declared_not_warned(tmp_path):
     """A name the file imports by ``-import_from`` is foreign: its spelling
-    is the exporter's business, so neither the list nor a use warns."""
+    is the exporter's business, so neither the list nor a use warns -- and
+    that includes the ORIGINAL name of an ``alias(Orig, Local)``."""
     ws = _titlecase_warnings(
         tmp_path, "k",
-        "-import_from(clausal.modules.units, [Metre, alias(Second, Sec)])\n"
+        "-import_from(clausal.modules.units, [Metre, alias(Second, sec)])\n"
         "foo(X) <- (X == 5(Metre))\n"
-        "bar(X) <- (X == 5(Sec))\n")
+        "bar(X) <- (X == 5(sec))\n")
     assert ws == []
+
+
+def test_a_titlecase_alias_local_name_warns(tmp_path):
+    """The LOCAL name of ``alias(Orig, Local)`` is this file's choice, so it
+    is linted like any name the file declares (triage A4, 2026-09-28): it
+    used to be exempt, and ``alias(fib, Fibo)`` loaded and answered."""
+    ws = _titlecase_warnings(
+        tmp_path, "k2",
+        "-import_from(clausal.modules.units, [alias(Second, Sec)])\n")
+    assert _named(ws) == ["Sec"]
 
 
 # --- Severity: the shipped default is an error ------------------------------

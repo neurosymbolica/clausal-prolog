@@ -44,10 +44,12 @@ Ordering
 --------
 ``date``, ``time`` and ``datetime`` values are orderable with the standard
 comparison operators ``<``, ``>``, ``<=``, ``>=`` and sort chronologically
-through ``sort/2``, ``msort/2``, ``min_list/2`` and ``max_list/2``.  Comparing
-two values that are not orderable against each other (``date`` vs
-``datetime``, naive vs tz-aware ``datetime``, ``date`` vs a number) raises a
-catchable ``error(type_error(orderable, Culprit), (<)/2)``.
+through ``sort/2``, ``msort/2``, ``min_list/2`` and ``max_list/2`` -- two
+values of the SAME kind.  A ``date`` against a ``datetime`` does NOT raise
+today: the two are different terms, and the comparison is decided by the
+standard order of terms, not chronologically (``date(2030, 1, 1) < DT``
+holds for a ``datetime`` in 2020).  Convert with ``date_of/2`` before
+comparing.  (docs/date_time.md says the same.)
 """
 
 from __future__ import annotations

@@ -171,7 +171,7 @@ An ISO error arrives in Scryer's form, `error(Formal, Culprit)`, where `Culprit`
 ```
 Terminate execution by raising `SystemExit`. `halt/0` exits with code 0; `halt/1` exits with the given code. `catch/3` does not absorb it.
 
-A 0-arity builtin in goal position is written with parentheses — `halt()`, `nl()`, `abolish_all_tables()` — a bare `nl` or `halt` goal is refused at load. `true`, `fail` and `false` are written bare.
+A 0-arity predicate in goal position is written bare, as in ISO Prolog — `halt`, `nl`, `abolish_all_tables` — or with parentheses (`halt()`, `nl()`); both spellings call it. An `-import_from`'d 0-arity predicate is called the same way. `true`, `fail` and `false` are written bare.
 
 ??? info "Implementation & tests"
     **Python tests:** `tests/test_exceptions.py`
@@ -364,7 +364,7 @@ Core implementation of higher-order call. `Goal` must be a callable (lambda or `
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:phrase_2"
 ```
-Invoke a DCG rule and require it to consume the entire input list. `RuleBody` is either a predicate name (0 extra args, e.g. `greeting`) or a partial term (N extra args, e.g. `digit(D)`). equivalent to calling the rule with `List` as the input state and `[]` as the output state.
+Invoke a DCG rule and require it to consume the entire input list. `RuleBody` is either a predicate name (0 extra args, e.g. `greeting`) or a partial term (N extra args, e.g. `digit(D)`). equivalent to calling the rule with `List` as the input state and `[]` as the output state. A `RuleBody` built at run time as a control construct is a DCG body, as in ISO: the conjunction `','(A, B)`, the disjunctions `';'(A, B)` and `'|'(A, B)`, and `'\+'(A)`, with lists and strings inside them as terminals — `G =.. [',', inc, inc], phrase(G, [0], [N])`. (`(inc, inc)` written in source is the compound `inc(inc)`, not a conjunction.)
 
 ??? info "Implementation & tests"
     **Python tests:** `tests/test_dcg.py`
@@ -719,7 +719,7 @@ These work only on a predicate declared [`-dynamic`](database_ops.md#declare-fir
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:assertz_1"
 ```
-Add the fact `Clause` at the **end** of its predicate's clause list. Only facts can be asserted: a rule raises `permission_error(assert, rule, Head)`.
+Add the fact `Clause` at the **end** of its predicate's clause list. Only facts can be asserted: a rule raises `permission_error(assert, rule, Head)`. The predicate must be declared `-dynamic`: a static one, or one nothing declares (static by default, ISO 7.5.2), raises `error(permission_error(modify, static_procedure, Name/Arity), assertz/1)`; an unbound `Clause` raises `instantiation_error`.
 
 ??? info "Implementation & tests"
     **Clausal tests:** `tests/fixtures/builtins_db.clausal`
@@ -743,7 +743,7 @@ Add `Clause` at the **front** of its predicate's clause list.
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:retract_1"
 ```
-Remove the **first** clause whose head unifies with `Term`. Not backtrackable — removes exactly one clause per call. Fails when nothing matches; a static predicate raises `permission_error(modify, static_procedure, Name/Arity)`.
+Remove the **first** clause whose head unifies with `Term`. Not backtrackable — removes exactly one clause per call. As in ISO (8.9.3) and Scryer: it fails when nothing matches, including for a name nothing declares (there is no clause to remove); a static predicate, a declared data functor or a builtin raises `error(permission_error(modify, static_procedure, Name/Arity), retract/1)`; an unbound `Term` raises `instantiation_error`. (`retractall/1` and `abolish/1` are not provided.)
 
 ??? info "Implementation & tests"
     **Clausal tests:** `tests/fixtures/builtins_db.clausal`
@@ -804,7 +804,7 @@ Remove all cached tabling answers for every predicate in the current database.
 
 ## Keyword-Term Introspection
 
-These predicates address a term's fields by name; the names come from the functor's declaration (`-private([point(x, y, z)])`). See [Keyword predicates](keyword_preds.md). The keyword construction spelling `point(x=1)`, `KWTerm` and `extend/3` are gone.
+These predicates address a term's fields by name; the names come from the functor's declaration (`-private([point(x, y, z)])`). See [Term Inspection § Fields by name](term_inspection.md#fields-by-name). The keyword construction spelling `point(x=1)`, `KWTerm` and `extend/3` are gone.
 
 ### `vary/3`
 ```clausal

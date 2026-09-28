@@ -181,6 +181,12 @@ this engine's error terms: where Scryer and SWI-Prolog differ, follow Scryer.
   `error(type_error(atom,1),atom_length/2)`, `error(evaluation_error(zero_divisor),(/)/2)`.
 - For a missing procedure, it is the missing indicator itself, whichever
   builtin found it missing: `error(existence_error(procedure,foo/1),foo/1)`.
+  A database builtin refusing a target nothing declares (`assertz(foo(a))`
+  when only `foo/2` is `-dynamic`) is not a missing procedure but a write to
+  a static one — ISO 7.5.2 makes a user procedure static by default — so it
+  raises `error(permission_error(modify,static_procedure,foo/1),assertz/1)`,
+  the same term as for a declared static predicate: declare it
+  `-dynamic(foo/1)` first.
 - When there is no single culprit indicator, it is an unbound variable, as
   Scryer's own library code throws `error(E, _)`.
 
@@ -252,7 +258,9 @@ a plain `.py` caller of [`solve()`](python_integration.md#querying-from-python).
 
 `assertz/1`, `asserta/1` and `retract/1` work only on predicates declared
 `-dynamic` — declare first, then modify. A clause for a predicate that is
-defined but not dynamic raises ISO's `permission_error`; the prose names the fix:
+defined but not dynamic — or, for `assertz`/`asserta`, one nothing declares,
+which is static by default — raises ISO's `permission_error`; `retract` of a
+name nothing declares fails (ISO 8.9.3). The prose names the fix:
 
 ```text
 Uncaught logic exception: error(permission_error(modify,static_procedure,fixed/1),assertz/1): fixed/1 is a static procedure — declare it -dynamic(fixed/1) to modify it at runtime

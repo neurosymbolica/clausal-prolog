@@ -3792,6 +3792,18 @@ class TermTransformer(NodeTransformer):
                 if isinstance(v, FormattedValue):
                     v.value = _strip_variable_markers(v.value)
 
+        if transformer._double_quotes_mode == "chars" and not transformer._reify:
+            # RULED 2026-09-28 (R2): an f-string in a clause is a STRING, the
+            # same term a ``"..."`` literal is under the module's
+            # ``-double_quotes`` mode -- the chars carrier by default.  It
+            # used to be the bare Python ``str`` the f-string evaluates to,
+            # which is an ATOM since the flip.  Under ``-double_quotes(atom)``
+            # it stays the atom, as ``"..."`` does.  Reflection reads the
+            # f-string's own text and is left alone.
+            expression = copy_location(Tuple(
+                elts=[copy_location(Constant(value=CHARS_TAG), node),
+                      expression],
+                ctx=load), node)
         return _build_py_thunk_ast(
             transformer, node, expression, var_names, thunk_cls="FStringThunk",
         )
@@ -5963,7 +5975,8 @@ class EmbedTransformer(NodeTransformer):
                 f"({decl_kind}) the same arity, or {drop}.")
 
     def _check_head_signature(transformer, functor_name, all_field_names,
-                              prev_fields, node, has_keywords=False):
+                              prev_fields, node, has_keywords=False,
+                              dcg=False):
         """Reject a clause head that cannot be built against the bound class.
 
         ``_seen_functors[functor_name]`` is exactly the tuple the guarded
@@ -5995,7 +6008,14 @@ class EmbedTransformer(NodeTransformer):
         deficit = (not has_keywords
                    and len(all_field_names) < len(visible))
         unknown = [n for n in all_field_names if n not in prev_fields]
-        if not unknown and not deficit:
+        # A head LONGER than the declaration whose surplus positions all
+        # remapped onto names the declaration has -- a DCG head, whose two
+        # state slots are always ``dcg0``/``dcg1`` -- has no unknown name, but
+        # it emits one keyword twice and died in ``compile`` with the raw
+        # "keyword argument repeated: dcg1" (triage B3a, 2026-09-28).
+        overflow = (not has_keywords
+                    and len(all_field_names) > len(prev_fields))
+        if not unknown and not deficit and not overflow:
             return
         lineno = getattr(node, "lineno", 0)
         decl_lineno, decl_kind = transformer._functor_decl_site.get(
@@ -6044,6 +6064,9 @@ class EmbedTransformer(NodeTransformer):
                 f"Clausal: give the declaration and every clause head of "
                 f"{functor_name} the same number of arguments, or rename one "
                 f"of them.\n"
+                + (f"  (A DCG rule's head carries the two state arguments as "
+                   f"well: {functor_name}//{len(all_field_names) - 2} is "
+                   f"{functor_name}/{len(all_field_names)}.)\n" if dcg else "")
                 + transformer._arity_conflict_remedy(
                     functor_name, all_field_names, prev_fields,
                     decl_kind, decl_lineno,
@@ -7074,6 +7097,16 @@ class EmbedTransformer(NodeTransformer):
                     for item in call.args[1].elts:
                         if isinstance(item, Name):
                             transformer._titlecase_imported.add(item.id)
+                        elif (isinstance(item, Call)
+                                and isinstance(item.func, Name)
+                                and item.func.id == "alias" and item.args):
+                            # ``alias(Orig, Local)``: ``Orig`` is the
+                            # exporter's to spell; ``Local`` is the name THIS
+                            # file chooses, so it is linted like any name the
+                            # file declares (``_lint_titlecase_alias_targets``).
+                            if isinstance(item.args[0], Name):
+                                transformer._titlecase_imported.add(
+                                    item.args[0].id)
                         elif isinstance(item, Call):
                             for arg in item.args:
                                 if isinstance(arg, Name):
@@ -7122,6 +7155,21 @@ class EmbedTransformer(NodeTransformer):
                 transformer._lint_titlecase(node)
         for arg in args:
             each(arg)
+
+    def _lint_titlecase_alias_targets(transformer, args):
+        """Lint the LOCAL name of each ``alias(Orig, Local)`` in an
+        ``-import_from`` list.  The imported names are the exporter's to
+        spell and stay exempt, but ``Local`` is chosen here: an alias to a
+        TitleCase name is refused like any other TitleCase functor this file
+        writes (``-import_from(m, [alias(fib, Fibo)])`` used to load, and
+        ``Fibo(0, X)`` then answered)."""
+        if len(args) != 2 or not isinstance(args[1], List):
+            return
+        for item in args[1].elts:
+            if (isinstance(item, Call) and isinstance(item.func, Name)
+                    and item.func.id == "alias" and len(item.args) == 2
+                    and isinstance(item.args[1], Name)):
+                transformer._lint_titlecase(item.args[1], root_is_functor=True)
 
     def _expand_currency_tables(transformer, module):
         """Rewrite every ``-constants_number_currency`` into its fact
@@ -7446,8 +7494,9 @@ class EmbedTransformer(NodeTransformer):
         * string literals and f-strings: text, not identifiers — including a
           string used as the CALLABLE (``'Foo'(1)``), which is a quoted atom
           naming the predicate ``Foo/1``, not the identifier ``Foo``;
-        * a name bound by an ``-import_from`` list (or its ``alias(...)``
-          local name) — see ``_titlecase_prepass``;
+        * a name bound by an ``-import_from`` list (for ``alias(Orig,
+          Local)``, only ``Orig``: the local name is this file's choice and
+          is linted) — see ``_titlecase_prepass``;
         * ``_TITLECASE_EXEMPT_NAMES`` (``Undefined``).
 
         And one carve-out in the REMEDY: ``_TITLECASE_RENAMED_SPELLINGS``
@@ -8155,7 +8204,9 @@ class EmbedTransformer(NodeTransformer):
                     transformer._lint_titlecase_declared_names(
                         list(directive_args)
                         + [kw.value for kw in neg.operand.keywords])
-                elif directive_name not in ("import_module", "import_from"):
+                elif directive_name == "import_from":
+                    transformer._lint_titlecase_alias_targets(directive_args)
+                elif directive_name != "import_module":
                     transformer._lint_titlecase(
                         *directive_args,
                         *(kw.value for kw in neg.operand.keywords))
@@ -9837,9 +9888,10 @@ class EmbedTransformer(NodeTransformer):
                 # unreachable — visit_Name treats it as a variable before the
                 # remap fires, so the call site later fails with a cryptic
                 # NotImplementedError. Reject it here at the directive.
-                # TitleCase is exempt for the same reason as the bare-name
-                # form above: visit_Name consults the remap first for it, so
-                # ``alias(metre, Metre)`` binds a name that use sites reach.
+                # TitleCase is exempt here for the same reason as the
+                # bare-name form above (visit_Name consults the remap first
+                # for it); a TitleCase LOCAL name is refused by the TitleCase
+                # lint before this point (``_lint_titlecase_alias_targets``).
                 if (_is_logic_var_name(local_name)
                         and not _is_titlecase_identifier(local_name)):
                     raise SyntaxError(
@@ -10414,6 +10466,13 @@ class EmbedTransformer(NodeTransformer):
                 if i < len(prev_fields):
                     arg_field_names[i] = prev_fields[i]
             all_field_names = arg_field_names + kwarg_field_names
+            if len(set(all_field_names)) != len(all_field_names):
+                # One name, one arity: ``state//1`` then ``state//2`` remaps
+                # the second head's surplus onto ``dcg1`` twice.  Refuse it
+                # here, naming both rules, as an arrow rule's head is.
+                transformer._check_head_signature(
+                    functor_name, all_field_names, prev_fields, expr_stmt,
+                    has_keywords=bool(kwarg_field_names), dcg=True)
 
         # Ensure all synthetic AST nodes have source positions.
         copy_location(body_expr_raw, src)

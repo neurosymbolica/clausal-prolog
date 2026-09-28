@@ -2268,15 +2268,28 @@ def _colliding_dim_names(a: dict, b: dict) -> frozenset:
                      if left[n] != right[n])
 
 
-def _float_beside_exact(f):
+def _float_beside_exact(f, op=None):
     """The refusal a float earns beside a Decimal or a Fraction at run time
     (RULED 2026-09-17 Q5): no implicit coercion, it risks loss of precision.
-    One spelling with ``clausal.logic.exact_arith``."""
+    One spelling with ``clausal.logic.exact_arith``.
+
+    *op* is the operator that met the pair (``"*"``), which becomes the
+    error's context ``(*)/2``; without one the context stays unbound.  The
+    remedy is the exact spelling of the float's own digits, ``rdiv(N, D)`` --
+    a term every module can write (``decimal(M, S)``, which this message used
+    to suggest, has no source spelling)."""
     from clausal.logic.exceptions import LogicException, type_error  # noqa: PLC0415
+    try:
+        exact = Fraction(repr(f))
+        remedy = f"rdiv({exact.numerator}, {exact.denominator})"
+    except (ValueError, OverflowError):      # inf / nan
+        remedy = "rdiv(N, D)"
+    where = f"({op})/2: " if op else ""
     return LogicException(type_error(
         "exact_number", f,
-        "quantity arithmetic: a float beside an exact number is refused "
-        "(RULED 2026-09-17 Q5); write the digits with the unit or as decimal(M, S)"))
+        f"{where}quantity arithmetic: a float beside an exact number is "
+        f"refused (RULED 2026-09-17 Q5); write it exactly, as {remedy}, or "
+        f"write the digits with the unit"))
 
 
 def _to_decimal(x):
@@ -2511,7 +2524,7 @@ class quantity:  # noqa: N801 -- see the naming note below
         return result
 
     @staticmethod
-    def _num_pair(a, b):
+    def _num_pair(a, b, op=None):
         """Return (a, b) ready for exact arithmetic.
 
         RULED 2026-09-18 (Q5 + Q6 option C): a float beside a Decimal or a
@@ -2523,9 +2536,9 @@ class quantity:  # noqa: N801 -- see the naming note below
         factor, ``_to_decimal`` for money) and at DECLARATION.  Decimal beside
         Fraction still goes exact-to-exact as a Fraction."""
         if isinstance(a, Decimal) and isinstance(b, float) and not isinstance(b, bool):
-            raise _float_beside_exact(b)
+            raise _float_beside_exact(b, op)
         if isinstance(b, Decimal) and isinstance(a, float) and not isinstance(a, bool):
-            raise _float_beside_exact(a)
+            raise _float_beside_exact(a, op)
         # Decimal and Fraction compare equal in Python but do not add: a
         # Fraction-valued money quantity (a CLP(Q) result) meeting a
         # Decimal literal goes exact-to-exact via Fraction(Decimal).
@@ -2540,24 +2553,24 @@ class quantity:  # noqa: N801 -- see the naming note below
         # A float beside a Fraction would silently produce a float: refused
         # the same way (Q5).
         if isinstance(a, Fraction) and isinstance(b, float) and not isinstance(b, bool):
-            raise _float_beside_exact(b)
+            raise _float_beside_exact(b, op)
         if isinstance(b, Fraction) and isinstance(a, float) and not isinstance(a, bool):
-            raise _float_beside_exact(a)
+            raise _float_beside_exact(a, op)
         return a, b
 
     # ── Arithmetic ──────────────────────────────────────────────────────────
 
     def __add__(self, other):
         if isinstance(other, (int, float, Decimal, Fraction)) and not self._dims:
-            a, b = self._num_pair(self._value, other)
+            a, b = self._num_pair(self._value, other, "+")
             return Quantity(exact_add(a, b), {})
         self._require_same_dims(other, "add")
-        a, b = self._num_pair(self._value, other._value)
+        a, b = self._num_pair(self._value, other._value, "+")
         return Quantity(exact_add(a, b), self._dims)
 
     def __radd__(self, other):
         if isinstance(other, (int, float, Decimal, Fraction)) and not self._dims:
-            a, b = self._num_pair(other, self._value)
+            a, b = self._num_pair(other, self._value, "+")
             return Quantity(exact_add(a, b), {})
         if isinstance(other, (int, float, Decimal, Fraction)):
             # A NUMBER meeting a dimensioned quantity is a units error, and it
@@ -2572,15 +2585,15 @@ class quantity:  # noqa: N801 -- see the naming note below
 
     def __sub__(self, other):
         if isinstance(other, (int, float, Decimal, Fraction)) and not self._dims:
-            a, b = self._num_pair(self._value, other)
+            a, b = self._num_pair(self._value, other, "-")
             return Quantity(exact_sub(a, b), {})
         self._require_same_dims(other, "subtract")
-        a, b = self._num_pair(self._value, other._value)
+        a, b = self._num_pair(self._value, other._value, "-")
         return Quantity(exact_sub(a, b), self._dims)
 
     def __rsub__(self, other):
         if isinstance(other, (int, float, Decimal, Fraction)) and not self._dims:
-            a, b = self._num_pair(other, self._value)
+            a, b = self._num_pair(other, self._value, "-")
             return Quantity(exact_sub(a, b), {})
         if isinstance(other, (int, float, Decimal, Fraction)):
             self._require_same_dims(other, "subtract")   # see __radd__
@@ -2589,13 +2602,13 @@ class quantity:  # noqa: N801 -- see the naming note below
     def __mul__(self, other):
         if isinstance(other, Quantity):
             new_dims = self._merge_dims(self._dims, other._dims, +1)
-            a, b = self._num_pair(self._value, other._value)
+            a, b = self._num_pair(self._value, other._value, "*")
             return Quantity(exact_mul(a, b), new_dims)
-        a, b = self._num_pair(self._value, other)
+        a, b = self._num_pair(self._value, other, "*")
         return Quantity(exact_mul(a, b), self._dims)
 
     def __rmul__(self, other):
-        a, b = self._num_pair(other, self._value)
+        a, b = self._num_pair(other, self._value, "*")
         return Quantity(exact_mul(a, b), self._dims)
 
     @staticmethod
@@ -2634,14 +2647,14 @@ class quantity:  # noqa: N801 -- see the naming note below
     def __truediv__(self, other):
         if isinstance(other, Quantity):
             new_dims = self._merge_dims(self._dims, other._dims, -1)
-            a, b = self._num_pair(self._value, other._value)
+            a, b = self._num_pair(self._value, other._value, "/")
             return Quantity(self._exact_div(a, b), new_dims)
-        a, b = self._num_pair(self._value, other)
+        a, b = self._num_pair(self._value, other, "/")
         return Quantity(self._exact_div(a, b), self._dims)
 
     def __rtruediv__(self, other):
         new_dims = {k: -v for k, v in self._dims.items()}
-        a, b = self._num_pair(other, self._value)
+        a, b = self._num_pair(other, self._value, "/")
         return Quantity(self._exact_div(a, b), new_dims)
 
     @staticmethod
@@ -2682,25 +2695,25 @@ class quantity:  # noqa: N801 -- see the naming note below
         the quotient is dimensionless (a dimensionless Quantity here, where
         ``divmod_/4`` binds a bare number — ``/`` has the same trait)."""
         if isinstance(other, (int, float, Decimal, Fraction)) and not self._dims:
-            a, b = self._num_pair(self._value, other)
+            a, b = self._num_pair(self._value, other, "//")
             return Quantity(self._floor_divmod(a, b)[0], {})
         self._require_same_dims(other, "floor-divide")
-        a, b = self._num_pair(self._value, other._value)
+        a, b = self._num_pair(self._value, other._value, "//")
         return Quantity(self._floor_divmod(a, b)[0], {})
 
     def __mod__(self, other):
         """The DIMENSION rule of ``divmod_/4``: operands share a dimension,
         the remainder keeps it."""
         if isinstance(other, (int, float, Decimal, Fraction)) and not self._dims:
-            a, b = self._num_pair(self._value, other)
+            a, b = self._num_pair(self._value, other, "mod")
             return Quantity(self._floor_divmod(a, b)[1], {})
         self._require_same_dims(other, "take the remainder of")
-        a, b = self._num_pair(self._value, other._value)
+        a, b = self._num_pair(self._value, other._value, "mod")
         return Quantity(self._floor_divmod(a, b)[1], self._dims)
 
     def __rfloordiv__(self, other):
         if isinstance(other, (int, float, Decimal, Fraction)) and not self._dims:
-            a, b = self._num_pair(other, self._value)
+            a, b = self._num_pair(other, self._value, "//")
             return Quantity(self._floor_divmod(a, b)[0], {})
         if isinstance(other, (int, float, Decimal, Fraction)):
             self._require_same_dims(other, "floor-divide")   # see __radd__
@@ -2708,7 +2721,7 @@ class quantity:  # noqa: N801 -- see the naming note below
 
     def __rmod__(self, other):
         if isinstance(other, (int, float, Decimal, Fraction)) and not self._dims:
-            a, b = self._num_pair(other, self._value)
+            a, b = self._num_pair(other, self._value, "mod")
             return Quantity(self._floor_divmod(a, b)[1], {})
         if isinstance(other, (int, float, Decimal, Fraction)):
             self._require_same_dims(other, "take the remainder of")   # see __radd__
@@ -3689,6 +3702,11 @@ def _wq(t: Any, prec: int, operand: bool = False) -> str:
                     return _wq(tail, prec, operand)
                 return _wq_list(elems, tail)
         return term_str(walked, quoted=True, double_quotes=True, sep=",")
+    if isinstance(t, Quantity):
+        # A units quantity is written as its source spelling, ``10 (usd)`` --
+        # what ``writeq/1`` prints -- not the Python repr
+        # ``quantity(Decimal('10'), {'usd': 1})`` (triage C17).
+        return str(t)
     cell = _wq_cell(t)
     if cell is None:
         return term_str(t, quoted=True, double_quotes=True, sep=",")

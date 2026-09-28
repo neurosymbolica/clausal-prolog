@@ -198,9 +198,73 @@ def _check_bag(bag, who: str) -> None:
 # Database lookup with the same _get_dispatch() interface.
 
 
-def undeclared_functor_error(functor: str, arity: int) -> NameError:
+from clausal.logic.exceptions import LogicException as _LogicException
+
+
+class UndeclaredFunctorError(_LogicException, NameError):
+    """A construction ``f(A1, ..., An)`` of a functor nothing declares.
+
+    DUAL-TYPED, as ``PredicateArityMismatchError`` is (a LogicException and a
+    TypeError): it is the ISO error term ``catch/3`` sees -- it used to be a
+    raw Python ``NameError``, which ``catch/3`` could only see transliterated
+    as ``('NameError', Message)`` (triage B4c, C1, C3) -- and it is still a
+    ``NameError`` with ``name`` set, so every Python handler, and the
+    undefined-name diagnostic that keys on ``exc.name``, keeps working.
+
+    The TERM depends on where the construction stood, which the compiler
+    knows and records (``terms_to_ast.construction_context``):
+
+    * an evaluable position (``'is'(X, f(1))``, ``X == f(1)``'s arithmetic):
+      ``type_error(evaluable, f/1)`` -- what ISO specifies for a compound
+      the evaluator does not know;
+    * the clause of ``assertz/1`` and friends:
+      ``permission_error(modify, static_procedure, f/1)`` with the builtin as
+      context (ruling R7, 2026-09-28: an undeclared procedure is static);
+    * anywhere else: ``existence_error(procedure, f/1)``, the term the
+      Python API already gives for an undeclared ``assertz`` target.
+
+    The assert case follows ruling R7; the database builtins' own refusal
+    (``database_ops._resolve_cell_head``) raises the same term.
+    """
+
+    def __init__(self, functor: str, arity: int, kind: "str | None" = None,
+                 context: "str | None" = None) -> None:
+        from clausal.logic.exceptions import (  # noqa: PLC0415
+            _error, existence_error, type_error,
+        )
+        from clausal.logic.atoms import mint  # noqa: PLC0415
+        pi = ("/", functor, arity)
+        prose = undeclared_functor_message(functor, arity)
+        if kind == "evaluable":
+            term = type_error("evaluable", pi,
+                              f"{context}: {prose}" if context else prose)
+        elif kind == "procedure" and context:
+            # RULED R7 (2026-09-28): the clause of assertz/asserta names a
+            # procedure nothing declares -- ISO makes it static by default,
+            # so writing it is permission_error(modify, static_procedure).
+            from clausal.logic.exceptions import permission_error  # noqa: PLC0415
+            term = permission_error(
+                "modify", "static_procedure", pi,
+                f"{context}: nothing declares {functor}/{arity}; declare it "
+                f"-dynamic({functor}/{arity}) first")
+        elif context:
+            term = _error(("existence_error", mint("procedure"), pi),
+                          f"{context}: {prose}")
+        else:
+            term = existence_error("procedure", pi, prose)
+        super().__init__(term)
+        self.name = functor
+        self.functor = functor
+        self.arity = arity
+
+
+def undeclared_functor_error(functor: str, arity: int,
+                             kind: "str | None" = None,
+                             context: "str | None" = None) -> NameError:
     """The error a construction ``functor(A1, ..., An)`` of a functor nothing
-    declares raises: "not in scope as a term class".
+    declares raises: "'f/N' is not in scope", with the declaration to write.
+    An :class:`UndeclaredFunctorError` -- a ``NameError`` and an ISO error
+    term at once; *kind*/*context* say where the construction stood.
 
     One sentence for both routes to it: ``_DbDispatchAdapter.__call__`` (the
     name is bound to nothing, so the adapter stands in) and
@@ -209,11 +273,22 @@ def undeclared_functor_error(functor: str, arity: int) -> NameError:
     object is not callable``).  ``name=`` is what lets the undefined-name
     diagnostic reach it (``enrich_undefined_name`` keys on ``exc.name``).
     """
-    return NameError(
-        f"Predicate '{functor}/{arity}' is not in scope as a term class.\n"
-        f"To construct a '{functor}' goal term, import it first, e.g.:\n"
-        f"  from your_module import {functor}",
-        name=functor,
+    return UndeclaredFunctorError(functor, arity, kind, context)
+
+
+def undeclared_functor_message(functor: str, arity: int) -> str:
+    """The text of :func:`undeclared_functor_error`: which declaration builds
+    the term.  A term is a cell, so the remedy is a declaration of the
+    functor (where the module owns it) or an import of it -- never the Python
+    import of a term class the message used to suggest."""
+    slots = ", ".join(["_"] * arity) if arity > 0 else ""
+    spec = f"{functor}({slots})" if arity > 0 else functor
+    return (
+        f"Predicate '{functor}/{arity}' is not in scope: nothing declares the "
+        f"functor {functor}/{arity}, so {functor}(...) builds no term.\n"
+        f"Declare it in the module that owns it, e.g. -private([{spec}]) or "
+        f"its -module export list, or import it with "
+        f"-import_from(owner, [{functor}])."
     )
 
 
@@ -223,6 +298,37 @@ def _undeclared_functor(functor: str, arity: int, *args, **kwargs):
     Raises at run time, where the adapter's NameError is raised for an
     unbound name, so a clause that never runs still loads."""
     raise undeclared_functor_error(functor, arity)
+
+
+def _undeclared_functor_in(kind: str, context: "str | None", functor: str,
+                           arity: int, *args, **kwargs):
+    """``$undeclared_functor_in``: ``$undeclared_functor`` for a construction
+    the compiler placed in a known position (``kind``/``context``, see
+    :class:`UndeclaredFunctorError`).  Kind ``"cell"`` (the clause of
+    retract/1) builds the plain cell instead: nothing is written, the goal
+    only matches, and finding no procedure it fails, as ISO 8.9.3 says."""
+    if kind == "cell" and not kwargs:
+        return (functor, *args)
+    raise undeclared_functor_error(functor, arity, kind, context)
+
+
+def _constructor_in(obj: Any, kind: str, context: "str | None",
+                    functor: str, arity: int) -> Any:
+    """``$constructor_in``: the callee of a construction ``f(...)`` whose
+    NAME the compiler found bound to nothing, in a known position.  The name
+    is looked up at run time as before; when it is still unbound -- the
+    ``_DbDispatchAdapter`` stand-in -- the construction raises the error for
+    that position instead of the adapter's context-free one.  Anything else
+    the name is bound to by then is returned unchanged."""
+    if type(obj) is _DbDispatchAdapter:
+        if kind == "cell":
+            def _cell(*args):
+                return (functor, *args)
+            return _cell
+        def _refuse(*args, **kwargs):
+            raise undeclared_functor_error(functor, arity, kind, context)
+        return _refuse
+    return obj
 
 
 class _DbDispatchAdapter:

@@ -6,8 +6,9 @@
     into Clausal's own syntax with an older translator; it is not an ISO
     Prolog system. Programs that use cut or if-then-else are refused, and a
     program whose clauses build compound data terms (`p(f(1)).`,
-    `X = g(2)`) loads but fails at run time with `NameError: Predicate
-    'f/1' is not in scope` (see [Known limitations](#known-limitations)).
+    `X = g(2)`) loads but fails at run time with
+    `error(existence_error(procedure, f/1), f/1)` (see
+    [Known limitations](#known-limitations)).
     For running real ISO Prolog alongside Clausal, use the
     [Scryer](scryer.md) or [Trealla](trealla.md) embeddings.
 
@@ -159,7 +160,8 @@ Most standard Prolog translates cleanly:
   so it only agrees with `\=` when both sides are ground)
 - Lists (`[H|T]` becomes `[H, *T]`)
 - DCG rules (`-->` becomes `>>`)
-- Directives (`dynamic`, `discontiguous`, `table`, `module`, `use_module`)
+- Directives (`dynamic`, `discontiguous`, `table`, `module`, `use_module`),
+  in the ISO call form `:- dynamic(foo/1).`
 - Negation as failure (`\+` becomes `not`)
 
 ### Unsupported constructs
@@ -244,9 +246,15 @@ mod = _load_prolog_module("my_module", "/path/to/my_module.pl",
                           dialect=Dialect.scryer())
 ```
 
-The default dialect is SWI-Prolog's operator table (the translator predates
-the ISO-first rule; pass `Dialect.scryer()` or `Dialect.iso()` for a stricter
-reader).
+The default is Scryer's operator table (`Dialect.scryer_reader()`): ISO's
+Table 7 plus Scryer's own defaults, prefix `+` (200, fy) and the infix `div`
+and `rdiv` (400, yfx) -- what Scryer reports with no library loaded. It
+replaced SWI's table on 2026-09-28. SWI's extra operators are therefore not
+operators here, as they are not in Scryer: the prefix directive forms
+(`:- dynamic foo/1.` -- write `:- dynamic(foo/1).`), `*->`, `=@=`, `\=@=`,
+`xor`, and the dict operators `:<` and `>:<`. A file that needs one declares
+it with `:- op/3`, which the reader applies as it goes, or pass
+`Dialect.swi()` to read SWI source.
 
 ---
 
@@ -337,8 +345,9 @@ renamed to `_pi`.)
 - **Compound data terms fail at run time.** The translator declares a
   program's bare atoms (the `-private([...])` list above) but not the
   functors of its data terms, so a clause such as `p(f(1)).` or
-  `q(X) :- X = g(2).` loads, then raises `NameError: Predicate 'f/1' is not
-  in scope as a term class` when it runs. Calls to the program's own
+  `q(X) :- X = g(2).` loads, then raises the ISO error term
+  `error(existence_error(procedure, f/1), f/1)` when it runs (a `catch/3`
+  sees it; from Python it is also a `NameError`). Calls to the program's own
   predicates are unaffected.
 - **Arithmetic follows today's Clausal operators, not ISO's.** `Y is X / 2`
   becomes `eval_(X / 2, Y)`, and `=:=` becomes the constraint `==` (see

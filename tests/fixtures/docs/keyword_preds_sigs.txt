@@ -1,4 +1,4 @@
-# Display snippets for docs/keyword_preds.md
+# Display snippets for docs/term_inspection.md (Fields by Name)
 
 --8<-- [start:default_values]
 with_defaults(TERM, RESULT) <- (

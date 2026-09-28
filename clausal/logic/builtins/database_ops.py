@@ -7,7 +7,11 @@ from typing import Any
 
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
 from clausal.logic.atoms import is_atom as _term_is_atom, spelling as _spelling
-from clausal.logic.exceptions import LogicException, permission_error
+from clausal.logic.exceptions import (
+    LogicException, instantiation_error, permission_error,
+)
+from clausal.logic.exceptions import _error as _error_term
+from clausal.logic.atoms import mint
 
 from clausal.logic.builtins._registry import (
     _db_builtin, structural_unify,
@@ -257,13 +261,31 @@ def _resolve_cell_head(term_val: Any, context: str, db,
             raise refusal_error(functor, arity, author, kind, reason,
                                 channel=context)
     if row is None and not _declared_here_at_arity(module_dict, functor, arity):
-        raise LogicException(existence_error(
-            "procedure", ("/", functor, arity),
-            f"{context}: no predicate {functor}/{arity} is known here, and a "
-            f"cell argument does not create one — a cell is indistinguishable "
-            f"from a plain data tuple, so the target must already be declared "
-            f"-dynamic({functor}/{arity})",
-        ))
+        # RULED R7 (2026-09-28): writing a procedure nothing declares is
+        # permission_error(modify, static_procedure, PI), with the refusing
+        # builtin as context.  ISO has no permission type for "not yet
+        # existing", and 7.5.2 makes a user procedure static by default, so
+        # this is the same refusal as for a declared static predicate.
+        from clausal.logic.builtins._registry import (  # noqa: PLC0415
+            _BUILTINS, _DB_BUILTINS,
+        )
+        builtin = (functor, arity) in _BUILTINS or (functor, arity) in _DB_BUILTINS
+        if context.startswith("retract") and not builtin:
+            # ISO 8.9.3 (and Scryer): retracting from a procedure that does
+            # not exist FAILS -- there is no clause to remove.  The caller
+            # finds no clause list for it and fails.
+            return term_val, False
+        # A builtin is a static procedure (ISO 8.9.1.3 / 8.9.3.3, Scryer:
+        # ``retract(atom_length(a, 1))`` is permission_error(modify,
+        # static_procedure, atom_length/2)).
+        why = (f"{context}: {functor}/{arity} is a builtin, a static "
+               f"procedure" if builtin else
+               f"{context}: no predicate {functor}/{arity} is declared here, "
+               f"and a cell argument does not create one — a cell is "
+               f"indistinguishable from a plain data tuple — so declare it "
+               f"-dynamic({functor}/{arity}) first")
+        raise LogicException(permission_error(
+            "modify", "static_procedure", ("/", functor, arity), why))
     # THE REMEDY NAMES THE RIGHT MODULE (roborev job 78, finding 4).  For a
     # row this module merely reaches through an ``-import_from``, "declare it
     # -dynamic here" is advice that would not work and must not: the
@@ -527,7 +549,9 @@ def _assertz_factory(db):
     def assertz__1(term, trail, k):
         term_val = deref(term)
         if is_var(term_val):
-            return
+            # ISO 8.9.1.3 a: an unbound clause is an instantiation error
+            # (Scryer too); it used to fail silently (triage B4a).
+            raise LogicException(instantiation_error("assertz/1"))
         clause = _build_clause(term_val, "assertz/1", db, module_dict)
         functor, arity = head_key(clause.head)
         pred_cls = _find_pred_cls(functor, arity, module_dict)
@@ -568,7 +592,9 @@ def _asserta_factory(db):
     def asserta__1(term, trail, k):
         term_val = deref(term)
         if is_var(term_val):
-            return
+            # ISO 8.9.1.3 a: an unbound clause is an instantiation error
+            # (Scryer too); it used to fail silently (triage B4a).
+            raise LogicException(instantiation_error("asserta/1"))
         clause = _build_clause(term_val, "asserta/1", db, module_dict)
         functor, arity = head_key(clause.head)
         pred_cls = _find_pred_cls(functor, arity, module_dict)
@@ -605,7 +631,9 @@ def _retract_factory(db):
     def retract__1(term, trail, k):
         term_val = deref(term)
         if is_var(term_val):
-            return
+            # ISO 8.9.3.3 a (Scryer too): an unbound clause is an
+            # instantiation error; it used to fail silently.
+            raise LogicException(instantiation_error("retract/1"))
         # A CELL pattern goes through the SAME gate as the assert doors (P3-3
         # Task 5, R11) and comes back normalized to the shape the clause list
         # actually holds -- without that, ``_first_match_index`` would compare

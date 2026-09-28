@@ -28,7 +28,8 @@ as the culprit (Scryer's form; see [Exceptions](exceptions.md)).
 
 The declaration also makes the predicate exist before it has clauses: a
 `-dynamic` predicate with no clauses simply fails, where an undeclared name is
-refused. Declare several at once:
+refused with the same `permission_error(modify, static_procedure, Name/Arity)`
+(it is static by default). Declare several at once:
 
 ```clausal
 --8<-- "tests/fixtures/docs/database_ops_examples.clausal:dynamic_directive"
@@ -69,6 +70,13 @@ Prolog's `asserta`). The new clause will be tried first on subsequent queries.
 ```clausal
 --8<-- "tests/fixtures/docs/database_ops_examples.clausal:retract_example"
 ```
+
+As in ISO (8.9.3) and Scryer, `retract` of a name nothing declares simply
+fails — there is no clause to remove — while a static predicate, a declared
+data functor or a builtin raises
+`error(permission_error(modify, static_procedure, Name/Arity), retract/1)`, and
+an unbound `Term` raises `instantiation_error`. (`retractall/1` and
+`abolish/1` are not provided.)
 
 `retract` uses unification for matching, so you can retract by pattern:
 
@@ -136,7 +144,7 @@ does not require dynamic predicates.)
 - **Must declare `-dynamic`** — without it, assertz/asserta/retract raise
   `error(permission_error(modify, static_procedure, Name/Arity), assertz/1)`
   (catchable by `catch/3`). A name with no declaration and no clauses is
-  refused too. To match the culprit in a catch pattern, quote it:
+  refused too by assertz/asserta; retract of such a name just fails. To match the culprit in a catch pattern, quote it:
   `'/'('assertz', 1)` (a bare builtin name in a term is the builtin's object,
   not the atom).
 - **assertz adds facts, not rules** — `assertz(foo(X) <- bar(X))` is not
@@ -144,8 +152,10 @@ does not require dynamic predicates.)
   assert time (the predicate's existing clauses are left untouched). Only
   ground or partially-ground facts can be asserted.
 - **Arity is part of the name** — `assertz(foo(a))` when only `foo/2` is
-  declared dynamic is refused with `existence_error(procedure, foo/1)`:
-  `foo/1` is a different predicate, and it is not declared.
+  declared dynamic is refused with
+  `error(permission_error(modify, static_procedure, foo/1), assertz/1)`:
+  `foo/1` is a different predicate, it is not declared, and an undeclared
+  procedure is static (ISO 7.5.2).
 - **retract removes one clause** — it removes the *first* matching clause only.
   Call it in a loop (or use `findall` + multiple retracts) to remove all
   matches.

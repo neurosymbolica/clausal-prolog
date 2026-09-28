@@ -682,7 +682,7 @@ unify(v, dt.date(2026, 3, 16), trail)
 deref(v)  # → datetime.date(2026, 3, 16)
 ```
 
-This means `Decimal`, `pathlib.Path`, and any other Python type with `__eq__` works as a logic term without wrapping. Dates and times are the exception on the **query** path: a date is the term `("date", Y, M, D)` (likewise `("datetime", …)`, `("time", …)` and `("timedelta", …)`), and that term is what a query passes — `solve(("same_day", ("date", 2024, 1, 1), X), module=m)`, directly or nested inside a list or compound argument. A bare Python `datetime.date` as a query argument is refused with a `NotImplementedError` that names the term to write, rather than binding by reference and quietly matching nothing. Call methods via `++()`:
+This means `Decimal`, `pathlib.Path`, and any other Python type with `__eq__` works as a logic term without wrapping. Dates and times are the exception on the **query** path: a date is the term `("date", Y, M, D)` (likewise `("datetime", …)`, `("time", …)` and `("timedelta", …)`), and that term is what a query passes — `solve(("same_day", ("date", 2024, 1, 1), X), module=m)`, directly or nested inside a list or compound argument. A bare Python `datetime.date` as a query argument is refused with a `NotImplementedError` that names the term to write, rather than binding by reference and quietly matching nothing. An object with no term form at all — a socket, a lock, a plain `object()` — crosses a query BY REFERENCE, at the top level or nested in a list or compound argument: `solve(("=", X, sock), module=m)` binds `X` to that very socket. Call methods via `++()`:
 
 ```clausal
 -import_from(date_time, [date])

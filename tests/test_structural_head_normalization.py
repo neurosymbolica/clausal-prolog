@@ -94,5 +94,5 @@ def test_undeclared_rule_and_fact_raise_same_error_in_output_mode():
     mod = _undeclared_mod()
     rule_err = _err_text("ur", 5, Var(), module=mod)
     fact_err = _err_text("uf", 50, Var(), module=mod)
-    assert "not in scope as a term class" in rule_err
-    assert "not in scope as a term class" in fact_err
+    assert "is not in scope: nothing declares the functor" in rule_err
+    assert "is not in scope: nothing declares the functor" in fact_err

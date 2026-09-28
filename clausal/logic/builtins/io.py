@@ -480,14 +480,19 @@ def _format_clause_term(val):
     if isinstance(val, Var):
         return str(val)  # _N format for anonymous vars
     if is_chars(val):
-        val = chars_text(val)          # stage 1: the carrier is text
+        # A STRING (the chars carrier, stage 1) -- ``listing/1`` is in the
+        # quoted family, so it prints as a double-quoted string literal,
+        # which is how the module it is listing would have to spell it.
+        # ``repr`` is not that: it picks quotes by content (``"it\'s"``) and
+        # would emit a single-quoted literal -- an ATOM -- for the common case.
+        return _quote_string(chars_text(val))
     if isinstance(val, str):
-        # A STRING (THE FLIP) -- ``listing/1`` is in the quoted family, so it
-        # prints as a double-quoted string literal, which is how the module
-        # it is listing would have to spell it.  ``repr`` is not that: it
-        # picks quotes by content (``"it\'s"``) and would emit a single-
-        # quoted literal -- an ATOM -- for the common case.
-        return _quote_string(val)
+        # An ATOM (stage 2 of the flip: a bare str is the atom) prints as
+        # writeq prints it -- bare when it is a plain name, single-quoted when
+        # it is not.  It used to print double-quoted, which re-reads as a
+        # STRING.
+        from clausal.terms import term_writeq  # noqa: PLC0415
+        return term_writeq(val)
     if isinstance(val, list):
         return "[" + ", ".join(_format_clause_term(e) for e in val) + "]"
     if is_term_instance(val):
@@ -520,14 +525,106 @@ def _format_clause_head(head):
     return _term_str(head)
 
 
+def _occurs_in(var, x) -> bool:
+    """True if the variable *var* (by identity) MAY occur in goal/term *x*.
+    Conservative: a container this walk does not know answers True, so the
+    fold below is skipped rather than risked."""
+    import dataclasses  # noqa: PLC0415
+    from clausal.pythonic_ast.nodes import Node  # noqa: PLC0415
+    from clausal.terms import ConcreteSeg, DictTerm, SegList, SetTerm  # noqa: PLC0415
+    if x is var:
+        return True
+    if x is None or isinstance(x, (bool, int, float, complex, str, bytes)):
+        return False
+    if isinstance(x, Var):
+        return False
+    if isinstance(x, (list, tuple)):
+        return any(_occurs_in(var, e) for e in x)
+    if isinstance(x, dict):
+        return any(_occurs_in(var, k) or _occurs_in(var, v)
+                   for k, v in x.items())
+    if isinstance(x, DictTerm):
+        return any(_occurs_in(var, k) or _occurs_in(var, v)
+                   for k, v in x._data.items())
+    if isinstance(x, SetTerm):
+        return any(_occurs_in(var, e) for e in x)
+    if isinstance(x, SegList):
+        return any(_occurs_in(var, list(seg.elements))
+                   if isinstance(seg, ConcreteSeg) else _occurs_in(var, seg.var)
+                   for seg in x.segments)
+    if isinstance(x, Node) and dataclasses.is_dataclass(x):
+        return any(_occurs_in(var, getattr(x, f.name))
+                   for f in dataclasses.fields(x) if f.name != "position")
+    return True
+
+
+def _fold_head_unifications(head, body):
+    """``(head, body)`` with the head arguments the compiler HOISTED into the
+    body folded back: a clause stored as ``s(_0) <- _0 is "a"`` lists as the
+    ``s("a")`` it was written as (triage C12).  Only a body goal ``V is T``
+    whose ``V`` is a head argument occurring once in the head and nowhere
+    else in the clause is folded, and only within the LEADING run of such
+    unifications (where the compiler puts its hoists): a unification after
+    an order-sensitive goal (``var/1``, ``not``, a side effect) is not the
+    same clause once moved into the head."""
+    from clausal.logic.cells import _cell_shape, cell_args, cell_functor  # noqa: PLC0415
+    from clausal.pythonic_ast.nodes import Unify  # noqa: PLC0415
+    if not _cell_shape(head)[0]:
+        return head, body
+    args = list(cell_args(head))
+    rest = list(body)
+    changed = False
+    for goal in list(rest):
+        if not (isinstance(goal, Unify) and isinstance(goal.left, Var)):
+            break
+        v = goal.left
+        slots = [i for i, a in enumerate(args) if a is v]
+        others = [g for g in rest if g is not goal]
+        if (len(slots) != 1 or _occurs_in(v, goal.right)
+                or any(_occurs_in(v, g) for g in others)
+                or any(_occurs_in(v, a) for i, a in enumerate(args)
+                       if i != slots[0])):
+            continue
+        args[slots[0]] = goal.right
+        rest.remove(goal)
+        changed = True
+    if not changed:
+        return head, body
+    return (cell_functor(head), *args), rest
+
+
+def _format_goal(goal):
+    """A body goal as listing prints it: the goal node's own layout, with
+    every TERM leaf rendered by :func:`_format_clause_term` -- so a string
+    is ``"a"``, not the carrier tuple ``('$chars', 'a')``."""
+    import dataclasses  # noqa: PLC0415
+    from clausal.pythonic_ast.nodes import BinOp, Call, Node  # noqa: PLC0415
+
+    def leaf(x):
+        if isinstance(x, Node):
+            return _format_goal(x)
+        return _format_clause_term(x)
+
+    try:
+        if isinstance(goal, BinOp):
+            return f"{leaf(goal.left)} {goal.op} {leaf(goal.right)}"
+        if (isinstance(goal, Call) and not goal.kwargs
+                and dataclasses.is_dataclass(goal)):
+            return f"{goal.func}({', '.join(leaf(a) for a in goal.args)})"
+    except Exception:  # noqa: BLE001 - a listing line must not raise
+        pass
+    return str(goal)
+
+
 def _format_clause(clause):
     """Format a Clause for listing output."""
-    head_str = _format_clause_head(clause.head)
-    if clause.is_fact():
+    head, body = _fold_head_unifications(clause.head, clause.body)
+    head_str = _format_clause_head(head)
+    if not body:
         return f"{head_str}."
-    body_strs = [str(g) for g in clause.body]
+    body_strs = [_format_goal(g) for g in body]
     body = ", ".join(body_strs)
-    if len(clause.body) > 1:
+    if len(body_strs) > 1:
         return f"{head_str} <- ({body})."
     return f"{head_str} <- {body}."
 

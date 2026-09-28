@@ -22,7 +22,8 @@ They are removed in 2.0.
   found, loaded and cached the same way. Where both `name.clausal` and
   `name.seam` exist, `.clausal` wins. See [Syntax](syntax.md).
 - The clause forms: facts (`head,`), rules (`head <- body`), and test
-  clauses (`test("description") <- body`). See [Testing](testing.md).
+  clauses (`test("description") <- body`, the `test/1` predicate). See
+  [Testing](testing.md).
 - The directives documented in [Directives](directives.md): `-module`
   (including `-private` and `-hide`), `-import_from`, `-import_module`,
   `-strict_atoms`, `-implicit_atoms`, `-implicit_functors`, `-dynamic`,
@@ -233,7 +234,6 @@ which loaded before is refused, needs a major release.
 | Form | Replacement | Warning |
 |---|---|---|
 | `clausal.logic.atoms.atom('x')` (the boundary class) | `'x'`; test with `type(v) is str` or `is_atom(v)` | `ClausalAtomClassDeprecationWarning`, once per call site |
-| `Test("…") <- …` | `test("…") <- …` | `ClausalDeprecatedSpellingWarning` |
 | `-double_quotes(atom)` / `-double_quotes(chars)` | Drop it: `'x'` for a symbol, `"x"` for text | Per-module ratchet. The directive is deleted once no module needs it. |
 | TitleCase unit names (`Metre`) and the old physical-constant spellings | The lowercase / snake_case spelling (`metre`) | `ClausalDeprecatedSpellingWarning` |
 | `query(goal, variables, module)` | `solve(...)`, reading `Var.value` | `DeprecationWarning` |

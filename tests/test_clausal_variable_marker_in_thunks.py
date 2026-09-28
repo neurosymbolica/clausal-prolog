@@ -390,7 +390,8 @@ def test_the_dash_dash_block_form_bears_a_marker():
     ast.fix_missing_locations(out)
     rendered = unparse(out)
     # Stripped to the bare name and captured as a lambda parameter.
-    assert "lambda Node: f'{Node}'" in rendered, rendered
+    # (the body is the chars carrier of the f-string: ruling R2)
+    assert "lambda Node: ('$chars', f'{Node}')" in rendered, rendered
 
 
 def test_the_block_forms_marker_is_checked_like_any_other():

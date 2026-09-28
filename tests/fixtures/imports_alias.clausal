@@ -1,7 +1,7 @@
 -double_quotes(atom)
--import_from(tests.fixtures.importable_utils, [alias(helper, Hlp)])
+-import_from(tests.fixtures.importable_utils, [alias(helper, hlp)])
 
-use_alias(X, Y) <- Hlp(X, Y)
+use_alias(X, Y) <- hlp(X, Y)
 
 test("use alias 0") <- (use_alias(0, Y), Y == 0)  # nv
 test("use alias 1") <- (use_alias(1, Y), Y == 2)  # nv

@@ -337,11 +337,25 @@ def _all(goal, lm):
 
 
 def _existence_culprit(goal, arg, lm):
+    """The indicator a CALL of an unknown procedure is refused with."""
     with pytest.raises(LogicException) as exc:
         list(call(goal, arg, module=lm))
     err = cell_args(exc.value.term)[0]
     assert cell_functor(err) == "existence_error", err
     return cell_args(err)[1]
+
+
+def _undeclared_write_culprit(goal, arg, lm):
+    """The indicator an assert of an UNDECLARED target is refused with.
+    Ruling R7 (2026-09-28): ``permission_error(modify, static_procedure,
+    PI)`` -- an undeclared procedure is static (ISO 7.5.2) -- where it was
+    ``existence_error(procedure, PI)``."""
+    with pytest.raises(LogicException) as exc:
+        list(call(goal, arg, module=lm))
+    err = cell_args(exc.value.term)[0]
+    assert cell_functor(err) == "permission_error", err
+    assert cell_args(err)[:2] == ("modify", "static_procedure"), err
+    return cell_args(err)[2]
 
 
 @pytest.fixture
@@ -376,7 +390,7 @@ def test_a_plain_cell_writes_only_through_the_caller_s_namespace(clib_pair):
     lm, owner_row = _lm(host), _lm(lib).db.row("dfact", 1)
     before = list(owner_row.clauses)
     for goal in ("add_h", "add_d"):
-        culprit = _existence_culprit(goal, 11, lm)
+        culprit = _undeclared_write_culprit(goal, 11, lm)
         assert cell_args(culprit) == ("dfact", 1), (goal, culprit)
     assert owner_row.clauses == before
     assert lm.db.row("dfact", 1, create=False) is None, "written locally"

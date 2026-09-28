@@ -979,7 +979,7 @@ built positionally. Write the arguments in the declared order, ...
 ```
 
 The field names in a declaration (`point(x, y)`) are still read by
-[`vary/3`, `unbound_keys/2` and `signature/3`](keyword_preds.md). Two keyword
+[`vary/3`, `unbound_keys/2` and `signature/3`](term_inspection.md#fields-by-name). Two keyword
 spellings remain: a directive's options (`-specialize(solve, p, alias=q)`) and
 an EDCG hidden argument (`_edcg_len_in=0`).
 

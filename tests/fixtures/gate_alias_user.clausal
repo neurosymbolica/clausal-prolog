@@ -3,6 +3,6 @@
 # gate_alias_owner.
 -dynamic(bo_p/1)
 -module(gate_alias_user, [ga_add(X)])
--import_from(tests.fixtures.gate_alias_owner, [alias(bo_p, AliasS)])
+-import_from(tests.fixtures.gate_alias_owner, [alias(bo_p, alias_s)])
 
-ga_add(X) <- assertz(AliasS(X))
+ga_add(X) <- assertz(alias_s(X))

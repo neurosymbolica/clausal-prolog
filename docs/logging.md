@@ -116,7 +116,7 @@ log at an arbitrary level. `Level` is a string (`"debug"`, `"info"`, etc.) or an
 
 ### Messages and f-strings
 
-A message is a string or an atom (an f-string is a Python `str`, so an atom). Clausal's [f-string support](io.md) means interpolation works naturally:
+A message is a string or an atom (an f-string is a string, like `"..."`). Clausal's [f-string support](io.md) means interpolation works naturally:
 
 ```clausal
 --8<-- "tests/fixtures/docs/logging_sigs.txt:fstring_example"

@@ -107,7 +107,8 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--dialect", default=None,
         choices=["iso", "swi", "scryer"],
-        help="Prolog dialect (default: iso for clausal→prolog, swi for prolog→clausal).",
+        help="Prolog dialect (default: iso for clausal→prolog; for prolog→clausal, "
+             "Scryer's operator table).",
     )
     parser.add_argument(
         "--roundtrip", action="store_true",
@@ -136,7 +137,7 @@ def main(argv: list[str] | None = None) -> int:
     elif args.to and args.to in _DIALECT_FACTORIES:
         dialect = _DIALECT_FACTORIES[args.to]()
     elif direction == "prolog_to_clausal":
-        dialect = Dialect.swi()
+        dialect = Dialect.scryer_reader()
     else:
         dialect = Dialect.iso()
 

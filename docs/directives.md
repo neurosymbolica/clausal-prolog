@@ -204,7 +204,9 @@ The REPL uses this mode implicitly so interactive queries keep auto-minting.
 
 **Problem**: Construction checking is on by default (see
 [Data functors vs predicates](#data-functors-vs-predicates)): a keyword-free
-reference to an undeclared functor is a runtime `NameError`, and an over-arity
+reference to an undeclared functor is a runtime error (the ISO term
+`existence_error(procedure, F/N)`, or `type_error(evaluable, F/N)` in an
+arithmetic position; from Python it is also a `NameError`), and an over-arity
 reference to a declared functor's signature is a compile-time `SyntaxError`
 naming `functor/arity`. Some modules — prototypes, meta-programming, code that
 builds ad hoc structured data — want Prolog's traditional open-world
@@ -228,8 +230,9 @@ p(wibble(1, 2)),
 
 `wibble/2` has no declared signature anywhere; under the flag, `wibble(1, 2)`
 still compiles to the cell `("wibble", 1, 2)` instead of raising. The identical
-source without the directive is a runtime `NameError` naming `wibble` when the
-goal that references it actually runs.
+source without the directive raises `existence_error(procedure, wibble/2)`
+(a `NameError` naming `wibble` from Python) when the goal that references it
+actually runs.
 
 **Advisory, not backfilled.** A functor that IS declared, referenced at a
 different written arity, is also advisory under the flag: `point/2` declared,

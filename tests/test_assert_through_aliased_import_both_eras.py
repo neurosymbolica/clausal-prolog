@@ -115,12 +115,13 @@ def test_call_of_the_alias_cell_answers_from_the_owner(
 
 def test_an_unrelated_cell_is_still_refused(aliased):
     """The reverse lookup is by the adopted row's OWN key, so a cell naming
-    something nobody imported still gets the existence error."""
+    something nobody imported is still refused -- as the write to a static
+    procedure it is (ruling R7, 2026-09-28)."""
     _owner, user = aliased
     lm = user.__dict__["$module"]
     with pytest.raises(LogicException) as exc:
         next(call("assertz", ("gd_nothing", 1), module=lm), None)
-    assert cell_functor(cell_args(exc.value.term)[0]) == "existence_error"
+    assert cell_functor(cell_args(exc.value.term)[0]) == "permission_error"
 
 
 def test_the_reverse_spelling_refuses_to_guess_between_two_owners():

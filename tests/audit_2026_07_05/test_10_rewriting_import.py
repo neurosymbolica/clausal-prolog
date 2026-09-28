@@ -696,7 +696,7 @@ def test_guard_escapes_and_literals(tmp_path):
     e = Var()
     assert _values(("sub", [0, 1, 2, 3], e), e, module=m) == [[1, 2]]
     s = Var()
-    assert _values(("greet", chars("bob"), s), s, module=m) == ["hello bob!"]
+    assert _values(("greet", chars("bob"), s), s, module=m) == [chars("hello bob!")]  # an f-string is a string (R2)
 
 
 def test_guard_binop_structural_unify(tmp_path):

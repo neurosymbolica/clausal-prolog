@@ -740,7 +740,7 @@ class PrologLoader(_ClausalSourceLoader):
         """Translate .pl source text to .clausal source text."""
         from clausal.tools.prolog_to_clausal import prolog_to_clausal
         from clausal.tools.prolog_dialect import Dialect
-        dialect = self._dialect or Dialect.swi()
+        dialect = self._dialect or Dialect.scryer_reader()
         return prolog_to_clausal(pl_source, dialect=dialect)
 
     def source_to_code(self, data, path="<string>"):

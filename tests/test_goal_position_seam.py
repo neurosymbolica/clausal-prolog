@@ -153,7 +153,7 @@ class TestIf:
             "        return S, S2\n"
             "    return None\n"
         ))
-        assert mod.label("small") == ("permitted", "v=permitted")
+        assert mod.label("small") == ("permitted", chars("v=permitted"))  # R2: a string
 
     def test_an_unbound_export_handed_to_an_inner_seam_binds_the_live_object(self):
         # spec §7: "an unbound export handed to an inner seam through ``++``

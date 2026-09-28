@@ -254,6 +254,14 @@ def _convert_inner(goal: Any, db: Any) -> GoalOp:
         # call/N already apply, here for a bare ``p`` conjunct in a body
         # (``p()`` and ``call(p)`` were the only accepted spellings before).
         goal = nodes.Call(func=nodes.LoadName(name=goal), args=[], kwargs=[])
+    elif isinstance(goal, (nodes.LoadName, nodes.LoadAttr)):
+        # A bare NAME in goal position that is not an atom of this module: a
+        # builtin's name (``p <- nl``), an ``-import_from``'d predicate (the
+        # rewriter spells it ``lib.ask``), or a dotted ``lib.ask``.  It is the
+        # call of that 0-arity predicate, as the atom above is, and as in ISO
+        # and Scryer.  It used to reach ``_not_yet`` below and fail the load
+        # with "goal shape not yet supported (LoadName)".
+        goal = nodes.Call(func=goal, args=[], kwargs=[])
     match goal:
         # ``Or`` stays binary — nested ``Or(Or(a, b), c)`` must round-trip
         # to nested ``Alternate`` so the lowering emits the same nested

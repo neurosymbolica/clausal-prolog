@@ -103,6 +103,22 @@ class Dialect:
         )
 
     @classmethod
+    def scryer_reader(cls) -> Dialect:
+        """The dialect the ``.pl`` TRANSLATOR reads with by default (ruling
+        R11, 2026-09-28): Scryer's operator table -- ISO Table 7 plus
+        Scryer's own defaults (``+`` fy 200, ``div`` and ``rdiv`` yfx 400),
+        exactly what Scryer's toplevel reports with no library loaded
+        (``OperatorTable.scryer_builtin_default``).  It replaced SWI's table,
+        whose extra operators (``:- dynamic foo/1`` prefix forms, ``*->``,
+        ``=@=``, ``xor``, dict ``:<``) are not ISO and Scryer refuses them
+        too.  A file that needs one declares it with ``:- op/3``, as it
+        would for Scryer; ``Dialect.swi()`` is still there to pass
+        explicitly."""
+        d = cls.scryer()
+        d.operator_table = OperatorTable.scryer_builtin_default()
+        return d
+
+    @classmethod
     def scryer(cls) -> Dialect:
         return cls(
             name="scryer",

@@ -6,7 +6,7 @@ An undeclared bare atom raises the same generic message whatever its name::
       bare atom references must be one of:
         - listed in -module(...), -private([...]), -import_from(...)
         - qualified (e.g. other_module.atom)
-        - obtained via global_atom("atom", Atom)
+        - obtained via global_atom('atom', Atom)
 
 Five remedies, and for ``null`` not one of them is the right answer.  The right
 answer is ``Undefined``.  See
