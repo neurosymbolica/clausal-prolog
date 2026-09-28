@@ -207,9 +207,9 @@ def test_F003_take_while_var_element_binding(fix):
 # A09-F004 — maplist/foldl committed choice loses solutions
 # ═══════════════════════════════════════════════════════════════════════════
 
-@pytest.mark.xfail(strict=False, reason="A09-F004: maplist/3 commits to the "
-                   "first solution per element — cannot reach Y='b'")
 def test_F004_maplist_committed_choice(fix):
+    # A09-F004 closed for maplist (ruling R6, 2026-09-28): maplist/3
+    # backtracks into each call, as the prologue's call/N does.
     _, m = fix
     Y = Var()
     assert _collect(m, Y, "mlprobe", Y) == ["b"]
@@ -222,10 +222,11 @@ def test_F004_foldl_committed_choice(fix):
 
 
 def test_F004_regression_maplist_first_solution(fix):
-    """The committed-choice first solution itself is produced correctly."""
+    """The first solution comes first, and the call is backtracked into for
+    the second (it used to commit to the first)."""
     _, m = fix
     Y = Var()
-    assert _collect(m, Y, "mlfirst", Y) == [mint("a")]
+    assert _collect(m, Y, "mlfirst", Y) == [mint("a"), mint("b")]
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -784,9 +785,8 @@ def test_F022_sort_cross_type_dedup(fix):
 # A09-F025 — open-mode gaps (doc: append "works in all directions")
 # ═══════════════════════════════════════════════════════════════════════════
 
-@pytest.mark.xfail(strict=False, reason="A09-F025: append(+,-,-) yields no "
-                   "solution (no partial-list mode)")
 def test_F025_append_open_tail(fix):
+    # A09-F025 closed (2026-09-28): append([1], L2, L3) answers L3 = [1|L2].
     _, m = fix
     assert _first(m, "append", [1], Var(), Var())
 
