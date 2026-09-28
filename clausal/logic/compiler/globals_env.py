@@ -239,7 +239,7 @@ class UndeclaredFunctorError(_LogicException, NameError):
         if kind == "evaluable":
             term = type_error("evaluable", pi,
                               f"{context}: {prose}" if context else prose)
-        elif kind == "procedure" and context:
+        elif kind in ("procedure", "procedure_arg") and context:
             # RULED R7 (2026-09-28): the clause of assertz/asserta names a
             # procedure nothing declares -- ISO makes it static by default,
             # so writing it is permission_error(modify, static_procedure).
@@ -248,8 +248,9 @@ class UndeclaredFunctorError(_LogicException, NameError):
                 "modify", "static_procedure", pi,
                 f"{context}: " + (why or (
                     f"nothing declares {functor}/{arity}; declare it "
-                    f"-dynamic({functor}/{arity}) first, or set the flag "
-                    f"assert_creates_dynamic to true in this module")))
+                    f"-dynamic({functor}/{arity}) first"
+                    + (", or set the flag assert_creates_dynamic to true in "
+                       "this module" if kind == "procedure" else ""))))
         elif context:
             term = _error(("existence_error", mint("procedure"), pi),
                           f"{context}: {prose}")

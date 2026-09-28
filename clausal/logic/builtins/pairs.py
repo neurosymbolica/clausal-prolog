@@ -222,22 +222,26 @@ def _group_plain(items, trail):
     return result
 
 
+_DONE = object()
+
+
 def _group_pairs(items, tail, groups, trail):
     """Run ``group_pairs_by_key`` over a pairs list given as *items* plus an
-    open *tail* (None for a proper list).  Returns False on failure, else
-    the output tail still to be closed (and *tail* is then open)."""
+    open *tail* (None for a proper list).  Returns ``_BAD`` on failure,
+    ``_DONE`` on success over a proper list, else the output tail still to
+    be closed (and *tail* is then open)."""
     from clausal.logic.builtins.iso_compare import _iso_identical  # noqa: PLC0415
     out = groups
     i, n = 0, len(items)
     while i < n:
         parts = _pair_parts(items[i], trail)
         if parts is None:
-            return False
+            return _BAD
         key, val = parts
         vs, kvs, head = Var(), Var(), Var()
         if not (unify(out, _cons(head, kvs), trail)
                 and _unify_pair(head, key, _cons(val, vs), trail)):
-            return False
+            return _BAD
         j = i + 1
         # same_key/4: extend the group while the next pair's key is
         # identical; the first clause's head and guard are undone on failure
@@ -255,11 +259,11 @@ def _group_pairs(items, tail, groups, trail):
             trail.undo(mark)
             break
         if not unify(vs, [], trail):
-            return False
+            return _BAD
         out = kvs
         i = j
     if tail is None:
-        return unify(out, [], trail) and None
+        return _DONE if unify(out, [], trail) else _BAD
     return out
 
 
@@ -282,9 +286,9 @@ def _group_pairs_by_key__2(this_generator, _proceed, _fail, _catcher, pairs, gro
         yield (_fail, DONE)
         return
     out = _group_pairs(items, tail, groups, trail)
-    if out is None:
+    if out is _DONE:
         yield (_proceed, None)
-    elif out is not False:
+    elif out is not _BAD:
         # An open tail: the first clause ends the list here; the second adds
         # one more fresh pair, which is always a group of its own.  Groups
         # bounds the count: a proper list fixes it, a non-list refuses it.

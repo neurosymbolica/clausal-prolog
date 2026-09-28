@@ -391,3 +391,25 @@ def _scryer(goal: str) -> str:
 @pytest.mark.parametrize("goal, answer, agrees", ORACLE, ids=[g for g, _, _ in ORACLE])
 def test_scryer_oracle(scryer, goal, answer, agrees):
     assert _scryer(goal) == answer
+
+
+@pytest.mark.parametrize("flag_on", [False, True], ids=["off", "on"])
+@pytest.mark.parametrize("goal", ["add_nested_dyn", "add_nested_new"])
+def test_a_nested_undeclared_functor_is_still_refused(
+        tmp_path, monkeypatch, flag_on, goal):
+    """Only the clause's OUTERMOST functor is the procedure the flag is
+    about.  An undeclared functor inside it is refused at construction, with
+    the flag off or on, and nothing is stored (roborev job 291)."""
+    header = "-set_prolog_flag(assert_creates_dynamic, true)\n" if flag_on else ""
+    lm = _lm(_load(tmp_path, monkeypatch, f"flags_nested_{int(flag_on)}_{goal}",
+                   header + textwrap.dedent("""
+        -dynamic(dyn/1)
+        add_nested_dyn(X) <- assertz(dyn(nested_undeclared(X)))
+        add_nested_new(X) <- assertz(flags_nested_new(nested_undeclared(X)))
+    """)))
+    with pytest.raises(NameError) as info:
+        list(solve((goal, 1), lm, Trail()))
+    formal = cell_args(_deref_walk(info.value.term))[0]
+    assert formal == ("permission_error", "modify", "static_procedure",
+                      ("/", "nested_undeclared", 1))
+    assert _answers(("dyn", Var()), lm) == []

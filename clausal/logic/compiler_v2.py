@@ -855,7 +855,7 @@ def _reject_reserved_truth_names(
                 name = entry[0] if isinstance(entry, tuple) else entry
                 if isinstance(name, str):
                     note(name, f"{kind} declaration")
-        elif isinstance(item, DirectiveItem):
+        elif isinstance(item, DirectiveItem) and item.name != "set_prolog_flag":
             for functor, arity, *_ in item.specs:
                 note(functor, f"-{item.name}({functor}/{arity})")
 
@@ -2786,7 +2786,8 @@ def _predicate_functor_names(predicate_nodes: list, module_items: list) -> set:
     """
     names = {head_key(node.head)[0] for node in predicate_nodes}
     for item in module_items:
-        if isinstance(item, DirectiveItem):
+        if isinstance(item, DirectiveItem) and item.name != "set_prolog_flag":
+            # (a set_prolog_flag item's specs are (flag, value), no functor)
             names.update(functor for functor, _arity, *_ in item.specs)
         elif isinstance(item, SpecializeItem):
             names.add(item.new_name)

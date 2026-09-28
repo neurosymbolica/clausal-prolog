@@ -1234,17 +1234,29 @@ def term_to_ast_expr(
             fname = term.func.name
         else:
             fname = _dotted_name_from_loadattr(term.func)
-        arg_exprs = [
-            term_to_ast_expr(a, var_context, eval_arith=eval_arith)
-            for a in term.args
-        ]
-        kw_exprs = [
-            ast.keyword(
-                arg=kw.name,
-                value=term_to_ast_expr(kw.value, var_context, eval_arith=eval_arith),
-            )
-            for kw in (term.kwargs or [])
-        ]
+        # Only the OUTERMOST construction of an assert's clause is the
+        # procedure being written (kind "procedure": the database builtin
+        # decides, knowing the calling module's assert_creates_dynamic flag).
+        # A functor nested inside it is data, refused at construction as
+        # before (kind "procedure_arg"), whatever the flag says.
+        _outer = _CONSTRUCTION_CONTEXT.get()
+        _inner = (("procedure_arg", _outer[1])
+                  if _outer is not None and _outer[0] == "procedure" else _outer)
+        _tok = _CONSTRUCTION_CONTEXT.set(_inner)
+        try:
+            arg_exprs = [
+                term_to_ast_expr(a, var_context, eval_arith=eval_arith)
+                for a in term.args
+            ]
+            kw_exprs = [
+                ast.keyword(
+                    arg=kw.name,
+                    value=term_to_ast_expr(kw.value, var_context, eval_arith=eval_arith),
+                )
+                for kw in (term.kwargs or [])
+            ]
+        finally:
+            _CONSTRUCTION_CONTEXT.reset(_tok)
         # P3-2 Task 2 (THE FLIP): a construction of a DATA functor becomes a
         # cell literal, unconditionally — cells are the compiled
         # representation of compound data, not an opt-in.  This is the branch
