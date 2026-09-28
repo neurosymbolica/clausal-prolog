@@ -1766,8 +1766,8 @@ def _zero_arity_head_prepass(module) -> frozenset:
     STAGE 2 of the atoms-as-str flip: a 0-arity predicate referenced as a
     VALUE is the atom of its name.  ``visit_Name`` learns a functor from
     ``_seen_functors``, which is filled as heads are VISITED, so a reference
-    placed before the predicate's first clause (legal under -implicit_atoms,
-    where nothing else declares the name) fell through to the import-remap
+    placed before the predicate's first clause (legal under the old, now
+    removed, -implicit_atoms, where nothing else declares the name) fell through to the import-remap
     path and loaded the CLASS at runtime -- a value that prints like the
     atom, is not equal to it and is not a term.  This set closes the order
     gap: it depends only on the file's text.
@@ -2476,7 +2476,7 @@ class TermTransformer(NodeTransformer):
         # ``EmbedTransformer._zero_arity_head_prepass`` before any body is
         # walked -- ``_declared_functors`` only knows a head once its clause
         # has been visited, so a value reference BEFORE the first clause
-        # (under -implicit_atoms) used to fall through to the class.
+        # (under the removed -implicit_atoms) used to fall through to the class.
         transformer._zero_arity_heads = zero_arity_heads
         # Fix round 2 (O1): the SHARED list ``EmbedTransformer.visit_Module``
         # drains once the walk is over.  ``_declared_functors`` is the
@@ -8214,7 +8214,8 @@ class EmbedTransformer(NodeTransformer):
                     directive_name, directive_args, expr_stmt
                 )
             # Bare -directive at module level (no parens, no args).
-            # ``-strict_atoms`` and ``-implicit_atoms`` use this form; other
+            # ``-strict_atoms`` uses this form (as did the removed
+            # ``-implicit_atoms``, which now raises); other
             # directives all take arguments and parse as the Call form above.
             case UnaryOp(
                 op=USub(),
@@ -8668,7 +8669,9 @@ class EmbedTransformer(NodeTransformer):
         if name == "strict_atoms":
             return transformer._handle_strict_atoms_directive(args, expr_stmt)
         if name == "implicit_atoms":
-            return transformer._handle_implicit_atoms_directive(args, expr_stmt)
+            raise SyntaxError(
+                "-implicit_atoms was removed; declare atoms with "
+                "-private([...]) or quote them")
         if name == "allow_singletons":
             return transformer._handle_allow_singletons_directive(args, expr_stmt)
         if name == "constant_value":
@@ -8696,7 +8699,7 @@ class EmbedTransformer(NodeTransformer):
             f"(known directives: -module, -private, -hide, -dynamic, -discontiguous, "
             f"-table, -shallow, -import_from, -import_module, "
             f"-specialize, -edcg_acc, -edcg_pass, -edcg_pred, -translations, "
-            f"-strict_atoms, -implicit_atoms, -allow_singletons, "
+            f"-strict_atoms, -allow_singletons, "
             f"-constant_value, -constant_number_units, "
             f"-constant_number_currency, -constants_number_units, "
             f"-constants_number_currency, -implicit_functors, -double_quotes)"
@@ -9113,22 +9116,6 @@ class EmbedTransformer(NodeTransformer):
         transformer._module_items.append(StrictAtomsItem())
         return replace(Pass(), expr_stmt)
 
-    def _handle_implicit_atoms_directive(transformer, args, expr_stmt):
-        """Process ``-implicit_atoms`` directive.
-
-        Marker directive — no arguments.  Accepts the bare form
-        ``-implicit_atoms`` and the parenthesised ``-implicit_atoms()``.
-        Emits an ``ImplicitAtomsItem`` module item that opts the file into
-        loose (auto-mint) atom resolution — the inverse of ``-strict_atoms``.
-        """
-        if args:
-            raise SyntaxError(
-                "-implicit_atoms takes no arguments: use bare "
-                "`-implicit_atoms` or `-implicit_atoms()`"
-            )
-        transformer._module_items.append(ImplicitAtomsItem())
-        return replace(Pass(), expr_stmt)
-
     def _handle_implicit_functors_directive(transformer, args, expr_stmt):
         """Process ``-implicit_functors`` — P3-2 Task 6, user ruling R7.
 
@@ -9163,7 +9150,7 @@ class EmbedTransformer(NodeTransformer):
           own binding-shape rule, which this flag layers on top of rather
           than replaces.
         - **Atoms stay outside this flag's scope.**  A bare 0-arity
-          reference is governed by ``-strict_atoms``/``-implicit_atoms``
+          reference is governed by the strict-atoms rule
           exclusively; this directive opens functor CONSTRUCTION, not atom
           vocabulary, and the two mechanisms compose independently (a
           flagged module can still be ``-strict_atoms`` and reject an

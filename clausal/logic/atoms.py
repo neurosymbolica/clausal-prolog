@@ -277,7 +277,7 @@ def as_dict_key(key):
 #: Call sites ``(filename, lineno)`` that have already been told ``atom`` is
 #: deprecated -- the once-per-call-site guard, kept here rather than left to
 #: the warnings registry so it is exactly-once regardless of the consumer's
-#: filters (the house pattern: ``compiler_v2._warn_implicit_atoms_deprecated``).
+#: filters (the house pattern, as in ``compiler_v2._warn_strict_atoms_deprecated``).
 _atom_class_warned_sites: set = set()
 
 _ATOM_CLASS_DEPRECATION = (

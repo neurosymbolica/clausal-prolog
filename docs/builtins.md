@@ -533,8 +533,7 @@ To obtain an atom from **text** (a string or char list), use `atom_chars/2` or `
 
 `global_atom/2` is the reflection escape hatch for reaching a global atom by
 name when a module-local declaration or an import shadows it — and the sanctioned
-way for a strict-default file to obtain a global atom it does not list. See
-[`-implicit_atoms`](directives.md#-implicit_atoms) for the file-level opt-out.
+way for a strict-default file to obtain a global atom it does not list.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/inspection.py` (`global_atom/2`)
@@ -1136,8 +1135,8 @@ Succeeds if `X` is bound (not an unbound `Var`).
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:atom_1"
 ```
 Succeeds if `X` is an **atom**: the interned Python `str` itself. Written bare
-(`red`, declared via `-private([red, blue])`, `-module(m, [red])`, an import,
-or `-implicit_atoms`) or single-quoted (`'hello world'`, no declaration
+(`red`, declared via `-private([red, blue])`, `-module(m, [red])` or an
+import) or single-quoted (`'hello world'`, no declaration
 needed). A **string** is not an atom — use `string/1` / `is_str/1` for that —
 and neither is `[]`. From Python, build one with
 `clausal.logic.atoms.mint("red")` and read its spelling with `spelling/1`.

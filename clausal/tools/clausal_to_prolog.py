@@ -1564,7 +1564,7 @@ class _ClausalToProlog:
             operand = value.operand
             if isinstance(operand, python_ast.Call) and isinstance(operand.func, python_ast.Name):
                 return True, self._convert_directive(operand)
-            # -strict_atoms / -implicit_atoms: a parenless, argument-less
+            # -strict_atoms: a parenless, argument-less
             # directive (UnaryOp(USub(Name)), not Call) — engine-only atom-
             # resolution bookkeeping with no Prolog equivalent, same
             # legitimately-silent category as -private(...) above. 523
@@ -1646,10 +1646,10 @@ class _ClausalToProlog:
         unrecognized shape, so this does NOT fall through to the
         fail-closed net's warning. An actually-unknown bare directive
         still warns below: only the names the engine itself recognizes
-        (clausal/reflection.py's StrictAtomsDeclaration / the mutually-
-        exclusive -implicit_atoms) are exempted.
+        (clausal/reflection.py's StrictAtomsDeclaration) are exempted.
+        (-implicit_atoms was removed; the engine refuses it at load.)
         """
-        if name in ("strict_atoms", "implicit_atoms"):
+        if name == "strict_atoms":
             return None
         self._add_warning(f"-{name}")
         return None

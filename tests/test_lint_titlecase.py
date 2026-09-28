@@ -300,10 +300,10 @@ def test_injected_runtime_class_suggests_the_escape(tmp_path):
 
 
 def test_python_builtin_exception_suggests_the_escape():
-    # Transformer only, no load: loading this under ``-implicit_atoms`` would
-    # mint ``ValueError`` into the process-wide atom pool and poison every
-    # later module that reaches the builtin bare (a ``++ValueError`` catcher
-    # then evaluates to the atom).
+    # Transformer only, no load: a load that minted ``ValueError`` into the
+    # process-wide atom pool would poison every later module that reaches
+    # the builtin bare (a ``++ValueError`` catcher then evaluates to the
+    # atom), so this test never loads.
     #
     # FUNCTOR position, so still linted.  The catcher ARGUMENT spelling this
     # used to use is a TERM position and is now a variable -- see

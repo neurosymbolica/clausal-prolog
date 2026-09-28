@@ -39,57 +39,29 @@ def _load_inline_clausal(name: str, source: str):
         os.unlink(path)
 
 
-def test_implicit_atoms_mints_undeclared_bare_atom():
-    """`-implicit_atoms` opts into loose auto-accept: an undeclared bare
-    atom is accepted into the global dict (today's default behavior).
-
-    THE FLIP (spec §5.1/§5.2): the accepted value is the arity-0 CELL, and
-    the sharing claim is stated as EQUALITY -- the pool stays keyed by the
-    SPELLING.
-    """
-    assert "sad_implicit_red" not in predicate_builtins
-    source = (
-        "-implicit_atoms\n"
-        "\n"
-        "color_implicit(sad_implicit_red),\n"
-    )
-    mod = _load_inline_clausal("_sad_implicit_mints", source)
-    assert predicate_builtins["sad_implicit_red"] == mint("sad_implicit_red")
-    assert mod.sad_implicit_red == predicate_builtins["sad_implicit_red"]
-
-
-def test_implicit_atoms_parenthesised_form():
-    """`-implicit_atoms()` is accepted, same as the bare form."""
-    source = (
-        "-implicit_atoms()\n"
-        "\n"
-        "color_implicit_paren(sad_implicit_paren_blue),\n"
-    )
-    mod = _load_inline_clausal("_sad_implicit_paren", source)
-    # THE FLIP: accepted atoms are arity-0 cells.
-    assert mod.sad_implicit_paren_blue == mint("sad_implicit_paren_blue")
-
-
-def test_implicit_atoms_rejects_arguments():
-    """`-implicit_atoms(foo)` is a SyntaxError — the marker takes no args."""
-    source = "-implicit_atoms(foo)\n\nX(y),\n"
+@pytest.mark.parametrize("directive", [
+    "-implicit_atoms", "-implicit_atoms()", "-implicit_atoms(foo)",
+])
+def test_implicit_atoms_was_removed(directive):
+    """R8 (2026-09-28): ``-implicit_atoms`` was REMOVED before 1.0, not
+    deprecated.  Every spelling is a load-time SyntaxError that says what to
+    do instead, and the undeclared atom it would have minted never leaks into
+    the process-wide pool."""
+    assert "sad_removed_atom" not in predicate_builtins
+    source = f"{directive}\ncolor_removed(sad_removed_atom),\n"
     with pytest.raises(SyntaxError) as exc_info:
-        _load_inline_clausal("_sad_implicit_args", source)
-    assert "-implicit_atoms takes no arguments" in str(exc_info.value)
-
-
-def test_strict_and_implicit_mutually_exclusive():
-    """A file carrying both directives is a SyntaxError."""
-    source = (
-        "-strict_atoms\n"
-        "-implicit_atoms\n"
-        "\n"
-        "X(sad_both_atom),\n"
-    )
-    with pytest.raises(SyntaxError) as exc_info:
-        _load_inline_clausal("_sad_both", source)
+        _load_inline_clausal("_sad_implicit_removed", source)
     msg = str(exc_info.value)
-    assert "mutually exclusive" in msg
+    assert "-implicit_atoms was removed" in msg
+    assert "-private([...])" in msg and "quote" in msg
+    assert "sad_removed_atom" not in predicate_builtins
+
+
+def test_the_implicit_atoms_deprecation_machinery_is_gone():
+    """The deprecation warning class and its per-file guard went with the
+    directive: nothing is left to warn about."""
+    assert not hasattr(_compiler_v2, "ClausalImplicitAtomsDeprecationWarning")
+    assert not hasattr(_compiler_v2, "_warn_implicit_atoms_deprecated")
 
 
 def test_repl_transformer_injects_implicit_atoms():
@@ -135,16 +107,6 @@ def test_undeclared_bare_atom_raises_by_default():
     assert "sad_default_red" not in predicate_builtins
 
 
-def test_implicit_atoms_still_mints_after_flip():
-    """`-implicit_atoms` remains the loose escape hatch after the flip.
-
-    THE FLIP: accepted atoms are arity-0 cells.
-    """
-    source = "-implicit_atoms\ncolor_still(sad_still_green),\n"
-    mod = _load_inline_clausal("_sad_still_mints", source)
-    assert mod.sad_still_green == mint("sad_still_green")
-
-
 def test_strict_atoms_deprecation_warns_once_per_process():
     """`-strict_atoms` still enforces strict, and emits the deprecation
     warning at most once per process."""
@@ -159,59 +121,6 @@ def test_strict_atoms_deprecation_warns_once_per_process():
         if issubclass(w.category, ClausalStrictAtomsDeprecationWarning)
     ]
     assert len(dep) == 1
-
-
-# ── -implicit_atoms deprecation (P2 Task 8, R-P2-3) ─────────────────────────
-
-
-def test_implicit_atoms_warns_deprecated():
-    """`-implicit_atoms` still opts the file into loose atoms, and says so."""
-    from clausal.logic.compiler_v2 import ClausalImplicitAtomsDeprecationWarning
-    _compiler_v2._implicit_atoms_deprecation_files = set()   # reset guard
-    src = "-implicit_atoms\n-module(m, [ok])\nuse(loose_one),\n"
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        _load_inline_clausal("_ia_dep_warns", src)
-    dep = [w for w in caught
-           if issubclass(w.category, ClausalImplicitAtomsDeprecationWarning)]
-    assert len(dep) == 1, [str(w.message) for w in caught]
-    text = str(dep[0].message)
-    assert "-implicit_atoms" in text
-    assert "-private" in text and "-module" in text, "say what to do instead"
-
-
-def test_a_declared_only_module_does_not_warn():
-    """The mirror: the warning must fire on the DIRECTIVE, not on every load.
-
-    Without this the pin above passes for a warning that fires unconditionally,
-    which would bury every clean module in deprecation noise."""
-    from clausal.logic.compiler_v2 import ClausalImplicitAtomsDeprecationWarning
-    _compiler_v2._implicit_atoms_deprecation_files = set()
-    src = "-module(m, [ok])\n-private([declared_one])\nuse(declared_one),\n"
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        _load_inline_clausal("_ia_dep_clean", src)
-    dep = [w for w in caught
-           if issubclass(w.category, ClausalImplicitAtomsDeprecationWarning)]
-    assert dep == []
-
-
-def test_implicit_atoms_warns_once_per_FILE_not_once_per_process():
-    """Once per file: re-loading one file stays quiet, but a SECOND file that
-    still carries the directive has to be named too — a once-per-process guard
-    would hide every file after the first, which is the opposite of what a
-    migration notice is for."""
-    from clausal.logic.compiler_v2 import ClausalImplicitAtomsDeprecationWarning
-    _compiler_v2._implicit_atoms_deprecation_files = set()
-    src = "-implicit_atoms\n-module(m, [ok])\nuse(loose_two),\n"
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        _load_inline_clausal("_ia_dep_once_a", src)
-        _load_inline_clausal("_ia_dep_once_a", src)   # same file again
-        _load_inline_clausal("_ia_dep_once_b", src)   # a DIFFERENT file
-    dep = [w for w in caught
-           if issubclass(w.category, ClausalImplicitAtomsDeprecationWarning)]
-    assert len(dep) == 2, [str(w.message) for w in dep]
 
 
 def test_runtime_dict_key_intern_strict_by_default_no_pollution():
@@ -232,17 +141,6 @@ def test_runtime_dict_key_intern_strict_by_default_no_pollution():
         _load_inline_clausal("_sad_rtkey_default", source)
     # Strict by default: the eager key-intern must not have leaked the atom.
     assert "sad_rtkey_indigo" not in predicate_builtins
-
-
-def test_runtime_dict_key_intern_implicit_still_mints():
-    """`-implicit_atoms` keeps the loose runtime key-intern behaviour."""
-    assert "sad_rtkey_amber" not in predicate_builtins
-    source = (
-        "-implicit_atoms\n"
-        "read_key(V) <- (V is {sad_rtkey_amber: 7}[sad_rtkey_amber]),\n"
-    )
-    mod = _load_inline_clausal("_sad_rtkey_implicit", source)
-    assert mod.sad_rtkey_amber is predicate_builtins["sad_rtkey_amber"]
 
 
 class TestDeclarednessIsPerModuleNotProcessWide:

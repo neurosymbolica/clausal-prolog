@@ -41,7 +41,7 @@ _SRC = (
     "    eq_same_list, neq_str_list, neq_non_char_list,\n"
     "])\n"
     "-double_quotes(chars)\n"
-    "-implicit_atoms\n"
+    "-private([a, b, c])\n"
     # ── rows 1-2: already true before the fix ──
     "ground_unify <- (\"ab\" is [a, b])\n"
     "eq_self <- (\"ab\" == \"ab\")\n"

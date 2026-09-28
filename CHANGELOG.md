@@ -222,6 +222,11 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
 - `q(...)` quasi-quotation.
 - **`Test/1`** test clauses: a TitleCase name is a logic variable, so
   `Test("…") <- …` is a load-time error. Use `test/1`.
+- **The `-implicit_atoms` directive**, with its deprecation warning
+  (`ClausalImplicitAtomsDeprecationWarning`) and the
+  `tools/codemods/add_implicit_atoms.py` codemod. A file that carries it
+  does not load: `SyntaxError: -implicit_atoms was removed; declare atoms
+  with -private([...]) or quote them`.
 
 ### Fixed
 
@@ -256,6 +261,7 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
 | comparing a seam answer with `"text"` | `v == --"text"` or `to_python(v) == "text"` |
 | `"sym"` used as a symbol in a `.clausal` file | `'sym'` or bare `sym` |
 | `Test("…") <- …` | `test("…") <- …` |
+| `-implicit_atoms` | list the atoms in `-private([...])` / `-module(name, [...])`, or quote them |
 | `X := Expr` in a body | `eval_(Expr, X)` |
 | `Compound(f, args)` / `KWTerm(...)` | the cell `(f, *args)` |
 | `exc.term` read as an object (`.args`, `.functor`) | `cell_functor(exc.term)`, `cell_args(exc.term)` |

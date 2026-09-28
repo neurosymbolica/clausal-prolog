@@ -1,5 +1,6 @@
--implicit_atoms
-# Phase 2 fixture: bare reference to phase2declonly_green without importing
-# from global_atoms_decl_only_a.  Must auto-mint the global atom.
+# Phase 2 fixture: references phase2declonly_green without importing it from
+# global_atoms_decl_only_a; declares it with its own -private instead.  Atoms
+# are global by spelling, so it is the same atom as the exporter's.
+-private([phase2declonly_green])
 
 color_decl_b(phase2declonly_green),

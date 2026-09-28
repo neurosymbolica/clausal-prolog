@@ -26,7 +26,7 @@ They are removed in 2.0.
   [Testing](testing.md).
 - The directives documented in [Directives](directives.md): `-module`
   (including `-private` and `-hide`), `-import_from`, `-import_module`,
-  `-strict_atoms`, `-implicit_atoms`, `-implicit_functors`, `-dynamic`,
+  `-strict_atoms`, `-implicit_functors`, `-dynamic`,
   `-table`, `-discontiguous`, `-meta_predicate`, `-shallow`, the
   `-constant_value` / `-constant_number_units` family, `-allow_singletons`,
   `-specialize` and the EDCG directives. `-double_quotes` is **transitional**

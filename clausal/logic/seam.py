@@ -13,7 +13,7 @@ turns that node into the term the engine itself would build:
   own functor rules (declared, imported, or ``-implicit_functors``);
 * a bare name is the ATOM the host module binds it to — ``("good",)`` —
   under the host module's own atom rules (strict atoms, declarations,
-  imports, ``-implicit_atoms``);
+  imports);
 * an ALL-CAPS / leading-underscore name is a fresh logic variable, shared
   within the one ``--`` expression;
 * ``++expr`` is evaluated EAGERLY: a Python caller is building a value
@@ -47,7 +47,7 @@ def seam_term(node: Any, module_globals: dict, loose: bool = False) -> Any:
     requests for a cell: no compiler pass runs there to auto-mint bare
     atoms or declare functors, so an unbound bare name mints its atom and
     an undeclared functor builds a cell at the written arity — the same
-    open world ``-implicit_atoms`` + ``-implicit_functors`` give a file.
+    open world ``-implicit_functors`` gives a file's functors.
     A file never asks for it: its own directives decide.
     """
     import ast as _ast
@@ -93,7 +93,7 @@ def seam_term(node: Any, module_globals: dict, loose: bool = False) -> Any:
                         return mint(name)
                     raise NameError(
                         f"--: {name!r} is not bound in this module — declare "
-                        f"or import the atom, or add -implicit_atoms")
+                        f"or import the atom, or quote it")
                 cur = cur[part]
             else:
                 cur = getattr(cur, part)

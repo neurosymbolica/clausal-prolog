@@ -105,39 +105,6 @@ def _warn_strict_atoms_deprecated() -> None:
     )
 
 
-_implicit_atoms_deprecation_files: set = set()
-
-
-class ClausalImplicitAtomsDeprecationWarning(DeprecationWarning):
-    """``-implicit_atoms`` is deprecated: declare the names instead."""
-
-
-def _warn_implicit_atoms_deprecated(module_name: str) -> None:
-    """Emit the ``-implicit_atoms`` deprecation notice once per FILE.
-
-    Per file, not per process (which is what ``-strict_atoms`` does): this
-    notice asks the reader to go and EDIT something, so every file that still
-    carries the directive has to be named.  A once-per-process guard would
-    report the first and hide the rest, which is the opposite of what a
-    migration notice is for.
-
-    Guarded by a module-level set rather than the warnings-filter dedup, so
-    it is exactly-once-per-file regardless of the consumer's filters.
-    """
-    if module_name in _implicit_atoms_deprecation_files:
-        return
-    _implicit_atoms_deprecation_files.add(module_name)
-    import warnings
-    warnings.warn(
-        f"{module_name}: -implicit_atoms is deprecated (2026-09-18). "
-        "Declare the names this file mints -- list them in -private([...]) "
-        "or -module(name, [...]), or -hide them -- and delete the directive. "
-        "It is removed in the next landing. (Shown once per file.)",
-        ClausalImplicitAtomsDeprecationWarning,
-        stacklevel=2,
-    )
-
-
 def _head_field_names(module_items) -> dict:
     """The rewriter's per-functor field names for this load, keyed by NAME.
 
@@ -2616,19 +2583,14 @@ def _process_bare_atom_refs(
     implicit_mode = any(
         isinstance(item, ImplicitAtomsItem) for item in module_items
     )
-    if strict_mode and implicit_mode:
-        raise SyntaxError(
-            f"{module_name}: -strict_atoms and -implicit_atoms are mutually "
-            f"exclusive; a file may carry at most one"
-        )
-    # ── NEW in this task ──────────────────────────────────────────────
-    # Strict is the default (Python-style): undeclared bare atoms raise
-    # unless the file opts into loose auto-mint via -implicit_atoms.
+    # Strict is the rule for every SOURCE file: undeclared bare atoms raise.
+    # The loose (auto-mint) item is internal to the interactive profile (the
+    # IPython cell transformer adds it); no directive produces it -- the
+    # ``-implicit_atoms`` directive was REMOVED before 1.0 and is now a
+    # load-time SyntaxError (term_rewriting).
     effective_strict = not implicit_mode
     if strict_mode:
         _warn_strict_atoms_deprecated()
-    if implicit_mode:
-        _warn_implicit_atoms_deprecated(module_name)
     undeclared: list[str] = []
 
     for item in module_items:

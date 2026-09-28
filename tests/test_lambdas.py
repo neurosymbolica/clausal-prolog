@@ -713,8 +713,9 @@ class TestLambdaImport:
         from clausal.logic.exceptions import LogicException
         clausal_file = tmp_path / "bad_goal.clausal"
         clausal_file.write_text(
-            "-double_quotes(atom)\n-implicit_atoms\n"  # St is a mixed-case bare atom, not a logic var
+            "-double_quotes(atom)\n"
             "-module(bad_goal, [run/1])\n"
+            "-private([st])\n"  # st is a bare atom in the head, not a logic var
             "\n"
             "loc(K, V) <- (K is \"a\", V is 1)\n"
             "\n"

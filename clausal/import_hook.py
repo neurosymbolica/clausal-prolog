@@ -112,8 +112,8 @@ def _make_intern_atom(module_dict, module_items, module_name):
     be silently accepted (that would pollute ``predicate_builtins`` and
     defeat the strict check), so the helper refuses to accept a name that is
     not already available, mirroring ``compiler_v2._process_bare_atom_refs``'
-    own ``effective_strict = not implicit_mode`` rule.  Only files carrying
-    ``-implicit_atoms`` disable strict mode and allow auto-accept, so a
+    own ``effective_strict = not implicit_mode`` rule.  Only the interactive
+    profile's loose item disables strict mode and allows auto-accept, so a
     dict-key atom and a value-position atom now resolve under the *same*
     default.  (Atom keys whose atom is declared post-exec via
     ``-module``/``-private`` are a known limitation in strict files —
@@ -139,7 +139,7 @@ def _make_intern_atom(module_dict, module_items, module_name):
     from clausal.logic.compiler_v2 import _locally_declared_names
     from clausal.pythonic_ast.nodes import ImplicitAtomsDeclaration
 
-    # Strict is the default; only ``-implicit_atoms`` re-enables auto-accept.
+    # Strict is the default; only the interactive loose item re-enables auto-accept.
     # Mirrors ``compiler_v2._process_bare_atom_refs``' ``effective_strict``.
     strict = not any(
         isinstance(it, ImplicitAtomsDeclaration) for it in module_items
@@ -303,7 +303,7 @@ def _run_v2_pipeline(loader, module, module_dict, filename, recover_module_items
 # ``predicate_builtins`` — the §1b/R2 GLOBAL ATOM pool ONLY.  Starts EMPTY
 #   at process bootstrap; grows only via a legitimate atom declaration
 #   (-module/-private, ``_process_declarations``), auto-accept
-#   (-implicit_atoms, ``_process_bare_atom_refs``/``$intern_atom``), or
+#   (the interactive loose item, ``_process_bare_atom_refs``/``$intern_atom``), or
 #   ``global_atom/2``'s mint-on-demand.  This is the dict the strictness
 #   check's "already resolved" test consults.
 #

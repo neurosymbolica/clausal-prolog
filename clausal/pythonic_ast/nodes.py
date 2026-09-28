@@ -1160,19 +1160,15 @@ class StrictAtomsDeclaration(Node):
 
 @node_class
 class ImplicitAtomsDeclaration(Node):
-    """Module item: ``-implicit_atoms`` directive marker.
+    """Module item: the interactive profile's loose atom mode.
 
-    Presence in ``module_items`` opts the file into the *loose* atom
+    Presence in ``module_items`` opts the unit into the *loose* atom
     default: undeclared bare atom references auto-mint into the
-    process-wide global dict instead of raising ``NameError``.  It is the
-    inverse of ``-strict_atoms`` and the escape hatch that survives the
-    strict-by-default flip — the REPL injects it so interactive sessions
-    keep auto-minting.
-
-    Takes no arguments — its mere presence is the signal.  A file may not
-    carry both ``-implicit_atoms`` and ``-strict_atoms``;
-    ``compiler_v2._process_bare_atom_refs`` rejects that with a
-    ``SyntaxError``.
+    process-wide global dict instead of raising ``NameError``.  Only the
+    REPL / IPython cell transformer adds it (``implicit_atoms_default``), so
+    interactive sessions keep auto-minting.  No SOURCE form produces it: the
+    ``-implicit_atoms`` directive that used to was removed before 1.0 and is
+    now a load-time ``SyntaxError``.
     """
     pass
 

@@ -72,8 +72,9 @@ def _is_compiled_predicate(mod, name, arity):
 
 
 def test_bare_atoms_share_identity_across_modules():
-    """Two modules referencing bare ``phase2red`` without declaring it
-    must see the same global PredicateMeta class."""
+    """Two modules that each declare ``phase2red`` on their own (neither
+    imports it) see the same global atom: atoms are global by spelling.
+    (The fixtures auto-minted it under -implicit_atoms before R8 removed it.)"""
     mod_a = _load_fixture(
         "global_atoms_a.clausal",
         "tests.fixtures.global_atoms_a",
@@ -97,7 +98,8 @@ def test_private_shadows_global():
     """P3-1 §1b/R2 INVERSION: a module that declares
     ``-private([phase2priv_orange])`` no longer owns a distinct private
     class — atoms are global-by-spelling interned strs, so the "private"
-    declaration and a sibling's bare reference to the same name resolve to
+    declaration and a sibling's own -private declaration of the same name
+    resolve to
     the identical global object.  (Pre-pivot this pinned the opposite:
     ``mod_a.phase2priv_orange is not mod_b.phase2priv_orange``.
     ``-private`` still has its module-local-identity story rewritten by
@@ -143,7 +145,8 @@ def test_module_decl_atom_is_not_global():
     """P3-1 §1b/R2 INVERSION: a module that declares
     ``-module(M, [phase2declonly_green])`` no longer keeps a distinct local
     class.  Another module that bare-references the same name without
-    importing now resolves to the SAME global str.  (Pre-pivot this pinned
+    importing (it declares the name -private itself; before R8 it
+    auto-minted it) now resolves to the SAME global str.  (Pre-pivot this pinned
     the opposite: ``mod_a.phase2declonly_green is not
     mod_b.phase2declonly_green``.)"""
     mod_a = _load_fixture(
@@ -233,13 +236,13 @@ def test_strict_atoms_undeclared_dict_key_raises_without_polluting():
     assert "phase3strict_dictkey_violet" not in predicate_builtins
 
 
-def test_non_strict_atom_dict_key_interns():
-    """A non-strict file with a bare-atom dict key mints the atom into the
-    process-wide dict, and it is the *same* object a value-position use binds —
-    so ``{k: 1}[k]`` reads back."""
+def test_declared_atom_dict_key_interns():
+    """A declared bare-atom dict key is interned into the process-wide dict,
+    and it is the *same* object a value-position use binds — so ``{k: 1}[k]``
+    reads back.  (It used to be exercised under the removed -implicit_atoms.)"""
     assert "phase_atomkey_teal" not in predicate_builtins
     source = (
-        "-implicit_atoms\n"  # test verifies implicit (loose) atom mint behaviour
+        "-private([phase_atomkey_teal])\n"
         "read_key(V) <- (V is {phase_atomkey_teal: 7}[phase_atomkey_teal]),\n"
     )
     mod = _load_inline_clausal("_atomkey_intern_test", source)
@@ -651,20 +654,20 @@ def test_bare_atom_arrives_as_the_arity_0_cell_at_python_seam():
 
 
 def test_strictness_preserved_across_the_lowering_flip():
-    """The lowering flip changes WHAT a bare atom compiles to (the arity-0
-    cell, not a class) but not WHETHER an undeclared one is allowed:
-    strict-by-default still raises ``NameError``, and ``-implicit_atoms``
-    still lifts it -- now producing the cell rather than a minted class."""
+    """The lowering flip changes WHAT a bare atom compiles to (the atom, not a
+    class) but not WHETHER an undeclared one is allowed: strict-by-default
+    still raises ``NameError``, and a declaration lifts it."""
     with pytest.raises(NameError):
         _load_inline_clausal(
             "_atompivot_strict_still_raises",
             "seam(atompivot_undeclared_atom),\n",
         )
     mod = _load_inline_clausal(
-        "_atompivot_implicit_lifts",
-        "-implicit_atoms\n\nseam_implicit(atompivot_implicit_atom),\n",
+        "_atompivot_declared_lifts",
+        "-private([atompivot_declared_atom])\n\n"
+        "seam_declared(atompivot_declared_atom),\n",
     )
-    assert mod.atompivot_implicit_atom == mint("atompivot_implicit_atom")
+    assert mod.atompivot_declared_atom == mint("atompivot_declared_atom")
 
 
 def test_true_lowers_to_truth_value_not_atom():
