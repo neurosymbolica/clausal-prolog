@@ -92,10 +92,9 @@ DEVIATIONS = [
 
 _ALL = [(cell, want) for cell, _, want in ROWS] + DEVIATIONS
 
-# ``-implicit_functors``: a quoted arithmetic cell in source is an ordinary
-# functor construction, which a strict module must declare
-# (todo/arithmetic-cells-in-strict-source-need-a-declaration-2026-09-28.md).
-_SRC = "-allow_singletons\n-implicit_functors\n" + "".join(
+# A STRICT module: the evaluable functors are in scope everywhere, with no
+# declaration (ruling Q16, 2026-09-28: "they are builtins really").
+_SRC = "-allow_singletons\n" + "".join(
     f"g{i}(X) <- 'is'(X, {cell}),\n" for i, (cell, _) in enumerate(_ALL))
 
 

@@ -80,7 +80,7 @@ reading.**
     `X is 2 ** 3` answers the integer 8 (Scryer: 8.0) and `2 ^ -1` answers
     0.5 (Scryer: `type_error(float, 2)`); `div` maps onto the bare `//`
     (floor, numerically ISO div). It should emit the quoted cells (`'**'`,
-    `'^'`, `div`, and `'//'` in place of `prolog.TruncDiv`) -- but a quoted
-    cell in a strict module needs a functor declaration
-    (todo/arithmetic-cells-in-strict-source-need-a-declaration-2026-09-28.md),
-    so the importer change waits on that question.
+    `'^'`, `div`, and `'//'` in place of `prolog.TruncDiv`). Q16 (2026-09-28)
+    unblocked it: the quoted cells need no declaration now. NOT done on this
+    branch: the change rewrites the importer's expression emitter and its
+    golden snapshots (tests/fixtures/prolog_golden), so it is its own step.

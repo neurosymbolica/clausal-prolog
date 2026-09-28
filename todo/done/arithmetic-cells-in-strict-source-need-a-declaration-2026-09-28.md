@@ -1,7 +1,14 @@
 # A quoted arithmetic cell in source is a NameError in a strict module
 
-**Status: OPEN, needs an operator ruling. Found 2026-09-28 (arithmetic rulings
-branch). Pre-existing on main 7a615550.**
+**Status: RULED Q16 2026-09-28 ("yes, they are builtins really") and DONE on
+feat/arith-scryer-rulings-2026-09-28: the evaluable table's functors are in
+scope in every module with no declaration
+(`terms_to_ast.evaluable_functor_signature`, the fallback for a name nothing
+binds; a module's own declaration answers first). `rem` is NOT in the closed
+table, so it is not among them. `decimal/2` (an exact-number cell, not an
+evaluable functor) still needs a declaration.
+
+Was: OPEN. Found 2026-09-28. Pre-existing on main 7a615550.
 
 The rulings of 2026-09-28 make the QUOTED spelling of an operator the way to
 get Scryer's meaning in today's syntax: `'//'(-7, 2)` truncates, `'**'(2, 3)`

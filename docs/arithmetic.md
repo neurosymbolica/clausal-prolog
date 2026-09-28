@@ -95,7 +95,9 @@ runtime (`unpack(T, ['+', 1, 2])`) are both evaluable. `eval_/2`, the ISO
 `'is'`/`'=:='`/`'<'`… builtins, `==`/`!=`/`<`/`<=` (CLP(ℤ)),
 `clpq.rational/1`, `clpr.real/1` and `between/3` all accept both spellings. A
 cell evaluates through **one** table, keyed by name and arity; the table is
-closed — there is no way to register a new evaluable functor.
+closed — there is no way to register a new evaluable functor. Its functors
+are builtins: in scope in every module without a declaration
+(`'is'(X, rdiv(7, 2))`, `'is'(X, '//'(-7, 2))`), and ordinary terms as data.
 
 Operator rulings of 2026-09-28: the table is the **Scryer** meaning of each
 functor, which a quoted spelling and a runtime-built cell get. A bare operator

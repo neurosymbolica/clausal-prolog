@@ -69,14 +69,15 @@ A non-arithmetic term in an arithmetic constraint raises Scryer's clpz error
 
 ## Writing a quoted arithmetic cell
 
-A quoted operator applied to arguments is a functor construction like any
-other, so a module with strict functors must declare it (or use
-`-implicit_functors`); a cell built at runtime with `unpack/2` needs no
-declaration:
+The functors of the evaluable table (`+ - * / // div mod ** ^ rdiv` and unary
+`-`) are builtins: they are in scope in every module, strict or not, with no
+declaration, so `rdiv(7, 2)`, `'//'(A, B)` and `'^'(2, 3)` are written as they
+are in Prolog. As data, in a fact or a clause head, they are ordinary terms
+(`f(rdiv(1, 2))` holds the term `rdiv(1, 2)`); they are evaluated only where
+arithmetic is (`'is'`, `eval_`, a comparison, a constraint). A module's own
+declaration of the same spelling answers first, with its usual arity checks.
 
 ```clausal
--implicit_functors
-
 half_toward_zero(N, H) <- 'is'(H, '//'(N, 2))
 
 test("toward zero") <- half_toward_zero(-7, -3)

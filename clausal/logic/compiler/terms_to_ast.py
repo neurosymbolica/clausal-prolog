@@ -478,8 +478,36 @@ def cell_signature_for_name(
         return _spelled, tuple(cls_fields)
     fields = functor_signature_for(leaf, leaf_namespace)
     if fields is None:
+        if binding is None and "." not in name:
+            return evaluable_functor_signature(leaf, arity)
         return None
     return _functor_spelling(binding, leaf), fields
+
+
+def evaluable_functor_signature(
+    name: str, arity: "int | None" = None
+) -> "tuple[str, tuple[str, ...]] | None":
+    """``(name, fields)`` when *name* is a functor of the closed evaluable
+    table (``clausal.logic.exact_arith.EVALUABLE``: ``+ - * / // div mod **
+    ^ rdiv``) -- else None.
+
+    Ruling Q16 (2026-09-28): "they are builtins really".  Like a builtin
+    predicate's name, an evaluable functor is in scope in EVERY module, with
+    no declaration, so ``rdiv(7, 2)``, ``'//'(A, B)`` and ``'^'(2, 3)`` are
+    written in source as they are in Prolog.  It is only the FALLBACK for a
+    name nothing binds: a module's own declaration or predicate of the same
+    spelling answers first (and its usual arity errors apply).  *arity*
+    picks between ``-/1`` and ``-/2``; with none, the widest is answered and
+    ``construction_signature_for_name`` re-asks at the written arity."""
+    from clausal.logic.exact_arith import EVALUABLE  # noqa: PLC0415
+    arities = [a for (n, a) in EVALUABLE if n == name]
+    if not arities:
+        return None
+    if arity is None:
+        arity = max(arities)
+    elif arity not in arities:
+        return None
+    return name, tuple(f"arg_{i}" for i in range(arity))
 
 
 def construction_signature_for_name(

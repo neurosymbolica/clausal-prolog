@@ -1983,6 +1983,12 @@ def _resolve(x):
         if val is not None:
             return val
     if type(x) is tuple:
+        # an exact-number cell (``rdiv(7, 2)``, ``decimal(15, 1)``) is the
+        # number it denotes in a post too (ruling Q15: rdiv is exact
+        # everywhere)
+        num = exact_cell_number(x)
+        if num is not None:
+            return present_number(num)
         # an arithmetic CELL (ruling R9 A1) folds EXACTLY as its node does:
         # rewrite it, then resolve the node (``**`` is not folded, above).  A
         # data term that merely uses an arithmetic functor (``-(a, 1)``) is

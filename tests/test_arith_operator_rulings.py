@@ -122,7 +122,9 @@ BARE_ROWS = [
 @pytest.fixture(scope="module")
 def mod(tmp_path_factory):
     d = tmp_path_factory.mktemp("arith_rulings")
-    src = "-allow_singletons\n-implicit_functors\n-private([yes, no])\n" + "".join(
+    # strict functors: the evaluable functors need no declaration (Q16);
+    # decimal/2 is an exact-number cell, not an evaluable functor
+    src = "-allow_singletons\n-private([yes, no, decimal(M, S)])\n" + "".join(
         f"g{i}(X) <- ({body}),\n" for i, (body, _) in enumerate(BARE_ROWS))
     p = d / "_arith_operator_rulings.clausal"
     p.write_text(src)
@@ -157,6 +159,66 @@ def test_ne_prunes_a_zero_divisor_while_labelling(tmp_path):
     m = _load_module("_arith_rulings_ne", str(p))
     x = Var()
     assert [deref(x) for _ in solve(("g", x), m)] == [[1, 2, 4]]
+
+
+# ── Q16: the evaluable functors are builtins -- in scope, and still terms ──
+
+_STRICT_SRC = """-module({name}, [ev(N, X), fact(T), head(T, A, B), same(T), mine(X)])
+-allow_singletons
+ev(1, X) <- 'is'(X, rdiv(7, 2))
+ev(2, X) <- 'is'(X, '//'(-7, 2))
+ev(3, X) <- 'is'(X, '^'(2, 3))
+ev(4, X) <- 'is'(X, '**'(2, 3))
+ev(5, X) <- 'is'(X, div(-7, 2))
+ev(6, X) <- 'is'(X, mod(-7, 2))
+ev(7, X) <- 'is'(X, '/'(7, 2))
+ev(8, X) <- 'is'(X, '+'(1, '*'(2, '-'(5, 1))))
+ev(9, X) <- 'is'(X, '-'(5))
+ev(10, X) <- (X == rdiv(7, 2))
+fact(rdiv(1, 2)),
+fact('//'(7, 2)),
+head(rdiv(A, B), A, B),
+same(T) <- (T is '^'(2, 3))
+"""
+
+_EV_WANT = {1: Fraction(7, 2), 2: -3, 3: 8, 4: 8.0, 5: -4, 6: 1, 7: 3.5,
+            8: 9, 9: -5, 10: Fraction(7, 2)}
+
+
+@pytest.fixture(scope="module")
+def strict_mod(tmp_path_factory):
+    d = tmp_path_factory.mktemp("arith_q16")
+    name = f"_arith_q16_{next(_N)}"
+    p = d / f"{name}.clausal"
+    p.write_text(_STRICT_SRC.format(name=name))
+    return _load_module(name, str(p))
+
+
+@pytest.mark.parametrize("n", sorted(_EV_WANT))
+def test_q16_evaluable_functors_are_in_scope_in_a_strict_module(strict_mod, n):
+    x = Var()
+    got = [deref(x) for _ in solve(("ev", n, x), strict_mod)]
+    assert got == [_EV_WANT[n]] and type(got[0]) is type(_EV_WANT[n]), got
+
+
+def test_q16_as_data_and_in_a_head_they_are_just_terms(strict_mod):
+    t = Var()
+    assert [deref(t) for _ in solve(("fact", t), strict_mod)] == [
+        ("rdiv", 1, 2), ("//", 7, 2)]
+    a, b = Var(), Var()
+    assert [(deref(a), deref(b)) for _ in solve(
+        ("head", ("rdiv", 1, 2), a, b), strict_mod)] == [(1, 2)]
+    assert [deref(t) for _ in solve(("same", t), strict_mod)] == [("^", 2, 3)]
+
+
+def test_q16_a_module_declaration_of_the_spelling_answers_first(tmp_path):
+    """A module's own declaration of an evaluable spelling wins, with its
+    usual arity error: a data functor rdiv/3 makes ``rdiv(1, 2)`` too few."""
+    p = tmp_path / "_arith_q16_shadow.clausal"
+    p.write_text("-private([rdiv(A, B, C)])\n"
+                 "g(X) <- 'is'(X, rdiv(1, 2))\n")
+    with pytest.raises(SyntaxError, match=r"rdiv/3 was constructed with 2"):
+        _load_module("_arith_q16_shadow", str(p))
 
 
 # ── the seam (``--``) in Python-hosted code ─────────────────────────────────
