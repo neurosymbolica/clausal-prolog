@@ -1,8 +1,9 @@
 """Pytest plugin for .clausal test discovery and docs code-block testing.
 
-Collects .clausal files (and their ``.seam`` alias) and reports each test/1
-clause as an individual
-pytest test item:
+Collects .clausal files (and their ``.seam`` alias), and Prolog ``.pl`` files
+through the experimental Prolog importer, and reports each test/1 clause as an
+individual pytest test item (a file that fails to load or translate is one
+failing ``<load>`` item):
 
     clausal/examples/fibonacci.clausal::fib(5) = 5
 
@@ -24,7 +25,7 @@ from pathlib import Path
 
 import pytest
 
-from clausal._suffixes import CLAUSAL_SUFFIXES
+from clausal._suffixes import PROLOG_SUFFIX, SOURCE_SUFFIXES
 from clausal.testing import load_clausal_module, collect_tests, run_test
 from clausal.tools.clear_pycache import clear_pycache
 
@@ -35,6 +36,15 @@ if _fixtures_dir not in sys.path:
     sys.path.insert(0, _fixtures_dir)
 
 _docs_dir = Path(__file__).parent / "docs"
+
+# Prolog source shipped as package DATA, not tests: the toklex grammar specs
+# and the export preludes.  The plugin collects .pl files, and these do not go
+# through the .pl importer (they are read by their own tools), so collecting
+# them would report translator errors about files nobody imports.
+collect_ignore_glob = [
+    "clausal/tools/toklex/specs/*.pl",
+    "clausal/tools/prolog_preludes/*.pl",
+]
 
 # Fenced ```clausal ... ``` blocks in markdown.
 _CLAUSAL_FENCE_RE = re.compile(r"```clausal\n(.*?)```", re.DOTALL)
@@ -75,15 +85,20 @@ def _clear_pycache_before_tests():
 
 # Marker a fixture can carry to opt out of automatic .clausal collection —
 # for files that are *meant* to fail at load (diagnostic regression fixtures).
+# A .pl file spells it with Prolog's comment character.
 _NO_COLLECT_MARKER = "# clausal: no-collect"
+_NO_COLLECT_MARKER_PL = "% clausal: no-collect"
 
 
 def _opts_out_of_collection(path: Path) -> bool:
-    """True if a .clausal file carries the ``# clausal: no-collect`` marker."""
+    """True if a test file carries the no-collect marker in its first 30 lines
+    (``# clausal: no-collect``; ``% clausal: no-collect`` in a .pl file)."""
+    marker = (_NO_COLLECT_MARKER_PL if path.suffix == PROLOG_SUFFIX
+              else _NO_COLLECT_MARKER)
     try:
         with path.open(encoding="utf-8") as fh:
             for _, line in zip(range(30), fh):
-                if line.strip() == _NO_COLLECT_MARKER:
+                if line.strip() == marker:
                     return True
     except OSError:  # pragma: no cover — unreadable file, let collection try
         return False
@@ -91,7 +106,7 @@ def _opts_out_of_collection(path: Path) -> bool:
 
 
 def pytest_collect_file(parent, file_path: Path):
-    if file_path.suffix in CLAUSAL_SUFFIXES:
+    if file_path.suffix in SOURCE_SUFFIXES:
         if _opts_out_of_collection(file_path):
             return None
         return ClausalFile.from_parent(parent, path=file_path)
@@ -103,7 +118,7 @@ def pytest_collect_file(parent, file_path: Path):
             pass
 
 
-# ── .clausal file collection ──────────────────────────────────────────────────
+# ── .clausal / .seam / .pl file collection ───────────────────────────────────
 
 
 class ClausalFile(pytest.File):

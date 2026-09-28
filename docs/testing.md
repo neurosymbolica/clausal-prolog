@@ -1,6 +1,6 @@
 # Testing
 
-Clausal has two kinds of tests: Python-level pytest tests in `tests/`, and inline `test/1` clauses in `.clausal` files.
+Clausal has two kinds of tests: Python-level pytest tests in `tests/`, and inline `test/1` clauses in `.clausal` files (and in Prolog `.pl` files, through the [Prolog importer](importing_prolog.md)).
 
 ## Inline `test/1` clauses
 
@@ -33,21 +33,54 @@ test("fib(7) = 13") <- (fib(7, F), F == 13)
 Use `clausal.testing` as a command-line tool:
 
 ```bash
-# Run all .clausal files under a directory
+# Run all .clausal, .seam and .pl files under a directory
 python -m clausal.testing clausal/examples/
 
 # Run a single file
 python -m clausal.testing clausal/examples/fibonacci.clausal
 
-# Verbose output (shows individual PASS/FAIL)
+# Verbose output (shows individual PASS/FAIL and every skipped file)
 python -m clausal.testing -v clausal/examples/
 ```
 
-The exit code is 0 if all tests pass, 1 otherwise. A file that fails to load is reported as one failing `<load>` item, with the load error and its source line.
+Exit codes:
+
+| Code | Meaning |
+|---|---|
+| 0 | every collected test passed |
+| 1 | a test failed, or a file failed to load (for a `.pl` file, to translate) |
+| 2 | usage error: a path does not exist, or names a file that is not `.clausal`, `.seam` or `.pl` |
+| 5 | no tests collected (the same number as pytest's "no tests collected") |
+
+A file that fails to load is reported as one failing `<load>` item, with the load error and its source line.
+
+**An empty run fails.** A directory with no test files, or whose files hold no `test/1` clauses, exits 5, as does a single file with no `test/1` clauses: a mistyped root or a renamed extension must not read as a green run. Pass `--allow-empty` when an empty directory is genuinely expected; the run then exits 0. `--strict` (alias `--fail-on-empty`) used to opt in to failing on an empty run; that is now the default, so the flag is accepted for compatibility and changes nothing (it cannot be combined with `--allow-empty`). An empty run used to exit 1 under `--strict`; it now exits 5 either way.
+
+**Skipped files are reported.** A directory scan names the files it collected nothing from, with the reason: `unsupported suffix` (a `README.md`, a `.py` helper) or `no test/1 clauses` (a module of helpers). Up to 5 are listed in full; a longer list is one count line, and `-v` lists every file. Files under hidden directories and `__pycache__` are not reported.
+
+```text
+1 file(s) skipped (unsupported suffix: 1):
+  docs/README.md  (unsupported suffix)
+no test files (.clausal, .seam or .pl) found
+0 tests [NO TESTS] (exit 5; pass --allow-empty to accept an empty run)
+```
+
+### Prolog `.pl` test files
+
+A `.pl` file is a test file too. It is loaded through the same experimental [Prolog importer](importing_prolog.md) a `-import_from` of a `.pl` file uses, and its `test/1` clauses are the tests:
+
+```prolog
+double(X, Y) :- Y is X * 2.
+
+test('double of two is four') :- double(2, 4).
+test('append works') :- append([1], [2], [1, 2]).
+```
+
+A `.pl` file the translator rejects (a syntax error, or a construct it cannot translate, such as a cut) is a failing `<load>` item carrying the translator error -- never a skipped file. The translator keeps no source map, so a failing `.pl` test is reported without a line number, and its goals are shown in their Clausal translation.
 
 ## Running `.clausal` tests via pytest
 
-The `conftest.py` at the project root registers a pytest plugin that automatically collects `.clausal` files (and their `.seam` alias), and also every ```` ```clausal ```` block in `docs/*.md` that contains a `test/1` clause. The [import hook](import.md) handles loading and compilation. Each `test/1` clause appears as an individual pytest item:
+The `conftest.py` at the project root registers a pytest plugin that automatically collects `.clausal` files (and their `.seam` alias), Prolog `.pl` files (through the Prolog importer; a file that does not translate is one failing `<load>` item), and also every ```` ```clausal ```` block in `docs/*.md` that contains a `test/1` clause. The [import hook](import.md) handles loading and compilation. Each `test/1` clause appears as an individual pytest item:
 
 ```bash
 python -m pytest clausal/examples/fibonacci.clausal -v
@@ -59,7 +92,7 @@ Output looks like:
 --8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:test_output"
 ```
 
-This means `.clausal` tests and Python tests can run together in one `pytest` invocation. Imported Prolog `.pl` files with `test/1` clauses can also be tested — the spelling is preserved across the translation (a Prolog `test/1` clause stays `test/1`, as every predicate name does), so nothing about the imported file is deprecated. See [Importing Prolog](importing_prolog.md).
+This means `.clausal` tests and Python tests can run together in one `pytest` invocation. A test-data file that is *meant* not to be collected (a fixture that fails to load on purpose) carries the line `# clausal: no-collect` within its first 30 lines -- `% clausal: no-collect` in a `.pl` file. Prolog `.pl` files with `test/1` clauses are collected and run like `.clausal` files -- the spelling is preserved across the translation (a Prolog `test/1` clause stays `test/1`, as every predicate name does), so nothing about the imported file is deprecated. See [Importing Prolog](importing_prolog.md).
 
 ## Running Python tests
 
