@@ -211,3 +211,45 @@ def test_v1_non_ground_in_a_clp_post_is_the_clpz_domain_error(v1_mod, tmp_path):
     got = _engine_answers(mod, "r0", 3)
     assert len(got) == 1 and got[0].startswith(
         "error(domain_error(clpz_expression,max(_,3))"), got
+
+
+# ── Two open partial lists unify (F030) ────────────────────────────────────
+#
+# ``[1|T1] = [H|T2]`` binds ``H = 1, T1 = T2``.  Two open SegLists used to
+# fail outright -- in plain unification, in a body ``is`` against a star
+# pattern, and in a clause HEAD ``[H, *T]`` called with a partial list (the
+# C list-pattern matcher).
+
+_PL_FACTS = "-allow_singletons\nhp([H, *T], H, T),\n"
+
+PL_ROWS = [
+    ("two partials", "L is [1, *_], L is [H, *_], R is H",
+     "L = [1|_], L = [H|_], R = H", 3, ["1"]),
+    ("tails meet", "L is [1, *T], M is [H, *U], L is M, R is [H, T, U]",
+     "L = [1|T], M = [H|U], L = M, R = [H, T, U]", 3, ["[1,_1,_1]"]),
+    ("longer prefix", "[1, 2, *A] is [H, *B], R is [H, A, B]",
+     "[1, 2|A] = [H|B], R = [H, A, B]", 3, ["[1,_1,[2|_1]]"]),
+    ("mismatch", "['a', *_] is ['b', *_], R is 1",
+     "[a|_] = [b|_], R = 1", 3, []),
+    ("head pattern", "L is [1, 2, *_], hp(L, H, T), R is [H, T]",
+     "L = [1, 2|_], L = [H|T], R = [H, T]", 3, ["[1,[2|_]]"]),
+    ("head pattern short", "L is [1, *_], hp(L, H, T), R is [H, T]",
+     "L = [1|_], L = [H|T], R = [H, T]", 3, ["[1,_]"]),
+]
+
+
+@pytest.fixture(scope="module")
+def pl_mod(tmp_path_factory):
+    return _load_seam(tmp_path_factory.mktemp("pl"), "_iso_ans_pl",
+                      _PL_FACTS, PL_ROWS)
+
+
+@pytest.mark.parametrize("i", range(len(PL_ROWS)), ids=[r[0] for r in PL_ROWS])
+def test_partial_lists_engine(pl_mod, i):
+    assert _engine_answers(pl_mod, f"r{i}", PL_ROWS[i][3]) == PL_ROWS[i][4]
+
+
+def test_partial_lists_oracle(scryer):
+    del scryer
+    got = _scryer_answers("", [(r[2], r[3]) for r in PL_ROWS])
+    assert got == [r[4] for r in PL_ROWS]

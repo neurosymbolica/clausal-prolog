@@ -434,6 +434,81 @@ def _walked_nil(w) -> bool:
 # ordinary list comparison, not by type mismatch).
 
 
+# ── Two OPEN SegLists (F030) ───────────────────────────────────────────────
+#
+# ISO unifies two partial lists element by element: ``[1|T1] = [H|T2]`` binds
+# ``H = 1, T1 = T2``.  Two open SegLists used to answer False outright (the
+# SegList-vs-SegList arm was NotImplemented), so ``L is [1, *_], L is [H, *_]``
+# and a head pattern ``p([H, *T])`` called with ``[1, *_]`` both failed.
+#
+# Handled here: pair the elements of the two leading concrete runs, then
+# finish with the one case unification decides without search -- a side whose
+# remainder is a SINGLE hole takes the other side's remainder, and an empty
+# remainder empties every hole on the other side.  That covers every pair of
+# ISO partial lists (a concrete prefix and one tail hole) and any Clausal
+# SegList meeting one.  Two remainders that both open with a hole and go on
+# (``[*A, 1]`` against ``[*B, 2]``) are ambiguous -- there is no single most
+# general unifier -- and stay unhandled (NotImplemented), as before.
+
+
+def _seglist_tokens(walked) -> list:
+    """The walked SegList as a flat token list: ``(False, element)`` for an
+    element, ``(True, var)`` for a hole."""
+    out: list = []
+    for seg in walked.segments:
+        if isinstance(seg, ConcreteSeg):
+            out.extend((False, e) for e in seg.elements)
+        else:
+            out.append((True, seg.var))
+    return out
+
+
+def _seglist_from_tokens(tokens):
+    """The list term *tokens* spells: a hole alone is its variable, no hole
+    is a plain list, anything else a SegList."""
+    if len(tokens) == 1 and tokens[0][0]:
+        return tokens[0][1]
+    if not any(is_hole for is_hole, _ in tokens):
+        return [x for _, x in tokens]
+    segs: list = []
+    for is_hole, x in tokens:
+        if is_hole:
+            segs.append(VarSeg(x))
+        elif segs and isinstance(segs[-1], ConcreteSeg):
+            segs[-1].elements.append(x)
+        else:
+            segs.append(ConcreteSeg([x]))
+    return SegList(segs)
+
+
+def _unify_open_seglists(a, b, trail):
+    """Unify two walked, non-ground SegLists; NotImplemented when the pair is
+    ambiguous (see the block comment above)."""
+    from .logic.variables import unify, deref
+    ta, tb = _seglist_tokens(a), _seglist_tokens(b)
+    i = 0
+    n = min(len(ta), len(tb))
+    while i < n and not ta[i][0] and not tb[i][0]:
+        if not unify(ta[i][1], tb[i][1], trail):
+            return False
+        i += 1
+    ra, rb = ta[i:], tb[i:]
+    for one, other in ((ra, rb), (rb, ra)):
+        if len(one) == 1 and one[0][0]:
+            hole = deref(one[0][1])
+            # ``[*A]`` against ``[1, *A]`` would make A cyclic; ISO without
+            # the occurs check builds a rational tree, which no walk here can
+            # finish, so it fails instead.
+            if any(h and deref(v) is hole for h, v in other) and len(other) > 1:
+                return False
+            return unify(one[0][1], _seglist_from_tokens(other), trail)
+        if not one:
+            if not all(h for h, _ in other):
+                return False
+            return all(unify(v, [], trail) for _, v in other)
+    return NotImplemented
+
+
 class SegList:
     """A first-class term representing a list with variable-length holes.
 
@@ -690,7 +765,12 @@ class SegList:
             return _drive_seg_unify(self._unify_gens, walked, other, trail,
                                     concrete_len, _apply_seglist_split)
         if isinstance(other, SegList):
-            return NotImplemented
+            walked = self._walk_raw()
+            other_walked = other._walk_raw()
+            if not isinstance(walked, SegList) or not isinstance(other_walked, SegList):
+                # One side walks to a plain list: the list arm above decides.
+                return unify(walked, other_walked, trail)
+            return _unify_open_seglists(walked, other_walked, trail)
         return NotImplemented
 
     # ── sequence protocol (partial-aware) ────────────────────────────────────
