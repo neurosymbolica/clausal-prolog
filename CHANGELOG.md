@@ -56,6 +56,13 @@ since 0.4.0 finish three moves:
   is not arithmetic, and raises `instantiation_error` for an unbound
   operand. A Python `str` reached through a variable is an atom there and
   raises; write `X is ++(expr)` to evaluate Python.
+- **A pair is `Key-Value`, as in Scryer's `library(pairs)`.**
+  `pairs_keys_values/3`, `pairs_keys/2`, `pairs_values/2` and
+  `group_pairs_by_key/2` take and build `'-'(K, V)` pairs instead of
+  `[K, V]` lists (a `[K, V]` element now fails), and follow Scryer's
+  definitions in every mode. `group_pairs_by_key/2` groups only ADJACENT
+  pairs with identical keys and returns `K-Values` groups: sort first to
+  collect every occurrence of a key. See [docs/pairs.md](docs/pairs.md).
 - **`clausal.__all__` is smaller.** `make_predicate` and
   `MakePredicateRetiredError` are gone. `Database`, `Clause`,
   `structural_unify` and `get_builtin_class` are internal and no longer
@@ -261,6 +268,7 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
 | comparing a seam answer with `"text"` | `v == --"text"` or `to_python(v) == "text"` |
 | `"sym"` used as a symbol in a `.clausal` file | `'sym'` or bare `sym` |
 | `Test("…") <- …` | `test("…") <- …` |
+| `[K, V]` pairs for `pairs_*` / `group_pairs_by_key` | `'-'(K, V)` |
 | `-implicit_atoms` | list the atoms in `-private([...])` / `-module(name, [...])`, or quote them |
 | `X := Expr` in a body | `eval_(Expr, X)` |
 | `Compound(f, args)` / `KWTerm(...)` | the cell `(f, *args)` |

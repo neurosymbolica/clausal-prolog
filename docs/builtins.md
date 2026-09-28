@@ -1947,7 +1947,7 @@ Split `List` by separator `Sep` into sublists (`Parts`). In join mode, interleav
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:pairs_keys_values_3"
 ```
-Relate a list of `[K, V]` pairs to separate `Keys` and `Values` lists. Works in both directions.
+Relate a list of `Key-Value` pairs to separate `Keys` and `Values` lists, as in Scryer's `library(pairs)`. Works in every direction; a pair it builds is the cell `'-'(K, V)`. A non-list, or an element that is not a pair, fails (no error). See [Pairs](pairs.md).
 
 ??? info "Implementation & tests"
     **Clausal tests:** `tests/fixtures/builtins_lists.clausal`
@@ -1959,7 +1959,7 @@ Relate a list of `[K, V]` pairs to separate `Keys` and `Values` lists. Works in 
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:pairs_keys_2"
 ```
-Extract the key (first element) from each pair.
+The keys of a list of `Key-Value` pairs: `pairs_keys_values(Pairs, Keys, _)`.
 
 ??? info "Implementation & tests"
     **Clausal tests:** `tests/fixtures/builtins_lists.clausal`
@@ -1971,7 +1971,7 @@ Extract the key (first element) from each pair.
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:pairs_values_2"
 ```
-Extract the value (second element) from each pair.
+The values of a list of `Key-Value` pairs: `pairs_keys_values(Pairs, _, Values)`.
 
 ??? info "Implementation & tests"
     **Clausal tests:** `tests/fixtures/builtins_lists.clausal`
@@ -1983,7 +1983,7 @@ Extract the value (second element) from each pair.
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:group_pairs_by_key_2"
 ```
-Group a list of `[Key, Value]` pairs by key. Groups is a list of `[Key, Values]` where Values collects all values for that key. Order is preserved (first occurrence of key determines group order).
+Group **adjacent** `Key-Value` pairs whose keys are identical (`==`), as in Scryer's `library(pairs)`. Groups is a list of `Key-Values`. It does not sort: sort the pairs first (`msort/2`) to collect every occurrence of a key into one group.
 
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:group_pairs_by_key_2_ex2"

@@ -671,8 +671,8 @@ group_pairs_by_key(+Pairs, -Groups)
 --8<-- [end:group_pairs_by_key_2]
 
 --8<-- [start:group_pairs_by_key_2_ex2]
-group_pairs_by_key([['a', 1], ['b', 2], ['a', 3]], GROUPS)
-% GROUPS = [['a', [1, 3]], ['b', [2]]]
+group_pairs_by_key([a-1, a-3, b-2], GROUPS)
+% GROUPS = [a-[1, 3], b-[2]]   (adjacent pairs only: [a-1, b-2, a-3] gives three groups)
 --8<-- [end:group_pairs_by_key_2_ex2]
 
 --8<-- [start:numlist_3]
