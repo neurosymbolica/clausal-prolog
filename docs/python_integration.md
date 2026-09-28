@@ -694,6 +694,40 @@ iso_date(Y, M, D, S) <- (
 
 ---
 
+## Listing the atoms a module declares: `declared_atoms`
+
+`clausal.declared_atoms(module_or_package)` answers which atom names a
+module's own files declare: the names in each file's `-module(Name, [...])`
+export list and `-private([...])` list. It returns a `frozenset` of `str`.
+
+```python
+import clausal
+import shapes                          # a package: shapes/__init__.clausal,
+import shapes.colours, shapes.forms    # shapes/colours.clausal, shapes/forms.clausal
+
+clausal.declared_atoms("shapes")       # frozenset({'red', 'green', 'circle', ...})
+clausal.declared_atoms(shapes.forms)   # just forms.clausal's declarations
+```
+
+- **An imported atom is not included.** An atom a file gets through
+  `-import_from` is bound in its namespace, but the file did not declare it;
+  the module that declares it does. A file that names an imported atom in
+  its own `-module` list re-exports it, and that counts as a declaration.
+- **The answer does not depend on import order.** It reads each file's
+  own declaration record, not the module namespace (which also holds
+  predicates, builtins and imported names) and not the process-wide atom
+  pool.
+- **A package counts its loaded submodules.** For a package the answer is
+  the union over the package's own `__init__` and every submodule already in
+  `sys.modules` whose file is under the package directory. It never imports
+  a submodule: asking a question must not run module bodies. Import the
+  submodules you want counted first.
+- The argument is an imported module, a `Module`, or a dotted name. A name
+  is looked up in `sys.modules` the way `module=` is, and one that is not
+  loaded raises `existence_error(module, …)`.
+
+---
+
 ## Using `Module` Directly
 
 For tests or programmatic use without the [import hook](import.md), load a

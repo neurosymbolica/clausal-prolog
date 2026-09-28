@@ -2659,6 +2659,7 @@ def _diagnostic_repeats(result: TestResult, rest: list[str]) -> bool:
 SKIP_UNSUPPORTED = "unsupported suffix"
 SKIP_NO_TESTS = "no test/1 clauses"
 SKIP_NO_COLLECT = "no-collect marker"
+SKIP_CONFTEST_IGNORE = "ignored by conftest.py"
 
 #: A test-file-typed file that is DATA, not tests (a fixture meant to fail at
 #: load, a grammar spec), opts out of collection by carrying this line within
@@ -2700,6 +2701,96 @@ def _is_scan_noise(path: Path, root: Path) -> bool:
     return any(part.startswith(".") or part == "__pycache__" for part in parts)
 
 
+def _conftest_ignores(directory: Path) -> tuple[list[Path], list[str]]:
+    """The ``collect_ignore`` paths and ``collect_ignore_glob`` patterns a
+    ``conftest.py`` in *directory* gives the pytest plugin, anchored at
+    *directory* the way pytest anchors them.
+
+    Read, never executed: only a top-level ``x = [...]``, ``x: T = [...]``
+    or ``x += [...]`` with a LITERAL list (or tuple) is understood, via
+    ``ast.literal_eval``.  Running a conftest to
+    compute its lists would import pytest and whatever else it imports into a
+    CLI run that does not use pytest; every in-repo conftest that sets these
+    names sets them to literals.  A computed value is not read (that
+    conftest's exclusions then apply under pytest only).
+    """
+    conftest = directory / "conftest.py"
+    if not conftest.is_file():
+        return [], []
+    import ast  # noqa: PLC0415 -- only a directory scan with a conftest needs it
+    try:
+        tree = ast.parse(conftest.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, SyntaxError, ValueError):
+        return [], []
+    lists: dict[str, list[str]] = {"collect_ignore": [],
+                                   "collect_ignore_glob": []}
+    for node in tree.body:
+        # ``x = [...]``, ``x: list[str] = [...]`` and ``x += [...]``, at top
+        # level; anything else (a conditional append, a computed value) is
+        # not read.
+        if isinstance(node, ast.Assign) and len(node.targets) == 1:
+            target, extend = node.targets[0], False
+        elif isinstance(node, ast.AnnAssign) and node.value is not None:
+            target, extend = node.target, False
+        elif isinstance(node, ast.AugAssign) and isinstance(node.op, ast.Add):
+            target, extend = node.target, True
+        else:
+            continue
+        if not (isinstance(target, ast.Name) and target.id in lists):
+            continue
+        try:
+            value = ast.literal_eval(node.value)
+        except (ValueError, TypeError, SyntaxError, MemoryError,
+                RecursionError):
+            continue
+        if not isinstance(value, (list, tuple)):
+            continue
+        entries = [v for v in value if isinstance(v, str)]
+        if extend:
+            lists[target.id].extend(entries)
+        else:
+            lists[target.id] = entries
+    return ([directory / e for e in lists["collect_ignore"]],
+            [str(directory / e) for e in lists["collect_ignore_glob"]])
+
+
+def _ignored_by_conftests(path: Path, root: Path,
+                          cache: dict | None = None) -> bool:
+    """True when a ``conftest.py`` at or below *root*, in *path*'s directory
+    or one of its ancestors, excludes *path* from pytest collection.
+
+    Pytest's rules: a ``collect_ignore`` entry names a file or directory
+    relative to its conftest (a directory excludes everything under it); a
+    ``collect_ignore_glob`` pattern is joined to the conftest's directory and
+    matched with ``fnmatch`` against the full path (so ``*`` crosses ``/``),
+    and a match on a directory excludes everything under it too.
+
+    *cache* (directory -> parsed lists) spares re-reading one conftest per
+    file of a scan.
+    """
+    import fnmatch  # noqa: PLC0415
+
+    if cache is None:
+        cache = {}
+
+    directory = path.parent
+    candidates = [path]
+    while True:
+        if directory not in cache:
+            cache[directory] = _conftest_ignores(directory)
+        paths, globs = cache[directory]
+        for candidate in candidates:
+            if any(candidate == ignored for ignored in paths):
+                return True
+            text = str(candidate)
+            if any(fnmatch.fnmatch(text, pattern) for pattern in globs):
+                return True
+        if directory == root or directory.parent == directory:
+            return False
+        candidates.append(directory)
+        directory = directory.parent
+
+
 def discover_clausal_files(
     roots: list[str | Path],
     skipped: list[tuple[Path, str]] | None = None,
@@ -2711,15 +2802,25 @@ def discover_clausal_files(
     rather than one extension after the other.
 
     A test-typed file carrying the no-collect marker
-    (:func:`opts_out_of_collection`) is not yielded.
+    (:func:`opts_out_of_collection`) is not yielded.  Nor, in a DIRECTORY
+    scan, is a file a ``conftest.py`` at or below that directory excludes
+    through ``collect_ignore``/``collect_ignore_glob``
+    (:func:`_ignored_by_conftests`), so the CLI and the pytest plugin skip
+    the same files.  As in pytest, a file named explicitly as a root is
+    not subject to the conftest lists.
 
     When *skipped* is a list, every other file the scan passes over is
     appended to it as ``(path, reason)`` — except files under a hidden
     directory or ``__pycache__``, which are noise, not candidates.
     """
-    def classify(p: Path) -> str | None:
+    conftest_cache: dict = {}
+
+    def classify(p: Path, scan_root: Path | None = None) -> str | None:
         if p.suffix not in TEST_SUFFIXES:
             return SKIP_UNSUPPORTED
+        if (scan_root is not None
+                and _ignored_by_conftests(p, scan_root, conftest_cache)):
+            return SKIP_CONFTEST_IGNORE
         if opts_out_of_collection(p):
             return SKIP_NO_COLLECT
         return None
@@ -2735,7 +2836,7 @@ def discover_clausal_files(
         elif root.is_dir():
             files = sorted(p for p in root.rglob("*") if p.is_file())
             for p in files:
-                reason = classify(p)
+                reason = classify(p, root)
                 if reason is None:
                     yield p
                 elif skipped is not None and not _is_scan_noise(p, root):

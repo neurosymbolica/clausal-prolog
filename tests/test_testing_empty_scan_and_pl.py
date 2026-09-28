@@ -298,3 +298,88 @@ def test_plugin_honours_the_prolog_no_collect_marker(tmp_path):
     out = proc.stdout + proc.stderr
     assert proc.returncode == 0, out
     assert "1 passed" in out, out
+
+
+# ── The CLI honours a conftest's collect_ignore lists ────────────────────────
+
+
+def test_cli_skips_the_golden_translator_inputs():
+    """The golden directory's conftest excludes its .pl inputs and .clausal
+    snapshots from the pytest plugin; the CLI skips the same files, so the
+    directory is an empty scan, not a run of failing loads."""
+    rc = main([str(REPO_ROOT / "tests" / "fixtures" / "prolog_golden")])
+    assert rc == EXIT_NO_TESTS
+
+
+def test_cli_honours_conftest_collect_ignore_glob(capsys, tmp_path):
+    (tmp_path / "ok.clausal").write_text(PASSING_CLAUSAL)
+    sub = tmp_path / "golden"
+    sub.mkdir()
+    (sub / "conftest.py").write_text('collect_ignore_glob = ["*.pl"]\n')
+    (sub / "input.pl").write_text(BROKEN_PL)
+    (sub / "kept.clausal").write_text(PASSING_CLAUSAL)
+    rc, out, _ = _run(capsys, ["-v", str(tmp_path)])
+    assert rc == EXIT_OK, out
+    assert "input.pl  (ignored by conftest.py)" in out, out
+    assert "2 passed, 0 failed [PASSED]" in out, out
+
+
+def test_cli_honours_conftest_collect_ignore_paths(capsys, tmp_path):
+    (tmp_path / "conftest.py").write_text(
+        'collect_ignore = ["broken.clausal", "data"]\n')
+    (tmp_path / "ok.clausal").write_text(PASSING_CLAUSAL)
+    (tmp_path / "broken.clausal").write_text("this is not clausal (\n")
+    (tmp_path / "data").mkdir()
+    (tmp_path / "data" / "deep.pl").write_text(BROKEN_PL)
+    rc, out, _ = _run(capsys, ["-v", str(tmp_path)])
+    assert rc == EXIT_OK, out
+    assert "broken.clausal  (ignored by conftest.py)" in out, out
+    assert "deep.pl  (ignored by conftest.py)" in out, out
+    assert "1 passed, 0 failed [PASSED]" in out, out
+
+
+def test_annotated_and_extended_conftest_lists_are_read(capsys, tmp_path):
+    (tmp_path / "conftest.py").write_text(
+        'collect_ignore_glob: list[str] = ["*.pl"]\n'
+        'collect_ignore = []\n'
+        'collect_ignore += ["broken.clausal"]\n')
+    (tmp_path / "ok.clausal").write_text(PASSING_CLAUSAL)
+    (tmp_path / "broken.clausal").write_text("this is not clausal (\n")
+    (tmp_path / "input.pl").write_text(BROKEN_PL)
+    rc, out, _ = _run(capsys, ["-v", str(tmp_path)])
+    assert rc == EXIT_OK, out
+    assert "broken.clausal  (ignored by conftest.py)" in out, out
+    assert "input.pl  (ignored by conftest.py)" in out, out
+
+
+def test_a_computed_conftest_list_is_not_executed(capsys, tmp_path):
+    """The CLI reads literal lists only; it never runs a conftest."""
+    (tmp_path / "conftest.py").write_text(
+        'raise SystemExit("executed")\n'
+        'collect_ignore_glob = ["*" + ".pl"]\n')
+    (tmp_path / "ok.clausal").write_text(PASSING_CLAUSAL)
+    (tmp_path / "input.pl").write_text(BROKEN_PL)
+    rc, out, _ = _run(capsys, [str(tmp_path)])
+    assert rc == EXIT_TESTS_FAILED, out
+    assert "input.pl" in out, out
+
+
+def test_a_file_named_explicitly_is_not_conftest_ignored(capsys, tmp_path):
+    """As in pytest, an explicit path argument is collected even when a
+    conftest list covers it."""
+    (tmp_path / "conftest.py").write_text('collect_ignore_glob = ["*.clausal"]\n')
+    target = tmp_path / "ok.clausal"
+    target.write_text(PASSING_CLAUSAL)
+    rc, out, _ = _run(capsys, [str(target)])
+    assert rc == EXIT_OK, out
+
+
+@pytest.mark.parametrize("rel", [
+    "clausal/tools/toklex/specs/clausal.toklex.pl",
+    "clausal/tools/toklex/specs/iso.toklex.pl",
+    "clausal/tools/prolog_preludes/clausal_constants_scryer.pl",
+    "clausal/tools/prolog_preludes/clausal_constants_trealla.pl",
+])
+def test_package_data_prolog_files_opt_out(rel):
+    from clausal.testing import opts_out_of_collection
+    assert opts_out_of_collection(REPO_ROOT / rel)

@@ -1,3 +1,4 @@
+% clausal: no-collect
 % iso.toklex.pl — ISO Prolog token layer, matching clausal/tools/prolog_tokenizer.py
 % dialect choices: '_' digit separators, lenient unknown escapes, 1e5 floats,
 % nested block comments (nesting is a driver flag, not a spec change).

@@ -8903,9 +8903,13 @@ class EmbedTransformer(NodeTransformer):
             statements.append(
                 _make_predicate_decl_ast(functor, field_names, expr_stmt)
             )
-        transformer._module_items.append(
-            DirectiveItem(name="predicate_export", specs=[(functor, arity)])
-        )
+        # The entry's own location rides on the item, so a load-time lint
+        # about the entry (compiler_v2's export-arity check) can point at it.
+        item = DirectiveItem(name="predicate_export", specs=[(functor, arity)])
+        if getattr(entry_node, "lineno", None) is not None:
+            item.position = (entry_node.lineno, entry_node.col_offset,
+                             entry_node.end_lineno, entry_node.end_col_offset)
+        transformer._module_items.append(item)
 
     def _handle_module_directive(transformer, args, expr_stmt):
         """Process ``-module(Name, [export1(A,B), export2(X,Y)])`` directive.

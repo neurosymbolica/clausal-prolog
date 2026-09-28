@@ -191,6 +191,10 @@ def compile_module(
     #    the atom foo beside a predicate foo/N).
     _warn_atom_exports_defined_as_predicates(
         module_items, predicate_nodes, module_name)
+    #    ... and on a name/N export entry whose arity looks like a typo
+    #    (ruling 2026-09-29: a warning; a clause-less name/N is legal).
+    _warn_export_arity_mismatches(
+        module_items, predicate_nodes, module_name, module_dict)
 
     # ── Step 3: Process module/private declarations ──────────────────────
     #    Needs to know which declared functors are PREDICATES (P3-2 Task 2 /
@@ -674,22 +678,23 @@ def _imported_reference(mod, orig_name: str, value):
     Post-pivot a declared atom binds its own interned spelling, so the two
     normally coincide.  They come apart for exactly one shape: the owner
     declares the name in its ``-module``/``-private`` list AND writes 0-arity
-    clauses for it, so the clause block's ``PredicateMeta`` wins the binding
+    clauses for it, so the clause block's predicate handle wins the binding
     (``_process_declarations``' don't-clobber guard).  The owner's own
     lowering still answers such a reference with the str — its ``-module``
-    list is in front of it — and the importer used to answer with the CLASS,
-    so a dict key written by the owner and read by the importer silently
-    missed.  ``DECLARED_ATOMS_KEY`` is what lets the importer answer the way
+    list is in front of it — and the importer used to answer with the
+    predicate object, so a dict key written by the owner and read by the
+    importer silently missed.  ``DECLARED_ATOMS_KEY`` is what lets the importer answer the way
     the owner does.
 
     The declaration is the authority, not the presence of /0 clauses: a name
     with 0-arity clauses that the owner never declared as an atom is a
-    predicate, and stays the class.  A DUAL declaration (``-module(m, [dual,
-    dual(G)])``) is a functor too — its class carries fields — so only a
-    zero-field class is answered with the spelling.
+    predicate, and stays the predicate handle.  A DUAL declaration
+    (``-module(m, [dual, dual(G)])``) is a functor too — its handle carries
+    fields (``field_names_for``) — so only a zero-field handle is answered
+    with the spelling.
 
     The module ATTRIBUTE (``mod.name`` from Python, and this file's own bare
-    local binding) is untouched: it keeps the predicate class, so ``call/N``
+    local binding) is untouched: it keeps the predicate handle, so ``call/N``
     and ``assertz`` still find the /0 predicate through the namespace (see
     ``higher_order._namespace_dispatch`` → ``database_ops._find_pred_cls``).
     """
@@ -2877,6 +2882,87 @@ def _warn_atom_exports_defined_as_predicates(module_items: list,
             f"there for conformance, or rename one of the two; to export the "
             f"predicate, write {export} in the export list instead of "
             f"`{name}`."), stacklevel=2)
+
+
+def _warn_export_arity_mismatches(module_items: list, predicate_nodes: list,
+                                  module_name: str,
+                                  module_dict: dict | None) -> None:
+    """Warn when a ``name/N`` export entry names an arity nothing here
+    defines or declares, while ``name`` HAS clauses at another arity --
+    ``-module(m, [base/9])`` over ``base/2`` clauses.  See
+    ``ClausalExportArityMismatchWarning``.
+
+    What counts as defining or declaring ``name/N``: a clause (after term
+    and goal expansion, so a DCG rule counts at its translated arity), a
+    ``-dynamic``/``-table``/``-discontiguous``/``-shallow``/
+    ``-meta_predicate`` spec, or a field-carrying export entry of that
+    arity.  A ``-specialize`` alias of the name counts at every arity (its
+    arity is not known here).  Only CLAUSES at another arity trigger the
+    warning: an export of a name with no clauses here is the "clauses live
+    elsewhere" idiom and stays silent.  The head-shaped export form
+    (``base(A, B, C)`` over ``base/2`` clauses) is not checked: the
+    rewriter already refuses that mismatch.
+    """
+    exports = [item for item in module_items
+               if isinstance(item, DirectiveItem)
+               and item.name == "predicate_export"]
+    if not exports:
+        return
+    clause_arities: dict[str, set[int]] = {}
+    for node in predicate_nodes:
+        functor, arity = head_key(node.head)
+        clause_arities.setdefault(functor, set()).add(arity)
+    declared: set[tuple[str, int]] = set()
+    any_arity: set[str] = set()
+    for item in module_items:
+        if isinstance(item, DirectiveItem) and item.name in (
+                *_PREDICATE_DIRECTIVES, "meta_predicate"):
+            declared.update((spec[0], spec[1]) for spec in item.specs)
+        elif isinstance(item, (ModuleDeclItem, PrivateDeclItem)):
+            entries = (item.exports if isinstance(item, ModuleDeclItem)
+                       else item.items)
+            declared.update((e[0], len(e[1])) for e in entries
+                            if isinstance(e, tuple) and e[1])
+        elif isinstance(item, SpecializeItem):
+            any_arity.add(item.new_name)
+    path = (module_dict or {}).get("__file__")
+    # The name the file gives itself reads better than a loader's synthetic
+    # module name (``load_clausal_module`` registers ``_clausal_test_<stem>``).
+    declared_name = next((item.module_name for item in module_items
+                          if isinstance(item, ModuleDeclItem)
+                          and item.module_name), None)
+    module_name = declared_name or module_name
+    from clausal.lint_warnings import (  # noqa: PLC0415
+        ClausalExportArityMismatchWarning,
+    )
+    seen: set[tuple[str, int]] = set()
+    for item in exports:
+        for functor, arity in item.specs:
+            if (functor, arity) in seen:
+                continue
+            seen.add((functor, arity))
+            others = clause_arities.get(functor, set())
+            if (not others or arity in others
+                    or (functor, arity) in declared
+                    or functor in any_arity):
+                continue
+            where = module_name
+            if item.position is not None:
+                line = item.position[0]
+                where = f"{path}:{line}" if path else f"{module_name}, line {line}"
+            defined = ", ".join(f"{functor}/{a}" for a in sorted(others))
+            fix = (f"{functor}/{min(others)}" if len(others) == 1
+                   else f"one of {defined}")
+            warnings.warn(ClausalExportArityMismatchWarning(
+                f"{where}: {module_name} lists {functor}/{arity} in its "
+                f"-module/-private declarations, but "
+                f"defines no {functor}/{arity} -- its clauses are for "
+                f"{defined}.  Exporting a predicate with no clauses here is "
+                f"legal (calling it raises existence_error), so this loads, "
+                f"but it is most likely a typo in the export entry: did you "
+                f"mean {fix}?  If {functor}/{arity} is a different procedure "
+                f"on purpose, declare it (e.g. -dynamic({functor}/{arity})) "
+                f"to silence this."), stacklevel=2)
 
 
 def _process_declarations(module_items: list, module_dict: dict,

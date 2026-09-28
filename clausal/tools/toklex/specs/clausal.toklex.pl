@@ -1,3 +1,4 @@
+% clausal: no-collect
 % clausal.toklex.pl — Clausal surface dialect, built from iso.toklex.pl
 % (Task 11, design §9, rulings of 2026-09-04).
 %

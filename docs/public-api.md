@@ -105,6 +105,7 @@ All of these import from `clausal`:
 from clausal import (
     solve, call, once, query,            # the query API
     query_wfs, Solutions,
+    declared_atoms,                      # module introspection
     Var, Trail, Module,                  # runtime objects
     deref, unify,                        # term access
     cell_functor, cell_args, make_cell,  # reading and building a cell
@@ -122,6 +123,7 @@ from clausal import (
 | `query` | `query(goal, variables, module=None, trail=None) -> Iterator[dict]` | **Deprecated** (`DeprecationWarning`). Covered through 1.x, removed in 2.0. |
 | `query_wfs` | `query_wfs(goal, variables, module=None, trail=None) -> list[dict]` | Well-founded semantics: each answer dict carries `"_truth"` (`True` or `Undefined`) and `"_delays"`. See [WFS](wfs.md). |
 | `Solutions` | `Solutions(goal, module=...)` | The interactive (REPL/notebook) solution iterator and display. |
+| `declared_atoms` | `declared_atoms(module_or_package) -> frozenset[str]` | The atoms the module's own files declare in their `-module`/`-private` lists; for a package, also its **loaded** submodules. Excludes `-import_from`ed atoms and does not depend on import order. Takes a module, a `Module` or a dotted name (lookup-only, like `module=`). See [Python integration](python_integration.md#listing-the-atoms-a-module-declares-declared_atoms). |
 | `cell_functor`, `cell_args`, `make_cell` | `cell_functor(c)`, `cell_args(c) -> tuple`, `make_cell(functor, *args) -> tuple` | Read and build a compound term (a cell). |
 | `to_python` | `to_python(val)` | Deep conversion out. |
 | `to_clausal` | `to_clausal(value) -> Any` | Deep conversion in. Raises `TypeError` for an unregistered class. |
@@ -222,7 +224,7 @@ is a `UserWarning` through `ClausalLintWarning`, so they show by default:
 `ClausalCurrencyLiteralWarning`, `ClausalScaleInNameWarning`,
 `ClausalShadowedVariableWarning`, `ClausalBooleanSeamWarning`,
 `ClausalAtomExportDefinedAsPredicateWarning`,
-`ClausalRetiredQuasiQuoteWarning`, `ClausalAtomClassDeprecationWarning`,
+`ClausalExportArityMismatchWarning`, `ClausalRetiredQuasiQuoteWarning`, `ClausalAtomClassDeprecationWarning`,
 `ClausalSeamTextCompareWarning`, `ClausalStringInCatchPatternWarning`.
 
 **The lint rule for 1.x:** a minor release may add a new lint, but a new

@@ -66,6 +66,14 @@ its own, exactly as with [`-dynamic`](#-dynamic).
 
 Both spellings work in [`-private`](#-private) too.
 
+An entry whose arity looks like a typo loads with a
+`ClausalExportArityMismatchWarning`: `-module(m, [base/9])` in a module
+whose clauses are all `base/2` warns at the entry's line, names both
+arities and suggests `base/2`. It stays a warning because exporting a
+predicate with no clauses is legal (calling it raises `existence_error`).
+It is silent when `base/9` has clauses or a declaration (`-dynamic(base/9)`,
+`-table`, …) in the module, and when `base` has no clauses at any arity.
+
 !!! info "Listing an atom declares the RIGHT to write it, not a new identity"
     **Atoms are global by spelling.** Listing `red` here does not create a module-local variant of it: the atom **is** the interned Python `str` `'red'`, and every module that writes `red` — by `-module`, by `-private`, or by `-import_from` — has that same atom, equal by `==`. What the listing buys is the *right to write the bare name*: an unlisted, unimported bare atom raises a compile-time `NameError` by default (strict is the default). For an atom other modules genuinely cannot reach or spell, use [`-hide`](#-hide), which is the only module-local mechanism. See [Atoms § Strict by default](syntax.md#atoms), [Import System § Atoms are global by spelling](import.md#atoms-are-global-by-spelling), and the [global-atoms-default spec](https://gitlab.com/MikeAmy/clausal/-/blob/main/implementation_plans/atoms_refactor/GLOBAL_ATOMS_DEFAULT.md).
 

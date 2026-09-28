@@ -130,6 +130,12 @@ since 0.4.0 finish three moves:
 
 ### Added
 
+- **`clausal.declared_atoms(module_or_package)`.** The `frozenset` of atom
+  names declared in the `-module`/`-private` lists of a module's own files,
+  or, for a package, of its `__init__` and its loaded submodules. An
+  `-import_from`ed atom is not included, and the answer does not depend on
+  import order. See
+  [docs/python_integration.md](docs/python_integration.md#listing-the-atoms-a-module-declares-declared_atoms).
 - **Prolog flags.** `set_prolog_flag/2` and `current_prolog_flag/2` with the
   ISO flags (`bounded`, `max_integer`, `min_integer`,
   `integer_rounding_function`, `char_conversion`, `debug`, `max_arity`,
@@ -213,6 +219,10 @@ since 0.4.0 finish three moves:
       Python `str` literal.
     - `ClausalAtomExportDefinedAsPredicateWarning`: an exported atom that
       is also a predicate.
+    - `ClausalExportArityMismatchWarning`: a `name/N` export entry for an
+      arity the module neither defines nor declares, while it has clauses
+      for `name` at another arity (`-module(m, [base/9])` over `base/2`
+      clauses). The export stays legal; the warning names both arities.
     - `ClausalScaleInNameWarning`, `ClausalCurrencyLiteralWarning`,
       `ClausalTitleCaseIdentifierWarning`, `ClausalKeywordArgumentWarning`.
 - **Diagnostics:**
@@ -268,6 +278,12 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
 
 ### Fixed
 
+- **`python -m clausal.testing` skips what the pytest plugin skips.** A
+  directory scan honours `collect_ignore`/`collect_ignore_glob` from the
+  `conftest.py` files under it, so `tests/` no longer reports the golden
+  translator inputs as failing loads, and the Prolog files shipped as
+  package data (the toklex specs and the constants preludes) carry the
+  `% clausal: no-collect` marker.
 - **A lambda called with the wrong number of arguments** raises an ISO
   error term instead of a Python `TypeError`: too many arguments extend the
   body goal (`maplist((S) <- (S > 0), [1, 2], R)` is

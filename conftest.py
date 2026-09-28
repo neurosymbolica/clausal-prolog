@@ -45,7 +45,10 @@ _docs_dir = Path(__file__).parent / "docs"
 # Prolog source shipped as package DATA, not tests: the toklex grammar specs
 # and the export preludes.  The plugin collects .pl files, and these do not go
 # through the .pl importer (they are read by their own tools), so collecting
-# them would report translator errors about files nobody imports.
+# them would report translator errors about files nobody imports.  Each file
+# also carries the ``% clausal: no-collect`` marker, which is what keeps the
+# CLI runner off them when it scans ``clausal/`` (this conftest is above that
+# scan root, so its list does not apply there).
 collect_ignore_glob = [
     "clausal/tools/toklex/specs/*.pl",
     "clausal/tools/prolog_preludes/*.pl",
