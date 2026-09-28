@@ -27,6 +27,12 @@ reading.**
    pinned as a strict xfail in tests/test_arith_operator_rulings.py.
    Reified comparisons (`reify_fd` -> `_resolve` -> `_eval_ground`) also
    still raise when their divisor becomes 0 while labelling.
+   **Goal-order dependence (roborev job 288):** the prune fires on ANY
+   propagation, not only labelling, so the same program raises or fails by
+   goal order: `(Y is 0, X == 1 // Y)` raises `evaluation_error(zero_divisor)`
+   at the post, `(X == 1 // Y, Y is 0)` FAILS. Likewise `'^'(2, Y)` with a
+   negative Y. Choosing "fail at the post too" (Scryer's `X #= 1 // 0` is
+   `false`) would make both orders fail; that is the ruling this item asks for.
 
 2. **Seam `/` over integers.** "Operators in seam follow Python semantics
    unless quoted": Python's `7 / 2` is the float 3.5, the engine's (bare or
