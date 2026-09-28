@@ -975,6 +975,18 @@ def _foldl__6(this_generator, _proceed, _fail, _catcher, goal, xs, ys, zs, v0, v
     yield from _foldl(this_generator, _proceed, _fail, goal, [xs, ys, zs], v0, v, trail)
 
 
+def _unify_pairs(target, kvs, trail) -> bool:
+    """Unify *target* with the list of ``K-V`` pairs *kvs* (``(K, V)``
+    tuples), reading each element of a bound list in either spelling of a
+    pair (the cell, or a ``k - v`` written in source), as the pairs
+    builtins do."""
+    from clausal.logic.builtins.pairs import _unify_pair  # noqa: PLC0415
+    items = _as_items(deref(target))
+    if items is None or len(items) != len(kvs):
+        return unify(target, [("-", k, v) for k, v in kvs], trail)
+    return all(_unify_pair(t, k, v, trail) for t, (k, v) in zip(items, kvs))
+
+
 @_trampoline_builtin("map_list_to_pairs", 3)
 def _map_list_to_pairs__3(this_generator, _proceed, _fail, _catcher, goal, ls, ps, trail):
     """map_list_to_pairs(Goal, Ls, Pairs) -- Pairs is ``[K1-L1, K2-L2, ...]``
@@ -1008,11 +1020,21 @@ def _map_list_to_pairs__3(this_generator, _proceed, _fail, _catcher, goal, ls, p
         # pairs builtins build them), not variables bound to them
         hs = [deref(h) for h in items]
         ks = [Var() for _ in hs]
-        yield from _maplist_drive(
-            this_generator, _proceed, dispatch, lambda i: (hs[i], ks[i]),
-            len(hs), trail,
-            finish=lambda: unify(ps, [("-", deref(k), deref(h))
-                                      for k, h in zip(ks, hs)], trail))
+        finish = None
+        if is_var(deref(ps)):
+            # nothing in Pairs to constrain the calls: bind it once per
+            # answer, to cells holding the values themselves
+            finish = lambda: unify(ps, [("-", deref(k), deref(h))  # noqa: E731
+                                        for k, h in zip(ks, hs)], trail)
+        elif not _unify_pairs(ps, list(zip(ks, hs)), trail):
+            # a bound or partial Pairs is the clauses' head: unified BEFORE
+            # the calls, so each call sees its key (Scryer:
+            # map_list_to_pairs(length, [X], [2-X]) runs length(X, 2))
+            hs = None
+        if hs is not None:
+            yield from _maplist_drive(
+                this_generator, _proceed, dispatch, lambda i: (hs[i], ks[i]),
+                len(hs), trail, finish=finish)
     else:
         yield from _open_lists_drive(this_generator, _proceed, dispatch,
                                      [ls, ps], call_args, trail)

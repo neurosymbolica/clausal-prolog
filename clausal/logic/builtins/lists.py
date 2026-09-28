@@ -1064,9 +1064,9 @@ def _zip__3(this_generator, _proceed, _fail, _catcher, l1, l2, pairs, trail):
     l1_items = _as_items(l1_val)
     l2_items = _as_items(l2_val)
     if l1_items is not None and l2_items is not None:
-        result = [("-", a, b) for a, b in zip(l1_items, l2_items)]
+        from clausal.logic.builtins.higher_order import _unify_pairs  # noqa: PLC0415
         mark = trail.mark()
-        if unify(pairs, result, trail):
+        if _unify_pairs(pairs, list(zip(l1_items, l2_items)), trail):
             yield (_proceed, None)
         trail.undo(mark)
     yield (_fail, DONE)

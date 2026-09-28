@@ -28,6 +28,9 @@ open_ls(L, PS) <- map_list_to_pairs(q, L, PS)
 bad_pair(PS) <- map_list_to_pairs(length, [[1]], ['-'(1, [1]), 'x'])
 bound_pairs(L) <- map_list_to_pairs(length, L, ['-'(K, [1, 2])])
 zip(PS) <- zip_([1, 2, 3], ['a', 'b'], PS)
+zip_check(Z) <- (zip_([1], ['a'], [1 - 'a']), Z is 1)
+dict_check(Z) <- (dict_pairs({'a': 1}, ['a' - 1]), Z is 1)
+bound_key(X) <- map_list_to_pairs(length, [X], ['-'(2, X)])
 dict_round_trip(D, PS) <- (dict_pairs(D, ['-'('b', 2), '-'('a', 1)]), dict_pairs(D, PS))
 old_shape(D) <- dict_pairs(D, [['a', 1]])
 put(D) <- dict_put_pairs(['-'('b', 2), 'b' - 3], {'a': 1}, D)
@@ -110,3 +113,13 @@ def test_dict_pairs_no_longer_reads_a_two_element_list(mod):
 
 def test_dict_put_pairs_reads_both_spellings_of_a_pair(mod):
     assert _answers(mod, "put") == [DictTerm({"a": 1, "b": 3})]
+
+
+def test_source_pair_spelling_checks(mod):
+    assert _answers(mod, "zip_check") == [1]
+    assert _answers(mod, "dict_check") == [1]
+
+
+# Scryer: map_list_to_pairs(length, [X], [2-X]) -> X = [_, _], deterministic
+def test_a_bound_key_reaches_the_call(mod):
+    assert _answers(mod, "bound_key", limit=5) == [["_", "_"]]

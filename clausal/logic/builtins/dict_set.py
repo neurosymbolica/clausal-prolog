@@ -190,9 +190,9 @@ def _dict_pairs__2(this_generator, _proceed, _fail, _catcher, d, pairs, trail):
     if data is not None:
         # Dict → Pairs
         sorted_keys = sorted(data.keys(), key=repr)
-        pair_list = [("-", k, data[k]) for k in sorted_keys]
+        from clausal.logic.builtins.higher_order import _unify_pairs  # noqa: PLC0415
         mark = trail.mark()
-        if unify(pairs, pair_list, trail):
+        if _unify_pairs(pairs, [(k, data[k]) for k in sorted_keys], trail):
             yield (_proceed, None)
         trail.undo(mark)
 
