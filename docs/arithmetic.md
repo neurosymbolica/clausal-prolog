@@ -127,12 +127,14 @@ on every spelling, bare or quoted: `eval_(1 / 0, X)`,
 `'is'(X, 1 // 0)`, `'=:='(1, 1 / 0)` and `X == 1 // 0` all raise it. Inside a
 CLP(ℤ) search, a divisor that becomes 0 (`X == 10 // Y, in_domain(Y, 0, 2),
 label([Y])`) fails that branch instead, as in Scryer's clpz, and the search
-goes on to Y = 1 and Y = 2.
+goes on to Y = 1 and Y = 2. (Two paths still raise there: the `!=`
+propagator and reified comparisons; see the open todo.)
 
 In a CLP(ℤ) constraint (`==`, `!=`, `<`, ...), a term that is not arithmetic
 raises Scryer's `domain_error(clpz_expression, T)`: `X == foo(1)` raises
 `error(domain_error(clpz_expression, foo(1)), (==)/2)`. So does the float
-power `'**'(A, B)`, which is not a clpz expression; use `'^'` there.
+power `'**'(Y, 2)` over a CLP(ℤ) variable, which is not a clpz expression; use
+`'^'` there. (A ground `'**'(2, 3)` is simply the float 8.0.)
 
 ### Comparison operators
 

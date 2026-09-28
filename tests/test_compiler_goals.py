@@ -208,26 +208,29 @@ class TestArithToAstExpr:
         expr = arith_to_ast_expr(Mult(left=2, right=3), {})
         assert isinstance(expr, ast.Call) and expr.func.id == "$mul"
 
-    def test_floordiv_stays_native_and_evaluates_a_variable_operand(self):
-        # ``//``, ``%``, ``**`` and unary ``-`` stay native Python operators,
-        # but an operand that may be a TERM at runtime (a variable bound to
-        # +(1, 2)) is evaluated first, ``$eval(v)`` (ruling R9) -- it used to
-        # meet Python's tuple operators.  An int keeps the one ``$deref``
-        # call; number literals and arithmetic sub-trees are used as they are.
+    def test_floordiv_is_python_and_evaluates_a_variable_operand(self):
+        # ``//``, ``%``, ``**`` keep Python's operators, through a thin helper
+        # (``$floordiv``/``$mod``/``$pow``) that raises a zero divisor as
+        # evaluation_error(zero_divisor) (Q4, 2026-09-28; they were native
+        # BinOps raising ZeroDivisionError).  An operand that may be a TERM
+        # at runtime (a variable bound to +(1, 2)) is evaluated first,
+        # ``$eval(v)`` (ruling R9).  An int keeps the one ``$deref`` call;
+        # number literals and arithmetic sub-trees are used as they are.
         # nv
         from clausal.pythonic_ast.nodes import FloorDiv, Mod, Pow
-        for cls, op in ((FloorDiv, ast.FloorDiv), (Mod, ast.Mod), (Pow, ast.Pow)):
+        for cls, name in ((FloorDiv, "$floordiv"), (Mod, "$mod"), (Pow, "$pow")):
             v = Var()
             expr = arith_to_ast_expr(cls(left=v, right=2), {v._id: "v"})
-            assert isinstance(expr, ast.BinOp) and isinstance(expr.op, op)
+            assert isinstance(expr, ast.Call) and expr.func.id == name
+            left, right = expr.args
             # an int stays on the $deref path; anything else goes to $eval
-            assert isinstance(expr.left, ast.IfExp)
-            assert expr.left.orelse.func.id == "$eval"
-            assert isinstance(expr.right, ast.Constant)
+            assert isinstance(left, ast.IfExp)
+            assert left.orelse.func.id == "$eval"
+            assert isinstance(right, ast.Constant)
             expr = arith_to_ast_expr(cls(left=7, right=2), {})
-            assert isinstance(expr, ast.BinOp) and isinstance(expr.left, ast.Constant)
+            assert expr.func.id == name and isinstance(expr.args[0], ast.Constant)
             expr = arith_to_ast_expr(cls(left=Add(left=v, right=1), right=2), {v._id: "v"})
-            assert isinstance(expr, ast.BinOp) and expr.left.func.id == "$add"
+            assert expr.func.id == name and expr.args[0].func.id == "$add"
 
     def test_negate_of_a_variable_evaluates_it(self):
         # nv

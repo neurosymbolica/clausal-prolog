@@ -1348,6 +1348,11 @@ def _unknown_expr_leaf_error(leaf) -> "Exception":
     return _LogicException(domain_error("clpz_expression", leaf, "clpfd expression"))
 
 
+def _domain_error_clpz(term):
+    from clausal.logic.exceptions import domain_error  # noqa: PLC0415
+    return domain_error("clpz_expression", term, "clpfd expression")
+
+
 def _is_zero_divisor(exc) -> bool:
     """*exc* (a LogicException) is ``error(evaluation_error(zero_divisor), _)``.
 
@@ -1408,6 +1413,14 @@ def _expr_domain(expr, trail: Trail) -> Domain:
     if isinstance(expr, _Negate):
         od = _expr_domain(expr.operand, trail)
         return _domain_negate(od)
+    if _NODE_KEYS.get(type(expr)) == ("**", 2):
+        # A quoted ``'**'`` cell (Scryer's FLOAT power, Q2 2026-09-28) posted
+        # over CLP(FD): not a clpz expression -- Scryer's ``X #= Y**2``
+        # raises exactly this.  Folded, its float would leave the FD
+        # variable silently unconstrained.  Reached only after the CLP(Q) /
+        # CLP(R) dispatch, which keeps it (a ground one folds to its float).
+        _ensure_exc_imports()
+        raise _LogicException(_domain_error_clpz(expr))
     if isinstance(expr, _Node):
         # Recognized expression NODE (Div/FloorDiv/Mod/Pow, …): if ground,
         # evaluate.  Only an integer result is a valid CLP(Z) domain bound —
@@ -1595,7 +1608,7 @@ def _apply_evaluable(fn, args):
     return fn(l, r)
 
 
-def _arith_cells_to_nodes(x, strict=None, float_pow=False):
+def _arith_cells_to_nodes(x, strict=None):
     """*x* with every arithmetic CELL rewritten as its operator node, or None
     when *x* holds none (the common case: nothing is allocated).
 
@@ -1629,12 +1642,12 @@ def _arith_cells_to_nodes(x, strict=None, float_pow=False):
         if key[1] == 1:
             o = x.operand
             to = type(o)
-            oc = None if to is int or to is float else _arith_cells_to_nodes(o, strict, float_pow)
+            oc = None if to is int or to is float else _arith_cells_to_nodes(o, strict)
             return None if oc is None else _replace(x, operand=oc)
         a, b = x.left, x.right
         ta, tb = type(a), type(b)
-        lc = None if ta is int or ta is float else _arith_cells_to_nodes(a, strict, float_pow)
-        rc = None if tb is int or tb is float else _arith_cells_to_nodes(b, strict, float_pow)
+        lc = None if ta is int or ta is float else _arith_cells_to_nodes(a, strict)
+        rc = None if tb is int or tb is float else _arith_cells_to_nodes(b, strict)
         if lc is None and rc is None:
             return None
         return _replace(x, left=a if lc is None else lc, right=b if rc is None else rc)
@@ -1642,17 +1655,9 @@ def _arith_cells_to_nodes(x, strict=None, float_pow=False):
         return None
     ka = _cell_key_args(x)
     if ka is not None and ka[0] in _EVALUABLE:
-        if strict is None and not float_pow and ka[0] == ("**", 2):
-            # ``'**'`` is Scryer's FLOAT power (Q2, 2026-09-28): not a clpz
-            # expression -- Scryer's ``X #= 2**3`` raises exactly this.
-            # Folded instead, its float would leave an FD variable silently
-            # unconstrained.  (CLP(Q)/CLP(R) pass *strict* and keep it;
-            # between/3, no clpz post, passes *float_pow*.)
-            from clausal.logic.exceptions import LogicException, domain_error  # noqa: PLC0415
-            raise LogicException(domain_error("clpz_expression", x, "clpfd expression"))
         args = []
         for a in ka[1]:
-            c = _arith_cells_to_nodes(a, strict, float_pow)
+            c = _arith_cells_to_nodes(a, strict)
             if c is None:
                 a = deref(a)
                 if not _arith_leaf(a):
@@ -1946,6 +1951,13 @@ def _resolve(x):
         if val is not None:
             return val
     if _Div is not None and isinstance(x, (_Div, _FloorDiv, _Mod)):
+        val = _eval_ground(x)
+        if val is not None:
+            return val
+    if _NODE_KEYS.get(type(x)) == ("**", 2):
+        # a quoted '**' cell is Scryer's float power: a ground one folds to
+        # its float here, ahead of the CLP(Q)/CLP(R) dispatch (the bare
+        # ``**`` node is Python's integer power and is not folded)
         val = _eval_ground(x)
         if val is not None:
             return val

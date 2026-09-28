@@ -274,16 +274,14 @@ def iso_mod(l, r):
 
 
 def _real(x):
-    """*x* evaluated; a number stays itself, a Python value (a Quantity)
-    passes through (None marks it: the caller keeps Python's operator)."""
+    """``(value, is_number)``: *x* evaluated once; a Python value that is not
+    a number (a Quantity) comes back with False, to meet Python's operator."""
     t = type(x)
     if t is int or t is float or t is Fraction or t is Decimal:
-        return x
+        return x, True
     x = evaluate(x)
     t = type(x)
-    if t is int or t is float or t is Fraction or t is Decimal:
-        return x
-    return None
+    return x, (t is int or t is float or t is Fraction or t is Decimal)
 
 
 def _float_pow(l, r, op: str):
@@ -310,10 +308,9 @@ def _float_pow(l, r, op: str):
 def iso_pow(l, r):
     """``'**'/2``: the power as a FLOAT (``'**'(2, 3)`` is 8.0), as Scryer.
     A Python value (a Quantity) keeps Python's own ``**``."""
-    lv, rv = _real(l), _real(r)
-    if lv is None or rv is None:
-        return python_pow(evaluate(l) if lv is None else lv,
-                          evaluate(r) if rv is None else rv)
+    (lv, lnum), (rv, rnum) = _real(l), _real(r)
+    if not (lnum and rnum):
+        return python_pow(lv, rv)
     return _float_pow(lv, rv, "**")
 
 
@@ -326,10 +323,9 @@ def iso_intpow(l, r):
     float.  An exact rational or Decimal base with an integer exponent stays
     EXACT (a Fraction; Scryer answers a float -- arithmetic here is
     rational, RULED 2026-09-17)."""
-    lv, rv = _real(l), _real(r)
-    if lv is None or rv is None:
-        return python_pow(evaluate(l) if lv is None else lv,
-                          evaluate(r) if rv is None else rv)
+    (lv, lnum), (rv, rnum) = _real(l), _real(r)
+    if not (lnum and rnum):
+        return python_pow(lv, rv)
     if type(rv) is int:
         if type(lv) is int:
             if rv >= 0:

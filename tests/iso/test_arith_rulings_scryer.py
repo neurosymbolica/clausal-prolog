@@ -18,6 +18,7 @@ print the same.  The engine's explanatory prose is not compared.
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import tempfile
 
@@ -152,7 +153,7 @@ CLP_ROWS = [
     ("X != foo(1)", "X #\\= foo(1)", "domain_error(clpz_expression,foo(1))"),
     ("X < foo(1)", "X #< foo(1)", "domain_error(clpz_expression,foo(1))"),
     ("X == 2 + foo", "X #= 2 + foo", "domain_error(clpz_expression,foo)"),
-    ("X == '**'(2, 3)", "X #= 2 ** 3", "domain_error(clpz_expression,2**3)"),
+    ("X == '**'(Y, 2)", "X #= Y ** 2", "domain_error(clpz_expression,_**2)"),
 ]
 
 
@@ -193,7 +194,9 @@ def test_clp_oracle_formal(scryer):
                              timeout=60).stdout.splitlines()
     finally:
         os.unlink(prelude)
-    got = [line.strip() for line in out if line.startswith("domain_error(")]
+    # a variable prints as _NNN in Scryer: compare it as ``_``
+    got = [re.sub(r"_\d+", "_", line.strip())
+           for line in out if line.startswith("domain_error(")]
     want = [r[2] for r in CLP_ROWS]
     assert len(got) == len(want) > 0
     assert got == want

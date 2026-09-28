@@ -446,6 +446,9 @@ def test_ground_data_pairs_keep_the_ground_fallback():
     assert fd_eq(("-", "a", 1), ("-", "b", 1), Trail()) is False
     assert fd_ne(("-", "a", 1), ("-", "b", 1), Trail()) is True
     assert fd_lt(("-", "a", 1), ("-", "b", 1), Trail()) is True
+    # a '**' data pair too: the Scryer float power is no reason to refuse it
+    assert fd_eq(("**", "a", 1), ("**", "a", 1), Trail()) is True
+    assert fd_lt(("**", "a", 1), ("**", "b", 1), Trail()) is True
     assert fd_eq(("-", Var(), "a"), 3, Trail()) is False
     text = _error_text(lambda: fd_eq(Var(), ("-", "a", 1), Trail()))
     assert text.startswith("error(domain_error(clpz_expression,-(a,1))"), text  # Q3
@@ -453,17 +456,23 @@ def test_ground_data_pairs_keep_the_ground_fallback():
 
 def test_pow_node_posts_and_pow_cell_is_not_a_clpz_expression(api_mod):
     """The bare ``**`` node is Python's power and posts (``X #= 2 ** 3`` is
-    8); the ``'**'`` cell is Scryer's FLOAT power, and -- as in Scryer's
-    clpz -- a CLP(FD) post refuses it with ``domain_error(clpz_expression,
-    T)`` rather than leave X silently unconstrained beside a float
-    (operator rulings 2026-09-28)."""
+    8).  The ``'**'`` cell is Scryer's FLOAT power: a ground one folds to its
+    float ahead of the CLP(Q)/CLP(R) dispatch (``X #= '**'(2, 3)`` is 8.0,
+    a CLP(R) answer), and one over a CLP(FD) variable is refused with
+    clpz's ``domain_error(clpz_expression, T)`` rather than leave X
+    silently unconstrained beside a float (operator rulings 2026-09-28)."""
     from clausal.pythonic_ast.nodes import Pow
     X = Var()
     assert _run(api_mod, ("#=", X, Pow(None, 2, 3)), X) == [8]
     assert _run(api_mod, ("#<", Pow(None, 2, 3), 9), None)
-    for goal in (("#=", Var(), ("**", 2, 3)), ("#<", ("**", 2, 3), 9)):
-        text = _error_text(lambda: _run(api_mod, goal, None))
-        assert text.startswith("error(domain_error(clpz_expression,**(2,3))"), text
+    X = Var()
+    got = _run(api_mod, ("#=", X, ("**", 2, 3)), X)
+    assert got == [8.0] and type(got[0]) is float
+    assert _run(api_mod, ("#<", ("**", 2, 3), 9), None)
+    Y = Var()
+    text = _error_text(lambda: _run(api_mod, ("#=", Var(), ("**", Y, 2)), None))
+    assert text.startswith("error(domain_error(clpz_expression,"), text
+    assert "**" in text, text
 
 
 @pytest.mark.xfail(strict=True, reason=(

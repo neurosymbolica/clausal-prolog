@@ -25,6 +25,8 @@ reading.**
    when labelling reaches Y = 0. Fixing it is a C change (call
    `_eval_propagating`, or treat the zero-divisor error as failure there);
    pinned as a strict xfail in tests/test_arith_operator_rulings.py.
+   Reified comparisons (`reify_fd` -> `_resolve` -> `_eval_ground`) also
+   still raise when their divisor becomes 0 while labelling.
 
 2. **Seam `/` over integers.** "Operators in seam follow Python semantics
    unless quoted": Python's `7 / 2` is the float 3.5, the engine's (bare or
@@ -41,6 +43,11 @@ reading.**
    (Scryer: 0.25).
 
 ## Known gaps, not decided by the rulings
+
+4b. A GROUND `'**'` cell in a comparison folds to its float before the
+    CLP(Q)/CLP(R) dispatch (`X == '**'(2, 3)` is 8.0); Scryer's clpz raises
+    `domain_error(clpz_expression, 2**3)` for `X #= 2**3`. Over a CLP(FD)
+    variable (`X == '**'(Y, 2)`) the engine raises that error, as Scryer.
 
 5. The `'//'` cell, rewritten into a node for a CLP post, is `IsoIntDiv`, a
    `FloorDiv` subclass; CLP(FD) evaluates it by its own entry (truncating),

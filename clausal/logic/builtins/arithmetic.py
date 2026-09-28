@@ -658,10 +658,7 @@ def _cell_bound_as_node(bound):
         if _arith_cells_to_nodes is None:
             from clausal.logic.clpfd import _arith_cells_to_nodes as f  # lazy: clpfd is heavy
             _arith_cells_to_nodes = f
-        # float_pow: a '**' cell is no clpz expression, but between/3 is no
-        # clpz post -- it evaluates, and a float bound is its own
-        # type_error(integer, ...) below.
-        node = _arith_cells_to_nodes(bound, float_pow=True)
+        node = _arith_cells_to_nodes(bound)
         if node is not None:
             return node
     return bound
