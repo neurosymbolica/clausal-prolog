@@ -61,11 +61,15 @@ They differ in **how much of the term's structure they spell out**:
 | code list `b"ab"` | `[97,98]` | `[97,98]` | `'.'(97,'.'(98,[]))` |
 | `""` / `[]` / `b""` | `[]` | `[]` | `[]` |
 | `foo(bar, "baz")` | `foo(bar,[b,a,z])` | `foo(bar,[b,a,z])` | `foo(bar,'.'(b,'.'(a,'.'(z,[]))))` |
-| `1 + 2` | `+(1,2)` | `+(1,2)` | `+(1,2)` |
+| `'+'(1, 2)` | `+(1,2)` | `+(1,2)` | `+(1,2)` |
 
 A string *is* the list of its characters, so all three spell it out; a `b"…"`
 code list is the list of its code numbers and spells out the same way. The
 three differ in quoting and in whether list syntax is used at all.
+
+The `'+'(1, 2)` row is the quoted cell. A bare `1 + 2` written as an argument
+in today's syntax is a runtime operator node, not that cell, and every writer
+prints it in its source form, `(1 + 2)`; see [Operators](operators.md).
 `write_canonical/1` additionally drops operator forms, so its output is the
 `'.'/2` structure itself; the string stays a compact `str` internally, the
 writer only *shows* the cons structure.
@@ -198,7 +202,7 @@ human-readable text with.
 format_pair(K, V, S) <- write_text_to_string(K - V, S)
 
 test("write text to string") <- (
-    format_pair("name", "alice", S),
+    format_pair('name', 'alice', S),
     S == "name - alice"
 )
 ```
@@ -254,7 +258,12 @@ back.
 
 ## F-String Support
 
-In `.clausal` files, f-strings build strings with logic variable interpolation. Variables are automatically dereferenced before the f-string is evaluated:
+In `.clausal` files, f-strings build text with logic variable interpolation. Variables are automatically dereferenced before the f-string is evaluated, and a string interpolates as its text.
+
+An f-string is Python, so its value is a Python `str` — which is an **atom**
+in Clausal, not a string. Compare it with a quoted atom (`'...'`, an atom in
+every `-double_quotes` mode), or convert it with `atom_chars/2` when you need
+the string:
 
 ```clausal
 -double_quotes(chars)
@@ -265,7 +274,14 @@ describe(NAME, AGE, S) <- (
 
 test("describe") <- (
     describe("Alice", 30, S),
-    S == "Name: Alice, Age: 30"
+    S is 'Name: Alice, Age: 30'
+)
+
+test("an f-string is an atom") <- (
+    describe("Alice", 30, S),
+    atom(S),
+    atom_chars(S, TEXT),
+    TEXT == "Name: Alice, Age: 30"
 )
 ```
 
@@ -283,7 +299,7 @@ summarize(XS, S) <- (
 
 test("summarize") <- (
     summarize([1, 2, 3], S),
-    S == "List has 3 element(s)"
+    S is 'List has 3 element(s)'
 )
 ```
 
@@ -300,7 +316,7 @@ full_name(FIRST, LAST, S) <- (
 
 test("full name") <- (
     full_name("Alice", "Smith", S),
-    S == "Alice Smith"
+    S is 'Alice Smith'
 )
 ```
 
@@ -322,7 +338,7 @@ describe_color(S) <- (
 
 test("deferred f-string") <- (
     describe_color(S),
-    S == "The color is red"
+    S is 'The color is red'
 )
 ```
 
@@ -389,6 +405,13 @@ test("concat all") <- (
 ### Examples
 
 ```clausal
+fib(0, 0),
+fib(1, 1),
+
+digits([D, *T]) >> (digit(D), digits(T))
+digits([D]) >> digit(D)
+digit(D) >> [D]
+
 # List all clauses for a predicate, by its Name/Arity indicator -- `fib/2`
 # here is `/`, the arithmetic operator, applied to a name and an int; it is
 # NOT data (see the paragraph below):
@@ -424,16 +447,15 @@ are arithmetic operators and a structural (non-`is`) use stays a reified
 operator term rather than data. It prints a header with clause count, then
 each clause in `head <- (body).` format.
 
-From Python, `listing` also takes a `PredicateMeta` class or instance (it
-lists that predicate, and prints `"% name/arity — no clauses"` for an empty
-one) or a builtin predicate (prints a `"% name/arity — builtin"` line).
+From Python, `listing` also takes a predicate handle (`listing(mod.fib)`
+lists every arity the module defines under that name, and prints
+`"% name/arity — no clauses"` for an empty one) or a builtin
+(`"% name/arity — builtin"`).
 
 The indicator finds an IMPORTED predicate as well as a local one: an
-`-import_from` binds the exporter's predicate, whose clauses live on the
-exporter's row, so `listing(qq/1)` and `listing('qq'/1)` from the importer
-print exactly what `listing(qq/1)` prints there. (Before the P3-3 close-out
-fix they raised `existence_error` for a predicate the importer could see and
-call, because the name was looked up in the calling module's database alone.)
+`-import_from` binds the exporter's predicate, so `listing(qq/1)` and
+`listing('qq'/1)` from the importer print exactly what `listing(qq/1)`
+prints in the exporting module.
 
 ---
 
@@ -476,14 +498,14 @@ print(f"Bound: {v}")     # hello
 
 ??? info "Test coverage"
 
-    Tests are in `tests/test_io.py` (43 tests) and `tests/test_listing.py` (36 tests).
+    Tests are in `tests/test_io.py` and `tests/test_listing.py`.
 
     - **Var display**: `__str__`, `__format__`, bound/unbound, nested
     - **write/writeln/print_term**: atoms, numbers, strings, compounds, lists, vars
     - **nl/tab**: output formatting
     - **write_to_string/term_to_string**: term conversion to string
     - **F-string integration**: variable interpolation, multiple vars, expressions
-    - **listing/1**: facts, rules, no-clauses, instance→class resolution, error handling
+    - **listing/1**: facts, rules, no-clauses, predicate handles, error handling
     - **portray_clause/1**: simple terms, lists, nested structures, unbound vars
 
 ---

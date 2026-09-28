@@ -41,25 +41,25 @@ Clausal's comparison operators are shared across CLP(Z), CLP(R), and CLP(Q). The
 
 **Dispatch rule:** if either operand is a `Fraction` or a variable declared with `rational` (or `in_q`), the constraint goes to CLP(Q). If either operand is a `float` or declared with `in_real`, it goes to CLP(R). Otherwise it goes to CLP(Z).
 
-Mixing `Fraction` (CLP(Q)) and `float` (CLP(R)) operands in the same constraint raises a `TypeError`. Convert explicitly if you need to cross domains.
+Mixing a rational (CLP(Q)) and a `float` (CLP(R)) operand in the same constraint raises a Python `TypeError` (`cannot mix CLP(Q) rational and CLP(R) float in the same constraint`). Convert explicitly if you need to cross domains.
 
-### `int/int` produces an exact rational
+### `/` inside a constraint is exact
 
-In Clausal, **integer division always produces an exact rational**, presented as an `int` when the quotient is integral:
+Inside a constraint (`==`, `!=`, `<`, ...) `/` is **exact rational division**, as inside Scryer's `{...}`. A quotient that IS an integer is that integer: `X == 6 / 2` gives `3`, not `Fraction(3, 1)`. Only non-integral results are `Fraction`.
+
+```clausal
+--8<-- "tests/fixtures/docs/clpq_sigs.txt:int_int_produces_fraction_ex2"
+```
+
+In **evaluation** (`eval_/2`, `'is'/2`, the ISO comparisons) a bare `/` keeps Python's meaning, true division, so it is a float. Use `rdiv/2` when you want the exact quotient outside a constraint:
 
 ```clausal
 --8<-- "tests/fixtures/docs/clpq_sigs.txt:int_int_produces_fraction"
 ```
 
-This is a deliberate language design choice. In a logic programming language, exactness is the natural default. If you want IEEE float division, use a float literal on either side: `1.0/3` or `7/2.0`.
+A zero divisor inside a constraint **fails** (`X == 1 / 0` has no solutions); in evaluation it raises `evaluation_error(zero_divisor)`. The full operator table is in [Operators](operators.md); evaluation is in [Arithmetic](arithmetic.md).
 
-A quotient that IS an integer is that integer: `4/2` evaluates to `2`, not `Fraction(2, 1)`. The two compare equal in Python but are different terms in the standard order (`==`, `compare/3`), so every binder — `is/2`, the arithmetic comparisons, `between/3`, CLP(Q) equalities and optima — presents an integral rational as `int`. Only non-integral results are `Fraction`.
-
-Because `int/int` is exact, rational constraints arise naturally:
-
-```clausal
---8<-- "tests/fixtures/docs/clpq_sigs.txt:int_int_produces_fraction_ex2"
-```
+Integral rationals are presented as `int` by every binder — the arithmetic comparisons, `between/3`, CLP(Q) equalities and optima — because `2` and `Fraction(2, 1)` compare equal in Python but are different terms in the standard order (`'=='/2`, `compare/3`).
 
 ---
 
@@ -83,16 +83,16 @@ Because `int/int` is exact, rational constraints arise naturally:
 
 CLP(Q) constraints can also be posted via the `clpq` module namespace using constraint blocks:
 
-```python
-# skip
-Optimal(X, Y, Cost) <- (
+```clausal
+optimal(X, Y, COST) <- (
     clpq.rational((
         0 <= X <= 1,
         0 <= Y <= 1,
         X + Y == 3/4,
     )),
-    clpq.maximize(X, Cost),
+    clpq.maximize(X, COST),
 )
+# -> X = Fraction(3, 4), Y = 0, COST = Fraction(3, 4)
 ```
 
 | Module Predicate | Arity | Description |
@@ -219,7 +219,7 @@ CLP(Q) uses a fundamentally different solver from CLP(R). Where CLP(R) narrows i
 | **Inequality** `Σ aᵢXᵢ <= c` | Revised simplex with slack variables | `2*X + Y <= 16` |
 | **Disequality** `X != Y` | Passive check (fires when both ground) | `X != 5` |
 
-All constraints must be **linear** — each term is a constant times a variable, with no products of variables. `3*X + 5*Y <= 10` is linear. `X * Y <= 10` is not, and will raise a `TypeError`.
+All constraints must be **linear** — each term is a constant times a variable, with no products of variables. `3*X + 5*Y <= 10` is linear. `X * Y == 10` over two rational variables is not, and raises a Python `TypeError` (`CLP(Q) requires linear constraints`).
 
 ### Why not interval arithmetic?
 
@@ -554,12 +554,12 @@ This is exactly the trade-off SICStus Prolog documents: "you may be out of space
 | Arithmetic | GMP rationals | SWI rationals | — | **Python `Fraction`** |
 | Optimization | `maximize/1`, `minimize/1` | Same (buggy) | — | **`maximize/2`, `minimize/2`** |
 | Bounds query | `sup/1`, `inf/1` | Same | — | **`sup/2`, `inf/2`** |
-| Entailment | `entailed/1` | Same | — | **`entailed/3`** |
+| Entailment | `entailed/1` | Same | — | **`entailed/1`** |
 | MIP | `bb_inf/3`, `bb_inf/5` | Same | — | **`int_minimize/3`** |
 | Projection | Fourier-Motzkin | Broken | — | **`dump_q/2` (Fourier-Motzkin)** |
-| Non-linear | Deferred | Deferred | — | **Rejected (TypeError)** |
+| Non-linear | Deferred | Deferred | — | **Rejected (Python `TypeError`)** |
 | Syntax | `{X + Y =< 8}` | Same | — | **`X + Y <= 8`** (unified) |
-| int/int | Stays integer | Stays integer | — | **Exact rational; `int` when integral** |
+| `/` inside a constraint | Exact rational | Exact rational | — | **Exact rational; `int` when integral** |
 
 ### Historical context
 
@@ -607,13 +607,14 @@ A variable can have **both** FD and Q attributes simultaneously, just like FD an
 | Situation | Behaviour |
 |---|---|
 | `in_q(X, 0, 10)` then `X == 3` | CLP(Q): X has `"clpq"` attribute, `3` is treated as `Fraction(3)` |
-| `in_domain(X, 1, 10)` then `X == 1/3` | CLP(Q): `1/3` triggers Q dispatch; FD var promoted to Q with bounds `[1, 10]` |
+| `in_domain(X, 1, 10)` then `X == 1/3` | **Fails**: `1/3` triggers Q dispatch, the FD var is promoted to Q with bounds `[1, 10]`, and `1/3` is outside them |
 | `in_domain(X, 1, 10)` then `X == 1/2` | **Fails**: `Fraction(1,2)` is not integer, FD hook rejects |
+| `X == 1/0` | **Fails**: a zero divisor inside a constraint has no solutions |
 | `in_real(X, 0.0, 10.0)` then `X == 1/3` | **TypeError**: cannot mix CLP(Q) rational and CLP(R) float |
 | `in_real(X, 0.0, 10.0)` then `in_q(X, ...)` | **TypeError**: cannot mix CLP(Q) rational and CLP(R) float |
 | `X == 5` (no declaration) | CLP(Z): both sides are `int` |
 | `X == 5.0` (no declaration) | CLP(R): float literal triggers R dispatch |
-| `X == 1/3` (no declaration) | CLP(Q): Fraction literal triggers Q dispatch |
+| `X == 1/3` (no declaration) | CLP(Q): `1/3` is exact inside a constraint, so it triggers Q dispatch |
 
 ---
 
@@ -706,7 +707,7 @@ A variable can have **both** FD and Q attributes simultaneously, just like FD an
 
 ??? info "Test coverage"
 
-    Tests are in `tests/test_clpq.py` (105 tests).
+    Tests are in `tests/test_clpq.py`.
 
     - **Dispatch**: Fraction triggers CLP(Q), int stays CLP(Z), float stays CLP(R)
     - **Domain declaration**: `in_q` basic, narrowing, infeasible, point binding, list form, unbounded, ground check

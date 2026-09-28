@@ -23,6 +23,8 @@ Clausal's [comparison operators](arithmetic.md) are shared between CLP(ℤ) and 
 
 This means `X * X == 2.0` (with undeclared `X`) automatically enters CLP(ℝ) because `2.0` is a float. No special operators or brace syntax needed.
 
+Inside a constraint a bare `/` is **exact rational** division (see [Operators](operators.md)), so an integer quotient belongs to [CLP(Q)](clpq.md), not CLP(ℝ): `in_real(X), X == 7 / 2` raises `TypeError: cannot mix CLP(Q) rational and CLP(R) float in the same constraint`. Give a real constraint a float operand, `X == 7.0 / 2`. A zero divisor inside a constraint makes it fail (`X == 1.0 / 0` has no solutions); only evaluation raises `evaluation_error(zero_divisor)`.
+
 ---
 
 ## Builtins
@@ -54,13 +56,28 @@ Without an `Eps`, bisection continues until the midpoint equals an endpoint in I
 
 Each branch of the bisection is a separate solution. Use `label_real` after posting all constraints to enumerate solutions.
 
+`label_real` **narrows, it does not bind**: after it, each variable is still a (very narrow) interval, not a float. A goal-position query (`for X in --sqrt2(X)`) therefore refuses to hand `X` back and raises `ResidualConstraints`. To read the interval, run the goal with the lower-level `solve` and an explicit `Trail`, then read the `"real"` attribute:
+
+```python
+from clausal import solve, Var, Trail
+from clausal.logic.variables import get_attr, deref
+from clausal.logic.clpr import REAL_KEY
+
+X, trail = Var(), Trail()
+for _ in solve(("sqrt2", X), module=m, trail=trail):   # m: the loaded module
+    state = get_attr(deref(X), REAL_KEY)
+    print(state.lo, state.hi)   # 1.4142135623724523 1.4142135623730954
+    break
+```
+
+(`sqrt2/1` is the example under [Non-linear constraints](#non-linear-constraints).)
+
 ### Module API
 
 CLP(R) constraints can also be posted via the `clpr` module namespace using constraint blocks:
 
-```python
-# skip
-Circle(X, Y) <- (
+```clausal
+circle(X, Y) <- (
     clpr.real((
         -10 <= X <= 10,
         -10 <= Y <= 10,
@@ -315,7 +332,7 @@ The FD domain is automatically narrowed against the real interval (and vice vers
 
 ??? info "Test coverage"
 
-    Tests are in `tests/test_clpr.py` (80 tests).
+    Tests are in `tests/test_clpr.py`.
 
     - **Outward rounding**: `_dn`/`_up` properties, `_iadd` containing 0.3, edge cases
     - **Interval arithmetic**: `_iadd`, `_isub`, `_imul`, `_idiv` (zero denominator), `_ipow_int` (even/odd/negative), `_isqrt`, `_iabs`, `_isin`, `_icos`, `_iexp`/`_ilog` roundtrip

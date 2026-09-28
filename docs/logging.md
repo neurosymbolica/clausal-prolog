@@ -58,7 +58,7 @@ Levels follow Python's standard hierarchy (ascending severity):
 | ERROR | `"error"` | `logging.ERROR` (40) |
 | CRITICAL | `"critical"` (or `"fatal"`) | `logging.CRITICAL` (50) |
 
-Level names are case-insensitive strings when passed to predicates.
+Level names are case-insensitive, written as strings (or atoms) when passed to predicates.
 
 ---
 
@@ -116,7 +116,7 @@ log at an arbitrary level. `Level` is a string (`"debug"`, `"info"`, etc.) or an
 
 ### Messages and f-strings
 
-Messages are Python strings. Clausal's [f-string support](io.md) means interpolation works naturally:
+A message is a string or an atom (an f-string is a Python `str`, so an atom). Clausal's [f-string support](io.md) means interpolation works naturally:
 
 ```clausal
 --8<-- "tests/fixtures/docs/logging_sigs.txt:fstring_example"
@@ -152,7 +152,7 @@ Set the logger's level. Messages below this level will be discarded (but the log
 --8<-- "tests/fixtures/docs/logging_sigs.txt:get_level_sig"
 ```
 
-Unify `Level` with the logger's effective level name (e.g. `"DEBUG"`, `"WARNING"`).
+Unify `Level` with the logger's effective level name, a string (e.g. `"DEBUG"`, `"WARNING"`).
 
 ### `is_enabled_for/2`
 
@@ -164,7 +164,7 @@ Unify `Level` with the logger's effective level name (e.g. `"DEBUG"`, `"WARNING"
 
 ```clausal
 process(L, DATA) <- (
-    (is_enabled_for(L, "debug"), debug(L, f"Processing: {DATA}") or True),
+    ((is_enabled_for(L, "debug"), debug(L, f"Processing: {DATA}")) or True),
     do_work(DATA)
 )
 ```
@@ -179,7 +179,7 @@ process(L, DATA) <- (
 --8<-- "tests/fixtures/docs/logging_sigs.txt:stream_handler_sig"
 ```
 
-Create a `logging.stream_handler`. `StreamName` is `"stdout"` or `"stderr"`.
+Create a `logging.StreamHandler`. `StreamName` is `"stdout"` or `"stderr"`.
 
 ### `file_handler/2`
 
@@ -187,7 +187,7 @@ Create a `logging.stream_handler`. `StreamName` is `"stdout"` or `"stderr"`.
 --8<-- "tests/fixtures/docs/logging_sigs.txt:file_handler_sig"
 ```
 
-Create a `logging.file_handler` that writes to the given file path.
+Create a `logging.FileHandler` that writes to the given file path.
 
 ### `set_formatter/2`
 
@@ -219,7 +219,7 @@ Remove a handler from the logger.
 --8<-- "tests/fixtures/docs/logging_sigs.txt:basic_config_sig"
 ```
 
-Call `logging.basicConfig()` with a Python dict of options. Supported keys: `level`, `format`, `datefmt`, `filename`, `filemode`, `stream`. Note: `basicConfig` only takes effect if the root logger has no handlers yet.
+Call `logging.basicConfig()` with a dict of options (`{level: "info"}`, keys declared or single-quoted). Supported keys: `level`, `format`, `datefmt`, `filename`, `filemode`, `stream`. Note: `basicConfig` only takes effect if the root logger has no handlers yet.
 
 ---
 
@@ -247,10 +247,10 @@ Call `logging.basicConfig()` with a Python dict of options. Supported keys: `lev
 
 ??? abstract "Implementation"
 
-    - **Module:** `clausal/modules/log.py`
-    - **Adapter class:** `_LoggingPredicate` (same pattern as `_RegexPredicate` in `clausal/modules/regex.py`)
+    - **Module:** `clausal/modules/py/logging.py`
+    - **Predicates:** `ModulePredicate` wrappers, the same pattern as the other `clausal/modules/py/` modules
     - **Backend:** Python's `logging` module — all predicates delegate to `logging.Logger` methods
-    - **Tests:** `tests/test_logging_module.py` (67 tests), `tests/fixtures/logging_basic.clausal` (30 fixture tests)
+    - **Tests:** `tests/test_logging_module.py`, `tests/fixtures/logging_basic.clausal`
 
     ---
 

@@ -3,11 +3,12 @@
 The `regex` standard library module provides regular expression predicates for `.clausal` files. It wraps Python's `re` module with a relational interface, including auto-binding of named capture groups to logic variables.
 
 Everything on this page is **text**: a pattern is text, a subject is text, and
-a captured group comes back as a **string** — never an atom. Every example
-below therefore opens with [`-double_quotes(chars)`](directives.md), so its
-`"…"` literals *are* strings and compare equal to what the predicates answer.
-Without that directive a module's `"2026"` is the atom `'2026'`, which will
-not unify with the string a group binds; see
+a captured group comes back as a **string** — never an atom. A `"…"`
+literal is a string by default, so it compares equal to what the predicates
+answer. The examples below also state
+[`-double_quotes(chars)`](directives.md) explicitly; under the temporary
+`-double_quotes(atom)` setting a module's `"2026"` would be the atom
+`'2026'`, which does not unify with the string a group binds; see
 [Type Checking](type_checking.md#the-atom--string--list-table).
 
 ---
@@ -91,7 +92,8 @@ test("positional groups") <- (
 **Mixed named + positional groups:** when a pattern mixes named and unnamed
 groups, `Groups` is a dict keyed by the named-group names, with each *unnamed*
 group added under its 1-based positional index (an integer key). For
-`r"(?P<A>\d+)-(\d+)"` against `"1-2"`, `Groups` is `{"A": "1", 2: "2"}`.
+`r"(?P<A>\d+)-(\d+)"` against `"1-2"`, `Groups` is `{'A': "1", 2: "2"}` —
+a group name is an atom key, a captured value a string.
 
 > **Gotcha — unmatched optional named group binds `None`.** An optional named
 > group that does not participate in the match (e.g. `r"(?P<TAG>\d+)?x"`

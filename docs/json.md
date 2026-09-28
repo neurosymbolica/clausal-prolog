@@ -16,7 +16,7 @@ Or via [module import](import.md):
 
 ```clausal
 -import_module(py.json)
-# then use py.json.parse(S_, T_), py.json.get(T_, "key", V_), etc.
+# then use py.json.parse(S_, T_), py.json.get(T_, key, V_), etc.
 ```
 
 ---
@@ -27,13 +27,15 @@ Or via [module import](import.md):
 |---|---|
 | `{}` object | [`DictTerm`](dicts_sets.md) with **atom** keys |
 | `[]` array | Python `list` |
-| `"string"` (a value) | a **string** (Python `str`) |
+| `"string"` (a value) | a **string** (in Python, the `('$chars', text)` carrier) |
 | `123` / `1.5` | Python `int` / `float` |
 | `true`/`false` | Python `True`/`False` |
 | `null` | Python `None` |
 
 An object **key** is a name, so it comes back as an atom: `D.name` and
-`get(D, name, V)` read a parsed object. A string **value** is text, so it
+`get(D, name, V)` read a parsed object (declare `name`, or write `'name'`).
+A string key `get(D, "name", V)` does not match the atom key, and the goal
+fails. A string **value** is text, so it
 comes back as a string. `parse/3`'s `atoms(...)` option (below) is how you
 promote chosen values to atoms as well.
 
@@ -91,7 +93,7 @@ to_json(DATA, JSON) <- generate(DATA, JSON)
 
 `get(Term, Key, Value)` — extract a value from a DictTerm by key.
 
-- **Key bound**: direct lookup, unify Value. Fails if key not found.
+- **Key bound**: direct lookup, unify Value. Fails if key not found. Keys of a parsed object are atoms.
 - **Key unbound**: enumerate all key-value pairs via backtracking.
 
 ```clausal
@@ -99,9 +101,12 @@ to_json(DATA, JSON) <- generate(DATA, JSON)
 
 get_name(JSON_STRING, NAME) <- (
     parse(JSON_STRING, DATA),
-    get(DATA, "name", NAME)
+    get(DATA, 'name', NAME)        # the atom key; "name" would fail
 )
 ```
+
+Given the text `{"name": "Ann"}`, `NAME` is the string `"Ann"`; with `KEY`
+unbound, `get(DATA, KEY, V)` enumerates `KEY = name, V = "Ann"`.
 
 ### read_file/2
 

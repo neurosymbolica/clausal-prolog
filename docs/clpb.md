@@ -24,6 +24,16 @@ Python's bitwise operators express Boolean formulas:
 
 Variables in CLP(B) are constrained to values 0 (false) and 1 (true).
 
+`BoolEq` and `BoolImpl` are term constructors (Python classes), so a module names them in
+its import list — the one place a TitleCase name is declared:
+
+```clausal
+-import_from(clausal.logic.clpb, [BoolEq, BoolImpl])
+
+implies(X, Y) <- sat(BoolImpl(X, Y))
+same(X, Y) <- sat(BoolEq(X, Y))
+```
+
 ---
 
 ## Builtins
@@ -76,6 +86,35 @@ solve(X, Y) <- (
 )
 # yields (0, 1) and (1, 0)
 ```
+
+---
+
+## Querying from Python
+
+In a `.seam` file, query with a goal-position `--`; each exported variable arrives as a plain
+`0` or `1`:
+
+```clausal
+-import_from(clausal.logic.clpb, [BoolEq])
+
+half_adder(X, Y, SUM, CARRY) <- (
+    sat(BoolEq(SUM, X ^ Y)),
+    sat(BoolEq(CARRY, X & Y))
+)
+xor_pair(X, Y) <- (sat(X ^ Y), bool_labeling([X, Y]))
+
+def main():
+    for S, C in --half_adder(1, 1, S, C):
+        print(S, C)                          # 0 1
+    for X, Y in --xor_pair(X, Y):
+        print(X, Y)                          # 0 1, then 1 0
+```
+
+An exported variable must be **bound**: a variable still carrying a Boolean constraint
+(`half_adder(X, 1, S, C)` leaves `X`, `S` and `C` open) raises `ResidualConstraints`
+(from `clausal.logic.seam`). Label inside the goal (`bool_labeling/1`) to get answers, or
+use `solve(goal, module=m, trail=t)` with an explicit `Trail` from a plain `.py` file when
+you need the constrained variables themselves.
 
 ---
 
@@ -171,7 +210,7 @@ CLP(B) variables are constrained to `0`/`1` (integers), not Python booleans (`Tr
 
 ??? info "Test coverage"
 
-    Tests are in `tests/test_clpb.py` (113 tests).
+    Tests are in `tests/test_clpb.py`.
 
     - **BDD operations**: make_node, apply, restrict, _expr_to_bdd
     - **sat**: forcing, contradiction, tautology, sequential conjunction

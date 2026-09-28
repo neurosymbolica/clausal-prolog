@@ -1,22 +1,25 @@
 # Display snippets for docs/graphs.md
 
 --8<-- [start:overview_import]
--import_from(graphs, [vertices, shortest_path, is_connected])
+-import_from(graphs, [vertices, shortest_path])
 
-Main <- (
-    G = [['a', 'b'], ['b', 'c'], ['a', 'c']],
+route(V, P) <- (
+    G is [['a', 'b'], ['b', 'c'], ['a', 'c']],
     vertices(G, V),
-    ++print(f"vertices: {V}"),
-    shortest_path(G, 'a', 'c', P),
-    ++print(f"Shortest path: {P}")
+    shortest_path(G, 'a', 'c', P)
 )
+
+def main():
+    for V, P in --route(V, P):
+        print(f"vertices: {V}")          # vertices: ['a', 'b', 'c']
+        print(f"shortest path: {P}")     # shortest path: ['a', 'c']
 --8<-- [end:overview_import]
 
 --8<-- [start:overview_module]
 -import_module(graphs)
 
-Main <- (
-    G = [['a', 'b'], ['b', 'c']],
+connected_vertices(V) <- (
+    G is [['a', 'b'], ['b', 'c']],
     graphs.vertices(G, V),
     graphs.is_connected(G)
 )

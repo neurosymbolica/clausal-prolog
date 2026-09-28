@@ -23,6 +23,12 @@ Or via [module import](import.md):
 
 ---
 
+Names and values may be passed as strings or atoms; every text the module
+hands back (a variable's value, the working directory, the platform, each
+`argv` entry) is a **string**, so `platform("linux")` matches.
+
+---
+
 ## Predicates
 
 ### environment_variable/2
@@ -74,7 +80,7 @@ show_pid(P) <- pid(P)
 
 ### argv/1
 
-`argv(Args)` — unify Args with `sys.argv` as a Python list.
+`argv(Args)` — unify Args with `sys.argv` as a list of strings.
 
 ```clausal
 get_args(ARGS) <- argv(ARGS)
@@ -107,7 +113,7 @@ show_info(INFO) <- (
     working_directory(CWD),
     pid(P),
     platform(PLAT),
-    INFO is f"PID {P} on {PLAT} in {CWD}"
+    INFO is f"PID {P} on {PLAT} in {CWD}"      # an atom: an f-string is a Python str
 )
 
 home_directory(HOME) <- environment_variable("HOME", HOME)

@@ -30,6 +30,8 @@ sat_count(X | Y, N)       # N = 3  (OR has 3 solutions)
 --8<-- [end:sat_count_2]
 
 --8<-- [start:half_adder]
+-import_from(clausal.logic.clpb, [BoolEq])
+
 half_adder(X, Y, SUM, CARRY) <- (
     sat(BoolEq(SUM, X ^ Y)),
     sat(BoolEq(CARRY, X & Y))
