@@ -1972,8 +1972,10 @@ def _lint_string_in_catch_pattern(transformer, call) -> None:
 
     Reads the SOURCE node, before the transform: the quote character comes
     from the file's quote map, and the mode in force from the transformer --
-    only ``chars`` makes ``"..."`` a string."""
-    if transformer._double_quotes_mode != "chars":
+    only ``chars`` makes ``"..."`` a string.  Not judged under ``reify``
+    (reflection and the rewriter read clauses as data; they do not load
+    them)."""
+    if transformer._double_quotes_mode != "chars" or transformer._reify:
         return
     func = call.func
     if not isinstance(func, Name) or call.keywords:
@@ -2002,14 +2004,14 @@ def _lint_string_in_catch_pattern(transformer, call) -> None:
                 continue
             atom = "'" + lit.value.replace("\\", "\\\\").replace("'", "\\'") + "'"
             warnings.warn(ClausalStringInCatchPatternWarning(
-                f"{transformer._filename}:{lit.lineno}:{lit.col_offset + 1}: "
-                f"the catcher of {func.id}/{form[0]} has the string "
+                f"{transformer._filename or '<unknown>'}:{lit.lineno}:"
+                f"{lit.col_offset + 1}: the catcher of {func.id}/{form[0]} has the string "
                 f"\"{lit.value}\" in error({formal.func.id}(...), _), which is a STRING under "
                 f"-double_quotes(chars); the engine's error terms carry ATOMS, "
                 f"so this pattern never matches the error it names and the "
                 f"error propagates past the catch. Write the atom {atom} "
                 f"instead (an atom in every -double_quotes mode)."
-            ), stacklevel=2)
+            ), stacklevel=_stacklevel_outside_rewriter())
 
 
 def _node_has_var_or_wildcard(node) -> bool:
@@ -2499,8 +2501,10 @@ class TermTransformer(NodeTransformer):
         # for a clause below the directive sees the new mode and one built
         # above it does not).  An empty map means "quotes unknown" — the
         # REPL/IPython transform site and every programmatic AST land there,
-        # and ``quote_of`` answers ``None`` for each lookup, which every
-        # reader treats as the pre-strings behaviour.
+        # and ``quote_of`` answers ``None`` for each lookup, which reads
+        # every text literal as an ATOM: a ``"…"`` string (chars by default)
+        # silently becomes an atom there, a wrong answer rather than a
+        # refusal.
         transformer._quote_map = quote_map if quote_map is not None else {}
         transformer._double_quotes_mode = double_quotes_mode
         # Source file being rewritten, used only to attribute compile-time

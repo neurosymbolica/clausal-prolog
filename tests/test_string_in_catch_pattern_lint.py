@@ -111,6 +111,16 @@ def test_permission_error_judges_action_and_type(tmp_path, monkeypatch):
     assert len(hits) == 2
 
 
+def test_reflection_does_not_judge(tmp_path, monkeypatch):
+    from clausal.reflection import reify_source
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        reify_source('g(R) <- catch(atom_length(1, _), '
+                     'error(type_error("atom", _), _), R is caught)\n')
+    assert not [w for w in caught
+                if isinstance(w.message, ClausalStringInCatchPatternWarning)]
+
+
 def test_a_string_outside_error_formal_does_not_warn(tmp_path, monkeypatch):
     _, hits = _load(tmp_path, monkeypatch, "scp_outside", PROGRAM.format(
         mode="",
