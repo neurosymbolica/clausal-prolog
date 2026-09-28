@@ -1,0 +1,5 @@
+# Fixture for tests/test_imported_atoms.py: a package EXPORTER.  It imports
+# two atoms from its own submodule and re-declares only one of them, so only
+# that one is its own (one level: the submodule owns deep_atom).
+-import_from(tests.fixtures.ia_reexp.owner, [deep_atom, deep_declared])
+-module(ia_reexp, [deep_declared])

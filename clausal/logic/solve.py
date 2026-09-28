@@ -68,6 +68,7 @@ from clausal.logic.cells import (
     resolve_qualified_goal_cell,
     qualify_mangled_goal,
     DECLARED_ATOMS_KEY,
+    IMPORT_FROM_KEY,
 )
 from clausal.terms import Undefined
 from clausal.terms import (
@@ -903,11 +904,27 @@ def declared_atoms(module_or_package: Any) -> frozenset:
     of asking a question -- the same reason ``module=`` resolution is
     lookup-only.  Import the submodules you want counted first.
     """
+    names: set[str] = set()
+    for ns in _own_file_namespaces(module_or_package, "declared_atoms"):
+        names.update(ns.get(DECLARED_ATOMS_KEY) or ())
+    return frozenset(names)
+
+
+def _own_file_namespaces(module_or_package: Any, context: str) -> list:
+    """The namespaces of a module's (or a package's) own files, in a fixed
+    order: the module itself first, then -- for a package -- each LOADED
+    submodule whose dotted name is under the package's and whose ``__file__``
+    lies under one of its ``__path__`` directories, sorted by dotted name.
+
+    The one copy of the argument handling and package scoping that
+    :func:`declared_atoms` and :func:`imported_atoms` share.  *context* names
+    the public function in the diagnostics.
+    """
     target = module_or_package
     if isinstance(target, str):
         found = sys.modules.get(target)
         if found is None:
-            _no_such_module(target, None, "declared_atoms")
+            _no_such_module(target, None, context)
         target = found
     if isinstance(target, Module):
         ns = target.module_dict or {}
@@ -915,17 +932,18 @@ def declared_atoms(module_or_package: Any) -> frozenset:
         ns = vars(target)
     else:
         raise TypeError(
-            "declared_atoms() expects a module object, a clausal Module or a "
+            f"{context}() expects a module object, a clausal Module or a "
             f"dotted module name, got {type(target).__name__}")
 
-    names: set[str] = set(ns.get(DECLARED_ATOMS_KEY) or ())
+    found_ns = [ns]
     pkg_name = ns.get("__name__")
     pkg_path = ns.get("__path__")
     if pkg_name and pkg_path is not None:
         import os  # noqa: PLC0415
         roots = [os.path.join(os.path.realpath(p), "") for p in pkg_path]
         prefix = pkg_name + "."
-        for sub_name, sub in list(sys.modules.items()):
+        for sub_name, sub in sorted(list(sys.modules.items()),
+                                    key=lambda kv: kv[0]):
             if not sub_name.startswith(prefix) or sub is None:
                 continue
             sub_file = getattr(sub, "__file__", None)
@@ -934,9 +952,95 @@ def declared_atoms(module_or_package: Any) -> frozenset:
             real = os.path.realpath(sub_file)
             if not any(real.startswith(r) for r in roots):
                 continue
-            names.update(getattr(sub, "__dict__", {}).get(DECLARED_ATOMS_KEY)
-                         or ())
-    return frozenset(names)
+            found_ns.append(getattr(sub, "__dict__", {}))
+    return found_ns
+
+
+def imported_atoms(module_or_package: Any) -> dict:
+    """The atoms a module's (or a package's) own files bring in via
+    ``-import_from`` without declaring them, as ``{atom: exporter}``.
+
+    The companion of :func:`declared_atoms`, with the same argument handling,
+    errors and package scoping (the module's own file and, for a package,
+    its LOADED submodules -- never imported by asking).  The two answers are
+    DISJOINT, so ``declared_atoms(m) | imported_atoms(m).keys()`` is every
+    atom those files can name.  The motivating shape is a package
+    ``__init__.clausal`` with no ``-module`` list whose atoms all arrive by
+    ``-import_from``.
+
+    An entry of an ``-import_from(exporter, [...])`` directive counts when:
+
+      - the EXPORTER's own file declares the name as an atom, in its
+        ``-module``/``-private`` list.  One level, exactly the record the
+        import edge itself reads (``compiler_v2._imported_reference``): a
+        module that merely imports an atom and passes it on is not its
+        exporter, and an imported PREDICATE is not an atom (a name that is
+        both, declared as an atom AND given clauses by its owner, counts: the
+        import edge answers it with the atom).  For a single-file exporter
+        this is ``declared_atoms(exporter)``; for a PACKAGE exporter it is
+        its ``__init__``'s declarations only, NOT the package-scoped
+        ``declared_atoms``, so the answer does not depend on which of the
+        exporter's submodules happen to be loaded;
+      - no file in scope declares it (a file that re-declares an imported
+        atom in its own ``-module``/``-private`` list owns it:
+        :func:`declared_atoms` reports it instead).
+
+    The key is the ATOM, i.e. the exporter's spelling: ``alias(orig, local)``
+    reports ``orig``, which is what the local name is bound to.  The value is
+    the exporter's dotted module name as ``sys.modules`` has it (the resolved
+    module's ``__name__``, which can differ from the spelling in the
+    directive when the compiler maps it to ``clausal.modules.*``), which
+    :func:`declared_atoms` accepts.
+
+    CLASHES -- the same atom imported from two exporters that both declare
+    it.  The atom is the same either way (atoms are global by spelling);
+    only the attribution differs, and it is deterministic:
+
+      - within one file, the LATER ``-import_from`` directive (in source
+        order) that names the atom wins, whatever local name it binds: an
+        ``alias(x, y)`` entry names the atom ``x`` just as a plain ``x``
+        does.  This is attribution by ATOM, not by binding -- after
+        ``-import_from(m1, [x])`` and ``-import_from(m2, [alias(x, y)])``
+        the local names ``x`` and ``y`` are bound by different directives,
+        but they are the same atom, and it is credited to ``m2``;
+      - across a package's files, the package's own ``__init__`` is asked
+        first, then its loaded submodules in sorted dotted-name order, and
+        the first file that imports the atom names its exporter.
+
+    The result is a fresh ``dict`` with its keys in sorted order.  It reads
+    the per-file record the compiler writes (``cells.IMPORT_FROM_KEY``), not
+    the namespace's dotted ``"<exporter>.<name>"`` keys, which are an
+    implementation detail of name resolution.
+    """
+    files = _own_file_namespaces(module_or_package, "imported_atoms")
+    declared_here: set[str] = set()
+    for ns in files:
+        declared_here.update(ns.get(DECLARED_ATOMS_KEY) or ())
+    owners: dict[str, frozenset] = {}
+    found: dict[str, str] = {}
+    for ns in files:
+        per_file: dict[str, str] = {}
+        for name, exporter in ns.get(IMPORT_FROM_KEY) or ():
+            if name in declared_here:
+                continue
+            if exporter not in owners:
+                # The exporter's OWN FILE's record, exactly what the import
+                # edge reads (``compiler_v2._imported_reference``) -- not the
+                # package-scoped ``declared_atoms(exporter)``, which would
+                # also credit a package exporter with atoms its loaded
+                # submodules declare, and so depend on what is loaded.  An
+                # exporter evicted from sys.modules since the import ran has
+                # nobody left to ask, so it owns nothing (lookup-only: asking
+                # never re-imports it).
+                owner_mod = sys.modules.get(exporter)
+                owners[exporter] = frozenset(
+                    getattr(owner_mod, "__dict__", {}).get(DECLARED_ATOMS_KEY)
+                    or ())
+            if name in owners[exporter]:
+                per_file[name] = exporter  # later directive naming it wins
+        for name, exporter in per_file.items():
+            found.setdefault(name, exporter)  # earlier file wins
+    return dict(sorted(found.items()))
 
 
 def _module_for_moduleless_solve(goal) -> tuple[Any, Module]:

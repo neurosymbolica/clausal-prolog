@@ -1,0 +1,4 @@
+# Fixture for tests/test_imported_atoms.py: a plain (non-package) importer.
+-import_from(tests.fixtures.ia_vocab2, [second_only, shared_kind])
+-import_from(tests.fixtures.ia_vocab, [shared_kind, vocab_rel])
+-module(ia_plain_importer, [local_one])

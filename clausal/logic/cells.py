@@ -241,6 +241,20 @@ FUNCTOR_SIGNATURES_KEY = "__clausal_functor_signatures__"
 DECLARED_ATOMS_KEY = "__clausal_declared_atoms__"
 
 
+# The module-namespace key holding a file's ``-import_from`` RECORD: a list of
+# ``(name, exporter)`` pairs in source order, one per imported name, where
+# *name* is the EXPORTER's spelling (an ``alias(orig, local)`` entry records
+# ``orig``, the atom the alias binds) and *exporter* is the resolved module's
+# ``__name__`` (a ``sys.modules`` key, so ``clausal.declared_atoms`` accepts
+# it).  Every imported name is recorded, predicates included: which of them
+# are ATOMS is the exporter's declaration, asked at read time.
+#
+# Written by ``compiler_v2._process_imports``; read by
+# ``solve.imported_atoms``.  Like ``DECLARED_ATOMS_KEY`` it is per FILE, so
+# the answer does not depend on what else was loaded into the namespace.
+IMPORT_FROM_KEY = "__clausal_import_from__"
+
+
 # The module-namespace key marking a module as opted into OPEN-WORLD functor
 # construction (P3-2 Task 6, user ruling R7): ``-implicit_functors`` compiles
 # to a module-level ``__clausal_implicit_functors__ = True`` assignment, the

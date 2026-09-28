@@ -105,7 +105,7 @@ All of these import from `clausal`:
 from clausal import (
     solve, call, once, query,            # the query API
     query_wfs, Solutions,
-    declared_atoms,                      # module introspection
+    declared_atoms, imported_atoms,      # module introspection
     Var, Trail, Module,                  # runtime objects
     deref, unify,                        # term access
     cell_functor, cell_args, make_cell,  # reading and building a cell
@@ -124,6 +124,7 @@ from clausal import (
 | `query_wfs` | `query_wfs(goal, variables, module=None, trail=None) -> list[dict]` | Well-founded semantics: each answer dict carries `"_truth"` (`True` or `Undefined`) and `"_delays"`. See [WFS](wfs.md). |
 | `Solutions` | `Solutions(goal, module=...)` | The interactive (REPL/notebook) solution iterator and display. |
 | `declared_atoms` | `declared_atoms(module_or_package) -> frozenset[str]` | The atoms the module's own files declare in their `-module`/`-private` lists; for a package, also its **loaded** submodules. Excludes `-import_from`ed atoms and does not depend on import order. Takes a module, a `Module` or a dotted name (lookup-only, like `module=`). See [Python integration](python_integration.md#listing-the-atoms-a-module-declares-declared_atoms). |
+| `imported_atoms` | `imported_atoms(module_or_package) -> dict[str, str]` | `{atom: exporter module name}` for the atoms the module's own files (for a package, also its **loaded** submodules) bring in via `-import_from` without re-declaring them. Counts a name only when the exporter's own file declares it as an atom (one level, as the import edge resolves it; for a package exporter, its `__init__` only), so imported predicates are excluded. Disjoint from `declared_atoms`. On a clash the later directive in a file that names the atom wins (an `alias(x, y)` names `x`), and the package's `__init__` wins over its submodules. Same argument forms and errors as `declared_atoms`. See [Python integration](python_integration.md#listing-the-atoms-a-module-imports-imported_atoms). |
 | `cell_functor`, `cell_args`, `make_cell` | `cell_functor(c)`, `cell_args(c) -> tuple`, `make_cell(functor, *args) -> tuple` | Read and build a compound term (a cell). |
 | `to_python` | `to_python(val)` | Deep conversion out. |
 | `to_clausal` | `to_clausal(value) -> Any` | Deep conversion in. Raises `TypeError` for an unregistered class. |
