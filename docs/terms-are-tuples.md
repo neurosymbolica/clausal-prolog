@@ -1,73 +1,74 @@
 # A compound term is a tuple
 
-**P2, 2026-09. What a downstream reader of a term needs to know.**
+**What Python code that reads engine terms needs to know.**
 
-A compound data term is a **cell**: the functor-first tuple `(name, *args)`.
+A compound term is a **cell**: the functor-first tuple `(name, *args)`.
+An atom is a Python `str`, and a string is the carrier `('$chars', text)`
+(see [An atom is a string](atoms-are-strings.md)).
 
-```python
-point(1, 2)        # -> ('point', 1, 2)
-BoolEq(X, Y)       # -> ('BoolEq', X, Y)
-```
+| Clausal source | Python value |
+|---|---|
+| `point(1, 2)` | `('point', 1, 2)` |
+| `edge(a, b)` | `('edge', 'a', 'b')` |
+| `f("text")` | `('f', ('$chars', 'text'))` |
+| `[1, g(x)]` | `[1, ('g', 'x')]` |
 
-It used to be an instance of a `PredicateMeta` class, and anything that read
-`term.x` or `type(term)` is reading the old shape.
+There is no compound class. `Compound` and the keyword-term class `KWTerm`
+were deleted, with `compound_as_cell`, `list_to_cons`, `cons_to_list` and
+`extend/3`; a predicate is no longer a Python class either (`PredicateMeta`
+and `make_predicate` are gone). A keyword-argument term, `point(x=1, y=2)`, is
+a load-time `SyntaxError`: build terms positionally.
 
-## Reading one
+## Reading and building one
 
-**Positions, not attributes.**
-
-```python
-from clausal.logic.cells import compound_cell_shape, cell_args
-
-is_cell, functor = compound_cell_shape(term)
-if is_cell:
-    args = cell_args(term)          # or term[1:]
-```
-
-**Field NAMES come from the declaration, not the term** — a tuple has no field
-names. Ask the database:
+**Positions, not attributes.** `clausal` exports three helpers:
 
 ```python
-fields = db.signature_for(functor, len(args))
+from clausal import cell_functor, cell_args, make_cell
+
+t = make_cell("point", 1, 2)    # ('point', 1, 2)
+cell_functor(t)                 # 'point'
+cell_args(t)                    # (1, 2)
 ```
+
+`cell_functor` and `cell_args` read the slots raw and do not check the shape,
+so test the shape first. A compound is a tuple of two or more elements that
+is not a string carrier:
+
+```python
+from clausal.logic.cells import is_chars
+
+def is_compound(t):
+    return type(t) is tuple and len(t) >= 2 and not is_chars(t)
+```
+
+To turn a whole term into plain Python values instead — every atom and
+string to its text, every cell to a tuple of converted elements — call
+`clausal.to_python(term)`. In a `.seam` file, compare an answer against a
+term written with `--`: `if V == --point(1, 2):`. See
+[Python Integration](python_integration.md).
+
+An error term is a cell too: `error(type_error(atom, 1), atom_length/2)` is
+`('error', ('type_error', 'atom', 1), ('/', 'atom_length', 2))`, read with the
+same helpers (see [Exceptions](exceptions.md)).
 
 ## Three things that bite
 
-1. **A cell is a tuple, so anything that treats a tuple structurally now
+1. **A cell is a tuple, so anything that treats a tuple structurally
    catches terms.** `isinstance(x, tuple)`, `len(x) == 2`, `a, b = x` — a
    generic tuple branch placed ahead of a specific one will swallow a term.
    Put the specific branch first.
 2. **`getattr(term, "field", default)` answers the DEFAULT.** It does not
    raise. The caller proceeds with a wrong-but-plausible value and nothing
    reports it. Read positions, or fail loudly.
-3. **A type test must ANSWER, not raise.** `compound_cell_shape` refuses the
-   reserved 1-tuple `('x',)`. A predicate that sits in a dispatch chain has to
-   handle that and answer False rather than propagate.
+3. **The 1-tuple `('x',)` is reserved.** It is not an atom, not a compound,
+   and must not be built. A type test that sits in a dispatch chain should
+   answer False for it rather than raise.
 
-## What has NOT changed
+## Predicates are not terms
 
-* **`m.pred(X)` still works.** The class is still the predicate handle, and a
-  module attribute still resolves to it. That goes in P4, not here.
-  **Update 2026-09-25: it has gone.** P4's flip (main `e107929e`) binds every
-  module attribute for a predicate to the owner's handle, a `str`, so
-  `m.pred(X)` is now `TypeError: 'str' object is not callable`. From Python,
-  run a plain cell against the module: `solve(("pred", X), module=m)` — see
-  [Querying from Python](python_integration.md#querying-from-python).
-* **A clause HEAD is still an instance** on the one internal channel that
-  builds it (`PredicateMeta._clausal_head`). Also P4.
-* **Atoms are unchanged**: an atom is the interned `str`, a string is the
-  `('$chars', s)` carrier. See the atoms announcement.
-* The `Compound` class was removed (2026-09-27), and the keyword-term class
-  `KWTerm` after it (2026-09-28).
-
-## Measured
-
-Loading the 37 `tests/fixtures/docs/*.clausal` fixtures:
-
-| | live term INSTANCES | `PredicateMeta` classes |
-|---|---|---|
-| before P2 | 534 | 574 |
-| after P2  | **0** | 574 |
-
-Classes are unchanged **by design** — they are the predicate handle until P4.
-What P2 removed is the instance.
+A module attribute for a predicate is the predicate's **handle**, a `str`, so
+`m.pred(X)` is `TypeError: 'str' object is not callable`. Query with `--pred(X)`
+in a `.seam` file, or run a plain cell against the module with
+`solve(("pred", X), module=m)` — see
+[Querying from Python](python_integration.md#querying-from-python).

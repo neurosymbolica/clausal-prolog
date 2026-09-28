@@ -10,7 +10,7 @@ Any `.clausal` file (see [Syntax](syntax.md)) can include test clauses of the fo
 --8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:test_syntax"
 ```
 
-A test passes if its body succeeds (produces at least one solution). Tests live alongside the predicates they exercise:
+A test passes if its body succeeds (produces at least one solution); a body that raises fails the test and reports the error. The head is `test/1`, lowercase like every predicate name: the old `Test/1` spelling is now a load-time error (TitleCase names have no role in Clausal), and the runner names the rename. Tests live alongside the predicates they exercise:
 
 ```clausal
 fib(0, 0),
@@ -43,11 +43,11 @@ python -m clausal.testing clausal/examples/fibonacci.clausal
 python -m clausal.testing -v clausal/examples/
 ```
 
-The exit code is 0 if all tests pass, 1 otherwise.
+The exit code is 0 if all tests pass, 1 otherwise. A file that fails to load is reported as one failing `<load>` item, with the load error and its source line.
 
 ## Running `.clausal` tests via pytest
 
-The `conftest.py` at the project root registers a pytest plugin that automatically collects `.clausal` files. The [import hook](import.md) handles loading and compilation. Each `test/1` clause appears as an individual pytest item:
+The `conftest.py` at the project root registers a pytest plugin that automatically collects `.clausal` files (and their `.seam` alias), and also every ```` ```clausal ```` block in `docs/*.md` that contains a `test/1` clause. The [import hook](import.md) handles loading and compilation. Each `test/1` clause appears as an individual pytest item:
 
 ```bash
 python -m pytest clausal/examples/fibonacci.clausal -v
@@ -72,8 +72,9 @@ Note: `tests/test_continuation_search.py` requires `greenlet` and is skipped if 
 ## Writing good `test/1` clauses
 
 - Each test should be a single rule with a descriptive string as the argument.
-- Test bodies can use any predicates defined in the module, plus [builtins](predicates.md) like `append`, `Member`, etc.
-- Use `==` for [CLP(ℤ)](constraints.md) arithmetic equality on computed results: `test("check") <- (SomePred(X), X == expected)`. For ground integers this behaves like equality; for Vars it posts a CLP(ℤ) constraint.
+- Test bodies can use any predicates defined in the module, plus [builtins](predicates.md) like `append`, `in_`, `member`, etc.
+- Use `==` for [CLP(ℤ)](constraints.md) arithmetic equality on computed results: `test("check") <- (some_pred(X), X == 13)`. For ground numbers this behaves like equality; for Vars it posts a constraint (see [Arithmetic](arithmetic.md) for what `/` means there).
+- Use `X is TERM` to unify with a non-numeric expected answer: `test("colour") <- (colour_of(apple, C), C is red)`.
 - Use `structural_eq(X, Y)` for structural equality (Prolog `==/2`) when comparing non-integer terms.
 - Use `==` for [arithmetic](arithmetic.md): `test("arith") <- (N == 2 + 3, N == 5)`.
 

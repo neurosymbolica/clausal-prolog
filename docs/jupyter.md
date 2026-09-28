@@ -36,7 +36,9 @@ import clausal.examples.fibonacci as fib
 *(fib.fib(8, N))
 ```
 
-This displays `N is 21` with syntax colouring.  Uppercase names like `N` are
+This displays `N is 21` with syntax colouring. (The goal-position seam,
+`for N in --fib.fib(8, N):`, is for Python hosted in a `.clausal`/`.seam` file
+and does not work in a notebook cell; see [IPython](ipython.md#query-syntax).)  Uppercase names like `N` are
 automatically allocated as fresh logic variables.
 
 ---
@@ -115,7 +117,7 @@ In a notebook you would query this as:
 
 ```python
 import family
-*(family.grandparent("alice", GC))
+*(family.grandparent('alice', GC))   # 'alice', the atom: "alice" is a string
 ```
 
 ### List membership and append

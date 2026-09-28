@@ -42,42 +42,57 @@ for t in threads:
 ## Pattern 1: Independent queries in parallel
 
 The simplest pattern. Multiple threads query the same compiled database
-concurrently. Each thread has its own Trail and Vars — they share only
-the (read-only) clause database.
+concurrently; they share only the (read-only) clause database.
+
+Write the query in a `.clausal` or `.seam` file, in
+[goal position](python_integration.md#goal-position-if-goal-for-in-goal).
+Every run of a `--` goal makes its own variables and its own Trail, so
+the function is safe to call from any thread. With `graph.clausal`:
+
+```clausal
+edge('a', 'b'),
+edge('b', 'c'),
+edge('c', 'd'),
+
+path(X, Y) <- edge(X, Y)
+path(X, Y) <- (edge(X, Z), path(Z, Y))
+```
+
+```python
+# paths.seam
+-import_module(graph)
+
+def reachable_from(source):
+    """Every node reachable from source; safe to call from any thread."""
+    return sorted(Y for Y in --graph.path(++source, Y))
+```
+
+Launch the threads from ordinary Python:
 
 ```python
 import threading
-from clausal.logic.variables import Var, Trail, deref
-from clausal.logic.solve import call
+import clausal, paths
 
-def query_worker(module, results, idx):
-    """Run a query in its own thread."""
-    x = Var()
-    solutions = []
-    for trail in call("path", "a", x, module=module):
-        solutions.append(deref(x))
-    results[idx] = solutions
+sources = ["a", "b", "c", "d"]
+results = [None] * len(sources)
 
-# Assume `mod` is a compiled Module with edge/2 and path/2
-results = [None] * 4
-threads = [
-    threading.Thread(target=query_worker, args=(mod, results, i))
-    for i in range(4)
-]
+def query_worker(idx):
+    results[idx] = paths.reachable_from(sources[idx])
+
+threads = [threading.Thread(target=query_worker, args=(i,)) for i in range(len(sources))]
 for t in threads:
     t.start()
 for t in threads:
     t.join()
 
-# All threads got the same answers (order may vary)
-for r in results:
-    print(sorted(r))
+print(results)  # [['b', 'c', 'd'], ['c', 'd'], ['d'], []]
 ```
 
-**Why this works:** `call()` creates a fresh Trail internally if you
-don't pass one. Each thread's `StepGenerator` chain is independent.
-The clause database's dispatch tables are immutable snapshots — no
-locking needed for reads. See [Free-Threaded Python Support](free_threading.md) for details on the C extension locking design.
+**Why this works:** each query creates a fresh Trail internally, and each
+thread's `StepGenerator` chain is independent. The clause database's
+dispatch tables are immutable snapshots — no locking needed for reads. See
+[Free-Threaded Python Support](free_threading.md) for details on the C
+extension locking design.
 
 ---
 
@@ -103,41 +118,40 @@ same Python objects.
 
 ## Pattern 3: Collecting results from parallel searches
 
-Use a lock or a per-index list to collect results without races:
+From a plain `.py` file, where `--` is not available, use `solve` and
+give each thread its own `Var`. Write each thread's answers to its own
+slot (or use a lock) so collection does not race:
 
 ```python
 import threading
-from clausal.logic.variables import Var, Trail, deref, walk
-from clausal.logic.solve import call
+from clausal import Var, solve, to_python
+import graph
 
-def search_worker(module, functor, arg, results, idx):
-    x = Var()
-    solutions = []
-    for trail in call(functor, arg, x, module=module):
-        solutions.append(walk(x))   # walk() deep-dereferences
-    results[idx] = solutions
+def search_worker(source, results, idx):
+    x = Var()                        # this thread's own query variable
+    results[idx] = [to_python(x.value) for _ in solve(("path", source, x), module=graph)]
 
-# Run different queries in parallel
-queries = [("path", "a"), ("path", "b"), ("path", "c"), ("path", "d")]
-results = [None] * len(queries)
+sources = ["a", "b", "c", "d"]
+results = [None] * len(sources)
 threads = [
-    threading.Thread(
-        target=search_worker,
-        args=(mod, f, a, results, i)
-    )
-    for i, (f, a) in enumerate(queries)
+    threading.Thread(target=search_worker, args=(s, results, i))
+    for i, s in enumerate(sources)
 ]
 for t in threads:
     t.start()
 for t in threads:
     t.join()
+
+print(results)  # [['b', 'c', 'd'], ['c', 'd'], ['d'], []]
 ```
 
-!!! tip "`deref` vs `walk`"
-    `deref(x)` follows the top-level binding chain but doesn't recurse
-    into lists or compounds.  `walk(x)` deeply substitutes all bound
-    variables throughout a term.  Use `walk` when you want a fully
-    ground snapshot to store across threads.
+!!! tip "Keep a snapshot, not a binding"
+    A `Var`'s binding is undone when the loop moves to the next answer,
+    so copy what you keep while you are inside the loop.
+    `clausal.to_python(x.value)` converts the answer into plain Python
+    values; `clausal.logic.variables.walk(x)` keeps it as an engine term
+    with every bound variable substituted. `deref(x)` follows only the
+    top-level binding.
 
 ---
 

@@ -1,9 +1,10 @@
 # An atom is a string
 
-**Landed 2026-09-18. What a downstream Python reader of a term must know.**
+**Landed 2026-09-18. What Python code that reads engine terms must know.**
 
-This change shipped with no downstream-facing note. It should have had one on
-the day, and this is it, written after the omission cost a corpus sweep.
+This is the migration note for code written before the change. For the
+current rules as a whole, see [Python Integration](python_integration.md#crossing-the-boundary-atoms-and-strings)
+and [Terms are tuples](terms-are-tuples.md).
 
 ## The change is a SWAP, in both directions
 
@@ -33,8 +34,8 @@ chars("some text")  # -> ('$chars', 'some text')     is_atom -> False
 
 It asked "is this a STRING?" and it now asks "is this an ATOM?". It does not
 raise, it does not return empty, it answers a different question — correctly,
-for the other question. **No test that only checks scores can see this**, which
-is why it is first in this document rather than last.
+for the other question. **A test that only checks final answers cannot see
+this**, which is why it is first in this document rather than last.
 
 Every pre-flip `isinstance(v, str)` over a value that came out of the engine is
 a site to READ, not to rewrite mechanically: whether it meant "string" or
@@ -50,7 +51,7 @@ a site to READ, not to rewrite mechanically: whether it meant "string" or
    it lands in dict keys, `sorted()` and `set()` operations as a tuple. Surfaces
    as `TypeError: '<' not supported between instances of 'tuple' and 'str'`, or
    as two key spaces that never meet.
-3. **The inversion above.** Silent, and not findable by scoring.
+3. **The inversion above.** Silent, and not findable from final answers alone.
 
 Shapes 1 and 2 are mechanical once found. Shape 3 is a read per site.
 
@@ -59,7 +60,12 @@ Shapes 1 and 2 are mechanical once found. Shape 3 is a read per site.
 ```python
 from clausal.logic.atoms import is_atom, spelling      # atom test, atom -> text
 from clausal.logic.cells import is_chars, chars_text   # string test, string -> text
+from clausal import to_python                          # a whole term -> Python values
 ```
+
+`to_python` converts deeply: an atom and a string both become their text, a
+compound becomes a tuple of converted elements. Use it where you want Python
+values and no longer care which kind of text a value was.
 
 Prefer these to a local copy. If a local helper is unavoidable — an independent
 reference implementation, say — spell it **`type(value) is str`**, which is the
@@ -82,11 +88,11 @@ every value the engine hands out now; replace it with `is_atom(v)`.
 `docs/python_integration.md`).
 
 And grep your own tree for the three shapes above before trusting a green run:
-a scoring gate cannot see shape 3, and it sees shape 1 only where the code
-happened to validate instead of filter.
+an answers-only check cannot see shape 3, and it sees shape 1 only where the
+code happened to validate instead of filter.
 
 ## See also
 
-* `docs/strict-atoms-migration.md` — how a bare name becomes a declared atom.
-* The terms announcement, for compound terms as functor-first tuples, lands
-  with that work; an atom is unchanged by it and is described here.
+* [Strict atoms migration](strict-atoms-migration.md) — how a bare name becomes a declared atom.
+* [Terms are tuples](terms-are-tuples.md) — compound terms as functor-first tuples.
+* [Python Integration](python_integration.md) — the `--`/`++` seams and the converters.

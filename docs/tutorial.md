@@ -29,7 +29,38 @@ Each line is a **fact** — an unconditional statement that something is true.
 The trailing comma is the separator between clauses (think of the file as one big
 expression).
 
-Query it from Python:
+Query it from Python. Next to `hello.clausal`, create `ask.seam`: a `.seam`
+file is Python that can also speak Clausal terms (`.clausal` and `.seam` are
+the same format under two names).
+
+```python
+# ask.seam
+-import_from(hello, [greeting])
+
+if --greeting('hello'):
+    print("yes")
+
+for X in --greeting(X):
+    print(X)
+```
+
+and run it:
+
+```bash
+python -c "import clausal, ask"
+```
+
+(`import clausal` installs the import hook that loads `.clausal` and `.seam`
+files as Python modules.)
+
+`--` marks a Clausal goal inside Python. After `if`, the goal is asked once:
+`greeting('hello')` holds, so this prints `yes`. After `for ... in`, every
+solution is produced in turn, and the ALL-CAPS name `X` comes back as an
+ordinary Python variable: `hello`, `hi`, `hey there`.
+
+From a plain `.py` file, where `--` is not available, the same questions go
+through `solve`: a goal is a **cell** — a tuple of the predicate's name
+followed by its arguments — run against the module you pass:
 
 ```python
 from clausal import Var, solve
@@ -37,19 +68,13 @@ import hello
 
 for trail in solve(("greeting", "hello"), module=hello):
     print("yes")
-```
 
-A goal is a **cell**: a tuple of the predicate's name followed by its
-arguments. `solve` runs it against the module you pass, and yields once per
-solution. This prints `yes` — one solution, confirming the fact. Try querying
-with a variable:
-
-```python
 for trail in solve(("greeting", X := Var()), module=hello):
     print(X.value)
 ```
 
-This prints every greeting in turn: `hello`, `hi`, `hey there`.
+The rest of this tutorial uses the `--` form; see
+[Python Integration](python_integration.md#querying-from-python) for both.
 
 ??? tip "Thinking relationally"
 
@@ -88,28 +113,26 @@ a parent of GRANDCHILD."
 The `<-` arrow means "is true if". Goals in the body are separated by **commas** and
 the body is wrapped in parentheses.
 
-Query it from Python:
+Query it from a `.seam` file:
 
 ```python
-from clausal import Var, solve
-import family
+-import_from(family, [grandparent])
 
-for trail in solve(("grandparent", "alice", X := Var()), module=family):
-    print(X.value)
+for X in --grandparent('alice', X):
+    print(X)
 ```
 
 Result: `dave` then `eve` — both of alice's grandchildren.
 
 ### Multiple solutions and backtracking
 
-`solve(goal, module=…)` yields the Trail after each solution. Clausal finds
-all clauses whose heads unify
-with the goal — these represent logical alternatives. If a condition in the body
-does not hold, Clausal explores the remaining alternatives.
+Clausal finds all clauses whose heads unify with the goal — these represent
+logical alternatives. If a condition in the body does not hold, Clausal
+explores the remaining alternatives.
 
-To get just the first answer use `once(goal, module=…)`. To iterate all
-solutions use a `for trail in solve(goal, module=…):` loop and read `X.value`
-on your Var objects inside the loop.
+`for X in --goal:` iterates every solution; `if --goal:` takes just the first
+one, and its variables stay bound after the `if`. The lower-level
+equivalents are `solve(goal, module=…)` and `once(goal, module=…)`.
 
 ---
 
@@ -154,7 +177,8 @@ search has its own consistent set of bindings.
 
 ## [Lists](lists.md)
 
-Lists are written with square brackets: `[]` (empty), `[1, 2, 3]`, `["a", "b"]`.
+Lists are written with square brackets: `[]` (empty), `[1, 2, 3]`, `['a', 'b']`.
+(`'a'` is an atom, a symbolic constant; `"a"` is a string, text.)
 The head/tail pattern uses a star:
 
 ```clausal
@@ -226,16 +250,19 @@ factorial(N, F) <- (
     N > 0,
     N1 == N - 1,
     factorial(N1, F1),
-    F == N1 * F1 + F1
+    F == N * F1
 )
 ```
 
-Supported operators: `+`, `-`, `*`, `/`, `//` (integer division), `**` (power),
-`mod` (modulo), `abs(X)`, `min(X, Y)`, `max(X, Y)`.
+Supported operators: `+`, `-`, `*`, `/`, `//`, `%` and `**`. Written bare,
+as here, an operator keeps its Python meaning (`-7 // 2` is -4); inside a `==` constraint `/` is exact (`X == 7 / 2`
+gives 7/2). [Operators](operators.md) has the full table, including the
+quoted Prolog spellings.
 
 `==` posts a [CLP(ℤ)](constraints.md) constraint that works in all directions — even when
-variables are unbound. Use `is` with a `++` escape only for eager Python-side
-evaluation (e.g., `LABEL is ++"fizz"` for string operations).
+variables are unbound. `is` is **unification**, not evaluation: `X is 1 + 2`
+binds `X` to the term `1 + 2`. To evaluate eagerly, use `eval_(1 + 2, X)` or
+a Python escape, `X is ++(1 + 2)`.
 
 ### Comparisons
 
@@ -243,7 +270,7 @@ The standard comparison operators work directly as goals:
 
 ```clausal
 positive(N) <- (N > 0)
-between(LOW, HIGH, N) <- (
+in_range(LOW, HIGH, N) <- (
     N >= LOW,
     N <= HIGH
 )
@@ -255,23 +282,27 @@ Comparison operators `<`, `>`, `>=`, `<=` work directly as goals. Use `==` and
 ### A worked example: fizzbuzz
 
 ```clausal
-fizzbuzz(N, LABEL) <- (N % 15 == 0, LABEL is ++"fizzbuzz")
-fizzbuzz(N, LABEL) <- (N % 3 == 0, LABEL is ++"fizz")
-fizzbuzz(N, LABEL) <- (N % 5 == 0, LABEL is ++"buzz")
-fizzbuzz(N, N),
+fizzbuzz(N, 'fizzbuzz') <- (N % 15 == 0)
+fizzbuzz(N, 'fizz') <- (N % 3 == 0, N % 5 != 0)
+fizzbuzz(N, 'buzz') <- (N % 5 == 0, N % 3 != 0)
+fizzbuzz(N, N) <- (N % 3 != 0, N % 5 != 0)
 ```
 
-Query it from Python:
+Each clause states exactly when it holds, so every number has one label.
+Query it from a `.seam` file, passing each Python `n` in with `++`:
 
 ```python
-from clausal import Var, once
-import fizzbuzz
+-import_from(fizzbuzz, [fizzbuzz])
 
-results = []
-for n in range(1, 16):
-    once(("fizzbuzz", n, X := Var()), module=fizzbuzz)
-    results.append(X.value)
+def labels(upto):
+    results = []
+    for n in range(1, upto + 1):
+        if --fizzbuzz(++n, LABEL):
+            results.append(LABEL)
+    return results
 ```
+
+`labels(15)` is `[1, 2, 'fizz', 4, 'buzz', 'fizz', 7, 8, 'fizz', 'buzz', 11, 'fizz', 13, 14, 'fizzbuzz']`.
 
 ---
 
@@ -360,20 +391,24 @@ python -m pytest
 Clausal's [import hook](import.md) picks up `.clausal` files automatically. The test runner
 collects any Python test files that import and exercise your predicates.
 
-A typical Python test wrapper looks like:
+A Python test can also run one `test/1` clause by its description. The
+description `"sum [1,2,3,4] = 10"` is a **string**, so from a `.py` file build
+it with `chars` (a plain Python `str` would be the atom of that spelling, a
+different term):
 
 ```python
 from clausal import once
+from clausal.logic.cells import chars
 import mymodule
 
 def test_sum():
-    assert once(("test", "sum [1,2,3,4] = 10"), module=mymodule) is not None
+    assert once(("test", chars("sum [1,2,3,4] = 10")), module=mymodule) is not None
 ```
 
 A wrapper that runs more than a couple of goals should build them through one
 helper function of its own rather than repeating the tuple and the `module=`
 at every call site — see
-[Driving Clausal from a test or scoring harness](python_integration.md#driving-clausal-from-a-test-or-scoring-harness).
+[Driving Clausal from a test suite](python_integration.md#driving-clausal-from-a-test-suite).
 
 See [Testing](testing.md) for the full testing guide, including how to use fixtures
 and parametrize.
@@ -404,7 +439,16 @@ edge between them. The second states that they are reachable if there is an edge
 from SOURCE to some MID, and MID and DEST are reachable. These two clauses are
 logical alternatives — together they define the complete reachability relation.
 
-Query it from Python:
+Query it from a `.seam` file:
+
+```python
+-import_from(graph, [reachable])
+
+print(sorted({DEST for DEST in --reachable('a', DEST)}))
+# ['b', 'c', 'd']
+```
+
+or from a plain `.py` file:
 
 ```python
 from clausal import Var, solve

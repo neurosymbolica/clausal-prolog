@@ -1,6 +1,180 @@
 # Python Integration
 
-Clausal and Python work together seamlessly. From `.clausal` files, use `++()` to call any Python expression. From Python code, build a goal cell and run it against its module with [`solve()`](#querying-from-python).
+Clausal and Python meet at two seams, one for each direction:
+
+- **`--term`** — Python speaks terms. In Python code hosted by a `.clausal`
+  or `.seam` file, `--goal` in goal position (`if`, `for`, `while`) **runs**
+  the goal and hands back its answers; anywhere else it builds the term.
+- **`++expr`** — Clausal calls Python. Inside a clause (or inside a `--`
+  term), `++expr` evaluates a Python expression and passes its value in.
+
+Nothing is converted at either seam unless you ask: an answer is the engine's
+own term, and [`to_python`](#the-converters-to_python-to_clausal-term_key)
+turns it into Python values. From a plain `.py` file, where `--` is not
+available, build a goal cell and run it with [`solve()`](#from-a-plain-py-file-solve-once-call).
+
+---
+
+## Querying from Python
+
+### In a `.seam` file: `--goal`
+
+Write the Python that asks questions in a `.seam` file (`.clausal` is the
+same format; the two suffixes are aliases). It is ordinary Python plus
+Clausal terms, and a term in goal position is a query:
+
+```clausal
+# report.seam
+-import_from(clausal.examples.fibonacci, [fib])
+
+def fib_of(n):
+    if --fib(++n, F):              # first answer; F becomes a local
+        return F
+
+def fib_table(n):                  # every answer of a conjunction
+    return [(N, F) for N, F in --(between(0, ++n, N), fib(N, F))]
+```
+
+```python
+import clausal          # installs the import hook for .clausal/.seam files
+import report
+
+print(report.fib_of(10))      # 55
+print(report.fib_table(4))    # [(0, 0), (1, 1), (2, 1), (3, 2), (4, 3)]
+```
+
+Inside `--` the grammar is Clausal's: an ALL-CAPS name is a logic variable,
+a bare name is an atom or a predicate, `++n` passes the Python value of `n`
+in. `if --g:` runs `g` for its first answer, `for X in --g:` iterates every
+answer, and the goal's variables come back as ordinary Python locals. A
+predicate in another module is reached with `-import_from(m, [pred])` as
+above, or with `-import_module(m)` and the dotted form `--m.pred(X)`:
+
+```clausal
+-import_module(clausal.examples.fibonacci)
+
+def fib_10():
+    for F in --clausal.examples.fibonacci.fib(10, F):
+        return F
+```
+
+What comes back is the **raw term**: an atom is a Python `str`, a string is
+the carrier `('$chars', text)`, a compound is its cell tuple. Compare it
+against a `--` term, or convert it with `to_python`. The full rules — goal
+positions, exports, undefined and constrained answers, the lints — are in
+[Goal position](#goal-position-if-goal-for-in-goal) below.
+
+A top-level `--goal` over a predicate defined **in the same file** runs
+before that file's clauses are compiled, and fails; put it in a function, as
+above, or query an imported predicate.
+
+### From a plain `.py` file: `solve`, `once`, `call`
+
+A `.py` file cannot use `--`, and a goal built at runtime is data, not
+source. Both use the lower-level API: a goal is a **cell** — a tuple whose
+first element is the predicate's name and whose remaining elements are its
+arguments — run against a **module**, the one whose database answers it.
+Pass both, every time:
+
+```python
+from clausal import Var, solve
+import fibonacci
+
+for trail in solve(("fib", 10, F := Var()), module=fibonacci):
+    print(F.value)  # 55
+```
+
+`module=` takes the imported `.clausal` module (as here), a `Module` object, or
+the module's dotted name as a string. A cell does not carry a module of its
+own, so `solve` without `module=` refuses an unqualified cell with an ISO
+`existence_error(module, …)` rather than guessing where the predicate lives.
+
+!!! warning "A module attribute is a handle, not something to call"
+    `fibonacci.fib` is the predicate's **handle** — a `str` naming the module
+    that owns it and the predicate — so `fibonacci.fib(10, F)` raises
+    `TypeError: 'str' object is not callable`. Build the cell and pass the
+    module instead, or query from a `.seam` file with `--`.
+
+`Var` objects support Python coercion:
+
+| Access | Behaviour |
+|--------|-----------|
+| `X.value` | Dereferenced value (Var if still unbound) |
+| `str(X)` | String of dereferenced value (`_N` if unbound) |
+| `int(X)` | Integer coercion (raises `UnboundVarCoercionError` if unbound) |
+| `float(X)` | Float coercion (raises `UnboundVarCoercionError` if unbound) |
+| `bool(X)` | Bool coercion (raises `UnboundVarCoercionError` if unbound) |
+| `f"{X}"` | F-string auto-deref |
+
+Read a binding **inside** the loop: each iteration yields the `Trail` with that
+solution's bindings live, and they are undone before the next one.
+
+### `once` — first solution only
+
+```python
+from clausal import Var, once
+import fibonacci
+
+trail = once(("fib", 10, F := Var()), module=fibonacci)
+if trail is not None:
+    print(F.value)  # 55
+```
+
+Returns the `Trail` for the first solution, or `None` if the goal fails.
+
+### `call` — drive a named predicate directly
+
+`call` takes the predicate name and its arguments separately and hands them
+straight to the compiled dispatch function, skipping the goal compilation
+`solve` does. It is the lowest-overhead path for calling one predicate many
+times:
+
+```python
+from clausal import Var, call
+import fibonacci
+
+for trail in call("fib", 7, N := Var(), module=fibonacci):
+    print(N.value)  # 13
+```
+
+### Driving Clausal from a test suite
+
+Plain-Python code that runs many goals — a pytest suite around a rulebase,
+a script that checks answers in bulk — should build every goal through **one
+helper function of its own**, not by writing raw tuples at each call site
+(in a `.seam` file, the `--` goal already names its predicate at the site):
+
+```python
+from clausal import Var, solve
+import fibonacci
+
+def answers(name, *args):
+    """The one place this suite builds a goal and names its module."""
+    return solve((name, *args), module=fibonacci)
+
+def test_fib_10():
+    F = Var()
+    assert [F.value for _ in answers("fib", 10, F)] == [55]
+```
+
+The goal's shape and the module it runs against are then decided in exactly
+one place: a change to either is one edit, and a call site cannot quietly
+drift to a different module or a malformed goal.
+
+### `query` — collect binding dicts (deprecated)
+
+!!! warning "Deprecated"
+    `query()` is deprecated. Iterate `solve(...)` and read `Var.value` inside
+    the loop, as above.
+
+```python
+from clausal import Var, query
+import fibonacci
+
+F = Var()
+for bindings in query(("fib", 10, F), {"F": F}, fibonacci):
+    print(bindings)  # {'F': 55}
+```
 
 ---
 
@@ -10,7 +184,9 @@ The `++()` operator evaluates an arbitrary Python expression at search time with
 
 ### As a Value
 
-Use `++expr` on the right side of `==` or `is` to compute a Python value:
+Use `++expr` as the value in a unification (`R is ++expr`) to compute a
+Python value. The value enters **unconverted**: a Python `str` is an atom, an
+`int` is an integer, any other object is itself.
 
 ```clausal
 list_len(L, N) <- (N is ++len(L))
@@ -55,28 +231,29 @@ add_len(A, B, R) <- (R is ++(len(A) + len(B)))
 ## `--` — The Seam: Python Speaks Terms
 
 `++()` escapes from Clausal to Python. `--` is the escape in the other direction:
-inside Python code hosted by a `.clausal` file (a function body, a module-level
-assignment), `--term` yields the runtime **term** — the same tuple the engine
-builds for that source in a clause — at the point of execution.
+inside Python code hosted by a `.clausal` or `.seam` file (a function body, a
+module-level assignment), `--term` yields the runtime **term** — the same tuple
+the engine builds for that source in a clause — at the point of execution. In
+[goal position](#goal-position-if-goal-for-in-goal) it runs the term as a goal
+instead.
 
 ```clausal
--module(oracle, [verdict(STATUS, IDS, CITATIONS)])
--double_quotes(chars)
--private([permitted])
+-module(shop, [order(STATUS, ITEMS, NOTES)])
+-private([shipped])
 
-def expected(status, ids, cites):
-    return --verdict(++status, ++ids, ++cites)      # ('verdict', status, ids, cites)
+def expected(status, items, notes):
+    return --order(++status, ++items, ++notes)      # ('order', status, items, notes)
 
-GOLD = --verdict(permitted, ['r1'], [])              # ('verdict', 'permitted', ['r1'], [])
-TEXT = --verdict(permitted, ["r1"], [])              # ('verdict', 'permitted', [('$chars', 'r1')], [])
+WANT = --order(shipped, ['a1'], [])              # ('order', 'shipped', ['a1'], [])
+TEXT = --order(shipped, ["a1"], [])              # ('order', 'shipped', [('$chars', 'a1')], [])
 
-expected("permitted", ["r1"], []) == GOLD            # True
-expected("permitted", ["r1"], []) == TEXT            # False
+expected("shipped", ["a1"], []) == WANT            # True
+expected("shipped", ["a1"], []) == TEXT            # False
 ```
 
-A Python `str` handed in through `++` is an **atom**, while `"r1"` written
-inside `--` under `-double_quotes(chars)` is a **string**, so the gold value
-spells the id `'r1'` (an atom in every mode) to compare equal with what
+A Python `str` handed in through `++` is an **atom**, while `"a1"` written
+inside `--` is a **string** (`"…"` is a string by default), so the expected
+value spells the id `'a1'` (an atom in every mode) to compare equal with what
 `expected` builds from Python text.
 
 Inside `--` the grammar is Clausal's, under the host module's own rules:
@@ -86,13 +263,12 @@ Inside `--` the grammar is Clausal's, under the host module's own rules:
   minted under `-implicit_atoms`;
 - an **ALL-CAPS or `_leading` name** is a fresh logic variable, shared within
   the one `--` expression;
-- `'...'` is an atom in every mode; `"..."` follows the module's
-  `-double_quotes` mode — declare it explicitly, because under the engine
-  default `atom` a `"..."` a Python author reads as a string is an atom (the
-  seam warns once per literal when the module never chose);
+- `'...'` is an atom; `"..."` is a string (the carrier `('$chars', text)`),
+  as in Scryer and Trealla, unless the module declares the temporary
+  `-double_quotes(atom)` setting;
 - a **functor** must be declared, imported, or opened with `-implicit_functors`;
-  it builds the cell, functor first, positional arguments filling the declared
-  slots and keywords their named slots; a predicate name builds the same cell,
+  it builds the cell, functor first, then the positional arguments (a keyword
+  argument, `--point(x=1)`, is a `SyntaxError`); a predicate name builds the same cell,
   which `call/N` runs as a goal — no class instance is ever minted;
 - a **Python value** enters only through `++expr`, evaluated at once; seams
   nest to any depth (`--outer(++[--inner(++x) for x in xs])`);
@@ -114,7 +290,7 @@ hosted file exactly as in a plain one (a bare `{x}` spells an atom and passes
 anything else unchanged to `format()`; `{x!s}` keeps Python's meaning, `str`
 first, then the spec). Without
 this, `str(answer)` on the string `"ok"` (the cell `('$chars', 'ok')`) is the
-tuple repr `"('$chars', 'ok')"`, and a comparison against text scores a wrong
+tuple repr `"('$chars', 'ok')"`, and a comparison against text accepts a wrong
 answer with no error. The rewrite is skipped in a file that binds `str`
 itself. It covers only those explicit forms: `%s`, `.format`, `print`,
 `json.dumps` and container reprs still show the cell — convert there
@@ -124,7 +300,7 @@ terms.
 Two cautions. The rewrite fires **only** in Python hosted by a `.clausal`
 file; a plain `.py` module never gets it, so verify it from a host or you
 will measure the wrong thing. And it is for display and serialization, not
-for an oracle's comparison: `str(atom) == str(text)` is `True` for a domain
+for a checker's comparison: `str(atom) == str(text)` is `True` for a rulebase
 that wrongly returns the string where the atom belongs, so a text-space
 comparison can no longer see that class of wrong answer. Compare terms.
 
@@ -134,15 +310,40 @@ A term in goal position is called. Goal positions are exactly: the test of
 `if`/`elif`/`while`, the iterable of `for`, and `not` inside those tests.
 
 ```clausal
-if --(verdict(S, IDS) is ++answer):          # unify once; S, IDS become locals
-    use(S, IDS)
-for S, IDS in --decide(++profile, verdict(S, IDS)):   # every solution
-    use(S, IDS)
-if not --decide(++profile, verdict(S, _)):    # failure test; exports nothing
-    ...
-while --next(++cur, N):                      # re-run each iteration
-    cur = N
+-module(orders, [])
+-private([small, large, open, closed, a1, a2, state(S, IDS)])
+
+status(small, state(open, [a1, a2])),
+status(large, state(closed, [a1])),
+status(large, state(closed, [a2])),
+next_id(N, M) <- (N < 3, M == N + 1)
+
+def first(size):
+    if --status(++size, state(S, IDS)):          # first answer; S, IDS become locals
+        return S, IDS
+
+def every(size):
+    return [(S, IDS) for S, IDS in --status(++size, state(S, IDS))]   # every answer
+
+def missing(size):
+    if not --status(++size, state(_, _)):         # failure test; exports nothing
+        return True
+    return False
+
+def parts(answer):
+    if --(state(S, IDS) is ++answer):             # unify once
+        return S, IDS
+
+def count_up():
+    cur, seen = 0, []
+    while --next_id(++cur, N):                    # re-run each iteration
+        cur = N
+        seen.append(N)
+    return seen
 ```
+
+`orders.first(large)` is `('closed', ['a1'])`, `orders.every(large)` is
+`[('closed', ['a1']), ('closed', ['a2'])]`, and `count_up()` is `[1, 2, 3]`.
 
 Exported names are ordinary locals: on success they survive the block; on
 failure nothing is assigned (a later read is an `UnboundLocalError`). A
@@ -159,14 +360,21 @@ converted. Compare an answer against a `--`-wrapped term, and ask for a
 Python value by name:
 
 ```clausal
--double_quotes(chars)
-for V in --verdict(V):
-    if V == --result(permitted, "Article 6(1)", art_6):   # the same term
-        ...
-    text = to_python(V)            # ('result', 'permitted', 'Article 6(1)', 'art_6')
-for T in --txt(T):
-    T == --"some text"             # True: the same string term
-    to_python(T)                   # 'some text'
+-module(rawout, [])
+-private([ok, done, result(STATUS, TEXT, TAG)])
+from clausal import to_python
+
+answer(result(ok, "all good", done)),
+txt("some text"),
+
+def check():
+    for V in --answer(V):
+        print(V == --result(ok, "all good", done))   # True: the same term
+        print(to_python(V))                          # ('result', 'ok', 'all good', 'done')
+    for T in --txt(T):
+        print(T == --"some text")                    # True: the same string term
+        print(repr(T))                               # ('$chars', 'some text')
+        print(to_python(T))                          # some text
 ```
 
 A plain Python literal on the other side — `T == "some text"` — is **False**
@@ -213,7 +421,7 @@ answer raises `UndefinedAnswer` (use `query_wfs` for truth values and delays)
 whatever the goal's shape: a bare tabled call (`if --wins(a):`, `for X in
 --wins(X):`), a conjunction (`if --(X is a, wins(X)):`), an untabled wrapper
 (`if --p(a):` with `p(X) <- wins(X)`), a call fed through `++`
-(`if --decide(++profile, verdict(S, X)):`), a negation delayed inside any clause
+(`if --classify(++item, S, X):`), a negation delayed inside any clause
 body on the way. The whole goal-position solve runs under one throwaway tabling
 leader, so the judgement is exactly the delays the answer's own derivation
 incurred, never reconstructed from a table key afterwards. Each answer is judged
@@ -303,7 +511,7 @@ into text.
 There are **two** outbound conversions, and which one a boundary gets is a
 decided trade rather than an accident.
 
-`clausal.logic.to_python.to_python` is the **deep** one, and every `py.*`
+`clausal.to_python` is the **deep** one, and every `py.*`
 wrapper argument goes through it:
 
 | Term | What the Python callee sees |
@@ -334,8 +542,8 @@ So a string nested deeper crosses **raw**: `++repr(L)` on `L = [f("x")]` sees
 `[('f', ('$chars', 'x'))]`, and a `DictTerm` argument arrives as a `DictTerm`.
 Atoms need nothing: `++len(L)` on `L = [bar, baz]` sees `['bar', 'baz']`. When
 you want the deep conversion at a `++`, ask for it by name — `from
-clausal.modules.py._helpers import to_python` in the Python module you are
-escaping into, and call it on the argument there.
+clausal import to_python` in the Python module you are escaping into, and call
+it on the argument there.
 
 Why the asymmetry: a `py.*` call crosses a bounded argument list into a
 foreign library that cannot read engine terms at all, and pays for the walk
@@ -349,7 +557,6 @@ same value an atom is — so an atom that crosses out and back is unchanged,
 and text that crosses out comes back as an atom, not a string:
 
 ```clausal
--double_quotes(chars)
 -private([bar])
 
 round_trip(X, Y) <- (Y is ++X)
@@ -461,114 +668,6 @@ print(repr(my_module.bar))            # 'bar'
 
 ---
 
-## Querying from Python
-
-A goal from Python is a **cell** — a tuple whose first element is the
-predicate's name and whose remaining elements are its arguments — run against
-a **module**, the one whose database answers it. Pass both, every time:
-
-```python
-from clausal import Var, solve
-import fibonacci
-
-for trail in solve(("fib", 10, F := Var()), module=fibonacci):
-    print(F.value)  # 55
-```
-
-`module=` takes the imported `.clausal` module (as here), a `Module` object, or
-the module's dotted name as a string. A cell does not carry a module of its
-own, so `solve` without `module=` refuses an unqualified cell with an ISO
-`existence_error(module, …)` rather than guessing where the predicate lives.
-
-!!! warning "A module attribute is a handle, not something to call"
-    `fibonacci.fib` is the predicate's **handle** — a `str` naming the module
-    that owns it and the predicate — so `fibonacci.fib(10, F)` raises
-    `TypeError: 'str' object is not callable`. Build the cell and pass the
-    module instead. (Python code *hosted* in a `.clausal` file can also run a
-    goal in [goal position](#goal-position-if-goal-for-in-goal) with `--`.)
-
-`Var` objects support Python coercion:
-
-| Access | Behaviour |
-|--------|-----------|
-| `X.value` | Dereferenced value (Var if still unbound) |
-| `str(X)` | String of dereferenced value (`_N` if unbound) |
-| `int(X)` | Integer coercion (raises `UnboundVarCoercionError` if unbound) |
-| `float(X)` | Float coercion (raises `UnboundVarCoercionError` if unbound) |
-| `bool(X)` | Bool coercion (raises `UnboundVarCoercionError` if unbound) |
-| `f"{X}"` | F-string auto-deref |
-
-Read a binding **inside** the loop: each iteration yields the `Trail` with that
-solution's bindings live, and they are undone before the next one.
-
-### `once` — first solution only
-
-```python
-from clausal import Var, once
-import fibonacci
-
-trail = once(("fib", 10, F := Var()), module=fibonacci)
-if trail is not None:
-    print(F.value)  # 55
-```
-
-Returns the `Trail` for the first solution, or `None` if the goal fails.
-
-### `call` — drive a named predicate directly
-
-`call` takes the predicate name and its arguments separately and hands them
-straight to the compiled dispatch function, skipping the goal compilation
-`solve` does. It is the lowest-overhead path for calling one predicate many
-times:
-
-```python
-from clausal import Var, call
-import fibonacci
-
-for trail in call("fib", 7, N := Var(), module=fibonacci):
-    print(N.value)  # 13
-```
-
-### Driving Clausal from a test or scoring harness
-
-Code that runs many goals — a pytest suite around a rulebase, a harness that
-scores answers — should build every goal through **one helper function of its
-own**, not by writing raw tuples at each call site:
-
-```python
-from clausal import Var, solve
-import fibonacci
-
-def answers(name, *args):
-    """The one place this harness builds a goal and names its module."""
-    return solve((name, *args), module=fibonacci)
-
-def test_fib_10():
-    F = Var()
-    assert [F.value for _ in answers("fib", 10, F)] == [55]
-```
-
-The goal's shape and the module it runs against are then decided in exactly
-one place: a change to either is one edit, and a call site cannot quietly
-drift to a different module or a malformed goal.
-
-### `query` — collect binding dicts (deprecated)
-
-!!! warning "Deprecated"
-    `query()` is deprecated. Iterate `solve(...)` and read `Var.value` inside
-    the loop, as above.
-
-```python
-from clausal import Var, query
-import fibonacci
-
-F = Var()
-for bindings in query(("fib", 10, F), {"F": F}, fibonacci):
-    print(bindings)  # {'F': 55}
-```
-
----
-
 ## Python Objects as Terms
 
 Any Python object works as a ground term. The C `unify` function (see [Architecture](architecture.md)) handles non-Var objects via Python's `==`:
@@ -611,9 +710,21 @@ for trail in solve(("fib", 10, F := Var()), module=fibonacci):
     print(F.value)  # 55
 ```
 
-Facts can also be asserted into a bare `Module` from Python. The clause head
-is a cell, the database holds the clauses, and the predicate is compiled once;
-a later `assertz` on the same database recompiles it on its next call:
+To add clauses at runtime, declare the predicate `-dynamic` in a `.clausal`
+file and run `assertz`/`retract` as goals (see
+[assertz/retract from Python](#assertzretract-from-python)); an undeclared or
+static predicate is refused.
+
+!!! warning "Internal API"
+    The block below fills a bare `Module` through the `Database`, `Clause`
+    and the compiler directly. None of these is covered by the 1.0 promise
+    (see [Public API](public-api.md)), and the direct `db.assertz` skips the
+    `-dynamic` check the `assertz/1` goal makes. It is shown for engine
+    tests and tooling.
+
+The clause head is a cell, the database holds the clauses, and the predicate
+is compiled once; a later `db.assertz` on the same database recompiles it on
+its next call:
 
 ```python
 from clausal import Module, Var, solve
@@ -692,11 +803,12 @@ A rule's body is a list of compiled goal nodes, not cells — write rules in a
 
     ### `structural_unify`
 
-    `clausal.logic.builtins.structural_unify(t1, t2, trail)` is a Python-level recursive unifier for cells, PredicateMeta instances, and `@dataclass` instances. The C `unify` handles `Var` binding, tuples, lists, and atomic equality.
+    `clausal.logic.builtins.structural_unify(t1, t2, trail)` is a Python-level recursive unifier for cells and `@dataclass` instances. It is internal (not covered by the 1.0 promise); use `unify` from `clausal.logic.variables`, whose C implementation handles `Var` binding, tuples, lists, and atomic equality.
 
     ### Term Dereferencing
 
-    `deref(var)` unwraps one level. For full recursive dereferencing:
+    `deref(var)` unwraps one level. For full recursive dereferencing (an
+    internal helper; `to_python` is the covered deep conversion):
 
     ```python
     from clausal.logic.solve import _deref_walk
@@ -706,15 +818,15 @@ A rule's body is a list of compiled goal nodes, not cells — write rules in a
 
     ### Builtin Term Constructors
 
-    Every builtin has a term constructor (a `BuiltinTerm`, the same object as
-    `clausal.<name>`), and calling it **builds a cell** — it does not run
-    anything. Run the cell like any other goal:
+    A builtin whose name is a Python identifier is exported from `clausal`
+    as a term constructor, and calling it **builds a cell** — it does not
+    run anything. (The predicate is covered by the 1.0 promise; the Python
+    object is not, so a plain cell is the stable spelling.) Run the cell like
+    any other goal:
 
     ```python
-    from clausal import Module, Var, solve
-    from clausal.logic.builtins import get_builtin_class
+    from clausal import Module, Var, solve, append
 
-    append = get_builtin_class("append")
     goal = append([1, 2], [3], L := Var())   # → ('append', [1, 2], [3], L)
     for trail in solve(goal, module=Module("scratch")):
         print(L.value)  # [1, 2, 3]
@@ -728,8 +840,9 @@ A rule's body is a list of compiled goal nodes, not cells — write rules in a
 
     ### assertz/retract from Python
 
-    Run the builtin as a goal, with the clause as a cell and the module that
-    owns the predicate:
+    Run the builtin as a goal. In a `.seam` file that is `if --assertz(counter(1)):`;
+    from a `.py` file, pass the clause as a cell and the module that owns the
+    predicate:
 
     ```python
     from clausal import once

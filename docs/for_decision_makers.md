@@ -17,7 +17,7 @@ checking validity, and exploring possibilities.
 
 It is not a replacement for Python. It is a complement: Python handles
 computation, data, and I/O; Clausal handles reasoning, rules, and constraints.
-They run together on the same runtime with no overhead.
+They run together in the same process, on the same runtime.
 
 ---
 
@@ -111,8 +111,8 @@ The most powerful systems combine both:
 | Recommendation scoring | Eligibility and constraint checking |
 
 Clausal runs natively in Python — the lingua franca of ML — making this
-combination natural. No separate systems, no data marshalling, no integration
-overhead.
+combination natural. No separate systems, no network hop, no serialisation
+format between them.
 
 ### 6. Rules as code
 
@@ -162,6 +162,16 @@ Clausal is a Python package. It runs wherever Python runs: local machines,
 Docker containers, cloud functions, CI pipelines. No new servers, no new
 databases, no new deployment processes.
 
+### Stability and standards
+
+- **A defined 1.0 surface.** The [Public API](public-api.md) page lists what
+  1.0 covers, what is internal, and what is still experimental (importing
+  Prolog `.pl` files is experimental in 1.0).
+- **Standard semantics.** Where the ISO Prolog standard (ISO/IEC 13211-1)
+  speaks, Clausal follows it; where it is silent, Clausal follows Scryer
+  Prolog. Error reports use the standard's error terms, so rules and their
+  failure modes behave as Prolog practitioners expect.
+
 ---
 
 ## The bottom line
@@ -173,7 +183,7 @@ databases, no new deployment processes.
 | **Testing** | Test harnesses, mocks, fixtures | A test is a question |
 | **Compliance** | Manual audit of source code | Auditors read the rules |
 | **Constraint problems** | Custom algorithms | Describe constraints; system solves |
-| **ML integration** | Separate systems, data marshalling | Same Python runtime |
+| **ML integration** | Separate systems, serialisation between them | Same Python runtime |
 | **Adoption risk** | All-or-nothing rewrite | Incremental, one module at a time |
 
 ---
