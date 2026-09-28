@@ -804,7 +804,7 @@ Remove all cached tabling answers for every predicate in the current database.
 
 ## Keyword-Term Introspection
 
-These predicates address a term's fields by name; the names come from the functor's declaration (`-private([point(x, y, z)])`). See [Keyword predicates](keyword_preds.md). The keyword construction spelling `point(x=1)`, `KWTerm` and `extend/3` are gone.
+These predicates address a term's fields by name; the names come from the functor's declaration (`-private([point(x, y, z)])`). See [Term Inspection § Fields by name](term_inspection.md#fields-by-name). The keyword construction spelling `point(x=1)`, `KWTerm` and `extend/3` are gone.
 
 ### `vary/3`
 ```clausal

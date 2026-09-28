@@ -227,7 +227,7 @@ distance(X1, X2, D) <- (
 ```
 
 A `-module` export list or a `-private([name(field, ...)])` declaration names
-the fields explicitly (see [Keyword Predicates](keyword_preds.md)).
+the fields explicitly (see [Term Inspection § Fields by name](term_inspection.md#fields-by-name)).
 
 The **arity** is the number of fields. `point/2` means "point with 2 arguments." Different arities define different predicates: `foo/1` and `foo/2` are unrelated.
 

@@ -209,6 +209,124 @@ meta-programming or code generation.
 
 ---
 
+## Fields by Name
+
+A term's fields can also be addressed by NAME. The names come from the
+functor's **declaration**:
+
+```clausal
+-private([point(x, y, z)])
+
+point(1, 2, 3),
+```
+
+`vary/3` copies a term with some fields replaced, `unbound_keys/2` lists the
+fields that are still unbound, and `signature/3` reflects the declared field
+names of a functor.
+
+!!! note "The keyword CONSTRUCTION spelling was retired on 2026-09-19"
+
+    A term used to be writable as `point(x=1, y=2, z=3)`, and the first clause
+    written that way was what named the fields. A term is built positionally
+    now, and a keyword argument in a term or a clause head is a load-time
+    error. The spelling had no ISO Prolog reading, and it made a functor's
+    field names depend on which of its clauses came first.
+
+    Two keyword spellings are unaffected: a `-directive`'s options
+    (`-specialize(solve, p, alias=q)`) and an EDCG hidden argument
+    (`p(L, _edcg_counter_in=0)`).
+
+    The `KWTerm` class and the `extend/3` builtin (which grew a term by new
+    keyword fields) went with it: a compound term is a plain cell, and its
+    fields are fixed by its declaration.
+
+```clausal
+--8<-- "tests/fixtures/docs/keyword_preds_examples.clausal:quick_example"
+```
+
+A term is never padded: a construction with fewer arguments than the declared
+functor has fields is refused, not filled with fresh logic variables. A field
+you want to leave open is written as a variable -- which is what a partial
+term is:
+
+```clausal
+-private([point(x, y, z)])
+
+p(P) <- (P is point(10, _Y, _Z))        # point(10, _, _)
+p(P) <- (P is point(_X, 20, 30))
+```
+
+### vary/3
+
+`vary(Overrides, Term, NewTerm)` — copy a term, replacing specified fields with
+new values. `Overrides` is a Python dict mapping field names to new values.
+
+```clausal
+--8<-- "tests/fixtures/docs/keyword_preds_examples.clausal:vary_examples"
+```
+
+Works for declared functor cells and term (dataclass) instances.
+
+### unbound_keys/2
+
+`unbound_keys(Term, Keys)` — list the field names that are still unbound
+(contain logic variables).
+
+```clausal
+--8<-- "tests/fixtures/docs/keyword_preds_examples.clausal:unbound_keys_examples"
+```
+
+### signature/3
+
+`signature(FunctorName, Arity, Names)` — reflect the registered signature of a
+predicate. Given a functor name and arity, unifies `Names` with the tuple of
+field names.
+
+```clausal
+--8<-- "tests/fixtures/docs/keyword_preds_examples.clausal:signature_example"
+```
+
+This is a database-dependent operation — the predicate must have been defined
+(with a signature) before `signature` is called.
+
+### Recipes: fields by name
+
+Default values via `vary`:
+
+```clausal
+--8<-- "tests/fixtures/docs/keyword_preds_sigs.txt:default_values"
+```
+
+Inspect which fields need filling:
+
+```clausal
+--8<-- "tests/fixtures/docs/keyword_preds_sigs.txt:inspect_fields"
+```
+
+Reflect on predicate structure:
+
+```clausal
+--8<-- "tests/fixtures/docs/keyword_preds_sigs.txt:reflect_predicate"
+```
+
+### Gotchas: fields by name
+
+- **A term cannot grow new fields** — a functor's fields are the ones it is
+  declared with. Use `vary` to change existing fields.
+- **`signature` requires the predicate to be registered** — if you call it
+  before the predicate is defined (e.g., in a different module that hasn't been
+  imported), it will fail.
+- **Field names are atoms** — `unbound_keys` and `signature` answer atoms
+  (`['x', 'y', 'z']`). An override dict's keys may be quoted atoms
+  (`{'x': 10}`) or strings (`{"x": 10}`); a bare `{x: 10}` key must be a
+  declared atom, like any bare atom.
+- **Field names come from the declaration** — `-private([point(x, y, z)])` or
+  the `-module` export list. An undeclared predicate's fields are `arg_0`,
+  `arg_1`, … , which `vary` and `unbound_keys` will happily use but nobody
+  wants to read.
+
+---
+
 ## Patterns & Recipes
 
 ### Generic term transformer
@@ -259,4 +377,5 @@ test("count") <- var_count([X_, 1, Y_, Z_], 3)
 *See also: [Type Checking](type_checking.md) — test term types without
 decomposition, [Meta-Predicates](meta_predicates.md) — findall, bagof for
 collecting solutions, [Predicates](predicates.md) — defining predicate
-structures.*
+structures, [Dicts & Sets](dicts_sets.md) — DictTerm for general key-value
+data.*
