@@ -2474,6 +2474,8 @@ def _route_other_arity_imported_calls_to_local(
 #: (``q <- halt``) was refused as an undeclared atom.
 BUILTIN_GOAL_ATOMS = frozenset({"fail", "halt"})
 
+from clausal.logic.exact_arith import EVALUABLE as _EVALUABLE  # noqa: E402
+
 
 def _process_bare_atom_refs(
     module_items: list,
@@ -2693,9 +2695,14 @@ def _process_bare_atom_refs(
             if name in builtin_names:
                 # Builtin under any arity — resolved by get_builtin_predicate.
                 continue
-            if effective_strict and name not in BUILTIN_GOAL_ATOMS:
+            if (effective_strict and name not in BUILTIN_GOAL_ATOMS
+                    and (name, 0) not in _EVALUABLE):
                 undeclared.append(name)
                 continue
+            # An arity-0 evaluable (``pi``, ``e``) is accepted like a
+            # builtin goal atom: the evaluable functors are builtins, in
+            # scope in every module with no declaration (ruling Q16,
+            # 2026-09-28), so ``'is'(X, pi)`` needs no ``-private([pi])``.
             # A BUILTIN_GOAL_ATOMS name (``fail``) is accepted here even in
             # strict mode: a builtin GOAL, like ``true``, needs no
             # declaration (operator ruling 2026-09-25).  ``true``/``false``

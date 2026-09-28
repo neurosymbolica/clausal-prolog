@@ -490,7 +490,11 @@ def evaluable_functor_signature(
 ) -> "tuple[str, tuple[str, ...]] | None":
     """``(name, fields)`` when *name* is a functor of the closed evaluable
     table (``clausal.logic.exact_arith.EVALUABLE``: ``+ - * / // div mod **
-    ^ rdiv abs min max``) -- else None.
+    ^ rdiv``, ``abs min max``, the rounding, float, trigonometric and bitwise
+    functors ...) -- else None.  The arity-0 entries (``pi``, ``e``) are
+    ATOMS, not constructions: they are never answered here (a zero-field
+    signature would build the reserved one-tuple); the strict-atoms check
+    accepts their bare spelling instead.
 
     Ruling Q16 (2026-09-28): "they are builtins really".  Like a builtin
     predicate's name, an evaluable functor is in scope in EVERY module, with
@@ -501,7 +505,7 @@ def evaluable_functor_signature(
     picks between ``-/1`` and ``-/2``; with none, the widest is answered and
     ``construction_signature_for_name`` re-asks at the written arity."""
     from clausal.logic.exact_arith import EVALUABLE  # noqa: PLC0415
-    arities = [a for (n, a) in EVALUABLE if n == name]
+    arities = [a for (n, a) in EVALUABLE if n == name and a > 0]
     if not arities:
         return None
     if arity is None:

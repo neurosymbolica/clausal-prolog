@@ -147,7 +147,7 @@ class TestA1Table:
     @pytest.mark.parametrize("cell,culprit", [
         (("foo", 1), "foo/1"),
         (("+", 1, 2, 3), "+/3"),
-        (("rem", 7, 2), "rem/2"),   # not in the closed table
+        (("integer", 7), "integer/1"),   # not in the closed table (nor Scryer's)
         (("*", ("foo", 1), 2), "foo/1"),
     ])
     def test_non_evaluable_cell_is_type_error_evaluable(self, api_mod, cell, culprit):
@@ -163,7 +163,15 @@ class TestA1Table:
             ("+", 2), ("-", 2), ("*", 2), ("/", 2), ("div", 2), ("mod", 2),
             ("//", 2), ("**", 2), ("^", 2), ("rdiv", 2), ("-", 1),
             # ISO 9.1.7 abs/1, Cor.2 min/2 and max/2 (2026-09-28)
-            ("abs", 1), ("min", 2), ("max", 2)}
+            ("abs", 1), ("min", 2), ("max", 2),
+            # the rest of ISO's evaluables (2026-09-28)
+            ("+", 1), ("sign", 1), ("rem", 2), ("gcd", 2), ("truncate", 1),
+            ("round", 1), ("ceiling", 1), ("floor", 1), ("float", 1),
+            ("float_integer_part", 1), ("float_fractional_part", 1),
+            ("sqrt", 1), ("sin", 1), ("cos", 1), ("tan", 1), ("asin", 1),
+            ("acos", 1), ("atan", 1), ("atan2", 2), ("atan", 2), ("exp", 1),
+            ("log", 1), ("pi", 0), ("e", 0), (">>", 2), ("<<", 2),
+            ("/\\", 2), ("\\/", 2), ("\\", 1), ("xor", 2)}
 
     def test_every_node_and_every_cell_key_has_one_entry(self):
         """Every evaluable operator node class maps onto a key, and every
@@ -181,10 +189,13 @@ class TestA1Table:
         # the only nodes beyond the source operators: the Scryer cells' forms
         assert set(_NODE_KEYS) - set(ARITH_OPERATOR_TERMS) == {
             IsoIntDiv, IsoDiv, IsoMod, IsoPow, IsoIntPow, IsoTrueDiv, IsoRdiv}
-        # abs/min/max have no node: a CLP post folds a ground use, and the
-        # set of such entries is named, so a new one cannot slip in unnoticed
+        # every entry past the operators has no node: a CLP post folds a
+        # ground use; the node-backed set is named, so a new node-less entry
+        # cannot slip in unnoticed
         from clausal.logic.exact_arith import CELL_ONLY_EVALUABLE
-        assert CELL_ONLY_EVALUABLE == {("abs", 1), ("min", 2), ("max", 2)}
+        assert set(EVALUABLE) - CELL_ONLY_EVALUABLE == {
+            ("+", 2), ("-", 2), ("*", 2), ("/", 2), ("-", 1), ("//", 2),
+            ("div", 2), ("mod", 2), ("**", 2), ("^", 2), ("rdiv", 2)}
         assert set(_NODE_KEYS.values()) == set(NODE_EVALUABLE) - CELL_ONLY_EVALUABLE
         assert set(EVALUABLE) - CELL_ONLY_EVALUABLE <= set(key_nodes())
         assert not CELL_ONLY_EVALUABLE & set(key_nodes())

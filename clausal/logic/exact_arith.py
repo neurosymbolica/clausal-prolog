@@ -44,7 +44,9 @@ from types import MappingProxyType
 __all__ = ["exact_add", "exact_sub", "exact_mul", "exact_div", "exact_neg",
            "python_floordiv", "python_mod", "python_pow", "iso_intdiv",
            "iso_div", "iso_mod", "iso_pow", "iso_intpow", "iso_abs", "iso_max",
-           "iso_min", "decimal_parts",
+           "iso_min", "iso_sign", "iso_rem", "iso_gcd", "iso_truncate",
+           "iso_round", "iso_ceiling", "iso_floor", "iso_float",
+           "decimal_parts",
            "EVALUABLE", "NODE_EVALUABLE", "CELL_ONLY_EVALUABLE",
            "evaluate", "evaluate_python_result"]
 
@@ -512,6 +514,278 @@ def exact_neg(x):
     return -_operand(x, "neg")
 
 
+# ── The rest of ISO's evaluables (ISO 9.1.7, 9.3, 9.4; Cor.2), 2026-09-28 ──
+#
+# Scryer's result kinds and error terms, measured on the local Scryer:
+#
+# * sign/1 and +/1 keep the operand's kind (sign(-2.5) is -1.0; an exact
+#   rational's sign is an integer); truncate/round/ceiling/floor answer an
+#   INTEGER from any number (round halves away from zero: round(-2.5) is -3);
+#   float/1, float_integer_part/1, float_fractional_part/1 and the float
+#   functions (sqrt, sin, cos, tan, asin, acos, atan, atan2, exp, log) answer
+#   a FLOAT, taking an exact operand at its value;
+# * rem/2 (the sign of the dividend), gcd/2 and the bitwise functors take
+#   INTEGERS only: type_error(integer, X) otherwise.  A negative shift count
+#   shifts the other way (1 << -1 is 0, 8 >> -1 is 16), as in Scryer;
+# * sqrt of a negative, log of a non-positive, asin/acos outside [-1, 1] and
+#   atan2(0, 0) are evaluation_error(undefined); a result too large for a
+#   float (exp(1000), float(10^400)) is evaluation_error(float_overflow).
+#
+# Two deliberate differences from Scryer, both ISO's reading: log(0) is
+# ``undefined`` (Scryer: float_overflow), and atan/2 is evaluable, as
+# atan2/2 (ISO Cor.2; Scryer has only atan2/2).  As for the rest of the
+# table, an evaluation error names the evaluable, where Scryer names is/2.
+
+import math as _math
+
+
+def _pi_text(op: str, arity: int) -> str:
+    return f"({op})/{arity}"
+
+
+def _num(x, op: str, arity: int = 1):
+    """*x* evaluated and a NUMBER, else type_error(evaluable) (a term, raised
+    by :func:`evaluate`) or type_error(number, X) (a Python value)."""
+    v, isnum = _real(x)
+    if not isnum:
+        from clausal.logic.exceptions import LogicException, type_error  # noqa: PLC0415
+        raise LogicException(type_error("number", v, _pi_text(op, arity)))
+    return v
+
+
+def _to_float(v, op: str, arity: int = 1) -> float:
+    try:
+        return float(v)
+    except OverflowError:
+        raise _float_overflow_n(op, arity) from None
+
+
+def _float_overflow_n(op: str, arity: int):
+    from clausal.logic.exceptions import LogicException, evaluation_error  # noqa: PLC0415
+    return LogicException(evaluation_error("float_overflow", _pi_text(op, arity)))
+
+
+def _undefined_n(op: str, arity: int):
+    from clausal.logic.exceptions import LogicException, evaluation_error  # noqa: PLC0415
+    return LogicException(evaluation_error("undefined", _pi_text(op, arity)))
+
+
+def _exact(v) -> "int | Fraction":
+    """An int, Fraction or Decimal as an exact int/Fraction."""
+    if type(v) is Decimal:
+        if not v.is_finite():
+            raise _not_finite(v, "rounding")
+        return Fraction(v)
+    return v
+
+
+def _int_arg(x, op: str, arity: int) -> int:
+    """*x* evaluated and an INTEGER (an integral rational counts, as for
+    ``//``), else type_error(integer, X) naming *op*."""
+    if type(x) is not int:
+        x = _presented(evaluate(x))
+        if type(x) is not int:
+            from clausal.logic.exceptions import LogicException, type_error  # noqa: PLC0415
+            raise LogicException(type_error("integer", x, _pi_text(op, arity)))
+    return x
+
+
+def iso_plus(x):
+    """``+/1`` (Cor.2): the number itself."""
+    if type(x) is int:
+        return x
+    return _num(x, "+")
+
+
+def iso_sign(x):
+    """``sign/1`` (ISO 9.1.7): -1, 0 or 1 in the operand's kind; a float's
+    sign is a float, an exact rational's an integer."""
+    v = _num(x, "sign")
+    if type(v) is float:
+        if v != v:
+            raise _undefined_n("sign", 1)
+        return 1.0 if v > 0 else -1.0 if v < 0 else 0.0
+    return 1 if v > 0 else -1 if v < 0 else 0
+
+
+def _float_to_int(v: float, op: str) -> "Fraction":
+    if v != v or v in (float("inf"), float("-inf")):
+        raise _undefined_n(op, 1)
+    return Fraction(v)
+
+
+def _rounding(x, op: str, fn):
+    v = _num(x, op)
+    if type(v) is int:
+        return v
+    if type(v) is float:
+        return fn(_float_to_int(v, op))
+    return fn(_exact(v))
+
+
+def _round_half_away(q: Fraction) -> int:
+    n = _math.floor(abs(q) + Fraction(1, 2))
+    return n if q >= 0 else -n
+
+
+def iso_truncate(x):
+    """``truncate/1``: the integer toward zero (truncate(-3.7) is -3)."""
+    return _rounding(x, "truncate", _math.trunc)
+
+
+def iso_round(x):
+    """``round/1``: the nearest integer, halves away from zero
+    (round(2.5) is 3, round(-2.5) is -3), exactly."""
+    return _rounding(x, "round", _round_half_away)
+
+
+def iso_ceiling(x):
+    """``ceiling/1``: the least integer not below the operand."""
+    return _rounding(x, "ceiling", _math.ceil)
+
+
+def iso_floor(x):
+    """``floor/1``: the greatest integer not above the operand."""
+    return _rounding(x, "floor", _math.floor)
+
+
+def iso_float(x):
+    """``float/1``: the operand as a float (float(7 rdiv 2) is 3.5)."""
+    v = _num(x, "float")
+    if type(v) is float:
+        return v
+    return _to_float(v, "float")
+
+
+def iso_float_integer_part(x):
+    """``float_integer_part/1``: the integer part, as a float
+    (float_integer_part(-3.7) is -3.0; of 3 is 3.0)."""
+    v = _num(x, "float_integer_part")
+    if type(v) is float:
+        return float(_math.trunc(_float_to_int(v, "float_integer_part")))
+    return _to_float(_math.trunc(_exact(v)), "float_integer_part")
+
+
+def iso_float_fractional_part(x):
+    """``float_fractional_part/1``: the operand minus its integer part, as a
+    float (float_fractional_part(-3.75) is -0.75; of 3 is 0.0)."""
+    v = _num(x, "float_fractional_part")
+    if type(v) is float:
+        return v - float(_math.trunc(_float_to_int(v, "float_fractional_part")))
+    q = _exact(v)
+    return float(q - _math.trunc(q))
+
+
+def iso_rem(l, r):
+    """``rem/2``: the remainder of ``//`` (truncating), the sign of the
+    dividend (-7 rem 2 is -1)."""
+    l, r = _int_arg(l, "rem", 2), _int_arg(r, "rem", 2)
+    if not r:
+        raise _zero_divisor("rem")
+    return l - r * iso_intdiv(l, r)
+
+
+def iso_gcd(l, r):
+    """``gcd/2``: the greatest common divisor, non-negative (gcd(0, 0) is 0)."""
+    return _math.gcd(_int_arg(l, "gcd", 2), _int_arg(r, "gcd", 2))
+
+
+def _shift(v: int, n: int, left: bool) -> int:
+    if n < 0:
+        n, left = -n, not left
+    return v << n if left else v >> n
+
+
+def iso_shift_right(l, r):
+    """``>>/2``: arithmetic shift right (-7 >> 1 is -4)."""
+    return _shift(_int_arg(l, ">>", 2), _int_arg(r, ">>", 2), False)
+
+
+def iso_shift_left(l, r):
+    """``<</2``: shift left."""
+    return _shift(_int_arg(l, "<<", 2), _int_arg(r, "<<", 2), True)
+
+
+def iso_bitand(l, r):
+    """``/\\/2``: bitwise and (two's complement: 5 /\\ -2 is 4)."""
+    return _int_arg(l, "/\\", 2) & _int_arg(r, "/\\", 2)
+
+
+def iso_bitor(l, r):
+    """``\\//2``: bitwise or."""
+    return _int_arg(l, "\\/", 2) | _int_arg(r, "\\/", 2)
+
+
+def iso_bitnot(x):
+    """``\\/1``: bitwise complement (\\ 5 is -6)."""
+    return ~_int_arg(x, "\\", 1)
+
+
+def iso_xor(l, r):
+    """``xor/2``: bitwise exclusive or."""
+    return _int_arg(l, "xor", 2) ^ _int_arg(r, "xor", 2)
+
+
+def _float_fn(op: str, fn, domain=None):
+    """A float function of one argument: the operand as a float (an exact one
+    at its value), *domain* (a predicate on that float) else
+    evaluation_error(undefined), and a float result."""
+    def apply(x):
+        f = _to_float(_num(x, op), op)
+        if f != f or (domain is not None and not domain(f)):
+            raise _undefined_n(op, 1)
+        try:
+            res = fn(f)
+        except OverflowError:
+            raise _float_overflow_n(op, 1) from None
+        except ValueError:
+            raise _undefined_n(op, 1) from None
+        if res in (float("inf"), float("-inf")) and f not in (float("inf"), float("-inf")):
+            raise _float_overflow_n(op, 1)
+        return res
+    apply.__name__ = f"iso_{op}"
+    apply.__doc__ = f"``{op}/1``: a float (Scryer's kinds and errors)."
+    return apply
+
+
+iso_sqrt = _float_fn("sqrt", _math.sqrt, lambda f: f >= 0)
+iso_sin = _float_fn("sin", _math.sin)
+iso_cos = _float_fn("cos", _math.cos)
+iso_tan = _float_fn("tan", _math.tan)
+iso_asin = _float_fn("asin", _math.asin, lambda f: -1 <= f <= 1)
+iso_acos = _float_fn("acos", _math.acos, lambda f: -1 <= f <= 1)
+iso_atan = _float_fn("atan", _math.atan)
+iso_exp = _float_fn("exp", _math.exp)
+iso_log = _float_fn("log", _math.log, lambda f: f > 0)
+
+
+def _atan2(op: str):
+    def apply(y, x):
+        fy = _to_float(_num(y, op, 2), op, 2)
+        fx = _to_float(_num(x, op, 2), op, 2)
+        if fy == 0 and fx == 0:
+            raise _undefined_n(op, 2)
+        return _math.atan2(fy, fx)
+    apply.__name__ = f"iso_{op}"
+    apply.__doc__ = (f"``{op}/2``: the angle of the point (X, Y), a float; "
+                     f"{op}(0, 0) is evaluation_error(undefined).")
+    return apply
+
+
+iso_atan2 = _atan2("atan2")
+iso_atan_2 = _atan2("atan")
+
+
+def iso_pi():
+    """``pi/0``."""
+    return _math.pi
+
+
+def iso_e():
+    """``e/0``."""
+    return _math.e
+
+
 _NODE_KEYS: dict = {}
 _KEY_NODES: dict = {}
 
@@ -663,6 +937,10 @@ def evaluate(x, context: str = "eval_/2"):
                 return num
         ka = cell_key_args(x)
         if ka is None:
+            if t is str:
+                fn = EVALUABLE.get((x, 0))
+                if fn is not None:
+                    return fn()             # pi/0, e/0
             if _is_term(x):
                 raise not_evaluable(x, context)
             return x
@@ -742,13 +1020,33 @@ EVALUABLE = MappingProxyType({
     ("**", 2): iso_pow, ("^", 2): iso_intpow, ("rdiv", 2): iso_rdiv,
     # ISO 9.1.7 abs/1; ISO Cor.2 9.3.9-10 max/2, min/2 (Scryer's kinds)
     ("abs", 1): iso_abs, ("max", 2): iso_max, ("min", 2): iso_min,
+    # the rest of ISO's evaluables (2026-09-28; see the block above iso_plus)
+    ("+", 1): iso_plus, ("sign", 1): iso_sign,
+    ("rem", 2): iso_rem, ("gcd", 2): iso_gcd,
+    ("truncate", 1): iso_truncate, ("round", 1): iso_round,
+    ("ceiling", 1): iso_ceiling, ("floor", 1): iso_floor,
+    ("float", 1): iso_float,
+    ("float_integer_part", 1): iso_float_integer_part,
+    ("float_fractional_part", 1): iso_float_fractional_part,
+    ("sqrt", 1): iso_sqrt, ("sin", 1): iso_sin, ("cos", 1): iso_cos,
+    ("tan", 1): iso_tan, ("asin", 1): iso_asin, ("acos", 1): iso_acos,
+    ("atan", 1): iso_atan, ("atan2", 2): iso_atan2, ("atan", 2): iso_atan_2,
+    ("exp", 1): iso_exp, ("log", 1): iso_log,
+    ("pi", 0): iso_pi, ("e", 0): iso_e,
+    (">>", 2): iso_shift_right, ("<<", 2): iso_shift_left,
+    ("/\\", 2): iso_bitand, ("\\/", 2): iso_bitor, ("\\", 1): iso_bitnot,
+    ("xor", 2): iso_xor,
 })
 
 #: The entries of :data:`EVALUABLE` with NO operator node: a CLP post cannot
 #: rewrite them into a node it linearises, so it folds a ground one to its
 #: value (``clpfd._arith_cells_to_nodes``) and leaves a non-ground one to
-#: the post's own diagnosis.
-CELL_ONLY_EVALUABLE = frozenset({("abs", 1), ("max", 2), ("min", 2)})
+#: the post's own diagnosis.  Everything past the operators ``+ - * / //
+#: div mod ** ^ rdiv`` is one (the bitwise operators too: their bare seam
+#: spellings are Python's and are no nodes of this table).
+CELL_ONLY_EVALUABLE = frozenset(k for k in EVALUABLE if k not in {
+    ("+", 2), ("-", 2), ("*", 2), ("/", 2), ("-", 1), ("//", 2), ("div", 2),
+    ("mod", 2), ("**", 2), ("^", 2), ("rdiv", 2)})
 
 #: :data:`EVALUABLE` plus the bare operator nodes' private Python-semantics
 #: entries -- what a NODE evaluates through.  A cell never looks here.
