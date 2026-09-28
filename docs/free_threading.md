@@ -1,7 +1,7 @@
 # Free-Threaded Python Support
 
-Clausal's C extensions (`_variables` and `_trampoline`) are compatible with
-free-threaded Python (PEP 703 / PEP 779, `python3.14t`+). Under a
+Clausal's core C extensions (`_variables`, `_trampoline` and `_tabling_core`)
+are compatible with free-threaded Python (PEP 703 / PEP 779, `python3.14t`+). Under a
 free-threaded build, the GIL is disabled and multiple threads execute Python
 bytecode in parallel. This page documents the threading contract: what is
 safe to share, what must be per-thread, and how the C extensions achieve
@@ -10,8 +10,13 @@ thread safety.
 !!! note "Build requirement"
     Free-threaded Python is a separate build variant. Install it via
     `pyenv install 3.14.3t` or use your distribution's `python3.14t`
-    package. Both C extensions declare `Py_MOD_GIL_NOT_USED` and work
-    correctly on both GIL-enabled and free-threaded builds.
+    package. The three core extensions declare `Py_MOD_GIL_NOT_USED` and work
+    correctly on both GIL-enabled and free-threaded builds. The other C
+    accelerators (`_arithmetic_core`, `_chars_core`, `_lists_core`,
+    `_list_unify`, `_constraints_dif`, `_clpfd_core`, `_clpfd_propagate`,
+    `_clpb_core`, `_clpr_core`) do **not** declare it yet, so on a
+    free-threaded build CPython re-enables the GIL when one of them is
+    imported (it warns when it does). Check with `sys._is_gil_enabled()`.
 
 ---
 
@@ -35,7 +40,7 @@ thread safety.
 
 ### Caller responsibilities
 
-- **Each parallel search branch needs its own Trail.** Create a fresh `Trail()` per thread or per branch.
+- **Each parallel search branch needs its own Trail.** Create a fresh `Trail()` per thread or per branch. `solve()`/`once()` and a goal-position `--goal` each make their own, so running one query per thread is enough.
 - **Query variables should be per-branch.** Each thread should create its own `Var()` instances for query arguments. Sharing an unbound query variable between threads means both threads race to bind it.
 - **Shared variables are safe to read** (`deref`, `walk`, `is_var`) from any thread, even concurrently.
 - **Binding races are serialized.** If two threads call `unify(X, a, trail1)` and `unify(X, b, trail2)` on the same unbound `X` simultaneously, the critical section serializes them: one thread binds `X`, the other retries with the now-bound value.
@@ -102,8 +107,9 @@ under GIL builds:
 
 ## Dynamic predicates under free-threading
 
-[`assert` and `retract`](database_ops.md) mutate the clause database. Phase 2 of the
-implementation plan adds copy-on-write semantics with a write lock:
+[`assert` and `retract`](database_ops.md) mutate the clause database (only
+predicates declared `-dynamic` accept them). Phase 2 of the implementation
+plan adds copy-on-write semantics with a write lock:
 
 - **Readers** (goal resolution) see an immutable snapshot of the clause list.
   No locking on the read path.
@@ -126,4 +132,4 @@ Phases 3-5 of the implementation plan will add:
 - **Concurrent tabling** — multiple threads contribute to and consume from
   shared memo tables.
 
-See `implementation_plans/FREE_THREADED_PARALLELISM.md` for the full design.
+See `implementation_plans/free_threaded/FREE_THREADED_PARALLELISM.md` for the full design.

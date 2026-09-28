@@ -1,9 +1,11 @@
 # Migrating to strict-atoms-by-default
 
-> **`-implicit_atoms` is deprecated as of 2026-09-18** and is removed in the
-> next landing. It still works and still opts a file out of strict resolution,
-> but loading such a file now warns once, naming it. This guide is how to get
-> off it: declare the names, then delete the directive.
+> **`-implicit_atoms` is deprecated as of 2026-09-18.** It still works and
+> still opts a file out of strict resolution, but loading such a file emits
+> `ClausalImplicitAtomsDeprecationWarning` (a `DeprecationWarning`, so shown
+> only where your warning filters show those — run with `-W default` to see
+> every file named). This guide is how to get off it: declare the names, then
+> delete the directive.
 
 
 ## What changed
@@ -24,18 +26,18 @@ As of the strict-atoms release, **an undeclared bare atom is a compile-time
 Anything else fails to load with a diagnostic like:
 
 ```
-strict_atoms: undeclared atom 'pending' in immigration_rules
+strict_atoms: undeclared atom 'pending' in orders
   bare atom references must be one of:
-    - listed in -module(immigration_rules, [atom, ...])
+    - listed in -module(orders, [atom, ...])
     - listed in -private([atom, ...])
     - imported via -import_from(from_module, [atom])
     - qualified (e.g. other_module.atom)
     - obtained via global_atom("atom", Atom)
 ```
 
-The new opt-out is the **`-implicit_atoms`** directive, which restores the old
-auto-mint behavior for a single file. It is permanent and supported — it is the
-escape hatch, not a deprecated shim.
+The opt-out is the **`-implicit_atoms`** directive, which restores the old
+auto-mint behavior for a single file. It is a migration stop-gap and is itself
+deprecated (see the note at the top).
 
 The old `-strict_atoms` directive is now redundant (strict is the default). It
 still works but is **deprecated** and emits a one-per-process
@@ -45,12 +47,13 @@ still works but is **deprecated** and emits a one-per-process
 
 - Atom **spellings** in clauses — no source rewriting needed for correct code.
 - Predicates with arity ≥ 1 — unchanged (already module-local by default).
-- Strings (`"red"`) — a distinct data type, never affected by atom strictness.
+- Strings (`"red"`, the carrier `('$chars', 'red')`) — a distinct data type,
+  never affected by atom strictness. A quoted atom (`'red'`) needs no
+  declaration either.
 - `True` / `False` — parsed as Python constants, not bare atoms, so truth-table
   files need no declarations.
-- The **REPL** and **doc/markdown ```clausal example blocks** compile in
-  implicit mode automatically — interactive and illustrative snippets keep
-  auto-minting with no directive needed.
+- Interactive use is strict too: in the IPython REPL an undeclared bare name
+  is a `NameError`. Write `'foo'` (a quoted atom) at the prompt.
 
 Note on **dict-literal keys**: a bare atom used as a dict key (`{sky: 1}`) is
 treated exactly like any other bare atom — it **raises** under the strict
@@ -70,12 +73,14 @@ their atoms, use strings for data, or only use arity-≥1 predicates need nothin
 
 You do not have to choose one for the whole repo — the recommended approach is
 to bulk-apply the safe path first, then adopt strictness incrementally where it
-pays off. This mirrors how upstream Clausal migrated its own corpus.
+pays off. This mirrors how Clausal migrated its own tree.
 
 ### Path A — Fastest, zero behavior change: bulk `-implicit_atoms`
 
 Add `-implicit_atoms` to every source file, restoring the old loose behavior
 everywhere. Nothing changes semantically; you just become explicit about it.
+Treat it as a temporary baseline: the directive is deprecated, so plan to
+follow with Path B.
 
 Upstream ships the exact codemod it used on its own tree:
 
@@ -109,9 +114,8 @@ For each reported atom, pick the right home:
 | Shared tag owned by another module | `-import_from(owner, [tag])` |
 | Need the global atom by name in a strict file | `global_atom("tag", Tag)` |
 
-Iterate file-by-file until the file loads clean. Keep `-implicit_atoms` on
-files where loose behavior is genuinely wanted — prototypes, data-heavy
-fixtures, or code that deliberately relies on ceremony-free tag atoms.
+Iterate file-by-file until the file loads clean. For data-heavy files where
+declaring every tag is noise, a quoted atom (`'tag'`) needs no declaration.
 
 #### `-private` is fine even when two files must agree
 
@@ -130,7 +134,7 @@ it via `-module` and the other via `-private`) refer to the exact same atom —
 declaring it twice is redundant, not conflicting. You may still prefer to
 **declare an atom where it is owned, and import it everywhere else** for
 readability (a status tag a caller compares against, a profile key one file
-writes and another reads, a verdict vocabulary two predicates draw from) —
+writes and another reads, a status vocabulary two predicates draw from) —
 `-module(owner, [..., red])` plus `-import_from(owner, [red])` documents the
 ownership relationship for a reader even though it makes no runtime
 difference. `-import_from` also remains the only way to reach an atom another

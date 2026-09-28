@@ -14,6 +14,7 @@ package lives at `packages/clausal-<name>/` in the main repository.
 | Package | Install | Description | Docs |
 |---|---|---|---|
 | **clausal-jax** | `pip install clausal-jax` | JAX predicates: array, PRNG, transforms, sharding, `jax.scipy`, optax, equinox, flax | [docs](../packages/clausal-jax/docs/jax.md) |
+| **clausal-opencv** | `pip install clausal-opencv` | OpenCV (`cv2`) predicates: image I/O, color, imgproc, contours, drawing, features, calib3d, objdetect, video | [docs](../packages/clausal-opencv/docs/opencv.md) |
 | **clausal-provenance** | `pip install clausal-provenance` | **Disabled pending redesign** (2026-09-25). Provenance-tagged bottom-up Datalog; PyTorch / JAX-differentiable semirings for neurosymbolic AI | [docs](../packages/clausal-provenance/docs/provenance.md) |
 | **clausal-scipy** | `pip install clausal-scipy` | SciPy wrappers: `linalg`, `optimize`, `stats`, `integrate`, `interpolate`, `fft`, `ndimage`, `spatial`, `signal`, `sparse`, `cluster`, `special`, `constants`, `differentiate` | [docs](../packages/clausal-scipy/docs/) |
 | **clausal-sklearn** | `pip install clausal-sklearn` | scikit-learn predicates (estimators, preprocessing, metrics) | [docs](../packages/clausal-sklearn/docs/sklearn.md) |

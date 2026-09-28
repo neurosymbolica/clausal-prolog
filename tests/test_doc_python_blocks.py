@@ -92,7 +92,7 @@ _CASES = [
      {}, "", ["55"]),
     ("pi-bare-module", "python_integration.md", 'Module("graph")',
      {}, "", ["a b", "b c", "c d"]),
-    ("pi-builtin-class", "python_integration.md", 'get_builtin_class("append")',
+    ("pi-builtin-class", "python_integration.md", 'goal = append([1, 2], [3]',
      {}, "", ["[1, 2, 3]"]),
     ("predicates-solve", "predicates.md", 'solve(("fib"', {}, "", ["55"]),
     ("predicates-rows", "predicates.md", "resolve_predicate_row",
@@ -218,7 +218,7 @@ _SEAM_CLAIM = re.compile(r"^([A-Za-z_][^\n#]*?)\s+#\s+(.+?)\s*$", re.M)
 
 
 def test_doc_seam_example_claims_hold(tmp_path):
-    block = _block("python_integration.md", "clausal", "GOLD = --verdict(")
+    block = _block("python_integration.md", "clausal", "WANT = --order(")
     claims = [(lhs, want) for lhs, want in _SEAM_CLAIM.findall(block)
               if not lhs.startswith(("def ", "return "))]
     assert len(claims) >= 4, claims
@@ -226,8 +226,8 @@ def test_doc_seam_example_claims_hold(tmp_path):
     for lhs, want in claims:
         m = re.fullmatch(r"([A-Za-z_]\w*) = .*", lhs)
         expr = m.group(1) if m else lhs
-        checks.append(f"print(repr(eval({expr!r}, vars(oracle))))")
-    out = _run_block(tmp_path, {"oracle": block},
-                     "import oracle\n" + "\n".join(checks))
+        checks.append(f"print(repr(eval({expr!r}, vars(shop))))")
+    out = _run_block(tmp_path, {"shop": block},
+                     "import shop\n" + "\n".join(checks))
     assert out == [want for _, want in claims]
 

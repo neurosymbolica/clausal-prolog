@@ -32,29 +32,17 @@ _HOWTO = (
 # grow this set. New blocks should compile or be moved to fixtures.
 _KNOWN_UNCOMPILABLE = {
     ("directives.md", 292),
-    ("for_ai_agents.md", 155),
-    ("for_ai_agents.md", 206),
-    ("for_prolog_programmers.md", 61),
-    ("for_prolog_programmers.md", 81),
-    ("for_prolog_programmers.md", 98),
-    ("for_prolog_programmers.md", 114),
-    ("for_python_programmers.md", 272),
-    ("for_python_programmers.md", 291),
     # import.md: two `# caller.clausal` blocks that `-import_from(lib, …)` a
     # fictional library and illustrate cross-module name scoping; the first
     # deliberately documents a runtime failure. Neither is standalone-compilable.
     #
     # These are keyed by fence line, so prose inserted ABOVE them shifts every
-    # one. The "A path segment is a directory name, literally" section pushed
-    # them down 36 lines, and the numbers below are shifted to match.
-    ("import.md", 323),
-    ("import.md", 351),
-    # import.md "Same-name declared atoms do not unify across modules": two
-    # more `# caller.clausal` blocks that `-import_from(lib, …)` a fictional
-    # library to illustrate the declared-atom identity mismatch and its
-    # `-import_from` remedy. Neither is standalone-compilable.
-    ("import.md", 406),
-    ("import.md", 422),
+    # one; the numbers below match docs/import.md as of the 2026-09-28 refresh.
+    ("import.md", 378),
+    ("import.md", 420),
+    # import.md: one more `# caller.clausal` block that `-import_from(lib, …)`
+    # a fictional library. Not standalone-compilable.
+    ("import.md", 485),
     ("purity.md", 111),
 }
 

@@ -38,6 +38,13 @@ Both are addressed:
 1. `get_code()` finds the `.pyc` file.
 2. Validates it against the source's mtime and size via `path_stats()`.
 3. If valid, loads the bytecode directly — `source_to_code()` is never called.
+
+The validation stamp is not the raw mtime: `path_stats()` XORs the source's
+nanosecond mtime with a tag derived from a **content digest of the engine
+sources that decide the emitted code** (plus a hand-maintained
+`CLAUSAL_BYTECODE_TAG`). Upgrading or editing the engine therefore invalidates
+every cached `.clausal` bytecode automatically; there is nothing to clear by
+hand.
 4. Returns the cached code object.
 
 **Source modification (cache invalidation):**
@@ -48,10 +55,9 @@ Both are addressed:
 ### What is cached
 
 The `.pyc` contains the bytecode for the **transformed module** — i.e., the output of `EmbedTransformer`. This means:
-- `$define_predicate(Predicate(head=..., body=...), $module)` calls (from `head <- body` rules)
-- `$assert_fact(term)` calls (from trailing-comma facts)
-- `$declare_head('foo', (...))` statements — one per predicate name, binding the module's predicate handle and recording its head's field names (they were `class foo(metaclass=PredicateMeta)` blocks until W4b-3 slice 5)
-- `Var()` allocations (from logic variable names)
+- `$define_predicate($Predicate(head=..., body=...), $module)` calls — one per clause, for `head <- body` rules and trailing-comma facts alike; the head and body are built from compiler node constructors (`$Call`, `$LoadName`, …)
+- `$declare_head('foo', (...))` statements — one per predicate name, binding the module's predicate handle and recording its head's field names
+- `$Var()` allocations (from logic variable names)
 
 These calls still execute at import time (they assert clauses), but the parsing and AST transformation cost is eliminated.
 
@@ -76,7 +82,7 @@ Previously, each `$define_predicate` call immediately compiled the predicate wit
 
 ### The fix
 
-With deferred compilation, `$define_predicate` and `$assert_fact` only collect predicate nodes. After `exec()` completes, `compiler_v2.compile_module` asserts and compiles each predicate exactly once with the full clause set:
+With deferred compilation, `$define_predicate` only collects predicate nodes. After `exec()` completes, `compiler_v2.compile_module` asserts and compiles each predicate exactly once with the full clause set:
 
 ```clausal
 --8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:caching_phases"
@@ -87,7 +93,7 @@ Total: O(N) compilation work per predicate.
 ### Safety
 
 Deferred compilation is safe because:
-- No predicate is queried during module load — `.clausal` files only contain definitions.
+- No predicate of the file itself is queried during its load. A module-level goal-position `--goal` over a predicate defined in the same file therefore fails at load (the file's clauses are not compiled yet); put it inside a `def`, or query an imported predicate.
 - [Directives](directives.md) (`-dynamic`, `-discontiguous`, `-table`) execute before clause definitions, so metadata like `db.is_dynamic()` is set correctly before compilation runs.
 - Cross-predicate references are resolved via `module_dict` globals, which are fully populated after `exec()`.
 
@@ -111,7 +117,7 @@ from my_predicates import foo  # works, but no .pyc written
 
 Each `.clausal` file gets its own `PredicateLoader(fullname, path)` instance, created by `PredicateFinder.find_spec()`. There is no shared global loader singleton. This ensures each module's path and caching state are independent.
 
-The old `_predicate_loader` global is set to `None` for backward compatibility detection. New code should use `_load_module(fullname, path)` for programmatic loading.
+For programmatic loading of a file by path, use `clausal.testing.load_clausal_module(path)`.
 
 ---
 

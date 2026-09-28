@@ -29,7 +29,7 @@ Peano arithmetic: natural number representation, addition, multiplication, and o
 
 ### graph.clausal
 
-Graph traversal: `Path/3` (path finding with cycle detection), `Reachable/2`, and `Connected/2` over edge facts.
+Graph traversal: `path/3` (path finding with cycle detection), `reachable/2`, and `connected/2` over edge facts.
 
 ---
 
@@ -39,14 +39,14 @@ Graph traversal: `Path/3` (path finding with cycle detection), `Reachable/2`, an
 
 Two sorting algorithms:
 
-- `NaiveSort/2` — permutation sort (generate-and-test)
-- `Qsort/2` — quicksort with partition
+- `naive_sort/2` — permutation sort (generate-and-test)
+- `qsort/2` — quicksort with partition
 
 *See: [List builtins](builtins.md#lists)*
 
 ### nqueens.clausal
 
-N-Queens puzzle using permutation-based search: `numlist`, `permutation`, `Safe/1`, and `NoAttack/3` diagonal constraint checking.
+N-Queens puzzle using permutation-based search: `numlist`, `permutation`, `safe/1`, and `no_attack/3` diagonal constraint checking.
 
 *See: [List builtins](builtins.md#lists)*
 
@@ -60,7 +60,7 @@ Tower of Hanoi: generates the sequence of moves to solve the puzzle for N disks.
 
 ### symbolic_diff.clausal
 
-Symbolic differentiation: `Diff(Expr, Var, Deriv)` computes the derivative of an algebraic expression with respect to a variable. Handles constants, variables, addition, multiplication, power, and chain rule.
+Symbolic differentiation: `diff(EXPR, VAR, DERIV)` computes the derivative of an algebraic expression with respect to a variable. Handles constants, variables, addition, multiplication, power, and chain rule.
 
 ---
 
@@ -98,19 +98,19 @@ Four-color map coloring: given a map of regions and adjacency constraints, finds
 
 ### lambdas.clausal
 
-Lambda (goal closure) examples: `ApplyVal`, `AddOne`, `AddZ`, `DoubleVal`, and more. Demonstrates variable capture, multi-arg closures, and conjunction bodies.
+Lambda (goal closure) examples: `apply_val`, `add_one`, `add_z`, `double_val`, and more. Demonstrates variable capture, multi-arg closures, and conjunction bodies.
 
 *See: [Lambdas](lambdas.md)*
 
 ### higher_order.clausal
 
-Higher-order list predicates: `Doubles` (maplist/3), `AllPositive` (maplist/2), `KeepPositive` (include/3), `RemoveNegative` (exclude/3), and `FoldSum` (foldl/4).
+Higher-order list predicates: `doubles` (maplist/3), `all_positive` (maplist/2), `keep_positive` (include/3), `remove_negative` (exclude/3), and `sum_list_fold` (foldl/4).
 
 *See: [Higher-order predicates](meta_predicates.md)*
 
 ### meta_predicates.clausal
 
-Meta-predicate examples: `Squares` (findall/3), `Positives` (bagof/3), `UniqueMembers` (setof/3), `AllPositive` (forall/2).
+Meta-predicate examples: `squares` (findall/3), `bag_positives` (bagof/3), `unique_members` (setof/3), `all_positive` (forall/2).
 
 *See: [Meta-predicates](meta_predicates.md)*
 
@@ -120,7 +120,7 @@ Meta-predicate examples: `Squares` (findall/3), `Positives` (bagof/3), `UniqueMe
 
 ### metainterpreters.clausal
 
-Five meta-interpreters ported from Markus Triska's [A Couple of Meta-interpreters in Prolog](https://www.metalevel.at/acomip/). Object-level programs are represented as lists of `[Head, Body]` clause pairs, where terms use the convention `["functor", arg1, arg2, ...]`. [`copy_term/2`](term_inspection.md) provides fresh variable copies at each resolution step.
+Five meta-interpreters ported from Markus Triska's [A Couple of Meta-interpreters in Prolog](https://www.metalevel.at/acomip/). Object-level programs are represented as lists of `[HEAD, BODY]` clause pairs of ordinary terms (`[natnum(succ(X)), [natnum(X)]]`). [`copy_term/2`](term_inspection.md) provides fresh variable copies at each resolution step.
 
 **solve/2** — vanilla list-based meta-interpreter (tail-recursive). Resolves goals against an explicit program:
 
@@ -208,7 +208,20 @@ Add test predicates to any example file, then run with pytest:
 --8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:fib_test"
 ```
 
-Or query from [Python](python_integration.md):
+Or query from [Python](python_integration.md). In a `.clausal` or `.seam`
+file, write the goal in [goal position](python_integration.md#goal-position-if-goal-for-in-goal):
+
+```python
+# fib_report.seam
+-import_module(clausal.examples.fibonacci)
+
+def fib(n):
+    for F in --clausal.examples.fibonacci.fib(++n, F):
+        return F
+```
+
+`import clausal, fib_report; fib_report.fib(10)` is `55`. From a plain `.py`
+file, build the goal cell and run it against the module:
 
 ```python
 from clausal import Var, solve

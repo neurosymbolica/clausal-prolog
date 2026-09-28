@@ -93,7 +93,11 @@ export CLAUSAL_IPYTHON=1
 
 ## Query syntax
 
-There are two ways to query in IPython:
+There are two ways to query in IPython. (The goal-position seam, `for X in
+--goal:` / `if --goal:`, which is how Python hosted in a `.clausal`/`.seam` file
+queries, is **not** available here: it needs a host Clausal module, and the
+REPL has none. It raises a `NameError` that says so. Put such code in a
+`.seam` file and import it — see [Python Integration](python_integration.md).)
 
 ### Plain Python: `solve` with a goal cell
 
@@ -135,13 +139,13 @@ into Clausal goals:
 ### Single goal
 
 ```python
-*(solve(ROWS))
+*(solve(ROWS))       # after -import_from(clausal.examples.sudoku, [solve])
 ```
 
 ### Conjunction — comma-separated
 
 ```python
-*(problem(1, ROWS), sudoku(ROWS))
+*(problem(1, ROWS), sudoku(ROWS))    # after -import_from(clausal.examples.sudoku, [problem, sudoku])
 ```
 
 Multiple comma-separated goals are folded into a left-associative `And` chain
@@ -150,10 +154,11 @@ and share a single solver context for correct backtracking.
 ### Unification goal
 
 ```python
-*(X is ["asdfa", 1, Y, some_term])
+*(X is ['asdfa', 1, Y])
 ```
 
-`is` inside `*(...)` is **unification**, not Python identity.
+`is` inside `*(...)` is **unification**, not Python identity. The answer
+prints as `X is [asdfa, 1, _],  Y is _`.
 
 ---
 
@@ -179,9 +184,11 @@ Solutions are presented one at a time with an `or` separator between them,
 matching Clausal's disjunction syntax:
 
 ```
-ROWS = [[1, 5, 6, ...], ...]
+ROWS is [[1, 5, 6, ...], ...]
    [SPACE/n: next  |  ENTER/.: stop  |  ESC/q: abort  |  a: all]
 ```
+
+When there is nothing more to show, the display ends with `# No more solutions.`
 
 Key bindings follow standard Prolog REPL conventions:
 
