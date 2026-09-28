@@ -208,6 +208,18 @@ def _check_mark_undo_pairing(stmts: list) -> list[str]:
                 and isinstance(node.args[0], _ast.Name)
             ):
                 undos.add(node.args[0].id)
+            elif (
+                # TRO's activation mark is consumed by
+                # ``trail.commit_fresh(mark, floor)``: it drops the entries
+                # since the mark only when all are on variables born after
+                # it, and otherwise leaves them to the clause arm's own
+                # mark/undo -- nothing is leaked either way.
+                isinstance(node.func, _ast.Attribute)
+                and node.func.attr == "commit_fresh"
+                and len(node.args) == 2
+                and isinstance(node.args[0], _ast.Name)
+            ):
+                undos.add(node.args[0].id)
 
     issues = list(nested_issues)
     for m in marks - undos:

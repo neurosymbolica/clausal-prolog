@@ -92,7 +92,7 @@ from clausal.logic.runtime._seg_helpers import (  # noqa: F401
 )
 
 from ._ast_helpers import (
-    _name, _call, _assign, _assign_mark, _undo_stmt, _if,
+    _name, _call, _attr, _assign, _assign_mark, _undo_stmt, _if,
     _MARK_PREFIX, _TRAIL_PARAM_NAME, _K_PARAM_NAME,
     _THIS_GEN_NAME, _DISP_PREFIX,
     _EXTRA_FUNCDEF,
@@ -272,6 +272,7 @@ from .tro import (  # noqa: E402,F401
     _head_has_unifying_list_pattern, _list_has_nonvar_constant,
     _contains_star_unpack,
     _compile_tro_tail,
+    _TRO_MARK_NAME, _TRO_FLOOR_NAME,
 )
 
 
@@ -572,6 +573,17 @@ def _sweep_tro_eligible(
     return frozenset(eligible)
 
 
+def _emits_tro_commit(stmts: list[ast.stmt]) -> bool:
+    """True if *stmts* contain a ``<trail>.commit_fresh(...)`` call (a TRO tail)."""
+    for stmt in stmts:
+        for node in ast.walk(stmt):
+            if (isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "commit_fresh"):
+                return True
+    return False
+
+
 def _node_has_own_yield(node: ast.AST) -> bool:
     """True if *node* contains a ``yield``/``yield from`` in its OWN scope
     (not inside a nested function/lambda, whose yields don't make the outer a
@@ -851,6 +863,24 @@ def _build_predicate_trampoline_funcdef(
 
     if clauses and arity > 0:
         _finalize_subject_depths(_subject_assigns, loop_stmts, subject)
+
+    if use_tro and _emits_tro_commit(loop_stmts):
+        # A TRO tail restarts this function body in place of a recursive
+        # call, so it must not leave anything on the trail the continuation
+        # still needs -- and a caller-visible effect of the clause (a
+        # binding of a caller variable, a dif/CLP constraint posted on one,
+        # a binding embedded in a tail argument) is exactly that.  Record
+        # where this activation starts -- trail length and the var-id
+        # floor -- so the tail can ask ``trail.commit_fresh`` whether every
+        # effect since then is on a variable born in this activation; only
+        # then is the in-place restart taken (see ``_compile_tro_tail``).
+        # Emitted only when a tail was: a lifted bucket clause can lose its
+        # eligibility on the recompute, leaving nothing to consume them.
+        _tn = ctx_template.trail_name
+        loop_stmts[:0] = [
+            _assign(_TRO_MARK_NAME, _call(_attr(_tn, "mark"))),
+            _assign(_TRO_FLOOR_NAME, _call(_attr(_tn, "var_floor"))),
+        ]
 
     if use_tro and tro_mode == "loop":
         # After all match arms: if _tro was set, reassign args and continue.

@@ -271,6 +271,7 @@ Clause 2 qualifies: the prefix goals (`Evaluate`) are deterministic, and the tai
 ```python
 def AccSum__3(this_generator, parent, arg0, arg1, arg2, trail):
     while True:
+        _tro_mark, _tro_floor = trail.mark(), trail.var_floor()
         _d0, _d1, _d2 = deref(arg0), deref(arg1), deref(arg2)
         _tro = False
         # clause 1 (base case) — unchanged
@@ -287,7 +288,10 @@ def AccSum__3(this_generator, parent, arg0, arg1, arg2, trail):
                     _tro_arg0 = deref(T)
                     _tro_arg1 = deref(NEWACC)
                     _tro_arg2 = deref(RESULT)
-                    _tro = True
+                    if trail.commit_fresh(_tro_mark, _tro_floor):
+                        _tro = True
+                    else:
+                        ...  # ordinary StepGenerator call of acc_sum
                 finally:
                     trail.undo(mark)
         if _tro:
@@ -302,6 +306,8 @@ def AccSum__3(this_generator, parent, arg0, arg1, arg2, trail):
 **Not eligible**: clauses where any prefix goal is a predicate `Call` (nondeterministic — the `StepGenerator` while-loop has multiple solutions that cannot be resumed after a TRO restart) or `Or`.
 
 **Safety check**: tail call arguments that are variables from head pattern decomposition (e.g., `T` from `[H, *T]`) are only allowed when there is at least one deterministic prefix goal, which implies the decomposed argument was ground. A **runtime ground-check** (`is_var()`) on these specific captured args provides provable correctness: if any checked arg is an unbound Var, execution falls back to a normal `StepGenerator` call. Passthrough variables (same `Var` at the same position in head and tail call) are always safe and skip the runtime check.
+
+**Prefix effects**: the restart abandons the clause's trail segment, which is only sound if nothing outside the clause can see it. `trail.commit_fresh(mark, floor)` checks that every trail entry since the activation began binds, or changes an attribute of, a variable created within the activation (its id is at least `trail.var_floor()` read at the start); it then drops those entries *without* undoing them, so a binding reachable from a tail argument (`X is H, p(f(X), T)`) survives. If any entry touches an older variable — a caller variable bound by the prefix, or a `dif`/CLP constraint posted on one (`K is not H`, `K != 3`, `K > 3`) — or is an opaque undo callback, the trail is left alone and that iteration makes the ordinary `StepGenerator` call instead. (Before 2026-09-29 the segment was undone unconditionally and only a top-level `deref` snapshot of the tail arguments was kept, silently losing all of these.)
 
 **Indexed predicates**: TRO works across both groundness-keyed dispatch and list structural dispatch:
 
