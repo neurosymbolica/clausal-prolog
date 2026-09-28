@@ -46,7 +46,13 @@ Both are addressed:
 The validation stamp is not the raw mtime: `path_stats()` XORs the source's
 nanosecond mtime with a tag derived from a **content digest of the engine
 sources that decide the emitted code** (plus a hand-maintained
-`CLAUSAL_BYTECODE_TAG`). Upgrading or editing the engine therefore invalidates
+`CLAUSAL_BYTECODE_TAG`). That set is every module whose content can change
+emitted code: the compiler (`templating/`, `pythonic_ast/`,
+`logic/compiler/`), the tables it reads at compile time
+(`logic/exact_arith.py`, `modules/units.py`, `modules/countries/_data.py`),
+and the `.pl` translator with its token spec (`tools/prolog_*.py`,
+`tools/toklex/`); see `_COMPILATION_ROOTS`/`_COMPILATION_FILES` in
+`clausal/import_hook.py`. Upgrading or editing the engine therefore invalidates
 every cached `.clausal` bytecode automatically; there is nothing to clear by
 hand.
 4. Returns the cached code object.

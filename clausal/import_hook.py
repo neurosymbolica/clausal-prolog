@@ -496,8 +496,36 @@ CLAUSAL_BYTECODE_TAG = 14
 #: file here invalidates every user's cached bytecode when it changes, so a
 #: module that only affects RUNTIME behaviour must not be listed -- a runtime
 #: change that makes old bytecode wrong is what the manual tag above is for.
-_COMPILATION_ROOTS = ("templating", "pythonic_ast", "logic/compiler")
-_COMPILATION_FILES = ("logic/compiler_v2.py",)
+#:
+#: THE RULE: every module whose content can change emitted code is listed,
+#: including data tables the transformer reads at compile time and, for
+#: ``.pl`` files, the translator ``PrologLoader.source_to_code`` runs before
+#: compiling (D18(a), 2026-09-29). Widening costs only cache misses; missing
+#: one lets two engines share a stale entry. Each entry outside the original
+#: compiler roots is proven by a positive control in
+#: tests/test_pycache.py::test_every_module_that_decides_bytecode_is_fingerprinted
+#: -- add a row there when adding one here.
+_COMPILATION_ROOTS = (
+    "templating", "pythonic_ast", "logic/compiler",
+    # the .pl tokenizer (tools/prolog_tokenizer.py) is generated from a spec
+    # by this package
+    "tools/toklex",
+)
+_COMPILATION_FILES = (
+    "logic/compiler_v2.py",
+    # Tables the transformer reads at compile time:
+    "logic/exact_arith.py",          # EVALUABLE (_mark_arith_position_names)
+    "modules/units.py",              # _DEPRECATED_UNIT_NAMES (-import_from)
+    "modules/countries/_data.py",    # JURISDICTIONS (_resolve_import_path)
+    # The .pl translator, whose output is what gets compiled and cached:
+    "tools/prolog_to_clausal.py",
+    "tools/prolog_parser.py",
+    "tools/prolog_tokenizer.py",
+    "tools/prolog_operators.py",
+    "tools/prolog_dialect.py",
+    "tools/prolog_ast.py",
+    "tools/toklex/specs/iso.toklex.pl",  # the spec load_lexer() compiles
+)
 
 _FINGERPRINT_CACHE: "int | None" = None
 
