@@ -1376,7 +1376,10 @@ def _no_value_in_propagation(exc) -> bool:
 
 
 def _eval_propagating(x):
-    """``_eval_ground(x)`` inside propagation: a zero divisor is
+    """``_eval_ground(x)`` inside propagation: an expression with no value
+    (see :func:`_no_value_in_propagation`: any ``evaluation_error`` --
+    ``zero_divisor``, ``undefined``, ``float_overflow`` -- or the
+    ``type_error(float, _)`` of ``'^'`` with a negative exponent) is
     :data:`_NO_VALUE` (the constraint fails), not an error."""
     try:
         return _eval_ground(x)
@@ -1386,14 +1389,18 @@ def _eval_propagating(x):
         raise
 
 
-#: What :func:`_eval_propagating` answers for an expression with a zero divisor.
+#: What :func:`_eval_propagating` answers for an expression with no value.
 _NO_VALUE = object()
 
 
 def _expr_domain(expr, trail: Trail) -> Domain:
     """Compute the domain of an expression (Var, int, or arithmetic node).
-    A ground expression with a zero divisor has no value: its domain is
-    empty, so a propagator over it fails (see :func:`_is_zero_divisor`)."""
+    A ground expression with no value -- any ``evaluation_error``
+    (``zero_divisor``, ``undefined``, ``float_overflow``) or the
+    ``type_error(float, _)`` of ``'^'`` with a negative exponent -- has an
+    EMPTY domain, so a propagator over it fails (see
+    :func:`_no_value_in_propagation`).  clpz's ``domain_error(
+    clpz_expression, _)`` for a non-arithmetic leaf still raises."""
     expr = deref(expr)
     if isinstance(expr, int):
         return ((expr, expr),)

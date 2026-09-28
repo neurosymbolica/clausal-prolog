@@ -42,6 +42,10 @@ BARE_ROWS = [
     ("eval_('**'(2, 3), X)", 8.0),
     ("eval_('^'(2, 3), X)", 8),
     ("eval_('//'(-7, 2) // 2, X)", -2),      # each operator by its own spelling
+    # an integral rational operand is an integer (a nested 4 / 2 is 2)
+    ("'is'(X, '//'(4 / 2, 1))", 2),
+    ("'is'(X, '^'(2, 6 / 2))", 8),       # 8, not 8.0
+    ("'is'(X, mod(4 / 2, 3))", 2),
     ("(Y is -7, X == '//'(Y, 2))", -3),
     ("(X == '//'(Y, 2), Y is -7)", -3),      # posted first, bound after
     ("(X == Y // 2, Y is -7)", -4),

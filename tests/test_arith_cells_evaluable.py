@@ -170,8 +170,13 @@ class TestA1Table:
         from clausal.logic.clpfd import _NODE_KEYS, _ensure_term_imports
         from clausal.logic.exact_arith import EVALUABLE, NODE_EVALUABLE, key_nodes
         from clausal.logic.exceptions import ARITH_OPERATOR_TERMS
+        from clausal.pythonic_ast.nodes import (
+            IsoDiv, IsoIntDiv, IsoIntPow, IsoMod, IsoPow)
         _ensure_term_imports()
         assert set(ARITH_OPERATOR_TERMS) <= set(_NODE_KEYS)
+        # the only nodes beyond the source operators: the Scryer cells' forms
+        assert set(_NODE_KEYS) - set(ARITH_OPERATOR_TERMS) == {
+            IsoIntDiv, IsoDiv, IsoMod, IsoPow, IsoIntPow}
         assert set(_NODE_KEYS.values()) == set(NODE_EVALUABLE)
         assert set(EVALUABLE) <= set(key_nodes())
         private = set(NODE_EVALUABLE) - set(EVALUABLE)

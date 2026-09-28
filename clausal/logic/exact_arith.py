@@ -243,14 +243,26 @@ def python_pow(l, r):
 
 # -- cells: Scryer semantics -------------------------------------------------
 
+def _presented(x):
+    """*x* as the binder would present it: an integral Fraction (a nested
+    ``4 / 2`` is ``Fraction(2, 1)``; only the tree ROOT is presented) or a
+    Decimal with no decimal places is its int (``present_number``)."""
+    t = type(x)
+    if t is Fraction or t is Decimal:
+        from clausal.logic.variables import present_number  # noqa: PLC0415
+        return present_number(x)
+    return x
+
+
 def _int_pair(l, r, op: str):
-    """Both operands evaluated and INTEGERS (ISO 9.1.3), else type_error."""
+    """Both operands evaluated and INTEGERS (ISO 9.1.3), else type_error.
+    An integral rational counts (``'//'(4 / 2, 1)`` is 2, as in Scryer)."""
     if type(l) is not int:
-        l = evaluate(l)
+        l = _presented(evaluate(l))
         if type(l) is not int:
             raise _type_error("integer", l, op)
     if type(r) is not int:
-        r = evaluate(r)
+        r = _presented(evaluate(r))
         if type(r) is not int:
             raise _type_error("integer", r, op)
     return l, r
@@ -336,6 +348,8 @@ def iso_intpow(l, r):
     (lv, lnum), (rv, rnum) = _real(l), _real(r)
     if not (lnum and rnum):
         return python_pow(lv, rv)
+    # an integral rational is an integer here (``'^'(2, 4 / 2)`` is 8)
+    lv, rv = _presented(lv), _presented(rv)
     if type(rv) is int:
         if type(lv) is int:
             if rv >= 0:
