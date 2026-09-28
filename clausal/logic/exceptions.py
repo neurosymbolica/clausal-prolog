@@ -601,6 +601,18 @@ def domain_error(domain: str, culprit: Any, context: Any = "") -> tuple:
     return _error(("domain_error", _name_atom(domain), culprit), context)
 
 
+def evaluation_error_kind(exc: Any) -> "str | None":
+    """The ``E`` of a LogicException ``error(evaluation_error(E), _)``
+    (``"zero_divisor"``, ``"undefined"``, ...), else None."""
+    term = getattr(exc, "term", None)
+    if type(term) is not tuple or len(term) != 3 or term[0] != "error":
+        return None
+    formal = term[1]
+    if type(formal) is tuple and len(formal) == 2 and formal[0] == "evaluation_error":
+        return formal[1]
+    return None
+
+
 def evaluation_error(error_type: str, context: Any = "") -> tuple:
     """Build error(evaluation_error(ErrorType), PI).
 

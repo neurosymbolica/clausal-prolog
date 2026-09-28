@@ -532,19 +532,18 @@ class TestBetweenArithmeticBounds:
             sol_var(self._between(0, bound, x), x)
         assert cell_functor(cell_args(exc.value.term)[0]) == "type_error"
 
-    def test_ground_zero_divisor_raises_with_between_context(self):
-        """``1 // 0`` evaluates to nothing while fully ground — the LOCAL
-        raise (indicator between/3), the one path non-numeric leaves no
-        longer reach (they raise inside _eval_ground first)."""
+    def test_ground_zero_divisor_raises_evaluation_error(self):
+        """``1 // 0`` in a bound is ISO's ``evaluation_error(zero_divisor)``
+        naming the operator (Q4, 2026-09-28; it was type_error(integer,
+        1 // 0) naming between/3, when the evaluator answered None)."""
         from clausal.terms import FloorDiv
         from clausal.logic.exceptions import LogicException
         x = Var()
         with pytest.raises(LogicException) as exc:
             sol_var(self._between(0, FloorDiv(left=1, right=0), x), x)
         err = exc.value.term
-        assert cell_functor(cell_args(err)[0]) == "type_error"
-        assert cell_args(cell_args(err)[0])[0] == mint("integer")
-        assert cell_args(err)[1] == ("/", "between", 3)
+        assert cell_args(err)[0] == ("evaluation_error", mint("zero_divisor"))
+        assert cell_args(err)[1] == ("/", "//", 2)
 
     def test_expression_with_unbound_leaf_keeps_mode_failure(self):
         """A bound expression still containing an unbound Var behaves like a

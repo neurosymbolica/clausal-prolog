@@ -149,7 +149,8 @@ def test_hash_family_error_surface_OPEN_iso_divergence(run_clausal):
         '#='(1, foo)    Clausal: FAILS SILENTLY
         '#\\='(1, foo)  Clausal: SUCCEEDS
         '#<'(1, foo)    Clausal: type_error(orderable, foo), context '(<)/2'
-        '#='(X, foo)    Clausal: type_error(evaluable, foo), context '(==)/2'
+        '#='(X, foo)    Clausal: domain_error(clpz_expression, foo), context
+                        '(==)/2' (Scryer's formal since Q3, 2026-09-28)
 
     Scryer's clpz answers ONE thing for all four:
     `error(domain_error(clpz_expression,foo),unknown(foo)-1)` (see the oracle
@@ -182,7 +183,9 @@ def test_hash_family_error_surface_OPEN_iso_divergence(run_clausal):
 
     eq = _err_term(run_clausal, "'#='(X_UNUSED, foo)", extra_atoms=("foo",))
     assert type(eq) is tuple and cell_functor(eq) == "error", eq
-    assert spelling(cell_args(cell_args(eq)[0])[0]) == "evaluable", eq
+    # Q3 (2026-09-28): Scryer's clpz formal; it was type_error(evaluable, foo).
+    assert cell_functor(cell_args(eq)[0]) == "domain_error", eq
+    assert spelling(cell_args(cell_args(eq)[0])[0]) == "clpz_expression", eq
     assert spelling(cell_args(cell_args(eq)[0])[1]) == "foo", eq
     # The wart: a '#=' call reports its indicator as (==)/2.
     assert cell_args(eq)[1] == ("/", "==", 2), eq

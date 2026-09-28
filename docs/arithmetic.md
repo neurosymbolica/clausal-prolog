@@ -34,6 +34,10 @@ test("eval") <- (X == 3 + 4 * 2, X == 11)
 Supported operators: `+`, `-`, `*`, `/`, `//` (integer division), `%` (modulo),
 `**` (power), `abs()`, `min()`, `max()`.
 
+A **bare** operator keeps Python's meaning in today's syntax (`-7 // 2` is -4,
+`2 ** 3` is 8); its **quoted** spelling follows Scryer Prolog (`'//'(-7, 2)` is
+-3, `'**'(2, 3)` is 8.0). [Operators](operators.md) has the whole table.
+
 ### eval_/2 — eager evaluation
 
 `eval_(EXPR, RESULT)` evaluates `EXPR` immediately and unifies the value with
@@ -68,8 +72,9 @@ Reach for `eval_/2` when you specifically need *eager* evaluation:
 
 - **Unit-carrying values** — `eval_(20(metre), D)`, `eval_(D / T, V)`; CLP
   constraints don't operate on [`Quantity`](units.md) objects.
-- **Catchable exceptions** — `catch(eval_(X // Y, R), _, ...)` sees the
-  `ZeroDivisionError`; a constraint would not raise it.
+- **Catchable exceptions** — `catch(eval_(X // Y, R), E, ...)` sees
+  `error(evaluation_error(zero_divisor), (//)/2)` when `Y` is 0. A
+  constraint never raises it: over a zero divisor it simply fails.
 - **Accumulator recursion** — an eagerly ground argument keeps
   tail-recursive predicates eligible for [tail-call
   optimisation](compiler.md).
@@ -86,27 +91,70 @@ Choosing an arithmetic idiom:
 ### Arithmetic terms built at runtime — the evaluable table
 
 Arithmetic written in source (`1 + 2`) and arithmetic built as a term at
-runtime (`unpack(T, ['+', 1, 2])`) evaluate through **one** table, keyed by
-name and arity. `eval_/2`, the ISO `'is'`/`'=:='`/`'<'`… builtins, `==`/`!=`/
-`<`/`<=` (CLP(ℤ)), `clpq.rational/1`, `clpr.real/1` and `between/3` all accept
-both spellings. The table is closed — there is no way to register a new
-evaluable functor:
+runtime (`unpack(T, ['+', 1, 2])`) are both evaluable. `eval_/2`, the ISO
+`'is'`/`'=:='`/`'<'`… builtins, `==`/`!=`/`<`/`<=` (CLP(ℤ)),
+`clpq.rational/1`, `clpr.real/1` and `between/3` all accept both spellings. A
+cell evaluates through **one** table, keyed by name and arity; the table is
+closed — there is no way to register a new evaluable functor. Its functors
+are builtins: in scope in every module without a declaration
+(`'is'(X, rdiv(7, 2))`, `'is'(X, '//'(-7, 2))`), and ordinary terms as data.
 
-| Term | Source spelling | Meaning |
+Operator rulings of 2026-09-28: the table is the **Scryer** meaning of each
+functor, which a quoted spelling and a runtime-built cell get. A bare operator
+written in source keeps Python's meaning, and the two differ for `//` and `**`
+(see [Operators](operators.md)):
+
+| Term | Meaning (Scryer) | Bare source operator (Python) |
 |---|---|---|
-| `+(A, B)`, `-(A, B)`, `*(A, B)` | `A + B`, `A - B`, `A * B` | exact (a `Decimal` keeps its scale) |
-| `/(A, B)` | `A / B` | exact division: `7 / 2` is the rational 7/2 |
-| `div(A, B)` | `A // B` | division rounded toward negative infinity |
-| `mod(A, B)` | `A % B` | modulo, sign of the divisor |
-| `**(A, B)` | `A ** B` | power: `2 ** 3` is the integer 8 |
-| `-(A)` | `-A` | negation |
+| `+(A, B)`, `-(A, B)`, `*(A, B)` | exact (a `Decimal` keeps its scale) | `A + B`, `A - B`, `A * B`: the same |
+| `/(A, B)` | division as a **float**: `'/'(7, 2)` is 3.5, `'/'(6, 2)` is 3.0 | `A / B`: Python true division, `7 / 2` is 3.5, `6 / 2` is 3.0 |
+| `rdiv(A, B)` | **exact** rational division: `rdiv(7, 2)` is 7/2, `rdiv(6, 2)` is 3 | — |
+| `//(A, B)` | integer division **truncating** toward zero: `'//'(-7, 2)` is -3 | `A // B` **floors**: `-7 // 2` is -4 |
+| `div(A, B)` | integer division rounded toward negative infinity: -4 | — |
+| `mod(A, B)` | integer modulo, sign of the divisor | `A % B`: Python modulo (the same on integers) |
+| `**(A, B)` | power as a **float**: `'**'(2, 3)` is 8.0 | `A ** B`: Python power, `2 ** 3` is the integer 8 |
+| `^(A, B)` | integer power: `'^'(2, 3)` is 8 | — (`A ^ B` is Python's XOR, for CLP(B)) |
+| `-(A)` | negation | `-A`: the same |
 
-The ISO spelling `//(A, B)` is **not** in the table: ISO `//` rounds toward
-zero in Scryer and SWI, while Clausal's `//` floors, so a term `//(-7, 2)`
-raises `type_error(evaluable, (//)/2)` instead of answering -4 where Scryer
-answers -3. Use `div` (floored) or `prolog.TruncDiv` (toward zero). The
-exact-number terms `rdiv(N, D)` and `decimal(M, S)` evaluate as the number they
-denote.
+`//`, `div` and `mod` take integers only (`type_error(integer, 7.0)` for
+`'//'(7.0, 2)`), as in Scryer. `^` follows Scryer's rules for a negative
+exponent: `'^'(2, -1)` is `type_error(float, 2)`, `'^'(1, -1)` is 1, and
+`'^'(0, -1)` is `evaluation_error(undefined)`; an exact rational base stays
+exact (`'^'(rdiv(1, 2), 2)` is 1/4, where Scryer answers 0.25). `rem` is not in the
+table. The exact-number term `decimal(M, S)` evaluates as the number it
+denotes.
+
+**Division (ruling Q15, 2026-09-28).** In *evaluation* — `eval_/2`, `'is'`,
+the ISO comparisons — `/` is a float division for two integers: bare it is
+Python's (`7 / 2` is 3.5, `6 / 2` is 3.0), quoted it is Scryer's (the same
+floats). A bare `/` keeps exact kinds exact where Python does: a `Fraction`
+over an int is a `Fraction`, a `Decimal` over an int is Python's `Decimal`
+quotient (rounded at 28 digits). A `Decimal` beside a `Fraction` divides
+exactly; a float beside either raises `type_error(exact_number, F)`. The
+quoted `'/'` always answers a float. `rdiv` is the exact spelling:
+`rdiv(7, 2)` is 7/2 and `rdiv(1, 3) + 1` is 4/3, and it never rounds.
+**Inside a constraint** (`==`, `!=`, `<`, ...) `/` is rational, as before:
+`X == 7 / 2` gives 7/2 and `X == 6 / 2` gives 3.
+
+A **zero divisor** in plain arithmetic raises
+`evaluation_error(zero_divisor)` naming the operator, on every spelling, bare or
+quoted: `eval_(1 / 0, X)`, `'is'(X, 1 // 0)` and `'=:='(1, 1 / 0)` all raise it.
+
+A **constraint** is a relation (ruling Q14, 2026-09-28): over an expression
+with no value — a zero divisor, or `'^'(2, -1)` — it has no solutions and
+**fails**, as Scryer's clpz does, in every goal order. `X == 1 // 0`,
+`(X == 1 // Y, Y is 0)` and `X != 1 // 0` all fail; in a search
+(`X == 10 // Y, in_domain(Y, 0, 2), label([Y])`) the branch Y = 0 fails and
+the search goes on to Y = 1 and Y = 2; reified, as in
+`if_(X == 1 // 0, ...)`, the test is false.
+
+In a CLP(ℤ) constraint (`==`, `!=`, `<`, ...), a term that is not arithmetic
+raises Scryer's `domain_error(clpz_expression, T)`: `X == foo(1)` raises
+`error(domain_error(clpz_expression, foo(1)), (==)/2)`. So does the float
+power `'**'`, which is not a clpz expression, over a CLP(ℤ) variable
+(`X == '**'(Y, 2)`) or nested in a CLP(ℤ) expression (`X == Y + '**'(2, 3)`);
+use `'^'` there. A ground `'**'(2, 3)` as a whole side of the comparison is
+simply the float 8.0.
 
 ### Comparison operators
 
@@ -284,7 +332,10 @@ test("digit sum") <- digit_sum(123, 6)
   unbound. Use [CLP(ℤ)](constraints.md) for constraints over unbound variables.
 - **`plus/3` requires at least two bound arguments** — it cannot enumerate all
   solutions to `plus(X, Y, 10)`.
-- **Integer division** — use `//` for integer division, `/` for float division.
+- **Integer division** — `//` floors like Python's (`-7 // 2` is -4); the
+  quoted `'//'(A, B)` truncates like Prolog's (-3). `/` is a float in
+  evaluation (`eval_(7 / 2, X)` is 3.5) and rational inside a constraint;
+  `rdiv` is exact everywhere.
 
 ---
 

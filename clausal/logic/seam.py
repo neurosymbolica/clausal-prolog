@@ -213,6 +213,7 @@ def seam_term(node: Any, module_globals: dict, loose: bool = False) -> Any:
                 raise SyntaxError(
                     f"--: arithmetic over an unbound variable has no value; "
                     f"bind it first or pass the term through ++(...)")
+            term = _built_constructions(term, build)
             expr = _ast.Call(func=_ast.Name(id="$present", ctx=_ast.Load()),
                              args=[arith_to_ast_expr(term, {})], keywords=[])
             code = compile(_ast.fix_missing_locations(_ast.Expression(body=expr)),
@@ -227,6 +228,13 @@ def seam_term(node: Any, module_globals: dict, loose: bool = False) -> Any:
             try:
                 result = eval(code, module_globals, ARITH_RUNTIME_NAMES)  # noqa: S307 — the module's own arithmetic
             except LogicException as exc:
+                # An ISO evaluation error (a zero divisor, Q4 2026-09-28) is
+                # a logic-level error on every spelling, the seam's too: it
+                # stays the catchable LogicException, never a raw
+                # ZeroDivisionError and never the TypeError below.
+                from clausal.logic.exceptions import evaluation_error_kind  # noqa: PLC0415
+                if evaluation_error_kind(exc) is not None:
+                    raise
                 # The exact helpers ($add & co.) refuse a non-number operand
                 # LOUDLY in-engine (a catchable type_error(evaluable, ...));
                 # this is the PYTHON-facing surface, so the same refusal
@@ -306,6 +314,26 @@ def _contains_var(term: Any) -> bool:
     return False
 
 
+def _built_constructions(term: Any, build) -> Any:
+    """*term* (an arithmetic node) with every functor CONSTRUCTION inside it
+    replaced by the cell ``build`` makes of it -- ``rdiv(1, 2)`` becomes
+    ``('rdiv', 1, 2)``, which the evaluator then evaluates -- so the compiled
+    value tree never looks a functor name up as a Python global (ruling Q16:
+    an evaluable functor is in scope everywhere, with no binding)."""
+    import dataclasses
+    if isinstance(term, Call) and isinstance(term.func, (LoadName, LoadAttr)):
+        return build(term)
+    if isinstance(term, Node) and dataclasses.is_dataclass(term):
+        changes = {}
+        for f in dataclasses.fields(term):
+            v = getattr(term, f.name)
+            nv = _built_constructions(v, build)
+            if nv is not v:
+                changes[f.name] = nv
+        return dataclasses.replace(term, **changes) if changes else term
+    return term
+
+
 def _load_names(term: Any) -> list:
     """Every bare name inside an arithmetic node, in source order."""
     import dataclasses
@@ -313,6 +341,14 @@ def _load_names(term: Any) -> list:
     def walk(t):
         if isinstance(t, LoadName):
             out.append(t.name)
+        elif isinstance(t, Call) and isinstance(t.func, LoadName):
+            # a FUNCTOR name is not an atom to look up: a construction the
+            # compiled tree resolves (an evaluable functor such as rdiv is in
+            # scope everywhere, ruling Q16); only its arguments are walked
+            for a in t.args:
+                walk(a)
+            for kw in (t.kwargs or []):
+                walk(kw.value)
         elif isinstance(t, Node) and dataclasses.is_dataclass(t):
             for f in dataclasses.fields(t):
                 walk(getattr(t, f.name))

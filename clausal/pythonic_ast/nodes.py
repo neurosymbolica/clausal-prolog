@@ -588,6 +588,42 @@ class Mod(BinOp):
 class Pow(BinOp):
     op: ClassVar = '**'
 
+# The node form of a Scryer-semantics arithmetic CELL (operator rulings
+# 2026-09-28): a CLP post rewrites ``'//'(X, 2)``, ``div(X, 2)``,
+# ``mod(X, 2)``, ``'**'(X, 2)`` and ``'^'(X, 2)`` into one of these so its
+# walkers see a node, while evaluation keeps the cell's Scryer meaning
+# (``clausal.logic.exact_arith.node_keys``).  Subclasses, so every structural
+# walker that knows ``FloorDiv``/``Mod``/``Pow`` walks them; no source syntax
+# produces them -- a bare ``//``, ``%``, ``**`` is the Python-semantics base.
+
+@dataclass
+class IsoTrueDiv(Div):
+    op: ClassVar = '/'
+
+@dataclass
+class IsoRdiv(Div):
+    op: ClassVar = 'rdiv'
+
+@dataclass
+class IsoIntDiv(FloorDiv):
+    op: ClassVar = '//'
+
+@dataclass
+class IsoDiv(FloorDiv):
+    op: ClassVar = 'div'
+
+@dataclass
+class IsoMod(Mod):
+    op: ClassVar = 'mod'
+
+@dataclass
+class IsoPow(Pow):
+    op: ClassVar = '**'
+
+@dataclass
+class IsoIntPow(Pow):
+    op: ClassVar = '^'
+
 @dataclass
 class MatMult(BinOp):
     op: ClassVar = '@'

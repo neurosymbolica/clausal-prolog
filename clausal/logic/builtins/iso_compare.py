@@ -29,23 +29,24 @@ def _clpfd_leaf_culprit(exc: LogicException):
     """The offending LEAF out of a `_eval_ground` leaf error, or None.
 
     `_eval_ground` (clausal/logic/clpfd.py) never catches an exception
-    itself, so every `LogicException` it lets escape is exactly its own
-    `_unknown_expr_leaf_error(leaf)` — `error(type_error(integer, Leaf,
-    "clpfd expression"), _)` — bubbled up unchanged through any amount of
-    recursion. Matching that literal shape (rather than translating every
-    `LogicException`) means an *unrelated* exception raised deeper in the
-    tree — should `_eval_ground` ever grow one — fails closed: it is
-    re-raised as-is instead of being mislabelled `evaluable`.
+    itself. What it lets escape is either its own
+    `_unknown_expr_leaf_error(leaf)` — `error(domain_error(clpz_expression,
+    Leaf), _)`, prose "clpfd expression" — or an evaluable entry's ISO
+    error (`evaluation_error(zero_divisor)`, `type_error(integer, X)`,
+    `type_error(float, X)`, ...), each bubbled up unchanged through any
+    amount of recursion. Matching the leaf error's literal shape (rather
+    than translating every `LogicException`) means every other error fails
+    closed: it is re-raised as-is instead of being mislabelled `evaluable`.
     """
     term = exc.term
     outer = term_functor_args(term)
     if outer is None or outer[0] != "error" or len(outer[1]) != 2:
         return None
     inner = term_functor_args(outer[1][0])
-    if inner is None or inner[0] != "type_error" or len(inner[1]) != 2:
+    if inner is None or inner[0] != "domain_error" or len(inner[1]) != 2:
         return None
     expected, leaf = inner[1]
-    if not (is_atom(expected) and spelling(expected) == "integer"):
+    if not (is_atom(expected) and spelling(expected) == "clpz_expression"):
         return None
     # The clpfd leaf error has no culprit indicator: its second argument is
     # an unbound variable (Scryer's form) and "clpfd expression" is the
@@ -115,21 +116,30 @@ def _iso_eval(term, context: str):
     type_error(evaluable, F/N). Scryer attributes BOTH to (is)/2 regardless of
     which comparison raised them — pin what it does, not what reads tidily.
 
-    `_eval_ground`'s own leaf error is `type_error(integer, Leaf, "clpfd
-    expression")` — a CLP(FD)-flavoured shape, not ISO's `type_error(evaluable,
-    Name/Arity)` for `is/2`. Measured directly against Scryer:
+    `_eval_ground`'s own leaf error is clpz's `domain_error(clpz_expression,
+    Leaf)` (prose "clpfd expression") — a CLP(FD)-flavoured shape, not ISO's
+    `type_error(evaluable, Name/Arity)` for `is/2`. Measured directly against Scryer:
     `_ is foo + 1` -> `error(type_error(evaluable,foo/0),(is)/2)`. Reconciled
     here, at the call site, rather than in `_eval_ground` itself — that
     function is shared by every other CLP(FD) caller in the engine and its
     "clpfd expression" shape is correct for THEM; only `is`/the comparisons
     need the ISO term.
     """
-    from clausal.logic.clpfd import _eval_ground
+    # EVALUATION, not a CLP post: ``/`` is Scryer's / Python's float division
+    # here (ruling Q15, 2026-09-28), where the CLP evaluator keeps it
+    # rational -- so is/2 and the ISO comparisons evaluate through the
+    # evaluable table's own evaluator, as eval_/2 does.
+    from clausal.logic.exact_arith import evaluate
+    from clausal.logic.variables import present_number
     t = deref(term)
     if is_var(t):
         raise LogicException(instantiation_error(context))
     try:
-        value = _eval_ground(t)
+        value = evaluate(t, context)
+        if not isinstance(value, (int, float, _Fraction, _Decimal)) or isinstance(value, bool):
+            raise LogicException(
+                type_error("evaluable", _evaluable_culprit(value), context))
+        return present_number(value)
     except LogicException as e:
         leaf = _clpfd_leaf_culprit(e)
         if leaf is None:
@@ -142,9 +152,6 @@ def _iso_eval(term, context: str):
         # this fallback must not hand back a raw term either.
         raise LogicException(
             type_error("evaluable", _evaluable_culprit(t), context)) from None
-    if value is None:
-        raise LogicException(instantiation_error(context))
-    return value
 
 
 def _arith_cmp(name, op):
