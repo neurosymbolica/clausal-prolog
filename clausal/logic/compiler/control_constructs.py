@@ -721,7 +721,8 @@ def _compile_bag_of(
     """bagof/setof whose goal may have FREE variables (ISO 8.10.2.4): the
     witness W is computed at run time (``$bag_witness``: the goal's
     variables' unbound variables, less the template's and the existential
-    prefixes'), each solution is collected as a ``[W, T]`` copy, and the
+    prefixes'), each solution is collected as a ``[W, T]`` copy (the bare
+    template when W is empty), and the
     construct answers once per bag (``$bagof_groups``), binding W and the
     bag (``$bagof_bind``).  With an empty witness this is the single bag."""
     var_context = ctx.var_context
@@ -733,21 +734,32 @@ def _compile_bag_of(
     gen_name = ctx.fresh("_bo_gen")
     unify_mark = ctx.fresh("_bo_um")
     wit_var = ctx.fresh("_bo_wit")
+    tpl_var = ctx.fresh("_bo_tpl")
+    row_var = ctx.fresh("_bo_row")
     grp_ws = ctx.fresh("_bo_ws")
     grp_ts = ctx.fresh("_bo_ts")
 
     # Built BEFORE the goal is lowered, so every variable the witness and
     # the template read is registered in this scope and the goal's body
-    # refers to the same names.
-    template_expr = term_to_ast_expr(template, var_context, eval_arith=False)
+    # refers to the same names.  The template term is built ONCE: a copy
+    # taken at each solution reads its variables' bindings then.
+    template_build = _assign(
+        tpl_var, term_to_ast_expr(template, var_context, eval_arith=False))
     witness_call = _call(
         _name("$bag_witness"),
         ast.Tuple(elts=[term_to_ast_expr(v, var_context, eval_arith=False)
                         for v in goal_vars], ctx=ast.Load()),
-        template_expr,
+        _name(tpl_var),
         ast.Tuple(elts=[term_to_ast_expr(e, var_context, eval_arith=False)
                         for e in existential], ctx=ast.Load()),
     )
+    # With an empty witness (the common case at run time) a row is the bare
+    # template, as findall collects it; otherwise the pair [W, T].
+    row_build = _assign(row_var, ast.IfExp(
+        test=_name(wit_var),
+        body=ast.List(elts=[_name(wit_var), _name(tpl_var)], ctx=ast.Load()),
+        orelse=_name(tpl_var),
+    ))
     bag_tmp = ctx.fresh("_bo_bag")
     bag_build = _assign(bag_tmp, term_to_ast_expr(bag, var_context,
                                                   eval_arith=False))
@@ -772,9 +784,7 @@ def _compile_bag_of(
         body=[
             ast.Expr(value=_call(
                 _attr(results_var, "append"),
-                _call(_name("$findall_copy"),
-                      ast.List(elts=[_name(wit_var), template_expr],
-                               ctx=ast.Load())),
+                _call(_name("$findall_copy"), _name(row_var)),
             )),
             _harvest_stmt(cond_leader, cond_bag),
         ],
@@ -783,7 +793,7 @@ def _compile_bag_of(
     answer_loop = ast.For(
         target=ast.Tuple(elts=[_name(grp_ws, ast.Store()),
                                _name(grp_ts, ast.Store())], ctx=ast.Store()),
-        iter=_call(_name("$bagof_groups"), _name(results_var)),
+        iter=_call(_name("$bagof_groups"), _name(results_var), _name(wit_var)),
         body=[
             _assign_mark(unify_mark, trail_name),
             ast.If(
@@ -802,7 +812,9 @@ def _compile_bag_of(
         bag_build,
         ast.Expr(value=_call(_name("$check_bag"), _name(bag_tmp),
                              ast.Constant(value=who))),
+        template_build,
         _assign(wit_var, witness_call),
+        row_build,
         _assign(results_var, ast.List(elts=[], ctx=ast.Load())),
         _assign(cond_bag, ast.List(elts=[], ctx=ast.Load())),
         _leader_stmt(cond_leader),

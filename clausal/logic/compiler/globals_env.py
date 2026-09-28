@@ -140,17 +140,18 @@ def _variant_key(term):
     return _standard_order_key(_copy_term_py(term, marks))
 
 
-def _bagof_groups(rows):
+def _bagof_groups(rows, witness):
     """The bags of a bagof/setof call, in the order it answers them.
 
-    *rows* are the collected ``[W, T]`` copies.  Rows whose witnesses are
+    *rows* are the collected ``[W, T]`` copies -- the bare templates when
+    *witness* is empty, which make one bag.  Rows whose witnesses are
     variants form one bag, in collection order; the bags are ordered by
     their first witness in the standard order of terms (stable), as Scryer's
     keysort orders them.  Each bag is ``(witnesses, templates)``."""
     if not rows:
         return []
-    if not rows[0][0]:                       # no free variables: one bag
-        return [([], [t for _, t in rows])]
+    if not witness:                          # no free variables: one bag
+        return [([], rows)]
     groups: list = []
     index: dict = {}
     for w, t in rows:
@@ -182,8 +183,11 @@ def _bagof_bind(witness, ws, bag, ts, dedup: bool, trail) -> bool:
         if not unify(witness, w, trail):
             return False
     if dedup:
-        from clausal.logic.solve import _deref_walk  # noqa: PLC0415
-        ts = _set_of_sort_dedup([_deref_walk(t) for t in ts])
+        if ws:
+            # the witness unification may have bound the rows' variables
+            from clausal.logic.solve import _deref_walk  # noqa: PLC0415
+            ts = [_deref_walk(t) for t in ts]
+        ts = _set_of_sort_dedup(ts)
     return unify(bag, ts, trail)
 
 
