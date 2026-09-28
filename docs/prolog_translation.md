@@ -211,6 +211,7 @@ Visitor/transformer: `PrologVisitor`, `PrologTransformer` (same pattern as `ast.
 
 - `OperatorTable.iso_default()` — ISO 13211-1 operators
 - `OperatorTable.swi_default()` — ISO + SWI extensions (`xor`, dict operators, etc.)
+- `OperatorTable.scryer_builtin_default()` — ISO + Scryer's own defaults (prefix `+`, `div`, `rdiv`): what Scryer's toplevel has with no library loaded. **The `.pl` translator reads with this table by default** (`Dialect.scryer_reader()`, ruling of 2026-09-28; it read with the SWI table before).
 - `OperatorTable.scryer_default()` — ISO + Scryer CLP(Z) operators (`#=`, `#<`, etc.)
 - `OperatorTable.trealla_default()` — ISO + Trealla CLP(Z) operators (same as Scryer)
 
@@ -252,10 +253,13 @@ reach(X, Y) <- (edge(X, Z), reach(Z, Y))
 ```python
 from clausal.tools.prolog_dialect import Dialect
 
-# Parse SWI-Prolog source (uses SWI operator table)
+# The default: Scryer's operator table (ISO + prefix +, div, rdiv)
+print(prolog_to_clausal(source))
+
+# Parse SWI-Prolog source (SWI operator table: `:- dynamic foo/1.`, `*->`, ...)
 print(prolog_to_clausal(source, dialect=Dialect.swi()))
 
-# Parse Scryer Prolog source
+# Scryer with library(clpz)'s operators (`#=`, `#<`, ...)
 print(prolog_to_clausal(source, dialect=Dialect.scryer()))
 ```
 
@@ -371,7 +375,7 @@ Options:
 | Flag | Description |
 |---|---|
 | `--to clausal\|iso\|swi\|scryer` | Target format; auto-detected from extension if omitted |
-| `--dialect iso\|swi\|scryer` | Prolog dialect (default: iso for clausal→prolog, swi for prolog→clausal) |
+| `--dialect iso\|swi\|scryer` | Prolog dialect (default: iso for clausal→prolog, Scryer's operator table for prolog→clausal) |
 | `-o FILE` | Output file (stdout if omitted) |
 | `--roundtrip` | Translate there and back; exit 0 if output matches input |
 
@@ -426,7 +430,7 @@ In the reverse direction (Clausal → Prolog), Clausal's reified if-then-else (`
 ### Known roundtrip limitations
 
 - **DCG rules**: Prolog `-->` ↔ clausal `>>` roundtrip can produce syntax that doesn't re-parse in the second leg (comma-in-pushback-list edge cases).
-- **Arity-indicator directives**: `:- dynamic foo/2.` → `-dynamic(foo/2)`; check the return leg with `--roundtrip` before relying on it.
+- **Arity-indicator directives**: `:- dynamic(foo/2).` → `-dynamic(foo/2)` (the bare prefix form `:- dynamic foo/2.` needs `Dialect.swi()`: it is not an operator in Scryer's table); check the return leg with `--roundtrip` before relying on it.
 - **Whitespace/formatting**: Exact text match is not guaranteed; structural equivalence is.
 
 ---

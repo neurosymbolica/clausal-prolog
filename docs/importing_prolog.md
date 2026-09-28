@@ -160,7 +160,8 @@ Most standard Prolog translates cleanly:
   so it only agrees with `\=` when both sides are ground)
 - Lists (`[H|T]` becomes `[H, *T]`)
 - DCG rules (`-->` becomes `>>`)
-- Directives (`dynamic`, `discontiguous`, `table`, `module`, `use_module`)
+- Directives (`dynamic`, `discontiguous`, `table`, `module`, `use_module`),
+  in the ISO call form `:- dynamic(foo/1).`
 - Negation as failure (`\+` becomes `not`)
 
 ### Unsupported constructs
@@ -245,9 +246,15 @@ mod = _load_prolog_module("my_module", "/path/to/my_module.pl",
                           dialect=Dialect.scryer())
 ```
 
-The default dialect is SWI-Prolog's operator table (the translator predates
-the ISO-first rule; pass `Dialect.scryer()` or `Dialect.iso()` for a stricter
-reader).
+The default is Scryer's operator table (`Dialect.scryer_reader()`): ISO's
+Table 7 plus Scryer's own defaults, prefix `+` (200, fy) and the infix `div`
+and `rdiv` (400, yfx) -- what Scryer reports with no library loaded. It
+replaced SWI's table on 2026-09-28. SWI's extra operators are therefore not
+operators here, as they are not in Scryer: the prefix directive forms
+(`:- dynamic foo/1.` -- write `:- dynamic(foo/1).`), `*->`, `=@=`, `\=@=`,
+`xor`, and the dict operators `:<` and `>:<`. A file that needs one declares
+it with `:- op/3`, which the reader applies as it goes, or pass
+`Dialect.swi()` to read SWI source.
 
 ---
 

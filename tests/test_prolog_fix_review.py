@@ -199,14 +199,26 @@ class TestF026StandardOrderRejected:
 
 
 class TestF041VariantEqualityRejected:
+    # ``=@=`` / ``\\=@=`` are SWI operators.  The translator reads with
+    # Scryer's operator table by default (ruling R11, 2026-09-28), where
+    # neither is an operator, so the infix spelling is a syntax error, as it
+    # is in Scryer; the designed rejection is still what an SWI-dialect read
+    # reaches.
     @pytest.mark.parametrize("op", ["=@=", "\\=@="])
     def test_variant_equality_rejected(self, op):
         with pytest.raises(PrologTranslationError):
-            prolog_to_clausal(f"q(X, Y) :- X {op} Y.")
+            prolog_to_clausal(f"q(X, Y) :- X {op} Y.", dialect=Dialect.swi())
 
     def test_variant_equality_rejected_in_metacall(self):
         with pytest.raises(PrologTranslationError):
-            prolog_to_clausal("q(L) :- findall(X, (p(X), X =@= f(_)), L).")
+            prolog_to_clausal("q(L) :- findall(X, (p(X), X =@= f(_)), L).",
+                              dialect=Dialect.swi())
+
+    @pytest.mark.parametrize("op", ["=@=", "\\=@="])
+    def test_not_an_operator_under_the_default_scryer_table(self, op):
+        from clausal.tools.prolog_parser import ParseError
+        with pytest.raises(ParseError):
+            prolog_to_clausal(f"q(X, Y) :- X {op} Y.")
 
 
 # ═══════════════════════════════════════════════════════════════════════
