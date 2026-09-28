@@ -133,10 +133,10 @@ propagator and reified comparisons; see the open todo.)
 In a CLP(ℤ) constraint (`==`, `!=`, `<`, ...), a term that is not arithmetic
 raises Scryer's `domain_error(clpz_expression, T)`: `X == foo(1)` raises
 `error(domain_error(clpz_expression, foo(1)), (==)/2)`. So does the float
-power `'**'(Y, 2)` over a CLP(ℤ) variable, which is not a clpz expression; use
-`'^'` there, and so is a ground `'**'` nested in a CLP(ℤ) expression
-(`X == Y + '**'(2, 3)`). (A ground `'**'(2, 3)` as a whole side of the
-comparison is simply the float 8.0.)
+power `'**'`, which is not a clpz expression, over a CLP(ℤ) variable
+(`X == '**'(Y, 2)`) or nested in a CLP(ℤ) expression (`X == Y + '**'(2, 3)`);
+use `'^'` there. A ground `'**'(2, 3)` as a whole side of the comparison is
+simply the float 8.0.
 
 ### Comparison operators
 

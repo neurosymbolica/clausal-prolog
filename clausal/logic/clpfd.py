@@ -1352,17 +1352,27 @@ def _domain_error_clpz(term):
     return domain_error("clpz_expression", term, "clpfd expression")
 
 
-def _is_zero_divisor(exc) -> bool:
-    """*exc* (a LogicException) is ``error(evaluation_error(zero_divisor), _)``.
+def _no_value_in_propagation(exc) -> bool:
+    """*exc* (a LogicException) is an evaluable entry saying "this has no
+    value": any ``evaluation_error`` (a zero divisor, Q4 2026-09-28; an
+    undefined ``'^'(0, -1)``) or the ``type_error(float, Base)`` of an
+    integer ``'^'`` with a negative exponent.
 
-    Raised by the evaluator for a zero divisor (Q4, 2026-09-28).  At the POST
-    of a ground expression it propagates to the caller; inside PROPAGATION --
-    a divisor that became 0 while labelling -- it means the expression has
-    no value, so the constraint FAILS and the search goes on, as Scryer's
-    clpz prunes it (``X #= 10 // Y, Y in 0..2, label([Y])`` gives Y = 1 and
-    Y = 2)."""
+    At the POST of a ground expression it propagates to the caller; inside
+    PROPAGATION -- a divisor or exponent that took such a value while
+    labelling -- the expression has no value, so the constraint FAILS and
+    the search goes on, as Scryer's clpz prunes it (``X #= 10 // Y, Y in
+    0..2, label([Y])`` gives Y = 1 and Y = 2; ``X #= 2^Y, Y in -1..2``
+    labels Y = 0, 1, 2).  clpz's own ``domain_error(clpz_expression, _)`` for
+    a non-arithmetic leaf is NOT one: it still raises."""
     from clausal.logic.exceptions import evaluation_error_kind  # noqa: PLC0415
-    return evaluation_error_kind(exc) == "zero_divisor"
+    if evaluation_error_kind(exc) is not None:
+        return True
+    term = exc.term
+    if type(term) is tuple and len(term) == 3 and type(term[1]) is tuple:
+        formal = term[1]
+        return len(formal) == 3 and formal[0] == "type_error" and formal[1] == "float"
+    return False
 
 
 def _eval_propagating(x):
@@ -1371,7 +1381,7 @@ def _eval_propagating(x):
     try:
         return _eval_ground(x)
     except _LogicException as exc:
-        if _is_zero_divisor(exc):
+        if _no_value_in_propagation(exc):
             return _NO_VALUE
         raise
 
@@ -1430,7 +1440,7 @@ def _expr_domain(expr, trail: Trail) -> Domain:
             if isinstance(val, int) and not isinstance(val, bool):
                 return ((val, val),)
         except _LogicException as exc:
-            if _is_zero_divisor(exc):
+            if _no_value_in_propagation(exc):
                 return ()          # no value: the propagator fails
             raise  # a garbage leaf deeper in the node — keep it catchable
         except Exception:

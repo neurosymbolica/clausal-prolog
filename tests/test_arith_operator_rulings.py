@@ -48,6 +48,8 @@ BARE_ROWS = [
     # Q4: zero divisors, every spelling
     ("eval_(1 // 0, X)", "error(evaluation_error(zero_divisor),(//)/2)"),
     ("eval_(1 % 0, X)", "error(evaluation_error(zero_divisor),(mod)/2)"),
+    ("eval_(decimal(15, 1) % 0, X)", "error(evaluation_error(zero_divisor),(mod)/2)"),
+    ("eval_(decimal(0, 1) // 0, X)", "error(evaluation_error(zero_divisor),(//)/2)"),
     ("eval_(1 / 0, X)", "error(evaluation_error(zero_divisor),(/)/2)"),
     ("eval_(0 ** -1, X)", "error(evaluation_error(zero_divisor),(**)/2)"),
     ("(Z is 0, eval_(1 // Z, X))", "error(evaluation_error(zero_divisor),(//)/2)"),
@@ -66,11 +68,15 @@ BARE_ROWS = [
     # label([Y])`` gives Y = 1 and Y = 2 there)
     ("findall(Y, (Z == 10 // Y, in_domain(Y, 0, 2), label([Y])), X)", [1, 2]),
     ("findall(Y, (Z == '//'(10, Y), in_domain(Y, -1, 1), label([Y])), X)", [-1, 1]),
-    # between/3 is not a clpz post: a '**' bound is its float, refused as a
-    # non-integer bound
     # a ground '**' nested in a CLP(FD) tree is refused like one over a var
     ("(X == Y + '**'(2, 3), Y is 1)",
      "error(domain_error(clpz_expression,2**3),_)"),
+    # a negative exponent of '^' prunes while labelling, as in Scryer's clpz
+    # (``X #= 2^Y, Y in -1..2`` labels Y = 0, 1, 2; with base 0 too)
+    ("findall(Y, (Z == '^'(2, Y), in_domain(Y, -1, 2), label([Y])), X)", [0, 1, 2]),
+    ("findall(Y, (Z == '^'(0, Y), in_domain(Y, -1, 2), label([Y])), X)", [0, 1, 2]),
+    # between/3 is not a clpz post: a '**' bound is its float, refused as a
+    # non-integer bound
     ("between(1, '**'(2, 2), X)", "error(type_error(integer,4.0),between/3)"),
 ]
 

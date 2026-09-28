@@ -37,7 +37,7 @@ Integral results are presented as ``int`` at the tree ROOT by
 """
 from __future__ import annotations
 
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from fractions import Fraction
 from types import MappingProxyType
 
@@ -212,6 +212,10 @@ def python_floordiv(l, r):
         return l // r
     except ZeroDivisionError:
         raise _zero_divisor("//") from None
+    except InvalidOperation:          # Decimal 0 // 0
+        if not r:
+            raise _zero_divisor("//") from None
+        raise
 
 
 def python_mod(l, r):
@@ -220,6 +224,10 @@ def python_mod(l, r):
         return l % r
     except ZeroDivisionError:
         raise _zero_divisor("mod") from None
+    except InvalidOperation:          # Decimal x % 0
+        if not r:
+            raise _zero_divisor("mod") from None
+        raise
 
 
 def python_pow(l, r):
@@ -322,7 +330,9 @@ def iso_intpow(l, r):
     ``evaluation_error(undefined)`` for base 0.  A float operand gives a
     float.  An exact rational or Decimal base with an integer exponent stays
     EXACT (a Fraction; Scryer answers a float -- arithmetic here is
-    rational, RULED 2026-09-17)."""
+    rational, RULED 2026-09-17): a Decimal base keeps its scale for a
+    non-negative exponent (``'^'(1.5, 2)`` is 2.25) and becomes a Fraction
+    for a negative one, which has no finite decimal in general."""
     (lv, lnum), (rv, rnum) = _real(l), _real(r)
     if not (lnum and rnum):
         return python_pow(lv, rv)
