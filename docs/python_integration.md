@@ -726,6 +726,42 @@ clausal.declared_atoms(shapes.forms)   # just forms.clausal's declarations
   is looked up in `sys.modules` the way `module=` is, and one that is not
   loaded raises `existence_error(module, …)`.
 
+## Listing the atoms a module imports: `imported_atoms`
+
+`clausal.imported_atoms(module_or_package)` is the companion of
+`declared_atoms`: the atoms a module's own files bring in through
+`-import_from` **without** declaring them, as a `dict` from atom name to the
+dotted name of the module that exports it.
+
+```python
+import clausal
+import procurement      # procurement/__init__.clausal has no -module list:
+                        #   -import_from(procurement.vocabulary, [open_procedure, ...])
+
+clausal.declared_atoms("procurement")   # frozenset()
+clausal.imported_atoms("procurement")   # {'open_procedure': 'procurement.vocabulary', ...}
+```
+
+- **Only atoms the exporter declares.** An entry counts when the name is in
+  `declared_atoms(exporter)`: one level, the way the import itself resolves
+  it. An imported predicate is not an atom, and a module that only imports
+  an atom and passes it on is not its exporter.
+- **Disjoint from `declared_atoms`.** An imported atom that a file in scope
+  re-declares in its own `-module`/`-private` list belongs to
+  `declared_atoms`. So `declared_atoms(m) | imported_atoms(m).keys()` is every
+  atom the files can name.
+- **The key is the atom.** `alias(orig, local)` reports `orig`, the atom the
+  local name is bound to. The exporter is the module's `sys.modules` name, so
+  a stdlib vocabulary imported as `units` reports `clausal.modules.units`.
+- **Clashes are deterministic.** When two exporters that both declare an
+  atom are imported, the atom is the same (atoms are global by spelling) and
+  only the attribution differs. Within one file the later `-import_from`
+  wins, as the later binding of the name does. Across a package's files,
+  the package's `__init__` is asked first, then its loaded submodules in
+  sorted name order, and the first file that imports the atom wins.
+- Package scoping, the argument forms and the errors are those of
+  `declared_atoms`. The result is a fresh `dict` with sorted keys.
+
 ---
 
 ## Using `Module` Directly

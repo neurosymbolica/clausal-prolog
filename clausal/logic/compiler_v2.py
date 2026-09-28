@@ -25,7 +25,7 @@ from clausal.logic.database import (
     Module as LogicModule, Clause, head_key, refusal_error,
     WRITE_LOAD_CLAUSES, WRITE_LOAD_DISPATCH,
 )
-from clausal.logic.cells import DECLARED_ATOMS_KEY
+from clausal.logic.cells import DECLARED_ATOMS_KEY, IMPORT_FROM_KEY
 from clausal.logic.atoms import (
     is_atom as _term_is_atom,
     is_mangled,
@@ -745,10 +745,18 @@ def _process_imports(module_items: list, module_dict: dict, db=None) -> None:
     the explicit parameter stays, because the direct API passes a namespace
     with no ``$module`` at all.
     """
+    # The per-file ``-import_from`` record (``cells.IMPORT_FROM_KEY``),
+    # rebuilt from scratch so a recompile into the same namespace does not
+    # accumulate.  Read by ``solve.imported_atoms``.
+    import_record = module_dict[IMPORT_FROM_KEY] = []
     for item in module_items:
         if isinstance(item, ImportFromItem):
             mod = _resolve_module(item.module)
+            exporter = getattr(mod, "__name__", None) or item.module
             for name_spec in item.names:
+                import_record.append(
+                    (name_spec[0] if isinstance(name_spec, tuple)
+                     else name_spec, exporter))
                 if isinstance(name_spec, tuple):
                     orig_name, local_name = name_spec
                     value = getattr(mod, orig_name)

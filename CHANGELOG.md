@@ -136,6 +136,14 @@ since 0.4.0 finish three moves:
   `-import_from`ed atom is not included, and the answer does not depend on
   import order. See
   [docs/python_integration.md](docs/python_integration.md#listing-the-atoms-a-module-declares-declared_atoms).
+- **`clausal.imported_atoms(module_or_package)`.** A `dict` from atom name to
+  exporter module name for the atoms a module's own files (or a package's
+  `__init__` and loaded submodules) bring in via `-import_from` without
+  re-declaring them. It counts only atoms the exporter declares, so imported
+  predicates are left out, and it never overlaps `declared_atoms`. A package
+  `__init__` with no `-module` list can now list its imported atoms without
+  reading internal namespace keys. See
+  [docs/python_integration.md](docs/python_integration.md#listing-the-atoms-a-module-imports-imported_atoms).
 - **Prolog flags.** `set_prolog_flag/2` and `current_prolog_flag/2` with the
   ISO flags (`bounded`, `max_integer`, `min_integer`,
   `integer_rounding_function`, `char_conversion`, `debug`, `max_arity`,

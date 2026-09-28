@@ -1,0 +1,6 @@
+# Fixture for tests/test_imported_atoms.py: imports an atom AND re-declares
+# it in its own -private list, so it is declared here, not imported.
+-import_from(tests.fixtures.ia_vocab, [restricted_procedure])
+-import_from(tests.fixtures.ia_vocab2, [second_only])
+-import_from(tests.fixtures.ia_vocab, [shared_kind])
+-private([restricted_procedure])

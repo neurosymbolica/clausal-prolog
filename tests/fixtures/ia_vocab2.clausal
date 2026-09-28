@@ -1,0 +1,6 @@
+# Fixture for tests/test_imported_atoms.py: a second exporter.  It DECLARES
+# shared_kind too (the clash case), and only IMPORTS open_procedure, so it is
+# not the owner of that atom (one level: an exporter counts only for the
+# atoms it declares itself).
+-import_from(tests.fixtures.ia_vocab, [open_procedure])
+-module(ia_vocab2, [shared_kind, second_only])
