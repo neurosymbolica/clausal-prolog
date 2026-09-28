@@ -298,6 +298,10 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
   the atom `assertz`, and `call(in_, X, [1])` answers `X = 1` instead of
   leaking a Python `TypeError`. A meta-argument (`call/N`, `maplist`'s
   closure) receives the atom and resolves it when called.
+- **A package whose `__init__` is a `.clausal` file** loads as a Clausal
+  package even when it is imported before `clausal.import_hook`; it used to
+  become an empty namespace package, and its `-import_from` of sibling
+  files never ran.
 
 ### Migration guide: 0.x to 1.0
 
