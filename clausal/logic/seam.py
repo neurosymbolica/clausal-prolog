@@ -661,7 +661,7 @@ def judged_answers(goal: Any, module, exported_vars, trail) -> "Iterator[tuple]"
             conditional = bool(leader._current_delays) or bool(leader._sources)
             answer = freeze_args(judge_vars, trail)
             if not conditional:
-                streamed.add(make_subgoal_key(answer, None))
+                streamed.add(_answer_key(make_subgoal_key, answer))
                 seg = detach()
                 try:
                     yield True, frozenset()
@@ -715,7 +715,7 @@ def judged_answers(goal: Any, module, exported_vars, trail) -> "Iterator[tuple]"
             truth = leader.truth_value(i)
             if truth is False:
                 continue
-            if make_subgoal_key(leader.answers[i], None) in streamed:
+            if _answer_key(make_subgoal_key, leader.answers[i]) in streamed:
                 continue          # a definite derivation already delivered it
             mark = trail.mark()
             if _unify_answer(judge_vars, leader.answers[i], trail):
@@ -742,6 +742,60 @@ def judged_answers(goal: Any, module, exported_vars, trail) -> "Iterator[tuple]"
             below = current_leader()
             if below is not None:
                 below.scc_deps |= {d for d in leader.scc_deps if d is not below}
+
+
+def _answer_key(make_subgoal_key, answer) -> Any:
+    """The variant key of a frozen *answer* for the ``streamed`` set.
+
+    The tabling key (``make_subgoal_key``) returns a leaf it does not know
+    as itself, and two answer shapes are unhashable: a partial list
+    (``SegList`` refuses to hash, like ``list``) and a dict holding a list
+    (``DictTerm`` hashes its values).  The seam used to crash on both with
+    ``TypeError: unhashable type`` (triage A1, C8).  Those answers take a
+    structural key instead; every other answer keeps the tabling key."""
+    try:
+        key = make_subgoal_key(answer, None)
+        hash(key)
+        return key
+    except TypeError:
+        return ("$structural",) + tuple(_structural_key(a) for a in answer)
+
+
+def _structural_key(term: Any) -> Any:
+    """A hashable variant key for *term*: variables are one marker, and the
+    containers the tabling key cannot hash are rebuilt."""
+    from clausal.logic.tabling import _normalize_for_key_py  # noqa: PLC0415
+    from clausal.logic.variables import deref, is_var  # noqa: PLC0415
+    from clausal.terms import (  # noqa: PLC0415
+        ConcreteSeg, DictTerm, SegList, SetTerm,
+    )
+    term = deref(term)
+    if is_var(term):
+        return ("$var",)
+    if isinstance(term, SegList):
+        return ("$seglist",) + tuple(
+            ("c",) + tuple(_structural_key(e) for e in seg.elements)
+            if isinstance(seg, ConcreteSeg) else ("v", _structural_key(seg.var))
+            for seg in term.segments)
+    if isinstance(term, DictTerm):
+        return ("$dict", frozenset(
+            (_structural_key(k), _structural_key(v))
+            for k, v in term._data.items()))
+    if isinstance(term, SetTerm):
+        return ("$set", frozenset(_structural_key(e) for e in term))
+    if isinstance(term, list):
+        return ("$list",) + tuple(_structural_key(e) for e in term)
+    if isinstance(term, tuple):
+        return ("$tuple",) + tuple(_structural_key(e) for e in term)
+    if isinstance(term, dict):
+        return ("$pydict", frozenset(
+            (_structural_key(k), _structural_key(v)) for k, v in term.items()))
+    key = _normalize_for_key_py(term)
+    try:
+        hash(key)
+        return key
+    except TypeError:
+        return ("$id", id(term))
 
 
 def _goal_text(goal: Any) -> str:

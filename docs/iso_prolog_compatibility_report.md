@@ -158,8 +158,9 @@ How the gap shows depends on how the term is built:
 - built at run time (`'=..'(T, [abs, -3]), 'is'(X, T)`):
   `error(type_error(evaluable, abs/1), (is)/2)`, as ISO specifies for an
   unknown evaluable;
-- written in source (`'is'(X, abs(-3))`): a Python `NameError` ("Predicate
-  'abs/1' is not in scope ..."), not an ISO error term;
+- written in source (`'is'(X, abs(-3))`): the same
+  `error(type_error(evaluable, abs/1), (is)/2)` (from Python it is also a
+  `NameError`, since nothing declares `abs/1`);
 - the constants (`'is'(X, pi)`): `type_error(evaluable, pi/0)`.
 
 The relational predicates `abs_/2`, `sign/2`, `max_/3`, `min_/3`, `gcd/3`

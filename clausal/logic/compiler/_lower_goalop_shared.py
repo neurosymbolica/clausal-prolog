@@ -111,6 +111,11 @@ _CONST_SET_MIN_ELEMENTS = 2
 _CONST_SET_LITERALS = (int, float, bool, complex, str, bytes, Fraction)
 
 
+
+#: The source spelling of each FD comparison, for an error context.
+_FD_SPELLING = {"eq": "==", "ne": "!=", "lt": "<", "le": "<=",
+                "gt": ">", "ge": ">="}
+
 def _is_const_element(term) -> bool:
     """True if *term* is a scalar literal, a zero-arity atom, or a global name.
 
@@ -449,8 +454,13 @@ def _lower_shared_body(
             return [_if(_call(_name("$structural_neq"), l_expr, r_expr), k_stmts)]
 
         case FDCompare(op=op, l=l, r=r):
-            l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
-            r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
+            # Both sides are arithmetic: an UNDECLARED functor built here is
+            # type_error(evaluable, F/N), in the constraint's own context.
+            from .terms_to_ast import construction_context  # noqa: PLC0415
+            with construction_context(
+                    "evaluable", f"({_FD_SPELLING.get(op, op)})/2"):
+                l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
+                r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
             return [
                 _if(
                     _call(_name(_FD_RUNTIME[op]), l_expr, r_expr, _name(trail_name)),

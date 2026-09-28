@@ -6,8 +6,9 @@
     into Clausal's own syntax with an older translator; it is not an ISO
     Prolog system. Programs that use cut or if-then-else are refused, and a
     program whose clauses build compound data terms (`p(f(1)).`,
-    `X = g(2)`) loads but fails at run time with `NameError: Predicate
-    'f/1' is not in scope` (see [Known limitations](#known-limitations)).
+    `X = g(2)`) loads but fails at run time with
+    `error(existence_error(procedure, f/1), f/1)` (see
+    [Known limitations](#known-limitations)).
     For running real ISO Prolog alongside Clausal, use the
     [Scryer](scryer.md) or [Trealla](trealla.md) embeddings.
 
@@ -337,8 +338,9 @@ renamed to `_pi`.)
 - **Compound data terms fail at run time.** The translator declares a
   program's bare atoms (the `-private([...])` list above) but not the
   functors of its data terms, so a clause such as `p(f(1)).` or
-  `q(X) :- X = g(2).` loads, then raises `NameError: Predicate 'f/1' is not
-  in scope as a term class` when it runs. Calls to the program's own
+  `q(X) :- X = g(2).` loads, then raises the ISO error term
+  `error(existence_error(procedure, f/1), f/1)` when it runs (a `catch/3`
+  sees it; from Python it is also a `NameError`). Calls to the program's own
   predicates are unaffected.
 - **Arithmetic follows today's Clausal operators, not ISO's.** `Y is X / 2`
   becomes `eval_(X / 2, Y)`, and `=:=` becomes the constraint `==` (see

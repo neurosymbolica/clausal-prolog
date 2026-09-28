@@ -7,7 +7,9 @@ from typing import Any
 
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
 from clausal.logic.atoms import is_atom as _term_is_atom, spelling as _spelling
-from clausal.logic.exceptions import LogicException, permission_error
+from clausal.logic.exceptions import (
+    LogicException, instantiation_error, permission_error,
+)
 from clausal.logic.exceptions import _error as _error_term
 from clausal.logic.atoms import mint
 
@@ -533,7 +535,9 @@ def _assertz_factory(db):
     def assertz__1(term, trail, k):
         term_val = deref(term)
         if is_var(term_val):
-            return
+            # ISO 8.9.1.3 a: an unbound clause is an instantiation error
+            # (Scryer too); it used to fail silently (triage B4a).
+            raise LogicException(instantiation_error("assertz/1"))
         clause = _build_clause(term_val, "assertz/1", db, module_dict)
         functor, arity = head_key(clause.head)
         pred_cls = _find_pred_cls(functor, arity, module_dict)
@@ -574,7 +578,9 @@ def _asserta_factory(db):
     def asserta__1(term, trail, k):
         term_val = deref(term)
         if is_var(term_val):
-            return
+            # ISO 8.9.1.3 a: an unbound clause is an instantiation error
+            # (Scryer too); it used to fail silently (triage B4a).
+            raise LogicException(instantiation_error("asserta/1"))
         clause = _build_clause(term_val, "asserta/1", db, module_dict)
         functor, arity = head_key(clause.head)
         pred_cls = _find_pred_cls(functor, arity, module_dict)

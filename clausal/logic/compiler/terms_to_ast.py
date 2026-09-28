@@ -20,6 +20,7 @@ import datetime
 import sys
 
 from contextlib import contextmanager
+from contextvars import ContextVar
 from fractions import Fraction
 
 from clausal.logic.exact_arith import (
@@ -769,6 +770,51 @@ def _dotted_name_from_loadattr(node) -> str | None:
 # ── Term → AST expression ──────────────────────────────────────────────────────
 
 
+#: Where the construction being lowered stands, for the error an UNDECLARED
+#: functor raises there (``globals_env.UndeclaredFunctorError``):
+#: ``("evaluable", "(is)/2")`` inside an arithmetic expression,
+#: ``("procedure", "assertz/1")`` in the clause handed to assertz, ``None``
+#: anywhere else.  Set by the lowering of those positions
+#: (:func:`construction_context`), read by :func:`term_to_ast_expr`'s two
+#: undeclared-functor emissions.  It changes only which ISO term the refusal
+#: carries; every declared construction compiles exactly as before.
+_CONSTRUCTION_CONTEXT: "ContextVar[tuple | None]" = ContextVar(
+    "_CONSTRUCTION_CONTEXT", default=None)
+
+#: The goals whose argument positions are EVALUABLE (ISO 8.6, 8.7), by
+#: argument index.  The context is ``(is)/2`` for all of them: Scryer reports
+#: an unknown evaluable in a comparison against ``(is)/2`` too.
+_EVALUABLE_ARGS = {
+    "is": (1,), "=:=": (0, 1), "=\\=": (0, 1),
+    "<": (0, 1), ">": (0, 1), "=<": (0, 1), ">=": (0, 1),
+}
+#: The database builtins whose clause argument names a PROCEDURE.
+_PROCEDURE_ARGS = {"assertz": "assertz/1", "asserta": "asserta/1",
+                   "assert": "assert/1"}
+
+
+@contextmanager
+def construction_context(kind: "str | None", context: "str | None" = None):
+    """Lower the terms built inside this block as standing in position
+    *kind* (see ``_CONSTRUCTION_CONTEXT``)."""
+    token = _CONSTRUCTION_CONTEXT.set(None if kind is None else (kind, context))
+    try:
+        yield
+    finally:
+        _CONSTRUCTION_CONTEXT.reset(token)
+
+
+def call_arg_context(fname: str, index: int) -> "tuple | None":
+    """The construction context of argument *index* of a call to *fname*:
+    an evaluable position of an ISO arithmetic builtin, the clause of an
+    assert, or None."""
+    if index in _EVALUABLE_ARGS.get(fname, ()):
+        return ("evaluable", "(is)/2")
+    if index == 0 and fname in _PROCEDURE_ARGS:
+        return ("procedure", _PROCEDURE_ARGS[fname])
+    return None
+
+
 def term_to_ast_expr(
     term: Any, var_context: dict[int, str], *, eval_arith: bool = True
 ) -> ast.expr:
@@ -1282,17 +1328,37 @@ def term_to_ast_expr(
         # same module loaded alone says "not in scope as a term class".
         # (-implicit_functors returned the cell above; a DECLARED data
         # functor binds its atom too, but answered a signature above.)
+        _where = _CONSTRUCTION_CONTEXT.get()
         if _namespace is not None:
             _resolved = _resolve_functor_binding(fname, _namespace)
             if _resolved is not None and _term_is_atom(_resolved[0]):
+                if _where is not None:
+                    return ast.Call(
+                        func=_name("$undeclared_functor_in"),
+                        args=[ast.Constant(value=_where[0]),
+                              ast.Constant(value=_where[1]),
+                              ast.Constant(value=fname),
+                              ast.Constant(value=len(arg_exprs)), *arg_exprs],
+                        keywords=kw_exprs,
+                    )
                 return ast.Call(
                     func=_name("$undeclared_functor"),
                     args=[ast.Constant(value=fname),
                           ast.Constant(value=len(arg_exprs)), *arg_exprs],
                     keywords=kw_exprs,
                 )
+        func = _name(fname)
+        if _where is not None and not kw_exprs:
+            # The name is looked up at run time as before; ``$constructor_in``
+            # only swaps the unbound-name stand-in for the refusal that fits
+            # this position.
+            func = _call(_name("$constructor_in"), func,
+                         ast.Constant(value=_where[0]),
+                         ast.Constant(value=_where[1]),
+                         ast.Constant(value=fname),
+                         ast.Constant(value=len(arg_exprs)))
         return ast.Call(
-            func=_name(fname),
+            func=func,
             args=arg_exprs,
             keywords=kw_exprs,
         )
@@ -1638,4 +1704,8 @@ def arith_to_ast_expr(term: Any, var_context: dict[int, str]) -> ast.expr:
             )
 
     # Fallback: treat as a plain term (e.g. a Var holding a number at runtime)
-    return term_to_ast_expr(term, var_context)
+    # -- built in an EVALUABLE position, so an undeclared functor here is
+    # ``type_error(evaluable, F/N)`` (ISO), not the plain undeclared-functor
+    # refusal.
+    with construction_context("evaluable", "(is)/2"):
+        return term_to_ast_expr(term, var_context)

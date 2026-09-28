@@ -555,6 +555,49 @@ def _templatize_query_goal(goal: Any, db=None):
     return goal, []
 
 
+_KNOWN_LEAF_TYPES = (int, float, complex, bool, str, bytes, type(None))
+
+
+def _is_opaque_value(v: Any) -> bool:
+    """True for a Python object the query compiler has no lowering for and
+    that is no goal, predicate or term either: a plain instance of a class
+    outside Clausal and the numeric/date modules, not callable.  Such a value
+    can only be passed through by reference."""
+    if isinstance(v, Var) or type(v) in _KNOWN_LEAF_TYPES:
+        return False
+    if isinstance(v, (list, tuple, dict, set, frozenset, type,
+                      _types.ModuleType)):
+        return False
+    if callable(v) or _is_dataclass(v):
+        return False
+    if hasattr(v, "_get_dispatch") or hasattr(v, "__unify__"):
+        return False
+    module_name = getattr(type(v), "__module__", "") or ""
+    return module_name.split(".")[0] not in (
+        "clausal", "datetime", "decimal", "fractions")
+
+
+def _parameterize_opaque(goal: Any, params: list) -> Any:
+    """*goal* with every opaque leaf (``_is_opaque_value``) inside a cell,
+    conjunction tuple or list replaced by a fresh Var; ``(Var, value)`` is
+    appended to *params*, which the caller binds before the search."""
+    def walk(t):
+        if isinstance(t, Var):
+            return t
+        if type(t) is tuple:
+            new = tuple(walk(e) for e in t)
+            return t if all(a is b for a, b in zip(new, t)) else new
+        if type(t) is list:
+            new = [walk(e) for e in t]
+            return t if all(a is b for a, b in zip(new, t)) else new
+        if _is_opaque_value(t):
+            pv = Var()
+            params.append((pv, t))
+            return pv
+        return t
+    return walk(goal)
+
+
 def _compile_as_query(goal: Any, module: Module) -> Any:
     """Compile goal as a zero-arity query predicate and return its dispatch fn.
 
@@ -577,6 +620,11 @@ def _compile_as_query(goal: Any, module: Module) -> Any:
     # query.  The returned param_pairs are bound to their values (on the trail)
     # by the caller before driving the search.
     goal, param_pairs = _templatize_query_goal(goal, getattr(module, "db", None))
+    # An OPAQUE Python object in the goal (a socket, a lock, ``object()``) has
+    # no literal lowering; it crosses by reference, as a parameter bound
+    # before the search (triage C13; python_integration.md: "Any Python
+    # object works as a ground term").
+    goal = _parameterize_opaque(goal, param_pairs)
 
     # Compute cache key before AST conversion (needs original term).  After
     # templatizing, ground args are Vars, so the key is value-independent.

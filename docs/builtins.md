@@ -364,7 +364,7 @@ Core implementation of higher-order call. `Goal` must be a callable (lambda or `
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:phrase_2"
 ```
-Invoke a DCG rule and require it to consume the entire input list. `RuleBody` is either a predicate name (0 extra args, e.g. `greeting`) or a partial term (N extra args, e.g. `digit(D)`). equivalent to calling the rule with `List` as the input state and `[]` as the output state.
+Invoke a DCG rule and require it to consume the entire input list. `RuleBody` is either a predicate name (0 extra args, e.g. `greeting`) or a partial term (N extra args, e.g. `digit(D)`). equivalent to calling the rule with `List` as the input state and `[]` as the output state. A `RuleBody` built at run time as a control construct is a DCG body, as in ISO: the conjunction `','(A, B)`, the disjunctions `';'(A, B)` and `'|'(A, B)`, and `'\+'(A)`, with lists and strings inside them as terminals — `G =.. [',', inc, inc], phrase(G, [0], [N])`. (`(inc, inc)` written in source is the compound `inc(inc)`, not a conjunction.)
 
 ??? info "Implementation & tests"
     **Python tests:** `tests/test_dcg.py`

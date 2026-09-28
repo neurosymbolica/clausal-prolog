@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from clausal.logic.variables import deref, is_var, unify
+from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.logic.predicate import (
     is_term_instance, term_field_names, _dispatch_at,
     is_declared_predicate_name, localize_goal,
@@ -83,6 +83,69 @@ def _empty_remainder_like(list_val):
 
 
 
+#: The control constructs a DCG BODY term may be built from (ISO 7.14 /
+#: Scryer's library(dcgs)): conjunction, disjunction (``;`` and ``|``) and
+#: negation.  ``->`` stays refused -- Clausal has no committed choice.
+_DCG_CONTROL_CELLS = frozenset({",", ";", "|", "\\+"})
+
+
+def _is_dcg_control_body(rule_val) -> bool:
+    """True for a DCG body term phrase must translate rather than call: an
+    ISO control cell, a conjunction tuple, or an ``and``/``or``/``not``
+    node."""
+    from clausal.logic.builtins.call_body import is_conjunction_tuple  # noqa: PLC0415
+    from clausal.pythonic_ast import nodes  # noqa: PLC0415
+    if isinstance(rule_val, (nodes.And, nodes.Or, nodes.Not)):
+        return True
+    if is_conjunction_tuple(rule_val):
+        return True
+    is_cell, functor = compound_cell_shape(rule_val)
+    return (is_cell and functor in _DCG_CONTROL_CELLS
+            and len(rule_val) == (2 if functor == "\\+" else 3))
+
+
+def _dcg_body_goal(body, s0, s):
+    """The GOAL a DCG body term means between the states *s0* and *s* -- the
+    ISO translation (7.14.2), built at run time as a term ``call/1`` runs:
+    conjunction threads a fresh state, disjunction shares both, negation
+    consumes nothing, a list or string is its terminals, ``true`` is the
+    empty body, and any other callable is the nonterminal with S0/S
+    appended.  A variable body is ``phrase(B, S0, S)`` at run time."""
+    from clausal.logic.builtins.call_body import is_conjunction_tuple  # noqa: PLC0415
+    from clausal.pythonic_ast import nodes  # noqa: PLC0415
+    b = deref(body)
+    if is_var(b):
+        return ("phrase", b, s0, s)
+    if b is True:
+        return ("=", s0, s)
+    if isinstance(b, nodes.And):
+        b = (",", b.left, b.right)
+    elif isinstance(b, nodes.Or):
+        b = (";", b.left, b.right)
+    elif isinstance(b, nodes.Not):
+        b = ("\\+", b.operand)
+    elif is_conjunction_tuple(b):
+        # ``(A, B, C)`` is ``(A, (B, C))``
+        head, rest = b[0], b[1:]
+        b = (",", head, rest[0] if len(rest) == 1 else tuple(rest))
+    is_cell, functor = compound_cell_shape(b)
+    if is_cell and functor == "," and len(b) == 3:
+        mid = Var()
+        return (",", _dcg_body_goal(b[1], s0, mid), _dcg_body_goal(b[2], mid, s))
+    if is_cell and functor in (";", "|") and len(b) == 3:
+        return (";", _dcg_body_goal(b[1], s0, s), _dcg_body_goal(b[2], s0, s))
+    if is_cell and functor == "\\+" and len(b) == 2:
+        return (",", ("\\+", _dcg_body_goal(b[1], s0, Var())), ("=", s0, s))
+    if isinstance(b, list) or is_chars(b) or isinstance(b, bytes):
+        items = list(_elements(b))
+        if not items:
+            return ("=", s0, s)
+        return ("append", items, s, s0)
+    if is_cell:
+        return (functor, *b[1:], s0, s)
+    return (b, s0, s)
+
+
 def _resolve_nonterminal(db, rule_val, extra_args, context):
     """A CELL nonterminal -> ``(dispatch, call_args)``, else ``None``.
 
@@ -123,6 +186,14 @@ def _resolve_nonterminal(db, rule_val, extra_args, context):
     ``existence_error(procedure, nosuch/2)`` -- N//A is N/(A+2) -- as Scryer.
     """
     from clausal.logic.builtins.higher_order import _resolve_named_goal  # noqa: PLC0415
+    if len(extra_args) == 2 and _is_dcg_control_body(rule_val):
+        # A control-construct BODY -- ``phrase((a, b), L)`` -- is translated,
+        # not named: it used to be refused (``(",", ...)`` failed; a
+        # conjunction tuple reached the resolver as a call of its first
+        # element).  Triage B3b, Scryer's phrase/2,3.
+        s0, s = extra_args
+        return _resolve_named_goal(db, _dcg_body_goal(rule_val, s0, s), [],
+                                   context)
     is_cell, functor = compound_cell_shape(rule_val)
     from clausal.logic.builtins.call_body import (  # noqa: PLC0415
         is_non_callable_term, non_callable_goal_error,

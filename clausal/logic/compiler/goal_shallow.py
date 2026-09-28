@@ -43,7 +43,7 @@ from ._ast_helpers import (
 )
 from ._vars import _var_python_name, _collect_vars, _collect_bound_vars
 from .terms_to_ast import (
-    term_to_ast_expr, arith_to_ast_expr,
+    term_to_ast_expr, arith_to_ast_expr, call_arg_context, construction_context,
     _is_star_list, _dotted_name_from_loadattr,
 )
 from .compile_ctx import CompilationContext
@@ -215,7 +215,14 @@ def _compile_predicate_call_impl(
     # Hoist any Lambda arguments to FunctionDef statements
     ordered_args, lambda_defs = _hoist_lambda_args(ctx, ordered_args)
 
-    arg_exprs = [term_to_ast_expr(a, var_context, eval_arith=False) for a in ordered_args]
+    arg_exprs = []
+    for index, a in enumerate(ordered_args):
+        # An evaluable argument of an ISO arithmetic builtin, or the clause
+        # of an assert, fixes the ISO term an UNDECLARED functor built there
+        # raises (``terms_to_ast.construction_context``).
+        where = call_arg_context(fname, index)
+        with construction_context(*(where or (None,))):
+            arg_exprs.append(term_to_ast_expr(a, var_context, eval_arith=False))
     return lambda_defs + ctx.strategy.emit_sub_call(
         ctx, fname, arity, arg_exprs, k_stmts,
         direct_bucket_ref=direct_bucket_ref,
