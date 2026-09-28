@@ -29,13 +29,14 @@ def _clpfd_leaf_culprit(exc: LogicException):
     """The offending LEAF out of a `_eval_ground` leaf error, or None.
 
     `_eval_ground` (clausal/logic/clpfd.py) never catches an exception
-    itself, so every `LogicException` it lets escape is exactly its own
+    itself. What it lets escape is either its own
     `_unknown_expr_leaf_error(leaf)` — `error(domain_error(clpz_expression,
-    Leaf), _)`, prose "clpfd expression" — bubbled up unchanged through any amount of
-    recursion. Matching that literal shape (rather than translating every
-    `LogicException`) means an *unrelated* exception raised deeper in the
-    tree — should `_eval_ground` ever grow one — fails closed: it is
-    re-raised as-is instead of being mislabelled `evaluable`.
+    Leaf), _)`, prose "clpfd expression" — or an evaluable entry's ISO
+    error (`evaluation_error(zero_divisor)`, `type_error(integer, X)`,
+    `type_error(float, X)`, ...), each bubbled up unchanged through any
+    amount of recursion. Matching the leaf error's literal shape (rather
+    than translating every `LogicException`) means every other error fails
+    closed: it is re-raised as-is instead of being mislabelled `evaluable`.
     """
     term = exc.term
     outer = term_functor_args(term)
@@ -115,9 +116,9 @@ def _iso_eval(term, context: str):
     type_error(evaluable, F/N). Scryer attributes BOTH to (is)/2 regardless of
     which comparison raised them — pin what it does, not what reads tidily.
 
-    `_eval_ground`'s own leaf error is `type_error(integer, Leaf, "clpfd
-    expression")` — a CLP(FD)-flavoured shape, not ISO's `type_error(evaluable,
-    Name/Arity)` for `is/2`. Measured directly against Scryer:
+    `_eval_ground`'s own leaf error is clpz's `domain_error(clpz_expression,
+    Leaf)` (prose "clpfd expression") — a CLP(FD)-flavoured shape, not ISO's
+    `type_error(evaluable, Name/Arity)` for `is/2`. Measured directly against Scryer:
     `_ is foo + 1` -> `error(type_error(evaluable,foo/0),(is)/2)`. Reconciled
     here, at the call site, rather than in `_eval_ground` itself — that
     function is shared by every other CLP(FD) caller in the engine and its

@@ -37,8 +37,10 @@ semantics unless quoted; quoted ones follow Scryer's.*
 A **zero divisor** is ISO's `evaluation_error(zero_divisor)` on every
 spelling, naming the operator: `eval_(1 // 0, X)` raises
 `error(evaluation_error(zero_divisor), (//)/2)`, and so do `'is'`, the
-comparisons and `==`. A bare Python-semantics operator raises it too, never a
-raw Python `ZeroDivisionError`: it is a logic-level error that `catch/3` sees.
+comparisons and `==` posted over a ground zero divisor. A bare
+Python-semantics operator raises it too, never a raw Python
+`ZeroDivisionError`: it is a logic-level error that `catch/3` sees. (A divisor
+that becomes 0 during a CLP(ℤ) search fails that branch, as in Scryer.)
 
 Inside `++(...)` the code is plain Python and every operator is Python's,
 exceptions included.

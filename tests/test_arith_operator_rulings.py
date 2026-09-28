@@ -59,6 +59,14 @@ BARE_ROWS = [
     ("X == 1 / 0", "error(evaluation_error(zero_divisor),(/)/2)"),
     ("1 < 1 // 0", "error(evaluation_error(zero_divisor),(//)/2)"),
     ("eval_(div(1, 0), X)", "error(evaluation_error(zero_divisor),(div)/2)"),
+    # ... but a divisor that becomes 0 while a CLP(FD) search runs prunes
+    # that branch, as Scryer's clpz does (``X #= 10 // Y, Y in 0..2,
+    # label([Y])`` gives Y = 1 and Y = 2 there)
+    ("findall(Y, (Z == 10 // Y, in_domain(Y, 0, 2), label([Y])), X)", [1, 2]),
+    ("findall(Y, (Z == '//'(10, Y), in_domain(Y, -1, 1), label([Y])), X)", [-1, 1]),
+    # between/3 is not a clpz post: a '**' bound is its float, refused as a
+    # non-integer bound
+    ("between(1, '**'(2, 2), X)", "error(type_error(integer,4.0),between/3)"),
 ]
 
 
@@ -84,6 +92,21 @@ def test_bare_python_quoted_scryer(mod, i):
         return
     assert not isinstance(want, str), got
     assert got == [want] and type(got[0]) is type(want), got
+
+
+@pytest.mark.xfail(strict=True, reason=(
+    "the C-accelerated != propagator (_clpfd_propagate.c) calls _eval_ground "
+    "directly, so a divisor that becomes 0 while labelling RAISES there "
+    "instead of pruning; fixing it is a C change -- "
+    "todo/arith-rulings-open-edges-2026-09-28.md item 1"))
+def test_ne_prunes_a_zero_divisor_while_labelling(tmp_path):
+    p = tmp_path / "_arith_rulings_ne.clausal"
+    p.write_text("-allow_singletons\n"
+                 "g(X) <- findall(Y, (10 // Y != 3, in_domain(Y, 0, 4), "
+                 "label([Y])), X)\n")
+    m = _load_module("_arith_rulings_ne", str(p))
+    x = Var()
+    assert [deref(x) for _ in solve(("g", x), m)] == [[1, 2, 4]]
 
 
 # ── the seam (``--``) in Python-hosted code ─────────────────────────────────

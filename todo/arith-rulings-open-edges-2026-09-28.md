@@ -7,18 +7,24 @@ reading.**
 
 ## Needs an operator ruling
 
-1. **Zero divisor inside a CLP(FD) constraint: raise or fail?** The engine now
-   RAISES `evaluation_error(zero_divisor)` (the brief said "everywhere ... the
-   CLP paths if reachable"). Scryer's clpz FAILS instead:
+1. **Zero divisor inside a CLP(FD) constraint.** Implemented reading: a
+   GROUND expression with a zero divisor RAISES at the post
+   (`X == 1 // 0` is `evaluation_error(zero_divisor)`; the brief said
+   "everywhere ... the CLP paths if reachable", and before the branch it
+   SUCCEEDED silently with X unconstrained). A divisor that becomes 0 while
+   PROPAGATING (labelling) makes the expression's domain empty, so the
+   constraint FAILS and the search goes on -- Scryer's clpz behaviour:
 
-       ?- X #= 1 // 0.          % Scryer: false.   engine: zero_divisor error
-       ?- X #= 10 // Y, Y in 0..2, label([Y]).
-                                % Scryer: Y = 1 ; Y = 2 (Y = 0 pruned)
-                                % engine: raises when labeling reaches Y = 0
+       ?- X #= 10 // Y, Y in 0..2, label([Y]).   % Y = 1 ; Y = 2 (both)
 
-   Before the branch the engine SUCCEEDED silently with X unconstrained, so
-   either reading is an improvement; failing would match Scryer and keep a
-   search over a domain containing 0 alive.
+   Scryer FAILS the ground post too (`X #= 1 // 0` is `false`), so the ground
+   raise is the one place the engine is louder than Scryer: ruling wanted.
+   **Known gap:** the C-accelerated `!=` propagator
+   (`clausal/logic/_clpfd_propagate.c`, the both-ground arm of the Ne
+   propagator) calls `_eval_ground` directly, so `10 // Y != 3` still RAISES
+   when labelling reaches Y = 0. Fixing it is a C change (call
+   `_eval_propagating`, or treat the zero-divisor error as failure there);
+   pinned as a strict xfail in tests/test_arith_operator_rulings.py.
 
 2. **Seam `/` over integers.** "Operators in seam follow Python semantics
    unless quoted": Python's `7 / 2` is the float 3.5, the engine's (bare or

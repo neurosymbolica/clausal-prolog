@@ -73,8 +73,9 @@ Reach for `eval_/2` when you specifically need *eager* evaluation:
 - **Unit-carrying values** — `eval_(20(metre), D)`, `eval_(D / T, V)`; CLP
   constraints don't operate on [`Quantity`](units.md) objects.
 - **Catchable exceptions** — `catch(eval_(X // Y, R), E, ...)` sees
-  `error(evaluation_error(zero_divisor), (//)/2)` when `Y` is 0 (a
-  constraint raises it too, once its divisor is known).
+  `error(evaluation_error(zero_divisor), (//)/2)` when `Y` is 0. A
+  constraint raises it only when posted over a ground zero divisor; a
+  divisor that becomes 0 during a search just fails that branch.
 - **Accumulator recursion** — an eagerly ground argument keeps
   tail-recursive predicates eligible for [tail-call
   optimisation](compiler.md).
@@ -123,7 +124,10 @@ number they denote.
 
 A **zero divisor** raises `evaluation_error(zero_divisor)` naming the operator,
 on every spelling, bare or quoted: `eval_(1 / 0, X)`,
-`'is'(X, 1 // 0)`, `'=:='(1, 1 / 0)` and `X == 1 // 0` all raise it.
+`'is'(X, 1 // 0)`, `'=:='(1, 1 / 0)` and `X == 1 // 0` all raise it. Inside a
+CLP(ℤ) search, a divisor that becomes 0 (`X == 10 // Y, in_domain(Y, 0, 2),
+label([Y])`) fails that branch instead, as in Scryer's clpz, and the search
+goes on to Y = 1 and Y = 2.
 
 In a CLP(ℤ) constraint (`==`, `!=`, `<`, ...), a term that is not arithmetic
 raises Scryer's `domain_error(clpz_expression, T)`: `X == foo(1)` raises

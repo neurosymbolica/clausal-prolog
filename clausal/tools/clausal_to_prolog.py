@@ -2759,7 +2759,9 @@ class _ClausalToProlog:
             python_ast.Mod: "mod",
             # A bare ``**`` is Python's power (``2 ** 3`` is the integer 8;
             # operator rulings 2026-09-28), which is ISO ``^`` for integers;
-            # ISO ``**`` always answers a float (8.0).
+            # ISO ``**`` always answers a float (8.0).  Known gap: a NEGATIVE
+            # integer exponent is 0.5 in Python (``2 ** -1``) and
+            # ``type_error(float, 2)`` for ISO ``^``.
             python_ast.Pow: "^",
             python_ast.BitAnd: "/\\",
             python_ast.BitOr: "\\/",

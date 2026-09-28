@@ -535,8 +535,11 @@ def _ne_propagate_bignum(lhs, rhs, trail, queue) -> bool:
         return False
     if not is_var(lhs) and not is_var(rhs):
         # Evaluate expression operands before comparing (A06-F001).
-        lv = lhs if type(lhs) is int else _eval_ground(lhs)
-        rv = rhs if type(rhs) is int else _eval_ground(rhs)
+        _ensure_exc_imports()
+        lv = lhs if type(lhs) is int else _eval_propagating(lhs)
+        rv = rhs if type(rhs) is int else _eval_propagating(rhs)
+        if lv is _NO_VALUE or rv is _NO_VALUE:
+            return False           # a zero divisor: no value to differ
         if lv is None or rv is None:
             return True
         return lv != rv
@@ -757,8 +760,11 @@ class NeConstraint(Constraint):
             # Evaluate expression operands (e.g. Add(X, 1)): comparing the
             # expression node structurally to an int is always "different" and
             # would wrongly satisfy the constraint (A06-F001).
-            lv = lhs if type(lhs) is int else _eval_ground(lhs)
-            rv = rhs if type(rhs) is int else _eval_ground(rhs)
+            _ensure_exc_imports()
+            lv = lhs if type(lhs) is int else _eval_propagating(lhs)
+            rv = rhs if type(rhs) is int else _eval_propagating(rhs)
+            if lv is _NO_VALUE or rv is _NO_VALUE:
+                return False     # a zero divisor: no value to differ
             if lv is None or rv is None:
                 return True  # an expression still has unbound vars — pending
             return lv != rv
@@ -1342,8 +1348,42 @@ def _unknown_expr_leaf_error(leaf) -> "Exception":
     return _LogicException(domain_error("clpz_expression", leaf, "clpfd expression"))
 
 
+def _is_zero_divisor(exc) -> bool:
+    """*exc* (a LogicException) is ``error(evaluation_error(zero_divisor), _)``.
+
+    Raised by the evaluator for a zero divisor (Q4, 2026-09-28).  At the POST
+    of a ground expression it propagates to the caller; inside PROPAGATION --
+    a divisor that became 0 while labelling -- it means the expression has
+    no value, so the constraint FAILS and the search goes on, as Scryer's
+    clpz prunes it (``X #= 10 // Y, Y in 0..2, label([Y])`` gives Y = 1 and
+    Y = 2)."""
+    term = exc.term
+    if type(term) is not tuple or len(term) != 3:
+        return False
+    formal = term[1]
+    return (type(formal) is tuple and len(formal) == 2
+            and formal[0] == "evaluation_error" and formal[1] == "zero_divisor")
+
+
+def _eval_propagating(x):
+    """``_eval_ground(x)`` inside propagation: a zero divisor is
+    :data:`_NO_VALUE` (the constraint fails), not an error."""
+    try:
+        return _eval_ground(x)
+    except _LogicException as exc:
+        if _is_zero_divisor(exc):
+            return _NO_VALUE
+        raise
+
+
+#: What :func:`_eval_propagating` answers for an expression with a zero divisor.
+_NO_VALUE = object()
+
+
 def _expr_domain(expr, trail: Trail) -> Domain:
-    """Compute the domain of an expression (Var, int, or arithmetic node)."""
+    """Compute the domain of an expression (Var, int, or arithmetic node).
+    A ground expression with a zero divisor has no value: its domain is
+    empty, so a propagator over it fails (see :func:`_is_zero_divisor`)."""
     expr = deref(expr)
     if isinstance(expr, int):
         return ((expr, expr),)
@@ -1379,7 +1419,9 @@ def _expr_domain(expr, trail: Trail) -> Domain:
             val = _eval_ground(expr)
             if isinstance(val, int) and not isinstance(val, bool):
                 return ((val, val),)
-        except _LogicException:
+        except _LogicException as exc:
+            if _is_zero_divisor(exc):
+                return ()          # no value: the propagator fails
             raise  # a garbage leaf deeper in the node — keep it catchable
         except Exception:
             pass
@@ -1492,7 +1534,7 @@ def _eval_ground(expr):
         fn = _EVALUABLE.get(ka[0]) if ka is not None else None
         if fn is None:
             raise _unknown_expr_leaf_error(expr)
-        result = _apply_evaluable(ka[0], fn, ka[1])
+        result = _apply_evaluable(fn, ka[1])
     else:
         # An operator NODE: its table key (``node_keys``), then the one
         # table.  A node the table does not know (``UnaryPlus``, the bitwise
@@ -1534,7 +1576,7 @@ def _eval_ground(expr):
     return result
 
 
-def _apply_evaluable(key, fn, args):
+def _apply_evaluable(fn, args):
     """Apply one evaluable-table entry to its evaluated *args*.
 
     None when an argument is still unbound.  A zero divisor raises inside
@@ -1553,7 +1595,7 @@ def _apply_evaluable(key, fn, args):
     return fn(l, r)
 
 
-def _arith_cells_to_nodes(x, strict=None):
+def _arith_cells_to_nodes(x, strict=None, float_pow=False):
     """*x* with every arithmetic CELL rewritten as its operator node, or None
     when *x* holds none (the common case: nothing is allocated).
 
@@ -1587,12 +1629,12 @@ def _arith_cells_to_nodes(x, strict=None):
         if key[1] == 1:
             o = x.operand
             to = type(o)
-            oc = None if to is int or to is float else _arith_cells_to_nodes(o, strict)
+            oc = None if to is int or to is float else _arith_cells_to_nodes(o, strict, float_pow)
             return None if oc is None else _replace(x, operand=oc)
         a, b = x.left, x.right
         ta, tb = type(a), type(b)
-        lc = None if ta is int or ta is float else _arith_cells_to_nodes(a, strict)
-        rc = None if tb is int or tb is float else _arith_cells_to_nodes(b, strict)
+        lc = None if ta is int or ta is float else _arith_cells_to_nodes(a, strict, float_pow)
+        rc = None if tb is int or tb is float else _arith_cells_to_nodes(b, strict, float_pow)
         if lc is None and rc is None:
             return None
         return _replace(x, left=a if lc is None else lc, right=b if rc is None else rc)
@@ -1600,16 +1642,17 @@ def _arith_cells_to_nodes(x, strict=None):
         return None
     ka = _cell_key_args(x)
     if ka is not None and ka[0] in _EVALUABLE:
-        if strict is None and ka[0] == ("**", 2):
+        if strict is None and not float_pow and ka[0] == ("**", 2):
             # ``'**'`` is Scryer's FLOAT power (Q2, 2026-09-28): not a clpz
             # expression -- Scryer's ``X #= 2**3`` raises exactly this.
             # Folded instead, its float would leave an FD variable silently
-            # unconstrained.  (CLP(Q)/CLP(R) pass *strict* and keep it.)
+            # unconstrained.  (CLP(Q)/CLP(R) pass *strict* and keep it;
+            # between/3, no clpz post, passes *float_pow*.)
             from clausal.logic.exceptions import LogicException, domain_error  # noqa: PLC0415
             raise LogicException(domain_error("clpz_expression", x, "clpfd expression"))
         args = []
         for a in ka[1]:
-            c = _arith_cells_to_nodes(a, strict)
+            c = _arith_cells_to_nodes(a, strict, float_pow)
             if c is None:
                 a = deref(a)
                 if not _arith_leaf(a):
