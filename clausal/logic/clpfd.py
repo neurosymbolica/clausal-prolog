@@ -2719,8 +2719,16 @@ def reify_fd(op: str, x, y, trail: Trail) -> bool | None:
         stripped = _units_strip(x, y, "reify(" + op + ")/3", trail)
         if stripped is not None:
             x, y = stripped
-    x = _resolve(x)
-    y = _resolve(y)
+    try:
+        x = _resolve(x)
+        y = _resolve(y)
+    except _LogicException as exc:
+        # Ruling Q14 (2026-09-28): a CLP(FD) relation over an expression
+        # with no value (``1 // 0``) has no solutions -- so, reified, it is
+        # FALSE, never an error.
+        if _no_value_in_propagation(exc):
+            return False
+        raise
     if _both_ground(x, y):
         if op in ("eq", "ne"):
             # the chars-model arm ``fd_eq``/``fd_ne`` already have: the two
@@ -3747,7 +3755,41 @@ def zcompare(order, x, y, trail: Trail) -> bool:
 # ── C-accelerated propagation (with Python fallback) ─────────────────────────
 # If the C extension is available, its versions silently replace the Python ones.
 
+class _NoValue:
+    """What the C ``!=`` propagator is handed for an expression with no value
+    (see :func:`_no_value_in_propagation`): it differs from nothing and
+    equals nothing, so the C both-ground arm's ``lv != rv`` is False and the
+    constraint FAILS -- ruling Q14 (2026-09-28), with no C change."""
+    __slots__ = ()
+
+    def __eq__(self, other):
+        return False
+
+    def __ne__(self, other):
+        return False
+
+    __hash__ = object.__hash__
+
+
+_NO_VALUE_FOR_C = _NoValue()
+
+
+def _eval_ground_for_c(x):
+    """``_eval_ground`` as the C propagator module sees it (it binds the
+    module attribute ``_eval_ground`` once, at its import): an expression with
+    no value is :data:`_NO_VALUE_FOR_C` instead of an error."""
+    try:
+        return _eval_ground(x)
+    except _LogicException as exc:
+        if _no_value_in_propagation(exc):
+            return _NO_VALUE_FOR_C
+        raise
+
+
 _USE_C_PROPAGATE = False
+_ensure_exc_imports()
+_eval_ground_py = _eval_ground
+_eval_ground = _eval_ground_for_c        # what the C init binds (see above)
 try:
     from clausal.logic._clpfd_propagate import (
         FDVar as _C_FDVar,
@@ -3773,6 +3815,8 @@ try:
     _USE_C_PROPAGATE = True
 except ImportError:
     pass
+finally:
+    _eval_ground = _eval_ground_py
 
 if _USE_C_PROPAGATE:
     FDVar = _C_FDVar
@@ -3918,3 +3962,33 @@ if _USE_C_PROPAGATE:
 
     # Re-register the C fd_hook
     register_attr_hook(FD_KEY, _c_fd_hook)
+
+
+# ── Ruling Q14 (2026-09-28): no value means no solutions ─────────────────────
+#
+# ``X == 1 // 0`` -- Scryer's ``X #= 1 // 0`` -- FAILS: "(#=)/2 is a relation:
+# failure means that there are no solutions for these arguments" (Markus
+# Triska).  In EVERY goal order: the ground post fails here, and a divisor
+# (or a '^' exponent) that reaches a no-value while propagating empties the
+# domain (``_expr_domain``) or fails the ``!=`` arm (``_eval_propagating``,
+# ``_eval_ground_for_c``).  Plain arithmetic -- is/2, the ISO comparisons,
+# eval_/2 -- keeps raising evaluation_error(zero_divisor).
+
+def _relation_fails_without_value(post):
+    def wrapped(l, r, trail, *args, **kwargs):
+        try:
+            return post(l, r, trail, *args, **kwargs)
+        except _LogicException as exc:
+            if _no_value_in_propagation(exc):
+                return False
+            raise
+    wrapped.__name__ = post.__name__
+    wrapped.__doc__ = post.__doc__
+    wrapped.__wrapped__ = post
+    return wrapped
+
+
+fd_eq = _relation_fails_without_value(fd_eq)
+fd_ne = _relation_fails_without_value(fd_ne)
+fd_lt = _relation_fails_without_value(fd_lt)
+fd_le = _relation_fails_without_value(fd_le)

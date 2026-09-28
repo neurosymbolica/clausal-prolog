@@ -24,7 +24,10 @@ from clausal.logic.variables import Var, deref
 
 _N = itertools.count()
 
-#: (clause body binding X, what X is -- or the error term it raises)
+#: A row that has no answer (the goal fails).
+FAILS = object()
+
+#: (clause body binding X, what X is -- the error term it raises, or FAILS)
 BARE_ROWS = [
     ("eval_(-7 // 2, X)", -4),               # Python floor division
     ("eval_(7 // -2, X)", -4),
@@ -61,11 +64,23 @@ BARE_ROWS = [
     ("'is'(X, 1 // 0)", "error(evaluation_error(zero_divisor),(//)/2)"),
     ("'=:='(1, 1 / 0)", "error(evaluation_error(zero_divisor),(/)/2)"),
     ("'<'(1, 1 // 0)", "error(evaluation_error(zero_divisor),(//)/2)"),
-    # a CLP post with a zero divisor raised nothing and succeeded before,
-    # leaving X unbound
-    ("X == 1 // 0", "error(evaluation_error(zero_divisor),(//)/2)"),
-    ("X == 1 / 0", "error(evaluation_error(zero_divisor),(/)/2)"),
-    ("1 < 1 // 0", "error(evaluation_error(zero_divisor),(//)/2)"),
+    # Ruling Q14 (2026-09-28): a CLP(FD) constraint over an expression with
+    # no value FAILS, as in Scryer ("(#=)/2 is a relation: failure means that
+    # there are no solutions"), in EVERY goal order.  It succeeded before,
+    # leaving X unbound.
+    ("X == 1 // 0", FAILS),
+    ("(Y is 0, X == 1 // Y)", FAILS),
+    ("(X == 1 // Y, Y is 0)", FAILS),
+    ("(X == 1 // Y, Y == 0)", FAILS),
+    ("X == 1 / 0", FAILS),
+    ("X == 1 % 0", FAILS),
+    ("X == '//'(1, 0)", FAILS),
+    ("X == mod(1, 0)", FAILS),
+    ("X != 1 // 0", FAILS),
+    ("1 < 1 // 0", FAILS),
+    ("X == '^'(2, -1)", FAILS),
+    # reified: the relation is false
+    ("if_(Z == 1 // 0, X is yes, X is no)", "no"),
     ("eval_(div(1, 0), X)", "error(evaluation_error(zero_divisor),(div)/2)"),
     # ... but a divisor that becomes 0 while a CLP(FD) search runs prunes
     # that branch, as Scryer's clpz does (``X #= 10 // Y, Y in 0..2,
@@ -88,7 +103,7 @@ BARE_ROWS = [
 @pytest.fixture(scope="module")
 def mod(tmp_path_factory):
     d = tmp_path_factory.mktemp("arith_rulings")
-    src = "-allow_singletons\n-implicit_functors\n" + "".join(
+    src = "-allow_singletons\n-implicit_functors\n-private([yes, no])\n" + "".join(
         f"g{i}(X) <- ({body}),\n" for i, (body, _) in enumerate(BARE_ROWS))
     p = d / "_arith_operator_rulings.clausal"
     p.write_text(src)
@@ -105,16 +120,17 @@ def test_bare_python_quoted_scryer(mod, i):
         assert isinstance(want, str), render_error_term(exc.term)
         assert render_error_term(exc.term) == want
         return
-    assert not isinstance(want, str), got
+    if want is FAILS:
+        assert got == [], got
+        return
+    assert not (isinstance(want, str) and want.startswith("error(")), got
     assert got == [want] and type(got[0]) is type(want), got
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "the C-accelerated != propagator (_clpfd_propagate.c) calls _eval_ground "
-    "directly, so a divisor that becomes 0 while labelling RAISES there "
-    "instead of pruning; fixing it is a C change -- "
-    "todo/arith-rulings-open-edges-2026-09-28.md item 1"))
 def test_ne_prunes_a_zero_divisor_while_labelling(tmp_path):
+    """The C-accelerated ``!=`` propagator's both-ground arm sees a no-value
+    expression as differing from nothing, so the branch fails (ruling Q14;
+    ``clpfd._eval_ground_for_c``) -- it raised before."""
     p = tmp_path / "_arith_rulings_ne.clausal"
     p.write_text("-allow_singletons\n"
                  "g(X) <- findall(Y, (10 // Y != 3, in_domain(Y, 0, 4), "

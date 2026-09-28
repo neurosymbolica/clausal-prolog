@@ -74,8 +74,7 @@ Reach for `eval_/2` when you specifically need *eager* evaluation:
   constraints don't operate on [`Quantity`](units.md) objects.
 - **Catchable exceptions** — `catch(eval_(X // Y, R), E, ...)` sees
   `error(evaluation_error(zero_divisor), (//)/2)` when `Y` is 0. A
-  constraint raises it only when posted over a ground zero divisor; a
-  divisor that becomes 0 during a search just fails that branch.
+  constraint never raises it: over a zero divisor it simply fails.
 - **Accumulator recursion** — an eagerly ground argument keeps
   tail-recursive predicates eligible for [tail-call
   optimisation](compiler.md).
@@ -122,13 +121,17 @@ exact (`'^'(1/2, 2)` is 1/4, where Scryer answers 0.25). `rem` is not in the
 table. The exact-number terms `rdiv(N, D)` and `decimal(M, S)` evaluate as the
 number they denote.
 
-A **zero divisor** raises `evaluation_error(zero_divisor)` naming the operator,
-on every spelling, bare or quoted: `eval_(1 / 0, X)`,
-`'is'(X, 1 // 0)`, `'=:='(1, 1 / 0)` and `X == 1 // 0` all raise it. Inside a
-CLP(ℤ) search, a divisor that becomes 0 (`X == 10 // Y, in_domain(Y, 0, 2),
-label([Y])`) fails that branch instead, as in Scryer's clpz, and the search
-goes on to Y = 1 and Y = 2. (Two paths still raise there: the `!=`
-propagator and reified comparisons; see the open todo.)
+A **zero divisor** in plain arithmetic raises
+`evaluation_error(zero_divisor)` naming the operator, on every spelling, bare or
+quoted: `eval_(1 / 0, X)`, `'is'(X, 1 // 0)` and `'=:='(1, 1 / 0)` all raise it.
+
+A **constraint** is a relation (ruling Q14, 2026-09-28): over an expression
+with no value — a zero divisor, or `'^'(2, -1)` — it has no solutions and
+**fails**, as Scryer's clpz does, in every goal order. `X == 1 // 0`,
+`(X == 1 // Y, Y is 0)` and `X != 1 // 0` all fail; in a search
+(`X == 10 // Y, in_domain(Y, 0, 2), label([Y])`) the branch Y = 0 fails and
+the search goes on to Y = 1 and Y = 2; reified, as in
+`if_(X == 1 // 0, ...)`, the test is false.
 
 In a CLP(ℤ) constraint (`==`, `!=`, `<`, ...), a term that is not arithmetic
 raises Scryer's `domain_error(clpz_expression, T)`: `X == foo(1)` raises

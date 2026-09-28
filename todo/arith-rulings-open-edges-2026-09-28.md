@@ -5,34 +5,19 @@ feat/arith-scryer-rulings-2026-09-28). Nothing here changes an answer the
 rulings decided; each item is a place the implementation had to pick a
 reading.**
 
-## Needs an operator ruling
+## Rulings
 
-1. **Zero divisor inside a CLP(FD) constraint.** Implemented reading: a
-   GROUND expression with a zero divisor RAISES at the post
-   (`X == 1 // 0` is `evaluation_error(zero_divisor)`; the brief said
-   "everywhere ... the CLP paths if reachable", and before the branch it
-   SUCCEEDED silently with X unconstrained). A divisor that becomes 0 while
-   PROPAGATING (labelling) makes the expression's domain empty, so the
-   constraint FAILS and the search goes on -- Scryer's clpz behaviour:
-
-       ?- X #= 10 // Y, Y in 0..2, label([Y]).   % Y = 1 ; Y = 2 (both)
-
-   Scryer FAILS the ground post too (`X #= 1 // 0` is `false`), so the ground
-   raise is the one place the engine is louder than Scryer: ruling wanted.
-   **Known gap:** the C-accelerated `!=` propagator
-   (`clausal/logic/_clpfd_propagate.c`, the both-ground arm of the Ne
-   propagator) calls `_eval_ground` directly, so `10 // Y != 3` still RAISES
-   when labelling reaches Y = 0. Fixing it is a C change (call
-   `_eval_propagating`, or treat the zero-divisor error as failure there);
-   pinned as a strict xfail in tests/test_arith_operator_rulings.py.
-   Reified comparisons (`reify_fd` -> `_resolve` -> `_eval_ground`) also
-   still raise when their divisor becomes 0 while labelling.
-   **Goal-order dependence (roborev job 288):** the prune fires on ANY
-   propagation, not only labelling, so the same program raises or fails by
-   goal order: `(Y is 0, X == 1 // Y)` raises `evaluation_error(zero_divisor)`
-   at the post, `(X == 1 // Y, Y is 0)` FAILS. Likewise `'^'(2, Y)` with a
-   negative Y. Choosing "fail at the post too" (Scryer's `X #= 1 // 0` is
-   `false`) would make both orders fail; that is the ruling this item asks for.
+1. **Zero divisor inside a CLP(FD) constraint -- RULED Q14 2026-09-28,
+   DONE.** A constraint over an expression with no value FAILS, as in
+   Scryer, in every goal order ("(#=)/2 is a relation: failure means that
+   there are no solutions for these arguments" -- Markus Triska); plain
+   arithmetic (is/2, the ISO comparisons, eval_/2) keeps raising
+   `evaluation_error(zero_divisor)`. Implemented with no C change: the ground
+   post fails (`fd_eq`/`fd_ne`/`fd_lt`/`fd_le` wrapped), propagation empties
+   the domain (`_expr_domain`) or fails the Python `!=` arm, the C `!=`
+   propagator is handed `clpfd._eval_ground_for_c` (a no-value sentinel that
+   differs from nothing), and a reified test (`reify_fd`) is false. The
+   goal-order dependence roborev job 288 found is gone.
 
 2. **Seam `/` over integers.** "Operators in seam follow Python semantics
    unless quoted": Python's `7 / 2` is the float 3.5, the engine's (bare or

@@ -34,13 +34,17 @@ semantics unless quoted; quoted ones follow Scryer's.*
 | `<<` `>>` | Python shifts; not evaluable by `eval_` | not in Clausal's evaluable table | — |
 | unary `-` | negation | the same: `'-'(5)` is -5 | the same |
 
-A **zero divisor** is ISO's `evaluation_error(zero_divisor)` on every
-spelling, naming the operator: `eval_(1 // 0, X)` raises
-`error(evaluation_error(zero_divisor), (//)/2)`, and so do `'is'`, the
-comparisons and `==` posted over a ground zero divisor. A bare
+A **zero divisor** in plain arithmetic is ISO's
+`evaluation_error(zero_divisor)` on every spelling, naming the operator:
+`eval_(1 // 0, X)` raises `error(evaluation_error(zero_divisor), (//)/2)`, and
+so do `'is'` and the ISO comparisons (`'=:='`, `'<'`, ...). A bare
 Python-semantics operator raises it too, never a raw Python
-`ZeroDivisionError`: it is a logic-level error that `catch/3` sees. (A divisor
-that becomes 0 during a CLP(ℤ) search fails that branch, as in Scryer.)
+`ZeroDivisionError`: it is a logic-level error that `catch/3` sees.
+
+A **constraint** (`==`, `!=`, `<`, ... — CLP(ℤ)'s `#=` family) is a relation,
+and over an expression with no value it has no solutions: `X == 1 // 0`
+**fails**, as in Scryer, in every goal order (`X == 1 // Y, Y is 0` fails too),
+and a divisor that becomes 0 during a search fails that branch.
 
 Inside `++(...)` the code is plain Python and every operator is Python's,
 exceptions included.
