@@ -1677,6 +1677,14 @@ class _ClausalToProlog:
             return None
         if name == "double_quotes":
             return self._convert_double_quotes_directive(call)
+        if (name == "set_prolog_flag" and len(call.args) == 2
+                and isinstance(call.args[0], python_ast.Name)
+                and call.args[0].id == "assert_creates_dynamic"):
+            # Clausal's own flag: ISO Prolog's assert already creates a
+            # missing procedure as dynamic (7.5.2(2)), which is what ``true``
+            # selects, so there is nothing to emit; and the reference systems
+            # do not know the flag, so writing it would be a load error there.
+            return None
         if name in ("constant_value", "constant_number_units",
                     "constant_number_currency"):
             self._collect_constant(name, call)

@@ -308,8 +308,31 @@ test("add at runtime") <- (
 `assertz`/`asserta`/`retract` work **only** on a predicate declared
 `-dynamic` — declare first. Without the declaration the `assertz` above raises
 the ISO error `error(permission_error(modify, static_procedure, color/1), assertz/1)`,
-and a name that is not declared at all is refused. A `-dynamic` predicate may
-start with no clauses. See [Database Operations](database_ops.md) for full details.
+and a name that is not declared at all is refused, unless the module sets the
+flag [`assert_creates_dynamic`](flags.md#assert_creates_dynamic) (below). A
+`-dynamic` predicate may start with no clauses. See
+[Database Operations](database_ops.md) for full details.
+
+### -set_prolog_flag
+
+`-set_prolog_flag(Flag, Value)` sets a [Prolog flag](flags.md) when the module
+loads, the ISO `:- set_prolog_flag(Flag, Value).` as a directive. A module-scoped
+flag is set for this module:
+
+```clausal
+-set_prolog_flag(assert_creates_dynamic, true)
+```
+
+- `assert_creates_dynamic`: `true` makes `assertz`/`asserta` of a procedure that
+  does not exist create it as dynamic (ISO 7.5.2(2)) instead of refusing it.
+- `double_quotes`: the same as [`-double_quotes(Mode)`](#-double_quotes), and
+  position-sensitive like it.
+- A process flag (`debug`) is set for the whole process.
+
+A setting that `set_prolog_flag/2` would refuse is a load-time `SyntaxError`
+carrying the ISO error term, e.g.
+`error(permission_error(modify,flag,unknown),set_prolog_flag/2)` for
+`-set_prolog_flag(unknown, fail)`.
 
 ### -table
 
@@ -617,6 +640,10 @@ mode, and `b"…"`/`b'…'` are always [codes](bytes_as_lists.md).
 | `chars` | the string `"hello"`, which *is* the list `['h','e','l','l','o']`; `atom("hello")` is false, `string("hello")` is true | the engine **default** (since 2026-09-26, as in Scryer and Trealla) |
 | `atom` | the atom `hello` — the same term as bare `hello` and as `'hello'` | the **opt-out** for a module that still relies on the old reading |
 | `codes` | — | **refused**. Codes are spelled `b"…"`. Any other argument is likewise an error. |
+
+`-set_prolog_flag(double_quotes, Mode)` is the same directive in ISO's
+spelling, and `current_prolog_flag(double_quotes, M)` reports the module's mode
+([Prolog Flags](flags.md)).
 
 The directive is **file-scoped and position-sensitive**: it governs the
 literals written below it, so it belongs at the top of the file, above the

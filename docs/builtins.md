@@ -66,6 +66,7 @@ Notation in signature lines:
 | [DCG (Definite Clause Grammars)](#dcg-definite-clause-grammars) | phrase/2, phrase/3 |
 | [Term Inspection](#term-inspection) | functor/3, arg/3, unpack/2, copy_term/2, term_variables/2, numbervars/3, gensym/2, module_constant/3 |
 | [Runtime Database](#runtime-database) | assertz/1, asserta/1, retract/1, clause/2, abolish_table/2, abolish_all_tables/0 |
+| [Prolog Flags](#prolog-flags) | set_prolog_flag/2, current_prolog_flag/2 |
 | [Keyword-Term Introspection](#keyword-term-introspection) | vary/3, unbound_keys/2, signature/3 |
 | [Attributed Variables](#attributed-variables) | put_attr/3, get_attr/3, del_attr/2, get_attrs/2, put_attrs/2, attvar/1, term_attvars/2 |
 | [Constraint Predicates](#constraint-predicates) | dif/2, eq/3, dif_t/3 |
@@ -712,7 +713,7 @@ there. Query the module that actually declared it instead (see
 
 ## Runtime Database
 
-These work only on a predicate declared [`-dynamic`](database_ops.md#declare-first-the-dynamic-directive) (declare first). A static predicate raises `error(permission_error(modify, static_procedure, Name/Arity), assertz/1)` (or `asserta/1`, `retract/1`); a name with no declaration is refused. See [Database operations](database_ops.md).
+These work only on a predicate declared [`-dynamic`](database_ops.md#declare-first-the-dynamic-directive) (declare first). A static predicate raises `error(permission_error(modify, static_procedure, Name/Arity), assertz/1)` (or `asserta/1`, `retract/1`); a name with no declaration is refused by assertz/asserta, unless the module sets the flag [`assert_creates_dynamic`](flags.md#assert_creates_dynamic), which creates it as dynamic (ISO 7.5.2(2)). See [Database operations](database_ops.md).
 
 ### `assertz/1`
 ```clausal
@@ -798,6 +799,42 @@ Remove all cached tabling answers for every predicate in the current database.
 ??? info "Implementation & tests"
     **Clausal tests:** none
     **Python tests:** `tests/test_tabling.py`
+
+---
+
+## Prolog Flags
+
+The ISO flags and `assert_creates_dynamic`; the table of flags, values and
+scopes is in [Prolog Flags](flags.md).
+
+### `set_prolog_flag/2`
+```clausal
+--8<-- "tests/fixtures/docs/builtins_sigs.txt:set_prolog_flag_2"
+```
+Set a flag (ISO 8.17.1). A module-scoped flag (`assert_creates_dynamic`) is set
+for the calling module; `double_quotes` is set only by the directive
+[`-set_prolog_flag`](directives.md#-set_prolog_flag). Errors are ISO's:
+`instantiation_error`, `type_error(atom, F)`, `domain_error(prolog_flag, F)`,
+`domain_error(flag_value, F+V)`, and `permission_error(modify, flag, F)` for a
+read-only flag or a value this engine does not implement.
+
+??? info "Implementation & tests"
+    **Implementation:** `clausal/logic/builtins/flags.py`
+    **Python tests:** `tests/iso/test_prolog_flags_scryer.py`
+
+---
+
+### `current_prolog_flag/2`
+```clausal
+--8<-- "tests/fixtures/docs/builtins_sigs.txt:current_prolog_flag_2"
+```
+The value of a flag (ISO 8.17.2); a module-scoped flag reports the calling
+module's value. With `Flag` unbound it enumerates every flag that has a value
+(`max_integer` and `min_integer` have none: integers are unbounded).
+
+??? info "Implementation & tests"
+    **Implementation:** `clausal/logic/builtins/flags.py`
+    **Python tests:** `tests/iso/test_prolog_flags_scryer.py`
 
 ---
 

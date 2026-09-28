@@ -123,6 +123,21 @@ since 0.4.0 finish three moves:
 
 ### Added
 
+- **Prolog flags.** `set_prolog_flag/2` and `current_prolog_flag/2` with the
+  ISO flags (`bounded`, `max_integer`, `min_integer`,
+  `integer_rounding_function`, `char_conversion`, `debug`, `max_arity`,
+  `unknown`, `double_quotes`) and ISO's error terms, and the directive
+  `-set_prolog_flag(Flag, Value)`. `double_quotes` is the module's
+  `-double_quotes` mode. `unknown` can only be `error`. See
+  [docs/flags.md](docs/flags.md).
+- **The `assert_creates_dynamic` flag** (module-scoped, default `false`).
+  With it `true`, `assertz`/`asserta` of a procedure that does not exist
+  creates it as dynamic (ISO 7.5.2(2)), instead of raising
+  `permission_error(modify, static_procedure, PI)`. A static predicate, a
+  builtin and a declared data functor are still refused. An imported `.pl`
+  module starts with it `true`, and `:- set_prolog_flag(F, V).` in a `.pl`
+  file now carries across for any flag.
+
 - **`.seam`** as an alias extension for `.clausal` files.
 - **Goal-position seams in hosted Python:** `if --g(X):`, `for X in --g(X):`,
   `while --g(X):` and `not --g(...)`, plus comprehensions whose first `for`

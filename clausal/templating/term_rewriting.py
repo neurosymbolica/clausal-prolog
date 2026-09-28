@@ -8694,6 +8694,8 @@ class EmbedTransformer(NodeTransformer):
             return transformer._handle_implicit_functors_directive(args, expr_stmt)
         if name == "double_quotes":
             return transformer._handle_double_quotes_directive(args, expr_stmt)
+        if name == "set_prolog_flag":
+            return transformer._handle_set_prolog_flag_directive(args, expr_stmt)
         raise SyntaxError(
             f"Unknown directive: -{name}(...)  "
             f"(known directives: -module, -private, -hide, -dynamic, -discontiguous, "
@@ -8702,7 +8704,8 @@ class EmbedTransformer(NodeTransformer):
             f"-strict_atoms, -allow_singletons, "
             f"-constant_value, -constant_number_units, "
             f"-constant_number_currency, -constants_number_units, "
-            f"-constants_number_currency, -implicit_functors, -double_quotes)"
+            f"-constants_number_currency, -implicit_functors, -double_quotes, "
+            f"-set_prolog_flag)"
         )
 
     def _handle_double_quotes_directive(transformer, args, expr_stmt):
@@ -8749,6 +8752,57 @@ class EmbedTransformer(NodeTransformer):
             f"its char atoms) and `atom` (\"...\" is an atom).  Codes are "
             f"spelled b\"...\" and have no mode."
         )
+
+    def _handle_set_prolog_flag_directive(transformer, args, expr_stmt):
+        """Process ``-set_prolog_flag(Flag, Value)`` -- ISO 8.17.1 as a
+        directive (``clausal.logic.builtins.flags``).
+
+        Validated here, at load, with the runtime builtin's own checks: a
+        refused setting is a ``SyntaxError`` carrying the ISO error term.
+        ``double_quotes`` is the ``-double_quotes`` mode (position-sensitive,
+        governing the literals below it); every other flag becomes a
+        ``set_prolog_flag`` directive item that ``compiler_v2`` applies to
+        this module's database (a module-scoped flag) or to the process.
+        """
+        from clausal.logic.builtins.flags import check_setting  # noqa: PLC0415
+        from clausal.logic.exceptions import LogicException  # noqa: PLC0415
+
+        def _arg(node):
+            if isinstance(node, Name):
+                return node.id
+            if isinstance(node, Constant) and isinstance(
+                    node.value, (str, bool, int)):
+                return node.value
+            if (isinstance(node, UnaryOp) and isinstance(node.op, USub)
+                    and isinstance(node.operand, Constant)
+                    and type(node.operand.value) is int):
+                return -node.operand.value
+            raise SyntaxError(
+                "-set_prolog_flag(Flag, Value): Flag and Value must be atoms "
+                "or numbers, e.g. -set_prolog_flag(assert_creates_dynamic, "
+                "true)")
+
+        if len(args) != 2:
+            raise SyntaxError(
+                "-set_prolog_flag takes two arguments: "
+                "-set_prolog_flag(Flag, Value)")
+        flag, value = _arg(args[0]), _arg(args[1])
+        try:
+            name, v = check_setting(flag, value, directive=True)
+        except LogicException as exc:
+            from clausal.logic.exceptions import render_error_term  # noqa: PLC0415
+            text = render_error_term(exc.term)
+            if exc.message:
+                text = f"{text}: {exc.message}"
+            raise SyntaxError(
+                f"-set_prolog_flag({flag}, {value}): {text}") from None
+        if name == "double_quotes":
+            transformer._double_quotes_mode = v
+            transformer._double_quotes_explicit = True
+            return replace(Pass(), expr_stmt)
+        transformer._module_items.append(
+            DirectiveItem(name="set_prolog_flag", specs=[(name, v)]))
+        return replace(Pass(), expr_stmt)
 
     def _declare_predicate_export(transformer, spec, entry_node, expr_stmt,
                                   statements, source_label):

@@ -167,6 +167,7 @@ def compile_module(
     #    this module's own seam sites, which name callees whose mode is the
     #    OWNER's fact -- answerable only now that the imports have run.
     _record_double_quotes_mode(module_items, db)
+    _apply_prolog_flag_directives(module_items, db)
     _lint_cross_mode_literals(module_items, module_dict)
 
     # ── Step 1: Term expansion (after imports, before directives) ────────
@@ -2101,7 +2102,23 @@ def _record_double_quotes_mode(module_items: list, db) -> None:
     for item in module_items:
         if isinstance(item, DoubleQuotesModeItem) and db is not None:
             db.double_quotes_modes = frozenset(item.modes_used or (item.mode,))
+            # current_prolog_flag(double_quotes, M) reports the mode in force
+            # at the end of the file.
+            if item.explicit:
+                from clausal.logic.builtins.flags import apply_setting  # noqa: PLC0415
+                apply_setting(db, "double_quotes", item.mode)
             return
+
+
+def _apply_prolog_flag_directives(module_items: list, db) -> None:
+    """Apply each ``-set_prolog_flag(F, V)`` directive, in file order.  The
+    transformer validated them (``flags.check_setting``); ``double_quotes``
+    never reaches here -- it is the compile-time ``-double_quotes`` mode."""
+    from clausal.logic.builtins.flags import apply_setting  # noqa: PLC0415
+    for item in module_items:
+        if isinstance(item, DirectiveItem) and item.name == "set_prolog_flag":
+            for name, value in item.specs:
+                apply_setting(db, name, value)
 
 
 def _double_quotes_modes_of_target(kind: str, target, module_dict: dict):

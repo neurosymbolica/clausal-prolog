@@ -1058,3 +1058,11 @@ date_between(+Start, +End, -D)
 --8<-- [start:timestamp_2]
 timestamp(?DateTime, ?Stamp)
 --8<-- [end:timestamp_2]
+
+--8<-- [start:set_prolog_flag_2]
+set_prolog_flag(+Flag, +Value)
+--8<-- [end:set_prolog_flag_2]
+
+--8<-- [start:current_prolog_flag_2]
+current_prolog_flag(?Flag, ?Value)
+--8<-- [end:current_prolog_flag_2]

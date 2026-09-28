@@ -29,7 +29,11 @@ as the culprit (Scryer's form; see [Exceptions](exceptions.md)).
 The declaration also makes the predicate exist before it has clauses: a
 `-dynamic` predicate with no clauses simply fails, where an undeclared name is
 refused with the same `permission_error(modify, static_procedure, Name/Arity)`
-(it is static by default). Declare several at once:
+(it is static by default). The module flag
+[`assert_creates_dynamic`](flags.md#assert_creates_dynamic) changes that last
+case to ISO 7.5.2(2): with it `true`, asserting into a procedure that does not
+exist creates it as a dynamic procedure. An imported `.pl` module has it on.
+Declare several at once:
 
 ```clausal
 --8<-- "tests/fixtures/docs/database_ops_examples.clausal:dynamic_directive"
@@ -144,7 +148,9 @@ does not require dynamic predicates.)
 - **Must declare `-dynamic`** — without it, assertz/asserta/retract raise
   `error(permission_error(modify, static_procedure, Name/Arity), assertz/1)`
   (catchable by `catch/3`). A name with no declaration and no clauses is
-  refused too by assertz/asserta; retract of such a name just fails. To match the culprit in a catch pattern, quote it:
+  refused too by assertz/asserta, unless the module sets the flag
+  [`assert_creates_dynamic`](flags.md#assert_creates_dynamic) (an imported
+  `.pl` module does); retract of such a name just fails. To match the culprit in a catch pattern, quote it:
   `'/'('assertz', 1)` (a bare builtin name in a term is the builtin's object,
   not the atom).
 - **assertz adds facts, not rules** — `assertz(foo(X) <- bar(X))` is not

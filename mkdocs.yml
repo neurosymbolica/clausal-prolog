@@ -72,6 +72,7 @@ nav:
     - Meta-Predicates: meta_predicates.md
     - Term Inspection: term_inspection.md
     - Database Operations: database_ops.md
+    - Prolog Flags: flags.md
     - Control: control.md
     - I/O: io.md
     - Logging: logging.md

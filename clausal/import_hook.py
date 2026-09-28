@@ -722,11 +722,27 @@ class PredicateLoader(_ClausalSourceLoader):
         return _extract_module_items(source, path)
 
 
+def _prolog_default_items() -> list:
+    """The module items every imported ``.pl`` module starts with, AHEAD of
+    its own: ``assert_creates_dynamic`` is ``true``, so imported ISO code
+    gets ISO's assert -- asserting into a procedure that does not exist
+    creates it as dynamic (ISO 7.5.2(2)).  A
+    ``:- set_prolog_flag(assert_creates_dynamic, false).`` in the file comes
+    later and wins.  An item rather than translated text, so the translation
+    itself (and every snapshot of it) is unchanged."""
+    from clausal.pythonic_ast.nodes import Directive  # noqa: PLC0415
+    return [Directive(name="set_prolog_flag",
+                      specs=[("assert_creates_dynamic", "true")])]
+
+
 class PrologLoader(_ClausalSourceLoader):
     """SourceLoader for .pl Prolog modules — translates to clausal on-the-fly.
 
     Pipeline: .pl source → prolog_to_clausal() → .clausal text →
               ast.parse → EmbedTransformer → bytecode (cached as .pyc)
+
+    The module's items start with :func:`_prolog_default_items` (the
+    ``assert_creates_dynamic`` flag on).
 
     All Prolog-specific imports are lazy (inside methods) so loading this
     module doesn't pull in the translator unless a .pl file is actually used.
@@ -763,6 +779,7 @@ class PrologLoader(_ClausalSourceLoader):
             ) from e
 
         code, transformer = _parse_clausal_source(clausal_source, path)
+        transformer._module_items[:0] = _prolog_default_items()
         self._last_transformer = transformer
         return code
 
@@ -787,7 +804,8 @@ class PrologLoader(_ClausalSourceLoader):
         """Cache-hit path: re-translate .pl source, then parse for module_items."""
         pl_source = self.get_data(path).decode("utf-8")
         clausal_source = self._translate(pl_source)
-        return _extract_module_items(clausal_source, path)
+        return _prolog_default_items() + _extract_module_items(
+            clausal_source, path)
 
 
 # Backward-compat alias — prefer _load_module() for new code.
