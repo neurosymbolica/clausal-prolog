@@ -315,6 +315,12 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
   `SELECT name, age` gave `('alice', 30)`, which is also the compound
   `alice(30)`); it is now `("alice", 30)`, as a single-column row already
   was.
+- **The Prolog exporter keeps `!=` a constraint.** It wrote `X != Y` as the
+  plain test `\==` (or `=\=` beside arithmetic), which differs whenever an
+  argument is unbound. A numeric `!=` (an integer literal or arithmetic on
+  either side) is now clpz's `#\=`, imported beside `#=`; any other is
+  `dif/2`. `is not` stays `dif/2`. See
+  [docs/prolog_translation.md](docs/prolog_translation.md).
 
 ### Migration guide: 0.x to 1.0
 

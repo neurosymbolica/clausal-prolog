@@ -386,9 +386,41 @@ reach(X, Y) <- (edge(X, Z), reach(Z, Y))
 
     def test_structural_neq(self):
         # nv
+        # Ruling R16 (2026-09-29): `!=` is a constraint, so a non-numeric (or
+        # not-known-numeric) one exports as dif/2, never the plain test \==.
         source = 'diff(X, Y) <- (X != Y)'
         result = clausal_source_to_prolog(source)
-        assert "X \\== Y" in result
+        assert "dif(X, Y)" in result
+        assert "\\==" not in result
+
+    @pytest.mark.parametrize("body, goal", [
+        ("X != 3", "#\\=(X, 3)"),                 # an integer literal
+        ("X != -2", "#\\=(X, -2)"),
+        ("X + 1 != Y", "#\\=(X + 1, Y)"),          # arithmetic
+        ("X != foo", "dif(X, foo)"),               # an atom
+        ("X != 1.5", "dif(X, 1.5)"),               # a float: not CLP(Z)
+        ("X != Y", "dif(X, Y)"),                   # unknown
+        ("X is not Y", "dif(X, Y)"),
+    ])
+    def test_not_equal_is_clpz_or_dif(self, body, goal):
+        # nv
+        source = f"-private([foo])\nne(X, Y) <- ({body}, Y is Y)"
+        result = clausal_source_to_prolog(source)
+        assert goal in result, result
+
+    def test_numeric_not_equal_imports_its_clpz_operator(self):
+        # nv
+        result = clausal_source_to_prolog("ne(X) <- (X != 3)")
+        assert "use_module(library(clpz), [(#\\=)/2])" in result, result
+        both = clausal_source_to_prolog("ne(X) <- (X != 3, X == 4)")
+        assert "[(#=)/2, (#\\=)/2]" in both, both
+        none = clausal_source_to_prolog("ne(X, Y) <- (X != Y)")
+        assert "clpz" not in none, none
+
+    def test_chained_not_equal(self):
+        # nv
+        result = clausal_source_to_prolog("ne(X, Y) <- (X != Y != 3)")
+        assert "dif(X, Y)" in result and "#\\=(Y, 3)" in result, result
 
     def test_variable_names_cross_unchanged(self):
         """Variables keep their spelling through a full source translation.

@@ -146,19 +146,25 @@ constraint, see [Operators](operators.md)):
 | `Z == X * 2` | `#=(Z, X * 2)` | CLP(ℤ) constraint; the module gets `:- use_module(library(clpz), [(#=)/2])` |
 | `X == Y` | `#=(X, Y)` | The same constraint |
 | `'=='(X, Y)` | `X == Y` | Structural identity (the quoted spelling) |
-| `X != Y` | `X \== Y` | **Structural** inequality — see the note below |
+| `X != 3`, `X + 1 != Y` | `#\=(X, 3)`, `#\=(X + 1, Y)` | CLP(ℤ) disequality when a side is an integer literal or arithmetic; the module imports `(#\=)/2` from clpz |
+| `X != Y`, `X != foo` | `dif(X, Y)`, `dif(X, foo)` | Otherwise (not numeric, or not known to be) — see the note below |
 | `X <= Y` | `X =< Y` | ISO `=<` (evaluates; not a constraint) |
 | `eval_(X * 2, Z)` | `Z is X * 2` | Eager evaluation |
 | `not G` | `\+ G` | Negation as failure |
 | `A and B` or `A, B` | `A, B` | Conjunction |
 | `A or B` | `(A ; B)` | Disjunction |
 
-!!! note "`!=` is not translated as a constraint"
-    In Clausal `X != Y` is the arithmetic disequality constraint (`#\=`), but
-    the exporter maps it to structural `\==`. On ground integers the two
-    agree; with an unbound variable or `1` vs `1.0` they do not. Write
-    `'\\=='(X, Y)` in Clausal when you mean structural inequality -- which
-    is what Prolog `\==` imports as.
+!!! note "`!=` stays a constraint"
+    In Clausal `X != Y` is a disequality **constraint**: it waits for its
+    arguments rather than testing them now, so it is never exported as the
+    plain tests `\==` or `=\=`, which differ from it whenever an argument is
+    unbound. The exporter decides "numeric" from the source alone: a side
+    that is an integer literal or an arithmetic expression gives clpz's
+    `#\=`; anything else, including a variable and a float literal (CLP(ℤ)
+    is over the integers), gives `dif/2`, which is sound for numbers too but
+    does not propagate over a finite domain. Write `'\\=='(X, Y)` in Clausal
+    when you mean the structural test -- which is what Prolog `\==` imports
+    as.
 
 ### Lists
 

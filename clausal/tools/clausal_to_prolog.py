@@ -960,6 +960,9 @@ class _ClausalToProlog:
         #: time, so a missing import is a silent wrong answer rather than a
         #: load failure.
         self._emitted_clp_arith_eq = False
+        #: The same for the CLP disequality `#\=` (ruling R16: a numeric
+        #: `!=`), imported beside `#=`.
+        self._emitted_clp_arith_neq = False
         #: Variable names bound by the head of the clause currently being
         #: converted. A lambda's body variable that is NOT a parameter and
         #: IS in this set is a CAPTURE, which is the only thing the lowering
@@ -1385,7 +1388,10 @@ class _ClausalToProlog:
             prelude_directives.append(PDirective(PCompound(
                 "use_module", (PCompound("library", (PAtom("lambda"),)),
                                PList(tuple(lambda_exports))))))
-        if self._emitted_clp_arith_eq and self.dialect.clpfd_needs_import:
+        clp_ops = [op for op, used in (("#=", self._emitted_clp_arith_eq),
+                                       ("#\\=", self._emitted_clp_arith_neq))
+                   if used]
+        if clp_ops and self.dialect.clpfd_needs_import:
             # THE INDICATOR IS PARENTHESISED ON PURPOSE. An import-list item is
             # read as a TERM, and `#=` is an operator in every system that has
             # it, so `[#=/2]` is a SYNTAX ERROR and the file does not consult.
@@ -1398,7 +1404,8 @@ class _ClausalToProlog:
             # supply anything" and suppresses every other import the file needs.
             prelude_directives.append(PDirective(PCompound(
                 "use_module", (PCompound("library", (PAtom(self.dialect.clpfd_module),)),
-                               PList((PCompound("/", (PAtom("#="), PNumber(2))),))))))
+                               PList(tuple(PCompound("/", (PAtom(op), PNumber(2)))
+                                           for op in clp_ops))))))
         prelude = getattr(self.dialect, "constants_prelude", None)
         if prelude is not None and self._emitted_constant_declaration:
             load, prelude_module = prelude
@@ -2799,6 +2806,34 @@ class _ClausalToProlog:
             return True
         return False
 
+    def _not_equal(self, left_node, right_node, left: PTerm,
+                   right: PTerm) -> PTerm:
+        """Clausal's `!=` constraint in Prolog (ruling R16, 2026-09-29).
+
+        `!=` is a CONSTRAINT, not a test: it waits for its arguments, so a
+        plain `\\==` or `=\\=` (what this used to write) means something else
+        when an argument is unbound.  A NUMERIC `!=` is the CLP(Z)
+        disequality `#\\=`; anything else -- not numeric, or not known to
+        be -- is `dif/2`, which is sound for numbers too (it only loses the
+        arithmetic: `X + 1 != 3` must be `#\\=`).
+
+        "Numeric" is decided SYNTACTICALLY, the only inference the exporter
+        has: either side is an arithmetic expression (`_is_arith_operand`) or
+        an integer literal.  A float literal is not: CLP(Z) is over the
+        integers and raises `domain_error(clpz_expression, F)` on one.
+        """
+        if self._is_clpz_operand(left_node) or self._is_clpz_operand(right_node):
+            self._emitted_clp_arith_neq = True
+            return PCompound("#\\=", (left, right))
+        return PCompound("dif", (left, right))
+
+    @classmethod
+    def _is_clpz_operand(cls, node: python_ast.expr) -> bool:
+        """True if *node* is an integer literal or arithmetic (R16)."""
+        if (isinstance(node, python_ast.Constant) and type(node.value) is int):
+            return True
+        return cls._is_arith_operand(node)
+
     # ── Interim refusals (operator decision, 2026-09-03) ──────────────
     #
     # See docs/iso-export-pilot-2026-09.md, "Operator decision — 2026-09-03
@@ -3200,9 +3235,8 @@ class _ClausalToProlog:
                 return PCompound("#=", (left, right))
 
             if isinstance(op, python_ast.NotEq):
-                arith = (self._is_arith_operand(node.left)
-                         or self._is_arith_operand(node.comparators[0]))
-                return PCompound("=\\=" if arith else "\\==", (left, right))
+                return self._not_equal(node.left, node.comparators[0],
+                                       left, right)
 
             if isinstance(op, python_ast.Lt):
                 # <- is Lt + USub (handled at statement level); pure Lt is <.
@@ -3220,6 +3254,7 @@ class _ClausalToProlog:
         # Multi-comparison: chain into conjunction
         parts = []
         prev = self._convert_expr(node.left)
+        prev_node = node.left
         for op, comp in zip(node.ops, node.comparators):
             right = self._convert_expr(comp)
             if isinstance(op, python_ast.Is):
@@ -3229,7 +3264,7 @@ class _ClausalToProlog:
             elif isinstance(op, python_ast.Eq):
                 parts.append(PCompound("==", (prev, right)))
             elif isinstance(op, python_ast.NotEq):
-                parts.append(PCompound("\\==", (prev, right)))
+                parts.append(self._not_equal(prev_node, comp, prev, right))
             elif isinstance(op, python_ast.Lt):
                 parts.append(PCompound("<", (prev, right)))
             elif isinstance(op, python_ast.LtE):
@@ -3248,6 +3283,7 @@ class _ClausalToProlog:
                         PCompound("member", (prev, right)),
                     )))
             prev = right
+            prev_node = comp
 
         if len(parts) == 1:
             return parts[0]

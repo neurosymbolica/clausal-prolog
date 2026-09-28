@@ -45,7 +45,7 @@ test('same atom ==') :-
     a == a.
 
 test('different atoms == fails') :-
-    a \== b.
+    dif(a, b).
 
 test('same integer ==') :-
     #=(42, 42).
@@ -55,10 +55,10 @@ test('bound var == value') :-
     _x == hello.
 
 test('different atoms !=') :-
-    a \== b.
+    dif(a, b).
 
 test('same atom != fails') :-
-    \+ a \== a.
+    \+ dif(a, a).
 
 test('same_value: integers') :-
     same_value(42, 42).
@@ -111,10 +111,10 @@ test('same var: X == X') :-
     #=(X, X).
 
 test('var != atom raises catchable type_error') :-
-    catch((_X_UNUSED \== a, false), _, true).
+    catch((dif(_X_UNUSED, a), false), _, true).
 
 test('two fresh vars: X != Y') :-
-    _X_UNUSED \== _Y_UNUSED.
+    dif(_X_UNUSED, _Y_UNUSED).
 
 test('structural_eq: a == a') :-
     structural_eq(a, a).
