@@ -271,3 +271,29 @@ class ClausalSeamTextCompareWarning(ClausalLintWarning):
     the seam's documented raw-out contract (docs/python_integration.md).
     """
 
+
+
+class ClausalStringInCatchPatternWarning(ClausalLintWarning):
+    """A double-quoted ``"..."`` literal naming the type, domain, kind or
+    action of an ISO error inside a catch pattern, read as a STRING under
+    this file's ``-double_quotes(chars)`` mode (the default).
+
+    The engine's own error terms carry ATOMS there (``domain_error(date,
+    X)``), and a string never unifies with an atom, so
+
+        catch(G, error(domain_error("date", _), _), R)
+
+    never catches the error it names: the error propagates past the catch.
+    Write the atom, ``'date'`` (an atom in every mode).
+
+    Judged for the catcher argument of ``catch/3``, ``catch_recover/3`` and
+    ``catch_error/2``, at the DESCRIPTOR positions of the ISO formals inside
+    ``error(Formal, _)``: the first argument of ``type_error/2``,
+    ``domain_error/2``, ``existence_error/2``, ``representation_error/1``,
+    ``evaluation_error/1``, ``resource_error/1`` and ``syntax_error/1``, and
+    the first two of ``permission_error/3``.  The CULPRIT (the last argument
+    of the /2 and /3 forms) is the offending term itself and may be a
+    string, so ``error(type_error(atom, "hello"), _)`` is not flagged.  Not
+    emitted under ``-double_quotes(atom)``, where ``"date"`` already IS the
+    atom.  Suppress it with ``warnings.filterwarnings`` on this class.
+    """

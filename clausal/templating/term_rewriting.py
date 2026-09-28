@@ -1944,7 +1944,72 @@ from clausal.lint_warnings import (  # noqa: E402, F401
     ClausalScaleInNameWarning,
     ClausalKeywordArgumentWarning,
     ClausalRetiredQuasiQuoteWarning,
+    ClausalStringInCatchPatternWarning,
 )
+
+
+#: The catch forms whose CATCHER is a pattern matched against a thrown term,
+#: as ``{name: (arity, catcher position)}``.
+_CATCH_PATTERN_FORMS = {"catch": (3, 1), "catch_recover": (3, 1), "catch_error": (2, 1)}
+
+#: The ISO error formals, as ``{name: (arity, descriptor positions)}``.  A
+#: DESCRIPTOR (the type in ``type_error(Type, Culprit)``, the action and type
+#: in ``permission_error/3`` ...) is always an atom in the engine's errors; the
+#: CULPRIT (the last argument of the /2 and /3 forms) is the offending term
+#: itself and may well be a string, so it is not judged.
+_ERROR_FORMAL_DESCRIPTORS = {
+    "type_error": (2, (0,)), "domain_error": (2, (0,)),
+    "existence_error": (2, (0,)), "permission_error": (3, (0, 1)),
+    "representation_error": (1, (0,)), "evaluation_error": (1, (0,)),
+    "resource_error": (1, (0,)), "syntax_error": (1, (0,)),
+}
+
+
+def _lint_string_in_catch_pattern(transformer, call) -> None:
+    """Warn for a ``"..."`` STRING at a descriptor position of an ISO error
+    formal inside ``error(Formal, _)`` in the catcher of a catch form
+    (``ClausalStringInCatchPatternWarning``).
+
+    Reads the SOURCE node, before the transform: the quote character comes
+    from the file's quote map, and the mode in force from the transformer --
+    only ``chars`` makes ``"..."`` a string."""
+    if transformer._double_quotes_mode != "chars":
+        return
+    func = call.func
+    if not isinstance(func, Name) or call.keywords:
+        return
+    form = _CATCH_PATTERN_FORMS.get(func.id)
+    if form is None or len(call.args) != form[0]:
+        return
+    catcher = call.args[form[1]]
+    import warnings  # noqa: PLC0415
+    for node in walk(catcher):
+        if not (isinstance(node, Call) and isinstance(node.func, Name)
+                and node.func.id == "error" and node.args):
+            continue
+        formal = node.args[0]
+        if not (isinstance(formal, Call) and isinstance(formal.func, Name)):
+            continue
+        shape = _ERROR_FORMAL_DESCRIPTORS.get(formal.func.id)
+        if shape is None or len(formal.args) != shape[0]:
+            continue
+        for position in shape[1]:
+            lit = formal.args[position]
+            if not (isinstance(lit, Constant) and type(lit.value) is str
+                    and getattr(lit, "lineno", None) is not None):
+                continue
+            if _quote_of_positioned(transformer, lit) != '"':
+                continue
+            atom = "'" + lit.value.replace("\\", "\\\\").replace("'", "\\'") + "'"
+            warnings.warn(ClausalStringInCatchPatternWarning(
+                f"{transformer._filename}:{lit.lineno}:{lit.col_offset + 1}: "
+                f"the catcher of {func.id}/{form[0]} has the string "
+                f"\"{lit.value}\" in error({formal.func.id}(...), _), which is a STRING under "
+                f"-double_quotes(chars); the engine's error terms carry ATOMS, "
+                f"so this pattern never matches the error it names and the "
+                f"error propagates past the catch. Write the atom {atom} "
+                f"instead (an atom in every -double_quotes mode)."
+            ), stacklevel=2)
 
 
 def _node_has_var_or_wildcard(node) -> bool:
@@ -2567,6 +2632,7 @@ class TermTransformer(NodeTransformer):
 
     def visit_Call(transformer, call):
         visit = transformer.visit
+        _lint_string_in_catch_pattern(transformer, call)
 
         # ``q(expr)`` is NOT special here.  It was a quasi-quotation that
         # stripped itself and lowered ``expr``; retired 2026-09-25, because a
