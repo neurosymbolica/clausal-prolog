@@ -253,3 +253,77 @@ def test_partial_lists_oracle(scryer):
     del scryer
     got = _scryer_answers("", [(r[2], r[3]) for r in PL_ROWS])
     assert got == [r[4] for r in PL_ROWS]
+
+
+# ── V2 + B4f/g/h: append/3, length/2, member/2 on OPEN lists ───────────────
+#
+# The prologue defines them by recursion on the list, so an unbound or
+# partial list is enumerated (infinitely, where the prologue is).  They used
+# to answer nothing.  ``in_/2`` is the engine's member/2, ``in_check/2`` its
+# memberchk/2.
+
+_LO_FACTS = "-allow_singletons\n-private([a, b])\n"
+
+LO_ROWS = [
+    ("append all open", "append(X, Y, Z), R is [X, Y, Z]",
+     "append(X, Y, Z), R = [X, Y, Z]", 3,
+     ["[[],_1,_1]", "[[_1],_2,[_1|_2]]", "[[_1,_2],_3,[_1,_2|_3]]"]),
+    ("append [1] L2 L3", "append([1], L2, L3), R is [L2, L3]",
+     "append([1], L2, L3), R = [L2, L3]", 3, ["[_1,[1|_1]]"]),
+    ("append X [9] Y", "append(X, [9], Y), R is [X, Y]",
+     "append(X, [9], Y), R = [X, Y]", 3,
+     ["[[],[9]]", "[[_1],[_1,9]]", "[[_1,_2],[_1,_2,9]]"]),
+    ("append partial first", "append([1, *T], [2], L), R is [T, L]",
+     "append([1|T], [2], L), R = [T, L]", 3,
+     ["[[],[1,2]]", "[[_1],[1,_1,2]]", "[[_1,_2],[1,_1,_2,2]]"]),
+    ("append open third", "append(X, Y, [1, *Z]), R is [X, Y, Z]",
+     "append(X, Y, [1|Z]), R = [X, Y, Z]", 3,
+     ["[[],[1|_1],_1]", "[[1],_1,_1]", "[[1,_1],_2,[_1|_2]]"]),
+    ("append split", "append(X, Y, [1, 2]), R is [X, Y]",
+     "append(X, Y, [1, 2]), R = [X, Y]", 5,
+     ["[[],[1,2]]", "[[1],[2]]", "[[1,2],[]]"]),
+    ("length open", "length(L, N), R is [L, N]",
+     "length(L, N), R = [L, N]", 3, ["[[],0]", "[[_],1]", "[[_,_],2]"]),
+    ("length partial", "length([a, *L], N), R is [L, N]",
+     "length([a|L], N), R = [L, N]", 3, ["[[],1]", "[[_],2]", "[[_,_],3]"]),
+    ("length partial fixed", "length([a, b, *T], 3), R is T",
+     "length([a, b|T], 3), R = T", 3, ["[_]"]),
+    ("length partial too short", "length([a, b, *T], 1), R is T",
+     "length([a, b|T], 1), R = T", 3, []),
+    ("length negative", "length(L, -1), R is L",
+     "length(L, -1), R = L", 3,
+     ["error(domain_error(not_less_than_zero,-1),length/2)"]),
+    ("length non-integer", "length([a], 'b'), R is 1",
+     "length([a], b), R = 1", 3, ["error(type_error(integer,b),length/2)"]),
+    ("length self", "length(L, L), R is L", "length(L, L), R = L", 3,
+     ["error(resource_error(finite_memory),length/2)"]),
+    ("member 1 open", "in_(1, L), R is L", "member(1, L), R = L", 3,
+     ["[1|_]", "[_,1|_]", "[_,_,1|_]"]),
+    ("member X open", "in_(X, L), R is [X, L]", "member(X, L), R = [X, L]", 3,
+     ["[_1,[_1|_]]", "[_1,[_,_1|_]]", "[_1,[_,_,_1|_]]"]),
+    ("member partial", "in_(X, ['a', *L]), R is [X, L]",
+     "member(X, [a|L]), R = [X, L]", 3,
+     ["[a,_]", "[_1,[_1|_]]", "[_1,[_,_1|_]]"]),
+    ("memberchk open", "in_check(1, L), R is L", "memberchk(1, L), R = L", 3,
+     ["[1|_]"]),
+    ("memberchk partial", "in_check(X, ['a', *L]), R is [X, L]",
+     "memberchk(X, [a|L]), R = [X, L]", 3, ["[a,_]"]),
+]
+
+
+@pytest.fixture(scope="module")
+def lo_mod(tmp_path_factory):
+    return _load_seam(tmp_path_factory.mktemp("lo"), "_iso_ans_lo",
+                      _LO_FACTS, LO_ROWS)
+
+
+@pytest.mark.parametrize("i", range(len(LO_ROWS)), ids=[r[0] for r in LO_ROWS])
+def test_open_lists_engine(lo_mod, i):
+    assert _engine_answers(lo_mod, f"r{i}", LO_ROWS[i][3]) == LO_ROWS[i][4]
+
+
+def test_open_lists_oracle(scryer):
+    del scryer
+    got = _scryer_answers("", [(r[2], r[3]) for r in LO_ROWS])
+    assert got == [r[4] for r in LO_ROWS]
+

@@ -48,8 +48,10 @@ list_sum([X, *XS], TOTAL) <- (
 
 ### in_/2
 
-`in_(Elem, List)` — the membership relation. Holds for each element in `List`
-on backtracking.
+`in_(Elem, List)` — the membership relation (ISO's `member/2`). Holds for
+each element in `List` on backtracking. On an open list it goes on, as the
+prologue's member/2 does: `in_(1, L)` answers `L = [1, *_]`;
+`L = [_, 1, *_]`; ... without end, and `in_check(1, L)` answers the first.
 
 ```clausal
 test("member") <- in_(2, [1, 2, 3])
@@ -73,11 +75,12 @@ test("check") <- in_check('b', ['a', 'b', 'c'])
 ### append/3
 
 `append(L1, L2, L3)` — relates three lists such that `L3` is `L1` followed by
-`L2`. Works in the three modes shown below — concatenation (`L1`, `L2`
-bound), splitting a bound `L3`, and extracting the remainder from a bound
-`L1` and `L3`. (Open partial-list mode — `L1` bound with `L2` and `L3`
-unbound — is not supported: `append([1], L2, L3)` **fails** without an error,
-where ISO Prolog would answer `L3 = [1|L2]`.)
+`L2`. Works in every mode, as the ISO prologue's definition does:
+concatenation (`L1`, `L2` bound), splitting a bound `L3`, extracting the
+remainder from a bound `L1` and `L3`, and the open modes --
+`append([1], L2, L3)` answers `L3 = [1, *L2]`, and with `L1` open and `L3`
+not a proper list, `append(X, Y, Z)` enumerates `X = [], Z = Y`;
+`X = [_A], Z = [_A, *Y]`; ... without end.
 
 ```clausal
 # Concatenate
@@ -121,7 +124,11 @@ test("zip") <- zip_([1, 2, 3], ['a', 'b', 'c'], [[1, 'a'], [2, 'b'], [3, 'c']])
 ### length/2
 
 `length(List, N)` — relates a list to its length. Can also generate a list of
-`N` fresh variables.
+`N` fresh variables, and with both open it enumerates, as ISO's prologue
+does: `length(L, N)` answers `L = [], N = 0`; `L = [_], N = 1`; ... without
+end (`length([a, *T], N)` likewise from `N = 1`). A non-integer `N` is
+`type_error(integer, N)`, a negative one
+`domain_error(not_less_than_zero, N)`.
 
 ```clausal
 test("length") <- length([10, 20, 30], 3)

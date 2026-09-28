@@ -149,6 +149,59 @@ def _seq_result(items, was_string, was_bytes=False):
     return items
 
 
+# ── Open lists: the prologue definitions' other modes ───────────────────────
+#
+# ISO's prologue defines append/3, length/2 and member/2 by recursion on the
+# list, so an OPEN list -- an unbound variable, or a partial list ``[a, *T]``
+# -- is enumerated: ``length(L, N)`` answers ``L = [], N = 0; L = [_], N = 1;
+# ...``, ``append(X, Y, Z)`` answers ``X = [], Z = Y; X = [_A], Z = [_A|Y];
+# ...``.  These builtins used to answer nothing there.  The helpers below give
+# the open cases the prologue's answers, in the prologue's order; the proper-
+# list modes keep their fast paths above them.
+
+
+def _open_skeleton(val):
+    """``(prefix, tail)`` for an OPEN list *val* (dereferenced): its known
+    leading elements and the unbound variable standing for the rest -- an
+    unbound variable is ``([], val)``, ``[a, b, *T]`` is ``([a, b], T)``.
+    None for anything else: a proper list, a non-list, or a SegList whose
+    holes are not all at the end (``[*A, 1]``)."""
+    if is_var(val):
+        return [], val
+    from clausal.terms import SegList, ConcreteSeg, VarSeg   # noqa: PLC0415
+    if not isinstance(val, SegList):
+        return None
+    walked = val._walk_raw()
+    if not isinstance(walked, SegList):
+        return None
+    segs = walked.segments
+    if not segs or not isinstance(segs[-1], VarSeg):
+        return None
+    prefix: list = []
+    for seg in segs[:-1]:
+        if not isinstance(seg, ConcreteSeg):
+            return None
+        prefix.extend(seg.elements)
+    tail = deref(segs[-1].var)
+    if not is_var(tail):
+        return None
+    return prefix, tail
+
+
+def _partial(prefix: list, tail):
+    """The list ``[*prefix, *tail]``: *tail* itself when *prefix* is empty,
+    a plain list when *tail* is ``[]``, else a partial list."""
+    from clausal.terms import SegList, ConcreteSeg, VarSeg   # noqa: PLC0415
+    if not prefix:
+        return tail
+    tail = deref(tail)
+    if isinstance(tail, list):
+        return prefix + tail
+    if isinstance(tail, SegList):
+        return SegList([ConcreteSeg(list(prefix)), *tail.segments])
+    return SegList([ConcreteSeg(list(prefix)), VarSeg(tail)])
+
+
 @_trampoline_builtin("in_", 2)
 def _member__2(this_generator, _proceed, _fail, _catcher, elem, lst, trail):
     """member(Elem, List) — Elem is a member of List; enumerates on backtrack.
@@ -176,7 +229,30 @@ def _member__2(this_generator, _proceed, _fail, _catcher, elem, lst, trail):
                 if unify(elem, item, trail):
                     yield (_proceed, None)
                 trail.undo(mark)
+    else:
+        skel = _open_skeleton(lst_val)
+        if skel is not None:
+            yield from _member_open(skel, elem, trail, _proceed)
     yield (_fail, DONE)
+
+
+def _member_open(skel, elem, trail, _proceed):
+    """member/2 on an OPEN list, as the prologue's recursion answers: each
+    known element in turn, then ``Tail = [Elem|_]``, ``Tail = [_, Elem|_]``,
+    ... without end."""
+    prefix, tail = skel
+    for item in prefix:
+        mark = trail.mark()
+        if unify(elem, item, trail):
+            yield (_proceed, None)
+        trail.undo(mark)
+    k = 0
+    while True:
+        mark = trail.mark()
+        if unify(tail, _partial([Var() for _ in range(k)] + [elem], Var()), trail):
+            yield (_proceed, None)
+        trail.undo(mark)
+        k += 1
 
 
 @_trampoline_builtin("in_check", 2)
@@ -202,6 +278,17 @@ def _memberchk__2(this_generator, _proceed, _fail, _catcher, elem, lst, trail):
                     yield (_fail, DONE)
                     return
                 trail.undo(mark)
+    else:
+        # An OPEN list: the first answer member/2 gives (the prologue's
+        # memberchk is once(member)) -- a known element, else the tail
+        # becomes ``[Elem|_]``.
+        skel = _open_skeleton(lst_val)
+        if skel is not None:
+            for step in _member_open(skel, elem, trail, _proceed):
+                yield step
+                break
+            yield (_fail, DONE)
+            return
     yield (_fail, DONE)
 
 
@@ -294,6 +381,34 @@ def _append__3(this_generator, _proceed, _fail, _catcher, l1, l2, l3, trail):
                 if unify(l1, prefix, trail) and unify(l2, suffix, trail):
                     yield (_proceed, None)
                 trail.undo(mark)
+    elif l1_items is not None:
+        # L1 proper, L2 and L3 open: L3 is L1 followed by L2 -- one answer,
+        # ``append([1], L2, L3)`` is ``L3 = [1|L2]``.
+        rest = l2_val if (is_var(l2_val) or _open_skeleton(l2_val) is not None) else None
+        if rest is not None:
+            mark = trail.mark()
+            if unify(l3, _partial(list(l1_items), rest), trail):
+                yield (_proceed, None)
+            trail.undo(mark)
+    else:
+        # L1 open and L3 not a proper list: the prologue enumerates L1's
+        # length, ``X = [], Z = Y; X = [_A], Z = [_A|Y]; ...``, without end
+        # (as in ISO).  L2 must be a list or an open one.
+        skel = _open_skeleton(l1_val)
+        l2_ok = l2_items is not None or is_var(l2_val) or _open_skeleton(l2_val) is not None
+        l3_ok = is_var(l3_val) or _open_skeleton(l3_val) is not None
+        if skel is not None and l2_ok and l3_ok:
+            prefix, tail = skel
+            rest = l2_items if l2_items is not None else l2_val
+            k = 0
+            while True:
+                fresh = [Var() for _ in range(k)]
+                mark = trail.mark()
+                if (unify(tail, fresh, trail)
+                        and unify(l3, _partial(prefix + fresh, rest), trail)):
+                    yield (_proceed, None)
+                trail.undo(mark)
+                k += 1
     yield (_fail, DONE)
 
 
@@ -306,19 +421,51 @@ def _length__2(this_generator, _proceed, _fail, _catcher, lst, n, trail):
     """
     lst_val = deref(lst)
     n_val = deref(n)
+    if not is_var(n_val) and not isinstance(n_val, bool):
+        # The prologue's errors (Scryer too): an integer length or none.
+        if not _is_int(n_val):
+            from clausal.logic.exceptions import LogicException, type_error  # noqa: PLC0415
+            raise LogicException(type_error("integer", n_val, "length/2"))
+        if n_val < 0:
+            from clausal.logic.exceptions import LogicException, domain_error  # noqa: PLC0415
+            raise LogicException(domain_error("not_less_than_zero", n_val, "length/2"))
     items = _as_items(lst_val)
     if items is not None:
         mark = trail.mark()
         if unify(n, len(items), trail):
             yield (_proceed, None)
         trail.undo(mark)
-    elif not is_var(n_val) and _is_int(n_val) and n_val >= 0:
-        result = [Var() for _ in range(n_val)]
+        yield (_fail, DONE)
+        return
+    skel = _open_skeleton(lst_val)
+    if skel is None:
+        yield (_fail, DONE)
+        return
+    prefix, tail = skel
+    if not is_var(n_val):
+        # ``length([a, *T], 3)``: T is two fresh elements (bool: no length).
+        if _is_int(n_val) and n_val >= len(prefix):
+            mark = trail.mark()
+            if unify(tail, [Var() for _ in range(n_val - len(prefix))], trail):
+                yield (_proceed, None)
+            trail.undo(mark)
+        yield (_fail, DONE)
+        return
+    if n_val is tail:
+        # ``length(L, L)``: no finite answer exists (Scryer's resource error).
+        from clausal.logic.exceptions import LogicException, _error  # noqa: PLC0415
+        from clausal.logic.atoms import mint  # noqa: PLC0415
+        raise LogicException(_error(("resource_error", mint("finite_memory")),
+                                    "length/2"))
+    # Both open: enumerate the length, ``L = [], N = 0; L = [_], N = 1; ...``
+    k = 0
+    while True:
         mark = trail.mark()
-        if unify(lst, result, trail):
+        if (unify(tail, [Var() for _ in range(k)], trail)
+                and unify(n, len(prefix) + k, trail)):
             yield (_proceed, None)
         trail.undo(mark)
-    yield (_fail, DONE)
+        k += 1
 
 
 @_trampoline_builtin("last", 2)

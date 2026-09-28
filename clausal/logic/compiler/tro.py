@@ -370,7 +370,8 @@ def _is_deterministic_goal(goal: Any) -> bool:
 # Builtins known to produce at most one solution (semidet / det).
 _DETERMINISTIC_BUILTINS: frozenset[tuple[str, int]] = frozenset({
     # list builtins (lists.py)
-    ("length", 2), ("last", 2), ("reverse", 2), ("flatten", 2),
+    # (length/2 is not here: with an open list it enumerates.)
+    ("last", 2), ("reverse", 2), ("flatten", 2),
     ("msort", 2), ("sort", 2), ("sum_list", 2), ("max_list", 2),
     ("min_list", 2), ("take", 3), ("drop", 3), ("split_at", 4),
     ("zip_", 3), ("replicate", 3),
