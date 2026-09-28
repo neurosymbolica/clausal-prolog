@@ -337,7 +337,8 @@ def _if(test: ast.expr, body: list[ast.stmt]) -> ast.If:
     )
 
 
-def _in_iter_expr(elem: Any, coll_expr: ast.expr) -> ast.expr:
+def _in_iter_expr(elem: Any, coll_expr: ast.expr,
+                  trail_expr: "ast.expr | None" = None) -> ast.expr:
     """Build the iterator expression for an ``in`` goal.
 
     Always ``_in_iter(deref(coll), <pair_mode>)``; *elem* being a TupleLiteral
@@ -352,8 +353,10 @@ def _in_iter_expr(elem: Any, coll_expr: ast.expr) -> ast.expr:
     ``_in_iter``'s other term-level readings, notably THE FLIP's char atoms
     for a ``str`` collection — apply to both.
     """
-    return _call(
-        _name("$in_iter"),
-        _call(_name("$deref"), coll_expr),
-        _locate(ast.Constant(value=isinstance(elem, TupleLiteral))),
-    )
+    args = [_call(_name("$deref"), coll_expr),
+            _locate(ast.Constant(value=isinstance(elem, TupleLiteral)))]
+    if trail_expr is not None:
+        # the positive ``in`` goal: an OPEN list enumerates member/2's
+        # candidates, binding (and undoing) the tail through this trail
+        args.append(trail_expr)
+    return _call(_name("$in_iter"), *args)

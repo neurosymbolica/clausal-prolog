@@ -1,5 +1,5 @@
 """Higher-order builtins: call_goal/1..8, call/1..8, maplist/2,3,
-include/3, exclude/3, partition/4, tfilter/3, tpartition/4, foldl/4,
+include/3, exclude/3, partition/4, tfilter/3, tpartition/4, foldl/4,5,6,
 take_while/3, drop_while/3, span/4, group_by/3, sort_by/3,
 max_by/3, min_by/3, filter_map/3."""
 
@@ -12,7 +12,7 @@ from clausal.logic.exceptions import (
 )
 from clausal.logic.meta_predicate import is_goal_object as _is_goal_object
 from clausal.logic.trampoline import DONE, StepGenerator
-from clausal.logic.builtins.lists import _as_items, _open_skeleton, _seq_result, _was_string
+from clausal.logic.builtins.lists import _as_items, _open_skeleton, _partial, _seq_result, _was_string
 from clausal.logic.builtins._helpers import _is_empty_list, _standard_order_key
 from clausal.logic.predicate import (
     _dispatch_at, _refuse_unqualified_other_arity,
@@ -38,6 +38,7 @@ from clausal.logic.builtins.call_body import (
     non_callable_goal_error, iso_control_cell_dispatch, folded_existence_error,
     needs_meta_call, MetaCallGoal,
 )
+from clausal.pythonic_ast.nodes import BitXor as _BitXor
 
 
 # ── call_goal/1,2,3 — invoke a goal closure (V2-9 lambdas) ──────────────────
@@ -527,6 +528,14 @@ def _make_call_goal_factory(extra_n: int):
                 from clausal.logic.exceptions import instantiation_error  # noqa: PLC0415
                 raise LogicException(instantiation_error(
                     f"call/{extra_n + 1}: the goal is unbound"))
+            if type(goal_val) is _BitXor:
+                # ``call(Y^G)``: ``^`` is a goal only inside bagof/setof's
+                # iterated goal (ISO 7.1.1.4); anywhere else it is the
+                # procedure (^)/2, which does not exist (Scryer:
+                # existence_error(procedure, (^)/2); with extras the fold's
+                # (^)/3 ...).  It used to be type_error(callable).
+                raise LogicException(folded_existence_error(
+                    "^", 2 + extra_n, f"call/{extra_n + 1}"))
             # A BODY term (conjunction, or, not, if_, a comparison ...) is
             # interpreted by ``_resolve_named_goal`` -- see ``call_body``.
             # Checked first: its nodes are Python-``callable`` and would
@@ -635,6 +644,128 @@ def _maplist_drive(this_generator, _proceed, dispatch, args_for, n, trail,
                                    this_generator, *args_for(len(stack)), trail))
 
 
+# ── Open lists: the prologue's recursion, clause by clause ──────────────────
+#
+# ``maplist(G, [], ...)`` and ``maplist(G, [X|Xs], ...)`` (likewise foldl/4-6)
+# are tried in that order at every position, so an unbound or partial list
+# argument enumerates as in Scryer: ``maplist(p, L)`` answers ``L = []``, then
+# ``L = [1]``, ``L = [1, 1]``, ... depth first, without end.  A list argument
+# is followed as ``(items, index, tail)``: its known elements, and the
+# unbound variable (or None: the proper end) after them.  A goal may bind a
+# tail as it runs, so each position re-reads the tail it reaches.
+
+
+def _list_state(term):
+    """``(items, 0, tail)`` for a proper or open list, else None."""
+    d = deref(term)
+    items = _as_items(d)
+    if items is not None:
+        return items, 0, None
+    skel = _open_skeleton(d)
+    if skel is None:
+        return None
+    return skel[0], 0, skel[1]
+
+
+def _settle(st):
+    """*st* with a bound tail it has reached read on, else None (not a list)."""
+    items, i, tail = st
+    while i >= len(items) and tail is not None:
+        t = deref(tail)
+        if is_var(t):
+            return items, i, t
+        st = _list_state(t)
+        if st is None:
+            return None
+        items, i, tail = st
+    return items, i, tail
+
+
+def _open_lists_drive(this_generator, _proceed, dispatch, lists, call_args,
+                      trail, finish=None):
+    """Yield the trampoline steps of the prologue's recursion over *lists*
+    (proper or open): at each position first "every list ends here" (then
+    ``finish(depth)``, under its own trail mark, and an answer), then "every
+    list has one more element" and ``call(G, *call_args(depth, heads))``,
+    re-asking the deepest call on backtracking.  *call_args* runs under the
+    position's trail mark and may answer None: the clause's head does not
+    unify there."""
+    states = []
+    for t in lists:
+        st = _list_state(t)
+        if st is None:
+            return
+        states.append(st)
+    outer = trail.mark()
+    closed = {len(items) for items, _i, tail in states if tail is None}
+    if closed:
+        # A proper list fixes the length, so every open one is that long:
+        # bind it to a plain list now (the recursion's own head unifications,
+        # done up front; the answers and their order are the same, and they
+        # read back as plain lists rather than a chain of partial ones).
+        if len(closed) > 1:
+            return
+        n = closed.pop()
+        for k, (items, _i, tail) in enumerate(states):
+            if tail is not None:
+                if len(items) > n or not unify(
+                        tail, [Var() for _ in range(n - len(items))], trail):
+                    trail.undo(outer)
+                    return
+                states[k] = (list(items) + deref(tail), 0, None)
+    stack = []                       # (step generator, trail mark, next states)
+    while True:
+        states = [_settle(st) for st in states] if states is not None else None
+        if states is not None and None in states:
+            states = None
+        if states is not None:
+            # clause 1: all lists end at this position
+            mark = trail.mark()
+            ok = True
+            for items, i, tail in states:
+                if i < len(items) or (tail is not None
+                                      and not unify(tail, [], trail)):
+                    ok = False
+                    break
+            if ok and (finish is None or finish(len(stack))):
+                yield (_proceed, None)
+            trail.undo(mark)
+            # clause 2: all lists have one more element
+            mark = trail.mark()
+            heads, nxt = [], []
+            for items, i, tail in states:
+                if i < len(items):
+                    heads.append(deref(items[i]))
+                    nxt.append((items, i + 1, tail))
+                elif tail is None:
+                    heads = None
+                    break
+                else:
+                    h, t = Var(), Var()
+                    if not unify(tail, _partial([h], t), trail):
+                        heads = None
+                        break
+                    heads.append(h)
+                    nxt.append(((), 0, t))
+            args = None if heads is None else call_args(len(stack), heads)
+            if args is not None:
+                stack.append((StepGenerator(
+                    dispatch, this_generator, this_generator, this_generator,
+                    *args, trail), mark, nxt))
+            else:
+                trail.undo(mark)
+        # the next solution of the deepest call
+        while stack:
+            _st = yield (stack[-1][0], None)
+            if _st is not DONE:
+                break
+            trail.undo(stack.pop()[1])
+        if not stack:
+            trail.undo(outer)
+            return
+        states = stack[-1][2]
+
+
 @_trampoline_builtin("maplist", 2)
 def _map_list__2(this_generator, _proceed, _fail, _catcher, goal, lst, trail):
     """map_list(Goal, List) — Goal(Elem) succeeds for each element; every
@@ -642,7 +773,15 @@ def _map_list__2(this_generator, _proceed, _fail, _catcher, goal, lst, trail):
     lst_val = deref(lst)
     goal_val = deref(goal)
     items = _as_items(lst_val)
-    if items is None or not _is_goal(goal_val):
+    if not _is_goal(goal_val):
+        yield (_fail, DONE)
+        return
+    if items is None:
+        # an OPEN list enumerates, as the prologue's recursion does
+        if _open_skeleton(lst_val) is not None:
+            dispatch = _ensure_trampoline_dispatch(goal_val, 1)
+            yield from _open_lists_drive(this_generator, _proceed, dispatch,
+                                         [lst_val], lambda _i, hs: hs, trail)
         yield (_fail, DONE)
         return
     dispatch = _ensure_trampoline_dispatch(goal_val, 1)
@@ -668,7 +807,16 @@ def _map_list__3(this_generator, _proceed, _fail, _catcher, goal, xs, ys, trail)
     xs_val = deref(xs)
     goal_val = deref(goal)
     xs_items = _as_items(xs_val)
-    if xs_items is None or not _is_goal(goal_val):
+    if not _is_goal(goal_val):
+        yield (_fail, DONE)
+        return
+    if xs_items is None:
+        # an OPEN Xs: the prologue's recursion over both lists (a proper Ys
+        # bounds it)
+        if _open_skeleton(xs_val) is not None:
+            dispatch = _ensure_trampoline_dispatch(goal_val, 2)
+            yield from _open_lists_drive(this_generator, _proceed, dispatch,
+                                         [xs_val, ys], lambda _i, hs: hs, trail)
         yield (_fail, DONE)
         return
     was_str = _was_string(xs_val)   # stage 1: str, carrier or ground SegString
@@ -769,31 +917,62 @@ def _exclude__3(this_generator, _proceed, _fail, _catcher, goal, lst, excluded, 
     yield (_fail, DONE)
 
 
+def _foldl(this_generator, _proceed, _fail, goal, lists, v0, v, trail):
+    """foldl/4-6 as the prologue defines them (Scryer's library(lists))::
+
+        foldl(G, [X|Xs], A0, A) :- call(G, X, A0, A1), foldl(G, Xs, A1, A).
+
+    EVERY solution of each call is an answer on backtracking, as maplist's
+    (operator ruling R5/R6, 2026-09-28) -- foldl used to commit to each
+    call's first solution.  Proper lists of one length take the stack
+    driver maplist uses; an open list (or lists that must be built)
+    enumerates through :func:`_open_lists_drive`."""
+    goal_val = deref(goal)
+    if not _is_goal(goal_val):
+        yield (_fail, DONE)
+        return
+    dispatch = _ensure_trampoline_dispatch(goal_val, len(lists) + 2)
+    accs = [v0]
+
+    def call_args(i, heads):
+        del accs[i + 1:]
+        nxt = Var()
+        accs.append(nxt)
+        return (*heads, accs[i], nxt)
+
+    items = [_as_items(deref(t)) for t in lists]
+    outer_mark = trail.mark()
+    if all(it is not None for it in items) and len({len(it) for it in items}) == 1:
+        n = len(items[0])
+        accs.extend(Var() for _ in range(n))
+        yield from _maplist_drive(
+            this_generator, _proceed, dispatch,
+            lambda i: (*(deref(it[i]) for it in items), accs[i], accs[i + 1]),
+            n, trail, finish=lambda: unify(v, accs[n], trail))
+    else:
+        yield from _open_lists_drive(
+            this_generator, _proceed, dispatch, lists, call_args, trail,
+            finish=lambda i: unify(v, accs[i], trail))
+    trail.undo(outer_mark)
+    yield (_fail, DONE)
+
+
 @_trampoline_builtin("foldl", 4)
 def _foldl__4(this_generator, _proceed, _fail, _catcher, goal, lst, v0, v, trail):
     """foldl(Goal, List, V0, V) — left fold with Goal(Elem, Acc0, Acc1)."""
-    lst_val = deref(lst)
-    goal_val = deref(goal)
-    items = _as_items(lst_val)
-    if items is None or not _is_goal(goal_val):
-        yield (_fail, DONE)
-        return
-    dispatch = _ensure_trampoline_dispatch(goal_val, 3)
-    outer_mark = trail.mark()
-    acc = v0
-    for elem in items:
-        next_acc = Var()
-        sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, deref(elem), deref(acc), next_acc, trail)
-        _st = yield (sg, None)
-        if _st is DONE:
-            trail.undo(outer_mark)
-            yield (_fail, DONE)
-            return
-        acc = next_acc
-    if unify(v, deref(acc), trail):
-        yield (_proceed, None)
-    trail.undo(outer_mark)
-    yield (_fail, DONE)
+    yield from _foldl(this_generator, _proceed, _fail, goal, [lst], v0, v, trail)
+
+
+@_trampoline_builtin("foldl", 5)
+def _foldl__5(this_generator, _proceed, _fail, _catcher, goal, xs, ys, v0, v, trail):
+    """foldl(Goal, Xs, Ys, V0, V) — Goal(X, Y, Acc0, Acc1) over two lists."""
+    yield from _foldl(this_generator, _proceed, _fail, goal, [xs, ys], v0, v, trail)
+
+
+@_trampoline_builtin("foldl", 6)
+def _foldl__6(this_generator, _proceed, _fail, _catcher, goal, xs, ys, zs, v0, v, trail):
+    """foldl(Goal, Xs, Ys, Zs, V0, V) — Goal(X, Y, Z, Acc0, Acc1) over three lists."""
+    yield from _foldl(this_generator, _proceed, _fail, goal, [xs, ys, zs], v0, v, trail)
 
 
 # ── V3-5: Extended higher-order list predicates ──────────────────────────────
@@ -1249,7 +1428,7 @@ def _tpartition__4(this_generator, _proceed, _fail, _catcher, goal, lst, include
 
 _GOAL_FIRST_LIST_BUILTINS = (
     ("maplist", 2), ("maplist", 3), ("include", 3), ("exclude", 3),
-    ("foldl", 4), ("take_while", 3), ("drop_while", 3), ("span", 4),
+    ("foldl", 4), ("foldl", 5), ("foldl", 6), ("take_while", 3), ("drop_while", 3), ("span", 4),
     ("group_by", 3), ("sort_by", 3), ("max_by", 3), ("min_by", 3),
     ("filter_map", 3), ("partition", 4), ("tfilter", 3), ("tpartition", 4),
 )

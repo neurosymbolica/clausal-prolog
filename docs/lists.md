@@ -52,6 +52,8 @@ list_sum([X, *XS], TOTAL) <- (
 each element in `List` on backtracking. On an open list it goes on, as the
 prologue's member/2 does: `in_(1, L)` answers `L = [1, *_]`;
 `L = [_, 1, *_]`; ... without end, and `in_check(1, L)` answers the first.
+The `X in L` goal is the same relation, open lists included; `X not in L`
+fails for an open `L` (some extension always holds `X`).
 
 ```clausal
 test("member") <- in_(2, [1, 2, 3])

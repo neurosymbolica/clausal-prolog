@@ -548,7 +548,7 @@ def _lower_shared_body(
             fast = _const_set_prologue(ctx, elem, collection)
             elem_expr = term_to_ast_expr(elem, var_context, eval_arith=False)
             coll_expr = term_to_ast_expr(collection, var_context, eval_arith=False)
-            iter_expr = _in_iter_expr(elem, coll_expr)
+            iter_expr = _in_iter_expr(elem, coll_expr, _name(trail_name))
             prologue: list[ast.stmt] = []
             if fast is not None:
                 # Feed the *same* loop a one- or zero-element tuple instead of
