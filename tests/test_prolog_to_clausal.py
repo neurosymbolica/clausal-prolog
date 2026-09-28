@@ -202,7 +202,9 @@ reach(X, Y) :- edge(X, Z), reach(Z, Y).
         # nv
         src = "test :- X \\= foo."
         result = prolog_to_clausal(src)
-        assert "X is not foo" in result
+        # ISO 8.2.3 "not unifiable" -- a test, not the delayed dif/2 that
+        # ``X is not foo`` spells.
+        assert "'\\\\='(X, foo)" in result
 
     def test_comparison_leq(self):
         # nv
@@ -241,7 +243,8 @@ reach(X, Y) :- edge(X, Z), reach(Z, Y).
         # nv
         src = "test :- X \\== 1."
         result = prolog_to_clausal(src)
-        assert "X != 1" in result
+        # ISO 8.4.1 term non-identity -- not the CLP disequality ``!=``.
+        assert "'\\\\=='(X, 1)" in result
 
     def test_disjunction(self):
         # nv

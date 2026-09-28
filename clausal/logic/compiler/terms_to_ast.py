@@ -490,7 +490,7 @@ def evaluable_functor_signature(
 ) -> "tuple[str, tuple[str, ...]] | None":
     """``(name, fields)`` when *name* is a functor of the closed evaluable
     table (``clausal.logic.exact_arith.EVALUABLE``: ``+ - * / // div mod **
-    ^ rdiv``) -- else None.
+    ^ rdiv abs min max``) -- else None.
 
     Ruling Q16 (2026-09-28): "they are builtins really".  Like a builtin
     predicate's name, an evaluable functor is in scope in EVERY module, with

@@ -581,8 +581,14 @@ class TestCToolkitGuards:
             _head_list_unify_input, _head_list_unify_output)
         from clausal.terms import SegList, ConcreteSeg, VarSeg, SegString
 
+        import re as _re
+
         def snap(vs):
-            return ["VAR" if is_var(deref(v)) else repr(deref(v)) for v in vs]
+            # A bound value may hold FRESH variables (an open SegList target
+            # binds the star to ``[1, *_]``); their ids differ between the C
+            # and the Python run, so they are compared by position only.
+            return ["VAR" if is_var(deref(v))
+                    else _re.sub(r"_\d+", "_", repr(deref(v))) for v in vs]
 
         def make_target(kind):
             return {

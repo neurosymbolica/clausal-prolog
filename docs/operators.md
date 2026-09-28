@@ -69,8 +69,8 @@ A non-arithmetic term in an arithmetic constraint raises Scryer's clpz error
 
 ## Writing a quoted arithmetic cell
 
-The functors of the evaluable table (`+ - * / // div mod ** ^ rdiv` and unary
-`-`) are builtins: they are in scope in every module, strict or not, with no
+The functors of the evaluable table (`+ - * / // div mod ** ^ rdiv abs min
+max` and unary `-`) are builtins: they are in scope in every module, strict or not, with no
 declaration, so `rdiv(7, 2)`, `'//'(A, B)` and `'^'(2, 3)` are written as they
 are in Prolog. As data, in a fact or a clause head, they are ordinary terms
 (`f(rdiv(1, 2))` holds the term `rdiv(1, 2)`); they are evaluated only where

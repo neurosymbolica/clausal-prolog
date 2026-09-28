@@ -195,14 +195,15 @@ class TestFindDestructiveReuseGoals:
         assert 2 not in eligible
 
     def test_deterministic_builtin_prefix_eligible(self):
-        """Known-deterministic builtins (length, dict_get, etc.) allow DR."""
+        """Known-deterministic builtins (sum_list, dict_get, etc.) allow DR.
+        (length/2 is no longer one: with an open list it enumerates.)"""
         # nv
         T, Len, Out = Var(), Var(), Var()
         head = ("process", Out)
         body = [
             Evaluate(left=T, right=[1, 2, 3]),
-            # length/2 is known deterministic — should NOT block DR
-            Call(func=LoadName(name="length"), args=[T, Len], kwargs=[]),
+            # sum_list/2 is known deterministic — should NOT block DR
+            Call(func=LoadName(name="sum_list"), args=[T, Len], kwargs=[]),
             self._append_call(T, [4], Out),
         ]
         clause = Clause(head=head, body=body)

@@ -381,6 +381,24 @@ def _when_condition(conv, raw):
     return conv.arg(t)
 
 
+def _iterated_goal(conv, raw):
+    """bagof/setof's goal argument: its leading ``V^`` prefixes (ISO
+    7.1.1.4, the iterated goal term) -- a ``^`` operator node or a ``'^'``
+    cell -- rebuilt as the ``^`` node the compiler strips, around ``call/1``
+    of the goal they quantify.  ``call/1`` of a ``V^G`` term itself is no
+    goal (Scryer: existence_error for ``(^)/2``); only these two forms
+    read the prefix."""
+    t = deref(raw)
+    if type(t) is nodes.BitXor:
+        return nodes.BitXor(left=conv.arg(t.left),
+                            right=_iterated_goal(conv, t.right))
+    is_cell, functor = compound_cell_shape(t)
+    if is_cell and functor == "^" and len(t) == 3:
+        return nodes.BitXor(left=conv.arg(t[1]),
+                            right=_iterated_goal(conv, t[2]))
+    return conv._call_leaf(t)
+
+
 def special_form_dispatch(db, folded, context: str):
     """``(dispatch, [])`` running the special-form goal *folded* -- a cell
     ``(name, A1 ... An)`` or, for ``halt/0``, the atom -- in *db*'s module,
@@ -393,7 +411,9 @@ def special_form_dispatch(db, folded, context: str):
     conv = _Converter(db)
     built = []
     for role, a in zip(roles, args):
-        if role == "G":
+        if role == "G" and functor in ("bagof", "setof"):
+            built.append(_iterated_goal(conv, a))
+        elif role == "G":
             built.append(conv._call_leaf(deref(a)))
         elif role == "W":
             built.append(_when_condition(conv, a))

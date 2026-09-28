@@ -469,8 +469,9 @@ class TestF002ListDispatchFallthrough:
         R = Var()
         assert collect(mod, "ld2", b"ab", R, outv=[R]) == [(mint("cons2"),), (mint("any2"),)]
 
-    @pytest.mark.xfail(strict=False, reason="A02-F002: non-ground SegList vs cons head needs SegList-vs-partial-pattern unify, blocked on F030 (Phase 6). The else-arm fix routes it to the var clause (any2); cons2 requires destructuring [1,*A] against [LH,*LT], which _head_list_unify_input returns False for by design.")
     def test_seglist_caller(self, mod):
+        # A02-F002: an open SegList [1, *A] destructures against a cons head
+        # [LH, *LT] since F030 (two open partial lists unify).
         A, R = Var(), Var()
         sl = SegList([ConcreteSeg([1]), VarSeg(A)])
         assert collect(mod, "ld2", sl, R, outv=[R]) == [(mint("cons2"),), (mint("any2"),)]

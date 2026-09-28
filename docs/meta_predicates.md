@@ -27,13 +27,20 @@ If Goal has no solutions, Bag is unified with `[]`.
 
 ### bagof/3
 
-`bagof(Template, Goal, Bag)` — like findall, but **fails** if Goal has no solutions (findall returns `[]` instead).
+`bagof(Template, Goal, Bag)` — like findall, but **fails** if Goal has no
+solutions (findall returns `[]` instead), and it collects one bag per binding
+of the goal's **free variables**: the variables of `Goal` that are neither in
+`Template` nor marked existential with `Var ^ Goal`. It backtracks over the
+bags in the standard order of those bindings, as ISO specifies and Scryer
+does. With no free variables it is findall that fails on empty.
 
 ```clausal
 adults(PEOPLE, ADULTS) <- (
-    bagof(P, (in_(P, PEOPLE), age(P, A), A >= 18), ADULTS)
+    bagof(P, A ^ (in_(P, PEOPLE), age(P, A), A >= 18), ADULTS)
 )
 ```
+
+Without the `A ^`, `A` is free and `adults` would answer one bag per age.
 
 #### bagof vs findall
 
@@ -44,7 +51,7 @@ age('alice', 30),
 age('bob', 25),
 age('carol', 30),
 
-all_people(PEOPLE) <- bagof(NAME, age(NAME, _), PEOPLE)
+all_people(PEOPLE) <- bagof(NAME, AGE ^ age(NAME, AGE), PEOPLE)
 
 test("bag of people") <- (
     all_people(PEOPLE),
@@ -54,18 +61,26 @@ test("bag of people") <- (
 
 Use bagof when you want failure on empty results, findall when you always want a list.
 
-!!! warning "No free-variable grouping (differs from ISO)"
-    ISO `bagof/3` and `setof/3` backtrack over the bindings of the goal's
-    *free* variables, one solution per group, and `V^Goal` marks a variable as
-    existentially quantified. Clausal's do not group: `bagof(N, age(N, A), L)`
-    above has the single answer `L = ['alice', 'bob', 'carol']` with `A`
-    left unbound, and `A ^ age(N, A)` is not supported (a load-time
-    `NotImplementedError`). To group, collect key-value pairs and use
-    [`group_pairs_by_key/2`](pairs.md).
+#### Free variables and `^`
+
+```clausal
+test("one bag per age") <- (
+    findall([AGE, NAMES], bagof(NAME, age(NAME, AGE), NAMES), BAGS),
+    BAGS is [[25, ['bob']], [30, ['alice', 'carol']]]
+)
+```
+
+An anonymous `_` in the goal is a free variable too: `bagof(N, age(N, _), L)`
+answers one bag per age. `V ^ Goal` may be nested (`X ^ Y ^ p(X, Y, Z)`), and
+a goal built at run time is read the same way
+(`G is (Y ^ p(Y)), call(bagof(X, G, L))`). Solutions whose free-variable
+bindings are variants share a bag.
 
 ### setof/3
 
-`setof(Template, Goal, Set)` — like bagof, but returns a **sorted list with duplicates removed**. Also fails on no solutions.
+`setof(Template, Goal, Set)` — like bagof (one set per binding of the free
+variables, `^` for existential ones), but each bag is a **sorted list with
+duplicates removed**. Also fails on no solutions.
 
 ```clausal
 unique_members(XS, US) <- setof(X, in_(X, XS), US)

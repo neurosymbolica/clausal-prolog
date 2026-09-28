@@ -155,10 +155,10 @@ constraint, see [Operators](operators.md)):
 
 !!! note "`!=` is not translated as a constraint"
     In Clausal `X != Y` is the arithmetic disequality constraint (`#\=`), but
-    the translator maps it to structural `\==` in both directions (and Prolog
-    `\==` imports as `!=`). On ground integers the two agree; with an unbound
-    variable or `1` vs `1.0` they do not. Write `'\\=='(X, Y)` in Clausal
-    when you mean structural inequality.
+    the exporter maps it to structural `\==`. On ground integers the two
+    agree; with an unbound variable or `1` vs `1.0` they do not. Write
+    `'\\=='(X, Y)` in Clausal when you mean structural inequality -- which
+    is what Prolog `\==` imports as.
 
 ### Lists
 
@@ -299,12 +299,12 @@ clausal_text = prolog_ast_to_clausal(pmodule)
 | `foo_bar(X)` | `foo_bar(X)` | names cross unchanged |
 | `findall(...)` | `findall(...)` | reverse builtin name map |
 | `X = Y` | `X is Y` | Unification |
-| `X \= Y` | `X is not Y` | `dif/2`: agrees with `\=` only on ground terms |
+| `X \= Y` | `'\\='(X, Y)` | ISO "not unifiable": a test, not the delayed `dif/2` |
 | `Y is X * 2` | `eval_(X * 2, Y)` | Eager arithmetic evaluation |
 | `Y =:= X * 2` | `Y == X * 2` | Arithmetic equality (a constraint in Clausal) |
 | `X =\= Y` | `X != Y` | Arithmetic disequality |
 | `X == Y` | `'=='(X, Y)` | Structural identity |
-| `X \== Y` | `X != Y` | **Mistranslated**: becomes the arithmetic constraint (see the note above) |
+| `X \== Y` | `'\\=='(X, Y)` | Structural non-identity: a test, not the CLP `!=` |
 | `X =< Y` | `X <= Y` | ISO `=<` → `<=` |
 | `\+ G` | `not G` | Negation as failure |
 | `(A , B)` | `(A, B)` | Conjunction |

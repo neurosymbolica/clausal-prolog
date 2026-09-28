@@ -123,7 +123,7 @@ def test_the_declared_minor_pair_is_what_slash_3_reports(tmp_path):
 
         look(N, U) <- constant_number_units(mu_fee, N, U)
     """)
-    assert _one(m, "look", 2) == (5000, ("eur_cent",))
+    assert _one(m, "look", 2) == (5000, "eur_cent")
 
 
 def test_a_minor_amount_adds_to_a_major_amount(tmp_path):
@@ -206,7 +206,7 @@ def test_a_decimal_magnitude_is_recorded_as_a_decimal(tmp_path):
     number, units = _one(m, "look", 2)
     assert isinstance(number, Decimal), f"recorded as {type(number).__name__}"
     assert number == Decimal("19.99")
-    assert units == ("euro",)
+    assert units == "euro"
 
 
 def test_an_integer_magnitude_stays_an_integer(tmp_path):
@@ -236,7 +236,7 @@ def test_a_non_currency_float_magnitude_is_untouched(tmp_path):
     """)
     number, units = _one(m, "look", 2)
     assert isinstance(number, float) and number == 1.5
-    assert units == ("hour",)
+    assert units == "hour"
 
 
 # ── float money literals: warn where the literal may already be lost ─────────
@@ -676,8 +676,8 @@ def test_slash_3_names_the_currency_without_the_qualified_form(tmp_path):
         eu(N, U) <- constant_number_units(n_eu, N, U)
         us(N, U) <- constant_number_units(n_us, N, U)
     """)
-    assert _one(m, "eu", 2) == (5000, ("eur_cent",))
-    assert _one(m, "us", 2) == (5000, ("usd_cent",))
+    assert _one(m, "eu", 2) == (5000, "eur_cent")
+    assert _one(m, "us", 2) == (5000, "usd_cent")
 
 
 def test_the_naming_rule_is_derived_from_the_table_not_hand_written():
@@ -872,7 +872,7 @@ def test_a_currency_constant_declares_and_stores_money(tmp_path):
     assert isinstance(m.cc_sga.value, Decimal)
     # A money constant IS a united constant: the stricter declaration does not
     # hide it from the view that already exists.
-    assert _one(m, "look", 2) == (5000, ("usd",))
+    assert _one(m, "look", 2) == (5000, "usd")
 
 
 def test_a_non_currency_unit_is_refused(tmp_path):
