@@ -1,4 +1,4 @@
-"""``-meta_predicate(p(1, ?))``: module-qualify a meta-argument at the call.
+"""``-meta_predicate(p(1, '?'))``: module-qualify a meta-argument at the call.
 
 Operator ruling 2026-09-25 (ruling 1, "follow Scryer").  Ruling S makes a
 predicate name passed as data the PLAIN atom, so a higher-order predicate in

@@ -101,6 +101,27 @@ test("sort then group") <- (
 )
 ```
 
+### map_list_to_pairs/3
+
+`map_list_to_pairs(Goal, List, Pairs)` — pairs each element `E` of `List` with
+a key: `Pairs` is `[K1-E1, K2-E2, ...]` where `call(Goal, Ei, Ki)`. Every
+solution of each call is an answer on backtracking. With `msort/2` and
+`pairs_values/2` it sorts a list by a computed key:
+
+```clausal
+test("pair with a key") <- (
+    map_list_to_pairs(length, [[1, 2, 3], [4], [5, 6]], PAIRS),
+    PAIRS == ['-'(3, [1, 2, 3]), '-'(1, [4]), '-'(2, [5, 6])]
+)
+
+test("sort by length") <- (
+    map_list_to_pairs(length, [[1, 2, 3], [4], [5, 6]], PAIRS),
+    msort(PAIRS, SORTED),
+    pairs_values(SORTED, BY_LENGTH),
+    BY_LENGTH == [[4], [5, 6], [1, 2, 3]]
+)
+```
+
 ---
 
 ## Patterns & Recipes
@@ -144,5 +165,5 @@ test("invert") <- invert(['-'('a', 1), '-'('b', 2)], ['-'(1, 'a'), '-'(2, 'b')])
 
 *See also: [Lists](lists.md) — general list operations,
 [Dicts & Sets](dicts_sets.md) — DictTerm for proper key-value mapping (`dict_pairs/2`
-still uses `[Key, Value]` lists),
+reads and builds the same `Key-Value` pairs),
 [Higher-Order](higher_order.md) — maplist, sort_by.*

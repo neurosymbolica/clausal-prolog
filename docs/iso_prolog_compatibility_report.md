@@ -93,6 +93,14 @@ meaning.) The full operator table, bare vs quoted, is in
 | `rdiv(7, 2)` | `Fraction(7, 2)` | Scryer (exact rational) |
 | `abs(-3)`, `abs(-3.5)` | `3`, `3.5` | ISO |
 | `max(2, 5)`, `min(1, 2.0)`, `max(1, 1.0)` | `5`, `1`, `1.0` | ISO Cor.2 / Scryer |
+| `rem(-7, 2)`, `sign(-2.5)`, `gcd(12, 18)` | `-1`, `-1.0`, `6` | ISO / Scryer |
+| `truncate(-3.7)`, `round(-2.5)`, `ceiling(2.1)`, `floor(-2.1)` | `-3`, `-3`, `3`, `-3` | ISO / Scryer |
+| `float(3)`, `float_integer_part(-3.7)`, `float_fractional_part(3.75)` | `3.0`, `-3.0`, `0.75` | ISO / Scryer |
+| `sqrt(4)`, `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2`, `exp`, `log` | floats (`sqrt(4)` is `2.0`) | ISO / Scryer |
+| `sqrt(-1)`, `log(0)`, `atan2(0, 0)` | `evaluation_error(undefined)` | ISO (Scryer: `log(0)` is `float_overflow`) |
+| `atan(1, 1)` | `0.7853981633974483` | ISO Cor.2 (Scryer: not evaluable) |
+| `pi`, `e` | `3.141592653589793`, `2.718281828459045` | ISO / Scryer |
+| `'>>'(-7, 1)`, `'<<'(1, 3)`, `'/\\'(12, 10)`, `'\\/'(12, 10)`, `'\\'(5)`, `xor(12, 10)` | `-4`, `8`, `8`, `14`, `-6`, `6` | ISO / Scryer |
 | a zero divisor | `evaluation_error(zero_divisor)` naming the operator | ISO |
 
 Inside an arithmetic **constraint** (`==`, `<`, ...; Prolog's `#=` family)
@@ -144,30 +152,16 @@ above; the next section lists where the checking stops short.
 
 ## Known gaps
 
-### Missing evaluable functors
+### Evaluable functors
 
-Only the evaluables in the table above exist. These ISO (and Scryer)
-evaluables are **missing**:
-
-`rem/2`, `sign/1`, `sqrt/1`, `sin/1`, `cos/1`,
-`atan/1`, `atan2/2`, `exp/1`, `log/1`, `float/1`, `integer/1`,
-`float_integer_part/1`, `float_fractional_part/1`, `truncate/1`, `round/1`,
-`ceiling/1`, `floor/1`, `(>>)/2`, `(<<)/2`, `(/\)/2`, `(\/)/2`, `(\)/1`,
-`xor/2`, `gcd/2`, `msb/1`, and the constants `pi`, `e`, `max_tagged_integer`.
-
-How the gap shows depends on how the term is built:
-
-- built at run time (`'=..'(T, [sign, -3]), 'is'(X, T)`):
-  `error(type_error(evaluable, sign/1), (is)/2)`, as ISO specifies for an
-  unknown evaluable;
-- written in source (`'is'(X, sign(-3))`): the same
-  `error(type_error(evaluable, sign/1), (is)/2)` (from Python it is also a
-  `NameError`, since nothing declares `sign/1`);
-- the constants (`'is'(X, pi)`): `type_error(evaluable, pi/0)`.
-
-The relational predicates `abs_/2`, `sign/2`, `max_/3`, `min_/3`, `gcd/3`
-and `divmod_/4` ([Arithmetic](arithmetic.md#numeric-functions)) cover some
-of the same ground.
+Every ISO evaluable (ISO 13211-1 9.1.7, 9.3, 9.4 and Cor.2) is in the table
+above (added 2026-09-28). Scryer's non-ISO extras are not: `msb/1`,
+`max_tagged_integer`, `integer/1` (not evaluable in Scryer either), `log/2`
+and the rest raise `type_error(evaluable, F/N)`. An evaluation error names
+the evaluable (`error(evaluation_error(undefined), sqrt/1)`), where Scryer
+names `is/2`. The relational predicates `abs_/2`, `sign/2`, `max_/3`,
+`min_/3`, `gcd/3` and `divmod_/4`
+([Arithmetic](arithmetic.md#numeric-functions)) remain.
 
 ### Builtins that fail silently where ISO or Scryer raise
 

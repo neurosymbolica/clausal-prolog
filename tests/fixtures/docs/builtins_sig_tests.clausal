@@ -180,7 +180,7 @@ test("dict_get exists") <- dict_get("a", {"a": 1}, 1)  # nv
 test("dict_put exists") <- dict_put("b", 2, {"a": 1}, _)  # nv
 test("dict_merge exists") <- dict_merge({"a": 1}, {"b": 2}, _)  # nv
 test("dict_keys exists") <- dict_keys({"x": 1}, ["x"])  # nv
-test("dict_pairs exists") <- dict_pairs({"a": 1}, [["a", 1]])  # nv
+test("dict_pairs exists") <- dict_pairs({"a": 1}, ['-'("a", 1)])  # nv
 test("is_set exists") <- is_set({1, 2, 3})  # nv
 test("set_union exists") <- set_union({1}, {2}, _)  # nv
 test("set_subset exists") <- set_subset({1}, {1, 2})  # nv
@@ -275,7 +275,7 @@ test("drop exists") <- (
 
 test("zip_ exists") <- (
     zip_([1, 2], ["a", "b"], P),
-    P == [[1, "a"], [2, "b"]]
+    P == ['-'(1, "a"), '-'(2, "b")]
 )  # nv
 
 test("numlist exists") <- (

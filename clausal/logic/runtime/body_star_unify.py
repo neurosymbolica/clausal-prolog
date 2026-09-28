@@ -12,7 +12,7 @@ constructing list values that may include star-unpacks.
 
 from __future__ import annotations
 
-from clausal.logic.variables import is_var, deref, unify
+from clausal.logic.variables import Var, is_var, deref, unify
 from clausal.terms import (
     DictTerm,
     SegList, ConcreteSeg, VarSeg,
@@ -462,13 +462,23 @@ def _build_multi_star_list(segments):
     return SegList(segs)
 
 
-def _in_iter(collection, pair_mode):
+def _in_iter(collection, pair_mode, trail=None):
     """Runtime iterator for ``in`` expressions.
 
     *pair_mode* is True when the left side of ``in`` is a tuple pattern
     (e.g. ``(KEY, VALUE) in DICT``).  For DictTerms, pair_mode switches
     from key iteration to (key, value) pair iteration.
+
+    An OPEN list -- an unbound variable, or a partial list ``[a, *T]`` -- is
+    member/2's open mode (ISO prologue; Scryer): its known elements, then
+    ``T = [E|_]``, ``T = [_, E|_]``, ... without end.  With *trail* (the
+    positive ``in`` goal) each such candidate binds the tail and is undone
+    before the next; without it (``not in``, which only asks whether some
+    candidate unifies) the open tail is one fresh variable, which always
+    does -- so ``E not in T`` fails for an open ``T``, as ``\\+ member``.
     """
+    if type(collection) is list:
+        return iter(collection)
     data = DictTerm.mapping_of(collection)
     if data is not None:
         # A plain dict is a dict-valued term too (the dictterm-only sweep):
@@ -495,7 +505,30 @@ def _in_iter(collection, pair_mode):
         # different things.  ``SegString.__iter__`` answers char atoms for
         # the same reason.
         return iter(str_chars(collection))
+    if is_var(collection) or isinstance(collection, SegList):
+        from clausal.logic.builtins.lists import _open_skeleton  # noqa: PLC0415
+        skel = _open_skeleton(collection)
+        if skel is not None:
+            return _in_open_iter(skel, trail)
     return iter(collection)
+
+
+def _in_open_iter(skel, trail):
+    """member/2's candidates on an open list (see :func:`_in_iter`)."""
+    from clausal.logic.builtins.lists import _partial  # noqa: PLC0415
+    prefix, tail = skel
+    yield from prefix
+    if trail is None:
+        yield Var()
+        return
+    k = 0
+    while True:
+        mark = trail.mark()
+        h = Var()
+        if unify(tail, _partial([Var() for _ in range(k)] + [h], Var()), trail):
+            yield h
+        trail.undo(mark)
+        k += 1
 
 
 def _segstring_align(ss, segments, trail, target):

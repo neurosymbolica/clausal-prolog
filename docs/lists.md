@@ -52,6 +52,8 @@ list_sum([X, *XS], TOTAL) <- (
 each element in `List` on backtracking. On an open list it goes on, as the
 prologue's member/2 does: `in_(1, L)` answers `L = [1, *_]`;
 `L = [_, 1, *_]`; ... without end, and `in_check(1, L)` answers the first.
+The `X in L` goal is the same relation, open lists included; `X not in L`
+fails for an open `L` (some extension always holds `X`).
 
 ```clausal
 test("member") <- in_(2, [1, 2, 3])
@@ -110,11 +112,11 @@ test("replicate") <- replicate(3, 'x', ['x', 'x', 'x'])
 
 ### zip_/3
 
-`zip_(L1, L2, Pairs)` — pair up corresponding elements. Stops at the shorter
-list.
+`zip_(L1, L2, Pairs)` — pair up corresponding elements as `X-Y` pairs (the
+`'-'(X, Y)` cell of the [pairs library](pairs.md)). Stops at the shorter list.
 
 ```clausal
-test("zip") <- zip_([1, 2, 3], ['a', 'b', 'c'], [[1, 'a'], [2, 'b'], [3, 'c']])
+test("zip") <- zip_([1, 2, 3], ['a', 'b', 'c'], ['-'(1, 'a'), '-'(2, 'b'), '-'(3, 'c')])
 ```
 
 ---

@@ -28,11 +28,11 @@ semantics unless quoted; quoted ones follow Scryer's.*
 | `div` | (no bare spelling) | ISO floored division: `div(-7, 2)` is -4; integers only | the same |
 | `%` | Python modulo, sign of the divisor: `-7 % 2` is 1 | (no quoted `%`; write `mod`) | Python's `%` only inside `++` |
 | `mod` | (no bare spelling) | ISO modulo, sign of the divisor: `mod(-7, 2)` is 1; integers only | the same |
-| `rem` | (none) | not evaluable in Clausal: `type_error(evaluable, rem/2)` | — |
+| `rem` | (none) | ISO remainder, the sign of the dividend: `rem(-7, 2)` is -1; integers only | the same |
 | `**` | Python power: `2 ** 3` is the **integer 8**; `2 ** -1` is 0.5 | ISO power, always a **float**: `'**'(2, 3)` is **8.0** | Scryer: a float |
 | `^` | Python bitwise XOR — as a CLP(B) formula in `sat(X ^ Y)`; not evaluable by `eval_` | ISO integer power: `'^'(2, 3)` is 8; `'^'(2, -1)` is `type_error(float, 2)`; `'^'(1, -1)` is 1 | Scryer: integer power |
-| `&` `\|` `~` | Python bitwise AND / OR / NOT — CLP(B) formulas in `sat(...)`; not evaluable by `eval_` (`type_error(evaluable, (&)/2)`) | no ISO operator of these spellings (ISO writes `/\`, `\/`, `\`) | — |
-| `<<` `>>` | Python shifts; not evaluable by `eval_` | not in Clausal's evaluable table | — |
+| `&` `\|` `~` | Python bitwise AND / OR / NOT — CLP(B) formulas in `sat(...)`; not evaluable by `eval_` (`type_error(evaluable, (&)/2)`) | no ISO operator of these spellings; ISO's bitwise functors are the quoted `'/\\'(A, B)`, `'\\/'(A, B)`, `'\\'(A)` and `xor(A, B)`, integers only (`'/\\'(12, 10)` is 8) | Scryer: `/\`, `\/`, `\`, `xor` |
+| `<<` `>>` | Python shifts; not evaluable by `eval_` | ISO shifts, integers only: `'>>'(-7, 1)` is -4; a negative count shifts the other way (`'<<'(1, -1)` is 0) | Scryer: the same |
 | unary `-` | negation | the same: `'-'(5)` is -5 | the same |
 
 A **zero divisor** in plain arithmetic is ISO's
@@ -69,13 +69,22 @@ A non-arithmetic term in an arithmetic constraint raises Scryer's clpz error
 
 ## Writing a quoted arithmetic cell
 
-The functors of the evaluable table (`+ - * / // div mod ** ^ rdiv abs min
-max` and unary `-`) are builtins: they are in scope in every module, strict or not, with no
+The functors of the evaluable table (`+ - * / // div mod ** ^ rdiv rem`,
+unary `-` and `+`, `abs min max sign gcd`, the rounding functors `truncate
+round ceiling floor`, `float float_integer_part float_fractional_part`,
+`sqrt sin cos tan asin acos atan atan2 exp log`, the bitwise `>> << /\ \/ \
+xor`, and the constants `pi` and `e`; see [Arithmetic](arithmetic.md)) are
+builtins: they are in scope in every module, strict or not, with no
 declaration, so `rdiv(7, 2)`, `'//'(A, B)` and `'^'(2, 3)` are written as they
 are in Prolog. As data, in a fact or a clause head, they are ordinary terms
 (`f(rdiv(1, 2))` holds the term `rdiv(1, 2)`); they are evaluated only where
 arithmetic is (`'is'`, `eval_`, a comparison, a constraint). A module's own
 declaration of the same spelling answers first, with its usual arity checks.
+The constants `pi` and `e` are atoms, so they need no declaration only in
+**arithmetic position** (`'is'(X, pi)`, `eval_(2 * e, X)`, a comparison
+operand, an evaluable functor's argument); as data (`f(e)`, `T is e`) they
+are ordinary atoms that a module declares like any other. Evaluating a bound
+atom reads it as ISO does: `T is e, 'is'(X, T)` gives `X = 2.718...`.
 
 ```clausal
 half_toward_zero(N, H) <- 'is'(H, '//'(N, 2))

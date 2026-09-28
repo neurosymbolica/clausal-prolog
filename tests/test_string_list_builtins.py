@@ -356,14 +356,14 @@ class TestZipString:
         # nv
         X = Var()
         r = _collect(X, "zip_", chars("ab"), chars("12"), X, module=mod)
-        assert r == [[[char_atom("a"), char_atom("1")],
-                      [char_atom("b"), char_atom("2")]]]
+        assert r == [[("-", char_atom("a"), char_atom("1")),
+                      ("-", char_atom("b"), char_atom("2"))]]
 
     def test_zip_string_list(self, mod):
         # nv
         X = Var()
         r = _collect(X, "zip_", chars("ab"), [1, 2], X, module=mod)
-        assert r == [[[char_atom("a"), 1], [char_atom("b"), 2]]]
+        assert r == [[("-", char_atom("a"), 1), ("-", char_atom("b"), 2)]]
 
 
 # ── split_with/3 ───────────────────────────────────────────────────────────

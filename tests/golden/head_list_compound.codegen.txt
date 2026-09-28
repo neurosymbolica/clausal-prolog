@@ -120,6 +120,7 @@ def mkpair__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
                                 yield None
                             return None
                             yield None
+                        _lambda6.__clausal_lambda__ = (2, 'prov', 2, '(K, V) <- (prov(K, V))')
                         _gen1 = StepGenerator($dispatch_at(call_goal, 3), _proceed, this_generator, this_generator, _lambda6, 'x', _v10, trail)
                         _st1 = (yield (_gen1, None))
                         while _st1 is not $DONE:

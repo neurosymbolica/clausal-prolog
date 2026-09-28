@@ -48,7 +48,10 @@ The goal can be a lambda, a predicate name, or a partial goal term (a cell such 
 `maplist(Goal, List)` — test `Goal(Elem)` for every element. Succeeds if the
 goal succeeds for all elements, and backtracks into every call, as the ISO
 prologue's definition by `call/N` does: with `p(1), p(2), p(3)`,
-`maplist(p, [X, Y])` has nine answers.
+`maplist(p, [X, Y])` has nine answers. On an OPEN list (unbound, or a
+partial list `[a, *T]`) it enumerates as that definition does, depth first
+and without end: `maplist(p, L)` answers `L = []`, `L = [1]`, `L = [1, 1]`,
+...
 
 ```clausal
 positive(X) <- (X > 0)
@@ -113,10 +116,16 @@ test("filtermap") <- filter_map(safe_sqrt, [4, -1, 9, -2, 16], [2.0, 3.0, 4.0])
 
 ## Folding
 
-### foldl/4
+### foldl/4, foldl/5, foldl/6
 
 `foldl(Goal, List, V0, V)` — left fold. Applies `Goal(Elem, Acc, NewAcc)`
 across the list, threading an accumulator from `V0` to `V`.
+`foldl(Goal, Xs, Ys, V0, V)` calls `Goal(X, Y, Acc, NewAcc)` over two lists
+of one length, and `foldl/6` over three, as Scryer's `library(lists)`.
+
+Like maplist, foldl backtracks into every call (each solution of the goal
+gives another fold), and an open list enumerates: `foldl(G, L, 0, S)` with
+`L` unbound answers `L = []` first, then longer lists.
 
 ```clausal
 add_step(X, ACC, OUT) <- (OUT == ACC + X)
@@ -253,6 +262,9 @@ test("count evens") <- count((X <- (X % 2 == 0)), [1, 2, 3, 4, 5, 6], 3)
 
 - **Goal argument order matters** — `maplist/3` calls `Goal(X, Y)` where X is
   input, Y is output. `foldl/4` calls `Goal(Elem, AccIn, AccOut)`.
+- **`^` is not a goal** — `Y^Goal` means something only as bagof/setof's
+  goal argument; `call(Y^p(Y))` is `existence_error(procedure, (^)/2)`, as
+  in ISO and Scryer.
 - **`group_by` groups consecutive runs** — not global grouping. sort first if
   needed.
 - **`include`/`exclude` are committed-choice** — they test each element once

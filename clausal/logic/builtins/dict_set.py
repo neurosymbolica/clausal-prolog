@@ -5,7 +5,7 @@ Dict builtins:
   dict_size/2       — number of keys
   dict_keys/2       — extract key list (sorted for determinism)
   dict_values/2     — extract value list (in key order)
-  dict_pairs/2      — DictTerm ↔ list of (Key: Value) pairs
+  dict_pairs/2      — DictTerm ↔ list of Key-Value pairs
   dict_get/3        — dict_get(Key, Dict, Value) — semidet lookup
   tri_get/3         — tri_get(Dict, Key, Value) — Kleene read (absent → Undefined)
   dict_put/4        — dict_put(Key, Value, Old, New) — functional update
@@ -161,9 +161,23 @@ def _dict_values__2(this_generator, _proceed, _fail, _catcher, d, values, trail)
     yield (_fail, DONE)
 
 
+def _kv_parts(pair):
+    """``(Key, Value)`` of a ``Key-Value`` pair -- the ``'-'(K, V)`` cell, or
+    a ``k - v`` written in source (the ``Sub`` node, the same term spelled
+    differently, as library(pairs) reads it) -- else None.  An unbound
+    element is not a pair here: these builtins do not invent keys."""
+    from clausal.logic.builtins.pairs import _pair_parts  # noqa: PLC0415
+    pair = deref(pair)
+    if is_var(pair):
+        return None
+    return _pair_parts(pair, None)
+
+
 @_trampoline_builtin("dict_pairs", 2)
 def _dict_pairs__2(this_generator, _proceed, _fail, _catcher, d, pairs, trail):
-    """dict_pairs(Dict, Pairs) — Dict ↔ list of [Key, Value] 2-element lists.
+    """dict_pairs(Dict, Pairs) — Dict ↔ list of ``Key-Value`` pairs (the
+    ``'-'(Key, Value)`` cell, as library(pairs); RULED 2026-09-28 -- it was a
+    list of ``[Key, Value]`` lists).
 
     Modes:
       dict_pairs(+DictTerm, -Pairs) — decompose dict into pair list
@@ -176,9 +190,9 @@ def _dict_pairs__2(this_generator, _proceed, _fail, _catcher, d, pairs, trail):
     if data is not None:
         # Dict → Pairs
         sorted_keys = sorted(data.keys(), key=repr)
-        pair_list = [[k, data[k]] for k in sorted_keys]
+        from clausal.logic.builtins.higher_order import _unify_pairs  # noqa: PLC0415
         mark = trail.mark()
-        if unify(pairs, pair_list, trail):
+        if _unify_pairs(pairs, [(k, data[k]) for k in sorted_keys], trail):
             yield (_proceed, None)
         trail.undo(mark)
 
@@ -187,15 +201,15 @@ def _dict_pairs__2(this_generator, _proceed, _fail, _catcher, d, pairs, trail):
         data = {}
         ok = True
         for pair in pairs_val:
-            pair = deref(pair)
-            if isinstance(pair, list) and len(pair) == 2:
+            kv = _kv_parts(pair)
+            if kv is not None:
                 # The nil key is legal and has a canonical (hashable) form
-                # (fix round 4, item 3): without the fold, ``[[[], 1]]``
+                # (fix round 4, item 3): without the fold, ``['-'([], 1)]``
                 # raised ``type_error(hashable, [])`` below for a key the
                 # ruling makes legal, and ``""``/``b""`` stored keys no
                 # reader could find.
-                k = _norm_key(deref(pair[0]))
-                v = deref(pair[1])
+                k = _norm_key(deref(kv[0]))
+                v = deref(kv[1])
                 if is_var(k):
                     ok = False
                     break
@@ -271,20 +285,21 @@ def _dict_put__4(this_generator, _proceed, _fail, _catcher, key, value, old_dict
 
 @_trampoline_builtin("dict_put_pairs", 3)
 def _dict_put_pairs__3(this_generator, _proceed, _fail, _catcher, pairs, old_dict, new_dict, trail):
-    """dict_put(Pairs, OldDict, NewDict) — bulk update from [[Key, Value], ...] list."""
+    """dict_put_pairs(Pairs, OldDict, NewDict) — bulk update from a list of
+    ``Key-Value`` pairs (RULED 2026-09-28; it was ``[[Key, Value], ...]``)."""
     pairs_val = deref(pairs)
     old_data = _dict_input(deref(old_dict))
     if isinstance(pairs_val, list) and old_data is not None:
         new_data = dict(old_data)
         ok = True
         for pair in pairs_val:
-            pair = deref(pair)
-            if isinstance(pair, list) and len(pair) == 2:
+            kv = _kv_parts(pair)
+            if kv is not None:
                 # Fix round 4, item 3 — the mirror of ``dict_pairs/2``'s
                 # Pairs→Dict arm: an un-normalised nil key escaped as a raw,
                 # uncatchable ``TypeError`` (``[]`` is unhashable).
-                k = _norm_key(deref(pair[0]))
-                v = deref(pair[1])
+                k = _norm_key(deref(kv[0]))
+                v = deref(kv[1])
                 if is_var(k):
                     ok = False
                     break

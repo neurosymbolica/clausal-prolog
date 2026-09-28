@@ -59,7 +59,7 @@ class TestPlainDictInputs:
         assert _sols("dict_values", dict(D), Var()) == [{1: [1, 2]}]
 
     def test_dict_pairs_decompose(self):
-        assert _sols("dict_pairs", dict(D), Var()) == [{1: [["a", 1], ["b", 2]]}]
+        assert _sols("dict_pairs", dict(D), Var()) == [{1: [("-", "a", 1), ("-", "b", 2)]}]
 
     def test_dict_get(self):
         assert _sols("dict_get", "a", dict(D), Var()) == [{2: 1}]
@@ -71,7 +71,7 @@ class TestPlainDictInputs:
         assert original == D, "dict_put must not mutate the caller's dict"
 
     def test_dict_put_pairs(self):
-        [sol] = _sols("dict_put_pairs", [["c", 3]], dict(D), Var())
+        [sol] = _sols("dict_put_pairs", [("-", "c", 3)], dict(D), Var())
         assert sol[2] == DictTerm({"a": 1, "b": 2, "c": 3})
 
     def test_dict_remove(self):

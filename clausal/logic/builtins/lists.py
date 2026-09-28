@@ -1057,14 +1057,16 @@ def _split_at__4(this_generator, _proceed, _fail, _catcher, n, lst, left, right,
 
 @_trampoline_builtin("zip_", 3)
 def _zip__3(this_generator, _proceed, _fail, _catcher, l1, l2, pairs, trail):
-    """zip_(L1, L2, Pairs) — Pairs is a list of [X, Y] from L1 and L2."""
+    """zip_(L1, L2, Pairs) — Pairs is the list of ``X-Y`` pairs (the
+    ``'-'(X, Y)`` cell, as library(pairs); RULED 2026-09-28 -- it was a list
+    of ``[X, Y]`` lists) from L1 and L2."""
     l1_val, l2_val = deref(l1), deref(l2)
     l1_items = _as_items(l1_val)
     l2_items = _as_items(l2_val)
     if l1_items is not None and l2_items is not None:
-        result = [[a, b] for a, b in zip(l1_items, l2_items)]
+        from clausal.logic.builtins.higher_order import _unify_pairs  # noqa: PLC0415
         mark = trail.mark()
-        if unify(pairs, result, trail):
+        if _unify_pairs(pairs, list(zip(l1_items, l2_items)), trail):
             yield (_proceed, None)
         trail.undo(mark)
     yield (_fail, DONE)

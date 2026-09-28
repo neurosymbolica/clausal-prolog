@@ -32,10 +32,11 @@ test("eval") <- (X == 3 + 4 * 2, X == 11)
 ```
 
 Supported operators: `+`, `-`, `*`, `/`, `//` (integer division), `%` (modulo),
-`**` (power). `abs()`, `min()` and `max()` are evaluated when their operands
-are ground; the constraint does not propagate through them, so
-`X == max(Y, 3)` with `Y` unbound raises
-`domain_error(clpz_expression, max(_, 3))`.
+`**` (power). The other evaluable functors (`abs()`, `min()`, `max()`,
+`round()`, `sqrt()`, ... below) are evaluated when their operands are ground;
+the constraint does not propagate through them, so `X == max(Y, 3)` with `Y`
+unbound raises `domain_error(clpz_expression, max(_, 3))` (Scryer's clpz posts
+`abs`, `min` and `max` as constraints; this engine does not yet).
 
 A **bare** operator keeps Python's meaning in today's syntax (`-7 // 2` is -4,
 `2 ** 3` is 8); its **quoted** spelling follows Scryer Prolog (`'//'(-7, 2)` is
@@ -120,14 +121,41 @@ written in source keeps Python's meaning, and the two differ for `//` and `**`
 | `-(A)` | negation | `-A`: the same |
 | `abs(A)` | absolute value, in the operand's own kind: `abs(-3)` is 3, `abs(-3.5)` is 3.5 | — |
 | `min(A, B)`, `max(A, B)` | the smaller / larger operand, in its own kind (`max(2, 5)` is 5); beside a float the operands compare as floats and a tie answers the float (`max(1, 1.0)` is 1.0) | — |
+| `+(A)` | the number itself | `+A`: not evaluable (a Python unary plus) |
+| `sign(A)` | -1, 0 or 1 in the operand's kind: `sign(-2.5)` is -1.0; an exact rational's sign is an integer | — |
+| `rem(A, B)` | the remainder of `'//'`, the sign of the **dividend**: `rem(-7, 2)` is -1; integers only | — |
+| `truncate(A)`, `round(A)`, `ceiling(A)`, `floor(A)` | an **integer** from any number: `truncate(-3.7)` is -3; `round` halves away from zero (`round(-2.5)` is -3), exactly | — |
+| `float(A)` | the operand as a float: `float(rdiv(7, 2))` is 3.5 | — |
+| `float_integer_part(A)`, `float_fractional_part(A)` | the integer part and the rest, as floats: -3.0 and -0.75 for -3.75 | — |
+| `gcd(A, B)` | greatest common divisor, non-negative; integers only | — |
+| `sqrt`, `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `exp`, `log` (arity 1) | a **float**; an exact operand is taken at its value. `sqrt(-1)`, `log(0)`, `log(-1)`, `asin(2)` are `evaluation_error(undefined)`; `exp(1000)` is `evaluation_error(float_overflow)` | — |
+| `atan2(Y, X)`, `atan(Y, X)` | the angle of the point (X, Y), a float; `atan2(0, 0)` is `evaluation_error(undefined)` | — |
+| `pi`, `e` | the constants, as floats (`'is'(X, pi)`); no declaration needed in arithmetic position, ordinary atoms as data (see [Operators](operators.md#writing-a-quoted-arithmetic-cell)) | — |
+| `'>>'(A, N)`, `'<<'(A, N)` | arithmetic shifts; a negative count shifts the other way (`'<<'(1, -1)` is 0); integers only | `A >> N`, `A << N`: Python shifts, not evaluable |
+| `'/\\'(A, B)`, `'\\/'(A, B)`, `'\\'(A)`, `xor(A, B)` | bitwise and, or, complement, exclusive or (two's complement: `'\\'(5)` is -6); integers only | `&`, `\|`, `~`, `^`: Python's, for CLP(B); not evaluable |
 
 `//`, `div` and `mod` take integers only (`type_error(integer, 7.0)` for
 `'//'(7.0, 2)`), as in Scryer. `^` follows Scryer's rules for a negative
 exponent: `'^'(2, -1)` is `type_error(float, 2)`, `'^'(1, -1)` is 1, and
 `'^'(0, -1)` is `evaluation_error(undefined)`; an exact rational base stays
-exact (`'^'(rdiv(1, 2), 2)` is 1/4, where Scryer answers 0.25). `rem` is not in the
-table. The exact-number term `decimal(M, S)` evaluates as the number it
+exact (`'^'(rdiv(1, 2), 2)` is 1/4, where Scryer answers 0.25). `rem`, `gcd`
+and the bitwise functors take integers only, too (`type_error(integer, 1.0)`
+for `xor(12, 1.0)`), and an integral rational counts as an integer
+(`gcd(rdiv(12, 1), 18)` is 6; Scryer keeps `12 rdiv 1` a rational and
+refuses it). The table is ISO's evaluables (ISO 13211-1 9.1.7, 9.3, 9.4 and
+Cor.2) with Scryer's kinds and errors, and two ISO readings where Scryer
+differs: `log(0)` is `evaluation_error(undefined)` (Scryer:
+`float_overflow`), and `atan/2` is evaluable, as `atan2/2` (Scryer has only
+`atan2/2`). `integer/1` and `log/2` are not in the table (nor in ISO or
+Scryer). The exact-number term `decimal(M, S)` evaluates as the number it
 denotes.
+
+```clausal
+test("rounding") <- ('is'(A, round(-2.5)), A == -3, 'is'(B, truncate(3.7)), B == 3)
+test("rem and gcd") <- ('is'(R, rem(-7, 2)), R == -1, 'is'(G, gcd(12, 18)), G == 6)
+test("bitwise") <- ('is'(X, '/\\'(12, 10)), X == 8, 'is'(Y, '>>'(-7, 1)), Y == -4)
+test("float functions") <- ('is'(S, sqrt(4)), S == 2.0, 'is'(P, pi), P > 3.14)
+```
 
 **Division (ruling Q15, 2026-09-28).** In *evaluation* — `eval_/2`, `'is'`,
 the ISO comparisons — `/` is a float division for two integers: bare it is

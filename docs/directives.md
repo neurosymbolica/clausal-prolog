@@ -399,12 +399,27 @@ module system needs to know which arguments are goals (to resolve them in the
 correct module context).
 
 ```clausal
---8<-- "tests/fixtures/docs/directives_sigs.txt:meta_predicate"
+-meta_predicate(my_map(2, '+', '-'))
+
+my_map(_, [], []),
+my_map(G, [X, *Xs], [Y, *Ys]) <- (
+    call(G, X, Y),
+    my_map(G, Xs, Ys)
+)
+
+double(X, Y) <- (Y == X * 2)
+
+test("my_map calls its goal on each element") <- (
+    my_map(double, [1, 2, 3], L),
+    L == [2, 4, 6]
+)
 ```
 
 The `2` means the first argument is a goal that takes 2 extra arguments.
-`+` means input, `-` means output. This ensures correct cross-module
-resolution when `my_map` is imported. See [Higher-Order Predicates](higher_order.md) for builtins like `maplist` that use this pattern.
+`'+'` means input, `'-'` means output (and `'?'` either, `':'` a
+module-sensitive argument that is not a goal). The modes are QUOTED atoms:
+a bare `+` or `-` is an operator, not a term, in this syntax. This ensures
+correct cross-module resolution when `my_map` is imported. See [Higher-Order Predicates](higher_order.md) for builtins like `maplist` that use this pattern.
 
 ### -shallow
 

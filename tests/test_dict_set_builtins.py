@@ -150,19 +150,19 @@ class TestDictPairs:
         v = Var()
         d = DictTerm({"a": 1, "b": 2})
         sols = _sols("dict_pairs", d, v)
-        assert sols[0][1] == [["a", 1], ["b", 2]]
+        assert sols[0][1] == [("-", "a", 1), ("-", "b", 2)]
 
     def test_pairs_to_dict(self):
         # nv
         v = Var()
-        pairs = [["x", 10], ["y", 20]]
+        pairs = [("-", "x", 10), ("-", "y", 20)]
         sols = _sols("dict_pairs", v, pairs)
         assert sols[0][0] == DictTerm({"x": 10, "y": 20})
 
     def test_pairs_to_dict_unordered(self):
         # nv
         v = Var()
-        pairs = [["b", 2], ["a", 1]]
+        pairs = [("-", "b", 2), ("-", "a", 1)]
         sols = _sols("dict_pairs", v, pairs)
         assert sols[0][0] == DictTerm({"a": 1, "b": 2})
 
@@ -231,7 +231,7 @@ class TestDictPutPairs:
         # nv
         v = Var()
         old = DictTerm({"a": 1})
-        pairs = [["b", 2], ["c", 3]]
+        pairs = [("-", "b", 2), ("-", "c", 3)]
         sols = _sols("dict_put_pairs", pairs, old, v)
         assert sols[0][2] == DictTerm({"a": 1, "b": 2, "c": 3})
 
@@ -239,7 +239,7 @@ class TestDictPutPairs:
         # nv
         v = Var()
         old = DictTerm({"a": 1, "b": 0})
-        sols = _sols("dict_put_pairs", [["b", 99]], old, v)
+        sols = _sols("dict_put_pairs", [("-", "b", 99)], old, v)
         assert sols[0][2] == DictTerm({"a": 1, "b": 99})
 
 
@@ -1256,7 +1256,7 @@ class TestNilKeyAcrossTheDictFamily:
         for a key the ruling makes legal."""
         # nv
         for key in _NIL_SPELLINGS:
-            sols = _sols("dict_pairs", Var(), [[key, 1]])
+            sols = _sols("dict_pairs", Var(), [("-", key, 1)])
             assert sols == [{0: DictTerm({(): 1})}], key
             assert list(sols[0][0].keys()) == [()], key
 
@@ -1264,7 +1264,7 @@ class TestNilKeyAcrossTheDictFamily:
         """``dict_put_pairs/3`` raised a raw (uncatchable) ``TypeError``."""
         # nv
         for key in _NIL_SPELLINGS:
-            sols = _sols("dict_put_pairs", [[key, 1]], DictTerm({}), Var())
+            sols = _sols("dict_put_pairs", [("-", key, 1)], DictTerm({}), Var())
             assert sols == [{2: DictTerm({(): 1})}], key
             assert list(sols[0][2].keys()) == [()], key
 
@@ -1272,7 +1272,7 @@ class TestNilKeyAcrossTheDictFamily:
         """Writer and reader agree: what ``dict_pairs/2`` stores, ``get/3``
         finds under any spelling."""
         # nv
-        built = _sols("dict_pairs", Var(), [[b"", 1]])[0][0]
+        built = _sols("dict_pairs", Var(), [("-", b"", 1)])[0][0]
         for key in _NIL_SPELLINGS:
             assert _sols("get", built, key, Var()) == [{2: 1}], key
 
@@ -1282,4 +1282,4 @@ class TestNilKeyAcrossTheDictFamily:
         # nv
         from clausal.logic.exceptions import LogicException
         with pytest.raises(LogicException, match="type_error"):
-            _sols("dict_pairs", Var(), [[[1, 2], 1]])
+            _sols("dict_pairs", Var(), [("-", [1, 2], 1)])

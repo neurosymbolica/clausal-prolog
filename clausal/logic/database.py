@@ -580,7 +580,7 @@ class Database:
         self._dynamic: set[tuple[str, int]] = set()
         self._discontiguous: set[tuple[str, int]] = set()
         self._tabled: set[tuple[str, int]] = set()
-        # ``-meta_predicate(p(1, ?))`` (operator ruling 2026-09-25, Scryer's
+        # ``-meta_predicate(p(1, '?'))`` (operator ruling 2026-09-25, Scryer's
         # meta_predicate/1): (functor, arity) -> the spec tuple, e.g.
         # ``(1, "?")``.  Deliberately NOT a home store: a declaration alone
         # does not make a predicate known.  See ``meta_predicate_specs``.

@@ -34,7 +34,7 @@ from clausal import cell_args
 from clausal.import_hook import _load_module
 from clausal.logic.atoms import is_mangled, mangle, mint
 from clausal.logic.predicate import is_declared_predicate_name
-from clausal.logic.solve import call
+from clausal.logic.solve import _deref_walk, call
 from clausal.logic.variables import Var, deref
 from clausal.predicate_diagnostics import PredicateArityMismatchError
 
@@ -53,6 +53,8 @@ pos_t(-1, False),
 step(1, 0, 1),
 step(2, 1, 3),
 step(-1, 3, 2),
+step5(X, Y, A0, A) <- (A == A0 + X + Y)
+step6(X, Y, Z, A0, A) <- (A == A0 + X + Y + Z)
 last(1, 1),
 ping(1, 2),
 holds(secret),
@@ -165,8 +167,9 @@ def _secret(lm):
 
 
 def _answers(functor, args, lm, out_vars):
-    """Every solution's bindings of *out_vars*, deref'd."""
-    return [tuple(deref(v) for v in out_vars)
+    """Every solution's bindings of *out_vars*, deref'd all the way down
+    (a pair ``K-V`` built around a variable reads back as its value)."""
+    return [tuple(_deref_walk(v) for v in out_vars)
             for _ in call(functor, *args, module=lm)]
 
 
@@ -302,7 +305,7 @@ class TestPhrase:
         assert tuple(cell_args(cell_args(cell_args(exc.value.term)[0])[1])) == ("secret", 2)
 
 
-# ── 3. the 16 list builtins, time_goal, _ensure_trampoline_dispatch ─────────
+# ── 3. the 19 list builtins, time_goal, _ensure_trampoline_dispatch ─────────
 
 
 L = [1, 2, -1]
@@ -314,6 +317,9 @@ _LIST_CASES = [
     ("include", "is_pos", (L,), 1),
     ("exclude", "is_pos", (L,), 1),
     ("foldl", "step", (L, 0), 1),
+    ("foldl", "step5", ([1, 2], [3, 4], 0), 1),
+    ("foldl", "step6", ([1], [2], [3], 0), 1),
+    ("map_list_to_pairs", "key", ([1, 2],), 1),
     ("take_while", "is_pos", (L,), 1),
     ("drop_while", "is_pos", (L,), 1),
     ("span", "is_pos", (L,), 2),
@@ -347,18 +353,23 @@ _CLASS_ERA_LIST_ANSWERS = {
     'partition/4': [([1, 2], [-1])],
     'tfilter/3': [([1, 2],)],
     'tpartition/4': [([1, 2], [-1])],
+    # foldl/5, foldl/6 and map_list_to_pairs/3 arrived 2026-09-28, after the
+    # class era: these are what the handle answers, checked by hand.
+    'foldl/5': [(10,)],
+    'foldl/6': [(6,)],
+    'map_list_to_pairs/3': [([("-", 10, 1), ("-", 20, 2)],)],
 }
 
 
-def test_the_list_case_table_covers_all_sixteen_builtins():
-    """Positive control on the population: 16 distinct builtin/arity pairs,
+def test_the_list_case_table_covers_all_nineteen_builtins():
+    """Positive control on the population: 19 distinct builtin/arity pairs,
     each a registered builtin.  Since the aliased-import ruling (2026-09-24)
     they are db-receiving (``_DB_BUILTINS``, ``_db_optional``): the caller's
     database is what says which unqualified name a goal arrived under."""
     from clausal.logic.builtins._registry import _BUILTINS, _DB_BUILTINS
     from clausal.logic.builtins.higher_order import _GOAL_FIRST_LIST_BUILTINS
     keys = {(b, 1 + len(a) + n) for b, _, a, n in _LIST_CASES}
-    assert len(keys) == 16
+    assert len(keys) == 19
     assert keys == set(_GOAL_FIRST_LIST_BUILTINS)
     assert keys <= set(_DB_BUILTINS), keys - set(_DB_BUILTINS)
     assert not keys & set(_BUILTINS)
@@ -379,7 +390,7 @@ def test_list_builtin_answers_the_same_for_a_handle(lm, builtin, goal, inputs, n
 def test_the_pinned_class_answers_cover_every_list_case():
     """Positive control on the pinned population: one answer per case."""
     keys = {f"{b}/{1 + len(a) + n}" for b, _, a, n in _LIST_CASES}
-    assert len(keys) == 16 and keys == set(_CLASS_ERA_LIST_ANSWERS)
+    assert len(keys) == 19 and keys == set(_CLASS_ERA_LIST_ANSWERS)
 
 
 def test_a_data_atom_is_still_not_a_list_goal(lm):

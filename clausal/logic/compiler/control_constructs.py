@@ -1144,6 +1144,57 @@ def _compile_goal_lambda(
     return func_name, func_def
 
 
+#: The attribute a compiled lambda carries: ``(n_params, body_name,
+#: body_arity, text)`` -- what ``_registry._ensure_trampoline_dispatch``
+#: needs to refuse a call with the wrong number of arguments by an ISO
+#: error term rather than Python's own ``TypeError``.
+LAMBDA_INFO_ATTR = "__clausal_lambda__"
+
+
+def _lambda_body_indicator(body) -> "tuple[str, int] | None":
+    """The ``(name, arity)`` of the lambda body's principal goal -- what
+    ``call/N`` would extend with its surplus arguments (library(lambda) in
+    Scryer: ``call(\\X^(X > 0), 1, 2)`` is existence_error ``(>)/3``); a
+    conjunction is ``','/2``.  None when the body has no such name."""
+    from clausal.logic.builtins.call_body import _construct  # noqa: PLC0415
+    from clausal.pythonic_ast.nodes import Call  # noqa: PLC0415
+    goals = _flatten_conjunction(body)
+    if len(goals) > 1:
+        return ",", 2
+    g = goals[0]
+    if isinstance(g, Call):
+        name = getattr(g.func, "name", None)
+        if type(name) is str:
+            return name, len(g.args) + len(g.kwargs)
+        return None
+    try:
+        name, arity = _construct(g)
+    except AttributeError:          # a node with no operator spelling
+        return None
+    return (name, arity) if type(name) is str else None
+
+
+def _lambda_info_stmt(func_name: str, lam: Lambda, func_def) -> ast.stmt:
+    """``<func_name>.__clausal_lambda__ = (n, name, arity, text)``, placed
+    right after the lambda's ``def``."""
+    n_params = len(lam.params.params)
+    ind = _lambda_body_indicator(lam.body)
+    text = f"({lam.params}) <- ({lam.body})"
+    value = ast.Tuple(elts=[
+        ast.Constant(value=n_params),
+        ast.Constant(value=None if ind is None else ind[0]),
+        ast.Constant(value=None if ind is None else ind[1]),
+        ast.Constant(value=text)], ctx=ast.Load())
+    stmt = ast.Assign(
+        targets=[ast.Attribute(value=ast.Name(id=func_name, ctx=ast.Load()),
+                               attr=LAMBDA_INFO_ATTR, ctx=ast.Store())],
+        value=value)
+    ast.copy_location(stmt, func_def)
+    for node in ast.walk(stmt):
+        ast.copy_location(node, func_def)
+    return stmt
+
+
 def _flatten_conjunction(goal) -> list:
     """flatten nested And nodes into a list of goals."""
     if isinstance(goal, And):
@@ -1172,6 +1223,7 @@ def _hoist_lambdas_in_term(
     if isinstance(term, Lambda):
         func_name, func_def = _compile_goal_lambda(ctx, term)
         lambda_defs.append(func_def)
+        lambda_defs.append(_lambda_info_stmt(func_name, term, func_def))
         return LoadName(name=func_name)
     if type(term) is _MetaArg:
         # A -meta_predicate position (clausal.logic.meta_predicate): hoist

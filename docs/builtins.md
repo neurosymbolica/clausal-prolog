@@ -75,8 +75,8 @@ Notation in signature lines:
 | [Type Checks](#type-checks) | var/1, nonvar/1, atom/1, string/1, is_str/1, atomic/1, number/1, integer/1, float_/1, compound/1, callable_/1, is_list/1, ground/1, must_be/2, can_be/2 |
 | [Dict and Set Predicates](#dict-and-set-predicates) | get/3,4, tri_get/3, delete/3, is_dict/1, dict_get/3, dict_put/4, dict_merge/3, gen_dict/3, sub_dict/2, is_set/1, set_union/3, set_subset/2, gen_set/2 |
 | [Arithmetic](#arithmetic) | between/3, succ/2, plus/3, abs_/2, max_/3, min_/3, sign/2, gcd/3, divmod_/4, lcm/3, exp_mod/4, popcount/2, msb/2, lsb/2 |
-| [List Predicates](#list-predicates) | in_/2, append/3, length/2, reverse/2, sort/2, permutation/2, select/3, flatten/2, take/3, drop/3, zip_/3, split_with/3, numlist/2,3, same_length/2, transpose/2 |
-| [Higher-Order List Predicates](#higher-order-list-predicates) | maplist/2,3, include/3, exclude/3, partition/4, tfilter/3, tpartition/4, foldl/4, take_while/3, drop_while/3, span/4, group_by/3, sort_by/3, filter_map/3 |
+| [List Predicates](#list-predicates) | in_/2, append/3, length/2, reverse/2, sort/2, permutation/2, select/3, flatten/2, take/3, drop/3, zip_/3, map_list_to_pairs/3, split_with/3, numlist/2,3, same_length/2, transpose/2 |
+| [Higher-Order List Predicates](#higher-order-list-predicates) | maplist/2,3, include/3, exclude/3, partition/4, tfilter/3, tpartition/4, foldl/4,5,6, take_while/3, drop_while/3, span/4, group_by/3, sort_by/3, filter_map/3 |
 | [Character/String](#characterstring) | char_type/2, char_code/2, upcase_atom/2, downcase_atom/2, atom_length/2, atom_chars/2, atom_codes/2, atom_concat/3, sub_atom/5, number_chars/2, number_codes/2 |
 | [I/O](#io) | write/1, writeq/1, write_canonical/1, write_term/2, writeln/1, write_text/1, writeln_text/1, print_term/1, nl/0, tab/1, write_to_string/2, write_text_to_string/2, term_to_string/2, listing/1, portray_clause/1 |
 | [Logging (`log` module)](#logging-log-module) | get_logger, debug, info, warning, error, critical, log, set_level, get_level, stream_handler, file_handler |
@@ -1374,7 +1374,7 @@ Succeeds if `Term` is a `DictTerm` or a plain `dict`.
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:dict_pairs_2"
 ```
-Bidirectional: `Dict` ↔ list of `[Key, Value]` 2-element lists. In dict→pairs direction, pairs are sorted by key.
+Bidirectional: `Dict` ↔ list of `Key-Value` pairs (the `'-'(Key, Value)` cell, as `pairs_keys_values/3`). In dict→pairs direction, pairs are sorted by key.
 
 ---
 
@@ -1398,7 +1398,7 @@ Functional update: `NewDict` is `OldDict` with `Key → Value` set. Returns a ne
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:dict_put_pairs_3"
 ```
-Bulk update from a `[[Key, Value], ...]` list. equivalent to repeated `dict_put/4`.
+Bulk update from a list of `Key-Value` pairs, equivalent to repeated `dict_put/4`.
 
 ---
 
@@ -1950,7 +1950,7 @@ Split `List` at index `N` into `Left` (first N elements) and `Right` (rest). Cla
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:zip__3"
 ```
-Pair up elements from two lists into `[X, Y]` sublists. Truncates to the shorter list.
+Pair up elements from two lists into `X-Y` pairs (the `'-'(X, Y)` cell). Truncates to the shorter list.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/lists.py` (`_zip__3`)
@@ -2030,6 +2030,18 @@ Group **adjacent** `Key-Value` pairs whose keys are identical (`==`), as in Scry
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:group_pairs_by_key_2_ex2"
 ```
+
+---
+
+### `map_list_to_pairs/3`
+```clausal
+--8<-- "tests/fixtures/docs/builtins_sigs.txt:map_list_to_pairs_3"
+```
+`Pairs` is `[K1-E1, K2-E2, ...]` with `call(Goal, Ei, Ki)` for each element of `List`, as in Scryer's `library(pairs)`. Every solution of each call is an answer on backtracking. See [Pairs](pairs.md#map_list_to_pairs3).
+
+??? info "Implementation & tests"
+    **Implementation:** `clausal/logic/builtins/higher_order.py` (`_map_list_to_pairs__3`)
+    **Python tests:** `tests/test_map_list_to_pairs.py`
 
 ---
 
@@ -2167,7 +2179,7 @@ Reified partition. Calls `Goal(Elem, T)` for each element. Elements where T=True
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:foldl_4"
 ```
-Left fold. Calls `Goal(Elem, Acc0, Acc1)` for each element, threading the accumulator. `V0` is the initial value; `V` is the final result.
+Left fold. Calls `Goal(Elem, Acc0, Acc1)` for each element, threading the accumulator. `V0` is the initial value; `V` is the final result. `foldl/5` and `foldl/6` fold over two and three lists (`Goal(X, Y, Acc0, Acc1)`, ...), as Scryer's `library(lists)`. Every solution of each call is an answer on backtracking, and an open list enumerates (see [Higher-Order](higher_order.md#foldl4-foldl5-foldl6)).
 
 ??? info "Implementation & tests"
     **Clausal tests:** `tests/fixtures/builtins_higher_order.clausal`
