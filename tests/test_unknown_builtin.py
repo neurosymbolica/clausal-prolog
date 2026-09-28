@@ -149,8 +149,8 @@ class TestUnknownGoalPosition:
 # Regression for todo/query-globals-injected-builtins-gap.md: the bare-query
 # compilation path derives its compiled globals only from ``module.module_dict``,
 # which need not carry the ``predicate_builtins`` injections.  A name that
-# ``term_to_ast_expr`` emits as a bare ``Name`` (Var/Compound/DictTerm/SetTerm/
-# KWTerm/Undefined, plus the $-prefixed engine helpers) must therefore resolve from
+# ``term_to_ast_expr`` emits as a bare ``Name`` (Var/DictTerm/SetTerm/
+# Undefined, plus the $-prefixed engine helpers) must therefore resolve from
 # the compiler-seeded base_globals, not the module dict.  The generic fix seeds
 # every predicate's base_globals from ``INJECTED_RUNTIME_BUILTINS`` (single source
 # of truth shared with import_hook.predicate_builtins).

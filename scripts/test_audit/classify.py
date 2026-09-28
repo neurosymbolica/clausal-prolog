@@ -84,7 +84,7 @@ BEHAVIOR_NAMES |= BEHAVIOR_HELPERS
 # AST-node constructors imported from clausal.terms count as infra use
 # (building queries by hand in Python rather than using .clausal syntax).
 TERM_AST_NODES = {
-    "Compound", "KWTerm", "Call", "LoadName", "LoadAttr",
+    "Compound", "Call", "LoadName", "LoadAttr",
     "Evaluate", "Add", "Sub", "Mult", "FloorDiv", "Mod", "Pow", "Negate",
     "Lt", "LtE", "Gt", "GtE", "Eq", "NotEq",
     "And", "Or", "Not", "IfExpr", "FindAll", "BagOf", "SetOf", "ForAll",

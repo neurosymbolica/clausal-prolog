@@ -70,11 +70,11 @@ class ClausalKeywordArgumentWarning(ClausalLintWarning):
     A term is built positionally.  The keyword spelling is Python's
     keyword-call syntax borrowed as a term form: it has no ISO Prolog
     reading, it made a functor's field NAMES depend on which clause of it
-    came first (the first head's keywords became the signature), and it is
-    the last surface producer of ``KWTerm`` -- a third term representation
-    beside the cell and the class instance.  Refused as of 2026-09-19 by
-    ``EmbedTransformer._lint_keyword_argument``; the machinery behind it is
-    deleted with the class in P4.
+    came first (the first head's keywords became the signature), and it was
+    the last surface producer of a keyword-term class -- a third term
+    representation beside the cell and the class instance, since deleted with
+    its machinery.  Refused as of 2026-09-19 by
+    ``EmbedTransformer._lint_keyword_argument``.
 
     Two keyword spellings are NOT this warning: a ``-directive``'s options
     (``-specialize(solve, p, alias=q)``), which are options of the directive

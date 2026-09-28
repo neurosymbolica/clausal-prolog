@@ -16,7 +16,6 @@ from clausal.logic.variables import Var, is_var, deref
 from clausal.terms import (
     DictTerm,
     SetTerm,
-    KWTerm,
     And,
     Unify,
     Evaluate,
@@ -123,13 +122,6 @@ def _collect_vars(term: Any, seen: set[int] | None = None,
         result = pre
         for e in term.elements:
             result.extend(_collect_vars(e, seen, include_bound))
-        return result
-
-    # KWTerm: recurse into field values
-    if isinstance(term, KWTerm):
-        result = pre
-        for v in term.values():
-            result.extend(_collect_vars(v, seen, include_bound))
         return result
 
 

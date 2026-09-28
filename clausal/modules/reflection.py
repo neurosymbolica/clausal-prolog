@@ -57,7 +57,6 @@ from clausal.logic.trampoline import DONE
 from clausal.logic.variables import deref, is_var, unify
 from clausal.modules.py import ModulePredicate, simple_to_trampoline, to_text
 from clausal.pythonic_ast import nodes as simple_ast
-from clausal.terms import KWTerm
 from clausal.reflection import (
     Atom,
     Clause,
@@ -380,10 +379,7 @@ def _rewrites(term, old, new, trail):
 
     Occurrence order matches ``reified_subterm/2``'s ``_subterms`` walk on the
     reified domain it targets (vocab / ``simple_ast`` nodes / lists / dicts —
-    what reified ``goals``/``args`` hold).  For a raw ``KWTerm`` the
-    two diverge: this walk descends args/values position-preservingly (needed to
-    rewrite ordinary compounds), whereas ``_subterms`` exposes their raw
-    fields — so don't rely on cross-walk agreement off the reified domain.  A
+    what reified ``goals``/``args`` hold).  A
     str-functor CELL (P3-2 Task 7) diverges from ``_subterms`` the same way:
     this walk protects its functor (only args are
     rewrite targets), whereas ``_subterms`` still walks it as a generic tuple
@@ -434,13 +430,6 @@ def _rewrites(term, old, new, trail):
         for i, elem in enumerate(term):
             for rewritten in _rewrites(elem, old, new, trail):
                 yield term[:i] + (rewritten,) + term[i + 1:]
-    elif isinstance(term, KWTerm):
-        items = list(term.items())
-        for key, value in items:
-            for rewritten in _rewrites(value, old, new, trail):
-                kw = dict(items)
-                kw[key] = rewritten
-                yield KWTerm(term.functor, _position=term._position, **kw)
     elif isinstance(term, dict):
         for key, value in term.items():
             for rewritten in _rewrites(value, old, new, trail):

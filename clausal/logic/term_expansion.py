@@ -457,8 +457,8 @@ def _head_as_cell(term: Any) -> Any:
     head flip; ``Database._with_instance_head`` is gone with it).
     """
     from clausal.logic.predicate import is_term_instance, term_field_names
-    from clausal.terms import Call as TermCall, KWTerm
-    if is_term_instance(term) and not isinstance(term, (TermCall, KWTerm)):
+    from clausal.terms import Call as TermCall
+    if is_term_instance(term) and not isinstance(term, TermCall):
         return (type(term).__name__,
                 *(getattr(term, f) for f in term_field_names(term)))
     return term

@@ -165,7 +165,7 @@ test("not str") <- (not number("42"))
 ### compound/1
 
 `compound(X)` — succeeds if `X` is a compound term with arity > 0. This
-includes cells, predicate instances, and `KWTerm` values. An **atom
+includes cells and predicate instances. An **atom
 is not compound**: it has arity 0 (it is a name, not a functor application),
 and arity 0 is not `> 0`.
 

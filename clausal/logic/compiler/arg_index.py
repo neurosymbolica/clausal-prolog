@@ -22,7 +22,7 @@ from clausal.logic.trampoline import DONE, StepGenerator  # noqa: F401
 from clausal.terms import (
     Call, LoadName, LoadAttr,
     Unify,
-    DictTerm, SetTerm, KWTerm, SegList,
+    DictTerm, SetTerm, SegList,
 )
 from clausal.pythonic_ast.nodes import StarUnpack  # noqa: F401
 from clausal.logic.predicate import (
@@ -239,7 +239,7 @@ def _is_deeply_ground(val: Any) -> bool:
       Previously ANY tuple unconditionally skipped element 0, so a nested
       var-functor tuple like ``("W", (Var(), 1))`` read as ground (the
       inner tuple's slot 0, the Var, was never even looked at).
-    - ``DictTerm``, ``KWTerm``, ``SetTerm`` and ``SegList``
+    - ``DictTerm``, ``SetTerm`` and ``SegList``
       previously fell through to the final ``return True`` (unconditional
       ground) the moment they were reached, regardless of what Vars they
       carried — ``("W", DictTerm(...Var...))`` wrongly keyed into a bucket.
@@ -291,8 +291,6 @@ def _is_deeply_ground_walk(val: Any, _budget: list[int]) -> bool:
     if isinstance(val, DictTerm):
         # Keys must already be ground by DictTerm's own contract; only
         # values can carry a Var.
-        return all(_is_deeply_ground_walk(v, _budget) for v in val.values())
-    if isinstance(val, KWTerm):
         return all(_is_deeply_ground_walk(v, _budget) for v in val.values())
     if isinstance(val, SetTerm):
         # Elements must already be ground by SetTerm's own contract

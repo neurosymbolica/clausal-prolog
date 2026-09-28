@@ -59,7 +59,7 @@ from .logic.atoms import (
     mint as _mint_atom,
     spelling as _atom_spelling,
 )
-from .terms import KWTerm, DictTerm, SetTerm
+from .terms import DictTerm, SetTerm
 from .logic.generated_names import with_dollar_twins
 
 

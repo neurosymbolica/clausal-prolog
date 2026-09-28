@@ -26,7 +26,7 @@ from typing import Any
 from clausal.logic.variables import Var, is_var, deref, unify  # noqa: F401
 from clausal.terms import (
     Call, LoadName, LoadAttr,
-    DictTerm, SetTerm, KWTerm,
+    DictTerm, SetTerm,
     SegList, VarSeg,  # noqa: F401
 )
 from clausal.pythonic_ast.nodes import (
@@ -66,7 +66,6 @@ from .terms_to_ast import (
 # suffixes.  Kept verbatim so call sites don't need editing.
 _DictTerm = DictTerm
 _SetTerm = SetTerm
-_KWTerm = KWTerm
 _SetLiteral = SetLiteral
 
 # Python types that ``ast.Constant`` accepts as a value.  PredicateMeta

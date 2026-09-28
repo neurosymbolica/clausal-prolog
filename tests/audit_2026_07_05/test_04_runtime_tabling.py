@@ -518,14 +518,6 @@ class TestF008DerefWalkTemplateFreeze:
         t.reset()
         assert snap == (1, "tag")  # was (unbound, "tag") after reset
 
-    @pytest.mark.compound_retirement_slice9
-    def test_kwterm_template_frozen(self):
-        from clausal.terms import KWTerm
-        _deref_walk, t, X = self._bound()
-        snap = _deref_walk(KWTerm("r", a=X, b=2))
-        t.reset()
-        assert deref(snap.a) == 1 and snap.b == 2
-
     def test_dictterm_template_frozen(self):
         from clausal.terms import DictTerm
         _deref_walk, t, X = self._bound()

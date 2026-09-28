@@ -791,9 +791,9 @@ _TITLECASE_EXEMPT_NAMES = frozenset({"Undefined"})
 # A term is built POSITIONALLY.  ``point(x=1, y=2)`` is Python's keyword-call
 # syntax borrowed as a term spelling: no ISO reading, and it is the only way a
 # functor's field NAMES could be declared, which made them depend on which
-# clause of the predicate came first.  It is also the last surface producer of
-# ``KWTerm``, a third term representation beside the cell and the class
-# instance.  Refused here; the machinery goes with the class in P4.
+# clause of the predicate came first.  It was also the last surface producer of
+# a keyword-term class, a third term representation beside the cell and the
+# class instance; that class and its machinery are deleted.  Refused here.
 
 #: Severity of the keyword-argument lint: ``"error"`` raises a located
 #: ``SyntaxError`` at the term; ``"warn"`` emits one

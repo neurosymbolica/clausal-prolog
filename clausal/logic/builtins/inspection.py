@@ -21,7 +21,7 @@ from clausal.logic.atoms import (
     mint,
     spelling,
 )
-from clausal.terms import KWTerm, SegList, SegString, VarSeg, ConcreteSeg
+from clausal.terms import SegList, SegString, VarSeg, ConcreteSeg
 
 from clausal.logic.builtins._registry import _builtin
 from clausal.logic.builtins._helpers import (
@@ -71,8 +71,6 @@ def _copy_term_py(term: Any, var_map: dict) -> Any:
         if all(new is old for new, old in zip(copied, term)):
             return term
         return copied
-    if isinstance(term, KWTerm):
-        return KWTerm(term.functor, **{k: _copy_term_py(v, var_map) for k, v in term.items()})
     # F092 (audit 2026-05-25): Seg* containers must produce an
     # independent copy whose VarSegs reference FRESH Vars threaded
     # through ``var_map`` so co-references inside the container are
@@ -145,10 +143,6 @@ def _collect_vars_py(term: Any, result: list, _seen: set | None = None) -> None:
         for e in term:
             _collect_vars_py(e, result, _seen)
         return
-    if isinstance(term, KWTerm):
-        for v in term.values():
-            _collect_vars_py(v, result, _seen)
-        return
     # F093 (audit 2026-05-25): Seg* containers expose their VarSegs as
     # variables.  Walk every ConcreteSeg element and every VarSeg's
     # ``var`` slot so ``term_variables`` and ``numbervars`` (which
@@ -194,8 +188,7 @@ try:
     # about ``SegList`` / ``SegString`` — they fall through to "return
     # as-is" for ``copy_term`` (aliasing the original) and "leaf" for
     # ``term_variables`` (missing VarSegs).  Both types are absent
-    # from ``_register_term_types`` (which only knows
-    # ``KWTerm``).  Short-circuit Seg* shapes in Python (same pattern
+    # from the C walkers' shape arms.  Short-circuit Seg* shapes in Python (same pattern
     # used by ``_is_ground`` for [[F083]]) and delegate every other
     # shape to the C fast path.  Within the Python branch we still
     # recurse via ``_copy_term_py`` / ``_collect_vars_py`` so any

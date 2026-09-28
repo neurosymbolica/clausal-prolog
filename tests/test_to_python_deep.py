@@ -16,7 +16,7 @@ from clausal.logic.atoms import mint, NIL_KEY
 from clausal.logic.cells import chars, TUPLE_TAG
 from clausal.logic.to_python import to_python
 from clausal.logic.variables import Var, Trail, unify
-from clausal.terms import KWTerm, SetTerm, DictTerm, SegList, SegString, VarSeg, ConcreteSeg
+from clausal.terms import SetTerm, DictTerm, SegList, SegString, VarSeg, ConcreteSeg
 
 
 # ── the hot-path contract is untouched ──────────────────────────────────────
@@ -45,17 +45,6 @@ def test_a_compound_cell_converts_its_args():
 def test_a_compound_cell_nested_in_a_list_converts_too():
     out = to_python([("f", chars("x"))])
     assert out == [("f", "x")] and type(out[0][1]) is str
-
-
-# ── KWTerm ──────────────────────────────────────────────────────────────────
-
-@pytest.mark.compound_retirement_slice9
-def test_a_kwterm_keeps_its_shape_with_converted_fields():
-    k = KWTerm("r", a=chars("t"), b=[mint("x"), chars("y")])
-    out = to_python(k)
-    assert isinstance(out, KWTerm) and out.functor == "r"
-    assert out.a == "t" and type(out.a) is str
-    assert out.b == ["x", "y"] and type(out.b[1]) is str
 
 
 # ── SetTerm / set ───────────────────────────────────────────────────────────

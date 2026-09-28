@@ -1,13 +1,12 @@
 """Tests for structural_unify — Step 9.
 
 structural_unify (clausal.logic.builtins) extends the C-extension unify with
-Python-level recursive unification for cells, KWTerm, and dataclass terms.
+Python-level recursive unification for cells and dataclass terms.
 
 Covers:
   - cell ↔ cell: same functor/arity, mismatches, recursive, with Var
   - list ↔ list: element-wise unification
   - Dataclass ↔ dataclass: same-type field-by-field unification
-  - KWTerm ↔ KWTerm: order-independent key-matching unification
   - Var arguments: binding and trail integration
   - Trail undo: partial unification is rolled back on failure
   - Fall-through: atomics and mixed types delegate to C unify
@@ -20,7 +19,6 @@ import pytest
 
 from clausal.logic.builtins import structural_unify
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
-from clausal.terms import KWTerm
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -232,74 +230,6 @@ class TestStructuralUnifyDataclass:
         assert deref(vx) == 1
         assert deref(vy) == 2
         assert deref(vz) == 3
-
-
-# ── TestStructuralUnifyKWTerm ──────────────────────────────────────────────────
-
-
-class TestStructuralUnifyKWTerm:
-    @pytest.mark.compound_retirement_slice9
-    def test_same_ground_succeeds(self):
-        # nv
-        t = fresh()
-        k1 = KWTerm("r", a=1, b=2)
-        k2 = KWTerm("r", a=1, b=2)
-        assert structural_unify(k1, k2, t)
-
-    @pytest.mark.compound_retirement_slice9
-    def test_order_independent(self):
-        """KWTerm unification matches by key name, not insertion order."""
-        # nv
-        t = fresh()
-        k1 = KWTerm("r", a=1, b=2)
-        k2 = KWTerm("r", b=2, a=1)
-        assert structural_unify(k1, k2, t)
-
-    @pytest.mark.compound_retirement_slice9
-    def test_different_functor_fails(self):
-        # nv
-        t = fresh()
-        assert not structural_unify(KWTerm("r", a=1), KWTerm("s", a=1), t)
-
-    @pytest.mark.compound_retirement_slice9
-    def test_different_keys_fail(self):
-        # nv
-        t = fresh()
-        assert not structural_unify(KWTerm("r", a=1), KWTerm("r", b=1), t)
-
-    @pytest.mark.compound_retirement_slice9
-    def test_value_mismatch_fails(self):
-        # nv
-        t = fresh()
-        assert not structural_unify(KWTerm("r", a=1), KWTerm("r", a=2), t)
-
-    @pytest.mark.compound_retirement_slice9
-    def test_with_var_field(self):
-        # nv
-        t = fresh()
-        v = Var()
-        assert structural_unify(KWTerm("r", a=v, b=2), KWTerm("r", a=99, b=2), t)
-        assert deref(v) == 99
-
-    @pytest.mark.compound_retirement_slice9
-    def test_trail_undo_on_failure(self):
-        # nv
-        t = fresh()
-        v = Var()
-        # a=V, b=1 vs a=42, b=99 — V binds to 42 but 1 != 99 → fail
-        result = structural_unify(
-            KWTerm("r", a=v, b=1), KWTerm("r", a=42, b=99), t
-        )
-        assert not result
-        assert not v.is_bound
-
-    @pytest.mark.compound_retirement_slice9
-    def test_extra_keys_in_one_fails(self):
-        # nv
-        t = fresh()
-        k1 = KWTerm("r", a=1, b=2, c=3)
-        k2 = KWTerm("r", a=1, b=2)
-        assert not structural_unify(k1, k2, t)
 
 
 # ── TestStructuralUnifyVarArgs ─────────────────────────────────────────────────

@@ -171,7 +171,7 @@ work in unification as atomic data without any wrapping.
 |---------|-----------|
 | `atom/1` | Zero-arity PredicateMeta class |
 | `is_str/1` | `isinstance(x, str)` (excludes declared atoms) |
-| `callable_/1` | `str`, cells, `KWTerm`, term instances, or declared atoms |
+| `callable_/1` | `str`, cells, term instances, or declared atoms |
 
 ### String Builtins
 

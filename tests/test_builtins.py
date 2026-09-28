@@ -19,7 +19,7 @@ from clausal.logic.cells import chars
 from clausal.logic.database import Clause, Database, Module
 from clausal.logic.solve import solve
 from clausal.logic.variables import Var, Trail, deref
-from clausal.terms import KWTerm, Call, LoadName
+from clausal.terms import Call, LoadName
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -44,83 +44,6 @@ def sol_var(goal, var, *, limit=50, mod=None):
     t = Trail()
     return [deref(var) for _ in solve(goal, mod, t)]
 
-
-# ── KWTerm tests ───────────────────────────────────────────────────────────────
-
-
-@pytest.mark.compound_retirement_slice9
-class TestKWTerm:
-    def test_construction_and_access(self):
-        # nv
-        t = KWTerm("point", x=1, y=2)
-        assert t.functor == "point"
-        assert t.x == 1
-        assert t.y == 2
-
-    def test_equality_order_independent(self):
-        # nv
-        assert KWTerm("r", a=1, b=2) == KWTerm("r", b=2, a=1)
-
-    def test_equality_different_functor(self):
-        # nv
-        assert KWTerm("r", a=1) != KWTerm("s", a=1)
-
-    def test_equality_different_fields(self):
-        # nv
-        assert KWTerm("r", a=1) != KWTerm("r", a=2)
-
-    def test_len(self):
-        # nv
-        assert len(KWTerm("r", a=1, b=2)) == 2
-
-    def test_keys_values_items(self):
-        # nv
-        t = KWTerm("r", a=1, b=2)
-        assert list(t.keys()) == ["a", "b"]
-        assert list(t.values()) == [1, 2]
-        assert list(t.items()) == [("a", 1), ("b", 2)]
-
-    def test_with_overrides(self):
-        # nv
-        t = KWTerm("r", a=1, b=2)
-        t2 = t.with_overrides(b=99)
-        assert t2.b == 99
-        assert t2.a == 1
-
-    def test_with_overrides_unknown_key(self):
-        # nv
-        t = KWTerm("r", a=1)
-        with pytest.raises(KeyError):
-            t.with_overrides(z=9)
-
-    def test_with_extensions(self):
-        # nv
-        t = KWTerm("r", a=1)
-        t2 = t.with_extensions(b=2)
-        assert list(t2.keys()) == ["a", "b"]
-
-    def test_with_extensions_existing_key(self):
-        # nv
-        t = KWTerm("r", a=1)
-        with pytest.raises(KeyError):
-            t.with_extensions(a=99)
-
-    def test_repr(self):
-        # nv
-        r = repr(KWTerm("r", x=1))
-        assert "KWTerm" in r and "x=1" in r
-
-    def test_hash_consistent(self):
-        # nv
-        t1 = KWTerm("r", a=1, b=2)
-        t2 = KWTerm("r", b=2, a=1)
-        assert hash(t1) == hash(t2)
-
-    def test_missing_attr(self):
-        # nv
-        t = KWTerm("r", a=1)
-        with pytest.raises(AttributeError):
-            _ = t.z
 
 # ── Migration note ─────────────────────────────────────────────────────────
 # TestTypeChecks / TestArithmetic / TestListPredicates / TestAssertRetract /
@@ -383,43 +306,6 @@ class TestWK5:
         assert len(results) == 1
         assert results[0] == point(x=1, y=99)
 
-    @pytest.mark.compound_retirement_slice9
-    def test_vary_kwterm(self):
-        # nv
-        mod = fresh_module()
-        t = KWTerm("r", a=1, b=2)
-        new_t = Var()
-        goal = Call(
-            func=LoadName(name="vary"), args=[{"b": 99}, t, new_t], kwargs=[]
-        )
-        results = sol_var(goal, new_t, mod=mod)
-        assert len(results) == 1
-        assert results[0] == KWTerm("r", a=1, b=99)
-
-    @pytest.mark.compound_retirement_slice9
-    def test_vary_unknown_key(self):
-        # nv
-        mod = fresh_module()
-        t = KWTerm("r", a=1)
-        new_t = Var()
-        goal = Call(
-            func=LoadName(name="vary"), args=[{"z": 9}, t, new_t], kwargs=[]
-        )
-        assert sol_var(goal, new_t, mod=mod) == []
-
-    @pytest.mark.compound_retirement_slice9
-    def test_extend_kwterm(self):
-        # nv
-        mod = fresh_module()
-        t = KWTerm("r", a=1)
-        new_t = Var()
-        goal = Call(
-            func=LoadName(name="extend"), args=[{"b": 2}, t, new_t], kwargs=[]
-        )
-        results = sol_var(goal, new_t, mod=mod)
-        assert len(results) == 1
-        assert results[0] == KWTerm("r", a=1, b=2)
-
     def test_unbound_keys_dataclass(self):
         @dataclasses.dataclass
         # nv
@@ -435,18 +321,6 @@ class TestWK5:
         results = sol_var(goal, keys, mod=mod)
         # THE FLIP (spec §6.4): a field NAME answered to the program is an atom.
         assert results == [[mint("y")]]
-
-    @pytest.mark.compound_retirement_slice9
-    def test_unbound_keys_kwterm(self):
-        # nv
-        v = Var()
-        t = KWTerm("r", a=1, b=v)
-        mod = fresh_module()
-        keys = Var()
-        goal = Call(func=LoadName(name="unbound_keys"), args=[t, keys], kwargs=[])
-        results = sol_var(goal, keys, mod=mod)
-        # THE FLIP (spec §6.4): a field NAME answered to the program is an atom.
-        assert results == [[mint("b")]]
 
     def test_signature(self):
         # nv

@@ -1575,7 +1575,6 @@ def _reify_value(value, depth: int = 0, path=None):
     )
     from clausal.logic.variables import deref, is_var
     from clausal.reflection import Atom, Goal, Variable, is_v, vfield
-    from clausal.terms import KWTerm
 
     if depth > DIAG_MAX_DEPTH:
         raise _Unrenderable("term too deep to render")
@@ -1607,10 +1606,6 @@ def _reify_value(value, depth: int = 0, path=None):
         return tuple(_reify_value(v, depth + 1, path) for v in value)
     if field_names_for(value) is not None:
         return Atom(name=value.__name__)
-    if isinstance(value, KWTerm):
-        return Goal(name=str(value.functor), args=[],
-                    kwargs=[[k, _reify_value(v, depth + 1, path)]
-                            for k, v in value.items()])
     if is_term_instance(value):
         return Goal(name=type(value).__name__,
                     args=[_reify_value(getattr(value, f), depth + 1, path)

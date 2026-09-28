@@ -1183,11 +1183,12 @@ def test_re_pattern_that_is_not_text_raises_type_error():
     assert cell_args(formal)[1] == ("t12_pat", 1)
 
 
-def test_vary_and_extend_refuse_a_malformed_field_key(builtins_mod):
+def test_vary_refuses_a_malformed_field_key(builtins_mod):
     """``keyword_ops._field_keys`` answered ``None`` for a key that is neither
     an atom nor an identifier spelling, and both callers turned that into a
-    silent failure.  A malformed key is ``type_error(atom, Key, …)``."""
-    for goal_name in ("vary", "extend"):
+    silent failure.  A malformed key is ``type_error(atom, Key, …)``.
+    (``extend/3`` was the other caller; it went with the keyword-term class.)"""
+    for goal_name in ("vary",):
         with pytest.raises(LogicException) as exc:
             list(solve((goal_name, {1: 2}, mint("t12_term"), Var()),
                        builtins_mod))
@@ -1198,14 +1199,14 @@ def test_vary_and_extend_refuse_a_malformed_field_key(builtins_mod):
         assert cell_args(exc.value.term)[1] == ("/", goal_name, 3)
 
 
-def test_vary_and_extend_report_an_unbound_field_key_as_uninstantiated(
+def test_vary_reports_an_unbound_field_key_as_uninstantiated(
     builtins_mod,
 ):
     """Fix round 1: an UNBOUND key is the instantiation fault, not the type
     fault.  ``type_error(atom, _G12)`` read as "a variable is the wrong SORT
     of term here" when the term is right and only the binding is missing —
     the same split ``listing/1`` makes for an unfinished indicator."""
-    for goal_name in ("vary", "extend"):
+    for goal_name in ("vary",):
         with pytest.raises(LogicException) as exc:
             list(solve((goal_name, {Var(): 2}, mint("t12_term"), Var()),
                        builtins_mod))

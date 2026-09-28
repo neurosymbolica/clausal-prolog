@@ -101,7 +101,7 @@ def _deref_walk_py(term: Any) -> Any:
         return {_deref_walk_py(k): _deref_walk_py(v) for k, v in term.items()}
     if isinstance(term, (set, frozenset)):
         return type(term)(_deref_walk_py(e) for e in term)  # A04-F005
-    # A01-F008: delegate to __walk__ hooks (KWTerm, DictTerm, Seg*),
+    # A01-F008: delegate to __walk__ hooks (DictTerm, Seg*),
     # keeping this Python fallback in sync with the C twin (_tabling_core
     # do_deref_walk) and with walk() itself. Preserves F018 Seg promotion.
     hook = getattr(term, "__walk__", None)

@@ -26,7 +26,6 @@ from clausal.terms import (
     DictTerm,
     Div,
     FloorDiv,
-    KWTerm,
     SegBytes,
     SegList,
     SegString,
@@ -130,7 +129,7 @@ def _format_term_as_text(val):
 #: has always produced -- a ``date`` prints ``2020-01-01``, not its ``repr``,
 #: and an unbound ``Var`` prints ``_N`` rather than the style's anonymous
 #: placeholder.
-_ISO_TERM_TYPES = (str, bytes, list, KWTerm, DictTerm, SetTerm)
+_ISO_TERM_TYPES = (str, bytes, list, DictTerm, SetTerm)
 
 
 #: What the ISO family puts between a compound's arguments and a list's
@@ -151,7 +150,7 @@ def _format_term_iso(val, quoted: bool, double_quotes: bool = False) -> str:
     (item 5).
 
     Every shape ``term_str`` renders as a term is routed to it (item 1) --
-    ``KWTerm``, ``DictTerm``, ``SetTerm`` and declared term
+    ``DictTerm``, ``SetTerm`` and declared term
     instances used to fall to ``str()``, which routes back through
     ``term_str``'s DISPLAY defaults and so printed double-quoted strings and
     Python reprs inside an ISO writer's output.

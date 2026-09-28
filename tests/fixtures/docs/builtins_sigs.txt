@@ -204,10 +204,6 @@ abolish_all_tables
 vary(+Overrides, +Term, -NewTerm)
 --8<-- [end:vary_3]
 
---8<-- [start:extend_3]
-extend(+Additions, +Term, -NewTerm)
---8<-- [end:extend_3]
-
 --8<-- [start:unbound_keys_2]
 unbound_keys(+Term, -Keys)
 --8<-- [end:unbound_keys_2]

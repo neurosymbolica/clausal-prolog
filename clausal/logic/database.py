@@ -13,7 +13,7 @@ import dataclasses
 from collections import namedtuple
 from typing import Any, Callable
 
-from clausal.terms import And, Call, KWTerm, LoadName, PyThunk
+from clausal.terms import And, Call, LoadName, PyThunk
 from clausal.pythonic_ast.nodes import TupleLiteral, StarUnpack
 from clausal.logic.cells import (TUPLE_TAG, compound_cell_shape, is_chars,
                                  cell_args, make_cell)
@@ -1690,7 +1690,7 @@ def _is_normalizable_fact(head: Any) -> bool:
         return any(_is_ground_value(a) for a in cell_args(head))
     if not is_term_instance(head):
         return False
-    if isinstance(head, (Call, KWTerm)):
+    if isinstance(head, Call):
         return False
     return any(
         _is_ground_value(getattr(head, name))
@@ -1747,8 +1747,8 @@ def _normalize_dataclass_fact(head: Any) -> tuple[Any, list]:
         for name in fields
     }
     # W4a: the tail of this function is the DATACLASS path (its gate,
-    # ``_is_normalizable_fact``, excludes cells and the Call/KWTerm
-    # shapes), so the rebuild is the class's own
+    # ``_is_normalizable_fact``, excludes cells and the Call
+    # shape), so the rebuild is the class's own
     # constructor.  It used to be ``_clausal_head``, for the predicate
     # INSTANCE that path also carried until W4a retired it.
     new_head = type(head)(**new_kwargs)
@@ -1763,7 +1763,7 @@ def _is_structural_head_value(val: Any) -> bool:
     Atomics, Vars, StarUnpack and lists are handled by other compiler paths and
     must NOT be normalized here."""
     from clausal.logic.variables import is_var
-    if is_var(val) or isinstance(val, (StarUnpack, list, KWTerm)):
+    if is_var(val) or isinstance(val, (StarUnpack, list)):
         return False
     if isinstance(val, Call):
         return isinstance(val.func, LoadName)
@@ -1837,7 +1837,7 @@ def _normalize_structural_head_args(head: Any, body: list) -> tuple[Any, list]:
     the match-guard path). Each structural field is replaced by a fresh Var and a
     Unify(var, value) goal is prepended to body (prepended so destructured inner
     vars are bound before the original body runs). No-op for non-functor-instance
-    heads (bare Call/KWTerm) or heads with no structural fields."""
+    heads (bare Call) or heads with no structural fields."""
     from clausal.logic.variables import Var
     from clausal.terms import Unify
 
@@ -1857,7 +1857,7 @@ def _normalize_structural_head_args(head: Any, body: list) -> tuple[Any, list]:
             return head, body
         return make_cell(functor, *args), prepend + list(body)
 
-    if not is_term_instance(head) or isinstance(head, (Call, KWTerm)):
+    if not is_term_instance(head) or isinstance(head, Call):
         return head, body
     fields = term_field_names(head)
     replacements: dict[str, Any] = {}
@@ -1896,8 +1896,6 @@ def head_key(head: Any) -> tuple[str, int]:
         if isinstance(head.func, LoadName):
             return head.func.name, len(head.args)
         raise TypeError(f"Call head with non-LoadName func: {head.func!r}")
-    if isinstance(head, KWTerm):
-        return head.functor, len(head)
     if is_term_instance(head):
         return type(head).__name__, len(term_field_names(head))
     # (A zero-arity ``PredicateMeta`` class head, keyed name/0, stood here;
@@ -1950,11 +1948,8 @@ def _extract_param_names(head: Any) -> tuple[str, ...] | None:
     if compound_cell_shape(head)[0]:
         # P2: a cell head carries no field NAMES -- they come from the
         # declaration (``-private([point(x, y)])`` / the -module export list),
-        # which the class already records.  The KWTerm arm below was the only
-        # other producer and its surface spelling is refused since 2026-09-19.
+        # which the class already records.
         return None
-    if isinstance(head, KWTerm):
-        return tuple(head.keys())
     if not is_term_instance(head):
         return None
     # exclude built-in term types that happen to be dataclasses.

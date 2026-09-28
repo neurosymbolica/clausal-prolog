@@ -5,7 +5,7 @@ Ground-literal behavior tests have moved to
 
 What stays here:
 
-- Tests that pass a cell or ``KWTerm(...)`` as the argument —
+- Tests that pass a cell as the argument —
   these cannot be constructed at clausal surface syntax (``f(x)`` in an
   argument position would resolve as a predicate call, not a term).
 - Tests involving ``bool`` (True/False) and ``complex`` literals, which
@@ -26,7 +26,6 @@ from clausal.logic.cells import chars
 from clausal.logic.database import Module
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, Trail, unify
-from clausal.terms import KWTerm
 
 
 def _succeeds(functor, arg):
@@ -54,7 +53,7 @@ class TestVarPostBinding:
         assert _succeeds("nonvar", v)
 
 
-# ── Compound (cell) / KWTerm arguments ─────────────────────────────────────────────
+# ── Compound (cell) arguments ─────────────────────────────────────────────
 
 
 class TestCompoundArgs:
@@ -72,10 +71,6 @@ class TestCompoundArgs:
 
     def test_compound_arity2(self):
         assert _succeeds("compound", ("g", 1, 2))
-
-    @pytest.mark.compound_retirement_slice9
-    def test_compound_kwterm(self):
-        assert _succeeds("compound", KWTerm("point", x=1, y=2))
 
     def test_compound_atom_fails(self):
         assert _fails("compound", mint("a"))

@@ -175,13 +175,11 @@ import sys as _sys  # noqa: F401
 import warnings  # noqa: F401
 from collections import defaultdict  # noqa: F401
 
-from clausal.terms import DictTerm, SetTerm, KWTerm, PyThunk  # noqa: F401
+from clausal.terms import DictTerm, SetTerm, PyThunk  # noqa: F401
 
 _DictTerm = DictTerm
 _SetTerm = SetTerm
 _PyThunk = PyThunk
-_KWTerm = KWTerm
-_KWTerm_t = KWTerm
 _DictTerm_t = DictTerm
 _SetTerm_t = SetTerm
 _DictTerm_s = DictTerm
@@ -280,7 +278,7 @@ from .tro import (  # noqa: E402,F401
 #
 # ``term_to_ast_expr`` can emit a *bare Name* for a runtime value (not just a
 # module-declared predicate): the term-constructor helpers ``Var``/
-# ``DictTerm``/``SetTerm``/``KWTerm``, the Kleene ``Undefined`` singleton, and any
+# ``DictTerm``/``SetTerm``, the Kleene ``Undefined`` singleton, and any
 # ``is_term_instance`` runtime type referenced as ``Cls(...)`` — e.g. ``Quantity``,
 # a ``PyThunk``/``FStringThunk`` wrapper, or a CLP(B) ``BoolEq``/``BoolImpl``.
 # Inside a *module clause* these names resolve because the module namespace has
@@ -348,7 +346,6 @@ INJECTED_RUNTIME_BUILTINS: dict = {
     "Var": Var,
     "DictTerm": _DictTerm,
     "SetTerm": _SetTerm,
-    "KWTerm": _KWTerm,
     "Trail": _Trail,
     "PyThunk": _PyThunk,
     "FStringThunk": _FStringThunk,
@@ -1049,7 +1046,7 @@ def _compile_predicate_trampoline_impl(
 
     base_globals: dict = {
         # Seed with the injected runtime builtins so every name term_to_ast_expr
-        # can emit (Var/DictTerm/SetTerm/KWTerm, Undefined, Quantity,
+        # can emit (Var/DictTerm/SetTerm, Undefined, Quantity,
         # PyThunk/FStringThunk, BoolEq/BoolImpl, plus $-prefixed engine helpers)
         # resolves even on the bare-query path — whose globals derive only from
         # the module dict, which need not carry the injections.  See

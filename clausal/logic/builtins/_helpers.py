@@ -21,7 +21,7 @@ from clausal.logic.atoms import (
     char_atom, is_nil as _is_nil, NIL_SPELLING as _NIL_SPELLING,
 )
 from clausal.terms import (
-    KWTerm, DictTerm, SetTerm, Quantity,
+    DictTerm, SetTerm, Quantity,
     SegList, SegString, SegBytes, VarSeg, ConcreteSeg,
 )
 
@@ -47,8 +47,6 @@ def _functor_name_py(term: Any) -> Any:
     the same name further down this file.  The empty string keeps the ISO
     nil-atom spelling ``"[]"``, as the empty list does.
     """
-    if isinstance(term, KWTerm):
-        return term.functor
     if is_term_instance(term):
         return type(term).__name__
     if isinstance(term, list):
@@ -83,8 +81,6 @@ def _arity_py(term: Any) -> int | None:
     accessor is called directly rather than through the funnel wrapper of
     the same name further down this file.
     """
-    if isinstance(term, KWTerm):
-        return len(term)
     if is_term_instance(term):
         return len(term_field_names(term))
     if isinstance(term, list):
@@ -121,11 +117,6 @@ def _nth_arg_py(term: Any, n: int) -> Any:
     accessor of the same name, whose own ``str`` arm is likewise
     shadowed; the twins are retired together or not at all.
     """
-    if isinstance(term, KWTerm):
-        vals = list(term.values())
-        if n < 1 or n > len(vals):
-            raise IndexError(f"arg index {n} out of range for {term!r}")
-        return vals[n - 1]
     if is_term_instance(term):
         fields = term_field_names(term)
         if n < 1 or n > len(fields):
@@ -165,8 +156,6 @@ def _args_list_py(term: Any) -> list:
     accessor of the same name, whose own ``str`` arm is likewise
     shadowed; the twins are retired together or not at all.
     """
-    if isinstance(term, KWTerm):
-        return list(term.values())
     if is_term_instance(term):
         return [getattr(term, name) for name in term_field_names(term)]
     if isinstance(term, list):
@@ -181,10 +170,7 @@ def _args_list_py(term: Any) -> list:
 
 
 def _is_compound_py(term: Any) -> bool:
-    return (
-        isinstance(term, KWTerm)
-        or is_term_instance(term)
-    )
+    return is_term_instance(term)
 
 
 def _is_ground_py(term: Any) -> bool:
@@ -217,8 +203,6 @@ def _is_ground_py(term: Any) -> bool:
         # a namedtuple as opaque as it was pre-flip.  Kept in step with
         # ``c_is_ground``'s ``PyTuple_CheckExact``.
         return all(_is_ground_py(e) for e in term)
-    if isinstance(term, KWTerm):
-        return all(_is_ground_py(v) for v in term.values())
     # F083 (audit 2026-05-25): recurse into Seg* containers so that
     # ``ground/1`` returns False for any SegList/SegString that still
     # holds an unbound ``VarSeg``. Both the Python fallback and the C
@@ -533,7 +517,7 @@ def functor_arity(term: Any) -> tuple[Any, int] | None:
     Deliberately narrower than ``_functor_name``/``_arity`` composed: it only
     covers structural/term shapes (a str-functor cell, a
     term instance, a plain ``str`` atom value, or a ``PredicateMeta`` atom
-    class), returning None for everything else — including ``KWTerm``, lists
+    class), returning None for everything else — including lists
     and numbers, which the composed pair *does* resolve. Where both are
     defined for a shape they cover in common, they must agree (see
     ``tests/test_funnel_accessors.py::TestFunctorArity``); this function
@@ -585,7 +569,7 @@ def functor_arity(term: Any) -> tuple[Any, int] | None:
 # ``sort/2``, ``msort/2``, ``setof/3`` and the ``*_by`` higher-order builtins
 # sort with Python's ``sorted()`` when the elements happen to be mutually
 # comparable, and fall back to a sort *key* when they are not.  Terms —
-# cells of mixed shapes, ``KWTerm``, declared term instances — define no ``__lt__``, so
+# cells of mixed shapes, declared term instances — define no ``__lt__``, so
 # any list of them takes the fallback.
 #
 # That fallback used to be ``(type name, repr(x))``, which ordered a compound's
@@ -631,11 +615,9 @@ _NUMERIC_RANK_QUANTITY = 5
 # Flavours within _ORD_COMPOUND.  A cell and a declared term that render
 # alike are *not* the same term (they do not unify), so they get adjacent
 # but distinct places in the order rather than interleaving.
-# The flavour also keeps the argument payloads shape-uniform: positional
-# flavours carry a tuple of keys, ``KWTerm`` carries name/key pairs, and the
-# two are never compared against each other.
+# (Flavour 1 was the keyword term's, retired with the class; the numbering
+# is kept so the two remaining flavours order as they always did.)
 _CF_POSITIONAL = 0   # cell
-_CF_KEYWORD = 1      # KWTerm (keyword-matched: fields sorted by name)
 _CF_DECLARED = 2     # declared term instance / dataclass
 
 # Task 15 item 1 (ISO alignment, Scryer-verified 2026-09-07).  There is no
@@ -816,14 +798,6 @@ def term_key(term: Any) -> tuple:
         if not term:
             return _ORD_EMPTY_LIST_KEY
         return _cons_key(tuple(term_key(e) for e in term))
-    if isinstance(term, KWTerm):
-        # KWTerm equality is by keyword *name*, not position, so the key must
-        # be too — otherwise two equal terms could sort to different places.
-        by_name = dict(term.items())
-        fields = tuple(
-            (name, term_key(by_name[name])) for name in sorted(by_name)
-        )
-        return (_ORD_COMPOUND, len(fields), (0, term.functor), _CF_KEYWORD, fields)
     if is_term_instance(term):
         names = term_field_names(term)
         return (_ORD_COMPOUND, len(names), (0, type(term).__name__), _CF_DECLARED,

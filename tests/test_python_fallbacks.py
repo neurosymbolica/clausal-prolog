@@ -11,7 +11,6 @@ import pytest
 from clausal.logic.cells import chars
 
 from clausal.logic.variables import Var, Trail, deref, unify, is_var
-from clausal.terms import KWTerm
 
 
 # ── predicate.py fallbacks ───────────────────────────────────────────────────
@@ -36,7 +35,8 @@ class TestIsTermInstanceFallback:
     def test_class_not_instance(self):
         # nv -- a class is never a term instance (a plain class stands in
         # for the retired PredicateMeta class row)
-        assert _is_term_instance_py(KWTerm) == is_term_instance(KWTerm) == False
+        cls = type("X", (), {})
+        assert _is_term_instance_py(cls) == is_term_instance(cls) == False
 
     def test_int_not_instance(self):
         # nv
@@ -55,7 +55,7 @@ class TestIsZeroFieldClassFallback:
     def test_no_object_is_a_zero_field_class_any_more(self):
         """W4b-3 slice 7 deleted the class: the question always answers
         False (it answered True for a zero-field ``PredicateMeta`` class)."""
-        for value in ("atom", ("pt", 1), KWTerm, type("X", (), {})):
+        for value in ("atom", ("pt", 1), type("X", (), {})):
             assert _is_zero_field_class_py(value) is False
             assert is_zero_field_class(value) is False
 
@@ -83,12 +83,6 @@ from clausal.logic.builtins._helpers import (
 
 
 class TestFunctorNameFallback:
-
-    @pytest.mark.compound_retirement_slice9
-    def test_kwterm(self):
-        # nv
-        t = KWTerm("rel", a=1)
-        assert _functor_name_py(t) == _functor_name(t) == "rel"
 
     def test_list_empty(self):
         # nv
@@ -177,12 +171,6 @@ class TestArgsListFallback:
 
 class TestIsCompoundFallback:
 
-    @pytest.mark.compound_retirement_slice9
-    def test_kwterm(self):
-        # nv
-        t = KWTerm("r", a=1)
-        assert _is_compound_py(t) == _is_compound(t) == True
-
     def test_int(self):
         # nv
         assert _is_compound_py(42) == _is_compound(42) == False
@@ -207,19 +195,6 @@ class TestIsGroundFallback:
         # nv
         v = Var()
         assert _is_ground_py([1, v]) == _is_ground([1, v]) == False
-
-    @pytest.mark.compound_retirement_slice9
-    def test_kwterm_with_var(self):
-        # nv
-        v = Var()
-        t = KWTerm("r", a=v)
-        assert _is_ground_py(t) == _is_ground(t) == False
-
-    @pytest.mark.compound_retirement_slice9
-    def test_kwterm_ground(self):
-        # nv
-        t = KWTerm("r", a=1)
-        assert _is_ground_py(t) == _is_ground(t) == True
 
     def test_predicate_cell_with_var(self):
         # nv -- what a predicate class built (a cell), since W4b-3 slice 7
@@ -271,25 +246,6 @@ class TestCopyTermFallback:
         c_result = _copy_term_impl(x, {})
         assert is_var(py_result) and py_result is not x
         assert is_var(c_result) and c_result is not x
-
-    @pytest.mark.compound_retirement_slice9
-    def test_kwterm_functor_preserved(self):
-        """KWTerm copy preserves functor (bug fix verification)."""
-        # nv
-        t = KWTerm("rel", a=1, b=2)
-        py = _copy_term_py(t, {})
-        c = _copy_term_impl(t, {})
-        assert py.functor == "rel"
-        assert c.functor == "rel"
-
-    @pytest.mark.compound_retirement_slice9
-    def test_kwterm_var_freshened(self):
-        # nv
-        x = Var()
-        t = KWTerm("r", a=x)
-        py = _copy_term_py(t, {})
-        assert is_var(py._fields["a"])
-        assert py._fields["a"] is not x
 
     def test_sharing_preserved(self):
         # nv
@@ -392,9 +348,9 @@ def _corpus():
     instance path: ``_clausal_head`` raises, so no such term can be built,
     and the C arms that classified one went with it.  The three rows that
     held one (``instance``, ``cell_in_instance``, ``instance_in_cell``) were
-    deleted with those arms, together, as their predecessor promised.  A
-    ``@dataclass`` term (``KWTerm``) is the term-instance shape the twins
-    still carry, and it is covered by rows of its own.
+    deleted with those arms, together, as their predecessor promised.  The
+    keyword-term rows (``kwterm``, ``cell_in_kwterm``) went the same way with
+    the keyword-term class and its C arms (Compound retirement slice 9).
     """
     X, Y, Z = Var(), Var(), Var()
     bound = Var()
@@ -410,7 +366,6 @@ def _corpus():
         ("var", X),
         ("bound_var_to_cell", bound),
         ("list", [1, X, 2]),
-        ("kwterm", KWTerm("r", a=X, b=2)),
         # --- cells ---
         ("cell_ground", ("pt", 1, 2)),
         ("cell_with_var", ("pt", 1, X)),
@@ -425,7 +380,6 @@ def _corpus():
         # --- cells reached only through another container ---
         ("cell_in_list", [("pt", X), ("pt", Y)]),
         ("cell_in_list_in_cell", ("f", [("g", X)], Y)),
-        ("cell_in_kwterm", KWTerm("r", a=("g", X))),
         ("list_of_lists_of_cells", [[("p", X)], [("q", Y), ("r", Z)]]),
         # --- shared structure across two cells ---
         ("cell_pair_sharing", ("f", ("g", X), ("h", X))),
@@ -436,19 +390,12 @@ def _corpus():
     ]
 
 
-# Compound retirement: these rows hold a ``KWTerm``, so what they pin is the
-# twins' KWTerm ARMS (removed in slice 9).  The marks let that slice select
-# exactly these rows.
-_SLICE9_ROWS = {"kwterm", "cell_in_kwterm"}
-
-
 def _row_params(exclude=frozenset()):
     out = []
     for n, _ in _corpus():
         if n in exclude:
             continue
-        marks = [pytest.mark.compound_retirement_slice9] if n in _SLICE9_ROWS else []
-        out.append(pytest.param(n, marks=marks) if marks else n)
+        out.append(n)
     return out
 
 
@@ -477,8 +424,6 @@ def _shape(term):
             return ("cell", [go(e) for e in t])
         if isinstance(t, tuple):  # tuple SUBCLASS (namedtuple, ...)
             return ("tuple_subclass", type(t).__qualname__, [go(e) for e in t])
-        if isinstance(t, KWTerm):
-            return ("kwterm", t.functor, [(k, go(v)) for k, v in t.items()])
         if isinstance(t, SegList):
             return ("seglist", [go(s) for s in t.segments])
         if isinstance(t, SegString):

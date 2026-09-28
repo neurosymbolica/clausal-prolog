@@ -94,7 +94,7 @@ Notation in signature lines:
 | [DCG (Definite Clause Grammars)](#dcg-definite-clause-grammars) | phrase/2, phrase/3 |
 | [Term Inspection](#term-inspection) | functor/3, arg/3, unpack/2, copy_term/2, term_variables/2, numbervars/3, gensym/2, module_constant/3 |
 | [Runtime Database](#runtime-database) | assertz/1, asserta/1, retract/1, abolish_table/2, abolish_all_tables/0 |
-| [Keyword-Term Introspection](#keyword-term-introspection) | vary/3, extend/3, unbound_keys/2, signature/3 |
+| [Keyword-Term Introspection](#keyword-term-introspection) | vary/3, unbound_keys/2, signature/3 |
 | [Attributed Variables](#attributed-variables) | put_attr/3, get_attr/3, del_attr/2, get_attrs/2, put_attrs/2, attvar/1, term_attvars/2 |
 | [Constraint Predicates](#constraint-predicates) | dif/2, eq/3, dif_t/3 |
 | [CLP(ℤ) — Integer Constraints](#clpfd-integer-constraints) | in_domain/3, label/1, all_different/1, structural_eq/2, sum_/3, scalar_product/4, element/3, circuit/1 |
@@ -854,29 +854,16 @@ Remove all cached tabling answers for every predicate in the current database.
 
 ## Keyword-Term Introspection
 
-These predicates operate on `KWTerm` (open-world keyword terms) and term (dataclass) instances.
+These predicates operate on declared functor cells and term (dataclass) instances.
 
 ### `vary/3`
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:vary_3"
 ```
-Produce a copy of `Term` with field values replaced by `Overrides` (a Python `dict`). Works on functor dataclass instances and `KWTerm`.
+Produce a copy of `Term` with field values replaced by `Overrides` (a Python `dict`). Works on declared functor cells and functor dataclass instances.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins.py:692`
-    **Clausal tests:** `tests/fixtures/builtins_keywords.clausal`
-    **Python tests:** `tests/test_builtins.py`
-
----
-
-### `extend/3`
-```clausal
---8<-- "tests/fixtures/docs/builtins_sigs.txt:extend_3"
-```
-Produce a copy of `Term` (must be a `KWTerm`) with additional fields from `Additions` (a Python `dict`). Dataclass terms have fixed schemas so only `KWTerm` is supported.
-
-??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:727`
     **Clausal tests:** `tests/fixtures/builtins_keywords.clausal`
     **Python tests:** `tests/test_builtins.py`
 
@@ -1290,7 +1277,7 @@ Succeeds if `X` is a Python `float`.
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:compound_1"
 ```
-Succeeds if `X` is a compound term with arity > 0 (a cell `("f", …)`, `KWTerm`, or term instance with at least one field). An **atom** is arity 0, so `compound/1` rejects it; a list (a string included) is not compound either.
+Succeeds if `X` is a compound term with arity > 0 (a cell `("f", …)` or term instance with at least one field). An **atom** is arity 0, so `compound/1` rejects it; a list (a string included) is not compound either.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins.py:921`
@@ -3115,7 +3102,7 @@ The following are not builtins in the registry — they are syntax forms compile
     | `tests/fixtures/builtins_lists.clausal` | `in_/2`, `in_check/2`, `append/3`, `length/2`, `last/2`, `reverse/2`, `list_item/3`, `flatten/2`, `msort/2`, `sort/2`, `permutation/2`, `select/3`, `subtract/3`, `intersection/3`, `union/3`, `list_to_set/2`, `sum_list/2`, `max_list/2`, `min_list/2`, `pairs_keys_values/3`, `pairs_keys/2`, `pairs_values/2` |
     | `tests/fixtures/builtins_higher_order.clausal` | `maplist/2`, `maplist/3`, `include/3`, `exclude/3`, `foldl/4` |
     | `tests/fixtures/list_util.clausal` | `take/3`, `drop/3`, `split_at/4`, `zip_/3`, `replicate/3`, `split_with/3`, `take_while/3`, `drop_while/3`, `span/4`, `group_by/3`, `sort_by/3`, `max_by/3`, `min_by/3`, `filter_map/3` |
-    | `tests/fixtures/builtins_keywords.clausal` | `vary/3`, `extend/3`, `unbound_keys/2`, `signature/3` |
+    | `tests/fixtures/builtins_keywords.clausal` | `vary/3`, `unbound_keys/2`, `signature/3` |
     | `tests/fixtures/builtins_dif.clausal` | `dif/2`, `eq/3`, `dif_t/3` |
     | `tests/fixtures/builtins_call.clausal` | `Call/N`, `call_goal/N` |
     | `tests/fixtures/coroutining.clausal` | `call_nth/2`, `count_all/2`, `setup_call_cleanup/3`, `call_cleanup/2`, `freeze/2`, `when/2` |

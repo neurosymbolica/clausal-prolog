@@ -229,7 +229,6 @@ def key_nodes() -> dict:
 
 
 _Node = None
-_KWTerm = None
 
 
 def cell_key_args(x):
@@ -257,8 +256,7 @@ def node_key_args(x):
 def _is_term(x) -> bool:
     """True for a value that is a TERM (and so must be evaluable to be used
     as a number): an atom, a cell (a declared term such as ``z(1)`` is one; so
-    is a string, the ``('$chars', Text)`` carrier), a
-    ``KWTerm`` or a pythonic-AST node.
+    is a string, the ``('$chars', Text)`` carrier) or a pythonic-AST node.
     Every tuple counts, even one without a str head: a tuple is a term (a cell,
     or the ``('$chars', Text)`` string carrier), never a Python value here.
     Anything else is a Python value and keeps Python semantics -- including a
@@ -267,12 +265,11 @@ def _is_term(x) -> bool:
     separate question from the cells ruling R9 settled."""
     if type(x) is str or type(x) is tuple:
         return True
-    global _Node, _KWTerm
+    global _Node
     if _Node is None:
         from clausal.pythonic_ast.nodes import Node  # noqa: PLC0415
-        from clausal.terms import KWTerm  # noqa: PLC0415
-        _Node, _KWTerm = Node, KWTerm
-    return isinstance(x, (_Node, _KWTerm))
+        _Node = Node
+    return isinstance(x, _Node)
 
 
 def not_evaluable(term, context: str = "eval_/2"):

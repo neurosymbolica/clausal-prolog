@@ -66,14 +66,7 @@ new values. `Overrides` is a Python dict mapping field names to new values.
 --8<-- "tests/fixtures/docs/keyword_preds_examples.clausal:vary_examples"
 ```
 
-Works for both predicate-class terms and KWTerms.
-
-### extend/3
-
-`extend(Additions, Term, NewTerm)` — copy a KWTerm with additional fields.
-Only works with open-world KWTerms (not fixed-schema predicate classes).
-
-Raises an error if you try to override an existing key — use `vary` for that.
+Works for declared functor cells and term (dataclass) instances.
 
 ### unbound_keys/2
 
@@ -123,10 +116,8 @@ This is a database-dependent operation — the predicate must have been defined
 
 ## Gotchas
 
-- **`extend` is for KWTerms only** — predicate classes have fixed schemas and
-  cannot grow new fields. Use `vary` to change existing fields.
-- **`extend` does not override** — it raises an error if a key already exists.
-  Use `vary` for updates.
+- **A term cannot grow new fields** — a functor's fields are the ones it is
+  declared with. Use `vary` to change existing fields.
 - **`signature` requires the predicate to be registered** — if you call it
   before the predicate is defined (e.g., in a different module that hasn't been
   imported), it will fail.

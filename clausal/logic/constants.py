@@ -173,7 +173,7 @@ def _contains_var(value) -> bool:
     if isinstance(value, dict):
         return any(_contains_var(k) or _contains_var(v)
                    for k, v in value.items())
-    # Term objects (KWTerm, compile-time PredicateMeta instances,
+    # Term objects (compile-time PredicateMeta instances,
     # Seg* containers): delegate to the canonical recursive ground check
     # instead of duck-typing an ``.args`` tuple — compile-time predicate
     # classes hold fields by name (``_fields``/``__slots__``), not a generic

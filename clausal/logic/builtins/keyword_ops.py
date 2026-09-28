@@ -1,5 +1,5 @@
-"""Keyword-term introspection builtins (WK-5): vary/3, extend/3,
-unbound_keys/2, signature/3."""
+"""Field-name introspection builtins (WK-5): vary/3, unbound_keys/2,
+signature/3.  (extend/3 went with the keyword-term class it served.)"""
 
 from __future__ import annotations
 
@@ -13,9 +13,9 @@ from clausal.logic.exceptions import (
 )
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.predicate import is_term_instance, term_field_names, term_field_dict
-from clausal.terms import KWTerm, DictTerm
+from clausal.terms import DictTerm
 
-from clausal.logic.builtins._registry import _builtin, _db_builtin
+from clausal.logic.builtins._registry import _db_builtin
 
 
 def _field_keys(mapping, context: str):
@@ -23,7 +23,7 @@ def _field_keys(mapping, context: str):
 
     THE FLIP (spec §6.4): a field name written in source is an ATOM, so
     ``vary({x: V}, …)`` (and ``{"x": V}`` in the default double-quotes mode)
-    arrives with the cell ``("x",)`` as its key.  KWTerm field names
+    arrives with the cell ``("x",)`` as its key.  Declared field names
     themselves stay identifier ``str``s (§6.4, last row), so the atom is read
     through ``spelling`` here.  A plain ``str`` key — what the Python API
     hands over — is already that identifier spelling and is taken as one.
@@ -80,7 +80,7 @@ def _vary_factory(db):
         """vary(Overrides, Term, NewTerm) — copy Term with field overrides.
 
         Overrides is a Python dict {field_name: new_value}.
-        Term is a declared functor CELL, a functor dataclass, or a KWTerm.
+        Term is a declared functor CELL or a functor dataclass.
         NewTerm is unified with the resulting copy.
         """
         overrides_val = deref(overrides)
@@ -103,17 +103,12 @@ def _vary_factory(db):
                     return
                 args[names.index(key)] = value
             result = make_cell(compound_cell_shape(term_val)[1], *args)
-        elif is_term_instance(term_val) and not isinstance(term_val, KWTerm):
+        elif is_term_instance(term_val):
             try:
                 kwargs = term_field_dict(term_val)
                 kwargs.update(overrides_val)
                 result = type(term_val)(**kwargs)
             except (TypeError, ValueError):
-                return
-        elif isinstance(term_val, KWTerm):
-            try:
-                result = term_val.with_overrides(**overrides_val)
-            except KeyError:
                 return
         else:
             return
@@ -124,42 +119,12 @@ def _vary_factory(db):
     return _vary__3
 
 
-@_builtin("extend", 3)
-def _extend__3(additions, term, new_term, trail, k):
-    """extend(Additions, Term, NewTerm) — copy Term with additional fields.
-
-    Additions is a Python dict {field_name: value}.
-    Term must be a KWTerm (dataclass terms have fixed schemas).
-    NewTerm is unified with the resulting extended term.
-    """
-    additions_val = deref(additions)
-    term_val = deref(term)
-    if is_var(additions_val) or is_var(term_val):
-        return
-    if isinstance(additions_val, DictTerm):
-        additions_val = additions_val.data
-    if not isinstance(additions_val, dict):
-        return
-    additions_val = _field_keys(additions_val, "extend/3")
-    if isinstance(term_val, KWTerm):
-        try:
-            result = term_val.with_extensions(**additions_val)
-        except KeyError:
-            return
-    else:
-        return
-    mark = trail.mark()
-    if unify(new_term, result, trail):
-        yield None
-    trail.undo(mark)
-
-
 @_db_builtin("unbound_keys", 2, fields=("term", "keys"), db_optional=True)
 def _unbound_keys_factory(db):
     def _unbound_keys__2(term, keys_list, trail, k):
         """unbound_keys(Term, Keys) — Keys is the list of field names holding unbound Vars.
 
-        Works for functor dataclass instances and KWTerm.
+        Works for declared functor cells and functor dataclass instances.
 
         THE FLIP (spec §6.4): a field NAME handed back to the program is an
         ATOM.  The registry stays keyed by the identifier spelling (a ``str``);
@@ -174,14 +139,10 @@ def _unbound_keys_factory(db):
             for name, val in zip(names, cell_args(term_val)):
                 if is_var(deref(val)):
                     keys.append(mint(name))
-        elif is_term_instance(term_val) and not isinstance(term_val, KWTerm):
+        elif is_term_instance(term_val):
             for name in term_field_names(term_val):
                 if is_var(deref(getattr(term_val, name))):
                     keys.append(mint(name))
-        elif isinstance(term_val, KWTerm):
-            for fname, val in term_val.items():
-                if is_var(deref(val)):
-                    keys.append(mint(fname))
         mark = trail.mark()
         if unify(keys_list, keys, trail):
             yield None

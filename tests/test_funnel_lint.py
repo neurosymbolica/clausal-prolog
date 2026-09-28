@@ -155,9 +155,8 @@ ALLOWLIST: tuple[AllowEntry, ...] = (
     #    name probes (not the whole file).
     AllowEntry("clausal/logic/coroutining.py", (127, 174),
                "plan exclusion #6: nonvar/ground name probes, nominal-only"),
-    # 7. KWTerm._fields is a keyword dict, NOT PredicateMeta._fields.
-    AllowEntry("clausal/terms.py", (180, 280),
-               "plan exclusion #7: KWTerm._fields is a dict, not PredicateMeta._fields"),
+    # (7. was the keyword-term class's own ``_fields`` dict; the class is
+    #  deleted.)
     # 8. class-registry _fields/PredicateMeta uses (class-level ops, not term
     #    probes) -- except the two migrated compiler_v2.py class-arity reads,
     #    which no longer match these patterns anyway.
@@ -256,7 +255,7 @@ ALLOWLIST: tuple[AllowEntry, ...] = (
     #    would change behavior) ──────────────────────────────────────────
     # task-2-report.md: functor/3's _functor_name + _arity double walk is
     # deliberately NOT collapsed to functor_arity() -- functor_arity is
-    # narrower on KWTerm/atomic shapes and migrating would change behavior.
+    # narrower on atomic shapes and migrating would change behavior.
     AllowEntry("clausal/logic/builtins/inspection.py", (235, 282),
                "task-2 skip: functor/3's composed _functor_name+_arity calls "
                "(functor_arity is narrower here; migrating would change behavior)"),
@@ -283,7 +282,9 @@ ALLOWLIST: tuple[AllowEntry, ...] = (
     # Range shifted 2377-2489 -> 2271-2383 by the Compound class's removal
     # (2026-09-27): the generic-compound confusion note above the site went
     # with the class (mechanical again).
-    AllowEntry("clausal/testing.py", (2271, 2383),
+    # Range shifted 2271-2383 -> 2266-2378 by the keyword-term class's removal
+    # (2026-09-28): its import and reifier arm above the site went with it.
+    AllowEntry("clausal/testing.py", (2266, 2378),
                "task-3 skip: diagnostic head-name fallback, semantics diverge "
                "from _functor_name (see task-3-report.md determination)"),
     # task-2-report.md / plan Task 2 text: "leave head_key itself as-is (it
@@ -617,7 +618,8 @@ def test_lint_catches_dotted_receiver_functor_fallback(tmp_path):
 
 
 def test_testing_py_allowlist_entry_is_load_bearing():
-    """clausal/testing.py:2353 (2459 before the Compound class's removal
+    """clausal/testing.py:2348 (2353 before the keyword-term class's removal
+    took its import and reifier arm above it, 2026-09-28; 2459 before the Compound class's removal
     took the generic-compound note above it, 2026-09-27; 2413 before F1 row 4 added ``_goal_arity``
     and the row-based ``_resolve_predicate`` above it, 2026-09-24; 2407 before the final fix wave's IMPORTANT 2
     (2026-09-23) added a 6-line comment above the ``field_names_for(declared)``
@@ -629,7 +631,7 @@ def test_testing_py_allowlist_entry_is_load_bearing():
     lines) has a real ``getattr(clause.head, "functor",
     None) or type(clause.head).__name__`` occurrence -- now that the
     receiver group is dotted-aware, the task-3 ALLOWLIST range for
-    testing.py (currently 2277-2389, which still covers the site; the entry's
+    testing.py (currently 2266-2378, which still covers the site; the entry's
     own comment records how it has moved as code above the site grew) is doing
     real exemption work, not sitting on an already-invisible site.
 
@@ -649,7 +651,7 @@ def test_testing_py_allowlist_entry_is_load_bearing():
         "allowlist entry is a dead no-op again"
     )
     assert any(
-        v.pattern == "functor_fallback" and v.line == 2353
+        v.pattern == "functor_fallback" and v.line == 2348
         for v in testing_violations
     ), testing_violations
 

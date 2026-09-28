@@ -71,7 +71,7 @@ def _normalize_fact_clause(term: Any, hoist_all: bool = False):
         from clausal.logic.database import _normalize_structural_head_args  # noqa: PLC0415
         head, body = _normalize_structural_head_args(term, [])
         return Clause(head=head, body=body, hoisted=len(body))
-    # Dataclass and KWTerm facts are passed as-is; their field patterns work
+    # Dataclass facts are passed as-is; their field patterns work
     # correctly since they use Python structural matching.
     return Clause(head=term, body=[])
 
