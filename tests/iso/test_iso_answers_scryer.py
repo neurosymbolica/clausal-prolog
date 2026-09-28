@@ -161,3 +161,53 @@ def test_c2_oracle(scryer):
     del scryer   # the fixture only asserts the binary is there
     got = _scryer_answers(_C2_PROGRAM, [(f"{g}(R)", 10) for g, _ in C2_ROWS])
     assert got == [want for _, want in C2_ROWS]
+
+
+# ── V1 + C3: abs/1, min/2, max/2 outside 'is' ──────────────────────────────
+#
+# The Scryer rows for the values are in test_arith_rulings_scryer.py.  Here:
+# the same functors where the engine reaches them by other routes -- a
+# runtime-built cell, and a GROUND use inside a CLP post (the posts do not
+# propagate through them; a non-ground one is clpz's domain error, pinned
+# below so a change is seen).
+
+_V1_FACTS = "-allow_singletons\n"
+
+#: (id, engine body binding R, Scryer goal binding R, limit, what both print)
+V1_ROWS = [
+    ("univ abs", "'=..'(E, ['abs', -3]), 'is'(R, E)",
+     "E =.. [abs, -3], R is E", 3, ["3"]),
+    ("univ max", "'=..'(E, ['max', 2, 5.0]), 'is'(R, E)",
+     "E =.. [max, 2, 5.0], R is E", 3, ["5.0"]),
+    ("clp ground max", "R == max(2, 5)", "R is max(2, 5)", 3, ["5"]),
+    ("clp ground nested", "R == abs(-7) + min(1, 2)",
+     "R is abs(-7) + min(1, 2)", 3, ["8"]),
+    ("clp compare", "R is 4, R < max(2, 5)", "R = 4, R < max(2, 5)", 3, ["4"]),
+]
+
+
+@pytest.fixture(scope="module")
+def v1_mod(tmp_path_factory):
+    return _load_seam(tmp_path_factory.mktemp("v1"), "_iso_ans_v1",
+                      _V1_FACTS, V1_ROWS)
+
+
+@pytest.mark.parametrize("i", range(len(V1_ROWS)), ids=[r[0] for r in V1_ROWS])
+def test_v1_engine(v1_mod, i):
+    assert _engine_answers(v1_mod, f"r{i}", V1_ROWS[i][3]) == V1_ROWS[i][4]
+
+
+def test_v1_oracle(scryer):
+    del scryer
+    got = _scryer_answers("", [(r[2], r[3]) for r in V1_ROWS])
+    assert got == [r[4] for r in V1_ROWS]
+
+
+def test_v1_non_ground_in_a_clp_post_is_the_clpz_domain_error(v1_mod, tmp_path):
+    """Not propagated: ``X == max(Y, 3)`` raises rather than answering
+    wrongly (Scryer's clpz would post it as a constraint)."""
+    mod = _load_seam(tmp_path, "_iso_ans_v1b", _V1_FACTS,
+                     [("", "R == max(Y, 3), Y is 5", "", 3, [])])
+    got = _engine_answers(mod, "r0", 3)
+    assert len(got) == 1 and got[0].startswith(
+        "error(domain_error(clpz_expression,max(_,3))"), got

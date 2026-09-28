@@ -32,7 +32,10 @@ test("eval") <- (X == 3 + 4 * 2, X == 11)
 ```
 
 Supported operators: `+`, `-`, `*`, `/`, `//` (integer division), `%` (modulo),
-`**` (power), `abs()`, `min()`, `max()`.
+`**` (power). `abs()`, `min()` and `max()` are evaluated when their operands
+are ground; the constraint does not propagate through them, so
+`X == max(Y, 3)` with `Y` unbound raises
+`domain_error(clpz_expression, max(_, 3))`.
 
 A **bare** operator keeps Python's meaning in today's syntax (`-7 // 2` is -4,
 `2 ** 3` is 8); its **quoted** spelling follows Scryer Prolog (`'//'(-7, 2)` is
@@ -115,6 +118,8 @@ written in source keeps Python's meaning, and the two differ for `//` and `**`
 | `**(A, B)` | power as a **float**: `'**'(2, 3)` is 8.0 | `A ** B`: Python power, `2 ** 3` is the integer 8 |
 | `^(A, B)` | integer power: `'^'(2, 3)` is 8 | — (`A ^ B` is Python's XOR, for CLP(B)) |
 | `-(A)` | negation | `-A`: the same |
+| `abs(A)` | absolute value, in the operand's own kind: `abs(-3)` is 3, `abs(-3.5)` is 3.5 | — |
+| `min(A, B)`, `max(A, B)` | the smaller / larger operand, in its own kind (`max(2, 5)` is 5); beside a float the operands compare as floats and a tie answers the float (`max(1, 1.0)` is 1.0) | — |
 
 `//`, `div` and `mod` take integers only (`type_error(integer, 7.0)` for
 `'//'(7.0, 2)`), as in Scryer. `^` follows Scryer's rules for a negative

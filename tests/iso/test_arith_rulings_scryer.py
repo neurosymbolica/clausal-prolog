@@ -74,6 +74,24 @@ ROWS = [
     ("'**'(-8.0, 0.5)", "(-8.0) ** 0.5",
      "error(evaluation_error(undefined),(**)/2)"),
     ("'^'(-2, 0.5)", "(-2) ^ 0.5", "error(evaluation_error(undefined),(^)/2)"),
+    # abs/1 (ISO 9.1.7), min/2 and max/2 (ISO Cor.2): the operand's own kind;
+    # beside a float the operands compare as floats and a tie is a float
+    ("abs(-3)", "abs(-3)", "3"),
+    ("abs(3)", "abs(3)", "3"),
+    ("abs(-3.5)", "abs(-3.5)", "3.5"),
+    ("abs(-9223372036854775808)", "abs(-9223372036854775808)",
+     "9223372036854775808"),
+    ("max(2, 5)", "max(2, 5)", "5"),
+    ("min(2, 5)", "min(2, 5)", "2"),
+    ("max(1, 2.0)", "max(1, 2.0)", "2.0"),
+    ("min(1, 2.0)", "min(1, 2.0)", "1"),
+    ("min(2, 1.0)", "min(2, 1.0)", "1.0"),
+    ("max(1, 1.0)", "max(1, 1.0)", "1.0"),
+    ("max(1.0, 1)", "max(1.0, 1)", "1.0"),
+    ("min(1, 1.0)", "min(1, 1.0)", "1.0"),
+    ("max(-3, abs(-7))", "max(-3, abs(-7))", "7"),
+    ("abs('foo')", "abs(foo)", "error(type_error(evaluable,foo/0),(is)/2)"),
+    ("max(1, 'foo')", "max(1, foo)", "error(type_error(evaluable,foo/0),(is)/2)"),
 ]
 
 #: Rows where the engine DELIBERATELY differs from Scryer (engine column only;
@@ -88,6 +106,10 @@ DEVIATIONS = [
     # exact arithmetic (RULED 2026-09-17): a rational base stays exact;
     # Scryer answers the float 0.25
     ("'^'(rdiv(1, 2), 2)", "1/4"),
+    # an exact rational stays exact (Scryer: the rational 1 rdiv 4 too, but
+    # it prints it in its own spelling)
+    ("abs(rdiv(-1, 4))", "1/4"),
+    ("max(rdiv(1, 3), rdiv(1, 4))", "1/3"),
 ]
 
 _ALL = [(cell, want) for cell, _, want in ROWS] + DEVIATIONS

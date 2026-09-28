@@ -91,6 +91,8 @@ meaning.) The full operator table, bare vs quoted, is in
 | `'**'(2, 3)` | `8.0` | ISO / Scryer |
 | `'^'(2, 3)` | `8` | ISO |
 | `rdiv(7, 2)` | `Fraction(7, 2)` | Scryer (exact rational) |
+| `abs(-3)`, `abs(-3.5)` | `3`, `3.5` | ISO |
+| `max(2, 5)`, `min(1, 2.0)`, `max(1, 1.0)` | `5`, `1`, `1.0` | ISO Cor.2 / Scryer |
 | a zero divisor | `evaluation_error(zero_divisor)` naming the operator | ISO |
 
 Inside an arithmetic **constraint** (`==`, `<`, ...; Prolog's `#=` family)
@@ -147,7 +149,7 @@ above; the next section lists where the checking stops short.
 Only the evaluables in the table above exist. These ISO (and Scryer)
 evaluables are **missing**:
 
-`rem/2`, `abs/1`, `sign/1`, `min/2`, `max/2`, `sqrt/1`, `sin/1`, `cos/1`,
+`rem/2`, `sign/1`, `sqrt/1`, `sin/1`, `cos/1`,
 `atan/1`, `atan2/2`, `exp/1`, `log/1`, `float/1`, `integer/1`,
 `float_integer_part/1`, `float_fractional_part/1`, `truncate/1`, `round/1`,
 `ceiling/1`, `floor/1`, `(>>)/2`, `(<<)/2`, `(/\)/2`, `(\/)/2`, `(\)/1`,
@@ -155,12 +157,12 @@ evaluables are **missing**:
 
 How the gap shows depends on how the term is built:
 
-- built at run time (`'=..'(T, [abs, -3]), 'is'(X, T)`):
-  `error(type_error(evaluable, abs/1), (is)/2)`, as ISO specifies for an
+- built at run time (`'=..'(T, [sign, -3]), 'is'(X, T)`):
+  `error(type_error(evaluable, sign/1), (is)/2)`, as ISO specifies for an
   unknown evaluable;
-- written in source (`'is'(X, abs(-3))`): the same
-  `error(type_error(evaluable, abs/1), (is)/2)` (from Python it is also a
-  `NameError`, since nothing declares `abs/1`);
+- written in source (`'is'(X, sign(-3))`): the same
+  `error(type_error(evaluable, sign/1), (is)/2)` (from Python it is also a
+  `NameError`, since nothing declares `sign/1`);
 - the constants (`'is'(X, pi)`): `type_error(evaluable, pi/0)`.
 
 The relational predicates `abs_/2`, `sign/2`, `max_/3`, `min_/3`, `gcd/3`
