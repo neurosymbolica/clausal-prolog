@@ -306,6 +306,24 @@ class TestWK5:
         assert len(results) == 1
         assert results[0] == point(x=1, y=99)
 
+    def test_vary_unknown_key_dataclass(self):
+        """An override naming no field is "no variation": no solution, no
+        error (the constructor's TypeError is caught)."""
+        @dataclasses.dataclass
+        # nv
+        class point:
+            x: object
+            y: object
+
+        mod = fresh_module()
+        new_p = Var()
+        goal = Call(
+            func=LoadName(name="vary"),
+            args=[{"z": 9}, point(x=1, y=2), new_p],
+            kwargs=[],
+        )
+        assert sol_var(goal, new_p, mod=mod) == []
+
     def test_unbound_keys_dataclass(self):
         @dataclasses.dataclass
         # nv

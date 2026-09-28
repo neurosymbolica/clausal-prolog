@@ -1188,15 +1188,13 @@ def test_vary_refuses_a_malformed_field_key(builtins_mod):
     an atom nor an identifier spelling, and both callers turned that into a
     silent failure.  A malformed key is ``type_error(atom, Key, …)``.
     (``extend/3`` was the other caller; it went with the keyword-term class.)"""
-    for goal_name in ("vary",):
-        with pytest.raises(LogicException) as exc:
-            list(solve((goal_name, {1: 2}, mint("t12_term"), Var()),
-                       builtins_mod))
-        formal = _formal(exc)
-        assert cell_functor(formal) == "type_error"
-        assert cell_args(formal)[0] == mint("atom")
-        assert cell_args(formal)[1] == 1
-        assert cell_args(exc.value.term)[1] == ("/", goal_name, 3)
+    with pytest.raises(LogicException) as exc:
+        list(solve(("vary", {1: 2}, mint("t12_term"), Var()), builtins_mod))
+    formal = _formal(exc)
+    assert cell_functor(formal) == "type_error"
+    assert cell_args(formal)[0] == mint("atom")
+    assert cell_args(formal)[1] == 1
+    assert cell_args(exc.value.term)[1] == ("/", "vary", 3)
 
 
 def test_vary_reports_an_unbound_field_key_as_uninstantiated(
@@ -1206,13 +1204,11 @@ def test_vary_reports_an_unbound_field_key_as_uninstantiated(
     fault.  ``type_error(atom, _G12)`` read as "a variable is the wrong SORT
     of term here" when the term is right and only the binding is missing —
     the same split ``listing/1`` makes for an unfinished indicator."""
-    for goal_name in ("vary",):
-        with pytest.raises(LogicException) as exc:
-            list(solve((goal_name, {Var(): 2}, mint("t12_term"), Var()),
-                       builtins_mod))
-        assert _formal(exc) == mint("instantiation_error")
-        assert cell_args(exc.value.term)[1] == ("/", goal_name, 3)
-        assert exc.value.message is None
+    with pytest.raises(LogicException) as exc:
+        list(solve(("vary", {Var(): 2}, mint("t12_term"), Var()), builtins_mod))
+    assert _formal(exc) == mint("instantiation_error")
+    assert cell_args(exc.value.term)[1] == ("/", "vary", 3)
+    assert exc.value.message is None
 
 
 _PREDICATE_MODULE = "clausal.logic.predicate"
