@@ -1006,8 +1006,8 @@ def _imported_binding_by_canonical_name(origins: dict, db, functor: str,
     *arity* — or None.
 
     A predicate keeps the exporter's name wherever it goes, so an
-    ``-import_from(m, [alias(bo_p, AliasS)])`` leaves the canonical spelling
-    bound to nothing in ``module_dict`` and ``AliasS`` bound to a predicate
+    ``-import_from(m, [alias(bo_p, alias_s)])`` leaves the canonical spelling
+    bound to nothing in ``module_dict`` and ``alias_s`` bound to a predicate
     that calls itself ``bo_p``.  ``_import_from_origins`` has ALREADY seen
     through that — it indexes an aliased import under both the alias and
     the predicate's own name — so this is ``_imported_binding`` plus the two

@@ -116,7 +116,7 @@ class TestModuleItemAccumulation:
         """import_from directives produce ImportFromItem entries."""
         # nv
         from clausal.pythonic_ast.nodes import ImportFromDirective
-        source = "-import_from(some.module, [Foo, alias(Bar, Baz)])\n"
+        source = "-import_from(some.module, [Foo, alias(Bar, baz)])\n"
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=SyntaxWarning)
             tree = ast.parse(source)
@@ -125,7 +125,7 @@ class TestModuleItemAccumulation:
         imports = [i for i in t._module_items if isinstance(i, ImportFromDirective)]
         assert len(imports) == 1
         assert imports[0].module == "some.module"
-        assert imports[0].names == ["Foo", ("Bar", "Baz")]
+        assert imports[0].names == ["Foo", ("Bar", "baz")]
 
     def test_import_module_item(self):
         """import_module directives produce ImportModuleItem entries."""

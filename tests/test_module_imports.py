@@ -154,7 +154,7 @@ class TestImportAlias:
         # nv
         mod = _load_fixture("imports_alias.clausal",
                             "tests.fixtures.imports_alias")
-        assert hasattr(mod, "Hlp")
+        assert hasattr(mod, "hlp")
         assert hasattr(mod, "use_alias")
 
     def test_use_alias_ground(self):

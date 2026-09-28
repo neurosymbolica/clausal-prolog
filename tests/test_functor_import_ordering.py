@@ -99,7 +99,7 @@ class TestHeadEmission:
         """``alias(f, F2)`` binds F2, not f — f is still purely local."""
         out = _unparse(
             "-module(m, [f(STATUS, CITATIONS)])\n"
-            "-import_from(other, [alias(f, Renamed)])\n"
+            "-import_from(other, [alias(f, renamed)])\n"
             "f(A, B) <- g(A, B)\n"
         )
         assert "STATUS=" in out

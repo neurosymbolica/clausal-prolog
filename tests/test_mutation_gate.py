@@ -513,8 +513,8 @@ def test_a_noop_retract_is_not_a_write(tmp_path):
 def test_an_aliased_import_asserts_ON_ITS_OWNER():
     """A write through an ALIASED ``-import_from`` lands on the owner's row.
 
-    ``-import_from(m, [alias(bo_p, AliasS)])`` binds the exporter's class
-    under ``AliasS``, so the assert's canonical functor (``bo_p``, the
+    ``-import_from(m, [alias(bo_p, alias_s)])`` binds the exporter's class
+    under ``alias_s``, so the assert's canonical functor (``bo_p``, the
     class's own name) resolves to no class by NAME in the importer's dict —
     or, when the importer also declares ``-dynamic(bo_p/1)``, to a local
     shadow class that is not the predicate the goal named.  Either way the
@@ -536,16 +536,16 @@ def test_an_aliased_import_asserts_ON_ITS_OWNER():
     owner_row = owner_db.row("bo_p", 1)
     assert owner_row is not None
     assert _row_of(owner, cls, 1) is owner_row
-    assert user.__dict__["AliasS"] == cls, "the alias binds the exporter's handle"
+    assert user.__dict__["alias_s"] == cls, "the alias binds the exporter's handle"
 
     assert _answers(owner, "bo_p") == [1]
 
     next(call("ga_add", 5, module=user.__dict__["$module"]), None)
 
     assert _answers(owner, "bo_p") == [1, 5], "the owner keeps its clause and sees the new one"
-    assert _answers(user, "AliasS") == [1, 5], "and so does the importer"
+    assert _answers(user, "alias_s") == [1, 5], "and so does the importer"
     assert _row_of(owner, cls, 1) is owner_row, "the shared binding did not move"
-    assert _row_of(user, user.__dict__["AliasS"], 1) is owner_row
+    assert _row_of(user, user.__dict__["alias_s"], 1) is owner_row
     assert len(owner_row.clauses) == 2
     runtime = [s for s in owner_row.writes
                if s.author.startswith("runtime-assert:")]

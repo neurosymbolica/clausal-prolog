@@ -9888,9 +9888,10 @@ class EmbedTransformer(NodeTransformer):
                 # unreachable — visit_Name treats it as a variable before the
                 # remap fires, so the call site later fails with a cryptic
                 # NotImplementedError. Reject it here at the directive.
-                # TitleCase is exempt for the same reason as the bare-name
-                # form above: visit_Name consults the remap first for it, so
-                # ``alias(metre, Metre)`` binds a name that use sites reach.
+                # TitleCase is exempt here for the same reason as the
+                # bare-name form above (visit_Name consults the remap first
+                # for it); a TitleCase LOCAL name is refused by the TitleCase
+                # lint before this point (``_lint_titlecase_alias_targets``).
                 if (_is_logic_var_name(local_name)
                         and not _is_titlecase_identifier(local_name)):
                     raise SyntaxError(
