@@ -15,6 +15,7 @@ Two runner defects, both of which let a gate read green over nothing:
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 import textwrap
@@ -166,6 +167,18 @@ def test_real_process_exit_status(tmp_path):
     assert proc.returncode == EXIT_NO_TESTS, proc.stdout + proc.stderr
 
 
+def test_cli_honours_the_no_collect_marker(capsys, tmp_path):
+    (tmp_path / "ok.clausal").write_text(PASSING_CLAUSAL)
+    (tmp_path / "data.pl").write_text("% clausal: no-collect\n" + BROKEN_PL)
+    (tmp_path / "fixture.clausal").write_text(
+        "# clausal: no-collect\nthis is not clausal (\n")
+    rc, out, _ = _run(capsys, [str(tmp_path)])
+    assert rc == EXIT_OK, out
+    assert "data.pl  (no-collect marker)" in out
+    assert "fixture.clausal  (no-collect marker)" in out
+    assert "1 passed, 0 failed [PASSED]" in out
+
+
 # ── D10: .pl is a test file ──────────────────────────────────────────────────
 
 
@@ -178,7 +191,7 @@ def test_pl_file_runs_its_test_clauses(capsys, tmp_path):
     assert "arith.pl::append works" in out
     assert "3 tests: 2 passed, 1 failed [FAILED]" in out
     # No source map: the report must not claim a line of the .pl file.
-    assert "arith.pl:7" not in out
+    assert not re.search(r"arith\.pl:\d+", out), out
     assert "arith.pl :: double of two is five" in out
     assert "Clausal translation" in out
 

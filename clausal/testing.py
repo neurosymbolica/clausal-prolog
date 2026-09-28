@@ -701,6 +701,11 @@ def _reified_clause(path, clause):
     position, or ``None``.  Cache shared with :func:`_reified_goals`."""
     if path is None or not clause.position:
         return None
+    if str(path).endswith(PROLOG_SUFFIX):
+        # A .pl file is Prolog: reifying it as Clausal source can only fail
+        # (re-read and re-parsed per failing test) or, worse, succeed on the
+        # wrong language.  Its clause positions are lines of the translation.
+        return None
     try:
         from clausal.reflection import Clause as ReifiedClause, reify_file, is_v, vfield
 
@@ -2653,6 +2658,33 @@ def _diagnostic_repeats(result: TestResult, rest: list[str]) -> bool:
 #: Why a scan passed over a file (``main`` reports each one).
 SKIP_UNSUPPORTED = "unsupported suffix"
 SKIP_NO_TESTS = "no test/1 clauses"
+SKIP_NO_COLLECT = "no-collect marker"
+
+#: A test-file-typed file that is DATA, not tests (a fixture meant to fail at
+#: load, a grammar spec), opts out of collection by carrying this line within
+#: its first 30 lines.  A .pl file spells it with Prolog's comment character.
+#: Both runners honour it: the CLI (``discover_clausal_files``) and the
+#: pytest plugin (the root ``conftest.py``).
+NO_COLLECT_MARKER = "# clausal: no-collect"
+NO_COLLECT_MARKER_PL = "% clausal: no-collect"
+
+
+def opts_out_of_collection(path: str | Path) -> bool:
+    """True if a test file carries the no-collect marker in its first 30
+    lines (``# clausal: no-collect``; ``% clausal: no-collect`` in .pl)."""
+    path = Path(path)
+    marker = (NO_COLLECT_MARKER_PL if path.suffix == PROLOG_SUFFIX
+              else NO_COLLECT_MARKER)
+    try:
+        with path.open(encoding="utf-8") as fh:
+            for _, line in zip(range(30), fh):
+                if line.strip() == marker:
+                    return True
+    except (OSError, UnicodeDecodeError):
+        # Unreadable or not UTF-8: let the loader report it as a <load>
+        # failure rather than skipping the file silently.
+        return False
+    return False
 #: A skipped-file list at most this long is printed in full without ``-v``;
 #: a longer one is a single count line unless ``-v`` is given.
 SKIPPED_LIST_INLINE_MAX = 5
@@ -2678,24 +2710,36 @@ def discover_clausal_files(
     directory holding files under several spellings reports them interleaved
     rather than one extension after the other.
 
+    A test-typed file carrying the no-collect marker
+    (:func:`opts_out_of_collection`) is not yielded.
+
     When *skipped* is a list, every other file the scan passes over is
-    appended to it as ``(path, SKIP_UNSUPPORTED)`` — except files under a
-    hidden directory or ``__pycache__``, which are noise, not candidates.
+    appended to it as ``(path, reason)`` — except files under a hidden
+    directory or ``__pycache__``, which are noise, not candidates.
     """
+    def classify(p: Path) -> str | None:
+        if p.suffix not in TEST_SUFFIXES:
+            return SKIP_UNSUPPORTED
+        if opts_out_of_collection(p):
+            return SKIP_NO_COLLECT
+        return None
+
     for root in roots:
         root = Path(root)
         if root.is_file():
-            if root.suffix in TEST_SUFFIXES:
+            reason = classify(root)
+            if reason is None:
                 yield root
             elif skipped is not None:
-                skipped.append((root, SKIP_UNSUPPORTED))
+                skipped.append((root, reason))
         elif root.is_dir():
             files = sorted(p for p in root.rglob("*") if p.is_file())
             for p in files:
-                if p.suffix in TEST_SUFFIXES:
+                reason = classify(p)
+                if reason is None:
                     yield p
                 elif skipped is not None and not _is_scan_noise(p, root):
-                    skipped.append((p, SKIP_UNSUPPORTED))
+                    skipped.append((p, reason))
 
 
 def _skipped_lines(skipped: list[tuple[Path, str]], verbose: bool) -> list[str]:

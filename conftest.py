@@ -25,8 +25,13 @@ from pathlib import Path
 
 import pytest
 
-from clausal._suffixes import PROLOG_SUFFIX, SOURCE_SUFFIXES
-from clausal.testing import load_clausal_module, collect_tests, run_test
+from clausal._suffixes import SOURCE_SUFFIXES
+from clausal.testing import (
+    collect_tests,
+    load_clausal_module,
+    opts_out_of_collection,
+    run_test,
+)
 from clausal.tools.clear_pycache import clear_pycache
 
 # Ensure test fixtures directory is importable (for -import_from directives
@@ -83,26 +88,11 @@ def _clear_pycache_before_tests():
     clear_pycache()
 
 
-# Marker a fixture can carry to opt out of automatic .clausal collection —
+# A fixture opts out of automatic collection with the no-collect marker —
 # for files that are *meant* to fail at load (diagnostic regression fixtures).
-# A .pl file spells it with Prolog's comment character.
-_NO_COLLECT_MARKER = "# clausal: no-collect"
-_NO_COLLECT_MARKER_PL = "% clausal: no-collect"
-
-
-def _opts_out_of_collection(path: Path) -> bool:
-    """True if a test file carries the no-collect marker in its first 30 lines
-    (``# clausal: no-collect``; ``% clausal: no-collect`` in a .pl file)."""
-    marker = (_NO_COLLECT_MARKER_PL if path.suffix == PROLOG_SUFFIX
-              else _NO_COLLECT_MARKER)
-    try:
-        with path.open(encoding="utf-8") as fh:
-            for _, line in zip(range(30), fh):
-                if line.strip() == marker:
-                    return True
-    except OSError:  # pragma: no cover — unreadable file, let collection try
-        return False
-    return False
+# The marker and its check live in clausal.testing so the CLI runner honours
+# the same opt-out (see clausal.testing.opts_out_of_collection).
+_opts_out_of_collection = opts_out_of_collection
 
 
 def pytest_collect_file(parent, file_path: Path):

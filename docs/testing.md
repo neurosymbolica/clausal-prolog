@@ -56,7 +56,7 @@ A file that fails to load is reported as one failing `<load>` item, with the loa
 
 **An empty run fails.** A directory with no test files, or whose files hold no `test/1` clauses, exits 5, as does a single file with no `test/1` clauses: a mistyped root or a renamed extension must not read as a green run. Pass `--allow-empty` when an empty directory is genuinely expected; the run then exits 0. `--strict` (alias `--fail-on-empty`) used to opt in to failing on an empty run; that is now the default, so the flag is accepted for compatibility and changes nothing (it cannot be combined with `--allow-empty`). An empty run used to exit 1 under `--strict`; it now exits 5 either way.
 
-**Skipped files are reported.** A directory scan names the files it collected nothing from, with the reason: `unsupported suffix` (a `README.md`, a `.py` helper) or `no test/1 clauses` (a module of helpers). Up to 5 are listed in full; a longer list is one count line, and `-v` lists every file. Files under hidden directories and `__pycache__` are not reported.
+**Skipped files are reported.** A directory scan names the files it collected nothing from, with the reason: `unsupported suffix` (a `README.md`, a `.py` helper), `no test/1 clauses` (a module of helpers) or `no-collect marker` (see below). Up to 5 are listed in full; a longer list is one count line, and `-v` lists every file. Files under hidden directories and `__pycache__` are not reported.
 
 ```text
 1 file(s) skipped (unsupported suffix: 1):
@@ -92,7 +92,7 @@ Output looks like:
 --8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:test_output"
 ```
 
-This means `.clausal` tests and Python tests can run together in one `pytest` invocation. A test-data file that is *meant* not to be collected (a fixture that fails to load on purpose) carries the line `# clausal: no-collect` within its first 30 lines -- `% clausal: no-collect` in a `.pl` file. Prolog `.pl` files with `test/1` clauses are collected and run like `.clausal` files -- the spelling is preserved across the translation (a Prolog `test/1` clause stays `test/1`, as every predicate name does), so nothing about the imported file is deprecated. See [Importing Prolog](importing_prolog.md).
+This means `.clausal` tests and Python tests can run together in one `pytest` invocation. A test-data file that is *meant* not to be collected (a fixture that fails to load on purpose, Prolog source that is data rather than tests) carries the line `# clausal: no-collect` within its first 30 lines -- `% clausal: no-collect` in a `.pl` file. Both runners honour it: the plugin does not collect the file, and `python -m clausal.testing` reports it as skipped. Prolog `.pl` files with `test/1` clauses are collected and run like `.clausal` files -- the spelling is preserved across the translation (a Prolog `test/1` clause stays `test/1`, as every predicate name does), so nothing about the imported file is deprecated. See [Importing Prolog](importing_prolog.md).
 
 ## Running Python tests
 
