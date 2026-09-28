@@ -537,3 +537,74 @@ class TestAtomicCacheWrite:
         loader.set_data(str(target), b"NEW")
         assert sorted(os.listdir(target.parent)) == [target.name]
         assert target.read_bytes() == b"OLD"
+
+
+# ── D18(a) audit: tables outside the fingerprint decide emitted code ─────────
+
+
+def _fingerprinted_relpaths():
+    """The package-relative files ``_compilation_fingerprint`` hashes."""
+    from clausal import import_hook as ih
+    package = os.path.dirname(os.path.abspath(ih.__file__))
+    out = set()
+    for rel in ih._COMPILATION_ROOTS:
+        for dirpath, dirnames, filenames in os.walk(
+                os.path.join(package, *rel.split("/"))):
+            dirnames[:] = [d for d in dirnames if d != "__pycache__"]
+            out |= {os.path.relpath(os.path.join(dirpath, f), package)
+                    for f in filenames if f.endswith(".py")}
+    out |= set(ih._COMPILATION_FILES)
+    assert out, "the fingerprint must hash SOMETHING"
+    return out
+
+
+@pytest.mark.xfail(strict=True, reason=(
+    "D18(a) 2026-09-29: the bytecode key fingerprints templating/, "
+    "pythonic_ast/, logic/compiler/ and compiler_v2.py only, but the "
+    "transformer reads exact_arith.EVALUABLE (term_rewriting.py "
+    "_mark_arith_position_names) and the .pl loader caches the output of "
+    "clausal/tools/prolog_to_clausal.py; two engines differing only there "
+    "share cache entries. Parked for a key decision, not fixed."))
+@pytest.mark.parametrize("dependency", [
+    "logic/exact_arith.py", "tools/prolog_to_clausal.py"])
+def test_every_module_that_decides_bytecode_is_fingerprinted(
+        dependency, monkeypatch):
+    import marshal
+    import types
+    from clausal import import_hook as ih
+
+    if dependency == "logic/exact_arith.py":
+        # Positive control: the SAME source compiles to DIFFERENT bytecode
+        # when only this runtime table changes.
+        from clausal.logic import exact_arith
+        src = "p(X) <- (X == sin(pi))\n"
+        before, _ = ih._parse_clausal_source(src, "t.clausal")
+        monkeypatch.setattr(exact_arith, "EVALUABLE", types.MappingProxyType(
+            {k: v for k, v in exact_arith.EVALUABLE.items() if k[0] != "sin"}))
+        after, _ = ih._parse_clausal_source(src, "t.clausal")
+    else:
+        # The .pl loader compiles (and caches) whatever the translator says.
+        import clausal.tools.prolog_to_clausal as p2c
+        loader = ih.PrologLoader("m", "m.pl")
+        before = loader.source_to_code(b"p(1).\n", "m.pl")
+        monkeypatch.setattr(p2c, "prolog_to_clausal",
+                            lambda text, dialect=None: "p(2),\n")
+        after = loader.source_to_code(b"p(1).\n", "m.pl")
+    assert marshal.dumps(before) != marshal.dumps(after), (
+        "positive control: this dependency must change the bytecode")
+    assert dependency in _fingerprinted_relpaths()
+
+
+def test_an_interrupted_write_leaves_no_stray_temp_file(tmp_path, monkeypatch):
+    src = tmp_path / "m.clausal"
+    src.write_text("p(1),\n")
+    loader = PredicateLoader("m", str(src))
+    target = tmp_path / "__pycache__" / "m.cpython-313.pyc"
+
+    def interrupt(src, dst):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(clausal.import_hook.os, "replace", interrupt)
+    with pytest.raises(KeyboardInterrupt):
+        loader.set_data(str(target), b"NEW")
+    assert os.listdir(target.parent) == []

@@ -660,11 +660,15 @@ class _ClausalSourceLoader(SourceLoader):
             finally:
                 os.close(fd)
             os.replace(path_tmp, path)
-        except OSError:
+        except BaseException as exc:
+            # ANY failure (an interrupt too) removes the temp file; only an
+            # OSError is swallowed.
             try:
                 os.unlink(path_tmp)
             except OSError:
                 pass
+            if not isinstance(exc, OSError):
+                raise
 
 
 def _parse_clausal_source(source, filename):
