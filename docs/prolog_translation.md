@@ -305,7 +305,6 @@ clausal_text = prolog_ast_to_clausal(pmodule)
 | `X =\= Y` | `X != Y` | Arithmetic disequality |
 | `X == Y` | `'=='(X, Y)` | Structural identity |
 | `X \== Y` | `'\\=='(X, Y)` | Structural non-identity: a test, not the CLP `!=` |
-| `X \== Y` | `X != Y` | **Mistranslated**: becomes the arithmetic constraint (see the note above) |
 | `X =< Y` | `X <= Y` | ISO `=<` → `<=` |
 | `\+ G` | `not G` | Negation as failure |
 | `(A , B)` | `(A, B)` | Conjunction |
