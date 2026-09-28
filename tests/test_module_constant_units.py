@@ -103,3 +103,21 @@ def test_it_enumerates_that_modules_pairs_with_the_name_unbound(tmp_path):
     """)
     rows = _rows(m, "all", 3)
     assert sorted(n for _, n, _ in rows) == [44.0, 55.0]
+
+
+def test_the_declared_unit_is_an_atom_not_the_reserved_1_tuple(tmp_path):
+    """`U` is the ATOM `usd_cent` (docs/builtins.md: `U = day`) -- not the
+    reserved 1-tuple `('usd_cent',)`, which is no atom and unifies with
+    nothing a program writes.  A compound unit is a cell of atoms."""
+    m = _load(tmp_path, "atom_unit", """
+        -module(atom_unit, [look/3, fee_au, speed_au])
+        -import_from(united_states, [usd_cent])
+        -import_from(units, [metre, second])
+        -constant_number_units(fee_au, 500, usd_cent)
+        -constant_number_units(speed_au, 3, metre / second)
+
+        look(C, N, U) <- constant_number_units(C, N, U)
+    """)
+    rows = _rows(m, "look", 3)
+    assert ("fee_au", 500, "usd_cent") in rows
+    assert ("speed_au", 3, ("/", "metre", "second")) in rows
