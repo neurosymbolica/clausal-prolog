@@ -1,6 +1,6 @@
-# Phase 2 fixture: -private declaration shadows the global atom default.
-# Module A privately owns phase2priv_orange; module B (companion fixture)
-# auto-mints the global one.
+# Phase 2 fixture: a -private declaration of phase2priv_orange.  Module B
+# (companion fixture) declares the same name -private independently; atoms
+# are global by spelling, so both are the same atom.
 
 -private([phase2priv_orange])
 

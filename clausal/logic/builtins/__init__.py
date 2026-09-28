@@ -11,7 +11,8 @@ This package is organized into submodules by category:
 - type_checks  — var/1, nonvar/1, is_str/1, number/1, integer/1, float_/1, etc.
 - arithmetic   — between/3, succ/2, plus/3, abs_/2, max_/3, min_/3, sign/2, gcd/3, divmod_/4
 - lists        — in_/2, append/3, length/2, sort/2, select/3, etc.
-- pairs        — pairs_keys_values/3, pairs_keys/2, pairs_values/2
+- pairs        — pairs_keys_values/3, pairs_keys/2, pairs_values/2, group_pairs_by_key/2
+- flags        — set_prolog_flag/2, current_prolog_flag/2
 - higher_order — call_goal/1..8, call/1..8, maplist/2,3, include/3, exclude/3, foldl/4
 - io           — write/1, writeln/1, print_term/1, nl/0, tab/1, write_to_string/2, term_to_string/2
 - dcg          — phrase/2, phrase/3
@@ -60,6 +61,7 @@ from clausal.logic.builtins import type_checks     # noqa: F401
 from clausal.logic.builtins import arithmetic      # noqa: F401
 from clausal.logic.builtins import lists           # noqa: F401
 from clausal.logic.builtins import pairs           # noqa: F401
+from clausal.logic.builtins import flags           # noqa: F401
 from clausal.logic.builtins import higher_order    # noqa: F401
 from clausal.logic.builtins import io              # noqa: F401
 from clausal.logic.builtins import dcg             # noqa: F401

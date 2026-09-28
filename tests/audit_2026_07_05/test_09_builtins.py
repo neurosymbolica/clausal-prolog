@@ -399,9 +399,11 @@ def test_F011_max_strings(fix):
 
 def test_F012_pairs_values_short_pair(fix):
     # A09-F018/F012: a too-short pair fails (no raw IndexError escapes).
+    # R4: a pair is K-V now; [1] and the arity-1 cell are both non-pairs.
     _, m = fix
     try:
         assert not _first(m, "pairs_values", [[1]], Var())
+        assert not _first(m, "pairs_values", [("-", 1)], Var())
     except IndexError:
         pytest.fail("raw IndexError escaped from pairs_values/2")
 
@@ -615,7 +617,7 @@ def test_F017_regression_list_forms_work(fix):
 def test_F018_pairs_keys_values_skips_junk(fix):
     _, m = fix
     K, V = Var(), Var()
-    ok = _first(m, "pairs_keys_values", [[1, "a"], "junk"], K, V)
+    ok = _first(m, "pairs_keys_values", [("-", 1, "a"), "junk"], K, V)
     assert not ok  # A09-F018 fixed: was succeeding with K=[1], V=['a']
 
 
@@ -748,22 +750,21 @@ def test_F022_subtract_cross_type(fix):
     assert _dw(D) == [1]  # actual: []
 
 
-@pytest.mark.xfail(strict=False, reason="A09-F022: group_pairs_by_key "
-                   "merges 1 and True keys")
+# A09-F022 (group_pairs_by_key) CLOSED by R4 (2026-09-28): keys are compared
+# with ISO `==` as in Scryer's library(pairs), not by Python hash, so 1 and
+# True stay apart and two equal list keys group together.  xfail removed.
 def test_F022_group_pairs_cross_type(fix):
     _, m = fix
     G = Var()
-    assert _first(m, "group_pairs_by_key", [[1, "a"], [True, "b"]], G)
-    assert len(_dw(G)) == 2  # actual: 1 merged group
+    assert _first(m, "group_pairs_by_key", [("-", 1, "a"), ("-", True, "b")], G)
+    assert len(_dw(G)) == 2
 
 
-@pytest.mark.xfail(strict=False, reason="A09-F022: equal unhashable keys "
-                   "split into separate groups (id() fallback)")
 def test_F022_group_pairs_unhashable_split(fix):
     _, m = fix
     G = Var()
-    assert _first(m, "group_pairs_by_key", [[[1], "a"], [[1], "b"]], G)
-    assert len(_dw(G)) == 1  # actual: 2 groups
+    assert _first(m, "group_pairs_by_key", [("-", [1], "a"), ("-", [1], "b")], G)
+    assert len(_dw(G)) == 1
 
 
 # A09-F022 CLOSED 2026-09-09. `sort/2` deduped 1/1.0/True into one element

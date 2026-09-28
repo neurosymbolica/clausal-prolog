@@ -453,8 +453,8 @@ Python object reference and is refused with a `TypeError` if constructed as a te
     declared (via `-module`, `-private`, or `-import_from`) or reached via
     `global_atom/2` will not compile.
 
-    [`-implicit_atoms`](directives.md#-implicit_atoms) turned this off per
-    file; it is deprecated (2026-09-18) and warns — declare the atoms instead.
+    There is no per-file opt-out: [`-implicit_atoms`](directives.md#-implicit_atoms)
+    was removed before 1.0 — declare the atoms, or quote them.
 
     Once an atom **is** resolved — declared in `-module([...])` (public),
     `-private([...])` (private), imported, or reached via `global_atom/2` —

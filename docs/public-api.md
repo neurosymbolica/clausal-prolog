@@ -26,8 +26,9 @@ They are removed in 2.0.
   [Testing](testing.md).
 - The directives documented in [Directives](directives.md): `-module`
   (including `-private` and `-hide`), `-import_from`, `-import_module`,
-  `-strict_atoms`, `-implicit_atoms`, `-implicit_functors`, `-dynamic`,
-  `-table`, `-discontiguous`, `-meta_predicate`, `-shallow`, the
+  `-strict_atoms`, `-implicit_functors`, `-dynamic`,
+  `-table`, `-discontiguous`, `-meta_predicate`, `-shallow`,
+  `-set_prolog_flag`, the
   `-constant_value` / `-constant_number_units` family, `-allow_singletons`,
   `-specialize` and the EDCG directives. `-double_quotes` is **transitional**
   (see 2).
@@ -38,6 +39,10 @@ They are removed in 2.0.
 - The dynamic database is **declare-first**: `assertz/1` and its kin add
   clauses only to a predicate declared `-dynamic`. Asserting into any other
   predicate raises `permission_error(modify, static_procedure, Name/Arity)`.
+  The module flag `assert_creates_dynamic` (below) selects ISO 7.5.2(2)
+  instead: an assert into a procedure that does not exist creates it as
+  dynamic. It is `false` in a `.clausal`/`.seam` module and `true` in an
+  imported `.pl` module.
 - Literal semantics:
     - `'x'` and bare `x` are the **atom** `x`.
     - `"…"` is a **string**, which is a char list, by default (as in
@@ -68,6 +73,13 @@ They are removed in 2.0.
   [ISO compatibility report](iso_prolog_compatibility_report.md). The quoted
   ISO names (`'is'`, `'='`, `'=='`, `'=:='`, `'@<'`, `compare/3`, `'=..'`,
   and the rest) are part of this.
+- **Prolog flags:** `set_prolog_flag/2` and `current_prolog_flag/2`, the
+  directive `-set_prolog_flag/2`, and the flag names and values documented
+  in [Prolog Flags](flags.md): the ISO flags `bounded`, `max_integer`,
+  `min_integer`, `integer_rounding_function`, `char_conversion`, `debug`,
+  `max_arity`, `unknown`, `double_quotes`, and `assert_creates_dynamic`.
+  Which flags are module-scoped is covered too. The set of values a flag
+  can be SET to may grow (`unknown` = `fail`, say) in a minor release.
 - The builtin predicates in the Clausal standard library, by name and
   arity, as documented under [Builtins](builtins.md) and the library pages.
   They are covered as **predicates**, called from `.clausal` source or as a

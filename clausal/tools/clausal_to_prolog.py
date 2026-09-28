@@ -1564,7 +1564,7 @@ class _ClausalToProlog:
             operand = value.operand
             if isinstance(operand, python_ast.Call) and isinstance(operand.func, python_ast.Name):
                 return True, self._convert_directive(operand)
-            # -strict_atoms / -implicit_atoms: a parenless, argument-less
+            # -strict_atoms: a parenless, argument-less
             # directive (UnaryOp(USub(Name)), not Call) — engine-only atom-
             # resolution bookkeeping with no Prolog equivalent, same
             # legitimately-silent category as -private(...) above. 523
@@ -1646,10 +1646,10 @@ class _ClausalToProlog:
         unrecognized shape, so this does NOT fall through to the
         fail-closed net's warning. An actually-unknown bare directive
         still warns below: only the names the engine itself recognizes
-        (clausal/reflection.py's StrictAtomsDeclaration / the mutually-
-        exclusive -implicit_atoms) are exempted.
+        (clausal/reflection.py's StrictAtomsDeclaration) are exempted.
+        (-implicit_atoms was removed; the engine refuses it at load.)
         """
-        if name in ("strict_atoms", "implicit_atoms"):
+        if name == "strict_atoms":
             return None
         self._add_warning(f"-{name}")
         return None
@@ -1677,6 +1677,14 @@ class _ClausalToProlog:
             return None
         if name == "double_quotes":
             return self._convert_double_quotes_directive(call)
+        if (name == "set_prolog_flag" and len(call.args) == 2
+                and isinstance(call.args[0], python_ast.Name)
+                and call.args[0].id == "assert_creates_dynamic"):
+            # Clausal's own flag: ISO Prolog's assert already creates a
+            # missing procedure as dynamic (7.5.2(2)), which is what ``true``
+            # selects, so there is nothing to emit; and the reference systems
+            # do not know the flag, so writing it would be a load error there.
+            return None
         if name in ("constant_value", "constant_number_units",
                     "constant_number_currency"):
             self._collect_constant(name, call)

@@ -41,7 +41,7 @@ def test_a_profile_key_survives_an_import_from_of_the_same_name(tmp_path):
     profile key."""
     m = _load(tmp_path, "shadow", """
         -module(shadow, [look/1])
-        -implicit_atoms
+        -private([currency, eur])
         -import_from(currency, [currency_code])
 
         inv({currency: eur}),

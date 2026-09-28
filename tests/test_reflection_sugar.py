@@ -28,7 +28,7 @@ def _clear_query_cache():
 
 
 _MATCHERS = """\
--implicit_atoms
+-private([ok])
 -import_from(reflection, [
     reified_item, reified_clause, reified_subterm,
     clause_body, goal_functor,

@@ -224,7 +224,6 @@ def test_q16_a_module_declaration_of_the_spelling_answers_first(tmp_path):
 # ── the seam (``--``) in Python-hosted code ─────────────────────────────────
 
 _SEAM_SRC = '''-module({name}, [p(A)])
--implicit_atoms
 -implicit_functors
 def floor_value(): return --p(-7 // 2)
 def pow_value(): return --p(2 ** 3)

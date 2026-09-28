@@ -56,6 +56,13 @@ since 0.4.0 finish three moves:
   is not arithmetic, and raises `instantiation_error` for an unbound
   operand. A Python `str` reached through a variable is an atom there and
   raises; write `X is ++(expr)` to evaluate Python.
+- **A pair is `Key-Value`, as in Scryer's `library(pairs)`.**
+  `pairs_keys_values/3`, `pairs_keys/2`, `pairs_values/2` and
+  `group_pairs_by_key/2` take and build `'-'(K, V)` pairs instead of
+  `[K, V]` lists (a `[K, V]` element now fails), and follow Scryer's
+  definitions in every mode. `group_pairs_by_key/2` groups only ADJACENT
+  pairs with identical keys and returns `K-Values` groups: sort first to
+  collect every occurrence of a key. See [docs/pairs.md](docs/pairs.md).
 - **`clausal.__all__` is smaller.** `make_predicate` and
   `MakePredicateRetiredError` are gone. `Database`, `Clause`,
   `structural_unify` and `get_builtin_class` are internal and no longer
@@ -115,6 +122,21 @@ since 0.4.0 finish three moves:
   earlier versions are ignored and rebuilt.
 
 ### Added
+
+- **Prolog flags.** `set_prolog_flag/2` and `current_prolog_flag/2` with the
+  ISO flags (`bounded`, `max_integer`, `min_integer`,
+  `integer_rounding_function`, `char_conversion`, `debug`, `max_arity`,
+  `unknown`, `double_quotes`) and ISO's error terms, and the directive
+  `-set_prolog_flag(Flag, Value)`. `double_quotes` is the module's
+  `-double_quotes` mode. `unknown` can only be `error`. See
+  [docs/flags.md](docs/flags.md).
+- **The `assert_creates_dynamic` flag** (module-scoped, default `false`).
+  With it `true`, `assertz`/`asserta` of a procedure that does not exist
+  creates it as dynamic (ISO 7.5.2(2)), instead of raising
+  `permission_error(modify, static_procedure, PI)`. A static predicate, a
+  builtin and a declared data functor are still refused. An imported `.pl`
+  module starts with it `true`, and `:- set_prolog_flag(F, V).` in a `.pl`
+  file now carries across for any flag.
 
 - **`.seam`** as an alias extension for `.clausal` files.
 - **Goal-position seams in hosted Python:** `if --g(X):`, `for X in --g(X):`,
@@ -222,6 +244,11 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
 - `q(...)` quasi-quotation.
 - **`Test/1`** test clauses: a TitleCase name is a logic variable, so
   `Test("…") <- …` is a load-time error. Use `test/1`.
+- **The `-implicit_atoms` directive**, with its deprecation warning
+  (`ClausalImplicitAtomsDeprecationWarning`) and the
+  `tools/codemods/add_implicit_atoms.py` codemod. A file that carries it
+  does not load: `SyntaxError: -implicit_atoms was removed; declare atoms
+  with -private([...]) or quote them`.
 
 ### Fixed
 
@@ -256,6 +283,8 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
 | comparing a seam answer with `"text"` | `v == --"text"` or `to_python(v) == "text"` |
 | `"sym"` used as a symbol in a `.clausal` file | `'sym'` or bare `sym` |
 | `Test("…") <- …` | `test("…") <- …` |
+| `[K, V]` pairs for `pairs_*` / `group_pairs_by_key` | `'-'(K, V)` |
+| `-implicit_atoms` | list the atoms in `-private([...])` / `-module(name, [...])`, or quote them |
 | `X := Expr` in a body | `eval_(Expr, X)` |
 | `Compound(f, args)` / `KWTerm(...)` | the cell `(f, *args)` |
 | `exc.term` read as an object (`.args`, `.functor`) | `cell_functor(exc.term)`, `cell_args(exc.term)` |

@@ -228,7 +228,8 @@ class UndeclaredFunctorError(_LogicException, NameError):
     """
 
     def __init__(self, functor: str, arity: int, kind: "str | None" = None,
-                 context: "str | None" = None) -> None:
+                 context: "str | None" = None,
+                 why: "str | None" = None) -> None:
         from clausal.logic.exceptions import (  # noqa: PLC0415
             _error, existence_error, type_error,
         )
@@ -238,15 +239,18 @@ class UndeclaredFunctorError(_LogicException, NameError):
         if kind == "evaluable":
             term = type_error("evaluable", pi,
                               f"{context}: {prose}" if context else prose)
-        elif kind == "procedure" and context:
+        elif kind in ("procedure", "procedure_arg") and context:
             # RULED R7 (2026-09-28): the clause of assertz/asserta names a
             # procedure nothing declares -- ISO makes it static by default,
             # so writing it is permission_error(modify, static_procedure).
             from clausal.logic.exceptions import permission_error  # noqa: PLC0415
             term = permission_error(
                 "modify", "static_procedure", pi,
-                f"{context}: nothing declares {functor}/{arity}; declare it "
-                f"-dynamic({functor}/{arity}) first")
+                f"{context}: " + (why or (
+                    f"nothing declares {functor}/{arity}; declare it "
+                    f"-dynamic({functor}/{arity}) first"
+                    + (", or set the flag assert_creates_dynamic to true in "
+                       "this module" if kind == "procedure" else ""))))
         elif context:
             term = _error(("existence_error", mint("procedure"), pi),
                           f"{context}: {prose}")
@@ -306,8 +310,14 @@ def _undeclared_functor_in(kind: str, context: "str | None", functor: str,
     the compiler placed in a known position (``kind``/``context``, see
     :class:`UndeclaredFunctorError`).  Kind ``"cell"`` (the clause of
     retract/1) builds the plain cell instead: nothing is written, the goal
-    only matches, and finding no procedure it fails, as ISO 8.9.3 says."""
-    if kind == "cell" and not kwargs:
+    only matches, and finding no procedure it fails, as ISO 8.9.3 says.
+
+    Kind ``"procedure"`` (the clause of assertz/asserta) builds the cell
+    too: whether writing it is allowed depends on the CALLING module's
+    ``assert_creates_dynamic`` flag, which only the database builtin knows,
+    so the builtin decides (``database_ops._resolve_cell_head``) and raises
+    this same :class:`UndeclaredFunctorError` when the flag is off."""
+    if kind in ("cell", "procedure") and not kwargs:
         return (functor, *args)
     raise undeclared_functor_error(functor, arity, kind, context)
 
@@ -321,7 +331,7 @@ def _constructor_in(obj: Any, kind: str, context: "str | None",
     that position instead of the adapter's context-free one.  Anything else
     the name is bound to by then is returned unchanged."""
     if type(obj) is _DbDispatchAdapter:
-        if kind == "cell":
+        if kind in ("cell", "procedure"):
             def _cell(*args):
                 return (functor, *args)
             return _cell

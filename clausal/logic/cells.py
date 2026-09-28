@@ -265,10 +265,9 @@ DECLARED_ATOMS_KEY = "__clausal_declared_atoms__"
 # every plain (keyword-free) reference in a flagged module.  Keyword
 # construction/matching still needs a real signature to place its named
 # slots against, flag or no flag -- the flag opens functor VOCABULARY, not
-# the keyword-placement contract.  Orthogonal to ``-strict_atoms`` /
-# ``-implicit_atoms``: this flag says nothing about bare (0-arity) ATOM
-# references, which keep whatever declaredness discipline those directives
-# already govern.
+# the keyword-placement contract.  Orthogonal to the strict-atoms rule:
+# this flag says nothing about bare (0-arity) ATOM references, which keep
+# the declaredness discipline that rule governs.
 IMPLICIT_FUNCTORS_FLAG = "__clausal_implicit_functors__"
 
 

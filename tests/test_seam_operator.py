@@ -28,7 +28,7 @@ class TestSeamBuildsCells:
         mod = _load_inline("_seam_cell", (
             "-module(_seam_cell, [verdict(A, B)])\n"
             "-double_quotes(chars)\n"
-            "-implicit_atoms\n"
+            "-private([good])\n"
             "def build():\n"
             "    return --verdict(good, \"baz\")\n"
         ))
@@ -38,7 +38,7 @@ class TestSeamBuildsCells:
         mod = _load_inline("_seam_atom_mode", (
             "-module(_seam_atom_mode, [verdict(A, B)])\n"
             "-double_quotes(atom)\n"
-            "-implicit_atoms\n"
+            "-private([good])\n"
             "def build():\n"
             "    return --verdict(good, \"baz\")\n"
         ))
@@ -48,7 +48,6 @@ class TestSeamBuildsCells:
         mod = _load_inline("_seam_sq", (
             "-module(_seam_sq, [verdict(A, B)])\n"
             "-double_quotes(chars)\n"
-            "-implicit_atoms\n"
             "def build():\n"
             "    return --verdict('sq', \"dq\")\n"
         ))
@@ -68,7 +67,7 @@ class TestSeamBuildsCells:
         mod = _load_inline("_seam_unify", (
             "-module(_seam_unify, [verdict(A, B), fact(X)])\n"
             "-double_quotes(chars)\n"
-            "-implicit_atoms\n"
+            "-private([good])\n"
             "fact(verdict(good, \"baz\"))\n"
             "def build():\n"
             "    return --verdict(good, \"baz\")\n"
@@ -104,7 +103,7 @@ class TestVariablesAndEscapes:
         mod = _load_inline("_seam_nest", (
             "-module(_seam_nest, [outer(A, B), inner(A)])\n"
             "-double_quotes(chars)\n"
-            "-implicit_atoms\n"
+            "-private([done])\n"
             "def build(xs):\n"
             "    return --outer(++[--inner(++x) for x in xs], done)\n"
         ))
@@ -129,7 +128,6 @@ class TestHostModuleRulesApply:
         mod = _load_inline("_seam_undeclared", (
             "-module(_seam_undeclared, [])\n"
             "-double_quotes(chars)\n"
-            "-implicit_atoms\n"
             "def build():\n"
             "    return --nosuch(1)\n"
         ))
@@ -140,7 +138,6 @@ class TestHostModuleRulesApply:
         mod = _load_inline("_seam_owa", (
             "-module(_seam_owa, [])\n"
             "-double_quotes(chars)\n"
-            "-implicit_atoms\n"
             "-implicit_functors\n"
             "def build():\n"
             "    return --nosuch(1, 2, 3)\n"
@@ -160,7 +157,7 @@ class TestHostModuleRulesApply:
             warnings.simplefilter("always")
             mod = _load_inline("_seam_warn", (
                 "-module(_seam_warn, [verdict(A, B), tag(A)])\n"
-                "-implicit_atoms\n"
+                "-private([good])\n"
                 "def build():\n"
                 "    return --verdict(good, \"baz\")\n"
                 "def build_atom():\n"
@@ -210,7 +207,7 @@ class TestTermForms:
         mod = _load_inline("_seam_arith_atoms", (
             "-module(_seam_arith_atoms, [verdict(A, B)])\n"
             "-double_quotes(chars)\n"
-            "-implicit_atoms\n"
+            "-private([x, y])\n"
             "def build():\n"
             "    return --verdict(x + y, 0)\n"
         ))
@@ -231,7 +228,7 @@ class TestTermForms:
         mod = _load_inline("_seam_toplevel", (
             "-module(_seam_toplevel, [verdict(A, B)])\n"
             "-double_quotes(chars)\n"
-            "-implicit_atoms\n"
+            "-private([good])\n"
             "GOLD = --verdict(good, \"x\")\n"
         ))
         assert mod.GOLD == ("verdict", "good", ("$chars", "x"))

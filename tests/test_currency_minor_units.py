@@ -1123,7 +1123,7 @@ def test_the_lint_is_BLIND_to_a_literal_under_an_unscaled_functor(tmp_path):
     completeness claim.
     """
     warned = _lint_warnings(tmp_path, "blind", """
-        -implicit_atoms
+        -private([tier1, total, below, ok])
         minimum_leverage_bps(300),
         ratio_ok(P) <- check_ratio_gte(P, tier1, total, 300, below, ok)
     """)
@@ -1135,7 +1135,7 @@ def test_body_position_is_reached_so_the_name_is_the_discriminator(tmp_path):
     """The control that makes the test above a statement about NAMES rather
     than about positions: same argument slot, scale-named functor, warns."""
     warned = _lint_warnings(tmp_path, "blind_ctl", """
-        -implicit_atoms
+        -private([tier1, total, below, ok])
         ratio_ok(P) <- ( check_ratio_gte(P, tier1, total, 300, below, ok),
                          floor_bps(300) )
     """)
@@ -1299,7 +1299,7 @@ def test_a_code_binds_its_currency_in_every_spelling(tmp_path):
     m = _load(tmp_path, "code_rev", """
         -double_quotes(atom)
         -module(code_rev, [lower/1, upper/1, pystr/1])
-        -implicit_atoms
+        -private([eur])
         -import_from(currency, [currency_code])
 
         lower(C) <- currency_code(C, eur)
@@ -1329,7 +1329,7 @@ def test_an_unknown_code_fails_rather_than_raising(tmp_path):
     unusable as a test."""
     m = _load(tmp_path, "code_no", """
         -module(code_no, [nope/1])
-        -implicit_atoms
+        -private([zzz])
         -import_from(currency, [currency_code])
 
         nope(C) <- currency_code(C, zzz)
@@ -1479,7 +1479,7 @@ def test_a_guard_followed_by_BARE_arithmetic_raises(tmp_path):
 def test_quantity_1_is_the_affirmative_test(tmp_path):
     m = _load(tmp_path, "quant1", """
         -module(quant1, [yes/0, no_plain/0, no_atom/0])
-        -implicit_atoms
+        -private([foo])
         -import_from(currency, [money])
         -import_from(european_union, [euro])
 
@@ -1498,7 +1498,7 @@ def test_number_still_refuses_what_it_always_refused(tmp_path):
     anything else."""
     m = _load(tmp_path, "numneg", """
         -module(numneg, [an_atom/0, a_bool/0, a_list/0])
-        -implicit_atoms
+        -private([foo])
 
         an_atom <- number(foo)
         a_bool  <- number(true)
@@ -1685,7 +1685,7 @@ def test_sum_list_still_rejects_a_genuine_non_number(tmp_path):
     from clausal.logic.exceptions import LogicException
     m = _load(tmp_path, "notnum", """
         -module(notnum, [bad/1])
-        -implicit_atoms
+        -private([foo])
 
         bad(S) <- sum_list([foo], S)
     """)

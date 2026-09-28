@@ -1,7 +1,6 @@
 # Phase 2 fixture: module-level export of an atom without anyone importing
-# it.  The declaring module owns its own local class; another module that
-# bare-references the same name must NOT see the local class — it must mint
-# the global atom independently.
+# it.  Another module that declares the same name itself (without importing)
+# gets the same atom: atoms are global by spelling.
 
 -module(global_atoms_decl_only_a, [phase2declonly_green])
 

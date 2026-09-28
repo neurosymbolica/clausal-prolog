@@ -201,6 +201,25 @@ They behave as `findall/3` that fails on an empty result (`setof` also sorts
 and removes duplicates). ISO enumerates one solution per binding of the
 free variables; Clausal returns a single bag.
 
+### Flags
+
+`set_prolog_flag/2` and `current_prolog_flag/2` are provided, with every ISO
+flag and ISO's error terms ([Prolog Flags](flags.md)). The limits:
+
+- `unknown` is always `error`: `fail` and `warning` are not implemented
+  (setting one is `permission_error(modify, flag, unknown)`);
+- `char_conversion` is always `off`;
+- `double_quotes` is `chars` or `atom` (no `codes`), and is set by a
+  directive, never at run time;
+- `max_integer` / `min_integer` have no value (integers are unbounded), and
+  `max_arity` is `unbounded`.
+
+Scryer reports a read-only flag and a bad `unknown` value as
+`domain_error(prolog_flag, F)`; Clausal follows ISO 8.17.1.3 here
+(`permission_error(modify, flag, F)` and `domain_error(flag_value, F+V)`).
+`assert_creates_dynamic` (implementation-defined) selects ISO 7.5.2(2)'s
+assert, and is on in an imported `.pl` module.
+
 ### Missing builtins
 
 Not provided (calling one raises `existence_error(procedure, PI)`):
@@ -212,8 +231,7 @@ Not provided (calling one raises `existence_error(procedure, PI)`):
   `nth1/3` (`member/2` is spelled `in_/2`, `callable/1` is `callable_/1`);
 - **database:** `retractall/1`, `abolish/1`, `current_predicate/1`;
 - **control:** `ignore/1`; the quoted name `'\\+'/1` (write `not G`);
-- **reading and flags:** `read/1`, `read_term/2,3`, `op/3`, `current_op/3`,
-  `set_prolog_flag/2`, `current_prolog_flag/2`;
+- **reading:** `read/1`, `read_term/2,3`, `op/3`, `current_op/3`;
 - **streams:** `open/3,4`, `close/1`, `get_char/1,2`, `put_char/1,2`,
   `peek_char/1,2`, `stream_property/2`;
 - **output:** `print/1`.

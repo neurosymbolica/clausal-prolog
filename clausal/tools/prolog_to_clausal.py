@@ -671,6 +671,18 @@ class _PrologToClausal:
             # spelled ``b"..."`` at the literal, so the mode cannot be set.
             return f"# double_quotes({mode_name or self._emit_term(mode)}) " \
                    f"is not a clausal mode (codes are spelled b\"...\")"
+        # :- set_prolog_flag(Flag, Value) for any other flag carries across as
+        # the directive of the same name; the value is emitted QUOTED, so an
+        # atom such as ``fail`` stays the atom rather than becoming a goal or
+        # a truth value.
+        if (isinstance(body, PCompound) and body.functor == "set_prolog_flag"
+                and len(body.args) == 2 and isinstance(body.args[0], PAtom)):
+            flag, value = body.args
+            if isinstance(value, PAtom):
+                v = "'" + value.name.replace("\\", "\\\\").replace("'", "\\'") + "'"
+            else:
+                v = self._emit_term(value)
+            return f"-set_prolog_flag({flag.name}, {v})"
         # :- op(P, T, N) → comment
         if isinstance(body, PCompound) and body.functor == "op" and len(body.args) == 3:
             return f"# operator: op({self._emit_term(body.args[0])}, {self._emit_term(body.args[1])}, {self._emit_term(body.args[2])})"

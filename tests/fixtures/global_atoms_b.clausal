@@ -1,5 +1,5 @@
--implicit_atoms
-# Phase 2 fixture: bare reference to undeclared atom (companion to
-# global_atoms_a.clausal).
+# Phase 2 fixture: independent -private declaration of the same atom
+# (companion to global_atoms_a.clausal).
+-private([phase2red])
 
 color_b(phase2red),

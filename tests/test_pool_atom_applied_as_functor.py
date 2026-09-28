@@ -72,10 +72,12 @@ def test_implicit_functors_still_builds_the_cell(polluted):
 
 
 def test_a_bare_use_of_the_same_atom_still_is_the_atom(polluted):
-    """The name key keeps the ATOM for a bare use in the same clause; only
-    the construction is refused."""
-    mod = _load("both", "-implicit_atoms\n"
-                        "r(U) <- (U is zz)\n"
+    """The name key keeps the ATOM for an atom use in the same clause; only
+    the construction is refused.  The atom use is quoted: under strict atoms
+    a BARE ``zz`` would need a local declaration, and declaring ``zz`` as an
+    atom here makes ``zz(1)`` a load-time atom-applied-as-functor error,
+    which is not the pooled-name path this pins."""
+    mod = _load("both", "r(U) <- (U is 'zz')\n"
                         "t(T) <- (T is zz(1))\n")
     assert _answers(mod, "r") == ["zz"]
     with pytest.raises(NameError, match=r"'zz/1' is not in scope"):

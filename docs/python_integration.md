@@ -259,8 +259,7 @@ value spells the id `'a1'` (an atom in every mode) to compare equal with what
 Inside `--` the grammar is Clausal's, under the host module's own rules:
 
 - a **bare name** is the atom the module declares or imports (`permitted` →
-  `'permitted'`, a plain `str`); an undeclared one is the usual strict-atoms error, or is
-  minted under `-implicit_atoms`;
+  `'permitted'`, a plain `str`); an undeclared one is the usual strict-atoms error;
 - an **ALL-CAPS or `_leading` name** is a fresh logic variable, shared within
   the one `--` expression;
 - `'...'` is an atom; `"..."` is a string (the carrier `('$chars', text)`),

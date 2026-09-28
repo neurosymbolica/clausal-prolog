@@ -232,14 +232,15 @@ class TestReviewRound1:
 
 
 class TestZeroArityValueBeforeFirstClause:
-    """The order caveat of the 0-arity-predicate-as-value rule, closed: under
-    -implicit_atoms a reference BEFORE the predicate's first clause used to
-    load the CLASS (prints like the atom, unequal to it, not a term)."""
+    """The order caveat of the 0-arity-predicate-as-value rule, closed: a
+    reference BEFORE the predicate's first clause used to load the CLASS
+    (prints like the atom, unequal to it, not a term).  ``p`` needs no atom
+    declaration: the module's own 0-arity predicate makes the name known."""
 
     def test_reference_before_and_after_the_clause_is_the_same_atom(self, tmp_path):
         from clausal.logic.variables import Var
         mod = _mod(tmp_path, "before(V) <- (V is p)\np <- true\nafter(V) <- (V is p)\n",
-                   hdr="-implicit_atoms\n")
+                   hdr="")
         (b,) = _first(mod, "before", Var())
         (a,) = _first(mod, "after", Var())
         assert b == mint("p") and a == mint("p") and type(b) is str
@@ -247,6 +248,6 @@ class TestZeroArityValueBeforeFirstClause:
 
     def test_a_call_in_function_position_is_still_a_call(self, tmp_path):
         from clausal.logic.variables import Var
-        mod = _mod(tmp_path, "p <- true\nt(R) <- (p, R is yes)\n", hdr="-implicit_atoms\n")
+        mod = _mod(tmp_path, "p <- true\nt(R) <- (p, R is yes)\n", hdr="-private([yes])\n")
         (r,) = _first(mod, "t", Var())
         assert r == mint("yes")
