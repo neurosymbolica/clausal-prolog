@@ -219,6 +219,10 @@ since 0.4.0 finish three moves:
       Python `str` literal.
     - `ClausalAtomExportDefinedAsPredicateWarning`: an exported atom that
       is also a predicate.
+    - `ClausalExportArityMismatchWarning`: a `name/N` export entry for an
+      arity the module neither defines nor declares, while it has clauses
+      for `name` at another arity (`-module(m, [base/9])` over `base/2`
+      clauses). The export stays legal; the warning names both arities.
     - `ClausalScaleInNameWarning`, `ClausalCurrencyLiteralWarning`,
       `ClausalTitleCaseIdentifierWarning`, `ClausalKeywordArgumentWarning`.
 - **Diagnostics:**

@@ -196,6 +196,27 @@ class ClausalAtomExportDefinedAsPredicateWarning(ClausalLintWarning):
     """
 
 
+class ClausalExportArityMismatchWarning(ClausalLintWarning):
+    """An ISO ``name/N`` entry in a ``-module``/``-private`` list names an
+    arity the module does nothing with, while the module DOES define
+    ``name`` at some other arity: ``-module(m, [base/9])`` over ``base/2``
+    clauses.  Almost always a typo in the export entry.
+
+    Not an error (operator ruling 2026-09-29): a ``name/N`` entry for a
+    predicate with no clauses here is legal -- it declares a procedure
+    whose clauses may come from elsewhere, and calling it with none raises
+    ``existence_error`` -- so the export stays, and the warning only fires
+    when other-arity clauses make the typo likely.  Silent when ``name/N``
+    has clauses here, or a ``-dynamic``/``-table``/``-discontiguous``/
+    ``-shallow``/``-meta_predicate`` declaration, or a field-carrying
+    export entry at arity N, and silent when ``name`` has no clauses at
+    any arity.  Emitted at load, once per export entry, naming the file
+    and line of the entry.  Remedy: correct the arity in the entry, or
+    declare ``name/N`` (e.g. ``-dynamic``) if it really is a different
+    procedure.
+    """
+
+
 class ClausalRetiredQuasiQuoteWarning(ClausalDeprecatedSpellingWarning):
     """``q(...)`` inside a ``term_expansion/4`` clause.
 

@@ -224,7 +224,7 @@ is a `UserWarning` through `ClausalLintWarning`, so they show by default:
 `ClausalCurrencyLiteralWarning`, `ClausalScaleInNameWarning`,
 `ClausalShadowedVariableWarning`, `ClausalBooleanSeamWarning`,
 `ClausalAtomExportDefinedAsPredicateWarning`,
-`ClausalRetiredQuasiQuoteWarning`, `ClausalAtomClassDeprecationWarning`,
+`ClausalExportArityMismatchWarning`, `ClausalRetiredQuasiQuoteWarning`, `ClausalAtomClassDeprecationWarning`,
 `ClausalSeamTextCompareWarning`, `ClausalStringInCatchPatternWarning`.
 
 **The lint rule for 1.x:** a minor release may add a new lint, but a new
