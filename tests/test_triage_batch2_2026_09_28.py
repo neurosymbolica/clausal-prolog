@@ -142,7 +142,7 @@ class TestB4aAssertzUnbound:
 
 
 class TestB4cC1C3UndeclaredFunctor:
-    def test_assertz_of_an_undeclared_name_is_an_existence_error(self, tmp_path, monkeypatch):
+    def test_assertz_of_an_undeclared_name_is_a_permission_error(self, tmp_path, monkeypatch):
         mod = _load(tmp_path, monkeypatch, "tri_b4c", """
             def run():
                 return [Z for Z in --(assertz(nodecl(1)), Z is 1)]
@@ -152,11 +152,13 @@ class TestB4cC1C3UndeclaredFunctor:
         with pytest.raises(LogicException) as exc:
             mod.run()
         term = _error_term(exc.value)
-        assert term[1] == ("existence_error", "procedure", ("/", "nodecl", 1))
+        assert term[1] == ("permission_error", "modify", "static_procedure",
+                           ("/", "nodecl", 1))  # ruling R7
         assert term[2] == ("/", "assertz", 1)
         # and catch/3 sees the ISO term, not a transliterated NameError
         (e,) = mod.caught()
-        assert e[1] == ("existence_error", "procedure", ("/", "nodecl", 1))
+        assert e[1] == ("permission_error", "modify", "static_procedure",
+                        ("/", "nodecl", 1))
 
     def test_it_is_still_a_name_error_for_python_callers(self, tmp_path, monkeypatch):
         mod = _load(tmp_path, monkeypatch, "tri_b4c2", """

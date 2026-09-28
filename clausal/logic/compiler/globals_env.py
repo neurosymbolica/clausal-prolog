@@ -218,12 +218,13 @@ class UndeclaredFunctorError(_LogicException, NameError):
       ``type_error(evaluable, f/1)`` -- what ISO specifies for a compound
       the evaluator does not know;
     * the clause of ``assertz/1`` and friends:
-      ``existence_error(procedure, f/1)`` with the builtin as context;
+      ``permission_error(modify, static_procedure, f/1)`` with the builtin as
+      context (ruling R7, 2026-09-28: an undeclared procedure is static);
     * anywhere else: ``existence_error(procedure, f/1)``, the term the
       Python API already gives for an undeclared ``assertz`` target.
 
-    Undeclared-name ``assertz`` (R7) is not ruled yet; this is the term the
-    Python API gives today, so both routes now agree.
+    The assert case follows ruling R7; the database builtins' own refusal
+    (``database_ops._resolve_cell_head``) raises the same term.
     """
 
     def __init__(self, functor: str, arity: int, kind: "str | None" = None,
@@ -237,6 +238,15 @@ class UndeclaredFunctorError(_LogicException, NameError):
         if kind == "evaluable":
             term = type_error("evaluable", pi,
                               f"{context}: {prose}" if context else prose)
+        elif kind == "procedure" and context:
+            # RULED R7 (2026-09-28): the clause of assertz/asserta names a
+            # procedure nothing declares -- ISO makes it static by default,
+            # so writing it is permission_error(modify, static_procedure).
+            from clausal.logic.exceptions import permission_error  # noqa: PLC0415
+            term = permission_error(
+                "modify", "static_procedure", pi,
+                f"{context}: nothing declares {functor}/{arity}; declare it "
+                f"-dynamic({functor}/{arity}) first")
         elif context:
             term = _error(("existence_error", mint("procedure"), pi),
                           f"{context}: {prose}")

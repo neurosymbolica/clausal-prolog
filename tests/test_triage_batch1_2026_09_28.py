@@ -118,7 +118,7 @@ class TestB4bAssertzContext:
         with pytest.raises(LogicException) as exc:
             mod.run()
         term = _error_term(exc.value)
-        assert term[1] == ("existence_error", "procedure", ("/", "foo", 1))
+        assert term[1] == ("permission_error", "modify", "static_procedure", ("/", "foo", 1))  # R7
         assert term[2] == ("/", "assertz", 1)
 
 

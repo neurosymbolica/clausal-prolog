@@ -28,7 +28,8 @@ as the culprit (Scryer's form; see [Exceptions](exceptions.md)).
 
 The declaration also makes the predicate exist before it has clauses: a
 `-dynamic` predicate with no clauses simply fails, where an undeclared name is
-refused. Declare several at once:
+refused with the same `permission_error(modify, static_procedure, Name/Arity)`
+(it is static by default). Declare several at once:
 
 ```clausal
 --8<-- "tests/fixtures/docs/database_ops_examples.clausal:dynamic_directive"
@@ -144,8 +145,10 @@ does not require dynamic predicates.)
   assert time (the predicate's existing clauses are left untouched). Only
   ground or partially-ground facts can be asserted.
 - **Arity is part of the name** — `assertz(foo(a))` when only `foo/2` is
-  declared dynamic is refused with `existence_error(procedure, foo/1)`:
-  `foo/1` is a different predicate, and it is not declared.
+  declared dynamic is refused with
+  `error(permission_error(modify, static_procedure, foo/1), assertz/1)`:
+  `foo/1` is a different predicate, it is not declared, and an undeclared
+  procedure is static (ISO 7.5.2).
 - **retract removes one clause** — it removes the *first* matching clause only.
   Call it in a loop (or use `findall` + multiple retracts) to remove all
   matches.

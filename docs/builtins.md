@@ -719,7 +719,7 @@ These work only on a predicate declared [`-dynamic`](database_ops.md#declare-fir
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:assertz_1"
 ```
-Add the fact `Clause` at the **end** of its predicate's clause list. Only facts can be asserted: a rule raises `permission_error(assert, rule, Head)`.
+Add the fact `Clause` at the **end** of its predicate's clause list. Only facts can be asserted: a rule raises `permission_error(assert, rule, Head)`. The predicate must be declared `-dynamic`: a static one, or one nothing declares (static by default, ISO 7.5.2), raises `error(permission_error(modify, static_procedure, Name/Arity), assertz/1)`; an unbound `Clause` raises `instantiation_error`.
 
 ??? info "Implementation & tests"
     **Clausal tests:** `tests/fixtures/builtins_db.clausal`

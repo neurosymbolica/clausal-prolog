@@ -261,17 +261,23 @@ def _resolve_cell_head(term_val: Any, context: str, db,
             raise refusal_error(functor, arity, author, kind, reason,
                                 channel=context)
     if row is None and not _declared_here_at_arity(module_dict, functor, arity):
-        # The CONTEXT is the builtin that refused (``assertz/1``), not the
-        # missing indicator a second time: ``existence_error``'s procedure
-        # convention is Scryer's for a CALL of an unknown procedure, where the
-        # culprit is also the caller.  Here the caller is assertz (triage B4b).
-        raise LogicException(_error_term(
-            ("existence_error", mint("procedure"), ("/", functor, arity)),
-            f"{context}: no predicate {functor}/{arity} is known here, and a "
-            f"cell argument does not create one — a cell is indistinguishable "
-            f"from a plain data tuple, so the target must already be declared "
-            f"-dynamic({functor}/{arity})",
-        ))
+        # RULED R7 (2026-09-28): writing a procedure nothing declares is
+        # permission_error(modify, static_procedure, PI), with the refusing
+        # builtin as context.  ISO has no permission type for "not yet
+        # existing", and 7.5.2 makes a user procedure static by default, so
+        # this is the same refusal as for a declared static predicate.
+        # The ruling is about WRITES (assertz/asserta); retract of a name
+        # nothing declares keeps the existence_error it had.
+        why = (f"{context}: no predicate {functor}/{arity} is declared here, "
+               f"and a cell argument does not create one — a cell is "
+               f"indistinguishable from a plain data tuple — so declare it "
+               f"-dynamic({functor}/{arity}) first")
+        if context.startswith("retract"):
+            raise LogicException(_error_term(
+                ("existence_error", mint("procedure"), ("/", functor, arity)),
+                why))
+        raise LogicException(permission_error(
+            "modify", "static_procedure", ("/", functor, arity), why))
     # THE REMEDY NAMES THE RIGHT MODULE (roborev job 78, finding 4).  For a
     # row this module merely reaches through an ``-import_from``, "declare it
     # -dynamic here" is advice that would not work and must not: the

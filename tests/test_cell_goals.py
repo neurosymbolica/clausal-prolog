@@ -639,17 +639,21 @@ class TestCellAssertRetract:
             mint("modify"), mint("static_procedure"), ("/", "stat", 1))
         assert pi == ("/", "assertz", 1) and "-dynamic(stat/1)" in context
 
-    def test_a_cell_assert_against_an_unknown_predicate_is_an_existence_error(
+    def test_a_cell_assert_against_an_unknown_predicate_is_a_permission_error(
             self, mod):
         """Not assertz's usual "create the predicate": a cell is
         indistinguishable from a str-headed data tuple, so an undeclared
-        target must not silently become state."""
+        target must not silently become state.  Ruling R7 (2026-09-28): an
+        undeclared procedure is static (ISO 7.5.2), so the refusal is
+        permission_error(modify, static_procedure, PI), context assertz/1."""
         with pytest.raises(LogicException) as exc_info:
             list(pcall("assertz", ("nope", 3), module=_lm(mod)))
-        inner, _pi, context = _error_term(exc_info.value)
-        assert inner == (
-            "existence_error", mint("procedure"), ("/", "nope", 1))
-        assert "does not create one" in context
+        inner, pi, _context = _error_term(exc_info.value)
+        assert inner == ("permission_error", mint("modify"),
+                         mint("static_procedure"), ("/", "nope", 1))
+        assert pi == ("/", "assertz", 1)
+        assert "does not create one" in str(exc_info.value)
+        assert "-dynamic(nope/1)" in str(exc_info.value)
 
     def test_a_cell_assert_against_a_declared_data_functor_is_a_permission_error(
             self, tmp_path):
@@ -685,9 +689,10 @@ class TestCellAssertRetract:
         with pytest.raises(LogicException) as exc_info:
             list(pcall("assertz", ("d", 7, 8), module=_lm(m)))
         inner, _pi, _context = _error_term(exc_info.value)
-        assert inner == (
-            "existence_error", mint("procedure"), ("/", "d", 2))
-        # ...while arity 1, the declared one, is the permission_error.
+        # ruling R7: undeclared is static, the same refusal as arity 1 below
+        assert inner == ("permission_error", mint("modify"),
+                         mint("static_procedure"), ("/", "d", 2))
+        # ...and arity 1, the declared one, is the permission_error too.
         with pytest.raises(LogicException) as exc_info:
             list(pcall("assertz", ("d", 7), module=_lm(m)))
         assert cell_functor(_error_term(exc_info.value)[0]) == "permission_error"
