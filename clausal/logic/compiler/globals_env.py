@@ -124,6 +124,26 @@ def _bag_witness(goal_vars, template, existential):
     return [v for v in found if id(v) not in excluded]
 
 
+def _bag_peel(goal):
+    """``(existential, goal)``: a bagof/setof goal reached through a variable
+    (``bagof(X, call(G), L)``, the Clausal spelling of ISO's
+    ``bagof(X, G, L)``) with its leading ``V^`` prefixes -- a ``^`` operator
+    node or a ``'^'`` cell -- read off at run time, as the compiler strips
+    the ones written in source."""
+    from clausal.pythonic_ast.nodes import BitXor  # noqa: PLC0415
+    existential: list = []
+    g = deref(goal)
+    while True:
+        if type(g) is BitXor:
+            existential.append(g.left)
+            g = deref(g.right)
+        elif (type(g) is tuple and len(g) == 3 and g[0] == "^"):
+            existential.append(g[1])
+            g = deref(g[2])
+        else:
+            return tuple(existential), g
+
+
 def _variant_key(term):
     """A key equal for two terms exactly when they are VARIANTS: each
     variable, in order of first appearance, is replaced by a numbered

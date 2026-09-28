@@ -607,8 +607,17 @@ def _compile_find_all_core(
         bound = {v._id for v in _collect_vars([template, existential])}
         goal_vars = [v for v in _collect_vars(inner_goal) if v._id not in bound]
         if goal_vars:
+            # ``call(G)`` is how Clausal source spells ISO's variable goal
+            # ``bagof(X, G, L)``: G's own ``V^`` prefixes are read at run time.
+            runtime_goal = None
+            if (type(inner_goal) is Call and type(inner_goal.func) is LoadName
+                    and inner_goal.func.name == "call" and not inner_goal.kwargs
+                    and len(inner_goal.args) == 1
+                    and is_var(inner_goal.args[0])):
+                runtime_goal = deref(inner_goal.args[0])
             return _compile_bag_of(ctx, template, inner_goal, bag, k_stmts,
-                                   existential, goal_vars, dedup=dedup)
+                                   existential, goal_vars, dedup=dedup,
+                                   runtime_goal=runtime_goal)
     var_context = ctx.var_context
     trail_name = ctx.trail_name
     results_var = ctx.fresh("_fa_results")
@@ -717,6 +726,7 @@ def _compile_bag_of(
     goal_vars: list,
     *,
     dedup: bool,
+    runtime_goal: Any = None,
 ) -> list[ast.stmt]:
     """bagof/setof whose goal may have FREE variables (ISO 8.10.2.4): the
     witness W is computed at run time (``$bag_witness``: the goal's
@@ -760,6 +770,25 @@ def _compile_bag_of(
         body=ast.List(elts=[_name(wit_var), _name(tpl_var)], ctx=ast.Load()),
         orelse=_name(tpl_var),
     ))
+    peel_stmts: list[ast.stmt] = []
+    if runtime_goal is not None:
+        # ``call(G)``: peel G's run-time ``V^`` prefixes into ``peel_ex`` and
+        # call what is left, through a fresh variable holding it.
+        peel_goal = ctx.fresh("_bo_goal")
+        peel_ex = ctx.fresh("_bo_ex")
+        peeled = Var()
+        var_context[peeled._id] = peel_goal
+        peel_stmts.append(ast.Assign(
+            targets=[ast.Tuple(elts=[_name(peel_ex, ast.Store()),
+                                     _name(peel_goal, ast.Store())],
+                               ctx=ast.Store())],
+            value=_call(_name("$bag_peel"),
+                        term_to_ast_expr(runtime_goal, var_context,
+                                         eval_arith=False)),
+        ))
+        inner_goal = Call(func=LoadName(name="call"), args=[peeled], kwargs=[])
+        witness_call.args[2] = ast.BinOp(left=witness_call.args[2], op=ast.Add(),
+                                         right=_name(peel_ex))
     bag_tmp = ctx.fresh("_bo_bag")
     bag_build = _assign(bag_tmp, term_to_ast_expr(bag, var_context,
                                                   eval_arith=False))
@@ -813,6 +842,7 @@ def _compile_bag_of(
         ast.Expr(value=_call(_name("$check_bag"), _name(bag_tmp),
                              ast.Constant(value=who))),
         template_build,
+        *peel_stmts,
         _assign(wit_var, witness_call),
         row_build,
         _assign(results_var, ast.List(elts=[], ctx=ast.Load())),
