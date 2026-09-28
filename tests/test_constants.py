@@ -1214,7 +1214,7 @@ def test_constant_number_units_3_gives_the_magnitude_and_the_unit(tmp_path):
     [(number, units)] = [(deref(n), deref(u)) for _ in
                          call("look", n, u, module=m.__dict__["$module"])]
     assert number == 5000
-    assert units == ("euro",), units
+    assert units == "euro", units
 
 
 def test_a_compound_unit_comes_back_as_a_term(tmp_path):
@@ -1236,8 +1236,8 @@ def test_a_compound_unit_comes_back_as_a_term(tmp_path):
         [pair] = [(deref(n), deref(u)) for _ in call(goal, n, u, module=mod)]
         return pair
 
-    assert one("per") == (3, ("/", ("metre",), ("second",)))
-    assert one("sq") == (7, ("**", ("metre",), 2))
+    assert one("per") == (3, ("/", "metre", "second"))
+    assert one("sq") == (7, ("**", "metre", 2))
 
 
 def test_a_unitless_constant_has_no_units_solution(tmp_path):
@@ -1335,7 +1335,7 @@ def test_constant_number_units_3_reports_the_DECLARED_pair(tmp_path):
     [(number, units)] = [(deref(n), deref(u)) for _ in
                          call("declared", n, u, module=mod)]
     assert number == 30, "the DECLARED magnitude, not the rescaled one"
-    assert units == ("day",), "the DECLARED unit, not its base"
+    assert units == "day", "the DECLARED unit, not its base"
 
     v = Var()
     [value] = [deref(v) for _ in call("value", v, module=mod)]
@@ -1364,7 +1364,7 @@ def test_a_non_rescaling_unit_agrees_between_the_two_predicates(tmp_path):
                          call("declared", n, u, module=mod)]
     v = Var()
     [value] = [deref(v) for _ in call("value", v, module=mod)]
-    assert (number, units) == (7, ("kilogram",))
+    assert (number, units) == (7, "kilogram")
     assert value.value == 7
 
 
