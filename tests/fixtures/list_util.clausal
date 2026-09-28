@@ -24,8 +24,8 @@ test("split_at beyond") <- (split_at(10, [1, 2], LEFT, RIGHT), LEFT == [1, 2], R
 
 # ── zip_/3 ────────────────────────────────────────────────────────────────────
 
-test("zip equal") <- (zip_([1, 2, 3], ["a", "b", "c"], RESULT), RESULT == [[1, "a"], [2, "b"], [3, "c"]])  # nv
-test("zip unequal") <- (zip_([1, 2], ["a", "b", "c"], RESULT), RESULT == [[1, "a"], [2, "b"]])  # nv
+test("zip equal") <- (zip_([1, 2, 3], ["a", "b", "c"], RESULT), RESULT == ['-'(1, "a"), '-'(2, "b"), '-'(3, "c")])  # nv
+test("zip unequal") <- (zip_([1, 2], ["a", "b", "c"], RESULT), RESULT == ['-'(1, "a"), '-'(2, "b")])  # nv
 test("zip empty") <- (zip_([], [1, 2], RESULT), RESULT == [])  # nv
 
 # ── replicate/3 ──────────────────────────────────────────────────────────────

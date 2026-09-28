@@ -112,11 +112,11 @@ test("replicate") <- replicate(3, 'x', ['x', 'x', 'x'])
 
 ### zip_/3
 
-`zip_(L1, L2, Pairs)` — pair up corresponding elements. Stops at the shorter
-list.
+`zip_(L1, L2, Pairs)` — pair up corresponding elements as `X-Y` pairs (the
+`'-'(X, Y)` cell of the [pairs library](pairs.md)). Stops at the shorter list.
 
 ```clausal
-test("zip") <- zip_([1, 2, 3], ['a', 'b', 'c'], [[1, 'a'], [2, 'b'], [3, 'c']])
+test("zip") <- zip_([1, 2, 3], ['a', 'b', 'c'], ['-'(1, 'a'), '-'(2, 'b'), '-'(3, 'c')])
 ```
 
 ---

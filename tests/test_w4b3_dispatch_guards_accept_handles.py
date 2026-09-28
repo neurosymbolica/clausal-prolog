@@ -305,7 +305,7 @@ class TestPhrase:
         assert tuple(cell_args(cell_args(cell_args(exc.value.term)[0])[1])) == ("secret", 2)
 
 
-# ── 3. the 18 list builtins, time_goal, _ensure_trampoline_dispatch ─────────
+# ── 3. the 19 list builtins, time_goal, _ensure_trampoline_dispatch ─────────
 
 
 L = [1, 2, -1]
@@ -319,6 +319,7 @@ _LIST_CASES = [
     ("foldl", "step", (L, 0), 1),
     ("foldl", "step5", ([1, 2], [3, 4], 0), 1),
     ("foldl", "step6", ([1], [2], [3], 0), 1),
+    ("map_list_to_pairs", "key", ([1, 2],), 1),
     ("take_while", "is_pos", (L,), 1),
     ("drop_while", "is_pos", (L,), 1),
     ("span", "is_pos", (L,), 2),
@@ -352,22 +353,23 @@ _CLASS_ERA_LIST_ANSWERS = {
     'partition/4': [([1, 2], [-1])],
     'tfilter/3': [([1, 2],)],
     'tpartition/4': [([1, 2], [-1])],
-    # foldl/5 and foldl/6 arrived 2026-09-28, after the
+    # foldl/5, foldl/6 and map_list_to_pairs/3 arrived 2026-09-28, after the
     # class era: these are what the handle answers, checked by hand.
     'foldl/5': [(10,)],
     'foldl/6': [(6,)],
+    'map_list_to_pairs/3': [([("-", 10, 1), ("-", 20, 2)],)],
 }
 
 
-def test_the_list_case_table_covers_all_eighteen_builtins():
-    """Positive control on the population: 18 distinct builtin/arity pairs,
+def test_the_list_case_table_covers_all_nineteen_builtins():
+    """Positive control on the population: 19 distinct builtin/arity pairs,
     each a registered builtin.  Since the aliased-import ruling (2026-09-24)
     they are db-receiving (``_DB_BUILTINS``, ``_db_optional``): the caller's
     database is what says which unqualified name a goal arrived under."""
     from clausal.logic.builtins._registry import _BUILTINS, _DB_BUILTINS
     from clausal.logic.builtins.higher_order import _GOAL_FIRST_LIST_BUILTINS
     keys = {(b, 1 + len(a) + n) for b, _, a, n in _LIST_CASES}
-    assert len(keys) == 18
+    assert len(keys) == 19
     assert keys == set(_GOAL_FIRST_LIST_BUILTINS)
     assert keys <= set(_DB_BUILTINS), keys - set(_DB_BUILTINS)
     assert not keys & set(_BUILTINS)
@@ -388,7 +390,7 @@ def test_list_builtin_answers_the_same_for_a_handle(lm, builtin, goal, inputs, n
 def test_the_pinned_class_answers_cover_every_list_case():
     """Positive control on the pinned population: one answer per case."""
     keys = {f"{b}/{1 + len(a) + n}" for b, _, a, n in _LIST_CASES}
-    assert len(keys) == 18 and keys == set(_CLASS_ERA_LIST_ANSWERS)
+    assert len(keys) == 19 and keys == set(_CLASS_ERA_LIST_ANSWERS)
 
 
 def test_a_data_atom_is_still_not_a_list_goal(lm):

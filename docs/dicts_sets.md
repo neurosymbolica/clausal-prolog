@@ -248,16 +248,20 @@ Succeeds if `Term` is a `DictTerm`.
 ```clausal
 --8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:dict_pairs_2"
 ```
-Bidirectional conversion between a `DictTerm` and a list of `[Key, Value]` 2-element lists.
+Bidirectional conversion between a `DictTerm` and a list of `Key-Value`
+pairs: the `'-'(Key, Value)` cell, as in the [pairs library](pairs.md). In the
+dict→pairs direction the pairs are sorted by key.
 
-```python
-# Dict → pairs
-dict_pairs({"a": 1, "b": 2}, PAIRS)
-# PAIRS = [["a", 1], ["b", 2]]  (sorted by key)
+```clausal
+test("dict to pairs") <- (
+    dict_pairs({'a': 1, 'b': 2}, PAIRS),
+    PAIRS == ['-'('a', 1), '-'('b', 2)]
+)
 
-# Pairs → dict
-dict_pairs(DICT, [["x", 10], ["y", 20]])
-# DICT = DictTerm({"x": 10, "y": 20})
+test("pairs to dict") <- (
+    dict_pairs(DICT, ['-'('x', 10), '-'('y', 20)]),
+    dict_get('y', DICT, 20)
+)
 ```
 
 ### `dict_get/3`
@@ -286,11 +290,14 @@ dict_put("b", 99, {"a": 1, "b": 0}, NEW)
 ```clausal
 --8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:dict_put_pairs_3"
 ```
-Bulk update: `Pairs` is a list of `[Key, Value]` 2-element lists. equivalent to calling `dict_put/4` for each pair in order.
+Bulk update: `Pairs` is a list of `Key-Value` pairs, equivalent to calling
+`dict_put/4` for each pair in order.
 
-```python
-dict_put_pairs([["b", 2], ["c", 3]], {"a": 1}, NEW)
-# NEW = DictTerm({"a": 1, "b": 2, "c": 3})
+```clausal
+test("bulk update") <- (
+    dict_put_pairs(['-'('b', 2), '-'('c', 3)], {'a': 1}, NEW),
+    dict_pairs(NEW, ['-'('a', 1), '-'('b', 2), '-'('c', 3)])
+)
 ```
 
 ### `dict_remove/3`

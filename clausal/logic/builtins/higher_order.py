@@ -975,6 +975,51 @@ def _foldl__6(this_generator, _proceed, _fail, _catcher, goal, xs, ys, zs, v0, v
     yield from _foldl(this_generator, _proceed, _fail, goal, [xs, ys, zs], v0, v, trail)
 
 
+@_trampoline_builtin("map_list_to_pairs", 3)
+def _map_list_to_pairs__3(this_generator, _proceed, _fail, _catcher, goal, ls, ps, trail):
+    """map_list_to_pairs(Goal, Ls, Pairs) -- Pairs is ``[K1-L1, K2-L2, ...]``
+    with ``call(Goal, Li, Ki)`` for each element, as Scryer's
+    library(pairs)::
+
+        map_list_to_pairs2([], _, []).
+        map_list_to_pairs2([H|T0], Pred, [K-H|T]) :-
+                call(Pred, H, K), map_list_to_pairs2(T0, Pred, T).
+
+    Every solution of each call is an answer on backtracking, and open lists
+    enumerate, as that definition does."""
+    goal_val = deref(goal)
+    if not _is_goal(goal_val):
+        yield (_fail, DONE)
+        return
+    dispatch = _ensure_trampoline_dispatch(goal_val, 2)
+
+    def call_args(_i, heads):
+        h, p = heads
+        k = Var()
+        if not unify(p, ("-", k, h), trail):
+            return None
+        return h, k
+
+    outer_mark = trail.mark()
+    items = _as_items(deref(ls))
+    if items is not None:
+        # a proper Ls: each combination of the calls' solutions binds Pairs
+        # to plain Key-Elem cells holding the values themselves (as the
+        # pairs builtins build them), not variables bound to them
+        hs = [deref(h) for h in items]
+        ks = [Var() for _ in hs]
+        yield from _maplist_drive(
+            this_generator, _proceed, dispatch, lambda i: (hs[i], ks[i]),
+            len(hs), trail,
+            finish=lambda: unify(ps, [("-", deref(k), deref(h))
+                                      for k, h in zip(ks, hs)], trail))
+    else:
+        yield from _open_lists_drive(this_generator, _proceed, dispatch,
+                                     [ls, ps], call_args, trail)
+    trail.undo(outer_mark)
+    yield (_fail, DONE)
+
+
 # ── V3-5: Extended higher-order list predicates ──────────────────────────────
 
 
@@ -1428,7 +1473,8 @@ def _tpartition__4(this_generator, _proceed, _fail, _catcher, goal, lst, include
 
 _GOAL_FIRST_LIST_BUILTINS = (
     ("maplist", 2), ("maplist", 3), ("include", 3), ("exclude", 3),
-    ("foldl", 4), ("foldl", 5), ("foldl", 6), ("take_while", 3), ("drop_while", 3), ("span", 4),
+    ("foldl", 4), ("foldl", 5), ("foldl", 6), ("map_list_to_pairs", 3),
+    ("take_while", 3), ("drop_while", 3), ("span", 4),
     ("group_by", 3), ("sort_by", 3), ("max_by", 3), ("min_by", 3),
     ("filter_map", 3), ("partition", 4), ("tfilter", 3), ("tpartition", 4),
 )

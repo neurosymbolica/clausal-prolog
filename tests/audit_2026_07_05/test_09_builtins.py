@@ -414,7 +414,7 @@ def test_F012_dict_pairs_unhashable_key(fix):
     # catchable by catch/3 — not a raw TypeError that kills the query.
     _, m = fix
     with pytest.raises(LogicException):
-        _first(m, "dict_pairs", Var(), [[[1], 2]])
+        _first(m, "dict_pairs", Var(), [("-", [1], 2)])
 
 
 def test_F012_set_list_unhashable(fix):
