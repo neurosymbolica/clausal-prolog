@@ -161,7 +161,9 @@ class TestA1Table:
             EVALUABLE[("sin", 1)] = abs  # no registration API: read-only
         assert set(EVALUABLE) == {
             ("+", 2), ("-", 2), ("*", 2), ("/", 2), ("div", 2), ("mod", 2),
-            ("//", 2), ("**", 2), ("^", 2), ("rdiv", 2), ("-", 1)}
+            ("//", 2), ("**", 2), ("^", 2), ("rdiv", 2), ("-", 1),
+            # ISO 9.1.7 abs/1, Cor.2 min/2 and max/2 (2026-09-28)
+            ("abs", 1), ("min", 2), ("max", 2)}
 
     def test_every_node_and_every_cell_key_has_one_entry(self):
         """Every evaluable operator node class maps onto a key, and every
@@ -179,8 +181,13 @@ class TestA1Table:
         # the only nodes beyond the source operators: the Scryer cells' forms
         assert set(_NODE_KEYS) - set(ARITH_OPERATOR_TERMS) == {
             IsoIntDiv, IsoDiv, IsoMod, IsoPow, IsoIntPow, IsoTrueDiv, IsoRdiv}
-        assert set(_NODE_KEYS.values()) == set(NODE_EVALUABLE)
-        assert set(EVALUABLE) <= set(key_nodes())
+        # abs/min/max have no node: a CLP post folds a ground use, and the
+        # set of such entries is named, so a new one cannot slip in unnoticed
+        from clausal.logic.exact_arith import CELL_ONLY_EVALUABLE
+        assert CELL_ONLY_EVALUABLE == {("abs", 1), ("min", 2), ("max", 2)}
+        assert set(_NODE_KEYS.values()) == set(NODE_EVALUABLE) - CELL_ONLY_EVALUABLE
+        assert set(EVALUABLE) - CELL_ONLY_EVALUABLE <= set(key_nodes())
+        assert not CELL_ONLY_EVALUABLE & set(key_nodes())
         private = set(NODE_EVALUABLE) - set(EVALUABLE)
         assert private and all(k[0].startswith("$") for k in private)
 

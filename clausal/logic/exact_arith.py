@@ -45,7 +45,7 @@ __all__ = ["exact_add", "exact_sub", "exact_mul", "exact_div", "exact_neg",
            "python_floordiv", "python_mod", "python_pow", "iso_intdiv",
            "iso_div", "iso_mod", "iso_pow", "iso_intpow", "iso_abs", "iso_max",
            "iso_min", "decimal_parts",
-           "EVALUABLE", "NODE_EVALUABLE",
+           "EVALUABLE", "NODE_EVALUABLE", "CELL_ONLY_EVALUABLE",
            "evaluate", "evaluate_python_result"]
 
 
@@ -743,6 +743,12 @@ EVALUABLE = MappingProxyType({
     # ISO 9.1.7 abs/1; ISO Cor.2 9.3.9-10 max/2, min/2 (Scryer's kinds)
     ("abs", 1): iso_abs, ("max", 2): iso_max, ("min", 2): iso_min,
 })
+
+#: The entries of :data:`EVALUABLE` with NO operator node: a CLP post cannot
+#: rewrite them into a node it linearises, so it folds a ground one to its
+#: value (``clpfd._arith_cells_to_nodes``) and leaves a non-ground one to
+#: the post's own diagnosis.
+CELL_ONLY_EVALUABLE = frozenset({("abs", 1), ("max", 2), ("min", 2)})
 
 #: :data:`EVALUABLE` plus the bare operator nodes' private Python-semantics
 #: entries -- what a NODE evaluates through.  A cell never looks here.
