@@ -33,7 +33,7 @@ from clausal.logic.variables import is_var, deref  # noqa: F401
 from clausal.terms import (
     Call, LoadName, LoadAttr,  # noqa: F401
     PyThunk, Unify,
-    DictTerm, SetTerm, KWTerm,
+    DictTerm, SetTerm,
 )
 from clausal.pythonic_ast.nodes import StarUnpack  # noqa: F401
 from clausal.logic.predicate import is_term_instance, term_field_names
@@ -393,8 +393,6 @@ def _nested_term_carries_a_literal(term):
     if isinstance(term, list):
         return any(_nested_term_carries_a_literal(e) for e in term)
     if isinstance(term, DictTerm):
-        return any(_nested_term_carries_a_literal(v) for v in term.values())
-    if isinstance(term, KWTerm):
         return any(_nested_term_carries_a_literal(v) for v in term.values())
     if isinstance(term, SetTerm):
         return bool(term.elements)

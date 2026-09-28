@@ -15,7 +15,7 @@ from clausal.logic.predicate import (
     _dispatch_at, is_declared_predicate_name,
 )
 from clausal.logic.trampoline import DONE, StepGenerator
-from clausal.terms import DictTerm, SetTerm, KWTerm
+from clausal.terms import DictTerm, SetTerm
 
 
 # ── Simple → trampoline adapter ──────────────────────────────────────────────
@@ -227,10 +227,10 @@ def _db_builtin(functor: str, arity: int, *, fields: tuple[str, ...] | None = No
 
 
 def structural_unify(t1: Any, t2: Any, trail: Any) -> bool:
-    """Python-level structural unification that handles KWTerm and dataclasses.
+    """Python-level structural unification that handles dataclasses.
 
     The C extension's ``unify`` handles Var, tuple, list, and atomic equality.
-    This wrapper adds recursive unification for KWTerm and dataclass
+    This wrapper adds recursive unification for dataclass
     terms (WK-6 cross-representation unification).
     """
     t1 = deref(t1)
@@ -262,17 +262,6 @@ def structural_unify(t1: Any, t2: Any, trail: Any) -> bool:
         mark = trail.mark()
         for name in fields:
             if not structural_unify(getattr(t1, name), getattr(t2, name), trail):
-                trail.undo(mark)
-                return False
-        return True
-
-    # KWTerm ↔ KWTerm (same functor and same key set)
-    if isinstance(t1, KWTerm) and isinstance(t2, KWTerm):
-        if t1.functor != t2.functor or set(t1.keys()) != set(t2.keys()):
-            return False
-        mark = trail.mark()
-        for key in t1.keys():
-            if not structural_unify(t1._fields[key], t2._fields[key], trail):
                 trail.undo(mark)
                 return False
         return True

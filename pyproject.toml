@@ -39,6 +39,3 @@ include = ["clausal*"]
 pythonpath = ["."]
 timeout = 10
 timeout_method = "thread"
-markers = [
-    "compound_retirement_slice9: the test's subject is the KWTerm class; slice 9 deletes or rewrites it",
-]

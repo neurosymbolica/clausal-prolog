@@ -14,7 +14,7 @@ from clausal.logic.cells import chars
 from clausal.logic.database import Module
 from clausal.logic.solve import solve
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
-from clausal.terms import Call, LoadName, KWTerm, DictTerm, SegList, ConcreteSeg, VarSeg
+from clausal.terms import Call, LoadName, DictTerm, SegList, ConcreteSeg, VarSeg
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -492,77 +492,6 @@ class TestGenSym:
         for t in threads:
             t.join()
         assert len(set(results)) == 10  # all unique
-
-
-# ── copy_term/2 with KWTerm ────────────────────────────────────────────────────
-
-
-class TestCopyTermKWTerm:
-
-    @pytest.mark.compound_retirement_slice9
-    def test_copy_kwterm_ground(self):
-        """copy_term(KWTerm('r', a=1), Y) → Y is KWTerm('r', a=1)."""
-        # nv
-        copy = Var()
-        vals = sol_var(goal("copy_term", KWTerm("r", a=1, b=2), copy), copy)
-        assert len(vals) == 1
-        c = vals[0]
-        assert isinstance(c, KWTerm)
-        assert c.functor == "r"
-        assert c._fields == {"a": 1, "b": 2}
-
-    @pytest.mark.compound_retirement_slice9
-    def test_copy_kwterm_preserves_functor(self):
-        """Functor name is preserved correctly (not replaced by fields dict)."""
-        # nv
-        copy = Var()
-        vals = sol_var(goal("copy_term", KWTerm("myrel", x=99), copy), copy)
-        assert len(vals) == 1
-        assert vals[0].functor == "myrel"
-
-    @pytest.mark.compound_retirement_slice9
-    def test_copy_kwterm_var_field_gets_fresh_var(self):
-        """Var in a KWTerm field → fresh Var in copy, not the original."""
-        # nv
-        x = Var()
-        t = KWTerm("r", a=x)
-        copy = Var()
-        mod = fresh_module()
-        trail = Trail()
-        for _ in solve(goal("copy_term", t, copy), mod, trail):
-            c = deref(copy)
-            assert isinstance(c, KWTerm)
-            assert c.functor == "r"
-            fresh = deref(c._fields["a"])
-            assert is_var(fresh)
-            assert fresh is not x
-
-    @pytest.mark.compound_retirement_slice9
-    def test_copy_kwterm_sharing_preserved(self):
-        """Two fields referencing the same Var → same fresh Var in copy."""
-        # nv
-        x = Var()
-        t = KWTerm("r", a=x, b=x)
-        copy = Var()
-        mod = fresh_module()
-        trail = Trail()
-        for _ in solve(goal("copy_term", t, copy), mod, trail):
-            c = deref(copy)
-            assert isinstance(c, KWTerm)
-            fa = deref(c._fields["a"])
-            fb = deref(c._fields["b"])
-            assert is_var(fa) and is_var(fb)
-            assert fa is fb
-
-    @pytest.mark.compound_retirement_slice9
-    def test_copy_kwterm_no_side_effects_on_original(self):
-        """copy_term does not bind Vars in the original KWTerm."""
-        # nv
-        x = Var()
-        t = KWTerm("r", a=x)
-        copy = Var()
-        solutions(goal("copy_term", t, copy))
-        assert is_var(deref(x))
 
 
 # ── copy_term/2 and term_variables/2 with DictTerm / SegList ──────────────────

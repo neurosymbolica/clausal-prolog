@@ -3,11 +3,10 @@
 ``point(x=1, y=2)`` is Python's keyword-call syntax borrowed as a term
 spelling.  It has no ISO Prolog reading, it is the only way a predicate
 could declare parameter NAMES (so it made the field names of a functor
-depend on which clause came first), and it is the last surface producer of
-``KWTerm`` -- a third term representation beside the cell and the class
-instance.  The spelling is REFUSED as of 2026-09-19; the machinery behind it
-(``KWTerm``, ``vary/3``, ``extend/3``, ``unbound_keys/2``, ``signature/3``)
-is deleted with the class in P4.
+depend on which clause came first), and it was the last surface producer of
+a keyword-term class -- a third term representation beside the cell and the
+class instance.  The spelling is REFUSED as of 2026-09-19; the class and the
+machinery that existed only for it (including ``extend/3``) are deleted.
 
 Two spellings keep their keywords, and both are tested here:
 

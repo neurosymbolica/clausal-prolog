@@ -100,7 +100,7 @@ def temp_fixture_module():
 
 
 _INJECTED_BARE = [
-    "Var", "DictTerm", "SetTerm", "KWTerm", "Trail", "PyThunk",
+    "Var", "DictTerm", "SetTerm", "Trail", "PyThunk",
     "FStringThunk", "Quantity", "BoolEq", "BoolImpl",
 ]
 _NODE_CLASSES = ["Predicate", "Call", "LoadName", "Add", "Sub", "Node", "Module"]

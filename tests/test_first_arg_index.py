@@ -401,14 +401,6 @@ class TestGroundnessWalkCompleteness:
         assert _is_deeply_ground(("W", DictTerm({"a": v}))) is False
         assert _is_deeply_ground(("W", DictTerm({"a": 1}))) is True
 
-    @pytest.mark.compound_retirement_slice9
-    def test_nested_kwterm_with_a_var_field_is_not_ground(self):
-        from clausal.logic.compiler.arg_index import _is_deeply_ground
-        from clausal.terms import KWTerm
-        v = Var()
-        assert _is_deeply_ground(("W", KWTerm("k", x=v))) is False
-        assert _is_deeply_ground(("W", KWTerm("k", x=1))) is True
-
     def test_nested_compound_with_a_var_arg_is_not_ground(self):
         from clausal.logic.compiler.arg_index import _is_deeply_ground
         v = Var()

@@ -219,7 +219,7 @@ test("nested access") <- (
 
 ??? abstract "Design decisions"
 
-    1. **Native Python data** — `Read` returns Python dicts/lists/scalars directly. No conversion to `KWTerm` or `Compound`. Users access nested data via `Get/3` or [`++()`](python_integration.md) interop. This is the most Pythonic approach and avoids inventing a parallel data representation.
+    1. **Native Python data** — `Read` returns Python dicts/lists/scalars directly. No conversion to term objects. Users access nested data via `Get/3` or [`++()`](python_integration.md) interop. This is the most Pythonic approach and avoids inventing a parallel data representation.
     2. **`safe_load` only** — prevents arbitrary code execution from YAML tags. This is the standard security practice.
     3. **`Get/3` for navigation** — a convenience predicate that avoids verbose `++()` chains for deep nested access. Accepts both single keys and key-path lists.
     4. **Module name is `yaml_module`** — avoids shadowing PyYAML's `yaml` package in the Python import machinery. With `-import_from`, the predicates are used without any prefix: `Read(...)`, `write(...)`, `Get(...)`.

@@ -133,25 +133,23 @@ class TestEveryContainerIsWalked:
 
     def _shapes(self):
         from typing import NamedTuple
-        from clausal.terms import KWTerm, DictTerm, SetTerm
+        from clausal.terms import DictTerm, SetTerm
         class NT(NamedTuple):
             x: object
         a = atom("a")
         return {
             "tuple": ("f", a), "list": [a], "dict": {"k": a}, "dict-key": {a: 1},
             "DictTerm": DictTerm({"k": a}),
-            "KWTerm": KWTerm("k", f=a), "SetTerm": SetTerm({a}), "set": {a},
+            "SetTerm": SetTerm({a}), "set": {a},
             "frozenset": frozenset({a}), "NamedTuple": NT(a), "nested": ("f", [{"k": (a,)}]),
         }
 
-    @pytest.mark.compound_retirement_slice9
     def test_has_atom_tag_sees_every_shape(self):
         from clausal.logic.to_python import has_atom_tag
         for name, shape in self._shapes().items():
             assert has_atom_tag(shape), name
         assert not has_atom_tag(("f", ["a", {"k": ("g", 1)}]))
 
-    @pytest.mark.compound_retirement_slice9
     def test_strip_removes_the_tag_from_every_shape_and_keeps_the_shape(self):
         from clausal.logic.to_python import strip_atom_tags, has_atom_tag
         for name, shape in self._shapes().items():
@@ -179,16 +177,14 @@ class TestEveryContainerIsWalked:
         out = strip_atom_tags(dd)
         assert type(out) is collections.defaultdict and out.default_factory is list and out["k"] == "a"
 
-    @pytest.mark.compound_retirement_slice9
     def test_to_python_converts_through_every_shape(self):
         """No drift: the same list of shapes converts, so a container the
         strip knows is one to_python knows."""
         from clausal.logic.to_python import to_python, TERM_CONTAINER_TYPES
         from clausal.logic.cells import chars
-        from clausal.terms import KWTerm, DictTerm, SetTerm
+        from clausal.terms import DictTerm, SetTerm
         c = chars("t")
         samples = {tuple: ("f", c), list: [c], dict: {"k": c}, DictTerm: DictTerm({"k": c}),
-                   KWTerm: KWTerm("k", f=c),
                    SetTerm: SetTerm({c}), set: {c}, frozenset: frozenset({c})}
         assert set(samples) == set(TERM_CONTAINER_TYPES)
         for t, sample in samples.items():

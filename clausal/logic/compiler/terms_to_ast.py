@@ -1,7 +1,7 @@
 """Term → AST expression lowering.
 
 Converts a compile-time term value (Var, scalar, list, cell,
-functor-dataclass, KWTerm, DictTerm, SetTerm, SetLiteral, DictLiteral,
+functor-dataclass, DictTerm, SetTerm, SetLiteral, DictLiteral,
 StarUnpack, TupleLiteral, Call-with-LoadName, PyThunk, …) into a
 Python AST expression that, at runtime, reconstructs that term.
 
@@ -34,7 +34,7 @@ from clausal.terms import (
     Add, Sub, Mult, Div, FloorDiv, Mod, Pow,
     Negate,
     Call, LoadName, LoadAttr, LoadSubscript,
-    DictTerm, SetTerm, KWTerm, PyThunk,
+    DictTerm, SetTerm, PyThunk,
     Undefined,
 )
 from clausal.pythonic_ast.nodes import (
@@ -96,7 +96,7 @@ def _is_opaque_head_literal(term: Any) -> bool:
     if term is None or isinstance(term, (bool, int, float, complex, str, bytes)):
         return False
     # Structural term types with dedicated head_to_match_pattern branches.
-    if isinstance(term, (list, dict, DictTerm, SetTerm, KWTerm,
+    if isinstance(term, (list, dict, DictTerm, SetTerm,
                          StarUnpack, Call, LoadName, LoadAttr,
                          TupleLiteral, DictLiteral, SetLiteral)):
         return False
@@ -1324,18 +1324,6 @@ def term_to_ast_expr(
                 for name in fields
                 if name not in ("_position", "position")
             ],
-        )
-
-    # KWTerm: generate KWTerm("functor", key=val, ...)
-    if isinstance(term, KWTerm):
-        keywords = [
-            ast.keyword(arg=k, value=term_to_ast_expr(v, var_context, eval_arith=eval_arith))
-            for k, v in term.items()
-        ]
-        return ast.Call(
-            func=_name("$KWTerm"),
-            args=[ast.Constant(value=term.functor)],
-            keywords=keywords,
         )
 
     # PyThunk: deferred Python expression via lambda wrapper.

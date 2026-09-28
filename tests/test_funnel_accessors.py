@@ -64,7 +64,6 @@ from clausal.logic.builtins._helpers import (
 )
 from clausal.logic.cells import TUPLE_TAG, make_cell, make_tuple_cell
 from clausal.logic.variables import Var, deref, is_var
-from clausal.terms import KWTerm
 from clausal.pythonic_ast.nodes import Add
 from tests.predicate_api_support import term_ctor
 
@@ -162,14 +161,6 @@ class TestFunctorArity:
         # nv
         node = Add(left=1, right=2)
         assert functor_arity(node) == ("Add", 3)  # (position, left, right)
-
-    @pytest.mark.compound_retirement_slice9
-    def test_kwterm_is_none(self):
-        # nv — out of functor_arity's declared domain (term instances,
-        # Compound, PredicateMeta atom classes only); KWTerm is a distinct
-        # shape and is not funneled here.
-        k = KWTerm("r", a=1, b=2)
-        assert functor_arity(k) is None
 
     def test_non_term_values_are_none(self):
         # nv

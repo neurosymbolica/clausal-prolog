@@ -506,8 +506,8 @@ def _head_arity(head: Any) -> int | None:
     must make the predicate's arity unknown — and so unrefusable — rather than
     let a diagnostic replace one failure with a stranger one.
 
-    ``database.head_key`` reads the same shapes and knows two more (``KWTerm``,
-    ``Call``), but it is not what this wants: it lives downstream of this module
+    ``database.head_key`` reads the same shapes and knows one more (``Call``),
+    but it is not what this wants: it lives downstream of this module
     so reaching it means a per-call local import, and it *raises* on anything
     else.
     """

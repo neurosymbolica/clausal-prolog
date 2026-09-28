@@ -38,7 +38,6 @@ from clausal.logic.variables import _variables as _c
 from clausal.terms import (
     ConcreteSeg,
     DictTerm,
-    KWTerm,
     PartialTermError,
     Quantity,
     SegBytes,
@@ -78,11 +77,6 @@ class TestF001OccursCheckBlindness:
         X = Var()
         assert unify_with_occurs_check(X, ("f", X), trail) is False
 
-    @pytest.mark.compound_retirement_slice9
-    def test_occurs_check_sees_var_in_kwterm(self, trail):
-        X = Var()
-        assert occurs_check(X, KWTerm("r", a=X)) is True
-
     def test_occurs_check_sees_var_in_predicate_meta_instance(self, trail):
         X = Var()
         inst = _fresh_pred_class()(X, 2)
@@ -102,35 +96,6 @@ class TestF001OccursCheckBlindness:
 
 # (A01-F003 -- Compound Var-functor support -- went with the Compound class:
 # a variable functor has no successor; ``T =.. [F|Args]`` is the ISO route.)
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# A01-F004 — KWTerm has no __unify__: Var-valued fields never bind
-# ─────────────────────────────────────────────────────────────────────────────
-
-class TestF004KWTermUnify:
-    @pytest.mark.compound_retirement_slice9
-    def test_kwterm_var_field_binds(self, trail):
-        Y = Var()
-        assert unify(KWTerm("r", a=Y, b=2), KWTerm("r", a=1, b=2), trail) is True
-        assert deref(Y) == 1
-
-    @pytest.mark.compound_retirement_slice9
-    def test_control_ground_kwterm(self, trail):
-        assert unify(KWTerm("r", a=1), KWTerm("r", a=1), trail)
-        assert not unify(KWTerm("r", a=1), KWTerm("r", a=2), trail)
-        assert not unify(KWTerm("r", a=1), KWTerm("s", a=1), trail)
-        # keyword-order independence (documented)
-        assert KWTerm("r", a=1, b=2) == KWTerm("r", b=2, a=1)
-
-    @pytest.mark.compound_retirement_slice9
-    def test_kwterm_reserved_position_and_mutators(self):
-        k = KWTerm("r", a=1, _position=(1, 2, 3, 4))
-        assert list(k.keys()) == ["a"] and k._position == (1, 2, 3, 4)
-        with pytest.raises(KeyError):
-            k.with_overrides(zzz=1)
-        with pytest.raises(KeyError):
-            k.with_extensions(a=2)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -276,15 +241,6 @@ class TestF008WalkFunctorTerms:
         snap = walk(("f", X))
         trail.reset()
         assert deref(snap[1]) == 1  # snapshot must not decay to unbound
-
-    @pytest.mark.compound_retirement_slice9
-    def test_walk_snapshot_of_kwterm_survives_undo(self, trail):
-        X = Var()
-        assert unify(X, 1, trail)
-        snap = walk(KWTerm("r", a=X, b=2))
-        trail.reset()
-        assert deref(snap.a) == 1
-        assert snap.functor == "r" and snap.b == 2
 
     def test_walk_snapshot_of_a_predicate_cell_survives_undo(self, trail):
         X = Var()

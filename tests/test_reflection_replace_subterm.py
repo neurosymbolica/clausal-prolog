@@ -32,7 +32,7 @@ def _clear_query_cache():
 # atoms and a helper for building f(a, g(a))-style ground compounds
 # The atoms a, b, c: plain strs.  They were zero-field ``make_predicate``
 # classes (retired at W4b-3 slice 6).  The rewrite answers are the same; only
-# the rendering differs -- inside a KWTerm or dict repr an atom now prints
+# the rendering differs -- inside a dict repr an atom now prints
 # QUOTED ('c'), where the class printed bare (c).
 _a = "a"
 _b = "b"
@@ -109,14 +109,6 @@ class TestOtherTermKinds:
         for _ in call(refl.replace_subterm, term, old, new, result):
             out.append(str(deref(result)))  # these kinds have no bound-var operands
         return out
-
-    @pytest.mark.compound_retirement_slice9
-    def test_kwterm_value_is_rewritten_position_preservingly(self):
-        from clausal.terms import KWTerm
-
-        term = KWTerm("g", x=_a, y=_b)
-        # an atom renders QUOTED inside a KWTerm repr (see _a above)
-        assert self._all(term, _a, _c) == ["KWTerm('g', x='c', y='b')"]
 
     def test_plain_dict_value_is_rewritten(self):
         assert self._all({"k": _a, "j": _b}, _a, _c) == ["{'k': 'c', 'j': 'b'}"]

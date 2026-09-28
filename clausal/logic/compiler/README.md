@@ -620,7 +620,7 @@ Things a new contributor would otherwise have to reverse-engineer.
   overhead a single dict lookup.
 
 - **Phase-0.5a runtime-helper aliases live in `predicate.py`.**
-  `_dif_fn`, `_fd_eq_fn`, `_DictTerm_t`, `_KWTerm_s`, …  (~50 names
+  `_dif_fn`, `_fd_eq_fn`, `_DictTerm_t`, `_SetTerm_s`, …  (~50 names
   used to populate `base_globals` for compiled predicates).  They're
   imported individually from their canonical source modules
   (`clausal.logic.constraints`, `clausal.logic.clpfd`,

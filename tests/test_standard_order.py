@@ -27,7 +27,7 @@ from clausal.logic.compiler.globals_env import _set_of_sort_dedup
 from clausal.logic.solve import solve
 from clausal.logic.trampoline import DONE
 from clausal.logic.variables import Var, Trail, deref
-from clausal.terms import DictTerm, KWTerm, SetTerm
+from clausal.terms import DictTerm, SetTerm
 from clausal.logic.atoms import char_atom, is_atom, mint, spelling
 from clausal.logic.cells import chars
 
@@ -84,13 +84,6 @@ class TestCompoundIntegerArguments:
         assert (_run_list_builtin(_msort__2, [a, b, c])
                 == _run_list_builtin(_msort__2, [c, a, b])
                 == [b, c, a])
-
-    @pytest.mark.compound_retirement_slice9
-    def test_kwterm_integer_fields(self):
-        k15 = KWTerm("pt", x=1, y=15)
-        k2 = KWTerm("pt", x=1, y=2)
-        k9 = KWTerm("pt", x=1, y=9)
-        assert _run_list_builtin(_msort__2, [k15, k2, k9]) == [k2, k9, k15]
 
     def test_dataclass_term_instance(self):
         """A declared term (dataclass-shaped instance) orders by its fields."""
@@ -163,12 +156,11 @@ class TestStandardOrderShape:
         ordered = [deref(x) for x in _key_sorted([_c("s", 15), v])]
         assert ordered == [_c("s", 2), _c("s", 15)]
 
-    @pytest.mark.compound_retirement_slice9
     def test_key_is_total_over_mixed_junk(self):
         """Every pair of keys must be comparable — no TypeError may escape."""
         items = [
             Var(), 1, 2.5, Fraction(1, 3), chars("atom"), b"bytes", [1, 2], (1, 2),
-            _c("f", 1), KWTerm("f", a=1), {chars("k"): 1}, DictTerm({chars("k"): 1}),
+            _c("f", 1), {chars("k"): 1}, DictTerm({chars("k"): 1}),
             SetTerm([1, 2]), dt.date(2020, 1, 1), None, object(),
         ]
         keys = [_standard_order_key(x) for x in items]

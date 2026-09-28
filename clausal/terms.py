@@ -192,132 +192,6 @@ def _is_structure_instance(x: Any) -> bool:
     return _dataclasses.is_dataclass(x) and not isinstance(x, type)
 
 
-# ── Open-world keyword term ────────────────────────────────────────────────────
-
-
-class KWTerm:
-    """Open-world keyword term — any functor, any keywords, dict-backed.
-
-    For runtime-constructed terms where the functor has no compile-time class.
-    Attributes are read from the backing dict.  Iteration yields values in
-    insertion order.  Equality and unification match by keyword name (not
-    position): ``KWTerm('r', a=1, b=2) == KWTerm('r', b=2, a=1)``.
-
-    **Reserved keyword:** ``_position`` is consumed by the constructor
-    as source-location metadata (Slice G — see :attr:`_position`), not
-    stored as a keyword field.  The leading underscore makes it
-    syntactically unreachable as a Clausal field name (Clausal parses
-    ``_foo`` as a logic variable), so user code cannot collide with it.
-    """
-
-    __slots__ = ("_functor", "_fields", "_position")
-
-    def __init__(self, functor: str, **kwargs: Any) -> None:
-        object.__setattr__(self, "_functor", functor)
-        # Slice G — source position; pop from kwargs before storing fields
-        # so callers can pass ``_position=(...)`` from templater-emitted
-        # constructor calls without polluting the keyword field set.
-        object.__setattr__(self, "_position", kwargs.pop("_position", None))
-        object.__setattr__(self, "_fields", dict(kwargs))
-
-    @property
-    def functor(self) -> str:
-        return self._functor
-
-    def __getattr__(self, name: str) -> Any:
-        try:
-            return self._fields[name]
-        except KeyError:
-            raise AttributeError(
-                f"KWTerm {self._functor!r} has no field {name!r}"
-            ) from None
-
-    def __eq__(self, other: object) -> bool:
-        if isinstance(other, KWTerm):
-            return (
-                self._functor == other._functor
-                and self._fields == other._fields
-            )
-        return NotImplemented
-
-    def __hash__(self) -> int:
-        return hash((self._functor, tuple(sorted(self._fields.items()))))
-
-    def __repr__(self) -> str:
-        args = ", ".join(f"{k}={v!r}" for k, v in self._fields.items())
-        return f"KWTerm({self._functor!r}, {args})"
-
-    def __unify__(self, other, trail):
-        """Called by C do_unify: match by functor + keyword name, then
-        pairwise-unify field values (so Var-valued fields bind).
-
-        Without this hook C ``do_unify`` falls back to rich-compare and
-        Var fields compare by identity instead of binding (A01-F004).
-        Mirrors :meth:`DictTerm.__unify__`.
-        """
-        if not isinstance(other, KWTerm):
-            return NotImplemented
-        if (self._functor != other._functor
-                or self._fields.keys() != other._fields.keys()):
-            return False
-        from .logic.variables import unify
-        mark = trail.mark()
-        for k in self._fields:
-            if not unify(self._fields[k], other._fields[k], trail):
-                trail.undo(mark)
-                return False
-        return True
-
-    def __occurs_check__(self, var) -> bool:
-        """Called by C do_occurs_check: check if var appears in any field
-        value (A01-F001). Mirrors :meth:`DictTerm.__occurs_check__`."""
-        from .logic.variables import occurs_check
-        return any(occurs_check(var, v) for v in self._fields.values())
-
-    def __walk__(self):
-        """Deep-substitute bindings (A01-F008): rebuild with walked field
-        values so a snapshot survives trail backtracking. ``_position``
-        (Slice G) is preserved; unbound Vars are left in place."""
-        from .logic.variables import walk
-        return KWTerm(
-            self._functor,
-            _position=self._position,
-            **{k: walk(v) for k, v in self._fields.items()},
-        )
-
-    def keys(self):
-        return self._fields.keys()
-
-    def values(self):
-        return self._fields.values()
-
-    def items(self):
-        return self._fields.items()
-
-    def __len__(self) -> int:
-        return len(self._fields)
-
-    def with_overrides(self, **overrides: Any) -> "KWTerm":
-        """Return a new KWTerm with specified fields replaced."""
-        new_fields = dict(self._fields)
-        for k in overrides:
-            if k not in new_fields:
-                raise KeyError(f"KWTerm {self._functor!r} has no field {k!r}")
-        new_fields.update(overrides)
-        return KWTerm(self._functor, **new_fields)
-
-    def with_extensions(self, **extensions: Any) -> "KWTerm":
-        """Return a new KWTerm with additional fields appended."""
-        new_fields = dict(self._fields)
-        for k in extensions:
-            if k in new_fields:
-                raise KeyError(
-                    f"KWTerm {self._functor!r} already has field {k!r}"
-                )
-        new_fields.update(extensions)
-        return KWTerm(self._functor, **new_fields)
-
-
 # ── SegList — segmented partial list ─────────────────────────────────────────
 
 
@@ -3425,12 +3299,6 @@ def term_str(t: Any, style: TermStyle | None = None, _bd: int = 0,
         cb = _c(')', 'bracket', style, _bd)
         return ob + sep.join(
             term_str(e, style, _bd + 1, quoted=quoted, double_quotes=double_quotes, sep=sep) for e in elems) + cb
-    if isinstance(t, KWTerm):
-        functor_s = _c(_locale_name(t.functor, style, len(t)), 'atom', style)
-        ob = _c('(', 'bracket', style, _bd)
-        cb = _c(')', 'bracket', style, _bd)
-        args = sep.join(f"{k}={term_str(v, style, _bd + 1, quoted=quoted, double_quotes=double_quotes, sep=sep)}" for k, v in t.items())
-        return functor_s + ob + args + cb
     if isinstance(t, DictTerm):
         ob = _c('{', 'bracket', style, _bd)
         cb = _c('}', 'bracket', style, _bd)
@@ -3505,7 +3373,7 @@ def term_canonical(t: Any) -> str:
     numbers and variables itself rather than borrowing :func:`term_str`'s
     coloured spellings.
 
-    Shapes ISO gives no canonical form for — ``KWTerm``, ``DictTerm``,
+    Shapes ISO gives no canonical form for — ``DictTerm``,
     ``SetTerm``, ``Predicate``, ``Call``, and opaque Python objects — fall
     back to :func:`term_str`; there is no ``'…'/N`` structure to print them
     as, so the display rendering is the best available answer.
@@ -3978,13 +3846,6 @@ def term_pformat(
         items = [_r(e) for e in elems]
         return ob + "\n" + ipad + _join(items) + "\n" + pad + cb
 
-    if isinstance(t, KWTerm):
-        functor_s = _c(t.functor, 'atom', style)
-        ob = _c('(', 'bracket', style, _bd)
-        cb = _c(')', 'bracket', style, _bd)
-        items = [f"{k} = {_r(v)}" for k, v in t.items()]
-        return functor_s + ob + "\n" + ipad + _join(items) + "\n" + pad + cb
-
     if isinstance(t, DictTerm):
         ob = _c('{', 'bracket', style, _bd)
         cb = _c('}', 'bracket', style, _bd)
@@ -4122,12 +3983,6 @@ def term_html(t: Any, _bd: int = 0) -> str:
         cb = _html_c(')', 'bracket', _bd)
         args_str = ", ".join(term_html(e, _bd + 1) for e in t[1:])
         return ob + args_str + cb
-    if isinstance(t, KWTerm):
-        functor_s = _html_c(esc(t.functor), 'atom')
-        ob = _html_c('(', 'bracket', _bd)
-        cb = _html_c(')', 'bracket', _bd)
-        args = ", ".join(f"{esc(k)}={term_html(v, _bd + 1)}" for k, v in t.items())
-        return functor_s + ob + args + cb
     if isinstance(t, DictTerm):
         ob = _html_c('{', 'bracket', _bd)
         cb = _html_c('}', 'bracket', _bd)
@@ -4190,7 +4045,6 @@ __all__ = [
     # New term types
     "DictTerm",
     "SetTerm",
-    "KWTerm",
     "SegList",
     "SegString",
     "SegBytes",

@@ -3,7 +3,6 @@
 Covers:
   - Python literals as terms (direct — no wrappers)
   - term_str for all term types
-  - KWTerm term_str (WK-3)
 """
 
 from __future__ import annotations
@@ -14,7 +13,6 @@ import pytest
 from clausal.logic.atoms import mint
 from clausal.logic.cells import chars
 from clausal.terms import (
-    KWTerm,
     term_str,
     term_pformat,
     Var,
@@ -163,15 +161,6 @@ class TestTermStr:
     def test_compound(self):
         # nv
         assert term_str(("foo", 1, 2)) == "foo(1, 2)"
-
-    @pytest.mark.compound_retirement_slice9
-    def test_kwterm(self):
-        # nv
-        t = KWTerm("point", x=1, y=2)
-        s = term_str(t)
-        assert s.startswith("point(")
-        assert "x=1" in s
-        assert "y=2" in s
 
     def test_is_node(self):
         # nv

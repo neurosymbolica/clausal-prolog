@@ -40,7 +40,7 @@ from clausal.logic.cells import chars, is_chars, chars_text, TUPLE_TAG  # stage 
 from clausal.logic.python_terms import FROM_TERM as _FROM_TERM  # the ONE registry (no cycle: python_terms never imports this module)
 from clausal.logic.variables import deref, walk
 from clausal.terms import (
-    DictTerm, KWTerm, SegBytes, SegList, SegString, SetTerm)
+    DictTerm, SegBytes, SegList, SegString, SetTerm)
 from clausal.logic.predicate import is_term_instance, term_field_names
 from clausal.pythonic_ast.nodes import Node as _Node
 
@@ -71,8 +71,6 @@ def to_python(val):
       Tuples are preserved as tuples (not converted to lists) -- library
       code that distinguishes tuple-of-ints from list-of-ints relies on
       this, e.g. ``a.at[(1, 2)]`` vs ``a.at[[1, 2]]`` in JAX;
-    - a ``KWTerm`` keeps its shape with converted field values -- Python has
-      no keyword-term type to become;
     - a ``SetTerm`` becomes a ``frozenset`` of converted elements (a
       ``set``/``frozenset`` keeps its type); an element that converts to
       something unhashable (a dict) raises ``TypeError``, loudly;
@@ -156,9 +154,6 @@ def to_python(val):
             return items
     if isinstance(val, list):
         return [to_python(x) for x in val]
-    if isinstance(val, KWTerm):
-        return KWTerm(val.functor, _position=val._position,
-                      **{k: to_python(v) for k, v in val.items()})
     if isinstance(val, (DictTerm, dict)):
         return {_as_dict_key(to_python(k)): to_python(v) for k, v in val.items()}
     if isinstance(val, SetTerm):
@@ -183,7 +178,7 @@ def to_python(val):
 #: ``is_term_instance``.  Seg* are containers too but hold str/VarSeg
 #: segments, not arbitrary terms: map_term leaves them alone, to_python walks
 #: them to their ground form.
-TERM_CONTAINER_TYPES = (tuple, list, dict, DictTerm, KWTerm, SetTerm, set, frozenset)
+TERM_CONTAINER_TYPES = (tuple, list, dict, DictTerm, SetTerm, set, frozenset)
 
 
 def term_children(val):
@@ -196,8 +191,6 @@ def term_children(val):
         for k, v in val.items():
             out.append(k); out.append(v)
         return out
-    if isinstance(val, KWTerm):
-        return list(val.values())
     if isinstance(val, (SetTerm, set, frozenset)):
         return list(val)
     if is_term_instance(val):
@@ -257,11 +250,6 @@ def map_term(val, fn):
         dict.clear(new)
         dict.update(new, out)
         return new
-    if isinstance(val, KWTerm):
-        fields = {k: fn(v) for k, v in val.items()}
-        if all(fields[k] is v for k, v in val.items()):
-            return val
-        return KWTerm(val.functor, _position=val._position, **fields)
     if isinstance(val, SetTerm):
         elems = [fn(e) for e in val]
         if all(a is b for a, b in zip(elems, val)):

@@ -330,7 +330,7 @@ class PurityError(Exception):
 def _renew_clause(clause: Clause) -> Clause:
     """Return a copy of the clause with all variables renamed to fresh ones.
 
-    Walks both runtime terms (cells, KWTerm, PredicateMeta instances,
+    Walks both runtime terms (cells, PredicateMeta instances,
     lists, tuples) and ``pythonic_ast`` Node subclasses (``Call``,
     ``Unify``, ``BinOp``, etc.) so that variables shared between head and
     body — including those nested inside arithmetic expressions like
