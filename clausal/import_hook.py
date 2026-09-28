@@ -517,6 +517,8 @@ _COMPILATION_FILES = (
     "logic/exact_arith.py",          # EVALUABLE (_mark_arith_position_names)
     "modules/units.py",              # _DEPRECATED_UNIT_NAMES (-import_from)
     "modules/countries/_data.py",    # JURISDICTIONS (_resolve_import_path)
+    "logic/generated_names.py",      # dollar_name: $-twin spelling of names
+    "terms.py",                      # quote_atom/quote_string (.pl translator)
     # The .pl translator, whose output is what gets compiled and cached:
     "tools/prolog_to_clausal.py",
     "tools/prolog_parser.py",

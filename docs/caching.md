@@ -49,7 +49,8 @@ sources that decide the emitted code** (plus a hand-maintained
 `CLAUSAL_BYTECODE_TAG`). That set is every module whose content can change
 emitted code: the compiler (`templating/`, `pythonic_ast/`,
 `logic/compiler/`), the tables it reads at compile time
-(`logic/exact_arith.py`, `modules/units.py`, `modules/countries/_data.py`),
+(`logic/exact_arith.py`, `modules/units.py`, `modules/countries/_data.py`,
+`logic/generated_names.py`, `terms.py`),
 and the `.pl` translator with its token spec (`tools/prolog_*.py`,
 `tools/toklex/`); see `_COMPILATION_ROOTS`/`_COMPILATION_FILES` in
 `clausal/import_hook.py`. Upgrading or editing the engine therefore invalidates

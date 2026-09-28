@@ -603,6 +603,35 @@ def _control_countries(monkeypatch):
     return before, _bytecode(src)
 
 
+def _control_generated_names(monkeypatch):
+    """dollar_name spells every runtime-class reference in emitted code."""
+    from clausal.logic import generated_names
+    from clausal.templating import term_rewriting as tr
+    assert tr.dollar_name is generated_names.dollar_name
+    src = "p(X) <- (q(X))\n"
+    before = _bytecode(src)
+    monkeypatch.setattr(tr, "dollar_name", lambda name: "$$" + name)
+    return before, _bytecode(src)
+
+
+def _control_terms(monkeypatch):
+    """quote_atom spells the atoms the .pl translator writes out."""
+    import marshal
+    import clausal.terms as terms
+    import clausal.tools.prolog_to_clausal as p2c
+    from clausal import import_hook as ih
+    assert p2c._quote_atom is terms.quote_atom
+
+    def compile_pl():
+        return marshal.dumps(ih.PrologLoader("m", "m.pl").source_to_code(
+            b"p('a b').\n", "m.pl"))
+
+    before = compile_pl()
+    monkeypatch.setattr(p2c, "_quote_atom",
+                        lambda s: terms.quote_atom(s + " x"))
+    return before, compile_pl()
+
+
 _PL_SAMPLE = (b":- op(700, xfx, ===>).\n"
               b"p(X) :- X = 'a b', q([1|_]), \"s\" = _.\nq(_).\n")
 
@@ -647,6 +676,8 @@ _MUTATION_CONTROLS = {
     "logic/exact_arith.py": _control_exact_arith,
     "modules/units.py": _control_units,
     "modules/countries/_data.py": _control_countries,
+    "logic/generated_names.py": _control_generated_names,
+    "terms.py": _control_terms,
 }
 
 #: The .pl translator: the control is that the file's code runs (or, for the
