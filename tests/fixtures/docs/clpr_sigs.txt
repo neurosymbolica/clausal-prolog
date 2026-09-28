@@ -70,7 +70,7 @@ mixed(X) <- (
 --8<-- [end:mixed_fd_and_real_ex2]
 
 --8<-- [start:float_literals_trigger_clp]
-# No in_real needed — the float literal 9.0 triggers CLP(ℝ)
+# The float literal 25.0 puts the equation in CLP(ℝ); in_real only sets the bounds
 pythagorean_real(X, Y) <- (
     in_real(X, 0.0, 10.0),
     in_real(Y, 0.0, 10.0),

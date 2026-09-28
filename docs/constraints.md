@@ -95,7 +95,7 @@ The `is not` operator uses `dif/2` constraint semantics rather than immediate `\
     4. **Unify succeeds, no trail growth** → terms already identical (e.g. `dif(X, X)`) → return False.
     5. **Unify succeeds with trail growth** → terms could become equal → undo sandbox, collect all free variables in both terms, attach `(x, y)` constraint pair to each via `put_attr`, return True.
 
-    `_structural_unify_oc` extends the C extension's `unify_with_occurs_check` to handle term (dataclass) instances and lists (which the C extension treats as opaque objects and compares with `==`).
+    `_structural_unify_oc` extends the C extension's `unify_with_occurs_check` to walk compound cells (tuples such as `('f', X)`) and lists.
 
     ### Attribute hook
 
@@ -155,9 +155,9 @@ The `is not` operator uses `dif/2` constraint semantics rather than immediate `\
 
 ??? info "Test coverage"
 
-    Tests are in `tests/test_dif.py` (42 tests).
+    Tests are in `tests/test_dif.py`.
 
-    - **`_collect_free_vars`**: scalars, Vars, bound vars, tuples, lists, Compounds, nested structures, deduplication
+    - **`_collect_free_vars`**: scalars, Vars, bound vars, compound cells, lists, nested structures, deduplication
     - **Direct `dif`**: ground equal/different, same var, one var, both vars, compound terms
     - **Occurs check**: `dif(X, f(X))` → succeed (can never be equal)
     - **Constraint propagation**: same/different values, multiple constraints, compound args, transitive via shared var
@@ -181,13 +181,32 @@ The implementation lives in `clausal.logic.clpfd`.
 | `==` | CLP(ℤ) arithmetic equality |
 | `!=` | CLP(ℤ) arithmetic disequality |
 | `<` `>` `<=` `>=` | CLP(ℤ) comparison constraints |
-| `is` | Unification (unchanged) |
-| `is not` | `dif/2` constraint (unchanged) |
-| `eval_(Expr, X)` | Eager arithmetic eval + unify (builtin, Prolog `is/2`) |
+| `is` | Unification, no evaluation |
+| `is not` | `dif/2` constraint |
+| `eval_(Expr, X)` | Eager arithmetic eval + unify (builtin; ISO `is/2` is the quoted `'is'(X, Expr)`) |
 
-when both sides are ground (no unbound Vars), the operators fall back to direct Python comparison. when at least one side is an unbound Var, CLP(ℤ) constraints are posted.
+When both sides are ground (no unbound Vars), the comparison is decided at once. When at least one side is an unbound Var, a constraint is posted: CLP(ℤ) for integers, [CLP(ℚ)](clpq.md) when a rational is involved, [CLP(ℝ)](clpr.md) when a float is.
 
-For true structural equality (Prolog `==/2`) use the builtin `structural_eq/2`.
+For true structural equality (Prolog `==/2`) use the quoted `'=='(A, B)` or the builtin `structural_eq/2`.
+
+What an operator means, bare or quoted, is defined once in [Operators](operators.md); evaluation is in [Arithmetic](arithmetic.md). Three rules matter most for constraints:
+
+- **`/` inside a constraint is exact.** `X == 7 / 2` gives `Fraction(7, 2)` and `X == 6 / 2` gives the integer `3` (Scryer's `{X = 7/2}`), while in evaluation `eval_(7 / 2, X)` is the float `3.5`. Write `rdiv(7, 2)` for the exact quotient anywhere.
+- **A zero divisor makes a constraint fail**, it does not raise. `X == 1 // 0` has no solutions, in every goal order, and a divisor that becomes 0 during labeling fails only that branch. Evaluation (`eval_(1 // 0, X)`) raises `evaluation_error(zero_divisor)` instead.
+- **A non-arithmetic term is a domain error.** `X == foo(1)` raises Scryer's clpz error `error(domain_error(clpz_expression, foo(1)), (==)/2)`.
+
+```clausal
+-module(div_demo, [])
+
+half(X) <- (X == 7 / 2)                 # X = Fraction(7, 2)
+exact(X) <- (X == 6 / 2)                # X = 3 (an int)
+no_value(X) <- (X == 1 // 0)            # fails: no solutions
+quotients(X, Y) <- (                    # Y = 0 fails its branch only
+    in_domain(Y, 0, 3),
+    X == 12 // Y,
+    label([Y])
+)                                       # (12, 1), (6, 2), (4, 3)
+```
 
 ??? abstract "Domain representation"
 
@@ -326,6 +345,27 @@ sendmoney(S, E, N, D, M, O, R, Y) <- (
 
 The `==` constraint is posted *before* `label` so the solver propagates the equation across all eight domains before any labeling begins. See the gotcha below.
 
+**Querying from Python.** In a `.seam` file (or any `.clausal` file hosting Python), a goal in `for` position runs and hands back each answer; the goal's variables become ordinary locals:
+
+```clausal
+-module(puzzle, [])
+
+sendmoney(S, E, N, D, M, O, R, Y) <- (
+    in_domain([S, E, N, D, M, O, R, Y], 0, 9),
+    all_different([S, E, N, D, M, O, R, Y]),
+    S != 0,
+    M != 0,
+    S * 1000 + E * 100 + N * 10 + D + (M * 1000 + O * 100 + R * 10 + E) == M * 10000 + O * 1000 + N * 100 + E * 10 + Y,
+    label([S, E, N, D, M, O, R, Y])
+)
+
+def main():
+    for S, E, N, D, M, O, R, Y in --sendmoney(S, E, N, D, M, O, R, Y):
+        print(S, E, N, D, M, O, R, Y)      # 9 5 6 7 1 0 8 2
+```
+
+Call `main()` after the module has loaded; a query at module top level runs before the module's predicates are registered. A variable that is still constrained when the answer is handed back (for example one that was never labeled) raises `ResidualConstraints`: label it inside the goal, or use the lower-level `solve(goal, module=m, trail=t)` from a plain `.py` file and read its attributes. See [Python Integration](python_integration.md).
+
 ### Gotcha: generate-and-test vs constraint-and-label
 
 A common mistake is to call `label` first and then check the arithmetic — this is **generate-and-test** and is extremely slow:
@@ -408,7 +448,7 @@ sendmoney_fast(S, E, N, D, M, O, R, Y) <- (
 
 ??? info "Test coverage"
 
-    Tests are in `tests/test_clpfd.py` (76 tests), `tests/test_clpz.py` (CLP(Z) infinite-domain semantics), and `tests/test_phase5_builtins.py` (global constraint tests).
+    Tests are in `tests/test_clpfd.py`, `tests/test_clpz.py` (CLP(Z) infinite-domain semantics), and `tests/test_phase5_builtins.py` (global constraint tests).
 
     - **Domain operations**: from_range, contains, min/max, size, singleton, intersection, remove, remove_above/below, values
     - **in_domain**: post domain, unify succeeds/fails, list, narrows existing, singleton binds, empty fails, ground int
@@ -595,7 +635,7 @@ pigeon_hole() <- (
 
 ??? info "Test coverage"
 
-    Tests are in `tests/test_clpb.py` (87 tests).
+    Tests are in `tests/test_clpb.py`.
 
     - **BDDNode**: construction, identity equality, hashable, repr
     - **make_node**: reduction rule, unique table sharing, different children
@@ -643,6 +683,7 @@ The same comparison operators (`==`, `!=`, `<`, `>`, `<=`, `>=`) route to CLP(�
 ### Cross-domain notes
 
 - **FD + Real coexistence:** a variable can carry both an FD domain and a real interval. The FD domain enforces integrality; the real interval handles continuous narrowing. Both stay in sync.
+- **Rational and real do not mix:** `/` inside a constraint is exact, so `in_real(X), X == 7 / 2` raises `TypeError: cannot mix CLP(Q) rational and CLP(R) float in the same constraint`. Write a float operand (`X == 7.0 / 2`) in a real constraint.
 - **Booleans are not numbers:** Python's `True`/`False` are not valid in CLP(ℝ) or CLP(ℤ) expressions. Use `0`/`1` if you need numeric values. Booleans belong to CLP(B).
 - **Labeling order:** for mixed-domain variables, use `label` (FD) first to fix integer values, then `label_real` for remaining real variables. `label_real` does not enforce integrality.
 - **Large integers:** integers beyond 2^53 lose precision when converted to IEEE doubles during interval propagation. Ground integer-integer comparisons are done exactly.

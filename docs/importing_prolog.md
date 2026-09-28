@@ -1,5 +1,16 @@
 # Importing Prolog Code
 
+!!! warning "Experimental in 1.0"
+    `.pl` import is **experimental** and outside the 1.0 compatibility
+    promise (see [Public API](public-api.md)). It translates Prolog source
+    into Clausal's own syntax with an older translator; it is not an ISO
+    Prolog system. Programs that use cut or if-then-else are refused, and a
+    program whose clauses build compound data terms (`p(f(1)).`,
+    `X = g(2)`) loads but fails at run time with `NameError: Predicate
+    'f/1' is not in scope` (see [Known limitations](#known-limitations)).
+    For running real ISO Prolog alongside Clausal, use the
+    [Scryer](scryer.md) or [Trealla](trealla.md) embeddings.
+
 Clausal can import `.pl` (Prolog) files directly. drop a `.pl` file on
 `sys.path` and `import` it — Clausal translates, compiles, and caches it
 automatically.
@@ -19,7 +30,7 @@ and `module=`.
 
 ## Quick example
 
-Given a file `graphs.pl`:
+Given a file `edges.pl`:
 
 ```prolog
 edge(1, 2).
@@ -30,17 +41,30 @@ path(X, Y) :- edge(X, Y).
 path(X, Z) :- edge(X, Y), path(Y, Z).
 ```
 
-Import and query from Python:
+Import and query it from a `.seam` file like any Clausal module:
+
+```python
+# app.seam
+-module(app, [])
+-import_from(edges, [path])
+
+def main():
+    for X in --path(1, X):
+        print("path", 1, X)      # path 1 2, path 1 3, path 1 4
+```
+
+From a plain `.py` file, where `--` is not available, use the lower-level
+`solve` with a goal cell:
 
 ```python
 import clausal
-from clausal.logic.solve import call
-from clausal.logic.variables import Var, deref
+from clausal import solve, Var
+from clausal.logic.variables import deref
 
-import graphs  # finds and translates graphs.pl
+import edges  # finds and translates edges.pl
 
 x, y = Var(), Var()
-for _ in call("path", x, y, module=graphs.__clausal_module__):
+for _ in solve(("path", x, y), module=edges):
     print(f"path({deref(x)}, {deref(y)})")
 ```
 
@@ -100,7 +124,7 @@ when one `.pl` file imports another, the import hook handles both files:
 double(X, Y) :- Y is X * 2.
 
 % main.pl
-:- use_module(helpers, [double/1]).
+:- use_module(helpers, [double/2]).
 quad(X, Y) :- double(X, T), double(T, Y).
 ```
 
@@ -131,7 +155,8 @@ Most standard Prolog translates cleanly:
 
 - Facts and rules (`:- body` becomes `<- (body)`)
 - Arithmetic (`is`, comparison operators)
-- Unification (`=` becomes `is`, `\=` becomes `is not`)
+- Unification (`=` becomes `is`; `\=` becomes `is not`, which is `dif/2`,
+  so it only agrees with `\=` when both sides are ground)
 - Lists (`[H|T]` becomes `[H, *T]`)
 - DCG rules (`-->` becomes `>>`)
 - Directives (`dynamic`, `discontiguous`, `table`, `module`, `use_module`)
@@ -166,11 +191,11 @@ translates to:
 -double_quotes(chars)
 -private([red])
 
-P("ab"),
+p("ab"),
 
-Q(red),
+q(red),
 
-R('hello world'),
+r('hello world'),
 ```
 
 - A **bare atom** (`red`) is emitted as a bare name and collected into an
@@ -186,23 +211,15 @@ R('hello world'),
   because it governs the literals below it) so the literal re-reads as the
   string it was. The directive is written only when the file actually
   contains a string.
-- `true`, `false` and `fail` map to Python `True`/`False`.
+- `true`, `false` and `fail` map to Python `True`/`False` (`a :- true.`
+  becomes `a() <- (True)`).
 
-A `:- double_quotes(Mode)` directive in the source is carried across in
-place, where it governs the clauses below it: `atom` becomes
+A `:- double_quotes(Mode)` directive in the source — or the ISO spelling
+`:- set_prolog_flag(double_quotes, Mode)` — is carried across in place,
+where it governs the clauses below it: `atom` becomes
 `-double_quotes(atom)`; `chars` is already what the emitted header says, so
 it is not written twice; `codes` has no Clausal mode (codes are spelled
 `b"…"` at the literal) and is emitted as a comment.
-
-!!! warning "`set_prolog_flag` is not translated"
-    Only the bare `:- double_quotes(Mode)` spelling is carried across. The
-    ISO/SWI form `:- set_prolog_flag(double_quotes, Mode)` is **not**
-    recognised today: it falls through to the generic directive emitter as
-    `-SetPrologFlag(double_quotes, atom)`, which is not a Clausal directive,
-    so the import fails with `SyntaxError: Unknown directive:
-    -SetPrologFlag(...)`. It is a loud failure, not a silent mistranslation —
-    but if your `.pl` file sets the flag that way, rewrite it as
-    `:- double_quotes(Mode)`.
 
 ---
 
@@ -227,7 +244,9 @@ mod = _load_prolog_module("my_module", "/path/to/my_module.pl",
                           dialect=Dialect.scryer())
 ```
 
-The default dialect is SWI-Prolog.
+The default dialect is SWI-Prolog's operator table (the translator predates
+the ISO-first rule; pass `Dialect.scryer()` or `Dialect.iso()` for a stricter
+reader).
 
 ---
 
@@ -274,7 +293,7 @@ The key operator mappings:
 |---|---|
 | `:-` | `<-` |
 | `=` | `is` |
-| `\=` | `is not` |
+| `\=` | `is not` (a `dif/2` constraint: the same as `\=` on ground terms, weaker when an argument is unbound) |
 | `is` | `eval_/2` |
 | `=:=` | `==` |
 | `=\=` | `!=` |
@@ -313,6 +332,20 @@ renamed to `_pi`.)
 
 ---
 
+## Known limitations
+
+- **Compound data terms fail at run time.** The translator declares a
+  program's bare atoms (the `-private([...])` list above) but not the
+  functors of its data terms, so a clause such as `p(f(1)).` or
+  `q(X) :- X = g(2).` loads, then raises `NameError: Predicate 'f/1' is not
+  in scope as a term class` when it runs. Calls to the program's own
+  predicates are unaffected.
+- **Arithmetic follows today's Clausal operators, not ISO's.** `Y is X / 2`
+  becomes `eval_(X / 2, Y)`, and `=:=` becomes the constraint `==` (see
+  [Operators](operators.md)).
+- **No cut, no if-then-else** (above), and no streams, `op/3` or flags
+  beyond `double_quotes`.
+
 ## Caveats
 
 - **The `.pl` extension is also used by Perl.** If a Perl script ends up
@@ -321,7 +354,9 @@ renamed to `_pi`.)
 - **All `.pl` files must be UTF-8 encoded.** Non-UTF-8 files raise a
   `SyntaxError` at import time.
 - **Avoid naming `.pl` files after standard modules.** A file like `json.pl`
-  on `sys.path` could shadow `clausal.modules.json`.
+  on `sys.path` could shadow `clausal.modules.json`, and in the other
+  direction `-import_from(graphs, [...])` in a Clausal module finds the
+  standard `graphs` module before a `graphs.pl` of yours.
 
 ---
 

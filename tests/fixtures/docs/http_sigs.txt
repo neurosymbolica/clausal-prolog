@@ -16,7 +16,8 @@ request({"url": "http://example.com", "method": "HEAD"}, STATUS, BODY)
 
 --8<-- [start:json_request_examples]
 json_get("http://api.example.com/users/1", USER),
-py.json.get(USER, "name", NAME)
+NAME is USER.name              # JSON object keys are atoms: USER.name, or
+                               # py.json.get(USER, name, NAME) -- not "name"
 
 json_post("http://api.example.com/items",
          {"name": "Widget", "price": 9.99},
@@ -31,7 +32,8 @@ decode("hello%20world", S) # S = "hello world"
 --8<-- [start:url_parse_examples]
 parse("https://example.com:8080/path?q=1#frag", PARTS)
 # PARTS = {scheme: "https", host: "example.com", port: 8080,
-#          path: "/path", query: "q=1", fragment: "frag"}   # atom keys
+#          path: "/path", query: "q=1", fragment: "frag"}
+# (atom keys, string values)
 
 join({scheme: "https", host: "example.com", path: "/api"}, URL)
 # URL = "https://example.com/api"
@@ -43,7 +45,7 @@ join({scheme: "https", host: "example.com", path: "/api"}, URL)
 
 search_api(QUERY, RESULTS) <- (
     encode(QUERY, SAFE_QUERY),
-    atom_concat("https://api.example.com/search?q=", SAFE_QUERY, URL),
+    append("https://api.example.com/search?q=", SAFE_QUERY, URL),   # strings are lists
     json_get(URL, RESULTS)
 )
 --8<-- [end:build_query_url]

@@ -1,6 +1,13 @@
 # Prolog Translation
 
-Clausal includes a bidirectional translator between `.clausal` and `.pl` (Prolog) source files. This enables exporting clausal programs for use in SWI-Prolog or Scryer Prolog, and importing existing Prolog code into clausal — either via the CLI tools or directly at import time (see [import.md](import.md#importing-pl-prolog-files-directly)).
+Clausal includes a bidirectional translator between `.clausal` and `.pl` (Prolog) source files. This enables exporting clausal programs for use in Scryer, Trealla or SWI-Prolog, and importing existing Prolog code into clausal — either via the CLI tools or directly at import time (see [Importing Prolog Code](importing_prolog.md)).
+
+!!! warning "Experimental in 1.0"
+    The Prolog → Clausal direction, and `.pl` import built on it, is
+    **experimental** in 1.0 (see [Public API](public-api.md) and the known
+    limitations in [Importing Prolog Code](importing_prolog.md#known-limitations)).
+    Where the two languages differ, Clausal follows ISO first and Scryer where
+    ISO is silent; SWI is a supported export dialect, not a reference.
 
 ---
 
@@ -129,20 +136,29 @@ Two consequences worth knowing:
 
 ### Operators
 
+What the exporter emits (Scryer dialect shown; `==` is Clausal's arithmetic
+constraint, see [Operators](operators.md)):
+
 | Clausal | Prolog | Notes |
 |---|---|---|
 | `X is Y` | `X = Y` | Unification |
 | `X is not Y` | `dif(X, Y)` | Disequality ([dif/2](constraints.md)) |
-| `Y == X * 2` | `Y =:= X * 2` | Arithmetic equality (compound arithmetic operand) |
-| `X == Y` | `X == Y` | Structural equality |
-| `X != Y` | `X \== Y` | Structural inequality |
-| `X <= Y` | `X =< Y` | ISO `=<` |
+| `Z == X * 2` | `#=(Z, X * 2)` | CLP(ℤ) constraint; the module gets `:- use_module(library(clpz), [(#=)/2])` |
+| `X == Y` | `#=(X, Y)` | The same constraint |
+| `'=='(X, Y)` | `X == Y` | Structural identity (the quoted spelling) |
+| `X != Y` | `X \== Y` | **Structural** inequality — see the note below |
+| `X <= Y` | `X =< Y` | ISO `=<` (evaluates; not a constraint) |
+| `eval_(X * 2, Z)` | `Z is X * 2` | Eager evaluation |
 | `not G` | `\+ G` | Negation as failure |
 | `A and B` or `A, B` | `A, B` | Conjunction |
 | `A or B` | `(A ; B)` | Disjunction |
 
-Note: on import, Prolog `=:=` with *atomic* operands (`X =:= Y`) still
-becomes structural `X == Y` — a known lossy case pending decision A11-D008.
+!!! note "`!=` is not translated as a constraint"
+    In Clausal `X != Y` is the arithmetic disequality constraint (`#\=`), but
+    the translator maps it to structural `\==` in both directions (and Prolog
+    `\==` imports as `!=`). On ground integers the two agree; with an unbound
+    variable or `1` vs `1.0` they do not. Write `'\\=='(X, Y)` in Clausal
+    when you mean structural inequality.
 
 ### Lists
 
@@ -156,9 +172,9 @@ becomes structural `X == Y` — a known lossy case pending decision A11-D008.
 
 | Clausal | Prolog |
 |---|---|
-| `-module(name, [Foo(X)])` | `:- module(name, [foo/1]).` |
-| `-import_from(mod, [Pred])` | `:- use_module('mod', [pred]).` |
-| `-dynamic(Color(N, V))` | `:- dynamic(color/2).` |
+| `-module(name, [foo(X)])` | `:- module(name, [foo/1]).` |
+| `-import_from(mod, [pred])` | `:- use_module('mod', [pred]).` |
+| `-dynamic(color(N, V))` | `:- dynamic(color/2).` |
 | `-private([...])` | *(omitted — Prolog visibility is module-based)* |
 
 ---
@@ -279,11 +295,12 @@ clausal_text = prolog_ast_to_clausal(pmodule)
 | `foo_bar(X)` | `foo_bar(X)` | names cross unchanged |
 | `findall(...)` | `findall(...)` | reverse builtin name map |
 | `X = Y` | `X is Y` | Unification |
-| `X \= Y` | `X is not Y` | Disequality |
+| `X \= Y` | `X is not Y` | `dif/2`: agrees with `\=` only on ground terms |
 | `Y is X * 2` | `eval_(X * 2, Y)` | Eager arithmetic evaluation |
-| `Y =:= X * 2` | `Y == X * 2` | Arithmetic equality (atomic-operand `X =:= Y` imports as structural `==`; pending A11-D008) |
-| `X == Y` | `X == Y` | Structural equality |
-| `X \== Y` | `X != Y` | Structural inequality |
+| `Y =:= X * 2` | `Y == X * 2` | Arithmetic equality (a constraint in Clausal) |
+| `X =\= Y` | `X != Y` | Arithmetic disequality |
+| `X == Y` | `'=='(X, Y)` | Structural identity |
+| `X \== Y` | `X != Y` | **Mistranslated**: becomes the arithmetic constraint (see the note above) |
 | `X =< Y` | `X <= Y` | ISO `=<` → `<=` |
 | `\+ G` | `not G` | Negation as failure |
 | `(A , B)` | `(A, B)` | Conjunction |
@@ -292,14 +309,14 @@ clausal_text = prolog_ast_to_clausal(pmodule)
 | `!` (cut) | **Rejected** | Not supported — use [once/1](control.md), dif/2, [indexing](indexing.md) |
 | `[H\|T]` | `[H, *T]` | List cons |
 | `member(X, L)` | `X in L` | Membership |
-| `head :- body.` | `Head() <- (body)` | Rules |
-| `head.` | `Head(),` | Facts (trailing comma) |
-| `head --> body.` | `Head() >> (body)` | [DCG](dcg.md) rules |
+| `foo(X) :- body.` | `foo(X) <- (body)` | Rules |
+| `head.` | `head(),` | Facts (trailing comma) |
+| `head --> body.` | `head() >> (body)` | [DCG](dcg.md) rules |
 | `:- module(...)` | `-module(...)` | [Module directive](directives.md) |
-| `:- use_module(library(L), [...])` | `-import_from(L, [...])` | Import directive |
-| `:- dynamic(p/N)` | `-dynamic(P/N)` | Dynamic directive |
+| `:- use_module(library(L), [...])` | `-import_from(L, [...])` | Import directive; `clpfd`/`clpz` map to `clausal.logic.clpfd` |
+| `:- dynamic(p/N)` | `-dynamic(p/N)` | Dynamic directive |
 | `:- op(P, T, N)` | `# operator: op(P, T, N)` | Comment (no clausal equivalent) |
-| `X` (variable) | `X` (single letter) or `_x` (leading underscore) | Variable naming |
+| `X` (variable) | `X` | Variable names cross unchanged |
 
 ### User-defined operator mappings
 
@@ -308,8 +325,8 @@ For projects with custom operators, provide a JSON mapping file:
 ```json
 {
   "operator_mappings": {
-    "<>":  {"clausal": "NotEqual", "arity": 2},
-    "==>": {"clausal": "Implies", "arity": 2}
+    "<>":  {"clausal": "not_equal", "arity": 2},
+    "==>": {"clausal": "implies", "arity": 2}
   }
 }
 ```
@@ -341,7 +358,7 @@ python -m clausal.tools.translate input.clausal --to scryer -o output.pl
 python -m clausal.tools.translate input.pl --to clausal -o output.clausal
 
 # Pipe mode (stdin/stdout)
-echo 'Foo(1, 2),' | python -m clausal.tools.translate --to swi
+echo 'foo(1, 2),' | python -m clausal.tools.translate --to scryer
 echo 'foo(1, 2).' | python -m clausal.tools.translate --to clausal
 
 # Roundtrip check (exit 0 if roundtrip reproduces the original)
@@ -409,7 +426,7 @@ In the reverse direction (Clausal → Prolog), Clausal's reified if-then-else (`
 ### Known roundtrip limitations
 
 - **DCG rules**: Prolog `-->` ↔ clausal `>>` roundtrip can produce syntax that doesn't re-parse in the second leg (comma-in-pushback-list edge cases).
-- **Arity-indicator directives**: `:- dynamic foo/2.` → `-dynamic(Foo/2)` → the `/2` arity indicator doesn't re-parse as clausal in the return leg. Single-leg translation works correctly in both directions.
+- **Arity-indicator directives**: `:- dynamic foo/2.` → `-dynamic(foo/2)`; check the return leg with `--roundtrip` before relying on it.
 - **Whitespace/formatting**: Exact text match is not guaranteed; structural equivalence is.
 
 ---
@@ -437,7 +454,7 @@ python -m clausal.tools.prolog_to_clausal SOURCE.pl -o tests/fixtures/prolog_gol
 
 ## Tier 3: Scryer Prolog embedding
 
-The translation pipeline feeds directly into the [Scryer Prolog embedding](scryer.md) — an in-process Scryer engine accessible from Python via PyO3. `.clausal` files are translated to Prolog with `Dialect.scryer()` and loaded into the embedded machine:
+The translation pipeline feeds directly into the [Scryer Prolog embedding](scryer.md) — an in-process Scryer engine accessible from Python via PyO3, shipped as the optional `clausal-scryer` package (`packages/clausal-scryer`; not part of the core install, so this example is not run by the core test suite). `.clausal` files are translated to Prolog with `Dialect.scryer()` and loaded into the embedded machine:
 
 ```python
 from clausal.scryer import Scryer
@@ -459,6 +476,6 @@ See the [Scryer Prolog Embedding](scryer.md) documentation for the full API.
 - **Phase 2** (done): Dialect-specific emission, golden tests, CLI
 - **Phase 3** (done): Prolog → Clausal (tokenizer, Pratt parser, Prolog AST → `.clausal` text)
 - **Phase 4** (done): Roundtrip validation, golden Prolog→Clausal files, unified CLI
-- **Phase 5** (done): Import-time `.pl` translation — `PrologFinder`/`PrologLoader` in the import hook translate `.pl` files on the fly, with `.pyc` caching and recursive `use_module` support (see [import.md](import.md#importing-pl-prolog-files-directly))
+- **Phase 5** (done, experimental in 1.0): Import-time `.pl` translation — `PrologFinder`/`PrologLoader` in the import hook translate `.pl` files on the fly, with `.pyc` caching and recursive `use_module` support (see [Importing Prolog Code](importing_prolog.md))
 - **Phase 6** (stretch, not started): Self-hosted DCG translator — rewrite the Prolog parser as a clausal DCG operating on a token stream, using the state-threading DCG pattern for dynamic `op/3` handling
 - **Phase 7** (stretch, not started): Additional dialects — GNU Prolog (`fd_*` constraints), ECLiPSe (`lib(ic)`, `do/2`), XSB Prolog (HiLog, tabling differences), Tau Prolog (JavaScript-hosted); each as a `Dialect` subclass

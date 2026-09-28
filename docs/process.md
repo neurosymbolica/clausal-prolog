@@ -41,7 +41,7 @@ check_status(CMD, CODE) <- shell(CMD, CODE)
 
 ### shell_output/2
 
-`shell_output(Command, Output)` — run a shell command and capture stdout as a string. Fails on non-zero exit code.
+`shell_output(Command, Output)` — run a shell command and capture stdout as a string (trailing newline included). Fails on non-zero exit code.
 
 ```clausal
 git_status(STATUS) <- shell_output("git status --porcelain", STATUS)
@@ -57,10 +57,18 @@ compile_and_check(CMD, OUT, ERR) <- shell_output(CMD, OUT, ERR)
 
 ### process_create/3
 
-`process_create(Program, Args, Result)` — run a program with an argument list (no shell). Result is a [`DictTerm`](dicts_sets.md) keyed by the atoms `exit_code`, `stdout`, `stderr` — read it with `RESULT.stdout` or `get(RESULT, stdout, OUT)`.
+`process_create(Program, Args, Result)` — run a program with an argument list (no shell). Result is a [`DictTerm`](dicts_sets.md) keyed by the atoms `exit_code`, `stdout`, `stderr` — read it with `RESULT.stdout` or `get(RESULT, stdout, OUT)` (declare the bare key names, e.g. `-private([stdout, exit_code])`, or single-quote them). The captured output is a string.
 
 ```clausal
+-private([stdout, exit_code])
+
 run_python(CODE, RESULT) <- process_create("python3", ["-c", CODE], RESULT)
+
+python_answer(OUT, CODE) <- (
+    run_python("print(42)", R),
+    OUT is R.stdout,          # "42\n"
+    CODE is R.exit_code       # 0
+)
 ```
 
 ### process_create/4

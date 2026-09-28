@@ -8,27 +8,38 @@ syntactic sugar for writing measurements inline.
 
 ## Quick start
 
-```python
--import_from(py.units,    [m, kg, s, newton, kilo, has_units, strip_units])
--import_from(py.imperial, [foot, inch, pound_mass, mph])
+```clausal
+-import_from(py.units,    [m, s, newton, kilo, has_units, strip_units])
+-import_from(py.imperial, [foot, inch])
 
-# SI sugar: n(Unit) — Unit must be an SI predicate
-eval_(100(m), distance)              # Quantity(100, {metre: 1})
-eval_(9.58(s), _time)                # Quantity(9.58, {second: 1})
-eval_(distance / _time, speed)       # Quantity(10.4…, {metre: 1, second: -1})
+# SI sugar: n(Unit), where Unit is an SI unit predicate
+speed(V) <- (
+    eval_(100(m), D),          # 100 (metre)
+    eval_(9.58(s), T),         # 9.58 (second)
+    eval_(D / T, V)            # 10.438... (metre / second)
+)
 
-# SI prefix: plain number, multiply in ++ escape
-big_force is ++(5 * kilo * newton(1))   # 5 kN → Quantity(5000, {kg:1, m:1, s:-2})
+# SI prefix: a plain number, multiplied in a ++ escape
+big_force(F) <- (F is ++(5 * kilo * newton(1)))   # 5000 (kilogram * metre / second ** 2)
 
-# Imperial: unit-vector Quantity, multiply in ++ escape
-height is ++(6 * foot + 2 * inch)       # Quantity(1.879…, {metre: 1})
+# Imperial: a unit-vector Quantity, multiplied in a ++ escape
+height(H) <- (H is ++(6 * foot + 2 * inch))       # 1.8796... (metre)
 
-# Check dimension type
-has_units(speed, m/s)            # succeeds: dims match
+# Check a dimension
+is_speed(V) <- has_units(V, m/s)
 
-# Extract numeric component
-strip_units(9.8(newton), V)      # V = 9.8
+# Extract the numeric component
+force_value(V) <- strip_units(9.8(newton), V)     # V = 9.8
+
+def main():
+    for V in --speed(V):
+        print(V)                           # 10.438413361169102 (metre / second)
+    for V in --(speed(V), is_speed(V)):
+        print("a speed:", V)
 ```
+
+`main` runs the queries from Python with a goal-position `--`; call it once the file has
+loaded (a query at module top level runs before the predicates are registered).
 
 ---
 
@@ -40,10 +51,10 @@ Unit names are lowercase identifiers — `metre`, `kilogram`, `newton`,
 the physical constants are snake_case (`speed_of_light`, `planck_constant`).
 The length family is spelled like `metre` throughout: `kilometre`,
 `centimetre`, `millimetre`, `micrometre`, `nanometre`.  The printed label of
-a `Quantity` follows the identifier: `str(5(metre))` is `5 metre`, and
-`9.8(newton)` prints in base units as `9.8 kilogram·metre·second^-2` (a
-scaled unit such as `kilometre` has no label of its own — `5(kilometre)`
-prints as `5000 metre`).
+a `Quantity` follows the identifier: `str(5(metre))` is `5 (metre)`, and
+`9.8(newton)` prints in base units as `9.8 (kilogram * metre / second ** 2)`
+(a scaled unit such as `kilometre` has no label of its own — `5(kilometre)`
+prints as `5000 (metre)`).
 
 The spellings these replaced — TitleCase `Metre`, `Second`, `Newton`,
 `SpeedOfLight`, … and the American `kilometer`, `centimeter`, … — are
@@ -60,7 +71,7 @@ label.** A `Quantity` prints its dimension keys by their unit name, so text
 that came out of `write/1`, `str()`, a `UnitsMismatch` message or the
 predicate `repr` changed spelling in the same release — before:
 `9.8 Kilogram·Metre·Second^-2`, `Unit mismatch for add: Metre vs Second`,
-`units.Metre/[]`; after: `9.8 kilogram·metre·second^-2`,
+`units.Metre/[]`; after (today's format): `9.8 (kilogram * metre / second ** 2)`,
 `Unit mismatch for add: metre vs second`, `units.metre/[]`. Anything that
 parses or compares those strings must expect the lowercase form; the values,
 dimension keys and arithmetic are unchanged.
@@ -71,12 +82,14 @@ dimension keys and arithmetic are unchanged.
 
 ### `n(Unit)` sugar — SI predicates only
 
-```python
-5(m)          # → Quantity(5,   {metre: 1})
-9.8(newton)   # → Quantity(9.8, {kilogram: 1, metre: 1, second: -2})
--3(s)         # → Quantity(-3,  {second: 1})
-5(m/s)        # → Quantity(5,   {metre: 1, second: -1})
-10(m**2)      # → Quantity(10,  {metre: 2})
+```clausal
+-import_from(py.units, [m, s, newton])
+
+a(X) <- eval_(5(m), X)          # 5 (metre)
+b(X) <- eval_(9.8(newton), X)   # 9.8 (kilogram * metre / second ** 2)
+c(X) <- eval_(-3(s), X)         # -3 (second)
+d(X) <- eval_(5(m/s), X)        # 5 (metre / second)
+e(X) <- eval_(10(m**2), X)      # 10 (metre ** 2)
 ```
 
 **The argument inside the parentheses must be an SI unit predicate** (or a
@@ -91,8 +104,10 @@ right of `*` (`5 * kilo * m` raises a `TypeError`).
 
 For unusual constructions, use `++()` directly:
 
-```python
-custom is ++(kilogram(1) * metre(1) / second(1)**2 * 9.8)   # same as 9.8(newton)
+```clausal
+-import_from(py.units, [kilogram, metre, second])
+
+custom(X) <- (X is ++(kilogram(1) * metre(1) / second(1)**2 * 9.8))   # same as 9.8(newton)
 ```
 
 ### `* unit` style — SI prefixes and imperial
@@ -100,12 +115,15 @@ custom is ++(kilogram(1) * metre(1) / second(1)**2 * 9.8)   # same as 9.8(newton
 SI prefixes are plain numbers; imperial/non-SI units are `Quantity` unit
 vectors.  Both are used via multiplication inside a `++()` escape:
 
-```python
-F   is ++(5 * kilo * newton(1))        # 5 kN
-t   is ++(100 * nano * second(1))      # 100 ns
-f   is ++(2.4 * mega * hertz(1))       # 2.4 GHz
-len is ++(20 * inch)                   # 20 inches → 0.508 m
-spd is ++(60 * mph)                    # 60 mph → 26.82 m/s
+```clausal
+-import_from(py.units, [kilo, nano, giga, newton, second, hertz])
+-import_from(py.imperial, [inch, mph])
+
+force(X) <- (X is ++(5 * kilo * newton(1)))        # 5 kN
+tick(X) <- (X is ++(100 * nano * second(1)))       # 100 ns
+clock(X) <- (X is ++(2.4 * giga * hertz(1)))       # 2.4 GHz
+span(X) <- (X is ++(20 * inch))                    # 20 inches → 0.508 (metre)
+pace(X) <- (X is ++(60 * mph))                     # 60 mph → 26.8224 (metre / second)
 ```
 
 ---
@@ -115,9 +133,9 @@ spd is ++(60 * mph)                    # 60 mph → 26.82 m/s
 An empty-argument call on any numeric literal produces a dimensionless
 `Quantity(n, {})`:
 
-```python
-42()      # → Quantity(42,   {})
-3.14()    # → Quantity(3.14, {})
+```clausal
+answer(X) <- eval_(42(), X)     # 42 (dimensionless)
+pi(X) <- eval_(3.14(), X)       # 3.14 (dimensionless)
 ```
 
 ---
@@ -127,19 +145,26 @@ An empty-argument call on any numeric literal produces a dimensionless
 when the callee is a logic variable, `MY_VAL(Unit)` desugars to
 `++(Quantity(MY_VAL, Unit))`:
 
-```python
-N == 9.8
-eval_(N(newton), F)     # → Quantity(9.8, newton dims)
+```clausal
+-import_from(py.units, [newton])
+
+force_of(N, F) <- eval_(N(newton), F)     # force_of(9.8, F): F = 9.8 (kilogram * metre / second ** 2)
 ```
 
 ---
 
 ## `has_units(X, Unit)` — dimension constraint / check
 
-```python
-has_units(F, newton)              # check or constrain: F must have newton dims
-has_units(V, m/s)                 # velocity check/constraint
-has_units(A, m/s**2)              # acceleration
+```clausal
+-import_from(py.units, [m, s, newton, has_units])
+
+is_force(F) <- has_units(F, newton)              # check or constrain: F must have newton dims
+is_velocity(V) <- has_units(V, m/s)              # velocity check/constraint
+is_acceleration(A) <- has_units(A, m/s**2)       # acceleration
+
+# an unbound F is constrained first, then checked when it is bound
+newton_ok(F) <- (has_units(F, newton), eval_(9.8(newton), F))   # succeeds
+metre_bad(F) <- (has_units(F, newton), eval_(9.8(m), F))        # fails
 ```
 
 `has_units/2` posts an AttVar constraint on `F` if it is unbound. Compound unit
@@ -173,13 +198,23 @@ d.dims    # MappingProxyType({<metre>: 1, <second>: -1})
 | `a * k`    | Scales value by plain number; preserves dims |
 | `k / a`    | Inverts dims and scales |
 
+These are the Python operators on a `Quantity`. In a clause, compute with
+[`eval_/2`](arithmetic.md): `+ - * **` behave as above, and division is
+**exact**. Two integer magnitudes divide to a `Fraction`, not a float —
+`eval_(7(m) / 2, X)` gives `X` a magnitude of `Fraction(7, 2)` — unlike a bare
+`7 / 2` between plain numbers, which is 3.5 (see [Operators](operators.md)). A float
+magnitude stays a float (`eval_(9.58(s) * 2, X)`), and a zero divisor raises
+`evaluation_error(zero_divisor)` in `eval_/2` and fails inside a constraint
+(`X == 1(m) / 0`). A [currency](currency.md) amount is stricter: a float factor beside
+its exact `Decimal` magnitude is refused.
+
 ---
 
 ## Modules
 
 ### `py.units` — SI units and prefixes
 
-```python
+```clausal
 -import_from(py.units, [m, kg, s, newton, kilo, has_units, strip_units])
 ```
 
@@ -190,7 +225,7 @@ and utility predicates (`has_units`, `strip_units`, `dimension_of`, `make_quanti
 
 ### `py.imperial` — imperial and non-SI unit vectors
 
-```python
+```clausal
 -import_from(py.imperial, [inch, foot, yard, mile, pound_mass, mph, lbf])
 ```
 
@@ -249,13 +284,13 @@ These scale on the way in and store as SI base units.  Use with `n(Unit)` sugar.
 
 `bit` is the base unit (IEC 80000-13).  All values are normalised to bits.
 
-```python
+```clausal
 -import_from(py.units, [bit, byte, kilobyte, gigabyte, kibibyte, gibibyte,
                         kilobit, megabit, kibi, mebi, gibi, tebi])
 
-eval_(4(gibibyte), size)                 # Quantity(34_359_738_368, {bit: 1})
-eval_(100(megabit), rate)                # Quantity(100_000_000,    {bit: 1})
-custom is ++(512 * mebi * byte(1))       # 512 MiB via binary prefix
+disk(SIZE) <- eval_(4(gibibyte), SIZE)         # 34359738368 (bit)
+link(RATE) <- eval_(100(megabit), RATE)        # 100000000 (bit)
+buffer(X) <- (X is ++(512 * mebi * byte(1)))   # 512 MiB via binary prefix: 4294967296 (bit)
 ```
 
 Decimal (SI-prefixed) byte multiples:
@@ -325,11 +360,13 @@ Scaled variants: `bar`, `millibar`, `atmosphere`, `electronvolt`, `kilowatt`
 Plain Python numbers — **not** predicates.  Use inside `++()` by multiplying
 against a unit vector:
 
-```python
-++(5 * kilo * newton(1))      # 5 kN
-++(100 * nano * second(1))    # 100 ns
-++(2.4 * giga * hertz(1))     # 2.4 GHz
-++(1 * mega * joule(1))       # 1 MJ
+```clausal
+-import_from(py.units, [kilo, nano, giga, mega, newton, second, hertz, joule])
+
+prefixed(X) <- (X is ++(5 * kilo * newton(1)))     # 5 kN
+prefixed(X) <- (X is ++(100 * nano * second(1)))   # 100 ns
+prefixed(X) <- (X is ++(2.4 * giga * hertz(1)))    # 2.4 GHz
+prefixed(X) <- (X is ++(1 * mega * joule(1)))      # 1 MJ
 ```
 
 | Name    | Value  | SI symbol | Note |
@@ -367,10 +404,12 @@ unit together.
 
 Plain Python numbers — use inside `++()` by multiplying against a unit vector:
 
-```python
-++(4   * gibi * byte(1))    # 4 GiB  →  Quantity(4 × 2³⁰ × 8, {bit: 1})
-++(512 * mebi * byte(1))    # 512 MiB
-++(100 * kibi * bit(1))     # 100 Kib
+```clausal
+-import_from(py.units, [gibi, mebi, kibi, byte, bit])
+
+binary(X) <- (X is ++(4 * gibi * byte(1)))      # 4 GiB → 34359738368 (bit)
+binary(X) <- (X is ++(512 * mebi * byte(1)))    # 512 MiB
+binary(X) <- (X is ++(100 * kibi * bit(1)))     # 100 Kib
 ```
 
 | Name   | Value  | IEC symbol |
@@ -393,20 +432,25 @@ an uppercase letter is a logic variable.
 Plain `Quantity` values — **not** predicates.  Import from `py.imperial` and
 use by multiplying a scalar inside a `++()` escape:
 
-```python
--import_from(py.imperial, [inch, foot, pound_mass, mph, kilowatt_hour])
+```clausal
+-import_from(py.imperial, [inch, pound_mass, mph, kilowatt_hour])
 
-LEN  is ++(20 * inch)           # Quantity(0.508,   {metre: 1})
-MASS is ++(150 * pound_mass)    # Quantity(68.04,   {kilogram: 1})
-SPD  is ++(60 * mph)            # Quantity(26.82,   {metre:1, second:-1})
-E    is ++(1 * kilowatt_hour)   # Quantity(3.6e6,   {kg:1, m:2, s:-2})
+imperial(LEN, MASS, SPD, E) <- (
+    LEN is ++(20 * inch),              # 0.508 (metre)
+    MASS is ++(150 * pound_mass),      # 68.0388555 (kilogram)
+    SPD is ++(60 * mph),               # 26.8224 (metre / second)
+    E is ++(1 * kilowatt_hour)         # 3600000.0 (kilogram * metre ** 2 / second ** 2)
+)
 ```
 
 All values are stored in SI base units; dimensions are the same as their SI
 equivalents so `has_units` checks work without any changes:
 
-```python
-has_units(++(20 * inch), metre)     # succeeds — both have {metre: 1}
+```clausal
+-import_from(py.imperial, [inch])
+-import_from(py.units, [metre, has_units])
+
+is_length() <- has_units(++(20 * inch), metre)     # succeeds — both have {metre: 1}
 ```
 
 #### length (stored as metres)
@@ -543,15 +587,23 @@ unify(v, newton(9.8), trail)   # fires hook → checks dims → binds v
 
 ## Catching unit errors
 
-`UnitsMismatch` is catchable via [`catch/3`](exceptions.md) using the `ClassName(Message)` form:
+`UnitsMismatch` is a Python exception class, so a module imports it and catches it with a
+`++` catcher (see [`catch/3`](exceptions.md)); the instance form binds the message:
 
-```python
-catch(
-    ++(metre(3) + second(2)),
-    UnitsMismatch(MSG),
-    1 == 1
+```clausal
+-import_from(py.units, [metre, second])
+-import_from(clausal.terms, [UnitsMismatch])
+
+mismatch_message(MSG) <- catch(
+    _ is ++(metre(3) + second(2)),
+    ++UnitsMismatch(MSG),
+    true
 )
+# MSG = "Unit mismatch for add: metre vs second"
 ```
+
+A **comparison** across dimensions (`X > 0` with `X` a length) is not a `UnitsMismatch`
+exception but the ISO error term `error(system_error(units_mismatch), (>)/2)`.
 
 ---
 

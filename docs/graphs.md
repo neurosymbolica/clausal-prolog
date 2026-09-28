@@ -2,7 +2,7 @@
 
 ## Overview
 
-The `graphs` module provides predicates for graph creation, traversal, pathfinding, cycle detection, connectivity, and minimum spanning trees. Graphs are represented as edge lists — plain Python [lists](lists.md) matching the [pairs](pairs.md) convention.
+The `graphs` module provides predicates for graph creation, traversal, pathfinding, cycle detection, connectivity, and minimum spanning trees. Graphs are represented as edge lists — plain [lists](lists.md) matching the [pairs](pairs.md) convention.
 
 ```clausal
 --8<-- "tests/fixtures/docs/graphs_sigs.txt:overview_import"
@@ -34,12 +34,15 @@ Or via [module import](import.md):
 
 ## Edge representation
 
-- **Unweighted**: `[["a", "b"], ["b", "c"], ...]` — list of 2-element lists
-- **Weighted**: `[["a", "b", 3], ["b", "c", 5], ...]` — list of 3-element lists
-- **Lone vertex**: a 1-element `[["v"]]` entry names a vertex with no incident
+- **Unweighted**: `[['a', 'b'], ['b', 'c'], ...]` — list of 2-element lists
+- **Weighted**: `[['a', 'b', 3], ['b', 'c', 5], ...]` — list of 3-element lists
+- **Lone vertex**: a 1-element `[['v']]` entry names a vertex with no incident
   edge (makes single-vertex graphs representable and `is_isolated` enumeration
   reachable)
-- **vertices** are extracted automatically from edges
+- **vertices** are extracted automatically from edges. A vertex is any term;
+  the examples use quoted atoms (`'a'`, an atom in every `-double_quotes`
+  mode). A `"a"` vertex is a string and is kept as one: `vertices([["a", "b"]], V)`
+  gives two string vertices, which are not the atoms `'a'` and `'b'`
 - **Malformed entries** (not a 1-, 2-, or 3-element list) are silently skipped
 
 ---
@@ -51,12 +54,12 @@ Most predicates treat the edge list as **undirected** — `neighbors`, `degree`,
 `connected_components`, `spanning_tree`, and `min_spanning_tree` all follow an
 edge in both directions. The exceptions are **directed**: `has_cycle`,
 `topological_sort`, and `reverse_edges` respect edge direction, and `has_edge`
-matches an edge only in the stored `[U, V]` order (so `has_edge([["a","b"]],
-"b", "a")` fails even though `"a"` and `"b"` are neighbors).
+matches an edge only in the stored `[U, V]` order (so `has_edge([['a', 'b']],
+'b', 'a')` fails even though `'a'` and `'b'` are neighbors).
 
 Other conventions worth noting:
 
-- **`degree` counts a self-loop once** (`[["a","a"]]` → degree 1), not twice.
+- **`degree` counts a self-loop once** (`[['a', 'a']]` → degree 1), not twice.
 - **`path_cost` requires at least two vertices**; a single-vertex path fails
   rather than reporting cost 0.
 - **`breadth_first_nodes` from an absent source** yields just `[Source]` — the
@@ -64,8 +67,8 @@ Other conventions worth noting:
   source fails unless `Start == End` (in which case it yields the
   single-vertex path `[Start]`).
 - **`is_isolated` in check mode treats any term that is not a vertex as
-  isolated** — `is_isolated([["a","b"]], "zzz")` succeeds, since a non-vertex
-  trivially has degree 0 (accepted behavior, A11-D010). Enumerate mode only
+  isolated** — `is_isolated([['a', 'b']], 'zzz')` succeeds, since a non-vertex
+  trivially has degree 0 (accepted behavior). Enumerate mode only
   yields actual vertices.
 - **`shortest_path` requires non-negative weights** (Dijkstra); a graph with a
   negative weight fails.
@@ -122,7 +125,7 @@ Other conventions worth noting:
 |-----------|------|-------------|
 | `find_path(Edges, Start, End, Path)` | `+Edges, +Start, +End, -Path` | Enumerate all simple paths via [backtracking](control.md) |
 | `shortest_path(Edges, Start, End, Path)` | `+Edges, +Start, +End, -Path` | Shortest path (BFS for unweighted, Dijkstra for weighted). **Precondition:** weighted edges must be non-negative; a graph with any negative weight fails (Dijkstra is unsound with negative weights). |
-| `path_cost(Edges, Path, Cost)` | `+Edges, +Path, -Cost` | sum_ of edge weights along a path |
+| `path_cost(Edges, Path, Cost)` | `+Edges, +Path, -Cost` | Sum of edge weights along a path |
 
 ```clausal
 --8<-- "tests/fixtures/docs/graphs_sigs.txt:pathfinding_examples"
