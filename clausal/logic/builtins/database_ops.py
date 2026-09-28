@@ -270,6 +270,40 @@ def _resolve_cell_head(term_val: Any, context: str, db,
             _BUILTINS, _DB_BUILTINS,
         )
         builtin = (functor, arity) in _BUILTINS or (functor, arity) in _DB_BUILTINS
+        if not builtin and not context.startswith("retract"):
+            from clausal.logic.builtins.flags import (  # noqa: PLC0415
+                assert_creates_dynamic,
+            )
+            if assert_creates_dynamic(db):
+                # ISO 7.5.2(2): with the flag on, asserting into a procedure
+                # that does not exist CREATES it, as a dynamic procedure of
+                # the calling module.  Only a name nothing declares gets
+                # here: a static predicate (it has a row), a builtin and a
+                # declared data functor are refused below as before.
+                (home if home is not None else db).mark_dynamic(functor, arity)
+                cell = (term_val if functor == term_val[0]
+                        else make_cell(functor, *args))
+                return cell, pred_cls is None
+            # The refusal the construction of the clause used to raise
+            # itself (``UndeclaredFunctorError``, a NameError too); the
+            # construction defers to here because only this builtin knows
+            # the calling module's flag.
+            from clausal.logic.compiler.globals_env import (  # noqa: PLC0415
+                UndeclaredFunctorError,
+            )
+            refusal = UndeclaredFunctorError(
+                functor, arity, "procedure", context,
+                why=(f"no predicate {functor}/{arity} is declared here, and "
+                     f"a cell argument does not create one — a cell is "
+                     f"indistinguishable from a plain data tuple — so "
+                     f"declare it -dynamic({functor}/{arity}) first, or set "
+                     f"the flag assert_creates_dynamic to true in this "
+                     f"module"))
+            # No ``name``: the solve-time undefined-name enrichment would
+            # replace this with a plain NameError and lose the ISO term, and
+            # the name is not undefined -- the procedure is.
+            refusal.name = None
+            raise refusal
         if context.startswith("retract") and not builtin:
             # ISO 8.9.3 (and Scryer): retracting from a procedure that does
             # not exist FAILS -- there is no clause to remove.  The caller

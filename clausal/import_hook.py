@@ -112,8 +112,8 @@ def _make_intern_atom(module_dict, module_items, module_name):
     be silently accepted (that would pollute ``predicate_builtins`` and
     defeat the strict check), so the helper refuses to accept a name that is
     not already available, mirroring ``compiler_v2._process_bare_atom_refs``'
-    own ``effective_strict = not implicit_mode`` rule.  Only files carrying
-    ``-implicit_atoms`` disable strict mode and allow auto-accept, so a
+    own ``effective_strict = not implicit_mode`` rule.  Only the interactive
+    profile's loose item disables strict mode and allows auto-accept, so a
     dict-key atom and a value-position atom now resolve under the *same*
     default.  (Atom keys whose atom is declared post-exec via
     ``-module``/``-private`` are a known limitation in strict files —
@@ -139,7 +139,7 @@ def _make_intern_atom(module_dict, module_items, module_name):
     from clausal.logic.compiler_v2 import _locally_declared_names
     from clausal.pythonic_ast.nodes import ImplicitAtomsDeclaration
 
-    # Strict is the default; only ``-implicit_atoms`` re-enables auto-accept.
+    # Strict is the default; only the interactive loose item re-enables auto-accept.
     # Mirrors ``compiler_v2._process_bare_atom_refs``' ``effective_strict``.
     strict = not any(
         isinstance(it, ImplicitAtomsDeclaration) for it in module_items
@@ -303,7 +303,7 @@ def _run_v2_pipeline(loader, module, module_dict, filename, recover_module_items
 # ``predicate_builtins`` — the §1b/R2 GLOBAL ATOM pool ONLY.  Starts EMPTY
 #   at process bootstrap; grows only via a legitimate atom declaration
 #   (-module/-private, ``_process_declarations``), auto-accept
-#   (-implicit_atoms, ``_process_bare_atom_refs``/``$intern_atom``), or
+#   (the interactive loose item, ``_process_bare_atom_refs``/``$intern_atom``), or
 #   ``global_atom/2``'s mint-on-demand.  This is the dict the strictness
 #   check's "already resolved" test consults.
 #
@@ -722,11 +722,27 @@ class PredicateLoader(_ClausalSourceLoader):
         return _extract_module_items(source, path)
 
 
+def _prolog_default_items() -> list:
+    """The module items every imported ``.pl`` module starts with, AHEAD of
+    its own: ``assert_creates_dynamic`` is ``true``, so imported ISO code
+    gets ISO's assert -- asserting into a procedure that does not exist
+    creates it as dynamic (ISO 7.5.2(2)).  A
+    ``:- set_prolog_flag(assert_creates_dynamic, false).`` in the file comes
+    later and wins.  An item rather than translated text, so the translation
+    itself (and every snapshot of it) is unchanged."""
+    from clausal.pythonic_ast.nodes import Directive  # noqa: PLC0415
+    return [Directive(name="set_prolog_flag",
+                      specs=[("assert_creates_dynamic", "true")])]
+
+
 class PrologLoader(_ClausalSourceLoader):
     """SourceLoader for .pl Prolog modules — translates to clausal on-the-fly.
 
     Pipeline: .pl source → prolog_to_clausal() → .clausal text →
               ast.parse → EmbedTransformer → bytecode (cached as .pyc)
+
+    The module's items start with :func:`_prolog_default_items` (the
+    ``assert_creates_dynamic`` flag on).
 
     All Prolog-specific imports are lazy (inside methods) so loading this
     module doesn't pull in the translator unless a .pl file is actually used.
@@ -763,6 +779,7 @@ class PrologLoader(_ClausalSourceLoader):
             ) from e
 
         code, transformer = _parse_clausal_source(clausal_source, path)
+        transformer._module_items[:0] = _prolog_default_items()
         self._last_transformer = transformer
         return code
 
@@ -787,7 +804,8 @@ class PrologLoader(_ClausalSourceLoader):
         """Cache-hit path: re-translate .pl source, then parse for module_items."""
         pl_source = self.get_data(path).decode("utf-8")
         clausal_source = self._translate(pl_source)
-        return _extract_module_items(clausal_source, path)
+        return _prolog_default_items() + _extract_module_items(
+            clausal_source, path)
 
 
 # Backward-compat alias — prefer _load_module() for new code.

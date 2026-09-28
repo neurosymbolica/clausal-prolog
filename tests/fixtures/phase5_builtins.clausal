@@ -69,20 +69,22 @@ test("transpose empty") <- (transpose([], T), T == [])  # nv
 
 # ── pairs_keys_values/3, pairs_keys/2, pairs_values/2 ──────────────────────
 
+# A pair is Key-Value (Scryer's library(pairs)). Written in source, `1 - "a"`
+# is read as a pair; a pair the builtins BUILD is the cell '-'(K, V).
 test("pairs_keys_values: decompose") <- (
-    pairs_keys_values([[1, "a"], [2, "b"]], K, V),
+    pairs_keys_values([1 - "a", '-'(2, "b")], K, V),
     K == [1, 2],
     V == ["a", "b"]
 )  # nv
 test("pairs_keys_values: compose") <- (
     pairs_keys_values(P, [1, 2], ["a", "b"]),
-    P == [[1, "a"], [2, "b"]]
+    P == ['-'(1, "a"), '-'(2, "b")]
 )  # nv
 test("pairs_keys") <- (
-    pairs_keys([[1, "a"], [2, "b"]], K),
+    pairs_keys([1 - "a", 2 - "b"], K),
     K == [1, 2]
 )  # nv
 test("pairs_values") <- (
-    pairs_values([[1, "a"], [2, "b"]], V),
+    pairs_values([1 - "a", 2 - "b"], V),
     V == ["a", "b"]
 )  # nv

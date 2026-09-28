@@ -595,6 +595,11 @@ class Database:
         # read by an IMPORTER's cross-mode literal lint.  ``None`` until
         # recorded, which the lint treats as "unknown", not as a mode.
         self.double_quotes_modes: "frozenset[str] | None" = None
+        # This module's MODULE-SCOPED Prolog flags (double_quotes,
+        # assert_creates_dynamic), set by ``-set_prolog_flag`` / a runtime
+        # ``set_prolog_flag/2`` in the module; an absent flag has its
+        # default.  See ``clausal.logic.builtins.flags``.
+        self.prolog_flags: dict = {}
         self._shallow: set[tuple[str, int]] = set()
         self._table_store: dict = {}
         self._rows: dict[tuple[str, int], PredRow] = {}

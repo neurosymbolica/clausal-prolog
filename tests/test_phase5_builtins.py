@@ -614,23 +614,38 @@ class TestTranspose:
 
 
 class TestGroupPairsByKey:
-    def test_basic(self):
-        # nv
-        g = Var()
-        goal = Call(func=LoadName(name="group_pairs_by_key"),
-                    args=[[["a", 1], ["b", 2], ["a", 3]], g], kwargs=[])
-        result = sol_var(goal, g)
-        assert len(result) == 1
-        groups = result[0]
-        assert groups == [["a", [1, 3]], ["b", [2]]]
+    """R4 (2026-09-28): Scryer's library(pairs). A pair is ``K-V`` (the cell
+    ``('-', K, V)``) and ADJACENT pairs with identical keys are grouped.
 
-    def test_all_unique(self):
+    Scryer 0.9 (local build), ``:- use_module(library(pairs)).``::
+
+        group_pairs_by_key([a-1,b-2,a-3], G).   G = [a-[1],b-[2],a-[3]].
+        group_pairs_by_key([X-1,X-2,Y-3], G).   G = [X-[1,2],Y-[3]].
+        group_pairs_by_key([a-1,b], G).         false.
+        group_pairs_by_key(foo, G).             false.
+        group_pairs_by_key([A,a-1], G).         A = _A-_B, G = [_A-[_B],a-[1]].
+        group_pairs_by_key([a-1,a-2], [a-[1],a-[2]]).   true.
+    """
+
+    @staticmethod
+    def _p(k, v):
+        return ("-", k, v)
+
+    def test_adjacent_only(self):
         # nv
         g = Var()
+        p = self._p
         goal = Call(func=LoadName(name="group_pairs_by_key"),
-                    args=[[["x", 1], ["y", 2], ["z", 3]], g], kwargs=[])
-        result = sol_var(goal, g)
-        assert result == [[["x", [1]], ["y", [2]], ["z", [3]]]]
+                    args=[[p("a", 1), p("b", 2), p("a", 3)], g], kwargs=[])
+        assert sol_var(goal, g) == [[p("a", [1]), p("b", [2]), p("a", [3])]]
+
+    def test_runs_are_grouped(self):
+        # nv
+        g = Var()
+        p = self._p
+        goal = Call(func=LoadName(name="group_pairs_by_key"),
+                    args=[[p("a", 1), p("a", 3), p("b", 2)], g], kwargs=[])
+        assert sol_var(goal, g) == [[p("a", [1, 3]), p("b", [2])]]
 
     def test_empty(self):
         # nv
@@ -642,17 +657,45 @@ class TestGroupPairsByKey:
         # nv
         g = Var()
         goal = Call(func=LoadName(name="group_pairs_by_key"),
-                    args=[[["a", 1]], g], kwargs=[])
-        assert sol_var(goal, g) == [[["a", [1]]]]
+                    args=[[self._p("a", 1)], g], kwargs=[])
+        assert sol_var(goal, g) == [[self._p("a", [1])]]
 
     def test_order_preserved(self):
         # nv
         g = Var()
+        p = self._p
         goal = Call(func=LoadName(name="group_pairs_by_key"),
-                    args=[[["b", 1], ["a", 2], ["b", 3]], g], kwargs=[])
-        result = sol_var(goal, g)
-        assert result[0][0][0] == "b"  # b appears first
-        assert result[0][1][0] == "a"
+                    args=[[p("b", 1), p("a", 2), p("b", 3)], g], kwargs=[])
+        assert sol_var(goal, g) == [[p("b", [1]), p("a", [2]), p("b", [3])]]
+
+    def test_keys_compare_by_identity(self):
+        # nv -- Scryer: [X-1,X-2,Y-3] groups the two X pairs, not Y.
+        g, x, y = Var(), Var(), Var()
+        p = self._p
+        goal = Call(func=LoadName(name="group_pairs_by_key"),
+                    args=[[p(x, 1), p(x, 2), p(y, 3)], g], kwargs=[])
+        (groups,) = sol_var(goal, g)
+        assert [grp[2] for grp in groups] == [[1, 2], [3]]
+
+    @pytest.mark.parametrize("pairs", [
+        [("-", "a", 1), "b"],         # Scryer: false
+        "foo",                        # Scryer: false
+        [["a", 1]],                   # the old [K, V] shape is not a pair
+    ])
+    def test_a_non_pair_fails(self, pairs):
+        # nv
+        goal = Call(func=LoadName(name="group_pairs_by_key"),
+                    args=[pairs, Var()], kwargs=[])
+        assert solutions(goal) == []
+
+    def test_a_bound_groups_list_can_split_a_run(self):
+        # nv -- Scryer: group_pairs_by_key([a-1,a-2], [a-[1],a-[2]]) is true
+        # (same_key's first clause fails on [V|Vs] = [], so the run closes).
+        p = self._p
+        goal = Call(func=LoadName(name="group_pairs_by_key"),
+                    args=[[p("a", 1), p("a", 2)], [p("a", [1]), p("a", [2])]],
+                    kwargs=[])
+        assert len(solutions(goal)) == 1
 
 
 # ── 5g: Error ───────────────────────────────────────────────────────────

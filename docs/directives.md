@@ -67,7 +67,7 @@ its own, exactly as with [`-dynamic`](#-dynamic).
 Both spellings work in [`-private`](#-private) too.
 
 !!! info "Listing an atom declares the RIGHT to write it, not a new identity"
-    **Atoms are global by spelling.** Listing `red` here does not create a module-local variant of it: the atom **is** the interned Python `str` `'red'`, and every module that writes `red` — by `-module`, by `-private`, by `-import_from`, or under `-implicit_atoms` — has that same atom, equal by `==`. What the listing buys is the *right to write the bare name*: an unlisted, unimported bare atom raises a compile-time `NameError` by default (strict is the default), and in files that carry [`-implicit_atoms`](#-implicit_atoms) it resolves to the same global atom without a listing. For an atom other modules genuinely cannot reach or spell, use [`-hide`](#-hide), which is the only module-local mechanism. See [Atoms § Strict by default](syntax.md#atoms), [Import System § Atoms are global by spelling](import.md#atoms-are-global-by-spelling), and the [global-atoms-default spec](https://gitlab.com/MikeAmy/clausal/-/blob/main/implementation_plans/atoms_refactor/GLOBAL_ATOMS_DEFAULT.md).
+    **Atoms are global by spelling.** Listing `red` here does not create a module-local variant of it: the atom **is** the interned Python `str` `'red'`, and every module that writes `red` — by `-module`, by `-private`, or by `-import_from` — has that same atom, equal by `==`. What the listing buys is the *right to write the bare name*: an unlisted, unimported bare atom raises a compile-time `NameError` by default (strict is the default). For an atom other modules genuinely cannot reach or spell, use [`-hide`](#-hide), which is the only module-local mechanism. See [Atoms § Strict by default](syntax.md#atoms), [Import System § Atoms are global by spelling](import.md#atoms-are-global-by-spelling), and the [global-atoms-default spec](https://gitlab.com/MikeAmy/clausal/-/blob/main/implementation_plans/atoms_refactor/GLOBAL_ATOMS_DEFAULT.md).
 
 ### -private
 
@@ -92,7 +92,7 @@ The list may also contain bare atoms:
     Listing a name in `-private` has four real effects and one advisory one:
 
     1. **Not identity** — listing an atom does *not* give it a module-local identity. `draft` here is the same atom as `other_module.draft` and as any bare `draft`; they unify. (This bullet used to claim the opposite; that was the pre-2026-09 model. [`-hide`](#-hide) is the tool if you need a symbol no other module can reach.)
-    2. **Strict-atom resolution** — the bare name compiles instead of raising the strict-by-default `NameError`. In files that carry [`-implicit_atoms`](#-implicit_atoms) you can omit the listing and rely on auto-minting.
+    2. **Strict-atom resolution** — the bare name compiles instead of raising the strict-by-default `NameError`.
     3. **Shadowing** — for a PREDICATE, the private class wins inside this module over `-module`, over imports, and over the global. An atom has nothing to shadow: every route resolves to the same atom.
     4. **Signature pre-registration** — for `P(A, B)` entries, arity and field names are fixed before the first clause rather than inferred from it. A `p/2` entry declares a PREDICATE whose clauses may live in another module, exactly as in [`-module`](#data-functors-vs-predicates).
     5. **Intent** — it tells a reader the name is internal. Advisory only, per the warning above.
@@ -142,7 +142,7 @@ See [Import System](import.md) for full details. For importing Prolog `.pl` file
 
 ## Atom-Identity Directives
 
-These directives control atom resolution and scope. Atoms are **global by spelling** — `red` denotes the same atom everywhere in a process, there is no per-module atom identity to shadow or overwrite (see [Import System](import.md#atoms-are-global-by-spelling) for the full story and its history). The short version: strict resolution is the default — an undeclared bare atom reference is a compile-time `NameError`; `-implicit_atoms` opts a file out of strict and restores Prolog-style auto-minting; `-hide` gives a module a private, compiler-renamed atom namespace other modules cannot spell.
+These directives control atom resolution and scope. Atoms are **global by spelling** — `red` denotes the same atom everywhere in a process, there is no per-module atom identity to shadow or overwrite (see [Import System](import.md#atoms-are-global-by-spelling) for the full story and its history). The short version: strict resolution is the default — an undeclared bare atom reference is a compile-time `NameError`; there is no opt-out (the old `-implicit_atoms` was removed before 1.0); `-hide` gives a module a private, compiler-renamed atom namespace other modules cannot spell.
 
 Upgrading an existing codebase from the old auto-mint default? See the [strict-atoms migration guide](strict-atoms-migration.md).
 
@@ -151,14 +151,13 @@ Upgrading an existing codebase from the old auto-mint default? See the [strict-a
 > **Deprecated (still supported).** Strict atom resolution is now the default,
 > so this directive is redundant and can be deleted. It still forces strict mode
 > where present; loading a file that uses it emits a one-per-process
-> `ClausalStrictAtomsDeprecationWarning`. To opt a file *out* of strict, use
-> [`-implicit_atoms`](#-implicit_atoms).
+> `ClausalStrictAtomsDeprecationWarning`. There is no way to opt a file *out*
+> of strict: [`-implicit_atoms`](#-implicit_atoms) was removed.
 
 **Historical context**: Before strict became the default, files could use
 `-strict_atoms` to opt in to compile-time `NameError` on undeclared bare atoms.
 That protection now applies everywhere by default, making this directive
-redundant. Use [`-implicit_atoms`](#-implicit_atoms) to opt a file *out* of
-strict when Prolog-style ceremony-free tag atoms are desired.
+redundant.
 
 ```clausal
 --8<-- "tests/fixtures/docs/directives_sigs.txt:strict_atoms"
@@ -180,25 +179,14 @@ A bare reference that satisfies none of the above raises a compile-time `NameErr
 
 ### -implicit_atoms
 
-> **Deprecated 2026-09-18 (still supported, warns once per file).** Declare the
-> names the file mints — list them in `-private([...])` or `-module(name, [...])`,
-> or [`-hide`](#-hide) them — and delete the directive. It is **removed in the
-> next landing**, at which point a file carrying it will not load. Loading a file
-> that still has it emits a `ClausalImplicitAtomsDeprecationWarning` naming that
-> file.
+> **Removed before 1.0.** A file that carries `-implicit_atoms` (in any
+> spelling) does not load: it is a `SyntaxError` that reads
+> `-implicit_atoms was removed; declare atoms with -private([...]) or quote them`.
 
-**Problem**: Strict atom resolution is the default (a typo in a bare atom is a
-compile-time `NameError`). Some files — prototypes, exploratory scripts, and
-code that deliberately relies on Prolog-style ceremony-free tag atoms — want the
-looser behavior back.
-
-`-implicit_atoms` is a **file-level opt-in marker** that takes no arguments (bare
-`-implicit_atoms` or `-implicit_atoms()`). With it present, an undeclared bare
-atom reference is auto-minted into the process-wide global atom dict instead of
-raising. It is the exact inverse of [`-strict_atoms`](#-strict_atoms); a file may
-not carry both (doing so is a compile error).
-
-The REPL uses this mode implicitly so interactive queries keep auto-minting.
+Declare the atoms a file uses — list them in `-private([...])` or
+`-module(name, [...])`, or [`-hide`](#-hide) them — or write them quoted
+(`'red'`, which needs no declaration). The
+[strict-atoms migration guide](strict-atoms-migration.md) shows how.
 
 ### -implicit_functors
 
@@ -271,11 +259,11 @@ not reach back and relax this check.
 **Orthogonal to atom resolution.** `-implicit_functors` concerns functor
 *construction* arity/declaredness; it says nothing about bare (0-arity) atom
 references, which are governed independently by
-[`-strict_atoms`](#-strict_atoms)/[`-implicit_atoms`](#-implicit_atoms). A
+the strict-atoms rule (see [`-strict_atoms`](#-strict_atoms)). A
 module may carry `-implicit_functors` together with `-strict_atoms`: functor
 construction is advisory while bare atom references still require declaration.
 
-**Scope**: per-file only, like `-implicit_atoms` — it does not propagate to
+**Scope**: per-file only — it does not propagate to
 imported modules.
 
 ### -hide
@@ -320,8 +308,31 @@ test("add at runtime") <- (
 `assertz`/`asserta`/`retract` work **only** on a predicate declared
 `-dynamic` — declare first. Without the declaration the `assertz` above raises
 the ISO error `error(permission_error(modify, static_procedure, color/1), assertz/1)`,
-and a name that is not declared at all is refused. A `-dynamic` predicate may
-start with no clauses. See [Database Operations](database_ops.md) for full details.
+and a name that is not declared at all is refused, unless the module sets the
+flag [`assert_creates_dynamic`](flags.md#assert_creates_dynamic) (below). A
+`-dynamic` predicate may start with no clauses. See
+[Database Operations](database_ops.md) for full details.
+
+### -set_prolog_flag
+
+`-set_prolog_flag(Flag, Value)` sets a [Prolog flag](flags.md) when the module
+loads, the ISO `:- set_prolog_flag(Flag, Value).` as a directive. A module-scoped
+flag is set for this module:
+
+```clausal
+-set_prolog_flag(assert_creates_dynamic, true)
+```
+
+- `assert_creates_dynamic`: `true` makes `assertz`/`asserta` of a procedure that
+  does not exist create it as dynamic (ISO 7.5.2(2)) instead of refusing it.
+- `double_quotes`: the same as [`-double_quotes(Mode)`](#-double_quotes), and
+  position-sensitive like it.
+- A process flag (`debug`) is set for the whole process.
+
+A setting that `set_prolog_flag/2` would refuse is a load-time `SyntaxError`
+carrying the ISO error term, e.g.
+`error(permission_error(modify,flag,unknown),set_prolog_flag/2)` for
+`-set_prolog_flag(unknown, fail)`.
 
 ### -table
 
@@ -629,6 +640,10 @@ mode, and `b"…"`/`b'…'` are always [codes](bytes_as_lists.md).
 | `chars` | the string `"hello"`, which *is* the list `['h','e','l','l','o']`; `atom("hello")` is false, `string("hello")` is true | the engine **default** (since 2026-09-26, as in Scryer and Trealla) |
 | `atom` | the atom `hello` — the same term as bare `hello` and as `'hello'` | the **opt-out** for a module that still relies on the old reading |
 | `codes` | — | **refused**. Codes are spelled `b"…"`. Any other argument is likewise an error. |
+
+`-set_prolog_flag(double_quotes, Mode)` is the same directive in ISO's
+spelling, and `current_prolog_flag(double_quotes, M)` reports the module's mode
+([Prolog Flags](flags.md)).
 
 The directive is **file-scoped and position-sensitive**: it governs the
 literals written below it, so it belongs at the top of the file, above the

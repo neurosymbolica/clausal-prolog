@@ -91,7 +91,7 @@ def test_money_at_names_a_column_other_than_the_last(tmp_path):
     m = _load(tmp_path, "at3", """
         -double_quotes(atom)
         -module(at3, [entry/4])
-        -implicit_atoms
+        -private([revenue, assets])
         -import_from(united_states, [usd, usd_cent])
         -constants_number_currency(entry/4,
                                    [(revenue, 1900, 250000000000, "s45A"),
@@ -153,7 +153,7 @@ def test_a_non_numeric_money_cell_is_refused(tmp_path):
     """Same claim the single-value form enforces: only numbers carry units."""
     with pytest.raises(SyntaxError, match="number"):
         _load(tmp_path, "nonnum", """
-            -implicit_atoms
+            -private([not_a_number])
             -import_from(united_states, [usd, usd_cent])
             -constants_number_currency(t/2,
                                        [(1, not_a_number)],
@@ -187,7 +187,7 @@ def test_the_units_form_takes_any_unit(tmp_path):
         -constants_number_units(span/2,
                                 [(short, 5), (long, 900)],
                                 metre, number_at(2))
-        -implicit_atoms
+        -private([short, long])
     """)
     rows = _rows(m, "span", 2)
     from clausal.modules.units import metre

@@ -162,7 +162,9 @@ CLP_ROWS = [
 
 @pytest.fixture(scope="module")
 def clp_mod():
-    src = ("-allow_singletons\n-implicit_atoms\n-implicit_functors\n" + "".join(
+    # ``foo`` is used both bare (row 4) and applied (rows 1-3), so it is
+    # declared as the atom AND as the data functor foo/1.
+    src = ("-allow_singletons\n-private([foo, foo(_)])\n-implicit_functors\n" + "".join(
         f"c{i}(X) <- ({body}),\n" for i, (body, _, _) in enumerate(CLP_ROWS)))
     with tempfile.NamedTemporaryFile(suffix=".clausal", mode="w",
                                      delete=False) as f:

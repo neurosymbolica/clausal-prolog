@@ -297,7 +297,7 @@ test("sum_list exists") <- (
 
 test("pairs_keys_values exists") <- (
     pairs_keys_values(P, [1, 2], ["a", "b"]),
-    P == [[1, "a"], [2, "b"]]
+    P == ['-'(1, "a"), '-'(2, "b")]
 )  # nv
 
 # ── Higher-Order List Predicates ─────────────────────────────────────────────

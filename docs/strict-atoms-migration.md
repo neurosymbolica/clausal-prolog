@@ -1,11 +1,9 @@
 # Migrating to strict-atoms-by-default
 
-> **`-implicit_atoms` is deprecated as of 2026-09-18.** It still works and
-> still opts a file out of strict resolution, but loading such a file emits
-> `ClausalImplicitAtomsDeprecationWarning` (a `DeprecationWarning`, so shown
-> only where your warning filters show those — run with `-W default` to see
-> every file named). This guide is how to get off it: declare the names, then
-> delete the directive.
+> **`-implicit_atoms` was removed before 1.0.** A file that still carries it
+> does not load: `SyntaxError: -implicit_atoms was removed; declare atoms with
+> -private([...]) or quote them`. This guide is how to get off it: delete the
+> directive, then declare (or quote) the names the diagnostic reports.
 
 
 ## What changed
@@ -35,9 +33,9 @@ strict_atoms: undeclared atom 'pending' in orders
     - obtained via global_atom('atom', Atom)
 ```
 
-The opt-out is the **`-implicit_atoms`** directive, which restores the old
-auto-mint behavior for a single file. It is a migration stop-gap and is itself
-deprecated (see the note at the top).
+There is no opt-out. The **`-implicit_atoms`** directive, which used to restore
+the old auto-mint behavior for a single file, was removed before 1.0 (see the
+note at the top).
 
 The old `-strict_atoms` directive is now redundant (strict is the default). It
 still works but is **deprecated** and emits a one-per-process
@@ -57,7 +55,7 @@ still works but is **deprecated** and emits a one-per-process
 
 Note on **dict-literal keys**: a bare atom used as a dict key (`{sky: 1}`) is
 treated exactly like any other bare atom — it **raises** under the strict
-default and must be declared or reached via `-implicit_atoms`. This holds for
+default and must be declared. This holds for
 both the compile-time source path and the runtime atom-intern path (they share
 the strict-by-default rule), so a dict-key atom and a value-position atom behave
 identically.
@@ -69,41 +67,12 @@ break. To find them, load your program (or run your test suite) and look for
 `strict_atoms: undeclared atom ...` `NameError`s. Files that already declare
 their atoms, use strings for data, or only use arity-≥1 predicates need nothing.
 
-## Two migration paths
+## How to migrate
 
-You do not have to choose one for the whole repo — the recommended approach is
-to bulk-apply the safe path first, then adopt strictness incrementally where it
-pays off. This mirrors how Clausal migrated its own tree.
+### Declare the atoms
 
-### Path A — Fastest, zero behavior change: bulk `-implicit_atoms`
-
-Add `-implicit_atoms` to every source file, restoring the old loose behavior
-everywhere. Nothing changes semantically; you just become explicit about it.
-Treat it as a temporary baseline: the directive is deprecated, so plan to
-follow with Path B.
-
-Upstream ships the exact codemod it used on its own tree:
-
-```bash
-# from your own checkout, pointed at your repo's source dirs
-python /path/to/clausal/tools/codemods/add_implicit_atoms.py src rules fixtures
-```
-
-The codemod:
-
-- inserts `-implicit_atoms` before the first non-comment line of each `.clausal`
-  file that does not already carry `-strict_atoms` or `-implicit_atoms`,
-- is **idempotent** (safe to re-run), and
-- skips byte-exact snapshot directories (its `_SKIP_DIRS`) — adjust that set for
-  your repo if you have generated `.clausal` output you compare as text.
-
-After running it, your suite should be green with no behavior change. Commit that
-as a mechanical baseline, then move to Path B on the files that matter.
-
-### Path B — Recommended, gain the typo safety: declare atoms
-
-For files where atom-spelling correctness matters (rule sets, decision logic),
-remove `-implicit_atoms` and let the diagnostic tell you which atoms to declare.
+Remove `-implicit_atoms` if a file still carries it, load the file, and let the
+diagnostic tell you which atoms to declare.
 For each reported atom, pick the right home:
 
 | Situation | Fix |
@@ -154,7 +123,7 @@ route gives you too.
 
 ## Reference
 
-- Directives: [`-implicit_atoms`](directives.md#-implicit_atoms),
+- Directives: [`-implicit_atoms`](directives.md#-implicit_atoms) (removed),
   [`-strict_atoms`](directives.md#-strict_atoms) (deprecated),
   `-module` / `-private` / `-import_from` /
   [`-hide`](directives.md#-hide) (module-private atoms, since the

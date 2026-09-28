@@ -223,6 +223,25 @@ where it governs the clauses below it: `atom` becomes
 it is not written twice; `codes` has no Clausal mode (codes are spelled
 `b"…"` at the literal) and is emitted as a comment.
 
+Any other `:- set_prolog_flag(Flag, Value).` is carried across as the
+directive [`-set_prolog_flag(Flag, 'Value')`](directives.md#-set_prolog_flag)
+(the value quoted, so `fail` stays an atom). A setting the engine refuses
+(`unknown` = `fail`, say) is then a load-time error; see [Prolog Flags](flags.md).
+
+### ISO assert: `assert_creates_dynamic` is on
+
+Every imported `.pl` module starts with the flag
+[`assert_creates_dynamic`](flags.md#assert_creates_dynamic) set to `true`, so
+the imported code gets ISO's assert (7.5.2(2)): `assertz(counter(0))` creates
+`counter/1` as a dynamic procedure the first time, with no `:- dynamic`
+declaration. A static predicate, a builtin and a declared data functor are
+still refused with `permission_error(modify, static_procedure, PI)`.
+`.clausal` and `.seam` modules keep the declare-first default (`false`).
+
+The default is set by the loader, not written into the translation. A
+`:- set_prolog_flag(assert_creates_dynamic, false).` in the file turns it
+off for that module.
+
 ---
 
 ## Loading `.pl` files programmatically
@@ -352,8 +371,9 @@ renamed to `_pi`.)
 - **Arithmetic follows today's Clausal operators, not ISO's.** `Y is X / 2`
   becomes `eval_(X / 2, Y)`, and `=:=` becomes the constraint `==` (see
   [Operators](operators.md)).
-- **No cut, no if-then-else** (above), and no streams, `op/3` or flags
-  beyond `double_quotes`.
+- **No cut, no if-then-else** (above), and no streams or `op/3`. The ISO
+  flags are there ([Prolog Flags](flags.md)), but `unknown` can only be
+  `error`.
 
 ## Caveats
 

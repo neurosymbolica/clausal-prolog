@@ -15,9 +15,10 @@ def mod():
     """Module with character-level predicates for higher-order tests."""
     with tempfile.NamedTemporaryFile(suffix=".clausal", mode="w", delete=False) as f:
         f.write(
-            '-double_quotes(atom)\n-implicit_atoms\n'  # upper is a bare atom arg to char_type/2, not declared
+            '-double_quotes(atom)\n'
             '-module(ho_str, [is_vowel(_c), is_upper(_c),'
             ' char_to_code(_c, _code), concat_chars(_c, _acc, _out)])\n'
+            '-private([upper])\n'  # upper is a bare atom arg to char_type/2
             'is_vowel(_c) <- in_(_c, ["a", "e", "i", "o", "u"])\n'
             'is_upper(_c) <- (char_type(_c, upper))\n'
             'char_to_code(_c, _code) <- char_code(_c, _code)\n'

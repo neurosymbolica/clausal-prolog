@@ -81,8 +81,7 @@ since a bare `str` is now an atom.
 
 `atom(X)` — succeeds if `X` is an atom: a bare identifier such as `red`, or a
 single-quoted spelling such as `'hello world'`. Bare atoms must be declared
-(`-private([red])`, `-module(m, [red])`, an import) unless the file carries
-[`-implicit_atoms`](directives.md#-implicit_atoms).
+(`-private([red])`, `-module(m, [red])`, an import).
 
 ```clausal
 -private([red, blue])
