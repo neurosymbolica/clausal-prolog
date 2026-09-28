@@ -136,6 +136,15 @@ since 0.4.0 finish three moves:
   `-import_from`ed atom is not included, and the answer does not depend on
   import order. See
   [docs/python_integration.md](docs/python_integration.md#listing-the-atoms-a-module-declares-declared_atoms).
+- **CLP(ℝ) `inf/2` and `sup/2`**: the bounds of an expression over real
+  variables, read from the store without changing it; they fail when
+  unbounded. (They used to reach the CLP(ℚ) solver, which knew nothing of
+  a real variable: `in_real(X, 0.0, 10.0), X >= 2.5, inf(X, I)` gave
+  `I = 0`.) See [docs/clpr.md](docs/clpr.md).
+- **`Module.declare_dynamic(name, arity)`**, the Python spelling of
+  `-dynamic(name/arity)`, so a `Module` built from Python can take an
+  `assertz`. Idempotent; its errors are ISO `dynamic/1`'s. See
+  [docs/database_ops.md](docs/database_ops.md).
 - **Prolog flags.** `set_prolog_flag/2` and `current_prolog_flag/2` with the
   ISO flags (`bounded`, `max_integer`, `min_integer`,
   `integer_rounding_function`, `char_conversion`, `debug`, `max_arity`,
@@ -308,6 +317,31 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
   `1` from `1.0`.
 - **Validation:** `global_atom/2` raises `type_error(atom, Name)` instead of
   failing silently.
+- **A bare builtin name in a data position is the atom** (`integer`,
+  `assertz`, `in_`), as in every Prolog: `must_be(integer, 3)` succeeds
+  (it raised `type_error(atom, <builtin integer/1>)`), `X is assertz` binds
+  the atom `assertz`, and `call(in_, X, [1])` answers `X = 1` instead of
+  leaking a Python `TypeError`. A meta-argument (`call/N`, `maplist`'s
+  closure) receives the atom and resolves it when called.
+- **A package whose `__init__` is a `.clausal` file** loads as a Clausal
+  package even when it is imported before `clausal.import_hook`; it used to
+  become an empty namespace package, and its `-import_from` of sibling
+  files never ran.
+- **A top-level `--goal` over a predicate of the same file** (which runs
+  before the file's clauses are compiled) raises
+  `existence_error(procedure, p/1)` with a message giving the file and
+  line and the fix, instead of a bare "not defined".
+- **sqlite: TEXT columns are strings in every row shape.** A multi-column
+  row from `query/3,4` used to carry its TEXT columns as atoms (so
+  `SELECT name, age` gave `('alice', 30)`, which is also the compound
+  `alice(30)`); it is now `("alice", 30)`, as a single-column row already
+  was.
+- **The Prolog exporter keeps `!=` a constraint.** It wrote `X != Y` as the
+  plain test `\==` (or `=\=` beside arithmetic), which differs whenever an
+  argument is unbound. A numeric `!=` (an integer literal or arithmetic on
+  either side) is now clpz's `#\=`, imported beside `#=`; any other is
+  `dif/2`. `is not` stays `dif/2`. See
+  [docs/prolog_translation.md](docs/prolog_translation.md).
 
 ### Migration guide: 0.x to 1.0
 

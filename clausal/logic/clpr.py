@@ -930,6 +930,44 @@ def _is_expr(x) -> bool:
 # ── Labeling: bisection search ────────────────────────────────────────────────
 
 
+# ── Reading bounds: inf/2, sup/2 (ruling R17) ────────────────────────────────
+
+
+def is_real_expression(expr, context: str) -> bool:
+    """True if *expr* mentions a variable with a CLP(R) interval -- the test
+    ``inf/2``/``sup/2`` use to answer from CLP(R) rather than CLP(Q)."""
+    vars_list: list = []
+    _collect_vars_from(_expr_node(expr, context), vars_list)
+    return any(is_var(v := deref(x)) and get_attr(v, REAL_KEY) is not None
+               for x in vars_list)
+
+
+def _expr_node(expr, context):
+    """*expr* with arithmetic cells as operator nodes (``type_error(evaluable,
+    F/N)`` for anything else), as the constraint posters see it."""
+    return _cells_as_nodes(deref(expr), 0, context)[0]
+
+
+def real_bound(expr, result, trail: Trail, which: str) -> bool:
+    """``inf(Expr, Inf)`` (*which* ``"inf"``) or ``sup(Expr, Sup)``: unify
+    *result* with the lower (upper) bound CLP(R) has established for *expr*,
+    as a float; FAIL when it is unbounded on that side.  Reads the store and
+    never changes it, as the classic CLP(R) ``inf/2`` and ``sup/2`` do.
+
+    The bound is the one interval propagation has PROVEN: sound (the true
+    infimum is never below ``inf``), and exact for a variable whose bounds
+    propagation fixed, but it can be looser than the true infimum where
+    interval arithmetic over-approximates (``X - X`` over ``[0, 1]`` is
+    ``[-1, 1]``) -- this solver narrows intervals, it is not a simplex.
+    """
+    context = f"{which}/2"
+    lo, hi = _expr_interval(_expr_node(expr, context), trail)
+    bound = lo if which == "inf" else hi
+    if math.isinf(bound) or math.isnan(bound):
+        return False
+    return unify(result, bound, trail)
+
+
 def label_real(vars_list, trail: Trail, eps: float | None = None):
     """Bisect real intervals until IEEE-point or eps width.
 

@@ -62,12 +62,24 @@ class _LazyHookFinder(MetaPathFinder):
             if found:
                 return self._activate_and_retry(fullname, path, target)
 
-        # Condition 3: .clausal (or .seam), or .pl, file on sys.path
+        # Condition 3: .clausal (or .seam), or .pl, file on sys.path -- or a
+        # package directory whose ``__init__`` is one (``tail/__init__.clausal``).
+        # Without the package form, PathFinder claimed such a directory as a
+        # PEP 420 namespace package when it was imported before
+        # ``clausal.import_hook`` had loaded: no ``__init__`` ran, so no
+        # ``__clausal_module__`` and no ``-import_from`` of its siblings.
         tail = fullname.rsplit(".", 1)[-1]
         search_dirs = path if path else sys.path
         for d in search_dirs:
+            if not isinstance(d, str):
+                continue
             if any(os.path.isfile(os.path.join(d, tail + suffix))
                    for suffix in SOURCE_SUFFIXES):
+                return self._activate_and_retry(fullname, path, target)
+            pkg_dir = os.path.join(d, tail)
+            if os.path.isdir(pkg_dir) and any(
+                    os.path.isfile(os.path.join(pkg_dir, "__init__" + suffix))
+                    for suffix in SOURCE_SUFFIXES):
                 return self._activate_and_retry(fullname, path, target)
 
         return None

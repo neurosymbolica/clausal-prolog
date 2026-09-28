@@ -131,6 +131,7 @@ from clausal import (
 | `Var` | `Var()` | `.value`, and `int()` / `float()` / `bool()` / `str()` / f-string coercion. |
 | `Trail` | `Trail()` | Pass one explicitly to keep a residual constraint store. |
 | `Module` | `Module(name)` | A logic module. `module=` also accepts an imported `.clausal` module or a dotted name. |
+| `Module.declare_dynamic` | `m.declare_dynamic(name, arity) -> None` | Declares `name/arity` dynamic, as `-dynamic(name/arity)` does. Idempotent; ISO `dynamic/1` errors. See [Database Operations](database_ops.md). |
 | `deref`, `unify` | `deref(term)`, `unify(a, b, trail) -> bool` | |
 | `LogicException` | `.term` is the thrown term; `.message` is the prose or `None` | Every `throw/1` and ISO error that reaches Python. |
 | `UnboundVarCoercionError` | subclass of `TypeError` | |

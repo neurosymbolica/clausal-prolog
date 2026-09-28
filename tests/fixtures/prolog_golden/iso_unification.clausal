@@ -26,15 +26,15 @@ test('same atom: is not fails') <- (_x is a, not dif(_x, a))
 
 test('same atom ==') <- ('=='(a, a))
 
-test('different atoms == fails') <- ('\\=='(a, b))
+test('different atoms == fails') <- (dif(a, b))
 
 test('same integer ==') <- (42 == 42)
 
 test('bound var == value') <- (_x is hello, '=='(_x, hello))
 
-test('different atoms !=') <- ('\\=='(a, b))
+test('different atoms !=') <- (dif(a, b))
 
-test('same atom != fails') <- (not '\\=='(a, a))
+test('same atom != fails') <- (not dif(a, a))
 
 test('same_value: integers') <- (same_value(42, 42))
 
@@ -66,9 +66,9 @@ test('two fresh vars: X == Y (CLP(FD) posts)') <- (_X_UNUSED == _Y_UNUSED)
 
 test('same var: X == X') <- (X == X)
 
-test('var != atom raises catchable type_error') <- (catch(('\\=='(_X_UNUSED, a), False), _, True))
+test('var != atom raises catchable type_error') <- (catch((dif(_X_UNUSED, a), False), _, True))
 
-test('two fresh vars: X != Y') <- ('\\=='(_X_UNUSED, _Y_UNUSED))
+test('two fresh vars: X != Y') <- (dif(_X_UNUSED, _Y_UNUSED))
 
 test('structural_eq: a == a') <- (structural_eq(a, a))
 

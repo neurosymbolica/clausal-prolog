@@ -207,6 +207,30 @@ def _lowering_db():
     return namespace_db(namespace)
 
 
+def _is_unshadowed_builtin_name(name: str, namespace: dict) -> bool:
+    """True iff *name* is a registered builtin predicate name that
+    *namespace* does not rebind to a value of its own (ruling R12).
+
+    Unshadowed means: unbound in the module, or bound to the builtin's own
+    ``BuiltinTerm``/``BuiltinPredicate``, or to the injected runtime entry of
+    the same name (``assertz``/``in_`` are also syntax-node classes there).
+    A genuine Python import or assignment under a builtin's name is the
+    user's value and keeps its load.
+    """
+    from clausal.logic.builtins._registry import (  # noqa: PLC0415
+        _BUILTIN_CLASSES, BuiltinPredicate, BuiltinTerm,
+    )
+    if name not in _BUILTIN_CLASSES:
+        return False
+    if name not in namespace:
+        return True
+    bound = namespace[name]
+    if isinstance(bound, (BuiltinTerm, BuiltinPredicate)):
+        return True
+    from clausal.import_hook import runtime_builtins  # noqa: PLC0415
+    return name in runtime_builtins and bound is runtime_builtins[name]
+
+
 def lowering_globals() -> "dict | None":
     """The namespace the innermost open compile targets, or None.
 
@@ -911,6 +935,15 @@ def term_to_ast_expr(
                 # in this namespace -- never ``p``, which here may name a
                 # DIFFERENT local predicate (roborev, 2026-09-25; Scryer
                 # passes ``q``).
+                return ast.Constant(value=_mint_atom(term.name))
+            # Ruling R12 (2026-09-29): a bare BUILTIN name in data position
+            # is the atom too, as in every Prolog -- ``must_be(integer, X)``
+            # passes the atom ``integer``, not the builtin's dispatch object,
+            # and ``X is assertz`` binds the atom, not a syntax-node class.
+            # A meta-argument (call/N, maplist's closure, findall's goal) gets
+            # the atom as well and resolves it by name at call time, exactly
+            # as it does a user predicate's atom (the arm just above).
+            if _is_unshadowed_builtin_name(term.name, namespace):
                 return ast.Constant(value=_mint_atom(term.name))
         return _name(term.name)
 

@@ -269,7 +269,16 @@ def _entailed__1(constraint_expr, trail, k):
 
 @_builtin("sup", 2)
 def _sup__2(expr, result, trail, k):
-    """sup(Expr, Sup) — compute supremum without committing."""
+    """sup(Expr, Sup) — compute supremum without committing.
+
+    CLP(R) when *Expr* mentions a real-domain variable (ruling R17: the
+    upper bound propagation has established, a float; fails when unbounded),
+    CLP(Q) otherwise."""
+    from clausal.logic.clpr import is_real_expression, real_bound  # noqa: PLC0415
+    if is_real_expression(expr, "sup/2"):
+        if real_bound(expr, result, trail, "sup"):
+            yield None
+        return
     from clausal.logic.clpq import sup as _sup_fn  # noqa: PLC0415
     if _sup_fn(expr, result, trail):
         yield None
@@ -277,7 +286,15 @@ def _sup__2(expr, result, trail, k):
 
 @_builtin("inf", 2)
 def _inf__2(expr, result, trail, k):
-    """inf(Expr, Inf) — compute infimum without committing."""
+    """inf(Expr, Inf) — compute infimum without committing.
+
+    CLP(R) when *Expr* mentions a real-domain variable (ruling R17), CLP(Q)
+    otherwise; see ``sup/2``."""
+    from clausal.logic.clpr import is_real_expression, real_bound  # noqa: PLC0415
+    if is_real_expression(expr, "inf/2"):
+        if real_bound(expr, result, trail, "inf"):
+            yield None
+        return
     from clausal.logic.clpq import inf as _inf_fn  # noqa: PLC0415
     if _inf_fn(expr, result, trail):
         yield None

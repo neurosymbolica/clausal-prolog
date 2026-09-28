@@ -65,8 +65,10 @@ positions, exports, undefined and constrained answers, the lints — are in
 [Goal position](#goal-position-if-goal-for-in-goal) below.
 
 A top-level `--goal` over a predicate defined **in the same file** runs
-before that file's clauses are compiled, and fails; put it in a function, as
-above, or query an imported predicate.
+while the file is still loading, before its clauses are compiled, so it
+raises `existence_error(procedure, p/1)` with a message naming the file and
+line and saying so. Put the query in a function called after the load, as
+above, or query the predicate from another file that imports it.
 
 ### From a plain `.py` file: `solve`, `once`, `call`
 
