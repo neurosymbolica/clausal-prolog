@@ -305,6 +305,18 @@ LO_ROWS = [
      ["error(domain_error(not_less_than_zero,-1),length/2)"]),
     ("length non-integer", "length([a], 'b'), R is 1",
      "length([a], b), R = 1", 3, ["error(type_error(integer,b),length/2)"]),
+    ("length atom true", "length(L, 'true'), R is L", "length(L, true), R = L", 3,
+     ["error(type_error(integer,true),length/2)"]),
+    ("length atom", "length(L, 'b'), R is L", "length(L, b), R = L", 3,
+     ["error(type_error(integer,b),length/2)"]),
+    ("length float", "length(L, 1.0), R is L", "length(L, 1.0), R = L", 3,
+     ["error(type_error(integer,1.0),length/2)"]),
+    ("length proper float", "length(['a'], 1.0), R is 1",
+     "length([a], 1.0), R = 1", 3, ["error(type_error(integer,1.0),length/2)"]),
+    ("length partial atom true", "length(['a', *T], 'true'), R is T",
+     "length([a|T], true), R = T", 3, ["error(type_error(integer,true),length/2)"]),
+    ("length compound", "length(L, [1]), R is L", "length(L, [1]), R = L", 3,
+     ["error(type_error(integer,[1]),length/2)"]),
     ("length self", "length(L, L), R is L", "length(L, L), R = L", 3,
      ["error(resource_error(finite_memory),length/2)"]),
     ("member 1 open", "in_(1, L), R is L", "member(1, L), R = L", 3,
@@ -517,6 +529,18 @@ def test_bagof_oracle(scryer):
 #: none, so there is ONE bag.  Scryer answers [1]; [2]; [3]: its
 #: ``findall_with_existential`` makes the existential variable the witness
 #: when the template already holds it.
+def test_length_bool_is_a_type_error(tmp_path):
+    """Clausal's ``True``/``False`` literals are no integers either (the
+    engine-only half of the ``length(L, true)`` rows above)."""
+    mod = _load_seam(tmp_path, "_iso_ans_lb", "-allow_singletons\n",
+                     [("", "length(L, True), R is L", "", 3, []),
+                      ("", "length([1], False), R is 1", "", 3, [])])
+    assert _engine_answers(mod, "r0", 3) == [
+        "error(type_error(integer,True),length/2)"]
+    assert _engine_answers(mod, "r1", 3) == [
+        "error(type_error(integer,False),length/2)"]
+
+
 BG_DEVIATIONS = [
     ("template variable under ^", "bagof(Y, Y ^ p(Y), L), R is L", ["[1,2,3]"]),
 ]

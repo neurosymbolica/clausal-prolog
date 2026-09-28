@@ -429,12 +429,10 @@ def _append__3(this_generator, _proceed, _fail, _catcher, l1, l2, l3, trail):
 
 
 def _length_n_error(n_val):
-    """The prologue's errors for length/2's N (Scryer too), or nothing for an
-    N that is merely the wrong integer: ``type_error(integer, N)`` for a
-    non-integer, ``domain_error(not_less_than_zero, N)`` for a negative one.
-    A bool is no length and no error (A09-F015): it just fails."""
-    if isinstance(n_val, bool):
-        return
+    """The prologue's errors for length/2's N (ISO, Scryer):
+    ``type_error(integer, N)`` for a non-integer -- a bool included, which
+    is no integer (``length(L, True)`` used to fail silently, A09-F015) --
+    and ``domain_error(not_less_than_zero, N)`` for a negative one."""
     from clausal.logic.exceptions import (  # noqa: PLC0415
         LogicException, domain_error, type_error,
     )
@@ -485,8 +483,8 @@ def _length__2(this_generator, _proceed, _fail, _catcher, lst, n, trail):
         return
     prefix, tail = skel
     if not is_var(n_val):
-        # ``length([a, *T], 3)``: T is two fresh elements (bool: no length).
-        if _is_int(n_val) and n_val >= len(prefix):
+        # ``length([a, *T], 3)``: T is two fresh elements.
+        if n_val >= len(prefix):
             mark = trail.mark()
             if unify(tail, [Var() for _ in range(n_val - len(prefix))], trail):
                 yield (_proceed, None)

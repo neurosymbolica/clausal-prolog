@@ -543,8 +543,13 @@ def test_F014_regression_char_type_c_path_non_ascii(fix):
 # ═══════════════════════════════════════════════════════════════════════════
 
 def test_F015_length_bool(fix):
+    # A bool is no integer: ISO/Scryer type_error(integer, N), not the silent
+    # failure this used to pin (2026-09-28).
     _, m = fix
-    assert not _first(m, "length", Var(), True)
+    for n in (True, False):
+        with pytest.raises(LogicException) as ei:
+            _first(m, "length", Var(), n)
+        assert ei.value.term[1] == ("type_error", "integer", n)
 
 
 def test_F015_list_item_bool_index(fix):
