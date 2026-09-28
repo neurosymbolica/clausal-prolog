@@ -44,13 +44,15 @@ since 0.4.0 finish three moves:
   operand. A Python `str` reached through a variable is an atom there and
   raises; write `X is ++(expr)` to evaluate Python.
 - **`clausal.__all__` is smaller.** `make_predicate` and
-  `MakePredicateRetiredError` are gone, and the builtin objects whose names
+  `MakePredicateRetiredError` are gone. `Database`, `Clause`,
+  `structural_unify` and `get_builtin_class` are internal and no longer
+  listed (they stay attributes of `clausal`). The builtin objects whose names
   are not Python identifiers (`'#='`, `'=..'`, `'@<'`, `is`, …) and the
   dotted solver predicates (`z3.*`, `clpq.*`, `ortools.*`, …) are no longer
-  listed. They stay attributes of `clausal` and callable from `.clausal`
-  source; only `from clausal import *` stops binding them.
-- **The packages under `packages/` pin an exact Clausal minor**
-  (`clausal>=1.0,<1.1`), because some of them use internal helpers.
+  listed either. They stay attributes of `clausal` and callable from
+  `.clausal` source; only `from clausal import *` stops binding them.
+- **At the 1.0 release, the packages under `packages/` pin an exact Clausal
+  minor** (`clausal>=1.0,<1.1`), because some of them use internal helpers.
 - **An atom is a Python `str`, and a string is the carrier
   `('$chars', text)`.** Answers, `++` arguments and the converters all follow
   this. The 1-tuple `('x',)` is reserved.

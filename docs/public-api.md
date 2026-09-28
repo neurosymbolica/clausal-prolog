@@ -271,8 +271,16 @@ Two known gaps in the atom-class deprecation:
 
 ### Exported by `clausal` but not covered
 
-These names are in `clausal.__all__` for convenience. They are internal and
-may change in a minor release:
+The builtin objects with a Python-identifier name (`append`, `between`,
+`length`, …) are in `clausal.__all__` for convenience. Each builds the goal
+cell for its builtin (`between(1, 3, X)` is `('between', 1, 3, X)`). The
+predicates are covered by 1.2; the Python objects are internal and may
+change in a minor release.
+
+### Attributes of `clausal` that are internal
+
+These are attributes of the `clausal` module but are not in
+`clausal.__all__` and are not covered:
 
 | Name | What it is | Use instead |
 |---|---|---|
@@ -280,7 +288,6 @@ may change in a minor release:
 | `Clause` | a stored clause record | |
 | `structural_unify` | the unifier behind `=`, taking a `trail` | `unify` |
 | `get_builtin_class` | looks up a builtin's object by functor | |
-| the builtin objects with a Python-identifier name (`append`, `between`, `length`, …) | each builds the goal cell for its builtin: `between(1, 3, X)` is `('between', 1, 3, X)` | the cell itself; the predicates are covered by 1.2 |
 
 A builtin whose name is not a Python identifier (`'#='`, `'=..'`, `'@<'`, …)
 and the dotted solver predicates (`z3.*`, `ortools.*`, `pysat.*`, `clpq.*`,
@@ -293,8 +300,9 @@ source as before.
 The packages under `packages/` are versioned independently. Some of them use
 internal helpers (`clausal.modules.py.ModulePredicate`,
 `simple_to_trampoline`, `clausal.logic.builtins._helpers`, the exporter), so
-each one pins an exact **minor** release of Clausal: a package built for
-1.0 requires `clausal>=1.0,<1.1`, and is re-released for each Clausal minor.
+at the 1.0 release each one pins an exact **minor** release of Clausal: a
+package built for 1.0 requires `clausal>=1.0,<1.1`, and is re-released for
+each Clausal minor.
 
 ### Not part of 1.0
 

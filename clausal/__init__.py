@@ -71,8 +71,6 @@ __all__ = [
     "once",
     # Runtime objects
     "Module",
-    "Database",
-    "Clause",
     "Var",
     "Trail",
     "Quantity",
@@ -80,7 +78,6 @@ __all__ = [
     "deref",
     "unify",
     "UnboundVarCoercionError",
-    "structural_unify",
     "LogicException",
     # Reading and building a term from Python (a compound term is the cell
     # ``(functor, *args)``, 2026-09-27): an error term is the cell
@@ -93,9 +90,10 @@ __all__ = [
     "to_python",
     "to_clausal",
     "term_key",
-    "get_builtin_class",
     "Solutions",
     "query_wfs",
+    # ``Database``, ``Clause``, ``structural_unify`` and ``get_builtin_class``
+    # stay module attributes but are internal, so they are not listed here.
     # The builtin predicate objects whose names are Python identifiers.  An
     # operator spelling ('#=', '=..') or a dotted solver name ('z3.sat',
     # 'clpq.minimize') is still a module attribute (getattr works) and still
