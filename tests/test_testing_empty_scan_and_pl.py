@@ -338,6 +338,20 @@ def test_cli_honours_conftest_collect_ignore_paths(capsys, tmp_path):
     assert "1 passed, 0 failed [PASSED]" in out, out
 
 
+def test_annotated_and_extended_conftest_lists_are_read(capsys, tmp_path):
+    (tmp_path / "conftest.py").write_text(
+        'collect_ignore_glob: list[str] = ["*.pl"]\n'
+        'collect_ignore = []\n'
+        'collect_ignore += ["broken.clausal"]\n')
+    (tmp_path / "ok.clausal").write_text(PASSING_CLAUSAL)
+    (tmp_path / "broken.clausal").write_text("this is not clausal (\n")
+    (tmp_path / "input.pl").write_text(BROKEN_PL)
+    rc, out, _ = _run(capsys, ["-v", str(tmp_path)])
+    assert rc == EXIT_OK, out
+    assert "broken.clausal  (ignored by conftest.py)" in out, out
+    assert "input.pl  (ignored by conftest.py)" in out, out
+
+
 def test_a_computed_conftest_list_is_not_executed(capsys, tmp_path):
     """The CLI reads literal lists only; it never runs a conftest."""
     (tmp_path / "conftest.py").write_text(

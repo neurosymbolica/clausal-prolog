@@ -2706,8 +2706,9 @@ def _conftest_ignores(directory: Path) -> tuple[list[Path], list[str]]:
     ``conftest.py`` in *directory* gives the pytest plugin, anchored at
     *directory* the way pytest anchors them.
 
-    Read, never executed: only a top-level assignment of a LITERAL list (or
-    tuple) is understood, via ``ast.literal_eval``.  Running a conftest to
+    Read, never executed: only a top-level ``x = [...]``, ``x: T = [...]``
+    or ``x += [...]`` with a LITERAL list (or tuple) is understood, via
+    ``ast.literal_eval``.  Running a conftest to
     compute its lists would import pytest and whatever else it imports into a
     CLI run that does not use pytest; every in-repo conftest that sets these
     names sets them to literals.  A computed value is not read (that
@@ -2721,13 +2722,21 @@ def _conftest_ignores(directory: Path) -> tuple[list[Path], list[str]]:
         tree = ast.parse(conftest.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, SyntaxError, ValueError):
         return [], []
-    paths: list[Path] = []
-    globs: list[str] = []
+    lists: dict[str, list[str]] = {"collect_ignore": [],
+                                   "collect_ignore_glob": []}
     for node in tree.body:
-        if not (isinstance(node, ast.Assign) and len(node.targets) == 1
-                and isinstance(node.targets[0], ast.Name)
-                and node.targets[0].id in ("collect_ignore",
-                                           "collect_ignore_glob")):
+        # ``x = [...]``, ``x: list[str] = [...]`` and ``x += [...]``, at top
+        # level; anything else (a conditional append, a computed value) is
+        # not read.
+        if isinstance(node, ast.Assign) and len(node.targets) == 1:
+            target, extend = node.targets[0], False
+        elif isinstance(node, ast.AnnAssign) and node.value is not None:
+            target, extend = node.target, False
+        elif isinstance(node, ast.AugAssign) and isinstance(node.op, ast.Add):
+            target, extend = node.target, True
+        else:
+            continue
+        if not (isinstance(target, ast.Name) and target.id in lists):
             continue
         try:
             value = ast.literal_eval(node.value)
@@ -2736,12 +2745,13 @@ def _conftest_ignores(directory: Path) -> tuple[list[Path], list[str]]:
             continue
         if not isinstance(value, (list, tuple)):
             continue
-        entries = [str(v) for v in value if isinstance(v, (str, os.PathLike))]
-        if node.targets[0].id == "collect_ignore":
-            paths = [directory / e for e in entries]
+        entries = [v for v in value if isinstance(v, str)]
+        if extend:
+            lists[target.id].extend(entries)
         else:
-            globs = [str(directory / e) for e in entries]
-    return paths, globs
+            lists[target.id] = entries
+    return ([directory / e for e in lists["collect_ignore"]],
+            [str(directory / e) for e in lists["collect_ignore_glob"]])
 
 
 def _ignored_by_conftests(path: Path, root: Path,

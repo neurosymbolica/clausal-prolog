@@ -76,7 +76,8 @@ def test_export_at_the_clause_arity_is_silent(load):
 
 
 def test_export_of_a_name_with_no_clauses_is_silent(load):
-    # Ruling 2026-09-25: a clause-less exported name/N is a procedure.
+    # Ruling 2026-09-25: a clause-less exported name/N is a procedure (the
+    # reason the 2026-09-29 ruling made this lint a warning, not an error).
     _mod, _path, caught = load("eam_none", "-module(eam_none, [nothing/3])\n")
     assert caught == []
 

@@ -42,7 +42,7 @@ PKG_ATOMS = frozenset({"red", "green", "hidden_a", "circle", "pkg_own"})
 
 
 @pytest.fixture
-def tree(tmp_path):
+def tree(tmp_path, request):
     (tmp_path / "da_vocab.clausal").write_text(VOCAB)
     pkg = tmp_path / "da_pkg"
     pkg.mkdir()
@@ -53,17 +53,25 @@ def tree(tmp_path):
     def load(order):
         """Import *order* on a clean slate; returns an evict() callable."""
         before = set(sys.modules)
+        done = []
+
+        def evict():
+            if done:
+                return
+            done.append(True)
+            for name in list(sys.modules):
+                if name not in before:
+                    sys.modules.pop(name, None)
+            if str(tmp_path) in sys.path:
+                sys.path.remove(str(tmp_path))
+            importlib.invalidate_caches()
+
+        # Registered before importing, so a failed import still cleans up.
+        request.addfinalizer(evict)
         sys.path.insert(0, str(tmp_path))
         importlib.invalidate_caches()
         for name in order:
             importlib.import_module(name)
-
-        def evict():
-            for name in list(sys.modules):
-                if name not in before:
-                    sys.modules.pop(name, None)
-            sys.path.remove(str(tmp_path))
-            importlib.invalidate_caches()
         return evict
 
     return load
