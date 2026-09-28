@@ -1,10 +1,11 @@
 """clausal.testing — test runner for .clausal predicate modules.
 
-Discovers test/1 clauses in .clausal files (and their ``.seam`` alias) and
-runs them. Each test clause
-is a rule of the form:
+Discovers test/1 clauses in .clausal files (and their ``.seam`` alias), and
+in Prolog ``.pl`` files loaded through the experimental Prolog importer, and
+runs them. Each test clause is a rule of the form:
 
-    test("description") <- goal1, goal2, ...
+    test("description") <- goal1, goal2, ...        % .clausal / .seam
+    test('description') :- Goal1, Goal2, ...        % .pl
 
 A test passes if its body succeeds (produces at least one solution).
 
@@ -12,6 +13,12 @@ Standalone usage
 ----------------
     python -m clausal.testing clausal/examples/
     python -m clausal.testing clausal/examples/fibonacci.clausal
+    python -m clausal.testing path/to/rules.pl
+
+Exit codes: 0 all tests passed; 1 a test failed or a file failed to load
+(or, for a ``.pl`` file, to translate); 2 a usage error (missing path, a file
+of an unsupported type); 5 no tests were collected.  Pass ``--allow-empty``
+to turn "no tests collected" into exit 0.
 
 Pytest integration
 ------------------
@@ -52,7 +59,25 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterator
 
-from clausal._suffixes import CLAUSAL_SUFFIXES, strip_clausal_suffix
+from clausal._suffixes import (
+    CLAUSAL_SUFFIXES,
+    PROLOG_SUFFIX,
+    SOURCE_SUFFIXES,
+    strip_clausal_suffix,
+)
+
+#: File extensions the runner collects test/1 clauses from: the Clausal
+#: source spellings plus Prolog ``.pl`` (translated on load).
+TEST_SUFFIXES: tuple[str, ...] = SOURCE_SUFFIXES
+
+#: Exit codes of ``python -m clausal.testing`` (``main``).
+EXIT_OK = 0
+EXIT_TESTS_FAILED = 1
+EXIT_USAGE = 2
+#: Nothing was collected: every root was empty, held no test files, or held
+#: only files without test/1 clauses.  Same number as pytest's "no tests
+#: collected".  ``--allow-empty`` maps it to ``EXIT_OK``.
+EXIT_NO_TESTS = 5
 
 
 # ── Diagnostic bounds ─────────────────────────────────────────────────────────
@@ -212,7 +237,11 @@ class FileResults:
 
 
 def load_clausal_module(path: str | Path) -> object:
-    """Load a .clausal file as a Python module and return it.
+    """Load a .clausal (or .seam, or Prolog .pl) file as a module and return it.
+
+    A ``.pl`` file goes through the experimental Prolog importer — the same
+    ``PrologLoader`` a ``-import_from`` of a ``.pl`` file uses — so a file the
+    translator rejects raises ``SyntaxError`` carrying the translator error.
 
     Every call compiles the file **afresh**, under a private
     ``_clausal_test_<basename>`` name, so each test gets an independent
@@ -228,15 +257,19 @@ def load_clausal_module(path: str | Path) -> object:
     # Ensure import hook is installed.
     import clausal.import_hook  # noqa: F401
 
-    from clausal.import_hook import _load_module
+    from clausal.import_hook import _load_module, _load_prolog_module
 
     path = str(path)
-    mod_name = f"_clausal_test_{strip_clausal_suffix(os.path.basename(path))}"
+    base = os.path.basename(path)
+    is_prolog = base.endswith(PROLOG_SUFFIX)
+    if is_prolog:
+        base = base[: -len(PROLOG_SUFFIX)]
+    mod_name = f"_clausal_test_{strip_clausal_suffix(base)}"
 
     # _load_module handles sys.modules eviction internally.
     old = sys.modules.get(mod_name)
     try:
-        mod = _load_module(mod_name, path)
+        mod = (_load_prolog_module if is_prolog else _load_module)(mod_name, path)
     finally:
         # Avoid polluting sys.modules across test runs.
         if old is None:
@@ -407,11 +440,23 @@ def run_test(
         result.diagnostic = diagnose_failure(mod, description, path=path,
                                              error=result.error)
         result.line = result.diagnostic.line
+        if path is not None and str(path).endswith(PROLOG_SUFFIX):
+            # The translator keeps no source map: positions are lines of the
+            # generated Clausal text, not of the .pl file.  Reporting one as
+            # ``file.pl:N`` would point at the wrong clause.
+            result.line = None
+            result.diagnostic.notes.append(
+                "a .pl file is translated before it runs: goals above are "
+                "shown in their Clausal translation, and any line numbers "
+                "are lines of that translation, not of the .pl source")
     return result
 
 
 def run_file(path: str | Path) -> FileResults:
-    """Load a .clausal file and run all its test/1 clauses."""
+    """Load a .clausal/.seam/.pl file and run all its test/1 clauses.
+
+    A load (or ``.pl`` translation) failure is one failing ``<load>`` result,
+    never an empty result list."""
     path = str(path)
     results = FileResults(path=path)
     try:
@@ -655,6 +700,11 @@ def _reified_clause(path, clause):
     """The reified ``Clause(head, goals, position)`` matching *clause*'s
     position, or ``None``.  Cache shared with :func:`_reified_goals`."""
     if path is None or not clause.position:
+        return None
+    if str(path).endswith(PROLOG_SUFFIX):
+        # A .pl file is Prolog: reifying it as Clausal source can only fail
+        # (re-read and re-parsed per failing test) or, worse, succeed on the
+        # wrong language.  Its clause positions are lines of the translation.
         return None
     try:
         from clausal.reflection import Clause as ReifiedClause, reify_file, is_v, vfield
@@ -2605,66 +2655,177 @@ def _diagnostic_repeats(result: TestResult, rest: list[str]) -> bool:
     return rest and rest[-1] in raised_lines
 
 
-def discover_clausal_files(roots: list[str | Path]) -> Iterator[Path]:
-    """Yield all .clausal (and .seam) files under the given roots.
+#: Why a scan passed over a file (``main`` reports each one).
+SKIP_UNSUPPORTED = "unsupported suffix"
+SKIP_NO_TESTS = "no test/1 clauses"
+SKIP_NO_COLLECT = "no-collect marker"
 
-    Both extensions are walked as one population, in path order, so a
-    directory holding files under both spellings reports them interleaved
+#: A test-file-typed file that is DATA, not tests (a fixture meant to fail at
+#: load, a grammar spec), opts out of collection by carrying this line within
+#: its first 30 lines.  A .pl file spells it with Prolog's comment character.
+#: Both runners honour it: the CLI (``discover_clausal_files``) and the
+#: pytest plugin (the root ``conftest.py``).
+NO_COLLECT_MARKER = "# clausal: no-collect"
+NO_COLLECT_MARKER_PL = "% clausal: no-collect"
+
+
+def opts_out_of_collection(path: str | Path) -> bool:
+    """True if a test file carries the no-collect marker in its first 30
+    lines (``# clausal: no-collect``; ``% clausal: no-collect`` in .pl)."""
+    path = Path(path)
+    marker = (NO_COLLECT_MARKER_PL if path.suffix == PROLOG_SUFFIX
+              else NO_COLLECT_MARKER)
+    try:
+        with path.open(encoding="utf-8") as fh:
+            for _, line in zip(range(30), fh):
+                if line.strip() == marker:
+                    return True
+    except (OSError, UnicodeDecodeError):
+        # Unreadable or not UTF-8: let the loader report it as a <load>
+        # failure rather than skipping the file silently.
+        return False
+    return False
+#: A skipped-file list at most this long is printed in full without ``-v``;
+#: a longer one is a single count line unless ``-v`` is given.
+SKIPPED_LIST_INLINE_MAX = 5
+
+
+def _is_scan_noise(path: Path, root: Path) -> bool:
+    """True for files under a hidden directory or ``__pycache__`` (or hidden
+    files): never test files a reader would expect a report about."""
+    try:
+        parts = path.relative_to(root).parts
+    except ValueError:  # pragma: no cover — rglob yields paths under root
+        return False
+    return any(part.startswith(".") or part == "__pycache__" for part in parts)
+
+
+def discover_clausal_files(
+    roots: list[str | Path],
+    skipped: list[tuple[Path, str]] | None = None,
+) -> Iterator[Path]:
+    """Yield all test files (.clausal, .seam and .pl) under the given roots.
+
+    All extensions are walked as one population, in path order, so a
+    directory holding files under several spellings reports them interleaved
     rather than one extension after the other.
+
+    A test-typed file carrying the no-collect marker
+    (:func:`opts_out_of_collection`) is not yielded.
+
+    When *skipped* is a list, every other file the scan passes over is
+    appended to it as ``(path, reason)`` — except files under a hidden
+    directory or ``__pycache__``, which are noise, not candidates.
     """
+    def classify(p: Path) -> str | None:
+        if p.suffix not in TEST_SUFFIXES:
+            return SKIP_UNSUPPORTED
+        if opts_out_of_collection(p):
+            return SKIP_NO_COLLECT
+        return None
+
     for root in roots:
         root = Path(root)
-        if root.is_file() and root.suffix in CLAUSAL_SUFFIXES:
-            yield root
+        if root.is_file():
+            reason = classify(root)
+            if reason is None:
+                yield root
+            elif skipped is not None:
+                skipped.append((root, reason))
         elif root.is_dir():
-            yield from sorted(
-                p for p in root.rglob("*") if p.suffix in CLAUSAL_SUFFIXES
-            )
+            files = sorted(p for p in root.rglob("*") if p.is_file())
+            for p in files:
+                reason = classify(p)
+                if reason is None:
+                    yield p
+                elif skipped is not None and not _is_scan_noise(p, root):
+                    skipped.append((p, reason))
+
+
+def _skipped_lines(skipped: list[tuple[Path, str]], verbose: bool) -> list[str]:
+    """The report block naming files a run collected nothing from."""
+    if not skipped:
+        return []
+    counts: dict[str, int] = {}
+    for _path, reason in skipped:
+        counts[reason] = counts.get(reason, 0) + 1
+    breakdown = ", ".join(f"{reason}: {n}" for reason, n in counts.items())
+    head = f"{len(skipped)} file(s) skipped ({breakdown})"
+    if not verbose and len(skipped) > SKIPPED_LIST_INLINE_MAX:
+        return [f"{head}; -v lists them"]
+    return [f"{head}:"] + [
+        f"  {os.path.relpath(path)}  ({reason})"
+        for path, reason in sorted(skipped, key=lambda e: str(e[0]))
+    ]
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
 
 def main(args: list[str] | None = None) -> int:
-    """Run .clausal tests from the command line. Returns exit code."""
+    """Run .clausal/.seam/.pl tests from the command line. Returns exit code.
+
+    Exit codes: ``EXIT_OK`` (0) every collected test passed;
+    ``EXIT_TESTS_FAILED`` (1) a test failed or a file failed to load or
+    translate; ``EXIT_USAGE`` (2) a path does not exist or names a file of an
+    unsupported type; ``EXIT_NO_TESTS`` (5) no test/1 clause was collected —
+    an empty scan is an error by default, because a mistyped root or a
+    renamed extension otherwise reads as a green run.  ``--allow-empty`` maps
+    5 to 0 for callers that genuinely expect an empty directory.
+    """
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Run test/1 clauses in .clausal (or .seam) files",
+        description="Run test/1 clauses in .clausal (or .seam) files and in "
+                    "Prolog .pl files",
+        epilog="exit status: 0 passed, 1 a test failed or a file failed to "
+               "load, 2 usage error, 5 no tests collected (see --allow-empty)",
     )
     parser.add_argument("paths", nargs="+",
-                        help=".clausal (or .seam) files or directories")
+                        help=".clausal, .seam or .pl files, or directories")
     parser.add_argument("-v", "--verbose", action="store_true",
-                        help="Show individual test results")
-    parser.add_argument("--strict", "--fail-on-empty", dest="strict",
-                        action="store_true",
-                        help="Exit non-zero when no test/1 clauses are collected")
+                        help="Show individual test results and every "
+                             "skipped file")
+    empty = parser.add_mutually_exclusive_group()
+    empty.add_argument("--allow-empty", action="store_true",
+                       help="Exit 0 instead of 5 when no test/1 clauses are "
+                            "collected")
+    empty.add_argument("--strict", "--fail-on-empty", dest="strict",
+                       action="store_true",
+                       help="Exit non-zero (5) when no test/1 clauses are "
+                            "collected; this is now the default, the flag is "
+                            "kept for compatibility")
     parsed = parser.parse_args(args)
 
     # Validate paths up front so a mistyped path or wrong cwd is an error, not a
-    # silently-green run.  A non-existent path, or a file that exists but is not a
-    # .clausal/.seam file, is reported and forces a non-zero exit.
+    # silently-green run.  A non-existent path, or a file that exists but is not
+    # a test file type, is reported and forces a non-zero exit.
     bad_paths: list[str] = []
     for path in parsed.paths:
         p = Path(path)
         if not p.exists():
             bad_paths.append(f"no such file or directory: {path}")
-        elif p.is_file() and p.suffix not in CLAUSAL_SUFFIXES:
-            bad_paths.append(f"not a .clausal file (or .seam alias): {path}")
+        elif p.is_file() and p.suffix not in TEST_SUFFIXES:
+            bad_paths.append(f"not a .clausal, .seam or .pl file: {path}")
     if bad_paths:
         for msg in bad_paths:
             print(f"error: {msg}", file=sys.stderr)
-        return 2
+        return EXIT_USAGE
 
     total_passed = 0
     total_failed = 0
     files_seen = 0
     failures: list[tuple[str, TestResult]] = []
+    skipped: list[tuple[Path, str]] = []
 
-    for path in discover_clausal_files(parsed.paths):
+    for path in discover_clausal_files(parsed.paths, skipped=skipped):
         files_seen += 1
         file_results = run_file(path)
         rel = os.path.relpath(file_results.path)
+        if not file_results.results:
+            # Loaded cleanly but holds no test/1 clause (a load failure is a
+            # ``<load>`` result, never an empty list).
+            skipped.append((path, SKIP_NO_TESTS))
 
         for r in file_results.results:
             if r.passed:
@@ -2689,25 +2850,29 @@ def main(args: list[str] | None = None) -> int:
                 print(line)
         print()
 
+    for line in _skipped_lines(skipped, parsed.verbose):
+        print(line)
+
     total = total_passed + total_failed
 
     # Distinguish "nothing to run" from "everything passed": files that exist but
-    # contain no test/1 clauses (or roots with no .clausal/.seam files at all)
-    # would otherwise print a misleading [PASSED].
+    # contain no test/1 clauses (or roots with no test files at all) would
+    # otherwise print a misleading [PASSED] — and exit 0 in a gate.
     if total == 0:
         if files_seen == 0:
-            print("no .clausal (or .seam) files found")
+            print("no test files (.clausal, .seam or .pl) found")
         else:
             print(f"{files_seen} file(s) collected, but no test/1 clauses found")
-        if parsed.strict:
-            print("0 tests [NO TESTS]")
-            return 1
-        print("0 tests [NO TESTS] (use --strict to fail)")
-        return 0
+        if parsed.allow_empty:
+            print("0 tests [NO TESTS] (allowed by --allow-empty)")
+            return EXIT_OK
+        print(f"0 tests [NO TESTS] (exit {EXIT_NO_TESTS}; "
+              "pass --allow-empty to accept an empty run)")
+        return EXIT_NO_TESTS
 
     status = "PASSED" if total_failed == 0 else "FAILED"
     print(f"{total} tests: {total_passed} passed, {total_failed} failed [{status}]")
-    return 0 if total_failed == 0 else 1
+    return EXIT_OK if total_failed == 0 else EXIT_TESTS_FAILED
 
 
 if __name__ == "__main__":

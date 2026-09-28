@@ -279,6 +279,24 @@ it with `:- op/3`, which the reader applies as it goes, or pass
 
 ---
 
+## Running a `.pl` file's tests
+
+`test/1` clauses in a `.pl` file are tests, as in a `.clausal` file: the
+translator keeps the `test` name, so `test('name') :- Body.` is the runner's
+`test/1`. Both runners collect `.pl` files:
+
+```bash
+python -m clausal.testing path/to/rules.pl      # or a directory holding .pl files
+python -m pytest path/to/rules.pl
+```
+
+A `.pl` file that fails to translate is reported as a failing `<load>` test
+carrying the translator error (exit 1), never skipped. A `.pl` file with no
+`test/1` clauses exits 5 ("no tests collected") unless `--allow-empty` is
+given. See [Testing](testing.md).
+
+---
+
 ## Error handling
 
 Translation and parse errors are surfaced as `SyntaxError`, which Python's

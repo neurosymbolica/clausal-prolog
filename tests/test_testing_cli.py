@@ -2,7 +2,8 @@
 
 Regression: a missing path (mistyped path / wrong cwd) and a file with no
 ``test(...)`` clauses both used to report ``[PASSED]`` with exit 0, masking
-mistakes as green runs. See todo/testing-missing-file-reports-pass.md.
+mistakes as green runs. See todo/testing-missing-file-reports-pass.md.  An
+empty run now exits 5 by default (tests/test_testing_empty_scan_and_pl.py).
 """
 
 from __future__ import annotations
@@ -22,7 +23,7 @@ def test_non_clausal_file_errors(capsys, tmp_path):
     p.write_text("hello")
     rc = main([str(p)])
     assert rc == 2
-    assert "not a .clausal file" in capsys.readouterr().err
+    assert "not a .clausal, .seam or .pl file" in capsys.readouterr().err
 
 
 def test_testless_file_is_distinct_not_passed(capsys, tmp_path):
@@ -30,7 +31,7 @@ def test_testless_file_is_distinct_not_passed(capsys, tmp_path):
     p.write_text("foo(1),\n")
     rc = main([str(p)])
     out = capsys.readouterr().out
-    assert rc == 0
+    assert rc == 5  # EXIT_NO_TESTS: an empty run is not a green run
     assert "NO TESTS" in out
     assert "PASSED" not in out
 
@@ -38,8 +39,9 @@ def test_testless_file_is_distinct_not_passed(capsys, tmp_path):
 def test_testless_file_strict_fails(capsys, tmp_path):
     p = tmp_path / "notests.clausal"
     p.write_text("foo(1),\n")
-    assert main(["--strict", str(p)]) == 1
-    assert main(["--fail-on-empty", str(p)]) == 1
+    # Failing on an empty run is the default now; the flags stay accepted.
+    assert main(["--strict", str(p)]) == 5
+    assert main(["--fail-on-empty", str(p)]) == 5
 
 
 def test_passing_file_still_passes(capsys, tmp_path):
@@ -168,7 +170,7 @@ def test_cli_messages_name_the_lowercase_predicate(capsys, tmp_path):
     """# nv"""
     p = tmp_path / "notests.clausal"
     p.write_text("foo(1),\n")
-    assert main([str(p)]) == 0
+    assert main([str(p)]) == 5
     out = capsys.readouterr().out
     assert "no test/1 clauses found" in out
     assert "Test(" not in out
@@ -201,7 +203,8 @@ def test_seam_files_are_discovered_under_a_directory(capsys, tmp_path):
     assert rc == 0
     assert "a.seam::seam" in out
     assert "b.clausal::clausal" in out
-    assert "txt" not in out
+    assert "::txt" not in out                       # c.txt is not run...
+    assert "c.txt  (unsupported suffix)" in out       # ...and is reported
     assert "2 passed, 0 failed [PASSED]" in out
 
 
