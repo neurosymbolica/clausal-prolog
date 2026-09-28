@@ -1,5 +1,9 @@
 """An integral rational is presented as an ``int``.
 
+Ruling Q15 (2026-09-28): in EVALUATION (is/2, eval_/2) a bare ``/`` is
+Python's true division, so the exact rational is spelled ``rdiv(A, B)`` in
+the evaluation rows below; inside a CLP post (``==``) ``/`` stays rational.
+
 ``int/int`` evaluates to an exact rational (``docs/clpq.md``): ``3/2`` is
 ``Fraction(3, 2)``, never ``1.5``. When the quotient IS an integer, though,
 ``4/2`` must present as ``int 2`` and not ``Fraction(2, 1)`` — the two are
@@ -73,13 +77,13 @@ def _holds(tmp_path, body):
 class TestIsPresentsIntegralQuotientsAsInt:
 
     @pytest.mark.parametrize("expr, want", [
-        ("4 / 2", 2),
-        ("6 / 3", 2),
+        ("rdiv(4, 2)", 2),
+        ("rdiv(6, 3)", 2),
         ("4 // 2", 2),             # unchanged: floor division was already int
-        ("(4 / 2) * 3", 6),        # the property holds for the whole tree,
-        ("(1 / 2) + (1 / 2)", 1),  # not only for a Div at the root
-        ("(7 / 2) - (3 / 2)", 2),
-        ("-(4 / 2)", -2),
+        ("(rdiv(4, 2)) * 3", 6),        # the property holds for the whole tree,
+        ("(rdiv(1, 2)) + (rdiv(1, 2))", 1),  # not only for a Div at the root
+        ("(rdiv(7, 2)) - (rdiv(3, 2))", 2),
+        ("-(rdiv(4, 2))", -2),
     ])
     def test_integral_result_is_int(self, tmp_path, expr, want):
         got = _bind(tmp_path, f"'is'(X, {expr})")
@@ -87,9 +91,9 @@ class TestIsPresentsIntegralQuotientsAsInt:
         assert type(got) is int, (expr, got)
 
     @pytest.mark.parametrize("expr, want", [
-        ("3 / 2", Fraction(3, 2)),
-        ("1 / 3", Fraction(1, 3)),
-        ("(1 / 2) + (1 / 3)", Fraction(5, 6)),
+        ("rdiv(3, 2)", Fraction(3, 2)),
+        ("rdiv(1, 3)", Fraction(1, 3)),
+        ("(rdiv(1, 2)) + (rdiv(1, 3))", Fraction(5, 6)),
     ])
     def test_non_integral_result_stays_exact(self, tmp_path, expr, want):
         got = _bind(tmp_path, f"'is'(X, {expr})")
@@ -105,12 +109,12 @@ class TestTheTwoSurfacesAgree:
     """``'=='``/``compare/3`` and ``'='`` must say the same thing."""
 
     def test_structural_equality_after_is(self, tmp_path):
-        assert _holds(tmp_path, "'is'(X, 4 / 2), '=='(X, 2)")
+        assert _holds(tmp_path, "'is'(X, rdiv(4, 2)), '=='(X, 2)")
 
     def test_compare_says_equal(self, tmp_path):
         x, o = Var(), Var()
         _, order = _first(tmp_path,
-                          "p(X, O) <- ('is'(X, 4 / 2), compare(O, X, 2))\n",
+                          "p(X, O) <- ('is'(X, rdiv(4, 2)), compare(O, X, 2))\n",
                           "p", x, o)
         assert spelling(order) == "="
 
@@ -327,9 +331,9 @@ class TestCompiledArithmetic:
     an integral rational as int."""
 
     @pytest.mark.parametrize("expr, want", [
-        ("4 / 2", 2),
-        ("(1 / 2) + (1 / 2)", 1),
-        ("(4 / 2) * 3", 6),
+        ("rdiv(4, 2)", 2),
+        ("(rdiv(1, 2)) + (rdiv(1, 2))", 1),
+        ("(rdiv(4, 2)) * 3", 6),
     ])
     def test_eval_integral_result_is_int(self, tmp_path, expr, want):
         got = _bind(tmp_path, f"eval_({expr}, X)")
@@ -337,7 +341,7 @@ class TestCompiledArithmetic:
         assert type(got) is int, (expr, got)
 
     def test_eval_non_integral_result_stays_exact(self, tmp_path):
-        got = _bind(tmp_path, "eval_(3 / 2, X)")
+        got = _bind(tmp_path, "eval_(rdiv(3, 2), X)")
         assert got == Fraction(3, 2) and type(got) is Fraction
 
     def test_eval_float_division_is_untouched(self, tmp_path):
@@ -369,12 +373,21 @@ class TestCompiledArithmetic:
             "-module(_seam_integral, [verdict(A, B, C)])\n"
             "-double_quotes(chars)\n"
             "def build():\n"
-            "    return --verdict(4 / 2, (1 / 2) + (1 / 2), 3 / 2)\n")
+            "    return --verdict(rdiv(4, 2) + 0, rdiv(1, 2) + rdiv(1, 2), "
+            "rdiv(3, 2) + 0)\n")
         mod = _load_module("_seam_integral", str(path))
         got = mod.build()
         assert got == ("verdict", 2, 1, Fraction(3, 2))
         assert type(got[1]) is int and type(got[2]) is int, got
         assert type(got[3]) is Fraction, got
+        # a bare / in the seam is Python's true division (ruling Q15)
+        path2 = tmp_path / "_seam_py_div.clausal"
+        path2.write_text(
+            "-module(_seam_py_div, [verdict(A, B)])\n"
+            "def build():\n"
+            "    return --verdict(4 / 2, 3 / 2)\n")
+        got = _load_module("_seam_py_div", str(path2)).build()
+        assert got == ("verdict", 2.0, 1.5) and type(got[1]) is float, got
 
 
 # ── ABSENCE: no path binds an integral Fraction at the unify boundary ──────
@@ -410,7 +423,7 @@ def _seam_runner(tmp_path):
         "-module(_seam_absence, [verdict(A, B)])\n"
         "-double_quotes(chars)\n"
         "def build():\n"
-        "    return --verdict(4 / 2, (1 / 2) + (1 / 2))\n")
+        "    return --verdict(rdiv(4, 2) + 0, rdiv(1, 2) + rdiv(1, 2))\n")
     mod = _load_module("_seam_absence", str(path))
     _, a, b = mod.build()
     # and across the unify boundary, as a clause would consume them
@@ -445,15 +458,15 @@ def _z3_runner(tmp_path):
 
 ABSENCE_PATHS = {
     "quoted is/2": (_clausal_runner(
-        "p(X) <- 'is'(X, 4 / 2)\n", "p", 1), [2]),
+        "p(X) <- 'is'(X, rdiv(4, 2))\n", "p", 1), [2]),
     "== through fd_eq/q_eq": (_clausal_runner(
         "p(X) <- (X == 4 / 2)\n", "p", 1), [2]),
     "== with a runtime operand": (_clausal_runner(
         "p(T, X) <- (X == T / 4)\n", "p", 1, ground=(700000,)), [175000]),
     "eval_ literal": (_clausal_runner(
-        "p(X) <- eval_(4 / 2, X)\n", "p", 1), [2]),
+        "p(X) <- eval_(rdiv(4, 2), X)\n", "p", 1), [2]),
     "eval_ sum of halves": (_clausal_runner(
-        "p(X) <- eval_((1 / 2) + (1 / 2), X)\n", "p", 1), [1]),
+        "p(X) <- eval_(rdiv(1, 2) + rdiv(1, 2), X)\n", "p", 1), [1]),
     "seam value arithmetic": (_seam_runner, [2, 1]),
     "rational then ==": (_clausal_runner(
         "p(X) <- (rational(X), X == 4 / 2)\n", "p", 1), [2]),

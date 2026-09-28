@@ -268,3 +268,18 @@ def test_seam_zero_divisor_is_the_logic_error(seam_mod):
         seam_mod.zero()
     assert render_error_term(info.value.term) == (
         "error(evaluation_error(zero_divisor),(//)/2)")
+
+
+def test_no_value_in_propagation_reads_the_error_terms_it_absorbs():
+    """The CLP "no value" test recognises the formals as the builders make
+    them (atoms ARE their str): '^''s type_error(float, B) and any
+    evaluation_error; clpz's own domain_error and other errors are not."""
+    from clausal.logic.clpfd import _no_value_in_propagation
+    from clausal.logic.exceptions import (
+        domain_error, evaluation_error, type_error)
+    assert _no_value_in_propagation(LogicException(type_error("float", 2, "(^)/2")))
+    assert _no_value_in_propagation(LogicException(evaluation_error("zero_divisor", "(/)/2")))
+    assert _no_value_in_propagation(LogicException(evaluation_error("undefined", "(^)/2")))
+    assert not _no_value_in_propagation(LogicException(
+        domain_error("clpz_expression", "a", "clpfd expression")))
+    assert not _no_value_in_propagation(LogicException(type_error("integer", 1.5, "(//)/2")))

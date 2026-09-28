@@ -30,7 +30,7 @@ _HEADER = """-double_quotes(chars)
 -constant_number_units(rate, 5.25, percent)
 -constant_number_units(width, 2.5, centimetre)
 -constant_number_units(fee, "1.50", usd)
-third(F) <- 'is'(F, 1 / 3)
+third(F) <- 'is'(F, rdiv(1, 3))   # rdiv: exact (Q15)
 """
 
 
