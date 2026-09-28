@@ -17,7 +17,7 @@ import sys as _sys
 from typing import Any
 
 from clausal.logic.generated_names import dollar_ref
-from clausal.logic.variables import deref, is_var
+from clausal.logic.variables import deref, is_var, unify
 from clausal.terms import (
     Call, LoadName, LoadAttr,
     PyThunk,
@@ -98,6 +98,93 @@ def _set_of_sort_dedup(items: list) -> list:
         out.append(item)
         last = key
     return out
+
+
+# ── bagof/3 and setof/3: free variables (ISO 8.10.2, 8.10.3) ────────────────
+#
+# bagof(T, G, L) collects one bag PER binding of the goal's FREE variables --
+# those in G that are neither in T nor existentially quantified by a leading
+# ``V^`` -- and backtracks over the bags, sorted by that binding (the
+# witness), as Scryer does.  Solutions whose witnesses are VARIANTS share a
+# bag, and their witness variables are unified.  The compiled construct
+# (``control_constructs._compile_find_all_core``) collects ``[W, T]`` rows and
+# hands them to these helpers.
+
+
+def _bag_witness(goal_vars, template, existential):
+    """The witness of a bagof/setof call: the unbound variables of
+    *goal_vars* (the goal's own variables, as a tuple) that occur neither in
+    *template* nor in *existential* (the ``V^`` prefixes), as a list."""
+    from clausal.logic.builtins.inspection import _collect_vars_impl  # noqa: PLC0415
+    exclude: list = []
+    _collect_vars_impl([template, list(existential)], exclude)
+    excluded = {id(v) for v in exclude}
+    found: list = []
+    _collect_vars_impl(list(goal_vars), found)
+    return [v for v in found if id(v) not in excluded]
+
+
+def _variant_key(term):
+    """A key equal for two terms exactly when they are VARIANTS: each
+    variable, in order of first appearance, is replaced by a numbered
+    marker no program can write, then the standard-order key is taken."""
+    from clausal.logic.builtins.inspection import (  # noqa: PLC0415
+        _collect_vars_impl, _copy_term_py,
+    )
+    from clausal.logic.builtins._helpers import _standard_order_key  # noqa: PLC0415
+    found: list = []
+    _collect_vars_impl(term, found)
+    if not found:
+        return _standard_order_key(term)
+    marks = {id(v): ("$bagof_variant", i) for i, v in enumerate(found)}
+    return _standard_order_key(_copy_term_py(term, marks))
+
+
+def _bagof_groups(rows):
+    """The bags of a bagof/setof call, in the order it answers them.
+
+    *rows* are the collected ``[W, T]`` copies.  Rows whose witnesses are
+    variants form one bag, in collection order; the bags are ordered by
+    their first witness in the standard order of terms (stable), as Scryer's
+    keysort orders them.  Each bag is ``(witnesses, templates)``."""
+    if not rows:
+        return []
+    if not rows[0][0]:                       # no free variables: one bag
+        return [([], [t for _, t in rows])]
+    groups: list = []
+    index: dict = {}
+    for w, t in rows:
+        key = _variant_key(w)
+        try:
+            at = index.get(key)
+        except TypeError:                    # an unhashable key: linear scan
+            at = next((i for i, g in enumerate(groups) if g[0] == key), None)
+        else:
+            if at is None:
+                index[key] = len(groups)
+        if at is None:
+            groups.append((key, [w], [t]))
+        else:
+            groups[at][1].append(w)
+            groups[at][2].append(t)
+    if len(groups) > 1:
+        from clausal.logic.builtins._helpers import _standard_order_key  # noqa: PLC0415
+        groups.sort(key=lambda g: _standard_order_key(g[1][0]))
+    return [(ws, ts) for _, ws, ts in groups]
+
+
+def _bagof_bind(witness, ws, bag, ts, dedup: bool, trail) -> bool:
+    """Answer one bag: unify the live *witness* with each collected witness
+    of the bag (they are variants, so this also shares their variables
+    across the bag's templates), then *bag* with the templates -- sorted and
+    without duplicates for setof."""
+    for w in ws:
+        if not unify(witness, w, trail):
+            return False
+    if dedup:
+        from clausal.logic.solve import _deref_walk  # noqa: PLC0415
+        ts = _set_of_sort_dedup([_deref_walk(t) for t in ts])
+    return unify(bag, ts, trail)
 
 
 def _findall_copy_row(template):

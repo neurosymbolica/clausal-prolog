@@ -197,12 +197,6 @@ Each of these **fails** in Clausal. The right-hand column is the error ISO
 unification never unifies terms of different types, so both fail in Scryer.
 `'=='(1, 1.0)` is correct (it fails).
 
-### `bagof/3` and `setof/3` have no `^` and no free-variable grouping
-
-They behave as `findall/3` that fails on an empty result (`setof` also sorts
-and removes duplicates). ISO enumerates one solution per binding of the
-free variables; Clausal returns a single bag.
-
 ### Missing builtins
 
 Not provided (calling one raises `existence_error(procedure, PI)`):

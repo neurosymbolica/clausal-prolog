@@ -92,7 +92,7 @@ A worklist handles arbitrary nesting depth (e.g. `[[[X, *Y], *Z], *W]` produces 
 | `IfExpr(test, body, orelse)` | [Reified ITE](reified_ite.md): three-way check for reifiable conditions, single-evaluation `_found` flag for general conditions. |
 | `Call(LoadName("once"), [goal])` | Sub-generator + `for` loop with `break` after first yield. Bindings escape to continuation. |
 | `Call(LoadName("findall"), [tmpl, goal, bag])` | Sub-generator collects `_deref_walk(tmpl)` per solution, undoes inner bindings, unifies result list with `bag`. Always succeeds (empty list on failure). |
-| `Call(LoadName("bagof"), [tmpl, goal, bag])` | Same as `findall`, but fails if no solutions (empty result list). |
+| `Call(LoadName("bagof"), [tmpl, goal, bag])` | Same as `findall`, but fails if no solutions (empty result list), and answers one bag per binding of the goal's free variables. |
 | `Call(LoadName("setof"), [tmpl, goal, bag])` | Same as `bagof`, plus deduplication via `_set_of_dedup` before unifying with `bag`. |
 | `Call(LoadName("forall"), [cond, action])` | Desugared to `not (cond and not action)` — uses existing NAF compilation. |
 | `in_(elem, coll)` | `for _x in deref(coll): mark ...; if unify(elem, _x, trail): k; undo` |
@@ -297,7 +297,7 @@ def AccSum__3(this_generator, parent, arg0, arg1, arg2, trail):
     yield (parent, DONE)
 ```
 
-**Deterministic goals** (eligible as prefix before a TRO tail call): `Evaluate`, `Unify`, `DoesNotUnify`, `ArithEq`, `ArithNeq`, comparisons (`>`, `<`, `>=`, `<=`), `in_`, `NotIn`, `Not` (NAF), `And` of deterministic goals, `IfExpr`, `once`, `findall`, `bagof`, `setof`.
+**Deterministic goals** (eligible as prefix before a TRO tail call): `Evaluate`, `Unify`, `DoesNotUnify`, `ArithEq`, `ArithNeq`, comparisons (`>`, `<`, `>=`, `<=`), `in_`, `NotIn`, `Not` (NAF), `And` of deterministic goals, `IfExpr`, `once`, `findall` (not `bagof`/`setof`, which backtrack over their bags).
 
 **Not eligible**: clauses where any prefix goal is a predicate `Call` (nondeterministic — the `StepGenerator` while-loop has multiple solutions that cannot be resumed after a TRO restart) or `Or`.
 
@@ -402,6 +402,14 @@ Key details:
 ### bagof/3
 
 Same as `findall` but wraps the unify+continuation block in `if _fa_results:`, so it **fails** when the inner goal has no solutions.
+
+The goal's leading `V ^` prefixes are stripped at compile time. When the goal
+has variables outside the template and those prefixes, it may have **free
+variables**, and `_compile_bag_of` takes over: the witness (the free
+variables' run-time values' unbound variables, `$bag_witness`) is computed
+before the goal runs, each solution is collected as a `[W, T]` copy, and the
+construct answers once per bag (`$bagof_groups` groups variant witnesses and
+sorts the bags by witness; `$bagof_bind` unifies the witness and the bag).
 
 ### setof/3
 

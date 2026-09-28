@@ -381,3 +381,129 @@ def test_maplist_oracle(scryer):
     got = _scryer_answers(_ML_PROGRAM, [(r[2], r[3]) for r in ML_ROWS])
     assert got == [r[4] for r in ML_ROWS]
 
+
+# ── R5: bagof/3 and setof/3 group by the free variables; ``V^G`` ───────────
+#
+# ISO 8.10.2/8.10.3: one bag per binding of the goal's free variables (those
+# in neither the template nor a leading ``V^``), answered on backtracking
+# in the standard order of that binding, as Scryer orders them.  They used to
+# answer ONE bag with the free variables left unbound, and ``V^G`` was a
+# load-time NotImplementedError.
+
+_BG_FACTS = """\
+-allow_singletons
+-private([peter, ann, pat, tom, mike, aa, bb, gg])
+age(peter, 7),
+age(ann, 11),
+age(pat, 8),
+age(tom, 5),
+age(mike, 11),
+klass(ann, aa),
+klass(mike, bb),
+klass(pat, bb),
+klass(peter, aa),
+klass(tom, aa),
+p(1),
+p(2),
+p(3),
+kv(1, aa),
+kv(2, bb),
+kv(1, gg),
+"""
+_BG_PROGRAM = """\
+age(peter, 7). age(ann, 11). age(pat, 8). age(tom, 5). age(mike, 11).
+klass(ann, aa). klass(mike, bb). klass(pat, bb). klass(peter, aa).
+klass(tom, aa).
+p(1). p(2). p(3).
+kv(1, aa). kv(2, bb). kv(1, gg).
+"""
+
+BG_ROWS = [
+    ("bagof groups by the free variable", "bagof(N, age(N, A), L), R is [A, L]",
+     "bagof(N, age(N, A), L), R = [A, L]", 10,
+     ["[5,[tom]]", "[7,[peter]]", "[8,[pat]]", "[11,[ann,mike]]"]),
+    ("bagof ^", "bagof(N, A ^ age(N, A), L), R is L",
+     "bagof(N, A^age(N, A), L), R = L", 10, ["[peter,ann,pat,tom,mike]"]),
+    ("setof pairs", "setof(C - N, klass(N, C), L), R is L",
+     "setof(C-N, klass(N, C), L), R = L", 10,
+     ["[aa-ann,aa-peter,aa-tom,bb-mike,bb-pat]"]),
+    ("setof groups", "setof(N, klass(N, C), L), R is [C, L]",
+     "setof(N, klass(N, C), L), R = [C, L]", 10,
+     ["[aa,[ann,peter,tom]]", "[bb,[mike,pat]]"]),
+    ("anonymous is free", "bagof(N, age(N, _), L), R is L",
+     "bagof(N, age(N, _), L), R = L", 10,
+     ["[tom]", "[peter]", "[pat]", "[ann,mike]"]),
+    ("keys", "bagof(V, kv(K, V), L), R is [K, L]",
+     "bagof(V, kv(K, V), L), R = [K, L]", 10, ["[1,[aa,gg]]", "[2,[bb]]"]),
+    ("no solutions", "bagof(X, (p(X), X is 9), L), R is L",
+     "bagof(X, (p(X), X = 9), L), R = L", 10, []),
+    ("setof no solutions", "setof(X, (p(X), X > 5), L), R is L",
+     "setof(X, (p(X), X > 5), L), R = L", 10, []),
+    ("setof sorts and dedups", "setof(X, in_(X, [3, 1, 2, 1]), L), R is L",
+     "setof(X, member(X, [3, 1, 2, 1]), L), R = L", 10, ["[1,2,3]"]),
+    ("bagof keeps order and duplicates", "bagof(X, in_(X, [3, 1, 2, 1]), L), R is L",
+     "bagof(X, member(X, [3, 1, 2, 1]), L), R = L", 10, ["[3,1,2,1]"]),
+    ("variant witnesses share a bag",
+     "bagof(X, (X is 1 or Y is 2 or X is 3), L), R is [Y, L]",
+     "bagof(X, (X = 1 ; Y = 2 ; X = 3), L), R = [Y, L]", 10,
+     ["[_,[1,3]]", "[2,[_]]"]),
+    ("^ over a disjunction", "bagof(X, Y ^ (X is 1 or Y is 2 or X is 3), L), R is L",
+     "bagof(X, Y^(X = 1 ; Y = 2 ; X = 3), L), R = L", 10, ["[1,_,3]"]),
+    ("a free variable bound outside", "X is 1, bagof(Y, (Y is X or Y is 2), L), R is L",
+     "X = 1, bagof(Y, (Y = X ; Y = 2), L), R = L", 10, ["[1,2]"]),
+    ("free variable in a compound",
+     "bagof(X, (p(X), Z is f(W)), L), R is [Z, L]",
+     "bagof(X, (p(X), Z = f(W)), L), R = [Z, L]", 10, ["[f(_),[1,2,3]]"]),
+    ("runtime-built goal with ^", "G is (Y ^ p(Y)), call(bagof(X, G, L)), R is L",
+     "G = (Y^p(Y)), bagof(X, G, L), R = L", 10, ["[_,_,_]"]),
+    ("unbound goal", "call(bagof(X, G, L)), R is L",
+     "bagof(X, G, L), R = L", 10, ["error(instantiation_error,_)"]),
+    ("non-callable goal", "call(bagof(X, 1, L)), R is L",
+     "bagof(X, 1, L), R = L", 10, ["error(type_error(callable,1),_)"]),
+    ("bag not a list", "call(bagof(X, p(X), 'foo')), R is 1",
+     "bagof(X, p(X), foo), R = 1", 10, ["error(type_error(list,foo),_)"]),
+]
+
+
+def _bg_line(line: str) -> str:
+    """The error term's context argument differs by convention (Scryer puts
+    the innermost call there); compare the formal term only."""
+    if line.startswith("error("):
+        return re.sub(r",[^,()]*(\([^()]*\))?(/\d+)?\)$", ",_)", line)
+    return line
+
+
+@pytest.fixture(scope="module")
+def bg_mod(tmp_path_factory):
+    src = _BG_FACTS.replace("-private([peter", "-private([foo, f(X), peter")
+    return _load_seam(tmp_path_factory.mktemp("bg"), "_iso_ans_bg", src,
+                      BG_ROWS)
+
+
+@pytest.mark.parametrize("i", range(len(BG_ROWS)), ids=[r[0] for r in BG_ROWS])
+def test_bagof_engine(bg_mod, i):
+    got = [_bg_line(x) for x in _engine_answers(bg_mod, f"r{i}", BG_ROWS[i][3])]
+    assert got == BG_ROWS[i][4]
+
+
+def test_bagof_oracle(scryer):
+    del scryer
+    got = _scryer_answers(_BG_PROGRAM, [(r[2], r[3]) for r in BG_ROWS])
+    assert [[_bg_line(x) for x in rows] for rows in got] == [r[4] for r in BG_ROWS]
+
+
+#: Where the engine follows ISO and Scryer does not (engine column only).
+#: ISO 7.1.1.4: the free variables of ``Y^p(Y)`` with template ``Y`` are
+#: none, so there is ONE bag.  Scryer answers [1]; [2]; [3]: its
+#: ``findall_with_existential`` makes the existential variable the witness
+#: when the template already holds it.
+BG_DEVIATIONS = [
+    ("template variable under ^", "bagof(Y, Y ^ p(Y), L), R is L", ["[1,2,3]"]),
+]
+
+
+def test_bagof_deviations(tmp_path):
+    mod = _load_seam(tmp_path, "_iso_ans_bgd", _BG_FACTS,
+                     [(n, b, "", 10, w) for n, b, w in BG_DEVIATIONS])
+    for i, (_, _, want) in enumerate(BG_DEVIATIONS):
+        assert _engine_answers(mod, f"r{i}", 10) == want

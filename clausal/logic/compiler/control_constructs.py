@@ -33,7 +33,7 @@ from clausal.terms import (
     Lt, LtE, Gt, GtE,
     Call, LoadName, LoadAttr,
 )
-from clausal.pythonic_ast.nodes import IfExpr, Lambda
+from clausal.pythonic_ast.nodes import BitXor, IfExpr, Lambda
 from clausal.logic.cells import make_cell
 from clausal.logic.database import Clause, Database
 from clausal.logic.meta_predicate import MetaArg as _MetaArg
@@ -594,7 +594,21 @@ def _compile_find_all_core(
     fail_on_empty: bool = False,
     dedup: bool = False,
 ) -> list[ast.stmt]:
-    """Compile find_all/3, bag_of/3, set_of/3 as special forms."""
+    """Compile find_all/3, bag_of/3, set_of/3 as special forms.
+
+    bagof/setof (``fail_on_empty``) strip the goal's leading ``V^`` prefixes
+    (ISO 7.1.1.4, the iterated goal term) and, when the goal may have FREE
+    variables, collect one bag per witness binding (``_compile_bag_of``)."""
+    if fail_on_empty:
+        existential: list = []
+        while type(inner_goal) is BitXor:
+            existential.append(inner_goal.left)
+            inner_goal = inner_goal.right
+        bound = {v._id for v in _collect_vars([template, existential])}
+        goal_vars = [v for v in _collect_vars(inner_goal) if v._id not in bound]
+        if goal_vars:
+            return _compile_bag_of(ctx, template, inner_goal, bag, k_stmts,
+                                   existential, goal_vars, dedup=dedup)
     var_context = ctx.var_context
     trail_name = ctx.trail_name
     results_var = ctx.fresh("_fa_results")
@@ -691,6 +705,114 @@ def _compile_find_all_core(
         stmts.extend(unify_block)
 
     return stmts
+
+
+def _compile_bag_of(
+    ctx: CompilationContext,
+    template: Any,
+    inner_goal: Any,
+    bag: Any,
+    k_stmts: list[ast.stmt],
+    existential: list,
+    goal_vars: list,
+    *,
+    dedup: bool,
+) -> list[ast.stmt]:
+    """bagof/setof whose goal may have FREE variables (ISO 8.10.2.4): the
+    witness W is computed at run time (``$bag_witness``: the goal's
+    variables' unbound variables, less the template's and the existential
+    prefixes'), each solution is collected as a ``[W, T]`` copy, and the
+    construct answers once per bag (``$bagof_groups``), binding W and the
+    bag (``$bagof_bind``).  With an empty witness this is the single bag."""
+    var_context = ctx.var_context
+    trail_name = ctx.trail_name
+    results_var = ctx.fresh("_bo_results")
+    cond_bag = ctx.fresh("_bo_cond")
+    cond_leader = ctx.fresh("_bo_cl")
+    mark_var = ctx.fresh("_bo_m")
+    gen_name = ctx.fresh("_bo_gen")
+    unify_mark = ctx.fresh("_bo_um")
+    wit_var = ctx.fresh("_bo_wit")
+    grp_ws = ctx.fresh("_bo_ws")
+    grp_ts = ctx.fresh("_bo_ts")
+
+    # Built BEFORE the goal is lowered, so every variable the witness and
+    # the template read is registered in this scope and the goal's body
+    # refers to the same names.
+    template_expr = term_to_ast_expr(template, var_context, eval_arith=False)
+    witness_call = _call(
+        _name("$bag_witness"),
+        ast.Tuple(elts=[term_to_ast_expr(v, var_context, eval_arith=False)
+                        for v in goal_vars], ctx=ast.Load()),
+        template_expr,
+        ast.Tuple(elts=[term_to_ast_expr(e, var_context, eval_arith=False)
+                        for e in existential], ctx=ast.Load()),
+    )
+    bag_tmp = ctx.fresh("_bo_bag")
+    bag_build = _assign(bag_tmp, term_to_ast_expr(bag, var_context,
+                                                  eval_arith=False))
+
+    inner_stmts = _lower_inner(ctx, inner_goal, [_yield_none_stmt()])
+    gen_fn = ast.FunctionDef(
+        name=gen_name,
+        args=ast.arguments(
+            posonlyargs=[], args=[], vararg=None,
+            kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[],
+        ),
+        body=inner_stmts + [
+            ast.Return(value=ast.Constant(value=None)),
+            ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
+        ],
+        decorator_list=[], returns=None, type_comment=None,
+        **_EXTRA_FUNCDEF,
+    )
+    collect_loop = ast.For(
+        target=_name("_", ast.Store()),
+        iter=_call(_name(gen_name)),
+        body=[
+            ast.Expr(value=_call(
+                _attr(results_var, "append"),
+                _call(_name("$findall_copy"),
+                      ast.List(elts=[_name(wit_var), template_expr],
+                               ctx=ast.Load())),
+            )),
+            _harvest_stmt(cond_leader, cond_bag),
+        ],
+        orelse=[],
+    )
+    answer_loop = ast.For(
+        target=ast.Tuple(elts=[_name(grp_ws, ast.Store()),
+                               _name(grp_ts, ast.Store())], ctx=ast.Store()),
+        iter=_call(_name("$bagof_groups"), _name(results_var)),
+        body=[
+            _assign_mark(unify_mark, trail_name),
+            ast.If(
+                test=_call(_name("$bagof_bind"), _name(wit_var), _name(grp_ws),
+                           _name(bag_tmp), _name(grp_ts),
+                           ast.Constant(value=dedup), _name(trail_name)),
+                body=k_stmts or [ast.Pass()],
+                orelse=[],
+            ),
+            _undo_stmt(unify_mark, trail_name),
+        ],
+        orelse=[],
+    )
+    who = "setof/3" if dedup else "bagof/3"
+    return [
+        bag_build,
+        ast.Expr(value=_call(_name("$check_bag"), _name(bag_tmp),
+                             ast.Constant(value=who))),
+        _assign(wit_var, witness_call),
+        _assign(results_var, ast.List(elts=[], ctx=ast.Load())),
+        _assign(cond_bag, ast.List(elts=[], ctx=ast.Load())),
+        _leader_stmt(cond_leader),
+        _assign_mark(mark_var, trail_name),
+        gen_fn,
+        collect_loop,
+        _undo_stmt(mark_var, trail_name),
+        _charge_stmt(trail_name, cond_leader, cond_bag),
+        answer_loop,
+    ]
 
 
 # ── throw/catch compilation (V2-14) ─────────────────────────────────────────
