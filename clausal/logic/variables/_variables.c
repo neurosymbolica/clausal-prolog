@@ -1796,7 +1796,7 @@ do_walk(PyObject *term, int depth)
         return result;
     }
     /* __walk__ protocol: delegate to Python method if present.
-     * KWTerm, the Seg types and DictTerm all supply __walk__
+     * The Seg types and DictTerm supply __walk__
      * (A01-F008). */
     {
         PyObject *hook = PyObject_GetAttrString(term, "__walk__");
@@ -2102,13 +2102,9 @@ py_register_attr_hook(PyObject *Py_UNUSED(module), PyObject *args)
  * (init_term_inspection_cache), before anything can inspect a term. */
 static PyObject *str_dataclass_fields = NULL;  /* "__dataclass_fields__" */
 static PyObject *str_name = NULL;              /* "name" */
-static PyObject *str_functor = NULL;           /* "functor" */
 
 /* Cached reference to dataclasses.fields() for dataclass field introspection */
 static PyObject *dc_fields_func = NULL;
-
-/* Cached reference for the KWTerm type */
-static PyObject *KWTerm_type = NULL;
 
 /*
  * init_term_inspection_cache() — the interned attribute names and the
@@ -2118,7 +2114,6 @@ static PyObject *KWTerm_type = NULL;
  *   str_dataclass_fields  c_is_term_instance
  *   dc_fields_func        py_term_field_names
  *   str_name              py_term_field_names
- *   str_functor           c_copy_term's KWTerm arm; py_functor_name (KWTerm)
  *
  * This used to be the second job of ``_register_predicate_meta(cls)``, which
  * predicate.py called at import time (Fix #5).  Anything that inspected a
@@ -2135,28 +2130,12 @@ init_term_inspection_cache(void)
     if (!str_dataclass_fields) return -1;
     str_name = PyUnicode_InternFromString("name");
     if (!str_name) return -1;
-    str_functor = PyUnicode_InternFromString("functor");
-    if (!str_functor) return -1;
     PyObject *mod = PyImport_ImportModule("dataclasses");
     if (!mod) return -1;
     dc_fields_func = PyObject_GetAttrString(mod, "fields");
     Py_DECREF(mod);
     if (!dc_fields_func) return -1;
     return 0;
-}
-
-/*
- * _register_term_types(kwterm_cls) — called at import time.  The KWTerm
- * class is the one term class the C inspection helpers still special-case
- * (Compound retirement slice 7 removed the Compound arms; KWTerm's go in
- * slice 9).
- */
-static PyObject *
-py_register_term_types(PyObject *Py_UNUSED(module), PyObject *kw)
-{
-    Py_INCREF(kw);
-    Py_XSETREF(KWTerm_type, kw);
-    Py_RETURN_NONE;
 }
 
 /* Internal: check if obj is a term instance (a @dataclass instance).
@@ -2282,27 +2261,6 @@ c_is_ground(PyObject *term, int depth)
         }
         return 1;
     }
-    /* KWTerm */
-    if (KWTerm_type) {
-        int r = PyObject_IsInstance(term, KWTerm_type);
-        if (r < 0) return -1;  /* Fix #3 */
-        if (r) {
-            PyObject *values = PyObject_CallMethod(term, "values", NULL);
-            if (!values) return -1;
-            PyObject *iter = PyObject_GetIter(values);
-            Py_DECREF(values);
-            if (!iter) return -1;
-            PyObject *item;
-            while ((item = PyIter_Next(iter))) {
-                int gr = c_is_ground(item, depth + 1);
-                Py_DECREF(item);
-                if (gr <= 0) { Py_DECREF(iter); return gr; }
-            }
-            Py_DECREF(iter);
-            if (PyErr_Occurred()) return -1;
-            return 1;
-        }
-    }
     /* Term instances (PredicateMeta or @dataclass) */
     {
         int ti = c_is_term_instance(term);
@@ -2344,13 +2302,6 @@ py_is_ground(PyObject *Py_UNUSED(module), PyObject *arg)
 static PyObject *
 py_functor_name(PyObject *Py_UNUSED(module), PyObject *term)
 {
-    int r;
-    /* KWTerm */
-    if (KWTerm_type) {
-        r = PyObject_IsInstance(term, KWTerm_type);
-        if (r < 0) return NULL;
-        if (r) return PyObject_GetAttr(term, str_functor);
-    }
     /* PredicateMeta instance */
     {
         int ti = c_is_term_instance(term);
@@ -2410,17 +2361,6 @@ py_functor_name(PyObject *Py_UNUSED(module), PyObject *term)
 static PyObject *
 py_arity(PyObject *Py_UNUSED(module), PyObject *term)
 {
-    int r;
-    /* KWTerm */
-    if (KWTerm_type) {
-        r = PyObject_IsInstance(term, KWTerm_type);
-        if (r < 0) return NULL;
-        if (r) {
-            Py_ssize_t n = PyObject_Length(term);
-            if (n < 0) return NULL;
-            return PyLong_FromSsize_t(n);
-        }
-    }
     /* Term instance (PredicateMeta or @dataclass) */
     {
         int ti = c_is_term_instance(term);
@@ -2494,30 +2434,8 @@ py_nth_arg(PyObject *Py_UNUSED(module), PyObject *args)
 {
     PyObject *term;
     Py_ssize_t n;
-    int r;
     if (!PyArg_ParseTuple(args, "On", &term, &n))
         return NULL;
-    /* KWTerm */
-    if (KWTerm_type) {
-        r = PyObject_IsInstance(term, KWTerm_type);
-        if (r < 0) return NULL;
-        if (r) {
-            PyObject *values = PyObject_CallMethod(term, "values", NULL);
-            if (!values) return NULL;
-            PyObject *vlist = PySequence_List(values);
-            Py_DECREF(values);
-            if (!vlist) return NULL;
-            Py_ssize_t len = PyList_GET_SIZE(vlist);
-            if (n < 1 || n > len) {
-                Py_DECREF(vlist);
-                return raise_arg_index_error(n, term);
-            }
-            PyObject *result = PyList_GET_ITEM(vlist, n - 1);
-            Py_INCREF(result);
-            Py_DECREF(vlist);
-            return result;
-        }
-    }
     /* Term instance (PredicateMeta or @dataclass) */
     {
         int ti = c_is_term_instance(term);
@@ -2594,19 +2512,6 @@ py_nth_arg(PyObject *Py_UNUSED(module), PyObject *args)
 static PyObject *
 py_args_list(PyObject *Py_UNUSED(module), PyObject *term)
 {
-    int r;
-    /* KWTerm */
-    if (KWTerm_type) {
-        r = PyObject_IsInstance(term, KWTerm_type);
-        if (r < 0) return NULL;
-        if (r) {
-            PyObject *values = PyObject_CallMethod(term, "values", NULL);
-            if (!values) return NULL;
-            PyObject *result = PySequence_List(values);
-            Py_DECREF(values);
-            return result;
-        }
-    }
     /* Term instance (PredicateMeta or @dataclass) */
     {
         int ti = c_is_term_instance(term);
@@ -2688,12 +2593,6 @@ py_args_list(PyObject *Py_UNUSED(module), PyObject *term)
 static PyObject *
 py_is_compound(PyObject *Py_UNUSED(module), PyObject *term)
 {
-    int r;
-    if (KWTerm_type) {
-        r = PyObject_IsInstance(term, KWTerm_type);
-        if (r < 0) return NULL;
-        if (r) Py_RETURN_TRUE;
-    }
     {
         int ti = c_is_term_instance(term);
         if (ti < 0) return NULL;
@@ -2811,48 +2710,6 @@ c_copy_term(PyObject *term, PyObject *var_map, int depth)
         return result;
     }
 
-    /* KWTerm: copy each value, construct new KWTerm(functor, **{k: copied_v, ...}) */
-    if (KWTerm_type) {
-        int r = PyObject_IsInstance(term, KWTerm_type);
-        if (r < 0) return NULL;
-        if (r) {
-            /* Issue 1 fix: get functor for correct reconstruction */
-            PyObject *functor = PyObject_GetAttr(term, str_functor);
-            if (!functor) return NULL;
-            /* Issue 2 fix: use items() call instead of PyMapping_Items */
-            PyObject *items_view = PyObject_CallMethod(term, "items", NULL);
-            if (!items_view) { Py_DECREF(functor); return NULL; }
-            PyObject *iter = PyObject_GetIter(items_view);
-            Py_DECREF(items_view);
-            if (!iter) { Py_DECREF(functor); return NULL; }
-            PyObject *new_dict = PyDict_New();
-            if (!new_dict) { Py_DECREF(functor); Py_DECREF(iter); return NULL; }
-            int err = 0;
-            PyObject *pair;
-            while ((pair = PyIter_Next(iter))) {
-                PyObject *k = PyTuple_GET_ITEM(pair, 0);
-                PyObject *v = PyTuple_GET_ITEM(pair, 1);
-                PyObject *copied_v = c_copy_term(v, var_map, depth + 1);
-                if (!copied_v) { Py_DECREF(pair); err = 1; break; }
-                int ok = PyDict_SetItem(new_dict, k, copied_v);
-                Py_DECREF(copied_v);
-                Py_DECREF(pair);
-                if (ok < 0) { err = 1; break; }
-            }
-            Py_DECREF(iter);
-            if (err || PyErr_Occurred()) {
-                Py_DECREF(functor); Py_DECREF(new_dict); return NULL;
-            }
-            /* Reconstruct: KWTerm(functor, **new_dict) */
-            PyObject *pos_args = PyTuple_Pack(1, functor);
-            Py_DECREF(functor);
-            if (!pos_args) { Py_DECREF(new_dict); return NULL; }
-            PyObject *result = PyObject_Call(KWTerm_type, pos_args, new_dict);
-            Py_DECREF(pos_args);
-            Py_DECREF(new_dict);
-            return result;
-        }
-    }
 
     /* Term instance (PredicateMeta or @dataclass): copy each field, reconstruct */
     {
@@ -3057,27 +2914,6 @@ c_collect_vars(PyObject *term, UIntSet *seen, PyObject *result, int depth)
         return 0;
     }
 
-    /* KWTerm */
-    if (KWTerm_type) {
-        int r = PyObject_IsInstance(term, KWTerm_type);
-        if (r < 0) return -1;
-        if (r) {
-            PyObject *values = PyObject_CallMethod(term, "values", NULL);
-            if (!values) return -1;
-            PyObject *iter = PyObject_GetIter(values);
-            Py_DECREF(values);
-            if (!iter) return -1;
-            PyObject *item;
-            while ((item = PyIter_Next(iter))) {
-                int r2 = c_collect_vars(item, seen, result, depth + 1);
-                Py_DECREF(item);
-                if (r2 < 0) { Py_DECREF(iter); return -1; }
-            }
-            Py_DECREF(iter);
-            if (PyErr_Occurred()) return -1;
-            return 0;
-        }
-    }
 
     /* Term instance (PredicateMeta or @dataclass) */
     {
@@ -3532,9 +3368,6 @@ static PyMethodDef module_methods[] = {
      "Analogous to SWI/Scryer's attr_unify_hook/2 (per module key) and\n"
      "SICStus's verify_attributes/3."},
     /* Predicate helpers */
-    {"_register_term_types", py_register_term_types, METH_O,
-     "_register_term_types(kwterm_cls)\n"
-     "Register the KWTerm type for C-level term inspection."},
     {"is_term_instance", py_is_term_instance, METH_O,
      "is_term_instance(obj) -> bool\n"
      "True if obj is a term instance (a @dataclass instance)."},

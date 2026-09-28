@@ -373,7 +373,7 @@ do_deref_walk(PyObject *term, int depth)
         return result;
     }
 
-    /* __walk__ protocol (A01-F008): KWTerm, DictTerm and the Seg types all
+    /* __walk__ protocol (A01-F008): DictTerm and the Seg types
      * supply __walk__, which deep-substitutes bindings via the canonical
      * walk(). This unifies _deref_walk with walk (they were blind to
      * disjoint type sets) and preserves F018 promotion. */
