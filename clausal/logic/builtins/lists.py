@@ -284,11 +284,19 @@ def _memberchk__2(this_generator, _proceed, _fail, _catcher, elem, lst, trail):
         # becomes ``[Elem|_]``.
         skel = _open_skeleton(lst_val)
         if skel is not None:
-            for step in _member_open(skel, elem, trail, _proceed):
-                yield step
-                break
-            yield (_fail, DONE)
-            return
+            prefix, tail = skel
+            for item in prefix:
+                mark = trail.mark()
+                if unify(elem, item, trail):
+                    yield (_proceed, None)
+                    trail.undo(mark)
+                    yield (_fail, DONE)
+                    return
+                trail.undo(mark)
+            mark = trail.mark()
+            if unify(tail, _partial([elem], Var()), trail):
+                yield (_proceed, None)
+            trail.undo(mark)
     yield (_fail, DONE)
 
 
@@ -400,6 +408,11 @@ def _append__3(this_generator, _proceed, _fail, _catcher, l1, l2, l3, trail):
         if skel is not None and l2_ok and l3_ok:
             prefix, tail = skel
             rest = l2_items if l2_items is not None else l2_val
+            # Once L1 is as long as L3's known prefix, every element of that
+            # prefix has met L1's: a failure then repeats for every longer
+            # L1 (``append([a, *T], Y, [b, *Z])`` fails, as in ISO, rather
+            # than looping).
+            known = 0 if is_var(l3_val) else len(_open_skeleton(l3_val)[0])
             k = 0
             while True:
                 fresh = [Var() for _ in range(k)]
@@ -407,6 +420,9 @@ def _append__3(this_generator, _proceed, _fail, _catcher, l1, l2, l3, trail):
                 if (unify(tail, fresh, trail)
                         and unify(l3, _partial(prefix + fresh, rest), trail)):
                     yield (_proceed, None)
+                elif len(prefix) + k >= known:
+                    trail.undo(mark)
+                    break
                 trail.undo(mark)
                 k += 1
     yield (_fail, DONE)
