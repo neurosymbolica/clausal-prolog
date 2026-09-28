@@ -231,8 +231,8 @@ def seam_term(node: Any, module_globals: dict, loose: bool = False) -> Any:
                 # a logic-level error on every spelling, the seam's too: it
                 # stays the catchable LogicException, never a raw
                 # ZeroDivisionError and never the TypeError below.
-                formal = exc.term[1] if type(exc.term) is tuple and len(exc.term) == 3 else None
-                if type(formal) is tuple and formal and formal[0] == "evaluation_error":
+                from clausal.logic.exceptions import evaluation_error_kind  # noqa: PLC0415
+                if evaluation_error_kind(exc) is not None:
                     raise
                 # The exact helpers ($add & co.) refuse a non-number operand
                 # LOUDLY in-engine (a catchable type_error(evaluable, ...));

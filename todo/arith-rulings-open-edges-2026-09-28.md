@@ -53,7 +53,9 @@ reading.**
    `FloorDiv` subclass; CLP(FD) evaluates it by its own entry (truncating),
    but CLP(R) interval propagation (`clpr._ifloordiv`), CLP(Z3) and
    clportools match `isinstance(x, FloorDiv)` and FLOOR it. Only a negative
-   operand with a quoted `'//'` inside those solvers can differ.
+   operand with a quoted `'//'` inside those solvers can differ. CLP(Q) too:
+   `_is_rational_arg` sends a `'//'` over a CLP(Q) variable there, and its
+   linearisers match the `FloorDiv` base class.
 6. A bare `**` in a CLP(FD) post is Python's integer power and posts
    (`X == Y ** 2`); Scryer's clpz rejects `**` (`domain_error`). By the
    rulings a bare operator is Python's, so this stands; the quoted `'**'`
@@ -71,5 +73,12 @@ reading.**
 9. `^` in a clause body is Python's XOR node (CLP(B) uses it: `sat(X ^ Y)`),
    so the integer power has only the quoted spelling `'^'(A, B)` today; the
    future Clausal Prolog syntax will give bare `^` its ISO meaning.
-10. The `.pl` importer still routes Prolog `//` to `prolog.TruncDiv`; it could
-    now emit the `'//'` cell instead.
+10. **The `.pl` importer (experimental, ruling Q9) maps Prolog `**` and `^`
+    onto the BARE `**`**, which is now Python's power: an imported
+    `X is 2 ** 3` answers the integer 8 (Scryer: 8.0) and `2 ^ -1` answers
+    0.5 (Scryer: `type_error(float, 2)`); `div` maps onto the bare `//`
+    (floor, numerically ISO div). It should emit the quoted cells (`'**'`,
+    `'^'`, `div`, and `'//'` in place of `prolog.TruncDiv`) -- but a quoted
+    cell in a strict module needs a functor declaration
+    (todo/arithmetic-cells-in-strict-source-need-a-declaration-2026-09-28.md),
+    so the importer change waits on that question.

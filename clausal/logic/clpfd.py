@@ -1344,8 +1344,7 @@ def _unknown_expr_leaf_error(leaf) -> "Exception":
     _ensure_exc_imports()
     # Scryer's formal (Q3, 2026-09-28; it was type_error(integer, Leaf)).  The
     # second argument is an unbound variable, as Scryer's library throws it.
-    from clausal.logic.exceptions import domain_error  # noqa: PLC0415
-    return _LogicException(domain_error("clpz_expression", leaf, "clpfd expression"))
+    return _LogicException(_domain_error_clpz(leaf))
 
 
 def _domain_error_clpz(term):
@@ -1362,12 +1361,8 @@ def _is_zero_divisor(exc) -> bool:
     no value, so the constraint FAILS and the search goes on, as Scryer's
     clpz prunes it (``X #= 10 // Y, Y in 0..2, label([Y])`` gives Y = 1 and
     Y = 2)."""
-    term = exc.term
-    if type(term) is not tuple or len(term) != 3:
-        return False
-    formal = term[1]
-    return (type(formal) is tuple and len(formal) == 2
-            and formal[0] == "evaluation_error" and formal[1] == "zero_divisor")
+    from clausal.logic.exceptions import evaluation_error_kind  # noqa: PLC0415
+    return evaluation_error_kind(exc) == "zero_divisor"
 
 
 def _eval_propagating(x):
@@ -1418,7 +1413,9 @@ def _expr_domain(expr, trail: Trail) -> Domain:
         # over CLP(FD): not a clpz expression -- Scryer's ``X #= Y**2``
         # raises exactly this.  Folded, its float would leave the FD
         # variable silently unconstrained.  Reached only after the CLP(Q) /
-        # CLP(R) dispatch, which keeps it (a ground one folds to its float).
+        # CLP(R) dispatch, which keeps it.  A ground one folds to its float
+        # only as a WHOLE comparison side (``_resolve``); nested in a CLP(FD)
+        # tree (``Y + '**'(2, 3)``) it is refused here too.
         _ensure_exc_imports()
         raise _LogicException(_domain_error_clpz(expr))
     if isinstance(expr, _Node):

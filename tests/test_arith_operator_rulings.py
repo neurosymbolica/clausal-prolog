@@ -43,6 +43,8 @@ BARE_ROWS = [
     ("eval_('^'(2, 3), X)", 8),
     ("eval_('//'(-7, 2) // 2, X)", -2),      # each operator by its own spelling
     ("(Y is -7, X == '//'(Y, 2))", -3),
+    ("(X == '//'(Y, 2), Y is -7)", -3),      # posted first, bound after
+    ("(X == Y // 2, Y is -7)", -4),
     # Q4: zero divisors, every spelling
     ("eval_(1 // 0, X)", "error(evaluation_error(zero_divisor),(//)/2)"),
     ("eval_(1 % 0, X)", "error(evaluation_error(zero_divisor),(mod)/2)"),
@@ -66,6 +68,9 @@ BARE_ROWS = [
     ("findall(Y, (Z == '//'(10, Y), in_domain(Y, -1, 1), label([Y])), X)", [-1, 1]),
     # between/3 is not a clpz post: a '**' bound is its float, refused as a
     # non-integer bound
+    # a ground '**' nested in a CLP(FD) tree is refused like one over a var
+    ("(X == Y + '**'(2, 3), Y is 1)",
+     "error(domain_error(clpz_expression,2**3),_)"),
     ("between(1, '**'(2, 2), X)", "error(type_error(integer,4.0),between/3)"),
 ]
 
