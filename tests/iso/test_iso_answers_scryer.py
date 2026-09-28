@@ -342,7 +342,7 @@ def test_open_lists_oracle(scryer):
 
 _ML_FACTS = """\
 -allow_singletons
--private([aa, bb, cc])
+-private([aa, bb, cc, foo])
 p(1),
 p(2),
 p(3),
@@ -367,6 +367,10 @@ ML_ROWS = [
      "maplist(q, [1, X], [Y, cc]), R = [X, Y]", 5, ["[2,aa]", "[2,bb]"]),
     ("maplist/3 later element bound", "maplist(q, [1, 1], [bb, Y]), R is Y",
      "maplist(q, [1, 1], [bb, Y]), R = Y", 5, ["aa", "bb"]),
+    ("maplist/3 Ys not a list", "maplist(q, [1, 2], 'foo'), R is 1",
+     "maplist(q, [1, 2], foo), R = 1", 5, []),
+    ("maplist/3 Ys partial", "maplist(q, [1, 2], ['bb', *T]), R is T",
+     "maplist(q, [1, 2], [bb|T]), R = T", 5, ["[cc]"]),
     ("maplist/3 in findall", "findall([X, Y], maplist(p, [X, Y]), L), length(L, R)",
      "findall([X, Y], maplist(p, [X, Y]), L), length(L, R)", 5, ["9"]),
 ]

@@ -12,7 +12,7 @@ from clausal.logic.exceptions import (
 )
 from clausal.logic.meta_predicate import is_goal_object as _is_goal_object
 from clausal.logic.trampoline import DONE, StepGenerator
-from clausal.logic.builtins.lists import _as_items, _seq_result, _was_string
+from clausal.logic.builtins.lists import _as_items, _open_skeleton, _seq_result, _was_string
 from clausal.logic.builtins._helpers import _is_empty_list, _standard_order_key
 from clausal.logic.predicate import (
     _dispatch_at, _refuse_unqualified_other_arity,
@@ -686,6 +686,20 @@ def _map_list__3(this_generator, _proceed, _fail, _catcher, goal, xs, ys, trail)
         yield (_fail, DONE)
         return
     outs = [Var() for _ in range(n)]
+    if not is_var(ys_val):
+        # Ys neither a list nor unbound: a partial list hands its known
+        # elements to the calls; anything else answers nothing, at once.
+        skel = _open_skeleton(ys_val)
+        if skel is None and not was_str:
+            trail.undo(outer_mark)
+            yield (_fail, DONE)
+            return
+        if skel is not None:
+            if len(skel[0]) > n:
+                trail.undo(outer_mark)
+                yield (_fail, DONE)
+                return
+            outs[:len(skel[0])] = skel[0]
     yield from _maplist_drive(
         this_generator, _proceed, dispatch,
         lambda i: (deref(xs_items[i]), outs[i]), n, trail,
