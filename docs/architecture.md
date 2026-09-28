@@ -27,7 +27,7 @@ The Warren Abstract Machine is the standard execution substrate for Prolog. For 
 - is debuggable with standard Python tools
 - allows Python calls without FFI
 - leverages the AST infrastructure clausal already has
-- is exactly what `clausal.trampoline` and `clausal.continuation_search` are already built toward
+- is exactly what `clausal.logic.trampoline` and `clausal.logic.continuation_search` are already built toward
 
 For programs that genuinely need a WAM — ISO-conformant constraint solving, rich library ecosystems, or cross-validation against a standards-compliant engine — the [Trealla](trealla.md) and [Scryer](scryer.md) Prolog embeddings provide one in-process, without replacing clausal's native execution model.
 
@@ -119,7 +119,7 @@ The `clausal.logic.tabling` module maintains a table mapping `(functor, arity, v
 
 ### Well-founded semantics
 
-Well-founded semantics (WFS) assigns three truth values to ground atoms: *true*, *false*, or *unknown*. It gives a principled treatment of negation in the presence of recursion — the unknown value propagates through mutually recursive negations rather than looping or giving arbitrary results. WFS is a three-valued semantics over strong Kleene, so its third value is represented by the language's own `Undefined` singleton rather than a separate sentinel.
+Well-founded semantics (WFS) assigns three truth values to ground atoms: *true*, *false*, or *undefined*. It gives a principled treatment of negation in the presence of recursion — the undefined value propagates through mutually recursive negations rather than looping or giving arbitrary results. WFS is a three-valued semantics over strong Kleene, so its third value is represented by the language's own `Undefined` singleton rather than a separate sentinel.
 
 WFS is implemented directly in `clausal.logic.tabling`, extending the existing SLG machinery with delayed negation and conditional answer resolution. when `not P(args)` targets a tabled predicate whose table is still evaluating (cycle through negation), the negation is *delayed* rather than checked immediately. After SLG completion, a simplification pass resolves delayed negations:
 
@@ -137,7 +137,7 @@ The compiler detects `not P(args)` where `P` is tabled and emits a call to `_naf
 
 The import hook (`clausal.import_hook`) intercepts module imports and transforms ASTs before compilation. This gives clausal two kinds of homoiconicity:
 
-**Logic terms as data.** Expressions marked with `--` are captured as `clausal.simple_ast` nodes rather than being evaluated. This means Prolog-style terms can appear inline in Python code, and are just Python objects.
+**Logic terms as data.** In a `.seam` (or `.clausal`) file, an expression marked with `--` is a logic term rather than Python: `--point(1, 2)` builds the cell `('point', 1, 2)`, an atom is a plain `str`, a string is the `('$chars', text)` carrier. In goal position (`if --g:`, `for X in --g:`) the term is *run* instead. Terms are just Python objects — tuples, `str`s, numbers, lists.
 
 **Python code as data.** Expressions or statement blocks can be captured as AST nodes without being executed. This allows the logic system to reason about Python programs — useful for [meta-interpreters](metainterpreters.md), program analysis, and code generation.
 
@@ -147,17 +147,35 @@ The cost of AST transformation is paid once at import time. `PredicateLoader` (a
 
 ## Python ↔ logic interop
 
-Logic predicates are called from Python by running a goal **cell** — the
-predicate's name and its arguments — against the module that defines it.
-`solve` yields once per solution, with that solution's bindings live:
+In a `.seam` file, Python calls a predicate by putting it in **goal position**;
+the goal's logic variables become ordinary Python locals, once per solution:
 
 ```python
-from clausal import Var, solve
+# app.seam
+-import_from(fibonacci, [fib])
+
+def main():
+    for F in --fib(7, F):
+        print(F)    # 13
+```
+
+A plain `.py` file cannot use `--`. There — and for goals built at runtime —
+run a goal **cell** (the predicate's name and its arguments) against the module
+that defines it with the lower-level `solve`, which yields once per solution
+with that solution's bindings live:
+
+```python
+from clausal import Var, solve, to_python
 import fibonacci
 
-for trail in solve(("fib", 7, F := Var()), module=fibonacci):
-    print(F.value)  # 13
+F = Var()
+for _ in solve(("fib", 7, F), module=fibonacci):
+    print(to_python(F))  # 13
 ```
+
+Answers come back as the engine's raw terms; `clausal.to_python` converts
+explicitly. See [Python integration](python_integration.md) and
+[Public API](public-api.md).
 
 The recursion and yielding challenges are solved by the trampoline. Python code called from within logic code runs normally with no special requirements.
 
@@ -170,22 +188,22 @@ The deep layering — Python → logic → Python → logic — is explicitly su
 | Layer | Status |
 |---|---|
 | `clausal.logic.variables` | Done — C extension, 88 tests |
-| `clausal.trampoline` | Done |
-| `clausal.continuation_search` | Done |
-| `clausal.simple_ast` / `clausal.conversion` | Done |
-| `clausal.term_rewriting` | Done |
+| `clausal.logic.trampoline` | Done — C twin plus pure-Python fallback |
+| `clausal.logic.continuation_search` | Done |
+| `clausal.pythonic_ast` | Done — goal/term node types |
+| `clausal.templating.term_rewriting` | Done |
 | `clausal.import_hook` | Done — `.pyc` caching, deferred compilation |
 | `clausal.logic.compiler` | Done — head patterns + body goals, simple + trampoline modes |
 | `clausal.logic.database` | Done — clause store, directives, dispatch |
-| `clausal.logic.builtins` | Done — assertz/retract, in_/append, arithmetic, higher-order, term inspection, exceptions, I/O; a class per builtin whose call builds that builtin's goal cell |
-| `clausal.logic.solve` | Done — call/solve/query/once |
+| `clausal.logic.builtins` | Done — assertz/retract, in_/append, arithmetic, higher-order, term inspection, exceptions, I/O; one `BuiltinTerm` per builtin, whose call builds that builtin's goal cell |
+| `clausal.logic.solve` / `clausal.logic.seam` | Done — goal-position seam; call/solve/query/once/query_wfs |
 | Predicate indexing | Done — groundness-keyed multi-arg dispatch |
 | Bytecode caching | Done — `__pycache__/*.pyc` via SourceLoader |
 | `clausal.logic.tabling` | Done — SLG resolution, variant tabling |
 | [`clausal.logic.constraints`](constraints.md) | Done — dif/2 via attributed variables |
 | [`clausal.logic.clpfd`](constraints.md) | Done — CLP(ℤ) integer constraints |
 | [Well-founded semantics](wfs.md) | Done — delayed negation, conditional answers |
-| [Meta-predicates](meta_predicates.md) | Done — findall, bagof, setof, forall, Call/N |
+| [Meta-predicates](meta_predicates.md) | Done — findall, bagof, setof, forall, call/N |
 | [Higher-order list builtins](higher_order.md) | Done — maplist, include, exclude, foldl |
 | Arithmetic builtins | Done — sign, gcd, divmod_ |
 | [Term inspection](term_inspection.md) | Done — copy_term, term_variables, numbervars |
@@ -197,7 +215,7 @@ The deep layering — Python → logic → Python → logic — is explicitly su
 | Pipeline split | Done — `compiler_v2.compile_module()`, two-phase architecture |
 | [Term expansion](term_expansion.md) | Done — `term_expansion/4` with plain-term patterns (`q()` quasi-quotation retired 2026-09-25), imported TE rules, init/final injection |
 | Goal expansion | Done — body-goal rewriting, regex auto-binding, pattern pre-compilation |
-| `clausal.modules` | Done — standard library package with `ModulesFinder`; [regex](regex.md) module, [log](logging.md) module (structured logging wrapping Python's `logging`), [date_time](date_time.md) module (relational date/time using Python `datetime` objects) |
+| `clausal.modules.py` | Done — library wrappers reached by bare name (`regex` → `py.re`, `log` → `py.logging`, `date_time` → `py.datetime`); [regex](regex.md), [log](logging.md), [date_time](date_time.md) |
 
 ---
 

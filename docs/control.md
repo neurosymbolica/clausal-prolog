@@ -35,8 +35,10 @@ test("any") <- (any_member(X, [10, 20, 30]), X == 10)
 
 ### time_goal/1
 
-`time_goal(Goal)` — execute `Goal` and print wall-clock and CPU time to stderr.
-The goal's solutions pass through unchanged.
+`time_goal(Goal)` — execute `Goal` and print the solution count, wall-clock
+and CPU time to stderr. The goal's solutions pass through unchanged; the line
+is printed once `Goal` is **exhausted**, so a caller that stops at the first
+solution (`once`, an `if --` seam) prints nothing.
 
 ```clausal
 --8<-- "tests/fixtures/docs/control_sigs.txt:time_goal_1"
@@ -45,7 +47,7 @@ The goal's solutions pass through unchanged.
 Output (to stderr):
 
 ```
-Wall: 0.000123s  CPU: 0.000098s
+# 1 solution(s), 0.000123s wall, 0.000098s CPU
 ```
 
 ### time_goal/2
@@ -81,8 +83,10 @@ test("exactly one solution") <- once(
 
 ## Gotchas
 
-- **`once` cuts all choice points** — it does not just skip one alternative, it
-  commits fully. Side effects from the first solution will have happened.
+- **`once` commits to the first solution** — it discards every remaining
+  alternative of `Goal`, not just the next one. Side effects from the first
+  solution will have happened. (Clausal has no cut; `once/1` is the ISO
+  construct for committing.)
 - **`time_goal/1` prints to stderr** — not stdout. It won't interfere with
   [write/writeln](io.md) output.
 - **`time_goal/2` measures wall time** — on a loaded system, wall time may be
@@ -90,6 +94,6 @@ test("exactly one solution") <- once(
 
 ---
 
-*See also: [If-Then-Else](reified_ite.md) — committed choice with `=>`,
+*See also: [If-Then-Else](reified_ite.md) — `if_/3` and the reified conditionals,
 [Tabling](tabling.md) — automatic memoization for performance,
 [Exception Handling](exceptions.md) — catch/throw for error control flow.*

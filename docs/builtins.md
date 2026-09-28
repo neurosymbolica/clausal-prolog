@@ -2,6 +2,10 @@
 
 Complete index of all built-in and standard-library predicates. Predicates are listed as `Name/arity`.
 
+Behaviour follows ISO 13211-1 first, and Scryer Prolog where ISO is silent. Error terms are Scryer's `error(Formal, Culprit)`; see [Exceptions](exceptions.md). Which of these the 1.0 release covers is set out in [Public API](public-api.md).
+
+**Documented on their own pages, not here:** the ISO comparison builtins are summarised [below](#iso-comparison-and-term-order-quoted-forms) and in [Operators](operators.md); `is_chars/1`, `is_codes/1` in [Type checking](type_checking.md); `time_goal/1` in [Control](control.md); `has_units/2`, `quantity/…` in [Units](units.md); `rational/1` and `rdiv` in [Arithmetic](arithmetic.md); CLP(ℚ)/CLP(ℝ) (`in_q`, `in_real`, `label_real`, `minimize`, `maximize`, `inf`, `sup`, `bb_inf`, `entailed`, `dump_q`, …) in [CLP(ℚ)](clpq.md) and [CLP(ℝ)](clpr.md); and the solver packages (`z3.*`, `ortools.*`, `pysat.*`) in their own pages.
+
 Notation in signature lines:
 - `+` = must be bound (input)
 - `-` = output (unified with result)
@@ -9,77 +13,45 @@ Notation in signature lines:
 
 ---
 
-??? abstract "Builtin Term Constructors"
+??? abstract "Builtin term constructors (Python)"
 
-    Every built-in predicate has a term constructor, a `BuiltinTerm` (the same
-    object as `clausal.<name>`).  Calling it **builds a cell** -- data, exactly
-    what `--append(...)` builds in a `.clausal` module; it runs nothing:
-
-    ```python
-    from clausal.logic.builtins import get_builtin_class
-    from clausal.logic.variables import Var
-
-    append = get_builtin_class("append")
-    between = get_builtin_class("between")
-
-    Z_ = Var()
-
-    # Positional construction
-    t = append([1, 2], [3, 4], Z_)
-    # → ('append', [1, 2], [3, 4], Z_)
-
-    # Keyword construction: name every field of a registered arity
-    t2 = between(low=1, high=10, x=Z_)
-    # → ('between', 1, 10, Z_)
-
-    # Any other argument count builds the cell AS WRITTEN -- never padded
-    # to a registered arity (a default argument is an explicit predicate)
-    between(1, 10)
-    # → ('between', 1, 10): between/2, an existence_error when run
-    between()
-    # → 'between'
-
-    # A 0-arity builtin builds its atom
-    get_builtin_class("nl")()
-    # → 'nl'
-    ```
-
-    Keywords at a count no registered arity has (`between(low=1, high=10)`)
-    are refused: field names place the arguments of a registered arity.
-
-    Run a cell with `solve(cell, module=m)` from Python, or with the
-    goal-position seam (`for X in --between(1, 3, X):`) inside a `.clausal`
-    module.  The object is not a class (it was a `PredicateMeta` class until
-    the W4b-3 retirement): it has no clause store and nothing to lock or
-    assert into.  It speaks the `_get_dispatch()` protocol, so it can also be
-    handed to `call/N`-style code as a goal object; a DB-dependent builtin
-    (assertz, retract, ...) has no db-free dispatch and raises
-    `NotImplementedError` there -- construct its term and run it with a module.
-
-    **Passing builtins to higher-order predicates:** Builtin predicates can be passed directly as arguments to `maplist`, `include`, `exclude`, `foldl`, `Call/N`, and other higher-order builtins — no lambda wrapper is needed:
-
-    ```
-    AllNumbers(XS) <- maplist(number, XS)
-    KeepInts(XS, INTS) <- include(integer, XS, INTS)
-    Incremented(XS, YS) <- maplist(succ, XS, YS)
-    ```
-
-    This works for any builtin or user-defined predicate whose arity matches what the higher-order predicate expects.
-
-    **Multi-arity builtins** (maplist/2,3, phrase/2,3, ...) pick the signature by argument count:
+    Every builtin with a Python-identifier name is also an object on the
+    `clausal` module (`clausal.append`, `clausal.between`, ...).  Calling it
+    **builds a cell** -- the plain tuple `(functor, *args)`, exactly what
+    `make_cell` builds; it runs nothing:
 
     ```python
-    maplist = get_builtin_class("maplist")
-    maplist(goal, [1, 2])           # → maplist/2 cell
-    maplist(goal, [1, 2], [2, 4])   # → maplist/3 cell
+    import clausal
+    from clausal import Var, Module, make_cell, solve
+
+    Z = Var()
+    clausal.append([1, 2], [3, 4], Z)      # ('append', [1, 2], [3, 4], Z)
+    make_cell("append", [1, 2], [3, 4], Z) # the same cell
+    clausal.between(low=1, high=10, x=Z)   # keywords name a registered arity's fields
+    clausal.between(1, 10)                 # ('between', 1, 10): built as written, never padded
+    clausal.nl()                           # 'nl': a 0-arity builtin builds its atom
+
+    X = Var()
+    for _ in solve(clausal.between(1, 3, X), module=Module("scratch")):
+        print(X.value)                     # 1, 2, 3
     ```
 
-    **Registry access:**
-    - `get_builtin_class(functor)` — returns the builtin's `BuiltinTerm`, or `None` (the name is historical)
-    - `_BUILTIN_CLASSES` — dict mapping functor name → `BuiltinTerm`
-    - `_BUILTIN_FIELDS` — dict mapping `(functor, arity)` → field name tuple
+    `solve` needs `module=` even for a builtin goal: a cell carries no module
+    of its own. Inside a `.seam` file, query with the goal-position seam
+    instead (`for X in --between(1, 3, X): ...`; see
+    [Python integration](python_integration.md)).  The objects are covered as
+    *predicates*, not as Python objects; see [Public API](public-api.md).
+    `get_builtin_class(name)` still returns them but is internal.
 
-    **Tests:** `tests/test_builtin_classes.py` (41 tests)
+    **Passing builtins to higher-order predicates.** A builtin's name is a
+    goal: pass it straight to `maplist`, `include`, `exclude`, `foldl`,
+    `call/N`, ... with no lambda wrapper:
+
+    ```
+    all_numbers(XS) <- maplist(number, XS)
+    keep_ints(XS, INTS) <- include(integer, XS, INTS)
+    incremented(XS, YS) <- maplist(succ, XS, YS)
+    ```
 
     ---
 
@@ -87,13 +59,13 @@ Notation in signature lines:
 
 | Category | Predicates |
 |---|---|
-| [Control Flow](#control-flow) | once, Not, if_/3, throw/1, Catch/2, catch_recover/3, catch/3, halt/0,1, setup_call_cleanup/3, call_cleanup/2 |
+| [Control Flow](#control-flow) | once/1, `not`, if_/3, throw/1, catch_recover/3, catch/3, halt/0,1, setup_call_cleanup/3, call_cleanup/2 |
 | [Coroutining](#coroutining) | freeze/2, when/2 |
 | [Meta-Predicates](#meta-predicates) | findall/3, bagof/3, setof/3, forall/2, call_nth/2, count_all/2 |
 | [Higher-Order Call](#higher-order-call) | call/1..8, call_goal/1..8 |
 | [DCG (Definite Clause Grammars)](#dcg-definite-clause-grammars) | phrase/2, phrase/3 |
 | [Term Inspection](#term-inspection) | functor/3, arg/3, unpack/2, copy_term/2, term_variables/2, numbervars/3, gensym/2, module_constant/3 |
-| [Runtime Database](#runtime-database) | assertz/1, asserta/1, retract/1, abolish_table/2, abolish_all_tables/0 |
+| [Runtime Database](#runtime-database) | assertz/1, asserta/1, retract/1, clause/2, abolish_table/2, abolish_all_tables/0 |
 | [Keyword-Term Introspection](#keyword-term-introspection) | vary/3, unbound_keys/2, signature/3 |
 | [Attributed Variables](#attributed-variables) | put_attr/3, get_attr/3, del_attr/2, get_attrs/2, put_attrs/2, attvar/1, term_attvars/2 |
 | [Constraint Predicates](#constraint-predicates) | dif/2, eq/3, dif_t/3 |
@@ -108,9 +80,10 @@ Notation in signature lines:
 | [I/O](#io) | write/1, writeq/1, write_canonical/1, write_term/2, writeln/1, write_text/1, writeln_text/1, print_term/1, nl/0, tab/1, write_to_string/2, write_text_to_string/2, term_to_string/2, listing/1, portray_clause/1 |
 | [Logging (`log` module)](#logging-log-module) | get_logger, debug, info, warning, error, critical, log, set_level, get_level, stream_handler, file_handler |
 | [Date & Time (`date_time` module)](#date--time-date_time-module) | now, now_utc, today, date, time, datetime, timedelta, date_add, date_sub, date_diff, datetime_string, timestamp, datetime_string_iso, date_string_iso, date_of, days_between, weekday, date_between, date_max, date_min, ordinal |
-| [YAML (`yaml_module` module)](#yaml-yaml_module-module) | Read, write, ReadAll, WriteAll, ReadFile, WriteFile, Get |
 | [Time & statistics](#time--statistics) | current_time/1, statistics/2 |
-| [Operator Syntax (Compiler Special Forms)](#operator-syntax-compiler-special-forms) | `is`, `==`, `!=`, `<`, `<=`, `>`, `>=`, `in`, `not in`, `not`, `if_` |
+| [ISO comparison and term order](#iso-comparison-and-term-order-quoted-forms) | `'='/2`, `'\\='/2`, `'=='/2`, `'\\=='/2`, `'@<'/2` ..., `compare/3`, `'=..'/2`, `'is'/2`, `'=:='/2`, `'<'/2` ... |
+| [Operator Syntax (Compiler Special Forms)](#operator-syntax-compiler-special-forms) | `is`, `is not`, `==`, `!=`, `<`, `<=`, `>`, `>=`, `in`, `not in`, `not` |
+| Solver packages | `z3.*`, `ortools.*`, `pysat.*`, `clpq.*`, `clpr.*`: see their own pages ([Constraints](constraints.md)) |
 
 ---
 
@@ -125,21 +98,19 @@ These are **compiler special forms** — transformed at compile time, not dispat
 Commit to the first solution of `Goal`; succeeds at most once even if `Goal` has multiple solutions.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/compiler.py:1619` (`_compile_once`)
     **Clausal tests:** `tests/fixtures/once_member.clausal`
     **Python tests:** `tests/test_builtins.py`
 
 ---
 
-### `Not/1`
+### `not/1`
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:not_1"
 ```
-Negation as failure (NAF). Succeeds if `Goal` has no solutions. Written as `not goal` in clause bodies.
-For tabled predicates, uses well-founded semantics (delayed negation via `_naf_tabled`).
+Negation as failure (NAF). Succeeds if `Goal` has no solutions. Written as the Python keyword, `not goal`, in a clause body; `Not` (TitleCase) is a load-time `SyntaxError` like every TitleCase name.
+For tabled predicates, uses well-founded semantics (delayed negation); see [WFS](wfs.md).
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/compiler.py:1507`
     **Clausal tests:** `tests/fixtures/wfs_win.clausal`, `tests/fixtures/wfs_win_asym.clausal`
     **Python tests:** `tests/test_compiled_programs.py`, `tests/test_wfs.py`
 
@@ -149,10 +120,9 @@ For tabled predicates, uses well-founded semantics (delayed negation via `_naf_t
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:if_3"
 ```
-If `Cond` has a solution, run `Then`; otherwise run `Else`. Soft-cut: only the first solution of `Cond` is tried. Compiles to a reified if-then-else that propagates constraints in both branches.
+The reified if-then-else (see [Reified if-then-else](reified_ite.md)); Clausal has no cut and no `->`. `Then` runs for **every** solution of `Cond` and `Else` only when `Cond` has none, so nothing is committed: `if_(in_(Y, [1, 2]), X is Y, X is 0)` answers `X = 1` and `X = 2`. A unification condition (`X is 1`) is reified: with `X` unbound both branches are explored, the `Else` branch under `dif(X, 1)`.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/compiler.py` (`_compile_ite_trampoline`)
     **Clausal tests:** `tests/fixtures/reified_memberd.clausal`, `tests/fixtures/tabled_ite.clausal`, `tests/fixtures/reified_max.clausal`
     **Python tests:** `tests/test_reified_ite.py`
 
@@ -165,24 +135,9 @@ If `Cond` has a solution, run `Then`; otherwise run `Else`. Soft-cut: only the f
 Raise a logic-level exception carrying `Term`. The exception propagates through the generator/trampoline chain until caught by `catch/3` or surfaces as a Python `LogicException`.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/compiler.py` (`_compile_throw`)
     **Exception class:** `clausal/logic/exceptions.py` (`LogicException`)
     **Clausal tests:** `tests/clausal_modules/exceptions.clausal`
     **Python tests:** `tests/test_exceptions.py`
-
----
-
-### `Catch/2`
-```clausal
---8<-- "tests/fixtures/docs/builtins_sigs.txt:catch_2"
-```
-Execute `Goal`. If an exception is raised (logic or Python), unify `Error` against the exception term and succeed. If `Goal` succeeds without throwing, `Catch/2` is transparent — all solutions pass through.
-
-Python exceptions appear as `ClassName(Message)` — the same shape as any logic term — so no special handling is needed. `Catch/2` never re-raises; it is equivalent to `catch(Goal, Error, true)`.
-
-??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/compiler.py` (`_compile_catch`)
-    **Python tests:** `tests/test_units.py::TestPythonExceptionCatch`
 
 ---
 
@@ -190,12 +145,9 @@ Python exceptions appear as `ClassName(Message)` — the same shape as any logic
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:catch_recover_3"
 ```
-Execute `Goal`. If an exception is raised, unify `Error` against the exception term, then execute `Recovery`. Like `Catch/2` but with an explicit recovery goal.
-
-`catch_recover` never re-raises. For selective catch with re-raise on mismatch, use `catch/3`.
+Execute `Goal`. If it throws and the thrown term unifies with `Error`, execute `Recovery`. It never re-raises: a thrown term that does not unify with `Error` makes `catch_recover` **fail**. For ISO behaviour (re-raise on mismatch) use `catch/3`.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/compiler.py` (`_compile_catch`)
 
 ---
 
@@ -205,10 +157,9 @@ Execute `Goal`. If an exception is raised, unify `Error` against the exception t
 ```
 Execute `Goal`. If `Goal` throws, unify the thrown term with `Catcher`. If unification succeeds, execute `Recovery`; otherwise re-raise. If `Goal` succeeds without throwing, `catch/3` is transparent — all solutions pass through.
 
-Python exceptions are wrapped as `ClassName(Message)` before unification against `Catcher`. Trail bindings from the failing goal are undone before recovery runs.
+An ISO error arrives in Scryer's form, `error(Formal, Culprit)`, where `Culprit` is the predicate indicator (`catch(atom_length(1, _), E, true)` binds `E = error(type_error(atom, 1), atom_length/2)`); see [Exceptions](exceptions.md). A Python exception raised inside `Goal` (for example from `++expr`) is caught as the cell `(ClassName, Message)`: `catch(++int("x"), E, true)` binds `E` to `('ValueError', "invalid literal for int() with base 10: 'x'")`. Bindings made by the failing goal are undone before recovery runs.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/compiler.py` (`_compile_catch`, `_compile_catch_trampoline`)
     **Clausal tests:** `tests/clausal_modules/exceptions.clausal`
     **Python tests:** `tests/test_exceptions.py`
 
@@ -218,10 +169,11 @@ Python exceptions are wrapped as `ClassName(Message)` before unification against
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:halt_0"
 ```
-Terminate execution by raising `SystemExit`. `halt/0` exits with code 0; `halt/1` exits with the given code.
+Terminate execution by raising `SystemExit`. `halt/0` exits with code 0; `halt/1` exits with the given code. `catch/3` does not absorb it.
+
+A 0-arity builtin in goal position is written with parentheses — `halt()`, `nl()`, `abolish_all_tables()` — a bare `nl` or `halt` goal is refused at load. `true`, `fail` and `false` are written bare.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/compiler.py` (inline in `compile_goal`/`compile_goal_trampoline`)
     **Python tests:** `tests/test_exceptions.py`
 
 ---
@@ -233,7 +185,6 @@ Terminate execution by raising `SystemExit`. `halt/0` exits with code 0; `halt/1
 Deterministic resource management (`try/finally` for logic). Setup runs once (first solution only). Call runs normally. Cleanup runs **exactly once** regardless of how Call terminates — success, failure, or exception. If Setup fails, Cleanup does not run.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/compiler.py` (`_compile_setup_call_cleanup`)
     **Python tests:** `tests/test_coroutining.py::TestSetupCallCleanup`
     **Clausal tests:** `tests/fixtures/coroutining.clausal`
 
@@ -246,7 +197,6 @@ Deterministic resource management (`try/finally` for logic). Setup runs once (fi
 Sugar for `setup_call_cleanup(true, Call, Cleanup)` — no setup step, just guaranteed cleanup.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/compiler.py` (`_compile_setup_call_cleanup`)
     **Python tests:** `tests/test_coroutining.py::TestCallCleanup`
     **Clausal tests:** `tests/fixtures/coroutining.clausal`
 
@@ -265,7 +215,6 @@ Coroutining predicates delay goal execution until variables are bound. They use 
 Delay `Goal` until `X` is bound. If `X` is already bound, runs `Goal` immediately. If `X` is unbound, attaches Goal as an attribute; when `X` is later unified, the frozen goal fires synchronously — failure rejects the unification.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/compiler.py` (`_compile_freeze`), `clausal/logic/coroutining.py` (`_freeze_hook`)
     **Python tests:** `tests/test_coroutining.py::TestFreeze`
     **Clausal tests:** `tests/fixtures/coroutining.clausal`
 
@@ -278,7 +227,6 @@ Delay `Goal` until `X` is bound. If `X` is already bound, runs `Goal` immediatel
 Generalized coroutining: delay `Goal` until `Condition` is satisfied. Supported conditions: `nonvar(X)`, `ground(X)`, conjunction `(C1, C2)`, disjunction `(C1 ; C2)`.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/compiler.py` (`_compile_when`), `clausal/logic/coroutining.py` (`_install_when_ground`, `_install_when_disjunction`)
     **Python tests:** `tests/test_coroutining.py::TestWhen`
     **Clausal tests:** `tests/fixtures/coroutining.clausal`
 
@@ -295,7 +243,6 @@ These are **compiler special forms** recognized by name in `compile_goal`/`compi
 Collect all bindings of `Template` produced by `Goal` into `Bag` (a list). Succeeds with `[]` if `Goal` has no solutions.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/compiler.py:1623` (`_compile_find_all_core`)
     **Clausal tests:** `tests/fixtures/meta_test.clausal`
     **Python tests:** `tests/test_meta.py`
 
@@ -308,7 +255,6 @@ Collect all bindings of `Template` produced by `Goal` into `Bag` (a list). Succe
 Like `findall/3` but fails if `Goal` has no solutions. Bag preserves duplicate solutions.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/compiler.py:1630`
     **Clausal tests:** `tests/fixtures/meta_test.clausal`
     **Python tests:** `tests/test_meta.py`
 
@@ -321,7 +267,6 @@ Like `findall/3` but fails if `Goal` has no solutions. Bag preserves duplicate s
 Like `bagof/3` but removes duplicates and sorts the result.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/compiler.py:1637`
     **Clausal tests:** `tests/fixtures/meta_test.clausal`
     **Python tests:** `tests/test_meta.py`
 
@@ -334,7 +279,6 @@ Like `bagof/3` but removes duplicates and sorts the result.
 Universal quantification: succeeds if `Action` succeeds for every solution of `Cond`. Desugars to `not(Cond and not(Action))`.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/compiler.py:1644`
     **Clausal tests:** `tests/fixtures/meta_test.clausal`
     **Python tests:** `tests/test_meta.py`
 
@@ -347,7 +291,6 @@ Universal quantification: succeeds if `Action` succeeds for every solution of `C
 Call `Goal` and succeed only on the **Nth solution** (1-indexed). Skips the first N-1 solutions. Fails if Goal has fewer than N solutions. Raises `type_error` if N is not a positive integer.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/compiler.py` (`_compile_call_nth`)
     **Python tests:** `tests/test_coroutining.py::TestCallNth`
     **Clausal tests:** `tests/fixtures/coroutining.clausal`
 
@@ -360,7 +303,6 @@ Call `Goal` and succeed only on the **Nth solution** (1-indexed). Skips the firs
 Count the number of solutions of `Goal` without collecting them. Unifies `Count` with the integer result. Bindings from the inner goal are not visible after counting (the trail is unwound).
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/compiler.py` (`_compile_count_all`)
     **Python tests:** `tests/test_coroutining.py::TestCountAll`
     **Clausal tests:** `tests/fixtures/coroutining.clausal`
 
@@ -384,9 +326,9 @@ Query runtime statistics. With Key bound, looks up a specific stat. With Key unb
 
 | Key | Value |
 |---|---|
-| `"wall_time"` | Wall-clock seconds since process start (float) |
-| `"cpu_time"` | CPU seconds used by this process (float) |
-| `"memory"` | Peak RSS memory in bytes (int, Linux/macOS only) |
+| `'wall_time'` | Wall-clock seconds since process start (float) |
+| `'cpu_time'` | CPU seconds used by this process (float) |
+| `'memory'` | Peak RSS memory in bytes (int, Linux/macOS only) |
 
 ---
 
@@ -399,7 +341,6 @@ Query runtime statistics. With Key bound, looks up a specific stat. With Key unb
 Call `Goal` (a lambda or dispatch function) with 0–7 extra arguments appended. Aliases for `call_goal/1..8`.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:1532` (alias registration)
     **Clausal tests:** `tests/fixtures/builtins_call.clausal`
     **Python tests:** `tests/test_meta.py`, `tests/test_higher_order.py`
 
@@ -412,7 +353,6 @@ Call `Goal` (a lambda or dispatch function) with 0–7 extra arguments appended.
 Core implementation of higher-order call. `Goal` must be a callable (lambda or `_get_dispatch()` object). `call_goal/4..8` are generated via `_make_call_goal_n`.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:1479`
     **Clausal tests:** `tests/fixtures/builtins_call.clausal`
     **Python tests:** `tests/test_meta.py`, `tests/test_higher_order.py`
 
@@ -427,7 +367,6 @@ Core implementation of higher-order call. `Goal` must be a callable (lambda or `
 Invoke a DCG rule and require it to consume the entire input list. `RuleBody` is either a predicate name (0 extra args, e.g. `greeting`) or a partial term (N extra args, e.g. `digit(D)`). equivalent to calling the rule with `List` as the input state and `[]` as the output state.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py` (`_phrase__2`)
     **Python tests:** `tests/test_dcg.py`
 
 ---
@@ -438,10 +377,9 @@ Invoke a DCG rule and require it to consume the entire input list. `RuleBody` is
 ```
 Invoke a DCG rule for partial parsing. Like `phrase/2`, but the remaining unconsumed input is unified with `Rest` instead of requiring `[]`.
 
-Also used for **state-passing DCGs**: encode state as a single-element list `[State]`, thread it through DCG nonterminals using `phrase(Rule, [InitialState], [FinalState])`. See [syntax.md](syntax.md#dcgs-as-general-state-passing) for the full pattern.
+Also used for **state-passing DCGs**: encode state as a single-element list `[State]`, thread it through DCG nonterminals using `phrase(Rule, [InitialState], [FinalState])`. See [DCGs — state threading](dcg.md#state-threading) for the full pattern.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py` (`_phrase__3`)
     **Python tests:** `tests/test_dcg.py`
 
 ---
@@ -473,20 +411,19 @@ Decompose a term into its functor name and arity, or construct a term from a nam
 | `functor(foo(a), N, A)` | `N = foo` (an atom), `A = 1` |
 | `functor(bar, N, A)` | `N = bar`, `A = 0` |
 | `functor(42, N, A)` | `N = 42`, `A = 0` |
-| `functor([], N, A)` | `N = '[]'`, `A = 0` |
+| `functor([], N, A)` | `N = []`, `A = 0` (as in Scryer) |
 | `functor([1, 2], N, A)` | `N = '.'`, `A = 2` — a list is the `'.'/2` structure |
 | `functor("ab", N, A)` | `N = '.'`, `A = 2` — a string is the list of its chars |
-| `functor("", N, A)` | `N = '[]'`, `A = 0` |
+| `functor("", N, A)` | `N = []`, `A = 0` |
 | `functor(T, foo, 2)` | `T = foo(_, _)` |
 | `functor(T, foo, 0)` | `T = foo` |
 | `functor(T, '.', 2)` | `T = [_ \| _]` — a partial LIST, never a `'.'/2` cell |
 | `functor(T, "foo", 1)` | `type_error(atomic, "foo")` — a string is a compound |
 | `functor(T, 42, 2)` | `type_error(atom, 42)` |
 
-The `'.'/2` reading is a **view**: decomposition answers virtually (`arg(2, "hello", T)` gives the `str` slice `"ello"`), and construction through the name position builds the engine's real list shapes, never a `(".", H, T)` cell. See `write_canonical/1` for the same view in the writer.
+The `'.'/2` reading is a **view**: decomposition answers virtually (`arg(2, "hello", T)` gives the string `"ello"`), and construction through the name position builds the engine's real list shapes, never a `(".", H, T)` cell. See `write_canonical/1` for the same view in the writer.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:353`
     **Clausal tests:** `tests/fixtures/builtins_inspect.clausal`
     **Python tests:** `tests/test_builtins.py`
 
@@ -501,7 +438,6 @@ unbound, enumerates `(N, arg)` pairs in order on backtracking; semidet when
 `arg` is given.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:394`
     **Clausal tests:** `tests/fixtures/builtins_inspect.clausal`
     **Python tests:** `tests/test_builtins.py`
 
@@ -529,7 +465,6 @@ Decompose a term to a `[functor | args]` list, or construct a term from such a l
 Constructed compounds are **cells** (plain tuples) — Python code tests a constructed term's shape with `clausal.cell_functor` / `clausal.cell_args`.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:413`
     **Clausal tests:** `tests/fixtures/builtins_inspect.clausal`
     **Python tests:** `tests/test_builtins.py`
 
@@ -542,7 +477,6 @@ Constructed compounds are **cells** (plain tuples) — Python code tests a const
 Unify `Copy` with a deep copy of `Original` where every unbound `Var` is replaced by a fresh one. Structural sharing is preserved: if the same `Var` appears in multiple positions in `Original`, the same fresh `Var` appears in all corresponding positions of `Copy`. Already-bound variables are followed and their values are copied rather than replaced.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py` (`_copy_term`, `copy_term/2`)
     **Clausal tests:** `tests/clausal_modules/term_inspection.clausal`
     **Python tests:** `tests/test_term_inspection.py`
 
@@ -555,7 +489,6 @@ Unify `Copy` with a deep copy of `Original` where every unbound `Var` is replace
 Unify `Vars` with a list of all unbound `Var`s in `Term`, collected left-to-right with duplicates removed (same `Var` appearing multiple times in `Term` appears only once in `Vars`). Bound variables are followed and not collected.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py` (`_collect_vars`, `term_variables/2`)
     **Clausal tests:** `tests/clausal_modules/term_inspection.clausal`
     **Python tests:** `tests/test_term_inspection.py`
 
@@ -568,7 +501,6 @@ Unify `Vars` with a list of all unbound `Var`s in `Term`, collected left-to-righ
 Number all unbound `Var`s in `Term` left-to-right, binding each to the cell `("$VAR", N)` where `N` starts at `Start` and increments. `End` is unified with the next unused number after all variables are numbered. Useful for pretty-printing terms with named variables. `Start` must be a bound integer.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py` (`numbervars/3`)
     **Clausal tests:** `tests/clausal_modules/term_inspection.clausal`
     **Python tests:** `tests/test_term_inspection.py`
 
@@ -578,7 +510,7 @@ Number all unbound `Var`s in `Term` left-to-right, binding each to the cell `("$
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:gensym_2"
 ```
-Generate a unique atom by appending a monotonically increasing counter to `Prefix`. `gensym("x", A)` produces `"x_1"`, `"x_2"`, etc. on successive calls. The counter is **not trailed** — it survives backtracking (impure, matches Prolog's `gensym/2`). Thread-safe via lock. Different prefixes maintain independent counters. `Prefix` must be a bound string; unbound or non-string prefix → fail.
+Generate a unique atom by appending a monotonically increasing counter to `Prefix`. `gensym(x, A)` produces the atoms `x_1`, `x_2`, etc. on successive calls. The counter is **not trailed** — it survives backtracking (impure, matches Prolog's `gensym/2`). Thread-safe via lock. Different prefixes maintain independent counters. `Prefix` must be a bound atom; anything else (unbound, a `"..."` string, a number) fails.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/inspection.py` (`gensym/2`)
@@ -712,11 +644,6 @@ dimensionless marker would make every constant look united.
 limit(N, U) <- constant_number_units(max_fine, N, U)
 ```
 
-!!! warning "Scope: program-wide, like `constant_value/2`"
-    A builtin never sees its calling module, so this enumerates every loaded Clausal
-    module's own declarations. Two modules declaring the same constant name both answer.
-    Use [`module_constant/3`](#module_constant3) when the module matters.
-
 ### `module_constant_units/4`
 
 ```text
@@ -749,11 +676,12 @@ resolves against; `Name` is the constant's declaration spelling as an **atom**
 (`max_retries`); `Value` is the
 constant's frozen value — the identical object the declaring module's own clause bodies embed.
 
-```clausal
+```text
+# m.clausal
 -module(m, [])
 -constant_value(max_retries, 3)
-```
-```clausal
+
+# caller.clausal
 -import_module(m)
 retry_limit(N) <- module_constant(m, max_retries, N)
 ```
@@ -785,16 +713,15 @@ there. Query the module that actually declared it instead (see
 
 ## Runtime Database
 
-These predicates require a live `Database` reference (`_DB_BUILTINS`). They recompile the affected predicate after modification.
+These work only on a predicate declared [`-dynamic`](database_ops.md#declare-first-the-dynamic-directive) (declare first). A static predicate raises `error(permission_error(modify, static_procedure, Name/Arity), assertz/1)` (or `asserta/1`, `retract/1`); a name with no declaration is refused. See [Database operations](database_ops.md).
 
 ### `assertz/1`
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:assertz_1"
 ```
-Add `Clause` (a fact or rule) at the **end** of its predicate's clause list. Fails on locked (non-dynamic) predicates. Ground compound facts are normalized to `Var+Is` form for output-mode queries.
+Add the fact `Clause` at the **end** of its predicate's clause list. Only facts can be asserted: a rule raises `permission_error(assert, rule, Head)`.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:507`
     **Clausal tests:** `tests/fixtures/builtins_db.clausal`
     **Python tests:** `tests/test_builtins.py`
 
@@ -807,7 +734,6 @@ Add `Clause` (a fact or rule) at the **end** of its predicate's clause list. Fai
 Add `Clause` at the **front** of its predicate's clause list.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:545`
     **Clausal tests:** `tests/fixtures/builtins_db.clausal`
     **Python tests:** `tests/test_builtins.py`
 
@@ -817,12 +743,38 @@ Add `Clause` at the **front** of its predicate's clause list.
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:retract_1"
 ```
-Remove the **first** clause whose head unifies with `Term`. Not backtrackable — removes exactly one clause per call. Fails on locked predicates.
+Remove the **first** clause whose head unifies with `Term`. Not backtrackable — removes exactly one clause per call. Fails when nothing matches; a static predicate raises `permission_error(modify, static_procedure, Name/Arity)`.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:580`
     **Clausal tests:** `tests/fixtures/builtins_db.clausal`
     **Python tests:** `tests/test_builtins.py`
+
+---
+
+### `clause/2`
+```text
+clause(+Head, ?Body)
+```
+ISO 8.8.1: `Body` unifies with the body of each clause of a **dynamic**
+predicate whose head unifies with `Head` (`True` for a fact), in the logical
+update view. A static predicate raises
+`permission_error(access, private_procedure, Name/Arity)`, as does a builtin
+or control construct; an unknown one fails.
+
+```clausal
+-dynamic(edge/2)
+-dynamic(path/2)
+
+edge(1, 2),
+path(X, Y) <- edge(X, Y)
+
+test("fact body is True") <- clause(edge(1, _), True)
+test("rule body is a term") <- (clause(path(A, B), BODY), BODY is edge(A, B))
+```
+
+??? info "Implementation & tests"
+    **Implementation:** `clausal/logic/builtins/clause_ops.py`
+    **Python tests:** `tests/test_clause_2_iso.py`
 
 ---
 
@@ -833,7 +785,6 @@ Remove the **first** clause whose head unifies with `Term`. Not backtrackable �
 Remove all cached answers for the named tabled predicate, forcing re-computation on the next call.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:661`
     **Clausal tests:** none
     **Python tests:** `tests/test_tabling.py`
 
@@ -846,7 +797,6 @@ Remove all cached answers for the named tabled predicate, forcing re-computation
 Remove all cached tabling answers for every predicate in the current database.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:678`
     **Clausal tests:** none
     **Python tests:** `tests/test_tabling.py`
 
@@ -854,16 +804,15 @@ Remove all cached tabling answers for every predicate in the current database.
 
 ## Keyword-Term Introspection
 
-These predicates operate on declared functor cells and term (dataclass) instances.
+These predicates address a term's fields by name; the names come from the functor's declaration (`-private([point(x, y, z)])`). See [Keyword predicates](keyword_preds.md). The keyword construction spelling `point(x=1)`, `KWTerm` and `extend/3` are gone.
 
 ### `vary/3`
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:vary_3"
 ```
-Produce a copy of `Term` with field values replaced by `Overrides` (a Python `dict`). Works on declared functor cells and functor dataclass instances.
+Produce a copy of `Term` with field values replaced by `Overrides` (a Python `dict`). Works on declared functor cells.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:692`
     **Clausal tests:** `tests/fixtures/builtins_keywords.clausal`
     **Python tests:** `tests/test_builtins.py`
 
@@ -876,7 +825,6 @@ Produce a copy of `Term` with field values replaced by `Overrides` (a Python `di
 Unify `Keys` with a list of field names whose values are unbound `Var`s in `Term`.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:754`
     **Clausal tests:** `tests/fixtures/builtins_keywords.clausal`
     **Python tests:** `tests/test_builtins.py`
 
@@ -889,7 +837,6 @@ Unify `Keys` with a list of field names whose values are unbound `Var`s in `Term
 Reflect the registered parameter name list for the predicate `FunctorName/Arity`. Fails if no signature is registered.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:778`
     **Clausal tests:** `tests/fixtures/builtins_keywords.clausal`
     **Python tests:** `tests/test_builtins.py`
 
@@ -966,7 +913,6 @@ Collect all attributed variables occurring in `Term` into a list. Traverses comp
 Disequality constraint. Succeeds if `X` and `Y` can remain different (posts a constraint if either is unbound). Implemented via attributed variables; propagates through unification.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:801` → `clausal/logic/constraints.py`
     **Clausal tests:** `tests/fixtures/builtins_dif.clausal`
     **Python tests:** `tests/test_dif.py`
 
@@ -979,7 +925,6 @@ Disequality constraint. Succeeds if `X` and `Y` can remain different (posts a co
 Reified equality. `T` is unified with `True` if `X = Y`, `False` if `dif(X, Y)`. Suspends if neither is determined yet.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:812` → `clausal/logic/reif.py`
     **Clausal tests:** `tests/fixtures/reif_eq_test.clausal`, `tests/fixtures/builtins_dif.clausal`
     **Python tests:** `tests/test_reif_builtins.py`
 
@@ -992,7 +937,6 @@ Reified equality. `T` is unified with `True` if `X = Y`, `False` if `dif(X, Y)`.
 Reified disequality. `T` is `True` if `dif(X, Y)`, `False` if `X = Y`.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:819` → `clausal/logic/reif.py`
     **Clausal tests:** `tests/fixtures/builtins_dif.clausal`
     **Python tests:** `tests/test_reif_builtins.py`
 
@@ -1009,7 +953,6 @@ CLP(ℤ) operates over **all integers** — variables default to the entire inte
 Post the integer domain `[Lo, Hi]` on a logic variable or a list of logic variables. Required before `label/1` can enumerate values.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:829` → `clausal/logic/clpfd.py`
     **Clausal tests:** `tests/fixtures/clpfd_queens.clausal`, `tests/fixtures/clpfd_sendmore.clausal`
     **Python tests:** `tests/test_clpfd.py`
 
@@ -1022,7 +965,6 @@ Post the integer domain `[Lo, Hi]` on a logic variable or a list of logic variab
 Enumerate concrete values for a list of constrained variables, backtracking over all consistent assignments. Variables must have finite domains (via `in_domain/3` or comparison constraints) — raises `ValueError` on unbounded domains.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:837` → `clausal/logic/clpfd.py`
     **Clausal tests:** `tests/fixtures/clpfd_queens.clausal`, `tests/fixtures/clpfd_sendmore.clausal`
     **Python tests:** `tests/test_clpfd.py`
 
@@ -1035,7 +977,6 @@ Enumerate concrete values for a list of constrained variables, backtracking over
 Post an all-different constraint on a list of integer-constrained variables. Propagates bounds and eliminates assigned values from other domains.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:844` → `clausal/logic/clpfd.py`
     **Clausal tests:** `tests/fixtures/clpfd_queens.clausal`, `tests/fixtures/clpfd_sendmore.clausal`
     **Python tests:** `tests/test_clpfd.py`
 
@@ -1045,7 +986,7 @@ Post an all-different constraint on a list of integer-constrained variables. Pro
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:structural_eq_2"
 ```
-True structural equality (Prolog `==/2`). Succeeds if `T1` and `T2` are identical after dereferencing variables, **without** binding any variables and **without** evaluating arithmetic. Recursively walks compound terms (cells), lists, SegLists, DictTerms, and user-defined term dataclasses.
+True structural equality (ISO `==/2`, also written `'=='(T1, T2)`). Succeeds if `T1` and `T2` are identical after dereferencing variables, **without** binding any variables and **without** evaluating arithmetic. Recursively walks compound terms (cells), lists, SegLists, DictTerms, and user-defined term dataclasses.
 
 For structural inequality use `not structural_eq(T1, T2)`.
 
@@ -1173,7 +1114,6 @@ Enumerate 0/1 assignments for a list of Boolean variables. Backtracks over all s
 Succeeds if `X` is an unbound logic variable.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:863`
     **Clausal tests:** `tests/fixtures/builtins_types.clausal`
     **Python tests:** `tests/test_builtins.py`
 
@@ -1186,7 +1126,6 @@ Succeeds if `X` is an unbound logic variable.
 Succeeds if `X` is bound (not an unbound `Var`).
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:870`
     **Clausal tests:** `tests/fixtures/builtins_types.clausal`
     **Python tests:** `tests/test_builtins.py`
 
@@ -1228,7 +1167,6 @@ Succeeds if `X` is an atomic constant: an **atom**, a number, a bool, or another
     **Python tests:** `tests/test_builtins.py`
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:877`
     **Clausal tests:** `tests/fixtures/builtins_types.clausal`
     **Python tests:** `tests/test_builtins.py`
 
@@ -1241,7 +1179,6 @@ Succeeds if `X` is an atomic constant: an **atom**, a number, a bool, or another
 Succeeds if `X` is an `int` or `float` (excludes `bool`).
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:885`
     **Clausal tests:** `tests/fixtures/builtins_types.clausal`
     **Python tests:** `tests/test_builtins.py`
 
@@ -1254,7 +1191,6 @@ Succeeds if `X` is an `int` or `float` (excludes `bool`).
 Succeeds if `X` is an `int` (excludes `bool`).
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:897`
     **Clausal tests:** `tests/fixtures/builtins_types.clausal`
     **Python tests:** `tests/test_builtins.py`
 
@@ -1267,7 +1203,6 @@ Succeeds if `X` is an `int` (excludes `bool`).
 Succeeds if `X` is a Python `float`.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:905`
     **Clausal tests:** `tests/fixtures/builtins_types.clausal`
     **Python tests:** `tests/test_builtins.py`
 
@@ -1277,10 +1212,9 @@ Succeeds if `X` is a Python `float`.
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:compound_1"
 ```
-Succeeds if `X` is a compound term with arity > 0 (a cell `("f", …)` or term instance with at least one field). An **atom** is arity 0, so `compound/1` rejects it; a list (a string included) is not compound either.
+Succeeds if `X` is a compound term with arity > 0: a cell `('f', …)`, or a non-empty list or string (the `'.'/2` structure, as in ISO). An **atom** is arity 0, so `compound/1` rejects it, and so is `[]` (= `""`).
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:921`
     **Clausal tests:** `tests/fixtures/builtins_types.clausal`
     **Python tests:** `tests/test_builtins.py`
 
@@ -1290,10 +1224,9 @@ Succeeds if `X` is a compound term with arity > 0 (a cell `("f", …)` or term i
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:callable__1"
 ```
-Succeeds if `X` is an **atom** or a compound term — something that could appear as a goal. A **string** is not callable: `call("foo")` raises `type_error(callable, "foo")`.
+Succeeds if `X` is an **atom** or a compound term — something that could appear as a goal. As in ISO, a non-empty string is a `'.'/2` compound and so is callable: `call("foo")` raises `existence_error(procedure, '.'/2)`, not a type error.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:935`
     **Clausal tests:** `tests/fixtures/builtins_types.clausal`
     **Python tests:** `tests/test_builtins.py`
 
@@ -1306,7 +1239,6 @@ Succeeds if `X` is an **atom** or a compound term — something that could appea
 Succeeds if `X` is list-shaped: a Python `list`, or a **string**, which *is* the list of its character atoms. Use `is_str/1` when you need to tell a character sequence (string) apart from a plain list — a bare atom (`str`) satisfies neither.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:947`
     **Clausal tests:** `tests/fixtures/builtins_types.clausal`
     **Python tests:** `tests/test_builtins.py`
 
@@ -1319,7 +1251,6 @@ Succeeds if `X` is list-shaped: a Python `list`, or a **string**, which *is* the
 Succeeds if `X` contains no unbound `Var`s (is fully instantiated).
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:954`
     **Clausal tests:** `tests/fixtures/builtins_types.clausal`
     **Python tests:** `tests/test_builtins.py`
 
@@ -1329,9 +1260,12 @@ Succeeds if `X` contains no unbound `Var`s (is fully instantiated).
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:must_be_2"
 ```
-assertz that `Term` is of the given type. Succeeds silently if it matches. Throws `instantiation_error` if Term is unbound. Throws `type_error(Type, Term, "must_be/2")` if Term is ground but wrong type.
+Assert that `Term` is of the given type. Succeeds silently if it matches. Throws `instantiation_error` if Term is unbound, and `error(type_error(Type, Term), must_be/2)` if Term is ground but of the wrong type.
 
-The Type argument is an **atom**. Supported types: `integer`, `float`, `number`, `atom`, `string` / `str`, `list`, `boolean`, `callable`, `dict`, `compound`. `atom` and `string` are now separate types (they used to be one entry): `must_be(atom, "abc")` raises, and so does `must_be(string, abc)`.
+The Type argument is an **atom**. Supported types: `integer`, `float`, `number`, `atom`, `string` / `str`, `list`, `boolean`, `callable`, `dict`, `compound`. `atom` and `string` are separate types: `must_be('atom', "abc")` raises, and so does `must_be('string', abc)`.
+
+!!! warning "Quote a type name that is also a builtin"
+    `integer`, `float`, `number`, `atom`, `callable` and `compound` are also builtin predicate names, and a bare builtin name in an argument is the builtin's object, not the atom: `must_be(integer, 3)` raises `type_error(atom, <builtin integer/1>)`. Write `must_be('integer', 3)`.
 
 ---
 
@@ -1339,7 +1273,7 @@ The Type argument is an **atom**. Supported types: `integer`, `float`, `number`,
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:can_be_2"
 ```
-assertz that `Term` could possibly be of the given type. Succeeds if Term is unbound (it could become anything) or already matches the type. Throws `type_error` only when Term is ground and definitely the wrong type. The Type argument is an **atom**, and the same types `must_be/2` takes.
+Assert that `Term` could possibly be of the given type. Succeeds if Term is unbound (it could become anything) or already matches the type. Throws `type_error` only when Term is ground and definitely the wrong type. The Type argument is an **atom**, and the same types `must_be/2` takes.
 
 ---
 
@@ -1566,7 +1500,6 @@ Arithmetic uses `==` to post CLP(ℤ) constraints (e.g., `Y == X * 2`). The pred
 Check or enumerate integers in `[Low, High]` inclusive. In check mode (X bound) succeeds iff `Low ≤ X ≤ High`. In generate mode (X unbound) backtracks over each integer.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:964`
     **Clausal tests:** `tests/fixtures/builtins_arith.clausal`
     **Python tests:** `tests/test_builtins.py`, `tests/test_search.py`
 
@@ -1579,7 +1512,6 @@ Check or enumerate integers in `[Low, High]` inclusive. In check mode (X bound) 
 Bidirectional successor: if `X` is bound, `Y = X + 1`; if `Y` is bound, `X = Y - 1`. Both must be non-negative integers.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:987`
     **Clausal tests:** `tests/fixtures/builtins_arith.clausal`
     **Python tests:** `tests/test_builtins.py`
 
@@ -1592,7 +1524,6 @@ Bidirectional successor: if `X` is bound, `Y = X + 1`; if `Y` is bound, `X = Y -
 Relational addition: any two of `X`, `Y`, `Z` determine the third.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:1008`
     **Clausal tests:** `tests/fixtures/builtins_arith.clausal`
     **Python tests:** `tests/test_builtins.py`
 
@@ -1605,7 +1536,6 @@ Relational addition: any two of `X`, `Y`, `Z` determine the third.
 Absolute value.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:1035`
     **Clausal tests:** `tests/fixtures/builtins_arith.clausal`
     **Python tests:** `tests/test_builtins.py`
 
@@ -1616,7 +1546,6 @@ Absolute value.
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:max__3"
 ```
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:1049`
     **Clausal tests:** `tests/fixtures/builtins_arith.clausal`
     **Python tests:** `tests/test_builtins.py`
 
@@ -1627,7 +1556,6 @@ Absolute value.
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:min__3"
 ```
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:1062`
     **Clausal tests:** `tests/fixtures/builtins_arith.clausal`
     **Python tests:** `tests/test_builtins.py`
 
@@ -1719,7 +1647,6 @@ Least significant bit position. X must be a positive integer. `lsb(12, B)` gives
 Enumerate or check membership. Backtracks over all elements.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:1078`
     **Clausal tests:** `tests/fixtures/meta_test.clausal`, `tests/fixtures/builtins_lists.clausal`
     **Python tests:** `tests/test_builtins.py`, `tests/test_search.py`
 
@@ -1732,7 +1659,6 @@ Enumerate or check membership. Backtracks over all elements.
 Deterministic membership check. Succeeds at most once; no backtracking.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:1091`
     **Clausal tests:** `tests/fixtures/builtins_lists.clausal`
     **Python tests:** `tests/test_builtins.py`
 
@@ -1745,7 +1671,6 @@ Deterministic membership check. Succeeds at most once; no backtracking.
 List concatenation. Works in all modes: given any two, determines the third. Backtracks over splits when `L3` is bound and `L1`/`L2` are unbound.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:1105`
     **Clausal tests:** `tests/fixtures/builtins_lists.clausal`
     **Python tests:** `tests/test_builtins.py`, `tests/test_search.py`
 
@@ -1758,7 +1683,6 @@ List concatenation. Works in all modes: given any two, determines the third. Bac
 List length in both directions.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:1141`
     **Clausal tests:** `tests/fixtures/builtins_lists.clausal`
     **Python tests:** `tests/test_builtins.py`
 
@@ -1771,7 +1695,6 @@ List length in both directions.
 Unify `Elem` with the last element of `List`.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:1159`
     **Clausal tests:** `tests/fixtures/builtins_lists.clausal`
     **Python tests:** `tests/test_builtins.py`, `tests/test_search.py`
 
@@ -1782,7 +1705,6 @@ Unify `Elem` with the last element of `List`.
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:reverse_2"
 ```
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:1170`
     **Clausal tests:** `tests/fixtures/builtins_lists.clausal`
     **Python tests:** `tests/test_builtins.py`, `tests/test_search.py`
 
@@ -1795,7 +1717,6 @@ Unify `Elem` with the last element of `List`.
 Get the element at 0-based index `N`.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:1181`
     **Clausal tests:** `tests/fixtures/builtins_lists.clausal`
     **Python tests:** `tests/test_builtins.py`
 
@@ -1808,7 +1729,6 @@ Get the element at 0-based index `N`.
 Recursively flatten a nested list structure.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:1225`
     **Clausal tests:** `tests/fixtures/builtins_lists.clausal`
     **Python tests:** `tests/test_builtins.py`
 
@@ -1821,7 +1741,6 @@ Recursively flatten a nested list structure.
 sort `List` preserving duplicate elements (stable sort).
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:1248`
     **Clausal tests:** `tests/fixtures/builtins_lists.clausal`
     **Python tests:** `tests/test_builtins.py`
 
@@ -1834,7 +1753,6 @@ sort `List` preserving duplicate elements (stable sort).
 sort `List` removing duplicate elements.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:1265`
     **Clausal tests:** `tests/fixtures/builtins_lists.clausal`
     **Python tests:** `tests/test_builtins.py`
 
@@ -1847,7 +1765,6 @@ sort `List` removing duplicate elements.
 Enumerate all permutations of `List` via backtracking.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:1286`
     **Clausal tests:** `tests/fixtures/builtins_lists.clausal`
     **Python tests:** `tests/test_builtins.py`, `tests/test_search.py`
 
@@ -1860,7 +1777,6 @@ Enumerate all permutations of `List` via backtracking.
 select `Elem` from `List`, unifying `Rest` with the remaining elements. Backtracks over all positions where `Elem` appears.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:1300`
     **Clausal tests:** `tests/fixtures/builtins_lists.clausal`
     **Python tests:** `tests/test_builtins.py`
 
@@ -1873,7 +1789,6 @@ select `Elem` from `List`, unifying `Rest` with the remaining elements. Backtrac
 List difference: elements in `Set1` not in `Set2`.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:1314`
     **Clausal tests:** `tests/fixtures/builtins_lists.clausal`
     **Python tests:** `tests/test_builtins.py`
 
@@ -1886,7 +1801,6 @@ List difference: elements in `Set1` not in `Set2`.
 Elements present in both `Set1` and `Set2`.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:1328`
     **Clausal tests:** `tests/fixtures/builtins_lists.clausal`
     **Python tests:** `tests/test_builtins.py`
 
@@ -1899,7 +1813,6 @@ Elements present in both `Set1` and `Set2`.
 Elements in `Set1` or `Set2`, with duplicates removed.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:1342`
     **Clausal tests:** `tests/fixtures/builtins_lists.clausal`
     **Python tests:** `tests/test_builtins.py`
 
@@ -1912,7 +1825,6 @@ Elements in `Set1` or `Set2`, with duplicates removed.
 Remove duplicates from `List` preserving the first-occurrence order.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:1359`
     **Clausal tests:** `tests/fixtures/builtins_lists.clausal`
     **Python tests:** `tests/test_builtins.py`
 
@@ -1925,7 +1837,6 @@ Remove duplicates from `List` preserving the first-occurrence order.
 sum_ all numeric elements of `List`.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:1375`
     **Clausal tests:** `tests/fixtures/builtins_lists.clausal`
     **Python tests:** `tests/test_builtins.py`
 
@@ -1938,7 +1849,6 @@ sum_ all numeric elements of `List`.
 Maximum element of a non-empty numeric list.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:1391`
     **Clausal tests:** `tests/fixtures/builtins_lists.clausal`
     **Python tests:** `tests/test_builtins.py`
 
@@ -1951,7 +1861,6 @@ Maximum element of a non-empty numeric list.
 Minimum element of a non-empty numeric list.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:1407`
     **Clausal tests:** `tests/fixtures/builtins_lists.clausal`
     **Python tests:** `tests/test_builtins.py`
 
@@ -2042,7 +1951,6 @@ Split `List` by separator `Sep` into sublists (`Parts`). In join mode, interleav
 Relate a list of `[K, V]` pairs to separate `Keys` and `Values` lists. Works in both directions.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:1426`
     **Clausal tests:** `tests/fixtures/builtins_lists.clausal`
     **Python tests:** `tests/test_builtins.py`
 
@@ -2055,7 +1963,6 @@ Relate a list of `[K, V]` pairs to separate `Keys` and `Values` lists. Works in 
 Extract the key (first element) from each pair.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:1450`
     **Clausal tests:** `tests/fixtures/builtins_lists.clausal`
     **Python tests:** `tests/test_builtins.py`
 
@@ -2068,7 +1975,6 @@ Extract the key (first element) from each pair.
 Extract the value (second element) from each pair.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:1463`
     **Clausal tests:** `tests/fixtures/builtins_lists.clausal`
     **Python tests:** `tests/test_builtins.py`
 
@@ -2137,7 +2043,6 @@ These predicates accept a **goal argument** (a lambda or named predicate). The g
 Verify that `Goal(Elem)` succeeds for every element of `List`. Fails if any element fails.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:1541`
     **Clausal tests:** `tests/fixtures/builtins_higher_order.clausal`
     **Python tests:** `tests/test_higher_order.py`
 
@@ -2150,7 +2055,6 @@ Verify that `Goal(Elem)` succeeds for every element of `List`. Fails if any elem
 Map `Goal(X, Y)` over `Xs` to produce `Ys`. Takes the first solution of `Goal` per element.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:1563`
     **Clausal tests:** `tests/fixtures/builtins_higher_order.clausal`
     **Python tests:** `tests/test_higher_order.py`
 
@@ -2163,7 +2067,6 @@ Map `Goal(X, Y)` over `Xs` to produce `Ys`. Takes the first solution of `Goal` p
 include `List` keeping only elements for which `Goal(Elem)` succeeds.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:1589`
     **Clausal tests:** `tests/fixtures/builtins_higher_order.clausal`
     **Python tests:** `tests/test_higher_order.py`
 
@@ -2176,7 +2079,6 @@ include `List` keeping only elements for which `Goal(Elem)` succeeds.
 include `List` keeping only elements for which `Goal(Elem)` **fails**.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:1614`
     **Clausal tests:** `tests/fixtures/builtins_higher_order.clausal`
     **Python tests:** `tests/test_higher_order.py`
 
@@ -2227,7 +2129,6 @@ Reified partition. Calls `Goal(Elem, T)` for each element. Elements where T=True
 Left fold. Calls `Goal(Elem, Acc0, Acc1)` for each element, threading the accumulator. `V0` is the initial value; `V` is the final result.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py:1639`
     **Clausal tests:** `tests/fixtures/builtins_higher_order.clausal`
     **Python tests:** `tests/test_higher_order.py`
 
@@ -2349,7 +2250,7 @@ Logic-aware character and atom predicates that participate in unification and ba
 
 !!! note "Prefer list predicates for STRING operations"
 
-    A string *is* a list, so `append/3` subsumes `atom_concat/3`, `length/2` subsumes `atom_length/2`, `nth0/3` indexes, `in_/2` tests membership, and `reverse/2` reverses. Reach for the `atom_*` family when you are working with an atom, or when you need it as the **bridge** between the two kinds: `atom_chars/2` turns an atom into the char list of its spelling and back. See [Strings as Lists](strings_as_lists.md).
+    A string *is* a list, so `append/3` subsumes `atom_concat/3`, `length/2` subsumes `atom_length/2`, `list_item/3` indexes, `in_/2` tests membership, and `reverse/2` reverses. Reach for the `atom_*` family when you are working with an atom, or when you need it as the **bridge** between the two kinds: `atom_chars/2` turns an atom into the char list of its spelling and back. See [Strings as Lists](strings_as_lists.md).
 
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:chars_family_kinds"
@@ -2488,7 +2389,6 @@ Print `Term` to stdout without a trailing newline, **unquoted** — ISO 8.14.2's
 For human text — and for f-strings — use `write_text/1` / `writeln_text/1`, which print a string as its characters. Use `print_term/1` when you need to tell an atom from a string.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py` (`write/1`)
     **Python tests:** `tests/test_io.py`
 
 ---
@@ -2565,7 +2465,6 @@ The cons form is a **view**, not the representation: a string stays a compact `s
 Like `write/1` (ISO, unquoted) but appends a newline. Not an ISO name; `writeln_text/1` is the text form.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py` (`writeln/1`)
     **Python tests:** `tests/test_io.py`
 
 ---
@@ -2603,7 +2502,6 @@ Like `write_text/1` but appends a newline. `writeln_text(f"X is {X}")` is the id
 Print the Clausal **display** representation of `Term` — an atom quoted where it needs it, a string in double quotes (the spelling `write_term(Term, [quoted(true), double_quotes(true)])` gives), compounds as functor/args, and the display `", "` after a comma that the ISO family drops — followed by a newline. Useful for debugging, because it distinguishes an atom from a string.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py` (`print_term/1`)
     **Python tests:** `tests/test_io.py`
 
 ---
@@ -2615,7 +2513,6 @@ Print the Clausal **display** representation of `Term` — an atom quoted where 
 Print a newline to stdout.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py` (`nl/0`)
     **Python tests:** `tests/test_io.py`
 
 ---
@@ -2627,7 +2524,6 @@ Print a newline to stdout.
 Print `N` spaces to stdout. `N` must be a bound non-negative integer.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py` (`tab/1`)
     **Python tests:** `tests/test_io.py`
 
 ---
@@ -2639,7 +2535,6 @@ Print `N` spaces to stdout. `N` must be a bound non-negative integer.
 Unify `String` with the **ISO** (`write/1`) rendering of `Term`, as a string — a string spells itself out as `[a,b,c]`. Does not print anything. `write_text_to_string/2` is the text form.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py` (`write_to_string/2`)
     **Python tests:** `tests/test_io.py`
 
 ---
@@ -2663,7 +2558,6 @@ Unify `String` with the **text** (`write_text/1`) rendering of `Term`, as a stri
 Unify `String` with the Clausal **display** rendering of `Term`, as a string — the `write_term(Term, [quoted(true), double_quotes(true)])` spelling plus the display `", "` after a comma. Does not print anything.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/logic/builtins.py` (`term_to_string/2`)
     **Python tests:** `tests/test_io.py`
 
 ---
@@ -2705,7 +2599,7 @@ All logging predicates always succeed (side-effect only). Messages below the log
 Unify `Logger` with a Python `logging.Logger` instance. Arity-1 returns the default `"clausal"` logger. Same name always returns same logger instance.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/modules/log.py`
+    **Implementation:** `clausal/modules/py/logging.py`
     **Python tests:** `tests/test_logging_module.py`
 
 ---
@@ -2717,7 +2611,7 @@ Unify `Logger` with a Python `logging.Logger` instance. Arity-1 returns the defa
 log at DEBUG level. Arity-1 uses default `"clausal"` logger.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/modules/log.py`
+    **Implementation:** `clausal/modules/py/logging.py`
 
 ---
 
@@ -2728,7 +2622,7 @@ log at DEBUG level. Arity-1 uses default `"clausal"` logger.
 log at INFO level.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/modules/log.py`
+    **Implementation:** `clausal/modules/py/logging.py`
 
 ---
 
@@ -2739,7 +2633,7 @@ log at INFO level.
 log at WARNING level.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/modules/log.py`
+    **Implementation:** `clausal/modules/py/logging.py`
 
 ---
 
@@ -2750,7 +2644,7 @@ log at WARNING level.
 log at ERROR level.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/modules/log.py`
+    **Implementation:** `clausal/modules/py/logging.py`
 
 ---
 
@@ -2761,7 +2655,7 @@ log at ERROR level.
 log at CRITICAL level.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/modules/log.py`
+    **Implementation:** `clausal/modules/py/logging.py`
 
 ---
 
@@ -2772,7 +2666,7 @@ log at CRITICAL level.
 log at an arbitrary level. `Level` is a string (`"debug"`, `"info"`, etc.) or integer.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/modules/log.py`
+    **Implementation:** `clausal/modules/py/logging.py`
 
 ---
 
@@ -2783,7 +2677,7 @@ log at an arbitrary level. `Level` is a string (`"debug"`, `"info"`, etc.) or in
 Set the logger's effective level.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/modules/log.py`
+    **Implementation:** `clausal/modules/py/logging.py`
 
 ---
 
@@ -2794,7 +2688,7 @@ Set the logger's effective level.
 Unify `Level` with the logger's effective level name (e.g. `"DEBUG"`).
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/modules/log.py`
+    **Implementation:** `clausal/modules/py/logging.py`
 
 ---
 
@@ -2805,7 +2699,7 @@ Unify `Level` with the logger's effective level name (e.g. `"DEBUG"`).
 Succeeds if the logger would process a message at `Level`; fails otherwise. The only logging predicate that can fail.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/modules/log.py`
+    **Implementation:** `clausal/modules/py/logging.py`
 
 ---
 
@@ -2816,7 +2710,7 @@ Succeeds if the logger would process a message at `Level`; fails otherwise. The 
 Create a `logging.StreamHandler`. `StreamName` is `"stdout"` or `"stderr"`.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/modules/log.py`
+    **Implementation:** `clausal/modules/py/logging.py`
 
 ---
 
@@ -2827,7 +2721,7 @@ Create a `logging.StreamHandler`. `StreamName` is `"stdout"` or `"stderr"`.
 Create a `logging.FileHandler` for the given path.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/modules/log.py`
+    **Implementation:** `clausal/modules/py/logging.py`
 
 ---
 
@@ -2838,7 +2732,7 @@ Create a `logging.FileHandler` for the given path.
 Set a `logging.Formatter` on the handler using Python format string syntax.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/modules/log.py`
+    **Implementation:** `clausal/modules/py/logging.py`
 
 ---
 
@@ -2849,7 +2743,7 @@ Set a `logging.Formatter` on the handler using Python format string syntax.
 Add a handler to the logger.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/modules/log.py`
+    **Implementation:** `clausal/modules/py/logging.py`
 
 ---
 
@@ -2860,7 +2754,7 @@ Add a handler to the logger.
 Remove a handler from the logger.
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/modules/log.py`
+    **Implementation:** `clausal/modules/py/logging.py`
 
 ---
 
@@ -2871,7 +2765,7 @@ Remove a handler from the logger.
 Call `logging.basicConfig()` with a dict of options (level, format, datefmt, filename, filemode, stream).
 
 ??? info "Implementation & tests"
-    **Implementation:** `clausal/modules/log.py`
+    **Implementation:** `clausal/modules/py/logging.py`
 
 ---
 
@@ -3049,25 +2943,53 @@ Bidirectional ISO-8601 helpers without a format argument. `datetime_string_iso/2
 
 ---
 
+## ISO comparison and term order (quoted forms)
+
+ISO's comparison and term-order predicates are builtins under their ISO
+names, written **quoted** (a bare `==` or `<` is a constraint, see below).
+They follow ISO 13211-1, and Scryer where ISO is silent:
+
+| Builtin | Meaning |
+|---|---|
+| `'='(A, B)`, `'\\='(A, B)` | unification; not unifiable |
+| `'=='(A, B)`, `'\\=='(A, B)` | identical / not identical in the standard order of terms |
+| `'@<'`, `'@>'`, `'@=<'`, `'@>='` (arity 2) | standard order of terms |
+| `compare(Order, A, B)` | `Order` is `'<'`, `'='` or `'>'` |
+| `'=..'(Term, List)` | univ; the same relation as `unpack/2` |
+| `'is'(X, Expr)` | ISO `is/2`: evaluates `Expr` |
+| `'=:='`, `'=\\='`, `'<'`, `'>'`, `'=<'`, `'>='` (arity 2) | ISO arithmetic comparison, both sides evaluated |
+| `'#='`, `'#\\='`, `'#<'`, `'#>'`, `'#=<'`, `'#>='` (arity 2) | CLP(ℤ) constraints under clpz's names |
+
+```clausal
+test("quoted ISO forms") <- (
+    '\\=='(1, 2),
+    '@<'(1, 'a'),
+    compare(O, 1, 2), O == '<',
+    'is'(X, 7 // 2), X == 3,
+    '=:='(1, 1.0)
+)
+```
+
+Which operator meaning applies to which spelling (bare = Python, quoted =
+Scryer) is set out in [Operators](operators.md); the evaluable functors are in
+[Arithmetic](arithmetic.md).
+
+---
+
 ## Operator Syntax (Compiler Special Forms)
 
-The following are not builtins in the registry — they are syntax forms compiled directly by `compile_goal`/`compile_goal_trampoline`.
+These bare spellings are syntax, compiled directly rather than looked up as
+builtins. [Operators](operators.md) is the reference for their meaning.
 
-| Syntax | Meaning | Compiler location |
-|--------|---------|-------------------|
-| `X is Y` | Unification (structural) | `compiler.py:1415` |
-| `X is not Y` | Disequality constraint (`dif/2`) | `compiler.py:1436` |
-| `X == Expr` | Arithmetic constraint (CLP(ℤ)) | `compiler.py` (`Evaluate`) |
-| `X == Y` | CLP(ℤ) equality constraint | `compiler.py:1444` |
-| `X != Y` | CLP(ℤ) disequality constraint | `compiler.py:1451` |
-| `X < Y` | CLP(ℤ) less-than constraint | `compiler.py:1459` |
-| `X <= Y` | CLP(ℤ) less-or-equal constraint | `compiler.py:1466` |
-| `X > Y` | CLP(ℤ) greater-than constraint | `compiler.py:1473` |
-| `X >= Y` | CLP(ℤ) greater-or-equal constraint | `compiler.py:1480` |
-| `X in Coll` | For-loop over collection | `compiler.py:1570` |
-| `X not in Coll` | Negated membership check | `compiler.py:1594` |
-| `not Goal` | Negation as failure | `compiler.py:1507` |
-| `if_(Cond, Then, Else)` | If-Then-Else | `compiler.py` (`_compile_ite`) |
+| Syntax | Meaning |
+|--------|---------|
+| `X is Y` | **unification**, no evaluation (`X is 1 + 2` binds `X` to the term `1 + 2`; for ISO `is/2` write `'is'(X, E)` or `eval_(E, X)`) |
+| `X is not Y` | disequality constraint (`dif/2`) |
+| `X == Y`, `X != Y` | arithmetic equality / disequality constraint (clpz's `#=` / `#\\=`) |
+| `X < Y`, `X <= Y`, `X > Y`, `X >= Y` | arithmetic ordering constraints |
+| `X in Coll` | membership: enumerates the elements of `Coll` |
+| `X not in Coll` | negated membership check |
+| `not Goal` | negation as failure |
 
 ---
 
@@ -3112,5 +3034,4 @@ The following are not builtins in the registry — they are syntax forms compile
     | `tests/fixtures/clpb_circuit.clausal` | `sat/1`, `bool_labeling/1`, `BoolEq` — HalfAdder, FullAdder, PigeonHole |
     | `tests/fixtures/logging_basic.clausal` | `get_logger`, `set_level`, `get_level`, `is_enabled_for`, `debug`, `info`, `warning`, `error`, `critical`, `log`, `stream_handler`, `set_formatter`, `add_handler`, `remove_handler` |
     | `tests/test_date_time.py` (99 tests) | `now`, `now_utc`, `today`, `date`, `time`, `datetime`, `timedelta`, `date_add`, `date_sub`, `date_diff`, `datetime_string`, `weekday`, `date_between`, `timestamp`, `datetime_string_iso`, `date_string_iso` |
-    | `tests/test_yaml_module.py` | `Read`, `write`, `ReadAll`, `WriteAll`, `ReadFile`, `WriteFile`, `Get` (45 tests) |
-    | `tests/fixtures/yaml_basic.clausal` | `Read`, `write`, `Get` — parsing, nested access, round-trip |
+    | `packages/clausal-yaml/tests/test_yaml_module.py` | `Read`, `write`, `ReadAll`, `WriteAll`, `ReadFile`, `WriteFile`, `Get` (45 tests) |

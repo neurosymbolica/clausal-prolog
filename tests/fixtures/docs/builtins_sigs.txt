@@ -29,7 +29,7 @@ catch(+Goal, ?Catcher, +Recovery)
 --8<-- [end:catch_3]
 
 --8<-- [start:halt_0]
-halt
+halt()
 halt(+Code)
 --8<-- [end:halt_0]
 
@@ -194,7 +194,7 @@ abolish_table(+functor, +Arity)
 --8<-- [end:abolish_table_2]
 
 --8<-- [start:abolish_all_tables_0]
-abolish_all_tables
+abolish_all_tables()
 --8<-- [end:abolish_all_tables_0]
 
 
@@ -900,7 +900,7 @@ print_term(+Term)
 --8<-- [end:print_term_1]
 
 --8<-- [start:nl_0]
-nl
+nl()
 --8<-- [end:nl_0]
 
 --8<-- [start:tab_1]

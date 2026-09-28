@@ -2,7 +2,7 @@
 
 DCGs are a notation for defining grammars and other [list](lists.md)-processing tasks. Clausal uses `>>` syntax for grammar rules, which are rewritten to ordinary `<-` clauses with two hidden difference-list arguments at compile time.
 
-The implementation lives in `clausal/templating/term_rewriting.py` (source-level rewriting) and `clausal/logic/builtins.py` (`phrase/2,3`).
+The implementation lives in `clausal/templating/term_rewriting.py` (source-level rewriting) and `clausal/logic/builtins/dcg.py` (`phrase/2,3`).
 
 *The `-table` directive is often used with DCGs to memoize recursive grammar rules. See [Directives](directives.md).*
 
@@ -139,19 +139,30 @@ The `phrase` builtin invokes a grammar rule on an input list.
 `phrase(RuleName, InputList)` — parse InputList with the named rule, succeeding if the entire list is consumed:
 
 ```clausal
+sentence >> (noun_phrase, verb_phrase, noun_phrase)
+noun_phrase >> (['the', 'dog'] or ['the', 'cat'] or ['a', 'bird'])
+verb_phrase >> (['chases'] or ['sees'] or ['likes'])
+
 valid_sentence(S) <- phrase(sentence, S)
+
+test("a sentence") <- valid_sentence(['the', 'dog', 'chases', 'the', 'cat'])
 ```
 
-Query: `valid_sentence(["the", "dog", "chases", "the", "cat"])` succeeds.
+From Python, in a `.seam` file, the goal-position seam runs the same query
+(the lower-level `solve(...)` API is in [Python integration](python_integration.md)):
+
+```python
+if --valid_sentence(['the', 'dog', 'chases', 'the', 'cat']):
+    print("parsed")
+```
 
 ### Strings as input
 
-Strings can be passed directly to `phrase` — a string *is* the list of its
-one-character **atoms**. This makes character-level DCGs natural:
+A double-quoted literal is a **string** (the default since 2026-09-26, as in
+Scryer), and a string *is* the list of its one-character **atoms**, so it can
+be passed directly to `phrase`. This makes character-level DCGs natural:
 
 ```clausal
--double_quotes(chars)
-
 # `'digit'` is single-quoted: char_type/2's Type argument is an atom, and a
 # bare `digit` would name the nonterminal on the next line.
 digit >> ([D], {char_type(D, 'digit')})
@@ -162,6 +173,10 @@ test("parse string") <- phrase(digits, "123")
 test("partial") <- (phrase(digits, "12ab", REST), REST is ['a', 'b'])
 ```
 
+The remainder comes back as a string: a goal-position seam hands Python the
+engine's term, the carrier `('$chars', 'ab')`, and `clausal.to_python` turns
+it into `'ab'`.
+
 No `atom_chars` conversion is needed. See [Strings as Lists](strings_as_lists.md)
 for more details.
 
@@ -170,8 +185,12 @@ for more details.
 `phrase(RuleName, S0, S)` — parse with explicit remainder. S is the unconsumed suffix:
 
 ```clausal
+noun_phrase >> (['the', 'dog'] or ['the', 'cat'] or ['a', 'bird'])
+
 # Parse and get remainder
 partial_parse(INPUT, REST) <- phrase(noun_phrase, INPUT, REST)
+
+test("remainder") <- partial_parse(['the', 'cat', 'sees'], ['sees'])
 ```
 
 `phrase/3` is also used for state threading (see below).
@@ -263,7 +282,7 @@ valid_sentence(S) <- phrase(sentence, S)
 
 ??? info "Test coverage"
 
-    Tests are in `tests/test_dcg.py` (47 tests).
+    Tests are in `tests/test_dcg.py`.
 
     - **Terminals**: single, multiple, empty
     - **Non-terminals**: chaining, extra args

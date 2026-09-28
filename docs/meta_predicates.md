@@ -54,6 +54,15 @@ test("bag of people") <- (
 
 Use bagof when you want failure on empty results, findall when you always want a list.
 
+!!! warning "No free-variable grouping (differs from ISO)"
+    ISO `bagof/3` and `setof/3` backtrack over the bindings of the goal's
+    *free* variables, one solution per group, and `V^Goal` marks a variable as
+    existentially quantified. Clausal's do not group: `bagof(N, age(N, A), L)`
+    above has the single answer `L = ['alice', 'bob', 'carol']` with `A`
+    left unbound, and `A ^ age(N, A)` is not supported (a load-time
+    `NotImplementedError`). To group, collect key-value pairs and use
+    [`group_pairs_by_key/2`](pairs.md).
+
 ### setof/3
 
 `setof(Template, Goal, Set)` — like bagof, but returns a **sorted list with duplicates removed**. Also fails on no solutions.
@@ -232,7 +241,7 @@ by_sign(XS, GS) <- group_by(((X, K) <- if_(X > 0, K is 'pos', K is 'neg')), XS, 
 `sort_by(Goal, List, Sorted)` — sort by key projected via `Goal(Elem, Key)`. Stable sort.
 
 ```clausal
-sort_by_abs(XS, SS) <- sort_by(((X, K) <- (K == abs(X))), XS, SS)
+sort_by_abs(XS, SS) <- sort_by(((X, K) <- abs_(X, K)), XS, SS)
 ```
 
 ### max_by/3, min_by/3
@@ -275,7 +284,7 @@ sort_by_abs(XS, SS) <- sort_by(((X, K) <- (K == abs(X))), XS, SS)
 
 ??? info "Test coverage"
 
-    - `tests/test_meta.py` (23 tests): findall, bagof, setof, forall, Call/N, `.clausal` integration
+    - `tests/test_meta.py`: findall, bagof, setof, forall, call/N, `.clausal` integration
     - `tests/test_higher_order.py` (34 tests): maplist/2,3, include/3, exclude/3, foldl/4, builtin predicates as arguments
     - `tests/fixtures/builtin_as_arg.clausal` (5 tests): include/maplist with builtin predicates (number, integer, succ)
 

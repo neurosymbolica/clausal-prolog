@@ -57,29 +57,29 @@ reach_a(X, X),
 reach_b(X, X),
 ```
 
-Tabled predicates are queried exactly like non-tabled ones — the tabling wrapper is transparent:
+Tabled predicates are queried exactly like non-tabled ones — the tabling wrapper is transparent. In a `.seam` file, query with the goal-position seam:
 
 ```python
-from clausal.logic.variables import Var, deref
-from clausal.logic.solve import call
-
-Y = Var()
-for trail in call("path", 1, Y, module=lm):
-    print(deref(Y))  # 2, 3, 4
+# in the same .seam file, below the clauses
+def main():
+    for Y in --path(1, Y):
+        print(Y)            # 2, 3, 4
 ```
+
+From a plain `.py` file (which cannot use `--`), use `solve(goal, module=m)` or `call` — see [Python integration](python_integration.md).
 
 ### Invalidation
 
-Tabled answers are cached for the lifetime of the module. If the underlying clauses change (via [`assertz`, `asserta`, or `retract`](database_ops.md) on a tabled predicate), all cached answers for that predicate are automatically invalidated. The next query recomputes from scratch.
+Tabled answers are cached for the lifetime of the module. If the underlying clauses change (via [`assertz`, `asserta`, or `retract`](database_ops.md) on a tabled predicate — which must be declared `-dynamic`), all cached answers for that predicate are automatically invalidated. The next query recomputes from scratch.
 
-To invalidate manually:
+To invalidate manually, call the builtins:
 
 ```python
-db.abolish_table("path", 2)   # clear one predicate's cache
-db.abolish_all_tables()        # clear all
+if --abolish_table(path, 2): ...     # clear one predicate's cache
+if --abolish_all_tables(): ...       # clear all
 ```
 
-The builtins `abolish_table/2` and `abolish_all_tables/0` are also available from within clausal code.
+The same builtins work in a clause body (`abolish_all_tables()` — a zero-arity builtin goal is written with parentheses). The `Database` object also has `abolish_table(functor, arity)` / `abolish_all_tables()` methods, but `Database` is internal (see [Public API](public-api.md)).
 
 ---
 
@@ -101,7 +101,8 @@ The builtins `abolish_table/2` and `abolish_all_tables/0` are also available fro
 
     - derefs bound variables
     - replaces unbound `Var` with the `_VAR` sentinel
-    - recursively normalises lists, cells, and `PredicateMeta` instances
+    - type-tags `bool`/`float`/`complex` leaves so `1`, `True` and `1.0` stay distinct keys
+    - recursively normalises lists, cells (plain tuples), dicts and sets
 
     The table store maps `(functor, arity, variant_key)` → `TableEntry`.
 
@@ -117,11 +118,12 @@ The builtins `abolish_table/2` and `abolish_all_tables/0` are also available fro
         answers: list[tuple]          # frozen answer tuples, in discovery order
         answer_set: set               # for O(1) duplicate detection
         suspended: list               # SuspendedConsumer instances
-        conditions: list              # parallel to answers: frozenset[DelayedNegation] | _FAILED
+        conditions: list              # parallel to answers: frozenset[frozenset[DelayedNegation]] | _FAILED
         _current_delays: set          # accumulates DelayedNegation during current derivation
+        scc_deps: set                 # evaluating ancestors consumed (mutual recursion / SCC completion)
     ```
 
-    `conditions[i]` is `frozenset()` for unconditional answers, a non-empty frozenset for conditional (WFS undefined) answers, or the `_FAILED` sentinel for invalidated answers. `truth_value(i)` returns `True`, `Undefined`, or `False` accordingly.
+    `conditions[i]` is a **disjunction of delay sets**, one inner set per derivation of the answer: it holds an empty inner set when some derivation is delay-free (the answer is true), only non-empty inner sets when every derivation is conditional (WFS undefined), or the `_FAILED` sentinel when every derivation was invalidated. Read it through `truth_value(i)` (`True`, `Undefined` or `False`) and `delays_for(i)` (the union of the live delay sets) rather than directly.
 
     ### SuspendedConsumer
 
@@ -229,7 +231,7 @@ if self.is_tabled(functor, arity):
     self.abolish_table(functor, arity)
 ```
 
-`compiler._install` abolishes as well, when it re-establishes the wrapper on a recompile. That covers the mutation paths that never call `Database.assertz`/`retract` — the `retract/1` builtin deletes straight out of `db._clauses`, and `PredicateMeta._assertz`/`_retract` (reachable only on a class no Clausal database owns — a loaded module binds every predicate to its handle, and runtime writes go through the `assertz`/`retract` builtins) only clear the dispatch — all of which recompile through `_install`.
+`compiler._install` abolishes as well, when it re-establishes the wrapper on a recompile. That covers the mutation paths that never call `Database.assertz`/`retract` — the `retract/1` builtin deletes straight out of the owning database's clause list and clears the dispatch, and the next call recompiles through `_install`.
 
 ---
 
@@ -287,9 +289,9 @@ move('a', 'c'),
 win(X) <- (move(X, Y), not win(Y))
 ```
 
-- `win("c")` = false (no moves from "c")
-- `win("a")` = true (via `move("a", "c")`, `not win("c")` succeeds)
-- `win("b")` = false (`not win("a")` fails because `win("a")` is true)
+- `win('c')` = false (no moves from `'c'`)
+- `win('a')` = true (via `move('a', 'c')`, `not win('c')` succeeds)
+- `win('b')` = false (`not win('a')` fails because `win('a')` is true)
 
 ### Truth value inspection
 
@@ -297,7 +299,7 @@ win(X) <- (move(X, Y), not win(Y))
 
 ### Compiler integration
 
-The compiler detects `Not(operand=Call(LoadName(tabled_pred), ...))` and emits:
+The compiler detects a negated call to a tabled predicate (`not p(...)`) and emits:
 
 ```python
 _m = trail.mark()
@@ -313,7 +315,7 @@ Non-tabled predicates fall through to the existing inline NAF codegen (no behavi
 ### Data structures
 
 - **`DelayedNegation(functor, arity, key, frozen_args)`** — represents a conditional dependency.
-- **`TableEntry.conditions`** — list parallel to `answers`, each entry a `frozenset[DelayedNegation]`. Empty frozenset = unconditional. `_FAILED` sentinel = invalidated.
+- **`TableEntry.conditions`** — list parallel to `answers`, each entry a set of delay sets (one per derivation). An empty inner set = unconditional. `_FAILED` sentinel = invalidated.
 - **`TableEntry._current_delays`** — accumulates delays during the current derivation.
 - **Leader context stack** — thread-local stack of `TableEntry` objects. `push_leader`/`pop_leader`/`current_leader` helpers. `_naf_tabled` attaches delays to the current leader.
 
@@ -360,7 +362,7 @@ Non-tabled predicates fall through to the existing inline NAF codegen (no behavi
     - Positive-only regression: tabled fib and cyclic path still work
     - Complete table NAF: immediate check on complete table
     - Symmetric win/move: both win(1) and win(2) are undefined
-    - Asymmetric win/move: win("a") is true
+    - Asymmetric win/move: win('a') is true
     - No negation cycle: tabled with NAF but no cycle → standard behavior
     - `query_wfs` API: returns list with truth annotations
 
@@ -371,7 +373,7 @@ Non-tabled predicates fall through to the existing inline NAF codegen (no behavi
     - `tests/fixtures/tabled_same_gen.clausal` — same-generation problem
     - `tests/fixtures/tabled_mutual_rec.clausal` — mutual recursion via alternating link types
     - `tests/fixtures/wfs_win.clausal` — symmetric win/move (WFS: both undefined)
-    - `tests/fixtures/wfs_win_asym.clausal` — asymmetric win/move (WFS: win("a") true)
+    - `tests/fixtures/wfs_win_asym.clausal` — asymmetric win/move (WFS: win('a') true)
 
 ---
 

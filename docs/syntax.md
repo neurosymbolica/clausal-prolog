@@ -22,9 +22,9 @@ Three double-prefix operators demarcate the boundary between Python and logic co
 
 | Operator | Meaning |
 |---|---|
-| `--expr` | Python expression embedded inside a logic term |
-| `++expr` | In a Python context: logic term inside a Python expression. In a `.clausal` context: evaluate Python expression at search time |
-| `~~expr` | Capture expression as a `simple_ast` AST node (works anywhere) |
+| `--term` | In Python code: build a logic **term** (a cell) — and, in goal position (`if --g:`, `for X in --g:`), run it as a query. See [Python integration](python_integration.md) |
+| `++expr` | In logic code: a **Python value** — the expression is evaluated and passed in unconverted (in a clause body, at search time) |
+| `~~expr` | Capture the expression as a Python `ast` node without running it (works anywhere) |
 | `--X` *inside a thunk* | The Clausal variable `X` — see [Marking a variable inside a thunk](#marking-a-variable-inside-a-thunk) |
 
 `--` was chosen because:
@@ -112,8 +112,8 @@ predicate is exported — `-module(m, ['Foo'(X)])`, or the ISO arity form
 `-module(m, ['Foo'/1])` — and `-private` reads it the same way.
 
 One Clausal limit applies to anything that *names* a predicate — a head or a
-declaration entry — and not to goals: the name becomes a generated class
-name, so it must spell a plain, non-keyword name. `'foo bar'(X)` and
+declaration entry — and not to goals: the name must spell a plain,
+non-keyword name. `'foo bar'(X)` and
 `'not'(X)` may be *called*; they may not be *defined* or *declared*.
 
 A single `_` is the anonymous variable — it never stores a value, and unification against it always succeeds (matching Python's and Prolog's existing convention).
@@ -257,10 +257,9 @@ eventually ran.
 
 `constant(pi)` is the spelling to reach for. It is what makes a constant *late-bound*, so that changing
 a declaration changes every use; and it is explicit, which matters when the same file also uses
-the atom. A name may be both a constant and an atom — but it may **not** be declared as a
-constant *and* listed as a bare atom in `-module`/`-private`/`-hide`, because that listing
-rebinds the module global to the atom after the file has run and would silently destroy the
-constant. That combination is a load-time error; write the atom quoted instead.
+the atom. A name may be both a constant and an atom: listing it in `-module`/`-private`
+declares the atom (so a bare `max_retries` is allowed under strict atoms) and leaves the
+constant in place, so `constant(max_retries)` is still `3`.
 
 ### Declaring
 
@@ -454,8 +453,8 @@ Python object reference and is refused with a `TypeError` if constructed as a te
     declared (via `-module`, `-private`, or `-import_from`) or reached via
     `global_atom/2` will not compile.
 
-    Files that want Prolog-style ceremony-free tag atoms opt out with
-    [`-implicit_atoms`](directives.md#-implicit_atoms).
+    [`-implicit_atoms`](directives.md#-implicit_atoms) turned this off per
+    file; it is deprecated (2026-09-18) and warns — declare the atoms instead.
 
     Once an atom **is** resolved — declared in `-module([...])` (public),
     `-private([...])` (private), imported, or reached via `global_atom/2` —
@@ -496,7 +495,7 @@ Built-in predicates are lowercase `snake_case` (e.g. `findall`, `assertz`, `var`
 
 The trailing underscore keeps the builtin namespace cleanly separate from Python keywords and builtins. User predicates follow the same `snake_case` convention, and only need the underscore where they would hit the same collision.
 
-3. **A few engine-provided type names are reserved.** For convenience in embedded Python, `Var`, `Trail`, `PredicateMeta`, `DictTerm`, `SetTerm`, `PyThunk`, and `Quantity` are injected into every module's namespace, so a predicate named after one of these (e.g. `Var/2`) collides. The engine *functions* `walk`, `deref`, and `unify` used to be reserved the same way, but no longer are — they are now injected under an internal `$`-prefix, so `walk/2`, `deref/2`, and `unify/2` are free for user predicates.
+3. **Engine-provided type names are injected.** For convenience in embedded Python, `Var`, `Trail`, `DictTerm`, `SetTerm`, `PyThunk`, `Quantity` and `Undefined` are injected into every module's namespace. They are TitleCase, so they never collide with a predicate name (a TitleCase functor is a load-time error). The engine *functions* `walk`, `deref`, and `unify` are injected under an internal `$`-prefix, so `walk/2`, `deref/2`, and `unify/2` are free for user predicates.
 
 ---
 
@@ -508,13 +507,26 @@ Unification is written with `is`:
 --8<-- "tests/fixtures/docs/syntax_sigs.txt:unification"
 ```
 
+**A bare `is` is unification, never evaluation.** `X is 1 + 2` binds `X` to
+the term `1 + 2`, not to `3`. Prolog's arithmetic `is/2` is written
+**quoted**, `'is'(X, 1 + 2)`, or as `eval_(1 + 2, X)`; both bind `X` to `3`.
+The quoted spelling is the ISO predicate, as every quoted operator is: see
+[Operators](operators.md) for the full bare-versus-quoted table, and
+[Arithmetic](arithmetic.md) for evaluation.
+
+```clausal
+test("bare is unifies") <- (X is 1 + 2, not (X is 3))
+test("quoted is evaluates") <- ('is'(X, 1 + 2), X == 3)
+test("quoted = unifies too") <- ('='(X, 'a'), X is 'a')
+```
+
 Why `is` rather than `=`?
-- `=` is Python's assignment operator and cannot appear in expressions
+- `=` is Python's assignment operator and cannot appear in a clause body (the quoted `'='(A, B)` is ISO unification)
 - `is` expresses the same concept in English — two things being the same — and Python programmers understand it. Clausal generalises this concept; in 'X is Y', if we don't know X or Y, we are describing that they must be same whatever they are, and when either become known, they both become known.
 
 Conversely, `X is not Y` posts a disequality constraint (`dif/2`): X and Y must end up with different values. This is lazily checked — the constraint is re-evaluated each time either variable gets bound. If they become equal, the constraint fails and the search backtracks. If they remain different, the constraint is satisfied and dropped. See [constraints.md](constraints.md) for details.
 
-`not (X is Y)` is the immediate check (Prolog `\=/2`): it fails if X and Y *can* unify right now, regardless of future bindings. Use this when you want point-in-time semantics.
+`not (X is Y)` is the immediate check (ISO `'\\='(X, Y)`): it fails if X and Y *can* unify right now, regardless of future bindings. Use this when you want point-in-time semantics.
 
 The corresponding AST node is `Unify(left, right)`. Disequality is `DoesNotUnify(left, right)`.
 
@@ -562,7 +574,7 @@ fib(N, RESULT) <- (
 The distinction from `is`:
 - `X is Y` — pure structural unification; neither side is evaluated arithmetically
 - `(X == expr)` — posts an arithmetic constraint (CLP(ℤ) or CLP(ℝ))
-- `eval_(expr, X)` — eager arithmetic evaluation; evaluates `expr` as an arithmetic expression and binds the result to `X` (Prolog's `is/2`). A variable operand is evaluated at runtime, whatever arithmetic term it holds; an unbound one raises `instantiation_error`, and an atom or a non-evaluable compound raises `type_error(evaluable, Name/Arity)`. See [Arithmetic](arithmetic.md) for the evaluable table and for when to prefer it over `==`.
+- `eval_(expr, X)`, or the quoted ISO form `'is'(X, expr)` — eager arithmetic evaluation; evaluates `expr` and binds the result to `X` (Prolog's `is/2`). A variable operand is evaluated at runtime, whatever arithmetic term it holds; an unbound one raises `instantiation_error`, and an atom or a non-evaluable compound raises `type_error(evaluable, Name/Arity)`. See [Arithmetic](arithmetic.md) for the evaluable table and for when to prefer it over `==`.
 
 ---
 
@@ -593,7 +605,7 @@ when at least one side is an unbound Var, a CLP(ℤ) constraint is posted:
 | `!=` | Arithmetic disequality constraint |
 | `<` `>` `<=` `>=` | Comparison constraints (narrow domain bounds) |
 
-`==` and `!=` post CLP(ℤ) arithmetic constraints (Prolog `=:=/2` and `=\=/2`). For true structural equality (Prolog `==/2`) — comparing deref'd terms without binding or evaluating — use the builtin `structural_eq(X, Y)`, or `not structural_eq(X, Y)` for inequality.
+`==` and `!=` post arithmetic constraints (clpz's `#=/2` and `#\\=/2`); inside a constraint `/` is exact rational division. For structural identity (ISO `==/2`) — comparing terms without binding or evaluating — write the quoted `'=='(X, Y)` (or `structural_eq(X, Y)`), and `'\\=='(X, Y)` for its negation. The quoted ISO arithmetic comparisons (`'=:='`, `'<'`, `'=<'`, ...) evaluate both sides and post nothing. [Operators](operators.md) has the full table.
 
 See [constraints.md](constraints.md) for the full CLP(ℤ) design, including domain representation, propagation, and labeling.
 
@@ -659,15 +671,18 @@ test("either") <- (X is 1 or X is 2)
 What if we just want to state a fact that always holds? We could do so by using a body that is always true, i.e. `True`.
 
 ```clausal
-parent(tom, bob) <- True
+parent('tom', 'bob') <- True
 ```
 
 But there is a shorthand for this. Facts (trivially true rules) are simply written without a body, only a trailing comma:
 
 ```clausal
-parent(tom, bob),
-parent(bob, ann),
+parent('tom', 'bob'),
+parent('bob', 'ann'),
 ```
+
+(The atoms are quoted because a bare `tom` must be declared first, e.g.
+`-private([tom, bob, ann])`; see [Atoms](#atoms).)
 
 Grammar rules (Definite Clause Grammars):
 
@@ -728,10 +743,12 @@ See [Dicts & Sets](dicts_sets.md) for details.
 
 ## Strings
 
-A **string** is the list of its one-character atoms — the classical Prolog
-*chars* model, as in ISO Prolog and Scryer. (A bare Python `str` is an atom
-now, not a string — see [Atoms vs strings](#atoms-vs-strings) — so a string
-is its own value, not literally a `str`.) See
+`"…"` is a **string** by default, as in Scryer and Trealla: the list of its
+one-character atoms — the classical Prolog *chars* model (ISO's
+`double_quotes` flag set to `chars`). A bare Python `str` is an atom, not a
+string — see [Atoms vs strings](#atoms-vs-strings) — and a string reaches
+Python as the carrier `('$chars', text)`. `-double_quotes(atom)` is a
+temporary per-module setting for code not yet migrated. See
 [strings as lists](strings_as_lists.md):
 
 ```clausal
@@ -739,7 +756,7 @@ is its own value, not literally a `str`.) See
 ```
 
 All list operations apply to strings, because a string is a list:
-`append/3`, `length/2`, `reverse/2`, `nth0/3`, `in_/2`, `maplist/N`, DCGs.
+`append/3`, `length/2`, `reverse/2`, `list_item/3`, `in_/2`, `maplist/N`, DCGs.
 `""` and `[]` are one and the same term. A string is **not** an atom —
 `atom/1` rejects it, `string/1` and `is_str/1` accept it, and `is_list/1`
 accepts it too. The analogous `b"…"` byte literal is a
@@ -752,9 +769,8 @@ denotes.
 
 !!! note "Which quote you write decides what you get"
     Unlike every earlier release, the quote character is now **significant**:
-    `'foo'` is always the atom `foo`; `"foo"` is an atom or a string
-    depending on the file's [`-double_quotes`](directives.md#-double_quotes)
-    mode. The `u`, `r` and triple-quote prefixes are inert — the quote
+    `'foo'` is always the atom `foo`; `"foo"` is a string (unless the
+    file sets [`-double_quotes(atom)`](directives.md#-double_quotes)). The `u`, `r` and triple-quote prefixes are inert — the quote
     character after any prefix is what counts. `b"…"`/`b'…'` are always
     [codes](bytes_as_lists.md), in either quote style.
 
@@ -766,14 +782,14 @@ Clausal keeps two disjoint kinds, exactly as ISO Prolog does:
 
 | | **Atom (a symbol)** | **String (text / data)** |
 |---|---|---|
-| written as | bare identifier `red`, `café`, `δικαίωμα`; or `'any spelling'` | `"hello world"` under `-double_quotes(chars)` |
-| represented as | the interned Python `str` itself | a list of char atoms (a `'.'/2` compound) — never a `str` |
+| written as | bare identifier `red`, `café`, `δικαίωμα`; or `'any spelling'` | `"hello world"` (the default) |
+| represented as | the interned Python `str` itself | the carrier `('$chars', text)`, which every relation treats as its char list (a `'.'/2` compound) — never a bare `str` |
 | compared by | `==` (`str` equality; interning makes `is` agree too, but write `==`) | value equality; also unifies with its char list |
 | typo-safe? | yes, under [`-strict_atoms`](directives.md#-strict_atoms) (the default) | no (it's data) |
 | `atom/1` | matches | does **not** match (use `string/1` / `is_str/1`) |
 | `atomic/1` | matches | does **not** match — a string is a list |
-| `callable_/1` | matches (an atom can name a goal) | does **not** match |
-| indexed on? | yes — first-argument indexing keys `("red", 0)` | no — a string head argument falls in the full-scan bucket |
+| `callable_/1` | matches (an atom can name a goal) | matches when non-empty — it is a `'.'/2` compound, as in ISO (`""` is `[]`, an atom) |
+| indexed on? | yes — first-argument indexing keys `('red', 0)` | no — a string head argument falls in the full-scan bucket |
 
 The two never unify: `red = "red"` fails. A one-character string is not a
 character either — `"a"` is the *list* `[a]`, while `a` is the char atom, so
@@ -920,6 +936,8 @@ process(X, R) <- (
 
 Under the hood, `++expr` wraps the Python expression in a lambda whose parameters shadow the module-scope Var names. The compiler emits `thunk_fn(deref(v0), deref(v1), ...)`. Any Python expression works — method calls, builtins, arithmetic, subscripts, etc.
 
+The values cross in both directions without a converter: a string argument (`"abc"`) reaches the Python code as a plain `str`, and a `str` the expression returns is an **atom** — `to_upper("abc", R)` binds `R` to the atom `'ABC'`. Anything else passes through unconverted (see [Python integration](python_integration.md)).
+
 ### Unit-literal sugar — `n(Unit)`
 
 A special case of the `++()` pattern: when a numeric literal is used as the
@@ -946,6 +964,24 @@ See [Units](units.md) for the full reference.
 goal(_, _),             # compound goal
 not goal,               # negation as failure
 ```
+
+A compound term is a **cell**: the plain tuple `(functor, *args)`, so
+`point(1, 2)` is `('point', 1, 2)` to Python code (read it with
+`clausal.cell_functor` / `clausal.cell_args`). Arguments are
+**positional**. A keyword-argument term is a load-time `SyntaxError`:
+
+```text
+-private([point(x, y)])
+p(P) <- (P is point(x=1, y=2))
+
+SyntaxError: ... `point/2` is written with keyword arguments (x=, y=): a term is
+built positionally. Write the arguments in the declared order, ...
+```
+
+The field names in a declaration (`point(x, y)`) are still read by
+[`vary/3`, `unbound_keys/2` and `signature/3`](keyword_preds.md). Two keyword
+spellings remain: a directive's options (`-specialize(solve, p, alias=q)`) and
+an EDCG hidden argument (`_edcg_len_in=0`).
 
 ---
 
@@ -1100,73 +1136,23 @@ No changes to the compiler, database, or runtime are needed.
 
 ### DCGs as general state-passing
 
-DCGs are not just for parsing — they are a **general state-passing mechanism**. The difference-list pair can carry any state encoded as a single-element list `[State]`. Terminals read state, pushback writes it back, and `phrase/3` sets initial/final state. (For a good explanation of this pattern, see [Markus Triska's DCG tutorial](https://www.metalevel.at/prolog/dcg).)
-
-#### `state/1` and `state/2` helper nonterminals
-
-Two reusable nonterminals form the core of state-passing DCGs:
-
-```clausal
---8<-- "tests/fixtures/docs/syntax_sigs.txt:dcgs_as_general_state_passing"
-```
-
-`state/1` reads the current state value into `S` without modifying it. `state/2` reads the old state into `S0` and writes `S` as the new state. Copy these into any module that needs state threading.
-
-#### Counter example
-
-Thread a counter through `phrase/3`:
+The hidden list pair can thread any state, not just tokens: pass `[Initial]`
+to `phrase/3` and receive `[Final]`, with two helper nonterminals reading and
+replacing the state. [DCGs — state threading](dcg.md#state-threading) has the
+pattern and worked examples (counter, tree leaves, accumulator):
 
 ```clausal
-# Increment: read counter, add 1, write new counter
-inc >> (state(N0), {N == N0 + 1}, state(_, N))
+(state(S), [S]) >> ([S])            # read the state
+(state2(S0, S), [S]) >> ([S0])      # read the old state, write a new one
+inc >> (state(N0), {N == N0 + 1}, state2(_, N))
 
-# Chain three increments
 count3 >> (inc, inc, inc)
+
+test("count from 0") <- phrase(count3, [0], [3])
 ```
 
-```python
-# Call from Python:
-phrase(count3, [0], [N])  # → N = 3
-phrase(count3, [10], [N])  # → N = 13
-```
-
-#### Tree leaf counting
-
-```clausal
-# Trees as "leaf" or [Left, Right]
-count_leaves('leaf') >> (state(N0), {N == N0 + 1}, state(_, N))
-count_leaves([L, R]) >> (count_leaves(L), count_leaves(R))
-
-# API: wrap with phrase/3
-num_leaves(T, N) <- phrase(count_leaves(T), [0], [N])
-```
-
-```python
-num_leaves("leaf", N)                     # → N = 1
-num_leaves(["leaf", ["leaf", "leaf"]], N)  # → N = 3
-```
-
-#### Accumulator: collecting items
-
-```clausal
-# Push item onto accumulator state
-push(X) >> (state(ACC0), {ACC is [X, *ACC0]}, state(_, ACC))
-
-# Push all items from a list
-push_all([]) >> ([])
-push_all([X, *XS]) >> (push(X), push_all(XS))
-```
-
-```python
-phrase(push_all([1, 2, 3]), [[]], Rest)  # → Rest = [[3, 2, 1]]
-```
-
-#### Key points
-
-- **State is encoded as `[Value]`** — a single-element list. `phrase/3` sets `[InitialState]` and receives `[FinalState]`.
-- **Multiple states** → use a compound value: `[state(Count, Items)]` or `[[Count, Items]]`.
-- **State-only DCG** (no token parsing): use `phrase/3` where the "list" is just a state wrapper. There is no requirement that the threaded state be a token list.
-- **Chaining**: DCG nonterminal calls naturally compose — `inc_then_double >> (inc, double)` threads the state through both operations sequentially.
+(Give the two helpers different names: `state/1` and `state/2` as pushback
+nonterminals in one module currently fail to load.)
 
 ---
 
@@ -1324,24 +1310,12 @@ Meta-predicates are higher-order predicates that take goals as arguments. They a
 ### [All-solutions predicates](meta_predicates.md)
 
 ```clausal
--allow_singletons
-# BAG and LIST name what each goal produces/expects for readability —
-# each line here is an independent illustration, not a chained example.
-
-# Collect all X where in_(X, [1,2,3]) into Bag
-findall(X, in_(X, [1, 2, 3]), BAG),
-
-# Same but with a filter — only X > 1
-findall(X, (in_(X, [1, 2, 3]) and X > 1), BAG),
-
-# Cartesian product — template can be any term
-findall([X, Y], (in_(X, [a, b]) and in_(Y, [1, 2])), BAG),
-
-# bagof fails if no solutions (findall succeeds with [])
-bagof(X, in_(X, LIST), BAG),
-
-# setof deduplicates results (preserving first-occurrence order)
-setof(X, in_(X, [1, 1, 2, 2, 3]), BAG),   # BAG = [1, 2, 3]
+test("findall") <- findall(X, in_(X, [1, 2, 3]), [1, 2, 3])
+test("filter") <- findall(X, (in_(X, [1, 2, 3]) and X > 1), [2, 3])
+test("product") <- findall([X, Y], (in_(X, ['a', 'b']) and in_(Y, [1, 2])), [['a', 1], ['a', 2], ['b', 1], ['b', 2]])
+test("bagof empty fails") <- (not bagof(X, in_(X, []), _))
+test("findall empty") <- findall(X, in_(X, []), [])
+test("setof sorts and dedups") <- setof(X, in_(X, [3, 1, 2, 1]), [1, 2, 3])
 ```
 
 | Predicate | Empty result |
@@ -1353,16 +1327,16 @@ setof(X, in_(X, [1, 1, 2, 2, 3]), BAG),   # BAG = [1, 2, 3]
 ### Universal quantification
 
 ```clausal
-# Succeeds iff Action holds for every solution of Cond
-forall(in_(X, [2, 4, 6]), X > 0),   # succeeds
-forall(in_(X, [2, -1, 6]), X > 0),  # fails
+# forall(Cond, Action) succeeds iff Action holds for every solution of Cond
+test("forall holds") <- forall(in_(X, [2, 4, 6]), X > 0)
+test("forall fails") <- (not forall(in_(X, [2, -1, 6]), X > 0))
 ```
 
 `forall(Cond, Action)` is equivalent to `not (Cond and not Action)`.
 
-### Call/N
+### call/N
 
-`Call/N` invokes a goal closure with extra arguments. It is an alias for `call_goal/N`:
+`call/N` invokes a goal closure with extra arguments. It is an alias for `call_goal/N`:
 
 ```clausal
 --8<-- "tests/fixtures/docs/syntax_sigs.txt:call_n"
@@ -1396,9 +1370,9 @@ See [Constraints](constraints.md) for the full API.
 
 Three main reasons:
 
-1. **Ambiguity.** It is impossible at compile time to distinguish a Python global from an atom without tracking all imports. Old compiled code could silently become wrong when a new name is imported. With explicit `--` escaping, the boundary is always visible.
+1. **Ambiguity.** It is impossible at compile time to distinguish a Python global from an atom without tracking all imports. Old compiled code could silently become wrong when a new name is imported. With explicit `++` / `--` escaping, the boundary is always visible.
 
-2. **Term representation efficiency.** Compound terms are most efficiently represented as instances of generated classes (enabling `match`/`case` to work directly on them); an atom needs no such wrapper — it *is* the interned `str`. Allowing arbitrary Python objects as functors requires a boxing wrapper, which is heavier.
+2. **Term representation efficiency.** A compound term is a plain tuple cell `(functor, *args)` and an atom *is* the interned `str`, so neither needs a wrapper. Allowing arbitrary Python objects as functors would require a boxing wrapper, which is heavier.
 
 3. **Logic variables must be visually distinct.** They are declared implicitly, work differently from Python names, and their bindings are reverted on backtracking. A clear syntactic marker — a capital initial (`X`, `FOO`, `Foo`) or a leading underscore (`_x`) — avoids confusion without requiring explicit `declare` statements.
 

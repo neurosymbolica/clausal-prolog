@@ -80,9 +80,9 @@ A worklist handles arbitrary nesting depth (e.g. `[[[X, *Y], *Z], *W]` produces 
 |---|---|
 | `True` | pass-through to `k_stmts` |
 | `False` | empty (no solution) |
-| `Unify(l, r)` | `mark = trail.mark(); if unify(l, r, trail): k_stmts; trail.undo(mark)` |
+| `Unify(l, r)` | `mark = trail.mark(); if unify(l, r, trail): k_stmts; trail.undo(mark)` — what a bare `X is Y` compiles to: unification, no evaluation (see [Operators](operators.md)) |
 | `DoesNotUnify(l, r)` | `if _dif(l, r, trail): k_stmts` — [dif/2](constraints.md) constraint |
-| `Evaluate(l, r)` | same as `Unify` but `r` is compiled via `arith_to_ast_expr` (arithmetic evaluation) |
+| `eval_(E, X)` (lowered to `ArithEval`) | evaluate `E` via `arith_to_ast_expr`, then unify with `X`, like ISO `is/2`. The quoted `'is'(X, E)` is the ISO builtin, called like any other. See [Arithmetic](arithmetic.md) |
 | `ArithEq(l, r)` | `if _fd_eq(l, r, trail): k_stmts` — [CLP(ℤ)](constraints.md) arithmetic equality |
 | `ArithNeq(l, r)` | `if _fd_ne(l, r, trail): k_stmts` — CLP(ℤ) arithmetic disequality |
 | `Lt/LtE/Gt/GtE` | `if _fd_lt/_fd_le/_fd_gt/_fd_ge(l, r, trail): k_stmts` — CLP(ℤ) comparison |
@@ -124,8 +124,8 @@ _inject_resolved_targets(call_targets, base_globals, db, globals_)
 
 **`_inject_resolved_targets(targets, base_globals, db, globals_)`** — resolution loop that ensures each called `(fname, arity)` pair has a binding in `base_globals` that `$dispatch_at` can resolve:
 
-1. If `fname` is already in `base_globals` and is a predicate binding at this arity — the owner's handle, or a class no Clausal database owns → already present; apply locked dispatch caching (see below) and continue.
-2. If `fname` is a known builtin → inject a `BuiltinPredicate` adapter.
+1. If `fname` is already in `base_globals` and is a predicate binding at this arity — the owner's handle → already present; apply locked dispatch caching (see below) and continue.
+2. If `fname` is a known builtin → inject a `BuiltinPredicate` adapter (the builtin's `BuiltinTerm` builds its cell; see [Builtins](builtins.md)).
 3. If `db` is not `None` and `fname` is in the database → inject a `_DbDispatchAdapter` wrapping `db.get_dispatch`.
 4. Dotted names (`mod.Pred`) are resolved via attribute traversal through the module dict.
 
@@ -161,14 +161,14 @@ Locked dispatch caching captures the dispatch *closure* for locked callees. Call
 `_inject_bucket_refs_trampoline` runs after `_inject_resolved_targets`. It scans each clause body for `Call` nodes whose callee is locked and has `_index_plans`. For each such call site it converts the term-level argument to an AST expression, extracts a static key via `_static_call_key`, and — if the key appears in the callee's bucket dict — injects the bucket function into `base_globals` under a readable string key:
 
 ```python
-base_globals["color.bucket(pos=0, 'red')"] = resolve_predicate_row(color, arity=1, db=db).index_plans[0]["red"]
+base_globals["color.bucket(pos=0, ('red', 0))"] = resolve_predicate_row(color, arity=1, db=db).index_plans[0][('red', 0)]
 ```
 
 `_dispatch_call_trampoline` then emits an `ast.Name` referencing that key instead of either `$disp_color_1` or `$dispatch_at(color, 1)`:
 
 ```python
 # static literal 'red' in indexed position 0 — direct bucket ref:
-_gen = StepGenerator(color.bucket(pos=0, 'red'), this_generator, 'red', trail)
+_gen = StepGenerator(color.bucket(pos=0, ('red', 0)), this_generator, 'red', trail)
 
 # arg is a variable — falls back to cached dispatch closure:
 _gen = StepGenerator($disp_color_1, this_generator, X_, trail)
@@ -449,7 +449,7 @@ compile_predicate(
 ```
 
 - `db=None` is allowed; a `_GlobalsDb` proxy is used for signature lookups from `globals_`.
-- `pred_cls` is the predicate's HANDLE (a loaded module's predicates are rows in its `Database`, bound to handles); the install goes through the mutation gate onto the row it names. (It was a `PredicateMeta` class until W4b-3 slice 7 deleted the class.)
+- `pred_cls` is the predicate's HANDLE (a loaded module's predicates are rows in its `Database`, bound to handles); the install goes through the mutation gate onto the row it names.
 - `globals_` is the module globals dict; predicate names in the body resolve from this dict.
 - Returns the compiled dispatch function and also installs it via `_install(db, functor, arity, fn, lazy_fn, pred_cls)`.
 
@@ -457,7 +457,7 @@ compile_predicate(
 
 `_install` stores the dispatch function:
 1. `db.set_dispatch(functor, arity, fn, lazy_fn)` — on the predicate's row in the Database. This is where a loaded module's predicates keep their dispatch: the module binds each one to its handle, and `$dispatch_at`/`resolve_predicate_row` read the row.
-2. When `pred_cls` is given — a class no Clausal database owns — on that class's row too (a private detached one on the `db=None` path).
+2. When `pred_cls` is a predicate handle, through the mutation gate onto the row it names (a private detached row on the `db=None` path).
 
 A lazy recompile closure is registered alongside. when `assertz`/`retract` invalidates dispatch by setting `row.dispatch_fn = None`, the next dispatch through the row (`$dispatch_at`, `db.get_dispatch`) invokes the lazy closure to recompile from the current clause list.
 
@@ -465,7 +465,7 @@ A lazy recompile closure is registered alongside. when `assertz`/`retract` inval
 
 ## `_GlobalsDb` — db-free compilation
 
-when `db=None`, the compiler uses a `_GlobalsDb(globals_)` proxy that implements only `signature_for(functor, arity)`. It looks up the named predicate class from `globals_` and returns `cls._signature`. This covers keyword-argument normalisation during compilation without requiring a live Database.
+when `db=None`, the compiler uses a `_GlobalsDb(globals_)` proxy that implements only `signature_for(functor, arity)`. It reads the signature from the module's own database row, reached through the `$module` handle the import hook binds into every loaded module's dict; a hand-built globals dict with no `$module` falls back to the binding found in `globals_`. Nothing else of a database is needed to compile. (Keyword-argument *terms* are a load-time `SyntaxError` since 2026-09-19; a directive's options and an EDCG hidden argument keep their keywords.)
 
 ---
 
@@ -505,7 +505,7 @@ class _DbDispatchAdapter:
 - Bytecode is cached in `__pycache__/` via `SourceLoader`
 
 **Phase B** (module exec time):
-- Bytecode execution binds each predicate name to its handle (`$declare_head`, which records the head's field names until the flip point, step 4a-bis) and collects `Predicate` nodes; it created a load-time `PredicateMeta` class per name until W4b-3 slice 5
+- Bytecode execution binds each predicate name to its handle (`$declare_head`, which records the head's field names until the flip point, step 4a-bis) and collects `Predicate` nodes
 - `compile_module()` takes over from there
 
 ### compile_module steps
@@ -525,7 +525,7 @@ compile_module(predicate_nodes, module_items, module_dict, module_name)
 | 4a-bis. The flip point | `_flip_bindings()` registers the Database as a handle owner (every binding is already a handle; the class it rebound is deleted); the module body's `$declare_head` record retires here, so the Database answers alone from now on |
 | 5. Compile | Each `(functor, arity)` is compiled via `compile_predicate_trampoline` (or `compile_predicate_shallow` for shallow predicates) |
 | 6. [Tabling](tabling.md) | Tabled predicates are wrapped with `make_tabled_wrapper_trampoline` from `clausal.logic.tabling` |
-| 7. Locking | Non-[dynamic](directives.md) predicates' rows are locked (`_lock_static_predicates(db)`) to prevent runtime modification |
+| 7. Locking | Non-[dynamic](directives.md) predicates' rows are locked (`_lock_static_predicates(db)`): a runtime `assertz`/`retract` on one raises `permission_error(modify, static_procedure, PI)` — see [Database operations](database_ops.md) |
 
 ### How predicate nodes are collected
 
@@ -575,15 +575,9 @@ Lowercase named groups are NOT auto-bound — they function as regex-only groups
 
 All static patterns (string literals) in `match` and `search` calls are pre-compiled via `re.compile()` and stored in `module_dict`. The goal's pattern argument is replaced with a `LoadName` referencing the compiled object. Dynamic patterns (f-strings, variables) are left unchanged.
 
-### `clausal.modules` — standard library package
+### Library module names
 
-`clausal/modules/` is a Python package that acts as the standard library search path for Clausal module imports. A `ModulesFinder` meta path finder (registered in `import_hook.py`) redirects bare module names to `clausal.modules.<name>`, so `-import_from(regex, [match, ...])` resolves to `clausal.modules.regex` transparently.
-
-Currently provides:
-- **`regex`** — match/2,3, search/2,3, replace/4, split/3, findall/3
-- **`log`** — get_logger/1,2, debug/1,2, info/1,2, warning/1,2, error/1,2, critical/1,2, log/3, set_level/2, get_level/2, is_enabled_for/2, stream_handler/2, file_handler/2, set_formatter/2, add_handler/2, remove_handler/2, basic_config/1. See [logging.md](logging.md)
-- **`date_time`** — now/1, now_utc/1, today/1, date/4, time/4, datetime/7, timedelta/3, date_add/3, date_sub/3, date_diff/3, datetime_string/3, weekday/2, date_between/3, timestamp/2, datetime_string_iso/2, date_string_iso/2. All predicates produce and consume real Python `datetime` objects (`datetime.date`, `datetime.time`, `datetime.datetime`, `datetime.timedelta`) — not custom term types. See [Date & Time](date_time.md)
-- **`yaml_module`** — Read/2, write/2, ReadAll/2, WriteAll/2, ReadFile/2, WriteFile/2, Get/3. Wraps PyYAML (`yaml.safe_load`/`yaml.safe_dump`); data represented as native Python dicts/lists/scalars. See [yaml.md](yaml.md)
+Library wrappers live under `clausal/modules/py/` (`clausal.modules.py.re`, `clausal.modules.py.logging`, `clausal.modules.py.datetime`, …). A bare library name in an import directive is rewritten at compile time through `compiler_v2._MODULE_ALIASES`, so `-import_from(regex, [match, ...])` loads `py.re`, `log` loads `py.logging`, `date_time` loads `py.datetime`, and `yaml` loads `py.yaml` (YAML itself ships in the separate `clausal-yaml` package). A `py.X` dotted import is redirected by the `ModulesFinder` meta path finder in `import_hook.py`. See [Regex](regex.md), [Logging](logging.md), [Date & Time](date_time.md).
 
 ---
 

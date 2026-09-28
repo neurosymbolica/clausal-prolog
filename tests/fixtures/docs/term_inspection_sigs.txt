@@ -1,9 +1,9 @@
 # Display snippets for docs/term_inspection.md
 
 --8<-- [start:gensym_example]
-gensym("x", A1),  # A1 = "x_1"
-gensym("x", A2),  # A2 = "x_2"
-gensym("y", A3)   # A3 = "y_1" (independent counter)
+gensym('x', A1),  # A1 = x_1
+gensym('x', A2),  # A2 = x_2
+gensym('y', A3)   # A3 = y_1 (independent counter)
 --8<-- [end:gensym_example]
 
 --8<-- [start:map_args_recipe]

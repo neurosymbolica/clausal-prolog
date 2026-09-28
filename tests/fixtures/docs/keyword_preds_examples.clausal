@@ -1,4 +1,3 @@
--double_quotes(chars)
 # Doc snippet fixtures for docs/keyword_preds.md
 
 # Shared fact for keyword predicate examples.  The field NAMES these
@@ -29,7 +28,7 @@ test("change multiple") <- (
 
 # --8<-- [start:unbound_keys_examples]
 # A field name is an ATOM (spec §6.4), so the keys are `y`/`z`, not the
-# strings "y"/"z" — this file is in `-double_quotes(chars)` mode.
+# strings "y"/"z".
 test("unbound") <- (
     unbound_keys(point(1, Y_UNUSED, Z_UNUSED), KEYS),
     in_('y', KEYS),

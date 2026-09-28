@@ -14,17 +14,27 @@ memoization, and self-modifying programs.
 
 ---
 
-## The `-dynamic` Directive
+## Declare first: the `-dynamic` directive
 
-By default, predicates are **locked** after loading — you cannot add or remove
-clauses at runtime. To allow runtime modification, declare the predicate as
-dynamic (see [Directives](directives.md) for other directive types):
+`assertz`, `asserta` and `retract` work **only on a predicate declared
+`-dynamic`**. Every other predicate is static once its module has loaded, as in
+ISO Prolog: modifying it raises
+`permission_error(modify, static_procedure, Name/Arity)`, with the builtin
+as the culprit (Scryer's form; see [Exceptions](exceptions.md)).
+
+```clausal
+--8<-- "tests/fixtures/docs/database_ops_examples.clausal:declare_first"
+```
+
+The declaration also makes the predicate exist before it has clauses: a
+`-dynamic` predicate with no clauses simply fails, where an undeclared name is
+refused. Declare several at once:
 
 ```clausal
 --8<-- "tests/fixtures/docs/database_ops_examples.clausal:dynamic_directive"
 ```
 
-Without this directive, `assertz` and `retract` will raise a permission error.
+See [Directives](directives.md) for the other directives.
 
 ---
 
@@ -93,10 +103,13 @@ test("clear all") <- abolish_all_tables()
 
 ### Memoization
 
-Use assert to cache computed results:
+Cache computed results in a dynamic predicate. Arithmetic goes through a
+constraint (`N1 == N - 1`): a bare `X is N - 1` is unification and would
+bind `X` to the unevaluated term (see [Operators](operators.md)).
+
 
 ```clausal
---8<-- "tests/fixtures/docs/database_ops_sigs.txt:memoization_recipe"
+--8<-- "tests/fixtures/docs/database_ops_examples.clausal:memoization_recipe"
 ```
 
 (For automatic memoization, consider [`-table`](tabling.md) instead.)
@@ -104,13 +117,13 @@ Use assert to cache computed results:
 ### Counter / mutable state
 
 ```clausal
---8<-- "tests/fixtures/docs/database_ops_sigs.txt:counter_recipe"
+--8<-- "tests/fixtures/docs/database_ops_examples.clausal:counter_recipe"
 ```
 
 ### Collecting facts from a computation
 
 ```clausal
---8<-- "tests/fixtures/docs/database_ops_sigs.txt:collect_recipe"
+--8<-- "tests/fixtures/docs/database_ops_examples.clausal:collect_recipe"
 ```
 
 (Prefer [`findall`](meta_predicates.md) for this pattern — it is cleaner and
@@ -120,21 +133,19 @@ does not require dynamic predicates.)
 
 ## Gotchas
 
-- **Must declare `-dynamic`** — without it, assertz/asserta/retract raise a
-  typed `permission_error(modify, static_procedure, Name/Arity)` (catchable by
-  `catch/3`). This is intentional: it prevents accidental modification of
-  predicates that should be stable.
+- **Must declare `-dynamic`** — without it, assertz/asserta/retract raise
+  `error(permission_error(modify, static_procedure, Name/Arity), assertz/1)`
+  (catchable by `catch/3`). A name with no declaration and no clauses is
+  refused too. To match the culprit in a catch pattern, quote it:
+  `'/'('assertz', 1)` (a bare builtin name in a term is the builtin's object,
+  not the atom).
 - **assertz adds facts, not rules** — `assertz(foo(X) <- bar(X))` is not
-  supported and raises a typed `permission_error(assert, rule, Head)` at
+  supported and raises `permission_error(assert, rule, Head)` at
   assert time (the predicate's existing clauses are left untouched). Only
   ground or partially-ground facts can be asserted.
-- **assertz keeps the partial-term rule** — `assertz(foo(a))` against a
-  `foo/2` predicate asserts `foo(a, _)`, an open fact whose second field
-  matches anything. A clause head *written in a file* at the wrong arity is
-  refused at load (see [Predicates](predicates.md)), but at assert time
-  `foo(a)` and `foo(a, _)` are the same already-built term — the argument
-  count the author wrote is gone — so no refusal is possible here. Spell the
-  open field as `_` to make the intent visible.
+- **Arity is part of the name** — `assertz(foo(a))` when only `foo/2` is
+  declared dynamic is refused with `existence_error(procedure, foo/1)`:
+  `foo/1` is a different predicate, and it is not declared.
 - **retract removes one clause** — it removes the *first* matching clause only.
   Call it in a loop (or use `findall` + multiple retracts) to remove all
   matches.

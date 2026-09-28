@@ -2,10 +2,10 @@
 
 --8<-- [start:escape_operators]
 # Logic term containing a Python value:
-point(--x_coord, --y_coord),
+point(++x_coord, ++y_coord),
 
-# Python expression containing a logic term:
-my_term = ++foo(X, bar(Y))
+# Python expression containing a logic term (a cell):
+my_term = --foo(1, bar(2))          # ('foo', 1, ('bar', 2))
 
 # Capture Python code as AST without running it:
 ast_node = ~~(x + y * z)
@@ -67,7 +67,7 @@ X is not Y,   # disequality constraint (dif/2)
 # === Horn clauses ===
 
 --8<-- [start:horn_clauses]
-Head <- Body,
+head(X) <- (goal1(X), goal2(X))
 --8<-- [end:horn_clauses]
 
 --8<-- [start:body_style]
@@ -76,7 +76,7 @@ SyntaxError: clause body must be parenthesized or a single call:
 --8<-- [end:body_style]
 
 --8<-- [start:conjunction_style]
-Rule >> ListDescription,
+rule >> list_description
 --8<-- [end:conjunction_style]
 
 
@@ -93,8 +93,6 @@ Rule >> ListDescription,
 # === Strings ===
 
 --8<-- [start:strings]
--double_quotes(chars)      # until this becomes the default
-
 "abc" is ['a', 'b', 'c'],  # a string IS its char list
 "" is [],                  # the empty string is the empty list
 "abc" is [H, *T],          # H = 'a' (a char atom), T = "bc" (a string)
@@ -104,14 +102,14 @@ Rule >> ListDescription,
 # === [Python interop](python_integration.md) — `++()` escape ===
 
 --8<-- [start:unit_literal_sugar]
-5(Metre)          # → ++(Metre(5))    → Quantity(5, {Metre: 1})
-9.8(Newton)       # → ++(Newton(9.8)) → Quantity(9.8, {kg:1, m:1, s:-2})
--3(Second)        # → Quantity(-3, {Second: 1})  (negation applied after)
+5(metre)          # → Quantity(5, metre)
+9.8(newton)       # → Quantity(9.8, newton)  (dimension kg·m·s⁻²)
+-3(second)        # → Quantity(-3, second)  (negation applied after)
 --8<-- [end:unit_literal_sugar]
 
 --8<-- [start:unit_literal_sugar_ex2]
-F(Newton)         # → has_units(F, Newton) — F must be bound to a Newton value
-F is 9.8(Newton)  # binds F; hook checks dims match
+FORCE(newton)         # → has_units(FORCE, newton) — FORCE must be a newton value
+FORCE is 9.8(newton)  # binds FORCE; the hook checks the dimensions match
 --8<-- [end:unit_literal_sugar_ex2]
 
 
@@ -126,7 +124,7 @@ F is 9.8(Newton)  # binds F; hook checks dims match
 # === Module qualification ===
 
 --8<-- [start:module_qualification]
-utils.Double(X, Y),    # qualified call after -import_module(utils)
+utils.double(X, Y),    # qualified call after -import_module(utils)
 --8<-- [end:module_qualification]
 
 
@@ -200,7 +198,7 @@ my_length(L, N) <- count_elems(L, _edcg_len_in=0, _edcg_len_out=N)
 
 --8<-- [start:call_n]
 call_goal((X <- (X > 0)), 5),        # call_goal/2: succeeds
-Call(GOAL, ARG1, ARG2),             # Call/3: invoke GOAL with two extra args
+call(GOAL, ARG1, ARG2),             # call/3: invoke GOAL with two extra args
 --8<-- [end:call_n]
 
 --8<-- [start:higher_order_list_predicates]
@@ -234,35 +232,38 @@ label([X, Y, Z])
 # === Syntax cheat sheet ===
 
 --8<-- [start:syntax_cheat_sheet]
-# Variables (ALL-CAPS preferred; leading-underscore also valid)
+# Variables (ALL-CAPS preferred; leading-underscore and TitleCase also valid)
 X, HEAD, REST          # ALL-CAPS logic variables
 _x, _head, _rest       # leading-underscore style (also valid)
+Total                  # TitleCase (the ISO spelling) — never in functor position
 _                      # anonymous variable (always unifies, stores nothing)
 
-# Atoms (symbols) → interned PredicateMeta classes
-Atom, red, café        # identifiers, incl. any-language unicode letters
---python_obj           # any Python object used as an atom
-# 'quoted text' is a STRING (a list of chars), NOT a declared atom — see Strings
+# Atoms (symbols) → the interned Python str
+red, café              # bare identifiers: must be declared (-module/-private/-import_from)
+'hello world', 'not'   # single quotes: an atom in any spelling, no declaration needed
 
 # Lists
 []                     # empty list
 [a, 1, X]              # simple list
 [FIRST, *REST]         # head/tail
 
-# Strings
-u"hello"               # list of character atoms
+# Strings ("…" is a string by default: a list of chars)
+"hello"                # the carrier ('$chars', 'hello')
+b"hi"                  # list of byte codes [104, 105]
 
 # Dicts (DictTerm — keys ground, values may be Vars)
-{"x": 1, "y": 2}              # ground dict
-{"x": X, "y": Y}              # dict with variable values
-{"addr": {"city": C}}         # nested dict
+{'x': 1, 'y': 2}              # ground dict (atom keys)
+{'x': X, 'y': Y}              # dict with variable values
+{'addr': {'city': C}}         # nested dict
 
 # Sets (SetTerm — elements must be ground)
 {1, 2, 3}                     # set of integers
-{"red", "green", "blue"}      # set of strings
+{'red', 'green', 'blue'}      # set of atoms
 
-# Unification
+# Unification (bare `is` never evaluates)
 X is Y,                # unify
+X is 1 + 2,            # X = the term 1 + 2, not 3
+'='(X, Y),             # ISO =/2, the same unification
 X is not Y,            # dif constraint (must stay different)
 not (X is Y),          # immediate check (don't unify right now)
 
@@ -272,31 +273,33 @@ X == Y,                # arithmetic equality constraint
 X != Y,                # arithmetic disequality constraint
 X < Y,                 # less-than constraint
 X <= Y,                # less-or-equal constraint
-eval_(X + 1, N),       # eager arithmetic evaluation (Prolog is/2)
+eval_(X + 1, N),       # eager arithmetic evaluation
+'is'(N, X + 1),        # ISO is/2 (quoted operators follow Scryer: see operators.md)
 in_domain(X, 1, 10),    # post integer domain
 all_different([X,Y,Z]), # pairwise disequality
 label([X, Y, Z]),      # enumerate solutions (first-fail)
-structural_eq(X, Y),   # structural equality (Prolog ==/2)
+'=='(X, Y),            # structural identity (ISO ==/2); also structural_eq(X, Y)
 
 # Rules and facts
-Head <- call(X),       # single-call body (no parens needed)
-Head <- (Body),        # operator body (parens required)
-Fact,                  # fact (trivially true)
-Rule >> ListDescription,   # DCG rule
+head(X) <- goal(X)            # single-call body (no parens needed)
+head(X) <- (X > 0, goal(X))   # operator or multi-goal body (parens required)
+fact(1),                      # fact (trivially true)
+rule >> list_description      # DCG rule
 
 # Goals
 goal(A, B),            # compound goal
 not goal,              # negation as failure
-assertz(goal),          # assert fact/rule at runtime
-retract(term),         # retract first matching clause
+assertz(fact(1)),      # add a fact at runtime (fact/1 declared -dynamic)
+retract(fact(1)),      # retract first matching clause
+p(x=1),                # SyntaxError: keyword-argument terms are refused
 
 # Module qualification
-utils.Double(X, Y),    # qualified call (after -import_module(utils))
+utils.double(X, Y),    # qualified call (after -import_module(utils))
 
 # Escaping
---python_expr          # Python inside logic term
-++logic_term           # logic term inside Python expression
-~~python_expr          # capture as AST node
+++python_expr          # a Python value inside logic code
+--logic_term           # a logic term inside Python code (run it in goal position)
+~~python_expr          # capture as a Python ast node
 
 # Lambdas (anonymous clauses)
 call_goal((X <- (R == X + 1)), 5)                             # R = 6
@@ -307,7 +310,7 @@ findall(X, in_(X, [1,2,3]), BAG),          # BAG = [1,2,3]
 bagof(X, in_(X, LIST), BAG),              # fails if LIST empty
 setof(X, in_(X, XS), BAG),               # deduplicates
 forall(in_(X, NS), X > 0),               # universal quantification
-Call(GOAL, ARG1),                          # Call/2 (alias for call_goal/2)
+call(GOAL, ARG1),                          # call/2 (alias for call_goal/2)
 
 # F-strings — logic variables auto-deref at search time
 writeln_text(f"Hello, {NAME}!"),            # prints bound value of NAME
@@ -315,13 +318,13 @@ writeln_text(f"{X:.2f}"),                   # format specs work
 write_text_to_string(f"{X} and {Y}", S),    # capture as string
 
 # DCGs — >> defines grammar rules with difference lists
-greeting >> (["hello", "world"]),          # terminal sequence
+greeting >> (['hello', 'world']),          # terminal sequence
 sentence >> (noun_phrase, verb_phrase),    # non-terminal chain
 digit(D) >> ([D], {D >= 0}, {D <= 9}),    # args + inline goals
-letter >> (["a"] or ["b"] or ["c"]),      # disjunction
-not_a >> (not ["a"], [X]),                # negation
+letter >> (['a'] or ['b'] or ['c']),      # disjunction
+not_a >> (not ['a'], [X]),                # negation
 (peek(T), [T]) >> ([T]),                  # pushback/semicontext
-phrase(greeting, ["hello", "world"]),     # phrase/2 — must consume all
+phrase(greeting, ['hello', 'world']),     # phrase/2 — must consume all
 phrase(digit(D), [3], REST),              # phrase/3 — partial parse
 
 # EDCGs — Extended DCGs (multiple named accumulators + passed args)

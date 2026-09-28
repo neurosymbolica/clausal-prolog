@@ -37,7 +37,7 @@ test("call/2") <- (
 )
 ```
 
-The goal can be a lambda, a predicate name, or a predicate instance.
+The goal can be a lambda, a predicate name, or a partial goal term (a cell such as `add(1)`, which `call` extends with the extra arguments).
 
 ---
 
@@ -101,7 +101,7 @@ test("exclude") <- exclude((X <- (X > 3)), [1, 5, 2, 8, 3], [1, 2, 3])
 value when `Goal(Elem, Out)` succeeds; skip elements where it fails.
 
 ```clausal
-safe_sqrt(X, Y) <- (X >= 0, Y == X ** 0.5)
+safe_sqrt(X, Y) <- (X >= 0, eval_(X ** 0.5, Y))
 
 test("filtermap") <- filter_map(safe_sqrt, [4, -1, 9, -2, 16], [2.0, 3.0, 4.0])
 ```

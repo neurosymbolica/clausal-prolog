@@ -18,7 +18,7 @@ The full source is in `clausal/examples/metainterpreters.clausal`.
 
 The key idea is to represent an *object-level* program — the program being interpreted — as a list of clauses, where each clause is a pair `[Head, Body]`. `Head` is a term, `Body` is a list of goals (also terms).
 
-In Clausal, object-level terms are ordinary predicate instances. We declare private functor classes for the object level so they are treated purely as data, not called directly:
+In Clausal, object-level terms are ordinary compound terms — cells such as `('natnum', ('succ', 0))`. We declare the object-level functors with `-private` so they are treated purely as data, not called directly:
 
 ```clausal
 -private([natnum(VALUE), succ(INNER), edge(FROM, TO), path(FROM, TO)])
@@ -89,7 +89,30 @@ solve([GOAL, *GOALS], PROGRAM) <- (
 
 The base case: an empty goal list means all goals are proved. The recursive case: take the first goal, find a matching clause, prepend its body to the remaining goals, and continue. This is the *list-based* form (`mi_list2` in Triska's article), which is tail-recursive and avoids the overhead of a conjunction stack.
 
-**Querying it:**
+**Querying it** from Python hosted in a `.seam` file, with the goal in goal position:
+
+```clausal
+-import_from(clausal.examples.metainterpreters, [natnum_program, graph_program, solve])
+-private([natnum(value), succ(inner), path(from_, to)])
+
+def natnum_holds():
+    # Does natnum(succ(succ(0))) hold?
+    if --(natnum_program(P), solve([natnum(succ(succ(0)))], P)):
+        return True        # the proof succeeds
+    return False
+
+def path_holds():
+    # Is there a path from a to c?
+    if --(graph_program(G), solve([path('a', 'c')], G)):
+        return True
+    return False
+```
+
+A functor declared in two modules is the same functor: `natnum(0)` here is the
+cell `('natnum', 0)`, exactly what the example module builds.
+
+From a plain `.py` file (no `--`), build the goal cells yourself and use the
+lower-level API:
 
 ```python
 from clausal import Var, once, solve
@@ -136,9 +159,9 @@ Each recursive call adds one to the count after the sub-proof completes. The cou
 | `natnum(0)` | 1 — one fact applied |
 | `natnum(succ(0))` | 2 — recursive clause + base fact |
 | `natnum(succ(succ(0)))` | 3 — two recursive steps + base |
-| `edge("a","b")` | 1 — one fact |
-| `path("a","b")` | 2 — one path clause + one edge fact |
-| `path("a","c")` | 4 — path + edge + path + edge |
+| `edge('a', 'b')` | 1 — one fact |
+| `path('a', 'b')` | 2 — one path clause + one edge fact |
+| `path('a', 'c')` | 4 — path + edge + path + edge |
 
 ---
 
@@ -164,8 +187,8 @@ Each resolution step decrements the depth counter. When `MAX` reaches zero, the 
 ```
 solve_limit([natnum(succ(0))], P, 1)     → fails  (needs 2 steps)
 solve_limit([natnum(succ(0))], P, 2)     → succeeds
-solve_limit([path("a","c")], P, 3)       → fails  (needs 4 steps)
-solve_limit([path("a","c")], P, 4)       → succeeds
+solve_limit([path('a', 'c')], P, 3)      → fails  (needs 4 steps)
+solve_limit([path('a', 'c')], P, 4)      → succeeds
 ```
 
 ---
@@ -196,7 +219,7 @@ cyclic_program(PROGRAM) <- (
 )
 ```
 
-`solve([path("a","b")], cyclic_program)` loops forever — the recursive clause is always tried first, generating `a→b→a→b→…`. But `solve_iterative_deepening([path("a","b")], cyclic_program)` succeeds at depth 2, because at depth 1 both branches are exhausted, and at depth 2 `a→b` is found via the base clause.
+`solve([path('a', 'b')], P)` with `P` the cyclic program loops forever — the recursive clause is always tried first, generating `a→b→a→b→…`. But `solve_iterative_deepening([path('a', 'b')], P)` succeeds at depth 2, because at depth 1 both branches are exhausted, and at depth 2 `a→b` is found via the base clause.
 
 ---
 
@@ -215,13 +238,13 @@ solve_tree([GOAL, *GOALS], PROGRAM, [[GOAL, BODY_TREE], *GOALS_TREE]) <- (
 
 Each node in the tree is `[Goal, SubTree]` where `SubTree` is the proof tree for the body goals that were used to resolve `Goal`. Facts (clauses with empty body) produce leaf nodes `[Goal, []]`.
 
-**Example: `path("a","c")`**
+**Example: `path('a', 'c')`**
 
 ```
-path("a", "c")
-└─ edge("a", "b")          ← leaf (fact)
-└─ path("b", "c")
-   └─ edge("b", "c")       ← leaf (fact)
+path('a', 'c')
+└─ edge('a', 'b')          ← leaf (fact)
+└─ path('b', 'c')
+   └─ edge('b', 'c')       ← leaf (fact)
 ```
 
 In Clausal list notation:
@@ -258,7 +281,7 @@ natnum(succ(succ(0)))
 
     Full source: `clausal/examples/metainterpreters.clausal`
 
-    The file contains 30 `test` clauses covering all five interpreters across the natural number and graph programs, including the iterative deepening completeness test on the cyclic graph.
+    The file contains 28 `test` clauses covering all five interpreters across the natural number and graph programs, including the iterative deepening completeness test on the cyclic graph.
 
 *See also: [Tabling](tabling.md) — built-in memoisation for left-recursive predicates.*
 *See also: [Meta-Predicates](meta_predicates.md) — findall, bagof, setof, forall.*

@@ -20,7 +20,18 @@ reach(X, Y) <- (
 )
 ```
 
-Query: `reach(1, 3)` succeeds (both directly and via node 2).
+Query it from Python hosted in the same `.seam` file, with the goal in goal
+position (`--`):
+
+```python
+if --reach(1, 3):
+    print("reachable")        # succeeds (both directly and via node 2)
+for Y in --reach(1, Y):
+    print(Y)                  # 2, 3, 3
+```
+
+From a plain `.py` file, use `solve(("reach", 1, Y), module=m)` — see
+[Querying from Python](python_integration.md#querying-from-python).
 
 ---
 
@@ -29,14 +40,18 @@ Query: `reach(1, 3)` succeeds (both directly and via node 2).
 A fact is a clause with no body — it is unconditionally true. Facts end with a trailing comma:
 
 ```clausal
-color(red, warm),
-color(blue, cool),
-color(green, cool),
+color('red', 'warm'),
+color('blue', 'cool'),
+color('green', 'cool'),
 ```
 
 Facts define the base data of your program. Think of them as rows in a database table.
 
-Multiple facts for the same predicate are logical alternatives. Clausal searches for those that unify with the goal, in source order. `color(X, cool)` unifies with `color(blue, cool)` first, then `color(green, cool)`.
+Multiple facts for the same predicate are logical alternatives. Clausal searches for those that unify with the goal, in source order. `color(X, 'cool')` unifies with `color('blue', 'cool')` first, then `color('green', 'cool')`.
+
+A quoted `'red'` is an atom anywhere. A bare `red` must be declared first
+(`-private([red, warm])`, or listed in `-module`) — see
+[Atoms](syntax.md#atoms). A double-quoted `"red"` is a **string**, not an atom.
 
 ---
 
@@ -45,10 +60,11 @@ Multiple facts for the same predicate are logical alternatives. Clausal searches
 A rule has a **head** (the conclusion) and a **body** (the conditions). The head holds when all conditions in the body hold:
 
 ```clausal
-warm_color(C) <- color(C, warm)
+color('red', 'warm'),
+warm_color(C) <- color(C, 'warm')
 ```
 
-Read this as: "C is a warm color if `color(C, warm)` holds."
+Read this as: "C is a warm color if `color(C, 'warm')` holds."
 
 ### Multi-Goal Bodies
 
@@ -132,7 +148,7 @@ ancestor(X, Y) <- (
 )
 ```
 
-Now `ancestor("alice", "dave")` holds — the relation connects them through the chain alice → bob → carol → dave.
+Now `ancestor('alice', 'dave')` holds — the relation connects them through the chain alice → bob → carol → dave.
 
 **Add metadata** — track the generation distance:
 
@@ -145,7 +161,7 @@ ancestor(X, Y, N) <- (
 )
 ```
 
-`ancestor("alice", "dave", N)` yields `N = 3`.
+`ancestor('alice', 'dave', N)` yields `N = 3`.
 
 This pattern — base case as a fact, recursive case as a rule — is the fundamental building block of Clausal programs.
 
@@ -199,13 +215,19 @@ Use `-private` when a predicate is an implementation detail that other modules s
 Predicate fields are inferred from clause heads — no separate declaration needed:
 
 ```clausal
-# point/2 has fields (arg0, arg1)
+# point/2 has fields ('arg_0', 'arg_1'): no head variable names them
 point(0, 0),
 point(1, 1),
 
-# distance/3 has fields (arg0, arg1, arg2)
-distance(X1, X2, D) <- (D == abs(X2 - X1))
+# distance/3 has fields ('x1', 'x2', 'd'): named after the head variables
+distance(X1, X2, D) <- (
+    DX == X2 - X1,
+    abs_(DX, D)
+)
 ```
+
+A `-module` export list or a `-private([name(field, ...)])` declaration names
+the fields explicitly (see [Keyword Predicates](keyword_preds.md)).
 
 The **arity** is the number of fields. `point/2` means "point with 2 arguments." Different arities define different predicates: `foo/1` and `foo/2` are unrelated.
 
@@ -224,12 +246,12 @@ them:
   `foo(a, _)` and absorbed into `foo/2` (which is what happened before this
   check: the padded clause matched `foo(a, ANYTHING)` and no `foo/1` ever
   existed). A padded position that really means "anything" must be spelled
-  `_`; a head that names only *some* fields by keyword (`foo(a=1),`) stays
-  legal, because there the unbound remainder is explicit.
+  `_`. (A keyword argument, `foo(a=1)`, is a load-time `SyntaxError` in a
+  head or a term: terms are built positionally.)
 
-The partial-term rule (`citation(REF)` in argument position builds a term with
-a fresh variable) still holds everywhere *except* a clause head. Two arities
-of one name are kept genuinely separate only in separate modules.
+A term is never padded anywhere: write every argument, using `_` for one you
+leave open. Two arities of one name are kept genuinely separate only in
+separate modules.
 
 Calling a predicate at an arity it does not have is an error, and it is reported
 as one:
@@ -262,26 +284,26 @@ Clausal files use [Python syntax](syntax.md) with logic programming semantics:
 # Comments start with #
 
 # Facts end with a comma
-color(red, warm),
-color(blue, cool),
+color('red', 'warm'),
+color('blue', 'cool'),
 
 # Rules use <- (implication arrow)
-warm_color(C) <- color(C, warm)
+warm_color(C) <- color(C, 'warm')
 
 # Multi-goal bodies are parenthesized, comma-separated
 nice_color(C) <- (
-    color(C, cool),
-    C != blue
+    color(C, 'cool'),
+    dif(C, 'blue')
 )
 ```
 
-Files are loaded via Python's [import system](import.md). `import my_module` loads `my_module.clausal` and compiles all predicates.
+Files are loaded via Python's [import system](import.md). `import my_module` loads `my_module.clausal` (or `my_module.seam`) and compiles all predicates.
 
 ---
 
 ## Python API (advanced)
 
-> For most use cases, define predicates in `.clausal` files. This section covers the lower-level Python API for embedding or advanced use.
+> For most use cases, define predicates in `.clausal`/`.seam` files and query them with the goal-position seam (`for X in --pred(X):`) from Python hosted in a `.seam` file. This section covers the lower-level API for a plain `.py` file, which cannot use `--`, and for goals built at runtime. The 1.0 surface is listed in [Public API](public-api.md).
 
 ### Predicates from Python
 
@@ -328,7 +350,7 @@ Predicates are locked after module loading — `assertz`/`retract` on one raise 
 ??? info "Test coverage"
 
     - `tests/test_compiled_programs.py` (41 tests): graph reachability, fibonacci, N-queens, NAF
-    - `tests/test_predicate_meta.py` (53 tests): PredicateMeta class behavior
+    - `tests/test_predicate_meta.py`: predicate rows, handles and locking
     - `tests/fixtures/edge_graph.clausal`: example fact + rule predicate file
 
 ---
