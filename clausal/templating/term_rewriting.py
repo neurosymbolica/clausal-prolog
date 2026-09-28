@@ -3792,6 +3792,18 @@ class TermTransformer(NodeTransformer):
                 if isinstance(v, FormattedValue):
                     v.value = _strip_variable_markers(v.value)
 
+        if transformer._double_quotes_mode == "chars" and not transformer._reify:
+            # RULED 2026-09-28 (R2): an f-string in a clause is a STRING, the
+            # same term a ``"..."`` literal is under the module's
+            # ``-double_quotes`` mode -- the chars carrier by default.  It
+            # used to be the bare Python ``str`` the f-string evaluates to,
+            # which is an ATOM since the flip.  Under ``-double_quotes(atom)``
+            # it stays the atom, as ``"..."`` does.  Reflection reads the
+            # f-string's own text and is left alone.
+            expression = copy_location(Tuple(
+                elts=[copy_location(Constant(value=CHARS_TAG), node),
+                      expression],
+                ctx=load), node)
         return _build_py_thunk_ast(
             transformer, node, expression, var_names, thunk_cls="FStringThunk",
         )

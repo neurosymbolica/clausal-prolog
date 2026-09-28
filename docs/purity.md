@@ -162,7 +162,7 @@ greeting_text(NAME, TEXT) <- (
 )
 
 # Test it without side effects:
-test("greeting") <- greeting_text('world', 'Hello, world!')
+test("greeting") <- greeting_text('world', "Hello, world!")
 
 # Emit it only at the boundary:
 greet(NAME) <- (

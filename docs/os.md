@@ -113,7 +113,7 @@ show_info(INFO) <- (
     working_directory(CWD),
     pid(P),
     platform(PLAT),
-    INFO is f"PID {P} on {PLAT} in {CWD}"      # an atom: an f-string is a Python str
+    INFO is f"PID {P} on {PLAT} in {CWD}"      # a string, like "..."
 )
 
 home_directory(HOME) <- environment_variable("HOME", HOME)
