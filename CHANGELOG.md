@@ -63,6 +63,13 @@ since 0.4.0 finish three moves:
   definitions in every mode. `group_pairs_by_key/2` groups only ADJACENT
   pairs with identical keys and returns `K-Values` groups: sort first to
   collect every occurrence of a key. See [docs/pairs.md](docs/pairs.md).
+  `dict_pairs/2`, `dict_put_pairs/3` and `zip_/3` use the same `'-'(K, V)`
+  pairs (a `[K, V]` element now fails).
+- **foldl/4 backtracks into every call**, as maplist does (it committed to
+  each call's first solution), and maplist, foldl and the `X in L` goal
+  enumerate an OPEN list as the ISO prologue's definitions do.
+- **`call(Y^G)` is `existence_error(procedure, (^)/2)`**, as in ISO and
+  Scryer (it was `type_error(callable, ...)`); bagof/setof still read `^`.
 - **`clausal.__all__` is smaller.** `make_predicate` and
   `MakePredicateRetiredError` are gone. `Database`, `Clause`,
   `structural_unify` and `get_builtin_class` are internal and no longer
@@ -149,6 +156,15 @@ since 0.4.0 finish three moves:
 - **Cell helpers exported from `clausal`:** `cell_functor`, `cell_args` and
   `make_cell`, to read and build a compound term. `query_wfs` is exported
   from `clausal` too.
+- **The rest of ISO's evaluables:** `sign/1`, `+/1`, `rem/2`, `gcd/2`,
+  `truncate/1`, `round/1`, `ceiling/1`, `floor/1`, `float/1`,
+  `float_integer_part/1`, `float_fractional_part/1`, `sqrt/1`, `sin/1`,
+  `cos/1`, `tan/1`, `asin/1`, `acos/1`, `atan/1`, `atan2/2`, `atan/2`,
+  `exp/1`, `log/1`, `pi`, `e` and the bitwise `'>>'`, `'<<'`, `'/\\'`,
+  `'\\/'`, `'\\'`, `xor`, with Scryer's kinds and errors. See
+  [docs/arithmetic.md](docs/arithmetic.md).
+- **`foldl/5`, `foldl/6` and `map_list_to_pairs/3`**, as Scryer's
+  `library(lists)` and `library(pairs)`.
 - **`'^'/2`**, ISO integer power: `'^'(2, 3)` is 8, and a negative
   exponent on an integer base other than 1 is `type_error(float, B)`.
 - **`rdiv/2` as an evaluable functor**, the exact rational division:
@@ -252,6 +268,11 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
 
 ### Fixed
 
+- **A lambda called with the wrong number of arguments** raises an ISO
+  error term instead of a Python `TypeError`: too many arguments extend the
+  body goal (`maplist((S) <- (S > 0), [1, 2], R)` is
+  `existence_error(procedure, (>)/3)`, as Scryer's library(lambda)), too
+  few are `existence_error(lambda_parameter, Lambda)`.
 - **Indexing:** clause selection no longer drops answers when:
     - an argument slot holds a variable bound to a structure,
     - a structured head was asserted at runtime,
