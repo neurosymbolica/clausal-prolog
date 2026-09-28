@@ -105,7 +105,8 @@ written in source keeps Python's meaning, and the two differ for `//` and `**`
 | Term | Meaning (Scryer) | Bare source operator (Python) |
 |---|---|---|
 | `+(A, B)`, `-(A, B)`, `*(A, B)` | exact (a `Decimal` keeps its scale) | `A + B`, `A - B`, `A * B`: the same |
-| `/(A, B)` | exact division: `7 / 2` is the rational 7/2 | `A / B`: the same |
+| `/(A, B)` | division as a **float**: `'/'(7, 2)` is 3.5, `'/'(6, 2)` is 3.0 | `A / B`: Python true division, `7 / 2` is 3.5, `6 / 2` is 3.0 |
+| `rdiv(A, B)` | **exact** rational division: `rdiv(7, 2)` is 7/2, `rdiv(6, 2)` is 3 | — |
 | `//(A, B)` | integer division **truncating** toward zero: `'//'(-7, 2)` is -3 | `A // B` **floors**: `-7 // 2` is -4 |
 | `div(A, B)` | integer division rounded toward negative infinity: -4 | — |
 | `mod(A, B)` | integer modulo, sign of the divisor | `A % B`: Python modulo (the same on integers) |
@@ -117,9 +118,21 @@ written in source keeps Python's meaning, and the two differ for `//` and `**`
 `'//'(7.0, 2)`), as in Scryer. `^` follows Scryer's rules for a negative
 exponent: `'^'(2, -1)` is `type_error(float, 2)`, `'^'(1, -1)` is 1, and
 `'^'(0, -1)` is `evaluation_error(undefined)`; an exact rational base stays
-exact (`'^'(1/2, 2)` is 1/4, where Scryer answers 0.25). `rem` is not in the
-table. The exact-number terms `rdiv(N, D)` and `decimal(M, S)` evaluate as the
-number they denote.
+exact (`'^'(rdiv(1, 2), 2)` is 1/4, where Scryer answers 0.25). `rem` is not in the
+table. The exact-number term `decimal(M, S)` evaluates as the number it
+denotes.
+
+**Division (ruling Q15, 2026-09-28).** In *evaluation* — `eval_/2`, `'is'`,
+the ISO comparisons — `/` is a float division for two integers: bare it is
+Python's (`7 / 2` is 3.5, `6 / 2` is 3.0), quoted it is Scryer's (the same
+floats). A bare `/` keeps exact kinds exact where Python does: a `Fraction`
+over an int is a `Fraction`, a `Decimal` over an int is Python's `Decimal`
+quotient (rounded at 28 digits). A `Decimal` beside a `Fraction` divides
+exactly; a float beside either raises `type_error(exact_number, F)`. The
+quoted `'/'` always answers a float. `rdiv` is the exact spelling:
+`rdiv(7, 2)` is 7/2 and `rdiv(1, 3) + 1` is 4/3, and it never rounds.
+**Inside a constraint** (`==`, `!=`, `<`, ...) `/` is rational, as before:
+`X == 7 / 2` gives 7/2 and `X == 6 / 2` gives 3.
 
 A **zero divisor** in plain arithmetic raises
 `evaluation_error(zero_divisor)` naming the operator, on every spelling, bare or
@@ -318,7 +331,9 @@ test("digit sum") <- digit_sum(123, 6)
 - **`plus/3` requires at least two bound arguments** — it cannot enumerate all
   solutions to `plus(X, Y, 10)`.
 - **Integer division** — `//` floors like Python's (`-7 // 2` is -4); the
-  quoted `'//'(A, B)` truncates like Prolog's (-3); `/` is exact division.
+  quoted `'//'(A, B)` truncates like Prolog's (-3). `/` is a float in
+  evaluation (`eval_(7 / 2, X)` is 3.5) and rational inside a constraint;
+  `rdiv` is exact everywhere.
 
 ---
 

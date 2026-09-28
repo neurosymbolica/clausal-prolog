@@ -35,6 +35,10 @@ from .conftest import SCRYER
 #: (evaluable cell as written in the engine, the same in Scryer, what both print)
 ROWS = [
     ("'//'(-7, 2)", "-7 // 2", "-3"),
+    # Q15: the quoted / is Scryer's float division; rdiv is exact
+    ("'/'(7, 2)", "7 / 2", "3.5"),
+    ("'/'(6, 2)", "6 / 2", "3.0"),
+    ("'/'(rdiv(7, 2), 2)", "(7 rdiv 2) / 2", "1.75"),
     ("'//'(7, -2)", "7 // -2", "-3"),
     ("'//'(7, 2)", "7 // 2", "3"),
     ("div(-7, 2)", "-7 div 2", "-4"),
@@ -83,7 +87,7 @@ DEVIATIONS = [
     ("'^'(0.0, -1)", "error(evaluation_error(undefined),(^)/2)"),       # Scryer: (is)/2
     # exact arithmetic (RULED 2026-09-17): a rational base stays exact;
     # Scryer answers the float 0.25
-    ("'^'(1 / 2, 2)", "1/4"),
+    ("'^'(rdiv(1, 2), 2)", "1/4"),
 ]
 
 _ALL = [(cell, want) for cell, _, want in ROWS] + DEVIATIONS

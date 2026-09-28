@@ -24,7 +24,7 @@ from fractions import Fraction
 
 from clausal.logic.exact_arith import (
     exact_add as _exact_add, exact_sub as _exact_sub,
-    exact_mul as _exact_mul, exact_div as _exact_div,
+    exact_mul as _exact_mul, python_truediv as _python_truediv,
     python_floordiv as _python_floordiv, python_mod as _python_mod,
     python_pow as _python_pow,
     evaluate as _evaluate, evaluate_python_result as _evaluate_python_result,
@@ -1450,12 +1450,12 @@ def _source_form(term_repr: str) -> str:
 # ── Arithmetic term → AST expression ──────────────────────────────────────────
 
 def exact_div(l, r):
-    """``$exact_div``: a literal int/int Div in compiled arithmetic — exact
-    (``3/2`` is ``Fraction(3, 2)``), an integral quotient as int.  A zero
-    divisor raises ``evaluation_error(zero_divisor)`` (Q4, 2026-09-28)."""
-    if r:
-        return present_number(Fraction(l, r))
-    return _exact_div(l, r)          # raises the zero divisor
+    """``$exact_div``: a literal int/int Div in compiled arithmetic -- which
+    is EVALUATION, so Python's true division (ruling Q15, 2026-09-28:
+    ``7 / 2`` is 3.5, ``6 / 2`` is 3.0; it was the exact rational).  The
+    name is kept for already-compiled code.  A zero divisor raises
+    ``evaluation_error(zero_divisor)`` (Q4)."""
+    return _python_truediv(l, r)
 
 
 # The ``$``-runtime names ``arith_to_ast_expr`` can emit, bound to their
@@ -1473,7 +1473,7 @@ ARITH_RUNTIME_NAMES: dict = {
     "$add": _exact_add,
     "$sub": _exact_sub,
     "$mul": _exact_mul,
-    "$div": _exact_div,
+    "$div": _python_truediv,        # bare / in evaluation: Python (Q15)
     # The bare ``//``, ``%``, ``**``: Python's operators (operator rulings
     # 2026-09-28: a bare operator in today's source syntax keeps Python's
     # meaning), with a zero divisor raised as evaluation_error(zero_divisor)
@@ -1572,8 +1572,7 @@ def arith_to_ast_expr(term: Any, var_context: dict[int, str]) -> ast.expr:
     if isinstance(term, (int, float, Fraction)) and not isinstance(term, bool):
         return ast.Constant(value=term)
 
-    # int / int → an exact rational; ``$exact_div`` presents an integral
-    # quotient as int (4/2 is 2, not Fraction(2, 1)).
+    # int / int literal: ``$exact_div``, Python's true division (Q15).
     if isinstance(term, Div):
         left_t = deref(term.left)
         right_t = deref(term.right)

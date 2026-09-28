@@ -125,12 +125,21 @@ def _iso_eval(term, context: str):
     "clpfd expression" shape is correct for THEM; only `is`/the comparisons
     need the ISO term.
     """
-    from clausal.logic.clpfd import _eval_ground
+    # EVALUATION, not a CLP post: ``/`` is Scryer's / Python's float division
+    # here (ruling Q15, 2026-09-28), where the CLP evaluator keeps it
+    # rational -- so is/2 and the ISO comparisons evaluate through the
+    # evaluable table's own evaluator, as eval_/2 does.
+    from clausal.logic.exact_arith import evaluate
+    from clausal.logic.variables import present_number
     t = deref(term)
     if is_var(t):
         raise LogicException(instantiation_error(context))
     try:
-        value = _eval_ground(t)
+        value = evaluate(t, context)
+        if not isinstance(value, (int, float, _Fraction, _Decimal)) or isinstance(value, bool):
+            raise LogicException(
+                type_error("evaluable", _evaluable_culprit(value), context))
+        return present_number(value)
     except LogicException as e:
         leaf = _clpfd_leaf_culprit(e)
         if leaf is None:
@@ -143,9 +152,6 @@ def _iso_eval(term, context: str):
         # this fallback must not hand back a raw term either.
         raise LogicException(
             type_error("evaluable", _evaluable_culprit(t), context)) from None
-    if value is None:
-        raise LogicException(instantiation_error(context))
-    return value
 
 
 def _arith_cmp(name, op):

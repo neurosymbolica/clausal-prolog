@@ -22,7 +22,8 @@ semantics unless quoted; quoted ones follow Scryer's.*
 | Spelling | Bare, today's syntax: Python meaning | Quoted / cell: Scryer meaning | Future Clausal Prolog syntax |
 |---|---|---|---|
 | `+` `-` `*` | exact addition, subtraction, multiplication (a `Decimal` keeps its scale) | the same | the same |
-| `/` | exact division: `7 / 2` is the rational 7/2 (not Python's float 3.5; [ruled 2026-09-17](arithmetic.md)) | the same: `'/'(7, 2)` is 7/2 | the same |
+| `/` | in evaluation (`eval_`, `'is'`, the ISO comparisons): Python true division — `7 / 2` is 3.5, `6 / 2` is **3.0**; a `Fraction` or `Decimal` operand stays exact as in Python. **Inside a constraint** (`==`, `<`, ...): exact rational, `X == 7 / 2` gives 7/2 and `X == 6 / 2` gives 3 (CLP(ℚ), like Scryer's `{X = 7/2}`) | Scryer's division, always a float: `'/'(7, 2)` is 3.5, `'/'(6, 2)` is 3.0; inside a constraint, rational as the bare one | Scryer: a float in evaluation; rational inside `{...}` |
+| `rdiv` | (no bare spelling) | the **exact** rational division: `rdiv(7, 2)` is 7/2, `rdiv(6, 2)` is 3, everywhere | the same |
 | `//` | Python floor division: `-7 // 2` is **-4** | ISO integer division, **truncating** toward zero: `'//'(-7, 2)` is **-3**; integers only | Scryer: truncates |
 | `div` | (no bare spelling) | ISO floored division: `div(-7, 2)` is -4; integers only | the same |
 | `%` | Python modulo, sign of the divisor: `-7 % 2` is 1 | (no quoted `%`; write `mod`) | Python's `%` only inside `++` |

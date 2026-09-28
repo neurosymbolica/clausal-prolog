@@ -171,10 +171,18 @@ def _operand(x, op: str):
 #   is 8, ``'^'(2, -1)`` is ``type_error(float, 2)``);
 # * nodes, Python: ``FloorDiv`` (bare ``//``) is Python's floor division,
 #   ``Mod`` (bare ``%``) Python's modulo, ``Pow`` (bare ``**``) Python's
-#   power (``2 ** 3`` is the integer 8).  They are keyed under private
-#   ``$``-names (:data:`NODE_EVALUABLE`) that no cell can spell;
-# * ``+``, ``-``, ``*``, ``/`` and unary ``-`` are shared: exact, and ``/``
-#   is exact (a Fraction for int/int, RULED 2026-09-17), on both spellings.
+#   power (``2 ** 3`` is the integer 8), ``Div`` (bare ``/``) Python's true
+#   division (``7 / 2`` is 3.5, ``6 / 2`` is 3.0; ruling Q15).  They are
+#   keyed under private ``$``-names (:data:`NODE_EVALUABLE`) that no cell
+#   can spell;
+# * the cell ``'/'`` is Scryer's division, always a float; ``rdiv`` is the
+#   exact-rational spelling (an exact-number cell, not in this table);
+# * ``+``, ``-``, ``*`` and unary ``-`` are shared: exact on both spellings.
+#
+# INSIDE A CLP POST (``==``, ``<``, ...) ``/`` keeps its RATIONAL meaning,
+# :func:`exact_div` (``X == 7 / 2`` is 7 rdiv 2, like Scryer's
+# ``{X = 7/2}``): ``clausal.logic.clpfd`` evaluates both ``Div`` and the
+# ``'/'`` cell's node through it.
 #
 # A zero divisor raises ``evaluation_error(zero_divisor)`` naming the
 # operator (ISO 9.1.7; Q4 of 2026-09-28) on every spelling -- a bare node
@@ -241,7 +249,84 @@ def python_pow(l, r):
         raise _float_overflow("**") from None
 
 
+def python_truediv(l, r):
+    """Bare ``/`` (the ``Div`` node) in EVALUATION: Python's true division
+    (ruling Q15, 2026-09-28).  ``7 / 2`` is 3.5 and ``6 / 2`` is 3.0 -- only
+    int / int becomes a float; exact kinds stay exact where Python keeps
+    them: a Fraction over an int or a Fraction is a Fraction, a Decimal over
+    an int or a Decimal is Python's Decimal quotient (context precision).
+    Where Python has no answer or would mix kinds the engine keeps its
+    rules: a Fraction beside a Decimal divides exactly (a Fraction), a float
+    beside a Fraction or a Decimal raises type_error(exact_number) (RULED
+    2026-09-17 Q5).  A Python value (a Quantity) meets Python's own ``/``.
+    Inside a CLP post ``/`` keeps its rational meaning (:func:`exact_div`)."""
+    if type(l) is int and type(r) is int:
+        if not r:
+            raise _zero_divisor("/")
+        try:
+            return l / r
+        except OverflowError:
+            raise _float_overflow("/") from None
+    l, r = _operand(l, "div"), _operand(r, "div")
+    tl, tr = type(l), type(r)
+    if tl is int and tr is int:
+        return python_truediv(l, r)
+    _check_float_beside_fraction(l, r, "div")
+    if (tl is Decimal or tr is Decimal) and (tl is float or tr is float):
+        raise _float_beside_decimal(l if tl is float else r, "div")
+    if (tl is Decimal and tr is Fraction) or (tl is Fraction and tr is Decimal):
+        return exact_div(l, r)
+    try:
+        return l / r
+    except ZeroDivisionError:
+        raise _zero_divisor("/") from None
+    except InvalidOperation:          # Decimal 0 / 0
+        if not r:
+            raise _zero_divisor("/") from None
+        raise
+    except OverflowError:
+        raise _float_overflow("/") from None
+
+
 # -- cells: Scryer semantics -------------------------------------------------
+
+def iso_rdiv(l, r):
+    """``rdiv/2``: exact rational division, the exact spelling (ruling Q15,
+    as Scryer): ``rdiv(7, 2)`` is 7 rdiv 2, ``rdiv(6, 2)`` is 3,
+    ``rdiv(rdiv(1, 2), 2)`` is 1 rdiv 4; a float operand is taken at its
+    exact value (Scryer: ``7 rdiv 2.0`` is 7 rdiv 2)."""
+    (lv, lnum), (rv, rnum) = _real(l), _real(r)
+    for v, num in ((lv, lnum), (rv, rnum)):
+        if not num:
+            raise _type_error("rational", v, "rdiv")
+    try:
+        lq, rq = Fraction(lv), Fraction(rv)
+    except (ValueError, OverflowError):   # inf / nan
+        raise _type_error("rational", lv if not isinstance(lv, (int, Fraction)) else rv, "rdiv") from None
+    if not rq:
+        raise _zero_divisor("rdiv")
+    return lq / rq
+
+
+def iso_truediv(l, r):
+    """``'/'/2``: Scryer's division -- always a FLOAT (``'/'(7, 2)`` is 3.5,
+    ``'/'(6, 2)`` is 3.0, ``'/'(7 rdiv 2, 2)`` is 1.75); ``rdiv`` is the
+    exact-rational spelling.  A Python value (a Quantity) meets Python's
+    ``/``."""
+    (lv, lnum), (rv, rnum) = _real(l), _real(r)
+    if not (lnum and rnum):
+        return python_truediv(lv, rv)
+    try:
+        fl, fr = float(lv), float(rv)
+    except OverflowError:
+        raise _float_overflow("/") from None
+    if not fr:
+        raise _zero_divisor("/")
+    try:
+        return fl / fr
+    except OverflowError:
+        raise _float_overflow("/") from None
+
 
 def _presented(x):
     """*x* as the binder would present it: an integral Fraction (a nested
@@ -392,11 +477,14 @@ def node_keys() -> dict:
     if not _NODE_KEYS:
         from clausal.pythonic_ast.nodes import (  # noqa: PLC0415
             Add, Div, FloorDiv, IsoDiv, IsoIntDiv, IsoIntPow, IsoMod, IsoPow,
+            IsoRdiv, IsoTrueDiv,
             Mod, Mult, Negate, Pow, Sub)
-        keys = {Add: ("+", 2), Sub: ("-", 2), Mult: ("*", 2), Div: ("/", 2),
+        keys = {Add: ("+", 2), Sub: ("-", 2), Mult: ("*", 2),
+                Div: ("$python_div", 2),
                 Negate: ("-", 1),
                 FloorDiv: ("$python_floordiv", 2), Mod: ("$python_mod", 2),
                 Pow: ("$python_pow", 2),
+                IsoTrueDiv: ("/", 2), IsoRdiv: ("rdiv", 2),
                 IsoIntDiv: ("//", 2), IsoDiv: ("div", 2), IsoMod: ("mod", 2),
                 IsoPow: ("**", 2), IsoIntPow: ("^", 2)}
         # the inverse first: _NODE_KEYS non-empty is the "filled" flag
@@ -601,15 +689,16 @@ def _exact_div_general(l, r):
 #: ``python_floordiv``); defined last because it names the exact operators.
 EVALUABLE = MappingProxyType({
     ("+", 2): exact_add, ("-", 2): exact_sub, ("*", 2): exact_mul,
-    ("/", 2): exact_div, ("-", 1): exact_neg,
+    ("/", 2): iso_truediv, ("-", 1): exact_neg,
     ("//", 2): iso_intdiv, ("div", 2): iso_div, ("mod", 2): iso_mod,
-    ("**", 2): iso_pow, ("^", 2): iso_intpow,
+    ("**", 2): iso_pow, ("^", 2): iso_intpow, ("rdiv", 2): iso_rdiv,
 })
 
 #: :data:`EVALUABLE` plus the bare operator nodes' private Python-semantics
 #: entries -- what a NODE evaluates through.  A cell never looks here.
 NODE_EVALUABLE = MappingProxyType({
     **EVALUABLE,
+    ("$python_div", 2): python_truediv,
     ("$python_floordiv", 2): python_floordiv, ("$python_mod", 2): python_mod,
     ("$python_pow", 2): python_pow,
 })

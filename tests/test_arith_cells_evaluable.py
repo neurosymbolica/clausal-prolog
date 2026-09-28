@@ -117,8 +117,10 @@ class TestA1Table:
     @pytest.mark.parametrize("cell,expected", [
         (("-", 7, 2), 5),
         (("*", 6, 7), 42),
-        (("/", 1, 2), Fraction(1, 2)),
-        (("/", 4, 2), 2),
+        (("/", 1, 2), 0.5),         # Scryer: a float (Q15); rdiv is exact
+        (("/", 4, 2), 2.0),
+        (("rdiv", 1, 2), Fraction(1, 2)),
+        (("rdiv", 4, 2), 2),
         (("mod", -7, 2), 1),        # floored, sign of the divisor (ISO mod)
         (("div", -7, 2), -4),       # floored (ISO div)
         # Operator rulings 2026-09-28: a cell follows Scryer.
@@ -159,7 +161,7 @@ class TestA1Table:
             EVALUABLE[("sin", 1)] = abs  # no registration API: read-only
         assert set(EVALUABLE) == {
             ("+", 2), ("-", 2), ("*", 2), ("/", 2), ("div", 2), ("mod", 2),
-            ("//", 2), ("**", 2), ("^", 2), ("-", 1)}
+            ("//", 2), ("**", 2), ("^", 2), ("rdiv", 2), ("-", 1)}
 
     def test_every_node_and_every_cell_key_has_one_entry(self):
         """Every evaluable operator node class maps onto a key, and every
@@ -171,12 +173,12 @@ class TestA1Table:
         from clausal.logic.exact_arith import EVALUABLE, NODE_EVALUABLE, key_nodes
         from clausal.logic.exceptions import ARITH_OPERATOR_TERMS
         from clausal.pythonic_ast.nodes import (
-            IsoDiv, IsoIntDiv, IsoIntPow, IsoMod, IsoPow)
+            IsoDiv, IsoIntDiv, IsoIntPow, IsoMod, IsoPow, IsoRdiv, IsoTrueDiv)
         _ensure_term_imports()
         assert set(ARITH_OPERATOR_TERMS) <= set(_NODE_KEYS)
         # the only nodes beyond the source operators: the Scryer cells' forms
         assert set(_NODE_KEYS) - set(ARITH_OPERATOR_TERMS) == {
-            IsoIntDiv, IsoDiv, IsoMod, IsoPow, IsoIntPow}
+            IsoIntDiv, IsoDiv, IsoMod, IsoPow, IsoIntPow, IsoTrueDiv, IsoRdiv}
         assert set(_NODE_KEYS.values()) == set(NODE_EVALUABLE)
         assert set(EVALUABLE) <= set(key_nodes())
         private = set(NODE_EVALUABLE) - set(EVALUABLE)

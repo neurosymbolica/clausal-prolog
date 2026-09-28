@@ -1255,6 +1255,13 @@ def _ensure_term_imports():
         _NODE_KEYS.update(_node_keys())
         _NODE_OPS.update({cls: (_NODE_EVALUABLE[k], k[1] == 2)
                           for cls, k in _NODE_KEYS.items()})
+        # Ruling Q15 (2026-09-28): inside a CLP post ``/`` is RATIONAL
+        # (``X == 7 / 2`` is 7 rdiv 2, like Scryer's ``{X = 7/2}``), on both
+        # spellings -- evaluation (is/2, eval_) has Python's / Scryer's float
+        from clausal.logic.exact_arith import exact_div as _exact_div_q  # noqa: PLC0415
+        for cls, k in _NODE_KEYS.items():
+            if k in (("$python_div", 2), ("/", 2), ("rdiv", 2)):
+                _NODE_OPS[cls] = (_exact_div_q, True)
         _Add = Add
         _Sub = Sub
         _Mult = Mult
@@ -1558,7 +1565,7 @@ def _eval_ground(expr):
         # arms below (ruling R9 A1, 2026-09-27).  A compound whose
         # ``name/arity`` is not in the table is the leaf error, as before.
         ka = _cell_key_args(expr)
-        fn = _EVALUABLE.get(ka[0]) if ka is not None else None
+        fn = _CLP_CELL_EVALUABLE.get(ka[0]) if ka is not None else None
         if fn is None:
             raise _unknown_expr_leaf_error(expr)
         result = _apply_evaluable(fn, ka[1])
@@ -3788,6 +3795,11 @@ def _eval_ground_for_c(x):
 
 _USE_C_PROPAGATE = False
 _ensure_exc_imports()
+
+#: The cells as a CLP post evaluates them: :data:`EVALUABLE` with ``/``
+#: RATIONAL (ruling Q15, 2026-09-28; see ``_ensure_term_imports``).
+from clausal.logic.exact_arith import exact_div as _exact_div_cell  # noqa: E402
+_CLP_CELL_EVALUABLE = {**_EVALUABLE, ("/", 2): _exact_div_cell}
 _eval_ground_py = _eval_ground
 _eval_ground = _eval_ground_for_c        # what the C init binds (see above)
 try:

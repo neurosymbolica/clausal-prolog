@@ -19,10 +19,21 @@ reading.**
    differs from nothing), and a reified test (`reify_fd`) is false. The
    goal-order dependence roborev job 288 found is gone.
 
-2. **Seam `/` over integers.** "Operators in seam follow Python semantics
-   unless quoted": Python's `7 / 2` is the float 3.5, the engine's (bare or
-   quoted) is the exact rational 7/2 (RULED 2026-09-17, "arithmetic IS
-   RATIONAL"). The branch keeps 7/2; the docs table says so.
+2. **`/` -- RULED Q15 2026-09-28, DONE.** In EVALUATION (is/2, eval_/2, the
+   ISO comparisons, compiled eval_) a bare `/` is Python's true division
+   (`7 / 2` is 3.5, `6 / 2` is 3.0; a Fraction over an int stays a Fraction,
+   a Decimal over an int is Python's Decimal quotient) and the quoted `'/'`
+   Scryer's (always a float). `rdiv/2` is now IN the evaluable table as the
+   exact spelling (`rdiv(6, 2)` is 3, `rdiv(7, 2.0)` is 7/2 as in Scryer).
+   Inside CLP posts `/` stays rational (`X == 7 / 2` is 7/2). Kept engine
+   rules where Python has no single answer: a Decimal beside a Fraction
+   divides exactly (Python raises TypeError); a float beside a Fraction or a
+   Decimal raises type_error(exact_number) (Q5 of 2026-09-17; Python would
+   give a float / raise). is/2 and the ISO comparisons now evaluate through
+   `exact_arith.evaluate` (as eval_ does), not the CLP evaluator.
+   Still open: between/3 evaluates its bounds with the CLP evaluator, so
+   `between(1, 6 / 2, X)` keeps the rational reading (3) where evaluation
+   would give 3.0.
 
 ## Deliberate deviations from Scryer (pinned as DEVIATIONS rows)
 

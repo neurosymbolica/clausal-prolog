@@ -597,6 +597,14 @@ class Pow(BinOp):
 # produces them -- a bare ``//``, ``%``, ``**`` is the Python-semantics base.
 
 @dataclass
+class IsoTrueDiv(Div):
+    op: ClassVar = '/'
+
+@dataclass
+class IsoRdiv(Div):
+    op: ClassVar = 'rdiv'
+
+@dataclass
 class IsoIntDiv(FloorDiv):
     op: ClassVar = '//'
 

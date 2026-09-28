@@ -14,6 +14,8 @@ every spelling -- a logic-level error, never a raw Python ZeroDivisionError
 from __future__ import annotations
 
 import itertools
+from decimal import Decimal
+from fractions import Fraction
 
 import pytest
 
@@ -45,10 +47,27 @@ BARE_ROWS = [
     ("eval_('**'(2, 3), X)", 8.0),
     ("eval_('^'(2, 3), X)", 8),
     ("eval_('//'(-7, 2) // 2, X)", -2),      # each operator by its own spelling
-    # an integral rational operand is an integer (a nested 4 / 2 is 2)
-    ("'is'(X, '//'(4 / 2, 1))", 2),
-    ("'is'(X, '^'(2, 6 / 2))", 8),       # 8, not 8.0
-    ("'is'(X, mod(4 / 2, 3))", 2),
+    # an integral rational operand is an integer (a nested rdiv(4, 2) is 2)
+    ("'is'(X, '//'(rdiv(4, 2), 1))", 2),
+    ("'is'(X, '^'(2, rdiv(6, 2)))", 8),       # 8, not 8.0
+    ("'is'(X, mod(rdiv(4, 2), 3))", 2),
+    # Q15: / in EVALUATION is Python's when bare, Scryer's when quoted (both
+    # floats for int/int); rdiv is the exact spelling; inside a CLP post
+    # (==) / stays rational
+    ("eval_(7 / 2, X)", 3.5),
+    ("eval_(6 / 2, X)", 3.0),
+    ("'is'(X, 7 / 2)", 3.5),
+    ("'is'(X, '/'(6, 2))", 3.0),
+    ("eval_(rdiv(7, 2) / 2, X)", Fraction(7, 4)),     # Python: Fraction / int
+    ("'is'(X, '/'(rdiv(7, 2), 2))", 1.75),            # Scryer: a float
+    ("'is'(X, rdiv(7, 2))", Fraction(7, 2)),
+    ("'is'(X, rdiv(6, 2))", 3),
+    ("'is'(X, rdiv(7, 2) + 1)", Fraction(9, 2)),
+    ("eval_(decimal(15, 1) / 2, X)", Decimal("0.75")),  # Python: Decimal / int
+    ("X == 7 / 2", Fraction(7, 2)),
+    ("X == 6 / 2", 3),
+    ("X == '/'(7, 2)", Fraction(7, 2)),
+    ("(Y is 7, X == Y / 2)", Fraction(7, 2)),
     ("(Y is -7, X == '//'(Y, 2))", -3),
     ("(X == '//'(Y, 2), Y is -7)", -3),      # posted first, bound after
     ("(X == Y // 2, Y is -7)", -4),

@@ -151,8 +151,13 @@ def test_decimal_cell_evaluates_as_its_decimal_since_step_2():
     assert _eval_ground(Decimal("9.9")) == Decimal("9.9")
 
 
-def test_a_non_canonical_rdiv_cell_is_still_refused():
+def test_a_non_canonical_rdiv_cell_evaluates_as_rdiv():
+    """Ruling Q15 (2026-09-28): rdiv/2 is the exact-rational spelling and is
+    evaluable, as in Scryer (``2 rdiv 4`` is 1 rdiv 2) -- a non-canonical
+    rdiv cell was refused before.  A non-number operand is still refused."""
+    from fractions import Fraction
     from clausal.logic.clpfd import _eval_ground
     from clausal.logic.exceptions import LogicException
+    assert _eval_ground(("rdiv", 2, 4)) == Fraction(1, 2)
     with pytest.raises(LogicException):
-        _eval_ground(("rdiv", 2, 4))
+        _eval_ground(("rdiv", "a", 4))
