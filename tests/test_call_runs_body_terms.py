@@ -504,6 +504,9 @@ _LIST_BUILTIN_CALLS = [
     ("include", (42, [1], Var())),
     ("exclude", (42, [1], Var())),
     ("foldl", (42, [1], 0, Var())),
+    ("foldl", (42, [1], [2], 0, Var())),
+    ("foldl", (42, [1], [2], [3], 0, Var())),
+    ("map_list_to_pairs", (42, [1], Var())),
     ("take_while", (42, [1], Var())),
     ("drop_while", (42, [1], Var())),
     ("span", (42, [1], Var(), Var())),
@@ -734,7 +737,7 @@ def test_a_handle_to_the_callers_own_module(host):
 
 
 def test_every_list_builtin_is_covered_for_the_unbound_goal():
-    """The unbound-goal test above is parametrized over ALL 16 builtins --
+    """The unbound-goal test above is parametrized over ALL 19 builtins --
     confirm the parametrization is the registry's list, not a subset."""
     from clausal.logic.builtins.higher_order import _GOAL_FIRST_LIST_BUILTINS
-    assert len(_LIST_BUILTIN_CALLS) == len(_GOAL_FIRST_LIST_BUILTINS) == 16
+    assert len(_LIST_BUILTIN_CALLS) == len(_GOAL_FIRST_LIST_BUILTINS) == 19

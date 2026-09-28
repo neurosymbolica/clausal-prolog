@@ -180,13 +180,13 @@ class TestZip:
     def test_equal_length(self):
         # nv
         assert run_trampoline_var(_zip__3, [1, 2, 3], ["a", "b", "c"]) == [
-            [[1, "a"], [2, "b"], [3, "c"]]
+            [("-", 1, "a"), ("-", 2, "b"), ("-", 3, "c")]
         ]
 
     def test_unequal_length(self):
         # nv
         assert run_trampoline_var(_zip__3, [1, 2], ["a", "b", "c"]) == [
-            [[1, "a"], [2, "b"]]
+            [("-", 1, "a"), ("-", 2, "b")]
         ]
 
     def test_empty(self):
