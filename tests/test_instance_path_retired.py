@@ -8,19 +8,13 @@ from clausal.logic.predicate import RetiredStateError
 from clausal.logic.variables import Var
 
 
-def test_make_predicate_is_retired_whatever_its_arguments():
-    """W4b-3 slice 6: ``make_predicate`` refuses EVERY call -- the retired
-    ``instances=`` keyword included (it used to get its own TypeError) --
-    with one message that points at the replacements."""
-    from clausal.logic.predicate import (  # KEEP_MP
-        MakePredicateRetiredError, make_predicate)
-    for call_it in (
-            lambda: make_predicate("Old", ["a"], instances=True),  # KEEP_MP
-            lambda: make_predicate("Old", ["a"])):  # KEEP_MP
-        with pytest.raises(MakePredicateRetiredError) as exc:
-            call_it()
-        assert isinstance(exc.value, TypeError)
-        assert "retired (W4b-3 slice 6)" in str(exc.value)
+def test_make_predicate_is_removed():
+    """W4b-3 slice 6 made ``make_predicate`` a stub that refused every call;
+    it was removed before 1.0, with ``MakePredicateRetiredError``."""
+    with pytest.raises(ImportError):
+        from clausal.logic.predicate import make_predicate  # noqa: F401
+    with pytest.raises(ImportError):
+        from clausal.logic.predicate import MakePredicateRetiredError  # noqa: F401
 
 
 def test_the_python_twins_no_longer_carry_a_predicatemeta_instance_arm():

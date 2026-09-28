@@ -1126,8 +1126,9 @@ def _star_query_input_transformer(lines: list[str]) -> list[str]:
     is (barring another extension appending after it) exactly the text
     ``ast.parse`` sees, so the columns line up with the tree
     ``_FreshEmbedTransformer`` is then handed.  If they ever do not, the map
-    simply misses and every literal falls back to the module default — the
-    pre-strings behaviour, never a wrong answer.
+    misses and every literal is read as an ATOM whatever its quotes — so a
+    ``"…"`` string, a char list by default, silently becomes an atom.  That
+    is a wrong answer, not a refusal.
     """
     global _LAST_CELL_LINES
     out = []
@@ -1245,9 +1246,9 @@ class _FreshEmbedTransformer(ast.NodeTransformer):
     *source_lines* is the cell's text, ``splitlines(keepends=True)``.  It is
     what ``EmbedTransformer`` tokenizes to recover each string literal's
     QUOTE CHARACTER (spec §7): ``ast`` erases it, so without the lines the
-    quote map is empty, every ``"…"`` looks like ``'…'``, and
-    ``-double_quotes(chars)`` is silently ignored — a cell would disagree
-    with a file that says the same thing.  The two ``python_repl`` call
+    quote map is empty, every ``"…"`` looks like ``'…'``, and the
+    ``chars`` reading of ``"…"`` (the default) is silently lost — a cell
+    would disagree with a file that says the same thing.  The two ``python_repl`` call
     sites pass it directly; under IPython the AST transformer is handed only
     a tree, so the lines come from ``_star_query_input_transformer``, the
     last input transformer to touch the text before it is parsed.
