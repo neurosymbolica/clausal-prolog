@@ -12,7 +12,9 @@ for _sp in _site.getsitepackages():
     if _os.path.isdir(_candidate) and _candidate not in __path__:
         __path__.append(_candidate)
 
-from clausal.logic.solve import call, solve, query, once, query_wfs, _deref_walk
+from clausal.logic.solve import (
+    call, solve, query, once, query_wfs, _deref_walk, declared_atoms,
+)
 from clausal.logic.database import Module, Database, Clause
 from clausal.logic.variables import Var, Trail, deref, unify, UnboundVarCoercionError
 from clausal.terms import Quantity, UnitsMismatch
@@ -69,6 +71,8 @@ __all__ = [
     "solve",
     "query",
     "once",
+    # Module introspection
+    "declared_atoms",
     # Runtime objects
     "Module",
     "Var",

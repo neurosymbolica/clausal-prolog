@@ -130,6 +130,12 @@ since 0.4.0 finish three moves:
 
 ### Added
 
+- **`clausal.declared_atoms(module_or_package)`.** The `frozenset` of atom
+  names declared in the `-module`/`-private` lists of a module's own files,
+  or, for a package, of its `__init__` and its loaded submodules. An
+  `-import_from`ed atom is not included, and the answer does not depend on
+  import order. See
+  [docs/python_integration.md](docs/python_integration.md#listing-the-atoms-a-module-declares-declared_atoms).
 - **Prolog flags.** `set_prolog_flag/2` and `current_prolog_flag/2` with the
   ISO flags (`bounded`, `max_integer`, `min_integer`,
   `integer_rounding_function`, `char_conversion`, `debug`, `max_arity`,

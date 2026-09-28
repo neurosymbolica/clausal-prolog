@@ -67,6 +67,7 @@ from clausal.logic.cells import (
     refuse_control_construct_cell,
     resolve_qualified_goal_cell,
     qualify_mangled_goal,
+    DECLARED_ATOMS_KEY,
 )
 from clausal.terms import Undefined
 from clausal.terms import (
@@ -861,6 +862,81 @@ def _no_such_module(designator, calling_module, context: str, cause=None):
     if cause is not None:
         raise exc from cause
     raise exc
+
+
+def declared_atoms(module_or_package: Any) -> frozenset:
+    """The atom names DECLARED by a module's (or a package's) own files.
+
+    An atom is declared by a file when the file names it in its own
+    ``-module(Name, [...])`` export list or its ``-private([...])`` list; the
+    compiler records those names per file under
+    ``cells.DECLARED_ATOMS_KEY`` (``__clausal_declared_atoms__``).  This is
+    the union of that record over:
+
+      - the given module, and
+      - when it is a package (it has ``__path__``), every submodule already
+        in ``sys.modules`` whose dotted name is under the package's and whose
+        ``__file__`` lies under one of the package's ``__path__``
+        directories.
+
+    What it deliberately does NOT read:
+
+      - the module NAMESPACE.  An ``-import_from``ed atom is bound there but
+        is not in the importing file's record, and the namespace also holds
+        predicates, builtins and whatever other modules were loaded first,
+        so its contents depend on import order.  The per-file record does
+        not.  (A file that names an imported atom in its own ``-module``
+        list re-exports it, and that IS a declaration by that file.)
+      - the process-wide atom pool, which holds every spelling any loaded
+        module interned.
+
+    *module_or_package* is an imported ``.clausal`` module object, a
+    :class:`~clausal.logic.database.Module`, or a dotted module name
+    (``str``) resolved the way ``solve``'s ``module=`` argument resolves
+    one: looked up in ``sys.modules`` and never imported, so a name that is
+    not loaded raises ``LogicException(existence_error(module, ...))``.
+
+    LOADED SUBMODULES ONLY.  A package's submodules count once they are
+    imported; this never imports one.  Scanning the package directory and
+    importing every ``.clausal`` file found there would execute module
+    bodies (and load files the package may never import) as a side effect
+    of asking a question -- the same reason ``module=`` resolution is
+    lookup-only.  Import the submodules you want counted first.
+    """
+    target = module_or_package
+    if isinstance(target, str):
+        found = sys.modules.get(target)
+        if found is None:
+            _no_such_module(target, None, "declared_atoms")
+        target = found
+    if isinstance(target, Module):
+        ns = target.module_dict or {}
+    elif isinstance(target, _types.ModuleType):
+        ns = vars(target)
+    else:
+        raise TypeError(
+            "declared_atoms() expects a module object, a clausal Module or a "
+            f"dotted module name, got {type(target).__name__}")
+
+    names: set[str] = set(ns.get(DECLARED_ATOMS_KEY) or ())
+    pkg_name = ns.get("__name__")
+    pkg_path = ns.get("__path__")
+    if pkg_name and pkg_path is not None:
+        import os  # noqa: PLC0415
+        roots = [os.path.join(os.path.realpath(p), "") for p in pkg_path]
+        prefix = pkg_name + "."
+        for sub_name, sub in list(sys.modules.items()):
+            if not sub_name.startswith(prefix) or sub is None:
+                continue
+            sub_file = getattr(sub, "__file__", None)
+            if not sub_file:
+                continue
+            real = os.path.realpath(sub_file)
+            if not any(real.startswith(r) for r in roots):
+                continue
+            names.update(getattr(sub, "__dict__", {}).get(DECLARED_ATOMS_KEY)
+                         or ())
+    return frozenset(names)
 
 
 def _module_for_moduleless_solve(goal) -> tuple[Any, Module]:

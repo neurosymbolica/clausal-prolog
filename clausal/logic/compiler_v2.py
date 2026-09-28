@@ -674,22 +674,23 @@ def _imported_reference(mod, orig_name: str, value):
     Post-pivot a declared atom binds its own interned spelling, so the two
     normally coincide.  They come apart for exactly one shape: the owner
     declares the name in its ``-module``/``-private`` list AND writes 0-arity
-    clauses for it, so the clause block's ``PredicateMeta`` wins the binding
+    clauses for it, so the clause block's predicate handle wins the binding
     (``_process_declarations``' don't-clobber guard).  The owner's own
     lowering still answers such a reference with the str — its ``-module``
-    list is in front of it — and the importer used to answer with the CLASS,
-    so a dict key written by the owner and read by the importer silently
-    missed.  ``DECLARED_ATOMS_KEY`` is what lets the importer answer the way
+    list is in front of it — and the importer used to answer with the
+    predicate object, so a dict key written by the owner and read by the
+    importer silently missed.  ``DECLARED_ATOMS_KEY`` is what lets the importer answer the way
     the owner does.
 
     The declaration is the authority, not the presence of /0 clauses: a name
     with 0-arity clauses that the owner never declared as an atom is a
-    predicate, and stays the class.  A DUAL declaration (``-module(m, [dual,
-    dual(G)])``) is a functor too — its class carries fields — so only a
-    zero-field class is answered with the spelling.
+    predicate, and stays the predicate handle.  A DUAL declaration
+    (``-module(m, [dual, dual(G)])``) is a functor too — its handle carries
+    fields (``field_names_for``) — so only a zero-field handle is answered
+    with the spelling.
 
     The module ATTRIBUTE (``mod.name`` from Python, and this file's own bare
-    local binding) is untouched: it keeps the predicate class, so ``call/N``
+    local binding) is untouched: it keeps the predicate handle, so ``call/N``
     and ``assertz`` still find the /0 predicate through the namespace (see
     ``higher_order._namespace_dispatch`` → ``database_ops._find_pred_cls``).
     """
