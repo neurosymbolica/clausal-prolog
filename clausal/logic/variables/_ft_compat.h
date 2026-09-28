@@ -64,6 +64,7 @@
 /* Atomic uint64 increment — for g_next_var_id */
 #define FT_ATOMIC_UINT64_T              _Atomic uint64_t
 #define FT_ATOMIC_FETCH_ADD(var, n)     atomic_fetch_add_explicit(&(var), (n), memory_order_relaxed)
+#define FT_ATOMIC_LOAD_U64(var)         atomic_load_explicit(&(var), memory_order_relaxed)
 
 /* Critical sections — direct function API (not the brace macros).
  *
@@ -93,6 +94,7 @@ typedef PyCriticalSection2 FtCriticalSection2;
 
 #define FT_ATOMIC_UINT64_T              uint64_t
 #define FT_ATOMIC_FETCH_ADD(var, n)     ((var)++)
+#define FT_ATOMIC_LOAD_U64(var)         (var)
 
 /* On GIL builds the cs/cs2 variables are unused; cast to void to suppress
  * warnings.  PyCriticalSection is forward-declared but incomplete (no

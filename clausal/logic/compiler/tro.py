@@ -32,7 +32,7 @@ from clausal.logic.database import Clause, Database
 from clausal.terms import PyThunk, DictTerm, SetTerm
 
 from ._ast_helpers import (
-    _name, _call, _assign, _assign_mark, _undo_stmt, _if,
+    _name, _call, _attr, _assign, _assign_mark, _undo_stmt, _if,
     _yield_none_stmt,
     _MARK_PREFIX, _TRAIL_PARAM_NAME,
     _PROCEED_PARAM_NAME, _FAIL_PARAM_NAME, _CATCHER_PARAM_NAME,
@@ -527,6 +527,13 @@ def _contains_star_unpack(term: Any) -> bool:
 from ._vars import _collect_var_ids, _collect_bound_vars  # noqa: E402,F401
 
 
+# Locals set at the start of every activation (loop iteration / bucket call)
+# of a predicate with a TRO clause: the trail length and the var-id floor
+# there.  ``_compile_tro_tail`` hands them to ``trail.commit_fresh``.
+_TRO_MARK_NAME = "_tro_mark"
+_TRO_FLOOR_NAME = "_tro_floor"
+
+
 def _compile_tro_tail(
     ctx: CompilationContext,
     tail_call: Call,
@@ -545,6 +552,11 @@ def _compile_tro_tail(
 
     The caller (``compile_head_to_match_case``) wraps this in
     ``try/finally: trail.undo(_mark)`` so trail cleanup is automatic.
+    The restart is taken only when ``trail.commit_fresh`` confirms every
+    trail entry of this activation is on a variable created within it (and
+    drops them, keeping their bindings); otherwise the ordinary
+    ``StepGenerator`` call is emitted inline -- see the comment at
+    ``commit_cond`` below.
 
     *tro_mode*:
 
@@ -557,7 +569,8 @@ def _compile_tro_tail(
     *check_indices*: if not None, a set of arg positions that need a runtime
     ``is_var()`` check.  when any checked arg is an unbound Var, the TRO
     flag is NOT set and execution falls back to a normal ``StepGenerator``
-    call (emitted inline).
+    call (emitted inline) -- the same fallback ``commit_fresh`` refusing
+    takes.
     """
 
     call_args = list(tail_call.args)
@@ -588,7 +601,7 @@ def _compile_tro_tail(
 
     stmts: list[ast.stmt] = list(lambda_defs)
 
-    # Snapshot each new arg value via deref before trail.undo runs.
+    # Snapshot each new arg value (the loop reassigns the args from these).
     for i, arg in enumerate(ordered_args):
         arg_expr = term_to_ast_expr(arg, var_context, eval_arith=False)
         tro_name = f"_tro_arg{i}"
@@ -616,55 +629,70 @@ def _compile_tro_tail(
         # Loop mode: set _tro = True
         tro_set_stmts = [_assign("_tro", ast.Constant(True))]
 
+    # The in-place restart discards this activation's trail segment, so it
+    # is taken only when ``trail.commit_fresh`` finds every entry since the
+    # activation began is on a variable created within it (it then drops
+    # those entries WITHOUT undoing them, so a binding reachable from a
+    # tail argument -- ``X is H, p(f(X), T)`` -- survives).  An effect on
+    # anything older -- a caller variable bound (``K is foo``), a dif or
+    # CLP constraint posted on one (``K is not H``, ``K != 3``, ``K > 3``)
+    # -- must stay undoable and visible to the caller, so that iteration
+    # takes the ordinary StepGenerator call below instead.  Undoing the
+    # segment unconditionally (the pre-2026-09-29 behaviour) silently lost
+    # all of these: the snapshot of the tail arguments preserves only
+    # their top-level values.
+    commit_cond = _call(
+        _attr(trail_name, "commit_fresh"),
+        _name(_TRO_MARK_NAME), _name(_TRO_FLOOR_NAME),
+    )
     # Runtime ground-check: if any checked arg is a Var, fall back to StepGenerator.
-    if check_indices:
-        checks = [
-            ast.UnaryOp(op=ast.Not(), operand=_call(_name("is_var"), _name(f"_tro_arg{i}")))
-            for i in sorted(check_indices)
-        ]
-        if len(checks) == 1:
-            ground_cond = checks[0]
-        else:
-            ground_cond = ast.BoolOp(op=ast.And(), values=checks)
-
-        # Fallback: normal StepGenerator call with captured _tro_arg values.
-        arg_exprs = [_name(f"_tro_arg{i}") for i in range(arity)]
-        fname = tail_call.func.name
-        _fallback_ctx = ctx.replace(
-            db=db, var_context=var_context, trail_name=trail_name,
-            self_name=self_name,
-            proceed_name=proceed_name, fail_name=fail_name, catcher_name=catcher_name,
-        )
-        # A03-F001 (step 5): the StepGenerator call is built directly below;
-        # the earlier _compile_predicate_call_impl() here was dead — its result
-        # was unconditionally overwritten before use.
-        call_expr = _dispatch_call_trampoline(_fallback_ctx, fname, arity, arg_exprs)
-        gen_name = ctx.fresh("_gen")
-        status_name = ctx.fresh("_st")
-        gen_assign = _assign(gen_name, call_expr)
-        first_step = _assign_yield_step(status_name, _name(gen_name), ast.Constant(None))
-        loop_body = [
-            _yield_step_stmt(_name(proceed_name), ast.Constant(None)),
-            _assign_yield_step(status_name, _name(gen_name), ast.Constant(None)),
-        ]
-        fallback_loop = ast.While(
-            test=ast.Compare(
-                left=_name(status_name),
-                ops=[ast.IsNot()],
-                comparators=[_name("$DONE")],
-            ),
-            body=loop_body,
-            orelse=[],
-        )
-        fallback_stmts = [gen_assign, first_step, fallback_loop]
-
-        stmts.append(ast.If(
-            test=ground_cond,
-            body=tro_set_stmts,
-            orelse=fallback_stmts,
-        ))
+    # The commit test goes LAST: it mutates the trail when it succeeds.
+    checks = [
+        ast.UnaryOp(op=ast.Not(), operand=_call(_name("is_var"), _name(f"_tro_arg{i}")))
+        for i in sorted(check_indices or ())
+    ]
+    checks.append(commit_cond)
+    if len(checks) == 1:
+        ground_cond = checks[0]
     else:
-        stmts.extend(tro_set_stmts)
+        ground_cond = ast.BoolOp(op=ast.And(), values=checks)
+
+    # Fallback: normal StepGenerator call with captured _tro_arg values.
+    arg_exprs = [_name(f"_tro_arg{i}") for i in range(arity)]
+    fname = tail_call.func.name
+    _fallback_ctx = ctx.replace(
+        db=db, var_context=var_context, trail_name=trail_name,
+        self_name=self_name,
+        proceed_name=proceed_name, fail_name=fail_name, catcher_name=catcher_name,
+    )
+    # A03-F001 (step 5): the StepGenerator call is built directly below;
+    # the earlier _compile_predicate_call_impl() here was dead — its result
+    # was unconditionally overwritten before use.
+    call_expr = _dispatch_call_trampoline(_fallback_ctx, fname, arity, arg_exprs)
+    gen_name = ctx.fresh("_gen")
+    status_name = ctx.fresh("_st")
+    gen_assign = _assign(gen_name, call_expr)
+    first_step = _assign_yield_step(status_name, _name(gen_name), ast.Constant(None))
+    loop_body = [
+        _yield_step_stmt(_name(proceed_name), ast.Constant(None)),
+        _assign_yield_step(status_name, _name(gen_name), ast.Constant(None)),
+    ]
+    fallback_loop = ast.While(
+        test=ast.Compare(
+            left=_name(status_name),
+            ops=[ast.IsNot()],
+            comparators=[_name("$DONE")],
+        ),
+        body=loop_body,
+        orelse=[],
+    )
+    fallback_stmts = [gen_assign, first_step, fallback_loop]
+
+    stmts.append(ast.If(
+        test=ground_cond,
+        body=tro_set_stmts,
+        orelse=fallback_stmts,
+    ))
 
     return stmts
 

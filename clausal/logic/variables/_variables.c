@@ -834,6 +834,83 @@ Trail_record(TrailObject *self, PyObject *fn)
 }
 
 static PyObject *
+Trail_var_floor(TrailObject *Py_UNUSED(self), PyObject *Py_UNUSED(args))
+{
+    /* Every Var / AttVar created after this call has var_id >= the result. */
+    return PyLong_FromUnsignedLongLong(
+        (unsigned long long)FT_ATOMIC_LOAD_U64(g_next_var_id));
+}
+
+static PyObject *
+Trail_commit_fresh(TrailObject *self, PyObject *const *args, Py_ssize_t nargs)
+{
+    /* trail.commit_fresh(mark, floor) -> bool
+     *
+     * Tail-recursion (last-call) support.  If every entry recorded since
+     * *mark* is a binding of, or an attribute change on, a variable created
+     * after *floor* was read (var_id >= floor), those entries are dropped
+     * from the trail WITHOUT being undone -- the bindings stay in force --
+     * and True is returned.  Such variables are unreachable from anything
+     * older than the mark except through a binding of an older variable,
+     * which would itself be an entry here, so no backtrack to before the
+     * mark can observe them.
+     *
+     * Otherwise (any entry touches an older variable, or is an opaque undo
+     * callback) the trail is left exactly as it was and False is returned:
+     * the effects since the mark reach state the caller can see, so they
+     * must stay undoable.
+     *
+     * Assumes the variables this trail binds are confined to its thread (the
+     * threading contract in _ft_compat.h): the id counter is process-wide,
+     * so on a free-threaded build a variable another thread created after
+     * the floor was read, then handed over through shared Python state,
+     * would count as fresh here.
+     */
+    if (nargs != 2) {
+        PyErr_SetString(PyExc_TypeError,
+                        "commit_fresh() takes exactly 2 arguments (mark, floor)");
+        return NULL;
+    }
+    if (trail_check_owner(self) < 0) return NULL;
+    Py_ssize_t mark = PyLong_AsSsize_t(args[0]);
+    if (mark == -1 && PyErr_Occurred()) return NULL;
+    unsigned long long floor = PyLong_AsUnsignedLongLong(args[1]);
+    if (floor == (unsigned long long)-1 && PyErr_Occurred()) return NULL;
+    if (mark < 0) {
+        PyErr_SetString(PyExc_ValueError, "trail mark out of range");
+        return NULL;
+    }
+    if (mark >= self->length)
+        Py_RETURN_TRUE;     /* nothing recorded since the mark */
+    for (Py_ssize_t i = mark; i < self->length; i++) {
+        TrailEntry *e = &self->entries[i];
+        uint64_t id;
+        if (e->kind == TRAIL_BINDING)
+            id = e->u.binding.var->var_id;
+        else if (e->kind == TRAIL_ATTR)
+            id = ((VarObject *)e->u.attr.attvar)->var_id;
+        else
+            Py_RETURN_FALSE;    /* TRAIL_CALLBACK: effect unknown */
+        if (id < (uint64_t)floor)
+            Py_RETURN_FALSE;
+    }
+    /* All fresh: release the trail's references, keep the effects. */
+    for (Py_ssize_t i = self->length - 1; i >= mark; i--) {
+        TrailEntry *e = &self->entries[i];
+        if (e->kind == TRAIL_BINDING) {
+            Py_XDECREF(e->u.binding.old_value);
+            Py_DECREF(e->u.binding.var);
+        } else {
+            Py_DECREF(e->u.attr.attvar);
+            Py_DECREF(e->u.attr.key);
+            Py_XDECREF(e->u.attr.old_attr);
+        }
+    }
+    self->length = mark;
+    Py_RETURN_TRUE;
+}
+
+static PyObject *
 Trail_repr(TrailObject *self)
 {
     return PyUnicode_FromFormat("Trail(length=%zd)", self->length);
@@ -860,6 +937,18 @@ static PyMethodDef Trail_methods[] = {
      "reset()\n"
      "\n"
      "Undo every binding and attribute change on this trail (undo(0))."},
+    {"var_floor", (PyCFunction)Trail_var_floor, METH_NOARGS,
+     "var_floor() -> int\n"
+     "\n"
+     "Every variable created after this call has an id >= the result.\n"
+     "Pair with commit_fresh()."},
+    {"commit_fresh", (PyCFunction)(void (*)(void))Trail_commit_fresh, METH_FASTCALL,
+     "commit_fresh(mark, floor) -> bool\n"
+     "\n"
+     "If every entry since *mark* binds or changes an attribute of a\n"
+     "variable created after *floor* (see var_floor()), drop those entries\n"
+     "without undoing them and return True; otherwise leave the trail\n"
+     "untouched and return False.  Used by tail-recursion optimisation."},
     {"record", (PyCFunction)Trail_record, METH_O,
      "record(callable)\n"
      "\n"
