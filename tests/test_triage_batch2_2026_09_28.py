@@ -141,6 +141,61 @@ class TestB4aAssertzUnbound:
         assert term[2] == ("/", "assertz", 1)
 
 
+class TestRetractIso:
+    """ISO 8.9.3, measured against Scryer (2026-09-28)."""
+    SRC = """
+        -dynamic(dy/1)
+        -private([f(_), a])
+        st(1),
+        dy(1),
+        def undeclared():
+            return [Z for Z in --(retract(nodecl(1)), Z is 1)]
+        def undeclared_cell():
+            return [Z for Z in --('=..'(G, ['nodecl', 1]), retract(G), Z is 1)]
+        def static():
+            return [Z for Z in --(retract(st(1)), Z is 1)]
+        def unbound():
+            return [Z for Z in --(retract(_), Z is 1)]
+        def builtin():
+            return [Z for Z in --(retract(atom_length(a, 1)), Z is 1)]
+        def data():
+            return [Z for Z in --(retract(f(1)), Z is 1)]
+        def dynamic():
+            return [Z for Z in --(retract(dy(1)), Z is 1)]
+    """
+
+    def test_retract(self, tmp_path, monkeypatch):
+        mod = _load(tmp_path, monkeypatch, "tri_rt", self.SRC)
+        assert mod.undeclared() == []            # fails, no error
+        assert mod.undeclared_cell() == []
+        for fn, pi in ((mod.static, ("/", "st", 1)),
+                       (mod.builtin, ("/", "atom_length", 2)),
+                       (mod.data, ("/", "f", 1))):
+            with pytest.raises(LogicException) as exc:
+                fn()
+            term = _error_term(exc.value)
+            assert term[1] == ("permission_error", "modify",
+                               "static_procedure", pi)
+            assert term[2] == ("/", "retract", 1)
+        with pytest.raises(LogicException) as exc:
+            mod.unbound()
+        assert _error_term(exc.value)[1:] == (
+            "instantiation_error", ("/", "retract", 1))
+        assert mod.dynamic() == [1]
+
+    def test_assertz_of_a_builtin_is_a_permission_error(self, tmp_path, monkeypatch):
+        mod = _load(tmp_path, monkeypatch, "tri_as_bi", """
+            -private([a])
+            def run():
+                return [Z for Z in --(assertz(atom_length(a, 1)), Z is 1)]
+        """)
+        with pytest.raises(LogicException) as exc:
+            mod.run()
+        assert _error_term(exc.value)[1] == (
+            "permission_error", "modify", "static_procedure",
+            ("/", "atom_length", 2))
+
+
 class TestB4cC1C3UndeclaredFunctor:
     def test_assertz_of_an_undeclared_name_is_a_permission_error(self, tmp_path, monkeypatch):
         mod = _load(tmp_path, monkeypatch, "tri_b4c", """

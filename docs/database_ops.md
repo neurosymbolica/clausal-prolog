@@ -71,6 +71,13 @@ Prolog's `asserta`). The new clause will be tried first on subsequent queries.
 --8<-- "tests/fixtures/docs/database_ops_examples.clausal:retract_example"
 ```
 
+As in ISO (8.9.3) and Scryer, `retract` of a name nothing declares simply
+fails — there is no clause to remove — while a static predicate, a declared
+data functor or a builtin raises
+`error(permission_error(modify, static_procedure, Name/Arity), retract/1)`, and
+an unbound `Term` raises `instantiation_error`. (`retractall/1` and
+`abolish/1` are not provided.)
+
 `retract` uses unification for matching, so you can retract by pattern:
 
 ```clausal
@@ -137,7 +144,7 @@ does not require dynamic predicates.)
 - **Must declare `-dynamic`** — without it, assertz/asserta/retract raise
   `error(permission_error(modify, static_procedure, Name/Arity), assertz/1)`
   (catchable by `catch/3`). A name with no declaration and no clauses is
-  refused too. To match the culprit in a catch pattern, quote it:
+  refused too by assertz/asserta; retract of such a name just fails. To match the culprit in a catch pattern, quote it:
   `'/'('assertz', 1)` (a bare builtin name in a term is the builtin's object,
   not the atom).
 - **assertz adds facts, not rules** — `assertz(foo(X) <- bar(X))` is not

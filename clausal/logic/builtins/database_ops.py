@@ -266,16 +266,24 @@ def _resolve_cell_head(term_val: Any, context: str, db,
         # builtin as context.  ISO has no permission type for "not yet
         # existing", and 7.5.2 makes a user procedure static by default, so
         # this is the same refusal as for a declared static predicate.
-        # The ruling is about WRITES (assertz/asserta); retract of a name
-        # nothing declares keeps the existence_error it had.
-        why = (f"{context}: no predicate {functor}/{arity} is declared here, "
+        from clausal.logic.builtins._registry import (  # noqa: PLC0415
+            _BUILTINS, _DB_BUILTINS,
+        )
+        builtin = (functor, arity) in _BUILTINS or (functor, arity) in _DB_BUILTINS
+        if context.startswith("retract") and not builtin:
+            # ISO 8.9.3 (and Scryer): retracting from a procedure that does
+            # not exist FAILS -- there is no clause to remove.  The caller
+            # finds no clause list for it and fails.
+            return term_val, False
+        # A builtin is a static procedure (ISO 8.9.1.3 / 8.9.3.3, Scryer:
+        # ``retract(atom_length(a, 1))`` is permission_error(modify,
+        # static_procedure, atom_length/2)).
+        why = (f"{context}: {functor}/{arity} is a builtin, a static "
+               f"procedure" if builtin else
+               f"{context}: no predicate {functor}/{arity} is declared here, "
                f"and a cell argument does not create one — a cell is "
                f"indistinguishable from a plain data tuple — so declare it "
                f"-dynamic({functor}/{arity}) first")
-        if context.startswith("retract"):
-            raise LogicException(_error_term(
-                ("existence_error", mint("procedure"), ("/", functor, arity)),
-                why))
         raise LogicException(permission_error(
             "modify", "static_procedure", ("/", functor, arity), why))
     # THE REMEDY NAMES THE RIGHT MODULE (roborev job 78, finding 4).  For a
@@ -623,7 +631,9 @@ def _retract_factory(db):
     def retract__1(term, trail, k):
         term_val = deref(term)
         if is_var(term_val):
-            return
+            # ISO 8.9.3.3 a (Scryer too): an unbound clause is an
+            # instantiation error; it used to fail silently.
+            raise LogicException(instantiation_error("retract/1"))
         # A CELL pattern goes through the SAME gate as the assert doors (P3-3
         # Task 5, R11) and comes back normalized to the shape the clause list
         # actually holds -- without that, ``_first_match_index`` would compare

@@ -791,6 +791,11 @@ _EVALUABLE_ARGS = {
 #: The database builtins whose clause argument names a PROCEDURE.
 _PROCEDURE_ARGS = {"assertz": "assertz/1", "asserta": "asserta/1",
                    "assert": "assert/1"}
+#: The builtins whose clause argument is only MATCHED against stored
+#: clauses: an undeclared functor there builds its cell, so the goal finds
+#: no procedure and fails (ISO 8.9.3: retract of a non-existent procedure
+#: fails) instead of refusing the construction.
+_MATCH_ARGS = {"retract": "retract/1"}
 
 
 @contextmanager
@@ -812,6 +817,8 @@ def call_arg_context(fname: str, index: int) -> "tuple | None":
         return ("evaluable", "(is)/2")
     if index == 0 and fname in _PROCEDURE_ARGS:
         return ("procedure", _PROCEDURE_ARGS[fname])
+    if index == 0 and fname in _MATCH_ARGS:
+        return ("cell", _MATCH_ARGS[fname])
     return None
 
 

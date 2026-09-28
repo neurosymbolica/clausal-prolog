@@ -304,7 +304,11 @@ def _undeclared_functor_in(kind: str, context: "str | None", functor: str,
                            arity: int, *args, **kwargs):
     """``$undeclared_functor_in``: ``$undeclared_functor`` for a construction
     the compiler placed in a known position (``kind``/``context``, see
-    :class:`UndeclaredFunctorError`)."""
+    :class:`UndeclaredFunctorError`).  Kind ``"cell"`` (the clause of
+    retract/1) builds the plain cell instead: nothing is written, the goal
+    only matches, and finding no procedure it fails, as ISO 8.9.3 says."""
+    if kind == "cell" and not kwargs:
+        return (functor, *args)
     raise undeclared_functor_error(functor, arity, kind, context)
 
 
@@ -317,6 +321,10 @@ def _constructor_in(obj: Any, kind: str, context: "str | None",
     that position instead of the adapter's context-free one.  Anything else
     the name is bound to by then is returned unchanged."""
     if type(obj) is _DbDispatchAdapter:
+        if kind == "cell":
+            def _cell(*args):
+                return (functor, *args)
+            return _cell
         def _refuse(*args, **kwargs):
             raise undeclared_functor_error(functor, arity, kind, context)
         return _refuse

@@ -704,9 +704,9 @@ class TestCellAssertRetract:
         inner, pi, _context = _error_term(exc_info.value)
         assert cell_functor(inner) == "permission_error"
         assert pi == ("/", "retract", 1)
-        with pytest.raises(LogicException) as exc_info:
-            list(pcall("retract", ("nope", 3), module=lm))
-        assert cell_functor(_error_term(exc_info.value)[0]) == "existence_error"
+        # ISO 8.9.3 (and Scryer): retract from a procedure that does not
+        # exist FAILS -- it used to be existence_error.
+        assert list(pcall("retract", ("nope", 3), module=lm)) == []
 
     def test_a_cell_assert_into_a_classless_dynamic_row_uses_a_cell_head(self):
         """No class in scope (a bare Database) — the head is the cell, with

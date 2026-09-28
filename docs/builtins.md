@@ -743,7 +743,7 @@ Add `Clause` at the **front** of its predicate's clause list.
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:retract_1"
 ```
-Remove the **first** clause whose head unifies with `Term`. Not backtrackable — removes exactly one clause per call. Fails when nothing matches; a static predicate raises `permission_error(modify, static_procedure, Name/Arity)`.
+Remove the **first** clause whose head unifies with `Term`. Not backtrackable — removes exactly one clause per call. As in ISO (8.9.3) and Scryer: it fails when nothing matches, including for a name nothing declares (there is no clause to remove); a static predicate, a declared data functor or a builtin raises `error(permission_error(modify, static_procedure, Name/Arity), retract/1)`; an unbound `Term` raises `instantiation_error`. (`retractall/1` and `abolish/1` are not provided.)
 
 ??? info "Implementation & tests"
     **Clausal tests:** `tests/fixtures/builtins_db.clausal`
