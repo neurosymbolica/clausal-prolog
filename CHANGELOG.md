@@ -130,6 +130,11 @@ since 0.4.0 finish three moves:
 
 ### Added
 
+- **CLP(ℝ) `inf/2` and `sup/2`**: the bounds of an expression over real
+  variables, read from the store without changing it; they fail when
+  unbounded. (They used to reach the CLP(ℚ) solver, which knew nothing of
+  a real variable: `in_real(X, 0.0, 10.0), X >= 2.5, inf(X, I)` gave
+  `I = 0`.) See [docs/clpr.md](docs/clpr.md).
 - **`Module.declare_dynamic(name, arity)`**, the Python spelling of
   `-dynamic(name/arity)`, so a `Module` built from Python can take an
   `assertz`. Idempotent; its errors are ISO `dynamic/1`'s. See

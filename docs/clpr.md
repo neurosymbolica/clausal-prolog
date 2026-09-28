@@ -35,6 +35,8 @@ Inside a constraint a bare `/` is **exact rational** division (see [Operators](o
 | `in_real` | 3 | `in_real(Var_or_list, Lo, Hi)` — declare real variable(s) with domain `[Lo, Hi]` |
 | `label_real` | 1 | `label_real(Vars)` — bisect intervals to IEEE float precision |
 | `label_real` | 2 | `label_real(Vars, Eps)` — bisect until interval width ≤ Eps |
+| `inf` | 2 | `inf(Expr, Inf)` — the lower bound of `Expr` in the current store; fails if unbounded below |
+| `sup` | 2 | `sup(Expr, Sup)` — the upper bound of `Expr` in the current store; fails if unbounded above |
 
 ### in_real/1 and in_real/3
 
@@ -56,7 +58,7 @@ Without an `Eps`, bisection continues until the midpoint equals an endpoint in I
 
 Each branch of the bisection is a separate solution. Use `label_real` after posting all constraints to enumerate solutions.
 
-`label_real` **narrows, it does not bind**: after it, each variable is still a (very narrow) interval, not a float. A goal-position query (`for X in --sqrt2(X)`) therefore refuses to hand `X` back and raises `ResidualConstraints`. To read the interval, run the goal with the lower-level `solve` and an explicit `Trail`, then read the `"real"` attribute:
+`label_real` **narrows, it does not bind**: after it, each variable is still a (very narrow) interval, not a float. A goal-position query (`for X in --sqrt2(X)`) therefore refuses to hand `X` back and raises `ResidualConstraints`. Read the interval in Clausal with [`inf/2` and `sup/2`](#inf2-and-sup2) (`sqrt2(X), inf(X, L), sup(X, H)`), or from Python: run the goal with the lower-level `solve` and an explicit `Trail`, then read the `"real"` attribute:
 
 ```python
 from clausal import solve, Var, Trail
@@ -71,6 +73,35 @@ for _ in solve(("sqrt2", X), module=m, trail=trail):   # m: the loaded module
 ```
 
 (`sqrt2/1` is the example under [Non-linear constraints](#non-linear-constraints).)
+
+### inf/2 and sup/2
+
+`inf(Expr, Inf)` unifies `Inf` with the lower bound CLP(ℝ) has established
+for `Expr`, and `sup(Expr, Sup)` with the upper bound, as floats. They read
+the store and never change it, and they **fail** when `Expr` is unbounded on
+that side. These are the classic CLP(R) predicates (Holzbaur's `clpqr`, as
+in SICStus; Scryer ships no `library(clpr)`), with one difference that
+comes from the solver: CLP(ℝ) here narrows intervals, it does not run a
+simplex, so the answer is the bound propagation has **proven**. It is sound
+(rounded outward, never inside the true range) and exact for a variable
+whose bounds propagation fixed, but interval arithmetic can make it looser
+than the true infimum (`X - X` over `[0, 1]` is `[-1, 1]`). A non-linear
+`Expr` is accepted and bounded the same way.
+
+```clausal
+test("inf and sup read the interval") <- (
+    in_real(X, 0.0, 10.0),
+    in_real(Y, 0.0, 5.0),
+    X + Y == 12.0,
+    sup(X, S), S == 10.0,
+    inf(2 * Y, I), I <= 4.0, I >= 3.9999
+)
+```
+
+`inf/2` and `sup/2` answer from CLP(ℝ) when `Expr` mentions a real
+variable, and from [CLP(ℚ)](clpq.md#sup2-and-inf2) (exact, by simplex)
+otherwise. A term that is not arithmetic raises
+`type_error(evaluable, Name/Arity)`.
 
 ### Module API
 
