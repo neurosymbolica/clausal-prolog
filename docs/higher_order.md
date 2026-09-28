@@ -46,7 +46,9 @@ The goal can be a lambda, a predicate name, or a partial goal term (a cell such 
 ### maplist/2
 
 `maplist(Goal, List)` — test `Goal(Elem)` for every element. Succeeds if the
-goal succeeds for all elements.
+goal succeeds for all elements, and backtracks into every call, as the ISO
+prologue's definition by `call/N` does: with `p(1), p(2), p(3)`,
+`maplist(p, [X, Y])` has nine answers.
 
 ```clausal
 positive(X) <- (X > 0)
@@ -56,7 +58,8 @@ test("all positive") <- maplist(positive, [1, 2, 3])
 
 ### maplist/3
 
-`maplist(Goal, Xs, Ys)` — transform each element via `Goal(X, Y)`.
+`maplist(Goal, Xs, Ys)` — transform each element via `Goal(X, Y)`; like
+maplist/2 it backtracks into every call.
 
 ```clausal
 square(X, Y) <- (Y == X ** 2)
@@ -252,8 +255,8 @@ test("count evens") <- count((X <- (X % 2 == 0)), [1, 2, 3, 4, 5, 6], 3)
   input, Y is output. `foldl/4` calls `Goal(Elem, AccIn, AccOut)`.
 - **`group_by` groups consecutive runs** — not global grouping. sort first if
   needed.
-- **Lambdas are committed-choice** — `include` tests each element once (first
-  solution only). It does not backtrack into the goal.
+- **`include`/`exclude` are committed-choice** — they test each element once
+  (first solution only) and do not backtrack into the goal. `maplist` does.
 - **Lambda syntax** — single-arg: `(X <- (body))`. Multi-arg: `((X, Y) <- (body))`
   with extra outer parens for the tuple. See [Lambdas](lambdas.md) for details.
 - **`call/N` appends arguments** — `call(foo, 1, 2)` calls `foo(1, 2)`.

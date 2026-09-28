@@ -592,9 +592,53 @@ del _n, _cg_arity, _key  # clean up loop variables
 # ── Higher-order list predicates (V2-11) ──────────────────────────────────────
 
 
+# maplist/2,3 backtrack through EVERY solution of each call, as the ISO
+# prologue's definition by call/N does (operator ruling R5/R6, 2026-09-28):
+# ``maplist(p, [X, Y])`` with p(1). p(2). p(3). has 9 answers, X varying
+# slowest.  They used to commit to each call's first solution.  The calls
+# are driven depth-first from a stack of per-element step generators: a
+# solution of the last call is an answer, and asking for the next answer
+# re-asks the deepest call that has one left.
+
+
+def _maplist_drive(this_generator, _proceed, dispatch, args_for, n, trail,
+                   finish=None):
+    """Yield the trampoline steps that run ``call(G, args_for(i)...)`` for
+    ``i`` in ``0 .. n-1`` depth-first, proceeding once per combination --
+    or, with *finish*, once per combination for which ``finish()`` (run
+    under its own trail mark) succeeds."""
+    if n == 0:
+        mark = trail.mark()
+        if finish is None or finish():
+            yield (_proceed, None)
+        trail.undo(mark)
+        return
+    stack = [StepGenerator(dispatch, this_generator, this_generator,
+                           this_generator, *args_for(0), trail)]
+    while stack:
+        _st = yield (stack[-1], None)
+        if _st is DONE:
+            stack.pop()             # this call is exhausted: re-ask the one before
+            continue
+        if len(stack) == n:
+            # every call succeeded: one answer, then the next solution of
+            # the last call
+            if finish is None:
+                yield (_proceed, None)
+            else:
+                mark = trail.mark()
+                if finish():
+                    yield (_proceed, None)
+                trail.undo(mark)
+            continue
+        stack.append(StepGenerator(dispatch, this_generator, this_generator,
+                                   this_generator, *args_for(len(stack)), trail))
+
+
 @_trampoline_builtin("maplist", 2)
 def _map_list__2(this_generator, _proceed, _fail, _catcher, goal, lst, trail):
-    """map_list(Goal, List) — Goal(Elem) succeeds for each element."""
+    """map_list(Goal, List) — Goal(Elem) succeeds for each element; every
+    combination of the calls' solutions is an answer."""
     lst_val = deref(lst)
     goal_val = deref(goal)
     items = _as_items(lst_val)
@@ -603,26 +647,23 @@ def _map_list__2(this_generator, _proceed, _fail, _catcher, goal, lst, trail):
         return
     dispatch = _ensure_trampoline_dispatch(goal_val, 1)
     outer_mark = trail.mark()
-    for elem in items:
-        sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, deref(elem), trail)
-        _st = yield (sg, None)
-        if _st is DONE:
-            trail.undo(outer_mark)
-            yield (_fail, DONE)
-            return
-        # Got first solution — committed choice, move to next element
-    yield (_proceed, None)
+    yield from _maplist_drive(this_generator, _proceed, dispatch,
+                              lambda i: (deref(items[i]),), len(items), trail)
     trail.undo(outer_mark)
     yield (_fail, DONE)
 
 
 @_trampoline_builtin("maplist", 3)
 def _map_list__3(this_generator, _proceed, _fail, _catcher, goal, xs, ys, trail):
-    """map_list(Goal, Xs, Ys) — Goal(X, Y) maps each X to Y.
+    """map_list(Goal, Xs, Ys) — Goal(X, Y) maps each X to Y; every
+    combination of the calls' solutions is an answer.
 
     F063 (C9 audit, option A): result is wrapped via ``_seq_result`` so
     str input with all-1-char-str result elements collapses to a
-    ``str``; list input keeps list output.
+    ``str``; list input keeps list output.  When Ys is already a list of
+    the same length, each call gets its own element of Ys (the prologue's
+    ``call(G, X, Y)``), so a bound Y constrains the call instead of
+    filtering its solutions afterwards.
     """
     xs_val = deref(xs)
     goal_val = deref(goal)
@@ -633,18 +674,23 @@ def _map_list__3(this_generator, _proceed, _fail, _catcher, goal, xs, ys, trail)
     was_str = _was_string(xs_val)   # stage 1: str, carrier or ground SegString
     dispatch = _ensure_trampoline_dispatch(goal_val, 2)
     outer_mark = trail.mark()
-    results = []
-    for x in xs_items:
-        y = Var()
-        sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, deref(x), y, trail)
-        _st = yield (sg, None)
-        if _st is DONE:
-            trail.undo(outer_mark)
-            yield (_fail, DONE)
-            return
-        results.append(deref(y))
-    if unify(ys, _seq_result(results, was_str), trail):
-        yield (_proceed, None)
+    n = len(xs_items)
+    ys_val = deref(ys)
+    ys_items = None if is_var(ys_val) or was_str else _as_items(ys_val)
+    if ys_items is not None:
+        if len(ys_items) == n:
+            yield from _maplist_drive(
+                this_generator, _proceed, dispatch,
+                lambda i: (deref(xs_items[i]), ys_items[i]), n, trail)
+        trail.undo(outer_mark)
+        yield (_fail, DONE)
+        return
+    outs = [Var() for _ in range(n)]
+    yield from _maplist_drive(
+        this_generator, _proceed, dispatch,
+        lambda i: (deref(xs_items[i]), outs[i]), n, trail,
+        finish=lambda: unify(ys, _seq_result([deref(y) for y in outs], was_str),
+                             trail))
     trail.undo(outer_mark)
     yield (_fail, DONE)
 

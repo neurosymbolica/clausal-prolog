@@ -327,3 +327,57 @@ def test_open_lists_oracle(scryer):
     got = _scryer_answers("", [(r[2], r[3]) for r in LO_ROWS])
     assert got == [r[4] for r in LO_ROWS]
 
+
+# ── R6: maplist/2,3 backtrack through every solution of each call ──────────
+#
+# The prologue defines maplist by call/N, so each call's solutions are
+# backtracked into; it used to commit to the first.
+
+_ML_FACTS = """\
+-allow_singletons
+-private([aa, bb, cc])
+p(1),
+p(2),
+p(3),
+q(1, aa),
+q(1, bb),
+q(2, cc),
+"""
+_ML_PROGRAM = "p(1). p(2). p(3). q(1, aa). q(1, bb). q(2, cc).\n"
+
+ML_ROWS = [
+    ("maplist/2 two open", "maplist(p, [X, Y]), R is [X, Y]",
+     "maplist(p, [X, Y]), R = [X, Y]", 20,
+     ["[1,1]", "[1,2]", "[1,3]", "[2,1]", "[2,2]", "[2,3]", "[3,1]", "[3,2]",
+      "[3,3]"]),
+    ("maplist/2 empty", "maplist(p, []), R is 1", "maplist(p, []), R = 1", 5,
+     ["1"]),
+    ("maplist/2 no solution", "maplist(p, [1, 4]), R is 1",
+     "maplist(p, [1, 4]), R = 1", 5, []),
+    ("maplist/3 outputs", "maplist(q, [1, 2], L), R is L",
+     "maplist(q, [1, 2], L), R = L", 5, ["[aa,cc]", "[bb,cc]"]),
+    ("maplist/3 bound outputs", "maplist(q, [1, X], [Y, cc]), R is [X, Y]",
+     "maplist(q, [1, X], [Y, cc]), R = [X, Y]", 5, ["[2,aa]", "[2,bb]"]),
+    ("maplist/3 later element bound", "maplist(q, [1, 1], [bb, Y]), R is Y",
+     "maplist(q, [1, 1], [bb, Y]), R = Y", 5, ["aa", "bb"]),
+    ("maplist/3 in findall", "findall([X, Y], maplist(p, [X, Y]), L), length(L, R)",
+     "findall([X, Y], maplist(p, [X, Y]), L), length(L, R)", 5, ["9"]),
+]
+
+
+@pytest.fixture(scope="module")
+def ml_mod(tmp_path_factory):
+    return _load_seam(tmp_path_factory.mktemp("ml"), "_iso_ans_ml",
+                      _ML_FACTS, ML_ROWS)
+
+
+@pytest.mark.parametrize("i", range(len(ML_ROWS)), ids=[r[0] for r in ML_ROWS])
+def test_maplist_engine(ml_mod, i):
+    assert _engine_answers(ml_mod, f"r{i}", ML_ROWS[i][3]) == ML_ROWS[i][4]
+
+
+def test_maplist_oracle(scryer):
+    del scryer
+    got = _scryer_answers(_ML_PROGRAM, [(r[2], r[3]) for r in ML_ROWS])
+    assert got == [r[4] for r in ML_ROWS]
+
