@@ -157,7 +157,9 @@ eager `eval_/2` evaluation:
 double(N, D) <- (eval_(N * 2, D))
 
 # Works in all directions:
-double_fd(N, D) <- (D #= N * 2)
+double_fd(N, D) <- (D == N * 2)
+
+test("runs backwards") <- (double_fd(N, 10), N is 5)
 ```
 
 ### Test with the most general query
@@ -188,6 +190,8 @@ high_earner(NAME) <- (employee(NAME, _, SALARY), SALARY > 90000)
 For problems over recursive structures (lists, trees, graphs):
 
 ```clausal
+-private([leaf, node(LEFT, RIGHT)])
+
 # Base clause: state when the relation trivially holds
 tree_depth(leaf, 0),
 
@@ -195,8 +199,11 @@ tree_depth(leaf, 0),
 tree_depth(node(LEFT, RIGHT), DEPTH) <- (
     tree_depth(LEFT, D1),
     tree_depth(RIGHT, D2),
-    DEPTH == max(D1, D2) + 1
+    max_(D1, D2, DMAX),
+    DEPTH == DMAX + 1
 )
+
+test("depth 2") <- tree_depth(node(node(leaf, leaf), leaf), 2)
 ```
 
 ### Pattern: constraint model
@@ -205,17 +212,19 @@ For constraint satisfaction problems, separate the model from the search:
 
 ```clausal
 # Model: describe what must hold
-schedule(TASKS) <- (
-    TASKS ins 1..24,
-    all_different(TASKS),
-    # ... domain constraints ...
+schedule([A, B, C]) <- (
+    in_domain([A, B, C], 1, 3),
+    all_different([A, B, C]),
+    A < B
 )
 
 # Search: how to find solutions (separate from the model)
-solve(TASKS) <- (
+solution(TASKS) <- (
     schedule(TASKS),
-    labeling([ff], TASKS)
+    label(TASKS)
 )
+
+test("three slots") <- findall(T, solution(T), [[1, 2, 3], [1, 3, 2], [2, 3, 1]])
 ```
 
 ### Pattern: bridge to [Python](python_integration.md)
@@ -233,9 +242,55 @@ word_frequency(TEXT, WORD, COUNT) <- (
 # Clausal does the reasoning
 most_common(TEXT, WORD) <- (
     word_frequency(TEXT, WORD, COUNT),
-    not (word_frequency(TEXT, _, HIGHER), HIGHER > COUNT)
+    not (word_frequency(TEXT, _, HIGHER) and HIGHER > COUNT)
+)
+
+test("most common word") <- (
+    findall(W, most_common("the cat and the dog", W), WS),
+    WS is ['the', 'the']
 )
 ```
+
+### Pattern: querying from Python
+
+Put the Python that asks questions in a `.clausal` or `.seam` file, and write
+the goal in goal position with `--`. Answers come back as the engine's own
+terms: an atom is a `str`, a compound term is a tuple (`('node', 'leaf',
+'leaf')`), a string is `('$chars', text)`; `clausal.to_python` converts one
+deeply.
+
+```python
+# queries.seam
+-import_module(staff)
+
+def high_earners():
+    return [NAME for NAME in --staff.high_earner(NAME)]
+
+def is_high_earner(name):
+    if --staff.high_earner(++name):
+        return True
+    return False
+```
+
+`++expr` hands a Python value in. From a plain `.py` file, where `--` is not
+available, use `solve(("high_earner", NAME := Var()), module=staff)`. See
+[Python Integration](python_integration.md#goal-position-if-goal-for-in-goal).
+
+### Rules that are easy to get wrong
+
+- `"text"` is a **string** (a character list), not an atom; write `'text'`
+  for an atom. See [Atoms vs strings](syntax.md#atoms-vs-strings).
+- A bare atom or functor must be declared (`-module`, `-private`,
+  `-import_from`) or quoted (`'leaf'`).
+- `#` starts a Python comment: write CLP(ℤ) as `==`, `!=`, `<`, `<=`
+  (see [Operators](operators.md)).
+- `X is Y` is unification. Arithmetic is `X == EXPR` (a constraint) or
+  `eval_(EXPR, X)` (eager); see [Arithmetic](arithmetic.md).
+- `assertz`/`retract` need the predicate declared `-dynamic(name/arity)`.
+- There is no cut. Use separate clauses, `dif/2` and
+  [reified if-then-else](reified_ite.md).
+- Error terms are ISO `error(Formal, Context)`, in Scryer's form
+  (`error(type_error(atom,1),atom_length/2)`); see [Exceptions](exceptions.md).
 
 ---
 

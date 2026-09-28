@@ -24,9 +24,9 @@ Or via [module import](import.md):
 
 ## Type Mapping
 
-- CSV rows → Python `list` of `str`
+- CSV rows → a list of rows, each a list of **strings**
 - CSV with headers → `list` of [`DictTerm`](dicts_sets.md) (one per record)
-- All values are strings — no automatic type coercion. Use [`++int(X)`](python_integration.md) or `number_chars` for conversion.
+- All values are strings — no automatic type coercion. Use `number_chars/2` (a string is a list of chars) to convert.
 
 ---
 
@@ -54,14 +54,17 @@ parse_line(LINE, FIELDS) <- parse_row(LINE, FIELDS)
 
 parse_and_get_name(CSV_TEXT, NAME) <- (
     parse_records(CSV_TEXT, HEADERS_UNUSED, RECORDS),
-    member(RECORD, RECORDS),
-    get(RECORD, "name", NAME)
+    in_(RECORD, RECORDS),
+    get(RECORD, 'name', NAME)       # the atom key; "name" would fail
 )
 ```
 
+With the text `"name,age\nann,3\nbob,4\n"` this yields `NAME = "ann"`, then
+`NAME = "bob"`; `HEADERS_UNUSED` is `[name, age]`.
+
 ### generate/2
 
-`generate(Rows, String)` — serialize a list of rows (lists of values) to a CSV string. Values with commas are automatically quoted.
+`generate(Rows, String)` — serialize a list of rows (lists of values) to a CSV string. Values with commas are automatically quoted; rows end in `\r\n`, as Python's `csv` writes them.
 
 ### generate_records/3
 

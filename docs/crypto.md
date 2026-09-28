@@ -31,7 +31,7 @@ verify_message(KEY, MSG, SIG) <- verify(KEY, MSG, SIG)
 
 | Predicate | Mode | Description |
 |-----------|------|-------------|
-| `hash(Algorithm, Data, Hex)` | `+Algo, +Data, -Hex` | Hex digest via `hashlib` |
+| `hash(Algorithm, Data, Hex)` | `+Algo, +Data, -Hex` | Hex digest via `hashlib`, as a string |
 | `hash_bytes(Algorithm, Data, Bytes)` | `+Algo, +Data, -Bytes` | Raw digest bytes |
 
 **Supported algorithms:** `"sha256"`, `"sha512"`, `"md5"`, `"sha1"`, `"sha384"`,
@@ -80,7 +80,7 @@ Fails silently if the algorithm is unknown, or if `Algorithm` or `Data` is unbou
 | `derive(Password, Salt, Iterations, DerivedKey)` | `+Pw, +Salt, +Iter, -DK` | PBKDF2-HMAC-SHA256, 32-byte key |
 | `derive(Password, Salt, Iterations, KeyLength, DerivedKey)` | `+Pw, +Salt, +Iter, +KL, -DK` | Custom key length |
 
-`DerivedKey` is a hex string. `Password` and `Salt` can be strings or `bytes`.
+`DerivedKey` is a hex string. `Password` and `Salt` can be strings, atoms or `bytes`.
 `Iterations` must be a positive integer.
 
 ```clausal

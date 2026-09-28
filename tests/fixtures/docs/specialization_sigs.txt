@@ -1,18 +1,18 @@
 # === Meta-Interpreter Specialization ===
 
 # --8<-- [start:count_natnum_test]
-test("count natnum(s(s(0)))") <- solve_count_natnum([["natnum", ["s", ["s", 0]]]], 3)
+test("count natnum(s(s(0)))") <- solve_count_natnum([['natnum', ['s', ['s', 0]]]], 3)
 # --8<-- [end:count_natnum_test]
 
 # --8<-- [start:specialize_factorial]
 # Factorial uses gt, sub, mul — these are residual goals
--specialize(Solve, FactorialProgram, alias=SolveFactorial)
+-specialize(solve, factorial_program, alias=solve_factorial)
 # --8<-- [end:specialize_factorial]
 
 # --8<-- [start:deep_unfolding]
--specialize(SolveCount, NatnumProgram, alias=DeepCount, depth=5)
+-specialize(solve_count, natnum_program, alias=deep_count, depth=5)
 # --8<-- [end:deep_unfolding]
 
 # --8<-- [start:cpd_directive]
--specialize(Solve, GraphProgram, alias=SolveGraphCpd, cpd=True)
+-specialize(solve, graph_program, alias=solve_graph_cpd, cpd=True)
 # --8<-- [end:cpd_directive]

@@ -34,16 +34,29 @@ new parser, no foreign notation. Your editor's syntax highlighting, linting,
 and autocompletion work out of the box.
 
 **Data types are mostly Python.** Numbers are Python numbers. [Lists](lists.md) are Python
-lists. [Dicts](dicts_sets.md) are Python dicts. Declared atoms (symbolic constants) are
-just interned Python `str`s — no wrapper class. A Python `str` crossing into
-Clausal is always read as an atom; a logic *string* (the `"…"` chars-model
-kind) is a related but distinct, list-shaped value — see
-[Atoms are symbolic constants](#atoms-are-symbolic-constants) below.
+lists. An atom (a symbolic constant) **is** a Python `str` — no wrapper class.
+A compound term is a plain tuple, `('point', 1, 2)`. A logic *string* (what
+`"…"` means) is the carrier `('$chars', text)`, a different value from the
+atom of the same spelling — see
+[Atoms are symbolic constants](#atoms-are-symbolic-constants) below and
+[Terms are tuples](terms-are-tuples.md).
 
 **The runtime is Python.** Clausal runs on the Python VM. You can call any
-Python library from within a logic predicate using `++()`, and call logic
-predicates from Python with `solve(("my_predicate", X), module=my_module)` —
-a goal is a tuple, run against the module that defines it.
+Python library from within a logic predicate using `++()`, and ask a
+question from Python by writing the goal after `--` in a `.seam` file:
+
+```python
+# ask.seam — Python that can also speak Clausal terms
+-import_from(my_module, [color])
+
+for X in --color(X):        # every answer; X is an ordinary Python local
+    print(X)
+```
+
+From a plain `.py` file the lower-level API does the same:
+`solve(("color", X := Var()), module=my_module)` — a goal is a tuple, run
+against the module that defines it. See
+[Python Integration](python_integration.md#querying-from-python).
 
 **Import works as expected.** `import my_module` loads
 `my_module.clausal` through Python's [import system](import.md). Bytecode is [cached](caching.md) in
@@ -100,18 +113,19 @@ A Python function produces one result. A Clausal predicate can produce
 search:
 
 ```clausal
+-private([red, green, blue])
+
 color(red),
 color(green),
 color(blue),
 ```
 
 ```python
-# From Python, iterate over all answers:
-from clausal import Var, solve
-import my_module
+# ask.seam — iterate over all answers:
+-import_from(my_module, [color])
 
-for trail in solve(("color", X := Var()), module=my_module):
-    print(X.value)  # red, green, blue
+for X in --color(X):
+    print(X)  # red, green, blue
 ```
 
 This replaces explicit loops and generators. Instead of writing code that
@@ -177,41 +191,27 @@ ok == "ok"             # True — the same value
 
 A 0-arity **predicate** — a procedure, a different thing from an atom — is
 defined in a `.clausal` module (`ok,` or `ok <- ...`) and is a row in that
-module's Database; the module binds its name to a predicate handle. There is
-no way to make one from Python any more: `make_predicate` was retired
-(W4b-3 slice 6) and raises `MakePredicateRetiredError`, pointing at a
-`.clausal` module, `solve((name, *args), module=m)`, or a plain object with a
-`_get_dispatch()` method for a predicate implemented in Python. The
-`PredicateMeta` class itself was deleted at W4b-3 slice 7. The atom helpers:
+module's database; the module binds its name to a predicate handle. A
+predicate is never a Python class: define it in a `.clausal` module, or, for
+a predicate implemented in Python, give a plain object a `_get_dispatch()`
+method (see [Public API](public-api.md)).
 
-| Helper | Question |
-|---|---|
-| `clausal.logic.atoms.is_atom(x)` | Is this the **atom term** — an interned `str`? |
-| `clausal.logic.predicate.is_zero_field_class(x)` | Always `False` now: it asked "is this a zero-field `PredicateMeta` class?", and the class is gone |
-| `clausal.logic.predicate.is_atom_value(x)` | The same question as `atoms.is_atom` — no class is an atom value |
-
-`predicate.is_atom` is a **deprecated alias** for `is_zero_field_class` (the
-class test, not the atom test) — import `is_zero_field_class` if you mean
-the class and `clausal.logic.atoms.is_atom` if you mean the atom.
-
-**Strings are the other kind — a list, not a bare `str`.** A `"hello"`
-literal is a string by default ([`-double_quotes(chars)`](directives.md#-double_quotes),
-the engine default since 2026-09-26; a module that declares
-`-double_quotes(atom)` reads it as the atom `hello` instead) — and a string is the
-list of its character atoms: internally a compact carrier around the text,
-not literally a bare `str`. Atoms and strings never unify: under
-`-double_quotes(chars)`, `atom(hello)` holds for the bare atom but
-`atom("hello")` fails for the string. Compare atoms with `==` (interning
-makes `is` agree, but `==` is the test); a string also compares — and
-unifies — by value. Use atoms for symbolic constants (colours, states,
-tags); use strings for text data.
+**Strings are the other kind — not a bare `str`.** A `"hello"` literal is a
+string, as in Scryer and Trealla: the carrier `('$chars', 'hello')`, which the
+engine treats as the list of its character atoms. (A module can still declare
+the temporary [`-double_quotes(atom)`](directives.md#-double_quotes) setting
+to read `"…"` as an atom.) Atoms and strings never unify: `atom(hello)` holds
+for the atom but `atom("hello")` fails for the string. From Python, compare
+a string answer against a `--"hello"` term, or convert it with
+`clausal.to_python`, which gives the text `'hello'`. Use atoms for symbolic
+constants (colours, states, tags); use strings for text data.
 
 | Type check | What it tests |
 |---|---|
-| `atom(X)` | An atom — the interned Python `str` |
-| `string(X)` / `is_str(X)` | A string (a character sequence, not a bare `str`) |
+| `atom(X)` | An atom — a Python `str` |
+| `string(X)` / `is_str(X)` | A string (the `('$chars', text)` carrier) |
 | `atomic(X)` | An atom or a number — **not** a string, which is a list |
-| `callable_(X)` | An atom or a compound term — **not** a string |
+| `callable_(X)` | An atom or a compound term — a string counts, being a non-empty list, as in Scryer |
 
 ---
 
@@ -310,18 +310,18 @@ In Python, you'd reach for a solver library or write custom search. In
 Clausal, you describe the constraints and let CLP(ℤ) search:
 
 ```clausal
--import_from(clpfd, [all_different, labeling]),
-
 send_more_money([S, E, N, D, M, O, R, Y]) <- (
-    [S, E, N, D, M, O, R, Y] ins 0..9,
+    in_domain([S, E, N, D, M, O, R, Y], 0, 9),
     all_different([S, E, N, D, M, O, R, Y]),
     S != 0, M != 0,
                 1000*S + 100*E + 10*N + D
               + 1000*M + 100*O + 10*R + E
-    #= 10000*M + 1000*O + 100*N + 10*E + Y,
-    labeling([leftmost], [S, E, N, D, M, O, R, Y])
+    == 10000*M + 1000*O + 100*N + 10*E + Y,
+    label([S, E, N, D, M, O, R, Y])
 )
 ```
+
+`--send_more_money(L)` answers `[9, 5, 6, 7, 1, 0, 8, 2]`.
 
 ### Parsing with grammars
 
@@ -329,10 +329,13 @@ send_more_money([S, E, N, D, M, O, R, Y]) <- (
 and the same grammar can parse, generate, and validate:
 
 ```clausal
-greeting >> [hello], name,
-name >> [world],
-name >> [clausal],
+greeting >> (['hello'], name)
+name >> (['world'])
+name >> (['clausal'])
 ```
+
+`--phrase(greeting, X)` generates `['hello', 'world']` and
+`['hello', 'clausal']`; with `X` given, it checks a sentence.
 
 ### Transparent integration with Python
 
@@ -361,8 +364,8 @@ dataframe_mean(DF, COL, MEAN) <- (
 
 *See also: [Tutorial](tutorial.md) — learn Clausal step by step.*
 
-*See also: [Python Integration](python_integration.md) — the `++()` escape
-and query API.*
+*See also: [Python Integration](python_integration.md) — the `--` and `++`
+seams and the query API.*
 
 *See also: [Thinking Relationally](thinking_relationally.md) — the mindset
 behind logic programming.*

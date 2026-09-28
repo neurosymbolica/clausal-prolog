@@ -1,31 +1,31 @@
 # Display snippets for docs/date_time.md
 
 --8<-- [start:now_today]
-now(DT)        # DT = datetime.datetime.now()
-now_utc(DT)    # DT = datetime.datetime.now(UTC)
-today(D)       # D = datetime.date.today()
+now(DT)        # DT = datetime(2026, 3, 16, 14, 30, 5, 123456)  (local, naive)
+now_utc(DT)    # DT = datetime(2026, 3, 16, 13, 30, 5, 123456, 0)  (UTC offset 0)
+today(D)       # D = date(2026, 3, 16)
 --8<-- [end:now_today]
 
 --8<-- [start:date_examples]
-# Construct
-date(2026, 3, 16, D)    # D = datetime.date(2026, 3, 16)
+# Construct (unification with the validated term)
+D is date(2026, 3, 16)       # D = date(2026, 3, 16)
 
 # Decompose
-date(Y, M, D, SomeDateObj)    # Y, M, D bound to components
+date(Y, M, DAY) is D         # Y = 2026, M = 3, DAY = 16
 --8<-- [end:date_examples]
 
 --8<-- [start:time_examples]
-time(14, 30, 0, T)      # T = datetime.time(14, 30, 0)
+time(14, 30, 0, T)      # T = time(14, 30, 0, 0)
 time(H, M, S, T)      # decompose T into components
 --8<-- [end:time_examples]
 
 --8<-- [start:datetime_example]
 datetime(2026, 3, 16, 14, 30, 0, DT)
-# DT = datetime.datetime(2026, 3, 16, 14, 30, 0)
+# DT = datetime(2026, 3, 16, 14, 30, 0, 0)
 --8<-- [end:datetime_example]
 
 --8<-- [start:timedelta_examples]
-timedelta(7, 0, TD)     # TD = datetime.timedelta(days=7)
+timedelta(7, 0, TD)     # TD = timedelta(7, 0, 0)
 timedelta(D, S, TD)    # decompose TD into days and seconds
 --8<-- [end:timedelta_examples]
 
@@ -43,13 +43,13 @@ days_between(A, B, N)    # N = (A - B).days (integer) — no date_diff+decompose
 --8<-- [end:days_between]
 
 --8<-- [start:date_of]
-date_of(DT, D)    # D = DT.date()        (datetime → date)
+date_of(DT, D)    # D = the calendar date of DT   (datetime → date)
 date_of(DT, D)    # DT = midnight of D   (date → datetime; DT unbound)
 --8<-- [end:date_of]
 
 --8<-- [start:datetime_string]
 datetime_string(DT, S, "%Y-%m-%d")    # format: S = "2026-03-16"
-datetime_string(DT, "2026-03-16", "%Y-%m-%d")    # parse: DT = midnight datetime
+datetime_string(DT, "2026-03-16", "%Y-%m-%d")    # parse: DT = datetime(2026, 3, 16, 0, 0, 0, 0)
 --8<-- [end:datetime_string]
 
 --8<-- [start:date_max_min]
@@ -58,8 +58,8 @@ date_min(D1, D2, M)    # M = the earlier of two dates
 --8<-- [end:date_max_min]
 
 --8<-- [start:ordinal]
-ordinal(D, N)    # N = D.toordinal()             (date → ordinal)
-ordinal(D, N)    # D = date.fromordinal(N)       (ordinal → date; D unbound)
+ordinal(D, N)    # date(2026, 3, 16) → N = 739691
+ordinal(D, N)    # N = 739691 → D = date(2026, 3, 16)   (D unbound)
 --8<-- [end:ordinal]
 
 --8<-- [start:weekday]
@@ -68,7 +68,7 @@ weekday(D, DOW)    # DOW = 0 (Monday) through 6 (Sunday)
 
 --8<-- [start:timestamp]
 timestamp(DT, TS)    # forward: TS = DT.timestamp() (float epoch)
-timestamp(DT, 0)     # inverse: DT = datetime.fromtimestamp(0)
+timestamp(DT, 0)     # inverse: DT = the local datetime of epoch 0
 --8<-- [end:timestamp]
 
 --8<-- [start:iso]

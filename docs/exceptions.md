@@ -1,6 +1,6 @@
 # Exception Handling
 
-Clausal provides structured exception handling via `throw/1`, `catch/3`, `Catch/2`, `catch_recover/3`, `halt/0`, and `halt/1`. Exceptions use ISO-Prolog-style structured error terms and are implemented via Python's native exception mechanism.
+Clausal provides structured exception handling via `throw/1`, `catch/3`, `catch_error/2`, `catch_recover/3`, `halt/0`, and `halt/1`. Error terms are ISO's `error(Formal, Context)`, with the context filled the way [Scryer](https://github.com/mthom/scryer-prolog) fills it (ISO first; where ISO is silent, Scryer — never SWI). Exceptions are implemented via Python's native exception mechanism.
 
 The implementation lives in `clausal/logic/exceptions.py`.
 
@@ -18,26 +18,27 @@ Raises an exception with a structured error term:
 
 Any term can be thrown — strings, atoms, or structured error terms.
 
-### Catch/2
+### catch_error/2
 
 Catches any exception and binds the error term to a variable or pattern:
 
 ```clausal
---8<-- "tests/fixtures/docs/exceptions_sigs.txt:catch_2"
+-private([boom(N)])
+
+test("catch_error/2 binds the ball") <- (
+    catch_error(throw(boom(42)), ERROR),
+    ERROR is boom(42)
+)
 ```
 
 - **Goal** — the goal to execute; all solutions pass through if no exception
 - **ERROR** — unified against the thrown term on exception; may be a variable (catches all) or a structured pattern (selective catch with no re-raise on mismatch)
 
-`Catch/2` never re-raises — it is equivalent to `catch(Goal, ERROR, true)` but with unified exception representation. Python exceptions appear as `ClassName(Message)` terms, identical in shape to logic `throw/1` terms.
-
-```clausal
---8<-- "tests/fixtures/docs/exceptions_sigs.txt:catch_2_ex2"
-```
+`catch_error/2` never re-raises — it is equivalent to `catch(Goal, ERROR, true)` but with unified exception representation. Python exceptions appear as `ClassName(Message)` terms, identical in shape to logic `throw/1` terms. (It was spelled `Catch/2` before TitleCase names became a load-time error.)
 
 ### catch_recover/3
 
-Like `Catch/2` but with an explicit recovery goal:
+Like `catch_error/2` but with an explicit recovery goal:
 
 ```clausal
 --8<-- "tests/fixtures/docs/exceptions_sigs.txt:catch_recover_3"
@@ -55,11 +56,17 @@ The standard form with selective matching and re-raise on mismatch:
 
 ```clausal
 safe_div(X, Y, R) <- catch(
-    (R == X / Y),
-    error(evaluation_error(zero_divisor), _),
-    R is "undefined"
+    eval_(X / Y, R),
+    error(evaluation_error('zero_divisor'), _),
+    R is 'undefined'
 )
 ```
+
+`safe_div(1, 0, R)` gives `R = 'undefined'`; `safe_div(7, 2, R)` gives `R = 3.5`.
+The division is evaluated with `eval_/2`, which raises on a zero divisor. The
+same division posted as a constraint, `R == X / Y`, does **not** raise: a zero
+divisor inside a constraint makes it **fail**, so there is nothing to catch
+(see [Arithmetic](arithmetic.md) and [Operators](operators.md)).
 
 `catch(Goal, Catcher, Recovery)`:
 
@@ -101,7 +108,8 @@ guarded_msg(M) <- catch(risky(_B), ++ValueError(M), true)
   `ZeroDivisionError` and `++Exception` catches any stray Python exception.
 - A catcher that evaluates to an exception **instance** (`++ValueError(M)`)
   matches by `isinstance` on its type and unifies its `args` against the real
-  exception's `args` — binding `M` to the actual message. Arity counts: a
+  exception's `args` — binding `M` to the actual message (as a string, the
+  carrier `('$chars', text)`). Arity counts: a
   two-arg pattern only matches a two-arg exception.
 - A `++` catcher never matches a logic `throw/1` ball, so it stays selective
   in both directions.
@@ -121,8 +129,8 @@ Those are `BaseException`s and pass straight through any handler.
 ### halt/0, halt/1
 
 ```clausal
-done() <- halt()
-done_with_code() <- halt(1)
+done <- halt()
+done_with_code <- halt(1)
 ```
 
 `halt()` raises `SystemExit(0)`. `halt(N)` raises `SystemExit(N)`.
@@ -138,7 +146,17 @@ structural shape as any predicate term — so there is
 no distinction between catching a logic throw and catching a Python exception:
 
 ```clausal
---8<-- "tests/fixtures/docs/exceptions_sigs.txt:unified_exception_representation"
+-private([my_error(N)])
+
+risky_int(X) <- (X is ++int("nope"))
+
+test("a logic throw and a Python exception are caught alike") <- (
+    catch_error(throw(my_error(42)), E1),
+    E1 is my_error(42),
+    catch_error(risky_int(_), E2),
+    functor(E2, NAME, 1),           # E2 = 'ValueError'(Message)
+    NAME is 'ValueError'
+)
 ```
 
 ---
@@ -184,8 +202,13 @@ again the new exception recovers the prose on a best-effort basis (it is kept
 for the most recent error terms only).
 
 ```clausal
-catch(atom_length(1, _), error(type_error(T, V), _), true)   % T = atom, V = 1
-catch(atom_length(1, _), error(_, PI), true)                 % PI = atom_length/2
+test("the formal term and the culprit indicator") <- (
+    catch(atom_length(1, _), error(type_error(T, V), _), true),
+    T is 'atom',
+    V is 1,
+    catch(atom_length(1, _), error(_, PI), true),
+    PI is '/'('atom_length', 2)
+)
 ```
 
 The type, domain and kind names inside an error term are **atoms**. Under the
@@ -201,26 +224,67 @@ it is the offending term itself, and may be a string.
 
 An error term is a plain **cell**: a tuple whose first element is the functor.
 `clausal.cell_functor` and `clausal.cell_args` read it, and `clausal.make_cell`
-builds one.
+builds one. In a `.clausal` (or `.seam`) file, a goal in goal position raises
+the uncaught error straight into the Python around it:
 
-```python
+```clausal
+# errs.clausal
 from clausal import LogicException, cell_args, cell_functor
 
-try:
-    ...  # a query that raises
-except LogicException as e:
-    assert cell_functor(e.term) == "error"
-    formal, indicator = cell_args(e.term)
-    # formal    == ('type_error', 'atom', 1)
-    # indicator == ('/', 'atom_length', 2)
-    # e.message == None, or the explanatory prose
+bad(N) <- atom_length(1, N)
+
+def main():
+    try:
+        for N in --bad(N):
+            pass
+    except LogicException as e:
+        print(e)                              # Uncaught logic exception: error(type_error(atom,1),atom_length/2)
+        print(cell_functor(e.term))           # error
+        formal, indicator = cell_args(e.term)
+        print(formal, indicator)              # ('type_error', 'atom', 1) ('/', 'atom_length', 2)
+        print(e.message)                      # None -- no prose for this error
 ```
+
+(`python -c "import clausal, errs; errs.main()"`.) The same exception reaches
+a plain `.py` caller of [`solve()`](python_integration.md#querying-from-python).
+
+## Modifying a static predicate
+
+`assertz/1`, `asserta/1` and `retract/1` work only on predicates declared
+`-dynamic` — declare first, then modify. A clause for a predicate that is
+defined but not dynamic raises ISO's `permission_error`; the prose names the fix:
+
+```text
+Uncaught logic exception: error(permission_error(modify,static_procedure,fixed/1),assertz/1): fixed/1 is a static procedure — declare it -dynamic(fixed/1) to modify it at runtime
+```
+
+```clausal
+-dynamic(counter/1)
+
+counter(0),
+fixed(1),
+
+test("a dynamic predicate accepts assertz") <- (
+    assertz(counter(1)),
+    findall(C, counter(C), [0, 1])
+)
+
+test("a static one raises permission_error") <- (
+    catch(assertz(fixed(2)), error(permission_error(M, T, PI), _), true),
+    M is 'modify',
+    T is 'static_procedure',
+    PI is '/'('fixed', 1)
+)
+```
+
+A name the module neither defines nor declares is refused before it gets that
+far: the goal cannot be built at all.
 
 ---
 
 ## Raising well-formedness guards in library code
 
-Shared library predicates (a harness's `library/` modules, for example) often want to
+Shared library predicates (a project's `library/` modules, for example) often want to
 **raise** on malformed input — a non-ground term, the wrong shape, the wrong type —
 rather than *fail logically*. Logical failure inside a `findall` is indistinguishable
 from a legitimate empty result: the `findall` collapses to `[]`, a downstream
@@ -298,15 +362,19 @@ Regression coverage for the propagation-through-`findall` behaviour lives in
 `LogicException` is a Python exception class that wraps a thrown logic term:
 
 ```python
-from clausal.logic.exceptions import LogicException
+from clausal import LogicException
 
 try:
-    # ... run a query that throws ...
+    ...  # run a query that throws
 except LogicException as e:
-    print(e.term)  # the thrown term
+    print(e.term)     # the thrown term, a plain cell
+    print(e.message)  # the explanatory prose, or None
 ```
 
-Uncaught `Throw` goals surface as `LogicException` in Python code. Caught exceptions (via `Catch`/`catch`) never leave the logic layer.
+An uncaught `throw/1` surfaces as `LogicException` in Python code; `str(e)` is
+`Uncaught logic exception: ` followed by the term as Scryer prints it, then
+`: ` and the prose when there is any. Caught exceptions (via `catch/3`,
+`catch_error/2`, `catch_recover/3`) never leave the logic layer.
 
 ---
 
@@ -360,12 +428,12 @@ Uncaught `Throw` goals surface as `LogicException` in Python code. Caught except
 
 ## Compiler Integration
 
-- `Throw(term)` compiles to `raise LogicException(term)`
+- `throw(term)` compiles to `raise LogicException(term)`
 - `catch(goal, catcher, recovery)` compiles to a `try/except Exception` block;
   `LogicException` yields `.term` directly, any other Python exception is
   wrapped as `ClassName(message)` before being unified against the catcher pattern;
   re-raises if no match
-- `Catch(goal, error)` — like `catch/3` but always catches (no re-raise); recovery = `true`
+- `catch_error(goal, error)` — like `catch/3` but always catches (no re-raise); recovery = `true`
 - `catch_recover(goal, error, recovery)` — like `catch/3` but always catches (no re-raise)
 - `halt()` / `halt(N)` compile to `raise SystemExit(0)` / `raise SystemExit(N)`
 
@@ -373,12 +441,12 @@ Uncaught `Throw` goals surface as `LogicException` in Python code. Caught except
 
 ??? info "Test coverage"
 
-    Tests are in `tests/test_exceptions.py` (31 tests) and
-    `tests/test_units.py::TestPythonExceptionCatch` (5 tests).
+    Tests are in `tests/test_exceptions.py` and
+    `tests/test_units.py::TestPythonExceptionCatch`.
 
     - **Throw**: ground term, string, structured error, uncaught surfaces as LogicException
     - **Catch**: matching/non-matching catcher, nested catch, recovery goal, variable catcher (catch-all)
-    - **Python exceptions**: `UnitsMismatch` caught via `Catch/2` as `UnitsMismatch(Msg)`, message bound, transparent when no error, unmatched exception re-raised via `catch/3`
+    - **Python exceptions**: `UnitsMismatch` caught via `catch_error/2` as `UnitsMismatch(Msg)`, message bound, transparent when no error, unmatched exception re-raised via `catch/3`
     - **Halt**: exit code 0, exit code N, raises SystemExit
     - **Structured errors**: type_error, instantiation_error, existence_error, permission_error, evaluation_error
     - **Import integration**: `.clausal` file with catch/throw patterns

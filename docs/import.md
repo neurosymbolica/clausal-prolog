@@ -14,6 +14,23 @@ for trail in solve(("fib", 7, F := Var()), module=fibonacci):
     print(F.value)  # 13
 ```
 
+A `.clausal`/`.seam` file imports another the same way, with a directive, and
+can then query it in [goal position](python_integration.md#goal-position-if-goal-for-in-goal)
+— the usual way to drive Clausal from Python code:
+
+```clausal
+# report.seam
+-import_module(fibonacci)
+
+def fib_of(n):
+    for F in --fibonacci.fib(++n, F):
+        return F
+```
+
+`python -c "import clausal, report; print(report.fib_of(7))"` prints `13`.
+(`import clausal` must come first: it installs the hook that finds `.seam` and
+`.clausal` files.)
+
 After the import:
 - `fibonacci.fib` is the predicate's **handle** — a `str` naming the owning module and the predicate. Its clauses are compiled and its dispatch installed on its row in the module's `Database`; the handle names it, it is not called
 - From Python, a goal is a cell — the predicate's name and its arguments — run against the module: `solve(("fib", 7, F), module=fibonacci)`
@@ -32,7 +49,7 @@ Every `.clausal` file has **two** associated objects, both stored in the module'
 | Python module (`sys.modules[name]`) | `types.ModuleType` | Standard Python module; holds each predicate's handle and anything else defined in the file |
 | `$module` | `clausal.logic.database.Module` | Logic module; holds the `Database` (clause store) and a reference to the Python module's `__dict__` |
 
-The `$` prefix makes `$module` inaccessible as a normal Python identifier — it is injected by the import hook and used only by generated code (`$define_predicate`, `$assert_fact`).
+The `$` prefix makes `$module` inaccessible as a normal Python identifier — it is injected by the import hook and used only by generated code (`$define_predicate`).
 
 ### Module vs Database
 
@@ -61,13 +78,13 @@ The `Module` also holds `module_dict: dict | None` — a reference to the Python
 
 2. **Create LogicModule** — a `clausal.logic.database.Module` is created with `module_dict=module.__dict__`. It is stored as `$module` in the globals.
 
-3. **Install per-module closures** — `$define_predicate` and `$assert_fact` are deferred closures that only collect the predicate nodes; nothing is asserted or compiled while the body runs.
+3. **Install per-module closures** — `$define_predicate` (and the legacy `$assert_fact`, which the transformer no longer emits) are deferred closures that only collect the predicate nodes; nothing is asserted or compiled while the body runs.
 
-4. **Load bytecode** — `self.get_code(module.__name__)` either loads the cached `.pyc` or calls `source_to_code()` to parse and transform fresh source. The `SourceLoader` protocol handles cache validation automatically (comparing mtime and size).
+4. **Load bytecode** — `self.get_code(module.__name__)` either loads the cached `.pyc` or calls `source_to_code()` to parse and transform fresh source. The `SourceLoader` protocol handles cache validation automatically (comparing size and an mtime stamp that also folds in a digest of the engine sources, so an engine upgrade invalidates the cache — see [caching.md](caching.md)).
 
-5. **Execute** — the bytecode is executed in the module's `__dict__`. Each `$define_predicate` / `$assert_fact` call collects its predicate node but defers all database and compilation work.
+5. **Execute** — the bytecode is executed in the module's `__dict__`. Each `$define_predicate` call — one per rule or fact — collects its predicate node but defers all database and compilation work.
 
-6. **Compile the module** — `compiler_v2.compile_module(predicate_nodes, module_items, module_dict, module_name)` handles directives, clause assertion, and predicate compilation in a single pass — and rebinds every predicate name in the module dict to its owner's **handle** (the classes built while the body runs are a load-time intermediate), compiling each predicate once. This is O(N) per predicate (one compilation with all N clauses) instead of the O(N²) that would result from recompiling after every single clause assertion. In a second pass, predicates marked with `-table(pred/arity)` are wrapped with `make_tabled_wrapper_trampoline`. The two-pass approach ensures cross-predicate references resolve before wrapping. See [tabling.md](tabling.md).
+6. **Compile the module** — `compiler_v2.compile_module(predicate_nodes, module_items, module_dict, module_name)` handles directives, clause assertion, and predicate compilation in a single pass — and binds every predicate name in the module dict to its owner's **handle**, compiling each predicate once. This is O(N) per predicate (one compilation with all N clauses) instead of the O(N²) that would result from recompiling after every single clause assertion. In a second pass, predicates marked with `-table(pred/arity)` are wrapped with `make_tabled_wrapper_trampoline`. The two-pass approach ensures cross-predicate references resolve before wrapping. See [tabling.md](tabling.md).
 
 7. **Lock non-dynamic predicates** — lock the row of every predicate in the module's `Database` that was not declared with [`-dynamic(pred/arity)`](directives.md).
 
@@ -75,35 +92,34 @@ The `Module` also holds `module_dict: dict | None` — a reference to the Python
 
 ## `$define_predicate` — asserting a rule (deferred)
 
-Called once per `head <- body` clause as the module executes. Steps:
+Called once per clause — a `head <- body` rule or a trailing-comma fact — as the module executes. Steps:
 
 1. `logic_module.define_predicate(predicate_node)` — flattens the `And`-chain body, normalises fact heads (ground values → `Var + Is`), asserts the resulting `Clause` to the database, and registers the keyword signature.
 
-2. Look up the binding the module body declared for the functor (`$declare_head` bound the module's own predicate HANDLE; it was a `PredicateMeta` class, bound to the row here, until W4b-3 slices 5 and 7).
+2. Look up the binding the module body declared for the functor (`$declare_head` bound the module's own predicate handle).
 
-3. Whatever the name is bound to, stamp the row the clause landed on: its owner (`record_clause_source`) and, if it has no signature yet, the head's field names from the rewriter's `HeadFieldNames` module item (the snapshot of `EmbedTransformer._seen_functors`, first registration wins). The class is not the source of the signature.
+3. Whatever the name is bound to, stamp the row the clause landed on: its owner (`record_clause_source`) and, if it has no signature yet, the head's field names from the rewriter's `HeadFieldNames` module item (the snapshot of `EmbedTransformer._seen_functors`, first registration wins). 
 
 4. Record `(functor, arity) → handle` in the pending dict. Compilation is deferred until all clauses have been asserted.
 
 ---
 
-## `$assert_fact` — asserting a fact (deferred)
+### Facts
 
-Called once per trailing-comma fact statement. Steps are identical to `$define_predicate` except the head term is passed directly rather than wrapped in a `Predicate` node. Compilation is equally deferred.
-
-Fact normalization: ground values in functor field positions are replaced with fresh `Var` objects and corresponding `Is(var, value)` body goals. This enables output-mode queries — e.g., `fib(N, RESULT)` with both args unbound can enumerate facts rather than only checking them.
+A trailing-comma fact goes through the same `$define_predicate` call, with a
+body of `True`. Fact normalization: ground values in functor field positions are replaced with fresh `Var` objects and corresponding `Is(var, value)` body goals. This enables output-mode queries — e.g., `fib(N, RESULT)` with both args unbound can enumerate facts rather than only checking them.
 
 ---
 
 ## Deferred compilation
 
-Previously, each `$define_predicate` / `$assert_fact` call immediately recompiled the predicate with all accumulated clauses. For a predicate with N clauses, this meant N compilations — O(N²) work.
+Previously, each `$define_predicate` call immediately recompiled the predicate with all accumulated clauses. For a predicate with N clauses, this meant N compilations — O(N²) work.
 
 With deferred compilation, assertions and compilation are separated:
-- During `exec()`, each `$define_predicate` / `$assert_fact` only collects the predicate node.
+- During `exec()`, each `$define_predicate` only collects the predicate node.
 - After `exec()` completes, `compiler_v2.compile_module` asserts and compiles each predicate exactly once with the full clause set.
 
-This is safe because no predicate is queried during module load — `.clausal` files only contain definitions. [Directives](directives.md) (`-dynamic`, etc.) execute before clause definitions, so `db.is_dynamic()` is already set when compilation runs.
+This is safe because no predicate of the file is queried during its own load. (A module-level goal-position `--goal` over a predicate of the same file therefore fails at load: put it in a `def`, or query an imported predicate.) [Directives](directives.md) (`-dynamic`, etc.) execute before clause definitions, so `db.is_dynamic()` is already set when compilation runs.
 
 ---
 
@@ -113,11 +129,11 @@ This is safe because no predicate is queried during module load — `.clausal` f
 
 ### `-import_from` — selective import
 
-```clausal
---8<-- "tests/fixtures/docs/import_sigs.txt:import_from_directive"
+```text
+-import_from(myapp.graphs.utils, [shortest_path, reachable])
 ```
 
-This emits `from myapp.graphs.utils import ShortestPath, reachable` in the generated Python code. The imported names are bound to the exporting module's predicate handles in module globals, where the compiler picks them up and wires dispatch automatically.
+This emits `from myapp.graphs.utils import shortest_path, reachable` in the generated Python code. The imported names are bound to the exporting module's predicate handles in module globals, where the compiler picks them up and wires dispatch automatically.
 
 Imported predicates can be used in clause bodies just like locally-defined ones:
 
@@ -127,8 +143,8 @@ connected(X, Y) <- reachable(X, Y)
 
 #### Aliases
 
-```clausal
---8<-- "tests/fixtures/docs/import_sigs.txt:alias_directive"
+```text
+-import_from(myapp.graphs.utils, [alias(reachable, reach)])
 ```
 
 Generates `from myapp.graphs.utils import reachable as reach`. Use the alias name in clause bodies:
@@ -137,11 +153,11 @@ Generates `from myapp.graphs.utils import reachable as reach`. Use the alias nam
 connected(X, Y) <- reach(X, Y)
 ```
 
-Alias names must be **TitleCase** (multi-character). Single uppercase letters like `R` are treated as logic variables by the name resolver and will not work as aliases.
+Write alias names like every other predicate name, in lowercase `snake_case`. An ALL-CAPS name (`R`, `REACH`) is a logic variable to the name resolver and will not work as an alias.
 
 #### Name isolation
 
-Behind the scenes, imported predicates are stored under a fully-qualified dotted key in compiled function globals — e.g., `"myapp.graphs.utils.Reachable"` rather than bare `"reachable"`. This means Python code in the `.clausal` file cannot accidentally shadow an imported predicate by assigning to the same name. The dotted key is invisible to the user; clause bodies use the short local name as written.
+Behind the scenes, imported predicates are stored under a fully-qualified dotted key in compiled function globals — e.g., `"myapp.graphs.utils.reachable"` rather than bare `"reachable"`. This means Python code in the `.clausal` file cannot accidentally shadow an imported predicate by assigning to the same name. The dotted key is invisible to the user; clause bodies use the short local name as written.
 
 #### Importing constants
 
@@ -207,7 +223,7 @@ a `++()` escape:
 2. The remap is passed to every `TermTransformer` instance created for clause heads and bodies.
 3. when `TermTransformer.visit_Name` sees a name in the remap, it emits `LoadName(name="full.module.path.Name")` instead of `LoadName(name="Name")`.
 4. The compiler's `_collect_globals_info` collects the dotted name as a call target. `_inject_resolved_targets` resolves it — first by attribute traversal from globals (for `-import_module` qualified calls), then by `sys.modules` lookup (for `-import_from` remapped names).
-5. The resolved predicate binding (the owner's handle) is stored under the dotted key in the compiled function's globals dict. Dict keys don't need to be valid Python identifiers — `"myapp.graphs.utils.Reachable"` works fine.
+5. The resolved predicate binding (the owner's handle) is stored under the dotted key in the compiled function's globals dict. Dict keys don't need to be valid Python identifiers — `"myapp.graphs.utils.reachable"` works fine.
 
 ### Cross-module calls from Python
 
@@ -216,6 +232,7 @@ From Python, import the module and run a goal cell against it:
 1. `import fibonacci` loads it; `fibonacci.fib` is the predicate's handle — a name, not a callable.
 2. `solve(("fib", 7, F), module=fibonacci)` resolves `fib` in that module's dict to the handle and dispatches through the owner's row.
 3. A `.clausal` module that `-import_from`s `fib` binds the same handle, and its compiled call sites reach the same row.
+4. Python hosted in a `.clausal`/`.seam` file skips the cell-building: after `-import_module(fibonacci)`, `for F in --fibonacci.fib(7, F):` runs the goal in place.
 
 ### Why not Prolog-style modules
 
@@ -223,7 +240,7 @@ Prolog's module system is widely regarded as one of the language's weakest point
 
 | Prolog pain point | Clausal's approach |
 |---|---|
-| **Meta-predicate "context module" confusion** — the #1 complaint | A predicate binding is its owner's handle, which names the defining module. No context module resolution needed. |
+| **Meta-predicate "context module" confusion** — the #1 complaint | A predicate binding is its owner's handle, which names the defining module. A goal argument is resolved in the caller only where the callee declares it with [`-meta_predicate`](directives.md#-meta_predicate), as in Scryer. |
 | **Flat namespace** | Python packages give hierarchical dotted paths for free. |
 | **Operator scoping** | No user-defined operators. Non-issue. |
 | **Export list maintenance** | No export lists. Everything is public — `-module`/[`-private`](directives.md#-private) declare a module's *documented surface*, not an access barrier, and `-import_from` reaches a private name just as readily (Python convention: `_` prefix = private). |
@@ -232,7 +249,7 @@ Prolog's module system is widely regarded as one of the language's weakest point
 
 ### Circular imports
 
-Same strategy as Python — partial module objects. The deferred compilation model helps: all clauses are asserted before any compilation happens. If module A imports module B which imports module A, B sees A's partially-loaded module object (classes defined, dispatch not yet compiled). when B's predicates call A's predicates at runtime, A's dispatch is already compiled by then.
+Same strategy as Python — partial module objects. The deferred compilation model helps: all clauses are asserted before any compilation happens. If module A imports module B which imports module A, B sees A's partially-loaded module object (handles bound, dispatch not yet compiled). when B's predicates call A's predicates at runtime, A's dispatch is already compiled by then.
 
 ### Error handling
 
@@ -248,11 +265,10 @@ loader knows what `M` declares, it appends it (`clausal/import_diagnostics.py`,
 called from the module-exec seam in `clausal/import_hook.py`):
 
 ```text
-cannot import name 'within_limit' from 'acme.compliance.schema' (/…/schema.clausal)
-  schema exports: verdict/2, beneficial_owner, not_beneficial_owner, holdings,
-                  person, entity, overall, as_of_date, exceeds_limit
-  did you mean: exceeds_limit ?
-  -> either add `within_limit` to that -module(...) list and define it there,
+ImportError: cannot import name 'under_budget' from 'shop.catalog' (/…/shop/catalog.clausal)
+  catalog exports: price/2, in_stock/1, apple, pear, over_budget
+  did you mean: over_budget ?
+  -> either add `under_budget` to that -module(...) list and define it there,
      or stop importing it and remove every use.
 ```
 
@@ -275,31 +291,33 @@ authoritative.
 ### A path segment is a directory name, literally
 
 Every segment of a dotted import is a **valid Python identifier**, and a package
-directory is importable only under its own name. So `eu/state-aid/` can never be
-the `state_aid` of `-import_from(eu.state_aid.reg_w_scheme, …)`: `state-aid` is not an
-identifier, and `state_aid` is a different segment, not a spelling of it. The
-same goes for a file — `state-aid.clausal` is not the module `state_aid`.
+directory is importable only under its own name. So `shop/order-rules/` can never be
+the `order_rules` of `-import_from(shop.order_rules.pricing, …)`: `order-rules` is not an
+identifier, and `order_rules` is a different segment, not a spelling of it. The
+same goes for a file — `order-rules.clausal` is not the module `order_rules`.
 
-Reported as "no module named 'eu.state_aid'" this reads as a missing file, and
+Reported as "no module named 'shop.order_rules'" this reads as a missing file, and
 sends you looking for a typo (or creating a second copy of a package you already
 have). So when the failing segment is explained by a misnamed directory or file
 sitting on the search path, the message names it:
 
 ```text
-ModuleNotFoundError: No module named 'eu.state_aid'
-  -import_from(eu.state_aid.reg_w_scheme, [G])
-    in deep.clausal
-  the segment 'state_aid' did not resolve, so neither can 'eu.state_aid.reg_w_scheme'.
-  eu/state-aid is there, but 'state-aid' is not a valid Python identifier, so
-    no dotted import can name it — 'state_aid' is a different segment, not a
-    spelling of it. There is therefore no export list to show.
-  -> rename the directory 'state-aid' to 'state_aid'. Renaming is the only
+ModuleNotFoundError: No module named 'shop.order_rules'
+  -import_from(shop.order_rules.pricing, [discount])
+    in app.clausal
+  the segment 'order_rules' did not resolve, so neither can
+    'shop.order_rules.pricing'.
+  /…/shop/order-rules
+    is there, but 'order-rules' is not a valid Python identifier, so no dotted
+    import can name it — 'order_rules' is a different segment, not a spelling
+    of it. There is therefore no export list to show.
+  -> rename the directory 'order-rules' to 'order_rules'. Renaming is the only
      repair: a package directory is importable only under its own name, so the
      import cannot be adjusted to meet it.
 ```
 
 Renaming really is the only repair: there is no way to write the import that
-matches a non-identifier name. A **digit-leading** name (`77usc501_abc`) is
+matches a non-identifier name. A **digit-leading** name (`2024_rules`) is
 rejected earlier still — you cannot even write the directive, so you get a
 syntax error with a caret on the digit rather than an import error.
 
@@ -350,7 +368,7 @@ declaration would do behind your back becomes an ordinary, visible argument.
 
 A library predicate cannot "reach back" into the importer to call a predicate
 the importer defined. The name isn't in the library's namespace, so the call
-fails at runtime:
+raises at runtime:
 
 ```clausal
 # lib.clausal — the library knows nothing about hook
@@ -383,12 +401,19 @@ not.
 
 When a library predicate needs to invoke something the caller supplies, the
 caller passes that predicate **as a goal argument** (higher-order), and the
-library invokes it with the [`Call` / `call_goal` higher-order builtins](higher_order.md).
+library invokes it with the [`call/N` / `call_goal` higher-order builtins](higher_order.md).
 This is the Pythonic equivalent of passing a callback / function object instead
-of relying on a global name being in scope:
+of relying on a global name being in scope.
+
+A predicate name passed as data is a plain atom, so the library must say which
+argument is a goal, with Scryer's [`-meta_predicate`](directives.md#-meta_predicate)
+declaration. An integer (or `':'`) position is qualified with the **caller's**
+module at the call site; `'+'`, `'-'` and `'?'` positions are left alone:
 
 ```clausal
 # lib.clausal — the hook is a parameter, not a free name
+-meta_predicate(run_check(1, '?'))
+
 run_check(HOOK, X) <- (call_goal(HOOK, X))
 ```
 
@@ -399,6 +424,10 @@ run_check(HOOK, X) <- (call_goal(HOOK, X))
 hook(42),
 test_ho(X) <- (run_check(hook, X))   # pass our hook in as a goal → binds X = 42
 ```
+
+Without the `-meta_predicate` line, `hook` would be looked up in `lib`, and the
+call raises `error(existence_error(procedure,hook/1),hook/1)` — exactly what
+Scryer does.
 
 This is the right pattern whenever a generic library predicate must call back
 into domain-specific predicates. For example, a generic eligibility engine takes
@@ -422,15 +451,16 @@ know Prolog. The guiding principle is **least surprise for a Python programmer**
 imports, modules, and name scoping should behave the way they already do in
 Python — lexical resolution against the defining module, predicates as
 first-class objects you pass explicitly — rather than a flat global predicate
-database or the implicit context-module threading that Prolog's meta-predicates
-rely on. The closure/lexical model is also what
+database. Caller-module qualification happens only where a library declares it
+with `-meta_predicate`, as in Scryer. The closure/lexical model is also what
 makes predicates ordinary named values (their handles) you can import, pass around,
-and call by reference, which is exactly what the [`Call`/`call_goal`
+and call by reference, which is exactly what the [`call/N`/`call_goal`
 higher-order builtins](higher_order.md) and [lambdas](lambdas.md) rely on.
 
 > **One-line summary.** If you came from Prolog: a library predicate sees the
 > names *in its own file*, never the caller's. Need it to call something the
-> caller owns? Pass that predicate in as a goal argument.
+> caller owns? Pass that predicate in as a goal argument, and declare the
+> argument with `-meta_predicate` in the library.
 
 ### Atoms are global by spelling
 
@@ -457,14 +487,14 @@ check(approved),
 -import_from(lib, [check])
 -private([approved])
 
-ask() <- check(approved)           # SUCCEEDS: `approved` is the same atom
-                                  # everywhere, whichever file declares it
+ask <- check(approved)             # SUCCEEDS: `approved` is the same atom
+                                   # everywhere, whichever file declares it
 ```
 
-`Ask()` succeeds: `check`'s clause head and the goal `check(approved)` both
+`ask` succeeds: `check`'s clause head and the goal `check(approved)` both
 carry the atom `approved` (the interned `str` `'approved'`) — there is nothing to
 re-import for agreement's sake. (Importing it anyway, `-import_from(lib,
-[Check, approved])`, still works and is a reasonable style choice — it just
+[check, approved])`, still works and is a reasonable style choice — it just
 is not REQUIRED the way it used to be.)
 
 **This used to be the sharpest edge in Clausal's scoping model** — atoms
@@ -501,9 +531,9 @@ and importing the same name (the re-export idiom) is safe in either textual
 order.
 
 A genuine disagreement is therefore always an arity disagreement, and it still
-raises: a head with more arguments than the bound class has fields raises
+raises: a head with more arguments than the declared head has fields raises
 `ClausalTermConstructionError`, naming the functor, both arities, where the
-class was registered and where the term was constructed. Two arities for one
+head was declared and where the term was constructed. Two arities for one
 functor name cannot be reconciled — give every declaration and clause head the
 same number of arguments, or rename one of them.
 
@@ -561,14 +591,14 @@ already raises `permission_error(modify, static_procedure, F/N)`.
 
 The following names are injected into every predicate module's namespace by the import hook:
 
-**Simple AST constructors**: all names from `clausal.pythonic_ast.__all__` — `LoadName`, `Call`, `IntLiteral`, `Is`, `And`, `Or`, `Not`, etc.
+**Simple AST constructors**: all names from `clausal.pythonic_ast.nodes.__all__` — `LoadName`, `Call`, `IntLiteral`, `Is`, `And`, `Or`, `Not`, etc. Generated code references each through its `$` twin (`$Call`, `$Predicate`, …), so a user predicate spelled like one can never shadow it.
 
-**Runtime types**: `Var`, `Trail`, `unify`, `deref`, `walk` — needed by generated code (`Var()` for logic variables) and by compiled predicate bodies.
+**Runtime values**: `Var`, `Trail`, `DictTerm`, `SetTerm`, `PyThunk`, `FStringThunk`, `Quantity`, `Undefined`, `BoolEq`, `BoolImpl` (one table: `INJECTED_RUNTIME_BUILTINS` in `clausal/logic/compiler/predicate.py`). The engine helpers are injected only as `$walk`, `$deref`, `$unify`, so `walk/2`, `deref/2` and `unify/2` are free for user predicates.
 
 **Hidden globals** (inaccessible as normal identifiers):
 - `$module` — the `LogicModule` for this file
-- `$define_predicate` — per-module closure for `head <- body` clauses
-- `$assert_fact` — per-module closure for fact statements
+- `$define_predicate` — per-module closure for clauses (rules and facts)
+- `$assert_fact` — legacy per-module closure for fact statements (no longer emitted for `.clausal` source)
 - `$ast` — the Python `ast` standard library module
 
 ---
@@ -580,6 +610,12 @@ The following names are injected into every predicate module's namespace by the 
 ---
 
 ## Importing `.pl` (Prolog) files directly
+
+!!! warning "Experimental in 1.0"
+    `.pl` import is **experimental** and outside the 1.0 compatibility promise
+    (see [Public API](public-api.md)). It runs an older translator into the
+    seam syntax: cut and if-then-else are refused, and it is not an ISO
+    Prolog consult.
 
 Clausal can import Prolog `.pl` files without a manual translation step. Placing a `.pl` file on `sys.path` makes it importable:
 
@@ -608,7 +644,7 @@ If both `foo.clausal` and `foo.pl` exist in the same directory, the `.clausal` f
 
 ### Recursive imports
 
-when a `.pl` file contains `:- use_module(bar, [helper/1]).`, the translator emits `-import_from(bar, [Helper])` in the `.clausal` text. At compile time, `importlib.import_module("bar")` triggers the import hook again, which finds and translates `bar.pl`. Python's `sys.modules` sentinel handles circular imports.
+when a `.pl` file contains `:- use_module(bar, [helper/1]).`, the translator emits `-import_from(bar, [helper])` in the `.clausal` text. At compile time, `importlib.import_module("bar")` triggers the import hook again, which finds and translates `bar.pl`. Python's `sys.modules` sentinel handles circular imports.
 
 Library imports are mapped to Clausal built-in modules:
 
@@ -630,7 +666,7 @@ SyntaxError: Cannot import foo.pl: Cut (!/0) cannot be translated to Clausal.
 
 ### Caveats
 
-- **Bare Prolog atoms** (lowercase identifiers like `red`, `foo`) become bare Python names in the translated output. Unless declared via `-module(...)`, they cause `NameError` at runtime. Use quoted atoms (`'red'`), integers, or strings for data values.
+- **Bare Prolog atoms** (lowercase identifiers like `red`, `foo`) are declared for you: the translator emits a `-private([red, ...])` line, so they load under the strict-atoms default.
 - **The `.pl` extension is also used by Perl.** If a Perl script ends up on `sys.path`, the import hook will attempt to parse it as Prolog and raise a `SyntaxError`. Avoid placing Perl scripts in directories on `sys.path`.
 - **Encoding:** All `.pl` files must be UTF-8 encoded. Non-UTF-8 files will raise `UnicodeDecodeError`.
 - **Stdlib shadowing:** The Clausal finders (`.clausal`, `.pl`) run *before* Python's `PathFinder` on `sys.meta_path`. A file like `os.clausal` or `re.pl` on `sys.path` named after a standard-library module is almost always an accident, so Clausal does **not** shadow it: the finder emits a `ClausalLintWarning` and defers to the standard library (the stdlib module is imported). Rename the file to avoid the warning. Avoid naming `.clausal`/`.pl` files after standard Python or Clausal modules.
@@ -658,16 +694,18 @@ Standard `.py` files are unaffected — Python's built-in finders handle them in
 
 ## Loading `.clausal` files programmatically
 
-For tests and external callers, `_load_module(fullname, path)` is the recommended way to load a `.clausal` file without relying on `sys.path` discovery:
+For tests and external callers, `clausal.testing.load_clausal_module(path)` loads a `.clausal` file from its path, without relying on `sys.path` discovery; each call compiles it afresh, with its own database:
 
 ```python
-from clausal.import_hook import _load_module
+from clausal import Var, solve
+from clausal.testing import load_clausal_module
 
-mod = _load_module("my_predicates", "/path/to/my_predicates.clausal")
-logic_module = mod.__dict__["$module"]
+mod = load_clausal_module("/path/to/my_predicates.clausal")
+for _ in solve(("my_pred", X := Var()), module=mod):
+    print(X.value)
 ```
 
-Each call creates a fresh `PredicateLoader` and module instance. Any previously cached `sys.modules` entry for the name is evicted first. This is the standard pattern used by all test helpers in the test suite.
+Underneath it is `clausal.import_hook._load_module(fullname, path)` (private), which creates a fresh `PredicateLoader` and module instance and evicts any previously cached `sys.modules` entry for the name first; the engine's own test helpers use it directly.
 
 ---
 

@@ -94,11 +94,14 @@ All SQL execution uses parameterized queries (`?` placeholders) internally. **St
 --8<-- "tests/fixtures/docs/sqlite_sigs.txt:query_sig"
 ```
 
-Execute a SELECT query and **nondeterministically iterate** over result rows via [backtracking](control.md). Each solution binds `Row` to one row. Multi-column rows are Python tuples; single-column rows are unwrapped to the bare value.
+Execute a SELECT query and **nondeterministically iterate** over result rows via [backtracking](control.md). Each solution binds `Row` to one row. Single-column rows are unwrapped to the bare value; a TEXT value comes back as a **string**. A multi-column row is the Python tuple of its values, and its TEXT columns come back as **atoms**: `SELECT name, age` gives `('alice', 30)`. Match it against a tuple pattern, `(NAME, AGE)`, to take it apart.
 
 ```clausal
 # Multi-column: Row unifies with a tuple
 all_users(ROW) <- query("db", "SELECT name, age FROM users", ROW)
+
+# ...which a tuple pattern takes apart: NAME = 'alice', AGE = 30
+user_age(NAME, AGE) <- query("db", "SELECT name, age FROM users", (NAME, AGE))
 
 # Single-column: Row unifies with the value directly
 all_names(NAME) <- query("db", "SELECT name FROM users", NAME)
@@ -188,7 +191,7 @@ list_tables(T) <- table("db", T)
 --8<-- "tests/fixtures/docs/sqlite_sigs.txt:column_sig"
 ```
 
-Enumerate columns of a table. Yields `(ColName, ColType)` pairs. Column types are SQLite type strings: `"TEXT"`, `"INTEGER"`, `"REAL"`, `"BLOB"`, etc.
+Enumerate columns of a table, one `ColName`/`ColType` solution per column. Both are strings; column types are SQLite type names: `"TEXT"`, `"INTEGER"`, `"REAL"`, `"BLOB"`, etc.
 
 ```clausal
 show_schema(COL, TYPE) <- (
@@ -224,17 +227,17 @@ show_schema(COL, TYPE) <- (
 ## Safety
 
 - **No SQL injection**: all queries use `cursor.execute(sql, params)` with `?` placeholders. String formatting is never used for SQL construction.
-- **Connection aliases are strings**: validated at lookup time. Invalid aliases produce a clear `ValueError`.
+- **Connection aliases are strings**: validated at lookup time. An alias that is not connected raises (today the thrown term is `'ValueError'('No SQLite connection with alias \'nodb\'')`, not an ISO error term).
 - **Thread-safe registry**: the connection registry uses a `threading.Lock`.
 
 ---
 
 ??? abstract "Implementation"
 
-    - **Module:** `clausal/modules/sqlite.py`
-    - **Adapter class:** `_SQLitePredicate` (same pattern as `_RegexPredicate` in `clausal/modules/regex.py`)
+    - **Module:** `clausal/modules/py/sqlite.py`
+    - **Predicates:** `ModulePredicate` wrappers, the same pattern as the other `clausal/modules/py/` modules
     - **Backend:** Python's `sqlite3` module (stdlib, always available)
-    - **Tests:** `tests/test_sqlite.py` (37 tests: 31 unit + 6 `.clausal` integration)
+    - **Tests:** `tests/test_sqlite.py`
 
     ---
 

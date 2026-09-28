@@ -16,7 +16,7 @@ positive(2),
 
 doubled(X, V) <- (
     positive(X),
-    V is X * 2
+    V == X * 2
 )
 ```
 
@@ -35,8 +35,7 @@ q(X) <- (
 )
 ```
 
-Why this is the standard (adopted from the EU corpus, 2026-07-04, and made
-engine-wide): one goal per line reads top-to-bottom like the proof it is,
+Why this is the standard: one goal per line reads top-to-bottom like the proof it is,
 keeps diffs minimal when a goal is inserted or removed, and is the easiest
 shape for code generators and language models to produce correctly.
 
@@ -49,7 +48,7 @@ shape for code generators and language models to produce correctly.
 ## The formatter
 
 ```
-clausal-fmt src/                 # rewrite every .clausal file under src/
+clausal-fmt src/                 # rewrite every .clausal / .seam file under src/
 clausal-fmt --check src/         # exit 1 if any file would change (CI gate)
 clausal-fmt --diff  src/         # print what would change, write nothing
 ```

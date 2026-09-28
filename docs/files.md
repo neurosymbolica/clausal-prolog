@@ -22,6 +22,17 @@ Or via [module import](import.md):
 
 ---
 
+## Text in, text out
+
+A path or content argument may be a string (`"data.csv"`) or an atom
+(`'data.csv'`, or a Python `str` passed in with `++`). Every text the module
+hands back — file names, joined paths, file contents, extensions — is a
+**string**: `directory_files` on a directory holding `a.py` and `b.txt` gives
+`["a.py", "b.txt"]`, which Python sees as `[('$chars', 'a.py'), ('$chars', 'b.txt')]`
+(use `clausal.to_python` for plain `str`s).
+
+---
+
 ## Predicates
 
 ### Existence Checks

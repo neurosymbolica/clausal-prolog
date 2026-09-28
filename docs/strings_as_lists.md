@@ -6,12 +6,13 @@ matching, and DCGs on strings directly; no conversion needed, because there is
 nothing to convert.
 
 !!! note "Writing a string literal"
-    A double-quoted literal means a string only in a file that declares
-    [`-double_quotes(chars)`](directives.md#-double_quotes). The engine default
-    is still `atom`, where `"hello"` is the atom `hello`; the default flips to
-    `chars` once every module has migrated. Every example on this page is run
-    under `-double_quotes(chars)`. A single-quoted `'hello'` is always an atom,
-    in either mode.
+    A double-quoted literal `"hello"` is a **string** — the engine default
+    since 2026-09-26, as in Scryer and Trealla. A single-quoted `'hello'` is
+    always an atom. A module that still needs the old reading can declare
+    [`-double_quotes(atom)`](directives.md#-double_quotes), a temporary
+    per-module setting; `chars` (the default) and `atom` are the only modes.
+    Code lists have no mode: they are written `b"..."` (see
+    [Bytes as Lists of Codes](bytes_as_lists.md)).
 
 ---
 
@@ -32,7 +33,7 @@ strings](syntax.md#atoms-vs-strings) — but at the logic level `"hello"` and
 
 The elements are **character atoms**: `'h'` is the atom whose spelling is the
 single character `h`, not the one-character string `"h"`. So
-`nth0(0, "abc", C)` gives `C = 'a'`, and `in_("a", "abc")` fails — `"a"` is the
+`list_item(0, "abc", C)` gives `C = 'a'`, and `in_("a", "abc")` fails — `"a"` is the
 *list* `['a']`, not the character.
 
 ---
@@ -71,7 +72,7 @@ needed. when matching a string, `*Prefix` binds to a substring; when matching
 a list, it binds to a sublist.
 
 **`[*XS]` is not a list test.** Because a string unifies with list patterns,
-`Listish([*XS])` succeeds for `Listish("met")` too — binding `XS` to the whole
+`listish([*XS])` succeeds for `listish("met")` too — binding `XS` to the whole
 string — and `[H, *T]` destructures a string one character at a time. A
 recursive list-walking predicate written the obvious way therefore walks
 *into* every string in its input instead of treating it as a leaf. When a
@@ -131,8 +132,6 @@ is a character sequence, the result is returned as a string:
 [Definite Clause Grammars](dcg.md) parse strings directly:
 
 ```clausal
--double_quotes(chars)
-
 # `'digit'` is single-quoted: char_type/2's Type argument is an ATOM, and a
 # bare `digit` here would name the nonterminal defined on the next line.
 digit >> ([D], {char_type(D, 'digit')})
@@ -156,9 +155,7 @@ Because strings are character lists, you can write character-level grammars
 naturally:
 
 ```clausal
--double_quotes(chars)
-
-letter >> ([C], {char_type(C, alpha)})
+letter >> ([C], {char_type(C, 'alpha')})
 space >> ([' '])
 word >> (letter)
 word >> (letter, word)
@@ -226,7 +223,7 @@ text back into an atom.
 
 For concatenation, splitting, length, and membership **of strings**, use the
 [list predicates](lists.md) (`append/3`, `length/2`, `in_/2`, `reverse/2`,
-`nth0/3`) — they work uniformly on strings and lists, because a string is a
+`list_item/3`) — they work uniformly on strings and lists, because a string is a
 list.
 
 ---
@@ -236,8 +233,12 @@ list.
 A bound string is internally a compact value that wraps its Python `str`
 text — not a bare `str` itself, since a bare `str` is now an atom (see
 [Atoms vs strings](syntax.md#atoms-vs-strings)). This preserves performance
-(comparison and concatenation on the wrapped text are fast) and Python
-interoperability (a string crossing to Python arrives as a plain `str`).
+(comparison and concatenation on the wrapped text are fast). What Python
+sees depends on the crossing: a goal-position seam (`for S in --p(S):`)
+hands back the engine's own term, the carrier `('$chars', 'hello')`, and
+`clausal.to_python(S)` gives the `str` `'hello'`; an argument passed to a
+Python callee from a clause body (`Y is ++f(S)`) arrives as a plain `str`.
+See [Python integration](python_integration.md).
 **The representation is never materialised into cons cells** — a proper
 list is a `list`, and a partial list or partial string is the engine's
 `SegList`/`SegString`. The `'.'/2` cons structure is only ever a *view* onto
@@ -308,12 +309,11 @@ movement in a text editor), use the standard Python library
 
 ## Comparison with Prolog
 
-Clausal follows [Scryer Prolog](scryer.md) here: a string **is** the list of
+Clausal follows [Scryer Prolog](https://github.com/mthom/scryer-prolog) here: a string **is** the list of
 its character atoms, the two never unify with an atom, and the `atom_*` family
 raises `type_error(atom, …)` on a string. Scryer likewise keeps a compact
 internal representation rather than materialising cons cells; Clausal's wraps
-a Python `str`, so a string handed to a Python callee arrives as a plain
-`str` with no conversion needed.
+a Python `str`.
 
 This doc covers the **`chars`** model (a string is the list of its
 one-character atoms). Clausal also has the Prolog **`codes`** model for byte
@@ -331,7 +331,7 @@ byte-stream unification and binary-protocol DCGs.
 | DCGs on strings | Works | Works |
 | Pattern matching | Works | Works — star vars bind to substrings |
 | Performance | O(n) cons cells | O(1) Python str operations |
-| Python interop | Requires conversion | Native `str` |
+| Python interop | Requires conversion | `to_python` gives a `str`; a `++` callee receives a `str` |
 
 ---
 
@@ -340,8 +340,6 @@ byte-stream unification and binary-protocol DCGs.
 ### Palindrome check (works on both strings and lists)
 
 ```clausal
--double_quotes(chars)
-
 palindrome(XS) <- reverse(XS, XS)
 
 test("list palindrome") <- palindrome([1, 2, 1])
@@ -354,8 +352,6 @@ test("not palindrome") <- (not palindrome("hello"))
 Using [findall](meta_predicates.md) to count matching characters:
 
 ```clausal
--double_quotes(chars)
-
 char_count(STR, CHAR, COUNT) <- (
     findall(C, (in_(C, STR), C is CHAR), MATCHES),
     length(MATCHES, COUNT)
@@ -370,8 +366,6 @@ test("count z") <- char_count("hello", 'z', 0)
 ### Simple tokenizer with DCGs
 
 ```clausal
--double_quotes(chars)
-
 # char_type/2's Type argument and the token tags are ATOMS, single-quoted
 # so they cannot be mistaken for the nonterminals of the same spelling.
 alpha >> ([C], {char_type(C, 'alpha')})

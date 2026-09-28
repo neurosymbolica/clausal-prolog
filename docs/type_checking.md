@@ -45,19 +45,23 @@ An atom **is** the interned Python `str`; a string is a distinct value — the
 list of its one-character atoms, not a bare `str`. Everything below follows
 from that:
 
-| | atom `bar` | string `"bar"` | `""` | `[]` | `['a','b']` | compound `f(1)` | number |
-|---|---|---|---|---|---|---|---|
-| `atom/1` | ✓ | | | | | | |
-| `string/1`, `is_str/1` | | ✓ | ✓ | ✓ | ✓ | | |
-| `atomic/1` | ✓ | | | | | | ✓ |
-| `compound/1` | | | | | | ✓ | |
-| `callable_/1` | ✓ | | | | | ✓ | |
-| `is_list/1` | | ✓ | ✓ | ✓ | ✓ | | |
-| `is_chars/1` | | ✓ | ✓ | ✓ | ✓ | | |
-| `ground/1` | ✓ | ✓ | ✓ | ✓ | ✓ | per args | ✓ |
+| | atom `bar` | string `"bar"` | `""` = `[]` | `['a','b']` | compound `f(1)` | number |
+|---|---|---|---|---|---|---|
+| `atom/1` | ✓ | | ✓ | | | |
+| `string/1`, `is_str/1` | | ✓ | ✓ | ✓ | | |
+| `atomic/1` | ✓ | | ✓ | | | ✓ |
+| `compound/1` | | ✓ | | ✓ | ✓ | |
+| `callable_/1` | ✓ | ✓ | ✓ | ✓ | ✓ | |
+| `is_list/1` | | ✓ | ✓ | ✓ | | |
+| `is_chars/1` | | ✓ | ✓ | ✓ | | |
+| `ground/1` | ✓ | ✓ | ✓ | ✓ | per args | ✓ |
 
-`atomic/1` is false for a string because a string is a **list**, not an atomic
-constant. `compound/1` is false for an atom because an atom has arity 0.
+This is ISO's reading, where a string is its char list: a non-empty list is the
+compound `'.'/2` (so `compound/1` and `callable_/1` hold), and the empty list
+`[]` — which is also the empty string `""` — is the atom `'[]'` (so `atom/1`,
+`atomic/1` and `callable_/1` hold). `atomic/1` is false for a non-empty string
+because a string is a **list**, not an atomic constant. `compound/1` is false
+for an atom because an atom has arity 0.
 
 `string/1` follows the **term**, not the representation: `""` and `[]` are one
 and the same term, and so are `"ab"` and `['a', 'b']`, so `string/1` holds for
@@ -82,7 +86,6 @@ single-quoted spelling such as `'hello world'`. Bare atoms must be declared
 
 ```clausal
 -private([red, blue])
--double_quotes(chars)
 
 test("bare atom") <- atom(red)
 test("quoted atom") <- atom('hello world')
@@ -101,7 +104,6 @@ not match a list with a non-character element.
 
 ```clausal
 -private([red])
--double_quotes(chars)
 
 test("str") <- is_str("hello")
 test("string") <- string("hello")
@@ -116,11 +118,10 @@ test("atom is not a string") <- (not string(red))
 ### atomic/1
 
 `atomic(X)` — succeeds if `X` is an atom, a number, or another atomic constant.
-It is **false for a string**, which is a list.
+It is **false for a non-empty string**, which is a list (`""` is `[]`, an atom).
 
 ```clausal
 -private([red])
--double_quotes(chars)
 
 test("atom is atomic") <- atomic(red)
 test("number is atomic") <- atomic(42)
@@ -164,8 +165,9 @@ test("not str") <- (not number("42"))
 
 ### compound/1
 
-`compound(X)` — succeeds if `X` is a compound term with arity > 0. This
-includes cells and predicate instances. An **atom
+`compound(X)` — succeeds if `X` is a compound term with arity > 0: a cell
+such as `('point', 1, 2, 3)`, and — as in ISO — a non-empty list or string,
+which is the `'.'/2` structure. An **atom
 is not compound**: it has arity 0 (it is a name, not a functor application),
 and arity 0 is not `> 0`.
 
@@ -181,18 +183,18 @@ test("atom is not compound") <- (not compound(red))
 ### callable_/1
 
 `callable_(X)` — succeeds if `X` is an **atom** or a compound term: something
-that could appear as a goal. A string is not callable — `call("foo")` raises
-`type_error(callable, "foo")` rather than calling `foo`.
+that could appear as a goal. As in ISO, that includes a string, which is a list
+(`'.'/2`), so `callable_("hello")` succeeds — and calling one does not call
+`hello`: `call("foo")` raises `error(existence_error(procedure, '.'/2), '.'/2)`.
 
 ```clausal
 -private([red])
--double_quotes(chars)
 
 point(1, 2, 3),
 
 test("atom") <- callable_(red)
 test("compound") <- callable_(point(1, 2, 3))
-test("not string") <- (not callable_("hello"))
+test("string is a list, so callable") <- callable_("hello")
 test("not int") <- (not callable_(42))
 ```
 
@@ -205,7 +207,6 @@ builtin: `append`, `length`, `reverse`, `member`, `maplist`, `take`, `drop`.
 a test for a particular representation (see below).
 
 ```clausal
--double_quotes(chars)
 
 test("list") <- is_list([1, 2, 3])
 test("empty") <- is_list([])
@@ -216,11 +217,11 @@ test("not int") <- (not is_list(42))
 
 ### is_chars/1
 
-`is_chars(X)` — succeeds if `X` is a character sequence: either a string or a
-list. Use this when you want to accept both spellings uniformly.
+`is_chars(X)` — succeeds if `X` is a string or any list (its elements are not
+checked; `is_str/1` is the test that they are characters). A `bytes` value is a
+*code* sequence and is rejected — use `is_codes/1` for that.
 
 ```clausal
--double_quotes(chars)
 
 test("string") <- is_chars("hello")
 test("list") <- is_chars([1, 2, 3])
@@ -231,7 +232,7 @@ test("not int") <- (not is_chars(42))
 |-----------|-----------|-------------|------|----------|---------|
 | `is_list/1` | Succeeds | Succeeds | Succeeds | Succeeds | Is this list-shaped? |
 | `is_str/1` | Succeeds | Succeeds | Succeeds | Fails | Is this a character sequence? (the same test as `string/1`) |
-| `is_chars/1` | Succeeds | Succeeds | Succeeds | Fails | The same test again, under the name the char-family builtins use |
+| `is_chars/1` | Succeeds | Succeeds | Succeeds | Succeeds | Is this a list or a string? (a `bytes` value is rejected — see `is_codes/1`) |
 
 All three follow the **term**, never the representation. `"hi"` and
 `['h','i']` are one and the same term, and so are `""` and `[]`, so no test
@@ -273,30 +274,26 @@ safe_print(X) <- (ground(X), writeln_text(X))
 
 ### Type-dispatched processing
 
-A string is a list, so an `is_list/1` clause would also catch strings. Test
-`is_str/1` first and let clause order do the work:
+Clausal has no cut, so **every** clause whose guard holds answers: keep the
+guards mutually exclusive. A string is a list, so the list clause must exclude
+character sequences with `not is_str(X)` — and because `is_str/1` is the term
+test, `[]` and every character list land in the text clause too:
 
 ```clausal
--double_quotes(chars)
+-private([unknown, text(s), items(n)])
 
-process(X, R) <- (var(X),                    R is 'unknown')
-process(X, R) <- (nonvar(X), integer(X),     R == X * 2)
-process(X, R) <- (nonvar(X), is_str(X),      R is f"got: {X}")
-process(X, R) <- (nonvar(X), is_list(X),     length(X, R))
+process(X, R) <- (var(X),                                R is unknown)
+process(X, R) <- (nonvar(X), integer(X),                 R == X * 2)
+process(X, R) <- (nonvar(X), is_str(X),                  R is text(X))
+process(X, R) <- (nonvar(X), is_list(X), not is_str(X),  length(X, N), R is items(N))
 
-test("dispatch on string") <- (process("ab", R1), R1 == "got: ab")
-test("dispatch on list") <- (process([1, 2], R2), R2 == 2)
-# `[]` and a char list ARE strings, so they reach the is_str/1 clause and come
-# back with a text answer, not a length.
-test("dispatch on empty") <- (process([], R3), is_str(R3))
-test("dispatch on char list") <- (process(['a'], R4), is_str(R4))
+test("dispatch on string") <- process("ab", text("ab"))
+test("dispatch on list") <- process([1, 2], items(2))
+test("dispatch on integer") <- process(21, 42)
+# `[]` and a char list ARE strings, so they reach the is_str/1 clause.
+test("dispatch on empty") <- process([], text(""))
+test("dispatch on char list") <- process(['a'], text("a"))
 ```
-
-Adding `not is_str(X)` to the list clause is a **different** filter, and
-usually not the one you want: because `is_str/1` is the term test, it excludes
-`[]` and every character list too, so `process([], R)` and `process(['a'], R)`
-would fall through to the `other` clause rather than being measured. Reach for
-it only when you genuinely mean "a list that is not a character sequence".
 
 ### Safe arithmetic guard
 
@@ -322,9 +319,11 @@ safe_add(X, Y, Z) <- (
   native Python lists and strings as a compact carrier, and only ever *shows*
   the cons form, through `write_canonical/1`, `functor/3` and `=..`.)
 - **A string is not atomic, an atom is not compound** — `atomic("bar")` fails
-  because a string is a list; `compound(bar)` fails because an atom has arity 0.
-- **Order matters** — put `var` checks first in multi-clause predicates,
-  since they match the broadest case.
+  and `compound("bar")` succeeds because a non-empty string is a list; `compound(bar)`
+  fails because an atom has arity 0.
+- **Every matching clause answers** — there is no cut, so a multi-clause
+  dispatcher needs mutually exclusive guards (`var(X)` / `nonvar(X)`, `is_str(X)` /
+  `not is_str(X)`), not clause order.
 
 ---
 

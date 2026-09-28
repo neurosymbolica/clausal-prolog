@@ -101,7 +101,7 @@ The list may also contain bare atoms:
 
 An atom may appear in both `-module` and `-private`. The first listing processed wins and the second is a no-op — and since both resolve to the same global atom, the duplication is redundant rather than conflicting.
 
-A [constant](#-constant_value) used to be listable in `-private` as pure documentation ("this one is an implementation detail"), a recorded no-op. It declares the ATOM now, which is a stronger reading and the intended one: a constant is spelled like an atom, so `pi` written bare is the atom `("pi",)` and `++pi` is the value, and one name carries both in one file. The declaration keeps the module global; the atom listing does not bind over it.
+A [constant](#-constant_value) used to be listable in `-private` as pure documentation ("this one is an implementation detail"), a recorded no-op. It declares the ATOM now, which is a stronger reading and the intended one: a constant is spelled like an atom, so `pi` written bare is the atom `'pi'` (a plain `str`) and `++pi` is the value, and one name carries both in one file. The declaration keeps the module global; the atom listing does not bind over it.
 
 ---
 
@@ -121,12 +121,10 @@ With aliasing:
 --8<-- "tests/fixtures/docs/directives_sigs.txt:import_from_ex2"
 ```
 
-This imports `Double` from `utils` but makes it available locally as `MyDouble`.
+This imports `double` from `utils` but makes it available locally as `my_double`.
 
 !!! info "Importing an atom: when it matters"
-    For predicates with arity, importing is the only way to reach the source module's local class. For **atoms**, importing is meaningful only when the source module owns a local version (because it listed the atom in its `-module` / `-private`). Importing an atom that the source module does not list is a no-op documentation hint — the atom is already global, so there is nothing distinct to import. See the [global-atoms-default spec](https://gitlab.com/MikeAmy/clausal/-/blob/main/implementation_plans/atoms_refactor/GLOBAL_ATOMS_DEFAULT.md) for the full resolution rules.
-
-    Importing an atom **always shadows** the global default in the importing module: bare `red` after `-import_from(M, [red])` resolves to `M.red`, not the global `red`. Use `global_atom/2` (see [Term Inspection](builtins.md#global_atom2)) to reach the global class from such a module.
+    For predicates, importing is how you reach the defining module's predicate. For **atoms**, importing only grants the right to write the bare name: an atom is the interned `str` of its spelling, so `red` imported from `M` is the same atom as `'red'` anywhere else. (A [`-hide`](#-hide) atom is the one exception, and it cannot be imported by spelling.)
 
 ### -import_module
 
@@ -179,8 +177,6 @@ A bare reference that satisfies none of the above raises a compile-time `NameErr
 **Scope**: per-file only. The directive does not propagate to imported modules — each file decides for itself. A strict file can freely import from non-strict files and vice versa.
 
 **Interaction with `global_atom/2`**: even in strict files, `global_atom/2` still resolves against the global atom dict. The directive restricts *bare* references, not the reflection escape hatch.
-
-**Recommended use**: turn on for any file whose clauses encode authoritative rules (regulatory, legal, clinical, compliance). Leave off for general code, library code, and prototypes.
 
 ### -implicit_atoms
 
@@ -243,12 +239,9 @@ Without the flag, a short or over-arity reference to a declared DATA functor
 is a compile-time `SyntaxError` naming `point/2` -- a term is never padded
 with fresh variables.
 
-**Keyword construction is unaffected.** The flag only makes keyword-*free*
-(positional) construction advisory. A keyword reference (`point(x=1, y=2)`)
-still needs a real registered signature to place its named slots against — an
-OWA-unknown functor referenced by keyword (`wobble(x=1)`) is still a
-compile-time `SyntaxError` naming the missing signature, flag or no flag, and a
-declared functor's unknown field name is still rejected the same way.
+**Keyword construction is gone, flag or no flag.** A term is built
+positionally; a keyword argument (`point(x=1, y=2)`) is a load-time
+`SyntaxError` in any module.
 
 **Predicates are unaffected.** A functor with clauses in the file is a
 predicate, not data — calling it compiles to a goal (class/dispatch emission)
@@ -321,8 +314,11 @@ test("add at runtime") <- (
 )
 ```
 
-Without `-dynamic`, the `assertz` call above would raise a `RuntimeError`.
-See [Database Operations](database_ops.md) for full details.
+`assertz`/`asserta`/`retract` work **only** on a predicate declared
+`-dynamic` — declare first. Without the declaration the `assertz` above raises
+the ISO error `error(permission_error(modify, static_procedure, color/1), assertz/1)`,
+and a name that is not declared at all is refused. A `-dynamic` predicate may
+start with no clauses. See [Database Operations](database_ops.md) for full details.
 
 ### -table
 
@@ -510,15 +506,15 @@ declared-above ordering rule a functor call needs and the frozen/immutable-value
 constant an earlier one declared, exactly like a later `name = value` pair within one directive
 can.
 
-**Constants are always public** — there is nothing to list in `-module` or `-private`; doing
-so is a `SyntaxError` pointing back at `-constants` and `-import_from`. Import a constant the
-same way you import a predicate:
+**Constants are always public** — the declaration itself is module-global. Listing the name
+in `-module` or `-private` declares the bare **atom** of that spelling (see above), not the
+constant. Import a constant the same way you import a predicate:
 
 ```clausal
 --8<-- "tests/fixtures/docs/syntax_sigs.txt:constants_importing"
 ```
 
-Every `-constants` declaration also registers on the declaring module for
+Every `-constant_value` declaration also registers on the declaring module for
 [`module_constant/3`](builtins.md#module_constant3) reflection — an imported constant is *not*
 re-registered on the importer, so it is only reachable through the module that actually
 declared it.
@@ -678,9 +674,9 @@ a term of it is the tuple `("point", 1, 2)`. See
 ## Backend Directive (planned)
 
 !!! note "Not yet implemented"
-    `-backend(scryer)` and `-backend(trealla)` are planned for a future release. Currently, programs are loaded from Python via the `Scryer` or `Trealla` classes. See [Scryer Prolog Embedding](scryer.md) and [Trealla Prolog Embedding](trealla.md).
+    `-backend(scryer)` and `-backend(trealla)` are planned for a future release. Currently, programs are loaded from Python via the `Scryer` or `Trealla` classes. See [Scryer Prolog Embedding](scryer.md) and [Trealla Prolog Embedding](trealla.md). The sketch below does **not** load today.
 
-```clausal
+```text
 -backend(scryer)  # or -backend(trealla)
 -module(queens, [queens(N, QS)])
 
@@ -695,11 +691,10 @@ queens(N, QS) <- (
 when `-backend(scryer)` is present, the import hook translates the entire file to Prolog and loads it into an embedded Scryer session. Exported predicates become bridge predicates that look like native clausal predicates to callers but execute on Scryer under the hood:
 
 ```python
-from queens import queens
-from clausal import Var, Solutions
-
-QS = Var()
-*Queens(8, QS)   # drives Scryer, displays via Solutions
+# a .seam file (planned behaviour)
+-import_from(queens, [queens])
+for QS in --queens(8, QS):   # drives Scryer under the hood
+    print(QS)
 ```
 
 ---

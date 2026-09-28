@@ -8,6 +8,13 @@ Clausal has first-class support for dictionaries and sets as logic terms. Unlike
 
 `DictTerm` is a unification-aware dictionary. Keys must be ground and hashable — an atom (`k`, `'k'`), a string, an int, or any other hashable ground term. An atom key and the same-spelled string key are **distinct** (see [Key kinds](#the-python-dict-surface) below). Values may be logic variables.
 
+!!! note "A double-quoted key is a STRING key"
+    A double-quoted literal is a string (the default since 2026-09-26), so
+    `{"x": 0}` is keyed by the string `"x"`. Dot access (`D.x`) and the dicts
+    the `py.*` wrappers return are keyed by **atoms**, so prefer atom keys
+    (`{'x': 0}`, or a declared bare `x`) for record-like data. The examples
+    below use string keys only where the point does not depend on the key kind.
+
 ### Syntax
 
 In [`.clausal` files](syntax.md), Python dict literals `{k: v, ...}` are automatically wrapped as `DictTerm`:
@@ -41,7 +48,8 @@ not ({"a": 1} is {"b": 1})
 not ({"a": 1} is {"a": 2})
 ```
 
-A `DictTerm` does **not** unify with a plain Python `dict` — they are distinct types.
+A `DictTerm` also unifies with a plain Python `dict` of the same keys (one
+passed in through `++`), and the two compare equal.
 
 A logic variable unifies with a `DictTerm` by binding to it:
 
@@ -160,9 +168,9 @@ head-position dict patterns above:
 --8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:atom_vs_string_keys"
 ```
 
-Which one you get from a `{…}` literal follows the file's
-[`-double_quotes`](directives.md#-double_quotes) mode for a `"k"` key, and is
-always an atom for a bare `k` or a single-quoted `'k'`. Dot access `D.k` looks
+A `"k"` key is a string (under a module's temporary
+[`-double_quotes(atom)`](directives.md#-double_quotes) setting it is the atom
+instead); a bare `k` or a single-quoted `'k'` is always an atom. Dot access `D.k` looks
 up the **atom** `k`, so the dot syntax and a bare-key literal agree. Result
 dicts built by the `py.*` wrappers (`py.json.parse/2`, `py.process`,
 `py.url.parse/2`, `py.csv`) key by **atoms**, which is what makes `R.stdout`
@@ -210,7 +218,7 @@ A logic variable unifies with a `SetTerm` by binding to it.
 
 ## Dict builtins
 
-All dict builtins are in `clausal/logic/builtins/dict_set.py`. They use `DictTerm` for all dict arguments — plain Python dicts are not accepted.
+All dict builtins are in `clausal/logic/builtins/dict_set.py`. They accept a `DictTerm` or a plain Python `dict` (passed in with `++`) for any dict argument.
 
 ### `is_dict/1`
 ```clausal
@@ -311,7 +319,7 @@ dict_merge({"a": 1, "b": 0}, {"b": 99, "c": 3}, MERGED)
 ```clausal
 --8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:gen_dict_3"
 ```
-Nondeterministic: on backtracking, enumerates all key-value pairs in `Dict`. equivalent to SWI's `gen_assoc/3`.
+Nondeterministic: on backtracking, enumerates all key-value pairs in `Dict` (the dict analogue of `gen_assoc/3` in Scryer's `library(assoc)`).
 
 ```python
 # Enumerate all pairs
@@ -454,6 +462,11 @@ These protocols allow custom term types to participate in unification without mo
 
 ## Python API
 
+`DictTerm` and `SetTerm` are **not** part of the 1.0 public API
+([Public API](public-api.md)): the covered way to read one that comes back
+from a query is `clausal.to_python`, which gives a `dict` or a `frozenset`.
+The classes themselves, for code that works below that line:
+
 ```python
 from clausal.terms import DictTerm, SetTerm
 
@@ -489,7 +502,7 @@ deref(x)  # 42
 
 | Feature | Status |
 |---|---|
-| `DictTerm`/`SetTerm` classes, `__walk__`/`__occurs_check__` hooks, `structural_unify` support | Done |
+| `DictTerm`/`SetTerm` classes, `__walk__`/`__occurs_check__` hooks | Done |
 | `__unify__` protocol in C, AST transform (`visit_Dict` → `DictTerm`), compiler head/body support | Done |
 | Dict builtins: `is_dict`, `dict_size`, `dict_keys`, `dict_values`, `dict_pairs`, `dict_get`, `dict_put`, `dict_put_pairs`, `dict_remove`, `dict_merge`, `gen_dict`, `sub_dict` | Done |
 | Set builtins: `is_set`, `set_size`, `set_list`, `set_union`, `set_intersection`, `set_subtract`, `set_sym_diff`, `set_subset`, `set_disjoint`, `set_add`, `set_remove`, `gen_set` | Done |
@@ -500,9 +513,9 @@ deref(x)  # 42
 
 ## Limitations
 
-- **No variable keys**: Dict keys must be ground. `{X: 1}` where `X` is an unbound variable is not supported.
+- **Keys must be bound when the dict is built**: `(K is 'k', D is {K: 1})` works, but `{X: 1}` with `X` unbound raises `error(instantiation_error, '{key}'/1)`.
 - **No variable set elements**: Set elements must be ground/hashable.
-- **Splat requires bound DictTerm**: `{**OLD, "k": v}` requires `OLD` to be a bound `DictTerm` at runtime. Unbound `OLD` raises `AttributeError` on `.data` access.
+- **Splat requires a bound dict**: `{**OLD, 'k': V}` requires `OLD` to be bound to a dict at runtime. Unbound `OLD` raises `error(instantiation_error, '{**}'/1)`.
 - **No mutable variants**: Mutable dict/set types were considered and rejected — the [`++()` Python escape](python_integration.md) covers accumulation patterns with idiomatic, explicit syntax. Use `trail.record()` directly if you need backtrackable undo of custom mutable state.
 
 ---

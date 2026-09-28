@@ -24,8 +24,13 @@ point(1, 2, 3),
     (`-specialize(solve, p, alias=q)`) and an EDCG hidden argument
     (`p(L, _edcg_counter_in=0)`).
 
-    Everything on this page still works — the builtins address fields by
-    NAME, and names now come from the declaration above.
+    The `KWTerm` class and the `extend/3` builtin (which grew a term by new
+    keyword fields) went with it: a compound term is a plain cell, and its
+    fields are fixed by its declaration.
+
+    What remains is on this page: `vary/3`, `unbound_keys/2` and
+    `signature/3` address fields by NAME, and names come from the declaration
+    above.
 
 ---
 
@@ -121,8 +126,10 @@ This is a database-dependent operation — the predicate must have been defined
 - **`signature` requires the predicate to be registered** — if you call it
   before the predicate is defined (e.g., in a different module that hasn't been
   imported), it will fail.
-- **Field names are strings** — override dicts use string keys like
-  `{"x": 10}`, not variable names.
+- **Field names are atoms** — `unbound_keys` and `signature` answer atoms
+  (`['x', 'y', 'z']`). An override dict's keys may be quoted atoms
+  (`{'x': 10}`) or strings (`{"x": 10}`); a bare `{x: 10}` key must be a
+  declared atom, like any bare atom.
 - **Field names come from the declaration** — `-private([point(x, y, z)])` or
   the `-module` export list. An undeclared predicate's fields are `arg_0`,
   `arg_1`, … , which `vary` and `unbound_keys` will happily use but nobody

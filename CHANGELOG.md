@@ -20,12 +20,25 @@ since 0.4.0 finish three moves:
 
 ### Breaking
 
-> **TODO (coordinator, before release):** add the entries for the ISO/Scryer
-> arithmetic alignment once it has landed on main (the `//`, `**` and `^/2`
-> rulings, the CLP(FD) error for a non-arithmetic term, and the zero-divisor
-> error), including the rule that a bare Python operator inside a `--` seam
-> keeps Python's meaning. Do not describe them here before they land.
-
+- **A bare `/` in evaluation is Python's true division.** In `eval_/2`,
+  `'is'/2` and the ISO comparisons, `7 / 2` is 3.5 and `6 / 2` is 3.0 (a
+  float for two integers); a `Fraction` or `Decimal` operand stays exact, as
+  in Python. Write `rdiv(7, 2)` for the exact rational 7/2. Inside a
+  constraint (`==`, `!=`, `<`, ...) `/` stays rational. See
+  [docs/operators.md](docs/operators.md).
+- **Bare operators keep Python's meaning; quoted ones follow Scryer.** In
+  `.clausal`/`.seam` source, clause bodies and `--` expressions alike,
+  `-7 // 2` is -4 and `2 ** 3` is the integer 8. A quoted or runtime-built
+  cell follows Scryer and ISO: `'//'(-7, 2)` truncates to -3, `'**'(2, 3)`
+  is the float 8.0, `'/'(7, 2)` is 3.5.
+- **A zero divisor is ISO's `evaluation_error(zero_divisor)`** in plain
+  arithmetic on every spelling (`eval_(1 // 0, X)` raises
+  `error(evaluation_error(zero_divisor), (//)/2)`), never a raw Python
+  `ZeroDivisionError`. Inside a constraint it **fails** instead, in every
+  goal order: `X == 1 // 0` has no solutions, as in Scryer.
+- **A non-arithmetic term in an arithmetic constraint** raises Scryer's
+  clpz error: `X == foo(1)` raises
+  `error(domain_error(clpz_expression, foo(1)), (==)/2)`.
 - **Error terms are Scryer's, and are plain cells.** An error is
   `error(Formal, Culprit)`, where `Culprit` is the culprit's predicate
   indicator (`atom_length/2`) or an unbound variable. The explanatory prose
@@ -90,9 +103,10 @@ since 0.4.0 finish three moves:
     - A load may not add clauses to another module's predicate.
     - An imported name that clashes with a local definition is refused.
     - `-import_from` binds the names it lists, not the module.
-- **Arithmetic is exact:** `Decimal` is a number, `+ - *` stay exact, `/`
-  of exact numbers is rational, an integral rational is presented as an
-  `int`, and a float mixed with a `Decimal` raises.
+- **Arithmetic is exact where it can be:** `Decimal` is a number, `+ - *`
+  stay exact, `rdiv` and `/` inside a constraint are rational, an integral
+  rational is presented as an `int`, and a float mixed with a `Decimal`
+  raises.
 - **Standard order:** `Quantity` sorts in the number band. `sort/2` no longer
   treats `1`, `1.0` and an equal `Decimal` as duplicates, and it no longer
   crashes on mixed units.
@@ -113,6 +127,16 @@ since 0.4.0 finish three moves:
 - **Cell helpers exported from `clausal`:** `cell_functor`, `cell_args` and
   `make_cell`, to read and build a compound term. `query_wfs` is exported
   from `clausal` too.
+- **`'^'/2`**, ISO integer power: `'^'(2, 3)` is 8, and a negative
+  exponent on an integer base other than 1 is `type_error(float, B)`.
+- **`rdiv/2` as an evaluable functor**, the exact rational division:
+  `rdiv(7, 2)` is 7/2 and `rdiv(6, 2)` is 3, in every arithmetic context.
+- **The evaluable functors are builtins in scope in every module**
+  (`+ - * / // div mod ** ^ rdiv` and unary `-`), strict or not, with no
+  declaration: `'is'(X, rdiv(7, 2))` and `'//'(A, B)` are written as in
+  Prolog. As data they stay ordinary terms.
+- **[docs/operators.md](docs/operators.md)**: what each operator spelling
+  means bare, quoted, and in the planned Prolog syntax.
 - **Arithmetic written as a plain cell evaluates.** `('+', 1, 2)` evaluates
   in `eval_/2`, the arithmetic comparisons, `between/3`, `#=`, `==`/`!=`
   constraints and CLP(Q)/CLP(R), through one closed table of evaluable
@@ -171,7 +195,6 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
       engine value, so filters built on it go silently empty.
     - Unpickling an old instance warns once, at the `pickle.loads` call
       site.
-- **`Test/1`** test clauses. Use `test/1`.
 - **`-double_quotes/1`.** It is a temporary per-module ratchet, and it will
   be deleted once no module needs it.
 - **TitleCase unit names** (`Metre` for `metre`) **and the old
@@ -197,6 +220,8 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
   `SyntaxError`. It was never deprecated. Use `eval_(Expr, X)` for eager arithmetic, `==` for arithmetic
   constraints, and `is` for unification.
 - `q(...)` quasi-quotation.
+- **`Test/1`** test clauses: a TitleCase name is a logic variable, so
+  `Test("…") <- …` is a load-time error. Use `test/1`.
 
 ### Fixed
 

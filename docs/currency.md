@@ -1,35 +1,60 @@
 # Currency amounts
 
-Exact-decimal money for legal/financial rulebases. A currency amount is a
-[`Quantity`](units.md) whose **magnitude is a `decimal.Decimal`** (never a binary
+Exact-decimal money for financial and regulatory rules. A currency amount is a
+[`Quantity`](units.md) whose **magnitude is exact** (a `decimal.Decimal`, or a
+`fractions.Fraction` after a division that does not terminate; never a binary
 float) and whose **dimension is a currency** (`euro`, `usd`, …). Currencies are
 units *base dimensions*, so all of dimensional analysis applies: euros add only to
 euros, money scales only by dimensionless numbers, and mixing currencies is an error —
 with **no implicit conversion** (exchange rates are not constants).
 
-This page is the integration guide. If you are refactoring a rulebase to use currency,
-read [Applying currency in a formalization](#applying-currency-in-a-formalization) first.
+This page is the integration guide. If you are converting existing rules to use currency,
+read [Applying currency to existing rules](#applying-currency-to-existing-rules) first.
+Arithmetic in general (what `/`, `//`, `rdiv` and `eval_/2` do) is documented in
+[Arithmetic](arithmetic.md) and [Operators](operators.md); this page covers only what a
+currency adds.
 
 ---
 
 ## Quick start
 
+A `.seam` file (the same syntax as `.clausal`, hosting Python) declares the rules and
+queries them from Python with a goal-position `--`:
+
 ```clausal
+-module(shop, [])
 -import_from(european_union, [euro])
--import_from(currency, [money, money_round, money_str, money_format])
+-import_from(currency, [money_round, money_str, money_format])
+-private([half_up, half_even, symbol])   # rounding modes and styles are atoms
 
-# write an amount: value(currency) — the value is an exact Decimal
-price is 7.89(euro)
+from clausal import to_python
 
-# arithmetic keeps full precision; same-currency only
-total <- (eval_(0.1(euro), A), eval_(0.2(euro), B), eval_(A + B, T_UNUSED))   # T = 0.30(euro), exact
+# write an amount: value(currency); the value is an exact Decimal
+price(P) <- eval_(7.89(euro), P)
 
-# round / display with an EXPLICIT mode — each line below is its own
-# independent predicate, not a continuation of the one above
-show  <- money_str(T_UNUSED, half_up, S_UNUSED)              # S = "0.30 EUR"
-euros <- money_round(some_amount, half_even, R_UNUSED) # R quantized to 2 dp, still a currency amount
-sym   <- money_format(price, symbol, half_up, S_UNUSED)  # S = "€7.89"
+# arithmetic keeps full precision; same currency only
+total(T) <- eval_(0.1(euro) + 0.2(euro), T)
+
+# round and display with an EXPLICIT mode
+show(S) <- (total(T), money_str(T, half_up, S))
+rounded(R) <- (eval_(10.00(euro) / 3, Q), money_round(Q, half_even, R))
+sym(S) <- (price(P), money_format(P, symbol, half_up, S))
+
+def main():
+    for T in --total(T):
+        print(T)                 # 0.3 (euro)   magnitude Decimal('0.3'), no float anywhere
+    for R in --rounded(R):
+        print(R)                 # 3.33 (euro)
+    for S in --show(S):
+        print(to_python(S))      # 0.30 EUR     money_str answers a string
+    for S in --sym(S):
+        print(S)                 # €7.89        money_format answers an atom (a str)
 ```
+
+Rounding modes (`half_up`, …) and display styles (`symbol`, …) are ordinary atoms, so a
+module declares the ones it writes (here with `-private`), as it would any other atom.
+A query runs from a function (`main` above), not at module top level: the module's
+predicates are registered only once the file has finished loading.
 
 ---
 
@@ -50,11 +75,11 @@ The word survives as the currency's *display* name either way — a judgment say
 dollar", not "500.00 USD" — so this changes the identifier a rulebase **writes**, not the
 word the system **prints**.
 
-**Single-currency rulebase** — import the bare name and never write the prefix:
+**Single-currency module** — import the bare name and never write the prefix:
 
 ```clausal
 -import_from(japan, [yen])
-budget is 1000000(yen)          # a Japanese statute means Japanese yen
+-constant_number_currency(budget, 1000000, yen)   # a Japanese rule means Japanese yen
 ```
 
 **Multiple currencies** — import each, or qualify with the jurisdiction:
@@ -62,10 +87,10 @@ budget is 1000000(yen)          # a Japanese statute means Japanese yen
 ```clausal
 -import_from(european_union, [euro])
 -import_from(united_states, [usd])
--import_module(european_union)        # enables the qualified form below
+-import_module(united_states)         # enables the qualified form below
 
-eu_price is 10.00(euro)
-us_price is 12.00(united_states.usd)   # qualified — same object as the bare `usd`
+eu_price(P) <- eval_(10.00(euro), P)
+us_price(P) <- eval_(12.00(united_states.usd), P)   # qualified — same currency as the bare `usd`
 ```
 
 Two references to the **same** currency (bare-imported or module-qualified) are the same
@@ -92,7 +117,7 @@ currency name is the everyday word (`baht`, `rupee`, `won`, `franc`, `peso`, `di
 (examples — the same-named `dinar` in `bahrain`/`kuwait`/`jordan`/… are **distinct**
 currencies, kept apart by their jurisdiction module.) The home jurisdiction is the
 currency's issuer, so a country using another's currency references the issuer — an
-Ecuadorian rulebase (legal tender: US dollar) imports `usd` from `united_states`. Shared
+Ecuadorian module (legal tender: US dollar) imports `usd` from `united_states`. Shared
 regional currencies live in a regional module: `european_union.euro`,
 `west_african_cfa.xof` (XOF), `central_african_cfa.xaf` (XAF), `cfp_franc.xpf` (XPF),
 `east_caribbean.xcd` (XCD).
@@ -104,7 +129,7 @@ otherwise the ISO code (the `symbol` display style then shows the code, e.g. `"T
 
 ### Historical (and future) currencies
 
-Withdrawn currencies ship too, so a rulebase can reason about obligations denominated in a
+Withdrawn currencies ship too, so rules can reason about obligations denominated in a
 currency no longer in use (a pre-euro Deutsche Mark contract, an old Zimbabwe-dollar
 judgment). Every currency carries its **in-service date range** — `start` and `end` (ISO date
 strings; `end` is `None` while still current; a future `start` denotes a scheduled currency
@@ -122,7 +147,7 @@ distinguishing term from their official name, or a date range when only the date
 ```
 
 Historical amounts behave exactly like current ones — exact `Decimal`, dimension-safe, the
-same `money_*` predicates. `19.99(mark) + 0.01(mark)` is `20.00(mark)`; `mark + euro` raises
+same `money_*` predicates. `19.99(dem) + 0.01(dem)` is `20.00(dem)`; `dem + euro` raises
 `UnitsMismatch` (a Deutsche Mark is not a euro — conversion is explicit and out of scope).
 
 ---
@@ -132,9 +157,13 @@ same `money_*` predicates. `19.99(mark) + 0.01(mark)` is `20.00(mark)`; `mark + 
 ### `value(currency)` — the normal form
 
 ```clausal
-7.89(euro)        # → Quantity(Decimal("7.89"), euro)
-1000(yen)         # → Quantity(Decimal("1000"), yen)   (yen has no minor unit)
-1.234(dinar)      # → Quantity(Decimal("1.234"), dinar)
+-import_from(european_union, [euro])
+-import_from(japan, [yen])
+-import_from(bahrain, [bhd])
+
+a(X) <- eval_(7.89(euro), X)     # X = 7.89 (euro),  magnitude Decimal('7.89')
+b(X) <- eval_(1000(yen), X)      # X = 1000 (yen),   yen has no minor unit
+c(X) <- eval_(1.234(bhd), X)     # X = 1.234 (bhd),  the Bahraini dinar has scale 3
 ```
 
 The written value becomes an **exact `Decimal`** — `7.89(euro)` is exactly 7.89, never the
@@ -146,19 +175,28 @@ Tagging a number as a currency **rejects any value with more decimal places than
 currency's scale**, raising [`CurrencyPrecisionError`](#errors-and-catch3):
 
 ```clausal
-7.89(euro)     # ok
-7.891(euro)    # RAISES — 3 dp for a 2-dp currency
-7.5(yen)       # RAISES — yen has scale 0
-1.234(dinar)   # ok — dinar has scale 3
+-import_from(european_union, [euro])
+-import_from(japan, [yen])
+-import_from(bahrain, [bhd])
+
+ok_1(X) <- eval_(7.89(euro), X)     # ok
+bad_1(X) <- eval_(7.891(euro), X)   # RAISES CurrencyPrecisionError: 3 dp for a 2-dp currency
+bad_2(X) <- eval_(7.5(yen), X)      # RAISES: yen has scale 0
+ok_2(X) <- eval_(1.234(bhd), X)     # ok: the Bahraini dinar has scale 3
 ```
 
 This is deliberate: it catches money entering through lossy float arithmetic. The
 canonical footgun is doing the maths in float **before** tagging:
 
 ```clausal
-(0.1 + 0.2)(euro)      # RAISES — 0.1 + 0.2 computes in float first (0.30000000000000004)
-0.1(euro) + 0.2(euro)  # correct — each literal is exact Decimal, added in Decimal space → 0.30
+-import_from(european_union, [euro])
+
+wrong(X) <- eval_((0.1 + 0.2)(euro), X)      # RAISES: 0.1 + 0.2 is a float first (0.30000000000000004)
+right(X) <- eval_(0.1(euro) + 0.2(euro), X)  # each literal is an exact Decimal: X = 0.3 (euro)
 ```
+
+(`wrong/1` also warns at load, `ClausalCurrencyLiteralWarning`, because the float carries
+17 significant digits; see [below](#float-literals-are-exact-to-15-significant-digits).)
 
 When the check fires, do one of three things (the error message says so):
 1. **combine per-currency literals** — `0.1(euro) + 0.2(euro)`, not `(0.1 + 0.2)(euro)`;
@@ -207,8 +245,11 @@ precision-checked). `money_precise(Text, Currency, Out)` is the same but **skips
 precision check — for genuine sub-scale amounts (unit prices, tariffs, tax rates).
 
 ```clausal
-money("7.89", euro, P)              # P = 7.89(euro); "7.891" would raise
-money_precise("0.0034", euro, Rate) # Rate = 0.0034(euro), sub-cent, allowed
+-import_from(european_union, [euro])
+-import_from(currency, [money, money_precise])
+
+price(P) <- money("7.89", euro, P)                # P = 7.89 (euro); "7.891" would raise
+rate(RATE) <- money_precise("0.0034", euro, RATE) # RATE = 0.0034 (euro), sub-cent, allowed
 ```
 
 Prefer `money("...", C, X)` (string) over `X(euro)` when the value comes from external data
@@ -220,21 +261,23 @@ you want parsed exactly with no chance of a float in the pipeline.
 
 ```clausal
 -import_from(py.units, [strip_units])
-amount_value <- (eval_(7.89(euro), A), strip_units(A, V_UNUSED))   # V = Decimal("7.89")
+-import_from(european_union, [euro])
+
+amount_value(V) <- (eval_(7.89(euro), A), strip_units(A, V))   # V = Decimal('7.89')
 ```
 
 ---
 
 ## Bare integers are not money
 
-A number that carries its scale only in an identifier — `minimum_leverage_bps(300)`,
-`sga_monthly_amount_cents` — is a bare integer to the engine. Two failures follow, and
+A number that carries its scale only in an identifier — `minimum_margin_bps(300)`,
+`monthly_limit_cents` — is a bare integer to the engine. Two failures follow, and
 neither announces itself:
 
 ```text
 two 'cents' integers, different currencies
   bare ints :  5000000 + 155000  ->  5155000      AUD and USD, silently summed
-  as money  :  UnitsMismatch: dollar (AUD) vs dollar (USD)
+  as money  :  UnitsMismatch: Unit mismatch for add: aud vs usd
 
 a cents value against a dollars threshold
   bare ints :  155000 > 1550     ->  True         "exceeds the threshold"
@@ -248,7 +291,7 @@ The second is the one to keep in mind: not a wrong number, a **reversed answer**
 `ClausalScaleInNameWarning`, once per (file, identifier):
 
 ```text
-leverage_ratio.clausal:93: `minimum_leverage_bps` names a scale but carries a bare
+margin.clausal:93: `minimum_margin_bps` names a scale but carries a bare
 number — the scale exists only in the identifier, where nothing can check it. Declare
 the amount with -constant_number_currency (or -constant_number_units) and use it here,
 so the unit is a fact the engine holds.
@@ -265,13 +308,13 @@ The discriminator is the **functor's name**. A bare literal in an argument of a 
 claims no scale is invisible:
 
 ```text
-minimum_leverage_bps(300),                                   warns
-ratio_ok(P) <- check_ratio_gte(P, tier1, total, 300, …)      SILENT — 300 is the floor
+minimum_margin_bps(300),                                     warns
+margin_ok(P) <- check_ratio_gte(P, tier1, total, 300, …)     SILENT — 300 is the floor
 ```
 
-Both lines are from one real domain, and the second is the one that decides; the first is a
-fact nothing reads any more. So **an emptied warning list is not "this domain is done"** —
-converting the site the lint names can silence a domain whose deciding literal is untouched.
+Picture both lines in one program: the second is the one that decides, and the first is a
+fact nothing reads any more. So **an emptied warning list is not "this program is done"** —
+converting the site the lint names can silence a program whose deciding literal is untouched.
 Self-emptying is a genuine progress signal for the sites the lint *can* see, and it is not a
 completeness claim.
 
@@ -286,7 +329,7 @@ Worth stating plainly, because the count is offered as a migration progress sign
 **wrong in both directions**:
 
 * It **under-reports**. A bare literal under a functor that claims no scale is invisible, and
-  that is where a deciding value can sit — so a domain can reach zero warnings with its
+  that is where a deciding value can sit — so a program can reach zero warnings with its
   deciding literal untouched.
 * It **over-reports on a table's CALL SITES.** `t_usd_cents(1, X)` warns because the functor
   claims a scale and carries a bare literal — but that literal is the index key, not money.
@@ -301,7 +344,7 @@ Worth stating plainly, because the count is offered as a migration progress sign
   recognise would warn on correct code again.
 
 So a falling count is evidence of progress and not a measure of it, and **zero warnings is not
-"this domain is migrated"**. Read it as a worklist that empties, never as a certificate.
+"this program is migrated"**. Read it as a worklist that empties, never as a certificate.
 
 The suffixes are derived from the vocabulary — every curated minor-unit word and every
 [ratio unit](#ratio-units-percent-and-basis_point) name, plus plurals — so giving a currency a
@@ -315,20 +358,20 @@ overlap; when ratio units landed on 2026-09-12 it was the assertion that named `
 
 ## Tables: a declaration that defines the predicate
 
-Most statutory money is in TABLES, not single facts. Declare the table and it **defines the
-predicate your rules already call** — so a domain migrates by replacing N fact lines with one
+Much published money is in TABLES, not single facts. Declare the table and it **defines the
+predicate your rules already call** — so a program migrates by replacing N fact lines with one
 declaration, and no call site changes:
 
 ```clausal
 -import_from(united_states, [usd, usd_cent])
--constants_number_currency(snap_max_allotment/2,
+-constants_number_currency(benefit_cap/2,
                            [(1, 29200), (2, 53600), (3, 76800)],
                            usd_cent, money_at(2))
 ```
 
 ```text
-snap_max_allotment(2, A)        A = 536.00 dollar
-snap_max_allotment(SIZE, A)     (1, 292.00) (2, 536.00) (3, 768.00)
+benefit_cap(2, A)        A = 536.00 (usd)
+benefit_cap(SIZE, A)     (1, 292.00) (2, 536.00) (3, 768.00)
 ```
 
 **There is no `constant(...)` retrieval and no subscript.** `constant/1` substitutes a single
@@ -358,19 +401,19 @@ jurisdiction module as the currency itself — the same shape as `kilometre` aga
 ```clausal
 -import_from(united_states, [usd, usd_cent])
 
-# what the filing SAID, in the unit it said it in
--constant_number_units(sga_monthly, 155000, usd_cent)
+# what the source SAID, in the unit it said it in
+-constant_number_units(monthly_limit, 155000, usd_cent)
 ```
 
 ```text
-stored            Quantity(Decimal('1550.00'), dollar)   one representation, always
-constant_value/2  Quantity(Decimal('1550.00'), dollar)
-constant_number_units/3   155000, usd_cent                   what the declaration said
+stored                    1550.00 (usd)       Decimal('1550.00'); one representation, always
+constant_value/2          1550.00 (usd)
+constant_number_units/3   155000, usd_cent    what the declaration said
 ```
 
 The point is that the declaration names the **currency and the scale where the engine can
 see both**, instead of encoding them in the parameter's identifier —
-`sga_monthly_amount_cents` — where only a human can read them. A scale in a name is
+`monthly_limit_cents` — where only a human can read them. A scale in a name is
 documentation the engine cannot check; a declared unit is a fact it can.
 
 After declaration the constant simply **is** a dollar amount, which is what makes minor and
@@ -379,7 +422,7 @@ major amounts add with no conversion logic and no mixed-dimension arithmetic:
 ```clausal
 -import_from(european_union, [euro, eur_cent])
 
-total(T) <- (eval_(5000 (eur_cent), A), eval_(10.00 (euro), B), eval_(A + B, T))   # 60.00(euro)
+total(T) <- (eval_(5000 (eur_cent), A), eval_(10.00 (euro), B), eval_(A + B, T))   # T = 60.00 (euro)
 ```
 
 Being an ordinary unit, a minor unit works in a declaration, in the `155000 (usd_cent)` annotation
@@ -396,7 +439,7 @@ its trailing zero by the time any quantity exists:
 -constant_number_units(fee, "292.00", usd)   stores  Decimal('292.00')
 ```
 
-Same number, different scale, and the scale is the part a statute wrote. Nothing downstream can
+Same number, different scale, and the scale is the part the source wrote. Nothing downstream can
 recover it — by the time the value reaches a `Quantity` the digits are gone.
 
 So a **string in the number position is read as an exact `Decimal`**, in all four members of the
@@ -406,16 +449,16 @@ family:
 -import_from(united_states, [usd])
 
 -constant_number_units(s_fee, "292.00", usd)
--constant_number_currency(s_sga, "1550.00", usd)
+-constant_number_currency(s_limit, "1550.00", usd)
 ```
 
 This is the counterpart of [minor units](#minor-units), reached from the other side. A minor unit
-keeps a statutory "29200 cents" recoverable by declaring the **scale**; a decimal string keeps a
-statutory "292.00 dollars" exact by declaring the **digits**. Use whichever the source text uses.
+keeps a published "29200 cents" recoverable by declaring the **scale**; a decimal string keeps a
+published "292.00 dollars" exact by declaring the **digits**. Use whichever the source text uses.
 
 **Only the directives named for carrying a unit.** `-constant_value(greeting, "292.00")` is a
 string constant and stays one — reading strings as numbers there would silently retype every text
-constant in the corpus.
+constant in every program.
 
 **What is still refused**, because the directive is named for the claim that only numbers carry
 units: a string that is not a number (`"abc"`), and the non-finite Decimals (`"NaN"`,
@@ -428,7 +471,7 @@ magnitude was spelled, not what was declared.
 
 **The scale does not survive EXPORT**, though the magnitude does. Prolog has no decimal type, so
 an exported `1550.00` is read as a float and prints as `1550.0` (measured 2026-09-13 in both
-Scryer and Trealla). A decimal string keeps the statutory scale exact inside the engine; at the
+Scryer and Trealla). A decimal string keeps the declared scale exact inside the engine; at the
 Prolog boundary only the number crosses.
 
 **One consequence worth knowing for the migration.** The [scale lint](#bare-integers-are-not-money)
@@ -446,21 +489,21 @@ ordinary scaled unit against the *dimensionless* base rather than a currency:
 -import_from(py.units, [basis_point])
 
 # what the regulation SAID, in the unit it said it in
--constant_number_units(min_leverage, 300, basis_point)
+-constant_number_units(min_margin, 300, basis_point)
 ```
 
 ```text
-stored                     Quantity(Decimal('0.0300'), {})   one representation, always
-constant_value/2           Quantity(Decimal('0.0300'), {})
+stored                     Decimal('0.0300'), dimensionless   one representation, always
+constant_value/2           Decimal('0.0300'), dimensionless
 constant_number_units/3    300, basis_point                  what the declaration said
 ```
 
 Same bargain as the currency half: the declaration carries the scale where the **engine** can
-read it, so a domain can stop carrying it in a parameter's name. `minimum_leverage_bps` can
-go back to being `minimum_leverage`.
+read it, so a program can stop carrying it in a parameter's name. `minimum_margin_bps` can
+go back to being `minimum_margin`.
 
 Both units are dimensionless, so `300 (basis_point)` and `3 (percent)` are the **same
-quantity** and compare equal — a rulebase declares in whichever spelling the statute uses and
+quantity** and compare equal — a program declares in whichever spelling its source uses and
 the arithmetic does not care which was chosen. A ratio multiplies against money and keeps the
 money's dimension:
 
@@ -468,7 +511,7 @@ money's dimension:
 -import_from(py.units, [basis_point])
 -import_from(united_states, [usd])
 
-charge(C) <- eval_(300 (basis_point) * 1550.00 (usd), C)   # 46.50(usd)
+charge(C) <- eval_(300 (basis_point) * 1550.00 (usd), C)   # C = 46.50000 (usd), exact
 ```
 
 **The factor is a `Decimal`, built with `scaleb`, and that is the whole safety argument.** A
@@ -486,16 +529,15 @@ than from a list written beside them.
 
 **Two limits, both deliberate.** A bare number is [never compatible with a ratio
 unit](#asserting-a-unit-compatible_units2) — once ratios are dimensionless, a bare `0.03`
-would otherwise satisfy every ratio claim there is. And the Prolog exporter **refuses** a
-ratio-unit amount, declaration or inline, for the reason it refuses every scaled unit: units
-are discarded on export, and discarding `basis_point` would emit `300` against a stored
-`0.03`. That is a 10000x error rather than the minor unit's 100x, and
-`<downstream-domain>` is on the export roster — so the refusal is load-bearing
-there, and lifts with the same fix
-(`todo/exporter-folds-scaled-units-to-the-wrong-magnitude-2026-09-11.md`).
+would otherwise satisfy every ratio claim there is. And the Prolog exporter treats a
+ratio unit like every scaled unit (see [below](#the-prolog-exporter-and-scaled-units)): a
+**declaration** exports its base magnitude (`-constant_number_units(min_margin, 300,
+basis_point)` exports `0.0300`, never `300`), while an **inline** `300(basis_point)` is
+refused, because units are discarded on export and dropping `basis_point` would emit `300`
+against a stored `0.03`, a 10000x error.
 
 **What ratio units do not solve**, and it is the same shape the currency half left open: a
-domain whose *public interface* computes in basis points — `leverage_ratio_bps/2` is exported
+module whose *public interface* computes in basis points — a `margin_ratio_bps/2` it exports
 — still has to rescale its producers and consumers together. This makes that conversion
 cheaper, because no representation changes at any interface, not free.
 
@@ -505,7 +547,7 @@ cheaper, because no representation changes at any interface, not free.
 
 ```clausal
 -import_from(united_states, [usd])
--constant_number_currency(sga_monthly, 5000, usd)     # stored Decimal('5000') usd
+-constant_number_currency(monthly_limit, 5000, usd)     # stored Decimal('5000') usd
 ```
 
 The directive is named for its claim and enforces it, exactly as
@@ -522,9 +564,9 @@ usd_cent     ok          usd ** 2       refused — an area in dollars
 Shape rather than type because the property the declaration asserts is *this constant is
 money*, and a minor unit satisfies it. Requiring a currency object split the two safety
 properties so that an author could have the currency gate or the minor-unit scale but never
-both — and every identifier the corpus migration concerns is spelled `_cents`, `_satang` or
-`_pence`, so the narrow gate would have covered exactly the case the migration is least
-likely to produce.
+both — and the identifiers a migration to declared money meets are typically spelled
+`_cents`, `_satang` or `_pence`, so the narrow gate would have covered exactly the case the
+migration is least likely to produce.
 
 ```text
 -constant_number_currency(fee, 5000, metre)
@@ -542,7 +584,7 @@ unit that loads perfectly well and **is not money**: `-constant_number_units(fee
 metre)` yields `Quantity(5000, metre)`, an int-valued length, in silence. Asking for money
 and getting a length is the error this refuses.
 
-Three further properties, each with a test:
+Two further properties, each with a test:
 
 * **A compound unit is refused.** Money is an amount, not a rate; `usd / second` is a good
   unit expression and belongs to the general directive.
@@ -584,7 +626,7 @@ This is not decoration. It closes two holes by construction:
 Minor-unit *names* are not in ISO 4217 — the standard carries only the number of decimal
 places — so they are curated data, added per currency as a rulebase needs one. See
 `MINOR_UNITS` in [`scripts/gen_currencies.py`](#extending-the-vocabulary). This set covers
-the currencies a corpus census found carrying a minor-unit scale in identifier names.
+the currencies that programs were found carrying a minor-unit scale for in identifier names.
 
 Names are **singular**, as every unit name in the vocabulary is (`metre`, not `metres`): GBP's
 subunit is `penny`, even where a rulebase spells its own identifiers `_pence`.
@@ -596,8 +638,8 @@ identifier already says which. A cent of one currency still never adds to a cent
 -import_from(united_states, [usd, usd_cent])
 -import_module(european_union)
 
-us(A) <- eval_(5000 (usd_cent), A)        # 50.00(dollar)
-eu(A) <- eval_(5000 (european_union.eur_cent), A)   # 50.00(euro)
+us(A) <- eval_(5000 (usd_cent), A)        # A = 50.00 (usd)
+eu(A) <- eval_(5000 (european_union.eur_cent), A)   # A = 50.00 (euro)
 ```
 
 ### The factor is derived, never written
@@ -623,36 +665,35 @@ declaration does not say a minor unit is now a *mechanically checkable* defect. 
 "documented but not represented" problem closed — and eventually the suffix disappears from
 the name entirely, because the declaration carries it.
 
-### The Prolog exporter refuses a scaled unit
+### The Prolog exporter and scaled units
 
-`clausal_to_prolog` folds a constant to its declared magnitude and discards the unit, which is
-faithful for a **base** unit (a currency, `metre`, `second`, or a factor-1 derived unit like
-`newton`) and wrong for a **scaled** one. `-constant_number_units(sga_monthly, 155000, usd_cent)`
-would export as `155000` where the engine holds `Decimal('1550.00') dollar` — a 100× money
-error. So it **refuses** rather than folding:
+`clausal_to_prolog` discards units on export, which is faithful for a **base** unit (a
+currency, `metre`, `second`, or a factor-1 derived unit like `newton`) and wrong for a
+**scaled** one unless the magnitude is converted first. The two shapes are handled
+differently:
 
-```text
-NotImplementedError: clausal_to_prolog: -constant_number_units(sga_monthly, ..., usd_cent)
-declares a constant in a scaled unit (usd_cent), and the exporter folds a constant to its
-DECLARED magnitude -- which is not the magnitude the engine holds once a unit rescales.
-Declare the constant in a base unit ...
-```
+* A **declaration** exports the magnitude the engine holds, converted exactly to the base
+  unit:
 
-The same refusal covers `30 day` and `5 kilometre`: the defect was never currency-specific —
-`day` is `Quantity(86400, second)`, so the exported `30` was never the 2592000 the engine
-holds. It also covers the **inline** form, `pay(155000(usd_cent))`, which reaches a different
-lowering and had the identical defect; refusing one shape and not the other would leave a
-hole in the middle of the guarantee. The two checks have opposite polarity on purpose — a
-declaration is refused unless its unit is known to be a base unit, while an inline quantity
-is refused only if its unit is known to be scaled, because that form is used throughout the
-corpus and an unrecognised name there must keep working. Ruled 2026-09-11, after three independent censuses agreed nothing declares a constant
-in a scaled unit today, so the refusal costs nothing and stops being free once the corpus
-constants migration starts.
+  ```text
+  -constant_number_units(monthly_limit, 155000, usd_cent)   exports   1550
+  -constant_number_units(min_margin, 300, basis_point)      exports   0.0300
+  ```
 
-To export such a constant, declare it in the base unit — or lift the refusal by teaching the
-exporter to fold to the base magnitude, which it can do: the `-import_from` it is already
-converting says where the unit name resolves. See
-`todo/exporter-folds-scaled-units-to-the-wrong-magnitude-2026-09-11.md`.
+  An integral result is emitted as an integer; a fractional amount stays a decimal number,
+  which Prolog reads as a float (Prolog has no decimal type).
+
+* An **inline** quantity in a scaled unit, `pay(155000(usd_cent))`, is still **refused**:
+
+  ```text
+  NotImplementedError: clausal_to_prolog: 155000(usd_cent) is a quantity in a scaled unit
+  (usd_cent), and units are discarded on export -- which keeps the written magnitude, not
+  the one the engine holds once a unit rescales. Write the amount in a base unit, ...
+  ```
+
+  The same refusal covers `30(day)` and `5(kilometre)`: the defect was never
+  currency-specific — `day` is `Quantity(86400, second)`, so an exported `30` was never the
+  2592000 the engine holds. Declare such an amount as a constant, or write it in a base unit.
 
 ### What changed, and why
 
@@ -681,68 +722,92 @@ what a source *said*, they do not make the base form insufficient:
 -import_from(european_union, [euro])
 -constant_number_units(rate, 0.10, euro)
 
-# 0.1 + 0.1 + 0.1 is exactly 0.30(euro) -- a float would give 0.30000000000000004
+# 0.1 + 0.1 + 0.1 is exactly 0.3 (euro) -- a float would give 0.30000000000000004
 sums(X) <- eval_(constant(rate) + constant(rate) + constant(rate), X)
 ```
 
-Use [`eval_/2`](arithmetic.md) for arithmetic on amounts, not `==`: CLP constraints do not
-operate on `Quantity` objects and will raise `type_error`. Comparisons (`>`, `=<`) work
-directly.
+Use [`eval_/2`](arithmetic.md) to *compute* an amount. A comparison (`==`, `>`, `<=`, …)
+between amounts works directly and respects the currency, and `X == A + B` with `X` unbound
+binds `X` to the sum. But `==` is a constraint, and inside a constraint division is rational
+(see [Operators](operators.md)), so `X == 7.89(euro)` answers a magnitude of
+`Fraction(789, 100)` rather than `Decimal('7.89')`: the same amount, not the same
+representation.
 
 **Ratios are covered too** — see [ratio units](#ratio-units-percent-and-basis_point).
 
 **And durations are not units at all** — see [`date_add/3` and `days_between/3`](builtins.md).
-A statutory "within 30 days" is a relation between two dates, not a quantity: months vary in
+A "within 30 days" rule is a relation between two dates, not a quantity: months vary in
 length and business days need a holiday calendar, neither of which a scalar can express.
 
 ## Arithmetic rules
 
-Inherited unchanged from [units](units.md); currency just fixes the magnitude to `Decimal`.
+Inherited from [units](units.md); currency just keeps the magnitude exact. The general
+rules for each operator are in [Arithmetic](arithmetic.md) and [Operators](operators.md).
 
-| Operation | Behaviour |
+| Operation (inside `eval_/2`) | Behaviour |
 |-----------|-----------|
 | `euro + euro`, `euro - euro` | same currency required; **full precision kept** (no rounding) |
 | `euro + usd` | `UnitsMismatch` — different currencies never combine |
 | `euro + 5` | `UnitsMismatch` — a currency amount and a plain number never add |
-| `euro * 3`, `euro * 0.2` | scale by a dimensionless number → euro (the `0.2` is coerced to Decimal) |
-| `euro / 3` | division keeps full precision — e.g. `10.00(euro) / 3` = `3.333…(euro)` |
+| `euro * 3`, `euro * 20(percent)`, `euro * rdiv(6, 5)` | scale by an exact dimensionless number → euro |
+| `euro * 0.2` | **refused**: `type_error(exact_number, 0.2)` — a float beside an exact amount; write the factor exactly (`20(percent)`, `rdiv(1, 5)`) |
+| `euro / 4` | exact: `10.00(euro) / 4` is `2.5 (euro)`, magnitude `Decimal('2.5')` |
+| `euro / 3` | exact: `10.00(euro) / 3` is `10/3 (euro)`, magnitude `Fraction(10, 3)` — never a 28-digit rounded `Decimal` |
+| `euro / 0` | `evaluation_error(zero_divisor)` in `eval_/2`; inside a constraint (`X == 1(euro) / 0`) the goal fails |
 | `euro / euro` | a **dimensionless** ratio (e.g. for “what fraction of …”) |
 
+```clausal
+-import_from(european_union, [euro])
+-import_from(py.units, [percent])
+
+vat(NET, VAT) <- eval_(NET * 20 (percent), VAT)       # exact
+share(S) <- eval_(10.00(euro) / 3, S)                   # S = 10/3 (euro), Fraction(10, 3)
+```
+
 **Rounding is never automatic.** Intermediate results keep every digit; you quantize only
-at display (below). So `10.00(euro) / 3` stays `3.333…` internally and becomes `"3.33 EUR"`
+at display (below). So `10.00(euro) / 3` stays `10/3` internally and becomes `"3.33 EUR"`
 only when you ask.
 
 ---
 
 ## Rounding and display
 
-Every rounding/display predicate takes a **required, explicit mode**. In `.clausal` the mode
-and style are written as bare words.
+Every rounding/display predicate takes a **required, explicit mode**. The mode and style
+are atoms, written bare once the module declares them (`-private([half_up, symbol])`); a
+string (`"half_up"`) is accepted too.
 
 **Modes:** `half_up`, `half_even` (banker's), `half_down`, `up`, `down`, `ceiling`, `floor`.
 
 - `money_round(Amount, Mode, Out)` — `Out` is `Amount` quantized to the currency's scale,
   still a currency amount.
-- `money_str(Amount, Mode, Str)` — `"3.33 EUR"` (value + ISO code).
-- `money_format(Amount, Style, Mode, Str)` — `Style` ∈ `symbol` (`"€3.33"`), `code`
-  (`"3.33 EUR"`), `name` (`"3.33 euro"`), `plain` (`"3.33"`).
+- `money_str(Amount, Mode, Str)` — `"3.33 EUR"` (value + ISO code), a **string**.
+- `money_format(Amount, Style, Mode, Str)` — `Style` ∈ `symbol` (`'€3.33'`), `code`
+  (`'3.33 EUR'`), `name` (`'3.33 euro'`), `plain` (`'3.33'`), answered as an **atom**.
+
+The argument is an amount, so compute it first; `money_round(10.00(euro) / 3, …)` would hand
+the rounding predicate the unevaluated term and fail.
 
 ```clausal
-money_round(10.00(euro) / 3, half_up, R)   # R = 3.33(euro)
-money_str(2.675(... via money_precise ...), half_up, S)   # S = "2.68 EUR"  (not 2.67 — no float trap)
-money_format(P, symbol, half_up, S)        # S = "€3.35"
+-import_from(european_union, [euro])
+-import_from(currency, [money_precise, money_round, money_str, money_format])
+-private([half_up, symbol])
+
+r(R) <- (eval_(10.00(euro) / 3, Q), money_round(Q, half_up, R))          # R = 3.33 (euro)
+s(S) <- (money_precise("2.675", euro, P), money_str(P, half_up, S))       # S = "2.68 EUR" (not 2.67: no float trap)
+f(S) <- (money_precise("3.345", euro, P), money_format(P, symbol, half_up, S))   # S = '€3.35'
 ```
 
-Unknown mode or style raises (catchable — see below).
+An unknown mode or style raises (catchable — see below).
 
 **Python / f-strings.** A currency `Quantity` also formats in Python f-strings (inside a
 `++()` escape or interop), spec `"<style>[,<mode>]"`, default style `code`, default mode
 `half_even`:
 
 ```python
-f"{amt}"              # "3.33 EUR"
-f"{amt:symbol}"       # "€3.33"
-f"{amt:name}"         # "3.33 euro"
+# amt is 3.345 (euro)
+f"{amt}"              # "3.34 EUR"
+f"{amt:symbol}"       # "€3.34"
+f"{amt:name}"         # "3.34 euro"
 f"{amt:plain,half_up}"# "3.35"
 ```
 
@@ -755,11 +820,14 @@ Query a currency's metadata (the argument is the currency, e.g. `euro`):
 ```clausal
 -import_from(currency, [currency_scale, currency_code, currency_symbol,
                         currency_start, currency_end])
-currency_scale(euro, N)     # N = 2
-currency_code(euro, C)      # C = "EUR"   (a string)
-currency_symbol(euro, S)    # S = "€"     (a string)
-currency_start(dem, S)      # S = "1948-06-20"   (ISO date string)
-currency_end(dem, E)        # E = "2002-05-15";  euro's end is None (still current)
+-import_from(european_union, [euro])
+-import_from(germany, [dem])
+
+facts(N, C, S) <- (currency_scale(euro, N),    # N = 2
+                   currency_code(euro, C),     # C = "EUR"   a string
+                   currency_symbol(euro, S))   # S = '€'     an atom
+history(S, E) <- (currency_start(dem, S),      # S = '1948-06-20'  an ISO date, as an atom
+                  currency_end(dem, E))        # E = '2002-05-15'; euro's end is None (still current)
 ```
 
 **An unbound currency RAISES.** An accessor is a function of a currency, so asking with an
@@ -781,10 +849,10 @@ currency_code(C, ++"EUR")   C = euro        a Python string
 currency_code(C, Code)      enumerates all 254
 ```
 
-**The code may be written as an atom or a string.** This matters more than it looks: `"EUR"`
-written in a rulebase is an *atom* while `iso_code` is a Python *string*, so before this
-`currency_code(euro, "EUR")` — the obvious way to check a code — failed silently, and only
-`++"EUR"` worked. Both spellings now reach the same currency.
+**The code may be written as an atom or a string.** `"EUR"` written in a `.seam` or
+`.clausal` file is a *string* (the default `-double_quotes(chars)`), `eur` or `'EUR'` is an
+*atom*, and `++"EUR"` hands in a Python `str`, which is an atom too. All of them reach the
+same currency; `currency_code(euro, X)` answers the string.
 
 Case-insensitive, which covers the two spellings that **can** exist: `eur` and `"EUR"`. A
 mixed-case `Eur` is not a misspelled code — TitleCase is a logic *variable*, so it would
@@ -809,7 +877,7 @@ number(10000)          succeeds        quantity(10000)         fails
 integer(10000(euro))   fails           float_(10000(euro))     fails
 ```
 
-**This exists because the alternative was silent and catastrophic.** A rulebase that sums
+**This exists because the alternative was silent and catastrophic.** A program that sums
 money behind a `number(V)` guard — the documented shape in real conformance rules, where *a
 member whose key is absent or non-numeric contributes nothing, and an empty list totals 0* —
 would, on attaching units, total **zero for every field**, compare 0 against 0 in every
@@ -819,12 +887,13 @@ Accepting inverts the failure mode rather than merely widening the test. Code th
 then does **bare** arithmetic raises loudly at the site:
 
 ```text
-number(V), V > 0        UnitsMismatch: Cannot compare dimensioned (euro) with plain value 0
-sum_list([1(euro), 1(usd)], S)   UnitsMismatch: euro vs dollar
+number(V), V > 0                 error(system_error(units_mismatch), (>)/2)
+                                 message: plain number: dimensionless vs euro
+sum_list([1(euro), 1(usd)], S)   UnitsMismatch: Unit mismatch for add: euro vs usd
 ```
 
 `integer/1` and `float_/1` stay **strict**: they name a specific representation and a quantity
-is neither. Widening those would make `integer(V)` — which is how a rulebase asserts
+is neither. Widening those would make `integer(V)` — which is how a program asserts
 minor-unit scale — silently true for an amount in any scale at all.
 
 `sum_list/2` seeds from the **first element** rather than a bare `0`, so a list of money
@@ -852,7 +921,7 @@ positive_fee(AMOUNT) <- (compatible_units(AMOUNT, euro), AMOUNT > 0.00(euro))
 ```
 
 ```text
-compatible_units: expected dollar (USD), got dollar (AUD)
+compatible_units: expected usd, got aud
 compatible_units: 5 carries no unit, so it cannot be euro. A bare number is never
 compatible, not even with dimensionless — write the quantity (`5(euro)`), or declare
 it with -constant_number_currency.
@@ -894,21 +963,36 @@ them in its import list and catches them with a `++` catcher (see
 matches by `isinstance`; the instance form `++UnitsMismatch(M)` also binds `M`
 to the message.
 
-- **`UnitsMismatch`** — combining different currencies, or a currency with a plain number.
+- **`UnitsMismatch`** — combining different currencies, or a currency with a plain number,
+  in arithmetic (`eval_/2`, `sum_list/2`) or in `compatible_units/2`.
 - **`CurrencyPrecisionError`** — tagging a value with sub-scale precision.
 
+A **comparison** across dimensions (`V > 0` with `V` a euro amount) raises the ISO error
+term `error(system_error(units_mismatch), (>)/2)` instead; catch it with an ordinary
+`error(system_error(units_mismatch), _)` pattern.
+
 ```clausal
+-module(prices, [safe_price(TEXT, P), checked_sum(A, B, RESULT), mismatch(MESSAGE)])
 -import_from(clausal.terms, [CurrencyPrecisionError, UnitsMismatch])
+-import_from(currency, [money, money_precise, money_round])
+-import_from(european_union, [euro])
+-private([half_up])
 
-# recover from an over-precise input
-safe_price(TEXT, P) <-
-    catch(money(TEXT, euro, P),
-          ++CurrencyPrecisionError,
-          money_round(... /* a fallback */, half_up, P)).
+# recover from an over-precise input: take it exactly, then round explicitly
+safe_price(TEXT, P) <- catch(
+    money(TEXT, euro, P),
+    ++CurrencyPrecisionError,
+    (money_precise(TEXT, euro, RAW), money_round(RAW, half_up, P)))
 
-# treat a currency mismatch as a rule failure, keeping the message
-catch(eval_(A + B, C), ++UnitsMismatch(M), 1 == 1)
+# report a currency mismatch instead of aborting, keeping the message
+checked_sum(A, B, RESULT) <- catch(
+    eval_(A + B, RESULT),
+    ++UnitsMismatch(M),
+    RESULT is mismatch(M))
 ```
+
+`safe_price("7.891", P)` answers `P = 7.89 (euro)`; `checked_sum` over a euro and a dollar
+amount answers `mismatch("Unit mismatch for add: euro vs usd")`.
 
 An uncaught `CurrencyPrecisionError` / `UnitsMismatch` aborts the query. Note a currency
 mismatch is a *hard error*, not a silent failure — you must handle it if a rule may see
@@ -926,15 +1010,15 @@ other lints are silenced, with `warnings.filterwarnings` on the class.
 
 ---
 
-## Applying currency in a formalization
+## Applying currency to existing rules
 
-Guidance for an instance refactoring a rulebase to use currency.
+Guidance for converting an existing set of rules to use currency.
 
-**1. Decide what is money.** A number denotes money when the statute/contract attaches it
+**1. Decide what is money.** A number denotes money when the regulation or contract attaches it
 to a currency (a price, fee, threshold, penalty, balance). Tag those — bare numbers lose the
 dimension safety and exactness that are the whole point.
 
-**2. Pick the currency by jurisdiction.** The rulebase's jurisdiction fixes the currency:
+**2. Pick the currency by jurisdiction.** The rules' jurisdiction fixes the currency:
 a UK regulation → `sterling` from `united_kingdom`; a eurozone directive → `euro` from
 `european_union`. Import the bare name; the prefix only appears when a rule genuinely spans
 currencies.
@@ -954,16 +1038,22 @@ alpha-3 codes as atoms (`currency.eur`, plus `all`/`try_` escapes). Replace them
 **4. Common patterns.**
 
 ```clausal
+-import_from(european_union, [euro])
+-import_from(py.units, [percent])
+-import_from(currency, [money_precise, money_round])
+
 # a threshold comparison (same currency; comparison respects dims)
-over_limit(Amount) <- Amount > 1000(euro).
+over_limit(AMOUNT) <- (AMOUNT > 1000(euro))
 
-# a percentage / tax rate — a dimensionless factor
-with_vat(Net, Gross) <- eval_(Net * 1.20, Gross).       # 20% VAT; Gross keeps full precision
-vat_due(Net, Mode, Due) <- (eval_(Net * 0.20, Raw), money_round(Raw, Mode, Due)).
+# a percentage / tax rate: an exact dimensionless factor (a float factor is refused)
+with_vat(NET, GROSS) <- eval_(NET * 120 (percent), GROSS)     # GROSS keeps full precision
+vat_due(NET, MODE, DUE) <- (eval_(NET * 20 (percent), RAW), money_round(RAW, MODE, DUE))
 
-# summing line items (fold with eval_); round once, at the end, for display
-# a per-unit price below display scale → money_precise
-unit_price(P) <- money_precise("0.0034", euro, P).
+# summing line items: sum_list/2 totals a list of amounts; round once, at the end
+order_total(ITEMS, TOTAL) <- sum_list(ITEMS, TOTAL)
+
+# a per-unit price below display scale: money_precise
+unit_price(P) <- money_precise("0.0034", euro, P)
 ```
 
 **5. Pitfalls to avoid.**
@@ -978,7 +1068,7 @@ unit_price(P) <- money_precise("0.0034", euro, P).
   error or you must convert *explicitly* (there is no built-in conversion) and `catch` the
   `UnitsMismatch`.
 
-**6. Current limitations** (see the deferred-gaps note in the repo): amounts above ~10²⁶
+**6. Current limitations**: amounts above ~10²⁶
 minor units, and `NaN`/`Infinity`, surface as raw/awkward errors; currency `__format__`
 rejects generic alignment specs like `f"{amt:>10}"`. None affect ordinary legal amounts.
 

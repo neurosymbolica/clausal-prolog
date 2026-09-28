@@ -22,7 +22,21 @@ predicates is safe for concurrent use. The C extension handles all the
 locking internally.
 
 ```clausal
---8<-- "tests/fixtures/docs/tutorial_parallel_clausal_sigs.txt:pure_predicates"
+# These are all safe for concurrent queries:
+
+list_concat([], YS, YS),
+list_concat([H, *XS], YS, [H, *ZS]) <- list_concat(XS, YS, ZS)
+
+factorial(0, 1),
+factorial(N, F) <- (
+    N > 0,
+    N1 == N - 1,
+    factorial(N1, F1),
+    F == N * F1
+)
+
+test("concat") <- list_concat([1], [2, 3], [1, 2, 3])
+test("factorial") <- factorial(5, 120)
 ```
 
 !!! tip "Use `==` for arithmetic"
@@ -36,17 +50,30 @@ multiple threads can walk the same dispatch tables concurrently.
 
 ### Tabled predicates
 
-Tabled predicates memoize their answers. Currently, each query creates
-its own table entries, so tabling is safe for concurrent use. Phase 5
-of the parallelism roadmap will add shared memo tables where multiple
-threads contribute answers to the same table.
+Tabled predicates memoize their answers. A completed table is kept on
+the module and reused: a second query for the same call does not run the
+clauses again.
 
 ```clausal
---8<-- "tests/fixtures/docs/tutorial_parallel_clausal_sigs.txt:tabled_predicates"
+-table(path/2)
+
+edge('a', 'b'),
+edge('b', 'c'),
+edge('c', 'a'),
+
+path(X, Y) <- edge(X, Y)
+path(X, Y) <- (path(X, Z), edge(Z, Y))
+
+test("a reaches every node, despite the cycle") <- (
+    findall(Y, path('a', Y), YS),
+    msort(YS, ['a', 'b', 'c'])
+)
 ```
 
-Multiple threads can query `Path` concurrently. Each thread builds
-its own memo table independently.
+Multiple threads can query `path` with the GIL enabled. Concurrent tabled
+queries under free-threading are not yet covered by the thread-safety tests
+(see [Free-Threaded Python Support](free_threading.md)); shared, concurrently
+filled tables are later work.
 
 ### [CLP(ℤ)](constraints.md) / [CLP(B)](clpb.md) / [CLP(ℝ)](clpr.md) predicates
 
@@ -56,7 +83,31 @@ attribute access. As long as each thread works with its own constraint
 variables (the normal case), constraint solving is safe.
 
 ```clausal
---8<-- "tests/fixtures/docs/tutorial_parallel_clausal_sigs.txt:clpz_predicates"
+-private([safe_queens(QS), no_attack(Q, QS, D)])
+
+n_queens(N, QUEENS) <- (
+    length(QUEENS, N),
+    in_domain(QUEENS, 1, N),
+    all_different(QUEENS),
+    safe_queens(QUEENS),
+    label(QUEENS)
+)
+
+safe_queens([]),
+safe_queens([Q, *QS]) <- (
+    no_attack(Q, QS, 1),
+    safe_queens(QS)
+)
+
+no_attack(_, [], _),
+no_attack(Q, [Q1, *QS], D) <- (
+    Q != Q1 + D,
+    Q != Q1 - D,
+    D1 == D + 1,
+    no_attack(Q, QS, D1)
+)
+
+test("6 queens") <- once(n_queens(6, [2, 4, 6, 1, 3, 5]))
 ```
 
 Multiple threads can solve N-Queens for different N values concurrently.
@@ -67,23 +118,37 @@ Multiple threads can solve N-Queens for different N values concurrently.
 
 ### [Dynamic](directives.md) predicates (`assert` / `retract`)
 
-Dynamic predicates modify the clause database at runtime. Concurrent
+Dynamic predicates modify the clause database at runtime; only a
+predicate declared `-dynamic` accepts `assertz`/`retract`. Concurrent
 `assertz` and `retract` from multiple threads is **not yet safe**
 (Phase 2 will add copy-on-write locking). However, asserting facts
-before launching threads and then only reading is fine:
+before launching threads and then only reading is fine. In `counters.clausal`:
 
 ```clausal
---8<-- "tests/fixtures/docs/tutorial_parallel_clausal_sigs.txt:dynamic_predicates"
+-module(counters, [counter(N)])
+-dynamic(counter/1)
+
+counter(0),
 ```
 
 ```python
-# skip
-# Safe: assert all facts first, then query in parallel
-for i in range(100):
-    mod.db.assertz(...)
+from threading import Thread
+from clausal import Var, once, solve
+import counters
 
-# Now launch threads that only READ
-threads = [Thread(target=query_counter, args=(mod,)) for _ in range(8)]
+# Safe: assert all facts first, then query in parallel
+for i in range(1, 100):
+    once(("assertz", ("counter", i)), module=counters)
+
+def count_counters(results):
+    N = Var()
+    results.append(sum(1 for _ in solve(("counter", N), module=counters)))
+
+results = []
+threads = [Thread(target=count_counters, args=(results,)) for _ in range(8)]
+for t in threads: t.start()
+for t in threads: t.join()
+print(results)  # [100, 100, 100, 100, 100, 100, 100, 100]
 ```
 
 ### Side effects (I/O, Python calls)
@@ -93,7 +158,10 @@ are safe in the sense that they won't crash, but the *ordering* of side
 effects across threads is nondeterministic:
 
 ```clausal
---8<-- "tests/fixtures/docs/tutorial_parallel_clausal_sigs.txt:side_effects"
+# Output from different threads will interleave unpredictably
+log(MSG) <- ++print(MSG)
+
+test("log succeeds once") <- log('hello')
 ```
 
 Use Python-level synchronization (locks, queues) if you need ordered output.
@@ -108,31 +176,30 @@ Predicates that only unify and backtrack are trivially safe. Push
 side effects to the Python caller:
 
 ```clausal
---8<-- "tests/fixtures/docs/tutorial_parallel_clausal_sigs.txt:pure_design"
+# Good: a pure relation; the caller does the I/O
+order_total(ITEMS, TOTAL) <- (
+    findall(P, in_([_, P], ITEMS), PRICES),
+    sum_list(PRICES, TOTAL)
+)
+
+test("total") <- order_total([['apple', 30], ['pear', 20]], 50)
 ```
 
 ```python
-# skip
-# Python caller does the I/O
-for trail in call("solve", data, result, module=mod):
-    print(deref(result))  # I/O in Python, not in Clausal
+from clausal import Var, solve
+import orders
+
+# The Python caller does the I/O
+TOTAL = Var()
+for trail in solve(("order_total", [["apple", 30], ["pear", 20]], TOTAL), module=orders):
+    print(TOTAL.value)  # 50
 ```
 
 ### 2. Use ground-term arguments for shared data
 
 Ground terms (no unbound variables) are immutable and free to share.
-Pass shared data as ground arguments rather than through dynamic predicates:
-
-```python
-# skip
-# Good: pass the lookup table as a ground list
-big_table = [(k, v) for k, v in dataset.items()]
-
-def worker():
-    result = Var()
-    for trail in call("lookup", "key42", big_table, result, module=mod):
-        print(deref(result))
-```
+Pass shared data as ground arguments rather than through dynamic predicates,
+as `orders_list` is passed below.
 
 ### 3. Keep query variables per-thread
 
@@ -140,19 +207,30 @@ Each thread should create fresh `Var()` instances for query arguments.
 Don't share an unbound variable between threads:
 
 ```python
-# skip
-# Good: fresh Var per thread
-def worker():
-    x = Var()
-    for trail in call("my_pred", x, module=mod):
-        results.append(deref(x))
+from threading import Thread
+from clausal import Var, solve
+import orders
 
-# Bad: shared unbound Var
-x = Var()
-def worker():
-    for trail in call("my_pred", x, module=mod):  # races on x
-        ...
+orders_list = [[["apple", 30], ["pear", n]] for n in range(8)]
+results = []
+
+# Good: each thread makes its own Var
+def worker(items):
+    total = Var()
+    for trail in solve(("order_total", items, total), module=orders):
+        results.append(total.value)
+
+threads = [Thread(target=worker, args=(items,)) for items in orders_list]
+for t in threads: t.start()
+for t in threads: t.join()
+print(sorted(results))  # [30, 31, 32, 33, 34, 35, 36, 37]
 ```
+
+Sharing one unbound `Var` between threads (a module-level `total = Var()`
+used by every worker) races on its binding. A goal-position `--` query in a
+`.clausal` or `.seam` file makes fresh variables on every run, so it cannot
+share one by accident; see
+[Parallel Queries from Python](tutorial_parallel_python.md).
 
 ---
 
@@ -167,28 +245,39 @@ in Python test files (`tests/test_free_threading.py`).
 ### `.clausal` tests for correctness
 
 ```clausal
---8<-- "tests/fixtures/docs/tutorial_parallel_clausal_sigs.txt:correctness_tests"
+list_concat([], YS, YS),
+list_concat([H, *XS], YS, [H, *ZS]) <- list_concat(XS, YS, ZS)
+
+# Verify the predicate works correctly (sequential)
+test("concat nil") <- (list_concat([], [1, 2], R), R is [1, 2])
+test("concat cons") <- (list_concat([1], [2, 3], R), R is [1, 2, 3])
 ```
 
 ### Python tests for concurrency
 
 ```python
-# skip
-def test_concurrent_append():
-    """Run append from 8 threads concurrently."""
+import threading
+from clausal import Var, solve
+import orders
+
+def test_concurrent_order_total():
+    """Run order_total from 8 threads at once."""
     barrier = threading.Barrier(8)
+    failures = []
 
     def worker(idx):
         barrier.wait()
         for _ in range(1000):
-            trail = Trail()
-            r = Var()
-            unify(r, None, trail)  # placeholder
-            # ... call append and verify result ...
+            total = Var()
+            answers = [total.value for _ in solve(
+                ("order_total", [["apple", 30], ["pear", idx]], total), module=orders)]
+            if answers != [30 + idx]:
+                failures.append((idx, answers))
 
-    threads = [Thread(target=worker, args=(i,)) for i in range(8)]
+    threads = [threading.Thread(target=worker, args=(i,)) for i in range(8)]
     for t in threads: t.start()
     for t in threads: t.join()
+    assert not failures
 ```
 
 ---
@@ -198,7 +287,7 @@ def test_concurrent_append():
 | Predicate type | Thread-safe? | Notes |
 |----------------|:---:|-------|
 | Pure (unify + backtrack only) | Yes | Naturally safe |
-| Tabled | Yes | Each thread gets independent tables |
+| Tabled | With the GIL | Completed tables are shared; free-threaded concurrency not yet tested |
 | CLP(ℤ) / CLP(B) / CLP(ℝ) | Yes | Per-thread constraint variables |
 | Dynamic (`assert` / `retract`) | Read-only | Concurrent writes not yet safe |
-| Side effects (I/O, `py_call`) | Safe but nondeterministic | Use Python locks for ordering |
+| Side effects (I/O, `++` calls) | Safe but nondeterministic | Use Python locks for ordering |

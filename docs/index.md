@@ -1,7 +1,7 @@
 # Clausal
 
 !!! warning "Beta"
-    Clausal is in early **beta**. The API, syntax, and module interfaces are all subject to change. The developer experience has not been widely tested beyond the author's own use. Expect rough edges — bug reports and feedback are very welcome.
+    Clausal is in **beta** on the way to 1.0. From 1.0.0, the surface listed in [Public API](public-api.md) follows semantic versioning; everything else may still change. The developer experience has not been widely tested beyond the author's own use. Expect rough edges — bug reports and feedback are very welcome.
 
 **Logic programming embedded in Python.**
 
@@ -24,6 +24,23 @@ fib(N, F) <- (
 )
 ```
 
+Ask it a question from a `.seam` file — Python that also speaks Clausal
+terms, with the goal after `--`:
+
+```python
+# report.seam
+-import_from(fibonacci, [fib])
+
+for F in --fib(10, F):
+    print(F)  # 55
+```
+
+```bash
+python -c "import clausal, report"
+```
+
+From a plain `.py` file, the same query goes through `solve`:
+
 ```python
 from clausal import Var, solve
 import fibonacci
@@ -32,12 +49,17 @@ for trail in solve(("fib", 10, F := Var()), module=fibonacci):
     print(F.value)  # 55
 ```
 
+Answers come back as the engine's own terms, which are plain Python values:
+an atom is a `str`, a compound term is a tuple `('point', 1, 2)`, a string is
+the carrier `('$chars', 'text')`. See [Python Integration](python_integration.md).
+
 ---
 
 ## Why Clausal?
 
 - **Python syntax and semantics** — Clausal code uses Python's parser. No separate parser, no foreign operators to learn.
-- **Deep integration** — goals are Python tuples, logic variables are Python objects, backtracking uses Python generators.
+- **Deep integration** — `--goal` runs a query from Python and `++expr` calls Python from a clause; terms are Python tuples and atoms are Python strings; backtracking uses Python generators.
+- **Heading for ISO Prolog** — ISO builtin names and ISO error terms; where ISO is silent, Clausal follows [Scryer Prolog](https://www.scryer.pl/). See [Operators](operators.md) and [Public API](public-api.md).
 - **Full-featured** — [tabling](tabling.md), [CLP(ℤ)](constraints.md), [DCGs](dcg.md), EDCGs, [modules](import.md), [term expansion](term_expansion.md), goal expansion, [reified if-then-else](reified_ite.md).
 - **Fast** — C extension for unification/trails, [first-argument indexing](indexing.md), groundness-keyed dispatch, [tail recursion optimization](compiler.md#tail-recursion-optimization-tro), [bytecode caching](caching.md).
 
@@ -66,7 +88,7 @@ In [2]: *(ROWS is [
    ...:   [8, _, 1, _, _, _, 7, _, _],
    ...:   [_, _, _, 1, 2, 3, _, 8, _],
    ...:   [2, _, 5, _, _, _, _, _, 9],
-   ...: ], Solve(ROWS))
+   ...: ], solve(ROWS))
 Out[2]: ROWS is [
   [1, 5, 6, 8, 9, 4, 3, 2, 7],
   [9, 2, 8, 7, 3, 1, 4, 5, 6],
@@ -78,7 +100,7 @@ Out[2]: ROWS is [
   [6, 9, 7, 1, 2, 3, 5, 8, 4],
   [2, 4, 5, 6, 7, 8, 1, 3, 9]
 ]
-# (No more solutions)
+# No more solutions.
 ```
 
 Uppercase names (`ROWS`) are automatically allocated as logic variables.  The
@@ -112,9 +134,12 @@ for the full feature set.
 | [Lambdas](lambdas.md) | Goal closures for higher-order logic programming |
 | [If-Then-Else](reified_ite.md) | Reified branching (no cut, no committed choice) |
 | [Import System](import.md) | `.clausal` file loading, module directives, qualified calls |
-| [Importing Prolog](importing_prolog.md) | Import `.pl` files directly — on-the-fly translation and caching |
+| [Importing Prolog](importing_prolog.md) | Import `.pl` files directly — on-the-fly translation and caching (experimental in 1.0) |
 | [Architecture](architecture.md) | Layer stack, execution model, why not a WAM |
-| [Python Integration](python_integration.md) | Query API, `++()` escape, Python interop |
+| [Python Integration](python_integration.md) | Querying with `--goal`, the `++()` escape, `solve()`, converters |
+| [Operators](operators.md) | What each operator means bare (Python) and quoted (Scryer/ISO) |
+| [Arithmetic](arithmetic.md) | Evaluation, exact rationals, the evaluable functors |
+| [Public API](public-api.md) | What the 1.0 semantic-versioning promise covers |
 | [Reflection](reflection.md) | Reify `.clausal` source as matchable terms — linters and matchers in Clausal |
 | [IPython / Jupyter REPL](ipython.md) | Interactive queries, `*(goals)` syntax, solution browsing |
 | **Standard Library Modules** | |

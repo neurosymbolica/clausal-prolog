@@ -127,15 +127,28 @@ query**. It asks: for which arguments does the predicate hold at all?
 
 ```python
 # The most general query for list_sum
+from itertools import islice
 from clausal import Var, solve
 import list_sum_example   # the .clausal file holding list_sum/2
 
-for trail in solve(("list_sum", LIST := Var(), SUM := Var()), module=list_sum_example):
+goal = ("list_sum", LIST := Var(), SUM := Var())
+for trail in islice(solve(goal, module=list_sum_example), 3):
     print(LIST.value, SUM.value)
 ```
 
 This asks: "Are there any lists and sums for which `list_sum` holds?" A truly
-relational predicate gives meaningful answers to its most general query.
+relational predicate gives meaningful answers to its most general query. Here
+there are infinitely many, so the loop takes the first three: `[] 0`, then a
+one-element list and a two-element list of unknowns, each with its sum still a
+[CLP(ℤ)](constraints.md) constraint rather than a number.
+
+The query above runs from a plain `.py` file with `solve`. In a `.clausal` or
+`.seam` file you would normally write the goal in
+[goal position](python_integration.md#goal-position-if-goal-for-in-goal)
+(`for LIST, SUM in --list_sum_example.list_sum(LIST, SUM):`), but a
+goal-position loop hands back only answers: it raises `ResidualConstraints`
+on the second answer, whose unknowns are still constrained. Use `solve` to
+look at constrained answers.
 
 when working with Clausal programs, it is often a good idea to try the most
 general query to see which solutions exist in general. It reveals whether a
@@ -232,10 +245,16 @@ See [Purity and Monotonicity](purity.md) for a deeper treatment.
 ### Testability
 
 Tests for relational predicates are simply queries that should hold or not
-hold. No mock objects, no test harnesses, no elaborate setup. A [test](testing.md) is just a
+hold. No mock objects, no test scaffolding, no elaborate setup. A [test](testing.md) is just a
 fact about the relation:
 
 ```clausal
+list_sum([], 0),
+list_sum([HEAD, *TAIL], TOTAL) <- (
+    list_sum(TAIL, SUBTOTAL),
+    TOTAL == SUBTOTAL + HEAD
+)
+
 test("sum of [1,2,3] is 6") <- list_sum([1, 2, 3], 6)
 test("sum of [] is 0") <- list_sum([], 0)
 ```
@@ -313,7 +332,7 @@ directions.
 **Using eager evaluation when constraints would be more general.** Eager
 `eval_/2` requires its expression argument to be ground. Use `==` instead —
 it posts [CLP(ℤ)](constraints.md) constraints that work with unbound variables and preserve
-multi-directional use. Reserve `eval_/2` and `++` escapes for [Python interop](python_integration.md) (e.g., strings).
+multi-directional use. Reserve `eval_/2` for ground expressions and `++` escapes for [Python interop](python_integration.md). [Arithmetic](arithmetic.md) has the details.
 
 **Naming predicates with verbs that imply a direction.** "Find," "get,"
 "compute," "check," "remove" — all suggest a specific mode. Describe what the

@@ -75,3 +75,76 @@ memo_fib(1, 1),
 
 test("clear") <- abolish_table('memo_fib', 2)  # nv
 # --8<-- [end:abolish_table_example]
+# --8<-- [start:declare_first]
+-dynamic(seen/1)
+-private([error(formal, context), permission_error(action, type, culprit),
+          modify, static_procedure])
+
+stable(1),
+
+test("a dynamic predicate accepts assertz") <- (
+    assertz(seen('x')),
+    seen('x')
+)
+
+test("a static predicate refuses it") <- (
+    catch(assertz(stable(2)), E, True),
+    E is error(permission_error(modify, static_procedure, '/'('stable', 1)), '/'('assertz', 1))
+)
+# --8<-- [end:declare_first]
+
+# --8<-- [start:memoization_recipe]
+-dynamic(fib_cache/2)
+
+fib(N, F) <- fib_cache(N, F)
+fib(N, F) <- (
+    not fib_cache(N, _),
+    fib_compute(N, F),
+    assertz(fib_cache(N, F))
+)
+
+fib_compute(0, 0),
+fib_compute(1, 1),
+fib_compute(N, F) <- (
+    N > 1,
+    N1 == N - 1,
+    N2 == N - 2,
+    fib(N1, F1),
+    fib(N2, F2),
+    F == F1 + F2
+)
+
+test("memoized fib") <- (fib(30, F), F == 832040, fib_cache(30, 832040))
+# --8<-- [end:memoization_recipe]
+
+# --8<-- [start:counter_recipe]
+-dynamic(ctr/1)
+
+ctr(0),
+
+increment(NEW) <- (
+    retract(ctr(OLD)),
+    NEW == OLD + 1,
+    assertz(ctr(NEW))
+)
+
+test("counter") <- (
+    increment(1),
+    increment(2),
+    ctr(2)
+)
+# --8<-- [end:counter_recipe]
+
+# --8<-- [start:collect_recipe]
+-dynamic(result/1)
+
+collect_evens(LIST) <- (
+    in_(X, LIST),
+    X % 2 == 0,
+    assertz(result(X)),
+    False
+)
+collect_evens(_),
+
+test("collect") <- (collect_evens([1, 2, 3, 4]), findall(X, result(X), [2, 4]))
+# --8<-- [end:collect_recipe]

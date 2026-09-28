@@ -32,27 +32,27 @@ out of the box, but some Prolog conventions must change.
 
 | Prolog | Clausal | Notes |
 |---|---|---|
-| `parent(alice, bob).` | `parent(alice, bob),` | Trailing comma, not period. Atoms are written bare (declare them in `-module`/`-private`, or carry `-implicit_atoms`) or single-quoted (`'alice'`, no declaration needed); each is the interned Python `str` itself. A double-quoted `"alice"` follows the file's [`-double_quotes`](directives.md#-double_quotes) mode — an atom today, a string once the default flips. |
+| `parent(alice, bob).` | `parent(alice, bob),` | Trailing comma, not period. Atoms are written bare (declare them in `-module`/`-private`, or carry `-implicit_atoms`) or single-quoted (`'alice'`, no declaration needed); each is the interned Python `str` itself. A double-quoted `"alice"` is a **string** (a character list), as in Scryer and Trealla; [`-double_quotes(atom)`](directives.md#-double_quotes) is a temporary per-module setting that reads it as an atom instead. |
 | `X`, `Parent` | `X`, `PARENT` | Variables are ALLCAPS (or leading underscore: `_x`) |
 | `_` | `_` | Anonymous variable — same |
 | `_Foo` singleton silently allowed | [`_UNUSED` suffix](syntax.md#singleton-variables-and-_unused) (`_foo_UNUSED`, `FOO_UNUSED`) | Clausal warns by default on *any* named variable used once, in both styles — matching SWI's `singleton variable` warning, but the suppression is a **suffix**, not a leading-underscore reading. Leading underscore is already a first-class variable *style* here (`_x`), so it can't double as "don't warn" too — and a case-based exemption would be blind for caseless-script variables, which are forced into leading-underscore spelling. `-allow_singletons` opts a whole file out. |
-| — (no equivalent) | [`pi`](syntax.md#constants) module-level constant | Prolog has no compile-time constants — the nearest idiom is a fact plus an extra goal (`is_pi(PI), area == PI * R**2`). Clausal's `-constant_value(pi, 3.14159)` binds a module global instead: a bare `pi` folds the ground value into the clause, and `++pi` looks it up when the goal runs; see [Constants](syntax.md#constants). There is nothing to translate this *to* in Prolog — a `.clausal` file carrying `-constants` refuses outbound translation (`clausal_to_prolog` raises `NotImplementedError`). |
+| — (no equivalent) | [`++pi`](syntax.md#constants) module-level constant | Prolog has no compile-time constants — the nearest idiom is a fact plus an extra goal (`pi_value(PI), A #= PI * R * R`). Clausal's `-constant_value(pi, 3.14159)` binds a module global; `++pi` is the value (`A == ++pi * R * R`), while a bare `pi` is the atom `pi` and must be declared like any other atom. See [Constants](syntax.md#constants). The Prolog exporter substitutes the value. |
 | `head :- body.` | `head <- (body)` | `<-` instead of `:-`. Multi-goal bodies parenthesized. |
 | `a, b, c` (conjunction) | `a, b, c` | Same — comma is conjunction |
-| `a ; b` (disjunction) | `a \| b` or separate clauses | Prefer separate clauses |
+| `a ; b` (disjunction) | `(a or b)` or separate clauses | Prefer separate clauses |
 | `\+(Goal)` | `not Goal` | Python's `not` keyword |
 | `X = Y` | `X is Y` | Unification uses `is` |
 | `X \= Y` | `not (X is Y)` | Immediate check |
 | `dif(X, Y)` | `X is not Y` or `dif(X, Y)` | Constraint — survives |
-| `X is Expr` | `eval_(Expr, X)` | Eager arithmetic evaluation; prefer `X == Expr` (CLP) |
+| `X is Expr` | `'is'(X, Expr)` or `eval_(Expr, X)` | Eager arithmetic evaluation — the quoted `'is'` is ISO `is/2`; a bare `X is Y` is unification. Prefer `X == Expr` (CLP). See [Operators](operators.md) and [Arithmetic](arithmetic.md) |
 | `X =:= Y` | `X == Y` | Arithmetic / CLP(ℤ) equality |
 | `X =\= Y` | `X != Y` | Arithmetic / CLP(ℤ) disequality |
-| `X #= Y` | `X #= Y` | CLP(ℤ) — same |
+| `X #= Y` | `X == Y`, or `'#='(X, Y)` | `#` starts a Python comment, so the CLP(ℤ) operators are written as Python comparisons (or quoted) |
 | `append/3` | `append/3` | Same — builtins are `snake_case` |
 | `member/2` | `in_/2` | Uses Python's `in` semantics |
 | `msort/2` | `msort/2` | Full names, not abbreviations |
 | `phrase(NT, Ls)` | `phrase(nt, LS)` | DCGs use `>>` instead of `-->` |
-| `?- goal.` | `for trail in goal:` | From Python; or `*(goal)` in IPython |
+| `?- goal.` | `for X in --goal(X):` | In a `.clausal`/`.seam` file ([goal position](python_integration.md#goal-position-if-goal-for-in-goal)); `solve(goal, module=m)` from a plain `.py` file; `*(goal)` in IPython |
 
 ---
 
@@ -61,7 +61,7 @@ out of the box, but some Prolog conventions must change.
 ### Tabling (SLG resolution)
 
 ```clausal
--table(fib/2),
+-table(fib/2)
 
 fib(0, 0),
 fib(1, 1),
@@ -81,26 +81,49 @@ Clausal's equivalent of `:- table`.
 ### CLP(ℤ)
 
 ```clausal
--import_from(clpfd, [all_different, labeling]),
+-private([safe_queens(QS), no_attack(Q, QS, D)])
 
 n_queens(N, QUEENS) <- (
     length(QUEENS, N),
-    QUEENS ins 1..N,
+    in_domain(QUEENS, 1, N),
     all_different(QUEENS),
-    safe_queens(QUEENS)
+    safe_queens(QUEENS),
+    label(QUEENS)
 )
+
+safe_queens([]),
+safe_queens([Q, *QS]) <- (
+    no_attack(Q, QS, 1),
+    safe_queens(QS)
+)
+
+no_attack(_, [], _),
+no_attack(Q, [Q1, *QS], D) <- (
+    Q != Q1 + D,
+    Q != Q1 - D,
+    D1 == D + 1,
+    no_attack(Q, QS, D1)
+)
+
+test("the first 6-queens placement") <- once(n_queens(6, [2, 4, 6, 1, 3, 5]))
 ```
 
-The constraint operators (`#=`, `#<`, `#>`, `#<=`, `#>=`, `#!=`) are the same.
-`ins` works as you'd expect. `all_different`, `labeling`, and other global
-constraints are available as `snake_case` builtins.
+`#` starts a Python comment, so the constraint operators are spelled as
+Python comparisons: `==`, `!=`, `<`, `>`, `<=`, `>=` post CLP(ℤ) constraints
+(`#=`, `#\=`, `#<`, …); the quoted forms (`'#='(X, Y)`) also work.
+`X ins 1..N` is `in_domain(X, 1, N)` and `labeling/2` is `label/1`
+(first-fail). `all_different` and the other global constraints are builtins,
+in scope without an import. See [Constraints](constraints.md).
 
 ### DCGs
 
 ```clausal
-greeting >> [hello], name,
-name >> [world],
-name >> [clausal],
+greeting >> (['hello'], name)
+name >> ['world']
+name >> ['clausal']
+
+test("parse") <- phrase(greeting, ['hello', 'world'])
+test("generate") <- findall(S, phrase(greeting, S), [['hello', 'world'], ['hello', 'clausal']])
 ```
 
 `>>` is Clausal's `-->`. Terminals are lists, non-terminals are bare calls,
@@ -108,18 +131,23 @@ inline goals use `{ }` or `++()`. `phrase/2` and `phrase/3` work as expected. Se
 
 ### [Meta-predicates](meta_predicates.md)
 
-[`findall/3`, `bagof/3`, `setof/3`](meta_predicates.md), `forall/2`, and [`Call/1..8`](higher_order.md) are all
+[`findall/3`, `bagof/3`, `setof/3`](meta_predicates.md), `forall/2`, and [`call/1..8`](higher_order.md) are all
 available as builtins.
 
 ### [Module system](import.md)
 
 ```clausal
--import_from(utils, [Double, Helper]),
--import_module(math_utils),
+-import_from(py.csv, [parse_row])
+-import_module(py.json)
+
+row_fields(LINE, FIELDS) <- parse_row(LINE, FIELDS)
+json_value(TEXT, VALUE) <- py.json.parse(TEXT, VALUE)
+
+test("a qualified call") <- (json_value("[1, 2]", V), V is [1, 2])
 ```
 
-equivalent to Prolog's `use_module` family. Qualified calls use dot notation:
-`math_utils.factorial(N, F)`.
+`-import_from` is `use_module/2` and `-import_module` is `use_module/1` with
+every call qualified. Qualified calls use dot notation: `py.json.parse(T, V)`.
 
 > **One genuine difference — read this.** Names resolve **lexically, against the
 > defining module** (Python-style): there is no flat global predicate database
@@ -155,10 +183,29 @@ An atom **is** the interned Python `str` — no wrapper — and is compared with
 Write one bare (`red`, declared in `-private`/`-module`, imported, or under
 `-implicit_atoms`) or single-quoted (`'hello world'`, no declaration needed).
 
-A double-quoted `"red"` is an atom or a **string** depending on the file's
-[`-double_quotes`](directives.md#-double_quotes) mode; a string is the list of
-its character atoms, and atoms and strings never unify — exactly as in ISO
-Prolog. See [Atoms vs strings](syntax.md#atoms-vs-strings).
+A double-quoted `"red"` is a **string** — the list of its character atoms,
+`-double_quotes(chars)`, the default in Scryer and Trealla. Atoms and strings
+never unify. [`-double_quotes(atom)`](directives.md#-double_quotes) is a
+temporary per-module setting for old code. See
+[Atoms vs strings](syntax.md#atoms-vs-strings).
+
+### Standards: ISO first, then Scryer
+
+Where ISO 13211-1 speaks, Clausal follows it; where ISO is silent, it follows
+Scryer Prolog (not SWI). Two places you will notice:
+
+- **Error terms** are ISO `error(Formal, Context)` terms in Scryer's form: the
+  context is the culprit's predicate indicator, and the printed exception
+  shows the term first —
+  `Uncaught logic exception: error(type_error(atom,1),atom_length/2)`. See
+  [Exceptions](exceptions.md).
+- **The database is declare-first.** `assertz`/`retract` work only on a
+  predicate declared `-dynamic(name/arity)`; a static one raises
+  `permission_error(modify, static_procedure, Name/Arity)`.
+
+[Operators](operators.md) lists which spellings follow Python and which follow
+Scryer: bare `-7 // 2` is `-4` (Python floor division), quoted
+`'//'(-7, 2)` is `-3` (ISO truncation).
 
 ### Naming conventions
 
@@ -191,19 +238,32 @@ You can call any Python expression from within a clause using [`++()`](python_in
 word_count(TEXT, N) <- (N is ++len(TEXT.split()))
 ```
 
-And call any Clausal predicate from Python:
+And query any predicate from Python hosted in a `.clausal` or `.seam` file —
+`--goal` in goal position is Clausal's `?-`:
+
+```python
+# report.seam
+-import_module(graph)
+
+def destinations(source):
+    return [DEST for DEST in --graph.reachable(++source, DEST)]
+```
+
+From a plain `.py` file, build the goal as a cell (a tuple: the name, then
+the arguments) and run it against its module:
 
 ```python
 from clausal import Var, solve
-import my_module
+import graph
 
-for trail in solve(("reachable", "a", DEST := Var()), module=my_module):
+for trail in solve(("reachable", "a", DEST := Var()), module=graph):
     print(DEST.value)
 ```
 
-No subprocess, no marshalling, no FFI. A goal is a Python tuple — the
-predicate's name and its arguments — run against the module that defines it.
-Logic variables are Python objects. Everything runs on one VM.
+No subprocess, no marshalling, no FFI. Answers are the engine's own terms: an
+atom is a Python `str`, a compound term is a tuple `('f', 1, 2)`, a string is
+`('$chars', text)`; `clausal.to_python` converts one deeply. See
+[Python Integration](python_integration.md).
 
 ### [Compilation](compiler.md), not interpretation
 
@@ -218,6 +278,11 @@ There is no interpreter loop. This means:
 ---
 
 ## Importing existing Prolog code
+
+!!! warning "Experimental in 1.0"
+    `.pl` import goes through a translator that is being replaced; what it
+    accepts and how it names things may change in a minor release (see
+    [Public API](public-api.md)).
 
 You don't have to rewrite your `.pl` files to use them in Clausal. Place them
 on `sys.path` and import directly:
@@ -238,9 +303,7 @@ translate and load `helpers.pl`.
 `discontiguous`, `table`, `use_module` with import lists.
 
 **What doesn't:** cut (`!`) and if-then-else (`->`) are rejected with clear
-error messages. Bare lowercase atoms (like `red`, `foo`) used as data values
-need to be quoted strings or integers — see
-[Importing Prolog](importing_prolog.md) for details.
+error messages — see [Importing Prolog](importing_prolog.md) for details.
 
 See [Importing Prolog Code](importing_prolog.md) for the full guide.
 

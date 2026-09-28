@@ -20,11 +20,18 @@ Or via [module import](import.md):
 -import_module(py.http)
 -import_module(py.url)
 
-main <- (
-    py.http.get("http://example.com", BODY),
-    ++print(BODY)
-)
+from clausal import to_python
+
+page(BODY) <- py.http.get("http://example.com", BODY)
+
+def main():
+    for BODY in --page(BODY):
+        print(to_python(BODY))      # BODY is a string; to_python gives the str
 ```
+
+URLs, headers and bodies may be written as strings or atoms. Every body the
+module hands back is a **string** (the `('$chars', text)` carrier in
+Python), and a parsed JSON object is a `DictTerm` whose keys are **atoms**.
 
 ---
 
@@ -57,8 +64,8 @@ main <- (
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `url` | string | *required* | request URL |
-| `method` | string | `"GET"` | HTTP method |
+| `url` | string or atom | *required* | request URL |
+| `method` | string or atom | `"GET"` | HTTP method |
 | `headers` | DictTerm | `{}` | request headers |
 | `data` | string | `None` | request body |
 | `timeout` | number | `30` | Timeout in seconds |
@@ -80,8 +87,10 @@ the status code so you can handle errors explicitly.
 | `json_get(Url, Term)` | `+Url, -Term` | GET + parse JSON → DictTerm/list |
 | `json_post(Url, Term, Response)` | `+Url, +Term, -Response` | POST JSON + parse response |
 
-JSON objects are converted to [`DictTerm`](dicts_sets.md), arrays to lists, using the same
-conversion as the [`py.json`](json.md) module.
+JSON objects are converted to [`DictTerm`](dicts_sets.md) (atom keys), arrays to lists and
+JSON strings to strings, using the same conversion as the [`py.json`](json.md) module.
+Read a field as `USER.name` or `py.json.get(USER, name, NAME)` (with `-import_module(py.json)`
+and `name` declared); a string key `"name"` does not match an atom key and the goal fails.
 
 ```clausal
 --8<-- "tests/fixtures/docs/http_sigs.txt:json_request_examples"
