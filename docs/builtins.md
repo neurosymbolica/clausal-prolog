@@ -253,7 +253,11 @@ Collect all bindings of `Template` produced by `Goal` into `Bag` (a list). Succe
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:bagof_3"
 ```
-Like `findall/3` but fails if `Goal` has no solutions. Bag preserves duplicate solutions.
+Like `findall/3` but fails if `Goal` has no solutions, and collects one bag
+per binding of the goal's free variables (those in neither `Template` nor a
+leading `Var ^`), backtracking over the bags in the standard order of those
+bindings (ISO 8.10.2). A bag preserves duplicate solutions. See
+[Meta-Predicates](meta_predicates.md#bagof3).
 
 ??? info "Implementation & tests"
     **Clausal tests:** `tests/fixtures/meta_test.clausal`
@@ -265,7 +269,8 @@ Like `findall/3` but fails if `Goal` has no solutions. Bag preserves duplicate s
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:setof_3"
 ```
-Like `bagof/3` but removes duplicates and sorts the result.
+Like `bagof/3` (one set per binding of the free variables, `^` for
+existential ones) but removes duplicates and sorts each set.
 
 ??? info "Implementation & tests"
     **Clausal tests:** `tests/fixtures/meta_test.clausal`

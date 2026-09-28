@@ -114,7 +114,7 @@ def test_slash_3_reports_the_decimal_not_the_string(tmp_path):
     assert len(rows) == 1
     n, u = rows[0]
     assert n == Decimal("292.00") and not isinstance(n, str)
-    assert u == ("usd",)
+    assert u == "usd"
 
 
 # ── the table half, where most statutory money lives ─────────────────────────

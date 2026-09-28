@@ -5,7 +5,7 @@ import pytest
 from clausal.logic.cells import chars  # stage 2: a string is the carrier
 from clausal.logic.atoms import char_atom
 from clausal.terms import ConcreteSeg, VarSeg, SegList, _multi_star_splits, _seglist_unify_gen
-from clausal.logic.variables import Var, Trail, walk, unify
+from clausal.logic.variables import Var, Trail, walk, unify, deref
 
 
 # ── _multi_star_splits ────────────────────────────────────────────────────────
@@ -263,12 +263,22 @@ class TestUnify:
         assert sl.__unify__(chars("hi"), Trail()) is True   # stage 2: the string is the carrier
         assert sl.__unify__(chars("ho"), Trail()) is False
 
-    def test_unify_against_seglist_returns_not_implemented(self):
+    def test_unify_against_seglist(self):
         # nv
+        # Two SegLists unify as the lists they spell (F030): a ground pair
+        # compares element-wise; an open pair pairs its elements and hands
+        # the tail over; an ambiguous pair (both remainders open with a hole
+        # and go on) is still NotImplemented.
         sl = SegList([ConcreteSeg([1])])
-        other = SegList([ConcreteSeg([1])])
-        result = sl.__unify__(other, Trail())
-        assert result is NotImplemented
+        assert sl.__unify__(SegList([ConcreteSeg([1])]), Trail()) is True
+        assert sl.__unify__(SegList([ConcreteSeg([2])]), Trail()) is False
+        h, t1, t2 = Var(), Var(), Var()
+        open1 = SegList([ConcreteSeg([1]), VarSeg(t1)])
+        assert open1.__unify__(SegList([ConcreteSeg([h]), VarSeg(t2)]), Trail())
+        assert deref(h) == 1 and deref(t1) is deref(t2)
+        a, b = Var(), Var()
+        amb = SegList([VarSeg(a), ConcreteSeg([1])])
+        assert amb.__unify__(SegList([VarSeg(b), ConcreteSeg([1])]), Trail()) is NotImplemented
 
     def test_unify_fully_ground_seglist_against_equal_list(self):
         # nv

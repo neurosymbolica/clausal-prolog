@@ -367,10 +367,13 @@ class TestPriorArtAndCharacterization:
             t.undo(m)
         assert splits == [([], [1, 2, 3]), ([1], [2, 3]), ([1, 2], [3]), ([1, 2, 3], [])]
 
-    def test_f030_seg_vs_seg_nonground_still_unsupported(self, trail):
-        """Prior art F030 (deferred): non-ground Seg* vs Seg* unification."""
+    def test_f030_seg_vs_seg_nonground(self, trail):
+        """Prior art F030: non-ground Seg* vs Seg* unification.  Two open
+        SegLists unify as ISO partial lists do (``T1 = T2``; the elements
+        pair up); two open SegStrings are still unsupported."""
         A, B = Var(), Var()
-        assert unify(SegList([VarSeg(A)]), SegList([VarSeg(B)]), trail) is False
+        assert unify(SegList([VarSeg(A)]), SegList([VarSeg(B)]), trail)
+        assert deref(A) is deref(B)
         assert unify(SegString([VarSeg(Var())]), SegString([VarSeg(Var())]), trail) is False
 
     def test_d001_cross_type_numeric_unification_characterization(self, trail):

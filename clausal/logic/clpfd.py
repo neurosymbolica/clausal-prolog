@@ -1692,7 +1692,14 @@ def _arith_cells_to_nodes(x, strict=None):
                     return None
                 c = a
             args.append(c)
-        cls = _key_nodes()[ka[0]]
+        cls = _key_nodes().get(ka[0])
+        if cls is None:
+            # An evaluable with no operator node (``abs/1``, ``min/2``,
+            # ``max/2``): no linearising walker knows it, so a GROUND one is
+            # folded to its value here and a non-ground one is left as the
+            # cell, for each post's own diagnosis (the CLP posts do not
+            # propagate through it).
+            return _eval_ground(x)
         if len(args) == 1:
             return cls(operand=args[0])
         return cls(left=args[0], right=args[1])

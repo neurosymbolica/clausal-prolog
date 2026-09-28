@@ -89,7 +89,7 @@ def _is_deterministic_op_ir(op: Any) -> bool:
       ``Sequence`` arm below treats empty as deterministic.
     - ``False`` becomes :class:`Fail` (D5j) — deterministic.
     - ``PyThunk`` becomes :class:`PyThunkOp` (D5j) — deterministic.
-    - ``Call(once|findall|bagof|setof|throw|halt, ...)`` becomes a
+    - ``Call(once|findall|throw|halt, ...)`` becomes a
       :class:`MetaCall` with the matching ``kind`` — the explicit set
       below mirrors the legacy ``name in {...}`` arm.
     - Other ``MetaCall`` kinds (``catch``, ``forall``, ``freeze``,
@@ -138,7 +138,8 @@ def _is_deterministic_op_ir(op: Any) -> bool:
 # ``forall``, ``freeze``, ``when``, ``setup_call_cleanup``,
 # ``call_cleanup``, ``call_nth``, ``count_all``) are non-deterministic.
 _DETERMINISTIC_META_KINDS: frozenset[str] = frozenset({
-    "once", "findall", "bagof", "setof", "throw", "halt",
+    # (not bagof/setof: they backtrack over the free-variable bags)
+    "once", "findall", "throw", "halt",
 })
 
 
@@ -354,9 +355,10 @@ def _is_deterministic_goal(goal: Any) -> bool:
         # is undetermined; not guaranteed single-solution (mirror of Branch).
         case IfExpr():
             return False
-        # once/findall/bagof/setof — always produce exactly one result
+        # once/findall — at most one result (bagof/setof backtrack over
+        # the free-variable bags, so they are not here)
         case Call(func=LoadName(name=name)) if name in (
-            "once", "findall", "bagof", "setof",
+            "once", "findall",
             "throw", "halt",
         ):
             return True
@@ -370,7 +372,8 @@ def _is_deterministic_goal(goal: Any) -> bool:
 # Builtins known to produce at most one solution (semidet / det).
 _DETERMINISTIC_BUILTINS: frozenset[tuple[str, int]] = frozenset({
     # list builtins (lists.py)
-    ("length", 2), ("last", 2), ("reverse", 2), ("flatten", 2),
+    # (length/2 is not here: with an open list it enumerates.)
+    ("last", 2), ("reverse", 2), ("flatten", 2),
     ("msort", 2), ("sort", 2), ("sum_list", 2), ("max_list", 2),
     ("min_list", 2), ("take", 3), ("drop", 3), ("split_at", 4),
     ("zip_", 3), ("replicate", 3),

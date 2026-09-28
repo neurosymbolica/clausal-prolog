@@ -580,7 +580,8 @@ def _literal_number(node):
 
 def _units_ast_to_term(node):
     """Lower a unit EXPRESSION's AST to the term ``constant_number_units/3``
-    answers with: nested tuples of atoms, ``('/', ('metre',), ('second',))``.
+    answers with: atoms, nested in cells for a compound unit --
+    ``('/', 'metre', 'second')``.
 
     Built at compile time from what the declaration WROTE. The same term
     cannot be recovered at runtime from the Quantity: a unit that is not the
@@ -591,7 +592,9 @@ def _units_ast_to_term(node):
     rather than record a wrong answer.
     """
     if isinstance(node, Name):
-        return (node.id,)                      # an atom is a 1-tuple
+        # An atom IS its str (atoms-as-str flip, stage 2); ``('x',)`` is a
+        # RESERVED shape, not the atom, so it never unifies with ``usd_cent``.
+        return node.id
     if isinstance(node, Constant) and isinstance(node.value, int):
         return node.value                      # an exponent
     if isinstance(node, BinOp):

@@ -127,7 +127,7 @@ def test_the_declared_ratio_pair_is_what_slash_3_reports(tmp_path):
 
         look(N, U) <- constant_number_units(ru_floor, N, U)
     """)
-    assert _one(m, "look", 2) == (300, ("basis_point",))
+    assert _one(m, "look", 2) == (300, "basis_point")
 
 
 def test_a_float_ratio_magnitude_does_not_go_binary(tmp_path):

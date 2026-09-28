@@ -20,6 +20,10 @@ static PyObject *fn_unify  = NULL;  /* clausal.logic.variables.unify */
 static PyObject *fn_deref  = NULL;  /* clausal.logic.variables.deref */
 static PyObject *fn_is_var = NULL;  /* clausal.logic.variables.is_var */
 
+/* clausal.logic.runtime.list_unify._seglist_input_fallback, looked up on
+ * first use: that module imports this one, so it cannot be bound at init. */
+static PyObject *fn_seglist_fallback = NULL;
+
 static PyTypeObject *SegListType     = NULL;
 static PyTypeObject *SegStringType   = NULL;
 static PyTypeObject *SegBytesType    = NULL;
@@ -363,9 +367,9 @@ py_head_list_unify_input(PyObject *Py_UNUSED(module), PyObject *args)
      *
      * For non-ground walked values the two types diverge: SegString
      * returns Py_None (defer to output mode so the body can constrain
-     * the unbound holes); SegList keeps the historical silent-False
-     * behaviour (SegList-vs-SegList unification is blocked by F030,
-     * Phase 6). The Python fallback mirrors this asymmetry. */
+     * the unbound holes); an open SegList is unified with the pattern as
+     * a term by the Python twin's _seglist_input_fallback (F030), which
+     * both implementations share. */
     if (PyObject_TypeCheck(d, SegStringType)) {
         PyObject *walked = PyObject_CallMethod(d, "__walk__", NULL);
         Py_DECREF(d);
@@ -392,8 +396,21 @@ py_head_list_unify_input(PyObject *Py_UNUSED(module), PyObject *args)
         if (!walked) return NULL;
         d = walked;
         if (!PyList_Check(d) && !is_chars_carrier(d)) {   /* STAGE 2: a bare str is an atom */
+            /* Still open: unify it with the pattern as a term (F030). */
+            if (!fn_seglist_fallback) {
+                PyObject *mod = PyImport_ImportModule(
+                    "clausal.logic.runtime.list_unify");
+                if (!mod) { Py_DECREF(d); return NULL; }
+                fn_seglist_fallback = PyObject_GetAttrString(
+                    mod, "_seglist_input_fallback");
+                Py_DECREF(mod);
+                if (!fn_seglist_fallback) { Py_DECREF(d); return NULL; }
+            }
+            PyObject *r = PyObject_CallFunctionObjArgs(
+                fn_seglist_fallback, d, var_vals, star_val, after_vals,
+                trail, NULL);
             Py_DECREF(d);
-            Py_RETURN_FALSE;
+            return r;
         }
     }
 

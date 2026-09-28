@@ -43,8 +43,9 @@ from types import MappingProxyType
 
 __all__ = ["exact_add", "exact_sub", "exact_mul", "exact_div", "exact_neg",
            "python_floordiv", "python_mod", "python_pow", "iso_intdiv",
-           "iso_div", "iso_mod", "iso_pow", "iso_intpow", "decimal_parts",
-           "EVALUABLE", "NODE_EVALUABLE",
+           "iso_div", "iso_mod", "iso_pow", "iso_intpow", "iso_abs", "iso_max",
+           "iso_min", "decimal_parts",
+           "EVALUABLE", "NODE_EVALUABLE", "CELL_ONLY_EVALUABLE",
            "evaluate", "evaluate_python_result"]
 
 
@@ -458,6 +459,53 @@ def iso_intpow(l, r):
     return _float_pow(lv, rv, "^")
 
 
+def iso_abs(x):
+    """``abs/1`` (ISO 9.1.7): the absolute value, in the operand's own kind
+    (Scryer: ``abs(-3)`` is 3, ``abs(-3.5)`` is 3.5, an exact rational stays
+    exact).  A Python value (a Quantity) meets Python's own ``abs``."""
+    if type(x) is int:
+        return -x if x < 0 else x
+    return abs(_operand(x, "abs"))
+
+
+def _float_compare_pick(lv, rv, pick_max: bool):
+    """Scryer's ``min``/``max`` once a float is involved: the operands are
+    compared AS FLOATS; the winner comes back in its own kind, and a tie is
+    the float of the second operand for ``max``, of the first for ``min``
+    (``max(1, 1.0)`` and ``min(1, 1.0)`` are both 1.0)."""
+    try:
+        fl, fr = float(lv), float(rv)
+    except OverflowError:
+        raise _float_overflow("max" if pick_max else "min") from None
+    if fl == fr:
+        return fr if pick_max else fl
+    if pick_max:
+        return lv if fl > fr else rv
+    return lv if fl < fr else rv
+
+
+def iso_max(l, r):
+    """``max/2`` (ISO Cor.2 9.3.9): the larger operand, in its own kind
+    (Scryer: ``max(2, 5)`` is 5, ``max(1, 2.0)`` is 2.0); beside a float the
+    comparison is Scryer's, see :func:`_float_compare_pick`."""
+    (lv, lnum), (rv, rnum) = _real(l), _real(r)
+    if not (lnum and rnum):
+        return max(lv, rv)
+    if type(lv) is float or type(rv) is float:
+        return _float_compare_pick(lv, rv, True)
+    return lv if lv > rv else rv
+
+
+def iso_min(l, r):
+    """``min/2`` (ISO Cor.2 9.3.10): the smaller operand, as :func:`iso_max`."""
+    (lv, lnum), (rv, rnum) = _real(l), _real(r)
+    if not (lnum and rnum):
+        return min(lv, rv)
+    if type(lv) is float or type(rv) is float:
+        return _float_compare_pick(lv, rv, False)
+    return lv if lv < rv else rv
+
+
 def exact_neg(x):
     if type(x) is int:
         return -x
@@ -692,7 +740,15 @@ EVALUABLE = MappingProxyType({
     ("/", 2): iso_truediv, ("-", 1): exact_neg,
     ("//", 2): iso_intdiv, ("div", 2): iso_div, ("mod", 2): iso_mod,
     ("**", 2): iso_pow, ("^", 2): iso_intpow, ("rdiv", 2): iso_rdiv,
+    # ISO 9.1.7 abs/1; ISO Cor.2 9.3.9-10 max/2, min/2 (Scryer's kinds)
+    ("abs", 1): iso_abs, ("max", 2): iso_max, ("min", 2): iso_min,
 })
+
+#: The entries of :data:`EVALUABLE` with NO operator node: a CLP post cannot
+#: rewrite them into a node it linearises, so it folds a ground one to its
+#: value (``clpfd._arith_cells_to_nodes``) and leaves a non-ground one to
+#: the post's own diagnosis.
+CELL_ONLY_EVALUABLE = frozenset({("abs", 1), ("max", 2), ("min", 2)})
 
 #: :data:`EVALUABLE` plus the bare operator nodes' private Python-semantics
 #: entries -- what a NODE evaluates through.  A cell never looks here.

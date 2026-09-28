@@ -89,6 +89,26 @@ from ._seg_helpers import (
 )
 
 
+def _seglist_input_fallback(target, var_vals, star_val, after_vals, trail):
+    """Input mode against an OPEN SegList *target* (F030): build the pattern
+    as the list term it spells -- ``[V1 ... Vn, *S, A1 ... Am]`` -- and
+    unify the two terms, which pairs the elements and hands the tail over
+    (``SegList.__unify__``).  ``p([H, *T])`` called with ``[1, *_]`` binds
+    ``H = 1`` there, as ISO's ``[H|T] = [1|_]`` does; it used to fail.
+    Shared by the C twin, which calls it for this one case."""
+    if star_val is None:
+        pattern = list(var_vals) + list(after_vals)
+    else:
+        segs = []
+        if var_vals:
+            segs.append(ConcreteSeg(list(var_vals)))
+        segs.append(VarSeg(star_val))
+        if after_vals:
+            segs.append(ConcreteSeg(list(after_vals)))
+        pattern = SegList(segs)
+    return bool(unify(target, pattern, trail))
+
+
 def _head_list_unify_input_py(target, var_vals, star_val, after_vals, trail):
     """Input-mode list pattern unification: destructure a list or string.
 
@@ -124,8 +144,8 @@ def _head_list_unify_input_py(target, var_vals, star_val, after_vals, trail):
     # SegString defers to output mode (returns None) so the body can
     # constrain the unbound holes — the output-mode helper then rebuilds
     # the pattern and tries the unify when called. A still-non-ground
-    # SegList keeps the historical silent-False behaviour (SegList-vs-
-    # SegList unification is blocked by F030, Phase 6).
+    # SegList is unified with the pattern as a term
+    # (``_seglist_input_fallback``, F030).
     if isinstance(d, SegString):
         d = d.__walk__()
         if is_chars(d):
@@ -141,7 +161,7 @@ def _head_list_unify_input_py(target, var_vals, star_val, after_vals, trail):
         if is_chars(d):
             d = chars_text(d); d_text = True   # a ground char SegList walks to the carrier
         if not (isinstance(d, list) or d_text):
-            return False
+            return _seglist_input_fallback(d, var_vals, star_val, after_vals, trail)
 
     if isinstance(d, (list, bytes)) or d_text:   # STAGE 2: text only through the carrier
         n_before = len(var_vals)
