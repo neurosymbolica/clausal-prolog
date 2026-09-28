@@ -153,4 +153,5 @@ def test_a_python_binding_under_a_builtin_name_is_kept(tmp_path):
     assert _is_unshadowed_builtin_name("assertz",
                                        {"assertz": runtime_builtins["assertz"]})
     assert not _is_unshadowed_builtin_name("integer", {"integer": 5})
+    assert not _is_unshadowed_builtin_name("integer", {"integer": None})
     assert not _is_unshadowed_builtin_name("not_a_builtin_xyz", {})

@@ -225,10 +225,10 @@ def _is_unshadowed_builtin_name(name: str, namespace: dict) -> bool:
     if name not in namespace:
         return True
     bound = namespace[name]
-    if bound is None or isinstance(bound, (BuiltinTerm, BuiltinPredicate)):
+    if isinstance(bound, (BuiltinTerm, BuiltinPredicate)):
         return True
     from clausal.import_hook import runtime_builtins  # noqa: PLC0415
-    return bound is runtime_builtins.get(name)
+    return name in runtime_builtins and bound is runtime_builtins[name]
 
 
 def lowering_globals() -> "dict | None":

@@ -162,7 +162,10 @@ constraint, see [Operators](operators.md)):
     that is an integer literal or an arithmetic expression gives clpz's
     `#\=`; anything else, including a variable and a float literal (CLP(ℤ)
     is over the integers), gives `dif/2`, which is sound for numbers too but
-    does not propagate over a finite domain. Write `'\\=='(X, Y)` in Clausal
+    does not propagate over a finite domain. The decision looks only at the
+    two operands: `X != Y` between two variables is `dif/2` even when both
+    are CLP(ℤ) variables elsewhere in the clause (the answers are the same;
+    only the pruning is weaker). Write `'\\=='(X, Y)` in Clausal
     when you mean the structural test -- which is what Prolog `\==` imports
     as.
 

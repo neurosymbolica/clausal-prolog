@@ -100,7 +100,10 @@ test("inf and sup read the interval") <- (
 
 `inf/2` and `sup/2` answer from CLP(ℝ) when `Expr` mentions a real
 variable, and from [CLP(ℚ)](clpq.md#sup2-and-inf2) (exact, by simplex)
-otherwise. A term that is not arithmetic raises
+otherwise. The CLP(ℝ) bound is always a **float**, so compare it
+with a float (`inf(X, 0.0)`). In a CLP(ℝ) expression, a variable with no
+real or CLP(ℤ) interval (a CLP(ℚ) variable, say) counts as unbounded, so the
+goal fails rather than mixing the two solvers. A term that is not arithmetic raises
 `type_error(evaluable, Name/Arity)`.
 
 ### Module API
