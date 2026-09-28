@@ -527,9 +527,13 @@ def test_F026_iso_operator_table_complete():
 
 
 def test_F027_bare_dynamic_directive():
-    # A11-F027 (fixed): bare `:- dynamic p/1.` parses via 1150 fx op.
+    # A11-F027 (fixed): bare `:- dynamic p/1.` parses via SWI's 1150 fx op.
+    # Since ruling R11 (2026-09-28) the default reader table is Scryer's,
+    # which (like Scryer) has no such op, so the SWI dialect is named.
     from clausal.tools.prolog_to_clausal import prolog_to_clausal
-    assert "-dynamic(p/1)" in prolog_to_clausal(":- dynamic p/1.\n")
+    from clausal.tools.prolog_dialect import Dialect
+    assert "-dynamic(p/1)" in prolog_to_clausal(":- dynamic p/1.\n",
+                                                dialect=Dialect.swi())
 
 
 def test_F027_guard_paren_dynamic_directive():
@@ -702,10 +706,12 @@ def test_F039_dcg_pushback_clear_error_or_valid():
 
 
 def test_F041_soft_cut_clear_error():
-    # A11-F041 (fixed): *-> parses then is rejected by the translator.
+    # A11-F041 (fixed): *-> parses then is rejected by the translator --
+    # under SWI's table; Scryer's (the default since ruling R11) has no *->.
     from clausal.tools.prolog_to_clausal import prolog_to_clausal, PrologTranslationError
+    from clausal.tools.prolog_dialect import Dialect
     with pytest.raises(PrologTranslationError, match="soft|[*]->"):
-        prolog_to_clausal("p :- (a *-> b ; c).\n")
+        prolog_to_clausal("p :- (a *-> b ; c).\n", dialect=Dialect.swi())
 
 
 def test_guard_body_ite_rejected():
