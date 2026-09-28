@@ -130,6 +130,10 @@ since 0.4.0 finish three moves:
 
 ### Added
 
+- **`Module.declare_dynamic(name, arity)`**, the Python spelling of
+  `-dynamic(name/arity)`, so a `Module` built from Python can take an
+  `assertz`. Idempotent; its errors are ISO `dynamic/1`'s. See
+  [docs/database_ops.md](docs/database_ops.md).
 - **Prolog flags.** `set_prolog_flag/2` and `current_prolog_flag/2` with the
   ISO flags (`bounded`, `max_integer`, `min_integer`,
   `integer_rounding_function`, `char_conversion`, `debug`, `max_arity`,

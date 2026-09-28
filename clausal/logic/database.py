@@ -1647,6 +1647,64 @@ class Module:
         if param_names is not None:
             self.db.register_signature(functor, arity, param_names)
 
+    def declare_dynamic(self, name: str, arity: int) -> None:
+        """Declare ``name/arity`` dynamic in this module, as the directive
+        ``-dynamic(name/arity)`` does (ruling R14, 2026-09-29).
+
+        After it, ``assertz``/``asserta``/``retract`` may change the
+        predicate, and a call with no clauses fails instead of raising.
+        Idempotent. Errors are ISO ``dynamic/1``'s, as ``LogicException``:
+
+        * an unbound argument: ``instantiation_error``;
+        * *name* not an atom (a ``str``): ``type_error(atom, Name)``;
+        * *arity* not an integer: ``type_error(integer, Arity)``;
+        * a negative *arity*: ``domain_error(not_less_than_zero, Arity)``;
+        * a builtin, or a static predicate that already has clauses (this
+          module's own, or one it imports):
+          ``permission_error(modify, static_procedure, Name/Arity)``.
+        """
+        from clausal.logic.variables import deref, is_var  # noqa: PLC0415
+        from clausal.logic.exceptions import (  # noqa: PLC0415
+            domain_error, instantiation_error,
+        )
+        context = "dynamic/1"
+        name, arity = deref(name), deref(arity)
+        if is_var(name) or is_var(arity):
+            raise LogicException(instantiation_error(context))
+        if type(name) is not str:
+            raise LogicException(type_error("atom", name, context))
+        if type(arity) is not int:
+            raise LogicException(type_error("integer", arity, context))
+        if arity < 0:
+            raise LogicException(
+                domain_error("not_less_than_zero", arity, context))
+        db = self.db
+        if db.is_dynamic(name, arity):
+            return
+        row = db.row(name, arity)
+        if row is not None and row.dynamic:
+            return      # an imported predicate its owner declared dynamic
+        from clausal.logic.builtins._registry import (  # noqa: PLC0415
+            _BUILTINS, _DB_BUILTINS,
+        )
+        builtin = (name, arity) in _BUILTINS or (name, arity) in _DB_BUILTINS
+        has_clauses = row is not None and bool(row.db.clauses_for(name, arity))
+        foreign = row is not None and row.db is not db
+        if builtin or has_clauses or foreign:
+            raise LogicException(permission_error(
+                "modify", "static_procedure", make_cell("/", name, arity),
+                context))
+        db.mark_dynamic(name, arity)
+        if (name, arity) not in db._dispatch:
+            # A clause-less ``-dynamic`` predicate gets an empty dispatch at
+            # load (compiler_v2 step 5), so a call FAILS instead of raising
+            # existence_error; the same here.  An assertz recompiles it.
+            from clausal.logic.compiler.predicate import (  # noqa: PLC0415
+                compile_predicate_trampoline,
+            )
+            compile_predicate_trampoline(
+                name, arity, [], db, globals_=self.module_dict)
+
     def solve(self, goal: Any, trail=None):
         """Solve a goal against this module's database.
 

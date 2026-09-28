@@ -41,6 +41,30 @@ Declare several at once:
 
 See [Directives](directives.md) for the other directives.
 
+### From Python: `Module.declare_dynamic`
+
+A `Module` built from Python has no directives, so declare its dynamic
+predicates with `Module.declare_dynamic(name, arity)`, the same declaration
+as `-dynamic(name/arity)`. It also works on the `Module` of a loaded
+`.clausal` file (`mod.__clausal_module__`).
+
+```python
+from clausal import Module, Var, solve
+
+m = Module("counter")
+m.declare_dynamic("count", 1)          # -dynamic(count/1)
+list(solve(("assertz", ("count", 0)), module=m))
+n = Var()
+[n.value for _ in solve(("count", n), module=m)]    # [0]
+```
+
+It is idempotent. Its errors are ISO `dynamic/1`'s, raised as a
+`LogicException` whose culprit is `dynamic/1`: `instantiation_error` for an
+unbound argument, `type_error(atom, Name)`, `type_error(integer, Arity)`,
+`domain_error(not_less_than_zero, Arity)`, and
+`permission_error(modify, static_procedure, Name/Arity)` for a builtin or a
+static predicate that already has clauses.
+
 ---
 
 ## Adding Clauses
