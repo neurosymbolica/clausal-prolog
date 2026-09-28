@@ -2,7 +2,7 @@
 
 Lambdas are anonymous clauses that can be passed as arguments to [higher-order predicates](higher_order.md). They use the same `head <- body` arrow syntax as clause definitions. Variables from the enclosing clause are captured implicitly — no special declarations are needed. Lambdas are the primary mechanism for higher-order logic programming in clausal.
 
-The implementation lives in `clausal/logic/compiler.py` (codegen), `clausal/templating/term_rewriting.py` (term transformation), and `clausal/logic/builtins.py` (`call_goal` builtins).
+The implementation lives in `clausal/logic/compiler/` (codegen), `clausal/templating/term_rewriting.py` (term transformation), and `clausal/logic/builtins/` (`call_goal` builtins).
 
 ---
 
@@ -115,7 +115,12 @@ color('blue'),
 get_color(C) <- call_goal((X <- (color(X), C is X)), _)
 ```
 
-Querying `get_color(C)` yields three solutions: `C = "red"`, `C = "green"`, `C = "blue"`.
+Querying it yields three solutions:
+
+```python
+# in a .seam file
+[C for C in --get_color(C)]     # ['red', 'green', 'blue']
+```
 
 ---
 
@@ -228,13 +233,13 @@ remove_evens(XS, RS) <- exclude((X <- (M == X % 2, M is 0)), XS, RS)
 fold_sum(XS, S) <- foldl(((E, A, R) <- (R == A + E)), XS, 0, S)
 ```
 
-All higher-order list predicates use **committed choice** — they take the first solution from the goal for each element. This is consistent with the Pythonic philosophy and sufficient for lambda goals, which are typically deterministic.
+All higher-order list predicates use **committed choice** — they take the first solution from the goal for each element: `maplist((X <- in_(X, [1, 2])), [A, B])` has the single answer `A = 1, B = 1`. (ISO-style `maplist/2..` in Scryer backtracks into the goal and would give four answers; use `findall`/recursion when you need every combination.)
 
 ---
 
 ## Limitations
 
-- **Lambdas are only supported as predicate call arguments.** Using a lambda in other positions (e.g., `X is (X <- ...)`) raises `NotImplementedError`.
+- **Lambdas are meant as predicate call arguments.** In other positions (e.g., `X is (Y <- ...)`) the lambda is not a term: `X` is bound to the compiled Python function, which no other predicate can inspect.
 - **Nested lambdas are supported** for variable capture but are an edge case. Inner lambdas can reference outer lambda parameters via closure.
 - **No pattern-matching on parameters.** Lambda parameters are positional arguments, not patterns. Use a predicate clause for pattern matching.
 
@@ -242,7 +247,7 @@ All higher-order list predicates use **committed choice** — they take the firs
 
 ??? example "Python API"
 
-    Lambdas are a `.clausal` file feature — they are compiled from source by the term transformer and compiler. From pure Python, you can construct the equivalent term tree manually:
+    Lambdas are a `.clausal`/`.seam` file feature — they are compiled from source by the term transformer and compiler. From pure Python you can construct the equivalent AST tree manually (internal API, not part of [the 1.0 surface](public-api.md)):
 
     ```python
     from clausal.pythonic_ast import nodes as sa
@@ -273,4 +278,4 @@ All higher-order list predicates use **committed choice** — they take the firs
 
 ---
 
-*See also: [Higher-Order](higher_order.md) — `maplist`, `include`, `foldl` and friends · [Meta-Predicates](meta_predicates.md) — `findall`, `bagof`, `setof`, `forall`, `Call/N` · [Python Interop](python_integration.md) — `++()` escape for calling Python from clause bodies.*
+*See also: [Higher-Order](higher_order.md) — `maplist`, `include`, `foldl` and friends · [Meta-Predicates](meta_predicates.md) — `findall`, `bagof`, `setof`, `forall`, `call/N` · [Python Interop](python_integration.md) — `++()` escape for calling Python from clause bodies.*

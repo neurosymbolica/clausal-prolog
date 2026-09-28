@@ -5,8 +5,10 @@ Python's native list syntax — no cons cells, no special notation.
 
 !!! tip "Strings work too"
 
-    All list predicates accept strings as character lists. `append("hel", "lo", X)`
-    yields `X = "hello"`, `in_('e', "hello")` succeeds, and `reverse("hello", X)`
+    A double-quoted literal is a string, and all list predicates accept strings
+    as character lists. `append("hel", "lo", X)` yields `X = "hello"` (the
+    string term; in Python, from a goal-position seam, the carrier
+    `('$chars', 'hello')`), `in_('e', "hello")` succeeds, and `reverse("hello", X)`
     yields `X = "olleh"`. See [Strings as Lists](strings_as_lists.md) for the full
     story.
 
@@ -74,7 +76,8 @@ test("check") <- in_check('b', ['a', 'b', 'c'])
 `L2`. Works in the three modes shown below — concatenation (`L1`, `L2`
 bound), splitting a bound `L3`, and extracting the remainder from a bound
 `L1` and `L3`. (Open partial-list mode — `L1` bound with `L2` and `L3`
-unbound — is not supported.)
+unbound — is not supported: `append([1], L2, L3)` **fails** without an error,
+where ISO Prolog would answer `L3 = [1|L2]`.)
 
 ```clausal
 # Concatenate
@@ -262,7 +265,7 @@ test("to_set") <- list_to_set([1, 2, 1, 3, 2], [1, 2, 3])
 ### union/3
 
 `union(S1, S2, Result)` — `S1` followed by the elements of `S2` not already
-in `S1` (SWI-consistent). `S1`'s own duplicates are preserved
+in `S1`. `S1`'s own duplicates are preserved
 (`union([1,1], [], U)` gives `[1,1]`); run `list_to_set/2` first for a true
 set.
 
@@ -300,7 +303,7 @@ test("sum") <- sum_list([1, 2, 3, 4], 10)
 
 ### max_list/2
 
-`max_list(List, max_)` — maximum element.
+`max_list(List, Max)` — maximum element.
 
 ```clausal
 test("max") <- max_list([3, 1, 4, 1, 5], 5)
@@ -308,7 +311,7 @@ test("max") <- max_list([3, 1, 4, 1, 5], 5)
 
 ### min_list/2
 
-`min_list(List, min_)` — minimum element.
+`min_list(List, Min)` — minimum element.
 
 ```clausal
 test("min") <- min_list([3, 1, 4, 1, 5], 1)
@@ -328,7 +331,7 @@ rotate([FIRST, *REST], YS) <- (
 
 ### partition by predicate
 
-Using [Call/N](higher_order.md#calln) to apply a predicate argument:
+Using [call/N](higher_order.md#call18-and-call_goal18) to apply a predicate argument:
 
 ```clausal
 --8<-- "tests/fixtures/docs/lists_examples.clausal:partition_example"

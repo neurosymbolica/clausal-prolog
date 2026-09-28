@@ -2,7 +2,7 @@
 
 ## Overview
 
-Clausal provides a **reified if-then-else** based on Neumerkel & Kral's `if_/3` ([arXiv:1607.01590](https://arxiv.org/abs/1607.01590)). Unlike Prolog's committed-choice `(->)/2`, reified ITE is **monotonic**: adding constraints can only restrict, never lose solutions. This is the same philosophy behind Clausal's use of [`dif/2`](constraints.md) instead of `\=`, and [CLP(ℤ)](constraints.md#clp-integer-constraints) instead of `is`-based arithmetic.
+Clausal provides a **reified if-then-else** based on Neumerkel & Kral's `if_/3` ([arXiv:1607.01590](https://arxiv.org/abs/1607.01590)). Unlike Prolog's committed-choice `(->)/2`, reified ITE is **monotonic**: adding constraints can only restrict, never lose solutions. This is the same philosophy behind Clausal's use of [`dif/2`](constraints.md) instead of `\=`, and [CLP(ℤ)](constraints.md#clp-integer-constraints) (`==`) instead of ISO `'is'/2` arithmetic (see [Arithmetic](arithmetic.md)).
 
 Clausal has no `!/0` (cut), no `(->)/2` (committed choice), and no `(*->)/2` (soft cut). The reified ITE is the only branching construct.
 
@@ -41,7 +41,15 @@ classify(X, L) <- if_(X >= 0, L is 'positive', L is 'negative')
 check(X, R) <- if_(X is 1, R is 'equal', R is 'different')
 ```
 
-when `X` is unbound, this produces two solutions: `X=1, R='equal'` and `dif(X,1), R='different'`.
+when `X` is unbound, this produces two solutions: `X=1, R='equal'` and `dif(X,1), R='different'`:
+
+```python
+# in a .seam file
+[R for R in --check(_, R)]      # ['equal', 'different']
+```
+
+(Exporting `X` too would raise `ResidualConstraints` on the second answer: a
+seam export must be a value, and there `X` is unbound under `dif`.)
 
 **Nested ITE:**
 ```clausal
@@ -110,7 +118,7 @@ Three-valued equality decision procedure in `clausal.logic.constraints`:
 
 No side effects — the trail is always restored to its original state.
 
-Handles `Var`, scalars, tuples (cells), lists, and `PredicateMeta` instances.
+Handles `Var`, scalars (an atom is a `str`), cells (compound terms are plain tuples), and lists.
 
 ### `reify_fd(op, x, y, trail) -> bool | None`
 
@@ -128,18 +136,18 @@ The `if_(condition, then, else)` call syntax is parsed into an `IfExpr` AST node
 
 ### Generated code (reifiable equality condition)
 
-For `if_(X is 1, R is "yes", R is "no")`:
+For `if_(X is 1, R is 'yes', R is 'no')`:
 
 ```python
 _reif_0 = _reify_eq(X_, 1, trail)
 if _reif_0 is True:
-    # then branch: R_ is "yes"
+    # then branch: R_ is 'yes'
     _m_0 = trail.mark()
     if unify(R_, "yes", trail):
         yield None  # solution
     trail.undo(_m_0)
 elif _reif_0 is False:
-    # else branch: R_ is "no"
+    # else branch: R_ is 'no'
     _m_1 = trail.mark()
     if unify(R_, "no", trail):
         yield None
@@ -256,20 +264,20 @@ trail.undo(_m_0)
 ```
 
 Key properties:
-- **Bindings escape**: unlike `Not`, bindings from the once'd goal are visible to the continuation.
-- **Continuation backtracks normally**: `once(X in [1,2]) and Y in [a,b]` produces `(1,a), (1,b)` — only `X` is committed, `Y` still backtracks.
+- **Bindings escape**: unlike `not`, bindings from the once'd goal are visible to the continuation.
+- **Continuation backtracks normally**: `(once(in_(X, [1, 2])), in_(Y, ['a', 'b']))` produces `(1, 'a'), (1, 'b')` — only `X` is committed, `Y` still backtracks.
 - **Failing goal = no solutions**: if the inner goal has no solutions, the continuation is never reached.
 - **Works in both simple and trampoline modes**: inner goal always compiles in simple mode (sub-generator pattern).
 
-`once()` is the explicit escape hatch for users who want first-solution commitment. It replaces Prolog's `once/1` and is the building block for committed-choice patterns like `if_(once(goal), then, else)`. See also [Control](control.md) for other control-flow predicates.
+`once()` is the explicit escape hatch for users who want first-solution commitment. It is ISO's `once/1` and is the building block for committed-choice patterns like `if_(once(goal), then, else)`. See also [Control](control.md) for other control-flow predicates.
 
 ---
 
 ??? info "Test coverage"
 
-    Tests are in `tests/test_reified_ite.py` (99 tests).
+    Tests are in `tests/test_reified_ite.py`.
 
-    - **`reify_eq` unit tests** (20): identical var, ground equal/incompatible (int, str, type mismatch), undetermined (var-int, int-var, two vars), bound var equal/inequal, Compound (same/different/different functor/with var), PredicateMeta (same/different), lists (same/different/with var), no side effects
+    - **`reify_eq` unit tests** (20): identical var, ground equal/incompatible (int, str, type mismatch), undetermined (var-int, int-var, two vars), bound var equal/inequal, cells (same/different/different functor/with var), lists (same/different/with var), no side effects
     - **`reify_fd` unit tests** (10): ground eq/ne/lt/ge true/false, undetermined with vars
     - **Reified ITE equality** (6): ground true/false, undetermined explores both — simple + trampoline modes
     - **Reified ITE dif** (3): ground dif true/false, undetermined with swapped branches

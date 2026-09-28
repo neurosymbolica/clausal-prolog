@@ -1,6 +1,6 @@
 # Well-Founded Semantics (WFS)
 
-Well-Founded Semantics provides a sound three-valued treatment of negation for [tabled](tabling.md) predicates. Unlike simple negation-as-failure (which can loop or give wrong answers with recursive negation), WFS assigns each atom a truth value of **true**, **false**, or **unknown** — and that third value is exactly the strong-Kleene `Undefined` literal the language already has, not a separate marker.
+Well-Founded Semantics provides a sound three-valued treatment of negation for [tabled](tabling.md) predicates. Unlike simple negation-as-failure (which can loop or give wrong answers with recursive negation), WFS assigns each atom a truth value of **true**, **false**, or **undefined** — and that third value is exactly the strong-Kleene `Undefined` literal the language already has, not a separate marker.
 
 ---
 
@@ -18,7 +18,7 @@ Without WFS, `not wins(Y)` would loop or produce incorrect answers. With WFS:
 
 - If `wins(Y)` is provably true → negation fails
 - If `wins(Y)` is provably false → negation succeeds
-- If `wins(Y)` is unknown (cyclic dependency) → the answer is marked `Undefined`
+- If `wins(Y)` is undefined (cyclic dependency) → the answer is marked `Undefined`
 
 ## Spelling the truth values
 
@@ -66,14 +66,32 @@ match XSB/SWI; writing it gets a diagnostic pointing at `Undefined`.
 
 ## The `query_wfs` API
 
-The standard `query()` / `call()` / `solve()` functions yield all non-failed answers without truth annotation. To see WFS truth values, use `query_wfs`:
+How an undefined answer reaches you depends on how you ask:
+
+- the **goal-position seam** in a `.seam` file (`for X in --wins(X):`) is strict: a
+  definite answer is exported as usual, and an undefined one raises
+  `clausal.logic.seam.UndefinedAnswer` (see
+  [Python integration](python_integration.md));
+- the lower-level `solve()` / `call()` / `query()` functions yield every non-false
+  answer **without** a truth annotation, undefined ones included;
+- `query_wfs` returns every answer annotated with its truth value.
+
+With the three-cycle `a→b→c→a` of Example 1 below:
 
 ```python
-from clausal.logic.solve import query_wfs
+# in a .seam file, below the clauses
+from clausal import Var, query_wfs
+from clausal.logic.seam import UndefinedAnswer
 
-results = query_wfs(goal, {"X": X}, module=mod)
-for r in results:
-    print(r["X"], r["_truth"])  # True or Undefined
+def main(this_module):
+    v = Var()
+    for r in query_wfs(('wins', v), {"X": v}, module=this_module):
+        print(r["X"], r["_truth"])      # a Undefined / b Undefined / c Undefined
+    try:
+        for X in --wins(X):
+            print(X)
+    except UndefinedAnswer:
+        print("wins/1 has an undefined answer")
 ```
 
 `query_wfs` returns a **list** (not iterator) of binding dicts, each with a `"_truth"` key:
@@ -92,8 +110,7 @@ therefore report *which* atoms form the unresolved pair, not merely that
 something is undefined.
 
 The annotation is independent of how the goal is asked: the same atom reports
-the same truth value whether the goal is a reified `Call`, a cell, a
-term instance, and whether the query is ground or unbound — and answer sets
+the same truth value whether the goal is a reified `Call` or a cell, and whether the query is ground or unbound — and answer sets
 are stable across query order (see the implementation overview below). It is
 also independent of the goal's SHAPE: an untabled wrapper over a tabled
 predicate, a conjunction (through goal position), a call fed through `++` —
@@ -195,7 +212,7 @@ Undefined does NOT mean "error" — it is a legitimate third truth value. In gam
 
 ### What to Do with Undefined Answers
 
-- **Treat as false**: In many practical programs, undefined answers can be safely treated as false (this is what `query()`/`call()` do — they yield undefined answers alongside true ones).
+- **Know which API you are using**: `solve()`/`call()`/`query()` yield undefined answers alongside true ones, unmarked; the goal-position seam raises `UndefinedAnswer` instead of exporting one.
 - **Inspect explicitly**: Use `query_wfs` when you need to distinguish true from undefined — e.g., for debugging, verification, or reporting.
 - **Restructure the program**: If you don't expect undefined answers, the cyclic dependency may indicate a modeling error.
 

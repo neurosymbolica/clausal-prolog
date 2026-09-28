@@ -17,17 +17,17 @@ byte streams with `phrase//`.
 
 ## The codes model: a byte is an int
 
-`str` and `bytes` look alike but are different domains, and Clausal keeps them
-distinct:
+A string and a `bytes` look alike but are different kinds, and Clausal keeps
+them distinct:
 
-| | `str` (chars model) | `bytes` (codes model) |
+| | string (chars model) | `bytes` (codes model) |
 |---|---|---|
-| literal | `"abc"` | `b"abc"` |
-| decomposes to | `['a', 'b', 'c']` (char atoms — 1-char `str`s) | `[97, 98, 99]` (`int`s) |
+| literal | `"abc"` (the default reading of `"…"`) | `b"abc"` |
+| decomposes to | `['a', 'b', 'c']` (char atoms — an atom is a 1-char Python `str`) | `[97, 98, 99]` (`int`s) |
 | element fixed point? | **no** — the element of `"a"` is the char atom `'a'`, and `"a"` itself is the list `['a']` | **no** — `b"a"[0] == 97` |
 | partial-term type | `SegString` | `SegBytes` |
 
-A `str` is a list of *characters*; a `bytes` is a list of *integer codes*. This
+A string is a list of *characters*; a `bytes` is a list of *integer codes*. This
 mirrors Python itself: iterating a `str` yields 1-character strings, but
 iterating `bytes` yields ints (`list(b"abc") == [97, 98, 99]`).
 
@@ -49,7 +49,7 @@ The empty `bytes` unifies with the empty list:
 A `bytes` value stays a `bytes` object — it keeps `.decode()`, `.hex()`,
 `b"a"[0] == 97`, every Python method. It merely *unifies with* its int-code
 list at the unification layer; nothing is converted. The int list is a
-**logical view**, exactly as the character list is for a `str`. A `bytes`
+**logical view**, exactly as the character list is for a string. A `bytes`
 threaded through unification and recursion stays `bytes`, so you can still call
 `.decode()` / `.hex()` on a bound result.
 
@@ -63,7 +63,7 @@ Clausal's [strings as lists](strings_as_lists.md) is the `chars` model;
 **bytes-as-lists is the `codes` model.**
 
 The `codes` representation is what the Triska / DCG tradition uses for byte and
-binary work — SWI's `get_byte/2`, code-list `phrase/2`, and so on. Integer
+binary work — ISO's `get_byte/2`, code-list `phrase/2`, and so on. Integer
 terminals are exactly what binary-protocol grammars want.
 
 | Feature | Prolog `codes` | Clausal `bytes` |
@@ -72,7 +72,7 @@ terminals are exactly what binary-protocol grammars want.
 | Element type | `int` code | `int` in `[0, 255]` |
 | DCGs over byte streams | Works (code lists) | Works (`bytes` subject, code terminals) |
 | Underlying storage | Cons cells | Compact `bytes` object |
-| Python interop | Requires conversion | Native `bytes` |
+| Python interop | Requires conversion | Native `bytes` (a goal-position seam hands back the `bytes` itself) |
 
 As with strings, Clausal takes the pragmatic middle path: a `bytes` *behaves
 as* a list of codes at the logic level but remains a compact, interoperable
@@ -83,7 +83,7 @@ Python `bytes` object underneath.
 ## Term Inspection
 
 The ISO inspection predicates follow the codes-model cons cell — an **int**
-head and a **`bytes`** tail (symmetric with the char cons cell for `str`):
+head and a **`bytes`** tail (symmetric with the char cons cell for a string):
 
 ```clausal
 --8<-- "tests/fixtures/docs/bytes_as_lists_examples.clausal:inspection"
@@ -115,7 +115,7 @@ Element results are int codes; sequence results reconstruct as `bytes`
 `is_list/1` accepts a `bytes` (it is list-shaped). `is_codes/1` is the codes
 analog of `is_chars/1`: it succeeds for a `bytes` or a list of ints in
 `[0, 255]`. `is_str/1` and `is_chars/1` stay `false` for a `bytes` — a `bytes`
-is not a `str`, and a code sequence is not a character sequence.
+is not a string, and a code sequence is not a character sequence.
 
 ---
 
@@ -125,10 +125,9 @@ A clause-head or body list pattern destructures a `bytes` argument: the head
 binds to an **int** code and the tail stays **`bytes`**.
 
 ```clausal
-# skip  (illustrative — exercised by tests/test_bytes_patterns.py)
 head_tail([H, *T], H, T),
 
-# head_tail(b"abc", H, T)  binds  H = 97 (int),  T = b"bc" (bytes)
+test("head tail") <- (head_tail(b"abc", H, T), H is 97, T is b"bc")
 ```
 
 The same works as a body goal: `b"abc" is [First, *Rest]` binds `First = 97`
@@ -153,28 +152,23 @@ This is the headline use case. A [DCG](dcg.md) parses a `bytes` subject with
 remainder is preserved as `bytes`.
 
 ```clausal
-# skip  (illustrative — exercised by tests/test_bytes_dcg.py and
-#         tests/test_bytes_patterns.py)
 g >> ([71, 69, 84, 32])          # [71,69,84,32] is the code list for b"GET "
 
-# phrase(g, b"GET /x", Rest)  succeeds with  Rest = b"/x"  (bytes)
-# phrase(g, b"GET ")          succeeds (full consumption)
+test("GET prefix") <- (phrase(g, b"GET /x", REST), REST is b"/x")
+test("GET whole") <- phrase(g, b"GET ")
 ```
 
 You can also wrap a `bytes` literal in the `sequence//1` non-terminal to match
 it as a unit:
 
 ```clausal
-# skip  (illustrative — exercised by tests/test_bytes_dcg.py)
 header >> (sequence(b"GET "))
 
-# phrase(header, b"GET /index", Rest)  succeeds with  Rest = b"/index"
+test("sequence of bytes") <- (phrase(header, b"GET /index", REST), REST is b"/index")
 ```
 
 Under `phrase/3`, when the subject is a `bytes`, the residue is bound to a
-`bytes` slice — the input type is preserved end to end. (These grammar examples
-are marked `# skip` only because the documentation test harness compiles each
-block in isolation; the behaviour itself is covered by the test suite.)
+`bytes` slice — the input type is preserved end to end.
 
 ---
 
@@ -233,7 +227,7 @@ The codes contract is wired through the same layers as strings-as-lists:
 - **Type checks** — `is_list/1` accepts a `bytes` (it is list-shaped), and
   `is_codes/1` is the codes analog of `is_chars/1` (succeeds for a `bytes` or a
   list of ints in `[0, 255]`). `is_str/1` and `is_chars/1` stay `false` for a
-  `bytes` — a `bytes` is not a `str`, and is a *code* sequence, not a *char*
+  `bytes` — a `bytes` is not a string, and is a *code* sequence, not a *char*
   sequence.
 - **Clause dispatch & first-argument indexing** — a `bytes`-literal clause head
   matches an int-list caller and buckets with it.

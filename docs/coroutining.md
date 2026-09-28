@@ -118,7 +118,9 @@ Sugar for `setup_call_cleanup(true, Call, Cleanup)` — no setup step, just guar
 
 Call `Goal` and succeed only on the **Nth solution**. The first N-1 solutions are skipped.
 
-- `N` must be a positive integer (>= 1). Raises `type_error(positive_integer, N, "call_nth/2")` otherwise.
+- `N` must be a positive integer (>= 1). Anything else, an unbound `N` included, raises
+  `error(type_error(positive_integer, N), call_nth/2)` (the Scryer error form; see
+  [Exceptions](exceptions.md)). `N` does not enumerate.
 - If Goal has fewer than N solutions, `call_nth` fails.
 - Only the Nth solution's bindings are visible to the continuation.
 
@@ -146,7 +148,7 @@ Unlike [findall](meta_predicates.md) + `length`, `count_all` does not build a li
 
 ## Nesting inside meta-predicates
 
-All Phase 1 predicates are compiler special forms that compile their goal arguments inline. They nest freely inside other meta-predicates — [findall](meta_predicates.md), [once](control.md), [catch](exceptions.md), [forall](meta_predicates.md), and each other:
+All of these are compiler special forms that compile their goal arguments inline. They nest freely inside other meta-predicates — [findall](meta_predicates.md), [once](control.md), [catch](exceptions.md), [forall](meta_predicates.md), and each other:
 
 ```clausal
 --8<-- "tests/fixtures/docs/coroutining_examples.clausal:nesting_inside_meta_predicates"

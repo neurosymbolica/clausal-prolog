@@ -64,28 +64,24 @@ test("fib 10") <- fib(10, 55)
 # === architecture.md ===
 
 --8<-- [start:architecture_diagram]
-clausal.trealla              embedded Trealla Prolog engine (ctypes/C, optional)
-clausal.scryer               embedded Scryer Prolog engine (PyO3/Rust, optional)
+clausal                      import hook, reader, seam (--/++), public API
+├── import_hook.py           .clausal/.seam/.pl loading, .pyc caching
+├── templating/              term rewriting (source -> clause terms)
+├── pythonic_ast/            the goal/term node types
+└── testing.py               pytest integration (test/1 collector)
 clausal.logic                core logic engine
-├── compiler.py              Clausal → Python codegen (AST)
-├── database.py              predicate clause storage + indexing
-├── builtins/                built-in predicates
-│   ├── lists.py             append, in_, reverse, sort, ...
-│   ├── arith.py             is, succ, plus, ...
-│   ├── io.py                write, writeln, read_term, ...
-│   └── ...
-├── clpfd.py                 CLP(FD) — finite-domain constraints
-├── clpr.py                  CLP(R) — real-number constraints
-├── clpb.py                  CLP(B) — boolean constraints
-├── tabling.py               SLG resolution (tabling / memoization)
-├── trail.py                 trail-based backtracking
-└── variables.py             logic variables (Var)
-clausal.modules              standard library modules
-├── regex.py                 regular expressions
-├── date_time.py             date/time predicates
-├── sqlite.py                SQLite database
-└── ...
-clausal.testing              pytest integration (ClausalFile collector)
+├── compiler_v2.py           module pipeline (imports, directives, expansion, compile)
+├── compiler/                clause -> Python generator codegen, indexing
+├── database.py              predicate rows: clauses, dispatch, tables
+├── variables/               logic variables + trail (C extension)
+├── trampoline.py            constant-stack driver (C twin + _trampoline_py.py)
+├── seam.py / solve.py       goal-position seam; solve/call/once/query_wfs
+├── builtins/                built-in predicates (lists, arithmetic, io, ...)
+├── clpfd.py, clpq.py, clpr.py, clpb.py   constraint solvers
+└── tabling.py               SLG resolution + well-founded semantics
+clausal.modules.py           library wrappers (re, logging, datetime, sqlite, ...)
+packages/clausal-trealla     embedded Trealla Prolog engine (optional)
+packages/clausal-scryer      embedded Scryer Prolog engine (optional)
 --8<-- [end:architecture_diagram]
 
 # === caching.md ===

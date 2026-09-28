@@ -1,11 +1,11 @@
 # === Import Directives ===
 
 --8<-- [start:import_from]
--import_from(utils, [Double, Helper])
+-import_from(utils, [double, helper])
 --8<-- [end:import_from]
 
 --8<-- [start:import_from_ex2]
--import_from(utils, [alias(Double, MyDouble)])
+-import_from(utils, [alias(double, my_double)])
 --8<-- [end:import_from_ex2]
 
 --8<-- [start:import_module]

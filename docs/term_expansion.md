@@ -53,11 +53,11 @@ Return a list to expand one item into multiple items. This is the most powerful 
 --8<-- "tests/fixtures/docs/term_expansion_sigs.txt:one_to_many_expansion"
 ```
 
-**Walkthrough**: when this rule is active and the module contains `color("red"),`:
+**Walkthrough**: when this rule is active and the module contains `color('red'),`:
 
-1. The expansion engine matches `color("red")` against `TERM`
-2. OUTPUT becomes `[color("red"), color("red")]`
-3. The module now has two copies of `color("red")`
+1. The expansion engine matches `color('red')` against `TERM`
+2. OUTPUT becomes `[color('red'), color('red')]`
+3. The module now has two copies of `color('red')`
 
 ### Patterns Are Plain Terms
 
@@ -167,11 +167,11 @@ The goal expansion for regex auto-binding shows both systems working together. w
 
 test("auto-bind year") <- (
     match(r"(?P<YEAR>\d{4})-\d{2}", '2026-03'),
-    YEAR == '2026'
+    YEAR is "2026"
 )
 ```
 
-The goal expansion pass detects the `(?P<YEAR>...)` group, rewrites `match/2` to `match/3` with group extraction, and binds `YEAR` automatically. The regex pattern is also precompiled at load time.
+The goal expansion pass detects the `(?P<YEAR>...)` group, rewrites `match/2` to `match/3` with group extraction, and binds `YEAR` automatically — to a **string** (`"2026"`, the `('$chars', '2026')` term), so compare it with unification (`is`), not with the CLP(ℤ) `==`, which raises `domain_error(clpz_expression, ...)` on text. The regex pattern is also precompiled at load time.
 
 ---
 

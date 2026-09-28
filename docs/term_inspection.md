@@ -75,7 +75,7 @@ test("third arg") <- arg(3, point(10, 20, 30), 30)
 ```
 
 Fails if N is out of range or Term is atomic. With `N` unbound, `arg/3`
-enumerates the `(N, Value)` pairs in order on backtracking (SWI-style), and
+enumerates the `(N, Value)` pairs in order on backtracking (as Scryer does), and
 is semidet when `Value` is given:
 
 ```clausal
@@ -112,13 +112,28 @@ test("construct") <- (
 )
 ```
 
-!!! note "Constructed terms are data functors, not predicates"
-    The cell `("point", 10, 20)` unifies with a source-written `point(10, 20)`
-    when `point` is a **data functor** (declared as data, or under
-    `-implicit_functors`). If `point/2` is a declared *predicate*, a
-    source-written `point(10, 20)` in a body is a predicate instance instead
-    and does **not** unify with the constructed cell — build with `functor/3`
-    or `unpack/2` on both sides, or compare with `functor/3` + `arg/3`.
+A compound term is always a **cell**, a plain tuple `(functor, *args)`: the
+term `unpack/2` or `functor/3` builds, a data functor written in source, and
+a declared predicate's name used as a term (`point(10, 20)` above, where
+`point/2` is a fact) are the same cell and unify. There is no separate class
+of "predicate instance".
+
+From Python, read a cell with `clausal.cell_functor` and `clausal.cell_args`
+(and build one with `clausal.make_cell`). In a `.seam` file, the
+goal-position seam hands the cell back as it is:
+
+```clausal
+from clausal import cell_functor, cell_args
+
+point(1, 2),
+
+def show():
+    for T in --unpack(T, ['point', 10, 20]):
+        print(T)                                  # ('point', 10, 20)
+        print(cell_functor(T), cell_args(T))      # point (10, 20)
+```
+
+See [Python integration](python_integration.md) for the seam.
 
 ---
 
@@ -163,8 +178,8 @@ test("ground term") <- term_variables([1, 2, 3], [])
 
 ### numbervars/3
 
-`numbervars(Term, Start, End)` — bind each unbound variable to a
-`$VAR(N)` atom, numbered sequentially from `Start`. `End` is unified with the
+`numbervars(Term, Start, End)` — bind each unbound variable to the cell
+`'$VAR'(N)`, numbered sequentially from `Start`. `End` is unified with the
 next available number.
 
 ```clausal
@@ -230,7 +245,7 @@ test("count") <- var_count([X_, 1, Y_, Z_], 3)
 - **`numbervars` mutates the term** — it binds variables in place. Use
   `copy_term` first if you need the original term unchanged.
 - **`unpack` constructs CELLS** — when building from a list, the result is a
-  plain tuple `("point", 10, 20)`, not a known predicate class. Python code
+  plain tuple `('point', 10, 20)`. Python code
   reads it with `clausal.cell_functor` / `clausal.cell_args`. `functor/3` in construct
   mode does the same.
 - **The name position is an atom** — `functor/3` and `unpack/2` hand back an

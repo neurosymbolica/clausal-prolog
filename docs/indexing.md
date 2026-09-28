@@ -11,7 +11,7 @@ color('blue',  [  0,   0, 255]),
 ...  # 200 more colors
 ```
 
-Querying `color("blue", X)` without indexing tries all 203 match blocks. With first-argument indexing, it jumps directly to the one clause whose first argument is `"blue"`.
+Querying `color('blue', X)` without indexing tries all 203 match blocks. With first-argument indexing, it jumps directly to the one clause whose first argument is `'blue'`.
 
 ---
 
@@ -29,13 +29,15 @@ Querying `color("blue", X)` without indexing tries all 203 match blocks. With fi
 
     | First arg in clause head | Index key | Bucket |
     |---|---|---|
-    | Literal scalar (int, str, float, bytes, bool, None) | The value itself | Specific bucket for that value |
-    | Var with `Unify(var, scalar)` in body (normalized fact) | The scalar value | Specific bucket |
-    | Compound term (`circle(R)`, `rect(W,H)`, …) | `(functor, arity)` tuple | Specific bucket |
-    | PredicateMeta instance | `(class_name, field_count)` tuple | Specific bucket |
+    | Literal scalar (int, float, bytes, bool, None) | The value itself | Specific bucket for that value |
+    | Atom (`red`, `'red'` — a Python `str`) | `(name, 0)` — the same shape as a compound's key | Specific bucket |
+    | Var with `Unify(var, scalar-or-atom)` in body (normalized fact) | That value's key | Specific bucket |
+    | Compound term, a cell (`circle(R)`, `rect(W,H)`, …) | `(functor, arity)` tuple | Specific bucket |
     | Var with `Unify(var, compound)` in body | `(functor, arity)` tuple | Specific bucket |
     | Unbound Var (no body unification) | `_INDEX_VAR` sentinel | Default bucket |
-    | List or other non-indexable value | `_INDEX_VAR` sentinel | Default bucket |
+    | String (`"red"`, the `('$chars', s)` carrier), list, `''`/`[]`/`b""`, or other non-indexable value | `_INDEX_VAR` sentinel | Default bucket |
+
+    A string is text, equal to its char list, and a char-list head is unindexed, so a string head is unindexed too: index facts on **atoms**, not strings.
 
     The Var+Unify pattern comes from fact normalization (`_normalize_dataclass_fact` / `_normalize_fact_clause`), which replaces ground head values with fresh Vars and adds `Unify(var, value)` goals to the body. This is the standard representation for facts in clausal — the indexer recognises it and extracts the original ground value, including compound-term values.
 
@@ -44,14 +46,14 @@ Querying `color("blue", X)` without indexing tries all 203 match blocks. With fi
     A critical correctness requirement: **clause ordering must be preserved.** In Prolog and clausal, clause order determines solution order. Consider:
 
     ```
-    f(1, "a"),          # clause 0, key=1
-    f(X, "b"),          # clause 1, default
-    f(2, "c"),          # clause 2, key=2
-    f(3, "d"),          # clause 3, key=3
-    f(X, "e"),          # clause 4, default
+    f(1, a),            # clause 0, key=1
+    f(X, b),            # clause 1, default
+    f(2, c),            # clause 2, key=2
+    f(3, d),            # clause 3, key=3
+    f(X, e),            # clause 4, default
     ```
 
-    when querying `f(1, Y)`, the expected solution order is `"a"`, `"b"`, `"e"` — clause 0 (matches key=1), clause 1 (default, matches anything), clause 4 (default, matches anything). Clause 2 and 3 are skipped because their first arg doesn't match 1.
+    when querying `f(1, Y)`, the expected solution order is `a`, `b`, `e` — clause 0 (matches key=1), clause 1 (default, matches anything), clause 4 (default, matches anything). Clause 2 and 3 are skipped because their first arg doesn't match 1.
 
     To achieve this, each bucket's clause list **merges the bucket-specific clauses with all default clauses, in their original order:**
 
@@ -85,7 +87,7 @@ Querying `color("blue", X)` without indexing tries all 203 match blocks. With fi
 
     - a cell `(functor, *args)` — `args[0]`
     - `Call(func=LoadName(f), args)` — `args[0]`
-    - PredicateMeta instance — `getattr(head, fields[0])`
+    - a term (dataclass) instance — its first field
 
     If the first arg is a Var, scans the clause body for `Unify(left=same_var, right=scalar)` or `Unify(left=scalar, right=same_var)` and returns the scalar. Identity comparison (`is`) ensures we match the exact Var object from the head.
 
@@ -160,23 +162,23 @@ Querying `color("blue", X)` without indexing tries all 203 match blocks. With fi
     Each sub-function (all, bucket, default) is compiled through the same `_build_predicate_funcdef` / `_build_predicate_trampoline_funcdef` machinery as a normal predicate, just with a subset of clauses. This means:
 
     - Head pattern compilation, body goal compilation, variable pre-allocation, and call target injection all work identically.
-    - All sub-functions share the same `base_globals` dict, so they have access to the same builtins, predicate classes, and call targets.
+    - All sub-functions share the same `base_globals` dict, so they have access to the same builtins, predicate handles, and call targets.
     - The `_collect_globals_info` + `_inject_resolved_targets` pass uses the **full** clause list, not the subset — ensuring all needed names are available in every sub-function.
 
     Sub-functions get distinct names (`{functor}__all`, `{functor}__b0`, `{functor}__dflt`) to avoid collisions when compiled via `functiondef_to_function`.
 
     ### Bucket head lifting
 
-    The `.clausal` term rewriter normalises every clause head to all-Var arguments, moving ground values into body `Unify` goals. A fact `color("red", "warm")` is stored as:
+    The `.clausal` term rewriter normalises every clause head to all-Var arguments, moving ground values into body `Unify` goals. A fact `color('red', 'warm')` is stored as:
 
     ```
-    head = color(arg_0=Var(_5), arg_1=Var(_6))
-    body = [Unify(left=Var(_5), right="red"), Unify(left=Var(_6), right="warm")]
+    head = ('color', Var(_5), Var(_6))
+    body = [Unify(left=Var(_5), right='red'), Unify(left=Var(_6), right='warm')]
     ```
 
-    Inside a bucket function for arg_0 = `"red"`, the body goal `Unify(Var(_5), "red")` is guaranteed to succeed — the dispatch layer already confirmed the argument is `"red"`. The resulting `trail.mark()` + `unify()` + `trail.undo()` triple is wasted work.
+    Inside a bucket function for arg_0 = `'red'`, the body goal `Unify(Var(_5), 'red')` is guaranteed to succeed — the dispatch layer already confirmed the argument is `'red'`. The resulting `trail.mark()` + `unify()` + `trail.undo()` triple is wasted work.
 
-    Before bucket compilation, `_lift_clause_at_pos(clause, pos)` removes this redundant Unify and places the ground value directly in the head. The head pattern compiler then emits `MatchValue("red")` instead of a wildcard capture, eliminating the three wasted operations:
+    Before bucket compilation, `_lift_clause_at_pos(clause, pos)` removes this redundant Unify and places the ground value directly in the head. The head pattern compiler then emits a match on `'red'` instead of a wildcard capture, eliminating the three wasted operations:
 
     ```python
     # Before (wildcard + body unify):
@@ -184,13 +186,13 @@ Querying `color("blue", X)` without indexing tries all 203 match blocks. With fi
         _mark = trail.mark()
         try:
             _m = trail.mark()
-            if unify(_v0, "red", trail):   # always succeeds in this bucket
+            if unify(_v0, 'red', trail):   # always succeeds in this bucket
                 ...
             trail.undo(_m)
         finally: trail.undo(_mark)
 
     # After (MatchValue — always matches in bucket context):
-    case ["red", _v1]:
+    case ['red', _v1]:
         _mark = trail.mark()
         try:
             ...
@@ -201,7 +203,7 @@ Querying `color("blue", X)` without indexing tries all 203 match blocks. With fi
 
     ### Lazy recompile integration
 
-    No changes to the Database or PredicateMeta invalidation mechanism were needed. when `assertz` or `retract` invalidates a predicate's dispatch function, the lazy recompile closure calls `compile_predicate` (or `compile_predicate_trampoline`) from scratch. Since the compilation functions now build an index automatically when beneficial, the recompiled dispatch function gets a fresh index reflecting the updated clause list.
+    No changes to the database's invalidation mechanism were needed. when `assertz` or `retract` invalidates a predicate's dispatch function, the lazy recompile closure calls `compile_predicate` (or `compile_predicate_trampoline`) from scratch. Since the compilation functions now build an index automatically when beneficial, the recompiled dispatch function gets a fresh index reflecting the updated clause list.
 
     ---
 
@@ -210,9 +212,10 @@ Querying `color("blue", X)` without indexing tries all 203 match blocks. With fi
 The following remain in the default bucket (no bucket discrimination):
 
 - **Lists** — including empty lists. List first-args could be indexed by structure (empty vs cons), but this is deferred.
+- **Strings** (`"…"`) — a string is its char list, so it is unindexed like a list. Use atoms for keys.
 - **Nested structures** — only the top-level functor/arity is extracted; argument positions *inside* a compound term are not recursively indexed.
 
-Scalar values, Compound terms (via functor/arity), and PredicateMeta instances are all indexed.
+Scalar values, atoms (as `(name, 0)`) and compound cells (via functor/arity) are indexed.
 
 ---
 
@@ -225,7 +228,7 @@ Scalar values, Compound terms (via functor/arity), and PredicateMeta instances a
     - **Simple mode dispatch**: ground lookup, Var enumeration, no-match fallback, mixed var+specific clauses, integer and string keys
     - **Trampoline mode dispatch**: same scenarios as simple mode, verifying `yield from` + DONE protocol correctness
     - **Dynamic re-indexing**: `assertz` triggers lazy recompile with updated index (both modes)
-    - **PredicateMeta integration**: normalized Var+Unify heads from PredicateMeta facts
+    - **Normalized facts**: Var+Unify heads from normalized facts
     - **Edge cases**: arity-1 predicates, duplicate first-arg keys, None as key, bool/int hash collision
 
     ---
@@ -266,24 +269,28 @@ With groundness-keyed dispatch, querying `color(NAME, 'warm')` uses a second-arg
 
     | arg at position `pos` | Key | Bucket |
     |---|---|---|
-    | Scalar (int, str, float, bytes, bool, None) | The value | Specific |
-    | Var with `Unify(var, scalar)` in body | The scalar | Specific |
+    | Scalar (int, float, bytes, bool, None) | The value | Specific |
+    | Atom (a `str`) | `(name, 0)` | Specific |
+    | Var with `Unify(var, scalar-or-atom)` in body | That value's key | Specific |
     | Compound (cell) | `(functor, arity)` tuple | Specific |
-    | PredicateMeta instance | `(class_name, field_count)` tuple | Specific |
     | Var with `Unify(var, compound)` in body | `(functor, arity)` tuple | Specific |
-    | Unbound Var, list | `_INDEX_VAR` | Default |
+    | Unbound Var, list, string | `_INDEX_VAR` | Default |
 
     The Var identity check (`goal.left is arg`) ensures we match the correct Var when multiple positions have Var+Unify patterns — each position's Var object is distinct.
 
     **Runtime key extraction** mirrors the compile-time rules. The `_runtime_arg_key(a)` helper (used by all dispatch closures) maps a deref'd runtime value to the same key space so that compound-term buckets are reachable:
 
     ```python
-    def _runtime_arg_key(a):
+    def _runtime_arg_key(a):          # simplified
+        if type(a) is str:
+            return (a, 0) if a else _INDEX_VAR    # an atom keys as name/0
         if isinstance(a, _INDEXABLE_TYPES):
             return a
-        if is_term_instance(a):
-            return (type(a).__name__, len(type(a)._fields))
-        return _INDEX_VAR   # unhashable / lists → default
+        if type(a) is tuple and a and type(a[0]) is str:
+            if a[0] == '$chars':
+                return _INDEX_VAR                 # a string is text: unindexed
+            return (a[0], len(a) - 1)             # a cell keys as functor/arity
+        return _INDEX_VAR   # lists, variables, unhashables → default
     ```
 
     All four dispatch closures call `_runtime_arg_key` instead of using the raw deref'd value directly.
@@ -353,9 +360,9 @@ Plans sorted by selectivity: position 0 first, then position 1.
 
 | Query | Selector path | Clauses tried |
 |---|---|---|
-| `color("blue", X)` | arg0 ground → pos-0 index → bucket["blue"] | 1 |
-| `color(X, "cool")` | arg0 Var → skip; arg1 ground → pos-1 index → bucket["cool"] | 2 |
-| `color("red", "warm")` | arg0 ground → pos-0 index → bucket["red"] | 1 |
+| `color('blue', X)` | arg0 ground → pos-0 index → bucket[`('blue', 0)`] | 1 |
+| `color(X, 'cool')` | arg0 Var → skip; arg1 ground → pos-1 index → bucket[`('cool', 0)`] | 2 |
+| `color('red', 'warm')` | arg0 ground → pos-0 index → bucket[`('red', 0)`] | 1 |
 | `color(X, Y)` | arg0 Var → skip; arg1 Var → skip; fallback | 5 |
 
 ## Interaction with first-argument indexing
@@ -379,7 +386,7 @@ No changes to the invalidation mechanism. when [`assertz` or `retract`](database
 
     `tests/test_groundness_dispatch.py` covers:
 
-    - **Generalised key extraction**: arbitrary position, Var+Unify at non-first positions, PredicateMeta second field
+    - **Generalised key extraction**: arbitrary position, Var+Unify at non-first positions
     - **Per-position index building**: position 0 index, position 1 index, `n_distinct` field
     - **Position analysis**: both positions indexable, single-position detection, selectivity sorting, three-arg predicates
     - **Second-arg lookup (simple mode)**: ground second arg, ground first arg, both ground, neither ground, no-match, three-arg middle/last ground
@@ -388,7 +395,6 @@ No changes to the invalidation mechanism. when [`assertz` or `retract`](database
     - **Mixed clauses**: var-headed clauses in position-specific buckets, true catch-all clauses (Var at all positions)
     - **Dynamic re-indexing**: `assertz` triggers multi-plan recompile (both modes)
     - **Backward compatibility**: single-position matches first-argument indexing, below-threshold still works
-    - **PredicateMeta integration**: second-field lookup on PredicateMeta facts
 
 ---
 
@@ -396,7 +402,7 @@ No changes to the invalidation mechanism. when [`assertz` or `retract`](database
 
 Single-arg groundness-keyed dispatch picks the *best single position* that is ground. Multi-argument indexing extends this in three steps:
 
-- **Compound keys** — Compound terms and PredicateMeta instances are indexable (via functor/arity tuples).
+- **Compound keys** — compound cells are indexable (via functor/arity tuples).
 - **Flat joint key** — index on `(argI, argJ)` pairs when both are ground and the pair uniquely discriminates clauses much better than any single arg.
 - **Secondary (hierarchical) dispatch** — two-level index on `(argI, argJ)` that also handles partial groundness (`argI` ground, `argJ` unbound) without falling all the way back to the full scan.
 
@@ -404,7 +410,7 @@ Single-arg groundness-keyed dispatch picks the *best single position* that is gr
 
 ## Compound functor/arity keys
 
-Without compound-key indexing, Compound and PredicateMeta heads fell into the default bucket.  A predicate like:
+Without compound-key indexing, compound heads fell into the default bucket.  A predicate like:
 
 ```clausal
 --8<-- "tests/fixtures/docs/indexing_sigs.txt:compound_keys"
@@ -412,7 +418,7 @@ Without compound-key indexing, Compound and PredicateMeta heads fell into the de
 
 had no indexing at all on `arg0`, even though the four clauses are perfectly discriminated by functor name.
 
-With compound-key indexing, `_extract_arg_key` returns `("circle", 1)`, `("rect", 2)`, `("triangle", 3)`, `("sq", 1)` as bucket keys. The runtime dispatch uses `_runtime_arg_key` to extract the same tuple from the caller's argument before dict lookup. Scalar keys and compound-tuple keys coexist safely in the same `idx_dict` because `(functor, arity)` tuples never equal plain integers or strings.
+With compound-key indexing, `_extract_arg_key` returns `("circle", 1)`, `("rect", 2)`, `("triangle", 3)`, `("sq", 1)` as bucket keys. The runtime dispatch uses `_runtime_arg_key` to extract the same tuple from the caller's argument before dict lookup. Scalar keys and `(name, arity)` tuple keys coexist safely in the same `idx_dict` because a tuple never equals a plain number or bytes value (an atom `circle` keys `("circle", 0)`, distinct from `circle(R)`'s `("circle", 1)`).
 
 ```clausal
 --8<-- "tests/fixtures/docs/indexing_sigs.txt:compound_dispatch"
@@ -506,7 +512,6 @@ else:
     - Dispatch correctness: `circle(42)` → `Q=42`, `rect(3,4)` → `Q=3`
     - Unknown functor (no bucket) falls through to default
     - Scalar keys and compound-tuple keys coexist without collision
-    - PredicateMeta heads produce `(class_name, field_count)` keys
 
     **TestSecondaryIndexing**:
 
@@ -545,20 +550,20 @@ At runtime `$disp_color_1` is the dispatch closure. It calls `deref(args[0])`, c
 With call-site specialisation the same call becomes:
 
 ```python
-# base_globals["color.bucket(pos=0, 'red')"] = <bucket fn>  (injected at compile time)
-StepGenerator(color.bucket(pos=0, 'red'), this_generator, 'red', trail)
+# base_globals["color.bucket(pos=0, ('red', 0))"] = <bucket fn>  (injected at compile time)
+StepGenerator(color.bucket(pos=0, ('red', 0)), this_generator, 'red', trail)
 ```
 
 One deref, one dict lookup, and the dispatch closure itself are all eliminated.
 
-The globals key `"color.bucket(pos=0, 'red')"` is not a valid Python identifier, but Python's `compile(ast_tree, ...)` resolves `ast.Name(id=k)` via a plain dict lookup on the function's globals, so any string works. `ast.unparse()` renders it verbatim, making generated code self-documenting.
+The globals key `"color.bucket(pos=0, ('red', 0))"` is not a valid Python identifier, but Python's `compile(ast_tree, ...)` resolves `ast.Name(id=k)` via a plain dict lookup on the function's globals, so any string works. `ast.unparse()` renders it verbatim, making generated code self-documenting.
 
 ## Priority table
 
 | Condition at call site | Dispatch expression emitted |
 |---|---|
-| Two static args, joint bucket exists | `"foo.bucket(pos=(0,1), ('red', 2))"` |
-| One static arg, single-pos bucket exists | `"foo.bucket(pos=0, 'red')"` |
+| Two static args, joint bucket exists | `"foo.bucket(pos=(0,1), (('red', 0),2))"` |
+| One static arg, single-pos bucket exists | `"foo.bucket(pos=0, ('red', 0))"` |
 | Locked predicate, no static match | `$disp_foo_2` (cached dispatch closure) |
 | Dynamic predicate | `$dispatch_at(foo, 2)` (the binding — the owner's handle — resolved to its row's dispatch at each call) |
 
@@ -588,12 +593,18 @@ The globals key `"color.bucket(pos=0, 'red')"` is not a valid Python identifier,
     **`_static_call_key(arg_expr)`** — Mirrors `_runtime_arg_key` for compile-time AST analysis:
 
     ```python
-    def _static_call_key(arg_expr: ast.expr) -> Any | None:
+    def _static_call_key(arg_expr: ast.expr) -> Any | None:      # simplified
         if isinstance(arg_expr, ast.Constant):
-            return arg_expr.value           # int, str, float, bool, None
+            v = arg_expr.value
+            if type(v) is str:
+                return (v, 0) if v else _INDEX_VAR   # an atom: the bucket a head built
+            return v                                 # int, float, bool, None, bytes
+        if isinstance(arg_expr, ast.Tuple) and all_constants(arg_expr):
+            # a literal ground CELL ('f', 1, 2) keys as (functor, arity);
+            # a string ('$chars', s) has no key (text is unindexed)
+            ...
         if isinstance(arg_expr, (ast.List, ast.Tuple)):
-            # literal 1-char-str elements canonicalise to the joined str
-            # (or joined bytes for 0-255 ints), same as _runtime_arg_key
+            # 0-255 int constants canonicalise to the joined bytes (the codes model)
             ...
         if isinstance(arg_expr, ast.Call):
             func = arg_expr.func
@@ -601,21 +612,15 @@ The globals key `"color.bucket(pos=0, 'red')"` is not a valid Python identifier,
             if isinstance(func, ast.Name):
                 return (func.id, n_args)
             if isinstance(func, ast.Attribute):
-                # Cls._clausal_new(...) (Phase 0 construction fast path):
-                # the class name is func.value, not func.attr — func.attr is
-                # always the literal "_clausal_new".  A qualified mod.Dog(...)
-                # call still keys on func.attr.
-                if func.attr == "_clausal_new" and isinstance(func.value, ast.Name):
-                    return (func.value.id, n_args)
-                return (func.attr, n_args)
+                return (func.attr, n_args)   # a qualified mod.f(...)
         return None                         # variable or unknown
     ```
 
     **Key naming helpers:**
 
     ```python
-    _bucket_key("Color", 0, "red")            →  "color.bucket(pos=0, 'red')"
-    _joint_bucket_key("Pair", 0, 1, "x", 2)  →  "Pair.bucket(pos=(0,1), ('x',2))"
+    _bucket_key("color", 0, ("red", 0))            →  "color.bucket(pos=0, ('red', 0))"
+    _joint_bucket_key("pair", 0, 1, ("x", 0), 2)  →  "pair.bucket(pos=(0,1), (('x', 0),2))"
     ```
 
     **`_inject_bucket_refs_trampoline(clauses, base_globals)`** — Scans all clause bodies, finds call sites where the callee is locked and has `_index_plans`, converts the term-level argument to an AST expression via `term_to_ast_expr`, calls `_static_call_key`, and if a match is found injects the bucket function into `base_globals` and records the mapping in `_compile_context_local.bucket_ref_map` / `joint_bucket_ref_map`.
@@ -648,7 +653,7 @@ The globals key `"color.bucket(pos=0, 'red')"` is not a valid Python identifier,
 
     **TestStaticCallKey**:
 
-    - Integer, string, float, bool, None constants → value itself
+    - Integer, float, bool, None constants → value itself; a `str` constant (an atom) → `(name, 0)`
     - `ast.Name` (variable) → `None`
     - `ast.Call` with `ast.Name` func → `(id, n_args)` tuple
     - `ast.Call` with `ast.Attribute` func → `(attr, n_args)` tuple

@@ -57,17 +57,17 @@ program by adding and removing goals:
 
 ```clausal
 -allow_singletons
-# These three lists are in order of increasing specificity: LIST and N
-# stay unbound in the first two Tests on purpose — that's what makes
-# them "the most general query" (see for_prolog_programmers.md).
-# The most general query — all lists and their lengths
-test("general") <- list_length(LIST, N)
+# These three queries are in order of increasing specificity: X stays
+# unbound in the first Test on purpose — that's what makes it "the most
+# general query" (see for_prolog_programmers.md).
+# The most general query — every element of the list
+test("general") <- in_(X, [1, 2, 3])
 
-# More specific — only lists of length 3
-test("specific") <- (list_length(LIST, N), N == 3)
+# More specific — only elements of [1, 2, 3] greater than 1
+test("specific") <- (in_(X, [1, 2, 3]), X > 1)
 
-# Even more specific — only the list [1,2,3] of length 3
-test("most specific") <- list_length([1, 2, 3], 3)
+# Even more specific — only 2
+test("most specific") <- in_(2, [1, 2, 3])
 ```
 
 Each additional constraint can only reduce the set of solutions. This is
@@ -113,7 +113,11 @@ a previously successful negation to fail.
 
 ```clausal
 # Dangerous: X is unbound, so not in_(X, [1,2,3]) may behave unexpectedly
-risky(X) <- not in_(X, [1, 2, 3])
+risky(X) <- (not in_(X, [1, 2, 3]))
+
+# Commutativity is lost: the order of the goals changes the answer
+test("bind first") <- (X is 5, risky(X))         # succeeds
+test("negate first") <- (not (risky(X), X is 5))  # risky(X) fails while X is unbound
 ```
 
 For disequality with unbound variables, use [`dif/2`](constraints.md) (`is not`) instead — it
@@ -123,6 +127,9 @@ bound:
 ```clausal
 # Safe: dif is a constraint, not a point-in-time check
 safe(X) <- (X is not 1, X is not 2)
+
+test("dif survives") <- (safe(X), X is 3)          # X = 3
+test("dif rechecks") <- (not (safe(X), X is 1))    # binding X to 1 later fails
 ```
 
 ### Arithmetic with `==`
@@ -199,6 +206,8 @@ handle(N, 'negative') <- (N < 0)
 
 # Clean: cases are distinguished by the functor — the wrapped value
 # doesn't matter here, only which functor it's wrapped in
+-private([zero, positive(n), negative(n)])
+
 classify(zero, 'zero'),
 classify(positive(_), 'positive'),
 classify(negative(_), 'negative'),
@@ -259,26 +268,38 @@ This separation is a major attraction of logic programming, and it only works
 within the pure monotonic core. Consider the N-Queens problem:
 
 ```clausal
--import_from(clpfd, [all_different, labeling]),
-
 # Logic: describe what must hold
 n_queens(N, QUEENS) <- (
     length(QUEENS, N),
-    QUEENS ins 1..N,
+    in_domain(QUEENS, 1, N),
     all_different(QUEENS),
     safe_queens(QUEENS)
+)
+
+safe_queens([]),
+safe_queens([Q, *QS]) <- (
+    no_attack(Q, QS, 1),
+    safe_queens(QS)
+)
+
+no_attack(_Q, [], _D),
+no_attack(Q, [Q1, *QS], D) <- (
+    Q != Q1 + D,
+    Q != Q1 - D,
+    D1 == D + 1,
+    no_attack(Q, QS, D1)
 )
 
 # Control: choose how to search
 test("8 queens") <- (
     n_queens(8, QUEENS),
-    labeling([ff], QUEENS)
+    label(QUEENS)
 )
 ```
 
-The same `n_queens/2` definition can be used with different labeling
-strategies — `[leftmost]`, `[ff]` (first-fail), `[bisect]` — without changing
-the logic. The logic specifies *what* must hold; the labeling specifies *how*
+The same `n_queens/2` definition can be searched in different ways — `label/1`
+(first-fail order), or handing the posted constraints to another solver — without
+changing the logic. The logic specifies *what* must hold; the labeling specifies *how*
 to search. This decoupling makes the approach flexible and versatile.
 
 ---

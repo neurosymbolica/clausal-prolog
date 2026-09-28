@@ -26,10 +26,22 @@ head_name(SRC, NAME) <- (
 )
 ```
 
-```python
->>> from clausal.logic.solve import call
->>> src = "edge(1, 2),\nconnected(X, Y) <- edge(X, Y)\n"
->>> # head_name(src, NAME) enumerates "edge", "connected"
+Query it from a `.seam` file with the goal-position seam, passing the
+source text in with `++`:
+
+```clausal
+-import_from(reflection, [reified_clause, clause_head, goal_functor])
+
+head_name(SRC, NAME) <- (
+    reified_clause(SRC, CLAUSE),
+    clause_head(CLAUSE, HEAD),
+    goal_functor(HEAD, NAME, _)
+)
+
+def heads(src):
+    return [NAME for NAME in --head_name(++src, NAME)]
+
+# heads("edge(1, 2),\nconnected(X, Y) <- edge(X, Y)\n") == ['edge', 'connected']
 ```
 
 ---
@@ -48,7 +60,7 @@ Inside clauses:
 
 | Term | Meaning |
 |---|---|
-| `Goal(NAME, ARGS, KWARGS)` | A predicate call *and* any compound term — heads, body goals, and structured arguments share this shape. `NAME` is the functor's spelling as a **string** (dotted for qualified calls, e.g. `"mod.Pred"`); `KWARGS` is a list of `[name, value]` pairs. Note the asymmetry: this raw field is a string, while `goal_functor/3` — the accessor — answers the name as an **atom**, because that is a name position. Pick one and stay with it inside a matcher. |
+| `Goal(NAME, ARGS, KWARGS)` | A predicate call *and* any compound term — heads, body goals, and structured arguments share this shape. `NAME` is the functor's spelling, a plain Python `str` — which is the atom (dotted for qualified calls, e.g. `'mod.pred'`); `KWARGS` is a list of `[name, value]` pairs. It is the same value `goal_functor/3` answers. |
 | `Variable(NAME)` | A logic variable, as a *ground* term — matchers inspect structure without binding anything. Anonymous variables are numbered `_1`, `_2`, … per clause. |
 | `Atom(NAME)` | A bare lowercase name. |
 | `Escape(CODE, VARS, POSITION)` | A `++` Python escape. `CODE` is the escaped expression's source text; it is never evaluated. |
@@ -126,11 +138,10 @@ binding it, and a non-`Clause` term simply fails. The enumeration builtins
 non-`Goal` terms (raw operator nodes, literals), which conveniently skips them
 in call-graph sweeps.
 
-Because `NAME` is an atom, a matcher can write it as a literal in ordinary
-(`-double_quotes(atom)`) source — `goal_functor(GOAL, "edge", _)` matches an
-`edge/…` call. Destructuring `Goal(NAME, _, _)` directly gives you the raw
-spelling *string* instead; the two do not unify with each other, so a matcher
-should use one form throughout.
+Because `NAME` is an atom, a matcher writes it as a quoted atom:
+`goal_functor(GOAL, 'edge', _)` matches an `edge/…` call. Destructuring
+`Goal(NAME, _, _)` directly gives the same atom. A double-quoted `"edge"` is
+a string (a `('$chars', …)` term) and matches neither.
 
 ### reified_subterm/2 — Recursive Walk
 
@@ -204,18 +215,18 @@ Semantics:
 
 - **Pattern variables are the matcher's own variables.** They *capture*
   the reified subterms they align with — `A` above binds to
-  `Variable("X")` when matching `my_pred(X, Y) <- (goalx(X), goaly(Y))` —
+  `Variable('X')` when matching `my_pred(X, Y) <- (goalx(X), goaly(Y))` —
   and repeated variables enforce sharing: the pattern above rejects
   `my_pred(X, Y) <- (goalx(Y), goaly(X))`. To pin an actual source-level
-  name, write `Variable("X")` explicitly in the pattern.
-- **Facts:** `Tagged(_, ok) <- True` matches the fact `Tagged(1, ok),`
+  name, write `Variable('X')` explicitly in the pattern.
+- **Facts:** `tagged(_, ok) <- True` matches the fact `tagged(1, ok),`
   (a `True` body is the empty goal list). Atoms in patterns match reified
   `Atom` terms, not strings.
 - **Whole-body capture:** `my_pred(_, _) <- GOALS` binds `GOALS` to the
   body's goal list.
 - **Goal lists match exactly.** A two-goal pattern body matches two-goal
   bodies only.
-- **Operators stay raw on both sides:** `Positive(A) <- (A > 0)` matches
+- **Operators stay raw on both sides:** `positive(A) <- (A > 0)` matches
   via the `Gt` node's structural unification; `not`/`or` bodies work the
   same way.
 
@@ -288,7 +299,8 @@ starts_with_edge(SRC, NAME) <- (
 ## Python API
 
 For Python-side tooling (e.g. static analysers that must not load the
-target's engine or imports), `clausal.reflection` exposes the pure layer:
+target's engine or imports), `clausal.reflection` exposes the pure layer.
+It is not covered by the 1.0 API promise (see [Public API](public-api.md)):
 
 ```python
 from clausal.reflection import reify_source, reify_file, reify_ast, Clause, Goal

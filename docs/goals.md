@@ -4,7 +4,7 @@
 
 Clausal aims to provide logic programming in Python as tightly integrated as possible — not as a front-end to an external Prolog, but as a genuine part of the Python runtime. Python code and logic code call into each other freely, share the same objects, and run on the same VM. Existing Prolog programs can be [imported directly](importing_prolog.md) — translated, compiled, and cached on the fly.
 
-The inspiration is heavily drawn from existing Prologs, particularly the insights of Marcus Triska (Power of Prolog), Richard O'Keefe, and Ulrich Neumerkel. Clausal does not claim to be a Prolog and does not follow ISO Prolog syntax, because those conventions are sufficiently alien to Python programmers that they would add unnecessary obstacles. Instead, clausal brings the spirit of Prolog to Python — using Python semantics for operators and keywords, retaining familiar Python concepts, and leveraging Python's runtime as much as possible.
+The inspiration is heavily drawn from existing Prologs, particularly the insights of Markus Triska (The Power of Prolog), Richard O'Keefe, and Ulrich Neumerkel. Clausal's surface syntax is Python's, not ISO Prolog's; its *semantics* follow ISO Prolog (ISO 13211-1) first, and Scryer Prolog where ISO is silent. In today's syntax a **bare** operator keeps its Python meaning (`-7 // 2` is -4) while the **quoted** ISO spelling follows Scryer (`'//'(-7, 2)` is -3) — see [Operators](operators.md). Clausal is cut-free by design: `once/1`, `if_/3` and negation cover committed choice.
 
 ## Why logic programming + Python?
 
@@ -42,10 +42,11 @@ Marrying these in Python — the lingua franca of machine learning — is the go
 ## What clausal provides
 
 - **`clausal.logic.variables`** — C extension for logic variables and trail-based backtracking. Foundation for all unification.
-- **`clausal.simple_ast`** and **`clausal.conversion`** — simplified Python AST, used as the term representation for homoiconic code.
-- **`clausal.term_rewriting`** — transforms DSL [syntax](syntax.md) (`--expr`, `head<-body`, trailing-comma facts) to AST-building Python.
-- **`clausal.trampoline`** — stack-safe CPS execution via generator-based trampoline.
-- **`clausal.continuation_search`** — greenlet-based search iterator.
-- **`clausal.import_hook`** — transparent [import](import.md) of logic modules; [IPython](ipython.md) integration.
+- **Terms are plain Python values** — an atom is a `str`, a compound is a cell tuple `('f', 1, 2)`, a list is a Python list, a string is the `('$chars', s)` carrier. `clausal.cell_functor`, `cell_args` and `make_cell` read and build cells.
+- **`clausal.import_hook`** — transparent [import](import.md) of `.clausal`/`.seam` modules; [IPython](ipython.md) integration.
+- **`clausal.logic.compiler`** — compiles clauses to Python generators run on a stack-safe trampoline (`clausal.logic.trampoline`).
+- **The goal-position seam** — in a `.seam` file, Python calls logic with `for X in --pred(X):` / `if --pred(a):`, and logic calls Python with `++expr` (see [Python integration](python_integration.md)).
+
+What 1.0 covers is listed in [Public API](public-api.md).
 
 Planned additions are described in the [Architecture](architecture.md) document.

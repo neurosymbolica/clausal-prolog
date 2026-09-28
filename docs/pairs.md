@@ -3,6 +3,11 @@
 Pair predicates work with [lists](lists.md) of two-element lists `[Key, Value]`, providing
 key-value processing operations. For proper key-value mappings with unification support, see [Dicts & Sets](dicts_sets.md).
 
+!!! note "A pair is `[Key, Value]`, not `Key-Value`"
+    Scryer's `library(pairs)` writes a pair as the term `Key-Value`. Clausal's
+    pair predicates take two-element **lists** instead, and a `'-'(Key, Value)`
+    cell is not a pair to them: `pairs_keys(['-'(a, 1)], K)` fails.
+
 ---
 
 ## Quick Example
