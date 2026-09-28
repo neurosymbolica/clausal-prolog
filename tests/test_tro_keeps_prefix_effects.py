@@ -94,6 +94,8 @@ len2(N, [], N),
 len2(N0, [_, *T], N) <- (eval_(N0 + 1, N1), len2(N1, T, N))
 walk([]),
 walk([H, *T]) <- (H is not tro_absent, walk(T))
+count_down(0),
+count_down(N) <- (N > 0, H is not N, H is tro_absent, eval_(N - 1, M), count_down(M))
 """
 
 
@@ -240,6 +242,30 @@ class TestSafeShapesStillLoop:
     def test_is_not_on_ground_elements(self, mod):
         lm = mod.__dict__["$module"]
         assert len(list(call("walk", list(range(2000)), module=lm))) == 1
+
+
+def _peak_bytes(fn):
+    import tracemalloc
+    tracemalloc.start()
+    try:
+        fn()
+        return tracemalloc.get_traced_memory()[1]
+    finally:
+        tracemalloc.stop()
+
+
+class TestTheRestartIsTaken:
+    """The answers are the same whether an iteration restarts in place or
+    falls back to a nested call, so check the thing TRO is for: memory that
+    does not grow with the depth.  A nested call per level holds a generator
+    frame per level (tens of MB at this depth); the in-place restart holds
+    one.  The clause posts a dif between two variables it creates itself,
+    so its trail segment is non-empty and commit_fresh must accept it."""
+
+    def test_counter_loop_runs_in_constant_memory(self, mod):
+        lm = mod.__dict__["$module"]
+        peak = _peak_bytes(lambda: list(call("count_down", 20000, module=lm)))
+        assert peak < 2_000_000, f"peak {peak} bytes: the restart was not taken"
 
 
 class TestTrailCommitFresh:

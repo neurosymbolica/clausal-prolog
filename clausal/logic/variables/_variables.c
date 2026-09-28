@@ -859,6 +859,12 @@ Trail_commit_fresh(TrailObject *self, PyObject *const *args, Py_ssize_t nargs)
      * callback) the trail is left exactly as it was and False is returned:
      * the effects since the mark reach state the caller can see, so they
      * must stay undoable.
+     *
+     * Assumes the variables this trail binds are confined to its thread (the
+     * threading contract in _ft_compat.h): the id counter is process-wide,
+     * so on a free-threaded build a variable another thread created after
+     * the floor was read, then handed over through shared Python state,
+     * would count as fresh here.
      */
     if (nargs != 2) {
         PyErr_SetString(PyExc_TypeError,

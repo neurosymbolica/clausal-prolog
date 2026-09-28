@@ -218,6 +218,7 @@ def _check_mark_undo_pairing(stmts: list) -> list[str]:
                 and node.func.attr == "commit_fresh"
                 and len(node.args) == 2
                 and isinstance(node.args[0], _ast.Name)
+                and node.args[0].id == "_tro_mark"   # tro._TRO_MARK_NAME
             ):
                 undos.add(node.args[0].id)
 
