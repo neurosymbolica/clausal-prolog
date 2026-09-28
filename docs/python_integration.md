@@ -759,7 +759,8 @@ clausal.imported_atoms("procurement")   # {'open_procedure': 'procurement.vocabu
 - **Clashes are deterministic.** When two exporters that both declare an
   atom are imported, the atom is the same (atoms are global by spelling) and
   only the attribution differs. Within one file the later `-import_from`
-  wins, as the later binding of the name does. Across a package's files,
+  that names the atom wins, whatever local name it binds (`alias(x, y)`
+  names the atom `x`, the same as a plain `x`). Across a package's files,
   the package's `__init__` is asked first, then its loaded submodules in
   sorted name order, and the first file that imports the atom wins.
 - Package scoping, the argument forms and the errors are those of

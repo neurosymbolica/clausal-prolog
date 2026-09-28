@@ -1,0 +1,5 @@
+# Fixture for tests/test_imported_atoms.py: the reverse order -- an ALIASED
+# import, then a plain import of the same atom from another exporter; the
+# later directive (ia_vocab) is credited.
+-import_from(tests.fixtures.ia_vocab2, [alias(shared_kind, sk_local)])
+-import_from(tests.fixtures.ia_vocab, [shared_kind])

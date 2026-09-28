@@ -996,9 +996,13 @@ def imported_atoms(module_or_package: Any) -> dict:
     it.  The atom is the same either way (atoms are global by spelling);
     only the attribution differs, and it is deterministic:
 
-      - within one file, the LATER directive in source order wins, mirroring
-        ``compiler_v2._process_imports``, whose later binding of the name
-        overwrites the earlier one;
+      - within one file, the LATER ``-import_from`` directive (in source
+        order) that names the atom wins, whatever local name it binds: an
+        ``alias(x, y)`` entry names the atom ``x`` just as a plain ``x``
+        does.  This is attribution by ATOM, not by binding -- after
+        ``-import_from(m1, [x])`` and ``-import_from(m2, [alias(x, y)])``
+        the local names ``x`` and ``y`` are bound by different directives,
+        but they are the same atom, and it is credited to ``m2``;
       - across a package's files, the package's own ``__init__`` is asked
         first, then its loaded submodules in sorted dotted-name order, and
         the first file that imports the atom names its exporter.
@@ -1033,7 +1037,7 @@ def imported_atoms(module_or_package: Any) -> dict:
                     getattr(owner_mod, "__dict__", {}).get(DECLARED_ATOMS_KEY)
                     or ())
             if name in owners[exporter]:
-                per_file[name] = exporter  # later directive wins
+                per_file[name] = exporter  # later directive naming it wins
         for name, exporter in per_file.items():
             found.setdefault(name, exporter)  # earlier file wins
     return dict(sorted(found.items()))

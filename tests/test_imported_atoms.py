@@ -190,3 +190,20 @@ def test_evicted_exporter_owns_nothing_and_is_not_reimported(load):
     sys.modules.pop(VOCAB2)
     assert clausal.imported_atoms(PLAIN) == {"shared_kind": VOCAB}
     assert VOCAB2 not in sys.modules
+
+
+# The clash rule is by ATOM, not by local binding: the later -import_from
+# directive that names the atom wins, whatever local name it binds.
+
+def test_clash_plain_then_alias_credits_the_later_alias(load):
+    name = "tests.fixtures.ia_alias_after_plain"
+    load(name)
+    assert clausal.imported_atoms(name) == {"shared_kind": VOCAB2}
+    ns = vars(sys.modules[name])
+    assert ns["shared_kind"] == "shared_kind" == ns["sk_local"]
+
+
+def test_clash_alias_then_plain_credits_the_later_plain(load):
+    name = "tests.fixtures.ia_plain_after_alias"
+    load(name)
+    assert clausal.imported_atoms(name) == {"shared_kind": VOCAB}

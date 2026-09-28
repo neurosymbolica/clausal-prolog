@@ -1,0 +1,6 @@
+# Fixture for tests/test_imported_atoms.py: a plain import, then an ALIASED
+# import of the same atom from another exporter.  x binds ia_vocab's atom and
+# the alias binds ia_vocab2's, but both are the atom shared_kind: the later
+# directive naming it (ia_vocab2) is credited.
+-import_from(tests.fixtures.ia_vocab, [shared_kind])
+-import_from(tests.fixtures.ia_vocab2, [alias(shared_kind, sk_local)])
