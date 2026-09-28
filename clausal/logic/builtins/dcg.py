@@ -125,9 +125,13 @@ def _dcg_body_goal(body, s0, s):
     elif isinstance(b, nodes.Not):
         b = ("\\+", b.operand)
     elif is_conjunction_tuple(b):
-        # ``(A, B, C)`` is ``(A, (B, C))``
-        head, rest = b[0], b[1:]
-        b = (",", head, rest[0] if len(rest) == 1 else tuple(rest))
+        # ``(A, B, C)`` is ``','(A, ','(B, C))`` -- built from explicit ``,``
+        # cells: a leftover bare tuple whose first element is an atom would
+        # read as a CELL (``(ws, eol)`` is ``ws(eol)``), not a conjunction.
+        acc = b[-1]
+        for g in reversed(b[:-1]):
+            acc = (",", g, acc)
+        b = acc
     is_cell, functor = compound_cell_shape(b)
     if is_cell and functor == "," and len(b) == 3:
         mid = Var()

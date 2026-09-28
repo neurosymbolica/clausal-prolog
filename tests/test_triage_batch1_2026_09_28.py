@@ -184,6 +184,21 @@ class TestC12ListingPrintsStrings:
         assert '"a"' in out
         assert "t(b)." in out
 
+    def test_listing_does_not_fold_past_an_order_sensitive_goal(
+            self, tmp_path, monkeypatch, capsys):
+        mod = _load(tmp_path, monkeypatch, "tri_c12b", """
+            p(X) <- (var(Y), X is Y)
+            w <- listing('/'('p', 1))
+            def run():
+                if --w:
+                    return True
+                return False
+        """)
+        assert mod.run() is True
+        out = capsys.readouterr().out
+        # moved into the head it would read p(Y) <- var(Y): a different clause
+        assert "var(" in out and " is " in out
+
 
 class TestC16FloatBesideExactMessage:
     def test_the_remedy_is_a_spelling_that_loads(self, tmp_path, monkeypatch):

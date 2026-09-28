@@ -115,6 +115,18 @@ class TestB3bPhraseWithAControlBody:
         assert mod.disj() == [1, 2]
         assert mod.terminals() == [["c"]]
 
+    def test_a_conjunction_tuple_of_three_goals(self, tmp_path, monkeypatch):
+        # (ws, eol) left over as a bare tuple would read as the CELL ws(eol);
+        # the translation must build explicit ',' cells (roborev round 1).
+        mod = _load(tmp_path, monkeypatch, "tri_b3b3", """
+            -private([a, b, c])
+            ws >> [b]
+            eol >> [c]
+            def run():
+                return [G for G in --(G is ([a], ws, eol), phrase(G, [a, b, c]))]
+        """)
+        assert len(mod.run()) == 1
+
 
 class TestB4aAssertzUnbound:
     def test_assertz_of_a_variable_is_an_instantiation_error(self, tmp_path, monkeypatch):

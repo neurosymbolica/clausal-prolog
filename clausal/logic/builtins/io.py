@@ -526,17 +526,36 @@ def _format_clause_head(head):
 
 
 def _occurs_in(var, x) -> bool:
-    """True if the variable *var* (by identity) occurs in goal/term *x*."""
+    """True if the variable *var* (by identity) MAY occur in goal/term *x*.
+    Conservative: a container this walk does not know answers True, so the
+    fold below is skipped rather than risked."""
     import dataclasses  # noqa: PLC0415
     from clausal.pythonic_ast.nodes import Node  # noqa: PLC0415
+    from clausal.terms import ConcreteSeg, DictTerm, SegList, SetTerm  # noqa: PLC0415
     if x is var:
         return True
+    if x is None or isinstance(x, (bool, int, float, complex, str, bytes)):
+        return False
+    if isinstance(x, Var):
+        return False
     if isinstance(x, (list, tuple)):
         return any(_occurs_in(var, e) for e in x)
+    if isinstance(x, dict):
+        return any(_occurs_in(var, k) or _occurs_in(var, v)
+                   for k, v in x.items())
+    if isinstance(x, DictTerm):
+        return any(_occurs_in(var, k) or _occurs_in(var, v)
+                   for k, v in x._data.items())
+    if isinstance(x, SetTerm):
+        return any(_occurs_in(var, e) for e in x)
+    if isinstance(x, SegList):
+        return any(_occurs_in(var, list(seg.elements))
+                   if isinstance(seg, ConcreteSeg) else _occurs_in(var, seg.var)
+                   for seg in x.segments)
     if isinstance(x, Node) and dataclasses.is_dataclass(x):
         return any(_occurs_in(var, getattr(x, f.name))
                    for f in dataclasses.fields(x) if f.name != "position")
-    return False
+    return True
 
 
 def _fold_head_unifications(head, body):
@@ -544,8 +563,10 @@ def _fold_head_unifications(head, body):
     body folded back: a clause stored as ``s(_0) <- _0 is "a"`` lists as the
     ``s("a")`` it was written as (triage C12).  Only a body goal ``V is T``
     whose ``V`` is a head argument occurring once in the head and nowhere
-    else in the clause is folded -- then the two spellings are the same
-    clause."""
+    else in the clause is folded, and only within the LEADING run of such
+    unifications (where the compiler puts its hoists): a unification after
+    an order-sensitive goal (``var/1``, ``not``, a side effect) is not the
+    same clause once moved into the head."""
     from clausal.logic.cells import _cell_shape, cell_args, cell_functor  # noqa: PLC0415
     from clausal.pythonic_ast.nodes import Unify  # noqa: PLC0415
     if not _cell_shape(head)[0]:
@@ -555,7 +576,7 @@ def _fold_head_unifications(head, body):
     changed = False
     for goal in list(rest):
         if not (isinstance(goal, Unify) and isinstance(goal.left, Var)):
-            continue
+            break
         v = goal.left
         slots = [i for i, a in enumerate(args) if a is v]
         others = [g for g in rest if g is not goal]
