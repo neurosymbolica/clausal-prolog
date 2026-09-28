@@ -2382,6 +2382,68 @@ def _atom_as_functor_message(name, filename, lineno, owner=None):
 # ─── Term Transformer ─────────────────────────────────────────────────────────
 
 
+# ── pi/e in ARITHMETIC position (ruling Q16, narrowed 2026-09-28) ──────────
+#
+# The arity-0 evaluables ``pi`` and ``e`` are builtins in an evaluated
+# expression -- ``'is'(X, pi)``, ``eval_(2 * e, X)``, ``X == pi`` -- and need
+# no declaration there.  Anywhere else (``f(e)``, a fact argument, ``T is e``)
+# they are ordinary atoms, declared like any other.  The rewriter cannot see
+# its position from ``visit_Name``, so a pre-pass over each module's Python
+# AST marks the ``pi``/``e`` Name nodes that stand in arithmetic position
+# with an attribute (which survives the rewriter's deepcopy of a body).
+
+_ARITH_CONSTANTS = frozenset({"pi", "e"})
+_ARITH_CMP_OPS = (Eq, NotEq, Lt, LtE, Gt, GtE)
+#: goal name -> the argument indexes that are evaluated (ISO 8.6, 8.7), and
+#: eval_/2's expression
+_ARITH_GOAL_ARGS = {
+    "is": (1,), "=:=": (0, 1), "=\\=": (0, 1), "<": (0, 1), ">": (0, 1),
+    "=<": (0, 1), ">=": (0, 1), "eval_": (0,),
+}
+_ARITH_MARK = "_clausal_arith_constant"
+
+
+def _call_name(func) -> "str | None":
+    if isinstance(func, Name):
+        return func.id
+    if isinstance(func, Constant) and isinstance(func.value, str):
+        return func.value
+    return None
+
+
+def _mark_arith_position_names(tree) -> None:
+    """Mark each ``pi``/``e`` Name in arithmetic position in *tree*:
+    an operand of ``==``/``!=``/``<``/``<=``/``>``/``>=``, an evaluated
+    argument of a quoted ``'is'``/``'=:='``/``'<'``... or of ``eval_``, and
+    below those only through arithmetic operators and evaluable functors."""
+    from clausal.logic.exact_arith import EVALUABLE  # noqa: PLC0415
+    def expr(node):
+        if isinstance(node, Name):
+            if node.id in _ARITH_CONSTANTS:
+                setattr(node, _ARITH_MARK, True)
+        elif isinstance(node, BinOp):
+            expr(node.left)
+            expr(node.right)
+        elif isinstance(node, UnaryOp):
+            expr(node.operand)
+        elif isinstance(node, Call) and not node.keywords:
+            name = _call_name(node.func)
+            if name is not None and (name, len(node.args)) in EVALUABLE:
+                for a in node.args:
+                    expr(a)
+
+    for node in _ast_module.walk(tree):
+        if isinstance(node, Compare):
+            if all(isinstance(op, _ARITH_CMP_OPS) for op in node.ops):
+                for operand in (node.left, *node.comparators):
+                    expr(operand)
+        elif isinstance(node, Call):
+            idxs = _ARITH_GOAL_ARGS.get(_call_name(node.func))
+            if idxs and len(node.args) == 2:     # all of these are /2
+                for i in idxs:
+                    expr(node.args[i])
+
+
 class TermTransformer(NodeTransformer):
     """Transform a Python expression AST into Python AST that constructs simple_ast nodes."""
 
@@ -3633,6 +3695,12 @@ class TermTransformer(NodeTransformer):
         # auto-minted as 0-arity atoms — those resolve via the runtime
         # predicate-resolution path (builtins, module globals, dispatch
         # adapter) rather than the global atom dict.
+        if (identifier in _ARITH_CONSTANTS
+                and getattr(name, _ARITH_MARK, False)):
+            # ``pi``/``e`` in an evaluated expression: the evaluable
+            # constant, a builtin needing no declaration there (the atom,
+            # which evaluation reads as the number)
+            return replace(Constant(value=sys.intern(identifier)), name)
         if not transformer._suppress_bare_atom_collection:
             transformer._bare_atom_refs.add(identifier)
         return node_ast(
@@ -7672,6 +7740,7 @@ class EmbedTransformer(NodeTransformer):
         transformer._import_module_bases.update(_import_module_prepass(module))
         transformer._expand_currency_tables(module)
         transformer._titlecase_prepass(module)
+        _mark_arith_position_names(module)
         result = transformer.generic_visit(module)
         transformer._lint_seam_text_compare(result, transformer._seam_exports[0])
         transformer._check_var_shaped_predicate_names()

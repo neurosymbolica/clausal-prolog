@@ -493,8 +493,9 @@ def evaluable_functor_signature(
     ^ rdiv``, ``abs min max``, the rounding, float, trigonometric and bitwise
     functors ...) -- else None.  The arity-0 entries (``pi``, ``e``) are
     ATOMS, not constructions: they are never answered here (a zero-field
-    signature would build the reserved one-tuple); the strict-atoms check
-    accepts their bare spelling instead.
+    signature would build the reserved one-tuple); in ARITHMETIC position the
+    rewriter emits their atom without a declaration
+    (``term_rewriting._mark_arith_position_names``).
 
     Ruling Q16 (2026-09-28): "they are builtins really".  Like a builtin
     predicate's name, an evaluable functor is in scope in EVERY module, with

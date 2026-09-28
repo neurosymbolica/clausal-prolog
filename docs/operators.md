@@ -80,6 +80,11 @@ are in Prolog. As data, in a fact or a clause head, they are ordinary terms
 (`f(rdiv(1, 2))` holds the term `rdiv(1, 2)`); they are evaluated only where
 arithmetic is (`'is'`, `eval_`, a comparison, a constraint). A module's own
 declaration of the same spelling answers first, with its usual arity checks.
+The constants `pi` and `e` are atoms, so they need no declaration only in
+**arithmetic position** (`'is'(X, pi)`, `eval_(2 * e, X)`, a comparison
+operand, an evaluable functor's argument); as data (`f(e)`, `T is e`) they
+are ordinary atoms that a module declares like any other. Evaluating a bound
+atom reads it as ISO does: `T is e, 'is'(X, T)` gives `X = 2.718...`.
 
 ```clausal
 half_toward_zero(N, H) <- 'is'(H, '//'(N, 2))

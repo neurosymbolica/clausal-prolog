@@ -130,7 +130,7 @@ written in source keeps Python's meaning, and the two differ for `//` and `**`
 | `gcd(A, B)` | greatest common divisor, non-negative; integers only | — |
 | `sqrt`, `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `exp`, `log` (arity 1) | a **float**; an exact operand is taken at its value. `sqrt(-1)`, `log(0)`, `log(-1)`, `asin(2)` are `evaluation_error(undefined)`; `exp(1000)` is `evaluation_error(float_overflow)` | — |
 | `atan2(Y, X)`, `atan(Y, X)` | the angle of the point (X, Y), a float; `atan2(0, 0)` is `evaluation_error(undefined)` | — |
-| `pi`, `e` | the constants, as floats (`'is'(X, pi)`) | — |
+| `pi`, `e` | the constants, as floats (`'is'(X, pi)`); no declaration needed in arithmetic position, ordinary atoms as data (see [Operators](operators.md#writing-a-quoted-arithmetic-cell)) | — |
 | `'>>'(A, N)`, `'<<'(A, N)` | arithmetic shifts; a negative count shifts the other way (`'<<'(1, -1)` is 0); integers only | `A >> N`, `A << N`: Python shifts, not evaluable |
 | `'/\\'(A, B)`, `'\\/'(A, B)`, `'\\'(A)`, `xor(A, B)` | bitwise and, or, complement, exclusive or (two's complement: `'\\'(5)` is -6); integers only | `&`, `\|`, `~`, `^`: Python's, for CLP(B); not evaluable |
 
