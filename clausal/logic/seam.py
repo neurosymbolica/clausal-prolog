@@ -859,12 +859,63 @@ def _definite_answers(goal: Any, module,
             f"--: {_goal_text(goal)}: a ++ over a goal variable in a tabled call has no "
             f"value to judge the call by; bind it in Python first or write "
             f"the term in the goal")
-    for truth, _delays in judged_answers(goal, module, (), trail):
-        if truth is Undefined:
-            raise UndefinedAnswer(
-                f"--: {_goal_text(goal)} has a conditional (undefined) answer; use "
-                f"clausal.query_wfs for truth values and delays")
-        yield
+    from clausal.predicate_diagnostics import PredicateNotFoundError  # noqa: PLC0415
+    try:
+        for truth, _delays in judged_answers(goal, module, (), trail):
+            if truth is Undefined:
+                raise UndefinedAnswer(
+                    f"--: {_goal_text(goal)} has a conditional (undefined) answer; use "
+                    f"clausal.query_wfs for truth values and delays")
+            yield
+    except PredicateNotFoundError as exc:
+        refusal = _still_loading_refusal(exc, module, module_globals)
+        if refusal is None:
+            raise
+        raise refusal from None
+
+
+def _still_loading_refusal(exc, module, module_globals):
+    """Ruling R13 (2026-09-29, option b): a top-level query of a predicate
+    of the module that is still LOADING it gets a located error saying so.
+
+    The module body executes before its predicates are compiled (they are
+    compiled together once the body has run, with its directives), so at
+    top level a query of the module's own ``p/1`` finds nothing.  Making it
+    work would mean compiling a half-loaded module and again at the end;
+    the query belongs after the load, or in another module.  The ISO term
+    is unchanged (``existence_error(procedure, p/1)``); only the message is.
+    None when *exc* is not that case.
+    """
+    from clausal.logic.compiler_v2 import _IMPORT_PLACEHOLDER  # noqa: PLC0415
+    from clausal.logic.atoms import demangle, is_mangled  # noqa: PLC0415
+    from clausal.predicate_diagnostics import PredicateNotFoundError  # noqa: PLC0415
+    name, arity = exc.functor, exc.arity
+    if (module_globals is None or not isinstance(name, str)
+            or not getattr(module, _IMPORT_PLACEHOLDER, False)):
+        return None
+    binding = module_globals.get(name)
+    if not (type(binding) is str and is_mangled(binding)
+            and demangle(binding)[0] == module.db.module_name()):
+        return None
+    where = _query_site(module_globals)
+    return PredicateNotFoundError(
+        f"{where}the query reaches {name}/{arity}, a predicate of this "
+        f"module, while the module is still loading: a top-level statement "
+        f"runs before the module's predicates are compiled.  Query "
+        f"{name}/{arity} after the module has loaded (from a function called "
+        f"later, or from Python), or from another module that imports it.",
+        name, arity)
+
+
+def _query_site(module_globals: dict) -> str:
+    """``file:line: `` of the innermost frame executing *module_globals*'
+    body, or ``''``."""
+    frame = sys._getframe(1)
+    while frame is not None:
+        if frame.f_globals is module_globals:
+            return f"{frame.f_code.co_filename}:{frame.f_lineno}: "
+        frame = frame.f_back
+    return ""
 
 
 def each_fresh(make, module_globals: dict):

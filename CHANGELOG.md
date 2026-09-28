@@ -306,6 +306,10 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
   package even when it is imported before `clausal.import_hook`; it used to
   become an empty namespace package, and its `-import_from` of sibling
   files never ran.
+- **A top-level `--goal` over a predicate of the same file** (which runs
+  before the file's clauses are compiled) raises
+  `existence_error(procedure, p/1)` with a message giving the file and
+  line and the fix, instead of a bare "not defined".
 
 ### Migration guide: 0.x to 1.0
 
