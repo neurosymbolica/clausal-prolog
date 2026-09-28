@@ -181,6 +181,10 @@ this engine's error terms: where Scryer and SWI-Prolog differ, follow Scryer.
   `error(type_error(atom,1),atom_length/2)`, `error(evaluation_error(zero_divisor),(/)/2)`.
 - For a missing procedure, it is the missing indicator itself, whichever
   builtin found it missing: `error(existence_error(procedure,foo/1),foo/1)`.
+  The exception is a database builtin refusing a target nothing declares
+  (`assertz(foo(a))` when only `foo/2` is `-dynamic`): nothing is being
+  called, so the context is the builtin,
+  `error(existence_error(procedure,foo/1),assertz/1)`.
 - When there is no single culprit indicator, it is an unbound variable, as
   Scryer's own library code throws `error(E, _)`.
 

@@ -200,11 +200,6 @@ They behave as `findall/3` that fails on an empty result (`setof` also sorts
 and removes duplicates). ISO enumerates one solution per binding of the
 free variables; Clausal returns a single bag.
 
-### The culprit of an ISO comparison names `is/2`
-
-`'<'(1, a)` raises `error(type_error(evaluable, a/0), (is)/2)`; the culprit
-should be the comparison, `(<)/2`.
-
 ### Missing builtins
 
 Not provided (calling one raises `existence_error(procedure, PI)`):

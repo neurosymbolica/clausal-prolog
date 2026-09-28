@@ -744,6 +744,41 @@ def judged_answers(goal: Any, module, exported_vars, trail) -> "Iterator[tuple]"
                 below.scc_deps |= {d for d in leader.scc_deps if d is not below}
 
 
+def _goal_text(goal: Any) -> str:
+    """*goal* as the reader wrote it -- ``win(1)``, not the rewriter node
+    ``Call(func=LoadName(name='win'), ...)`` -- for a message.  A goal node
+    renders itself (bound variables dereferenced); a runtime term through
+    the writeq renderer.  Building a message must never raise."""
+    try:
+        from clausal.logic.solve import _deref_walk  # noqa: PLC0415
+        if isinstance(goal, Node):
+            return str(_deref_node(goal, _deref_walk))
+        from clausal.terms import term_writeq  # noqa: PLC0415
+        return term_writeq(_deref_walk(goal))
+    except Exception:  # noqa: BLE001 - see the docstring
+        return repr(goal)
+
+
+def _deref_node(node: Any, walk) -> Any:
+    """A copy of goal *node* with every argument dereferenced, so a bound
+    variable prints as its value."""
+    import dataclasses  # noqa: PLC0415
+    if isinstance(node, Node) and dataclasses.is_dataclass(node):
+        changes = {}
+        for f in dataclasses.fields(node):
+            if f.name == "position":
+                continue
+            v = getattr(node, f.name)
+            nv = ([_deref_node(e, walk) for e in v] if isinstance(v, list)
+                  else _deref_node(v, walk))
+            if nv is not v:
+                changes[f.name] = nv
+        return dataclasses.replace(node, **changes) if changes else node
+    if isinstance(node, Var):
+        return walk(node)
+    return node
+
+
 def _definite_answers(goal: Any, module,
                       module_globals: "dict | None" = None) -> "Iterator[None]":
     """Yield once per UNCONDITIONAL answer of *goal*; raise UndefinedAnswer
@@ -760,13 +795,13 @@ def _definite_answers(goal: Any, module,
     site = _tabled_call_site(goal, module, trail)
     if site is not None and any(_has_var_thunk(a) for a in site[3]):
         raise SyntaxError(
-            f"--: {goal!r}: a ++ over a goal variable in a tabled call has no "
+            f"--: {_goal_text(goal)}: a ++ over a goal variable in a tabled call has no "
             f"value to judge the call by; bind it in Python first or write "
             f"the term in the goal")
     for truth, _delays in judged_answers(goal, module, (), trail):
         if truth is Undefined:
             raise UndefinedAnswer(
-                f"--: {goal!r} has a conditional (undefined) answer; use "
+                f"--: {_goal_text(goal)} has a conditional (undefined) answer; use "
                 f"clausal.query_wfs for truth values and delays")
         yield
 

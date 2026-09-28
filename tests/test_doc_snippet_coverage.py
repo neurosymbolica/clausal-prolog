@@ -31,7 +31,6 @@ _HOWTO = (
 # examples / pseudo-code in guide pages. Allowlist, not aspiration: do not
 # grow this set. New blocks should compile or be moved to fixtures.
 _KNOWN_UNCOMPILABLE = {
-    ("directives.md", 292),
     # import.md: two `# caller.clausal` blocks that `-import_from(lib, …)` a
     # fictional library and illustrate cross-module name scoping; the first
     # deliberately documents a runtime failure. Neither is standalone-compilable.
@@ -43,7 +42,6 @@ _KNOWN_UNCOMPILABLE = {
     # import.md: one more `# caller.clausal` block that `-import_from(lib, …)`
     # a fictional library. Not standalone-compilable.
     ("import.md", 485),
-    ("purity.md", 111),
 }
 
 

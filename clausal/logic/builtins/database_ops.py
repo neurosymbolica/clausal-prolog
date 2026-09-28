@@ -8,6 +8,8 @@ from typing import Any
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
 from clausal.logic.atoms import is_atom as _term_is_atom, spelling as _spelling
 from clausal.logic.exceptions import LogicException, permission_error
+from clausal.logic.exceptions import _error as _error_term
+from clausal.logic.atoms import mint
 
 from clausal.logic.builtins._registry import (
     _db_builtin, structural_unify,
@@ -257,8 +259,12 @@ def _resolve_cell_head(term_val: Any, context: str, db,
             raise refusal_error(functor, arity, author, kind, reason,
                                 channel=context)
     if row is None and not _declared_here_at_arity(module_dict, functor, arity):
-        raise LogicException(existence_error(
-            "procedure", ("/", functor, arity),
+        # The CONTEXT is the builtin that refused (``assertz/1``), not the
+        # missing indicator a second time: ``existence_error``'s procedure
+        # convention is Scryer's for a CALL of an unknown procedure, where the
+        # culprit is also the caller.  Here the caller is assertz (triage B4b).
+        raise LogicException(_error_term(
+            ("existence_error", mint("procedure"), ("/", functor, arity)),
             f"{context}: no predicate {functor}/{arity} is known here, and a "
             f"cell argument does not create one — a cell is indistinguishable "
             f"from a plain data tuple, so the target must already be declared "

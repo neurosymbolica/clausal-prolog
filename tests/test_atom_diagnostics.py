@@ -185,7 +185,7 @@ def test_mixed_undeclared_keeps_both_hint_and_remedies():
     assert "- listed in -private([atom, ...])" in msg
     assert "- imported via -import_from(from_module, [atom])" in msg
     assert "- qualified (e.g. other_module.atom)" in msg
-    assert '- obtained via global_atom("atom", Atom)' in msg
+    assert "- obtained via global_atom('atom', Atom)" in msg
 
 
 def test_ordinary_undeclared_atom_message_is_unchanged():

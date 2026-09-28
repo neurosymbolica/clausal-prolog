@@ -104,7 +104,10 @@ class TestListing:
         animal._assertz(Clause(animal("cat"), []))
         output = _capture_listing(animal.handle)
         assert "animal(" in output
-        assert '"cat"' in output
+        # "cat" here is a Python str -- an ATOM since the flip -- so it lists
+        # bare, as writeq writes it; a double-quoted "cat" would re-read as a
+        # string (triage C12, 2026-09-28).
+        assert "animal(cat)." in output
 
     def test_a_compound_cell_is_not_a_predicate_indicator(self):
         """FLIPPED 2026-09-25 -- Operator ruling 2026-09-25 ("do what Scryer does").
@@ -185,9 +188,12 @@ class TestListingClassArgumentGoldenOutput:
         output = _capture_listing(color.handle)
         assert output == (
             "% color/2 — 3 clause(s)\n"
-            'color("red", "#ff0000").\n'
-            'color("green", "#00ff00").\n'
-            'color("blue", "#0000ff").\n'
+            # The arguments are Python strs, i.e. ATOMS since the flip: they
+            # list as writeq writes an atom (triage C12, 2026-09-28), where
+            # they used to be double-quoted, which re-reads as a string.
+            "color(red, '#ff0000').\n"
+            "color(green, '#00ff00').\n"
+            "color(blue, '#0000ff').\n"
         )
 
 

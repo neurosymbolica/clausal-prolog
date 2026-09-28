@@ -21,7 +21,7 @@ As of the strict-atoms release, **an undeclared bare atom is a compile-time
 - a `-private([atom])` listing,
 - a `-import_from(other_module, [atom])`,
 - a qualified reference (`other_module.atom`), or
-- a `global_atom("atom", Atom)` call.
+- a `global_atom('atom', Atom)` call.
 
 Anything else fails to load with a diagnostic like:
 
@@ -32,7 +32,7 @@ strict_atoms: undeclared atom 'pending' in orders
     - listed in -private([atom, ...])
     - imported via -import_from(from_module, [atom])
     - qualified (e.g. other_module.atom)
-    - obtained via global_atom("atom", Atom)
+    - obtained via global_atom('atom', Atom)
 ```
 
 The opt-out is the **`-implicit_atoms`** directive, which restores the old
@@ -112,7 +112,7 @@ For each reported atom, pick the right home:
 | Module-local tag, exported | add to `-module(name, [..., tag])` |
 | Module-local tag, private | add to `-private([tag])` (bare name, 0-arity) |
 | Shared tag owned by another module | `-import_from(owner, [tag])` |
-| Need the global atom by name in a strict file | `global_atom("tag", Tag)` |
+| Need the global atom by name in a strict file | `global_atom('tag', Tag)` |
 
 Iterate file-by-file until the file loads clean. For data-heavy files where
 declaring every tag is noise, a quoted atom (`'tag'`) needs no declaration.
@@ -147,7 +147,7 @@ atom into a namespace only its own file can spell, so a different module's
 `red` (declared any way at all) is guaranteed to be a genuinely different
 value, not a same-spelling collision to avoid.
 
-If you are unsure whether a name crosses a boundary, `global_atom("red", R)`
+If you are unsure whether a name crosses a boundary, `global_atom('red', R)`
 in both places is a safe way to confirm — it is the same process-wide value
 the old auto-mint gave you, and (post-pivot) the same value any declaration
 route gives you too.

@@ -207,7 +207,7 @@ class TestTermClassShape:
     def test_still_names_the_sibling(self, capsys, pkg):
         _run(pkg, self.SRC)
         out = capsys.readouterr().out
-        assert "not in scope as a term class" in out
+        assert "is not in scope: nothing declares the functor" in out
         assert "undefsib_citations" in out
 
 

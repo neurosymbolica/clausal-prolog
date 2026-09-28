@@ -200,7 +200,7 @@ def _check_bag(bag, who: str) -> None:
 
 def undeclared_functor_error(functor: str, arity: int) -> NameError:
     """The error a construction ``functor(A1, ..., An)`` of a functor nothing
-    declares raises: "not in scope as a term class".
+    declares raises: "'f/N' is not in scope", with the declaration to write.
 
     One sentence for both routes to it: ``_DbDispatchAdapter.__call__`` (the
     name is bound to nothing, so the adapter stands in) and
@@ -209,11 +209,22 @@ def undeclared_functor_error(functor: str, arity: int) -> NameError:
     object is not callable``).  ``name=`` is what lets the undefined-name
     diagnostic reach it (``enrich_undefined_name`` keys on ``exc.name``).
     """
-    return NameError(
-        f"Predicate '{functor}/{arity}' is not in scope as a term class.\n"
-        f"To construct a '{functor}' goal term, import it first, e.g.:\n"
-        f"  from your_module import {functor}",
-        name=functor,
+    return NameError(undeclared_functor_message(functor, arity), name=functor)
+
+
+def undeclared_functor_message(functor: str, arity: int) -> str:
+    """The text of :func:`undeclared_functor_error`: which declaration builds
+    the term.  A term is a cell, so the remedy is a declaration of the
+    functor (where the module owns it) or an import of it -- never the Python
+    import of a term class the message used to suggest."""
+    slots = ", ".join(["_"] * arity) if arity > 0 else ""
+    spec = f"{functor}({slots})" if arity > 0 else functor
+    return (
+        f"Predicate '{functor}/{arity}' is not in scope: nothing declares the "
+        f"functor {functor}/{arity}, so {functor}(...) builds no term.\n"
+        f"Declare it in the module that owns it, e.g. -private([{spec}]) or "
+        f"its -module export list, or import it with "
+        f"-import_from(owner, [{functor}])."
     )
 
 

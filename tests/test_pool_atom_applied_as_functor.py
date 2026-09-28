@@ -57,12 +57,12 @@ def polluted():
 
 def test_construction_is_the_undeclared_functor_error_not_a_str_call(polluted):
     mod = _load("term", "r(T) <- (T is zz(1))\n")
-    with pytest.raises(NameError, match=r"'zz/1' is not in scope as a term class"):
+    with pytest.raises(NameError, match=r"'zz/1' is not in scope: nothing declares the functor zz/1"):
         _answers(mod, "r")
 
 
 def test_fact_argument_is_the_undeclared_functor_error(polluted):
-    with pytest.raises(NameError, match=r"'zz/1' is not in scope as a term class"):
+    with pytest.raises(NameError, match=r"'zz/1' is not in scope: nothing declares the functor zz/1"):
         _answers(_load("fact", "s(zz(1)),\nr(T) <- s(T)\n"), "r")
 
 

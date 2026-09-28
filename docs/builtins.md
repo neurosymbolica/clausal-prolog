@@ -171,7 +171,7 @@ An ISO error arrives in Scryer's form, `error(Formal, Culprit)`, where `Culprit`
 ```
 Terminate execution by raising `SystemExit`. `halt/0` exits with code 0; `halt/1` exits with the given code. `catch/3` does not absorb it.
 
-A 0-arity builtin in goal position is written with parentheses — `halt()`, `nl()`, `abolish_all_tables()` — a bare `nl` or `halt` goal is refused at load. `true`, `fail` and `false` are written bare.
+A 0-arity predicate in goal position is written bare, as in ISO Prolog — `halt`, `nl`, `abolish_all_tables` — or with parentheses (`halt()`, `nl()`); both spellings call it. An `-import_from`'d 0-arity predicate is called the same way. `true`, `fail` and `false` are written bare.
 
 ??? info "Implementation & tests"
     **Python tests:** `tests/test_exceptions.py`
