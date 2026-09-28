@@ -765,6 +765,9 @@ class SegList:
             return _drive_seg_unify(self._unify_gens, walked, other, trail,
                                     concrete_len, _apply_seglist_split)
         if isinstance(other, SegList):
+            if not all(isinstance(g, (ConcreteSeg, VarSeg))
+                       for g in (*self._segments, *other._segments)):
+                return NotImplemented   # not a SegList this class builds
             walked = self._walk_raw()
             other_walked = other._walk_raw()
             if not isinstance(walked, SegList) or not isinstance(other_walked, SegList):
