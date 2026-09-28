@@ -192,8 +192,7 @@ catch(atom_length(1, _), error(_, PI), true)                 % PI = atom_length/
 
 An error term is a plain **cell**: a tuple whose first element is the functor.
 `clausal.cell_functor` and `clausal.cell_args` read it, and `clausal.make_cell`
-builds one. They replace the `.functor` / `.args` attributes of the retired
-`Compound` class.
+builds one.
 
 ```python
 from clausal import LogicException, cell_args, cell_functor

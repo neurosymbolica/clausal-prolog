@@ -15,7 +15,7 @@ from clausal.logic.predicate import (
     _dispatch_at, is_declared_predicate_name,
 )
 from clausal.logic.trampoline import DONE, StepGenerator
-from clausal.terms import Compound, DictTerm, SetTerm, KWTerm
+from clausal.terms import DictTerm, SetTerm, KWTerm
 
 
 # ── Simple → trampoline adapter ──────────────────────────────────────────────
@@ -173,7 +173,7 @@ def _ensure_trampoline_dispatch(goal_val, arity: int | None = None, db=None):
         # exactly what call/N answers.  Before the Node check below: a body
         # node is ``call(X > 0, 1)`` -- existence_error (>)/3, as call/N says.
         return MetaCallGoal(goal_val, db)._get_dispatch()
-    # A Pythonic AST node (Predicate, Lambda, Compound-as-term, …) is
+    # A Pythonic AST node (Predicate, Lambda, …) is
     # ``callable`` — every node gets a field-replacement ``__call__`` from
     # @node_class — but it is NOT a goal dispatch function.  This is reached
     # when a non-goal term is passed to call_goal/maplist/foldl/etc., e.g. a
@@ -227,10 +227,10 @@ def _db_builtin(functor: str, arity: int, *, fields: tuple[str, ...] | None = No
 
 
 def structural_unify(t1: Any, t2: Any, trail: Any) -> bool:
-    """Python-level structural unification that handles Compound, KWTerm, and dataclasses.
+    """Python-level structural unification that handles KWTerm and dataclasses.
 
     The C extension's ``unify`` handles Var, tuple, list, and atomic equality.
-    This wrapper adds recursive unification for Compound, KWTerm, and dataclass
+    This wrapper adds recursive unification for KWTerm and dataclass
     terms (WK-6 cross-representation unification).
     """
     t1 = deref(t1)
@@ -241,17 +241,6 @@ def structural_unify(t1: Any, t2: Any, trail: Any) -> bool:
         return bool(unify(t1, t2, trail))
 
     # Both are ground (or at least non-Var at the top level).
-    # Compound ↔ Compound
-    if isinstance(t1, Compound) and isinstance(t2, Compound):
-        if t1.functor != t2.functor or len(t1.args) != len(t2.args):
-            return False
-        mark = trail.mark()
-        for a1, a2 in zip(t1.args, t2.args):
-            if not structural_unify(a1, a2, trail):
-                trail.undo(mark)
-                return False
-        return True
-
     # list ↔ list
     if isinstance(t1, list) and isinstance(t2, list):
         if len(t1) != len(t2):

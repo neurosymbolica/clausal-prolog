@@ -28,7 +28,6 @@ from clausal.logic.solve import call
 from clausal.logic.cells import chars
 from clausal.logic.variables import Var, Trail, deref, unify, is_var
 from clausal.pythonic_ast.nodes import StarUnpack
-from clausal.terms import Compound
 
 
 # ── Trampoline dispatch driver ────────────────────────────────────────────────
@@ -181,17 +180,13 @@ class TestHeadToMatchPattern:
         assert v._id in ctx
         assert len(list_guards) == 1
 
-    # ── Compound ──
+    # ── compound term (cell) ──
 
-    @pytest.mark.compound_retirement_slice8
-    def test_compound_gives_the_cell_pattern(self):
-        # nv -- ruling 2026-09-26: an atom-functor Compound of arity >= 1 IS
-        # its cell, so its head pattern is the CELL pattern (the match subject
-        # is normalised through ``$as_cells``, so a Compound caller arrives
-        # as the cell too).
+    def test_cell_gives_the_cell_pattern(self):
+        # nv
         v = Var()
         ctx: dict[int, str] = {}
-        term = Compound("foo", (v, 42))
+        term = ("foo", v, 42)
         p = head_to_match_pattern(term, ctx)
         assert isinstance(p, ast.MatchSequence)
         assert len(p.patterns) == 3
@@ -200,24 +195,6 @@ class TestHeadToMatchPattern:
         assert isinstance(p.patterns[1], ast.MatchAs)   # v
         assert isinstance(p.patterns[2], ast.MatchValue)  # 42
         assert v._id in ctx
-
-    @pytest.mark.compound_retirement_slice8
-    def test_a_compound_with_no_cell_keeps_the_class_pattern(self):
-        # nv -- arity 0 has no cell equivalent (the 1-tuple is RESERVED)
-        p = head_to_match_pattern(Compound("foo", ()), {})
-        assert isinstance(p, ast.MatchClass)
-        assert p.cls.id == "$Compound"
-        assert p.kwd_attrs == ["functor", "args"]
-        assert p.kwd_patterns[0].value.value == "foo"
-
-    @pytest.mark.compound_retirement_slice8
-    def test_compound_with_var_functor_gives_wildcard(self):
-        # nv
-        v_functor = Var()
-        term = Compound(v_functor, (1, 2))
-        p = head_to_match_pattern(term, {})
-        assert isinstance(p, ast.MatchAs)
-        assert p.name is None  # wildcard
 
     # ── functor dataclass ──
 
@@ -504,7 +481,7 @@ class TestCompilePredicate:
         fn = compile_predicate("point", 2, clauses, db, globals_={"point": point})
         assert list(_run_dispatch(fn, "anything", 99, _trail())) == []
 
-    # ── Compound head matching ──
+    # ── compound (cell) head matching ──
 
     def test_compound_head_matches_compound_term(self):
         # nv

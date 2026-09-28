@@ -201,7 +201,7 @@ Each solution is a `dict` mapping Prolog variable names (strings) to Python valu
 | atom | `str` |
 | string (char list) | `str` |
 | list | `list` |
-| compound `f(a, b)` | `Compound("f", (a, b))` from `clausal.terms` |
+| compound `f(a, b)` | the cell `("f", a, b)` |
 | unbound variable | `str` (the variable name) |
 
 Ground goals that succeed with no variables return `{}` (empty dict).
@@ -223,7 +223,7 @@ with Scryer() as s:
     # True
 ```
 
-`to_prolog` handles `int`, `float`, `str` (quoted as atoms), `bool`, `None` (→ `[]`), `list`, and `Compound`.
+`to_prolog` handles `int`, `float`, `str` (quoted as atoms), `bool`, `None` (→ `[]`), `list`, and a cell `("f", a, b)`.
 
 ---
 
@@ -266,7 +266,7 @@ try:
     s.query_all("X is foo.")
 except _scryer_ext.ScryerError as e:
     print(e)
-    # Prolog error: Compound("error", [Compound("type_error", ...)])
+    # Prolog error: the cell ("error", ("type_error", ...), ...)
 ```
 
 ---

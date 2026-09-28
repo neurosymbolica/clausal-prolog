@@ -871,7 +871,6 @@ if sys.argv[1] == "py":
     sys.modules['clausal.logic._constraints_dif'] = None  # force Python impl
 import clausal.logic.constraints as C
 from clausal.logic.variables import Var, Trail, unify, get_attr
-from clausal.terms import Compound
 
 t = Trail(); print(C.dif(1, 2, t))
 t = Trail(); print(C.dif(1, 1, t))
@@ -879,7 +878,7 @@ t = Trail(); x = Var(); print(C.dif(x, x, t))
 t = Trail(); x, y = Var(), Var()
 print(C.dif(x, y, t), unify(x, 1, t), unify(y, 1, t), unify(y, 2, t))
 t = Trail(); x = Var()
-print(C.dif(Compound("f", (x, 2)), Compound("f", (1, 2)), t), unify(x, 1, t))
+print(C.dif(("f", x, 2), ("f", 1, 2), t), unify(x, 1, t))
 t = Trail(); x, y = Var(), Var()
 C.dif(x, y, t); C.dif(x, 2, t)
 print(unify(x, 2, t), unify(x, 3, t), unify(y, 3, t))

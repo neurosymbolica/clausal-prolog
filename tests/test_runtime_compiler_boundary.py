@@ -202,7 +202,6 @@ def test_detector_ignores_sibling_packages():
 def test_detector_clean_source_returns_empty():
     source = textwrap.dedent("""
         from clausal.logic.variables import unify, deref
-        from clausal.terms import Compound
         import ast
     """)
     assert _imports_matching(source, "clausal.logic.compiler") == []

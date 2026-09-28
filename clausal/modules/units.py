@@ -614,7 +614,7 @@ def _quantity_number_impl(term, number, trail):
 
 def _holds_var(term) -> bool:
     """True if an UNBOUND variable sits inside a walked term's tuple/list/dict
-    structure. Engine term instances (Compound, DictTerm, ...) are not
+    structure. Engine term instances (DictTerm, ...) are not
     walked: inside a quantity term they are malformed anyway, and the
     caller's type_error is the loud answer there."""
     if is_var(term):

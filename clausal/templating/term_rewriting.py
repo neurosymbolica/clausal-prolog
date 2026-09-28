@@ -1103,7 +1103,7 @@ def _python_class_names() -> frozenset:
     """TitleCase names that reach a ``.clausal`` module as real Python
     classes, so the lint's remedy for them is the ``++`` escape rather than
     a snake_case rename: the engine-injected runtime names
-    (``INJECTED_RUNTIME_BUILTINS`` — ``Var``, ``Compound``, ``PyThunk``,
+    (``INJECTED_RUNTIME_BUILTINS`` — ``Var``, ``PyThunk``,
     …), the AST node classes seeded into every module namespace
     (``pythonic_ast.nodes.__all__``), and Python's own builtins
     (``ValueError``, ``AssertionError``, …).  Resolved lazily — the

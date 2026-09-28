@@ -26,7 +26,7 @@ from clausal.logic.translations import (
 from tests.predicate_api_support import term_ctor
 from clausal.logic.variables import Var, Trail, deref
 from clausal.logic.cells import chars, is_chars, chars_text
-from clausal.terms import Compound, KWTerm, term_str, TermStyle
+from clausal.terms import KWTerm, term_str, TermStyle
 from clausal.import_hook import _load_module
 
 
@@ -217,9 +217,8 @@ class TestTranslateBuiltin:
         gen = _translate__3(mint("th"), t, result_var, trail, None)
         next(gen, None)
         result = deref(result_var)
-        # Must be a string, not a Compound or PredicateMeta
+        # Must be a string
         assert is_chars(result)
-        assert not isinstance(result, Compound)
 
     def test_unbound_lang_fails(self):
         # nv

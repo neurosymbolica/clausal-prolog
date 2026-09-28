@@ -2564,7 +2564,7 @@ def _process_bare_atom_refs(
     distrust check to ``_SIMPLE_AST_NODE_NAMES`` (the ``simple_ast.__all__``
     classes specifically), reasoning that the todo's repro was entirely
     about that set and that ``INJECTED_RUNTIME_BUILTINS`` entries (``Var``,
-    ``Undefined``, ``Compound``, ...) were a separate, deliberate
+    ``Undefined``, ...) were a separate, deliberate
     resolve-everywhere design. The reviewer proved this left the todo's
     "closes the whole CLASS of bug" promise undelivered: injecting a
     SYNTHETIC name into ``runtime_builtins`` reproduced the identical
@@ -2916,7 +2916,7 @@ def _process_declarations(module_items: list, module_dict: dict,
       everywhere.
     * **Tuple entry** (``(name, field_names)`` — a functor with fields):
       no class is minted either, post-flip (P3-2 Task 2 / R6 revised).
-      Compound DATA is cells now — a tuple ``("point", 1, 2)`` whose shape
+      compound DATA is cells now — a tuple ``("point", 1, 2)`` whose shape
       the module's ``__clausal_functor_signatures__`` registry describes —
       so a data functor needs no class to construct through, and the plain
       interned spelling is bound instead, exactly as a bare atom entry is.

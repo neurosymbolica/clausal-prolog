@@ -118,7 +118,7 @@ _inject_resolved_targets(call_targets, base_globals, db, globals_)
 
 **`_collect_globals_info(clauses)`** — single tree walk returning:
 
-- `head_types`: `{name: cls}` for any class found in clause heads (needed for `MatchClass` patterns — `Compound` and dataclass heads; a cell head needs none).
+- `head_types`: `{name: cls}` for any class found in clause heads (needed for `MatchClass` patterns — dataclass heads; a cell head needs none).
 - `py_thunks`: `{key: fn}` for any `PyThunk` lambda found in clause bodies (the `++expr` Python-escape syntax).
 - `call_targets`: `set[(fname, arity)]` for every `Call(LoadName(f), ...)` node found in clause bodies.
 

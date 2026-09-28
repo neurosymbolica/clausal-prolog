@@ -78,3 +78,11 @@ assertions do for `collect_vars`.
   above when this is picked up.
 - `.superpowers/sdd/p32-cell-default-flip/task-2c-report.md` — Task 2C's own
   record of finding this while building the corpus.
+
+## Closed 2026-09-27: the shape is gone
+
+Compound retirement slices 7 and 8 removed the `Compound` class and its C
+arms.  A variable functor has no successor (ISO has no variable-functor
+compound; `T =.. [F|Args]` and `call/N` are the routes), and a slot-0-Var
+tuple is not a cell, so both twins treat it alike (`test_python_fallbacks.py`,
+row `cell_var_functor`).  Nothing is left to diverge.

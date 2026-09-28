@@ -8,7 +8,6 @@ Usage::
         s.query(f"likes({to_prolog('alice')}, X).")
 """
 
-from clausal.terms import Compound
 
 
 def to_prolog(value) -> str:
@@ -31,7 +30,8 @@ def to_prolog(value) -> str:
         return f"'{escaped}'"
     if isinstance(value, list):
         return "[" + ", ".join(to_prolog(e) for e in value) + "]"
-    if isinstance(value, Compound):
-        args = ", ".join(to_prolog(a) for a in value.args)
-        return f"{value.functor}({args})"
+    if type(value) is tuple and len(value) > 1 and type(value[0]) is str:
+        # a compound term: the cell (functor, *args)
+        args = ", ".join(to_prolog(a) for a in value[1:])
+        return f"{value[0]}({args})"
     raise TypeError(f"Cannot convert {type(value).__name__} to Prolog text")

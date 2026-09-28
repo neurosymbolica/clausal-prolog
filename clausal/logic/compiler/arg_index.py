@@ -20,7 +20,6 @@ from clausal.logic.generated_names import bare_name_of
 from clausal.logic.variables import Var, is_var, deref  # noqa: F401
 from clausal.logic.trampoline import DONE, StepGenerator  # noqa: F401
 from clausal.terms import (
-    Compound, compound_as_cell,
     Call, LoadName, LoadAttr,
     Unify,
     DictTerm, SetTerm, KWTerm, SegList,
@@ -88,9 +87,9 @@ def _arg_to_index_key(arg: Any, env: "dict | None" = None) -> Any:
       ``TUPLE_TAG`` marker) → ``(functor, len(arg) - 1)`` / ``(TUPLE_TAG,
       len(arg) - 1)`` (P3-2 Task 4).  Must run BEFORE the generic
       ``(list, tuple)`` branch — a cell IS a tuple — and produces the same
-      ``(name, arity)`` shape as the ``Compound`` / class-instance / ``Call``
-      branches below, so a cell head and a compile-time ``Compound`` head of
-      the same functor land in ONE bucket regardless of which one wrote it.
+      ``(name, arity)`` shape as the class-instance / ``Call`` branches
+      below, so heads of the same functor land in ONE bucket regardless of
+      which spelling wrote them.
     - ``list``/``tuple`` of ints in [0, 255] → the joined ``bytes`` (the
       codes model, kept — see :func:`_bytelist_to_bytes_or_none`).  The
       str/char-list analog (F095) stays RETIRED, but for the OPPOSITE
@@ -102,7 +101,6 @@ def _arg_to_index_key(arg: Any, env: "dict | None" = None) -> Any:
       caller passing the char-list spelling of the term would miss the
       bucket the string spelling built.  Both key ``_INDEX_VAR`` (a full
       scan is always correct).
-    - Compound nodes → ``(functor, arity)`` tuple  (Phase 9a)
     - PredicateMeta instances → ``(class_name, field_count)`` tuple  (Phase 9a)
     - ``Call(LoadName(qn), args)`` (imported-compound head arg) →
       ``(qn.rsplit('.', 1)[-1], len(args))`` so the bucket matches the
@@ -135,8 +133,6 @@ def _arg_to_index_key(arg: Any, env: "dict | None" = None) -> Any:
         if b is not None:
             return b
         return _INDEX_VAR
-    if isinstance(arg, Compound):
-        return (arg.functor, len(arg.args))
     if isinstance(arg, Call) and isinstance(arg.func, LoadName):
         basename = arg.func.name.rsplit(".", 1)[-1]
         # The arity counts KEYWORD arguments too: ``box(Lo=g(1), Hi=2)`` is
@@ -243,11 +239,10 @@ def _is_deeply_ground(val: Any) -> bool:
       Previously ANY tuple unconditionally skipped element 0, so a nested
       var-functor tuple like ``("W", (Var(), 1))`` read as ground (the
       inner tuple's slot 0, the Var, was never even looked at).
-    - ``Compound``, ``DictTerm``, ``KWTerm``, ``SetTerm`` and ``SegList``
+    - ``DictTerm``, ``KWTerm``, ``SetTerm`` and ``SegList``
       previously fell through to the final ``return True`` (unconditional
       ground) the moment they were reached, regardless of what Vars they
-      carried — ``("W", DictTerm(...Var...))`` and
-      ``("W", Compound("g", (Var(),)))`` both wrongly keyed into a bucket.
+      carried — ``("W", DictTerm(...Var...))`` wrongly keyed into a bucket.
     """
     return _is_deeply_ground_walk(val, [_GROUNDNESS_WALK_BUDGET])
 
@@ -293,11 +288,6 @@ def _is_deeply_ground_walk(val: Any, _budget: list[int]) -> bool:
             if not _is_deeply_ground_walk(e, _budget):
                 return False
         return True
-    if isinstance(val, Compound):
-        return (
-            _is_deeply_ground_walk(val.functor, _budget)
-            and all(_is_deeply_ground_walk(e, _budget) for e in val.args)
-        )
     if isinstance(val, DictTerm):
         # Keys must already be ground by DictTerm's own contract; only
         # values can carry a Var.
@@ -331,7 +321,7 @@ def _runtime_arg_key(a: Any, deep_gate: bool = True) -> Any:
 
     P3-2 Task 4: a cell (a non-empty ``tuple`` whose slot 0 is a ``str``
     functor or the ``TUPLE_TAG`` marker) keys as ``(functor, len(a) - 1)`` /
-    ``(TUPLE_TAG, len(a) - 1)`` — the same shape ``Compound``/class-instance
+    ``(TUPLE_TAG, len(a) - 1)`` — the same shape class-instance
     heads use, so a live cell argument reaches the bucket a source-written
     compound head of the same functor built.  Must run BEFORE the generic
     ``(list, tuple)`` branch, which retains only the bytes/byte-list
@@ -370,17 +360,6 @@ def _runtime_arg_key(a: Any, deep_gate: bool = True) -> Any:
         if b is not None:
             return b
         return _INDEX_VAR
-    if isinstance(a, Compound):
-        # Ruling 2026-09-26: an atom-functor Compound of arity >= 1 IS its
-        # cell -- key it (and gate it) exactly as that cell, so it reaches the
-        # same bucket the cell does.
-        # A functor that is a Var BOUND to the atom is the same term too: the
-        # bucket's ``match`` subject is normalised through ``$as_cells``
-        # (``terms.as_cells_for_match``), which derefs the functor.
-        cell = compound_as_cell(a)
-        if cell is not None:
-            return _runtime_arg_key(cell, deep_gate)
-        return (a.functor, len(a.args))
     if is_term_instance(a):
         cls = type(a)
         # P3-3 Task 4 fold-in: the same gate the cell branch above carries,
@@ -693,11 +672,7 @@ def _extract_arg_key(
         return _INDEX_VAR
     head = clause.head
     # Get arg at position pos from head
-    if isinstance(head, Compound):
-        if len(head.args) <= pos:
-            return _INDEX_VAR
-        arg = head.args[pos]
-    elif isinstance(head, Call) and isinstance(head.func, LoadName):
+    if isinstance(head, Call) and isinstance(head.func, LoadName):
         if len(head.args) <= pos:
             return _INDEX_VAR
         arg = head.args[pos]

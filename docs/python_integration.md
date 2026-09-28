@@ -266,7 +266,7 @@ down: an atom is its `str`, a string (the chars carrier, a ground
 elements — unless its functor is registered, in which case the registered
 rebuild answers (`('date', …)` is a `datetime.date`, `('()', …)` a Python
 tuple; a look-alike whose components do not rebuild stays a cell). A
-`Compound` with a cell equivalent converts as the cell; a `KWTerm` keeps its
+`KWTerm` keeps its
 shape with converted fields; a `SetTerm` is a `frozenset`; a `DictTerm` is a
 `dict` with keys converted and normalised — an atom key and the string of its
 spelling become **one** Python key. A non-ground `Seg*` crosses raw (there is
@@ -314,7 +314,7 @@ wrapper argument goes through it:
 | a partial string that has become ground | the `str` it walks to |
 | compound cell `foo("x", 1)` | the tuple `('foo', 'x', 1)` (converted elementwise) |
 | a cell whose functor is REGISTERED — `date(2023, 6, 1)`, the data cell `('()', 1, 2)` | the registered Python object — `datetime.date(2023, 6, 1)`, `(1, 2)` |
-| `Compound` / `KWTerm` / `SetTerm` / ground `SegList` | its cell (converted) / itself with converted fields / a `frozenset` / the list |
+| `KWTerm` / `SetTerm` / ground `SegList` | itself with converted fields / a `frozenset` / the list |
 | list `[bar, "x"]` | `['bar', 'x']` |
 | `DictTerm` / dict | a `dict`, **keys converted and normalised** (an atom key and its text merge into one) |
 | a non-ground `Seg*`, anything else | itself |
@@ -692,7 +692,7 @@ A rule's body is a list of compiled goal nodes, not cells — write rules in a
 
     ### `structural_unify`
 
-    `clausal.logic.builtins.structural_unify(t1, t2, trail)` is a Python-level recursive unifier for `Compound`, `KWTerm`, PredicateMeta instances, and `@dataclass` instances. The C `unify` handles `Var` binding, tuples, lists, and atomic equality.
+    `clausal.logic.builtins.structural_unify(t1, t2, trail)` is a Python-level recursive unifier for cells, `KWTerm`, PredicateMeta instances, and `@dataclass` instances. The C `unify` handles `Var` binding, tuples, lists, and atomic equality.
 
     ### Term Dereferencing
 
@@ -701,7 +701,7 @@ A rule's body is a list of compiled goal nodes, not cells — write rules in a
     ```python
     from clausal.logic.solve import _deref_walk
 
-    _deref_walk(term)  # recursively dereferences Compound, lists, etc.
+    _deref_walk(term)  # recursively dereferences cells, lists, etc.
     ```
 
     ### Builtin Term Constructors

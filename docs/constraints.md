@@ -95,7 +95,7 @@ The `is not` operator uses `dif/2` constraint semantics rather than immediate `\
     4. **Unify succeeds, no trail growth** → terms already identical (e.g. `dif(X, X)`) → return False.
     5. **Unify succeeds with trail growth** → terms could become equal → undo sandbox, collect all free variables in both terms, attach `(x, y)` constraint pair to each via `put_attr`, return True.
 
-    `_structural_unify_oc` extends the C extension's `unify_with_occurs_check` to handle `Compound`, term (dataclass) instances, and lists (which the C extension treats as opaque objects and compares with `==`).
+    `_structural_unify_oc` extends the C extension's `unify_with_occurs_check` to handle term (dataclass) instances and lists (which the C extension treats as opaque objects and compares with `==`).
 
     ### Attribute hook
 

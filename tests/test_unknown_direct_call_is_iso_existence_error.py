@@ -44,7 +44,6 @@ from clausal.logic.exceptions import LogicException, error_prose
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, walk
 from clausal.predicate_diagnostics import PredicateNotFoundError
-from clausal.terms import Compound
 
 
 def _load(tmp_path, monkeypatch, name, body):
@@ -247,9 +246,8 @@ def test_a_qualified_call_into_an_unloaded_module_is_the_same_iso_term(pair):
     assert _answers("qualified_unloaded", I) == [(_pi("nosuch", 1),)]
 
 
-# Stays a Compound (slice 5 finding): assertz/asserta of a CELL whose
-# predicate is not known yet raises existence_error; a Compound creates it.
-@pytest.mark.compound_retirement_slice8
+# R12 (2026-09-27, declare first): assertz adds clauses only to a predicate
+# declared -dynamic, so the new arity is declared before the write.
 def test_a_qualified_call_resolves_a_predicate_asserted_later(tmp_path, monkeypatch):
     """The refusal re-resolves per call through the owner's handle, so it
     cannot go stale: a clause added to the owner afterwards answers."""
@@ -267,7 +265,8 @@ def test_a_qualified_call_resolves_a_predicate_asserted_later(tmp_path, monkeypa
         _answers("q", I)
     _assert_iso(info.value.term, "late", 1)
     O = ow.__dict__["$module"]
-    list(call("assertz", Compound("late", (7,)), module=O))
+    O.db.mark_dynamic("late", 1)
+    list(call("assertz", ("late", 7), module=O))
     assert _answers("q", I) == [(7,)]
 
 

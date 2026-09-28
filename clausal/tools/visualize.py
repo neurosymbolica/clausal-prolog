@@ -197,7 +197,7 @@ Examples:
     # Build a small demo predicate: demo(X) :- X = 42.
     x = Var()
     db.assertz(Clause(
-        # A head is the cell, or the atom at arity 0 (Compound retirement).
+        # A head is the cell, or the atom at arity 0 (``foo()`` is not a term).
         head=(make_cell(args.functor, *(Var() for _ in range(args.arity)))
               if args.arity else args.functor),
         body=[],

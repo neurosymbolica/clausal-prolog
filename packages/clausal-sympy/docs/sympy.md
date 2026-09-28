@@ -382,7 +382,7 @@ Explicit conversion between Clausal terms and SymPy expressions. Rarely needed.
 
 ## Math functions
 
-Importable callables that produce `Compound` terms. These are converted to SymPy functions by the predicates:
+Importable callables that produce compound terms (cells). These are converted to SymPy functions by the predicates:
 
 | Function | SymPy equivalent |
 |---|---|

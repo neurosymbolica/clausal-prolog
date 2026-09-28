@@ -8,7 +8,7 @@ Python (3.13t+).  The rules:
 **Safe to share** between threads:
   - ``Var`` / ``AttVar`` objects (bindings are atomic; ``unify()`` uses
     per-object critical sections).
-  - Ground terms (int, str, tuples/lists of ground values, Compound).
+  - Ground terms (int, str, tuples/lists of ground values).
   - The attribute hook registry (``register_attr_hook`` is synchronized).
 
 **Must be per-thread** (enforced at runtime):

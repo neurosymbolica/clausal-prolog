@@ -19,7 +19,6 @@ from typing import Any
 from clausal.logic.generated_names import dollar_ref
 from clausal.logic.variables import deref, is_var
 from clausal.terms import (
-    Compound,
     Call, LoadName, LoadAttr,
     PyThunk,
     SegBytes, SegList, SegString, VarSeg,
@@ -83,9 +82,8 @@ def _set_of_sort_dedup(items: list) -> list:
     # Otherwise each item's standard-order key is computed ONCE and serves
     # both the sort and the dedup.  The Python-``==`` dedup is kept as it was;
     # on top of it, two items with EQUAL standard-order keys are one term too
-    # -- a Compound and its cell (ruling 2026-09-26) are not Python-``==``,
-    # but sort/2 already treats them as one and ISO 8.10.3 has setof sort as
-    # sort/2 does.  Sorted by key, equal keys are adjacent; the first survives.
+    # -- terms that are not Python-``==`` but that sort/2 treats as one,
+    # and ISO 8.10.3 has setof sort as sort/2 does.  Sorted by key, equal keys are adjacent; the first survives.
     # (Deliberately NOT a pure key dedup: that would also stop setof merging
     # ``1`` and ``1.0``, a parked decision, A01-D001.)
     keyed = [(_standard_order_key(x), x) for x in items]
@@ -355,9 +353,6 @@ def _collect_head_types(clauses: list[Clause]) -> dict[str, type]:
         term = deref(term)
         if isinstance(term, StarUnpack):
             _walk(term.value)
-        elif isinstance(term, Compound):
-            for a in term.args:
-                _walk(a)
         elif isinstance(term, list):
             for e in term:
                 _walk(e)
@@ -405,9 +400,6 @@ def _collect_py_thunks(clauses: list[Clause]) -> dict[str, Any]:
         term = deref(term)
         if isinstance(term, PyThunk):
             thunks[f"_pyt_{id(term)}"] = term.fn
-        elif isinstance(term, Compound):
-            for a in term.args:
-                _walk(a)
         elif isinstance(term, list):
             for e in term:
                 _walk(e)
@@ -434,9 +426,6 @@ def _collect_types_from_term(term: Any) -> dict[str, type]:
         t = deref(t)
         if isinstance(t, StarUnpack):
             _walk(t.value)
-        elif isinstance(t, Compound):
-            for a in t.args:
-                _walk(a)
         elif isinstance(t, list):
             for e in t:
                 _walk(e)
@@ -517,9 +506,6 @@ def _collect_globals_info(
         term = deref(term)
         if isinstance(term, StarUnpack):
             _walk_head(term.value)
-        elif isinstance(term, Compound):
-            for a in term.args:
-                _walk_head(a)
         elif isinstance(term, list):
             for e in term:
                 _walk_head(e)
@@ -536,11 +522,10 @@ def _collect_globals_info(
             # ``$headlit_<id(inner value)>`` per opaque slot — which nothing
             # injected, so a head arg like ``pt(1, <a date>)`` compiled to an
             # arm that raised ``NameError`` on its first caller (the
-            # ``Compound`` twin, which this walker has always recursed into,
-            # answered correctly — that asymmetry WAS the bug).
+            # retired ``Compound`` twin, which this walker had always recursed
+            # into, answered correctly — that asymmetry WAS the bug).
             #
-            # So: recurse into the slots, mirroring the ``Compound`` branch
-            # above, on exactly what ``head_match``'s branch claims (§1b/Task
+            # So: recurse into the slots, on exactly what ``head_match``'s branch claims (§1b/Task
             # 5: str functor or ``TUPLE_TAG``, slot 0 read raw — this ``elif``
             # is one of three sites folded onto ``cells._cell_shape`` as the
             # shared cell-shape predicate, per the Task 5 carry-forward
@@ -590,9 +575,6 @@ def _collect_globals_info(
         dterm = deref(term)
         if isinstance(dterm, _PyThunk):
             thunks[f"_pyt_{id(dterm)}"] = dterm.fn
-        elif isinstance(dterm, Compound):
-            for a in dterm.args:
-                _walk_body(a)
         elif isinstance(dterm, list):
             for e in dterm:
                 _walk_body(e)

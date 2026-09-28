@@ -417,8 +417,7 @@ or `Name//Arity`:
   `type_error(atomic, N)`, a number name `type_error(atom, N)`.
 
 The indicator has several representations: the cells `('/', Name, Arity)` /
-`('//', Name, Arity)` and the engine's `Compound("/", (Name, Arity))` (both
-reachable from Python/engine callers that already hold the name and arity as
+`('//', Name, Arity)` (reachable from Python/engine callers that already hold the name and arity as
 data), and -- what a user-written `foo/2` or `foo // 2` actually compiles to
 in `.clausal` source -- a runtime `Div` / `FloorDiv` node, since `/` and `//`
 are arithmetic operators and a structural (non-`is`) use stays a reified

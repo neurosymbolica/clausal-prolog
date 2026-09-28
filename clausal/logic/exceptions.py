@@ -12,8 +12,7 @@ Structured error term helpers follow ISO Prolog conventions:
     error(existence_error(ObjType, Culprit), Context)
     error(permission_error(Operation, ObjType, Culprit), Context)
 
-Every term is a plain CELL (slice 2 of the Compound retirement,
-2026-09-27): ``('error', ('type_error', 'atom', 1), Context)``.  Read one
+Every term is a plain CELL (2026-09-27): ``('error', ('type_error', 'atom', 1), Context)``.  Read one
 from Python with ``clausal.cell_functor`` / ``clausal.cell_args``.
 ``Context`` is what Scryer puts there (operator ruling 2026-09-27: when
 Scryer and SWI differ, Scryer): the predicate indicator of the builtin that
@@ -31,7 +30,7 @@ from typing import Any
 from clausal.logic.cells import chars as _chars  # stage 1: the chars carrier
 from clausal.logic.atoms import is_atom, mint, spelling
 from clausal.logic.variables import Var
-from clausal.terms import Add, Compound, Div, FloorDiv, Mod, Mult, Negate, Pow, Sub
+from clausal.terms import Add, Div, FloorDiv, Mod, Mult, Negate, Pow, Sub
 from clausal.terms import term_writeq
 
 # ── The is/== hint ────────────────────────────────────────────────────────────
@@ -83,14 +82,11 @@ def render_arith_operator_term(value: Any) -> str:
 def term_functor_args(term: Any) -> tuple[Any, tuple] | None:
     """``(functor, args)`` of a compound error-term node, or None.
 
-    Reads a cell (the spelling every engine builder uses since slice 2 of
-    the Compound retirement) and, at the Python boundary, a ``Compound`` a
-    caller built by hand, alike.  An atom or any other shape is None.
+    Reads a cell (the spelling every engine builder uses).  An atom or any
+    other shape is None.
     """
     if type(term) is tuple and term and type(term[0]) is str:
         return term[0], term[1:]
-    if isinstance(term, Compound):
-        return term.functor, tuple(term.args)
     return None
 
 
@@ -127,9 +123,8 @@ def render_error_term(term: Any) -> str:
     """The term as Scryer prints an uncaught error: ``writeq`` text with
     operators, e.g. ``error(type_error(evaluable,foo/0),(is)/2)``.
 
-    Ruling R2 of the Compound retirement (2026-09-27): the message shows the
-    TERM, not the Python object, so it reads the same whether the term is a
-    ``Compound`` or a cell.  Building an exception must never itself raise,
+    Ruling 2026-09-27: the message shows the TERM (Scryer's writeq-style
+    text), not the Python object.  Building an exception must never itself raise,
     so a term the renderer cannot handle falls back to its ``repr``.
 
     Variables are named within the term (``local_vars``): a variable that
@@ -248,7 +243,7 @@ def python_error_term(exc: Exception) -> tuple:
 
 def _is_python_error_term_of(term: Any, cause: BaseException) -> bool:
     """True when *term* is :func:`python_error_term`'s ``ClassName(Message)``
-    for *cause* -- a cell (or hand-built ``Compound``) of arity exactly 1
+    for *cause* -- a cell of arity exactly 1
     whose functor is the cause's class name, never a bare atom."""
     fa = term_functor_args(term)
     return (fa is not None and len(fa[1]) == 1

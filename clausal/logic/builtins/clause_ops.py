@@ -103,7 +103,6 @@ from clausal.logic.exceptions import (
 )
 from clausal.logic.predicate import is_term_instance, term_field_names
 from clausal.pythonic_ast import nodes
-from clausal.terms import Compound
 
 from clausal.logic.builtins._registry import (
     _BUILTINS, _DB_BUILTINS, _db_builtin, BuiltinTerm as _BuiltinTerm,
@@ -145,7 +144,7 @@ def _is_callable(t: Any) -> bool:
     from clausal.logic.builtins.call_body import is_body_term  # noqa: PLC0415
     if type(t) is str or t is True or t is False:
         return True                      # an atom (a handle is one too)
-    if is_body_term(t) or compound_cell_shape(t)[0] or isinstance(t, Compound):
+    if is_body_term(t) or compound_cell_shape(t)[0]:
         return True
     if _is_nonempty_list(t):
         # OPERATOR RULING 2026-09-25 -- an explicit exception to "ISO first":
@@ -190,10 +189,8 @@ def _type_check(t: Any, what: str) -> None:
 
 
 def _as_cell(head: Any) -> Any:
-    """A stored head (a cell since P2; a ``Compound`` from a runtime assertz;
-    a class instance pre-P2) as the cell it spells."""
-    if isinstance(head, Compound):
-        return make_cell(head.functor, *head.args) if head.args else head.functor
+    """A stored head (a cell since P2; a class instance pre-P2) as the cell
+    it spells."""
     if is_term_instance(head) and not compound_cell_shape(head)[0]:
         fields = term_field_names(head)
         name = type(head).__name__
@@ -681,8 +678,6 @@ def _resolve(db, head):
     if is_body_term(head):
         name, arity = _construct(head)
         raise _private(name, arity, "is a control construct")
-    if isinstance(head, Compound):
-        head = _as_cell(head)
     if isinstance(head, _BuiltinTerm):
         head = head._functor           # its class's __name__ before slice 3
     if type(head) is str:

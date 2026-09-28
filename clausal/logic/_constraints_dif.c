@@ -26,7 +26,6 @@
 /* ── Cached references (set during module init) ─────────────────────── */
 
 /* From clausal.terms */
-static PyObject *Compound_type = NULL;
 static PyObject *DictTerm_type = NULL;
 static PyObject *Quantity_type = NULL;
 static PyObject *ConcreteSeg_type = NULL;
@@ -35,8 +34,6 @@ static PyObject *Seg_types = NULL;       /* (SegList, SegString, SegBytes) tuple
 
 /* Interned strings */
 static PyObject *DIF_KEY_STR = NULL;    /* "dif" */
-static PyObject *str_functor = NULL;    /* "functor" */
-static PyObject *str_args = NULL;       /* "args" */
 static PyObject *str_data = NULL;       /* "data" */
 static PyObject *str_segments = NULL;   /* "segments" */
 static PyObject *str_elements = NULL;   /* "elements" */
@@ -45,14 +42,6 @@ static PyObject *str_value = NULL;      /* "value" */
 
 
 /* ── Inline helpers ──────────────────────────────────────────────────── */
-
-/* is Compound instance? */
-static inline int
-is_compound(PyObject *obj)
-{
-    if (!Compound_type) return 0;
-    return PyObject_IsInstance(obj, Compound_type);
-}
 
 /* is_term_instance: direct C API call → 1/0/-1 */
 static inline int
@@ -118,25 +107,6 @@ collect_walk(PyObject *term, PyObject *seen, PyObject *result, int depth)
             if (collect_walk(PyList_GET_ITEM(t, i), seen, result, depth + 1) < 0)
                 return -1;
         }
-        return 0;
-    }
-
-    /* Compound */
-    int ic = is_compound(t);
-    if (ic < 0) return -1;
-    if (ic) {
-        PyObject *args = PyObject_GetAttr(t, str_args);
-        if (!args) return -1;
-        if (PyTuple_Check(args)) {
-            Py_ssize_t n = PyTuple_GET_SIZE(args);
-            for (Py_ssize_t i = 0; i < n; i++) {
-                if (collect_walk(PyTuple_GET_ITEM(args, i), seen, result, depth + 1) < 0) {
-                    Py_DECREF(args);
-                    return -1;
-                }
-            }
-        }
-        Py_DECREF(args);
         return 0;
     }
 
@@ -293,50 +263,6 @@ c_structural_unify_oc(PyObject *t1, PyObject *t2, TrailObject *trail, int depth)
 
     PyObject *d1 = VarAPI->deref(t1);  /* borrowed */
     PyObject *d2 = VarAPI->deref(t2);  /* borrowed */
-
-    /* Both Compound? */
-    int ic1 = is_compound(d1);
-    if (ic1 < 0) return -1;
-    int ic2 = is_compound(d2);
-    if (ic2 < 0) return -1;
-
-    if (ic1 && ic2) {
-        /* Compare functor */
-        PyObject *f1 = PyObject_GetAttr(d1, str_functor);
-        if (!f1) return -1;
-        PyObject *f2 = PyObject_GetAttr(d2, str_functor);
-        if (!f2) { Py_DECREF(f1); return -1; }
-        int feq = PyObject_RichCompareBool(f1, f2, Py_EQ);
-        Py_DECREF(f1);
-        Py_DECREF(f2);
-        if (feq < 0) return -1;
-        if (!feq) return 0;
-
-        /* Compare args */
-        PyObject *a1 = PyObject_GetAttr(d1, str_args);
-        if (!a1) return -1;
-        PyObject *a2 = PyObject_GetAttr(d2, str_args);
-        if (!a2) { Py_DECREF(a1); return -1; }
-
-        Py_ssize_t n1 = PyTuple_Check(a1) ? PyTuple_GET_SIZE(a1) : PyObject_Length(a1);
-        Py_ssize_t n2 = PyTuple_Check(a2) ? PyTuple_GET_SIZE(a2) : PyObject_Length(a2);
-        if (n1 != n2) {
-            Py_DECREF(a1); Py_DECREF(a2);
-            return 0;
-        }
-
-        for (Py_ssize_t i = 0; i < n1; i++) {
-            PyObject *arg1 = PyTuple_GET_ITEM(a1, i);
-            PyObject *arg2 = PyTuple_GET_ITEM(a2, i);
-            int r = c_structural_unify_oc(arg1, arg2, trail, depth + 1);
-            if (r <= 0) {
-                Py_DECREF(a1); Py_DECREF(a2);
-                return r;
-            }
-        }
-        Py_DECREF(a1); Py_DECREF(a2);
-        return 1;
-    }
 
     /* Both term instances? */
     int ti1 = call_is_term_instance(d1);
@@ -689,10 +615,9 @@ PyInit__constraints_dif(void)
     /* Import the C API capsule from _variables */
     if (import_variables_capi() < 0) return NULL;
 
-    /* Import clausal.terms.Compound */
+    /* Import the term classes from clausal.terms */
     PyObject *terms_mod = PyImport_ImportModule("clausal.terms");
     if (!terms_mod) return NULL;
-    Compound_type = PyObject_GetAttrString(terms_mod, "Compound");
     DictTerm_type = PyObject_GetAttrString(terms_mod, "DictTerm");
     Quantity_type = PyObject_GetAttrString(terms_mod, "Quantity");
     ConcreteSeg_type = PyObject_GetAttrString(terms_mod, "ConcreteSeg");
@@ -701,7 +626,7 @@ PyInit__constraints_dif(void)
     PyObject *segstring_type = PyObject_GetAttrString(terms_mod, "SegString");
     PyObject *segbytes_type = PyObject_GetAttrString(terms_mod, "SegBytes");
     Py_DECREF(terms_mod);
-    if (!Compound_type || !DictTerm_type || !Quantity_type ||
+    if (!DictTerm_type || !Quantity_type ||
         !ConcreteSeg_type || !VarSeg_type ||
         !seglist_type || !segstring_type || !segbytes_type) {
         Py_XDECREF(seglist_type);
@@ -719,10 +644,6 @@ PyInit__constraints_dif(void)
     /* Intern strings */
     DIF_KEY_STR = PyUnicode_InternFromString("dif");
     if (!DIF_KEY_STR) return NULL;
-    str_functor = PyUnicode_InternFromString("functor");
-    if (!str_functor) return NULL;
-    str_args = PyUnicode_InternFromString("args");
-    if (!str_args) return NULL;
     str_data = PyUnicode_InternFromString("data");
     if (!str_data) return NULL;
     str_segments = PyUnicode_InternFromString("segments");

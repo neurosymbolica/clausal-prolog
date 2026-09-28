@@ -25,7 +25,6 @@ from clausal.logic.variables import (
 )
 from clausal.logic.predicate import is_term_instance, term_field_names
 from clausal.terms import (
-    Compound,
     SegList,
     SegString,
     SegBytes,
@@ -116,10 +115,6 @@ def _collect_free_vars(term: Any) -> list:
             for elem in t:
                 _walk(elem)
             return
-        if isinstance(t, Compound):
-            for arg in t.args:
-                _walk(arg)
-            return
         # Containers the unifier can bind through via their __unify__ hook.
         # Kept in lockstep with what unify() descends into: a var reachable
         # only through one of these must still receive the dif constraint,
@@ -161,21 +156,14 @@ def _collect_free_vars(term: Any) -> list:
 def _structural_unify_oc(t1: Any, t2: Any, trail: Trail) -> bool:
     """Unify t1 and t2 structurally with occurs check.
 
-    Handles Compound and term (dataclass) instances that the C extension's
+    Handles term (dataclass) instances that the C extension's
     ``unify_with_occurs_check`` does not (it falls through to ``==``).
     """
     t1 = deref(t1)
     t2 = deref(t2)
 
     # Let the C extension handle Var, tuple, list, scalars.
-    # But if both are Compound or term instances, recurse.
-    if isinstance(t1, Compound) and isinstance(t2, Compound):
-        if t1.functor != t2.functor or len(t1.args) != len(t2.args):
-            return False
-        for a1, a2 in zip(t1.args, t2.args):
-            if not _structural_unify_oc(a1, a2, trail):
-                return False
-        return True
+    # But if both are term instances, recurse.
 
     if is_term_instance(t1) and is_term_instance(t2):
         t1_type = type(t1)

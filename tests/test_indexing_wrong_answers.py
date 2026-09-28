@@ -24,7 +24,7 @@ import pytest
 
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, Trail, walk, unify
-from clausal.terms import Compound, Call, LoadName, Unify
+from clausal.terms import Call, LoadName, Unify
 
 
 SRC = """
@@ -68,22 +68,16 @@ def _bound(value):
 
 # ── 1. a bound Var inside a cell caller ─────────────────────────────────────
 
-@pytest.mark.compound_retirement_slice8
 @pytest.mark.parametrize("arg", [
     ("k", ("f", 2)),                                       # control
     ("k", "BOUND_CELL"),
-    ("k", "BOUND_COMPOUND"),
-    ("k", "BOUND_VAR_FUNCTOR"),
     ("k", "BOUND_TWICE"),
     "BOUND_OUTER",
-], ids=["control", "slot-var-to-cell", "slot-var-to-compound",
-        "slot-var-functor-compound", "slot-var-chain", "whole-arg-var"])
+], ids=["control", "slot-var-to-cell", "slot-var-chain", "whole-arg-var"])
 def test_a_bound_var_in_a_cell_slot_reaches_the_bucket(M, arg):
     assert M.db.row("w3", 1).index_plans, "w3 must be indexed for this test"
     make = {
         "BOUND_CELL": lambda: _bound(("f", 2)),
-        "BOUND_COMPOUND": lambda: _bound(Compound("f", (2,))),
-        "BOUND_VAR_FUNCTOR": lambda: Compound(_bound("f"), (2,)),
         "BOUND_TWICE": lambda: _bound(_bound(("f", 2))),
     }
     if arg == "BOUND_OUTER":
@@ -100,9 +94,8 @@ def test_a_bound_var_to_a_non_matching_cell_still_misses(M):
 
 # ── 2. an asserted structured head, unbound caller ──────────────────────────
 
-@pytest.mark.compound_retirement_slice8
 def test_an_asserted_structured_head_answers_an_unbound_caller(M):
-    for term in (("dz", ("f", 1)), ("dz", Compound("g", (1,))),
+    for term in (("dz", ("f", 1)), ("dz", ("g", 1)),
                  ("dz", ("k", ("f", Var()))), ("dz", [1, 2])):
         list(call("assertz", term, module=M))
     X = Var()
@@ -112,7 +105,6 @@ def test_an_asserted_structured_head_answers_an_unbound_caller(M):
     assert any(unify(g, ("g", 1), Trail()) for g in got)
     # input mode is unchanged
     assert _n(M, "dz", ("f", 1)) == 1
-    assert _n(M, "dz", Compound("f", (1,))) == 1
     assert _n(M, "dz", ("f", 2)) == 0
     assert _n(M, "dz", ("k", ("f", 5))) == 1
 
@@ -143,7 +135,6 @@ def test_a_keyword_head_keys_by_its_full_arity():
     assert _arg_to_index_key(_kw_box(_g(1), 2)) == _runtime_arg_key(("box", ("g", 1), 2))
 
 
-@pytest.mark.compound_retirement_slice8
 def test_a_keyword_head_answers_with_an_unbound_second_argument(M):
     """Keyword data terms are refused in source since 2026-09-19, so the
     clause is added through the database API (the shape a programmatic
@@ -152,10 +143,8 @@ def test_a_keyword_head_answers_with_an_unbound_second_argument(M):
     V = Var()
     M.db.assertz(Clause(head=("kp", V, "a"),
                         body=[Unify(left=V, right=_kw_box(_g(1), 2))], hoisted=1))
-    for arg in (("box", ("g", 1), 2), Compound("box", (("g", 1), 2)),
-                ("box", Compound("g", (1,)), 2)):
-        Y = Var()
-        assert [walk(Y) for _ in call("kp", arg, Y, module=M)] == ["a"], arg
+    Y = Var()
+    assert [walk(Y) for _ in call("kp", ("box", ("g", 1), 2), Y, module=M)] == ["a"]
     Y = Var()
     assert [walk(Y) for _ in call("kp", ("box", ("g", 2), 2), Y, module=M)] == []
     # positive control: the answers above came through the first-arg index

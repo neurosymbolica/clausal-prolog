@@ -21,7 +21,7 @@ from clausal.logic.atoms import (
     char_atom, is_nil as _is_nil, NIL_SPELLING as _NIL_SPELLING,
 )
 from clausal.terms import (
-    Compound, KWTerm, DictTerm, SetTerm, Quantity, compound_as_cell,
+    KWTerm, DictTerm, SetTerm, Quantity,
     SegList, SegString, SegBytes, VarSeg, ConcreteSeg,
 )
 
@@ -47,8 +47,6 @@ def _functor_name_py(term: Any) -> Any:
     the same name further down this file.  The empty string keeps the ISO
     nil-atom spelling ``"[]"``, as the empty list does.
     """
-    if isinstance(term, Compound):
-        return term.functor if isinstance(term.functor, str) else None
     if isinstance(term, KWTerm):
         return term.functor
     if is_term_instance(term):
@@ -85,8 +83,6 @@ def _arity_py(term: Any) -> int | None:
     accessor is called directly rather than through the funnel wrapper of
     the same name further down this file.
     """
-    if isinstance(term, Compound):
-        return len(term.args)
     if isinstance(term, KWTerm):
         return len(term)
     if is_term_instance(term):
@@ -125,10 +121,6 @@ def _nth_arg_py(term: Any, n: int) -> Any:
     accessor of the same name, whose own ``str`` arm is likewise
     shadowed; the twins are retired together or not at all.
     """
-    if isinstance(term, Compound):
-        if n < 1 or n > len(term.args):
-            raise IndexError(f"arg index {n} out of range for {term!r}")
-        return term.args[n - 1]
     if isinstance(term, KWTerm):
         vals = list(term.values())
         if n < 1 or n > len(vals):
@@ -173,8 +165,6 @@ def _args_list_py(term: Any) -> list:
     accessor of the same name, whose own ``str`` arm is likewise
     shadowed; the twins are retired together or not at all.
     """
-    if isinstance(term, Compound):
-        return list(term.args)
     if isinstance(term, KWTerm):
         return list(term.values())
     if is_term_instance(term):
@@ -192,7 +182,7 @@ def _args_list_py(term: Any) -> list:
 
 def _is_compound_py(term: Any) -> bool:
     return (
-        isinstance(term, (Compound, KWTerm))
+        isinstance(term, KWTerm)
         or is_term_instance(term)
     )
 
@@ -227,8 +217,6 @@ def _is_ground_py(term: Any) -> bool:
         # a namedtuple as opaque as it was pre-flip.  Kept in step with
         # ``c_is_ground``'s ``PyTuple_CheckExact``.
         return all(_is_ground_py(e) for e in term)
-    if isinstance(term, Compound):
-        return isinstance(term.functor, str) and all(_is_ground_py(a) for a in term.args)
     if isinstance(term, KWTerm):
         return all(_is_ground_py(v) for v in term.values())
     # F083 (audit 2026-05-25): recurse into Seg* containers so that
@@ -295,8 +283,8 @@ try:
         _is_ground as _c_is_ground,
         _register_term_types,
     )
-    # Register Compound and KWTerm types with the C extension
-    _register_term_types(Compound, KWTerm)
+    # Register the KWTerm type with the C extension
+    _register_term_types(KWTerm)
 
     # F083 (audit 2026-05-25): the C ``_is_ground`` does not know about
     # SegList / SegString / SegBytes and falls through to "True" for any
@@ -343,7 +331,7 @@ except ImportError:
 # isn't cell-shaped can reach the new code at all.
 #
 # Per §1b (P3-2 Task 5): only a cell with a STR functor is treated as
-# compound/decomposable, same as a Compound term. A ``(tuple, ...)`` cell
+# compound/decomposable. A ``(tuple, ...)`` cell
 # (``cells.TUPLE_TAG`` in slot 0) is tuple DATA, not a compound — it is
 # deliberately left to fall through to the same "not a recognized shape"
 # answer a plain tuple gets. The bridge's unbound-Var-functor cell (a
@@ -546,7 +534,7 @@ def functor_arity(term: Any) -> tuple[Any, int] | None:
     """Return ``(functor_name, arity)`` for *term* in a single traversal, or None.
 
     Deliberately narrower than ``_functor_name``/``_arity`` composed: it only
-    covers structural/term shapes (a well-formed, str-functor ``Compound``, a
+    covers structural/term shapes (a str-functor cell, a
     term instance, a plain ``str`` atom value, or a ``PredicateMeta`` atom
     class), returning None for everything else — including ``KWTerm``, lists
     and numbers, which the composed pair *does* resolve. Where both are
@@ -567,20 +555,13 @@ def functor_arity(term: Any) -> tuple[Any, int] | None:
     disagreement.)  This INVERTS the P3-1 Task 1 str-as-atom-value reading.
     See ``is_atom_value`` in ``clausal/logic/predicate.py``.
 
-    The functor slot is ``str`` for a ``Compound``/term instance, but for a
+    The functor slot is ``str`` for a cell/term instance, but for a
     plain str atom value or a zero-arity atom class it is the value/class
     itself (``_functor_name_py``'s own contract: an atomic constant IS its
     own functor name), so the type is ``Any``, not ``str``.
 
-    Caller warning: any ``is_term_instance`` guard admits ``Compound`` (it is
-    a dataclass), and ``functor_arity`` will answer for the *Compound*, not
-    for its Python class -- do not use it to get a class/type name (e.g. for
-    diagnostic display of a ``Compound`` head). Callers that want the type
-    name unconditionally must not route a value that might be a ``Compound``
-    through ``functor_arity`` first.
-
     Phase 2 bridge Task 1: a str-functor cell resolves to ``(functor,
-    arity)`` same as a Compound. A ``(tuple, ...)`` tuple-DATA cell
+    arity)``. A ``(tuple, ...)`` tuple-DATA cell
     resolves to None. P3-2 Task 5 (§1b): the bridge's unbound-Var-functor
     cell is deprecated and no longer cell-shaped at all — a slot-0-Var
     tuple now falls through this whole function the same as any other
@@ -591,10 +572,6 @@ def functor_arity(term: Any) -> tuple[Any, int] | None:
     is_compound_cell, f = _cell_functor(term)
     if is_compound_cell:
         return (f, len(term) - 1)
-    if isinstance(term, Compound):
-        if not isinstance(term.functor, str):
-            return None
-        return (term.functor, len(term.args))
     if is_term_instance(term):
         return (type(term).__name__, len(term_field_names(term)))
     if is_atom_value(term):
@@ -611,7 +588,7 @@ def functor_arity(term: Any) -> tuple[Any, int] | None:
 # ``sort/2``, ``msort/2``, ``setof/3`` and the ``*_by`` higher-order builtins
 # sort with Python's ``sorted()`` when the elements happen to be mutually
 # comparable, and fall back to a sort *key* when they are not.  Terms —
-# ``Compound``, ``KWTerm``, declared term instances — define no ``__lt__``, so
+# cells of mixed shapes, ``KWTerm``, declared term instances — define no ``__lt__``, so
 # any list of them takes the fallback.
 #
 # That fallback used to be ``(type name, repr(x))``, which ordered a compound's
@@ -624,8 +601,8 @@ def functor_arity(term: Any) -> tuple[Any, int] | None:
 # ``_standard_order_key`` replaces it with a structural key that recurses into
 # arguments, so a compound's arguments get exactly the comparison the same
 # values get when bare.  Ranks follow the ISO standard order of terms
-# (Var < Number < Atom < Compound, ISO 7.2.1 — a string and a list are both
-# the ``'.'/2`` compound, so there is no band between Atom and Compound);
+# (Var < Number < Atom < compound, ISO 7.2.1 — a string and a list are both
+# the ``'.'/2`` compound, so there is no band between atom and compound);
 # everything with no term shape of its own keeps the old type-name grouping
 # via ``_OpaqueOrder``.
 #
@@ -654,14 +631,13 @@ _ORD_OTHER = 6
 _NUMERIC_RANK = {float: 0, int: 1, bool: 2, _Decimal: 3, _Fraction: 4}
 _NUMERIC_RANK_QUANTITY = 5
 
-# Flavours within _ORD_COMPOUND.  A generic ``Compound`` and a declared term
-# that render alike are *not* the same term (they do not unify — see
-# ``todo/a-generic-compound-renders-identically-to-a-declared-term.md``), so
-# they get adjacent but distinct places in the order rather than interleaving.
+# Flavours within _ORD_COMPOUND.  A cell and a declared term that render
+# alike are *not* the same term (they do not unify), so they get adjacent
+# but distinct places in the order rather than interleaving.
 # The flavour also keeps the argument payloads shape-uniform: positional
 # flavours carry a tuple of keys, ``KWTerm`` carries name/key pairs, and the
 # two are never compared against each other.
-_CF_POSITIONAL = 0   # Compound
+_CF_POSITIONAL = 0   # cell
 _CF_KEYWORD = 1      # KWTerm (keyword-matched: fields sorted by name)
 _CF_DECLARED = 2     # declared term instance / dataclass
 
@@ -828,7 +804,7 @@ def term_key(term: Any) -> tuple:
             return _number_key(num, 1)
         # A cell (spec §5.1).  STAGE 2: an atom is a str and keyed in the
         # atom band above; the 1-tuple is RESERVED and refuses just below.
-        # Arity > 0 keys like ``Compound`` — arity first, then name
+        # Arity > 0 keys as a compound — arity first, then name
         # (ISO 7.2.1), positional flavour — never as a sequence.
         refuse_reserved_1tuple(term)   # STAGE 2: the arity-0 cell is RESERVED
         return (_ORD_COMPOUND, len(term) - 1, (0, term[0]), _CF_POSITIONAL,
@@ -843,31 +819,6 @@ def term_key(term: Any) -> tuple:
         if not term:
             return _ORD_EMPTY_LIST_KEY
         return _cons_key(tuple(term_key(e) for e in term))
-    if isinstance(term, Compound):
-        # Ruling 2026-09-26: an atom-functor Compound of arity >= 1 IS the
-        # cell (f, *args) -- it keys as that cell, exactly (ISO has one term
-        # f(1, 2)), so compare/3 says '=' where ==/2 and =/2 now agree.
-        cell = compound_as_cell(term)
-        if cell is not None:
-            return term_key(cell)
-        functor = deref(term.functor)
-        # No cell equivalent -- not an ISO term, so ISO 7.2 does not place it;
-        # a deterministic Clausal position that is never '=' to a cell:
-        #  * arity 0 (``foo()``, functor a str): the compound band at arity 0,
-        #    named -- after every atom, before every arity >= 1 compound.  No
-        #    cell has arity 0 (the 1-tuple is RESERVED), so nothing collides.
-        #  * a Var or non-atom functor: name slot ``(2, key(functor))``, after
-        #    every named compound (0) and every tuple-data cell (1) of the same
-        #    arity, ordered among themselves by the standard order of the
-        #    functor, so two different Var functors are two different terms.
-        #    (Before 2026-09-26 these took ``(1, "")``, the tuple-data slot, so
-        #    compare/3 said '=' to a tuple-data cell and to each other.)
-        if isinstance(functor, str):
-            name_key = (0, functor)
-        else:
-            name_key = (2, term_key(functor))
-        return (_ORD_COMPOUND, len(term.args), name_key, _CF_POSITIONAL,
-                tuple(term_key(a) for a in term.args))
     if isinstance(term, KWTerm):
         # KWTerm equality is by keyword *name*, not position, so the key must
         # be too — otherwise two equal terms could sort to different places.

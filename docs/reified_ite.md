@@ -110,7 +110,7 @@ Three-valued equality decision procedure in `clausal.logic.constraints`:
 
 No side effects — the trail is always restored to its original state.
 
-Handles `Var`, scalars, tuples, lists, `Compound`, and `PredicateMeta` instances.
+Handles `Var`, scalars, tuples (cells), lists, and `PredicateMeta` instances.
 
 ### `reify_fd(op, x, y, trail) -> bool | None`
 

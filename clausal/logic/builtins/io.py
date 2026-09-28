@@ -23,7 +23,6 @@ from clausal.terms import (
     term_canonical as _term_canonical,
     term_pformat as _term_pformat,
     quote_string as _quote_string,
-    Compound,
     DictTerm,
     Div,
     FloorDiv,
@@ -131,7 +130,7 @@ def _format_term_as_text(val):
 #: has always produced -- a ``date`` prints ``2020-01-01``, not its ``repr``,
 #: and an unbound ``Var`` prints ``_N`` rather than the style's anonymous
 #: placeholder.
-_ISO_TERM_TYPES = (str, bytes, list, Compound, KWTerm, DictTerm, SetTerm)
+_ISO_TERM_TYPES = (str, bytes, list, KWTerm, DictTerm, SetTerm)
 
 
 #: What the ISO family puts between a compound's arguments and a list's
@@ -152,7 +151,7 @@ def _format_term_iso(val, quoted: bool, double_quotes: bool = False) -> str:
     (item 5).
 
     Every shape ``term_str`` renders as a term is routed to it (item 1) --
-    ``Compound``, ``KWTerm``, ``DictTerm``, ``SetTerm`` and declared term
+    ``KWTerm``, ``DictTerm``, ``SetTerm`` and declared term
     instances used to fall to ``str()``, which routes back through
     ``term_str``'s DISPLAY defaults and so printed double-quoted strings and
     Python reprs inside an ISO writer's output.
@@ -499,9 +498,7 @@ def _format_clause_term(val):
         # on a plain tuple is the Python repr, so an argument like
         # ``("pt", 1, 2)`` printed ``('pt', 1, 2)`` in ``listing/1`` output
         # instead of ``pt(1, 2)``.  ``term_str`` renders it as the term
-        # (``clausal/terms.py``'s cell branches); Compound already gets this
-        # for free via its own ``__str__``, which is why only this shape
-        # needs routing here.
+        # (``clausal/terms.py``'s cell branches).
         return _term_str(val)
     return str(val)
 
@@ -644,15 +641,11 @@ def _pi_parts(val):
     SHAPED *val*, operands dereffed, or ``None`` -- shape only, nothing about
     whether the operands are well formed.
 
-    Four spellings of each: the cell ``('/', n, a)``, the engine's
-    ``Compound("/", (n, a))``, and the runtime operator node a user-written
+    Three spellings of each: the cell ``('/', n, a)``, and the runtime operator node a user-written
     ``fib/2`` (``Div``) or ``fib//2`` (``FloorDiv``) compiles to.
     """
     if type(val) is tuple and len(val) == 3 and val[0] in ("/", "//"):
         return val[0], deref(val[1]), deref(val[2])
-    if (isinstance(val, Compound) and val.functor in ("/", "//")
-            and len(val.args) == 2):
-        return val.functor, deref(val.args[0]), deref(val.args[1])
     if isinstance(val, Div):
         return "/", deref(val.left), deref(val.right)
     if isinstance(val, FloorDiv):

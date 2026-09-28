@@ -114,15 +114,15 @@ def stale(tmp_path):
     to the ``last/2`` row to make its ``_fields`` STALE.  Handle era: there
     is no class to go stale; the binding is the handle, which names both
     rows.)"""
-    from clausal.terms import Compound
     name = f"w4b3stale_{next(_counter)}"
     p = tmp_path / f"{name}.clausal"
     p.write_text(_STALE_SRC.format(name=name))
     mod = _load_module(name, str(p))
     m = mod.__dict__["$module"]
     try:
-        # a Compound, not a cell: a cell would not create last/2 (slice 5 finding)
-        assert len(list(call("assertz", Compound("last", (1, 1)), module=m))) == 1
+        # R12 (declare first): last/2 is declared -dynamic before the write
+        m.db.mark_dynamic("last", 2)
+        assert len(list(call("assertz", ("last", 1, 1), module=m))) == 1
         assert m.module_dict["last"] == mangle(m.name, "last")
         assert m.db.row("last", 0) is not None
         assert len(m.db.row("last", 2).clauses) == 1
@@ -241,9 +241,8 @@ class TestSolveCallPhase5:
         assert len(list(call("last", 1, 1, module=lm))) == 1
         assert len(list(call("last", [5], 5, module=lm))) == 0
 
-    # Stays a Compound (slice 5 finding): assertz/asserta of a CELL whose
-    # predicate is not known yet raises existence_error; a Compound creates it.
-    @pytest.mark.compound_retirement_slice8
+    # R12 (2026-09-27, declare first): assertz adds clauses only to a predicate
+    # declared -dynamic, so the new arity is declared before the write.
     @pytest.mark.parametrize("era", ["handle"])  # the class era is gone
     def test_a_stale_fields_class_keeps_its_local_predicate(
             self, stale, monkeypatch, era):
@@ -584,9 +583,8 @@ class TestInjectResolvedTargets:
         # r: the term last(1) still builds from the name key: the key is the
         # handle, unchanged (the class era called the class to build it)
 
-    # Stays a Compound (slice 5 finding): assertz/asserta of a CELL whose
-    # predicate is not known yet raises existence_error; a Compound creates it.
-    @pytest.mark.compound_retirement_slice8
+    # R12 (2026-09-27, declare first): assertz adds clauses only to a predicate
+    # declared -dynamic, so the new arity is declared before the write.
     @pytest.mark.parametrize("era", ["handle"])  # the class era is gone
     def test_a_stale_fields_class_is_not_shadowed_by_a_builtin(
             self, stale, era):
@@ -675,9 +673,8 @@ class TestInjectResolvedTargets:
             assert len(list(_drive_trampoline(fn, Trail(), 1, 1))) == 1
         assert calls == [("last", 2)] * 3
 
-    # Stays a Compound (slice 5 finding): assertz/asserta of a CELL whose
-    # predicate is not known yet raises existence_error; a Compound creates it.
-    @pytest.mark.compound_retirement_slice8
+    # R12 (2026-09-27, declare first): assertz adds clauses only to a predicate
+    # declared -dynamic, so the new arity is declared before the write.
     @pytest.mark.parametrize("era", ["handle"])  # the class era is gone
     def test_a_local_row_asserted_after_the_first_call_outranks_the_cached_builtin(
             self, owner, era):
@@ -690,7 +687,6 @@ class TestInjectResolvedTargets:
         )
         from clausal.logic.solve import _drive_trampoline
         from clausal.logic.variables import Trail
-        from clausal.terms import Compound
         b = self._owner_binding(owner, "last", era)
         globals_ = {"last": b}
         bg = dict(globals_)
@@ -698,7 +694,8 @@ class TestInjectResolvedTargets:
         fn = bg[_disp_key("last", 2)]
         assert len(list(_drive_trampoline(fn, Trail(), [4, 5], 5))) == 1
         assert owner.db.row("last", 2) is None
-        assert len(list(call("assertz", Compound("last", (9, 9)),
+        owner.db.mark_dynamic("last", 2)
+        assert len(list(call("assertz", ("last", 9, 9),
                              module=owner))) == 1
         assert owner.db.row("last", 2) is not None
         # the local row answers now, through the compiled entry and solve.call

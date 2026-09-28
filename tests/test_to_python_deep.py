@@ -16,7 +16,7 @@ from clausal.logic.atoms import mint, NIL_KEY
 from clausal.logic.cells import chars, TUPLE_TAG
 from clausal.logic.to_python import to_python
 from clausal.logic.variables import Var, Trail, unify
-from clausal.terms import Compound, KWTerm, SetTerm, DictTerm, SegList, SegString, VarSeg, ConcreteSeg
+from clausal.terms import KWTerm, SetTerm, DictTerm, SegList, SegString, VarSeg, ConcreteSeg
 
 
 # ── the hot-path contract is untouched ──────────────────────────────────────
@@ -34,33 +34,17 @@ def test_a_namedtuple_survives():
     assert type(out) is P and out.y == "t" and type(out.y) is str
 
 
-# ── Compound ────────────────────────────────────────────────────────────────
+# ── compound terms (cells) ──────────────────────────────────────────────────
 
-@pytest.mark.compound_retirement_slice8
-def test_an_atom_functor_compound_is_its_cell_converted():
-    c = Compound("pair", (mint("a"), chars("text")))
+def test_a_compound_cell_converts_its_args():
+    c = ("pair", mint("a"), chars("text"))
     assert to_python(c) == ("pair", "a", "text")
     assert type(to_python(c)[2]) is str
 
 
-@pytest.mark.compound_retirement_slice8
-def test_a_compound_nested_in_a_list_converts_too():
-    out = to_python([Compound("f", (chars("x"),))])
+def test_a_compound_cell_nested_in_a_list_converts_too():
+    out = to_python([("f", chars("x"))])
     assert out == [("f", "x")] and type(out[0][1]) is str
-
-
-@pytest.mark.compound_retirement_slice8
-def test_a_compound_with_no_cell_keeps_its_shape_with_converted_args():
-    # arity 0 is not an ISO term and has no cell (the 1-tuple is reserved)
-    c0 = Compound("foo", ())
-    out = to_python(c0)
-    assert isinstance(out, Compound) and out.functor == "foo" and out.args == ()
-    # a Var functor has no cell either; its args still convert
-    v = Var()
-    cv = Compound(v, (chars("x"),))
-    out = to_python(cv)
-    assert isinstance(out, Compound) and out.functor is v
-    assert out.args == ("x",) and type(out.args[0]) is str
 
 
 # ── KWTerm ──────────────────────────────────────────────────────────────────
@@ -241,7 +225,6 @@ def test_the_carrier_is_tested_before_the_generic_tuple_arm():
     assert type(out) is str and out == "x"
     out = to_python([chars("x")])
     assert out == ["x"] and type(out[0]) is str
-
 
 
 def test_a_dataclass_term_instance_is_rebuilt_with_converted_fields():

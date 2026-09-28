@@ -11,7 +11,7 @@ import pytest
 from clausal.logic.cells import chars
 
 from clausal.logic.variables import Var, Trail, deref, unify, is_var
-from clausal.terms import Compound, KWTerm
+from clausal.terms import KWTerm
 
 
 # ── predicate.py fallbacks ───────────────────────────────────────────────────
@@ -36,17 +36,11 @@ class TestIsTermInstanceFallback:
     def test_class_not_instance(self):
         # nv -- a class is never a term instance (a plain class stands in
         # for the retired PredicateMeta class row)
-        assert _is_term_instance_py(Compound) == is_term_instance(Compound) == False
+        assert _is_term_instance_py(KWTerm) == is_term_instance(KWTerm) == False
 
     def test_int_not_instance(self):
         # nv
         assert _is_term_instance_py(42) == is_term_instance(42) == False
-
-    @pytest.mark.compound_retirement_slice8
-    def test_compound_is_dataclass(self):
-        # nv
-        c = Compound("f", (1,))
-        assert _is_term_instance_py(c) == is_term_instance(c)
 
     def test_var_not_instance(self):
         # nv
@@ -61,7 +55,7 @@ class TestIsZeroFieldClassFallback:
     def test_no_object_is_a_zero_field_class_any_more(self):
         """W4b-3 slice 7 deleted the class: the question always answers
         False (it answered True for a zero-field ``PredicateMeta`` class)."""
-        for value in ("atom", ("pt", 1), Compound, type("X", (), {})):
+        for value in ("atom", ("pt", 1), KWTerm, type("X", (), {})):
             assert _is_zero_field_class_py(value) is False
             assert is_zero_field_class(value) is False
 
@@ -71,14 +65,6 @@ class TestIsZeroFieldClassFallback:
 
 
 class TestTermFieldNamesFallback:
-
-    @pytest.mark.compound_retirement_slice8
-    def test_compound_dataclass(self):
-        # nv
-        c = Compound("f", (1, 2))
-        py = _term_field_names_py(c)
-        c_ver = term_field_names(c)
-        assert py == c_ver
 
     def test_non_term_raises(self):
         # nv
@@ -97,12 +83,6 @@ from clausal.logic.builtins._helpers import (
 
 
 class TestFunctorNameFallback:
-
-    @pytest.mark.compound_retirement_slice8
-    def test_compound(self):
-        # nv
-        c = Compound("f", (1, 2))
-        assert _functor_name_py(c) == _functor_name(c) == "f"
 
     @pytest.mark.compound_retirement_slice9
     def test_kwterm(self):
@@ -143,12 +123,6 @@ class TestFunctorNameFallback:
 
 class TestArityFallback:
 
-    @pytest.mark.compound_retirement_slice8
-    def test_compound(self):
-        # nv
-        c = Compound("f", (1, 2, 3))
-        assert _arity_py(c) == _arity(c) == 3
-
     def test_int(self):
         # nv
         assert _arity_py(42) == _arity(42) == 0
@@ -169,27 +143,6 @@ class TestArityFallback:
 
 class TestNthArgFallback:
 
-    @pytest.mark.compound_retirement_slice8
-    def test_compound_first(self):
-        # nv
-        c = Compound("f", (10, 20))
-        assert _nth_arg_py(c, 1) == _nth_arg(c, 1) == 10
-
-    @pytest.mark.compound_retirement_slice8
-    def test_compound_second(self):
-        # nv
-        c = Compound("f", (10, 20))
-        assert _nth_arg_py(c, 2) == _nth_arg(c, 2) == 20
-
-    @pytest.mark.compound_retirement_slice8
-    def test_out_of_range(self):
-        # nv
-        c = Compound("f", (10,))
-        with pytest.raises(IndexError):
-            _nth_arg_py(c, 5)
-        with pytest.raises(IndexError):
-            _nth_arg(c, 5)
-
     def test_string_args_are_head_char_and_str_tail(self):
         # nv
         # THE FLIP (2026-09-06-atoms-as-cells-strings §6.4) reversed
@@ -207,12 +160,6 @@ class TestNthArgFallback:
 
 class TestArgsListFallback:
 
-    @pytest.mark.compound_retirement_slice8
-    def test_compound(self):
-        # nv
-        c = Compound("f", (1, 2, 3))
-        assert _args_list_py(c) == _args_list(c) == [1, 2, 3]
-
     def test_non_compound(self):
         # nv
         assert _args_list_py(42) == _args_list(42) == []
@@ -229,12 +176,6 @@ class TestArgsListFallback:
 
 
 class TestIsCompoundFallback:
-
-    @pytest.mark.compound_retirement_slice8
-    def test_compound(self):
-        # nv
-        c = Compound("f", (1,))
-        assert _is_compound_py(c) == _is_compound(c) == True
 
     @pytest.mark.compound_retirement_slice9
     def test_kwterm(self):
@@ -266,19 +207,6 @@ class TestIsGroundFallback:
         # nv
         v = Var()
         assert _is_ground_py([1, v]) == _is_ground([1, v]) == False
-
-    @pytest.mark.compound_retirement_slice8
-    def test_compound_with_var(self):
-        # nv
-        v = Var()
-        c = Compound("f", (1, v))
-        assert _is_ground_py(c) == _is_ground(c) == False
-
-    @pytest.mark.compound_retirement_slice8
-    def test_compound_ground(self):
-        # nv
-        c = Compound("f", (1, 2))
-        assert _is_ground_py(c) == _is_ground(c) == True
 
     @pytest.mark.compound_retirement_slice9
     def test_kwterm_with_var(self):
@@ -344,16 +272,6 @@ class TestCopyTermFallback:
         assert is_var(py_result) and py_result is not x
         assert is_var(c_result) and c_result is not x
 
-    @pytest.mark.compound_retirement_slice8
-    def test_compound_copied(self):
-        # nv
-        c = Compound("f", (1, Var()))
-        py = _copy_term_py(c, {})
-        assert isinstance(py, Compound)
-        assert py.functor == "f"
-        assert py.args[0] == 1
-        assert is_var(py.args[1])
-
     @pytest.mark.compound_retirement_slice9
     def test_kwterm_functor_preserved(self):
         """KWTerm copy preserves functor (bug fix verification)."""
@@ -408,17 +326,6 @@ class TestCollectVarsFallback:
         c_result = []
         _collect_vars_impl([x, x, x], c_result)
         assert len(py_result) == len(c_result) == 1
-
-    @pytest.mark.compound_retirement_slice8
-    def test_compound_vars(self):
-        # nv
-        x, y = Var(), Var()
-        c = Compound("f", (x, 1, y))
-        py_result = []
-        _collect_vars_py(c, py_result)
-        c_result = []
-        _collect_vars_impl(c, c_result)
-        assert len(py_result) == len(c_result) == 2
 
 
 # ── P3-2 Task 2C: cells (plain tuples) through the C twins ───────────────────
@@ -486,8 +393,8 @@ def _corpus():
     and the C arms that classified one went with it.  The three rows that
     held one (``instance``, ``cell_in_instance``, ``instance_in_cell``) were
     deleted with those arms, together, as their predecessor promised.  A
-    ``@dataclass`` term (``Compound``, ``KWTerm``) is the term-instance shape
-    the twins still carry, and it is covered by rows of its own.
+    ``@dataclass`` term (``KWTerm``) is the term-instance shape the twins
+    still carry, and it is covered by rows of its own.
     """
     X, Y, Z = Var(), Var(), Var()
     bound = Var()
@@ -503,8 +410,6 @@ def _corpus():
         ("var", X),
         ("bound_var_to_cell", bound),
         ("list", [1, X, 2]),
-        ("compound", Compound("f", (1, X))),
-        ("compound_var_functor", Compound(X, (1, 2))),
         ("kwterm", KWTerm("r", a=X, b=2)),
         # --- cells ---
         ("cell_ground", ("pt", 1, 2)),
@@ -520,9 +425,7 @@ def _corpus():
         # --- cells reached only through another container ---
         ("cell_in_list", [("pt", X), ("pt", Y)]),
         ("cell_in_list_in_cell", ("f", [("g", X)], Y)),
-        ("cell_in_compound", Compound("f", (("g", X), 2))),
         ("cell_in_kwterm", KWTerm("r", a=("g", X))),
-        ("compound_in_cell", ("f", Compound("g", (X,)))),
         ("list_of_lists_of_cells", [[("p", X)], [("q", Y), ("r", Z)]]),
         # --- shared structure across two cells ---
         ("cell_pair_sharing", ("f", ("g", X), ("h", X))),
@@ -533,22 +436,9 @@ def _corpus():
     ]
 
 
-# A PRE-EXISTING twin divergence this corpus turned up, unrelated to cells and
-# deliberately not "fixed" by Task 2C (a non-cell answer change is exactly what
-# this phase's invariant forbids): A01-F003 taught the C twins to visit a
-# ``Compound``'s FUNCTOR slot — an unbound functor Var is a variable of the
-# term — but the Python twins in ``inspection.py`` still walk ``term.args``
-# only.  ``c_is_ground`` and ``_is_ground_py`` DO agree here (both reject a
-# non-str functor), so only the copy/collect pair diverges.  Pinned below by
-# ``test_a_var_functor_compound_is_a_known_twin_divergence`` so the drift is on
-# record rather than silent.
-_KNOWN_COMPOUND_FUNCTOR_DIVERGENCE = {"compound_var_functor"}
-
-# Compound retirement: these rows hold a ``Compound`` / ``KWTerm``, so what
-# they pin is the twins' Compound / KWTerm ARMS (removed in slices 7-9).  The
-# marks let those slices select exactly these rows.
-_SLICE8_ROWS = {"compound", "compound_var_functor", "cell_in_compound",
-                "compound_in_cell"}
+# Compound retirement: these rows hold a ``KWTerm``, so what they pin is the
+# twins' KWTerm ARMS (removed in slice 9).  The marks let that slice select
+# exactly these rows.
 _SLICE9_ROWS = {"kwterm", "cell_in_kwterm"}
 
 
@@ -557,8 +447,7 @@ def _row_params(exclude=frozenset()):
     for n, _ in _corpus():
         if n in exclude:
             continue
-        marks = ([pytest.mark.compound_retirement_slice8] if n in _SLICE8_ROWS else []) + \
-                ([pytest.mark.compound_retirement_slice9] if n in _SLICE9_ROWS else [])
+        marks = [pytest.mark.compound_retirement_slice9] if n in _SLICE9_ROWS else []
         out.append(pytest.param(n, marks=marks) if marks else n)
     return out
 
@@ -588,8 +477,6 @@ def _shape(term):
             return ("cell", [go(e) for e in t])
         if isinstance(t, tuple):  # tuple SUBCLASS (namedtuple, ...)
             return ("tuple_subclass", type(t).__qualname__, [go(e) for e in t])
-        if isinstance(t, Compound):
-            return ("compound", go(t.functor), [go(a) for a in t.args])
         if isinstance(t, KWTerm):
             return ("kwterm", t.functor, [(k, go(v)) for k, v in t.items()])
         if isinstance(t, SegList):
@@ -740,7 +627,7 @@ class TestCellCollectVarsTwinParity:
 
     @pytest.mark.parametrize(
         "name",
-        _row_params(_KNOWN_COMPOUND_FUNCTOR_DIVERGENCE),
+        _row_params(),
     )
     def test_same_variables_in_the_same_order(self, name):
         # nv
@@ -794,27 +681,6 @@ class TestCellCollectVarsTwinParity:
         _c_collect_raw(term, result)
         assert result == [x]
 
-    @pytest.mark.compound_retirement_slice8
-    def test_a_var_functor_compound_is_a_known_twin_divergence(self):
-        """Pre-existing, not a cell question — see the note at
-        ``_KNOWN_COMPOUND_FUNCTOR_DIVERGENCE``.  The C twin visits the functor
-        slot (A01-F003), the Python twin does not.  Recorded, not fixed."""
-        # nv
-        f = Var()
-        term = Compound(f, (1, 2))
-        py_result: list = []
-        _collect_vars_py(term, py_result)
-        c_result: list = []
-        _c_collect_raw(term, c_result)
-        assert py_result == []
-        assert c_result == [f]
-        # The CELL analogue has no such split: both twins walk slot 0.
-        cell_py: list = []
-        _collect_vars_py((f, 1, 2), cell_py)
-        cell_c: list = []
-        _c_collect_raw((f, 1, 2), cell_c)
-        assert cell_py == cell_c == [f]
-
 
 @requires_c
 class TestCellIsGroundTwinParity:
@@ -831,11 +697,6 @@ class TestCellIsGroundTwinParity:
         # nv
         assert _c_is_ground_raw(("pt", 1, Var())) is False
         assert _c_is_ground_raw(("pt", 1, 2)) is True
-
-    @pytest.mark.compound_retirement_slice8
-    def test_a_cell_nested_in_a_compound_is_reached(self):
-        # nv
-        assert _c_is_ground_raw(Compound("f", (("pt", Var()),))) is False
 
     def test_a_namedtuple_is_opaque_to_both_twins(self):
         """Exact-type, like the copy/collect twins — controller ruling, Task 2C
@@ -909,7 +770,7 @@ class TestWrapperUsesTheCPathAgain:
 
     @pytest.mark.parametrize(
         "name",
-        _row_params(_KNOWN_COMPOUND_FUNCTOR_DIVERGENCE),
+        _row_params(),
     )
     def test_wrapper_agrees_with_the_python_twin(self, name):
         # nv
@@ -1041,49 +902,12 @@ class TestTheWrapperActuallyReachesC:
     file green while quietly giving back the whole point of Task 2C.  These
     tests fail in that case.
 
-    Two independent methods, because neither alone is enough: an ORACLE shape
-    on which the two implementations demonstrably differ, and a SPY on the
-    module-global C name (looked up at call time inside the wrapper, so
+    A SPY on the module-global C name (looked up at call time inside the wrapper, so
     ``monkeypatch.setattr`` on the module reaches it).
     """
 
-    # --- oracle: Compound with a Var functor (see
-    #     _KNOWN_COMPOUND_FUNCTOR_DIVERGENCE).  Python walks args only, C
-    #     visits the functor slot too (A01-F003), so the answer names the
-    #     implementation that ran.
-
-    @pytest.mark.compound_retirement_slice8
-    @requires_c
-    def test_term_variables_wrapper_returns_the_c_answer(self):
-        # nv
-        f = Var()
-        term = Compound(f, (1, 2))
-
-        control: list = []
-        _collect_vars_py(term, control)
-        assert control == [], "oracle broken: the twins no longer differ here"
-
-        result: list = []
-        _collect_vars_impl(term, result)
-        assert result == [f], "the wrapper ran the PYTHON twin, not C"
-
-    @pytest.mark.compound_retirement_slice8
-    @requires_c
-    def test_copy_term_wrapper_returns_the_c_answer(self):
-        # nv
-        f = Var()
-        term = Compound(f, (1, 2))
-
-        control = _copy_term_py(term, {})
-        assert control.functor is f, "oracle broken: the twins no longer differ"
-
-        out = _copy_term_impl(term, {})
-        assert is_var(out.functor)
-        assert out.functor is not f, "the wrapper ran the PYTHON twin, not C"
-
-    # --- spy: ground/1's twins agree on the oracle shape (both reject a
-    #     non-str functor), so the only way to prove which one ran is to watch
-    #     the C entry point.  Applied to all three for symmetry.
+    # --- spy: the only way to prove which twin ran is to watch the C entry
+    #     point.  Applied to all three.
 
     def test_is_ground_wrapper_calls_the_c_entry_point(self, monkeypatch):
         # nv

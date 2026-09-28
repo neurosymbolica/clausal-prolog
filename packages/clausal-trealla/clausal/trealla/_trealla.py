@@ -52,8 +52,7 @@ def _parse_binding_value(text: str):
         functor = m.group(1)
         args_text = m.group(2)
         args = _parse_list_elements(args_text)
-        from clausal.terms import Compound
-        return Compound(functor, tuple(args))
+        return (functor, *args)
 
     # Quoted atom: 'something'
     if text.startswith("'") and text.endswith("'"):
@@ -267,7 +266,7 @@ class Trealla:
         """Run a Prolog query. Returns an iterator over solution dicts.
 
         Each solution is a dict mapping variable names (str) to Python
-        values (int, float, str, list, Compound).
+        values (int, float, str, list, cell).
 
         Iteration is lazy — each call to next() resumes Prolog
         backtracking for one more solution.

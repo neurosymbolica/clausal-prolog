@@ -68,7 +68,7 @@ from clausal.logic.cells import (
     resolve_qualified_goal_cell,
     qualify_mangled_goal,
 )
-from clausal.terms import Compound, Undefined
+from clausal.terms import Undefined
 from clausal.terms import (
     Call as _ReifiedCall,
     LoadName as _ReifiedLoadName,
@@ -101,18 +101,17 @@ def _deref_walk_py(term: Any) -> Any:
         return {_deref_walk_py(k): _deref_walk_py(v) for k, v in term.items()}
     if isinstance(term, (set, frozenset)):
         return type(term)(_deref_walk_py(e) for e in term)  # A04-F005
-    # A01-F008: delegate to __walk__ hooks (Compound, KWTerm, DictTerm, Seg*),
+    # A01-F008: delegate to __walk__ hooks (KWTerm, DictTerm, Seg*),
     # keeping this Python fallback in sync with the C twin (_tabling_core
-    # do_deref_walk) and with walk() itself. Preserves Compound _position and
-    # F018 Seg promotion.
+    # do_deref_walk) and with walk() itself. Preserves F018 Seg promotion.
     hook = getattr(term, "__walk__", None)
     if hook is not None:
         return hook()
     if is_term_instance(term):
         cls = type(term)
         # W4a: ``is_term_instance`` is dataclass-only, so *cls* is a
-        # dataclass term class -- a pythonic_ast node like ``BinOp``, a
-        # ``Compound`` -- and calling it is the rebuild.  (It used to look up
+        # dataclass term class -- a pythonic_ast node like ``BinOp`` -- and
+        # calling it is the rebuild.  (It used to look up
         # ``_clausal_head`` first, for the predicate-INSTANCE shape that no
         # longer exists.  It also used to check for a ``_clausal_new``
         # Phase-0 fast-constructor first -- that gate, and its four siblings
@@ -190,9 +189,8 @@ def _term_to_goal(term: Any, db: Any = None) -> Any:
     node.  The compiler expects goal nodes, so we convert here.
     A CELL goal ``("f", a, b)`` lowers (P3-3 Task 5, R11): slot 0
     names the predicate, the rest are its arguments, so it becomes
-    ``AstCall(LoadName("f"), [a, b])`` — the identical node a ``Compound`` goal
-    produces, which is what makes a cell goal and a class-term goal share
-    compiled code and answer alike.  Two cell functors are not ordinary calls
+    ``AstCall(LoadName("f"), [a, b])``, which is what makes a cell goal and a
+    class-term goal share compiled code and answer alike.  Two cell functors are not ordinary calls
     and are handled before that: the module-qualified form ``(":", M, G)``,
     which lowers to the INNER goal's node (P3-3 Task 6), and the control
     constructs (deferred to the ISO-surface phase) — see
@@ -234,12 +232,6 @@ def _term_to_goal(term: Any, db: Any = None) -> Any:
         if term in CELL_GOAL_CONTROL_FUNCTORS:    # parity with call/N (F5): ','/0 is refused, not looked up
             refuse_control_construct_cell(term, term, "solve/1")
         return AstCall(func=LoadName(name=term), args=[], kwargs=[])
-    if isinstance(term, Compound):
-        return AstCall(
-            func=LoadName(name=term.functor),
-            args=list(term.args),
-            kwargs=[],
-        )
     is_cell_goal, functor = compound_cell_shape(term)
     if is_cell_goal:
         if functor == QUALIFIED_GOAL_FUNCTOR and len(term) == 3:
@@ -305,9 +297,6 @@ def _structural_key(term: Any, var_index: dict, thunks: list | None = None) -> t
             idx = len(var_index)
             var_index[id(t)] = idx
         return ("var", idx)
-    if isinstance(t, Compound):
-        return ("cmp", t.functor,
-                tuple(_structural_key(a, var_index, thunks) for a in t.args))
     if isinstance(t, _PyThunk):
         # A ``++expr`` escape.  The thunk OBJECT is rebuilt on every execution
         # of the hosting Python code (a fresh closure over this iteration's
@@ -365,7 +354,7 @@ def _structural_key(term: Any, var_index: dict, thunks: list | None = None) -> t
         # A goal NODE — what the rewriter hands ``solve()`` for a
         # goal-position ``--`` seam, rebuilt from scratch on every execution
         # (Task 7).  It is a dataclass, so its shape is its fields; keyed
-        # field-by-field it is exactly as value-sensitive as a Compound.
+        # field-by-field it is exactly as value-sensitive as a cell.
         # A ``Lambda`` is refused: its body's variables are deliberately NOT
         # collected by ``_collect_vars``, so a cache hit could not rebind
         # them and the cached code would keep the FIRST execution's Vars.
@@ -406,12 +395,11 @@ def _goal_cache_key(goal: Any, module: Module, thunks: list | None = None):
     """Structural, value-sensitive cache key for a top-level query goal.
 
     Returns ``None`` (caching disabled for this goal) when the goal is neither a
-    predicate term, a Compound, a CELL, nor a goal NODE, or when it contains an
+    predicate term, a CELL, nor a goal NODE, or when it contains an
     unhashable ground leaf.
 
     Cells were previously in the "neither" bucket and so were uncached
-    outright; they are hashable tuples with the same structural discipline as
-    a Compound, and ``_structural_key`` gives them their own ``('cell', ...)``
+    outright; they are hashable tuples, and ``_structural_key`` gives them their own ``('cell', ...)``
     tag, so a cell goal caches like any other predicate call (P3-3 Task 5).
 
     Goal NODES (``Call``/``Unify``/``And``/``TupleLiteral``, …) were the next
@@ -427,8 +415,7 @@ def _goal_cache_key(goal: Any, module: Module, thunks: list | None = None):
     traversal is the point: a second, separately-written walk could drift out
     of step with the key's and silently rebind the wrong thunk.
     """
-    if not (isinstance(goal, Compound)
-            or isinstance(goal, _GoalNode)
+    if not (isinstance(goal, _GoalNode)
             or compound_cell_shape(goal)[0]):
         return None
     try:
@@ -443,7 +430,7 @@ def _templatize_query_goal(goal: Any, db=None):
     """Parameterize the fully-ground top-level arguments of a predicate-call goal.
 
     Returns ``(template_goal, [(param_var, value), ...])``. Each direct argument
-    of a single predicate-call goal (PredicateMeta instance or Compound) that is
+    of a single predicate-call goal (a CELL) that is
     fully ground is replaced with a fresh unbound Var; the var is bound to that
     value at run time (see ``solve``). The compiled query therefore contains no
     baked-in argument literals and is reused across calls that differ only in
@@ -523,26 +510,12 @@ def _templatize_query_goal(goal: Any, db=None):
         # names the term to write.
         return None
 
-    if isinstance(goal, Compound):
-        params = []
-        new_args: list = []
-        for a in goal.args:
-            gv = _ground_value(a)
-            if gv is None:
-                new_args.append(a)
-            else:
-                pv = Var()
-                params.append((pv, gv))
-                new_args.append(pv)
-        if not params:
-            return goal, []
-        return Compound(goal.functor, tuple(new_args)), params
 
-    # A CELL goal parameterizes exactly like a Compound one (P3-3 Task 5): the
+    # A CELL goal parameterizes (P3-3 Task 5): the
     # goal's own arguments are slots 1.. and slot 0 is the functor, which is
     # never a parameter.  Without this branch every distinct ground argument
     # compiled its own query — a cell goal is a predicate call, and it gets the
-    # same value-independent compiled query a Compound call gets.
+    # same value-independent compiled query any predicate call gets.
     is_cell_goal, cell_f = compound_cell_shape(goal)
     if is_cell_goal and (
         # ARITY-MATCHED to ``_term_to_goal``'s own guard (P3-3 Task 5 fix
@@ -694,7 +667,7 @@ def _compile_as_query(goal: Any, module: Module) -> Any:
     _query_body_compiler.accepts_ctx_template = True
 
     # The dummy head is the ATOM ``_query``: an arity-0 head is its name
-    # (Compound retirement slice 3; ``foo()`` is not a term, ruling R4).
+    # (``foo()`` is not a term).
     clause = Clause(head="_query", body=[goal])
     dispatch_fn = compile_predicate_trampoline(
         "_query", 0, [clause], db,
@@ -1150,7 +1123,7 @@ def call(
         if builtin is not None:
             dispatch_fn = builtin._get_dispatch()
 
-    # Fall back to Database dispatch lookup (test modules and Compound-head predicates).
+    # Fall back to Database dispatch lookup (test modules and asserted predicates).
     if dispatch_fn is None and module is not None:
         dispatch_fn = module.db.get_dispatch(functor, arity)
 
@@ -1445,9 +1418,7 @@ def _tabled_call_site(goal, module, trail):
     signature normalization and ``is_tabled`` are all static, so the site is
     the same before and after the solve.
 
-    Handles every single-goal shape ``solve()`` accepts: term instances,
-    ``Compound`` (checked FIRST — ``is_term_instance`` is also true for a
-    Compound and would mangle its functor into ``"Compound"``), reified
+    Handles every single-goal shape ``solve()`` accepts: term instances, reified
     ``Call(LoadName(...))`` — the shape ``docs/wfs.md`` and the test suite
     build (todo/wfs-undefined-lost-at-query-surface.md §3) — and qualified
     ``Call(LoadAttr(LoadName(mod), pred))``, whose table lives in the
@@ -1485,11 +1456,6 @@ def _tabled_call_site(goal, module, trail):
     if is_cell_goal:
         functor = cell_functor
         goal_args = list(goal[1:])
-    elif isinstance(goal, Compound):
-        functor = deref(goal.functor)
-        if not isinstance(functor, str):
-            return None
-        goal_args = list(goal.args)
     elif isinstance(goal, _ReifiedCall):
         func = goal.func
         if isinstance(func, _ReifiedLoadName):

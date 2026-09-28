@@ -1,6 +1,6 @@
 """Clause head → match-case compilation.
 
-Compiles clause heads (functor dataclass instances, Compounds, etc.)
+Compiles clause heads (cells, functor dataclass instances, etc.)
 into Python ``match`` statement arm patterns.  Handles list patterns
 (with bidirectional input/output guards — see
 ``clausal.logic.runtime.list_unify`` for
@@ -25,7 +25,6 @@ from typing import Any
 
 from clausal.logic.variables import Var, is_var, deref, unify  # noqa: F401
 from clausal.terms import (
-    Compound, compound_as_cell,
     Call, LoadName, LoadAttr,
     DictTerm, SetTerm, KWTerm,
     SegList, VarSeg,  # noqa: F401
@@ -71,7 +70,7 @@ _KWTerm = KWTerm
 _SetLiteral = SetLiteral
 
 # Python types that ``ast.Constant`` accepts as a value.  PredicateMeta
-# atom classes, Compound terms, dataclass instances, etc. are NOT in this
+# atom classes, dataclass instances, etc. are NOT in this
 # set — they must be lowered via ``term_to_ast_expr`` instead.
 _AST_CONST_TYPES = (type(None), bool, int, float, str, bytes, complex)
 
@@ -79,7 +78,7 @@ _AST_CONST_TYPES = (type(None), bool, int, float, str, bytes, complex)
 def pattern_structure_depth(pat: ast.pattern) -> tuple[int, bool]:
     """``(depth, classes)`` for the built head pattern *pat*: how many
     STRUCTURE levels it destructures -- a sequence pattern (a cell) or a class
-    pattern (a ``Compound`` with no cell, a term instance) is a level; an
+    pattern (a term instance) is a level; an
     or-/as-pattern is as deep as its deepest part; a value, singleton,
     capture or star is 0 -- and whether it holds any CLASS pattern.
 
@@ -125,7 +124,7 @@ def finalize_subject_depths(assigns: list, stmts: list, subject: ast.expr) -> No
     them even inside list-dispatch branches) contributes its case patterns.
     An argument whose patterns have no structure keeps ``$deref``; one with a
     CLASS pattern also gets ``classes=True``, the only case in which the
-    normaliser walks a no-cell Compound's args or an instance's fields.
+    normaliser walks an instance's fields.
     """
     depths = [0] * len(assigns)
     classes = [False] * len(assigns)
@@ -153,7 +152,7 @@ def finalize_subject_depths(assigns: list, stmts: list, subject: ast.expr) -> No
 
 def subject_assign(name: str, arg: str, depth: int) -> ast.stmt:
     """``<name> = $deref(<arg>)``, or ``$as_cells(<arg>, depth)`` where a
-    cell-only head pattern could meet a Compound (see
+    head pattern with structure could meet a bound-Var slot (see
     :func:`finalize_subject_depths`, which rewrites a depth-0 assignment
     once the patterns are built)."""
     if depth <= 0:
@@ -162,30 +161,13 @@ def subject_assign(name: str, arg: str, depth: int) -> ast.stmt:
                                ast.Constant(value=depth)))
 
 
-def _compound_class_pattern(functor: Any, arg_patterns: list) -> ast.MatchClass:
-    """``case $Compound(functor=<functor>, args=(<p0>, ...))``."""
-    return ast.MatchClass(
-        cls=_name("$Compound"),
-        patterns=[],
-        kwd_attrs=["functor", "args"],
-        kwd_patterns=[
-            ast.MatchValue(value=ast.Constant(value=functor)),
-            ast.MatchSequence(patterns=arg_patterns),
-        ],
-    )
-
-
 def _cell_match_pattern(functor: str, arg_patterns: list) -> ast.MatchSequence:
     """The cell pattern ``case ('functor', <p0>, ...)`` for a flagged module.
 
-    Ruling 2026-09-26 (an atom-functor ``Compound`` of arity >= 1 IS its
-    cell): the pattern stays cell-only, and the SUBJECT is normalised instead
-    -- the predicate builders assign each ``match`` subject through
+    The predicate builders assign each ``match`` subject through
     ``$as_cells`` (``terms.as_cells_for_match``) at the positions and to the
     depth the built patterns need (:func:`finalize_subject_depths`), so a
-    caller's Compound spelling arrives as the cell.  Doubling the pattern
-    with a ``$Compound`` alternative at every level instead cost 2**depth
-    nodes (roborev 203: 45,046 nodes for a head nested 12 deep).
+    slot holding a Var bound to a structure arrives as that structure.
 
     A ``MatchSequence`` whose first element is a ``MatchValue`` on the functor
     string: the sequence length discriminates ARITY and the first element
@@ -217,7 +199,7 @@ def _matched_field_names(term: Any) -> tuple[str, ...]:
     (decided by this pattern).
 
     ``unify`` ignores a dataclass field declared ``compare=False`` — either
-    explicitly (``BinOp.__unify__`` / ``Compound.__unify__`` skip the source
+    explicitly (``BinOp.__unify__`` skips the source
     ``position``) or via the ``==`` fallback, which dataclasses derive from the
     comparable fields only.  So a pattern must skip those fields too.  Today
     that means the cosmetic source ``position`` carried by every
@@ -404,7 +386,6 @@ def head_to_match_pattern(
     solution — it never *binds* the literal. Every atomic head literal must
     therefore capture the arg and route through ``unify()`` (which binds a Var
     and rejects a mismatch), never rely on ``==``/identity alone.
-    Compound(f, args)      → ``MatchClass(Compound, functor=f, args=...)``
     functor dataclass      → ``MatchClass(cls, kwd field patterns)``
     Call(LoadName(qn), …)  → resolve ``qn`` in ``globals_``; if a class with
                              ``_fields`` results, emit ``MatchClass(cls,
@@ -729,24 +710,6 @@ def head_to_match_pattern(
             list_guards.append(("set_literal", cap_name, term))
         return ast.MatchAs(pattern=None, name=cap_name)
 
-    # Compound(functor, args) → MatchClass on Compound
-    #
-    # Structural head args are hoisted to Var + Unify at assert time
-    # (_normalize_structural_head_args), so this MatchClass only ever sees a
-    # ground (input-mode) caller; output-mode binding is handled by the Unify.
-    if isinstance(term, Compound):
-        f = term.functor
-        if is_var(f):
-            # Variable functor: cannot match statically → wildcard
-            return ast.MatchAs(pattern=None, name=None)
-        sub_patterns = [head_to_match_pattern(a, var_context, dup_guards, list_guards, _list_reg_ids, globals_=globals_) for a in term.args]
-        # Ruling 2026-09-26: an atom-functor Compound of arity >= 1 IS its
-        # cell, so its pattern is the CELL pattern -- the only spelling a
-        # bucket pattern ever meets (see ``_cell_match_pattern``).
-        if compound_as_cell(term) is not None:
-            return _cell_match_pattern(f, sub_patterns)
-        return _compound_class_pattern(f, sub_patterns)
-
     # Call(func=LoadName(qualified_name), args=[...]) — emitted whenever a
     # rule head references an imported-compound functor (e.g. ``Item(...)``
     # from another module).  Without this branch the term falls through to
@@ -993,8 +956,8 @@ def head_to_match_pattern(
     # into the head of a bucket clause), and from ``assertz`` of a fact whose
     # argument a Python or ``.clausal`` caller had already built.
     #
-    # A cell is STRUCTURAL, exactly as a ``Compound`` is, so it matches the way
-    # a ``Compound`` does: a pattern that discriminates the functor and the
+    # A cell is STRUCTURAL, so it matches with a pattern that discriminates
+    # the functor and the
     # arity and captures the arguments into per-call locals.  Two reasons this
     # is the branch rather than the A02-F003 opaque-literal capture below:
     #
@@ -1004,21 +967,15 @@ def head_to_match_pattern(
     #   refuses a non-ground container, leaving it to the accept-all wildcard
     #   that fired on every caller (Task 2 report section 12).  Recursing into
     #   the slots registers each inner Var in ``var_context``, giving it a
-    #   fresh per-call binding, which is what the ``Compound`` branch above
-    #   does with ``term.args``.
-    # * The two representations of the same term must answer alike.  Under this
-    #   branch a cell head arg accepts and rejects exactly what its ``Compound``
-    #   analog accepts and rejects, in every argument mode.  Output-mode
-    #   BINDING for a structural head arg comes from the hoist
-    #   (``database._is_structural_head_value``), not from the pattern — for
-    #   cells and Compounds alike.
+    #   fresh per-call binding.
+    # * Output-mode BINDING for a structural head arg comes from the hoist
+    #   (``database._is_structural_head_value``), not from the pattern.
     #
     # Slot 0 is read RAW, via ``cells._cell_shape`` — no deref. §1b (P3-2
     # Task 5): the bridge's higher-order Var-functor cell is deprecated
     # precisely because recognizing it required a deref, so this was never
     # a shape this branch could decide anyway; a slot-0-Var tuple now falls
-    # through to the wildcard the var-functor ``Compound`` branch also
-    # returns, uniformly with ``is_cell``'s own (equally raw) domain.
+    # through to the wildcard, uniformly with ``is_cell``'s own (equally raw) domain.
     # ``_cell_shape``'s own ``type(x) is tuple`` matches ``cells.is_cell``'s
     # domain — a tuple SUBCLASS (a namedtuple) is opaque data, not a cell
     # (the exact-type ruling of Task 2C). Task 5 carry-forward: this is one
@@ -1076,8 +1033,7 @@ def head_to_match_pattern(
         return ast.MatchAs(pattern=None, name=cap_name)
 
     # Fallback: wildcard (accept anything, no binding). Degraded path when there
-    # is no list_guards sink, and for var-functor Compound heads (blocked on
-    # A01-D004) which reach this only via the wildcard at the var-functor branch.
+    # is no list_guards sink.
     return ast.MatchAs(pattern=None, name=None)
 
 
@@ -1129,7 +1085,7 @@ def _compile_multi_star_guard(
             )
         if isinstance(elem, _AST_CONST_TYPES):
             return ast.Constant(value=elem)
-        # Non-scalar term (PredicateMeta atom, Compound, dataclass
+        # Non-scalar term (PredicateMeta atom, dataclass
         # instance, ...): delegate to term_to_ast_expr, which emits a
         # Name reference for atoms and constructor calls for compounds.
         return term_to_ast_expr(elem, vc, eval_arith=False)
@@ -1560,7 +1516,7 @@ def compile_head_to_match_case(
 
     Parameters
     ----------
-    head:        head term (functor dataclass or Compound)
+    head:        head term (cell or functor dataclass)
     body_stmts:  pre-compiled body statements (from compile_body or a placeholder)
     var_context: mutable dict; Var._id → python_name mappings are added here
     arity:       expected number of arguments (len of head's fields/args)
@@ -1989,8 +1945,6 @@ def _head_arg_patterns(
     """Extract per-argument patterns from a head term."""
     def _pat(term):
         return head_to_match_pattern(term, var_context, dup_guards, list_guards, _list_reg_ids, globals_=globals_)
-    if isinstance(head, Compound):
-        return [_pat(a) for a in head.args]
     # Call(func=LoadName(f), args=[...]) — e.g. from $assert_fact with trailing comma.
     # Extract patterns from the positional args, not from the Call dataclass fields.
     if isinstance(head, Call) and isinstance(head.func, LoadName):

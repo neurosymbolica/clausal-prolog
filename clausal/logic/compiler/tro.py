@@ -19,7 +19,6 @@ from typing import Any
 from clausal.logic.variables import is_var, deref  # noqa: F401
 from clausal.logic.meta_predicate import MetaArg as _MetaArg
 from clausal.terms import (
-    Compound,
     And, Or, Not,
     Unify, DoesNotUnify, Evaluate, ArithEq, ArithNeq, StructuralEq, StructuralNeq,
     Lt, LtE, Gt, GtE,
@@ -266,8 +265,6 @@ def _head_args(head):
         return list(cell_args(head))
     if is_term_instance(head):
         return [getattr(head, f) for f in term_field_names(head)]
-    if isinstance(head, Compound):
-        return list(head.args)
     return None
 
 

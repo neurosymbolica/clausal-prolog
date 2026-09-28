@@ -51,7 +51,7 @@ from clausal.logic.atoms import is_atom, key_of, mint, spelling
 from clausal.logic.cells import TUPLE_TAG, chars, is_chars, chars_text
 from clausal.logic.exceptions import LogicException, domain_error, type_error
 from clausal.logic.variables import Var, deref, is_var, unify
-from clausal.terms import Compound, DictTerm
+from clausal.terms import DictTerm
 
 
 # ── Converters ──────────────────────────────────────────────────────────
@@ -195,14 +195,11 @@ def _option_shape(opt: Any) -> tuple:
     """``(functor, args)`` for a one-option term, or ``(None, ())``.
 
     Deliberately narrow — an option is a compound, written either as a cell
-    ``("atoms", [...])`` (the compiled representation) or as a ``Compound``
-    (what a hand-built term or an older caller passes).  Everything else,
+    ``("atoms", [...])`` (the compiled representation).  Everything else,
     including a bare atom, falls through to the caller's domain_error.
     """
     if type(opt) is tuple and opt and type(opt[0]) is str and opt[0] != TUPLE_TAG:
         return opt[0], opt[1:]
-    if isinstance(opt, Compound):
-        return opt.functor, tuple(opt.args)
     return None, ()
 
 

@@ -701,15 +701,13 @@ def test_qualified_goals_in_include_and_foldl(host):
     assert len(_solve_all(host, ("maplist", (":", OTHER, "p"), [10]))) == 1
 
 
-@pytest.mark.compound_retirement_slice8
-def test_compound_and_body_goals_in_maplist_include_foldl(host):
-    """A Compound goal folds like its cell; a body term is ``call(Body, E)``
+def test_cell_and_body_goals_in_maplist_include_foldl(host):
+    """A cell goal folds; a body term is ``call(Body, E)``
     -- the fold names ``(>)/3`` etc., existence_error, as call/N says."""
-    from clausal.terms import Compound
     L = Var()
-    assert _outs(host, ("include", Compound("edge", (1,)), [2, 3], L),
+    assert _outs(host, ("include", ("edge", 1), [2, 3], L),
                  L) == [[2]]
-    assert len(_solve_all(host, ("maplist", Compound("edge", (1,)), [2]))) == 1
+    assert len(_solve_all(host, ("maplist", ("edge", 1), [2]))) == 1
     body = nodes.Gt(left=Var(), right=0)
     for goal, ind in (
             (("maplist", body, [1]), (">", 3)),

@@ -173,14 +173,13 @@ def _contains_var(value) -> bool:
     if isinstance(value, dict):
         return any(_contains_var(k) or _contains_var(v)
                    for k, v in value.items())
-    # Term objects (Compound, KWTerm, compile-time PredicateMeta instances,
+    # Term objects (KWTerm, compile-time PredicateMeta instances,
     # Seg* containers): delegate to the canonical recursive ground check
     # instead of duck-typing an ``.args`` tuple — compile-time predicate
     # classes hold fields by name (``_fields``/``__slots__``), not a generic
     # ``.args``, so ``getattr(value, "args", None)`` silently missed them.
-    # ``Compound.is_ground`` (terms.py:587) does the same delegation, lazily,
-    # to dodge the circular import (this module is imported very early, from
-    # import_hook.py, before clausal.logic.builtins exists).
+    # Imported lazily to dodge the circular import (this module is imported
+    # very early, from import_hook.py, before clausal.logic.builtins exists).
     from clausal.logic.builtins._helpers import _is_ground  # noqa: PLC0415
     return not _is_ground(value)
 

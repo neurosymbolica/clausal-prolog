@@ -64,7 +64,7 @@ from clausal.logic.builtins._helpers import (
 )
 from clausal.logic.cells import TUPLE_TAG, make_cell, make_tuple_cell
 from clausal.logic.variables import Var, deref, is_var
-from clausal.terms import Compound, KWTerm
+from clausal.terms import KWTerm
 from clausal.pythonic_ast.nodes import Add
 from tests.predicate_api_support import term_ctor
 
@@ -90,7 +90,6 @@ class NotADataclass:
 
 
 class TestTermFieldNamesOfClass:
-
 
     def test_dataclass_class_matches_instance_field_set(self):
         # nv — must be the SAME set term_field_names yields for an instance,
@@ -148,16 +147,6 @@ class TestFunctorArity:
         c = ("foo", 1, 2, 3)
         assert functor_arity(c) == ("foo", 3)
 
-    @pytest.mark.compound_retirement_slice8
-    def test_compound_with_var_functor_is_none(self):
-        # nv — documented divergence from the composed accessors: a
-        # non-str functor makes the WHOLE pair unresolvable, whereas
-        # _functor_name/_arity composed would give (None, 2). functor_arity
-        # only promises a result for well-formed (str-functor) compounds.
-        c = Compound(Var(), (1, 2))
-        assert functor_arity(c) is None
-        assert (_functor_name(c), _arity(c)) == (None, 2)
-
     def test_predicate_meta_term_instance(self):
         # nv
         t = bar(b=1, a=2)
@@ -202,8 +191,6 @@ class TestFunctorArity:
     @pytest.mark.parametrize(
         "term",
         [
-            pytest.param(Compound("foo", ()),
-                         marks=pytest.mark.compound_retirement_slice8),
             ("bar", 1, 2, 3),
             bar(b=1, a=2),
             mint("foo"),
@@ -212,7 +199,6 @@ class TestFunctorArity:
             term_ctor("qux", ["x", "y", "z"])(x=1, y=2, z=3),
         ],
         ids=[
-            "compound-nullary",
             "compound-3ary",
             "predicate-meta-instance",
             "predicate-meta-atom-1",
@@ -228,8 +214,6 @@ class TestFunctorArity:
 
 
 # ── is_zero_field_class adoption regression (4 migrated _helpers.py sites) ───
-
-
 
 
 # ── Task 2 migration regression (sites with no existing direct coverage) ─────

@@ -45,7 +45,6 @@ from clausal import cell_args, cell_functor
 from clausal.logic.exceptions import LogicException
 from clausal.logic.solve import call as pcall, solve
 from clausal.logic.variables import Var, deref
-from clausal.terms import Compound
 
 
 def _write_module(tmp_path, name: str, source: str):
@@ -141,13 +140,12 @@ class TestCellAsGoal:
         X = Var()
         assert [deref(X) for _ in solve(("q", X), _lm(mod))] == [1, 2]
 
-    @pytest.mark.compound_retirement_slice8
-    def test_a_cell_goal_lowers_to_the_same_node_a_compound_goal_does(self):
+    def test_a_cell_goal_lowers_to_a_call_node(self):
         from clausal.logic.solve import _term_to_goal
+        from clausal.pythonic_ast.nodes import Call as AstCall, LoadName
         v = Var()
-        from_cell = _term_to_goal(("p", v))
-        from_compound = _term_to_goal(Compound("p", (v,)))
-        assert from_cell == from_compound
+        assert _term_to_goal(("p", v)) == AstCall(
+            func=LoadName(name="p"), args=[v], kwargs=[])
 
 
 # ── call/N over cells and atoms ────────────────────────────────────────────
@@ -523,11 +521,9 @@ class TestZeroArityControlConstructsByName:
 # ── a bare str goal IS the atom (stage 2, atoms-as-str) ────────────────────
 
 
-@pytest.mark.compound_retirement_slice8
 class TestBareStrGoalInSolve:
     """STAGE 2 (atoms-as-str, spec §3 Q1): a bare ``str`` IS the atom, so
-    ``solve("z0", m)`` is the call of ``z0/0`` -- the same goal the
-    ``Compound("z0", ())`` spelling lowers to.  (THE FLIP had made a ``str``
+    ``solve("z0", m)`` is the call of ``z0/0``.  (THE FLIP had made a ``str``
     a STRING, with ``solve("z0", m)`` an ``existence_error(procedure,
     '.'/2)``; a string is the ``chars`` carrier now, and the old 1-tuple cell
     spelling is refused by the engine.)"""
@@ -535,11 +531,12 @@ class TestBareStrGoalInSolve:
     def test_a_bare_str_goal_has_no_procedure(self, mod):
         lm = _lm(mod)
         assert len(list(solve("z0", lm))) == 1
-        assert len(list(solve(Compound("z0", ()), lm))) == 1
 
     def test_the_lowering_path_refuses_a_bare_str_goal(self):
         from clausal.logic.solve import _term_to_goal
-        assert _term_to_goal("z0") == _term_to_goal(Compound("z0", ()))
+        from clausal.pythonic_ast.nodes import Call as AstCall, LoadName
+        assert _term_to_goal("z0") == AstCall(
+            func=LoadName(name="z0"), args=[], kwargs=[])
 
     def test_an_unknown_cell_goal_still_reports_the_missing_predicate(
             self, mod):
@@ -594,23 +591,6 @@ class TestCellAssertRetract:
             list(pcall("assertz", ("seen", X), module=lm))
         Y = Var()
         assert [deref(Y) for _ in solve(("seen", Y), lm)] == [1, 2]
-
-    @pytest.mark.compound_retirement_slice8
-    def test_the_cell_spelling_agrees_with_the_compound_spelling(self, mod):
-        """The Compound path has always frozen (``_normalize_fact_clause``
-        rebuilds a bound argument as a fresh Var + Unify); the cell path now
-        agrees with it, which is the point of the fix."""
-        lm = _lm(mod)
-        X = Var()
-        for _ in solve(("p", X), lm):
-            list(pcall("assertz", Compound("seenc", (X,)), module=lm))
-        Z = Var()
-        for _ in solve(("p", Z), lm):
-            list(pcall("assertz", ("seen", Z), module=lm))
-        Y, W = Var(), Var()
-        by_compound = [deref(Y) for _ in solve(("seenc", Y), lm)]
-        by_cell = [deref(W) for _ in solve(("seen", W), lm)]
-        assert by_cell == by_compound == [1, 2]
 
     def test_the_freeze_is_on_the_assert_path_only(self, mod):
         """``retract`` must keep SHARING the caller's variables — binding them
@@ -723,19 +703,9 @@ class TestCellAssertRetract:
             list(pcall("retract", ("nope", 3), module=lm))
         assert cell_functor(_error_term(exc_info.value)[0]) == "existence_error"
 
-    @pytest.mark.compound_retirement_slice8
-    def test_a_non_cell_assert_is_untouched_by_the_gate(self, mod):
-        """A Compound assert still creates its predicate, as it always has."""
-        lm = _lm(mod)
-        list(pcall("assertz", Compound("fresh", (1,)), module=lm))
-        X = Var()
-        assert [deref(X) for _ in pcall("fresh", X, module=lm)] == [1]
-
     def test_a_cell_assert_into_a_classless_dynamic_row_uses_a_cell_head(self):
-        """No class in scope (a bare Database) — the head is the cell
-        ``assertz(Compound(...))`` would have built (a cell since Compound
-        retirement slice 3; a ``Compound`` before), with every argument
-        hoisted: the head argument is a fresh Var, 5 is in the body."""
+        """No class in scope (a bare Database) — the head is the cell, with
+        every argument hoisted: the head argument is a fresh Var, 5 is in the body."""
         db = Database()
         db.mark_dynamic("r", 1)
         from clausal.logic.builtins import get_builtin_dispatch

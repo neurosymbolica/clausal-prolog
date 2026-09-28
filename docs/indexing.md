@@ -83,7 +83,7 @@ Querying `color("blue", X)` without indexing tries all 203 match blocks. With fi
 
     Extracts the indexing key from a clause. Handles three head representations:
 
-    - `Compound(functor, args)` — `args[0]`
+    - a cell `(functor, *args)` — `args[0]`
     - `Call(func=LoadName(f), args)` — `args[0]`
     - PredicateMeta instance — `getattr(head, fields[0])`
 
@@ -268,7 +268,7 @@ With groundness-keyed dispatch, querying `color(NAME, 'warm')` uses a second-arg
     |---|---|---|
     | Scalar (int, str, float, bytes, bool, None) | The value | Specific |
     | Var with `Unify(var, scalar)` in body | The scalar | Specific |
-    | Compound node | `(functor, arity)` tuple | Specific |
+    | Compound (cell) | `(functor, arity)` tuple | Specific |
     | PredicateMeta instance | `(class_name, field_count)` tuple | Specific |
     | Var with `Unify(var, compound)` in body | `(functor, arity)` tuple | Specific |
     | Unbound Var, list | `_INDEX_VAR` | Default |
@@ -281,8 +281,6 @@ With groundness-keyed dispatch, querying `color(NAME, 'warm')` uses a second-arg
     def _runtime_arg_key(a):
         if isinstance(a, _INDEXABLE_TYPES):
             return a
-        if isinstance(a, Compound):
-            return (a.functor, len(a.args))
         if is_term_instance(a):
             return (type(a).__name__, len(type(a)._fields))
         return _INDEX_VAR   # unhashable / lists → default
@@ -503,7 +501,7 @@ else:
 
     **TestCompoundKeyIndexing**:
 
-    - `_extract_arg_key` returns `(functor, arity)` tuples for Compound heads
+    - `_extract_arg_key` returns `(functor, arity)` tuples for compound (cell) heads
     - `_build_arg_index` yields distinct buckets for compound-headed clauses
     - Dispatch correctness: `circle(42)` → `Q=42`, `rect(3,4)` → `Q=3`
     - Unknown functor (no bucket) falls through to default

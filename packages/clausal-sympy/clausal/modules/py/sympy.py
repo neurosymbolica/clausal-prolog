@@ -44,7 +44,7 @@ from clausal.modules.py import _import_stdlib, ModulePredicate, simple_to_trampo
 _sp = _import_stdlib("sympy")
 from clausal.terms import (
     Add, Sub, Mult, Div, FloorDiv, Mod, Pow,
-    Negate, Compound, term_str, DictTerm,
+    Negate, term_str, DictTerm,
 )
 
 
@@ -111,7 +111,7 @@ def to_sympy(term: Any, ctx: _ConversionContext | None = None) -> _sp.Expr:
     - Free Vars become SymPy Symbols (auto-named if no context).
     - Arithmetic nodes (Add, Sub, ...) map to SymPy operators.
     - Python int/float pass through as SymPy Integer/Float.
-    - Compound("sin", (x,)) -> sympy.sin(x), etc. for known functions.
+    - The cell ("sin", x) -> sympy.sin(x), etc. for known functions.
     """
     if ctx is None:
         ctx = _ConversionContext()
@@ -172,10 +172,10 @@ def _to_sympy(term: Any, ctx: _ConversionContext) -> _sp.Expr:
     if isinstance(term, Negate):
         return -_to_sympy(term.operand, ctx)
 
-    # Compound terms -> SymPy function calls
-    if isinstance(term, Compound):
-        fn_name = term.functor
-        sp_args = [_to_sympy(a, ctx) for a in term.args]
+    # Compound terms (cells ``(name, *args)``) -> SymPy function calls
+    if type(term) is tuple and len(term) >= 2 and type(term[0]) is str:
+        fn_name = term[0]
+        sp_args = [_to_sympy(a, ctx) for a in term[1:]]
         sp_fn = _SYMPY_FUNCTIONS.get(fn_name)
         if sp_fn is not None:
             return sp_fn(*sp_args)
@@ -216,7 +216,7 @@ def from_sympy(expr: _sp.Expr, ctx: _ConversionContext | None = None) -> Any:
     - SymPy Symbols -> Clausal Vars (preserving mapping if ctx provided).
     - SymPy Add/Mul/Pow -> Clausal Add/Mult/Pow nodes.
     - SymPy Integer/Rational -> Python int or Clausal Div.
-    - SymPy functions -> Compound("name", args).
+    - SymPy functions -> the cell ("name", *args).
     """
     if ctx is None:
         ctx = _ConversionContext()
@@ -284,41 +284,41 @@ def _from_sympy(expr: _sp.Expr, ctx: _ConversionContext) -> Any:
             right=_from_sympy(expr.args[1], ctx),
         )
 
-    # Known functions -> Compound
+    # Known functions -> cell
     for name, sp_fn in _SYMPY_FUNCTIONS.items():
         if isinstance(expr, sp_fn.__class__) or (
             hasattr(sp_fn, "__name__") and type(expr).__name__ == sp_fn.__name__
         ):
             c_args = tuple(_from_sympy(a, ctx) for a in expr.args)
-            return Compound(name, c_args)
+            return (name, *c_args) if c_args else name   # arity 0: the atom
 
-    # Applied function -> Compound
+    # Applied function -> cell
     if isinstance(expr, _sp.Function):
         name = type(expr).__name__
         c_args = tuple(_from_sympy(a, ctx) for a in expr.args)
-        return Compound(name, c_args)
+        return (name, *c_args) if c_args else name   # arity 0: the atom
 
-    # Derivative, Integral -> Compound representation
+    # Derivative, Integral -> cell representation
     if isinstance(expr, _sp.Derivative):
         c_args = tuple(_from_sympy(a, ctx) for a in expr.args)
-        return Compound("derivative", c_args)
+        return ("derivative", *c_args)
 
     if isinstance(expr, _sp.Integral):
         c_args = tuple(_from_sympy(a, ctx) for a in expr.args)
-        return Compound("integral", c_args)
+        return ("integral", *c_args)
 
-    # Infinity, pi, e, etc.
+    # Infinity, pi, e, etc. -- arity 0, so the ATOM (``foo()`` is not a term)
     if expr is _sp.oo:
-        return Compound("inf", ())
+        return "inf"
     if expr is _sp.pi:
-        return Compound("pi", ())
+        return "pi"
     if expr is _sp.E:
-        return Compound("e", ())
+        return "e"
 
     # Order term O(...)
     if isinstance(expr, _sp.Order):
         c_args = tuple(_from_sympy(a, ctx) for a in expr.args)
-        return Compound("O", c_args)
+        return ("O", *c_args)
 
     # Fallback: string representation
     return str(expr)
@@ -1127,15 +1127,15 @@ def _binomial_3(n, k_val, result, trail, k):
 
 # -- Math function constructors ----------------------------------------------
 #
-# These are callable objects that build Compound terms.  In .clausal files:
+# These are callable objects that build compound terms (cells).  In .clausal files:
 #     -import_from(sympy, [sin, cos, exp, Diff])
 #     Test("diff sin") <- (Diff(sin(X), X, R), R == cos(X))
 #
-# sin(X) -> Compound("sin", (X,)) which to_sympy converts to sympy.sin(Symbol).
+# sin(X) -> the cell ("sin", X) which to_sympy converts to sympy.sin(Symbol).
 
 
 class _MathFunc:
-    """Callable that produces Compound("name", args) terms."""
+    """Callable that produces the cell ``(name, *args)``."""
 
     __slots__ = ("_name",)
 
@@ -1143,7 +1143,7 @@ class _MathFunc:
         self._name = name
 
     def __call__(self, *args):
-        return Compound(self._name, args)
+        return (self._name, *args) if args else self._name   # arity 0: the atom
 
     def __repr__(self) -> str:
         return self._name

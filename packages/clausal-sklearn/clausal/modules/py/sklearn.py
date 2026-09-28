@@ -35,7 +35,7 @@ from typing import Any
 from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.logic.trampoline import DONE
 from clausal.modules.py import ModulePredicate, simple_to_trampoline
-from clausal.terms import Compound, DictTerm
+from clausal.terms import DictTerm
 
 
 # ── Lazy sklearn import ───────────────────────────────────────────────────
@@ -143,14 +143,14 @@ def Split(train, test):
 # ── CV term constructors ──────────────────────────────────────────────────
 
 class _CVFunc:
-    """Callable that produces Compound("name", args) for CV strategies."""
+    """Callable that produces the cell ``(name, *args)`` for CV strategies."""
     __slots__ = ("_name",)
 
     def __init__(self, name: str) -> None:
         self._name = name
 
     def __call__(self, *args):
-        return Compound(self._name, args)
+        return (self._name, *args) if args else self._name   # arity 0: the atom
 
     def __repr__(self) -> str:
         return self._name
@@ -160,7 +160,7 @@ kfold = _CVFunc("kfold")
 stratified_kfold = _CVFunc("stratified_kfold")
 shuffle_split = _CVFunc("shuffle_split")
 group_kfold = _CVFunc("group_kfold")
-loo = Compound("loo", ())
+loo = "loo"
 
 
 # ── Algorithm registry ────────────────────────────────────────────────────
@@ -331,19 +331,23 @@ def _make_cv(cv_term):
     cv_term = deref(cv_term)
     if isinstance(cv_term, int):
         return cv_term
-    if isinstance(cv_term, Compound):
-        name = cv_term.functor
-        args = cv_term.args
-        if name == "kfold":
-            return ms.KFold(n_splits=int(args[0]))
-        elif name == "stratified_kfold":
-            return ms.StratifiedKFold(n_splits=int(args[0]))
-        elif name == "shuffle_split":
-            return ms.ShuffleSplit(n_splits=int(args[0]), test_size=float(args[1]))
-        elif name == "group_kfold":
-            return ms.GroupKFold(n_splits=int(args[0]))
-        elif name == "loo":
-            return ms.LeaveOneOut()
+    # A CV strategy is a cell ``(name, *args)``, or the bare atom ``loo``.
+    if type(cv_term) is str:
+        name, args = cv_term, ()
+    elif type(cv_term) is tuple and cv_term and type(cv_term[0]) is str:
+        name, args = cv_term[0], tuple(deref(a) for a in cv_term[1:])
+    else:
+        name = None
+    if name == "kfold":
+        return ms.KFold(n_splits=int(args[0]))
+    elif name == "stratified_kfold":
+        return ms.StratifiedKFold(n_splits=int(args[0]))
+    elif name == "shuffle_split":
+        return ms.ShuffleSplit(n_splits=int(args[0]), test_size=float(args[1]))
+    elif name == "group_kfold":
+        return ms.GroupKFold(n_splits=int(args[0]))
+    elif name == "loo":
+        return ms.LeaveOneOut()
     raise ValueError(f"Unknown CV strategy: {cv_term!r}")
 
 

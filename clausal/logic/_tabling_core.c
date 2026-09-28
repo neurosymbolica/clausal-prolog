@@ -28,11 +28,7 @@
  * Forward declarations and cached references
  * ================================================================ */
 
-static PyObject *Compound_type = NULL;
-
 /* Cached interned strings */
-static PyObject *str_functor = NULL;
-static PyObject *str_args = NULL;
 static PyObject *str___name__ = NULL;
 static PyObject *str___list__ = NULL;
 static PyObject *str___tuple__ = NULL;   /* A04-F005 */
@@ -180,55 +176,6 @@ do_normalize(PyObject *term, int depth)
         PyObject *result = PyTuple_Pack(2, str___set__, frozen);
         Py_DECREF(frozen);
         return result;
-    }
-
-    /* Compound → (functor, arg0, arg1, ...).
-     * Ruling 2026-09-26: a Compound whose functor derefs to an atom (str)
-     * and whose arity is >= 1 IS the cell (functor, *args), so it keys
-     * exactly as that tuple does: ("__tuple__", functor, arg0, ...).  The
-     * functors '$chars' (its cell is the chars carrier, i.e. text) and '()'
-     * (TUPLE_TAG: its cell is tuple data) are excluded and keep the plain
-     * (functor, arg0, ...) shape.  Twin of ``compound_as_cell`` in the
-     * Python ``_normalize_for_key_py``. */
-    if (Compound_type) {
-        int r = PyObject_IsInstance(term, Compound_type);
-        if (r < 0) return NULL;
-        if (r) {
-            PyObject *functor = PyObject_GetAttr(term, str_functor);
-            if (!functor) return NULL;
-            PyObject *args = PyObject_GetAttr(term, str_args);
-            if (!args) { Py_DECREF(functor); return NULL; }
-            if (!PyTuple_Check(args)) {
-                Py_DECREF(functor);
-                Py_DECREF(args);
-                PyErr_SetString(PyExc_TypeError, "Compound.args is not a tuple");
-                return NULL;
-            }
-            Py_ssize_t n = PyTuple_GET_SIZE(args);
-            PyObject *df = VarAPI->deref(functor);   /* borrowed */
-            int as_cell = n > 0 && PyUnicode_Check(df)
-                && PyUnicode_CompareWithASCIIString(df, "$chars") != 0
-                && PyUnicode_CompareWithASCIIString(df, "()") != 0;
-            Py_ssize_t off = as_cell ? 2 : 1;
-            PyObject *result = PyTuple_New(n + off);
-            if (!result) { Py_DECREF(functor); Py_DECREF(args); return NULL; }
-            if (as_cell) {
-                Py_INCREF(str___tuple__);
-                PyTuple_SET_ITEM(result, 0, str___tuple__);
-                Py_INCREF(df);
-                PyTuple_SET_ITEM(result, 1, df);
-                Py_DECREF(functor);
-            } else {
-                PyTuple_SET_ITEM(result, 0, functor);  /* steals ref */
-            }
-            for (Py_ssize_t i = 0; i < n; i++) {
-                PyObject *elem = do_normalize(PyTuple_GET_ITEM(args, i), depth + 1);
-                if (!elem) { Py_DECREF(args); Py_DECREF(result); return NULL; }
-                PyTuple_SET_ITEM(result, i + off, elem);
-            }
-            Py_DECREF(args);
-            return result;
-        }
     }
 
     /* Term instance (a @dataclass instance) → (class_name, field0, ...) */
@@ -426,10 +373,10 @@ do_deref_walk(PyObject *term, int depth)
         return result;
     }
 
-    /* __walk__ protocol (A01-F008): Compound, KWTerm, DictTerm and the Seg
-     * types all supply __walk__, which deep-substitutes bindings via the
-     * canonical walk(). This unifies _deref_walk with walk (they were blind to
-     * disjoint type sets) and preserves Compound _position + F018 promotion. */
+    /* __walk__ protocol (A01-F008): KWTerm, DictTerm and the Seg types all
+     * supply __walk__, which deep-substitutes bindings via the canonical
+     * walk(). This unifies _deref_walk with walk (they were blind to
+     * disjoint type sets) and preserves F018 promotion. */
     {
         PyObject *hook = PyObject_GetAttrString(term, "__walk__");
         if (hook) {
@@ -607,17 +554,6 @@ py_register_var_sentinel(PyObject *Py_UNUSED(module), PyObject *sentinel)
     Py_RETURN_NONE;
 }
 
-static int
-import_compound_type(void)
-{
-    PyObject *mod = PyImport_ImportModule("clausal.terms");
-    if (!mod) return -1;
-    Compound_type = PyObject_GetAttrString(mod, "Compound");
-    Py_DECREF(mod);
-    if (!Compound_type) return -1;
-    return 0;
-}
-
 /* ================================================================
  * Module definition
  * ================================================================ */
@@ -656,10 +592,6 @@ PyInit__tabling_core(void)
     if (import_variables_capi() < 0)
         return NULL;
 
-    /* Import the Compound type from clausal.terms */
-    if (import_compound_type() < 0)
-        return NULL;
-
     PyObject *m = PyModule_Create(&moduledef);
     if (!m) return NULL;
 
@@ -668,14 +600,12 @@ PyInit__tabling_core(void)
 #endif
 
     /* Intern frequently-used attribute name strings */
-    str_functor = PyUnicode_InternFromString("functor");
-    str_args = PyUnicode_InternFromString("args");
     str___name__ = PyUnicode_InternFromString("__name__");
     str___list__ = PyUnicode_InternFromString("__list__");
     str___tuple__ = PyUnicode_InternFromString("__tuple__");
     str___dict__ = PyUnicode_InternFromString("__dict__");
     str___set__ = PyUnicode_InternFromString("__set__");
-    if (!str_functor || !str_args || !str___name__ || !str___list__ ||
+    if (!str___name__ || !str___list__ ||
         !str___tuple__ || !str___dict__ || !str___set__) {
         Py_DECREF(m);
         return NULL;

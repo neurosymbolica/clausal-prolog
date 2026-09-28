@@ -21,7 +21,7 @@ from clausal.logic.atoms import (
     mint,
     spelling,
 )
-from clausal.terms import Compound, KWTerm, SegList, SegString, VarSeg, ConcreteSeg
+from clausal.terms import KWTerm, SegList, SegString, VarSeg, ConcreteSeg
 
 from clausal.logic.builtins._registry import _builtin
 from clausal.logic.builtins._helpers import (
@@ -71,8 +71,6 @@ def _copy_term_py(term: Any, var_map: dict) -> Any:
         if all(new is old for new, old in zip(copied, term)):
             return term
         return copied
-    if isinstance(term, Compound):
-        return Compound(term.functor, tuple(_copy_term_py(a, var_map) for a in term.args))
     if isinstance(term, KWTerm):
         return KWTerm(term.functor, **{k: _copy_term_py(v, var_map) for k, v in term.items()})
     # F092 (audit 2026-05-25): Seg* containers must produce an
@@ -147,10 +145,6 @@ def _collect_vars_py(term: Any, result: list, _seen: set | None = None) -> None:
         for e in term:
             _collect_vars_py(e, result, _seen)
         return
-    if isinstance(term, Compound):
-        for a in term.args:
-            _collect_vars_py(a, result, _seen)
-        return
     if isinstance(term, KWTerm):
         for v in term.values():
             _collect_vars_py(v, result, _seen)
@@ -200,7 +194,7 @@ try:
     # about ``SegList`` / ``SegString`` — they fall through to "return
     # as-is" for ``copy_term`` (aliasing the original) and "leaf" for
     # ``term_variables`` (missing VarSegs).  Both types are absent
-    # from ``_register_term_types`` (which only knows ``Compound`` and
+    # from ``_register_term_types`` (which only knows
     # ``KWTerm``).  Short-circuit Seg* shapes in Python (same pattern
     # used by ``_is_ground`` for [[F083]]) and delegate every other
     # shape to the C fast path.  Within the Python branch we still
@@ -295,8 +289,8 @@ def _construct_named(name_val, args, who: str):
     """Build a term with functor *name_val* over *args*, for ``functor/3``/``unpack/2``.
 
     A ``PredicateMeta`` handed in as the name used to be reduced to
-    ``name_val.__name__`` and rebuilt as a generic :class:`Compound`, throwing
-    away the very class the caller supplied.  Since a Compound never unifies
+    ``name_val.__name__`` and rebuilt as a generic compound (the since-retired
+    ``Compound`` class), throwing away the very class the caller supplied.  Since that never unified
     with a declared term-class instance of the same name and arity, that made
     decompose-then-reconstruct fail for every declared with-fields term, and
     the two rendered identically so the mismatch was invisible.  Downstream
@@ -322,7 +316,7 @@ def _construct_named(name_val, args, who: str):
     downstream ``functor/3`` probe over an arity-0 schema atom working.
 
     Spec §6.4 (2026-09-06-atoms-as-cells-strings): the generic shape is a
-    CELL, ``(spelling, *args)``, not a :class:`Compound` — cells are how the
+    CELL, ``(spelling, *args)`` — cells are how the
     engine represents a compound data term post-P3-2, so a term built here now
     unifies with the same term written longhand.  §5.4 carves out ``'.'``/2,
     which builds the engine's list shape instead (see :func:`_cons`).
@@ -365,7 +359,7 @@ def _construct_named(name_val, args, who: str):
         return (spelling(name_val), *args)
     # A09-F027: the functor of a compound must be atom-shaped (ISO:
     # type_error(atom, Name)), else unpack(T, [3, 1, 2]) built
-    # Compound("3", (1, 2)) and functor/3 built a bogus functor "f(1)".
+    # a compound named "3" and functor/3 built a bogus functor "f(1)".
     from clausal.logic.exceptions import LogicException, type_error
     raise LogicException(type_error("atom", name_val, who))
 
@@ -375,7 +369,7 @@ def _functor__3(term, name, arity, trail, k):
     """functor(Term, Name, Arity) — decompose or compose a term.
 
     If Term is bound: unify Name with its functor name and Arity with its arity.
-    If Term is unbound: Name and Arity must be bound; construct a Compound.
+    If Term is unbound: Name and Arity must be bound; construct a cell.
     """
     term_val = deref(term)
 

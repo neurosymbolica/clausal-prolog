@@ -23,7 +23,7 @@ from clausal.logic.variables import Var, Trail, unify, deref, is_var
 from clausal.logic.database import Database, Clause, Module, head_key
 from clausal.logic.trampoline import StepGenerator, DONE, solutions
 from clausal.logic.solve import call, query, query_wfs
-from clausal.terms import Compound, Undefined
+from clausal.terms import Undefined
 
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
@@ -505,7 +505,7 @@ class TestQueryWfs:
 # ── WFS truth at the query surface ──────────────────────────────────────────
 # todo/wfs-undefined-lost-at-query-surface.md: the engine computed Undefined
 # correctly in the table and every public query path reported True (TermCall
-# and Compound goals never reached their table entry), while _naf_tabled
+# and compound goals never reached their table entry), while _naf_tabled
 # treated a CONDITIONAL answer in a complete table as a definite positive —
 # which made ground queries on a symmetric program asymmetric (one atom
 # false-by-[], the other unconditionally true).
@@ -663,14 +663,13 @@ class TestQueryWfsUndefinedSurface:
             for i in range(len(entry.answers)):
                 assert entry.truth_value(i) is Undefined
 
-    @pytest.mark.compound_retirement_slice8
-    def test_compound_goal_undefined(self):
-        """A Compound goal reaches its table entry (it used to be shadowed by
-        the is_term_instance branch and always read True)."""
+    def test_cell_goal_undefined(self):
+        """A cell goal reaches its table entry (a compound goal used to be
+        shadowed by the is_term_instance branch and always read True)."""
         # nv
         lm = _module(_load("wfs_win"))
         X = Var()
-        results = query_wfs(Compound("win", (X,)), {"X": X}, lm, Trail())
+        results = query_wfs(("win", X), {"X": X}, lm, Trail())
         assert len(results) == 2
         assert all(r["_truth"] is Undefined for r in results)
 

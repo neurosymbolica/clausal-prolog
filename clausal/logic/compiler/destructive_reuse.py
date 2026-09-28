@@ -13,7 +13,6 @@ from typing import Any
 
 from clausal.logic.variables import is_var, deref  # noqa: F401
 from clausal.terms import (
-    Compound,
     And, Or,
     Unify, DoesNotUnify, Evaluate, ArithEq, ArithNeq, StructuralEq, StructuralNeq,
     Lt, LtE, Gt, GtE,

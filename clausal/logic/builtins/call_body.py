@@ -202,7 +202,7 @@ class _Converter:
         Only STRUCTURE is kept in the compiled code: lists, tuples/cells
         (slot 0 of a cell is the functor), and arithmetic nodes, whose
         elements are lifted in turn.  Every other value -- a number, an atom,
-        a ``datetime.date``, an ndarray, a Compound, any opaque Python object
+        a ``datetime.date``, an ndarray, any opaque Python object
         -- becomes a parameter, never a literal: a literal needs a lowering
         and a hashable cache key, and a parameter needs neither (roborev on
         152a8f64: a bound Var holding a date was inlined and lost the query
@@ -491,7 +491,7 @@ def needs_meta_call(t, db=None) -> bool:
     """True for a goal a goal-taking list builtin must hand to ``call/N`` per
     element: everything that is not already a runnable goal OBJECT (a closure,
     a predicate class, a ``_get_dispatch`` implementor, a declared predicate
-    handle).  That is an unbound Var, a cell, a plain atom, a Compound, a
+    handle).  That is an unbound Var, a cell, a plain atom, a
     body term -- and a NON-callable term (number, list, string, tuple data).
 
     Operator rule 2026-09-25, ISO first: the WG17 Prolog prologue DEFINES
@@ -512,8 +512,7 @@ def needs_meta_call(t, db=None) -> bool:
     if type(t) is str:
         from clausal.logic.predicate import is_declared_predicate_name  # noqa: PLC0415
         return not is_declared_predicate_name(t, db=db)
-    from clausal.terms import Compound  # noqa: PLC0415
-    return (compound_cell_shape(t)[0] or isinstance(t, Compound)
+    return (compound_cell_shape(t)[0]
             or is_body_term(t) or is_non_callable_term(t))
 
 

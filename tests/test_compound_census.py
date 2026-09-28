@@ -17,10 +17,10 @@ from pathlib import Path
 
 import pytest
 
-# Compound retirement slice 5: NOT converted to cells.  The subject is the
-# class itself -- it is the self-test of the Compound/KWTerm census instruments, whose
-# positive controls construct both classes -- so slice 8 deletes or rewrites this module.
-pytestmark = pytest.mark.compound_retirement_slice8
+# The run-time half now counts KWTerm (the Compound class is gone; the static
+# half still reports any source that names it), so the subject is the KWTerm
+# class: slice 9 deletes or rewrites this module.
+pytestmark = pytest.mark.compound_retirement_slice9
 
 REPO = Path(__file__).resolve().parent.parent
 TOOL = REPO / "tools" / "compound_census"
@@ -60,25 +60,26 @@ def test_static_census_counts_a_synthetic_tree(tmp_path):
 
 
 def test_static_census_sees_the_engine():
-    """Positive control on the real tree: the engine still has both classes
-    (until the retirement's last slice, when this assertion is the one to
-    flip)."""
+    """On the real tree: the Compound class is gone from the engine (no
+    reference at all -- the positive control that the census would see one is
+    ``test_static_census_counts_a_synthetic_tree``), and KWTerm is still
+    there (until its own slice)."""
     m = _census_module()
     res = m["census"]([REPO / "clausal"])
     assert res["parsed"] > 100
-    assert res["counts"]["Compound", "construct"] > 0
+    assert res["counts"]["Compound", "refs"] == 0, [
+        s for s in res["sites"] if s[0] == "Compound"]
     assert res["counts"]["KWTerm", "refs"] > 0
 
 
 def test_runtime_plugin_counts_a_synthetic_run(tmp_path):
     (tmp_path / "test_synthetic.py").write_text(
-        "from clausal.terms import Compound, KWTerm\n"
+        "from clausal.terms import KWTerm\n"
         "from clausal.logic.exceptions import LogicException\n"
         "def test_builds():\n"
-        "    Compound('f', (1,))\n"
-        "    Compound('g', ())\n"
         "    KWTerm('r', a=1)\n"
-        "    LogicException(Compound('error', ('x', 'c')))\n"
+        "    KWTerm('s', b=2)\n"
+        "    LogicException('an_atom')\n"
         "    LogicException(('error', 'y', 'c'))\n")
     out = tmp_path / "cc.json"
     env = {**os.environ, "CC_OUT": str(out), "PYTHONDONTWRITEBYTECODE": "1",
@@ -91,12 +92,9 @@ def test_runtime_plugin_counts_a_synthetic_run(tmp_path):
     rep = json.loads(out.read_text())
     assert Path(rep["engine"]).resolve() == (REPO / "clausal" / "__init__.py").resolve()
     assert rep["tests_run"] == 1 and rep["tests_constructing"] == 1
-    # only what the synthetic test plants: no engine builder is involved, so
-    # this does not move as the engine stops building Compound
-    assert rep["compound_total"] == 3, rep
-    assert rep["kinds"]["atom_functor/arity0"] == 1
-    assert any(s.startswith("test_synthetic.py:4") for s, _ in rep["compound_sites"])
-    assert rep["kwterm_total"] == 1
-    assert rep["logic_exceptions"] == {"total": 2, "term_Compound": 1,
+    # only what the synthetic test plants: no engine builder is involved
+    assert rep["kwterm_total"] == 2, rep
+    assert any(s.startswith("test_synthetic.py:4") for s, _ in rep["kwterm_sites"])
+    assert rep["logic_exceptions"] == {"total": 2, "term_str": 1,
                                        "term_cell": 1}
-    assert "compound census: Compound 3 constructions" in r.stdout
+    assert "compound census: KWTerm 2 constructions" in r.stdout

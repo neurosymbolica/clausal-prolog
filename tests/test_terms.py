@@ -1,7 +1,6 @@
 """Tests for clausal.terms — Step 9.
 
 Covers:
-  - Compound construction and repr
   - Python literals as terms (direct — no wrappers)
   - term_str for all term types
   - KWTerm term_str (WK-3)
@@ -15,7 +14,6 @@ import pytest
 from clausal.logic.atoms import mint
 from clausal.logic.cells import chars
 from clausal.terms import (
-    Compound,
     KWTerm,
     term_str,
     term_pformat,
@@ -38,67 +36,6 @@ from clausal.terms import (
 class point:
     x: object = None
     y: object = None
-
-
-# ── TestCompound ───────────────────────────────────────────────────────────────
-
-
-@pytest.mark.compound_retirement_slice8
-class TestCompound:
-    def test_construction(self):
-        # nv
-        c = Compound("foo", (1, 2, 3))
-        assert c.functor == "foo"
-        assert c.args == (1, 2, 3)
-
-    def test_arity_zero(self):
-        # nv
-        c = Compound("nil", ())
-        assert c.functor == "nil"
-        assert c.args == ()
-
-    def test_var_functor(self):
-        # nv
-        v = Var()
-        c = Compound(v, (1,))
-        assert c.functor is v
-
-    def test_equality_same(self):
-        # nv
-        assert Compound("f", (1, 2)) == Compound("f", (1, 2))
-
-    def test_equality_different_functor(self):
-        # nv
-        assert Compound("f", (1,)) != Compound("g", (1,))
-
-    def test_equality_different_args(self):
-        # nv
-        assert Compound("f", (1,)) != Compound("f", (2,))
-
-    def test_equality_different_arity(self):
-        # nv
-        assert Compound("f", (1,)) != Compound("f", (1, 2))
-
-    def test_str_no_args(self):
-        # nv
-        assert str(Compound("nil", ())) == "nil()"
-
-    def test_str_with_args(self):
-        # nv
-        assert str(Compound("foo", (1, chars("x")))) == 'foo(1, "x")'
-
-    def test_nested_str(self):
-        # nv
-        inner = Compound("g", (2,))
-        outer = Compound("f", (inner,))
-        assert str(outer) == "f(g(2))"
-
-    def test_repr_is_dataclass_repr(self):
-        # nv
-        c = Compound("foo", (1,))
-        r = repr(c)
-        assert "Compound" in r
-        assert "foo" in r
 
 
 # ── TestPythonLiteralsAreTerms ─────────────────────────────────────────────────
@@ -150,7 +87,6 @@ class TestPythonLiteralsAreTerms:
     def test_ellipsis_is_term(self):
         # nv
         assert term_str(...) == "..."
-
 
 
 # ── The cons helpers are gone ─────────────────────────────────────────────────
@@ -227,7 +163,6 @@ class TestTermStr:
     def test_compound(self):
         # nv
         assert term_str(("foo", 1, 2)) == "foo(1, 2)"
-
 
     @pytest.mark.compound_retirement_slice9
     def test_kwterm(self):
@@ -345,13 +280,10 @@ class TestCellTermStr:
     ``"foo(1, 2)"``'s sibling for a ``point`` functor.
     """
 
-    @pytest.mark.compound_retirement_slice8
     def test_cell_matches_the_class_era_rendering_byte_for_byte(self):
-        # The class-era anchor: term_str(Compound("point", (1, 2))) would
-        # have printed exactly this (see TestTermStr.test_compound's
-        # "foo(1, 2)" for the same shape with a different functor name).
+        # The class-era anchor: term_str of the retired Compound("point",
+        # (1, 2)) printed exactly this.
         assert term_str(("point", 1, 2)) == "point(1, 2)"
-        assert term_str(("point", 1, 2)) == term_str(Compound("point", (1, 2)))
 
     def test_nested_cells(self):
         assert term_str(("pt", 1, ("q", 2))) == "pt(1, q(2))"
@@ -400,27 +332,23 @@ class TestCellTermStr:
 class TestCellTermPformat:
     """P3-2 Task 7: ``term_pformat`` smoke tests -- a wide cell used to fall
     through every isinstance branch straight to ``return flat``, so it never
-    got the indented multi-line form a wide ``Compound`` gets."""
+    got the indented multi-line form."""
 
     def test_short_cell_stays_flat(self):
         assert term_pformat(("pt", 1, 2), width=80) == "pt(1, 2)"
 
-    @pytest.mark.compound_retirement_slice8
-    def test_wide_cell_gets_the_compound_equivalent_multiline_form(self):
+    def test_wide_cell_gets_the_multiline_form(self):
         wide = ("bigfunctor",) + tuple(range(1, 20))
-        compound_equivalent = Compound("bigfunctor", tuple(range(1, 20)))
         cell_result = term_pformat(wide, width=20)
-        compound_result = term_pformat(compound_equivalent, width=20)
-        assert "\n" in cell_result
-        assert cell_result.startswith("bigfunctor(\n")
-        assert cell_result.rstrip().endswith(")")
-        # identical multi-line shape to the Compound it replaced -- same
-        # functor, same args, same indentation
-        assert cell_result == compound_result
+        # byte-identical to what the retired Compound class printed (measured
+        # on the last engine that had it)
+        assert cell_result == (
+            "bigfunctor(\n" + "".join(f"  {i},\n" for i in range(1, 19))
+            + "  19\n)")
 
     def test_zero_arg_cell_stays_flat_like_zero_arg_compound(self):
         # A str-functor cell always has slot 0, so "zero args" means a
-        # 1-tuple; matches Compound's `if not t.args: return flat` guard.
+        # 1-tuple.
         # Spec §6.7: that flat form is the ATOM's bare name -- the 1-tuple
         # is an atom, not a zero-argument call (it printed ``atom_like()``
         # before atoms became cells).

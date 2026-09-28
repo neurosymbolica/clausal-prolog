@@ -11,7 +11,7 @@ from clausal.logic.database import (
     _flatten_body,
     _extract_param_names,
 )
-from clausal.terms import And, Call, Compound, Unify as Is, LoadName, Var
+from clausal.terms import And, Call, Unify as Is, LoadName, Var
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -43,12 +43,6 @@ class TestHeadKey:
         h = ("likes", 1, 2)
         assert head_key(h) == ("likes", 2)
 
-    @pytest.mark.compound_retirement_slice8
-    def test_compound_arity_zero(self):
-        # nv
-        h = Compound("true", ())
-        assert head_key(h) == ("true", 0)
-
     def test_call_loadname(self):
         # nv
         h = call_head("member", Var(), Var())
@@ -74,13 +68,6 @@ class TestHeadKey:
         with pytest.raises(TypeError):
             head_key(3.5)                  # stage 2: a str head is the ATOM name/0, so the non-term here is a float
         assert head_key("an_atom") == ("an_atom", 0)
-
-    @pytest.mark.compound_retirement_slice8
-    def test_compound_var_functor_raises(self):
-        # nv
-        v = Var()
-        with pytest.raises(TypeError):
-            head_key(Compound(v, (1,)))
 
 
 # ── _flatten_body ──────────────────────────────────────────────────────────────
@@ -138,7 +125,6 @@ class TestClause:
         body = [Is(left=Var(), right=1)]
         c = Clause(head=head, body=body)
         assert not c.is_fact()
-
 
 
 # ── Database ───────────────────────────────────────────────────────────────────

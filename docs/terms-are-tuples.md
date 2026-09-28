@@ -57,7 +57,8 @@ fields = db.signature_for(functor, len(args))
   builds it (`PredicateMeta._clausal_head`). Also P4.
 * **Atoms are unchanged**: an atom is the interned `str`, a string is the
   `('$chars', s)` carrier. See the atoms announcement.
-* `Compound` and `KWTerm` still exist and are still read the old way.
+* `KWTerm` still exists and is still read the old way (the `Compound` class
+  was removed, 2026-09-27).
 
 ## Measured
 

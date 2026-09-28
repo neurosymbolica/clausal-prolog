@@ -40,6 +40,5 @@ pythonpath = ["."]
 timeout = 10
 timeout_method = "thread"
 markers = [
-    "compound_retirement_slice8: the test's subject is the Compound class itself (a Compound handed to the engine, a var/non-atom functor, foo(), _position, or a cell-vs-Compound difference); slice 8 deletes or rewrites it",
     "compound_retirement_slice9: the test's subject is the KWTerm class; slice 9 deletes or rewrites it",
 ]

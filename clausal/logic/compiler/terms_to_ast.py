@@ -1,6 +1,6 @@
 """Term → AST expression lowering.
 
-Converts a compile-time term value (Var, scalar, list, Compound,
+Converts a compile-time term value (Var, scalar, list, cell,
 functor-dataclass, KWTerm, DictTerm, SetTerm, SetLiteral, DictLiteral,
 StarUnpack, TupleLiteral, Call-with-LoadName, PyThunk, …) into a
 Python AST expression that, at runtime, reconstructs that term.
@@ -31,7 +31,6 @@ from typing import Any
 
 from clausal.logic.variables import Var, is_var, deref, present_number
 from clausal.terms import (
-    Compound,
     Add, Sub, Mult, Div, FloorDiv, Mod, Pow,
     Negate,
     Call, LoadName, LoadAttr, LoadSubscript,
@@ -97,7 +96,7 @@ def _is_opaque_head_literal(term: Any) -> bool:
     if term is None or isinstance(term, (bool, int, float, complex, str, bytes)):
         return False
     # Structural term types with dedicated head_to_match_pattern branches.
-    if isinstance(term, (list, dict, Compound, DictTerm, SetTerm, KWTerm,
+    if isinstance(term, (list, dict, DictTerm, SetTerm, KWTerm,
                          StarUnpack, Call, LoadName, LoadAttr,
                          TupleLiteral, DictLiteral, SetLiteral)):
         return False
@@ -754,7 +753,7 @@ def term_to_ast_expr(
     at runtime.  when False, they are kept as structural term constructors
     (e.g. ``Add(left=x, right=1)``).
 
-    Supports: Var, Python scalars, list, Compound, functor dataclasses.
+    Supports: Var, Python scalars, list, cells, functor dataclasses.
     """
     raw = term
     term = deref(term)
@@ -1135,20 +1134,6 @@ def term_to_ast_expr(
         _rec = lambda t: term_to_ast_expr(t, var_context, eval_arith=eval_arith)
         return ast.Set(elts=[_rec(e) for e in term.elements])
 
-    if isinstance(term, Compound):
-        f = term.functor
-        f_expr: ast.expr
-        if is_var(f):
-            vid = f._id
-            f_expr = _name(var_context[vid]) if vid in var_context else _call(_name("$Var"))
-        else:
-            f_expr = ast.Constant(value=f)
-        args_elts = [term_to_ast_expr(a, var_context, eval_arith=eval_arith) for a in term.args]
-        return _call(
-            _name("$Compound"),
-            f_expr,
-            ast.Tuple(elts=args_elts, ctx=ast.Load()),
-        )
 
     # Arithmetic term nodes: when eval_arith is set, generate native Python
     # operators so they evaluate at runtime.  when False (e.g. predicate call
