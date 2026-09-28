@@ -970,13 +970,17 @@ def imported_atoms(module_or_package: Any) -> dict:
 
     An entry of an ``-import_from(exporter, [...])`` directive counts when:
 
-      - the EXPORTER declares the name as an atom -- it is in
-        ``declared_atoms(exporter)``.  One level, like the import edge itself
-        (``compiler_v2._imported_reference``): a module that merely imports
-        an atom and passes it on is not its exporter, and an imported
-        PREDICATE is not an atom (a name that is both, declared as an atom
-        AND given clauses by its owner, counts: the import edge answers it
-        with the atom);
+      - the EXPORTER's own file declares the name as an atom, in its
+        ``-module``/``-private`` list.  One level, exactly the record the
+        import edge itself reads (``compiler_v2._imported_reference``): a
+        module that merely imports an atom and passes it on is not its
+        exporter, and an imported PREDICATE is not an atom (a name that is
+        both, declared as an atom AND given clauses by its owner, counts: the
+        import edge answers it with the atom).  For a single-file exporter
+        this is ``declared_atoms(exporter)``; for a PACKAGE exporter it is
+        its ``__init__``'s declarations only, NOT the package-scoped
+        ``declared_atoms``, so the answer does not depend on which of the
+        exporter's submodules happen to be loaded;
       - no file in scope declares it (a file that re-declares an imported
         atom in its own ``-module``/``-private`` list owns it:
         :func:`declared_atoms` reports it instead).
@@ -984,8 +988,9 @@ def imported_atoms(module_or_package: Any) -> dict:
     The key is the ATOM, i.e. the exporter's spelling: ``alias(orig, local)``
     reports ``orig``, which is what the local name is bound to.  The value is
     the exporter's dotted module name as ``sys.modules`` has it (the resolved
-    module's ``__name__``, so an aliased stdlib vocabulary such as ``units``
-    reports ``clausal.modules.units``), which :func:`declared_atoms` accepts.
+    module's ``__name__``, which can differ from the spelling in the
+    directive when the compiler maps it to ``clausal.modules.*``), which
+    :func:`declared_atoms` accepts.
 
     CLASHES -- the same atom imported from two exporters that both declare
     it.  The atom is the same either way (atoms are global by spelling);
@@ -1015,12 +1020,18 @@ def imported_atoms(module_or_package: Any) -> dict:
             if name in declared_here:
                 continue
             if exporter not in owners:
-                # An exporter evicted from sys.modules since the import ran
-                # has nobody left to ask, so it owns nothing (lookup-only:
-                # asking never re-imports it).
-                owners[exporter] = (
-                    declared_atoms(exporter) if exporter in sys.modules
-                    else frozenset())
+                # The exporter's OWN FILE's record, exactly what the import
+                # edge reads (``compiler_v2._imported_reference``) -- not the
+                # package-scoped ``declared_atoms(exporter)``, which would
+                # also credit a package exporter with atoms its loaded
+                # submodules declare, and so depend on what is loaded.  An
+                # exporter evicted from sys.modules since the import ran has
+                # nobody left to ask, so it owns nothing (lookup-only: asking
+                # never re-imports it).
+                owner_mod = sys.modules.get(exporter)
+                owners[exporter] = frozenset(
+                    getattr(owner_mod, "__dict__", {}).get(DECLARED_ATOMS_KEY)
+                    or ())
             if name in owners[exporter]:
                 per_file[name] = exporter  # later directive wins
         for name, exporter in per_file.items():

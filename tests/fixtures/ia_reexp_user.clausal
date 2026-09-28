@@ -1,0 +1,4 @@
+# Fixture for tests/test_imported_atoms.py: imports from a package exporter,
+# and a Python module's names (never atoms).
+-import_from(tests.fixtures.ia_reexp, [deep_atom, deep_declared])
+-import_from(py.re, [match])

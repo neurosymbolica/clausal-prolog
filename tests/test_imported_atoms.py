@@ -10,7 +10,8 @@ accessor a consumer had to read the compiler's internal dotted
 ``"<exporter>.<name>"`` namespace keys.
 
 Fixtures: tests/fixtures/ia_vocab.clausal, ia_vocab2.clausal,
-ia_plain_importer.clausal and the ia_pkg/ package.
+ia_plain_importer.clausal, ia_reexp_user.clausal and the ia_pkg/ and
+ia_reexp/ packages.
 """
 
 from __future__ import annotations
@@ -162,3 +163,30 @@ def test_rejects_non_module():
 
 def test_exported_from_clausal():
     assert "imported_atoms" in clausal.__all__
+
+
+REEXP = "tests.fixtures.ia_reexp"
+REEXP_USER = "tests.fixtures.ia_reexp_user"
+
+
+def test_package_exporter_owns_only_its_own_files_declarations(load):
+    """One level, and independent of what is loaded: the package exporter's
+    __init__ passes deep_atom on without declaring it, so it is not the
+    exporter of deep_atom -- even though its submodule, which does declare
+    it, is loaded (it is, since __init__ imports from it)."""
+    load(REEXP_USER)
+    assert f"{REEXP}.owner" in sys.modules
+    assert "deep_atom" in clausal.declared_atoms(REEXP)  # package-scoped
+    assert clausal.imported_atoms(REEXP_USER) == {"deep_declared": REEXP}
+
+
+def test_python_module_exporter_contributes_nothing(load):
+    load(REEXP_USER)
+    assert "match" not in clausal.imported_atoms(REEXP_USER)
+
+
+def test_evicted_exporter_owns_nothing_and_is_not_reimported(load):
+    load(PLAIN)
+    sys.modules.pop(VOCAB2)
+    assert clausal.imported_atoms(PLAIN) == {"shared_kind": VOCAB}
+    assert VOCAB2 not in sys.modules

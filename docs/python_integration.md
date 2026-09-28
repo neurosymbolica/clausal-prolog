@@ -742,17 +742,20 @@ clausal.declared_atoms("procurement")   # frozenset()
 clausal.imported_atoms("procurement")   # {'open_procedure': 'procurement.vocabulary', ...}
 ```
 
-- **Only atoms the exporter declares.** An entry counts when the name is in
-  `declared_atoms(exporter)`: one level, the way the import itself resolves
-  it. An imported predicate is not an atom, and a module that only imports
-  an atom and passes it on is not its exporter.
+- **Only atoms the exporter declares.** An entry counts when the exporter's
+  own file declares the name in its `-module`/`-private` list: one level,
+  the way the import itself resolves it. An imported predicate is not an
+  atom, and a module that only imports an atom and passes it on is not its
+  exporter. For a single-file exporter this is `declared_atoms(exporter)`;
+  for a package exporter only its `__init__` counts, so the answer does not
+  depend on which of its submodules are loaded.
 - **Disjoint from `declared_atoms`.** An imported atom that a file in scope
   re-declares in its own `-module`/`-private` list belongs to
   `declared_atoms`. So `declared_atoms(m) | imported_atoms(m).keys()` is every
   atom the files can name.
 - **The key is the atom.** `alias(orig, local)` reports `orig`, the atom the
-  local name is bound to. The exporter is the module's `sys.modules` name, so
-  a stdlib vocabulary imported as `units` reports `clausal.modules.units`.
+  local name is bound to. The exporter is the module's `sys.modules` name
+  (its `__name__`), which `declared_atoms` accepts.
 - **Clashes are deterministic.** When two exporters that both declare an
   atom are imported, the atom is the same (atoms are global by spelling) and
   only the attribution differs. Within one file the later `-import_from`
