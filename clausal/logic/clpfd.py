@@ -35,7 +35,7 @@ from typing import Any
 
 from clausal.logic.atoms import is_atom, mint, spelling
 from dataclasses import replace as _replace   # a rebuilt node keeps its position
-from clausal.logic.exact_arith import EVALUABLE as _EVALUABLE, ZERO_DIVISOR_KEYS as _ZERO_DIVISOR_KEYS
+from clausal.logic.exact_arith import EVALUABLE as _EVALUABLE, NODE_EVALUABLE as _NODE_EVALUABLE
 from clausal.logic.exact_arith import cell_key_args as _cell_key_args, node_keys as _node_keys
 from clausal.logic.exact_arith import key_nodes as _key_nodes, not_evaluable as _not_evaluable
 from clausal.logic.variables import (
@@ -535,8 +535,11 @@ def _ne_propagate_bignum(lhs, rhs, trail, queue) -> bool:
         return False
     if not is_var(lhs) and not is_var(rhs):
         # Evaluate expression operands before comparing (A06-F001).
-        lv = lhs if type(lhs) is int else _eval_ground(lhs)
-        rv = rhs if type(rhs) is int else _eval_ground(rhs)
+        _ensure_exc_imports()
+        lv = lhs if type(lhs) is int else _eval_propagating(lhs)
+        rv = rhs if type(rhs) is int else _eval_propagating(rhs)
+        if lv is _NO_VALUE or rv is _NO_VALUE:
+            return False           # a zero divisor: no value to differ
         if lv is None or rv is None:
             return True
         return lv != rv
@@ -757,8 +760,11 @@ class NeConstraint(Constraint):
             # Evaluate expression operands (e.g. Add(X, 1)): comparing the
             # expression node structurally to an int is always "different" and
             # would wrongly satisfy the constraint (A06-F001).
-            lv = lhs if type(lhs) is int else _eval_ground(lhs)
-            rv = rhs if type(rhs) is int else _eval_ground(rhs)
+            _ensure_exc_imports()
+            lv = lhs if type(lhs) is int else _eval_propagating(lhs)
+            rv = rhs if type(rhs) is int else _eval_propagating(rhs)
+            if lv is _NO_VALUE or rv is _NO_VALUE:
+                return False     # a zero divisor: no value to differ
             if lv is None or rv is None:
                 return True  # an expression still has unbound vars — pending
             return lv != rv
@@ -1231,8 +1237,10 @@ _Add = _Sub = _Mult = _Div = _FloorDiv = _Mod = _Pow = _Negate = None
 #: ``{operator node class: evaluable-table key}`` (exact_arith.node_keys),
 #: filled with the node imports below.
 _NODE_KEYS: dict = {}
-#: ``{node class: (table entry, binary?, screens a zero divisor?)}`` -- the
-#: same table, pre-resolved for _eval_ground's hot path.
+#: ``{node class: (table entry, binary?)}`` -- the same table, pre-resolved
+#: for _eval_ground's hot path.  A zero divisor RAISES inside the entry
+#: (``evaluation_error(zero_divisor)``, Q4 2026-09-28); it used to answer
+#: None here, "not evaluable yet", so ``X == 1 // 0`` succeeded unbound.
 _NODE_OPS: dict = {}
 _Node = None
 
@@ -1245,8 +1253,15 @@ def _ensure_term_imports():
         # the table views first: ``_Add`` is the "imports done" flag, so it
         # must not be set while they could still be empty
         _NODE_KEYS.update(_node_keys())
-        _NODE_OPS.update({cls: (_EVALUABLE[k], k[1] == 2, k in _ZERO_DIVISOR_KEYS)
+        _NODE_OPS.update({cls: (_NODE_EVALUABLE[k], k[1] == 2)
                           for cls, k in _NODE_KEYS.items()})
+        # Ruling Q15 (2026-09-28): inside a CLP post ``/`` is RATIONAL
+        # (``X == 7 / 2`` is 7 rdiv 2, like Scryer's ``{X = 7/2}``), on both
+        # spellings -- evaluation (is/2, eval_) has Python's / Scryer's float
+        from clausal.logic.exact_arith import exact_div as _exact_div_q  # noqa: PLC0415
+        for cls, k in _NODE_KEYS.items():
+            if k in (("$python_div", 2), ("/", 2), ("rdiv", 2)):
+                _NODE_OPS[cls] = (_exact_div_q, True)
         _Add = Add
         _Sub = Sub
         _Mult = Mult
@@ -1321,7 +1336,7 @@ def _ensure_exc_imports():
 
 
 def _unknown_expr_leaf_error(leaf) -> "Exception":
-    """Catchable ``type_error(integer, Leaf, "clpfd expression")`` for a LEAF
+    """Catchable ``domain_error(clpz_expression, Leaf)`` for a LEAF
     inside an arithmetic expression tree that CLP(FD) cannot type as an
     integer (str, atom, date, Quantity, Decimal, None, compound, bare
     float/Fraction, …).  Both leaf fall-throughs — ``_expr_domain``'s
@@ -1334,11 +1349,65 @@ def _unknown_expr_leaf_error(leaf) -> "Exception":
     The context is a fixed string because these walkers are shared by every
     comparator (their signatures are frozen — the C extension calls them)."""
     _ensure_exc_imports()
-    return _LogicException(_type_error("integer", leaf, "clpfd expression"))
+    # Scryer's formal (Q3, 2026-09-28; it was type_error(integer, Leaf)).  The
+    # second argument is an unbound variable, as Scryer's library throws it.
+    return _LogicException(_domain_error_clpz(leaf))
+
+
+def _domain_error_clpz(term):
+    from clausal.logic.exceptions import domain_error  # noqa: PLC0415
+    return domain_error("clpz_expression", term, "clpfd expression")
+
+
+def _no_value_in_propagation(exc) -> bool:
+    """*exc* (a LogicException) is an evaluable entry saying "this has no
+    value": any ``evaluation_error`` (a zero divisor, Q4 2026-09-28; an
+    undefined ``'^'(0, -1)``) or the ``type_error(float, Base)`` of an
+    integer ``'^'`` with a negative exponent.
+
+    At the POST of a ground expression it propagates to the caller; inside
+    PROPAGATION -- a divisor or exponent that took such a value while
+    labelling -- the expression has no value, so the constraint FAILS and
+    the search goes on, as Scryer's clpz prunes it (``X #= 10 // Y, Y in
+    0..2, label([Y])`` gives Y = 1 and Y = 2; ``X #= 2^Y, Y in -1..2``
+    labels Y = 0, 1, 2).  clpz's own ``domain_error(clpz_expression, _)`` for
+    a non-arithmetic leaf is NOT one: it still raises."""
+    from clausal.logic.exceptions import evaluation_error_kind  # noqa: PLC0415
+    if evaluation_error_kind(exc) is not None:
+        return True
+    term = exc.term
+    if type(term) is tuple and len(term) == 3 and type(term[1]) is tuple:
+        formal = term[1]
+        return len(formal) == 3 and formal[0] == "type_error" and formal[1] == "float"
+    return False
+
+
+def _eval_propagating(x):
+    """``_eval_ground(x)`` inside propagation: an expression with no value
+    (see :func:`_no_value_in_propagation`: any ``evaluation_error`` --
+    ``zero_divisor``, ``undefined``, ``float_overflow`` -- or the
+    ``type_error(float, _)`` of ``'^'`` with a negative exponent) is
+    :data:`_NO_VALUE` (the constraint fails), not an error."""
+    try:
+        return _eval_ground(x)
+    except _LogicException as exc:
+        if _no_value_in_propagation(exc):
+            return _NO_VALUE
+        raise
+
+
+#: What :func:`_eval_propagating` answers for an expression with no value.
+_NO_VALUE = object()
 
 
 def _expr_domain(expr, trail: Trail) -> Domain:
-    """Compute the domain of an expression (Var, int, or arithmetic node)."""
+    """Compute the domain of an expression (Var, int, or arithmetic node).
+    A ground expression with no value -- any ``evaluation_error``
+    (``zero_divisor``, ``undefined``, ``float_overflow``) or the
+    ``type_error(float, _)`` of ``'^'`` with a negative exponent -- has an
+    EMPTY domain, so a propagator over it fails (see
+    :func:`_no_value_in_propagation`).  clpz's ``domain_error(
+    clpz_expression, _)`` for a non-arithmetic leaf still raises."""
     expr = deref(expr)
     if isinstance(expr, int):
         return ((expr, expr),)
@@ -1363,6 +1432,16 @@ def _expr_domain(expr, trail: Trail) -> Domain:
     if isinstance(expr, _Negate):
         od = _expr_domain(expr.operand, trail)
         return _domain_negate(od)
+    if _NODE_KEYS.get(type(expr)) == ("**", 2):
+        # A quoted ``'**'`` cell (Scryer's FLOAT power, Q2 2026-09-28) posted
+        # over CLP(FD): not a clpz expression -- Scryer's ``X #= Y**2``
+        # raises exactly this.  Folded, its float would leave the FD
+        # variable silently unconstrained.  Reached only after the CLP(Q) /
+        # CLP(R) dispatch, which keeps it.  A ground one folds to its float
+        # only as a WHOLE comparison side (``_resolve``); nested in a CLP(FD)
+        # tree (``Y + '**'(2, 3)``) it is refused here too.
+        _ensure_exc_imports()
+        raise _LogicException(_domain_error_clpz(expr))
     if isinstance(expr, _Node):
         # Recognized expression NODE (Div/FloorDiv/Mod/Pow, …): if ground,
         # evaluate.  Only an integer result is a valid CLP(Z) domain bound —
@@ -1374,7 +1453,9 @@ def _expr_domain(expr, trail: Trail) -> Domain:
             val = _eval_ground(expr)
             if isinstance(val, int) and not isinstance(val, bool):
                 return ((val, val),)
-        except _LogicException:
+        except _LogicException as exc:
+            if _no_value_in_propagation(exc):
+                return ()          # no value: the propagator fails
             raise  # a garbage leaf deeper in the node — keep it catchable
         except Exception:
             pass
@@ -1484,10 +1565,10 @@ def _eval_ground(expr):
         # arms below (ruling R9 A1, 2026-09-27).  A compound whose
         # ``name/arity`` is not in the table is the leaf error, as before.
         ka = _cell_key_args(expr)
-        fn = _EVALUABLE.get(ka[0]) if ka is not None else None
+        fn = _CLP_CELL_EVALUABLE.get(ka[0]) if ka is not None else None
         if fn is None:
             raise _unknown_expr_leaf_error(expr)
-        result = _apply_evaluable(ka[0], fn, ka[1])
+        result = _apply_evaluable(fn, ka[1])
     else:
         # An operator NODE: its table key (``node_keys``), then the one
         # table.  A node the table does not know (``UnaryPlus``, the bitwise
@@ -1497,13 +1578,11 @@ def _eval_ground(expr):
             return None
         # (inlined _apply_evaluable: this is the hot path of is/2 and of
         # every ground fold in the CLP posts)
-        fn, binary, screens_zero = op
+        fn, binary = op
         if binary:
             l = _eval_ground(expr.left)
             r = _eval_ground(expr.right)
             if l is None or r is None:
-                return None
-            if screens_zero and r == 0:
                 return None
             result = fn(l, r)
         else:
@@ -1531,13 +1610,13 @@ def _eval_ground(expr):
     return result
 
 
-def _apply_evaluable(key, fn, args):
+def _apply_evaluable(fn, args):
     """Apply one evaluable-table entry to its evaluated *args*.
 
-    None when an argument is still unbound, or -- as the node arms always
-    answered -- when the divisor of ``/``, ``div`` or ``mod`` is zero.  Every
-    argument is evaluated before that check, so a garbage leaf on either
-    side raises whatever the other side holds."""
+    None when an argument is still unbound.  A zero divisor raises inside
+    the entry (``evaluation_error(zero_divisor)``); every argument is
+    evaluated first, so a garbage leaf on either side raises whatever the
+    other side holds."""
     if len(args) == 1:
         o = _eval_ground(args[0])
         if o is None:
@@ -1546,8 +1625,6 @@ def _apply_evaluable(key, fn, args):
     l = _eval_ground(args[0])
     r = _eval_ground(args[1])
     if l is None or r is None:
-        return None
-    if r == 0 and key in _ZERO_DIVISOR_KEYS:
         return None
     return fn(l, r)
 
@@ -1898,7 +1975,20 @@ def _resolve(x):
         val = _eval_ground(x)
         if val is not None:
             return val
+    if _NODE_KEYS.get(type(x)) == ("**", 2):
+        # a quoted '**' cell is Scryer's float power: a ground one folds to
+        # its float here, ahead of the CLP(Q)/CLP(R) dispatch (the bare
+        # ``**`` node is Python's integer power and is not folded)
+        val = _eval_ground(x)
+        if val is not None:
+            return val
     if type(x) is tuple:
+        # an exact-number cell (``rdiv(7, 2)``, ``decimal(15, 1)``) is the
+        # number it denotes in a post too (ruling Q15: rdiv is exact
+        # everywhere)
+        num = exact_cell_number(x)
+        if num is not None:
+            return present_number(num)
         # an arithmetic CELL (ruling R9 A1) folds EXACTLY as its node does:
         # rewrite it, then resolve the node (``**`` is not folded, above).  A
         # data term that merely uses an arithmetic functor (``-(a, 1)``) is
@@ -2037,7 +2127,8 @@ def _expr_tree_has_var(x) -> bool:
 
 
 def _reject_nonnumeric_eq(l, r, context: str = "(==)/2") -> None:
-    """A12-F002: raise a catchable type_error when a Var is compared with ``==``
+    """A12-F002: raise a catchable ``domain_error(clpz_expression, Ground)``
+    (Scryer's clpz formal, Q3 2026-09-28) when a Var is compared with ``==``
     (or ``!=``, which passes ``context="(!=)/2"`` — arithmetic disequality is
     the same defect family, while ``dif/2`` stays the structural form)
     against a GROUND operand that is not a number.  Posting the EqConstraint
@@ -2072,8 +2163,10 @@ def _reject_nonnumeric_eq(l, r, context: str = "(==)/2") -> None:
     if isinstance(ground, (_Add, _Sub, _Mult, _Div, _FloorDiv, _Mod, _Pow,
                            _Negate)):
         return  # fully-ground tree: dispatch resolves and compares it
-    from clausal.logic.exceptions import LogicException, type_error
-    raise LogicException(type_error("evaluable", ground, context))
+    # Scryer's ``X #= foo(1)`` formal (Q3, 2026-09-28; it was
+    # type_error(evaluable, Ground)).
+    from clausal.logic.exceptions import LogicException, domain_error
+    raise LogicException(domain_error("clpz_expression", ground, context))
 
 
 def _incomparable_order_error(culprit, context: str) -> "LogicException":
@@ -2090,7 +2183,8 @@ def _incomparable_order_error(culprit, context: str) -> "LogicException":
 
 def _reject_nonnumeric_order(l, r, context: str) -> None:
     """Ordering-comparator sibling of :func:`_reject_nonnumeric_eq`: raise a
-    catchable ``type_error(orderable, Culprit, Context)`` when a ground
+    catchable ``domain_error(clpz_expression, Culprit)`` (Scryer's clpz
+    formal, Q3 2026-09-28) when a ground
     NON-NUMERIC operand is ordered against an unbound var.  Posting the FD
     Lt/Le constraint instead made the same broken var as A12-F002 — the
     unification hook then rejected EVERY later binding, so ``X < "banana",
@@ -2103,11 +2197,10 @@ def _reject_nonnumeric_order(l, r, context: str) -> None:
     ground side must be ``numbers.Real`` — int posts CLP(FD), float
     dispatches to CLP(R), Fraction to CLP(Q); everything else (str, date,
     Quantity, Decimal, atom class, compound, …) is rejected.  A fully-ground
-    arithmetic expression tree also passes.  Reuses the ``orderable`` error
-    shape of :func:`_incomparable_order_error` (rather than ``evaluable`` as
-    ``==`` does) so one handler catches every ill-typed order comparison;
-    here *culprit* is the offending ground operand, whichever side it
-    appears on.  Call-order independent, and deliberately run BEFORE the
+    arithmetic expression tree also passes.  (Before Q3 this reused the
+    ``orderable`` shape of :func:`_incomparable_order_error`, which stays the
+    error of two GROUND values that do not order.)  *culprit* is the
+    offending ground operand, whichever side it appears on.  Call-order independent, and deliberately run BEFORE the
     CLP(Q)/CLP(R) dispatch in both the Python comparators and the
     C-accelerated wrappers: a var carrying a rational/real attribute
     triggers the dispatch on its own, and q_lt/real_lt would otherwise post
@@ -2125,7 +2218,10 @@ def _reject_nonnumeric_order(l, r, context: str) -> None:
     if isinstance(ground, (_Add, _Sub, _Mult, _Div, _FloorDiv, _Mod, _Pow,
                            _Negate)):
         return  # fully-ground tree: dispatch resolves and compares it
-    raise _incomparable_order_error(ground, context)
+    # Scryer's ``X #< foo(1)`` formal (Q3, 2026-09-28; it was
+    # type_error(orderable, Ground)).
+    from clausal.logic.exceptions import LogicException, domain_error  # noqa: PLC0415
+    raise LogicException(domain_error("clpz_expression", ground, context))
 
 
 def fd_eq(l, r, trail: Trail, *, _units_done: bool = False) -> bool:
@@ -2636,8 +2732,16 @@ def reify_fd(op: str, x, y, trail: Trail) -> bool | None:
         stripped = _units_strip(x, y, "reify(" + op + ")/3", trail)
         if stripped is not None:
             x, y = stripped
-    x = _resolve(x)
-    y = _resolve(y)
+    try:
+        x = _resolve(x)
+        y = _resolve(y)
+    except _LogicException as exc:
+        # Ruling Q14 (2026-09-28): a CLP(FD) relation over an expression
+        # with no value (``1 // 0``) has no solutions -- so, reified, it is
+        # FALSE, never an error.
+        if _no_value_in_propagation(exc):
+            return False
+        raise
     if _both_ground(x, y):
         if op in ("eq", "ne"):
             # the chars-model arm ``fd_eq``/``fd_ne`` already have: the two
@@ -3664,7 +3768,46 @@ def zcompare(order, x, y, trail: Trail) -> bool:
 # ── C-accelerated propagation (with Python fallback) ─────────────────────────
 # If the C extension is available, its versions silently replace the Python ones.
 
+class _NoValue:
+    """What the C ``!=`` propagator is handed for an expression with no value
+    (see :func:`_no_value_in_propagation`): it differs from nothing and
+    equals nothing, so the C both-ground arm's ``lv != rv`` is False and the
+    constraint FAILS -- ruling Q14 (2026-09-28), with no C change."""
+    __slots__ = ()
+
+    def __eq__(self, other):
+        return False
+
+    def __ne__(self, other):
+        return False
+
+    __hash__ = object.__hash__
+
+
+_NO_VALUE_FOR_C = _NoValue()
+
+
+def _eval_ground_for_c(x):
+    """``_eval_ground`` as the C propagator module sees it (it binds the
+    module attribute ``_eval_ground`` once, at its import): an expression with
+    no value is :data:`_NO_VALUE_FOR_C` instead of an error."""
+    try:
+        return _eval_ground(x)
+    except _LogicException as exc:
+        if _no_value_in_propagation(exc):
+            return _NO_VALUE_FOR_C
+        raise
+
+
 _USE_C_PROPAGATE = False
+_ensure_exc_imports()
+
+#: The cells as a CLP post evaluates them: :data:`EVALUABLE` with ``/``
+#: RATIONAL (ruling Q15, 2026-09-28; see ``_ensure_term_imports``).
+from clausal.logic.exact_arith import exact_div as _exact_div_cell  # noqa: E402
+_CLP_CELL_EVALUABLE = {**_EVALUABLE, ("/", 2): _exact_div_cell}
+_eval_ground_py = _eval_ground
+_eval_ground = _eval_ground_for_c        # what the C init binds (see above)
 try:
     from clausal.logic._clpfd_propagate import (
         FDVar as _C_FDVar,
@@ -3690,6 +3833,8 @@ try:
     _USE_C_PROPAGATE = True
 except ImportError:
     pass
+finally:
+    _eval_ground = _eval_ground_py
 
 if _USE_C_PROPAGATE:
     FDVar = _C_FDVar
@@ -3835,3 +3980,33 @@ if _USE_C_PROPAGATE:
 
     # Re-register the C fd_hook
     register_attr_hook(FD_KEY, _c_fd_hook)
+
+
+# ── Ruling Q14 (2026-09-28): no value means no solutions ─────────────────────
+#
+# ``X == 1 // 0`` -- Scryer's ``X #= 1 // 0`` -- FAILS: "(#=)/2 is a relation:
+# failure means that there are no solutions for these arguments" (Markus
+# Triska).  In EVERY goal order: the ground post fails here, and a divisor
+# (or a '^' exponent) that reaches a no-value while propagating empties the
+# domain (``_expr_domain``) or fails the ``!=`` arm (``_eval_propagating``,
+# ``_eval_ground_for_c``).  Plain arithmetic -- is/2, the ISO comparisons,
+# eval_/2 -- keeps raising evaluation_error(zero_divisor).
+
+def _relation_fails_without_value(post):
+    def wrapped(l, r, trail, *args, **kwargs):
+        try:
+            return post(l, r, trail, *args, **kwargs)
+        except _LogicException as exc:
+            if _no_value_in_propagation(exc):
+                return False
+            raise
+    wrapped.__name__ = post.__name__
+    wrapped.__doc__ = post.__doc__
+    wrapped.__wrapped__ = post
+    return wrapped
+
+
+fd_eq = _relation_fails_without_value(fd_eq)
+fd_ne = _relation_fails_without_value(fd_ne)
+fd_lt = _relation_fails_without_value(fd_lt)
+fd_le = _relation_fails_without_value(fd_le)

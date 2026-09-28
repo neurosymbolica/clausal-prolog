@@ -164,7 +164,8 @@ def test_an_exception_propagates_and_is_not_recorded_as_a_path(inst):
            "bad(X) <- (X == lo)\n")
     mod, _ = _load(src, "_ei6")
     from clausal.logic.exceptions import LogicException
-    with pytest.raises(LogicException, match="type_error"):
+    # clpz's formal since Q3 (2026-09-28); type_error(evaluable, lo) before
+    with pytest.raises(LogicException, match="domain_error"):
         _run(mod, ("bad", Var()))
     assert inst.records() == []
 

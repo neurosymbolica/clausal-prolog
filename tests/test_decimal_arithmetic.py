@@ -43,7 +43,7 @@ dec(D) <- strip_units(++d150, D)
 one(D) <- strip_units(++d1, D)
 big(D) <- strip_units(++dbig, D)
 two(D) <- strip_units(++d200, D)
-third(F) <- 'is'(F, 1 / 3)
+third(F) <- (F == 1 / 3)    # a CLP post: / is rational there (Q15)
 """
 
 
@@ -85,10 +85,11 @@ def _same(a, b):
 
 class TestParityAndValues:
     @pytest.mark.parametrize("binders, expr, want", [
-        # runtime ints: division is RATIONAL on both paths (the parked
-        # "eval_ variable-operand float" is closed here)
-        ("X is 7, Y is 2", "X / Y", Fraction(7, 2)),
-        ("X is 4, Y is 2", "X / Y", 2),
+        # runtime ints: a bare / in EVALUATION is Python's true division on
+        # both paths (ruling Q15, 2026-09-28; it was the exact rational --
+        # rdiv is the exact spelling now)
+        ("X is 7, Y is 2", "X / Y", 3.5),
+        ("X is 4, Y is 2", "X / Y", 2.0),
         ("X is 7, Y is 2", "X + Y", 9),
         # Decimal +, -, * with an int: exact, scale kept
         ("dec(D)", "D + 1", Decimal("2.50")),
@@ -99,9 +100,10 @@ class TestParityAndValues:
         # Decimal ⊕ Fraction: exact, as a Fraction
         ("dec(D), third(F)", "D + F", Fraction(11, 6)),
         ("dec(D), third(F)", "D * F", Fraction(1, 2)),
-        # division over an exact operand is a Fraction, never a Decimal
-        ("dec(D)", "D / 3", Fraction(1, 2)),
-        ("one(D)", "D / 3", Fraction(1, 3)),
+        # a bare / over a Decimal is Python's Decimal quotient (Q15); a
+        # Decimal beside a Fraction (no Python answer) divides exactly
+        ("dec(D)", "D / 3", Decimal("0.50")),
+        ("one(D)", "D / 3", Decimal("0.3333333333333333333333333333")),
         ("dec(D)", "D / D", 1),
         ("dec(D), third(F)", "D / F", Fraction(9, 2)),
         ("dec(D)", "-D", Decimal("-1.50")),
@@ -154,10 +156,22 @@ class TestExactnessBeyondNativeDecimal:
         assert got_is == Fraction(11111111111111111111111111111, 10**28) ** 2
         assert str(got_is) == "1.23456790123456790123456790120987654320987654320987654321"
 
-    def test_division_never_rounds(self, tmp_path):
-        got_is, got_ev = _both(tmp_path, "one(D)", "D / 7")
+    def test_rdiv_never_rounds(self, tmp_path):
+        """rdiv, the exact spelling, never rounds; a bare / over a Decimal is
+        Python's Decimal quotient (ruling Q15, 2026-09-28), which does."""
+        hdr = "-private([rdiv(A, B)])\n"
+        got_is, got_ev = _both(tmp_path, "one(D)", "rdiv(D, 7)", header=hdr)
         _same(got_is, got_ev)
         assert got_is == Fraction(1, 7)
+        for binders, expr, want in (("X is 7, Y is 2", "rdiv(X, Y)", Fraction(7, 2)),
+                                    ("X is 4, Y is 2", "rdiv(X, Y)", 2),
+                                    ("dec(D)", "rdiv(D, 3)", Fraction(1, 2))):
+            got_is, got_ev = _both(tmp_path, binders, expr, header=hdr)
+            _same(got_is, got_ev)
+            assert got_is == want and type(got_is) is type(want), (expr, got_is)
+        got_is, got_ev = _both(tmp_path, "one(D)", "D / 7")
+        _same(got_is, got_ev)
+        assert got_is == Decimal(1) / 7
 
 
 class TestEvaluatorUnit:
@@ -266,7 +280,8 @@ class TestWrittenSpellingsInCompiledArithmetic:
         ("rdiv(1, 3) + 1", Fraction(4, 3)),
         ("decimal(1001, 2) + rdiv(1, 3)", Fraction(3103, 300)),
         ("2 * rdiv(1, 4)", Fraction(1, 2)),
-        ("decimal(150, 2) / 3", Fraction(1, 2)),
+        ("decimal(150, 2) / 3", Decimal("0.50")),    # bare /: Python (Q15)
+        ("rdiv(2, 4) + 1", Fraction(3, 2)),         # rdiv evaluates (Q15)
         ("decimal(100, 2) - 1", Decimal("0.00")),   # scale is information: 1.00 - 1 is 0.00
     ])
     def test_written_cells_evaluate_on_both_paths(self, tmp_path, expr, want):
@@ -281,10 +296,9 @@ class TestWrittenSpellingsInCompiledArithmetic:
     # SyntaxError, so each case declares the arity it writes: ``rdiv(2, 4)``
     # is a non-canonical rdiv/2 cell, ``rdiv(1, 3, 5)`` an rdiv/3 look-alike.
     @pytest.mark.parametrize("expr, hdr", [
-        ("rdiv(2, 4) + 1", "-private([decimal(A, B), rdiv(A, B)])\n"),
         ("decimal(1, 0) * 2", "-private([decimal(A, B), rdiv(A, B)])\n"),
         ("rdiv(1, 3, 5) * 2", "-private([decimal(A, B), rdiv(A, B, C)])\n"),
-    ], ids=["rdiv(2, 4) + 1", "decimal(1, 0) * 2", "rdiv(1, 3, 5) * 2"])
+    ], ids=["decimal(1, 0) * 2", "rdiv(1, 3, 5) * 2"])
     def test_a_look_alike_cell_is_refused_loudly_on_both_paths(self, tmp_path, expr, hdr):
         got_is, got_ev = _both(tmp_path, "true", expr, header=hdr)
         assert isinstance(got_is, LogicException) and isinstance(got_ev, LogicException), (got_is, got_ev)

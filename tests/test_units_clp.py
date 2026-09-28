@@ -440,14 +440,16 @@ class TestComparatorsEngine:
         assert clpfd.fd_eq(r, _bin(Div, Quantity(6, M), Quantity(3, M)), t)
         assert deref(r) == 2 and not isinstance(deref(r), Quantity)
 
-    def test_units_var_against_atom_keeps_existing_type_error(self):
+    def test_units_var_against_atom_keeps_the_clpz_expression_error(self):
         clpfd = self._fd()
         from clausal.logic.units_constraint import constrain_var_dims
         t, x = Trail(), Var()
         assert constrain_var_dims(x, M, t)
         with pytest.raises(LogicException) as ei:
             clpfd.fd_eq(x, mint("banana"), t)
-        assert cell_functor(cell_args(ei.value.term)[0]) == "type_error"
+        # the same error as without units: Scryer's clpz formal since Q3
+        # (2026-09-28), type_error(evaluable, banana) before
+        assert cell_functor(cell_args(ei.value.term)[0]) == "domain_error"
 
     def test_plain_constraints_untouched(self):
         clpfd = self._fd()

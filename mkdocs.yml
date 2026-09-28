@@ -65,6 +65,7 @@ nav:
     - Predicate Index: builtins.md
     - Type Checking: type_checking.md
     - Arithmetic: arithmetic.md
+    - Operators, Python vs Prolog: operators.md
     - Lists: lists.md
     - Pairs: pairs.md
     - Higher-Order: higher_order.md
