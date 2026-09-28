@@ -203,7 +203,7 @@ test("float_: var fails") :-
     \+ float(_x_UNUSED).
 
 test("number: large int (via eval)") :-
-    #=(X, 10 ** 100),
+    #=(X, 10 ^ 100),
     number(X).
 
 test("is_list: list of mixed types") :-

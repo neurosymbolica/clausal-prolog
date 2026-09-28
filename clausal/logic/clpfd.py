@@ -35,7 +35,7 @@ from typing import Any
 
 from clausal.logic.atoms import is_atom, mint, spelling
 from dataclasses import replace as _replace   # a rebuilt node keeps its position
-from clausal.logic.exact_arith import EVALUABLE as _EVALUABLE, ZERO_DIVISOR_KEYS as _ZERO_DIVISOR_KEYS
+from clausal.logic.exact_arith import EVALUABLE as _EVALUABLE, NODE_EVALUABLE as _NODE_EVALUABLE
 from clausal.logic.exact_arith import cell_key_args as _cell_key_args, node_keys as _node_keys
 from clausal.logic.exact_arith import key_nodes as _key_nodes, not_evaluable as _not_evaluable
 from clausal.logic.variables import (
@@ -1231,8 +1231,10 @@ _Add = _Sub = _Mult = _Div = _FloorDiv = _Mod = _Pow = _Negate = None
 #: ``{operator node class: evaluable-table key}`` (exact_arith.node_keys),
 #: filled with the node imports below.
 _NODE_KEYS: dict = {}
-#: ``{node class: (table entry, binary?, screens a zero divisor?)}`` -- the
-#: same table, pre-resolved for _eval_ground's hot path.
+#: ``{node class: (table entry, binary?)}`` -- the same table, pre-resolved
+#: for _eval_ground's hot path.  A zero divisor RAISES inside the entry
+#: (``evaluation_error(zero_divisor)``, Q4 2026-09-28); it used to answer
+#: None here, "not evaluable yet", so ``X == 1 // 0`` succeeded unbound.
 _NODE_OPS: dict = {}
 _Node = None
 
@@ -1245,7 +1247,7 @@ def _ensure_term_imports():
         # the table views first: ``_Add`` is the "imports done" flag, so it
         # must not be set while they could still be empty
         _NODE_KEYS.update(_node_keys())
-        _NODE_OPS.update({cls: (_EVALUABLE[k], k[1] == 2, k in _ZERO_DIVISOR_KEYS)
+        _NODE_OPS.update({cls: (_NODE_EVALUABLE[k], k[1] == 2)
                           for cls, k in _NODE_KEYS.items()})
         _Add = Add
         _Sub = Sub
@@ -1321,7 +1323,7 @@ def _ensure_exc_imports():
 
 
 def _unknown_expr_leaf_error(leaf) -> "Exception":
-    """Catchable ``type_error(integer, Leaf, "clpfd expression")`` for a LEAF
+    """Catchable ``domain_error(clpz_expression, Leaf)`` for a LEAF
     inside an arithmetic expression tree that CLP(FD) cannot type as an
     integer (str, atom, date, Quantity, Decimal, None, compound, bare
     float/Fraction, …).  Both leaf fall-throughs — ``_expr_domain``'s
@@ -1334,7 +1336,10 @@ def _unknown_expr_leaf_error(leaf) -> "Exception":
     The context is a fixed string because these walkers are shared by every
     comparator (their signatures are frozen — the C extension calls them)."""
     _ensure_exc_imports()
-    return _LogicException(_type_error("integer", leaf, "clpfd expression"))
+    # Scryer's formal (Q3, 2026-09-28; it was type_error(integer, Leaf)).  The
+    # second argument is an unbound variable, as Scryer's library throws it.
+    from clausal.logic.exceptions import domain_error  # noqa: PLC0415
+    return _LogicException(domain_error("clpz_expression", leaf, "clpfd expression"))
 
 
 def _expr_domain(expr, trail: Trail) -> Domain:
@@ -1497,13 +1502,11 @@ def _eval_ground(expr):
             return None
         # (inlined _apply_evaluable: this is the hot path of is/2 and of
         # every ground fold in the CLP posts)
-        fn, binary, screens_zero = op
+        fn, binary = op
         if binary:
             l = _eval_ground(expr.left)
             r = _eval_ground(expr.right)
             if l is None or r is None:
-                return None
-            if screens_zero and r == 0:
                 return None
             result = fn(l, r)
         else:
@@ -1534,10 +1537,10 @@ def _eval_ground(expr):
 def _apply_evaluable(key, fn, args):
     """Apply one evaluable-table entry to its evaluated *args*.
 
-    None when an argument is still unbound, or -- as the node arms always
-    answered -- when the divisor of ``/``, ``div`` or ``mod`` is zero.  Every
-    argument is evaluated before that check, so a garbage leaf on either
-    side raises whatever the other side holds."""
+    None when an argument is still unbound.  A zero divisor raises inside
+    the entry (``evaluation_error(zero_divisor)``); every argument is
+    evaluated first, so a garbage leaf on either side raises whatever the
+    other side holds."""
     if len(args) == 1:
         o = _eval_ground(args[0])
         if o is None:
@@ -1546,8 +1549,6 @@ def _apply_evaluable(key, fn, args):
     l = _eval_ground(args[0])
     r = _eval_ground(args[1])
     if l is None or r is None:
-        return None
-    if r == 0 and key in _ZERO_DIVISOR_KEYS:
         return None
     return fn(l, r)
 
@@ -1599,6 +1600,13 @@ def _arith_cells_to_nodes(x, strict=None):
         return None
     ka = _cell_key_args(x)
     if ka is not None and ka[0] in _EVALUABLE:
+        if strict is None and ka[0] == ("**", 2):
+            # ``'**'`` is Scryer's FLOAT power (Q2, 2026-09-28): not a clpz
+            # expression -- Scryer's ``X #= 2**3`` raises exactly this.
+            # Folded instead, its float would leave an FD variable silently
+            # unconstrained.  (CLP(Q)/CLP(R) pass *strict* and keep it.)
+            from clausal.logic.exceptions import LogicException, domain_error  # noqa: PLC0415
+            raise LogicException(domain_error("clpz_expression", x, "clpfd expression"))
         args = []
         for a in ka[1]:
             c = _arith_cells_to_nodes(a, strict)
@@ -2037,7 +2045,8 @@ def _expr_tree_has_var(x) -> bool:
 
 
 def _reject_nonnumeric_eq(l, r, context: str = "(==)/2") -> None:
-    """A12-F002: raise a catchable type_error when a Var is compared with ``==``
+    """A12-F002: raise a catchable ``domain_error(clpz_expression, Ground)``
+    (Scryer's clpz formal, Q3 2026-09-28) when a Var is compared with ``==``
     (or ``!=``, which passes ``context="(!=)/2"`` — arithmetic disequality is
     the same defect family, while ``dif/2`` stays the structural form)
     against a GROUND operand that is not a number.  Posting the EqConstraint
@@ -2072,8 +2081,10 @@ def _reject_nonnumeric_eq(l, r, context: str = "(==)/2") -> None:
     if isinstance(ground, (_Add, _Sub, _Mult, _Div, _FloorDiv, _Mod, _Pow,
                            _Negate)):
         return  # fully-ground tree: dispatch resolves and compares it
-    from clausal.logic.exceptions import LogicException, type_error
-    raise LogicException(type_error("evaluable", ground, context))
+    # Scryer's ``X #= foo(1)`` formal (Q3, 2026-09-28; it was
+    # type_error(evaluable, Ground)).
+    from clausal.logic.exceptions import LogicException, domain_error
+    raise LogicException(domain_error("clpz_expression", ground, context))
 
 
 def _incomparable_order_error(culprit, context: str) -> "LogicException":
@@ -2090,7 +2101,8 @@ def _incomparable_order_error(culprit, context: str) -> "LogicException":
 
 def _reject_nonnumeric_order(l, r, context: str) -> None:
     """Ordering-comparator sibling of :func:`_reject_nonnumeric_eq`: raise a
-    catchable ``type_error(orderable, Culprit, Context)`` when a ground
+    catchable ``domain_error(clpz_expression, Culprit)`` (Scryer's clpz
+    formal, Q3 2026-09-28) when a ground
     NON-NUMERIC operand is ordered against an unbound var.  Posting the FD
     Lt/Le constraint instead made the same broken var as A12-F002 — the
     unification hook then rejected EVERY later binding, so ``X < "banana",
@@ -2103,11 +2115,10 @@ def _reject_nonnumeric_order(l, r, context: str) -> None:
     ground side must be ``numbers.Real`` — int posts CLP(FD), float
     dispatches to CLP(R), Fraction to CLP(Q); everything else (str, date,
     Quantity, Decimal, atom class, compound, …) is rejected.  A fully-ground
-    arithmetic expression tree also passes.  Reuses the ``orderable`` error
-    shape of :func:`_incomparable_order_error` (rather than ``evaluable`` as
-    ``==`` does) so one handler catches every ill-typed order comparison;
-    here *culprit* is the offending ground operand, whichever side it
-    appears on.  Call-order independent, and deliberately run BEFORE the
+    arithmetic expression tree also passes.  (Before Q3 this reused the
+    ``orderable`` shape of :func:`_incomparable_order_error`, which stays the
+    error of two GROUND values that do not order.)  *culprit* is the
+    offending ground operand, whichever side it appears on.  Call-order independent, and deliberately run BEFORE the
     CLP(Q)/CLP(R) dispatch in both the Python comparators and the
     C-accelerated wrappers: a var carrying a rational/real attribute
     triggers the dispatch on its own, and q_lt/real_lt would otherwise post
@@ -2125,7 +2136,10 @@ def _reject_nonnumeric_order(l, r, context: str) -> None:
     if isinstance(ground, (_Add, _Sub, _Mult, _Div, _FloorDiv, _Mod, _Pow,
                            _Negate)):
         return  # fully-ground tree: dispatch resolves and compares it
-    raise _incomparable_order_error(ground, context)
+    # Scryer's ``X #< foo(1)`` formal (Q3, 2026-09-28; it was
+    # type_error(orderable, Ground)).
+    from clausal.logic.exceptions import LogicException, domain_error  # noqa: PLC0415
+    raise LogicException(domain_error("clpz_expression", ground, context))
 
 
 def fd_eq(l, r, trail: Trail, *, _units_done: bool = False) -> bool:

@@ -70,6 +70,20 @@ def _assert_orderable_error(exc_info, indicator):
     assert exc_info.value.message is None
 
 
+def _assert_clpz_expression_error(exc_info, indicator):
+    """An unbound variable (or a tree holding one) ordered against a ground
+    non-number: Scryer's clpz ``domain_error(clpz_expression, X)`` (Q3,
+    2026-09-28; it was type_error(orderable, X), which stays the error of
+    two GROUND values that do not order against each other)."""
+    term = exc_info.value.term
+    assert type(term) is tuple and cell_functor(term) == "error"
+    inner = cell_args(term)[0]
+    assert cell_functor(inner) == "domain_error"
+    assert cell_args(inner)[0] == mint("clpz_expression")
+    assert cell_args(term)[1] == indicator
+    assert exc_info.value.message is None
+
+
 # ── Comparison operators order dates/datetimes/times ─────────────────────
 
 class TestComparisonOperators:
@@ -153,49 +167,50 @@ class TestVarVsNonNumericOperand:
     succeed by posting an FD ordering constraint whose unification hook then
     rejected EVERY later binding — including ones satisfying the comparison
     (``X < "banana", X is "apple"`` had 0 solutions).  Same broken-var shape
-    as A12-F002 for ``==``; the ordering comparators must raise the same
-    catchable type_error(orderable, ...) the ground incomparable path uses.
+    as A12-F002 for ``==``; the ordering comparators must raise a catchable
+    error -- Scryer's clpz ``domain_error(clpz_expression, ...)`` since Q3
+    (2026-09-28), ``type_error(orderable, ...)`` before.
     Filed: todo/nonnumeric-comparison-on-unbound-var-rejects-all-later-bindings.md
     """
 
     def test_var_lt_str(self):
         with pytest.raises(LogicException) as ei:
             fd_lt(Var(), "banana", Trail())
-        _assert_orderable_error(ei, ("/", "<", 2))
+        _assert_clpz_expression_error(ei, ("/", "<", 2))
         assert cell_args(cell_args(ei.value.term)[0])[1] == "banana"
 
     def test_str_lt_var(self):
         # the offending ground side may also be the LEFT operand
         with pytest.raises(LogicException) as ei:
             fd_lt("apple", Var(), Trail())
-        _assert_orderable_error(ei, ("/", "<", 2))
+        _assert_clpz_expression_error(ei, ("/", "<", 2))
         assert cell_args(cell_args(ei.value.term)[0])[1] == "apple"
 
     def test_var_le_str(self):
         with pytest.raises(LogicException) as ei:
             fd_le(Var(), "banana", Trail())
-        _assert_orderable_error(ei, ("/", "=<", 2))
+        _assert_clpz_expression_error(ei, ("/", "=<", 2))
 
     def test_var_gt_str_surfaces_lt_context(self):
         # fd_gt delegates to fd_lt with swapped args, like the ground path
         with pytest.raises(LogicException) as ei:
             fd_gt(Var(), "banana", Trail())
-        _assert_orderable_error(ei, ("/", "<", 2))
+        _assert_clpz_expression_error(ei, ("/", "<", 2))
 
     def test_var_ge_str_surfaces_le_context(self):
         with pytest.raises(LogicException) as ei:
             fd_ge(Var(), "banana", Trail())
-        _assert_orderable_error(ei, ("/", "=<", 2))
+        _assert_clpz_expression_error(ei, ("/", "=<", 2))
 
     def test_var_lt_date(self):
         with pytest.raises(LogicException) as ei:
             fd_lt(Var(), dt.date(2026, 6, 1), Trail())
-        _assert_orderable_error(ei, ("/", "<", 2))
+        _assert_clpz_expression_error(ei, ("/", "<", 2))
 
     def test_var_lt_datetime(self):
         with pytest.raises(LogicException) as ei:
             fd_lt(Var(), dt.datetime(2026, 6, 1, 12, 0), Trail())
-        _assert_orderable_error(ei, ("/", "<", 2))
+        _assert_clpz_expression_error(ei, ("/", "<", 2))
 
     def test_var_lt_quantity(self):
         # 2026-09-12: quantities order through the units side channel now
@@ -212,7 +227,7 @@ class TestVarVsNonNumericOperand:
         from decimal import Decimal
         with pytest.raises(LogicException) as ei:
             fd_lt(Var(), Decimal("2.5"), Trail())
-        _assert_orderable_error(ei, ("/", "<", 2))
+        _assert_clpz_expression_error(ei, ("/", "<", 2))
 
     def test_real_attr_var_lt_str(self):
         # A var already carrying a CLP(R) attribute triggers the real
@@ -225,7 +240,7 @@ class TestVarVsNonNumericOperand:
         assert fd_lt(x, 2.5, trail)  # gives x a REAL attribute
         with pytest.raises(LogicException) as ei:
             fd_lt(x, "banana", trail)
-        _assert_orderable_error(ei, ("/", "<", 2))
+        _assert_clpz_expression_error(ei, ("/", "<", 2))
 
     def test_rational_attr_var_le_str(self):
         trail = Trail()
@@ -233,7 +248,7 @@ class TestVarVsNonNumericOperand:
         assert fd_le(x, Fraction(5, 2), trail)  # gives x a CLP(Q) attribute
         with pytest.raises(LogicException) as ei:
             fd_le(x, "banana", trail)
-        _assert_orderable_error(ei, ("/", "=<", 2))
+        _assert_clpz_expression_error(ei, ("/", "=<", 2))
 
     # ── var inside an expr tree (same defect, one level down) ────────────
 
@@ -241,19 +256,19 @@ class TestVarVsNonNumericOperand:
         from clausal.terms import Add
         with pytest.raises(LogicException) as ei:
             fd_lt(Add(left=Var(), right=1), "banana", Trail())
-        _assert_orderable_error(ei, ("/", "<", 2))
+        _assert_clpz_expression_error(ei, ("/", "<", 2))
 
     def test_var_tree_le_date(self):
         from clausal.terms import Add
         with pytest.raises(LogicException) as ei:
             fd_le(Add(left=Var(), right=1), dt.date(2026, 6, 1), Trail())
-        _assert_orderable_error(ei, ("/", "=<", 2))
+        _assert_clpz_expression_error(ei, ("/", "=<", 2))
 
     def test_var_tree_gt_str_surfaces_lt_context(self):
         from clausal.terms import Add
         with pytest.raises(LogicException) as ei:
             fd_gt(Add(left=Var(), right=1), "banana", Trail())
-        _assert_orderable_error(ei, ("/", "<", 2))
+        _assert_clpz_expression_error(ei, ("/", "<", 2))
 
     def test_var_tree_lt_int_still_posts(self):
         from clausal.terms import Add
@@ -325,7 +340,7 @@ class TestVarVsNonNumericOperand:
         mod = _load_module("strcmp_repro", path)
         with pytest.raises(LogicException) as ei:
             list(solve(("strlt_ok", Var()), mod.__dict__["$module"]))
-        _assert_orderable_error(ei, ("/", "<", 2))
+        _assert_clpz_expression_error(ei, ("/", "<", 2))
 
 
 class TestLegitimateTypeErrorPreserved:

@@ -61,21 +61,33 @@ def _eval_between_bound(term):
     side it sits on (roborev job 13 — verified order-independent), and the
     raise is right — no future binding of ``N`` makes the bound legal.
 
-    Two raise sites, two contexts: a non-numeric LEAF raises inside
-    ``_eval_ground`` with its own "clpfd expression" context; the local
-    raise below covers what evaluates to None while ground (a zero
-    divisor) or to a non-integer (7/2, bool) and names "between/3".
+    Raise sites: a non-numeric LEAF raises inside ``_eval_ground`` (its
+    clpz ``domain_error`` is re-raised here as ``type_error(integer, Leaf)``
+    with the "clpfd expression" context); a zero divisor raises
+    ``evaluation_error(zero_divisor)`` there too (Q4, 2026-09-28); the local
+    raise below covers a non-integer (7/2, bool) and names "between/3".
     """
     from clausal.logic.clpfd import _eval_ground  # lazy: clpfd is heavy
     from clausal.logic.exceptions import LogicException, type_error
 
-    val = _eval_ground(term)
+    try:
+        val = _eval_ground(term)
+    except LogicException as exc:
+        # The CLP(FD) leaf error is Scryer's clpz ``domain_error(
+        # clpz_expression, Leaf)`` (Q3, 2026-09-28); between/3 is not a clpz
+        # post, and a bound that can never be an integer keeps its
+        # ``type_error(integer, Leaf)``.
+        from clausal.logic.builtins.iso_compare import _clpfd_leaf_culprit  # noqa: PLC0415
+        leaf = _clpfd_leaf_culprit(exc)
+        if leaf is None:
+            raise
+        raise LogicException(type_error("integer", leaf, "clpfd expression")) from None
     if val is None:
         if _arith_has_unbound_var(term):
             return None
-        # Ground but unevaluable — the reachable case is a zero divisor
-        # (non-numeric leaves raised inside _eval_ground already): name the
-        # unevaluated bound rather than vanish.
+        # Ground but unevaluable (a zero divisor and a non-numeric leaf
+        # raise inside _eval_ground already): name the unevaluated bound
+        # rather than vanish.
         raise LogicException(type_error("integer", term, "between/3"))
     val = present_number(val)  # an exact rational that IS an integer (6 / 2)
     if not isinstance(val, int) or isinstance(val, bool):

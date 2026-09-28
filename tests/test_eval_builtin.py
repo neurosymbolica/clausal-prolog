@@ -42,19 +42,24 @@ class TestEvalBuiltin:
         assert not _succeeds(mod)
 
     def test_eval_zero_division_raises(self, tmp_path):
-        """Python semantics: uncaught ZeroDivisionError propagates.
+        """A zero divisor under a bare ``//`` (Python's floor division) is
+        the logic-level ``evaluation_error(zero_divisor)`` naming the
+        operator (Q4, 2026-09-28), never a raw Python ZeroDivisionError.
 
-        Specifically ZeroDivisionError — not a predicate-resolution error —
-        so this cannot pass while eval_/2 is unimplemented.
+        Specifically that error — not a predicate-resolution error — so this
+        cannot pass while eval_/2 is unimplemented.
         """
         # nv
+        from clausal.logic.exceptions import LogicException, render_error_term
         mod = _load(tmp_path, "eval_zdiv_raw",
                     "test <- eval_(1 // 0, _)\n")
-        with pytest.raises(ZeroDivisionError):
+        with pytest.raises(LogicException) as ei:
             _succeeds(mod)
+        assert render_error_term(ei.value.term) == (
+            "error(evaluation_error(zero_divisor),(//)/2)")
 
     def test_eval_zero_division_catchable(self, tmp_path):
-        """Python semantics: ZeroDivisionError is interceptable by catch/3."""
+        """The zero divisor's evaluation_error is interceptable by catch/3."""
         # nv
         mod = _load(tmp_path, "eval_zdiv",
                     'test <- catch(eval_(1 // 0, _), _, 1 == 1)\n')

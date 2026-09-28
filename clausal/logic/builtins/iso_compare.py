@@ -30,8 +30,8 @@ def _clpfd_leaf_culprit(exc: LogicException):
 
     `_eval_ground` (clausal/logic/clpfd.py) never catches an exception
     itself, so every `LogicException` it lets escape is exactly its own
-    `_unknown_expr_leaf_error(leaf)` — `error(type_error(integer, Leaf,
-    "clpfd expression"), _)` — bubbled up unchanged through any amount of
+    `_unknown_expr_leaf_error(leaf)` — `error(domain_error(clpz_expression,
+    Leaf), _)`, prose "clpfd expression" — bubbled up unchanged through any amount of
     recursion. Matching that literal shape (rather than translating every
     `LogicException`) means an *unrelated* exception raised deeper in the
     tree — should `_eval_ground` ever grow one — fails closed: it is
@@ -42,10 +42,10 @@ def _clpfd_leaf_culprit(exc: LogicException):
     if outer is None or outer[0] != "error" or len(outer[1]) != 2:
         return None
     inner = term_functor_args(outer[1][0])
-    if inner is None or inner[0] != "type_error" or len(inner[1]) != 2:
+    if inner is None or inner[0] != "domain_error" or len(inner[1]) != 2:
         return None
     expected, leaf = inner[1]
-    if not (is_atom(expected) and spelling(expected) == "integer"):
+    if not (is_atom(expected) and spelling(expected) == "clpz_expression"):
         return None
     # The clpfd leaf error has no culprit indicator: its second argument is
     # an unbound variable (Scryer's form) and "clpfd expression" is the

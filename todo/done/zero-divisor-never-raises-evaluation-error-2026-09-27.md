@@ -1,6 +1,15 @@
 # The engine never raises `evaluation_error(zero_divisor)`
 
-**Status: OPEN. Found 2026-09-27 during Compound retirement slice 2; not fixed.**
+**Status: FIXED 2026-09-28 (branch feat/arith-scryer-rulings-2026-09-28, Q4 of
+the operator's arithmetic rulings).** Every row below now raises
+`error(evaluation_error(zero_divisor), (Op)/2)` naming the operator -- a bare
+`//`, `%`, `**` too, and `X == 1 // 0`. Pinned in
+tests/iso/test_arith_rulings_scryer.py and tests/test_arith_operator_rulings.py.
+One open question moved to
+todo/arith-rulings-open-edges-2026-09-28.md: Scryer's clpz FAILS a
+constraint whose divisor is zero, where the engine now raises.
+
+**Was: OPEN. Found 2026-09-27 during Compound retirement slice 2.**
 
 ## Measured (main 03f70a71)
 

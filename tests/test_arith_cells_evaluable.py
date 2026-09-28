@@ -120,8 +120,12 @@ class TestA1Table:
         (("/", 1, 2), Fraction(1, 2)),
         (("/", 4, 2), 2),
         (("mod", -7, 2), 1),        # floored, sign of the divisor (ISO mod)
-        (("div", -7, 2), -4),       # floored (ISO div; the FloorDiv node)
-        (("**", 2, 3), 8),
+        (("div", -7, 2), -4),       # floored (ISO div)
+        # Operator rulings 2026-09-28: a cell follows Scryer.
+        (("//", -7, 2), -3),        # ISO // truncates toward zero
+        (("//", 7, -2), -3),
+        (("**", 2, 3), 8.0),        # ISO ** is always a float
+        (("^", 2, 3), 8),           # ISO ^ is the integer power
         (("-", 5), -5),
         (("*", ("+", 1, 2), 2), 6),                 # nested cells
         (Add(None, ("+", 1, 2), 3), 6),             # a cell under a node
@@ -141,10 +145,7 @@ class TestA1Table:
     @pytest.mark.parametrize("cell,culprit", [
         (("foo", 1), "foo/1"),
         (("+", 1, 2, 3), "+/3"),
-        # ISO // truncates; the engine's floored FloorDiv node is ISO div, so
-        # the ISO spelling is NOT aliased onto it (a silent -4 for -7 // 2
-        # where ISO and Scryer answer -3).
-        (("//", 7, 2), "///2"),
+        (("rem", 7, 2), "rem/2"),   # not in the closed table
         (("*", ("foo", 1), 2), "foo/1"),
     ])
     def test_non_evaluable_cell_is_type_error_evaluable(self, api_mod, cell, culprit):
@@ -158,17 +159,23 @@ class TestA1Table:
             EVALUABLE[("sin", 1)] = abs  # no registration API: read-only
         assert set(EVALUABLE) == {
             ("+", 2), ("-", 2), ("*", 2), ("/", 2), ("div", 2), ("mod", 2),
-            ("**", 2), ("-", 1)}
+            ("//", 2), ("**", 2), ("^", 2), ("-", 1)}
 
-    def test_node_and_cell_share_one_table(self):
-        """Every evaluable operator node class maps onto a table key, so the
-        node arms and the cell arms cannot drift apart."""
+    def test_every_node_and_every_cell_key_has_one_entry(self):
+        """Every evaluable operator node class maps onto a key, and every
+        cell key onto a node class (what a CLP post rewrites the cell into),
+        so the node arms and the cell arms cannot drift apart.  The bare
+        ``//``, ``%``, ``**`` nodes keep Python semantics under private
+        ``$``-keys that no cell can spell (operator rulings 2026-09-28)."""
         from clausal.logic.clpfd import _NODE_KEYS, _ensure_term_imports
-        from clausal.logic.exact_arith import EVALUABLE
+        from clausal.logic.exact_arith import EVALUABLE, NODE_EVALUABLE, key_nodes
         from clausal.logic.exceptions import ARITH_OPERATOR_TERMS
         _ensure_term_imports()
-        assert set(_NODE_KEYS) == set(ARITH_OPERATOR_TERMS)
-        assert set(_NODE_KEYS.values()) == set(EVALUABLE)
+        assert set(ARITH_OPERATOR_TERMS) <= set(_NODE_KEYS)
+        assert set(_NODE_KEYS.values()) == set(NODE_EVALUABLE)
+        assert set(EVALUABLE) <= set(key_nodes())
+        private = set(NODE_EVALUABLE) - set(EVALUABLE)
+        assert private and all(k[0].startswith("$") for k in private)
 
 
 # ---------------------------------------------------------------------------
@@ -383,10 +390,12 @@ class TestA2Keeps:
         from decimal import Decimal
         assert _answers(mod, "k7") == [Decimal("10.01")]
 
-    def test_zero_division_still_raises_python_error(self, tmp_path):
+    def test_zero_division_raises_evaluation_error(self, tmp_path):
+        """Q4 (2026-09-28): ISO's evaluation_error(zero_divisor), naming the
+        operator -- a raw Python ZeroDivisionError before."""
         mod = _module(tmp_path, "t(X) <- (unpack(T, ['div', 1, 0]), eval_(T, X))", ["t(X)"])
-        with pytest.raises(ZeroDivisionError):
-            _answers(mod, "t")
+        text = _error_text(lambda: _answers(mod, "t"))
+        assert text.startswith("error(evaluation_error(zero_divisor),/(div,2))"), text
 
 
 def test_deep_sum_still_posts():
@@ -439,22 +448,22 @@ def test_ground_data_pairs_keep_the_ground_fallback():
     assert fd_lt(("-", "a", 1), ("-", "b", 1), Trail()) is True
     assert fd_eq(("-", Var(), "a"), 3, Trail()) is False
     text = _error_text(lambda: fd_eq(Var(), ("-", "a", 1), Trail()))
-    assert text.startswith("error(type_error(evaluable,-(a,1))"), text
+    assert text.startswith("error(domain_error(clpz_expression,-(a,1))"), text  # Q3
 
 
-def test_pow_cell_and_node_post_alike(api_mod):
-    """``**`` is not folded ahead of the post for the node spelling, so the
-    cell spelling must not be either (roborev job 265): both reach the
-    solver as the Pow node and answer alike."""
+def test_pow_node_posts_and_pow_cell_is_not_a_clpz_expression(api_mod):
+    """The bare ``**`` node is Python's power and posts (``X #= 2 ** 3`` is
+    8); the ``'**'`` cell is Scryer's FLOAT power, and -- as in Scryer's
+    clpz -- a CLP(FD) post refuses it with ``domain_error(clpz_expression,
+    T)`` rather than leave X silently unconstrained beside a float
+    (operator rulings 2026-09-28)."""
     from clausal.pythonic_ast.nodes import Pow
-    for goal_op in ("#=", "#<"):
-        X = Var()
-        node = _run(api_mod, (goal_op, X, Pow(None, 2, 3)), X) if goal_op == "#=" else \
-            bool(_run(api_mod, (goal_op, Pow(None, 2, 3), 9), None))
-        X = Var()
-        cell = _run(api_mod, (goal_op, X, ("**", 2, 3)), X) if goal_op == "#=" else \
-            bool(_run(api_mod, (goal_op, ("**", 2, 3), 9), None))
-        assert cell == node, (goal_op, cell, node)
+    X = Var()
+    assert _run(api_mod, ("#=", X, Pow(None, 2, 3)), X) == [8]
+    assert _run(api_mod, ("#<", Pow(None, 2, 3), 9), None)
+    for goal in (("#=", Var(), ("**", 2, 3)), ("#<", ("**", 2, 3), 9)):
+        text = _error_text(lambda: _run(api_mod, goal, None))
+        assert text.startswith("error(domain_error(clpz_expression,**(2,3))"), text
 
 
 @pytest.mark.xfail(strict=True, reason=(

@@ -731,10 +731,13 @@ def test_guard_contract_mappings():
 
 
 def test_guard_pow_emit_parse_fixpoint_c2p():
-    """clausal_to_prolog gets ** grouping right (contrast A11-F030)."""
+    """clausal_to_prolog gets ** grouping right (contrast A11-F030).  A bare
+    ``**`` is Python's power, which exports as ISO ``^`` (xfy, so the left
+    group keeps its parentheses); ISO ``**`` would answer a float (operator
+    rulings 2026-09-28)."""
     from clausal.tools.clausal_to_prolog import clausal_source_to_prolog
     out = clausal_source_to_prolog("P(X) <- eval_((2 ** 3) ** 2, X)\n")
-    assert "(2 ** 3) ** 2" in out
+    assert "(2 ^ 3) ^ 2" in out
 
 
 # ═════════════════════════════════════════════════════════════════════════════

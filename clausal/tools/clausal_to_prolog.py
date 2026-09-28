@@ -2757,7 +2757,10 @@ class _ClausalToProlog:
             # same reason. Python % and Prolog mod are both floored — mod is OK.
             python_ast.FloorDiv: "div",
             python_ast.Mod: "mod",
-            python_ast.Pow: "**",
+            # A bare ``**`` is Python's power (``2 ** 3`` is the integer 8;
+            # operator rulings 2026-09-28), which is ISO ``^`` for integers;
+            # ISO ``**`` always answers a float (8.0).
+            python_ast.Pow: "^",
             python_ast.BitAnd: "/\\",
             python_ast.BitOr: "\\/",
             python_ast.BitXor: "xor",

@@ -994,11 +994,14 @@ class TestF007PoisonedEvaluatingTables:
         # A04-F007: a body exception drops the poisoned entry (the drive closes
         # the StepGenerator chain), so the re-query recomputes and re-raises
         # rather than silently returning the pre-crash partial answer set.
+        # The body's zero divisor is ISO's evaluation_error(zero_divisor)
+        # since Q4 (2026-09-28); a raw ZeroDivisionError before.
+        from clausal.logic.exceptions import LogicException
         m = load("f007b", BOOM_SRC)
-        with pytest.raises(ZeroDivisionError):
-            list(call("boom", Var(), module=m))
-        with pytest.raises(ZeroDivisionError):
-            list(call("boom", Var(), module=m))
+        for _ in range(2):
+            with pytest.raises(LogicException) as ei:
+                list(call("boom", Var(), module=m))
+            assert "zero_divisor" in str(ei.value)
 
     def test_poisoned_entry_status_mechanism(self, load):
         # A04-F007: an abandoned once() no longer leaves an "evaluating" entry —

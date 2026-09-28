@@ -25,6 +25,8 @@ from fractions import Fraction
 from clausal.logic.exact_arith import (
     exact_add as _exact_add, exact_sub as _exact_sub,
     exact_mul as _exact_mul, exact_div as _exact_div,
+    python_floordiv as _python_floordiv, python_mod as _python_mod,
+    python_pow as _python_pow,
     evaluate as _evaluate, evaluate_python_result as _evaluate_python_result,
 )
 from typing import Any
@@ -1449,8 +1451,11 @@ def _source_form(term_repr: str) -> str:
 
 def exact_div(l, r):
     """``$exact_div``: a literal int/int Div in compiled arithmetic — exact
-    (``3/2`` is ``Fraction(3, 2)``), an integral quotient as int."""
-    return present_number(Fraction(l, r))
+    (``3/2`` is ``Fraction(3, 2)``), an integral quotient as int.  A zero
+    divisor raises ``evaluation_error(zero_divisor)`` (Q4, 2026-09-28)."""
+    if r:
+        return present_number(Fraction(l, r))
+    return _exact_div(l, r)          # raises the zero divisor
 
 
 # The ``$``-runtime names ``arith_to_ast_expr`` can emit, bound to their
@@ -1469,6 +1474,13 @@ ARITH_RUNTIME_NAMES: dict = {
     "$sub": _exact_sub,
     "$mul": _exact_mul,
     "$div": _exact_div,
+    # The bare ``//``, ``%``, ``**``: Python's operators (operator rulings
+    # 2026-09-28: a bare operator in today's source syntax keeps Python's
+    # meaning), with a zero divisor raised as evaluation_error(zero_divisor)
+    # rather than a raw ZeroDivisionError (Q4).
+    "$floordiv": _python_floordiv,
+    "$mod": _python_mod,
+    "$pow": _python_pow,
     # Ruling R9 (2026-09-27): an operand that may be a TERM at runtime --
     # ``eval_``'s whole operand when it is a variable or a literal term, or an
     # operand of the native ``//``, ``%``, ``**``, unary ``-`` -- is evaluated
@@ -1482,7 +1494,7 @@ ARITH_RUNTIME_NAMES: dict = {
     "$int": int,
 }
 _EXACT_BINOP_NAMES = ((Add, "$add"), (Sub, "$sub"), (Mult, "$mul"), (Div, "$div"))
-_NATIVE_OPS = {FloorDiv: ast.FloorDiv(), Mod: ast.Mod(), Pow: ast.Pow()}
+_NATIVE_OPS = {FloorDiv: "$floordiv", Mod: "$mod", Pow: "$pow"}
 
 
 def _native_operand(term: Any, var_context: dict[int, str]) -> ast.expr:
@@ -1584,9 +1596,8 @@ def arith_to_ast_expr(term: Any, var_context: dict[int, str]) -> ast.expr:
                            operand=_native_operand(term.operand, var_context))
     native = _NATIVE_OPS.get(type(term))
     if native is not None:
-        return ast.BinOp(left=_native_operand(term.left, var_context),
-                         op=native,
-                         right=_native_operand(term.right, var_context))
+        return _call(_name(native), _native_operand(term.left, var_context),
+                     _native_operand(term.right, var_context))
 
     # ``+``, ``-``, ``*``, ``/`` go through their exact helper (a call, ~30 ns,
     # measured): exactness, Decimal scale and term-operand evaluation live there.

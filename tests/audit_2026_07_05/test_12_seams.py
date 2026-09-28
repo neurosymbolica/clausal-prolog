@@ -252,8 +252,9 @@ class TestF002EqNonRealOperand:
         term = exc_info.value.term
         assert type(term) is tuple and cell_functor(term) == "error"
         inner = cell_args(term)[0]
-        assert cell_functor(inner) == "type_error"
-        assert cell_args(inner)[0] == mint("evaluable")
+        # Q3 (2026-09-28): Scryer's clpz formal (was type_error(evaluable, _))
+        assert cell_functor(inner) == "domain_error"
+        assert cell_args(inner)[0] == mint("clpz_expression")
         assert cell_args(inner)[1] == culprit
         assert cell_args(term)[1] == ("/", "==", 2)
         assert exc_info.value.message is None
@@ -367,8 +368,9 @@ class TestF002NeNonRealOperand:
         term = exc_info.value.term
         assert type(term) is tuple and cell_functor(term) == "error"
         inner = cell_args(term)[0]
-        assert cell_functor(inner) == "type_error"
-        assert cell_args(inner)[0] == mint("evaluable")
+        # Q3 (2026-09-28): Scryer's clpz formal (was type_error(evaluable, _))
+        assert cell_functor(inner) == "domain_error"
+        assert cell_args(inner)[0] == mint("clpz_expression")
         assert cell_args(inner)[1] == culprit
         assert cell_args(term)[1] == ("/", "!=", 2)
         assert exc_info.value.message is None
@@ -484,8 +486,8 @@ class TestF002ExprTreeVsNonNumericOperand:
         with pytest.raises(LogicException) as ei:
             fd_eq(self._add(Var(), 1), "banana", Trail())
         term = ei.value.term
-        assert cell_functor(cell_args(term)[0]) == "type_error"
-        assert cell_args(cell_args(term)[0])[0] == mint("evaluable")
+        assert cell_functor(cell_args(term)[0]) == "domain_error"   # Q3
+        assert cell_args(cell_args(term)[0])[0] == mint("clpz_expression")
         assert cell_args(cell_args(term)[0])[1] == "banana"
         assert cell_args(term)[1] == ("/", "==", 2)
         assert ei.value.message is None
@@ -578,8 +580,9 @@ class TestNonNumericLeafInsideExprTree:
         term = exc_info.value.term
         assert type(term) is tuple and cell_functor(term) == "error"
         inner = cell_args(term)[0]
-        assert cell_functor(inner) == "type_error"
-        assert cell_args(inner)[0] == mint("integer")
+        # Q3 (2026-09-28): Scryer's clpz formal (was type_error(integer, _))
+        assert cell_functor(inner) == "domain_error"
+        assert cell_args(inner)[0] == mint("clpz_expression")
         # The culprit is the operand AS THE CALLER PASSED IT: a Python
         # ``str`` operand stays a STRING (THE FLIP), while an operand
         # written as ``"a"`` in .clausal source is an ATOM — see
@@ -734,8 +737,8 @@ safeleaf(SX, SE) <- catch((SX + "a" == 5), SE, 1 == 1)
         assert len(caught) == 1
         term = caught[0]
         assert type(term) is tuple and cell_functor(term) == "error"
-        assert cell_functor(cell_args(term)[0]) == "type_error"
-        assert cell_args(cell_args(term)[0])[0] == mint("integer")
+        assert cell_functor(cell_args(term)[0]) == "domain_error"   # Q3
+        assert cell_args(cell_args(term)[0])[0] == mint("clpz_expression")
         assert cell_args(cell_args(term)[0])[1] == mint("a")
         assert type(deref(cell_args(term)[1])) is Var
         assert error_prose(term) == "clpfd expression"

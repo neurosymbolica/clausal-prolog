@@ -227,6 +227,13 @@ def seam_term(node: Any, module_globals: dict, loose: bool = False) -> Any:
             try:
                 result = eval(code, module_globals, ARITH_RUNTIME_NAMES)  # noqa: S307 — the module's own arithmetic
             except LogicException as exc:
+                # An ISO evaluation error (a zero divisor, Q4 2026-09-28) is
+                # a logic-level error on every spelling, the seam's too: it
+                # stays the catchable LogicException, never a raw
+                # ZeroDivisionError and never the TypeError below.
+                formal = exc.term[1] if type(exc.term) is tuple and len(exc.term) == 3 else None
+                if type(formal) is tuple and formal and formal[0] == "evaluation_error":
+                    raise
                 # The exact helpers ($add & co.) refuse a non-number operand
                 # LOUDLY in-engine (a catchable type_error(evaluable, ...));
                 # this is the PYTHON-facing surface, so the same refusal
