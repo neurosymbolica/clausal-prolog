@@ -31,6 +31,16 @@ test("query params") <- (
     V == 2
 )  # nv
 
+test("text is a string in single- and multi-column rows") <- (
+    connect(":memory:", "doc_test_txt"),
+    exec("doc_test_txt", "CREATE TABLE users (name TEXT, age INTEGER)"),
+    exec("doc_test_txt", "INSERT INTO users VALUES ('alice', 30)"),
+    query("doc_test_txt", "SELECT name, age FROM users", (NAME, AGE)),
+    string(NAME), NAME is "alice", AGE is 30,
+    query("doc_test_txt", "SELECT name FROM users", ONE),
+    string(ONE), ONE is "alice"
+)  # nv
+
 # ── Row count ────────────────────────────────────────────────────────────────
 
 test("row count") <- (

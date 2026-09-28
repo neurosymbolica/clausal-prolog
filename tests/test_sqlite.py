@@ -250,7 +250,8 @@ class TestSQLiteQuery:
                 rows.append(deref(v))
             elif gen is parent:
                 break
-        assert rows == [("alice", 30), ("bob", 25), ("carol", 35)]
+        # R15: TEXT columns are strings in a multi-column row too
+        assert rows == [(chars("alice"), 30), (chars("bob"), 25), (chars("carol"), 35)]
 
     def test_query_single_column(self):
         # nv
@@ -330,7 +331,7 @@ class TestSQLiteQuery:
                 rows.append(deref(v))
             elif gen is parent:
                 break
-        assert rows == [(42, "hello", 3.14, None)]
+        assert rows == [(42, chars("hello"), 3.14, None)]
 
     def test_query_join(self):
         # nv
@@ -353,7 +354,8 @@ class TestSQLiteQuery:
                 rows.append(deref(v))
             elif gen is parent:
                 break
-        assert rows == [("alice", "engineering"), ("bob", "marketing")]
+        assert rows == [(chars("alice"), chars("engineering")),
+                        (chars("bob"), chars("marketing"))]
 
     def test_query_aggregate(self):
         # nv

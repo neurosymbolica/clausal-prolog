@@ -310,6 +310,11 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
   before the file's clauses are compiled) raises
   `existence_error(procedure, p/1)` with a message giving the file and
   line and the fix, instead of a bare "not defined".
+- **sqlite: TEXT columns are strings in every row shape.** A multi-column
+  row from `query/3,4` used to carry its TEXT columns as atoms (so
+  `SELECT name, age` gave `('alice', 30)`, which is also the compound
+  `alice(30)`); it is now `("alice", 30)`, as a single-column row already
+  was.
 
 ### Migration guide: 0.x to 1.0
 

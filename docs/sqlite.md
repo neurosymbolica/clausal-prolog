@@ -94,13 +94,13 @@ All SQL execution uses parameterized queries (`?` placeholders) internally. **St
 --8<-- "tests/fixtures/docs/sqlite_sigs.txt:query_sig"
 ```
 
-Execute a SELECT query and **nondeterministically iterate** over result rows via [backtracking](control.md). Each solution binds `Row` to one row. Single-column rows are unwrapped to the bare value; a TEXT value comes back as a **string**. A multi-column row is the Python tuple of its values, and its TEXT columns come back as **atoms**: `SELECT name, age` gives `('alice', 30)`. Match it against a tuple pattern, `(NAME, AGE)`, to take it apart.
+Execute a SELECT query and **nondeterministically iterate** over result rows via [backtracking](control.md). Each solution binds `Row` to one row. Single-column rows are unwrapped to the bare value. A multi-column row is the tuple of its values: `SELECT name, age` gives `("alice", 30)`. Match it against a tuple pattern, `(NAME, AGE)`, to take it apart. A TEXT value is a **string** (database text is data, not a symbol) in both shapes; an INTEGER or REAL is a number and NULL is `None`.
 
 ```clausal
 # Multi-column: Row unifies with a tuple
 all_users(ROW) <- query("db", "SELECT name, age FROM users", ROW)
 
-# ...which a tuple pattern takes apart: NAME = 'alice', AGE = 30
+# ...which a tuple pattern takes apart: NAME = "alice" (a string), AGE = 30
 user_age(NAME, AGE) <- query("db", "SELECT name, age FROM users", (NAME, AGE))
 
 # Single-column: Row unifies with the value directly

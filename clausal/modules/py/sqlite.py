@@ -125,6 +125,18 @@ def _sqlite_current_connection_1(this_generator, _proceed, _fail, _catcher, alia
 
 # ── Layer 2: Raw SQL queries ─────────────────────────────────────────────
 
+def _row_term(row: tuple) -> Any:
+    """A result row as a term: a single-column row unwraps to its value, a
+    multi-column row is the tuple of its values.  A TEXT value is a STRING
+    (the chars carrier) either way (ruling R15, 2026-09-29): database text is
+    data, not symbols.  Before, a multi-column row kept its raw ``str``
+    columns, which are ATOMS -- ``SELECT name, age`` gave ``('alice', 30)``,
+    which is also the compound ``alice(30)``."""
+    if len(row) == 1:
+        return text_result(row[0])
+    return tuple(text_result(v) for v in row)
+
+
 def _sqlite_query_3(this_generator, _proceed, _fail, _catcher, alias, sql, row_var, trail):
     """query/3: execute SQL, backtrack over result rows as tuples."""
     alias = deref(alias)
@@ -133,9 +145,7 @@ def _sqlite_query_3(this_generator, _proceed, _fail, _catcher, alias, sql, row_v
     cur = conn.execute(_text(sql, "sql"))
     for row in cur:
         mark = trail.mark()
-        # Single-column rows unwrap to the value itself
-        value = row[0] if len(row) == 1 else row
-        if unify(row_var, text_result(value), trail):
+        if unify(row_var, _row_term(row), trail):
             yield (_proceed, None)
         trail.undo(mark)
     yield (_fail, DONE)
@@ -155,8 +165,7 @@ def _sqlite_query_4(this_generator, _proceed, _fail, _catcher, alias, sql, param
     cur = conn.execute(_text(sql, "sql"), param_seq)
     for row in cur:
         mark = trail.mark()
-        value = row[0] if len(row) == 1 else row
-        if unify(row_var, text_result(value), trail):
+        if unify(row_var, _row_term(row), trail):
             yield (_proceed, None)
         trail.undo(mark)
     yield (_fail, DONE)
