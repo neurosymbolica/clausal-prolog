@@ -616,7 +616,8 @@ is a cell, the database holds the clauses, and the predicate is compiled once;
 a later `assertz` on the same database recompiles it on its next call:
 
 ```python
-from clausal import Clause, Module, Var, solve
+from clausal import Module, Var, solve
+from clausal.logic.database import Clause
 from clausal.logic.compiler import compile_predicate_trampoline
 
 graph = Module("graph")

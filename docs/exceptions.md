@@ -188,6 +188,15 @@ catch(atom_length(1, _), error(type_error(T, V), _), true)   % T = atom, V = 1
 catch(atom_length(1, _), error(_, PI), true)                 % PI = atom_length/2
 ```
 
+The type, domain and kind names inside an error term are **atoms**. Under the
+default `-double_quotes(chars)`, `"atom"` is a string, so a pattern written
+`error(type_error("atom", _), _)` never matches and the error propagates past
+the catch. Write `'atom'` (or bare `atom`). A load-time
+`ClausalStringInCatchPatternWarning` flags a double-quoted string at those
+positions in the catcher of `catch/3`, `catch_recover/3` and `catch_error/2`.
+The culprit (the last argument of `type_error/2` and its kin) is not judged:
+it is the offending term itself, and may be a string.
+
 ### Reading an error term from Python
 
 An error term is a plain **cell**: a tuple whose first element is the functor.

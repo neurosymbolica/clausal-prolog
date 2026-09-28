@@ -7,9 +7,8 @@ named by a handle).  What stays here:
 
 * the POSITIVE CONTROL that the class is gone: it is not importable from
   ``clausal.logic.predicate`` nor exported by ``clausal``;
-* ``make_predicate`` is still a stub that raises ``MakePredicateRetiredError``
-  (public API with a documented error; removing the name is a separate
-  decision), and the error is still exported;
+* ``make_predicate`` (a stub that raised ``MakePredicateRetiredError`` after
+  the class went) is REMOVED before 1.0, the error class with it;
 * ``make_atom``, the atom constructor, which lived beside the class.
 """
 
@@ -30,12 +29,12 @@ class TestTheClassIsGone:
         assert not hasattr(clausal, "PredicateMeta")
         assert "PredicateMeta" not in clausal.__all__
 
-    def test_make_predicate_is_a_stub_that_raises(self):
-        from clausal import MakePredicateRetiredError, make_predicate
-        with pytest.raises(MakePredicateRetiredError) as info:
-            make_predicate("a", [])
-        assert isinstance(info.value, TypeError)
-        assert "retired" in str(info.value)
+    def test_make_predicate_is_removed(self):
+        for name in ("make_predicate", "MakePredicateRetiredError"):
+            assert not hasattr(predicate_mod, name)
+            assert name not in predicate_mod.__all__
+            assert not hasattr(clausal, name)
+            assert name not in clausal.__all__
 
     def test_the_c_extension_has_no_predicate_class_slot(self):
         """W4b-3 slice 8: the extension's ``PredicateMeta`` slot, its

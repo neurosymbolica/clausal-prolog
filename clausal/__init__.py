@@ -6,13 +6,13 @@ Top-level public API (Step 7 and later).
 # Extend __path__ so that separately-installed backend distributions
 # (e.g. clausal-trealla, clausal-gprolog, clausal-scryer) that place
 # subpackages under clausal/ in site-packages are discoverable.
-import os as _os, site as _site
+import keyword as _keyword, os as _os, site as _site
 for _sp in _site.getsitepackages():
     _candidate = _os.path.join(_sp, "clausal")
     if _os.path.isdir(_candidate) and _candidate not in __path__:
         __path__.append(_candidate)
 
-from clausal.logic.solve import call, solve, query, once, _deref_walk
+from clausal.logic.solve import call, solve, query, once, query_wfs, _deref_walk
 from clausal.logic.database import Module, Database, Clause
 from clausal.logic.variables import Var, Trail, deref, unify, UnboundVarCoercionError
 from clausal.terms import Quantity, UnitsMismatch
@@ -20,9 +20,6 @@ from clausal.logic.builtins import (
     structural_unify,
     get_builtin_class,
     _BUILTIN_CLASSES,
-)
-from clausal.logic.predicate import (
-    make_predicate, MakePredicateRetiredError,
 )
 from clausal.logic.exceptions import LogicException
 from clausal.logic.cells import cell_args, cell_functor, make_cell
@@ -74,8 +71,6 @@ __all__ = [
     "once",
     # Runtime objects
     "Module",
-    "Database",
-    "Clause",
     "Var",
     "Trail",
     "Quantity",
@@ -83,9 +78,6 @@ __all__ = [
     "deref",
     "unify",
     "UnboundVarCoercionError",
-    "structural_unify",
-    "make_predicate",
-    "MakePredicateRetiredError",
     "LogicException",
     # Reading and building a term from Python (a compound term is the cell
     # ``(functor, *args)``, 2026-09-27): an error term is the cell
@@ -98,8 +90,15 @@ __all__ = [
     "to_python",
     "to_clausal",
     "term_key",
-    "get_builtin_class",
     "Solutions",
-    # All builtin predicate classes
-    *_builtin_names,
+    "query_wfs",
+    # ``Database``, ``Clause``, ``structural_unify`` and ``get_builtin_class``
+    # stay module attributes but are internal, so they are not listed here.
+    # The builtin predicate objects whose names are Python identifiers.  An
+    # operator spelling ('#=', '=..') or a dotted solver name ('z3.sat',
+    # 'clpq.minimize') is still a module attribute (getattr works) and still
+    # callable from .clausal source; it is left out of ``__all__`` because
+    # ``from clausal import *`` cannot bind such a name anyway.
+    *(_n for _n in _builtin_names
+      if _n.isidentifier() and not _keyword.iskeyword(_n)),
 ]

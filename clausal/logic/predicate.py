@@ -11,8 +11,8 @@ module body's clause heads), the era-agnostic resolvers (``resolve_predicate_row
 (``register_handle_owner``, ``namespace_db``) and ``_dispatch_at``.
 
 The ``PredicateMeta`` metaclass that made a predicate a Python CLASS was
-deleted at W4b-3 slice 7 (2026-09-26); ``make_predicate`` stays as a stub
-that raises ``MakePredicateRetiredError``.
+deleted at W4b-3 slice 7 (2026-09-26); its Python constructor,
+``make_predicate``, was removed before 1.0 (it had been a stub that raised).
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ import os
 import re
 import sys
 import textwrap
-from typing import Any, Callable, NoReturn
+from typing import Any, Callable
 
 from clausal.logic.cells import is_chars, chars_text  # stage 1: the chars carrier
 from clausal._suffixes import CLAUSAL_SUFFIXES
@@ -2503,40 +2503,6 @@ def is_atom_value(obj: Any) -> bool:
     return _term_is_atom(obj)          # STAGE 2 (spec §4): no class is an atom
 
 
-class MakePredicateRetiredError(TypeError):
-    """``make_predicate`` was RETIRED (W4b-3 slice 6, 2026-09-25): a
-    predicate is a Database row, named by a handle, and a class created in
-    Python has no Database to be a row of.  A ``TypeError`` -- the call
-    itself is the mistake, whatever its arguments -- raised at the call, so
-    the traceback points at the line to change."""
-
-
-_MAKE_PREDICATE_RETIRED = (
-    "make_predicate({name!r}, {fields!r}) was retired (W4b-3 slice 6): a "
-    "predicate is a row in a module's Database, named by a handle, not a "
-    "class made in Python.\n"
-    "  -> define {name} in a .clausal module and import it (or load the "
-    "module and run a goal with solve((\"{name}\", *args), module=m));\n"
-    "  -> to supply a predicate from Python, bind a plain object (not a "
-    "class) with a _get_dispatch() method returning its dispatch function "
-    "into a Python module, and -import_from it;\n"
-    "  -> to build a term, write the cell: ({name!r}, arg, ...).")
-
-
-def make_predicate(name: str, fields: list[str], *,
-                   instances: Any = _MISSING) -> NoReturn:
-    """RETIRED (W4b-3 slice 6): raises :class:`MakePredicateRetiredError`.
-
-    It created a ``PredicateMeta`` class from Python -- the Python-API arm of
-    the class era; the class itself was deleted at W4b-3 slice 7.
-    The name stays so a caller gets THIS explanation, pointing at the
-    replacements, rather than an ``ImportError``/``AttributeError``."""
-    raise MakePredicateRetiredError(
-        _MAKE_PREDICATE_RETIRED.format(name=name, fields=list(fields)
-                                       if isinstance(fields, (list, tuple))
-                                       else fields))
-
-
 def make_atom(name: str) -> tuple[str]:
     """Return the atom *name* — the arity-0 cell ``(name,)``.
 
@@ -2573,7 +2539,7 @@ __all__ = ["RetiredStateError", "_MISSING", "is_term_instance",
            "is_atom_value",
            "term_field_names", "term_field_names_of_class", "field_names_for",
            "term_field_values", "term_field_dict",
-           "make_predicate", "MakePredicateRetiredError", "make_atom",
+           "make_atom",
            "resolve_predicate_row", "is_declared_predicate",
            "is_declared_predicate_name", "predicate_arities_for",
            "mint_predicate_handle", "namespace_db",
