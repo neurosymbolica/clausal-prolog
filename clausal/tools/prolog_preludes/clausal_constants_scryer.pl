@@ -1,3 +1,4 @@
+% clausal: no-collect
 % Constants prelude for SCRYER PROLOG.
 %
 % Expands the `:- constant_number_units(Name, Number, Units)` directives the

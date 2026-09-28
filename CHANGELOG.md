@@ -278,6 +278,12 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
 
 ### Fixed
 
+- **`python -m clausal.testing` skips what the pytest plugin skips.** A
+  directory scan honours `collect_ignore`/`collect_ignore_glob` from the
+  `conftest.py` files under it, so `tests/` no longer reports the golden
+  translator inputs as failing loads, and the Prolog files shipped as
+  package data (the toklex specs and the constants preludes) carry the
+  `% clausal: no-collect` marker.
 - **A lambda called with the wrong number of arguments** raises an ISO
   error term instead of a Python `TypeError`: too many arguments extend the
   body goal (`maplist((S) <- (S > 0), [1, 2], R)` is
