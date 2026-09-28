@@ -428,6 +428,22 @@ def _append__3(this_generator, _proceed, _fail, _catcher, l1, l2, l3, trail):
     yield (_fail, DONE)
 
 
+def _length_n_error(n_val):
+    """The prologue's errors for length/2's N (Scryer too), or nothing for an
+    N that is merely the wrong integer: ``type_error(integer, N)`` for a
+    non-integer, ``domain_error(not_less_than_zero, N)`` for a negative one.
+    A bool is no length and no error (A09-F015): it just fails."""
+    if isinstance(n_val, bool):
+        return
+    from clausal.logic.exceptions import (  # noqa: PLC0415
+        LogicException, domain_error, type_error,
+    )
+    if type(n_val) is not int:
+        raise LogicException(type_error("integer", n_val, "length/2"))
+    if n_val < 0:
+        raise LogicException(domain_error("not_less_than_zero", n_val, "length/2"))
+
+
 @_trampoline_builtin("length", 2)
 def _length__2(this_generator, _proceed, _fail, _catcher, lst, n, trail):
     """length(List, N) — N is the length of List.
@@ -437,22 +453,32 @@ def _length__2(this_generator, _proceed, _fail, _catcher, lst, n, trail):
     """
     lst_val = deref(lst)
     n_val = deref(n)
-    if not is_var(n_val) and not isinstance(n_val, bool):
-        # The prologue's errors (Scryer too): an integer length or none.
-        if not _is_int(n_val):
-            from clausal.logic.exceptions import LogicException, type_error  # noqa: PLC0415
-            raise LogicException(type_error("integer", n_val, "length/2"))
-        if n_val < 0:
-            from clausal.logic.exceptions import LogicException, domain_error  # noqa: PLC0415
-            raise LogicException(domain_error("not_less_than_zero", n_val, "length/2"))
     items = _as_items(lst_val)
     if items is not None:
+        if type(n_val) is int:
+            if n_val < 0:
+                _length_n_error(n_val)
+        elif not is_var(n_val):
+            _length_n_error(n_val)
         mark = trail.mark()
         if unify(n, len(items), trail):
             yield (_proceed, None)
         trail.undo(mark)
         yield (_fail, DONE)
         return
+    if type(n_val) is int:
+        if n_val < 0:
+            _length_n_error(n_val)
+        if is_var(lst_val):
+            # the generating mode: N fresh elements
+            mark = trail.mark()
+            if unify(lst, [Var() for _ in range(n_val)], trail):
+                yield (_proceed, None)
+            trail.undo(mark)
+            yield (_fail, DONE)
+            return
+    elif not is_var(n_val):
+        _length_n_error(n_val)
     skel = _open_skeleton(lst_val)
     if skel is None:
         yield (_fail, DONE)
