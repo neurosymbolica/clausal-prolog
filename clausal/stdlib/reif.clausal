@@ -1,14 +1,78 @@
-# Reified predicates library (V2-8 Phase B)
+# Reified predicates library (V2-8 Phase B; Scryer's library(reif), 2026-09-30)
 #
 # memberd_t/3: reified deterministic membership
 # From Neumerkel & Kral (arXiv:1607.01590, §7):
 #   memberd_t(X, Es, T) — T is True if X is a member of Es, False otherwise.
 #   Ground queries are deterministic (no leftover choicepoints).
 #   Uses eq/3 (reified equality) and if_/3 (reified branching).
+#
+# The rest of Scryer's reif.pl export list, with Scryer's meaning:
+# tfilter/3, tpartition/4, tmember/2, tmember_t/3 and cond_t/3.  Scryer
+# writes each as ``if_(call(C, X), Then, Else)``: if_/3 calls its condition
+# with one more argument, the truth value, and branches on it -- an unbound
+# truth value is instantiation_error, anything but true/false
+# type_error(boolean, T).  The seam's if_ takes a GOAL as its condition, so
+# here the reified call and the check are written out, then if_ branches on
+# the (now ground) truth value.  (=)/3 and dif/3 are engine builtins; if_/3,
+# (',')/3 and (;)/3 in an if_ condition are lowered by the native .pl front
+# end (clausal/tools/iso_l3.py).
+#
+# tfilter/3 and tpartition/4 are ALSO engine builtins, committed to each
+# call's first truth value.  A .pl file that imports library(reif) takes
+# these (Scryer's, every answer) instead.
+
+-private([boolean])
+
+# The closures belong to the CALLER (Scryer's meta_predicate declarations):
+# a closure is resolved in the module that passed it, not here.
+-meta_predicate(tfilter(2, '?', '?'))
+-meta_predicate(tpartition(2, '?', '?', '?'))
+-meta_predicate(tmember(2, '?'))
+-meta_predicate(tmember_t(2, '?', '?'))
+-meta_predicate(cond_t(1, 0, '?'))
 
 memberd_t(_x, _es, _t) <- l_memberd_t(_es, _x, _t)
 
 l_memberd_t([], _, False),
 l_memberd_t([_e, *_es], _x, _t) <- (
     if_(_x is _e, _t is True, l_memberd_t(_es, _x, _t))
+)
+
+# tfilter(C_2, [E|Es], Fs0) :-
+#     if_(call(C_2, E), Fs0 = [E|Fs], Fs0 = Fs), tfilter(C_2, Es, Fs).
+tfilter(_, [], []),
+tfilter(C, [E, *ES], FS0) <- (
+    call(C, E, T), must_be(boolean, T),
+    if_(T is True, FS0 is [E, *FS], FS0 is FS),
+    tfilter(C, ES, FS)
+)
+
+# tpartition(P_2, Xs, Ts, Fs) :- i_tpartition(Xs, P_2, Ts, Fs).
+tpartition(P, XS, TS, FS) <- i_tpartition(XS, P, TS, FS)
+
+i_tpartition([], _, [], []),
+i_tpartition([X, *XS], P, TS0, FS0) <- (
+    call(P, X, T), must_be(boolean, T),
+    if_(T is True, (TS0 is [X, *TS], FS0 is FS),
+                   (FS0 is [X, *FS], TS0 is TS)),
+    i_tpartition(XS, P, TS, FS)
+)
+
+# tmember(P_2, [X|Xs]) :- if_(call(P_2, X), true, tmember(P_2, Xs)).
+tmember(P, [X, *XS]) <- (
+    call(P, X, T), must_be(boolean, T),
+    if_(T is True, True, tmember(P, XS))
+)
+
+# tmember_t(P_2, [X|Xs], T) :- if_(call(P_2, X), T = true, tmember_t(P_2, Xs, T)).
+tmember_t(_, [], False),
+tmember_t(P, [X, *XS], T) <- (
+    call(P, X, T0), must_be(boolean, T0),
+    if_(T0 is True, T is True, tmember_t(P, XS, T))
+)
+
+# cond_t(If_1, Then_0, T) :- if_(If_1, (Then_0, T = true), T = false).
+cond_t(C, G, T) <- (
+    call(C, T0), must_be(boolean, T0),
+    if_(T0 is True, (call(G), T is True), T is False)
 )

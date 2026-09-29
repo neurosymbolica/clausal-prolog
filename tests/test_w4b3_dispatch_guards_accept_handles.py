@@ -55,6 +55,12 @@ step(2, 1, 3),
 step(-1, 3, 2),
 step5(X, Y, A0, A) <- (A == A0 + X + Y)
 step6(X, Y, Z, A0, A) <- (A == A0 + X + Y + Z)
+sum3(X1, X2, S) <- (S == X1 + X2)
+sum4(X1, X2, X3, S) <- (S == X1 + X2 + X3)
+sum5(X1, X2, X3, X4, S) <- (S == X1 + X2 + X3 + X4)
+sum6(X1, X2, X3, X4, X5, S) <- (S == X1 + X2 + X3 + X4 + X5)
+sum7(X1, X2, X3, X4, X5, X6, S) <- (S == X1 + X2 + X3 + X4 + X5 + X6)
+sum8(X1, X2, X3, X4, X5, X6, X7, S) <- (S == X1 + X2 + X3 + X4 + X5 + X6 + X7)
 last(1, 1),
 ping(1, 2),
 holds(secret),
@@ -314,6 +320,13 @@ L = [1, 2, -1]
 _LIST_CASES = [
     ("maplist", "is_pos", ([1, 2],), 0),
     ("maplist", "key", ([1, 2],), 1),
+    # maplist/4..9 (slice 4)
+    ("maplist", "sum3", ([1], [2],), 1),
+    ("maplist", "sum4", ([1], [2], [3],), 1),
+    ("maplist", "sum5", ([1], [2], [3], [4],), 1),
+    ("maplist", "sum6", ([1], [2], [3], [4], [5],), 1),
+    ("maplist", "sum7", ([1], [2], [3], [4], [5], [6],), 1),
+    ("maplist", "sum8", ([1], [2], [3], [4], [5], [6], [7],), 1),
     ("include", "is_pos", (L,), 1),
     ("exclude", "is_pos", (L,), 1),
     ("foldl", "step", (L, 0), 1),
@@ -358,18 +371,26 @@ _CLASS_ERA_LIST_ANSWERS = {
     'foldl/5': [(10,)],
     'foldl/6': [(6,)],
     'map_list_to_pairs/3': [([("-", 10, 1), ("-", 20, 2)],)],
+    # maplist/4..9 arrived 2026-09-30 (slice 4), after the class era too.
+    'maplist/4': [([3],)],
+    'maplist/5': [([6],)],
+    'maplist/6': [([10],)],
+    'maplist/7': [([15],)],
+    'maplist/8': [([21],)],
+    'maplist/9': [([28],)],
 }
 
 
 def test_the_list_case_table_covers_all_nineteen_builtins():
-    """Positive control on the population: 19 distinct builtin/arity pairs,
+    """Positive control on the population: 25 distinct builtin/arity pairs
+    (19, and maplist/4..9 since slice 4),
     each a registered builtin.  Since the aliased-import ruling (2026-09-24)
     they are db-receiving (``_DB_BUILTINS``, ``_db_optional``): the caller's
     database is what says which unqualified name a goal arrived under."""
     from clausal.logic.builtins._registry import _BUILTINS, _DB_BUILTINS
     from clausal.logic.builtins.higher_order import _GOAL_FIRST_LIST_BUILTINS
     keys = {(b, 1 + len(a) + n) for b, _, a, n in _LIST_CASES}
-    assert len(keys) == 19
+    assert len(keys) == 25
     assert keys == set(_GOAL_FIRST_LIST_BUILTINS)
     assert keys <= set(_DB_BUILTINS), keys - set(_DB_BUILTINS)
     assert not keys & set(_BUILTINS)
@@ -390,7 +411,7 @@ def test_list_builtin_answers_the_same_for_a_handle(lm, builtin, goal, inputs, n
 def test_the_pinned_class_answers_cover_every_list_case():
     """Positive control on the pinned population: one answer per case."""
     keys = {f"{b}/{1 + len(a) + n}" for b, _, a, n in _LIST_CASES}
-    assert len(keys) == 19 and keys == set(_CLASS_ERA_LIST_ANSWERS)
+    assert len(keys) == 25 and keys == set(_CLASS_ERA_LIST_ANSWERS)
 
 
 def test_a_data_atom_is_still_not_a_list_goal(lm):

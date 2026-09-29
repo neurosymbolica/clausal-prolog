@@ -12,6 +12,8 @@ Built-ins implemented
 ---------------------
 eq/3        — reified equality: eq(X, Y, T) — T is True if X=Y, False if dif(X,Y)
 dif_t/3     — reified disequality: dif_t(X, Y, T) — T is True if dif(X,Y), False if X=Y
+=/3, dif/3  — library(reif)'s names (Scryer's reif.pl): =/3 is eq/3; dif/3 is
+              dif_t/3 in =/3's answer order (False first)
 """
 
 from __future__ import annotations
@@ -89,3 +91,14 @@ def dif_t__3(x: Any, y: Any, t: Any, trail: Trail, k: Any):
             yield None
         trail.undo(mark)
     return; yield  # noqa: B901 — ensure generator
+
+
+def reif_dif__3(x: Any, y: Any, t: Any, trail: Trail, k: Any):
+    """Scryer's reif ``dif(X, Y, T) :- =(X, Y, NT), non(NT, T).``: dif_t/3's
+    truth values, in =/3's answer order -- undetermined, (T = False, X = Y)
+    comes before (T = True, dif(X, Y))."""
+    for _ in eq__3(x, y, nt := Var(), trail, k):
+        mark = trail.mark()
+        if unify(t, deref(nt) is not True, trail):
+            yield None
+        trail.undo(mark)
