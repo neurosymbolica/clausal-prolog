@@ -101,3 +101,24 @@ def test_labeling_min_max_options(native, ans):
                                p(1, 2), p(0, 0), p(0, 1), p(0, 2)]]
     assert ans(mod, "o4") == [[p(2, 0), p(2, 1), p(1, 0), p(1, 2), p(0, 1),
                                p(0, 2)]]
+
+
+LEX = """\
+:- use_module(library(clpz)).
+l1(R) :- findall(X, (lex_chain([[1,X],[1,2]]), X in 0..3, label([X])), R).
+l2(R) :- findall(X-Y, (lex_chain([[X,Y],[1,1]]), [X,Y] ins 0..2, label([X,Y])), R).
+l3(R) :- findall(A-B-C, (lex_chain([[A],[B],[C]]), [A,B,C] ins 0..1, label([A,B,C])), R).
+l4(R) :- findall(x, lex_chain([[1,2],[1]]), R).
+"""
+
+
+def test_lex_chain(native, ans):
+    """lex_chain/1 did not exist; Scryer's answers (lists of different
+    lengths fail)."""
+    mod = native.load("l3_clpz_lex", LEX)
+    p = lambda a, b: ("-", a, b)  # noqa: E731
+    assert ans(mod, "l1") == [[0, 1, 2]]
+    assert ans(mod, "l2") == [[p(0, 0), p(0, 1), p(0, 2), p(1, 0), p(1, 1)]]
+    assert ans(mod, "l3") == [[p(p(0, 0), 0), p(p(0, 0), 1), p(p(0, 1), 1),
+                               p(p(1, 1), 1)]]
+    assert ans(mod, "l4") == [[]]

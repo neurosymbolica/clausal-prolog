@@ -236,3 +236,33 @@ def _all_distinct(vs, trail, k):
     from clausal.logic.clpfd import all_different  # noqa: PLC0415
     if all_different(_items(vs, "all_distinct/1"), trail):
         yield None
+
+
+@_builtin("lex_chain", 1, fields=("lists",))
+def _lex_chain(lists, trail, k):
+    """lex_chain(Lists) -- each list is lexicographically less than or equal
+    to the next.  Posted as the reified chain Scryer's decomposition means:
+    ``A1 #< B1 #\\/ (A1 #= B1 #/\\ lex(Rest))``, true on exhausted lists."""
+    from clausal.logic.clpz_surface import post_connective  # noqa: PLC0415
+    ls = [_items(li, "lex_chain/1") for li in _items(lists, "lex_chain/1")]
+    for a, b in zip(ls, ls[1:]):
+        if len(a) != len(b):
+            return                  # lists of different lengths: Scryer fails
+        for x in a + b:
+            _integer_or_fd_var(x)
+        term = 1
+        for x, y in reversed(list(zip(a, b))):
+            term = ("#\\/", ("#<", x, y), ("#/\\", ("#=", x, y), term))
+        if term == 1:
+            continue
+        if not post_connective(term[0], term[1:], trail):
+            return
+    yield None
+
+
+def _integer_or_fd_var(x):
+    from clausal.logic.exceptions import LogicException, type_error  # noqa: PLC0415
+    from clausal.logic.variables import deref, is_var  # noqa: PLC0415
+    x = deref(x)
+    if not (is_var(x) or type(x) is int):
+        raise LogicException(type_error("integer", x, "lex_chain/1"))
