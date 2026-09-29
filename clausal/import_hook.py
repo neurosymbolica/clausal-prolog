@@ -991,8 +991,10 @@ class NativePrologLoader(PrologLoader):
                 pl_source, os.path.basename(path), op_table=self._op_table())
         except iso_l3.LoweringRefused as e:
             line = iso_l3.line_of(pl_source, e.span) or 0
-            text = (pl_source.splitlines()[line - 1]
-                    if 0 < line <= pl_source.count("\n") + 1 else "")
+            # Split on "\n" only: _Positions numbers lines that way, and
+            # splitlines() also breaks on \f, \x85, \u2028 ...
+            lines = pl_source.split("\n")
+            text = lines[line - 1] if 0 < line <= len(lines) else ""
             raise SyntaxError(f"Cannot import {path}: {e}",
                               (path, line, 1, text)) from e
         self.l3_stats = stats

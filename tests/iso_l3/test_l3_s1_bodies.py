@@ -138,3 +138,45 @@ def test_an_underscore_variable_is_exempt_as_in_prolog(native, ans):
 
 def test_a_repeated_variable_is_no_singleton(native):
     assert _singletons(native, "s1_twice", "e(X, X).\n") == []
+
+
+# ── roborev round 1 ──
+
+
+def test_the_meta_goal_table_matches_the_compilers(native):
+    """_META_GOAL_ARGS is index-keyed; ir.META_GOAL_POSITIONS is field-keyed.
+    Every compiler meta kind that a .pl program can name must be listed, with
+    as many goal positions, so a new one cannot drift in silently."""
+    from clausal.logic.compiler.ir import META_GOAL_POSITIONS
+    ours = {name: len(ix) for (name, _), ix in L3._META_GOAL_ARGS.items()}
+    theirs = {k: len(v) for k, v in META_GOAL_POSITIONS.items()
+              if k not in ("catch_error", "catch_recover")}   # not ISO names
+    assert ours == theirs
+
+
+def test_an_operator_goal_position_is_the_whole_goal():
+    src = "p(A, B) :- A == B, q(A).\nq(1).\n"
+    mod, _ = L3.lower_items(L3.read_iso(src), source=src)
+    pos = {}
+    for n in ast.walk(mod):
+        if isinstance(n, ast.Call) and getattr(n.func, "id", None) == "$LoadName":
+            kw = {k.arg: k.value for k in n.keywords}
+            pos[ast.literal_eval(kw["name"])] = ast.literal_eval(kw["position"])
+    assert pos["=="] == (1, 11, 1, 17)       # `A == B`, not `A =`
+    assert pos["q"] == (1, 19, 1, 20)        # prefix goal: the name
+
+
+@pytest.mark.parametrize("text", ["'None'(1).", "p :- 'True'(1).",
+                                  "'False'."])
+def test_true_false_none_as_predicate_names_are_refused_cleanly(native, text):
+    """``ast.Name`` cannot carry these ids and the engine's codegen raises
+    on them (ValueError, no line): refused with the .pl line instead."""
+    with pytest.raises(SyntaxError, match="cannot name a predicate") as ei:
+        native.load("s1_pyconst", "q.\n" + text + "\n")
+    assert ei.value.lineno == 2
+
+
+def test_a_refusal_line_counts_newlines_only(native):
+    with pytest.raises(SyntaxError) as ei:
+        native.load("s1_ff", "a('\f').\np :- !.\n")
+    assert ei.value.lineno == 2 and ei.value.text == "p :- !."

@@ -106,6 +106,11 @@ _META_GOAL_ARGS: dict[tuple[str, int], tuple[int, ...]] = {
 #: Goals whose second argument is an ISO iterated goal term, ``V^G``.
 _ITERATED_GOAL = {("bagof", 3), ("setof", 3)}
 
+#: ISO-legal predicate names the engine cannot hold: ``ast.Name`` cannot carry
+#: them, and the compiler's codegen raises on them (``'True'``/``'False'`` are
+#: also the seam's reserved truth values).  Refused with the ``.pl`` line.
+_UNREPRESENTABLE_NAMES = ("True", "False", "None")
+
 #: Python names a lowered program must never bind or read by accident.
 _DOLLAR = "$"
 
@@ -119,6 +124,7 @@ class _Positions:
 
     def __init__(self, source: "str | None"):
         self._starts = None
+        self.source = source
         if source is not None:
             starts = [0]
             for i, ch in enumerate(source):
@@ -343,7 +349,7 @@ class _ClauseLowering:
                     if name == "call" and i == 0:
                         self._refuse_control_in(a, s)
                     lowered.append(self.term(a, s))
-            head_pos = self._pos.of(_functor_span(sp, name))
+            head_pos = self._pos.of(_functor_span(sp, name, self._pos.source))
             return self._call(name, lowered, head_pos, pos)
         # ISO 7.6.2: a number (or anything else) is not callable.
         raise LoweringRefused(
@@ -376,6 +382,8 @@ class _ClauseLowering:
                     self._refuse_control_in(a, s)
 
     def _check_goal_name(self, name: str, sp) -> None:
+        if name in _UNREPRESENTABLE_NAMES:
+            raise LoweringRefused(_unrepresentable(name), _top_span(sp))
         if name.startswith(_DOLLAR):
             raise LoweringRefused(
                 f"`{name}` is a reserved name: a `$`-prefixed predicate is "
@@ -390,13 +398,23 @@ class _ClauseLowering:
             position=_pos_expr(pos))
 
 
-def _functor_span(sp, name: str):
-    """The span of a goal's functor name: its first ``len(name)`` characters
-    for a prefix-written ``f(...)`` goal, else the whole goal."""
+def _unrepresentable(name: str) -> str:
+    return (f"`{name}` cannot name a predicate in Clausal (ISO allows it; the "
+            f"engine reserves True/False/None): rename the predicate")
+
+
+def _functor_span(sp, name: str, source: "str | None" = None):
+    """The span of a goal's functor name when the goal is written in prefix
+    form ``f(...)`` -- the source there starts with the name and a ``(`` --
+    else the whole goal (an operator goal ``A == B`` starts with its left
+    operand, which is not the name)."""
     top = _top_span(sp)
     if top is None:
         return None
-    return (top[0], min(top[1], top[0] + len(name)))
+    end = top[0] + len(name)
+    if source is not None and source[top[0]:end + 1] == name + "(":
+        return (top[0], end)
+    return top
 
 
 # ── clauses ──────────────────────────────────────────────────────────────────
@@ -435,6 +453,8 @@ def lower_clause(term: Any, spans=None, var_names=None,
         raise LoweringRefused(
             f"a clause head is not callable: {head!r} (ISO type_error(callable))",
             whole_span)
+    if name in _UNREPRESENTABLE_NAMES:
+        raise LoweringRefused(_unrepresentable(name), whole_span)
     if name.startswith(_DOLLAR):
         raise LoweringRefused(
             f"`{name}` is a reserved name: a `$`-prefixed predicate is the "
