@@ -36,12 +36,12 @@ _KNOWN_UNCOMPILABLE = {
     # deliberately documents a runtime failure. Neither is standalone-compilable.
     #
     # These are keyed by fence line, so prose inserted ABOVE them shifts every
-    # one; the numbers below match docs/import.md as of the 2026-09-28 refresh.
-    ("import.md", 378),
-    ("import.md", 420),
+    # one; the numbers below match docs/import.md as of batch F (2026-09-29).
+    ("import.md", 423),
+    ("import.md", 465),
     # import.md: one more `# caller.clausal` block that `-import_from(lib, …)`
     # a fictional library. Not standalone-compilable.
-    ("import.md", 485),
+    ("import.md", 530),
 }
 
 
