@@ -111,8 +111,10 @@ class TestB3aDcgNonterminalAtTwoArities:
 
     def test_a_declared_nonterminal_at_two_arities_names_the_rule(
             self, tmp_path, monkeypatch):
-        """A FIELDED declaration keeps one arity per file; the refusal
-        names the rule instead of dying in ``compile``."""
+        """A FIELDED declaration fixes the arities a clause head may have
+        (each declared arity its own fields since 2026-09-29; state//2 is
+        not declared here); the refusal names the rule instead of dying in
+        ``compile``."""
         with pytest.raises(SyntaxError) as exc:
             _load(tmp_path, monkeypatch, "tri_b3a_decl", """
                 -private([state(S, DCG0, DCG1)])
@@ -121,7 +123,7 @@ class TestB3aDcgNonterminalAtTwoArities:
             """)
         msg = str(exc.value)
         assert "keyword argument repeated" not in msg
-        assert "one arity" in msg
+        assert "has exactly the arities its declarations name" in msg
         assert "state" in msg
 
 

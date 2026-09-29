@@ -384,7 +384,7 @@ def _declared_here_at_arity(module_dict: "dict | None", functor: str,
     from clausal.logic.compiler.terms_to_ast import (  # noqa: PLC0415
         functor_signature_for,
     )
-    fields = functor_signature_for(functor, module_dict)
+    fields = functor_signature_for(functor, module_dict, arity=arity)
     return fields is not None and len(fields) == arity
 
 

@@ -277,3 +277,44 @@ landed on the branch in one feature commit plus a docs commit.
   construction at an undeclared arity of a several-arity name is the
   compound at the written arity (ruling C), agreeing with the compile-time
   path. Low (tests) is covered by `TestReviewRound1`.
+
+## Q1 ruled: declared fields are per (name, arity) (2026-09-29, later)
+
+Operator ruling (direct): "-module(lib, [q(X), q(X, Y)]): allow it."
+Branch `feat/fields-per-arity-2026-09-29`, base `32894d0c`.
+
+- **Rewriter.** A -module/-private template entry at an arity the name does
+  not have yet declares THAT arity with its own fields
+  (`_declare_fielded_entry`: `_register_functor_arity` + its own
+  `$declare_head`). A clause head of a fielded name must be at a declared
+  arity: a template entry, or a field-free `name/N` entry / `-dynamic(name/N)`
+  (`_procedure_decl_arities`). An undeclared arity stays the old error; its
+  note now says "declare it in the same list, as `f(A, ARG_1)` ... or as
+  `f/2`". The late-declaration check is per arity: a list below clauses at
+  several arities must declare each of them (`_refuse_late_fielded`).
+- **Exec-time registry (C3).** Still keyed by name. A name declared at
+  several arities gets a DICT value `{arity: fields}`; a single-arity name
+  keeps its tuple, so its emitted update is byte-identical, and the
+  `-import_from` copy carries the dict unchanged. Read through
+  `cells.registry_signatures` / `registry_fields`.
+- **Database (C1).** `declared_fields_by_name` answers `None` for a name
+  declared at several arities (it answered the last one);
+  `declared_signatures_by_name` gives all of them.
+- **C2.** `functor_signature_for(name, ns, arity=None)`: one declared arity
+  answers it whatever is asked (unchanged); several answer the one at
+  `arity`, else the widest (a construction re-asks at the written arity).
+  `functor_signatures_for` gives the whole map.
+- **Keyword construction (Q3).** Seam, compile-time lowering, head
+  patterns and `-constants` choose with the runtime's own
+  `_head_signature_for`: the written arity when declared, else the one the
+  keywords fit, else `AmbiguousArityConstructionError`.
+- **-edcg_pred (Q4)** stays one arity: `_edcg_preds` is name-keyed with a
+  visible arity and the EDCG expander looks it up by name, so re-keying the
+  field registry does not make it free.
+- **`.pl` translator.** A name used as data at several arities is declared
+  at each (`box(_), box(_, _)`); it used to be left undeclared.
+- **No-change evidence.** The 453 rewritable `.clausal` files compared as
+  before against base `32894d0c`: 0 differ in module code, 0 in module
+  items. Positive control: `q(1), -private([q(A, B)])` differs (it now
+  emits a `$declare_head` for `q/2`; that shape loaded before and still
+  does).

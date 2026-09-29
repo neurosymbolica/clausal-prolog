@@ -124,8 +124,12 @@ class TestC1PrologDataFunctorsAreDeclared:
                  if ln.startswith("-private(")]
         return lines[0] if lines else ""
 
-    def test_a_name_used_as_data_at_two_arities_is_left_undeclared(self):
-        assert "f(" not in self._private("r(f(1)).\ns(f(1, 2)).\n")
+    def test_a_name_used_as_data_at_two_arities_is_declared_at_both(self):
+        # declared field names are per (name, arity) since 2026-09-29
+        # ("-module(lib, [q(X), q(X, Y)]): allow it"); it used to be left
+        # undeclared, and the load then raised
+        assert self._private("r(f(1)).\ns(f(1, 2)).\n") == (
+            "-private([f(_), f(_, _)])")
 
     def test_an_evaluable_name_is_matched_by_arity(self):
         # atan2/2 is an evaluable (left alone); atan2/3 is only data here

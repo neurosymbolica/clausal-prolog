@@ -1845,13 +1845,18 @@ def _process_directives(module_items: list, db: Any, module_dict: dict | None = 
                         imported_from[name_spec[1]] = (item.module, name_spec[0])
                     else:
                         imported_from[name_spec] = (item.module, name_spec)
-        from clausal.logic.cells import FUNCTOR_SIGNATURES_KEY  # noqa: PLC0415
-        for name, fields in (module_dict.get(FUNCTOR_SIGNATURES_KEY) or {}).items():
-            if fields and db.declared_fields(name, len(fields)) is None:
-                owner = imported_from.get(name)
-                db.declare_functor(
-                    name, tuple(fields),
-                    origin=None if owner is None else ("import", *owner))
+        from clausal.logic.cells import (  # noqa: PLC0415
+            FUNCTOR_SIGNATURES_KEY, registry_signatures,
+        )
+        for name, value in (module_dict.get(FUNCTOR_SIGNATURES_KEY) or {}).items():
+            # Every declared arity (a name declared at several has a
+            # per-arity value, operator ruling 2026-09-29).
+            for fields in (registry_signatures(value) or {}).values():
+                if fields and db.declared_fields(name, len(fields)) is None:
+                    owner = imported_from.get(name)
+                    db.declare_functor(
+                        name, tuple(fields),
+                        origin=None if owner is None else ("import", *owner))
     for item in module_items:
         if isinstance(item, DirectiveItem):
             if item.name == "predicate_export":

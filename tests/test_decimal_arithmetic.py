@@ -304,12 +304,21 @@ class TestWrittenSpellingsInCompiledArithmetic:
         assert isinstance(got_is, LogicException) and isinstance(got_ev, LogicException), (got_is, got_ev)
 
     def test_a_short_construction_of_a_data_functor_is_refused_at_load(self, tmp_path):
-        """Ruling C / Q1 (2026-09-25): the name's declaration is rdiv/3 (the
-        later of the two), so ``rdiv(2, 4)`` is too few arguments -- refused
-        at load, not padded to the look-alike ``rdiv(2, 4, _)``."""
+        """Ruling C / Q1 (2026-09-25): the name's only declaration is rdiv/3,
+        so ``rdiv(2, 4)`` is too few arguments -- refused at load, not padded
+        to the look-alike ``rdiv(2, 4, _)``."""
         with pytest.raises(SyntaxError, match=r"rdiv/3 was constructed with 2 positional"):
             _both(tmp_path, "true", "rdiv(2, 4) + 1",
-                  header=self._HDR + "-private([rdiv(A, B, C)])\n")
+                  header="-private([rdiv(A, B, C)])\n")
+
+    def test_a_construction_at_either_declared_arity_builds(self, tmp_path):
+        """Declared field names are per (name, arity) (operator ruling
+        2026-09-29): with rdiv/2 AND rdiv/3 declared, ``rdiv(2, 4)`` is the
+        declared rdiv/2.  (While the registry was keyed by name, the later
+        declaration, rdiv/3, replaced the earlier and this was refused.)"""
+        got_is, got_ev = _both(tmp_path, "true", "rdiv(2, 4) + 1",
+                               header=self._HDR + "-private([rdiv(A, B, C)])\n")
+        assert got_is == got_ev == Fraction(3, 2)
 
     def test_an_atom_times_two_is_refused_not_repeated(self, tmp_path):
         got_is, got_ev = _both(tmp_path, "true", "yes * 2")

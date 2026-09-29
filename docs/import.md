@@ -567,8 +567,9 @@ modules may spell the same functor's fields differently — one
 spellings are valid views of the same two slots. Its **arity** is not local:
 it is part of the functor's identity. `verdict/2` and `verdict/3` are two
 different functors (and two different procedures, as in ISO), and one file
-may define both -- unless the file DECLARES `verdict`'s field names, which
-belong to one arity (see [Predicates](predicates.md)).
+may define both. A declaration's field names are per arity:
+`-module(m, [verdict(S, C), verdict(S, C, N)])` declares both, each with its
+own fields (see [Predicates](predicates.md)).
 
 The rewriter follows that rule. A clause head is normally emitted with the
 field names derived from the head variables, but when the same file also
@@ -582,10 +583,10 @@ A genuine disagreement is therefore always an arity disagreement, and it still
 raises: a head with more arguments than the declared head has fields raises
 `ClausalTermConstructionError`, naming the functor, both arities, where the
 head was declared and where the term was constructed. A declaration's field
-names belong to one arity, so they cannot be reconciled with another: give
-every declaration and clause head the same number of arguments, spell the
-declaration `name/N` (no field names) so the other arity is a procedure of its
-own, or rename one of them.
+names belong to its own arity, so they cannot be reconciled with another: give
+the head the declared number of arguments, declare the other arity too (a
+second entry, `name(A, B)` beside `name(A)`, or `name/N` with no field names)
+so it is a procedure of its own, or rename one of them.
 
 ### One defining module per predicate
 

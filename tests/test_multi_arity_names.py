@@ -8,9 +8,11 @@ one arity in Clausal").  The plan and census are in
 ``implementation_plans/multi-arity-names-2026-09-29.md``; its decision
 numbers (D1-D9) are cited below.
 
-What STAYS an error (D2): a name whose FIELD NAMES were declared -- a fielded
-``-module``/``-private`` entry, ``-edcg_pred`` -- keeps one arity per file;
-a call at an arity the name does not have is still refused (D7).
+What STAYS an error (D2): a clause head of a name whose FIELD NAMES were
+declared -- a fielded ``-module``/``-private`` entry, ``-edcg_pred`` -- at an
+arity no declaration names (since the per-arity ruling a list may declare
+several arities, ``test_fields_per_arity.py``; ``-edcg_pred`` keeps one); a
+call at an arity the name does not have is still refused (D7).
 """
 
 from __future__ import annotations
@@ -267,14 +269,18 @@ class TestSingleArityOutputIsUnchanged:
         assert hf.by_arity == {("p", 1): ("x",), ("p", 2): ("x", "y")}
 
 
-def test_a_declared_conflict_names_the_iso_spelling(tmp_path):
+def test_a_declared_conflict_names_the_per_arity_declaration(tmp_path):
+    """Since the per-arity ruling (2026-09-29, "-module(lib, [q(X),
+    q(X, Y)]): allow it") the way out is to declare the second arity too;
+    the ISO indicator stays an alternative."""
     with pytest.raises(SyntaxError) as info:
         _load(tmp_path, "isonote", """
             -module(isonote, [f(A)])
             f(1, 2),
         """)
     flat = " ".join(str(info.value).split())
-    assert "once the entry is spelled `f/1`" in flat
+    assert "declare it in the same list, as `f(A, ARG_1)`" in flat
+    assert "or as `f/2`" in flat
 
 
 def test_a_prolog_file_defining_call_goal_1_to_8_imports(tmp_path):
@@ -308,9 +314,10 @@ class TestReviewRound1:
     def test_a_fielded_declaration_after_two_arities_is_refused(
             self, tmp_path):
         """D2 must not depend on order: a fielded -private entry BELOW
-        clauses at two arities would leave the name-keyed registry naming
-        one arity's fields for a name that has two."""
-        with pytest.raises(SyntaxError, match="one arity"):
+        clauses at two arities that declares only ONE of them leaves the
+        other undeclared (declaring both loads since the per-arity ruling,
+        ``test_fields_per_arity.py``)."""
+        with pytest.raises(SyntaxError, match="does not declare f/2"):
             _load(tmp_path, "latepriv", """
                 f(1),
                 f(1, 2),
