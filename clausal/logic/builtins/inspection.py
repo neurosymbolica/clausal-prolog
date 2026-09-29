@@ -1039,3 +1039,112 @@ def _module_constant__3(m, name, value, trail, k):
                     and unify(value, v, trail)):
                 yield None
             trail.undo(mark)
+
+
+# ── unify_with_occurs_check/2, subsumes_term/2, acyclic_term/1 (ISO) ─────────
+#
+# ISO core builtins that did not exist (existence_error(procedure, ...)).
+# Answers are Scryer's (measured 2026-09-30).
+
+
+@_builtin("unify_with_occurs_check", 2)
+def _unify_with_occurs_check__2(a, b, trail, k):
+    """unify_with_occurs_check(X, Y) -- ISO 8.2.2: unification that fails
+    rather than build a cyclic term (``unify_with_occurs_check(X, f(X))``
+    fails)."""
+    from clausal.logic.constraints import _structural_unify_oc  # noqa: PLC0415
+    mark = trail.mark()
+    if _structural_unify_oc(a, b, trail):
+        yield None
+    trail.undo(mark)
+
+
+@_builtin("subsumes_term", 2)
+def _subsumes_term__2(general, specific, trail, k):
+    """subsumes_term(General, Specific) -- ISO 8.2.4: some substitution of
+    General's variables makes it identical to Specific, binding none of
+    Specific's.  Leaves no bindings.
+
+    The ISO reference definition, step for step::
+
+        \\+ \\+ (term_variables(S, V1), unify_with_occurs_check(G, S),
+               term_variables(V1, V2), V1 == V2)
+    """
+    from clausal.logic.constraints import _structural_unify_oc  # noqa: PLC0415
+    v1: list = []
+    _collect_vars_impl(deref(specific), v1)
+    mark = trail.mark()
+    ok = _structural_unify_oc(general, specific, trail)
+    if ok:
+        v2: list = []
+        _collect_vars_impl(list(v1), v2)
+        ok = len(v1) == len(v2) and all(
+            deref(x) is deref(y) for x, y in zip(v1, v2))
+    trail.undo(mark)
+    if ok:
+        yield None
+
+
+def _acyclic_children(t):
+    """The immediate subterms of a (dereferenced) compound *t*, or ()."""
+    if type(t) in (tuple, list):
+        return t
+    if isinstance(t, SegList):
+        raw = t._walk_raw()
+        if isinstance(raw, list):
+            return raw
+        out = []
+        for seg in raw.segments:
+            if isinstance(seg, VarSeg):
+                out.append(seg.var)
+            else:
+                out.extend(seg.elements)
+        return out
+    if is_term_instance(t):
+        return [getattr(t, f) for f in term_field_names(t)]
+    import dataclasses  # noqa: PLC0415
+    if dataclasses.is_dataclass(t) and not isinstance(t, type):
+        # an operator node (``Add``/``Div``/...): its operands
+        return [getattr(t, f.name) for f in dataclasses.fields(t)
+                if f.name != "position"]
+    return ()
+
+
+def _is_acyclic(term) -> bool:
+    """False when *term*, followed through its variable bindings, reaches
+    itself.  Iterative depth-first search with three colours: a compound on
+    the current path (grey) reached again is a cycle; one fully explored
+    (black) is not revisited, so a shared subterm costs one visit and a deep
+    term no Python recursion."""
+    grey, black = set(), set()
+    stack = [(deref(term), False)]
+    while stack:
+        t, leaving = stack.pop()
+        key = id(t)
+        if leaving:
+            grey.discard(key)
+            black.add(key)
+            continue
+        children = _acyclic_children(t)
+        if not children:
+            continue
+        if key in grey:
+            return False
+        if key in black:
+            continue
+        grey.add(key)
+        stack.append((t, True))
+        for c in children:
+            c = deref(c)
+            if id(c) in grey and _acyclic_children(c):
+                return False
+            stack.append((c, False))
+    return True
+
+
+@_builtin("acyclic_term", 1)
+def _acyclic_term__1(term, trail, k):
+    """acyclic_term(T) -- ISO 8.3.11 (Cor.2): T is a finite (acyclic) term.
+    ``X = f(X), acyclic_term(X)`` fails."""
+    if _is_acyclic(term):
+        yield None

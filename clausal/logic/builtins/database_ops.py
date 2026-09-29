@@ -781,6 +781,131 @@ def _retract_factory(db):
     return retract__1
 
 
+@_db_builtin("retractall", 1, fields=("head",))
+def _retractall_factory(db):
+    """retractall(Head) -- ISO 8.9.5 (Cor.2): remove every clause whose head
+    unifies with Head; always succeeds (a predicate with no clauses is no
+    error).  It did not exist (existence_error(procedure, retractall/1)).
+    Errors are retract/1's, with retract/1 as their context -- Scryer's own
+    shape (``retractall(baz(_))`` on a static baz/1 is
+    permission_error(modify, static_procedure, baz/1) in retract/1)."""
+    from clausal.logic.database import head_key
+    from clausal.logic.compiler import compile_predicate_trampoline
+    module_dict = getattr(db, "module_dict", None)
+
+    def retractall__1(head, trail, k):
+        h = deref(head)
+        if is_var(h):
+            raise LogicException(instantiation_error("retract/1"))
+        from clausal.logic.builtins.call_body import is_non_callable_term  # noqa: PLC0415
+        if is_non_callable_term(h, lists=False):
+            from clausal.logic.exceptions import type_error  # noqa: PLC0415
+            raise LogicException(type_error("callable", h, "retract/1"))
+        term_val = _check_cell_head_permission(h, "retract/1", db, module_dict)
+        try:
+            functor, arity = head_key(term_val)
+        except TypeError:
+            yield None
+            return
+        pred_cls = _find_pred_cls(functor, arity, module_dict)
+        home = _home_db(db, pred_cls, functor, arity)
+        clause_list = home._clauses.get((functor, arity))
+        keep = None
+        if clause_list:
+            keep = [c for c in clause_list if not _clause_head_matches(term_val, c)]
+        if keep is not None and len(keep) != len(clause_list):
+            # ONE write for the whole removal (retract/1's gate and
+            # recompile, once -- not once per clause).  An undefined
+            # predicate is left undefined: ISO Cor.2 and Scryer create it
+            # dynamic, which the gate's declaration model has no door for.
+            home_globals = _home_globals(db, module_dict, home)
+            with home.mutate(functor, arity, author=db.runtime_author(),
+                             kind="retract", detail="retractall/1",
+                             through=pred_cls):
+                clause_list[:] = keep
+                if keep:
+                    compile_predicate_trampoline(
+                        functor, arity, home.clauses_for(functor, arity), home,
+                        globals_=home_globals, pred_cls=pred_cls)
+        yield None
+
+    return retractall__1
+
+
+def _clause_head_matches(term_val, clause) -> bool:
+    """retract/1's match (``_first_match_index``): the head unifies with
+    *term_val* and the clause's hoisted ``Unify`` goals agree with it.
+    Leaves no bindings."""
+    from clausal.terms import Unify as _Unify  # avoid top-level cycle
+    tmp_trail = Trail()
+    mark = tmp_trail.mark()
+    try:
+        if not structural_unify(term_val, clause.head, tmp_trail):
+            return False
+        for goal in clause.body:
+            if isinstance(goal, _Unify):
+                chk = Trail()
+                chk_mark = chk.mark()
+                ok = structural_unify(deref(goal.left), deref(goal.right), chk)
+                chk.undo(chk_mark)
+                if not ok:
+                    return False
+        return True
+    finally:
+        tmp_trail.undo(mark)
+
+
+def _pi_parts(pi):
+    """``(name, arity)`` of a predicate-indicator pattern (either part may be
+    an unbound variable), or raise ISO's type_error(predicate_indicator, PI)."""
+    from clausal.terms import Div  # noqa: PLC0415
+    t = deref(pi)
+    if is_var(t):
+        return Var(), Var()
+    parts = None
+    if type(t) is tuple and len(t) == 3 and t[0] == "/":
+        parts = (t[1], t[2])
+    elif isinstance(t, Div):          # ``foo/1`` written in a clause body
+        parts = (t.left, t.right)
+    if parts is not None:
+        name, arity = deref(parts[0]), deref(parts[1])
+        if (is_var(name) or _term_is_atom(name)) and (
+                is_var(arity) or (type(arity) is int and arity >= 0)):
+            return parts
+    from clausal.logic.exceptions import type_error  # noqa: PLC0415
+    raise LogicException(type_error("predicate_indicator", t,
+                                    "current_predicate/1"))
+
+
+@_db_builtin("current_predicate", 1, fields=("indicator",))
+def _current_predicate_factory(db):
+    """current_predicate(Name/Arity) -- ISO 8.8.2: a user-defined procedure
+    of the calling module (clauses, a -dynamic declaration or a name/N
+    export; not a builtin, not an import).  Enumerates on backtracking.  It
+    did not exist (existence_error(procedure, current_predicate/1))."""
+
+    def current_predicate__1(pi, trail, k):
+        name, arity = _pi_parts(pi)
+        if db is None:
+            return
+        # ``$`` names are compiler-internal; a ``_`` name cannot be written
+        # as a predicate (it reads as a variable) -- it is the query
+        # compiler's ``_query/0`` scaffolding.
+        keys = sorted(k for k in db.offered_keys()
+                      if type(k[0]) is str and not k[0].startswith(("$", "_")))
+        for f, a in keys:
+            mark = trail.mark()
+            if unify(name, mint(f), trail) and unify(arity, a, trail):
+                if is_var(deref(pi)):
+                    if unify(pi, ("/", mint(f), a), trail):
+                        yield None
+                else:
+                    yield None
+            trail.undo(mark)
+
+    return current_predicate__1
+
+
 # ── Tabling ───────────────────────────────────────────────────────────────────
 
 
