@@ -718,6 +718,10 @@ def _clause_factory(db):
         b = deref(body)
         if not is_var(b):
             _type_check(b, "body")
+            if type(b) is str and b == "true":
+                # the atom ``true`` a Prolog term spells the goal with: a
+                # fact's body reads back as the engine's True
+                body = True
         resolved = _resolve(db, h)
         if resolved is None:
             return

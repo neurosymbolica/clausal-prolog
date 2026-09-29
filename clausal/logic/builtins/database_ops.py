@@ -107,12 +107,55 @@ def _build_clause(term_val: Any, context: str, db, module_dict) -> "Any":
     if isinstance(term_val, _Predicate):
         raise LogicException(
             permission_error("assert", "rule", term_val.head, context))
+    term_val = _unneck_clause(term_val, context, "assert")
     was_cell, _cell_functor = compound_cell_shape(term_val)
     term_val, hoist_all = _resolve_cell_head(term_val, context, db,
                                              module_dict)
     if was_cell:
         term_val = _freeze_asserted_head_args(term_val)
     return _normalize_fact_clause(term_val, hoist_all=hoist_all)
+
+
+def is_true_body(body: Any) -> bool:
+    """*body* is the goal ``true``: the engine's ``True`` or the atom
+    ``true`` a Prolog term spells it with."""
+    body = deref(body)
+    return body is True or (type(body) is str and body == "true")
+
+
+def neck_parts(term_val: Any) -> "tuple[Any, Any] | None":
+    """``(Head, Body)`` of a ``Head :- Body`` cell, else None."""
+    from clausal.logic.cells import compound_cell_shape  # noqa: PLC0415
+    ok, functor = compound_cell_shape(term_val)
+    if ok and functor == ":-" and len(term_val) == 3:
+        return term_val[1], term_val[2]
+    return None
+
+
+def _unneck_clause(term_val: Any, context: str, action: str) -> Any:
+    """A ``Head :- Body`` clause term, as assertz/asserta/retract receive it
+    from Prolog source: ``Head :- true`` is the fact Head.  It used to be
+    taken as a FACT OF ``(:-)/2`` -- ``assertz((p(X) :- X = 2))`` stored a
+    clause nobody could call, and ``retract((p(1) :- true))`` looked for
+    one.  ISO 8.9.1.3 / 8.9.3.3 errors, as Scryer gives them: an unbound
+    head is instantiation_error, a non-callable head or body
+    type_error(callable, _).  A rule body cannot be asserted at runtime (the
+    same refusal as the rule node, A09-F005)."""
+    parts = neck_parts(term_val)
+    if parts is None:
+        return term_val
+    head, body = deref(parts[0]), deref(parts[1])
+    if is_var(head):
+        raise LogicException(instantiation_error(context))
+    _refuse_non_callable_clause(head, context)
+    if is_true_body(body):
+        return head
+    if action == "retract":
+        return None          # no runtime clause has a rule body to match
+    if is_var(body):
+        raise LogicException(instantiation_error(context))
+    _refuse_non_callable_clause(body, context)
+    raise LogicException(permission_error("assert", "rule", head, context))
 
 
 def _freeze_asserted_head_args(head: Any) -> Any:
@@ -681,6 +724,10 @@ def _retract_factory(db):
             # ISO 8.9.3.3 a (Scryer too): an unbound clause is an
             # instantiation error; it used to fail silently.
             raise LogicException(instantiation_error("retract/1"))
+        # ``Head :- true`` is the fact Head (see _unneck_clause)
+        term_val = _unneck_clause(term_val, "retract/1", "retract")
+        if term_val is None:
+            return
         # A CELL pattern goes through the SAME gate as the assert doors (P3-3
         # Task 5, R11) and comes back normalized to the shape the clause list
         # actually holds -- without that, ``_first_match_index`` would compare
