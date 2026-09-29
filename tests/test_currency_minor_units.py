@@ -1640,7 +1640,7 @@ def test_the_inline_refusal_names_the_directive_that_was_WRITTEN():
 
 
 def test_sum_list_still_accepts_every_numeric_kind(tmp_path):
-    """REGRESSION, found on canonical by the harness lane's answer diff.
+    """REGRESSION, found on canonical by a downstream checker's answer diff.
 
     `06290b23` added pre-validation to `sum_list/2` so that a single
     non-numeric element could not be returned unchanged by the new

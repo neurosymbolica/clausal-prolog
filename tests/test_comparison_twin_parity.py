@@ -4,7 +4,7 @@ wrapper defined later that is the one actually loaded when the C propagate
 module imports.  On 2026-09-17 a defect lived in the GAP between them (the
 twin folded a ground expression tree before comparing, the wrapper did not)
 while every test that named ``fd_eq`` exercised the twin and passed.
-the harness lane's question: "has the CHANGE been measured, or the
+a downstream checker's question: "has the CHANGE been measured, or the
 INTERACTION?"  This file measures the interaction: one matrix, both
 implementations, outcomes compared.
 

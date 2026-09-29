@@ -286,7 +286,7 @@ def test_a_genuinely_fractional_fold_is_still_a_float_and_that_is_KNOWN():
     representation at a USE SITE: `decimal_repr="rational"` covers declarations,
     but a use site must be arithmetically usable, and under the operator's
     `#=` ruling CLP(Z) is integer-only -- so a fractional money amount cannot be
-    a clpz constraint at all. That is a design question for the export lane, not
+    a clpz constraint at all. That is a design question for a downstream exporter, not
     something to settle by changing this emitter.
     """
     out = _export('-import_from(australia, [aud, aud_cent])\n'

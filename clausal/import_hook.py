@@ -664,7 +664,7 @@ class _ClausalSourceLoader(SourceLoader):
         """Write a ``.pyc`` ATOMICALLY; create ``__pycache__/`` if needed.
 
         Several engines may share one ``__pycache__`` (parallel lanes over a
-        shared kit or corpus tree), so the bytes go to a uniquely named temp
+        shared downstream tree), so the bytes go to a uniquely named temp
         file in the SAME directory and ``os.replace`` swaps it in: a reader
         sees the old file or the complete new one, never a torn one. This
         mirrors CPython's ``importlib._bootstrap_external._write_atomic``.
