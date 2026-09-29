@@ -924,6 +924,23 @@ def _leftmost_usub(node):
     return None, 0
 
 
+#: How a ``use_module`` target is spelled.
+#:
+#: ``"relative"`` (the default) is the EXPORT-TREE layout: with a
+#: *module_path*, the target is a quoted path relative to the consuming file's
+#: package, after :data:`_LIBRARY_REMAP` has flattened the shared libraries to the
+#: tree's root -- what Scryer resolves a consulted path against.
+#:
+#: ``"plain"`` is the ENGINE layout: the target is the dotted module path with
+#: its dots as ``/`` (``lib``, ``pkg/dates``, ``a/b/c/schema``),
+#: unquoted, which the engine's ``.pl`` front end resolves through
+#: ``sys.path`` like any other module spec. Nothing is flattened. And since the
+#: engine's ``use_module/1`` imports NOTHING, every import list is explicit:
+#: from *module_signatures*, or from arities written in the source, and an
+#: import whose names cannot be listed is refused rather than left listless.
+_MODULE_SPECS = frozenset({"relative", "plain"})
+
+
 class _ClausalToProlog:
     """Convert Python AST (from .clausal source) to Prolog AST.
 
@@ -935,9 +952,15 @@ class _ClausalToProlog:
                  module_path: str | None = None,
                  module_signatures: dict[str, set[tuple[str, int]]] | None = None,
                  meta_modes: MetaModeMap | None = None,
-                 source_lines: list[str] | None = None):
+                 source_lines: list[str] | None = None,
+                 module_specs: str = "relative"):
         self.dialect = dialect
         self.strict = strict
+        if module_specs not in _MODULE_SPECS:
+            raise ValueError(f"module_specs must be one of {sorted(_MODULE_SPECS)}, "
+                             f"got {module_specs!r}")
+        #: How a use_module target is spelled -- see :data:`_MODULE_SPECS`.
+        self.module_specs = module_specs
         # Original source, split into lines. Required to tell the lambda arrow
         # `<-` from the comparison `< -`, which are indistinguishable in the
         # AST and differ only in source spacing. None when the caller built the
@@ -1937,6 +1960,14 @@ class _ClausalToProlog:
             lib_inner = library_name[len("library("):-1]  # "clpfd"
             return PCompound("library", (PAtom(lib_inner),))
 
+        if self.module_specs == "plain":
+            # Engine layout: the dotted path itself, as a `/`-joined spec.
+            segments = mod_path.split(".")
+            spec: PTerm = PAtom(segments[0])
+            for segment in segments[1:]:
+                spec = PCompound("/", (spec, PAtom(segment)))
+            return spec
+
         if self.module_path is None:
             # Single-file use: absolute dotted path, unchanged.
             return PAtom(mod_path.replace(".", "/"), quoted=True)
@@ -1995,6 +2026,9 @@ class _ClausalToProlog:
                 requested.append((resolve_name(elt.left.id, self.dialect),
                                   elt.right.value + extra))
 
+        if self.module_specs == "plain" and mod_path not in self.dialect.library_map:
+            return self._explicit_import_list(mod_path, requested)
+
         if self.module_signatures is None:
             if self.module_path is not None:
                 # Relative-path mode without signatures: no way to tell which
@@ -2021,6 +2055,41 @@ class _ClausalToProlog:
             # can never claim an export the target does not have).
             return None
 
+        imports: list[PTerm] = []
+        seen: set[tuple[str, int]] = set()
+        for name, arity in requested:
+            arities = ([arity] if arity is not None
+                       else sorted(a for n, a in exported if n == name))
+            for a in arities:
+                if (name, a) in exported and (name, a) not in seen:
+                    seen.add((name, a))
+                    imports.append(PCompound("/", (PAtom(name), PNumber(a))))
+        return imports
+
+    def _explicit_import_list(self, mod_path: str,
+                              requested: list[tuple[str, int | None]]) -> list[PTerm]:
+        """The import list for the ``"plain"`` (engine) layout: never None.
+
+        The engine's ``use_module/1`` imports nothing, so a listless import --
+        the relative layout's answer to "arity unknown" -- would load the
+        target and bind no name. With a signature for *mod_path* the list is
+        filtered exactly as in the relative layout (atoms and constructors
+        drop out, bare names expand to every exported arity). Without one,
+        only entries whose arity is WRITTEN can be listed; a bare name there
+        is recorded as untranslatable and left out.
+        """
+        exported = (self.module_signatures or {}).get(mod_path)
+        if exported is None:
+            listed = []
+            for name, arity in dict.fromkeys(requested):
+                if arity is None:
+                    self._add_warning(
+                        f"import of {name} from {mod_path}: its arity is unknown "
+                        "(no signature for the target), and the engine's "
+                        "use_module/1 imports nothing")
+                    continue
+                listed.append(PCompound("/", (PAtom(name), PNumber(arity))))
+            return listed
         imports: list[PTerm] = []
         seen: set[tuple[str, int]] = set()
         for name, arity in requested:
@@ -2083,7 +2152,8 @@ class _ClausalToProlog:
         if imports is None:
             # Unknown or unfiltered target: import its whole export set.
             return PDirective(PCompound("use_module", (prolog_mod,)))
-        if not imports and self.module_signatures is not None:
+        if not imports and (self.module_signatures is not None
+                            or self.module_specs == "plain"):
             # Nothing the target exports was asked for — a use_module naming
             # predicates it does not export would abort the consult.
             #
@@ -2116,6 +2186,21 @@ class _ClausalToProlog:
                 f"-import_module({mod_path})\n"
                 f"   No relative path from this module names that file."
             )
+        if self.module_specs == "plain" and mod_path not in self.dialect.library_map:
+            # The engine's use_module/1 imports nothing: list the whole
+            # export set, which only a signature can supply.
+            exported = (self.module_signatures or {}).get(mod_path)
+            if exported is None:
+                self._add_warning(
+                    f"-import_module({mod_path}): no signature for the target, "
+                    "and the engine's use_module/1 imports nothing")
+                return PComment(
+                    f"WARNING: -import_module({mod_path}) not translated: "
+                    "no signature to list its exports")
+            if not exported:
+                return PComment(f"% skipped: {mod_path} exports nothing")
+            return PDirective(PCompound("use_module", (prolog_mod, PList(tuple(
+                PCompound("/", (PAtom(n), PNumber(a))) for n, a in sorted(exported))))))
         return PDirective(PCompound("use_module", (prolog_mod,)))
 
     def _convert_meta_directive(self, name: str, call: python_ast.Call) -> PDirective | list | PComment | None:
@@ -4150,6 +4235,7 @@ def clausal_source_to_prolog_ast(source: str, *,
                                   module_path: str | None = None,
                                   module_signatures: dict[str, set[tuple[str, int]]] | None = None,
                                   meta_modes: MetaModeMap | None = None,
+                                  module_specs: str = "relative",
                                   ) -> PModule:
     """Parse .clausal source text and return a Prolog AST (PModule).
 
@@ -4172,6 +4258,11 @@ def clausal_source_to_prolog_ast(source: str, *,
     exports; when omitted alongside *module_path*, the import list is dropped
     entirely (``:- use_module('path').``).
 
+    *module_specs* picks the layout the output is loaded from:
+    ``"relative"`` (default) for an export tree, ``"plain"`` for the Clausal
+    engine's own ``.pl`` front end, which resolves module specs through
+    ``sys.path``. See :data:`_MODULE_SPECS`.
+
     *meta_modes* supplies ``:- meta_predicate`` argument modes this module's own
     text cannot show -- see :data:`MetaModeMap`. It is looked up under
     *module_path* exactly as passed, and unioned per argument with the body-local
@@ -4193,7 +4284,8 @@ def clausal_source_to_prolog_ast(source: str, *,
                                  module_path=module_path,
                                  module_signatures=module_signatures,
                                  meta_modes=meta_modes,
-                                 source_lines=source.splitlines(keepends=True))
+                                 source_lines=source.splitlines(keepends=True),
+                                 module_specs=module_specs)
     return converter.convert_module(tree)
 
 
@@ -4250,6 +4342,7 @@ def clausal_source_to_prolog(source: str, *,
                               module_path: str | None = None,
                               module_signatures: dict[str, set[tuple[str, int]]] | None = None,
                               meta_modes: MetaModeMap | None = None,
+                              module_specs: str = "relative",
                               ) -> str:
     """Translate .clausal source text to Prolog source text.
 
@@ -4259,15 +4352,16 @@ def clausal_source_to_prolog(source: str, *,
     raises :class:`UntranslatableConstructError` instead of emitting a
     ``???`` placeholder plus a warning comment.
 
-    *module_path* and *module_signatures* control ``use_module`` emission —
-    see :func:`clausal_source_to_prolog_ast`.
+    *module_path*, *module_signatures* and *module_specs* control
+    ``use_module`` emission — see :func:`clausal_source_to_prolog_ast`.
     """
     if dialect is None:
         dialect = Dialect.iso()
     pmodule = clausal_source_to_prolog_ast(source, dialect=dialect, strict=strict,
                                            module_path=module_path,
                                            module_signatures=module_signatures,
-                                           meta_modes=meta_modes)
+                                           meta_modes=meta_modes,
+                                           module_specs=module_specs)
     return emit_module(pmodule, dialect.operator_table)
 
 
