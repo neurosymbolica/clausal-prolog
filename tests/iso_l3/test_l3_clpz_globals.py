@@ -133,3 +133,26 @@ def test_lex_chain(native, ans):
     assert ans(mod, "l3") == [[p(p(0, 0), 0), p(p(0, 0), 1), p(p(0, 1), 1),
                                p(p(1, 1), 1)]]
     assert ans(mod, "l4") == [[]]
+
+
+CHAIN = """\
+:- use_module(library(clpz)).
+h1(R) :- findall(L, (L = [A,B,C], L ins 1..3, chain(#<, L), label(L)), R).
+h2(R) :- findall(L, (L = [A,B], L ins 1..2, chain(#>=, L), label(L)), R).
+h3(E) :- catch(chain(foo, [_]), error(E, _), true).
+h4(E) :- catch(chain(_, [_]), error(E, _), true).
+h5(R) :- findall(x, chain(#<, []), R).
+h6(E) :- catch(chain(#<, foo), error(E, _), true).
+"""
+
+
+def test_chain(native, ans):
+    """chain(Relation, Zs), Scryer's argument order and errors; it did not
+    exist."""
+    mod = native.load("l3_clpz_chain", CHAIN)
+    assert ans(mod, "h1") == [[[1, 2, 3]]]
+    assert ans(mod, "h2") == [[[1, 1], [2, 1], [2, 2]]]
+    assert ans(mod, "h3") == [("domain_error", "chain_relation", "foo")]
+    assert ans(mod, "h4") == ["instantiation_error"]
+    assert ans(mod, "h5") == [["x"]]
+    assert ans(mod, "h6") == [("type_error", "list", "foo")]

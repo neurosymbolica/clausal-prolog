@@ -266,3 +266,31 @@ def _integer_or_fd_var(x):
     x = deref(x)
     if not (is_var(x) or type(x) is int):
         raise LogicException(type_error("integer", x, "lex_chain/1"))
+
+
+#: chain/2's relation atoms (clpz's) -> clpfd.chain's names
+_CHAIN_RELATIONS = {"#=": "eq", "#<": "lt", "#>": "gt", "#=<": "le",
+                    "#>=": "ge"}
+
+
+@_builtin("chain", 2, fields=("relation", "vars"))
+def _chain(relation, vs, trail, k):
+    """chain(Relation, Zs) -- Scryer's argument order: consecutive elements
+    of Zs are related by Relation, one of ``#=``, ``#<``, ``#>``, ``#=<``,
+    ``#>=``.  Checks in Scryer's order: Zs a list of integers/variables,
+    then Relation ground and one of those."""
+    from clausal.logic.clpfd import chain  # noqa: PLC0415
+    from clausal.logic.exceptions import (  # noqa: PLC0415
+        LogicException, domain_error, instantiation_error)
+    from clausal.logic.variables import deref, is_var  # noqa: PLC0415
+    zs = _items(vs, "chain/2")
+    for z in zs:
+        _integer_or_fd_var(z)
+    rel = deref(relation)
+    if is_var(rel):
+        raise LogicException(instantiation_error("chain/2"))
+    name = _CHAIN_RELATIONS.get(rel) if type(rel) is str else None
+    if name is None:
+        raise LogicException(domain_error("chain_relation", rel, "chain/2"))
+    if chain(zs, name, trail):
+        yield None
