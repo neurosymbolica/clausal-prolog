@@ -629,10 +629,12 @@ def test_guard_tokenizer_radix_and_bignum():
 
 
 def test_F030_pow_grouping_preserved():
-    # A11-F030 (fixed): ** emits right-associative parens.
+    # A11-F030 (fixed): the grouping of ** survives.  Since 2026-09-29 ISO
+    # ** is emitted as the quoted ISO evaluable (Python ** answered 2 ** 3 as
+    # 8, ISO as 8.0), whose nesting carries the grouping by construction.
     from clausal.tools.prolog_to_clausal import prolog_to_clausal
     out = prolog_to_clausal("q(X) :- X is (2 ** 3) ** 2.\n")
-    assert "(2 ** 3) ** 2" in out
+    assert "'**'('**'(2, 3), 2)" in out
 
 
 def test_F031_floordiv_export_semantics():

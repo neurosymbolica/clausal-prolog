@@ -1117,7 +1117,7 @@ class _PrologToClausal:
             # access (``m.p(...)``), so an unqualified call of an import
             # failed; when the module is a .pl file its module/2 export
             # list is read and imported by name as well.
-            exports = self._pl_exports(clausal_mod)
+            exports = self._pl_exports(clausal_mod, directive)
             if exports:
                 self._own_names.update(exports)
                 return (f"-import_module({clausal_mod})\n"
@@ -1165,17 +1165,21 @@ class _PrologToClausal:
                 return dotted
         return self._dotted_or_refuse(path, directive, spec=spec)
 
-    def _pl_exports(self, dotted: str) -> list[str]:
+    def _pl_exports(self, dotted: str, directive: str) -> list[str]:
         """The predicate names a ``.pl`` module's ``module/2`` directive
-        exports, or [] when *dotted* is no ``.pl`` file with one."""
+        exports, or [] when *dotted* is no ``.pl`` file with one.  A file
+        that cannot be read is refused here, naming the directive -- the
+        fallback (qualified access only) would fail far from the cause."""
         path = self._find_module_file(dotted)
         if path is None or not path.endswith(".pl"):
             return []
         try:
             text = Path(path).read_text(encoding="utf-8")
             pmod = parse(text, dialect=self._dialect)
-        except Exception:  # noqa: BLE001 -- its own import reports it
-            return []
+        except Exception as e:  # noqa: BLE001
+            raise PrologTranslationError(
+                f"{directive}: cannot read the export list of {path}: "
+                f"{e}") from e
         for item in pmod.items:
             b = getattr(item, "body", None)
             if (isinstance(item, PDirective) and isinstance(b, PCompound)
@@ -1431,6 +1435,15 @@ class _PrologToClausal:
                     f"{self._emit_quantified(args[1])}, "
                     f"{self._emit_term(args[2])})")
 
+        # A ``V^G`` in a GOAL argument of any other meta-predicate
+        # (findall, forall, aggregate_all, \+, ...) is called as a goal,
+        # which Clausal has no meaning for; emitting the data term '^'(V, G)
+        # would call that term.  Refused, as in direct goal position.
+        for i in _META_GOAL_ARGS.get(functor, ()):
+            if (i < len(args) and isinstance(args[i], PCompound)
+                    and args[i].functor == "^" and len(args[i].args) == 2):
+                self._refuse_caret_goal()
+
         # (^)/2 as a DATA term is the term ^(A, B), spelled as the quoted
         # ISO functor ('^'(A, B); a bare ``^`` is Python XOR, ``**`` a
         # different functor).  As a GOAL (``Y^p(Y)`` called directly) it has
@@ -1438,12 +1451,8 @@ class _PrologToClausal:
         # ISO evaluable (``_emit_expr``).
         if functor == "^" and len(args) == 2:
             if not goal:
-                return self._emit_expr(term)
-            raise PrologTranslationError(
-                "The existential quantifier ((^)/2) is only supported inside "
-                "the goal argument of bagof/3 or setof/3; `V^Goal` called "
-                "as a goal cannot be translated."
-            )
+                return self._emit_quoted_op_term(term)
+            self._refuse_caret_goal()
 
         # ','/2 in term position is a tuple, NOT a flattened argument list:
         # emitting it bare turned foo(a, (b, c)) into a foo/3 call (F023).
@@ -1464,7 +1473,8 @@ class _PrologToClausal:
             module = args[0].name
             goal = args[1]
             if isinstance(goal, PCompound):
-                goal_name = _reverse_builtin_map().get(goal.functor, goal.functor)
+                goal_name = self._predicate_name(goal.functor,
+                                                 len(goal.args))
                 inner = ", ".join(self._emit_term(a) for a in goal.args)
                 return f"{module}.{goal_name}({inner})"
             if isinstance(goal, PAtom):
@@ -1549,7 +1559,7 @@ class _PrologToClausal:
         # ISO evaluable operators Python spells differently → '//'(X, Y)
         if ((functor in _ISO_QUOTED_BINARY_OPS and len(args) == 2)
                 or (functor in _ISO_QUOTED_UNARY_OPS and len(args) == 1)):
-            return self._emit_expr(term)
+            return self._emit_quoted_op_term(term)
 
         # Prefix operators
         if functor in _PREFIX_MAP and len(args) == 1:
@@ -1567,6 +1577,22 @@ class _PrologToClausal:
             return f"{name}()"
         arg_strs = ", ".join(self._emit_term(a) for a in args)
         return f"{name}({arg_strs})"
+
+    @staticmethod
+    def _refuse_caret_goal() -> None:
+        raise PrologTranslationError(
+            "The existential quantifier ((^)/2) is only supported inside "
+            "the goal argument of bagof/3 or setof/3; `V^Goal` called as a "
+            "goal (directly, or in a goal argument of findall/forall/\\+/"
+            "...) cannot be translated."
+        )
+
+    def _emit_quoted_op_term(self, term: PCompound) -> str:
+        """An ISO operator term in DATA position: the quoted functor over
+        operands emitted as TERMS (so their functors are declared), not as
+        arithmetic."""
+        inner = ", ".join(self._emit_term(a) for a in term.args)
+        return f"{_quote_atom(term.functor)}({inner})"
 
     def _emit_quantified(self, term: PTerm) -> str:
         """The goal argument of bagof/setof: ``V^G`` → ``V ^ (G)``, nested

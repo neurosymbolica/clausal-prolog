@@ -481,3 +481,40 @@ class TestNoSilentDrop:
             t(X) :- r(X likes _).
         """)
         assert _answers(m, "t") == ["a"]
+
+
+# ── review round 1 (roborev) ──────────────────────────────────────────
+
+
+class TestReviewRound1:
+    @pytest.mark.parametrize("src", [
+        "t(L) :- findall(X, Y^p(X, Y), L).",
+        "t :- forall(Y^p(Y), q(Y)).",
+        "t :- \\+ Y^p(Y).",
+        "t(N) :- aggregate_all(count, Y^p(Y), N).",
+    ])
+    def test_caret_goal_in_a_meta_argument_is_refused(self, src):
+        # only bagof/setof give ^ a meaning; elsewhere it is a goal, and
+        # emitting the data term '^'(Y, G) would call it
+        with pytest.raises(PrologTranslationError, match=r"\(\^\)/2"):
+            prolog_to_clausal(src + "\n")
+
+    @pytest.mark.parametrize("op", ["mod", "//", "rem", "^", "<<"])
+    def test_quoted_operator_data_term_declares_its_operand_functors(
+            self, tmp_path, op):
+        m = _load(tmp_path, f"opdata_{abs(hash(op))}", f"""\
+            t(X) :- T = f(a) {op} 2, T =.. [X|_].
+        """)
+        assert _answers(m, "t") == [op]
+
+    def test_qualified_call_of_an_own_import_is_not_renamed(self):
+        out = prolog_to_clausal(
+            ":- use_module(mylib, [time/1]).\nt(X) :- mylib:time(X).\n")
+        assert "mylib.time(X)" in out
+
+    def test_unparseable_use_module_1_target_names_the_directive(
+            self, tmp_path):
+        (tmp_path / f"{_PREFIX}broken.pl").write_text(
+            f":- module({_PREFIX}broken, [v/1]).\nv(1 :- .\n")
+        with pytest.raises(SyntaxError, match=r"line 1.*use_module"):
+            _load(tmp_path, "usesbroken", f":- use_module({_PREFIX}broken).\n")
