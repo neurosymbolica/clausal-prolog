@@ -377,7 +377,8 @@ _PROPAGATED = frozenset({
     ("div", 2), ("mod", 2), ("^", 2),
     # lifted into their own propagators (clpfd._lift_cells) before the
     # reified comparison is posted: Z = abs(A) holds whatever B is
-    ("abs", 1), ("min", 2), ("max", 2),
+    ("abs", 1), ("min", 2), ("max", 2), ("rem", 2), ("sign", 1),
+    ("\\", 1), ("<<", 2), (">>", 2), ("/\\", 2), ("\\/", 2), ("xor", 2),
 })
 
 
@@ -687,7 +688,7 @@ def _lift_functional(l, r, trail):
         # its arguments: a partial function (rem by 0) or a partial operand
         # (X // Y) would prune Y = 0 for good, where the reified comparison
         # is merely false there.  Those stay refused.
-        if key not in _TOTAL_KEYS or not all(_total_expr(a) for a in args):
+        if not _total_expr((key[0],) + tuple(args)):
             raise LogicException(domain_error(
                 "clpz_expression", walk((key[0],) + tuple(args)),
                 f"{key[0]}/{key[1]} over a variable, with a partial function "
@@ -716,15 +717,27 @@ def _total_expr(t) -> bool:
             _fd._ensure_term_imports()
         key = _fd._NODE_KEYS.get(type(x))
         if key is not None:
-            if key not in _TOTAL_KEYS:
+            args = (x.operand,) if key[1] == 1 else (x.left, x.right)
+        else:
+            ka = _fd._cell_key_args(x) if type(x) is tuple else None
+            if ka is None:
                 return False
-            stack.extend((x.operand,) if key[1] == 1 else (x.left, x.right))
-            continue
-        ka = _fd._cell_key_args(x) if type(x) is tuple else None
-        if ka is None or ka[0] not in _TOTAL_KEYS:
+            key, args = ka
+        if key in _BY_NONZERO_CONSTANT:
+            d = deref(args[1])
+            if type(d) is not int or d == 0:
+                return False    # a divisor that may be 0
+        elif key not in _TOTAL_KEYS:
             return False
-        stack.extend(ka[1])
+        stack.extend(args)
     return True
+
+
+#: Total only over a non-zero constant divisor.
+_BY_NONZERO_CONSTANT = frozenset({
+    ("rem", 2), ("mod", 2), ("//", 2), ("div", 2),
+    ("$python_floordiv", 2), ("$python_mod", 2),
+})
 
 
 def _reify_cmp(op, l, r, trail):

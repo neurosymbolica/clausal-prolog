@@ -4180,8 +4180,80 @@ _FD_INT_KEYS = frozenset({
     ("+", 2), ("-", 2), ("*", 2), ("-", 1), ("+", 1),
     ("$python_floordiv", 2), ("$python_mod", 2), ("//", 2), ("div", 2),
     ("mod", 2), ("^", 2), ("abs", 1), ("min", 2), ("max", 2),
+    ("rem", 2), ("sign", 1), ("\\", 1), ("<<", 2), (">>", 2),
+    ("/\\", 2), ("\\/", 2), ("xor", 2),
 })
-_LIFTED_KEYS = frozenset({("abs", 1), ("min", 2), ("max", 2)})
+_LIFTED_KEYS = frozenset({("abs", 1), ("min", 2), ("max", 2),
+                          ("rem", 2), ("sign", 1), ("\\", 1), ("<<", 2),
+                          (">>", 2), ("/\\", 2), ("\\/", 2), ("xor", 2)})
+
+#: Largest number of argument combinations FunctionalConstraint enumerates.
+_FUNCTIONAL_ENUM_LIMIT = 4096
+
+
+class FunctionalConstraint(Constraint):
+    """``Z = F(A1, ..., An)`` for an integer evaluable F with no dedicated
+    propagator (``rem``, ``sign``, the bitwise functors): once every Ai is
+    known Z is F's value; while the arguments' domains are small (at most
+    ``_FUNCTIONAL_ENUM_LIMIT`` combinations) every combination is tried, so
+    Z is narrowed to F's image and each Ai to the values with a support
+    (generalised arc consistency).  A combination with no value (``rem`` by
+    0) has no support."""
+    __slots__ = ('z', 'fn', 'args')
+
+    def __init__(self, z, fn, args):
+        self.z = z
+        self.fn = fn
+        self.args = tuple(args)
+        super().__init__((z,) + self.args)
+
+    def _value(self, vals):
+        try:
+            v = self.fn(*vals)
+        except _LogicException as exc:
+            if _no_value_in_propagation(exc):
+                return None
+            raise
+        return v if type(v) is int else None
+
+    def propagate(self, trail: Trail, queue: deque) -> bool:
+        import itertools  # noqa: PLC0415
+        z = deref(self.z)
+        doms = [_expr_domain(deref(a), trail) for a in self.args]
+        if not all(doms):
+            return False
+        zd = _expr_domain(z, trail)
+        size = 1
+        for d in doms:
+            n = domain_size(d)
+            if math.isinf(n):
+                return True             # unbounded: wait for bindings
+            size *= n
+            if size > _FUNCTIONAL_ENUM_LIMIT:
+                return True
+        image = set()
+        support = [set() for _ in doms]
+        for combo in itertools.product(*(domain_values(d) for d in doms)):
+            v = self._value(combo)
+            if v is None or not domain_contains(zd, v):
+                continue
+            image.add(v)
+            for i, c in enumerate(combo):
+                support[i].add(c)
+        if not image:
+            return False
+        nz = _indices_to_domain(sorted(image))
+        if is_var(z) and not _narrow_if_changed(z, domain_intersection(zd, nz),
+                                                trail, queue):
+            return False
+        for a, sup in zip(self.args, support):
+            a = deref(a)
+            if is_var(a):
+                na = domain_intersection(_expr_domain(a, trail),
+                                         _indices_to_domain(sorted(sup)))
+                if not na or not _narrow_if_changed(a, na, trail, queue):
+                    return False
+        return True
 
 
 _Q_KEY = _REAL_KEY = None
@@ -4272,8 +4344,10 @@ def _post_lifted(aux, trail) -> bool:
             ops.append(o)
         if key == ("abs", 1):
             c = AbsConstraint(z, ops[0])
-        else:
+        elif key in (("min", 2), ("max", 2)):
             c = MinMaxConstraint(z, ops[0], ops[1], key == ("max", 2))
+        else:
+            c = FunctionalConstraint(z, _EVALUABLE[key], ops)
         if not _post_constraint(c, trail):
             return False
     return True
