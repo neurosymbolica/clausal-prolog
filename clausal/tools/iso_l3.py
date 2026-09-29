@@ -3,7 +3,8 @@
 Plan: ``implementation_plans/native-iso-reader-step2-2026-09-29.md`` (D1 = (c)
 hybrid: clauses are lowered HERE to the transformed AST; directives go through
 the seam's own handlers -- slice 2).  Scope today is slices 0 and 1: facts,
-rules, every ISO term shape, and (next step) rule bodies.  Whatever is outside that scope --
+rules, every ISO term shape, and the control constructs ``,`` ``;`` ``\\+``
+``true`` ``fail``/``false`` and ``call/N``.  Whatever is outside that scope --
 a directive, a DCG rule, a reader ``SyntaxIssue`` -- is REFUSED, never half-handled, so a gap is a loud import error
 and not a silently skipped clause.
 
@@ -68,6 +69,31 @@ class LoweringRefused(Exception):
         super().__init__(message)
         self.span = span
 
+
+# ── meta-argument positions ──────────────────────────────────────────────────
+
+#: Goal-argument positions the compiler lowers AS GOALS (``terms_to_goalop``
+#: turns these calls into a ``MetaCall``; ``ir.META_GOAL_POSITIONS``), by
+#: ``(name, arity)`` -> 0-based argument indexes.  A variable there is
+#: refused at compile time (``BareGoalVariableError``), so it is lowered as
+#: ``call(G)`` -- the ISO body conversion of a variable goal.
+_META_GOAL_ARGS: dict[tuple[str, int], tuple[int, ...]] = {
+    ("once", 1): (0,),
+    ("call_nth", 2): (0,),
+    ("count_all", 2): (0,),
+    ("setup_call_cleanup", 3): (0, 1, 2),
+    ("call_cleanup", 2): (0, 1),
+    ("freeze", 2): (1,),
+    ("when", 2): (1,),
+    ("findall", 3): (1,),
+    ("bagof", 3): (1,),
+    ("setof", 3): (1,),
+    ("catch", 3): (0, 2),
+    ("forall", 2): (0, 1),
+}
+
+#: Goals whose second argument is an ISO iterated goal term, ``V^G``.
+_ITERATED_GOAL = {("bagof", 3), ("setof", 3)}
 
 #: Python names a lowered program must never bind or read by accident.
 _DOLLAR = "$"
@@ -243,6 +269,85 @@ class _ClauseLowering:
                               position=_pos_expr(self._pos.of(_top_span(sp)))))
         return ast.List(elts=elts, ctx=ast.Load())
 
+    # ── goals ──
+
+    def goal(self, g: Any, sp=None) -> ast.expr:
+        """ISO 7.6.2 body conversion, to the seam's goal nodes."""
+        pos = self._pos.of(_top_span(sp))
+        if type(g) is VarRef:
+            return self._call("call", [self.var(g)], pos, pos)
+        if type(g) is str:
+            if g == "true":
+                return _const(True)
+            if g in ("fail", "false"):
+                return _const(False)
+            return self._call(g, [], pos, pos)
+        if type(g) is tuple and g and _is_callable_name(g[0]) and g[0] != "$chars":
+            name, args = g[0], g[1:]
+            spans = _arg_spans(sp, len(args))
+            if name == "," and len(args) == 2:
+                elts: list[ast.expr] = []
+                while (type(g) is tuple and len(g) == 3 and g[0] == ","):
+                    s2 = _arg_spans(sp, 2)
+                    elts.append(self.goal(g[1], s2[0]))
+                    g, sp = g[2], s2[1]
+                elts.append(self.goal(g, sp))
+                return _node("TupleLiteral",
+                             elements=ast.List(elts=elts, ctx=ast.Load()),
+                             position=_pos_expr(pos))
+            if name == ";" and len(args) == 2:
+                return _node("Or", left=self.goal(args[0], spans[0]),
+                             right=self.goal(args[1], spans[1]),
+                             position=_pos_expr(pos))
+            if name == "\\+" and len(args) == 1:
+                return _node("Not", operand=self.goal(args[0], spans[0]),
+                             position=_pos_expr(pos))
+            key = (name, len(args))
+            goal_args = _META_GOAL_ARGS.get(key, ())
+            lowered = []
+            for i, (a, s) in enumerate(zip(args, spans)):
+                if i in goal_args:
+                    if key in _ITERATED_GOAL:
+                        lowered.append(self._iterated_goal(a, s))
+                    else:
+                        lowered.append(self.goal(a, s))
+                else:
+                    lowered.append(self.term(a, s))
+            head_pos = self._pos.of(_functor_span(sp, name))
+            return self._call(name, lowered, head_pos, pos)
+        # ISO 7.6.2: a number (or anything else) is not callable.
+        raise LoweringRefused(
+            f"{g!r} is not callable (ISO type_error(callable, {g!r}))",
+            _top_span(sp))
+
+    def _iterated_goal(self, g: Any, sp) -> ast.expr:
+        """``V1^V2^G`` in bagof/setof -> ``$BitXor(left=V1, right=...)``, the
+        shape the compiler strips the existential prefix from."""
+        if type(g) is tuple and len(g) == 3 and g[0] == "^":
+            spans = _arg_spans(sp, 2)
+            return _node("BitXor", left=self.term(g[1], spans[0]),
+                         right=self._iterated_goal(g[2], spans[1]),
+                         position=_pos_expr(self._pos.of(_top_span(sp))))
+        return self.goal(g, sp)
+
+    def _call(self, name: str, args: list, name_pos, pos) -> ast.expr:
+        return _node(
+            "Call",
+            func=_node("LoadName", name=_const(name), position=_pos_expr(name_pos)),
+            args=ast.List(elts=args, ctx=ast.Load()),
+            kwargs=ast.List(elts=[], ctx=ast.Load()),
+            position=_pos_expr(pos))
+
+
+def _functor_span(sp, name: str):
+    """The span of a goal's functor name: its first ``len(name)`` characters
+    for a prefix-written ``f(...)`` goal, else the whole goal."""
+    top = _top_span(sp)
+    if top is None:
+        return None
+    return (top[0], min(top[1], top[0] + len(name)))
+
+
 # ── clauses ──────────────────────────────────────────────────────────────────
 
 
@@ -288,10 +393,7 @@ def lower_clause(term: Any, spans=None, var_names=None,
         args=[_name(name)],
         keywords=[ast.keyword(arg=f, value=lw.term(a, s))
                   for f, a, s in zip(fields, args, _arg_spans(head_sp, len(args)))])
-    if body is not None:
-        raise LoweringRefused(
-            "rule bodies are not lowered yet (slice 1, next step)", whole_span)
-    body_ast = _const(True)
+    body_ast = _const(True) if body is None else lw.goal(body, body_sp)
     define = ast.Expr(value=ast.Call(
         func=_name(_DOLLAR + "define_predicate"),
         args=[_node("Predicate", head=head_ast, body=body_ast,
