@@ -145,7 +145,8 @@ since 0.4.0 finish three moves:
   a unit (a bare name on a Python module imports its value). `5*euro` stays
   an ordinary ISO term. `is/2` and the ISO comparisons now accept a quantity
   (`Q is 100 * constant(one_euro)` answers 100 euro) instead of raising
-  `type_error(evaluable, ...)`.
+  `type_error(evaluable, ...)`; comparing across units (or with a plain
+  number) raises `system_error(units_mismatch)`, as the seam does.
 - **`get_strict/3`: the strict dict read as a predicate.**
   `get_strict(Dict, Key, Value)` (get/3's argument order) raises
   `existence_error(dict_key, Key)` on a missing key, with the subscript

@@ -142,6 +142,10 @@ class DirectiveContext:
         self.dead_stmts: set[int] = set()
         self.load_only: dict[int, ast.stmt] = {}
         self.dropped_keys: set[str] = set()
+        #: A constant's declaring directive span, and each predicate a
+        #: constants table defines (the constant-name clash check).
+        self.constant_spans: dict = {}
+        self.table_heads: dict = {}
         #: The module's own name, from its module/2 (``own:G`` is local).
         self.own_module: "str | None" = None
         self._t = None
@@ -620,6 +624,12 @@ def _const_value(ctx, cell, span, what, *, units: bool) -> ast.expr:
         if cell[0] == "$chars" and len(cell) == 2:
             if units:
                 return ast.Constant(value=cell[1])
+            # The double_quotes flag in force, as for a clause's literal.
+            mode = ctx.note_literal()
+            if mode == "codes":
+                return _list([ast.Constant(value=ord(c)) for c in cell[1]])
+            if mode == "atom":
+                return ast.Constant(value=cell[1])
             return ast.Tuple(elts=[ast.Constant(value="$chars"),
                                    ast.Constant(value=cell[1])],
                              ctx=ast.Load())
@@ -663,6 +673,7 @@ def _constant_directive(directive: str, arity: int):
     def lower(ctx, args, spans, span):
         what = f"{directive}({', '.join(_show(a) for a in args)})"
         name = _const_name(ctx, args[0], span, what)
+        ctx.constant_spans.setdefault(name.id, span)
         seam_args = [name, _const_value(ctx, args[1], span, what,
                                         units=units)]
         if units:
@@ -754,11 +765,11 @@ def _constant_table(directive: str):
                     f"{what}: row {_show(row)} has {len(row)} columns but "
                     f"{pred}/{arity} takes {arity}", span)
             money = row[col - 1]
+            # Only a double-quoted STRING is an exact decimal; an atom (even
+            # '292.00') is no number, as for the single-value directives.
             node = (ast.Constant(value=money[1])
                     if type(money) is tuple and len(money) == 2
-                    and money[0] == "$chars"
-                    else ast.Constant(value=money)
-                    if type(money) is str else None)
+                    and money[0] == "$chars" else None)
             if node is not None:
                 ast.copy_location(node, ctx._anchor(span))
             text = _decimal_string(node) if node is not None else None
@@ -777,6 +788,7 @@ def _constant_table(directive: str):
             quantity = ast.Call(func=_name("$Quantity"),
                                 args=[magnitude, unit_ast], keywords=[])
             row[col - 1] = Embedded(_thunk(quantity, ctx._pos.of(span)))
+            ctx.table_heads.setdefault(pred, span)
             try:
                 out.extend(lower_clause((pred, *row), None, {}, ctx._pos,
                                         None, ctx))

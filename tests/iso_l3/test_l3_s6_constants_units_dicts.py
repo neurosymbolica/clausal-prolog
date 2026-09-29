@@ -400,3 +400,89 @@ def test_a_constant_named_like_a_predicate_is_refused(native):
         fee(V) :- V = constant(fee).
     """)
     assert err.lineno == 2 and "already bound by a predicate" in str(err), err
+
+
+# ── quantities in the ISO comparisons (the seam's answers) ───────────────────
+
+S6Q_PL = """\
+    :- use_module(european_union, [euro]).
+    :- use_module(united_states, [usd]).
+    :- constant_number_units(one_euro, 1, euro).
+    :- constant_number_units(max_fine, 5000, euro).
+    :- constant_number_units(one_usd, 1, usd).
+    gt5(R) :- Q is 100 * constant(one_euro),
+              catch((Q > 5, R = yes), error(E, _), R = E).
+    eq(R) :- Q is 100 * constant(one_euro),
+             catch((Q =:= 100, R = yes), error(E, _), R = E).
+    ratio(X) :- X is constant(max_fine) / constant(one_euro).
+    ratio_eq(R) :- X is constant(max_fine) / constant(one_euro),
+                   catch((X =:= 5000, R = yes), error(E, _), R = E).
+    mix(R) :- catch((constant(one_euro) < constant(one_usd), R = yes),
+                    error(E, _), R = E).
+    mixeq(R) :- catch((constant(one_euro) =:= constant(one_usd), R = yes),
+                      error(E, _), R = E).
+    mixadd(R) :- catch((_ is constant(one_euro) + constant(one_usd), R = yes),
+                       error(E, _), R = E).
+"""
+
+S6Q_SEAM = """\
+    -private([yes])
+    -import_from(european_union, [euro])
+    -import_from(united_states, [usd])
+    -constant_number_units(one_euro, 1, euro)
+    -constant_number_units(max_fine, 5000, euro)
+    -constant_number_units(one_usd, 1, usd)
+    gt5(R) <- (Q == 100 * constant(one_euro), catch((Q > 5, R is yes), error(E, _), R is E))
+    eq(R) <- (Q == 100 * constant(one_euro), catch((Q == 100, R is yes), error(E, _), R is E))
+    ratio(X) <- (X == constant(max_fine) / constant(one_euro))
+    ratio_eq(R) <- (X == constant(max_fine) / constant(one_euro), catch((X == 5000, R is yes), error(E, _), R is E))
+    mix(R) <- catch((constant(one_euro) < constant(one_usd), R is yes), error(E, _), R is E)
+    mixeq(R) <- catch((constant(one_euro) == constant(one_usd), R is yes), error(E, _), R is E)
+"""
+
+
+def test_quantity_comparisons_match_the_seam(native):
+    """A quantity against a plain number, or against another unit, is the
+    seam's catchable ``system_error(units_mismatch)`` -- for ``=:=`` too,
+    never a quiet false; units that cancel give a plain number."""
+    nat, _ = _twin_ab(native, "s6q2", S6Q_PL, "s6q2_twin", S6Q_SEAM, [
+        ("gt5", V), ("eq", V), ("ratio", V), ("ratio_eq", V), ("mix", V),
+        ("mixeq", V)])
+    mismatch = ("system_error", "units_mismatch")
+    for p in ("gt5", "eq", "mix", "mixeq", "mixadd"):
+        assert _all(nat, p, V) == [(mismatch,)], p
+    assert _all(nat, "ratio", V) == [(5000,)]
+    assert _all(nat, "ratio_eq", V) == [("yes",)]
+
+
+def test_a_double_quoted_constant_follows_the_double_quotes_flag(native):
+    mod = native.load("s6dq", textwrap.dedent("""\
+        :- constant_value(s, "ab").
+        :- set_prolog_flag(double_quotes, codes).
+        :- constant_value(c, "ab").
+        :- set_prolog_flag(double_quotes, atom).
+        :- constant_value(a, "ab").
+        vs(X) :- X = constant(s).
+        vc(X) :- X = constant(c).
+        va(X) :- X = constant(a).
+    """))
+    assert _all(mod, "vs", V) == [(("$chars", "ab"),)]
+    assert _all(mod, "vc", V) == [([97, 98],)]
+    assert _all(mod, "va", V) == [("ab",)]
+
+
+def test_an_atom_in_a_tables_money_column_is_refused(native):
+    err = _refusal(native, "s6tatom", """\
+        :- use_module(european_union, [euro]).
+        :- constants_number_units(p/2, [[1, '292.00']], euro, number_at(2)).
+    """)
+    assert err.lineno == 2 and "not a number literal" in str(err), err
+
+
+def test_a_constant_named_like_a_table_predicate_is_refused(native):
+    err = _refusal(native, "s6tclash", """\
+        :- use_module(european_union, [euro]).
+        :- constant_value(p, 1).
+        :- constants_number_units(p/2, [[1, 10]], euro, number_at(2)).
+    """)
+    assert err.lineno == 3 and "constants table" in str(err), err

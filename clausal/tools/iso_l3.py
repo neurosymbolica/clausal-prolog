@@ -274,7 +274,7 @@ class _ClauseLowering:
                 elts=[_const(t[0])]
                 + [self.term(a, s) for a, s in zip(t[1:], spans)],
                 ctx=ast.Load())
-        if type(t).__name__ == "Embedded":
+        if isinstance(t, _embedded_class()):
             return t.expr               # iso_l3_directives' prepared cell
         raise LoweringRefused(f"unsupported term {t!r}", _top_span(sp))
 
@@ -564,6 +564,11 @@ def _show_cell(t) -> str:
     return _show(t)
 
 
+def _embedded_class():
+    from clausal.tools.iso_l3_directives import Embedded  # noqa: PLC0415
+    return Embedded
+
+
 def _builtin_libraries() -> frozenset:
     from clausal.tools.iso_l3_directives import _BUILTIN_LIBRARIES  # noqa: PLC0415
     return _BUILTIN_LIBRARIES
@@ -798,7 +803,7 @@ def lower_items(items, *, strict: bool = True, source: "str | None" = None,
 
 
 def _head_name(term) -> "str | None":
-    if type(term) is tuple and len(term) == 3 and term[0] == ":-":
+    if type(term) is tuple and len(term) == 3 and term[0] in (":-", "-->"):
         term = term[1]
     if type(term) is str:
         return term
@@ -816,19 +821,22 @@ def _constant_clash(ctx, heads: dict):
     t = getattr(ctx, "_t", None)
     if t is None or not t._constants:
         return None
-    taken = {n: s for n, s in heads.items() if n is not None}
+    taken = {n: ("a predicate defined in this file", s)
+             for n, s in heads.items() if n is not None}
+    for n, s in ctx.table_heads.items():
+        taken.setdefault(n, ("a predicate a constants table defines", s))
     for n in t._imported_functors:
-        taken.setdefault(n, None)
+        # No clause to point at: name the constant's own declaration.
+        taken.setdefault(n, ("an imported name", ctx.constant_spans.get(n)))
     clashes = sorted(n for n in t._constants if n in taken)
     if not clashes:
         return None
     first = clashes[0]
-    what = ("a predicate defined in this file" if taken[first] is not None
-            else "an imported name")
+    what, span = taken[first]
     return (f"constant `{first}` is already bound by {what}: a constant "
             f"declaration writes a module global, so the predicate would be "
             f"overwritten by the value. Rename the constant (an ATOM of the "
-            f"same spelling is fine)", taken[first])
+            f"same spelling is fine)", span)
 
 
 def _drop_removed_imports(body: list, ctx) -> list:

@@ -315,7 +315,8 @@ of that day, which replace the D6-D8 recommendations below where they differ:
   the thunk the seam's `29200(usd_cent)` cell lowers to, plus the seam's one-per-table
   currency gate. A value cell is ISO data: `2*3` is the term `'*'(2, 3)` (the seam evaluates
   its RHS to 6 -- a deliberate difference, open for a ruling), an atom is that atom, `"..."`
-  a string, and under a units directive a decimal string (an atom is refused there).
+  follows the double_quotes flag, and under a units directive a decimal string (an atom is
+  refused there).
 * `constant(Name)` is term expansion in `iso_l3._ClauseLowering.term`: the same
   `$PyThunk(lambda: name, [])` the seam's `constant()` builds. Declared-above or imported
   (the seam's `_constants` / `_import_remap` test), else a load error with the `.pl` line.
@@ -326,7 +327,9 @@ of that day, which replace the D6-D8 recommendations below where they differ:
   `:- use_module(european_union, [euro]).`: the native `use_module` now resolves the seam's
   import aliases (`_resolve_import_path`), and a bare name imported from a PYTHON module
   imports its value (a bare name on a Prolog module keeps D11(a)).
-* Engine changes the fold needed: `is/2` and the ISO comparisons accept a `Quantity` result;
+* Engine changes the fold needed: `is/2` and the ISO comparisons accept a `Quantity` result
+  (a unitless one presents as its number; a units mismatch, `=:=` included, is the seam's
+  `system_error(units_mismatch)`);
   the compiler's body walk collects a `PyThunk` inside a data cell (a `.pl` compound is a
   cell, where the seam builds a node).
 * D6: predicate forms only; `get_strict/3` added (`existence_error(dict_key, K)` on a miss,

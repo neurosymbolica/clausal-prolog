@@ -225,14 +225,18 @@ value(V)    :- constant_value(max_fine, V).               % program-wide
   clause (or imported); anything else, including `constant(X)` or
   `constant(f(a))`, is a load error naming the `.pl` line.
 * Units come **only** from these declarations. `5*euro` is the ordinary ISO
-  term `'*'(5, euro)`; `make_quantity/3` stays available.
+  term `'*'(5, euro)`; `make_quantity/3` stays available. Comparing a
+  quantity with a plain number or another unit raises
+  `system_error(units_mismatch)`, as in the seam; units that cancel give a
+  plain number.
 * `use_module(M, [name])` on a **Python** module (a currency jurisdiction
   such as `european_union`) imports the value `name`, as `-import_from` does;
   on a Prolog module a bare name imports nothing (D11).
 * A value is ISO data: `:- constant_value(k, 2*3).` holds the term
-  `'*'(2, 3)` (which `is/2` evaluates to 6), an atom is that atom, `"..."` a
-  string. Under a units directive the number is a number or a decimal
-  string, never an atom.
+  `'*'(2, 3)` (which `is/2` evaluates to 6), an atom is that atom, and
+  `"..."` follows the `double_quotes` flag in force (chars by default).
+  Under a units directive the number is a number or a double-quoted
+  decimal string (`"292.00"`, exact), never an atom.
 * Dicts are predicate forms only (no literal, no subscript): `dict_pairs/2`
   builds, `get/3` reads softly (fails on a missing key), `get_strict/3` reads
   strictly (`existence_error(dict_key, Key)`), `dict_put/4` and
