@@ -179,19 +179,24 @@ def test_labeling_min_max_optimisation_is_refused_loudly(native, ans):
     assert "min(Expr)/max(Expr)" in str(ei.value)
 
 
-def test_a_reified_comparison_over_an_unpropagated_functor_is_refused(
-        native, ans):
-    """Scryer accepts ``B #<==> (abs(X) #= 2)``; clpfd has no propagator
-    for abs/1, so a variable under it would never wake the reification.
-    Refused loudly rather than answered wrongly; a GROUND abs folds."""
+def test_a_reified_comparison_over_abs_is_accepted(native, ans):
+    """Scryer accepts ``B #<==> (abs(X) #= 2)``.  It was refused ("abs/1
+    over a variable is not supported") while clpfd had no propagator for
+    abs/1; abs/min/max are now lifted into their own propagators, so it
+    answers as Scryer does.  A partial operand under it (``X // Y``) is
+    still refused -- posted outside the reification it would prune Y = 0.
+    A GROUND abs folds."""
     from clausal.logic.exceptions import LogicException
     mod = native.load("s5_rabs", ":- use_module(library(clpz)).\n"
-                                 "t(X-B) :- X in -3..3, B #<==> (abs(X) #= 2).\n"
-                                 "u(B) :- B #<==> (abs(-2) #= 2).\n")
-    with pytest.raises(LogicException) as ei:
-        ans(mod, "t")
-    assert "abs/1 over a variable is not supported" in str(ei.value)
+                                 "t(X-B) :- X in -3..3, B #<==> (abs(X) #= 2), "
+                                 "label([X, B]).\n"
+                                 "u(B) :- B #<==> (abs(-2) #= 2).\n"
+                                 "v(B) :- B #<==> (abs(X // Y) #= 2).\n")
+    assert ans(mod, "t") == [("-", x, int(abs(x) == 2)) for x in range(-3, 4)]
     assert ans(mod, "u") == [1]
+    with pytest.raises(LogicException) as ei:
+        ans(mod, "v")
+    assert "clpz_expression" in str(ei.value)
 
 
 def test_a_local_label_at_another_arity_is_refused(native):

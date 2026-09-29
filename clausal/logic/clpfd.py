@@ -2754,6 +2754,38 @@ _REIFY_OPS = {
 }
 
 
+def _open_evaluable_cell(t) -> bool:
+    """*t* (dereferenced) is an all-integer arithmetic cell -- ``abs(X)``,
+    ``max(X, 1)`` -- with an unbound variable somewhere inside it.  (Only at
+    the top: a cell inside a list, ``[abs(X)] == [1]``, is still compared as
+    data -- the CLP(FD) posts have no element-wise list comparison to hand
+    it to.)"""
+    if type(t) is not tuple:
+        return False
+    ka = _cell_key_args(t)
+    if ka is None or ka[0] not in _EVALUABLE:
+        return False
+    return _cell_has_var(ka[1]) and _fd_int_term(t)[0]
+
+
+def _cell_has_var(args) -> bool:
+    stack = list(args)
+    while stack:
+        a = deref(stack.pop())
+        if is_var(a):
+            return True
+        if _Add is None:
+            _ensure_term_imports()
+        key = _NODE_KEYS.get(type(a))
+        if key is not None:
+            stack.extend((a.operand,) if key[1] == 1 else (a.left, a.right))
+        elif type(a) is tuple:
+            ka2 = _cell_key_args(a)
+            if ka2 is not None:
+                stack.extend(ka2[1])
+    return False
+
+
 def reify_fd(op: str, x, y, trail: Trail) -> bool | None:
     """Reified FD comparison: three-valued decision.
 
@@ -2779,6 +2811,12 @@ def reify_fd(op: str, x, y, trail: Trail) -> bool | None:
         if _no_value_in_propagation(exc):
             return False
         raise
+    if _open_evaluable_cell(x) or _open_evaluable_cell(y):
+        # ``abs(X) == 1`` with X unbound: an arithmetic CELL (no operator
+        # node) looked ground at the top, so the comparison was decided on
+        # the raw compound -- FALSE -- and ``if_`` took the else branch for
+        # X = 1 too.  It is undetermined.
+        return None
     if _both_ground(x, y):
         if op in ("eq", "ne"):
             x, y = _walk_compound(x), _walk_compound(y)
@@ -4142,8 +4180,98 @@ _FD_INT_KEYS = frozenset({
     ("+", 2), ("-", 2), ("*", 2), ("-", 1), ("+", 1),
     ("$python_floordiv", 2), ("$python_mod", 2), ("//", 2), ("div", 2),
     ("mod", 2), ("^", 2), ("abs", 1), ("min", 2), ("max", 2),
+    ("rem", 2), ("sign", 1), ("\\", 1), ("<<", 2), (">>", 2),
+    ("/\\", 2), ("\\/", 2), ("xor", 2),
 })
-_LIFTED_KEYS = frozenset({("abs", 1), ("min", 2), ("max", 2)})
+_LIFTED_KEYS = frozenset({("abs", 1), ("min", 2), ("max", 2),
+                          ("rem", 2), ("sign", 1), ("\\", 1), ("<<", 2),
+                          (">>", 2), ("/\\", 2), ("\\/", 2), ("xor", 2)})
+
+#: Largest number of argument combinations FunctionalConstraint enumerates.
+_FUNCTIONAL_ENUM_LIMIT = 4096
+
+
+class FunctionalConstraint(Constraint):
+    """``Z = F(A1, ..., An)`` for an integer evaluable F with no dedicated
+    propagator (``rem``, ``sign``, the bitwise functors): once every Ai is
+    known Z is F's value; while the arguments' domains are small (at most
+    ``_FUNCTIONAL_ENUM_LIMIT`` combinations) every combination is tried, so
+    Z is narrowed to F's image and each Ai to the values with a support
+    (generalised arc consistency).  A combination with no value (``rem`` by
+    0) has no support."""
+    __slots__ = ('z', 'fn', 'args')
+
+    def __init__(self, z, fn, args):
+        self.z = z
+        self.fn = fn
+        self.args = tuple(args)
+        super().__init__((z,) + self.args)
+
+    def _value(self, vals):
+        try:
+            v = self.fn(*vals)
+        except _LogicException as exc:
+            if _no_value_in_propagation(exc):
+                return None
+            raise
+        return v if type(v) is int else None
+
+    def propagate(self, trail: Trail, queue: deque) -> bool:
+        import itertools  # noqa: PLC0415
+        z = deref(self.z)
+        args = [deref(a) for a in self.args]
+        # enumerate over the DISTINCT variables, so ``xor(X, X)`` never
+        # counts a combination giving X two values
+        vs: list = []
+        for a in args:
+            if is_var(a) and not any(a is v for v in vs):
+                vs.append(a)
+        doms = [_expr_domain(v, trail) for v in vs]
+        if not all(doms):
+            return False
+        zd = _expr_domain(z, trail)
+        size = 1
+        for d in doms:
+            n = domain_size(d)
+            if math.isinf(n):
+                return True             # unbounded: wait for bindings
+            size *= n
+            if size > _FUNCTIONAL_ENUM_LIMIT:
+                return True             # too many: wait for bindings
+        slots = []
+        for a in args:
+            if is_var(a):
+                slots.append(next(i for i, v in enumerate(vs) if v is a))
+            else:
+                ad = _expr_domain(a, trail)
+                val = domain_singleton(ad)
+                if val is None:
+                    return True         # a non-ground expression: wait
+                slots.append(("const", val))
+        image = set()
+        support = [set() for _ in vs]
+        for combo in itertools.product(*(domain_values(d) for d in doms)):
+            vals = [combo[s] if type(s) is int else s[1] for s in slots]
+            v = self._value(vals)
+            if v is None or not domain_contains(zd, v):
+                continue
+            image.add(v)
+            for i, c in enumerate(combo):
+                support[i].add(c)
+        if not image:
+            return False
+        nz = _indices_to_domain(sorted(image))
+        if is_var(z) and not _narrow_if_changed(z, domain_intersection(zd, nz),
+                                                trail, queue):
+            return False
+        for v, sup in zip(vs, support):
+            v = deref(v)
+            if is_var(v):
+                nv = domain_intersection(_expr_domain(v, trail),
+                                         _indices_to_domain(sorted(sup)))
+                if not nv or not _narrow_if_changed(v, nv, trail, queue):
+                    return False
+        return True
 
 
 _Q_KEY = _REAL_KEY = None
@@ -4234,8 +4362,10 @@ def _post_lifted(aux, trail) -> bool:
             ops.append(o)
         if key == ("abs", 1):
             c = AbsConstraint(z, ops[0])
-        else:
+        elif key in (("min", 2), ("max", 2)):
             c = MinMaxConstraint(z, ops[0], ops[1], key == ("max", 2))
+        else:
+            c = FunctionalConstraint(z, _EVALUABLE[key], ops)
         if not _post_constraint(c, trail):
             return False
     return True

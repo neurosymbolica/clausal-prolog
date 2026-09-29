@@ -375,6 +375,10 @@ _CLPZ_FUNCTORS = frozenset({
 _PROPAGATED = frozenset({
     ("+", 2), ("-", 2), ("-", 1), ("*", 2), ("/", 2), ("//", 2),
     ("div", 2), ("mod", 2), ("^", 2),
+    # lifted into their own propagators (clpfd._lift_cells) before the
+    # reified comparison is posted: Z = abs(A) holds whatever B is
+    ("abs", 1), ("min", 2), ("max", 2), ("rem", 2), ("sign", 1),
+    ("\\", 1), ("<<", 2), (">>", 2), ("/\\", 2), ("\\/", 2), ("xor", 2),
 })
 
 
@@ -630,6 +634,10 @@ def reify(e, trail, ctx):
     if name in _CMP:
         l = clpz_expression(e[1], ctx, reified=True)
         r = clpz_expression(e[2], ctx, reified=True)
+        lifted = _lift_functional(l, r, trail)
+        if lifted is None:
+            return None
+        l, r = lifted
         b = _bool_var(trail)
         return b if _post_constraint(ReifiedCmp(b, _CMP[name], l, r),
                                      trail) else None
@@ -660,6 +668,80 @@ def reify(e, trail, ctx):
         return _reify_cmp("eq", ("+", bl, br), 2, trail)
     # #\/
     return _reify_cmp("ge", ("+", bl, br), 1, trail)
+
+
+def _lift_functional(l, r, trail):
+    """``(l, r)`` with each abs/min/max over a variable replaced by a fresh
+    variable carrying its propagator (clpfd's lifting, as in the plain
+    posts), or None when posting one failed.  Sound under reification: the
+    function is total, so Z = abs(A) holds whether the comparison does or
+    not."""
+    ok_l, lift_l = _fd._fd_int_term(l)
+    ok_r, lift_r = _fd._fd_int_term(r)
+    if not (ok_l and ok_r and (lift_l or lift_r)):
+        return l, r
+    aux: list = []
+    l = _fd._lift_cells(l, aux)
+    r = _fd._lift_cells(r, aux)
+    for _z, key, args in aux:
+        # Posted OUTSIDE the reification, so it must hold for every value of
+        # its arguments: a partial function (rem by 0) or a partial operand
+        # (X // Y) would prune Y = 0 for good, where the reified comparison
+        # is merely false there.  Those stay refused.
+        if not _total_expr((key[0],) + tuple(args)):
+            raise LogicException(domain_error(
+                "clpz_expression", walk((key[0],) + tuple(args)),
+                f"{key[0]}/{key[1]} over a variable, with a partial function "
+                f"in it, is not supported in a reified comparison"))
+    if not _fd._post_lifted(aux, trail):
+        return None
+    return l, r
+
+
+#: Integer functions defined for EVERY integer argument.
+_TOTAL_KEYS = frozenset({
+    ("+", 2), ("-", 2), ("*", 2), ("-", 1), ("+", 1), ("abs", 1),
+    ("min", 2), ("max", 2), ("sign", 1), ("\\", 1), ("<<", 2), (">>", 2),
+    ("/\\", 2), ("\\/", 2), ("xor", 2),
+})
+
+
+def _total_expr(t) -> bool:
+    """*t* is built from integers, variables and total functions only."""
+    stack = [t]
+    while stack:
+        x = deref(stack.pop())
+        if is_var(x) or type(x) is int:
+            continue
+        if _fd._Add is None:
+            _fd._ensure_term_imports()
+        key = _fd._NODE_KEYS.get(type(x))
+        if key is not None:
+            args = (x.operand,) if key[1] == 1 else (x.left, x.right)
+        else:
+            ka = _fd._cell_key_args(x) if type(x) is tuple else None
+            if ka is None:
+                return False
+            key, args = ka
+        if key in _BY_NONZERO_CONSTANT:
+            d = deref(args[1])
+            if type(d) is not int or d == 0:
+                return False    # a divisor that may be 0
+        elif key in (("^", 2), ("$python_pow", 2)):
+            e = deref(args[1])
+            if type(e) is not int or e < 0:
+                return False    # an exponent that may be negative
+        elif key not in _TOTAL_KEYS:
+            return False
+        stack.extend(args)
+    return True
+
+
+#: Total only over a non-zero constant divisor.
+_BY_NONZERO_CONSTANT = frozenset({
+    ("rem", 2), ("mod", 2), ("//", 2), ("div", 2),
+    ("$python_floordiv", 2), ("$python_mod", 2),
+})
 
 
 def _reify_cmp(op, l, r, trail):
