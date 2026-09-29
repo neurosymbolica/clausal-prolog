@@ -29,7 +29,7 @@ CLP(R) uses IEEE 754 doubles with outward-rounded intervals. This is sound (the 
 
 ---
 
-## The constraint set: `{...}` in goal position
+## The constraint set in goal position
 
 A **set literal in goal position** is a set of CLP(Q) constraints — the seam's twin of
 Prolog's clpq goal `{C}`. Each element is a comparison over rational arithmetic (`==`, `!=`,
@@ -123,7 +123,7 @@ Integral rationals are presented as `int` by every binder — the arithmetic com
 
 ### Module API
 
-CLP(Q) constraints are posted with a [constraint set in goal position](#the-constraint-set--in-goal-position);
+CLP(Q) constraints are posted with a [constraint set in goal position](#the-constraint-set-in-goal-position);
 the optimisation and projection predicates live in the `clpq` module namespace:
 
 ```clausal

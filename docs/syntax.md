@@ -609,7 +609,7 @@ when at least one side is an unbound Var, a CLP(ℤ) constraint is posted:
 
 See [constraints.md](constraints.md) for the full CLP(ℤ) design, including domain representation, propagation, and labeling.
 
-### Rational constraints: a set in goal position (CLP(ℚ))
+### Rational constraints: a set in goal position
 
 A **set literal in goal position** is a set of CLP(ℚ) constraints over exact rational
 arithmetic — the twin of Prolog's clpq goal `{C}`. Its elements are comparisons (`==`, `!=`,
@@ -754,7 +754,7 @@ primary({'red', 'green', 'blue'}),
 Two sets unify iff they contain the same elements (order irrelevant). Variables in set elements are not supported.
 
 This is the *data* position. A set literal standing alone as a **goal** is not a value but a
-[CLP(ℚ) constraint set](#rational-constraints-a-set-in-goal-position-clpq): `{X >= 0, X <= 10}`.
+[CLP(ℚ) constraint set](#rational-constraints-a-set-in-goal-position): `{X >= 0, X <= 10}`.
 
 See [Dicts & Sets](dicts_sets.md) for details.
 
