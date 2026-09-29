@@ -32,3 +32,11 @@ def mod(tmp_path_factory):
 ])
 def test_callable_1(mod, pred, answers):
     assert len(list(solve(pred, mod))) == answers
+
+
+def test_callable_1_from_a_query_and_call_n():
+    from clausal.logic.database import Module
+    m = Module("cisoname_q")
+    assert len(list(solve(("callable", ("f", 1)), m))) == 1
+    assert len(list(solve(("callable", 3), m))) == 0
+    assert len(list(solve(("call", "callable", "foo"), m))) == 1

@@ -14,6 +14,7 @@ t_atom_codes(R) <- catch((L is [a, *T], atom_codes(X, L), R is X), E, R is E)
 t_number_chars(R) <- catch((L is [a, *T], number_chars(X, L), R is X), E, R is E)
 t_number_codes(R) <- catch((L is [49, *T], number_codes(X, L), R is X), E, R is E)
 t_non_list(R) <- catch((atom_chars(X, a), R is X), E, R is E)
+t_unbound_element(R) <- catch((L is [Y, *T], T is [b], atom_chars(X, L), R is X), E, R is E)
 """
 
 
@@ -38,3 +39,10 @@ def test_a_non_list_is_still_a_type_error(mod):
     R = Var()
     [got] = [_deref_walk(R) for _ in solve(("t_non_list", R), mod)]
     assert got[1] == ("type_error", "list", "a")
+
+
+@pytest.mark.parametrize("name", ["t_unbound_element"])
+def test_other_incomplete_lists_are_instantiation_errors(mod, name):
+    R = Var()
+    [got] = [_deref_walk(R) for _ in solve((name, R), mod)]
+    assert got[1] == "instantiation_error"
