@@ -59,3 +59,20 @@ def test_errors(mod):
     assert _formal(mod, Var()) == "instantiation_error"
     assert _formal(mod, [P("a", 1)], "x") == ("type_error", "list", "x")
     assert _formal(mod, [P("a", 1)], ["x"]) == ("type_error", "pair", "x")
+
+
+def test_from_a_clausal_body_with_source_pairs(tmp_path):
+    """A pair written in source (``b - 1``) is a Sub node, not the cell;
+    keysort takes both spellings (roborev, High)."""
+    from clausal.import_hook import _load_module
+    p = tmp_path / "ks_body.clausal"
+    p.write_text("-private([a, b, c])\n"
+                 "ks(S) <- keysort([b - 1, a - 2, c - 0, a - 1], S)\n"
+                 "chk() <- keysort([b - 1, a - 2], [a - 2, b - 1])\n")
+    m = _load_module("ks_body", str(p))
+    S = Var()
+    [got] = [_deref_walk(S) for _ in solve(("ks", S), m)]
+    keys = [(e.left, e.right) if hasattr(e, "left") else (e[1], e[2])
+            for e in got]
+    assert keys == [("a", 2), ("a", 1), ("b", 1), ("c", 0)]
+    assert len(list(solve("chk", m))) == 1

@@ -725,8 +725,19 @@ def _keysort_error(term, who="keysort/2"):
     return LogicException(type_error("pair", term, who))
 
 
+def _pair_key_value(t):
+    """``(Key, Value)`` of a pair in either spelling -- the cell
+    ``("-", K, V)`` or a source ``k - v`` node -- else None."""
+    if type(t) is tuple and len(t) == 3 and t[0] == "-":
+        return t[1], t[2]
+    from clausal.pythonic_ast.nodes import Sub  # noqa: PLC0415
+    if type(t) is Sub:
+        return t.left, t.right
+    return None
+
+
 def _is_pair(t) -> bool:
-    return type(t) is tuple and len(t) == 3 and t[0] == "-"
+    return _pair_key_value(t) is not None
 
 
 @_trampoline_builtin("keysort", 2)
@@ -772,9 +783,19 @@ def _keysort__2(this_generator, _proceed, _fail, _catcher, lst, sorted_lst, trai
     elif not (is_var(sorted_val)
               or isinstance(sorted_val, (SegList, SegString, SegBytes))):
         raise LogicException(type_error("list", sorted_val, who))
-    result = sorted(pairs, key=lambda p: _standard_order_key(deref(p[1])))
+    result = sorted(pairs,
+                    key=lambda p: _standard_order_key(deref(_pair_key_value(p)[0])))
     mark = trail.mark()
-    if unify(sorted_lst, result, trail):
+    if out_items is None:
+        ok = unify(sorted_lst, result, trail)
+    else:
+        # Element by element, spelling-blind: a source ``k - v`` node and
+        # the cell ``("-", K, V)`` are the same pair.
+        from clausal.logic.builtins.pairs import _unify_pair  # noqa: PLC0415
+        ok = len(out_items) == len(result) and all(
+            _unify_pair(o, *_pair_key_value(r), trail)
+            for o, r in zip(out_items, result))
+    if ok:
         yield (_proceed, None)
     trail.undo(mark)
     yield (_fail, DONE)
