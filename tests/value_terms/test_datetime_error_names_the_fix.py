@@ -1,13 +1,13 @@
 """A Python datetime in a goal must say what to write instead.
 
 RULED 2026-09-15 (option b): the seam stays strict -- a Python datetime is not
-a term and is refused -- and the harnesses pass the term they already hold.
-Measured by the harness lane across all 82 sealed bodies: 85 date()
-constructions, and ZERO from a clock, a parse, or arithmetic on external input.
+a term and is refused -- and callers pass the term they already hold.
+Measured across the downstream callers: of their date() constructions,
+ZERO came from a clock, a parse, or arithmetic on external input.
 Every one is built from components the body has in hand, so nothing is lost by
 requiring the term.
 
-This message is what 22 domains will meet while making that edit, so it has to
+This message is what downstream domains will meet while making that edit, so it has to
 name the fix rather than the fault.
 """
 import datetime

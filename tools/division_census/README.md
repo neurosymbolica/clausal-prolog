@@ -1,13 +1,13 @@
 # Division census
 
-Answers one question: **do the corpus's genuine-division sites ever divide
+Answers one question: **do a downstream program's genuine-division sites ever divide
 unevenly?**
 
-The exporter lowers corpus arithmetic to clpz `#=`, which is CLP over the
+The exporter lowers program arithmetic to clpz `#=`, which is CLP over the
 integers. `#=(X, 6/2)` binds 3; `#=(X, 7/2)` does not raise, it silently finds
-no solution. So an exported program agrees with the corpus exactly where a
-division comes out exact. Eight corpus sites do a genuine numeric division
-(iso-export-lane, 2026-09-19, by a structural walk of the emitted AST), and
+no solution. So an exported program agrees with the engine exactly where a
+division comes out exact. Eight downstream sites do a genuine numeric division
+(a downstream user, 2026-09-19, by a structural walk of the emitted AST), and
 whether those are exact in practice is **not knowable from anything on disk** —
 the runtime census records `{file, line, path}` and no operand values.
 
@@ -16,7 +16,7 @@ nothing in the export pipeline has to change to answer it.
 
 ## Running it
 
-Over a scorer run (the population that matters):
+Over a downstream answer-set run (the population that matters):
 
 ```sh
 PYTHONPATH=<engine>/tools/division_census \
@@ -51,7 +51,7 @@ Three outcome classes, because `#=` fails differently for each and lumping
 them together cannot be acted on: `exact` (an integer quotient — `#=` computes
 it), `INEXACT` (an exact non-integer — **`#=` finds no solution, silently**,
 and this is the class the question is about), and `float` (a float operand —
-`#=` raises `domain_error`, which is loud, and 0 corpus sites are exposed).
+`#=` raises `domain_error`, which is loud, and 0 downstream sites are exposed).
 
 A `count` is EVALUATIONS, not calls — `==` evaluates its arithmetic twice per
 solution (measured). A site reads `<pred half__2>` when a compiled clause body
@@ -61,7 +61,7 @@ stack.
 
 ## Six of the eight sites do not need this census at all
 
-The export lane derived eight genuine-division sites from the emitted AST
+A downstream user derived eight genuine-division sites from the emitted AST
 (2026-09-19). Their shape, which is what decides how to read a result:
 
 * **six divide by a CONSTANT** (a basis-point scale, or a quarter), so their
@@ -71,18 +71,17 @@ The export lane derived eight genuine-division sites from the emitted AST
 * **two divide by a runtime quantity**, and those are the only ones a
   denominator census actually has to answer.
 
-The site list itself is closed-side; ask the export lane for it.
+The site list itself is not in this repository.
 
-## Running it over the corpus
+## Running it over a downstream program
 
-The tool loads, but the corpus's per-domain import roots are the harness's
+The tool loads, but a downstream program's per-domain import roots are its runner's
 knowledge, not this repo's: loading division-bearing domain files directly got
-only a subset (the downstream corpus's own import roots resolve differently
-per domain). Measured working end to end on those 6 — real site attribution
-(`categorisation.clausal:149`) and real operand values — so the instrument is
+only a subset (the downstream program's own import roots resolve differently
+per domain). Measured working end to end on those 6 — real site attribution and real operand values — so the instrument is
 not the blocker.
 
-For the full population, hand it to the lane that owns the scorer runs: set
+For the full population, hand it to whoever owns the downstream runs: set
 `PYTHONPATH` to include this directory, set `DIVISION_CENSUS_OUT`, and import
 `division_census` (calling `verify()`) before the run loads any `.clausal`.
 The header line "bindings installed but NEVER fired" is the check that the run

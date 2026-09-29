@@ -8,8 +8,8 @@ DIVISOR survived:
 
 A unit atom is not an evaluable functor, so BOTH reference engines answer
 `type_error(evaluable, usd_cent/0)` — the derived predicate could never have
-answered. 65 single-goal corpus clauses were this exact shape, measured
-2026-09-13, across 18 domains.
+answered. Dozens of single-goal downstream clauses were this exact shape,
+measured 2026-09-13.
 """
 import pytest
 
@@ -49,7 +49,7 @@ def test_division_by_something_that_is_not_a_unit_stays_division():
 
     `/` between a constant and an ordinary term is real arithmetic and must
     survive as real arithmetic. A fold that swallowed every `/` would pass every
-    test above while silently deleting division from the corpus.
+    test above while silently deleting division from downstream code.
     """
     out = _emit("155000", "aud", "constant(cap) / COUNT")
     body = out.split("%")[0]
@@ -82,8 +82,8 @@ def test_the_round_trip_is_exact_for_each_scaled_unit(declared, unit, asked, exp
 # `constant(c) / unit` was only half of it. A use site that asks for a RUNTIME
 # value in a named unit — `CENTS == A / eur_cent` — has the identical problem
 # and the fold above declines it, because it requires the left to be a Call.
-# Measured 2026-09-19 over the emitted AST: 13 of the corpus's 18 `/`-bearing
-# `#=` goals are this shape, in 13 domains.
+# Measured 2026-09-19 over the emitted AST: 13 of 18 downstream `/`-bearing
+# `#=` goals are this shape.
 #
 # It matters more since the 2026-09-18 ruling: the goal now emits `#=`, and
 # clpz answers `domain_error(clpz_expression, eur_cent)` for the atom. It was
@@ -104,7 +104,7 @@ def test_a_variable_asked_for_in_a_scaled_unit_folds_to_multiplication():
     """`A / eur_cent` is `A * 100` — exact, and no atom reaches arithmetic.
 
     Multiplication rather than division on purpose: the reciprocal of every
-    scaled unit in the corpus is an exact integer, so this shape leaves clpz's
+    scaled unit in downstream code is an exact integer, so this shape leaves clpz's
     exact-division limit ENTIRELY rather than landing inside it.
     """
     out = _emit_var("A / eur_cent")

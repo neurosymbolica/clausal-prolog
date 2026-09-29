@@ -568,7 +568,7 @@ def _is_known_scaled_unit(name: str) -> bool:
     the still-supported TitleCase ``Metre`` alias) keeps working, and only the
     known hazard is refused. Under-refusing in the direction of the
     established behaviour, rather than breaking exports to close a hole that
-    nothing in the corpus reaches.
+    nothing in downstream code reaches.
     """
     from clausal.modules import units as _units                 # noqa: PLC0415
     from clausal.modules.countries import _data                 # noqa: PLC0415
@@ -606,7 +606,7 @@ def _group_digits(numerator: int, places: int) -> str:
 def _integral_if_whole(value):
     """A Decimal that equals a whole number becomes an int, for USE SITES.
 
-    Reported by iso-export-lane on canonical 750e6ae1: the scaled fold emitted
+    Reported by a downstream user on canonical 750e6ae1: the scaled fold emitted
     `1550.00`, which Prolog reads as a FLOAT, where the exact integer 1550 was
     available -- and the unscaled path stayed integer, so only scaling lost
     exactness. The engine holds currency exactly, so this was discarding
@@ -1187,13 +1187,13 @@ class _ClausalToProlog:
         reaches this lowering rather than `_collect_constant`, and dropping
         the unit keeps the WRITTEN magnitude, not the one the engine holds
         once a unit rescales. Refusing one shape and not the other would
-        leave a hole in the middle of the guarantee (corpus-lane,
+        leave a hole in the middle of the guarantee (a downstream user,
         2026-09-11).
 
         Called only once the node is known to BE a quantity -- an ordinary
         call like `implements(k1)` reaches `_try_quantity` too and leaves by
         the `return None` below, so a check placed before that returns a
-        refusal for every one-argument predicate call in the corpus.
+        refusal for every one-argument predicate call in a program.
         """
         if _is_known_scaled_unit(unit_name):
             raise NotImplementedError(
@@ -2751,8 +2751,8 @@ class _ClausalToProlog:
         common ``CENTS == A / eur_cent`` -- a RUNTIME value asked for in a named
         unit. The defect is identical: a unit atom is not an evaluable functor,
         so the surviving divisor makes the goal dead. Measured 2026-09-19 over
-        the emitted AST, 13 of the corpus's 18 `/`-bearing `#=` goals are this
-        shape, across 13 domains, and every one of them was equally dead BEFORE
+        the emitted AST, 13 of 18 downstream `/`-bearing `#=` goals are this
+        shape, and every one of them was equally dead BEFORE
         the 2026-09-18 ruling -- `=:=` raises on the atom exactly as `#=` does.
 
         EMITS MULTIPLICATION, NOT DIVISION, and that is the point rather than a
@@ -4057,7 +4057,7 @@ def clausal_source_to_prolog_ast(source: str, *,
     ``???`` placeholder plus a warning comment.
 
     *module_path* is the dotted path of the module being translated
-    (``"eu.ai_act.prohibited_practices.prohibition"``). When given,
+    (``"orgs.policy.rules.decision"``). When given,
     ``use_module`` file paths are emitted relative to that module's package
     directory, which is what Scryer resolves a consulted path against.
 
@@ -4104,9 +4104,8 @@ def _expand_table_directives(tree) -> None:
     at all, so it fell through to generic directive emission and landed in the
     .pl verbatim. ISO has no such directive, so every one was
     `domain_error(directive, constants_number_currency/4)` at LOAD -- the
-    exported program did not run at all. Measured 2026-09-17: 10 sites in 6
-    corpus files, and it is one of the two classes holding G3 at zero across the
-    whole roster.
+    exported program did not run at all. Measured 2026-09-17: 10 downstream
+    sites, and it was one of the two classes keeping every export from loading.
 
     A second data shape of the same declaration family, arriving after the first
     was handled and never swept for. The names differ by one letter and an

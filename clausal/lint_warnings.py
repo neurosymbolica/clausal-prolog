@@ -103,7 +103,7 @@ class ClausalCurrencyLiteralWarning(ClausalLintWarning):
     is the difference between a loud problem and a silent wrong amount.
 
     Money only. A physical measurement makes no exact-decimal claim, and
-    warning there would fire on every float in the corpus.
+    warning there would fire on every float in downstream code.
     """
 
 
@@ -134,7 +134,7 @@ class ClausalShadowedVariableWarning(ClausalLintWarning):
     """A Python local whose name is ALL_CAPS, read inside a seam as a logic
     VARIABLE rather than as the local.
 
-    The corpus convention is ALL_CAPS for exactly these locals (``P``, ``D``,
+    The usual convention is ALL_CAPS for exactly these locals (``P``, ``D``,
     ``S``, ``C``, ``R``), and the two readings look identical in the source:
 
         P = 2

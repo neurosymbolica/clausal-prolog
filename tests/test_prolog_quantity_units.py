@@ -141,7 +141,7 @@ def test_discarded_units_ride_a_TRAILING_comment_on_their_own_line():
     """One comment per LINE, listing that line's values and units.
 
     Trailing, not above: a `%` runs to end of line, which is harmless once the
-    line's code is complete, and it costs NO EXTRA LINES. On the corpus this
+    line's code is complete, and it costs NO EXTRA LINES. Downstream, this
     took the note overhead from 78 added lines (9.7% of output) to 16 (2.3%),
     and the 16 are the one-per-file header.
     """

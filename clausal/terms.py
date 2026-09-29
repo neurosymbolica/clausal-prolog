@@ -2302,7 +2302,7 @@ def _dims_str(dims: dict, *, qualify: frozenset = frozenset()) -> str:
     rendering, but the effect must land on the component that actually
     collides and nowhere else. ``AUD/second`` against ``USD/second`` shares
     one identical ``second``, which was never ambiguous and must render the
-    same on both sides (corpus-lane, 2026-09-11).
+    same on both sides (a downstream user, 2026-09-11).
 
     A qualified key with no code is left bare rather than given an
     identity: ``id()`` differs between runs of the same program, which
@@ -2951,7 +2951,7 @@ class quantity:  # noqa: N801 -- see the naming note below
 #: `date`, `decimal` and `rdiv`: all writable, all atoms.
 #:
 #: `Quantity` stays as an alias because it is exported from this module and
-#: reached from corpus files and sealed harness bodies that this lane may not
+#: reached from downstream files and bodies that this repository does not
 #: edit. The ~945 in-tree call sites are a separate, mechanical migration --
 #: separate because lowercase `quantity` ALREADY exists as a local variable in
 #: 51 places, so a blanket rename would leave the class shadowed by a local in

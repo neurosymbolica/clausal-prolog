@@ -394,9 +394,9 @@ def check_currency_unit(name: str, unit, spelling: str):
     argument to *be* a currency split the two safety properties across two
     directives so that an author could have the currency gate or the
     minor-unit scale but never both -- and every one of the 139 identifiers
-    the corpus migration is about is spelled ``_cents``/``_satang``/
+    a downstream migration is about is spelled ``_cents``/``_satang``/
     ``_pence``, so the gate would have covered the case the migration is
-    least likely to produce (corpus-lane, 2026-09-11).
+    least likely to produce (a downstream user, 2026-09-11).
 
     The gap this closes is narrow and worth stating exactly, since two of the
     three obvious failures were already covered: a mistyped or unbound

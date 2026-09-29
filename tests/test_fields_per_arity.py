@@ -1,7 +1,7 @@
 """Declared field names are per ARITY (operator ruling 2026-09-29).
 
 ``-module(lib, [q(X), q(X, Y)]): allow it.``  The parenthesized export is the
-form the prompts teach and the corpus uses, so a name may be DECLARED with
+form the documentation teaches and downstream code uses, so a name may be DECLARED with
 field names at several arities in one file: each ``(name, arity)`` carries
 its own fields.  This lifts Q1/D2 of
 ``implementation_plans/multi-arity-names-2026-09-29.md`` for declarations

@@ -1,8 +1,8 @@
 # Fixture for tests/test_imported_atoms.py: a package __init__ with NO
 # -module list that brings its atoms in via -import_from only.
--import_from(tests.fixtures.ia_vocab, [open_procedure, shared_kind, restricted_procedure, vocab_rel, alias(aliased_src, aliased_local)])
--import_from(tests.fixtures.ia_vocab2, [shared_kind, open_procedure])
+-import_from(tests.fixtures.ia_vocab, [open_kind, shared_kind, closed_kind, vocab_rel, alias(aliased_src, aliased_local)])
+-import_from(tests.fixtures.ia_vocab2, [shared_kind, open_kind])
 
-trigger(open_procedure),
+trigger(open_kind),
 trigger(shared_kind),
 trigger(aliased_local),

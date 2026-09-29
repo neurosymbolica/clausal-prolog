@@ -1,10 +1,9 @@
 """`-constants_number_currency` — a TABLE of money, defining the predicate.
 
-Operator's ruling, 2026-09-12. Most of the corpus's statutory money is in
-tables rather than single facts: 217 indexed money rows across ~8 domains
-against 29 single-value constants migrated (corpus-lane's census). One domain
-alone holds 30 rows, another's thresholds file 81, and both
-are stopped on this.
+Operator's ruling, 2026-09-12. Most statutory money in downstream code is
+in tables rather than single facts: indexed money rows far outnumber the
+single-value constants migrated. One domain alone holds dozens of rows, and
+it is stopped on this.
 
 **Half of it already worked.** `-constant_value` accepts a structured RHS, so
 a table declares fine as DATA — verified:
@@ -20,9 +19,9 @@ could check.
 **The declaration DEFINES the predicate the rulebase already calls**
 (operator's ruling), so a domain migrates by replacing N fact lines with one
 declaration and NO call site changes. Binding a list instead would have turned
-217 rows into 217 edits plus a rewrite of every consumer.
+N rows into N edits plus a rewrite of every consumer.
 
-**The money column is DECLARED, never inferred.** corpus-lane's four real
+**The money column is DECLARED, never inferred.** a downstream user's four real
 shapes put it in arg 2 of 2, in arg 3 of 4, and inside a nested list, and one
 carries a two-date validity window beside the amount. Any positional rule
 would guess wrong on at least one shape, and guessing wrong is silent — which
@@ -86,7 +85,7 @@ def test_a_call_site_written_the_old_way_still_works(tmp_path):
 
 
 def test_money_at_names_a_column_other_than_the_last(tmp_path):
-    """corpus-lane's shape C: `threshold_entry(revenue, date, 2500000000,
+    """a downstream user's shape C: `threshold_entry(revenue, date, 2500000000,
     "s45A ...")` — money is arg 3 of 4, with a citation after it."""
     m = _load(tmp_path, "at3", """
         -double_quotes(atom)
@@ -240,8 +239,8 @@ def test_each_form_names_its_own_column_keyword(tmp_path):
 # The lint was designed to EMPTY as sites convert, and a falling count was
 # offered as a better progress measure than counting edited files. A table
 # declaration it does not recognise breaks exactly that: converting that domain's
-# 30 rows would move the count by ZERO, so the progress signal reads "nothing
-# happened" on the largest migration in the corpus (corpus-lane, 2026-09-12).
+# rows would move the count by ZERO, so the progress signal reads "nothing
+# happened" on the largest migration downstream (a downstream user, 2026-09-12).
 #
 # The discriminator was right and the exemption was missing: the generated
 # facts still carry bare numbers in their NON-money columns, so the rule fired

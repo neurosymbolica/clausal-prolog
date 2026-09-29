@@ -473,8 +473,8 @@ class TestEngineFingerprintInvalidation:
 
 
 class TestAtomicCacheWrite:
-    """Several engines can share one ``__pycache__`` (kit/corpus trees run by
-    parallel lanes), so a reader must never see a half-written ``.pyc``.
+    """Several engines can share one ``__pycache__`` (downstream trees run by
+    parallel processes), so a reader must never see a half-written ``.pyc``.
     ``set_data`` writes a temp file beside the target and ``os.replace``s it
     in, as CPython's ``importlib._bootstrap_external._write_atomic`` does."""
 

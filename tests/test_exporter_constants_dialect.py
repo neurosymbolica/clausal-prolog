@@ -258,7 +258,7 @@ def test_the_rational_form_reads_back_exactly_in_the_real_system(system):
 
 
 def test_a_scaled_fold_that_lands_on_a_whole_unit_stays_an_INTEGER():
-    """Reported by iso-export-lane on canonical 750e6ae1, and it was mine.
+    """Reported by a downstream user on canonical 750e6ae1, and it was mine.
 
     `155000 aud_cent` is `Decimal('1550.00')`, which IS integral -- so an exact
     integer was available and the emitter wrote `1550.00`, a Prolog FLOAT. The

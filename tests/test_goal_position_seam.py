@@ -1821,7 +1821,7 @@ class TestAllCapsLocalReadAsAVariableWarns:
 
     No error, no exception: the escape does not cross the value, ``P`` is a
     fresh variable, and the goal is simply less constrained than it reads.
-    The corpus convention is ALL_CAPS for exactly these locals (``P``, ``D``,
+    The usual convention is ALL_CAPS for exactly these locals (``P``, ``D``,
     ``S``, ``C``, ``R``), so the migration would meet it at a large fraction
     of sites.
 
@@ -1892,7 +1892,7 @@ class TestAllCapsLocalReadAsAVariableWarns:
     def test_it_does_NOT_warn_on_the_seam_s_own_loop_target(self):
         """``V`` is the ``for`` target of the seam itself, so it is a Python
         binding only because the seam made it one.  Warning here would fire on
-        every correct site in the corpus."""
+        every correct site in a program."""
         msgs = self._warns("target", (
             "    out = []\n"
             "    for V in --pair(K, V):\n"

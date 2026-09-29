@@ -1,13 +1,13 @@
 """Census: every DIVISION the engine evaluates, with its DENOMINATOR.
 
-THE QUESTION.  The exporter lowers corpus arithmetic to clpz ``#=``, which is
+THE QUESTION.  The exporter lowers program arithmetic to clpz ``#=``, which is
 CLP over the integers: ``#=(X, 7/2)`` does not raise, it silently finds no
 solution, while ``#=(X, 6/2)`` binds 3.  So an exported program agrees with
-the corpus only where a division comes out EXACT.  Eight corpus sites do a
-genuine numeric division (iso-export-lane, 2026-09-19, by a structural walk of
+the engine only where a division comes out EXACT.  Eight downstream sites do a
+genuine numeric division (a downstream user, 2026-09-19, by a structural walk of
 the emitted AST).  Whether those divisions are exact in practice is not
 knowable from anything on disk -- the runtime census records ``{file, line,
-path}`` and no operand VALUES -- so it has to be measured while the corpus
+path}`` and no operand VALUES -- so it has to be measured while the program
 RUNS.  This is that instrument.  It reads the engine, not the export pipeline,
 because the engine is where the quotients are actually computed.
 
@@ -37,7 +37,7 @@ do not read a count as a call count.
 
 WHAT A ROW MEANS.  ``exact`` is whether the quotient is an integer -- the
 property ``#=`` needs.  ``site`` is the nearest ``.clausal``/``.seam`` frame on
-the stack, which is the corpus line responsible; ``(engine)`` means no corpus
+the stack, which is the source line responsible; ``(engine)`` means no source
 frame was below it (an engine-internal division, e.g. inside a library
 predicate).  A denominator of 1 is still recorded: it is exact, and a census
 that hides the easy cases cannot say what fraction of traffic is easy.
@@ -85,7 +85,7 @@ def _classify(left, right, value) -> str:
       SOLUTION, silently; this is the case the question is about.
     * ``float``   -- a float operand.  ``#=`` raises
       ``domain_error(clpz_expression, F)``, which is loud, and
-      iso-export-lane measured 0 corpus sites exposed to it.  Kept apart so
+      a downstream user measured 0 downstream sites exposed to it.  Kept apart so
       it cannot inflate the INEXACT count: a float divided by 1 is not an
       integer, but it is not the silent failure either.
     """
@@ -152,7 +152,7 @@ def install() -> list[str]:
         function over it makes the wrapper an instance method and the
         instance arrives as the numerator -- measured, as
         ``TypeError: _exact_div() takes 2 positional arguments but 3 were
-        given``, the first time this ran against a corpus module that
+        given``, the first time this ran against a downstream module that
         divides a Quantity.  ``inspect.getattr_static`` sees the descriptor
         rather than what it resolves to, which is the only way to tell.
         """
@@ -188,7 +188,7 @@ def _patch_clpq() -> None:
     dividing the coefficients directly (``{v: c / rv ...}, lv / rv``), so a
     division that happens inside a posted CONSTRAINT rather than in ground
     arithmetic is invisible to every other binding here.  That is not
-    hypothetical: the harness lane's row 7 (a scored domain
+    hypothetical: a downstream run's row 7 (a scored domain
     produced no census rows at all while five siblings produced plenty, and
     this is the path such a site would take.
 
@@ -240,7 +240,7 @@ def report(path: str | None = None) -> str:
                     "# it divides through a binding not in the list above.\n")
         f.write(f"# divisions evaluated: {total}\n")
         f.write(f"# distinct (site, binding, operands, exactness) rows: {len(_ROWS)}\n")
-        f.write(f"# distinct corpus sites: {len(sites)}\n")
+        f.write(f"# distinct sites: {len(sites)}\n")
         f.write(f"# INEXACT divisions (an exact non-integer — the SILENT "
                 f"#= failure): {inexact}\n")
         f.write("# outcome classes: "
@@ -253,13 +253,13 @@ def report(path: str | None = None) -> str:
         # the header in front of them and the docs somewhere else, and a
         # census that counts evaluations while its reader assumes calls is
         # off by exactly 2x -- the kind of factor that gets discovered a
-        # month later, inside a conclusion (iso-export-lane, 2026-09-19).
+        # month later, inside a conclusion (a downstream user, 2026-09-19).
         f.write("# CAUTION: `count` is EVALUATIONS, not calls. `==` evaluates "
                 "its arithmetic TWICE per solution (measured: one goal, one "
                 "solution, two rows). Exactness per row is unaffected.\n")
         f.write("# A division by a CONSTANT is decidable without this census: "
                 "`X * Y / 10000` is exact iff X*Y is a multiple of 10000. Six "
-                "of the eight corpus sites divide by a constant; only TWO "
+                "of the eight downstream sites divide by a constant; only TWO "
                 "divide by a runtime quantity, and those are the live "
                 "question.\n")
         f.write("site\tbinding\tleft\tright\texactness\tcount\n")
@@ -307,7 +307,7 @@ def pytest_sessionfinish(session, exitstatus):   # noqa: ARG001
 install()
 
 # ALWAYS write, even with nothing to report.  It used to write only when
-# ``_ROWS`` was non-empty, and the harness lane hit the consequence
+# ``_ROWS`` was non-empty, and a downstream run hit the consequence
 # (2026-09-19): a domain that produced NO FILE is indistinguishable from a run
 # where the census was never armed, and those are opposite conclusions — "no
 # division happens here" versus "the census is blind here".  A zero-row file

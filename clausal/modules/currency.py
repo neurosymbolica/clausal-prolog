@@ -100,11 +100,11 @@ def _currency_for_code(text):
     """The currency object an ISO 4217 code names, or None.
 
     Case-insensitive, which covers **the two spellings that can exist**: a
-    lowercase atom (`eur`, which is also how the corpus writes it) and an
+    lowercase atom (`eur`, which is also how downstream code writes it) and an
     uppercase one (`"EUR"`). A mixed-case `Eur` cannot be written as an atom
     at all — TitleCase is a logic VARIABLE since 2026-09-10, so it would
     silently become a fresh variable rather than a misspelled code
-    (corpus-lane, 2026-09-11). Strings in either case work too.
+    (a downstream user, 2026-09-11). Strings in either case work too.
     """
     import importlib                                          # noqa: PLC0415
     records, bindings = _currency_records()

@@ -6938,7 +6938,7 @@ class EmbedTransformer(NodeTransformer):
         the thunk and swallows that failure; nothing is evaluated unless it
         is about to be used.
 
-        Emitted ONLY when such a base exists, so every goal in the corpus that
+        Emitted ONLY when such a base exists, so every goal in a program that
         does not use the form lowers to byte-identical code.
         """
         # ONLY the root of the CALL'S OWN func chain (roborev job 79, finding
@@ -8234,7 +8234,7 @@ class EmbedTransformer(NodeTransformer):
         # bound and not the ones the seam lowering is about to add: an
         # exported goal variable becomes a local (``_export_stmts``,
         # ``_declare_locals``), and scanning afterwards would report every
-        # correct site in the corpus.
+        # correct site in a program.
         transformer._python_locals.append(
             transformer._author_bound_locals(node))
         transformer._seam_exports.append({})
@@ -9754,7 +9754,7 @@ class EmbedTransformer(NodeTransformer):
                 and ident not in transformer._scale_name_seen):
             # The declaration half of the scale-in-a-name lint. A directive is
             # not a clause, so `_lint_scale_in_name`'s walk never reaches it --
-            # and this is the form the corpus migration produces most, where
+            # and this is the form a constants migration produces most, where
             # `-constant_value` takes no unit and the scale in the NAME is the
             # only record there is. See ClausalScaleInNameWarning.
             transformer._scale_name_seen.add(ident)

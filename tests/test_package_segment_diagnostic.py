@@ -1,13 +1,13 @@
 """A dotted import that fails on a non-identifier directory says so.
 
-``eu/state-aid/`` on disk cannot be the ``state_aid`` segment of a dotted
-import — a package directory's name IS its import segment, and ``state-aid``
+``orgs/grant-aid/`` on disk cannot be the ``grant_aid`` segment of a dotted
+import — a package directory's name IS its import segment, and ``grant-aid``
 is not a Python identifier.  The finder therefore misses, and the author was
-told ``No module named 'eu.state_aid'`` while looking straight at the
+told ``No module named 'orgs.grant_aid'`` while looking straight at the
 directory.  Two separate defects made that message wrong:
 
-* the *intermediate*-segment shape (``-import_from(eu.state_aid.reg_w_scheme, …)``
-  against a hyphenated ``eu/state-aid/``) raised with ``name='eu.state_aid'``,
+* the *intermediate*-segment shape (``-import_from(orgs.grant_aid.grant_scheme, …)``
+  against a hyphenated ``orgs/grant-aid/``) raised with ``name='orgs.grant_aid'``,
   a strict prefix of the declared path, so ``enrich_import_error`` did not
   recognise it as this file's own directive at all and CPython's bare one-liner
   escaped;
@@ -113,20 +113,20 @@ def _load_error(root, source, modname="_seg_use"):
 class TestHyphenatedDirectory:
 
     def test_the_directory_and_the_identifier_rule_are_both_named(self, on_path):
-        pkg = _pkg(on_path, "eu", "state-aid")
+        pkg = _pkg(on_path, "orgs", "grant-aid")
         msg = _flat(str(_load_error(
-            on_path, "-import_from(eu.state_aid, [Aid])\n")))
+            on_path, "-import_from(orgs.grant_aid, [Aid])\n")))
 
-        assert (f"{pkg} is there, but 'state-aid' is not a valid Python "
-                f"identifier, so no dotted import can name it — 'state_aid' "
+        assert (f"{pkg} is there, but 'grant-aid' is not a valid Python "
+                f"identifier, so no dotted import can name it — 'grant_aid' "
                 f"is a different segment, not a spelling of it." in msg)
 
     def test_the_remedy_is_the_rename(self, on_path):
-        _pkg(on_path, "eu", "state-aid")
+        _pkg(on_path, "orgs", "grant-aid")
         msg = _flat(str(_load_error(
-            on_path, "-import_from(eu.state_aid, [Aid])\n")))
+            on_path, "-import_from(orgs.grant_aid, [Aid])\n")))
 
-        assert ("-> rename the directory 'state-aid' to 'state_aid'. Renaming "
+        assert ("-> rename the directory 'grant-aid' to 'grant_aid'. Renaming "
                 "is the only repair: a package directory is importable only "
                 "under its own name, so the import cannot be adjusted to meet "
                 "it." in msg)
@@ -134,44 +134,44 @@ class TestHyphenatedDirectory:
     def test_an_intermediate_hyphenated_segment_is_diagnosed(self, on_path):
         """The shape from the migration: the hyphen is *not* the last segment,
         so ``exc.name`` is a strict prefix of the declared path."""
-        pkg = _pkg(on_path, "eu", "state-aid")
-        (pkg / "reg_w_scheme.clausal").write_text(
-            "-module(reg_w_scheme, [reg_w_scheme/1])\nreg_w_scheme(1),\n")
+        pkg = _pkg(on_path, "orgs", "grant-aid")
+        (pkg / "grant_scheme.clausal").write_text(
+            "-module(grant_scheme, [grant_scheme/1])\ngrant_scheme(1),\n")
 
-        # ``RegWScheme``, not ``G``: an ALL-CAPS imported name is refused at load
+        # ``GrantScheme``, not ``G``: an ALL-CAPS imported name is refused at load
         # time as a logic-variable name (term_rewriting's
         # ``-import_from`` check), which would preempt the import failure this
         # test is about.  The name is incidental here either way.
         msg = _flat(str(_load_error(
-            on_path, "-import_from(eu.state_aid.reg_w_scheme, [RegWScheme])\n")))
+            on_path, "-import_from(orgs.grant_aid.grant_scheme, [GrantScheme])\n")))
 
         # Previously this escaped enrichment entirely: no directive, no file,
-        # no directory — just "No module named 'eu.state_aid'".
-        assert "-import_from(eu.state_aid.reg_w_scheme, [RegWScheme])" in msg
-        assert ("the segment 'state_aid' did not resolve, so neither can "
-                "'eu.state_aid.reg_w_scheme'" in msg)
-        assert f"{pkg} is there, but 'state-aid' is not a valid Python" in msg
+        # no directory — just "No module named 'orgs.grant_aid'".
+        assert "-import_from(orgs.grant_aid.grant_scheme, [GrantScheme])" in msg
+        assert ("the segment 'grant_aid' did not resolve, so neither can "
+                "'orgs.grant_aid.grant_scheme'" in msg)
+        assert f"{pkg} is there, but 'grant-aid' is not a valid Python" in msg
 
     def test_import_module_directive_too(self, on_path):
-        _pkg(on_path, "eu", "state-aid")
+        _pkg(on_path, "orgs", "grant-aid")
         msg = _flat(str(_load_error(
-            on_path, "-import_module(eu.state_aid)\n")))
+            on_path, "-import_module(orgs.grant_aid)\n")))
 
-        assert "-import_module(eu.state_aid)" in msg
-        assert "rename the directory 'state-aid' to 'state_aid'" in msg
+        assert "-import_module(orgs.grant_aid)" in msg
+        assert "rename the directory 'grant-aid' to 'grant_aid'" in msg
 
     def test_a_top_level_hyphenated_directory_is_found_too(self, on_path):
         """No parent package: the search path is ``sys.path`` itself."""
-        pkg = _pkg(on_path, "state-aid")
+        pkg = _pkg(on_path, "grant-aid")
         msg = _flat(str(_load_error(
-            on_path, "-import_from(state_aid, [Aid])\n")))
+            on_path, "-import_from(grant_aid, [Aid])\n")))
 
-        assert f"{pkg} is there, but 'state-aid' is not a valid Python" in msg
+        assert f"{pkg} is there, but 'grant-aid' is not a valid Python" in msg
 
     def test_it_stays_a_ModuleNotFoundError(self, on_path):
-        _pkg(on_path, "eu", "state-aid")
+        _pkg(on_path, "orgs", "grant-aid")
         use = on_path / "use.clausal"
-        use.write_text("-import_from(eu.state_aid, [Aid])\n")
+        use.write_text("-import_from(orgs.grant_aid, [Aid])\n")
         sys.modules.pop("_seg_cls", None)
         with pytest.raises(ModuleNotFoundError):
             _load_module("_seg_cls", str(use))
@@ -180,16 +180,16 @@ class TestHyphenatedDirectory:
 class TestHyphenatedSourceFile:
 
     def test_a_hyphenated_clausal_file_is_named_as_the_reason(self, on_path):
-        pkg = _pkg(on_path, "eu", exports="eux/1")
-        (pkg / "state-aid.clausal").write_text(
-            "-module(state_aid, [aid/1])\naid(1),\n")
+        pkg = _pkg(on_path, "orgs", exports="orgx/1")
+        (pkg / "grant-aid.clausal").write_text(
+            "-module(grant_aid, [aid/1])\naid(1),\n")
 
         msg = _flat(str(_load_error(
-            on_path, "-import_from(eu.state_aid, [Aid])\n")))
+            on_path, "-import_from(orgs.grant_aid, [Aid])\n")))
 
-        assert (f"{pkg / 'state-aid.clausal'} is there, but 'state-aid' is not "
+        assert (f"{pkg / 'grant-aid.clausal'} is there, but 'grant-aid' is not "
                 f"a valid Python identifier" in msg)
-        assert ("rename the file 'state-aid.clausal' to 'state_aid.clausal'. "
+        assert ("rename the file 'grant-aid.clausal' to 'grant_aid.clausal'. "
                 "Renaming is the only repair: a module file is importable only "
                 "under its own name" in msg)
 
@@ -200,9 +200,9 @@ class TestHyphenatedSourceFile:
 class TestGenuinelyAbsentModule:
 
     def test_absent_module_keeps_the_missing_module_sentence(self, on_path):
-        _pkg(on_path, "eu", exports="eux/1")
+        _pkg(on_path, "orgs", exports="orgx/1")
         msg = _flat(str(_load_error(
-            on_path, "-import_from(eu.no_such_thing, [Aid])\n")))
+            on_path, "-import_from(orgs.no_such_thing, [Aid])\n")))
 
         assert "names a module that does not exist" in msg
         assert "no export list to show" in msg
@@ -214,13 +214,13 @@ class TestGenuinelyAbsentModule:
     def test_absent_intermediate_segment_says_where_it_stopped(self, on_path):
         """A prefix miss with nothing to point at still names the segment
         rather than blaming the whole dotted path."""
-        _pkg(on_path, "eu", exports="eux/1")
+        _pkg(on_path, "orgs", exports="orgx/1")
         msg = _flat(str(_load_error(
-            on_path, "-import_from(eu.nope.deeper, [Aid])\n")))
+            on_path, "-import_from(orgs.nope.deeper, [Aid])\n")))
 
-        assert "-import_from(eu.nope.deeper, [Aid])" in msg
+        assert "-import_from(orgs.nope.deeper, [Aid])" in msg
         assert ("the segment 'nope' did not resolve, so neither can "
-                "'eu.nope.deeper'" in msg)
+                "'orgs.nope.deeper'" in msg)
         assert "not a valid Python identifier" not in msg
 
 
@@ -237,51 +237,51 @@ class TestMisnamedPathEntryScan:
         return _misnamed_path_entry(dotted)
 
     def test_finds_a_hyphenated_directory(self, on_path):
-        _pkg(on_path, "eu", "state-aid")
-        importlib.import_module("eu")
+        _pkg(on_path, "orgs", "grant-aid")
+        importlib.import_module("orgs")
 
-        hit = self._scan("eu.state_aid")
+        hit = self._scan("orgs.grant_aid")
 
         assert hit is not None
-        assert hit.entry == "state-aid"
-        assert hit.stem == "state-aid"
+        assert hit.entry == "grant-aid"
+        assert hit.stem == "grant-aid"
         assert hit.kind == "directory"
 
     def test_says_nothing_when_the_correctly_named_entry_also_exists(
             self, on_path):
-        """If ``state_aid`` is on the search path too, the import failed for
+        """If ``grant_aid`` is on the search path too, the import failed for
         some other reason and the hyphenated sibling is not the story."""
-        _pkg(on_path, "eu", "state-aid")
-        _pkg(on_path / "eu", "state_aid")
-        importlib.import_module("eu")
+        _pkg(on_path, "orgs", "grant-aid")
+        _pkg(on_path / "orgs", "grant_aid")
+        importlib.import_module("orgs")
 
-        assert self._scan("eu.state_aid") is None
+        assert self._scan("orgs.grant_aid") is None
 
     def test_a_correct_spelling_in_a_LATER_directory_still_aborts_the_scan(
             self, two_dirs_on_path):
         """The abort is a property of the search path, not of one directory.
 
-        Checked per-directory it depended on order: ``d1/state-aid`` was
-        reported while ``d2/state_aid`` sat correctly spelled further down the
+        Checked per-directory it depended on order: ``d1/grant-aid`` was
+        reported while ``d2/grant_aid`` sat correctly spelled further down the
         path, and the author was told to rename a directory that was not the
-        reason for anything.  ``d2/state_aid`` here is a plain file, so the
+        reason for anything.  ``d2/grant_aid`` here is a plain file, so the
         import still fails — the point is that the hyphen is no longer offered
         as the explanation.
         """
         d1, d2 = two_dirs_on_path
-        _pkg(d1, "state-aid")
-        (d2 / "state_aid").write_text("not an importable module\n")
+        _pkg(d1, "grant-aid")
+        (d2 / "grant_aid").write_text("not an importable module\n")
 
-        assert self._scan("state_aid") is None
+        assert self._scan("grant_aid") is None
 
     def test_a_later_correct_spelling_keeps_the_absent_module_sentence(
             self, two_dirs_on_path):
         """End to end: no rename advice, because renaming would repair nothing."""
         d1, d2 = two_dirs_on_path
-        _pkg(d1, "state-aid")
-        (d2 / "state_aid").write_text("not an importable module\n")
+        _pkg(d1, "grant-aid")
+        (d2 / "grant_aid").write_text("not an importable module\n")
         msg = _flat(str(_load_error(
-            d1, "-import_from(state_aid, [Aid])\n", modname="_seg_order")))
+            d1, "-import_from(grant_aid, [Aid])\n", modname="_seg_order")))
 
         assert "names a module that does not exist" in msg
         assert "not a valid Python identifier" not in msg
@@ -289,19 +289,19 @@ class TestMisnamedPathEntryScan:
 
     def test_says_nothing_about_an_unrelated_hyphenated_directory(
             self, on_path):
-        _pkg(on_path, "eu", "some-other-thing")
-        importlib.import_module("eu")
+        _pkg(on_path, "orgs", "some-other-thing")
+        importlib.import_module("orgs")
 
-        assert self._scan("eu.state_aid") is None
+        assert self._scan("orgs.grant_aid") is None
 
     def test_ignores_files_that_are_not_importable_sources(self, on_path):
-        _pkg(on_path, "eu", exports="eux/1")
-        (on_path / "eu" / "state-aid.txt").write_text("notes\n")
-        importlib.import_module("eu")
+        _pkg(on_path, "orgs", exports="orgx/1")
+        (on_path / "orgs" / "grant-aid.txt").write_text("notes\n")
+        importlib.import_module("orgs")
 
-        assert self._scan("eu.state_aid") is None
+        assert self._scan("orgs.grant_aid") is None
 
     def test_says_nothing_when_the_parent_package_is_unimportable(self):
         """No parent in ``sys.modules`` means no search path to scan; the scan
         must decline rather than guess at ``sys.path``."""
-        assert self._scan("no_such_parent_pkg.state_aid") is None
+        assert self._scan("no_such_parent_pkg.grant_aid") is None

@@ -1,7 +1,7 @@
 """A date is the term ('date', Y, M, D); a Python datetime is not a term.
 
-Ruled 2026-09-14/15: dates normalise with everything else. The corpus already
-writes `date(Y, M, D)` and has a ratchet (`check_date_representation.py`)
+Ruled 2026-09-14/15: dates normalise with everything else. Downstream code already
+writes `date(Y, M, D)` and has a ratchet (a downstream check)
 enforcing it against `[Y, M, D]` lists, so this closes the *second*
 representation rather than introducing the first.
 
