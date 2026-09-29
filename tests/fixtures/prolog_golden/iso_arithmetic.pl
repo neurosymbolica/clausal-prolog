@@ -225,28 +225,44 @@ test('gcd unbound fails') :-
     \+ gcd(_x_UNUSED, 8, _).
 
 test('divmod 17 5 = (3, 2)') :-
-    divmod_(17, 5, Q, R),
+    integer(17),
+    integer(5),
+    5 =\= 0,
+    Q is div(17, 5),
+    R is 17 mod 5,
     #=(Q, 3),
     #=(R, 2).
 
 test('divmod exact 10 5 = (2, 0)') :-
-    divmod_(10, 5, Q, R),
+    integer(10),
+    integer(5),
+    5 =\= 0,
+    Q is div(10, 5),
+    R is 10 mod 5,
     #=(Q, 2),
     #=(R, 0).
 
 test('divmod by zero fails') :-
-    \+ divmod_(10, 0, _, _).
+    \+ (integer(10), integer(0), 0 =\= 0, _ is div(10, 0), _ is 10 mod 0).
 
 test('divmod negative: -7 // 2 = -4, -7 % 2 = 1 (Python floor)') :-
-    divmod_(-7, 2, Q, R),
+    integer(-7),
+    integer(2),
+    2 =\= 0,
+    Q is div(-7, 2),
+    R is -7 mod 2,
     #=(Q, -4),
     #=(R, 1).
 
 test('divmod unbound fails') :-
-    \+ divmod_(_x_UNUSED, 5, _, _).
+    \+ (integer(_x_UNUSED), integer(5), 5 =\= 0, _ is div(_x_UNUSED, 5), _ is _x_UNUSED mod 5).
 
 test('divmod check mode: correct') :-
-    divmod_(17, 5, 3, 2).
+    integer(17),
+    integer(5),
+    5 =\= 0,
+    3 is div(17, 5),
+    2 is 17 mod 5.
 
 test('divmod check mode: wrong r fails') :-
-    \+ divmod_(17, 5, 3, 99).
+    \+ (integer(17), integer(5), 5 =\= 0, 3 is div(17, 5), 99 is 17 mod 5).

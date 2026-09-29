@@ -134,16 +134,16 @@ test('gcd negative: gcd(-12, 8) = 4') <- (gcd(-12, 8, G), G == 4)
 
 test('gcd unbound fails') <- (not gcd(_x_UNUSED, 8, _))
 
-test('divmod 17 5 = (3, 2)') <- (divmod_(17, 5, Q, R), Q == 3, R == 2)
+test('divmod 17 5 = (3, 2)') <- (integer(17), integer(5), 5 != 0, eval_('div'(17, 5), Q), eval_('mod'(17, 5), R), Q == 3, R == 2)
 
-test('divmod exact 10 5 = (2, 0)') <- (divmod_(10, 5, Q, R), Q == 2, R == 0)
+test('divmod exact 10 5 = (2, 0)') <- (integer(10), integer(5), 5 != 0, eval_('div'(10, 5), Q), eval_('mod'(10, 5), R), Q == 2, R == 0)
 
-test('divmod by zero fails') <- (not divmod_(10, 0, _, _))
+test('divmod by zero fails') <- (not (integer(10), integer(0), 0 != 0, eval_('div'(10, 0), _), eval_('mod'(10, 0), _)))
 
-test('divmod negative: -7 // 2 = -4, -7 % 2 = 1 (Python floor)') <- (divmod_(-7, 2, Q, R), Q == -4, R == 1)
+test('divmod negative: -7 // 2 = -4, -7 % 2 = 1 (Python floor)') <- (integer(-7), integer(2), 2 != 0, eval_('div'(-7, 2), Q), eval_('mod'(-7, 2), R), Q == -4, R == 1)
 
-test('divmod unbound fails') <- (not divmod_(_x_UNUSED, 5, _, _))
+test('divmod unbound fails') <- (not (integer(_x_UNUSED), integer(5), 5 != 0, eval_('div'(_x_UNUSED, 5), _), eval_('mod'(_x_UNUSED, 5), _)))
 
-test('divmod check mode: correct') <- (divmod_(17, 5, 3, 2))
+test('divmod check mode: correct') <- (integer(17), integer(5), 5 != 0, eval_('div'(17, 5), 3), eval_('mod'(17, 5), 2))
 
-test('divmod check mode: wrong r fails') <- (not divmod_(17, 5, 3, 99))
+test('divmod check mode: wrong r fails') <- (not (integer(17), integer(5), 5 != 0, eval_('div'(17, 5), 3), eval_('mod'(17, 5), 99)))

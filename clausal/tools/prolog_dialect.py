@@ -78,6 +78,15 @@ class Dialect:
             # this output are Scryer and Trealla, and BOTH spell the library
             # `clpz`. "clpfd" is the SWI name and would not resolve in either.
             clpfd_module="clpz",
+            # The source-level import follows the same rule. With no entry it
+            # was emitted as a relative PATH, use_module('clausal/logic/clpfd'),
+            # which neither engine can load, so label/1 went unimported in
+            # Scryer. Only clpfd: library(clpb) and library(tabling) are
+            # absent from Trealla (measured 2026-09-29), so an iso mapping
+            # for them would be right on one of the two engines only.
+            library_map={
+                "clausal.logic.clpfd": "library(clpz)",
+            },
         )
 
     @classmethod
@@ -264,8 +273,10 @@ BUILTIN_NAME_MAP: dict[str, dict[str, str]] = {
     "numbervars":    {"iso": "numbervars"},
     "all_different": {"iso": "all_distinct", "swi": "all_different", "scryer": "all_distinct",
                       "gprolog": "fd_all_different", "trealla": "all_distinct"},
-    "in_domain":     {"swi": "ins", "scryer": "ins",
-                      "gprolog": "fd_domain", "trealla": "ins"},
+    # in_domain/3 is REWRITTEN, not renamed, for every dialect with no entry
+    # here (D21): see _ClausalToProlog._rewrite_in_domain. Only GNU
+    # Prolog has a genuine 3-argument form.
+    "in_domain":     {"gprolog": "fd_domain"},
     "label":         {"iso": "label", "gprolog": "fd_labeling"},
     "labeling":      {"iso": "labeling", "gprolog": "fd_labeling"},
     "maplist":       {"iso": "maplist"},
@@ -346,7 +357,8 @@ BUILTIN_NAME_MAP: dict[str, dict[str, str]] = {
     "foldl":         {"swi": "foldl", "scryer": "foldl", "trealla": "foldl"},
     "sign":          {"iso": "sign"},
     "gcd":           {"iso": "gcd"},
-    "divmod_":       {"swi": "divmod", "scryer": "divmod", "trealla": "divmod"},
+    # divmod_/4 has no entry: it is EXPANDED into ISO div/mod (D21), see
+    # _ClausalToProlog._expand_divmod.
     "dif":           {"iso": "dif"},
     "unpack":        {"iso": "unpack"},
     "must_be":       {"iso": "must_be"},
