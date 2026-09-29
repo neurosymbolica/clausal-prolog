@@ -3929,7 +3929,11 @@ def term_pformat(
         args = t[1:]
         if not args:
             return flat
-        functor_s = _c(t[0], 'atom', style)
+        # A ``-hide`` functor displays in its human ``module.name`` form, as
+        # the flat ``term_str`` branch does; the raw spelling carries the
+        # internal separator.
+        fname = demangle_for_display(t[0]) if is_mangled(t[0]) else t[0]
+        functor_s = _c(fname, 'atom', style)
         ob = _c('(', 'bracket', style, _bd)
         cb = _c(')', 'bracket', style, _bd)
         items = [_r(a) for a in args]
@@ -4045,13 +4049,20 @@ def term_html(t: Any, _bd: int = 0) -> str:
         return _html_c(esc(str(t)), 'number')
     if isinstance(t, (int, float, complex)):
         return _html_c(esc(repr(t)), 'number')
-    if isinstance(t, str):
-        # A STRING -- the same writeq spelling ``term_str`` produces (spec
-        # §6.7): a double-quoted string token, and ``[]`` for the empty
-        # string, which is the empty list.
-        if t == "":
+    if is_chars(t):
+        # A STRING -- the chars carrier: the same spelling ``term_str``
+        # produces (a double-quoted string token, ``[]`` for the empty one).
+        # It used to fall to the cell branch and render as ``$chars("abc")``.
+        text = chars_text(t)
+        if text == "":
             return _html_c('[]', 'bracket', _bd)
-        return _html_c(esc(quote_string(t)), 'string')
+        return _html_c(esc(quote_string(text)), 'string')
+    if isinstance(t, str):
+        # An ATOM (stage 2 of the atoms-as-str flip; this branch still read
+        # a str as a STRING and printed ``"foo"``): ``term_str``'s spelling,
+        # quoted when it must be, a ``-hide`` atom in its ``module.name``
+        # form.
+        return _html_c(esc(term_str(t)), 'atom')
     if isinstance(t, bytes):
         return esc(repr(t))
     if isinstance(t, list):
@@ -4073,7 +4084,7 @@ def term_html(t: Any, _bd: int = 0) -> str:
             # An ATOM -- an arity-0 cell prints as its (quoted) name, never
             # as ``flag()`` (spec §6.7); ``term_str`` owns that spelling.
             return _html_c(esc(term_str(t)), 'atom')
-        functor_s = _html_c(esc(t[0]), 'atom')
+        functor_s = _html_c(esc(term_str(t[0])), 'atom')
         ob = _html_c('(', 'bracket', _bd)
         cb = _html_c(')', 'bracket', _bd)
         args_str = ", ".join(term_html(a, _bd + 1) for a in t[1:])

@@ -51,3 +51,13 @@ directly rather than delegating to `term_str`.
   contract this gap under-delivers on on the wide-output path only.
 - `.superpowers/sdd/p32-cell-default-flip/task-7-report.md` — Task 7's own
   before/after table recording exactly what was and wasn't added per surface.
+
+## Closed 2026-09-30
+
+Fixed on fix/todo-batch-5-2026-09-30: the wide `term_pformat` cell branch
+demangles a `-hide` functor, and `term_html` (the IPython/Jupyter renderer,
+which `term_pformat_html` uses) was brought past the atoms-as-str flip on the
+way -- it printed an ATOM as a double-quoted string, a STRING as the cell
+`$chars("abc")`, and a hidden atom with its raw separator. Pinned by
+tests/test_term_html_and_wide_display.py; the old str-is-a-string pin in
+tests/test_term_html.py is updated.
