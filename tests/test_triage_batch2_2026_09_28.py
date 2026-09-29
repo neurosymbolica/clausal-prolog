@@ -236,16 +236,16 @@ class TestB4cC1C3UndeclaredFunctor:
                 fn()
             assert _error_term(exc.value)[1] == ("type_error", "evaluable", pi)
 
-    def test_a_pl_data_functor_is_an_iso_error_term(self, tmp_path, monkeypatch):
+    def test_a_pl_data_functor_builds_its_term(self, tmp_path, monkeypatch):
+        # batch E (2026-09-29): the translator declares a .pl file's data
+        # functors, so p(f(1)) answers as in ISO/Scryer.  (This pinned the
+        # existence_error the undeclared functor raised before.)
         mod = _load(tmp_path, monkeypatch, "tri_c1", """
             -import_from(tri_c1lib, [p])
             def run():
                 return [X for X in --p(X)]
         """, libs={"tri_c1lib.pl": "p(f(1)).\n"})
-        with pytest.raises(LogicException) as exc:
-            mod.run()
-        assert _error_term(exc.value)[1] == (
-            "existence_error", "procedure", ("/", "f", 1))
+        assert mod.run() == [("f", 1)]
 
 
 class TestC13OpaquePythonObjects:

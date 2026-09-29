@@ -4,10 +4,7 @@
     `.pl` import is **experimental** and outside the 1.0 compatibility
     promise (see [Public API](public-api.md)). It translates Prolog source
     into Clausal's own syntax with an older translator; it is not an ISO
-    Prolog system. Programs that use cut or if-then-else are refused, and a
-    program whose clauses build compound data terms (`p(f(1)).`,
-    `X = g(2)`) loads but fails at run time with
-    `error(existence_error(procedure, f/1), f/1)` (see
+    Prolog system. Programs that use cut or if-then-else are refused (see
     [Known limitations](#known-limitations)).
     For running real ISO Prolog alongside Clausal, use the
     [Scryer](scryer.md) or [Trealla](trealla.md) embeddings.
@@ -382,13 +379,17 @@ renamed to `_pi`.)
 
 ## Known limitations
 
-- **Compound data terms fail at run time.** The translator declares a
-  program's bare atoms (the `-private([...])` list above) but not the
-  functors of its data terms, so a clause such as `p(f(1)).` or
-  `q(X) :- X = g(2).` loads, then raises the ISO error term
-  `error(existence_error(procedure, f/1), f/1)` when it runs (a `catch/3`
-  sees it; from Python it is also a `NameError`). Calls to the program's own
-  predicates are unaffected.
+- **Some compound data terms are not declared.** The translator declares a
+  program's bare atoms and the functors of its data terms (`p(f(1)).` and
+  `q(X) :- X = g(2).` add `f(_)` and `g(_)` to the `-private([...])` list).
+  A name is left undeclared when the program defines, declares, imports or
+  calls it as a predicate (including in a meta-predicate's goal argument,
+  such as `findall(X, counter(X), L)`), when the engine knows it as a
+  builtin or evaluable, or when it is used as data at two arities (Clausal
+  gives one name one arity).  A data term under such a name that nothing
+  else declares raises the ISO error term
+  `error(existence_error(procedure, f/1), f/1)` when it is built (a
+  `catch/3` sees it; from Python it is also a `NameError`).
 - **Arithmetic follows today's Clausal operators, not ISO's.** `Y is X / 2`
   becomes `eval_(X / 2, Y)`, and `=:=` becomes the constraint `==` (see
   [Operators](operators.md)).

@@ -324,6 +324,142 @@ def _collect_predicate_names(pmodule: PModule) -> set[str]:
     return names
 
 
+def _names_not_data_functors(pmodule: PModule) -> set[str]:
+    """Names *pmodule* gives a predicate meaning of its own: clause and DCG
+    head functors, the names its ``dynamic``/``discontiguous``/``table``
+    directives declare, and the names its ``use_module/2`` lists import.
+
+    A compound whose functor is one of these builds a term already (a
+    predicate is a declared functor), so it must NOT be declared a data
+    functor too -- ``-private([u(_)])`` beside a clause for ``u/1`` would
+    shadow the predicate."""
+    names: set[str] = set()
+
+    def head_name(head) -> None:
+        if isinstance(head, PCompound) and head.functor == ",":
+            head = head.args[0]            # DCG pushback head
+        if isinstance(head, PCompound):
+            names.add(head.functor)
+        elif isinstance(head, PAtom):
+            names.add(head.name)
+
+    def indicators(term) -> None:
+        if isinstance(term, PCompound) and term.functor in (",", "/", "//") \
+                and len(term.args) == 2:
+            if term.functor == ",":
+                indicators(term.args[0])
+                indicators(term.args[1])
+            elif isinstance(term.args[0], PAtom):
+                names.add(term.args[0].name)
+        elif isinstance(term, PList):
+            for e in term.elements:
+                indicators(e)
+        elif isinstance(term, PAtom):
+            names.add(term.name)
+
+    for item in pmodule.items:
+        if isinstance(item, (PClause, PDCGRule)):
+            head_name(item.head)
+        elif isinstance(item, PDirective) and isinstance(item.body, PCompound):
+            body = item.body
+            if body.functor in ("dynamic", "discontiguous", "table"):
+                for a in body.args:
+                    indicators(a)
+            elif body.functor == "use_module" and len(body.args) >= 2:
+                indicators(body.args[1])
+    return names
+
+
+#: argument positions (0-based) that hold a GOAL (or a clause, for the
+#: database builtins) in the meta-predicates a ``.pl`` file commonly calls
+_META_GOAL_ARGS: dict[str, tuple[int, ...]] = {
+    "call": (0,), "once": (0,), "ignore": (0,), "\\+": (0,), "not": (0,),
+    "findall": (1,), "bagof": (1,), "setof": (1,), "aggregate_all": (1,),
+    "forall": (0, 1), "catch": (0, 2), "call_cleanup": (0, 1),
+    "setup_call_cleanup": (0, 1, 2), "freeze": (1,), "when": (1,),
+    "call_nth": (0,), "time": (0,), "phrase": (0,),
+    "maplist": (0,), "foldl": (0,), "include": (0,), "exclude": (0,),
+    "partition": (0,),
+    "assert": (0,), "asserta": (0,), "assertz": (0,), "retract": (0,),
+    "retractall": (0,), "clause": (0,),
+}
+
+_CONTROL_FUNCTORS = frozenset({",", ";", "->", "*->", "\\+", ":-", "|"})
+
+
+def _collect_goal_names(pmodule: PModule) -> set[str]:
+    """Every name *pmodule* uses as a GOAL -- in a clause body, or in a goal
+    argument of a meta-predicate (``findall(X, counter(X), L)``,
+    ``assertz(counter(X))``), through the control constructs.  Such a name is
+    a predicate (possibly one ``assertz`` creates at run time), never a data
+    functor."""
+    names: set[str] = set()
+
+    def goal(term) -> None:
+        if isinstance(term, PAtom):
+            names.add(term.name)
+            return
+        if not isinstance(term, PCompound):
+            return
+        f, args = term.functor, term.args
+        if f in _CONTROL_FUNCTORS:
+            for a in args:
+                goal(a)
+            return
+        if f == "^" and len(args) == 2:
+            goal(args[1])
+            return
+        if f == ":" and len(args) == 2:
+            goal(args[1])
+            return
+        names.add(f)
+        for i in _META_GOAL_ARGS.get(f, ()):
+            if i < len(args):
+                goal(args[i])
+
+    for item in pmodule.items:
+        body = getattr(item, "body", None)
+        if isinstance(item, PDCGRule):
+            _dcg_goal_names(body, goal, names)
+        elif body is not None:
+            goal(body)
+    return names
+
+
+def _dcg_goal_names(body, goal, names) -> None:
+    """The DCG body walk of :func:`_collect_goal_names`: a nonterminal is a
+    goal name, ``{G}`` holds goals, a list is terminals."""
+    if isinstance(body, PCurly):
+        goal(body.body)
+    elif isinstance(body, PCompound) and body.functor in _CONTROL_FUNCTORS:
+        for a in body.args:
+            _dcg_goal_names(a, goal, names)
+    elif isinstance(body, PCompound):
+        goal(body)
+    elif isinstance(body, PAtom):
+        names.add(body.name)
+
+
+#: goal names the compiler lowers itself, beyond ``ir.MetaKind``
+_CONTROL_GOAL_NAMES = frozenset({"call", "not", "not_", "and_", "or_"})
+
+
+def _engine_knows_name(name: str, arity: int) -> bool:
+    """True when the engine gives *name* a meaning of its own -- a registered
+    builtin, a control/meta construct the compiler lowers (``findall``,
+    ``catch``, ``call``, ...), or an arithmetic evaluable.  Such a name is
+    never declared a data functor: the declaration would shadow it."""
+    from clausal.logic.builtins._registry import get_builtin_class  # noqa: PLC0415
+    from clausal.logic.exact_arith import EVALUABLE  # noqa: PLC0415
+    from clausal.logic.compiler.ir import MetaKind  # noqa: PLC0415
+    import typing  # noqa: PLC0415
+    if get_builtin_class(name) is not None:
+        return True
+    if name in typing.get_args(MetaKind) or name in _CONTROL_GOAL_NAMES:
+        return True
+    return (name, arity) in EVALUABLE
+
+
 def _checked_var_name(prolog_name: str) -> str:
     """A Prolog variable's Clausal spelling, or a refusal naming the variable.
 
@@ -402,6 +538,10 @@ class _PrologToClausal:
         # Names this module uses as a PREDICATE (clause-head or goal
         # functor). Populated by emit_module before the emission pass.
         self._predicate_names: set[str] = set()
+        # C1 (2026-09-29): functors of compound DATA terms (``p(f(1)).``,
+        # ``X = g(2)``), name -> arities.  Declared ``-private([f(_)])`` so
+        # the term builds; a Prolog compound needs no declaration.
+        self._data_functors: dict[str, set[int]] = {}
 
     def emit_module(self, pmodule: PModule) -> str:
         """Emit a complete module as clausal source text."""
@@ -422,8 +562,19 @@ class _PrologToClausal:
             preamble_parts.append("-import_module(prolog)")
         if "math." in body:
             preamble_parts.append("-import_module(math)")
-        if self._data_atoms:
-            atom_list = ", ".join(sorted(self._data_atoms))
+        private = sorted(self._data_atoms)
+        not_data = _names_not_data_functors(pmodule) | _collect_goal_names(pmodule)
+        for name, arities in sorted(self._data_functors.items()):
+            # one name, one arity: a name used as data at two arities is
+            # left undeclared (it raises as before) rather than half-declared
+            if len(arities) != 1 or name in not_data:
+                continue
+            (arity,) = arities
+            if _engine_knows_name(name, arity):
+                continue
+            private.append(f"{name}({', '.join(['_'] * arity)})")
+        if private:
+            atom_list = ", ".join(private)
             preamble_parts.append(f"-private([{atom_list}])")
         if preamble_parts:
             body = "\n".join(preamble_parts) + "\n\n" + body
@@ -547,6 +698,8 @@ class _PrologToClausal:
             lst = self._emit_term(goal.args[1])
             return f"{elem} in {lst}"
         # Regular compound goal → a call under the same name
+        if isinstance(goal, PCompound):
+            return self._emit_compound(goal, goal=True)
         return self._emit_term(goal)
 
     def _emit_disjunction(self, term: PTerm) -> str:
@@ -633,6 +786,8 @@ class _PrologToClausal:
         if isinstance(goal, PCompound) and goal.functor == ";":
             return self._emit_disjunction(goal)
         # Regular non-terminal
+        if isinstance(goal, PCompound):
+            return self._emit_compound(goal, goal=True)
         return self._emit_term(goal)
 
     # ── Directives ───────────────────────────────────────────────────
@@ -871,8 +1026,8 @@ class _PrologToClausal:
         self._data_atoms.add(name)
         return name
 
-    def _emit_compound(self, term: PCompound) -> str:
-        """Emit a compound term."""
+    def _emit_compound(self, term: PCompound, goal: bool = False) -> str:
+        """Emit a compound term (*goal*: it stands in goal position)."""
         functor = term.functor
         args = term.args
 
@@ -1056,6 +1211,8 @@ class _PrologToClausal:
 
         # Regular compound: functor(args) → functor(args), name unchanged
         name = self._predicate_name(functor, len(args))
+        if not goal and args and name == functor and _is_plain_atom_name(name):
+            self._data_functors.setdefault(name, set()).add(len(args))
         if not args:
             return f"{name}()"
         arg_strs = ", ".join(self._emit_term(a) for a in args)
