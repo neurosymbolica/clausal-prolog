@@ -134,6 +134,13 @@ since 0.4.0 finish three moves:
 
 ### Added
 
+- **library(lambda) as builtins: `(\)/1..8`, `(^)/3..10`, `(+\)/2..9`.**
+  Ulrich Neumerkel's lambdas (`maplist(\X^Y^(Y is 2*X), Xs, Ys)`,
+  `Free+\X^Goal`) run through call/N with Scryer's answers: `\` copies the
+  lambda before each call so no binding leaks between calls, `+\` shares the
+  variables of its left side, and a parameter no argument reaches raises
+  `existence_error(lambda_parameter, _)`. The native `.pl` front end accepts
+  `use_module(library(lambda)[, List])` and adds its `op(201, xfx, +\)`.
 - **`member/2` and `memberchk/2` are builtins under their ISO names.** They
   were registered only as `in_/2` and `in_check/2`, so a `.pl` file read by
   the native front end, or a goal handed to `solve()`, found no procedure.
