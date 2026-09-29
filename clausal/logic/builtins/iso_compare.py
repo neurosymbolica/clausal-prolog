@@ -23,6 +23,8 @@ from clausal.logic.predicate import is_term_instance, term_field_names
 from clausal.logic.variables import deref, is_var
 from clausal.logic.variables import unify as _unify
 from clausal.terms import DictTerm, SetTerm
+from clausal.terms import Quantity as _Quantity
+from clausal.terms import UnitsMismatch as _UnitsMismatch
 
 
 def _clpfd_leaf_culprit(exc: LogicException):
@@ -135,7 +137,18 @@ def _iso_eval(term, context: str):
     if is_var(t):
         raise LogicException(instantiation_error(context))
     try:
-        value = evaluate(t, context)
+        try:
+            value = evaluate(t, context)
+        except _UnitsMismatch as e:
+            raise _units_mismatch(context, e) from None
+        if isinstance(value, _Quantity):
+            # A quantity is a number with a unit (a declared constant's
+            # value, folded in: ``Q is 100 * constant(one_euro)``).  One
+            # whose units cancelled (``constant(max_fine) /
+            # constant(one_euro)``) is a plain number, as the seam gives it.
+            if not value._dims:
+                return present_number(value._value)
+            return value
         if not isinstance(value, (int, float, _Fraction, _Decimal)) or isinstance(value, bool):
             raise LogicException(
                 type_error("evaluable", _evaluable_culprit(value), context))
@@ -154,6 +167,27 @@ def _iso_eval(term, context: str):
             type_error("evaluable", _evaluable_culprit(t), context)) from None
 
 
+def _units_mismatch(context: str, e: Exception) -> LogicException:
+    """A units mismatch as the seam raises it in a comparison:
+    ``error(system_error(units_mismatch), _)``, catchable by ``catch/3``."""
+    from clausal.logic.units_clp import _mismatch_text  # noqa: PLC0415
+    return _mismatch_text(context, str(e))
+
+
+def _quantity_operands(x, y, context: str):
+    """The magnitudes to compare when either side is a quantity: both sides
+    must carry the SAME units (Quantity._cmp_value), else units_mismatch --
+    for ``=:=`` and ``=\\=`` too, which would otherwise quietly answer
+    false/true for ``100 euro =:= 100``."""
+    try:
+        if isinstance(x, _Quantity):
+            return x._cmp_value(y)
+        b, a = y._cmp_value(x)
+        return a, b
+    except _UnitsMismatch as e:
+        raise _units_mismatch(context, e) from None
+
+
 def _arith_cmp(name, op):
     # `fields` is passed EXPLICITLY rather than inferred. `_registry.
     # _extract_fields_simple` computes a builtin's term fields as
@@ -170,7 +204,10 @@ def _arith_cmp(name, op):
     # already correct — each `_arith_cmp` call has its own binding.
     @_builtin(name, 2, fields=("a", "b"))
     def _cmp(a, b, trail, k):
-        if op(_iso_eval(a, "is/2"), _iso_eval(b, "is/2")):
+        x, y = _iso_eval(a, "is/2"), _iso_eval(b, "is/2")
+        if isinstance(x, _Quantity) or isinstance(y, _Quantity):
+            x, y = _quantity_operands(x, y, "is/2")
+        if op(x, y):
             yield None
     _cmp.__name__ = f"_iso_cmp_{name}"
     return _cmp

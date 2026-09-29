@@ -499,6 +499,18 @@ The two directives are a family, which is why they are positional rather than ke
 arguments: `-constants(a = 1, b = 2)` had no room for a third argument on one of its pairs.
 One line per constant also reads better in a diff.
 
+### In ISO syntax (`.pl`)
+
+A `.pl` file read by the native front end writes the same directives as
+ISO directives, verbatim: `:- constant_value(max_retries, 3).`,
+`:- constant_number_units(max_fine, 5000, euro).`,
+`:- constant_number_currency(fee, "292.00", euro).` and the table forms
+`:- constants_number_units(p/2, [[1, 10], [2, 20]], euro, number_at(2)).`
+(a row is a list, or a parenthesised sequence `(1, 10)`). The unit is
+imported with `:- use_module(european_union, [euro]).`, and a declared value
+is used as `constant(max_fine)`, folded at compile time exactly as here. See
+[Importing Prolog Code](importing_prolog.md#constants-units-and-dicts-native-front-end).
+
 ### Reaching a constant from another module
 
 **Ruled 2026-09-12.** A constant is in scope where it is **declared**, where it is

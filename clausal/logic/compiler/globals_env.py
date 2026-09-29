@@ -811,6 +811,14 @@ def _collect_globals_info(
                 val = getattr(dterm, name)
                 if val is not None:
                     _walk_body(val)
+        elif _cell_shape(dterm)[0]:
+            # A CELL written as data in a goal argument (the native .pl front
+            # end lowers an ISO compound to its cell): its slots can hold a
+            # PyThunk (``X is 100 * constant(one_euro)``) that the compiled
+            # code reads by its ``_pyt_<id>`` name, so the slots are walked
+            # as ``_walk_head`` walks a head cell's.
+            for e in dterm[1:]:
+                _walk_body(e)
 
     for clause in clauses:
         _walk_head(clause.head)
