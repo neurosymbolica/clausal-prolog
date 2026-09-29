@@ -30,9 +30,10 @@ from clausal.tools.prolog_to_clausal import (
 )
 
 QM = """\
-:- module(qmempty, [p/1]).
+:- module(qmempty, [p/1, r/1]).
 p(1).
 p(2).
+r(9).
 """
 
 
@@ -93,3 +94,24 @@ def test_suggested_spelling_gives_qualified_access(tmp_path):
     x = Var()
     got = [deref(x) for _ in call("q", x, module=mod.__clausal_module__)]
     assert got == [1, 2]
+
+
+def test_qualified_call_reaches_an_unimported_predicate_beside_a_local_one(
+        tmp_path):
+    """Operator ruling 2026-09-29 (no `as` aliasing): a name clash is
+    resolved by module qualification.  qmempty:p(X) reaches the module's
+    p/1 even though p/1 is NOT in the import list and the importing file
+    defines its own p/1; the unqualified p(X) stays the local one."""
+    _write(tmp_path, "qmempty", QM)
+    main = _write(tmp_path, "_pl_empty_clash", """\
+        :- use_module(qmempty, [r/1]).
+        p(local).
+        theirs(X) :- qmempty:p(X).
+        mine(X) :- p(X).
+    """)
+    mod = _load_prolog_module("_pl_empty_clash", main)
+    lm = mod.__clausal_module__
+    x = Var()
+    assert [deref(x) for _ in call("theirs", x, module=lm)] == [1, 2]
+    y = Var()
+    assert [deref(y) for _ in call("mine", y, module=lm)] == ["local"]
