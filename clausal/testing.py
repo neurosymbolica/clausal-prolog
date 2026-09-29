@@ -549,7 +549,11 @@ def run_test(
             logic_module, description)
         if negative:
             # test(Name, fail): passes iff the goal has NO solution.  One
-            # solution decides it; the rest are never searched for.
+            # solution decides it; the rest are never searched for.  An
+            # embedder calling run_test without collect_tests still gets
+            # an unsupported option refused, never run as a `fail` test.
+            _check_test_option(mod, _test_entry(logic_module, description)[1],
+                               description)
             gen = call(functor, goal_desc, TEST_OPTION_FAIL, module=logic_module)
             try:
                 passed = next(gen, None) is None

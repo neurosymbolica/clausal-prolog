@@ -170,3 +170,41 @@ def test_plugin_reports_an_unknown_option(tmp_path):
     assert proc.returncode == 1, out
     assert "o.clausal::<collect>" in out, out
     assert "nondet" in out, out
+
+
+# ── review follow-ups ────────────────────────────────────────────────────────
+
+
+def test_run_test_direct_refuses_an_unknown_option(tmp_path):
+    """run_test without collect_tests must not run throws(...) as `fail`."""
+    p = tmp_path / "o.clausal"
+    p.write_text("p(1),\ntest(\"t\", throws('x')) <- p(2)\n")
+    mod = load_clausal_module(p)
+    r = run_test(mod, "t")
+    assert not r.passed
+    assert isinstance(r.error, TestCollectionError)
+    assert "throws('x')" in str(r.error)
+
+
+def test_pl_test2_fact_and_call_still_unify(tmp_path):
+    """A .pl test/2 predicate that is NOT a plunit test: the fact and a
+    call of it translate the atom option the same way, so they unify."""
+    p = tmp_path / "facts.pl"
+    p.write_text("test(x, false).\ntest(y, fail).\n"
+                 "test(ok) :- test(x, false), test(y, fail).\n")
+    mod = load_clausal_module(p)
+    lm = mod.__dict__["$module"]
+    assert lm.db.is_defined("test", 2)
+    # test/2 facts whose option is not `fail` are refused at collection ...
+    with pytest.raises(TestCollectionError):
+        collect_tests(mod)
+    # ... but the translation itself is consistent: the call finds the facts.
+    assert run_test(mod, "ok").passed
+
+
+def test_same_description_under_test1_and_test2_warns(tmp_path):
+    p = tmp_path / "w.clausal"
+    p.write_text('p(1),\ntest("t") <- p(1)\ntest("t", fail) <- p(2)\n')
+    mod = load_clausal_module(p)
+    with pytest.warns(UserWarning, match=r"more than one of test/1"):
+        collect_tests(mod)
