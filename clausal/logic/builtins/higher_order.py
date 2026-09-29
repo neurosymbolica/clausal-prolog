@@ -602,6 +602,41 @@ for _n in range(1, 9):
 del _n, _cg_arity, _key  # clean up loop variables
 
 
+# ── findall/4 ─────────────────────────────────────────────────────────────────
+
+
+def _findall_4_factory(db):
+    """findall(Template, Goal, Bag, Tail) -- findall/3 whose result list ends
+    in *Tail* instead of ``[]`` (Scryer, SWI: ``findall(X, member(X, [a, b]),
+    L, [c])`` gives ``L = [a, b, c]``).  It did not exist
+    (existence_error(procedure, findall/4)).  Runs ``call/1`` of the
+    ``findall/3`` term, so the goal is resolved in the calling module and
+    every findall/3 rule -- errors included -- applies unchanged."""
+    call1 = _DB_BUILTINS[("call", 1)](db)
+
+    def _findall__4(this_generator, _proceed, _fail, _catcher,
+                    template, goal, bag, tail, trail):
+        collected = Var()
+        sg = StepGenerator(call1, this_generator, this_generator,
+                           this_generator, ("findall", template, goal, collected),
+                           trail)
+        _st = yield (sg, None)
+        while _st is not DONE:
+            mark = trail.mark()
+            items = _as_items(deref(collected))
+            if items is not None and unify(bag, _partial(list(items), tail), trail):
+                yield (_proceed, None)
+            trail.undo(mark)
+            _st = yield (sg, None)
+        yield (_fail, DONE)
+    return _findall__4
+
+
+_findall_4_factory._db_optional = True
+_DB_BUILTINS[("findall", 4)] = _findall_4_factory
+_BUILTIN_FIELDS[("findall", 4)] = ("template", "goal", "bag", "tail")
+
+
 # ── Higher-order list predicates (V2-11) ──────────────────────────────────────
 
 
