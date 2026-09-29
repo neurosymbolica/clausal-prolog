@@ -450,9 +450,17 @@ def _python_backed_module(dotted: str):
         if not origin.endswith(".py") or origin.endswith(SOURCE_SUFFIXES):
             return None
         try:
-            return importlib.import_module(cand)
-        except ImportError:
-            return None
+            mod = importlib.import_module(cand)
+        except Exception as e:  # noqa: BLE001
+            # Refused HERE, as the native front end refuses it: falling back
+            # to the Clausal path would emit indicators and fail later with
+            # a misleading "not a Clausal module" at load.
+            raise PrologTranslationError(
+                f"{dotted} could not be imported: {e}") from e
+        from clausal.logic.predicate import namespace_db  # noqa: PLC0415
+        if namespace_db(vars(mod)) is not None:
+            return None     # a .py module carrying a Clausal database
+        return mod
     return None
 
 
@@ -1178,7 +1186,10 @@ class _PrologToClausal:
                     f"{directive}: the module is not an atom, an a/b path "
                     "or library(Name), so it names no module to import.")
             clausal_mod = self._resolve_module_path(spec, directive)
-            py_mod = _python_backed_module(clausal_mod)
+            try:
+                py_mod = _python_backed_module(clausal_mod)
+            except PrologTranslationError as e:
+                raise PrologTranslationError(f"{directive}: {e}") from None
             if py_mod is not None:
                 return self._emit_python_use_module(
                     clausal_mod, py_mod,
@@ -1230,8 +1241,8 @@ class _PrologToClausal:
         with the same message."""
         from clausal.logic.solve import module_signatures  # noqa: PLC0415
         sig = module_signatures(mod)
-        offer = ", ".join(f"{n}/{a}" for n in sig for a in sorted(sig[n])
-                          ) or "no predicates"
+        offer = ", ".join(f"{n}/{a}" for n in sig
+                          for a in (sorted(sig[n]) or ["?"])) or "no predicates"
         if imports is None:
             names = list(sig)
         else:
@@ -1244,7 +1255,11 @@ class _PrologToClausal:
                         and len(e.args) == 2 and isinstance(e.args[0], PAtom)):
                     n = e.args[0].name
                     a = _indicator_arity(e.args[1])
-                    if isinstance(a, int) and e.functor == "//":
+                    if not isinstance(a, int):
+                        raise PrologTranslationError(
+                            f"{directive}: {_plain_term(e)} is not a name/N "
+                            "indicator")
+                    if e.functor == "//":
                         a += 2
                     have = sig.get(n)
                     if have is None or (have and a not in have):

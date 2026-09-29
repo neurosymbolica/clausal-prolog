@@ -76,3 +76,43 @@ def test_both_front_ends_refuse_the_same_entry(load, entry, expect):
         msg = str(info.value)
         assert expect in msg, (fe, msg)
         assert "py.datetime offers" in msg
+
+
+def test_a_py_module_carrying_a_clausal_database_is_not_python_backed(
+        tmp_path, monkeypatch):
+    """roborev (Medium): as on the native path, a .py module with a Clausal
+    database keeps the Clausal route (its indicators are real arities)."""
+    import sys
+    from clausal.tools.prolog_to_clausal import _python_backed_module
+    monkeypatch.syspath_prepend(str(tmp_path))
+    (tmp_path / "d46_pydb.py").write_text(
+        "from clausal.logic.database import Module\n"
+        "globals()['$module'] = Module('d46_pydb')\n")
+    (tmp_path / "d46_pyplain.py").write_text("X = 1\n")
+    try:
+        assert _python_backed_module("d46_pydb") is None
+        assert _python_backed_module("d46_pyplain") is not None
+    finally:
+        sys.modules.pop("d46_pydb", None)
+        sys.modules.pop("d46_pyplain", None)
+
+
+def test_a_python_module_that_fails_to_import_is_refused_at_translation(
+        tmp_path, monkeypatch):
+    import sys
+    from clausal.tools.prolog_to_clausal import (
+        PrologTranslationError, prolog_to_clausal)
+    monkeypatch.syspath_prepend(str(tmp_path))
+    (tmp_path / "d46_broken.py").write_text("raise RuntimeError('boom')\n")
+    try:
+        with pytest.raises(PrologTranslationError, match="could not be imported"):
+            prolog_to_clausal(":- use_module(d46_broken, [p/1]).\n")
+    finally:
+        sys.modules.pop("d46_broken", None)
+
+
+def test_a_non_integer_arity_is_refused():
+    from clausal.tools.prolog_to_clausal import (
+        PrologTranslationError, prolog_to_clausal)
+    with pytest.raises(PrologTranslationError, match="not a name/N indicator"):
+        prolog_to_clausal(":- use_module(py/datetime, [days_between/_]).\n")
