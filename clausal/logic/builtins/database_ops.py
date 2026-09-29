@@ -745,7 +745,7 @@ def _retract_factory(db):
             term_val, body_pattern = term_val.head, term_val.body
         # A CELL pattern goes through the SAME gate as the assert doors (P3-3
         # Task 5, R11) and comes back normalized to the shape the clause list
-        # actually holds -- without that, ``_first_match_index`` would compare
+        # actually holds -- without that, ``_first_match`` would compare
         # a tuple against a class-term head and never match, so a legal
         # ``retract(("p", 1))`` would silently fail instead of retracting.
         term_val = _check_cell_head_permission(term_val, "retract/1", db,
@@ -817,11 +817,15 @@ def _retract_factory(db):
         cell = _as_cell(term_val)
         for i, clause in enumerate(clause_list):
             matched, why = head_matches(clause, home, cell)
-            if not matched or why is not None:
+            if not matched:
                 continue
+            if why is not None:
+                raise _no_term_form(clause, "retract/1", why)
             c_head, c_body, why = clause_terms(clause, home)
             if why is not None:
-                continue            # a body with no term form: not a fact
+                if body_pattern is True:
+                    continue        # a body with no term form: not a fact
+                raise _no_term_form(clause, "retract/1", why)
             tmp = Trail()
             mark = tmp.mark()
             ok = unify(cell, c_head, tmp) and unify(body_pattern, c_body, tmp)
@@ -885,6 +889,18 @@ def _retractall_factory(db):
     return retractall__1
 
 
+def _no_term_form(clause, context: str, why: str) -> LogicException:
+    """The clause MAY match the pattern but has no term form to decide it
+    by (clause/2 refuses the same clause): permission_error rather than a
+    guess either way."""
+    from clausal.logic.database import head_key  # noqa: PLC0415
+    name, arity = head_key(clause.head)
+    return LogicException(permission_error(
+        "access", "private_procedure", ("/", mint(name), arity),
+        f"{context}: {name}/{arity} has a clause with no term form -- {why} "
+        f"-- so it cannot be matched against a pattern"))
+
+
 def _clause_head_matches(term_val, clause, home) -> bool:
     """retractall/1's match: the clause's head, with its hoisted arguments
     put back (``clause_ops.head_matches``, clause/2's reading), unifies with
@@ -893,7 +909,9 @@ def _clause_head_matches(term_val, clause, home) -> bool:
     out of ``retractall(h(5))``.  Leaves no bindings."""
     from clausal.logic.builtins.clause_ops import (  # noqa: PLC0415
         _as_cell, head_matches)
-    matched, _why = head_matches(clause, home, _as_cell(term_val))
+    matched, why = head_matches(clause, home, _as_cell(term_val))
+    if matched and why is not None:
+        raise _no_term_form(clause, "retractall/1", why)
     return matched
 
 

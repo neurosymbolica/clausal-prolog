@@ -33,7 +33,6 @@ def test_retract_of_a_rule_body_binds_it(native, ans):
     assert b[0] == "=" and b[2] == 1
 
 
-
 def test_retractall_matches_the_head_whatever_the_body(tmp_path):
     """retractall(Head) removes every clause whose HEAD unifies (ISO 8.9.5).
     A seam rule's own ``X is 3`` (a unification) used to read as a head
@@ -50,3 +49,21 @@ def test_retractall_matches_the_head_whatever_the_body(tmp_path):
         m = _load_module(f"_retractall_{name}", str(p))
         v = Var()
         assert [_deref_walk(v) for _ in solve(("t", v), m)] == [want], name
+
+
+def test_more_patterns(native, ans):
+    """Scryer: a fact with a compound argument retracts by its value;
+    retract(Head) of a predicate with only rules fails.  (A multi-goal rule
+    body does not match yet: the engine's body term is a flat tuple, the
+    Prolog pattern a ','/2 cell -- todo/conjunction-starting-with-an-atom-
+    is-a-compound-2026-09-25.md.)"""
+    src = (":- dynamic(f/1).\n:- dynamic(g/1).\n:- dynamic(q/1).\n"
+           "f(p(1, [a])).\nf(p(2, [b])).\n"
+           "g(X) :- X = 1, X > 0.\ng(5).\n"
+           "q(X) :- X = 1.\n"
+           "t1(L) :- retract(f(p(2, _))), findall(Y, f(Y), L).\n"
+           "t2(L) :- retract((g(X) :- X = 1, X > 0)), findall(Y, g(Y), L).\n"
+           "t3(L) :- findall(x, retract(q(_)), L).\n")
+    for name, want in (("t1", [[("p", 1, ["a"])]]), ("t3", [[]])):
+        mod = native.load(f"l3_retract_more_{name}", src)
+        assert ans(mod, name) == want, name
