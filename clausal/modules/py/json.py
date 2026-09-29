@@ -47,7 +47,7 @@ _json = _import_stdlib("json")
 
 from typing import Any
 
-from clausal.logic.atoms import is_atom, key_of, mint, spelling
+from clausal.logic.atoms import crossing_value, is_atom, key_of, mint, spelling
 from clausal.logic.cells import TUPLE_TAG, chars, is_chars, chars_text
 from clausal.logic.exceptions import LogicException, domain_error, type_error
 from clausal.logic.variables import Var, deref, is_var, unify
@@ -118,7 +118,7 @@ def _clausal_to_python(term: Any, context: str = "py.json.generate/2") -> Any:
     if is_var(term):
         raise TypeError("Cannot serialize unbound variable to JSON")
     if is_atom(term):
-        return spelling(term)
+        return crossing_value(term)    # ``true`` is the JSON boolean, not the string "true" (D35)
     if isinstance(term, DictTerm):
         return {
             _clausal_to_python(k, context): _clausal_to_python(deref(v), context)

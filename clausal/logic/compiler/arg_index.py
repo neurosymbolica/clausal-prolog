@@ -269,7 +269,7 @@ def _is_deeply_ground_walk(val: Any, _budget: list[int]) -> bool:
     # even reaching the is_var check.  Measured: this fast path alone
     # brings ('point', 1, 2)'s key cost back down near its pre-completeness-
     # fix baseline (see task4-bench.txt, PART C).
-    if isinstance(val, _INDEXABLE_TYPES) or type(val) is bool:
+    if isinstance(val, _INDEXABLE_TYPES):   # a bool IS an int to isinstance: ground, as before
         return True
     if is_var(val):
         return False

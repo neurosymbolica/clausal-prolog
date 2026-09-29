@@ -477,7 +477,11 @@ def _normalize_for_key_py(term):
         return _VAR
     if term is None:
         return term
-    if isinstance(term, (bool, float, complex)):
+    if isinstance(term, bool):
+        # A truth ATOM (D35): keyed as its spelling, the key the str
+        # spelling of the same atom already has -- one atom, one variant.
+        return "true" if term else "false"
+    if isinstance(term, (float, complex)):
         return (type(term), term)          # A04-F006
     if isinstance(term, (str, bytes)):
         return term

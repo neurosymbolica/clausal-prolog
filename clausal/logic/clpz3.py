@@ -37,7 +37,7 @@ import weakref
 from fractions import Fraction
 from typing import Any
 
-from clausal.logic.atoms import is_atom, mint, spelling
+from clausal.logic.atoms import crossing_value, is_atom, mint, spelling
 from clausal.logic.cells import is_chars, chars_text  # stage 1: the chars carrier
 # clpb OWNS the BoolEq/BoolImpl declarations, so it owns the reader for
 # them too -- a second spelling here is how the two backends drift apart
@@ -2140,7 +2140,7 @@ def z3_set_option(key: Any, value: Any, trail: Trail) -> bool:
         return False
     value = deref(value)
     if is_atom(value):
-        value = spelling(value)
+        value = crossing_value(value)  # a boolean option value crosses as the Python bool (D35)
     state.solver.set(key, value)
     return True
 

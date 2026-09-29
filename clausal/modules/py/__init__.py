@@ -183,13 +183,13 @@ def to_text(val):
         return chars_text(_v)
     if type(val) is str:
         return val                     # STAGE 2: an ATOM -- its spelling is the text (spec §3)
-    from clausal.logic.atoms import is_atom as _is_atom, spelling as _spelling
+    from clausal.logic.atoms import is_atom as _is_atom, crossing_value as _crossing_value
     from clausal.logic.variables import deref
     val = deref(val)
     if type(val) is str:
         return val
     if _is_atom(val):
-        return _spelling(val)
+        return _crossing_value(val)    # a truth atom crosses as its OBJECT (D35)
     walk = getattr(val, "__walk__", None)
     if callable(walk):
         walked = walk()

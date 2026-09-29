@@ -450,6 +450,16 @@ def truth_atom(spelling: str):
     return obj
 
 
+def crossing_value(atom):
+    """What *atom* hands to PYTHON: a truth atom is its OBJECT (``True``,
+    ``False``, ``Undefined`` -- the ruling's interop half), every other atom
+    its spelling.  The boundary sites (``to_python``, ``unwrap_atom``, the
+    ``py.*`` wrappers, JSON generation, z3 options) call this rather than
+    ``spelling``: ``spelling(True)`` is ``"true"`` for atom_length/2, and a
+    Python caller must never receive that str for a truth value."""
+    return atom if is_truth_atom(atom) else spelling(atom)
+
+
 def is_atom(term) -> bool:
     """True iff *term* is an atom: STAGE 2 of the atoms-as-str flip (spec §1),
     an atom IS the Python ``str`` -- or one of the three truth-atom objects
@@ -514,4 +524,5 @@ __all__ = [
     "demangle", "demangle_for_display", "mint", "key_of", "as_dict_key",
     "is_atom", "spelling", "char_atom", "is_char_atom",
     "is_truth_atom", "truth_spelling", "truth_atom", "TRUTH_SPELLINGS",
+    "crossing_value",
 ]
