@@ -86,6 +86,11 @@ o1(R) :- findall(X-Y, (X in 0..2, Y in 0..2, X #< Y, labeling([max(X)], [X,Y])),
 o2(R) :- findall(X-Y, (X in 0..2, Y in 0..2, X #< Y, labeling([min(X+Y)], [X,Y])), R).
 o3(R) :- findall(X-Y, (X in 0..2, Y in 0..2, labeling([max(X), min(Y)], [X,Y])), R).
 o4(R) :- findall(X-Y, (X in 0..2, Y in 0..2, X #\\= Y, labeling([down, max(X-Y)], [X,Y])), R).
+o5(R) :- findall(X, (X in 0..3, labeling([down, min(X/2)], [X])), R).
+o6(R) :- Vs = [A,B,C,D,E,F,G,H], Vs ins 0..9, S #= A+B+C+D+E+F+G+H,
+         once(labeling([max(S)], Vs)), R = S.
+o7(E) :- catch((X in 0..3, labeling([max(foo)], [X])), error(E, _), true).
+o8(E) :- catch(findall(X, (X in 0..3, labeling([min(_)], [X])), _), error(E, _), true).
 """
 
 
@@ -101,6 +106,12 @@ def test_labeling_min_max_options(native, ans):
                                p(1, 2), p(0, 0), p(0, 1), p(0, 2)]]
     assert ans(mod, "o4") == [[p(2, 0), p(2, 1), p(1, 0), p(1, 2), p(0, 1),
                                p(0, 2)]]
+    # clpz's `/` (exact): an odd X has no objective value
+    assert ans(mod, "o5") == [[0, 2]]
+    # branch and bound: the best of 10^8 labellings without enumerating them
+    assert ans(mod, "o6") == [72]
+    assert ans(mod, "o7") == [("domain_error", "clpz_expression", "foo")]
+    assert ans(mod, "o8") == ["instantiation_error"]
 
 
 LEX = """\
