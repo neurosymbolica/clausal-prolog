@@ -776,7 +776,9 @@ def _retractall_factory(db):
     Errors are retract/1's, with retract/1 as their context -- Scryer's own
     shape (``retractall(baz(_))`` on a static baz/1 is
     permission_error(modify, static_procedure, baz/1) in retract/1)."""
-    retract = _retract_factory(db)
+    from clausal.logic.database import head_key
+    from clausal.logic.compiler import compile_predicate_trampoline
+    module_dict = getattr(db, "module_dict", None)
 
     def retractall__1(head, trail, k):
         h = deref(head)
@@ -786,18 +788,58 @@ def _retractall_factory(db):
         if is_non_callable_term(h, lists=False):
             from clausal.logic.exceptions import type_error  # noqa: PLC0415
             raise LogicException(type_error("callable", h, "retract/1"))
-        while True:
-            mark = trail.mark()
-            removed = False
-            for _ in retract(head, trail, k):
-                removed = True
-                break
-            trail.undo(mark)
-            if not removed:
-                break
+        term_val = _check_cell_head_permission(h, "retract/1", db, module_dict)
+        try:
+            functor, arity = head_key(term_val)
+        except TypeError:
+            yield None
+            return
+        pred_cls = _find_pred_cls(functor, arity, module_dict)
+        home = _home_db(db, pred_cls, functor, arity)
+        clause_list = home._clauses.get((functor, arity))
+        keep = None
+        if clause_list:
+            keep = [c for c in clause_list if not _clause_head_matches(term_val, c)]
+        if keep is not None and len(keep) != len(clause_list):
+            # ONE write for the whole removal (retract/1's gate and
+            # recompile, once -- not once per clause).  An undefined
+            # predicate is left undefined: ISO Cor.2 and Scryer create it
+            # dynamic, which the gate's declaration model has no door for.
+            home_globals = _home_globals(db, module_dict, home)
+            with home.mutate(functor, arity, author=db.runtime_author(),
+                             kind="retract", detail="retractall/1",
+                             through=pred_cls):
+                clause_list[:] = keep
+                if keep:
+                    compile_predicate_trampoline(
+                        functor, arity, home.clauses_for(functor, arity), home,
+                        globals_=home_globals, pred_cls=pred_cls)
         yield None
 
     return retractall__1
+
+
+def _clause_head_matches(term_val, clause) -> bool:
+    """retract/1's match (``_first_match_index``): the head unifies with
+    *term_val* and the clause's hoisted ``Unify`` goals agree with it.
+    Leaves no bindings."""
+    from clausal.terms import Unify as _Unify  # avoid top-level cycle
+    tmp_trail = Trail()
+    mark = tmp_trail.mark()
+    try:
+        if not structural_unify(term_val, clause.head, tmp_trail):
+            return False
+        for goal in clause.body:
+            if isinstance(goal, _Unify):
+                chk = Trail()
+                chk_mark = chk.mark()
+                ok = structural_unify(deref(goal.left), deref(goal.right), chk)
+                chk.undo(chk_mark)
+                if not ok:
+                    return False
+        return True
+    finally:
+        tmp_trail.undo(mark)
 
 
 def _pi_parts(pi):

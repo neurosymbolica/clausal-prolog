@@ -1050,28 +1050,61 @@ def _subsumes_term__2(general, specific, trail, k):
         yield None
 
 
+def _acyclic_children(t):
+    """The immediate subterms of a (dereferenced) compound *t*, or ()."""
+    if type(t) in (tuple, list):
+        return t
+    if isinstance(t, SegList):
+        raw = t._walk_raw()
+        if isinstance(raw, list):
+            return raw
+        out = []
+        for seg in raw.segments:
+            if isinstance(seg, VarSeg):
+                out.append(seg.var)
+            else:
+                out.extend(seg.elements)
+        return out
+    if is_term_instance(t):
+        return [getattr(t, f) for f in term_field_names(t)]
+    import dataclasses  # noqa: PLC0415
+    if dataclasses.is_dataclass(t) and not isinstance(t, type):
+        # an operator node (``Add``/``Div``/...): its operands
+        return [getattr(t, f.name) for f in dataclasses.fields(t)
+                if f.name != "position"]
+    return ()
+
+
 def _is_acyclic(term) -> bool:
     """False when *term*, followed through its variable bindings, reaches
-    itself.  Only a binding can close a cycle (a tuple or list built in
-    Python cannot contain itself through a Var otherwise), so a compound is
-    tracked on the current path by identity."""
-    path: set = set()
-
-    def walk(t) -> bool:
-        t = deref(t)
-        if type(t) in (tuple, list):
-            key = id(t)
-            if key in path:
+    itself.  Iterative depth-first search with three colours: a compound on
+    the current path (grey) reached again is a cycle; one fully explored
+    (black) is not revisited, so a shared subterm costs one visit and a deep
+    term no Python recursion."""
+    grey, black = set(), set()
+    stack = [(deref(term), False)]
+    while stack:
+        t, leaving = stack.pop()
+        key = id(t)
+        if leaving:
+            grey.discard(key)
+            black.add(key)
+            continue
+        children = _acyclic_children(t)
+        if not children:
+            continue
+        if key in grey:
+            return False
+        if key in black:
+            continue
+        grey.add(key)
+        stack.append((t, True))
+        for c in children:
+            c = deref(c)
+            if id(c) in grey and _acyclic_children(c):
                 return False
-            path.add(key)
-            try:
-                return all(walk(e) for e in t)
-            finally:
-                path.discard(key)
-        if isinstance(t, (SegList,)):
-            return walk(t._walk_raw()) if not isinstance(t._walk_raw(), SegList) else True
-        return True
-    return walk(term)
+            stack.append((c, False))
+    return True
 
 
 @_builtin("acyclic_term", 1)
