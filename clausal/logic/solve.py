@@ -233,6 +233,15 @@ def _term_to_goal(term: Any, db: Any = None) -> Any:
     if type(term) is str:                     # STAGE 2: an atom IS the 0-arity goal of its name
         if term in CELL_GOAL_CONTROL_FUNCTORS:    # parity with call/N (F5): ','/0 is refused, not looked up
             refuse_control_construct_cell(term, term, "solve/1")
+        # The 0-arity control constructs (ISO 7.8.1, 7.8.2) have no
+        # predicate row -- the compiler lowers them -- so looking them up
+        # raised PredicateNotFoundError where call/1 (``_resolve_named_goal``)
+        # already answered: ``true`` succeeds once, ``fail``/``false`` fail.
+        # Lowered to the goal literals the compiler reads the same way.
+        if term == "true":
+            return True
+        if term in ("fail", "false"):
+            return False
         return AstCall(func=LoadName(name=term), args=[], kwargs=[])
     is_cell_goal, functor = compound_cell_shape(term)
     if is_cell_goal:
