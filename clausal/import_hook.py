@@ -1084,8 +1084,13 @@ def _load_module(fullname, path):
     """Load a .clausal file as a Python module and return it.
 
     This is the recommended helper for tests and external callers.
-    Each call creates a fresh PredicateLoader and module instance.
+    Each call creates a fresh loader and module instance: a PredicateLoader,
+    or -- for a ``.pl`` path -- the loader :func:`_load_prolog_module` uses
+    (the front end ``CLAUSAL_PL_FRONTEND`` selects), so a Prolog file is
+    never parsed as Clausal source.
     """
+    if os.fspath(path).endswith(".pl"):
+        return _load_prolog_module(fullname, path)
     sys.modules.pop(fullname, None)
     loader = PredicateLoader(fullname, path)
     spec = ModuleSpec(fullname, loader, origin=path)
