@@ -79,8 +79,9 @@ def _evaluable_culprit(leaf):
     Matching Scryer's culprit IDENTITY for a compound is a separate,
     still-OPEN question and is deliberately not attempted here. Scryer
     evaluates arguments first, so its culprit is the innermost non-evaluable
-    leaf; measured 2026-09-09 against
-    /workspace/scryer-prolog/target/release/scryer-prolog:
+    leaf; measured 2026-09-09, and re-checked 2026-09-30 against the clean
+    reference build /workspace/scryer-prolog-clpq/target/release/scryer-prolog
+    (the path tests take from tests/_oracles.py):
 
         1 =:= foo(bar)     error(type_error(evaluable,bar/0),(is)/2)
         1 =:= f(g(h))      error(type_error(evaluable,h/0),(is)/2)

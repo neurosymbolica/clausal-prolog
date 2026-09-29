@@ -6,8 +6,8 @@ import pytest
 from clausal.tools.toklex import load_lexer
 from clausal.tools.toklex.dcg import render_dcg
 from clausal.tools.toklex.driver import IncrementalLexer
+from tests._oracles import SCRYER
 
-SCRYER = "/workspace/scryer-prolog/target/release/scryer-prolog"
 SAMPLES = ["foo(X, 1). ", "=.. = . ", "1. 1.5 1.0e7 ", "'a''b' \"s\" 0'a ",
            "/* c /* n */ */ x ", "a. "]
 

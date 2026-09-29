@@ -49,8 +49,8 @@ from clausal.tools.clausal_to_prolog import (
     goal_subterms,
 )
 from clausal.tools.prolog_ast import PAtom, PCompound, PDirective, PNumber
+from tests._oracles import SCRYER
 
-SCRYER = "/workspace/scryer-prolog/target/release/scryer-prolog"
 
 requires_scryer = pytest.mark.skipif(
     not os.path.exists(SCRYER),

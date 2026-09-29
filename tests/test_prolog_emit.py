@@ -884,7 +884,7 @@ def test_lowercase_unit_name_lowers_the_same_way():
 
 # ── D17: the exported `!=` consults and answers in real Scryer ──────────────
 
-_SCRYER = "/workspace/scryer-prolog/target/release/scryer-prolog"
+from tests._oracles import SCRYER as _SCRYER
 
 
 @pytest.mark.skipif(not __import__("os").path.exists(_SCRYER),

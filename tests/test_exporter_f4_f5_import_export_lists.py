@@ -73,7 +73,7 @@ def test_no_import_list_item_is_a_bare_atom():
                 assert all("/" in item for item in items), line
 
 
-SCRYER = "/workspace/scryer-prolog/target/release/scryer-prolog"
+from tests._oracles import SCRYER
 
 
 @pytest.mark.skipif(not os.path.exists(SCRYER), reason="Scryer not built here")

@@ -19,10 +19,11 @@ import subprocess
 import tempfile
 
 import pytest
+from tests._oracles import SCRYER, TREALLA
 
 BINARIES = {
-    "scryer": "/workspace/scryer-prolog/target/release/scryer-prolog",
-    "trealla": "/workspace/trealla-prolog/tpl",
+    "scryer": SCRYER,
+    "trealla": TREALLA,
 }
 PRELUDE_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
