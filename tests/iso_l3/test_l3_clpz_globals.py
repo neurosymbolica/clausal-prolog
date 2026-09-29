@@ -78,3 +78,26 @@ def test_clpz_globals_errors_and_shapes(native, ans):
     assert ans(mod, "f3") == [[("\\/", ("\\/", r(1, 2), r(4, 5)), r(7, 8))]]
     assert ans(mod, "f4") == [["="]]
     assert ans(mod, "f5") == [[">"]]
+
+
+OPTIMISE = """\
+:- use_module(library(clpz)).
+o1(R) :- findall(X-Y, (X in 0..2, Y in 0..2, X #< Y, labeling([max(X)], [X,Y])), R).
+o2(R) :- findall(X-Y, (X in 0..2, Y in 0..2, X #< Y, labeling([min(X+Y)], [X,Y])), R).
+o3(R) :- findall(X-Y, (X in 0..2, Y in 0..2, labeling([max(X), min(Y)], [X,Y])), R).
+o4(R) :- findall(X-Y, (X in 0..2, Y in 0..2, X #\\= Y, labeling([down, max(X-Y)], [X,Y])), R).
+"""
+
+
+def test_labeling_min_max_options(native, ans):
+    """labeling/2's min(Expr)/max(Expr) options were refused
+    (domain_error(labeling_option, max(_))); the answers come in the
+    objectives' order, ties in labeling order -- Scryer's, row for row."""
+    mod = native.load("l3_clpz_optimise", OPTIMISE)
+    p = lambda a, b: ("-", a, b)  # noqa: E731
+    assert ans(mod, "o1") == [[p(1, 2), p(0, 1), p(0, 2)]]
+    assert ans(mod, "o2") == [[p(0, 1), p(0, 2), p(1, 2)]]
+    assert ans(mod, "o3") == [[p(2, 0), p(2, 1), p(2, 2), p(1, 0), p(1, 1),
+                               p(1, 2), p(0, 0), p(0, 1), p(0, 2)]]
+    assert ans(mod, "o4") == [[p(2, 0), p(2, 1), p(1, 0), p(1, 2), p(0, 1),
+                               p(0, 2)]]

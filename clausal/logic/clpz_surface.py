@@ -218,12 +218,7 @@ def _options(options, opts_term):
             elif o in _CHOICE:
                 slot = "choice"
         elif type(o) is tuple and len(o) == 2 and o[0] in ("min", "max"):
-            # Scryer's optimisation options: not built here.  Refused loudly
-            # rather than ignored (ignoring would change the answers).
-            raise LogicException(domain_error(
-                "labeling_option", walk(o),
-                "labeling/2: the min(Expr)/max(Expr) optimisation options "
-                "are not supported"))
+            continue                       # optimisation: see _objectives
         if slot is None:
             _raise(domain_error("labeling_option", walk(o), ctx))
         cur = {"sel": sel, "order": order, "choice": choice}[slot]
@@ -301,11 +296,47 @@ def labeling(options, vars_, trail: Trail):
     for v in vs:
         _finite_or_raise(v, ctx)
     sel, order, choice = _options(options, options)
+    objectives = _objectives(options)
     # A united variable is labelled through its shadow, as label/1 does.
     if _fd._label_targets is None:
         _fd._ensure_units_imports()
     vs = _fd._label_targets(vs)
-    yield from _label(vs, sel, order, choice, trail)
+    if not objectives:
+        yield from _label(vs, sel, order, choice, trail)
+        return
+    yield from _label_optimising(vs, sel, order, choice, objectives, trail)
+
+
+def _objectives(options):
+    """The ``min(Expr)`` / ``max(Expr)`` options, in order, as
+    ``(sign, Expr)`` (sign -1 for max)."""
+    out = []
+    for o in _proper_list(options, "labeling/2"):
+        o = deref(o)
+        if type(o) is tuple and len(o) == 2 and o[0] in ("min", "max"):
+            out.append((-1 if o[0] == "max" else 1, o[1]))
+    return out
+
+
+def _label_optimising(vs, sel, order, choice, objectives, trail):
+    """Scryer's ``min(Expr)``/``max(Expr)``: the solutions in order of the
+    objectives (the first decides, ties go to the next), each tie in the
+    order the other options label it.  The domains are finite (checked),
+    so every labelling is found first and then answered in that order."""
+    from clausal.logic.builtins.iso_compare import _iso_eval  # noqa: PLC0415
+    found = []
+    for _ in _label(vs, sel, order, choice, trail):
+        values = [walk(deref(v)) for v in vs]
+        keys = []
+        for sign, expr in objectives:
+            keys.append(sign * _iso_eval(expr, "labeling/2"))
+        found.append((tuple(keys), len(found), values))
+    found.sort(key=lambda f: (f[0], f[1]))
+    for _keys, _n, values in found:
+        mark = trail.mark()
+        if all(unify(v, val, trail) for v, val in zip(vs, values)):
+            yield None
+        trail.undo(mark)
 
 
 def _label(vs, sel, order, choice, trail):
