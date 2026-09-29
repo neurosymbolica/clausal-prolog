@@ -183,6 +183,29 @@ def _drive_trampoline(dispatch_fn: Any, trail: Trail, *args: Any) -> Iterator[Tr
             end_drive_episode()
 
 
+def _control_node_holds_a_cell_goal(term: Any) -> bool:
+    """True when *term* is a control NODE (And/Or/Not/IfExpr/TupleLiteral)
+    with a CELL somewhere in goal position under it."""
+    from clausal.pythonic_ast import nodes  # noqa: PLC0415
+    if isinstance(term, (nodes.And, nodes.Or)):
+        return (_goal_is_or_holds_cell(term.left)
+                or _goal_is_or_holds_cell(term.right))
+    if isinstance(term, nodes.Not):
+        return _goal_is_or_holds_cell(term.operand)
+    if isinstance(term, nodes.IfExpr):
+        return any(_goal_is_or_holds_cell(g)
+                   for g in (term.test, term.body, term.orelse))
+    if isinstance(term, nodes.TupleLiteral):
+        return any(_goal_is_or_holds_cell(g) for g in term.elements)
+    return False
+
+
+def _goal_is_or_holds_cell(goal: Any) -> bool:
+    goal = deref(goal)
+    return (compound_cell_shape(goal)[0]
+            or _control_node_holds_a_cell_goal(goal))
+
+
 def _term_to_goal(term: Any, db: Any = None) -> Any:
     """Convert a runtime term instance to a simple_ast goal node.
 
@@ -234,6 +257,15 @@ def _term_to_goal(term: Any, db: Any = None) -> Any:
         if term in CELL_GOAL_CONTROL_FUNCTORS:    # parity with call/N (F5): ','/0 is refused, not looked up
             refuse_control_construct_cell(term, term, "solve/1")
         return AstCall(func=LoadName(name=term), args=[], kwargs=[])
+    if _control_node_holds_a_cell_goal(term):
+        # A cell nested in an And/Or/Not/if-then-else NODE: the compiler's
+        # goal lowering (terms_to_goalop) reads goal nodes and has no cell
+        # arm, so ``solve(And(("p", X), ("q", X)), m)`` raised
+        # ``NotImplementedError: goal shape not yet supported (tuple)``.
+        # call/1 runs exactly such a body term (call_body's converter lowers
+        # every cell, qualified and control cells included, with the same
+        # diagnostics), so the query is that call.
+        return AstCall(func=LoadName(name="call"), args=[term], kwargs=[])
     is_cell_goal, functor = compound_cell_shape(term)
     if is_cell_goal:
         if functor == QUALIFIED_GOAL_FUNCTOR and len(term) == 3:

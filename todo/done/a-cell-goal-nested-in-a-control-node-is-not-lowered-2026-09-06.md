@@ -45,3 +45,13 @@ pre-pass (or go away).
 
 - `.superpowers/sdd/p33-state-relocation/task-5-report.md` (the concern list)
 - `clausal/logic/solve.py::_term_to_goal` — the cell branch this one mirrors
+
+## Closed 2026-09-30
+
+Fixed on fix/todo-batch-5-2026-09-30 at the query seam rather than in
+`terms_to_goalop`: `_term_to_goal` hands a control NODE that holds a cell in
+goal position to call/1, whose body converter (call_body) already lowers
+every cell -- plain, qualified and control -- with the same diagnostics as a
+top-level cell. The compiler's goal lowering is untouched (a cell never
+reaches a compiled clause body from source). Pinned by
+tests/test_solve_cell_goals_in_control_nodes.py.
