@@ -190,6 +190,9 @@ Most standard Prolog translates cleanly:
 - Directives (`dynamic`, `discontiguous`, `table`, `module`, `use_module`),
   in the ISO call form `:- dynamic(foo/1).`
 - Negation as failure (`\+` becomes `not`)
+- Standard order of terms: `X @< Y` (and `@>`, `@=<`, `@>=`) becomes the
+  quoted ISO builtin `'@<'(X, Y)`; `compare/3` crosses unchanged. (Refused
+  until 2026-09-29, when the engine had had them for weeks.)
 - `bagof/3` and `setof/3` with the existential quantifier: `Y^Goal` becomes
   `Y ^ (Goal)` (nested to the right, `A ^ (B ^ (Goal))`), so the solutions
   group by the free variables as in ISO (8.10):

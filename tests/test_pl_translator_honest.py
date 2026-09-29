@@ -403,3 +403,39 @@ class TestDoubleQuotesFlag:
                 :- set_prolog_flag(double_quotes, string).
                 t("a").
             """)
+
+
+# ── G. standard order of terms is an engine builtin ───────────────────
+
+
+class TestStandardOrder:
+    """@</2, @>/2, @=</2, @>=/2 are engine builtins (the quoted ISO forms,
+    2026-09-09), so they cross -- they were refused as "no standard-order
+    builtins".  Scryer, for the pairs below: lt [1,3,5,8], gt [2,4,6,7],
+    le [1,3,5,8,9], ge [2,4,6,7,9]."""
+
+    _SRC = """\
+        pr(1, a, b).
+        pr(2, b, a).
+        pr(3, 1, a).
+        pr(4, f(b), f(a)).
+        pr(5, 1.0, 1).
+        pr(6, 2, 1.0).
+        pr(7, [1], f(x)).
+        pr(8, g(a, b), h(a, b, c)).
+        pr(9, a, a).
+        lt(L) :- findall(N, (pr(N, P, Q), P @< Q), L).
+        gt(L) :- findall(N, (pr(N, P, Q), P @> Q), L).
+        le(L) :- findall(N, (pr(N, P, Q), P @=< Q), L).
+        ge(L) :- findall(N, (pr(N, P, Q), P @>= Q), L).
+        c(O) :- compare(O, 1, a).
+    """
+
+    @pytest.mark.parametrize("pred,expected", [
+        ("lt", [[1, 3, 5, 8]]), ("gt", [[2, 4, 6, 7]]),
+        ("le", [[1, 3, 5, 8, 9]]), ("ge", [[2, 4, 6, 7, 9]]),
+        ("c", ["<"]),
+    ])
+    def test_matches_scryer(self, tmp_path, pred, expected):
+        m = _load(tmp_path, f"so_{pred}", self._SRC)
+        assert _answers(m, pred) == expected

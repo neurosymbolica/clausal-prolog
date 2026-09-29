@@ -191,12 +191,13 @@ class TestF026BagofWitness:
         assert "eval_('^'(2, '^'(3, 2)), X)" in out
 
 
-class TestF026StandardOrderRejected:
+class TestF026StandardOrderTranslated:
     @pytest.mark.parametrize("op", ["@<", "@>", "@=<", "@>="])
-    def test_standard_order_comparison_rejected(self, op):
-        # Clausal has no standard-order term comparison builtins.
-        with pytest.raises(PrologTranslationError):
-            prolog_to_clausal(f"q(X, Y) :- X {op} Y.")
+    def test_standard_order_comparison_is_the_quoted_builtin(self, op):
+        # The engine has the quoted ISO builtins (2026-09-09); the refusal
+        # this replaced was stale (2026-09-29).
+        out = prolog_to_clausal(f"q(X, Y) :- X {op} Y.")
+        assert f"'{op}'(X, Y)" in out
 
 
 class TestF041VariantEqualityRejected:

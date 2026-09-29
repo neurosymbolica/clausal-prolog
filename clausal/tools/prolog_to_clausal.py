@@ -1372,17 +1372,14 @@ class _PrologToClausal:
                 "See: docs/reified_ite.md, docs/for_prolog_programmers.md"
             )
 
-        # Standard-order comparison has no Clausal equivalent — the language
-        # exposes no standard term order (setof's internal sort is not a
-        # user-facing builtin). Reject rather than emit `@<(X, Y)` (F026).
+        # Standard-order comparison (ISO 8.4.1): the engine has the quoted
+        # ISO builtins '@<'/2 etc. (2026-09-09), so they cross as those.
+        # They were refused as "no standard-order builtins" until
+        # 2026-09-29.  Quoted, because a bare ``@`` is Python's matmul.
         if functor in ("@<", "@>", "@=<", "@>=") and len(args) == 2:
-            raise PrologTranslationError(
-                f"Standard-order comparison ('{functor}') cannot be "
-                "translated: Clausal has no standard-order term comparison "
-                "builtins.\n"
-                "Use arithmetic comparison (<, =<, ...) for numbers, or "
-                "structural ==/\\== for term identity."
-            )
+            left = self._emit_term(args[0])
+            right = self._emit_term(args[1])
+            return f"{_quote_atom(functor)}({left}, {right})"
 
         # Variant equality has no Clausal equivalent (F041 — the designed
         # rejection promised when =@=/\=@= were added to the parser tables).
