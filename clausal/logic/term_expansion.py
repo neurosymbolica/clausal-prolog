@@ -66,6 +66,53 @@ def _head_name_arity(pred_node):
     return None
 
 
+#: Meta-calls whose arguments at these positions are GOALS.
+_META_GOAL_ARGS = {
+    "call": (0,), "once": (0,), "ignore": (0,), "not": (0,), "\\+": (0,),
+    "findall": (1,), "bagof": (1,), "setof": (1,), "forall": (0, 1),
+    "catch": (0, 2), "aggregate_all": (1,),
+}
+
+
+def _goal_names(goal, out: set) -> None:
+    """Add to *out* the names of the predicates *goal* calls (a clause-body
+    node): through And/Or/Not/if-then-else, conjunction tuples and the goal
+    arguments of ``_META_GOAL_ARGS``."""
+    from clausal.pythonic_ast import nodes  # noqa: PLC0415
+    from clausal.logic.cells import compound_cell_shape  # noqa: PLC0415
+    if isinstance(goal, nodes.And) or isinstance(goal, nodes.Or):
+        _goal_names(goal.left, out)
+        _goal_names(goal.right, out)
+    elif isinstance(goal, nodes.Not):
+        _goal_names(goal.operand, out)
+    elif isinstance(goal, nodes.IfExpr):
+        for g in (goal.test, goal.body, goal.orelse):
+            _goal_names(g, out)
+    elif isinstance(goal, nodes.TupleLiteral):
+        for g in goal.elements:
+            _goal_names(g, out)
+    elif isinstance(goal, (list, tuple)) and not compound_cell_shape(goal)[0]:
+        for g in goal:
+            _goal_names(g, out)
+    elif isinstance(goal, nodes.Call) and isinstance(goal.func, nodes.LoadName):
+        name = goal.func.name
+        out.add(name)
+        for i in _META_GOAL_ARGS.get(name, ()):
+            if i < len(goal.args):
+                _goal_names(goal.args[i], out)
+    elif isinstance(goal, nodes.LoadName):
+        out.add(goal.name)
+    elif type(goal) is str:
+        out.add(goal)
+    else:
+        is_cell, functor = compound_cell_shape(goal)
+        if is_cell:
+            out.add(functor)
+            for i in _META_GOAL_ARGS.get(functor, ()):
+                if i + 1 < len(goal):
+                    _goal_names(goal[i + 1], out)
+
+
 def _expansion_helpers(expansion_clauses, regular_items) -> list:
     """The clauses of *regular_items* whose predicates the term_expansion/4
     bodies can reach, transitively, in source order.
@@ -74,9 +121,12 @@ def _expansion_helpers(expansion_clauses, regular_items) -> list:
     the same file (it is already consulted when the expansion runs).  Only the
     term_expansion/4 clauses used to be compiled into the synthetic
     expansion module, so a body calling ``step(I, O)`` of its own file failed
-    the whole load.  Reachability is by NAME over every functor a body writes
-    (a data term's functor included), which over-approximates harmlessly: a
-    name no clause here defines selects nothing."""
+    the whole load.  Reachability is by NAME over the GOALS a body calls --
+    its conjuncts, disjuncts, negations and if-then-else branches, and the
+    goal arguments of the meta-calls -- never over the data terms it builds:
+    the common idiom writes the file's own facts as patterns
+    (``I is fact(X)``), and counting those as helpers would compile every
+    fact a second time into the expansion module."""
     by_name: dict = {}
     for item in regular_items:
         key = _head_name_arity(item)
@@ -86,11 +136,10 @@ def _expansion_helpers(expansion_clauses, regular_items) -> list:
         return []
 
     def called(nodes) -> set:
-        out: dict = {}
-        seen: set = set()
+        out: set = set()
         for n in nodes:
-            _collect_functor_arities(n.body, out, seen)
-        return set(out)
+            _goal_names(n.body, out)
+        return out
 
     reachable: set = set()
     frontier = list(called(expansion_clauses))

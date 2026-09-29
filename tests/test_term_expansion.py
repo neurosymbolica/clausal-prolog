@@ -995,3 +995,19 @@ class TestHelperInTheSameModule:
             "term_expansion(I, O, S, S) <- (I is fact(X), O is [fact(X), logged_fact(X)])\n"
             "fact(1),\n"))
         assert self._answers(m, "logged_fact") == [1]
+
+    def test_facts_written_as_data_patterns_are_not_helpers(self):
+        """A body that BUILDS ``fact(X)`` does not call fact/1: the file's
+        facts are not compiled into the expansion module (roborev, Medium)."""
+        from clausal.logic.term_expansion import (
+            _expansion_helpers, _is_term_expansion_clause)
+        source = ("-private([fact(_), logged_fact(_)])\n"
+                  "term_expansion(I, O, S, S) <- (I is fact(X), O is [fact(X), logged_fact(X)], step(X))\n"
+                  "step(_) <- True\n"
+                  "fact(1),\nfact(2),\n")
+        preds, _, _md = _parse_and_collect(source)
+        te = [p for p in preds if _is_term_expansion_clause(p)]
+        rest = [p for p in preds if not _is_term_expansion_clause(p)]
+        helpers = _expansion_helpers(te, rest)
+        assert [_head_functor(h.head) if not isinstance(h.head, str) else h.head
+                for h in helpers] == ["step"]
