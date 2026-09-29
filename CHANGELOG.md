@@ -161,6 +161,12 @@ since 0.4.0 finish three moves:
   optional `:- constructors([pt(x, y)]).` gives a data functor field names
   (`signature/3`, `unbound_keys/2`). Listed as `pt/2` in `module/2`, it is
   exported as data with those fields. There is no `atoms/1` directive.
+  Not declared: a constant's name (`constant(Name)` is a fold, not data), a
+  constants table's predicate, an imported name (a Python module's value
+  such as `euro` included) and the engine's own names (clpz, clpq). A bare
+  entry of a `use_module/2` list imports nothing and is a use of its atom,
+  unless the module offers that name as `name/N` (a module/2 export, a
+  Python module's predicate): then it is not declared either.
 - **library(lambda) as builtins: `(\)/1..8`, `(^)/3..10`, `(+\)/2..9`.**
   Ulrich Neumerkel's lambdas (`maplist(\X^Y^(Y is 2*X), Xs, Ys)`,
   `Free+\X^Goal`) run through call/N with Scryer's answers: `\` copies the

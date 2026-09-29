@@ -181,6 +181,10 @@ class Uses:
             elif type(t) is tuple and t and type(t[0]) is str:
                 if t[0] == "$chars":
                     continue
+                if t[0] == "constant" and len(t) == 2:
+                    # D8's compile-time fold, not a data term: neither
+                    # ``constant`` nor the constant's name is an atom use.
+                    continue
                 if t[0] != ".":
                     self.functors.setdefault(t[0], set()).add(len(t) - 1)
                 stack.extend(t[1:])
@@ -287,6 +291,11 @@ class DirectiveContext:
         self.dq_modes_used: set[str] = set()
         self.module_aliases: dict[str, str] = {}
         self.bare_atom_imports: list[tuple[str, int | None]] = []
+        #: The bare import entries that name something their module offers
+        #: as name/N (a Python module's predicate, a Prolog module's
+        #: module/2 export): warned with the others (D11), but not a use of
+        #: the atom -- see :meth:`auto_declare`.
+        self.bare_predicate_names: set[str] = set()
         self.directives = 0
         #: Other source files whose CONTENT this lowering baked in (a
         #: use_module/1 export list, a declared module name a qualified
@@ -485,9 +494,20 @@ class DirectiveContext:
 
         Left out, because the name already means something here and binding
         it would shadow that: a clause head, a goal, a name a directive
-        declares (dynamic, table, a name/N export ...), an imported name, a
-        constructor, an engine builtin or evaluable, and any spelling a
-        declaration cannot bind (:func:`_is_declarable`).
+        declares (dynamic, table, a name/N export ...), an imported name
+        (a Python module's value included), a constructor, a constant (a
+        constant's name is its module global; ``constant(Name)`` is folded,
+        not data -- :class:`Uses` skips it), a predicate a constants table
+        defines, an engine builtin or evaluable (clpz's and clpq's names
+        among them), and any spelling a declaration cannot bind
+        (:func:`_is_declarable`).
+
+        A bare entry of a use_module/2 list is a use of its atom (D11(a):
+        it imports nothing) UNLESS the module offers that name: a Python
+        module's value is imported instead, and a name the module offers as
+        ``name/N`` (a Python module's predicate, a Prolog module's export)
+        is neither imported nor declared -- binding that spelling to an
+        atom here would only hide the missing ``name/N``.
 
         Raises :class:`DirectiveRefused` for a constructor that is also
         defined by clauses here: a constructor is data."""
@@ -499,7 +519,9 @@ class DirectiveContext:
                     f"this file; a name/arity is one or the other", where)
         taken = set(uses.goal_names) | {n for n, _a in uses.heads}
         taken |= {n for n, _a in self.constructors}
+        taken |= set(self.constant_spans) | set(self.table_heads)
         if self._t is not None:
+            taken |= set(getattr(self._t, "_constants", ()))
             taken |= set(self._t._import_remap)
             taken |= set(getattr(self._t, "_imported_functors", ()))
             for item in self._t._module_items:
@@ -507,7 +529,8 @@ class DirectiveContext:
                     if type(spec) is tuple and spec and type(spec[0]) is str:
                         taken.add(spec[0])
         wanted = set(uses.atoms) | set(uses.functors)
-        wanted |= {n for n, _line in self.bare_atom_imports}
+        wanted |= {n for n, _line in self.bare_atom_imports
+                   if n not in self.bare_predicate_names}
         names = sorted(n for n in wanted - taken
                        if _is_declarable(n) and not _engine_names(n))
         self.auto_atoms = [n for n in names if n not in uses.functors]
@@ -674,6 +697,12 @@ def _use_module(ctx: DirectiveContext, args, spans, span):
                 f"{what}: {n}/{a} cannot be imported by name (the name is no "
                 f"identifier); call it qualified, m:'{n}'(...)", span)
     declared, exports, ops, sticky = _declared_exports(found)
+    if exports and bare:
+        # A bare entry naming one of the module's name/N exports is not a
+        # use of the atom (see DirectiveContext.auto_declare).
+        exported = {n for n, _a in exports}
+        ctx.bare_predicate_names.update(
+            n for n, _line in bare if n in exported)
     last = dotted.rsplit(".", 1)[-1]
     ctx.alias(last, dotted)
     if declared and declared != last:
@@ -1329,6 +1358,8 @@ def _python_bare(ctx, mod, bare) -> list:
             values.append(n)
         else:
             atoms.append((n, line))
+            if n in sig:
+                ctx.bare_predicate_names.add(n)
     _warn_bare(ctx, atoms)
     return values
 

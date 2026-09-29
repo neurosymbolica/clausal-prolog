@@ -354,3 +354,56 @@ def test_a_seam_module_imports_the_atom_from_the_native_facade(pkg):
         warnings.simplefilter("always")
         mod = importlib.import_module("s3seamuse")
     assert _all(mod, ("t", V)) == [(1,)]
+
+
+# ── what slices 5 and 6 give a meaning is not auto-declared ──
+
+
+def test_constants_their_fold_and_table_heads_are_not_auto_declared(native,
+                                                                    ans):
+    """A constant's name is its module global and ``constant(Name)`` is a
+    compile-time fold, not data: neither the name nor ``constant`` is an
+    atom use, even where the name also appears as an atom.  A constants
+    table's predicate, a Python module's imported value (euro) and clpz's
+    names keep their meaning too."""
+    mod = native.load("s3_consts", textwrap.dedent("""\
+        :- use_module(library(clpz)).
+        :- use_module(european_union, [euro]).
+        :- constant_value(greeting, hello).
+        :- constant_number_units(len, 5, euro).
+        :- constants_number_units(snap/2, [[1, 29200]], euro, number_at(2)).
+        names(L) :- L = [greeting, len, snap, euro, other].
+        w(W) :- W = f(constant(greeting)).
+        d(X) :- X is constant(len) * 2.
+        cl(X) :- X in 1..3, X #> 1, labeling([ff], [X]).
+        """))
+    st = mod.__loader__.l3_stats
+    assert st["auto_declared"] == {"atoms": 2, "functors": 1,
+                                   "functor_arities": 1}, st
+    assert (mod.other, mod.ff, mod.f) == ("other", "ff", "f")
+    assert mod.greeting == "hello" and "constant" not in vars(mod)
+    assert ans(mod, "names") == [["greeting", "len", "snap", "euro",
+                                  "other"]]
+    assert ans(mod, "w") == [("f", "hello")]
+    assert len(ans(mod, "d")) == 1
+    assert ans(mod, "cl") == [2, 3]
+
+
+def test_a_bare_entry_naming_an_export_is_not_an_atom_use(native, ans):
+    """D11(a): a bare entry imports nothing.  It counts as a use of its atom
+    -- unless the module offers the name as name/N (an export here; a
+    Python module's predicate likewise), where it only hides the missing
+    indicator."""
+    _write(native, "s3_exp.pl", """\
+        :- module(s3_exp, [s3_exp_pred/1]).
+        s3_exp_pred(1).
+        """)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        mod = native.load("s3_bare_exp", textwrap.dedent("""\
+            :- use_module(s3_exp, [s3_exp_pred, s3_exp_atom]).
+            t(1).
+            """))
+    assert ans(mod, "t") == [1]
+    assert mod.s3_exp_atom == "s3_exp_atom"
+    assert "s3_exp_pred" not in vars(mod)
