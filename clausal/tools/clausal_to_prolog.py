@@ -1967,6 +1967,19 @@ class _ClausalToProlog:
         """
         requested: list[tuple[str, int | None]] = []
         for elt in elts:
+            if (isinstance(elt, python_ast.Call) and isinstance(elt.func, python_ast.Name)
+                    and elt.func.id == "alias"):
+                # An aliased import binds a LOCAL name to the exporter's
+                # predicate. ISO has no import renaming and Clausal Prolog has
+                # none either (ruling 2026-09-29): a clash is resolved by module
+                # qualification. Read as a call template it became `alias/2`,
+                # and the body's calls to the local name hit a predicate
+                # nothing defines -- an existence_error at CALL time. Refused.
+                self._add_warning(
+                    f"aliased import {python_ast.unparse(elt)} from {mod_path}: "
+                    "Prolog has no import renaming; call the predicate by its "
+                    "own name, qualified as m:p(X) where it clashes")
+                continue
             if isinstance(elt, python_ast.Call) and isinstance(elt.func, python_ast.Name):
                 requested.append((resolve_name(elt.func.id, self.dialect), len(elt.args)))
             elif isinstance(elt, python_ast.Name):
