@@ -10260,6 +10260,16 @@ class EmbedTransformer(NodeTransformer):
                 continue
             entry = aliases[-1]
             local = entry.asname or entry.name
+            if local in bound and bound[local] != entry.name:
+                # F3: ONE local name for two different predicates.  Python's
+                # ``from m import f as x, g as x`` would keep the last one
+                # silently; say which two collide instead.
+                raise SyntaxError(
+                    f"-import_from({module_path}, [...]): the local name "
+                    f"`{local}` is bound twice, to {module_path}'s "
+                    f"`{bound[local]}` and to its `{entry.name}`. One name "
+                    f"names one predicate here: give one of them another "
+                    f"local name with alias({entry.name}, other_name)")
             if local in bound:
                 del aliases[-1]              # the same import, once
             else:

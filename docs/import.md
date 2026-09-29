@@ -183,6 +183,16 @@ indicator against one is refused: list the bare name.
 A `name/N` entry names a predicate, never an atom, so
 [`clausal.imported_atoms`](public-api.md) does not report it.
 
+#### Repeated entries
+
+An entry that repeats one already in the list is imported once:
+`[baz, baz]`, `[baz/1, baz/1]` and `[alias(baz, b), alias(baz, b)]` are
+each one import, and `[baz, baz/1]` is every arity (the bare name already
+brings them all). Two entries that bind ONE local name to two different
+predicates -- `[alias(f, x), alias(g, x)]`, or `[g, alias(f, g)]` -- are a
+`SyntaxError`. One predicate under two local names (`[f, alias(f, f2)]`)
+is fine.
+
 #### Name isolation
 
 Behind the scenes, imported predicates are stored under a fully-qualified dotted key in compiled function globals — e.g., `"myapp.graphs.utils.reachable"` rather than bare `"reachable"`. This means Python code in the `.clausal` file cannot accidentally shadow an imported predicate by assigning to the same name. The dotted key is invisible to the user; clause bodies use the short local name as written.

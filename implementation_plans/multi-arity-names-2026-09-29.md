@@ -181,7 +181,7 @@ not involved); `solve.call` phase 5 + `binding_grants_arity`;
 |---|---|---|
 | F1 | `tools/prolog_to_clausal.py` translates `foo/1` + `foo/2` as-is | no change; the load was the only blocker (the call_goal/1..8 trigger) |
 | F2 | translator `_data_functors` skips a DATA name used at two arities (~565) | consistent with D2; unchanged |
-| F3 | translator `_emit_import_list` drops the arity: `use_module(bar, [baz/1, baz/2])` → `-import_from(bar, [baz, baz])` | follow-up: harmless (a bare import brings every arity), but it is a duplicate |
+| F3 | translator `_emit_import_list` drops the arity: `use_module(bar, [baz/1, baz/2])` → `-import_from(bar, [baz, baz])` | DONE (2026-09-29, `fix/batch-f-import-arity`): the translator emits a repeated name once, the loader imports a repeated entry once, and one local name bound to two different predicates is a `SyntaxError` |
 | F4 | exporter `_convert_module_directive`: export list not deduplicated (`[foo/1, foo/2, foo/1]`) | follow-up |
 | F5 | exporter `_import_list` with no signatures: bare name → bare atom (not valid ISO) | pre-existing, follow-up |
 | F6 | `BUILTIN_NAME_MAP` / `resolve_name` name-only | pre-existing, unrelated to this rule |

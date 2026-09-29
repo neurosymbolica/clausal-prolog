@@ -1831,6 +1831,9 @@ class _PrologToClausal:
                     items.append(self._predicate_name(e.name))
                 else:
                     items.append(self._emit_term(e))
+            # F3: ``[baz/1, baz/2]`` both emit ``baz`` (a bare name imports
+            # every arity), so the second is the same entry: once.
+            items = list(dict.fromkeys(items))
             return "[" + ", ".join(items) + "]"
         return self._emit_term(term)
 

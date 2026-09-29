@@ -139,6 +139,11 @@ since 0.4.0 finish three moves:
   any missing arity, and the message names the entry to add. A `p/N` entry
   names a predicate, so `clausal.imported_atoms` does not count it. See
   [docs/import.md](docs/import.md#importing-one-arity-namen).
+- **A repeated `-import_from` entry is one import.** `[baz, baz]`,
+  `[baz/1, baz/1]` and `[baz, baz/1]` load as one entry (the `.pl`
+  translator no longer emits `[baz, baz]` for `[baz/1, baz/2]`). Binding ONE
+  local name to two different predicates (`[alias(f, x), alias(g, x)]`) is
+  now a `SyntaxError`; Python kept the last one silently before.
 - **`clausal.declared_atoms(module_or_package)`.** The `frozenset` of atom
   names declared in the `-module`/`-private` lists of a module's own files,
   or, for a package, of its `__init__` and its loaded submodules. An
