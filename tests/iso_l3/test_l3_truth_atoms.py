@@ -263,8 +263,8 @@ def test_the_objects_stay_python_true_false_undefined(iso_mod):
     assert _run(iso_mod, "c6")[0][3] is Undefined
 
 
-@pytest.mark.xfail(strict=True, reason="reader gap, not D35: the native "
-                   "front end does not map ISO callable/1 to callable_/1")
-def test_native_callable_1_is_not_mapped_yet(native):
+def test_native_callable_1_of_true(native):
+    """callable/1 is an engine builtin under its ISO name, so the native
+    front end runs it, and the atom true is callable."""
     mod = native.load("l3_truth_callable", "t3(ok) :- callable(true).\n")
     assert _run(mod, "t3") == ["ok"]

@@ -1240,7 +1240,9 @@ def format_to_text(fs, args) -> str:
                     raise LogicException(instantiation_error("atom_chars/2"))
                 if _is_empty_list(a):
                     es.append(("c", "[]"))         # nil is the atom '[]'
-                elif type(a) is str:
+                elif _term_is_atom(a):
+                    # Any atom, the truth atoms included: ``format("~a",
+                    # [true])`` prints ``true`` (Scryer).
                     es.append(("c", spelling(a)))
                 elif isinstance(a, (int, float)) and not isinstance(a, bool):
                     es.append(("c", str(a)))
