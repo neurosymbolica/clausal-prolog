@@ -89,3 +89,21 @@ def test_listless_import_consults_and_answers_in_scryer(tmp_path):
                          stdin=subprocess.DEVNULL, capture_output=True, text=True,
                          timeout=60)
     assert "ok(1,1,2)" in out.stdout, out.stdout + out.stderr
+
+
+# ── F4b: an import list names each indicator once, too ────────────────
+
+def test_repeated_import_indicator_is_named_once():
+    src = "-import_from(lib, [helper/1, helper/1])\nq(X) <- (helper(X))\n"
+    assert ":- use_module('lib', [helper/1])." in _directives(src)
+
+
+def test_import_indicator_in_two_spellings_is_named_once():
+    # `helper(X)` and `helper/1` are the same import; so are `sent//1` and `sent/3`
+    src = "-import_from(lib, [helper(X), helper/1, sent//1, sent/3])\nq(X) <- (helper(X))\n"
+    assert ":- use_module('lib', [helper/1, sent/3])." in _directives(src)
+
+
+def test_distinct_arities_of_one_name_are_both_kept():
+    src = "-import_from(lib, [helper/1, helper/2])\nq(X) <- (helper(X))\n"
+    assert ":- use_module('lib', [helper/1, helper/2])." in _directives(src)
