@@ -69,19 +69,19 @@ test("number: string fails") <- (not number("42"))
 
 test("number: var fails") <- (not number(_x_UNUSED))
 
-test("callable: declared atom succeeds") <- (callable_(hello))
+test("callable: declared atom succeeds") <- (callable(hello))
 
-test("callable: a string is callable as the list it is") <- (callable_("is_bound_number"))
+test("callable: a string is callable as the list it is") <- (callable("is_bound_number"))
 
-test("callable: an arbitrary string is callable too") <- (callable_("hello"))
+test("callable: an arbitrary string is callable too") <- (callable("hello"))
 
-test("callable: the empty list is the atom '[]' and is callable") <- (callable_([]))
+test("callable: the empty list is the atom '[]' and is callable") <- (callable([]))
 
-test("callable: a non-empty list is the compound './2'") <- (callable_([1, 2]))
+test("callable: a non-empty list is the compound './2'") <- (callable([1, 2]))
 
-test("callable: int fails") <- (not callable_(42))
+test("callable: int fails") <- (not callable(42))
 
-test("callable: var fails") <- (not callable_(_x_UNUSED))
+test("callable: var fails") <- (not callable(_x_UNUSED))
 
 test("is_list: list") <- (is_list([1, 2, 3]))
 
@@ -123,17 +123,17 @@ test("integer: octal literal 0o1") <- (integer(1))
 
 test("integer: binary literal 0b1") <- (integer(1))
 
-test("float_: 1.0 succeeds") <- (float_(1.0))
+test("float_: 1.0 succeeds") <- (float(1.0))
 
-test("float_: 0.0 succeeds") <- (float_(0.0))
+test("float_: 0.0 succeeds") <- (float(0.0))
 
-test("float_: scientific 1e9") <- (float_(1000000000.0))
+test("float_: scientific 1e9") <- (float(1000000000.0))
 
-test("float_: int fails") <- (not float_(1))
+test("float_: int fails") <- (not float(1))
 
-test("float_: string fails") <- (not float_("1.0"))
+test("float_: string fails") <- (not float("1.0"))
 
-test("float_: var fails") <- (not float_(_x_UNUSED))
+test("float_: var fails") <- (not float(_x_UNUSED))
 
 test("number: large int (via eval)") <- (X == '^'(10, 100), number(X))
 

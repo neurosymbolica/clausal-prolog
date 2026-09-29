@@ -328,6 +328,17 @@ def _downcase_atom__2(atom, lower, trail, k):
     trail.undo(mark)
 
 
+def _refuse_non_list(val, who):
+    """ISO 8.16.4.3 / 8.16.5.3 / 8.16.7.3 / 8.16.8.3 (Scryer-verified): a
+    PARTIAL list -- ``[a | T]`` -- is an instantiation error, anything else
+    that is not a list a ``type_error(list, L)``.  A partial list used to get
+    the type error."""
+    from clausal.terms import SegList, SegString, SegBytes  # noqa: PLC0415
+    if isinstance(val, (SegList, SegString, SegBytes)):
+        raise LogicException(instantiation_error(who))
+    raise LogicException(type_error("list", val, who))
+
+
 # ── atom_length/2 ────────────────────────────────────────────────────────────
 
 @_builtin("atom_length", 2)
@@ -381,7 +392,7 @@ def _atom_chars__2(atom, chars, trail, k):
         # isinstance-list check. A str element then validates as a character.
         items = _as_items(vc)
         if items is None:
-            raise LogicException(type_error("list", vc, "atom_chars/2"))
+            _refuse_non_list(vc, "atom_chars/2")
         elems = []
         for elem in items:
             e = deref(elem)
@@ -423,7 +434,7 @@ def _atom_codes__2(atom, codes, trail, k):
     elif c_bound:
         items = _as_items(vc)  # F017: bytes/str/ground Seg* → element list
         if items is None:
-            raise LogicException(type_error("list", vc, "atom_codes/2"))
+            _refuse_non_list(vc, "atom_codes/2")
         elems = []
         for elem in items:
             e = deref(elem)
@@ -656,7 +667,7 @@ def _number_chars__2(number, chars, trail, k):
     elif c_bound:
         items = _as_items(vc)  # F017: str/ground Seg* → element list
         if items is None:
-            raise LogicException(type_error("list", vc, "number_chars/2"))
+            _refuse_non_list(vc, "number_chars/2")
         elems = []
         for elem in items:
             e = deref(elem)
@@ -708,7 +719,7 @@ def _number_codes__2(number, codes, trail, k):
     elif c_bound:
         items = _as_items(vc)  # F017: bytes/str/ground Seg* → element list
         if items is None:
-            raise LogicException(type_error("list", vc, "number_codes/2"))
+            _refuse_non_list(vc, "number_codes/2")
         elems = []
         for elem in items:
             e = deref(elem)

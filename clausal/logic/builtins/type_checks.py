@@ -188,6 +188,12 @@ def _float__1(x, trail, k):
         yield None
 
 
+# ISO's name for float_/1 (8.3.5), the same function, as callable/1 and
+# member/2 are: ``float(X)`` as a goal used to reach Python's ``float``
+# class and raise type_error(callable, <class 'float'>).
+_builtin("float", 1)(_float__1)
+
+
 @_builtin("quantity", 1)
 def _quantity__1(x, trail, k):
     """quantity(X) — X is a number carrying a UNIT.
@@ -364,6 +370,14 @@ def _callable__1_factory(db):
         # callable.
 
     return callable___1
+
+
+# ISO's name for callable_/1 (8.3.9), the same factory -- as member/2 and
+# memberchk/2 are registered under their ISO names -- so `callable(X)` in a
+# clause body, a .pl file or a query reaches it; it used to be
+# existence_error(procedure, callable/1).  The trailing-underscore spelling
+# stays (it keeps Python's own ``callable`` out of the way in hosted code).
+_db_builtin("callable", 1, fields=("x",))(_callable__1_factory)
 
 
 @_builtin("is_list", 1)
