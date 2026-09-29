@@ -2124,7 +2124,10 @@ def _declared_head_for_call(namespace, binding, args: tuple,
 
     One declared arity -> that one, whatever was written (exactly the
     class's one ``_fields``, so a mismatch keeps its construction error).
-    Several (operator ruling 2026-09-29) -> the arity WRITTEN, else
+    Several (operator ruling 2026-09-29) -> the arity WRITTEN; a
+    keyword-free construction at an arity not declared is the compound AT
+    the arity written (ruling C, as the compile-time path builds it), so
+    the positional ``arg_N`` layout is answered; else
     :func:`_head_signature_for`'s choice or its
     ``AmbiguousArityConstructionError``."""
     found = declared_head_arities(namespace, binding)
@@ -2135,6 +2138,9 @@ def _declared_head_for_call(namespace, binding, args: tuple,
     if entry is None:
         if len(entries) == 1:
             entry = next(iter(entries.values()))
+        elif not kwargs:
+            return (functor, tuple(f"arg_{i}" for i in range(len(args))),
+                    None)
         else:
             fields = _head_signature_for(
                 functor, {a: e[0] for a, e in entries.items()}, args, kwargs)

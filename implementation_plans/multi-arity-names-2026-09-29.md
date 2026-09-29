@@ -232,3 +232,42 @@ not involved); `solve.call` phase 5 + `binding_grants_arity`;
 5. **Docs** (`docs/predicates.md`, `docs/import.md`,
    `docs/importing_prolog.md`). Exit: nothing says "exactly one arity" for
    procedures.
+
+## Implementation record (2026-09-29, same branch)
+
+Built, because the census showed the change is contained. Slices 1–5 are
+landed on the branch in one feature commit plus a docs commit.
+
+- **No-change evidence.** The rewriter output (module code plus module
+  items) was compared for every `.clausal` file in the tree against base
+  `530814b4`, with `PYTHONHASHSEED=0` and the base tree in a scratch copy.
+  453 files compile; 0 differ apart from `HeadFieldNames.by_arity`, which is
+  new. The one hash difference (`edcg_counter`) is an `ast` object address
+  in a repr, and it is identical once addresses are masked. As a positive
+  control, the new test file run against the base engine gives 15 failed,
+  5 passed.
+- **A7 extra.** In the DCG path, a head at an arity other than a DECLARED
+  one is now checked even when no field name repeats. A shorter
+  `state//1` under a fielded `state/4` declaration used to slip past the
+  check and die while building the head at load, with a construction error
+  rather than the positioned SyntaxError. It was an error before and it is
+  still one; only the message changed.
+- **A8.** The messages now say "a functor declared with field names has
+  one arity in a file", and a -module/-private template conflict adds the
+  ISO way out (spell the entry `name/N`).
+- **E1.** The runtime remedy reads "pass N arguments to f, or define f/M:
+  a f clause head with M arguments is a procedure of its own, unrelated to
+  f/N (as in ISO)". A test follows it literally and the result loads.
+- **C4.** `cell_signature_for_name`'s handle arm answers a several-arity
+  predicate name at the arity asked for, or its widest arity when none is
+  asked. `construction_signature_for_name` re-asks a keyword construction
+  at the written arity (Q3's default).
+- **roborev round 1** gave 1 Medium and 3 Low findings; the Medium and 2 of the Lows are fixed. Medium: D2 depended on ORDER. A fielded
+  `-private`/`-module`/`-edcg_pred` entry placed BELOW clauses that already gave the name
+  two arities loaded silently. It is now refused (`_refuse_late_fielded_declaration`).
+  This fires only when there are 2+ arities, so a late declaration after ONE arity
+  behaves as before. Low: a clause head unseating a `-dynamic` placeholder
+  no longer wipes an arity another head opened. Low: a `-constants`
+  construction at an undeclared arity of a several-arity name is the
+  compound at the written arity (ruling C), agreeing with the compile-time
+  path. Low (tests) is covered by `TestReviewRound1`.

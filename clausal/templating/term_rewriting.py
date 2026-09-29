@@ -5937,8 +5937,12 @@ class EmbedTransformer(NodeTransformer):
         transformer._functor_decl_site[functor_name] = (
             getattr(node, "lineno", 0), kind,
         )
-        transformer._functor_arities[functor_name] = {
-            len(field_names): field_names}
+        # MERGED, not replaced: a clause head that unseats a ``-dynamic``
+        # placeholder re-registers the primary here, and an arity another
+        # head already opened must survive it (roborev round 1).  The
+        # placeholder's own arity was dropped by ``_unseat_directive_minted``.
+        transformer._functor_arities.setdefault(functor_name, {})[
+            len(field_names)] = field_names
         transformer._functor_arity_sites[
             (functor_name, len(field_names))] = (
                 getattr(node, "lineno", 0), kind)
@@ -6121,6 +6125,30 @@ class EmbedTransformer(NodeTransformer):
         return (f"  remedy: write every clause head as `{template}` and give "
                 f"the declaration at {transformer._site(decl_lineno)} "
                 f"({decl_kind}) the same arity, or {drop}.")
+
+    def _refuse_late_fielded_declaration(transformer, functor_name, fields,
+                                         node, kind):
+        """D2 regardless of ORDER (roborev round 1): a fielded declaration
+        (a -module/-private template entry, -edcg_pred) BELOW clauses that
+        already gave *functor_name* several arities.  A name had one arity
+        until the 2026-09-29 ruling, so no program that loaded before
+        reaches this."""
+        arities = transformer._functor_arities.get(functor_name) or {}
+        if len(arities) < 2:
+            return
+        lineno = getattr(node, "lineno", 0)
+        src = transformer._source_snippet(lineno)
+        known = ", ".join(f"{functor_name}/{a}" for a in sorted(arities))
+        raise SyntaxError(
+            f"{kind} for {functor_name}/{len(fields)} comes after clauses "
+            f"that define {known}\n"
+            f"  declaration: {transformer._site(lineno)}"
+            + (f" — {src}" if src else "")
+            + f"\nA functor declared with field names has one arity in a "
+            f"file, and {functor_name} already has {len(arities)}.\n"
+            f"  remedy: spell the entry `{functor_name}/{len(fields)}` (a "
+            f"predicate indicator, no field names), or give the other "
+            f"arities a different name.")
 
     def _second_arity_note(transformer, functor_name, arity, decl_kind):
         """The ISO way out of a declared-arity conflict, for a -module or
@@ -6425,7 +6453,11 @@ class EmbedTransformer(NodeTransformer):
         """
         if functor_name in transformer._directive_minted_functors:
             transformer._directive_minted_functors.discard(functor_name)
-            transformer._seen_functors.pop(functor_name, None)
+            placeholder = transformer._seen_functors.pop(functor_name, None)
+            if placeholder is not None:
+                arities = transformer._functor_arities.get(functor_name)
+                if arities is not None:
+                    arities.pop(len(placeholder), None)
 
     def _make_term_transformer(transformer, atoms=None, *, seam=False,
                                clause_var_names=None):
@@ -9141,6 +9173,9 @@ class EmbedTransformer(NodeTransformer):
                         for i, arg in enumerate(export.args)
                     ]
                     field_names += [kw.arg for kw in export.keywords]
+                    transformer._refuse_late_fielded_declaration(
+                        functor_name, field_names, export,
+                        "-module export entry")
                     exports_info.append((functor_name, field_names))
                     signature_entries.append((functor_name, field_names))
                     transformer._fielded_functors.add(functor_name)
@@ -9222,6 +9257,8 @@ class EmbedTransformer(NodeTransformer):
                     for i, arg in enumerate(item.args)
                 ]
                 field_names += [kw.arg for kw in item.keywords]
+                transformer._refuse_late_fielded_declaration(
+                    functor_name, field_names, item, "-private entry")
                 private_info.append((functor_name, field_names))
                 signature_entries.append((functor_name, field_names))
                 transformer._fielded_functors.add(functor_name)
@@ -10421,6 +10458,8 @@ class EmbedTransformer(NodeTransformer):
                 raise SyntaxError(
                     f"-edcg_pred: list items must be names, got {dump(item)}"
                 )
+        transformer._refuse_late_fielded_declaration(
+            pred_name, [None] * visible_arity, expr_stmt, "-edcg_pred")
         transformer._edcg_preds[pred_name] = (visible_arity, acc_pass_names)
 
         # Compute full arity: visible + 2 per accumulator + 1 per pass.

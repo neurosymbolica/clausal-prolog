@@ -300,3 +300,81 @@ def test_a_prolog_file_defining_call_goal_1_to_8_imports(tmp_path):
         assert len(db.clauses_for("call_goal", n)) == 1, n
     y = Var()
     assert _answers(mod, "call_goal", "succ_of", 1, y) == [("succ_of", 1, 2)]
+
+
+class TestReviewRound1:
+    """roborev round 1 (2026-09-29)."""
+
+    def test_a_fielded_declaration_after_two_arities_is_refused(
+            self, tmp_path):
+        """D2 must not depend on order: a fielded -private entry BELOW
+        clauses at two arities would leave the name-keyed registry naming
+        one arity's fields for a name that has two."""
+        with pytest.raises(SyntaxError, match="one arity"):
+            _load(tmp_path, "latepriv", """
+                f(1),
+                f(1, 2),
+                -private([f(A)])
+            """)
+
+    def test_a_fielded_declaration_after_one_arity_still_loads(
+            self, tmp_path):
+        """Unchanged from before the ruling: one arity, declared late."""
+        mod = _load(tmp_path, "latepriv1", """
+            f(1),
+            -private([f(A)])
+        """)
+        assert len(_db(mod).clauses_for("f", 1)) == 1
+
+    def test_a_dynamic_placeholder_a_zero_fact_and_a_real_head(self, tmp_path):
+        mod = _load(tmp_path, "dynzero", """
+            -dynamic(foo/2)
+            foo,
+            foo(X, Y) <- (X is Y)
+            foo,
+        """)
+        db = _db(mod)
+        assert len(db.clauses_for("foo", 0)) == 2
+        assert len(db.clauses_for("foo", 2)) == 1
+        out, items = _rewrite("""
+            -dynamic(foo/2)
+            foo,
+            foo(X, Y) <- (X is Y)
+            foo,
+        """)
+        assert out.count("$declare_head('foo', ())") == 1
+        [hf] = [i for i in items if type(i).__name__ == "HeadFieldNames"]
+        assert hf.by_arity == {("foo", 0): (), ("foo", 2): ("x", "y")}
+
+    def test_an_edcg_declaration_after_two_arities_is_refused(self, tmp_path):
+        with pytest.raises(SyntaxError, match="one arity"):
+            _load(tmp_path, "lateedcg", """
+                q(1),
+                q(1, 2),
+                -edcg_pred(q, 1, [])
+            """)
+
+    def test_a_data_construction_at_a_third_arity(self, tmp_path):
+        """Ruling C: the compound at the arity written."""
+        mod = _load(tmp_path, "third_data", """
+            p(X) <- (X is 1)
+            p(X, Y) <- (X is Y)
+            mk(T) <- (T is p(1, 2, 3))
+        """)
+        t = Var()
+        assert _answers(mod, "mk", t) == [(("p", 1, 2, 3),)]
+
+    def test_a_constants_construction_at_an_undeclared_arity(self):
+        from clausal.logic.predicate import (
+            begin_loading_declarations, declare_head,
+            end_loading_declarations,
+        )
+        from clausal.logic.constants import constant_functor_term
+        ns = {"__name__": "marity_constns", "__d": declare_head}
+        begin_loading_declarations(ns)
+        try:
+            exec("__d('p', ('a',)); __d('p', ('a', 'b', 'c'))", ns)
+            assert constant_functor_term("p", (1, 2), {}, ns) == ("p", 1, 2)
+            assert constant_functor_term("p", (1,), {}, ns) == ("p", 1)
+        finally:
+            end_loading_declarations(ns)
