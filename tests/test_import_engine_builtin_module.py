@@ -19,7 +19,7 @@ _N = itertools.count()
 
 @pytest.mark.parametrize("names", [
     "[label]", "[in_domain, label]", "[fd_eq, label]",
-    "[alias(label, lab)]",
+    "[alias(label, lab)]", "[label/1, in_domain/3]",
 ])
 def test_importing_a_builtin_from_clpfd(tmp_path, names):
     call = "lab" if "lab)" in names else "label"
@@ -33,3 +33,15 @@ def test_importing_a_builtin_from_clpfd(tmp_path, names):
     if "fd_eq" in names:
         from clausal.logic import clpfd
         assert vars(m)["fd_eq"] is clpfd.fd_eq
+
+
+def test_a_reexported_helper_stays_its_python_value(tmp_path):
+    """get_attr is a helper clausal.logic.clpfd imports from
+    clausal.logic.variables, not that module's implementation of the builtin
+    of that name: it stays the function."""
+    from clausal.logic import clpfd
+    name = f"_eng_import_{next(_N)}"
+    p = tmp_path / f"{name}.seam"
+    p.write_text("-import_from(clausal.logic.clpfd, [get_attr])\n")
+    m = _load_module(name, str(p))
+    assert vars(m)["get_attr"] is clpfd.get_attr

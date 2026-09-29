@@ -757,6 +757,17 @@ def _refuse_missing_indicators(item, mod, orig_name: str, selected,
     at = f"{where}, line {line}" if line else where
     exporter_db = namespace_db(vars(mod))
     wanted = ", ".join(f"{orig_name}/{a}" for a in sorted(selected))
+    if exporter_db is None and _engine_builtin_for(mod, orig_name) is not None:
+        from clausal.logic.builtins import _BUILTINS, _DB_BUILTINS  # noqa: PLC0415
+        missing = sorted(a for a in selected if (orig_name, a) not in _BUILTINS
+                         and (orig_name, a) not in _DB_BUILTINS)
+        if not missing:
+            return          # the builtin has every arity asked for
+        raise ImportError(
+            f"{at}: -import_from({item.module}, [{wanted}]): "
+            f"existence_error(procedure, {orig_name}/{missing[0]}) -- the "
+            f"builtin {orig_name} has no arity {missing[0]}",
+            name=orig_name, path=getattr(mod, "__file__", None))
     if exporter_db is None:
         raise ImportError(
             f"{at}: -import_from({item.module}, [{wanted}]): {item.module} is "
@@ -811,6 +822,8 @@ def _engine_builtin_for(mod, orig_name: str):
     if value is builtin or not callable(value) or getattr(
             value, "_get_dispatch", None) is not None:
         return None
+    if getattr(value, "__module__", None) != mod.__name__:
+        return None     # a helper it re-exports (get_attr, structural_eq)
     return builtin
 
 

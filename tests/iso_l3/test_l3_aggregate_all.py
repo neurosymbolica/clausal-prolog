@@ -47,11 +47,10 @@ def test_aggregate_all(native, ans):
         assert ans(mod, name) == expected, name
 
 
-def test_aggregate_all_from_the_seam():
+def test_aggregate_all_from_the_seam(tmp_path):
     """The spec shapes as seam source builds them: ``count`` an atom,
     ``sum(X)`` a cell."""
-    import tempfile
-    from pathlib import Path
+    import uuid
 
     from clausal.import_hook import _load_module
     from clausal.logic.solve import _deref_walk, solve
@@ -63,9 +62,9 @@ def test_aggregate_all_from_the_seam():
            "g1(C) <- aggregate_all(sum(X), p(X), C)\n"
            "g2(C) <- aggregate_all(max(X), p(X), C)\n"
            "g3(C) <- aggregate_all(set(X), p(X), C)\n")
-    d = Path(tempfile.mkdtemp())
-    (d / "_agg_seam.clausal").write_text(src)
-    m = _load_module("_agg_seam", str(d / "_agg_seam.clausal"))
+    name = f"_agg_seam_{uuid.uuid4().hex[:8]}"
+    (tmp_path / f"{name}.clausal").write_text(src)
+    m = _load_module(name, str(tmp_path / f"{name}.clausal"))
     got = []
     for i in range(4):
         v = Var()

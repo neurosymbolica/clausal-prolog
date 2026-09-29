@@ -9,13 +9,13 @@ from __future__ import annotations
 import pytest
 
 
-@pytest.mark.parametrize("before,want", [
-    ("", "codes"),
-    (":- set_prolog_flag(double_quotes, atom).\n", "codes"),
-    (":- set_prolog_flag(double_quotes, chars).\n", "codes"),
+@pytest.mark.parametrize("tag,before,want", [
+    ("only", "", "codes"),
+    ("atom", ":- set_prolog_flag(double_quotes, atom).\n", "codes"),
+    ("chars", ":- set_prolog_flag(double_quotes, chars).\n", "codes"),
 ])
-def test_codes_is_reported(native, ans, before, want):
-    mod = native.load(f"l3_dq_codes_{len(before)}",
+def test_codes_is_reported(native, ans, tag, before, want):
+    mod = native.load(f"l3_dq_codes_{tag}",
                       before + ":- set_prolog_flag(double_quotes, codes).\n"
                       "f(M) :- current_prolog_flag(double_quotes, M).\n"
                       "g(X) :- X = \"ab\".\n")
