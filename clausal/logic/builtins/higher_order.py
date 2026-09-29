@@ -315,8 +315,9 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
         # arity -- what call/N's fold makes -- names no procedure.
         return iso_control_cell_dispatch(db, folded, functor,
                                          len(call_args), context)
-    if call_args and functor in _ZERO_ARITY_CONTROL_GOALS \
-            and functor not in _USER_DEFINABLE_WITH_ARGS:
+    if call_args and functor in _ZERO_ARITY_CONTROL_GOALS and (
+            functor not in _USER_DEFINABLE_WITH_ARGS or db is None):
+        # (true/N and false/N with no database: nothing can define them.)
         # ``call(true, X)`` / ``call(fail, X)``: the fold makes true/1, a
         # control construct with extra arguments, which no database defines
         # (Scryer: existence_error(procedure, true/1)) -- the same answer the
