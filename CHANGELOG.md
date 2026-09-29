@@ -319,6 +319,12 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
 
 ### Fixed
 
+- **`:- use_module(m, []).` in a `.pl` file is a located translation
+  error**, not a loader crash (`ValueError: empty names on ImportFrom`).
+  Scryer reads it as `remove_module/2` (drops the imports, never loads
+  `m`), Trealla and SWI as "load `m`, import nothing", so the error names
+  both and points at `use_module(m)` / `use_module(m, [p/1])`. See
+  [docs/importing_prolog.md](docs/importing_prolog.md).
 - **An imported `.pl` file's `_Name` variable is no singleton.** By the
   Prolog convention (ISO, Scryer) `_Y` in `setof(X, p(X, _Y), L)` is used
   once on purpose; the `.pl` load warned "rename to `_Y_UNUSED`". The

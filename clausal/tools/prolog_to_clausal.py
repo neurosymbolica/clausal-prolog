@@ -1104,6 +1104,22 @@ class _PrologToClausal:
             raise PrologTranslationError(
                 f"{directive}: use_module/{len(body.args)} is not a "
                 "use_module the translator knows (use_module/1 or /2).")
+        if (len(body.args) == 2 and isinstance(body.args[1], PList)
+                and not body.args[1].elements and body.args[1].tail is None):
+            # Measured 2026-09-29: Scryer reads use_module(M, []) as
+            # remove_module(M) (it drops M's exports and never loads M, so
+            # M:p(X) is an existence_error), Trealla and SWI as "load M,
+            # import nothing".  Picking either silently makes a program
+            # answer differently from one of the two; -import_from(m, [])
+            # was a loader crash (``empty names on ImportFrom``).
+            raise PrologTranslationError(
+                f"{directive}: an empty import list has no portable meaning. "
+                "Scryer reads it as remove_module/2 (it drops the module's "
+                "imports and does not load it), Trealla and SWI as 'load "
+                "it, import nothing'. Write use_module(M) to load it and "
+                "import its exports, or use_module(M, [p/1, ...]) to import "
+                "some; either way M:p(X) then reaches any predicate it "
+                "exports.")
 
         lib_term = body.args[0]
         if (isinstance(lib_term, PCompound) and lib_term.functor == "library"
