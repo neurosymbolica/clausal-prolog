@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import json
 import keyword
+import os
+import sys
 from pathlib import Path
 
 
@@ -87,7 +89,71 @@ _REVERSE_OVERRIDES: dict[str, str] = {
 # 2-arg form's name via the name-only map.
 _REVERSE_ARITY_OVERRIDES: dict[tuple[str, int], str] = {
     ("catch", 3): "catch",
+    # catch/2 is no ISO or Scryer predicate; it is how the exporter writes
+    # Clausal's catch_error/2, so the round trip brings it back.
+    ("catch", 2): "catch_error",
 }
+
+
+def _slash_path(term) -> str | None:
+    """``a``, ``'a/b'`` or ``a/b/c`` (the ``/``/2 compound) as the path
+    string ``a/b/c``; None for anything else."""
+    if isinstance(term, PAtom):
+        return term.name
+    if (isinstance(term, PCompound) and term.functor == "/"
+            and len(term.args) == 2):
+        left, right = _slash_path(term.args[0]), _slash_path(term.args[1])
+        if left is not None and right is not None:
+            return f"{left}/{right}"
+    return None
+
+
+def _plain_term(term) -> str:
+    """A Prolog-ish rendering of *term* for an error message."""
+    if isinstance(term, PAtom):
+        return term.name
+    if isinstance(term, PVar):
+        return term.name
+    if isinstance(term, PNumber):
+        return repr(term.value)
+    if isinstance(term, PString):
+        return '"' + term.value + '"'
+    if isinstance(term, PList):
+        inner = ", ".join(_plain_term(e) for e in term.elements)
+        if term.tail is not None:
+            inner += "|" + _plain_term(term.tail)
+        return f"[{inner}]"
+    if isinstance(term, PCompound):
+        if term.functor == "/" and len(term.args) == 2:
+            return f"{_plain_term(term.args[0])}/{_plain_term(term.args[1])}"
+        return (f"{term.functor}("
+                + ", ".join(_plain_term(a) for a in term.args) + ")")
+    return str(term)
+
+
+def _module_file_exists(cand: str) -> bool:
+    return (os.path.isdir(cand)
+            or any(os.path.isfile(cand + ext)
+                   for ext in (".pl", ".clausal", ".seam", ".py")))
+
+
+def _names_all_native(term) -> bool:
+    """True when *term* is a non-empty import list every name of which the
+    engine runs natively (after the builtin rename map)."""
+    if not isinstance(term, PList) or not term.elements or term.tail:
+        return False
+    for e in term.elements:
+        if isinstance(e, PCompound) and e.functor == "/" and len(e.args) == 2 \
+                and isinstance(e.args[0], PAtom):
+            name = e.args[0].name
+        elif isinstance(e, PAtom):
+            name = e.name
+        else:
+            return False
+        name = _reverse_builtin_map().get(name, name)
+        if not _engine_has_goal(name):
+            return False
+    return True
 
 
 def _has_elements(term) -> bool:
@@ -103,22 +169,65 @@ def _indicator_arity(term) -> int | None:
     return None
 
 
+#: Clausal names whose BUILTIN_NAME_MAP entry is an EXPORT-direction mapping
+#: only, never to be run backwards.  ``get/3`` (attribute-list lookup) is
+#: exported as ``profile_get/3``, a predicate a downstream helper library
+#: defines; a ``.pl`` file's own ``profile_get`` is that library's (or the
+#: file's) predicate, not Clausal's ``get`` (2026-09-29: the backwards
+#: mapping made ``profile_get(X, k, V)`` answer ``[]`` silently).
+_EXPORT_ONLY_NAMES: frozenset = frozenset({"get"})
+
+
 def _build_reverse_builtin_map() -> dict[str, str]:
-    """Build a mapping from Prolog builtin names to clausal names."""
+    """Build a mapping from Prolog builtin names to clausal names.
+
+    Only renames the engine still NEEDS survive: a Prolog name the engine
+    already knows under that very name (``atomic/1``) crosses unchanged, and
+    a rename whose Clausal target the engine does not define (``is_atomic``)
+    is dropped rather than emitted as a call to nothing.  Evaluable names are
+    handled at the arithmetic emitter, not here (see ``_EVALUABLE_RENAMES``).
+    """
     rev: dict[str, str] = {}
     for clausal_name, dialect_map in BUILTIN_NAME_MAP.items():
+        if clausal_name in _EXPORT_ONLY_NAMES:
+            continue
         for prolog_name in dialect_map.values():
-            if prolog_name not in rev:
-                rev[prolog_name] = clausal_name
-        # Also map the clausal name itself (snake_case names may appear
-        # directly in Prolog sources and should not be pascal-cased).
-        if clausal_name not in rev:
-            rev[clausal_name] = clausal_name
+            if prolog_name in rev or prolog_name == clausal_name:
+                continue
+            if _engine_has_goal(prolog_name) \
+                    or not _engine_has_goal(clausal_name):
+                continue
+            rev[prolog_name] = clausal_name
     rev.update(_REVERSE_OVERRIDES)
     return rev
 
 
-_REVERSE_BUILTIN_MAP = _build_reverse_builtin_map()
+def _engine_has_goal(name: str) -> bool:
+    """True when *name* is a goal the engine runs under that spelling: a
+    registered builtin or a control/meta construct the compiler lowers."""
+    from clausal.logic.builtins._registry import get_builtin_class  # noqa: PLC0415
+    from clausal.logic.compiler.ir import MetaKind  # noqa: PLC0415
+    import typing  # noqa: PLC0415
+    return (get_builtin_class(name) is not None
+            or name in typing.get_args(MetaKind)
+            or name in _CONTROL_GOAL_NAMES)
+
+
+def _is_evaluable(name: str, arity: int | None) -> bool:
+    from clausal.logic.exact_arith import EVALUABLE  # noqa: PLC0415
+    return arity is not None and (name, arity) in EVALUABLE
+
+
+_REVERSE_BUILTIN_MAP_CACHE: dict[str, str] | None = None
+
+
+def _reverse_builtin_map() -> dict[str, str]:
+    """The reverse map, built on first use (it consults the builtin
+    registry, which must not be imported with this module)."""
+    global _REVERSE_BUILTIN_MAP_CACHE
+    if _REVERSE_BUILTIN_MAP_CACHE is None:
+        _REVERSE_BUILTIN_MAP_CACHE = _build_reverse_builtin_map()
+    return _REVERSE_BUILTIN_MAP_CACHE
 
 
 # ── Operator mapping: Prolog operators → clausal syntax ──────────────
@@ -153,27 +262,26 @@ _INFIX_MAP = {
     "-":    "-",
     "*":    "*",
     "/":    "/",
-    "**":   "**",
-    "^":    "**",       # ISO exponentiation (arithmetic context only, F026)
     ",":    ",",        # conjunction stays
-    "div":  "//",       # SWI floored division → clausal // (also floored)
     "=..":  "=..",      # univ — no direct clausal equivalent, keep as comment
-    "/\\":  "&",        # bitwise AND
-    "\\/":  "|",        # bitwise OR
-    "xor":  "^",        # bitwise XOR
-    "<<":   "<<",
-    ">>":   ">>",       # NOTE: >> is DCG in clausal, so only in arithmetic context
+# (``**``, ``^``, ``div``, ``//``, ``mod``, ``rem``, ``<<``, ``>>``, ``/\``,
+# ``\/`` and ``xor`` are emitted as the quoted ISO evaluable -- see
+# ``_ISO_QUOTED_BINARY_OPS``.)
 }
 
-# Prolog operators whose ISO semantics differ from Python's.
-# These are emitted as qualified calls: prolog.TruncDiv(X, Y)
-# The ``prolog`` module (clausal.modules.prolog) provides ISO-compatible
-# implementations (truncation toward zero, not floor).
-_PROLOG_QUALIFIED_OPS = {
-    "//":  "TruncDiv",   # ISO truncate-div (toward zero) vs Python // (floor)
-    "mod": "TruncMod",   # ISO mod (sign follows divisor) — floored, like Python %
-    "rem": "Rem",        # ISO remainder (sign follows dividend)
-}
+# ISO evaluable OPERATORS whose Python spelling means something else in a
+# Clausal expression: Python ``//`` floors where ISO truncates, ``**`` on
+# integers is an integer where ISO gives a float, ``^`` is Python XOR, and
+# ``<<``/``&``/``|``/``~`` are not evaluated by eval_ at all
+# (type_error(evaluable, (<<)/2)).  They are emitted as the QUOTED ISO
+# evaluable, ``'//'(X, Y)``, which the engine's evaluable table evaluates
+# with ISO's meaning (answers checked against Scryer, 2026-09-29).  Until then
+# ``2 ^ -1`` answered 0.5 (ISO: type_error(float, 2)) and ``2 ** 3`` answered
+# 8 (ISO: 8.0).
+_ISO_QUOTED_BINARY_OPS = frozenset({
+    "//", "mod", "rem", "div", "**", "^", "<<", ">>", "/\\", "\\/", "xor",
+})
+_ISO_QUOTED_UNARY_OPS = frozenset({"\\"})
 
 # ISO evaluable constants (functors of arity 0 in arithmetic context).
 # Emitted as math.* attribute references — emit_module adds the matching
@@ -191,7 +299,6 @@ _EVALUABLE_CONSTANTS = {
 _PREFIX_MAP = {
     "\\+": "not",
     "-":   "-",
-    "\\":  "~",         # bitwise complement
     "+":   "+",
 }
 
@@ -208,15 +315,30 @@ _LIBRARY_TO_MODULE: dict[str, str] = {
     "clpz": "clausal.logic.clpfd",
     "clpb": "clausal.logic.clpb",
     "tabling": "clausal.logic.tabling",
-    "lists": None,       # built-in, no import needed
-    "apply": None,       # built-in
 }
+
+#: Libraries whose predicates the engine provides natively, so importing one
+#: is a no-op, not a loss (2026-09-29: ``library(dif)`` became
+#: ``-import_module(dif)``, "No module named 'dif'").  Each library's core
+#: predicates are engine builtins: lists (append/3, length/2, ...), apply
+#: (maplist, foldl, include, exclude, partition), dif (dif/2), between
+#: (between/3, numlist/3), error (must_be/2, can_be/2), pairs
+#: (pairs_keys_values/3, ...), when (when/2), freeze (freeze/2), iso_ext
+#: (forall/2, call_cleanup/2, setup_call_cleanup/3).  A predicate of one of
+#: these the engine lacks is an ISO existence_error when called.  Any other
+#: library is dropped only when every name its import list gives is native.
+_BUILTIN_LIBRARIES: frozenset = frozenset({
+    "lists", "apply", "dif", "between", "error", "pairs", "when", "freeze",
+    "iso_ext",
+})
 
 
 # ── Public API ───────────────────────────────────────────────────────
 
 
-def prolog_to_clausal(source: str, *, dialect: Dialect | None = None) -> str:
+def prolog_to_clausal(source: str, *, dialect: Dialect | None = None,
+                      source_path: str | None = None,
+                      module_name: str | None = None) -> str:
     """Translate Prolog source text to clausal source text.
 
     Parameters
@@ -227,19 +349,29 @@ def prolog_to_clausal(source: str, *, dialect: Dialect | None = None) -> str:
         Dialect for operator table and name resolution.
         Defaults to Scryer's operator table (``Dialect.scryer_reader``,
         ruling R11).
+    source_path, module_name : str, optional
+        Where the file lives and the dotted name it is imported as.  A
+        relative ``use_module`` path is resolved against the file's own
+        directory, as Scryer does; without them only the dotted reading
+        (``a/b`` is the module ``a.b`` on ``sys.path``) is available.
     """
     if dialect is None:
         dialect = Dialect.scryer_reader()
     pmodule = parse(source, dialect=dialect)
-    return prolog_ast_to_clausal(pmodule, dialect=dialect)
+    return prolog_ast_to_clausal(pmodule, dialect=dialect,
+                                 source_path=source_path,
+                                 module_name=module_name)
 
 
 def prolog_ast_to_clausal(pmodule: PModule, *,
-                          dialect: Dialect | None = None) -> str:
+                          dialect: Dialect | None = None,
+                          source_path: str | None = None,
+                          module_name: str | None = None) -> str:
     """Translate a Prolog AST module to clausal source text."""
     if dialect is None:
         dialect = Dialect.scryer_reader()
-    emitter = _PrologToClausal(dialect)
+    emitter = _PrologToClausal(dialect, source_path=source_path,
+                               module_name=module_name)
     return emitter.emit_module(pmodule)
 
 
@@ -367,6 +499,23 @@ def _names_not_data_functors(pmodule: PModule) -> set[str]:
                     indicators(a)
             elif body.functor == "use_module" and len(body.args) >= 2:
                 indicators(body.args[1])
+    return names
+
+
+def _own_predicate_names(pmodule: PModule) -> set[str]:
+    """Names *pmodule* gives a predicate meaning of its own: clause and DCG
+    head functors, ``dynamic``/``discontiguous``/``table`` declarations, and
+    the names ``use_module/2`` imports from a module that is NOT a
+    ``library(...)`` (a library import names the engine's predicate)."""
+    names = set()
+    for item in pmodule.items:
+        if (isinstance(item, PDirective) and isinstance(item.body, PCompound)
+                and item.body.functor == "use_module"
+                and len(item.body.args) >= 2
+                and isinstance(item.body.args[0], PCompound)
+                and item.body.args[0].functor == "library"):
+            continue
+        names |= _names_not_data_functors(PModule((item,)))
     return names
 
 
@@ -520,12 +669,24 @@ def _checked_var_name(prolog_name: str) -> str:
     )
 
 
+#: Lowercase names that are NOT atoms when written bare in Clausal source:
+#: ``undefined`` is the alias of the truth value ``Undefined`` (the alias
+#: fold, docs/kleene), so a Prolog atom of that spelling is emitted quoted.
+#: (``true``/``false`` are mapped to ``True``/``False`` on purpose -- see
+#: ``_BUILTIN_ATOM_REWRITES``.)
+_RESERVED_BARE_NAMES: frozenset = frozenset({"undefined"})
+
+
 class _PrologToClausal:
     """Translates Prolog AST → clausal source text."""
 
     def __init__(self, dialect: Dialect,
-                 operator_mappings: dict[str, dict] | None = None):
+                 operator_mappings: dict[str, dict] | None = None, *,
+                 source_path: str | None = None,
+                 module_name: str | None = None):
         self._dialect = dialect
+        self._source_path = source_path
+        self._module_name = module_name
         self._user_ops = operator_mappings or {}
         self._data_atoms: set[str] = set()  # atoms used as data values
         # THE FLIP (2026-09-06-atoms-as-cells-strings §7): a Prolog
@@ -535,6 +696,11 @@ class _PrologToClausal:
         # emitted, so a translated module that has no strings keeps the
         # engine default and no directive it does not need.
         self._emitted_string = False
+        # The double_quotes flag in force at the current item (``chars``,
+        # ``codes`` or ``atom``), and the mode the emitted module is in
+        # (never ``codes``: Clausal has no such module mode).
+        self._dq_mode = "chars"
+        self._dq_engine = "chars"
         # Names this module uses as a PREDICATE (clause-head or goal
         # functor). Populated by emit_module before the emission pass.
         self._predicate_names: set[str] = set()
@@ -542,13 +708,26 @@ class _PrologToClausal:
         # ``X = g(2)``), name -> arities.  Declared ``-private([f(_)])`` so
         # the term builds; a Prolog compound needs no declaration.
         self._data_functors: dict[str, set[int]] = {}
+        # Names the program defines, declares, or imports from a non-library
+        # module: they mean the program's own predicate, so no builtin
+        # rename applies to them.  Populated by emit_module.
+        self._own_names: set[str] = set()
 
     def emit_module(self, pmodule: PModule) -> str:
         """Emit a complete module as clausal source text."""
         self._predicate_names = _collect_predicate_names(pmodule)
+        self._own_names = _own_predicate_names(pmodule)
         lines: list[str] = []
         for item in pmodule.items:
-            text = self._emit_item(item)
+            try:
+                text = self._emit_item(item)
+            except PrologTranslationError as e:
+                # Name the source line: a refusal must point at the Prolog
+                # the user wrote, not at a translation they never see.
+                line = getattr(item, "line", 0)
+                if line and not str(e).startswith("line "):
+                    raise PrologTranslationError(f"line {line}: {e}") from e
+                raise
             if text is not None:
                 lines.append(text)
         body = "\n\n".join(lines) + "\n"
@@ -570,7 +749,7 @@ class _PrologToClausal:
             if len(arities) != 1 or name in not_data:
                 continue
             (arity,) = arities
-            if _engine_knows_name(name, arity):
+            if _engine_knows_name(name, arity) or name in _RESERVED_BARE_NAMES:
                 continue
             private.append(f"{name}({', '.join(['_'] * arity)})")
         if private:
@@ -588,10 +767,18 @@ class _PrologToClausal:
         if isinstance(item, PDirective):
             return self._emit_directive(item)
         if isinstance(item, PQuery):
-            return f"# ?- {self._emit_term(item.body)}"
+            # A comment here was a silent drop: the goal never ran.  (Scryer
+            # skips it too, but saying nothing is the failure this module
+            # refuses; ISO prolog text holds only clauses and directives.)
+            raise PrologTranslationError(
+                f"?- {_plain_term(item.body)}: a query in program text is "
+                "not run on load (ISO 6.2: prolog text is clauses and "
+                "directives). Remove it, or write the goal as a test/1 "
+                "clause.")
         if isinstance(item, PComment):
             return f"# {item.text}"
-        return None
+        raise PrologTranslationError(
+            f"cannot translate item {type(item).__name__}")
 
     # ── Clauses ──────────────────────────────────────────────────────
 
@@ -828,18 +1015,33 @@ class _PrologToClausal:
             body = PCompound("double_quotes", (body.args[1],))
         if (isinstance(body, PCompound) and body.functor == "double_quotes"
                 and len(body.args) == 1):
+            # The flag governs every later "..." (ISO 7.11.2.5), and the
+            # translator honours it AT THE LITERAL: each PString is emitted
+            # in the mode in force where it stands (``_emit_string``), so
+            # ``codes`` -- which Clausal has no module mode for -- is kept
+            # too (2026-09-29; it was a comment, and "ab" stayed chars).
+            # The module's own mode follows for chars/atom, so
+            # current_prolog_flag(double_quotes, M) reports it.
             mode = body.args[0]
             mode_name = mode.name if isinstance(mode, PAtom) else None
-            if mode_name == "chars":
-                # The preamble carries it; emitting it here too would double it.
-                self._emitted_string = True
+            if mode_name not in ("chars", "codes", "atom"):
+                raise PrologTranslationError(
+                    f":- set_prolog_flag(double_quotes, {_plain_term(mode)}): "
+                    "ISO's double_quotes values are chars, codes and atom "
+                    "(Scryer: domain_error(flag_value, double_quotes+"
+                    f"{_plain_term(mode)})).")
+            self._dq_mode = mode_name
+            if mode_name == "codes":
+                return (f"# double_quotes(codes): each \"...\" below is "
+                        "emitted as its list of character codes")
+            if mode_name == self._dq_engine:
+                # Already the module's mode (chars: the preamble carries
+                # it); emitting it again would double it.
+                if mode_name == "chars":
+                    self._emitted_string = True
                 return None
-            if mode_name == "atom":
-                return "-double_quotes(atom)"
-            # ``codes`` (and anything else) has no clausal directive: codes are
-            # spelled ``b"..."`` at the literal, so the mode cannot be set.
-            return f"# double_quotes({mode_name or self._emit_term(mode)}) " \
-                   f"is not a clausal mode (codes are spelled b\"...\")"
+            self._dq_engine = mode_name
+            return f"-double_quotes({mode_name})"
         # :- set_prolog_flag(Flag, Value) for any other flag carries across as
         # the directive of the same name; the value is emitted QUOTED, so an
         # atom such as ``fail`` stays the atom rather than becoming a goal or
@@ -852,9 +1054,15 @@ class _PrologToClausal:
             else:
                 v = self._emit_term(value)
             return f"-set_prolog_flag({flag.name}, {v})"
-        # :- op(P, T, N) → comment
+        # :- op(P, T, N): the READER has already applied it (the terms
+        # below it parse with the operator), which is its effect on a
+        # program's text.  Clausal keeps no run-time operator table
+        # (current_op/3, op/3 as a goal), so what remains is a comment
+        # recording the declaration.
         if isinstance(body, PCompound) and body.functor == "op" and len(body.args) == 3:
-            return f"# operator: op({self._emit_term(body.args[0])}, {self._emit_term(body.args[1])}, {self._emit_term(body.args[2])})"
+            return (f"# operator: op({_plain_term(body.args[0])}, "
+                    f"{_plain_term(body.args[1])}, {_plain_term(body.args[2])}) "
+                    "-- applied by the reader to the terms below")
         # Generic directive
         return f"-{self._emit_term(body)}"
 
@@ -864,33 +1072,57 @@ class _PrologToClausal:
         return f"-module({name}, {exports})"
 
     def _emit_use_module(self, body: PCompound) -> str:
-        """Emit :- use_module(...) as -import_from(...) or -import_module(...)."""
-        if len(body.args) == 0:
-            return f"# use_module({self._emit_term(body)})"
+        """Emit :- use_module(...) as -import_from(...) or -import_module(...).
+
+        Never a comment in place of an import (2026-09-29: an unquoted
+        ``a/b`` path became one, so the import silently vanished): a module
+        spec this cannot map to an importable module is refused, naming the
+        directive."""
+        directive = f":- {_plain_term(body)}"
+        if len(body.args) == 0 or len(body.args) > 2:
+            raise PrologTranslationError(
+                f"{directive}: use_module/{len(body.args)} is not a "
+                "use_module the translator knows (use_module/1 or /2).")
 
         lib_term = body.args[0]
-        lib_name = self._extract_library_name(lib_term)
-
-        if lib_name is not None:
-            # library(X) form — check known mapping.
-            # A None value means "built-in, no import needed".
+        if (isinstance(lib_term, PCompound) and lib_term.functor == "library"
+                and len(lib_term.args) == 1):
+            lib_name = _slash_path(lib_term.args[0])
+            if lib_name is None:
+                raise PrologTranslationError(
+                    f"{directive}: the library name is not an atom or an "
+                    "a/b path.")
+            if lib_name in _BUILTIN_LIBRARIES:
+                return f"# library({lib_name}) is built-in — no import needed"
             if lib_name in _LIBRARY_TO_MODULE:
                 clausal_mod = _LIBRARY_TO_MODULE[lib_name]
-                if clausal_mod is None:
-                    return f"# library({lib_name}) is built-in — no import needed"
+            elif len(body.args) == 2 and _names_all_native(body.args[1]):
+                return (f"# library({lib_name}): every name it imports is "
+                        "provided by the engine -- no import needed")
             else:
-                # Unknown library — use the name directly as module path.
-                clausal_mod = lib_name
-        elif isinstance(lib_term, PAtom):
-            # Bare atom: use_module(bar) or use_module('./bar')
-            # Strip leading ./ from relative paths
-            name = lib_term.name
-            if name.startswith('./') or name.startswith('.\\'):
-                name = name[2:]
-            clausal_mod = name
+                # Unknown library -- read it as a module of that name (a
+                # missing one is an import error at load).
+                clausal_mod = self._dotted_or_refuse(lib_name, directive)
         else:
-            return f"# use_module: {self._emit_term(body)}"
+            spec = _slash_path(lib_term)
+            if spec is None:
+                raise PrologTranslationError(
+                    f"{directive}: the module is not an atom, an a/b path "
+                    "or library(Name), so it names no module to import.")
+            clausal_mod = self._resolve_module_path(spec, directive)
 
+        if len(body.args) == 1:
+            # ISO-family use_module/1 imports every EXPORTED predicate,
+            # unqualified.  -import_module alone gives only qualified
+            # access (``m.p(...)``), so an unqualified call of an import
+            # failed; when the module is a .pl file its module/2 export
+            # list is read and imported by name as well.
+            exports = self._pl_exports(clausal_mod, directive)
+            if exports:
+                self._own_names.update(exports)
+                return (f"-import_module({clausal_mod})\n"
+                        f"-import_from({clausal_mod}, [{', '.join(exports)}])")
+            return f"-import_module({clausal_mod})"
         if len(body.args) >= 2:
             # With import list
             imports = self._emit_import_list(body.args[1])
@@ -906,6 +1138,140 @@ class _PrologToClausal:
             return f"-import_from({clausal_mod}, {imports})"
         else:
             return f"-import_module({clausal_mod})"
+
+    def _resolve_module_path(self, spec: str, directive: str) -> str:
+        """The dotted module a ``use_module`` path names.
+
+        Relative to the importing file's directory first, as Scryer resolves
+        it (``'../lib'``, ``sub/lib``); a path with no such file beside the
+        importer is read as a dotted module on ``sys.path`` (``a/b`` is
+        ``a.b``), which is how a bare name has always been resolved."""
+        path = spec
+        if path.startswith("./") or path.startswith(".\\"):
+            path = path[2:]
+        if path.endswith(".pl"):
+            path = path[:-3]
+        if self._source_path:
+            base = os.path.dirname(os.path.abspath(self._source_path))
+            cand = os.path.normpath(os.path.join(base, path))
+            if _module_file_exists(cand):
+                if not self._module_name:
+                    # Without it the dotted name would come from whichever
+                    # sys.path entry (cwd included) happens to contain the
+                    # file: output depending on the caller's cwd.
+                    raise PrologTranslationError(
+                        f"{directive}: relative use_module needs the "
+                        "importing module's name (pass module_name= with "
+                        "source_path=; the import hook always does).")
+                dotted = self._dotted_for_file(cand)
+                if dotted is None:
+                    raise PrologTranslationError(
+                        f"{directive}: {spec!r} is the file {cand}, which "
+                        "no sys.path entry (nor this module's own package "
+                        "root) contains as a dotted module path, so it "
+                        "cannot be imported.")
+                return dotted
+        return self._dotted_or_refuse(path, directive, spec=spec)
+
+    def _pl_exports(self, dotted: str, directive: str) -> list[str]:
+        """The predicate names a ``.pl`` module's ``module/2`` directive
+        exports, or [] when *dotted* is no ``.pl`` file with one.  A file
+        that cannot be read is refused here, naming the directive -- the
+        fallback (qualified access only) would fail far from the cause."""
+        path = self._find_module_file(dotted)
+        if path is None or not path.endswith(".pl"):
+            return []
+        try:
+            text = Path(path).read_text(encoding="utf-8")
+            pmod = parse(text, dialect=self._dialect)
+        except Exception as e:  # noqa: BLE001
+            raise PrologTranslationError(
+                f"{directive}: cannot read the export list of {path}: "
+                f"{e}") from e
+        for item in pmod.items:
+            b = getattr(item, "body", None)
+            if (isinstance(item, PDirective) and isinstance(b, PCompound)
+                    and b.functor == "module" and len(b.args) == 2
+                    and isinstance(b.args[1], PList)):
+                names = []
+                for e in b.args[1].elements:
+                    if (isinstance(e, PCompound) and e.functor in ("/", "//")
+                            and len(e.args) == 2
+                            and isinstance(e.args[0], PAtom)
+                            and _is_plain_atom_name(e.args[0].name)
+                            and e.args[0].name not in names):
+                        names.append(e.args[0].name)
+                return names
+            if isinstance(item, (PClause, PDCGRule)):
+                break
+        return []
+
+    def _package_root(self) -> str | None:
+        """The directory the importer's dotted name is relative to: climb
+        one directory per dot from the file's directory -- one more for a
+        package ``__init__.pl``, whose name IS its directory's."""
+        if not (self._source_path and self._module_name):
+            return None
+        depth = self._module_name.count(".")
+        if os.path.basename(self._source_path) == "__init__.pl":
+            depth += 1
+        root = os.path.dirname(os.path.abspath(self._source_path))
+        for _ in range(depth):
+            root = os.path.dirname(root)
+        return root
+
+    def _find_module_file(self, dotted: str) -> str | None:
+        # Only with the importer's name: a direct API call must not read
+        # the file system through sys.path (cwd included), or its output
+        # would depend on the caller's working directory.
+        root = self._package_root()
+        if root is None:
+            return None
+        parts = dotted.split(".")
+        roots = [root]
+        roots.extend(os.path.abspath(e or os.getcwd()) for e in sys.path
+                     if isinstance(e, str))
+        for root in roots:
+            base = os.path.join(root, *parts)
+            if os.path.isfile(base + ".pl"):
+                # a .clausal/.seam twin is what the import hook loads
+                if any(os.path.isfile(base + ext)
+                       for ext in (".clausal", ".seam")):
+                    return None
+                return base + ".pl"
+        return None
+
+    def _dotted_or_refuse(self, path: str, directive: str,
+                          spec: str | None = None) -> str:
+        parts = [p for seg in path.split("/") for p in seg.split(".")]
+        if parts and all(p.isidentifier() and not keyword.iskeyword(p)
+                         for p in parts):
+            return ".".join(parts)
+        raise PrologTranslationError(
+            f"{directive}: {spec or path!r} names no module: there is no "
+            "such file beside this one, and it is not a dotted module path "
+            "(a/b/c of plain names).")
+
+    def _dotted_for_file(self, cand: str) -> str | None:
+        """*cand* (a module path without extension) as a dotted module name:
+        relative to this module's own package root when the importer's
+        dotted name is known, else to the most specific sys.path entry."""
+        roots: list[str] = []
+        root = self._package_root()
+        if root is not None:
+            roots.append(root)
+        entries = sorted({os.path.abspath(e or os.getcwd()) for e in sys.path
+                          if isinstance(e, str)}, key=len, reverse=True)
+        roots.extend(entries)
+        for root in roots:
+            rel = os.path.relpath(cand, root)
+            if rel.startswith(os.pardir) or os.path.isabs(rel):
+                continue
+            parts = rel.split(os.sep)
+            if all(p.isidentifier() and not keyword.iskeyword(p)
+                   for p in parts):
+                return ".".join(parts)
+        return None
 
     def _emit_meta_directive(self, kind: str, body: PCompound) -> str:
         """Emit -dynamic(pred/N), -discontiguous(pred/N), -table(pred/N)."""
@@ -943,10 +1309,7 @@ class _PrologToClausal:
                 return repr(term.value)
             return str(term.value)
         if isinstance(term, PString):
-            # A STRING (THE FLIP): double-quoted, and the module carries
-            # ``-double_quotes(chars)`` so it re-reads as one.
-            self._emitted_string = True
-            return _quote_string(term.value)
+            return self._emit_string(term.value)
         if isinstance(term, PList):
             return self._emit_list(term)
         if isinstance(term, PCurly):
@@ -954,6 +1317,18 @@ class _PrologToClausal:
         if isinstance(term, PCompound):
             return self._emit_compound(term)
         return str(term)
+
+    def _emit_string(self, value: str) -> str:
+        """A ``"..."`` literal, read under the double_quotes flag in force:
+        ``codes`` → the list of codes, ``atom`` → the quoted atom, ``chars``
+        → a string (the module carries ``-double_quotes(chars)`` so it
+        re-reads as one)."""
+        if self._dq_mode == "codes":
+            return "[" + ", ".join(str(ord(c)) for c in value) + "]"
+        if self._dq_mode == "atom":
+            return _quote_atom(value)
+        self._emitted_string = True
+        return _quote_string(value)
 
     # Atoms that map to Python builtins and should not be collected as data atoms.
     _BUILTIN_ATOMS = frozenset({"true", "false", "fail", "True", "False", "None"})
@@ -1022,6 +1397,11 @@ class _PrologToClausal:
         # `test(subtract) :- subtract(...)`.
         if name in self._predicate_names:
             return _quote_atom(name)
+        # A name the engine RESERVES: bare ``undefined`` is the truth value
+        # Undefined, and ``-private([undefined])`` is a load error.  The
+        # quoted literal is the plain atom and needs no declaration.
+        if name in _RESERVED_BARE_NAMES:
+            return _quote_atom(name)
         # Register as a data atom (will be declared via -private).
         self._data_atoms.add(name)
         return name
@@ -1043,17 +1423,14 @@ class _PrologToClausal:
                 "See: docs/reified_ite.md, docs/for_prolog_programmers.md"
             )
 
-        # Standard-order comparison has no Clausal equivalent — the language
-        # exposes no standard term order (setof's internal sort is not a
-        # user-facing builtin). Reject rather than emit `@<(X, Y)` (F026).
+        # Standard-order comparison (ISO 8.4.1): the engine has the quoted
+        # ISO builtins '@<'/2 etc. (2026-09-09), so they cross as those.
+        # They were refused as "no standard-order builtins" until
+        # 2026-09-29.  Quoted, because a bare ``@`` is Python's matmul.
         if functor in ("@<", "@>", "@=<", "@>=") and len(args) == 2:
-            raise PrologTranslationError(
-                f"Standard-order comparison ('{functor}') cannot be "
-                "translated: Clausal has no standard-order term comparison "
-                "builtins.\n"
-                "Use arithmetic comparison (<, =<, ...) for numbers, or "
-                "structural ==/\\== for term identity."
-            )
+            left = self._emit_term(args[0])
+            right = self._emit_term(args[1])
+            return f"{_quote_atom(functor)}({left}, {right})"
 
         # Variant equality has no Clausal equivalent (F041 — the designed
         # rejection promised when =@=/\=@= were added to the parser tables).
@@ -1065,33 +1442,37 @@ class _PrologToClausal:
                 "an explicit double copy_term/subsumes check."
             )
 
-        # bagof/setof: strip ISO existential quantifiers (V^Goal) from the
-        # goal argument. Clausal's bagof/setof never group by free variables
-        # (they collect over all solutions, failing when empty), which is
-        # exactly ISO's behaviour when the free variables are ^-quantified —
-        # dropping the quantifier is faithful (F026).
+        # bagof/setof: the ISO existential quantifier (V^Goal, 8.10) crosses
+        # as Clausal's own ``V ^ Goal``.  Clausal's bagof/setof group by the
+        # free variables like ISO's, so the quantifier CHANGES the answers:
+        # stripping it (as this translator did until 2026-09-29) turned
+        # ``setof(X, Y^p(X,Y), L)`` into one answer per Y.  Python's ``^`` is
+        # left-associative, so a nested ``A^B^G`` is parenthesised to the
+        # right: ``A ^ (B ^ G)``.
         if functor in ("bagof", "setof") and len(args) == 3:
-            inner = args[1]
-            while (isinstance(inner, PCompound) and inner.functor == "^"
-                    and len(inner.args) == 2):
-                inner = inner.args[1]
-            if inner is not args[1]:
-                args = (args[0], inner, args[2])
-                term = PCompound(functor, args)
+            name = self._predicate_name(functor, 3)
+            return (f"{name}({self._emit_term(args[0])}, "
+                    f"{self._emit_quantified(args[1])}, "
+                    f"{self._emit_term(args[2])})")
 
-        # (^)/2 anywhere else in goal/term position: in arithmetic context it
-        # is exponentiation (handled in _emit_expr → Python **); as a plain
-        # goal or data term Clausal has no equivalent — reject rather than
-        # emit `^(Y, Goal)` (F026).
+        # A ``V^G`` in a GOAL argument of any other meta-predicate
+        # (findall, forall, aggregate_all, \+, ...) is called as a goal,
+        # which Clausal has no meaning for; emitting the data term '^'(V, G)
+        # would call that term.  Refused, as in direct goal position.
+        for i in _META_GOAL_ARGS.get(functor, ()):
+            if (i < len(args) and isinstance(args[i], PCompound)
+                    and args[i].functor == "^" and len(args[i].args) == 2):
+                self._refuse_caret_goal()
+
+        # (^)/2 as a DATA term is the term ^(A, B), spelled as the quoted
+        # ISO functor ('^'(A, B); a bare ``^`` is Python XOR, ``**`` a
+        # different functor).  As a GOAL (``Y^p(Y)`` called directly) it has
+        # no Clausal equivalent -- refused.  In arithmetic context it is the
+        # ISO evaluable (``_emit_expr``).
         if functor == "^" and len(args) == 2:
-            raise PrologTranslationError(
-                "The existential quantifier ((^)/2) is only supported inside "
-                "the goal argument of bagof/3 or setof/3, where it is "
-                "stripped (Clausal's bagof/setof never group by free "
-                "variables).\n"
-                "In arithmetic context, (^)/2 translates to Python's ** "
-                "operator."
-            )
+            if not goal:
+                return self._emit_quoted_op_term(term)
+            self._refuse_caret_goal()
 
         # ','/2 in term position is a tuple, NOT a flattened argument list:
         # emitting it bare turned foo(a, (b, c)) into a foo/3 call (F023).
@@ -1112,7 +1493,8 @@ class _PrologToClausal:
             module = args[0].name
             goal = args[1]
             if isinstance(goal, PCompound):
-                goal_name = _REVERSE_BUILTIN_MAP.get(goal.functor, goal.functor)
+                goal_name = self._predicate_name(goal.functor,
+                                                 len(goal.args))
                 inner = ", ".join(self._emit_term(a) for a in goal.args)
                 return f"{module}.{goal_name}({inner})"
             if isinstance(goal, PAtom):
@@ -1194,12 +1576,10 @@ class _PrologToClausal:
             right = self._emit_term(args[1])
             return f"{left} {clausal_op} {right}"
 
-        # ISO operators with different semantics → prolog.'//'(X, Y)
-        if functor in _PROLOG_QUALIFIED_OPS and len(args) == 2:
-            op_name = _PROLOG_QUALIFIED_OPS[functor]
-            left = self._emit_term(args[0])
-            right = self._emit_term(args[1])
-            return f"prolog.{op_name}({left}, {right})"
+        # ISO evaluable operators Python spells differently → '//'(X, Y)
+        if ((functor in _ISO_QUOTED_BINARY_OPS and len(args) == 2)
+                or (functor in _ISO_QUOTED_UNARY_OPS and len(args) == 1)):
+            return self._emit_quoted_op_term(term)
 
         # Prefix operators
         if functor in _PREFIX_MAP and len(args) == 1:
@@ -1218,13 +1598,43 @@ class _PrologToClausal:
         arg_strs = ", ".join(self._emit_term(a) for a in args)
         return f"{name}({arg_strs})"
 
+    @staticmethod
+    def _refuse_caret_goal() -> None:
+        raise PrologTranslationError(
+            "The existential quantifier ((^)/2) is only supported inside "
+            "the goal argument of bagof/3 or setof/3; `V^Goal` called as a "
+            "goal (directly, or in a goal argument of findall/forall/\\+/"
+            "...) cannot be translated."
+        )
+
+    def _emit_quoted_op_term(self, term: PCompound) -> str:
+        """An ISO operator term in DATA position: the quoted functor over
+        operands emitted as TERMS (so their functors are declared), not as
+        arithmetic."""
+        inner = ", ".join(self._emit_term(a) for a in term.args)
+        return f"{_quote_atom(term.functor)}({inner})"
+
+    def _emit_quantified(self, term: PTerm) -> str:
+        """The goal argument of bagof/setof: ``V^G`` → ``V ^ (G)``, nested
+        to the right; anything else is the goal term itself."""
+        if (isinstance(term, PCompound) and term.functor == "^"
+                and len(term.args) == 2):
+            witness = self._emit_term(term.args[0])
+            inner = term.args[1]
+            inner_s = self._emit_quantified(inner)
+            # Always parenthesised (a conjunction already is): Python's
+            # ``^`` binds tighter than ``is``/comparison, so ``Y ^ X is Y``
+            # would read as ``(Y ^ X) is Y``.
+            if not (isinstance(inner, PCompound) and inner.functor == ","
+                    and len(inner.args) == 2):
+                inner_s = f"({inner_s})"
+            return f"{witness} ^ {inner_s}"
+        return self._emit_term(term)
+
     # Python operator precedence (higher number = tighter binding).
     _EXPR_PREC: dict[str, int] = {
-        "xor": 1, "\\/": 2, "/\\": 3,
-        "<<": 4, ">>": 4,
         "+": 5, "-": 5,
-        "*": 6, "/": 6, "div": 6,
-        "**": 8, "^": 8,
+        "*": 6, "/": 6,
     }
 
     def _emit_expr(self, term: PTerm, parent_prec: int = 0) -> str:
@@ -1243,37 +1653,36 @@ class _PrologToClausal:
             # quoted/registered like an arg-position atom.
             return self._emit_atom(term)
         if isinstance(term, PCompound):
-            # ISO operators with different semantics → prolog.Op(X, Y)
-            if len(term.args) == 2 and term.functor in _PROLOG_QUALIFIED_OPS:
-                left = self._emit_expr(term.args[0])
-                right = self._emit_expr(term.args[1])
-                op_name = _PROLOG_QUALIFIED_OPS[term.functor]
-                return f"prolog.{op_name}({left}, {right})"
+            # ISO evaluable operators Python spells differently → the
+            # quoted ISO evaluable, '//'(X, Y)
+            if ((len(term.args) == 2 and term.functor in _ISO_QUOTED_BINARY_OPS)
+                    or (len(term.args) == 1
+                        and term.functor in _ISO_QUOTED_UNARY_OPS)):
+                inner = ", ".join(self._emit_expr(a) for a in term.args)
+                return f"{_quote_atom(term.functor)}({inner})"
             # Arithmetic binary operators
             if len(term.args) == 2 and term.functor in self._EXPR_PREC:
                 my_prec = self._EXPR_PREC[term.functor]
-                if term.functor in ("**", "^"):
-                    # ** is right-associative in Python: the LEFT child needs
-                    # parens at equal precedence so (2**3)**2 doesn't collapse
-                    # to 2**3**2 == 2**(3**2) (F030). ISO ^ is xfy (also
-                    # right-associative), so the same rule applies (F026).
-                    left = self._emit_expr(term.args[0], my_prec + 1)
-                    right = self._emit_expr(term.args[1], my_prec)
-                else:
-                    left = self._emit_expr(term.args[0], my_prec)
-                    right = self._emit_expr(term.args[1], my_prec + 1)
+                left = self._emit_expr(term.args[0], my_prec)
+                right = self._emit_expr(term.args[1], my_prec + 1)
                 op = _INFIX_MAP.get(term.functor, term.functor)
                 result = f"{left} {op} {right}"
                 if my_prec < parent_prec:
                     result = f"({result})"
                 return result
             # Arithmetic unary operators
-            if len(term.args) == 1 and term.functor in ("-", "+", "\\"):
+            if len(term.args) == 1 and term.functor in ("-", "+"):
                 operand = self._emit_expr(term.args[0], 9)
                 op = _PREFIX_MAP.get(term.functor, term.functor)
                 return f"{op}{operand}"
-            # Arithmetic functions
-            name = self._predicate_name(term.functor, len(term.args))
+            # Arithmetic functions: an ISO evaluable keeps its own name
+            # (``max``, ``float``), which is what the engine evaluates;
+            # anything else is a user function name as before.
+            from clausal.logic.exact_arith import EVALUABLE  # noqa: PLC0415
+            if (term.functor, len(term.args)) in EVALUABLE:
+                name = term.functor
+            else:
+                name = self._predicate_name(term.functor, len(term.args))
             args = ", ".join(self._emit_expr(a) for a in term.args)
             return f"{name}({args})"
         return self._emit_term(term)
@@ -1301,14 +1710,24 @@ class _PrologToClausal:
         ``arity`` disambiguates Prolog names shared by Clausal predicates of
         different arity (``catch/3`` vs ``catch_error/2``); pass it wherever
         the call site knows it."""
-        if arity is not None:
+        if arity is not None and prolog_name not in self._own_names:
             override = _REVERSE_ARITY_OVERRIDES.get((prolog_name, arity))
             if override is not None:
                 return override
-        # Check reverse builtin map first
-        clausal_name = _REVERSE_BUILTIN_MAP.get(prolog_name)
-        if clausal_name is not None:
-            return clausal_name
+        # Check reverse builtin map first -- unless the program defines or
+        # imports the name itself, when it means its OWN predicate (a
+        # program's ``time/1`` is not Clausal's ``time_goal/1``).
+        # Nor an ISO evaluable at its evaluable arity (max/2, abs/1): that is
+        # no predicate, and as data it is an ordinary compound -- the old
+        # rename to the RELATIONAL max_/3 raised type_error(evaluable,
+        # max_/2).  The expression emitter keeps evaluables by itself;
+        # float/1 is the exception here, being ISO's type test too, which
+        # Clausal spells float_/1.
+        if prolog_name not in self._own_names and not (
+                prolog_name != "float" and _is_evaluable(prolog_name, arity)):
+            clausal_name = _reverse_builtin_map().get(prolog_name)
+            if clausal_name is not None:
+                return clausal_name
         # Unmapped names cross unchanged — except that a Python keyword
         # gets the trailing underscore the codebase uses for the same
         # collision (``in_``, ``if_``): ``not/1`` -> ``not_``.
@@ -1412,15 +1831,6 @@ class _PrologToClausal:
                     items.append(self._emit_term(e))
             return "[" + ", ".join(items) + "]"
         return self._emit_term(term)
-
-    def _extract_library_name(self, term: PTerm) -> str | None:
-        """Extract library name from library(Name) term."""
-        if isinstance(term, PCompound) and term.functor == "library" and len(term.args) == 1:
-            if isinstance(term.args[0], PAtom):
-                return term.args[0].name
-        if isinstance(term, PAtom):
-            return term.name
-        return None
 
     # ── Conjunction/disjunction flattening ────────────────────────────
 

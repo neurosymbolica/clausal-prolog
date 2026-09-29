@@ -1,5 +1,3 @@
--import_module(prolog)
-
 -module(iso_arithmetic, [test/1])
 
 # library import of clausal.logic.clpfd dropped: it named only operator-spelled predicates
@@ -8,7 +6,7 @@ double(X, Y) <- (Y == X * 2)
 
 square(X, Y) <- (Y == X * X)
 
-triangle_number(N, T) <- (T == N * (N + 1) // 2)
+triangle_number(N, T) <- (T == 'div'(N * (N + 1), 2))
 
 test('addition: 1+2=3') <- (1 + 2 == 3)
 
@@ -16,11 +14,11 @@ test('subtraction: 5-3=2') <- (5 - 3 == 2)
 
 test('multiplication: 3*4=12') <- (3 * 4 == 12)
 
-test('integer division: 7//2=3') <- (7 // 2 == 3)
+test('integer division: 7//2=3') <- ('div'(7, 2) == 3)
 
-test('modulo: 7%2=1') <- (prolog.TruncMod(7, 2) == 1)
+test('modulo: 7%2=1') <- ('mod'(7, 2) == 1)
 
-test('power: 2**3=8') <- (2 ** 3 == 8)
+test('power: 2**3=8') <- ('^'(2, 3) == 8)
 
 test('negation: -3') <- (-3 == -3)
 
@@ -32,9 +30,9 @@ test('double negation: --5=5') <- (5 == 5)
 
 test('subtraction negative: 3-5=-2') <- (3 - 5 == -2)
 
-test('negative floor div: -7//2=-4') <- (-7 // 2 == -4)
+test('negative floor div: -7//2=-4') <- ('div'(-7, 2) == -4)
 
-test('negative mod: -7%2=1') <- (prolog.TruncMod(-7, 2) == 1)
+test('negative mod: -7%2=1') <- ('mod'(-7, 2) == 1)
 
 test('1 < 2') <- (1 < 2)
 
@@ -92,7 +90,7 @@ test('eval check fails: 4 == 1+2') <- (not 4 == 1 + 2)
 
 test('mixed int/float: 1 + 2.0 == 3.0') <- (1 + 2.0 == 3.0)
 
-test('large integer: 10^100 + 1') <- (X == 10 ** 100, X + 1 == 10 ** 100 + 1)
+test('large integer: 10^100 + 1') <- (X == '^'(10, 100), X + 1 == '^'(10, 100) + 1)
 
 test('mixed int/float compare: not 1 < 1.0') <- (not 1 < 1.0)
 

@@ -135,7 +135,7 @@ test("float_: string fails") <- (not float_("1.0"))
 
 test("float_: var fails") <- (not float_(_x_UNUSED))
 
-test("number: large int (via eval)") <- (X == 10 ** 100, number(X))
+test("number: large int (via eval)") <- (X == '^'(10, 100), number(X))
 
 test("is_list: list of mixed types") <- (is_list([1, "a", [2]]))
 

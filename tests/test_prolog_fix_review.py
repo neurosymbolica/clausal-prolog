@@ -162,17 +162,16 @@ class TestF035QuotedFunctorHeads:
 
 
 class TestF026BagofWitness:
-    def test_bagof_witness_stripped(self):
-        # Clausal bagof/setof never group by free variables, which is ISO's
-        # behaviour when the variable is ^-quantified — drop the quantifier.
+    def test_bagof_witness_kept(self):
+        # Clausal bagof/setof group by free variables like ISO's (91ef2a77),
+        # so the quantifier changes the answers and must cross (2026-09-29;
+        # it was stripped before, which answered one list per Y).
         out = prolog_to_clausal("q(L) :- bagof(X, Y^p(X,Y), L).")
-        assert "bagof(X, p(X, Y), L)" in out
-        assert "^" not in out
+        assert "bagof(X, Y ^ (p(X, Y)), L)" in out
 
-    def test_setof_nested_witnesses_stripped(self):
+    def test_setof_nested_witnesses_kept(self):
         out = prolog_to_clausal("q(L) :- setof(X, A^B^p(X, A, B), L).")
-        assert "setof(X, p(X, A, B), L)" in out
-        assert "^" not in out
+        assert "setof(X, A ^ (B ^ (p(X, A, B))), L)" in out
 
     def test_caret_outside_bagof_rejected(self):
         # (^)/2 in plain goal/term position has no Clausal equivalent.
@@ -180,22 +179,25 @@ class TestF026BagofWitness:
             prolog_to_clausal("q(X) :- Y^p(X, Y).")
 
     def test_arith_caret_maps_to_python_pow(self):
-        # In arithmetic context (^)/2 is ISO exponentiation → Python **.
+        # In arithmetic context (^)/2 is ISO exponentiation, emitted as the
+        # quoted ISO evaluable (Python ** answered 2 ^ -1 = 0.5, not ISO's
+        # type_error; 2026-09-29).
         out = prolog_to_clausal("f(X) :- X is 2 ^ 3.")
-        assert "eval_(2 ** 3, X)" in out
+        assert "eval_('^'(2, 3), X)" in out
 
     def test_arith_caret_right_associative(self):
         # ISO ^ is xfy: 2^3^2 = 2^(3^2); Python ** is also right-assoc.
         out = prolog_to_clausal("f(X) :- X is 2 ^ 3 ^ 2.")
-        assert "eval_(2 ** 3 ** 2, X)" in out
+        assert "eval_('^'(2, '^'(3, 2)), X)" in out
 
 
-class TestF026StandardOrderRejected:
+class TestF026StandardOrderTranslated:
     @pytest.mark.parametrize("op", ["@<", "@>", "@=<", "@>="])
-    def test_standard_order_comparison_rejected(self, op):
-        # Clausal has no standard-order term comparison builtins.
-        with pytest.raises(PrologTranslationError):
-            prolog_to_clausal(f"q(X, Y) :- X {op} Y.")
+    def test_standard_order_comparison_is_the_quoted_builtin(self, op):
+        # The engine has the quoted ISO builtins (2026-09-09); the refusal
+        # this replaced was stale (2026-09-29).
+        out = prolog_to_clausal(f"q(X, Y) :- X {op} Y.")
+        assert f"'{op}'(X, Y)" in out
 
 
 class TestF041VariantEqualityRejected:

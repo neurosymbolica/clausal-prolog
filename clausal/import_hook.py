@@ -817,7 +817,11 @@ class PrologLoader(_ClausalSourceLoader):
         from clausal.tools.prolog_to_clausal import prolog_to_clausal
         from clausal.tools.prolog_dialect import Dialect
         dialect = self._dialect or Dialect.scryer_reader()
-        return prolog_to_clausal(pl_source, dialect=dialect)
+        # The file's path and dotted name resolve a relative use_module
+        # path against the file's own directory, as Scryer does.
+        return prolog_to_clausal(pl_source, dialect=dialect,
+                                 source_path=self._path,
+                                 module_name=self._fullname)
 
     def source_to_code(self, data, path="<string>"):
         from clausal.tools.prolog_to_clausal import PrologTranslationError

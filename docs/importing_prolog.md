@@ -128,7 +128,29 @@ quad(X, Y) :- double(X, T), double(T, Y).
 
 The `use_module` with an explicit import list is the recommended form — it
 maps directly to Clausal's `-import_from` directive, which injects the
-imported predicates into the calling module's namespace.
+imported predicates into the calling module's namespace. `use_module/1`
+imports every predicate the `.pl` module's `module/2` directive exports
+(`-import_module` plus an `-import_from` of that list); for a `.clausal` or
+`.seam` module it is `-import_module`, whose predicates are reached
+qualified.
+
+### Module paths
+
+A module is named by an atom (`helpers`), a quoted or unquoted path
+(`'sub/helpers'`, `sub/helpers`, `'../shared/helpers'`, with or without a
+`.pl` suffix), or `library(Name)`. As in Scryer, a path is resolved against
+the **importing file's own directory** first; the file found there is
+imported under its dotted module name (relative to the importer's package
+root, or else to a `sys.path` entry). A path with no such file beside the
+importer is read as a dotted module on `sys.path` (`a/b` is `a.b`), which is
+how a bare name has always been resolved.
+
+A module spec that names no importable module — a variable, a compound that
+is not an `a/b` path, `'../../x'` with no such file and no dotted reading, or
+a file outside every `sys.path` entry — is a load-time `SyntaxError` that
+names the directive and its line. Until 2026-09-29 an unquoted `a/b` path
+became a comment and the import vanished, and a quoted one failed with
+"argument must be a dotted module path".
 
 ### Library imports
 
@@ -142,6 +164,12 @@ Standard Prolog library imports are mapped to Clausal built-in modules:
 | `:- use_module(library(tabling), [...])` | `-import_from(clausal.logic.tabling, [...])` |
 | `:- use_module(library(lists))` | *(built-in — no import needed)* |
 | `:- use_module(library(apply))` | *(built-in — no import needed)* |
+| `:- use_module(library(L))`, L one of `dif`, `between`, `error`, `pairs`, `when`, `freeze`, `iso_ext` | *(built-in — no import needed)* |
+| `:- use_module(library(L), [...])`, every listed name an engine builtin | *(built-in — no import needed)* |
+
+Any other `library(Name)` is read as the module `Name` (a missing one is an
+`ImportError` at load). A predicate of a built-in library that the engine
+lacks raises the ISO `existence_error` when it is called.
 
 ---
 
@@ -162,6 +190,13 @@ Most standard Prolog translates cleanly:
 - Directives (`dynamic`, `discontiguous`, `table`, `module`, `use_module`),
   in the ISO call form `:- dynamic(foo/1).`
 - Negation as failure (`\+` becomes `not`)
+- Standard order of terms: `X @< Y` (and `@>`, `@=<`, `@>=`) becomes the
+  quoted ISO builtin `'@<'(X, Y)`; `compare/3` crosses unchanged. (Refused
+  until 2026-09-29, when the engine had had them for weeks.)
+- `bagof/3` and `setof/3` with the existential quantifier: `Y^Goal` becomes
+  `Y ^ (Goal)` (nested to the right, `A ^ (B ^ (Goal))`), so the solutions
+  group by the free variables as in ISO (8.10):
+  `setof(X, Y^p(X, Y), L)` answers one list.
 
 ### Unsupported constructs
 
@@ -174,6 +209,12 @@ The translator **rejects** programs containing:
 
 These are rejected rather than silently mistranslated, because their semantics
 cannot be faithfully represented in Clausal's pure core.
+
+A **query in program text** (`?- Goal.`) is refused too: it is not run on
+load, and until 2026-09-29 it was silently turned into a comment. An
+`:- op/3` directive is applied by the reader to the terms below it (its
+effect on the program's text); Clausal has no run-time operator table, so
+the directive itself is kept as a comment.
 
 ### Atoms and strings
 
@@ -214,13 +255,21 @@ r('hello world'),
   contains a string.
 - `true`, `false` and `fail` map to Python `True`/`False` (`a :- true.`
   becomes `a() <- (True)`).
+- The atom `undefined` is emitted quoted (`'undefined'`): bare `undefined`
+  is Clausal's truth value `Undefined`, which `-private` cannot declare
+  (until 2026-09-29 a file holding the atom failed to load).
 
-A `:- double_quotes(Mode)` directive in the source — or the ISO spelling
-`:- set_prolog_flag(double_quotes, Mode)` — is carried across in place,
-where it governs the clauses below it: `atom` becomes
-`-double_quotes(atom)`; `chars` is already what the emitted header says, so
-it is not written twice; `codes` has no Clausal mode (codes are spelled
-`b"…"` at the literal) and is emitted as a comment.
+The ISO directive `:- set_prolog_flag(double_quotes, Mode)` (or the short
+`:- double_quotes(Mode)`) governs every `"…"` below it, as in Scryer, and the
+translator applies it at each literal: under `chars` (the default) `"ab"` is
+the string `"ab"` (the chars `[a, b]`), under `codes` it is the list
+`[97, 98]`, and under `atom` it is the atom `'ab'`. The module's own mode
+follows for `chars` and `atom` (`-double_quotes(atom)`), so
+`current_prolog_flag(double_quotes, M)` reports it; Clausal has no `codes`
+module mode, so that directive becomes a comment while its literals are
+still emitted as codes. Any other value is refused, naming the line (Scryer:
+`domain_error(flag_value, double_quotes+Value)`). Until 2026-09-29 `codes`
+was only a comment and the strings below it stayed chars.
 
 Any other `:- set_prolog_flag(Flag, Value).` is carried across as the
 directive [`-set_prolog_flag(Flag, 'Value')`](directives.md#-set_prolog_flag)
@@ -309,6 +358,10 @@ SyntaxError: Cannot import foo.pl: Cut (!/0) cannot be translated to Clausal.
 | Translation error | Unsupported construct (cut, if-then-else) | `SyntaxError` |
 | Encoding error | Non-UTF-8 `.pl` file | `SyntaxError` |
 | Import error | Missing module in `use_module` | `ImportError` |
+| Unmappable module spec | `use_module(M)`, a path with no module | `SyntaxError` naming the directive and line |
+
+A translation error names the `.pl` line it comes from
+(`Cannot import foo.pl: line 12: Cut (!/0) ...`).
 
 ---
 
@@ -347,8 +400,18 @@ The key operator mappings:
 | `;` | `or` |
 | `-->` | `>>` |
 | `member(X, L)` | `X in L` |
+| `X // Y`, `mod`, `rem`, `div`, `^`, `**`, `<<`, `>>`, `/\`, `\/`, `\` | the quoted ISO evaluable: `'//'(X, Y)`, `'^'(X, Y)`, ... |
+| `max(X, Y)`, `abs(X)`, `sqrt(X)`, ... (any ISO evaluable) | the same name |
 
-Predicate names cross unchanged: `foo_bar/2` stays `foo_bar/2`. A name
+Predicate names cross unchanged: `foo_bar/2` stays `foo_bar/2`. A few
+library predicates that Clausal spells differently are renamed to the
+Clausal predicate that answers the same (`memberchk/2` → `in_check/2`,
+`nth0/3` → `list_item/3`, `time/1` → `time_goal/1`, `all_distinct/1` →
+`all_different/1`, ...), but never a name the program defines, declares or
+imports from its own modules — a file's own `time/1` stays `time/1` — and
+never a name the engine already has (`atomic/1`). Until 2026-09-29
+`profile_get/3` was renamed to Clausal's `get/3` and `atomic/1` to an
+`is_atomic/1` that does not exist; both now cross unchanged. A name
 that collides with a Python keyword gets a trailing underscore (`not/1`
 becomes `not_/1`), and a quoted functor whose name is not a plain lowercase
 name is refused rather than translated — `'Foo'`, `'FOO'` and `'_foo'` would
@@ -390,9 +453,23 @@ renamed to `_pi`.)
   else declares raises the ISO error term
   `error(existence_error(procedure, f/1), f/1)` when it is built (a
   `catch/3` sees it; from Python it is also a `NameError`).
-- **Arithmetic follows today's Clausal operators, not ISO's.** `Y is X / 2`
-  becomes `eval_(X / 2, Y)`, and `=:=` becomes the constraint `==` (see
-  [Operators](operators.md)).
+- **Arithmetic.** `+ - * /` cross as Clausal's operators (`Y is X / 2`
+  becomes `eval_(X / 2, Y)`), and `=:=` becomes the constraint `==` (see
+  [Operators](operators.md)). The ISO operators Python spells differently
+  (`//`, `mod`, `rem`, `div`, `^`, `**`, the bit operators) cross as the
+  quoted ISO evaluable (`'^'(2, 3)`), and every ISO evaluable function keeps
+  its name, so these answer as in ISO: `2 ** 3` is `8.0` and `2 ^ -1` is
+  `type_error(float, 2)`. Until 2026-09-29 `max`/`min`/`abs` were renamed to
+  `max_`/`min_`/`abs_` (a `type_error(evaluable, max_/2)`), `^` became Python
+  `**` (`2 ^ -1` answered `0.5`) and `<<`, `/\`, `\/`, `\` were not
+  evaluated at all.
+- **A renamed library name is renamed in data position too.** The few
+  renames that remain (`memberchk` → `in_check`, `float/1` → `float_/1`,
+  ...) apply wherever the name appears as a functor, because a meta-call's
+  goal argument is emitted as a term; `X = memberchk(a, L)` builds
+  `in_check(a, L)`.
+- **`use_module/1` of a `.clausal`/`.seam` module** gives qualified access
+  only (`-import_module`); name the predicates with `use_module/2`.
 - **No cut, no if-then-else** (above), and no streams or `op/3`. The ISO
   flags are there ([Prolog Flags](flags.md)), but `unknown` can only be
   `error`.

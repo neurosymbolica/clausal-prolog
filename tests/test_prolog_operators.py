@@ -73,31 +73,33 @@ class TestPrologModule:
 
 
 class TestTranslatorISOOperators:
-    """Prolog ``//``, ``mod``, ``rem`` are emitted as prolog.TruncDiv etc."""
+    """Prolog ``//``, ``mod``, ``rem`` are emitted as the quoted ISO
+    evaluables the engine's evaluable table has (2026-09-29; they were
+    ``prolog.TruncDiv`` etc. from a helper module before)."""
 
-    def test_integer_division_emits_prolog_qualified(self):
+    def test_integer_division_emits_iso_evaluable(self):
         # nv
         src = "test :- X is 7 // 2."
         result = prolog_to_clausal(src)
-        assert "prolog.TruncDiv" in result
+        assert "eval_('//'(7, 2), X)" in result
 
-    def test_mod_emits_prolog_qualified(self):
+    def test_mod_emits_iso_evaluable(self):
         # nv
         src = "test :- X is 7 mod 3."
         result = prolog_to_clausal(src)
-        assert "prolog.TruncMod" in result
+        assert "eval_('mod'(7, 3), X)" in result
 
-    def test_rem_emits_prolog_qualified(self):
+    def test_rem_emits_iso_evaluable(self):
         # nv
         src = "test :- X is 7 rem 3."
         result = prolog_to_clausal(src)
-        assert "prolog.Rem" in result
+        assert "eval_('rem'(7, 3), X)" in result
 
-    def test_auto_imports_prolog_module(self):
+    def test_no_helper_module_import(self):
         # nv
         src = "test :- X is 7 // 2."
         result = prolog_to_clausal(src)
-        assert "-import_module(prolog)" in result
+        assert "-import_module(prolog)" not in result
 
     def test_no_prolog_import_when_not_needed(self):
         # nv
