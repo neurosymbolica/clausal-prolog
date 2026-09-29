@@ -20,6 +20,20 @@ This compiles to a reified three-way branch when the condition is a built-in rei
 
 All three arguments are required.
 
+### In a `.pl` file: library(reif)'s `if_/3`
+
+A `.pl` file on the native front end (`CLAUSAL_PL_FRONTEND=native`) that
+imports `library(reif)` gets Scryer's `if_(If_1, Then_0, Else_0)`: `If_1` is
+a CLOSURE called with one more argument, the truth value, and the branch
+follows it (`instantiation_error` when it is unbound,
+`type_error(boolean, T)` when it is neither `true` nor `false`).
+`if_(X = Y, ...)` and `if_(dif(X, Y), ...)` compile to the reified branch
+above, and `if_((A, B), ...)`/`if_((A ; B), ...)` are unfolded as reif's
+`','/3` and `;/3`. Without the import `if_` is an ordinary (undefined) call,
+as in Scryer. The seam's `if_` keeps taking a goal; the seam spells a
+closure condition out:
+`(memberd_t(E, L, T), must_be(boolean, T), if_(T is True, A, B))`.
+
 ### The old spelling, `If/3`
 
 `if_` was once spelled `If`.  That spelling is TitleCase, which has no role in

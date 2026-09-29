@@ -309,6 +309,50 @@ strict mode for `.pl`. What was built:
 * **Exit:** a rulebase exercising each construct passes natively, with seam-twin all-answers
   identical, and a lint count equal to the number of planted `\+`/`once` sites.
 
+**Built (2026-09-30, branch `feat/iso-reader-slice4-2026-09-30`; rulings of 2026-09-30).**
+
+* Already right on the base, now pinned: `bagof`/`setof` with `^` (the §1.2 probe answers
+  `[[1,2,3]]`), `findall/3`, `forall/2`, `once/1`, `catch/3`/`throw/1`, `maplist/2,3`,
+  `foldl/4..6`, `dif/2`, `\+`.
+* New engine builtins (seam too): `findall/4` (a `MetaCall` findall with a `tail`, checked like
+  Scryer's `can_be(list, _)` on both lists; also a `call/N` special form), `maplist/4..9`
+  (every answer; the open-list recursion as maplist/2,3) and `call/9` (maplist/9 runs on it).
+* library(reif), Scryer's export list: `if_/3` is lowered by L3 when the file imports it
+  (`use_module(library(reif))`, or a list naming `if_/3`; otherwise `if_` is an ordinary call
+  and an existence_error, as in Scryer). `X = Y` -> `$IfExpr` over `$Unify` (reif's `=/3`),
+  `dif(X, Y)` -> the arms swapped, `(A, B)`/`(A ; B)` unfolded as reif's `','/3`/`;/3`, any other
+  condition -> `call(C, T), must_be(boolean, T), $IfExpr(T = true, ...)` (Scryer's errors).
+  `(=)/3` and `dif/3` are engine builtins in Scryer's answer orders. `tmember/2`,
+  `tmember_t/3`, `cond_t/3` are in `clausal.stdlib.reif` (with `-meta_predicate`, so a closure
+  resolves in the caller); `tfilter/3` and `tpartition/4` there give every answer and REPLACE
+  the engine's committed-choice builtins for a file importing library(reif) (a library
+  override, like clpz's `label/1`; a file's own definition wins, and only that name is
+  dropped). `memberd/2` is not in Scryer (neither reif nor lists): not provided.
+* D13, the transition lint: `\+/1`, `once/1`, `forall/2`, `memberchk/2`, `findall/3_empty`
+  (a findall/3 whose bag is `[]`) and `make_quantity/3`, counted at GOAL positions (ISO 7.6.2,
+  meta-argument goals, `m:G`) from the reader cells, so a cache hit counts the same;
+  `l3_stats["transition_constructs"]` holds every key; one INFO line on
+  `clausal.pl_frontend` per load that has any. Never refused.
+* D35: a data-position `true`/`false`/`undefined` folds to `True`/`False`/`Undefined`
+  (`$LoadName('Undefined')`, as the seam); `memberd_t(b, [a,b], true)` succeeds (it failed).
+  Not an auto-declared atom.
+* D40: `true/N`, `false/N` (N >= 1) are definable: the seam's reserved-name check is arity 0
+  only, an APPLIED `true(...)` in the seam is the functor (no truth fold), and `call(true, X)`
+  reaches a user `true/1` (existence_error when none).
+* D26b: a listless `use_module/1` of a `.seam` module imports its `-module` list's bare names
+  and templates (by name) as well as its `name/N` entries; a module exporting nothing is still
+  loaded (`-import_module`), so `m:G` reaches it.
+* **Exit (met):** `tests/iso_l3/test_l3_s4_exit.py` over `s4/s4_exit.pl` (33 rows): native rows
+  = Scryer's (oracle-run) = the `.seam` twin's; the lint counts the 7 planted sites on a full
+  lowering and on a cache hit. `tests/iso_l3/test_l3_s4_constructs.py` (23 tests) pins each
+  construct and ruling.
+* Missing builtins, filed not built: `nth0/3,4`, `nth1/3,4`, `keysort/2`, `atom_number/2`,
+  `aggregate_all/3` (count, sum, max, bag, set).
+* OPEN: `call((A, B), T)` / `call((A ; B), T)` at run time (a reif condition that is a
+  VARIABLE bound to a conjunction/disjunction) is existence_error `','/3`, `;/3` (the
+  pinned call/N fold); Scryer with library(reif) runs reif's `','/3`, `;/3`. A written
+  `if_((A, B), ...)` is unaffected (unfolded at load).
+
 ### Slice 5: constraint libraries
 
 * A reader change: `use_module(library(clpz))` installs clpz's `op/3` set in the reader table.

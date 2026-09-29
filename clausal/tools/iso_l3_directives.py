@@ -91,13 +91,17 @@ _LIBRARY_MODULES: dict[str, "str | None"] = {
 #: What ``use_module(library(L))`` (no list) imports from L's module: the
 #: names in it that are not global builtins.
 _LIBRARY_EXPORTS: dict[str, tuple[str, ...]] = {
-    "reif": ("memberd_t",),
+    # Scryer's reif.pl exports if_/3, (=)/3, (',')/3, (;)/3, cond_t/3,
+    # dif/3, memberd_t/3, tfilter/3, tmember/2, tmember_t/3, tpartition/4:
+    # if_ and the (,)/(;) conditions are lowered here (iso_l3), =/3 and dif/3
+    # are engine builtins, tfilter/tpartition are overrides (below).
+    "reif": ("memberd_t", "tmember", "tmember_t", "cond_t"),
 }
 
 #: Names a library's import list may give that the COMPILER lowers itself
 #: (they are no registered builtin, so ``_engine_has_goal`` does not see
 #: them): nothing to import.
-_COMPILER_GOALS = frozenset({"if_", "{}"})
+_COMPILER_GOALS = frozenset({"if_", "{}", ",", ";"})
 
 #: library(clpz)'s operators (Scryer ``clpz.pl``'s module/2 export list).
 CLPZ_OPS: tuple[tuple[int, str, str], ...] = (
@@ -129,8 +133,12 @@ _LIBRARY_STICKY_OPS: dict[str, tuple] = {"clpz": CLPZ_OPS, "clpfd": CLPZ_OPS}
 _LIBRARY_OVERRIDES: dict[str, tuple[str, tuple[str, ...]]] = {
     "clpz": ("clausal.stdlib.clpz", ("label",)),
     "clpfd": ("clausal.stdlib.clpz", ("label",)),
+    # Scryer's reif tfilter/3 and tpartition/4 give EVERY answer; the engine
+    # builtins commit to each call's first truth value.
+    "reif": ("clausal.stdlib.reif", ("tfilter", "tpartition")),
 }
-_OVERRIDE_ARITIES = {"label": ("label", 1)}
+_OVERRIDE_ARITIES = {"label": ("label", 1), "tfilter": ("tfilter", 3),
+                     "tpartition": ("tpartition", 4)}
 
 _OP_SPECIFIERS = ("xfx", "xfy", "yfx", "fy", "fx", "xf", "yf")
 
@@ -148,13 +156,19 @@ class Uses:
     the reader cells, so the cache-hit path (no clause is lowered) sees the
     same population as a full lowering."""
 
-    __slots__ = ("atoms", "functors", "goal_names", "heads")
+    __slots__ = ("atoms", "functors", "goal_names", "heads", "transition",
+                 "reif")
 
     def __init__(self):
         self.atoms: set[str] = set()
         self.functors: dict[str, set[int]] = {}
         self.goal_names: set[str] = set()
         self.heads: set[tuple[str, int]] = set()
+        #: D13: the transition constructs' goal-position sites, per key.
+        self.transition: dict[str, int] = dict.fromkeys(TRANSITION_KEYS, 0)
+        #: library(reif)'s if_/3 is in scope (the file imported it): an
+        #: ``if_`` goal's arms are goals, its condition a reified closure.
+        self.reif = False
 
     def clause(self, term) -> None:
         if type(term) is tuple and len(term) == 3 and term[0] == ":-":
@@ -175,7 +189,10 @@ class Uses:
         while stack:
             t = stack.pop()
             if type(t) is str:
-                self.atoms.add(t)
+                # D35: a data ``true``/``false``/``undefined`` is the truth
+                # VALUE (iso_l3 folds it), not an atom to declare.
+                if t not in ("true", "false", "undefined"):
+                    self.atoms.add(t)
             elif type(t) is list:
                 stack.extend(t)
             elif type(t) is tuple and t and type(t[0]) is str:
@@ -196,6 +213,8 @@ class Uses:
         if not (type(g) is tuple and g and type(g[0]) is str):
             return
         name, args = g[0], g[1:]
+        if name == "\\+" and len(args) == 1:
+            self.transition["\\+/1"] += 1
         if name in (",", ";", "->", "*->") and len(args) == 2 \
                 or name == "\\+" and len(args) == 1:
             for a in args:
@@ -206,6 +225,15 @@ class Uses:
             return
         self.goal_names.add(name)
         key = (name, len(args))
+        tkey = _TRANSITION_GOALS.get(key)
+        if tkey is not None and (key != ("findall", 3)
+                                 or args[2] == "[]" or args[2] == []):
+            self.transition[tkey] += 1
+        if key == ("if_", 3) and self.reif:
+            self._reif_condition(args[0])
+            self.goal(args[1])
+            self.goal(args[2])
+            return
         from clausal.tools.iso_l3 import _META_GOAL_ARGS  # noqa: PLC0415
         meta = _META_GOAL_ARGS.get(key, ())
         for i, a in enumerate(args):
@@ -221,6 +249,19 @@ class Uses:
                 self._closure(a)
             else:
                 self.data(a)
+
+    def _reif_condition(self, c) -> None:
+        """An ``if_/3`` condition: (',')/3 and (;)/3 over conditions, (=)/3
+        and dif/3 over data, else a closure called with one more argument."""
+        if type(c) is tuple and len(c) == 3 and c[0] in (",", ";"):
+            self._reif_condition(c[1])
+            self._reif_condition(c[2])
+        elif type(c) is tuple and len(c) == 3 and c[0] in ("=", "dif"):
+            self.goal_names.add(c[0])
+            self.data(c[1])
+            self.data(c[2])
+        else:
+            self._closure(c)
 
     def _procedure(self, t) -> None:
         """assertz(C), retract(C), clause(H, B): a CLAUSE, not data -- its
@@ -239,6 +280,22 @@ class Uses:
             for a in t[1:]:
                 self.data(a)
 
+
+#: D13 (operator ruling 2026-09-30): the transition constructs, ACCEPTED on
+#: the native path and COUNTED (never refused by the loader: a ban is a
+#: gate's job).  One key per construct, as a gate reads them from
+#: ``l3_stats["transition_constructs"]``: ``\+/1``, once/1, forall/2,
+#: memberchk/2, the ``findall(_, G, [])`` backdoor (a findall/3 whose bag is
+#: the empty list) and make_quantity/3 (every quantity should be a declared
+#: constant).  A site is a GOAL position (ISO 7.6.2, including a
+#: meta-argument the compiler runs as a goal and a qualified ``m:G``); a
+#: closure passed as data (``maplist(memberchk(X), Ls)``) is not counted.
+TRANSITION_KEYS = ("\\+/1", "once/1", "forall/2", "memberchk/2",
+                   "findall/3_empty", "make_quantity/3")
+_TRANSITION_GOALS = {("once", 1): "once/1", ("forall", 2): "forall/2",
+                     ("memberchk", 2): "memberchk/2",
+                     ("findall", 3): "findall/3_empty",
+                     ("make_quantity", 3): "make_quantity/3"}
 
 #: Builtins whose first argument is a clause or a clause head.
 _PROCEDURE_ARGS = frozenset({
@@ -322,6 +379,10 @@ class DirectiveContext:
         #: library(clpq) was imported: a goal ``{C}`` is clpq's (else it is
         #: an ordinary call of ``{}/1``, as in Scryer).
         self.clpq = False
+        #: library(reif)'s if_/3 was imported: a goal ``if_(C, T, E)`` is
+        #: reif's, lowered by iso_l3 (else an ordinary call of if_/3, as in
+        #: Scryer, where it exists only by that import).
+        self.reif = False
         #: constructors/1 templates found by :func:`prescan_constructors`
         #: BEFORE lowering: module/2 comes first, and an exported
         #: constructor must reach -module as its template, not as name/N.
@@ -400,10 +461,15 @@ class DirectiveContext:
                     self.dropped_keys.discard(f"{dotted}.{a.name}")
         return stmts
 
-    def drop_imports(self, dotted: str) -> None:
+    def drop_imports(self, dotted: str, names: "set | None" = None) -> None:
         """Undo every import of *dotted* so far: its statements, its module
         items and its remap entries.  A goal already lowered through the
-        remap is re-spelled by ``iso_l3`` at the end (:attr:`dropped_keys`)."""
+        remap is re-spelled by ``iso_l3`` at the end (:attr:`dropped_keys`).
+        With *names*, only those local names are undone (a library override
+        the file defines itself, where the library's other names stay)."""
+        if names is not None:
+            self._drop_import_names(dotted, names)
+            return
         stmts = self._imports.pop(dotted, [])
         for s in stmts:
             self.dead_stmts.add(id(s))
@@ -428,6 +494,42 @@ class DirectiveContext:
                     if not (type(i).__name__ == "ImportFromDirective"
                             and getattr(i, "module", None) == dotted)]
 
+    def _drop_import_names(self, dotted: str, names: set) -> None:
+        for s in self._imports.get(dotted, []):
+            if not isinstance(s, ast.ImportFrom):
+                continue
+            cur = self.load_only.get(id(s), s)
+            if not isinstance(cur, ast.ImportFrom):
+                continue
+            kept = [a for a in cur.names if (a.asname or a.name) not in names]
+            if len(kept) == len(cur.names):
+                continue
+            self.dead_stmts.add(id(s))
+            repl: ast.stmt = (
+                ast.ImportFrom(module=cur.module, names=kept, level=cur.level)
+                if kept else ast.Expr(value=ast.Call(
+                    func=ast.Name(id="__import__", ctx=ast.Load()),
+                    args=[ast.Constant(value=cur.module)], keywords=[])))
+            ast.copy_location(repl, s)
+            self.load_only[id(s)] = repl
+        if self._t is None:
+            return
+        remap = self._t._import_remap
+        for local in names:
+            key = remap.get(local)
+            if key is not None and key == f"{dotted}.{local}":
+                del remap[local]
+                self._t._imported_functors.discard(local)
+                self.dropped_keys.add(key)
+        items = self._t._module_items
+        for i in list(items):
+            if (type(i).__name__ == "ImportFromDirective"
+                    and getattr(i, "module", None) == dotted):
+                i.names = [n for n in i.names
+                           if (n[1] if isinstance(n, tuple) else n) not in names]
+                if not i.names:
+                    items.remove(i)
+
     def drop_shadowed_overrides(self, defined: set) -> None:
         """A library override (Scryer's ``label/1``) the file defines itself
         (same name AND arity) is the file's: as for any builtin, a local
@@ -437,7 +539,7 @@ class DirectiveContext:
         the file's ``label/1`` calls into the engine's first-fail one."""
         for module, pis in self.override_imports:
             if pis & defined:
-                self.drop_imports(module)
+                self.drop_imports(module, {n for n, _a in pis & defined})
                 continue
             clash = sorted(f"{n}/{a}" for n, a in defined
                            if n in {m for m, _ in pis})
@@ -445,7 +547,7 @@ class DirectiveContext:
                 raise _refused(
                     f"{', '.join(clash)} is defined here and "
                     f"{', '.join(f'{n}/{a}' for n, a in sorted(pis))} is "
-                    f"imported from {module} (library(clpz)); one name at "
+                    f"imported from {module}; one name at "
                     f"two arities across an import is not supported -- "
                     f"rename the local predicate", None)
 
@@ -729,6 +831,12 @@ def _use_module(ctx: DirectiveContext, args, spans, span):
         for op in wanted:
             ctx.apply_op(*op, span, what)
     if not entries:
+        if imports is None:
+            # D26b: a listless import of a module that exports nothing still
+            # LOADS it, so ``m:G`` reaches it (Scryer: use_module/1 always
+            # loads the module).
+            return ctx.imported(dotted, ctx.seam(
+                "import_module", [_dotted_ast(dotted)], span, what))
         return []
     return ctx.imported(dotted, ctx.seam(
         "import_from",
@@ -840,6 +948,9 @@ def _use_library(ctx, lib, entries, span, what, listed_ops=()):
         ctx.apply_op(*op, span, what)
     if name in ("clpq", "clpr"):
         ctx.clpq = True
+    if name == "reif" and (entries is None
+                           or any(n == "if_" for n, _a in entries)):
+        ctx.reif = True
     if name in _BUILTIN_LIBRARIES:
         return []
     if name not in _LIBRARY_MODULES:
@@ -1507,8 +1618,18 @@ def _seam_exports(path: str):
                         and type(e.right.value) is int):
                     extra = 2 if isinstance(e.op, ast.FloorDiv) else 0
                     pi = (e.left.id, e.right.value + extra)
-                    if pi not in exports:
-                        exports.append(pi)
+                elif isinstance(e, ast.Name):
+                    # A bare name (an atom, or a predicate at every arity):
+                    # the seam's -import_from takes it by name (D26b).
+                    pi = (e.id, None)
+                elif (isinstance(e, ast.Call)
+                      and isinstance(e.func, ast.Name)):
+                    # A template ``f(x, y)``: the name, imported by name.
+                    pi = (e.func.id, None)
+                else:
+                    continue
+                if pi not in exports and (pi[0], None) not in exports:
+                    exports.append(pi)
         return name, exports, []
     return None, None, []
 
