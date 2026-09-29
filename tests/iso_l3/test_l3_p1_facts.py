@@ -105,10 +105,12 @@ def test_P1_iso_facts_answer_identically_to_the_seam_twin(l3_env):
 
 
 def test_P1_denominator_is_reported_for_refused_constructs(l3_env):
-    """Rules are P2. They must be REFUSED and COUNTED, never silently dropped."""
+    """Rules are P2. They must be REFUSED and COUNTED, never silently dropped.
+    The COUNTING mode is the explicit ``strict=False`` (tooling that surveys
+    a corpus); the default raises (see the slice-0 tests below)."""
     tmp, stats, L3 = l3_env
     items = L3.read_iso("f(1).\ng(X) :- f(X).\n")
-    _, st = L3.lower_items(items)
+    _, st = L3.lower_items(items, strict=False)
     assert st["read"] == 2, st
     assert st["lowered"] == 1, st
     assert st["refused"] == 1 and st["refusals"], st
@@ -161,3 +163,47 @@ def test_P1_refuses_rather_than_half_handles_an_unsupported_term():
     L3 = _load_l3()
     with pytest.raises(L3.LoweringRefused):
         L3.lower_arg(3.5)      # floats are not in P1 scope
+
+
+# ── slice 0 (2026-09-29): no lost last clause, no silent drop ─────────
+
+
+def test_read_iso_keeps_the_last_clause_without_a_trailing_newline():
+    """``f(1).\\ng(2).`` is two clauses; read_iso returned one (the reader
+    was never CLOSED, so the final ``.`` -- an end token only when followed
+    by layout or EOF -- stayed pending).  prolog_reader.read_module gives 2."""
+    L3 = _load_l3()
+    from clausal.tools.prolog_reader import read_module
+    src = "f(1).\ng(2)."
+    assert len(read_module(src)) == 2
+    items = L3.read_iso(src)
+    assert [type(i).__name__ for i in items] == ["Clause", "Clause"]
+
+
+def test_lower_items_raises_on_a_refused_clause_by_default():
+    """A clause the lowering refuses must not be dropped while the module
+    still imports: the default raises, naming the clause."""
+    L3 = _load_l3()
+    with pytest.raises(L3.LoweringRefused, match="rules are P2"):
+        L3.lower_items(L3.read_iso("f(1).\ng(X) :- f(X).\n"))
+
+
+def test_lower_items_raises_on_a_directive_by_default():
+    L3 = _load_l3()
+    with pytest.raises(L3.LoweringRefused, match="Directive"):
+        L3.lower_items(L3.read_iso(":- dynamic(d/1).\nf(1).\n"))
+
+
+def test_lower_items_raises_on_a_syntax_issue_by_default():
+    L3 = _load_l3()
+    items = L3.read_iso("f(1).\ng(.\nh(2).\n")
+    assert any(type(i).__name__ == "SyntaxIssue" for i in items)
+    with pytest.raises(L3.LoweringRefused, match="SyntaxIssue"):
+        L3.lower_items(items)
+
+
+def test_an_iso_module_with_a_refused_clause_does_not_import(l3_env):
+    tmp, stats, _ = l3_env
+    (tmp / "isorule.pl").write_text("f(1).\ng(X) :- f(X).\n", encoding="utf-8")
+    with pytest.raises(Exception, match="rules are P2"):
+        importlib.import_module("isorule")

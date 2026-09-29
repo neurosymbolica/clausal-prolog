@@ -114,23 +114,41 @@ def lower_fact(term: tuple, span=None) -> list[ast.stmt]:
     return guard + [define]
 
 
-def lower_items(items) -> tuple[ast.Module, dict]:
+def lower_items(items, *, strict: bool = True) -> tuple[ast.Module, dict]:
     """ReaderItems -> (ast.Module, stats). Stats carry the DENOMINATOR (plan §8.4):
-    a shrinking population must be visible, not silent."""
+    a shrinking population must be visible, not silent.
+
+    *strict* (the default) raises :class:`LoweringRefused` on the first item
+    it cannot lower -- a clause, a directive, or a reader ``SyntaxIssue`` --
+    so a module never imports with a clause missing (2026-09-29: the item
+    was counted and the module loaded without it).  ``strict=False`` is the
+    explicit counting mode for tooling that surveys a corpus: it skips and
+    counts every refusal in ``stats``."""
     body: list[ast.stmt] = []
     stats = {"read": 0, "lowered": 0, "refused": 0, "refusals": []}
+
+    def refuse(msg: str) -> None:
+        if strict:
+            raise LoweringRefused(msg)
+        stats["refused"] += 1
+        stats["refusals"].append(msg)
+
     for it in items:
         stats["read"] += 1
+        span = getattr(it, "span", None)
+        where = f" at {span}" if span else ""
         if type(it).__name__ != "Clause":
-            stats["refused"] += 1
-            stats["refusals"].append(f"{type(it).__name__} (P3)")
+            detail = getattr(it, "message", None) or getattr(it, "term", None)
+            refuse(f"{type(it).__name__} (P3){where}"
+                   + (f": {detail!r}" if detail is not None else ""))
             continue
         try:
-            body.extend(lower_fact(it.term, getattr(it, "span", None)))
-            stats["lowered"] += 1
+            lowered = lower_fact(it.term, span)
         except LoweringRefused as e:
-            stats["refused"] += 1
-            stats["refusals"].append(str(e))
+            refuse(f"{e}{where}")
+            continue
+        body.extend(lowered)
+        stats["lowered"] += 1
     mod = ast.Module(body=body, type_ignores=[])
     _undollar(mod)
     ast.fix_missing_locations(mod)
@@ -138,15 +156,11 @@ def lower_items(items) -> tuple[ast.Module, dict]:
 
 
 def read_iso(source: str) -> list:
-    """ISO source text -> ReaderItems (L0+L1+L2, unchanged -- plan §2)."""
-    from clausal.tools.prolog_reader import PrologReader
-    from clausal.tools.toklex import EOF, NEED_MORE
-    r = PrologReader()
-    r.feed(source)
-    r.feed("")
-    out = []
-    while True:
-        it = r.read_term()
-        if it is EOF or it is NEED_MORE:
-            return out
-        out.append(it)
+    """ISO source text -> ReaderItems (L0+L1+L2, unchanged -- plan §2).
+
+    The reader is CLOSED after the source is fed, as ``read_module`` does:
+    an end ``.`` is one only when layout or EOF follows it, so without the
+    close a last clause with no trailing newline stayed pending and was lost
+    (2026-09-29).  ``SyntaxIssue`` items are returned like any other."""
+    from clausal.tools.prolog_reader import read_module
+    return read_module(source)
