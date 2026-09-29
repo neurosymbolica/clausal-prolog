@@ -17,6 +17,7 @@ conversion (upcase_atom/2, downcase_atom/2).
 
 from __future__ import annotations
 
+import re as _re
 from typing import Any
 
 from clausal.logic.variables import deref, is_var, unify
@@ -752,14 +753,18 @@ def _number_codes__2(number, codes, trail, k):
 
 # ── atom_number/2 ───────────────────────────────────────────────────────────────
 
-import re as _re
-
 #: A number token as Prolog source writes one (ISO 6.4.4/6.4.5): an
 #: optional ``-`` directly before it; decimal, ``0x``/``0o``/``0b`` or
 #: ``0'c`` integers; a float needs a fraction and may carry an exponent.
 _NUMBER_TOKEN = _re.compile(
     r"-?(?:0x[0-9a-fA-F]+|0o[0-7]+|0b[01]+|0'(?:\\.|.)"
     r"|[0-9]+\.[0-9]+(?:[eE][+-]?[0-9]+)?|[0-9]+)\Z", _re.S)
+
+
+#: ``0'\\c`` escapes (ISO 6.4.2.1 plus Scryer's ``\\e``, ``\\s``)
+_CHAR_ESCAPES = {"n": "\n", "t": "\t", "\\": "\\", "'": "'", "a": "\a",
+                 "b": "\b", "f": "\f", "v": "\v", "r": "\r", "0": "\0",
+                 "e": "\x1b", "s": " ", '"': '"', "`": "`"}
 
 
 def _parse_number_token(text: str):
@@ -771,12 +776,9 @@ def _parse_number_token(text: str):
     if body.startswith("0'"):
         ch = body[2:]
         if ch.startswith("\\"):
-            simple = {"n": "\n", "t": "\t", "\\": "\\", "'": "'", "a": "\a",
-                      "b": "\b", "f": "\f", "v": "\v", "r": "\r", "0": "\0",
-                      "e": "\x1b", "s": " ", '"': '"', "`": "`"}
-            if ch[1:] not in simple:
+            if ch[1:] not in _CHAR_ESCAPES:
                 return None
-            ch = simple[ch[1:]]
+            ch = _CHAR_ESCAPES[ch[1:]]
         value = ord(ch)
     elif body[:2] in ("0x", "0o", "0b"):
         value = int(body[2:], {"0x": 16, "0o": 8, "0b": 2}[body[:2]])
@@ -785,6 +787,18 @@ def _parse_number_token(text: str):
     else:
         value = int(body)
     return -value if neg else value
+
+
+def _number_text(n) -> str:
+    """*n* as a Prolog number token that :func:`_parse_number_token` reads
+    back: a float always has its fraction (``1.0e+22``, not Python's
+    ``1e+22``)."""
+    s = str(n)
+    if type(n) is float and "e" in s:
+        mant, exp = s.split("e")
+        if "." not in mant:
+            s = f"{mant}.0e{exp}"
+    return s
 
 
 @_builtin("atom_number", 2)
@@ -808,7 +822,7 @@ def _atom_number__2(atom, number, trail, k):
         if isinstance(vn, bool) or not isinstance(vn, (int, float)):
             raise LogicException(type_error("number", vn, "atom_number/2"))
         mark = trail.mark()
-        if unify(atom, mint(str(vn)), trail):
+        if unify(atom, mint(_number_text(vn)), trail):
             yield None
         trail.undo(mark)
         return

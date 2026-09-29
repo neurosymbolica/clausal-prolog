@@ -45,3 +45,29 @@ def test_aggregate_all(native, ans):
     }
     for name, expected in want.items():
         assert ans(mod, name) == expected, name
+
+
+def test_aggregate_all_from_the_seam():
+    """The spec shapes as seam source builds them: ``count`` an atom,
+    ``sum(X)`` a cell."""
+    import tempfile
+    from pathlib import Path
+
+    from clausal.import_hook import _load_module
+    from clausal.logic.solve import _deref_walk, solve
+    from clausal.logic.variables import Var
+    src = ("-allow_singletons\n"
+           "-private([count, sum(_), max(_), set(_)])\n"
+           "p(1),\np(3),\np(2),\n"
+           "g0(C) <- aggregate_all(count, p(_), C)\n"
+           "g1(C) <- aggregate_all(sum(X), p(X), C)\n"
+           "g2(C) <- aggregate_all(max(X), p(X), C)\n"
+           "g3(C) <- aggregate_all(set(X), p(X), C)\n")
+    d = Path(tempfile.mkdtemp())
+    (d / "_agg_seam.clausal").write_text(src)
+    m = _load_module("_agg_seam", str(d / "_agg_seam.clausal"))
+    got = []
+    for i in range(4):
+        v = Var()
+        got.append([_deref_walk(v) for _ in solve((f"g{i}", v), m)])
+    assert got == [[3], [6], [3], [[1, 2, 3]]]

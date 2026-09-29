@@ -26,6 +26,12 @@ n17(L) :- atom_number('1.0e10', L).
 n19(L) :- atom_number('', L).
 n20(L) :- atom_number(L, -3).
 n21(L) :- atom_number('12', 13), L = y.
+n22(L) :- atom_number('0b101', L).
+n23(L) :- atom_number('0o17', L).
+n24(L) :- atom_number('-0x1A', L).
+n25(L) :- atom_number('0''\\n', L).
+n26(N) :- X is 10.0**22, atom_number(A, X), atom_number(A, N).
+n27(A) :- X is 10.0**22, atom_number(A, X).
 """
 
 
@@ -42,7 +48,8 @@ def test_atom_number(native, ans):
         "n13": [_err(("type_error", "atom", 12))],
         "n14": [_err(("type_error", "number", "a"))],
         "n15": ["y"], "n16": [], "n17": [1.0e10], "n19": [], "n20": ["-3"],
-        "n21": [],
+        "n21": [], "n22": [5], "n23": [15], "n24": [-26], "n25": [10],
+        "n26": [1.0e22], "n27": ["1.0e+22"],
     }
     for name, expected in want.items():
         assert ans(mod, name) == expected, name

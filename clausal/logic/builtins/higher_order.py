@@ -674,18 +674,8 @@ def _aggregate_value(name, items):
     if name == "bag":
         return list(items)
     if name == "set":
-        seen, out = set(), []
-        for x in items:
-            key = _standard_order_key(x)
-            try:
-                if key in seen:
-                    continue
-                seen.add(key)
-            except TypeError:
-                if any(_standard_order_key(y) == key for y in out):
-                    continue
-            out.append(x)
-        return sorted(out, key=_standard_order_key)
+        from clausal.logic.builtins.lists import sorted_set  # noqa: PLC0415
+        return sorted_set(items)
     if name == "sum":
         acc = 0
         for x in items:
@@ -706,7 +696,9 @@ def _aggregate_all_factory(db):
     ``min(E)`` the largest / smallest value of E (arithmetic, evaluated;
     FAILS when there is no solution), ``bag(E)`` the list of E, ``set(E)``
     that list sorted with duplicates removed (sort/2).  An unbound Spec is
-    instantiation_error, an unknown one type_error(aggregate, Spec).  It did
+    instantiation_error, any other one -- the witness forms ``max(X, W)`` /
+    ``min(X, W)`` and compound specs included, deliberately --
+    type_error(aggregate, Spec).  It did
     not exist (existence_error(procedure, aggregate_all/3)).  Runs call/1 of
     the ``findall/3`` term, so Goal is resolved in the calling module and
     findall/3's rules -- errors included -- apply."""
