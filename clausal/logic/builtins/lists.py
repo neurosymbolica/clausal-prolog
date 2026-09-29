@@ -714,20 +714,23 @@ def _sort_items(lst_val, sorted_val, who: str):
     from clausal.terms import SegList, SegString, SegBytes  # noqa: PLC0415
     from clausal.logic.exceptions import (  # noqa: PLC0415
         LogicException, instantiation_error, type_error)
+    # List first, then Sorted: ISO's error order (8.4.3.3 a, b, then c), so
+    # ``sort(_, x)`` is the instantiation error and ``sort(a, x)`` names a.
+    items = _as_items(lst_val)
+    if items is None:
+        if isinstance(lst_val, SegList):
+            walked = lst_val._walk_raw()
+            if not isinstance(walked, list):
+                raise LogicException(instantiation_error(who))
+            items = walked
+        elif is_var(lst_val) or isinstance(lst_val, (SegString, SegBytes)):
+            raise LogicException(instantiation_error(who))
+        else:
+            raise LogicException(type_error("list", lst_val, who))
     if not (is_var(sorted_val) or _as_items(sorted_val) is not None
             or isinstance(sorted_val, (SegList, SegString, SegBytes))):
         raise LogicException(type_error("list", sorted_val, who))
-    items = _as_items(lst_val)
-    if items is not None:
-        return items
-    if isinstance(lst_val, SegList):
-        walked = lst_val._walk_raw()
-        if isinstance(walked, list):
-            return walked
-        raise LogicException(instantiation_error(who))
-    if is_var(lst_val) or isinstance(lst_val, (SegString, SegBytes)):
-        raise LogicException(instantiation_error(who))
-    raise LogicException(type_error("list", lst_val, who))
+    return items
 
 
 @_trampoline_builtin("msort", 2)

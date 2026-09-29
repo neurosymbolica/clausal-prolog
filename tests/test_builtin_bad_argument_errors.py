@@ -7,7 +7,6 @@ checked against Scryer Prolog (/workspace/scryer-prolog, 2026-09-30).
 """
 import importlib
 import sys
-import textwrap
 
 import pytest
 
@@ -29,6 +28,9 @@ _CASES = [
     ("sort([a, *_], _)", "instantiation_error", "sort"),
     ("sort(_, _)", "instantiation_error", "sort"),
     ("sort([b, a], x)", ("type_error", "list", "x"), "sort"),
+    # ISO error order: List is checked before Sorted.
+    ("sort(_, x)", "instantiation_error", "sort"),
+    ("sort(a, x)", ("type_error", "list", "a"), "sort"),
     ("msort(a, _)", ("type_error", "list", "a"), "msort"),
     ("sub_atom(abc, _, -1, _, _)", ("domain_error", "not_less_than_zero", -1), "sub_atom"),
     ("sub_atom(abc, -1, _, _, _)", ("domain_error", "not_less_than_zero", -1), "sub_atom"),
@@ -54,17 +56,19 @@ def mod(tmp_path_factory):
              "-private([a, b, abc, foo, x, f(_), no_error])"]
     for i, (goal, _, _) in enumerate(_CASES):
         lines.append(
-            f"t{i}(R) <- (catch(({goal}, R is no_error), E, R is E)),")
+            f"t{i}(R) <- (catch(({goal}, R is no_error), E, R is E))")
     # Positive controls: the good-argument modes still answer.
     lines += [
-        "ok_sort(S) <- sort([b, a, b], S),",
-        "ok_arg(A) <- arg(1, f(a), A),",
-        "ok_arg0(A) <- arg(0, f(a), A),",
-        "ok_functor(T) <- functor(T, foo, 2),",
-        "ok_sub(S) <- sub_atom(abc, 1, 1, _, S),",
-        "ok_code(C) <- char_code(C, 97),",
-        "ok_len(N) <- atom_length(abc, N),",
-        "ok_seg(S) <- (L is [X, a, *T], T is [], X is b, sort(L, S)),",
+        "ok_sort(S) <- sort([b, a, b], S)",
+        "ok_arg(A) <- arg(1, f(a), A)",
+        "ok_arg0(A) <- arg(0, f(a), A)",
+        "ok_functor(T) <- functor(T, foo, 2)",
+        "ok_sub(S) <- sub_atom(abc, 1, 1, _, S)",
+        "ok_code(C) <- char_code(C, 97)",
+        "ok_len(N) <- atom_length(abc, N)",
+        "ok_seg(S) <- (L is [X, a, *T], T is [], X is b, sort(L, S))",
+        # a filled-in SegList with an UNBOUND element is still a proper list
+        "ok_seg_var(N) <- (L is [X, a, *T], T is [], sort(L, S), length(S, N))",
     ]
     (d / f"{_MOD}.clausal").write_text("\n".join(lines) + "\n")
     sys.path.insert(0, str(d))
@@ -98,3 +102,4 @@ def test_good_arguments_still_answer(mod):
     assert _answers(mod, "ok_code") == ["a"]
     assert _answers(mod, "ok_len") == [3]
     assert _answers(mod, "ok_seg") == [["a", "b"]]
+    assert _answers(mod, "ok_seg_var") == [2]
