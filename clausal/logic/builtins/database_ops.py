@@ -567,6 +567,17 @@ def _home_globals(db, module_dict: "dict | None", home) -> "dict | None":
 # ── assertz / retract ──────────────────────────────────────────────────────────
 
 
+def _refuse_non_callable_clause(term_val, who):
+    """ISO 8.9.1.3 b / Scryer: a clause that is a number (or another term
+    that can never be a goal) is ``type_error(callable, T)``.  It used to
+    escape as a raw Python ``TypeError`` ("Cannot extract (functor, arity)
+    from head term: 1")."""
+    from clausal.logic.builtins.call_body import is_non_callable_term  # noqa: PLC0415
+    if is_non_callable_term(term_val, lists=False):
+        from clausal.logic.exceptions import type_error  # noqa: PLC0415
+        raise LogicException(type_error("callable", term_val, who))
+
+
 @_db_builtin("assertz", 1, fields=("term",))
 def _assertz_factory(db):
     """assertz(Term) — add Term as a fact at end of its predicate's clause list.
@@ -586,6 +597,7 @@ def _assertz_factory(db):
             # ISO 8.9.1.3 a: an unbound clause is an instantiation error
             # (Scryer too); it used to fail silently (triage B4a).
             raise LogicException(instantiation_error("assertz/1"))
+        _refuse_non_callable_clause(term_val, "assertz/1")
         clause = _build_clause(term_val, "assertz/1", db, module_dict)
         functor, arity = head_key(clause.head)
         pred_cls = _find_pred_cls(functor, arity, module_dict)
@@ -629,6 +641,7 @@ def _asserta_factory(db):
             # ISO 8.9.1.3 a: an unbound clause is an instantiation error
             # (Scryer too); it used to fail silently (triage B4a).
             raise LogicException(instantiation_error("asserta/1"))
+        _refuse_non_callable_clause(term_val, "asserta/1")
         clause = _build_clause(term_val, "asserta/1", db, module_dict)
         functor, arity = head_key(clause.head)
         pred_cls = _find_pred_cls(functor, arity, module_dict)

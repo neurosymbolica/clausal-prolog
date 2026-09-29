@@ -507,12 +507,31 @@ def _univ__2(term, lst, trail, k):
         trail.undo(mark)
     else:
         # Construction
+        # ISO 8.5.3.3 (Scryer-verified): an unbound or partial List, or an
+        # unbound head, is an instantiation error; a non-list List is
+        # type_error(list, L); the empty list is
+        # domain_error(non_empty_list, []).  All used to FAIL silently.
+        from clausal.logic.exceptions import (  # noqa: PLC0415
+            LogicException, domain_error, instantiation_error, type_error)
+        from clausal.logic.builtins.lists import _as_items  # noqa: PLC0415
         lst_val = deref(lst)
-        if is_var(lst_val) or not isinstance(lst_val, list) or len(lst_val) == 0:
-            return
+        items = _as_items(lst_val)
+        if items is None:
+            if is_var(lst_val) or isinstance(lst_val, (SegList, SegString)):
+                if isinstance(lst_val, SegList):
+                    walked = lst_val._walk_raw()
+                    if isinstance(walked, list):
+                        items = walked
+                if items is None:
+                    raise LogicException(instantiation_error("=../2"))
+            else:
+                raise LogicException(type_error("list", lst_val, "=../2"))
+        lst_val = list(items)
+        if len(lst_val) == 0:
+            raise LogicException(domain_error("non_empty_list", [], "=../2"))
         f_val = deref(lst_val[0])
         if is_var(f_val):
-            return
+            raise LogicException(instantiation_error("=../2"))
         args_vals = [deref(a) for a in lst_val[1:]]
         if len(args_vals) == 0:
             # ``T =.. [N]`` — N must be ATOMIC (spec §6.4 / ISO 8.5.3.3 e);
@@ -529,10 +548,10 @@ def _univ__2(term, lst, trail, k):
                 or f_val is None
             ):
                 from clausal.logic.exceptions import LogicException, type_error
-                raise LogicException(type_error("atomic", f_val, "unpack/2"))
+                raise LogicException(type_error("atomic", f_val, "=../2"))
             constructed: Any = f_val  # atom
         else:
-            constructed = _construct_named(f_val, args_vals, "unpack/2")
+            constructed = _construct_named(f_val, args_vals, "=../2")
         mark = trail.mark()
         if unify(term, constructed, trail):
             yield None
