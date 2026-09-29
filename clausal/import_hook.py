@@ -985,8 +985,10 @@ class NativePrologLoader(PrologLoader):
         ``l3_stats``; raises ``SyntaxError`` at the refused ``.pl`` line."""
         from clausal.tools import iso_l3  # noqa: PLC0415
         try:
+            # The refusal names ``file.pl:N``; the SyntaxError carries the
+            # full path.
             tree, stats, singletons = iso_l3.lower_module(
-                pl_source, path, op_table=self._op_table())
+                pl_source, os.path.basename(path), op_table=self._op_table())
         except iso_l3.LoweringRefused as e:
             line = iso_l3.line_of(pl_source, e.span) or 0
             text = (pl_source.splitlines()[line - 1]
