@@ -131,6 +131,11 @@ With aliasing:
 
 This imports `double` from `utils` but makes it available locally as `my_double`.
 
+A bare name imports every arity the module has for it; the ISO indicator
+`double/2` imports one arity, as Scryer's `use_module(utils, [double/2])`
+does, and `alias(double/2, my_double)` renames one arity. See
+[Importing one arity](import.md#importing-one-arity-namen).
+
 !!! info "Importing an atom: when it matters"
     For predicates, importing is how you reach the defining module's predicate. For **atoms**, importing only grants the right to write the bare name: an atom is the interned `str` of its spelling, so `red` imported from `M` is the same atom as `'red'` anywhere else. (A [`-hide`](#-hide) atom is the one exception, and it cannot be imported by spelling.)
 

@@ -53,7 +53,7 @@ This gives:
 
 - **bounded stack depth** — the trampoline loop runs at a fixed stack depth; deep or infinitely recursive predicates do not exhaust the Python call stack or trigger `RecursionError`
 - true tail-call elimination (constant stack depth for deterministic chains)
-- **tail recursion optimization (TRO)** — when the last goal in a clause body is a self-recursive call preceded only by deterministic goals, the compiler emits a `while True` loop with argument reassignment instead of allocating a new `StepGenerator` per recursion depth, reducing memory from O(n) to O(1). Works across groundness-keyed and list structural dispatch boundaries; runtime `is_var()` ground-check ensures correctness when head-decomposition variables might be unbound
+- **tail recursion optimization (TRO)** — when the last goal in a clause body is a self-recursive call preceded only by deterministic goals, the compiler emits a `while True` loop with argument reassignment instead of allocating a new `StepGenerator` per recursion depth, reducing memory from O(n) to O(1). Works across groundness-keyed and list structural dispatch boundaries; runtime `is_var()` ground-check ensures correctness when head-decomposition variables might be unbound; an iteration whose prefix bound or constrained a caller's variable makes the ordinary call instead, so no effect is lost (see [Compiler](compiler.md#tail-recursion-optimization-tro))
 - the ability to interrupt execution for timeouts, concurrency, asyncio interop
 - a point of control that can be swapped (e.g. a C trampoline for reduced overhead)
 

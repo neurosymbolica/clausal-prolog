@@ -1,6 +1,7 @@
 # ISO Prolog Compatibility Report
 
-*Measured on engine `main` at 9fe1ee48, 2026-09-28. Earlier editions (March
+*Measured on engine `main` at 9fe1ee48, 2026-09-28, and updated
+2026-09-29 for procedures, modules and `==`. Earlier editions (March
 2026) recorded design decisions taken with Markus Triska; their outcome is
 summarised under [History](#history).*
 
@@ -148,6 +149,26 @@ Constraints: [`dif/2`, CLP(ℤ)](constraints.md), [CLP(B)](clpb.md),
 The first argument of each is checked as ISO requires for the error rows
 above; the next section lists where the checking stops short.
 
+`'=='(X, Y)` compares the whole term: a variable bound anywhere inside a
+list, cell or dict reads as its value, as ISO 8.4.1.1 requires (fixed
+2026-09-29).
+
+### Procedures and modules
+
+A procedure is a name **and** an arity, as in ISO: `p/1` and `p/2` in one
+file are two procedures, and a DCG nonterminal `s//1` is `s/3`. A name whose
+fields are declared may be declared at several arities
+(`-module(lib, [q(X), q(X, Y)])`); see [Predicates](predicates.md).
+
+ISO 13211-1 has no module system, so here Scryer is the reference:
+
+- `use_module(m, [p/1])` imports one arity of `p` (Clausal:
+  `-import_from(m, [p/1])`), and a bare name imports every arity;
+- a name clash between two modules is resolved with a module-qualified
+  call, `m:p(X)` (Clausal: `m.p(X)`). Renaming an import with `as` is not
+  supported, because neither ISO nor Scryer has it. (A `.clausal` file's
+  own `alias(p, q)` renames an import; it has no Prolog counterpart.)
+
 ---
 
 ## Known gaps
@@ -231,8 +252,6 @@ Not provided (calling one raises `existence_error(procedure, PI)`):
 - **List syntax.** Today's syntax writes a partial list `[H, *T]`; in a
   `.seam`/`.clausal` clause, `[H|T]` is a list holding one bitwise-or term.
   The `.pl` importer translates `[H|T]` for you.
-- **`call/N` with a builtin name** can leak a Python `TypeError`
-  (`call(in_, X, [1])`) instead of an ISO error.
 - **`write_canonical/1`** prints a list with the `'.'` functor
   (`'.'(s,[])`), not in list notation.
 
