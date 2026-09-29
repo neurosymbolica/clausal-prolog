@@ -13,6 +13,7 @@ Public API:
 from __future__ import annotations
 
 import ast as python_ast
+import functools
 import keyword as _keyword_module
 import posixpath
 import re
@@ -922,6 +923,18 @@ def _leftmost_usub(node):
         if result is not None:
             return result, depth + 1
     return None, 0
+
+
+@functools.lru_cache(maxsize=None)
+def _engine_signature(mod_path: str) -> frozenset | None:
+    """The engine's (name, arity) export set for *mod_path*, or None when the
+    engine names no such module. Memoised: the accessor imports the module."""
+    from clausal import module_signatures   # noqa: PLC0415 -- the engine's own package
+    try:
+        table = module_signatures(mod_path)
+    except Exception:    # existence_error(module, _) and any import failure
+        return None
+    return frozenset((name, arity) for name, arities in table.items() for arity in arities)
 
 
 #: Functor of the marker a dict literal converts to in the plain layout
@@ -2119,8 +2132,13 @@ class _ClausalToProlog:
             return PCompound("library", (PAtom(lib_inner),))
 
         if self.module_specs == "plain":
-            # Engine layout: the dotted path itself, as a `/`-joined spec.
-            segments = mod_path.split(".")
+            # Engine layout: the dotted path itself, as a `/`-joined spec. An
+            # engine ALIAS is spelled by what it aliases (`date_time` is
+            # `py/datetime`, ruling D32): the native front end resolves only
+            # the real name (measured). The engine's own table, so the two
+            # cannot drift.
+            from clausal.logic.compiler_v2 import _MODULE_ALIASES  # noqa: PLC0415
+            segments = _MODULE_ALIASES.get(mod_path, mod_path).split(".")
             spec: PTerm = PAtom(segments[0])
             for segment in segments[1:]:
                 spec = PCompound("/", (spec, PAtom(segment)))
@@ -2224,6 +2242,19 @@ class _ClausalToProlog:
                     imports.append(PCompound("/", (PAtom(name), PNumber(a))))
         return imports
 
+    def _plain_signature(self, mod_path: str) -> set[tuple[str, int]] | None:
+        """*mod_path*'s export set for the plain layout: the caller's
+        *module_signatures* first, else the ENGINE's own
+        :func:`clausal.module_signatures` -- which answers for Python-backed
+        and engine modules (``date_time``, ``py.datetime``, ``currency``...)
+        that have no Clausal source to take a signature from. A name the
+        engine lists with no arity (an arity-unknown adapter) is not in the
+        set. None when neither knows the target."""
+        supplied = (self.module_signatures or {}).get(mod_path)
+        if supplied is not None:
+            return supplied
+        return _engine_signature(mod_path)
+
     def _explicit_import_list(self, mod_path: str,
                               requested: list[tuple[str, int | None]]) -> list[PTerm]:
         """The import list for the ``"plain"`` (engine) layout: never None.
@@ -2240,7 +2271,7 @@ class _ClausalToProlog:
         call raises existence_error on the engine, and a signature for the
         target removes the ambiguity.
         """
-        exported = (self.module_signatures or {}).get(mod_path)
+        exported = self._plain_signature(mod_path)
         if exported is None:
             listed = []
             for name, arity in dict.fromkeys(requested):
@@ -2350,7 +2381,7 @@ class _ClausalToProlog:
         if self.module_specs == "plain" and mod_path not in self.dialect.library_map:
             # The engine's use_module/1 imports nothing: list the whole
             # export set, which only a signature can supply.
-            exported = (self.module_signatures or {}).get(mod_path)
+            exported = self._plain_signature(mod_path)
             if exported is None:
                 self._add_warning(
                     f"-import_module({mod_path}): no signature for the target, "

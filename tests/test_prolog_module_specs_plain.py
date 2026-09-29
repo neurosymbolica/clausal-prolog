@@ -226,3 +226,58 @@ def test_a_library_import_is_not_reexported():
         "-import_from(clausal.logic.clpfd, [in_domain])\n-import_from(fp.sub, [f/1])\n",
         module_path="fp.__init__", module_specs="plain")
     assert out.startswith(":- module(fp, [f/1]).")
+
+
+# ── engine signatures: Python-backed modules (batch I, ruling D32) ─────
+
+DATES = ("-module(dd, [p(N)])\n-import_from(date_time, [days_between, date])\n"
+         "p(N) <- (days_between(date(2026, 1, 10), date(2026, 1, 1), N))\n")
+
+
+def test_a_python_backed_target_is_listed_from_the_engine_signature():
+    """No caller signature: the arity comes from clausal.module_signatures,
+    the alias is spelled by what it aliases, and the data functor `date`
+    (not a predicate there) drops out."""
+    out = _plain(DATES, strict=True)
+    assert ":- use_module(py/datetime, [days_between/3])." in out
+
+
+def test_a_caller_signature_wins_over_the_engine():
+    out = _plain("-import_from(date_time, [days_between])\n", strict=True,
+                 module_signatures={"date_time": {("days_between", 9)}})
+    assert "days_between/9" in out
+
+
+def _load_dates(root: Path) -> str:
+    code = textwrap.dedent(f"""
+        import sys, importlib
+        sys.path.insert(0, {str(root)!r})
+        from clausal import solve
+        from clausal.logic.variables import Var, deref
+        try:
+            m = importlib.import_module("dd"); N = Var()
+            print("ANSWERS", [deref(N) for _ in solve(("p", N), m.__dict__.get("$module", m))])
+        except Exception as e:
+            print("RAISES", type(e).__name__)
+    """)
+    env = {**__import__("os").environ, "CLAUSAL_PL_FRONTEND": "native"}
+    proc = subprocess.run([sys.executable, "-c", code], cwd=REPO, env=env,
+                          capture_output=True, text=True, timeout=300)
+    return proc.stdout.strip().splitlines()[-1] if proc.stdout.strip() else proc.stderr[-300:]
+
+
+def test_the_engine_signed_import_runs_natively(tmp_path):
+    (tmp_path / "dd.pl").write_text(clausal_source_to_prolog(
+        DATES, strict=True, module_path="dd", module_specs="plain"))
+    assert _load_dates(tmp_path) == "ANSWERS [9]"
+
+
+def test_control_without_the_engine_signature_the_import_is_lost(tmp_path, monkeypatch):
+    """With the engine fallback disabled the bare name is read as an atom
+    (ruling D4) and nothing imports days_between/3."""
+    import clausal.tools.clausal_to_prolog as ctp
+    monkeypatch.setattr(ctp, "_engine_signature", lambda mod_path: None)
+    out = clausal_source_to_prolog(DATES, module_path="dd", module_specs="plain")
+    assert "days_between/3" not in out
+    (tmp_path / "dd.pl").write_text(out)
+    assert _load_dates(tmp_path).startswith("RAISES")
