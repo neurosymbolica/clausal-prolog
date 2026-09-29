@@ -428,6 +428,42 @@ def load_operator_mapping(path: str | Path) -> dict[str, dict]:
 # ── Emitter ──────────────────────────────────────────────────────────
 
 
+def _python_backed_module(dotted: str):
+    """The Python module *dotted* names when it is PYTHON-backed (a ``.py``
+    file, not a Clausal source a ``module/2`` list is read from), else None.
+    ``py.X`` is the seam's ``clausal.modules.py.X`` (the import hook's
+    redirect).  Nothing is imported unless its source is a Python file."""
+    import importlib  # noqa: PLC0415
+    import importlib.util  # noqa: PLC0415
+    from clausal._suffixes import SOURCE_SUFFIXES  # noqa: PLC0415
+    candidates = [dotted]
+    if dotted.startswith("py.") and "." not in dotted[3:]:
+        candidates.insert(0, f"clausal.modules.{dotted}")
+    for cand in candidates:
+        try:
+            spec = importlib.util.find_spec(cand)
+        except (ImportError, ValueError):
+            continue
+        if spec is None:
+            continue
+        origin = spec.origin or ""
+        if not origin.endswith(".py") or origin.endswith(SOURCE_SUFFIXES):
+            return None
+        try:
+            mod = importlib.import_module(cand)
+        except Exception as e:  # noqa: BLE001
+            # Refused HERE, as the native front end refuses it: falling back
+            # to the Clausal path would emit indicators and fail later with
+            # a misleading "not a Clausal module" at load.
+            raise PrologTranslationError(
+                f"{dotted} could not be imported: {e}") from e
+        from clausal.logic.predicate import namespace_db  # noqa: PLC0415
+        if namespace_db(vars(mod)) is not None:
+            return None     # a .py module carrying a Clausal database
+        return mod
+    return None
+
+
 def _collect_predicate_names(pmodule: PModule) -> set[str]:
     """Every name *pmodule* uses as a predicate: clause/DCG head functors
     (including 0-arity atom heads) and the functor of every compound term.
@@ -1154,6 +1190,14 @@ class _PrologToClausal:
                     f"{directive}: the module is not an atom, an a/b path "
                     "or library(Name), so it names no module to import.")
             clausal_mod = self._resolve_module_path(spec, directive)
+            try:
+                py_mod = _python_backed_module(clausal_mod)
+            except PrologTranslationError as e:
+                raise PrologTranslationError(f"{directive}: {e}") from None
+            if py_mod is not None:
+                return self._emit_python_use_module(
+                    clausal_mod, py_mod,
+                    body.args[1] if len(body.args) == 2 else None, directive)
 
         if len(body.args) == 1:
             # ISO-family use_module/1 imports every EXPORTED predicate,
@@ -1186,6 +1230,62 @@ class _PrologToClausal:
             return f"-import_from({clausal_mod}, {imports})"
         else:
             return f"-import_module({clausal_mod})"
+
+    def _emit_python_use_module(self, dotted, mod, imports, directive) -> str:
+        """``use_module(py/datetime, [days_between/3])`` -- a PYTHON-backed
+        module: it has no ``module/2`` list and the seam's ``-import_from``
+        takes its names BARE (an indicator against one is refused at load:
+        "not a Clausal module, so its names have no predicate arities to
+        select").  Each ``name/N`` entry is CHECKED against
+        ``clausal.module_signatures`` -- an unknown name or an arity the
+        module does not register is a translation error naming the line and
+        listing what the module offers -- and the checked names are imported
+        bare.  No list imports every predicate the module has.  The native
+        front end (``iso_l3_directives._use_python_module``) does the same,
+        with the same message."""
+        from clausal.logic.solve import module_signatures  # noqa: PLC0415
+        sig = module_signatures(mod)
+        offer = ", ".join(f"{n}/{a}" for n in sig
+                          for a in (sorted(sig[n]) or ["?"])) or "no predicates"
+        if imports is None:
+            names = list(sig)
+        else:
+            if not isinstance(imports, PList) or imports.tail is not None:
+                raise PrologTranslationError(
+                    f"{directive}: the import list is not a list")
+            names = []
+            for e in imports.elements:
+                if (isinstance(e, PCompound) and e.functor in ("/", "//")
+                        and len(e.args) == 2 and isinstance(e.args[0], PAtom)):
+                    n = e.args[0].name
+                    a = _indicator_arity(e.args[1])
+                    if not isinstance(a, int):
+                        raise PrologTranslationError(
+                            f"{directive}: {_plain_term(e)} is not a name/N "
+                            "indicator")
+                    if e.functor == "//":
+                        a += 2
+                    have = sig.get(n)
+                    if have is None or (have and a not in have):
+                        at = (f"{dotted} has {n} as "
+                              + ", ".join(f"{n}/{x}" for x in sorted(have))
+                              if have else f"{dotted} has no predicate {n}")
+                        raise PrologTranslationError(
+                            f"{directive}: existence_error(procedure, "
+                            f"{n}/{a}) -- {at}; {dotted} offers {offer}")
+                elif isinstance(e, PAtom):
+                    n = e.name
+                else:
+                    raise PrologTranslationError(
+                        f"{directive}: {_plain_term(e)} is not a name/N "
+                        "indicator")
+                if n not in names:
+                    names.append(n)
+        if not names:
+            return f"# {directive}: {dotted} offers no predicates to import"
+        self._own_names.update(names)
+        return (f"-import_from({dotted}, "
+                f"[{', '.join(self._predicate_name(n) for n in names)}])")
 
     def _resolve_module_path(self, spec: str, directive: str) -> str:
         """The dotted module a ``use_module`` path names.
