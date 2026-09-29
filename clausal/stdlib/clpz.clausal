@@ -6,11 +6,3 @@
 # from here, and the seam keeps its own.
 
 label(VS) <- labeling([], VS)
-
-# sum/3 under clpz's name.  The engine spells it `sum_` (a bare `sum` is
-# Python's builtin in seam source, so it cannot be a global builtin).  NOT
-# YET REACHED: the native front end imports only the names its
-# _LIBRARY_OVERRIDES table lists for library(clpz) (today `label`), so that
-# table needs `sum` for a .pl file to see this.
-
-sum(VS, OP, V) <- sum_(VS, OP, V)

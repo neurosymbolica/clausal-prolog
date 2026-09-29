@@ -36,3 +36,45 @@ def test_clpz_globals(native, ans):
     assert ans(mod, "c27") == [[r(3, 3)]]
     assert ans(mod, "c31") == [[1]]
     assert ans(mod, "c32") == [["<"]]
+
+
+ERRORS = """\
+:- use_module(library(clpz)).
+e1(E) :- catch(fd_dom(a, _), error(E, _), true).
+e2(E) :- catch(all_distinct(_), error(E, _), true).
+e3(E) :- catch(all_distinct(foo), error(E, _), true).
+e4(E) :- catch(global_cardinality([_], [_]), error(E, _), true).
+e5(E) :- catch(global_cardinality([_], [a-1]), error(E, _), true).
+e6(E) :- catch(global_cardinality([_], [x]), error(E, _), true).
+e7(E) :- catch(tuples_in([[_]], [[a]]), error(E, _), true).
+e8(E) :- catch(tuples_in([[_]], [[_]]), error(E, _), true).
+e9(E) :- catch(tuples_in(_, [[1]]), error(E, _), true).
+f1(R) :- findall(x, tuples_in([[_, _]], [[1]]), R).
+f2(R) :- findall(D, (X #< 5, fd_dom(X, D)), R).
+f3(R) :- findall(D, (X in 1..2 \\/ 4..5 \\/ 7..8, fd_dom(X, D)), R).
+f4(R) :- findall(O, zcompare(O, 2, 2), R).
+f5(R) :- findall(O, zcompare(O, 3, 2), R).
+"""
+
+
+def test_clpz_globals_errors_and_shapes(native, ans):
+    """Error terms as Scryer's (must_be's instantiation_error /
+    type_error(integer, _), list_si's instantiation_error,
+    domain_error(gcc_pair, _)); a relation row of another width matches
+    nothing; half-bounded and three-interval domains."""
+    mod = native.load("l3_clpz_globals_err", ERRORS)
+    r = lambda a, b: ("..", a, b)  # noqa: E731
+    assert ans(mod, "e1") == [("type_error", "integer", "a")]
+    assert ans(mod, "e2") == ["instantiation_error"]
+    assert ans(mod, "e3") == [("type_error", "list", "foo")]
+    assert ans(mod, "e4") == ["instantiation_error"]
+    assert ans(mod, "e5") == [("type_error", "integer", "a")]
+    assert ans(mod, "e6") == [("domain_error", "gcc_pair", "x")]
+    assert ans(mod, "e7") == [("type_error", "integer", "a")]
+    assert ans(mod, "e8") == ["instantiation_error"]
+    assert ans(mod, "e9") == ["instantiation_error"]
+    assert ans(mod, "f1") == [[]]
+    assert ans(mod, "f2") == [[r("inf", 4)]]
+    assert ans(mod, "f3") == [[("\\/", ("\\/", r(1, 2), r(4, 5)), r(7, 8))]]
+    assert ans(mod, "f4") == [["="]]
+    assert ans(mod, "f5") == [[">"]]
