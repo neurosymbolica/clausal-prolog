@@ -35,8 +35,12 @@ CASES = {
     "arg":      "findall(V, arg_call(V), L)",
     "negated":  "findall(1, neg(zz), L)",
     "missing":  "findall(V, (fact_dict(D), get(D, zz, V)), L)",
+    # the strict subscript: a hit, check mode, and a miss that RAISES
+    "sub_hit":  "findall(V, sub(V), L)",
+    "sub_chk":  "findall(1, sub_is(2), L)",
+    "sub_miss": "findall(K, catch(sub_zz(_), error(existence_error(dict_key, K), _), True), L)",
 }
-LIB = """-module(dm, [fact_dict(D), rd(V), nested(V), tmpl(L), upd(P), arg_call(V), neg(K), tkey(L)])
+LIB = """-module(dm, [fact_dict(D), rd(V), nested(V), tmpl(L), upd(P), arg_call(V), neg(K), tkey(L), sub(V), sub_is(V), sub_zz(V)])
 -private([a, b, c, inner, x, n, k, zz])
 fact_dict({a: 1, b: 2}),
 rd(V) <- (D is {a: 1}, get(D, a, V))
@@ -47,14 +51,17 @@ upd(P) <- (D is {a: 1, b: 2}, D2 is {**D, b: 9, c: 3}, dict_pairs(D2, P))
 arg_call(V) <- (pick({k: 5}, V))
 pick(D, V) <- (get(D, k, V))
 neg(K) <- (not get({a: 1}, K, _))
+sub(V) <- (D is {a: 1, b: 2}, V is D[b])
+sub_is(V) <- (D is {a: 1, b: 2}, D[b] is V)
+sub_zz(V) <- (D is {a: 1}, V is D[zz])
 """
-DRIVER = ("-import_from(dm, [fact_dict, rd, nested, tmpl, upd, arg_call, neg, tkey])\n"
-          "-private([zz])\n"
+DRIVER = ("-import_from(dm, [fact_dict, rd, nested, tmpl, upd, arg_call, neg, tkey, sub, sub_is, sub_zz])\n"
+          "-private([zz, dict_key])\n"
           # neg/1, not neg/0: an IMPORTED 0-arity goal passed to findall is a
           # separate translator-front-end defect (reported), not D6's.
           + "".join(f"c_{n}(L) <- ({g})\n" for n, g in CASES.items()))
 SIGS = {"dm": {("fact_dict", 1), ("rd", 1), ("nested", 1), ("tmpl", 1),
-               ("upd", 1), ("arg_call", 1), ("neg", 1), ("tkey", 1)}}
+               ("upd", 1), ("arg_call", 1), ("neg", 1), ("tkey", 1), ("sub", 1), ("sub_is", 1), ("sub_zz", 1)}}
 
 RUN = textwrap.dedent("""
     import sys, importlib
@@ -103,6 +110,7 @@ def test_the_ground_truth_is_the_engine_documented_one(truth):
         "fact": "[[a-1,b-2]]", "read": "[1]", "nested": "[7]",
         "template": "[[n-1],[n-2]]", "tkey": "[[a-1],[b-1]]", "update": "[[a-1,b-9,c-3]]", "arg": "[5]",
         "negated": "[1]", "missing": "[]",
+        "sub_hit": "[2]", "sub_chk": "[1]", "sub_miss": "[zz]",
     }
 
 
@@ -135,9 +143,9 @@ def test_a_negated_literal_stays_inside_the_negation():
     assert "\\+ (dict_pairs(Dict__1, [a - 1]), get(Dict__1, zz, _))" in out
 
 
-def test_the_strict_subscript_is_refused_until_the_engine_has_a_strict_read():
-    with pytest.raises(UntranslatableConstructError, match="dict subscript"):
-        _plain("s(P, V) <- (V is P[k])\n", strict=True)
+def test_the_strict_subscript_lowers_to_get_strict():
+    out = _plain("s(P, V) <- (V is P[k])\n", strict=True)
+    assert "get_strict(P, k, V)" in out
 
 
 def test_the_relative_layout_keeps_the_iso_lowering():

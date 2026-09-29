@@ -3895,14 +3895,11 @@ class _ClausalToProlog:
         key = self._convert_expr(key_node)
         value = self._convert_expr(value_node)
         if self.module_specs == "plain":
-            # D6: no engine predicate reads a dict STRICTLY yet (get/3 and
-            # dict_get/3 both fail on a missing key, where the subscript
-            # raises existence_error(dict_key, K)). Refused until one exists,
-            # rather than silently softened.
-            self._add_warning(
-                "dict subscript " + python_ast.unparse(subscript_node)
-                + ": no strict engine read to lower it to yet")
-            return PAtom("???")
+            # D6: the engine's strict read. Like the subscript it RAISES
+            # existence_error(dict_key, K) on a missing key, where get/3 and
+            # dict_get/3 fail (measured); only the error's implementation-
+            # defined context differs (get_strict/3 vs the subscript's).
+            return PCompound("get_strict", (profile, key, value))
         return PCompound("profile_get_strict", (profile, key, value))
 
     def _convert_dict(self, node: python_ast.Dict) -> PTerm:
