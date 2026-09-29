@@ -985,6 +985,9 @@ def imported_atoms(module_or_package: Any) -> dict:
         atom in its own ``-module``/``-private`` list owns it:
         :func:`declared_atoms` reports it instead).
 
+    A ``name/N`` entry (D20) names a PREDICATE at an arity, never an atom,
+    and is not counted.
+
     The key is the ATOM, i.e. the exporter's spelling: ``alias(orig, local)``
     reports ``orig``, which is what the local name is bound to.  The value is
     the exporter's dotted module name as ``sys.modules`` has it (the resolved
@@ -1020,7 +1023,10 @@ def imported_atoms(module_or_package: Any) -> dict:
     found: dict[str, str] = {}
     for ns in files:
         per_file: dict[str, str] = {}
-        for name, exporter in ns.get(IMPORT_FROM_KEY) or ():
+        for name, exporter, *selected in ns.get(IMPORT_FROM_KEY) or ():
+            if selected and selected[0] is not None:
+                # A ``name/N`` entry names a PREDICATE, never an atom (D20).
+                continue
             if name in declared_here:
                 continue
             if exporter not in owners:

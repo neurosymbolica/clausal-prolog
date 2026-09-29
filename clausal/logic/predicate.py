@@ -690,6 +690,7 @@ def _refuse_unqualified_other_arity(binding: Any, name: str, arity: int,
     )
     defined = None
     site = None
+    unimported = None
     # A diagnostic: the handle's owner (with the caller's db as the Q0
     # hint) only sharpens the message, so an ambiguous owner is "unknown".
     from clausal.logic.atoms import demangle, is_mangled  # noqa: PLC0415
@@ -697,13 +698,30 @@ def _refuse_unqualified_other_arity(binding: Any, name: str, arity: int,
         _mod_name, _bare = demangle(binding)
         owner = _owner_db_or_none(_mod_name, db)
         if owner is not None:
-            others = sorted(a for a in owner.arities_for(_bare) if a != arity)
+            owned = owner.arities_for(_bare)
+            # The arities this module IMPORTED, when the import selected some
+            # (D20, ``-import_from(m, [p/1])``): those are what ``name``
+            # takes here, not every arity its owner has.
+            granted = (db.adopted_arities(name)
+                       if db is not None and db is not owner else frozenset())
+            others = sorted(a for a in (granted or owned) if a != arity)
             defined = others[0] if len(others) == 1 else None
             # The class arm's "defined at" line, from the ROW (W4b-2d R6):
             # only under the owner's own name, as there.
             if name == _bare:
                 site = _row_declared_at(owner, _bare, defined)
-    raise predicate_arity_mismatch(name, arity, defined, site=site)
+            if granted and arity in owned and arity not in granted:
+                entry = (f"{_bare}/{arity}" if name == _bare
+                         else f"alias({_bare}/{arity}, {name})")
+                unimported = (
+                    f"  {_mod_name} has {_bare}/{arity}, but this module's "
+                    f"-import_from did not import it: add {entry} to the "
+                    f"-import_from({_mod_name}, [...]) list to call it")
+    exc = predicate_arity_mismatch(name, arity, defined, site=site)
+    if unimported is not None:
+        exc = PredicateArityMismatchError(
+            f"{exc.message}\n{unimported}", name, arity)
+    raise exc
 
 
 class _UnqualifiedName:
@@ -2212,6 +2230,30 @@ def _handle_head_cell(handle: str, args: tuple, kwargs: dict,
     return (functor, *written) if written else functor
 
 
+def record_import_arities(namespace: dict, selections: dict) -> None:
+    """The module-body record of ``-import_from`` arity selections (D20),
+    read by :func:`_foreign_head_verdict` while the body builds heads.
+
+    Keyed by the imported HANDLE (a head names the handle, not the local
+    spelling), MERGED across entries and directives: the arities are the
+    union of every selection that reached the handle, and a bare import of
+    it (``None``) means every arity, for good.  A handle imported under two
+    local names at different arities therefore counts as imported at both,
+    which can only send a head to the load gate (a loud refusal), never
+    let one past it.  Non-handle bindings (a Python module's objects) are
+    skipped; the load refuses ``name/N`` against those anyway."""
+    record = namespace.setdefault("$import_arities", {})
+    for local, found in selections.items():
+        handle = namespace.get(local)
+        if type(handle) is not str:
+            continue
+        if found is None or (handle in record and record[handle] is None):
+            record[handle] = None
+        else:
+            record[handle] = frozenset(record.get(handle) or ()) | frozenset(
+                found)
+
+
 def _foreign_head_verdict(handle: str, home: "dict | None",
                           written: int) -> "str | None":
     """How :func:`_handle_head_cell` treats a head the owner's signature
@@ -2237,6 +2279,11 @@ def _foreign_head_verdict(handle: str, home: "dict | None",
     resolved = _resolve_mangled_owner(handle, db=home_db)
     if resolved is None or resolved[0] is home_db:
         return None
+    selected = (home.get("$import_arities") or {}).get(handle)
+    if selected is not None and written not in selected:
+        # D20: ``-import_from(m, [p/1])`` did not import ``p/written``, so
+        # this head is the importer's own procedure (ISO).
+        return "local"
     if written in resolved[0].head_signatures(resolved[1]):
         return "defer"
     return "local"

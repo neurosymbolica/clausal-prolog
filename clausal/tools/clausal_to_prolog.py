@@ -1945,6 +1945,16 @@ class _ClausalToProlog:
                 requested.append((resolve_name(elt.func.id, self.dialect), len(elt.args)))
             elif isinstance(elt, python_ast.Name):
                 requested.append((resolve_name(elt.id, self.dialect), None))
+            elif (isinstance(elt, python_ast.BinOp)
+                  and isinstance(elt.op, (python_ast.Div, python_ast.FloorDiv))
+                  and isinstance(elt.left, python_ast.Name)
+                  and isinstance(elt.right, python_ast.Constant)
+                  and type(elt.right.value) is int):
+                # ``name/N`` (D20) is already the ISO indicator; ``name//N``
+                # is the nonterminal, ``name/N+2``.
+                extra = 2 if isinstance(elt.op, python_ast.FloorDiv) else 0
+                requested.append((resolve_name(elt.left.id, self.dialect),
+                                  elt.right.value + extra))
 
         if self.module_signatures is None:
             if self.module_path is not None:

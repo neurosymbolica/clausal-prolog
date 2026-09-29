@@ -520,6 +520,26 @@ reach(X, Y) <- (edge(X, Z), reach(Z, Y))
         assert ":- use_module(" in result
         assert "tests/fixtures/importable_utils" in result
 
+    def test_import_from_an_indicator_keeps_its_arity(self):
+        """D20: ``-import_from(m, [p/1])`` exports as ``p/1``, and a
+        nonterminal ``s//1`` as ``s/3`` -- not dropped."""
+        source = ('-import_from(tests.fixtures.importable_utils, '
+                  '[helper/1, sent//1])')
+        result = clausal_source_to_prolog(source)
+        flat = " ".join(result.split())
+        assert ("use_module('tests/fixtures/importable_utils', "
+                "[helper/1, sent/3])") in flat
+
+    def test_a_bare_name_beside_an_indicator_imports_the_whole_module(self):
+        """With no module signatures a bare name has no arity to emit, so
+        the list becomes a listless use_module (F5) -- which still imports
+        helper/1 and sent/3 along with everything else."""
+        source = ('-import_from(tests.fixtures.importable_utils, '
+                  '[helper/1, double, sent//1])')
+        result = clausal_source_to_prolog(source)
+        flat = " ".join(result.split())
+        assert ":- use_module('tests/fixtures/importable_utils')." in flat
+
     def test_dynamic_directive(self):
         # nv
         source = '-dynamic(Color(NAME, VALUE))'

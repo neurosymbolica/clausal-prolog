@@ -130,6 +130,23 @@ since 0.4.0 finish three moves:
 
 ### Added
 
+- **`-import_from(m, [p/1])` imports one arity of `p`**, as Scryer's
+  `use_module(m, [p/1])` does (`s//1` is `s/3`). A bare `p` still imports
+  every arity; the forms mix in one list, and `alias(p/1, q)` renames one
+  arity. An indicator the exporter lacks is a load-time `ImportError`
+  (`existence_error(procedure, p/N)`, with the file, line and the arities
+  the module has). A call at an arity that was not imported is refused like
+  any missing arity, and the message names the entry to add. A `p/N` entry
+  names a predicate, so `clausal.imported_atoms` does not count it. See
+  [docs/import.md](docs/import.md#importing-one-arity-namen).
+- **A repeated `-import_from` entry is one import.** `[baz, baz]`,
+  `[baz/1, baz/1]` and `[baz, baz/1]` load as one entry (the `.pl`
+  translator no longer emits `[baz, baz]` for `[baz/1, baz/2]`). Binding ONE
+  local name to two different predicates (`[alias(f, x), alias(g, x)]`) is
+  now a `SyntaxError`; Python kept the last one silently before.
+- **A `.pl` file's `use_module(file, [p/1])` imports `p/1` only**, as in
+  Scryer; it imported every arity of `p` before. A `library(...)` list is
+  still imported by bare name.
 - **`clausal.declared_atoms(module_or_package)`.** The `frozenset` of atom
   names declared in the `-module`/`-private` lists of a module's own files,
   or, for a package, of its `__init__` and its loaded submodules. An
@@ -295,6 +312,11 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
 
 ### Fixed
 
+- **An imported `.pl` file's `_Name` variable is no singleton.** By the
+  Prolog convention (ISO, Scryer) `_Y` in `setof(X, p(X, _Y), L)` is used
+  once on purpose; the `.pl` load warned "rename to `_Y_UNUSED`". The
+  `.clausal`/`.seam` rule is unchanged: every named variable used once
+  warns.
 - **`python -m clausal.testing` skips what the pytest plugin skips.** A
   directory scan honours `collect_ignore`/`collect_ignore_glob` from the
   `conftest.py` files under it, so `tests/` no longer reports the golden

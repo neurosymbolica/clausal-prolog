@@ -155,6 +155,51 @@ connected(X, Y) <- reach(X, Y)
 
 Write alias names like every other predicate name, in lowercase `snake_case`. An ALL-CAPS name (`R`, `REACH`) is a logic variable to the name resolver and will not work as an alias.
 
+#### Importing one arity: `name/N`
+
+A bare name imports **every** arity the exporter has for it. An ISO
+predicate indicator imports one arity, as Scryer's `use_module(m, [p/1])`
+does (a DCG nonterminal `s//1` is `s/3`):
+
+```text
+-import_from(myapp.graphs.utils, [reachable/2, alias(path/3, route), edge])
+```
+
+The forms mix in one list. Under `reachable/2` only `reachable/2` is
+imported; this file may define its own `reachable/1` or `reachable/3`, which
+are procedures of their own (ISO). A call to an arity that was not imported
+and is not defined here is refused like any call at a missing arity
+(`PredicateArityMismatchError`, whose ISO term is
+`existence_error(procedure, reachable/3)`), and the message says when the
+exporter has that arity and which entry to add. `alias(path/3, route)`
+imports `path/3` under the local name `route`.
+
+Selections add up: `[reachable/1, reachable/2]`, or the two in separate
+directives, import both arities, and a bare `reachable` anywhere in the file
+imports every arity. One predicate imported under two local names must be
+imported at the same arities under each: `[path/1, alias(path/3, route)]`
+is a `SyntaxError`, because both names share one reference and a call could
+not tell them apart.
+
+An indicator the exporter does not have is a load-time `ImportError`
+naming the file, the line, the module and the indicator
+(`existence_error(procedure, reachable/4)`), and saying which arities the
+module has for the name. A Python module has no predicate arities, so an
+indicator against one is refused: list the bare name.
+
+A `name/N` entry names a predicate, never an atom, so
+[`clausal.imported_atoms`](public-api.md) does not report it.
+
+#### Repeated entries
+
+An entry that repeats one already in the list is imported once:
+`[baz, baz]`, `[baz/1, baz/1]` and `[alias(baz, b), alias(baz, b)]` are
+each one import, and `[baz, baz/1]` is every arity (the bare name already
+brings them all). Two entries that bind ONE local name to two different
+predicates -- `[alias(f, x), alias(g, x)]`, or `[g, alias(f, g)]` -- are a
+`SyntaxError`. One predicate under two local names (`[f, alias(f, f2)]`)
+is fine.
+
 #### Name isolation
 
 Behind the scenes, imported predicates are stored under a fully-qualified dotted key in compiled function globals — e.g., `"myapp.graphs.utils.reachable"` rather than bare `"reachable"`. This means Python code in the `.clausal` file cannot accidentally shadow an imported predicate by assigning to the same name. The dotted key is invisible to the user; clause bodies use the short local name as written.

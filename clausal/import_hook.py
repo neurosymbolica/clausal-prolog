@@ -701,11 +701,12 @@ class _ClausalSourceLoader(SourceLoader):
                 raise
 
 
-def _parse_clausal_source(source, filename):
+def _parse_clausal_source(source, filename, prolog_singletons=False):
     """Parse + EmbedTransformer a .clausal source string.
 
     Returns ``(code_object, transformer)`` — the transformer carries
-    ``_module_items`` needed by the V2 pipeline.
+    ``_module_items`` needed by the V2 pipeline.  *prolog_singletons* is the
+    ``.pl`` path's (D19): a ``_Name`` variable is no singleton there.
     """
     # A malformed clause surfaces here as CPython's stock one-liner, whose
     # reported line is where the parse gave up rather than where the mistake
@@ -720,14 +721,15 @@ def _parse_clausal_source(source, filename):
         tree = ast.parse(source, filename=filename)
         source_lines = source.splitlines(keepends=True)
         transformer = EmbedTransformer(
-            source_lines=source_lines, filename=filename)
+            source_lines=source_lines, filename=filename,
+            prolog_singletons=prolog_singletons)
         tree = transformer.visit(tree)
         ast.fix_missing_locations(tree)
         code = compile(tree, filename=filename, mode="exec")
         return code, transformer
 
 
-def _extract_module_items(source, filename):
+def _extract_module_items(source, filename, prolog_singletons=False):
     """Re-parse .clausal source text just to recover module_items (cache-hit path)."""
     with warnings.catch_warnings(), \
             clausal_syntax_diagnostics(source, filename):
@@ -738,7 +740,8 @@ def _extract_module_items(source, filename):
         tree = ast.parse(source, filename=filename)
         source_lines = source.splitlines(keepends=True)
         transformer = EmbedTransformer(
-            source_lines=source_lines, filename=filename)
+            source_lines=source_lines, filename=filename,
+            prolog_singletons=prolog_singletons)
         transformer.visit(tree)
         return transformer._module_items
 
@@ -842,7 +845,8 @@ class PrologLoader(_ClausalSourceLoader):
                 (path, 0, 0, ""),
             ) from e
 
-        code, transformer = _parse_clausal_source(clausal_source, path)
+        code, transformer = _parse_clausal_source(clausal_source, path,
+                                                  prolog_singletons=True)
         transformer._module_items[:0] = _prolog_default_items()
         self._last_transformer = transformer
         return code
@@ -869,7 +873,7 @@ class PrologLoader(_ClausalSourceLoader):
         pl_source = self.get_data(path).decode("utf-8")
         clausal_source = self._translate(pl_source)
         return _prolog_default_items() + _extract_module_items(
-            clausal_source, path)
+            clausal_source, path, prolog_singletons=True)
 
 
 # Backward-compat alias — prefer _load_module() for new code.
