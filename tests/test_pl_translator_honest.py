@@ -21,7 +21,7 @@ from clausal.tools.prolog_to_clausal import (
     PrologTranslationError, prolog_to_clausal,
 )
 
-_PREFIX = "_plhonest_"
+_PREFIX = "plhonest_"
 
 
 @pytest.fixture(autouse=True)
@@ -93,3 +93,61 @@ class TestCaretQuantifier:
             u(L) :- setof(X, Y^member(X-Y, [2-b, 1-a]), L).
         """)
         assert _answers(m, "u") == [[1, 2]]
+
+
+# ── B. no rename of a name the program means literally ────────────────
+
+
+class TestNoStaleRenames:
+    """A Prolog name crosses unchanged unless the engine spells the SAME
+    predicate differently.  ``profile_get/3`` was renamed to Clausal's
+    ``get/3`` (an export-direction mapping for a downstream helper library,
+    run backwards), so a program's own ``profile_get`` vanished."""
+
+    def test_undefined_profile_get_is_an_existence_error(self, tmp_path):
+        # Scryer: error(existence_error(procedure, profile_get/3), _)
+        m = _load(tmp_path, "pg_undef", """\
+            t(V) :- X = foo, profile_get(X, k, V).
+        """)
+        with pytest.raises(Exception, match="profile_get"):
+            _answers(m, "t")
+
+    def test_own_profile_get_is_called(self, tmp_path):
+        m = _load(tmp_path, "pg_own", """\
+            profile_get(foo, k, 1).
+            t(V) :- profile_get(foo, k, V).
+        """)
+        assert _answers(m, "t") == [1]
+        x = Var()
+        assert [s["X"] for s in query(("profile_get", "foo", "k", x),
+                                      {"X": x}, m)] == [1]
+
+    def test_imported_profile_get_is_called(self, tmp_path):
+        (tmp_path / f"{_PREFIX}pg_lib.pl").write_text(textwrap.dedent(f"""\
+            :- module({_PREFIX}pg_lib, [profile_get/3]).
+            profile_get(foo, k, 2).
+        """))
+        m = _load(tmp_path, "pg_user", f"""\
+            :- use_module({_PREFIX}pg_lib, [profile_get/3]).
+            t(V) :- profile_get(foo, k, V).
+        """)
+        assert _answers(m, "t") == [2]
+
+    def test_atomic_is_the_iso_type_test(self, tmp_path):
+        # was renamed to is_atomic/1, which does not exist
+        m = _load(tmp_path, "atomic", """\
+            t(X) :- atomic(foo), X = 1.
+            t(X) :- atomic(f(a)), X = 2.
+        """)
+        assert _answers(m, "t") == [1]
+
+    def test_a_program_defining_a_renamed_name_keeps_it(self, tmp_path):
+        # time/1 maps to Clausal's time_goal/1 -- but not when the program
+        # defines its own time/1
+        m = _load(tmp_path, "owntime", """\
+            time(7).
+            t(X) :- time(X).
+        """)
+        assert _answers(m, "t") == [7]
+        # ... and it is time/1 under its own name, as the program wrote it
+        assert _answers(m, "time") == [7]

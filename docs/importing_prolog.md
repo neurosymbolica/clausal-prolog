@@ -352,7 +352,15 @@ The key operator mappings:
 | `-->` | `>>` |
 | `member(X, L)` | `X in L` |
 
-Predicate names cross unchanged: `foo_bar/2` stays `foo_bar/2`. A name
+Predicate names cross unchanged: `foo_bar/2` stays `foo_bar/2`. A few
+library predicates that Clausal spells differently are renamed to the
+Clausal predicate that answers the same (`memberchk/2` → `in_check/2`,
+`nth0/3` → `list_item/3`, `time/1` → `time_goal/1`, `all_distinct/1` →
+`all_different/1`, ...), but never a name the program defines, declares or
+imports from its own modules — a file's own `time/1` stays `time/1` — and
+never a name the engine already has (`atomic/1`). Until 2026-09-29
+`profile_get/3` was renamed to Clausal's `get/3` and `atomic/1` to an
+`is_atomic/1` that does not exist; both now cross unchanged. A name
 that collides with a Python keyword gets a trailing underscore (`not/1`
 becomes `not_/1`), and a quoted functor whose name is not a plain lowercase
 name is refused rather than translated — `'Foo'`, `'FOO'` and `'_foo'` would

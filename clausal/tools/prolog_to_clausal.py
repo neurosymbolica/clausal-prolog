@@ -87,6 +87,9 @@ _REVERSE_OVERRIDES: dict[str, str] = {
 # 2-arg form's name via the name-only map.
 _REVERSE_ARITY_OVERRIDES: dict[tuple[str, int], str] = {
     ("catch", 3): "catch",
+    # catch/2 is no ISO or Scryer predicate; it is how the exporter writes
+    # Clausal's catch_error/2, so the round trip brings it back.
+    ("catch", 2): "catch_error",
 }
 
 
@@ -103,22 +106,60 @@ def _indicator_arity(term) -> int | None:
     return None
 
 
+#: Clausal names whose BUILTIN_NAME_MAP entry is an EXPORT-direction mapping
+#: only, never to be run backwards.  ``get/3`` (attribute-list lookup) is
+#: exported as ``profile_get/3``, a predicate a downstream helper library
+#: defines; a ``.pl`` file's own ``profile_get`` is that library's (or the
+#: file's) predicate, not Clausal's ``get`` (2026-09-29: the backwards
+#: mapping made ``profile_get(X, k, V)`` answer ``[]`` silently).
+_EXPORT_ONLY_NAMES: frozenset = frozenset({"get"})
+
+
 def _build_reverse_builtin_map() -> dict[str, str]:
-    """Build a mapping from Prolog builtin names to clausal names."""
+    """Build a mapping from Prolog builtin names to clausal names.
+
+    Only renames the engine still NEEDS survive: a Prolog name the engine
+    already knows under that very name (``atomic/1``) crosses unchanged, and
+    a rename whose Clausal target the engine does not define (``is_atomic``)
+    is dropped rather than emitted as a call to nothing.  Evaluable names are
+    handled at the arithmetic emitter, not here (see ``_EVALUABLE_RENAMES``).
+    """
     rev: dict[str, str] = {}
     for clausal_name, dialect_map in BUILTIN_NAME_MAP.items():
+        if clausal_name in _EXPORT_ONLY_NAMES:
+            continue
         for prolog_name in dialect_map.values():
-            if prolog_name not in rev:
-                rev[prolog_name] = clausal_name
-        # Also map the clausal name itself (snake_case names may appear
-        # directly in Prolog sources and should not be pascal-cased).
-        if clausal_name not in rev:
-            rev[clausal_name] = clausal_name
+            if prolog_name in rev or prolog_name == clausal_name:
+                continue
+            if _engine_has_goal(prolog_name) \
+                    or not _engine_has_goal(clausal_name):
+                continue
+            rev[prolog_name] = clausal_name
     rev.update(_REVERSE_OVERRIDES)
     return rev
 
 
-_REVERSE_BUILTIN_MAP = _build_reverse_builtin_map()
+def _engine_has_goal(name: str) -> bool:
+    """True when *name* is a goal the engine runs under that spelling: a
+    registered builtin or a control/meta construct the compiler lowers."""
+    from clausal.logic.builtins._registry import get_builtin_class  # noqa: PLC0415
+    from clausal.logic.compiler.ir import MetaKind  # noqa: PLC0415
+    import typing  # noqa: PLC0415
+    return (get_builtin_class(name) is not None
+            or name in typing.get_args(MetaKind)
+            or name in _CONTROL_GOAL_NAMES)
+
+
+_REVERSE_BUILTIN_MAP_CACHE: dict[str, str] | None = None
+
+
+def _reverse_builtin_map() -> dict[str, str]:
+    """The reverse map, built on first use (it consults the builtin
+    registry, which must not be imported with this module)."""
+    global _REVERSE_BUILTIN_MAP_CACHE
+    if _REVERSE_BUILTIN_MAP_CACHE is None:
+        _REVERSE_BUILTIN_MAP_CACHE = _build_reverse_builtin_map()
+    return _REVERSE_BUILTIN_MAP_CACHE
 
 
 # ── Operator mapping: Prolog operators → clausal syntax ──────────────
@@ -370,6 +411,23 @@ def _names_not_data_functors(pmodule: PModule) -> set[str]:
     return names
 
 
+def _own_predicate_names(pmodule: PModule) -> set[str]:
+    """Names *pmodule* gives a predicate meaning of its own: clause and DCG
+    head functors, ``dynamic``/``discontiguous``/``table`` declarations, and
+    the names ``use_module/2`` imports from a module that is NOT a
+    ``library(...)`` (a library import names the engine's predicate)."""
+    names = set()
+    for item in pmodule.items:
+        if (isinstance(item, PDirective) and isinstance(item.body, PCompound)
+                and item.body.functor == "use_module"
+                and len(item.body.args) >= 2
+                and isinstance(item.body.args[0], PCompound)
+                and item.body.args[0].functor == "library"):
+            continue
+        names |= _names_not_data_functors(PModule((item,)))
+    return names
+
+
 #: argument positions (0-based) that hold a GOAL (or a clause, for the
 #: database builtins) in the meta-predicates a ``.pl`` file commonly calls
 _META_GOAL_ARGS: dict[str, tuple[int, ...]] = {
@@ -542,10 +600,15 @@ class _PrologToClausal:
         # ``X = g(2)``), name -> arities.  Declared ``-private([f(_)])`` so
         # the term builds; a Prolog compound needs no declaration.
         self._data_functors: dict[str, set[int]] = {}
+        # Names the program defines, declares, or imports from a non-library
+        # module: they mean the program's own predicate, so no builtin
+        # rename applies to them.  Populated by emit_module.
+        self._own_names: set[str] = set()
 
     def emit_module(self, pmodule: PModule) -> str:
         """Emit a complete module as clausal source text."""
         self._predicate_names = _collect_predicate_names(pmodule)
+        self._own_names = _own_predicate_names(pmodule)
         lines: list[str] = []
         for item in pmodule.items:
             text = self._emit_item(item)
@@ -1109,7 +1172,7 @@ class _PrologToClausal:
             module = args[0].name
             goal = args[1]
             if isinstance(goal, PCompound):
-                goal_name = _REVERSE_BUILTIN_MAP.get(goal.functor, goal.functor)
+                goal_name = _reverse_builtin_map().get(goal.functor, goal.functor)
                 inner = ", ".join(self._emit_term(a) for a in goal.args)
                 return f"{module}.{goal_name}({inner})"
             if isinstance(goal, PAtom):
@@ -1315,14 +1378,17 @@ class _PrologToClausal:
         ``arity`` disambiguates Prolog names shared by Clausal predicates of
         different arity (``catch/3`` vs ``catch_error/2``); pass it wherever
         the call site knows it."""
-        if arity is not None:
+        if arity is not None and prolog_name not in self._own_names:
             override = _REVERSE_ARITY_OVERRIDES.get((prolog_name, arity))
             if override is not None:
                 return override
-        # Check reverse builtin map first
-        clausal_name = _REVERSE_BUILTIN_MAP.get(prolog_name)
-        if clausal_name is not None:
-            return clausal_name
+        # Check reverse builtin map first -- unless the program defines or
+        # imports the name itself, when it means its OWN predicate (a
+        # program's ``time/1`` is not Clausal's ``time_goal/1``).
+        if prolog_name not in self._own_names:
+            clausal_name = _reverse_builtin_map().get(prolog_name)
+            if clausal_name is not None:
+                return clausal_name
         # Unmapped names cross unchanged — except that a Python keyword
         # gets the trailing underscore the codebase uses for the same
         # collision (``in_``, ``if_``): ``not/1`` -> ``not_``.
