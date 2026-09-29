@@ -682,9 +682,49 @@ def _lift_functional(l, r, trail):
     aux: list = []
     l = _fd._lift_cells(l, aux)
     r = _fd._lift_cells(r, aux)
+    for _z, key, args in aux:
+        # Posted OUTSIDE the reification, so it must hold for every value of
+        # its arguments: a partial function (rem by 0) or a partial operand
+        # (X // Y) would prune Y = 0 for good, where the reified comparison
+        # is merely false there.  Those stay refused.
+        if key not in _TOTAL_KEYS or not all(_total_expr(a) for a in args):
+            raise LogicException(domain_error(
+                "clpz_expression", walk((key[0],) + tuple(args)),
+                f"{key[0]}/{key[1]} over a variable, with a partial function "
+                f"in it, is not supported in a reified comparison"))
     if not _fd._post_lifted(aux, trail):
         return None
     return l, r
+
+
+#: Integer functions defined for EVERY integer argument.
+_TOTAL_KEYS = frozenset({
+    ("+", 2), ("-", 2), ("*", 2), ("-", 1), ("+", 1), ("abs", 1),
+    ("min", 2), ("max", 2), ("sign", 1), ("\\", 1), ("<<", 2), (">>", 2),
+    ("/\\", 2), ("\\/", 2), ("xor", 2),
+})
+
+
+def _total_expr(t) -> bool:
+    """*t* is built from integers, variables and total functions only."""
+    stack = [t]
+    while stack:
+        x = deref(stack.pop())
+        if is_var(x) or type(x) is int:
+            continue
+        if _fd._Add is None:
+            _fd._ensure_term_imports()
+        key = _fd._NODE_KEYS.get(type(x))
+        if key is not None:
+            if key not in _TOTAL_KEYS:
+                return False
+            stack.extend((x.operand,) if key[1] == 1 else (x.left, x.right))
+            continue
+        ka = _fd._cell_key_args(x) if type(x) is tuple else None
+        if ka is None or ka[0] not in _TOTAL_KEYS:
+            return False
+        stack.extend(ka[1])
+    return True
 
 
 def _reify_cmp(op, l, r, trail):

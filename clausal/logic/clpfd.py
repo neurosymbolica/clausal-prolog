@@ -2755,14 +2755,21 @@ _REIFY_OPS = {
 
 
 def _open_evaluable_cell(t) -> bool:
-    """*t* (dereferenced) is an arithmetic cell -- ``abs(X)``, ``max(X, 1)``
-    -- with an unbound variable somewhere inside."""
+    """*t* (dereferenced) is an all-integer arithmetic cell -- ``abs(X)``,
+    ``max(X, 1)`` -- with an unbound variable somewhere inside it.  (Only at
+    the top: a cell inside a list, ``[abs(X)] == [1]``, is still compared as
+    data -- the CLP(FD) posts have no element-wise list comparison to hand
+    it to.)"""
     if type(t) is not tuple:
         return False
     ka = _cell_key_args(t)
     if ka is None or ka[0] not in _EVALUABLE:
         return False
-    stack = list(ka[1])
+    return _cell_has_var(ka[1]) and _fd_int_term(t)[0]
+
+
+def _cell_has_var(args) -> bool:
+    stack = list(args)
     while stack:
         a = deref(stack.pop())
         if is_var(a):

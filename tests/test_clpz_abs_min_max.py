@@ -40,6 +40,10 @@ SEAM_ROWS = [
      " label([X])), L)", [[-1, 1], [1, 1], [-2, 0], [0, 0], [2, 0]]),
     ("findall([X, B], (in_domain(X, 0, 2), if_(max(X, 1) == 1, B is 1, B is 0),"
      " label([X])), L)", [[0, 1], [1, 1], [2, 0]]),
+    ("findall([X, B], (in_domain(X, -1, 1), if_(min(X, 0) == -1, B is 1, B is 0),"
+     " label([X])), L)", [[-1, 1], [0, 0], [1, 0]]),
+    ("findall([X, B], (in_domain(X, -2, 2), if_(abs(X) + 1 == 2, B is 1, B is 0),"
+     " label([X])), L)", [[-1, 1], [1, 1], [-2, 0], [0, 0], [2, 0]]),
 ]
 
 
@@ -97,6 +101,8 @@ REIFIED_PL = """\
 r3(L) :- findall(X-B, (X in -2..2, B #<==> (abs(X) #= 1), label([X,B])), L).
 r5(L) :- findall(X-Y-B, (X in 0..2, Y in 0..2, B #<==> (max(X,Y) #= 1), label([X,Y,B])), L).
 r6(L) :- findall(X-B, (X in -2..2, B #<==> (abs(X) + 1 #> 2), label([X,B])), L).
+r7(L) :- findall(X-B, (X in -2..2, B #<==> (min(X, 0) #= -1), label([X,B])), L).
+r8(E) :- catch(B #<==> (abs(X // Y) #= 1), error(E, _), true).
 """
 
 
@@ -122,6 +128,11 @@ def test_native_pl_reified(tmp_path, monkeypatch):
                               p(p(1, 0), 1), p(p(1, 1), 1), p(p(1, 2), 0),
                               p(p(2, 0), 0), p(p(2, 1), 0), p(p(2, 2), 0)]]
         assert ans("r6") == [[p(-2, 1), p(-1, 0), p(0, 0), p(1, 0), p(2, 1)]]
+        assert ans("r7") == [[p(-2, 0), p(-1, 1), p(0, 0), p(1, 0), p(2, 0)]]
+        # posted outside the reification, X // Y would prune Y = 0 for good
+        # where the comparison is merely false: refused, as before
+        (e,) = ans("r8")
+        assert e[0] == "domain_error" and e[1] == "clpz_expression"
     finally:
         sys.modules.pop("_clpz_abs_reif", None)
         shutil.rmtree(tmp_path / "__pycache__", ignore_errors=True)
