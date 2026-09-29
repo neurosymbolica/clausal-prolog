@@ -118,3 +118,10 @@ during one run. And a `-hide` data atom flips the other way the moment
 unrelated code imports a Python module sharing its bare declared name (`csv`,
 `json`, `types` are plausible domain names). NOT YET REPRODUCED; cheap to
 reproduce, and it raises the severity if it holds.
+
+## Closed 2026-09-30 (stale)
+
+Re-measured on 9b6b58a1: `solve((mangle("json", "whatever"), 1))` and the same
+handle into an unloaded module BOTH raise a LogicException
+`error(existence_error(procedure, whatever/1), whatever/1)` -- review point (c)
+above, the Scryer shape, for both cases.

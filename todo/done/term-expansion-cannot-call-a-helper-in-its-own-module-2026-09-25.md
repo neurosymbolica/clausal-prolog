@@ -26,3 +26,16 @@ or document the limit and point at a helper MODULE imported with
 
 The retired-q() warning already follows this reachability
 (`EmbedTransformer._settle_retired_quasi_quote`), so it is ready for either.
+
+## Closed 2026-09-30
+
+Fixed on fix/todo-batch-3-2026-09-30 with the first option: the helpers
+reachable from the term_expansion/4 bodies (transitively, by name over every
+functor a body writes -- the same reachability the retired-q() warning uses)
+are defined and compiled into the synthetic `_term_expansion_` module as
+written; they are not themselves expanded, and they still reach the module as
+ordinary items. The pre-mint of data constructors skips a helper's
+name/arity (that pre-mint was what turned `step(I, O)` into a call of a
+Python constructor: `type_error(callable, <function step>)` on main, the
+`NotImplementedError` above before that). Pinned by
+tests/test_term_expansion.py::TestHelperInTheSameModule.

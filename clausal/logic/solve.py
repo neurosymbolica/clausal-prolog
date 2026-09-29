@@ -42,10 +42,13 @@ predicate calls.
 
 from __future__ import annotations
 
+import functools as _functools
 import sys
 import types as _types
 import weakref
 from dataclasses import fields as _dc_fields, is_dataclass as _is_dataclass
+from decimal import Decimal
+from fractions import Fraction
 from typing import Any, Iterator
 
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
@@ -71,7 +74,7 @@ from clausal.logic.cells import (
     DECLARED_ATOMS_KEY,
     IMPORT_FROM_KEY,
 )
-from clausal.terms import Undefined
+from clausal.terms import Quantity, Undefined
 from clausal.terms import (
     Call as _ReifiedCall,
     LoadName as _ReifiedLoadName,
@@ -576,8 +579,20 @@ _KNOWN_LEAF_TYPES = (int, float, complex, bool, str, bytes, type(None))
 def _is_opaque_value(v: Any) -> bool:
     """True for a Python object the query compiler has no lowering for and
     that is no goal, predicate or term either: a plain instance of a class
-    outside Clausal and the numeric/date modules, not callable.  Such a value
-    can only be passed through by reference."""
+    outside Clausal and the date module, not callable.  Such a value can only
+    be passed through by reference.
+
+    A NUMBER with no literal lowering -- a ``Decimal``, a ``Fraction`` or a
+    ``Quantity`` -- is passed the same way.  Each is a number (rdiv/decimal
+    ruling, 2026-09-17; a quantity is a number with units), immutable, and
+    unifies by value, but ``term_to_ast_expr`` has no literal lowering for it
+    (``ast.Constant`` cannot hold one), so ``solve(("p", Decimal("7.5"),
+    X))`` raised ``NotImplementedError: unsupported term type Decimal``
+    instead of answering.  A ``datetime`` stays refused: the ruling of
+    2026-09-15 makes a date the TERM ``('date', Y, M, D)``, and the refusal
+    names it."""
+    if isinstance(v, (Decimal, Fraction, Quantity)):
+        return True
     if isinstance(v, Var) or type(v) in _KNOWN_LEAF_TYPES:
         return False
     if isinstance(v, (list, tuple, dict, set, frozenset, type,
@@ -588,29 +603,50 @@ def _is_opaque_value(v: Any) -> bool:
     if hasattr(v, "_get_dispatch") or hasattr(v, "__unify__"):
         return False
     module_name = getattr(type(v), "__module__", "") or ""
-    return module_name.split(".")[0] not in (
-        "clausal", "datetime", "decimal", "fractions")
+    return module_name.split(".")[0] not in ("clausal", "datetime")
+
+
+#: A plain Python FUNCTION value -- a simple-mode goal function
+#: ``fn(*args, trail, k)`` a caller hands in as a meta-argument, say.  It is a
+#: goal OBJECT (``call/N`` and ``call_goal`` run one), but the query compiler
+#: has no literal lowering for it: ``solve(("c1", 2, fn, OUT), m)`` raised
+#: ``NotImplementedError: term_to_ast_expr: unsupported term type function``
+#: while ``call("c1", 2, fn, OUT, module=m)`` answered.  As an ARGUMENT it
+#: crosses by reference, as an opaque object does; never in a cell's functor
+#: slot, which names the call itself.
+_PASSABLE_CALLABLE_TYPES = (_types.FunctionType, _types.BuiltinFunctionType,
+                            _types.MethodType, _functools.partial)
 
 
 def _parameterize_opaque(goal: Any, params: list) -> Any:
     """*goal* with every opaque leaf (``_is_opaque_value``) inside a cell,
     conjunction tuple or list replaced by a fresh Var; ``(Var, value)`` is
-    appended to *params*, which the caller binds before the search."""
-    def walk(t):
+    appended to *params*, which the caller binds before the search.  A
+    Python function in an ARGUMENT position (``_PASSABLE_CALLABLE_TYPES``) is
+    passed the same way; one in GOAL position -- the goal itself, or a
+    conjunct of a top-level conjunction tuple -- is left alone, since it is
+    the call.  Only cells, tuples and lists are walked: a value nested in a
+    dict or a set is not reached (and keeps the compiler's refusal)."""
+    def walk(t, goal_position=False):
         if isinstance(t, Var):
             return t
         if type(t) is tuple:
-            new = tuple(walk(e) for e in t)
+            if t and type(t[0]) is str:        # a cell: slot 0 is its name
+                new = (t[0],) + tuple(walk(e) for e in t[1:])
+            else:                              # a conjunction or data tuple
+                new = tuple(walk(e, goal_position) for e in t)
             return t if all(a is b for a, b in zip(new, t)) else new
         if type(t) is list:
             new = [walk(e) for e in t]
             return t if all(a is b for a, b in zip(new, t)) else new
-        if _is_opaque_value(t):
+        if _is_opaque_value(t) or (
+                not goal_position and isinstance(t, _PASSABLE_CALLABLE_TYPES)
+                and not hasattr(t, "_get_dispatch")):
             pv = Var()
             params.append((pv, t))
             return pv
         return t
-    return walk(goal)
+    return walk(goal, True)
 
 
 def _compile_as_query(goal: Any, module: Module) -> Any:

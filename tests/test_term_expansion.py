@@ -953,3 +953,61 @@ class TestExpansionResultIsValidated:
         assert _head_functor(result[0].head) == "foo"
         assert deref(result[1].head) == mint("flag")   # the atom head, wrapped
         assert all(r.body is True for r in result)
+
+
+class TestHelperInTheSameModule:
+    """todo/done/term-expansion-cannot-call-a-helper-in-its-own-module-
+    2026-09-25.md: a term_expansion/4 body calling a helper predicate of its
+    own file (the ISO/Scryer idiom) failed the whole load -- only the
+    term_expansion/4 clauses were compiled into the synthetic expansion
+    module, and the helper's name was pre-minted as a DATA constructor."""
+
+    def _load(self, tmp_path, name, src):
+        path = tmp_path / f"{name}.clausal"
+        path.write_text(src)
+        return _load_module(name, str(path))
+
+    def _answers(self, mod, pred):
+        X = Var()
+        return [deref(X) for _ in call(pred, X,
+                                       module=mod.__dict__["$module"])]
+
+    def test_a_two_step_helper_chain(self, tmp_path):
+        m = self._load(tmp_path, "te_helper_chain", (
+            "-private([fact(_), logged_fact(_)])\n"
+            "term_expansion(I, O, S, S) <- step(I, O)\n"
+            "step(I, O) <- rewrite(I, O)\n"
+            "rewrite(fact(X), [fact(X), logged_fact(X)]),\n"
+            "fact(1),\n"
+            "fact(2),\n"))
+        assert self._answers(m, "logged_fact") == [1, 2]
+        assert self._answers(m, "fact") == [1, 2]
+        # The helpers are ordinary predicates of the module too.
+        O = Var()
+        assert len(list(call("step", ("fact", 3), O,
+                             module=m.__dict__["$module"]))) == 1
+
+    def test_a_pattern_written_in_the_body_still_builds_its_terms(self, tmp_path):
+        """A functor the body only BUILDS (``fact(X)`` as data) names a
+        predicate the file also defines: it must keep building."""
+        m = self._load(tmp_path, "te_helper_body_pattern", (
+            "-private([fact(_), logged_fact(_)])\n"
+            "term_expansion(I, O, S, S) <- (I is fact(X), O is [fact(X), logged_fact(X)])\n"
+            "fact(1),\n"))
+        assert self._answers(m, "logged_fact") == [1]
+
+    def test_facts_written_as_data_patterns_are_not_helpers(self):
+        """A body that BUILDS ``fact(X)`` does not call fact/1: the file's
+        facts are not compiled into the expansion module (roborev, Medium)."""
+        from clausal.logic.term_expansion import (
+            _expansion_helpers, _is_term_expansion_clause)
+        source = ("-private([fact(_), logged_fact(_)])\n"
+                  "term_expansion(I, O, S, S) <- (I is fact(X), O is [fact(X), logged_fact(X)], step(X))\n"
+                  "step(_) <- True\n"
+                  "fact(1),\nfact(2),\n")
+        preds, _, _md = _parse_and_collect(source)
+        te = [p for p in preds if _is_term_expansion_clause(p)]
+        rest = [p for p in preds if not _is_term_expansion_clause(p)]
+        helpers = _expansion_helpers(te, rest)
+        assert [_head_functor(h.head) if not isinstance(h.head, str) else h.head
+                for h in helpers] == ["step"]
