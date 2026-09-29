@@ -748,3 +748,76 @@ def _number_codes__2(number, codes, trail, k):
         trail.undo(mark)
     else:
         raise LogicException(instantiation_error("number_codes/2"))
+
+
+# ── atom_number/2 ───────────────────────────────────────────────────────────────
+
+import re as _re
+
+#: A number token as Prolog source writes one (ISO 6.4.4/6.4.5): an
+#: optional ``-`` directly before it; decimal, ``0x``/``0o``/``0b`` or
+#: ``0'c`` integers; a float needs a fraction and may carry an exponent.
+_NUMBER_TOKEN = _re.compile(
+    r"-?(?:0x[0-9a-fA-F]+|0o[0-7]+|0b[01]+|0'(?:\\.|.)"
+    r"|[0-9]+\.[0-9]+(?:[eE][+-]?[0-9]+)?|[0-9]+)\Z", _re.S)
+
+
+def _parse_number_token(text: str):
+    """The number *text* spells as a Prolog number token, else None."""
+    if not _NUMBER_TOKEN.match(text):
+        return None
+    neg = text.startswith("-")
+    body = text[1:] if neg else text
+    if body.startswith("0'"):
+        ch = body[2:]
+        if ch.startswith("\\"):
+            simple = {"n": "\n", "t": "\t", "\\": "\\", "'": "'", "a": "\a",
+                      "b": "\b", "f": "\f", "v": "\v", "r": "\r", "0": "\0",
+                      "e": "\x1b", "s": " ", '"': '"', "`": "`"}
+            if ch[1:] not in simple:
+                return None
+            ch = simple[ch[1:]]
+        value = ord(ch)
+    elif body[:2] in ("0x", "0o", "0b"):
+        value = int(body[2:], {"0x": 16, "0o": 8, "0b": 2}[body[:2]])
+    elif "." in body:
+        value = float(body)
+    else:
+        value = int(body)
+    return -value if neg else value
+
+
+@_builtin("atom_number", 2)
+def _atom_number__2(atom, number, trail, k):
+    """atom_number(Atom, Number) -- Atom is the text of Number.
+
+    Atom bound: it must be an atom, and it is read as a Prolog number token
+    (an optional ``-`` directly before it; ``0x1A``, ``0'a``; a float needs
+    its fraction).  Text that is not a number FAILS -- the predicate asks
+    whether the atom is a number, it does not raise a syntax error -- and so
+    does surrounding layout.  Atom unbound: Number must be a number, and
+    Atom is its text (as number_codes/2 writes it).  Both unbound is
+    instantiation_error; a bound non-atom Atom is type_error(atom, A); an
+    unbound Atom beside a non-number is type_error(number, N).  It did not
+    exist (existence_error(procedure, atom_number/2))."""
+    va = deref(atom)
+    if is_var(va):
+        vn = deref(number)
+        if is_var(vn):
+            raise LogicException(instantiation_error("atom_number/2"))
+        if isinstance(vn, bool) or not isinstance(vn, (int, float)):
+            raise LogicException(type_error("number", vn, "atom_number/2"))
+        mark = trail.mark()
+        if unify(atom, mint(str(vn)), trail):
+            yield None
+        trail.undo(mark)
+        return
+    if not _term_is_atom(va):
+        raise LogicException(type_error("atom", va, "atom_number/2"))
+    value = _parse_number_token(spelling(va))
+    if value is None:
+        return
+    mark = trail.mark()
+    if unify(number, value, trail):
+        yield None
+    trail.undo(mark)
