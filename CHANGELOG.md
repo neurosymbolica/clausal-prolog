@@ -489,7 +489,10 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
   the whole path, so a `.pl` package could load a same-named `.clausal`
   sibling from another tree and answer from it without any error.
   `PrologFinder` is no longer installed on `sys.meta_path`; `PredicateFinder`
-  finds `.pl` too. See [docs/importing_prolog.md](docs/importing_prolog.md).
+  finds `.pl` too. The other side of the same rule: a stray `foo.pl` in an
+  earlier entry (such as the script directory, `sys.path[0]`) now shadows a
+  `foo.clausal` or `foo.seam` in a later one. See
+  [docs/importing_prolog.md](docs/importing_prolog.md).
 
 - **CLP(Q) accepts quantities.** `{Q = 100 * constant(one_euro)}` in a
   `.pl` file, `clpq.rational(Q == 100 * constant(one_euro))`, `in_q/3` with

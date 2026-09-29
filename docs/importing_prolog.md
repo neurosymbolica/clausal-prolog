@@ -599,7 +599,10 @@ renamed to `_pi`.)
 
 - **The `.pl` extension is also used by Perl.** If a Perl script ends up
   on `sys.path`, the import hook will attempt to parse it as Prolog and
-  raise a `SyntaxError`.
+  raise a `SyntaxError` -- even when a `.clausal` or `.seam` module of the
+  same name sits in a later `sys.path` entry, since the earlier entry wins.
+  `sys.path[0]` is the script directory or the current directory, so a
+  stray `foo.pl` there shadows an installed `foo.clausal`.
 - **All `.pl` files must be UTF-8 encoded.** Non-UTF-8 files raise a
   `SyntaxError` at import time.
 - **Avoid naming `.pl` files after standard modules.** A file like `json.pl`
