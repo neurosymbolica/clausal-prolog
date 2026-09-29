@@ -59,6 +59,17 @@ def _ensure_term_imports():
         _ArithEq, _ArithNeq = ArithEq, ArithNeq
         _Lt, _LtE, _Gt, _GtE = Lt, LtE, Gt, GtE
         _CompareChain = CompareChain
+        _Q_BLOCK_POSTERS[:] = [
+            (ArithEq, q_eq, "(==)/2"), (ArithNeq, q_ne, "(!=)/2"),
+            (LtE, q_le, "(=<)/2"), (Lt, q_lt, "(<)/2"),
+            (GtE, q_ge, "(>=)/2"), (Gt, q_gt, "(>)/2"),
+        ]
+
+
+#: Constraint-block node class -> (poster, the operator the user wrote, for
+#: the ISO ``units_mismatch`` context the side channel throws).  Filled by
+#: :func:`_ensure_term_imports` with the node classes.
+_Q_BLOCK_POSTERS: list = []
 
 
 # ── QVar: per-variable rational-domain state ─────────────────────────────────
@@ -1926,19 +1937,22 @@ def _post_q_constraint_node(node: Any, trail: Trail) -> bool:
                 return False
         return True
 
-    if isinstance(node, _ArithEq):
-        return q_eq(node.left, node.right, trail)
-    if isinstance(node, _ArithNeq):
-        return q_ne(node.left, node.right, trail)
-    if isinstance(node, _LtE):
-        return q_le(node.left, node.right, trail)
-    if isinstance(node, _Lt):
-        return q_lt(node.left, node.right, trail)
-    if isinstance(node, _GtE):
-        return q_ge(node.left, node.right, trail)
-    if isinstance(node, _Gt):
-        return q_gt(node.left, node.right, trail)
+    for node_class, post, context in _Q_BLOCK_POSTERS:
+        if isinstance(node, node_class):
+            return _post_q_stripped(post, node.left, node.right, context, trail)
 
     raise TypeError(
         f"clpq constraint block: unsupported node {type(node).__name__}: {node}"
     )
+
+
+
+def _post_q_stripped(post, l: Any, r: Any, context: str, trail: Trail) -> bool:
+    """Run the units side channel (``units_clp``) on one comparison of a
+    constraint block, then post it.  The bare comparators strip a Quantity
+    or a united variable to its solver number / shadow variable before
+    dispatching; a block posts straight to ``q_*``, so it strips here too,
+    through the same cached channel (``_units_strip``) every CLP(Q) entry
+    point uses."""
+    l, r = _units_strip(l, r, context, trail)
+    return post(l, r, trail)

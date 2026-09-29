@@ -29,6 +29,48 @@ CLP(R) uses IEEE 754 doubles with outward-rounded intervals. This is sound (the 
 
 ---
 
+## The constraint set in goal position
+
+A **set literal in goal position** is a set of CLP(Q) constraints — the seam's twin of
+Prolog's clpq goal `{C}`. Each element is a comparison over rational arithmetic (`==`, `!=`,
+`<`, `<=`, `>`, `>=`, or a chain such as `0 <= X <= 10`); the elements are posted together,
+and `/` inside them is exact division.
+
+```clausal
+two(N, Q) <- {Q == N * 2}
+within(X) <- {0 <= X <= 10}
+box(X, Y) <- {X + Y == 1, X - Y == 1/2}      # X = 3/4, Y = 1/4
+half(X) <- {2 * X == 3}                       # X = Fraction(3, 2)
+```
+
+`two(3, Q)` gives `Q = 6`; `two(N, 8)` solves `N = 4`; `two(N, Q)` with both unbound leaves
+the constraint in the store and binds `Q` the moment `N` is known. The long spelling is the
+module predicate the set lowers to — `{C1, C2}` **is** `clpq.rational((C1, C2))`, one goal,
+so the two forms answer identically:
+
+```clausal
+two(N, Q) <- clpq.rational(Q == N * 2)
+box(X, Y) <- clpq.rational((X + Y == 1, X - Y == 1/2))
+```
+
+A unit-carrying operand is welcome: a `-constant_number_units` constant folded in with
+`constant(Name)` keeps its unit through the solver (the units side channel), so
+`{Q == 100 * constant(one_euro)}` gives `100 euro` and `{F >= constant(max_fine)}` compares
+against the declared `5000 euro`, throwing `system_error(units_mismatch)` if `F` is
+dimensionless.
+
+Only **goal** position has this meaning. A set in **data** position — a head argument, a
+call argument, the right-hand side of `is` — is still a set (`colors({1, 2, 3})`), and `{}`
+is an empty dict, never a constraint set. An element that is not a comparison is a load-time
+error naming it: `{X + 1, X > 1}` is refused, because a set of *values* belongs in an
+argument, not in goal position.
+
+The bare comparison goals outside a set (`X == N * 2` on its own) are the CLP(Z)-style
+constraints described next; they route to CLP(Q) only when an operand is already rational.
+Write the set when you mean rational arithmetic.
+
+---
+
 ## Unified syntax
 
 Clausal's comparison operators are shared across CLP(Z), CLP(R), and CLP(Q). The domain is determined at runtime by what types are involved:
@@ -81,7 +123,19 @@ Integral rationals are presented as `int` by every binder — the arithmetic com
 
 ### Module API
 
-CLP(Q) constraints can also be posted via the `clpq` module namespace using constraint blocks:
+CLP(Q) constraints are posted with a [constraint set in goal position](#the-constraint-set-in-goal-position);
+the optimisation and projection predicates live in the `clpq` module namespace:
+
+```clausal
+optimal(X, Y, COST) <- (
+    {0 <= X <= 1, 0 <= Y <= 1, X + Y == 3/4},
+    clpq.maximize(X, COST),
+)
+# -> X = Fraction(3, 4), Y = 0, COST = Fraction(3, 4)
+```
+
+`clpq.rational((constraints))` is the long spelling of the same block — what the set lowers
+to:
 
 ```clausal
 optimal(X, Y, COST) <- (
@@ -92,12 +146,11 @@ optimal(X, Y, COST) <- (
     )),
     clpq.maximize(X, COST),
 )
-# -> X = Fraction(3, 4), Y = 0, COST = Fraction(3, 4)
 ```
 
 | Module Predicate | Arity | Description |
 |---|---|---|
-| `clpq.rational` | 1 | `clpq.rational((constraints))` — post rational constraints |
+| `clpq.rational` | 1 | `clpq.rational((constraints))` — post rational constraints; the long spelling of `{constraints}` in goal position |
 | `clpq.maximize` | 2 | `clpq.maximize(Expr, Result)` — maximize over rationals |
 | `clpq.minimize` | 2 | `clpq.minimize(Expr, Result)` — minimize over rationals |
 | `clpq.supremum` | 2 | `clpq.supremum(Expr, Result)` — compute upper bound without committing |
