@@ -134,6 +134,23 @@ since 0.4.0 finish three moves:
 
 ### Added
 
+- **Constants, units and dicts on the native `.pl` front end.** A `.pl`
+  file declares constants with the seam's directive family in ISO syntax
+  (`:- constant_value(max_retries, 3).`, `:- constant_number_units(max_fine,
+  5000, euro).`, `constant_number_currency/3` and the `constants_number_*`
+  tables), runs through the seam's own handlers, and reads a value with
+  `constant(Name)`, folded at compile time as in the seam; an undeclared
+  name is a load error naming the `.pl` line. `constant_number_units/3` is
+  module-scoped as in the seam. `use_module(european_union, [euro])` imports
+  a unit (a bare name on a Python module imports its value). `5*euro` stays
+  an ordinary ISO term. `is/2` and the ISO comparisons now accept a quantity
+  (`Q is 100 * constant(one_euro)` answers 100 euro) instead of raising
+  `type_error(evaluable, ...)`.
+- **`get_strict/3`: the strict dict read as a predicate.**
+  `get_strict(Dict, Key, Value)` (get/3's argument order) raises
+  `existence_error(dict_key, Key)` on a missing key, with the subscript
+  `V is D[K]`'s other errors, where `get/3` fails. It is the strict read ISO
+  syntax can spell; from `.seam` it is an ordinary call.
 - **library(lambda) as builtins: `(\)/1..8`, `(^)/3..10`, `(+\)/2..9`.**
   Ulrich Neumerkel's lambdas (`maplist(\X^Y^(Y is 2*X), Xs, Ys)`,
   `Free+\X^Goal`) run through call/N with Scryer's answers: `\` copies the

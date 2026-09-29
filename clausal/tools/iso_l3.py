@@ -265,6 +265,8 @@ class _ClauseLowering:
         if type(t) is tuple and t and _is_callable_name(t[0]):
             if t[0] == "$chars" and len(t) == 2 and type(t[1]) is str:
                 return self._double_quoted(t[1])
+            if t[0] == "constant" and len(t) == 2:
+                return self._constant(t[1], sp)
             if t[0] == "." and len(t) == 3:
                 return self._cons(t, sp)
             spans = _arg_spans(sp, len(t) - 1)
@@ -272,7 +274,70 @@ class _ClauseLowering:
                 elts=[_const(t[0])]
                 + [self.term(a, s) for a, s in zip(t[1:], spans)],
                 ctx=ast.Load())
+        if type(t).__name__ == "Embedded":
+            return t.expr               # iso_l3_directives' prepared cell
         raise LoweringRefused(f"unsupported term {t!r}", _top_span(sp))
+
+    # ── constants (D8): the compile-time fold ──
+
+    def _constant(self, name: Any, sp) -> ast.expr:
+        """``constant(Name)`` -> the declared value, by TERM EXPANSION at
+        compile time, exactly as the seam lowers it since 2026-09-11: a
+        ``$PyThunk`` over the module global the declaration bound (the
+        builder the seam's ``constant()`` ends in).  The name must be
+        declared ABOVE, or imported; anything else is a load error naming
+        the ``.pl`` line, as the seam refuses it."""
+        pos = self._pos.of(_top_span(sp))
+        if type(name) is not str:
+            raise LoweringRefused(
+                f"constant() takes the name of a declared constant, not "
+                f"{_show_cell(name)}: the argument is a name, never an "
+                f"expression. Write constant(max_fine)", _top_span(sp))
+        if not self._constant_in_scope(name):
+            raise LoweringRefused(
+                f"constant({name}): nothing declares `{name}`. Declare it "
+                f"with :- constant_value({name}, <value>). or "
+                f":- constant_number_units({name}, <number>, <units>). above "
+                f"this clause, or import it", _top_span(sp))
+        return _thunk(_name(name), pos)
+
+    def _constant_in_scope(self, name: str) -> bool:
+        t = getattr(self._ctx, "_t", None)
+        return t is not None and (name in t._constants
+                                  or name in t._import_remap)
+
+    def _constant_units_goal(self, args: tuple, spans: list, sp, pos):
+        """``constant_number_units(Name, N, U)`` -> the seam's COMPILE-TIME
+        MODULE INSERTION (``module_constant_units(Module, Name, N, U)``): the
+        module is the name's owner -- this module for a declared name, the
+        declaring module for an imported one."""
+        name, n, u = args
+        if type(name) is str:
+            t = getattr(self._ctx, "_t", None)
+            if t is not None and name in t._constants:
+                mod_expr: ast.expr = _name(_DOLLAR + "module")
+            elif t is not None and name in t._import_remap:
+                owner = t._import_remap[name].rsplit(".", 1)[0]
+                mod_expr = ast.Call(
+                    func=_name("__import__"), args=[_const(owner)],
+                    keywords=[ast.keyword(arg="fromlist", value=ast.List(
+                        elts=[_const("_")], ctx=ast.Load()))])
+            else:
+                raise LoweringRefused(
+                    f"constant_number_units({name}, ...): `{name}` is not a "
+                    f"constant in this module. Declare it with "
+                    f":- constant_number_units({name}, <number>, <units>). "
+                    f"or import it from the module that does",
+                    _top_span(sp))
+            name_term = _thunk(_const(name), pos)
+        else:
+            mod_expr = _name(_DOLLAR + "module")
+            name_term = self.term(name, spans[0])
+        lowered = [_thunk(mod_expr, pos), name_term,
+                   self.term(n, spans[1]), self.term(u, spans[2])]
+        head_pos = self._pos.of(_functor_span(sp, "constant_number_units",
+                                              self._pos.source))
+        return self._call("module_constant_units", lowered, head_pos, pos)
 
     def _double_quoted(self, text: str) -> ast.expr:
         """``"..."`` under the ``double_quotes`` flag in force (ISO
@@ -356,6 +421,8 @@ class _ClauseLowering:
             if name == ":" and len(args) == 2:
                 return self._qualified(args, spans, sp, pos)
             self._check_goal_name(name, sp)
+            if name == "constant_number_units" and len(args) == 3:
+                return self._constant_units_goal(args, spans, sp, pos)
             lowered = self._goal_args(name, args, spans)
             head_pos = self._pos.of(_functor_span(sp, name, self._pos.source))
             remap = self._ctx.import_remap if self._ctx is not None else {}
@@ -477,6 +544,24 @@ class _ClauseLowering:
             args=ast.List(elts=args, ctx=ast.Load()),
             kwargs=ast.List(elts=[], ctx=ast.Load()),
             position=_pos_expr(pos))
+
+
+def _thunk(expr: ast.expr, pos) -> ast.expr:
+    """``$PyThunk(lambda: expr, [], _position=pos)``: the seam's
+    ``_build_py_thunk_ast`` with no captured logic variables."""
+    lam = ast.Lambda(args=ast.arguments(posonlyargs=[], args=[], vararg=None,
+                                        kwonlyargs=[], kw_defaults=[],
+                                        kwarg=None, defaults=[]),
+                     body=expr)
+    return ast.Call(func=_name(_DOLLAR + "PyThunk"),
+                    args=[lam, ast.List(elts=[], ctx=ast.Load())],
+                    keywords=[ast.keyword(arg="_position",
+                                          value=_pos_expr(pos))])
+
+
+def _show_cell(t) -> str:
+    from clausal.tools.iso_l3_directives import _show  # noqa: PLC0415
+    return _show(t)
 
 
 def _builtin_libraries() -> frozenset:
@@ -661,6 +746,7 @@ def lower_items(items, *, strict: bool = True, source: "str | None" = None,
         stats["refused"] += 1
         stats["refusals"].append(where(span) + msg)
 
+    heads: dict = {}        # predicate name -> its first clause's span
     for it in items:
         stats["read"] += 1
         kind = type(it).__name__
@@ -698,6 +784,10 @@ def lower_items(items, *, strict: bool = True, source: "str | None" = None,
             continue
         body.extend(lowered)
         stats["lowered"] += 1
+        heads.setdefault(_head_name(it.term), span)
+    clash = _constant_clash(ctx, heads)
+    if clash is not None:
+        refuse(*clash)
     if ctx.dead_stmts or ctx.dropped_keys:
         body = _drop_removed_imports(body, ctx)
     mod = ast.Module(body=body, type_ignores=[])
@@ -705,6 +795,40 @@ def lower_items(items, *, strict: bool = True, source: "str | None" = None,
     if _lowered is not None:
         _lowered.append(ctx)
     return mod, stats
+
+
+def _head_name(term) -> "str | None":
+    if type(term) is tuple and len(term) == 3 and term[0] == ":-":
+        term = term[1]
+    if type(term) is str:
+        return term
+    if type(term) is tuple and term and type(term[0]) is str:
+        return term[0]
+    return None
+
+
+def _constant_clash(ctx, heads: dict):
+    """The seam's ``_check_constant_name_is_free``, for ``.pl``: a constant
+    declaration writes a module global, so a predicate (or an imported
+    name) of the same spelling would be overwritten by the value.  Checked
+    once the whole file is lowered, as the seam checks it.  -> (message,
+    span) or None."""
+    t = getattr(ctx, "_t", None)
+    if t is None or not t._constants:
+        return None
+    taken = {n: s for n, s in heads.items() if n is not None}
+    for n in t._imported_functors:
+        taken.setdefault(n, None)
+    clashes = sorted(n for n in t._constants if n in taken)
+    if not clashes:
+        return None
+    first = clashes[0]
+    what = ("a predicate defined in this file" if taken[first] is not None
+            else "an imported name")
+    return (f"constant `{first}` is already bound by {what}: a constant "
+            f"declaration writes a module global, so the predicate would be "
+            f"overwritten by the value. Rename the constant (an ATOM of the "
+            f"same spelling is fine)", taken[first])
 
 
 def _drop_removed_imports(body: list, ctx) -> list:

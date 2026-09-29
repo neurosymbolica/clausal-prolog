@@ -361,9 +361,11 @@ def _use_module(ctx: DirectiveContext, args, spans, span):
     entries = None
     if imports == []:
         return _remove_module(ctx, spec, span, what)
+    bare: list = []
     if imports is not None:
-        entries = _import_list(ctx, imports, spans[1], span, what)
+        entries, bare = _import_list(ctx, imports, spans[1], span, what)
     if type(spec) is tuple and len(spec) == 2 and spec[0] == "library":
+        _warn_bare(ctx, bare)
         return _use_library(ctx, spec[1], entries, span, what)
     path = _slash_path(spec)
     if path is None:
@@ -373,8 +375,22 @@ def _use_module(ctx: DirectiveContext, args, spans, span):
     dotted = _dotted(path, span, what)
     found = _module_source(dotted)
     if found is None:
+        # The seam's import aliases: a currency jurisdiction
+        # (``european_union``) names ``clausal.modules.countries.<it>``, as
+        # ``-import_from(european_union, [euro])`` resolves it.
+        found = _module_source(_resolve_import_path(dotted))
+    if found is None:
         raise _refused(f"{what}: no module {dotted} on sys.path (a slash "
                        f"path a/b names the dotted module a.b)", span)
+    if bare and not found.endswith((".pl", ".seam", ".clausal")):
+        # A Python module (a currency's units, say) is no Prolog module: its
+        # names are VALUES, not atoms or predicates, so a bare name imports
+        # the value by that name, exactly as the seam's ``-import_from``
+        # does.  (A ``name/0`` entry is refused by the seam's handler: a
+        # Python module has no predicate arities to select.)
+        entries = list(entries or ()) + [(n, None) for n, _ in bare]
+    else:
+        _warn_bare(ctx, bare)
     for n, a in entries or ():
         if not n.isidentifier():
             raise _refused(
@@ -400,7 +416,9 @@ def _use_module(ctx: DirectiveContext, args, spans, span):
         return []
     return ctx.imported(dotted, ctx.seam(
         "import_from",
-        [_dotted_ast(dotted), _list([_pi_ast(*e) for e in entries])],
+        [_dotted_ast(dotted),
+         _list([_name(n) if a is None else _pi_ast(n, a)
+                for n, a in entries])],
         span, what))
 
 
@@ -542,7 +560,243 @@ def _initialization(ctx, args, spans, span):
         span)
 
 
+# ── constants (D8) and units (D7) ────────────────────────────────────────────
+#
+# The seam's own ``-constant_*`` handlers run with synthesized arguments
+# (D1(c)), so declaration semantics, the groundness gate, the currency gate,
+# ``constant_value/2`` registration and ``constant_number_units/3``'s record
+# are ONE implementation.  What is decided HERE is only how an ISO cell reads
+# as the handler's argument:
+#
+#   the name          an atom                       -> the handler's Name
+#   the value         a number                      -> the number
+#                     an atom (quoted or not)       -> that atom (its str)
+#                     "..." under a units directive -> the decimal STRING the
+#                                                      seam reads exactly
+#                                                      ("292.00" keeps .00)
+#                     constant(Earlier)             -> the earlier constant
+#                     a list / a compound           -> that term, as DATA
+#                                                      (``2*3`` is the term
+#                                                      '*'(2, 3): ISO, and
+#                                                      ``is/2`` evaluates it)
+#   the unit          euro, metre/second, metre^2, metre**2, 2 -> the seam's
+#                     unit expression (names must be bound, e.g. imported:
+#                     ``:- use_module(european_union, [euro]).``)
+#
+# ``5*euro`` in a clause is an ordinary ISO term (D7): only a declaration
+# gives a number a unit.
+
+
+def _const_name(ctx, cell, span, what) -> ast.Name:
+    if type(cell) is not str:
+        raise _refused(f"{what}: the first argument names the constant and "
+                       f"must be an atom, got {_show(cell)}", span)
+    return _name(cell)
+
+
+def _const_value(ctx, cell, span, what, *, units: bool) -> ast.expr:
+    """An ISO value cell -> the Python-ast RHS the seam's handler takes."""
+    if type(cell) is VarRef:
+        raise _refused(f"{what}: the value is a variable; a constant's value "
+                       f"must be ground", span)
+    if isinstance(cell, bool):
+        raise _refused(f"{what}: unexpected {cell!r}", span)
+    if type(cell) in (int, float):
+        return ast.Constant(value=cell)
+    if type(cell) is str:
+        if units:
+            # An atom is no number, even one spelled '292.00': the exact
+            # decimal form is the double-quoted STRING, as in the seam.
+            raise _refused(f"{what}: {_show(cell)} is an atom, not a "
+                           f"number, and only numbers carry units (write "
+                           f"an exact decimal as a string, \"292.00\")",
+                           span)
+        return ast.List(elts=[], ctx=ast.Load()) if cell == "[]" \
+            else ast.Constant(value=cell)
+    if type(cell) is list:
+        return _list([_const_value(ctx, x, span, what, units=False)
+                      for x in cell])
+    if type(cell) is tuple and cell and type(cell[0]) is str:
+        if cell[0] == "$chars" and len(cell) == 2:
+            if units:
+                return ast.Constant(value=cell[1])
+            return ast.Tuple(elts=[ast.Constant(value="$chars"),
+                                   ast.Constant(value=cell[1])],
+                             ctx=ast.Load())
+        if cell[0] == "constant" and len(cell) == 2:
+            if type(cell[1]) is not str:
+                raise _refused(f"{what}: constant() takes the name of a "
+                               f"declared constant, got {_show(cell[1])}",
+                               span)
+            return _name(cell[1])
+        return ast.Tuple(
+            elts=[ast.Constant(value=cell[0])]
+            + [_const_value(ctx, a, span, what, units=False)
+               for a in cell[1:]],
+            ctx=ast.Load())
+    raise _refused(f"{what}: {_show(cell)} is not a constant value", span)
+
+
+_UNIT_OPS = {"*": ast.Mult, "/": ast.Div, "**": ast.Pow, "^": ast.Pow}
+
+
+def _unit_expr(cell, span, what) -> ast.expr:
+    """A unit cell -> the seam's unit-expression AST: a name, or names
+    combined with ``*``, ``/`` and ``**`` (ISO ``^`` too), integer
+    exponents."""
+    if type(cell) is str and cell.isidentifier():
+        return _name(cell)
+    if type(cell) is int and not isinstance(cell, bool):
+        return ast.Constant(value=cell)
+    if (type(cell) is tuple and len(cell) == 3 and cell[0] in _UNIT_OPS):
+        return ast.BinOp(left=_unit_expr(cell[1], span, what),
+                         op=_UNIT_OPS[cell[0]](),
+                         right=_unit_expr(cell[2], span, what))
+    raise _refused(f"{what}: {_show(cell)} is not a unit expression -- a "
+                   f"unit is a name, or names combined with *, / and ** "
+                   f"(or ^)", span)
+
+
+def _constant_directive(directive: str, arity: int):
+    units = arity == 3
+
+    def lower(ctx, args, spans, span):
+        what = f"{directive}({', '.join(_show(a) for a in args)})"
+        name = _const_name(ctx, args[0], span, what)
+        seam_args = [name, _const_value(ctx, args[1], span, what,
+                                        units=units)]
+        if units:
+            seam_args.append(_unit_expr(args[2], span, what))
+        anchor = ctx._anchor(span)
+        for a in seam_args:
+            # The handler copies locations FROM its arguments.
+            for n in ast.walk(a):
+                if "lineno" in n._attributes:
+                    ast.copy_location(n, anchor)
+        return ctx.seam(directive, seam_args, span, what)
+    return lower
+
+
+#: The table family's column keyword, per directive (the seam's
+#: ``TABLE_DIRECTIVES``: ``number_at(N)`` / ``money_at(N)``).
+_TABLE_COLUMN = {"constants_number_units": ("number_at", False),
+                 "constants_number_currency": ("money_at", True)}
+
+
+class Embedded:
+    """A data-term slot whose lowering is a ready-made Python AST (a table
+    row's quantity cell).  ``iso_l3``'s term lowering emits ``.expr``."""
+
+    __slots__ = ("expr",)
+
+    def __init__(self, expr: ast.expr):
+        self.expr = expr
+
+
+def _table_rows(rows, span, what) -> list:
+    """The rows argument: a list of rows, each a list ``[1, 29200]`` or a
+    parenthesised sequence ``(1, 29200)``."""
+    if type(rows) is not list:
+        raise _refused(f"{what}: the second argument is the list of rows, "
+                       f"got {_show(rows)}", span)
+    out = []
+    for r in rows:
+        if type(r) is list:
+            out.append(list(r))
+            continue
+        cells = []
+        while type(r) is tuple and len(r) == 3 and r[0] == ",":
+            cells.append(r[1])
+            r = r[2]
+        cells.append(r)
+        out.append(cells)
+    return out
+
+
+def _constant_table(directive: str):
+    column_kw, is_money = _TABLE_COLUMN[directive]
+
+    def lower(ctx, args, spans, span):
+        from clausal.templating.term_rewriting import (  # noqa: PLC0415
+            _decimal_string, _decimal_value_call, _literal_number)
+        from clausal.tools.iso_l3 import (  # noqa: PLC0415
+            LoweringRefused, _thunk, lower_clause)
+        indicator, rows, unit, at = args
+        what = f"{directive}({_show(indicator)}, ...)"
+        example = (f"{directive}(snap_max/2, [[1, 29200], [2, 53600]], "
+                   f"{'usd_cent' if is_money else 'metre'}, {column_kw}(2))")
+        pi = _indicator(indicator)
+        if pi is None or indicator[0] != "/":
+            raise _refused(f"{what}: the first argument is a predicate "
+                           f"indicator name/arity: {example}", span)
+        pred, arity = pi
+        if not (type(at) is tuple and len(at) == 2 and at[0] == column_kw
+                and type(at[1]) is int and not isinstance(at[1], bool)):
+            raise _refused(f"{what}: the fourth argument names the column as "
+                           f"{column_kw}(N), 1-based, got {_show(at)}: "
+                           f"{example}", span)
+        col = at[1]
+        if not 1 <= col <= arity:
+            raise _refused(f"{what}: {column_kw}({col}) is out of range for "
+                           f"{pred}/{arity} -- the column is 1-based", span)
+        unit_ast = _unit_expr(unit, span, what)
+        out: list = []
+        if is_money:
+            # The seam's one-per-table currency gate, at load.
+            out.append(ast.Expr(value=ast.Call(
+                func=_name("$check_currency_unit"),
+                args=[ast.Constant(value=f"{pred}/{arity}"), unit_ast,
+                      ast.Constant(value=f"-{directive}")],
+                keywords=[])))
+        for row in _table_rows(rows, span, what):
+            if len(row) != arity:
+                raise _refused(
+                    f"{what}: row {_show(row)} has {len(row)} columns but "
+                    f"{pred}/{arity} takes {arity}", span)
+            money = row[col - 1]
+            node = (ast.Constant(value=money[1])
+                    if type(money) is tuple and len(money) == 2
+                    and money[0] == "$chars"
+                    else ast.Constant(value=money)
+                    if type(money) is str else None)
+            if node is not None:
+                ast.copy_location(node, ctx._anchor(span))
+            text = _decimal_string(node) if node is not None else None
+            if text is None and (type(money) not in (int, float)
+                                 or isinstance(money, bool)
+                                 or _literal_number(
+                                     ast.Constant(value=money)) is None):
+                raise _refused(
+                    f"{what}: column {col} of {_show(row)} is {_show(money)}, "
+                    f"which is not a number literal: a table row is data, "
+                    f"and only numbers carry units", span)
+            magnitude = (_decimal_value_call(node, text) if text is not None
+                         else ast.Constant(value=money))
+            # What the seam's ``29200(usd_cent)`` cell lowers to: a thunk
+            # building the Quantity where the fact is compiled.
+            quantity = ast.Call(func=_name("$Quantity"),
+                                args=[magnitude, unit_ast], keywords=[])
+            row[col - 1] = Embedded(_thunk(quantity, ctx._pos.of(span)))
+            try:
+                out.extend(lower_clause((pred, *row), None, {}, ctx._pos,
+                                        None, ctx))
+            except LoweringRefused as e:
+                raise _refused(f"{what}: {e}", span) from None
+        for s in out:
+            ast.copy_location(s, ctx._anchor(span))
+        return out
+    return lower
+
+
 _DIRECTIVES = {
+    ("constant_value", 2): _constant_directive("constant_value", 2),
+    ("constant_number_units", 3): _constant_directive(
+        "constant_number_units", 3),
+    ("constant_number_currency", 3): _constant_directive(
+        "constant_number_currency", 3),
+    ("constants_number_units", 4): _constant_table("constants_number_units"),
+    ("constants_number_currency", 4): _constant_table(
+        "constants_number_currency"),
     ("module", 2): _module,
     ("use_module", 1): _use_module,
     ("use_module", 2): _use_module,
@@ -572,7 +826,7 @@ def _import_list(ctx, imports, spans, span, what):
     if type(imports) is not list:
         raise _refused(f"{what}: the import list must be a proper list, got "
                        f"{_show(imports)}", span)
-    entries = []
+    entries, bare = [], []
     for e, s in zip(imports, _list_spans(spans, len(imports))):
         where = _top(s) or span
         if type(e) is tuple and len(e) == 3 and e[0] == "as":
@@ -585,12 +839,19 @@ def _import_list(ctx, imports, spans, span, what):
             entries.append(pi)
             continue
         if type(e) is str:
-            # D11(a): accepted, counted, imports nothing.
-            ctx.bare_atom_imports.append((e, ctx._line(where)))
+            # D11(a) for a Prolog module (the caller decides: see
+            # _warn_bare); a Python module's bare name imports its value.
+            bare.append((e, ctx._line(where)))
             continue
         raise _refused(f"{what}: the import entry {_show(e)} is not "
                        f"name/N (or name//N)", where)
-    return entries
+    return entries, bare
+
+
+def _warn_bare(ctx, bare) -> None:
+    """D11(a): a bare atom in a Prolog module's import list is accepted,
+    counted and imports nothing (atoms are global by spelling)."""
+    ctx.bare_atom_imports.extend(bare)
 
 
 def _dotted(path: str, span, what) -> str:
@@ -693,6 +954,11 @@ def _seam_exports(path: str):
                         exports.append(pi)
         return name, exports, []
     return None, None, []
+
+
+def _resolve_import_path(dotted: str) -> str:
+    from clausal.templating.term_rewriting import _resolve_import_path as f  # noqa: PLC0415
+    return f(dotted)
 
 
 def _engine_goal(name: str) -> bool:

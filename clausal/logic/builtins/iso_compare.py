@@ -23,6 +23,7 @@ from clausal.logic.predicate import is_term_instance, term_field_names
 from clausal.logic.variables import deref, is_var
 from clausal.logic.variables import unify as _unify
 from clausal.terms import DictTerm, SetTerm
+from clausal.terms import Quantity as _Quantity
 
 
 def _clpfd_leaf_culprit(exc: LogicException):
@@ -136,6 +137,11 @@ def _iso_eval(term, context: str):
         raise LogicException(instantiation_error(context))
     try:
         value = evaluate(t, context)
+        if isinstance(value, _Quantity):
+            # A quantity is a number with a unit (a declared constant's
+            # value, folded in: ``Q is 100 * constant(one_euro)``); the
+            # evaluator already checked the units, and it binds as is.
+            return value
         if not isinstance(value, (int, float, _Fraction, _Decimal)) or isinstance(value, bool):
             raise LogicException(
                 type_error("evaluable", _evaluable_culprit(value), context))

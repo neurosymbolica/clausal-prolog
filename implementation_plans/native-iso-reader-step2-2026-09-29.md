@@ -305,6 +305,36 @@ control.
   all-answers. Scaled-unit normalisation matches the seam (`5000 cent` stays `5000 cent`, per
   the decimal-currency memo).
 
+**Built 2026-09-30** (branch `feat/iso-reader-slice6-2026-09-30`), to the operator's rulings
+of that day, which replace the D6-D8 recommendations below where they differ:
+
+* D8: `:- constant_value(N, V).`, `constant_number_units/3`, `constant_number_currency/3`
+  and the `constants_number_units/4` / `constants_number_currency/4` tables are rows in
+  `iso_l3_directives._DIRECTIVES`. The single-value forms run the SEAM's handler with
+  synthesized arguments (D1(c)); the tables are expanded to facts here, the money cell being
+  the thunk the seam's `29200(usd_cent)` cell lowers to, plus the seam's one-per-table
+  currency gate. A value cell is ISO data: `2*3` is the term `'*'(2, 3)` (the seam evaluates
+  its RHS to 6 -- a deliberate difference, open for a ruling), an atom is that atom, `"..."`
+  a string, and under a units directive a decimal string (an atom is refused there).
+* `constant(Name)` is term expansion in `iso_l3._ClauseLowering.term`: the same
+  `$PyThunk(lambda: name, [])` the seam's `constant()` builds. Declared-above or imported
+  (the seam's `_constants` / `_import_remap` test), else a load error with the `.pl` line.
+  A goal `constant_number_units(Name, N, U)` gets the seam's compile-time module insertion
+  (`module_constant_units`). The seam's constant-vs-predicate name clash check is repeated
+  at the end of `lower_items`.
+* D7: units only from the declarations. `5*euro` is an ISO term. The unit is imported by
+  `:- use_module(european_union, [euro]).`: the native `use_module` now resolves the seam's
+  import aliases (`_resolve_import_path`), and a bare name imported from a PYTHON module
+  imports its value (a bare name on a Prolog module keeps D11(a)).
+* Engine changes the fold needed: `is/2` and the ISO comparisons accept a `Quantity` result;
+  the compiler's body walk collects a `PyThunk` inside a data cell (a `.pl` compound is a
+  cell, where the seam builds a node).
+* D6: predicate forms only; `get_strict/3` added (`existence_error(dict_key, K)` on a miss,
+  sharing `runtime.dict_ops._subscript`). `dict_pairs/2`, `get/3,4`, `dict_put/4`,
+  `dict_put_pairs/3` verified natively.
+* Tests: `tests/iso_l3/test_l3_s6_constants_units_dicts.py` (seam twins; the `{C}` test
+  skips until slice 5 lowers `{C}`).
+
 ### Slice 7: the test runner and diagnostics on the native path
 
 * The runner already collects `.pl` `test/1` (measured). This slice makes failure reports

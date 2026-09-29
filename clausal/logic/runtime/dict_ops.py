@@ -24,7 +24,7 @@ from clausal.logic.exceptions import (
 _SUBSCRIPT_CTX = "[]/2"
 
 
-def _subscript(obj: Any, key: Any) -> Any:
+def _subscript(obj: Any, key: Any, context: str = _SUBSCRIPT_CTX) -> Any:
     """Evaluate ``P[K]`` on the right-hand side of ``is/2``.
 
     Returns the stored value for *key* in *obj*.  The value may itself be a
@@ -41,13 +41,16 @@ def _subscript(obj: Any, key: Any) -> Any:
       * *key* absent          → ``existence_error(dict_key, key)`` (the Python
         ``KeyError`` analogue — a strict read throws, it does not fail);
       * unhashable *key*      → ``type_error(dict_key, key)``.
+
+    *context* is the culprit the error carries: ``[]/2`` for the subscript,
+    ``get_strict/3`` for the predicate form, which shares this body.
     """
     obj = deref(obj)
     key = deref(key)
     if is_var(obj):
-        raise LogicException(instantiation_error(_SUBSCRIPT_CTX))
+        raise LogicException(instantiation_error(context))
     if is_var(key):
-        raise LogicException(instantiation_error(_SUBSCRIPT_CTX))
+        raise LogicException(instantiation_error(context))
     # ``mapping_of`` normalises a PLAIN dict's own nil keys (fix round 4,
     # item 1).  Taking ``obj`` raw folded only the LOOKUP key, so on
     # ``{"": 1}`` -- a dict a Python caller built, never through
@@ -57,7 +60,7 @@ def _subscript(obj: Any, key: Any) -> Any:
     # nothing to fold, so it is read, never mutated.
     data = DictTerm.mapping_of(obj)
     if data is None:
-        raise LogicException(type_error("dict", obj, _SUBSCRIPT_CTX))
+        raise LogicException(type_error("dict", obj, context))
     # Read the mapping only with a NORMALISED key (fix round 3, item 1):
     # every spelling of nil is one key, and ``[]`` -- the spelling
     # ``mint("[]")`` answers -- is unhashable, so ``D.'[]'`` used to raise
@@ -68,13 +71,13 @@ def _subscript(obj: Any, key: Any) -> Any:
         return data[key]
     except KeyError:
         raise LogicException(
-            existence_error("dict_key", key, _SUBSCRIPT_CTX)
+            existence_error("dict_key", key, context)
         ) from None
     except TypeError:
         # Unhashable key (e.g. a list/compound reached here despite the
         # is_var guard) — a wrong-typed key, not a missing one.
         raise LogicException(
-            type_error("dict_key", key, _SUBSCRIPT_CTX)
+            type_error("dict_key", key, context)
         ) from None
 
 

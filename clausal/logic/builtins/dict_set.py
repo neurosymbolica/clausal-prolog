@@ -11,6 +11,8 @@ Dict builtins:
   dict_put/4        — dict_put(Key, Value, Old, New) — functional update
   dict_put_pairs/3   — dict_put(Pairs, Old, New) — bulk update from pair list
   dict_remove/3     — dict_remove(Key, Old, New) — remove key
+  get/3, get/4      — get(Dict, Key, Value[, Default]) — soft read (fails / defaults)
+  get_strict/3      — get_strict(Dict, Key, Value) — strict read (throws on a miss)
   dict_merge/3      — dict_merge(D1, D2, Merged) — D2 overrides D1
   gen_dict/3        — gen_dict(Key, Dict, Value) — nondeterministic enumeration
 
@@ -419,6 +421,29 @@ def _get__3(this_generator, _proceed, _fail, _catcher, d, key, value, trail):
         if unify(value, data[key_val], trail):
             yield (_proceed, None)
         trail.undo(mark)
+    yield (_fail, DONE)
+
+
+@_trampoline_builtin("get_strict", 3)
+def _get_strict__3(this_generator, _proceed, _fail, _catcher, d, key, value, trail):
+    """get_strict(Dict, Key, Value) — STRICT read (Python ``dict[key]``).
+
+    ``get/3``'s argument order and the subscript's errors: binds ``Value`` to
+    ``Dict[Key]``; **throws** ``existence_error(dict_key, Key)`` when the key
+    is absent (``get/3`` fails there), ``instantiation_error`` for an unbound
+    dict or key, ``type_error(dict, D)`` for a non-dict and
+    ``type_error(dict_key, K)`` for an unhashable key -- the one
+    implementation the seam's ``V is P[K]`` read runs
+    (``runtime.dict_ops._subscript``), with this predicate as the culprit.
+    The predicate form is how a ``.pl`` program reads strictly: ISO syntax
+    has no subscript.
+    """
+    from clausal.logic.runtime.dict_ops import _subscript  # noqa: PLC0415
+    found = _subscript(d, key, "get_strict/3")
+    mark = trail.mark()
+    if unify(value, found, trail):
+        yield (_proceed, None)
+    trail.undo(mark)
     yield (_fail, DONE)
 
 

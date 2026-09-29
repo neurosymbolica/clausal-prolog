@@ -135,6 +135,7 @@ reader already knows:
 | Operation | Clausal form | Python analogue | On an absent key |
 |---|---|---|---|
 | read (strict) | `V is P["k"]` | `d[k]` | **throws** `existence_error(dict_key, …)` |
+| read (strict, predicate form) | `get_strict(P, "k", V)` | `d[k]` | **throws** `existence_error(dict_key, …)` |
 | read (soft) | `get(P, "k", V)` | `d.get(k)` | **fails** the clause |
 | read (defaulted) | `get(P, "k", V, Default)` | `d.get(k, default)` | binds `Default` |
 | read (Kleene) | `tri_get(P, "k", V)` | — | binds `Undefined` |
@@ -153,7 +154,12 @@ promote(PROFILE, P2) <- (P2 is {**PROFILE, 'role': 'admin'})
 drop_draft(PROFILE, P2) <- delete(PROFILE, 'draft', P2)
 ```
 
-Choosing a read: the strict subscript is for keys the clause is entitled to
+In ISO syntax (a `.pl` file on the native front end) dicts have **predicate
+forms only** — no dict literal and no subscript: build with `dict_pairs/2`,
+read with `get/3` (soft) or `get_strict/3` (strict), update with
+`dict_put/4` and `dict_put_pairs/3`.
+
+Choosing a read: the strict subscript (or `get_strict/3`) is for keys the clause is entitled to
 assume (a typo should be loud); `get/3` is for keys whose absence should just
 fail this one rule rather than abort the query; `get/4` when a default is
 the honest answer; `tri_get/3` when absence means the three-valued
