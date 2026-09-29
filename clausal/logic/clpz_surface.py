@@ -375,6 +375,9 @@ _CLPZ_FUNCTORS = frozenset({
 _PROPAGATED = frozenset({
     ("+", 2), ("-", 2), ("-", 1), ("*", 2), ("/", 2), ("//", 2),
     ("div", 2), ("mod", 2), ("^", 2),
+    # lifted into their own propagators (clpfd._lift_cells) before the
+    # reified comparison is posted: Z = abs(A) holds whatever B is
+    ("abs", 1), ("min", 2), ("max", 2),
 })
 
 
@@ -630,6 +633,10 @@ def reify(e, trail, ctx):
     if name in _CMP:
         l = clpz_expression(e[1], ctx, reified=True)
         r = clpz_expression(e[2], ctx, reified=True)
+        lifted = _lift_functional(l, r, trail)
+        if lifted is None:
+            return None
+        l, r = lifted
         b = _bool_var(trail)
         return b if _post_constraint(ReifiedCmp(b, _CMP[name], l, r),
                                      trail) else None
@@ -660,6 +667,24 @@ def reify(e, trail, ctx):
         return _reify_cmp("eq", ("+", bl, br), 2, trail)
     # #\/
     return _reify_cmp("ge", ("+", bl, br), 1, trail)
+
+
+def _lift_functional(l, r, trail):
+    """``(l, r)`` with each abs/min/max over a variable replaced by a fresh
+    variable carrying its propagator (clpfd's lifting, as in the plain
+    posts), or None when posting one failed.  Sound under reification: the
+    function is total, so Z = abs(A) holds whether the comparison does or
+    not."""
+    ok_l, lift_l = _fd._fd_int_term(l)
+    ok_r, lift_r = _fd._fd_int_term(r)
+    if not (ok_l and ok_r and (lift_l or lift_r)):
+        return l, r
+    aux: list = []
+    l = _fd._lift_cells(l, aux)
+    r = _fd._lift_cells(r, aux)
+    if not _fd._post_lifted(aux, trail):
+        return None
+    return l, r
 
 
 def _reify_cmp(op, l, r, trail):
