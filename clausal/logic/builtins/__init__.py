@@ -8,6 +8,7 @@ This package is organized into submodules by category:
 - database_ops — assertz/1, asserta/1, retract/1, abolish_table/2, abolish_all_tables/0
 - keyword_ops  — vary/3, unbound_keys/2, signature/3
 - constraints  — dif/2, eq/3, dif_t/3, in_domain/3, label/1, all_different/1, structural_eq/2
+- clpz_names   — in/2, ins/2, labeling/2, #<==>/2 and the reified connectives (Scryer names)
 - type_checks  — var/1, nonvar/1, is_str/1, number/1, integer/1, float_/1, etc.
 - arithmetic   — between/3, succ/2, plus/3, abs_/2, max_/3, min_/3, sign/2, gcd/3, divmod_/4
 - lists        — in_/2, append/3, length/2, sort/2, select/3, etc.
@@ -56,6 +57,7 @@ from clausal.logic.builtins import database_ops    # noqa: F401
 from clausal.logic.builtins import clause_ops      # noqa: F401  (clause/2)
 from clausal.logic.builtins import keyword_ops     # noqa: F401
 from clausal.logic.builtins import constraints     # noqa: F401
+from clausal.logic.builtins import clpz_names      # noqa: F401  (library(clpz) names)
 from clausal.logic.builtins import z3_constraints  # noqa: F401
 from clausal.logic.builtins import type_checks     # noqa: F401
 from clausal.logic.builtins import arithmetic      # noqa: F401
