@@ -1841,7 +1841,15 @@ class _ClausalToProlog:
                         "write a call template `name(A, B)`, a predicate indicator "
                         "`name/2` (either may quote the name), or a bare name. It used to be dropped silently, "
                         "exporting less than the source declares.")
-        export_list = PList(tuple(exports))
+        # F4 (2026-09-29): each Name/Arity once, first occurrence kept --
+        # `p(X)` and `p/1` are the same export, and so is a repeated entry.
+        unique, seen = [], set()
+        for exp in exports:
+            key = (exp.args[0].name, exp.args[1].value)
+            if key not in seen:
+                seen.add(key)
+                unique.append(exp)
+        export_list = PList(tuple(unique))
         return PDirective(PCompound("module", (PAtom(mod_name), export_list)))
 
     def _quoted_export_name(self, node) -> str | None:
@@ -1944,11 +1952,15 @@ class _ClausalToProlog:
                 # requested names the target really exports, so import its
                 # whole export set instead of naming any of them.
                 return None
-            return [
-                PCompound("/", (PAtom(name), PNumber(arity)))
-                if arity is not None else PAtom(name)
-                for name, arity in requested
-            ]
+            # F5 (2026-09-29): a BARE name's arity is unknown here, and a bare
+            # atom is not an ISO import item -- Scryer refuses the file at load
+            # (syntax_error(invalid_module_declaration)) and Trealla imports
+            # NOTHING, failing at call time. Import the whole export set
+            # instead (a listless use_module): a superset, no guessed arity.
+            if any(arity is None for _, arity in requested):
+                return None
+            return [PCompound("/", (PAtom(name), PNumber(arity)))
+                    for name, arity in requested]
 
         exported = self.module_signatures.get(mod_path)
         if exported is None:
