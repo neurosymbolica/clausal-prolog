@@ -200,7 +200,7 @@ returns both) and is the reason not to choose this.
 RECOMMENDATION: (a), prototyped below.  The `mint` canonicalisation is a
 separate commit so it can be dropped alone.
 
-## Prototype: four commits on the branch (4bdca566, 8d5294f6, 224c37b2, and the to_text commit)
+## Prototype: four commits on the branch (4bdca566, 8d5294f6, 224c37b2, 2b44990d)
 
 Option (a), in one engine commit (the `mint` canonicalisation is the 5-line
 hunk in `atoms.mint`; dropping it alone leaves `atom_chars(X, [t,r,u,e])`
@@ -324,6 +324,15 @@ is what it wants.  Reverted there (commit 4); the four value boundaries
 rule the census settles on: an atom crosses to Python as its OBJECT where
 the Python side receives a VALUE, and as its SPELLING where it receives
 TEXT.
+
+### Box gates d47-3 (224c37b2) and d47-4 (2b44990d, the tip)
+d47-3: NEW = the one `to_text` process-module case (fixed in 2b44990d),
+GONE = the perf-timing flake.  d47-4: 146 failed / 20489 passed / 67
+skipped / 33 xfailed / 2 xpassed in 8:43, run completed, import verified
+from the gate worktree; **NEW empty**; GONE = `audit_2026_05_25/
+test_class_C17_perf_memory.py::test_F026_multi_star_splits_bounded_for_
+moderate_input` (a timing test, gone on all four runs -- a flake against
+the baseline, not this change).  The two xpassed are pre-existing.
 
 ### Residuals (documented, not changed)
 - `DictTerm` keys: a Python dict, so `{true: a}` and `{1: a}` share a key.
