@@ -43,3 +43,9 @@ every other str-quoting inconsistency in AST-level `__str__`), or whether
 `_format_clause`'s body-goal formatting specifically should switch from
 `str(g)` to a `term_str`-aware equivalent. Either is a bigger surface than
 one function; needs its own design pass, likely outside P3-1.
+
+## Closed 2026-09-30 (stale)
+
+No longer reproduces on f84633ea: with `-hide([secret])`, `listing(holds/1)`
+and `listing(r/1)` for `r(X) <- (X is secret)` both print `lsh.secret`, and
+`writeq` prints `f(lsh.secret)` -- no raw U+E000 separator.
