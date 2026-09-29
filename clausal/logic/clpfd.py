@@ -2754,6 +2754,31 @@ _REIFY_OPS = {
 }
 
 
+def _open_evaluable_cell(t) -> bool:
+    """*t* (dereferenced) is an arithmetic cell -- ``abs(X)``, ``max(X, 1)``
+    -- with an unbound variable somewhere inside."""
+    if type(t) is not tuple:
+        return False
+    ka = _cell_key_args(t)
+    if ka is None or ka[0] not in _EVALUABLE:
+        return False
+    stack = list(ka[1])
+    while stack:
+        a = deref(stack.pop())
+        if is_var(a):
+            return True
+        if _Add is None:
+            _ensure_term_imports()
+        key = _NODE_KEYS.get(type(a))
+        if key is not None:
+            stack.extend((a.operand,) if key[1] == 1 else (a.left, a.right))
+        elif type(a) is tuple:
+            ka2 = _cell_key_args(a)
+            if ka2 is not None:
+                stack.extend(ka2[1])
+    return False
+
+
 def reify_fd(op: str, x, y, trail: Trail) -> bool | None:
     """Reified FD comparison: three-valued decision.
 
@@ -2779,6 +2804,12 @@ def reify_fd(op: str, x, y, trail: Trail) -> bool | None:
         if _no_value_in_propagation(exc):
             return False
         raise
+    if _open_evaluable_cell(x) or _open_evaluable_cell(y):
+        # ``abs(X) == 1`` with X unbound: an arithmetic CELL (no operator
+        # node) looked ground at the top, so the comparison was decided on
+        # the raw compound -- FALSE -- and ``if_`` took the else branch for
+        # X = 1 too.  It is undetermined.
+        return None
     if _both_ground(x, y):
         if op in ("eq", "ne"):
             x, y = _walk_compound(x), _walk_compound(y)
