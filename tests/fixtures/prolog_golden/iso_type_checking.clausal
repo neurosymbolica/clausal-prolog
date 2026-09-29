@@ -123,17 +123,17 @@ test("integer: octal literal 0o1") <- (integer(1))
 
 test("integer: binary literal 0b1") <- (integer(1))
 
-test("float_: 1.0 succeeds") <- (float_(1.0))
+test("float_: 1.0 succeeds") <- (float(1.0))
 
-test("float_: 0.0 succeeds") <- (float_(0.0))
+test("float_: 0.0 succeeds") <- (float(0.0))
 
-test("float_: scientific 1e9") <- (float_(1000000000.0))
+test("float_: scientific 1e9") <- (float(1000000000.0))
 
-test("float_: int fails") <- (not float_(1))
+test("float_: int fails") <- (not float(1))
 
-test("float_: string fails") <- (not float_("1.0"))
+test("float_: string fails") <- (not float("1.0"))
 
-test("float_: var fails") <- (not float_(_x_UNUSED))
+test("float_: var fails") <- (not float(_x_UNUSED))
 
 test("number: large int (via eval)") <- (X == '^'(10, 100), number(X))
 
