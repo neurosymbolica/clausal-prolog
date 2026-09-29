@@ -15,7 +15,7 @@ import textwrap
 import pytest
 
 from clausal.import_hook import _load_prolog_module
-from clausal.logic.solve import query
+from clausal.logic.solve import _deref_walk, solve
 from clausal.logic.variables import Var
 from clausal.tools.prolog_to_clausal import (
     PrologTranslationError, prolog_to_clausal,
@@ -42,7 +42,8 @@ def _load(tmp_path, name, source):
 
 def _answers(mod, pred):
     x = Var()
-    return [s["X"] for s in query((pred, x), {"X": x}, mod)]
+    # the value is walked INSIDE the loop, before backtracking undoes it
+    return [_deref_walk(x) for _ in solve((pred, x), mod)]
 
 
 # ── A. bagof/setof keep the existential quantifier ─────────────────────
@@ -119,8 +120,8 @@ class TestNoStaleRenames:
         """)
         assert _answers(m, "t") == [1]
         x = Var()
-        assert [s["X"] for s in query(("profile_get", "foo", "k", x),
-                                      {"X": x}, m)] == [1]
+        assert [_deref_walk(x) for _ in
+                solve(("profile_get", "foo", "k", x), m)] == [1]
 
     def test_imported_profile_get_is_called(self, tmp_path):
         (tmp_path / f"{_PREFIX}pg_lib.pl").write_text(textwrap.dedent(f"""\
@@ -518,3 +519,55 @@ class TestReviewRound1:
             f":- module({_PREFIX}broken, [v/1]).\nv(1 :- .\n")
         with pytest.raises(SyntaxError, match=r"line 1.*use_module"):
             _load(tmp_path, "usesbroken", f":- use_module({_PREFIX}broken).\n")
+
+
+# ── follow-up: package __init__.pl, and no cwd-dependent output ───────
+
+
+class TestPackageInitAndNoModuleName:
+    def test_package_init_pl_imports_a_sibling(self, tmp_path):
+        # plhpkg/inner/__init__.pl is the module plhpkg.inner; its sibling
+        # 'prohibition' is plhpkg.inner.prohibition (the root climb was one
+        # directory short for __init__.pl, dropping the leading 'plhpkg.')
+        root = tmp_path / "plhpkg" / "inner"
+        root.mkdir(parents=True)
+        (tmp_path / "plhpkg" / "__init__.py").write_text("")
+        (root / "prohibition.pl").write_text(
+            ":- module(prohibition, [v/1]).\nv(7).\n")
+        (root / "__init__.pl").write_text(
+            ":- use_module('prohibition', [v/1]).\nw(X) :- v(X).\n")
+        import importlib  # the REAL import hook: __init__.pl is a package
+        m = importlib.import_module("plhpkg.inner")
+        assert _answers(m, "w") == [7]
+
+    def test_package_init_pl_use_module_1(self, tmp_path):
+        root = tmp_path / "plhpkg" / "inner"
+        root.mkdir(parents=True)
+        (tmp_path / "plhpkg" / "__init__.py").write_text("")
+        (root / "prohibition.pl").write_text(
+            ":- module(prohibition, [v/1]).\nv(8).\n")
+        (root / "__init__.pl").write_text(
+            ":- use_module(prohibition).\nw(X) :- v(X).\n")
+        import importlib  # the REAL import hook: __init__.pl is a package
+        m = importlib.import_module("plhpkg.inner")
+        assert _answers(m, "w") == [8]
+
+    def test_relative_path_without_module_name_is_refused(self, tmp_path):
+        (tmp_path / "lib.pl").write_text(":- module(lib, [v/1]).\nv(1).\n")
+        with pytest.raises(PrologTranslationError,
+                           match="needs the importing module's name"):
+            prolog_to_clausal(":- use_module('lib', [v/1]).\n",
+                              source_path=str(tmp_path / "m.pl"))
+
+    def test_output_without_source_does_not_depend_on_cwd(
+            self, tmp_path, monkeypatch):
+        cwd = tmp_path / "cwd"        # NOT on sys.path (tmp_path is)
+        cwd.mkdir()
+        (cwd / "cwdlib.pl").write_text(
+            ":- module(cwdlib, [v/1]).\nv(1).\n")
+        src = ":- use_module(cwdlib).\nw(X) :- v(X).\n"
+        # '' on sys.path means the cwd, as in an interactive session
+        monkeypatch.setattr(sys, "path", [""] + sys.path)
+        a = prolog_to_clausal(src)
+        monkeypatch.chdir(cwd)
+        assert prolog_to_clausal(src) == a

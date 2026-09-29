@@ -1155,6 +1155,14 @@ class _PrologToClausal:
             base = os.path.dirname(os.path.abspath(self._source_path))
             cand = os.path.normpath(os.path.join(base, path))
             if _module_file_exists(cand):
+                if not self._module_name:
+                    # Without it the dotted name would come from whichever
+                    # sys.path entry (cwd included) happens to contain the
+                    # file: output depending on the caller's cwd.
+                    raise PrologTranslationError(
+                        f"{directive}: relative use_module needs the "
+                        "importing module's name (pass module_name= with "
+                        "source_path=; the import hook always does).")
                 dotted = self._dotted_for_file(cand)
                 if dotted is None:
                     raise PrologTranslationError(
@@ -1198,14 +1206,29 @@ class _PrologToClausal:
                 break
         return []
 
+    def _package_root(self) -> str | None:
+        """The directory the importer's dotted name is relative to: climb
+        one directory per dot from the file's directory -- one more for a
+        package ``__init__.pl``, whose name IS its directory's."""
+        if not (self._source_path and self._module_name):
+            return None
+        depth = self._module_name.count(".")
+        if os.path.basename(self._source_path) == "__init__.pl":
+            depth += 1
+        root = os.path.dirname(os.path.abspath(self._source_path))
+        for _ in range(depth):
+            root = os.path.dirname(root)
+        return root
+
     def _find_module_file(self, dotted: str) -> str | None:
+        # Only with the importer's name: a direct API call must not read
+        # the file system through sys.path (cwd included), or its output
+        # would depend on the caller's working directory.
+        root = self._package_root()
+        if root is None:
+            return None
         parts = dotted.split(".")
-        roots = []
-        if self._source_path and self._module_name:
-            root = os.path.dirname(os.path.abspath(self._source_path))
-            for _ in range(self._module_name.count(".")):
-                root = os.path.dirname(root)
-            roots.append(root)
+        roots = [root]
         roots.extend(os.path.abspath(e or os.getcwd()) for e in sys.path
                      if isinstance(e, str))
         for root in roots:
@@ -1234,11 +1257,8 @@ class _PrologToClausal:
         relative to this module's own package root when the importer's
         dotted name is known, else to the most specific sys.path entry."""
         roots: list[str] = []
-        if self._source_path and self._module_name:
-            depth = self._module_name.count(".")
-            root = os.path.dirname(os.path.abspath(self._source_path))
-            for _ in range(depth):
-                root = os.path.dirname(root)
+        root = self._package_root()
+        if root is not None:
             roots.append(root)
         entries = sorted({os.path.abspath(e or os.getcwd()) for e in sys.path
                           if isinstance(e, str)}, key=len, reverse=True)
