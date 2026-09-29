@@ -517,7 +517,78 @@ def _convert_inner(goal: Any, db: Any) -> GoalOp:
         case nodes.ArithEq() | nodes.ArithNeq() | nodes.Lt() | nodes.LtE() \
                 | nodes.Gt() | nodes.GtE():
             return FDCompare(op=_FD_OP[type(goal)], l=goal.left, r=goal.right)
+        case nodes.SetLiteral():
+            # A set literal in GOAL position is a CLP(Q) constraint set, the
+            # seam twin of clpq's ``{C}`` (operator ruling 2026-09-30): it is
+            # the goal ``clpq.rational((elements...))`` and converts through
+            # that very arm, so the two spellings produce one GoalOp.  A set
+            # in DATA position (a head, an argument) is untouched: only
+            # goals reach ``_convert``.
+            return _convert_inner(_set_goal_as_clpq_rational(goal), db)
     _not_yet(goal)
+
+
+#: The node shapes a goal-position set may hold: the comparisons
+#: ``clpq_constraint_block`` posts (a ``CompareChain`` is a chain of them).
+_CLPQ_SET_ELEMENTS = (nodes.ArithEq, nodes.ArithNeq, nodes.Lt, nodes.LtE,
+                      nodes.Gt, nodes.GtE)
+
+
+def _is_clpq_constraint(element: Any) -> bool:
+    if isinstance(element, _CLPQ_SET_ELEMENTS):
+        return True
+    return (isinstance(element, nodes.CompareChain)
+            and all(isinstance(c, _CLPQ_SET_ELEMENTS)
+                    for c in element.comparisons))
+
+
+def _set_goal_as_clpq_rational(goal: nodes.SetLiteral) -> nodes.Call:
+    """``{C1, C2, ...}`` in goal position -> the ``clpq.rational((C1, C2,
+    ...))`` call node (one element: ``clpq.rational(C1)``), the exact AST the
+    seam's long spelling and the ``.pl`` front end's ``{C}`` lowering
+    produce.  Every element must be a constraint; anything else is a
+    load-time :class:`SetGoalElementError` naming it."""
+    elements = list(goal.elements)
+    if not elements:
+        raise SetGoalElementError(goal, None)
+    for element in elements:
+        if not _is_clpq_constraint(element):
+            raise SetGoalElementError(goal, element)
+    pos = goal.position
+    arg = elements[0] if len(elements) == 1 else nodes.TupleLiteral(
+        elements=elements, position=pos)
+    func = nodes.LoadAttr(
+        object=nodes.LoadName(name="clpq", position=pos), attr="rational",
+        position=pos)
+    return nodes.Call(func=func, args=[arg], kwargs=[], position=pos)
+
+
+class SetGoalElementError(Exception):
+    """A set literal in goal position held something that is not a
+    constraint.
+
+    In goal position ``{...}`` is a CLP(Q) constraint set (the seam's twin
+    of clpq's ``{C}``), so each element must be a comparison ``==``, ``!=``,
+    ``<``, ``<=``, ``>``, ``>=`` or a chain of them.  ``predicate`` is
+    filled in by the predicate compiler once the enclosing ``functor/arity``
+    is known (like :class:`BareGoalVariableError`).
+    """
+
+    def __init__(self, goal: Any, element: Any,
+                 predicate: str | None = None) -> None:
+        self.goal = goal
+        self.element = element
+        self.predicate = predicate
+        location = f" in predicate {predicate}" if predicate else ""
+        culprit = (f"`{element}` in `{goal}`{location} is not one"
+                   if element is not None
+                   else f"`{goal}`{location} holds no constraint")
+        super().__init__(
+            f"a set literal in goal position is a CLP(Q) constraint set "
+            f"(the twin of clpq's {{C}}): each element must be a comparison "
+            f"(==, !=, <, <=, >, >= or a chain of them), but {culprit}. "
+            f"A set of VALUES belongs in an argument, not in goal position."
+        )
 
 
 class BareGoalVariableError(Exception):
@@ -597,4 +668,5 @@ def _not_yet(goal: Any) -> NoReturn:
     )
 
 
-__all__ = ["terms_to_goalop", "BareGoalVariableError", "BareGoalUndefinedError"]
+__all__ = ["terms_to_goalop", "BareGoalVariableError", "BareGoalUndefinedError",
+           "SetGoalElementError"]
