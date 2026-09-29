@@ -861,6 +861,35 @@ def _map_list__3(this_generator, _proceed, _fail, _catcher, goal, xs, ys, trail)
     yield (_fail, DONE)
 
 
+def _make_maplist_n(n_lists):
+    """maplist/(n_lists + 1) for 3..7 lists: the prologue's definition by
+    call/N over every list at once -- proper or open lists, every
+    combination of the calls' solutions an answer (``_open_lists_drive``,
+    which maplist/2,3 use for open lists).  Scryer's library(lists) has
+    maplist/2..9; only /2 and /3 existed here, so ``maplist(plus, Xs, Ys,
+    Zs)`` was existence_error(procedure, maplist/4)."""
+    def fn(this_generator, _proceed, _fail, _catcher, goal, *rest):
+        *lists, trail = rest
+        goal_val = deref(goal)
+        if not _is_goal(goal_val):
+            yield (_fail, DONE)
+            return
+        dispatch = _ensure_trampoline_dispatch(goal_val, n_lists)
+        yield from _open_lists_drive(this_generator, _proceed, dispatch,
+                                     lists, lambda _i, hs: hs, trail)
+        yield (_fail, DONE)
+    fn.__name__ = f"_map_list__{n_lists + 1}"
+    fields = ("goal",) + tuple(f"list{i + 1}" for i in range(n_lists))
+    return _trampoline_builtin("maplist", n_lists + 1, fields=fields)(fn)
+
+
+# up to maplist/8: its goal is called with 7 arguments, i.e. call/8, the
+# highest call/N (ISO requires call/1..8).
+for _n_lists in range(3, 8):
+    globals()[f"_map_list__{_n_lists + 1}"] = _make_maplist_n(_n_lists)
+del _n_lists
+
+
 @_trampoline_builtin("include", 3)
 def _include__3(this_generator, _proceed, _fail, _catcher, goal, lst, included, trail):
     """include(Goal, List, Included) — keep elements where Goal(Elem) succeeds."""
@@ -1498,7 +1527,9 @@ def _tpartition__4(this_generator, _proceed, _fail, _catcher, goal, lst, include
 # the same arrangement ``call/N``, ``phrase`` and ``time_goal`` already use.
 
 _GOAL_FIRST_LIST_BUILTINS = (
-    ("maplist", 2), ("maplist", 3), ("include", 3), ("exclude", 3),
+    ("maplist", 2), ("maplist", 3), ("maplist", 4), ("maplist", 5),
+    ("maplist", 6), ("maplist", 7), ("maplist", 8),
+    ("include", 3), ("exclude", 3),
     ("foldl", 4), ("foldl", 5), ("foldl", 6), ("map_list_to_pairs", 3),
     ("take_while", 3), ("drop_while", 3), ("span", 4),
     ("group_by", 3), ("sort_by", 3), ("max_by", 3), ("min_by", 3),
