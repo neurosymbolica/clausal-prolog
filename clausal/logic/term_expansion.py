@@ -51,6 +51,59 @@ def _is_term_expansion_clause(pred_node) -> bool:
     return False
 
 
+def _head_name_arity(pred_node):
+    """``(name, arity)`` of a Predicate node's head, or None."""
+    head = pred_node.head
+    from clausal.terms import Call, LoadName
+    from clausal.logic.cells import compound_cell_shape  # noqa: PLC0415
+    if isinstance(head, Call) and isinstance(head.func, LoadName):
+        return head.func.name, len(head.args)
+    if type(head) is str:
+        return head, 0
+    is_cell, functor = compound_cell_shape(head)
+    if is_cell:
+        return functor, len(head) - 1
+    return None
+
+
+def _expansion_helpers(expansion_clauses, regular_items) -> list:
+    """The clauses of *regular_items* whose predicates the term_expansion/4
+    bodies can reach, transitively, in source order.
+
+    ISO/Scryer ``term_expansion`` routinely delegates to a helper defined in
+    the same file (it is already consulted when the expansion runs).  Only the
+    term_expansion/4 clauses used to be compiled into the synthetic
+    expansion module, so a body calling ``step(I, O)`` of its own file failed
+    the whole load.  Reachability is by NAME over every functor a body writes
+    (a data term's functor included), which over-approximates harmlessly: a
+    name no clause here defines selects nothing."""
+    by_name: dict = {}
+    for item in regular_items:
+        key = _head_name_arity(item)
+        if key is not None:
+            by_name.setdefault(key[0], []).append(item)
+    if not by_name:
+        return []
+
+    def called(nodes) -> set:
+        out: dict = {}
+        seen: set = set()
+        for n in nodes:
+            _collect_functor_arities(n.body, out, seen)
+        return set(out)
+
+    reachable: set = set()
+    frontier = list(called(expansion_clauses))
+    while frontier:
+        name = frontier.pop()
+        if name in reachable or name not in by_name:
+            continue
+        reachable.add(name)
+        frontier.extend(called(by_name[name]))
+    return [item for item in regular_items
+            if (_head_name_arity(item) or (None,))[0] in reachable]
+
+
 def run_term_expansion(
     predicate_nodes: list,
     module_dict: dict,
@@ -104,7 +157,9 @@ def run_term_expansion(
     # Step 3: Compile term_expansion clauses into a mini logic module.
     # Imported rules come first (lower priority), then local rules.
     all_te_clauses = imported_te_clauses + expansion_clauses
-    expansion_module = _compile_expansion_rules(all_te_clauses, module_dict)
+    helpers = _expansion_helpers(expansion_clauses, regular_items)
+    expansion_module = _compile_expansion_rules(all_te_clauses, module_dict,
+                                                helpers)
 
     # Store local TE predicate nodes for downstream importers, on this
     # module's DATABASE, where ``-import_from(mod, [term_expansion])`` finds
@@ -359,9 +414,13 @@ def _term_expansion_module(module_dict):
     return lm
 
 
-def _compile_expansion_rules(expansion_clauses, module_dict):
-    """Compile term_expansion clauses into a mini LogicModule."""
+def _compile_expansion_rules(expansion_clauses, module_dict, helpers=()):
+    """Compile term_expansion clauses into a mini LogicModule, with the
+    *helpers* (``_expansion_helpers``) their bodies call.  A helper is
+    compiled HERE as written: it is not itself expanded (it runs while
+    expansion happens), and it still reaches the module as an ordinary item."""
     lm = _term_expansion_module(module_dict)
+    helper_keys = {k for k in map(_head_name_arity, helpers) if k is not None}
 
     # A10-F008 / A10-D004(a): pre-mint term classes for functors referenced in
     # the expansion patterns — e.g. a brand-new ``logged_fact``
@@ -369,7 +428,7 @@ def _compile_expansion_rules(expansion_clauses, module_dict):
     # at expansion time fails with "not in scope as a term class".
     functor_arities: dict[str, int] = {}
     _seen_ids: set = set()
-    for pred_node in expansion_clauses:
+    for pred_node in list(expansion_clauses) + list(helpers):
         _collect_functor_arities(pred_node, functor_arities, _seen_ids)
     # "Not bound" includes bound to an ATOM: an atom is data and builds no
     # term, and the module dict this copies is pre-seeded with the
@@ -380,12 +439,26 @@ def _compile_expansion_rules(expansion_clauses, module_dict):
     # the atom.
     from clausal.logic.atoms import is_atom as _is_atom  # noqa: PLC0415
     for name, arity in functor_arities.items():
+        if (name, arity) in helper_keys:
+            continue        # a PREDICATE the bodies call, compiled below
         if name not in lm.module_dict or _is_atom(lm.module_dict[name]):
             lm.module_dict[name] = _data_functor_ctor(name, arity)
+    for name, _arity in helper_keys:
+        # The module dict this copies may bind the helper's name to anything
+        # (a pre-minted data constructor of an earlier load, a pooled atom);
+        # the call must resolve to the row compiled below.
+        lm.module_dict.pop(name, None)
 
-    # assertz each expansion clause.
-    for pred_node in expansion_clauses:
+    # assertz each expansion clause, and each helper clause.
+    for pred_node in list(expansion_clauses) + list(helpers):
         lm.define_predicate(pred_node)
+    for name, arity in sorted(helper_keys):
+        clauses = lm.db.clauses_for(name, arity)
+        if clauses:
+            compile_predicate_trampoline(
+                name, arity, clauses, lm.db,
+                globals_=lm.module_dict, pred_cls=None,
+            )
 
     # Compile the expansion predicate.
     functor, arity = "term_expansion", 4
