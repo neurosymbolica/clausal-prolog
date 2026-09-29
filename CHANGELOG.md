@@ -134,6 +134,18 @@ since 0.4.0 finish three moves:
 
 ### Added
 
+- **A set literal in goal position is a CLP(Q) constraint set.** In
+  `.clausal`/`.seam` source, `two(N, Q) <- {Q == N * 2}` and
+  `within(X) <- {0 <= X <= 10}` post exact rational constraints: the twin
+  of clpq's `{C}` and the short spelling of `clpq.rational((...))`, which
+  it lowers to (one goal, identical answers). Elements are comparisons
+  (`==`, `!=`, `<`, `<=`, `>`, `>=` or a chain); any other element is a
+  load-time error naming it. A set in data position is still a set and
+  `{}` is still a dict. The constraint block now runs the units side
+  channel, so a `-constant_number_units` constant folded in through
+  `constant(Name)` keeps its unit: `{Q == 100 * constant(one_euro)}` gives
+  `100 euro` (before, `clpq.rational` refused a Quantity as non-linear).
+  See [docs/clpq.md](docs/clpq.md).
 - **library(lambda) as builtins: `(\)/1..8`, `(^)/3..10`, `(+\)/2..9`.**
   Ulrich Neumerkel's lambdas (`maplist(\X^Y^(Y is 2*X), Xs, Ys)`,
   `Free+\X^Goal`) run through call/N with Scryer's answers: `\` copies the

@@ -609,6 +609,22 @@ when at least one side is an unbound Var, a CLP(ℤ) constraint is posted:
 
 See [constraints.md](constraints.md) for the full CLP(ℤ) design, including domain representation, propagation, and labeling.
 
+### Rational constraints: a set in goal position (CLP(ℚ))
+
+A **set literal in goal position** is a set of CLP(ℚ) constraints over exact rational
+arithmetic — the twin of Prolog's clpq goal `{C}`. Its elements are comparisons (`==`, `!=`,
+`<`, `<=`, `>`, `>=`, or a chain), posted together:
+
+```clausal
+two(N, Q) <- {Q == N * 2}                    # two(3, Q) gives 6; two(N, 8) gives 4
+within(X) <- {0 <= X <= 10}
+half(X) <- {2 * X == 3}                       # X = Fraction(3, 2)
+```
+
+It is one goal, `clpq.rational((...))`, spelled short. A set in *data* position (a head, an
+argument, `S is {1, 2}`) is still a set, and `{}` is a dict. An element that is not a
+comparison is a load-time error. See [CLP(Q)](clpq.md).
+
 ---
 
 ## Horn clauses
@@ -736,6 +752,9 @@ primary({'red', 'green', 'blue'}),
 ```
 
 Two sets unify iff they contain the same elements (order irrelevant). Variables in set elements are not supported.
+
+This is the *data* position. A set literal standing alone as a **goal** is not a value but a
+[CLP(ℚ) constraint set](#rational-constraints-a-set-in-goal-position-clpq): `{X >= 0, X <= 10}`.
 
 See [Dicts & Sets](dicts_sets.md) for details.
 
