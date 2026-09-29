@@ -717,6 +717,69 @@ def _msort__2(this_generator, _proceed, _fail, _catcher, lst, sorted_lst, trail)
     yield (_fail, DONE)
 
 
+def _keysort_error(term, who="keysort/2"):
+    from clausal.logic.exceptions import (  # noqa: PLC0415
+        LogicException, instantiation_error, type_error)
+    if is_var(term):
+        return LogicException(instantiation_error(who))
+    return LogicException(type_error("pair", term, who))
+
+
+def _is_pair(t) -> bool:
+    return type(t) is tuple and len(t) == 3 and t[0] == "-"
+
+
+@_trampoline_builtin("keysort", 2)
+def _keysort__2(this_generator, _proceed, _fail, _catcher, lst, sorted_lst, trail):
+    """keysort(Pairs, Sorted) -- ISO 8.4.2: *Pairs* (a list of ``Key-Value``)
+    stably sorted by Key in the standard order of terms; duplicates KEPT.
+
+    It did not exist (``existence_error(procedure, keysort/2)``).  Errors as
+    ISO 8.4.2.3: a partial list or an unbound element is an instantiation
+    error, a non-list ``type_error(list, Pairs)``, an element that is not a
+    pair ``type_error(pair, E)``; a *Sorted* that is neither a (partial)
+    list nor has only variables and pairs as elements is a type error too.
+    """
+    from clausal.terms import SegList, SegString, SegBytes  # noqa: PLC0415
+    from clausal.logic.exceptions import (  # noqa: PLC0415
+        LogicException, instantiation_error, type_error)
+    who = "keysort/2"
+    lst_val = deref(lst)
+    items = _as_items(lst_val)
+    if items is None:
+        if isinstance(lst_val, SegList):
+            walked = lst_val._walk_raw()
+            if not isinstance(walked, list):
+                raise LogicException(instantiation_error(who))
+            items = walked
+        elif is_var(lst_val) or isinstance(lst_val, (SegString, SegBytes)):
+            raise LogicException(instantiation_error(who))
+        else:
+            raise LogicException(type_error("list", lst_val, who))
+    pairs = []
+    for e in items:
+        e = deref(e)
+        if not _is_pair(e):
+            raise _keysort_error(e)
+        pairs.append(e)
+    sorted_val = deref(sorted_lst)
+    out_items = _as_items(sorted_val)
+    if out_items is not None:
+        for e in out_items:
+            e = deref(e)
+            if not (is_var(e) or _is_pair(e)):
+                raise LogicException(type_error("pair", e, who))
+    elif not (is_var(sorted_val)
+              or isinstance(sorted_val, (SegList, SegString, SegBytes))):
+        raise LogicException(type_error("list", sorted_val, who))
+    result = sorted(pairs, key=lambda p: _standard_order_key(deref(p[1])))
+    mark = trail.mark()
+    if unify(sorted_lst, result, trail):
+        yield (_proceed, None)
+    trail.undo(mark)
+    yield (_fail, DONE)
+
+
 @_trampoline_builtin("sort", 2)
 def _sort__2(this_generator, _proceed, _fail, _catcher, lst, sorted_lst, trail):
     """sort(List, Sorted) — Sorted is List sorted with duplicates removed.
