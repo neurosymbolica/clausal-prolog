@@ -44,6 +44,7 @@ from __future__ import annotations
 
 import sys
 import types as _types
+import weakref
 from dataclasses import fields as _dc_fields, is_dataclass as _is_dataclass
 from typing import Any, Iterator
 
@@ -257,7 +258,10 @@ def _term_to_goal(term: Any, db: Any = None) -> Any:
 
 _VAR_SENTINEL = object()
 
-# Cache: (structural_key, module_id) → (fn, code_object, var_names)
+# Cache: (structural_key, id(module)) →
+#   (fn, code_object, var_names, thunk_names, weakref-to-module)
+# The weakref is checked on every hit (see the insert site in
+# _compile_as_query): an id alone can be reused by a later module.
 _query_cache: dict = {}
 
 # Upper bound on distinct cached query shapes; see eviction note at the
@@ -657,8 +661,13 @@ def _compile_as_query(goal: Any, module: Module) -> Any:
     vars_in_goal = _collect_vars(goal, include_bound=True)
 
     cached = _query_cache.get(cache_key) if cache_key is not None else None
+    if cached is not None and cached[4]() is not module:
+        # Compiled for a DEAD module whose id this one reuses (see the
+        # insert site): its code resolved names in the dead module's
+        # namespace, so it must not run here.
+        cached = None
     if cached is not None:
-        cached_fn, cached_code, cached_var_names, cached_thunk_names = cached[:4]
+        cached_fn, cached_code, cached_var_names, cached_thunk_names, _ = cached
         # The two name lists ARE the parameter list of a cached query: the
         # cached code says ``_v<id>`` / ``_pyt_<id>`` by the name it was
         # compiled with, and every one of them has to be rebound to this
@@ -759,17 +768,18 @@ def _compile_as_query(goal: Any, module: Module) -> Any:
             "thunk names recorded for the cache but never called by the "
             "compiled query: " + repr(_thunk_names_not_called(
                 dispatch_fn.__code__, cached_thunk_names)))
-        # The entry holds its MODULE (slot 4, never read): the key is
-        # ``id(module)``, and a module the caller wraps afresh on every call
-        # (``_coerce_module`` over a plain Python module, a transient
-        # ``Module``) would otherwise die with this query and free its id for
-        # the next one -- whose same-shaped goal then HIT this entry and ran
-        # code resolved against the dead module's namespace: a silent wrong
-        # answer.  Kept alive here, the id cannot be reused while the entry
-        # lives.
+        # The entry records its MODULE by weak reference, and a hit is taken
+        # only when it is still that module: the key is ``id(module)``, and a
+        # module the caller wraps afresh on every call (``_coerce_module``
+        # over a plain Python module, a transient ``Module``) dies with this
+        # query and frees its id for the next one -- whose same-shaped goal
+        # used to HIT this entry and run code resolved against the dead
+        # module's namespace: a silent wrong answer.  A weak reference, not a
+        # strong one, so the cache does not keep every transient wrap (and
+        # its database) alive until eviction.
         _query_cache[cache_key] = (dispatch_fn, dispatch_fn.__code__,
                                    cached_var_names, cached_thunk_names,
-                                   module)
+                                   weakref.ref(module))
 
     return dispatch_fn, param_pairs
 

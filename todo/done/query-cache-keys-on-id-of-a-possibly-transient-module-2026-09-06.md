@@ -43,10 +43,11 @@ plain Python modules binding `g` to handles of `p/1` and `q/1`, queried with
 the same `g(X)` goal in turn, answered each other's value in 14 of 20 pairs
 (the second wrap lands on the first one's freed id almost every time).
 
-Fixed with option 3 on fix/todo-batch-2-2026-09-30: the cache entry holds its
-module (slot 4), so the id cannot be reused while the entry lives. No
+Fixed on fix/todo-batch-2-2026-09-30: the cache entry records its module by
+WEAK reference and a hit is taken only when it is still that module (option 3
+kept alive every transient wrap until eviction -- roborev Medium). No
 semantic change for plain modules (each call still wraps afresh); option 1
 (memoize the wrap, which would also let those queries HIT) is left as a perf
 follow-up -- it changes whether an assertz into a plain module's wrap
 persists across calls. Pinned by tests/test_query_cache_transient_module.py
-(the 40-pair loop, and a deterministic keep-alive check).
+(the 40-pair loop, a forged id collision, and a no-keep-alive check).

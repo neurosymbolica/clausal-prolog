@@ -6,7 +6,8 @@ module wraps it in a fresh ``Module`` on every call, which died with the
 query and freed its id; the next wrap often landed on the same id, HIT the
 dead module's entry, and ran code resolved against the dead module's
 namespace -- a silent wrong answer (measured on the base: 14 of 20 pairs
-below answered the other module's value).
+below answered the other module's value).  A hit now checks the entry's
+module by (weak) identity.
 """
 import gc
 import sys
@@ -52,9 +53,27 @@ def test_same_goal_over_two_plain_modules_answers_each_its_own(owner):
     assert wrong == []
 
 
-def test_a_cached_query_keeps_its_module_alive(owner):
-    """Deterministic form: the entry holds the module, so its id cannot be
-    reused while the entry lives."""
+def test_an_entry_for_a_dead_module_is_not_served(owner):
+    """Deterministic form: forge the id collision.  An entry compiled for a
+    module that has since died must not answer for a new module that lands
+    on its key -- the hit checks the entry's module by identity."""
+    from clausal.logic import solve as solve_mod
+    pa = _plain("qctm_dead_a", "p")
+    a = Module("qctm_dead_a", module_dict=vars(pa))
+    X = Var()
+    assert [_deref_walk(X) for _ in solve(("g", X), a)] == [1]
+    key_a = [k for k in solve_mod._query_cache if k[1] == id(a)]
+    assert key_a, "the query must have been cached"
+    pb = _plain("qctm_dead_b", "q")
+    b = Module("qctm_dead_b", module_dict=vars(pb))
+    # Re-key a's entry under b's id, as an id reuse would.
+    for k in key_a:
+        solve_mod._query_cache[(k[0], id(b))] = solve_mod._query_cache[k]
+    X = Var()
+    assert [_deref_walk(X) for _ in solve(("g", X), b)] == [2]
+
+
+def test_the_cache_does_not_keep_a_transient_module_alive(owner):
     pm = _plain("qctm_keep", "p")
     m = Module("qctm_keep", module_dict=vars(pm))
     ref = weakref.ref(m)
@@ -62,4 +81,4 @@ def test_a_cached_query_keeps_its_module_alive(owner):
     assert [_deref_walk(X) for _ in solve(("g", X), m)] == [1]
     del m
     gc.collect()
-    assert ref() is not None
+    assert ref() is None
