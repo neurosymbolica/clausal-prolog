@@ -658,7 +658,7 @@ def _compile_as_query(goal: Any, module: Module) -> Any:
 
     cached = _query_cache.get(cache_key) if cache_key is not None else None
     if cached is not None:
-        cached_fn, cached_code, cached_var_names, cached_thunk_names = cached
+        cached_fn, cached_code, cached_var_names, cached_thunk_names = cached[:4]
         # The two name lists ARE the parameter list of a cached query: the
         # cached code says ``_v<id>`` / ``_pyt_<id>`` by the name it was
         # compiled with, and every one of them has to be rebound to this
@@ -759,8 +759,17 @@ def _compile_as_query(goal: Any, module: Module) -> Any:
             "thunk names recorded for the cache but never called by the "
             "compiled query: " + repr(_thunk_names_not_called(
                 dispatch_fn.__code__, cached_thunk_names)))
+        # The entry holds its MODULE (slot 4, never read): the key is
+        # ``id(module)``, and a module the caller wraps afresh on every call
+        # (``_coerce_module`` over a plain Python module, a transient
+        # ``Module``) would otherwise die with this query and free its id for
+        # the next one -- whose same-shaped goal then HIT this entry and ran
+        # code resolved against the dead module's namespace: a silent wrong
+        # answer.  Kept alive here, the id cannot be reused while the entry
+        # lives.
         _query_cache[cache_key] = (dispatch_fn, dispatch_fn.__code__,
-                                   cached_var_names, cached_thunk_names)
+                                   cached_var_names, cached_thunk_names,
+                                   module)
 
     return dispatch_fn, param_pairs
 

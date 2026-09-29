@@ -35,3 +35,18 @@ not a diagnostic one.
 Owner: the query-cache / `_compile_as_query` code, not the qualified-goal
 work. Home: P3-3 Task 9 (perf/reconciliation) if option 1 is chosen, since
 it also removes a per-call `Module` allocation on the plain-module path.
+
+## Closed 2026-09-30
+
+REPRODUCED on 9b6b58a1 as a silent wrong answer, not a narrow coincidence: two
+plain Python modules binding `g` to handles of `p/1` and `q/1`, queried with
+the same `g(X)` goal in turn, answered each other's value in 14 of 20 pairs
+(the second wrap lands on the first one's freed id almost every time).
+
+Fixed with option 3 on fix/todo-batch-2-2026-09-30: the cache entry holds its
+module (slot 4), so the id cannot be reused while the entry lives. No
+semantic change for plain modules (each call still wraps afresh); option 1
+(memoize the wrap, which would also let those queries HIT) is left as a perf
+follow-up -- it changes whether an assertz into a plain module's wrap
+persists across calls. Pinned by tests/test_query_cache_transient_module.py
+(the 40-pair loop, and a deterministic keep-alive check).
