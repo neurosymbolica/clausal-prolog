@@ -873,3 +873,22 @@ def _standard_order_sorted(items: list) -> list:
     if len(types) == 1 and types.pop() in _NATIVE_ORDER_SAFE:
         return sorted(items)
     return sorted(items, key=_standard_order_key)
+
+
+def _check_nonneg_int_arg(val: Any, who: str) -> None:
+    """ISO's argument check for an integer position that may be unbound.
+
+    An unbound (already dereferenced) *val* passes; a bound one must be an
+    integer (``type_error(integer, V)``; a bool is the truth value, not 1)
+    and not negative (``domain_error(not_less_than_zero, V)``).  Builtins
+    used to FAIL silently on these (``arg(x, f(a), _)``,
+    ``sub_atom(abc, _, -1, _, _)``), where ISO and Scryer raise.
+    """
+    if is_var(val):
+        return
+    from clausal.logic.exceptions import (  # noqa: PLC0415
+        LogicException, domain_error, type_error)
+    if not isinstance(val, int) or isinstance(val, bool):
+        raise LogicException(type_error("integer", val, who))
+    if val < 0:
+        raise LogicException(domain_error("not_less_than_zero", val, who))
