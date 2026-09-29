@@ -156,8 +156,8 @@ since 0.4.0 finish three moves:
   module's own definition of the name answers first. The engine's
   `label/1` is unchanged (first-fail); a native `.pl` file that imports
   library(clpz) gets Scryer's `label/1` (`labeling([], Vs)`).
-- **The native `.pl` front end: clpq's `{C}` and ops by import.** `{C}` is
-  lowered to `clpq.rational(C)`. An import installs the operators Scryer
+- **The native `.pl` front end: clpq's `{C}` and ops by import.** After
+  `use_module(library(clpq))`, `{C}` is lowered to `clpq.rational(C)`. An import installs the operators Scryer
   installs: `use_module/1` every op the module exports; an import list the
   exported ops it names, plus the exported ops the module also declares
   with a top-level `op/3` (so `use_module(library(clpz), [label/1])` still

@@ -1,4 +1,4 @@
-"""Slice 5's exit test (plan native-iso-reader-step2 §4 Slice 5): 18 clpz and
+"""Slice 5's exit test (plan native-iso-reader-step2 §4 Slice 5): 19 clpz and
 6 clpq cases whose answers are IDENTICAL to Scryer's.
 
 ``s5/s5_clpz_exit.pl`` and ``s5/s5_clpq_exit.pl`` hold one ``case(Name, L)``
@@ -59,12 +59,17 @@ CLPZ = {
                   "domain_error-clpz_domain,domain_error-clpz_domain,"
                   "type_error-integer,type_error-list,instantiation_error,"
                   "domain_error-labeling_option,"
-                  "domain_error-consistent_labeling_options,type_error-list,"
+                  "domain_error-consistent_labeling_options,"
+                  "domain_error-nonrepeating_labeling_options,none,"
+                  "type_error-list,"
                   "instantiation_error,instantiation_error,"
                   "instantiation_error,"
                   "domain_error-clpz_reifiable_expression]",
     "c18_label_errors": "[instantiation_error,instantiation_error,"
                         "type_error-list]",
+    "c19_bisect_negative": "[[-5,0],[-4,0],[-3,0],[-2,0],[-1,0],[0,0],"
+                           "[-5,1],[-4,1],[-3,1],[-2,1],[-1,1],[0,1],"
+                           "[-5,2],[-4,2],[-3,2],[-2,2],[-1,2],[0,2]]",
 }
 
 CLPQ = {
@@ -129,7 +134,7 @@ def native_s5(tmp_path, monkeypatch):
 
 def test_clpz_rows_equal_scryers(native_s5):
     rows = _rows(native_s5("s5_clpz_exit"))
-    assert len(rows) == len(CLPZ) == 18
+    assert len(rows) == len(CLPZ) == 19
     for name, want in CLPZ.items():
         assert rows[name] == want, name
 

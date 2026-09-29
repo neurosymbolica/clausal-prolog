@@ -134,32 +134,29 @@ def test_call_label_is_the_engine_s_OPEN_divergence(native, ans):
     assert ans(mod, "t")[:2] == [[1, 1], [2, 1]]
 
 
-def test_the_builtins_from_solve():
-    import clausal
-    assert os.getcwd() in clausal.__file__, clausal.__file__
-    from clausal.logic.solve import solve
-    from clausal.logic.variables import Var, walk
-    X, B = Var(), Var()
-    goal = ("call", (",", ("in", X, ("..", 0, 4)),
-                     (",", ("#<==>", B, ("#>", X, 2)), ("labeling", [], [X]))))
-    got = [(walk(X), walk(B)) for _ in solve(goal, _fresh_module())]
-    assert got == [(0, 0), (1, 0), (2, 0), (3, 1), (4, 1)]
-
-
-def _fresh_module():
+def test_the_builtins_from_solve(tmp_path, monkeypatch):
     import importlib
     import sys
-    import tempfile
-    d = tempfile.mkdtemp()
-    with open(os.path.join(d, "s5_empty.clausal"), "w") as f:
-        f.write("s5_anchor(1),\n")
-    sys.path.insert(0, d)
+    import clausal
+    root = os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))))
+    assert clausal.__file__.startswith(root), (clausal.__file__, root)
+    from clausal.logic.solve import solve
+    from clausal.logic.variables import Var, walk
+    (tmp_path / "s5_empty.clausal").write_text("s5_anchor(1),\n")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    importlib.invalidate_caches()
+    sys.modules.pop("s5_empty", None)
     try:
-        importlib.invalidate_caches()
-        sys.modules.pop("s5_empty", None)
-        return importlib.import_module("s5_empty")
+        mod = importlib.import_module("s5_empty")
+        X, B = Var(), Var()
+        goal = ("call", (",", ("in", X, ("..", 0, 4)),
+                         (",", ("#<==>", B, ("#>", X, 2)),
+                          ("labeling", [], [X]))))
+        got = [(walk(X), walk(B)) for _ in solve(goal, mod)]
     finally:
-        sys.path.remove(d)
+        sys.modules.pop("s5_empty", None)
+    assert got == [(0, 0), (1, 0), (2, 0), (3, 1), (4, 1)]
 
 
 def test_the_builtins_from_the_seam_in_quoted_form(native, ans):
@@ -182,7 +179,37 @@ def test_labeling_min_max_optimisation_is_refused_loudly(native, ans):
     assert "min(Expr)/max(Expr)" in str(ei.value)
 
 
+def test_a_reified_comparison_over_an_unpropagated_functor_is_refused(
+        native, ans):
+    """Scryer accepts ``B #<==> (abs(X) #= 2)``; clpfd has no propagator
+    for abs/1, so a variable under it would never wake the reification.
+    Refused loudly rather than answered wrongly; a GROUND abs folds."""
+    from clausal.logic.exceptions import LogicException
+    mod = native.load("s5_rabs", ":- use_module(library(clpz)).\n"
+                                 "t(X-B) :- X in -3..3, B #<==> (abs(X) #= 2).\n"
+                                 "u(B) :- B #<==> (abs(-2) #= 2).\n")
+    with pytest.raises(LogicException) as ei:
+        ans(mod, "t")
+    assert "abs/1 over a variable is not supported" in str(ei.value)
+    assert ans(mod, "u") == [1]
+
+
+def test_a_local_label_at_another_arity_is_refused(native):
+    with pytest.raises(SyntaxError) as ei:
+        native.load("s5_lab5", ":- use_module(library(clpz)).\n"
+                               "label(A, B) :- A = B.\n")
+    assert "label/2 is defined here and label/1 is imported" in str(ei.value)
+
+
 # ── clpq ──
+
+
+def test_braces_without_library_clpq_are_an_ordinary_goal(native, ans):
+    """As in Scryer: without the import, ``{X = 1}`` calls ``{}/1``."""
+    from clausal.predicate_diagnostics import PredicateNotFoundError
+    mod = native.load("s5_qnoimp", "t(X) :- {X = 1}.\n")
+    with pytest.raises(PredicateNotFoundError, match="{}"):
+        ans(mod, "t")
 
 
 def test_clpq_braces_lower_to_the_seams_clpq_rational():

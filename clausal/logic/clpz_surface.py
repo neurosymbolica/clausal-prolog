@@ -202,6 +202,14 @@ def _options(options, opts_term):
         if is_var(o):
             _raise(instantiation_error(ctx))
         slot = None
+        if o == "upto_ground" and type(o) is str:
+            continue                       # Scryer's default consistency
+        if (o == "upto_in" and type(o) is str) or (
+                type(o) is tuple and len(o) == 2 and o[0] == "upto_in"):
+            raise LogicException(domain_error(
+                "labeling_option", walk(o),
+                "labeling/2: the upto_in consistency options are not "
+                "supported"))
         if type(o) is str:
             if o in _SELECTION:
                 slot = "sel"
@@ -219,9 +227,12 @@ def _options(options, opts_term):
         if slot is None:
             _raise(domain_error("labeling_option", walk(o), ctx))
         cur = {"sel": sel, "order": order, "choice": choice}[slot]
-        if cur is not None and cur != o:
-            _raise(domain_error("consistent_labeling_options",
-                                walk(opts_term), ctx))
+        if cur is not None:
+            # Scryer's override_/5: the same option twice is a different
+            # domain from two options of one category.
+            _raise(domain_error(
+                "nonrepeating_labeling_options" if cur == o
+                else "consistent_labeling_options", walk(opts_term), ctx))
         if slot == "sel":
             sel = o
         elif slot == "order":
@@ -326,7 +337,9 @@ def _label(vs, sel, order, choice, trail):
         return
     # bisect
     lo, hi = domain_min(d), domain_max(d)
-    mid = (lo + hi) // 2
+    total = lo + hi
+    # Scryer's (I + S) // 2 TRUNCATES toward zero; Python's // floors.
+    mid = total // 2 if total >= 0 else -((-total) // 2)
     if mid == hi:
         mid -= 1
     halves = [domain_remove_above(d, mid), domain_remove_below(d, mid + 1)]
@@ -356,11 +369,23 @@ _CLPZ_FUNCTORS = frozenset({
 })
 
 
-def clpz_expression(e, context: str):
+#: The functors clpfd's propagators understand (they have an operator node):
+#: a reified comparison may use the others only over ground subterms, which
+#: fold to their value.
+_PROPAGATED = frozenset({
+    ("+", 2), ("-", 2), ("-", 1), ("*", 2), ("/", 2), ("//", 2),
+    ("div", 2), ("mod", 2), ("^", 2),
+})
+
+
+def clpz_expression(e, context: str, reified: bool = False):
     """*e* checked as a clpz expression and returned with the ``#X``/``?X``
     variable markers removed; anything else raises Scryer's
     ``domain_error(clpz_expression, Culprit)`` naming the offending
-    subterm."""
+    subterm.  *reified*: inside a reified comparison, a functor clpfd cannot
+    propagate (``abs``, ``min``, ``max``, the bitwise ones ...) over a
+    non-ground subterm is refused loudly -- Scryer accepts it, and a
+    silently unwatched variable would give wrong answers."""
     e = deref(e)
     if is_var(e) or _is_int(e):
         return e
@@ -371,8 +396,34 @@ def clpz_expression(e, context: str):
         _raise(type_error("integer", walk(inner), context))
     if type(e) is tuple and len(e) >= 2 and type(e[0]) is str \
             and (e[0], len(e) - 1) in _CLPZ_FUNCTORS:
-        return (e[0],) + tuple(clpz_expression(a, context) for a in e[1:])
+        out = (e[0],) + tuple(clpz_expression(a, context, reified)
+                              for a in e[1:])
+        if (reified and (e[0], len(e) - 1) not in _PROPAGATED
+                and _term_vars(out)):
+            raise LogicException(domain_error(
+                "clpz_expression", walk(e),
+                f"{context}: {e[0]}/{len(e) - 1} over a variable is not "
+                f"supported in a reified comparison (the engine's CLP(FD) "
+                f"does not propagate it)"))
+        return out
     _raise(domain_error("clpz_expression", walk(e), context))
+
+
+def _term_vars(t, out=None) -> list:
+    """The unbound variables of a term (cells and lists), in order."""
+    if out is None:
+        out = []
+    t = deref(t)
+    if is_var(t):
+        if not any(v is t for v in out):
+            out.append(t)
+    elif type(t) is tuple:
+        for a in t[1:]:
+            _term_vars(a, out)
+    elif type(t) is list:
+        for a in t:
+            _term_vars(a, out)
+    return out
 
 
 # ── reification ──────────────────────────────────────────────────────────────
@@ -434,15 +485,12 @@ class ReifiedCmp(Constraint):
     its negation (B = 0) is POSTED through clpfd, which propagates it from
     then on.  ``done`` is a variable bound (on the trail) when either has
     happened, so a re-run is a no-op and backtracking re-arms it."""
-    __slots__ = ("b", "op", "l", "r", "nl", "nr", "done")
+    __slots__ = ("b", "op", "l", "r", "done")
 
     def __init__(self, b, op, l, r):
         self.b, self.op, self.l, self.r = b, op, l, r
-        self.nl, self.nr = _fd._cells_as_nodes(l, r)
         self.done = Var()
-        vs: list = []
-        _fd._collect_vars_from(self.nl, vs)
-        _fd._collect_vars_from(self.nr, vs)
+        vs = _term_vars((",", l, r))
         vs.append(b)
         super().__init__(tuple(vs))
 
@@ -454,8 +502,11 @@ class ReifiedCmp(Constraint):
             unify(self.done, 1, trail)
             op = self.op if b == 1 else _NEGATE[self.op]
             return _post_cmp(op, self.l, self.r, trail)
-        ld = _fd._expr_domain(self.nl, trail)
-        rd = _fd._expr_domain(self.nr, trail)
+        # Nodes are rebuilt each time: a bound variable is replaced by its
+        # value, so a subterm that became ground folds.
+        nl, nr = _fd._cells_as_nodes(deref(self.l), deref(self.r))
+        ld = _fd._expr_domain(nl, trail)
+        rd = _fd._expr_domain(nr, trail)
         if not ld or not rd:
             verdict = False      # no value: the relation has no solutions
         else:
@@ -549,8 +600,8 @@ def _check_reifiable(e, whole, ctx):
         clpz_expression(e, ctx)
         return
     if type(e) is tuple and len(e) == 3 and e[0] in _CMP:
-        clpz_expression(e[1], ctx)
-        clpz_expression(e[2], ctx)
+        clpz_expression(e[1], ctx, reified=True)
+        clpz_expression(e[2], ctx, reified=True)
         return
     if type(e) is tuple and len(e) == 3 and e[0] == "in":
         _fd_variable(e[1], ctx)
@@ -577,8 +628,8 @@ def reify(e, trail, ctx):
         return x if _post([x], ((0, 1),), trail) else None
     name = e[0]
     if name in _CMP:
-        l = clpz_expression(e[1], ctx)
-        r = clpz_expression(e[2], ctx)
+        l = clpz_expression(e[1], ctx, reified=True)
+        r = clpz_expression(e[2], ctx, reified=True)
         b = _bool_var(trail)
         return b if _post_constraint(ReifiedCmp(b, _CMP[name], l, r),
                                      trail) else None

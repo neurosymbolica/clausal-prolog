@@ -118,6 +118,7 @@ _LIBRARY_OVERRIDES: dict[str, tuple[str, tuple[str, ...]]] = {
     "clpz": ("clausal.stdlib.clpz", ("label",)),
     "clpfd": ("clausal.stdlib.clpz", ("label",)),
 }
+_OVERRIDE_ARITIES = {"label": ("label", 1)}
 
 _OP_SPECIFIERS = ("xfx", "xfy", "yfx", "fy", "fx", "xf", "yf")
 
@@ -164,10 +165,14 @@ class DirectiveContext:
         self.dropped_keys: set[str] = set()
         #: The module's own name, from its module/2 (``own:G`` is local).
         self.own_module: "str | None" = None
-        #: ``(module, names)`` of each library override imported (see
-        #: :data:`_LIBRARY_OVERRIDES`): a name the file defines itself is
-        #: its own, so :meth:`drop_shadowed_overrides` drops the import.
+        #: ``(module, {(name, arity)})`` of each library override imported
+        #: (see :data:`_LIBRARY_OVERRIDES`): a procedure the file defines
+        #: itself is its own, so :meth:`drop_shadowed_overrides` drops the
+        #: import.
         self.override_imports: list[tuple[str, frozenset]] = []
+        #: library(clpq) was imported: a goal ``{C}`` is clpq's (else it is
+        #: an ordinary call of ``{}/1``, as in Scryer).
+        self.clpq = False
         self._t = None
 
     # ── the seam transformer, one per file ──
@@ -260,11 +265,24 @@ class DirectiveContext:
 
     def drop_shadowed_overrides(self, defined: set) -> None:
         """A library override (Scryer's ``label/1``) the file defines itself
-        is the file's: as for any builtin, a local definition wins (Scryer
-        too: it warns and uses the local clauses)."""
-        for module, names in self.override_imports:
-            if names & defined:
+        (same name AND arity) is the file's: as for any builtin, a local
+        definition wins (Scryer too: it warns and uses the local
+        clauses).  A local definition at another arity is refused: the
+        engine keys the import by name, so dropping it would silently turn
+        the file's ``label/1`` calls into the engine's first-fail one."""
+        for module, pis in self.override_imports:
+            if pis & defined:
                 self.drop_imports(module)
+                continue
+            clash = sorted(f"{n}/{a}" for n, a in defined
+                           if n in {m for m, _ in pis})
+            if clash:
+                raise _refused(
+                    f"{', '.join(clash)} is defined here and "
+                    f"{', '.join(f'{n}/{a}' for n, a in sorted(pis))} is "
+                    f"imported from {module} (library(clpz)); one name at "
+                    f"two arities across an import is not supported -- "
+                    f"rename the local predicate", None)
 
     def note_literal(self) -> str:
         """The mode a ``"..."`` literal read now takes (and record it)."""
@@ -489,6 +507,8 @@ def _use_library(ctx, lib, entries, span, what, listed_ops=()):
                    + list(_LIBRARY_STICKY_OPS.get(name, ())))
     for op in install:
         ctx.apply_op(*op, span, what)
+    if name in ("clpq", "clpr"):
+        ctx.clpq = True
     if name in _BUILTIN_LIBRARIES:
         return []
     if name not in _LIBRARY_MODULES:
@@ -519,7 +539,7 @@ def _use_library(ctx, lib, entries, span, what, listed_ops=()):
                 f"{module or 'the engine'})", span)
     if overridden:
         ctx.override_imports.append(
-            (over_module, frozenset(n for n, _ in overridden)))
+            (over_module, frozenset(_OVERRIDE_ARITIES[n] for n, _ in overridden)))
     out: list = []
     for mod, names in ((module, wanted), (over_module, overridden)):
         if names:

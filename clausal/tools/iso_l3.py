@@ -364,7 +364,8 @@ class _ClauseLowering:
                              position=_pos_expr(pos))
             if name == ":" and len(args) == 2:
                 return self._qualified(args, spans, sp, pos)
-            if name == "{}" and len(args) == 1:
+            if (name == "{}" and len(args) == 1 and self._ctx is not None
+                    and self._ctx.clpq):
                 return self._clpq(args[0], spans[0], sp, pos)
             self._check_goal_name(name, sp)
             lowered = self._goal_args(name, args, spans)
@@ -753,7 +754,7 @@ def lower_items(items, *, strict: bool = True, source: "str | None" = None,
             refuse(f"{kind} is not lowered (DCG is out of scope; a query "
                    f"`?-` is no clause): {it.term!r}", span)
             continue
-        defined.add(_head_name(it.term))
+        defined.add(_head_indicator(it.term))
         if directives_only:
             # The clause is not lowered, but the double_quotes modes its
             # literals were read under are module-item facts (the cross-mode
@@ -770,7 +771,10 @@ def lower_items(items, *, strict: bool = True, source: "str | None" = None,
             continue
         body.extend(lowered)
         stats["lowered"] += 1
-    ctx.drop_shadowed_overrides(defined)
+    try:
+        ctx.drop_shadowed_overrides(defined)
+    except DirectiveRefused as e:
+        refuse(str(e), None)
     if ctx.dead_stmts or ctx.dropped_keys:
         body = _drop_removed_imports(body, ctx)
     mod = ast.Module(body=body, type_ignores=[])
@@ -780,14 +784,15 @@ def lower_items(items, *, strict: bool = True, source: "str | None" = None,
     return mod, stats
 
 
-def _head_name(term) -> "str | None":
-    """The predicate name a clause term defines (None when it has none)."""
+def _head_indicator(term) -> "tuple | None":
+    """``(name, arity)`` of the procedure a clause term defines (None when
+    it has none)."""
     if type(term) is tuple and len(term) == 3 and term[0] == ":-":
         term = term[1]
     if type(term) is str:
-        return term
+        return term, 0
     if type(term) is tuple and term and type(term[0]) is str:
-        return term[0]
+        return term[0], len(term) - 1
     return None
 
 

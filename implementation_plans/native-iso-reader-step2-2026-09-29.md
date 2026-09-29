@@ -311,18 +311,21 @@ control.
   `labeling/2` (Scryer's options and search order: leftmost/ff/ffc/min/max, up/down,
   step/enum/bisect; `min(E)`/`max(E)` refused loudly, not built), and the reified connectives
   `#<==>/2`, `#==>/2`, `#<==/2`, `#\//2`, `#/\/2`, `#\/1`, `#\/2` over the six comparisons and
-  `in/2`. Reification is a new propagator (`ReifiedCmp`, `ReifiedIn`): clpfd's own
+  `in/2`. A reified comparison over a functor clpfd cannot propagate (`abs`, `min`, `max`, the
+  bitwise ones) applied to a variable is refused loudly (Scryer accepts it). Reification is a new propagator (`ReifiedCmp`, `ReifiedIn`): clpfd's own
   reification decides at call time inside `if_/3` only. Error formals are Scryer's
   (`clpz_expression`, `clpz_domain`, `clpz_reifiable_expression`, `labeling_option`,
   `consistent_labeling_options`, `type_error(list|integer)`, `instantiation_error`), with
   the builtin's indicator as context. The `#=` family was already registered (iso_compare).
 * `label/1`: the engine's global `label/1` is FIRST-FAIL (a different answer order from
   Scryer's leftmost). It is unchanged; a `.pl` importing library(clpz) takes `label/1` from
-  `clausal/stdlib/clpz.clausal` (`labeling([], Vs)`), and a file's own `label/1` still wins.
+  `clausal/stdlib/clpz.clausal` (`labeling([], Vs)`), and a file's own `label/1` still wins
+  (a local `label/N` at another arity is refused: the import is keyed by name).
   OPEN: a meta-called `label/1` (`call(label(Vs))`) resolves to the engine's builtin, because
   call/N consults the builtin registry before a module's imports (pinned as an OPEN
   divergence test). Needs a ruling: make the global `label/1` Scryer's, or leave it.
-* clpq: goal `{C}` lowers to `clpq.rational(C)` exactly as the seam lowers
+* clpq: after `use_module(library(clpq))`, goal `{C}` lowers to `clpq.rational(C)` (without
+  the import it is an ordinary call of `{}/1`, as in Scryer) exactly as the seam lowers
   `clpq.rational((X + Y == 10, ...))` (the seam has NO `{...}` goal: a set-literal goal is
   `NotImplementedError` in `terms_to_goalop`, so the plan's "`$SetLiteral`" premise was
   wrong). `=`/`=:=` -> `$ArithEq`, `=\=` -> `$ArithNeq`, `<`/`>`/`=<`/`>=`; `+ - * /` and
@@ -330,7 +333,7 @@ control.
 * Seam quoted form works for the predicates (`'in'`, `'ins'`, `'#<==>'`, `labeling`) and for
   `\/` (an evaluable), but `'..'(1, 3)` has no seam constructor (not an evaluable, so a
   NameError). Not changed here.
-* **Exit** (`tests/iso_l3/test_l3_s5_exit.py`, `s5/*.pl`): 18 clpz and 6 clpq `case/2` rows,
+* **Exit** (`tests/iso_l3/test_l3_s5_exit.py`, `s5/*.pl`): 19 clpz and 6 clpq `case/2` rows,
   each the findall of one query, identical to Scryer's writeq output. Oracle:
   `/workspace/scryer-prolog-clpq` (upstream master + library(clpq)/(clpr) only). NOT
   `/workspace/scryer-prolog`, whose working tree has uncommitted clpz changes that drop a

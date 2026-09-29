@@ -62,8 +62,12 @@ case(c17_errors, L) :-
     findall(F, (member(G, [X #= a, X #= _ * foo, _ in a..3, _ in 1..sup_x,
                            a in 1..3, foo ins 0..1, [_|_] ins 0..1,
                            labeling([bogus], [1]), labeling([up, down], [1]),
+                           labeling([ff, ff], [1]), labeling([upto_ground], [1]),
                            labeling(foo, [1]), labeling([bogus], [_]),
                            labeling([], [_]), (Z #> 3, labeling([], [Z])),
                            _ #<==> 2]),
                 err(G, F)), L).
 case(c18_label_errors, L) :- findall(F, label_err(F), L).
+% bisection over a domain below zero (Scryer's split point truncates)
+case(c19_bisect_negative, L) :-
+    findall([X,Y], (X in -5..0, Y in 0..2, labeling([ff, bisect], [X,Y])), L).
