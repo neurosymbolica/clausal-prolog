@@ -586,6 +586,69 @@ def _effective_bytecode_tag() -> int:
     return CLAUSAL_BYTECODE_TAG ^ _compilation_fingerprint()
 
 
+# ── The .pl front end (plan native-iso-reader-step2, D3(a)) ─────────────────
+#
+# ``CLAUSAL_PL_FRONTEND=native|translator`` selects how a ``.pl`` file becomes
+# code: ``translator`` (the default until slice 8) is ``prolog_to_clausal`` ->
+# seam text -> EmbedTransformer; ``native`` is the ISO reader -> ``iso_l3``,
+# which lowers clauses straight to the transformed AST.  The two write the
+# SAME ``__pycache__`` file name, so the front end is part of the cache key
+# (R2): the native loader XORs a NONZERO salt into the key the translator
+# uses unchanged -- a cache written with the variable unset stays valid, and
+# no entry one front end wrote can ever validate for the other.
+
+#: The environment variable that selects the ``.pl`` front end.
+PL_FRONTEND_ENV = "CLAUSAL_PL_FRONTEND"
+_PL_FRONTENDS = ("translator", "native")
+
+#: Engine sources only the NATIVE front end compiles with (the rest -- the
+#: toklex lexer, the Pratt parser, the operator tables -- are in the shared
+#: fingerprint already).  Hashed into the native salt, so an edit to one
+#: invalidates native bytecode and leaves the translator's cache alone.
+_NATIVE_FRONTEND_FILES = (
+    "tools/iso_l3.py",
+    "tools/prolog_reader.py",
+)
+
+_NATIVE_SALT_CACHE: "int | None" = None
+
+
+def pl_frontend() -> str:
+    """The ``.pl`` front end ``CLAUSAL_PL_FRONTEND`` selects, read at each
+    lookup.  Unset or empty is ``translator``; an unknown value is an
+    ``ImportError``, never a silent default (a typo would otherwise run the
+    front end its author did not ask for)."""
+    value = os.environ.get(PL_FRONTEND_ENV, "").strip()
+    if not value:
+        return "translator"
+    if value not in _PL_FRONTENDS:
+        raise ImportError(
+            f"{PL_FRONTEND_ENV}={value!r} is not a .pl front end; use one of "
+            f"{', '.join(_PL_FRONTENDS)} (unset means translator)")
+    return value
+
+
+def _native_frontend_salt() -> int:
+    """The native front end's part of the cache key: a digest of its id and
+    of :data:`_NATIVE_FRONTEND_FILES`, NONZERO in the low 32 bits that
+    importlib keeps (a zero there would share the translator's key)."""
+    global _NATIVE_SALT_CACHE
+    if _NATIVE_SALT_CACHE is not None:
+        return _NATIVE_SALT_CACHE
+    package = os.path.dirname(os.path.abspath(__file__))
+    digest = hashlib.blake2b(b"clausal-pl-frontend:native", digest_size=4)
+    for rel in _NATIVE_FRONTEND_FILES:
+        digest.update(rel.encode("utf-8"))
+        try:
+            with open(os.path.join(package, *rel.split("/")), "rb") as handle:
+                digest.update(handle.read())
+        except OSError:
+            pass
+    salt = int.from_bytes(digest.digest(), "big") & 0xFFFFFFFF
+    _NATIVE_SALT_CACHE = salt or 1
+    return _NATIVE_SALT_CACHE
+
+
 # ── One source file → one compilation ────────────────────────────────────────
 #
 # Maps a resolved source path to the dotted name it was first imported under.
@@ -876,6 +939,91 @@ class PrologLoader(_ClausalSourceLoader):
             clausal_source, path, prolog_singletons=True)
 
 
+class _NativeItems:
+    """What ``_run_v2_pipeline`` reads off ``_last_transformer``: the module
+    items.  The native front end has no transformer to hand over."""
+
+    def __init__(self, module_items):
+        self._module_items = module_items
+
+
+class NativePrologLoader(PrologLoader):
+    """SourceLoader for ``.pl`` files through the NATIVE front end
+    (``CLAUSAL_PL_FRONTEND=native``; plan native-iso-reader-step2).
+
+    Pipeline: .pl source -> ``PrologReader`` (Scryer's operator table, D2(b))
+              -> ``iso_l3`` lowering -> transformed ``ast.Module`` -> bytecode
+
+    Everything from ``exec`` on is the translator's path unchanged
+    (``_run_v2_pipeline``): the join is the pair (transformed AST, module
+    items).  A refusal -- a construct outside the slices landed so far, a
+    reader syntax error, and by design ``!``/``->``/``*->`` -- is a
+    ``SyntaxError`` naming the ``.pl`` line; the module does not import.
+
+    ``l3_stats`` holds the last lowering's read/lowered/refused counts (on a
+    cache hit too: the recovery path re-lowers), so a caller can see WHICH
+    front end ran and over how many items.
+    """
+
+    frontend = "native"
+    l3_stats: "dict | None" = None
+
+    def path_stats(self, path):
+        stats = super().path_stats(path)
+        stats["mtime"] = (stats["mtime"] ^ _native_frontend_salt()) & 0xFFFFFFFF
+        return stats
+
+    def _op_table(self):
+        if self._dialect is not None:
+            import copy  # noqa: PLC0415
+            # A copy: the reader's op/3 must not mutate the caller's dialect.
+            return copy.deepcopy(self._dialect.operator_table)
+        return None   # iso_l3's own default: a fresh Scryer table
+
+    def _lower(self, pl_source, path):
+        """Lower *pl_source*; -> (ast.Module, module_items).  Records
+        ``l3_stats``; raises ``SyntaxError`` at the refused ``.pl`` line."""
+        from clausal.tools import iso_l3  # noqa: PLC0415
+        try:
+            # The refusal names ``file.pl:N``; the SyntaxError carries the
+            # full path.
+            tree, stats, singletons = iso_l3.lower_module(
+                pl_source, os.path.basename(path), op_table=self._op_table())
+        except iso_l3.LoweringRefused as e:
+            line = iso_l3.line_of(pl_source, e.span) or 0
+            # Split on "\n" only: _Positions numbers lines that way, and
+            # splitlines() also breaks on \f, \x85, \u2028 ...
+            lines = pl_source.split("\n")
+            text = lines[line - 1] if 0 < line <= len(lines) else ""
+            raise SyntaxError(f"Cannot import {path}: {e}",
+                              (path, line, 1, text)) from e
+        self.l3_stats = stats
+        iso_l3.warn_singletons(singletons, pl_source, path)
+        return tree, _prolog_default_items()
+
+    def source_to_code(self, data, path="<string>"):
+        try:
+            pl_source = data.decode("utf-8")
+        except UnicodeDecodeError as e:
+            raise SyntaxError(
+                f"Cannot import {path}: {e} (all .pl files must be UTF-8)",
+                (path, 0, 0, ""),
+            ) from e
+        tree, module_items = self._lower(pl_source, path)
+        self._last_transformer = _NativeItems(module_items)
+        return compile(tree, path, "exec")
+
+    def _recover_module_items(self, path):
+        """Cache-hit path: re-read and re-lower the ``.pl`` source."""
+        pl_source = self.get_data(path).decode("utf-8")
+        return self._lower(pl_source, path)[1]
+
+
+def _pl_loader_class():
+    """The ``.pl`` loader class ``CLAUSAL_PL_FRONTEND`` selects."""
+    return NativePrologLoader if pl_frontend() == "native" else PrologLoader
+
+
 # Backward-compat alias — prefer _load_module() for new code.
 _predicate_loader = None
 
@@ -898,10 +1046,11 @@ def _load_module(fullname, path):
 def _load_prolog_module(fullname, path, dialect=None):
     """Load a .pl file as a Clausal module and return it.
 
-    Test/external helper. Each call creates a fresh loader and module.
+    Test/external helper. Each call creates a fresh loader and module, of the
+    front end ``CLAUSAL_PL_FRONTEND`` selects (the translator when unset).
     """
     sys.modules.pop(fullname, None)
-    loader = PrologLoader(fullname, path, dialect=dialect)
+    loader = _pl_loader_class()(fullname, path, dialect=dialect)
     spec = ModuleSpec(fullname, loader, origin=path)
     mod = importlib.util.module_from_spec(spec)
     sys.modules[fullname] = mod
@@ -1048,7 +1197,11 @@ class PrologFinder(_ExtensionFinder):
     priority over .pl files when both exist for the same module name.
     """
     _extensions = (PROLOG_SUFFIX,)
-    _loader_cls = PrologLoader
+
+    @property
+    def _loader_cls(self):
+        # Read per lookup: the front end is CLAUSAL_PL_FRONTEND's at import.
+        return _pl_loader_class()
 
 
 class ModulesFinder(MetaPathFinder):

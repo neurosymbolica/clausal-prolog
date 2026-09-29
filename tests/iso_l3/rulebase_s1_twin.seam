@@ -1,0 +1,79 @@
+# The hand-written seam twin of rulebase_s1.pl (slice 1 exit test): the same
+# helper predicates, written as a seam author writes them.  Where the seam has
+# its own spelling with the ISO meaning it is used (`or`, `not`, `==` as `is`
+# with both sides known, `**`, `%`); where the seam's sugar MEANS something
+# else -- `==` evaluates, `//` floors, `^` is xor -- the ISO name is quoted.
+# test_l3_s1_exit.py compares every predicate's all-answers, in order, with the
+# native front end's.  It carries no test/1 of its own.
+-private([a, b, c, d, e, red, green, blue, neg, zero, pos, same, differ,
+          equal, unequal, p, q, eq, caret, intdiv, max_min])
+
+edge(a, b),
+edge(b, c),
+edge(c, d),
+edge(b, e),
+
+owns(1, a),
+owns(2, a),
+owns(3, b),
+
+path(X, Y) <- edge(X, Y)
+path(X, Y) <- (edge(X, Z), path(Z, Y))
+
+len([], 0),
+len([_, *T], N) <- (len(T, N0), N == N0 + 1)
+
+app([], L, L),
+app([H, *T], L, [H, *R]) <- app(T, L, R)
+
+nrev([], []),
+nrev([H, *T], R) <- (nrev(T, RT), app(RT, [H], R))
+
+fact(0, 1),
+fact(N, F) <- (N > 0, N1 == N - 1, fact(N1, F1), F == N * F1)
+
+color(C) <- (C is red or C is green or C is blue)
+
+sign_of(X, S) <- ((X < 0, S is neg) or (X == 0, S is zero) or (X > 0, S is pos))
+
+source(X) <- (edge(X, _), not edge(_, X))
+leaf(X) <- (edge(_, X), not edge(X, _))
+
+memb(X, [X, *_]),
+memb(X, [_, *T]) <- memb(X, T)
+
+not_in(X, L) <- (not memb(X, L))
+
+apply2(F, X, Y) <- call(F, X, Y)
+twice(G) <- (call(G), call(G))
+
+mapl(_, [], []),
+mapl(F, [X, *Xs], [Y, *Ys]) <- (call(F, X, Y), mapl(F, Xs, Ys))
+
+succ_of(X, Y) <- (Y == X + 1)
+
+reach_from(X, Ys) <- findall(Y, call(path(X), Y), Ys)
+goal_var(G, R) <- (G is edge(b, R), call(G))
+all_owned(L) <- setof(X, Y ^ owns(X, Y), L)
+
+arith(X) <- (X == 7 - 2 * 3)
+arith_int_div(X) <- 'is'(X, '//'(-7, 2))
+arith_pow(X) <- (X == 2 ** 10)
+arith_max(X) <- (X == max(1, 2.0))
+arith_mod(M, R) <- (M == -7 % 2, R == rem(-7, 2))
+
+eq_struct(A, B, R) <- (('=='(A, B), R is same) or (not '=='(A, B), R is differ))
+eq_arith(A, B, R) <- (('=:='(A, B), R is equal) or ('=\\='(A, B), R is unequal))
+before(A, B) <- '@<'(A, B)
+cmp(O, A, B) <- compare(O, A, B)
+
+oracle(eq, L) <- findall(R, (eq_struct(1, 1.0, R) or eq_struct(a, a, R)
+                             or eq_struct('+'(1, 1), 2, R)
+                             or eq_arith('+'(1, 1), 2, R)), L)
+oracle('is', L) <- findall(X, (arith(X) or fact(5, X) or len([p, q], X)), L)
+oracle(caret, L) <- findall(X, (arith_pow(X) or 'is'(X, '^'(2.0, 2))
+                                or all_owned(X)), L)
+oracle(intdiv, L) <- findall(X, (arith_int_div(X) or 'is'(X, '//'(7, -2))
+                                 or 'is'(X, '//'(-7, -2))), L)
+oracle(max_min, L) <- findall(X, (arith_max(X) or X == max(2, 1)
+                              or X == min(-1.5, -2)), L)

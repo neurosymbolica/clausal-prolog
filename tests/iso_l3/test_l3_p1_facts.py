@@ -105,11 +105,13 @@ def test_P1_iso_facts_answer_identically_to_the_seam_twin(l3_env):
 
 
 def test_P1_denominator_is_reported_for_refused_constructs(l3_env):
-    """Rules are P2. They must be REFUSED and COUNTED, never silently dropped.
-    The COUNTING mode is the explicit ``strict=False`` (tooling that surveys
-    a corpus); the default raises (see the slice-0 tests below)."""
+    """A construct out of scope (a directive: slice 2) must be REFUSED and
+    COUNTED, never silently dropped.  The COUNTING mode is the explicit
+    ``strict=False`` (tooling that surveys a corpus); the default raises (see
+    the slice-0 tests below).  (Rules were the P1 example; slice 1 lowers
+    them.)"""
     tmp, stats, L3 = l3_env
-    items = L3.read_iso("f(1).\ng(X) :- f(X).\n")
+    items = L3.read_iso("f(1).\n:- dynamic(d/1).\n")
     _, st = L3.lower_items(items, strict=False)
     assert st["read"] == 2, st
     assert st["lowered"] == 1, st
@@ -159,10 +161,12 @@ def test_P1_NEGATIVE_CONTROL_a_mislowered_arity_is_caught(l3_env):
 
 
 def test_P1_refuses_rather_than_half_handles_an_unsupported_term():
-    """A construct outside P1 must RAISE, not be quietly approximated."""
+    """A term shape L3 does not know must RAISE, not be quietly approximated.
+    (A float was the P1 example; slice 1 lowers every ISO term shape, so the
+    example is a value no reader produces.)"""
     L3 = _load_l3()
     with pytest.raises(L3.LoweringRefused):
-        L3.lower_arg(3.5)      # floats are not in P1 scope
+        L3.lower_arg(True)
 
 
 # ── slice 0 (2026-09-29): no lost last clause, no silent drop ─────────
@@ -184,8 +188,8 @@ def test_lower_items_raises_on_a_refused_clause_by_default():
     """A clause the lowering refuses must not be dropped while the module
     still imports: the default raises, naming the clause."""
     L3 = _load_l3()
-    with pytest.raises(L3.LoweringRefused, match="rules are P2"):
-        L3.lower_items(L3.read_iso("f(1).\ng(X) :- f(X).\n"))
+    with pytest.raises(L3.LoweringRefused, match="not callable"):
+        L3.lower_items(L3.read_iso("f(1).\n3 :- f(1).\n"))
 
 
 def test_lower_items_raises_on_a_directive_by_default():
@@ -204,6 +208,6 @@ def test_lower_items_raises_on_a_syntax_issue_by_default():
 
 def test_an_iso_module_with_a_refused_clause_does_not_import(l3_env):
     tmp, stats, _ = l3_env
-    (tmp / "isorule.pl").write_text("f(1).\ng(X) :- f(X).\n", encoding="utf-8")
-    with pytest.raises(Exception, match="rules are P2"):
+    (tmp / "isorule.pl").write_text("f(1).\n3 :- f(1).\n", encoding="utf-8")
+    with pytest.raises(Exception, match="not callable"):
         importlib.import_module("isorule")

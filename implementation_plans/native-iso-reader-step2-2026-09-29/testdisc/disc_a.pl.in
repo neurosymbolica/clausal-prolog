@@ -1,0 +1,4 @@
+:- module(disc_a, []).
+p(1).
+test("p holds for 1") :- p(1).
+test("p fails for 2 (expected red)") :- p(2).

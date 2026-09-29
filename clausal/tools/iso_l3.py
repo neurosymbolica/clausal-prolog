@@ -1,166 +1,619 @@
 """L3: lower ISO ReaderItems to the SAME transformed Python AST the seam produces.
 
-Plan: `implementation_plans/clausal-iso-to-transformed-ast-2026-09-14.md` (rev 4).
-**P1 scope: FACTS ONLY** — facts, atoms, integers, lists. Rules, directives and
-arithmetic are P2/P3 and are REFUSED here rather than half-handled, so a gap is a
-loud error and not a silently-skipped clause.
+Plan: ``implementation_plans/native-iso-reader-step2-2026-09-29.md`` (D1 = (c)
+hybrid: clauses are lowered HERE to the transformed AST; directives go through
+the seam's own handlers -- slice 2).  Scope today is slices 0 and 1: facts,
+rules, every ISO term shape, and the control constructs ``,`` ``;`` ``\\+``
+``true`` ``fail``/``false`` and ``call/N``.  Whatever is outside that scope --
+a directive, a DCG rule, a reader ``SyntaxIssue``, and by design ``!``, ``->``
+and ``*->`` -- is REFUSED, never half-handled, so a gap is a loud import error
+and not a silently skipped clause.
 
-WHY THE TRANSFORMED AST IS THE JOIN (plan §1): `compile_module`'s `module_dict` is
-the name-resolution environment for the whole compile, touched ~102 times in
-compiler_v2. Lowering "direct to the compiler" would mean a second implementation of
-name resolution; routing through seam source text goes via the reverse translator,
-which is measured NOT an inverse. Producing the same AST inherits module semantics by
-construction.
+WHY THE TRANSFORMED AST IS THE JOIN (plan §2): ``compile_module``'s
+``module_dict`` is the name-resolution environment for the whole compile.
+Producing the same (``ast.Module``, ``module_items``) pair the seam produces
+inherits module semantics by construction; from ``exec`` onward the native
+``.pl`` path and the seam are the same code.
 
-TWO REPRESENTATIONS, and conflating them is the easy mistake:
+TWO REPRESENTATIONS:
 
-    reader output   ('fact_a', 1, ('foo_atom',))     functor-first TUPLES; atoms are 1-tuples
-    runtime term    fact_a(arg_0=1, arg_1=...)       a PredicateMeta class INSTANCE
+    reader output   ('f', 1, 'foo', VarRef(0))    functor-first TUPLES; atoms are str
+    lowered AST     $head(f, arg_0=1, ...) / $Call(func=$LoadName(name='g'), args=[...])
 
-L3 is exactly the bridge between them.
+HOW EACH ISO SHAPE LOWERS (the ISO meaning is explicit here, in one place):
 
-`_fields` SPELLING (plan §6 decision 1, taken 2026-09-14): L3 emits positional
-`arg_0..arg_{n-1}`. The seam derives field names from the ARGUMENT EXPRESSION -- a
-variable `A` becomes field `a`, a non-variable becomes `arg_N` -- which has no stable
-ISO analogue, since ISO variable names differ per clause. Measured: `positional(A, B)`
-gives `('a','b')` while `mylen([], 0)` gives `('arg_0','arg_1')`. A mismatch between
-the two front ends is unreachable within a module (one file, one suffix, one front
-end); across modules the class object travels via import, so field names never meet.
-Pinned by test.
+* A DATA term (a head argument, a goal argument) lowers to the Python
+  expression that builds the runtime term itself: an atom is its ``str``, a
+  compound is its functor-first CELL (a tuple), a proper list a ``list``, a
+  partial list the seam's ``[H, *T]`` display, ``"..."`` the chars carrier.
+  A compound is never routed through ``$LoadName``: name resolution there
+  is how the seam's surface meanings reach a term (``max`` would be looked
+  up, ``^`` would be xor).  An ISO compound is just data.
+* A GOAL lowers by its ISO NAME, always: ``$Call(func=$LoadName(name=f))``.
+  ``==`` never becomes ``$ArithEq`` (the seam's ``==`` evaluates), ``is``
+  never becomes ``$Unify``, ``^`` is never ``$BitXor`` in a term.  The only
+  structural nodes are the control constructs: ``$TupleLiteral`` (``,``),
+  ``$Or`` (``;``), ``$Not`` (``\\+``), ``True``/``False`` -- and, inside the
+  goal of ``bagof``/``setof``, the ``V^G`` prefix, which the engine's
+  grouping reads as ``$BitXor`` (``control_constructs._compile_find_all_core``).
+* A VARIABLE GOAL is ``call(G)`` (ISO 7.6.2 body conversion), including a
+  variable in a meta-argument position the compiler lowers as a goal
+  (``findall/3``'s second argument, and the rest of
+  ``ir.META_GOAL_POSITIONS``).
+
+``_fields`` SPELLING (P1 decision 1, 2026-09-14; unchanged): L3 emits
+positional ``arg_0..arg_{n-1}``.  The seam derives field names from the
+argument expression, which has no stable ISO analogue.  A mismatch between the
+two front ends is unreachable within a module; across modules the predicate
+travels via import, so field names never meet.  Pinned by test.
 """
 from __future__ import annotations
 
 import ast
+import bisect
 from typing import Any
 
-# `$`-prefixed names are not parseable Python, so templates use a DOLLAR_ prefix
-# and are renamed after parsing. dump_transformed.py does the same trick in reverse
-# to run black over transformed output.
-_DOLLAR = "DOLLAR_"
+from clausal.tools.prolog_reader import VarRef
+
+#: The front end's id: the value ``CLAUSAL_PL_FRONTEND`` selects it by, and the
+#: salt that keeps its cached bytecode apart from the translator's.
+FRONTEND_ID = "native"
 
 
 class LoweringRefused(Exception):
-    """A construct outside P1 scope. Raised, never skipped -- a silently dropped
-    clause is the failure mode the plan's §8.4 ('print the denominator') exists for."""
+    """A construct the native front end does not lower.  Raised, never skipped
+    -- a silently dropped clause is the failure mode the plan's §8.4 ('print
+    the denominator') exists for.  *span* is the ``(start, end)`` character
+    offset of the refused item in the ``.pl`` text, when known."""
+
+    def __init__(self, message: str, span=None):
+        super().__init__(message)
+        self.span = span
 
 
-def _undollar(tree: ast.AST) -> ast.AST:
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Name) and node.id.startswith(_DOLLAR):
-            node.id = "$" + node.id[len(_DOLLAR):]
-    return tree
+# ── cut-free ruling ──────────────────────────────────────────────────────────
+
+_CUT_FREE = ("Clausal is cut-free with no committed choice, by design "
+             "(ruling): !, -> and *-> are refused")
+
+#: Control constructs refused by design, and what each one is.
+_REFUSED_CONTROL = {
+    "!": "`!` (cut)",
+    "->": "`->` (if-then)",
+    "*->": "`*->` (soft-cut)",
+}
+
+#: Goal-argument positions the compiler lowers AS GOALS (``terms_to_goalop``
+#: turns these calls into a ``MetaCall``; ``ir.META_GOAL_POSITIONS``), by
+#: ``(name, arity)`` -> 0-based argument indexes.  A variable there is
+#: refused at compile time (``BareGoalVariableError``), so it is lowered as
+#: ``call(G)`` -- the ISO body conversion of a variable goal.
+_META_GOAL_ARGS: dict[tuple[str, int], tuple[int, ...]] = {
+    ("once", 1): (0,),
+    ("call_nth", 2): (0,),
+    ("count_all", 2): (0,),
+    ("setup_call_cleanup", 3): (0, 1, 2),
+    ("call_cleanup", 2): (0, 1),
+    ("freeze", 2): (1,),
+    ("when", 2): (1,),
+    ("findall", 3): (1,),
+    ("bagof", 3): (1,),
+    ("setof", 3): (1,),
+    ("catch", 3): (0, 2),
+    ("forall", 2): (0, 1),
+}
+
+#: Goals whose second argument is an ISO iterated goal term, ``V^G``.
+_ITERATED_GOAL = {("bagof", 3), ("setof", 3)}
+
+#: ISO-legal predicate names the engine cannot hold: ``ast.Name`` cannot carry
+#: them, and the compiler's codegen raises on them (``'True'``/``'False'`` are
+#: also the seam's reserved truth values).  Refused with the ``.pl`` line.
+_UNREPRESENTABLE_NAMES = ("True", "False", "None")
+
+#: Python names a lowered program must never bind or read by accident.
+_DOLLAR = "$"
 
 
-def _pos_tuple(span) -> ast.expr:
-    if not span:
-        return ast.Constant(value=None)
-    return ast.Tuple(elts=[ast.Constant(value=int(x)) for x in span], ctx=ast.Load())
+# ── positions ────────────────────────────────────────────────────────────────
 
 
-def _is_atom(t: Any) -> bool:
-    return type(t) is str              # STAGE 2: an atom is a str
+class _Positions:
+    """``(start, end)`` character offsets in the ``.pl`` text -> the seam's
+    ``(line, col, end_line, end_col)`` (1-based lines, 0-based columns)."""
+
+    def __init__(self, source: "str | None"):
+        self._starts = None
+        self.source = source
+        if source is not None:
+            starts = [0]
+            for i, ch in enumerate(source):
+                if ch == "\n":
+                    starts.append(i + 1)
+            self._starts = starts
+
+    def line_col(self, offset: int) -> tuple[int, int]:
+        i = bisect.bisect_right(self._starts, offset) - 1
+        return i + 1, offset - self._starts[i]
+
+    def of(self, span) -> "tuple | None":
+        if self._starts is None or not _is_leaf_span(span) or span[0] < 0:
+            return None
+        line, col = self.line_col(span[0])
+        end_line, end_col = self.line_col(span[1])
+        return (line, col, end_line, end_col)
+
+    def line(self, span) -> "int | None":
+        if self._starts is None or not _is_leaf_span(span) or span[0] < 0:
+            return None
+        return self.line_col(span[0])[0]
+
+
+def _is_leaf_span(s) -> bool:
+    return (type(s) is tuple and len(s) == 2
+            and type(s[0]) is int and type(s[1]) is int)
+
+
+def _top_span(s):
+    """The ``(start, end)`` of a span-tree node (prolog_reader's contract:
+    a leaf is the pair itself; a compound/list/curly node leads with it)."""
+    if _is_leaf_span(s):
+        return s
+    if type(s) is tuple and s:
+        return _top_span(s[0])
+    return None
+
+
+def _arg_spans(s, n: int) -> list:
+    """The argument span subtrees of a compound node, padded to *n*."""
+    if type(s) is tuple and len(s) == n + 1 and not _is_leaf_span(s):
+        return list(s[1:])
+    return [None] * n
+
+
+def _list_spans(s, n: int) -> list:
+    if (type(s) is tuple and len(s) == 2 and type(s[1]) is list
+            and len(s[1]) == n):
+        return list(s[1])
+    return [None] * n
+
+
+# ── AST building blocks ──────────────────────────────────────────────────────
+
+
+def _name(ident: str) -> ast.Name:
+    return ast.Name(id=ident, ctx=ast.Load())
+
+
+def _node(kind: str, *args: ast.expr, **kw: ast.expr) -> ast.Call:
+    """``$<kind>(*args, **kw)``: a seam node constructor call."""
+    return ast.Call(func=_name(_DOLLAR + kind), args=list(args),
+                    keywords=[ast.keyword(arg=k, value=v) for k, v in kw.items()])
+
+
+def _const(value) -> ast.Constant:
+    return ast.Constant(value=value)
+
+
+def _pos_expr(pos) -> ast.expr:
+    if pos is None:
+        return _const(None)
+    return ast.Tuple(elts=[_const(int(x)) for x in pos], ctx=ast.Load())
+
+
+def _is_callable_name(f) -> bool:
+    return type(f) is str
+
+
+# ── one clause ───────────────────────────────────────────────────────────────
+
+
+class _ClauseLowering:
+    """Lowers ONE clause: owns its variable table (first occurrence is the
+    seam's walrus ``(X := $Var())``, in Python's evaluation order, which is
+    the order the AST is built in) and its singleton census."""
+
+    def __init__(self, var_names: dict, positions: _Positions):
+        self._var_names = var_names
+        self._pos = positions
+        self._bound: set[int] = set()
+        self.occurrences: dict[str, int] = {}
+
+    # ── variables ──
+
+    @staticmethod
+    def py_name(iso_name: str) -> str:
+        # ``$v_`` keeps an ISO variable out of the module's own names:
+        # ``__name__``, ``True`` and ``Var`` are all legal ISO variables.
+        return f"{_DOLLAR}v_{iso_name}"
+
+    def var(self, ref: VarRef) -> ast.expr:
+        name = self._var_names.get(ref.i, "_")
+        if name == "_":
+            return _node("Var")
+        self.occurrences[name] = self.occurrences.get(name, 0) + 1
+        ident = self.py_name(name)
+        if ref.i in self._bound:
+            return _name(ident)
+        self._bound.add(ref.i)
+        return ast.NamedExpr(target=ast.Name(id=ident, ctx=ast.Store()),
+                             value=_node("Var"))
+
+    # ── data terms ──
+
+    def term(self, t: Any, sp=None) -> ast.expr:
+        if type(t) is VarRef:
+            return self.var(t)
+        if isinstance(t, bool):
+            raise LoweringRefused(f"unexpected bool {t!r} from the reader",
+                                  _top_span(sp))
+        if type(t) in (int, float):
+            return _const(t)
+        if type(t) is str:
+            # ISO/Scryer: '[]' is the empty list, as the seam compiles it.
+            return ast.List(elts=[], ctx=ast.Load()) if t == "[]" else _const(t)
+        if type(t) is list:
+            spans = _list_spans(sp, len(t))
+            return ast.List(elts=[self.term(x, s) for x, s in zip(t, spans)],
+                            ctx=ast.Load())
+        if type(t) is tuple and t and _is_callable_name(t[0]):
+            if t[0] == "$chars" and len(t) == 2 and type(t[1]) is str:
+                # "..." -- the chars carrier, exactly as the seam emits it.
+                return ast.Tuple(elts=[_const("$chars"), _const(t[1])],
+                                 ctx=ast.Load())
+            if t[0] == "." and len(t) == 3:
+                return self._cons(t, sp)
+            spans = _arg_spans(sp, len(t) - 1)
+            return ast.Tuple(
+                elts=[_const(t[0])]
+                + [self.term(a, s) for a, s in zip(t[1:], spans)],
+                ctx=ast.Load())
+        raise LoweringRefused(f"unsupported term {t!r}", _top_span(sp))
+
+    def _cons(self, t: tuple, sp) -> ast.expr:
+        """A cons chain ``'.'(H, T)`` -> the seam's ``[H, ..., *T]`` display
+        (Scryer reads ``'.'(a, [])`` as ``[a]``)."""
+        elts: list[ast.expr] = []
+        while type(t) is tuple and len(t) == 3 and t[0] == ".":
+            spans = _arg_spans(sp, 2)
+            elts.append(self.term(t[1], spans[0]))
+            t, sp = t[2], spans[1]
+        if type(t) is list:
+            spans = _list_spans(sp, len(t))
+            elts.extend(self.term(x, s) for x, s in zip(t, spans))
+        elif not (type(t) is str and t == "[]"):
+            elts.append(_node("StarUnpack", value=self.term(t, sp),
+                              position=_pos_expr(self._pos.of(_top_span(sp)))))
+        return ast.List(elts=elts, ctx=ast.Load())
+
+    # ── goals ──
+
+    def goal(self, g: Any, sp=None) -> ast.expr:
+        """ISO 7.6.2 body conversion, to the seam's goal nodes."""
+        pos = self._pos.of(_top_span(sp))
+        if type(g) is VarRef:
+            return self._call("call", [self.var(g)], pos, pos)
+        if type(g) is str:
+            if g in _REFUSED_CONTROL:
+                raise LoweringRefused(
+                    f"{_REFUSED_CONTROL[g]} is refused: {_CUT_FREE}",
+                    _top_span(sp))
+            if g == "true":
+                return _const(True)
+            if g in ("fail", "false"):
+                return _const(False)
+            self._check_goal_name(g, sp)
+            return self._call(g, [], pos, pos)
+        if type(g) is tuple and g and _is_callable_name(g[0]) and g[0] != "$chars":
+            name, args = g[0], g[1:]
+            spans = _arg_spans(sp, len(args))
+            if name in _REFUSED_CONTROL and len(args) == 2:
+                raise LoweringRefused(
+                    f"{_REFUSED_CONTROL[name]} is refused: {_CUT_FREE}",
+                    _top_span(sp))
+            if name == "," and len(args) == 2:
+                elts: list[ast.expr] = []
+                while (type(g) is tuple and len(g) == 3 and g[0] == ","):
+                    s2 = _arg_spans(sp, 2)
+                    elts.append(self.goal(g[1], s2[0]))
+                    g, sp = g[2], s2[1]
+                elts.append(self.goal(g, sp))
+                return _node("TupleLiteral",
+                             elements=ast.List(elts=elts, ctx=ast.Load()),
+                             position=_pos_expr(pos))
+            if name == ";" and len(args) == 2:
+                left = args[0]
+                if (type(left) is tuple and len(left) == 3
+                        and left[0] in ("->", "*->")):
+                    raise LoweringRefused(
+                        f"{_REFUSED_CONTROL[left[0]]} is refused (as the "
+                        f"condition of a `;`): {_CUT_FREE}",
+                        _top_span(spans[0]) or _top_span(sp))
+                return _node("Or", left=self.goal(args[0], spans[0]),
+                             right=self.goal(args[1], spans[1]),
+                             position=_pos_expr(pos))
+            if name == "\\+" and len(args) == 1:
+                return _node("Not", operand=self.goal(args[0], spans[0]),
+                             position=_pos_expr(pos))
+            self._check_goal_name(name, sp)
+            key = (name, len(args))
+            goal_args = _META_GOAL_ARGS.get(key, ())
+            lowered = []
+            for i, (a, s) in enumerate(zip(args, spans)):
+                if i in goal_args:
+                    if key in _ITERATED_GOAL:
+                        lowered.append(self._iterated_goal(a, s))
+                    else:
+                        lowered.append(self.goal(a, s))
+                else:
+                    if name == "call" and i == 0:
+                        self._refuse_control_in(a, s)
+                    lowered.append(self.term(a, s))
+            head_pos = self._pos.of(_functor_span(sp, name, self._pos.source))
+            return self._call(name, lowered, head_pos, pos)
+        # ISO 7.6.2: a number (or anything else) is not callable.
+        raise LoweringRefused(
+            f"{g!r} is not callable (ISO type_error(callable, {g!r}))",
+            _top_span(sp))
+
+    def _iterated_goal(self, g: Any, sp) -> ast.expr:
+        """``V1^V2^G`` in bagof/setof -> ``$BitXor(left=V1, right=...)``, the
+        shape the compiler strips the existential prefix from."""
+        if type(g) is tuple and len(g) == 3 and g[0] == "^":
+            spans = _arg_spans(sp, 2)
+            return _node("BitXor", left=self.term(g[1], spans[0]),
+                         right=self._iterated_goal(g[2], spans[1]),
+                         position=_pos_expr(self._pos.of(_top_span(sp))))
+        return self.goal(g, sp)
+
+    def _refuse_control_in(self, g: Any, sp) -> None:
+        """A goal written as ``call/N``'s first argument is still a goal: the
+        cut-free refusal applies to what is visible of it at load time."""
+        if type(g) is str and g in _REFUSED_CONTROL:
+            raise LoweringRefused(
+                f"{_REFUSED_CONTROL[g]} is refused: {_CUT_FREE}", _top_span(sp))
+        if type(g) is tuple and g and type(g[0]) is str:
+            if g[0] in _REFUSED_CONTROL and len(g) == 3:
+                raise LoweringRefused(
+                    f"{_REFUSED_CONTROL[g[0]]} is refused: {_CUT_FREE}",
+                    _top_span(sp))
+            if g[0] in (",", ";") and len(g) == 3 or g[0] == "\\+" and len(g) == 2:
+                for a, s in zip(g[1:], _arg_spans(sp, len(g) - 1)):
+                    self._refuse_control_in(a, s)
+
+    def _check_goal_name(self, name: str, sp) -> None:
+        if name in _UNREPRESENTABLE_NAMES:
+            raise LoweringRefused(_unrepresentable(name), _top_span(sp))
+        if name.startswith(_DOLLAR):
+            raise LoweringRefused(
+                f"`{name}` is a reserved name: a `$`-prefixed predicate is "
+                f"the engine's own", _top_span(sp))
+
+    def _call(self, name: str, args: list, name_pos, pos) -> ast.expr:
+        return _node(
+            "Call",
+            func=_node("LoadName", name=_const(name), position=_pos_expr(name_pos)),
+            args=ast.List(elts=args, ctx=ast.Load()),
+            kwargs=ast.List(elts=[], ctx=ast.Load()),
+            position=_pos_expr(pos))
+
+
+def _unrepresentable(name: str) -> str:
+    return (f"`{name}` cannot name a predicate in Clausal (ISO allows it; the "
+            f"engine reserves True/False/None): rename the predicate")
+
+
+def _functor_span(sp, name: str, source: "str | None" = None):
+    """The span of a goal's functor name when the goal is written in prefix
+    form ``f(...)`` -- the source there starts with the name and a ``(`` --
+    else the whole goal (an operator goal ``A == B`` starts with its left
+    operand, which is not the name)."""
+    top = _top_span(sp)
+    if top is None:
+        return None
+    end = top[0] + len(name)
+    if source is not None and source[top[0]:end + 1] == name + "(":
+        return (top[0], end)
+    return top
+
+
+# ── clauses ──────────────────────────────────────────────────────────────────
+
+
+def lower_clause(term: Any, spans=None, var_names=None,
+                 positions: "_Positions | None" = None,
+                 singletons: "list | None" = None) -> list[ast.stmt]:
+    """A clause term (a fact, or ``(H :- B)``) -> ``[$declare_head(...),
+    $define_predicate(...)]``.
+
+    The declaration is the ``$declare_head`` statement the seam rewriter
+    emits for a predicate name (``term_rewriting._make_predicate_decl_ast``),
+    and the head is built through ``$head`` exactly as the rewriter builds it.
+    *singletons*, when given, receives ``(name, span)`` for each named
+    variable that occurs once (a ``_``-prefixed name is exempt: D19)."""
+    positions = positions or _Positions(None)
+    var_names = var_names or {}
+    whole_span = _top_span(spans)
+    if type(term) is tuple and len(term) == 3 and term[0] == ":-":
+        head, body = term[1], term[2]
+        head_sp, body_sp = _arg_spans(spans, 2)
+    else:
+        head, body = term, None
+        head_sp, body_sp = spans, None
+
+    if type(head) is VarRef:
+        raise LoweringRefused(
+            "a clause head is a variable (ISO instantiation_error)", whole_span)
+    if type(head) is str:
+        name, args = head, ()
+    elif type(head) is tuple and head and type(head[0]) is str \
+            and head[0] != "$chars":
+        name, args = head[0], head[1:]
+    else:
+        raise LoweringRefused(
+            f"a clause head is not callable: {head!r} (ISO type_error(callable))",
+            whole_span)
+    if name in _UNREPRESENTABLE_NAMES:
+        raise LoweringRefused(_unrepresentable(name), whole_span)
+    if name.startswith(_DOLLAR):
+        raise LoweringRefused(
+            f"`{name}` is a reserved name: a `$`-prefixed predicate is the "
+            f"engine's own", whole_span)
+    if name in (",", ";", "->", "*->", "!", "\\+", ":-", "call") \
+            or (name in ("true", "fail", "false") and not args):
+        raise LoweringRefused(
+            f"cannot define the control construct {name}/{len(args)} (ISO "
+            f"permission_error(modify, static_procedure, {name}/{len(args)}))",
+            whole_span)
+
+    lw = _ClauseLowering(var_names, positions)
+    fields = tuple(f"arg_{i}" for i in range(len(args)))
+    decl = ast.Expr(value=ast.Call(
+        func=_name(_DOLLAR + "declare_head"),
+        args=[_const(name), ast.Tuple(elts=[_const(f) for f in fields],
+                                      ctx=ast.Load())],
+        keywords=[]))
+    head_ast = ast.Call(
+        func=_name(_DOLLAR + "head"),
+        args=[_name(name)],
+        keywords=[ast.keyword(arg=f, value=lw.term(a, s))
+                  for f, a, s in zip(fields, args, _arg_spans(head_sp, len(args)))])
+    body_ast = _const(True) if body is None else lw.goal(body, body_sp)
+    define = ast.Expr(value=ast.Call(
+        func=_name(_DOLLAR + "define_predicate"),
+        args=[_node("Predicate", head=head_ast, body=body_ast,
+                    position=_pos_expr(positions.of(whole_span))),
+              _name(_DOLLAR + "module")],
+        keywords=[]))
+    if singletons is not None:
+        for vname, count in lw.occurrences.items():
+            if count == 1 and not vname.startswith("_"):
+                singletons.append((vname, whole_span))
+    return [decl, define]
+
+
+def lower_fact(term: Any, span=None) -> list[ast.stmt]:
+    """P1's entry point, kept: a fact (or clause) term with no source map."""
+    return lower_clause(term, span)
 
 
 def lower_arg(t: Any, span=None) -> ast.expr:
-    """One ISO argument term -> the seam's AST for it. P1 subset."""
-    if isinstance(t, bool):
-        raise LoweringRefused(f"P1: unexpected bool {t!r}")
-    if isinstance(t, int):
-        return ast.Constant(value=t)
-    if isinstance(t, str):
-        return ast.Constant(value=t)
-    if _is_atom(t):
-        # An atom reference resolves by NAME at load time (strict atoms), exactly
-        # as the seam's $LoadName does.
-        call = ast.parse(f"{_DOLLAR}LoadName(name={t[0]!r}, position=None)",
-                         mode="eval").body
-        call.keywords[1].value = _pos_tuple(span)
-        return call
-    if isinstance(t, list):
-        return ast.List(elts=[lower_arg(x) for x in t], ctx=ast.Load())
-    raise LoweringRefused(f"P1 handles atoms, integers, strings and lists; got {t!r}")
+    """One ISO data term -> the AST that builds it (variables fresh per call)."""
+    return _ClauseLowering({}, _Positions(None)).term(t, span)
 
 
-def lower_fact(term: tuple, span=None) -> list[ast.stmt]:
-    """A fact term ('name', arg...) -> [declaration, $define_predicate(...)].
-
-    The declaration is the ``$declare_head`` statement the seam rewriter
-    emits for a predicate name (``term_rewriting._make_predicate_decl_ast``,
-    W4b-3 slice 5; it was a guarded ``PredicateMeta`` class block), and the
-    head is built through ``$head`` exactly as the rewriter builds it."""
-    if type(term) is not tuple or not term or type(term[0]) is not str:
-        raise LoweringRefused(f"not a callable term: {term!r}")
-    name, args = term[0], list(term[1:])
-    if name == ":-":
-        raise LoweringRefused("P1 is facts only; rules are P2")
-    fields = tuple(f"arg_{i}" for i in range(len(args)))
-    fields_src = "(" + "".join(f"{f!r}, " for f in fields) + ")"
-
-    guard = ast.parse(
-        f"{_DOLLAR}declare_head({name!r}, {fields_src})").body
-
-    head = ast.Call(
-        func=ast.Name(id=f"{_DOLLAR}head", ctx=ast.Load()),
-        args=[ast.Name(id=name, ctx=ast.Load())],
-        keywords=[ast.keyword(arg=f, value=lower_arg(a))
-                  for f, a in zip(fields, args)],
-    )
-    define = ast.parse(
-        f"{_DOLLAR}define_predicate({_DOLLAR}Predicate(head=None, body=True, "
-        f"position=None), {_DOLLAR}module)").body[0]
-    pred_call = define.value.args[0]
-    pred_call.keywords[0].value = head
-    pred_call.keywords[2].value = _pos_tuple(span)
-    return guard + [define]
+# ── modules ──────────────────────────────────────────────────────────────────
 
 
-def lower_items(items, *, strict: bool = True) -> tuple[ast.Module, dict]:
-    """ReaderItems -> (ast.Module, stats). Stats carry the DENOMINATOR (plan §8.4):
-    a shrinking population must be visible, not silent.
+def _item_span(it):
+    span = getattr(it, "span", None)
+    if span is not None:
+        return span
+    return _top_span(getattr(it, "spans", None))
+
+
+def lower_items(items, *, strict: bool = True, source: "str | None" = None,
+                filename: "str | None" = None,
+                singletons: "list | None" = None) -> tuple[ast.Module, dict]:
+    """ReaderItems -> (ast.Module, stats).  Stats carry the DENOMINATOR (plan
+    §8.4): a shrinking population must be visible, not silent.
 
     *strict* (the default) raises :class:`LoweringRefused` on the first item
-    it cannot lower -- a clause, a directive, or a reader ``SyntaxIssue`` --
-    so a module never imports with a clause missing (2026-09-29: the item
-    was counted and the module loaded without it).  ``strict=False`` is the
-    explicit counting mode for tooling that surveys a corpus: it skips and
-    counts every refusal in ``stats``."""
+    it cannot lower -- a directive, a DCG rule, a refused control construct,
+    or a reader ``SyntaxIssue`` -- so a module never imports with a clause
+    missing.  ``strict=False`` is the explicit counting mode for tooling that
+    surveys a corpus: it skips and counts every refusal in ``stats``.
+
+    *source* (the ``.pl`` text the items were read from) turns spans into
+    seam positions and every refusal message into a ``file:line`` one."""
+    positions = _Positions(source)
+    where_file = filename or "<.pl>"
     body: list[ast.stmt] = []
     stats = {"read": 0, "lowered": 0, "refused": 0, "refusals": []}
 
-    def refuse(msg: str) -> None:
+    def where(span) -> str:
+        line = positions.line(span) if span is not None else None
+        if line is not None:
+            return f"{where_file}:{line}: "
+        return f"at {span}: " if span else ""
+
+    def refuse(msg: str, span) -> None:
         if strict:
-            raise LoweringRefused(msg)
+            raise LoweringRefused(where(span) + msg, span)
         stats["refused"] += 1
-        stats["refusals"].append(msg)
+        stats["refusals"].append(where(span) + msg)
 
     for it in items:
         stats["read"] += 1
-        span = getattr(it, "span", None)
-        where = f" at {span}" if span else ""
-        if type(it).__name__ != "Clause":
-            detail = getattr(it, "message", None) or getattr(it, "term", None)
-            refuse(f"{type(it).__name__} (P3){where}"
-                   + (f": {detail!r}" if detail is not None else ""))
+        kind = type(it).__name__
+        span = _item_span(it)
+        if kind == "SyntaxIssue":
+            refuse(f"syntax error (SyntaxIssue): {it.message}", span)
+            continue
+        if kind != "Clause":
+            refuse(f"{kind} is not lowered yet (directives are slice 2; "
+                   f"DCG is out of scope): {it.term!r}", span)
             continue
         try:
-            lowered = lower_fact(it.term, span)
+            lowered = lower_clause(it.term, it.spans, it.var_names, positions,
+                                   singletons)
         except LoweringRefused as e:
-            refuse(f"{e}{where}")
+            refuse(str(e), e.span or span)
             continue
         body.extend(lowered)
         stats["lowered"] += 1
     mod = ast.Module(body=body, type_ignores=[])
-    _undollar(mod)
     ast.fix_missing_locations(mod)
     return mod, stats
 
 
-def read_iso(source: str) -> list:
-    """ISO source text -> ReaderItems (L0+L1+L2, unchanged -- plan §2).
+def reader_op_table():
+    """The operator table the native front end reads with (D2(b)): Scryer's
+    table with no library loaded, ``Dialect.scryer_reader()``'s -- a FRESH
+    one per call, since ``op/3`` directives mutate the reader's table."""
+    from clausal.tools.prolog_dialect import Dialect
+    return Dialect.scryer_reader().operator_table
+
+
+def read_iso(source: str, op_table=None) -> list:
+    """ISO source text -> ReaderItems (L0+L1+L2, unchanged -- plan §2), read
+    with :func:`reader_op_table` unless *op_table* is given.
 
     The reader is CLOSED after the source is fed, as ``read_module`` does:
     an end ``.`` is one only when layout or EOF follows it, so without the
     close a last clause with no trailing newline stayed pending and was lost
     (2026-09-29).  ``SyntaxIssue`` items are returned like any other."""
     from clausal.tools.prolog_reader import read_module
-    return read_module(source)
+    return read_module(source, op_table=op_table or reader_op_table())
+
+
+def lower_module(source: str, filename: "str | None" = None, *,
+                 op_table=None) -> tuple[ast.Module, dict, list]:
+    """``.pl`` text -> (ast.Module, stats, singletons), strict: the native
+    loader's one call.  Raises :class:`LoweringRefused` with a ``file:line``
+    message on the first item it cannot lower."""
+    singletons: list = []
+    mod, stats = lower_items(read_iso(source, op_table), source=source,
+                             filename=filename, singletons=singletons)
+    return mod, stats, singletons
+
+
+def line_of(source: str, span) -> "int | None":
+    """The 1-based ``.pl`` line of a span's start (None when unknown)."""
+    return _Positions(source).line(span) if span is not None else None
+
+
+def warn_singletons(singletons, source: str, filename: str) -> None:
+    """The ``.pl`` singleton lint: one ``ClausalSingletonWarning`` per named
+    variable occurring once in its clause (a ``_``-prefixed name is exempt,
+    the Prolog convention -- D19)."""
+    if not singletons:
+        return
+    import warnings  # noqa: PLC0415
+    from clausal.lint_warnings import ClausalSingletonWarning  # noqa: PLC0415
+    for name, span in singletons:
+        warnings.warn(
+            f"{filename}:{line_of(source, span)}: singleton variable `{name}` "
+            f"-- a variable occurring once binds nothing. Misspelling? Rename "
+            f"to `_{name}` (or `_`) if deliberate",
+            ClausalSingletonWarning, stacklevel=3)
