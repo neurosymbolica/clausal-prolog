@@ -120,6 +120,9 @@ l1(R) :- findall(X, (lex_chain([[1,X],[1,2]]), X in 0..3, label([X])), R).
 l2(R) :- findall(X-Y, (lex_chain([[X,Y],[1,1]]), [X,Y] ins 0..2, label([X,Y])), R).
 l3(R) :- findall(A-B-C, (lex_chain([[A],[B],[C]]), [A,B,C] ins 0..1, label([A,B,C])), R).
 l4(R) :- findall(x, lex_chain([[1,2],[1]]), R).
+l5(E) :- catch(lex_chain([[1],[1,2],[foo]]), error(E, _), true).
+l6(R) :- findall(x, lex_chain([[],[]]), R).
+l7(R) :- findall(D, (lex_chain([[X,_],[1,1]]), X in 0..2, fd_dom(X, D)), R).
 """
 
 
@@ -133,6 +136,11 @@ def test_lex_chain(native, ans):
     assert ans(mod, "l3") == [[p(p(0, 0), 0), p(p(0, 0), 1), p(p(0, 1), 1),
                                p(p(1, 1), 1)]]
     assert ans(mod, "l4") == [[]]
+    # every element is checked before any length comparison fails
+    assert ans(mod, "l5") == [("type_error", "integer", "foo")]
+    assert ans(mod, "l6") == [["x"]]
+    # the first position is pruned before labelling, as Scryer's
+    assert ans(mod, "l7") == [[("..", 0, 1)]]
 
 
 CHAIN = """\

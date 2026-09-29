@@ -328,7 +328,9 @@ def _post_clpz(op, l, r, trail) -> bool:
 
 def _objective_value(expr, trail):
     """The value of the objective once the variables are labelled, or None
-    when it has none (``X/2`` with X odd)."""
+    when it has none -- ``X/2`` with X odd, ``1//X`` with X = 0: the clpz
+    relation fails there (ruling Q14, as Scryer's), so that labelling is
+    not an answer of the optimisation."""
     if _term_vars(expr):
         # Scryer: an objective over a variable the labelling leaves unbound
         _raise(instantiation_error("labeling/2"))

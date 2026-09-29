@@ -14,6 +14,7 @@ under the name ``label`` (``clausal.stdlib.clpz``).  The implementation is
 from __future__ import annotations
 
 from clausal.logic.builtins._registry import _builtin
+from clausal.logic import clpfd as _fd
 
 
 @_builtin("in", 2, fields=("var", "domain"))
@@ -241,15 +242,23 @@ def _all_distinct(vs, trail, k):
 @_builtin("lex_chain", 1, fields=("lists",))
 def _lex_chain(lists, trail, k):
     """lex_chain(Lists) -- each list is lexicographically less than or equal
-    to the next.  Posted as the reified chain Scryer's decomposition means:
-    ``A1 #< B1 #\\/ (A1 #= B1 #/\\ lex(Rest))``, true on exhausted lists."""
+    to the next.  Posted as the reified chain ``A1 #< B1 #\\/ (A1 #= B1
+    #/\\ lex(Rest))`` (true on exhausted lists) plus ``A1 #=< B1``: the
+    same solutions as Scryer's lex_le, with weaker propagation past the
+    first position."""
     from clausal.logic.clpz_surface import post_connective  # noqa: PLC0415
     ls = [_items(li, "lex_chain/1") for li in _items(lists, "lex_chain/1")]
+    for li in ls:                   # every element first, as Scryer checks
+        for x in li:
+            _integer_or_fd_var(x)
     for a, b in zip(ls, ls[1:]):
         if len(a) != len(b):
             return                  # lists of different lengths: Scryer fails
-        for x in a + b:
-            _integer_or_fd_var(x)
+        # A1 #=< B1 always holds for a lexicographic =<: posted plainly it
+        # prunes the first position before labelling (the reified chain
+        # alone would wait)
+        if a and not _fd.fd_le(a[0], b[0], trail):
+            return
         term = 1
         for x, y in reversed(list(zip(a, b))):
             term = ("#\\/", ("#<", x, y), ("#/\\", ("#=", x, y), term))
