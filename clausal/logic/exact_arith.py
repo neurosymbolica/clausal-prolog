@@ -41,6 +41,8 @@ from decimal import Decimal, InvalidOperation
 from fractions import Fraction
 from types import MappingProxyType
 
+from clausal.logic.atoms import is_truth_atom as _is_truth_atom
+
 __all__ = ["exact_add", "exact_sub", "exact_mul", "exact_div", "exact_neg",
            "python_floordiv", "python_mod", "python_pow", "iso_intdiv",
            "iso_div", "iso_mod", "iso_pow", "iso_intpow", "iso_abs", "iso_max",
@@ -926,6 +928,10 @@ def evaluate(x, context: str = "eval_/2"):
     t = type(x)
     if t is int or t is float or t is Fraction or t is Decimal:
         return x
+    if _is_truth_atom(x):
+        # true/false/undefined are ATOMS (D35): ``type_error(evaluable,
+        # true/0)``, as for any atom -- never Python's ``True + 1``.
+        raise not_evaluable(x, context)
     if _is_var(x):
         from clausal.logic.exceptions import LogicException, instantiation_error  # noqa: PLC0415
         raise LogicException(instantiation_error(context))

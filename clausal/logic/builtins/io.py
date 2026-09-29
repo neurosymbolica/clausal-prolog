@@ -10,6 +10,8 @@ import sys as _sys
 
 from clausal.logic.atoms import (
     demangle,
+    is_truth_atom,
+    truth_spelling,
     is_atom as _term_is_atom,
     is_mangled,
     spelling,
@@ -119,6 +121,8 @@ def _format_term_as_text(val):
         # bare spelling (``foo bar``, not ``'foo bar'``) -- exactly what the
         # str branch above already does for the text of a string.
         return _term_str(val, quoted=False)
+    if is_truth_atom(val):
+        return truth_spelling(val)     # the atoms true/false/undefined (D35)
     return str(val)
 
 
@@ -171,6 +175,8 @@ def _format_term_iso(val, quoted: bool, double_quotes: bool = False) -> str:
         # ``clausal/logic/cells.py``) and falls through to ``str()`` below.
         return _term_str(val, quoted=quoted, double_quotes=double_quotes,
                          sep=ISO_SEP)
+    if is_truth_atom(val):
+        return truth_spelling(val)     # the atoms true/false/undefined (D35)
     return str(val)
 
 

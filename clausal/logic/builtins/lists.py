@@ -922,9 +922,12 @@ def _list_to_set__2(this_generator, _proceed, _fail, _catcher, lst, set_out, tra
     items = _as_items(lst_val)
     if items is not None:
         items = [deref(x) for x in items]
+        # Duplicates by ``==``/2 (Scryer's list_to_set/2), not by Python's
+        # ``==``: ``true`` is not 1 (D35) and 1 is not 1.0.
+        from clausal.logic.builtins.iso_compare import _iso_identical  # noqa: PLC0415
         seen: list = []
         for x in items:
-            if x not in seen:
+            if not any(_iso_identical(x, y) for y in seen):
                 seen.append(x)
         out = _seq_result(seen, _was_string(lst_val), _was_bytes(lst_val))
         mark = trail.mark()

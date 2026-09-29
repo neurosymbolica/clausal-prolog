@@ -138,8 +138,11 @@ def test_d40_native(native, ans):
     assert ans(mod, "q") == [1]
     assert ans(mod, "r") == [2]
     assert ans(mod, "c") == [1]
+    # the indicator's name is the atom ``true`` -- whose object is ``True``
+    # (D35 closed): ``mint("true")`` IS ``True``, so ``true/2`` walks as
+    # ``('/', True, 2)``; the str spelling still unifies with it.
     assert ans(mod, "e") == [("existence_error", "procedure",
-                              ("/", "true", 2))]
+                              ("/", True, 2))]
 
 
 def test_d40_seam(native, ans):
@@ -349,12 +352,13 @@ def test_listless_use_module_of_a_module_exporting_nothing_loads_it(native,
     assert ans(mod, "q") == [7]
 
 
-# ── D35's cost: the truth values are not atoms to the engine (OPEN) ──
+# ── D35's cost, CLOSED: the truth values ARE atoms to the engine ──
 #
-# A data ``true`` IS Python ``True`` (the ruling), and the engine's atom-level
-# builtins, unification and standard order treat ``True`` as a bool, not as
-# the atom ``true``.  Scryer's answers are pinned strict-xfail: each flips to
-# a pass (and so fails loudly) the day the engine reads True/False as atoms.
+# A data ``true`` IS Python ``True`` (the ruling), and the engine reads the
+# object as the atom ``true`` (``clausal.logic.atoms.is_truth_atom``): atom/1,
+# the atom builtins, functor/3, unification and the standard order all answer
+# as Scryer does.  These were strict-xfail while the cost was open; the wider
+# table is tests/iso_l3/test_l3_truth_atoms.py.
 
 _ISO_ATOM_TRUE = """\
     a1(ok) :- atom(true).
@@ -374,8 +378,6 @@ _ISO_ATOM_TRUE = """\
     ("a5", ["ok"]),
     ("a6", [">"]),
 ])
-@pytest.mark.xfail(strict=True, reason="D35 OPEN: True/False are not atoms "
-                   "to atom/1, atom_length/2, functor/3, unify, compare/3")
 def test_d35_truth_values_behave_as_scryers_atoms(native, ans, name, scryer):
     mod = _load(native, "s4_d35_iso", _ISO_ATOM_TRUE)
     assert ans(mod, name) == scryer

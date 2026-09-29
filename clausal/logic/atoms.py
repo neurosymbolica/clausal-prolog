@@ -110,7 +110,7 @@ def is_mangled(value) -> bool:
     """
     if type(value) is str:
         return HIDDEN_SEP in value
-    return is_atom(value) and HIDDEN_SEP in value[0]
+    return False                         # a truth atom's spelling never carries the separator
 
 
 def demangle(value) -> tuple[str, str]:
@@ -201,6 +201,9 @@ def mint(spelling: str):
         raise TypeError(f"mint: spelling must be a str, got {type(spelling).__name__}")
     if spelling == NIL_SPELLING:
         return []
+    truth = truth_atom(spelling)
+    if truth is not None:
+        return truth                     # true/false/undefined ARE True/False/Undefined
     return sys.intern(spelling)          # STAGE 2 (spec 2026-09-18 §1): the atom IS the interned str
 
 
@@ -384,12 +387,76 @@ class atom(str):
         return f"atom({str.__repr__(self)})"
 
 
+# ── The truth atoms ───────────────────────────────────────────────────────────
+#
+# ``true``, ``false`` and ``undefined`` are ATOMS (ISO 7.2.1: ``atom(true)``,
+# ``true \= 1``, ``compare(>, true, a)``, ``atom_length(false, 5)``), and
+# their OBJECTS are Python ``True``/``False`` and the Kleene ``Undefined``
+# (operator ruling: the objects stay, for interop -- a Python caller reads
+# ``True`` back, never a str).  Python says a ``bool`` is an ``int``
+# (``True == 1``, ``hash(True) == hash(1)``); the engine must not.  This is
+# the ONE place that says which objects are the truth atoms and what they
+# spell; unify (C), ``structural_eq``, the standard-order key, the index
+# keys, the arithmetic evaluators, the renderers and ``is_atom``/``spelling``
+# below all read it.
+#
+# The str of the spelling (``"true"``, built by a Python caller or a
+# pre-canonicalisation path) is the SAME atom -- the nil precedent: every
+# spelling of ``[]`` is one term.  ``mint`` canonicalises the three
+# spellings to the objects so that a runtime-built atom (``atom_chars(X,
+# [t, r, u, e])``, ``functor(true(x), N, _)``) IS the truth value.
+#
+# ``Undefined`` lives in ``clausal.terms`` (which imports this module), so
+# it registers itself here at import; the lazy fallback covers a caller that
+# reaches this module first.
+
+TRUTH_SPELLINGS: dict = {"true": True, "false": False}   # + "undefined" once registered
+_UNDEFINED = None
+
+
+def _register_undefined(obj) -> None:
+    """Called by ``clausal.terms`` once ``Undefined`` exists."""
+    global _UNDEFINED
+    _UNDEFINED = obj
+    TRUTH_SPELLINGS["undefined"] = obj
+
+
+def _undefined():
+    if _UNDEFINED is None:
+        from clausal.terms import Undefined  # noqa: PLC0415  (registers itself)
+        return Undefined
+    return _UNDEFINED
+
+
+def is_truth_atom(term) -> bool:
+    """True iff *term* is one of the three truth-atom OBJECTS."""
+    return term is True or term is False or (term is _UNDEFINED and term is not None)
+
+
+def truth_spelling(term) -> str:
+    """The spelling of a truth-atom object: ``"true"``/``"false"``/``"undefined"``."""
+    if term is True:
+        return "true"
+    if term is False:
+        return "false"
+    return "undefined"
+
+
+def truth_atom(spelling: str):
+    """The truth-atom OBJECT for *spelling*, or ``None`` when it is not one."""
+    obj = TRUTH_SPELLINGS.get(spelling)
+    if obj is None and spelling == "undefined":
+        return _undefined()
+    return obj
+
+
 def is_atom(term) -> bool:
     """True iff *term* is an atom: STAGE 2 of the atoms-as-str flip (spec §1),
-    an atom IS the Python ``str``.  A STRING is the chars carrier
+    an atom IS the Python ``str`` -- or one of the three truth-atom objects
+    (``True``/``False``/``Undefined``, see above).  A STRING is the chars carrier
     ``('$chars', text)`` and is not an atom; no class is an atom (spec §4);
     the 1-tuple ``('x',)`` is RESERVED (``cells.refuse_reserved_1tuple``)."""
-    return type(term) is str            # STAGE 2 (spec §1): an atom is a Python str; a string is the carrier
+    return type(term) is str or is_truth_atom(term)   # STAGE 2 (spec §1): an atom is a Python str; a string is the carrier
 
 
 def spelling(atom) -> str:
@@ -404,6 +471,8 @@ def spelling(atom) -> str:
     """
     if type(atom) is str:
         return atom                      # STAGE 2: an atom's spelling is itself
+    if is_truth_atom(atom):
+        return truth_spelling(atom)      # True/False/Undefined ARE true/false/undefined
     if is_nil(atom):
         return NIL_SPELLING              # every nil spelling incl. the empty carrier
     raise TypeError(f"not an atom: {atom!r}")
@@ -444,4 +513,5 @@ __all__ = [
     "HIDDEN_SEP", "NIL_SPELLING", "NIL_KEY", "mangle", "is_mangled",
     "demangle", "demangle_for_display", "mint", "key_of", "as_dict_key",
     "is_atom", "spelling", "char_atom", "is_char_atom",
+    "is_truth_atom", "truth_spelling", "truth_atom", "TRUTH_SPELLINGS",
 ]

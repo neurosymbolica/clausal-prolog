@@ -1552,7 +1552,10 @@ def _eval_ground(expr):
     _ensure_term_imports()
     if not isinstance(expr, _Node):
         if isinstance(expr, bool):
-            return None  # bools are deliberately not FD numbers; keep pending
+            # A truth ATOM (D35) is not an FD number: Scryer's clpz answers
+            # ``1 #< true`` with ``domain_error(clpz_expression, true)``.
+            # Keeping it "pending" made the seam's ``1 < true`` FAIL silently.
+            raise _unknown_expr_leaf_error(expr)
         # An exact-number CELL (the transfer form of a Fraction or a Decimal,
         # RULED 2026-09-17) evaluates as the number it denotes: an ``rdiv``
         # cell is its Fraction and a ``decimal`` cell its Decimal, both
@@ -2186,6 +2189,14 @@ def _reject_nonnumeric_eq(l, r, context: str = "(==)/2") -> None:
     the Python ``fd_eq`` and the C-accelerated wrapper, so an attr-carrying
     var cannot smuggle a non-numeric operand into q_eq/real_eq."""
     dl, dr = deref(l), deref(r)
+    # A truth ATOM (D35: True/False are the atoms true/false) is never an
+    # arithmetic operand, ground-vs-ground included: ``1 < true`` used to
+    # fall to Python's ``1 < True`` and FAIL silently.  Scryer's clpz:
+    # ``domain_error(clpz_expression, true)``.
+    for _g in (dl, dr):
+        if isinstance(_g, bool):
+            from clausal.logic.exceptions import LogicException, domain_error  # noqa: PLC0415
+            raise LogicException(domain_error("clpz_expression", _g, context))
     if _Add is None:
         _ensure_term_imports()
     varish_l = is_var(dl) or _expr_tree_has_var(dl)
@@ -2241,6 +2252,14 @@ def _reject_nonnumeric_order(l, r, context: str) -> None:
     triggers the dispatch on its own, and q_lt/real_lt would otherwise post
     against the ground non-numeric operand unchecked."""
     dl, dr = deref(l), deref(r)
+    # A truth ATOM (D35: True/False are the atoms true/false) is never an
+    # arithmetic operand, ground-vs-ground included: ``1 < true`` used to
+    # fall to Python's ``1 < True`` and FAIL silently.  Scryer's clpz:
+    # ``domain_error(clpz_expression, true)``.
+    for _g in (dl, dr):
+        if isinstance(_g, bool):
+            from clausal.logic.exceptions import LogicException, domain_error  # noqa: PLC0415
+            raise LogicException(domain_error("clpz_expression", _g, context))
     if _Add is None:
         _ensure_term_imports()
     varish_l = is_var(dl) or _expr_tree_has_var(dl)
