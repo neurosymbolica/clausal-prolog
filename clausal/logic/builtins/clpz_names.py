@@ -303,3 +303,22 @@ def _chain(relation, vs, trail, k):
         raise LogicException(domain_error("chain_relation", rel, "chain/2"))
     if chain(zs, name, trail):
         yield None
+
+
+@_builtin("fd_var", 1, fields=("var",))
+def _fd_var(x, trail, k):
+    """fd_var(X) -- X is an unbound variable with a finite-domain
+    constraint (an integer, a plain variable or any other term is not)."""
+    from clausal.logic.clpfd import FD_KEY  # noqa: PLC0415
+    from clausal.logic.variables import deref, get_attr, is_var  # noqa: PLC0415
+    x = deref(x)
+    if is_var(x) and get_attr(x, FD_KEY) is not None:
+        yield None
+
+
+@_builtin("indomain", 1, fields=("var",))
+def _indomain(x, trail, k):
+    """indomain(X) -- label(X) for one variable: X takes each value of its
+    (finite) domain, ascending; an integer succeeds once."""
+    from clausal.logic.clpz_surface import label  # noqa: PLC0415
+    yield from label([x], trail)

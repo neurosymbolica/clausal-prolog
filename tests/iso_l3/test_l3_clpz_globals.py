@@ -164,3 +164,25 @@ def test_chain(native, ans):
     assert ans(mod, "h4") == ["instantiation_error"]
     assert ans(mod, "h5") == [["x"]]
     assert ans(mod, "h6") == [("type_error", "list", "foo")]
+
+
+FDVAR = """\
+:- use_module(library(clpz)).
+v1(R) :- findall(x, (X in 1..3, fd_var(X)), R).
+v2(R) :- findall(x, fd_var(3), R).
+v3(R) :- findall(x, fd_var(_), R).
+v4(R) :- findall(X, (X in 1..3, indomain(X)), R).
+v5(E) :- catch(indomain(_), error(E, _), true).
+v6(R) :- findall(x, indomain(3), R).
+"""
+
+
+def test_fd_var_and_indomain(native, ans):
+    """fd_var/1 and indomain/1 did not exist; Scryer's answers."""
+    mod = native.load("l3_clpz_fdvar", FDVAR)
+    assert ans(mod, "v1") == [["x"]]
+    assert ans(mod, "v2") == [[]]
+    assert ans(mod, "v3") == [[]]
+    assert ans(mod, "v4") == [[1, 2, 3]]
+    assert ans(mod, "v5") == ["instantiation_error"]
+    assert ans(mod, "v6") == [["x"]]
