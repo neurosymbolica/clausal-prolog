@@ -20,6 +20,7 @@ from clausal.logic.cells import (
 from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.terms import (
     term_str as _term_str,
+    term_write as _term_write,
     term_canonical as _term_canonical,
     term_pformat as _term_pformat,
     quote_string as _quote_string,
@@ -139,7 +140,8 @@ _ISO_TERM_TYPES = (str, bytes, list, DictTerm, SetTerm)
 ISO_SEP = ","
 
 
-def _format_term_iso(val, quoted: bool, double_quotes: bool = False) -> str:
+def _format_term_iso(val, quoted: bool, double_quotes: bool = False,
+                     ignore_ops: bool = False, numbervars: bool = True) -> str:
     """Format a dereffed value for the ISO family (``write/1``/``writeq/1``/
     ``write_term/2``).
 
@@ -155,22 +157,34 @@ def _format_term_iso(val, quoted: bool, double_quotes: bool = False) -> str:
     ``term_str``'s DISPLAY defaults and so printed double-quoted strings and
     Python reprs inside an ISO writer's output.
 
-    *double_quotes* is here only for ``write_term/2``'s option of that name;
-    every other caller in the family leaves it False.
+    *double_quotes*, *ignore_ops* and *numbervars* are here for
+    ``write_term/2``'s options of those names.
+
+    The layout is Scryer's (``clausal.terms.term_write``): operator syntax
+    (``foo/1``, ``1+2``, ``- (1)``), a distinct ``_N`` per variable (so
+    ``writeq(f(X, Y, X))`` shows the sharing), Scryer's float spelling, and
+    under ``quoted(true)`` every atom a reader would not read back as itself
+    quoted -- a FUNCTOR included (``'A b'(1)``).  It used to be ``term_str``'s
+    functional notation, with ``_`` for every variable and functors never
+    quoted, so ``writeq/1`` output did not re-read as the term written.
     """
     if _is_empty_list(val):
         # ``()`` is nil and is not caught by the cell test below (it is
         # falsy), so it is decided here (fix round 2, item 5).
         return "[]"
-    if isinstance(val, _ISO_TERM_TYPES) or is_term_instance(val):
-        return _term_str(val, quoted=quoted, double_quotes=double_quotes,
-                         sep=ISO_SEP)
-    if type(val) is tuple and val and (type(val[0]) is str or val[0] is TUPLE_TAG):
-        # A CELL -- ``("pt", 1, 2)`` (or a tuple-DATA cell). Slot 0 read RAW,
-        # no deref: a slot-0-Var tuple is not a legal cell (see
-        # ``clausal/logic/cells.py``) and falls through to ``str()`` below.
-        return _term_str(val, quoted=quoted, double_quotes=double_quotes,
-                         sep=ISO_SEP)
+    if (isinstance(val, _ISO_TERM_TYPES) or is_term_instance(val)
+            or isinstance(val, (Var, SegList, SegString))
+            or (isinstance(val, (int, float)) and not isinstance(val, bool))
+            or (type(val) is tuple and val
+                and (type(val[0]) is str or val[0] is TUPLE_TAG))):
+        # Every TERM shape goes through the Scryer writer: atoms, strings,
+        # lists, dicts, sets, term instances, variables, Seg* partial terms,
+        # numbers and CELLS -- ``("pt", 1, 2)`` or a tuple-DATA cell, slot 0
+        # read RAW, no deref (a slot-0-Var tuple is not a legal cell, see
+        # ``clausal/logic/cells.py``).  Any other Python value -- a date, a
+        # Quantity's own spelling aside, an opaque object -- keeps ``str()``.
+        return _term_write(val, quoted=quoted, double_quotes=double_quotes,
+                           ignore_ops=ignore_ops, numbervars=numbervars)
     return str(val)
 
 
@@ -298,10 +312,9 @@ def _write_canonical__1(term, trail, k):
 
 #: The write-options this engine knows.  Anything else is a
 #: ``domain_error(write_option, Opt)``, as ISO 8.14.2.3 g requires.
-#: ``ignore_ops`` and ``numbervars`` are accepted and INERT: this engine
-#: never prints operator forms in the write family (so ``ignore_ops(true)``
-#: is already what it does), and it has no ``'$VAR'/1`` convention to
-#: honour or suppress.
+#: ``ignore_ops(true)`` writes every compound in functional notation (a list
+#: as its ``'.'/2`` structure), and ``numbervars(true)`` writes
+#: ``'$VAR'(N)`` as a variable letter -- both as Scryer does.
 _WRITE_OPTIONS = frozenset({
     "quoted", "double_quotes", "ignore_ops", "numbervars",
 })
@@ -329,12 +342,12 @@ def _write_option_bool(value, option):
 
 
 def _write_term_options(options):
-    """``(quoted, double_quotes)`` for an ISO write-option list.
+    """``(quoted, double_quotes, ignore_ops, numbervars)`` for an ISO
+    write-option list.
 
-    ISO 8.14.2's defaults are ``quoted(false)`` and ``double_quotes(false)``,
-    so ``write_term(T, [])`` prints a string as ``[a,b,c]`` — which is
-    exactly ``write/1``.  ``ignore_ops(Bool)`` and ``numbervars(Bool)`` are
-    accepted and inert (see ``_WRITE_OPTIONS``).
+    ISO 8.14.2's defaults are all ``false``, so ``write_term(T, [])`` prints
+    a string as ``[a,b,c]`` -- as ``write/1`` does, except that ``write/1``
+    is ``numbervars(true)``.
 
     An unbound ``Options``, and a PARTIAL one (``[quoted(true) | _]``, which
     reaches here as a non-ground ``Seg*``), are both
@@ -354,6 +367,8 @@ def _write_term_options(options):
         raise LogicException(type_error("list", opts_val, "write_term/2"))
     quoted = False
     double_quotes = False
+    ignore_ops = False
+    numbervars = False
     for opt in opts_val:
         opt = deref(opt)
         if is_var(opt):
@@ -370,7 +385,11 @@ def _write_term_options(options):
             quoted = value
         elif name == "double_quotes":
             double_quotes = value
-    return quoted, double_quotes
+        elif name == "ignore_ops":
+            ignore_ops = value
+        elif name == "numbervars":
+            numbervars = value
+    return quoted, double_quotes, ignore_ops, numbervars
 
 
 @_builtin("write_term", 2)
@@ -379,10 +398,11 @@ def _write_term__2(term, options, trail, k):
 
     ``quoted(Bool)`` quotes atoms that would not re-read as themselves;
     ``double_quotes(Bool)`` prints a string (and the char list that IS one)
-    as ``"abc"`` rather than as ``[a,b,c]``; ``ignore_ops(Bool)`` and
-    ``numbervars(Bool)`` are accepted and inert.  Both Boolean options
-    default to FALSE, so ``write_term(T, [])`` is exactly ``write/1`` and
-    ``write_term(T, [quoted(true)])`` is exactly ``writeq/1``.
+    as ``"abc"`` rather than as ``[a,b,c]``; ``ignore_ops(Bool)`` writes
+    every compound in functional notation; ``numbervars(Bool)`` writes
+    ``'$VAR'(N)`` as a variable letter.  All four default to FALSE (ISO),
+    so ``write_term(T, [numbervars(true)])`` is exactly ``write/1`` and
+    ``write_term(T, [quoted(true), numbervars(true)])`` exactly ``writeq/1``.
     ``write_term(T, [quoted(true), double_quotes(true)])`` is the SPELLING
     ``print_term/1`` / ``term_to_string/2`` give a string (fix round 1,
     item 4) — those two additionally keep the display comma spacing, which
@@ -397,9 +417,11 @@ def _write_term__2(term, options, trail, k):
     (fix round 1, item 0).
     """
     from clausal.logic.solve import _deref_walk
-    quoted, double_quotes = _write_term_options(options)
+    quoted, double_quotes, ignore_ops, numbervars = _write_term_options(options)
     _sys.stdout.write(_format_term_iso(_deref_walk(term), quoted=quoted,
-                                       double_quotes=double_quotes))
+                                       double_quotes=double_quotes,
+                                       ignore_ops=ignore_ops,
+                                       numbervars=numbervars))
     _sys.stdout.flush()
     yield None
 
@@ -964,4 +986,336 @@ def _portray_clause__1(term, trail, k):
     from clausal.logic.solve import _deref_walk
     val = _deref_walk(term)
     print(_term_pformat(val))
+    yield None
+
+
+# ── format/1,2 (Scryer's library(format)) ────────────────────────────────────
+#
+# A port of Scryer Prolog's ``format_//2`` (src/lib/format.pl), directive by
+# directive, so a ``.pl`` program and a Clausal one print the same text:
+#
+#   ~w ~q ~a ~s ~d ~Nd ~ND ~NU ~NL ~f ~Nf ~r ~Nr ~R ~NR ~n ~Nn ~i ~~
+#   ~t ~`Ct ~| ~N| ~N+          and ~* in place of any N (taken from Args)
+#
+# The layout is Scryer's CELL model: the text between two tab stops is a
+# cell; ``~t`` marks a glue point, and the space a cell lacks to reach its
+# stop is shared among its glue points, the remainder to the LAST.  A cell
+# with no glue is not padded.  Anything else -- ``~c``, ``~e``, ``~p`` --
+# is ``domain_error(format_string, Rest)``, as in Scryer; too few arguments
+# are ``domain_error(non_empty_list, [])``, too many
+# ``domain_error(empty_list, Rest)``.  Errors carry ``format_//2`` as their
+# context, as Scryer's do.
+
+_FMT_CTX = ("//", "format_", 2)     # the indicator format_//2, as Scryer names it
+
+
+def _fmt_chars(term, what):
+    """The characters of the FORMAT string: a string, a char list, a code
+    list, or an atom (Scryer: ``must_be(chars, Fs)``; an atom is accepted as
+    its characters, as format/2 callers commonly write it)."""
+    from clausal.logic.solve import _deref_walk  # noqa: PLC0415
+    t = _deref_walk(term)
+    if is_var(t):
+        raise LogicException(instantiation_error(what))
+    if is_chars(t):
+        return list(chars_text(t))
+    if type(t) is str:
+        return list(spelling(t))
+    if isinstance(t, bytes):
+        return [chr(b) for b in t]
+    if isinstance(t, list):
+        out = []
+        for e in t:
+            e = deref(e)
+            if is_var(e):
+                raise LogicException(instantiation_error(what))
+            if type(e) is str and len(spelling(e)) == 1:
+                out.append(spelling(e))
+            elif type(e) is int and not isinstance(e, bool) and 0 <= e < 0x110000:
+                out.append(chr(e))
+            else:
+                raise LogicException(type_error("chars", t, what))
+        return out
+    raise LogicException(type_error("chars", t, what))
+
+
+def _fmt_int(arg):
+    """``Arg is Arg0, must_be(integer, Arg)``."""
+    from clausal.logic.exact_arith import evaluate  # noqa: PLC0415
+    from clausal.logic.variables import present_number  # noqa: PLC0415
+    a = deref(arg)
+    if is_var(a):
+        raise LogicException(instantiation_error("must_be/2"))
+    v = present_number(evaluate(a, "is/2"))
+    if not isinstance(v, int) or isinstance(v, bool):
+        raise LogicException(type_error("integer", v, "must_be/2"))
+    return v
+
+
+def _fmt_d(arg, num):
+    s = str(_fmt_int(arg))
+    if num == 0:
+        return s
+    sign, digits = ("-", s[1:]) if s.startswith("-") else ("", s)
+    if len(digits) <= num:
+        return sign + "0." + "0" * (num - len(digits)) + digits
+    return sign + digits[:-num] + "." + digits[-num:]
+
+
+def _fmt_grouped(arg, sep, num):
+    s = _fmt_d(arg, num)
+    head, dot, frac = s.partition(".")
+    sign = "-" if head.startswith("-") else ""
+    digits = head[len(sign):]
+    groups = []
+    while len(digits) > 3:
+        groups.insert(0, digits[-3:])
+        digits = digits[:-3]
+    groups.insert(0, digits)
+    return sign + sep.join(groups) + dot + frac
+
+
+def _fmt_f(arg, num):
+    """Scryer's ``float_with_n_decimal_digits``, arithmetic for arithmetic:
+    the fraction part times 10^N rounded half away from zero, carried into
+    the integer part at 10^N -- so ``~1f`` of 0.15 is 0.2 and ``~2f`` of
+    1.005 is 1.00, as Scryer prints them.  An integer is exact at any size;
+    an infinite or NaN value is ``evaluation_error(undefined)``."""
+    import math  # noqa: PLC0415
+    from clausal.logic.exact_arith import evaluate  # noqa: PLC0415
+    from clausal.logic.exceptions import evaluation_error  # noqa: PLC0415
+    a = deref(arg)
+    if is_var(a):
+        raise LogicException(instantiation_error("is/2"))
+    v = evaluate(a, "is/2")
+    scale = 10 ** num
+    if isinstance(v, int) and not isinstance(v, bool):
+        i, frr = v, scale
+        negative = v < 0
+    else:
+        f = float(v)
+        if math.isinf(f) or math.isnan(f):
+            raise LogicException(evaluation_error("undefined", _FMT_CTX))
+        fr = abs(f - math.trunc(f))
+        frr0 = math.floor(fr * scale + 0.5)
+        i0 = math.trunc(f)
+        if frr0 >= scale:
+            i, frr = i0 + (1 if f > 0 else -1 if f < 0 else 0), frr0
+        else:
+            i, frr = i0, frr0 + scale
+        negative = f < 0
+    head = "-0" if (i == 0 and negative and frr > scale) else str(i)
+    tail = "0" if frr == 1 else str(frr)[1:]
+    return head + "." + tail
+
+
+_RADIX_DIGITS = "0123456789abcdefghijklmnopqrstuvwxyz"
+
+
+def _fmt_radix(arg, radix, upper):
+    i = _fmt_int(arg)
+    if not 2 <= radix <= 36:
+        raise LogicException(domain_error(
+            "format_string", list(f"~{radix}{'R' if upper else 'r'}"),
+            _FMT_CTX))
+    if i == 0:
+        return "0"
+    n, out = abs(i), []
+    while n:
+        n, m = divmod(n, radix)
+        out.append(_RADIX_DIGITS[m])
+    s = ("-" if i < 0 else "") + "".join(reversed(out))
+    return s.upper() if upper else s
+
+
+def _fmt_s(arg):
+    from clausal.logic.solve import _deref_walk  # noqa: PLC0415
+    t = _deref_walk(arg)
+    if is_chars(t):
+        return chars_text(t)
+    if isinstance(t, list):
+        out = []
+        for e in t:
+            e = deref(e)
+            if is_var(e):
+                raise LogicException(instantiation_error("must_be/2"))
+            if type(e) is str and len(spelling(e)) == 1:
+                out.append(spelling(e))
+            else:
+                raise LogicException(type_error("character", e, "must_be/2"))
+        return "".join(out)
+    if is_var(t):
+        raise LogicException(instantiation_error("must_be/2"))
+    raise LogicException(type_error("list", t, "must_be/2"))
+
+
+def format_to_text(fs, args) -> str:
+    """The text ``format(Fs, Args)`` prints (Scryer's ``format_//2``)."""
+    from clausal.logic.solve import _deref_walk  # noqa: PLC0415
+    fs = _fmt_chars(fs, "must_be/2")
+    args_val = _deref_walk(args)
+    if is_var(args_val):
+        raise LogicException(instantiation_error("must_be/2"))
+    if not isinstance(args_val, list):
+        raise LogicException(type_error("list", args_val, "must_be/2"))
+    args = list(args_val)
+
+    out: list = []          # finished text
+    line_cells: list = []   # (from, to, elements) of the current line
+    tab = 0                 # the current tab stop's column
+    es: list = []           # elements of the open cell: ("c", text) | ("g", fill)
+
+    def take():
+        if not args:
+            raise LogicException(domain_error("non_empty_list", [], _FMT_CTX))
+        return args.pop(0)
+
+    def emit_cell(frm, to, elements):
+        width = sum(len(x) for k, x in elements if k == "c")
+        glue = [i for i, (k, _x) in enumerate(elements) if k == "g"]
+        sizes = {}
+        if glue:
+            space = to - frm - width
+            if space > 0:
+                distr, delta = divmod(space, len(glue))
+                for i in glue:
+                    sizes[i] = distr
+                sizes[glue[-1]] = distr + delta
+        text = []
+        for i, (k, x) in enumerate(elements):
+            text.append(x if k == "c" else x * sizes.get(i, 0))
+        out.append("".join(text))
+
+    def content_width(elements):
+        return sum(len(x) for k, x in elements if k == "c")
+
+    i, n = 0, len(fs)
+    while i < n:
+        c = fs[i]
+        if c != "~":
+            j = i
+            while j < n and fs[j] != "~":
+                j += 1
+            es.append(("c", "".join(fs[i:j])))
+            i = j
+            continue
+        rest = fs[i:]
+        had_args = bool(args)
+        j = i + 1
+        # numeric argument: digits, or ``*`` (taken from Args)
+        num = None
+        if j < n and fs[j] == "*":
+            num = _fmt_int(take())
+            j += 1
+        else:
+            k = j
+            while k < n and fs[k].isdigit():
+                k += 1
+            if k > j:
+                num = int("".join(fs[j:k]))
+            j = k
+        d = fs[j] if j < n else None
+        if d == "`" and num is None and j + 2 < n and fs[j + 2] == "t":
+            es.append(("g", fs[j + 1]))
+            i = j + 3
+            continue
+        if num is None and d in ("~", "w", "q", "a", "i", "s", "t"):
+            if d == "~":
+                es.append(("c", "~"))
+            elif d == "w":
+                es.append(("c", _format_term_iso(_deref_walk(take()),
+                                                 quoted=False)))
+            elif d == "q":
+                es.append(("c", _format_term_iso(_deref_walk(take()),
+                                                 quoted=True)))
+            elif d == "a":
+                a = _deref_walk(take())
+                if is_var(a):
+                    raise LogicException(instantiation_error("atom_chars/2"))
+                if _is_empty_list(a):
+                    es.append(("c", "[]"))         # nil is the atom '[]'
+                elif type(a) is str:
+                    es.append(("c", spelling(a)))
+                elif isinstance(a, (int, float)) and not isinstance(a, bool):
+                    es.append(("c", str(a)))
+                else:
+                    raise LogicException(type_error("atom", a, "atom_chars/2"))
+            elif d == "i":
+                take()
+            elif d == "s":
+                es.append(("c", _fmt_s(take())))
+            elif d == "t":
+                es.append(("g", " "))
+            i = j + 1
+            continue
+        nm = 0 if num is None else num
+        if d == "d":
+            es.append(("c", _fmt_d(take(), nm)))
+        elif d == "D":
+            es.append(("c", _fmt_grouped(take(), ",", nm)))
+        elif d == "U":
+            es.append(("c", _fmt_grouped(take(), "_", nm)))
+        elif d == "L":
+            s = _fmt_d(take(), 0)
+            width = nm or 72
+            parts = []
+            while len(s) > width:
+                parts.append(s[:width] + "_\n")
+                s = s[width:]
+            es.append(("c", "".join(parts) + s))
+        elif d == "f":
+            es.append(("c", _fmt_f(take(), 6 if num is None else num)))
+        elif d == "r":
+            es.append(("c", _fmt_radix(take(), 8 if num is None else num, False)))
+        elif d == "R":
+            es.append(("c", _fmt_radix(take(), 8 if num is None else num, True)))
+        elif d == "n":
+            if es:
+                emit_cell(tab, tab, es)
+            out.append("\n" * (1 if num is None else num))
+            tab, es = 0, []
+        elif d == "|":
+            if num is None:
+                new_tab = tab + content_width(es)
+            else:
+                new_tab = num
+            if es:
+                emit_cell(tab, new_tab, es)
+            tab, es = new_tab, []
+        elif d == "+":
+            new_tab = tab + nm
+            if es:
+                emit_cell(tab, new_tab, es)
+            tab, es = new_tab, []
+        else:
+            if not had_args:
+                raise LogicException(
+                    domain_error("non_empty_list", [], _FMT_CTX))
+            raise LogicException(domain_error("format_string", rest, _FMT_CTX))
+        i = j + 1
+    if args:
+        raise LogicException(domain_error("empty_list", args, _FMT_CTX))
+    if es:
+        emit_cell(tab, tab, es)
+    return "".join(out)
+
+
+@_builtin("format", 2)
+def _format__2(fs, args, trail, k):
+    """format(Format, Arguments) -- Scryer's ``library(format)``: print
+    *Arguments* under the directives of *Format* (a string, char or code
+    list, or atom).  See ``format_to_text`` for the directives; it did not
+    exist before (``existence_error(procedure, format/2)``)."""
+    text = format_to_text(fs, args)
+    _sys.stdout.write(text)
+    _sys.stdout.flush()
+    yield None
+
+
+@_builtin("format", 1)
+def _format__1(fs, trail, k):
+    """format(Format) -- ``format(Format, [])``."""
+    text = format_to_text(fs, [])
+    _sys.stdout.write(text)
+    _sys.stdout.flush()
     yield None
