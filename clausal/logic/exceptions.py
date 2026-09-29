@@ -252,7 +252,12 @@ def python_error_term(exc: Exception) -> tuple:
         # it on every path.  No culprit indicator is known here, so the
         # context is unbound (as Scryer's library errors leave it) and the
         # message is the prose.
-        return system_error("units_mismatch", str(exc))
+        # Built directly rather than through ``system_error``'s text
+        # context, which would read a message that happened to start
+        # ``name/N: `` as a culprit indicator.
+        return _with_prose(
+            ("error", ("system_error", mint("units_mismatch")), Var()),
+            str(exc))
     return (type(exc).__name__, str(exc))
 
 

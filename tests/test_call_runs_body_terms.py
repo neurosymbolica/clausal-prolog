@@ -568,15 +568,17 @@ def test_phrase_of_a_list_or_string_is_its_terminals(host, arity):
     terminal-2026-09-25.md; it used to FAIL silently)."""
     from clausal.logic.cells import chars
     from clausal.logic.solve import _deref_walk, solve
-    for rule, want in ((["a"], ["a"]), (chars("ab"), ["a", "b"])):
+    for rule, want in ((["a"], ["a"]), (chars("ab"), ["a", "b"]),
+                       (b"ab", [97, 98])):          # a code list
         L = Var()
-        goal = ("phrase", rule, L) + ((Var(),) if arity == 3 else ())
-        got = [_deref_walk(L) for _ in solve(goal, host)]
         if arity == 2:
+            got = [_deref_walk(L) for _ in solve(("phrase", rule, L), host)]
             assert got == [want]
         else:
-            [partial] = got
-            assert list(partial[:len(want)]) == want
+            # A closed Rest: L is the terminals followed by exactly it.
+            got = [_deref_walk(L)
+                   for _ in solve(("phrase", rule, L, ["z"]), host)]
+            assert got == [want + ["z"]]
 
 
 def test_phrase_terminal_bodies_match_scryer(host):
