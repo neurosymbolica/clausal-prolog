@@ -51,6 +51,12 @@ ROWS = [
     ("~ic|", ["a"], "c|"),
     ("~t~2f~10|~w", [3.14159, "x"], "      3.14x"),
     ("~`-t~30|~n", [], "-" * 30 + "\n"),
+    # Scryer's float_with_n_decimal_digits arithmetic (roborev, Medium):
+    ("~2f|", [1.005], "1.00|"),
+    ("~0f|", [2.5], "3.0|"),
+    ("~2f|", [-1.5], "-1.50|"),
+    ("~f|", [10 ** 30], "1000000000000000000000000000000.000000|"),
+    ("~a|", [[]], "[]|"),
 ]
 
 
@@ -73,6 +79,9 @@ ERRORS = [
     ("~d|", [1.0], ("type_error", "integer", 1.0)),
     ("~a|", [("f", "x")], ("type_error", "atom", ("f", "x"))),
     ("~w", "hello", ("type_error", "list", "hello")),
+    ("~f|", [float("inf")], ("evaluation_error", "undefined")),
+    ("~a|", [True], ("type_error", "atom", True)),
+    ("~*c|", [3], ("domain_error", "format_string", ["~", "*", "c", "|"])),
 ]
 
 

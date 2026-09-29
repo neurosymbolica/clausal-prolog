@@ -177,9 +177,12 @@ def _format_term_iso(val, quoted: bool, double_quotes: bool = False,
             or (isinstance(val, (int, float)) and not isinstance(val, bool))
             or (type(val) is tuple and val
                 and (type(val[0]) is str or val[0] is TUPLE_TAG))):
-        # A CELL -- ``("pt", 1, 2)`` (or a tuple-DATA cell). Slot 0 read RAW,
-        # no deref: a slot-0-Var tuple is not a legal cell (see
-        # ``clausal/logic/cells.py``) and falls through to ``str()`` below.
+        # Every TERM shape goes through the Scryer writer: atoms, strings,
+        # lists, dicts, sets, term instances, variables, Seg* partial terms,
+        # numbers and CELLS -- ``("pt", 1, 2)`` or a tuple-DATA cell, slot 0
+        # read RAW, no deref (a slot-0-Var tuple is not a legal cell, see
+        # ``clausal/logic/cells.py``).  Any other Python value -- a date, a
+        # Quantity's own spelling aside, an opaque object -- keeps ``str()``.
         return _term_write(val, quoted=quoted, double_quotes=double_quotes,
                            ignore_ops=ignore_ops, numbervars=numbervars)
     return str(val)
@@ -1073,26 +1076,37 @@ def _fmt_grouped(arg, sep, num):
 
 
 def _fmt_f(arg, num):
-    """``float_with_n_decimal_digits``: rounded half away from zero on the
-    number's own decimal value (``~1f`` of 0.15 is 0.2, as in Scryer)."""
-    from decimal import Decimal, ROUND_HALF_UP  # noqa: PLC0415
-    from fractions import Fraction  # noqa: PLC0415
+    """Scryer's ``float_with_n_decimal_digits``, arithmetic for arithmetic:
+    the fraction part times 10^N rounded half away from zero, carried into
+    the integer part at 10^N -- so ``~1f`` of 0.15 is 0.2 and ``~2f`` of
+    1.005 is 1.00, as Scryer prints them.  An integer is exact at any size;
+    an infinite or NaN value is ``evaluation_error(undefined)``."""
+    import math  # noqa: PLC0415
     from clausal.logic.exact_arith import evaluate  # noqa: PLC0415
+    from clausal.logic.exceptions import evaluation_error  # noqa: PLC0415
     a = deref(arg)
     if is_var(a):
         raise LogicException(instantiation_error("is/2"))
     v = evaluate(a, "is/2")
-    if isinstance(v, Fraction):
-        d = Decimal(v.numerator) / Decimal(v.denominator)
-    elif isinstance(v, float):
-        d = Decimal(repr(v))
+    scale = 10 ** num
+    if isinstance(v, int) and not isinstance(v, bool):
+        i, frr = v, scale
+        negative = v < 0
     else:
-        d = Decimal(v)
-    q = d.quantize(Decimal(1).scaleb(-num), rounding=ROUND_HALF_UP)
-    s = format(q, "f")
-    if num == 0:
-        s += ".0"
-    return s
+        f = float(v)
+        if math.isinf(f) or math.isnan(f):
+            raise LogicException(evaluation_error("undefined", _FMT_CTX))
+        fr = abs(f - math.trunc(f))
+        frr0 = math.floor(fr * scale + 0.5)
+        i0 = math.trunc(f)
+        if frr0 >= scale:
+            i, frr = i0 + (1 if f > 0 else -1 if f < 0 else 0), frr0
+        else:
+            i, frr = i0, frr0 + scale
+        negative = f < 0
+    head = "-0" if (i == 0 and negative and frr > scale) else str(i)
+    tail = "0" if frr == 1 else str(frr)[1:]
+    return head + "." + tail
 
 
 _RADIX_DIGITS = "0123456789abcdefghijklmnopqrstuvwxyz"
@@ -1186,6 +1200,7 @@ def format_to_text(fs, args) -> str:
             i = j
             continue
         rest = fs[i:]
+        had_args = bool(args)
         j = i + 1
         # numeric argument: digits, or ``*`` (taken from Args)
         num = None
@@ -1217,9 +1232,14 @@ def format_to_text(fs, args) -> str:
                 a = _deref_walk(take())
                 if is_var(a):
                     raise LogicException(instantiation_error("atom_chars/2"))
-                if type(a) is not str and not isinstance(a, (int, float)):
+                if _is_empty_list(a):
+                    es.append(("c", "[]"))         # nil is the atom '[]'
+                elif type(a) is str:
+                    es.append(("c", spelling(a)))
+                elif isinstance(a, (int, float)) and not isinstance(a, bool):
+                    es.append(("c", str(a)))
+                else:
                     raise LogicException(type_error("atom", a, "atom_chars/2"))
-                es.append(("c", spelling(a) if type(a) is str else str(a)))
             elif d == "i":
                 take()
             elif d == "s":
@@ -1268,7 +1288,7 @@ def format_to_text(fs, args) -> str:
                 emit_cell(tab, new_tab, es)
             tab, es = new_tab, []
         else:
-            if not args and d is not None:
+            if not had_args:
                 raise LogicException(
                     domain_error("non_empty_list", [], _FMT_CTX))
             raise LogicException(domain_error("format_string", rest, _FMT_CTX))
