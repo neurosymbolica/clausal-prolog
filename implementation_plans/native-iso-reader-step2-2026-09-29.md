@@ -254,18 +254,46 @@ control.
   natively (`lib/x` imports resolve; `set_prolog_flag(double_quotes, codes)` raises
   `permission_error`).
 
-### Slice 3: declarations and strictness
+### Slice 3: declarations (LANDED on feat/iso-reader-slice3-2026-09-30; rulings 2026-09-30)
 
-* Add the ISO declarations directive (D4), routed to the `-private`/`-module` entry logic, and
-  exported constructors (D4). Strictness follows D5 per suffix: auto-declare for plain `.pl`,
-  with the declared set **printed with its size** in a load-time info line, and strict for
-  Clausal Prolog.
-* Bare-atom entries in `use_module/2` lists (what today's exporter emits, and what a downstream
-  reader flags) follow D11.
-* **Exit:** under strict mode, an undeclared atom typo fails at load with the `.pl` line and
-  the directive to add. A declared constructor builds data. The pilot's gap 3
-  (`existence_error(procedure, attribute/2)`) cannot recur: a test holds a data functor
-  declared only by the directive.
+"Clausal Prolog aims to be a cut-free ISO Prolog", and it is **not strict**: there is no
+strict mode for `.pl`. What was built:
+
+* **Auto-declaration.** Every atom and data functor a file uses in a data position (ISO
+  7.6.2 positions, read off the reader cells, so the cache-hit path sees the same set) is
+  declared through the seam's `-private` handler, at the end of the module. The effect is
+  the import surface: the name is bound to its spelling, so a seam `-import_from(m, [red])`
+  finds it. A data term builds with or without it (L3 lowers it to a cell); a data-only
+  functor already built data natively on the base, and still does (pinned by a test).
+  A data functor is declared **by name only, with no field signature**: a signature makes it
+  a declared data functor, and `assertz` of its term would then be refused, where ISO 7.5.2
+  and `assert_creates_dynamic` create the procedure. Left out: heads, goals (including an
+  `assertz`/`retract`/`clause` target and a `call/N` closure), imported names,
+  directive-declared names, constructors, engine builtins and evaluables, and any spelling
+  that is not a lowercase non-keyword identifier. An atom entry in a `use_module/2` list is
+  a use and is declared (it still imports nothing, D11(a)).
+* **The size is one INFO line per load** on the `clausal.pl_frontend` logger
+  (`file.pl: auto-declared N names (A atoms, F data functors)`); the names at DEBUG;
+  `l3_stats["auto_declared"]` holds the counts. The engine had no load-time info channel;
+  this is the first user of `logging` there.
+* **`:- constructors([pt(x, y)]).`** is optional and only gives a data functor its field
+  names: routed to `-private`'s template entry (so `signature/3` and `unbound_keys/2` answer
+  `[x, y]`). An exported constructor is `pt/2` in the `module/2` list; a pre-scan (only of a
+  file whose text contains `constructors(`) finds the templates first, so the export reaches
+  `-module` as the template `pt(x, y)`. That is what exports a DATA functor with its fields:
+  a native or seam importer gets the spelling binding and the signature. Refused, with the
+  line: an atom entry, a `name/N` entry, a non-identifier or keyword field or name, a
+  repeated field, the same name/arity declared twice with different fields, and a
+  constructor that is also defined by clauses.
+* **Not expressible:** `vary/3` takes a dict of overrides, and ISO has no dict surface until
+  D6 is ruled, so field-name *update* has no ISO spelling. The seam's `P.x` is dict access
+  and has no cell meaning in the seam either.
+* `:- atoms([...])` is not part of the language: an unknown directive.
+* **Exit (met):** `tests/iso_l3/test_l3_s3_declarations.py` (26 tests; 25 fail on
+  f01790d2, the other pins that `atoms/1` stays unknown). A data functor used only as data, with no declaration, loads and builds data.
+  A package facade fixture (`tests/iso_l3/s3`) has a test module importing an atom from the
+  facade (`use_module(s3pkg, [class_comparison])`) and the package's exported constructor.
+  It answers the same as its seam twin, per predicate, in order.
 
 ### Slice 4: meta-predicates, all-solutions, reif, dif, the transition constructs
 
@@ -442,21 +470,17 @@ default until slice 8.
 suffix's own flip to ISO syntax is a separate, later, mechanical step: every remaining
 seam-syntax file is first renamed `.seam`, and no content sniffing is done.
 
-**D4. The ISO spelling of the declarations directive.**
-(a) Reuse `:- private([foo, pt(x, y)]).` (works today through the handler).
-(b) **`:- atoms([foo, bar]).` and `:- constructors([pt(x, y)]).`**, both routed to the same
-handler. Exported constructors appear as `pt/2` in the `module/2` export list, and their
-field names come from `constructors/1`.
-(c) One `:- declare([...])`.
-**Recommend (b).** "private" misdescribes a global-by-spelling atom, and a constructor
-template is the only place field names can live in ISO syntax. Target translators strip both
-(§11.2).
+**D4. The ISO spelling of the declarations directive.** **RULED 2026-09-30 (operator):**
+`:- constructors([pt(x, y)]).` only, and it is OPTIONAL: it exists to give a data functor
+FIELD NAMES, routed to the same handler that gives seam constructors their fields. An
+exported constructor appears as `pt/2` in the `module/2` export list and takes its field
+names from `constructors/1`. `:- atoms([...])` is NOT part of the language. (Options were
+(a) reuse `private/1`, (b) `atoms/1` + `constructors/1`, (c) one `declare/1`.)
 
-**D5. Strictness by suffix.**
-(a) Strict everywhere.
-(b) **Plain `.pl` auto-declares every atom and data functor it uses, as today's translator
-does post-C1, and prints the count. Clausal Prolog is strict (§11.2).**
-**Recommend (b).** Plain ISO files from Scryer and Trealla must load unchanged.
+**D5. Strictness by suffix.** **RULED 2026-09-30 (operator), superseding (b)'s second
+half:** Clausal Prolog (native `.pl`) is NOT strict. Every atom and data functor a file
+uses is auto-declared, with the count printed (an INFO line, see Slice 3). There is no
+strict mode for `.pl`.
 
 **D6. Dict surface.**
 (a) **Predicate forms only**: construct with `dict_pairs(D, [k-v, …])`, read with `get/3`,
@@ -499,7 +523,11 @@ the seam's qualified name. **Recommend as stated.** The adaptor's alias protocol
 emitting them.
 (b) Refuse them now.
 **Recommend (a).** Under D4(b) atoms are global by spelling, so the entry is a no-op
-declaration.
+declaration. **RULED (a) 2026-09-30:** accepted, imports nothing, counted warning kept
+(slice 2). Since slice 3 the entry also counts as a use of the atom, so it is auto-declared
+(bound to its own spelling, as a seam facade's `-import_from` of an atom binds it). Scryer
+refuses it (`syntax_error(invalid_module_declaration)`, measured), as it does a bare atom in
+a `module/2` export list, which stays refused here.
 
 **D12. `initialization/1`.** Refuse it with a clear error, or run the goal after load.
 **Recommend refuse.** A rulebase has no entry point, and a load-time side effect is outside

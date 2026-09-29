@@ -2,14 +2,17 @@
 
 Plan: ``implementation_plans/native-iso-reader-step2-2026-09-29.md`` (D1 = (c)
 hybrid: clauses are lowered HERE to the transformed AST; directives go through
-the seam's own handlers, ``iso_l3_directives``).  Scope today is slices 0-2
-and 5: facts, rules, every ISO term shape, the control constructs ``,`` ``;``
-``\\+`` ``true`` ``fail``/``false`` and ``call/N``, module-qualified goals
-``m:G``, clpq's goal ``{C}`` (lowered to the seam's ``clpq.rational(C)``), and
-the directives of ``iso_l3_directives`` (module/2, use_module/1,2, dynamic,
-discontiguous, table, meta_predicate, set_prolog_flag, op).  clpz's
-predicates need nothing here: they are engine builtins under Scryer's names
-(``clausal.logic.builtins.clpz_names``).  Whatever is
+the seam's own handlers, ``iso_l3_directives``).  Scope today is slices 0-3,
+5 and 6: facts, rules, every ISO term shape, the control constructs ``,``
+``;`` ``\\+`` ``true`` ``fail``/``false`` and ``call/N``, module-qualified
+goals ``m:G``, clpq's goal ``{C}`` (lowered to the seam's
+``clpq.rational(C)``), ``constant(Name)`` (folded at compile time), the
+directives of ``iso_l3_directives`` (module/2, use_module/1,2, dynamic,
+discontiguous, table, meta_predicate, set_prolog_flag, op, constructors, and
+the constants/units family), and the auto-declaration of every atom and data
+functor a file uses (slice 3).  clpz's predicates need nothing here: they are
+engine builtins under Scryer's names (``clausal.logic.builtins.clpz_names``).
+Whatever is
 outside that scope -- an unknown directive, ``initialization/1``, a DCG rule,
 a reader ``SyntaxIssue``, and by design ``!``, ``->`` and ``*->`` -- is
 REFUSED, never half-handled, so a gap is a loud import error and not a
@@ -805,11 +808,14 @@ def lower_items(items, *, strict: bool = True, source: "str | None" = None,
     *source* (the ``.pl`` text the items were read from) turns spans into
     seam positions and every refusal message into a ``file:line`` one."""
     from clausal.tools.iso_l3_directives import (  # noqa: PLC0415
-        DirectiveContext, DirectiveRefused)
+        DirectiveContext, DirectiveRefused, Uses, prescan_constructors)
     positions = _Positions(source)
     where_file = filename or "<.pl>"
     ctx = DirectiveContext(source=source, filename=where_file,
                            positions=positions, op_table=op_table)
+    if source is not None:
+        ctx.prescanned = prescan_constructors(source)
+    uses = Uses()
     body: list[ast.stmt] = []
     stats = {"read": 0, "lowered": 0, "refused": 0, "skipped": 0,
              "directives": 0, "refusals": []}
@@ -850,6 +856,7 @@ def lower_items(items, *, strict: bool = True, source: "str | None" = None,
                    f"`?-` is no clause): {it.term!r}", span)
             continue
         defined.add(_head_indicator(it.term))
+        uses.clause(it.term)
         if directives_only:
             # The clause is not lowered, but the double_quotes modes its
             # literals were read under are module-item facts (the cross-mode
@@ -876,6 +883,14 @@ def lower_items(items, *, strict: bool = True, source: "str | None" = None,
         refuse(*clash)
     if ctx.dead_stmts or ctx.dropped_keys:
         body = _drop_removed_imports(body, ctx)
+    try:
+        body.extend(ctx.auto_declare(uses))
+    except DirectiveRefused as e:
+        refuse(str(e), e.span)
+    stats["auto_declared"] = {
+        "atoms": len(ctx.auto_atoms),
+        "functors": len({n for n, _a in ctx.auto_functors}),
+        "functor_arities": len(ctx.auto_functors)}
     mod = ast.Module(body=body, type_ignores=[])
     ast.fix_missing_locations(mod)
     if _lowered is not None:
@@ -1038,6 +1053,28 @@ def lower_module(source: str, filename: "str | None" = None, *,
 def line_of(source: str, span) -> "int | None":
     """The 1-based ``.pl`` line of a span's start (None when unknown)."""
     return _Positions(source).line(span) if span is not None else None
+
+
+#: The logger the native front end reports load-time facts on (INFO): not a
+#: warning -- nothing is wrong -- but a denominator a reader can ask for.
+LOGGER_NAME = "clausal.pl_frontend"
+
+
+def log_auto_declared(ctx, filename: str) -> None:
+    """ONE info line per load: how many atoms and data functors the file's
+    use declared (the ruling of 2026-09-30: Clausal Prolog is not strict),
+    then, at DEBUG, the names."""
+    import logging  # noqa: PLC0415
+    log = logging.getLogger(LOGGER_NAME)
+    atoms, functors = ctx.auto_atoms, ctx.auto_functors
+    names = len({n for n, _a in functors})
+    log.info("%s: auto-declared %d names (%d atoms, %d data functors at "
+             "%d name/arity)", filename, len(atoms) + names, len(atoms),
+             names, len(functors))
+    if log.isEnabledFor(logging.DEBUG) and (atoms or functors):
+        log.debug("%s: auto-declared atoms: %s; data functors: %s", filename,
+                  ", ".join(atoms) or "-",
+                  ", ".join(f"{n}/{a}" for n, a in functors) or "-")
 
 
 def warn_singletons(singletons, source: str, filename: str) -> None:

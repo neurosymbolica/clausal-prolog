@@ -152,6 +152,15 @@ since 0.4.0 finish three moves:
   `existence_error(dict_key, Key)` on a missing key, with the subscript
   `V is D[K]`'s other errors, where `get/3` fails. It is the strict read ISO
   syntax can spell; from `.seam` it is an ordinary call.
+- **Native `.pl` front end: declarations (`CLAUSAL_PL_FRONTEND=native`).**
+  A `.pl` file is not strict: every atom and data functor it uses is
+  declared for it, so a `.seam` file can `-import_from` those names, and
+  each load logs the count as one INFO line on the `clausal.pl_frontend`
+  logger (the names at DEBUG). A data functor declared this way has no field
+  names, and `assertz` of its term still creates a dynamic procedure. The
+  optional `:- constructors([pt(x, y)]).` gives a data functor field names
+  (`signature/3`, `unbound_keys/2`). Listed as `pt/2` in `module/2`, it is
+  exported as data with those fields. There is no `atoms/1` directive.
 - **library(lambda) as builtins: `(\)/1..8`, `(^)/3..10`, `(+\)/2..9`.**
   Ulrich Neumerkel's lambdas (`maplist(\X^Y^(Y is 2*X), Xs, Ys)`,
   `Free+\X^Goal`) run through call/N with Scryer's answers: `\` copies the

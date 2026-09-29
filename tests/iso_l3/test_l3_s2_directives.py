@@ -223,16 +223,20 @@ def test_bare_atoms_in_import_lists_give_one_counted_warning_per_file(
     with warnings.catch_warnings(record=True) as got:
         warnings.simplefilter("always")
         mod = native.load("s2_bare",
-                          "a.\n:- use_module(s2p/s2plib, [cite, pair/2]).\n"
-                          ":- use_module(s2p/s2plib, [twice/2, rule]).\n"
+                          "a.\n:- use_module(s2p/s2plib, [s2_cite_atom, pair/2]).\n"
+                          ":- use_module(s2p/s2plib, [twice/2, s2_rule_atom]).\n"
                           "t(K) :- pair(K, _).\n")
     ours = [w for w in got if w.category is ClausalBareAtomImportWarning]
     assert len(ours) == 1, [str(w.message) for w in got]
     msg = str(ours[0].message)
-    assert "2 bare atom entries" in msg and "(cite, rule)" in msg, msg
+    assert "2 bare atom entries" in msg and "(s2_cite_atom, s2_rule_atom)" in msg, msg
     assert "s2_bare.pl:2" in msg
     assert ans(mod, "t") == ["a", "b"]
-    assert not mod.__dict__.get("cite")
+    # Nothing is imported from s2plib; the entry is a USE of the global atom,
+    # which slice 3 auto-declares (bound to its own spelling, as a seam
+    # facade's -import_from of an atom binds it).
+    assert mod.__dict__.get("s2_cite_atom") == "s2_cite_atom"
+    assert "s2_cite_atom" not in vars(sys.modules["s2p.s2plib"])
 
 
 # ── D12 and unknown directives ──

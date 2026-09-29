@@ -1,0 +1,2 @@
+-module(s3tw, [classify/2, pt/2, origin/1])
+-import_from(s3tw.kinds, [classify, class_comparison, pt, origin])
