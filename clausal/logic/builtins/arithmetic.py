@@ -680,6 +680,22 @@ def _between__3(low, high, x, trail, k):
         high = _eval_between_bound(high_d)
         if high is None:
             return
+    # Scryer's library(between) (must_be/can_be): an unbound bound is an
+    # instantiation error, a non-integer bound -- or a bound X that is not an
+    # integer -- a type_error(integer, _).  These used to FAIL silently
+    # (``between(1, a, X)``, ``between(_, 3, X)``).  A bool is not an
+    # integer (A09-F015).
+    from clausal.logic.exceptions import (  # noqa: PLC0415
+        LogicException, instantiation_error, type_error)
+    for bound in (deref(low), deref(high)):
+        if is_var(bound):
+            raise LogicException(instantiation_error("between/3"))
+        if not isinstance(bound, int) or isinstance(bound, bool):
+            raise LogicException(type_error("integer", bound, "between/3"))
+    x_val = deref(x)
+    if not is_var(x_val) and (not isinstance(x_val, int)
+                              or isinstance(x_val, bool)):
+        raise LogicException(type_error("integer", x_val, "between/3"))
     yield from (_between__3_c if _USE_C_ARITH else _between__3_py)(low, high, x, trail, k)
 
 @_builtin("succ", 2)

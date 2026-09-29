@@ -1284,3 +1284,99 @@ def _transpose__2(matrix, transposed, trail, k):
     result = [list(col) for col in zip(*rows)]
     if unify(transposed, result, trail):
         yield None
+
+
+# ── nth0/3, nth1/3, nth0/4, nth1/4 (Scryer's library(lists)) ─────────────────
+#
+# They did not exist (existence_error(procedure, nth0/3)).  Semantics are
+# Scryer's: an integer index selects (and a proper list that is too short
+# fails), an unbound index enumerates from the base, a non-integer index is
+# type_error(integer, N) and a negative one domain_error(not_less_than_zero,
+# N).  With the list unbound or partial and the index bound, the list is
+# built out to that position (``nth1(1, L, x, [y])`` gives ``L = [x, y]``).
+
+
+def _nth_index_check(n_val, who):
+    if is_var(n_val):
+        return
+    from clausal.logic.exceptions import (  # noqa: PLC0415
+        LogicException, domain_error, type_error)
+    if not isinstance(n_val, int) or isinstance(n_val, bool):
+        raise LogicException(type_error("integer", n_val, who))
+    if n_val < 0:
+        raise LogicException(domain_error("not_less_than_zero", n_val, who))
+
+
+def _nth_solutions(base, index, lst, elem, rest, trail, who):
+    """Yield once per solution of nthB(Index, List, Elem[, Rest])."""
+    n_val = deref(index)
+    _nth_index_check(n_val, who)
+    lst_val = deref(lst)
+    items = _as_items(lst_val)
+    if items is None:
+        skeleton = _open_skeleton(lst_val)
+        if skeleton is None or is_var(n_val):
+            return      # not a list, or enumerating an open list: fail
+        prefix, tail = skeleton
+        pos = n_val - base
+        if pos < 0:
+            return
+        mark = trail.mark()
+        if pos < len(prefix):
+            ok = unify(elem, prefix[pos], trail)
+            if ok and rest is not None:
+                ok = unify(rest, _partial(list(prefix[:pos]) + list(prefix[pos + 1:]),
+                                          tail), trail)
+        else:
+            fresh = [Var() for _ in range(pos - len(prefix))]
+            shared = Var()
+            ok = unify(tail, _partial(fresh + [elem], shared), trail)
+            if ok and rest is not None:
+                ok = unify(rest, _partial(list(prefix) + fresh, shared), trail)
+        if ok:
+            yield None
+        trail.undo(mark)
+        return
+    if is_var(n_val):
+        indices = range(len(items))
+    else:
+        pos = n_val - base
+        if pos < 0 or pos >= len(items):
+            return
+        indices = (pos,)
+    for i in indices:
+        mark = trail.mark()
+        ok = unify(elem, items[i], trail)
+        if ok and is_var(n_val):
+            ok = unify(index, i + base, trail)
+        if ok and rest is not None:
+            ok = unify(rest, list(items[:i]) + list(items[i + 1:]), trail)
+        if ok:
+            yield None
+        trail.undo(mark)
+
+
+def _nth_builtin(base, arity):
+    name = f"nth{base}"
+    who = f"{name}/{arity}"
+
+    if arity == 3:
+        def fn(this_generator, _proceed, _fail, _catcher, index, lst, elem, trail):
+            for _ in _nth_solutions(base, index, lst, elem, None, trail, who):
+                yield (_proceed, None)
+            yield (_fail, DONE)
+    else:
+        def fn(this_generator, _proceed, _fail, _catcher, index, lst, elem, rest, trail):
+            for _ in _nth_solutions(base, index, lst, elem, rest, trail, who):
+                yield (_proceed, None)
+            yield (_fail, DONE)
+    fn.__name__ = f"_{name}__{arity}"
+    fn.__doc__ = (f"{name}(Index, List, Elem{', Rest' if arity == 4 else ''}) "
+                  f"-- Scryer's library(lists), {base}-based.")
+    return _trampoline_builtin(name, arity)(fn)
+
+
+_nth0__3 = _nth_builtin(0, 3)
+_nth1__3 = _nth_builtin(1, 3)
+_nth0__4 = _nth_builtin(0, 4)
+_nth1__4 = _nth_builtin(1, 4)
