@@ -128,7 +128,29 @@ quad(X, Y) :- double(X, T), double(T, Y).
 
 The `use_module` with an explicit import list is the recommended form — it
 maps directly to Clausal's `-import_from` directive, which injects the
-imported predicates into the calling module's namespace.
+imported predicates into the calling module's namespace. `use_module/1`
+imports every predicate the `.pl` module's `module/2` directive exports
+(`-import_module` plus an `-import_from` of that list); for a `.clausal` or
+`.seam` module it is `-import_module`, whose predicates are reached
+qualified.
+
+### Module paths
+
+A module is named by an atom (`helpers`), a quoted or unquoted path
+(`'sub/helpers'`, `sub/helpers`, `'../shared/helpers'`, with or without a
+`.pl` suffix), or `library(Name)`. As in Scryer, a path is resolved against
+the **importing file's own directory** first; the file found there is
+imported under its dotted module name (relative to the importer's package
+root, or else to a `sys.path` entry). A path with no such file beside the
+importer is read as a dotted module on `sys.path` (`a/b` is `a.b`), which is
+how a bare name has always been resolved.
+
+A module spec that names no importable module — a variable, a compound that
+is not an `a/b` path, `'../../x'` with no such file and no dotted reading, or
+a file outside every `sys.path` entry — is a load-time `SyntaxError` that
+names the directive and its line. Until 2026-09-29 an unquoted `a/b` path
+became a comment and the import vanished, and a quoted one failed with
+"argument must be a dotted module path".
 
 ### Library imports
 
@@ -142,6 +164,12 @@ Standard Prolog library imports are mapped to Clausal built-in modules:
 | `:- use_module(library(tabling), [...])` | `-import_from(clausal.logic.tabling, [...])` |
 | `:- use_module(library(lists))` | *(built-in — no import needed)* |
 | `:- use_module(library(apply))` | *(built-in — no import needed)* |
+| `:- use_module(library(L))`, L one of `dif`, `between`, `error`, `pairs`, `when`, `freeze`, `iso_ext` | *(built-in — no import needed)* |
+| `:- use_module(library(L), [...])`, every listed name an engine builtin | *(built-in — no import needed)* |
+
+Any other `library(Name)` is read as the module `Name` (a missing one is an
+`ImportError` at load). A predicate of a built-in library that the engine
+lacks raises the ISO `existence_error` when it is called.
 
 ---
 
@@ -313,6 +341,10 @@ SyntaxError: Cannot import foo.pl: Cut (!/0) cannot be translated to Clausal.
 | Translation error | Unsupported construct (cut, if-then-else) | `SyntaxError` |
 | Encoding error | Non-UTF-8 `.pl` file | `SyntaxError` |
 | Import error | Missing module in `use_module` | `ImportError` |
+| Unmappable module spec | `use_module(M)`, a path with no module | `SyntaxError` naming the directive and line |
+
+A translation error names the `.pl` line it comes from
+(`Cannot import foo.pl: line 12: Cut (!/0) ...`).
 
 ---
 

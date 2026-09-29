@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import json
 import keyword
+import os
+import sys
 from pathlib import Path
 
 
@@ -91,6 +93,67 @@ _REVERSE_ARITY_OVERRIDES: dict[tuple[str, int], str] = {
     # Clausal's catch_error/2, so the round trip brings it back.
     ("catch", 2): "catch_error",
 }
+
+
+def _slash_path(term) -> str | None:
+    """``a``, ``'a/b'`` or ``a/b/c`` (the ``/``/2 compound) as the path
+    string ``a/b/c``; None for anything else."""
+    if isinstance(term, PAtom):
+        return term.name
+    if (isinstance(term, PCompound) and term.functor == "/"
+            and len(term.args) == 2):
+        left, right = _slash_path(term.args[0]), _slash_path(term.args[1])
+        if left is not None and right is not None:
+            return f"{left}/{right}"
+    return None
+
+
+def _plain_term(term) -> str:
+    """A Prolog-ish rendering of *term* for an error message."""
+    if isinstance(term, PAtom):
+        return term.name
+    if isinstance(term, PVar):
+        return term.name
+    if isinstance(term, PNumber):
+        return repr(term.value)
+    if isinstance(term, PString):
+        return '"' + term.value + '"'
+    if isinstance(term, PList):
+        inner = ", ".join(_plain_term(e) for e in term.elements)
+        if term.tail is not None:
+            inner += "|" + _plain_term(term.tail)
+        return f"[{inner}]"
+    if isinstance(term, PCompound):
+        if term.functor == "/" and len(term.args) == 2:
+            return f"{_plain_term(term.args[0])}/{_plain_term(term.args[1])}"
+        return (f"{term.functor}("
+                + ", ".join(_plain_term(a) for a in term.args) + ")")
+    return str(term)
+
+
+def _module_file_exists(cand: str) -> bool:
+    return (os.path.isdir(cand)
+            or any(os.path.isfile(cand + ext)
+                   for ext in (".pl", ".clausal", ".seam", ".py")))
+
+
+def _names_all_native(term) -> bool:
+    """True when *term* is a non-empty import list every name of which the
+    engine runs natively (after the builtin rename map)."""
+    if not isinstance(term, PList) or not term.elements or term.tail:
+        return False
+    for e in term.elements:
+        if isinstance(e, PCompound) and e.functor == "/" and len(e.args) == 2 \
+                and isinstance(e.args[0], PAtom):
+            name = e.args[0].name
+        elif isinstance(e, PAtom):
+            name = e.name
+        else:
+            return False
+        name = _reverse_builtin_map().get(name, name)
+        if not _engine_has_goal(name):
+            return False
+    return True
 
 
 def _has_elements(term) -> bool:
@@ -252,15 +315,30 @@ _LIBRARY_TO_MODULE: dict[str, str] = {
     "clpz": "clausal.logic.clpfd",
     "clpb": "clausal.logic.clpb",
     "tabling": "clausal.logic.tabling",
-    "lists": None,       # built-in, no import needed
-    "apply": None,       # built-in
 }
+
+#: Libraries whose predicates the engine provides natively, so importing one
+#: is a no-op, not a loss (2026-09-29: ``library(dif)`` became
+#: ``-import_module(dif)``, "No module named 'dif'").  Each library's core
+#: predicates are engine builtins: lists (append/3, length/2, ...), apply
+#: (maplist, foldl, include, exclude, partition), dif (dif/2), between
+#: (between/3, numlist/3), error (must_be/2, can_be/2), pairs
+#: (pairs_keys_values/3, ...), when (when/2), freeze (freeze/2), iso_ext
+#: (forall/2, call_cleanup/2, setup_call_cleanup/3).  A predicate of one of
+#: these the engine lacks is an ISO existence_error when called.  Any other
+#: library is dropped only when every name its import list gives is native.
+_BUILTIN_LIBRARIES: frozenset = frozenset({
+    "lists", "apply", "dif", "between", "error", "pairs", "when", "freeze",
+    "iso_ext",
+})
 
 
 # ── Public API ───────────────────────────────────────────────────────
 
 
-def prolog_to_clausal(source: str, *, dialect: Dialect | None = None) -> str:
+def prolog_to_clausal(source: str, *, dialect: Dialect | None = None,
+                      source_path: str | None = None,
+                      module_name: str | None = None) -> str:
     """Translate Prolog source text to clausal source text.
 
     Parameters
@@ -271,19 +349,29 @@ def prolog_to_clausal(source: str, *, dialect: Dialect | None = None) -> str:
         Dialect for operator table and name resolution.
         Defaults to Scryer's operator table (``Dialect.scryer_reader``,
         ruling R11).
+    source_path, module_name : str, optional
+        Where the file lives and the dotted name it is imported as.  A
+        relative ``use_module`` path is resolved against the file's own
+        directory, as Scryer does; without them only the dotted reading
+        (``a/b`` is the module ``a.b`` on ``sys.path``) is available.
     """
     if dialect is None:
         dialect = Dialect.scryer_reader()
     pmodule = parse(source, dialect=dialect)
-    return prolog_ast_to_clausal(pmodule, dialect=dialect)
+    return prolog_ast_to_clausal(pmodule, dialect=dialect,
+                                 source_path=source_path,
+                                 module_name=module_name)
 
 
 def prolog_ast_to_clausal(pmodule: PModule, *,
-                          dialect: Dialect | None = None) -> str:
+                          dialect: Dialect | None = None,
+                          source_path: str | None = None,
+                          module_name: str | None = None) -> str:
     """Translate a Prolog AST module to clausal source text."""
     if dialect is None:
         dialect = Dialect.scryer_reader()
-    emitter = _PrologToClausal(dialect)
+    emitter = _PrologToClausal(dialect, source_path=source_path,
+                               module_name=module_name)
     return emitter.emit_module(pmodule)
 
 
@@ -585,8 +673,12 @@ class _PrologToClausal:
     """Translates Prolog AST → clausal source text."""
 
     def __init__(self, dialect: Dialect,
-                 operator_mappings: dict[str, dict] | None = None):
+                 operator_mappings: dict[str, dict] | None = None, *,
+                 source_path: str | None = None,
+                 module_name: str | None = None):
         self._dialect = dialect
+        self._source_path = source_path
+        self._module_name = module_name
         self._user_ops = operator_mappings or {}
         self._data_atoms: set[str] = set()  # atoms used as data values
         # THE FLIP (2026-09-06-atoms-as-cells-strings §7): a Prolog
@@ -614,7 +706,15 @@ class _PrologToClausal:
         self._own_names = _own_predicate_names(pmodule)
         lines: list[str] = []
         for item in pmodule.items:
-            text = self._emit_item(item)
+            try:
+                text = self._emit_item(item)
+            except PrologTranslationError as e:
+                # Name the source line: a refusal must point at the Prolog
+                # the user wrote, not at a translation they never see.
+                line = getattr(item, "line", 0)
+                if line and not str(e).startswith("line "):
+                    raise PrologTranslationError(f"line {line}: {e}") from e
+                raise
             if text is not None:
                 lines.append(text)
         body = "\n\n".join(lines) + "\n"
@@ -930,33 +1030,57 @@ class _PrologToClausal:
         return f"-module({name}, {exports})"
 
     def _emit_use_module(self, body: PCompound) -> str:
-        """Emit :- use_module(...) as -import_from(...) or -import_module(...)."""
-        if len(body.args) == 0:
-            return f"# use_module({self._emit_term(body)})"
+        """Emit :- use_module(...) as -import_from(...) or -import_module(...).
+
+        Never a comment in place of an import (2026-09-29: an unquoted
+        ``a/b`` path became one, so the import silently vanished): a module
+        spec this cannot map to an importable module is refused, naming the
+        directive."""
+        directive = f":- {_plain_term(body)}"
+        if len(body.args) == 0 or len(body.args) > 2:
+            raise PrologTranslationError(
+                f"{directive}: use_module/{len(body.args)} is not a "
+                "use_module the translator knows (use_module/1 or /2).")
 
         lib_term = body.args[0]
-        lib_name = self._extract_library_name(lib_term)
-
-        if lib_name is not None:
-            # library(X) form — check known mapping.
-            # A None value means "built-in, no import needed".
+        if (isinstance(lib_term, PCompound) and lib_term.functor == "library"
+                and len(lib_term.args) == 1):
+            lib_name = _slash_path(lib_term.args[0])
+            if lib_name is None:
+                raise PrologTranslationError(
+                    f"{directive}: the library name is not an atom or an "
+                    "a/b path.")
+            if lib_name in _BUILTIN_LIBRARIES:
+                return f"# library({lib_name}) is built-in — no import needed"
             if lib_name in _LIBRARY_TO_MODULE:
                 clausal_mod = _LIBRARY_TO_MODULE[lib_name]
-                if clausal_mod is None:
-                    return f"# library({lib_name}) is built-in — no import needed"
+            elif len(body.args) == 2 and _names_all_native(body.args[1]):
+                return (f"# library({lib_name}): every name it imports is "
+                        "provided by the engine -- no import needed")
             else:
-                # Unknown library — use the name directly as module path.
-                clausal_mod = lib_name
-        elif isinstance(lib_term, PAtom):
-            # Bare atom: use_module(bar) or use_module('./bar')
-            # Strip leading ./ from relative paths
-            name = lib_term.name
-            if name.startswith('./') or name.startswith('.\\'):
-                name = name[2:]
-            clausal_mod = name
+                # Unknown library -- read it as a module of that name (a
+                # missing one is an import error at load).
+                clausal_mod = self._dotted_or_refuse(lib_name, directive)
         else:
-            return f"# use_module: {self._emit_term(body)}"
+            spec = _slash_path(lib_term)
+            if spec is None:
+                raise PrologTranslationError(
+                    f"{directive}: the module is not an atom, an a/b path "
+                    "or library(Name), so it names no module to import.")
+            clausal_mod = self._resolve_module_path(spec, directive)
 
+        if len(body.args) == 1:
+            # ISO-family use_module/1 imports every EXPORTED predicate,
+            # unqualified.  -import_module alone gives only qualified
+            # access (``m.p(...)``), so an unqualified call of an import
+            # failed; when the module is a .pl file its module/2 export
+            # list is read and imported by name as well.
+            exports = self._pl_exports(clausal_mod)
+            if exports:
+                self._own_names.update(exports)
+                return (f"-import_module({clausal_mod})\n"
+                        f"-import_from({clausal_mod}, [{', '.join(exports)}])")
+            return f"-import_module({clausal_mod})"
         if len(body.args) >= 2:
             # With import list
             imports = self._emit_import_list(body.args[1])
@@ -972,6 +1096,116 @@ class _PrologToClausal:
             return f"-import_from({clausal_mod}, {imports})"
         else:
             return f"-import_module({clausal_mod})"
+
+    def _resolve_module_path(self, spec: str, directive: str) -> str:
+        """The dotted module a ``use_module`` path names.
+
+        Relative to the importing file's directory first, as Scryer resolves
+        it (``'../lib'``, ``sub/lib``); a path with no such file beside the
+        importer is read as a dotted module on ``sys.path`` (``a/b`` is
+        ``a.b``), which is how a bare name has always been resolved."""
+        path = spec
+        if path.startswith("./") or path.startswith(".\\"):
+            path = path[2:]
+        if path.endswith(".pl"):
+            path = path[:-3]
+        if self._source_path:
+            base = os.path.dirname(os.path.abspath(self._source_path))
+            cand = os.path.normpath(os.path.join(base, path))
+            if _module_file_exists(cand):
+                dotted = self._dotted_for_file(cand)
+                if dotted is None:
+                    raise PrologTranslationError(
+                        f"{directive}: {spec!r} is the file {cand}, which "
+                        "no sys.path entry (nor this module's own package "
+                        "root) contains as a dotted module path, so it "
+                        "cannot be imported.")
+                return dotted
+        return self._dotted_or_refuse(path, directive, spec=spec)
+
+    def _pl_exports(self, dotted: str) -> list[str]:
+        """The predicate names a ``.pl`` module's ``module/2`` directive
+        exports, or [] when *dotted* is no ``.pl`` file with one."""
+        path = self._find_module_file(dotted)
+        if path is None or not path.endswith(".pl"):
+            return []
+        try:
+            text = Path(path).read_text(encoding="utf-8")
+            pmod = parse(text, dialect=self._dialect)
+        except Exception:  # noqa: BLE001 -- its own import reports it
+            return []
+        for item in pmod.items:
+            b = getattr(item, "body", None)
+            if (isinstance(item, PDirective) and isinstance(b, PCompound)
+                    and b.functor == "module" and len(b.args) == 2
+                    and isinstance(b.args[1], PList)):
+                names = []
+                for e in b.args[1].elements:
+                    if (isinstance(e, PCompound) and e.functor in ("/", "//")
+                            and len(e.args) == 2
+                            and isinstance(e.args[0], PAtom)
+                            and _is_plain_atom_name(e.args[0].name)
+                            and e.args[0].name not in names):
+                        names.append(e.args[0].name)
+                return names
+            if isinstance(item, (PClause, PDCGRule)):
+                break
+        return []
+
+    def _find_module_file(self, dotted: str) -> str | None:
+        parts = dotted.split(".")
+        roots = []
+        if self._source_path and self._module_name:
+            root = os.path.dirname(os.path.abspath(self._source_path))
+            for _ in range(self._module_name.count(".")):
+                root = os.path.dirname(root)
+            roots.append(root)
+        roots.extend(os.path.abspath(e or os.getcwd()) for e in sys.path
+                     if isinstance(e, str))
+        for root in roots:
+            base = os.path.join(root, *parts)
+            if os.path.isfile(base + ".pl"):
+                # a .clausal/.seam twin is what the import hook loads
+                if any(os.path.isfile(base + ext)
+                       for ext in (".clausal", ".seam")):
+                    return None
+                return base + ".pl"
+        return None
+
+    def _dotted_or_refuse(self, path: str, directive: str,
+                          spec: str | None = None) -> str:
+        parts = [p for seg in path.split("/") for p in seg.split(".")]
+        if parts and all(p.isidentifier() and not keyword.iskeyword(p)
+                         for p in parts):
+            return ".".join(parts)
+        raise PrologTranslationError(
+            f"{directive}: {spec or path!r} names no module: there is no "
+            "such file beside this one, and it is not a dotted module path "
+            "(a/b/c of plain names).")
+
+    def _dotted_for_file(self, cand: str) -> str | None:
+        """*cand* (a module path without extension) as a dotted module name:
+        relative to this module's own package root when the importer's
+        dotted name is known, else to the most specific sys.path entry."""
+        roots: list[str] = []
+        if self._source_path and self._module_name:
+            depth = self._module_name.count(".")
+            root = os.path.dirname(os.path.abspath(self._source_path))
+            for _ in range(depth):
+                root = os.path.dirname(root)
+            roots.append(root)
+        entries = sorted({os.path.abspath(e or os.getcwd()) for e in sys.path
+                          if isinstance(e, str)}, key=len, reverse=True)
+        roots.extend(entries)
+        for root in roots:
+            rel = os.path.relpath(cand, root)
+            if rel.startswith(os.pardir) or os.path.isabs(rel):
+                continue
+            parts = rel.split(os.sep)
+            if all(p.isidentifier() and not keyword.iskeyword(p)
+                   for p in parts):
+                return ".".join(parts)
+        return None
 
     def _emit_meta_directive(self, kind: str, body: PCompound) -> str:
         """Emit -dynamic(pred/N), -discontiguous(pred/N), -table(pred/N)."""
@@ -1498,15 +1732,6 @@ class _PrologToClausal:
                     items.append(self._emit_term(e))
             return "[" + ", ".join(items) + "]"
         return self._emit_term(term)
-
-    def _extract_library_name(self, term: PTerm) -> str | None:
-        """Extract library name from library(Name) term."""
-        if isinstance(term, PCompound) and term.functor == "library" and len(term.args) == 1:
-            if isinstance(term.args[0], PAtom):
-                return term.args[0].name
-        if isinstance(term, PAtom):
-            return term.name
-        return None
 
     # ── Conjunction/disjunction flattening ────────────────────────────
 

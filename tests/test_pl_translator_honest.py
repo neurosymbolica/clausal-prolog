@@ -221,3 +221,136 @@ class TestIsoEvaluableOperators:
             t(X) :- T = 2 ^ 3, T =.. [X|_].
         """)
         assert _answers(m, "t") == ["^"]
+
+
+# ── C. module paths in use_module ─────────────────────────────────────
+
+
+def _pkg(tmp_path):
+    """plhpkg/{lib1.pl, sub/{lib2.pl}} on sys.path (tmp_path)."""
+    root = tmp_path / "plhpkg"
+    (root / "sub").mkdir(parents=True)
+    (root / "__init__.py").write_text("")
+    (root / "sub" / "__init__.py").write_text("")
+    (root / "lib1.pl").write_text(
+        ":- module(lib1, [v/1]).\nv(1).\n")
+    (root / "sub" / "lib2.pl").write_text(
+        ":- module(lib2, [v/1]).\nv(2).\n")
+    return root
+
+
+def _pkg_mod(tmp_path, rel, source):
+    root = _pkg(tmp_path)
+    path = root / rel
+    path.write_text(textwrap.dedent(source))
+    name = "plhpkg." + rel[:-3].replace("/", ".")
+    return _load_prolog_module(name, str(path))
+
+
+class TestModulePaths:
+    """ISO leaves source-sink resolution to the implementation; Scryer
+    resolves a relative path against the LOADING FILE's directory
+    (measured 2026-09-29: sub/m2.pl with use_module('../lib1') loads
+    lib1.pl, and m3.pl with use_module(sub/lib2) loads sub/lib2.pl).  The
+    translator maps the resolved file to its dotted module name; a path it
+    cannot map is a load error naming the directive, never a comment."""
+
+    def test_unquoted_slash_path(self, tmp_path):
+        m = _pkg_mod(tmp_path, "m3.pl", """\
+            :- use_module(sub/lib2).
+            w(X) :- v(X).
+        """)
+        assert _answers(m, "w") == [2]
+
+    def test_quoted_slash_path(self, tmp_path):
+        m = _pkg_mod(tmp_path, "m3.pl", """\
+            :- use_module('sub/lib2').
+            w(X) :- v(X).
+        """)
+        assert _answers(m, "w") == [2]
+
+    def test_quoted_slash_path_with_import_list(self, tmp_path):
+        m = _pkg_mod(tmp_path, "m3.pl", """\
+            :- use_module('sub/lib2', [v/1]).
+            w(X) :- v(X).
+        """)
+        assert _answers(m, "w") == [2]
+
+    def test_unquoted_slash_path_with_import_list(self, tmp_path):
+        m = _pkg_mod(tmp_path, "m3.pl", """\
+            :- use_module(sub/lib2, [v/1]).
+            w(X) :- v(X).
+        """)
+        assert _answers(m, "w") == [2]
+
+    def test_relative_parent_path(self, tmp_path):
+        m = _pkg_mod(tmp_path, "sub/m2.pl", """\
+            :- use_module('../lib1', [v/1]).
+            w(X) :- v(X).
+        """)
+        assert _answers(m, "w") == [1]
+
+    def test_dotted_sys_path_fallback(self, tmp_path):
+        # no plhpkg/sub/plhpkg/lib1.pl beside the file: the path is read as
+        # the dotted module plhpkg.lib1 on sys.path, as a bare name is
+        m = _pkg_mod(tmp_path, "sub/m4.pl", """\
+            :- use_module(plhpkg/lib1).
+            w(X) :- v(X).
+        """)
+        assert _answers(m, "w") == [1]
+
+    def test_pl_suffix(self, tmp_path):
+        m = _pkg_mod(tmp_path, "m3.pl", """\
+            :- use_module('sub/lib2.pl').
+            w(X) :- v(X).
+        """)
+        assert _answers(m, "w") == [2]
+
+    def test_unresolvable_path_names_directive_and_line(self, tmp_path):
+        with pytest.raises(SyntaxError,
+                           match=r"line 2.*use_module.*\.\./\.\./nowhere"):
+            _pkg_mod(tmp_path, "m5.pl", """\
+                w(1).
+                :- use_module('../../nowhere').
+            """)
+
+    def test_variable_path_is_refused(self, tmp_path):
+        with pytest.raises(SyntaxError, match=r"line 1.*use_module"):
+            _load(tmp_path, "varpath", ":- use_module(M).\n")
+
+
+class TestNativeLibraries:
+    """A library the engine provides natively is a no-op import (Scryer's
+    library(dif) is dif/2, which is an engine builtin)."""
+
+    def test_library_dif(self, tmp_path):
+        m = _load(tmp_path, "libdif", """\
+            :- use_module(library(dif)).
+            t(X) :- dif(X, 1), X = 2.
+        """)
+        assert _answers(m, "t") == [2]
+
+    def test_library_dif_with_list(self, tmp_path):
+        m = _load(tmp_path, "libdif2", """\
+            :- use_module(library(dif), [dif/2]).
+            t(X) :- dif(X, 1), X = 2.
+        """)
+        assert _answers(m, "t") == [2]
+
+    def test_library_between(self, tmp_path):
+        m = _load(tmp_path, "libbetween", """\
+            :- use_module(library(between), [between/3]).
+            t(X) :- between(1, 2, X).
+        """)
+        assert _answers(m, "t") == [1, 2]
+
+    def test_use_module_1_imports_the_exports(self, tmp_path):
+        # use_module/1 imports every exported predicate, unqualified (it was
+        # -import_module alone, which gives only qualified access)
+        (tmp_path / f"{_PREFIX}um_lib.pl").write_text(
+            f":- module({_PREFIX}um_lib, [v/1]).\nv(3).\n")
+        m = _load(tmp_path, "um_user", f"""\
+            :- use_module({_PREFIX}um_lib).
+            w(X) :- v(X).
+        """)
+        assert _answers(m, "w") == [3]

@@ -89,22 +89,34 @@ class PClause:
     """head :- body.  (body=None for facts)"""
     head: PTerm
     body: PTerm | None = None
+    #: 1-based source line the item starts on (0: unknown).  Not part of
+    #: the item's identity, so two items that differ only here compare equal.
+    line: int = field(default=0, compare=False)
 
 @dataclass(frozen=True, slots=True)
 class PDCGRule:
     """head --> body."""
     head: PTerm
     body: PTerm
+    #: 1-based source line the item starts on (0: unknown).  Not part of
+    #: the item's identity, so two items that differ only here compare equal.
+    line: int = field(default=0, compare=False)
 
 @dataclass(frozen=True, slots=True)
 class PDirective:
     """:- directive."""
     body: PTerm
+    #: 1-based source line the item starts on (0: unknown).  Not part of
+    #: the item's identity, so two items that differ only here compare equal.
+    line: int = field(default=0, compare=False)
 
 @dataclass(frozen=True, slots=True)
 class PQuery:
     """?- query."""
     body: PTerm
+    #: 1-based source line the item starts on (0: unknown).  Not part of
+    #: the item's identity, so two items that differ only here compare equal.
+    line: int = field(default=0, compare=False)
 
 
 @dataclass(frozen=True, slots=True)

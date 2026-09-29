@@ -132,9 +132,10 @@ class PrologParser:
 
     def _parse_item(self) -> PItem:
         """Parse one clause, directive, or query, consuming the trailing '.'."""
+        line = self._peek().line
         term = self._parse_term(1200)
         self._expect(TokenType.DOT)
-        return self._classify_item(term)
+        return dataclasses.replace(self._classify_item(term), line=line)
 
     def _classify_item(self, term: PTerm) -> PItem:
         """Classify a top-level term as clause, directive, DCG rule, or query."""
