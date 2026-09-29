@@ -1,0 +1,2 @@
+-module(cur, [euro, price/1])
+price(euro),
