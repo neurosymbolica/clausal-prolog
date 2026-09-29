@@ -64,7 +64,7 @@ disagrees with it.
   re-exported functor has no local clause head.
 * Load sweep of the full corpus: identical OK/ERR outcome on both trees (same
   pre-existing environmental failure count), including both changed files.
-* All domain test files in the corpus run through `python -m clausal.testing`:
+* All domain test files in downstream code run through `python -m clausal.testing`:
   byte-identical results on both trees (same pass/fail split; the failures
   are pre-existing and environmental).
 

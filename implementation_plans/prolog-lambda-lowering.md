@@ -273,8 +273,8 @@ this table agree.
 
 **The operator's hypothesis is confirmed, and more strongly than stated: four in five
 refused sites are redundant eta-expansions** — 317 of 390, 81.3 %. The library is more extreme
-than the corpus: 133 of 144 library sites (92.4 %) are class (a), against 184 of 246 (74.8 %)
-in the corpus.
+than downstream code: 133 of 144 library sites (92.4 %) are class (a), against 184 of 246 (74.8 %)
+in downstream code.
 
 Class (c), by reason (census stdout):
 
@@ -340,7 +340,7 @@ separately-testable widening.
 **16 of the 390 sites pass their lambda to an engine builtin** — `include/3` (6),
 `max_by/3` (5), `min_by/3` (2), `call_goal/5` (2), `call_goal/3` (1). The other **374 pass
 it to a library predicate** (`<downstream-library>`, `<downstream-library>`, `<downstream-library>`,
-`optimization_lib`, the planner libraries), each of which is itself exported as a `.pl`.
+`<downstream-library>`, the planner libraries), each of which is itself exported as a `.pl`.
 That ratio decides the shape of the remedy: this is overwhelmingly a *library-library
 meta-call* problem, not a *builtin* problem.
 
@@ -411,10 +411,10 @@ domains (22 of the 23 are `queries.clausal` or `tests/test_queries.clausal`), 4 
    corpus b=2 c=0  <downstream-domain>.clausal
    corpus b=0 c=3  <downstream-domain>.clausal
    corpus b=0 c=1  th/visa/queries.clausal
-   library    b=0 c=2  optimization_lib.clausal
+   library    b=0 c=2  <downstream-library>.clausal
    library    b=0 c=3  <downstream-library>.clausal
    library    b=0 c=3  tests/test_kit_gap_wave2.clausal
-   library    b=0 c=2  tests/test_validate_props.clausal
+   library    b=0 c=2  <downstream-library-test>
 ```
 
 *(Paths abbreviated to the repo-relative form; the census prints them absolute under
@@ -427,7 +427,7 @@ Three things this list says that the aggregate does not:
   surfaces (`flip_scan`, `bisect_flip`, `what_if_nth`, `aggregate_over`), not the normative
   rule files. A domain whose `queries.clausal` stays refused still exports its rules; it
   loses its boundary-probe and minimal-cause surface. That is a smaller loss than
-  "21 domains blocked", and the distinction should not be lost when the deferral is scored.
+  "several domains blocked", and the distinction should not be lost when the deferral is scored.
 - **Only 6 of the 27 involve class (b) at all**, and 3 of those 6 also carry class (c). So
   teaching the engine `call_goal/N` partial application (§4.2) would unblock at most
   **3 files on its own** — `<downstream-domain>.clausal`,
@@ -435,12 +435,12 @@ Three things this list says that the aggregate does not:
   `<downstream-domain>.clausal`. Class (c) lifting is
   where the residual actually lives: it alone would unblock 24 of the 27.
 - **Two of the four library files are libraries** — `<downstream-library>.clausal` (3 class-(c)
-  sites) and `optimization_lib.clausal` (2). A library library that will not translate blocks
+  sites) and `<downstream-library>.clausal` (2). A library library that will not translate blocks
   every domain importing it at G2/G3 regardless of that domain's own cleanliness, so these
   two are worth more than their file count. `<downstream-library>` is the host of
   `flip_scan` / `bisect_flip` / `what_if`, i.e. of most of the 27.
 
-The honest summary of the deferral: **27 files, 22 corpus domains' query surfaces, and two
+The honest summary of the deferral: **27 files, 22 downstream domains' query surfaces, and two
 library libraries stay refused**, and the class-(c) half is 24 of the 27.
 
 ---
@@ -595,7 +595,7 @@ the 116 of 317 class-(a) sites whose callee is not defined in the same file (201
 engine imposes no qualification requirement. Scryer does (§3.2), and that is the whole
 difficulty.
 
-**Option A1 — respell the corpus and library source; emit `meta_predicate` from the
+**Option A1 — respell downstream code and library source; emit `meta_predicate` from the
 exporter.**
 
 `((ID, PR, S, C) <- aml_ctf_requirement(ID, PR, S, C))` becomes `aml_ctf_requirement`, in
@@ -608,7 +608,7 @@ exporter.**
 - *Cost:* 317 source edits in `<downstream-corpus>` and
   `<downstream-trunk>/library`, plus one directive per exported higher-order
   library predicate. Not an engine change at all, except for the directive emission. Per the
-  standing note, library edits must be validated against the corpus's own Clausal test suites
+  standing note, library edits must be validated against downstream code's own Clausal test suites
   and checked against library consumers in the six sibling repos before landing.
 - *Benefit:* 47 files (40 corpus, 7 library) go clean under strict (§2.4).
 - *Risk:* the per-host caveat of §2.3 — a host that structurally inspects its closure
@@ -1041,7 +1041,7 @@ note/refactor". So each remedy has to be scored on whether it survives.
 
 | remedy | survives the refactor? | why |
 |---|---|---|
-| §4.1 A1 — source eta-reduction of 317 sites | **yes, entirely** | it deletes a construct from the source. Any front end over that source sees a bare predicate reference. It also aligns the corpus with the engine's own `unnecessary_lambda` rule, which is a source-quality win independent of ISO. |
+| §4.1 A1 — source eta-reduction of 317 sites | **yes, entirely** | it deletes a construct from the source. Any front end over that source sees a bare predicate reference. It also aligns downstream code with the engine's own `unnecessary_lambda` rule, which is a source-quality win independent of ISO. |
 | §3.3 — `meta_predicate` emission | **yes** | it is a fact about ISO module semantics, not about the Clausal surface. Whatever the front end, an exported higher-order predicate needs it. |
 | §5 — `clausal_hof.pl` companion | **yes** | Scryer will still lack `include/3`. |
 | §6 — `_detect_arrow` alignment | **mostly throwaway** | the refactor's ISO surface will not carry the `<-` / `< -` spacing ambiguity at all. But it is ~10 lines, it closes a latent hole today, and it removes a second copy of an engine rule — worth doing on those grounds, not on durability. |
@@ -1095,8 +1095,8 @@ classes (b) and (c) refused until the refactor.** In order:
    the engine), class (c)'s lifting (converter surgery against a converter the refactor
    replaces), and translator-side eta-reduction (a duplicate of an engine rule). All 72
    sites stay refused, which is today's behaviour and the honest one — **at the cost named
-   in §2.5: 27 files, being 22 corpus domains' `queries.clausal` surfaces plus two library
-   libraries (`<downstream-library>`, `optimization_lib`), stay refused for a (b)/(c) lambda
+   in §2.5: 27 files, being 22 downstream domains' `queries.clausal` surfaces plus two library
+   libraries (`<downstream-library>`, `<downstream-library>`), stay refused for a (b)/(c) lambda
    and nothing else.** 24 of the 27 turn on class (c) alone, so if the operator wants to
    buy some of that back before the refactor, class-(c) lifting is the purchase and
    class-(b) `call/N` (3 files) is not.
@@ -1123,7 +1123,7 @@ without a corresponding `meta_predicate` declaration (§3.2 — it raises).
 | the translator's clause-level `_detect_arrow` does no adjacency check | refusal work | **confirmed**, with the emission measured (`X < -1` → `_X :- 1.`) — and **0 live instances** across all 9,608 top-level `Compare` statements in the two trees (§6 states the scan's method and denominators) |
 | lambda lifting can emit aux clauses next to their host | — | **would fire the `:- discontiguous` post-pass** (`clausal_to_prolog.py:486-528`); aux clauses must be blocked at the module end (§4.3) |
 | the Python-AST transliteration of "is a raw `Lambda` node" is faithful | §2.1, first draft | **one site wide** — it omits `_is_logic_var_name`, so the mixed-case head at `library/repros/callgoal_imported_lambda_repro.clausal:28` classifies as (a) though the engine reifies it as a `Predicate`. Engine-faithful class (a) is **317, not 318** (§2.2 footnote) |
-| deferring classes (b) and (c) is free, since they are already refused | implied by §7 | **has a named cost** — 27 files stay refused for a (b)/(c) lambda and nothing else: 22 corpus domains' query surfaces plus `<downstream-library>` and `optimization_lib`; 24 of the 27 are class (c) alone (§2.5) |
+| deferring classes (b) and (c) is free, since they are already refused | implied by §7 | **has a named cost** — 27 files stay refused for a (b)/(c) lambda and nothing else: 22 downstream domains' query surfaces plus `<downstream-library>` and `<downstream-library>`; 24 of the 27 are class (c) alone (§2.5) |
 | a lifted aux must be exported to be reachable | — | **false** — a non-exported aux resolves both via a `meta_predicate` host and via `Module:aux` (§3.3) |
 
 ---
@@ -1267,7 +1267,7 @@ mk(D, X, Y, T) <- (T is host(D, X, Y))
 
 — gives `D` a mode, and the emitted directive makes Scryer module-qualify an ordinary
 data argument at every call site. Measured: the caller passes `foo`, gets back
-`m:foo`, and a later `X == foo` **fails with no error anywhere**. Latent in the corpus
+`m:foo`, and a later `X == foo` **fails with no error anywhere**. Latent in downstream code
 today (every live hit is goal-position) and unguardable after the fact, so it is fenced
 at the source.
 
@@ -1378,7 +1378,7 @@ and the complement of its `Free/` marker (which opts back into true sharing).
 yall's default from first principles rather than from the library — a strong
 signal the rule is the right one. The one capability it forgoes is
 **bind-and-return-through-a-capture** (the accumulator / shared-logic-variable
-idiom) — which is precisely what `Free/` exists to allow, and which the corpus
+idiom) — which is precisely what `Free/` exists to allow, and which downstream code
 does not use (its closures are passed to HOFs, never used as inline partial
 goals that contribute bindings back).
 
@@ -1407,7 +1407,7 @@ proposal, so a lift of that shape must `copy_term` per call or be refused.
 **Today there is no export risk either way:** the export refuses every case
 where the two semantics are observable — unbound captures live only in class-b
 (constant/positional, refused) and class-c (refused pending the refactor); every
-class-a site (Phase C) captures nothing, and the corpus's class-b/c captures are
+class-a site (Phase C) captures nothing, and downstream code's class-b/c captures are
 ground constants or ground query inputs, where sharing and copy are identical.
 
 ### Open items before ratification

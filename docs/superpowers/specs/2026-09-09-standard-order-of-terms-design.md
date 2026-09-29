@@ -7,7 +7,7 @@ designates these predicates as the answer to the `type_error(evaluable, date/3)`
 
 ## 1. Why
 
-`feat/iso-compare-builtins-2026-09-09` (landed, main `46712278`) gave the corpus ISO
+`feat/iso-compare-builtins-2026-09-09` (landed, main `46712278`) gave downstream code ISO
 spellings for arithmetic comparison, unification and identity. It deliberately did NOT
 deliver standard-order comparison, so a date-comparing site still has no correct spelling
 to migrate to and five G3-only-red domains remain blocked. This spec closes that.

@@ -2,7 +2,7 @@
 
 **Filed** 2026-09-10, engine lane, at the landing of
 `feat/titlecase-is-an-error-2026-09-10` (e0460d12).
-**Owner** the export lane, by agreement — see "Sequencing" below.
+**Owner** a downstream exporter, by agreement — see "Sequencing" below.
 
 ## What
 
@@ -19,19 +19,19 @@ Neither is a call site. The `.pl` importer stopped PascalCasing predicate
 names in this branch — names now cross unchanged, because a TitleCase
 identifier in a Clausal position is a load-time error, so a name the function
 produced could not load. Its sibling `pascal_to_snake` IS still live: the
-export direction still calls it, and the export lane confirmed their repo
+export direction still calls it, and a downstream exporter confirmed their repo
 imports `pascal_to_snake` only.
 
 ## Why it is not already done
 
 Removing a name from `clausal_to_prolog.__all__` is an export-surface change.
-The export lane asked for it not to ride in the same window as their `.seam`
+A downstream exporter asked for it not to ride in the same window as their `.seam`
 rename sweep, where a new failure would have two candidate causes. That is the
 whole reason this is a todo and not a commit.
 
 ## Exit criterion
 
-The export lane's `.seam` rename sweep has landed and been verified. Then:
+A downstream exporter's `.seam` rename sweep has landed and been verified. Then:
 delete `snake_to_pascal` from `prolog_dialect.py`, its import in
 `clausal_to_prolog.py:39`, and its `__all__` entry at :49.
 

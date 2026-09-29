@@ -54,12 +54,12 @@ Full spec: `docs/superpowers/specs/2026-09-14-retire-predicatemeta-section4-answ
    allow.
 2. **`Quantity`** was named in no ruling. Same shape of question as `Decimal`, plausibly
    `('quantity', <magnitude>, <unit>)`, but units are live corpus vocabulary. Do not assume.
-3. **The oracle gate has NOT been run on any of this.** Engine-green is a different claim from
+3. **The downstream answer-set gate has NOT been run on any of this.** Engine-green is a different claim from
    corpus-answers-unchanged, and dates and money are live corpus vocabulary. Ask
-   the harness lane for the 28 sealed answer-set scorers before promoting anything here.
+   a downstream checker for the downstream answer-set checks before promoting anything here.
 4. **Named-zone narrowing.** A tz-aware datetime now carries its UTC offset in minutes, so a
    `ZoneInfo` reduces to its offset AT THAT INSTANT and DST-crossing arithmetic would differ from
-   Python's. Exact for fixed offsets (`timezone.utc`, `now_utc/1`). Revisit if the corpus needs
+   Python's. Exact for fixed offsets (`timezone.utc`, `now_utc/1`). Revisit if downstream code needs
    DST-correct arithmetic.
 
 ---
@@ -118,9 +118,9 @@ See [[instruments-that-fail-open]] — running count is now 12.
 
 ---
 
-# ADDENDUM — the oracle gate ran, went red, and the fix is ruled
+# ADDENDUM — the downstream answer-set gate ran, went red, and the fix is ruled
 
-Written after the handoff above; it supersedes that section's "oracle gate has NOT been run".
+Written after the handoff above; it supersedes that section's "downstream answer-set gate has NOT been run".
 
 ## The canary caught what my corpus sweep could not
 
@@ -128,38 +128,38 @@ Written after the handoff above; it supersedes that section's "oracle gate has N
              NotImplementedError: term_to_ast_expr: unsupported term type date
     canonical, same domain, same minute          341/341, EXIT=0
 
-**My claim "the corpus cost is zero" for dates was wrong, and precisely how matters.** I swept
-the corpus tree (787 .clausal, 88 .seam, 263 .py), found nothing importing
-`py.datetime` from code, and reported it as a fact about "the corpus". The DOWNSTREAM CALLER BODIES are
+**My claim "downstream code cost is zero" for dates was wrong, and precisely how matters.** I swept
+the downstream tree (its `.clausal`, `.seam` and `.py` files), found nothing importing
+`py.datetime` from code, and reported it as a fact about "downstream code". The DOWNSTREAM CALLER BODIES are
 not in that tree. They construct `datetime.date` and pass it into goals — exactly the path the
 change closed. The number was right; the CLAIM generalised across a boundary I had not measured.
 
-the harness lane named it as a shape three lanes have now hit: **the population you measured,
+A downstream checker named it as a shape three lanes have now hit: **the population you measured,
 named as the population that matters.** Recorded in [[instruments-that-fail-open]].
 
 ## Blast radius, measured and predictable
 
-the harness lane's predictor — "the body imports or constructs a `datetime`" — validated exact on
+A downstream checker's predictor — "the body imports or constructs a `datetime`" — validated exact on
 the observed data (10 predicted failures, 10 observed, 0 missed, 0 false alarms). Corpus-wide:
-**23 of 74 domains**. A fix has a number to hit.
+**23 of the roster's domains**. A fix has a number to hit.
 
-**Partial evidence on the other three changes, and it is real rather than absent.** The 8 domains
-that scored are all at their recorded numbers, including the large-case ones (`life_cycle_costing`
-17464, `espd` 2294, `shortlisting` 2217, `procedure_choice` 4716). So the tuple-tag, ordering and
+**Partial evidence on the other three changes, and it is real rather than absent.** The domains
+that scored are all at their recorded numbers, including the large-case ones (four large-case
+`<downstream-domain>`s). So the tuple-tag, ordering and
 import changes moved nothing ON THOSE EIGHT. They are untested on the 10 that could not run. Do not
 report them as gated.
 
 ## The ruling: (b) + the better error
 
 Both lanes initially argued for (a) — engine coerces a Python date at the boundary — on a cost
-asymmetry. **Both cost arguments were withdrawn after measuring.** Mine said "82 sealed bodies";
-theirs said the same; neither had measured the WORK. By AST across all 82:
+asymmetry. **Both cost arguments were withdrawn after measuring.** Mine said "the downstream bodies";
+theirs said the same; neither had measured the WORK. By AST across all of them:
 
-    date() constructions   85   across 22 domains    (54 three-scalar, 31 starred triple)
+    date() constructions   85   across several domains    (54 three-scalar, 31 starred triple)
     timedelta()            37   keyword-only
-    clock or parse calls    0   ZERO, anywhere in the 82
+    clock or parse calls    0   ZERO, anywhere in them
 
-**Not one date in any sealed body comes from a clock, a parse, or external arithmetic.** That zero
+**Not one date in any downstream body comes from a clock, a parse, or external arithmetic.** That zero
 is what decided it: the only thing that would have made coercion NECESSARY is a date arriving with
 no component form, and there is none. So (b) loses nothing, and it is the version where "the seam
 shouldn't need dates" is literally true rather than "the seam tolerates dates".
@@ -176,13 +176,13 @@ A value with a canonical term encoding gets a suggestion; one without gets the p
 that asymmetry is pinned by a test — it IS the distinction the ruling turns on. Shapes come from
 `modules.py.datetime`'s own emit table so there is one definition.
 
-LEFT, the harness lane's, gated on the operator's DIRECT word for sealed files:
+LEFT, a downstream checker's, gated on the operator's DIRECT word for downstream files:
 85 sites to the term form. 31 starred triples are `("date", *v)`; 54 scalar sites are
 `("date", y, m, d)`. **The 37 `timedelta()` calls are keyword-only and the term is positional** —
 `timedelta(days=1.5)` is `('timedelta', 1, 43200, 0)`, not `('timedelta', 1.5)`. Those want reading,
 not a sed.
 
-Then: the 28, then the full 82, with the harness lane saying which of the four changes each
+Then: the 28, then the full set, with a downstream checker saying which of the four changes each
 result does and does not cover.
 
 ---
@@ -263,7 +263,7 @@ in C over GMP — writing against the Python one means rewriting twice.
 2. `Quantity` is unruled. Same shape as `Decimal`, but units are live corpus
    vocabulary — do not assume it follows.
 3. The date migration on the HARNESS side: ruled (b) + the better error, then
-   the harness lane measured the real shape — 85 constructions vs 70 crossings
+   a downstream checker measured the real shape — 85 constructions vs 70 crossings
    in 62 wrappers, and a migration of the constructions produced a SILENT WRONG
    answer (`framework_agreements` 1413/1423). Their library changes (capability probe,
    recogniser, pass-through) are correct and uncommitted. **The cost basis has
@@ -278,16 +278,16 @@ the Database row. Verified: attribute reach, `getattr` by literal AND by variabl
 every REACH and cannot ENUMERATE** -- that is the entire distinction.
 
 Enumeration count: engine **3** (all already dispositioned "enumerate the db's rows");
-sealed bodies **ZERO** (the harness lane, by AST, calibrated 6 positive / 5 negative
+downstream bodies **ZERO** (a downstream checker, by AST, calibrated 6 positive / 5 negative
 before running). Their 164 hits are all one launcher line enumerating the harness's own
-PYTHON sibling -- 0 of 82 bodies declare a clause head, 82 of 82 export lists are empty.
+PYTHON sibling -- 0 of the downstream bodies declare a clause head, every export list is empty.
 
 **So q3 is one hook plus a `__dir__`, not ~655 site edits.**
 
 CAVEAT, and it is why `__dir__` ships WITH the hook rather than after: the zero rests on
 harness bodies declaring no predicates, which is how this batch was built, not a rule
 anyone enforces. If one ever does, that re-export line becomes a real enumeration in all
-82 launchers at once.
+the downstream launchers at once.
 
 SEQUENCING: the hook cannot fire until names leave `module_dict` (P4). Add both together.
 
@@ -296,17 +296,17 @@ SEQUENCING: the hook cannot fire until names leave `module_dict` (P4). Add both 
 **§4 q3 is not free.** I reported corpus object-shaped predicate access as ~0 and
 "the engine's own 209 sites are the whole migration". Measured: corpus `.seam`
 harnesses use `m.<predicate>(` ~200 times across 160 names, plus ~101
-`getattr(m, <var>)`. **~446 sites in the 82 SEALED BODIES alone** (the harness lane's own count: 296
+`getattr(m, <var>)`. **~446 sites in the downstream bodies alone** (a downstream checker's own count: 296
 module-attribute reaches across 245 names, 98 `getattr(m, <var>)`, 52
 `getattr(m, 'literal')` -- a shape I did not count), plus the engine's 209.
 
 Four times in one day I generalised a sweep past the file type it covered -- but the
-CAUSE is structural, not carelessness, and the harness lane named it: the sealed
-bodies are excluded from every other lane's census BY THE SEAL, so "the corpus costs
+CAUSE is structural, not carelessness, and a downstream checker named it: the downstream
+bodies are excluded from every other lane's census BY CONSTRUCTION, so "downstream code costs
 nothing" is silent about the harnesses BY CONSTRUCTION.
 
 **STANDING PROTOCOL FROM HERE: any sweep whose conclusion would cover the harnesses
-goes to the harness lane as a question.** They answer most in one AST pass. See
+goes to a downstream checker as a question.** They answer most in one AST pass. See
 [[instruments-that-fail-open]] (count 15).
 
 ## NEXT, in order
@@ -315,6 +315,6 @@ goes to the harness lane as a question.** They answer most in one AST pass. See
    by SNIPPET because line numbers drift (19 of 50 had, while the checker validated
    the canonical tree nobody edits). 4 of the 14 TIGHTEN an arity-blind test.
    `globals_env.py:550` is marked NO — re-read it now imports are planted.
-2. **The oracle gate is the instrument that matters**, not the engine suite. It
-   caught what a green suite and a corpus sweep both missed. Ask the harness lane.
+2. **The downstream answer-set gate is the instrument that matters**, not the engine suite. It
+   caught what a green suite and a corpus sweep both missed. Ask a downstream checker.
 3. `rdiv`/`decimal` arithmetic, sequenced with the CLP(Q) port.

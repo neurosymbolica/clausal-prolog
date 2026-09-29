@@ -106,7 +106,7 @@ Measured in the engine's own tests, three access shapes:
      40 occurrences / 23 files   getattr(mod, "edge")
 
 **The dominant in-tree idiom is already name+arity**, which is the shape the new design wants; the
-object-shaped access is 209 occurrences. *The corpus side is NOT measured and is the real risk.*
+object-shaped access is 209 occurrences. *Downstream code side is NOT measured and is the real risk.*
 
 From Python the class does exactly two things: it is **called as a goal**, and it is **called as a
 term constructor** (`owner.public_pred(1)` → `public_pred(arg_0=1)`, which unifies).
@@ -151,16 +151,16 @@ exact gap `io.py:589` documents as a fixed bug.
 Revised order:
 
     1. q1: plant shared rows at import; `row.db is not self` replaces `_belongs_elsewhere`.
-       Gate: the aliased-import clobber tests, and an answer-set run over a corpus domain.
+       Gate: the aliased-import clobber tests, and an answer-set run over a downstream domain.
     2. q3: bind the atom + one generic PredicateRef; migrate the 209 in-tree object-shaped
-       accesses. MEASURE THE CORPUS FIRST -- this is the only step with an unmeasured blast radius.
+       accesses. MEASURE DOWNSTREAM FIRST -- this is the only step with an unmeasured blast radius.
     3. P1's 19 actionable sites, now that db.row means what the reroute assumes.
     4. q2: record export sets. No enforcement.
     5. P2+ as the spec has them.
 
 ## 6. Not established
 
-* the corpus's object-shaped predicate access (§3) — the one unmeasured number in this document,
+* downstream code's object-shaped predicate access (§3) — the one unmeasured number in this document,
   and the one that decides whether q3 is a migration or a flag day
 * whether any module both imports and locally defines the same `(functor, arity)`, which is the
   conflict q1 moves to load time
@@ -286,7 +286,7 @@ therefore buys the cut barrier its mechanism, which is a second reason it sequen
     engine tree, tracked:   .clausal  431      .seam  0      .pl  15
 
 **Zero files have moved to `.seam`.** `.clausal` cannot take on ISO syntax while 431 engine files
-(plus the corpus, which the plan puts at 787 and which is not measured here) still hold Python-seam
+(plus downstream code, which the plan puts at 787 and which is not measured here) still hold Python-seam
 syntax under that name. The write-side flip to `.seam` is the prerequisite for everything in this
 section, and it has not started.
 
@@ -335,14 +335,14 @@ That is a separate change with its own blast radius and it is NOT part of this r
 engine and corpus code may lean on the runtime route, and that population is unmeasured. Sequence
 it after the encodings land, and gate it on a corpus answer-set run — money and dates are live
 corpus vocabulary (`decimal-currency`, the minor-units work, the date/3 predicates), so this is
-the one step in the representation change that touches values the corpus computes with.
+the one step in the representation change that touches values downstream code computes with.
 
 ## Open, and small
 
 * `Quantity` — a unit-carrying value — was not named in the ruling. It is the same shape of
   question as `Decimal` and probably the same answer (`('quantity', <magnitude term>, <unit>)`),
   but it is not ruled and should not be assumed.
-* Whether `('decimal', "10.01")` is the WRITTEN surface or only the internal encoding. The corpus
+* Whether `('decimal', "10.01")` is the WRITTEN surface or only the internal encoding. Downstream code
   writes money literals; if the encoding is also the surface, that is a corpus migration.
 
 ---
@@ -461,7 +461,7 @@ better design and should be taken then. Until that is ruled, a reserved `$`-pref
 marshalling win and the one-branch recognition rule with no ISO cost and no dependency on an open
 question. Either way, `(tuple, …)` should go: it is the only candidate that cannot be marshalled.
 
-**Not established:** how many tuple-DATA terms exist in the corpus, i.e. what a re-tagging would
+**Not established:** how many tuple-DATA terms exist in downstream code, i.e. what a re-tagging would
 cost to migrate. The engine's own use is small (4 sites, all display tests).
 
 ## RECOMMENDED: `('()', 1, 2)` — the two-character spelling `"()"`
@@ -506,7 +506,7 @@ given, without the collision.
 **The one cost**, stated plainly: the atom `'()'` stops being available as an ordinary atom. That
 is the same trade `'[]'` already makes, and it is why the precedent matters.
 
-**Migration**: the engine's own tuple-DATA use is 4 sites, all display tests. The corpus is
+**Migration**: the engine's own tuple-DATA use is 4 sites, all display tests. Downstream code is
 unmeasured — that figure is the only thing between this recommendation and a decision.
 
 ### Confirmed against real Prolog (Scryer, plus the operator's SWI 10 session)
@@ -547,14 +547,14 @@ mistake — testing a precedent at the wrong arity — is easy to repeat.)*
 
 # CORPUS SWEEP — both open numbers, measured
 
-the corpus tree @ `main`: **787 `.clausal`, 88 `.seam`, 263 `.py`** (the `.clausal`
+the downstream tree @ `main`: **its `.clausal`, `.seam` and `.py` files** (the `.clausal`
 count matches the plan's 787 exactly). Instruments in `tools/predmeta_census/`; every count printed
 the size of what it matched, and both controls behaved (a must-match-nothing pattern returned 0, a
 must-match-plenty pattern returned 1,692 / 290,641).
 
 ## 1. Object-shaped predicate access: ESSENTIALLY ZERO
 
-How the corpus actually invokes a predicate:
+How downstream code actually invokes a predicate:
 
     test(...)          in-language, .clausal        5,259  in 295 files
     --pred(...)        the term seam, .seam            57  in  42 files
@@ -575,23 +575,23 @@ sweep reported 123 object-shaped sites. Read:
 * `from <domain>.<module> import <pred>`: **0**. `call(mod.pred, …)`: **0**. Attribute calls
   resolve to `re.Match.group`, `pathlib.mkdir` and the `_body.main` shim.
 
-So **spec §4 q3 — a module-level predicate name becomes the atom — costs the corpus nothing.** The
-engine's own 209 object-shaped accesses are the whole migration, and the corpus is already on the
+So **spec §4 q3 — a module-level predicate name becomes the atom — costs downstream code nothing.** The
+engine's own 209 object-shaped accesses are the whole migration, and downstream code is already on the
 idiom the design targets.
 
 Worth noting for the seam's own roadmap: `if --goal:` and `for x in --goal:` are at **0** corpus
 sites. The goal-position seam landed 2026-09-08; all 57 corpus seams are TERM position. The
 transparent-variable idiom is available and unused.
 
-## 2. Tuple-DATA in the corpus: ZERO
+## 2. Tuple-DATA in downstream code: ZERO
 
     TUPLE_TAG by name                0 occurrences in 0 files
     $cells namespace                 0 occurrences in 0 files
     is_cell / compound_cell_shape    0 occurrences in 0 files
     matching slot 0 on a type        0 occurrences in 0 files
 
-**Re-tagging tuple-data is compiler-internal and costs the corpus nothing.** Corpus source writes
-`(1, 2)` and the compiler applies the tag; nothing in the corpus spells or matches it. The engine's
+**Re-tagging tuple-data is compiler-internal and costs downstream code nothing.** Corpus source writes
+`(1, 2)` and the compiler applies the tag; nothing in downstream code spells or matches it. The engine's
 own use is 4 sites, all display tests.
 
 **That was the one number between the `('()', 1, 2)` recommendation and a decision. It is zero.**
@@ -600,8 +600,8 @@ own use is 4 sites, all display tests.
 
 Those 5,259 `test(...)` and 57 `--pred(...)` invocations all run THROUGH the engine. A
 representation change with zero corpus EDIT sites can still move corpus ANSWERS, and site analysis
-is a different claim from an answer-set re-run. Both changes still need the oracle gate — ask
-the harness lane to re-run the sealed answer-set scorers — before promotion.
+is a different claim from an answer-set re-run. Both changes still need the downstream answer-set gate — ask
+A downstream checker to re-run the downstream answer-set checks — before promotion.
 
 ---
 
@@ -613,7 +613,7 @@ Measured before implementing, and they need different decisions.
 
     date(2026, 9, 14) written in .clausal   exports as   ('date', 2026, 9, 14)   type tuple
 
-Exactly the ruled encoding, in the engine today. And the corpus standardises on it independently:
+Exactly the ruled encoding, in the engine today. And downstream code standardises on it independently:
 `_tools/check_date_representation.py` is a RATCHET whose whole job is stopping `[Y, M, D]` integer
 lists spreading in place of "the standard `date(Y, M, D)` term", with a per-file baseline holding
 **one** remaining violation. So there is no date migration to do.
@@ -872,13 +872,13 @@ Three kinds, and only the third needs a decision:
    landed**: `@<`, `@=<`, `@>`, `@>=` and `compare/3` are all present as builtins on this branch,
    and `msort` already orders date terms correctly. So date comparison moves from `=<` to `@=<`.
 
-   This cannot affect the corpus: corpus dates were ALREADY cells, never Python objects, so no
+   This cannot affect downstream code: corpus dates were ALREADY cells, never Python objects, so no
    corpus code can have been comparing them with `=<` and getting Python's date ordering.
 
 ## Still not measured
 
-Whether any corpus rulebase compares dates at all, and with what. The oracle gate
-(the harness lane, the sealed answer-set scorers) is the check that matters before promotion, and it has not
+Whether any corpus rulebase compares dates at all, and with what. The downstream answer-set gate
+(a downstream checker, the downstream answer-set checks) is the check that matters before promotion, and it has not
 been asked for on any of this session's changes.
 
 ---
@@ -925,11 +925,11 @@ for exactly the writes the gate exists to police. Needs its own test before it i
 
 # CORRECTION to §4 q3's cost: it is NOT zero
 
-Earlier in this document I reported that the corpus has essentially no object-shaped predicate
-access, so binding a module-level name to the atom would cost the corpus nothing and "the engine's
+Earlier in this document I reported that downstream code has essentially no object-shaped predicate
+access, so binding a module-level name to the atom would cost downstream code nothing and "the engine's
 own 209 sites are the whole migration".
 
-**Measured wrong.** In the corpus `.seam` harnesses:
+**Measured wrong.** In downstream code `.seam` harnesses:
 
     m.<predicate>(        200 occurrences, 160 distinct names   (~11 are re.Match false positives)
     getattr(m, <var>)     101 occurrences
@@ -942,15 +942,15 @@ straight to `solve`.
 
 ## How the error was made, because it is the fourth of its kind today
 
-The sweep covered the 263 corpus `.py` files and found ≈0. The harnesses are `.seam` files. I had
+The sweep covered the downstream `.py` files and found ≈0. The harnesses are `.seam` files. I had
 swept those too — for `--`/`++` usage, answering a different question — and never went back for
 `m.pred(`. The `m.<lowercase>(` hits did appear in my results, and I dismissed the whole class as
 `re.Match` methods because `m.group(` was the top row.
 
-Three earlier instances the same day: the sealed bodies outside the corpus tree; "the corpus never
-imports py.datetime" (the import is spelled `date_time`); and the harness lane's own
+Three earlier instances the same day: the downstream bodies outside the downstream tree; "downstream code never
+imports py.datetime" (the import is spelled `date_time`); and a downstream checker's own
 population-vs-work estimate. **The rule, now stated four times: name the glob in the sentence.**
-"No `.py` file does X" is a fact. "The corpus does not do X" is an inference across a boundary,
+"No `.py` file does X" is a fact. "Downstream code does not do X" is an inference across a boundary,
 and it reads identically in a report.
 
 ---
@@ -988,30 +988,30 @@ a tuple the seam made. Testing the thing built, not the place it was installed.
 
 ## The §4 q3 figure again, verified at source and HIGHER
 
-the harness lane re-measured on the sealed bodies rather than inheriting my number:
+A downstream checker re-measured on the downstream bodies rather than inheriting my number:
 
     module-attribute reaches   296   across 245 distinct names   (I reported ~200 / 160)
     getattr(m, <variable>)      98                               (I reported ~101)
     getattr(m, 'literal')       52                               (I did not count this shape)
     ------------------------------------------------------------
-                              ~446   across the 82 sealed bodies
+                              ~446   across the downstream bodies
 
 **Use 446, not 300.** My figure came from the visible corpus tree; theirs from the population that
 actually matters.
 
 ### And the STRUCTURAL reason, which is better than the rule I wrote
 
-I filed four of these as repeated carelessness. the harness lane named the cause instead:
+I filed four of these as repeated carelessness. A downstream checker named the cause instead:
 
-> *the sealed bodies are excluded from every other lane's census BY THE SEAL -- corpus-lane cannot
-> read them, the exporter skips `eval/`, your sweeps are over the corpus tree. So any claim of the
-> form "the corpus costs nothing" is silent about the harnesses BY CONSTRUCTION, not by oversight.*
+> *the downstream bodies are excluded from every other lane's census BY CONSTRUCTION -- a downstream user cannot
+> read them, the exporter skips `eval/`, your sweeps are over the downstream tree. So any claim of the
+> form "downstream code costs nothing" is silent about the harnesses BY CONSTRUCTION, not by oversight.*
 
 That is not four lapses. It is one population that is invisible to every lane except the one that
 owns it — and which consumes the engine more directly than anything else. "Put the glob in the
 sentence" catches the wording; this catches the reason, and it has a counter-move:
 
-**ASK THE HARNESS LANE.** Any sweep whose conclusion would cover the harnesses goes to that lane
+**ASK THE DOWNSTREAM CHECKER.** Any sweep whose conclusion would cover the harnesses goes to that lane
 as a question. They answer most in one AST pass. That is cheaper than a fifth discovery arriving
 mid-landing, and it is the standing protocol from here.
 
@@ -1046,30 +1046,30 @@ demand out of the Database row. Measured on a real loaded module:
 
     engine, enumeration sites                    3   all already dispositioned
                                                      "enumerate the db's rows"
-    sealed bodies, enumeration of a RULEBASE      0   (the harness lane, AST)
+    downstream bodies, enumeration of a RULEBASE      0   (a downstream checker, AST)
 
-The detector found 164 enumeration sites in the sealed bodies and every one is the same line in the
-82 launchers — `globals().update({k: v for k, v in vars(_body).items() ...})` — enumerating the
+The detector found 164 enumeration sites in the downstream bodies and every one is the same line in the
+the downstream launchers — `globals().update({k: v for k, v in vars(_body).items() ...})` — enumerating the
 harness's own PYTHON sibling, not a rulebase. Unaffected, because:
 
-    harness bodies declaring a clause head    0 of 82
-    their -module export lists                82 of 82 EMPTY
+    harness bodies declaring a clause head    0 of N
+    their -module export lists                N of N EMPTY
     sites enumerating under_test / rulebase   0
 
-**So q3 costs one hook on the module type plus a `__dir__`, not ~655 site edits.** The 446 sealed
+**So q3 costs one hook on the module type plus a `__dir__`, not ~655 site edits.** The downstream
 access sites — including the 52 `getattr(m, 'literal')` I had not counted — need no migration.
 
 The zero is calibrated: eleven cases, six positive and five negative, with attribute reach,
 `getattr` by literal and by variable, `hasattr` and `vars()` on a non-module all correctly NOT
-detected before it was run over the corpus. A zero from an untested detector is the absence of a
+detected before it was run over downstream code. A zero from an untested detector is the absence of a
 detector.
 
 ## THE CAVEAT, and it is why `__dir__` is not optional
 
-The zero rests on the harness bodies declaring no predicates — true today at 0 of 82 with empty
+The zero rests on the harness bodies declaring no predicates — true today at 0 of N with empty
 export lists, but **a property of how this batch was built, not a rule anyone enforces.** If a
 future body ever declares one, that re-export line becomes a genuine enumeration of a genuine
-namespace **in all 82 launchers at once**.
+namespace **in the downstream launchers at once**.
 
 So: the hook is safe against these harnesses as they are, and **the `__dir__` is what keeps it safe
 if that changes.** Ship them together; the `__dir__` is the safety property, not a cosmetic
@@ -1168,7 +1168,7 @@ all lowercase, all writable, all atoms.
 
 Operator's rulings, 2026-09-15, interactively. This section supersedes the `Normalisation`
 subsection's **Open** and the `Quantity` is still unruled entry. Recorded, **not implemented**:
-§2's rekey and §5's predicate both want the oracle gate in front of them.
+§2's rekey and §5's predicate both want the downstream answer-set gate in front of them.
 
 ## The ruling in one line
 

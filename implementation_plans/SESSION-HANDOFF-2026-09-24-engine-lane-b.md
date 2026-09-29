@@ -55,10 +55,9 @@ Also: 18 list/higher-order builtins + functor/3, =../2, callable/1, _is_goal cal
 _ensure_trampoline_dispatch with no db (Q0 todo, round 2 section).
 
 ## Downstream (information barrier: details only outside the engine repo)
-/workspace/_p4-flip-downstream-impact-2026-09-24.md (+ -appendix/): 259 corpus scorer
-sites LOUD at the flip (corpus-lane counts 82 files/74 domains; harness-batch-lane 200/63
-under its scope); remedy = cells to solve. corpus-lane has it. Operator confirmed the two
-relays (W4 census GO, reflect.py repair GO) the offline predecessor carried.
+Downstream sites go LOUD at the flip; remedy = cells to solve. The downstream owners have
+the list. Operator confirmed the two relays (W4 census GO, reflect.py repair GO) the offline
+predecessor carried.
 
 ## Working rules re-learned today
 - Every review round after a gate needs a RE-gate on the final commit before landing.

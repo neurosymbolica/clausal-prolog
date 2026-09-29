@@ -8,7 +8,7 @@ nothing could produce the term those arms classified. Everything below is
 the measurement that established that, kept as the record of why the
 original Task 5 sequencing was wrong.
 
-The corpus fix recorded under "What DID get done" was itself undone by W4a,
+Downstream code fix recorded under "What DID get done" was itself undone by W4a,
 deliberately and in the same breath as the arms: the three rows spelling
 `Pt._clausal_head(...)` and `TestTheCorpusStillCoversInstances` are gone,
 because the term they restored can no longer be built. The class's mirror
@@ -117,7 +117,7 @@ Task 5 step 1, and it found a real hole. The twin-parity corpus in
 covers `_is_ground`/`copy_term`/`collect_vars` across cells, classes and
 instances — but its three rows named `instance`, `cell_in_instance` and
 `instance_in_cell` spelled `Pt(x=..., y=...)`, and **P2 Task 3 turned that
-call into a CELL**. All three silently became duplicates of shapes the corpus
+call into a CELL**. All three silently became duplicates of shapes downstream code
 already had, and the C instance arms — the ones Task 5 exists to reason about
 — stopped being exercised by that file at all. Nothing failed; the parity
 assertions passed over the wrong terms.

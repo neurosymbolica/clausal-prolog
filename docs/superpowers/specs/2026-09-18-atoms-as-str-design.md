@@ -43,14 +43,14 @@ directly are ~10% cheaper (80 → 71 ns first-arg, 54 → 50 ns two-arg).
 `mint` 81, `spelling` 71, char-atom helpers 51, `is_zero_field_class` 13); 70 literal `("x",)`
 cells in engine code; 121 `str` type tests whose MEANING (atom vs text) has to be classified one
 by one; the C core special-cases tuple size 1 in 2 places and touches PyUnicode in ~78; 94 test
-files hold 499 literal atom tuples. Closed side — CORRECTED 2026-09-18 by the harness lane's AST census (`tools/census/
+files hold 499 literal atom tuples. Closed side — CORRECTED 2026-09-18 by a downstream checker's AST census (`tools/census/
 atom_literal_census.py`, calibrated on decoys before use): my read-only count of 7 files / 17 sites
-saw only the library and tooling bucket, because the sealed harness bodies under `eval/` are unreadable
+saw only the library and tooling bucket, because the downstream harness bodies under `eval/` are unreadable
 to other lanes BY RULE. The real population, 925 files scanned, 214 sites in 72 files, read as a
 CEILING: 94 sites / 26 files are TEST expectations (break too, not seam violations); 84 / 28 are
-SEALED BODIES (the seam-rule population, invisible to this lane); 30 / 14 library + tooling; 6 / 4 other.
+DOWNSTREAM BODIES (the seam-rule population, invisible to this lane); 30 / 14 library + tooling; 6 / 4 other.
 At least 15 of the 84 are tuples of NAMES, not atom cells (`answer_names=("STATUS",)`); the rest need
-a human read. The work is the harness lane's; the landing is a RE-BASELINE (a new reference, the old
+a human read. The work is a downstream checker's; the landing is a RE-BASELINE (a new reference, the old
 one historical the moment it lands). An atom-literal arm on their census guard is the obvious way to
 stop it growing, armed AFTER the fix, by the operator's call.
 
@@ -88,7 +88,7 @@ be true of both kinds, the ambiguity this design exists to remove.
 ## 3. The seam and the transfer layer
 
 * **A Python str crossing the seam (`++`, `--`, a goal argument, a dict key) is an ATOM** (§8 Q1).
-  This matches the engine and the corpus's actual use (identifiers, labels, dict keys); an opaque
+  This matches the engine and downstream code's actual use (identifiers, labels, dict keys); an opaque
   text payload as an atom is legal Prolog (`'a b c'`) and ISO's text predicates (`atom_length/2`,
   `sub_atom/5`, `atom_chars/2`) work on atoms. A Python caller who means a char list writes the
   list of one-char strs or `chars("...")` (a small helper on the seam). `text_of` keeps giving
@@ -96,18 +96,18 @@ be true of both kinds, the ambiguity this design exists to remove.
 * **Transfer:** a bare str inside a transfer term is an atom (today: a string scalar); the carrier
   transfers as itself. `_SCALARS` keeps str; nothing else moves. The decimal/rdiv/quantity/date
   transfer forms are unaffected (str heads, int arguments).
-* **The library's raw-string escape hatch is a named dependency (the harness lane, 2026-09-18) — design
+* **The library's raw-string escape hatch is a named dependency (a downstream checker, 2026-09-18) — design
   against it, do not discover it.** The closed library lets a harness pass a profile value as a RAW
   STRING (`string_values=`), and the mechanism is that the string is NOT the atom: an undeclared
   name fails closed because `category("x")` cannot match `category(x)`. It is CONDITIONAL — a name
   the module DOES declare still resolves to the atom — and a mutation control depends on that
-  conditionality (a mutant that ADDS a declared sector must be killable). Three sealed bodies use
+  conditionality (a mutant that ADDS a declared sector must be killable). Three downstream bodies use
   it by design (a fail-closed spot case, two undeclared goods, one explicit allow-list). Under this
   design "str = atom" would make the raw string EQUAL the atom and the spot case would silently
   stop failing closed. So the hatch's undeclared branch must emit the `('$chars', …)` carrier (a
   char list is still not an atom), and its declared branch the atom — same conditional, new
-  carrier. A library change, the harness lane's, in the landing window; an exercised test per body.
-  Their lexical census: 15 str literals inside goals in 3 of 82 bodies, a FLOOR (a str reaching a
+  carrier. A library change, a downstream checker's, in the landing window; an exercised test per body.
+  Their lexical census: 15 str literals inside goals in 3 of the downstream bodies, a FLOOR (a str reaching a
   goal through a variable is invisible to it) — the loud interim rule is what finds the rest.
 * **The exporter** consumes engine terms and has atom-vs-string branches; it flips WITH the engine,
   in the same landing, and its emitted Prolog does not change (an atom prints as an atom, a char
@@ -136,15 +136,15 @@ be true of both kinds, the ambiguity this design exists to remove.
    zero-field-class sites and the name-clash diagnostic deleted.
 4. **Tests**: the 499 literal atom tuples in 94 files by a mechanical rewrite (`("x",)` → `"x"`),
    then the tests that asserted str-means-string by hand.
-5. **Closed side, same window**: the 17 direct-representation sites (the harness lane's files);
+5. **Closed side, same window**: the 17 direct-representation sites (a downstream checker's files);
    the seam rule of §3 announced to every lane BEFORE step 2 lands so the 17 does not grow.
-5b. **Stage 1 (the carrier) is SWEPT BEFORE it lands** (the harness lane's suggestion, taken):
+5b. **Stage 1 (the carrier) is SWEPT BEFORE it lands** (a downstream checker's suggestion, taken):
    unlike the atom flip it is not a re-baseline — most rows should be unchanged and the ones that
    raise are the escape-hatch bodies plus whatever the lexical census missed, an informative diff.
    The two stages keep SEPARATE shas even if they land in one window, so a moved row attributes.
-6. **Landing window** (the operator's, 2026-09-18): after iso-export-lane's first G3 result on a
-   frozen sha is recorded; the harness lane re-baselines the 82 the same day (every row moves by
-   construction — a re-baseline, not a null); corpus-lane's rulebase axis is unaffected (sources
+6. **Landing window** (the operator's, 2026-09-18): after a downstream user's first G3 result on a
+   frozen sha is recorded; a downstream checker re-baselines the full set the same day (every row moves by
+   construction — a re-baseline, not a null); a downstream user's rulebase axis is unaffected (sources
    never see the representation).
 
 ## 6. Gates
@@ -152,7 +152,7 @@ be true of both kinds, the ambiguity this design exists to remove.
 Engine failure-set A/B on a clean base per step; the exporter golden files; the twin/wrapper
 parity matrix (`tests/test_comparison_twin_parity.py`) and the standard-order suite; the
 transfer round-trip tests; a positive control per step (a site that must fail when the step is
-reverted). Harness: a RE-BASELINE at the landing sha, then the usual 82-row diff for everything
+reverted). Harness: a RE-BASELINE at the landing sha, then the usual full diff for everything
 after. The barrier scan on every crossing commit.
 
 ## 7. Measure before building
@@ -165,11 +165,11 @@ after. The barrier scan on every crossing commit.
 * The exporter's atom/string branches (`clausal_to_prolog.py`), counted.
 * **String literals matched in TERM PATTERNS** — an error catcher like `catch(_, error(type_error("x",
   _)), _)`, a head or a `==` against a quoted literal — anywhere in engine, library or corpus code
-  (corpus-lane, 2026-09-18, from the atom pivot: quoted literals inside catchers stopped matching
+  (a downstream user, 2026-09-18, from the atom pivot: quoted literals inside catchers stopped matching
   under `chars` SILENTLY, and a suite cannot see an unexercised clamp). Under this design the same
   literal becomes the `('$chars', …)` carrier and would fail the same quiet way; grep for the shape
   before step 2 lands and give each site a test that is exercised.
-* Closed side: the harness lane's exact list of the 17 sites, and whether any harness body
+* Closed side: a downstream checker's exact list of the 17 sites, and whether any harness body
   passes a Python str MEANING text through the seam (that is the one seam semantics change, §3).
 
 ### 7a. Measured 2026-09-18 (canonical `bd31d3b2`)
@@ -184,7 +184,7 @@ after. The barrier scan on every crossing commit.
   `toklex/spec.py` 12, `prolog_to_clausal.py` 10, `compiler/ir.py` 9, `builtins/io.py` 7.
 * **C. Quoted literals in term patterns** in the engine's own `.clausal`/`.seam` modules: 5 sites in
   3 of 19 files (listed in the commit that added this section) — small; the library and corpus halves
-  are corpus-lane's and the harness lane's to grep with the same pattern.
+  are a downstream user's and a downstream checker's to grep with the same pattern.
 * **D. Exporter atom/string/chars branch lines:** 37 of 3,708 in `clausal_to_prolog.py`.
 
 ## 8. Parked for the operator (recommendations in bold)

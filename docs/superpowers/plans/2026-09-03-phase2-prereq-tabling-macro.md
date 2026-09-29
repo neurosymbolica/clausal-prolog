@@ -12,7 +12,7 @@ independently mergeable (both fixes are real bugs regardless of Phase 2's fate).
   Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
   Claude-Session: https://claude.ai/code/session_01G7xiWqatWtL6zNQDc7nspk
 - Full-suite runs: exactly `/workspace/clausal/venv/bin/python -m pytest tests/ -q --tb=no --continue-on-collection-errors`; failure-set NAME-diff vs baseline_failures.txt (worktree root) must be empty per task.
-- The five walkers and their sync contract, <harness-library> (GATE_CORE), and `_get_dispatch` are untouchable.
+- The five walkers and their sync contract, <harness-library> (frozen), and `_get_dispatch` are untouchable.
 - `tests/test_funnel_lint.py` must stay green (it will fail if a fix reintroduces a bypassed probe).
 
 ## Task 1: fix clpfd `_narrow()`'s unconditional float() on bignum bounds

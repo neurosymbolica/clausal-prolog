@@ -142,7 +142,7 @@ The three-lane census closed on 2026-09-22
 (`todo/w4-alias-sweep-before-sizing-2026-09-22.md`): the 31 hold-and-call
 sites migrated in six bodies to literal tuples under a dated exception, the
 silently-dead assessment module repaired onto `reflection.vkind`, all three
-broken export-lane gates closed. The re-run sweep reports **0 in every shape,
+broken downstream exporter gates closed. The re-run sweep reports **0 in every shape,
 shape 4 included**.
 
 Two qualifications that survive, and belong in any W4b sizing:

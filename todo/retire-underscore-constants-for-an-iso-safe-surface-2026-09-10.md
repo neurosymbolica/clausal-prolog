@@ -118,7 +118,7 @@ stripped:
 **Two earlier counts of mine were WRONG and the record should say so.** A first pass reported
 767 and a second 592 for the domains: both were counting legal citations inside string
 literals — `"21 U.S.C. 812(b)(2)(B)"`, `"Article 465(1)"` — because I stripped `#` comments
-but not string bodies. The corpus is a text corpus with code in it; that floor is written down
+but not string bodies. Downstream code is a text corpus with code in it; that floor is written down
 in this project's own notes and I walked into it twice. Anyone re-measuring must strip string
 bodies, and should check a known-prose line does NOT match before believing a number.
 
@@ -197,7 +197,7 @@ Add to the definition of done:
 - `-constant_value`/`-constant_value_units` declared names export as their literal value, with a test
   asserting the exported `.pl` for a rule that uses one, and a test that a non-constant `++`
   still warns.
-- Tell the export lane before it lands; they hold a byte-identical baseline across the roster
+- Tell a downstream exporter before it lands; they hold a byte-identical baseline across the roster
   and will want to re-run it, since "every file differs" is the diff that hides a regression.
 
 

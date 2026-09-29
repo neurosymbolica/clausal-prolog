@@ -99,14 +99,14 @@ enumeration must be module-scoped too or the leak returns through the back door.
 
 ## Blast radius: measured zero
 
-corpus-lane censused **call sites**, not names, across four surfaces: **zero** `/3` call sites in
+A downstream user censused **call sites**, not names, across four surfaces: **zero** `/3` call sites in
 rulebase bodies, Python/harness, and the library; the 18 files matching are all DIRECTIVES, verified
 specifically so declarations are not counted as goals. Sites relying on `/3` FAILING were
 searched as their own shape (`\+ constant_number_units(...)`) — zero. **With a planted positive
 control**, so the zeros are the absence of call sites, not of a detector.
 
-**Why zero**: the corpus reaches constants exclusively through `constant(name)`, never the `/3`
-reflection channel — 176 declared values across 17 domains. So `/3` has never been exercised by
+**Why zero**: downstream code reaches constants exclusively through `constant(name)`, never the `/3`
+reflection channel — 176 declared values across several domains. So `/3` has never been exercised by
 a rulebase in either direction. The leak never leaked; the silence never silenced.
 
 **Consequence: a strict improvement with no migration**, and the cheap moment to do it, because
@@ -125,4 +125,4 @@ TDD, with mutation controls on every gate:
   exactly the raise tests
 
 Three axes before landing: engine suite (failure **and skip** name sets), export bytes
-(iso-export-lane), domain answers (the harness lane).
+(a downstream user), domain answers (a downstream checker).

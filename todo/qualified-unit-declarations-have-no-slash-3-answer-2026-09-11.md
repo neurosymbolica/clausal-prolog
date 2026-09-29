@@ -19,7 +19,7 @@ united constants silently does not see it. The VALUE is correct either way
 (same day) means the qualified form is no longer needed to disambiguate a minor unit: `cent`
 is shared, so it is not bound bare, and `eur_cent`/`usd_cent` say which at the site. But the
 qualified form remains the documented way to write a currency where two jurisdictions share a
-word, and the corpus vocabulary has 25 such names —
+word, and downstream code vocabulary has 25 such names —
 
     dollar x22   franc x17   pound x12   dinar x10   peso x10   rupee x7
 

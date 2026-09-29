@@ -17,7 +17,7 @@
 - Gate command: `./venv/bin/python -m pytest tests -q -rfE -p no:cacheprovider --continue-on-collection-errors --ignore=tests/test_clportools.py`. Extract the failure SET with `grep -E "^(FAILED|ERROR) " out.txt | sed -E 's/ - .*//' | sort -u`; compare with `comm`. Baseline: regenerate on `main` at the start (do not trust a number from a file).
 - **GONE must equal exactly the retired-test list** (Task 2's `RETIRED` list); NEW must be 0. Package gate: `./tools/w3_package_gate.sh <venv> <room> <out>` NEW 0 / GONE 0.
 - Stage explicit paths only (never `git add -A`); commit messages carry the retired-test names; end with the Co-Authored-By / Claude-Session trailers used on this branch's history.
-- Closed-side terms never enter commits (`clausify`, harness/gates tooling names, corpus domain paths); scan the range before landing.
+- Closed-side terms never enter commits (downstream project, tool and domain names); scan the range before landing.
 - In zsh: write `"${VAR}:path"` for git rev:path; never gate a chain on `grep -c`'s exit.
 
 ---
@@ -139,7 +139,7 @@ Rule from the spec: if the test's SUBJECT is the instance path (it asserts somet
 
 Known decisions (verify each by reading; do not apply blindly):
 
-- `tests/test_python_fallbacks.py`: the corpus rows `("instance", Pt._clausal_head(x=X, y=2))`, `("cell_in_instance", ...)`, `("instance_in_cell", ...)` (lines ~523, 542, 543) are DELETED, and the class `TestTheCorpusStillCoversInstances` (~line 613) is DELETED — its docstring says "these rows go with the arms, together". The five `t = Pt._clausal_head(x=1, y=2)` uses near lines 43/85/125/168/238 become `t = Pt(x=1, y=2)` IF the surrounding test is about term walking generally (read the assertion: if it asserts `.x`/`.y` attribute reads, retire it instead).
+- `tests/test_python_fallbacks.py`: the `CORPUS` table's rows `("instance", Pt._clausal_head(x=X, y=2))`, `("cell_in_instance", ...)`, `("instance_in_cell", ...)` (lines ~523, 542, 543) are DELETED, and the class `TestTheCorpusStillCoversInstances` (~line 613) is DELETED — its docstring says "these rows go with the arms, together". The five `t = Pt._clausal_head(x=1, y=2)` uses near lines 43/85/125/168/238 become `t = Pt(x=1, y=2)` IF the surrounding test is about term walking generally (read the assertion: if it asserts `.x`/`.y` attribute reads, retire it instead).
 - `tests/test_fast_construction.py`: the file's subject is `_clausal_new` and `instances=True`; read each test: tests of the fast constructor itself are retired; a test that only used `instances=True` to get a class and then asserts on cell/functor behaviour is migrated by dropping the keyword.
 - `tests/test_predrow.py`: `test_instances_no_longer_carry_a_state_face` and the `inst = cls._clausal_head(...)` line in `test_a_field_named_like_a_retired_attribute_stays_a_field` (W2's F1 section): retire the first (there are no instances); in the second, delete the two `inst._locked` assertions and keep the class-level ones.
 - `tests/test_funnel_accessors.py` (4 sites), `tests/test_clpb.py`, `tests/test_predicate_class_as_term_value.py` (`make_predicate("pcatv_cite_inst", ["key"], instances=True)`), `tests/test_tagged_terms.py`, `tests/test_second_package_copy_term_identity.py`, the two audit files: drop the keyword / replace `_clausal_head(` with the cell call, then run the file; a test that then fails on an attribute read is retired.
@@ -286,7 +286,7 @@ cp "$NEW" <room>/clausal/logic/variables/_variables.new.so && mv <room>/clausal/
 ```
 Never `build_ext --inplace` in a room a long-lived process has imported. Verify by OBSERVATION, not exit code: Step 5.
 
-- [ ] **Step 5: Run the parity test and the corpus**
+- [ ] **Step 5: Run the parity test and downstream code**
 
 Run: `./venv/bin/python -m pytest tests/test_instance_path_retired.py tests/test_python_fallbacks.py -q -p no:cacheprovider`
 Expected: all pass, and the `twins_agree` test passed only because the rebuilt `.so` is the one imported (print `C.__file__` and its mtime if in doubt).
@@ -317,6 +317,6 @@ git commit -m "W4a: delete the C instance arms (c_is_term_instance, py_/c_term_f
 
 - [ ] **Step 4: Swap the `.so` in the clone** — the clone `/workspace/clausal` and every room symlinking its venv import THEIR OWN `.so` files; the clone's own copy must be replaced by the cp-then-mv procedure of Task 4 Step 4, and any room other lanes read (ask them) needs the same. Enumerate live importers via `/proc/*/map_files` for `_variables.cpython` before swapping; a process that imported the old `.so` keeps it until restart (never delete the old file while mapped).
 
-- [ ] **Step 5: Notify the lanes** — main moved AND the engine tree changed AND a `.so` changed: tell the downstream lane (its reference engine and tree hash), the corpus lane and the export lane (they run against `CLAUSAL_ROOT`). State plainly: no answer changes; instance-only doors now raise.
+- [ ] **Step 5: Notify the lanes** — main moved AND the engine tree changed AND a `.so` changed: tell the downstream lane (its reference engine and tree hash), a downstream user and a downstream exporter (they run against `CLAUSAL_ROOT`). State plainly: no answer changes; instance-only doors now raise.
 
 - [ ] **Step 6: Record** — append to the scope note and close the task-5 todo (arms 0/2/3 gone; the four class arms and `py_register_predicate_meta` are W4b's); update memory.

@@ -130,7 +130,7 @@ Clausal Database, handing out a `make_predicate`/`PredicateMeta` class) gets
 its own message and remedy (`describe_imported_python_predicate_implemented`:
 define the clauses in a Clausal module that owns the predicate, or have the
 Python module define it). Measured first: 0 users -- over the in-tree
-population (82 loads, 8 imported-predicate keys, all Clausal exporters) and
+population (every load, 8 imported-predicate keys, all Clausal exporters) and
 the 12 packages (9 carry `.clausal` files with `-import_from`: 103 files, 92
 load; the 11 that do not need `cv2`/`equinox`/`flax`; 0 imported-predicate
 keys). With the refusal disabled the Python shape loads (positive control).

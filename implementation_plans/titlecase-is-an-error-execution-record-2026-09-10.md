@@ -97,7 +97,7 @@ typed.
 
 ## Sequencing with the other lanes
 
-The export lane's `.seam` rename sweep was mid-flight. Two things came out of
+A downstream exporter's `.seam` rename sweep was mid-flight. Two things came out of
 coordinating with it:
 
 - `/workspace/clausal-bug-fix` is not only the shared clone, it is what that
@@ -111,7 +111,7 @@ coordinating with it:
   (engine path, severity `"warn"`, C extension imports) before re-delivering.
 
 `snake_to_pascal` now has no caller anywhere in the engine and survives only as
-a re-export. Held out of this branch at the export lane's request so an
+a re-export. Held out of this branch at a downstream exporter's request so an
 export-surface change does not ride in the same window as their rename; filed
 as `todo/remove-dead-snake-to-pascal-export-2026-09-10.md`.
 

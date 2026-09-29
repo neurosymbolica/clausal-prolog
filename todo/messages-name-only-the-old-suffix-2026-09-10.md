@@ -6,10 +6,10 @@ BEHAVES correctly on either suffix; they INSTRUCT as though only one exists.
 
 ## The class
 
-the harness lane found the shape in their tooling and named it well: *the tool behaves
+A downstream checker found the shape in their tooling and named it well: *the tool behaves
 right and instructs wrong*. A refusal message synthesises a filename with one suffix into
 the sentence telling a human which file to open, while the code beside it resolved the real
-path correctly. iso-export-lane found it in five of their messages, where it is worse: the
+path correctly. A downstream user found it in five of their messages, where it is worse: the
 repair such a message invites creates a file that SHADOWS the real module, because the
 finder takes the first suffix.
 
@@ -71,7 +71,7 @@ the model to copy.
 The exit check added in 820dc66f (`tests/rewrite/test_cli.py`) deliberately SKIPS strings
 containing whitespace, because it hunts path construction and a path has no spaces. Correct
 for its job and structurally blind to this one. Two defects, two instruments — the lesson
-iso-export-lane drew after seven sites across three trees: a prerequisite verified by one
+A downstream user drew after seven sites across three trees: a prerequisite verified by one
 instrument should not be recorded as met.
 
 ## Exit criterion

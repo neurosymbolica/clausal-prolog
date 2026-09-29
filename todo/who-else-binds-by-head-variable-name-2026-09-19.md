@@ -1,6 +1,6 @@
 # Sweep: what else in the engine binds by HEAD-VARIABLE NAME?
 
-Raised by iso-export-lane 2026-09-19, and the framing is the useful part: the
+Raised by a downstream user 2026-09-19, and the framing is the useful part: the
 two instances found so far were each found BY ACCIDENT (a failing suite), not
 by looking for the pattern. It is a CLASS, and a cell head cannot honour any
 member of it, because a cell carries no names.

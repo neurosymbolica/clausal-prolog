@@ -423,7 +423,7 @@ of it has caught something real at least once:
    commits. The clone's main carries other sessions' commits, so the range that
    crosses to canonical is wider than the range you wrote. Scan it for
    downstream-project references, peer project names, their battery sizes and
-   their corpus domain names, and genericize before the crossing (precedent:
+   their downstream domain names, and genericize before the crossing (precedent:
    commit `be08ba4f`). Historical mentions already in canonical history are
    clues, not code — do NOT propose history rewrites over them.
 3. **The peers' own acceptance batteries and pins are the bar** — theirs, run by
@@ -435,7 +435,7 @@ of it has caught something real at least once:
    cherry-pick, not merge.
 
 Deliberately generic here: the peer project names, their battery sizes and their
-corpus domain names live in the git-ignored SDD ledger and the controller's
+downstream domain names live in the git-ignored SDD ledger and the controller's
 memory, not in a committed file.
 
 ---
@@ -513,10 +513,10 @@ memory, not in a committed file.
   its own noise. Quote `task-9-report.md` §3 (copied to
   `implementation_plans/p33-execution-record/task-9-report.md`) for the numbers.
 - **Information barrier**: keep downstream/peer project information out of NEW
-  commits — project names, their battery sizes, their corpus domain names. Write
+  commits — project names, their battery sizes, their downstream domain names. Write
   them in the git-ignored ledger; genericize in anything committed. Scan before
   merging or syncing.
-- `<harness-library>` is GATE_CORE — off limits (editing it requires syncing two
+- `<harness-library>` is frozen — off limits (editing it requires syncing two
   out-of-tree forks). The `_get_dispatch` signature is frozen (~22 out-of-tree
   implementors); P3-3 preserved it through `_detached_row`, and Phase 4 must too.
 - C changes are allowed where they make sense (user ruling, standing since

@@ -32,8 +32,8 @@ sections `quantity RULED — 2026-09-15` and `The dims map: a DICT inside, a TUP
   use `gate_run.sh` — it `cd`s to the main checkout and gates the wrong tree.
 - **Regenerate the baseline in THIS tree.** Never trust a remembered number.
 - **Nothing is promoted by this plan.** It stays on `feat/iso-l3-lowering-2026-09-14`. Units are
-  live corpus vocabulary, so promotion needs the ORACLE gate (the harness lane's 28 sealed
-  scorers), not the engine suite. A green suite is exactly what missed the date breakage.
+  live downstream vocabulary, so promotion needs the downstream answer-set checks, not the
+  engine suite. A green suite is exactly what missed the date breakage.
 - `quantity.__hash__` is `hash((self._value, frozenset(self._dims.items())))`. It never touches
   `_dims` directly, which is why a plain dict costs it nothing — but it DOES mean a caller who
   mutates `_dims` silently corrupts an already-hashed value. That is why the property returns a
@@ -875,8 +875,8 @@ MSG
 
 - **The transfer form, the registry TO_TERM/FROM_TERM entries, and `quantity_number/2`.** They sit
   on top of this and want their own plan.
-- **Promotion.** Nothing here leaves `feat/iso-l3-lowering-2026-09-14`. Units are live corpus
-  vocabulary, so promotion needs the ORACLE gate — the harness lane's 28 sealed answer-set scorers — and
+- **Promotion.** Nothing here leaves `feat/iso-l3-lowering-2026-09-14`. Units are live downstream
+  vocabulary, so promotion needs the downstream answer-set checks — and
   `<downstream-domain>` is the canary to run first, being the one units-DECLARING
   domain with an unexplained reading.
 - **`units_clp.py` and `arithmetic.py`.** Not edited, but they hold 15 `_dims` references between

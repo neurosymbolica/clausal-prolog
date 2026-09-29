@@ -113,6 +113,6 @@ parked (todo/seam-handle-form-for-hold-and-call-sites-parked-2026-09-22.md).
 The cost the spec names is real (the atoms-flip sweep) and is accepted for
 these 31 sites in 5 bodies. At W4 landing the same sites may move to
 ``(m.thing, K, V)`` (no literal, no ``module=``) — the todo says when to
-look. The downstream lane holds a sealed-body edit that reverses a spec
+look. The downstream lane holds a downstream-body edit that reverses a spec
 until the operator confirms it to them DIRECTLY; that confirmation is theirs
 to give, not this file's.

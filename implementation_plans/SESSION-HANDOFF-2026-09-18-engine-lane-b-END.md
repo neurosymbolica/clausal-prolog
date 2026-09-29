@@ -53,7 +53,7 @@ Supersedes `SESSION-HANDOFF-2026-09-18-engine-lane-END.md`'s ADDENDUM 2. Branch
   _variables.c are NAME sites (Compound functor), untouched.
 * `tests/fmt/test_corpus.py` / `tests/rewrite/test_corpus.py` rows are red inside worktrees by construction.
 * The C twin `_head_list_unify_input` does not refuse a bare str target (only the Python twin does): the rule
-  is armed at Python entry points; note for the harness lane.
+  is armed at Python entry points; note for a downstream checker.
 
 ## What a downstream lane must do at the seam (announce before landing)
 * Text INPUT to the engine is `chars("...")` (`clausal.logic.cells`), a list of char atoms, or an atom; a bare
@@ -64,6 +64,6 @@ Supersedes `SESSION-HANDOFF-2026-09-18-engine-lane-END.md`'s ADDENDUM 2. Branch
 * The library's raw-string escape hatch: its undeclared branch must emit the carrier (spec §3).
 
 ## Peers / landing
-the harness lane: FREEZE sha = 73c86686 (slice 10 = roborev round-1 fixes, re-gated NEW 0 / GONE 0; the earlier 1c24bd65 is superseded) for the pre-landing sweep (informative diff, NOT a re-baseline); the
-library's raw-string escape hatch must emit the carrier on its undeclared branch. iso-export-lane: G3 first run
-on a frozen sha gates the landing window. corpus-lane: silent-unmatch grep (quoted literals in term patterns).
+A downstream checker: FREEZE sha = 73c86686 (slice 10 = roborev round-1 fixes, re-gated NEW 0 / GONE 0; the earlier 1c24bd65 is superseded) for the pre-landing sweep (informative diff, NOT a re-baseline); the
+library's raw-string escape hatch must emit the carrier on its undeclared branch. A downstream user: G3 first run
+on a frozen sha gates the landing window. A downstream user: silent-unmatch grep (quoted literals in term patterns).

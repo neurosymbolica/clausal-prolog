@@ -11,7 +11,7 @@ The spelling `point(x=1, y=2)` in a term or a clause head is a load-time
 error.  The engine's own 34 sites in 17 files were migrated to positional
 terms plus a declaration (`-private([point(x, y, z)])`) where the NAMES
 mattered; a lowercase declaration names the fields lowercase, which is what
-the keyword head used to do.  The corpus had **zero** sites (931 files,
+the keyword head used to do.  Downstream code had **zero** sites (every source file,
 control: every bare-name keyword call there is a Python `def`/import/assign in
 the same file).
 

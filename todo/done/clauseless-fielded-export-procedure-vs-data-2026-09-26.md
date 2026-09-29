@@ -44,7 +44,7 @@ over-count DCG heads): 41 clause-less, non-dynamic, field-carrying exports
 in 151 module files. 23 are referenced as data in their own file; the other
 18 are exported for importers (tagged-term shapes, constant functors, the
 provenance fixtures' `edge`). Reclassifying them as procedures would change
-those files, and the corpus has not been measured.
+those files, and downstream code has not been measured.
 
 ## What landed
 

@@ -59,11 +59,11 @@ docs warning as part of it.
 The operator ruled option 1 the same day, after three independent censuses agreed the cost is
 zero today:
 
-* **corpus source** (iso-export-lane, corpus b6f2c367, 74 roster domains / 931 files): the
+* **corpus source** (a downstream user, corpus b6f2c367, every roster domain): the
   only unit-bearing literals are `euro` 34, `baht` 7, `dollar` 5 — all BASE currencies. Zero
   occurrences of `cent`, `satang`, `penny`, `day`, `hour`, `minute`, `week`, `month`, `year`,
   `kilometre`, `km`, `gram`, `kg`, `tonne`. `-constant_number_units` appears zero times in
-  the corpus and zero times in library.
+  downstream code and zero times in library.
 * **corpus exports** (same lane, the `% Clausal units:` comments across 754 staged `.pl`):
   `euro` 23, `baht` 9, `dollar` 4, nothing else. The two censuses agree, which is the point
   of running both — a scaled unit reaching the exporter by an ungrepped path would show in
@@ -79,7 +79,7 @@ An unknown name is refused rather than assumed base.
 Tests in `tests/test_currency_minor_units.py`; the characterisation test that pinned the old
 100× fold is deleted, as its own message instructed.
 
-**Option 2 is still the fix and this is still open.** corpus-lane's framing is the one to
+**Option 2 is still the fix and this is still open.** a downstream user's framing is the one to
 keep: the refusal costs nothing *today* and stops being free the moment the constants
 migration starts, because that migration is exactly what creates the first corpus constant.
 A domain that is both on the migration list and on the ISO publish list is blocked until the
@@ -88,7 +88,7 @@ the exporter can resolve the jurisdiction from the `-import_from` it already rea
 
 ### The inline shape, found after option 1 landed
 
-corpus-lane, same day, verified on this tree: option 1 as first written covered the
+A downstream user, same day, verified on this tree: option 1 as first written covered the
 DECLARATION and left the identical defect open on the inline quantity literal.
 
     -constant_number_units(m, 155000, cent)   ->  NotImplementedError    refused
@@ -118,7 +118,7 @@ Worth knowing before editing either, because they look like the same check and a
 
 A declaration in a scaled unit had zero occurrences anywhere when this landed, so refusing
 everything not known to be safe costs nothing there. The inline `5000(euro)` form is used
-throughout the corpus and the tests and has exported this way since the 2026-09-08 ruling —
+throughout downstream code and the tests and has exported this way since the 2026-09-08 ruling —
 refusing unknown names there broke 15 tests on the first attempt, including the
 still-supported TitleCase `Metre` alias and four `iso_type_checking` fixture roundtrips. So
 the inline check under-refuses in the direction of the established behaviour: an unrecognised
@@ -154,7 +154,7 @@ Three things that follow, none of them yet decided:
 * **The scaled-unit refusals would lift for a different reason.** Today they exist because
   dropping `usd_cent` or `basis_point` changes the magnitude. Under term expansion the unit is
   not dropped, so there is nothing to refuse.
-* **It changes what "lossy" means for the roster.** iso-export-lane's export-bytes axis compares
+* **It changes what "lossy" means for the roster.** a downstream user's export-bytes axis compares
   emitted Prolog; a declaration-carrying export is a different file shape, not a different number
   in the same shape. That is a coordinated change, not an engine-side one.
 

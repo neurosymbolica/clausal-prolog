@@ -25,7 +25,7 @@ units/dims tests, provenance fixtures. Someone should triage them, but not W3.
   CALL it. That is W3/W4's cliff: whatever replaces the class must be
   callable in those positions. A census guard with a ratchet (absence of the
   retired names, COUNT of `_get_dispatch` and handle-as-value) was requested.
-* **the corpus lane**: the downstream trees, 0 hits. One STRING-KEYED dependency:
+* **A downstream user**: the downstream trees, 0 hits. One STRING-KEYED dependency:
   `a downstream gate module` classifies a module-shadow collision by matching the
   rendered AttributeError text `' has no attribute '_get_dispatch'` from
   `_dispatch_at`'s probe of a non-PredicateMeta object (17 archived
@@ -36,14 +36,14 @@ units/dims tests, provenance fixtures. Someone should triage them, but not W3.
   commit, send them the verbatim first line, and say whether the old
   AttributeError path is still reachable for any input. They hold the downstream gate module
   unchanged until then.
-* **the export lane**: 0 facade reads, 0 `_get_dispatch` callers. The same
+* **a downstream exporter**: 0 facade reads, 0 `_get_dispatch` callers. The same
   the downstream gate module diagnostic (~983–1038) is text-coupled and fails OPEN. **One live
   classification site**: `a downstream classification site`
   `isinstance(obj, PredicateMeta) and getattr(obj, "_fields", None) != ()`
   decides declared-predicate vs atom — a behaviour change there is a wrong
   ANSWER, not a lost hint. `a downstream helper` reads
   `type(t).__match_args__`. `the downstream corpus tree` NOT grepped (held by
-  the corpus lane for a batch) — ask when the hold lifts.
+  a downstream user for a batch) — ask when the hold lifts.
 
 ## What W3 must therefore preserve or announce
 
@@ -60,7 +60,7 @@ units/dims tests, provenance fixtures. Someone should triage them, but not W3.
 * triage of the 105 baseline reds in the package suites;
 * the W3 design itself (shim + deprecation window + which exception class).
 
-## Addendum (the export lane, later the same day): a third coupling shape
+## Addendum (a downstream exporter, later the same day): a third coupling shape
 
 `a downstream test` compares
 `type(t).__name__ == "PredicateMeta"` — the class NAME as a STRING. Neither
@@ -74,9 +74,9 @@ query returns nothing today from the patterns used above. Their repo-wide
 grep confirmed W2's zero; `an untracked snapshot` is an untracked snapshot
 duplicating live hits, not additional sites.
 
-## Addendum 2 — the corpus is swept; the census is COMPLETE
+## Addendum 2 — downstream code is swept; the census is COMPLETE
 
-the export lane, after the hold on the downstream corpus tree lifted: W2
+a downstream exporter, after the hold on the downstream corpus tree lifted: W2
 facades 0 files (positive control first), `_get_dispatch` 0 call sites,
 `PredicateMeta` 1 file and it is a comment
 (one downstream file, in a comment). Final

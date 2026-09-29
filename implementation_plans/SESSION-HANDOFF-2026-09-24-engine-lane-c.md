@@ -34,5 +34,5 @@ Q4 AmbiguousHandleOwnerError (two live modules sharing a name, raised only when 
 ## After these land (pre-flip remainder, from the dry run)
 small fixes (listing(p) bare, analyze_mi(mod.solve), step 4a, tabling guard, cell
 spelling) -> the flip (W4b-2d) -> migrate 484 class-pinning tests -> W4b-3 deletion.
-Downstream: 259 corpus scorer sites LOUD at the flip; remedy = cells to solve (NOT
---m.pred, ruled all-solve); list at /workspace/_p4-flip-downstream-impact-2026-09-24.md.
+Downstream: sites go LOUD at the flip; remedy = cells to solve (NOT
+--m.pred, ruled all-solve); the list is kept downstream.

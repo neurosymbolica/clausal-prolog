@@ -73,7 +73,7 @@ the quiet direction instead: every underscore-led singleton stops being reported
 real typo-catching.
 
 **This cannot be settled by reading the source.** The measurement is: implement the predicate,
-run the engine suite and the corpus with each reading, and count the warnings each produces.
+run the engine suite and downstream code with each reading, and count the warnings each produces.
 Do that before choosing.
 
 ## Migration cost, measured 2026-09-11

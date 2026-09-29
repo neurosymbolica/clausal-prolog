@@ -50,7 +50,7 @@ Operator ruled for the real-unit design, and for EUR/USD only, after seeing the 
 exact: `-constant_number_units(x, 1550.00, dollar)` stores `Quantity(Decimal('1550.0'),
 dollar)`, and `_check_currency_precision` rejects sub-scale digits. So minor units buy
 exactly one thing — recording what the **source** said — and the base-currency form was never
-unsafe. Worth keeping in view if the corpus migration is re-costed.
+unsafe. Worth keeping in view if downstream code migration is re-costed.
 
 **"I think the minor units always have names, right?"** — 238 of 254 do; 16 are ISO scale 0
 (yen, won) and have no subunit in circulation. But the *names* are not in ISO 4217, which
@@ -96,16 +96,16 @@ rather than being silently rewritten:
   "RULED … no minor-unit currency … ever" section now carries a SUPERSEDED section.
 
 **Ratios and durations are NOT superseded.** No `percent`, no `basis_point` (parked in
-`todo/ratio-declaration-units-basis-points-and-percent-2026-09-11.md`, which is corpus-lane's
+`todo/ratio-declaration-units-basis-points-and-percent-2026-09-11.md`, which is a downstream user's
 live blocker and the obvious next one); durations remain date arithmetic.
 
 ## Worth putting to the other lanes
 
-corpus-lane holds 71 ambiguous `_cents` parameter names spanning three lanes (13 profile keys
+A downstream user holds 71 ambiguous `_cents` parameter names spanning three lanes (13 profile keys
 on the oracle interface, 56 reaching `eval/` bodies, 27 anchored in mutation catalogs). Now
 that the declaration can carry the currency and the scale, **most of those renames may be
 unnecessary** — the name can stay while the declaration says `cent`. That turns a 71-name
-cross-lane rename into a much smaller pass. It is corpus-lane's call, not this lane's.
+cross-lane rename into a much smaller pass. It is a downstream user's call, not this lane's.
 
 ## Evidence
 

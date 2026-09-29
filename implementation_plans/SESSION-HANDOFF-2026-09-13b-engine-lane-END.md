@@ -26,18 +26,18 @@ tree, which is how you test one tree's code against another tree's expectations.
 
 ## Both missing measurement arms are CLOSED, and both peers beat my reasoning
 
-**iso-export-lane — export bytes: `cc008788` vs `c71810ec`, 1560 files, raw 0, normalised 0**,
+**A downstream user — export bytes: `cc008788` vs `c71810ec`, every exported file, raw 0, normalised 0**,
 141 errors under both. Wider than the five unmeasured commits, so a zero covers them. They
 **disabled their own in-flight change (`be454bb`) for the arm**, which is the discipline: a second
 variable moving inside a measurement of the first answers neither question. Their recorder read
 "engine 25 commits behind" before the run — an instrument that reports what it is ACTUALLY
 measuring.
 
-**the harness lane — the domain axis is vacuous in the STRICT sense.** My argument was "no corpus
-file declares a constant". Theirs was better and they said so: **that is a claim about the CORPUS;
+**A downstream checker — the domain axis is vacuous in the STRICT sense.** My argument was "no corpus
+file declares a constant". Theirs was better and they said so: **that is a claim about DOWNSTREAM CODE;
 reachability is decided by the IMPORT GRAPH.** They measured it — atexit hook on `sys.modules` over
 a real scored domain (crr_lcr, 33/33): CHANGED modules imported NONE, any `clausal.tools.*` at all
-NONE; 0 of 82 harnesses and 0 rulebases reference the exporter. **My reasoned version is retired,
+NONE; 0 of N harnesses and 0 rulebases reference the exporter. **My reasoned version is retired,
 not kept alongside.**
 
 ## THE RULING — non-integer arithmetic surface, DIRECT
@@ -48,7 +48,7 @@ CLOSED.**
 
 Obtained by asking the operator directly, both candidates side by side. This was the right move and
 the pattern is worth more than the answer: **two second-hand accounts of the SAME operator, minutes
-apart, describing DIFFERENT surfaces.** iso-export-lane had `{...}` relayed; this lane had
+apart, describing DIFFERENT surfaces.** a downstream user had `{...}` relayed; this lane had
 `arithmetic(...)` raised. Neither lane should pick between two second-hand accounts of one person.
 
 **He priced both costs before ruling, so neither reopens it:** it re-purposes the set literal, and
@@ -56,10 +56,10 @@ apart, describing DIFFERENT surfaces.** iso-export-lane had `{...}` relayed; thi
 nothing, `{}/1` missing; only the branch build at `/workspace/scryer-prolog-clpq` has it). The
 availability gate is an implementation problem, not grounds to reopen.
 
-Relayed to iso-export-lane marked DIRECT so they need not ask again.
+Relayed to a downstream user marked DIRECT so they need not ask again.
 `todo/non-integer-arithmetic-surface-and-export-2026-09-13.md` updated in place.
 
-## The census that sizes the remaining risk (iso-export-lane's, and it is the best artefact of the day)
+## The census that sizes the remaining risk (a downstream user's, and it is the best artefact of the day)
 
     924  VAR == <rhs> sites in corpus source
     886  plain, no division
@@ -81,7 +81,7 @@ blocked. **False as of option 3.** Checked by RUNNING it, not by reading:
     _unit_factor(['basis_point'])  -> Decimal('0.0001')
     _unit_factor(['nonesuch_xyz']) -> None          (the refusal that should remain, remains)
 
-**`<downstream-domain>` is UNBLOCKED** — 21 pairs across 9 domains, corpus-lane's migration, not this
+**`<downstream-domain>` is UNBLOCKED** — 21 pairs across several domains, a downstream user's migration, not this
 lane's. The memory had stated a REFUSAL as a standing property of a tree and it went stale in ONE
 DAY. State the CHANGE; carry the command that re-measures it.
 
@@ -113,7 +113,7 @@ previous handoff that were NOT caught lacked it.
    the operator said not now, deliberately. It needs the `box` ssh ALIAS, `--force` for the clock
    skew, and verification by observation.
 2. **Implement the `{...}` surface.** Engine + surface is this lane's; emission and the `#=`
-   conversion are iso-export-lane's; the float trap binds both. **Emit the RATIO, never the
+   conversion are a downstream user's; the float trap binds both. **Emit the RATIO, never the
    decimal** — `{X = 155.05}` gives `2727668446186701 rdiv 17592186044416`, `{X = 15505/100}` gives
    `3101 rdiv 20`.
 3. **The CLP(Q) availability gate** now has to be designed around rather than argued about.
@@ -121,7 +121,7 @@ previous handoff that were NOT caught lacked it.
    rather than measurement.
 5. Adopting `decimal_repr="rational"` for the roster is still a separate decision from having the
    capability, and still needs its own export-bytes run.
-6. `<downstream-domain>` migration — corpus-lane's, now genuinely unblocked.
+6. `<downstream-domain>` migration — a downstream user's, now genuinely unblocked.
 
 ## Numbers, with their trees, because they do not transfer
 
@@ -153,4 +153,4 @@ and changing its failure set now is the very trap they avoided today.
 the CLONE, and a count from one tree says nothing about another. What the landing is actually
 cleared by is narrower and stronger: **zero failures anywhere in the exporter / constants /
 currency / prelude area**, from a name set whose extraction was positive-controlled, plus the
-before/after probe, plus iso-export-lane's byte zero, plus the harness lane's import-graph null.
+before/after probe, plus a downstream user's byte zero, plus a downstream checker's import-graph null.

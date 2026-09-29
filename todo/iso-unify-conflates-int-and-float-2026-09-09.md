@@ -72,5 +72,5 @@ regression. The related `'#='` pin is
 
 An operator ruling on whether `unify` narrows engine-wide, then (in one
 change, to keep A05-D001's consistency rule) `unify`, `structural_eq` and the
-CLP posting path together, with the corpus re-run. Out of scope for the
+CLP posting path together, with downstream code re-run. Out of scope for the
 comparison-builtins branch, which changed no engine behaviour at all.

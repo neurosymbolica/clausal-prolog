@@ -56,8 +56,8 @@ of two unknowns are nonlinear and belong to Z3 either way.
 - `ground_dims` is the positive-control oracle only; it rejects every
   variable by design.
 - Corpus side: exact quotients now print as rationals (`10/3 euro`) and the
-  comparators accept quantities they used to refuse. The sealed
-  <downstream-domain> scorers (the harness lane) must be re-run before this is
+  comparators accept quantities they used to refuse. The
+  <downstream-domain> answer-set checks must be re-run before this is
   promoted to canonical; that is a claim this repo cannot make.
 - Round 22 (lows, unfixed): `Quantity._all_finite` checks Decimals only, so a
   non-finite FLOAT reaching `//`, `%` or the Fraction↔float bridge in

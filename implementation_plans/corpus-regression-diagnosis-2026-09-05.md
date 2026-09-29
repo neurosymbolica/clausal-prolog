@@ -115,7 +115,7 @@ level(N, dd) <- (src(N), N == 4)
 | **3 rule clauses instead of 4** (`mini3/`) | PASS | below `_INDEX_THRESHOLD = 4`; indexing never engages. |
 
 So the trigger is exactly: **an atom imported from ANOTHER module, used as a rule-head argument, in
-a predicate with ≥ 4 clauses, called with that argument bound.** That is the corpus's "DAG-root
+a predicate with ≥ 4 clauses, called with that argument bound.** That is downstream code's "DAG-root
 `schema.clausal` + sibling `computation.clausal`" (Wave B) decomposition idiom.
 
 The engine's own test suite is green because its atom-head fixtures are single-module (Constant
@@ -268,7 +268,7 @@ By domain area (tests fixed):
 <downstream-domain> 328   <downstream-domain> 52   <downstream-domain> 40   <downstream-domain> 37
 <downstream-domain> 31      <downstream-domain> 31       <downstream-domain> 20
 <downstream-domain> 19          <downstream-domain> 17   <downstream-domain> 17
-<downstream-domain> 12   <downstream-domain> 11   uk/traffic_highway_code 10   <downstream-domain> 3
+<downstream-domain> 12   <downstream-domain> 11   <downstream-domain> 10   <downstream-domain> 3
 <downstream-domain> 2   <downstream-domain> 2   <downstream-domain> 1
 ```
 
@@ -283,23 +283,23 @@ arg naming an `-import_from`'d identifier in a predicate with ≥ 4 clauses.
 files with >=1 at-risk predicate: 57
 at-risk predicates:               99
 domain areas touched:             29
-top: <downstream-domain> 33, uk/traffic_highway_code 7, <downstream-domain> 6,
+top: <downstream-domain> 33, <downstream-domain> 7, <downstream-domain> 6,
      <downstream-domain> 5, <downstream-domain> 5, <downstream-domain> 4,
      <downstream-domain> 3, <downstream-domain> 3, then ~2 each across
      <downstream-domain>, <downstream-domain>, <downstream-domain>, <downstream-domain>, <downstream-domain>,
-     <downstream-domain>, <downstream-domain>, <downstream-domain>, <downstream-domain>, <downstream-domain>, <downstream-domain>, th/visa …
+     <downstream-domain>, <downstream-domain>, <downstream-domain>, <downstream-domain>, <downstream-domain>, <downstream-domain>, <downstream-domain> …
 ```
 
 This is an upper bound on *predicates* (an at-risk predicate only misbehaves when actually called
 with that argument bound) and a lower bound on *impact* (a broken predicate poisons many downstream
 queries — one broken `cdd_level/2` produced 28 red tests). It agrees with the measured sweep on the
 ranking (`<downstream-domain>` far in front, then `<downstream-domain>`, `<downstream-domain>`, `<downstream-domain>`,
-`<downstream-domain>`, `<downstream-domain>`, `uk/traffic_highway_code`).
+`<downstream-domain>`, `<downstream-domain>`, `<downstream-domain>`).
 
-Anything outside the corpus that uses the same decomposition idiom (a shared vocabulary module +
+Anything outside downstream code that uses the same decomposition idiom (a shared vocabulary module +
 sibling rule modules, ≥ 4 clauses) is equally exposed. Everything single-module, or below the
 4-clause index threshold, is unaffected — which is why the engine's own suite stayed green and why
-this reached the corpus rather than CI.
+this reached downstream code rather than CI.
 
 ## 9. Recommended action
 

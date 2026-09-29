@@ -3,7 +3,7 @@
 **Type:** engine semantics regression (P3-1 fallout) — BLOCKING for the ISO
 export's credibility and for the Prolog-reader surface. **Owner:** the
 `clausal-bug-fix` instance (the P3 refactoring lane whose pivot introduced
-it). **Reporter:** the ISO-export lane (executor-train session), 2026-09-06.
+it). **Reporter:** a downstream user, 2026-09-06.
 **Operator rulings in this file were taken 2026-09-06 with Mike and are
 final unless he reopens them; the OPEN QUESTIONS section is what is not yet
 ruled.** Trigger: Markus Triska asked what `write_canonical("hello")` prints
@@ -27,7 +27,7 @@ plain interned `str` and — correctly, given that — RETIRED the cons rule
 which ISO forbids). The Python-surface parser was left lowering `"..."` to
 that same plain str, so a double-quoted literal now denotes an ATOM. The ISO
 translator followed (`bda6b039`, "a str literal denotes an ATOM, not a char
-list"), and the corpus's literal migration (2026-09-05) was built on it.
+list"), and downstream code's literal migration (2026-09-05) was built on it.
 
 Net effect, measured live on canonical `ccdb78d7` (2026-09-06):
 
@@ -304,7 +304,7 @@ L. **Docs:** fold the two stale-doc todos; user docs for `'…'` vs `"…"`,
 5. Foreign-text default (Python/JSON in = string): confirm; and the JSON
    profile loader's atom-by-vocabulary rule.
 6. `-double_quotes(atom)` mass insertion: one commit per repo by the lane
-   that owns it (corpus: executor-train lanes; library: trunk) — coordinate
+   that owns it (corpus: downstream lanes; library: trunk) — coordinate
    so it lands BEFORE the engine flip reaches canonical.
 7. Whether the reverse translator (`prolog_to_clausal`) and the Prolog
    reader (`prolog_reader.py`) already emit `'x'` vs `"x"` correctly — the
@@ -313,8 +313,8 @@ L. **Docs:** fold the two stale-doc todos; user docs for `'…'` vs `"…"`,
 ## 8. Coordination
 
 - Owner: `clausal-bug-fix` instance (P3 lane). Reporter/consumer: ISO
-  export lane (executor-train), which will re-run the export gates and
-  owns items J/K's export side; library/corpus migration is the corpus lanes'.
+  downstream exporter (downstream), which will re-run the export gates and
+  owns items J/K's export side; library/corpus migration is downstream code lanes'.
 - Engine-main hold rules unchanged (hold canonical commits only during
   P3-3's announced landing sync). The flip must not reach canonical before
   the ratchet directive is in every corpus/library module (item I) — the
