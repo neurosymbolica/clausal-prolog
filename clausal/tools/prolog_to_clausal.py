@@ -824,7 +824,7 @@ class _PrologToClausal:
             name = self._predicate_name(term.functor, len(term.args))
             if not term.args:
                 return f"{name}()"
-            args = ", ".join(self._emit_term(a) for a in term.args)
+            args = self._emit_args(term.functor, term.args)
             return f"{name}({args})"
         if isinstance(term, PAtom):
             name = self._predicate_name(term.name, 0)
@@ -1105,6 +1105,22 @@ class _PrologToClausal:
             raise PrologTranslationError(
                 f"{directive}: use_module/{len(body.args)} is not a "
                 "use_module the translator knows (use_module/1 or /2).")
+        if (len(body.args) == 2 and isinstance(body.args[1], PList)
+                and not body.args[1].elements and body.args[1].tail is None):
+            # Measured 2026-09-29: Scryer reads use_module(M, []) as
+            # remove_module(M) (it drops M's exports and never loads M, so
+            # M:p(X) is an existence_error), Trealla and SWI as "load M,
+            # import nothing".  Picking either silently makes a program
+            # answer differently from one of the two; -import_from(m, [])
+            # was a loader crash (``empty names on ImportFrom``).
+            raise PrologTranslationError(
+                f"{directive}: an empty import list has no portable meaning. "
+                "Scryer reads it as remove_module/2 (it drops the module's "
+                "imports and does not load it), Trealla and SWI as 'load "
+                "it, import nothing'. Write use_module(M) to load it and "
+                "import its exports, or use_module(M, [p/1, ...]) to import "
+                "some; either way M:p(X) then reaches any predicate it "
+                "exports.")
 
         lib_term = body.args[0]
         if (isinstance(lib_term, PCompound) and lib_term.functor == "library"
@@ -1693,8 +1709,23 @@ class _PrologToClausal:
             self._data_functors.setdefault(name, set()).add(len(args))
         if not args:
             return f"{name}()"
-        arg_strs = ", ".join(self._emit_term(a) for a in args)
+        arg_strs = self._emit_args(functor, args)
         return f"{name}({arg_strs})"
+
+    def _emit_args(self, functor: str, args) -> str:
+        """The emitted argument list of a ``functor(args)`` head, goal or
+        data term.
+
+        plunit's ``test(Name, Option)``: the option is DATA the test runner
+        reads, so an atom option (``fail``, ``false``) stays the atom it
+        spells rather than folding to the truth value ``False``.  Applied in
+        every position -- head, goal and data alike -- so a ``test/2`` fact
+        and a call of it still unify."""
+        emitted = [self._emit_term(a) for a in args]
+        if (functor == "test" and len(args) == 2
+                and isinstance(args[1], PAtom)):
+            emitted[1] = _quote_atom(args[1].name)
+        return ", ".join(emitted)
 
     @staticmethod
     def _refuse_caret_goal() -> None:

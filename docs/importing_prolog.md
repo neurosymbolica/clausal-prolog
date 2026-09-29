@@ -137,6 +137,13 @@ imports every predicate the `.pl` module's `module/2` directive exports
 `.seam` module it is `-import_module`, whose predicates are reached
 qualified.
 
+An EMPTY import list, `:- use_module(m, []).`, is a translation error naming
+the line: Scryer reads it as `remove_module/2` (it drops `m`'s imports and
+does not load `m`, so `m:p(X)` is an `existence_error`), while Trealla and
+SWI load `m` and import nothing. Write `use_module(m)` or
+`use_module(m, [p/1])` instead; after either, `m:p(X)` reaches every
+predicate `m` exports, in Clausal, Scryer and Trealla alike.
+
 ### Module paths
 
 A module is named by an atom (`helpers`), a quoted or unquoted path
@@ -372,6 +379,7 @@ SyntaxError: Cannot import foo.pl: Cut (!/0) cannot be translated to Clausal.
 | Encoding error | Non-UTF-8 `.pl` file | `SyntaxError` |
 | Import error | Missing module in `use_module` | `ImportError` |
 | Unmappable module spec | `use_module(M)`, a path with no module | `SyntaxError` naming the directive and line |
+| Empty import list | `use_module(M, [])` (Scryer and Trealla disagree on it) | `SyntaxError` naming the directive and line |
 
 A translation error names the `.pl` line it comes from
 (`Cannot import foo.pl: line 12: Cut (!/0) ...`).

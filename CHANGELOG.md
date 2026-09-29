@@ -130,6 +130,18 @@ since 0.4.0 finish three moves:
 
 ### Added
 
+- **Negative tests: `test(Name, fail)`.** plunit's `test/2` with the option
+  `fail` passes iff its goal has no solution; a solution fails it and an
+  exception is an error, as for `test/1`. The seam spelling is the same term,
+  `test("name", fail) <- Goal`, and `.pl` files write it as plunit does. Any
+  other option (`throws(E)`, `nondet`, `true(C)`, ...) is a collection error
+  naming it (`clausal.testing.TestCollectionError`; one failing `<collect>`
+  item for the file), never ignored. As in plunit, `test/2` is reserved: a
+  file defining its own `test/2` predicate with other second arguments now
+  fails collection (none of 1,450 `.clausal`/`.seam`/`.pl` files in the repo
+  and a corpus checkout does). In a `.pl` file an atom second argument of
+  `test/2` stays that atom (`fail`/`false` no longer fold to `False` there),
+  in heads, calls and data alike. See [docs/testing.md](docs/testing.md).
 - **`-import_from(m, [p/1])` imports one arity of `p`**, as Scryer's
   `use_module(m, [p/1])` does (`s//1` is `s/3`). A bare `p` still imports
   every arity; the forms mix in one list, and `alias(p/1, q)` renames one
@@ -312,6 +324,12 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
 
 ### Fixed
 
+- **`:- use_module(m, []).` in a `.pl` file is a located translation
+  error**, not a loader crash (`ValueError: empty names on ImportFrom`).
+  Scryer reads it as `remove_module/2` (drops the imports, never loads
+  `m`), Trealla and SWI as "load `m`, import nothing", so the error names
+  both and points at `use_module(m)` / `use_module(m, [p/1])`. See
+  [docs/importing_prolog.md](docs/importing_prolog.md).
 - **An imported `.pl` file's `_Name` variable is no singleton.** By the
   Prolog convention (ISO, Scryer) `_Y` in `setof(X, p(X, _Y), L)` is used
   once on purpose; the `.pl` load warned "rename to `_Y_UNUSED`". The

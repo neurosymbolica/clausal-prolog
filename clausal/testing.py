@@ -9,6 +9,15 @@ runs them. Each test clause is a rule of the form:
 
 A test passes if its body succeeds (produces at least one solution).
 
+A NEGATIVE test is plunit's ``test/2`` with the option ``fail``:
+
+    test("description", fail) <- goal1, goal2, ...  % .clausal / .seam
+    test('description', fail) :- Goal1, Goal2, ...  % .pl
+
+It passes iff its body has NO solution; a solution fails it, and an
+exception is an error as for ``test/1``.  Any other option is a collection
+error (:class:`TestCollectionError`) naming it.
+
 Standalone usage
 ----------------
     python -m clausal.testing clausal/examples/
@@ -228,6 +237,8 @@ class TestResult:
     duration: float = 0.0
     line: int | None = None
     diagnostic: GoalDiagnostic | None = None
+    #: A ``test(Name, fail)`` clause: it passes iff its goal has no solution.
+    negative: bool = False
 
 
 @dataclass
@@ -283,58 +294,157 @@ def load_clausal_module(path: str | Path) -> object:
 #: lowercase, so it is ``test/1``; ``Test/1`` clauses are still collected and
 #: run (a file may hold both while it is being renamed) and the loader warns
 #: once per file — see ``term_rewriting._warn_deprecated_test_spelling``.
+#: ``test/2`` is plunit's ``test(Name, Options)``; the one option supported
+#: is ``fail`` (ruling 2026-09-29), a NEGATIVE test.
 TEST_NAME = "test"
 TEST_DEPRECATED_NAME = "Test"
 
+#: The ``test/2`` options the runner understands.
+TEST_OPTION_FAIL = "fail"
+
+#: plunit's other ``test/2`` options, named in the error for one of them so
+#: the author sees it was read and refused, not mistyped.
+PLUNIT_UNSUPPORTED_OPTIONS = (
+    "true(Cond)", "all(Template Cmp Values)", "set(Template Cmp Values)",
+    "throws(Error)", "error(Error)", "false", "nondet", "blocked(Reason)",
+    "fixme(Reason)", "setup(Goal)", "cleanup(Goal)", "forall(Generator)",
+    "condition(Goal)", "occurs_check(Mode)", "timeout(Seconds)",
+)
+
+
+class TestCollectionError(ValueError):
+    """A test clause the runner cannot collect: an unsupported ``test/2``
+    option.  A load-time-like error for the whole file (the CLI and the
+    pytest plugin report it as ``<collect>``), never a silently skipped
+    test."""
+
+    __test__ = False                    # not a pytest test class
+
 
 def _test_clauses(logic_module) -> list[tuple[str, object]]:
-    """``(functor, clause)`` for every ``test/1`` and ``Test/1`` clause.
+    """``(functor, clause)`` for every ``test/1``, ``Test/1`` and ``test/2``
+    clause.
 
     Order is the order a reader sees: each predicate's clauses in the order
-    they were asserted (source order for a loaded file), and the two
-    predicates merged by source line so a mixed file runs top to bottom.
-    The merge never reorders WITHIN a predicate: it only chooses which
-    predicate's next clause comes first (a clause without a source position,
-    e.g. from ``assertz``, is taken as if it came last).  A single-spelling
-    file — the common case — is exactly the ``clauses_for`` order.
+    they were asserted (source order for a loaded file), and the predicates
+    merged by source line so a mixed file runs top to bottom.  The merge
+    never reorders WITHIN a predicate: it only chooses which predicate's
+    next clause comes first (a clause without a source position, e.g. from
+    ``assertz``, is taken as if it came last).  A single-predicate file —
+    the common case — is exactly the ``clauses_for`` order.  A ``test/2``
+    clause is told apart by its head's arity (:func:`_is_negative`).
     """
-    canonical = [(TEST_NAME, c) for c in logic_module.db.clauses_for(TEST_NAME, 1)]
-    legacy = [(TEST_DEPRECATED_NAME, c)
-              for c in logic_module.db.clauses_for(TEST_DEPRECATED_NAME, 1)]
-    if not legacy:
-        return canonical
-    if not canonical:
-        return legacy
+    db = logic_module.db
+    groups = [g for g in (
+        [(TEST_NAME, c) for c in db.clauses_for(TEST_NAME, 1)],
+        [(TEST_DEPRECATED_NAME, c)
+         for c in db.clauses_for(TEST_DEPRECATED_NAME, 1)],
+        [(TEST_NAME, c) for c in db.clauses_for(TEST_NAME, 2)],
+    ) if g]
+    if len(groups) <= 1:
+        return groups[0] if groups else []
 
     def line(entry):
         position = entry[1].position
         return position[0] if position else float("inf")
 
     merged: list[tuple[str, object]] = []
-    i = j = 0
-    while i < len(canonical) and j < len(legacy):
-        if line(canonical[i]) <= line(legacy[j]):
-            merged.append(canonical[i])
-            i += 1
-        else:
-            merged.append(legacy[j])
-            j += 1
-    merged.extend(canonical[i:])
-    merged.extend(legacy[j:])
-    return merged
+    heads = [0] * len(groups)
+    while True:
+        best = None
+        for gi, group in enumerate(groups):
+            if heads[gi] < len(group) and (
+                    best is None
+                    or line(group[heads[gi]]) < line(groups[best][heads[best]])):
+                best = gi
+        if best is None:
+            return merged
+        merged.append(groups[best][heads[best]])
+        heads[best] += 1
+
+
+def _head_args(head) -> tuple:
+    """The argument tuple of a ``test`` clause head."""
+    if hasattr(head, "args"):
+        return tuple(head.args)
+    from clausal.logic.cells import _cell_shape, cell_args  # noqa: PLC0415
+    if _cell_shape(head)[0]:
+        return tuple(cell_args(head))
+    from clausal.logic.predicate import term_field_names  # noqa: PLC0415
+    return tuple(getattr(head, n) for n in term_field_names(head))
+
+
+def _is_negative(clause) -> bool:
+    """True for a ``test(Name, fail)`` clause (a ``test/2`` head)."""
+    return len(_head_args(clause.head)) == 2
+
+
+def _test_option(clause) -> tuple[object, str]:
+    """``(value, source text)`` of a ``test/2`` clause's option argument.
+
+    A head argument the compiler hoisted (``fail`` in a seam head becomes a
+    fresh variable plus a leading ``Unify(V, fail)`` body goal, see
+    ``Clause.hoisted``) is read back from that goal: a bare name is the
+    atom it spells, anything else is only rendered for the error."""
+    from clausal.logic.variables import Var, deref  # noqa: PLC0415
+    from clausal.terms import term_str  # noqa: PLC0415
+    opt = deref(_head_args(clause.head)[1])
+    if isinstance(opt, Var):
+        for goal in list(clause.body or ())[:getattr(clause, "hoisted", 0)]:
+            if type(goal).__name__ == "Unify" and goal.left is opt:
+                right = goal.right
+                if type(right).__name__ == "LoadName":
+                    return right.name, right.name
+                return None, _render_node(right)
+        return None, "a variable"
+    from clausal.logic.atoms import is_atom, spelling  # noqa: PLC0415
+    if is_atom(opt):
+        return spelling(opt), spelling(opt)
+    try:
+        return None, term_str(opt)
+    except Exception:  # noqa: BLE001 - only rendered for the error
+        return None, repr(opt)
+
+
+def _render_node(node) -> str:
+    """Source-like text of a hoisted head argument (for an error only)."""
+    kind = type(node).__name__
+    if isinstance(node, list):
+        return "[" + ", ".join(_render_node(e) for e in node) + "]"
+    if kind == "LoadName":
+        return node.name
+    if kind in ("ListLiteral", "TupleLiteral"):
+        inner = ", ".join(_render_node(e) for e in node.elements)
+        return f"[{inner}]" if kind == "ListLiteral" else f"({inner})"
+    if kind == "Call":
+        args = ", ".join(_render_node(a) for a in node.args)
+        return f"{_render_node(node.func)}({args})"
+    if kind == "Constant" or not hasattr(node, "__dataclass_fields__"):
+        value = getattr(node, "value", node)
+        return repr(value)
+    return str(node)
+
+
+def _check_test_option(mod, clause, name: str) -> None:
+    """Raise :class:`TestCollectionError` unless the option is ``fail``."""
+    value, text = _test_option(clause)
+    if value == TEST_OPTION_FAIL:
+        return
+    where = getattr(mod, "__file__", None) or getattr(mod, "__name__", "<module>")
+    if clause.position and not str(where).endswith(PROLOG_SUFFIX):
+        # A .pl file's positions are lines of its translation (no source map).
+        where = f"{where}: line {clause.position[0]}"
+    raise TestCollectionError(
+        f"{where}: test({name!r}, {text}): unknown test option `{text}`; "
+        f"only `{TEST_OPTION_FAIL}` is supported (test(Name, fail) passes "
+        "iff Name's goal has no solution). plunit's other options are not: "
+        + ", ".join(PLUNIT_UNSUPPORTED_OPTIONS))
 
 
 def _test_description_term(head):
-    """The description ARGUMENT of a ``test/1`` clause head."""
-    if hasattr(head, "args"):
-        return head.args[0]
-    from clausal.logic.cells import _cell_shape, cell_args  # noqa: PLC0415
-    if _cell_shape(head)[0]:                        # P2: a head is a cell
-        args = cell_args(head)
-        return args[0] if args else head
-    from clausal.logic.predicate import term_field_names
-    names = term_field_names(head)
-    return getattr(head, names[0]) if names else head
+    """The description ARGUMENT of a ``test/1`` or ``test/2`` clause head."""
+    args = _head_args(head)
+    return args[0] if args else head
 
 
 def _test_description_name(desc) -> str:
@@ -364,13 +474,20 @@ def _test_description_name(desc) -> str:
 
 
 def collect_tests(mod: object) -> list[str]:
-    """Return the list of test/1 clause descriptions from a loaded module."""
+    """Return the test descriptions (``test/1``, ``Test/1`` and
+    ``test(Name, fail)`` clauses) from a loaded module.
+
+    Raises :class:`TestCollectionError` for a ``test/2`` clause whose option
+    is not ``fail``."""
     logic_module = mod.__dict__.get("$module")
     if logic_module is None:
         return []
     entries = _test_clauses(logic_module)
     names = [_test_description_name(_test_description_term(clause.head))
              for _functor, clause in entries]
+    for (_functor, clause), name in zip(entries, names):
+        if _is_negative(clause):
+            _check_test_option(mod, clause, name)
     _warn_description_under_both_spellings(mod, entries, names)
     return names
 
@@ -384,8 +501,9 @@ def _warn_description_under_both_spellings(mod, entries, names) -> None:
     the file and the descriptions, so the author renames one of them.
     """
     spelled: dict[str, set[str]] = {}
-    for (functor, _clause), name in zip(entries, names):
-        spelled.setdefault(name, set()).add(functor)
+    for (functor, clause), name in zip(entries, names):
+        spelled.setdefault(name, set()).add(
+            f"{functor}/{len(_head_args(clause.head))}")
     doubled = [name for name, functors in spelled.items() if len(functors) > 1]
     if not doubled:
         return
@@ -393,10 +511,11 @@ def _warn_description_under_both_spellings(mod, entries, names) -> None:
     where = getattr(mod, "__file__", None) or getattr(mod, "__name__", "<module>")
     listed = ", ".join(repr(name) for name in doubled)
     warnings.warn(
-        f"{where}: test description(s) {listed} defined under both "
-        f"{TEST_NAME}/1 and {TEST_DEPRECATED_NAME}/1; each name runs its "
+        f"{where}: test description(s) {listed} defined under more than "
+        f"one of {TEST_NAME}/1, {TEST_DEPRECATED_NAME}/1 and "
+        f"{TEST_NAME}(Name, fail); each name runs its "
         f"first clause only, so rename the {TEST_DEPRECATED_NAME}/1 clause "
-        f"to {TEST_NAME}/1 or give it its own description",
+        f"to {TEST_NAME}/1 or give each clause its own description",
         stacklevel=3,
     )
 
@@ -426,17 +545,36 @@ def run_test(
         # ``-double_quotes(chars)``.  Calling with the name would pass a
         # ``str`` — a different term from the atom, matching nothing.  The
         # functor is the clause's own: ``test`` or the deprecated ``Test``.
-        functor, goal_desc = _test_goal_for_name(logic_module, description)
-        solutions = list(call(functor, goal_desc, module=logic_module))
-        passed = len(solutions) > 0
+        functor, goal_desc, negative = _test_goal_for_name(
+            logic_module, description)
+        if negative:
+            # test(Name, fail): passes iff the goal has NO solution.  One
+            # solution decides it; the rest are never searched for.  An
+            # embedder calling run_test without collect_tests still gets
+            # an unsupported option refused, never run as a `fail` test.
+            _check_test_option(mod, _test_entry(logic_module, description)[1],
+                               description)
+            gen = call(functor, goal_desc, TEST_OPTION_FAIL, module=logic_module)
+            try:
+                passed = next(gen, None) is None
+            finally:
+                gen.close()
+        else:
+            solutions = list(call(functor, goal_desc, module=logic_module))
+            passed = len(solutions) > 0
         result = TestResult(name=description, passed=passed,
-                            duration=time.perf_counter() - t0)
+                            duration=time.perf_counter() - t0,
+                            negative=negative)
     except Exception as e:
         result = TestResult(name=description, passed=False, error=e,
-                            duration=time.perf_counter() - t0)
+                            duration=time.perf_counter() - t0,
+                            negative=_names_negative(logic_module, description))
 
     # Observation only, and only on failure.  ``passed`` is already decided.
-    if diagnose and not result.passed:
+    # A ``fail`` test whose goal SUCCEEDED has no failing conjunct to find:
+    # the conjunct walk would only report that every goal solved.
+    if (diagnose and not result.passed
+            and not (result.negative and result.error is None)):
         result.diagnostic = diagnose_failure(mod, description, path=path,
                                              error=result.error)
         result.line = result.diagnostic.line
@@ -464,7 +602,13 @@ def run_file(path: str | Path) -> FileResults:
     except Exception as e:
         results.results.append(TestResult(name="<load>", passed=False, error=e))
         return results
-    for desc in collect_tests(mod):
+    try:
+        descs = collect_tests(mod)
+    except TestCollectionError as e:
+        results.results.append(
+            TestResult(name="<collect>", passed=False, error=e))
+        return results
+    for desc in descs:
         results.results.append(run_test(mod, desc, path=path, diagnose=True))
     return results
 
@@ -684,10 +828,20 @@ def _test_goal_for_name(logic_module, description):
         db = logic_module.db
         if (db.is_defined(TEST_DEPRECATED_NAME, 1)
                 and not db.is_defined(TEST_NAME, 1)):
-            return TEST_DEPRECATED_NAME, description
-        return TEST_NAME, description
+            return TEST_DEPRECATED_NAME, description, False
+        return TEST_NAME, description, False
     functor, clause = entry
-    return functor, _test_description_term(clause.head)
+    return (functor, _test_description_term(clause.head),
+            _is_negative(clause))
+
+
+def _names_negative(logic_module, description) -> bool:
+    """True when *description* names a ``test(Name, fail)`` clause."""
+    try:
+        entry = _test_entry(logic_module, description)
+    except Exception:  # noqa: BLE001 - only labels an already-failed result
+        return False
+    return entry is not None and _is_negative(entry[1])
 
 
 #: Reifying a file is the same work for every failing test in it, so cache —
@@ -2625,6 +2779,11 @@ def _wrap_goal(text: str, indent: str, width: int = 96) -> list[str]:
     return lines
 
 
+#: How a ``test(Name, fail)`` clause whose goal had a solution is reported.
+NEGATIVE_SUCCEEDED = ("test(..., fail) succeeded: its goal has a solution, "
+                      "and a `fail` test passes only when it has none")
+
+
 def _failure_lines(rel: str, result: TestResult) -> list[str]:
     location = f"{rel}:{result.line}" if result.line else rel
     header = f"  {location} :: {result.name}"
@@ -2635,6 +2794,8 @@ def _failure_lines(rel: str, result: TestResult) -> list[str]:
         detail, *rest = str(result.error).splitlines() or [""]
     if result.error is not None:
         header = lines[0] = f"{header} — {detail}"
+    elif result.negative:
+        header = lines[0] = f"{header} — {NEGATIVE_SUCCEEDED}"
     # A multi-line message (a lookup failure lists its candidates) belongs in
     # the report exactly once.  The goal block below already reproduces it in
     # full and under the goal it came from, so print the remainder here only

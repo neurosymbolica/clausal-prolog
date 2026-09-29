@@ -28,6 +28,18 @@ test("fib(5) = 5") <- fib(5, 5)
 test("fib(7) = 13") <- (fib(7, F), F == 13)
 ```
 
+### Negative tests: `test(Name, fail)`
+
+A test that must find **no** solution is plunit's `test/2` with the option `fail`. It passes iff its body has no solution; a body that succeeds fails the test (reported as `test(..., fail) succeeded`), and a body that raises is an error, as for `test/1`. The seam spelling is the same term:
+
+```clausal
+parent("tom", "bob"),
+
+test("bob is not tom's parent", fail) <- parent("bob", "tom")
+```
+
+and a `.pl` file writes it as plunit does: `test(no_cycle, fail) :- parent(bob, tom).` `fail` is the only option supported. Any other option -- `true(Cond)`, `throws(Error)`, `nondet`, `blocked(Reason)`, `setup(Goal)` and the rest of plunit's list, or a list of options -- is a collection error naming the option: the file is one failing `<collect>` item (`<collect>` in the CLI report too), never a silently skipped test.
+
 ## Running `.clausal` tests standalone
 
 Use `clausal.testing` as a command-line tool:
