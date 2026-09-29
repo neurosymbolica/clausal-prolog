@@ -20,6 +20,7 @@ from clausal.logic.cells import (
 from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.terms import (
     term_str as _term_str,
+    term_write as _term_write,
     term_canonical as _term_canonical,
     term_pformat as _term_pformat,
     quote_string as _quote_string,
@@ -139,7 +140,8 @@ _ISO_TERM_TYPES = (str, bytes, list, DictTerm, SetTerm)
 ISO_SEP = ","
 
 
-def _format_term_iso(val, quoted: bool, double_quotes: bool = False) -> str:
+def _format_term_iso(val, quoted: bool, double_quotes: bool = False,
+                     ignore_ops: bool = False, numbervars: bool = True) -> str:
     """Format a dereffed value for the ISO family (``write/1``/``writeq/1``/
     ``write_term/2``).
 
@@ -155,22 +157,31 @@ def _format_term_iso(val, quoted: bool, double_quotes: bool = False) -> str:
     ``term_str``'s DISPLAY defaults and so printed double-quoted strings and
     Python reprs inside an ISO writer's output.
 
-    *double_quotes* is here only for ``write_term/2``'s option of that name;
-    every other caller in the family leaves it False.
+    *double_quotes*, *ignore_ops* and *numbervars* are here for
+    ``write_term/2``'s options of those names.
+
+    The layout is Scryer's (``clausal.terms.term_write``): operator syntax
+    (``foo/1``, ``1+2``, ``- (1)``), a distinct ``_N`` per variable (so
+    ``writeq(f(X, Y, X))`` shows the sharing), Scryer's float spelling, and
+    under ``quoted(true)`` every atom a reader would not read back as itself
+    quoted -- a FUNCTOR included (``'A b'(1)``).  It used to be ``term_str``'s
+    functional notation, with ``_`` for every variable and functors never
+    quoted, so ``writeq/1`` output did not re-read as the term written.
     """
     if _is_empty_list(val):
         # ``()`` is nil and is not caught by the cell test below (it is
         # falsy), so it is decided here (fix round 2, item 5).
         return "[]"
-    if isinstance(val, _ISO_TERM_TYPES) or is_term_instance(val):
-        return _term_str(val, quoted=quoted, double_quotes=double_quotes,
-                         sep=ISO_SEP)
-    if type(val) is tuple and val and (type(val[0]) is str or val[0] is TUPLE_TAG):
+    if (isinstance(val, _ISO_TERM_TYPES) or is_term_instance(val)
+            or isinstance(val, (Var, SegList, SegString))
+            or (isinstance(val, (int, float)) and not isinstance(val, bool))
+            or (type(val) is tuple and val
+                and (type(val[0]) is str or val[0] is TUPLE_TAG))):
         # A CELL -- ``("pt", 1, 2)`` (or a tuple-DATA cell). Slot 0 read RAW,
         # no deref: a slot-0-Var tuple is not a legal cell (see
         # ``clausal/logic/cells.py``) and falls through to ``str()`` below.
-        return _term_str(val, quoted=quoted, double_quotes=double_quotes,
-                         sep=ISO_SEP)
+        return _term_write(val, quoted=quoted, double_quotes=double_quotes,
+                           ignore_ops=ignore_ops, numbervars=numbervars)
     return str(val)
 
 
@@ -298,10 +309,9 @@ def _write_canonical__1(term, trail, k):
 
 #: The write-options this engine knows.  Anything else is a
 #: ``domain_error(write_option, Opt)``, as ISO 8.14.2.3 g requires.
-#: ``ignore_ops`` and ``numbervars`` are accepted and INERT: this engine
-#: never prints operator forms in the write family (so ``ignore_ops(true)``
-#: is already what it does), and it has no ``'$VAR'/1`` convention to
-#: honour or suppress.
+#: ``ignore_ops(true)`` writes every compound in functional notation (a list
+#: as its ``'.'/2`` structure), and ``numbervars(true)`` writes
+#: ``'$VAR'(N)`` as a variable letter -- both as Scryer does.
 _WRITE_OPTIONS = frozenset({
     "quoted", "double_quotes", "ignore_ops", "numbervars",
 })
@@ -329,12 +339,12 @@ def _write_option_bool(value, option):
 
 
 def _write_term_options(options):
-    """``(quoted, double_quotes)`` for an ISO write-option list.
+    """``(quoted, double_quotes, ignore_ops, numbervars)`` for an ISO
+    write-option list.
 
-    ISO 8.14.2's defaults are ``quoted(false)`` and ``double_quotes(false)``,
-    so ``write_term(T, [])`` prints a string as ``[a,b,c]`` — which is
-    exactly ``write/1``.  ``ignore_ops(Bool)`` and ``numbervars(Bool)`` are
-    accepted and inert (see ``_WRITE_OPTIONS``).
+    ISO 8.14.2's defaults are all ``false``, so ``write_term(T, [])`` prints
+    a string as ``[a,b,c]`` -- as ``write/1`` does, except that ``write/1``
+    is ``numbervars(true)``.
 
     An unbound ``Options``, and a PARTIAL one (``[quoted(true) | _]``, which
     reaches here as a non-ground ``Seg*``), are both
@@ -354,6 +364,8 @@ def _write_term_options(options):
         raise LogicException(type_error("list", opts_val, "write_term/2"))
     quoted = False
     double_quotes = False
+    ignore_ops = False
+    numbervars = False
     for opt in opts_val:
         opt = deref(opt)
         if is_var(opt):
@@ -370,7 +382,11 @@ def _write_term_options(options):
             quoted = value
         elif name == "double_quotes":
             double_quotes = value
-    return quoted, double_quotes
+        elif name == "ignore_ops":
+            ignore_ops = value
+        elif name == "numbervars":
+            numbervars = value
+    return quoted, double_quotes, ignore_ops, numbervars
 
 
 @_builtin("write_term", 2)
@@ -379,10 +395,11 @@ def _write_term__2(term, options, trail, k):
 
     ``quoted(Bool)`` quotes atoms that would not re-read as themselves;
     ``double_quotes(Bool)`` prints a string (and the char list that IS one)
-    as ``"abc"`` rather than as ``[a,b,c]``; ``ignore_ops(Bool)`` and
-    ``numbervars(Bool)`` are accepted and inert.  Both Boolean options
-    default to FALSE, so ``write_term(T, [])`` is exactly ``write/1`` and
-    ``write_term(T, [quoted(true)])`` is exactly ``writeq/1``.
+    as ``"abc"`` rather than as ``[a,b,c]``; ``ignore_ops(Bool)`` writes
+    every compound in functional notation; ``numbervars(Bool)`` writes
+    ``'$VAR'(N)`` as a variable letter.  All four default to FALSE (ISO),
+    so ``write_term(T, [numbervars(true)])`` is exactly ``write/1`` and
+    ``write_term(T, [quoted(true), numbervars(true)])`` exactly ``writeq/1``.
     ``write_term(T, [quoted(true), double_quotes(true)])`` is the SPELLING
     ``print_term/1`` / ``term_to_string/2`` give a string (fix round 1,
     item 4) — those two additionally keep the display comma spacing, which
@@ -397,9 +414,11 @@ def _write_term__2(term, options, trail, k):
     (fix round 1, item 0).
     """
     from clausal.logic.solve import _deref_walk
-    quoted, double_quotes = _write_term_options(options)
+    quoted, double_quotes, ignore_ops, numbervars = _write_term_options(options)
     _sys.stdout.write(_format_term_iso(_deref_walk(term), quoted=quoted,
-                                       double_quotes=double_quotes))
+                                       double_quotes=double_quotes,
+                                       ignore_ops=ignore_ops,
+                                       numbervars=numbervars))
     _sys.stdout.flush()
     yield None
 

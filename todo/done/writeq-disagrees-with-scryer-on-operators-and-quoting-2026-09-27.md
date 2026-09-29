@@ -31,3 +31,18 @@ raises in Scryer and answers without an error here --
 `arg(x, [1], X)` (Scryer `type_error(integer,x)`), `functor(X, foo, -1)` and
 `sub_atom(abc, B, -1, A, S)` (`domain_error(not_less_than_zero,-1)`),
 `char_code(X, -1)` (`representation_error(character_code)`).
+
+## Closed 2026-09-30
+
+Done as proposed on fix/todo-batch-4-2026-09-30: the ISO writer family
+(`_format_term_iso`: write/1, writeln/1, writeq/1, write_term/2,
+write_to_string/2) prints through `clausal.terms.term_write`, the same
+Scryer layout `term_writeq` uses, with `quoted`, `double_quotes`,
+`ignore_ops` and `numbervars` threaded through (the latter two were inert and
+are now honoured: `ignore_ops(true)` is functional notation with lists as
+`'.'/2`, `numbervars(true)` writes `'$VAR'(N)` as a letter). Every row of the
+table above now matches Scryer except the variable NUMBERS, which are the
+engine's own (`f(_0,_1,_0)` -- the sharing shows). `term_str`'s display
+family (print_term/1, str()) is untouched. Pinned by
+tests/test_iso_writers_scryer_layout.py. The builtin-error half of "also seen
+while probing" is fixed on fix/todo-batch-1-2026-09-30.

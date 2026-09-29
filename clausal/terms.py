@@ -3703,8 +3703,18 @@ def _wq_cell(t):
 
 
 def _wq_list(elems: list, tail) -> str:
-    if tail is None and elems and all(is_char_atom(deref(e)) for e in elems):
-        return _wq_quote("".join(spelling(deref(e)) for e in elems), '"')
+    quoted, double_quotes, ignore_ops, _nv = _WQ_OPTS.get()
+    if (double_quotes and tail is None and elems
+            and all(is_char_atom(deref(e)) for e in elems)):
+        text = "".join(spelling(deref(e)) for e in elems)
+        return _wq_quote(text, '"') if quoted else text
+    if ignore_ops:
+        # ``ignore_ops(true)``: a list is the ``'.'/2`` compound it is, as
+        # Scryer writes it.
+        out = _wq(tail, 999) if tail is not None else "[]"
+        for e in reversed(elems):
+            out = _wq_name(".") + "(" + _wq(e, 999) + "," + out + ")"
+        return out
     body = ",".join(_wq(e, 999) for e in elems)
     if tail is not None:
         body += "|" + _wq(tail, 999)
@@ -3718,6 +3728,23 @@ def _wq_list(elems: list, tail) -> str:
 #: NUL run inside a ``term_str`` fallback (a dict key, say) could collide.
 _WQ_LOCAL_VARS: _contextvars.ContextVar = _contextvars.ContextVar(
     "_WQ_LOCAL_VARS", default=None)
+
+
+#: The ISO write options in force while ``term_write`` renders:
+#: ``(quoted, double_quotes, ignore_ops, numbervars)``.  ``term_writeq``
+#: leaves the default, which is how Scryer's toplevel prints an uncaught
+#: error: quoted, double-quoted strings, operators, ``'$VAR'`` as a letter.
+_WQ_DEFAULT_OPTS = (True, True, False, True)
+_WQ_OPTS: _contextvars.ContextVar = _contextvars.ContextVar(
+    "_WQ_OPTS", default=_WQ_DEFAULT_OPTS)
+
+
+def _wq_name(s: str) -> str:
+    """An atom in a NAME position under the options in force: quoted when
+    ``quoted(true)`` and ISO 6.4.2 needs it, else its bare spelling."""
+    if _WQ_OPTS.get()[0]:
+        return _wq_atom(s)
+    return demangle_for_display(s) if is_mangled(s) else s
 
 
 def _wq_var(v) -> str:
@@ -3754,18 +3781,25 @@ def _wq(t: Any, prec: int, operand: bool = False) -> str:
         t = deref(t)
     if isinstance(t, Var):
         return _wq_var(t)
+    quoted, double_quotes, ignore_ops, numbervars = _WQ_OPTS.get()
     if isinstance(t, bool) or t is None:
-        return term_str(t, quoted=True, double_quotes=True, sep=",")
+        return term_str(t, quoted=quoted, double_quotes=double_quotes, sep=",")
     if isinstance(t, float):
         return _wq_float(t)
     if isinstance(t, int):
         return str(t)
     if is_chars(t):
         text = chars_text(t)
-        return _wq_quote(text, '"') if text else "[]"
+        if not text:
+            return "[]"
+        if double_quotes:
+            return _wq_quote(text, '"') if quoted else text
+        # ``double_quotes(false)``: a string is the list of its chars.
+        return _wq_list(list(text), None)
     if isinstance(t, str):
-        s = _wq_atom(t)
-        return "(" + s + ")" if operand and _wq_is_op_atom(t) else s
+        s = _wq_name(t)
+        return ("(" + s + ")" if operand and not ignore_ops
+                and _wq_is_op_atom(t) else s)
     if isinstance(t, bytes):
         return "[" + ",".join(str(b) for b in t) + "]"
     if isinstance(t, list) or (type(t) is tuple and not t):
@@ -3784,7 +3818,8 @@ def _wq(t: Any, prec: int, operand: bool = False) -> str:
                 if not elems:
                     return _wq(tail, prec, operand)
                 return _wq_list(elems, tail)
-        return term_str(walked, quoted=True, double_quotes=True, sep=",")
+        return term_str(walked, quoted=quoted, double_quotes=double_quotes,
+                        sep=",")
     if isinstance(t, Quantity):
         # A units quantity is written as its source spelling, ``10 (usd)`` --
         # what ``writeq/1`` prints -- not the Python repr
@@ -3792,9 +3827,16 @@ def _wq(t: Any, prec: int, operand: bool = False) -> str:
         return str(t)
     cell = _wq_cell(t)
     if cell is None:
-        return term_str(t, quoted=True, double_quotes=True, sep=",")
+        return term_str(t, quoted=quoted, double_quotes=double_quotes,
+                        sep=",")
     name, args = cell
     ops = _WQ_OPS
+    if ignore_ops:
+        if (numbervars and name == "$VAR" and len(args) == 1
+                and type(deref(args[0])) is int and deref(args[0]) >= 0):
+            arg = deref(args[0])
+            return chr(ord("A") + arg % 26) + (str(arg // 26) if arg >= 26 else "")
+        return _wq_name(name) + "(" + ",".join(_wq(a, 999) for a in args) + ")"
     if len(args) == 2:
         e = ops.lookup_infix(name)
         if e is not None:
@@ -3813,7 +3855,7 @@ def _wq(t: Any, prec: int, operand: bool = False) -> str:
         arg = deref(args[0])
         if name == "{}":
             return "{" + _wq(arg, 1200) + "}"
-        if name == "$VAR" and type(arg) is int and arg >= 0:
+        if numbervars and name == "$VAR" and type(arg) is int and arg >= 0:
             return chr(ord("A") + arg % 26) + (str(arg // 26) if arg >= 26 else "")
         e = ops.lookup_prefix(name)
         if e is not None:
@@ -3826,9 +3868,24 @@ def _wq(t: Any, prec: int, operand: bool = False) -> str:
                 a = _wq(arg, p if spec == "fy" else p - 1, True)
             sep = " " if (a[0] == "(" or name[0].isalpha()
                           or _wq_glue(name, a)) else ""
-            s = _wq_atom(name) + sep + a
+            s = _wq_name(name) + sep + a
             return "(" + s + ")" if p > prec else s
-    return _wq_atom(name) + "(" + ",".join(_wq(a, 999) for a in args) + ")"
+    return _wq_name(name) + "(" + ",".join(_wq(a, 999) for a in args) + ")"
+
+
+def term_write(t: Any, *, quoted: bool, double_quotes: bool = False,
+               ignore_ops: bool = False, numbervars: bool = True) -> str:
+    """Render *t* as ISO ``write_term/2`` does with these options, byte for
+    byte as Scryer writes it: operator syntax (unless *ignore_ops*), no space
+    after a comma, a distinct ``_N`` per variable, Scryer's float spelling,
+    and -- under *quoted* -- every atom, functor included, quoted when it
+    would not re-read as itself.  The ISO writer family (``write/1``,
+    ``writeq/1``, ``write_term/2``) prints through this."""
+    token = _WQ_OPTS.set((quoted, double_quotes, ignore_ops, numbervars))
+    try:
+        return _wq(t, 1200)
+    finally:
+        _WQ_OPTS.reset(token)
 
 
 def term_writeq(t: Any, *, local_vars: bool = False) -> str:
