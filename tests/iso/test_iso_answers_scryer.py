@@ -167,9 +167,8 @@ def test_c2_oracle(scryer):
 #
 # The Scryer rows for the values are in test_arith_rulings_scryer.py.  Here:
 # the same functors where the engine reaches them by other routes -- a
-# runtime-built cell, and a GROUND use inside a CLP post (the posts do not
-# propagate through them; a non-ground one is clpz's domain error, pinned
-# below so a change is seen).
+# runtime-built cell, and a use inside a CLP post (a non-ground one posts a
+# constraint, as Scryer's clpz does; pinned below).
 
 _V1_FACTS = "-allow_singletons\n"
 
@@ -203,14 +202,14 @@ def test_v1_oracle(scryer):
     assert got == [r[4] for r in V1_ROWS]
 
 
-def test_v1_non_ground_in_a_clp_post_is_the_clpz_domain_error(v1_mod, tmp_path):
-    """Not propagated: ``X == max(Y, 3)`` raises rather than answering
-    wrongly (Scryer's clpz would post it as a constraint)."""
+def test_v1_non_ground_in_a_clp_post_is_a_constraint(v1_mod, tmp_path):
+    """``X == max(Y, 3)`` posts a constraint, as Scryer's clpz does
+    (``R #= max(Y, 3), Y = 5`` gives R = 5); it raised
+    domain_error(clpz_expression, max(_, 3)) before abs/min/max were
+    lifted into their own propagators."""
     mod = _load_seam(tmp_path, "_iso_ans_v1b", _V1_FACTS,
                      [("", "R == max(Y, 3), Y is 5", "", 3, [])])
-    got = _engine_answers(mod, "r0", 3)
-    assert len(got) == 1 and got[0].startswith(
-        "error(domain_error(clpz_expression,max(_,3))"), got
+    assert _engine_answers(mod, "r0", 3) == ["5"]
 
 
 # ── Two open partial lists unify (F030) ────────────────────────────────────
