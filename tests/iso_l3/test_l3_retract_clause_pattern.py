@@ -53,10 +53,9 @@ def test_retractall_matches_the_head_whatever_the_body(tmp_path):
 
 def test_more_patterns(native, ans):
     """Scryer: a fact with a compound argument retracts by its value;
-    retract(Head) of a predicate with only rules fails.  (A multi-goal rule
-    body does not match yet: the engine's body term is a flat tuple, the
-    Prolog pattern a ','/2 cell -- todo/conjunction-starting-with-an-atom-
-    is-a-compound-2026-09-25.md.)"""
+    a multi-goal rule body matches as a conjunction (the ','/2 cell against
+    the engine's flat body tuple); retract(Head) of a predicate with only
+    rules fails."""
     src = (":- dynamic(f/1).\n:- dynamic(g/1).\n:- dynamic(q/1).\n"
            "f(p(1, [a])).\nf(p(2, [b])).\n"
            "g(X) :- X = 1, X > 0.\ng(5).\n"
@@ -64,6 +63,25 @@ def test_more_patterns(native, ans):
            "t1(L) :- retract(f(p(2, _))), findall(Y, f(Y), L).\n"
            "t2(L) :- retract((g(X) :- X = 1, X > 0)), findall(Y, g(Y), L).\n"
            "t3(L) :- findall(x, retract(q(_)), L).\n")
-    for name, want in (("t1", [[("p", 1, ["a"])]]), ("t3", [[]])):
+    for name, want in (("t1", [[("p", 1, ["a"])]]), ("t2", [[5]]),
+                       ("t3", [[]])):
         mod = native.load(f"l3_retract_more_{name}", src)
         assert ans(mod, name) == want, name
+
+
+def test_clause_2_with_a_conjunction_body(native, ans):
+    """clause(g(X), (X = 1, X > 0)) finds the rule; a disjunction matches
+    too; a left-nested pattern does not.  Scryer: c1 [x], c2 [], c3 [x],
+    c4 []."""
+    mod = native.load("l3_clause_conj",
+                      ":- dynamic(g/1).\n"
+                      "g(X) :- X = 1, X > 0, X < 5.\n"
+                      "g(X) :- (X = 1 ; X = 2).\n"
+                      "c1(L) :- findall(x, clause(g(Y), (Y = 1, Y > 0, Y < 5)), L).\n"
+                      "c2(L) :- findall(x, clause(g(Y), ((Y = 1, Y > 0), Y < 5)), L).\n"
+                      "c3(L) :- findall(x, clause(g(Y), (Y = 1 ; Y = 2)), L).\n"
+                      "c4(L) :- findall(x, clause(g(Y), (Y = 1, Y > 0)), L).\n")
+    assert ans(mod, "c1") == [["x"]]
+    assert ans(mod, "c2") == [[]]
+    assert ans(mod, "c3") == [["x"]]
+    assert ans(mod, "c4") == [[]]

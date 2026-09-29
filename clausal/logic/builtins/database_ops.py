@@ -742,7 +742,10 @@ def _retract_factory(db):
         term_val = _unneck_clause(term_val, "retract/1", "retract")
         body_pattern = True
         if type(term_val) is _OpenBody:
-            term_val, body_pattern = term_val.head, term_val.body
+            from clausal.logic.builtins.clause_ops import (  # noqa: PLC0415
+                engine_body_pattern)
+            term_val, body_pattern = (term_val.head,
+                                      engine_body_pattern(term_val.body))
         # A CELL pattern goes through the SAME gate as the assert doors (P3-3
         # Task 5, R11) and comes back normalized to the shape the clause list
         # actually holds -- without that, ``_first_match`` would compare
