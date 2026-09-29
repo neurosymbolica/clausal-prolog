@@ -55,3 +55,64 @@ class TestStructuralEqSeesABoundVariableInsideATerm:
     def test_does_not_hold(self, tmp_path, monkeypatch, name):
         mod = _load(tmp_path, monkeypatch, "eq_bound_in_term", self.SRC)
         assert mod.run(name) == []
+
+
+class TestC1PrologDataFunctorsAreDeclared:
+    """C1: an imported ``.pl`` whose clauses build compound DATA terms
+    (``p(f(1)).``, ``X = g(2)``) loaded but raised
+    existence_error(procedure, f/1) at run time -- the translator declared
+    the file's data atoms but not its data functors.  ISO/Scryer answer
+    ``p(f(1))``."""
+
+    LIB = {"c1_lib.pl": """
+        p(f(1)).
+        q(X) :- X = g(2).
+        r([h(a), h(b)]).
+        s(Y) :- findall(X, member(X, [1, 2]), Y).
+        t(u(1)).
+        u(_).
+        add(X) :- assertz(counter(X)).
+        cnt(L) :- findall(X, counter(X), L).
+    """}
+
+    SRC = """
+        -import_from(c1_lib, [p, q, r, s, t])
+        def run():
+            return ([X for X in --p(X)], [X for X in --q(X)],
+                    [X for X in --r(X)], [X for X in --s(X)],
+                    [X for X in --t(X)])
+    """
+
+    def test_data_terms_answer(self, tmp_path, monkeypatch):
+        from clausal import to_python
+        mod = _load(tmp_path, monkeypatch, "c1_main", self.SRC, libs=self.LIB)
+        p, q, r, s, t = mod.run()
+        assert p == [("f", 1)]
+        assert q == [("g", 2)]
+        assert r == [[("h", "a"), ("h", "b")]]
+        assert s == [[1, 2]]
+        assert t == [("u", 1)]
+
+    def test_translation_declares_only_data_functors(self):
+        from clausal.tools.prolog_to_clausal import prolog_to_clausal
+        out = prolog_to_clausal(textwrap.dedent(self.LIB["c1_lib.pl"]))
+        (private,) = [ln for ln in out.splitlines() if ln.startswith("-private(")]
+        for spec in ("f(_)", "g(_)", "h(_)"):
+            assert spec in private
+        # a builtin (member/2) and a predicate the file defines (u/1) are
+        # not data functors: declaring them would shadow the predicate
+        assert "member(" not in private
+        assert "u(" not in private
+        # a predicate assertz creates at run time, called only through
+        # meta-predicates, is not a data functor either
+        assert "counter(" not in private
+
+    def test_a_predicate_asserted_at_run_time_still_works(self, tmp_path, monkeypatch):
+        mod = _load(tmp_path, monkeypatch, "c1_main2", """
+            -import_from(c1_lib, [add, cnt])
+            def run():
+                if not --add(7):
+                    raise AssertionError("add(7) failed")
+                return [L for L in --cnt(L)]
+        """, libs=self.LIB)
+        assert mod.run() == [[7]]
