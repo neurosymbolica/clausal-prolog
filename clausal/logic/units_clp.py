@@ -559,6 +559,43 @@ def strip_for_solver(l: Any, r: Any, context: str, trail: Trail):
     return strip(l, env, trail), strip(r, env, trail)
 
 
+def strip_expr_for_solver(expr: Any, context: str, trail: Trail):
+    """The side channel for ONE expression: an objective (``sup/2``,
+    ``maximize/2``, ``bb_inf/3``) or a bound, whose dimension is the answer's.
+
+    Returns None when the tree holds no Quantity or united Var, or a leaf
+    the side channel does not speak for. Otherwise the same analysis as a
+    comparison of the tree with itself — unknown factors default as there,
+    what stays unknown throws ``units_undetermined`` — and the result is
+    ``(stripped, dims)``: the tree the solver can take and the dims the
+    solver's number gets back (empty for a dimensionless expression).
+    """
+    if not _units_flag.active:
+        return None
+    _ensure_imports()
+    expr = deref(expr)
+    material = _scan(expr)
+    if material is _FOREIGN or not material:
+        return None
+    a = _Analysis(context)
+    try:
+        dims, _ = a.run(expr, expr)
+    except _NotEngaged:
+        return None
+    return strip(expr, a.env, trail), dims
+
+
+def reattach(value, dims: dict):
+    """A solver's number as the term it stands for: a Quantity of *dims*, or
+    the number itself when the dims are empty. ``present_number`` first, so an
+    integral rational is an int here as everywhere (the Quantity constructor
+    then applies the currency rule: an int magnitude of a currency is a
+    Decimal, as on the ground path)."""
+    _ensure_imports()
+    value = present_number(value)
+    return _Quantity(value, dims) if dims else value
+
+
 # ── in_domain / label ────────────────────────────────────────────────────────
 
 def in_domain_units(var_or_list, lo, hi, trail: Trail):
@@ -666,11 +703,12 @@ def in_domain_units(var_or_list, lo, hi, trail: Trail):
     return in_domain(shadows, lo_n, hi_n, trail)
 
 
-def label_targets(vars_list) -> list:
-    """``label/1``'s list with every united var replaced by its shadow. A
-    united var with no shadow and no solver state has no domain and is left
-    alone (label skips it, as it skips any var without FD state); one with
-    solver state but no shadow was posted on directly and throws."""
+def label_targets(vars_list, context: str = "label/1") -> list:
+    """``label/1``'s list (or ``bb_inf/3``'s integer list, *context* naming
+    the caller) with every united var replaced by its shadow. A united var
+    with no shadow and no solver state has no domain and is left alone
+    (label skips it, as it skips any var without FD state); one with solver
+    state but no shadow was posted on directly and throws."""
     if not _units_flag.active:
         return list(vars_list)
     out = []
@@ -681,7 +719,7 @@ def label_targets(vars_list) -> list:
             # a builtin outside the side channel — shadowed or not — every
             # labelled value would land on the wrong variable or be refused
             # by the units hook with no diagnostic. Say so, first.
-            _refuse_bypassed(dv, "label/1")
+            _refuse_bypassed(dv, context)
             state = get_attr(dv, UNITS_KEY)
             if state is not None and state.shadow is not None:
                 out.append(state.shadow)

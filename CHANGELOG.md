@@ -453,6 +453,19 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
 
 ### Fixed
 
+- **CLP(Q) accepts quantities.** `{Q = 100 * constant(one_euro)}` in a
+  `.pl` file, `clpq.rational(Q == 100 * constant(one_euro))`, `in_q/3` with
+  quantity bounds, `entailed/1` and the objectives of `maximize/2`,
+  `minimize/2`, `sup/2`, `inf/2` and `bb_inf/3` go through the units side
+  channel the CLP(FD) comparators already use: dimensions are inferred and
+  checked first (a disagreement is `system_error(units_mismatch)`), the
+  tableau solves on exact magnitudes in the base unit, and the answer is a
+  quantity — `100 euro`, `3/2 euro`, and `N = 300` for
+  `{Q = N * constant(one_euro)}, Q = 300 euro`. Every such post used to
+  raise a raw `TypeError: CLP(Q) requires linear constraints`. A quantity
+  leaf inside an arithmetic cell built at run time (`Q = 6000 * constant(c)`
+  in ISO syntax) is evaluable in a post too, instead of
+  `type_error(evaluable, ...)`. See [docs/clpq.md](docs/clpq.md#units).
 - **A procedure `assertz` creates is no longer shadowed by an atom of the
   same name some other module declared.** Module dicts are seeded from the
   process-wide atom pool, so the body goal `note(X)` of a later,

@@ -171,6 +171,54 @@ Projects the constraint store onto a list of variables, eliminating all internal
 
 This is the feature that SWI-Prolog's CLP(Q) gets wrong — internal variables leak into answers. Clausal eliminates them correctly via Fourier-Motzkin.
 
+## Units
+
+A quantity (a number with units, see [units.md](units.md)) may stand
+anywhere in a constraint, on either front end:
+
+```prolog
+:- use_module(library(clpq)).
+:- use_module(european_union, [euro]).
+:- constant_number_units(one_euro, 1, euro).
+:- constant_number_units(max_fine, 5000, euro).
+
+price(Q)  :- {Q = 100 * constant(one_euro)}.        % Q = 100 euro
+fine(Q)   :- {Q >= constant(max_fine)}.             % posts; a later binding decides
+split(N)  :- {Q = N * constant(one_euro)}, Q is 300 * constant(one_euro).   % N = 300
+half(Q)   :- {2 * Q = 3 * constant(one_euro)}.      % Q = 3/2 euro
+```
+
+```clausal
+price(Q) <- clpq.rational(Q == 100 * constant(one_euro))
+```
+
+The tableau never sees a unit. Every post goes through the same units side
+channel the CLP(FD) comparators use (`clausal.logic.units_clp`): the
+dimension of every operand is inferred first — a variable multiplied by a
+quantity takes the product's dimension, a bare multiplier defaults to
+dimensionless — and a disagreement raises the ISO term
+`error(system_error(units_mismatch), Ctx)` before anything is posted. Then
+each quantity becomes its exact magnitude (a `Decimal` is an exact
+rational) and each dimensioned variable its bare *shadow*; the constraint is
+solved on those. When the tableau binds a shadow, the variable the program
+wrote is bound to a quantity with the inferred dimension.
+
+The magnitude is always in the dimension's **base unit**, on the way in and
+on the way out: `5000 cent` is `50 euro` at construction (a scaled unit,
+exactly as `1 kilometre` is `1000 metre`), so `{Q = constant(small_fine)}`
+answers `50.00 euro`. The answer's magnitude is presented as everywhere in
+the engine: an integral rational is an int (a currency shows it as a
+`Decimal`), a non-integral one an exact `Fraction` — `3/2 euro`, never a
+float.
+
+`in_q/3` takes quantity bounds (`in_q(X, 0(euro), 10.50(euro))` declares
+`X` in euro; a plain number beside a quantity bound is a mismatch), the
+objectives of `maximize/2`, `minimize/2`, `sup/2`, `inf/2` and `bb_inf/3`
+answer a quantity of the objective's dimension (a plain number when the
+units cancel, `Q / constant(one_euro)`), `entailed/1` reads through the
+same channel, and `dump_q/2` projects a dimensioned variable's constraints
+(they live on its shadow) under the variable's own name.
+
 ---
 
 ## Constraint examples
