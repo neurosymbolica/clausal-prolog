@@ -194,10 +194,11 @@ class TestUndeclaredArityStaysAnError:
         flat = " ".join(str(info.value).split())
         assert "conflicts with the declaration of f/1" in flat
         # the remedy names the per-arity declaration now
-        assert "f(A, ARG_1)" in flat or "declare" in flat
+        assert ("declare it in the same list, as `f(A, ARG_1)`" in flat
+                and "or as `f/2`" in flat)
 
     def test_a_late_declaration_missing_an_arity_is_refused(self, tmp_path):
-        with pytest.raises(SyntaxError, match="one arity|f/2"):
+        with pytest.raises(SyntaxError, match="does not declare f/2"):
             _load(tmp_path, "fpa_late1", """
                 f(1),
                 f(1, 2),
@@ -264,3 +265,48 @@ def test_a_prolog_data_functor_at_two_arities(tmp_path):
     mod = _load_prolog_module("fpa_pl", path)
     x, y = Var(), Var()
     assert _answers(mod, "mk", x, y) == [(("box", 1), ("box", 1, 2))]
+
+
+def test_a_keyword_construction_fitting_no_declared_arity(tmp_path):
+    """No declared arity has field C: refused naming the arities (it was a
+    placement error while a name had one declaration)."""
+    mod = _load(tmp_path, "fpa_nofit", """
+        -private([f(A), f(A, B)])
+        mk(T) <- (T is f(1))
+    """)
+    with pytest.raises(AmbiguousArityConstructionError,
+                       match=r"none of them fits"):
+        seam_term(_kw_call("f", C=1), mod.__dict__)
+
+
+def test_a_dynamic_placeholder_then_a_template_entry_at_another_arity(
+        tmp_path):
+    """The placeholder is unseated by the first clause; the template entry's
+    arity stays declared, with its own fields (``_unseat_directive_minted``
+    promotes it)."""
+    mod = _load(tmp_path, "fpa_dyntpl", """
+        -dynamic(q/1)
+        -module(fpa_dyntpl, [q(X, Y)])
+        q(1),
+        q(1, 2),
+    """)
+    db = _db(mod)
+    assert len(db.clauses_for("q", 1)) == 1
+    assert len(db.clauses_for("q", 2)) == 1
+    assert db.declared_fields("q", 2) == ("X", "Y")
+    with pytest.raises(SyntaxError, match="conflicts with the declaration"):
+        _load(tmp_path, "fpa_dyntpl3", """
+            -dynamic(q/1)
+            -module(fpa_dyntpl3, [q(X, Y)])
+            q(1, 2, 3),
+        """)
+
+
+def test_a_prolog_evaluable_beside_data_of_the_same_name(tmp_path):
+    """roborev: ``atan2/2`` is an evaluable, ``atan2/3`` data here.  A
+    declaration of ``atan2/3`` alone would answer ``atan2(1, 2)`` too, so
+    the translator leaves the name undeclared, as before."""
+    from clausal.tools.prolog_to_clausal import prolog_to_clausal
+    out = prolog_to_clausal(
+        "t(X, Y) :- X = atan2(1, 2), Y = atan2(1, 2, 3).\n")
+    assert "atan2(_" not in out

@@ -756,9 +756,15 @@ class _PrologToClausal:
             # ``box(_)`` and ``box(_, _)``.
             if name in not_data or name in _RESERVED_BARE_NAMES:
                 continue
-            for arity in sorted(arities):
-                if _engine_knows_name(name, arity):
-                    continue
+            known = {a for a in arities if _engine_knows_name(name, a)}
+            if known and len(arities) > 1:
+                # The engine knows the name at one of its arities (an
+                # evaluable ``atan2/2`` beside data ``atan2/3``): a
+                # declaration at the other would answer the known arity's
+                # construction too, so the name is left undeclared, as it
+                # was before (roborev on the per-arity ruling).
+                continue
+            for arity in sorted(arities - known):
                 private.append(f"{name}({', '.join(['_'] * arity)})")
         if private:
             atom_list = ", ".join(private)
