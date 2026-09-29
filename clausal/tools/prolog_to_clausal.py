@@ -150,6 +150,11 @@ def _engine_has_goal(name: str) -> bool:
             or name in _CONTROL_GOAL_NAMES)
 
 
+def _is_evaluable(name: str, arity: int | None) -> bool:
+    from clausal.logic.exact_arith import EVALUABLE  # noqa: PLC0415
+    return arity is not None and (name, arity) in EVALUABLE
+
+
 _REVERSE_BUILTIN_MAP_CACHE: dict[str, str] | None = None
 
 
@@ -194,27 +199,26 @@ _INFIX_MAP = {
     "-":    "-",
     "*":    "*",
     "/":    "/",
-    "**":   "**",
-    "^":    "**",       # ISO exponentiation (arithmetic context only, F026)
     ",":    ",",        # conjunction stays
-    "div":  "//",       # SWI floored division → clausal // (also floored)
     "=..":  "=..",      # univ — no direct clausal equivalent, keep as comment
-    "/\\":  "&",        # bitwise AND
-    "\\/":  "|",        # bitwise OR
-    "xor":  "^",        # bitwise XOR
-    "<<":   "<<",
-    ">>":   ">>",       # NOTE: >> is DCG in clausal, so only in arithmetic context
+# (``**``, ``^``, ``div``, ``//``, ``mod``, ``rem``, ``<<``, ``>>``, ``/\``,
+# ``\/`` and ``xor`` are emitted as the quoted ISO evaluable -- see
+# ``_ISO_QUOTED_BINARY_OPS``.)
 }
 
-# Prolog operators whose ISO semantics differ from Python's.
-# These are emitted as qualified calls: prolog.TruncDiv(X, Y)
-# The ``prolog`` module (clausal.modules.prolog) provides ISO-compatible
-# implementations (truncation toward zero, not floor).
-_PROLOG_QUALIFIED_OPS = {
-    "//":  "TruncDiv",   # ISO truncate-div (toward zero) vs Python // (floor)
-    "mod": "TruncMod",   # ISO mod (sign follows divisor) — floored, like Python %
-    "rem": "Rem",        # ISO remainder (sign follows dividend)
-}
+# ISO evaluable OPERATORS whose Python spelling means something else in a
+# Clausal expression: Python ``//`` floors where ISO truncates, ``**`` on
+# integers is an integer where ISO gives a float, ``^`` is Python XOR, and
+# ``<<``/``&``/``|``/``~`` are not evaluated by eval_ at all
+# (type_error(evaluable, (<<)/2)).  They are emitted as the QUOTED ISO
+# evaluable, ``'//'(X, Y)``, which the engine's evaluable table evaluates
+# with ISO's meaning (answers checked against Scryer, 2026-09-29).  Until then
+# ``2 ^ -1`` answered 0.5 (ISO: type_error(float, 2)) and ``2 ** 3`` answered
+# 8 (ISO: 8.0).
+_ISO_QUOTED_BINARY_OPS = frozenset({
+    "//", "mod", "rem", "div", "**", "^", "<<", ">>", "/\\", "\\/", "xor",
+})
+_ISO_QUOTED_UNARY_OPS = frozenset({"\\"})
 
 # ISO evaluable constants (functors of arity 0 in arithmetic context).
 # Emitted as math.* attribute references — emit_module adds the matching
@@ -232,7 +236,6 @@ _EVALUABLE_CONSTANTS = {
 _PREFIX_MAP = {
     "\\+": "not",
     "-":   "-",
-    "\\":  "~",         # bitwise complement
     "+":   "+",
 }
 
@@ -1141,16 +1144,18 @@ class _PrologToClausal:
                     f"{self._emit_quantified(args[1])}, "
                     f"{self._emit_term(args[2])})")
 
-        # (^)/2 anywhere else in goal/term position: in arithmetic context it
-        # is exponentiation (handled in _emit_expr → Python **); as a plain
-        # goal or data term Clausal has no equivalent — reject rather than
-        # emit `^(Y, Goal)` (F026).
+        # (^)/2 as a DATA term is the term ^(A, B), spelled as the quoted
+        # ISO functor ('^'(A, B); a bare ``^`` is Python XOR, ``**`` a
+        # different functor).  As a GOAL (``Y^p(Y)`` called directly) it has
+        # no Clausal equivalent -- refused.  In arithmetic context it is the
+        # ISO evaluable (``_emit_expr``).
         if functor == "^" and len(args) == 2:
+            if not goal:
+                return self._emit_expr(term)
             raise PrologTranslationError(
                 "The existential quantifier ((^)/2) is only supported inside "
-                "the goal argument of bagof/3 or setof/3.\n"
-                "In arithmetic context, (^)/2 translates to Python's ** "
-                "operator."
+                "the goal argument of bagof/3 or setof/3; `V^Goal` called "
+                "as a goal cannot be translated."
             )
 
         # ','/2 in term position is a tuple, NOT a flattened argument list:
@@ -1254,12 +1259,10 @@ class _PrologToClausal:
             right = self._emit_term(args[1])
             return f"{left} {clausal_op} {right}"
 
-        # ISO operators with different semantics → prolog.'//'(X, Y)
-        if functor in _PROLOG_QUALIFIED_OPS and len(args) == 2:
-            op_name = _PROLOG_QUALIFIED_OPS[functor]
-            left = self._emit_term(args[0])
-            right = self._emit_term(args[1])
-            return f"prolog.{op_name}({left}, {right})"
+        # ISO evaluable operators Python spells differently → '//'(X, Y)
+        if ((functor in _ISO_QUOTED_BINARY_OPS and len(args) == 2)
+                or (functor in _ISO_QUOTED_UNARY_OPS and len(args) == 1)):
+            return self._emit_expr(term)
 
         # Prefix operators
         if functor in _PREFIX_MAP and len(args) == 1:
@@ -1297,11 +1300,8 @@ class _PrologToClausal:
 
     # Python operator precedence (higher number = tighter binding).
     _EXPR_PREC: dict[str, int] = {
-        "xor": 1, "\\/": 2, "/\\": 3,
-        "<<": 4, ">>": 4,
         "+": 5, "-": 5,
-        "*": 6, "/": 6, "div": 6,
-        "**": 8, "^": 8,
+        "*": 6, "/": 6,
     }
 
     def _emit_expr(self, term: PTerm, parent_prec: int = 0) -> str:
@@ -1320,37 +1320,36 @@ class _PrologToClausal:
             # quoted/registered like an arg-position atom.
             return self._emit_atom(term)
         if isinstance(term, PCompound):
-            # ISO operators with different semantics → prolog.Op(X, Y)
-            if len(term.args) == 2 and term.functor in _PROLOG_QUALIFIED_OPS:
-                left = self._emit_expr(term.args[0])
-                right = self._emit_expr(term.args[1])
-                op_name = _PROLOG_QUALIFIED_OPS[term.functor]
-                return f"prolog.{op_name}({left}, {right})"
+            # ISO evaluable operators Python spells differently → the
+            # quoted ISO evaluable, '//'(X, Y)
+            if ((len(term.args) == 2 and term.functor in _ISO_QUOTED_BINARY_OPS)
+                    or (len(term.args) == 1
+                        and term.functor in _ISO_QUOTED_UNARY_OPS)):
+                inner = ", ".join(self._emit_expr(a) for a in term.args)
+                return f"{_quote_atom(term.functor)}({inner})"
             # Arithmetic binary operators
             if len(term.args) == 2 and term.functor in self._EXPR_PREC:
                 my_prec = self._EXPR_PREC[term.functor]
-                if term.functor in ("**", "^"):
-                    # ** is right-associative in Python: the LEFT child needs
-                    # parens at equal precedence so (2**3)**2 doesn't collapse
-                    # to 2**3**2 == 2**(3**2) (F030). ISO ^ is xfy (also
-                    # right-associative), so the same rule applies (F026).
-                    left = self._emit_expr(term.args[0], my_prec + 1)
-                    right = self._emit_expr(term.args[1], my_prec)
-                else:
-                    left = self._emit_expr(term.args[0], my_prec)
-                    right = self._emit_expr(term.args[1], my_prec + 1)
+                left = self._emit_expr(term.args[0], my_prec)
+                right = self._emit_expr(term.args[1], my_prec + 1)
                 op = _INFIX_MAP.get(term.functor, term.functor)
                 result = f"{left} {op} {right}"
                 if my_prec < parent_prec:
                     result = f"({result})"
                 return result
             # Arithmetic unary operators
-            if len(term.args) == 1 and term.functor in ("-", "+", "\\"):
+            if len(term.args) == 1 and term.functor in ("-", "+"):
                 operand = self._emit_expr(term.args[0], 9)
                 op = _PREFIX_MAP.get(term.functor, term.functor)
                 return f"{op}{operand}"
-            # Arithmetic functions
-            name = self._predicate_name(term.functor, len(term.args))
+            # Arithmetic functions: an ISO evaluable keeps its own name
+            # (``max``, ``float``), which is what the engine evaluates;
+            # anything else is a user function name as before.
+            from clausal.logic.exact_arith import EVALUABLE  # noqa: PLC0415
+            if (term.functor, len(term.args)) in EVALUABLE:
+                name = term.functor
+            else:
+                name = self._predicate_name(term.functor, len(term.args))
             args = ", ".join(self._emit_expr(a) for a in term.args)
             return f"{name}({args})"
         return self._emit_term(term)
@@ -1385,7 +1384,14 @@ class _PrologToClausal:
         # Check reverse builtin map first -- unless the program defines or
         # imports the name itself, when it means its OWN predicate (a
         # program's ``time/1`` is not Clausal's ``time_goal/1``).
-        if prolog_name not in self._own_names:
+        # Nor an ISO evaluable at its evaluable arity (max/2, abs/1): that is
+        # no predicate, and as data it is an ordinary compound -- the old
+        # rename to the RELATIONAL max_/3 raised type_error(evaluable,
+        # max_/2).  The expression emitter keeps evaluables by itself;
+        # float/1 is the exception here, being ISO's type test too, which
+        # Clausal spells float_/1.
+        if prolog_name not in self._own_names and not (
+                prolog_name != "float" and _is_evaluable(prolog_name, arity)):
             clausal_name = _reverse_builtin_map().get(prolog_name)
             if clausal_name is not None:
                 return clausal_name

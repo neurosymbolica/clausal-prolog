@@ -179,14 +179,16 @@ class TestF026BagofWitness:
             prolog_to_clausal("q(X) :- Y^p(X, Y).")
 
     def test_arith_caret_maps_to_python_pow(self):
-        # In arithmetic context (^)/2 is ISO exponentiation → Python **.
+        # In arithmetic context (^)/2 is ISO exponentiation, emitted as the
+        # quoted ISO evaluable (Python ** answered 2 ^ -1 = 0.5, not ISO's
+        # type_error; 2026-09-29).
         out = prolog_to_clausal("f(X) :- X is 2 ^ 3.")
-        assert "eval_(2 ** 3, X)" in out
+        assert "eval_('^'(2, 3), X)" in out
 
     def test_arith_caret_right_associative(self):
         # ISO ^ is xfy: 2^3^2 = 2^(3^2); Python ** is also right-assoc.
         out = prolog_to_clausal("f(X) :- X is 2 ^ 3 ^ 2.")
-        assert "eval_(2 ** 3 ** 2, X)" in out
+        assert "eval_('^'(2, '^'(3, 2)), X)" in out
 
 
 class TestF026StandardOrderRejected:

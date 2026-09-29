@@ -39,7 +39,7 @@ def test_the_default_reader_table_is_scryers():
 
 
 @pytest.mark.parametrize("src, expect", [
-    ("p(X) :- X is 7 div 2.\n", "7 // 2"),
+    ("p(X) :- X is 7 div 2.\n", "'div'(7, 2)"),
     ("p(X) :- X = +(1).\n", "X is +1"),
     (":- dynamic(foo/1).\n", "-dynamic(foo/1)"),
 ])

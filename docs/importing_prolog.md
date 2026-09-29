@@ -351,6 +351,8 @@ The key operator mappings:
 | `;` | `or` |
 | `-->` | `>>` |
 | `member(X, L)` | `X in L` |
+| `X // Y`, `mod`, `rem`, `div`, `^`, `**`, `<<`, `>>`, `/\`, `\/`, `\` | the quoted ISO evaluable: `'//'(X, Y)`, `'^'(X, Y)`, ... |
+| `max(X, Y)`, `abs(X)`, `sqrt(X)`, ... (any ISO evaluable) | the same name |
 
 Predicate names cross unchanged: `foo_bar/2` stays `foo_bar/2`. A few
 library predicates that Clausal spells differently are renamed to the
@@ -402,9 +404,16 @@ renamed to `_pi`.)
   else declares raises the ISO error term
   `error(existence_error(procedure, f/1), f/1)` when it is built (a
   `catch/3` sees it; from Python it is also a `NameError`).
-- **Arithmetic follows today's Clausal operators, not ISO's.** `Y is X / 2`
-  becomes `eval_(X / 2, Y)`, and `=:=` becomes the constraint `==` (see
-  [Operators](operators.md)).
+- **Arithmetic.** `+ - * /` cross as Clausal's operators (`Y is X / 2`
+  becomes `eval_(X / 2, Y)`), and `=:=` becomes the constraint `==` (see
+  [Operators](operators.md)). The ISO operators Python spells differently
+  (`//`, `mod`, `rem`, `div`, `^`, `**`, the bit operators) cross as the
+  quoted ISO evaluable (`'^'(2, 3)`), and every ISO evaluable function keeps
+  its name, so these answer as in ISO: `2 ** 3` is `8.0` and `2 ^ -1` is
+  `type_error(float, 2)`. Until 2026-09-29 `max`/`min`/`abs` were renamed to
+  `max_`/`min_`/`abs_` (a `type_error(evaluable, max_/2)`), `^` became Python
+  `**` (`2 ^ -1` answered `0.5`) and `<<`, `/\`, `\/`, `\` were not
+  evaluated at all.
 - **No cut, no if-then-else** (above), and no streams or `op/3`. The ISO
   flags are there ([Prolog Flags](flags.md)), but `unknown` can only be
   `error`.

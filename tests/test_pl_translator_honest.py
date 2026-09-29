@@ -151,3 +151,73 @@ class TestNoStaleRenames:
         assert _answers(m, "t") == [7]
         # ... and it is time/1 under its own name, as the program wrote it
         assert _answers(m, "time") == [7]
+
+
+# ── D. ISO evaluables keep their names ────────────────────────────────
+
+
+class TestEvaluableNames:
+    """max/min/abs (and every ISO evaluable) are in the engine's evaluable
+    table, so ``X is max(3, 5)`` crosses as ``max``, not ``max_`` (which
+    raised type_error(evaluable, max_/2)).  Scryer: mx 5, mn 3, ab 4,
+    fl 3.0, tr 3, fl_test [1], dat max(1,2)."""
+
+    _SRC = """\
+        mx(X) :- X is max(3, 5).
+        mn(X) :- X is min(3, 5).
+        ab(X) :- X is abs(-4).
+        fl(X) :- X is float(3).
+        tr(X) :- X is truncate(3.7) + ceiling(0.5) - floor(0.5).
+        sq(X) :- X is sqrt(16) + sin(0) + cos(0) + exp(0) + log(1).
+        fl_test(X) :- float(1.0), X = 1.
+        fl_test(X) :- float(1), X = 2.
+        dat(X) :- X = max(1, 2).
+    """
+
+    @pytest.mark.parametrize("pred,expected", [
+        ("mx", [5]), ("mn", [3]), ("ab", [4]), ("fl", [3.0]), ("tr", [4]),
+        ("sq", [6.0]), ("fl_test", [1]),
+    ])
+    def test_evaluable(self, tmp_path, pred, expected):
+        m = _load(tmp_path, f"ev_{pred}", self._SRC)
+        assert _answers(m, pred) == expected
+
+    def test_evaluable_name_as_data(self, tmp_path):
+        m = _load(tmp_path, "ev_dat", self._SRC)
+        assert _answers(m, "dat") == [("max", 1, 2)]
+
+
+class TestIsoEvaluableOperators:
+    """The ISO arithmetic operators Python spells differently cross as the
+    quoted ISO evaluable.  Expected values are Scryer's (2026-09-29)."""
+
+    @pytest.mark.parametrize("expr,expected", [
+        ("-7 // 2", -3), ("-7 mod 2", 1), ("-7 rem 2", -1),
+        ("7 div -2", -4), ("2 ^ 3", 8), ("2 ** 3", 8.0), ("2.0 ^ 2", 4.0),
+        ("1 << 3", 8), ("16 >> 2", 4), ("5 /\\ 3", 1), ("5 \\/ 3", 7),
+        ("\\ 5", -6), ("2 ^ 3 ^ 2", 512), ("(2 ^ 3) ^ 2", 64),
+        ("1 + 2 * 3 - 4 / 2", 5.0),
+    ])
+    def test_value(self, tmp_path, expr, expected):
+        m = _load(tmp_path, "iso_op", f"t(X) :- X is {expr}.\n")
+        got = _answers(m, "t")
+        assert got == [expected] and type(got[0]) is type(expected)
+
+    def test_int_caret_negative_is_a_type_error(self, tmp_path):
+        # Scryer: error(type_error(float, 2), (^)/2); was 0.5
+        m = _load(tmp_path, "iso_caret", "t(X) :- X is 2 ^ -1.\n")
+        with pytest.raises(Exception, match="type_error"):
+            _answers(m, "t")
+
+    def test_in_comparison(self, tmp_path):
+        m = _load(tmp_path, "iso_cmp", """\
+            t(1) :- 2 ^ 3 > 7, 1 << 2 =:= 4, -7 // 2 =:= -3.
+        """)
+        assert _answers(m, "t") == [1]
+
+    def test_as_data(self, tmp_path):
+        # a data term keeps its ISO functor, (^)/2 -- not Python's **
+        m = _load(tmp_path, "iso_data", """\
+            t(X) :- T = 2 ^ 3, T =.. [X|_].
+        """)
+        assert _answers(m, "t") == ["^"]
