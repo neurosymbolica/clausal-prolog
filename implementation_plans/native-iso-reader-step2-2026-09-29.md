@@ -294,6 +294,48 @@ control.
 * **Exit:** 15 clpz and 5 clpq cases with answers identical to Scryer. The units side channel
   inside CLP is out of scope here.
 
+**Built (2026-09-30, branch `feat/iso-reader-slice5-2026-09-30`).**
+
+* Ops by import, Scryer's rule as measured (8 cases, `tests/iso_l3/test_l3_s5_clp.py`, with
+  an oracle test): `use_module/1` installs every op the module exports; an import LIST
+  installs the exported ops it names (an op the module does not export is not installed) plus
+  every exported op the module also declares with a top-level `op/3` (read from its source,
+  `_sticky_ops`). For libraries the same rule runs off tables: clpz's ops arrive with any
+  import (clpz.pl both exports and declares them), lambda's `+\` only when named or on
+  `use_module/1`. Slice 2 installed every library op on any import and every listed op
+  unchecked; `test_l3_lambda.py`'s header named no op, so Scryer could not read it either, and
+  now names `op(201, xfx, +\)`. A `use_module/2` of an op-exporting `.pl` module is no longer
+  bytecode-cached (its op set is read from the other file).
+* Engine builtins (`clausal/logic/builtins/clpz_names.py` over
+  `clausal/logic/clpz_surface.py`): `in/2`, `ins/2` (`..`, `inf`/`sup`, `\/`, an integer),
+  `labeling/2` (Scryer's options and search order: leftmost/ff/ffc/min/max, up/down,
+  step/enum/bisect; `min(E)`/`max(E)` refused loudly, not built), and the reified connectives
+  `#<==>/2`, `#==>/2`, `#<==/2`, `#\//2`, `#/\/2`, `#\/1`, `#\/2` over the six comparisons and
+  `in/2`. Reification is a new propagator (`ReifiedCmp`, `ReifiedIn`): clpfd's own
+  reification decides at call time inside `if_/3` only. Error formals are Scryer's
+  (`clpz_expression`, `clpz_domain`, `clpz_reifiable_expression`, `labeling_option`,
+  `consistent_labeling_options`, `type_error(list|integer)`, `instantiation_error`), with
+  the builtin's indicator as context. The `#=` family was already registered (iso_compare).
+* `label/1`: the engine's global `label/1` is FIRST-FAIL (a different answer order from
+  Scryer's leftmost). It is unchanged; a `.pl` importing library(clpz) takes `label/1` from
+  `clausal/stdlib/clpz.clausal` (`labeling([], Vs)`), and a file's own `label/1` still wins.
+  OPEN: a meta-called `label/1` (`call(label(Vs))`) resolves to the engine's builtin, because
+  call/N consults the builtin registry before a module's imports (pinned as an OPEN
+  divergence test). Needs a ruling: make the global `label/1` Scryer's, or leave it.
+* clpq: goal `{C}` lowers to `clpq.rational(C)` exactly as the seam lowers
+  `clpq.rational((X + Y == 10, ...))` (the seam has NO `{...}` goal: a set-literal goal is
+  `NotImplementedError` in `terms_to_goalop`, so the plan's "`$SetLiteral`" premise was
+  wrong). `=`/`=:=` -> `$ArithEq`, `=\=` -> `$ArithNeq`, `<`/`>`/`=<`/`>=`; `+ - * /` and
+  unary minus to the seam's nodes. Anything else in the braces is refused at load.
+* Seam quoted form works for the predicates (`'in'`, `'ins'`, `'#<==>'`, `labeling`) and for
+  `\/` (an evaluable), but `'..'(1, 3)` has no seam constructor (not an evaluable, so a
+  NameError). Not changed here.
+* **Exit** (`tests/iso_l3/test_l3_s5_exit.py`, `s5/*.pl`): 18 clpz and 6 clpq `case/2` rows,
+  each the findall of one query, identical to Scryer's writeq output. Oracle:
+  `/workspace/scryer-prolog-clpq` (upstream master + library(clpq)/(clpr) only). NOT
+  `/workspace/scryer-prolog`, whose working tree has uncommitted clpz changes that drop a
+  constraint (`X+Y #= 10, X-Y #= 4` over 0..10 answers seven solutions there).
+
 ### Slice 6: dicts, units, constants (after D6-D8 are ruled)
 
 * Dicts: the predicate forms (`dict_pairs/2`, `get/3,4`, `put/4`, `dict_keys/2`, …) and

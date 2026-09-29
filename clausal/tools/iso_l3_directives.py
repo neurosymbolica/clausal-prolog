@@ -16,11 +16,15 @@ What is handled, and how (the ISO directive -> the seam's):
                                     the reader's table (as Scryer applies it)
     use_module(a/b) / ('a/b')       -import_from(a.b, <a/b's name/arity exports>)
                                     (+ the exported op/3s, into the table)
-    use_module(a/b, [p/1])          -import_from(a.b, [p/1])
+    use_module(a/b, [p/1])          -import_from(a.b, [p/1]) (+ the op/3s the
+                                    list names that a/b exports, and the
+                                    exported ops a/b also declares with a
+                                    top-level op/3 -- Scryer's rule, measured)
     use_module(m, [])               Scryer's remove_module/2 (D27): drops the
                                     names imported from module m, loads nothing
     use_module(library(L)[, Is])    lists/apply/dif/...: built in, nothing
-                                    clpz: clausal.logic.clpfd + clpz's ops
+                                    clpz: clausal.logic.clpfd + clpz's ops;
+                                    label/1 from clausal.stdlib.clpz (Scryer's)
                                     reif: clausal.stdlib.reif; clpq: built in
                                     lambda: built in + its +\\ operator
     dynamic/discontiguous/table(PIs)  the same-named seam directive
@@ -99,6 +103,22 @@ LAMBDA_OPS: tuple[tuple[int, str, str], ...] = ((201, "xfx", "+\\"),)
 _LIBRARY_OPS: dict[str, tuple] = {"clpz": CLPZ_OPS, "clpfd": CLPZ_OPS,
                                   "lambda": LAMBDA_OPS}
 
+#: The library ops an import installs even when its list does not name them:
+#: Scryer's rule for an op a module both EXPORTS and declares with a
+#: top-level ``:- op/3`` (measured: ``use_module(library(clpz), [label/1])``
+#: makes ``#<==>`` an operator; ``use_module(library(lambda), [(\)/2])``
+#: does not make ``+\`` one -- lambda.pl only exports it).
+_LIBRARY_STICKY_OPS: dict[str, tuple] = {"clpz": CLPZ_OPS, "clpfd": CLPZ_OPS}
+
+#: Library predicates whose Scryer meaning differs from the engine builtin
+#: of the same name: an import of the library takes the name from this
+#: module instead (clpz's label/1 is leftmost-first; the engine's is
+#: first-fail, a different answer order).
+_LIBRARY_OVERRIDES: dict[str, tuple[str, tuple[str, ...]]] = {
+    "clpz": ("clausal.stdlib.clpz", ("label",)),
+    "clpfd": ("clausal.stdlib.clpz", ("label",)),
+}
+
 _OP_SPECIFIERS = ("xfx", "xfy", "yfx", "fy", "fx", "xf", "yf")
 
 _AS_REFUSED = ("import aliasing with `as` is refused (it is SWI-only: not "
@@ -144,6 +164,10 @@ class DirectiveContext:
         self.dropped_keys: set[str] = set()
         #: The module's own name, from its module/2 (``own:G`` is local).
         self.own_module: "str | None" = None
+        #: ``(module, names)`` of each library override imported (see
+        #: :data:`_LIBRARY_OVERRIDES`): a name the file defines itself is
+        #: its own, so :meth:`drop_shadowed_overrides` drops the import.
+        self.override_imports: list[tuple[str, frozenset]] = []
         self._t = None
 
     # ── the seam transformer, one per file ──
@@ -233,6 +257,14 @@ class DirectiveContext:
         items[:] = [i for i in items
                     if not (type(i).__name__ == "ImportFromDirective"
                             and getattr(i, "module", None) == dotted)]
+
+    def drop_shadowed_overrides(self, defined: set) -> None:
+        """A library override (Scryer's ``label/1``) the file defines itself
+        is the file's: as for any builtin, a local definition wins (Scryer
+        too: it warns and uses the local clauses)."""
+        for module, names in self.override_imports:
+            if names & defined:
+                self.drop_imports(module)
 
     def note_literal(self) -> str:
         """The mode a ``"..."`` literal read now takes (and record it)."""
@@ -359,12 +391,13 @@ def _use_module(ctx: DirectiveContext, args, spans, span):
     imports = args[1] if len(args) == 2 else None
     what = f"use_module({_show(spec)}{', [...]' if len(args) == 2 else ''})"
     entries = None
+    listed_ops: list = []
     if imports == []:
         return _remove_module(ctx, spec, span, what)
     if imports is not None:
-        entries = _import_list(ctx, imports, spans[1], span, what)
+        entries, listed_ops = _import_list(ctx, imports, spans[1], span, what)
     if type(spec) is tuple and len(spec) == 2 and spec[0] == "library":
-        return _use_library(ctx, spec[1], entries, span, what)
+        return _use_library(ctx, spec[1], entries, span, what, listed_ops)
     path = _slash_path(spec)
     if path is None:
         raise _refused(f"{what}: the module is not an atom, an a/b path or "
@@ -380,7 +413,7 @@ def _use_module(ctx: DirectiveContext, args, spans, span):
             raise _refused(
                 f"{what}: {n}/{a} cannot be imported by name (the name is no "
                 f"identifier); call it qualified, m:'{n}'(...)", span)
-    declared, exports, ops = _declared_exports(found)
+    declared, exports, ops, sticky = _declared_exports(found)
     last = dotted.rsplit(".", 1)[-1]
     ctx.alias(last, dotted)
     if declared and declared != last:
@@ -396,6 +429,16 @@ def _use_module(ctx: DirectiveContext, args, spans, span):
         for op in ops:
             ctx.apply_op(*op, span, what)
         entries = exports
+    else:
+        # Scryer (measured): an import list installs the op/3s it NAMES
+        # that the module EXPORTS -- an op the module does not export is
+        # not installed -- plus every exported op the module also declares
+        # with a top-level op/3, named or not.
+        wanted = _op_triples(listed_ops, _op_triples(ops)) + list(sticky)
+        if wanted or ops:
+            ctx.depends_on.add(found)
+        for op in wanted:
+            ctx.apply_op(*op, span, what)
     if not entries:
         return []
     return ctx.imported(dotted, ctx.seam(
@@ -433,11 +476,18 @@ def _remove_module(ctx, spec, span, what):
     return []
 
 
-def _use_library(ctx, lib, entries, span, what):
+def _use_library(ctx, lib, entries, span, what, listed_ops=()):
     name = _slash_path(lib)
     if name is None:
         raise _refused(f"{what}: the library name is not an atom", span)
-    for op in _LIBRARY_OPS.get(name, ()):
+    lib_ops = _LIBRARY_OPS.get(name, ())
+    if entries is None:
+        install = list(lib_ops)
+    else:
+        # The same rule as for a module file (see _use_module).
+        install = (_op_triples(listed_ops, _op_triples(lib_ops))
+                   + list(_LIBRARY_STICKY_OPS.get(name, ())))
+    for op in install:
         ctx.apply_op(*op, span, what)
     if name in _BUILTIN_LIBRARIES:
         return []
@@ -447,11 +497,17 @@ def _use_library(ctx, lib, entries, span, what):
             f"knows (built in: {', '.join(sorted(_BUILTIN_LIBRARIES))}; "
             f"mapped: {', '.join(sorted(_LIBRARY_MODULES))})", span)
     module = _LIBRARY_MODULES[name]
+    over_module, over_names = _LIBRARY_OVERRIDES.get(name, (None, ()))
+    overridden: list = []
     if entries is None:
         wanted = [(n, None) for n in _LIBRARY_EXPORTS.get(name, ())]
+        overridden = [(n, None) for n in over_names]
     else:
         wanted = []
         for n, arity in entries:
+            if n in over_names:
+                overridden.append((n, arity))
+                continue
             if _engine_goal(n):
                 continue
             if module is not None and _module_has(module, n):
@@ -461,13 +517,30 @@ def _use_library(ctx, lib, entries, span, what):
                 f"{what}: library({name})'s {n}/{arity} is not available in "
                 f"Clausal (neither an engine builtin nor defined in "
                 f"{module or 'the engine'})", span)
-    if not wanted:
-        return []
-    return ctx.imported(module, ctx.seam("import_from",
-                    [_dotted_ast(module),
-                     _list([_name(n) if a is None else _pi_ast(n, a)
-                            for n, a in wanted])],
-                    span, what))
+    if overridden:
+        ctx.override_imports.append(
+            (over_module, frozenset(n for n, _ in overridden)))
+    out: list = []
+    for mod, names in ((module, wanted), (over_module, overridden)):
+        if names:
+            out.extend(ctx.imported(mod, ctx.seam(
+                "import_from",
+                [_dotted_ast(mod),
+                 _list([_name(n) if a is None else _pi_ast(n, a)
+                        for n, a in names])],
+                span, what)))
+    return out
+
+
+def _op_triples(ops, allowed=None) -> list:
+    """``op(P, T, Names)`` argument triples -> one ``(P, T, Name)`` per
+    name, keeping only those in *allowed* (a list of triples) when given."""
+    out = []
+    for p, t, names in ops:
+        for n in (names if type(names) is list else [names]):
+            if allowed is None or (p, t, n) in allowed:
+                out.append((p, t, n))
+    return out
 
 
 def _predspec(directive: str):
@@ -572,13 +645,17 @@ def _import_list(ctx, imports, spans, span, what):
     if type(imports) is not list:
         raise _refused(f"{what}: the import list must be a proper list, got "
                        f"{_show(imports)}", span)
-    entries = []
+    entries, ops = [], []
+    checker = DirectiveContext(source=None, filename="", positions=ctx._pos)
     for e, s in zip(imports, _list_spans(spans, len(imports))):
         where = _top(s) or span
         if type(e) is tuple and len(e) == 3 and e[0] == "as":
             raise _refused(f"{what}: {_AS_REFUSED}", where)
         if type(e) is tuple and len(e) == 4 and e[0] == "op":
-            ctx.apply_op(e[1], e[2], e[3], where, what)
+            # Checked here; installed by the caller only if the module
+            # exports it (Scryer).
+            checker.apply_op(e[1], e[2], e[3], where, what)
+            ops.append(e[1:])
             continue
         pi = _indicator(e)
         if pi is not None:
@@ -590,7 +667,7 @@ def _import_list(ctx, imports, spans, span, what):
             continue
         raise _refused(f"{what}: the import entry {_show(e)} is not "
                        f"name/N (or name//N)", where)
-    return entries
+    return entries, ops
 
 
 def _dotted(path: str, span, what) -> str:
@@ -622,15 +699,18 @@ def _module_source(dotted: str) -> "str | None":
 
 
 def _declared_exports(path: str):
-    """-> (module name, [(name, arity)] or None, [op triples]) from the
-    module/2 declaration of the file at *path* (a ``.pl`` read with the
-    native reader, a ``.seam``/``.clausal`` with ``ast``).  ``None`` exports:
-    the file declares none (or is no Clausal source)."""
+    """-> (module name, [(name, arity)] or None, [op triples], [sticky op
+    triples]) from the module/2 declaration of the file at *path* (a ``.pl``
+    read with the native reader, a ``.seam``/``.clausal`` with ``ast``).
+    ``None`` exports: the file declares none (or is no Clausal source).  The
+    STICKY ops are the exported ops the file also declares with a top-level
+    ``op/3`` directive: Scryer installs those in an importer whatever its
+    import list names (measured)."""
     if path.endswith(".pl"):
         return _pl_exports(path)
     if path.endswith((".seam", ".clausal")):
-        return _seam_exports(path)
-    return None, None, []
+        return _seam_exports(path) + ([],)
+    return None, None, [], []
 
 
 def _pl_exports(path: str):
@@ -644,10 +724,10 @@ def _pl_exports(path: str):
     while True:
         it = reader.read_term()
         if it is EOF or it is NEED_MORE:
-            return None, None, []
+            return None, None, [], []
         kind = type(it).__name__
         if kind != "Directive":
-            return None, None, []
+            return None, None, [], []
         t = it.term
         if (type(t) is tuple and len(t) == 3 and t[0] == "module"
                 and type(t[1]) is str and type(t[2]) is list):
@@ -658,7 +738,32 @@ def _pl_exports(path: str):
                     exports.append(pi)
                 elif type(e) is tuple and len(e) == 4 and e[0] == "op":
                     ops.append(e[1:])
-            return t[1], exports, ops
+            return t[1], exports, ops, _sticky_ops(reader, ops)
+
+
+def _sticky_ops(reader, ops) -> list:
+    """The exported *ops* the rest of the file (still in *reader*) also
+    declares with a top-level ``op/3`` directive.  Only directives are
+    looked at; the exported ops are applied to the reader's table first, so
+    the file parses as it does when it is loaded."""
+    from clausal.tools.prolog_reader import EOF, NEED_MORE  # noqa: PLC0415
+    exported = _op_triples(ops)
+    if not exported:
+        return []
+    for p, t, n in exported:
+        try:
+            reader.op_table.define(p, t, n)
+        except Exception:  # noqa: BLE001 -- a bad op is the loader's to refuse
+            pass
+    declared = set()
+    while True:
+        it = reader.read_term()
+        if it is EOF or it is NEED_MORE:
+            break
+        t = it.term if type(it).__name__ == "Directive" else None
+        if type(t) is tuple and len(t) == 4 and t[0] == "op":
+            declared.update(_op_triples([t[1:]]))
+    return [op for op in exported if op in declared]
 
 
 def _seam_exports(path: str):
