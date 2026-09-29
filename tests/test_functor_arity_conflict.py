@@ -10,8 +10,10 @@ whose first clause) fixes arity N, and which is then given a clause head of
 arity M > N, used to compile into a keyword construction with ``arg_N``
 placeholder names for the surplus positions.  The class had already been minted
 with N fields, so the module blew up at load with a bare, unattributable
-``TypeError``.  A functor name has exactly one arity in Clausal, so this is now
-a ``SyntaxError`` at rewrite time naming both sites.
+``TypeError``.  A DECLARED functor has one arity per file, so this is now
+a ``SyntaxError`` at rewrite time naming both sites.  (Two CLAUSE heads at
+two arities, with no fielded declaration, are two procedures since the
+2026-09-29 ruling -- as in ISO; see ``tests/test_multi_arity_names.py``.)
 
 **Run time.**  Construction silently *discarded* positional arguments past
 ``len(_fields)``, so ``some_atom(A, B)`` on a zero-arity class returned a
@@ -205,15 +207,16 @@ class TestDeclarationClauseArityConflict:
         assert "f/1" in msg
 
     def test_second_clause_with_a_different_arity(self, tmp_path):
-        """No declaration at all — the first clause fixes the arity."""
-        with pytest.raises(SyntaxError) as exc_info:
-            _load(tmp_path, "clause_clause", """
-                f(1),
-                f(1, 2),
-            """)
-        msg = str(exc_info.value)
-        assert "f/2" in msg
-        assert "f/1" in msg
+        """No declaration at all: FLIPPED by the 2026-09-29 ruling (one name
+        at several arities, as in ISO).  The first clause no longer fixes
+        the arity -- ``f/1`` and ``f/2`` are two procedures, each with its
+        own clause, and neither absorbs the other."""
+        mod = _load(tmp_path, "clause_clause", """
+            f(1),
+            f(1, 2),
+        """)
+        assert len(_row_of(mod, "f", 1).clauses) == 1
+        assert len(_row_of(mod, "f", 2).clauses) == 1
 
     def test_private_declaration_conflicts_too(self, tmp_path):
         with pytest.raises(SyntaxError) as exc_info:
@@ -326,8 +329,15 @@ class TestShorterHeadAfterLongerIsRefused:
     field with a fresh ``Var()``, so ``foo/1``'s fact was absorbed into
     ``foo/2`` as ``foo(a, _)``, a clause matching ``foo(a, ANYTHING)`` that
     the author never wrote.  A clause head is not a partial term: positional
-    under-supply against the bound class is now the same load-time
+    under-supply against the bound class became the same load-time
     ``SyntaxError`` that positional over-supply has always been.
+
+    Since the 2026-09-29 ruling (one name at several arities, as in ISO)
+    two CLAUSE heads at two arities are two procedures: ``foo(a),`` after
+    ``foo(a, b),`` defines ``foo/1`` and is never absorbed into ``foo/2``
+    (the silent merge stays dead).  The refusal is reached when the name's
+    fields are DECLARED -- a fielded ``-private`` entry here -- and every
+    message assertion below is made through one.
 
     Keyword heads are exempt — ``f(A=1)`` names exactly which fields it binds,
     so the unnamed remainder is explicit, not an accident.  ``-edcg_pred``
@@ -340,9 +350,22 @@ class TestShorterHeadAfterLongerIsRefused:
             _load(tmp_path, name, text)
         return str(exc_info.value)
 
-    def test_the_todo_repro_is_refused(self, tmp_path):
-        msg = self._refused(tmp_path, "merge_fact", """
+    def test_the_todo_repro_defines_two_procedures(self, tmp_path):
+        """FLIPPED (2026-09-29): the repro loads as ``foo/2`` and ``foo/1``,
+        one clause each -- no ``foo(a, _)`` is fabricated."""
+        mod = _load(tmp_path, "merge_fact", """
             -private([a, b])
+
+            foo(a, b),
+            foo(a),
+        """)
+        assert len(_row_of(mod, "foo", 2).clauses) == 1
+        assert len(_row_of(mod, "foo", 1).clauses) == 1
+
+    def test_the_todo_repro_is_refused_under_a_fielded_declaration(
+            self, tmp_path):
+        msg = self._refused(tmp_path, "merge_fact_decl", """
+            -private([a, b, foo(X, Y)])
 
             foo(a, b),
             foo(a),
@@ -352,7 +375,7 @@ class TestShorterHeadAfterLongerIsRefused:
 
     def test_a_rule_head_is_refused_too(self, tmp_path):
         msg = self._refused(tmp_path, "merge_rule", """
-            -private([a, b])
+            -private([a, b, foo(X, Y)])
 
             foo(a, b),
             foo(X) <- (X == a),
@@ -360,10 +383,23 @@ class TestShorterHeadAfterLongerIsRefused:
         assert "foo/1" in msg
         assert "foo/2" in msg
 
-    def test_a_bare_name_fact_is_refused(self, tmp_path):
-        """``foo,`` after ``foo(a, b),`` padded to a match-EVERYTHING clause."""
-        msg = self._refused(tmp_path, "merge_zero", """
+    def test_a_bare_name_fact_defines_foo_0(self, tmp_path):
+        """FLIPPED (2026-09-29): ``foo,`` after ``foo(a, b),`` used to pad
+        to a match-EVERYTHING clause; it is ``foo/0`` now, a procedure of
+        its own."""
+        mod = _load(tmp_path, "merge_zero", """
             -private([a, b])
+
+            foo(a, b),
+            foo,
+        """)
+        assert len(_row_of(mod, "foo", 2).clauses) == 1
+        assert len(mod.__clausal_module__.db.clauses_for("foo", 0)) == 1
+
+    def test_a_bare_name_fact_is_refused_under_a_fielded_declaration(
+            self, tmp_path):
+        msg = self._refused(tmp_path, "merge_zero_decl", """
+            -private([a, b, foo(X, Y)])
 
             foo(a, b),
             foo,
@@ -373,7 +409,7 @@ class TestShorterHeadAfterLongerIsRefused:
 
     def test_a_bare_name_rule_head_is_refused(self, tmp_path):
         msg = self._refused(tmp_path, "merge_zrule", """
-            -private([a, b])
+            -private([a, b, foo(X, Y)])
 
             foo(a, b),
             foo <- (a == a)
@@ -383,12 +419,12 @@ class TestShorterHeadAfterLongerIsRefused:
 
     def test_the_message_names_both_sites_and_the_padding(self, tmp_path):
         msg = self._refused(tmp_path, "merge_sites", """
-            -private([a, b])
+            -private([a, b, foo(X, Y)])
 
             foo(a, b),
             foo(a),
         """)
-        assert "merge_sites.clausal:3" in msg      # the arity-fixing clause
+        assert "merge_sites.clausal:1" in msg      # the arity-fixing declaration
         assert "merge_sites.clausal:4" in msg      # the offending head
         flat = " ".join(msg.split())
         assert "not a partial term" in flat
@@ -397,7 +433,7 @@ class TestShorterHeadAfterLongerIsRefused:
     def test_the_remedy_spells_the_anything_position(self, tmp_path):
         """Padding meant "anything" exactly once in a while — say how to keep it."""
         msg = self._refused(tmp_path, "merge_anon", """
-            -private([a, b])
+            -private([a, b, foo(X, Y)])
 
             foo(a, b),
             foo(a),
@@ -520,17 +556,16 @@ class TestTheRemedyPrintsTheTemplateEdit:
         assert "-module(" in msg
         assert "-private([...])" not in msg
 
-    def test_an_earlier_clause_is_not_called_a_declaration(self, tmp_path):
-        """No declaration exists — the remedy must not invent one to edit."""
-        msg = self._msg(tmp_path, "remedy_clause", """
+    def test_an_earlier_clause_does_not_fix_the_arity(self, tmp_path):
+        """FLIPPED (2026-09-29): with no declaration there is no remedy to
+        print -- an earlier clause does not fix the arity, and ``f/1``
+        beside ``f/2`` loads (ISO: two procedures)."""
+        mod = self._loads(tmp_path, "remedy_clause", """
             f(1),
             f(1, 2),
         """)
-        assert "remedy:" in msg
-        assert "`f(ARG_0, ARG_1)`" in msg
-        assert "an earlier clause" in msg
-        assert "-private([...])" not in msg
-        assert "-module(" not in msg
+        assert _is_predicate_at(mod, "f", 1)
+        assert _is_predicate_at(mod, "f", 2)
 
     def test_the_template_reuses_the_head_variable_names(self, tmp_path):
         """A head written with real variables gets them back, uppercased."""

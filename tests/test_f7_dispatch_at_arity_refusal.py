@@ -159,8 +159,8 @@ def test_wrong_arity_reaches_the_modules_own_row_at_the_call_arity(
     The ``ping/2`` row is built by a real runtime ``assertz(ping(1, 2))``.
     (Not ``-dynamic(ping/2)`` in the file: that plus ``ping <- ...`` crashes
     at load on main too -- a separate defect the controller is filing.  One
-    file cannot author both ``ping/0`` and ``ping(1, 2)`` either: one name,
-    one arity per file.)  The assertz RE-BINDS the ``ping`` class to the
+    file could not author both ``ping/0`` and ``ping(1, 2)`` either, when
+    this was written: one name, one arity per file -- lifted 2026-09-29.)  The assertz RE-BINDS the ``ping`` class to the
     ``ping/2`` row, so the class-era ``ping/0`` call is the one the class-arm
     fallback has to rescue."""
     from clausal.logic.solve import _drive_trampoline, call as _call

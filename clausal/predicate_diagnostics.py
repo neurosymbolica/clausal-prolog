@@ -245,26 +245,23 @@ def _arguments(n):
 def _describe_mismatch(head, functor, called_arity, defined_arity, site):
     """The site line and the remedy line under *head*.
 
-    The remedy does not say "define ``functor/called_arity`` as a predicate of
-    its own", which was the first wording and is advice the implementation
-    refuses to take: a second head of the same name at another arity in the
-    same file is a load-time SyntaxError
-    (``todo/done/same-name-two-arities-silently-merge.md`` — before that fix
-    it was silently padded with a wildcard and absorbed into the existing
-    predicate, which was worse).  Renaming is the only remedy that works, and
-    the sentence says why so the reader does not have to try the other one —
-    see ``docs/predicates.md``.
+    Both halves of the remedy are advice that works.  Since the 2026-09-29
+    ruling (one name at several arities, as in ISO) a clause head with
+    *called_arity* arguments defines ``functor/called_arity``, a procedure
+    of its own, in the same file as ``functor/defined_arity``.  (Before it,
+    that head was a load-time SyntaxError, and before THAT it was silently
+    padded and absorbed -- ``todo/done/same-name-two-arities-silently-merge.md``
+    -- so the remedy used to say "rename".)  See ``docs/predicates.md``.
     """
     lines = [head]
     if isinstance(site, tuple) and len(site) == 2:
         lines.extend(_sentence(
             f"{functor}/{defined_arity} is defined at {site[0]}:{site[1]}."))
     lines.extend(_arrow([
-        f"pass {_arguments(defined_arity)} to {functor}, or give the "
-        f"{called_arity}-argument predicate a different name: a second "
-        f"{functor} head with {_arguments(called_arity)} in the same file does "
-        f"not define {functor}/{called_arity} — one name has one arity, and "
-        f"the head is refused at load."
+        f"pass {_arguments(defined_arity)} to {functor}, or define "
+        f"{functor}/{called_arity}: a {functor} clause head with "
+        f"{_arguments(called_arity)} is a procedure of its own, unrelated "
+        f"to {functor}/{defined_arity} (as in ISO)."
     ]))
     return lines
 

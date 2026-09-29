@@ -1178,8 +1178,10 @@ class HeadFieldNames(Node):
     """Module item: the field names the rewriter fixed for each functor.
 
     A snapshot of ``EmbedTransformer._seen_functors`` taken at the end of
-    ``visit_Module``, keyed by NAME (one arity per name per file is enforced
-    by the rewriter), each value a ``tuple[str, ...]``.  It is exactly the
+    ``visit_Module``, keyed by NAME -- each name's PRIMARY (first
+    registered) arity -- each value a ``tuple[str, ...]``; *by_arity* holds
+    EVERY arity, keyed ``(name, arity)`` (a name may have several arities
+    in one file since the 2026-09-29 ruling, as in ISO).  It is exactly the
     tuple the functor's class is minted with, and the first registration
     wins: a ``-module``/``-private``/``-edcg_pred`` declaration beats any
     clause, a ``-dynamic``/``f/N`` placeholder loses to the first real head.
@@ -1192,6 +1194,7 @@ class HeadFieldNames(Node):
     load paths.  ``reflection`` skips it (``_SKIPPED_ITEMS``).
     """
     fields: dict = field(default_factory=dict)
+    by_arity: dict = field(default_factory=dict)
 
 
 @node_class

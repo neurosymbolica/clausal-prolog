@@ -204,16 +204,21 @@ def test_the_declaration_site_reaches_the_row(tmp_path, monkeypatch):
 def test_the_arity_conflict_message_names_the_declaration_not_a_class(
         tmp_path, monkeypatch):
     """There is no class to be "minted with N fields" any more: the message
-    says what is true -- the name is DECLARED with N field(s)."""
+    says what is true -- the name is DECLARED with N field(s).
+
+    Since the 2026-09-29 ruling (one name at several arities, as in ISO) two
+    CLAUSE heads at two arities load; the conflict is reached through a
+    FIELDED declaration, which keeps one arity per file."""
     monkeypatch.syspath_prepend(str(tmp_path))
     with pytest.raises(SyntaxError) as info:
         _load(tmp_path, "s5_conflict", """
+            -private([s5c_p(A)])
             s5c_p(1),
             s5c_p(1, 2),
         """)
     text = str(info.value)
     assert "conflicts with the declaration of s5c_p/1" in text
-    assert "s5c_p is declared with 1 field(s) (arg_0)" in text
+    assert "s5c_p is declared with 1 field(s) (A)" in text
     assert "class is minted" not in text
 
 
@@ -315,7 +320,8 @@ def test_a_loading_handle_answers_its_arity_even_before_its_owner_resolves():
     ns = {"__name__": "s5_unresolved_owner"}
     begin_loading_declarations(ns)
     handle = mangle("s5_unresolved_owner", "s5u_p")
-    ns[PREDICATE_HEADS_KEY]["s5u_p"] = (("a", "b"), None)
+    # One entry per declared ARITY (operator ruling 2026-09-29).
+    ns[PREDICATE_HEADS_KEY]["s5u_p"] = {2: (("a", "b"), None)}
     ns["s5u_p"] = handle
     try:
         assert "s5_unresolved_owner" not in sys.modules

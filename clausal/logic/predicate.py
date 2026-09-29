@@ -258,8 +258,8 @@ def _construction_hint(
         # cosmetic disagreement: some declaration of this name is wrong.
         body = (
             f"{functor} takes {len(registered)} argument(s) but "
-            f"{len(supplied)} were supplied. A functor name has exactly one "
-            f"arity in Clausal, so a second declaration of {functor} with a "
+            f"{len(supplied)} were supplied. A functor declared with field "
+            f"names has one arity, so a second declaration of {functor} with a "
             f"different arity — or an imported {functor} of another arity "
             f"shadowing this one — cannot be reconciled. Fix: give every "
             f"declaration and clause head of {functor} the same number of "
@@ -1685,11 +1685,12 @@ def is_declared_predicate(binding, *, arity: int, db=None) -> bool:
     3. Anything else (the same six hazard-1 shapes ``resolve_predicate_row``
        refuses) -> ``False``.
     """
-    loading = loading_head_fields(binding)
+    loading = loading_head_arities(binding)
     if loading is not None:
         # A handle its LOADING module declared: answered as the rewriter's
-        # class answered, from its field names (W4b-3 slice 5).
-        return len(loading) == arity
+        # class answered, from its field names (W4b-3 slice 5) -- at each
+        # arity the body declared (operator ruling 2026-09-29).
+        return arity in loading
     from clausal.logic.atoms import is_mangled  # noqa: PLC0415
     if is_mangled(binding):
         resolved = _resolve_mangled_owner(binding, db)
@@ -1774,7 +1775,7 @@ def is_declared_predicate_name(binding, *, db=None) -> bool:
        ``functor(T, SomeDataclass, 0)`` keeps raising
        ``type_error(atomic, ...)`` exactly as before.
     """
-    if loading_head_fields(binding) is not None:
+    if loading_head_arities(binding) is not None:
         return True      # declared by its LOADING module (W4b-3 slice 5)
     from clausal.logic.atoms import is_mangled  # noqa: PLC0415
     if is_mangled(binding):
@@ -1826,10 +1827,13 @@ def local_predicate_handle(namespace, functor: str) -> "str | None":
     return mangle(module_name, functor)
 
 
-def declared_head(namespace, binding) -> "tuple[str, tuple, Any] | None":
-    """``(functor, fields, site)`` when *binding* is a predicate HANDLE the
-    module body running in *namespace* declared with ``$declare_head``;
-    ``None`` otherwise (an imported handle, an atom, any other value).
+def declared_head_arities(namespace, binding) -> "tuple[str, dict] | None":
+    """``(functor, {arity: (fields, site)})`` when *binding* is a predicate
+    HANDLE the module body running in *namespace* declared with
+    ``$declare_head``; ``None`` otherwise (an imported handle, an atom, any
+    other value).  One entry per ARITY the body declared: a name may have
+    several in one file (operator ruling 2026-09-29, as in ISO), and every
+    single-arity file declares exactly one.
 
     The binding must still BE that module's handle for the name: a later
     ``-import_from`` or a user assignment over the name retires the
@@ -1843,9 +1847,28 @@ def declared_head(namespace, binding) -> "tuple[str, tuple, Any] | None":
     if not is_mangled(binding):
         return None
     functor = demangle(binding)[1]
-    entry = heads.get(functor)
-    if entry is None or binding != local_predicate_handle(namespace, functor):
+    entries = heads.get(functor)
+    if not entries or binding != local_predicate_handle(namespace, functor):
         return None
+    return functor, entries
+
+
+def declared_head(namespace, binding, arity=None) -> "tuple[str, tuple, Any] | None":
+    """``(functor, fields, site)`` for the declaration :func:`declared_head_arities`
+    finds AT *arity* (``None`` when the body declared the name only at other
+    arities) -- or, with no *arity*, the name's FIRST declaration, which is
+    its only one in a single-arity file.  ``None`` when *binding* is not a
+    handle this module body declared."""
+    found = declared_head_arities(namespace, binding)
+    if found is None:
+        return None
+    functor, entries = found
+    if arity is None:
+        entry = next(iter(entries.values()))
+    else:
+        entry = entries.get(arity)
+        if entry is None:
+            return None
     return functor, entry[0], entry[1]
 
 
@@ -1885,7 +1908,7 @@ def end_loading_declarations(namespace: dict) -> None:
         del _LOADING_NAMESPACES[name]
 
 
-def loading_head_fields(binding) -> "tuple | None":
+def loading_head_fields(binding, arity=None) -> "tuple | None":
     """The field names a module that is still LOADING declared for the
     predicate HANDLE *binding* (``$declare_head``), or ``None``.
 
@@ -1899,7 +1922,34 @@ def loading_head_fields(binding) -> "tuple | None":
     authority.
 
     O(1) and allocation-free when no load is in progress: the resolvers
-    that ask this sit on runtime paths too."""
+    that ask this sit on runtime paths too.
+
+    A name declared at several arities (operator ruling 2026-09-29) answers
+    the fields AT *arity*; with no *arity*, or one it was not declared at,
+    it answers ``None`` -- which arity is meant is not ours to guess.  A
+    name declared at ONE arity answers that arity's fields whatever *arity*
+    says, exactly as the class's one ``_fields`` did.  For "is it declared
+    at all" ask :func:`loading_head_arities`."""
+    entries = _loading_head_entries(binding)
+    if entries is None:
+        return None
+    if arity is not None and arity in entries:
+        return entries[arity][0]
+    if len(entries) == 1:
+        return next(iter(entries.values()))[0]
+    return None
+
+
+def loading_head_arities(binding) -> "frozenset | None":
+    """The arities a module that is still LOADING declared the predicate
+    HANDLE *binding* at (``$declare_head``), or ``None`` when it declared
+    none -- the question :func:`loading_head_fields` answers for one arity.
+    O(1) and allocation-free when no load is in progress."""
+    entries = _loading_head_entries(binding)
+    return None if entries is None else frozenset(entries)
+
+
+def _loading_head_entries(binding) -> "dict | None":
     if not _LOADING_NAMESPACES or type(binding) is not str:
         return None
     from clausal.logic.atoms import HIDDEN_SEP  # noqa: PLC0415
@@ -1909,7 +1959,7 @@ def loading_head_fields(binding) -> "tuple | None":
     namespace = _LOADING_NAMESPACES.get(module_name)
     if namespace is None:
         return None
-    found = declared_head(namespace, binding)
+    found = declared_head_arities(namespace, binding)
     return found[1] if found is not None else None
 
 
@@ -1953,7 +2003,11 @@ def _declares_over(namespace, functor: str, fields: tuple) -> bool:
             namespace.get(FUNCTOR_SIGNATURES_KEY) or {}):
         return True
     if value == local_predicate_handle(namespace, functor):
-        entry = (namespace.get(PREDICATE_HEADS_KEY) or {}).get(functor)
+        # Compared AT the declared arity: a second arity of the name
+        # (operator ruling 2026-09-29) is a new declaration, and rebinding
+        # the name to the same handle value is a no-op.
+        entries = (namespace.get(PREDICATE_HEADS_KEY) or {}).get(functor)
+        entry = entries.get(len(fields)) if entries else None
         return entry is None or entry[0] != fields
     return False
 
@@ -1988,8 +2042,8 @@ def declare_head(functor: str, fields: tuple, /) -> None:
             f"named by its module.  Define {functor} in a .clausal file and "
             f"import it, or run this code with a non-empty module-level "
             f"__name__")
-    namespace.setdefault(PREDICATE_HEADS_KEY, {})[functor] = (
-        fields, _source_site(1))
+    namespace.setdefault(PREDICATE_HEADS_KEY, {}).setdefault(functor, {})[
+        len(fields)] = (fields, _source_site(1))
     namespace[functor] = handle
 
 
@@ -2044,7 +2098,7 @@ def head_cell(binding, /, *args: Any, **kwargs: Any) -> Any:
         from clausal.logic.atoms import is_mangled  # noqa: PLC0415
         if is_mangled(binding):
             home = sys._getframe(1).f_globals
-            declared = declared_head(home, binding)
+            declared = _declared_head_for_call(home, binding, args, kwargs)
             if declared is not None:
                 # This module body's OWN predicate (``$declare_head``, W4b-3
                 # slice 5): built against the field names its declaration
@@ -2059,6 +2113,33 @@ def head_cell(binding, /, *args: Any, **kwargs: Any) -> Any:
                                        site=site)
             return _handle_head_cell(binding, args, kwargs, home=home)
     return binding(*args, **kwargs)
+
+
+def _declared_head_for_call(namespace, binding, args: tuple,
+                            kwargs: dict) -> "tuple[str, tuple, Any] | None":
+    """The ``(functor, fields, site)`` declaration a head or construction
+    written with *args*/*kwargs* is built against, when *binding* is a
+    handle the module body running in *namespace* declared; ``None``
+    otherwise.
+
+    One declared arity -> that one, whatever was written (exactly the
+    class's one ``_fields``, so a mismatch keeps its construction error).
+    Several (operator ruling 2026-09-29) -> the arity WRITTEN, else
+    :func:`_head_signature_for`'s choice or its
+    ``AmbiguousArityConstructionError``."""
+    found = declared_head_arities(namespace, binding)
+    if found is None:
+        return None
+    functor, entries = found
+    entry = entries.get(len(args) + len(kwargs))
+    if entry is None:
+        if len(entries) == 1:
+            entry = next(iter(entries.values()))
+        else:
+            fields = _head_signature_for(
+                functor, {a: e[0] for a, e in entries.items()}, args, kwargs)
+            entry = entries[len(fields)]
+    return functor, entry[0], entry[1]
 
 
 def _handle_head_cell(handle: str, args: tuple, kwargs: dict,
@@ -2260,14 +2341,14 @@ def predicate_arities_for(binding, *, cache: "dict | None" = None,
         # resolves.  Read FIRST, as ``is_declared_predicate[_name]`` read it,
         # so an owner that does not resolve (yet) cannot make this answer
         # "not a predicate" while they answer "a predicate".
-        loading = loading_head_fields(binding)
+        loading = loading_head_arities(binding)
         resolved = _resolve_mangled_owner(binding, db)
         if resolved is None:
-            return {len(loading)} if loading is not None else set()
+            return set(loading) if loading is not None else set()
         db, functor = resolved
         defined, declared = _arity_maps(db, cache)
         if loading is not None:
-            return {len(loading)} | set(defined.get(functor, ()))
+            return set(loading) | set(defined.get(functor, ()))
         return set(defined.get(functor) or declared.get(functor) or ())
     return set()
 
@@ -2323,10 +2404,11 @@ def field_names_for(value, *, arity=None, db=None, namespace=None):
     3. anything else -> ``None``.
     """
     if isinstance(value, str):
-        loading = loading_head_fields(value)
+        loading = loading_head_fields(value, arity)
         if loading is not None:
             # A handle its LOADING module declared: the rewriter's class
-            # answered ``_fields`` here (W4b-3 slice 5).
+            # answered ``_fields`` here (W4b-3 slice 5) -- at *arity*, for a
+            # name declared at several (operator ruling 2026-09-29).
             return loading
         return _field_names_for_name(value, arity, db, namespace)
     if not isinstance(value, type):
