@@ -14,7 +14,7 @@ class Dialect:
     name: str                                  # "iso", "swi", "scryer"
     operator_table: OperatorTable = field(repr=False)
     library_map: dict[str, str] = field(default_factory=dict)
-    clpfd_module: str = "clpfd"
+    clpfd_module: str = "clpz"                 # Scryer/Trealla; swi() overrides "clpfd"
     #: Does emitting a CLP arithmetic goal (`#=`) require importing
     #: :attr:`clpfd_module`, or is the solver built in? GNU Prolog's FD system
     #: is built in and has no `library(fd)` to import; everywhere else the file
@@ -262,7 +262,7 @@ BUILTIN_NAME_MAP: dict[str, dict[str, str]] = {
     "copy_term":     {"iso": "copy_term"},
     "term_variables": {"iso": "term_variables"},
     "numbervars":    {"iso": "numbervars"},
-    "all_different": {"swi": "all_different", "scryer": "all_distinct",
+    "all_different": {"iso": "all_distinct", "swi": "all_different", "scryer": "all_distinct",
                       "gprolog": "fd_all_different", "trealla": "all_distinct"},
     "in_domain":     {"swi": "ins", "scryer": "ins",
                       "gprolog": "fd_domain", "trealla": "ins"},
@@ -338,7 +338,7 @@ BUILTIN_NAME_MAP: dict[str, dict[str, str]] = {
     "succ":          {"iso": "succ"},
     "plus":          {"iso": "plus"},
     "phrase":        {"iso": "phrase"},
-    "time_goal":     {"swi": "time", "scryer": "time", "trealla": "time"},
+    "time_goal":     {"iso": "time", "swi": "time", "scryer": "time", "trealla": "time"},
     "include":       {"swi": "include", "scryer": "include",
                       "gprolog": "include", "trealla": "include"},
     "exclude":       {"swi": "exclude", "scryer": "exclude",
