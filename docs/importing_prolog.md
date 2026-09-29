@@ -210,6 +210,12 @@ The translator **rejects** programs containing:
 These are rejected rather than silently mistranslated, because their semantics
 cannot be faithfully represented in Clausal's pure core.
 
+A **query in program text** (`?- Goal.`) is refused too: it is not run on
+load, and until 2026-09-29 it was silently turned into a comment. An
+`:- op/3` directive is applied by the reader to the terms below it (its
+effect on the program's text); Clausal has no run-time operator table, so
+the directive itself is kept as a comment.
+
 ### Atoms and strings
 
 The translator preserves the ISO distinction: a Prolog **atom** loads as a

@@ -767,10 +767,18 @@ class _PrologToClausal:
         if isinstance(item, PDirective):
             return self._emit_directive(item)
         if isinstance(item, PQuery):
-            return f"# ?- {self._emit_term(item.body)}"
+            # A comment here was a silent drop: the goal never ran.  (Scryer
+            # skips it too, but saying nothing is the failure this module
+            # refuses; ISO prolog text holds only clauses and directives.)
+            raise PrologTranslationError(
+                f"?- {_plain_term(item.body)}: a query in program text is "
+                "not run on load (ISO 6.2: prolog text is clauses and "
+                "directives). Remove it, or write the goal as a test/1 "
+                "clause.")
         if isinstance(item, PComment):
             return f"# {item.text}"
-        return None
+        raise PrologTranslationError(
+            f"cannot translate item {type(item).__name__}")
 
     # ── Clauses ──────────────────────────────────────────────────────
 
@@ -1046,9 +1054,15 @@ class _PrologToClausal:
             else:
                 v = self._emit_term(value)
             return f"-set_prolog_flag({flag.name}, {v})"
-        # :- op(P, T, N) → comment
+        # :- op(P, T, N): the READER has already applied it (the terms
+        # below it parse with the operator), which is its effect on a
+        # program's text.  Clausal keeps no run-time operator table
+        # (current_op/3, op/3 as a goal), so what remains is a comment
+        # recording the declaration.
         if isinstance(body, PCompound) and body.functor == "op" and len(body.args) == 3:
-            return f"# operator: op({self._emit_term(body.args[0])}, {self._emit_term(body.args[1])}, {self._emit_term(body.args[2])})"
+            return (f"# operator: op({_plain_term(body.args[0])}, "
+                    f"{_plain_term(body.args[1])}, {_plain_term(body.args[2])}) "
+                    "-- applied by the reader to the terms below")
         # Generic directive
         return f"-{self._emit_term(body)}"
 

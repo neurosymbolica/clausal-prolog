@@ -458,3 +458,26 @@ class TestReservedAtoms:
         """)
         assert _answers(m, "t") == ["undefined"]
         assert _answers(m, "u") == [1]
+
+
+# ── I. nothing else is silently dropped ───────────────────────────────
+
+
+class TestNoSilentDrop:
+    def test_query_in_program_text_is_refused(self, tmp_path):
+        # was emitted as a comment: the goal never ran and nothing said so
+        with pytest.raises(SyntaxError, match=r"line 2.*\?-"):
+            _load(tmp_path, "query", """\
+                p(1).
+                ?- p(X).
+            """)
+
+    def test_op_directive_is_applied_by_the_reader(self, tmp_path):
+        # op/3 is honoured where it matters here, by the reader: the
+        # operator parses below the directive
+        m = _load(tmp_path, "opdir", """\
+            :- op(700, xfx, likes).
+            r(a likes b).
+            t(X) :- r(X likes _).
+        """)
+        assert _answers(m, "t") == ["a"]
