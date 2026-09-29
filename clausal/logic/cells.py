@@ -1027,3 +1027,30 @@ def is_compiled_constant(obj) -> bool:
     """True iff *obj* IS a constant of a LIVE generated code object."""
     ref = _COMPILED_GROUND.get(id(obj))
     return ref is not None and ref() is not None
+
+
+def is_pool_seeded_atom(namespace, name: str) -> bool:
+    """True when *namespace* binds *name* to the plain atom of that spelling
+    ONLY because the process-wide atom pool seeded it there: the module
+    neither declares the atom (``DECLARED_ATOMS_KEY``) nor imports the name
+    (``IMPORT_FROM_KEY``).
+
+    Every module dict is seeded from that pool, so once ANY module declares
+    ``-private([nosuch])``, every other module has an attribute ``nosuch``
+    too -- and a qualified call ``m.nosuch(1)`` read it as a data reference
+    of m's, so its error depended on what an unrelated module declared.
+    """
+    if not isinstance(namespace, dict):
+        return False
+    value = namespace.get(name)
+    if type(value) is not str or value != name:
+        return False
+    from clausal.logic.atoms import is_mangled  # noqa: PLC0415
+    if is_mangled(value):
+        return False
+    if name in (namespace.get(DECLARED_ATOMS_KEY) or ()):
+        return False
+    for entry in namespace.get(IMPORT_FROM_KEY) or ():
+        if entry and entry[0] == name:
+            return False
+    return True

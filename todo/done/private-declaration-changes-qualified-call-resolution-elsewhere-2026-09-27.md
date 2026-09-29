@@ -63,3 +63,16 @@ reference" message is raised and check which namespace it consulted.
 
 The error for `other_mod.nosuch(1)` depends only on `other_mod` (and the
 caller), never on what an unrelated module declared.
+
+## Closed 2026-09-30
+
+Fixed on fix/todo-batch-5-2026-09-30: `cells.is_pool_seeded_atom` tells an atom
+the target module only has because the process-wide pool seeded its dict (it
+neither declares it, `DECLARED_ATOMS_KEY`, nor imports it, `IMPORT_FROM_KEY`)
+from its own; the qualified-call resolution (`globals_env`) and the handle
+route (`predicate._dispatch_at`) ignore such a binding, so `m.nosuch(1)` is
+the PredicateNotFoundError whatever else is loaded. A module that declares the
+atom itself keeps the data-reference error. Re-measured: the 4 order-dependent
+failures of test_unknown_direct_call_is_iso_existence_error.py after loading a
+`-private([nosuch])` module are gone. Pinned by
+tests/test_pool_atom_does_not_change_qualified_call.py.

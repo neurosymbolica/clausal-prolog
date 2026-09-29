@@ -35,7 +35,7 @@ from clausal.logic.builtins import (
     get_builtin_predicate, BuiltinPredicate,
 )
 
-from clausal.logic.cells import _cell_shape, is_chars
+from clausal.logic.cells import _cell_shape, is_chars, is_pool_seeded_atom
 from clausal.logic.atoms import is_atom as _term_is_atom, is_nil
 
 from ._ast_helpers import _name, _call, _assign
@@ -1198,10 +1198,19 @@ def _inject_resolved_targets(
                     continue
             parts = target_name.split(".")
             obj = globals_.get(parts[0]) if globals_ else None
+            parent = None
             for part in parts[1:]:
                 if obj is None:
                     break
+                parent = obj
                 obj = getattr(obj, part, None)
+            if (target_arity >= 0 and parent is not None and obj is not None
+                    and is_pool_seeded_atom(getattr(parent, "__dict__", None),
+                                            parts[-1])):
+                # ``m.nosuch(1)`` where m only has ``nosuch`` because the
+                # atom pool seeded it (another module declared the atom):
+                # not m's data reference -- resolve as the unknown call it is.
+                obj = None
             # W4b-3: a predicate HANDLE (post-flip module attribute) is
             # accepted and cached exactly as the class is, at its own arity.
             # At another arity the object is still kept (next branch): a
@@ -1219,6 +1228,10 @@ def _inject_resolved_targets(
             mod_obj = _sys.modules.get(mod_path)
             if mod_obj is not None:
                 resolved = getattr(mod_obj, attr_name, None)
+                if (target_arity >= 0 and resolved is not None
+                        and is_pool_seeded_atom(
+                            getattr(mod_obj, "__dict__", None), attr_name)):
+                    resolved = None                 # see the walk above
                 if resolved is not None and _is_call_target(
                         resolved, target_arity, db):   # W4b-3
                     base_globals[target_name] = resolved
