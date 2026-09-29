@@ -64,3 +64,12 @@ that documents both the feature and its required gate
   twin) — the runtime helper implementing the leniency.
 - `todo/done/first-arg-indexing-str-caller-still-reaches-list-fact-2026-09-04.md`
   — the adjacent, ALREADY-FIXED literal-fact case, for contrast.
+
+## Closed 2026-09-30 (superseded)
+
+The atoms-as-str flip (2026-09-18) resolved the asymmetry this note recorded:
+a `str` is now an ATOM and a string is the chars carrier. Re-measured on
+9b6b58a1: `pat([H, *T], H, T)` and `all([*XS], XS)` give NO answer for the
+atom `met` (an atom is not a list), and destructure the STRING `"met"` into
+`m` and `"et"` -- a string is the list of its chars (ISO double_quotes=chars).
+Nothing left to scope.
