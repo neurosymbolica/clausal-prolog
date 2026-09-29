@@ -53,3 +53,18 @@ def test_atom_number(native, ans):
     }
     for name, expected in want.items():
         assert ans(mod, name) == expected, name
+
+
+def test_atom_number_beyond_the_int_str_digit_limit():
+    """A 5000-digit integer reads and writes (CPython caps int/str
+    conversion at ~4300 digits; it escaped as a bare ValueError)."""
+    from clausal.logic.database import Module
+    from clausal.logic.solve import solve
+    from clausal.logic.variables import Var, deref
+    m = Module("an_big")
+    n = 7 * 10 ** 4999 + 3
+    text = "7" + "0" * 4998 + "3"
+    v = Var()
+    assert [deref(v) for _ in solve(("atom_number", text, v), m)] == [n]
+    a = Var()
+    assert [deref(a) for _ in solve(("atom_number", a, n), m)] == [text]

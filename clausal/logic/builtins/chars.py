@@ -18,6 +18,7 @@ conversion (upcase_atom/2, downcase_atom/2).
 from __future__ import annotations
 
 import re as _re
+from decimal import Decimal as _Decimal
 from typing import Any
 
 from clausal.logic.variables import deref, is_var, unify
@@ -785,7 +786,8 @@ def _parse_number_token(text: str):
     elif "." in body:
         value = float(body)
     else:
-        value = int(body)
+        # through Decimal: CPython caps int(str) at ~4300 digits
+        value = int(_Decimal(body)) if len(body) > 4000 else int(body)
     return -value if neg else value
 
 
@@ -793,6 +795,8 @@ def _number_text(n) -> str:
     """*n* as a Prolog number token that :func:`_parse_number_token` reads
     back: a float always has its fraction (``1.0e+22``, not Python's
     ``1e+22``)."""
+    if type(n) is int and abs(n) >= 10 ** 4000:
+        return str(_Decimal(n))     # CPython caps str(int) at ~4300 digits
     s = str(n)
     if type(n) is float and "e" in s:
         mant, exp = s.split("e")
