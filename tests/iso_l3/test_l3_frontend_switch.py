@@ -104,7 +104,7 @@ def test_an_unknown_frontend_value_is_an_error_not_a_default(pkg, monkeypatch):
 def test_native_refusal_is_an_import_error_naming_the_pl_line(pkg, monkeypatch):
     tmp, names = pkg
     monkeypatch.setenv(ENV, "native")
-    (tmp / "fe_ref.pl").write_text("f(1).\n\n:- dynamic(d/1).\n")
+    (tmp / "fe_ref.pl").write_text("f(1).\n\n:- initialization(f(1)).\n")
     with pytest.raises(SyntaxError) as ei:
         _import(tmp, names, "fe_ref")
     assert ei.value.lineno == 3
@@ -178,8 +178,11 @@ def test_a_cached_entry_of_one_front_end_is_never_served_to_the_other(
     # POSITIVE CONTROL: the same front end twice IS served from the cache.
     mod = load("native")
     assert calls[-1] == "NativePrologLoader" and len(calls) == 3
-    # ...and the cache-hit path still reports its stats (re-lowered).
-    assert mod.__loader__.l3_stats["lowered"] == 1
+    # ...and the cache-hit path still reports its stats: it re-reads the
+    # file and re-lowers only the directives (slice 2), so the one clause
+    # is counted as skipped.
+    st = mod.__loader__.l3_stats
+    assert st["read"] == 1 and st["skipped"] == 1 and st["lowered"] == 0, st
 
 
 def test_every_file_the_native_path_runs_is_in_its_cache_key():

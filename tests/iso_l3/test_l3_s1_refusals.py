@@ -48,7 +48,7 @@ def test_the_cut_family_is_refused_with_the_ruling_and_the_line(
     ("r_callhead", "call(x).", "control construct call/1"),
     ("r_dollarhead", "'$module'(1).", "reserved name"),
     ("r_dollargoal", "p :- '$unify'(a, a).", "reserved name"),
-    ("r_directive", ":- initialization(main).", "Directive"),
+    ("r_directive", ":- initialization(main).", "initialization/1 is refused"),
     ("r_dcg", "s --> [a].", "DCGRule"),
 ])
 def test_what_iso_does_not_make_a_clause_is_refused(native, name, text,
@@ -67,7 +67,7 @@ def test_the_same_shapes_as_data_load(native, ans):
 
 
 def test_counting_mode_counts_every_refusal():
-    src = "a.\np :- !.\nq :- (a -> a ; a).\n:- dynamic(d/1).\nr :- a.\n"
+    src = "a.\np :- !.\nq :- (a -> a ; a).\n:- nodirective(d/1).\nr :- a.\n"
     _, st = L3.lower_items(L3.read_iso(src), strict=False, source=src,
                            filename="c.pl")
     assert (st["read"], st["lowered"], st["refused"]) == (5, 2, 3), st

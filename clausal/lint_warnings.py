@@ -47,6 +47,13 @@ class ClausalDeprecatedSpellingWarning(ClausalLintWarning):
     """
 
 
+class ClausalBareAtomImportWarning(ClausalDeprecatedSpellingWarning):
+    """A bare atom in a ``.pl`` ``use_module/2`` import list (``[cite,
+    p/1]``; not ISO).  Accepted during the transition and COUNTED: one
+    warning per file gives the number of such entries and their names.  An
+    atom is global by spelling, so the entry imports nothing."""
+
+
 class ClausalTitleCaseIdentifierWarning(ClausalLintWarning):
     """A TitleCase identifier (``Foo``, ``FooBar``) in Clausal code.
 
