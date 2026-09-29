@@ -463,6 +463,13 @@ renamed to `_pi`.)
   `max_`/`min_`/`abs_` (a `type_error(evaluable, max_/2)`), `^` became Python
   `**` (`2 ^ -1` answered `0.5`) and `<<`, `/\`, `\/`, `\` were not
   evaluated at all.
+- **A renamed library name is renamed in data position too.** The few
+  renames that remain (`memberchk` → `in_check`, `float/1` → `float_/1`,
+  ...) apply wherever the name appears as a functor, because a meta-call's
+  goal argument is emitted as a term; `X = memberchk(a, L)` builds
+  `in_check(a, L)`.
+- **`use_module/1` of a `.clausal`/`.seam` module** gives qualified access
+  only (`-import_module`); name the predicates with `use_module/2`.
 - **No cut, no if-then-else** (above), and no streams or `op/3`. The ISO
   flags are there ([Prolog Flags](flags.md)), but `unknown` can only be
   `error`.
