@@ -1045,8 +1045,9 @@ def prescan_constructors(source: str) -> "dict[tuple[str, int], tuple[str, ...]]
     exported constructor must reach the seam's -module as its template
     (that is what exports a DATA functor with its fields), so the export
     list needs the templates when it is lowered.  Only a file whose text
-    mentions ``constructors(`` is read twice.  A malformed entry is left
-    for the real directive to refuse, with its line."""
+    mentions ``constructors(`` is read twice.  A malformed entry (the checks
+    of :func:`_constructor_template`) is left out, so module/2 exports it
+    as a predicate and the real directive then refuses it with its line."""
     if not _CONSTRUCTORS_RE.search(source):
         return {}
     from clausal.tools import iso_l3  # noqa: PLC0415
@@ -1059,9 +1060,11 @@ def prescan_constructors(source: str) -> "dict[tuple[str, int], tuple[str, ...]]
         if not (type(t) is tuple and len(t) == 2 and t[0] == "constructors"):
             continue
         for e, _s in _sequence(t[1], None):
-            if (type(e) is tuple and len(e) > 1 and type(e[0]) is str
-                    and all(type(f) is str for f in e[1:])):
-                found.setdefault((e[0], len(e) - 1), tuple(e[1:]))
+            try:
+                name, fields = _constructor_template(e, None, "")
+            except DirectiveRefused:
+                continue
+            found.setdefault((name, len(fields)), fields)
     return found
 
 

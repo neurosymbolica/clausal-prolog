@@ -709,8 +709,10 @@ def lower_items(items, *, strict: bool = True, source: "str | None" = None,
         body.extend(ctx.auto_declare(uses))
     except DirectiveRefused as e:
         refuse(str(e), e.span)
-    stats["auto_declared"] = {"atoms": len(ctx.auto_atoms),
-                              "functors": len(ctx.auto_functors)}
+    stats["auto_declared"] = {
+        "atoms": len(ctx.auto_atoms),
+        "functors": len({n for n, _a in ctx.auto_functors}),
+        "functor_arities": len(ctx.auto_functors)}
     mod = ast.Module(body=body, type_ignores=[])
     ast.fix_missing_locations(mod)
     if _lowered is not None:
@@ -838,9 +840,10 @@ def log_auto_declared(ctx, filename: str) -> None:
     import logging  # noqa: PLC0415
     log = logging.getLogger(LOGGER_NAME)
     atoms, functors = ctx.auto_atoms, ctx.auto_functors
-    log.info("%s: auto-declared %d names (%d atoms, %d data functors)",
-             filename, len(atoms) + len({n for n, _a in functors}),
-             len(atoms), len(functors))
+    names = len({n for n, _a in functors})
+    log.info("%s: auto-declared %d names (%d atoms, %d data functors at "
+             "%d name/arity)", filename, len(atoms) + names, len(atoms),
+             names, len(functors))
     if log.isEnabledFor(logging.DEBUG) and (atoms or functors):
         log.debug("%s: auto-declared atoms: %s; data functors: %s", filename,
                   ", ".join(atoms) or "-",

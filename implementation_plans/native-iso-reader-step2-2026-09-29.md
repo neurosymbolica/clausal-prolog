@@ -289,8 +289,8 @@ strict mode for `.pl`. What was built:
   D6 is ruled, so field-name *update* has no ISO spelling. The seam's `P.x` is dict access
   and has no cell meaning in the seam either.
 * `:- atoms([...])` is not part of the language: an unknown directive.
-* **Exit (met):** `tests/iso_l3/test_l3_s3_declarations.py` (21 tests; 20 fail on
-  f01790d2). A data functor used only as data, with no declaration, loads and builds data.
+* **Exit (met):** `tests/iso_l3/test_l3_s3_declarations.py` (26 tests; 25 fail on
+  f01790d2, the other pins that `atoms/1` stays unknown). A data functor used only as data, with no declaration, loads and builds data.
   A package facade fixture (`tests/iso_l3/s3`) has a test module importing an atom from the
   facade (`use_module(s3pkg, [class_comparison])`) and the package's exported constructor.
   It answers the same as its seam twin, per predicate, in order.

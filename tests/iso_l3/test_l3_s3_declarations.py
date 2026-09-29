@@ -64,7 +64,8 @@ def test_a_data_functor_used_only_as_data_loads_and_builds_data(native, ans):
     assert ans(mod, "q") == ["color"]
     assert ans(mod, "sel", 2, ("attribute", "size", 3)) == ["size"]
     st = mod.__loader__.l3_stats
-    assert st["auto_declared"] == {"atoms": 2, "functors": 1}, st
+    assert st["auto_declared"] == {"atoms": 2, "functors": 1,
+                                   "functor_arities": 1}, st
     assert (mod.color, mod.red, mod.attribute) == ("color", "red", "attribute")
 
 
@@ -77,7 +78,8 @@ def test_the_declared_set_size_is_an_info_line_not_a_warning(native, caplog):
     info = [r.getMessage() for r in lines if r.levelno == logging.INFO]
     assert len(info) == 1, info
     assert info[0].endswith(
-        "s3_info.pl: auto-declared 3 names (2 atoms, 1 data functors)"), info
+        "s3_info.pl: auto-declared 3 names (2 atoms, 1 data functors at "
+        "1 name/arity)"), info
     debug = [r.getMessage() for r in lines if r.levelno == logging.DEBUG]
     assert debug and "color, red; data functors: attribute/2" in debug[0]
     assert not [w for w in got if "auto-declared" in str(w.message)]
@@ -126,8 +128,32 @@ def test_names_that_mean_something_else_are_not_declared(native, ans):
     assert ans(mod, "h") == ["h", "dbl"]
     ctx_atoms = mod.__loader__.l3_stats["auto_declared"]
     # x is the only name here with no other meaning.
-    assert ctx_atoms == {"atoms": 1, "functors": 0}, ctx_atoms
+    assert ctx_atoms == {"atoms": 1, "functors": 0,
+                         "functor_arities": 0}, ctx_atoms
     assert mod.x == "x"
+
+
+def test_a_functor_used_only_as_data_can_still_be_asserted(native, ans):
+    """``item`` is never a goal here, so it is auto-declared as a name; its
+    term is still assertz-able (assert_creates_dynamic), and the new
+    procedure answers locally and qualified from another module."""
+    native.load("s3_rec", ":- module(s3_rec, [rec/1]).\n"
+                          "rec(X) :- T = item(X), assertz(T).\n")
+    rec = sys.modules["s3_rec"]
+    assert rec.__loader__.l3_stats["auto_declared"]["functors"] == 1
+    assert ans(rec, "rec", 1, 1) == [()]
+    assert ans(rec, "item") == [1]
+    user = native.load("s3_recuse", ":- module(s3_recuse, [q/1]).\n"
+                                    ":- use_module(s3_rec, [rec/1]).\n"
+                                    "q(X) :- rec(6), s3_rec:item(X).\n")
+    assert ans(user, "q") == [1, 6]
+
+
+def test_one_name_at_two_arities_counts_once_as_a_name(native):
+    mod = native.load("s3_arities", "p(L) :- L = [box(1), box(1, 2)].\n")
+    assert mod.__loader__.l3_stats["auto_declared"] == {
+        "atoms": 0, "functors": 1, "functor_arities": 2}
+    assert mod.box == "box"
 
 
 def test_a_cache_hit_recovers_the_same_declarations(tmp_path, monkeypatch, ans):
@@ -149,7 +175,7 @@ def test_a_cache_hit_recovers_the_same_declarations(tmp_path, monkeypatch, ans):
         sys.modules.pop("s3_cached", None)
     assert stats[0]["skipped"] == 0 and stats[1]["skipped"] == 3, stats
     assert stats[0]["auto_declared"] == stats[1]["auto_declared"] == {
-        "atoms": 2, "functors": 1}
+        "atoms": 2, "functors": 1, "functor_arities": 1}
 
 
 # ── constructors/1 ──
@@ -222,6 +248,18 @@ def test_constructors_refusals_name_their_line(native, decl, fragment):
     err = _refusal(native, "s3_badctor", f"a.\n:- {decl}.\n")
     assert err.lineno == 2, err
     assert fragment in str(err), str(err)
+
+
+@pytest.mark.parametrize("ctor", ["seg(from, to)", "'Pt'(x)", "pt(x, x)"])
+def test_an_exported_malformed_constructor_is_refused_at_its_line(native, ctor):
+    """The pre-scan skips a malformed template, so module/2 exports it as a
+    predicate and constructors/1 refuses it with ITS line."""
+    name, arity = ctor.split("(")[0], ctor.count(",") + 1
+    err = _refusal(native, "s3_badexp",
+                   f":- module(s3_badexp, [{name}/{arity}]).\n"
+                   f":- constructors([{ctor}]).\n")
+    assert err.lineno == 2, err
+    assert "constructors(...)" in str(err), str(err)
 
 
 def test_a_constructor_defined_by_clauses_is_refused(native):
