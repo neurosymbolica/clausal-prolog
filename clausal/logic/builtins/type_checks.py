@@ -366,6 +366,14 @@ def _callable__1_factory(db):
     return callable___1
 
 
+# ISO's name for callable_/1 (8.3.9), the same factory -- as member/2 and
+# memberchk/2 are registered under their ISO names -- so `callable(X)` in a
+# clause body, a .pl file or a query reaches it; it used to be
+# existence_error(procedure, callable/1).  The trailing-underscore spelling
+# stays (it keeps Python's own ``callable`` out of the way in hosted code).
+_db_builtin("callable", 1, fields=("x",))(_callable__1_factory)
+
+
 @_builtin("is_list", 1)
 def _is_list__1(x, trail, k):
     """is_list(X) — succeeds if X is a Python list or a Python str.
