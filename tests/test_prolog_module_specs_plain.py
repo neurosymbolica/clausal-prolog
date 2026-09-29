@@ -100,11 +100,21 @@ def test_a_bare_name_is_listed_from_its_signature():
     assert ":- use_module(qlib, [twice/2])." in out
 
 
-def test_a_bare_name_with_no_signature_is_refused_not_left_listless():
-    with pytest.raises(UntranslatableConstructError, match="arity is unknown"):
-        _plain("-import_from(other, [thing])\n", strict=True)
-    out = _plain("-import_from(other, [thing])\n")
-    assert "use_module(other)" not in out and "use_module(other, [])" not in out
+def test_a_bare_name_with_no_signature_is_an_atom_and_emits_nothing():
+    """Ruling D4 (2026-09-29): Clausal Prolog is non-strict and atoms are never
+    imported, so an unclassifiable bare name is read as one -- not refused, and
+    never left as a listless import (which would import nothing anyway)."""
+    out = _plain("-import_from(other, [thing])\n", strict=True)
+    assert "use_module(other" not in out
+    assert "% skipped: other exports none of the requested names" in out
+    out = _plain("-import_from(other, [thing, g/2])\n", strict=True)
+    assert ":- use_module(other, [g/2])." in out
+
+
+def test_an_atom_imported_from_a_signed_facade_emits_nothing():
+    sigs = {"pkg": {("f", 1)}}
+    out = _plain("-import_from(pkg, [f, some_atom])\n", strict=True, module_signatures=sigs)
+    assert ":- use_module(pkg, [f/1])." in out and "some_atom" not in out
 
 
 def test_written_arities_need_no_signature():

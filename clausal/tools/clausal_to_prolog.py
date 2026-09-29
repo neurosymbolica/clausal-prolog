@@ -2120,18 +2120,21 @@ class _ClausalToProlog:
         target and bind no name. With a signature for *mod_path* the list is
         filtered exactly as in the relative layout (atoms and constructors
         drop out, bare names expand to every exported arity). Without one,
-        only entries whose arity is WRITTEN can be listed; a bare name there
-        is recorded as untranslatable and left out.
+        only entries whose arity is WRITTEN can be listed. A bare name there
+        is read as an ATOM and emits nothing (ruling D4, 2026-09-29: Clausal
+        Prolog is non-strict, atoms are auto-declared and never imported). It
+        is recorded as lossy, not refused: if it is really a predicate, the
+        call raises existence_error on the engine, and a signature for the
+        target removes the ambiguity.
         """
         exported = (self.module_signatures or {}).get(mod_path)
         if exported is None:
             listed = []
             for name, arity in dict.fromkeys(requested):
                 if arity is None:
-                    self._add_warning(
-                        f"import of {name} from {mod_path}: its arity is unknown "
-                        "(no signature for the target), and the engine's "
-                        "use_module/1 imports nothing")
+                    self._add_lossy(
+                        f"bare import {name} from {mod_path} read as an atom "
+                        "(no signature for the target): nothing emitted")
                     continue
                 listed.append(PCompound("/", (PAtom(name), PNumber(arity))))
             return listed
