@@ -125,7 +125,7 @@ def _run(binary, flags, pl_path):
     return dict(line.split("=", 1) for line in proc.stdout.splitlines() if "=" in line), proc
 
 
-@pytest.mark.parametrize("dialect", ["scryer", "trealla"])
+@pytest.mark.parametrize("dialect", ["iso", "scryer", "trealla"])
 @pytest.mark.parametrize("engine, binary, flags", [
     pytest.param("scryer", SCRYER, [], marks=pytest.mark.skipif(
         not os.path.exists(SCRYER), reason="Scryer not built here")),
@@ -232,3 +232,13 @@ def test_in_over_something_other_than_a_range_is_not_folded():
     reverse map's existing reading (membership, `in_`)."""
     from clausal.tools.prolog_to_clausal import prolog_to_clausal
     assert "in_domain" not in prolog_to_clausal("p(V, D) :- in(V, D).\n")
+
+
+def test_the_iso_dialect_imports_clpfd_as_a_library_not_a_path():
+    """The iso dialect used to emit use_module('clausal/logic/clpfd'), a path
+    neither engine can load; the agreement test above now runs it."""
+    out = clausal_source_to_prolog(
+        "-import_from(clausal.logic.clpfd, [in_domain, label])\n"
+        "p(V) <- (in_domain(V, 1, 3), label([V]))\n", dialect=Dialect.iso())
+    assert "use_module(library(clpz))" in out
+    assert "clausal/logic/clpfd" not in out

@@ -78,6 +78,15 @@ class Dialect:
             # this output are Scryer and Trealla, and BOTH spell the library
             # `clpz`. "clpfd" is the SWI name and would not resolve in either.
             clpfd_module="clpz",
+            # The source-level import follows the same rule. With no entry it
+            # was emitted as a relative PATH, use_module('clausal/logic/clpfd'),
+            # which neither engine can load, so label/1 went unimported in
+            # Scryer. Only clpfd: library(clpb) and library(tabling) are
+            # absent from Trealla (measured 2026-09-29), so an iso mapping
+            # for them would be right on one of the two engines only.
+            library_map={
+                "clausal.logic.clpfd": "library(clpz)",
+            },
         )
 
     @classmethod
