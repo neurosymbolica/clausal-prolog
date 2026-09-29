@@ -66,3 +66,10 @@ The spawn-boundary suspicion the earlier revision raised is NOT the cause.
 - `clausal/logic/tabling.py::make_tabled_wrapper_trampoline`, `::_charge_delays`
 - [[running-tests-in-bug-fix-clone]] — the sys.path trap that produced the
   false negative
+
+## Closed 2026-09-30 (stale)
+
+Fixed by b2b2911d ("a clause-prefix delay covers every answer, not just the
+first"): the trampoline wrapper dropped the per-answer clear, and the witness
+is pinned in tests/test_wfs.py. Re-measured on f01790d2: both `pp` answers are
+Undefined.
