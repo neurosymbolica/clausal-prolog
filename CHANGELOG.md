@@ -130,6 +130,15 @@ since 0.4.0 finish three moves:
 
 ### Added
 
+- **`-import_from(m, [p/1])` imports one arity of `p`**, as Scryer's
+  `use_module(m, [p/1])` does (`s//1` is `s/3`). A bare `p` still imports
+  every arity; the forms mix in one list, and `alias(p/1, q)` renames one
+  arity. An indicator the exporter lacks is a load-time `ImportError`
+  (`existence_error(procedure, p/N)`, with the file, line and the arities
+  the module has). A call at an arity that was not imported is refused like
+  any missing arity, and the message names the entry to add. A `p/N` entry
+  names a predicate, so `clausal.imported_atoms` does not count it. See
+  [docs/import.md](docs/import.md#importing-one-arity-namen).
 - **`clausal.declared_atoms(module_or_package)`.** The `frozenset` of atom
   names declared in the `-module`/`-private` lists of a module's own files,
   or, for a package, of its `__init__` and its loaded submodules. An

@@ -1107,9 +1107,17 @@ class Directive(Node):
 
 @node_class
 class ImportFromDirective(Node):
-    """Module-level -import_from(module, [names...])."""
+    """Module-level -import_from(module, [names...]).
+
+    *names* holds each imported spelling once (a bare ``str`` or an
+    ``(orig, local)`` alias tuple).  *arities* restricts a LOCAL name to the
+    arities its ``name/N`` entries selected (D20, 2026-09-29); a name absent
+    from it imports every arity the exporter has.  *line* is the directive's
+    source line, for the load-time diagnostics."""
     module: str = ""
     names: list = field(default_factory=list)  # [name_or_alias_tuple, ...]
+    arities: dict = field(default_factory=dict)  # {local: frozenset[int]}
+    line: int = 0
 
 @node_class
 class ImportModuleDirective(Node):

@@ -292,7 +292,7 @@ def compile_module(
         # class was bound to the row here until W4b-3 slice 7 deleted it.)
         local, declared = _local_binding(module_dict, functor, arity)
         with _load_gate(db, functor, arity, author, WRITE_LOAD_CLAUSES,
-                        _load_through(local, origins, functor),
+                        _load_through(local, origins, functor, arity),
                         origins, module_name, module_dict):
             logic_module.define_predicate(pred_node)
             pending[key] = local
@@ -474,7 +474,7 @@ def compile_module(
     for (functor, arity), pred_cls in pending.items():
         clauses = db.clauses_for(functor, arity)
         with _load_gate(db, functor, arity, author, WRITE_LOAD_DISPATCH,
-                        _load_through(pred_cls, origins, functor),
+                        _load_through(pred_cls, origins, functor, arity),
                         origins, module_name, module_dict):
             if db.is_shallow(functor, arity):
                 compile_predicate_shallow(
@@ -713,7 +713,8 @@ def _imported_reference(mod, orig_name: str, value):
     return predicate_builtins.setdefault(orig_name, _mint_atom(orig_name))
 
 
-def _plant_imported_rows(db, mod, orig_name: str, local_name: str) -> None:
+def _plant_imported_rows(db, mod, orig_name: str, local_name: str,
+                         selected=None) -> None:
     """Make *local_name* resolve, in *db*, to the row the exporter owns.
 
     Spec §4 q1.  The binding above is the whole import relationship today --
@@ -735,9 +736,47 @@ def _plant_imported_rows(db, mod, orig_name: str, local_name: str) -> None:
     if exporter_db is None or exporter_db is db:
         return
     for arity in exporter_db.arities_for(orig_name):
+        if selected is not None and arity not in selected:
+            continue        # D20: ``name/N`` imports the arities it names
         row = exporter_db.row(orig_name, arity)
         if row is not None:
             db.adopt_row(local_name, arity, row)
+
+
+def _refuse_missing_indicators(item, mod, orig_name: str, selected,
+                               module_dict: dict) -> None:
+    """D20: an ``-import_from(m, [p/N])`` entry whose exporter has no
+    ``p/N`` is a load-time existence error (as Scryer's ``use_module(m,
+    [p/N])`` refuses an indicator ``m`` does not export).  It names the
+    module, the indicator and the line, and says which arities ``m`` has for
+    ``p``.  A Python module has no predicate arities at all, so an indicator
+    against one is refused too."""
+    from clausal.logic.predicate import namespace_db  # noqa: PLC0415
+    where = module_dict.get("__file__") or module_dict.get("__name__") or ""
+    line = getattr(item, "line", 0)
+    at = f"{where}, line {line}" if line else where
+    exporter_db = namespace_db(vars(mod))
+    wanted = ", ".join(f"{orig_name}/{a}" for a in sorted(selected))
+    if exporter_db is None:
+        raise ImportError(
+            f"{at}: -import_from({item.module}, [{wanted}]): {item.module} is "
+            f"not a Clausal module, so its names have no predicate arities to "
+            f"select; list the bare name `{orig_name}` instead")
+    have = exporter_db.declared_arities_for(orig_name)
+    missing = sorted(a for a in selected if a not in have)
+    if not missing:
+        return
+    first = f"{orig_name}/{missing[0]}"
+    if have:
+        found = ", ".join(f"{orig_name}/{a}" for a in sorted(have))
+        offer = f"{item.module} has {orig_name} as {found}"
+    else:
+        offer = f"{item.module} has no {orig_name} at any arity"
+    raise ImportError(
+        f"{at}: -import_from({item.module}, [{wanted}]): "
+        f"existence_error(procedure, {first}) -- {item.module} has no "
+        f"procedure {first}; {offer}",
+        name=orig_name, path=getattr(mod, "__file__", None))
 
 
 def _process_imports(module_items: list, module_dict: dict, db=None) -> None:
@@ -754,14 +793,28 @@ def _process_imports(module_items: list, module_dict: dict, db=None) -> None:
     # rebuilt from scratch so a recompile into the same namespace does not
     # accumulate.  Read by ``solve.imported_atoms``.
     import_record = module_dict[IMPORT_FROM_KEY] = []
+    # The body-time record of ``name/N`` selections has served its purpose
+    # (``predicate._foreign_head_verdict``); the adopted rows planted below
+    # are the record from here on.
+    module_dict.pop("$import_arities", None)
     for item in module_items:
         if isinstance(item, ImportFromItem):
             mod = _resolve_module(item.module)
             exporter = getattr(mod, "__name__", None) or item.module
             for name_spec in item.names:
+                local = name_spec[1] if isinstance(name_spec, tuple) else name_spec
+                selected = _selected_arities(item, local)
+                # ``(atom-or-name, exporter, arities)``: *arities* is ``None``
+                # for a bare entry and the selected frozenset for ``name/N``
+                # entries, which name a PREDICATE, never an atom (D20).
                 import_record.append(
                     (name_spec[0] if isinstance(name_spec, tuple)
-                     else name_spec, exporter))
+                     else name_spec, exporter, selected))
+                if selected is not None:
+                    _refuse_missing_indicators(
+                        item, mod,
+                        name_spec[0] if isinstance(name_spec, tuple)
+                        else name_spec, selected, module_dict)
                 if isinstance(name_spec, tuple):
                     orig_name, local_name = name_spec
                     value = getattr(mod, orig_name)
@@ -771,7 +824,8 @@ def _process_imports(module_items: list, module_dict: dict, db=None) -> None:
                     # cannot do this -- it carries the exporter's ``__name__``
                     # wherever it goes, which is why ``_import_from_origins``
                     # has to index an aliased import under both spellings.
-                    _plant_imported_rows(db, mod, orig_name, local_name)
+                    _plant_imported_rows(db, mod, orig_name, local_name,
+                                         selected)
                     # Also store under the dotted key ("module.OrigName") so
                     # that _inject_resolved_targets can resolve it when the compiler
                     # emits LoadName(name="module.OrigName") for remapped imports.
@@ -780,7 +834,8 @@ def _process_imports(module_items: list, module_dict: dict, db=None) -> None:
                 else:
                     value = getattr(mod, name_spec)
                     module_dict[name_spec] = value
-                    _plant_imported_rows(db, mod, name_spec, name_spec)
+                    _plant_imported_rows(db, mod, name_spec, name_spec,
+                                         selected)
                     # Dotted key for compiler resolution (e.g. "py.sympy.inf").
                     module_dict[f"{item.module}.{name_spec}"] = (
                         _imported_reference(mod, name_spec, value))
@@ -926,7 +981,7 @@ def _import_from_origins(module_items: list, module_dict: dict,
     today; ``tests/test_import_origins_both_eras.py`` checks that both
     shapes give the same answers.
     """
-    origins: dict[str, tuple[str, Any]] = {}
+    origins = _Origins()
     for item in module_items:
         if not isinstance(item, ImportFromItem):
             continue
@@ -937,9 +992,43 @@ def _import_from_origins(module_items: list, module_dict: dict,
             if own_name is None:
                 bound = None
             origins[local] = (item.module, bound)
+            selected = _selected_arities(item, local)
+            if selected is not None:
+                origins.arities[local] = selected
+            else:
+                origins.arities.pop(local, None)
             if own_name is not None and own_name != local:
+                if own_name not in origins and selected is not None:
+                    origins.arities[own_name] = selected
                 origins.setdefault(own_name, (item.module, bound))
     return origins
+
+
+class _Origins(dict):
+    """``_import_from_origins``' answer: ``{name: (module, bound)}``, plus
+    ``arities`` -- ``{name: frozenset}`` for a name whose import selected
+    arities with ``name/N`` entries (D20, 2026-09-29).  A name absent from
+    ``arities`` was imported at every arity its exporter has."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.arities: dict[str, frozenset] = {}
+
+
+def _selected_arities(item, local: str) -> "frozenset | None":
+    """The arities an ``-import_from`` item's ``name/N`` entries selected for
+    the LOCAL name *local*, or ``None`` when it imports every arity."""
+    return (getattr(item, "arities", None) or {}).get(local)
+
+
+def _imported_at(origins: dict, functor: str, arity) -> bool:
+    """False when *functor*'s import selected arities (``name/N``) and
+    *arity* is not one of them: the import does not reach that arity, so a
+    local ``functor/arity`` is a procedure of its own (ISO)."""
+    if arity is None:
+        return True
+    selected = getattr(origins, "arities", {}).get(functor)
+    return selected is None or arity in selected
 
 
 def _refuse_unrefused_deferred_heads(predicate_nodes, module_dict,
@@ -1014,7 +1103,7 @@ def _imported_binding_by_canonical_name(origins: dict, db, functor: str,
     ``-specialize`` target, or anything another rewrite pass left in the dict,
     none of which is an ``-import_from``.
     """
-    bound = _imported_binding(origins, functor)
+    bound = _imported_binding(origins, functor, arity)
     if bound is None or not is_declared_predicate(bound, arity=arity, db=db):
         return None
     return bound if _belongs_elsewhere(bound, db, arity) else None
@@ -1079,7 +1168,7 @@ def _refuse_foreign_writes(db, predicate_nodes: list, module_dict: dict,
             continue
         checked.add((functor, arity))
         pred_cls = _local_binding(module_dict, functor)[0]
-        pred_cls = _load_through(pred_cls, origins, functor)
+        pred_cls = _load_through(pred_cls, origins, functor, arity)
         exc = db.refusal_for(
             functor, arity, author=author, kind=WRITE_LOAD_CLAUSES,
             detail=_LOAD_SITES[WRITE_LOAD_CLAUSES], through=pred_cls,
@@ -1145,7 +1234,7 @@ def _implements_an_imported_declaration(origins: dict, module_dict: dict,
     pass no load binds another module's predicate to its own row.
     """
     origin = origins.get(functor)
-    if origin is None:
+    if origin is None or not _imported_at(origins, functor, arity):
         return None
     exporter, bound = origin
     if bound is None or _is_self_import(exporter, module_name, author):
@@ -1247,7 +1336,7 @@ def _local_binding(module_dict: dict, functor: str, arity=None):
     return None, None
 
 
-def _load_through(pred_cls, origins: dict, functor: str):
+def _load_through(pred_cls, origins: dict, functor: str, arity=None):
     """The ``through=`` a load write of ``functor/arity`` hands the gate: the
     module's own binding for the name, else the ``-import_from`` binding.
 
@@ -1258,10 +1347,10 @@ def _load_through(pred_cls, origins: dict, functor: str):
     reading *db* and *arity*, until W4b-3 slice 7 deleted the class.)
     """
     return pred_cls if pred_cls is not None else _imported_binding(
-        origins, functor)
+        origins, functor, arity)
 
 
-def _imported_binding(origins: dict, functor: str):
+def _imported_binding(origins: dict, functor: str, arity=None):
     """The predicate an ``-import_from`` bound for *functor* -- a class today,
     a mangled atom after the flip -- or ``None``.
 
@@ -1279,7 +1368,9 @@ def _imported_binding(origins: dict, functor: str):
     diagnostic reads its row through ``resolve_predicate_row``.
     """
     origin = origins.get(functor)
-    return None if origin is None else origin[1]
+    if origin is None or not _imported_at(origins, functor, arity):
+        return None
+    return origin[1]
 
 
 @contextlib.contextmanager
@@ -1358,7 +1449,10 @@ def _imported_indicators(module_items: list) -> dict:
             else:
                 spelling = local = name_spec
                 text = f"-import_from({item.module}, [{spelling}])"
+            selected = _selected_arities(item, local)
             for arity in owner_db.declared_arities_for(spelling):
+                if selected is not None and arity not in selected:
+                    continue            # D20: not imported at this arity
                 if owner_db.declared_kind(spelling, arity) == "data":
                     kind = "data"
                 else:

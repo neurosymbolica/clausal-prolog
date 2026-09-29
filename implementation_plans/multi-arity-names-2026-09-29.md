@@ -192,8 +192,8 @@ not involved); `solve.call` phase 5 + `binding_grants_arity`;
 - `-module(m, [p/1, p/2])` works today (each entry is marked per
   `(f, a)`).
 - `-import_from(m, [p])` imports EVERY arity the exporter has.
-  `-import_from(m, [p/1])` (import one arity, as Scryer's
-  `use_module(m, [p/1])` does) is not supported. Operator question Q2.
+  `-import_from(m, [p/1])` imports one arity, as Scryer's
+  `use_module(m, [p/1])` does (Q2, ruled D20).
 - `-private([p/1, p/2])` works (bare entries).
 
 ## Operator questions (each has a default that is implemented)
@@ -205,8 +205,14 @@ not involved); `solve.call` phase 5 + `binding_grants_arity`;
   behaviour. To lift it, the name-keyed registry (C1–C3) has to be
   re-keyed.
 - **Q2.** Should `-import_from` accept `name/N` to import one arity?
-  **Default: unchanged** (a bare name imports every arity). Recommend yes,
-  as a follow-up.
+  **RULED yes (D20, operator 2026-09-29), built on
+  `fix/batch-f-import-arity-2026-09-29`.** `name/N` (and `name//N`) imports
+  one arity, as Scryer's `use_module(m, [p/1])`; a bare name still imports
+  every arity; lists mix; `alias(p/1, q)` works. An indicator the exporter
+  lacks is a load-time `ImportError` (`existence_error(procedure, p/N)`,
+  file, line, what the module has for `p`). An unimported arity is refused
+  like a missing arity (`PredicateArityMismatchError`, ISO term
+  `existence_error(procedure, p/N)`) plus a line naming the entry to add.
 - **Q3.** `--p(k=v)` / `p(k=v)` keyword construction when `p` has several
   arities: which arity's fields? **Default:** the written arity (positional
   + keyword count), the same rule `_head_signature_for` already uses for

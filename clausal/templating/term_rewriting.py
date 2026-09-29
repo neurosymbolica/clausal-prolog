@@ -701,6 +701,19 @@ def _raise_located_syntax_error(msg: str, node, source_lines=None,
         msg, (filename, lineno, (col + 1) if col is not None else None, text))
 
 
+def _import_indicator(node) -> "tuple[str, int] | None":
+    """``(name, arity)`` for an ``-import_from`` list entry written as an ISO
+    predicate indicator -- ``name/N``, or a DCG nonterminal ``name//N``
+    (arity N + 2, ISO 7.14) -- else ``None`` (D20, 2026-09-29)."""
+    if (isinstance(node, BinOp) and isinstance(node.op, (Div, FloorDiv))
+            and isinstance(node.left, Name)
+            and isinstance(node.right, Constant)
+            and type(node.right.value) is int and node.right.value >= 0):
+        extra = 2 if isinstance(node.op, FloorDiv) else 0
+        return node.left.id, node.right.value + extra
+    return None
+
+
 def _is_logic_var_name(identifier: str) -> bool:
     """Return True if ``identifier`` should be treated as a logic variable.
 
@@ -4748,6 +4761,31 @@ def _make_import_signatures_update_ast(resolved_module, name_pairs, source):
     ]
     tree = parse("\n".join(lines))
     block = tree.body[0]
+    for node in walk(block):
+        copy_location(node, source)
+    return block
+
+
+#: Module-body record of the arities an ``-import_from``'s ``name/N``
+#: entries selected, keyed by the imported HANDLE (D20, 2026-09-29).  Read by
+#: ``predicate._foreign_head_verdict`` while the body builds heads -- before
+#: ``compile_module`` has planted the adopted rows that record it afterwards
+#: -- and dropped by ``compiler_v2._process_imports``.
+IMPORT_ARITIES_KEY = "$import_arities"
+
+
+def _make_import_arities_record_ast(selected, source):
+    """``globals()['$import_arities'][<handle>] = frozenset({...})`` for each
+    local name whose import selected arities; ``None`` when none did, so a
+    file without ``name/N`` entries compiles byte-identically."""
+    if not selected:
+        return None
+    pairs_text = repr({local: tuple(sorted(found))
+                       for local, found in sorted(selected.items())})
+    text = (f"globals().setdefault({IMPORT_ARITIES_KEY!r}, {{}}).update("
+            f"{{globals()[_ia_local]: frozenset(_ia_found) "
+            f"for _ia_local, _ia_found in {pairs_text}.items()}})")
+    block = parse(text).body[0]
     for node in walk(block):
         copy_location(node, source)
     return block
@@ -10077,7 +10115,30 @@ class EmbedTransformer(NodeTransformer):
         unit_renames = _deprecated_unit_renames(module_path)
         renamed_units: list[tuple[str, str]] = []
         aliases = []
+        # D20 (2026-09-29): ``name/N`` (or ``name//N``, a DCG nonterminal,
+        # N + 2) imports ONE arity, as Scryer's ``use_module(m, [p/1])``.
+        # ``arities`` maps each LOCAL name to the arities its entries
+        # selected, or ``None`` once any entry for it is a bare name (which
+        # brings every arity).  ``bound`` maps a local name to the alias
+        # entry already emitted for it, so an entry that repeats one
+        # (``[g/1, g/2]``, ``[baz, baz]``) is ONE Python import.
+        arities: dict[str, "set[int] | None"] = {}
+        bound: dict[str, str] = {}
         for item in args[1].elts:
+            arity = None
+            if _import_indicator(item) is not None:
+                name_id, arity = _import_indicator(item)
+                item = copy_location(Name(id=name_id, ctx=Load()), item)
+            elif (isinstance(item, Call) and isinstance(item.func, Name)
+                  and item.func.id == "alias" and len(item.args) == 2
+                  and _import_indicator(item.args[0]) is not None):
+                name_id, arity = _import_indicator(item.args[0])
+                item = copy_location(Call(
+                    func=item.func,
+                    args=[copy_location(Name(id=name_id, ctx=Load()),
+                                        item.args[0]), item.args[1]],
+                    keywords=[]), item)
+            n_before = len(aliases)
             if isinstance(item, Name):
                 # Map local name → "module.path.Name" for dotted globals key
                 local_name = item.id
@@ -10191,9 +10252,22 @@ class EmbedTransformer(NodeTransformer):
                 aliases.append(alias(name=orig_name, asname=local_name))
             else:
                 raise SyntaxError(
-                    f"-import_from: import list items must be names or "
-                    f"alias(OrigName, LocalName), got {dump(item)}"
+                    f"-import_from: import list items must be names, "
+                    f"indicators name/N, or alias(OrigName, LocalName), got "
+                    f"{dump(item)}"
                 )
+            if len(aliases) == n_before:
+                continue
+            entry = aliases[-1]
+            local = entry.asname or entry.name
+            if local in bound:
+                del aliases[-1]              # the same import, once
+            else:
+                bound[local] = entry.name
+            if arity is None or (local in arities and arities[local] is None):
+                arities[local] = None
+            else:
+                arities.setdefault(local, set()).add(arity)
         if renamed_units:
             transformer._warn_deprecated_unit_spelling(renamed_units, expr_stmt)
         # Accumulate import info for pipeline-split ModuleAST.
@@ -10204,7 +10278,12 @@ class EmbedTransformer(NodeTransformer):
             else:
                 import_names.append(a.name)
         transformer._module_items.append(
-            ImportFromItem(module=module_path, names=import_names)
+            ImportFromItem(
+                module=module_path, names=import_names,
+                arities={local: frozenset(found)
+                         for local, found in arities.items()
+                         if found is not None},
+                line=getattr(expr_stmt, "lineno", 0) or 0)
         )
         # Resolve the module path for the generated ImportFrom AST node.
         # Bare names are mapped to ``clausal.modules.<name>`` so the
@@ -10225,9 +10304,11 @@ class EmbedTransformer(NodeTransformer):
         # ``_make_import_signatures_update_ast``).
         name_pairs = [(a.asname or a.name, a.name) for a in aliases]
         sig_stmt = _make_import_signatures_update_ast(resolved, name_pairs, expr_stmt)
-        if sig_stmt is None:
-            return stmt
-        return [stmt, sig_stmt]
+        arities_stmt = _make_import_arities_record_ast(
+            {local: found for local, found in arities.items()
+             if found is not None}, expr_stmt)
+        out = [s for s in (stmt, sig_stmt, arities_stmt) if s is not None]
+        return out[0] if len(out) == 1 else out
 
     def _handle_import_module_directive(transformer, args, expr_stmt):
         """Process ``-import_module(dotted.module)`` directive.
