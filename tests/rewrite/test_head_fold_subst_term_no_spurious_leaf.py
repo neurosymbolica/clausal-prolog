@@ -25,5 +25,9 @@ def test_one_answer_per_vocabulary_cell(rules):
         return [_deref_walk(R) for _ in solve(("subst_term", term, 1, "t", R), m)]
     assert answers(("Variable", 1)) == ["t"]
     assert answers(("Variable", 2)) == [("Variable", 2)]
-    assert len(answers(("Goal", "f", [("Variable", 1)], []))) == 1
+    # [t] -- a list of one char atom, which the engine presents as the
+    # string it is.
+    from clausal.logic.cells import chars
+    assert answers(("Goal", "f", [("Variable", 1)], [])) == [
+        ("Goal", "f", chars("t"), [])]
     assert answers(5) == [5]
