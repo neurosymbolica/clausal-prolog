@@ -217,7 +217,12 @@ objectives of `maximize/2`, `minimize/2`, `sup/2`, `inf/2` and `bb_inf/3`
 answer a quantity of the objective's dimension (a plain number when the
 units cancel, `Q / constant(one_euro)`), `entailed/1` reads through the
 same channel, and `dump_q/2` projects a dimensioned variable's constraints
-(they live on its shadow) under the variable's own name.
+(they live on its shadow) under the variable's own name, with magnitudes in
+the base unit and no unit shown (`{Q >= 5000}` for a euro variable).
+
+CLP(R) runs the same channel for physical quantities (a float magnitude
+comes back as a quantity), and refuses money (`units_unsupported`): a
+currency amount is exact and must not be computed in floats.
 
 ---
 

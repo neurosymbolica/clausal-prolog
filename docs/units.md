@@ -584,8 +584,9 @@ unify(v, newton(9.8), trail)   # fires hook → checks dims → binds v
 ```
 
 Such a variable, or a ground quantity, may take part in a CLP constraint:
-the CLP(FD) comparators and `in_domain/3`, and CLP(Q) (`{C}` in a `.pl`
-file, `clpq.rational/1`, `in_q/3`, the objectives). The solver works on
+the CLP(FD) comparators and `in_domain/3`, CLP(Q) (`{C}` in a `.pl`
+file, `clpq.rational/1`, `in_q/3`, the objectives) and, for physical
+quantities only, CLP(R). The solver works on
 the exact magnitude in the dimension's base unit and the answer comes back
 as a quantity; dimensions that disagree raise
 `error(system_error(units_mismatch), Ctx)`. See [clpq.md](clpq.md#units)

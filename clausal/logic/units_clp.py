@@ -546,6 +546,15 @@ def strip_for_solver(l: Any, r: Any, context: str, trail: Trail):
         return None            # no Quantity or units var exists in this process
     _ensure_imports()
     l, r = deref(l), deref(r)
+    if type(l) is tuple or type(r) is tuple:
+        # An arithmetic CELL built at run time (``Q = 6000 * constant(c)`` in
+        # ISO syntax) may hold a quantity leaf. The scan reads nodes, so the
+        # cell is rewritten here through the ONE rewriter the posts use
+        # (ruling R9 A1), not spelled a second time; a cell that is not
+        # arithmetic (a data pair ``a-1(metre)``) comes back as it was and
+        # stays foreign to the channel, on the caller's ground fallback.
+        from clausal.logic.clpfd import _cells_as_nodes  # noqa: PLC0415
+        l, r = _cells_as_nodes(l, r)
     material_l = _scan(l)
     if material_l is _FOREIGN:
         return None
@@ -557,6 +566,50 @@ def strip_for_solver(l: Any, r: Any, context: str, trail: Trail):
     except _NotEngaged:
         return None
     return strip(l, env, trail), strip(r, env, trail)
+
+
+def strip_for_real_solver(l: Any, r: Any, context: str, trail: Trail):
+    """:func:`strip_for_solver` for CLP(R), which computes in floats: a
+    currency anywhere in the comparison is refused (``units_unsupported``)
+    before the strip, since money takes the exact route only (CLP(Q)); a
+    physical quantity goes through as for any solver."""
+    if not _units_flag.active:
+        return None
+    _ensure_imports()
+    l, r = deref(l), deref(r)
+    for side in (l, r):
+        money = _first_money(side)
+        if money is not None:
+            raise _unsupported(
+                context,
+                f"{money!r} is money, which CLP(R) would compute in floats; "
+                f"post it in CLP(Q) (clpq.rational, {{...}}) instead")
+    return strip_for_solver(l, r, context, trail)
+
+
+def _first_money(x: Any):
+    """The first currency-dimensioned leaf (a Quantity or a united Var) in
+    the tree, or None."""
+    from clausal.terms import _currency_info  # noqa: PLC0415
+    x = deref(x)
+    dims = None
+    if isinstance(x, _Quantity):
+        dims = x.dims
+    elif is_var(x):
+        state = get_attr(x, UNITS_KEY)
+        dims = state.dims if state is not None else None
+    elif isinstance(x, _BINARY):
+        return _first_money(x.left) or _first_money(x.right)
+    elif isinstance(x, _Negate):
+        return _first_money(x.operand)
+    elif type(x) is tuple:
+        for a in x[1:]:
+            found = _first_money(a)
+            if found is not None:
+                return found
+    if dims and any(_currency_info(k) is not None for k in dims):
+        return x
+    return None
 
 
 def strip_expr_for_solver(expr: Any, context: str, trail: Trail):

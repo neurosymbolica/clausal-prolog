@@ -1522,6 +1522,101 @@ class TestClpqFrontEnd:
         assert deref(q) == self._euro(2) and deref(m) == self._euro(2)
 
 
+class TestCellsHoldingQuantities:
+    """An arithmetic cell built at run time with a quantity leaf, in a
+    CLP(FD) post: the side channel rewrites it as its node first. Before,
+    ``2*3(metre) == 6(metre)`` answered False -- the cell stayed a cell and
+    met the quantity on the ground fallback -- and a variable beside one
+    raised ``domain_error(clpz_expression, ...)``."""
+
+    def test_ground_cell_against_a_quantity_evaluates(self):
+        import clausal.logic.clpfd as clpfd
+        assert clpfd.fd_eq(("*", 2, Quantity(3, M)), Quantity(6, M), Trail())
+        assert not clpfd.fd_eq(("*", 2, Quantity(3, M)), Quantity(7, M), Trail())
+        assert clpfd.fd_lt(("*", 2, Quantity(3, M)), Quantity(7, M), Trail())
+
+    def test_var_against_a_cell_binds_a_quantity(self):
+        import clausal.logic.clpfd as clpfd
+        t, x = Trail(), Var()
+        assert clpfd.fd_eq(x, ("*", 2, Quantity(3, M)), t)
+        assert deref(x) == Quantity(6, M)
+
+    def test_var_inside_a_cell_is_solved_for(self):
+        import clausal.logic.clpfd as clpfd
+        t, x = Trail(), Var()
+        assert clpfd.fd_eq(("*", x, Quantity(3, M)), Quantity(6, M), t)
+        assert deref(x) == 2 and type(deref(x)) is int
+
+    def test_mismatch_inside_a_cell_is_the_iso_term(self):
+        import clausal.logic.clpfd as clpfd
+        with pytest.raises(LogicException) as ei:
+            clpfd.fd_eq(("+", Quantity(1, M), Quantity(1, S)), Var(), Trail())
+        _assert_system_error(ei, "units_mismatch")
+
+    def test_a_data_pair_holding_a_quantity_keeps_the_ground_fallback(self):
+        import clausal.logic.clpfd as clpfd
+        pair = ("-", mint("a"), Quantity(1, M))
+        assert clpfd.fd_eq(pair, ("-", mint("a"), Quantity(1, M)), Trail())
+        assert not clpfd.fd_eq(pair, ("-", mint("b"), Quantity(1, M)), Trail())
+
+
+class TestClprFrontEnd:
+    """CLP(R) runs the side channel too (after the cell rewrite): a physical
+    quantity is solved on its magnitude and bound back; money is refused,
+    since CLP(R) computes in floats. Before, a quantity leaf in a cell was
+    ``type_error(evaluable, ...)`` and one in a node a raw TypeError."""
+
+    def test_cell_with_a_quantity_posts_on_the_shadow(self):
+        """CLP(R) keeps a ground product as an interval (a plain var stays
+        unbound after ``X == 2.0 * 3.5`` too); the post is on the shadow and
+        a later binding is checked against it, as a quantity."""
+        import clausal.logic.clpr as clpr
+        t, x = Trail(), Var()
+        assert clpr.real_eq(x, ("*", 2.0, Quantity(3.5, M)), t)
+        mark = t.mark()
+        assert not unify(x, Quantity(8.0, M), t)
+        t.undo(mark)
+        assert unify(x, Quantity(7.0, M), t)
+        assert deref(x) == Quantity(7.0, M)
+
+    def test_scalar_quantity_binds_a_float_quantity(self):
+        import clausal.logic.clpr as clpr
+        t, x = Trail(), Var()
+        assert clpr.real_eq(x, Quantity(7.0, M), t)
+        assert deref(x) == Quantity(7.0, M) and type(deref(x).value) is float
+
+    def test_node_with_a_quantity_and_a_mismatch(self):
+        import clausal.logic.clpr as clpr
+        t, x = Trail(), Var()
+        assert clpr.real_ge(x, Quantity(2.5, M), t)
+        assert not unify(x, Quantity(2.0, M), t)
+        with pytest.raises(LogicException) as ei:
+            clpr.real_lt(_bin(Add, Quantity(1.0, M), Quantity(1.0, S)), x, t)
+        _assert_system_error(ei, "units_mismatch")
+
+    def test_money_is_refused_not_computed_in_floats(self):
+        import clausal.logic.clpr as clpr
+        t, x = Trail(), Var()
+        with pytest.raises(LogicException) as ei:
+            clpr.real_eq(x, _bin(Mult, 2.0, Quantity(3, euro)), t)
+        _assert_system_error(ei, "units_unsupported")
+        with pytest.raises(LogicException) as ei:
+            clpr.real_le(("*", 2.0, Quantity(3, euro)), 7.0, t)      # inside a cell too
+        _assert_system_error(ei, "units_unsupported")
+
+
+class TestInQDeclaredTarget:
+    def test_dimensionless_bounds_on_a_declared_var_is_a_mismatch(self):
+        import clausal.logic.clpq as clpq
+        from clausal.logic.units_constraint import constrain_var_dims
+        t, x = Trail(), Var()
+        assert constrain_var_dims(x, {"euro": 1}, t)
+        with pytest.raises(LogicException) as ei:
+            clpq.in_q(x, Quantity(0, {}), Quantity(10, {}), t)
+        _assert_system_error(ei, "units_mismatch")
+        assert get_attr(x, "clpq") is None                    # nothing posted on the way
+
+
 def is_var_unbound(v) -> bool:
     from clausal.logic.variables import is_var
     return is_var(deref(v))

@@ -1183,12 +1183,12 @@ def _in_q_units(targets, lo, hi, trail):
             continue
         if not is_var(v):
             raise units_clp._mismatch(ctx, {}, dims, f"target {v!r}")
-        if not dims:
-            shadows.append(v)                     # dimensionless bounds: a plain domain
-            continue
         state = get_attr(v, UNITS_KEY)
         if state is not None and state.dims != dims:
             raise units_clp._mismatch(ctx, state.dims, dims)
+        if not dims:
+            shadows.append(v)                     # dimensionless bounds: a plain domain
+            continue
         if state is None and (get_attr(v, Q_KEY) is not None
                               or get_attr(v, "fd") is not None
                               or get_attr(v, "real") is not None):

@@ -834,11 +834,30 @@ def _cells_as_nodes(l, r, context):
     return impl(l, r, context)
 
 
+_strip_for_real_solver = None
+
+
+def _units_strip(l, r, context, trail):
+    """The units side channel (clausal.logic.units_clp) after the cell
+    rewrite, as CLP(Q) runs it: a physical quantity is its magnitude in the
+    base unit and a united variable its shadow (the ``units_link`` hook binds
+    the user's variable to a Quantity when the shadow binds); money is
+    refused, since it must not be computed in floats. Untouched when no
+    units material is involved."""
+    global _strip_for_real_solver
+    if _strip_for_real_solver is None:
+        from clausal.logic.units_clp import strip_for_real_solver  # noqa: PLC0415
+        _strip_for_real_solver = strip_for_real_solver
+    stripped = _strip_for_real_solver(l, r, context, trail)
+    return (l, r) if stripped is None else stripped
+
+
 def real_eq(l, r, trail: Trail) -> bool:
     """Post lhs == rhs as a real constraint."""
     l = deref(l)
     r = deref(r)
     l, r = _cells_as_nodes(l, r, "(==)/2")   # ruling R9 A1
+    l, r = _units_strip(l, r, "(==)/2", trail)
     # Ground check
     if not is_var(l) and not _is_expr(l) and not is_var(r) and not _is_expr(r):
         if isinstance(l, int) and not isinstance(l, bool) and isinstance(r, int) and not isinstance(r, bool):
@@ -865,6 +884,7 @@ def real_ne(l, r, trail: Trail) -> bool:
     l = deref(l)
     r = deref(r)
     l, r = _cells_as_nodes(l, r, "(!=)/2")   # ruling R9 A1
+    l, r = _units_strip(l, r, "(!=)/2", trail)
     if not is_var(l) and not _is_expr(l) and not is_var(r) and not _is_expr(r):
         if isinstance(l, int) and not isinstance(l, bool) and isinstance(r, int) and not isinstance(r, bool):
             return l != r
@@ -882,6 +902,7 @@ def real_lt(l, r, trail: Trail) -> bool:
     l = deref(l)
     r = deref(r)
     l, r = _cells_as_nodes(l, r, "(<)/2")   # ruling R9 A1
+    l, r = _units_strip(l, r, "(<)/2", trail)
     if not is_var(l) and not _is_expr(l) and not is_var(r) and not _is_expr(r):
         if isinstance(l, int) and not isinstance(l, bool) and isinstance(r, int) and not isinstance(r, bool):
             return l < r
@@ -899,6 +920,7 @@ def real_le(l, r, trail: Trail) -> bool:
     l = deref(l)
     r = deref(r)
     l, r = _cells_as_nodes(l, r, "(=<)/2")   # ruling R9 A1
+    l, r = _units_strip(l, r, "(=<)/2", trail)
     if not is_var(l) and not _is_expr(l) and not is_var(r) and not _is_expr(r):
         if isinstance(l, int) and not isinstance(l, bool) and isinstance(r, int) and not isinstance(r, bool):
             return l <= r
@@ -913,11 +935,15 @@ def real_le(l, r, trail: Trail) -> bool:
 
 def real_gt(l, r, trail: Trail) -> bool:
     """Post lhs > rhs as a real constraint (swaps to <=)."""
+    l, r = _cells_as_nodes(deref(l), deref(r), "(>)/2")
+    l, r = _units_strip(l, r, "(>)/2", trail)      # under the operator the user wrote
     return real_lt(r, l, trail)
 
 
 def real_ge(l, r, trail: Trail) -> bool:
     """Post lhs >= rhs as a real constraint (swaps to <=)."""
+    l, r = _cells_as_nodes(deref(l), deref(r), "(>=)/2")
+    l, r = _units_strip(l, r, "(>=)/2", trail)
     return real_le(r, l, trail)
 
 
