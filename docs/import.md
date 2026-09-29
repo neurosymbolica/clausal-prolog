@@ -685,13 +685,17 @@ The resulting bytecode is cached as a `.pyc` file, so subsequent imports skip tr
 
 ### Finder priority
 
-The import hook registers three finders in `sys.meta_path`, in this order:
+The import hook registers two finders in `sys.meta_path`, ahead of Python's own:
 
-1. **PredicateFinder** — searches for `.clausal` files
-2. **PrologFinder** — searches for `.pl` files
-3. **ModulesFinder** — redirects bare names to `clausal.modules.*`
+1. **PredicateFinder** — searches for `.clausal`, `.seam` and `.pl` files
+2. **ModulesFinder** — redirects `py.X` names to `clausal.modules.py.*`
 
-If both `foo.clausal` and `foo.pl` exist in the same directory, the `.clausal` file wins.
+`PredicateFinder` resolves per `sys.path` entry, in path order: the first entry
+that holds the module wins, whatever its extension. Only within one entry does
+the extension decide (`.clausal`, then `.seam`, then `.pl`), so if both
+`foo.clausal` and `foo.pl` exist in the same directory the `.clausal` file wins,
+but a `foo.pl` in an earlier entry beats a `foo.clausal` in a later one. See
+[Finder priority](importing_prolog.md#finder-priority) for the full order.
 
 ### Recursive imports
 
@@ -718,7 +722,7 @@ SyntaxError: Cannot import foo.pl: Cut (!/0) cannot be translated to Clausal.
 ### Caveats
 
 - **Bare Prolog atoms** (lowercase identifiers like `red`, `foo`) are declared for you: the translator emits a `-private([red, ...])` line, so they load under the strict-atoms default.
-- **The `.pl` extension is also used by Perl.** If a Perl script ends up on `sys.path`, the import hook will attempt to parse it as Prolog and raise a `SyntaxError`. Avoid placing Perl scripts in directories on `sys.path`.
+- **The `.pl` extension is also used by Perl.** If a Perl script ends up on `sys.path`, the import hook will attempt to parse it as Prolog and raise a `SyntaxError` — even when a `.clausal` or `.seam` module of the same name sits in a later `sys.path` entry, since the earlier entry wins. `sys.path[0]` is the script directory or the current directory, so a stray `foo.pl` there shadows an installed `foo.clausal`. Avoid placing Perl scripts in directories on `sys.path`.
 - **Encoding:** All `.pl` files must be UTF-8 encoded. Non-UTF-8 files will raise `UnicodeDecodeError`.
 - **Stdlib shadowing:** The Clausal finders (`.clausal`, `.pl`) run *before* Python's `PathFinder` on `sys.meta_path`. A file like `os.clausal` or `re.pl` on `sys.path` named after a standard-library module is almost always an accident, so Clausal does **not** shadow it: the finder emits a `ClausalLintWarning` and defers to the standard library (the stdlib module is imported). Rename the file to avoid the warning. Avoid naming `.clausal`/`.pl` files after standard Python or Clausal modules.
 
@@ -735,7 +739,7 @@ logic_module = mod.__clausal_module__
 
 ## File discovery
 
-`PredicateFinder` and `PrologFinder` search for `<modulename>.clausal` and `<modulename>.pl` respectively in:
+`PredicateFinder` searches for `<modulename>.clausal`, `.seam` and `.pl` (and the `<modulename>/__init__` package forms), entry by entry, in:
 - `sys.path` for top-level module names
 - the parent package's `__path__` for sub-modules
 

@@ -98,17 +98,27 @@ On the first import, the full pipeline runs. On subsequent imports, the cached
 
 ## Finder priority
 
-Clausal registers three import finders, checked in this order:
+Clausal registers two import finders ahead of Python's own, checked in this
+order:
 
-| Priority | Finder | Extension | Loader |
+| Priority | Finder | Extensions | Loader |
 |---|---|---|---|
-| 1 | `PredicateFinder` | `.clausal` | `PredicateLoader` |
-| 2 | `PrologFinder` | `.pl` | `PrologLoader` |
-| 3 | `ModulesFinder` | *(bare names)* | redirects to `clausal.modules.*` |
+| 1 | `PredicateFinder` | `.clausal`, `.seam`, then `.pl` | `PredicateLoader`; `.pl` via `PrologLoader` or `NativePrologLoader` (`CLAUSAL_PL_FRONTEND`) |
+| 2 | `ModulesFinder` | *(`py.X` names)* | redirects to `clausal.modules.py.*` |
 
-If both `foo.clausal` and `foo.pl` exist in the same directory, the `.clausal`
-file wins. This means you can keep the original `.pl` alongside a
-hand-optimized `.clausal` version and the right one is always loaded.
+`PredicateFinder` resolves per `sys.path` entry, in path order, as Python
+does: the first entry that holds the module wins, whatever its extension.
+Only within one entry does the extension decide: a flat `foo.clausal`, then
+`foo.seam`, then a `foo/__init__.clausal` or `foo/__init__.seam` package,
+then a flat `foo.pl`, then a `foo/__init__.pl` package. So if both
+`foo.clausal` and `foo.pl` exist in the same directory, the `.clausal` file
+wins -- you can keep the original `.pl` alongside a hand-optimized
+`.clausal` version and the right one is always loaded -- but a `foo.pl` in an
+earlier `sys.path` entry beats a `foo.clausal` in a later one.
+
+A plain Python module is found by Python's `PathFinder`, which runs after
+these finders: a `.clausal`, `.seam` or `.pl` module anywhere on `sys.path`
+still wins over a `.py` module of the same name in an earlier entry.
 
 ---
 
@@ -589,7 +599,10 @@ renamed to `_pi`.)
 
 - **The `.pl` extension is also used by Perl.** If a Perl script ends up
   on `sys.path`, the import hook will attempt to parse it as Prolog and
-  raise a `SyntaxError`.
+  raise a `SyntaxError` -- even when a `.clausal` or `.seam` module of the
+  same name sits in a later `sys.path` entry, since the earlier entry wins.
+  `sys.path[0]` is the script directory or the current directory, so a
+  stray `foo.pl` there shadows an installed `foo.clausal`.
 - **All `.pl` files must be UTF-8 encoded.** Non-UTF-8 files raise a
   `SyntaxError` at import time.
 - **Avoid naming `.pl` files after standard modules.** A file like `json.pl`
