@@ -439,3 +439,22 @@ class TestStandardOrder:
     def test_matches_scryer(self, tmp_path, pred, expected):
         m = _load(tmp_path, f"so_{pred}", self._SRC)
         assert _answers(m, pred) == expected
+
+
+# ── H. no declaration of a name the engine reserves ───────────────────
+
+
+class TestReservedAtoms:
+    """``undefined`` is an ordinary atom in ISO; in Clausal the bare name is
+    the truth value Undefined, and ``-private([undefined])`` is refused at
+    load.  The translator emits the QUOTED atom, which is the atom in every
+    position and needs no declaration."""
+
+    def test_undefined_is_an_atom(self, tmp_path):
+        m = _load(tmp_path, "undef", """\
+            p(undefined).
+            t(X) :- p(X).
+            u(1) :- p(undefined).
+        """)
+        assert _answers(m, "t") == ["undefined"]
+        assert _answers(m, "u") == [1]

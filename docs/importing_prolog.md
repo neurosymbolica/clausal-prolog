@@ -249,6 +249,9 @@ r('hello world'),
   contains a string.
 - `true`, `false` and `fail` map to Python `True`/`False` (`a :- true.`
   becomes `a() <- (True)`).
+- The atom `undefined` is emitted quoted (`'undefined'`): bare `undefined`
+  is Clausal's truth value `Undefined`, which `-private` cannot declare
+  (until 2026-09-29 a file holding the atom failed to load).
 
 The ISO directive `:- set_prolog_flag(double_quotes, Mode)` (or the short
 `:- double_quotes(Mode)`) governs every `"…"` below it, as in Scryer, and the

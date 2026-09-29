@@ -669,6 +669,14 @@ def _checked_var_name(prolog_name: str) -> str:
     )
 
 
+#: Lowercase names that are NOT atoms when written bare in Clausal source:
+#: ``undefined`` is the alias of the truth value ``Undefined`` (the alias
+#: fold, docs/kleene), so a Prolog atom of that spelling is emitted quoted.
+#: (``true``/``false`` are mapped to ``True``/``False`` on purpose -- see
+#: ``_BUILTIN_ATOM_REWRITES``.)
+_RESERVED_BARE_NAMES: frozenset = frozenset({"undefined"})
+
+
 class _PrologToClausal:
     """Translates Prolog AST → clausal source text."""
 
@@ -741,7 +749,7 @@ class _PrologToClausal:
             if len(arities) != 1 or name in not_data:
                 continue
             (arity,) = arities
-            if _engine_knows_name(name, arity):
+            if _engine_knows_name(name, arity) or name in _RESERVED_BARE_NAMES:
                 continue
             private.append(f"{name}({', '.join(['_'] * arity)})")
         if private:
@@ -1350,6 +1358,11 @@ class _PrologToClausal:
         # Reachable since Prolog test names became atoms:
         # `test(subtract) :- subtract(...)`.
         if name in self._predicate_names:
+            return _quote_atom(name)
+        # A name the engine RESERVES: bare ``undefined`` is the truth value
+        # Undefined, and ``-private([undefined])`` is a load error.  The
+        # quoted literal is the plain atom and needs no declaration.
+        if name in _RESERVED_BARE_NAMES:
             return _quote_atom(name)
         # Register as a data atom (will be declared via -private).
         self._data_atoms.add(name)
