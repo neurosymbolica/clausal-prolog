@@ -188,6 +188,12 @@ def _float__1(x, trail, k):
         yield None
 
 
+# ISO's name for float_/1 (8.3.5), the same function, as callable/1 and
+# member/2 are: ``float(X)`` as a goal used to reach Python's ``float``
+# class and raise type_error(callable, <class 'float'>).
+_builtin("float", 1)(_float__1)
+
+
 @_builtin("quantity", 1)
 def _quantity__1(x, trail, k):
     """quantity(X) — X is a number carrying a UNIT.
