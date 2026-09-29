@@ -385,6 +385,13 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
 
 ### Fixed
 
+- **A procedure `assertz` creates is no longer shadowed by an atom of the
+  same name some other module declared.** Module dicts are seeded from the
+  process-wide atom pool, so the body goal `note(X)` of a later,
+  assert-created `note/1` bound to the atom `note` and raised
+  `existence_error(procedure, note/1)`, depending on what the process had
+  loaded first. The call now re-resolves in the calling module (its own
+  row, then a builtin) and raises the same error only when nothing answers.
 - **`:- use_module(m, []).` in a `.pl` file is a located translation
   error**, not a loader crash (`ValueError: empty names on ImportFrom`).
   Scryer reads it as `remove_module/2` (drops the imports, never loads

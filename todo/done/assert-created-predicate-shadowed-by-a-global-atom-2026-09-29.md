@@ -36,3 +36,13 @@ depends on what else the process loaded first.
 Make a clause-body goal resolve to a procedure reference whenever the name is
 not a procedure here, whatever the atom pool holds; pin with a test that seeds
 the pool first.  The slice 2 tests use a distinctive name meanwhile.
+
+## Resolved 2026-09-29
+
+`compiler/globals_env._inject_resolved_targets`: an unqualified call whose
+name is bound to an ATOM with no `name/arity` row at compile time now gets a
+`$disp_name_N` entry (`_atom_bound_dispatch`) that re-resolves per call in the
+compiling module (own row, then builtin; a locked row is cached) and falls
+back to the atom's existence_error.  The name key keeps the atom.  Pinned by
+tests/iso_l3/test_l3_atom_pool_does_not_shadow.py (seeds the pool first; both
+`.pl` front ends; fails without the fix).
