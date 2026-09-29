@@ -2106,6 +2106,22 @@ def _both_ground(l, r) -> bool:
     return True
 
 
+def _walk_compound(x):
+    """A compound operand of the ground fallback, with every BOUND variable
+    inside it replaced by its value (unbound ones stay).
+
+    ``_both_ground`` looks at the top of each side only, and the fallback is
+    Python equality -- which compares a bound ``Var`` object inside a list,
+    cell or dict, not its value.  So ``X is [Y], Y is 1, X == [1]`` failed
+    where unification, the quoted ``'=='`` and ISO ==/2 (8.4.1.1, which
+    dereferences every subterm) all hold.  A scalar is returned as is, so the
+    walk costs nothing on the common numeric path."""
+    if isinstance(x, (list, tuple, dict)) or hasattr(type(x), "__walk__"):
+        from clausal.logic.solve import _deref_walk  # noqa: PLC0415
+        return _deref_walk(x)
+    return x
+
+
 def _expr_tree_has_var(x) -> bool:
     """True if *x* is an unbound Var, or an arithmetic expression tree with
     at least one unbound Var leaf (dereferenced).  Used by the non-numeric
@@ -2297,6 +2313,7 @@ def fd_eq(l, r, trail: Trail, *, _units_done: bool = False) -> bool:
             return _post_constraint(ScalarProductConstraint(coeffs_tuple, vars_tuple, value), trail)
         # Non-linear: fall through to EqConstraint
     if _both_ground(l, r):
+        l, r = _walk_compound(l), _walk_compound(r)
         _eq = _text_list_eq(l, r)
         return (l == r) if _eq is None else _eq
     # At least one Var — use CLP(FD)
@@ -2341,6 +2358,7 @@ def fd_ne(l, r, trail: Trail, *, _units_done: bool = False) -> bool:
         from clausal.logic.clpr import real_ne
         return real_ne(l, r, trail)
     if _both_ground(l, r):
+        l, r = _walk_compound(l), _walk_compound(r)
         _eq = _text_list_eq(l, r)
         return (l != r) if _eq is None else (not _eq)
     if is_var(l):
@@ -2751,6 +2769,7 @@ def reify_fd(op: str, x, y, trail: Trail) -> bool | None:
         raise
     if _both_ground(x, y):
         if op in ("eq", "ne"):
+            x, y = _walk_compound(x), _walk_compound(y)
             # the chars-model arm ``fd_eq``/``fd_ne`` already have: the two
             # spellings of one text term (str / carrier / char list) are
             # equal here too, where Python's ``==`` on the raw values says no
@@ -3885,7 +3904,10 @@ if _USE_C_PROPAGATE:
         # The C impl's ground fallback is Python equality, same as the Python
         # twin's — so the chars-model arm has to sit in front of it here too,
         # or `==` answers differently depending on which impl is loaded.
-        _eq = _text_list_eq(deref(l), deref(r))
+        # the ground fallback sees a bound variable inside a compound as
+        # its value (see _walk_compound); the C impl compares raw objects
+        l, r = _walk_compound(deref(l)), _walk_compound(deref(r))
+        _eq = _text_list_eq(l, r)
         if _eq is not None:
             return _eq
         return _c_impl(l, r, trail)
@@ -3912,7 +3934,8 @@ if _USE_C_PROPAGATE:
         l, r = _cells_as_nodes(_dl, _dr)
         # Same broken-var guard as fd_eq above; the C impl posts unchecked.
         _reject_nonnumeric_eq(l, r, "(!=)/2")
-        _eq = _text_list_eq(deref(l), deref(r))
+        l, r = _walk_compound(deref(l)), _walk_compound(deref(r))
+        _eq = _text_list_eq(l, r)
         if _eq is not None:
             return not _eq
         return _c_impl(l, r, trail)

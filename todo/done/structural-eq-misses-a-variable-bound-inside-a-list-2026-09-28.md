@@ -45,3 +45,10 @@ after `_resolve`) compares a list/cell that still holds a bound `Var`
 without walking it (`_both_ground`, `_text_list_eq`); a deep deref
 (`_deref_walk`) of both sides before the fallback comparison is the likely
 fix.  The quoted `'=='/2` already answers correctly (w1).
+
+## Fixed
+
+2026-09-29, branch fix/batch-e-residual-triage-2026-09-29: `clausal/logic/clpfd.py`
+`_walk_compound` deep-derefs a list/cell/dict operand before the ground
+fallback of `fd_eq`/`fd_ne` (Python and C-wrapped twins) and reified `==`/`!=`.
+Pinned by `tests/test_batch_e_residual_2026_09_29.py::TestStructuralEqSeesABoundVariableInsideATerm`.
