@@ -143,3 +143,76 @@ def test_relative_stays_the_default():
 def test_an_unknown_layout_is_an_error():
     with pytest.raises(ValueError, match="module_specs"):
         clausal_source_to_prolog("", module_specs="engine")
+
+
+# ── a file with no -module (a package facade) ─────────────────────────
+
+SUB = "-module(sub, [f(X)])\nf(1),\nf(2),\n"
+FACADE = "-import_from(fp.sub, [f])\n"
+CONSUMER = "-module(cons, [g(X)])\n-import_from(fp, [f])\ng(X) <- (f(X))\n"
+FACADE_SIGS = {"fp.sub": {("f", 1)}, "fp": {("f", 1)}}
+
+
+def _stage_facade(root: Path, facade_text: str | None = None) -> None:
+    files = {"fp/sub.pl": ("fp.sub", SUB), "fp/__init__.pl": ("fp.__init__", FACADE),
+             "cons.pl": ("cons", CONSUMER)}
+    for rel, (module_path, src) in files.items():
+        path = root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(clausal_source_to_prolog(
+            src, strict=True, module_path=module_path,
+            module_signatures=FACADE_SIGS, module_specs="plain"))
+    if facade_text is not None:
+        (root / "fp/__init__.pl").write_text(facade_text)
+
+
+def _consult_consumer(root: Path, frontend: str) -> str:
+    code = textwrap.dedent(f"""
+        import sys
+        sys.path.insert(0, {str(root)!r})
+        import importlib
+        from clausal import solve
+        from clausal.logic.variables import Var, deref
+        try:
+            m = importlib.import_module("cons")
+            X = Var()
+            print("ANSWERS", [deref(X) for _ in solve(("g", X), m.__dict__.get("$module", m))])
+        except Exception as e:
+            print("RAISES", type(e).__name__)
+    """)
+    env = {**__import__("os").environ, "CLAUSAL_PL_FRONTEND": frontend}
+    proc = subprocess.run([sys.executable, "-c", code], cwd=REPO, env=env,
+                          capture_output=True, text=True, timeout=300)
+    return proc.stdout.strip().splitlines()[-1] if proc.stdout.strip() else proc.stderr[-300:]
+
+
+def test_a_facade_gets_a_module_directive_that_reexports_its_imports():
+    out = clausal_source_to_prolog(FACADE + "local(1),\n", module_path="fp.__init__",
+                                   module_signatures=FACADE_SIGS, module_specs="plain")
+    assert out.startswith(":- module(fp, [local/1, f/1]).")
+
+
+@pytest.mark.parametrize("frontend", ["translator", "native"])
+def test_a_facade_reexports_on_the_engine(tmp_path, frontend):
+    _stage_facade(tmp_path)
+    assert _consult_consumer(tmp_path, frontend) == "ANSWERS [1, 2]"
+
+
+@pytest.mark.parametrize("frontend", ["translator", "native"])
+def test_control_a_facade_without_a_module_directive_reexports_nothing(tmp_path, frontend):
+    """The old output: the same facade with no :- module/2. Without this
+    control the test above could pass for a reason unrelated to the directive."""
+    _stage_facade(tmp_path, facade_text=":- use_module(fp/sub, [f/1]).\n")
+    assert _consult_consumer(tmp_path, frontend).startswith("RAISES")
+
+
+def test_the_relative_layout_emits_no_implicit_module():
+    out = clausal_source_to_prolog(FACADE, module_path="fp.__init__")
+    assert ":- module(" not in out
+
+
+def test_a_library_import_is_not_reexported():
+    out = clausal_source_to_prolog(
+        "-import_from(clausal.logic.clpfd, [in_domain])\n-import_from(fp.sub, [f/1])\n",
+        module_path="fp.__init__", module_specs="plain")
+    assert out.startswith(":- module(fp, [f/1]).")
