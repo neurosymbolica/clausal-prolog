@@ -474,6 +474,12 @@ def _iso_structural_ne(a, b, trail, k):
 # tests/iso/test_iso_compare_errors.py — changing them would change infix
 # `==`, which this plan may not do.
 #
+# One difference from infix `==` (2026-09-30): under clpz `/` is exact
+# integer division, so each builtin first hands its operands to
+# `clpfd.clpz_operands`, which posts `A / B` as an integer Z with
+# `Z * B #= A, B #\= 0` (Scryer: `X #= 7/2` fails, `X #= 8/2` is 4).  Infix
+# `==` keeps `/` rational (ruling Q15).
+#
 # Each target function is imported INSIDE its builtin body, not at module
 # import time: `clausal/logic/clpfd.py` swaps in C-accelerated versions of
 # these functions further down its own module (clpfd.py:3274+), so a
@@ -493,48 +499,54 @@ def _clp_eq(a, b, trail, k):
     corpus sites take two arithmetic modes and `#=` is the only spelling
     correct for all of them.
     """
-    from clausal.logic.clpfd import fd_eq
-    if fd_eq(a, b, trail):
+    from clausal.logic.clpfd import clpz_operands, fd_eq
+    ops = clpz_operands(a, b, trail)
+    if ops is not None and fd_eq(*ops, trail):
         yield None
 
 
 @_builtin("#\\=", 2)
 def _clp_ne(a, b, trail, k):
     """CLP(FD) disequality constraint — the negation of `#=`."""
-    from clausal.logic.clpfd import fd_ne
-    if fd_ne(a, b, trail):
+    from clausal.logic.clpfd import clpz_operands, fd_ne
+    ops = clpz_operands(a, b, trail)
+    if ops is not None and fd_ne(*ops, trail):
         yield None
 
 
 @_builtin("#<", 2)
 def _clp_lt(a, b, trail, k):
     """CLP(FD)/CLP(R) strictly-less-than constraint."""
-    from clausal.logic.clpfd import fd_lt
-    if fd_lt(a, b, trail):
+    from clausal.logic.clpfd import clpz_operands, fd_lt
+    ops = clpz_operands(a, b, trail)
+    if ops is not None and fd_lt(*ops, trail):
         yield None
 
 
 @_builtin("#>", 2)
 def _clp_gt(a, b, trail, k):
     """CLP(FD)/CLP(R) strictly-greater-than constraint."""
-    from clausal.logic.clpfd import fd_gt
-    if fd_gt(a, b, trail):
+    from clausal.logic.clpfd import clpz_operands, fd_gt
+    ops = clpz_operands(a, b, trail)
+    if ops is not None and fd_gt(*ops, trail):
         yield None
 
 
 @_builtin("#=<", 2)
 def _clp_le(a, b, trail, k):
     """CLP(FD)/CLP(R) less-than-or-equal constraint."""
-    from clausal.logic.clpfd import fd_le
-    if fd_le(a, b, trail):
+    from clausal.logic.clpfd import clpz_operands, fd_le
+    ops = clpz_operands(a, b, trail)
+    if ops is not None and fd_le(*ops, trail):
         yield None
 
 
 @_builtin("#>=", 2)
 def _clp_ge(a, b, trail, k):
     """CLP(FD)/CLP(R) greater-than-or-equal constraint."""
-    from clausal.logic.clpfd import fd_ge
-    if fd_ge(a, b, trail):
+    from clausal.logic.clpfd import clpz_operands, fd_ge
+    ops = clpz_operands(a, b, trail)
+    if ops is not None and fd_ge(*ops, trail):
         yield None
 
 

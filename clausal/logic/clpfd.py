@@ -4255,6 +4255,142 @@ def _lifting_nonlinear_cells(post):
     return wrapped
 
 
+#: ``/`` in its two spellings: the bare (Python) node and ISO's quoted one
+_TRUE_DIV_KEYS = frozenset({("/", 2), ("$python_div", 2)})
+
+
+def _lift_exact_div(x, aux: list):
+    """*x* with each ``A / B`` over all-integer operands replaced by a fresh
+    Var Z; ``(Z, A, B)`` for each is appended to *aux*."""
+    x = deref(x)
+    t = type(x)
+    if t is int or is_var(x):
+        return x
+    if _Add is None:
+        _ensure_term_imports()
+    key = _NODE_KEYS.get(t)
+    if key is not None:
+        if key[1] == 1:
+            return _replace(x, operand=_lift_exact_div(x.operand, aux))
+        a = _lift_exact_div(x.left, aux)
+        b = _lift_exact_div(x.right, aux)
+        if key in _TRUE_DIV_KEYS and _fd_int_term(a)[0] and _fd_int_term(b)[0]:
+            z = Var()
+            aux.append((z, a, b))
+            return z
+        return _replace(x, left=a, right=b)
+    if t is not tuple or exact_cell_number(x) is not None:
+        return x
+    ka = _cell_key_args(x)
+    if ka is None or ka[0] not in _EVALUABLE:
+        return x
+    key, args = ka
+    args = tuple(_lift_exact_div(a, aux) for a in args)
+    if (key in _TRUE_DIV_KEYS and _fd_int_term(args[0])[0]
+            and _fd_int_term(args[1])[0]):
+        z = Var()
+        aux.append((z, args[0], args[1]))
+        return z
+    return (key[0],) + args
+
+
+def clpz_operands(l, r, trail):
+    """``(l, r)`` for a clpz comparison (``#=``, ``#\\=``, ``#<``, ...), or
+    None when the posts below already fail.
+
+    Under clpz ``/`` is TRUNCATED INTEGER DIVISION THAT MUST BE EXACT: Scryer
+    fails ``X #= 7/2`` and ``X #= Y/2, Y = 7``, and gives 4 for ``X #= 8/2``.
+    The engine's shared comparison posts keep ``/`` rational (ruling Q15:
+    the seam's ``X == 7 / 2`` is 7 rdiv 2), so the #-family lifts each
+    all-integer ``A / B`` into a fresh Z with ``Z * B #= A`` and ``B #\\= 0``
+    first -- exactly "A/B is the integer Z".  A ``/`` over a non-integer
+    operand keeps its old route."""
+    aux: list = []
+    dl, dr = deref(l), deref(r)
+    if not (type(dl) is int or is_var(dl)):
+        l = _lift_exact_div(dl, aux)
+    if not (type(dr) is int or is_var(dr)):
+        r = _lift_exact_div(dr, aux)
+    for z, a, b in aux:
+        a = _operand_var(a, trail)
+        if a is False:
+            return None
+        b = _operand_var(b, trail)
+        if b is False:
+            return None
+        if not _post_constraint(ExactDivConstraint(z, a, b), trail):
+            return None
+    return l, r
+
+
+def _div_bounds(alo, ahi, blo, bhi):
+    """Bounds of A / B for B of one sign (no 0 in B), or None."""
+    corners = []
+    for x in (alo, ahi):
+        for y in (blo, bhi):
+            if math.isinf(x) or math.isinf(y):
+                return None
+            corners.append(Fraction(x, y))
+    return math.ceil(min(corners)), math.floor(max(corners))
+
+
+class ExactDivConstraint(Constraint):
+    """``Z = A / B`` under clpz: B is not 0 and B divides A exactly (Scryer's
+    ``X #= 7/2`` fails).  Once A and B are known Z is their quotient; once
+    Z and B are, A is their product; bounds of Z follow A and B while B
+    keeps one sign."""
+    __slots__ = ('z', 'a', 'b')
+
+    def __init__(self, z, a, b):
+        self.z = z
+        self.a = a
+        self.b = b
+        result: list = []
+        for t in (z, a, b):
+            _collect_vars_from(t, result)
+        super().__init__(tuple(result))
+
+    def propagate(self, trail: Trail, queue: deque) -> bool:
+        z, a, b = deref(self.z), deref(self.a), deref(self.b)
+        bd = _expr_domain(b, trail)
+        if is_var(b):
+            nb = domain_remove(bd, 0)
+            if not nb:
+                return False
+            if not _narrow_if_changed(b, nb, trail, queue):
+                return False
+            b = deref(self.b)
+            bd = _expr_domain(b, trail)
+        ad, zd = _expr_domain(a, trail), _expr_domain(z, trail)
+        if not (ad and bd and zd):
+            return False
+        av, bv, zv = domain_singleton(ad), domain_singleton(bd), domain_singleton(zd)
+        if bv == 0:
+            return False
+        if av is not None and bv is not None:
+            if av % bv:
+                return False
+            nz = domain_intersection(zd, ((av // bv, av // bv),))
+            if not nz:
+                return False
+            return not is_var(z) or _narrow_if_changed(z, nz, trail, queue)
+        if zv is not None and bv is not None:
+            na = domain_intersection(ad, ((zv * bv, zv * bv),))
+            if not na:
+                return False
+            return not is_var(a) or _narrow_if_changed(a, na, trail, queue)
+        blo, bhi = domain_min(bd), domain_max(bd)
+        if blo > 0 or bhi < 0:
+            bounds = _div_bounds(domain_min(ad), domain_max(ad), blo, bhi)
+            if bounds is not None:
+                nz = domain_intersection(zd, domain_from_range(*bounds))
+                if not nz:
+                    return False
+                if is_var(z) and not _narrow_if_changed(z, nz, trail, queue):
+                    return False
+        return True
+
+
 fd_eq = _lifting_nonlinear_cells(fd_eq)
 fd_ne = _lifting_nonlinear_cells(fd_ne)
 fd_lt = _lifting_nonlinear_cells(fd_lt)
