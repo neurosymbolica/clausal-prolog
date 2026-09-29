@@ -134,6 +134,22 @@ since 0.4.0 finish three moves:
 
 ### Added
 
+- **library(lambda) as builtins: `(\)/1..8`, `(^)/3..10`, `(+\)/2..9`.**
+  Ulrich Neumerkel's lambdas (`maplist(\X^Y^(Y is 2*X), Xs, Ys)`,
+  `Free+\X^Goal`) run through call/N with Scryer's answers: `\` copies the
+  lambda before each call so no binding leaks between calls, `+\` shares the
+  variables of its left side, and a parameter no argument reaches raises
+  `existence_error(lambda_parameter, _)`. The native `.pl` front end accepts
+  `use_module(library(lambda)[, List])` and adds its `op(201, xfx, +\)`.
+  The procedures are global, as the list builtins are: unlike Scryer, a
+  module that does not import the library can still call them, and
+  `call(Y^G, A)` is library(lambda)'s `(^)/3` rather than an
+  existence_error.
+- **`member/2` and `memberchk/2` are builtins under their ISO names.** They
+  were registered only as `in_/2` and `in_check/2`, so a `.pl` file read by
+  the native front end, or a goal handed to `solve()`, found no procedure.
+  The same builtins answer both spellings; a module's own or imported
+  `member/2` still answers first.
 - **Negative tests: `test(Name, fail)`.** plunit's `test/2` with the option
   `fail` passes iff its goal has no solution; a solution fails it and an
   exception is an error, as for `test/1`. The seam spelling is the same term,
@@ -385,6 +401,13 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
 
 ### Fixed
 
+- **A procedure `assertz` creates is no longer shadowed by an atom of the
+  same name some other module declared.** Module dicts are seeded from the
+  process-wide atom pool, so the body goal `note(X)` of a later,
+  assert-created `note/1` bound to the atom `note` and raised
+  `existence_error(procedure, note/1)`, depending on what the process had
+  loaded first. The call now re-resolves in the calling module (its own
+  row, then a builtin) and raises the same error only when nothing answers.
 - **`:- use_module(m, []).` in a `.pl` file is a located translation
   error**, not a loader crash (`ValueError: empty names on ImportFrom`).
   Scryer reads it as `remove_module/2` (drops the imports, never loads

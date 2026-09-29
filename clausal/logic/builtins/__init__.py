@@ -63,6 +63,7 @@ from clausal.logic.builtins import lists           # noqa: F401
 from clausal.logic.builtins import pairs           # noqa: F401
 from clausal.logic.builtins import flags           # noqa: F401
 from clausal.logic.builtins import higher_order    # noqa: F401
+from clausal.logic.builtins import lambda_lib      # noqa: F401  (library(lambda))
 from clausal.logic.builtins import io              # noqa: F401
 from clausal.logic.builtins import dcg             # noqa: F401
 from clausal.logic.builtins import dict_set        # noqa: F401

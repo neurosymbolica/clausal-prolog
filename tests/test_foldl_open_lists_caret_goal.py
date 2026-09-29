@@ -5,7 +5,8 @@
 * maplist/2,3, foldl and the ``in`` goal on an OPEN list (unbound, or
   partial) enumerate as the prologue's recursion does;
 * ``call(Y^G)`` is existence_error(procedure, (^)/2): ``^`` is a goal only
-  inside bagof/setof's iterated goal.
+  inside bagof/setof's iterated goal; with an extra argument it is
+  library(lambda)'s (^)/3, a builtin.
 """
 
 from __future__ import annotations
@@ -46,6 +47,7 @@ not_in_closed(L) <- (L is [a, b], c not in L)
 caret(Y) <- call(Y^p(Y))
 caret_cell(Y) <- call('^'(Y, p(Y)))
 caret_extra(Y) <- call(Y^p(Y), 1)
+caret_cell_extra(Y) <- call('^'(Y, p(Y)), 1)
 bagof_caret(L) <- bagof(X, Y^p(X), L)
 """
 
@@ -157,10 +159,17 @@ def test_not_in_on_an_open_list_fails_and_binds_nothing(mod):
 @pytest.mark.parametrize("name, want", [
     ("caret", "error(existence_error(procedure,(^)/2),(^)/2)"),
     ("caret_cell", "error(existence_error(procedure,(^)/2),(^)/2)"),
-    ("caret_extra", "error(existence_error(procedure,(^)/3),(^)/3)"),
 ])
 def test_call_of_a_caret_goal_is_an_existence_error(mod, name, want):
     assert _error(mod, name) == want
+
+
+# With an extra argument the fold is library(lambda)'s (^)/3, a builtin:
+# Scryer (library(lambda) loaded): call(Y^p(Y), 1) -> Y = 1.  The operator
+# node and the cell spelling answer alike.
+@pytest.mark.parametrize("name", ["caret_extra", "caret_cell_extra"])
+def test_call_of_a_caret_goal_with_an_extra_is_the_lambda_hat(mod, name):
+    assert _answers(mod, name) == [1]
 
 
 def test_bagof_still_reads_the_caret(mod):

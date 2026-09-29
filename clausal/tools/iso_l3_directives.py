@@ -22,6 +22,7 @@ What is handled, and how (the ISO directive -> the seam's):
     use_module(library(L)[, Is])    lists/apply/dif/...: built in, nothing
                                     clpz: clausal.logic.clpfd + clpz's ops
                                     reif: clausal.stdlib.reif; clpq: built in
+                                    lambda: built in + its +\\ operator
     dynamic/discontiguous/table(PIs)  the same-named seam directive
     meta_predicate(Heads)           -meta_predicate
     set_prolog_flag(F, V)           -set_prolog_flag; double_quotes is kept
@@ -66,6 +67,9 @@ _LIBRARY_MODULES: dict[str, "str | None"] = {
     "reif": "clausal.stdlib.reif",
     "clpq": None,
     "tabling": None,
+    # (\)/1..8, (^)/3..10 and (+\)/2..9 are engine builtins
+    # (clausal.logic.builtins.lambda_lib); the import adds the +\ operator.
+    "lambda": None,
 }
 
 #: What ``use_module(library(L))`` (no list) imports from L's module: the
@@ -89,7 +93,11 @@ CLPZ_OPS: tuple[tuple[int, str, str], ...] = (
     (450, "xfx", ".."), (150, "fx", "#"),
 )
 
-_LIBRARY_OPS: dict[str, tuple] = {"clpz": CLPZ_OPS, "clpfd": CLPZ_OPS}
+#: library(lambda)'s operator (Scryer ``lambda.pl``'s module/2 export list).
+LAMBDA_OPS: tuple[tuple[int, str, str], ...] = ((201, "xfx", "+\\"),)
+
+_LIBRARY_OPS: dict[str, tuple] = {"clpz": CLPZ_OPS, "clpfd": CLPZ_OPS,
+                                  "lambda": LAMBDA_OPS}
 
 _OP_SPECIFIERS = ("xfx", "xfy", "yfx", "fy", "fx", "xf", "yf")
 

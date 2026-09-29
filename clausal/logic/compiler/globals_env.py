@@ -902,6 +902,51 @@ def _unqualified_other_arity_dispatch(binding, db, name: str, arity: int):
     return dispatch
 
 
+def _is_plain_atom_binding(binding, db) -> bool:
+    """True for an ATOM binding that is only data: not a predicate handle
+    (a mangled str is an atom by shape but names a procedure) and not
+    anything else the db sees as a predicate."""
+    from clausal.logic.atoms import is_mangled  # noqa: PLC0415
+    return (_term_is_atom(binding) and not is_mangled(binding)
+            and not is_declared_predicate_name(binding, db=db))
+
+
+def _atom_bound_dispatch(atom, db, name: str, arity: int):
+    """The dispatch for an UNQUALIFIED call ``name/arity`` whose name is
+    bound to an ATOM while the compiling module has no ``name/arity`` row.
+
+    An atom is data and never a call target, and ``_atom_shadows_row`` already
+    lets this db's own row win over one -- but only a row present at COMPILE
+    time.  The atom may be no more than a same-spelled atom some earlier
+    module left in the process-wide pool the module dict is seeded from, so
+    a procedure ``assertz`` creates later (under ``assert_creates_dynamic``;
+    a ``-dynamic`` declaration makes its row at compile time and never
+    reaches here) was shadowed by it, and the answer depended on what the
+    process had loaded first.  This re-resolves on every call in the
+    compiling module (its own row, then a builtin); only a LOCKED row's
+    dispatch is cached, so a call to an asserted (never locked) row pays a
+    ``get_dispatch`` and a ``row`` lookup each time.  When nothing answers, the call
+    raises exactly what calling the atom always raised
+    (``predicate._dispatch_at``'s atom branch).
+    """
+    from clausal.logic.predicate import _dispatch_at  # noqa: PLC0415
+    cached = None
+
+    def dispatch(*args):
+        nonlocal cached
+        if cached is not None:
+            return cached(*args)
+        fn = db.get_dispatch(name, arity)          # own row, then builtins
+        if fn is not None:
+            row = db.row(name, arity)
+            if row is not None and row.locked:
+                cached = fn
+            return fn(*args)
+        return _dispatch_at(atom, arity, db)(*args)
+    dispatch.__qualname__ = f"atom_bound[{name}/{arity}]"
+    return dispatch
+
+
 def _clausal_module_name_of(value) -> str | None:
     """The Clausal ``Module`` name behind *value* (a ``Module`` or an
     imported ``.clausal`` module object), else None."""
@@ -1238,6 +1283,21 @@ def _inject_resolved_targets(
         builtin = get_builtin_predicate(target_name, target_arity, db)
         if builtin is not None:
             _merge_builtin(base_globals, target_name, builtin)
+            continue
+        if (target_arity >= 0 and db is not None and globals_
+                and target_name in globals_
+                and _is_plain_atom_binding(globals_[target_name], db)
+                and db.row(target_name, target_arity) is None):
+            # An ATOM binding with no row behind it YET: the module dict is
+            # seeded from the process-wide atom pool, so the binding may be
+            # nothing more than another module's atom of the same spelling,
+            # and a procedure ``assertz`` creates later must still answer
+            # the call.  The NAME key keeps the atom (term construction and
+            # data references read it); the call re-resolves per call.
+            base_globals[target_name] = globals_[target_name]
+            base_globals[_disp_key(target_name, target_arity)] = (
+                _atom_bound_dispatch(globals_[target_name], db, target_name,
+                                     target_arity))
             continue
         if globals_ and target_name in globals_ and not _atom_shadows_row(
             globals_[target_name], db, target_name, target_arity
