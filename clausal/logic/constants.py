@@ -469,3 +469,61 @@ def register_module_constant(module, name: str, value) -> None:
     of the call sites rather than needing a check here.
     """
     module.constants[name] = value
+
+
+# ── Clausal modules loaded outside ``sys.modules`` ────────────────────────────
+#
+# ``constant_value/2``, ``module_constant/3`` (module unbound) and
+# ``constant_number_units/3`` enumerate "every loaded Clausal module". They
+# used to read that off ``sys.modules`` alone, which misses a module the test
+# runner loads: ``clausal.testing.load_clausal_module`` compiles a file under a
+# private ``_clausal_test_<stem>`` name and pops it from ``sys.modules`` so
+# runs stay independent. A test's own ``constant_value(plain, V)`` then FAILED
+# silently for the file's own ``-constant_value(plain, 3)``, while a normal
+# import of the same program answered ``V = 3``.
+#
+# Such a loader registers the module here instead, keyed by its SOURCE FILE so
+# a fresh compile of the same file REPLACES the previous one (as a re-import
+# replaces a ``sys.modules`` entry) -- the runner names modules by file STEM,
+# so two same-stem files in different directories must not evict each other
+# -- and unregisters it when its run is over. Weak references, so a
+# registration never keeps a module alive by itself.
+
+import sys as _sys
+import weakref as _weakref
+
+_DETACHED_MODULES: dict = {}
+
+
+def _detached_key(py_module):
+    return getattr(py_module, "__file__", None) or py_module.__name__
+
+
+def register_detached_module(py_module) -> None:
+    """Record a Clausal module loaded outside ``sys.modules`` (see above)."""
+    _DETACHED_MODULES[_detached_key(py_module)] = _weakref.ref(py_module)
+
+
+def unregister_detached_module(py_module) -> None:
+    """Forget *py_module* if it is the registered module under its name."""
+    key = _detached_key(py_module)
+    ref = _DETACHED_MODULES.get(key)
+    if ref is not None and ref() is py_module:
+        del _DETACHED_MODULES[key]
+
+
+def loaded_clausal_py_modules() -> list:
+    """Every loaded Python module, as the reflection builtins enumerate them.
+
+    ``sys.modules`` (snapshotted, in its order) followed by the live detached
+    modules it does not already hold. A caller still filters on
+    ``__clausal_module__``.
+    """
+    mods = list(_sys.modules.values())
+    seen = {id(m) for m in mods}
+    for ref in list(_DETACHED_MODULES.values()):
+        mod = ref()
+        if mod is not None and id(mod) not in seen:
+            seen.add(id(mod))
+            mods.append(mod)
+    return mods

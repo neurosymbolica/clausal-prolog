@@ -122,3 +122,86 @@ def test_reflected_value_is_the_same_frozen_object(tmp_path):
                 in call("module_constant", m, mint("c_l"), v,
                         module=m.__dict__["$module"])]
     assert result is m.__dict__["c_l"]
+
+
+# ── A module the test runner loads is still a loaded program ─────────────────
+#
+# ``clausal.testing.load_clausal_module`` compiles a file as
+# ``_clausal_test_<stem>`` and pops it from ``sys.modules``; the enumerating
+# reflection builtins read ``sys.modules`` alone, so a test's own
+# ``constant_value(plain, V)`` FAILED silently for the file's own
+# ``-constant_value(plain, 3)`` while a normal import answered ``V = 3``.
+
+_RUNNER_CV_SRC = """\
+-module(cvrun, [plain, a/1, b/1])
+-constant_value(plain, 3)
+a(V) <- constant_value(plain, V)
+b(V) <- module_constant(_, plain, V)
+test("plain") <- a(3)
+test("module unbound") <- b(3)
+"""
+
+
+def test_constant_value_answers_through_the_test_runner(tmp_path, capsys):
+    from clausal.testing import main
+    path = tmp_path / "cvrun.seam"
+    path.write_text(_RUNNER_CV_SRC)
+    rc = main([str(path)])
+    out = capsys.readouterr().out
+    assert rc == 0, out
+    assert "2 passed, 0 failed" in out
+
+
+def test_constant_value_answers_for_a_load_clausal_module_module(tmp_path):
+    from clausal.testing import load_clausal_module
+    path = tmp_path / "cvrun2.seam"
+    path.write_text(_RUNNER_CV_SRC)
+    mod = load_clausal_module(path)
+    v = Var()
+    assert [deref(v) for _ in call("a", v, module=mod.__dict__["$module"])] \
+        == [3]
+
+
+def test_a_finished_runner_module_stops_answering(tmp_path):
+    """The runner unregisters a file's module once its tests have run, so
+    one file's constants do not answer another file's queries."""
+    from clausal.logic.constants import loaded_clausal_py_modules
+    from clausal.testing import run_file
+    path = tmp_path / "cvrun3.seam"
+    path.write_text(_RUNNER_CV_SRC)
+    res = run_file(path)
+    assert [r.passed for r in res.results] == [True, True]
+    assert not any(getattr(m, "__name__", None) == "_clausal_test_cvrun3"
+                   for m in loaded_clausal_py_modules())
+
+
+def test_same_stem_runner_modules_do_not_evict_each_other(tmp_path):
+    """The runner names a module by file STEM; two same-stem files in
+    different directories are two programs, and both stay reachable."""
+    from clausal.testing import load_clausal_module
+    (tmp_path / "d1").mkdir()
+    (tmp_path / "d2").mkdir()
+    p1 = tmp_path / "d1" / "same.seam"
+    p2 = tmp_path / "d2" / "same.seam"
+    p1.write_text("-module(same, [k1, a/1])\n-constant_value(k1, 1)\n"
+                  "a(V) <- constant_value(k1, V)\n")
+    p2.write_text("-module(same, [k2, a/1])\n-constant_value(k2, 2)\n"
+                  "a(V) <- constant_value(k2, V)\n")
+    m1 = load_clausal_module(p1)
+    m2 = load_clausal_module(p2)
+    for m, want in ((m1, [1]), (m2, [2])):
+        v = Var()
+        assert [deref(v) for _ in call("a", v, module=m.__dict__["$module"])] \
+            == want
+
+
+def test_reloading_one_file_does_not_duplicate_answers(tmp_path):
+    from clausal.testing import load_clausal_module
+    path = tmp_path / "cvrel.seam"
+    path.write_text("-module(cvrel, [krel, a/1])\n-constant_value(krel, 7)\n"
+                    "a(V) <- constant_value(krel, V)\n")
+    first = load_clausal_module(path)       # noqa: F841 -- kept alive
+    second = load_clausal_module(path)
+    v = Var()
+    assert [deref(v) for _ in call("a", v, module=second.__dict__["$module"])] \
+        == [7]

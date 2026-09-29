@@ -818,12 +818,12 @@ def _constant_number_units__3(name, number, units, trail, k):
       (+Name, ?Number, ?Units): the declared magnitude and units.
       (-Name, ?Number, ?Units): enumerate every united constant.
     """
-    import sys as _sys                                     # noqa: PLC0415
+    from clausal.logic.constants import loaded_clausal_py_modules  # noqa: PLC0415
     name_val = deref(name)
     want = spelling(name_val) if _term_is_atom(name_val) else None
     if want is None and not is_var(name_val):
         return                       # a non-atom names no constant
-    for py_module in list(_sys.modules.values()):
+    for py_module in loaded_clausal_py_modules():
         logic_module = getattr(py_module, "__clausal_module__", None)
         declared = getattr(logic_module, "constant_units", None)
         if not declared:
@@ -985,8 +985,10 @@ def _module_constant__3(m, name, value, trail, k):
     # Module unbound: enumerate every loaded Clausal module.
     # Snapshot values() so a module load triggered mid-iteration (e.g. by a
     # lazy import somewhere downstream) can't perturb this iteration.
-    import sys as _sys  # noqa: PLC0415
-    for py_module in list(_sys.modules.values()):
+    # ``sys.modules`` plus the modules a test run loads outside it (see
+    # ``clausal.logic.constants.register_detached_module``).
+    from clausal.logic.constants import loaded_clausal_py_modules  # noqa: PLC0415
+    for py_module in loaded_clausal_py_modules():
         cdict = _module_constants_dict(py_module)
         if not cdict:
             continue
