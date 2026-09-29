@@ -50,7 +50,11 @@ Pass a `Dialect` to control dialect-specific output:
 ```python
 from clausal.tools.prolog_dialect import Dialect
 
-# SWI-Prolog output (e.g. all_different, library(clpfd))
+# The default: ISO, with Scryer's names where ISO has none
+# (all_distinct, time, library(clpz))
+print(clausal_source_to_prolog(source))
+
+# SWI-Prolog output (all_different, library(clpfd))
 print(clausal_source_to_prolog(source, dialect=Dialect.swi()))
 
 # Scryer Prolog output (e.g. all_distinct, library(clpz))
@@ -59,6 +63,12 @@ print(clausal_source_to_prolog(source, dialect=Dialect.scryer()))
 # Trealla Prolog output (same as Scryer — all_distinct, library(clpz))
 print(clausal_source_to_prolog(source, dialect=Dialect.trealla()))
 ```
+
+Where the dialects differ, the default follows ISO first and Scryer where
+ISO is silent: its CLP(ℤ) library is `clpz` (only `Dialect.swi()` uses
+`clpfd`), and it writes `all_different` as `all_distinct/1` and `time_goal`
+as `time/1`. `in_domain` and `divmod_` keep their names, because Scryer's
+`ins` is binary and it has no `divmod/4`.
 
 ### Intermediate Prolog AST
 
@@ -93,7 +103,8 @@ for item in pmodule.items:
 | `all_different` | `all_different` | names cross unchanged |
 | `dcg_rule` | `dcg_rule` | names cross unchanged |
 | `findall` | `findall` | Builtin name map overrides |
-| `time_goal` | `time` | Builtin name map (SWI/Scryer) |
+| `time_goal` | `time` | Builtin name map (every dialect) |
+| `all_different` | `all_distinct` | Builtin name map (`iso`, Scryer, Trealla; `all_different` under SWI) |
 
 ### Variable names
 
@@ -161,7 +172,8 @@ constraint, see [Operators](operators.md)):
     unbound. The exporter decides "numeric" from the source alone, on the
     term each side EXPORTS AS: a side that becomes an integer (an integer
     literal, `-3`, a quantity literal such as `5000(euro)`, a constant
-    folded to an integer) or an arithmetic expression gives clpz's `#\=`;
+    folded to an integer) or an arithmetic expression (including a clpz
+    evaluable call such as `abs(X)`) gives clpz's `#\=`;
     anything else, including a variable, a float (literal, `2.5(euro)`, or
     a folded float constant: CLP(ℤ) is over the integers) and a constant
     folded to an atom, gives `dif/2`, which is sound for numbers too but
@@ -185,9 +197,20 @@ constraint, see [Operators](operators.md)):
 | Clausal | Prolog |
 |---|---|
 | `-module(name, [foo(X)])` | `:- module(name, [foo/1]).` |
-| `-import_from(mod, [pred])` | `:- use_module('mod', [pred]).` |
+| `-module(name, [foo(X), foo/1])` | `:- module(name, [foo/1]).` (each `Name/Arity` once) |
+| `-import_from(mod, [pred/2])` | `:- use_module('mod', [pred/2]).` |
+| `-import_from(mod, [pred])` | `:- use_module('mod').` (a bare name has no arity to list) |
 | `-dynamic(color(N, V))` | `:- dynamic(color/2).` |
+| `-discontiguous(p/1)` | `:- discontiguous(p/1).` |
 | `-private([...])` | *(omitted — Prolog visibility is module-based)* |
+
+A prefix-operator directive (`dynamic`, `discontiguous`, `table`, ...) is
+written in functional notation, `:- dynamic(color/2).`, which Scryer, Trealla
+and SWI all read. An import list names each `Name/Arity` once. When the
+exporter knows the exporting module's signatures (the export pipeline always
+passes them), a bare name in an import list is written as the indicators it
+stands for; without them it cannot give the arity, and Scryer refuses a bare
+atom in an import list, so the directive is written without a list.
 
 ---
 
@@ -330,6 +353,12 @@ clausal_text = prolog_ast_to_clausal(pmodule)
 | `head --> body.` | `head() >> (body)` | [DCG](dcg.md) rules |
 | `:- module(...)` | `-module(...)` | [Module directive](directives.md) |
 | `:- use_module(library(L), [...])` | `-import_from(L, [...])` | Import directive; `clpfd`/`clpz` map to `clausal.logic.clpfd` |
+| `:- use_module(sub/helpers, [p/1])` | `-import_from(sub.helpers, [p/1])` | A path resolves against the file's directory; `p/1` imports one arity |
+| `:- use_module(m)` | `-import_module(m)` (plus an `-import_from` of a `.pl` module's export list) | Whole-module import |
+| `m:p(X)` | `m.p(X)` | Module-qualified call |
+| `X @< Y` | `'@<'(X, Y)` | Standard order (and `@>`, `@=<`, `@>=`) |
+| `setof(X, Y^G, L)` | `setof(X, Y ^ (G), L)` | The `^` quantifier is kept |
+| `X // Y`, `X mod Y`, `X ^ Y`, ... | `'//'(X, Y)`, `'mod'(X, Y)`, `'^'(X, Y)`, ... | Quoted ISO evaluables; `max`, `abs`, ... keep their names |
 | `:- dynamic(p/N)` | `-dynamic(p/N)` | Dynamic directive |
 | `:- op(P, T, N)` | `# operator: op(P, T, N)` | Comment (no clausal equivalent) |
 | `X` (variable) | `X` | Variable names cross unchanged |
