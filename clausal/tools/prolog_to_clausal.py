@@ -440,6 +440,10 @@ def _dcg_goal_names(body, goal, names) -> None:
         names.add(body.name)
 
 
+#: goal names the compiler lowers itself, beyond ``ir.MetaKind``
+_CONTROL_GOAL_NAMES = frozenset({"call", "not", "not_", "and_", "or_"})
+
+
 def _engine_knows_name(name: str, arity: int) -> bool:
     """True when the engine gives *name* a meaning of its own -- a registered
     builtin, a control/meta construct the compiler lowers (``findall``,
@@ -453,11 +457,7 @@ def _engine_knows_name(name: str, arity: int) -> bool:
         return True
     if name in typing.get_args(MetaKind) or name in _CONTROL_GOAL_NAMES:
         return True
-    return any(k[0] == name for k in EVALUABLE)
-
-
-#: goal names the compiler lowers itself, beyond ``ir.MetaKind``
-_CONTROL_GOAL_NAMES = frozenset({"call", "not", "not_", "and_", "or_"})
+    return (name, arity) in EVALUABLE
 
 
 def _checked_var_name(prolog_name: str) -> str:
@@ -542,9 +542,6 @@ class _PrologToClausal:
         # ``X = g(2)``), name -> arities.  Declared ``-private([f(_)])`` so
         # the term builds; a Prolog compound needs no declaration.
         self._data_functors: dict[str, set[int]] = {}
-        # set by the goal emitters for the ONE compound they hand to
-        # ``_emit_term`` as a goal; consumed (and cleared) there
-        self._goal_top = False
 
     def emit_module(self, pmodule: PModule) -> str:
         """Emit a complete module as clausal source text."""
@@ -701,7 +698,8 @@ class _PrologToClausal:
             lst = self._emit_term(goal.args[1])
             return f"{elem} in {lst}"
         # Regular compound goal → a call under the same name
-        self._goal_top = True
+        if isinstance(goal, PCompound):
+            return self._emit_compound(goal, goal=True)
         return self._emit_term(goal)
 
     def _emit_disjunction(self, term: PTerm) -> str:
@@ -788,7 +786,8 @@ class _PrologToClausal:
         if isinstance(goal, PCompound) and goal.functor == ";":
             return self._emit_disjunction(goal)
         # Regular non-terminal
-        self._goal_top = True
+        if isinstance(goal, PCompound):
+            return self._emit_compound(goal, goal=True)
         return self._emit_term(goal)
 
     # ── Directives ───────────────────────────────────────────────────
@@ -935,8 +934,6 @@ class _PrologToClausal:
 
     def _emit_term(self, term: PTerm) -> str:
         """Emit a Prolog AST term as clausal syntax."""
-        goal = self._goal_top
-        self._goal_top = False
         if isinstance(term, PAtom):
             return self._emit_atom(term)
         if isinstance(term, PVar):
@@ -955,7 +952,7 @@ class _PrologToClausal:
         if isinstance(term, PCurly):
             return "{" + self._emit_term(term.body) + "}"
         if isinstance(term, PCompound):
-            return self._emit_compound(term, goal=goal)
+            return self._emit_compound(term)
         return str(term)
 
     # Atoms that map to Python builtins and should not be collected as data atoms.

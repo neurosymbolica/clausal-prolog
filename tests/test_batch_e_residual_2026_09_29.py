@@ -116,3 +116,29 @@ class TestC1PrologDataFunctorsAreDeclared:
                 return [L for L in --cnt(L)]
         """, libs=self.LIB)
         assert mod.run() == [[7]]
+
+    @staticmethod
+    def _private(src):
+        from clausal.tools.prolog_to_clausal import prolog_to_clausal
+        lines = [ln for ln in prolog_to_clausal(src).splitlines()
+                 if ln.startswith("-private(")]
+        return lines[0] if lines else ""
+
+    def test_a_name_used_as_data_at_two_arities_is_left_undeclared(self):
+        assert "f(" not in self._private("r(f(1)).\ns(f(1, 2)).\n")
+
+    def test_an_evaluable_name_is_matched_by_arity(self):
+        # atan2/2 is an evaluable (left alone); atan2/3 is only data here
+        assert "atan2(" not in self._private("t(X) :- X = atan2(1, 2).\n")
+        assert "atan2(_, _, _)" in self._private("t(X) :- X = atan2(1, 2, 3).\n")
+
+    def test_an_atom_and_a_functor_of_one_name(self, tmp_path, monkeypatch):
+        # the atom is written quoted ('a'), so only a(_) is declared and
+        # both answers come back (roborev round 1 asked)
+        assert self._private("p(a).\nq(a(1)).\n") == "-private([a(_)])"
+        mod = _load(tmp_path, monkeypatch, "c1_main3", """
+            -import_from(c1_lib3, [p, q])
+            def run():
+                return [X for X in --p(X)], [X for X in --q(X)]
+        """, libs={"c1_lib3.pl": "p(a).\nq(a(1)).\n"})
+        assert mod.run() == (["a"], [("a", 1)])

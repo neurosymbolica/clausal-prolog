@@ -2114,8 +2114,9 @@ def _walk_compound(x):
     Python equality -- which compares a bound ``Var`` object inside a list,
     cell or dict, not its value.  So ``X is [Y], Y is 1, X == [1]`` failed
     where unification, the quoted ``'=='`` and ISO ==/2 (8.4.1.1, which
-    dereferences every subterm) all hold.  A scalar is returned as is, so the
-    walk costs nothing on the common numeric path."""
+    dereferences every subterm) all hold.  Called only once both sides are
+    ground at the top (``_both_ground``), in both twins; a scalar is returned
+    as is."""
     if isinstance(x, (list, tuple, dict)) or hasattr(type(x), "__walk__"):
         from clausal.logic.solve import _deref_walk  # noqa: PLC0415
         return _deref_walk(x)
@@ -3906,7 +3907,9 @@ if _USE_C_PROPAGATE:
         # or `==` answers differently depending on which impl is loaded.
         # the ground fallback sees a bound variable inside a compound as
         # its value (see _walk_compound); the C impl compares raw objects
-        l, r = _walk_compound(deref(l)), _walk_compound(deref(r))
+        l, r = deref(l), deref(r)
+        if _both_ground(l, r):
+            l, r = _walk_compound(l), _walk_compound(r)
         _eq = _text_list_eq(l, r)
         if _eq is not None:
             return _eq
@@ -3934,7 +3937,9 @@ if _USE_C_PROPAGATE:
         l, r = _cells_as_nodes(_dl, _dr)
         # Same broken-var guard as fd_eq above; the C impl posts unchecked.
         _reject_nonnumeric_eq(l, r, "(!=)/2")
-        l, r = _walk_compound(deref(l)), _walk_compound(deref(r))
+        l, r = deref(l), deref(r)
+        if _both_ground(l, r):
+            l, r = _walk_compound(l), _walk_compound(r)
         _eq = _text_list_eq(l, r)
         if _eq is not None:
             return not _eq
