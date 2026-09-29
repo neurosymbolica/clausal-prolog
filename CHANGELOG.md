@@ -480,6 +480,17 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
 
 ### Fixed
 
+- **A `.pl` module in an earlier `sys.path` entry is no longer shadowed by a
+  `.clausal` or `.seam` module of the same name in a later one.** The import
+  hook now resolves source modules per `sys.path` entry, in path order: the
+  first entry that holds the module wins, and the extension priority
+  (`.clausal`, `.seam`, then `.pl`) decides only within one entry. Before,
+  `.clausal`/`.seam` and `.pl` were found by two finders that each scanned
+  the whole path, so a `.pl` package could load a same-named `.clausal`
+  sibling from another tree and answer from it without any error.
+  `PrologFinder` is no longer installed on `sys.meta_path`; `PredicateFinder`
+  finds `.pl` too. See [docs/importing_prolog.md](docs/importing_prolog.md).
+
 - **CLP(Q) accepts quantities.** `{Q = 100 * constant(one_euro)}` in a
   `.pl` file, `clpq.rational(Q == 100 * constant(one_euro))`, `in_q/3` with
   quantity bounds, `entailed/1` and the objectives of `maximize/2`,

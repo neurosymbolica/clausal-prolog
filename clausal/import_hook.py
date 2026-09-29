@@ -1104,11 +1104,19 @@ class _AliasLoader:
 class _ExtensionFinder(MetaPathFinder):
     """Base finder that searches sys.path for files with given extensions.
 
-    ``_extensions`` lists the suffixes this finder claims, in priority order:
-    within one ``sys.path`` entry the first suffix that names an existing
-    file (or ``__init__`` package file) wins.  ``_extension`` is the single-
-    suffix spelling older subclasses use; it is honoured when ``_extensions``
-    is left empty.
+    Resolution is per ``sys.path`` entry, in path order — Python's own
+    contract.  Each entry is asked for every suffix *group* the finder claims
+    (:meth:`_suffix_groups`, in priority order) before the next entry is
+    looked at, so a source module in an earlier entry always beats one in a
+    later entry whatever its suffix; the suffix priority only decides between
+    files in the *same* entry.  Within one entry, for each group in turn: a
+    flat ``tail<suffix>`` file (first suffix of the group that exists) wins,
+    then a ``tail/__init__<suffix>`` package; only then is the next group
+    tried.
+
+    ``_extensions`` lists the suffixes of the finder's single default group,
+    in priority order; ``_extension`` is the single-suffix spelling older
+    subclasses use, honoured when ``_extensions`` is left empty.
     """
     _extension: str = ""
     _extensions: tuple[str, ...] = ()
@@ -1117,7 +1125,15 @@ class _ExtensionFinder(MetaPathFinder):
     def _suffixes(self) -> tuple[str, ...]:
         return self._extensions or (self._extension,)
 
-    def _spec_for(self, fullname, source_path, pkg_dir=None):
+    def _suffix_groups(self):
+        """``((suffixes, get_loader_cls), ...)`` in priority order within one
+        ``sys.path`` entry.  ``get_loader_cls`` is called only once a file is
+        found, so a loader choice that can fail (an invalid
+        ``CLAUSAL_PL_FRONTEND``) never breaks an unrelated import."""
+        return ((self._suffixes(), lambda: self._loader_cls),)
+
+    def _spec_for(self, fullname, source_path, pkg_dir=None,
+                  get_loader_cls=None):
         """Build the spec for ``fullname``, deduplicating by source path.
 
         If this exact file is already loaded under another dotted name, alias
@@ -1132,45 +1148,58 @@ class _ExtensionFinder(MetaPathFinder):
             # Either this file is new, or its registry entry is stale because
             # the module was evicted from sys.modules.  Compile, and let the
             # load claim (or reclaim) the path.
-            loader = self._loader_cls(fullname, source_path)
+            # The loader class is resolved only here, not on the alias path.
+            loader_cls = (get_loader_cls() if get_loader_cls is not None
+                          else self._loader_cls)
+            loader = loader_cls(fullname, source_path)
             loader._canonical_path = key
         spec = ModuleSpec(fullname, loader, origin=source_path)
         if pkg_dir is not None:
             spec.submodule_search_locations = [pkg_dir]
         return spec
 
+    @staticmethod
+    def _first_file(candidates):
+        return next((c for c in candidates if os.path.isfile(c)), None)
+
+    def _find_in_entry(self, dir_entry, tail, groups):
+        """The first source for ``tail`` in one ``sys.path`` entry, as
+        ``(path, pkg_dir or None, get_loader_cls)``, or None."""
+        pkg_dir = os.path.join(dir_entry, tail)
+        pkg_dir_exists = None  # stat the directory at most once per entry
+        for suffixes, get_loader_cls in groups:
+            # Flat-file form: ``dir_entry/tail.clausal`` → module ``tail``.
+            # The first suffix with a file behind it wins, so ``tail.clausal``
+            # beats ``tail.seam`` in the same directory.  A flat file takes
+            # priority over a same-named package directory of its own group.
+            flat = self._first_file(
+                os.path.join(dir_entry, tail + s) for s in suffixes)
+            if flat is not None:
+                return flat, None, get_loader_cls
+            # Package form: ``dir_entry/tail/__init__.clausal`` → package
+            # ``tail``.  Reuses Python's __init__ package mechanism so
+            # submodule files (``tail/sub.clausal``) then resolve as
+            # ``fullname.sub``.  A bare directory *without* an __init__ is left
+            # to PathFinder as a PEP-420 namespace package (return nothing
+            # here), so this must not fire.
+            if pkg_dir_exists is None:
+                pkg_dir_exists = os.path.isdir(pkg_dir)
+            if pkg_dir_exists:
+                init = self._first_file(
+                    os.path.join(pkg_dir, "__init__" + s) for s in suffixes)
+                if init is not None:
+                    return init, pkg_dir, get_loader_cls
+        return None
+
     def find_spec(self, fullname, path, target=None):
         tail = fullname.rsplit(".", 1)[-1]
         search_dirs = path if path else sys.path
-        suffixes = self._suffixes()
+        groups = self._suffix_groups()
         for dir_entry in search_dirs:
-            # Flat-file form: ``dir_entry/tail.clausal`` → module ``tail``.
-            # The first suffix with a file behind it wins, so ``tail.clausal``
-            # beats ``tail.seam`` in the same directory.
-            file_candidate = next(
-                (c for c in (os.path.join(dir_entry, tail + s) for s in suffixes)
-                 if os.path.isfile(c)),
-                None,
-            )
-            is_file = file_candidate is not None
-            # Package form: ``dir_entry/tail/__init__.clausal`` → package ``tail``.
-            # Reuses Python's __init__ package mechanism so submodule files
-            # (``tail/sub.clausal``) then resolve as ``fullname.sub``.  A bare
-            # directory *without* an __init__ is left to PathFinder as a PEP-420
-            # namespace package (return nothing here), so this must not fire.
-            pkg_dir = os.path.join(dir_entry, tail)
-            init_candidate = None
-            if os.path.isdir(pkg_dir):
-                init_candidate = next(
-                    (c for c in (os.path.join(pkg_dir, "__init__" + s)
-                                 for s in suffixes)
-                     if os.path.isfile(c)),
-                    None,
-                )
-            is_pkg = init_candidate is not None
-
-            if not (is_file or is_pkg):
+            found = self._find_in_entry(dir_entry, tail, groups)
+            if found is None:
                 continue
+            source, pkg_dir, get_loader_cls = found
 
             # A10-F010 / A10-D002(a): a .clausal/.pl file (or package dir) named
             # after a standard-library module is almost always an accident.
@@ -1180,9 +1209,8 @@ class _ExtensionFinder(MetaPathFinder):
                 from clausal.templating.term_rewriting import (
                     ClausalLintWarning,
                 )
-                shadowed = file_candidate if is_file else init_candidate
                 warnings.warn(
-                    f"{shadowed!r} is named after the standard-library "
+                    f"{source!r} is named after the standard-library "
                     f"module {tail!r}; the stdlib module is used instead. "
                     f"Rename the file to avoid shadowing it.",
                     ClausalLintWarning,
@@ -1190,28 +1218,39 @@ class _ExtensionFinder(MetaPathFinder):
                 )
                 return None
 
-            # Flat file takes priority over a same-named package directory so
-            # existing flat-module resolution is unchanged.
-            if is_file:
-                return self._spec_for(fullname, file_candidate)
-
             # A non-None search-locations list is what marks the module a
             # *package*: importlib sets ``__path__`` from it, so a later
             # find_spec(fullname + ".sub", path=[pkg_dir]) resolves submodules.
-            return self._spec_for(fullname, init_candidate, pkg_dir=pkg_dir)
+            return self._spec_for(fullname, source, pkg_dir=pkg_dir,
+                                  get_loader_cls=get_loader_cls)
+        return None
 
 
 class PredicateFinder(_ExtensionFinder):
-    """Find .clausal (or its alias .seam) files and load them via PredicateLoader."""
+    """Find predicate-module source on sys.path: .clausal (or its alias .seam)
+    via PredicateLoader, and .pl via the loader ``CLAUSAL_PL_FRONTEND`` selects.
+
+    This is the one source finder on ``sys.meta_path``: a single scan walks
+    the path entries in order and asks each for .clausal/.seam, then .pl, so
+    an earlier entry's .pl module beats a later entry's .clausal one, and a
+    .clausal/.seam file beats a .pl file only within the same entry.
+    ``_extensions`` stays the .clausal group alone.
+    """
     _extensions = CLAUSAL_SUFFIXES
     _loader_cls = PredicateLoader
 
+    def _suffix_groups(self):
+        return ((self._suffixes(), lambda: self._loader_cls),
+                ((PROLOG_SUFFIX,), _pl_loader_class))
+
 
 class PrologFinder(_ExtensionFinder):
-    """Find .pl Prolog files and load them via PrologLoader.
+    """Find .pl Prolog files only, via the ``CLAUSAL_PL_FRONTEND`` loader.
 
-    Registered after PredicateFinder so that .clausal/.seam files take
-    priority over .pl files when both exist for the same module name.
+    Not installed on ``sys.meta_path``: :class:`PredicateFinder` covers .pl
+    in the same per-entry scan (a separate finder scanning the whole path
+    after it would let a later entry's .clausal beat an earlier entry's .pl).
+    Kept for callers that want a .pl-only finder.
     """
     _extensions = (PROLOG_SUFFIX,)
 
@@ -1318,7 +1357,9 @@ def _ensure_source_modules_on_path() -> None:
 
 _ensure_source_modules_on_path()
 
-sys.meta_path[:] = [PredicateFinder(), PrologFinder(), ModulesFinder(), *sys.meta_path]
+# One source finder: .clausal/.seam and .pl are resolved in a single per-entry
+# walk of sys.path (see PredicateFinder); PrologFinder is not installed.
+sys.meta_path[:] = [PredicateFinder(), ModulesFinder(), *sys.meta_path]
 
 
 # ── IPython integration ───────────────────────────────────────────────────────
