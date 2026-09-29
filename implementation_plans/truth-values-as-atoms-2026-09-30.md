@@ -200,7 +200,7 @@ returns both) and is the reason not to choose this.
 RECOMMENDATION: (a), prototyped below.  The `mint` canonicalisation is a
 separate commit so it can be dropped alone.
 
-## Prototype: three commits on the branch (4bdca566, 8d5294f6, 224c37b2)
+## Prototype: four commits on the branch (4bdca566, 8d5294f6, 224c37b2, and the to_text commit)
 
 Option (a), in one engine commit (the `mint` canonicalisation is the 5-line
 hunk in `atoms.mint`; dropping it alone leaves `atom_chars(X, [t,r,u,e])`
@@ -313,6 +313,17 @@ timing test; flake).  NEW, sorted:
 - 1 tooling artefact: `test_atom_class_deprecation.py` census -- terms.py
   bound the atoms MODULE by alias, which the census counts; the import is
   now name-level.
+
+### Box gate d47-2 (8d5294f6): the d47-1 set + 1 -- and the fourth commit
+`test_process_module.py::test_shell_accepts_an_atom_command` writes
+`shell(mint("true"))`: the shell PROGRAM `true`.  The second commit had
+put `crossing_value` under the py.* wrappers' `to_text` as well, and
+`to_text` is a TEXT position, not a value boundary -- the atom's spelling
+is what it wants.  Reverted there (commit 4); the four value boundaries
+(`to_python`, `unwrap_atom`, JSON, z3 options) keep `crossing_value`.  The
+rule the census settles on: an atom crosses to Python as its OBJECT where
+the Python side receives a VALUE, and as its SPELLING where it receives
+TEXT.
 
 ### Residuals (documented, not changed)
 - `DictTerm` keys: a Python dict, so `{true: a}` and `{1: a}` share a key.

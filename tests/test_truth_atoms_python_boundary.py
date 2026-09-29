@@ -42,10 +42,12 @@ def test_json_generation_keeps_the_booleans():
     assert json.dumps(_clausal_to_python([True, False], "generate/2")) == "[true, false]"
 
 
-def test_py_wrapper_argument_conversion_keeps_the_objects():
-    from clausal.modules.py import to_text as conv
-    for obj in TRUTH:
-        assert conv(obj) is obj
+def test_py_text_position_reads_the_spelling():
+    # ``to_text`` is a TEXT position, not a value boundary: ``shell(true)``
+    # runs the program `true`, so the atom's spelling is what it wants
+    from clausal.modules.py import to_text
+    assert to_text(True) == "true"
+    assert to_text(False) == "false"
 
 
 def test_tabling_keys_one_atom_one_variant():
