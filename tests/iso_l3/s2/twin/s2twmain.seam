@@ -1,0 +1,54 @@
+# The hand-written seam twin of s2/native/s2main.pl (slice 2 exit test): the
+# same predicates, written as a seam author writes them.  A qualified call is
+# the dotted path; double_quotes has no codes mode here, so the codes are
+# written out.
+-module(s2twmain, [shape_area/2, big/1, local_base/1, their_base/1,
+                   bumped/1, noted/1, seen_all/1, fib/2, kind/2, twice/1])
+-import_from(s2tw.shapes, [area/2, scaled/2, kinds/1])
+-import_from(s2tw.facts, [bump/1, counter/1, add_note/1, notes/1])
+-dynamic(seen/1)
+-discontiguous(kind/2)
+-table(fib/2)
+-meta_predicate(twice(0))
+-private([sq(side), rect(w, h), local, vowel, consonant, a, b, c, x, y,
+          p, q, r])
+
+shape_area(sq(2), A) <- area(sq(2), A)
+shape_area(rect(2, 3), A) <- area(rect(2, 3), A)
+
+big(Y) <- (scaled(3, Y), Y > 40)
+
+base(local),
+local_base(X) <- base(X)
+their_base(X) <- s2tw.facts.base(X)
+their_base(X) <- s2tw.shapes.kinds(X)
+
+bumped([A, B, C]) <- (bump(A), bump(B), bump(C))
+
+noted(L) <- (add_note(x), add_note(y), notes(L))
+
+seen_all(L) <- (assertz(seen(1)), assertz(seen(2)), findall(X, seen(X), L))
+
+fib(0, 0),
+fib(1, 1),
+fib(N, F) <- (N > 1, N1 == N - 1, N2 == N - 2, fib(N1, F1), fib(N2, F2),
+              F == F1 + F2)
+
+kind(a, vowel),
+twice(G) <- (call(G), call(G))
+inc(X, Y) <- (Y == X + 1)
+memb(X, [X, *_]),
+memb(X, [_, *T]) <- memb(X, T)
+kind(b, consonant),
+
+ops(X) <- ('=..'(Y, ['^^', b, c]), '=..'(X, ['^^', a, Y]))
+ops(X) <- '=..'(X, ['===>', a, b])
+ops(X) <- memb(X, [1, 2])
+ops(X) <- maplist(inc, [1, 2], X)
+ops(X) <- (memb(X, [p, q, r]), dif(X, q))
+
+dq_chars(X) <- (X is "ab")
+dq_codes(X) <- (X is [97, 98])
+dq_atom(X) <- (X is 'ab')
+dq_atom(X) <- (X is [])
+dq_back(X) <- (X is "ab")

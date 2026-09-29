@@ -1,0 +1,22 @@
+# The hand-written seam twin of s2/native/s2lib/facts.pl (slice 2 exit).
+-module(facts, [base/1, pair/2, counter/1, bump/1, add_note/1, notes/1])
+-set_prolog_flag(assert_creates_dynamic, true)
+-dynamic(counter/1)
+-dynamic(note/1)
+-private([a, b, c, d])
+
+base(10),
+base(20),
+
+pair(a, 1),
+pair(b, 2),
+
+rel(R) <- '=..'(R, ['===>', a, b])
+rel(R) <- '=..'(R, ['===>', c, d])
+
+counter(0)
+
+bump(N) <- (retract(counter(M)), N == M + 1, assertz(counter(N)))
+
+add_note(X) <- assertz(note(X))
+notes(L) <- findall(X, note(X), L)
