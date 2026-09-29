@@ -608,15 +608,43 @@ def test_a_python_written_closure_passed_on_by_a_clause(clib, via):
     assert [walk(out) for _ in call(via, _python_probe, out, module=D)] == [20]
 
 
+class _ProbeHolder:
+    def probe(self, x, status, trail, k):
+        yield from _python_probe(x, status, trail, k)
+
+
+def _closures():
+    import functools
+    return {"function": _python_probe,
+            "bound method": _ProbeHolder().probe,
+            "partial": functools.partial(_python_probe)}
+
+
+@pytest.mark.parametrize("kind", ["function", "bound method", "partial"])
 @pytest.mark.parametrize("hop", ["c1", "c2"])
 @pytest.mark.parametrize("where", ["library", "importer"])
-def test_a_python_written_closure_in_a_solve_cell_goal(clib, hop, where):
+def test_a_python_written_closure_in_a_solve_cell_goal(clib, hop, where, kind):
     from clausal.logic.solve import solve
     L, D = clib
     module = L if where == "library" else D
     out = Var()
-    assert [walk(out) for _ in solve((hop, 3, _python_probe, out), module)] \
-        == [30]
+    fn = _closures()[kind]
+    assert [walk(out) for _ in solve((hop, 3, fn, out), module)] == [30]
+
+
+def test_a_function_in_goal_position_is_not_parameterized():
+    """Only ARGUMENT positions pass a function by reference: the goal itself
+    and a conjunct of a conjunction tuple are left as written."""
+    from clausal.logic.solve import _parameterize_opaque
+    params = []
+    assert _parameterize_opaque(_python_probe, params) is _python_probe
+    conj = (_python_probe, ("q", 1))
+    assert _parameterize_opaque(conj, params) is conj
+    assert params == []
+    nested = ("p", (_python_probe, 1))
+    out = _parameterize_opaque(nested, params)
+    assert len(params) == 1 and params[0][1] is _python_probe
+    assert out[1][0] is params[0][0]
 
 
 # ── A lambda NODE built in Python and handed to a query (2026-09-25) ───────

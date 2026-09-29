@@ -610,24 +610,30 @@ def _parameterize_opaque(goal: Any, params: list) -> Any:
     conjunction tuple or list replaced by a fresh Var; ``(Var, value)`` is
     appended to *params*, which the caller binds before the search.  A
     Python function in an ARGUMENT position (``_PASSABLE_CALLABLE_TYPES``) is
-    passed the same way."""
-    def walk(t, functor_slot=False):
+    passed the same way; one in GOAL position -- the goal itself, or a
+    conjunct of a top-level conjunction tuple -- is left alone, since it is
+    the call.  Only cells, tuples and lists are walked: a value nested in a
+    dict or a set is not reached (and keeps the compiler's refusal)."""
+    def walk(t, goal_position=False):
         if isinstance(t, Var):
             return t
         if type(t) is tuple:
-            new = tuple(walk(e, i == 0) for i, e in enumerate(t))
+            if t and type(t[0]) is str:        # a cell: slot 0 is its name
+                new = (t[0],) + tuple(walk(e) for e in t[1:])
+            else:                              # a conjunction or data tuple
+                new = tuple(walk(e, goal_position) for e in t)
             return t if all(a is b for a, b in zip(new, t)) else new
         if type(t) is list:
             new = [walk(e) for e in t]
             return t if all(a is b for a, b in zip(new, t)) else new
         if _is_opaque_value(t) or (
-                not functor_slot and isinstance(t, _PASSABLE_CALLABLE_TYPES)
+                not goal_position and isinstance(t, _PASSABLE_CALLABLE_TYPES)
                 and not hasattr(t, "_get_dispatch")):
             pv = Var()
             params.append((pv, t))
             return pv
         return t
-    return walk(goal)
+    return walk(goal, True)
 
 
 def _compile_as_query(goal: Any, module: Module) -> Any:
