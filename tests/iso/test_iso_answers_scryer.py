@@ -534,10 +534,12 @@ def test_length_bool_is_a_type_error(tmp_path):
     mod = _load_seam(tmp_path, "_iso_ans_lb", "-allow_singletons\n",
                      [("", "length(L, True), R is L", "", 3, []),
                       ("", "length([1], False), R is 1", "", 3, [])])
+    # the culprit renders as the ATOM (D35 closed): Scryer prints
+    # ``type_error(integer,true)`` for ``length(L, true)``
     assert _engine_answers(mod, "r0", 3) == [
-        "error(type_error(integer,True),length/2)"]
+        "error(type_error(integer,true),length/2)"]
     assert _engine_answers(mod, "r1", 3) == [
-        "error(type_error(integer,False),length/2)"]
+        "error(type_error(integer,false),length/2)"]
 
 
 BG_DEVIATIONS = [

@@ -105,7 +105,9 @@ def test_a_fresh_copy_leaves_local_variables_unbound(lam, ans):
 def test_a_missing_parameter_is_a_lambda_parameter_error(lam, ans, name):
     [e] = ans(lam, name)
     assert e[0] == "existence_error" and e[1] == "lambda_parameter"
-    assert e[2][0] == "^" and e[2][2] == "true"
+    # D35 (2026-09-30): the lambda is DATA, so its body `true` is the
+    # truth value True (written back as `true`, as Scryer prints it).
+    assert e[2][0] == "^" and e[2][2] is True
 
 
 def test_the_plus_backslash_operator_needs_the_import(native):

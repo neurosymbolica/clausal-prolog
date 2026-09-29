@@ -576,9 +576,11 @@ class TestF004MultiStarTrailingFixed:
 
 class TestIndexedDispatchGuards:
     def test_bool_and_float_callers_share_int_bucket(self, mod):
-        # hash-equal cross-type keys (True/1.0 vs 1) stay consistent with unify
+        # hash-equal cross-type keys (1.0 vs 1) stay consistent with unify;
+        # a bool no longer shares the bucket (D35 closed: a truth value is an ATOM, keyed as
+        # the atom's ("true", 0), and it does not unify with 1 either)
         R = Var()
-        assert collect(mod, "kind4", True, R, outv=[R]) == [(mint("one"),)]
+        assert collect(mod, "kind4", True, R, outv=[R]) == []
         R = Var()
         assert collect(mod, "kind4", 1.0, R, outv=[R]) == [(mint("one"),)]
 

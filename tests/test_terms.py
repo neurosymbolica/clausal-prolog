@@ -60,11 +60,11 @@ class TestPythonLiteralsAreTerms:
 
     def test_bool_true_is_term(self):
         # nv
-        assert term_str(True) == "True"
+        assert term_str(True) == "true"     # the atom true (D35)
 
     def test_bool_false_is_term(self):
         # nv
-        assert term_str(False) == "False"
+        assert term_str(False) == "false"   # the atom false (D35)
 
     def test_none_is_term(self):
         # nv
@@ -115,11 +115,11 @@ class TestTermStr:
 
     def test_true(self):
         # nv
-        assert term_str(True) == "True"
+        assert term_str(True) == "true"     # the atom true (D35)
 
     def test_false(self):
         # nv
-        assert term_str(False) == "False"
+        assert term_str(False) == "false"   # the atom false (D35)
 
     def test_int(self):
         # nv

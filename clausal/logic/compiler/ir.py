@@ -328,6 +328,7 @@ class MetaCall(GoalOp):
     - ``freeze``:               ``{"var": Term, "inner": GoalOp}``
     - ``when``:                 ``{"cond": Term, "inner": GoalOp}``
     - ``findall|bagof|setof``:  ``{"template": Term, "inner": GoalOp, "bag": Term}``
+      (findall/4 adds ``"tail": Term``, the list the collected one ends in)
     - ``throw``:                ``{"term": Term}``
     - ``catch``:                ``{"inner": GoalOp, "catcher": Term, "recovery": GoalOp}``
     - ``catch_error``:          ``{"inner": GoalOp, "error": Term}``

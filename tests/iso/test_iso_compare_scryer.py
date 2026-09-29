@@ -514,7 +514,7 @@ def _identity_table():
         (1, 1.0, True, False),                 # the ISO case
         (1, 1, True, True),
         (1.0, 1.0, True, True),
-        (True, 1, True, False),                # bool is type-distinguished
+        (True, 1, False, False),               # ``true`` is an ATOM (D35 closed): not even structurally equal to 1
         ([1], [1.0], True, False),             # strictness survives nesting
         ([1, 2], [1, 2], True, True),
         ((1, 2), (1, 2.0), True, False),

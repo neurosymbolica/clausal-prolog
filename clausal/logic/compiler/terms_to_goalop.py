@@ -372,6 +372,14 @@ def _convert_inner(goal: Any, db: Any) -> GoalOp:
             return MetaCall(kind="findall", args={
                 "template": template, "inner": inner, "bag": bag,
             })
+        case nodes.Call(func=nodes.LoadName(name="findall"),
+                        args=[template, inner, bag, tail], kwargs=[]):
+            # findall/4 (Scryer's builtins, the difference-list form):
+            # findall/3 whose collected list ends in *tail*, not ``[]``.
+            return MetaCall(kind="findall", args={
+                "template": template, "inner": inner, "bag": bag,
+                "tail": tail,
+            })
         case nodes.Call(func=nodes.LoadName(name="bagof"),
                         args=[template, inner, bag], kwargs=[]):
             return MetaCall(kind="bagof", args={

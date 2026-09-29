@@ -189,7 +189,7 @@ def to_text(val):
     if type(val) is str:
         return val
     if _is_atom(val):
-        return _spelling(val)
+        return _spelling(val)          # a TEXT position: the atom's spelling -- ``shell(true)`` runs the program `true` (D35)
     walk = getattr(val, "__walk__", None)
     if callable(walk):
         walked = walk()

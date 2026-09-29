@@ -33,7 +33,7 @@ from decimal import Decimal
 from fractions import Fraction
 from typing import Any
 
-from clausal.logic.atoms import is_atom, mint, spelling
+from clausal.logic.atoms import is_atom, is_truth_atom, mint, spelling, truth_spelling
 from dataclasses import replace as _replace   # a rebuilt node keeps its position
 from clausal.logic.exact_arith import EVALUABLE as _EVALUABLE, NODE_EVALUABLE as _NODE_EVALUABLE
 from clausal.logic.exact_arith import cell_key_args as _cell_key_args, node_keys as _node_keys
@@ -1552,7 +1552,10 @@ def _eval_ground(expr):
     _ensure_term_imports()
     if not isinstance(expr, _Node):
         if isinstance(expr, bool):
-            return None  # bools are deliberately not FD numbers; keep pending
+            # A truth ATOM (D35) is not an FD number: Scryer's clpz answers
+            # ``1 #< true`` with ``domain_error(clpz_expression, true)``.
+            # Keeping it "pending" made the seam's ``1 < true`` FAIL silently.
+            raise _unknown_expr_leaf_error(expr)
         # An exact-number CELL (the transfer form of a Fraction or a Decimal,
         # RULED 2026-09-17) evaluates as the number it denotes: an ``rdiv``
         # cell is its Fraction and a ``decimal`` cell its Decimal, both
@@ -1734,6 +1737,17 @@ def _cells_as_nodes(l, r, strict=None):
     """``(l, r)`` with arithmetic cells rewritten (see _arith_cells_to_nodes;
     CLP(Q) and CLP(R) pass their context as *strict*)."""
     tl, tr = type(l), type(r)
+    # A truth atom (D35: True/False/Undefined ARE the atoms true/false/
+    # undefined) meets the comparators as the str of its spelling -- the
+    # shape every atom already has here -- so ``X == True`` with X bound to
+    # True holds, ``true != 1`` holds, ``1 < true`` is the same
+    # type_error(orderable, ...) as ``1 < a``, and a var beside one is the
+    # same domain_error(clpz_expression, ...) as beside any atom.  Python's
+    # ``True == 1`` never reaches the ground fallbacks.
+    if tl is bool or is_truth_atom(l):
+        l, tl = truth_spelling(l), str
+    if tr is bool or is_truth_atom(r):
+        r, tr = truth_spelling(r), str
     cl = None if tl is int or tl is float else _arith_cells_to_nodes(l, strict)
     cr = None if tr is int or tr is float else _arith_cells_to_nodes(r, strict)
     return (l if cl is None else cl), (r if cr is None else cr)

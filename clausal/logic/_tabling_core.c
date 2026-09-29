@@ -88,7 +88,13 @@ do_normalize(PyObject *term, int depth)
      * is canonical (the fast path above); non-exact int, str and bytes stay
      * raw. Keep in lock-step with _normalize_for_key_py. Decimal/Fraction are
      * intentionally left raw in BOTH (documented residual, A01-D001). */
-    if (PyBool_Check(term) || PyFloat_Check(term) || PyComplex_Check(term)) {
+    if (PyBool_Check(term)) {
+        /* A truth ATOM (D35): keyed as its spelling, the key the str
+         * spelling of the same atom already has -- one atom, one variant.
+         * Lock-step with _normalize_for_key_py. */
+        return PyUnicode_FromString(term == Py_True ? "true" : "false");
+    }
+    if (PyFloat_Check(term) || PyComplex_Check(term)) {
         return PyTuple_Pack(2, (PyObject *)Py_TYPE(term), term);
     }
     if (PyLong_Check(term) || PyUnicode_Check(term) || PyBytes_Check(term)) {

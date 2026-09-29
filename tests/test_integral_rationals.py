@@ -275,8 +275,13 @@ class TestEvalGround:
         assert got == 2 and type(got) is int
 
     def test_bool_is_not_a_number_here(self):
+        # D35 closed: a truth value is an ATOM: not a number, and no longer "pending" --
+        # Scryer's clpz answers domain_error(clpz_expression, true)
         from clausal.logic.clpfd import _eval_ground
-        assert _eval_ground(True) is None
+        from clausal.logic.exceptions import LogicException
+        with pytest.raises(LogicException) as ei:
+            _eval_ground(True)
+        assert ei.value.term[1] == ("domain_error", "clpz_expression", True)
 
     @pytest.mark.parametrize("node, want", [
         # Pow: (1/2) ** -1 is the integer 2

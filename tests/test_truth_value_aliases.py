@@ -214,22 +214,37 @@ def test_truth_values_cannot_be_declared(spelling, directive):
     assert "builtins, not predicates or atoms" in msg
 
 
-@pytest.mark.parametrize("spelling", ["true", "false", "undefined"])
-def test_alias_cannot_head_a_clause(spelling):
-    """A clause head is the other way a name gets defined.  ``true(1),`` used to
-    mint a ``true/1`` predicate that nothing could ever call, because every
-    reference to ``true`` resolves to the value instead."""
+@pytest.mark.parametrize("head", ["true <- (1 is 1)", "false <- (1 is 1)",
+                                  "undefined(1),"])
+def test_alias_cannot_head_a_clause(head):
+    """A clause head is the other way a name gets defined.  ``true`` and
+    ``false`` are reserved at arity 0 (the truth values); ``undefined`` at
+    every arity (D40, 2026-09-30, lifted true/N and false/N for N >= 1)."""
+    spelling = head.split("(")[0].split(" ")[0]
     with pytest.raises(NameError) as exc_info:
-        _load(f"_reserved_head_{spelling}", f"-private([p(X)])\n{spelling}(1),\n")
+        _load(f"_reserved_head_{spelling}", f"-private([p(X)])\n{head}\n")
     msg = str(exc_info.value)
     assert "reserved truth value name" in msg
     assert f"`{spelling}`" in msg
 
 
-@pytest.mark.parametrize("spelling", ["true", "false", "undefined"])
-def test_alias_cannot_be_a_directive_target(spelling):
+@pytest.mark.parametrize("spelling", ["true", "false"])
+def test_true_n_and_false_n_can_head_a_clause(spelling):
+    """D40 (operator ruling 2026-09-30): true/N and false/N (N >= 1) are
+    ordinary procedures, as in ISO and Scryer, and a body call reaches
+    them."""
+    mod = _load(f"_d40_head_{spelling}",
+                f"{spelling}(X) <- (X is 1)\nq(Y) <- {spelling}(Y)\n")
+    from clausal.logic.solve import call
+    from clausal.logic.variables import Var, deref
+    y = Var()
+    assert [deref(y) for _ in call("q", y, module=mod)] == [1]
+
+
+@pytest.mark.parametrize("spec", ["true/0", "false/0", "undefined/1"])
+def test_alias_cannot_be_a_directive_target(spec):
     with pytest.raises(NameError) as exc_info:
-        _load(f"_reserved_dyn_{spelling}", f"-dynamic({spelling}/1)\n")
+        _load(f"_reserved_dyn_{spec.replace('/', '_')}", f"-dynamic({spec})\n")
     assert "reserved truth value name" in str(exc_info.value)
 
 
@@ -239,7 +254,8 @@ def test_reserved_diagnostic_lists_every_offender_at_once():
     with pytest.raises(NameError) as exc_info:
         _load(
             "_reserved_many",
-            "-private([p(X)])\ntrue(1),\nfalse(2),\nundefined(3),\n",
+            "-private([p(X)])\ntrue <- (1 is 1)\nfalse <- (1 is 1)\n"
+            "undefined(3),\n",
         )
     msg = str(exc_info.value)
     assert "`true`" in msg and "`false`" in msg and "`undefined`" in msg

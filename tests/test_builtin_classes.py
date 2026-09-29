@@ -330,7 +330,7 @@ class TestMultiArity:
         # nv
         ml = get_builtin_class("maplist")
         assert "maplist" in repr(ml)
-        assert "[2, 3, 4, 5, 6, 7, 8]" in repr(ml)   # maplist/2..8
+        assert "[2, 3, 4, 5, 6, 7, 8, 9]" in repr(ml)
 
 
 # ── is_term_instance / term_field_names ───────────────────────────────────────

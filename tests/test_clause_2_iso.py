@@ -180,9 +180,10 @@ def _control_heads():
         (nodes.Not(operand=("p", X)), ("\\+", 1)),
         (nodes.Or(left=("p", X), right=("s", X)), (";", 2)),
         (nodes.IfExpr(test=("p", X), body=True, orelse=True), ("if_", 3)),
-        (True, ("true", 0)),                    # both: true/0
-        (False, ("false", 0)),
-        ("true", ("true", 0)),
+        # D35 closed: a truth value is an ATOM whose object IS the name: true/0 walks as (True, 0)
+        (True, (True, 0)),                      # both: true/0
+        (False, (False, 0)),
+        ("true", (True, 0)),
         ("!", ("!", 0)),                        # both: !/0
         ("fail", ("fail", 0)),
         (("findall", X, ("p", X), Var()), ("findall", 3)),

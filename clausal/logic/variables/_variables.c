@@ -1445,9 +1445,10 @@ do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
                 Py_DECREF(code);
                 Py_DECREF(elem_raw);
                 if (r != 1) return r;
-            } else if (PyLong_Check(elem)) {
+            } else if (PyLong_Check(elem) && !PyBool_Check(elem)) {
                 /* Ground int element — compare value, no allocation. A
-                 * bool is a PyLong subclass (True==1) and matches by value. */
+                 * bool is a truth ATOM (D35), not a code: it falls to the
+                 * delegating arm below and the truth-atom arm says no. */
                 int overflow = 0;
                 long v = PyLong_AsLongAndOverflow(elem, &overflow);
                 Py_DECREF(elem_raw);
@@ -1483,7 +1484,7 @@ do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
                 Py_DECREF(code);
                 Py_DECREF(elem_raw);
                 if (r != 1) return r;
-            } else if (PyLong_Check(elem)) {
+            } else if (PyLong_Check(elem) && !PyBool_Check(elem)) {   /* a bool is a truth ATOM (D35), not a code */
                 int overflow = 0;
                 long v = PyLong_AsLongAndOverflow(elem, &overflow);
                 Py_DECREF(elem_raw);
@@ -1553,6 +1554,29 @@ do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
     if (PyTuple_Check(t1) || PyList_Check(t1) ||
         PyTuple_Check(t2) || PyList_Check(t2))
         return 0;
+
+    /* ---- The truth atoms (D35, clausal.logic.atoms.is_truth_atom) ----
+     * True/False ARE the atoms true/false.  Python says a bool is an int
+     * (True == 1), so the RichCompare fallback below would unify ``true``
+     * with 1; ISO says an atom never unifies with a number.  A truth atom
+     * unifies with itself (the identity fast path at the top) and with the
+     * str of its spelling -- the same atom in its other spelling, as every
+     * spelling of ``[]`` is one term -- and with nothing else.  A STRING
+     * ("true" as the chars carrier, unwrapped above with t*_text set) is
+     * not the atom.  ``Undefined`` needs no arm: it is a singleton whose
+     * ``==`` is identity, and its ``__unify__`` (terms.py) answers the str
+     * spelling. */
+    if (PyBool_Check(t1) || PyBool_Check(t2)) {
+        int b1 = PyBool_Check(t1);
+        PyObject *b = b1 ? t1 : t2;
+        PyObject *o = b1 ? t2 : t1;
+        int o_text = b1 ? t2_text : t1_text;
+        if (PyBool_Check(o)) return b == o;     /* two bools: singletons, identity */
+        if (!o_text && PyUnicode_Check(o))
+            return PyUnicode_CompareWithASCIIString(
+                o, b == Py_True ? "true" : "false") == 0;
+        return 0;
+    }
 
     int cmp = PyObject_RichCompareBool(t1, t2, Py_EQ);
     if (cmp < 0) return -1;

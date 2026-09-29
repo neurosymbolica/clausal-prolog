@@ -16,6 +16,7 @@ import ast
 from collections import defaultdict
 from typing import Any, Callable
 
+from clausal.logic.atoms import is_truth_atom, truth_spelling
 from clausal.logic.generated_names import bare_name_of
 from clausal.logic.variables import Var, is_var, deref  # noqa: F401
 from clausal.logic.trampoline import DONE, StepGenerator  # noqa: F401
@@ -46,7 +47,7 @@ _INDEX_VAR = object()  # sentinel: clause has variable/non-indexable first arg
 # an atom is a cell now and keys ``(spelling, 0)`` through the cell branch.
 # The perf consequence is deliberate pressure: a fact table keyed by string
 # first arguments loses first-argument indexing; write atoms as atoms.
-_INDEXABLE_TYPES = (int, float, bytes, bool, type(None))
+_INDEXABLE_TYPES = (int, float, bytes, type(None))   # bool: a truth ATOM, keyed by spelling below
 _INDEX_THRESHOLD = 4  # minimum clauses before indexing kicks in
 _JOINT_COVERAGE_THRESHOLD = 0.8  # min fraction of clauses needing joint key for 9b
 
@@ -118,6 +119,8 @@ def _arg_to_index_key(arg: Any, env: "dict | None" = None) -> Any:
         return _INDEX_VAR
     if _t is str:
         return (arg, 0)                # STAGE 2: a str is the ATOM -- name/0, the cell key's shape
+    if is_truth_atom(arg):
+        return (truth_spelling(arg), 0)   # D35: true/false/undefined are ATOMS -- the atom's bucket, never the int's (True hashes as 1)
     if isinstance(arg, _INDEXABLE_TYPES):
         return arg
     if type(arg) is tuple and arg:
@@ -266,7 +269,7 @@ def _is_deeply_ground_walk(val: Any, _budget: list[int]) -> bool:
     # even reaching the is_var check.  Measured: this fast path alone
     # brings ('point', 1, 2)'s key cost back down near its pre-completeness-
     # fix baseline (see task4-bench.txt, PART C).
-    if isinstance(val, _INDEXABLE_TYPES):
+    if isinstance(val, _INDEXABLE_TYPES):   # a bool IS an int to isinstance: ground, as before
         return True
     if is_var(val):
         return False
@@ -339,6 +342,8 @@ def _runtime_arg_key(a: Any, deep_gate: bool = True) -> Any:
         return _INDEX_VAR
     if t is str:
         return (a, 0)                  # STAGE 2: a str is the ATOM
+    if is_truth_atom(a):
+        return (truth_spelling(a), 0)  # D35: the atom's bucket (see _arg_to_index_key)
     if isinstance(a, _INDEXABLE_TYPES):
         return a
     if type(a) is tuple and a:
@@ -407,6 +412,8 @@ def _static_call_key(arg_expr: ast.expr) -> Any | None:
         # would name a bucket no head ever built.
         if t is str:
             return (value, 0)          # STAGE 2: a str constant is the ATOM -- the bucket a head ("foo", 0) built
+        if t is bool:
+            return (truth_spelling(value), 0)   # D35: ``true``/``false`` are ATOMS -- the atom's bucket
         return value
     if isinstance(arg_expr, ast.Tuple) and arg_expr.elts \
             and all(isinstance(e, ast.Constant) for e in arg_expr.elts) \

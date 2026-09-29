@@ -2,11 +2,13 @@
 
 Plan: ``implementation_plans/native-iso-reader-step2-2026-09-29.md`` (D1 = (c)
 hybrid: clauses are lowered HERE to the transformed AST; directives go through
-the seam's own handlers, ``iso_l3_directives``).  Scope today is slices 0-3,
-5 and 6: facts, rules, every ISO term shape, the control constructs ``,``
+the seam's own handlers, ``iso_l3_directives``).  Scope today is slices 0-6:
+facts, rules, every ISO term shape, the control constructs ``,``
 ``;`` ``\\+`` ``true`` ``fail``/``false`` and ``call/N``, module-qualified
 goals ``m:G``, clpq's goal ``{C}`` (lowered to the seam's
-``clpq.rational(C)``), ``constant(Name)`` (folded at compile time), the
+``clpq.rational(C)``), library(reif)'s ``if_/3`` (slice 4, see ``_if``), the
+data-position truth values (``true``/``false``/``undefined`` ARE
+``True``/``False``/``Undefined``, D35), ``constant(Name)`` (folded at compile time), the
 directives of ``iso_l3_directives`` (module/2, use_module/1,2, dynamic,
 discontiguous, table, meta_predicate, set_prolog_flag, op, constructors, and
 the constants/units family), and the auto-declaration of every atom and data
@@ -106,6 +108,7 @@ _META_GOAL_ARGS: dict[tuple[str, int], tuple[int, ...]] = {
     ("freeze", 2): (1,),
     ("when", 2): (1,),
     ("findall", 3): (1,),
+    ("findall", 4): (1,),
     ("bagof", 3): (1,),
     ("setof", 3): (1,),
     ("catch", 3): (0, 2),
@@ -125,6 +128,10 @@ _ITERATED_GOAL = {("bagof", 3), ("setof", 3)}
 #: them, and the compiler's codegen raises on them (``'True'``/``'False'`` are
 #: also the seam's reserved truth values).  Refused with the ``.pl`` line.
 _UNREPRESENTABLE_NAMES = ("True", "False", "None")
+
+#: The truth values' ISO spellings, folded in a DATA position (D35):
+#: ``Clausal Prolog``'s ``true``/``false``/``undefined`` ARE the values.
+_TRUTH_DATA = frozenset({"true", "false", "undefined"})
 
 #: Python names a lowered program must never bind or read by accident.
 _DOLLAR = "$"
@@ -236,6 +243,7 @@ class _ClauseLowering:
         self._ctx = ctx
         self._bound: set[int] = set()
         self.occurrences: dict[str, int] = {}
+        self._if_n = 0          # if_/3 truth-value variables minted so far
 
     # ── variables ──
 
@@ -269,7 +277,11 @@ class _ClauseLowering:
             return _const(t)
         if type(t) is str:
             # ISO/Scryer: '[]' is the empty list, as the seam compiles it.
-            return ast.List(elts=[], ctx=ast.Load()) if t == "[]" else _const(t)
+            if t == "[]":
+                return ast.List(elts=[], ctx=ast.Load())
+            if t in _TRUTH_DATA:
+                return self._truth_value(t, sp)
+            return _const(t)
         if type(t) is list:
             spans = _list_spans(sp, len(t))
             return ast.List(elts=[self.term(x, s) for x, s in zip(t, spans)],
@@ -289,6 +301,19 @@ class _ClauseLowering:
         if isinstance(t, _embedded_class()):
             return t.expr               # iso_l3_directives' prepared cell
         raise LoweringRefused(f"unsupported term {t!r}", _top_span(sp))
+
+    def _truth_value(self, t: str, sp) -> ast.expr:
+        """D35 (operator ruling 2026-09-30): in a DATA position ``true``,
+        ``false`` and ``undefined`` are the truth values themselves --
+        Python ``True``/``False`` and the engine's ``Undefined`` -- exactly
+        as the seam folds them (``term_rewriting._TRUTH_ALIASES``), so a
+        reified ``T`` bound by ``memberd_t/3`` unifies with a written
+        ``true``.  ``undefined`` is the seam's ``$LoadName('Undefined')``,
+        the injected runtime binding."""
+        if t == "undefined":
+            return _node("LoadName", name=_const("Undefined"),
+                         position=_pos_expr(self._pos.of(_top_span(sp))))
+        return _const(t == "true")
 
     # ── constants (D8): the compile-time fold ──
 
@@ -435,6 +460,9 @@ class _ClauseLowering:
             if (name == "{}" and len(args) == 1 and self._ctx is not None
                     and self._ctx.clpq):
                 return self._clpq(args[0], spans[0], sp, pos)
+            if (name == "if_" and len(args) == 3 and self._ctx is not None
+                    and self._ctx.reif):
+                return self._if(args, spans, sp, pos)
             self._check_goal_name(name, sp)
             if name == "constant_number_units" and len(args) == 3:
                 return self._constant_units_goal(args, spans, sp, pos)
@@ -581,6 +609,69 @@ class _ClauseLowering:
         raise LoweringRefused(
             f"{{}}/1 (clpq): {e!r} is not a linear arithmetic expression "
             f"(numbers, variables, + - * /)", _top_span(sp))
+
+    # ── library(reif)'s if_/3 ──
+
+    def _if(self, args: tuple, spans: list, sp, pos) -> ast.expr:
+        """``if_(If_1, Then_0, Else_0)`` with Scryer's library(reif) meaning:
+        ``call(If_1, T)``, then Then_0 when T is true, Else_0 when false
+        (instantiation_error unbound, type_error(boolean, T) otherwise).
+
+        * ``X = Y`` -> the seam's reified branch, ``$IfExpr`` over
+          ``$Unify`` (reif's (=)/3: true, X = Y first, then false,
+          dif(X, Y)); ``dif(X, Y)`` -> the same with the arms swapped
+          (reif's dif/3 is =/3 negated, false first).
+        * ``(A, B)`` / ``(A ; B)`` -> reif's (',')/3 and (;)/3 unfolded:
+          ``if_(A, if_(B, Then, Else), Else)`` and
+          ``if_(A, Then, if_(B, Then, Else))``.
+        * anything else (a closure, a variable) ->
+          ``call(If_1, T), must_be(boolean, T), $IfExpr(T = true, ...)``.
+
+        The arms are lowered in the order the built AST evaluates them, so a
+        variable's first occurrence (the walrus) is the one evaluated
+        first."""
+        c, th, el = args
+        c_sp, th_sp, el_sp = spans
+        top = _top_span(sp)
+        ppos = _pos_expr(pos)
+        if type(c) is tuple and len(c) == 3 and c[0] in (",", ";"):
+            a_sp, b_sp = _arg_spans(c_sp, 2)
+            if c[0] == ",":
+                inner = ("if_", c[2], th, el), (top, b_sp, th_sp, el_sp)
+                return self._if((c[1], inner[0], el),
+                                [a_sp, inner[1], el_sp], sp, pos)
+            inner = ("if_", c[2], th, el), (top, b_sp, th_sp, el_sp)
+            return self._if((c[1], th, inner[0]),
+                            [a_sp, th_sp, inner[1]], sp, pos)
+        if type(c) is tuple and len(c) == 3 and c[0] in ("=", "dif"):
+            l_sp, r_sp = _arg_spans(c_sp, 2)
+            test = _node("Unify", left=self.term(c[1], l_sp),
+                         right=self.term(c[2], r_sp),
+                         position=_pos_expr(self._pos.of(_top_span(c_sp))))
+            if c[0] == "=":
+                body, orelse = self.goal(th, th_sp), self.goal(el, el_sp)
+            else:
+                body = self.goal(el, el_sp)
+                orelse = self.goal(th, th_sp)
+            return _node("IfExpr", test=test, body=body, orelse=orelse,
+                         position=ppos)
+        self._refuse_control_in(c, c_sp)
+        self._if_n += 1
+        t_ident = f"{_DOLLAR}if_T{self._if_n}"
+        t_first = ast.NamedExpr(target=ast.Name(id=t_ident, ctx=ast.Store()),
+                                value=_node("Var"))
+        call_c = self._call("call", [self.term(c, c_sp), t_first], pos, pos)
+        check = self._call("must_be", [_const("boolean"), _name(t_ident)],
+                           pos, pos)
+        branch = _node("IfExpr",
+                       test=_node("Unify", left=_name(t_ident),
+                                  right=_const(True), position=ppos),
+                       body=self.goal(th, th_sp), orelse=self.goal(el, el_sp),
+                       position=ppos)
+        return _node("TupleLiteral",
+                     elements=ast.List(elts=[call_c, check, branch],
+                                       ctx=ast.Load()),
+                     position=ppos)
 
     def _iterated_goal(self, g: Any, sp) -> ast.expr:
         """``V1^V2^G`` in bagof/setof -> ``$BitXor(left=V1, right=...)``, the
@@ -856,6 +947,7 @@ def lower_items(items, *, strict: bool = True, source: "str | None" = None,
                    f"`?-` is no clause): {it.term!r}", span)
             continue
         defined.add(_head_indicator(it.term))
+        uses.reif = ctx.reif
         uses.clause(it.term)
         if directives_only:
             # The clause is not lowered, but the double_quotes modes its
@@ -887,6 +979,7 @@ def lower_items(items, *, strict: bool = True, source: "str | None" = None,
         body.extend(ctx.auto_declare(uses))
     except DirectiveRefused as e:
         refuse(str(e), e.span)
+    stats["transition_constructs"] = dict(uses.transition)
     stats["auto_declared"] = {
         "atoms": len(ctx.auto_atoms),
         "functors": len({n for n, _a in ctx.auto_functors}),
@@ -1075,6 +1168,20 @@ def log_auto_declared(ctx, filename: str) -> None:
         log.debug("%s: auto-declared atoms: %s; data functors: %s", filename,
                   ", ".join(atoms) or "-",
                   ", ".join(f"{n}/{a}" for n, a in functors) or "-")
+
+
+def log_transition_constructs(stats: dict, filename: str) -> None:
+    """D13: ONE info line per load that has any transition construct -- the
+    goal-position sites of each (``l3_stats["transition_constructs"]``
+    holds the same counts, every key present, for a gate to read)."""
+    counts = stats.get("transition_constructs") or {}
+    total = sum(counts.values())
+    if not total:
+        return
+    import logging  # noqa: PLC0415
+    logging.getLogger(LOGGER_NAME).info(
+        "%s: transition constructs: %d sites (%s)", filename, total,
+        ", ".join(f"{k}: {n}" for k, n in counts.items() if n))
 
 
 def warn_singletons(singletons, source: str, filename: str) -> None:

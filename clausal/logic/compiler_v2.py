@@ -885,6 +885,13 @@ _RESERVED_TRUTH_NAMES = {
 }
 
 
+#: D40 (operator ruling 2026-09-30): true/N and false/N for N >= 1 are
+#: ordinary procedures (ISO; Scryer loads ``true(X) :- X = 1.``).  Only the
+#: lowercase ISO spellings: ``undefined`` and the TitleCase values stay
+#: reserved at every arity.
+_DEFINABLE_WITH_ARGS = frozenset({"true", "false"})
+
+
 def _reject_reserved_truth_names(
     module_items: list, predicate_nodes: list, module_name: str
 ) -> None:
@@ -916,7 +923,8 @@ def _reject_reserved_truth_names(
 
     for pred_node in predicate_nodes:
         functor, arity = head_key(pred_node.head)
-        note(functor, f"clause head {functor}/{arity}")
+        if arity == 0 or functor not in _DEFINABLE_WITH_ARGS:
+            note(functor, f"clause head {functor}/{arity}")
 
     for item in module_items:
         if isinstance(item, (ModuleDeclItem, PrivateDeclItem)):
@@ -930,7 +938,8 @@ def _reject_reserved_truth_names(
                     note(name, f"{kind} declaration")
         elif isinstance(item, DirectiveItem) and item.name != "set_prolog_flag":
             for functor, arity, *_ in item.specs:
-                note(functor, f"-{item.name}({functor}/{arity})")
+                if arity == 0 or functor not in _DEFINABLE_WITH_ARGS:
+                    note(functor, f"-{item.name}({functor}/{arity})")
 
     if not offenders:
         return

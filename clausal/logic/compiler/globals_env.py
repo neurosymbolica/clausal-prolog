@@ -276,6 +276,13 @@ def _is_list_or_partial_list(term) -> bool:
     return False
 
 
+def _findall_tail(results: list, tail):
+    """findall/4's answer list: the collected *results* followed by *tail*
+    (a partial list when *tail* is unbound)."""
+    from clausal.logic.builtins.lists import _partial  # noqa: PLC0415
+    return _partial(results, tail)
+
+
 def _check_bag(bag, who: str) -> None:
     """``type_error(list, Bag)`` for a findall/bagof/setof result that is
     neither a list nor a partial list (ISO 13211-1 8.10.1.3 d, 8.10.2.3 c,

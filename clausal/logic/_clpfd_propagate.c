@@ -1040,12 +1040,14 @@ ne_propagate(BinaryConstraintObject *self, PyObject *trail, PyObject *queue)
          * (A06-F001).  Plain ints skip the eval. */
         PyObject *lv = lhs, *rv = rhs;
         int owns_lv = 0, owns_rv = 0;
-        if (!PyLong_Check(lhs)) {
+        /* A bool is a truth ATOM (D35), not an int: it goes through
+         * _eval_ground like any other non-number leaf, which raises. */
+        if (!PyLong_Check(lhs) || PyBool_Check(lhs)) {
             lv = PyObject_CallOneArg(fn_eval_ground, lhs);
             if (!lv) goto error;
             owns_lv = 1;
         }
-        if (!PyLong_Check(rhs)) {
+        if (!PyLong_Check(rhs) || PyBool_Check(rhs)) {
             rv = PyObject_CallOneArg(fn_eval_ground, rhs);
             if (!rv) { if (owns_lv) Py_DECREF(lv); goto error; }
             owns_rv = 1;
