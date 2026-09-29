@@ -362,7 +362,8 @@ class DirectiveContext:
             from clausal.pythonic_ast.nodes import DoubleQuotesMode  # noqa: PLC0415
             items.append(DoubleQuotesMode(
                 mode=self._dq_engine_mode, explicit=True,
-                modes_used=tuple(sorted(self.dq_modes_used))))
+                modes_used=tuple(sorted(self.dq_modes_used)),
+                flag=self.dq_mode))
         return items
 
     def alias(self, name: str, dotted: str) -> None:

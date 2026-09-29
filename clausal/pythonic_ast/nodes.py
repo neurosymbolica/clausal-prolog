@@ -1260,6 +1260,10 @@ class DoubleQuotesMode(Node):
     mode: str = "atom"
     explicit: bool = False
     modes_used: tuple = ()
+    #: the double_quotes FLAG value to report when it is not ``mode``: the
+    #: native ``.pl`` front end lowers a ``codes`` literal itself, so the
+    #: engine mode stays chars/atom while the flag in force is ``codes``
+    flag: str = ""
 
 
 @node_class

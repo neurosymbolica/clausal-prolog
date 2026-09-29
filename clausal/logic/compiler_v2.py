@@ -2236,7 +2236,8 @@ def _record_double_quotes_mode(module_items: list, db) -> None:
             # at the end of the file.
             if item.explicit:
                 from clausal.logic.builtins.flags import apply_setting  # noqa: PLC0415
-                apply_setting(db, "double_quotes", item.mode)
+                apply_setting(db, "double_quotes",
+                              getattr(item, "flag", "") or item.mode)
             return
 
 
