@@ -104,6 +104,15 @@ def _is_dcg_control_body(rule_val) -> bool:
             and len(rule_val) == (2 if functor == "\\+" else 3))
 
 
+def _is_dcg_terminal_body(rule_val) -> bool:
+    """True for a DCG body that is its own TERMINALS: a list (``[]``
+    included), a string (the chars carrier) or a code list.  ISO DCG and
+    Scryer's phrase/2,3 accept any grammar body, so ``phrase([a], L)`` is
+    ``L = [a]`` and ``phrase("ab", L)`` is ``L = [a, b]``; both used to fail
+    silently here."""
+    return isinstance(rule_val, (list, bytes)) or is_chars(rule_val)
+
+
 def _dcg_body_goal(body, s0, s):
     """The GOAL a DCG body term means between the states *s0* and *s* -- the
     ISO translation (7.14.2), built at run time as a term ``call/1`` runs:
@@ -169,8 +178,10 @@ def _resolve_nonterminal(db, rule_val, extra_args, context):
     tree: call/N RUNS a control-construct cell as a body (operator ruling
     2026-09-25) and raises for a string, ``[]`` and any non-callable, but
     ``phrase((a, b), L)`` never named a nonterminal here, so control
-    functors -- and strings and lists, which are DCG terminals -- are turned
-    away before the resolver sees them and keep failing.  A module-qualified
+    functors are turned away before the resolver sees them and keep failing.
+    A list or string body is its TERMINALS and is translated like a control
+    body (``_is_dcg_terminal_body``): ``phrase([a], L)`` gives ``L = [a]``,
+    as in Scryer -- it used to fail silently.  A module-qualified
     nonterminal ``M:NT`` (what a ``-meta_predicate`` argument arrives as,
     operator ruling 2026-09-25) resolves NT in M.  The one non-cell that
     RAISES is a non-callable term (a number, tuple data ...):
@@ -190,7 +201,8 @@ def _resolve_nonterminal(db, rule_val, extra_args, context):
     ``existence_error(procedure, nosuch/2)`` -- N//A is N/(A+2) -- as Scryer.
     """
     from clausal.logic.builtins.higher_order import _resolve_named_goal  # noqa: PLC0415
-    if len(extra_args) == 2 and _is_dcg_control_body(rule_val):
+    if len(extra_args) == 2 and (_is_dcg_control_body(rule_val)
+                                 or _is_dcg_terminal_body(rule_val)):
         # A control-construct BODY -- ``phrase((a, b), L)`` -- is translated,
         # not named: it used to be refused (``(",", ...)`` failed; a
         # conjunction tuple reached the resolver as a call of its first
