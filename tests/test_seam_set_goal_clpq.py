@@ -93,80 +93,89 @@ def _scryer(tmp_path, program: str, goal: str, outs: str) -> list:
         if inner.startswith("(") else [(value(v),) for v in inner.split(",")]
 
 
-# ── the cases: (name, set body, long body, head, call args, n outs, expected,
-#    scryer clause, scryer goal, scryer out template) ──────────────────────
+# ── the cases: (name, set body, long body, head, call arguments -- ``None``
+#    is a fresh output variable --, expected answers (the outputs, walked),
+#    scryer clause, scryer goal, scryer output template) ─────────────────────
 CASES = [
     ("forward",
      "two(N, Q) <- {Q == N * 2}",
      "two(N, Q) <- clpq.rational(Q == N * 2)",
-     "two(N, Q)", (3,), 1, [(6,)],
+     "two(N, Q)", (3, None), [(6,)],
      "two(N, Q) :- {Q = N * 2}.", "two(3, Q)", "Q"),
     ("backward",
      "two(N, Q) <- {Q == N * 2}",
      "two(N, Q) <- clpq.rational(Q == N * 2)",
-     "two(N, Q)", (), 2, None,   # Q is bound below, N solved
+     "two(N, Q)", (None, 8), [(4,)],
      "two(N, Q) :- {Q = N * 2}.", "two(N, 8)", "N"),
     ("rational",
      "half(X) <- {2 * X == 3}",
      "half(X) <- clpq.rational(2 * X == 3)",
-     "half(X)", (), 1, [(Fraction(3, 2),)],
+     "half(X)", (None,), [(Fraction(3, 2),)],
      "half(X) :- {2 * X = 3}.", "half(X)", "X"),
     ("chained",
      "within(X) <- ({0 <= X <= 10}, X == 7)",
      "within(X) <- (clpq.rational(0 <= X <= 10), X == 7)",
-     "within(X)", (), 1, [(7,)],
+     "within(X)", (None,), [(7,)],
      "within(X) :- {0 =< X, X =< 10}, X = 7.", "within(X)", "X"),
     ("chained_out_of_range",
      "within(X) <- ({0 <= X <= 10}, X == 11)",
      "within(X) <- (clpq.rational(0 <= X <= 10), X == 11)",
-     "within(X)", (), 1, [],
+     "within(X)", (None,), [],
      "within(X) :- {0 =< X, X =< 10}, X = 11.", "within(X)", "X"),
     ("two_constraints",
      "box(X, Y) <- {X + Y == 1, X - Y == 1/2}",
      "box(X, Y) <- clpq.rational((X + Y == 1, X - Y == 1/2))",
-     "box(X, Y)", (), 2, [(Fraction(3, 4), Fraction(1, 4))],
+     "box(X, Y)", (None, None), [(Fraction(3, 4), Fraction(1, 4))],
      "box(X, Y) :- {X + Y = 1, X - Y = 1/2}.", "box(X, Y)", "(X, Y)"),
     ("inequality_then_binding",
      "above(X) <- ({X > 1}, X == 2)",
      "above(X) <- (clpq.rational(X > 1), X == 2)",
-     "above(X)", (), 1, [(2,)],
+     "above(X)", (None,), [(2,)],
      "above(X) :- {X > 1}, X = 2.", "above(X)", "X"),
     ("inequality_then_refused_binding",
      "above(X) <- ({X > 1}, X == 1)",
      "above(X) <- (clpq.rational(X > 1), X == 1)",
-     "above(X)", (), 1, [],
+     "above(X)", (None,), [],
      "above(X) :- {X > 1}, X = 1.", "above(X)", "X"),
     ("both_unbound_then_propagation",
      "both(Q) <- ({Q == N * 2}, N == 4)",
      "both(Q) <- (clpq.rational(Q == N * 2), N == 4)",
-     "both(Q)", (), 1, [(8,)],
+     "both(Q)", (None,), [(8,)],
      "both(Q) :- {Q = N * 2}, N = 4.", "both(Q)", "Q"),
 ]
+_IDS = [c[0] for c in CASES]
 
 
-def _run(tmp_path, body, head, args, n):
+def _run(tmp_path, body, head, call_args):
+    """Load ``body`` and call ``head``'s predicate with ``call_args``, a
+    ``None`` being a fresh output variable; answers are the outputs, walked."""
     mod = _module(tmp_path, body, [head])
     pred = head.split("(")[0]
-    if n == 2 and args == () and "two" in head:      # backward: Q bound
-        got = [tuple(walk(o) for o in (N,))
-               for N in [Var()] for _ in call(pred, N, 8, module=mod)]
-        return got
-    return _answers(mod, pred, *args, n=n)
+    args = [Var() if a is None else a for a in call_args]
+    outs = [a for a, given in zip(args, call_args) if given is None]
+    return [tuple(walk(o) for o in outs) for _ in call(pred, *args, module=mod)]
 
 
-@pytest.mark.parametrize("case", CASES, ids=[c[0] for c in CASES])
-def test_set_goal_answers_equal_its_twin_and_scryer(tmp_path, case):
-    (_, set_body, long_body, head, args, n, expected,
-     pl_clause, pl_goal, pl_outs) = case
-    got_set = _run(tmp_path, set_body, head, args, n)
-    got_long = _run(tmp_path, long_body, head, args, n)
-    if expected is None:                        # backward
-        expected = [(4,)]
+@pytest.mark.parametrize("case", CASES, ids=_IDS)
+def test_set_goal_answers_equal_its_twin(tmp_path, case):
+    """The set spelling answers exactly as its ``clpq.rational`` twin, in
+    the engine's presentation (an int, or a Fraction when non-integral)."""
+    _, set_body, long_body, head, call_args, expected, *_ = case
+    got_set = _run(tmp_path, set_body, head, call_args)
+    got_long = _run(tmp_path, long_body, head, call_args)
     assert got_set == expected, got_set
     assert got_set == got_long, (got_set, got_long)
-    for row in got_set:                         # the ENGINE's presentation
+    for row in got_set:
         for v in row:
             assert type(v) in (int, Fraction), (v, type(v))
+
+
+@pytest.mark.parametrize("case", CASES, ids=_IDS)
+def test_scryers_clpq_braces_answer_the_same(tmp_path, case):
+    """The oracle: Scryer's ``{C}`` (library(clpq)) gives the answers the
+    engine's table expects.  Needs the clpq build at ``SCRYER``; set
+    ``CLAUSAL_ISO_ALLOW_NO_SCRYER`` to skip instead of fail without it."""
+    _, _, _, _, _, expected, pl_clause, pl_goal, pl_outs = case
     assert _scryer(tmp_path, pl_clause, pl_goal, pl_outs) == expected
 
 
@@ -273,11 +282,12 @@ def test_a_non_constraint_element_is_a_load_error_naming_it(tmp_path, body,
 
 
 def test_an_empty_brace_pair_in_goal_position_is_a_dict_not_a_set(tmp_path):
-    from clausal.logic.compiler.terms_to_goalop import SetGoalElementError
-    with pytest.raises(Exception) as ei:
+    """``{}`` is Python's empty dict; in goal position it is refused as the
+    dict it is (the compiler's unsupported-goal-shape error names
+    ``DictTerm``), never read as an empty constraint set."""
+    with pytest.raises(NotImplementedError) as ei:
         _module(tmp_path, "e() <- {}", ["e()"])
-    assert not isinstance(ei.value, SetGoalElementError)
-    assert "CLP(Q)" not in str(ei.value)
+    assert "DictTerm" in str(ei.value) and "CLP(Q)" not in str(ei.value)
 
 
 def test_a_set_in_data_position_is_still_a_set(tmp_path):
