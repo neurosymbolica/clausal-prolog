@@ -45,6 +45,8 @@ from __future__ import annotations
 import sys
 import types as _types
 from dataclasses import fields as _dc_fields, is_dataclass as _is_dataclass
+from decimal import Decimal
+from fractions import Fraction
 from typing import Any, Iterator
 
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
@@ -70,7 +72,7 @@ from clausal.logic.cells import (
     DECLARED_ATOMS_KEY,
     IMPORT_FROM_KEY,
 )
-from clausal.terms import Undefined
+from clausal.terms import Quantity, Undefined
 from clausal.terms import (
     Call as _ReifiedCall,
     LoadName as _ReifiedLoadName,
@@ -563,8 +565,20 @@ _KNOWN_LEAF_TYPES = (int, float, complex, bool, str, bytes, type(None))
 def _is_opaque_value(v: Any) -> bool:
     """True for a Python object the query compiler has no lowering for and
     that is no goal, predicate or term either: a plain instance of a class
-    outside Clausal and the numeric/date modules, not callable.  Such a value
-    can only be passed through by reference."""
+    outside Clausal and the date module, not callable.  Such a value can only
+    be passed through by reference.
+
+    A NUMBER with no literal lowering -- a ``Decimal``, a ``Fraction`` or a
+    ``Quantity`` -- is passed the same way.  Each is a number (rdiv/decimal
+    ruling, 2026-09-17; a quantity is a number with units), immutable, and
+    unifies by value, but ``term_to_ast_expr`` has no literal lowering for it
+    (``ast.Constant`` cannot hold one), so ``solve(("p", Decimal("7.5"),
+    X))`` raised ``NotImplementedError: unsupported term type Decimal``
+    instead of answering.  A ``datetime`` stays refused: the ruling of
+    2026-09-15 makes a date the TERM ``('date', Y, M, D)``, and the refusal
+    names it."""
+    if isinstance(v, (Decimal, Fraction, Quantity)):
+        return True
     if isinstance(v, Var) or type(v) in _KNOWN_LEAF_TYPES:
         return False
     if isinstance(v, (list, tuple, dict, set, frozenset, type,
@@ -575,8 +589,7 @@ def _is_opaque_value(v: Any) -> bool:
     if hasattr(v, "_get_dispatch") or hasattr(v, "__unify__"):
         return False
     module_name = getattr(type(v), "__module__", "") or ""
-    return module_name.split(".")[0] not in (
-        "clausal", "datetime", "decimal", "fractions")
+    return module_name.split(".")[0] not in ("clausal", "datetime")
 
 
 def _parameterize_opaque(goal: Any, params: list) -> Any:
