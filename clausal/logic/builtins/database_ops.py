@@ -14,7 +14,7 @@ from clausal.logic.exceptions import _error as _error_term
 from clausal.logic.atoms import mint
 
 from clausal.logic.builtins._registry import (
-    _db_builtin, structural_unify,
+    _db_builtin,
 )
 
 
@@ -133,8 +133,8 @@ def neck_parts(term_val: Any) -> "tuple[Any, Any] | None":
 
 
 class _OpenBody:
-    """``retract((Head :- Body))`` with Body unbound: retract the fact Head
-    and bind Body to ``true``."""
+    """``retract((Head :- Body))``: the clause pattern, Body True for the
+    goal ``true``."""
     __slots__ = ("head", "body")
 
     def __init__(self, head, body):
@@ -159,13 +159,11 @@ def _unneck_clause(term_val: Any, context: str, action: str) -> Any:
         raise LogicException(instantiation_error(context))
     _refuse_non_callable_clause(head, context)
     if is_true_body(body):
-        return head
+        return _OpenBody(head, True) if action == "retract" else head
     if action == "retract":
-        if is_var(body):
-            # ``retract((H :- B))``: B is ``true`` for a fact (ISO, Scryer);
-            # the caller binds it
-            return _OpenBody(head, body)
-        return None          # no runtime clause has a rule body to match
+        if not is_var(body):
+            _refuse_non_callable_clause(body, context)
+        return _OpenBody(head, body)
     if is_var(body):
         raise LogicException(instantiation_error(context))
     _refuse_non_callable_clause(body, context)
@@ -738,16 +736,19 @@ def _retract_factory(db):
             # ISO 8.9.3.3 a (Scryer too): an unbound clause is an
             # instantiation error; it used to fail silently.
             raise LogicException(instantiation_error("retract/1"))
-        # ``Head :- true`` is the fact Head (see _unneck_clause)
+        # ISO 8.9.3: retract(Head) is retract((Head :- true)) -- it removes
+        # a FACT only -- and retract((Head :- Body)) matches the clause's
+        # body too (see _unneck_clause).
         term_val = _unneck_clause(term_val, "retract/1", "retract")
-        if term_val is None:
-            return
-        open_body = None
+        body_pattern = True
         if type(term_val) is _OpenBody:
-            term_val, open_body = term_val.head, term_val.body
+            from clausal.logic.builtins.clause_ops import (  # noqa: PLC0415
+                engine_body_pattern)
+            term_val, body_pattern = (term_val.head,
+                                      engine_body_pattern(term_val.body))
         # A CELL pattern goes through the SAME gate as the assert doors (P3-3
         # Task 5, R11) and comes back normalized to the shape the clause list
-        # actually holds -- without that, ``_first_match_index`` would compare
+        # actually holds -- without that, ``_first_match`` would compare
         # a tuple against a class-term head and never match, so a legal
         # ``retract(("p", 1))`` would silently fail instead of retracting.
         term_val = _check_cell_head_permission(term_val, "retract/1", db,
@@ -768,9 +769,10 @@ def _retract_factory(db):
         # the compiled dispatch, abolish the tabled answers and stamp a write
         # that never happened.  ``Database.retract`` has always pre-checked
         # for a match and opened no transaction; both retract doors agree.
-        index = _first_match_index(term_val, clause_list)
-        if index < 0:
+        found = _first_match(term_val, body_pattern, clause_list, home)
+        if found is None:
             return
+        index, c_head, c_body = found
         # THROUGH THE GATE (P3-3 Task 3).  The lock check that used to stand
         # here is the gate's policy now, and its exit is what invalidates the
         # dispatch when the last clause goes (the recompile below is skipped
@@ -797,52 +799,44 @@ def _retract_factory(db):
         # solution (ISO/SWI "retract by pattern"). The clause is already
         # removed, so binding its template vars is safe; normal
         # backtracking undoes these bindings via the engine trail.
-        from clausal.terms import Unify as _Unify  # avoid top-level cycle
-        structural_unify(term_val, removed.head, trail)
-        for goal in removed.body:
-            if isinstance(goal, _Unify):
-                structural_unify(deref(goal.left), deref(goal.right), trail)
-        if open_body is not None:
-            unify(open_body, True, trail)
+        from clausal.logic.builtins.clause_ops import _as_cell  # noqa: PLC0415
+        unify(_as_cell(term_val), c_head, trail)
+        from clausal.logic.builtins.clause_ops import unify_body  # noqa: PLC0415
+        unify_body(body_pattern, c_body, trail)
         yield None
         return  # retract is not backtrackable
 
-    def _first_match_index(term_val, clause_list):
-        """Index of the first clause whose head unifies with *term_val* (and
-        whose ``Unify`` body goals are consistent with that unification), or
-        ``-1`` when none matches.
+    def _first_match(term_val, body_pattern, clause_list, home):
+        """``(index, Head, Body)`` of the first clause whose head AND body
+        unify with the pattern, as clause/2 reads them (``clause_ops.
+        head_matches`` / ``clause_terms``: the hoisted head arguments put
+        back, the body as a term, both a fresh renaming), or None.
 
-        A pure SEARCH: it removes nothing, so the caller can ask before it
-        decides whether there is a write to open a transaction for (P3-3
-        Task 3 fix round 2).  Leaves no bindings behind either way."""
-        from clausal.terms import Unify as _Unify  # avoid top-level cycle
+        A pure SEARCH on a private trail: it removes nothing and leaves no
+        bindings.  It used to test the head plus EVERY ``Unify`` in the body,
+        so ``retract(r(_))`` removed a rule ``r(X) :- X = 1`` (ISO removes
+        only a fact) and a program's own ``X is 3`` read as a head test."""
+        from clausal.logic.builtins.clause_ops import (  # noqa: PLC0415
+            _as_cell, clause_terms, head_matches, unify_body)
+        cell = _as_cell(term_val)
         for i, clause in enumerate(clause_list):
-            tmp_trail = Trail()
-            mark = tmp_trail.mark()
-            if not structural_unify(term_val, clause.head, tmp_trail):
-                tmp_trail.undo(mark)
+            matched, why = head_matches(clause, home, cell)
+            if not matched:
                 continue
-            # Verify body: check that Unify goals are consistent with the head
-            # unification.  We check only Unify goals (normalization artefacts).
-            body_ok = True
-            for goal in clause.body:
-                if isinstance(goal, _Unify):
-                    lv = deref(goal.left)
-                    rv = deref(goal.right)
-                    chk_trail = Trail()
-                    chk_mark = chk_trail.mark()
-                    if not structural_unify(lv, rv, chk_trail):
-                        body_ok = False
-                        chk_trail.undo(chk_mark)
-                        break
-                    chk_trail.undo(chk_mark)  # don't retain Is bindings
-            if not body_ok:
-                tmp_trail.undo(mark)  # undo head bindings before next iteration
-                continue
-            # Found a matching clause.
-            tmp_trail.undo(mark)  # clean up temporary bindings
-            return i
-        return -1
+            if why is not None:
+                raise _no_term_form_error(clause, "retract/1", why)
+            c_head, c_body, why = clause_terms(clause, home)
+            if why is not None:
+                if body_pattern is True:
+                    continue        # a body with no term form: not a fact
+                raise _no_term_form_error(clause, "retract/1", why)
+            tmp = Trail()
+            mark = tmp.mark()
+            ok = unify(cell, c_head, tmp) and unify_body(body_pattern, c_body, tmp)
+            tmp.undo(mark)
+            if ok:
+                return i, c_head, c_body
+        return None
 
     return retract__1
 
@@ -878,7 +872,8 @@ def _retractall_factory(db):
         clause_list = home._clauses.get((functor, arity))
         keep = None
         if clause_list:
-            keep = [c for c in clause_list if not _clause_head_matches(term_val, c)]
+            keep = [c for c in clause_list
+                    if not _clause_head_matches(term_val, c, home)]
         if keep is not None and len(keep) != len(clause_list):
             # ONE write for the whole removal (retract/1's gate and
             # recompile, once -- not once per clause).  An undefined
@@ -898,27 +893,30 @@ def _retractall_factory(db):
     return retractall__1
 
 
-def _clause_head_matches(term_val, clause) -> bool:
-    """retract/1's match (``_first_match_index``): the head unifies with
-    *term_val* and the clause's hoisted ``Unify`` goals agree with it.
-    Leaves no bindings."""
-    from clausal.terms import Unify as _Unify  # avoid top-level cycle
-    tmp_trail = Trail()
-    mark = tmp_trail.mark()
-    try:
-        if not structural_unify(term_val, clause.head, tmp_trail):
-            return False
-        for goal in clause.body:
-            if isinstance(goal, _Unify):
-                chk = Trail()
-                chk_mark = chk.mark()
-                ok = structural_unify(deref(goal.left), deref(goal.right), chk)
-                chk.undo(chk_mark)
-                if not ok:
-                    return False
-        return True
-    finally:
-        tmp_trail.undo(mark)
+def _no_term_form_error(clause, context: str, why: str) -> LogicException:
+    """The clause MAY match the pattern but has no term form to decide it
+    by (clause/2 refuses the same clause): permission_error rather than a
+    guess either way."""
+    from clausal.logic.database import head_key  # noqa: PLC0415
+    name, arity = head_key(clause.head)
+    return LogicException(permission_error(
+        "access", "private_procedure", ("/", mint(name), arity),
+        f"{context}: {name}/{arity} has a clause with no term form -- {why} "
+        f"-- so it cannot be matched against a pattern"))
+
+
+def _clause_head_matches(term_val, clause, home) -> bool:
+    """retractall/1's match: the clause's head, with its hoisted arguments
+    put back (``clause_ops.head_matches``, clause/2's reading), unifies with
+    *term_val* -- whatever the body.  It used to require EVERY body
+    ``Unify`` to agree, so a rule's own ``X is 3`` kept ``h(X) <- X is 3``
+    out of ``retractall(h(5))``.  Leaves no bindings."""
+    from clausal.logic.builtins.clause_ops import (  # noqa: PLC0415
+        _as_cell, head_matches)
+    matched, why = head_matches(clause, home, _as_cell(term_val))
+    if matched and why is not None:
+        raise _no_term_form_error(clause, "retractall/1", why)
+    return matched
 
 
 def _pi_parts(pi):

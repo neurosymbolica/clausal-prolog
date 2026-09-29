@@ -615,6 +615,72 @@ def _on_private_trail(built: _Built, then):
         tmp.undo(mark)
 
 
+class OpenConjunction:
+    """A body pattern ``(G1, ..., Gk, Rest)`` whose tail Rest is unbound:
+    it matches a stored flat body of MORE than k goals, Rest taking the
+    remaining goals (one goal as itself, several as the flat tuple)."""
+    __slots__ = ("prefix", "tail")
+
+    def __init__(self, prefix, tail):
+        self.prefix = prefix
+        self.tail = tail
+
+
+def engine_body_pattern(t):
+    """A body PATTERN as Prolog source spells it, in the shape clause_terms
+    builds a body: the atom ``true`` is True, ``\\+ G`` the Not node, a
+    right-nested ``','``/2 cell chain the flat tuple of its goals (as the
+    compiler flattens a body) -- an :class:`OpenConjunction` when its tail
+    is unbound -- and a ``';'``/2 cell the Or node.  So
+    ``clause(g(X), (X = 1, X > 0))`` finds ``g(X) :- X = 1, X > 0``; it
+    found nothing (the cell never unified with the tuple).  Known residue:
+    the compiler's flat body has lost a clause's own grouping, so a body
+    written ``A, (B, C)`` matches the pattern ``(A, B, C)`` (Scryer: no),
+    and a left-nested pattern ``((A, B), C)`` matches nothing.  Match with
+    :func:`unify_body`."""
+    t = deref(t)
+    if type(t) is str and t == "true":
+        return True
+    if type(t) is tuple and len(t) == 2 and t[0] == "\\+":
+        return nodes.Not(operand=engine_body_pattern(t[1]))
+    if type(t) is not tuple or len(t) != 3 or type(t[0]) is not str:
+        return t
+    if t[0] == ";":
+        return nodes.Or(left=engine_body_pattern(t[1]),
+                        right=engine_body_pattern(t[2]))
+    if t[0] != ",":
+        return t
+    goals = []
+    x = t
+    while type(x) is tuple and len(x) == 3 and x[0] == ",":
+        left = deref(x[1])
+        if type(left) is tuple and len(left) == 3 and left[0] == ",":
+            # ((A, B), C): the clause as written had that grouping, which
+            # the compiler's flat body no longer shows -- no match
+            return t
+        goals.append(engine_body_pattern(left))
+        x = deref(x[2])
+    if is_var(x):
+        return OpenConjunction(tuple(goals), x)
+    goals.append(engine_body_pattern(x))
+    return tuple(goals)
+
+
+def unify_body(pattern, body, trail) -> bool:
+    """Unify an :func:`engine_body_pattern` result with a stored body."""
+    if type(pattern) is not OpenConjunction:
+        return unify(pattern, body, trail)
+    body = deref(body)
+    k = len(pattern.prefix)
+    if type(body) is not tuple or len(body) <= k:
+        return False
+    for p, g in zip(pattern.prefix, body):
+        if not unify(p, g, trail):
+            return False
+    rest = body[k:]
+    return unify(pattern.tail, rest[0] if len(rest) == 1 else rest, trail)
+
+
 def head_matches(clause, home_db, cell) -> "tuple[bool, str | None]":
     """``(matched, why)``: whether *clause*'s head, hoisted arguments put
     back, unifies with the query head *cell* -- decided on the private
@@ -718,10 +784,9 @@ def _clause_factory(db):
         b = deref(body)
         if not is_var(b):
             _type_check(b, "body")
-            if type(b) is str and b == "true":
-                # the atom ``true`` a Prolog term spells the goal with: a
-                # fact's body reads back as the engine's True
-                body = True
+            # the Prolog spelling of a body (the atom ``true``, ``','``/2
+            # and ``';'``/2 cells) as the engine's body term
+            body = engine_body_pattern(b)
         resolved = _resolve(db, h)
         if resolved is None:
             return
@@ -745,7 +810,7 @@ def _clause_factory(db):
                 raise _private(name, arity, (
                     f"has a clause whose body has no term form -- {why}"))
             mark = trail.mark()
-            if unify(cell, c_head, trail) and unify(body, c_body, trail):
+            if unify(cell, c_head, trail) and unify_body(body, c_body, trail):
                 yield None
             trail.undo(mark)
 
