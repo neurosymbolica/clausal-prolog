@@ -154,11 +154,15 @@ class TestArg:
         result = _call_binding("arg", 0, ("f", char_atom("a")), x)
         assert result is None
 
-    def test_negative_fails(self):
-        # nv
+    def test_negative_is_a_domain_error(self):
+        """ISO 8.5.2.3: arg(-1, f(a), X) is
+        domain_error(not_less_than_zero, -1) (Scryer-verified)."""
+        import pytest
+        from clausal.logic.exceptions import LogicException
         x = Var()
-        result = _call_binding("arg", -1, ("f", char_atom("a")), x)
-        assert result is None
+        with pytest.raises(LogicException) as info:
+            _call_binding("arg", -1, ("f", char_atom("a")), x)
+        assert info.value.term[1] == ("domain_error", "not_less_than_zero", -1)
 
     def test_nested_compound(self):
         """arg(1, f(g(x)), A) → A = g(x)."""

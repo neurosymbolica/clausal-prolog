@@ -43,19 +43,11 @@ def test_F073_char_code_out_of_range_fails_logically():
 
     # Should not raise ValueError; should either fail logically (0 solutions)
     # or raise LogicException.
-    try:
-        n = _run("char_code", 2, v, 0x110000)
-    except ValueError as e:
-        pytest.fail(
-            f"char_code(V, 0x110000) leaked raw ValueError: {e}. "
-            f"This is the bug F073 — catch/3 cannot intercept it."
-        )
-
-    # If no exception, expect 0 solutions (logical failure).
-    assert n == 0, (
-        f"expected logical failure (0 solutions) for char_code(V, 0x110000), "
-        f"got {n}"
-    )
+    # 2026-09-30: ISO 8.16.6.3 / Scryer -- representation_error(character_code),
+    # not a silent failure (todo/done/builtins-fail-silently-on-bad-arguments).
+    with pytest.raises(LogicException) as info:
+        _run("char_code", 2, v, 0x110000)
+    assert info.value.term[1] == ("representation_error", "character_code")
 
 
 def test_F073_char_code_negative_code_fails_logically():
@@ -65,18 +57,10 @@ def test_F073_char_code_negative_code_fails_logically():
     """
     v = Var()
 
-    try:
-        n = _run("char_code", 2, v, -1)
-    except ValueError as e:
-        pytest.fail(
-            f"char_code(V, -1) leaked raw ValueError: {e}. "
-            f"This is the bug F073 — catch/3 cannot intercept it."
-        )
-
-    assert n == 0, (
-        f"expected logical failure (0 solutions) for char_code(V, -1), "
-        f"got {n}"
-    )
+    # 2026-09-30: ISO / Scryer -- representation_error(character_code).
+    with pytest.raises(LogicException) as info:
+        _run("char_code", 2, v, -1)
+    assert info.value.term[1] == ("representation_error", "character_code")
 
 
 def test_F073_atom_codes_negative_element_fails_logically():

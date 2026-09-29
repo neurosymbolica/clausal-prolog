@@ -151,33 +151,19 @@ def test_F089_functor_agrees_on_string_vs_char_list_and_diverges_on_the_atom():
 
 
 def test_F090_arg_on_str_is_retired_str_is_atomic():
-    """P3-1 Task 5 (\u00a71b/R2): ``arg(N, "abc", X)`` no longer follows
-    ISO cons-cell symmetry -- a str is atomic (arity 0), so EVERY index
-    fails, including n=1 and n=2 (formerly asserted to bind the head
-    char / tail substring under the retired cons rule).
+    """P3-1 Task 5 (\u00a71b/R2): a str is an ATOM, atomic (arity 0), so
+    ``arg(N, abc, X)`` has no argument to give -- formerly the head char /
+    tail substring under the retired cons rule.  Since 2026-09-30 an atomic
+    Term is ISO 8.5.2.3's ``type_error(compound, abc)`` (Scryer-verified),
+    where it used to fail silently; the conclusion "no argument" stands.
     """
-    # n=1 → no longer the head; str is atomic (arity 0), so this fails.
-    X = Var()
-    sols = _collect("arg", 3, 1, mint("abc"), X, snap=lambda X=X: deref(X))
-    assert sols == [], (
-        f'arg(1, "abc", X) bound X={sols!r}; expected [] -- a str is '
-        f'atomic under the retired cons rule (\u00a71b/R2), so it has '
-        f'no arguments.'
-    )
-    # n=2 → likewise no longer the tail.
-    X = Var()
-    sols = _collect("arg", 3, 2, mint("abc"), X, snap=lambda X=X: deref(X))
-    assert sols == [], (
-        f'arg(2, "abc", X) bound X={sols!r}; expected [] -- same '
-        f'rationale as n=1.'
-    )
-    # n=3 → still fails (was already out of range; still is).
-    X = Var()
-    sols = _collect("arg", 3, 3, mint("abc"), X, snap=lambda X=X: deref(X))
-    assert sols == [], (
-        f'arg(3, "abc", X) bound X={sols!r}; expected [] '
-        f"(str is arity 0, unchanged conclusion)."
-    )
+    import pytest
+    from clausal.logic.exceptions import LogicException
+    for n in (1, 2, 3):
+        X = Var()
+        with pytest.raises(LogicException) as info:
+            _collect("arg", 3, n, mint("abc"), X, snap=lambda X=X: deref(X))
+        assert info.value.term[1] == ("type_error", "compound", "abc")
 
 
 def test_F091_arg_on_list_uses_cons_cell():
