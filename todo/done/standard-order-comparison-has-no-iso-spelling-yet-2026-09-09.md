@@ -30,3 +30,8 @@ improvised inside a comparison-operators branch.
 Next step: a spec round on standard order for the non-ISO term types, then a
 plan. Until then, describe the comparison work as unblocking numeric
 migration, not corpus migration.
+
+## Closed 2026-09-30 (stale)
+
+Delivered by the standard-order branch (feat/iso-standard-order-2026-09-09,
+merged): on f84633ea `@<`, `@>=`, `compare/3` and `'=..'/2` all answer.

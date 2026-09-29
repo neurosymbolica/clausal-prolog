@@ -432,7 +432,11 @@ def _atom_codes__2(atom, codes, trail, k):
             if not isinstance(e, int):
                 raise LogicException(type_error("integer", e, "atom_codes/2"))
             if not (0 <= e < 0x110000):
-                return  # logical failure — out-of-range code point
+                # ISO / Scryer: not a character code.  This used to FAIL
+                # silently.
+                from clausal.logic.exceptions import representation_error  # noqa: PLC0415
+                raise LogicException(
+                    representation_error("character_code", "atom_codes/2"))
             elems.append(chr(e))
         mark = trail.mark()
         if unify(atom, mint("".join(elems)), trail):
@@ -713,7 +717,11 @@ def _number_codes__2(number, codes, trail, k):
             if not isinstance(e, int):
                 raise LogicException(type_error("integer", e, "number_codes/2"))
             if not (0 <= e < 0x110000):
-                return  # logical failure — out-of-range code point
+                # ISO / Scryer: not a character code.  This used to FAIL
+                # silently.
+                from clausal.logic.exceptions import representation_error  # noqa: PLC0415
+                raise LogicException(
+                    representation_error("character_code", "number_codes/2"))
             elems.append(chr(e))
         s = "".join(elems)
         try:

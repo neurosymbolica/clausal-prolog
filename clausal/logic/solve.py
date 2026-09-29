@@ -1552,6 +1552,23 @@ def call(
     other_arity_binding = None
     if module is not None and module.module_dict is not None:
         pred_cls = module.module_dict.get(functor)
+        if pred_cls is None and type(functor) is str and "." in functor:
+            # A DOTTED functor (``call("alow.numlist", 3, L)``): walk it the
+            # way a compiled ``alow.numlist(3, L)`` does -- the first segment
+            # in this module's namespace, the rest as attributes -- and hand
+            # the binding to ``_dispatch_at``, whose handle route applies the
+            # name+arity rule in the OWNER (its row at this arity, else a
+            # builtin).  It used to refuse outright
+            # ("'alow.numlist'/2 is not defined in module ...") where the
+            # compiled call answered (name-arity residual Low 1).
+            head, *rest = functor.split(".")
+            obj = module.module_dict.get(head)
+            for part in rest:
+                if obj is None:
+                    break
+                obj = getattr(obj, part, None)
+            if obj is not None and is_declared_predicate_name(obj, db=module.db):
+                dispatch_fn = _dispatch_at(obj, arity, module.db)
         # W4b-3: after the flip the binding is a module-qualified HANDLE,
         # which has no ``_get_dispatch``; skipping this phase then hands the
         # call to a same-named BUILTIN in Phase 6.  ``_dispatch_at`` resolves

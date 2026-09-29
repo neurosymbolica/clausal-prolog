@@ -549,24 +549,34 @@ class TestBetweenArithmeticBounds:
         assert cell_args(err)[0] == ("evaluation_error", mint("zero_divisor"))
         assert cell_args(err)[1] == ("/", "//", 2)
 
-    def test_expression_with_unbound_leaf_keeps_mode_failure(self):
+    def test_expression_with_unbound_leaf_is_an_instantiation_error(self):
         """A bound expression still containing an unbound Var behaves like a
-        plain unbound bound: silent failure (current documented mode error)."""
+        plain unbound bound -- since 2026-09-30 an instantiation error, as
+        Scryer's library(between), not a silent failure."""
+        from clausal.logic.exceptions import LogicException
         from clausal.terms import Sub
         x = Var()
-        assert sol_var(self._between(0, Sub(left=Var(), right=1), x), x) == []
+        with pytest.raises(LogicException) as info:
+            sol_var(self._between(0, Sub(left=Var(), right=1), x), x)
+        assert cell_args(info.value.term)[0] == mint("instantiation_error")
 
-    def test_plain_unbound_bound_still_fails_silently(self):
-        """Regression pin: between(0, HIGH, X) with HIGH unbound keeps its
-        current silent mode-failure behaviour."""
+    def test_plain_unbound_bound_is_an_instantiation_error(self):
+        """2026-09-30 (Scryer's library(between)): between(0, HIGH, X) with
+        HIGH unbound is an instantiation error; it used to fail silently."""
+        from clausal.logic.exceptions import LogicException
         x = Var()
-        assert sol_var(self._between(0, Var(), x), x) == []
+        with pytest.raises(LogicException) as info:
+            sol_var(self._between(0, Var(), x), x)
+        assert cell_args(info.value.term)[0] == mint("instantiation_error")
 
-    def test_bool_bounds_still_fail_silently(self):
-        """Regression pin (A09-F015): plain bool bounds are rejected by
-        failing, not by raising — unchanged."""
+    def test_bool_bounds_are_a_type_error(self):
+        """A09-F015: a bool bound is still rejected (True is not 1) -- since
+        2026-09-30 as type_error(integer, B), as Scryer, not by failing."""
+        from clausal.logic.exceptions import LogicException
         x = Var()
-        assert sol_var(self._between(False, True, x), x) == []
+        with pytest.raises(LogicException) as info:
+            sol_var(self._between(False, True, x), x)
+        assert cell_functor(cell_args(info.value.term)[0]) == "type_error"
 
     def test_c_and_python_paths_agree_on_expression_bounds(self):
         """The evaluation happens at the dispatch boundary, so the C and

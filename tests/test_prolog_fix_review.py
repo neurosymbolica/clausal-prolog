@@ -309,9 +309,11 @@ class TestF033QualifiedBuiltinNames:
         out = prolog_to_clausal("r(X, L) :- lists:memberchk(X, L).\n")
         assert "lists.in_check(X, L)" in out
 
-    def test_qualified_nth0_maps_to_list_item(self):
+    def test_qualified_nth0_keeps_its_iso_name(self):
+        # nth0/3 is a builtin under its own name since 2026-09-30, so the
+        # reverse map no longer renames it to list_item/3.
         out = prolog_to_clausal("r(L, X) :- lists:nth0(0, L, X).\n")
-        assert "lists.list_item(0, L, X)" in out
+        assert "lists.nth0(0, L, X)" in out
 
     def test_unqualified_member_still_infix_in(self):
         # Guard: the infix special case must survive the reverse-map change.

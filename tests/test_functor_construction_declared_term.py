@@ -139,7 +139,7 @@ def test_unpack_atom_name_builds_a_generic_cell(cite):
     "builtin,args,who",
     [
         (_functor__3, (3, 1), "functor/3"),
-        (_univ__2, ([3, 1, 2],), "unpack/2"),
+        (_univ__2, ([3, 1, 2],), "(=..)/2"),   # unpack/2 is '=..'/2's alias
     ],
 )
 def test_non_atom_name_raises_type_error_naming_its_own_site(builtin, args, who):

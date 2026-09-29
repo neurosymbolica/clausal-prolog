@@ -17,3 +17,10 @@ landed with these open:
    on every call with a string goal (hot path) -- hoist it.
 Plus the pinned strict-xfail known gap: a double import `[numlist, alias(numlist, nl)]`
 makes `nl(3, L)` resolve under numlist.
+
+## 2026-09-30: item 1 fixed
+
+Item 1 (dotted functor in solve.call) is fixed on fix/todo-batch-6-2026-09-30:
+`call` walks a dotted functor as the compiled call does and hands the binding
+to `_dispatch_at`, so it answers `[1, 2, 3]` too
+(tests/test_call_dotted_functor.py). Items 2-4 remain open.

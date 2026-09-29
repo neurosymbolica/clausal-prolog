@@ -733,7 +733,9 @@ def test_guard_contract_mappings():
     out = prolog_to_clausal(
         "q(X, L) :- nth0(0, L, X), memberchk(X, L), member(X, L).\n")
     flat = out.replace(" ", "")
-    assert "list_item(0,L,X)" in flat
+    # nth0/3 is a builtin under its own name since 2026-09-30 (Scryer's
+    # library(lists)), so the translator keeps the ISO spelling.
+    assert "nth0(0,L,X)" in flat
     assert "in_check(X,L)" in flat
     assert "XinL" in flat
 

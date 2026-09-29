@@ -74,18 +74,11 @@ def test_F073_atom_codes_negative_element_fails_logically():
     """
     v = Var()
 
-    try:
-        n = _run("atom_codes", 2, v, [-1])
-    except ValueError as e:
-        pytest.fail(
-            f"atom_codes(V, [-1]) leaked raw ValueError: {e}. "
-            f"This is the bug F073 — catch/3 cannot intercept it."
-        )
-
-    assert n == 0, (
-        f"expected logical failure (0 solutions) for atom_codes(V, [-1]), "
-        f"got {n}"
-    )
+    # 2026-09-30: ISO / Scryer -- representation_error(character_code),
+    # no longer a silent failure.
+    with pytest.raises(LogicException) as info:
+        _run("atom_codes", 2, v, [-1])
+    assert info.value.term[1] == ("representation_error", "character_code")
 
 
 def test_F073_atom_codes_out_of_range_element_fails_logically():
@@ -95,18 +88,11 @@ def test_F073_atom_codes_out_of_range_element_fails_logically():
     """
     v = Var()
 
-    try:
-        n = _run("atom_codes", 2, v, [0x110000])
-    except ValueError as e:
-        pytest.fail(
-            f"atom_codes(V, [0x110000]) leaked raw ValueError: {e}. "
-            f"This is the bug F073 — catch/3 cannot intercept it."
-        )
-
-    assert n == 0, (
-        f"expected logical failure (0 solutions) for atom_codes(V, [0x110000]), "
-        f"got {n}"
-    )
+    # 2026-09-30: ISO / Scryer -- representation_error(character_code),
+    # no longer a silent failure.
+    with pytest.raises(LogicException) as info:
+        _run("atom_codes", 2, v, [0x110000])
+    assert info.value.term[1] == ("representation_error", "character_code")
 
 
 def test_F073_number_codes_negative_element_fails_logically():
@@ -116,18 +102,11 @@ def test_F073_number_codes_negative_element_fails_logically():
     """
     v = Var()
 
-    try:
-        n = _run("number_codes", 2, v, [-1])
-    except ValueError as e:
-        pytest.fail(
-            f"number_codes(V, [-1]) leaked raw ValueError: {e}. "
-            f"This is the bug F073 — catch/3 cannot intercept it."
-        )
-
-    assert n == 0, (
-        f"expected logical failure (0 solutions) for number_codes(V, [-1]), "
-        f"got {n}"
-    )
+    # 2026-09-30: ISO / Scryer -- representation_error(character_code),
+    # no longer a silent failure.
+    with pytest.raises(LogicException) as info:
+        _run("number_codes", 2, v, [-1])
+    assert info.value.term[1] == ("representation_error", "character_code")
 
 
 def test_F073_number_codes_out_of_range_element_fails_logically():
@@ -137,15 +116,8 @@ def test_F073_number_codes_out_of_range_element_fails_logically():
     """
     v = Var()
 
-    try:
-        n = _run("number_codes", 2, v, [0x110000])
-    except ValueError as e:
-        pytest.fail(
-            f"number_codes(V, [0x110000]) leaked raw ValueError: {e}. "
-            f"This is the bug F073 — catch/3 cannot intercept it."
-        )
-
-    assert n == 0, (
-        f"expected logical failure (0 solutions) for number_codes(V, [0x110000]), "
-        f"got {n}"
-    )
+    # 2026-09-30: ISO / Scryer -- representation_error(character_code),
+    # no longer a silent failure.
+    with pytest.raises(LogicException) as info:
+        _run("number_codes", 2, v, [0x110000])
+    assert info.value.term[1] == ("representation_error", "character_code")
