@@ -15,3 +15,13 @@ construct that is definitionally true.
 has (or share one helper), pin `solve(("true",), m)` → 1 solution, `solve(("fail",), m)`
 → 0, and keep `solve(("unknown_pred",), m)` raising. Consider the same for the qualified
 form `(":", mod, ("true",))`.
+
+## Closed 2026-09-30
+
+Fixed on fix/todo-batch-2-2026-09-30. Since the atoms-as-str flip the goal is
+the atom `"true"` (the 1-tuple `("true",)` is now reserved and refused), and
+`_term_to_goal` lowered it to a call of `true/0`, which has no row.
+`_term_to_goal` now lowers `true` to the goal literal True and `fail`/`false`
+to False, which the compiler already reads as succeed-once / fail; the
+qualified form `(":", M, true)` goes through the same branch. An unknown atom
+still raises. Pinned by tests/test_solve_zero_arity_control_atoms.py.

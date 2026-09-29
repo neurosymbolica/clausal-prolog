@@ -28,3 +28,13 @@ phrase/2); the empty list is the empty terminal (`phrase([], L)` gives
 `L = []`).  Control-construct rule bodies (`phrase((a, b), L)`) are the
 larger half of the same feature -- a DCG body interpreter, the grammar
 analogue of `call_body`.
+
+## Closed 2026-09-30
+
+Fixed on fix/todo-batch-2-2026-09-30: `_resolve_nonterminal` translates a
+list/string/code-list body through `_dcg_body_goal` (which already turned a
+terminal list into `append(Items, S, S0)` for a control body), exactly as it
+does a control-construct body. Scryer-verified rows (phrase/2 and /3, `[]`,
+chars, a failing match) pinned in tests/test_call_runs_body_terms.py; the old
+"keeps failing" pin is flipped. Control-construct bodies had already landed
+(triage B3b).

@@ -32,6 +32,7 @@ from clausal.logic.atoms import is_atom, mint, spelling
 from clausal.logic.variables import Var
 from clausal.terms import Add, Div, FloorDiv, Mod, Mult, Negate, Pow, Sub
 from clausal.terms import term_writeq
+from clausal.terms import UnitsMismatch
 
 # ── The is/== hint ────────────────────────────────────────────────────────────
 #
@@ -238,14 +239,40 @@ def python_error_term(exc: Exception) -> tuple:
     exception alongside this structural term (and unwraps the module-predicate
     boundary wrapper for it).
     """
+    if isinstance(exc, UnitsMismatch):
+        # Ruling 2026-09-12: a units mismatch is thrown in the ISO shape
+        # ``error(system_error(units_mismatch), Ctx)`` -- the term the CLP
+        # side channel (``units_clp``) already throws for a comparison.  The
+        # ground path (``Quantity`` arithmetic reached through ``eval_/2``,
+        # ``sum_list/2``, ``max_list/2``, a ``++`` escape, ...) raises the
+        # Python class, which stays the internal signal (an uncaught one
+        # still surfaces as ``UnitsMismatch``, and a ``++UnitsMismatch``
+        # catcher still matches it); what ``catch/3`` sees is the ISO term,
+        # so ``catch(G, error(system_error(units_mismatch), _), R)`` selects
+        # it on every path.  No culprit indicator is known here, so the
+        # context is unbound (as Scryer's library errors leave it) and the
+        # message is the prose.
+        # Built directly rather than through ``system_error``'s text
+        # context, which would read a message that happened to start
+        # ``name/N: `` as a culprit indicator.
+        return _with_prose(
+            ("error", ("system_error", mint("units_mismatch")), Var()),
+            str(exc))
     return (type(exc).__name__, str(exc))
 
 
 def _is_python_error_term_of(term: Any, cause: BaseException) -> bool:
-    """True when *term* is :func:`python_error_term`'s ``ClassName(Message)``
-    for *cause* -- a cell of arity exactly 1
-    whose functor is the cause's class name, never a bare atom."""
+    """True when *term* is :func:`python_error_term`'s transliteration of
+    *cause*: ``ClassName(Message)`` -- a cell of arity exactly 1 whose
+    functor is the cause's class name, never a bare atom -- or, for a
+    ``UnitsMismatch``, ``error(system_error(units_mismatch), _)``."""
     fa = term_functor_args(term)
+    if isinstance(cause, UnitsMismatch):
+        if fa is None or fa[0] != "error" or len(fa[1]) != 2:
+            return False
+        formal = term_functor_args(fa[1][0])
+        return (formal is not None and formal[0] == "system_error"
+                and len(formal[1]) == 1 and formal[1][0] == "units_mismatch")
     return (fa is not None and len(fa[1]) == 1
             and fa[0] == type(cause).__name__)
 

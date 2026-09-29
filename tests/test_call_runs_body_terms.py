@@ -561,17 +561,44 @@ def test_phrase_of_a_non_callable_is_a_type_error(host, rule, arity):
 
 
 @pytest.mark.parametrize("arity", [2, 3])
-def test_phrase_of_a_list_or_string_keeps_failing(host, arity):
-    """Pinned as-is: a list or string rule is a DCG TERMINAL, not a
-    non-callable, so ruling B leaves it alone -- it fails, as it always has.
-    NOTE this is NOT Scryer: ``phrase([a], L)`` gives ``L = [a]`` and
-    ``phrase("ab", L)`` gives ``L = [a, b]`` there (box, 2026-09-25).
-    Supporting terminal rules is a feature, parked in the report."""
+def test_phrase_of_a_list_or_string_is_its_terminals(host, arity):
+    """A list or string rule is a DCG TERMINAL body, not a non-callable:
+    ``phrase([a], L)`` gives ``L = [a]`` and ``phrase("ab", L)`` gives
+    ``L = [a, b]``, as in Scryer (todo/done/phrase-of-a-list-or-string-is-a-
+    terminal-2026-09-25.md; it used to FAIL silently)."""
     from clausal.logic.cells import chars
-    from clausal.logic.solve import solve
-    for rule in (["a"], chars("ab")):
-        goal = ("phrase", rule, Var()) + ((Var(),) if arity == 3 else ())
-        assert list(solve(goal, host)) == []
+    from clausal.logic.solve import _deref_walk, solve
+    for rule, want in ((["a"], ["a"]), (chars("ab"), ["a", "b"]),
+                       (b"ab", [97, 98])):          # a code list
+        L = Var()
+        if arity == 2:
+            got = [_deref_walk(L) for _ in solve(("phrase", rule, L), host)]
+            assert got == [want]
+        else:
+            # A closed Rest: L is the terminals followed by exactly it.
+            got = [_deref_walk(L)
+                   for _ in solve(("phrase", rule, L, ["z"]), host)]
+            assert got == [want + ["z"]]
+
+
+def test_phrase_terminal_bodies_match_scryer(host):
+    """Scryer (library(dcgs), double_quotes=chars), 2026-09-30:
+    phrase([], L) -> L = []; phrase([a], [a,b]) fails;
+    phrase([a], [a,b], R) -> R = [b]; phrase("ab", [a,b,c], R) -> R = [c];
+    phrase([a], [b]) fails."""
+    from clausal.logic.cells import chars
+    from clausal.logic.solve import _deref_walk, solve
+
+    def answers(goal, v):
+        return [_deref_walk(v) for _ in solve(goal, host)]
+    L = Var()
+    assert answers(("phrase", [], L), L) == [[]]
+    assert list(solve(("phrase", ["a"], ["a", "b"]), host)) == []
+    R = Var()
+    assert answers(("phrase", ["a"], ["a", "b"], R), R) == [["b"]]
+    R = Var()
+    assert answers(("phrase", chars("ab"), ["a", "b", "c"], R), R) == [["c"]]
+    assert list(solve(("phrase", ["a"], ["b"]), host)) == []
 
 
 def test_time_goal_is_call_1_timed(host, capsys):

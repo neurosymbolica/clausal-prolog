@@ -18,3 +18,21 @@ tests/fixtures/units_clp_side_channel.clausal. `tests/test_units.py`
 flips with this change.
 
 **Footer:** finishing this todo includes `git mv`-ing it to `todo/done/`.
+
+## Closed 2026-09-30
+
+Fixed on fix/todo-batch-2-2026-09-30 at the one place every door meets:
+`exceptions.python_error_term`, the transliteration `catch/3` (compiled and
+trampoline) and the module-predicate wrapper use for a non-logic exception.
+A `UnitsMismatch` now transliterates to `error(system_error(units_mismatch),
+_)` (unbound context, the message as prose) instead of the TitleCase
+`UnitsMismatch(Message)` cell no catcher can be written against, so the same
+catcher selects it from `==` (the CLP channel, unchanged), `eval_/2`,
+`sum_list/2`, `max_list/2` and a `++` escape. The Python class stays the
+internal signal: uncaught, it is still `UnitsMismatch`, and a
+`++UnitsMismatch(M)` catcher still matches (`_is_python_error_term_of` knows
+the new shape, so the wrapper unwrap keeps working). Pinned by
+tests/test_units_mismatch_iso_term.py.
+
+Not done: a culprit indicator in the context (the Quantity operation does not
+know which builtin reached it).
