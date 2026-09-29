@@ -383,3 +383,45 @@ def test_directive_lowering_needs_no_loader(native):
     src = ":- dynamic(d/1).\nd(1).\n:- discontiguous(d/1).\n"
     _, st = L3.lower_items(L3.read_iso(src), source=src, filename="x.pl")
     assert (st["read"], st["lowered"], st["directives"]) == (3, 3, 2), st
+
+
+# ── review round: dependencies, module names, the cache ──
+
+
+def test_a_module_that_baked_in_another_files_exports_is_not_cached(native):
+    """use_module/1 copies the target's export list into this file's code;
+    the cache key covers this file only, so the bytecode is not written."""
+    _write(native, "s2p/s2plib.pl", LIB_PL)
+    native.load("s2_dep1", ":- use_module(s2p/s2plib).\nt(Y) :- twice(1, Y).\n")
+    native.load("s2_dep2", ":- use_module(s2p/s2plib, [pair/2]).\n"
+                           "t(K) :- pair(K, _).\n")
+    written = {p.name.split(".")[0] for p in native.tmp.glob("__pycache__/*.pyc")}
+    assert "s2_dep2" in written and "s2_dep1" not in written, written
+
+
+def test_a_qualified_goal_through_an_unknown_module_is_refused(native):
+    err = _refusal(native, "s2_qunk", "a.\nt(X) :- nosuchmod:p(X).\n")
+    assert err.lineno == 2 and "nosuchmod" in str(err), str(err)
+
+
+def test_a_module_name_two_imports_claim_is_ambiguous(native):
+    _write(native, "s2a/lib.pl", ":- module(lib, [p/1]).\np(a).\n")
+    _write(native, "s2b/lib.pl", ":- module(lib, [q/1]).\nq(b).\n")
+    err = _refusal(native, "s2_amb", ":- use_module(s2a/lib, [p/1]).\n"
+                                     ":- use_module(s2b/lib, [q/1]).\n"
+                                     "t(X) :- lib:p(X).\n")
+    assert err.lineno == 3 and "ambiguous" in str(err), str(err)
+
+
+def test_the_files_own_module_name_qualifies_a_local_goal(native, ans):
+    mod = native.load("s2_own", ":- module(s2_own, [t/1]).\n"
+                                "p(1).\nt(X) :- s2_own:p(X).\n")
+    assert ans(mod, "t") == [1]
+
+
+def test_the_cache_hit_path_keeps_the_double_quotes_modes_used(native):
+    text = ":- set_prolog_flag(double_quotes, atom).\ns(X) :- X = \"ab\".\n"
+    mod = native.load("s2_dqhit", text)
+    fresh = [i for i in mod.__loader__._recover_module_items(
+        mod.__file__) if type(i).__name__ == "DoubleQuotesMode"]
+    assert len(fresh) == 1 and fresh[0].modes_used == ("atom",), fresh

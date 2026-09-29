@@ -1003,6 +1003,10 @@ class NativePrologLoader(PrologLoader):
             raise SyntaxError(f"Cannot import {path}: {e}",
                               (path, line, 1, text)) from e
         self.l3_stats = low.stats
+        # The bytecode baked in other files' content (a use_module/1 export
+        # list, a declared module name): the cache key covers this file
+        # only, so such a module is not cached (it is re-lowered each load).
+        self._uncacheable = bool(low.context.depends_on)
         iso_l3.warn_singletons(low.singletons, pl_source, path)
         low.context.warn_bare_atom_imports()
         return low.tree, _prolog_default_items() + low.module_items
@@ -1018,6 +1022,11 @@ class NativePrologLoader(PrologLoader):
         tree, module_items = self._lower(pl_source, path)
         self._last_transformer = _NativeItems(module_items)
         return compile(tree, path, "exec")
+
+    def _cache_bytecode(self, source_path, bytecode_path, data):
+        if getattr(self, "_uncacheable", False):
+            return None
+        return super()._cache_bytecode(source_path, bytecode_path, data)
 
     def _recover_module_items(self, path):
         """Cache-hit path: re-read the ``.pl`` source and re-lower its

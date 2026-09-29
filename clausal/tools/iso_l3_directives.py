@@ -121,6 +121,13 @@ class DirectiveContext:
         self.module_aliases: dict[str, str] = {}
         self.bare_atom_imports: list[tuple[str, int | None]] = []
         self.directives = 0
+        #: Other source files whose CONTENT this lowering baked in (a
+        #: use_module/1 export list, a declared module name a qualified
+        #: goal resolves through).  Non-empty: the loader does not cache the
+        #: bytecode, since the cache key covers this file only.
+        self.depends_on: set[str] = set()
+        #: The module's own name, from its module/2 (``own:G`` is local).
+        self.own_module: "str | None" = None
         self._t = None
 
     # ── the seam transformer, one per file ──
@@ -147,6 +154,32 @@ class DirectiveContext:
                 mode=self._dq_engine_mode, explicit=True,
                 modes_used=tuple(sorted(self.dq_modes_used))))
         return items
+
+    def alias(self, name: str, dotted: str) -> None:
+        """Record that ``name:G`` means the module *dotted*; a name two
+        different imports claim is AMBIGUOUS (``None``), and a qualified goal
+        through it is refused rather than resolved by import order."""
+        if self.module_aliases.get(name, dotted) != dotted:
+            self.module_aliases[name] = None
+        elif name not in self.module_aliases:
+            self.module_aliases[name] = dotted
+
+    def resolve_module(self, name: str) -> "tuple[str | None, str]":
+        """``m`` of ``m:G`` -> (dotted path or None, why-not)."""
+        if name in self.module_aliases:
+            dotted = self.module_aliases[name]
+            if dotted is None:
+                return None, (f"`{name}` names two imported modules, so "
+                              f"{name}:G is ambiguous")
+            return dotted, ""
+        if name == self.own_module:
+            return "", ""
+        found = _module_source(name) if all(
+            p.isidentifier() for p in name.split(".")) else None
+        if found is None:
+            return None, (f"`{name}` is no module this file imported (nor a "
+                          f"module on sys.path)")
+        return name, ""
 
     def note_literal(self) -> str:
         """The mode a ``"..."`` literal read now takes (and record it)."""
@@ -264,6 +297,7 @@ def _module(ctx: DirectiveContext, args, spans, span):
         raise _refused(f"{what}: the export entry {_show(e)} is not a "
                        f"predicate indicator name/N (or name//N) or an "
                        f"op/3", _top(s) or span)
+    ctx.own_module = name
     return ctx.seam("module", [_name(name), _list(entries)], span, what)
 
 
@@ -292,10 +326,13 @@ def _use_module(ctx: DirectiveContext, args, spans, span):
                 f"{what}: {n}/{a} cannot be imported by name (the name is no "
                 f"identifier); call it qualified, m:'{n}'(...)", span)
     declared, exports, ops = _declared_exports(found)
-    if declared:
-        ctx.module_aliases[declared] = dotted
-    ctx.module_aliases[dotted.rsplit(".", 1)[-1]] = dotted
+    last = dotted.rsplit(".", 1)[-1]
+    ctx.alias(last, dotted)
+    if declared and declared != last:
+        ctx.alias(declared, dotted)
+        ctx.depends_on.add(found)
     if entries is None:
+        ctx.depends_on.add(found)
         if exports is None:
             raise _refused(
                 f"{what}: {found} declares no module/2 export list, so "

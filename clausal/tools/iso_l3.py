@@ -413,8 +413,16 @@ class _ClauseLowering:
         aliases = self._ctx.module_aliases if self._ctx is not None else {}
         if m not in aliases and m in _builtin_libraries():
             return self.goal(g, g_sp)
+        if self._ctx is not None:
+            dotted, why = self._ctx.resolve_module(m)
+            if dotted is None:
+                raise LoweringRefused(f"{m}:{gname}/{len(gargs)}: {why}",
+                                      _top_span(m_sp) or _top_span(sp))
+            if dotted == "":            # the file's own module
+                return self.goal(g, g_sp)
+        else:
+            dotted = m
         self._check_goal_name(gname, g_sp)
-        dotted = aliases.get(m) or m
         mpos = _pos_expr(self._pos.of(_top_span(m_sp)))
         parts = dotted.split(".")
         obj = _node("LoadName", name=_const(parts[0]), position=mpos)
@@ -675,6 +683,11 @@ def lower_items(items, *, strict: bool = True, source: "str | None" = None,
                    f"`?-` is no clause): {it.term!r}", span)
             continue
         if directives_only:
+            # The clause is not lowered, but the double_quotes modes its
+            # literals were read under are module-item facts (the cross-mode
+            # lint): note them as the full lowering would.
+            if _has_chars(it.term):
+                ctx.note_literal()
             stats["skipped"] += 1
             continue
         try:
@@ -690,6 +703,16 @@ def lower_items(items, *, strict: bool = True, source: "str | None" = None,
     if _lowered is not None:
         _lowered.append(ctx)
     return mod, stats
+
+
+def _has_chars(t) -> bool:
+    if type(t) is tuple:
+        if len(t) == 2 and t[0] == "$chars":
+            return True
+        return any(_has_chars(a) for a in t[1:])
+    if type(t) is list:
+        return any(_has_chars(a) for a in t)
+    return False
 
 
 def _syntax_issue_message(it, source) -> str:
