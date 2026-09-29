@@ -1314,10 +1314,31 @@ def _nth_solutions(base, index, lst, elem, rest, trail, who):
     lst_val = deref(lst)
     items = _as_items(lst_val)
     if items is None:
+        from clausal.terms import SegList  # noqa: PLC0415
+        if isinstance(lst_val, SegList):
+            walked = lst_val._walk_raw()
+            if isinstance(walked, list):
+                # every hole filled, an element still unbound: a proper list
+                items = walked
+    if items is None:
         skeleton = _open_skeleton(lst_val)
-        if skeleton is None or is_var(n_val):
-            return      # not a list, or enumerating an open list: fail
+        if skeleton is None:
+            return      # not a list
         prefix, tail = skeleton
+        if is_var(n_val):
+            # An unbound index over an OPEN list: the known prefix answers
+            # (Scryer then goes on extending the tail without end; that
+            # unbounded enumeration is not reproduced -- it stops here).
+            for i, item in enumerate(prefix):
+                mark = trail.mark()
+                ok = unify(elem, item, trail) and unify(index, i + base, trail)
+                if ok and rest is not None:
+                    ok = unify(rest, _partial(list(prefix[:i]) + list(prefix[i + 1:]),
+                                              tail), trail)
+                if ok:
+                    yield None
+                trail.undo(mark)
+            return
         pos = n_val - base
         if pos < 0:
             return

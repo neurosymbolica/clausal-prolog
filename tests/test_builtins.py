@@ -545,12 +545,16 @@ class TestBetweenArithmeticBounds:
         assert cell_args(err)[0] == ("evaluation_error", mint("zero_divisor"))
         assert cell_args(err)[1] == ("/", "//", 2)
 
-    def test_expression_with_unbound_leaf_keeps_mode_failure(self):
+    def test_expression_with_unbound_leaf_is_an_instantiation_error(self):
         """A bound expression still containing an unbound Var behaves like a
-        plain unbound bound: silent failure (current documented mode error)."""
+        plain unbound bound -- since 2026-09-30 an instantiation error, as
+        Scryer's library(between), not a silent failure."""
+        from clausal.logic.exceptions import LogicException
         from clausal.terms import Sub
         x = Var()
-        assert sol_var(self._between(0, Sub(left=Var(), right=1), x), x) == []
+        with pytest.raises(LogicException) as info:
+            sol_var(self._between(0, Sub(left=Var(), right=1), x), x)
+        assert cell_args(info.value.term)[0] == mint("instantiation_error")
 
     def test_plain_unbound_bound_is_an_instantiation_error(self):
         """2026-09-30 (Scryer's library(between)): between(0, HIGH, X) with

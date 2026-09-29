@@ -664,6 +664,19 @@ def _cell_bound_as_node(bound):
     return bound
 
 
+def _between_bound_error(bound):
+    """Raise between/3's ISO error for *bound*: an instantiation error when
+    it is (or its expression holds) an unbound variable, else
+    type_error(integer, Bound) -- for an expression, the term as written."""
+    from clausal.logic.exceptions import (  # noqa: PLC0415
+        LogicException, instantiation_error, type_error)
+    from clausal.logic.builtins._helpers import _is_ground  # noqa: PLC0415
+    b = deref(bound)
+    if is_var(b) or not _is_ground(b):
+        raise LogicException(instantiation_error("between/3"))
+    raise LogicException(type_error("integer", b, "between/3"))
+
+
 @_builtin("between", 3)
 def _between__3(low, high, x, trail, k):
     # Evaluate expression bounds here, at the dispatch boundary (the same
@@ -674,28 +687,27 @@ def _between__3(low, high, x, trail, k):
     if isinstance(low_d, ARITH_OPERATOR_TERMS):
         low = _eval_between_bound(low_d)
         if low is None:
+            _between_bound_error(low_d)
             return
     high_d = _cell_bound_as_node(deref(high))
     if isinstance(high_d, ARITH_OPERATOR_TERMS):
         high = _eval_between_bound(high_d)
         if high is None:
+            _between_bound_error(high_d)
             return
     # Scryer's library(between) (must_be/can_be): an unbound bound is an
     # instantiation error, a non-integer bound -- or a bound X that is not an
     # integer -- a type_error(integer, _).  These used to FAIL silently
     # (``between(1, a, X)``, ``between(_, 3, X)``).  A bool is not an
-    # integer (A09-F015).
-    from clausal.logic.exceptions import (  # noqa: PLC0415
-        LogicException, instantiation_error, type_error)
+    # integer (A09-F015).  Checked only here, off the answering path's
+    # imports.
     for bound in (deref(low), deref(high)):
-        if is_var(bound):
-            raise LogicException(instantiation_error("between/3"))
-        if not isinstance(bound, int) or isinstance(bound, bool):
-            raise LogicException(type_error("integer", bound, "between/3"))
+        if is_var(bound) or not isinstance(bound, int) or isinstance(bound, bool):
+            _between_bound_error(bound)
     x_val = deref(x)
     if not is_var(x_val) and (not isinstance(x_val, int)
                               or isinstance(x_val, bool)):
-        raise LogicException(type_error("integer", x_val, "between/3"))
+        _between_bound_error(x_val)
     yield from (_between__3_c if _USE_C_ARITH else _between__3_py)(low, high, x, trail, k)
 
 @_builtin("succ", 2)

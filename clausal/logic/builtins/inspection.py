@@ -547,7 +547,6 @@ def _univ__2(term, lst, trail, k):
                 or isinstance(f_val, (int, float, bool, bytes))
                 or f_val is None
             ):
-                from clausal.logic.exceptions import LogicException, type_error
                 raise LogicException(type_error("atomic", f_val, "=../2"))
             constructed: Any = f_val  # atom
         else:

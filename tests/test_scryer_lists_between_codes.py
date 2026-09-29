@@ -63,3 +63,23 @@ def test_code_out_of_range_is_a_representation_error(mod):
     for name in ("atom_codes", "number_codes"):
         assert _err(mod, name, Var(), [97, -1]) == (
             "representation_error", "character_code")
+
+
+def test_nth_on_seglists(tmp_path):
+    """roborev (Medium): ``[X, *T]`` after ``T = [b]`` is a proper list; an
+    unbound index over an open list answers its known prefix."""
+    from clausal.import_hook import _load_module
+    p = tmp_path / "nth_seg.clausal"
+    p.write_text("-private([a, b])\n"
+                 "t1(E) <- (L is [X, *T], T is [b], nth0(1, L, E))\n"
+                 "t2(I) <- (L is [a, b, *T], nth0(I, L, a))\n")
+    m = _load_module("nth_seg", str(p))
+    E = Var()
+    assert [_deref_walk(E) for _ in solve(("t1", E), m)] == ["b"]
+    I = Var()
+    assert [_deref_walk(I) for _ in solve(("t2", I), m)] == [0]
+
+
+def test_between_with_an_unbound_expression_bound(mod):
+    H = Var()
+    assert _err(mod, "between", 0, ("-", H, 1), Var()) == "instantiation_error"
