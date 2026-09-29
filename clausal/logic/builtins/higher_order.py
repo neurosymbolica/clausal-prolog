@@ -532,10 +532,14 @@ def _make_call_goal_factory(extra_n: int):
                 # ``call(Y^G)``: ``^`` is a goal only inside bagof/setof's
                 # iterated goal (ISO 7.1.1.4); anywhere else it is the
                 # procedure (^)/2, which does not exist (Scryer:
-                # existence_error(procedure, (^)/2); with extras the fold's
-                # (^)/3 ...).  It used to be type_error(callable).
-                raise LogicException(folded_existence_error(
-                    "^", 2 + extra_n, f"call/{extra_n + 1}"))
+                # existence_error(procedure, (^)/2)).  It used to be
+                # type_error(callable).  With extras the fold is
+                # library(lambda)'s (^)/3.. -- a builtin -- so the operator
+                # node goes the way its cell spelling ``'^'(Y, G)`` goes.
+                if extra_n == 0:
+                    raise LogicException(folded_existence_error(
+                        "^", 2, "call/1"))
+                goal_val = ("^", goal_val.left, goal_val.right)
             # A BODY term (conjunction, or, not, if_, a comparison ...) is
             # interpreted by ``_resolve_named_goal`` -- see ``call_body``.
             # Checked first: its nodes are Python-``callable`` and would

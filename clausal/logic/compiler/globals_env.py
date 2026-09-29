@@ -919,11 +919,13 @@ def _atom_bound_dispatch(atom, db, name: str, arity: int):
     lets this db's own row win over one -- but only a row present at COMPILE
     time.  The atom may be no more than a same-spelled atom some earlier
     module left in the process-wide pool the module dict is seeded from, so
-    a procedure created later (``assertz`` under ``assert_creates_dynamic``,
-    or ``-dynamic`` clauses added at run time) was shadowed by it, and the
-    answer depended on what the process had loaded first.  This re-resolves
-    on every call in the compiling module (its own row, then a builtin);
-    only a LOCKED row's dispatch is cached.  When nothing answers, the call
+    a procedure ``assertz`` creates later (under ``assert_creates_dynamic``;
+    a ``-dynamic`` declaration makes its row at compile time and never
+    reaches here) was shadowed by it, and the answer depended on what the
+    process had loaded first.  This re-resolves on every call in the
+    compiling module (its own row, then a builtin); only a LOCKED row's
+    dispatch is cached, so a call to an asserted (never locked) row pays a
+    ``get_dispatch`` and a ``row`` lookup each time.  When nothing answers, the call
     raises exactly what calling the atom always raised
     (``predicate._dispatch_at``'s atom branch).
     """
