@@ -243,6 +243,7 @@ class _ClauseLowering:
         self._ctx = ctx
         self._bound: set[int] = set()
         self.occurrences: dict[str, int] = {}
+        self._if_n = 0          # if_/3 truth-value variables minted so far
 
     # ── variables ──
 
@@ -655,7 +656,7 @@ class _ClauseLowering:
             return _node("IfExpr", test=test, body=body, orelse=orelse,
                          position=ppos)
         self._refuse_control_in(c, c_sp)
-        self._if_n = getattr(self, "_if_n", 0) + 1
+        self._if_n += 1
         t_ident = f"{_DOLLAR}if_T{self._if_n}"
         t_first = ast.NamedExpr(target=ast.Name(id=t_ident, ctx=ast.Store()),
                                 value=_node("Var"))

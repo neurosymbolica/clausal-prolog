@@ -335,9 +335,15 @@ strict mode for `.pl`. What was built:
   `clausal.pl_frontend` per load that has any. Never refused.
 * D35: a data-position `true`/`false`/`undefined` folds to `True`/`False`/`Undefined`
   (`$LoadName('Undefined')`, as the seam); `memberd_t(b, [a,b], true)` succeeds (it failed).
-  Not an auto-declared atom.
+  Not an auto-declared atom. OPEN (needs a ruling): the engine treats the folded values as
+  BOOLS, not atoms -- `atom(true)` fails, `atom_length(false, N)`, `atom_codes(true, _)`,
+  `functor(F, true, 1)` and `F =.. [true, x]` raise type_error(atom), `true = 1` SUCCEEDS
+  (Python `True == 1`), `X is true + 1` evaluates, and the standard order puts `true` with the
+  numbers. Scryer's answers are pinned strict-xfail in `test_l3_s4_constructs.py`. A lambda
+  body `true` is now `True` in an error term (`test_l3_lambda.py` updated).
 * D40: `true/N`, `false/N` (N >= 1) are definable: the seam's reserved-name check is arity 0
-  only, an APPLIED `true(...)` in the seam is the functor (no truth fold), and `call(true, X)`
+  only for these two (`undefined/N` and the TitleCase values stay reserved; so does exporting
+  `true/1` in a `-module` list -- the exporter-parity test pins it), an APPLIED `true(...)` in the seam is the functor (no truth fold), and `call(true, X)`
   reaches a user `true/1` (existence_error when none).
 * D26b: a listless `use_module/1` of a `.seam` module imports its `-module` list's bare names
   and templates (by name) as well as its `name/N` entries; a module exporting nothing is still

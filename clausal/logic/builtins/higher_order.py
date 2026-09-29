@@ -69,18 +69,18 @@ def _control_fail(this_generator, _proceed, _fail, _catcher, trail):
 # local to that call, so the barrier is the call itself and there is nothing
 # left inside it to cut.  ``call("!")`` is therefore ``call("true")`` — opaque,
 # not a no-op that silently changes the caller's choice points.
-#: D40 (operator ruling 2026-09-30): true/N and false/N for N >= 1 are
-#: ordinary procedures a module may define (ISO; Scryer loads
-#: ``true(X) :- X = 1.``), so call/N's fold onto them takes the normal
-#: lookup, which raises existence_error when nothing defines them.
-_USER_DEFINABLE_WITH_ARGS = frozenset({"true", "false"})
-
 _ZERO_ARITY_CONTROL_GOALS = {
     "true": _control_succeed_once,
     "!": _control_succeed_once,
     "fail": _control_fail,
     "false": _control_fail,
 }
+
+#: D40 (operator ruling 2026-09-30): true/N and false/N for N >= 1 are
+#: ordinary procedures a module may define (ISO; Scryer loads
+#: ``true(X) :- X = 1.``), so call/N's fold onto them takes the normal
+#: lookup, which raises existence_error when nothing defines them.
+_USER_DEFINABLE_WITH_ARGS = frozenset({"true", "false"})
 
 
 def _raise_if_unloaded_handle(functor, arity, context):

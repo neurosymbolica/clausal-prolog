@@ -191,7 +191,8 @@ class Uses:
             if type(t) is str:
                 # D35: a data ``true``/``false``/``undefined`` is the truth
                 # VALUE (iso_l3 folds it), not an atom to declare.
-                if t not in ("true", "false", "undefined"):
+                from clausal.tools.iso_l3 import _TRUTH_DATA  # noqa: PLC0415
+                if t not in _TRUTH_DATA:
                     self.atoms.add(t)
             elif type(t) is list:
                 stack.extend(t)
@@ -1628,8 +1629,12 @@ def _seam_exports(path: str):
                     pi = (e.func.id, None)
                 else:
                     continue
-                if pi not in exports and (pi[0], None) not in exports:
-                    exports.append(pi)
+                if (pi[0], None) in exports or pi in exports:
+                    continue
+                if pi[1] is None:
+                    # by name covers every arity: drop a name/N seen before
+                    exports = [x for x in exports if x[0] != pi[0]]
+                exports.append(pi)
         return name, exports, []
     return None, None, []
 

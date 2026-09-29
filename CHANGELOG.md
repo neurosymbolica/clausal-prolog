@@ -491,11 +491,15 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
   end left `true`/`false`/`undefined` as atoms where the seam folds them to
   `True`/`False`/`Undefined`, so `memberd_t(b, [a, b], true)` FAILED (the
   reified `T` is `True`). They fold now, as in the seam; `True`/`False`
-  written in a `.pl` file stay ordinary variables.
+  written in a `.pl` file stay ordinary variables. Known divergence (as in
+  the seam): the engine treats the folded values as bools, not atoms, so
+  `atom(true)` fails, `atom_length(false, N)` and `functor(F, true, 1)`
+  raise `type_error(atom, _)`, `true = 1` succeeds and `compare(O, true, a)`
+  gives `<` (Scryer: yes, 5, `true(_)`, no, `>`).
 - **A user-defined `true/N` or `false/N` (N >= 1) loads,** in `.seam` and
   `.pl` alike (ISO and Scryer allow it): the seam refused it as a "reserved
   truth value name", and `call(true, X)` now reaches it. `true/0` and
-  `false/0` stay the truth values.
+  `false/0` stay the truth values; `undefined/N` stays reserved.
 - **A listless `use_module/1` of a `.seam` module imports its export list**
   on the native front end: the bare names of its `-module` list were
   skipped, so the module's predicates were not in scope; a module exporting

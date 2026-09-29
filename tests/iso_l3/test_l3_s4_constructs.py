@@ -347,3 +347,35 @@ def test_listless_use_module_of_a_module_exporting_nothing_loads_it(native,
         q(X) :- s4seamnone:hidden(X).
         """)
     assert ans(mod, "q") == [7]
+
+
+# ── D35's cost: the truth values are not atoms to the engine (OPEN) ──
+#
+# A data ``true`` IS Python ``True`` (the ruling), and the engine's atom-level
+# builtins, unification and standard order treat ``True`` as a bool, not as
+# the atom ``true``.  Scryer's answers are pinned strict-xfail: each flips to
+# a pass (and so fails loudly) the day the engine reads True/False as atoms.
+
+_ISO_ATOM_TRUE = """\
+    a1(ok) :- atom(true).
+    a2(N) :- atom_length(false, N).
+    a3(F) :- functor(F, true, 1), F = true(x).
+    a4(ok) :- atom_chars(X, [t, r, u, e]), X == true.
+    a5(ok) :- true \\= 1.
+    a6(O) :- compare(O, true, a).
+    """
+
+
+@pytest.mark.parametrize("name, scryer", [
+    ("a1", ["ok"]),
+    ("a2", [5]),
+    ("a3", [("true", "x")]),
+    ("a4", ["ok"]),
+    ("a5", ["ok"]),
+    ("a6", [">"]),
+])
+@pytest.mark.xfail(strict=True, reason="D35 OPEN: True/False are not atoms "
+                   "to atom/1, atom_length/2, functor/3, unify, compare/3")
+def test_d35_truth_values_behave_as_scryers_atoms(native, ans, name, scryer):
+    mod = _load(native, "s4_d35_iso", _ISO_ATOM_TRUE)
+    assert ans(mod, name) == scryer
