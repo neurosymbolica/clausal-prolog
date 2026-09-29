@@ -25,6 +25,11 @@ q9(L) :- findall(X, (X in -3..3, B #<==> (X rem 2 #= 0), B = 1, label([X])), L).
 q10(L) :- findall(X, (X in 0..4, 1 << X #= 8, label([X])), L).
 q11(L) :- findall(X, (X in 0..7, X \\/ 1 #= 5, label([X])), L).
 q12(L) :- findall(X-Y, (X in -3..3, Y in -1..1, X rem Y #= 0, X #= 2, label([Y])), L).
+q13(L) :- findall(X, (X in 0..3, xor(X, X) #= 0, label([X])), L).
+q14(L) :- findall(X-B, (X in -2..2, B #<==> (sign(X) #= 1), label([X,B])), L).
+q15(L) :- findall(X-B, (X in -3..3, B #<==> (abs(X^2) #= 4), label([X,B])), L).
+q16(E) :- catch(B #<==> (X rem Y #= 0), error(E, _), true).
+q17(L) :- findall(Y, (X in 0..1000, Y in 0..1000, xor(X, Y) #= 5, X = 3), L).
 """
 
 WANT = {
@@ -32,6 +37,12 @@ WANT = {
     "q8": [("-", 0, 3), ("-", 1, 2), ("-", 2, 1), ("-", 3, 0)],
     "q9": [-2, 0, 2], "q10": [3], "q11": [4, 5],
     "q12": [("-", 2, -1), ("-", 2, 1)],
+    "q13": [0, 1, 2, 3],
+    "q14": [("-", -2, 0), ("-", -1, 0), ("-", 0, 0), ("-", 1, 1), ("-", 2, 1)],
+    "q15": [("-", -3, 0), ("-", -2, 1), ("-", -1, 0), ("-", 0, 0),
+            ("-", 1, 0), ("-", 2, 1), ("-", 3, 0)],
+    # 1001 x 1001 combinations: deferred until X is bound
+    "q17": [6],
 }
 
 
@@ -46,6 +57,11 @@ def test_native_pl(tmp_path, monkeypatch):
         for name, want in WANT.items():
             v = Var()
             assert [_deref_walk(v) for _ in solve((name, v), m)] == [want], name
+        # a variable divisor under reification: posting rem outside it would
+        # prune Y = 0 for good -- refused
+        v = Var()
+        (e,) = [_deref_walk(v) for _ in solve(("q16", v), m)]
+        assert e[0] == "domain_error" and e[1] == "clpz_expression"
     finally:
         sys.modules.pop("_clpz_fn_cells", None)
         shutil.rmtree(tmp_path / "__pycache__", ignore_errors=True)

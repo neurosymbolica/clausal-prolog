@@ -727,6 +727,10 @@ def _total_expr(t) -> bool:
             d = deref(args[1])
             if type(d) is not int or d == 0:
                 return False    # a divisor that may be 0
+        elif key in (("^", 2), ("$python_pow", 2)):
+            e = deref(args[1])
+            if type(e) is not int or e < 0:
+                return False    # an exponent that may be negative
         elif key not in _TOTAL_KEYS:
             return False
         stack.extend(args)

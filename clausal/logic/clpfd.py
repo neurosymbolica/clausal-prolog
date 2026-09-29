@@ -4219,7 +4219,14 @@ class FunctionalConstraint(Constraint):
     def propagate(self, trail: Trail, queue: deque) -> bool:
         import itertools  # noqa: PLC0415
         z = deref(self.z)
-        doms = [_expr_domain(deref(a), trail) for a in self.args]
+        args = [deref(a) for a in self.args]
+        # enumerate over the DISTINCT variables, so ``xor(X, X)`` never
+        # counts a combination giving X two values
+        vs: list = []
+        for a in args:
+            if is_var(a) and not any(a is v for v in vs):
+                vs.append(a)
+        doms = [_expr_domain(v, trail) for v in vs]
         if not all(doms):
             return False
         zd = _expr_domain(z, trail)
@@ -4230,11 +4237,22 @@ class FunctionalConstraint(Constraint):
                 return True             # unbounded: wait for bindings
             size *= n
             if size > _FUNCTIONAL_ENUM_LIMIT:
-                return True
+                return True             # too many: wait for bindings
+        slots = []
+        for a in args:
+            if is_var(a):
+                slots.append(next(i for i, v in enumerate(vs) if v is a))
+            else:
+                ad = _expr_domain(a, trail)
+                val = domain_singleton(ad)
+                if val is None:
+                    return True         # a non-ground expression: wait
+                slots.append(("const", val))
         image = set()
-        support = [set() for _ in doms]
+        support = [set() for _ in vs]
         for combo in itertools.product(*(domain_values(d) for d in doms)):
-            v = self._value(combo)
+            vals = [combo[s] if type(s) is int else s[1] for s in slots]
+            v = self._value(vals)
             if v is None or not domain_contains(zd, v):
                 continue
             image.add(v)
@@ -4246,12 +4264,12 @@ class FunctionalConstraint(Constraint):
         if is_var(z) and not _narrow_if_changed(z, domain_intersection(zd, nz),
                                                 trail, queue):
             return False
-        for a, sup in zip(self.args, support):
-            a = deref(a)
-            if is_var(a):
-                na = domain_intersection(_expr_domain(a, trail),
+        for v, sup in zip(vs, support):
+            v = deref(v)
+            if is_var(v):
+                nv = domain_intersection(_expr_domain(v, trail),
                                          _indices_to_domain(sorted(sup)))
-                if not na or not _narrow_if_changed(a, na, trail, queue):
+                if not nv or not _narrow_if_changed(v, nv, trail, queue):
                     return False
         return True
 
