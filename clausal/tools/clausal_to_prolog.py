@@ -924,6 +924,32 @@ def _leftmost_usub(node):
     return None, 0
 
 
+#: Functor of the marker a dict literal converts to in the plain layout
+#: (ruling D6); never emitted -- _hoist_dict_literals replaces every one.
+_DICT_LITERAL = "$clausal_dict_literal"
+
+
+def _contains_dict_literal(term) -> bool:
+    if isinstance(term, PClause):
+        return (_contains_dict_literal(term.head)
+                or (term.body is not None and _contains_dict_literal(term.body)))
+    if isinstance(term, PCompound):
+        return term.functor == _DICT_LITERAL or any(
+            _contains_dict_literal(a) for a in term.args)
+    if isinstance(term, PList):
+        return any(_contains_dict_literal(e) for e in term.elements) or (
+            term.tail is not None and _contains_dict_literal(term.tail))
+    return False
+
+
+def _conjoin(goals: list) -> PTerm:
+    """Right-nested ``,/2`` of *goals* (one goal stays itself)."""
+    body = goals[-1]
+    for goal in reversed(goals[:-1]):
+        body = PCompound(",", (goal, body))
+    return body
+
+
 #: How a ``use_module`` target is spelled.
 #:
 #: ``"relative"`` (the default) is the EXPORT-TREE layout: with a
@@ -1689,7 +1715,7 @@ class _ClausalToProlog:
         # Bare fact (no trailing comma): Foo(1, 2)
         if isinstance(value, python_ast.Call):
             head = self._convert_head(value)
-            return PClause(head)
+            return self._hoist_dict_literals(PClause(head))
 
         # Bare 0-arity fact with no parens at all: foo, / foo -- the engine
         # compiles this to Clause(head=foo, body=[True]) (a real fact, not
@@ -1713,7 +1739,7 @@ class _ClausalToProlog:
                     body = self._convert_expr(body_ast, goal_position=True)
                 finally:
                     self._enclosing_head_vars = outer_head_vars
-                return PClause(head, body)
+                return self._hoist_dict_literals(PClause(head, body))
             return None
 
         # head >> body (DCG rule — RShift)
@@ -1724,6 +1750,93 @@ class _ClausalToProlog:
             return PDCGRule(head, body)
 
         return None
+
+    # ── D6: dict literals become dict_pairs/2 goals (plain layout) ────
+    #
+    # Goal-argument positions the walk treats as GOALS rather than terms:
+    # a literal there is built inside that goal, never hoisted out of it
+    # (its values may use variables bound inside).
+    _META_GOAL_ARGS = {("findall", 3): (1,), ("bagof", 3): (1,), ("setof", 3): (1,),
+                       ("forall", 2): (0, 1), ("\\+", 1): (0,), ("call", 1): (0,)}
+
+    def _hoist_dict_literals(self, clause: PClause) -> PClause:
+        """Replace every dict-literal marker in *clause* with a fresh variable
+        bound by ``dict_pairs(Var, [K-V, ...])``, placed immediately before
+        the innermost goal that uses it. A literal in the HEAD (a fact's
+        argument) is built at the start of the body. A findall/bagof/setof
+        TEMPLATE literal is built at the END of that call's goal, once per
+        solution. Only the plain layout makes markers."""
+        if self.module_specs != "plain" or not _contains_dict_literal(clause):
+            return clause
+        self._fresh_dict = 0
+        head_goals: list[PTerm] = []
+        head = self._extract_dict_literals(clause.head, head_goals)
+        body = None if clause.body is None else self._hoist_goal(clause.body)
+        goals = head_goals + ([body] if body is not None else [])
+        new = PClause(head, _conjoin(goals) if goals else None)
+        if _contains_dict_literal(new):
+            self._add_warning("dict literal in a position the D6 lowering "
+                              "does not reach")
+        return new
+
+    def _fresh_dict_var(self) -> PVar:
+        self._fresh_dict += 1
+        return PVar(f"Dict__{self._fresh_dict}")
+
+    def _extract_dict_literals(self, term: PTerm, goals: list[PTerm]) -> PTerm:
+        """*term* with each marker replaced by a fresh variable; the building
+        goals are appended to *goals*, inner literals before outer ones.
+        A lambda argument is left for _hoist_goal, which builds inside it."""
+        if isinstance(term, PCompound) and term.functor == _DICT_LITERAL:
+            pairs = self._extract_dict_literals(term.args[0], goals)
+            var = self._fresh_dict_var()
+            goals.append(PCompound("dict_pairs", (var, pairs)))
+            return var
+        if isinstance(term, PCompound) and term.functor == "\\" and len(term.args) == 1:
+            return self._hoist_lambda(term)
+        if isinstance(term, PCompound):
+            return PCompound(term.functor, tuple(
+                self._extract_dict_literals(a, goals) for a in term.args))
+        if isinstance(term, PList):
+            elements = tuple(self._extract_dict_literals(e, goals) for e in term.elements)
+            tail = (None if term.tail is None
+                    else self._extract_dict_literals(term.tail, goals))
+            return PList(elements, tail=tail)
+        return term
+
+    def _hoist_lambda(self, term: PCompound) -> PCompound:
+        """``\\X^Y^Body``: the body is a goal; build its literals inside it."""
+        def walk(t):
+            if isinstance(t, PCompound) and t.functor == "^" and len(t.args) == 2:
+                return PCompound("^", (t.args[0], walk(t.args[1])))
+            return self._hoist_goal(t)
+        return PCompound("\\", (walk(term.args[0]),))
+
+    def _hoist_goal(self, goal: PTerm) -> PTerm:
+        if not _contains_dict_literal(goal):
+            return goal
+        if isinstance(goal, PCompound) and goal.functor in (",", ";") and len(goal.args) == 2:
+            return PCompound(goal.functor, tuple(self._hoist_goal(a) for a in goal.args))
+        key = (goal.functor, len(goal.args)) if isinstance(goal, PCompound) else None
+        if key in (("findall", 3), ("bagof", 3), ("setof", 3)):
+            template_goals: list[PTerm] = []
+            template = self._extract_dict_literals(goal.args[0], template_goals)
+            inner = self._hoist_goal(goal.args[1])
+            if template_goals:
+                inner = _conjoin([inner] + template_goals)
+            before: list[PTerm] = []
+            result = self._extract_dict_literals(goal.args[2], before)
+            return _conjoin(before + [PCompound(goal.functor, (template, inner, result))])
+        if key in self._META_GOAL_ARGS:
+            positions = self._META_GOAL_ARGS[key]
+            before = []
+            args = tuple(self._hoist_goal(a) if i in positions
+                         else self._extract_dict_literals(a, before)
+                         for i, a in enumerate(goal.args))
+            return _conjoin(before + [PCompound(goal.functor, args)])
+        before = []
+        new_goal = self._extract_dict_literals(goal, before)
+        return _conjoin(before + [new_goal])
 
     def _detect_arrow(self, compare: python_ast.Compare):
         """Detect <- pattern in a Compare node."""
@@ -2796,7 +2909,8 @@ class _ClausalToProlog:
                     and not node.keywords \
                     and self.dialect.name not in BUILTIN_NAME_MAP["in_domain"]:
                 return self._rewrite_in_domain(node)
-            functor = resolve_name(node.func.id, self.dialect)
+            functor = (node.func.id if self.module_specs == "plain" and node.func.id == "get"
+                       else resolve_name(node.func.id, self.dialect))
         elif (isinstance(node.func, python_ast.Constant)
                 and isinstance(node.func.value, str)
                 and node.func.value):
@@ -3676,6 +3790,11 @@ class _ClausalToProlog:
 
         left = self._convert_expr(left_node)
         splat_target = self._convert_expr(values[0])
+        if self.module_specs == "plain":
+            # D6: the engine's own update, later keys overriding (measured).
+            pairs = tuple(PCompound("-", (self._convert_expr(k), self._convert_expr(v)))
+                          for k, v in zip(keys[1:], values[1:]))
+            return PCompound("dict_put_pairs", (PList(pairs), splat_target, left))
         attr_list = self._dict_attr_list(keys[1:], values[1:])
         return PCompound("attrs_put", (splat_target, PList(attr_list), left))
 
@@ -3741,6 +3860,15 @@ class _ClausalToProlog:
             key_node = key_node.value
         key = self._convert_expr(key_node)
         value = self._convert_expr(value_node)
+        if self.module_specs == "plain":
+            # D6: no engine predicate reads a dict STRICTLY yet (get/3 and
+            # dict_get/3 both fail on a missing key, where the subscript
+            # raises existence_error(dict_key, K)). Refused until one exists,
+            # rather than silently softened.
+            self._add_warning(
+                "dict subscript " + python_ast.unparse(subscript_node)
+                + ": no strict engine read to lower it to yet")
+            return PAtom("???")
         return PCompound("profile_get_strict", (profile, key, value))
 
     def _convert_dict(self, node: python_ast.Dict) -> PTerm:
@@ -3761,6 +3889,17 @@ class _ClausalToProlog:
                 PAtom("_"),
                 PList(tuple(pairs)),
             ))
+        if self.module_specs == "plain":
+            # Ruling D6: in Clausal Prolog a dict is built by dict_pairs/2.
+            # A literal is a TERM here, so it becomes a marker that the clause
+            # post-pass (_hoist_dict_literals) replaces with a fresh variable
+            # bound by a dict_pairs/2 goal placed before the goal that uses it.
+            if any(k is None for k in node.keys):
+                self._add_warning("dict splat " + python_ast.unparse(node))
+                return PAtom("???")
+            return PCompound(_DICT_LITERAL, (PList(tuple(
+                PCompound("-", (self._convert_expr(k), self._convert_expr(v)))
+                for k, v in zip(node.keys, node.values))),))
         # ISO / Scryer / Trealla: lower to a key-sorted attribute(K, V) list.
         if any(k is None for k in node.keys):  # {**expr} splat — no static key set
             self._add_warning("dict splat " + python_ast.unparse(node))
