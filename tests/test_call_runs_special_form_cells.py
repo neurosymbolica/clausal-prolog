@@ -387,7 +387,6 @@ def test_catch_catches_the_error_of_its_own_goal(host):
 
 @pytest.mark.parametrize("args, indicator", [
     ((("once", ("p", Var())), "z"), ("once", 2)),
-    ((("findall", Var(), ("p", Var()), Var()), "z"), ("findall", 4)),
     (("findall", Var()), ("findall", 1)),
 ])
 def test_call_n_extras_past_a_special_form_name_no_procedure(host, args,
@@ -398,6 +397,17 @@ def test_call_n_extras_past_a_special_form_name_no_procedure(host, args,
     formal = _formal(ei)
     assert cell_functor(formal) == "existence_error"
     assert cell_args(formal)[1] == ("/", *indicator)
+
+
+def test_call_n_past_findall_3_is_findall_4(host):
+    """findall/4 exists since 2026-09-30, so ``call(findall(Y, p(Y), L), z)``
+    is ``findall(Y, p(Y), L, z)``: Scryer answers type_error(list, z) (the
+    tail is no list) -- it used to be existence_error(procedure, findall/4)."""
+    with pytest.raises(LogicException) as ei:
+        _call(host, ("findall", Var(), ("p", Var()), Var()), "z")
+    formal = _formal(ei)
+    assert cell_functor(formal) == "type_error"
+    assert cell_args(formal)[0] == "list" and cell_args(formal)[1] == "z"
 
 
 # ── the result of findall/bagof/setof must be a list or a partial list ─────

@@ -616,6 +616,14 @@ def _findall_4_factory(db):
 
     def _findall__4(this_generator, _proceed, _fail, _catcher,
                     template, goal, bag, tail, trail):
+        # A Tail that is neither a list nor a partial list is
+        # type_error(list, Tail), as Scryer raises (``findall(X, p(X), L,
+        # foo)``).
+        t = deref(tail)
+        if not (is_var(t) or _as_items(t) is not None
+                or _open_skeleton(t) is not None):
+            from clausal.logic.exceptions import type_error  # noqa: PLC0415
+            raise LogicException(type_error("list", t, "findall/4"))
         collected = Var()
         sg = StepGenerator(call1, this_generator, this_generator,
                            this_generator, ("findall", template, goal, collected),
@@ -903,6 +911,8 @@ def _make_maplist_n(n_lists):
     which maplist/2,3 use for open lists).  Scryer's library(lists) has
     maplist/2..9; only /2 and /3 existed here, so ``maplist(plus, Xs, Ys,
     Zs)`` was existence_error(procedure, maplist/4)."""
+    # Unlike maplist/3 (F063), no string promotion: output lists come back
+    # as lists even when every input is a string (the same term either way).
     def fn(this_generator, _proceed, _fail, _catcher, goal, *rest):
         *lists, trail = rest
         goal_val = deref(goal)

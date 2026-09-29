@@ -31,3 +31,19 @@ def test_maplist_5_to_9_exist_and_run(tmp_path):
     for n_lists in range(4, 8):
         lists = [[1, 2]] * n_lists
         assert len(list(solve(("maplist", f"ok{n_lists}", *lists), m))) == 1, n_lists
+
+
+def test_maplist_5_binds_outputs_and_checks_lengths(tmp_path):
+    from clausal.import_hook import _load_module
+    p = tmp_path / "maplist5.clausal"
+    p.write_text("sum3(A, B, C, S) <- (S == A + B + C)\n"
+                 "two(X, Y, Z, W) <- (W is [X, Y, Z])\n")
+    m = _load_module("maplist5", str(p))
+    S = Var()
+    assert [_deref_walk(S) for _ in solve(
+        ("maplist", "sum3", [1, 2], [10, 20], [100, 200], S), m)] == [[111, 222]]
+    assert list(solve(("maplist", "sum3", [1, 2], [10], [100, 200], Var()), m)) == []
+    Xs = Var()
+    got = [_deref_walk(Xs) for _, _ in zip(solve(
+        ("maplist", "sum3", Xs, [1], [2], [3]), m), range(3))]
+    assert got[:1] == [[0]]

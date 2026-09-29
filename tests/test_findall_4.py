@@ -31,3 +31,20 @@ def test_findall_4_from_a_clause_body(tmp_path):
     assert [_deref_walk(L) for _ in solve(("q", L), m)] == [["a", "b", "c"]]
     L = Var()
     assert [_deref_walk(L) for _ in solve(("r", L, []), m)] == [["a", "b"]]
+
+
+def test_findall_4_tail_shapes():
+    from clausal.logic.solve import solve as _solve
+    m = Module("f4c")
+    X, L, T = Var(), Var(), Var()
+    got = [(_deref_walk(L)) for _ in _solve(
+        ("findall", X, ("member", X, ["a"]), L, T), m)]
+    assert len(got) == 1 and list(got[0])[0] == "a"     # [a|T], open
+    with pytest.raises(LogicException) as info:
+        list(_solve(("findall", X, ("member", X, ["a"]), Var(), "foo"), m))
+    assert info.value.term[1] == ("type_error", "list", "foo")
+
+
+def test_findall_4_goal_position_is_known_to_clause_2():
+    from clausal.logic.builtins.clause_ops import _goal_positions
+    assert _goal_positions("findall", 4, None) == (1,)
