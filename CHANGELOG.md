@@ -212,6 +212,22 @@ since 0.4.0 finish three moves:
   `__init__` with no `-module` list can now list its imported atoms without
   reading internal namespace keys. See
   [docs/python_integration.md](docs/python_integration.md#listing-the-atoms-a-module-imports-imported_atoms).
+- **`clausal.module_signatures(module)`.** A `dict` from predicate name to
+  the `frozenset` of its arities, for the predicates a module offers to
+  `-import_from`. It answers for a Python-backed engine module (`py.datetime`,
+  `currency`, `units`, ...), which has no Clausal source to read a signature
+  from, as well as for a Clausal module. A module name is spelled and
+  resolved as `-import_from` resolves it, and is imported if needed. See
+  [docs/public-api.md](docs/public-api.md#13-python-entry-points).
+- **A native `.pl` file can import a Python-backed module.**
+  `:- use_module(py/datetime, [date_add/3, timedelta/3]).` works under
+  `CLAUSAL_PL_FRONTEND=native`: `py/X` is redirected to the engine's
+  `py.X` module as `-import_from(py.X, ...)` is, and each `name/N` entry is
+  checked against `clausal.module_signatures`. A name the module lacks, or
+  an arity it does not register, is a load error that names the `.pl` line
+  and lists the predicates the module offers. `use_module(py/datetime)`
+  imports every predicate the module has. See
+  [docs/importing_prolog.md](docs/importing_prolog.md#importing-a-python-backed-module).
 - **CLP(ℝ) `inf/2` and `sup/2`**: the bounds of an expression over real
   variables, read from the store without changing it; they fail when
   unbounded. (They used to reach the CLP(ℚ) solver, which knew nothing of

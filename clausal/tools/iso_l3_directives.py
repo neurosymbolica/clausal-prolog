@@ -17,6 +17,10 @@ What is handled, and how (the ISO directive -> the seam's):
     use_module(a/b) / ('a/b')       -import_from(a.b, <a/b's name/arity exports>)
                                     (+ the exported op/3s, into the table)
     use_module(a/b, [p/1])          -import_from(a.b, [p/1])
+    use_module(py/x[, [p/1]])       a PYTHON module (D32): py/x is py.x, as
+                                    in the seam; p/1 CHECKED against
+                                    clausal.module_signatures, imported by
+                                    bare name; no list = all its predicates
     use_module(m, [])               Scryer's remove_module/2 (D27): drops the
                                     names imported from module m, loads nothing
     use_module(library(L)[, Is])    lists/apply/dif/...: built in, nothing
@@ -371,10 +375,12 @@ def _use_module(ctx: DirectiveContext, args, spans, span):
                        f"library(Name), so it names no module to import",
                        span)
     dotted = _dotted(path, span, what)
-    found = _module_source(dotted)
+    found = _module_source(_engine_module_path(dotted))
     if found is None:
         raise _refused(f"{what}: no module {dotted} on sys.path (a slash "
                        f"path a/b names the dotted module a.b)", span)
+    if _is_python_module(found):
+        return _use_python_module(ctx, dotted, found, entries, span, what)
     for n, a in entries or ():
         if not n.isidentifier():
             raise _refused(
@@ -401,6 +407,54 @@ def _use_module(ctx: DirectiveContext, args, spans, span):
     return ctx.imported(dotted, ctx.seam(
         "import_from",
         [_dotted_ast(dotted), _list([_pi_ast(*e) for e in entries])],
+        span, what))
+
+
+def _use_python_module(ctx, dotted, found, entries, span, what):
+    """D32: ``use_module(py/datetime, [date_add/3, ...])`` -- a module whose
+    predicates are PYTHON adapters, with no Clausal source and so no module/2
+    export list.  Its offer is ``clausal.module_signatures`` (D28): each
+    ``name/N`` entry is CHECKED against it, and an unknown name or an arity
+    the module does not register is a load error listing what it has (as
+    Scryer's ``use_module(M, [p/N])`` refuses an indicator M does not
+    export).  No list imports every predicate it has.
+
+    The seam's ``-import_from`` takes a Python module's names BARE (an
+    indicator against one is its own refusal, compiler_v2), so the checked
+    entries are handed over as bare names: an adapter is one object, and the
+    import binds it with every arity it registers."""
+    import importlib  # noqa: PLC0415
+    from clausal.logic.solve import module_signatures  # noqa: PLC0415
+    try:
+        mod = importlib.import_module(_engine_module_path(dotted))
+    except ImportError as e:
+        raise _refused(f"{what}: {dotted} could not be imported: {e}",
+                       span) from None
+    sig = module_signatures(mod)
+    offer = ", ".join(f"{n}/{a}" for n in sig for a in sorted(sig[n])
+                      ) or "no predicates"
+    last = dotted.rsplit(".", 1)[-1]
+    ctx.alias(last, dotted)
+    if entries is None:
+        ctx.depends_on.add(found)
+        names = list(sig)
+    else:
+        names = []
+        for n, a in entries:
+            have = sig.get(n)
+            if have is None or (have and a not in have):
+                at = (f"{dotted} has {n} as "
+                      + ", ".join(f"{n}/{x}" for x in sorted(have))
+                      if have else f"{dotted} has no predicate {n}")
+                raise _refused(
+                    f"{what}: existence_error(procedure, {n}/{a}) -- {at}; "
+                    f"{dotted} offers {offer}", span)
+            if n not in names:
+                names.append(n)
+    if not names:
+        return []
+    return ctx.imported(dotted, ctx.seam(
+        "import_from", [_dotted_ast(dotted), _list([_name(n) for n in names])],
         span, what))
 
 
@@ -619,6 +673,23 @@ def _module_source(dotted: str) -> "str | None":
     if spec is None:
         return None
     return spec.origin or "<namespace>"
+
+
+def _engine_module_path(dotted: str) -> str:
+    """The seam's ``py.X`` -> ``clausal.modules.py.X`` redirect
+    (``import_hook.ModulesFinder``), applied before a lookup: outside that
+    finder, ``py`` can be a non-package module already in ``sys.modules``,
+    and ``py.X`` then names nothing."""
+    if dotted.startswith("py.") and "." not in dotted[3:]:
+        return f"clausal.modules.{dotted}"
+    return dotted
+
+
+def _is_python_module(origin: str) -> bool:
+    """True when the module at *origin* is PYTHON (its predicates are
+    adapters), not a Clausal source a module/2 list can be read from."""
+    return (origin != "<namespace>"
+            and not origin.endswith((".pl", ".seam", ".clausal")))
 
 
 def _declared_exports(path: str):

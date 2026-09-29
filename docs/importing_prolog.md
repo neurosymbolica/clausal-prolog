@@ -144,6 +144,27 @@ SWI load `m` and import nothing. Write `use_module(m)` or
 `use_module(m, [p/1])` instead; after either, `m:p(X)` reaches every
 predicate `m` exports, in Clausal, Scryer and Trealla alike.
 
+### Importing a Python-backed module
+
+Under the native front end (`CLAUSAL_PL_FRONTEND=native`) a `.pl` file can
+import an engine module whose predicates are written in Python, such as
+`py.datetime`:
+
+```prolog
+:- use_module(py/datetime, [date_add/3, timedelta/3, days_between/3]).
+due(D) :- timedelta(30, 0, TD), date_add(date(2026, 1, 15), TD, D).
+```
+
+`py/X` names the same module as `-import_from(py.X, ...)` in a `.seam`
+file. Each `name/N` entry is checked against the module's predicates (see
+`clausal.module_signatures` in [the public API](public-api.md)): a name the
+module does not have, or an arity it does not register, is a load-time
+`SyntaxError` that names the line and lists what the module offers.
+`use_module(py/datetime)` with no list imports every predicate the module
+has. A Python predicate is one object for all its arities, so importing
+`p/N` also makes `p`'s other registered arities callable. A bare atom in
+the list imports nothing, as for any module.
+
 ### Module paths
 
 A module is named by an atom (`helpers`), a quoted or unquoted path

@@ -1049,6 +1049,124 @@ def imported_atoms(module_or_package: Any) -> dict:
     return dict(sorted(found.items()))
 
 
+def module_signatures(module: Any) -> dict:
+    """The predicates a module offers to ``-import_from``, as
+    ``{name: frozenset(arities)}``.
+
+    Valid for both kinds of module an ``-import_from`` can name:
+
+      - a CLAUSAL module (``.clausal``/``.seam``/``.pl``): every predicate its
+        own database is the home of -- clauses, ``-dynamic`` declarations,
+        compiled dispatch -- plus a bare ``name/N`` entry of its ``-module``
+        list.  A predicate it merely imports is not its own and is left out,
+        and so is a fielded DATA declaration (a constructor, not a
+        predicate).  Compiler-internal ``$`` names are left out.
+      - a PYTHON-BACKED module (``clausal.modules.*``, ``py.*`` and any Python
+        module whose public attributes are predicate adapters, i.e. objects
+        carrying ``_get_dispatch``): each public attribute that registers at
+        least one arity.  An adapter keeping a ``_dispatch_fns`` table
+        (``ModulePredicate`` and its subclasses) answers from that table's
+        keys; one that does not answers from the parameter list of the
+        function its ``_get_dispatch()`` returns
+        (``this_generator, _proceed, _fail, _catcher, *args, trail``).  An
+        adapter whose dispatch takes ``*args`` has no discoverable arity: it
+        is listed with an EMPTY frozenset, meaning "a predicate, arities
+        unknown", never left out.  A unit or currency constant (an adapter
+        with no registered arity) and a plain Python function (a term
+        constructor such as ``py.datetime``'s ``date/3``) are not
+        predicates and are left out.
+
+    *module* is a module object, a :class:`~clausal.logic.database.Module`,
+    or a name spelled as an ``-import_from`` spells it (``py.datetime``,
+    ``date_time``, ``currency``, ``thailand``, ``pkg.mod``) and resolved the
+    same way.  Unlike :func:`declared_atoms`, a name is IMPORTED when it is
+    not loaded yet: the question is what an import of the module would
+    bring, and answering it takes the module, exactly as the import does.
+    A name that resolves to no module raises
+    ``LogicException(existence_error(module, ...))``.
+
+    The result is a fresh ``dict`` with its keys in sorted order.  A
+    package is answered for its own ``__init__`` only (what an
+    ``-import_from`` of the package reads), never its submodules.
+    """
+    target = module
+    if isinstance(target, str):
+        target = _import_for_signatures(target)
+    if isinstance(target, Module):
+        ns = target.module_dict or {}
+        db = target.db
+    elif isinstance(target, _types.ModuleType):
+        ns = vars(target)
+        from clausal.logic.predicate import namespace_db  # noqa: PLC0415
+        db = namespace_db(ns)
+    else:
+        raise TypeError(
+            f"module_signatures() expects a module object, a clausal Module "
+            f"or a module name, got {type(target).__name__}")
+    found: dict[str, set] = {}
+    if db is not None:
+        keys = set(db.owned_keys()) | set(db._predicate_export)
+        for name, arity in keys:
+            if type(name) is str and not name.startswith("$"):
+                found.setdefault(name, set()).add(arity)
+    else:
+        for name, value in list(ns.items()):
+            if name.startswith("_") or isinstance(value, type):
+                continue
+            arities = _adapter_arities(value)
+            if arities is not None:
+                found[name] = arities
+    return {name: frozenset(found[name]) for name in sorted(found)}
+
+
+def _adapter_arities(value: Any) -> "set | None":
+    """The arities a Python predicate adapter registers: ``None`` when
+    *value* is no predicate (no ``_get_dispatch``, or a ``_dispatch_fns``
+    table with nothing in it); an empty set when it is one whose arities
+    cannot be read off it."""
+    get_dispatch = getattr(value, "_get_dispatch", None)
+    if not callable(get_dispatch):
+        return None
+    table = getattr(value, "_dispatch_fns", None)
+    if isinstance(table, dict):
+        arities = {a for a in table if type(a) is int and a >= 0}
+        return arities or None
+    import inspect  # noqa: PLC0415
+    try:
+        params = list(inspect.signature(get_dispatch()).parameters.values())
+    except (TypeError, ValueError):
+        return set()
+    if any(p.kind in (p.VAR_POSITIONAL, p.VAR_KEYWORD) for p in params):
+        return set()
+    positional = [p for p in params
+                  if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)]
+    # this_generator, _proceed, _fail, _catcher ... trail
+    arity = len(positional) - 5
+    return {arity} if arity >= 0 else set()
+
+
+def _import_for_signatures(name: str):
+    """Resolve *name* as ``-import_from`` resolves a module path
+    (``compiler_v2._resolve_module``: the ``clausal.modules`` spellings
+    first, then the name itself), importing it if needed."""
+    from clausal.logic.compiler_v2 import _resolve_module  # noqa: PLC0415
+    try:
+        return _resolve_module(name)
+    except ModuleNotFoundError as exc:
+        missing = getattr(exc, "name", None) or ""
+        if missing and not (name == missing or name.startswith(missing + ".")
+                            or missing.startswith("clausal.modules")):
+            raise       # the module exists; something IT imports is missing
+        from clausal.logic.exceptions import (  # noqa: PLC0415
+            LogicException, existence_error,
+        )
+        raise LogicException(existence_error(
+            "module", name,
+            f"module_signatures: {name!r} names no module -- a module name "
+            f"is spelled as -import_from spells it (py.datetime, currency, "
+            f"pkg.mod)")) from exc
+
+
 def _module_for_moduleless_solve(goal) -> tuple[Any, Module]:
     """Pick the goal and module for a ``solve(goal)`` called without ``module=``.
 
