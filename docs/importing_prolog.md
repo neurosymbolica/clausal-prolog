@@ -460,12 +460,11 @@ renamed to `_pi`.)
   `q(X) :- X = g(2).` add `f(_)` and `g(_)` to the `-private([...])` list).
   A name is left undeclared when the program defines, declares, imports or
   calls it as a predicate (including in a meta-predicate's goal argument,
-  such as `findall(X, counter(X), L)`), when the engine knows it as a
-  builtin or evaluable, or when it is used as data at two arities (a
-  `-private` entry declares field names, which belong to one arity; a
-  PREDICATE may have several arities in one file, as in ISO -- a file
-  defining `call_goal/1` .. `call_goal/8` imports).  A data term under such a
-  name that nothing
+  such as `findall(X, counter(X), L)`), or when the engine knows it as a
+  builtin or evaluable at that arity.  A name used as data at two arities
+  is declared at both (`box(1)` and `box(1, 2)` add `box(_)` and
+  `box(_, _)`: a `-private` entry's field names are per arity).  A data term
+  under a name that nothing
   else declares raises the ISO error term
   `error(existence_error(procedure, f/1), f/1)` when it is built (a
   `catch/3` sees it; from Python it is also a `NameError`).

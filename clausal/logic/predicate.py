@@ -2533,10 +2533,15 @@ def _field_names_for_name(name, arity, db, namespace):
             if found is not None:
                 return found
     if namespace is not None:
-        from clausal.logic.cells import FUNCTOR_SIGNATURES_KEY  # noqa: PLC0415
-        found = (namespace.get(FUNCTOR_SIGNATURES_KEY) or {}).get(name)
+        from clausal.logic.cells import (  # noqa: PLC0415
+            FUNCTOR_SIGNATURES_KEY, registry_fields,
+        )
+        # Per (name, arity): a name declared at several arities answers
+        # only AT *arity* (operator ruling 2026-09-29).
+        found = registry_fields(namespace.get(FUNCTOR_SIGNATURES_KEY),
+                                name, arity)
         if found is not None:
-            return tuple(found)
+            return found
     # NO ``_BUILTIN_FIELDS`` FALLBACK (removed W4b-1 fix round 1, review
     # finding): a bare string that happens to spell a registered builtin
     # name -- ``'when'``, ``'freeze'``, ``'call_nth'`` -- is an ordinary

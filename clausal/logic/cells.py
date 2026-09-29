@@ -80,6 +80,8 @@ from clausal.logic.variables import deref, is_var
 
 __all__ = [
     "FUNCTOR_SIGNATURES_KEY",
+    "registry_fields",
+    "registry_signatures",
     "IMPLICIT_FUNCTORS_FLAG",
     "CELLS_NAMESPACE_KEY",
     "TUPLE_TAG",
@@ -216,7 +218,46 @@ def chars_text(x) -> str:
 # the cell-default flip).  Once a later task removes those classes, this
 # registry becomes the sole source of truth for a functor's declared field
 # names.
+#
+# A name DECLARED with field names at several arities (operator ruling
+# 2026-09-29: "-module(lib, [q(X), q(X, Y)]): allow it") has a DICT value,
+# ``{arity: fields}``; every other name keeps its ``fields`` tuple.  Read
+# the registry through :func:`registry_signatures` / :func:`registry_fields`,
+# never by indexing it, so both shapes are honoured.
 FUNCTOR_SIGNATURES_KEY = "__clausal_functor_signatures__"
+
+
+def registry_signatures(value) -> "dict[int, tuple[str, ...]] | None":
+    """``{arity: fields}`` for one functor-signature registry *value* (a
+    ``fields`` tuple, or the per-arity dict of a name declared at several
+    arities); ``None`` for ``None``."""
+    if value is None:
+        return None
+    if isinstance(value, dict):
+        return {a: tuple(f) for a, f in value.items()}
+    return {len(value): tuple(value)}
+
+
+def registry_fields(registry, name: str,
+                    arity: "int | None" = None) -> "tuple[str, ...] | None":
+    """*name*'s field names in the functor-signature *registry*.
+
+    A single-arity name answers its one entry whatever *arity* is (the old
+    by-name read, unchanged).  A name declared at several arities answers
+    the entry AT *arity*, and ``None`` when *arity* is ``None`` or not one
+    of them: by name alone, which arity is meant is not the registry's to
+    guess."""
+    if not registry:
+        return None
+    value = registry.get(name)
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        return tuple(value)
+    if arity is None:
+        return None
+    found = value.get(arity)
+    return None if found is None else tuple(found)
 
 
 # The module-namespace key recording every spelling this file DECLARED as a

@@ -120,7 +120,8 @@ def seam_term(node: Any, module_globals: dict, loose: bool = False) -> Any:
                 # the one rule the compiler uses (``handle_cell_functor``,
                 # operator ruling 2026-09-25 option (a)).
                 sig = cell_signature_for_name(
-                    fname, arity=len(args) + len(kwargs))
+                    fname, arity=len(args) + len(kwargs),
+                    keywords=tuple(k for k, _ in kwargs) or None)
                 owa = loose or _implicit_functors_active(module_globals)
                 if sig is not None:
                     functor, fields = sig
@@ -137,7 +138,8 @@ def seam_term(node: Any, module_globals: dict, loose: bool = False) -> Any:
                 # the same cell: post-P3-3 a cell is a goal (``call/N``), and
                 # no class instance is ever minted from a seam.
                 from clausal.logic.compiler.terms_to_ast import functor_signature_for  # noqa: PLC0415
-                fields = functor_signature_for(fname, module_globals, classes=False)   # P2: the Database, then the exec-time map; a CLASS binding is resolved below as before
+                fields = functor_signature_for(fname, module_globals, classes=False,
+                                               arity=len(args) + len(kwargs))   # P2: the Database, then the exec-time map; a CLASS binding is resolved below as before
                 if fields is not None:
                     placed = _place_signature_slots(
                         fields, args, kwargs, functor=fname, missing=Var)

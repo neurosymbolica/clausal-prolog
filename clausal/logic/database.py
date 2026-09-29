@@ -1321,13 +1321,22 @@ class Database:
         return self._declared.get((functor, arity))
 
     def declared_fields_by_name(self, functor: str) -> tuple[str, ...] | None:
-        """The by-NAME read the exec-time registry map offered (one entry per
-        name; the last declaration wins), for ``functor_signature_for``."""
-        found = None
-        for (f, _a), fields in self._declared.items():
-            if f == functor:
-                found = fields
-        return found
+        """The by-NAME read the exec-time registry map offered: the one
+        declaration of *functor*.  A name declared with field names at
+        SEVERAL arities (operator ruling 2026-09-29) answers ``None``: by
+        name alone, which arity is meant is not ours to guess -- ask
+        :meth:`declared_fields` at the arity, or
+        :meth:`declared_signatures_by_name` for all of them."""
+        found = self.declared_signatures_by_name(functor)
+        if len(found) != 1:
+            return None
+        return next(iter(found.values()))
+
+    def declared_signatures_by_name(
+            self, functor: str) -> dict[int, tuple[str, ...]]:
+        """``{arity: fields}`` for every declaration of *functor*."""
+        return {a: fields for (f, a), fields in self._declared.items()
+                if f == functor}
 
     def mark_predicate_export(self, functor: str, arity: int) -> None:
         """Record a bare ``name/arity`` -module/-private export entry (R6b):

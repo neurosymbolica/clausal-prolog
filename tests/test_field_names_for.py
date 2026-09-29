@@ -127,9 +127,10 @@ def test_two_arities_exact_read_beats_the_by_name_fallback():
     db.declare_functor("p", ("a", "b"))
     assert field_names_for("p", arity=1, db=db) == ("a",)
     assert field_names_for("p", arity=2, db=db) == ("a", "b")
-    # No arity: the by-name read, which answers the LAST declaration.  Pinned
-    # so the documented lossiness is a recorded property, not a surprise.
-    assert field_names_for("p", db=db) == ("a", "b")
+    # No arity: by name alone, which of two declared arities is meant is not
+    # the reader's to guess (per-arity ruling 2026-09-29: "-module(lib,
+    # [q(X), q(X, Y)]): allow it").  It used to answer the LAST declaration.
+    assert field_names_for("p", db=db) is None
 
 
 def test_dynamic_only_declaration_has_no_field_names_but_IS_declared():

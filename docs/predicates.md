@@ -239,19 +239,32 @@ nonterminal works the same way: `state//1` and `state//2` are `state/3` and
 `foo` has, and `foo(1, 2)` in a data position is the compound at the arity
 written.
 
-The one exception is a name whose **field names are declared**: a
-`-private([point(x, y)])` entry, a `-module(m, [f(A)])` template entry, or
-`-edcg_pred`. Field names belong to one arity, so such a name keeps one arity
-per file, and a clause head at another arity fails at load, naming both sites:
+A name whose **field names are declared** -- a `-private([point(x, y)])`
+entry, a `-module(m, [f(A)])` template entry -- has exactly the arities its
+declarations name, each with its own field names. One list may declare
+several:
+
+```clausal
+-module(lib, [q(X), q(X, Y)])
+q(1),
+q(1, 2),
+```
+
+A clause head at an arity no declaration names fails at load, naming both
+sites (this catches a head written with one argument too many or too few):
 
 - *functor f/2 conflicts with the declaration of f/1 in the same file*, or,
   for a shorter head, *... a clause head is not a partial term*. A position
   that really means "anything" must be spelled `_`.
 
-To give such a name a second arity, spell its export entry `f/1` (ISO's
-predicate indicator, no field names) instead of `f(A)`. (A keyword argument,
+To give such a name another arity, declare that arity too: `f(A, B)` beside
+`f(A)` in the list, or ISO's predicate indicator `f/2` (no field names).
+An `-edcg_pred` name keeps one arity per file. (A keyword argument,
 `foo(a=1)`, is a load-time `SyntaxError` in a head or a term: terms are built
-positionally.)
+positionally. A Python seam or `-constants` value that builds a term by field
+name picks the arity written, positional plus keyword count; when that arity
+is not declared and the keywords fit more than one declared arity, it raises
+`AmbiguousArityConstructionError` rather than guess.)
 
 A term is never padded anywhere: write every argument, using `_` for one you
 leave open.

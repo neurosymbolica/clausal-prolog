@@ -750,16 +750,16 @@ class _PrologToClausal:
         private = sorted(self._data_atoms)
         not_data = _names_not_data_functors(pmodule) | _collect_goal_names(pmodule)
         for name, arities in sorted(self._data_functors.items()):
-            # a -private entry declares FIELD NAMES, which belong to one
-            # arity (a predicate may have several since 2026-09-29, data may
-            # not): a name used as data at two arities is
-            # left undeclared (it raises as before) rather than half-declared
-            if len(arities) != 1 or name in not_data:
+            # One -private entry per arity the name is used at as data: a
+            # declaration's field names are per (name, arity) (operator
+            # ruling 2026-09-29), so ``box(1)`` and ``box(1, 2)`` declare
+            # ``box(_)`` and ``box(_, _)``.
+            if name in not_data or name in _RESERVED_BARE_NAMES:
                 continue
-            (arity,) = arities
-            if _engine_knows_name(name, arity) or name in _RESERVED_BARE_NAMES:
-                continue
-            private.append(f"{name}({', '.join(['_'] * arity)})")
+            for arity in sorted(arities):
+                if _engine_knows_name(name, arity):
+                    continue
+                private.append(f"{name}({', '.join(['_'] * arity)})")
         if private:
             atom_list = ", ".join(private)
             preamble_parts.append(f"-private([{atom_list}])")

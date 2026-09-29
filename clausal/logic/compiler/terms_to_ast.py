@@ -59,7 +59,9 @@ from clausal.logic.atoms import (
     spelling as _atom_spelling,
 )
 from clausal.logic.constants import _FrozenList, _FrozenDict, _FrozenSet
-from clausal.logic.cells import FUNCTOR_SIGNATURES_KEY, IMPLICIT_FUNCTORS_FLAG
+from clausal.logic.cells import (
+    FUNCTOR_SIGNATURES_KEY, IMPLICIT_FUNCTORS_FLAG, registry_signatures,
+)
 
 from clausal.logic.generated_names import dollar_ref
 from ._ast_helpers import _name, _call, _attr
@@ -375,7 +377,29 @@ def _resolve_module_path(prefix: str, namespace: dict) -> Any:
     return sys.modules.get(prefix)
 
 
-def functor_signature_for(name: str, namespace: "dict | None", *, classes: bool = True) -> "tuple[str, ...] | None":
+def functor_signatures_for(
+    name: str, namespace: "dict | None",
+) -> "dict[int, tuple[str, ...]] | None":
+    """``{arity: fields}`` for every arity *name* is DECLARED at with field
+    names in *namespace* -- the Database first, then the exec-time registry
+    (a name declared at several arities has a per-arity registry value,
+    operator ruling 2026-09-29) -- or ``None``.  No class fallback."""
+    if namespace is None:
+        return None
+    db = getattr(namespace.get("$module"), "db", None)
+    if db is not None:
+        declared = db.declared_signatures_by_name(name)
+        if declared:
+            return declared
+    registry = namespace.get(FUNCTOR_SIGNATURES_KEY)
+    if registry is not None and name in registry:
+        return registry_signatures(registry[name])
+    return None
+
+
+def functor_signature_for(name: str, namespace: "dict | None", *,
+                          classes: bool = True,
+                          arity: "int | None" = None) -> "tuple[str, ...] | None":
     """Resolve *name*'s declared field-name tuple against *namespace*.
 
     Consults *namespace*'s ``__clausal_functor_signatures__`` registry
@@ -394,23 +418,31 @@ def functor_signature_for(name: str, namespace: "dict | None", *, classes: bool 
     if namespace is None:
         return None
     # P2 Task 2 (R-P2-1): the Database is the registry; the module-level map
-    # below is the EXEC-TIME carrier (bound before the module body runs) and
+    # is the EXEC-TIME carrier (bound before the module body runs) and
     # answers while the Database has not been filled yet.
-    db = getattr(namespace.get("$module"), "db", None)
-    if db is not None:
-        declared = db.declared_fields_by_name(name)
-        if declared is not None:
-            return declared
-    registry = namespace.get(FUNCTOR_SIGNATURES_KEY)
-    if registry is not None and name in registry:
-        return registry[name]
+    #
+    # Per (name, *arity*) since the 2026-09-29 ruling: a name declared at
+    # ONE arity answers that declaration whatever *arity* is (unchanged --
+    # the placement then refuses a wrong arity against it); a name declared
+    # at SEVERAL answers the one AT *arity*, else (no arity asked, or one
+    # not declared) its WIDEST, which a construction site re-asks at the
+    # written arity (``construction_signature_for_name``) and placement
+    # refuses when it is not declared.
+    declared = functor_signatures_for(name, namespace)
+    if declared:
+        if len(declared) == 1:
+            return next(iter(declared.values()))
+        if arity in declared:
+            return declared[arity]
+        return declared[max(declared)]
     if not classes:
         return None            # the caller resolves a class binding itself (the seam does)
     return term_field_names_of_class(namespace.get(name))
 
 
 def cell_signature_for_name(
-    name: str, resolve_globals: "dict | None" = None, *, arity: "int | None" = None
+    name: str, resolve_globals: "dict | None" = None, *, arity: "int | None" = None,
+    keywords: "tuple[str, ...] | None" = None,
 ) -> "tuple[str, tuple[str, ...]] | None":
     """Resolve *name* to ``(functor, fields)`` for a DATA functor, or None.
 
@@ -462,6 +494,13 @@ def cell_signature_for_name(
     A name bound to a predicate HANDLE (the binding after the flip) is
     spelled by :func:`handle_cell_functor`: always its PLAIN name (operator
     ruling 2026-09-25, option (a)).
+
+    *keywords* (the field names a keyword construction writes; *arity* is
+    then the WRITTEN arity, positional + keyword count) matters only for a
+    name with fields at SEVERAL arities (operator ruling 2026-09-29, the
+    plan's Q3): the written arity when it is one of them, else the one
+    arity the keywords fit, else ``AmbiguousArityConstructionError`` --
+    ``predicate._head_signature_for``, the runtime's own choice.
     """
     namespace = resolve_globals if resolve_globals is not None else lowering_globals()
     if namespace is None:
@@ -481,6 +520,11 @@ def cell_signature_for_name(
         # too; its class only ever built instances, and __call__ builds cells
         # now, so the class-call path would only cost a runtime construction.
         cls_fields = term_field_names_of_class(binding)
+        if cls_fields is None and keywords and arity is not None:
+            by_arity = _several_arity_signatures(binding, _db)
+            if by_arity is not None:
+                return (_functor_spelling(binding, leaf, is_predicate=True),
+                        _keyword_signature(leaf, by_arity, arity, keywords))
         if cls_fields is None:
             # A predicate NAME at several arities (operator ruling
             # 2026-09-29, as in ISO) has no one field list, so the by-name
@@ -510,12 +554,50 @@ def cell_signature_for_name(
             # ``_place_signature_slots`` exactly as a long one is.
             return (_spelled, tuple(f"arg_{i}" for i in range(arity)))
         return _spelled, tuple(cls_fields)
-    fields = functor_signature_for(leaf, leaf_namespace)
+    fields = None
+    if keywords and arity is not None:
+        by_arity = functor_signatures_for(leaf, leaf_namespace)
+        if by_arity is not None and len(by_arity) > 1:
+            fields = _keyword_signature(leaf, by_arity, arity, keywords)
+    if fields is None:
+        fields = functor_signature_for(leaf, leaf_namespace, arity=arity)
     if fields is None:
         if binding is None and "." not in name:
             return evaluable_functor_signature(leaf, arity)
         return None
     return _functor_spelling(binding, leaf), fields
+
+
+def _keyword_signature(functor: str, by_arity: dict, written: int,
+                       keywords) -> "tuple[str, ...]":
+    """The fields a keyword construction of *functor*, WRITTEN at arity
+    *written* with field names *keywords*, is placed against, among its
+    declared *by_arity* ``{arity: fields}`` -- the runtime's own choice
+    (``predicate._head_signature_for``), so the compiled and runtime paths
+    agree, including its ``AmbiguousArityConstructionError``."""
+    from clausal.logic.predicate import _head_signature_for  # noqa: PLC0415
+    n_positional = max(written - len(keywords), 0)
+    return tuple(_head_signature_for(
+        functor, {a: tuple(f) for a, f in by_arity.items()},
+        (None,) * n_positional, dict.fromkeys(keywords)))
+
+
+def _several_arity_signatures(binding, db) -> "dict[int, tuple[str, ...]] | None":
+    """``{arity: fields}`` of the predicate *binding* when it is a predicate
+    at SEVERAL arities; ``None`` otherwise."""
+    from clausal.logic.predicate import (  # noqa: PLC0415
+        field_names_for, predicate_arities_for,
+    )
+    arities = predicate_arities_for(binding, db=db)
+    if len(arities) < 2:
+        return None
+    out = {}
+    for a in arities:
+        found = field_names_for(binding, arity=a, db=db)
+        if found is None or len(found) != a:
+            found = tuple(f"arg_{i}" for i in range(a))
+        out[a] = tuple(found)
+    return out
 
 
 def _several_arity_fields(binding, arity, db) -> "tuple[str, ...] | None":
@@ -535,7 +617,9 @@ def _several_arity_fields(binding, arity, db) -> "tuple[str, ...] | None":
     return tuple(found)
 
 
-def _is_several_arity_predicate(name: str, resolve_globals) -> bool:
+def _is_several_arity_name(name: str, resolve_globals) -> bool:
+    """*name* is a predicate at several arities, or a functor DECLARED with
+    field names at several (operator ruling 2026-09-29)."""
     namespace = (resolve_globals if resolve_globals is not None
                  else lowering_globals())
     if namespace is None:
@@ -544,8 +628,11 @@ def _is_several_arity_predicate(name: str, resolve_globals) -> bool:
     if resolved is None:
         return False
     from clausal.logic.predicate import predicate_arities_for  # noqa: PLC0415
-    return len(predicate_arities_for(
-        resolved[0], db=namespace_db(namespace))) > 1
+    if len(predicate_arities_for(
+            resolved[0], db=namespace_db(namespace))) > 1:
+        return True
+    declared = functor_signatures_for(resolved[1], resolved[2])
+    return declared is not None and len(declared) > 1
 
 
 def evaluable_functor_signature(
@@ -582,6 +669,7 @@ def evaluable_functor_signature(
 def construction_signature_for_name(
     name: str, resolve_globals: "dict | None" = None, *,
     n_positional: int, has_keywords: bool, n_keywords: "int | None" = None,
+    keyword_names: "tuple[str, ...] | None" = None,
 ) -> "tuple[str, tuple[str, ...]] | None":
     """The ``(functor, fields)`` a construction or head pattern WRITTEN with
     *n_positional* positional arguments is placed against, or None.
@@ -606,13 +694,16 @@ def construction_signature_for_name(
         # declaration again, which ``_place_signature_slots`` then refuses.
         sig = cell_signature_for_name(name, resolve_globals, arity=n_positional)
     elif (sig is not None and has_keywords and n_keywords
-          and _is_several_arity_predicate(name, resolve_globals)):
-        # A keyword construction of a predicate name at several arities
-        # (operator ruling 2026-09-29) is placed against the arity WRITTEN
-        # -- positional plus keyword count -- as a head is
+          and _is_several_arity_name(name, resolve_globals)):
+        # A keyword construction of a name with fields at several arities
+        # (a predicate, or a name DECLARED at several -- operator rulings
+        # 2026-09-29) is placed against the arity WRITTEN -- positional plus
+        # keyword count -- when it is one of them, else the one the keywords
+        # fit, else AmbiguousArityConstructionError, as a head is
         # (``predicate._head_signature_for``).
         sig = cell_signature_for_name(
-            name, resolve_globals, arity=n_positional + n_keywords)
+            name, resolve_globals, arity=n_positional + n_keywords,
+            keywords=tuple(keyword_names) if keyword_names else None)
     return sig
 
 
@@ -1362,7 +1453,8 @@ def term_to_ast_expr(
         # functor its declaration) -- see construction_signature_for_name.
         _sig = construction_signature_for_name(
             fname, n_positional=len(arg_exprs), has_keywords=bool(kw_exprs),
-            n_keywords=len(kw_exprs))
+            n_keywords=len(kw_exprs),
+            keyword_names=tuple(kw.arg for kw in kw_exprs))
         _namespace = lowering_globals()
         _owa = _implicit_functors_active(_namespace)
         if _sig is not None:

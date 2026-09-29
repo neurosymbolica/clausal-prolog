@@ -4701,13 +4701,20 @@ def _make_functor_signatures_update_ast(entries, source):
     directive's generated statement must ADD to the registry, not clobber
     an earlier one's entries.
 
+    A name DECLARED at several arities (operator ruling 2026-09-29) comes
+    as ``(name, {arity: fields})`` and is registered as that dict: the
+    registry is keyed by name, and the value carries each arity's own
+    fields (``cells.registry_signatures`` reads both shapes).  A dict value
+    rides ``_make_import_signatures_update_ast``'s copy unchanged.
+
     Returns ``None`` when *entries* is empty (an all-atom ``-module``/
     ``-private`` list has nothing to register).
     """
     if not entries:
         return None
     dict_text = ", ".join(
-        f"{name!r}: {tuple(fields)!r}" for name, fields in entries
+        f"{name!r}: {(fields if isinstance(fields, dict) else tuple(fields))!r}"
+        for name, fields in entries
     )
     lines = [
         f"globals().setdefault({FUNCTOR_SIGNATURES_KEY!r}, {{}})"
@@ -5809,10 +5816,19 @@ class EmbedTransformer(NodeTransformer):
         # field names, for a keyword head refused at a second arity.
         transformer._functor_arity_sites: dict[tuple[str, int], tuple[int, str]] = {}
         # Names with a FIELDED declaration -- a ``-module``/``-private``
-        # template entry, ``-edcg_pred`` -- anywhere in the file.  Such a
-        # name keeps one arity per file (D2 of the plan): its field names
-        # are per NAME (the exec-time signature registry is keyed by name).
+        # template entry, ``-edcg_pred`` -- anywhere in the file.  A clause
+        # head of such a name must be at an arity a declaration names (D2 of
+        # the plan, re-keyed 2026-09-29: "-module(lib, [q(X), q(X, Y)]):
+        # allow it" -- field names are per (name, arity), so each declared
+        # arity carries its own; an UNDECLARED arity stays the old error).
         transformer._fielded_functors: set[str] = set()
+        # name -> {arity: field names} its -module/-private TEMPLATE entries
+        # declare (the last entry at an arity wins, as the registry did).
+        transformer._fielded_arities: dict[str, dict[int, list[str]]] = {}
+        # name -> the arities a field-free PROCEDURE declaration names (an
+        # ISO ``name/N`` export/-private entry, ``-dynamic(name/N)``).  Lets
+        # a fielded name open that arity with a clause head.
+        transformer._procedure_decl_arities: dict[str, set[int]] = {}
         transformer._atoms: set[str] = set()
         # P3-1 Task 6 (§1a/§1b, ruling R1): this file's OWN ``-module(...)``
         # name, set by ``_handle_module_directive`` the moment that
@@ -5992,15 +6008,86 @@ class EmbedTransformer(NodeTransformer):
             (functor_name, len(field_names))] = (
                 getattr(node, "lineno", 0), kind)
 
-    def _register_functor_arity(transformer, functor_name, field_names, node):
+    def _register_functor_arity(transformer, functor_name, field_names, node,
+                                kind="first clause"):
         """Record ANOTHER arity of a name that already has its primary
-        registration (``_head_fields_at`` answered that the head opens one).
+        registration (``_head_fields_at`` answered that the head opens one,
+        or a -module/-private template entry declares a second arity).
         The name was checked against ``-hide`` when the primary registered."""
         transformer._functor_arities.setdefault(functor_name, {})[
             len(field_names)] = field_names
         transformer._functor_arity_sites[
             (functor_name, len(field_names))] = (
-                getattr(node, "lineno", 0), "first clause")
+                getattr(node, "lineno", 0), kind)
+
+    def _declare_fielded_entry(transformer, functor_name, field_names, node,
+                               kind, statements, expr_stmt):
+        """Register a -module/-private TEMPLATE entry ``name(F1, ..., Fn)``.
+
+        The first registration of the name is the old path, byte for byte.
+        An entry at an arity the name does not have yet declares THAT arity
+        with its own field names (operator ruling 2026-09-29: "-module(lib,
+        [q(X), q(X, Y)]): allow it"), so a clause head at either arity is
+        built against its own declaration.  An entry at an arity the name
+        already has changes nothing, as before."""
+        transformer._fielded_functors.add(functor_name)
+        transformer._fielded_arities.setdefault(functor_name, {})[
+            len(field_names)] = field_names
+        if functor_name not in transformer._seen_functors:
+            transformer._register_functor(
+                functor_name, field_names, node, kind)
+        elif len(field_names) not in transformer._functor_arities.get(
+                functor_name, {}):
+            transformer._register_functor_arity(
+                functor_name, field_names, node, kind)
+        else:
+            return
+        statements.append(
+            _make_predicate_decl_ast(functor_name, field_names, expr_stmt))
+
+    def _per_arity_signature_entries(transformer, entries):
+        """The ``(name, fields)`` pairs for the signature registry, with a
+        name DECLARED at several arities folded into one
+        ``(name, {arity: fields})`` pair that carries every declared arity
+        (earlier directives' included, since ``.update`` replaces the
+        name's value).  A single-arity name's pair is unchanged, so its
+        emitted registry update is byte-identical."""
+        out = []
+        folded = set()
+        for name, fields in entries:
+            by_arity = transformer._fielded_arities.get(name) or {}
+            if len(by_arity) < 2:
+                out.append((name, fields))
+            elif name not in folded:
+                folded.add(name)
+                out.append((name, {a: tuple(f) for a, f in
+                                   sorted(by_arity.items())}))
+        return out
+
+    def _late_fielded_arities_before(transformer, functor_name, before):
+        """Record, the first time a directive names *functor_name*, the
+        arities it had BEFORE the directive (for ``_refuse_late_fielded``)."""
+        if functor_name not in before:
+            before[functor_name] = set(
+                transformer._functor_arities.get(functor_name) or ())
+
+    def _refuse_late_fielded(transformer, before, nodes, kind):
+        """D2 regardless of ORDER, per arity: a -module/-private directive
+        whose template entries come BELOW clauses that already gave a name
+        several arities must declare every one of them.  (One arity before
+        the directive is the pre-ruling shape, which loaded, and still
+        does.)"""
+        for functor_name, arities in before.items():
+            if len(arities) < 2:
+                continue
+            covered = (set(transformer._fielded_arities.get(functor_name, ()))
+                       | transformer._procedure_decl_arities.get(
+                           functor_name, set()))
+            missing = sorted(arities - covered)
+            if missing:
+                transformer._raise_late_fielded(
+                    functor_name, nodes[functor_name], kind, arities,
+                    missing)
 
     def _head_fields_at(transformer, functor_name, arity, has_keywords=False,
                         unseat=True):
@@ -6039,13 +6126,19 @@ class EmbedTransformer(NodeTransformer):
         known = transformer._functor_arities.get(functor_name) or {}
         if arity in known:
             return known[arity], False
-        if (not has_keywords
-                and functor_name not in transformer._fielded_functors
-                and functor_name not in transformer._edcg_preds
-                and (transformer._functor_decl_site.get(
-                        functor_name, (0, ""))[1] == "first clause"
-                     or functor_name
-                     in transformer._directive_minted_functors)):
+        if has_keywords or functor_name in transformer._edcg_preds:
+            return primary, False
+        if functor_name in transformer._fielded_functors:
+            # D2, per arity: a fielded name opens only an arity a field-free
+            # procedure declaration names (``q/2`` in the list, -dynamic).
+            # Its template entries registered their own arities already.
+            if arity in transformer._procedure_decl_arities.get(
+                    functor_name, ()):
+                return None, True
+            return primary, False
+        if (transformer._functor_decl_site.get(
+                functor_name, (0, ""))[1] == "first clause"
+                or functor_name in transformer._directive_minted_functors):
             return None, True
         return primary, False
 
@@ -6175,11 +6268,12 @@ class EmbedTransformer(NodeTransformer):
 
     def _refuse_late_fielded_declaration(transformer, functor_name, fields,
                                          node, kind):
-        """D2 regardless of ORDER (roborev round 1): a fielded declaration
-        (a -module/-private template entry, -edcg_pred) BELOW clauses that
-        already gave *functor_name* several arities.  A name had one arity
-        until the 2026-09-29 ruling, so no program that loaded before
-        reaches this."""
+        """D2 regardless of ORDER (roborev round 1), for ``-edcg_pred``,
+        which keeps one arity per name (Q4): its declaration BELOW clauses
+        that already gave *functor_name* several arities.  A name had one
+        arity until the 2026-09-29 ruling, so no program that loaded before
+        reaches this.  (-module/-private template entries are checked per
+        arity: ``_refuse_late_fielded``.)"""
         arities = transformer._functor_arities.get(functor_name) or {}
         if len(arities) < 2:
             return
@@ -6191,22 +6285,48 @@ class EmbedTransformer(NodeTransformer):
             f"that define {known}\n"
             f"  declaration: {transformer._site(lineno)}"
             + (f" — {src}" if src else "")
-            + f"\nA functor declared with field names has one arity in a "
-            f"file, and {functor_name} already has {len(arities)}.\n"
-            f"  remedy: spell the entry `{functor_name}/{len(fields)}` (a "
-            f"predicate indicator, no field names), or give the other "
-            f"arities a different name.")
+            + f"\nAn -edcg_pred predicate has one arity in a file, and "
+            f"{functor_name} already has {len(arities)}.\n"
+            f"  remedy: give the other arities a different name.")
 
-    def _second_arity_note(transformer, functor_name, arity, decl_kind):
-        """The ISO way out of a declared-arity conflict, for a -module or
-        -private TEMPLATE entry: the same entry spelled ``name/N`` names the
-        procedure without fixing field names, and then a clause head at
-        another arity is a second procedure (operator ruling 2026-09-29)."""
+    def _raise_late_fielded(transformer, functor_name, node, kind, arities,
+                            missing):
+        """A -module/-private directive declares field names for some of
+        *functor_name*'s arities, below clauses that define *arities*, and
+        leaves *missing* undeclared."""
+        lineno = getattr(node, "lineno", 0)
+        src = transformer._source_snippet(lineno)
+        known = ", ".join(f"{functor_name}/{a}" for a in sorted(arities))
+        undeclared = ", ".join(f"{functor_name}/{a}" for a in missing)
+        templates = ", ".join(
+            f"`{transformer._arity_template(functor_name, transformer._functor_arities[functor_name][a])}`"
+            for a in missing)
+        raise SyntaxError(
+            f"{kind} for {functor_name} comes after clauses that define "
+            f"{known}, and does not declare {undeclared}\n"
+            f"  declaration: {transformer._site(lineno)}"
+            + (f" — {src}" if src else "")
+            + f"\nA functor declared with field names has exactly the "
+            f"arities its declarations name, each with its own fields.\n"
+            f"  remedy: declare {undeclared} in the same list ({templates}),"
+            f" or spell it as a predicate indicator (`{functor_name}/"
+            f"{missing[0]}`), or give that arity a different name.")
+
+    def _second_arity_note(transformer, functor_name, head_fields,
+                           decl_kind):
+        """The way to a second arity out of a declared-arity conflict, for a
+        -module or -private TEMPLATE entry: declare the head's arity too.
+        Each arity carries its own field names (operator ruling 2026-09-29:
+        "-module(lib, [q(X), q(X, Y)]): allow it"); ISO's ``name/N`` names
+        the procedure without fixing field names."""
         if decl_kind not in ("-module export list", "-private declaration"):
             return ""
+        arity = len(head_fields)
+        template = transformer._arity_template(functor_name, head_fields)
         return (f"\n  (Two arities of {functor_name} are two procedures, as "
-                f"in ISO, once the entry is spelled `{functor_name}/{arity}`: "
-                f"it is the field names that fix one arity.)")
+                f"in ISO: to define {functor_name}/{arity} as well, declare "
+                f"it in the same list, as `{template}` -- each arity carries "
+                f"its own field names -- or as `{functor_name}/{arity}`.)")
 
     def _check_head_signature(transformer, functor_name, all_field_names,
                               prev_fields, node, has_keywords=False,
@@ -6223,8 +6343,9 @@ class EmbedTransformer(NodeTransformer):
         ``-module``/``-private`` declaration (or an earlier clause) fixes
         arity N and a later clause head supplies N+k arguments, whose surplus
         positions fall back to ``arg_N`` placeholder names.  A functor whose
-        field names are DECLARED has one arity per file, so that is a source
-        error, not something to resolve.  (Two CLAUSE heads at two arities
+        field names are DECLARED has exactly the arities its declarations
+        name (each with its own fields, operator ruling 2026-09-29), so a
+        head at another arity is a source error, not something to resolve.  (Two CLAUSE heads at two arities
         never reach here: since the 2026-09-29 ruling each is a procedure of
         its own, as in ISO -- ``_head_fields_at``.)
 
@@ -6283,14 +6404,14 @@ class EmbedTransformer(NodeTransformer):
                 f"padded with {n_missing} fresh {args} into a "
                 f"{len(visible)}-argument clause that matches calls its "
                 f"author never wrote. A functor declared with field names "
-                f"has one arity in a file.\n"
+                f"has exactly the arities its declarations name.\n"
                 f"  remedy: write this head at arity {len(visible)} to "
                 f"match `{template}` — a position that really means "
                 f'"anything" must be spelled `_` — or give the '
                 f"{len(all_field_names)}-argument predicate a different "
                 f"name."
                 + transformer._second_arity_note(
-                    functor_name, len(visible), decl_kind)
+                    functor_name, all_field_names, decl_kind)
             )
         if len(all_field_names) > len(prev_fields):
             raise SyntaxError(
@@ -6300,8 +6421,8 @@ class EmbedTransformer(NodeTransformer):
                 f"{functor_name} is declared with "
                 f"{len(prev_fields)} field(s) {declared}, so a "
                 f"{len(all_field_names)}-argument head cannot be built "
-                f"against it. A functor declared with field names has one "
-                f"arity in a file: give the declaration and every clause head of "
+                f"against it. A functor declared with field names has exactly "
+                f"the arities its declarations name: give the declaration and every clause head of "
                 f"{functor_name} the same number of arguments, or rename one "
                 f"of them.\n"
                 + (f"  (A DCG rule's head carries the two state arguments as "
@@ -6312,7 +6433,7 @@ class EmbedTransformer(NodeTransformer):
                     decl_kind, decl_lineno,
                 )
                 + transformer._second_arity_note(
-                    functor_name, len(prev_fields), decl_kind)
+                    functor_name, all_field_names, decl_kind)
             )
         raise SyntaxError(
             f"clause head for {functor_name}/{len(all_field_names)} names "
@@ -6505,6 +6626,16 @@ class EmbedTransformer(NodeTransformer):
                 arities = transformer._functor_arities.get(functor_name)
                 if arities is not None:
                     arities.pop(len(placeholder), None)
+                    if arities and functor_name in transformer._fielded_functors:
+                        # A template entry declared another arity (2026-09-29
+                        # ruling): it becomes the primary, so the clause head
+                        # being built is checked against the DECLARATIONS,
+                        # not taken for the name's first clause.
+                        arity, fields = next(iter(arities.items()))
+                        transformer._seen_functors[functor_name] = fields
+                        transformer._functor_decl_site[functor_name] = (
+                            transformer._functor_arity_sites.get(
+                                (functor_name, arity), (0, "")))
 
     def _make_term_transformer(transformer, atoms=None, *, seam=False,
                                clause_var_names=None):
@@ -8873,6 +9004,8 @@ class EmbedTransformer(NodeTransformer):
             # a dangling target there is a load error — A12-F003.)
             statements = []
             for functor, arity in specs:
+                transformer._procedure_decl_arities.setdefault(
+                    functor, set()).add(arity)
                 if functor not in transformer._seen_functors:
                     field_names = [f"arg_{i}" for i in range(arity)]
                     transformer._register_functor(
@@ -9097,6 +9230,8 @@ class EmbedTransformer(NodeTransformer):
         clause-free declaration it would rebind to a str.
         """
         functor, arity = spec
+        transformer._procedure_decl_arities.setdefault(functor, set()).add(
+            arity)
         if functor not in transformer._seen_functors:
             field_names = [f"arg_{i}" for i in range(arity)]
             transformer._register_functor(
@@ -9133,6 +9268,8 @@ class EmbedTransformer(NodeTransformer):
         statements = []
         exports_info = []  # for ModuleAST accumulation
         signature_entries = []  # (name, fields) pairs -- see _make_functor_signatures_update_ast
+        late_before: dict[str, set[int]] = {}  # see _refuse_late_fielded
+        late_nodes: dict = {}
         # A10-F012: validate shape instead of silently dropping malformed
         # parts (every other directive raises on bad args).
         if len(args) < 1 or len(args) > 2 or not isinstance(args[0], Name):
@@ -9220,29 +9357,26 @@ class EmbedTransformer(NodeTransformer):
                         for i, arg in enumerate(export.args)
                     ]
                     field_names += [kw.arg for kw in export.keywords]
-                    transformer._refuse_late_fielded_declaration(
-                        functor_name, field_names, export,
-                        "-module export entry")
+                    transformer._late_fielded_arities_before(
+                        functor_name, late_before)
+                    late_nodes.setdefault(functor_name, export)
                     exports_info.append((functor_name, field_names))
                     signature_entries.append((functor_name, field_names))
-                    transformer._fielded_functors.add(functor_name)
-                    if functor_name not in transformer._seen_functors:
-                        transformer._register_functor(
-                            functor_name, field_names, export,
-                            "-module export list")
-                        statements.append(
-                            _make_predicate_decl_ast(
-                                functor_name, field_names, expr_stmt
-                            )
-                        )
+                    transformer._declare_fielded_entry(
+                        functor_name, field_names, export,
+                        "-module export list", statements, expr_stmt)
                 # Other item shapes are not pre-registered here — the
                 # signature is taken from the first clause — but the list
                 # itself is well-formed.  (The ISO ``foo/2`` arity form IS
                 # handled, above: R6b, a PREDICATE export.)
+        transformer._refuse_late_fielded(
+            late_before, late_nodes, "-module export entry")
         transformer._module_items.append(
             ModuleDeclItem(module_name=module_name, exports=exports_info)
         )
-        sig_stmt = _make_functor_signatures_update_ast(signature_entries, expr_stmt)
+        sig_stmt = _make_functor_signatures_update_ast(
+            transformer._per_arity_signature_entries(signature_entries),
+            expr_stmt)
         if sig_stmt is not None:
             statements.append(sig_stmt)
         if not statements:
@@ -9263,6 +9397,8 @@ class EmbedTransformer(NodeTransformer):
         statements = []
         private_info = []  # for ModuleAST accumulation
         signature_entries = []  # (name, fields) pairs -- see _make_functor_signatures_update_ast
+        late_before: dict[str, set[int]] = {}  # see _refuse_late_fielded
+        late_nodes: dict = {}
         # A10-F012: a missing/malformed list (e.g. -private(helper(X))) used to
         # silently become a no-op, so the predicate signature was later
         # inferred from the first clause with no warning. Raise instead.
@@ -9304,26 +9440,24 @@ class EmbedTransformer(NodeTransformer):
                     for i, arg in enumerate(item.args)
                 ]
                 field_names += [kw.arg for kw in item.keywords]
-                transformer._refuse_late_fielded_declaration(
-                    functor_name, field_names, item, "-private entry")
+                transformer._late_fielded_arities_before(
+                    functor_name, late_before)
+                late_nodes.setdefault(functor_name, item)
                 private_info.append((functor_name, field_names))
                 signature_entries.append((functor_name, field_names))
-                transformer._fielded_functors.add(functor_name)
-                if functor_name not in transformer._seen_functors:
-                    transformer._register_functor(
-                        functor_name, field_names, item,
-                        "-private declaration")
-                    statements.append(
-                        _make_predicate_decl_ast(
-                            functor_name, field_names, expr_stmt
-                        )
-                    )
+                transformer._declare_fielded_entry(
+                    functor_name, field_names, item,
+                    "-private declaration", statements, expr_stmt)
             # Other item shapes are not pre-registered here; the list itself
             # is still well-formed.  (The ISO ``foo/2`` arity form IS handled,
             # above: R6b, a PREDICATE entry.)
+        transformer._refuse_late_fielded(
+            late_before, late_nodes, "-private entry")
         transformer._module_items.append(
             PrivateDeclItem(items=private_info))
-        sig_stmt = _make_functor_signatures_update_ast(signature_entries, expr_stmt)
+        sig_stmt = _make_functor_signatures_update_ast(
+            transformer._per_arity_signature_entries(signature_entries),
+            expr_stmt)
         if sig_stmt is not None:
             statements.append(sig_stmt)
         if not statements:

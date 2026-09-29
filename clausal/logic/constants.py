@@ -272,8 +272,18 @@ def constant_functor_term(name: str, args, kwargs, namespace):
             binding, db=namespace_db(namespace)):
         return binding(*args, **kwargs)
 
-    from clausal.logic.compiler.terms_to_ast import functor_signature_for  # noqa: PLC0415
-    fields = functor_signature_for(name, namespace)   # P2: the Database first, then the exec-time map
+    from clausal.logic.compiler.terms_to_ast import (  # noqa: PLC0415
+        _keyword_signature, functor_signature_for, functor_signatures_for,
+    )
+    # P2: the Database first, then the exec-time map.  Per (name, arity)
+    # (operator ruling 2026-09-29): a name DECLARED at several arities is
+    # placed against the arity written, or -- keywords -- the one they fit.
+    written = len(args) + len(kwargs or {})
+    by_arity = functor_signatures_for(name, namespace)
+    if kwargs and by_arity is not None and len(by_arity) > 1:
+        fields = _keyword_signature(name, by_arity, written, tuple(kwargs))
+    else:
+        fields = functor_signature_for(name, namespace, arity=written)
     if fields is None:
         # No class and no declared signature: nothing to place against.  Let
         # the original call happen so the failure names the real problem
