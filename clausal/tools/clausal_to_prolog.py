@@ -1488,7 +1488,7 @@ class _ClausalToProlog:
         # caller-module goal through a 1-meta and a 2-meta, a library(lambda)
         # `\X^Goal` passed through the meta predicate, and #= in the body --
         # identical answers in both positions on both engines.
-        module_item: PItem | None = None
+        module_item: PItem | None = self._implicit_module_directive(defined)
         before_module: list[PItem] = []
         rest: list[PItem] = []
         for item in self._items:
@@ -1522,6 +1522,51 @@ class _ClausalToProlog:
         if self.strict and self._all_warnings:
             raise UntranslatableConstructError(list(self._all_warnings))
         return PModule(tuple(self._items))
+
+    def _implicit_module_directive(self, defined: set[tuple[str, int]]) -> PDirective | None:
+        """``:- module(Name, Exports)`` for a file that has no ``-module``, in the
+        ``"plain"`` (engine) layout only; None otherwise.
+
+        A Clausal file without ``-module`` -- typically a package facade,
+        ``__init__`` importing from its submodules -- makes every predicate it
+        defines AND every name it imports visible to its importers. A ``.pl``
+        file with no ``:- module/2`` does neither on the engine: an importer's
+        ``use_module(pkg, [f/1])`` is ``existence_error(procedure, f/1)``.
+        Measured on the engine's native and translator front ends: a facade
+        spelled ``:- module(pkg, [f/1]). :- use_module(pkg/sub, [f/1]).``
+        re-exports ``f/1`` on both; ``reexport/2`` is not a directive either
+        front end has.
+
+        The export list is the file's own predicates, then every indicator its
+        explicit import lists name, first occurrence kept. Dialect-library
+        imports (``library(...)``) are not re-exported. The module is named
+        after the file's module path, a package ``__init__`` after its package.
+        """
+        if self.module_specs != "plain" or self.module_path is None:
+            return None
+        if any(_is_module_directive(item) for item in self._items):
+            return None
+        segments = [seg for seg in self.module_path.split(".") if seg != "__init__"]
+        if not segments:
+            return None
+        exports: dict[tuple[str, int], None] = dict.fromkeys(sorted(defined))
+        for item in self._items:
+            body = getattr(item, "body", None)
+            if not (isinstance(item, PDirective) and isinstance(body, PCompound)
+                    and body.functor == "use_module" and len(body.args) == 2):
+                continue
+            target, listed = body.args
+            if isinstance(target, PCompound) and target.functor == "library":
+                continue
+            if not isinstance(listed, PList):
+                continue
+            for element in listed.elements:
+                if (isinstance(element, PCompound) and element.functor == "/"
+                        and isinstance(element.args[0], PAtom)
+                        and isinstance(element.args[1], PNumber)):
+                    exports.setdefault((element.args[0].name, element.args[1].value))
+        return PDirective(PCompound("module", (PAtom(segments[-1]), PList(tuple(
+            PCompound("/", (PAtom(name), PNumber(arity))) for name, arity in exports)))))
 
     def _convert_stmt(self, stmt) -> PItem | list[PItem] | None:
         """Convert a top-level statement to PItem(s).
