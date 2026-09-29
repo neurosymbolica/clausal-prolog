@@ -6,12 +6,12 @@ Base: canonical main `530814b4` (worktree `/workspace/_isoreader`, branch
 the probes in `implementation_plans/native-iso-reader-step2-2026-09-29/`. Re-run them rather
 than quote them.
 
-Inputs: executor-train `docs/CLAUSAL-PROLOG-MIGRATION-STRATEGY-2026-09-28.md` (step 2 is this
-lane's) and `docs/ISO-MIGRATION-SIZING-2026-09-28.md` (§6 pilot, §11 rulings);
+Inputs: a downstream migration strategy (step 2 is this lane's) and a downstream sizing
+document (§6 pilot, §11 rulings);
 `implementation_plans/prolog-reader-l1l2-plan.md`; the 2026-09-09 gap survey (clone-only,
 untracked); `clausal/tools/{prolog_reader,iso_l3,prolog_parser,prolog_to_clausal}.py`;
-`clausal/import_hook.py` (`PrologLoader`, `_run_v2_pipeline`); executor-train
-`auto/prolog/source.py`. The plan `iso_l3.py` cites, `clausal-iso-to-transformed-ast-2026-09-14.md`
+`clausal/import_hook.py` (`PrologLoader`, `_run_v2_pipeline`); a downstream
+Prolog reader. The plan `iso_l3.py` cites, `clausal-iso-to-transformed-ast-2026-09-14.md`
 (rev 4), is not in this tree or in its history. This plan replaces it for P2 onward.
 
 Rulings consumed. Native parser, not the translator (§11.5). Cut-free and no committed
@@ -59,7 +59,7 @@ Three defects that fail open. All three belong in slice 0:
 | `max`/`min`/`abs` → non-evaluables | **now loud**, still wrong | translated to `max_`/`min_`/`abs_`, then `type_error(evaluable, max_/2)` at call time. The engine evaluates `max(3,5)` natively (cell probe: `5`) |
 | `profile_get` → `get` rename | still renames | seam text shows `get(X, k, V)`. `profile_get` exists nowhere in the engine; it is an exporter name |
 | imported `euro` shadowed by `-private` | **gone** | `-private([euro])` plus the import still answers `euro`, because atoms are `str` |
-| unquoted `kit/x` import dropped as a comment | **still silently dropped at load** | emitted as `# use_module: …`. The load succeeds, and the call fails later with `PredicateNotFoundError mx/1`. The quoted form is refused at load ("must be a dotted module path") |
+| unquoted `lib/x` import dropped as a comment | **still silently dropped at load** | emitted as `# use_module: …`. The load succeeds, and the call fails later with `PredicateNotFoundError mx/1`. The quoted form is refused at load ("must be a dotted module path") |
 | NEW: `set_prolog_flag(double_quotes, codes)` | **silently ignored** | the translator turns it into a comment, and `current_prolog_flag(double_quotes, X)` answers `chars`. The seam directive handler would raise `permission_error` |
 
 Also obsolete in Audit 3. Undeclared data compounds now load: `X = pt(1,2)` answers,
@@ -79,7 +79,7 @@ message is stale) and yall are refused. `#=` is **not even read**: a parse error
 ### 1.3 Reader facts
 
 * `PrologReader()` defaults to `OperatorTable.swi_default()`, which contradicts "never SWI".
-  The harness reader (`auto/prolog/source.py`) calls `read_module` with the same default.
+  A downstream reader calls `read_module` with the same default.
 * No shipped table has `in`, `ins`, `..`, `#<==>` and the rest; only `scryer_default` has the
   six `#` comparisons. Scryer gets them from the `op/3` entries in `library(clpz)`'s module
   export list (`clpz.pl:44-60`). Our reader applies only top-level `op/3`, so
@@ -190,7 +190,7 @@ and it answers identically to a `.seam` twin through the real loader
 | clpq | seam `{…}` goal → `$SetLiteral`+`$ArithEq` | `library(clpq)` mapping | L3 maps goal `{}/1` |
 | dif, reif | `dif/2` builtin; `clausal.stdlib.reif` (`if_`, `memberd`, …) | `library(reif)` → `clausal.stdlib.reif` import | the import handler |
 | `test/1` discovery | the runner collects `test/1` from any loaded module, `.pl` included (file and dir modes measured) | `.pl` line numbers; the negative-test form (D14) | none: loader-agnostic |
-| DCG `-->` | seam `_dcg_body_ast` | not in scope for step 2 (0 corpus sites known); refuse loudly | L3 refuses |
+| DCG `-->` | seam `_dcg_body_ast` | not in scope for step 2 (0 downstream sites known); refuse loudly | L3 refuses |
 
 ---
 
@@ -248,10 +248,10 @@ control.
 * All of these go through `_handle_directive` with synthesized args (§1.5), and the module
   items are taken from that instance. The cache-hit `_recover_module_items` re-reads the file
   and re-lowers only the directives.
-* **Exit:** a three-module rulebase in which a `.pl` imports a `.seam` kit-style module and
+* **Exit:** a three-module rulebase in which a `.pl` imports a `.seam` library-style module and
   vice versa, a `.pl` imports a `.pl` via both path spellings, and `dynamic` + `assertz` work
   with `assert_creates_dynamic`. Every probe in `translator_probe/` answers correctly
-  natively (`kit/x` imports resolve; `set_prolog_flag(double_quotes, codes)` raises
+  natively (`lib/x` imports resolve; `set_prolog_flag(double_quotes, codes)` raises
   `permission_error`).
 
 ### Slice 3: declarations and strictness
@@ -260,7 +260,7 @@ control.
   exported constructors (D4). Strictness follows D5 per suffix: auto-declare for plain `.pl`,
   with the declared set **printed with its size** in a load-time info line, and strict for
   Clausal Prolog.
-* Bare-atom entries in `use_module/2` lists (what today's exporter emits, and what the harness
+* Bare-atom entries in `use_module/2` lists (what today's exporter emits, and what a downstream
   reader flags) follow D11.
 * **Exit:** under strict mode, an undeclared atom typo fails at load with the `.pl` line and
   the directive to add. A declared constructor builds data. The pilot's gap 3
@@ -274,10 +274,10 @@ control.
 * `findall/3,4`, `forall/2`, `once/1`, `catch/3`/`throw/1`, `maplist/2..7`, `foldl/4..6`,
   `if_/3`, `memberd/2`, `dif/2`. `\+`, `once` and `forall` are accepted and **counted** by the
   transition lint (D13); they are never refused by the loader.
-* The missing ISO/Scryer list builtins that corpus code calls (`nth0/nth1`, `keysort`,
+* The missing ISO/Scryer list builtins that downstream code calls (`nth0/nth1`, `keysort`,
   `atom_number`, `aggregate_all(count|sum|max|bag|set)`) are **engine builtin work**. The
-  front end does not rewrite them. File them as separate todos and sequence them by corpus
-  site counts from the sizing instrument.
+  front end does not rewrite them. File them as separate todos and sequence them by downstream
+  site counts.
 * **Exit:** a rulebase exercising each construct passes natively, with seam-twin all-answers
   identical, and a lint count equal to the number of planted `\+`/`once` sites.
 
@@ -317,7 +317,7 @@ control.
 
 ### Slice 8: parity and cutover (the strategy's exit test)
 
-1. **The engine-internal A/B, owned by this lane.** This needs iso-export-lane's
+1. **The engine-internal A/B, owned by this lane.** This needs a downstream exporter's
    **Clausal-Prolog dialect** of `clausal_to_prolog`. Today's exporter drops declarations,
    lowers dicts to `attribute/2` lists, strips units and emits `profile_get` (measured on a
    5-line file), so a round trip through it cannot be faithful (R7). With that dialect in
@@ -325,14 +325,12 @@ control.
    clauses (of 329 `.clausal`/`.seam` files under `tests/`). Load each natively and require the pass set and
    the per-test all-answers to equal the seam run. Every refusal is listed with its count.
    This becomes a **permanent gate**: the divergence alarm for R1.
-2. **The pilot domain, owned by the harness lane.** This lane never reads the corpus. The
-   sizing doc's `eu/ai_act/prohibited_practices`, exported in the Clausal-Prolog dialect and
-   loaded natively, must pass its own tests (control 51/51 and 22/22). The harness lane's
-   three arms follow: the sweep, the frozen trial, and the answer-set A/B on a reference
-   domain.
+2. **The pilot domain, owned downstream.** This lane never reads downstream code. A pilot
+   `<downstream-domain>`, exported in the Clausal-Prolog dialect and loaded natively, must pass
+   its own tests. The downstream answer-set checks follow.
 3. Flip the `.pl` default to native. `prolog_to_clausal` leaves the import path and stays a
-   tool until nothing imports it. Harness `source.py` switches to the same reader table (R4).
-4. The `.clausal`-reads-ISO flip is **not** in this slice (D3). It follows corpus migration.
+   tool until nothing imports it. The downstream reader switches to the same reader table (R4).
+4. The `.clausal`-reads-ISO flip is **not** in this slice (D3). It follows downstream migration.
 
 ---
 
@@ -351,11 +349,11 @@ the seam's handlers with synthesized args (proved in §1.5).**
 implementation of module, declaration, flag and table semantics.
 
 **D2. Reader operator table.**
-(a) Keep `swi_default` (today's default, and the harness's).
+(a) Keep `swi_default` (today's default, and a downstream reader's).
 (b) **`scryer_reader`**, with library-exported ops added on import.
 (c) Pure `iso_default`.
 **Recommend (b)** (ISO first, then Scryer). Consequence: `:- dynamic d/1.` is refused as it is
-in Scryer, and `:- dynamic(d/1).` is the spelling. Flip the harness reader at the same time.
+in Scryer, and `:- dynamic(d/1).` is the spelling. Flip the downstream reader at the same time.
 
 **D3. Selecting the front end during the transition.**
 (a) An env/config switch, `CLAUSAL_PL_FRONTEND=native|translator`, with the translator as
@@ -413,8 +411,8 @@ reification ops)**, or (b) front-end rewrites to `in_domain/3`. **Recommend (a).
 from any front end and from `query()`.
 
 **D10. Module paths and aliasing.** A slash path (quoted or not) maps to a dotted package
-path, and `./` relative paths are refused at first. Aliasing with `as` is refused, and the
-harness reader already flags it. Qualified calls use `m:G`, which needs a `:`/2 lowering to
+path, and `./` relative paths are refused at first. Aliasing with `as` is refused, and a
+downstream reader already flags it. Qualified calls use `m:G`, which needs a `:`/2 lowering to
 the seam's qualified name. **Recommend as stated.** The adaptor's alias protocol then uses
 `m:G`.
 
@@ -432,7 +430,7 @@ the pure subset.
 **D13. The transition constructs (`\+`, `once/1`, `forall/2`, and the `findall(_,G,[])`
 backdoors) in the front end.** Accept them silently, accept them and count them, or refuse
 them. **Recommend accept + count** (a lint, keyed to the `todo/cut-like-*` files). The ban
-is enforced by the lint and gate lane, not by the loader.
+is enforced by a lint, not by the loader.
 
 **D14. The negative-test form** (the strategy's open decision; the runner is this lane's).
 (a) `test(Name, false) :- Goal.`, meaning "Goal has no solution".
@@ -448,7 +446,7 @@ vocabulary, and keeps negation out of the language.
 * **R1. The two front ends diverge.** Seam and native lower the same program differently,
   and nothing notices. Mitigations: the directives share one implementation (D1c); clause
   lowering calls the seam's helper functions rather than copies; slice 8.1's round-trip A/B
-  over 150 engine test modules is a permanent gate; the harness lane's answer-set A/B runs on
+  over 150 engine test modules is a permanent gate; the downstream answer-set A/B runs on
   each engine candidate. Field-name divergence (`arg_i` vs seam-derived names) is already
   pinned as unobservable within a module.
 * **R2. Stale bytecode serves the wrong front end.** The `.pyc` cache is keyed per engine
@@ -458,8 +456,8 @@ vocabulary, and keeps negation out of the language.
 * **R3. Silent drops.** Measured today (§1.1): the last item is lost without a trailing
   newline, and refused clauses are skipped while the import succeeds. Slice 0 closes both.
   Every later slice prints read/lowered/refused and refuses an N of 0.
-* **R4. Reader tables disagree across lanes.** The engine loader and the harness
-  `auto/prolog/source.py` both call `read_module` with the SWI default. Flipping only one
+* **R4. Reader tables disagree across lanes.** The engine loader and a downstream
+  reader both call `read_module` with the SWI default. Flipping only one
   makes the gates read a file differently from the engine that loads it. Mitigation: flip
   both in one coordinated change (D2), with a shared fixture.
 * **R5. A seam sugar node carries a non-ISO meaning.** The seam's `==` evaluates, its `is`
@@ -471,14 +469,14 @@ vocabulary, and keeps negation out of the language.
   harnesses must go through `call/1` for the second.
 * **R7. The exit test depends on another lane.** Without the exporter's Clausal-Prolog
   dialect, round trips measure the exporter's lossy choices, not this front end. Sequence
-  iso-export-lane's dialect work in parallel with slices 3-6.
-* **R8. Sealed boundary.** This lane cannot run the pilot domain or read `eval/`. The pilot
-  exit belongs to the harness lane. The engine-internal A/B is this lane's proxy, and it
+  the downstream exporter's dialect work in parallel with slices 3-6.
+* **R8. Repository boundary.** This lane cannot run the pilot domain. The pilot
+  exit belongs downstream. The engine-internal A/B is this lane's proxy, and it
   cannot stand in for the pilot.
 * **R9. Load cost.** The toklex reader and Pratt parser replace `ast.parse` for `.pl`. Measure
   the load time on the 150-module A/B before the slice 8 flip. The `.pyc` cache hides this
   cost only on a hit.
-* **R10. The engine builtins are missing for corpus code** (`nth1`, `keysort`,
+* **R10. The engine builtins are missing for downstream code** (`nth1`, `keysort`,
   `atom_number`, `aggregate_all`, `format/3`, …). Front-end work cannot fix this, and it will
   surface as `PredicateNotFoundError` on the pilot. Size it from the sizing instrument's call
   census before slice 8.
@@ -486,8 +484,8 @@ vocabulary, and keeps negation out of the language.
 ## 7. Out of scope
 
 DCG (`-->`), yall lambdas, consult or a top level, streams, the `.clausal` suffix flip, units
-inside CLP, `if_/3`'s purity ruling (strategy open decision), and PlDoc signatures for the
-kit surface (harness).
+inside CLP, `if_/3`'s purity ruling (strategy open decision), and PlDoc signatures for
+downstream library surfaces.
 
 ## 8. Probe files (`implementation_plans/native-iso-reader-step2-2026-09-29/`)
 

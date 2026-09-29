@@ -522,7 +522,7 @@ def lower_items(items, *, strict: bool = True, source: "str | None" = None,
     it cannot lower -- a directive, a DCG rule, a refused control construct,
     or a reader ``SyntaxIssue`` -- so a module never imports with a clause
     missing.  ``strict=False`` is the explicit counting mode for tooling that
-    surveys a corpus: it skips and counts every refusal in ``stats``.
+    surveys many files: it skips and counts every refusal in ``stats``.
 
     *source* (the ``.pl`` text the items were read from) turns spans into
     seam positions and every refusal message into a ``file:line`` one."""

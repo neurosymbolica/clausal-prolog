@@ -107,7 +107,7 @@ def test_P1_iso_facts_answer_identically_to_the_seam_twin(l3_env):
 def test_P1_denominator_is_reported_for_refused_constructs(l3_env):
     """A construct out of scope (a directive: slice 2) must be REFUSED and
     COUNTED, never silently dropped.  The COUNTING mode is the explicit
-    ``strict=False`` (tooling that surveys a corpus); the default raises (see
+    ``strict=False`` (tooling that surveys many files); the default raises (see
     the slice-0 tests below).  (Rules were the P1 example; slice 1 lowers
     them.)"""
     tmp, stats, L3 = l3_env
