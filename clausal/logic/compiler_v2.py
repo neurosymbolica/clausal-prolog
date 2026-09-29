@@ -916,7 +916,8 @@ def _reject_reserved_truth_names(
 
     for pred_node in predicate_nodes:
         functor, arity = head_key(pred_node.head)
-        note(functor, f"clause head {functor}/{arity}")
+        if arity == 0:
+            note(functor, f"clause head {functor}/{arity}")
 
     for item in module_items:
         if isinstance(item, (ModuleDeclItem, PrivateDeclItem)):
@@ -930,7 +931,8 @@ def _reject_reserved_truth_names(
                     note(name, f"{kind} declaration")
         elif isinstance(item, DirectiveItem) and item.name != "set_prolog_flag":
             for functor, arity, *_ in item.specs:
-                note(functor, f"-{item.name}({functor}/{arity})")
+                if arity == 0:
+                    note(functor, f"-{item.name}({functor}/{arity})")
 
     if not offenders:
         return

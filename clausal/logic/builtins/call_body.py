@@ -340,6 +340,7 @@ class _Converter:
 # added to the compiler without being made callable here.
 SPECIAL_FORMS: dict[tuple[str, int], str] = {
     ("findall", 3): "AGA",
+    ("findall", 4): "AGAA",
     ("bagof", 3): "AGA",
     ("setof", 3): "AGA",
     ("once", 1): "G",
