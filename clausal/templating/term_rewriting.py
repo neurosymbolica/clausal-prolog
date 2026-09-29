@@ -5740,8 +5740,14 @@ class EmbedTransformer(NodeTransformer):
     """
 
     def __init__(transformer, source_lines=None, implicit_atoms_default=False,
-                 filename=None, interactive=False, reify=False):
+                 filename=None, interactive=False, reify=False,
+                 prolog_singletons=False):
         transformer._scope_depth = 0
+        # D19: the ``.pl`` import path (``import_hook.PrologLoader``) only.
+        # Prolog's convention (ISO, Scryer): a variable named ``_Name`` is
+        # deliberately used once, so it is no singleton.  ``.clausal`` and
+        # ``.seam`` source never set it -- their rule has no exceptions.
+        transformer._prolog_singletons = prolog_singletons
         # TitleCase-identifier lint state (see ``_lint_titlecase``): the
         # identifiers already reported (once per file), the names an
         # ``-import_from`` list binds (exempt), and the TitleCase names the
@@ -6063,6 +6069,8 @@ class EmbedTransformer(NodeTransformer):
         lineno = getattr(expr_stmt, "lineno", None)
         where = transformer._site(lineno) if lineno else "unknown site"
         for ident, count in term_transformer.var_occurrences.items():
+            if transformer._prolog_singletons and ident.startswith("_"):
+                continue
             if ident.endswith("_UNUSED"):
                 if count > 1:
                     warnings.warn(

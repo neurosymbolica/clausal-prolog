@@ -309,6 +309,11 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
 
 ### Fixed
 
+- **An imported `.pl` file's `_Name` variable is no singleton.** By the
+  Prolog convention (ISO, Scryer) `_Y` in `setof(X, p(X, _Y), L)` is used
+  once on purpose; the `.pl` load warned "rename to `_Y_UNUSED`". The
+  `.clausal`/`.seam` rule is unchanged: every named variable used once
+  warns.
 - **`python -m clausal.testing` skips what the pytest plugin skips.** A
   directory scan honours `collect_ignore`/`collect_ignore_glob` from the
   `conftest.py` files under it, so `tests/` no longer reports the golden

@@ -290,6 +290,16 @@ The default is set by the loader, not written into the translation. A
 `:- set_prolog_flag(assert_creates_dynamic, false).` in the file turns it
 off for that module.
 
+### Singletons: `_Name` is deliberate
+
+A `.pl` file follows the Prolog convention (ISO, Scryer): a variable whose
+name starts with `_` (`_Y` in `g(L) :- setof(X, p(X, _Y), L).`) is used
+once on purpose, so the load does not warn about it. Any other variable
+used once still gets `ClausalSingletonWarning`. This is the `.pl` loader's
+rule only: in `.clausal` and `.seam` source every named variable used once
+warns, whatever its spelling (see
+[singleton variables](syntax.md#singleton-variables-and-_unused)).
+
 ---
 
 ## Loading `.pl` files programmatically
