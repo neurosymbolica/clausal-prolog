@@ -73,8 +73,9 @@ class PrologTranslationError(Exception):
 # infix `X in L`, so BUILTIN_NAME_MAP has no clausal-side name for it; but
 # wherever a predicate *name* is required (qualified goals like
 # `lists:member(X, L)`, metacall arguments like `findall(X, member(X, L), Xs)`)
-# the underlying Clausal builtin is `in_/2` — `member` does not exist on the
-# Clausal side (F033).
+# the underlying Clausal builtin is `in_/2` (F033).  The engine now also
+# registers `member/2` under its ISO name; the rename stays so the
+# translation keeps the Clausal spelling of membership.
 _REVERSE_OVERRIDES: dict[str, str] = {
     "member": "in_",
 }

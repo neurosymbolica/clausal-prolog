@@ -236,6 +236,13 @@ def _member__2(this_generator, _proceed, _fail, _catcher, elem, lst, trail):
     yield (_fail, DONE)
 
 
+# ISO's name for in_/2 (the prologue's member/2): the same builtin under the
+# name every front end and query() writes, so a .pl file read by the native
+# front end, and a goal handed to query(), reach it without a rename.  A
+# module's own member/2 still answers first (a row outranks a builtin).
+_trampoline_builtin("member", 2)(_member__2)
+
+
 def _member_open(skel, elem, trail, _proceed):
     """member/2 on an OPEN list, as the prologue's recursion answers: each
     known element in turn, then ``Tail = [Elem|_]``, ``Tail = [_, Elem|_]``,
@@ -298,6 +305,10 @@ def _memberchk__2(this_generator, _proceed, _fail, _catcher, elem, lst, trail):
                 yield (_proceed, None)
             trail.undo(mark)
     yield (_fail, DONE)
+
+
+# memberchk/2 under its ISO-prologue name, as member/2 above.
+_trampoline_builtin("memberchk", 2)(_memberchk__2)
 
 
 def _append_dr__3(this_generator, _proceed, _fail, _catcher, l1, l2, l3, trail):

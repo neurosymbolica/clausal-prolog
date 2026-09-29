@@ -305,9 +305,13 @@ class TestF033QualifiedBuiltinNames:
         assert "lists.in_(X, L)" in out
         assert "lists.member" not in out
 
-    def test_qualified_memberchk_maps_to_in_check(self):
+    def test_qualified_memberchk_keeps_its_iso_name(self):
+        # memberchk/2 is an engine builtin under its ISO name (it used to
+        # exist only as in_check/2), so the rename is no longer needed and
+        # the translator keeps the name, as for any builtin the engine
+        # knows by that spelling.
         out = prolog_to_clausal("r(X, L) :- lists:memberchk(X, L).\n")
-        assert "lists.in_check(X, L)" in out
+        assert "lists.memberchk(X, L)" in out
 
     def test_qualified_nth0_maps_to_list_item(self):
         out = prolog_to_clausal("r(L, X) :- lists:nth0(0, L, X).\n")

@@ -34,9 +34,9 @@ test('member: not found') <- (not d in [a, b, c])
 
 test('member: empty fails') <- (not x in [])
 
-test('memberchk: found') <- (in_check(b, [a, b, c]))
+test('memberchk: found') <- (memberchk(b, [a, b, c]))
 
-test('memberchk: not found') <- (not in_check(d, [a, b, c]))
+test('memberchk: not found') <- (not memberchk(d, [a, b, c]))
 
 test('append two lists') <- (append([1, 2], [3, 4], [1, 2, 3, 4]))
 

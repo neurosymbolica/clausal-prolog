@@ -134,6 +134,11 @@ since 0.4.0 finish three moves:
 
 ### Added
 
+- **`member/2` and `memberchk/2` are builtins under their ISO names.** They
+  were registered only as `in_/2` and `in_check/2`, so a `.pl` file read by
+  the native front end, or a goal handed to `solve()`, found no procedure.
+  The same builtins answer both spellings; a module's own or imported
+  `member/2` still answers first.
 - **Negative tests: `test(Name, fail)`.** plunit's `test/2` with the option
   `fail` passes iff its goal has no solution; a solution fails it and an
   exception is an error, as for `test/1`. The seam spelling is the same term,
