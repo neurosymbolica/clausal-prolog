@@ -42,7 +42,12 @@ _DOLLAR = "DOLLAR_"
 
 class LoweringRefused(Exception):
     """A construct outside P1 scope. Raised, never skipped -- a silently dropped
-    clause is the failure mode the plan's §8.4 ('print the denominator') exists for."""
+    clause is the failure mode the plan's §8.4 ('print the denominator') exists for.
+    *span* is the refused item's ``(start, end)`` offset in the ``.pl`` text."""
+
+    def __init__(self, message: str, span=None):
+        super().__init__(message)
+        self.span = span
 
 
 def _undollar(tree: ast.AST) -> ast.AST:
@@ -159,7 +164,7 @@ def lower_items(items, *, strict: bool = True, source: "str | None" = None,
     def refuse(msg: str, span) -> None:
         msg = where(span) + msg
         if strict:
-            raise LoweringRefused(msg)
+            raise LoweringRefused(msg, span)
         stats["refused"] += 1
         stats["refusals"].append(msg)
 
@@ -186,7 +191,7 @@ def lower_items(items, *, strict: bool = True, source: "str | None" = None,
     return mod, stats
 
 
-def read_iso(source: str) -> list:
+def read_iso(source: str, op_table=None) -> list:
     """ISO source text -> ReaderItems (L0+L1+L2, unchanged -- plan §2).
 
     The reader is CLOSED after the source is fed, as ``read_module`` does:
@@ -201,5 +206,39 @@ def read_iso(source: str) -> list:
     in Scryer, and ``:- dynamic(d/1).`` is the spelling."""
     from clausal.tools.prolog_dialect import Dialect
     from clausal.tools.prolog_reader import read_module
-    return read_module(source,
-                       op_table=Dialect.scryer_reader().operator_table)
+    return read_module(source, op_table=(
+        op_table or Dialect.scryer_reader().operator_table))
+
+
+def lower_module(source: str, filename: "str | None" = None, *,
+                 op_table=None) -> tuple[ast.Module, dict, list]:
+    """``.pl`` text -> (ast.Module, stats, singletons), strict: the native
+    loader's one call.  Raises :class:`LoweringRefused` with a ``file:line``
+    message (and the item's span) on the first item it cannot lower.
+    *singletons* lists ``(variable name, span)`` for the singleton lint."""
+    mod, stats = lower_items(read_iso(source, op_table), source=source,
+                             filename=filename)
+    return mod, stats, []
+
+
+def line_of(source: str, span) -> "int | None":
+    """The 1-based ``.pl`` line of *span*'s start, or None."""
+    if span is None:
+        return None
+    return bisect.bisect_right(_line_starts(source), span[0])
+
+
+def warn_singletons(singletons, source: str, filename: str) -> None:
+    """The ``.pl`` singleton lint: one ``ClausalSingletonWarning`` per named
+    variable occurring once in its clause (a ``_``-prefixed name is exempt,
+    the Prolog convention -- D19)."""
+    if not singletons:
+        return
+    import warnings  # noqa: PLC0415
+    from clausal.lint_warnings import ClausalSingletonWarning  # noqa: PLC0415
+    for name, span in singletons:
+        warnings.warn(
+            f"{filename}:{line_of(source, span)}: singleton variable `{name}` "
+            f"-- a variable occurring once binds nothing. Misspelling? Rename "
+            f"to `_{name}` (or `_`) if deliberate",
+            ClausalSingletonWarning, stacklevel=3)
