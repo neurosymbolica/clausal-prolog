@@ -130,6 +130,13 @@ since 0.4.0 finish three moves:
 
 ### Added
 
+- **Negative tests: `test(Name, fail)`.** plunit's `test/2` with the option
+  `fail` passes iff its goal has no solution; a solution fails it and an
+  exception is an error, as for `test/1`. The seam spelling is the same term,
+  `test("name", fail) <- Goal`, and `.pl` files write it as plunit does. Any
+  other option (`throws(E)`, `nondet`, `true(C)`, ...) is a collection error
+  naming it (`clausal.testing.TestCollectionError`; one failing `<collect>`
+  item for the file), never ignored. See [docs/testing.md](docs/testing.md).
 - **`-import_from(m, [p/1])` imports one arity of `p`**, as Scryer's
   `use_module(m, [p/1])` does (`s//1` is `s/3`). A bare `p` still imports
   every arity; the forms mix in one list, and `alias(p/1, q)` renames one

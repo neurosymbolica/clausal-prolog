@@ -27,6 +27,7 @@ import pytest
 
 from clausal._suffixes import SOURCE_SUFFIXES
 from clausal.testing import (
+    TestCollectionError,
     collect_tests,
     load_clausal_module,
     opts_out_of_collection,
@@ -126,7 +127,16 @@ class ClausalFile(pytest.File):
             )
             return
         self._mod = mod
-        for desc in collect_tests(mod):
+        try:
+            descs = collect_tests(mod)
+        except TestCollectionError as e:
+            # An unsupported test(Name, Option): the whole file is refused,
+            # as for a load error, never a silently skipped clause.
+            yield ClausalItem.from_parent(
+                self, name="<collect>", mod=None, load_error=e
+            )
+            return
+        for desc in descs:
             yield ClausalItem.from_parent(self, name=desc, mod=mod)
 
 
@@ -153,8 +163,9 @@ class ClausalItem(pytest.Item):
 
     def runtest(self):
         if self._load_error is not None:
+            verb = "collect tests from" if self.name == "<collect>" else "load"
             raise ClausalTestFailure(
-                f"Failed to load {self.path}: {self._load_error}"
+                f"Failed to {verb} {self.path}: {self._load_error}"
             ) from self._load_error
         # ``diagnose=True``: a bare "no solutions" is close to no signal, and
         # pytest is where CI and most day-to-day runs read failures — the
@@ -167,9 +178,15 @@ class ClausalItem(pytest.Item):
             if result.error:
                 raise ClausalTestFailure(
                     _with_diagnosis(
-                        f"test({self.name!r}) raised: {result.error}", result
+                        f"{_spelled(self.name, result)} raised: {result.error}",
+                        result,
                     )
                 ) from result.error
+            if result.negative:
+                raise ClausalTestFailure(
+                    f"test({self.name!r}, fail) succeeded (its goal has a "
+                    "solution; a `fail` test passes only when it has none)"
+                )
             raise ClausalTestFailure(
                 _with_diagnosis(
                     f"test({self.name!r}) failed (no solutions)", result
@@ -185,6 +202,11 @@ class ClausalItem(pytest.Item):
 
 class ClausalTestFailure(Exception):
     pass
+
+
+def _spelled(name, result) -> str:
+    """The test as its clause spells it: ``test(N)`` or ``test(N, fail)``."""
+    return f"test({name!r}, fail)" if result.negative else f"test({name!r})"
 
 
 # ── docs/*.md code-block collection ──────────────────────────────────────────
@@ -266,7 +288,19 @@ class DocMdFile(pytest.File):
                 )
                 continue
 
-            descs = collect_tests(mod)
+            try:
+                descs = collect_tests(mod)
+            except TestCollectionError as e:
+                yield DocItem.from_parent(
+                    self,
+                    name=f"L{lineno} [collect error]",
+                    mod=None,
+                    desc=None,
+                    lineno=lineno,
+                    load_error=e,
+                    load_output=buf.getvalue(),
+                )
+                continue
             if descs:
                 for desc in descs:
                     yield DocItem.from_parent(
@@ -340,9 +374,15 @@ class DocItem(pytest.Item):
             if result.error:
                 raise DocTestFailure(
                     _with_diagnosis(
-                        f"test({self._desc!r}) raised: {result.error}", result
+                        f"{_spelled(self._desc, result)} raised: "
+                        f"{result.error}", result
                     )
                 ) from result.error
+            if result.negative:
+                raise DocTestFailure(
+                    f"test({self._desc!r}, fail) succeeded (its goal has a "
+                    "solution; a `fail` test passes only when it has none)"
+                )
             raise DocTestFailure(
                 _with_diagnosis(
                     f"test({self._desc!r}) has no solutions", result

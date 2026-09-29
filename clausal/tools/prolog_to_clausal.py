@@ -820,7 +820,14 @@ class _PrologToClausal:
             name = self._predicate_name(term.functor, len(term.args))
             if not term.args:
                 return f"{name}()"
-            args = ", ".join(self._emit_term(a) for a in term.args)
+            emitted = [self._emit_term(a) for a in term.args]
+            if (term.functor == "test" and len(term.args) == 2
+                    and isinstance(term.args[1], PAtom)):
+                # plunit's test(Name, Option): the option is DATA the test
+                # runner reads, so ``fail``/``false`` stay the atoms they
+                # spell rather than becoming the truth value False.
+                emitted[1] = _quote_atom(term.args[1].name)
+            args = ", ".join(emitted)
             return f"{name}({args})"
         if isinstance(term, PAtom):
             name = self._predicate_name(term.name, 0)
