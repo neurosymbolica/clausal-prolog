@@ -52,3 +52,12 @@ def test_an_unknown_cell_inside_a_node_is_the_iso_error(mod):
     with pytest.raises(LogicException) as info:
         list(solve(And(left=("p", x), right=("nosuch", 1)), mod))
     assert info.value.term[1][0] == "existence_error"
+
+
+def test_a_conjunction_tuple_node_and_a_qualified_cell(mod):
+    from clausal.pythonic_ast.nodes import TupleLiteral
+    x = Var()
+    assert _xs(mod, TupleLiteral(elements=[("p", x), ("q", x)]), x) == [2]
+    x = Var()
+    lm = mod.__dict__["$module"]
+    assert _xs(mod, And(left=(":", lm, ("p", x)), right=("q", x)), x) == [2]

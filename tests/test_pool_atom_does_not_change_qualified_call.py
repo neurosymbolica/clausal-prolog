@@ -35,6 +35,9 @@ def mods(tmp_path, monkeypatch):
 
 
 def test_unrelated_private_atom_does_not_change_the_error(mods):
+    # Through both fixed sites: the qualified-call resolution leaves the
+    # call unresolved, and its run-time dispatch goes through the handle
+    # route (predicate._dispatch_at), which also ignores the seeded atom.
     _load(mods, "pacq_decl", "-module(pacq_decl, [])\n-private([pacq_nosuch])\n")
     _load(mods, "pacq_other", "-module(pacq_other, [real(X)])\nreal(1),\n")
     caller = _load(mods, "pacq_caller",
@@ -57,3 +60,18 @@ def test_the_owner_declaring_the_atom_still_reports_a_data_reference(mods):
         list(solve(("t", Var()), caller))
     assert not isinstance(info.value, PredicateNotFoundError)
     assert info.value.term[1][0] == "existence_error"
+
+
+def test_a_target_that_imports_the_atom_keeps_the_data_reference(mods):
+    """Negative control for the IMPORT_FROM exemption."""
+    _load(mods, "pacq_src", "-module(pacq_src, [pacq_imp])\n")
+    _load(mods, "pacq_imp_owner",
+          "-module(pacq_imp_owner, [real(X)])\n-import_from(pacq_src, [pacq_imp])\n"
+          "real(pacq_imp),\n")
+    caller = _load(mods, "pacq_caller3",
+                   "-module(pacq_caller3, [t(R)])\n-import_module(pacq_imp_owner)\n"
+                   "t(R) <- (pacq_imp_owner.pacq_imp(R)),\n")
+    with pytest.raises(LogicException) as info:
+        list(solve(("t", Var()), caller))
+    assert not isinstance(info.value, PredicateNotFoundError)
+

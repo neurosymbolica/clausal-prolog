@@ -597,6 +597,11 @@ def _is_opaque_value(v: Any) -> bool:
     that is no goal, predicate or term either: a plain instance of a class
     outside Clausal and the numeric/date modules, not callable.  Such a value
     can only be passed through by reference."""
+    if isinstance(v, Module):
+        # A Module DESIGNATOR inside a goal term -- the M of a nested
+        # ``(":", M, G)`` -- has no literal lowering; call/1 resolves it at
+        # run time.
+        return True
     if isinstance(v, Var) or type(v) in _KNOWN_LEAF_TYPES:
         return False
     if isinstance(v, (list, tuple, dict, set, frozenset, type,
@@ -615,9 +620,19 @@ def _parameterize_opaque(goal: Any, params: list) -> Any:
     """*goal* with every opaque leaf (``_is_opaque_value``) inside a cell,
     conjunction tuple or list replaced by a fresh Var; ``(Var, value)`` is
     appended to *params*, which the caller binds before the search."""
+    from clausal.pythonic_ast import nodes as _nodes  # noqa: PLC0415
+
     def walk(t):
         if isinstance(t, Var):
             return t
+        if type(t) in (_nodes.And, _nodes.Or):
+            left, right = walk(t.left), walk(t.right)
+            if left is t.left and right is t.right:
+                return t
+            return type(t)(left=left, right=right)
+        if type(t) is _nodes.Not:
+            op = walk(t.operand)
+            return t if op is t.operand else _nodes.Not(operand=op)
         if type(t) is tuple:
             new = tuple(walk(e) for e in t)
             return t if all(a is b for a, b in zip(new, t)) else new
