@@ -69,3 +69,10 @@ added in fix round 1 is deliberately on the assert path only, in
 - `clausal/logic/builtins/database_ops.py::_freeze_asserted_head_args`
 - `tests/test_cell_goals.py::TestCellAssertRetract::test_collect_by_assert_over_a_cell_stores_one_clause_per_solution`
 - `.superpowers/sdd/p33-state-relocation/task-5-report.md` §"Fix round 1"
+
+## Closed 2026-09-30 (stale)
+
+The class-term spelling no longer exists: the PredicateMeta class was deleted
+(5d9fc36f), and a predicate name is bound to its HANDLE (a mangled str, not
+callable), so `m.seen(X)` cannot build a term. Re-measured on 9b6b58a1: the
+collect-by-assert idiom through the remaining (cell) spelling stores `[1, 2]`.

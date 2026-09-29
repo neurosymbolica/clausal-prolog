@@ -56,3 +56,10 @@ Proposed, not yet ruled:
 W4b-2a's second half. Defects 1 and 2 are worth fixing INDEPENDENTLY of the
 vocabulary ruling — a control character and a Python repr in a catchable term
 are wrong under every candidate answer.
+
+## Closed 2026-09-30 (stale)
+
+All three defects are gone. Re-measured on 9b6b58a1: a handle into an unloaded
+module and a loaded module's missing predicate both raise a LogicException
+whose term is `error(existence_error(procedure, Name/Arity), Name/Arity)` -- no
+`\x1f`, no Python repr, and a term in both cases (rulings 2026-09-24/25).
