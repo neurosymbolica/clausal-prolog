@@ -1105,8 +1105,7 @@ def module_signatures(module: Any) -> dict:
             f"or a module name, got {type(target).__name__}")
     found: dict[str, set] = {}
     if db is not None:
-        keys = set(db.owned_keys()) | set(db._predicate_export)
-        for name, arity in keys:
+        for name, arity in db.offered_keys():
             if type(name) is str and not name.startswith("$"):
                 found.setdefault(name, set()).add(arity)
     else:
@@ -1147,24 +1146,36 @@ def _adapter_arities(value: Any) -> "set | None":
 
 def _import_for_signatures(name: str):
     """Resolve *name* as ``-import_from`` resolves a module path
-    (``compiler_v2._resolve_module``: the ``clausal.modules`` spellings
-    first, then the name itself), importing it if needed."""
-    from clausal.logic.compiler_v2 import _resolve_module  # noqa: PLC0415
-    try:
-        return _resolve_module(name)
-    except ModuleNotFoundError as exc:
-        missing = getattr(exc, "name", None) or ""
-        if missing and not (name == missing or name.startswith(missing + ".")
-                            or missing.startswith("clausal.modules")):
-            raise       # the module exists; something IT imports is missing
-        from clausal.logic.exceptions import (  # noqa: PLC0415
-            LogicException, existence_error,
-        )
-        raise LogicException(existence_error(
-            "module", name,
-            f"module_signatures: {name!r} names no module -- a module name "
-            f"is spelled as -import_from spells it (py.datetime, currency, "
-            f"pkg.mod)")) from exc
+    (``compiler_v2._resolve_module``: the ``clausal.modules`` spelling
+    first, then the name itself), importing it if needed.  Only a module
+    that is itself ABSENT falls through to the next candidate or to
+    ``existence_error(module, Name)``: a module that exists but fails to
+    import (a missing dependency, an error in its body) re-raises."""
+    import importlib  # noqa: PLC0415
+    from clausal.logic.compiler_v2 import (  # noqa: PLC0415
+        _MODULE_ALIASES, _currency_jurisdictions,
+    )
+    mapped = _MODULE_ALIASES.get(name)
+    if mapped is None and name in _currency_jurisdictions():
+        mapped = f"countries.{name}"
+    for candidate in (f"clausal.modules.{mapped or name}", name):
+        try:
+            return importlib.import_module(candidate)
+        except ModuleNotFoundError as exc:
+            missing = getattr(exc, "name", None) or ""
+            if not (candidate == missing
+                    or candidate.startswith(missing + ".")):
+                raise   # the module exists; something IT imports is missing
+        except ValueError:
+            break       # no module name at all ("", a leading dot)
+    from clausal.logic.exceptions import (  # noqa: PLC0415
+        LogicException, existence_error,
+    )
+    raise LogicException(existence_error(
+        "module", name,
+        f"module_signatures: {name!r} names no module -- a module name "
+        f"is spelled as -import_from spells it (py.datetime, currency, "
+        f"pkg.mod)"))
 
 
 def _module_for_moduleless_solve(goal) -> tuple[Any, Module]:

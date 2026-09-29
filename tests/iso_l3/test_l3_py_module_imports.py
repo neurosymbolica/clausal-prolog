@@ -206,3 +206,72 @@ def test_the_seam_still_refuses_an_indicator_against_a_python_module(native):
     with pytest.raises(ImportError, match="not a Clausal module"):
         native.load("d32_seam", "-import_from(py.datetime, [date_add/3])\n"
                                 "a,\n", suffix=".seam")
+
+
+# ── review round: the routes around the Python path ──
+
+_ADAPTERS = '''\
+class _Varargs:
+    def _get_dispatch(self):
+        def run(this_generator, _proceed, _fail, _catcher, *args):
+            yield (_proceed, None)
+        return run
+
+
+class _Fixed:
+    def _get_dispatch(self):
+        def run(this_generator, _proceed, _fail, _catcher, x, trail):
+            yield (_proceed, None)
+        return run
+
+
+anyarity = _Varargs()
+one = _Fixed()
+'''
+
+
+def _pyfile(native, name, text):
+    (native.tmp / f"{name}.py").write_text(text, encoding="utf-8")
+    native._names.append(name)
+
+
+def test_an_adapter_of_unknown_arity_is_accepted_and_offered_as_n_q(native):
+    _pyfile(native, "d32_adapters", _ADAPTERS)
+    assert clausal.module_signatures("d32_adapters") == {
+        "anyarity": frozenset(), "one": frozenset({1})}
+    native.load("d32_anyok", ":- use_module(d32_adapters, [anyarity/5]).\n"
+                             "t :- anyarity(1, 2, 3, 4, 5).\n")
+    err = _refusal(native, "d32_anybad",
+                   "a.\n:- use_module(d32_adapters, [one/2]).\n")
+    assert "anyarity/?" in str(err) and "one/1" in str(err)
+
+
+def test_only_bare_atoms_from_a_python_module_import_nothing(native, ans):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", ClausalBareAtomImportWarning)
+        pl = native.load("d32_onlybare", ":- use_module(py/datetime, "
+                                         "[date_add]).\nt(1).\n")
+    assert ans(pl, "t") == [1]
+    assert "date_add" not in vars(pl)
+
+
+def test_a_python_file_carrying_a_clausal_database_keeps_the_clausal_route(
+        native):
+    """A Python module with a ``$module`` database (built through the Python
+    API) is a Clausal module: its entries go to the seam as indicators, and
+    the seam's own existence check answers -- not the D32 signature check."""
+    _pyfile(native, "d32_pydb",
+            "from clausal.logic.database import Module\n"
+            "globals()['$module'] = Module('d32_pydb', "
+            "module_dict=globals())\n")
+    with pytest.raises(Exception) as ei:
+        native.load("d32_viadb", "a.\n:- use_module(d32_pydb, [reach/2]).\n")
+    assert "reach" in str(ei.value)
+    assert "offers" not in str(ei.value)        # not the D32 refusal
+
+
+def test_a_module_with_a_missing_dependency_is_not_reported_absent(native):
+    _pyfile(native, "d32_brokendep", "import no_such_dependency_d32\n")
+    with pytest.raises(ModuleNotFoundError) as ei:
+        clausal.module_signatures("d32_brokendep")
+    assert ei.value.name == "no_such_dependency_d32"

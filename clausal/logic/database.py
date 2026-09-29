@@ -771,6 +771,15 @@ class Database:
             found.update(keyed)
         return found
 
+    def offered_keys(self) -> "set[tuple[str, int]]":
+        """Every ``(functor, arity)`` this database OFFERS as a predicate:
+        :meth:`owned_keys` plus a bare ``name/arity`` export entry
+        (``mark_predicate_export``), which is a predicate with no row yet.
+        Not ``_adopted`` (an import is another database's) and not a fielded
+        DATA declaration.  The population ``clausal.module_signatures``
+        answers for a Clausal module."""
+        return self.owned_keys() | set(self._predicate_export)
+
     def adopt_row(self, local_functor: str, arity: int, row: "PredRow") -> bool:
         """Make ``(local_functor, arity)`` resolve to an existing *row* that
         another database owns.  True if it was adopted, False if this database
