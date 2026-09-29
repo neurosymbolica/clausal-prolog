@@ -187,6 +187,29 @@ def _drive_trampoline(dispatch_fn: Any, trail: Trail, *args: Any) -> Iterator[Tr
             end_drive_episode()
 
 
+def _control_node_holds_a_cell_goal(term: Any) -> bool:
+    """True when *term* is a control NODE (And/Or/Not/IfExpr/TupleLiteral)
+    with a CELL somewhere in goal position under it."""
+    from clausal.pythonic_ast import nodes  # noqa: PLC0415
+    if isinstance(term, (nodes.And, nodes.Or)):
+        return (_goal_is_or_holds_cell(term.left)
+                or _goal_is_or_holds_cell(term.right))
+    if isinstance(term, nodes.Not):
+        return _goal_is_or_holds_cell(term.operand)
+    if isinstance(term, nodes.IfExpr):
+        return any(_goal_is_or_holds_cell(g)
+                   for g in (term.test, term.body, term.orelse))
+    if isinstance(term, nodes.TupleLiteral):
+        return any(_goal_is_or_holds_cell(g) for g in term.elements)
+    return False
+
+
+def _goal_is_or_holds_cell(goal: Any) -> bool:
+    goal = deref(goal)
+    return (compound_cell_shape(goal)[0]
+            or _control_node_holds_a_cell_goal(goal))
+
+
 def _term_to_goal(term: Any, db: Any = None) -> Any:
     """Convert a runtime term instance to a simple_ast goal node.
 
@@ -247,6 +270,15 @@ def _term_to_goal(term: Any, db: Any = None) -> Any:
         if term in ("fail", "false"):
             return False
         return AstCall(func=LoadName(name=term), args=[], kwargs=[])
+    if _control_node_holds_a_cell_goal(term):
+        # A cell nested in an And/Or/Not/if-then-else NODE: the compiler's
+        # goal lowering (terms_to_goalop) reads goal nodes and has no cell
+        # arm, so ``solve(And(("p", X), ("q", X)), m)`` raised
+        # ``NotImplementedError: goal shape not yet supported (tuple)``.
+        # call/1 runs exactly such a body term (call_body's converter lowers
+        # every cell, qualified and control cells included, with the same
+        # diagnostics), so the query is that call.
+        return AstCall(func=LoadName(name="call"), args=[term], kwargs=[])
     is_cell_goal, functor = compound_cell_shape(term)
     if is_cell_goal:
         if functor == QUALIFIED_GOAL_FUNCTOR and len(term) == 3:
@@ -590,8 +622,9 @@ def _is_opaque_value(v: Any) -> bool:
     X))`` raised ``NotImplementedError: unsupported term type Decimal``
     instead of answering.  A ``datetime`` stays refused: the ruling of
     2026-09-15 makes a date the TERM ``('date', Y, M, D)``, and the refusal
-    names it."""
-    if isinstance(v, (Decimal, Fraction, Quantity)):
+    names it.  So is a Module DESIGNATOR inside a goal term -- the M of a
+    nested ``(":", M, G)`` -- which call/1 resolves at run time."""
+    if isinstance(v, (Decimal, Fraction, Quantity, Module)):
         return True
     if isinstance(v, Var) or type(v) in _KNOWN_LEAF_TYPES:
         return False
@@ -625,11 +658,23 @@ def _parameterize_opaque(goal: Any, params: list) -> Any:
     Python function in an ARGUMENT position (``_PASSABLE_CALLABLE_TYPES``) is
     passed the same way; one in GOAL position -- the goal itself, or a
     conjunct of a top-level conjunction tuple -- is left alone, since it is
-    the call.  Only cells, tuples and lists are walked: a value nested in a
-    dict or a set is not reached (and keeps the compiler's refusal)."""
+    the call.  Cells, tuples, lists and And/Or/Not nodes are walked: a value
+    nested in a dict or a set is not reached (and keeps the compiler's
+    refusal)."""
+    from clausal.pythonic_ast import nodes as _nodes  # noqa: PLC0415
+
     def walk(t, goal_position=False):
         if isinstance(t, Var):
             return t
+        if type(t) in (_nodes.And, _nodes.Or):
+            left = walk(t.left, goal_position)
+            right = walk(t.right, goal_position)
+            if left is t.left and right is t.right:
+                return t
+            return type(t)(left=left, right=right)
+        if type(t) is _nodes.Not:
+            op = walk(t.operand, goal_position)
+            return t if op is t.operand else _nodes.Not(operand=op)
         if type(t) is tuple:
             if t and type(t[0]) is str:        # a cell: slot 0 is its name
                 new = (t[0],) + tuple(walk(e) for e in t[1:])

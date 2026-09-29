@@ -22,8 +22,13 @@ def test_term_html_float():
 
 
 def test_term_html_str():
-    # nv
+    # A str is an ATOM since the atoms-as-str flip; a STRING is the chars
+    # carrier (2026-09-30: this pinned the pre-flip reading).
+    from clausal.logic.cells import chars
     result = term_html("hello")
+    assert 'class="clausal-atom"' in result
+    assert "hello" in result
+    result = term_html(chars("hello"))
     assert 'class="clausal-string"' in result
     assert "hello" in result
 

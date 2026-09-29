@@ -56,3 +56,10 @@ programs never used directly.
   `_normalize_structural_head_args` — the hoist mechanism itself.
 - `todo/partially-ground-cell-vs-raw-cell-head-equality-gap-2026-09-05.md` —
   the specific instance this general gap explains; pick up together.
+
+## Closed 2026-09-30 (stale)
+
+No longer reproduces on f84633ea: after `assertz(qq(pt(1, 2), yes))` and
+`assertz(qq(_, catchall))` under `-dynamic(qq/2)`, the output-mode query
+`qq(X, K)` answers `X = pt(1, 2), K = yes` and then the catchall; the input
+mode gives `[yes, catchall]`; a source fact `fact(pt(1, 2), yes)` binds too.

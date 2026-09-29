@@ -1027,3 +1027,40 @@ def is_compiled_constant(obj) -> bool:
     """True iff *obj* IS a constant of a LIVE generated code object."""
     ref = _COMPILED_GROUND.get(id(obj))
     return ref is not None and ref() is not None
+
+
+def is_pool_seeded_atom(namespace, name: str) -> bool:
+    """True when *namespace* binds *name* to the plain atom of that spelling
+    ONLY because the process-wide atom pool seeded it there: the module
+    neither declares the atom (``DECLARED_ATOMS_KEY``) nor imports the name
+    (``IMPORT_FROM_KEY``).
+
+    Every module dict is seeded from that pool, so once ANY module declares
+    ``-private([nosuch])``, every other module has an attribute ``nosuch``
+    too -- and a qualified call ``m.nosuch(1)`` read it as a data reference
+    of m's, so its error depended on what an unrelated module declared.
+
+    An atom a module only USES bare (auto-accepted, recorded nowhere) is
+    counted as seeded too: ``m.red(1)`` then raises the unknown-procedure
+    error rather than the data-reference one.  Both are
+    ``existence_error(procedure, red/1)``; only the message and the Python
+    type differ, and the answer no longer depends on load order.
+    """
+    if not isinstance(namespace, dict):
+        return False
+    value = namespace.get(name)
+    if type(value) is not str or value != name:
+        return False
+    if name in (namespace.get(DECLARED_ATOMS_KEY) or ()):
+        return False
+    # Declared or defined under the name at ANY arity (a fielded data
+    # functor such as ``edge(A, B)``, a ``name/N`` export, a row): the
+    # module's own binding, whose "declared as DATA" diagnostic must stand.
+    db = getattr(namespace.get("$module"), "db", None)
+    arities = getattr(db, "declared_arities_for", None)
+    if arities is not None and arities(name):
+        return False
+    for entry in namespace.get(IMPORT_FROM_KEY) or ():
+        if entry and entry[0] == name:
+            return False
+    return True

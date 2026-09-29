@@ -1091,6 +1091,12 @@ def _dispatch_at(obj: Any, arity: int, db: Any = None) -> Callable:
                 return _fn
             _refuse_if_known_at_another_arity(_hdb, _name, arity)
             _bound = (_hmd or {}).get(_name)
+            if _bound is not None:
+                from clausal.logic.cells import is_pool_seeded_atom  # noqa: PLC0415
+                if is_pool_seeded_atom(_hmd, _name):
+                    # Only the atom pool put the name there (another module
+                    # declared the atom): the module has no such binding.
+                    _bound = None
             if _bound is not None and _bound is not obj:
                 return _dispatch_at(_bound, arity, _hdb)
             from clausal.logic.exceptions import (  # noqa: PLC0415

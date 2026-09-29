@@ -55,3 +55,12 @@ broken COPY of head_fold with ONE deletion (the `not reified_subterm(REST,
 Variable(N))` legality goal) and is otherwise "head_fold as shipped" — so any
 edit to head_fold must be mirrored there or the negative control stops
 isolating the condition it exists to isolate.
+
+## Closed 2026-09-30
+
+Measured as the note proposed: `subst_term(Variable(1), 1, T, R)` answered
+`R = T` and then `R = Variable(1)` (2 answers), a Goal holding the variable 3 --
+the spurious answer was real. Fixed on fix/todo-batch-5-2026-09-30: the leaf
+guard also excludes a Variable/Goal cell (read by functor, as `is_v` does),
+mirrored in `_broken_head_fold_control.clausal`. tests/rewrite (578) green;
+pinned by tests/rewrite/test_head_fold_subst_term_no_spurious_leaf.py.

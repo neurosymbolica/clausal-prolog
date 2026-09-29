@@ -75,3 +75,10 @@ capability; the full-suite name-diff around the change was EMPTY.
   would need routed through.
 - `tests/test_tagged_terms.py::test_the_cell_and_compound_rows_agree_in_every_argument_mode`
   (Task 3) — the four-row parity pin; a fix here would need a fifth row.
+
+## Closed 2026-09-30 (stale)
+
+No longer reproduces on f84633ea: after `assertz(qq(pt(1, 2), yes))` and
+`assertz(qq(_, catchall))` under `-dynamic(qq/2)`, the output-mode query
+`qq(X, K)` answers `X = pt(1, 2), K = yes` and then the catchall; the input
+mode gives `[yes, catchall]`; a source fact `fact(pt(1, 2), yes)` binds too.
