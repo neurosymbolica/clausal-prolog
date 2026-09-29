@@ -186,3 +186,25 @@ def test_fd_var_and_indomain(native, ans):
     assert ans(mod, "v4") == [[1, 2, 3]]
     assert ans(mod, "v5") == ["instantiation_error"]
     assert ans(mod, "v6") == [["x"]]
+
+
+NVALUE = """\
+:- use_module(library(clpz)).
+n1(R) :- findall(L, (L = [A,B,C], L ins 1..2, nvalue(1, L), label(L)), R).
+n2(R) :- findall(N, (nvalue(N, [1,2,1])), R).
+n3(R) :- findall(L-N, (L = [A,B], L ins 1..2, nvalue(N, L), label(L)), R).
+n4(R) :- findall(N, nvalue(N, []), R).
+n5(R) :- findall(L, (L = [A,B,C], L ins 1..3, nvalue(3, L), A #< B, B #< C, label(L)), R).
+"""
+
+
+def test_nvalue(native, ans):
+    """nvalue/2 did not exist; Scryer's answers."""
+    mod = native.load("l3_clpz_nvalue", NVALUE)
+    p = lambda a, b: ("-", a, b)  # noqa: E731
+    assert ans(mod, "n1") == [[[1, 1, 1], [2, 2, 2]]]
+    assert ans(mod, "n2") == [[2]]
+    assert ans(mod, "n3") == [[p([1, 1], 1), p([1, 2], 2), p([2, 1], 2),
+                               p([2, 2], 1)]]
+    assert ans(mod, "n4") == [[0]]
+    assert ans(mod, "n5") == [[[1, 2, 3]]]
