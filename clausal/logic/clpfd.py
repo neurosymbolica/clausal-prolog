@@ -4028,6 +4028,392 @@ if _USE_C_PROPAGATE:
     register_attr_hook(FD_KEY, _c_fd_hook)
 
 
+# ── abs/1, min/2, max/2 over unbound operands ────────────────────────────────
+#
+# clpz accepts ``abs/1``, ``min/2`` and ``max/2`` anywhere in an arithmetic
+# post (``X in -3..3, abs(X) #= 2, label([X])`` is X = -2 ; X = 2 in
+# Scryer).  They have no operator node, so no linearising walker knows them:
+# a non-ground one reached the post as a plain compound, where ``abs(X) ==
+# 2`` compared the compound with 2 and FAILED silently, and ``Y == abs(X)``
+# raised domain_error(clpz_expression, abs(_)).  Each such cell is now lifted
+# out of the comparison into a fresh variable Z carrying its own propagator
+# (Z = |A|, Z = min(A, B), Z = max(A, B)), and the comparison is posted over
+# Z.  Only an all-integer comparison is lifted (every leaf an integer or a
+# variable with no CLP(Q)/CLP(R) attribute); anything else keeps its old
+# route and diagnosis.
+
+
+def _domain_abs(d: Domain) -> Domain:
+    """The image of *d* under ``abs``."""
+    parts = []
+    for lo, hi in d:
+        if lo >= 0:
+            parts.append(((lo, hi),))
+        elif hi <= 0:
+            parts.append(((-hi, -lo),))
+        else:
+            parts.append(((0, max(-lo, hi)),))
+    return _domain_union(parts)
+
+
+class AbsConstraint(Constraint):
+    """``Z = abs(A)``."""
+    __slots__ = ('z', 'a')
+
+    def __init__(self, z, a):
+        self.z = z
+        self.a = a
+        super().__init__((z, a))
+
+    def propagate(self, trail: Trail, queue: deque) -> bool:
+        z, a = deref(self.z), deref(self.a)
+        nz = domain_intersection(_expr_domain(z, trail),
+                                 _domain_abs(_expr_domain(a, trail)))
+        if not nz:
+            return False
+        if is_var(z) and not _narrow_if_changed(z, nz, trail, queue):
+            return False
+        a = deref(self.a)
+        na = domain_intersection(_expr_domain(a, trail),
+                                 _domain_union([nz, _domain_negate(nz)]))
+        if not na:
+            return False
+        if is_var(a) and not _narrow_if_changed(a, na, trail, queue):
+            return False
+        return True
+
+
+class MinMaxConstraint(Constraint):
+    """``Z = min(A, B)`` (``is_max`` False) or ``Z = max(A, B)`` (True):
+    bounds propagation; once one operand is certainly the smaller (the
+    larger), Z has exactly its domain."""
+    __slots__ = ('z', 'a', 'b', 'is_max')
+
+    def __init__(self, z, a, b, is_max: bool):
+        self.z = z
+        self.a = a
+        self.b = b
+        self.is_max = is_max
+        super().__init__((z, a, b))
+
+    def propagate(self, trail: Trail, queue: deque) -> bool:
+        z, a, b = deref(self.z), deref(self.a), deref(self.b)
+        zd, ad, bd = (_expr_domain(z, trail), _expr_domain(a, trail),
+                      _expr_domain(b, trail))
+        if self.is_max:
+            # max(A, B) = -min(-A, -B): propagate the negated problem
+            zd, ad, bd = _domain_negate(zd), _domain_negate(ad), _domain_negate(bd)
+        if not (zd and ad and bd):
+            return False
+        # Z = min(A, B)
+        alo, ahi = domain_min(ad), domain_max(ad)
+        blo, bhi = domain_min(bd), domain_max(bd)
+        if ahi < blo:
+            img = ad
+        elif bhi < alo:
+            img = bd
+        else:
+            img = _domain_union([ad, bd])
+            img = domain_intersection(
+                img, domain_from_range(min(alo, blo), min(ahi, bhi)))
+        nz = domain_intersection(zd, img)
+        if not nz:
+            return False
+        zlo = domain_min(nz)
+        above = domain_from_range(zlo, _POS_INF)
+        na = domain_intersection(ad, above)
+        nb = domain_intersection(bd, above)
+        if not na or not nb:
+            return False
+        # Z must be the value of one of them
+        if not domain_intersection(nz, _domain_union([na, nb])):
+            return False
+        if self.is_max:
+            nz, na, nb = _domain_negate(nz), _domain_negate(na), _domain_negate(nb)
+        for v, nd in ((z, nz), (a, na), (b, nb)):
+            v = deref(v)
+            if is_var(v) and not _narrow_if_changed(v, nd, trail, queue):
+                return False
+        return True
+
+
+#: operator-node / cell keys that stay in the integers
+_FD_INT_KEYS = frozenset({
+    ("+", 2), ("-", 2), ("*", 2), ("-", 1), ("+", 1),
+    ("$python_floordiv", 2), ("$python_mod", 2), ("//", 2), ("div", 2),
+    ("mod", 2), ("^", 2), ("abs", 1), ("min", 2), ("max", 2),
+})
+_LIFTED_KEYS = frozenset({("abs", 1), ("min", 2), ("max", 2)})
+
+
+_Q_KEY = _REAL_KEY = None
+
+
+def _fd_int_term(x) -> tuple[bool, bool]:
+    """(*x* is an all-integer arithmetic term?, it holds an abs/min/max
+    cell?).  Iterative: a deep sum must not hit the recursion limit here."""
+    global _Q_KEY, _REAL_KEY
+    if _Q_KEY is None:
+        from clausal.logic.clpq import Q_KEY  # noqa: PLC0415
+        from clausal.logic.clpr import REAL_KEY  # noqa: PLC0415
+        _Q_KEY, _REAL_KEY = Q_KEY, REAL_KEY
+    Q_KEY, REAL_KEY = _Q_KEY, _REAL_KEY
+    if _Add is None:
+        _ensure_term_imports()
+    lifted = False
+    stack = [x]
+    while stack:
+        x = deref(stack.pop())
+        t = type(x)
+        if t is int:
+            continue
+        if is_var(x):
+            if get_attr(x, Q_KEY) is not None or get_attr(x, REAL_KEY) is not None:
+                return False, False
+            continue
+        key = _NODE_KEYS.get(t)
+        if key is not None:
+            if key not in _FD_INT_KEYS:
+                return False, False
+            if key[1] == 1:
+                stack.append(x.operand)
+            else:
+                stack.append(x.left)
+                stack.append(x.right)
+            continue
+        if t is not tuple or exact_cell_number(x) is not None:
+            return False, False
+        ka = _cell_key_args(x)
+        if ka is None or ka[0] not in _FD_INT_KEYS:
+            return False, False
+        lifted = lifted or ka[0] in _LIFTED_KEYS
+        stack.extend(ka[1])
+    return True, lifted
+
+
+def _lift_cells(x, aux: list):
+    """*x* with each abs/min/max cell replaced by a fresh Var; ``(Var, key,
+    args)`` for each is appended to *aux* (a ground one too: its propagator
+    binds the Var to the value)."""
+    x = deref(x)
+    t = type(x)
+    if t is int or is_var(x):
+        return x
+    key = _NODE_KEYS.get(t)
+    if key is not None:
+        if key[1] == 1:
+            return _replace(x, operand=_lift_cells(x.operand, aux))
+        return _replace(x, left=_lift_cells(x.left, aux),
+                        right=_lift_cells(x.right, aux))
+    key, args = _cell_key_args(x)
+    args = tuple(_lift_cells(a, aux) for a in args)
+    if key in _LIFTED_KEYS:
+        z = Var()
+        aux.append((z, key, args))
+        return z
+    return (key[0],) + args
+
+
+def _operand_var(a, trail):
+    """*a* as a Var or int: an expression becomes a fresh Var equated to it
+    (False when that post fails)."""
+    a = deref(a)
+    if is_var(a) or type(a) is int:
+        return a
+    v = Var()
+    return v if fd_eq(v, a, trail) else False
+
+
+def _post_lifted(aux, trail) -> bool:
+    for z, key, args in aux:
+        ops = []
+        for a in args:
+            o = _operand_var(a, trail)
+            if o is False:
+                return False
+            ops.append(o)
+        if key == ("abs", 1):
+            c = AbsConstraint(z, ops[0])
+        else:
+            c = MinMaxConstraint(z, ops[0], ops[1], key == ("max", 2))
+        if not _post_constraint(c, trail):
+            return False
+    return True
+
+
+def _lifting_nonlinear_cells(post):
+    def wrapped(l, r, trail, *args, **kwargs):
+        dl, dr = deref(l), deref(r)
+        if not (type(dl) is int or is_var(dl)) or not (type(dr) is int or is_var(dr)):
+            # only a compound side can hold a cell
+            okl, liftl = _fd_int_term(l)
+            if okl:
+                okr, liftr = _fd_int_term(r)
+                if okr and (liftl or liftr):
+                    aux: list = []
+                    l = _lift_cells(l, aux)
+                    r = _lift_cells(r, aux)
+                    if not _post_lifted(aux, trail):
+                        return False
+        return post(l, r, trail, *args, **kwargs)
+    wrapped.__name__ = post.__name__
+    wrapped.__doc__ = post.__doc__
+    wrapped.__wrapped__ = post
+    return wrapped
+
+
+#: ``/`` in its two spellings: the bare (Python) node and ISO's quoted one
+_TRUE_DIV_KEYS = frozenset({("/", 2), ("$python_div", 2)})
+
+
+def _lift_exact_div(x, aux: list):
+    """*x* with each ``A / B`` over all-integer operands replaced by a fresh
+    Var Z; ``(Z, A, B)`` for each is appended to *aux*."""
+    x = deref(x)
+    t = type(x)
+    if t is int or is_var(x):
+        return x
+    if _Add is None:
+        _ensure_term_imports()
+    key = _NODE_KEYS.get(t)
+    if key is not None:
+        if key[1] == 1:
+            return _replace(x, operand=_lift_exact_div(x.operand, aux))
+        a = _lift_exact_div(x.left, aux)
+        b = _lift_exact_div(x.right, aux)
+        if key in _TRUE_DIV_KEYS and _fd_int_term(a)[0] and _fd_int_term(b)[0]:
+            z = Var()
+            aux.append((z, a, b))
+            return z
+        return _replace(x, left=a, right=b)
+    if t is not tuple or exact_cell_number(x) is not None:
+        return x
+    ka = _cell_key_args(x)
+    if ka is None or ka[0] not in _EVALUABLE:
+        return x
+    key, args = ka
+    args = tuple(_lift_exact_div(a, aux) for a in args)
+    if (key in _TRUE_DIV_KEYS and _fd_int_term(args[0])[0]
+            and _fd_int_term(args[1])[0]):
+        z = Var()
+        aux.append((z, args[0], args[1]))
+        return z
+    return (key[0],) + args
+
+
+def clpz_operands(l, r, trail):
+    """``(l, r)`` for a clpz comparison (``#=``, ``#\\=``, ``#<``, ...), or
+    None when the posts below already fail.
+
+    Under clpz ``/`` is TRUNCATED INTEGER DIVISION THAT MUST BE EXACT: Scryer
+    fails ``X #= 7/2`` and ``X #= Y/2, Y = 7``, and gives 4 for ``X #= 8/2``.
+    The engine's shared comparison posts keep ``/`` rational (ruling Q15:
+    the seam's ``X == 7 / 2`` is 7 rdiv 2), so the #-family lifts each
+    all-integer ``A / B`` into a fresh Z with ``Z * B #= A`` and ``B #\\= 0``
+    first -- exactly "A/B is the integer Z".  A ``/`` over a non-integer
+    operand keeps its old route."""
+    aux: list = []
+    dl, dr = deref(l), deref(r)
+    if not (type(dl) is int or is_var(dl)):
+        l = _lift_exact_div(dl, aux)
+    if not (type(dr) is int or is_var(dr)):
+        r = _lift_exact_div(dr, aux)
+    for z, a, b in aux:
+        a = _operand_var(a, trail)
+        if a is False:
+            return None
+        b = _operand_var(b, trail)
+        if b is False:
+            return None
+        if not _post_constraint(ExactDivConstraint(z, a, b), trail):
+            return None
+    return l, r
+
+
+def _div_bounds(alo, ahi, blo, bhi):
+    """Bounds of A / B for B of one sign (no 0 in B), or None."""
+    corners = []
+    for x in (alo, ahi):
+        for y in (blo, bhi):
+            if math.isinf(x) or math.isinf(y):
+                return None
+            corners.append(Fraction(x, y))
+    return math.ceil(min(corners)), math.floor(max(corners))
+
+
+class ExactDivConstraint(Constraint):
+    """``Z = A / B`` under clpz: B is not 0 and B divides A exactly (Scryer's
+    ``X #= 7/2`` fails).  Once A and B are known Z is their quotient; once
+    Z and B are, A is their product; bounds of Z follow A and B while B
+    keeps one sign."""
+    __slots__ = ('z', 'a', 'b')
+
+    def __init__(self, z, a, b):
+        self.z = z
+        self.a = a
+        self.b = b
+        result: list = []
+        for t in (z, a, b):
+            _collect_vars_from(t, result)
+        super().__init__(tuple(result))
+
+    def propagate(self, trail: Trail, queue: deque) -> bool:
+        z, a, b = deref(self.z), deref(self.a), deref(self.b)
+        bd = _expr_domain(b, trail)
+        if is_var(b):
+            nb = domain_remove(bd, 0)
+            if not nb:
+                return False
+            if not _narrow_if_changed(b, nb, trail, queue):
+                return False
+            b = deref(self.b)
+            bd = _expr_domain(b, trail)
+        ad, zd = _expr_domain(a, trail), _expr_domain(z, trail)
+        if not (ad and bd and zd):
+            return False
+        av, bv, zv = domain_singleton(ad), domain_singleton(bd), domain_singleton(zd)
+        if bv == 0:
+            return False
+        if av is not None and bv is not None:
+            if av % bv:
+                return False
+            nz = domain_intersection(zd, ((av // bv, av // bv),))
+            if not nz:
+                return False
+            return not is_var(z) or _narrow_if_changed(z, nz, trail, queue)
+        if zv is not None and bv is not None:
+            na = domain_intersection(ad, ((zv * bv, zv * bv),))
+            if not na:
+                return False
+            return not is_var(a) or _narrow_if_changed(a, na, trail, queue)
+        blo, bhi = domain_min(bd), domain_max(bd)
+        if blo > 0 or bhi < 0:
+            bounds = _div_bounds(domain_min(ad), domain_max(ad), blo, bhi)
+            if bounds is not None:
+                nz = domain_intersection(zd, domain_from_range(*bounds))
+                if not nz:
+                    return False
+                if is_var(z) and not _narrow_if_changed(z, nz, trail, queue):
+                    return False
+                zd = nz
+            # A = Z * B: A lies between the corner products
+            corners = [_safe_mult(p, q) for p in (domain_min(zd), domain_max(zd))
+                       for q in (blo, bhi)]
+            na = domain_intersection(ad, domain_from_range(min(corners),
+                                                           max(corners)))
+            if not na:
+                return False
+            if is_var(a) and not _narrow_if_changed(a, na, trail, queue):
+                return False
+        return True
+
+
+fd_eq = _lifting_nonlinear_cells(fd_eq)
+fd_ne = _lifting_nonlinear_cells(fd_ne)
+fd_lt = _lifting_nonlinear_cells(fd_lt)
+fd_le = _lifting_nonlinear_cells(fd_le)
+
+
 # ── Ruling Q14 (2026-09-28): no value means no solutions ─────────────────────
 #
 # ``X == 1 // 0`` -- Scryer's ``X #= 1 // 0`` -- FAILS: "(#=)/2 is a relation:

@@ -92,6 +92,40 @@ def _unterminated_fact_error(name, lineno, src):
     ) from None
 
 
+def _unseed_foreign_pool_atoms(module_dict, module_items):
+    """Take back, before the body runs, the pool atoms that ``exec_module``
+    seeded into *module_dict* but THIS module's own vocabulary does not
+    vouch for.
+
+    The seed copies the WHOLE process-wide ``predicate_builtins`` pool into
+    every module namespace.  The strict-atom checks already distrust a
+    seeded entry for a bare atom or a dict key (the leaked-pool-atom shape,
+    see ``_make_intern_atom``), but a name in CALL position -- ``cite(X)`` in
+    a clause body or ``REF = cite(a)`` at module level -- is resolved by
+    Python itself: once any earlier module had declared ``cite``, the
+    undeclared use found the atom str (``'str' object is not callable``, or
+    ``existence_error(procedure, cite/1)``) instead of raising NameError,
+    and the sibling-export diagnostic was lost.  Order-dependent: the same
+    file answered differently depending on what was loaded first.
+
+    Kept: every name this module declares or imports
+    (``_locally_declared_names``), and everything in a module that opts
+    into auto-accepted atoms (the interactive loose item), whose bare atoms
+    resolve through the pool by design.  Only an entry that is still
+    exactly the seeded pool atom is removed."""
+    from clausal.logic.compiler_v2 import _locally_declared_names
+    from clausal.pythonic_ast.nodes import ImplicitAtomsDeclaration
+
+    if any(isinstance(it, ImplicitAtomsDeclaration) for it in module_items):
+        return
+    local = _locally_declared_names(module_items)
+    for name, atom in list(predicate_builtins.items()):
+        if name in local or name in runtime_builtins:
+            continue
+        if module_dict.get(name) is atom:
+            del module_dict[name]
+
+
 def _make_intern_atom(module_dict, module_items, module_name):
     """Build the ``$intern_atom`` helper for a module load.
 
@@ -251,6 +285,7 @@ def _run_v2_pipeline(loader, module, module_dict, filename, recover_module_items
 
     module_dict["$intern_atom"] = _make_intern_atom(module_dict, module_items,
                                                     module.__name__)
+    _unseed_foreign_pool_atoms(module_dict, module_items)
 
     _preseed_py_submodules(module_items)
     # A failed `-import_from` surfaces here as CPython's stock ImportError,
@@ -1049,8 +1084,13 @@ def _load_module(fullname, path):
     """Load a .clausal file as a Python module and return it.
 
     This is the recommended helper for tests and external callers.
-    Each call creates a fresh PredicateLoader and module instance.
+    Each call creates a fresh loader and module instance: a PredicateLoader,
+    or -- for a ``.pl`` path -- the loader :func:`_load_prolog_module` uses
+    (the front end ``CLAUSAL_PL_FRONTEND`` selects), so a Prolog file is
+    never parsed as Clausal source.
     """
+    if os.fspath(path).endswith(".pl"):
+        return _load_prolog_module(fullname, path)
     sys.modules.pop(fullname, None)
     loader = PredicateLoader(fullname, path)
     spec = ModuleSpec(fullname, loader, origin=path)

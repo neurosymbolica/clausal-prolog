@@ -1035,6 +1035,13 @@ def declared_atoms(module_or_package: Any) -> frozenset:
     bodies (and load files the package may never import) as a side effect
     of asking a question -- the same reason ``module=`` resolution is
     lookup-only.  Import the submodules you want counted first.
+
+    NOT THE PACKAGE ROOT'S ATTRIBUTES.  For a package the answer is the
+    package's atom VOCABULARY -- the union over its own files -- not the set
+    of names bound on the package root: an atom declared only in a submodule
+    (say a ``-private`` one) is in ``declared_atoms(pkg)`` while
+    ``getattr(pkg, name)`` can raise AttributeError.  To learn the root's
+    attribute surface, read the root module's own names (``vars(pkg)``).
     """
     names: set[str] = set()
     for ns in _own_file_namespaces(module_or_package, "declared_atoms"):
