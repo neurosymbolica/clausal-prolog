@@ -2,12 +2,15 @@
 
 Plan: ``implementation_plans/native-iso-reader-step2-2026-09-29.md`` (D1 = (c)
 hybrid: clauses are lowered HERE to the transformed AST; directives go through
-the seam's own handlers -- slice 2).  Scope today is slices 0 and 1: facts,
-rules, every ISO term shape, and the control constructs ``,`` ``;`` ``\\+``
-``true`` ``fail``/``false`` and ``call/N``.  Whatever is outside that scope --
-a directive, a DCG rule, a reader ``SyntaxIssue``, and by design ``!``, ``->``
-and ``*->`` -- is REFUSED, never half-handled, so a gap is a loud import error
-and not a silently skipped clause.
+the seam's own handlers, ``iso_l3_directives``).  Scope today is slices 0-2:
+facts, rules, every ISO term shape, the control constructs ``,`` ``;`` ``\\+``
+``true`` ``fail``/``false`` and ``call/N``, module-qualified goals ``m:G``, and
+the directives of ``iso_l3_directives`` (module/2, use_module/1,2, dynamic,
+discontiguous, table, meta_predicate, set_prolog_flag, op).  Whatever is
+outside that scope -- an unknown directive, ``initialization/1``, a DCG rule,
+a reader ``SyntaxIssue``, and by design ``!``, ``->`` and ``*->`` -- is
+REFUSED, never half-handled, so a gap is a loud import error and not a
+silently skipped clause.
 
 WHY THE TRANSFORMED AST IS THE JOIN (plan §2): ``compile_module``'s
 ``module_dict`` is the name-resolution environment for the whole compile.
@@ -213,9 +216,12 @@ class _ClauseLowering:
     seam's walrus ``(X := $Var())``, in Python's evaluation order, which is
     the order the AST is built in) and its singleton census."""
 
-    def __init__(self, var_names: dict, positions: _Positions):
+    def __init__(self, var_names: dict, positions: _Positions, ctx=None):
         self._var_names = var_names
         self._pos = positions
+        # The file's directive state (``iso_l3_directives.DirectiveContext``):
+        # the double_quotes mode in force, the import remap, module aliases.
+        self._ctx = ctx
         self._bound: set[int] = set()
         self.occurrences: dict[str, int] = {}
 
@@ -258,9 +264,7 @@ class _ClauseLowering:
                             ctx=ast.Load())
         if type(t) is tuple and t and _is_callable_name(t[0]):
             if t[0] == "$chars" and len(t) == 2 and type(t[1]) is str:
-                # "..." -- the chars carrier, exactly as the seam emits it.
-                return ast.Tuple(elts=[_const("$chars"), _const(t[1])],
-                                 ctx=ast.Load())
+                return self._double_quoted(t[1])
             if t[0] == "." and len(t) == 3:
                 return self._cons(t, sp)
             spans = _arg_spans(sp, len(t) - 1)
@@ -269,6 +273,20 @@ class _ClauseLowering:
                 + [self.term(a, s) for a, s in zip(t[1:], spans)],
                 ctx=ast.Load())
         raise LoweringRefused(f"unsupported term {t!r}", _top_span(sp))
+
+    def _double_quoted(self, text: str) -> ast.expr:
+        """``"..."`` under the ``double_quotes`` flag in force (ISO
+        7.11.2.5): ``chars`` (the default) is the chars carrier, exactly as
+        the seam emits it; ``codes`` the list of character codes; ``atom``
+        the atom."""
+        mode = self._ctx.note_literal() if self._ctx is not None else "chars"
+        if mode == "codes":
+            return ast.List(elts=[_const(ord(c)) for c in text],
+                            ctx=ast.Load())
+        if mode == "atom":
+            return self.term(text)
+        return ast.Tuple(elts=[_const("$chars"), _const(text)],
+                         ctx=ast.Load())
 
     def _cons(self, t: tuple, sp) -> ast.expr:
         """A cons chain ``'.'(H, T)`` -> the seam's ``[H, ..., *T]`` display
@@ -335,26 +353,89 @@ class _ClauseLowering:
             if name == "\\+" and len(args) == 1:
                 return _node("Not", operand=self.goal(args[0], spans[0]),
                              position=_pos_expr(pos))
+            if name == ":" and len(args) == 2:
+                return self._qualified(args, spans, sp, pos)
             self._check_goal_name(name, sp)
-            key = (name, len(args))
-            goal_args = _META_GOAL_ARGS.get(key, ())
-            lowered = []
-            for i, (a, s) in enumerate(zip(args, spans)):
-                if i in goal_args:
-                    if key in _ITERATED_GOAL:
-                        lowered.append(self._iterated_goal(a, s))
-                    else:
-                        lowered.append(self.goal(a, s))
-                else:
-                    if name == "call" and i == 0:
-                        self._refuse_control_in(a, s)
-                    lowered.append(self.term(a, s))
+            lowered = self._goal_args(name, args, spans)
             head_pos = self._pos.of(_functor_span(sp, name, self._pos.source))
-            return self._call(name, lowered, head_pos, pos)
+            remap = self._ctx.import_remap if self._ctx is not None else {}
+            return self._call(remap.get(name, name), lowered, head_pos, pos)
         # ISO 7.6.2: a number (or anything else) is not callable.
         raise LoweringRefused(
             f"{g!r} is not callable (ISO type_error(callable, {g!r}))",
             _top_span(sp))
+
+    def _goal_args(self, name: str, args: tuple, spans: list) -> list:
+        """A goal's arguments: a meta-argument position is a goal (ISO body
+        conversion), every other one a data term."""
+        key = (name, len(args))
+        goal_args = _META_GOAL_ARGS.get(key, ())
+        lowered = []
+        for i, (a, s) in enumerate(zip(args, spans)):
+            if i in goal_args:
+                if key in _ITERATED_GOAL:
+                    lowered.append(self._iterated_goal(a, s))
+                else:
+                    lowered.append(self.goal(a, s))
+            else:
+                if name == "call" and i == 0:
+                    self._refuse_control_in(a, s)
+                lowered.append(self.term(a, s))
+        return lowered
+
+    def _qualified(self, args: tuple, spans: list, sp, pos) -> ast.expr:
+        """``m:G`` (D10) -> the seam's qualified call ``a.b.g(...)``: a name
+        clash is resolved by qualification, never by an import alias.  *m*
+        is a module name this file imported (its dotted path), a dotted path
+        itself, or a built-in library (``lists:append/3`` is the builtin)."""
+        m, g = args
+        m_sp, g_sp = spans
+        if type(m) is not str:
+            raise LoweringRefused(
+                f"the module of a qualified goal must be an atom at load, "
+                f"got {m!r}", _top_span(m_sp) or _top_span(sp))
+        if type(g) is str:
+            gname, gargs, gspans = g, (), []
+        elif (type(g) is tuple and g and type(g[0]) is str
+              and g[0] != "$chars"):
+            gname, gargs = g[0], g[1:]
+            gspans = _arg_spans(g_sp, len(gargs))
+        else:
+            raise LoweringRefused(
+                f"{m}:{g!r} -- the goal of a qualified call must be callable "
+                f"at load (ISO type_error(callable))",
+                _top_span(g_sp) or _top_span(sp))
+        if gname in (",", ";", "\\+", ":", "->", "*->", "!") or (
+                gname in ("true", "fail", "false") and not gargs):
+            raise LoweringRefused(
+                f"{m}:{gname}/{len(gargs)} -- qualify each goal, not a "
+                f"control construct", _top_span(sp))
+        aliases = self._ctx.module_aliases if self._ctx is not None else {}
+        if m not in aliases and m in _builtin_libraries():
+            return self.goal(g, g_sp)
+        if self._ctx is not None:
+            dotted, why = self._ctx.resolve_module(m)
+            if dotted is None:
+                raise LoweringRefused(f"{m}:{gname}/{len(gargs)}: {why}",
+                                      _top_span(m_sp) or _top_span(sp))
+            if dotted == "":            # the file's own module
+                return self.goal(g, g_sp)
+        else:
+            dotted = m
+        self._check_goal_name(gname, g_sp)
+        mpos = _pos_expr(self._pos.of(_top_span(m_sp)))
+        parts = dotted.split(".")
+        obj = _node("LoadName", name=_const(parts[0]), position=mpos)
+        for p in parts[1:]:
+            obj = _node("LoadAttr", object=obj, attr=_const(p), position=mpos)
+        func = _node("LoadAttr", object=obj, attr=_const(gname),
+                     position=_pos_expr(pos))
+        return _node(
+            "Call", func=func,
+            args=ast.List(elts=self._goal_args(gname, gargs, gspans),
+                          ctx=ast.Load()),
+            kwargs=ast.List(elts=[], ctx=ast.Load()),
+            position=_pos_expr(pos))
 
     def _iterated_goal(self, g: Any, sp) -> ast.expr:
         """``V1^V2^G`` in bagof/setof -> ``$BitXor(left=V1, right=...)``, the
@@ -398,6 +479,11 @@ class _ClauseLowering:
             position=_pos_expr(pos))
 
 
+def _builtin_libraries() -> frozenset:
+    from clausal.tools.iso_l3_directives import _BUILTIN_LIBRARIES  # noqa: PLC0415
+    return _BUILTIN_LIBRARIES
+
+
 def _unrepresentable(name: str) -> str:
     return (f"`{name}` cannot name a predicate in Clausal (ISO allows it; the "
             f"engine reserves True/False/None): rename the predicate")
@@ -422,7 +508,7 @@ def _functor_span(sp, name: str, source: "str | None" = None):
 
 def lower_clause(term: Any, spans=None, var_names=None,
                  positions: "_Positions | None" = None,
-                 singletons: "list | None" = None) -> list[ast.stmt]:
+                 singletons: "list | None" = None, ctx=None) -> list[ast.stmt]:
     """A clause term (a fact, or ``(H :- B)``) -> ``[$declare_head(...),
     $define_predicate(...)]``.
 
@@ -466,7 +552,7 @@ def lower_clause(term: Any, spans=None, var_names=None,
             f"permission_error(modify, static_procedure, {name}/{len(args)}))",
             whole_span)
 
-    lw = _ClauseLowering(var_names, positions)
+    lw = _ClauseLowering(var_names, positions, ctx)
     fields = tuple(f"arg_{i}" for i in range(len(args)))
     decl = ast.Expr(value=ast.Call(
         func=_name(_DOLLAR + "declare_head"),
@@ -512,24 +598,56 @@ def _item_span(it):
     return _top_span(getattr(it, "spans", None))
 
 
+class Lowered:
+    """One ``.pl`` file lowered: the transformed ``tree``, its ``stats``
+    (read/lowered/refused plus ``directives``), the ``singletons`` census,
+    the ``module_items`` the seam's directive handlers produced, and the
+    directive ``context`` (for its D11 warning)."""
+
+    __slots__ = ("tree", "stats", "singletons", "module_items", "context")
+
+    def __init__(self, tree, stats, singletons, module_items, context):
+        self.tree = tree
+        self.stats = stats
+        self.singletons = singletons
+        self.module_items = module_items
+        self.context = context
+
+
 def lower_items(items, *, strict: bool = True, source: "str | None" = None,
                 filename: "str | None" = None,
-                singletons: "list | None" = None) -> tuple[ast.Module, dict]:
+                singletons: "list | None" = None,
+                op_table=None, directives_only: bool = False,
+                _lowered: "list | None" = None) -> tuple[ast.Module, dict]:
     """ReaderItems -> (ast.Module, stats).  Stats carry the DENOMINATOR (plan
     §8.4): a shrinking population must be visible, not silent.
 
+    *items* may be a lazy iterable: a directive is lowered BEFORE the next
+    item is read, so an ``op/3`` it applies to *op_table* (the reader's own
+    table) governs the items after it, as in Scryer.
+
     *strict* (the default) raises :class:`LoweringRefused` on the first item
-    it cannot lower -- a directive, a DCG rule, a refused control construct,
-    or a reader ``SyntaxIssue`` -- so a module never imports with a clause
-    missing.  ``strict=False`` is the explicit counting mode for tooling that
-    surveys many files: it skips and counts every refusal in ``stats``.
+    it cannot lower -- an unknown or refused directive, a DCG rule, a refused
+    control construct, or a reader ``SyntaxIssue`` -- so a module never
+    imports with a clause missing.  ``strict=False`` is the explicit counting
+    mode for tooling that surveys many files: it skips and counts every
+    refusal in ``stats``.
+
+    *directives_only* (the loader's cache-hit path) lowers the directives
+    alone -- their module items are what that path needs -- and counts each
+    clause as ``skipped``.
 
     *source* (the ``.pl`` text the items were read from) turns spans into
     seam positions and every refusal message into a ``file:line`` one."""
+    from clausal.tools.iso_l3_directives import (  # noqa: PLC0415
+        DirectiveContext, DirectiveRefused)
     positions = _Positions(source)
     where_file = filename or "<.pl>"
+    ctx = DirectiveContext(source=source, filename=where_file,
+                           positions=positions, op_table=op_table)
     body: list[ast.stmt] = []
-    stats = {"read": 0, "lowered": 0, "refused": 0, "refusals": []}
+    stats = {"read": 0, "lowered": 0, "refused": 0, "skipped": 0,
+             "directives": 0, "refusals": []}
 
     def where(span) -> str:
         line = positions.line(span) if span is not None else None
@@ -548,23 +666,83 @@ def lower_items(items, *, strict: bool = True, source: "str | None" = None,
         kind = type(it).__name__
         span = _item_span(it)
         if kind == "SyntaxIssue":
-            refuse(f"syntax error (SyntaxIssue): {it.message}", span)
+            refuse(_syntax_issue_message(it, source), span)
+            continue
+        if kind == "Directive":
+            try:
+                lowered = ctx.lower(it.term, it.spans, span)
+            except DirectiveRefused as e:
+                refuse(f"directive: {e}", e.span or span)
+                continue
+            body.extend(lowered)
+            stats["lowered"] += 1
+            stats["directives"] += 1
             continue
         if kind != "Clause":
-            refuse(f"{kind} is not lowered yet (directives are slice 2; "
-                   f"DCG is out of scope): {it.term!r}", span)
+            refuse(f"{kind} is not lowered (DCG is out of scope; a query "
+                   f"`?-` is no clause): {it.term!r}", span)
+            continue
+        if directives_only:
+            # The clause is not lowered, but the double_quotes modes its
+            # literals were read under are module-item facts (the cross-mode
+            # lint): note them as the full lowering would.
+            if _has_chars(it.term):
+                ctx.note_literal()
+            stats["skipped"] += 1
             continue
         try:
             lowered = lower_clause(it.term, it.spans, it.var_names, positions,
-                                   singletons)
+                                   singletons, ctx)
         except LoweringRefused as e:
             refuse(str(e), e.span or span)
             continue
         body.extend(lowered)
         stats["lowered"] += 1
+    if ctx.dead_stmts or ctx.dropped_keys:
+        body = _drop_removed_imports(body, ctx)
     mod = ast.Module(body=body, type_ignores=[])
     ast.fix_missing_locations(mod)
+    if _lowered is not None:
+        _lowered.append(ctx)
     return mod, stats
+
+
+def _drop_removed_imports(body: list, ctx) -> list:
+    """``use_module(M, [])`` (D27): drop M's import statements, and re-spell
+    every goal lowered through a dropped import (``$LoadName('m.p')``) as
+    the plain local name, which no longer resolves -- Scryer's
+    existence_error when it is called."""
+    body = [ctx.load_only.get(id(s), s) for s in body
+            if id(s) not in ctx.dead_stmts or id(s) in ctx.load_only]
+    for node in ast.walk(ast.Module(body=body, type_ignores=[])):
+        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                and node.func.id == _DOLLAR + "LoadName"):
+            for kw in node.keywords:
+                if (kw.arg == "name" and isinstance(kw.value, ast.Constant)
+                        and kw.value.value in ctx.dropped_keys):
+                    kw.value = _const(kw.value.value.rsplit(".", 1)[1])
+    return body
+
+
+def _has_chars(t) -> bool:
+    if type(t) is tuple:
+        if len(t) == 2 and t[0] == "$chars":
+            return True
+        return any(_has_chars(a) for a in t[1:])
+    if type(t) is list:
+        return any(_has_chars(a) for a in t)
+    return False
+
+
+def _syntax_issue_message(it, source) -> str:
+    msg = f"syntax error (SyntaxIssue): {it.message}"
+    if source is not None and _is_leaf_span(it.span):
+        import re  # noqa: PLC0415
+        text = source[it.span[0]:it.span[1] + 1]
+        if re.search(r"\buse_module\b", text) and re.search(r"\bas\b", text):
+            from clausal.tools.iso_l3_directives import _AS_REFUSED  # noqa: PLC0415
+            msg = f"{_AS_REFUSED} ({msg})"
+    return msg
 
 
 def reader_op_table():
@@ -587,15 +765,49 @@ def read_iso(source: str, op_table=None) -> list:
     return read_module(source, op_table=op_table or reader_op_table())
 
 
+def iter_iso(source: str, op_table=None):
+    """-> (items, table): ReaderItems read LAZILY, one per ``next``, from a
+    reader over *op_table* (a fresh :func:`reader_op_table` by default) --
+    so a directive lowered between two reads can change the table the
+    next item is parsed with (``use_module(library(clpz))``'s ops)."""
+    from clausal.tools.prolog_reader import EOF, NEED_MORE, PrologReader  # noqa: PLC0415
+    table = op_table if op_table is not None else reader_op_table()
+    reader = PrologReader(op_table=table)
+    reader.feed(source)
+    reader.close()
+
+    def items():
+        while True:
+            it = reader.read_term()
+            if it is EOF:
+                return
+            if it is NEED_MORE:
+                raise RuntimeError("lexer returned NEED_MORE after close()")
+            yield it
+    return items(), table
+
+
+def lower_source(source: str, filename: "str | None" = None, *,
+                 op_table=None, directives_only: bool = False) -> Lowered:
+    """``.pl`` text -> :class:`Lowered`, strict: the native loader's one
+    call.  Raises :class:`LoweringRefused` with a ``file:line`` message on
+    the first item it cannot lower."""
+    singletons: list = []
+    items, table = iter_iso(source, op_table)
+    ctxs: list = []
+    mod, stats = lower_items(items, source=source, filename=filename,
+                             singletons=singletons, op_table=table,
+                             directives_only=directives_only, _lowered=ctxs)
+    ctx = ctxs[0]
+    return Lowered(mod, stats, singletons, ctx.module_items(), ctx)
+
+
 def lower_module(source: str, filename: "str | None" = None, *,
                  op_table=None) -> tuple[ast.Module, dict, list]:
-    """``.pl`` text -> (ast.Module, stats, singletons), strict: the native
-    loader's one call.  Raises :class:`LoweringRefused` with a ``file:line``
-    message on the first item it cannot lower."""
-    singletons: list = []
-    mod, stats = lower_items(read_iso(source, op_table), source=source,
-                             filename=filename, singletons=singletons)
-    return mod, stats, singletons
+    """``.pl`` text -> (ast.Module, stats, singletons): :func:`lower_source`
+    without the module items."""
+    low = lower_source(source, filename, op_table=op_table)
+    return low.tree, low.stats, low.singletons
 
 
 def line_of(source: str, span) -> "int | None":

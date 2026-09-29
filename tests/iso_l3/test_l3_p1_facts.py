@@ -105,13 +105,13 @@ def test_P1_iso_facts_answer_identically_to_the_seam_twin(l3_env):
 
 
 def test_P1_denominator_is_reported_for_refused_constructs(l3_env):
-    """A construct out of scope (a directive: slice 2) must be REFUSED and
+    """A construct out of scope (a DCG rule) must be REFUSED and
     COUNTED, never silently dropped.  The COUNTING mode is the explicit
     ``strict=False`` (tooling that surveys many files); the default raises (see
     the slice-0 tests below).  (Rules were the P1 example; slice 1 lowers
     them.)"""
     tmp, stats, L3 = l3_env
-    items = L3.read_iso("f(1).\n:- dynamic(d/1).\n")
+    items = L3.read_iso("f(1).\ns --> [a].\n")
     _, st = L3.lower_items(items, strict=False)
     assert st["read"] == 2, st
     assert st["lowered"] == 1, st
@@ -192,10 +192,10 @@ def test_lower_items_raises_on_a_refused_clause_by_default():
         L3.lower_items(L3.read_iso("f(1).\n3 :- f(1).\n"))
 
 
-def test_lower_items_raises_on_a_directive_by_default():
+def test_lower_items_raises_on_an_unknown_directive_by_default():
     L3 = _load_l3()
-    with pytest.raises(L3.LoweringRefused, match="Directive"):
-        L3.lower_items(L3.read_iso(":- dynamic(d/1).\nf(1).\n"))
+    with pytest.raises(L3.LoweringRefused, match="unknown directive foo/1"):
+        L3.lower_items(L3.read_iso(":- foo(d/1).\nf(1).\n"))
 
 
 def test_lower_items_raises_on_a_syntax_issue_by_default():

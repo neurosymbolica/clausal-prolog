@@ -607,6 +607,7 @@ _PL_FRONTENDS = ("translator", "native")
 #: invalidates native bytecode and leaves the translator's cache alone.
 _NATIVE_FRONTEND_FILES = (
     "tools/iso_l3.py",
+    "tools/iso_l3_directives.py",
     "tools/prolog_reader.py",
 )
 
@@ -980,15 +981,19 @@ class NativePrologLoader(PrologLoader):
             return copy.deepcopy(self._dialect.operator_table)
         return None   # iso_l3's own default: a fresh Scryer table
 
-    def _lower(self, pl_source, path):
+    def _lower(self, pl_source, path, directives_only=False):
         """Lower *pl_source*; -> (ast.Module, module_items).  Records
-        ``l3_stats``; raises ``SyntaxError`` at the refused ``.pl`` line."""
+        ``l3_stats``; raises ``SyntaxError`` at the refused ``.pl`` line.
+        The module items are the seam directive handlers' (slice 2), after
+        :func:`_prolog_default_items`.  *directives_only* is the cache-hit
+        path: it needs the module items, not the clauses."""
         from clausal.tools import iso_l3  # noqa: PLC0415
         try:
             # The refusal names ``file.pl:N``; the SyntaxError carries the
             # full path.
-            tree, stats, singletons = iso_l3.lower_module(
-                pl_source, os.path.basename(path), op_table=self._op_table())
+            low = iso_l3.lower_source(
+                pl_source, os.path.basename(path), op_table=self._op_table(),
+                directives_only=directives_only)
         except iso_l3.LoweringRefused as e:
             line = iso_l3.line_of(pl_source, e.span) or 0
             # Split on "\n" only: _Positions numbers lines that way, and
@@ -997,9 +1002,14 @@ class NativePrologLoader(PrologLoader):
             text = lines[line - 1] if 0 < line <= len(lines) else ""
             raise SyntaxError(f"Cannot import {path}: {e}",
                               (path, line, 1, text)) from e
-        self.l3_stats = stats
-        iso_l3.warn_singletons(singletons, pl_source, path)
-        return tree, _prolog_default_items()
+        self.l3_stats = low.stats
+        # The bytecode baked in other files' content (a use_module/1 export
+        # list, a declared module name): the cache key covers this file
+        # only, so such a module is not cached (it is re-lowered each load).
+        self._uncacheable = bool(low.context.depends_on)
+        iso_l3.warn_singletons(low.singletons, pl_source, path)
+        low.context.warn_bare_atom_imports()
+        return low.tree, _prolog_default_items() + low.module_items
 
     def source_to_code(self, data, path="<string>"):
         try:
@@ -1013,10 +1023,16 @@ class NativePrologLoader(PrologLoader):
         self._last_transformer = _NativeItems(module_items)
         return compile(tree, path, "exec")
 
+    def _cache_bytecode(self, source_path, bytecode_path, data):
+        if getattr(self, "_uncacheable", False):
+            return None
+        return super()._cache_bytecode(source_path, bytecode_path, data)
+
     def _recover_module_items(self, path):
-        """Cache-hit path: re-read and re-lower the ``.pl`` source."""
+        """Cache-hit path: re-read the ``.pl`` source and re-lower its
+        directives (the module items come from them alone)."""
         pl_source = self.get_data(path).decode("utf-8")
-        return self._lower(pl_source, path)[1]
+        return self._lower(pl_source, path, directives_only=True)[1]
 
 
 def _pl_loader_class():

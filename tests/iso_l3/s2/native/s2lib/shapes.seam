@@ -1,0 +1,12 @@
+# Slice 2 exit rulebase: a .seam library-style module, imported by the .pl
+# main module; it imports the .pl module facts.pl in turn.
+-module(shapes, [area/2, scaled/2, kinds/1])
+-import_from(s2lib.facts, [base/1, pair/2])
+-private([sq(side), rect(w, h)])
+
+area(sq(S), A) <- (A == S * S)
+area(rect(W, H), A) <- (A == W * H)
+
+scaled(X, Y) <- (base(B), Y == X * B)
+
+kinds(K) <- pair(K, _)

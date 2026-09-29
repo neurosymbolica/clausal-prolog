@@ -14,9 +14,10 @@ import pytest
 ENV = "CLAUSAL_PL_FRONTEND"
 
 # The slice-1 exit rulebase and its seam twin are DATA for
-# test_l3_s1_exit.py, which runs them under the native front end.  Collected
+# test_l3_s1_exit.py, and s2/ the slice-2 rulebase for test_l3_s2_exit.py;
+# each runs them under the native front end.  Collected
 # as test files they would run under the default (the translator) instead.
-collect_ignore = ["rulebase_s1.pl", "rulebase_s1_twin.seam"]
+collect_ignore = ["rulebase_s1.pl", "rulebase_s1_twin.seam", "s2"]
 
 
 class NativeLoads:

@@ -58,8 +58,8 @@ def test_a_syntax_issue_is_refused_with_its_pl_line():
 
 
 def test_a_refused_directive_names_its_pl_line():
-    src = "f(1).\n:- dynamic(d/1).\n"
-    with pytest.raises(L3.LoweringRefused, match=r"m\.pl:2: Directive"):
+    src = "f(1).\n:- initialization(f(1)).\n"
+    with pytest.raises(L3.LoweringRefused, match=r"m\.pl:2: directive: "):
         L3.lower_items(L3.read_iso(src), source=src, filename="m.pl")
 
 
