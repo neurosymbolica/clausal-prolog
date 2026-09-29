@@ -459,7 +459,19 @@ def _emit_item(item: PItem, op_table: OperatorTable) -> str:
         body_str = _emit_dcg_body(item.body, op_table)
         return _terminate(head_str + " -->\n    " + body_str)
     if isinstance(item, PDirective):
-        body_str = emit_term(item.body, op_table)
+        body = item.body
+        if (isinstance(body, PCompound) and len(body.args) == 1
+                and op_table.lookup_prefix(body.functor) is not None):
+            # A directive whose functor is a PREFIX operator in this table
+            # (dynamic, discontiguous, multifile, table, ...) is written in
+            # FUNCTIONAL notation, `:- discontiguous(p/1).`: every reader
+            # parses it, while the prefix form `:- discontiguous p/1.` only
+            # parses where that operator is declared -- not under Scryer's
+            # builtin table (measured 2026-09-29, the SWI dialect's output).
+            arg = emit_term(body.args[0], op_table, context_prec=999)
+            return _terminate(":- " + emit_term(PAtom(body.functor), op_table)
+                              + "(" + arg + ")")
+        body_str = emit_term(body, op_table)
         return _terminate(":- " + body_str)
     if isinstance(item, PComment):
         if item.text.startswith("%"):

@@ -2,7 +2,7 @@
 
 safe_queens(N, QUEENS) :-
     in_domain(QUEENS, 1, N),
-    all_different(QUEENS),
+    all_distinct(QUEENS),
     label(QUEENS),
     check_diagonals(QUEENS).
 
