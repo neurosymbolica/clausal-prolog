@@ -560,17 +560,21 @@ def test_F015_list_item_bool_index(fix):
 
 
 def test_F015_between_bool_c_py_divergence(fix):
+    """The C and Python paths agree on bool bounds -- since 2026-09-30 by
+    both raising type_error(integer, False) (Scryer), not by both failing."""
     import clausal.logic.builtins.arithmetic as ar
     _, m = fix
-    X = Var()
-    with_c = _collect(m, X, "between", False, True, X)
-    ar._USE_C_ARITH = False
-    try:
-        X2 = Var()
-        without_c = _collect(m, X2, "between", False, True, X2)
-    finally:
-        ar._USE_C_ARITH = True
-    assert with_c == without_c
+    errs = []
+    for use_c in (True, False):
+        ar._USE_C_ARITH = use_c
+        try:
+            X = Var()
+            with pytest.raises(LogicException) as info:
+                _collect(m, X, "between", False, True, X)
+            errs.append(cell_args(info.value.term)[0])
+        finally:
+            ar._USE_C_ARITH = True
+    assert errs[0] == errs[1] == ("type_error", "integer", False)
 
 
 def test_F015_regression_succ_rejects_bool(fix):

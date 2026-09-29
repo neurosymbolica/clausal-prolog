@@ -230,10 +230,11 @@ _SRC_ROWS = {
     "p3": ("(unpack(T, ['+', 1, 2]), X == 1, T != 3)", []),
     "p4": ("(unpack(T, ['+', X, 2]), clpq.rational(T == 5))", [3]),
     "p6": ("(unpack(T, ['+', X, 2]), '#='(T, 5))", [3]),
-    # a between/3 bound holding an unbound variable: no answer, no error,
-    # exactly as the node spelling between(1, Y + 1, X) and a bare Y
-    "b1": ("(unpack(T, ['+', Y, 1]), between(1, T, X))", []),
-    "b2": ("between(1, Y + 1, X)", []),
+    # a between/3 bound holding an unbound variable: since 2026-09-30 the
+    # instantiation error, exactly as the node spelling between(1, Y + 1, X)
+    # and a bare Y (Scryer's library(between)) -- see _ERROR_ROWS
+    "b1": ("(unpack(T, ['+', Y, 1]), between(1, T, X))", "instantiation_error"),
+    "b2": ("between(1, Y + 1, X)", "instantiation_error"),
     # CLP(Q) objectives and entailment take a cell too (roborev job 271)
     "o1": ("(unpack(T, ['+', Y, 2]), clpq.rational(Y >= 1), clpq.minimize(T, X))", [3]),
     "o2": ("(unpack(T, ['+', Y, 2]), clpq.rational(Y <= 4), clpq.supremum(T, X))", [6]),
@@ -250,8 +251,15 @@ def src_mod(tmp_path_factory):
 
 @pytest.mark.parametrize("name", list(_SRC_ROWS))
 def test_source_row(src_mod, name):
+    want = _SRC_ROWS[name][1]
+    if want == "instantiation_error":
+        from clausal.logic.exceptions import LogicException
+        with pytest.raises(LogicException) as info:
+            _answers(src_mod, name)
+        assert info.value.term[1] == "instantiation_error"
+        return
     got = _answers(src_mod, name)
-    assert got == _SRC_ROWS[name][1]
+    assert got == want
 
 
 def _real_interval(mod, pred):
