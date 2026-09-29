@@ -467,3 +467,269 @@ class TestEngineFingerprintInvalidation:
                     "a changed compiler must recompile, not reuse")
             finally:
                 ih._FINGERPRINT_CACHE = original
+
+
+# ── D18(b): set_data writes atomically ───────────────────────────────────────
+
+
+class TestAtomicCacheWrite:
+    """Several engines can share one ``__pycache__`` (kit/corpus trees run by
+    parallel lanes), so a reader must never see a half-written ``.pyc``.
+    ``set_data`` writes a temp file beside the target and ``os.replace``s it
+    in, as CPython's ``importlib._bootstrap_external._write_atomic`` does."""
+
+    def _loader(self, tmp_path):
+        src = tmp_path / "m.clausal"
+        src.write_text("p(1),\n")
+        return PredicateLoader("m", str(src))
+
+    def test_the_write_goes_through_a_temp_file_and_replace(
+            self, tmp_path, monkeypatch):
+        loader = self._loader(tmp_path)
+        target = tmp_path / "__pycache__" / "m.cpython-313.pyc"
+        target.parent.mkdir()
+        target.write_bytes(b"OLD")
+        seen = []
+        real_replace = os.replace
+
+        def spy(src, dst):
+            # At the moment of the swap the reader still sees the OLD file,
+            # and the temp file already holds the COMPLETE new bytes.
+            seen.append((src, dst, target.read_bytes(),
+                         open(src, "rb").read()))
+            return real_replace(src, dst)
+
+        monkeypatch.setattr(clausal.import_hook.os, "replace", spy)
+        loader.set_data(str(target), b"NEW-COMPLETE-BYTES")
+        assert len(seen) == 1, seen
+        src, dst, visible, staged = seen[0]
+        assert os.fspath(dst) == str(target)
+        assert os.path.dirname(src) == str(target.parent)
+        assert src != str(target)
+        assert visible == b"OLD"
+        assert staged == b"NEW-COMPLETE-BYTES"
+        assert target.read_bytes() == b"NEW-COMPLETE-BYTES"
+        assert sorted(os.listdir(target.parent)) == [target.name]
+
+    def test_a_failed_write_leaves_no_stray_temp_file(
+            self, tmp_path, monkeypatch):
+        loader = self._loader(tmp_path)
+        target = tmp_path / "__pycache__" / "m.cpython-313.pyc"
+
+        def boom(src, dst):
+            raise OSError("disk full")
+
+        monkeypatch.setattr(clausal.import_hook.os, "replace", boom)
+        loader.set_data(str(target), b"NEW")      # swallowed, as before
+        assert os.listdir(target.parent) == []
+
+    def test_a_write_that_fails_midway_leaves_no_stray_temp_file(
+            self, tmp_path, monkeypatch):
+        loader = self._loader(tmp_path)
+        target = tmp_path / "__pycache__" / "m.cpython-313.pyc"
+        target.parent.mkdir()
+        target.write_bytes(b"OLD")
+
+        def boom(fd, data):
+            raise OSError("I/O error")
+
+        monkeypatch.setattr(clausal.import_hook.os, "write", boom)
+        loader.set_data(str(target), b"NEW")
+        assert sorted(os.listdir(target.parent)) == [target.name]
+        assert target.read_bytes() == b"OLD"
+
+
+# ── D18(a): every module that decides emitted code is fingerprinted ────────
+
+
+def _fingerprinted_relpaths():
+    """The package-relative files ``_compilation_fingerprint`` hashes."""
+    from clausal import import_hook as ih
+    package = os.path.dirname(os.path.abspath(ih.__file__))
+    out = set()
+    for rel in ih._COMPILATION_ROOTS:
+        for dirpath, dirnames, filenames in os.walk(
+                os.path.join(package, *rel.split("/"))):
+            dirnames[:] = [d for d in dirnames if d != "__pycache__"]
+            out |= {os.path.relpath(os.path.join(dirpath, f), package)
+                    for f in filenames if f.endswith(".py")}
+    out |= set(ih._COMPILATION_FILES)
+    assert out, "the fingerprint must hash SOMETHING"
+    return out
+
+
+def _bytecode(source, filename="t.clausal"):
+    import marshal
+    from clausal import import_hook as ih
+    code, _ = ih._parse_clausal_source(source, filename)
+    return marshal.dumps(code)
+
+
+def _control_exact_arith(monkeypatch):
+    """EVALUABLE decides whether ``pi`` under ``sin`` is arithmetic."""
+    import types
+    from clausal.logic import exact_arith
+    src = "p(X) <- (X == sin(pi))\n"
+    before = _bytecode(src)
+    monkeypatch.setattr(exact_arith, "EVALUABLE", types.MappingProxyType(
+        {k: v for k, v in exact_arith.EVALUABLE.items() if k[0] != "sin"}))
+    return before, _bytecode(src)
+
+
+def _control_units(monkeypatch):
+    """_DEPRECATED_UNIT_NAMES renames an old unit spelling at import."""
+    import warnings
+    import clausal.modules.units as units
+    src = "-import_from(units, [Metre])\np(X) <- (X is Metre)\n"
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        before = _bytecode(src)
+        renames = dict(units._DEPRECATED_UNIT_NAMES)
+        del renames["Metre"]
+        monkeypatch.setattr(units, "_DEPRECATED_UNIT_NAMES", renames)
+        return before, _bytecode(src)
+
+
+def _control_countries(monkeypatch):
+    """JURISDICTIONS resolves ``thailand`` to ``clausal.modules.countries``."""
+    from clausal.modules.countries import _data
+    from clausal.templating import term_rewriting as tr
+    src = "-import_from(thailand, [baht])\np(X) <- (X is baht)\n"
+    monkeypatch.setattr(tr, "_CURRENCY_JURISDICTIONS", None)
+    before = _bytecode(src)
+    monkeypatch.setattr(tr, "_CURRENCY_JURISDICTIONS", None)
+    monkeypatch.setattr(_data, "JURISDICTIONS",
+                        [j for j in _data.JURISDICTIONS if j != "thailand"])
+    return before, _bytecode(src)
+
+
+def _control_generated_names(monkeypatch):
+    """dollar_name spells every runtime-class reference in emitted code."""
+    from clausal.logic import generated_names
+    from clausal.templating import term_rewriting as tr
+    assert tr.dollar_name is generated_names.dollar_name
+    src = "p(X) <- (q(X))\n"
+    before = _bytecode(src)
+    monkeypatch.setattr(tr, "dollar_name", lambda name: "$$" + name)
+    return before, _bytecode(src)
+
+
+def _control_terms(monkeypatch):
+    """quote_atom spells the atoms the .pl translator writes out."""
+    import marshal
+    import clausal.terms as terms
+    import clausal.tools.prolog_to_clausal as p2c
+    from clausal import import_hook as ih
+    assert p2c._quote_atom is terms.quote_atom
+
+    def compile_pl():
+        return marshal.dumps(ih.PrologLoader("m", "m.pl").source_to_code(
+            b"p('a b').\n", "m.pl"))
+
+    before = compile_pl()
+    monkeypatch.setattr(p2c, "_quote_atom",
+                        lambda s: terms.quote_atom(s + " x"))
+    return before, compile_pl()
+
+
+_PL_SAMPLE = (b":- op(700, xfx, ===>).\n"
+              b"p(X) :- X = 'a b', q([1|_]), \"s\" = _.\nq(_).\n")
+
+
+def _pl_compile_census():
+    """Package-relative files whose code RUNS, or which are OPENED, while a
+    ``.pl`` file is compiled from cold (lexer cache cleared)."""
+    import clausal
+    from clausal import import_hook as ih
+    from clausal.tools import toklex
+    package = os.path.dirname(os.path.abspath(clausal.__file__))
+    toklex.load_lexer.cache_clear()
+    ran, opened = set(), set()
+
+    def prof(frame, event, arg):
+        if event == "call":
+            ran.add(frame.f_code.co_filename)
+
+    _OPEN_CENSUS[:] = [opened]
+    sys.setprofile(prof)
+    try:
+        ih.PrologLoader("m", "m.pl").source_to_code(_PL_SAMPLE, "m.pl")
+    finally:
+        sys.setprofile(None)
+        _OPEN_CENSUS[:] = []
+    return {os.path.relpath(f, package) for f in ran | opened
+            if isinstance(f, str) and f.startswith(package + os.sep)}
+
+
+_OPEN_CENSUS: list = []
+
+
+def _audit_open(event, args):
+    if event == "open" and _OPEN_CENSUS and isinstance(args[0], str):
+        _OPEN_CENSUS[0].add(os.path.abspath(args[0]))
+
+
+sys.addaudithook(_audit_open)
+
+
+_MUTATION_CONTROLS = {
+    "logic/exact_arith.py": _control_exact_arith,
+    "modules/units.py": _control_units,
+    "modules/countries/_data.py": _control_countries,
+    "logic/generated_names.py": _control_generated_names,
+    "terms.py": _control_terms,
+}
+
+#: The .pl translator: the control is that the file's code runs (or, for the
+#: token spec, that it is read) while a .pl file compiles. prolog_ast.py is
+#: dataclasses only -- its generated __init__s carry no file -- so its
+#: control is that the translator builds its node types.
+_TRANSLATOR_FILES = (
+    "tools/prolog_to_clausal.py", "tools/prolog_parser.py",
+    "tools/prolog_tokenizer.py", "tools/prolog_operators.py",
+    "tools/prolog_dialect.py", "tools/prolog_ast.py",
+    "tools/toklex/specs/iso.toklex.pl",
+)
+
+
+@pytest.mark.parametrize(
+    "dependency", list(_MUTATION_CONTROLS) + list(_TRANSLATOR_FILES))
+def test_every_module_that_decides_bytecode_is_fingerprinted(
+        dependency, monkeypatch):
+    """D18(a): positive control FIRST (this file really decides emitted
+    code), then the fingerprint must cover it."""
+    if dependency in _MUTATION_CONTROLS:
+        before, after = _MUTATION_CONTROLS[dependency](monkeypatch)
+        assert before != after, (
+            "positive control: changing this table must change the bytecode")
+    elif dependency == "tools/prolog_ast.py":
+        import clausal.tools.prolog_ast as past
+        import clausal.tools.prolog_to_clausal as p2c
+        assert p2c.PClause is past.PClause
+    else:
+        census = _pl_compile_census()
+        assert dependency in census, sorted(census)
+    assert dependency in _fingerprinted_relpaths()
+
+
+def test_the_toklex_package_is_fingerprinted_and_used():
+    census = _pl_compile_census()
+    used = {f for f in census if f.startswith("tools/toklex/")
+            and f.endswith(".py")}
+    assert used, sorted(census)
+    assert used <= _fingerprinted_relpaths(), used - _fingerprinted_relpaths()
+
+
+def test_an_interrupted_write_leaves_no_stray_temp_file(tmp_path, monkeypatch):
+    src = tmp_path / "m.clausal"
+    src.write_text("p(1),\n")
+    loader = PredicateLoader("m", str(src))
+    target = tmp_path / "__pycache__" / "m.cpython-313.pyc"
+
+    def interrupt(src, dst):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(clausal.import_hook.os, "replace", interrupt)
+    with pytest.raises(KeyboardInterrupt):
+        loader.set_data(str(target), b"NEW")
+    assert os.listdir(target.parent) == []

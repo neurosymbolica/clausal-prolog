@@ -146,7 +146,7 @@ constraint, see [Operators](operators.md)):
 | `Z == X * 2` | `#=(Z, X * 2)` | CLP(ℤ) constraint; the module gets `:- use_module(library(clpz), [(#=)/2])` |
 | `X == Y` | `#=(X, Y)` | The same constraint |
 | `'=='(X, Y)` | `X == Y` | Structural identity (the quoted spelling) |
-| `X != 3`, `X + 1 != Y` | `#\=(X, 3)`, `#\=(X + 1, Y)` | CLP(ℤ) disequality when a side is an integer literal or arithmetic; the module imports `(#\=)/2` from clpz |
+| `X != 3`, `X + 1 != Y`, `X != 5000(euro)` | `#\=(X, 3)`, `#\=(X + 1, Y)`, `#\=(X, 5000)` | CLP(ℤ) disequality when a side exports as an integer or arithmetic; the module imports `(#\=)/2` from clpz |
 | `X != Y`, `X != foo` | `dif(X, Y)`, `dif(X, foo)` | Otherwise (not numeric, or not known to be) — see the note below |
 | `X <= Y` | `X =< Y` | ISO `=<` (evaluates; not a constraint) |
 | `eval_(X * 2, Z)` | `Z is X * 2` | Eager evaluation |
@@ -158,10 +158,13 @@ constraint, see [Operators](operators.md)):
     In Clausal `X != Y` is a disequality **constraint**: it waits for its
     arguments rather than testing them now, so it is never exported as the
     plain tests `\==` or `=\=`, which differ from it whenever an argument is
-    unbound. The exporter decides "numeric" from the source alone: a side
-    that is an integer literal or an arithmetic expression gives clpz's
-    `#\=`; anything else, including a variable and a float literal (CLP(ℤ)
-    is over the integers), gives `dif/2`, which is sound for numbers too but
+    unbound. The exporter decides "numeric" from the source alone, on the
+    term each side EXPORTS AS: a side that becomes an integer (an integer
+    literal, `-3`, a quantity literal such as `5000(euro)`, a constant
+    folded to an integer) or an arithmetic expression gives clpz's `#\=`;
+    anything else, including a variable, a float (literal, `2.5(euro)`, or
+    a folded float constant: CLP(ℤ) is over the integers) and a constant
+    folded to an atom, gives `dif/2`, which is sound for numbers too but
     does not propagate over a finite domain. The decision looks only at the
     two operands: `X != Y` between two variables is `dif/2` even when both
     are CLP(ℤ) variables elsewhere in the clause (the answers are the same;

@@ -422,6 +422,46 @@ reach(X, Y) <- (edge(X, Z), reach(Z, Y))
         result = clausal_source_to_prolog("ne(X, Y) <- (X != Y != 3)")
         assert "dif(X, Y)" in result and "#\\=(Y, 3)" in result, result
 
+    # D17 (2026-09-29): "numeric" is read off the CONVERTED term, not the
+    # Python AST node, so a quantity literal, a negative literal and a folded
+    # constant are classified by the number they export as.
+    _NE_CONSTANTS = ("-constant_value(max_fine, 5000)\n"
+                     "-constant_value(rate, 1.5)\n"
+                     "-constant_value(kind, foo)\n")
+
+    @pytest.mark.parametrize("body, goal", [
+        ("X != 5000(euro)", "#\\=(X, 5000)"),      # quantity literal
+        ("X != -3", "#\\=(X, -3)"),                # negative int literal
+        ("X != ++max_fine", "#\\=(X, 5000)"),      # constant folded to an int
+        ("X != -1.5", "dif(X, -1.5)"),             # negative float
+        ("X != 2.5(euro)", "dif(X, 2.5)"),         # float quantity
+        ("X != ++rate", "dif(X, 1.5)"),            # constant folded to a float
+        ("X != ++kind", "dif(X, foo)"),            # constant folded to an atom
+        ("X != 1.5", "dif(X, 1.5)"),               # float literal
+        ("X != Y", "dif(X, Y)"),                   # variable vs variable
+        ("X != abs(Y)", "#\\=(X, abs(Y))"),        # evaluable calls
+        ("X != min(Y, 2)", "#\\=(X, min(Y, 2))"),
+        ("X != max(Y, 2)", "#\\=(X, max(Y, 2))"),
+        ("X != sign(Y)", "#\\=(X, sign(Y))"),
+        ("X != f(Y)", "dif(X, f(Y))"),             # not evaluable
+    ])
+    def test_not_equal_classifies_the_converted_term(self, body, goal):
+        # nv
+        source = self._NE_CONSTANTS + f"ne(X, Y) <- ({body}, Y is Y)\n"
+        result = clausal_source_to_prolog(source)
+        assert goal in result, result
+        if goal.startswith("dif"):
+            assert "clpz" not in result, result
+        else:
+            assert "(#\\=)/2" in result, result
+
+    def test_not_equal_and_equal_agree_on_a_quantity(self):
+        # nv
+        eq = clausal_source_to_prolog("p(X) <- (X == 5000(euro))")
+        ne = clausal_source_to_prolog("p(X) <- (X != 5000(euro))")
+        assert "#=(X, 5000)" in eq, eq
+        assert "#\\=(X, 5000)" in ne, ne
+
     def test_variable_names_cross_unchanged(self):
         """Variables keep their spelling through a full source translation.
 
@@ -820,3 +860,40 @@ def test_lowercase_unit_name_lowers_the_same_way():
     text = out if isinstance(out, str) else str(out)
     assert "X = 5.0" in text, text
     assert "???" not in text, text
+
+
+# ── D17: the exported `!=` consults and answers in real Scryer ──────────────
+
+_SCRYER = "/workspace/scryer-prolog/target/release/scryer-prolog"
+
+
+@pytest.mark.skipif(not __import__("os").path.exists(_SCRYER),
+                    reason=f"Scryer binary not found at {_SCRYER}")
+@pytest.mark.parametrize("query, answer", [
+    ("ne(4000).", "true."),
+    ("ne(5000).", "false."),
+    ("ne(X), X = 5000.", "false."),     # a constraint, not a test
+    ("nf(2.0).", "true."),
+    ("nf(1.5).", "false."),
+    ("na(3, -3).", "false."),           # abs(Y) is EVALUATED, not compared
+    ("na(3, -4).", "true."),
+])
+def test_not_equal_export_runs_in_scryer(tmp_path, query, answer):
+    # nv
+    import subprocess
+    source = ("-module(m, [ne(X), nf(X), na(X, Y)])\n"
+              "-constant_value(max_fine, 5000)\n"
+              "-constant_value(rate, 1.5)\n"
+              "ne(X) <- (X != 5000(euro), X != ++max_fine, X != -3)\n"
+              "nf(X) <- (X != ++rate)\n"
+              "na(X, Y) <- (X != abs(Y))\n")
+    pl = clausal_source_to_prolog(source)
+    assert "#\\=(X, 5000)" in pl and "dif(X, 1.5)" in pl, pl
+    # The exporter leaves `library(dif)` to the consumer (as for `is not`);
+    # Scryer does not autoload it, so supply it here.
+    (tmp_path / "ne.pl").write_text(
+        pl.replace(":- use_module(library(clpz)",
+                   ":- use_module(library(dif)).\n:- use_module(library(clpz)", 1))
+    proc = subprocess.run([_SCRYER, "ne.pl"], cwd=tmp_path, input=query + "\n",
+                          capture_output=True, text=True, timeout=30)
+    assert proc.stdout.strip() == answer, (proc.stdout, proc.stderr, pl)

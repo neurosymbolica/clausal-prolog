@@ -2790,24 +2790,19 @@ class _ClausalToProlog:
             op_str = "???"
         return PCompound(op_str, (left, right))
 
-    @staticmethod
-    def _is_arith_operand(node: python_ast.expr) -> bool:
-        """True if *node* is a compound arithmetic expression.
+    #: The expressions CLP(Z) evaluates, by arity: exactly the heads Scryer's
+    #: library(clpz) `parse_clpz/2` accepts (src/lib/clpz.pl, the `m(...)`
+    #: rows), which covers what `_convert_binop` / `_convert_unaryop` emit
+    #: and the evaluable CALLS (`abs(Y)`, `min(A, B)`, ...). The dialects
+    #: have no evaluable table of their own to consult; both ladder engines
+    #: use this clpz. A converted term headed by one of these is arithmetic.
+    _ARITH_FUNCTORS_2 = frozenset({
+        "+", "-", "*", "/", "//", "div", "mod", "rem", "^", "min", "max",
+        "<<", ">>", "/\\", "\\/", "xor"})
+    _ARITH_FUNCTORS_1 = frozenset({
+        "-", "\\", "abs", "sign", "msb", "lsb", "popcount"})
 
-        Used to distinguish arithmetic `==`/`!=` (`X == Y + 1`, an evaluation)
-        from structural `==`/`!=` (`X == foo`), so the former round-trips to
-        Prolog `=:=`/`=\\=` rather than `==`/`\\==` (F032).
-        """
-        if isinstance(node, python_ast.BinOp):
-            return True
-        if isinstance(node, python_ast.UnaryOp) and isinstance(
-            node.op, (python_ast.USub, python_ast.UAdd)
-        ):
-            return True
-        return False
-
-    def _not_equal(self, left_node, right_node, left: PTerm,
-                   right: PTerm) -> PTerm:
+    def _not_equal(self, left: PTerm, right: PTerm) -> PTerm:
         """Clausal's `!=` constraint in Prolog (ruling R16, 2026-09-29).
 
         `!=` is a CONSTRAINT, not a test: it waits for its arguments, so a
@@ -2817,22 +2812,38 @@ class _ClausalToProlog:
         be -- is `dif/2`, which is sound for numbers too (it only loses the
         arithmetic: `X + 1 != 3` must be `#\\=`).
 
-        "Numeric" is decided SYNTACTICALLY, the only inference the exporter
-        has: either side is an arithmetic expression (`_is_arith_operand`) or
-        an integer literal.  A float literal is not: CLP(Z) is over the
-        integers and raises `domain_error(clpz_expression, F)` on one.
+        "Numeric" is decided on the CONVERTED terms (`_is_clpz_term`), i.e.
+        on what the exporter actually writes, so a quantity literal
+        (`5000(euro)` -> `5000`), a negative literal and a folded constant
+        are classified by the number they become (D17).  A float is not
+        numeric here: CLP(Z) is over the integers and raises
+        `domain_error(clpz_expression, F)` on one.
         """
-        if self._is_clpz_operand(left_node) or self._is_clpz_operand(right_node):
+        if self._is_clpz_term(left) or self._is_clpz_term(right):
             self._emitted_clp_arith_neq = True
             return PCompound("#\\=", (left, right))
         return PCompound("dif", (left, right))
 
     @classmethod
-    def _is_clpz_operand(cls, node: python_ast.expr) -> bool:
-        """True if *node* is an integer literal or arithmetic (R16)."""
-        if (isinstance(node, python_ast.Constant) and type(node.value) is int):
-            return True
-        return cls._is_arith_operand(node)
+    def _is_clpz_term(cls, term: PTerm) -> bool:
+        """True if the exported *term* is an integer or arithmetic (R16/D17).
+
+        An integer `PNumber` (whatever it came from: a literal, `-3`, a
+        quantity's magnitude, a folded constant) or a compound headed by an
+        arithmetic functor or evaluable clpz function (`abs(Y)`: as dif/2
+        it would compare X against the UNEVALUATED term).  A float `PNumber` is not.  An arithmetic
+        compound counts even if a float sits inside it -- `#\\=` then raises
+        in the target, as `#=` does for `==` (ruling 2026-09-19), which is
+        louder than the structural `dif/2` silently comparing `X` against
+        the unevaluated term `1.5 * 2`.
+        """
+        if isinstance(term, PNumber):
+            return type(term.value) is int
+        if isinstance(term, PCompound):
+            arity = len(term.args)
+            return ((arity == 2 and term.functor in cls._ARITH_FUNCTORS_2)
+                    or (arity == 1 and term.functor in cls._ARITH_FUNCTORS_1))
+        return False
 
     # ── Interim refusals (operator decision, 2026-09-03) ──────────────
     #
@@ -3235,8 +3246,7 @@ class _ClausalToProlog:
                 return PCompound("#=", (left, right))
 
             if isinstance(op, python_ast.NotEq):
-                return self._not_equal(node.left, node.comparators[0],
-                                       left, right)
+                return self._not_equal(left, right)
 
             if isinstance(op, python_ast.Lt):
                 # <- is Lt + USub (handled at statement level); pure Lt is <.
@@ -3254,7 +3264,6 @@ class _ClausalToProlog:
         # Multi-comparison: chain into conjunction
         parts = []
         prev = self._convert_expr(node.left)
-        prev_node = node.left
         for op, comp in zip(node.ops, node.comparators):
             right = self._convert_expr(comp)
             if isinstance(op, python_ast.Is):
@@ -3264,7 +3273,7 @@ class _ClausalToProlog:
             elif isinstance(op, python_ast.Eq):
                 parts.append(PCompound("==", (prev, right)))
             elif isinstance(op, python_ast.NotEq):
-                parts.append(self._not_equal(prev_node, comp, prev, right))
+                parts.append(self._not_equal(prev, right))
             elif isinstance(op, python_ast.Lt):
                 parts.append(PCompound("<", (prev, right)))
             elif isinstance(op, python_ast.LtE):
@@ -3283,7 +3292,6 @@ class _ClausalToProlog:
                         PCompound("member", (prev, right)),
                     )))
             prev = right
-            prev_node = comp
 
         if len(parts) == 1:
             return parts[0]

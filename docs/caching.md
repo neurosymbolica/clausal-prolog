@@ -23,7 +23,7 @@ Both are addressed:
 | `source_to_code(data, path)` | Parse source + `EmbedTransformer` + `compile()` — the cached transform |
 | `get_data(path)` | Read file bytes (source or `.pyc`) |
 | `path_stats(path)` | Return `{'mtime': ..., 'size': ...}` for cache validation |
-| `set_data(path, data)` | write `.pyc` file, creating `__pycache__/` if needed |
+| `set_data(path, data)` | write `.pyc` file **atomically** (temp file in the same directory, then `os.replace`), creating `__pycache__/` if needed |
 | `get_code(fullname)` | Inherited from `SourceLoader` — handles the full cache lookup/write cycle |
 
 ### Cache lifecycle
@@ -32,6 +32,10 @@ Both are addressed:
 1. `get_code()` checks for a cached `.pyc` via `importlib.util.cache_from_source(path)`.
 2. No cache exists → calls `source_to_code()` to parse, transform, and compile.
 3. `set_data()` writes the bytecode to `__pycache__/<name>.cpython-<ver>.pyc`.
+   The write is atomic, as CPython's own `.pyc` writes are: the bytes go to a
+   uniquely named temp file beside the target, which `os.replace` swaps in, so
+   several processes sharing one `__pycache__` never read a torn file. A failed
+   write removes its temp file and is ignored (the import still succeeds).
 4. Returns the code object.
 
 **Subsequent imports (cache hit):**
@@ -42,7 +46,14 @@ Both are addressed:
 The validation stamp is not the raw mtime: `path_stats()` XORs the source's
 nanosecond mtime with a tag derived from a **content digest of the engine
 sources that decide the emitted code** (plus a hand-maintained
-`CLAUSAL_BYTECODE_TAG`). Upgrading or editing the engine therefore invalidates
+`CLAUSAL_BYTECODE_TAG`). That set is every module whose content can change
+emitted code: the compiler (`templating/`, `pythonic_ast/`,
+`logic/compiler/`), the tables it reads at compile time
+(`logic/exact_arith.py`, `modules/units.py`, `modules/countries/_data.py`,
+`logic/generated_names.py`, `terms.py`),
+and the `.pl` translator with its token spec (`tools/prolog_*.py`,
+`tools/toklex/`); see `_COMPILATION_ROOTS`/`_COMPILATION_FILES` in
+`clausal/import_hook.py`. Upgrading or editing the engine therefore invalidates
 every cached `.clausal` bytecode automatically; there is nothing to clear by
 hand.
 4. Returns the cached code object.
@@ -130,6 +141,7 @@ For programmatic loading of a file by path, use `clausal.testing.load_clausal_mo
     - Query correctness from cached bytecode (facts and rules)
     - Dynamic predicates remain unlocked after cached load
     - `sys.dont_write_bytecode` suppression
+    - Atomic `.pyc` writes (temp file + `os.replace`; no stray temp file on failure)
     - Deferred compilation: `compile_predicate` called once per predicate, not once per clause
 
 ---

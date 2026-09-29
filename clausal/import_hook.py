@@ -496,8 +496,38 @@ CLAUSAL_BYTECODE_TAG = 14
 #: file here invalidates every user's cached bytecode when it changes, so a
 #: module that only affects RUNTIME behaviour must not be listed -- a runtime
 #: change that makes old bytecode wrong is what the manual tag above is for.
-_COMPILATION_ROOTS = ("templating", "pythonic_ast", "logic/compiler")
-_COMPILATION_FILES = ("logic/compiler_v2.py",)
+#:
+#: THE RULE: every module whose content can change emitted code is listed,
+#: including data tables the transformer reads at compile time and, for
+#: ``.pl`` files, the translator ``PrologLoader.source_to_code`` runs before
+#: compiling (D18(a), 2026-09-29). Widening costs only cache misses; missing
+#: one lets two engines share a stale entry. Each entry outside the original
+#: compiler roots is proven by a positive control in
+#: tests/test_pycache.py::test_every_module_that_decides_bytecode_is_fingerprinted
+#: -- add a row there when adding one here.
+_COMPILATION_ROOTS = (
+    "templating", "pythonic_ast", "logic/compiler",
+    # the .pl tokenizer (tools/prolog_tokenizer.py) is generated from a spec
+    # by this package
+    "tools/toklex",
+)
+_COMPILATION_FILES = (
+    "logic/compiler_v2.py",
+    # Tables the transformer reads at compile time:
+    "logic/exact_arith.py",          # EVALUABLE (_mark_arith_position_names)
+    "modules/units.py",              # _DEPRECATED_UNIT_NAMES (-import_from)
+    "modules/countries/_data.py",    # JURISDICTIONS (_resolve_import_path)
+    "logic/generated_names.py",      # dollar_name: $-twin spelling of names
+    "terms.py",                      # quote_atom/quote_string (.pl translator)
+    # The .pl translator, whose output is what gets compiled and cached:
+    "tools/prolog_to_clausal.py",
+    "tools/prolog_parser.py",
+    "tools/prolog_tokenizer.py",
+    "tools/prolog_operators.py",
+    "tools/prolog_dialect.py",
+    "tools/prolog_ast.py",
+    "tools/toklex/specs/iso.toklex.pl",  # the spec load_lexer() compiles
+)
 
 _FINGERPRINT_CACHE: "int | None" = None
 
@@ -631,14 +661,44 @@ class _ClausalSourceLoader(SourceLoader):
                 "size": st.st_size}
 
     def set_data(self, path, data):
-        # Write .pyc file; create __pycache__/ dir if needed.
+        """Write a ``.pyc`` ATOMICALLY; create ``__pycache__/`` if needed.
+
+        Several engines may share one ``__pycache__`` (parallel lanes over a
+        shared kit or corpus tree), so the bytes go to a uniquely named temp
+        file in the SAME directory and ``os.replace`` swaps it in: a reader
+        sees the old file or the complete new one, never a torn one. This
+        mirrors CPython's ``importlib._bootstrap_external._write_atomic``.
+        The temp file is removed on any failure, and a failure is swallowed:
+        the cache is an optimisation, never a reason to fail an import.
+        """
         try:
-            dir_ = os.path.dirname(path)
-            os.makedirs(dir_, exist_ok=True)
-            with open(path, "wb") as f:
-                f.write(data)
+            os.makedirs(os.path.dirname(path), exist_ok=True)
         except OSError:
-            pass  # silently skip if we cannot write cache
+            return
+        # pid + random: unique across the processes sharing the directory
+        # and across threads of one process; O_EXCL refuses any collision.
+        path_tmp = f"{path}.{os.getpid()}.{os.urandom(4).hex()}.tmp"
+        try:
+            fd = os.open(path_tmp, os.O_EXCL | os.O_CREAT | os.O_WRONLY, 0o666)
+        except OSError:
+            return
+        try:
+            try:
+                view = memoryview(data)
+                while view:
+                    view = view[os.write(fd, view):]
+            finally:
+                os.close(fd)
+            os.replace(path_tmp, path)
+        except BaseException as exc:
+            # ANY failure (an interrupt too) removes the temp file; only an
+            # OSError is swallowed.
+            try:
+                os.unlink(path_tmp)
+            except OSError:
+                pass
+            if not isinstance(exc, OSError):
+                raise
 
 
 def _parse_clausal_source(source, filename):
