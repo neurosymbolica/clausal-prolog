@@ -2,7 +2,7 @@
 -module(facts, [base/1, pair/2, counter/1, bump/1, add_note/1, notes/1])
 -set_prolog_flag(assert_creates_dynamic, true)
 -dynamic(counter/1)
--dynamic(note/1)
+-dynamic(jotting/1)
 -private([a, b, c, d])
 
 base(10),
@@ -18,5 +18,5 @@ counter(0)
 
 bump(N) <- (retract(counter(M)), N == M + 1, assertz(counter(N)))
 
-add_note(X) <- assertz(note(X))
-notes(L) <- findall(X, note(X), L)
+add_note(X) <- assertz(jotting(X))
+notes(L) <- findall(X, jotting(X), L)

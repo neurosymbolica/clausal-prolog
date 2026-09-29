@@ -265,8 +265,8 @@ def test_dynamic_in_every_iso_spelling_and_assertz(native, ans):
 
 
 def test_assert_creates_dynamic_for_an_undeclared_predicate(native, ans):
-    mod = native.load("s2_acd", "add(X) :- assertz(note(X)).\n"
-                                "all(L) :- add(a), add(b), findall(X, note(X), L).\n")
+    mod = native.load("s2_acd", "add(X) :- assertz(jotting(X)).\n"
+                                "all(L) :- add(a), add(b), findall(X, jotting(X), L).\n")
     assert ans(mod, "all") == [["a", "b"]]
 
 

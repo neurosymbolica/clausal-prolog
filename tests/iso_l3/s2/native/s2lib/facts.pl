@@ -19,7 +19,7 @@ counter(0).
 
 bump(N) :- retract(counter(M)), N is M + 1, assertz(counter(N)).
 
-% note/1 is never declared: assertz creates it as dynamic
+% jotting/1 is never declared: assertz creates it as dynamic
 % (assert_creates_dynamic is on for a .pl module).
-add_note(X) :- assertz(note(X)).
-notes(L) :- findall(X, note(X), L).
+add_note(X) :- assertz(jotting(X)).
+notes(L) :- findall(X, jotting(X), L).
