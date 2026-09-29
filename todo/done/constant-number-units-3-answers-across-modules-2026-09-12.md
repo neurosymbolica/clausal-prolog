@@ -46,3 +46,9 @@ has written down, which is itself evidence.
 **Check before fixing**: whether any corpus rulebase relies on reading another module's declared
 pair. A census of `constant_number_units/3` call sites, not a name census — see the repeated
 lesson that a census of NAMES is never evidence about BINDINGS.
+
+## Closed 2026-09-30 (stale)
+
+No longer reproduces on f01790d2: the two-module probe answers only xb's own
+`(22.0, usd)`. Fixed by a92a3e74 (compile-time module insertion:
+`constant_number_units(fee_x, ...)` lowers to `module_constant_units($module, ...)`).

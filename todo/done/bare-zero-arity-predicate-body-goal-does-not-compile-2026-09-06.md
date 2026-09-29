@@ -28,3 +28,8 @@ touches for `(":", M, G)`. Fix: a bare `str` body goal whose name has a /0 row
 (local or via the module's dispatch/namespace) lowers to `AstCall(LoadName(k), ())`,
 exactly as the cell `("k",)` does since Task 5; a bare str with no /0 row keeps
 the compile-time refusal.
+
+## Closed 2026-09-30 (stale)
+
+No longer reproduces on f01790d2: `-module(m, [k, go]) k, go <- k,` loads and
+`go` succeeds once (the bare /0 body goal compiles).
