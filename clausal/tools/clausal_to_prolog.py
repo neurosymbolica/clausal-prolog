@@ -1931,8 +1931,10 @@ class _ClausalToProlog:
     def _import_list(self, mod_path: str, elts: list) -> list[PTerm] | None:
         """The import-list elements for -import_from(*mod_path*, [*elts*]).
 
-        With no ``module_signatures`` the requested names are emitted as they
-        always were (bare atoms, or Name/Arity when written with arguments).
+        With no ``module_signatures`` an item whose arity is written (a call
+        template, ``name/N``, ``name//N``) is emitted as ``Name/Arity``, once
+        each (F4b); a single BARE name makes the whole import listless (F5),
+        since its arity is unknown and a bare atom is not an ISO import item.
         With signatures, each requested name is resolved the same way a
         predicate name is (PascalCase → snake_case, builtin remaps) and then
         looked up in the target's export set; names the target does not export
@@ -1969,8 +1971,11 @@ class _ClausalToProlog:
             # instead (a listless use_module): a superset, no guessed arity.
             if any(arity is None for _, arity in requested):
                 return None
+            # F4b: each indicator once, first occurrence kept -- `helper(X)`
+            # and `helper/1`, or `sent//1` and `sent/3`, are the same import
+            # (the signatures path below dedupes the same way).
             return [PCompound("/", (PAtom(name), PNumber(arity)))
-                    for name, arity in requested]
+                    for name, arity in dict.fromkeys(requested)]
 
         exported = self.module_signatures.get(mod_path)
         if exported is None:
