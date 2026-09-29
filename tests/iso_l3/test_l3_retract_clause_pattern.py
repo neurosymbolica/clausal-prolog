@@ -31,3 +31,22 @@ def test_retract_of_a_rule_body_binds_it(native, ans):
                       "t(B) :- retract((r(_) :- B)).\n")
     (b,) = ans(mod, "t")
     assert b[0] == "=" and b[2] == 1
+
+
+
+def test_retractall_matches_the_head_whatever_the_body(tmp_path):
+    """retractall(Head) removes every clause whose HEAD unifies (ISO 8.9.5).
+    A seam rule's own ``X is 3`` (a unification) used to read as a head
+    test, keeping ``h(X) <- (X is 3)`` out of ``retractall(h(5))``.
+    Scryer, for ``h(X) :- X = 3. h(7).``: t1 [7], t2 [], t3 []."""
+    from clausal.import_hook import _load_module
+    from clausal.logic.solve import _deref_walk, solve
+    from clausal.logic.variables import Var
+    for name, goal, want in (("t1", "5", [7]), ("t2", "7", []),
+                             ("t3", "_", [])):
+        p = tmp_path / f"_retractall_{name}.clausal"
+        p.write_text("-allow_singletons\n-dynamic(h/1)\nh(X) <- (X is 3)\nh(7),\n"
+                     f"t(L) <- (retractall(h({goal})), findall(Y, h(Y), L))\n")
+        m = _load_module(f"_retractall_{name}", str(p))
+        v = Var()
+        assert [_deref_walk(v) for _ in solve(("t", v), m)] == [want], name

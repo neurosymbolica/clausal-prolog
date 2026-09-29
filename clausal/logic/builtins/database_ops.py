@@ -14,7 +14,7 @@ from clausal.logic.exceptions import _error as _error_term
 from clausal.logic.atoms import mint
 
 from clausal.logic.builtins._registry import (
-    _db_builtin, structural_unify,
+    _db_builtin,
 )
 
 
@@ -864,7 +864,8 @@ def _retractall_factory(db):
         clause_list = home._clauses.get((functor, arity))
         keep = None
         if clause_list:
-            keep = [c for c in clause_list if not _clause_head_matches(term_val, c)]
+            keep = [c for c in clause_list
+                    if not _clause_head_matches(term_val, c, home)]
         if keep is not None and len(keep) != len(clause_list):
             # ONE write for the whole removal (retract/1's gate and
             # recompile, once -- not once per clause).  An undefined
@@ -884,27 +885,16 @@ def _retractall_factory(db):
     return retractall__1
 
 
-def _clause_head_matches(term_val, clause) -> bool:
-    """retract/1's match (``_first_match_index``): the head unifies with
-    *term_val* and the clause's hoisted ``Unify`` goals agree with it.
-    Leaves no bindings."""
-    from clausal.terms import Unify as _Unify  # avoid top-level cycle
-    tmp_trail = Trail()
-    mark = tmp_trail.mark()
-    try:
-        if not structural_unify(term_val, clause.head, tmp_trail):
-            return False
-        for goal in clause.body:
-            if isinstance(goal, _Unify):
-                chk = Trail()
-                chk_mark = chk.mark()
-                ok = structural_unify(deref(goal.left), deref(goal.right), chk)
-                chk.undo(chk_mark)
-                if not ok:
-                    return False
-        return True
-    finally:
-        tmp_trail.undo(mark)
+def _clause_head_matches(term_val, clause, home) -> bool:
+    """retractall/1's match: the clause's head, with its hoisted arguments
+    put back (``clause_ops.head_matches``, clause/2's reading), unifies with
+    *term_val* -- whatever the body.  It used to require EVERY body
+    ``Unify`` to agree, so a rule's own ``X is 3`` kept ``h(X) <- X is 3``
+    out of ``retractall(h(5))``.  Leaves no bindings."""
+    from clausal.logic.builtins.clause_ops import (  # noqa: PLC0415
+        _as_cell, head_matches)
+    matched, _why = head_matches(clause, home, _as_cell(term_val))
+    return matched
 
 
 def _pi_parts(pi):
