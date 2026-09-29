@@ -183,11 +183,14 @@ def test_import_module_gets_the_same_relative_path_treatment():
 
 
 def test_absolute_paths_and_bare_import_lists_without_module_path():
-    """No module_path → today's behaviour is unchanged."""
+    """No module_path: absolute paths are unchanged, and a list of BARE names
+    (arity unknown without signatures) becomes a listless use_module (F5,
+    2026-09-29 -- a bare atom is not an ISO import item: Scryer refuses the
+    file, Trealla imports nothing). See test_exporter_f4_f5_import_export_lists."""
     out = clausal_source_to_prolog(IMPORTER_SRC, strict=True)
-    assert (":- use_module('eu/ai_act/prohibited_practices/kernel', "
-            "[ai_act_verdict])." in out)
-    assert ":- use_module('clausal/stdlib/kleene', [and3, or3])." in out
+    assert ":- use_module('eu/ai_act/prohibited_practices/kernel')." in out
+    assert ":- use_module('clausal/stdlib/kleene')." in out
+    assert "[ai_act_verdict]" not in out and "[and3, or3]" not in out
 
 
 PY_IMPORT_SRC = """-import_from(py.datetime, [now])
