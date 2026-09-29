@@ -162,6 +162,10 @@ Most standard Prolog translates cleanly:
 - Directives (`dynamic`, `discontiguous`, `table`, `module`, `use_module`),
   in the ISO call form `:- dynamic(foo/1).`
 - Negation as failure (`\+` becomes `not`)
+- `bagof/3` and `setof/3` with the existential quantifier: `Y^Goal` becomes
+  `Y ^ (Goal)` (nested to the right, `A ^ (B ^ (Goal))`), so the solutions
+  group by the free variables as in ISO (8.10):
+  `setof(X, Y^p(X, Y), L)` answers one list.
 
 ### Unsupported constructs
 

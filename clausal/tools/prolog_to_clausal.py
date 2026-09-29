@@ -1065,19 +1065,18 @@ class _PrologToClausal:
                 "an explicit double copy_term/subsumes check."
             )
 
-        # bagof/setof: strip ISO existential quantifiers (V^Goal) from the
-        # goal argument. Clausal's bagof/setof never group by free variables
-        # (they collect over all solutions, failing when empty), which is
-        # exactly ISO's behaviour when the free variables are ^-quantified —
-        # dropping the quantifier is faithful (F026).
+        # bagof/setof: the ISO existential quantifier (V^Goal, 8.10) crosses
+        # as Clausal's own ``V ^ Goal``.  Clausal's bagof/setof group by the
+        # free variables like ISO's, so the quantifier CHANGES the answers:
+        # stripping it (as this translator did until 2026-09-29) turned
+        # ``setof(X, Y^p(X,Y), L)`` into one answer per Y.  Python's ``^`` is
+        # left-associative, so a nested ``A^B^G`` is parenthesised to the
+        # right: ``A ^ (B ^ G)``.
         if functor in ("bagof", "setof") and len(args) == 3:
-            inner = args[1]
-            while (isinstance(inner, PCompound) and inner.functor == "^"
-                    and len(inner.args) == 2):
-                inner = inner.args[1]
-            if inner is not args[1]:
-                args = (args[0], inner, args[2])
-                term = PCompound(functor, args)
+            name = self._predicate_name(functor, 3)
+            return (f"{name}({self._emit_term(args[0])}, "
+                    f"{self._emit_quantified(args[1])}, "
+                    f"{self._emit_term(args[2])})")
 
         # (^)/2 anywhere else in goal/term position: in arithmetic context it
         # is exponentiation (handled in _emit_expr → Python **); as a plain
@@ -1086,9 +1085,7 @@ class _PrologToClausal:
         if functor == "^" and len(args) == 2:
             raise PrologTranslationError(
                 "The existential quantifier ((^)/2) is only supported inside "
-                "the goal argument of bagof/3 or setof/3, where it is "
-                "stripped (Clausal's bagof/setof never group by free "
-                "variables).\n"
+                "the goal argument of bagof/3 or setof/3.\n"
                 "In arithmetic context, (^)/2 translates to Python's ** "
                 "operator."
             )
@@ -1217,6 +1214,23 @@ class _PrologToClausal:
             return f"{name}()"
         arg_strs = ", ".join(self._emit_term(a) for a in args)
         return f"{name}({arg_strs})"
+
+    def _emit_quantified(self, term: PTerm) -> str:
+        """The goal argument of bagof/setof: ``V^G`` → ``V ^ (G)``, nested
+        to the right; anything else is the goal term itself."""
+        if (isinstance(term, PCompound) and term.functor == "^"
+                and len(term.args) == 2):
+            witness = self._emit_term(term.args[0])
+            inner = term.args[1]
+            inner_s = self._emit_quantified(inner)
+            # Always parenthesised (a conjunction already is): Python's
+            # ``^`` binds tighter than ``is``/comparison, so ``Y ^ X is Y``
+            # would read as ``(Y ^ X) is Y``.
+            if not (isinstance(inner, PCompound) and inner.functor == ","
+                    and len(inner.args) == 2):
+                inner_s = f"({inner_s})"
+            return f"{witness} ^ {inner_s}"
+        return self._emit_term(term)
 
     # Python operator precedence (higher number = tighter binding).
     _EXPR_PREC: dict[str, int] = {

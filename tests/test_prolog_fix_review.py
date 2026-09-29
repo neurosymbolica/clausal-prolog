@@ -162,17 +162,16 @@ class TestF035QuotedFunctorHeads:
 
 
 class TestF026BagofWitness:
-    def test_bagof_witness_stripped(self):
-        # Clausal bagof/setof never group by free variables, which is ISO's
-        # behaviour when the variable is ^-quantified — drop the quantifier.
+    def test_bagof_witness_kept(self):
+        # Clausal bagof/setof group by free variables like ISO's (91ef2a77),
+        # so the quantifier changes the answers and must cross (2026-09-29;
+        # it was stripped before, which answered one list per Y).
         out = prolog_to_clausal("q(L) :- bagof(X, Y^p(X,Y), L).")
-        assert "bagof(X, p(X, Y), L)" in out
-        assert "^" not in out
+        assert "bagof(X, Y ^ (p(X, Y)), L)" in out
 
-    def test_setof_nested_witnesses_stripped(self):
+    def test_setof_nested_witnesses_kept(self):
         out = prolog_to_clausal("q(L) :- setof(X, A^B^p(X, A, B), L).")
-        assert "setof(X, p(X, A, B), L)" in out
-        assert "^" not in out
+        assert "setof(X, A ^ (B ^ (p(X, A, B))), L)" in out
 
     def test_caret_outside_bagof_rejected(self):
         # (^)/2 in plain goal/term position has no Clausal equivalent.
