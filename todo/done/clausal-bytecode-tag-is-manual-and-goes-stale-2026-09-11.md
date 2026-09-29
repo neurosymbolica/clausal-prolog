@@ -81,3 +81,8 @@ hygiene, and it applies to what a lane is ASKED for as much as to how they run i
     find <tree> -name __pycache__ -type d -exec rm -rf {} +
 
 and say so explicitly when asking another lane to re-measure after an engine landing.
+
+## Moved to done/ 2026-09-30
+
+It says RESOLVED at a9989b7a (content-fingerprinted tag) at the top but had
+stayed in todo/.
