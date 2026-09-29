@@ -26,6 +26,7 @@ from clausal.terms import SegList, SegString, VarSeg, ConcreteSeg
 from clausal.logic.builtins._registry import _builtin
 from clausal.logic.builtins._helpers import (
     NIL_SPELLING, _functor_name, _arity, _nth_arg, _args_list, _is_empty_list,
+    _check_nonneg_int_arg,
 )
 from clausal.logic.runtime._seg_helpers import walk_seg
 
@@ -370,11 +371,16 @@ def _functor__3(term, name, arity, trail, k):
         # Construction mode
         name_val = deref(name)
         arity_val = deref(arity)
+        # ISO 8.5.1.3 a, b, d, f (Scryer-verified): an unbound Name or Arity
+        # is an instantiation error, a non-integer Arity a type error and a
+        # negative one a domain error.  All four used to FAIL silently.
+        # A09-F015 / A01-D001(c): a bool arity is not an integer (True is
+        # not 1).
         if is_var(name_val) or is_var(arity_val):
-            return
-        # A09-F015 / A01-D001(c): a bool arity is rejected (True is not 1).
-        if not isinstance(arity_val, int) or isinstance(arity_val, bool) or arity_val < 0:
-            return
+            from clausal.logic.exceptions import (  # noqa: PLC0415
+                LogicException, instantiation_error)
+            raise LogicException(instantiation_error("functor/3"))
+        _check_nonneg_int_arg(arity_val, "functor/3")
         # Spec §6.4 / ISO 8.5.1.3 e: the name of a term built here must be
         # ATOMIC.  A list, a dict, a set, a cell or any other compound shape
         # is not, and used to be handed straight back as ``T`` at arity 0 —
@@ -438,8 +444,20 @@ def _arg__3(n, term, arg_out, trail, k):
     """arg(N, Term, arg) — unify arg with the N-th argument of Term (1-based)."""
     n_val = deref(n)
     term_val = deref(term)
+    # ISO 8.5.2.3 (Scryer-verified): an unbound Term is an instantiation
+    # error, an atomic one a type_error(compound), and a bound N that is not
+    # a non-negative integer a type or domain error.  All used to FAIL
+    # silently.  (An unbound N enumerates -- a deliberate extension.)
     if is_var(term_val):
-        return
+        from clausal.logic.exceptions import (  # noqa: PLC0415
+            LogicException, instantiation_error)
+        raise LogicException(instantiation_error("arg/3"))
+    _check_nonneg_int_arg(n_val, "arg/3")
+    from clausal.logic.builtins.type_checks import _is_atomic_term  # noqa: PLC0415
+    if _is_atomic_term(walk_seg(term_val)):
+        from clausal.logic.exceptions import (  # noqa: PLC0415
+            LogicException, type_error)
+        raise LogicException(type_error("compound", term_val, "arg/3"))
     if is_var(n_val):
         # Output mode: enumerate (N, Arg) pairs, SWI-style relational arg/3.
         # This used to FAIL SILENTLY — the exact ground-vs-var blind spot of
@@ -458,9 +476,6 @@ def _arg__3(n, term, arg_out, trail, k):
                 yield None
             trail.undo(mark)
             index += 1
-    # A09-F015 / A01-D001(c): a bool index is rejected (True is not 1).
-    if not isinstance(n_val, int) or isinstance(n_val, bool):
-        return
     # SegList/SegString never appear at the Clausal surface — walk
     # to ground form first (user decision 2026-06-13).
     term_val = walk_seg(term_val)
@@ -818,12 +833,12 @@ def _constant_number_units__3(name, number, units, trail, k):
       (+Name, ?Number, ?Units): the declared magnitude and units.
       (-Name, ?Number, ?Units): enumerate every united constant.
     """
-    import sys as _sys                                     # noqa: PLC0415
+    from clausal.logic.constants import loaded_clausal_py_modules  # noqa: PLC0415
     name_val = deref(name)
     want = spelling(name_val) if _term_is_atom(name_val) else None
     if want is None and not is_var(name_val):
         return                       # a non-atom names no constant
-    for py_module in list(_sys.modules.values()):
+    for py_module in loaded_clausal_py_modules():
         logic_module = getattr(py_module, "__clausal_module__", None)
         declared = getattr(logic_module, "constant_units", None)
         if not declared:
@@ -985,8 +1000,10 @@ def _module_constant__3(m, name, value, trail, k):
     # Module unbound: enumerate every loaded Clausal module.
     # Snapshot values() so a module load triggered mid-iteration (e.g. by a
     # lazy import somewhere downstream) can't perturb this iteration.
-    import sys as _sys  # noqa: PLC0415
-    for py_module in list(_sys.modules.values()):
+    # ``sys.modules`` plus the modules a test run loads outside it (see
+    # ``clausal.logic.constants.register_detached_module``).
+    from clausal.logic.constants import loaded_clausal_py_modules  # noqa: PLC0415
+    for py_module in loaded_clausal_py_modules():
         cdict = _module_constants_dict(py_module)
         if not cdict:
             continue

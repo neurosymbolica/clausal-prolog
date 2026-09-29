@@ -120,12 +120,16 @@ class TestFunctor:
         goal = Call(func=LoadName(name="functor"), args=[t, mint("hello"), 0], kwargs=[])
         assert sol_var(goal, t, mod=mod) == [mint("hello")]
 
-    def test_fails_both_unbound(self):
-        # nv
+    def test_all_unbound_is_an_instantiation_error(self):
+        # ISO 8.5.1.3 a (Scryer-verified); this used to fail silently
+        # (todo/done/builtins-fail-silently-on-bad-arguments-2026-09-27.md).
+        from clausal.logic.exceptions import LogicException
         mod = fresh_module()
         t, f, a = Var(), Var(), Var()
         goal = Call(func=LoadName(name="functor"), args=[t, f, a], kwargs=[])
-        assert sol_var(goal, t, mod=mod) == []
+        with pytest.raises(LogicException) as exc:
+            sol_var(goal, t, mod=mod)
+        assert cell_args(exc.value.term)[0] == mint("instantiation_error")
 
     def test_decompose_dataclass(self):
         # nv

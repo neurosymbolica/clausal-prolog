@@ -45,3 +45,19 @@ silent. From memory, to be confirmed against the text:
     t_charcode(R) <- (catch((char_code(_, -1), R is no_error), E, R is E)),
 
 Each query returns no answers.
+
+## Closed 2026-09-30
+
+Fixed on fix/todo-batch-1-2026-09-30. Every row now raises Scryer's error
+term (checked against /workspace/scryer-prolog): functor/3 (unbound
+Name/Arity, non-integer and negative Arity), arg/3 (unbound Term, atomic
+Term, non-integer and negative N), sort/2 and msort/2 (partial list, non-list
+List or Sorted), sub_atom/5 (non-integer and negative Before/Length/After,
+non-atom Sub), char_code/2 (out-of-range code), atom_length/2 (non-integer
+and negative Length). `length(_, -1)` had already been fixed. Pinned by
+tests/test_builtin_bad_argument_errors.py.
+
+Left alone on purpose: `arg(N, T, A)` with N unbound still ENUMERATES (ISO:
+instantiation_error) -- a deliberate extension documented in arg/3. And
+keysort/2 does not exist at all (existence_error) -- see the missing-ISO-
+builtins todo.

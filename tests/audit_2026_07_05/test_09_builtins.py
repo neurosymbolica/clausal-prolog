@@ -903,9 +903,14 @@ def test_regression_arg_bounds(fix):
     _, m = fix
     t = ("f", 1, 2)
     assert not _first(m, "arg", 0, t, Var())
-    assert not _first(m, "arg", -1, t, Var())
     assert not _first(m, "arg", 0, [10, 20], Var())
-    assert not _first(m, "arg", -1, chars("ab"), Var())
+    # A negative N is ISO 8.5.2.3's domain_error(not_less_than_zero, N)
+    # (Scryer-verified, 2026-09-30); it used to fail silently.
+    for term in (t, chars("ab")):
+        with pytest.raises(LogicException) as info:
+            _first(m, "arg", -1, term, Var())
+        assert cell_args(info.value.term)[0] == (
+            "domain_error", "not_less_than_zero", -1)
     X = Var()
     assert _first(m, "arg", 1, t, X) and deref(X) == 1
 

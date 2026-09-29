@@ -29,3 +29,10 @@ see ledger note on `_belongs_elsewhere`).
 
 Pin: owner `_assertz` after importer load still succeeds; owner + importer both see the
 new clause.
+
+## Closed 2026-09-30 (stale)
+
+No longer reproduces on f01790d2: owner `lpo` declares `-dynamic(lp/1)`, an
+importer `-import_from(lpo, [lp/1])` without `-dynamic` loads, and afterwards
+the owner's own `assertz(lp(2))` succeeds and the importer sees `[1, 2]`
+(the adoption ruling of 2026-09-20 made the importer's row the owner's).

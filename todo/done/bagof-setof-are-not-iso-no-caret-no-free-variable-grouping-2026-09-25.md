@@ -62,3 +62,10 @@ age(peter, 7). age(ann, 11). age(pat, 8). age(tom, 5). age(mike, 11).
 - The row table in tests/test_call_runs_special_form_cells.py (rows 4-6)
   only uses goals with no free variables, so it will not move.  Add rows
   with free variables when this is fixed.
+
+## Closed 2026-09-30 (stale)
+
+Fixed by 24238636 ("bagof/3, setof/3: one bag per binding of the free
+variables; V^Goal"). Re-measured on f01790d2 with the age/2 example above:
+`bagof(N, age(N, A), L)` answers one bag per A (5, 7, 8, 11) and
+`bagof(N, A ^ age(N, A), L)` answers the single bag.

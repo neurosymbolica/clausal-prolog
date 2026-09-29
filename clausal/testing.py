@@ -287,6 +287,11 @@ def load_clausal_module(path: str | Path) -> object:
             sys.modules.pop(mod_name, None)
         else:
             sys.modules[mod_name] = old
+    # Out of sys.modules, but still a loaded program: the reflection
+    # builtins that enumerate loaded modules (constant_value/2 and kin)
+    # must see it, or its own constants answer nothing.
+    from clausal.logic.constants import register_detached_module
+    register_detached_module(mod)
     return mod
 
 
@@ -608,8 +613,13 @@ def run_file(path: str | Path) -> FileResults:
         results.results.append(
             TestResult(name="<collect>", passed=False, error=e))
         return results
-    for desc in descs:
-        results.results.append(run_test(mod, desc, path=path, diagnose=True))
+    try:
+        for desc in descs:
+            results.results.append(
+                run_test(mod, desc, path=path, diagnose=True))
+    finally:
+        from clausal.logic.constants import unregister_detached_module
+        unregister_detached_module(mod)
     return results
 
 

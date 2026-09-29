@@ -724,11 +724,15 @@ class _PrologToClausal:
         # module: they mean the program's own predicate, so no builtin
         # rename applies to them.  Populated by emit_module.
         self._own_names: set[str] = set()
+        # Names this module uses in GOAL position (a body goal, or a goal
+        # argument of a meta-predicate).  Populated by emit_module.
+        self._goal_names: set[str] = set()
 
     def emit_module(self, pmodule: PModule) -> str:
         """Emit a complete module as clausal source text."""
         self._predicate_names = _collect_predicate_names(pmodule)
         self._own_names = _own_predicate_names(pmodule)
+        self._goal_names = _collect_goal_names(pmodule)
         lines: list[str] = []
         for item in pmodule.items:
             try:
@@ -1440,6 +1444,13 @@ class _PrologToClausal:
         # Reachable since Prolog test names became atoms:
         # `test(subtract) :- subtract(...)`.
         if name in self._predicate_names:
+            return _quote_atom(name)
+        # The same for a name the module CALLS or IMPORTS without defining it
+        # (``:- use_module(lib, [g/0]).  c(L) :- findall(1, g, L).``): neither
+        # sweep above sees a 0-arity import, so ``g`` was declared
+        # ``-private([g])`` and the private DATA atom shadowed the imported
+        # predicate -- the goal raised existence_error(procedure, g/0).
+        if name in self._goal_names or name in self._own_names:
             return _quote_atom(name)
         # A name the engine RESERVES: bare ``undefined`` is the truth value
         # Undefined, and ``-private([undefined])`` is a load error.  The

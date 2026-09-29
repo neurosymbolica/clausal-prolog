@@ -601,6 +601,14 @@ def domain_error(domain: str, culprit: Any, context: Any = "") -> tuple:
     return _error(("domain_error", _name_atom(domain), culprit), context)
 
 
+def representation_error(flag: str, context: Any = "") -> tuple:
+    """Build error(representation_error(Flag), PI).
+
+    ISO 7.12.2 g: an implementation-defined limit is breached, e.g. an
+    integer that is not a character code (``character_code``)."""
+    return _error(("representation_error", _name_atom(flag)), context)
+
+
 def evaluation_error_kind(exc: Any) -> "str | None":
     """The ``E`` of a LogicException ``error(evaluation_error(E), _)``
     (``"zero_divisor"``, ``"undefined"``, ...), else None."""

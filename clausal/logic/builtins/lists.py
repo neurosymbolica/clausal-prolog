@@ -701,11 +701,43 @@ def _flatten__2(this_generator, _proceed, _fail, _catcher, lst, flat, trail):
     yield (_fail, DONE)
 
 
+def _sort_items(lst_val, sorted_val, who: str):
+    """The elements ``sort/2``/``msort/2`` sort, or an ISO error.
+
+    ISO Cor.2 8.4.3 (Scryer-verified): a partial list is an instantiation
+    error, anything else that is not a list a ``type_error(list, L)``, and
+    so is a bound Sorted that is neither a list nor a partial list.  These
+    used to FAIL silently (``sort(a, S)`` had no answer).  A ``SegList`` whose
+    holes are all filled is a proper list even when an element is unbound,
+    and is sorted rather than refused.
+    """
+    from clausal.terms import SegList, SegString, SegBytes  # noqa: PLC0415
+    from clausal.logic.exceptions import (  # noqa: PLC0415
+        LogicException, instantiation_error, type_error)
+    # List first, then Sorted: ISO's error order (8.4.3.3 a, b, then c), so
+    # ``sort(_, x)`` is the instantiation error and ``sort(a, x)`` names a.
+    items = _as_items(lst_val)
+    if items is None:
+        if isinstance(lst_val, SegList):
+            walked = lst_val._walk_raw()
+            if not isinstance(walked, list):
+                raise LogicException(instantiation_error(who))
+            items = walked
+        elif is_var(lst_val) or isinstance(lst_val, (SegString, SegBytes)):
+            raise LogicException(instantiation_error(who))
+        else:
+            raise LogicException(type_error("list", lst_val, who))
+    if not (is_var(sorted_val) or _as_items(sorted_val) is not None
+            or isinstance(sorted_val, (SegList, SegString, SegBytes))):
+        raise LogicException(type_error("list", sorted_val, who))
+    return items
+
+
 @_trampoline_builtin("msort", 2)
 def _msort__2(this_generator, _proceed, _fail, _catcher, lst, sorted_lst, trail):
     """msort(List, Sorted) — Sorted is List sorted, preserving duplicates."""
     lst_val = deref(lst)
-    items = _as_items(lst_val)
+    items = _sort_items(lst_val, deref(sorted_lst), "msort/2")
     if items is not None:
         items = [deref(x) for x in items]
         result = _standard_order_sorted(items)
@@ -740,7 +772,7 @@ def _sort__2(this_generator, _proceed, _fail, _catcher, lst, sorted_lst, trail):
     unhashable key can only ever equal another unhashable key.
     """
     lst_val = deref(lst)
-    items = _as_items(lst_val)
+    items = _sort_items(lst_val, deref(sorted_lst), "sort/2")
     if items is not None:
         items = [deref(x) for x in items]
         seen: list = []

@@ -70,3 +70,15 @@ class TestTroNonLastArmClobber:
         drv = _drv_solutions(prc_mod)
         assert drv == alone
         assert len(drv) == 3
+
+
+def test_nonlast_tro_arm_answers_in_clause_order(prc_mod):
+    """todo/done/tro-nonlast-arm-solution-order.md: signal-mode TRO on a
+    NON-last clause used to yield the later arm's answers before the tail
+    recursion's (2, 1, 0).  Clause order is the recursion's deepest answer
+    first: N - 1 - 1 (0), then N - 1 (1), then N (2).  No longer reproduces
+    on f01790d2; this pins the order (the tests above sort)."""
+    lm = prc_mod.__dict__["$module"]
+    x = Var()
+    got = [str(deref(x)) for _ in call("prc", mint("k"), 2, x, module=lm)]
+    assert got == ["2 - 1 - 1", "2 - 1", "2"]

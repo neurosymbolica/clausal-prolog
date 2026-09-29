@@ -29,7 +29,9 @@ from clausal.logic.atoms import (
 )
 from clausal.logic.exceptions import LogicException, instantiation_error, type_error
 from clausal.logic.builtins._registry import _builtin
-from clausal.logic.builtins._helpers import NIL_SPELLING, _is_empty_list
+from clausal.logic.builtins._helpers import (
+    NIL_SPELLING, _is_empty_list, _check_nonneg_int_arg,
+)
 from clausal.logic.builtins.lists import _as_items
 
 # ── C-accelerated inner loops (Option B: C helpers from Python generators) ───
@@ -283,7 +285,11 @@ def _char_code__2(char, code, trail, k):
         if not isinstance(vn, int) or isinstance(vn, bool):
             raise LogicException(type_error("integer", vn, "char_code/2"))
         if not (0 <= vn < 0x110000):
-            return  # logical failure — out-of-range code point
+            # ISO 8.16.6.3 d (Scryer-verified): not a character code.  This
+            # used to FAIL silently.
+            from clausal.logic.exceptions import representation_error  # noqa: PLC0415
+            raise LogicException(
+                representation_error("character_code", "char_code/2"))
         mark = trail.mark()
         if unify(char, char_atom(chr(vn)), trail):
             yield None
@@ -337,6 +343,8 @@ def _atom_length__2(atom, length, trail, k):
     atom_str = _atom_to_str(va)
     if atom_str is None:
         raise LogicException(type_error("atom", va, "atom_length/2"))
+    # ISO 8.16.1.3 c, d (Scryer-verified); used to FAIL silently.
+    _check_nonneg_int_arg(deref(length), "atom_length/2")
     mark = trail.mark()
     if unify(length, len(atom_str), trail):
         yield None
@@ -525,11 +533,14 @@ def _sub_atom__5(atom, before, length, after, sub, trail, k):
 
     va = va_str
     n = len(va)
-    # A09-F015 / A01-D001(c): a bool bound to Before/Length/After is not an
-    # integer position (True is not 1) — reject before either search path.
-    if any(isinstance(deref(p), bool) for p in (before, length, after)):
-        return
+    # ISO 8.16.3.3 (Scryer-verified): a bound Before/Length/After must be a
+    # non-negative integer (A09-F015 / A01-D001(c): a bool is not one, True
+    # is not 1) and a bound Sub an atom.  These used to FAIL silently.
+    for p in (before, length, after):
+        _check_nonneg_int_arg(deref(p), "sub_atom/5")
     vs = deref(sub)
+    if not is_var(vs) and _atom_to_str(vs) is None:
+        raise LogicException(type_error("atom", vs, "sub_atom/5"))
 
     # Optimization: if Sub is bound to an atom, use str.find to locate
     # occurrences.  Atoms-as-cells: search on the spelling, so a 1-tuple

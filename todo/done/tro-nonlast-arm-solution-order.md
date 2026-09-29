@@ -39,3 +39,9 @@ order differs. `once/1`, first-solution cut, and `findall/3` order are affected.
 Lower than P1 (soundness). Only bites order-sensitive callers over predicates
 whose recursive clause is not the last arm of its bucket. Park until an
 order-sensitive failure actually surfaces.
+
+## Closed 2026-09-30 (stale)
+
+No longer reproduces on f01790d2: `prc("k", 2, X)` answers in clause order
+(N - 1 - 1, N - 1, N) with signal-mode TRO active. Pinned by
+`tests/test_tro_nonlast_arm_clobber.py::test_nonlast_tro_arm_answers_in_clause_order`.
