@@ -380,9 +380,9 @@ class TestPriorArtAndCharacterization:
         """A01-D001 (design question): unify falls back to Python ==."""
         import decimal
         import fractions
-        assert unify(1, True, trail)
+        assert not unify(1, True, trail)     # D35 closed: a truth value is an ATOM -- never a number
         assert unify(1, 1.0, trail)
-        assert unify(0, False, trail)
+        assert not unify(0, False, trail)    # D35 closed: a truth value is an ATOM
         assert unify(decimal.Decimal(1), 1, trail)
         assert unify(fractions.Fraction(1, 2), 0.5, trail)
         assert not unify(1, "1", trail)

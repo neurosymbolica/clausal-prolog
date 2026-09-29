@@ -302,7 +302,7 @@ class TestStaticCallKey:
 
     def test_bool_constant(self):
         # nv
-        assert _static_call_key(ast.Constant(value=True)) is True
+        assert _static_call_key(ast.Constant(value=True)) == ("true", 0)   # D35 closed: a truth value is an ATOM: the atom's bucket
 
     def test_variable_name_returns_none(self):
         # A Name node (variable reference) is not statically known

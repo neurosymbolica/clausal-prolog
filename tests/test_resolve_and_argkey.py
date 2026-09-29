@@ -149,19 +149,19 @@ class TestRuntimeArgKey:
         """bool goes through isinstance fallback, not type(a) is int."""
         # nv
         result = _runtime_arg_key(True)
-        assert result is True
+        assert result == ("true", 0)    # D35 closed: a truth value is an ATOM: the atom's bucket
 
     def test_bool_false_returns_self(self):
         # nv
         result = _runtime_arg_key(False)
-        assert result is False
+        assert result == ("false", 0)   # D35 closed: a truth value is an ATOM
 
     def test_bool_not_equal_to_int(self):
         """True and 1 should produce the same key (both indexable), but
         type(True) is int is False — bool goes through isinstance path."""
-        # Both should be indexable (returned as-is)
+        # D35 closed: a truth value is an ATOM: its key is the atom's, never the int's
         # nv
-        assert _runtime_arg_key(True) is True
+        assert _runtime_arg_key(True) == ("true", 0)
         assert _runtime_arg_key(1) == 1
 
     def test_float_returns_self(self):

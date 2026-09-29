@@ -33,7 +33,7 @@ from decimal import Decimal
 from fractions import Fraction
 from typing import Any
 
-from clausal.logic.atoms import is_atom, mint, spelling
+from clausal.logic.atoms import is_atom, is_truth_atom, mint, spelling, truth_spelling
 from dataclasses import replace as _replace   # a rebuilt node keeps its position
 from clausal.logic.exact_arith import EVALUABLE as _EVALUABLE, NODE_EVALUABLE as _NODE_EVALUABLE
 from clausal.logic.exact_arith import cell_key_args as _cell_key_args, node_keys as _node_keys
@@ -1737,6 +1737,17 @@ def _cells_as_nodes(l, r, strict=None):
     """``(l, r)`` with arithmetic cells rewritten (see _arith_cells_to_nodes;
     CLP(Q) and CLP(R) pass their context as *strict*)."""
     tl, tr = type(l), type(r)
+    # A truth atom (D35: True/False/Undefined ARE the atoms true/false/
+    # undefined) meets the comparators as the str of its spelling -- the
+    # shape every atom already has here -- so ``X == True`` with X bound to
+    # True holds, ``true != 1`` holds, ``1 < true`` is the same
+    # type_error(orderable, ...) as ``1 < a``, and a var beside one is the
+    # same domain_error(clpz_expression, ...) as beside any atom.  Python's
+    # ``True == 1`` never reaches the ground fallbacks.
+    if tl is bool or is_truth_atom(l):
+        l, tl = truth_spelling(l), str
+    if tr is bool or is_truth_atom(r):
+        r, tr = truth_spelling(r), str
     cl = None if tl is int or tl is float else _arith_cells_to_nodes(l, strict)
     cr = None if tr is int or tr is float else _arith_cells_to_nodes(r, strict)
     return (l if cl is None else cl), (r if cr is None else cr)
@@ -2189,14 +2200,6 @@ def _reject_nonnumeric_eq(l, r, context: str = "(==)/2") -> None:
     the Python ``fd_eq`` and the C-accelerated wrapper, so an attr-carrying
     var cannot smuggle a non-numeric operand into q_eq/real_eq."""
     dl, dr = deref(l), deref(r)
-    # A truth ATOM (D35: True/False are the atoms true/false) is never an
-    # arithmetic operand, ground-vs-ground included: ``1 < true`` used to
-    # fall to Python's ``1 < True`` and FAIL silently.  Scryer's clpz:
-    # ``domain_error(clpz_expression, true)``.
-    for _g in (dl, dr):
-        if isinstance(_g, bool):
-            from clausal.logic.exceptions import LogicException, domain_error  # noqa: PLC0415
-            raise LogicException(domain_error("clpz_expression", _g, context))
     if _Add is None:
         _ensure_term_imports()
     varish_l = is_var(dl) or _expr_tree_has_var(dl)
@@ -2252,14 +2255,6 @@ def _reject_nonnumeric_order(l, r, context: str) -> None:
     triggers the dispatch on its own, and q_lt/real_lt would otherwise post
     against the ground non-numeric operand unchecked."""
     dl, dr = deref(l), deref(r)
-    # A truth ATOM (D35: True/False are the atoms true/false) is never an
-    # arithmetic operand, ground-vs-ground included: ``1 < true`` used to
-    # fall to Python's ``1 < True`` and FAIL silently.  Scryer's clpz:
-    # ``domain_error(clpz_expression, true)``.
-    for _g in (dl, dr):
-        if isinstance(_g, bool):
-            from clausal.logic.exceptions import LogicException, domain_error  # noqa: PLC0415
-            raise LogicException(domain_error("clpz_expression", _g, context))
     if _Add is None:
         _ensure_term_imports()
     varish_l = is_var(dl) or _expr_tree_has_var(dl)

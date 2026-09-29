@@ -12,9 +12,11 @@ measured with::
 on the ISO text (``:- use_module(library(lists)).`` prepended; ``run/1`` =
 ``findall`` over ``call(N, X)`` with ``catch``), 2026-09-30.  Where the two
 front ends legitimately differ the row says so: the seam's ``==``/``<`` are
-CLP(FD) posts (``#=``/``#<``), so a bool operand there is clpz's
-``domain_error(clpz_expression, true)`` -- also Scryer's answer for
-``X #= true`` -- where ``is/2`` and ``=:=`` give ISO's
+CLP(FD) posts (``#=``/``#<``): a bool LEAF inside an expression, or beside
+a var, is clpz's ``domain_error(clpz_expression, true)`` -- also Scryer's
+answer for ``X #= true`` -- while two GROUND operands compare as the atoms
+they are (``X == True`` holds, ``1 < true`` is ``type_error(orderable,
+true)`` exactly as ``1 < a``); ``is/2`` and ``=:=`` give ISO's
 ``type_error(evaluable, true/0)``.
 """
 from __future__ import annotations
@@ -195,8 +197,11 @@ SEAM_ONLY = {
     # is ``domain_error(clpz_expression, true)``
     "r1": (_err("domain_error", "clpz_expression", True),
            "X #= true: raises(error(domain_error(clpz_expression,true),_))"),
-    "r2": (_err("domain_error", "clpz_expression", True),
-           "1 #< true: raises(error(domain_error(clpz_expression,true),_))"),
+    # the seam's ``<`` on two GROUND operands is Python's ``<`` over the
+    # atom's spelling, as for any atom: ``1 < true`` is the same
+    # type_error(orderable, true) as ``1 < a`` (measured on the base engine)
+    "r2": (_err("type_error", "orderable", "true"),
+           "1 #< true: raises(error(domain_error(clpz_expression,true),_)) -- clpz posts; the seam's ground < does not"),
 }
 
 WRITE_OUT = "true\nfalse\nundefined\ng(true,[false])\n"
