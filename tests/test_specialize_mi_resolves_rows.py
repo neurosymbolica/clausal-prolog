@@ -189,7 +189,7 @@ def test_a_clause_less_row_is_found_in_the_db_without_any_binding():
 
 def _two_arity_owner(monkeypatch, name):
     """A REAL owner: a Database defining ``amb_mi`` at two arities (one
-    ``.clausal`` file cannot), registered under *name* the way a loaded
+    ``.clausal`` file could not until 2026-09-29), registered under *name* the way a loaded
     module is, so the owner lookup runs unmocked."""
     import types
     from types import SimpleNamespace

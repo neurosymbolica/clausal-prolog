@@ -95,15 +95,33 @@ class TestA5UndeclaredFunctorWording:
 
 
 class TestB3aDcgNonterminalAtTwoArities:
-    def test_state1_and_state2_pushback_rules_name_the_rule(self, tmp_path, monkeypatch):
+    def test_state1_and_state2_pushback_rules_define_two_nonterminals(
+            self, tmp_path, monkeypatch):
+        """FLIPPED (2026-09-29 ruling, one name at several arities as in
+        ISO): ``state//1`` and ``state//2`` are ``state/3`` and ``state/4``,
+        two procedures.  B3a's defect -- the raw "keyword argument
+        repeated" from ``compile`` -- must stay gone either way."""
+        mod = _load(tmp_path, monkeypatch, "tri_b3a", """
+            (state(S), [S]) >> ([S])
+            (state(S0, S), [S]) >> ([S0])
+        """)
+        db = mod.__dict__["$module"].db
+        assert len(db.clauses_for("state", 3)) == 1
+        assert len(db.clauses_for("state", 4)) == 1
+
+    def test_a_declared_nonterminal_at_two_arities_names_the_rule(
+            self, tmp_path, monkeypatch):
+        """A FIELDED declaration keeps one arity per file; the refusal
+        names the rule instead of dying in ``compile``."""
         with pytest.raises(SyntaxError) as exc:
-            _load(tmp_path, monkeypatch, "tri_b3a", """
+            _load(tmp_path, monkeypatch, "tri_b3a_decl", """
+                -private([state(S, DCG0, DCG1)])
                 (state(S), [S]) >> ([S])
                 (state(S0, S), [S]) >> ([S0])
             """)
         msg = str(exc.value)
         assert "keyword argument repeated" not in msg
-        assert "exactly one arity" in msg
+        assert "one arity" in msg
         assert "state" in msg
 
 

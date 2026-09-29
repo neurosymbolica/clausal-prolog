@@ -744,7 +744,9 @@ class _PrologToClausal:
         private = sorted(self._data_atoms)
         not_data = _names_not_data_functors(pmodule) | _collect_goal_names(pmodule)
         for name, arities in sorted(self._data_functors.items()):
-            # one name, one arity: a name used as data at two arities is
+            # a -private entry declares FIELD NAMES, which belong to one
+            # arity (a predicate may have several since 2026-09-29, data may
+            # not): a name used as data at two arities is
             # left undeclared (it raises as before) rather than half-declared
             if len(arities) != 1 or name in not_data:
                 continue

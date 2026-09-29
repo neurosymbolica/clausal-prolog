@@ -752,7 +752,8 @@ def head_to_match_pattern(
         # same re-ask the construction site makes, from the same helper.
         _sig = construction_signature_for_name(
             term.func.name, globals_, n_positional=len(term.args),
-            has_keywords=bool(term.kwargs))
+            has_keywords=bool(term.kwargs),
+            n_keywords=len(term.kwargs or ()))
         _owa = _implicit_functors_active(globals_)
         if _sig is None:
             resolved = _resolve_loadname(term.func.name, globals_)

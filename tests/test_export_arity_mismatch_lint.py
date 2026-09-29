@@ -96,9 +96,10 @@ def test_warns_once_per_entry_on_a_cached_reload(load):
     assert len(first) == 1 and len(second) == 1
 
 
-# A .clausal/.pl file gives a name one arity (the rewriter refuses base/2
-# beside base/3 in one file), so "clauses at the exported arity AND at
-# another" is exercised on the check itself, with cell heads.
+# When this was written a .clausal/.pl file gave a name one arity (the
+# rewriter refused base/2 beside base/3 in one file; lifted 2026-09-29), so
+# "clauses at the exported arity AND at another" is exercised on the check
+# itself, with cell heads.
 
 class _Clause:
     def __init__(self, head):

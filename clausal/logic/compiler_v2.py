@@ -105,8 +105,10 @@ def _warn_strict_atoms_deprecated() -> None:
     )
 
 
-def _head_field_names(module_items) -> dict:
-    """The rewriter's per-functor field names for this load, keyed by NAME.
+def _head_field_names(module_items, by_arity: bool = False) -> dict:
+    """The rewriter's per-functor field names for this load, keyed by NAME
+    (each name's primary arity) -- or, with *by_arity*, keyed
+    ``(name, arity)`` for every arity the file gives the name.
 
     Read off the ``HeadFieldNames`` module item (``{}`` when there is none,
     e.g. a hand-built item list).  This -- not the functor's class -- is where
@@ -116,7 +118,7 @@ def _head_field_names(module_items) -> dict:
     """
     for item in module_items:
         if isinstance(item, HeadFieldNamesItem):
-            return item.fields
+            return item.by_arity if by_arity else item.fields
     return {}
 
 
@@ -276,6 +278,7 @@ def compile_module(
     # ── Step 4: assertz all clauses ───────────────────────────────────────
     pending: dict[tuple[str, int], "str | None"] = {}
     head_fields = _head_field_names(module_items)
+    head_fields_by_arity = _head_field_names(module_items, by_arity=True)
     for pred_node in predicate_nodes:
         functor, arity = head_key(pred_node.head)
         key = (functor, arity)
@@ -287,7 +290,7 @@ def compile_module(
         # through, so the compile writes its index plans onto this row
         # (``_plan_row_for``) and installs through it.  (A ``PredicateMeta``
         # class was bound to the row here until W4b-3 slice 7 deleted it.)
-        local, declared = _local_binding(module_dict, functor)
+        local, declared = _local_binding(module_dict, functor, arity)
         with _load_gate(db, functor, arity, author, WRITE_LOAD_CLAUSES,
                         _load_through(local, origins, functor),
                         origins, module_name, module_dict):
@@ -323,7 +326,9 @@ def compile_module(
             # finds the row already stamped.  A ``define_predicate`` that
             # registered names from a non-cell head got there first too.
             if clause_row.signature is None:
-                fields = head_fields.get(functor)
+                fields = head_fields_by_arity.get(key)
+                if fields is None:
+                    fields = head_fields.get(functor)
                 if fields is not None and len(fields) == arity:
                     clause_row.signature = tuple(fields)
 
@@ -1222,7 +1227,7 @@ _LOAD_SITES = {
 }
 
 
-def _local_binding(module_dict: dict, functor: str):
+def _local_binding(module_dict: dict, functor: str, arity=None):
     """``(binding, declared)`` for the binding a load write of *functor*
     goes THROUGH when this module itself holds the name: the module's own
     predicate HANDLE (``$declare_head``, W4b-3 slice 5 -- where the
@@ -1231,7 +1236,12 @@ def _local_binding(module_dict: dict, functor: str):
     ``_load_through`` falls back to an ``-import_from`` of the name.  The ONE
     rule step 3d and step 4 share."""
     binding = module_dict.get(functor)
-    declared = declared_head(module_dict, binding)
+    # The declaration AT *arity* when the body made one there (a name may
+    # have several, operator ruling 2026-09-29), else the name's first.
+    declared = (declared_head(module_dict, binding, arity)
+                if arity is not None else None)
+    if declared is None:
+        declared = declared_head(module_dict, binding)
     if declared is not None:
         return binding, declared
     return None, None

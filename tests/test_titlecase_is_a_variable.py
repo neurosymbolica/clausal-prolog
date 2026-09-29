@@ -424,22 +424,30 @@ def test_comma_less_bare_titlecase_statement_matches_its_lowercase_twin(
     refuse it; the comma-LESS arm did not, so the statement fell through to
     hosted Python -- the exact silent-fallthrough the sibling fix cites as
     its reason.  With the lint demoted, both spellings must reach the same
-    arity-conflict diagnosis."""
+    functor-position path.
+
+    That path used to END in the arity-conflict diagnosis; since the
+    2026-09-29 ruling (one name at several arities, as in ISO) it defines
+    ``foo/0`` beside ``foo/1``.  So the discriminator is now the clause
+    itself: a statement that fell through to hosted Python would assert
+    nothing at /0."""
     from clausal.templating import term_rewriting
     monkeypatch.setattr(
         term_rewriting, "TITLECASE_IDENTIFIER_SEVERITY", "warn")
-    with pytest.raises(SyntaxError, match="conflicts with"):
-        _load(tmp_path, "commaless_lc", """
-            -module(ttiav_commaless_lc, [])
-            foo(1),
-            foo
-        """)
-    with pytest.raises(SyntaxError, match="conflicts with"):
-        _load(tmp_path, "commaless_tc", """
-            -module(ttiav_commaless_tc, [])
-            Foo(1),
-            Foo
-        """)
+    lc = _load(tmp_path, "commaless_lc", """
+        -module(ttiav_commaless_lc, [])
+        foo(1),
+        foo
+    """)
+    tc = _load(tmp_path, "commaless_tc", """
+        -module(ttiav_commaless_tc, [])
+        Foo(1),
+        Foo
+    """)
+    for mod, name in ((lc, "foo"), (tc, "Foo")):
+        db = mod.__dict__["$module"].db
+        assert len(db.clauses_for(name, 1)) == 1
+        assert len(db.clauses_for(name, 0)) == 1
 
 
 def test_a_thunk_inside_a_lambda_body_uses_the_same_exclusions(tmp_path):

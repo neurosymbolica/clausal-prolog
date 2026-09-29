@@ -128,22 +128,35 @@ class TestTheMessage:
         assert "pass 3 arguments to citation" in out
 
     def test_the_remedy_is_advice_that_works(self, tmp_path):
-        """It must not say "define citation/2 as a predicate of its own".
+        """Both halves of the remedy must work if followed.
 
-        That was the first wording, and a reader who followed it in the same
-        file had the clause padded to /3 and absorbed, then got this same
-        message again — see ``test_following_the_remedy_literally``.
+        The first wording ("define citation/2 as a predicate of its own")
+        did not: the clause was padded to /3 and absorbed.  The second
+        ("give the 2-argument predicate a different name ... refused at
+        load") was true while a name had one arity per file.  Since the
+        2026-09-29 ruling (one name at several arities, as in ISO) defining
+        citation/2 IS the fix -- and following it literally loads and
+        answers (``test_following_the_define_remedy_literally``).
         """
         # The remedy is wrapped and hanging-indented, so match on the collapsed
         # text — asserting a raw substring pins the wrap width, not the advice.
         flat = " ".join(_report(tmp_path, CITATIONS).split())
-        assert "define citation/2 as a predicate of its own" not in flat
-        assert "give the 2-argument predicate a different name" in flat
-        # Since same-name-two-arities-silently-merge.md the second head is a
-        # load error, and the sentence says so instead of describing the old
-        # silent absorption.
-        assert "refused at load" in flat
+        assert "pass 3 arguments to citation, or define citation/2" in flat
+        assert "unrelated to citation/3" in flat
+        assert "refused at load" not in flat
         assert "absorbed" not in flat
+
+    def test_following_the_define_remedy_literally(self, tmp_path):
+        out = _report(tmp_path, """
+            -double_quotes(atom)
+            -private([art_1_2, meta])
+
+            citation(art_1_2, "Reg-Z Article 1(2)", meta),
+            citation(REF, META) <- citation(REF, _, META)
+
+            test("citation record resolves") <- citation(REF, METADATA),
+        """, name="argfollow.clausal")
+        assert "1 passed, 0 failed" in out
 
 
 class TestForwardReference:
@@ -790,18 +803,15 @@ class TestZeroArityFactAtomHead:
 
 
 class TestTwoAritiesInOneFile:
-    """``docs/predicates.md`` used to say these stay unrelated.  They do not —
-    and since ``todo/done/same-name-two-arities-silently-merge.md`` BOTH
-    orders are load errors, so neither can silently rewrite the program.
-    The runtime remedy line still must not send the reader to write the
-    second arity, because one name has one arity whichever way they try.
+    """``docs/predicates.md`` says ``foo/1`` and ``foo/2`` are unrelated, and
+    since the 2026-09-29 ruling (as in ISO) that holds in ONE file too:
+    each order defines two procedures and neither absorbs the other (the
+    silent merge of ``todo/done/same-name-two-arities-silently-merge.md``
+    stays dead).  FLIPPED twice: these pinned the absorption, then its
+    load-time refusal.
     """
 
-    def test_the_longer_head_then_the_shorter_is_a_load_error(self, tmp_path):
-        """FLIPPED: this used to pin the silent absorption (the shorter head
-        padded to ``citation(REF, META, _)``) plus the accurate-but-confusing
-        runtime refusal that followed.  The absorption is now refused at
-        load, in the same run the test file's report captures."""
+    def test_the_longer_head_then_the_shorter_defines_both(self, tmp_path):
         out = _report(tmp_path, """
             -double_quotes(atom)
             -private([art_1_2, meta])
@@ -810,17 +820,20 @@ class TestTwoAritiesInOneFile:
             citation(art_1_2, meta),
 
             test("citation record resolves") <- citation(REF, METADATA),
+            test("the long one is its own") <- citation(art_1_2, _, meta),
+            test("nothing was padded") <- (not citation(art_1_2, meta, _)),
         """, name="argremedy.clausal")
-        assert "citation/2 conflicts" in out
-        assert "citation/3" in out
-        assert "not a partial term" in out
+        assert "3 passed, 0 failed" in out
 
-    def test_the_shorter_head_first_is_a_load_error(self, tmp_path):
+    def test_the_shorter_head_first_defines_both(self, tmp_path):
         out = _report(tmp_path, """
             -double_quotes(atom)
             -private([art_1_2, meta])
 
             citation(art_1_2, meta),
             citation(art_1_2, "Reg-Z Article 1(2)", meta),
+
+            test("short") <- citation(art_1_2, meta),
+            test("long") <- citation(art_1_2, _, meta),
         """, name="argorder.clausal")
-        assert "conflicts with the declaration of citation/2" in out
+        assert "2 passed, 0 failed" in out

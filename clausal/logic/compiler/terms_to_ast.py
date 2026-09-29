@@ -482,7 +482,16 @@ def cell_signature_for_name(
         # now, so the class-call path would only cost a runtime construction.
         cls_fields = term_field_names_of_class(binding)
         if cls_fields is None:
-            return None
+            # A predicate NAME at several arities (operator ruling
+            # 2026-09-29, as in ISO) has no one field list, so the by-name
+            # read answers None.  A construction is the compound at the
+            # arity WRITTEN (ruling C), so ask at that arity; with none
+            # (a presence test, or the construction site's first ask) the
+            # WIDEST arity stands in, and the construction site re-asks at
+            # the written one (``construction_signature_for_name``).
+            cls_fields = _several_arity_fields(binding, arity, _db)
+            if cls_fields is None:
+                return None
         # ``is_predicate``: the question was just answered above, so the
         # spelling does not ask ``is_declared_predicate_name`` a second time.
         _spelled = _functor_spelling(binding, leaf, is_predicate=True)
@@ -507,6 +516,36 @@ def cell_signature_for_name(
             return evaluable_functor_signature(leaf, arity)
         return None
     return _functor_spelling(binding, leaf), fields
+
+
+def _several_arity_fields(binding, arity, db) -> "tuple[str, ...] | None":
+    """The field names of the predicate *binding* at *arity* (else its
+    widest arity) when it is a predicate at SEVERAL arities; ``None`` for
+    anything else, so a single-arity name keeps its old answer."""
+    from clausal.logic.predicate import (  # noqa: PLC0415
+        field_names_for, predicate_arities_for,
+    )
+    arities = predicate_arities_for(binding, db=db)
+    if len(arities) < 2:
+        return None
+    at = arity if arity is not None else max(arities)
+    found = field_names_for(binding, arity=at, db=db)
+    if found is None or len(found) != at:
+        found = tuple(f"arg_{i}" for i in range(at))
+    return tuple(found)
+
+
+def _is_several_arity_predicate(name: str, resolve_globals) -> bool:
+    namespace = (resolve_globals if resolve_globals is not None
+                 else lowering_globals())
+    if namespace is None:
+        return False
+    resolved = _resolve_functor_binding(name, namespace)
+    if resolved is None:
+        return False
+    from clausal.logic.predicate import predicate_arities_for  # noqa: PLC0415
+    return len(predicate_arities_for(
+        resolved[0], db=namespace_db(namespace))) > 1
 
 
 def evaluable_functor_signature(
@@ -542,7 +581,7 @@ def evaluable_functor_signature(
 
 def construction_signature_for_name(
     name: str, resolve_globals: "dict | None" = None, *,
-    n_positional: int, has_keywords: bool,
+    n_positional: int, has_keywords: bool, n_keywords: "int | None" = None,
 ) -> "tuple[str, tuple[str, ...]] | None":
     """The ``(functor, fields)`` a construction or head pattern WRITTEN with
     *n_positional* positional arguments is placed against, or None.
@@ -566,6 +605,14 @@ def construction_signature_for_name(
         # ``q/2`` is ``('q', 1, 2, 3)``.  A DATA functor answers its
         # declaration again, which ``_place_signature_slots`` then refuses.
         sig = cell_signature_for_name(name, resolve_globals, arity=n_positional)
+    elif (sig is not None and has_keywords and n_keywords
+          and _is_several_arity_predicate(name, resolve_globals)):
+        # A keyword construction of a predicate name at several arities
+        # (operator ruling 2026-09-29) is placed against the arity WRITTEN
+        # -- positional plus keyword count -- as a head is
+        # (``predicate._head_signature_for``).
+        sig = cell_signature_for_name(
+            name, resolve_globals, arity=n_positional + n_keywords)
     return sig
 
 
@@ -1314,7 +1361,8 @@ def term_to_ast_expr(
         # WRITTEN arity (a predicate name answers that arity's slots; a data
         # functor its declaration) -- see construction_signature_for_name.
         _sig = construction_signature_for_name(
-            fname, n_positional=len(arg_exprs), has_keywords=bool(kw_exprs))
+            fname, n_positional=len(arg_exprs), has_keywords=bool(kw_exprs),
+            n_keywords=len(kw_exprs))
         _namespace = lowering_globals()
         _owa = _implicit_functors_active(_namespace)
         if _sig is not None:

@@ -231,27 +231,30 @@ the fields explicitly (see [Term Inspection § Fields by name](term_inspection.m
 
 The **arity** is the number of fields. `point/2` means "point with 2 arguments." Different arities define different predicates: `foo/1` and `foo/2` are unrelated.
 
-Unrelated, but not both definable **in one file**: there a name has exactly one
-arity, and writing `foo(a, b),` and `foo(a),` together does not give you `foo/2`
-and `foo/1`.
+That holds **in one file** too, as in ISO: `foo(a, b),` and `foo(a),` in the
+same file define `foo/2` and `foo/1`, two procedures, one clause each. Neither
+absorbs the other: the short head is never padded to `foo(a, _)`. A DCG
+nonterminal works the same way: `state//1` and `state//2` are `state/3` and
+`state/4`. A bare `foo` in a data position is the atom `foo`, whatever arities
+`foo` has, and `foo(1, 2)` in a data position is the compound at the arity
+written.
 
-Both orders fail at load, naming both sites and telling you to rename one of
-them:
+The one exception is a name whose **field names are declared**: a
+`-private([point(x, y)])` entry, a `-module(m, [f(A)])` template entry, or
+`-edcg_pred`. Field names belong to one arity, so such a name keeps one arity
+per file, and a clause head at another arity fails at load, naming both sites:
 
-- Shorter head first (`foo(a),` then `foo(a, b),`): *functor foo/2 conflicts
-  with the declaration of foo/1 in the same file*.
-- Longer head first (`foo(a, b),` then `foo(a),`): *functor foo/1 conflicts
-  with the declaration of foo/2 in the same file* — a clause head is not a
-  partial term, so the short head is refused rather than silently padded to
-  `foo(a, _)` and absorbed into `foo/2` (which is what happened before this
-  check: the padded clause matched `foo(a, ANYTHING)` and no `foo/1` ever
-  existed). A padded position that really means "anything" must be spelled
-  `_`. (A keyword argument, `foo(a=1)`, is a load-time `SyntaxError` in a
-  head or a term: terms are built positionally.)
+- *functor f/2 conflicts with the declaration of f/1 in the same file*, or,
+  for a shorter head, *... a clause head is not a partial term*. A position
+  that really means "anything" must be spelled `_`.
+
+To give such a name a second arity, spell its export entry `f/1` (ISO's
+predicate indicator, no field names) instead of `f(A)`. (A keyword argument,
+`foo(a=1)`, is a load-time `SyntaxError` in a head or a term: terms are built
+positionally.)
 
 A term is never padded anywhere: write every argument, using `_` for one you
-leave open. Two arities of one name are kept genuinely separate only in
-separate modules.
+leave open.
 
 Calling a predicate at an arity it does not have is an error, and it is reported
 as one:
@@ -259,10 +262,9 @@ as one:
 ```
 citation takes 3 arguments, but this call passes 2
   citation/3 is defined at citations.clausal:14.
-  -> pass 3 arguments to citation, or give the 2-argument predicate a
-     different name: a second citation head with 2 arguments in the same file
-     does not define citation/2 — one name has one arity, and the head is
-     refused at load.
+  -> pass 3 arguments to citation, or define citation/2: a citation clause
+     head with 2 arguments is a procedure of its own, unrelated to citation/3
+     (as in ISO).
 ```
 
 This is a `PredicateArityMismatchError`, which is a `TypeError` and, since
