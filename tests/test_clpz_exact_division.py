@@ -8,7 +8,6 @@ goal (2026-09-30)."""
 from __future__ import annotations
 
 import importlib
-import itertools
 import shutil
 import sys
 from fractions import Fraction
@@ -36,6 +35,7 @@ t12(L) :- findall(X, (X in 0..10, X/3 #= 2, label([X])), L).
 t13(L) :- findall(X, X #= (8/2)/2, L).
 t14(L) :- findall(X, (X #=< 9/3, X #>= 9/3), L).
 t15(L) :- findall(X, (X #< 7/2, X #> 5/5, label([X])), L).
+t16(L) :- findall(X, (X in 0..100, X/3 #= Z, Z in 5..6, label([X])), L).
 """
 
 WANT = {
@@ -43,7 +43,7 @@ WANT = {
     "t8": [("-", 1, 2)], "t9": [], "t10": [],
     "t11": [("-", -1, -4), ("-", -2, -2), ("-", -4, -1), ("-", 4, 1),
             ("-", 2, 2), ("-", 1, 4)],
-    "t12": [6], "t13": [2], "t14": [3], "t15": [],
+    "t12": [6], "t13": [2], "t14": [3], "t15": [], "t16": [15, 18],
 }
 
 
@@ -71,8 +71,6 @@ def test_native_pl(pl_mod, name):
     v = Var()
     assert [_deref_walk(v) for _ in solve((name, v), pl_mod)] == [WANT[name]]
 
-
-_N = itertools.count()
 
 SEAM_ROWS = [
     ("findall(X, '#='(X, 7 / 2), L)", []),

@@ -4146,11 +4146,18 @@ _FD_INT_KEYS = frozenset({
 _LIFTED_KEYS = frozenset({("abs", 1), ("min", 2), ("max", 2)})
 
 
+_Q_KEY = _REAL_KEY = None
+
+
 def _fd_int_term(x) -> tuple[bool, bool]:
     """(*x* is an all-integer arithmetic term?, it holds an abs/min/max
     cell?).  Iterative: a deep sum must not hit the recursion limit here."""
-    from clausal.logic.clpq import Q_KEY  # noqa: PLC0415
-    from clausal.logic.clpr import REAL_KEY  # noqa: PLC0415
+    global _Q_KEY, _REAL_KEY
+    if _Q_KEY is None:
+        from clausal.logic.clpq import Q_KEY  # noqa: PLC0415
+        from clausal.logic.clpr import REAL_KEY  # noqa: PLC0415
+        _Q_KEY, _REAL_KEY = Q_KEY, REAL_KEY
+    Q_KEY, REAL_KEY = _Q_KEY, _REAL_KEY
     if _Add is None:
         _ensure_term_imports()
     lifted = False
@@ -4388,6 +4395,16 @@ class ExactDivConstraint(Constraint):
                     return False
                 if is_var(z) and not _narrow_if_changed(z, nz, trail, queue):
                     return False
+                zd = nz
+            # A = Z * B: A lies between the corner products
+            corners = [_safe_mult(p, q) for p in (domain_min(zd), domain_max(zd))
+                       for q in (blo, bhi)]
+            na = domain_intersection(ad, domain_from_range(min(corners),
+                                                           max(corners)))
+            if not na:
+                return False
+            if is_var(a) and not _narrow_if_changed(a, na, trail, queue):
+                return False
         return True
 
 

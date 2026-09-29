@@ -516,7 +516,8 @@ def _clp_ne(a, b, trail, k):
 
 @_builtin("#<", 2)
 def _clp_lt(a, b, trail, k):
-    """CLP(FD)/CLP(R) strictly-less-than constraint."""
+    """CLP(FD)/CLP(R) strictly-less-than constraint (an all-integer ``/`` is
+    clpz's exact integer division, see clpfd.clpz_operands)."""
     from clausal.logic.clpfd import clpz_operands, fd_lt
     ops = clpz_operands(a, b, trail)
     if ops is not None and fd_lt(*ops, trail):
@@ -525,7 +526,8 @@ def _clp_lt(a, b, trail, k):
 
 @_builtin("#>", 2)
 def _clp_gt(a, b, trail, k):
-    """CLP(FD)/CLP(R) strictly-greater-than constraint."""
+    """CLP(FD)/CLP(R) strictly-greater-than constraint (an all-integer ``/`` is
+    clpz's exact integer division, see clpfd.clpz_operands)."""
     from clausal.logic.clpfd import clpz_operands, fd_gt
     ops = clpz_operands(a, b, trail)
     if ops is not None and fd_gt(*ops, trail):
@@ -534,7 +536,8 @@ def _clp_gt(a, b, trail, k):
 
 @_builtin("#=<", 2)
 def _clp_le(a, b, trail, k):
-    """CLP(FD)/CLP(R) less-than-or-equal constraint."""
+    """CLP(FD)/CLP(R) less-than-or-equal constraint (an all-integer ``/`` is
+    clpz's exact integer division, see clpfd.clpz_operands)."""
     from clausal.logic.clpfd import clpz_operands, fd_le
     ops = clpz_operands(a, b, trail)
     if ops is not None and fd_le(*ops, trail):
@@ -543,7 +546,8 @@ def _clp_le(a, b, trail, k):
 
 @_builtin("#>=", 2)
 def _clp_ge(a, b, trail, k):
-    """CLP(FD)/CLP(R) greater-than-or-equal constraint."""
+    """CLP(FD)/CLP(R) greater-than-or-equal constraint (an all-integer ``/`` is
+    clpz's exact integer division, see clpfd.clpz_operands)."""
     from clausal.logic.clpfd import clpz_operands, fd_ge
     ops = clpz_operands(a, b, trail)
     if ops is not None and fd_ge(*ops, trail):
