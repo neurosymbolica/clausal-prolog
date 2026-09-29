@@ -29,3 +29,9 @@ At load time, walk the catcher argument of each `catch/3` whose catcher is an
 it, and suggest the atom spelling. The lint is only sound when
 `double_quotes` is `chars` or `codes`; under `atom` the literal is already an
 atom.
+
+## Closed 2026-09-30 (stale)
+
+Implemented by 7782bafa ("lint: warn on a string naming an error's type in a catch
+pattern"): `_lint_string_in_catch_pattern` in term_rewriting.py raises
+`ClausalStringInCatchPatternWarning` under `-double_quotes(chars)`.

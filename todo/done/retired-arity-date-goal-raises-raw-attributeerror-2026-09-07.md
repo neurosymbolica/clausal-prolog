@@ -33,3 +33,11 @@ Related: `docs/date_time.md` and `docs/python_integration.md` still document
 `date(Year, Month, Day, DateObj)` on BOTH trees; canonical's 9eec2dcf
 (2026-09-02) touched python_integration.md without removing it. Rewriting
 those two docs for date/3 is its own item.
+
+## Closed 2026-09-30 (resolved by the W3 ruling)
+
+No raw AttributeError any more. Re-measured on 9b6b58a1: `date(2024, 1, 1, E)`
+raises the catchable `error(type_error(callable, <function date>), _)`
+(DispatchTargetError) -- the W3 ruling of 2026-09-22 for a goal that resolves
+to a Python value that is not a predicate. The existence_error this note
+expected was superseded by that ruling.

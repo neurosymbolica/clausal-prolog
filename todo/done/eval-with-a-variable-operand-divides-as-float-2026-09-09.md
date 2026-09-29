@@ -39,3 +39,11 @@ and `eval_` becomes exact like the other two; (b) document `eval_/2` as "Python
 evaluation semantics" (which `terms_to_goalop.py` already says in a comment) and leave
 it; (c) route `eval_/2` through `_eval_ground`. Decide, then add a parity test that
 runs the three-clause program above and asserts the three answers agree in type.
+
+## Closed 2026-09-30 (ruled)
+
+Decided by ruling Q15 (2026-09-28, todo/arith-rulings-open-edges-2026-09-28.md):
+in EVALUATION (is/2, eval_/2, the ISO comparisons) a bare `/` is Python's true
+division, so `eval_(T / 4, Q)` giving 175000.0 is the ruled answer; `rdiv/2` is
+the exact spelling, and inside a CLP post `/` stays rational. Re-measured on
+9b6b58a1: literal and variable operands now agree (both floats).

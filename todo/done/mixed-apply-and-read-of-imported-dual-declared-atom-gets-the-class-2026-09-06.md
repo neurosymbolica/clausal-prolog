@@ -36,3 +36,11 @@ signature (verify the diagnostic wording stays the same).
   bake, because `_process_imports` still clobbers the local `PredicateMeta` with
   the imported atom str; declining to clobber would restore the bake but changes
   `getattr(mod, name)`, which Task 5b fenced off.
+
+## Closed 2026-09-30 (stale)
+
+The PredicateMeta class this depended on is gone (5d9fc36f). Re-measured on
+9b6b58a1 with owner `-module(mxo, [k, v/2]) k, v(k, 1),` and an importer
+`-import_from(mxo, [k, v/2])`: the data read `v(k, V)` answers `[1]`, also in the
+predicate that ALSO applies `k(X)` -- the read no longer misses; the applied
+form raises its arity diagnostic (`k takes 0 arguments, but this call passes 1`).
