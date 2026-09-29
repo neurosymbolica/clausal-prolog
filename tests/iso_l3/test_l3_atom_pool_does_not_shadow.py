@@ -52,5 +52,9 @@ def test_with_nothing_asserted_the_call_still_raises_existence_error(
                       "get(X) :- pooled_absent(X).\n", frontend=frontend)
     with pytest.raises(LogicException) as ei:
         list(call("get", Var(), module=mod))
-    assert "existence_error" in str(ei.value)
-    assert "pooled_absent" in str(ei.value)
+    # the ISO term: the pooled atom is no longer in the module namespace,
+    # so this is the same error a fresh process gives (the candidate-list
+    # message is its str, the term carries the ISO form)
+    from clausal.logic.exceptions import render_error_term
+    assert "existence_error(procedure,pooled_absent/1)" in render_error_term(
+        ei.value.term)
