@@ -47,7 +47,8 @@ def test_an_explicit_iso_key_still_wins():
 
 
 def test_other_dialects_are_unaffected():
-    assert resolve_name("in_domain", Dialect.swi()) == BUILTIN_NAME_MAP["in_domain"]["swi"]
+    # in_domain has no swi entry any more: D21 rewrites it structurally for
+    # every dialect but gprolog (tests/test_d21_in_domain_divmod.py).
     assert resolve_name("in_domain", Dialect.gprolog()) == BUILTIN_NAME_MAP["in_domain"]["gprolog"]
     assert resolve_name("all_different", Dialect.swi()) == "all_different"
 

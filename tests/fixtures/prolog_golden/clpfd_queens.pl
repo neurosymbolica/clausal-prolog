@@ -1,7 +1,7 @@
-:- use_module(library(clpz), [(#=)/2]).
+:- use_module(library(clpz), [(#=)/2, (in)/2, (ins)/2]).
 
 safe_queens(N, QUEENS) :-
-    in_domain(QUEENS, 1, N),
+    ((var(QUEENS) ; integer(QUEENS)), in(QUEENS, ..(1, N)) ; nonvar(QUEENS), (QUEENS == [] ; QUEENS = [_|_], ins(QUEENS, ..(1, N)))),
     all_distinct(QUEENS),
     label(QUEENS),
     check_diagonals(QUEENS).

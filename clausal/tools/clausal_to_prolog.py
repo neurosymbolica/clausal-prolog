@@ -38,6 +38,7 @@ from clausal.templating.term_rewriting import (
     _expand_currency_table as _engine_expand_currency_table,
 )
 from clausal.tools.prolog_dialect import (
+    BUILTIN_NAME_MAP,
     Dialect,
     pascal_to_snake, snake_to_pascal,
     clausal_var_to_prolog, prolog_var_to_clausal,
@@ -207,7 +208,13 @@ def _quote_atom(name: str) -> str:
 #: (`[nonexistent_thing/2]`) is accepted just as happily, so acceptance of the
 #: directive proves nothing about the indicator. `'(#=)'` names an atom spelled
 #: `(#=)`, which is not the operator.
-_LIBRARY_OPERATOR_ATOMS = frozenset({"#=", "#\\=", "#<", "#>", "#=<", "#>="})
+#:
+#: `in` and `ins` (D21, the in_domain/3 rewrite) are the same class, alphanumeric
+#: as they are: after a listless `use_module(library(clpz))` has put clpz's
+#: operators in force, `[in/2]` is `syntax_error(incomplete_reduction)` in
+#: Scryer and `[(in)/2]` is right on Scryer and Trealla (measured 2026-09-29).
+_LIBRARY_OPERATOR_ATOMS = frozenset({"#=", "#\\=", "#<", "#>", "#=<", "#>=",
+                                     "in", "ins"})
 
 
 def _is_operator_atom(name: str, op_table: OperatorTable) -> bool:
@@ -975,6 +982,9 @@ class _ClausalToProlog:
         #: The same for the CLP disequality `#\=` (ruling R16: a numeric
         #: `!=`), imported beside `#=`.
         self._emitted_clp_arith_neq = False
+        #: The CLP domain operators (`in`, `ins`) that `in_domain/3` has been
+        #: rewritten to (D21), imported beside `#=` for the same reason.
+        self._emitted_clp_domain_ops: set[str] = set()
         #: Variable names bound by the head of the clause currently being
         #: converted. A lambda's body variable that is NOT a parameter and
         #: IS in this set is a CAPTURE, which is the only thing the lowering
@@ -1401,7 +1411,9 @@ class _ClausalToProlog:
                 "use_module", (PCompound("library", (PAtom("lambda"),)),
                                PList(tuple(lambda_exports))))))
         clp_ops = [op for op, used in (("#=", self._emitted_clp_arith_eq),
-                                       ("#\\=", self._emitted_clp_arith_neq))
+                                       ("#\\=", self._emitted_clp_arith_neq),
+                                       ("in", "in" in self._emitted_clp_domain_ops),
+                                       ("ins", "ins" in self._emitted_clp_domain_ops))
                    if used]
         if clp_ops and self.dialect.clpfd_needs_import:
             # THE INDICATOR IS PARENTHESISED ON PURPOSE. An import-list item is
@@ -2516,6 +2528,79 @@ class _ClausalToProlog:
     # Prolog meaning and must not be lowered to arithmetic look-alikes.
     _CLPFD_CANONICAL = frozenset({"#=", "#\\=", "#<", "#>", "#=<", "#>="})
 
+    def _expand_divmod(self, node: python_ast.Call) -> PTerm:
+        """``divmod_(X, Y, Q, R)`` -> its definition in ISO arithmetic (D21).
+
+        No target engine has a ``divmod/4`` to rename to: Scryer has none at
+        all (measured 2026-09-29), so the old ``divmod`` spelling was an
+        existence_error there. The engine's divmod_/4 is Python's ``divmod``:
+        FLOOR quotient, remainder with the divisor's sign. ISO ``div`` floors
+        and ISO ``mod`` takes the divisor's sign, so
+
+            integer(X), integer(Y), Y =\\= 0, Q is X div Y, R is X mod Y
+
+        is the same relation. The guards carry the engine's FAILURE cases: an
+        unbound or non-integer operand, or a zero divisor, fails there rather
+        than raising, where bare ``is/2`` would raise instantiation, type or
+        zero_divisor errors. ``is/2`` unifies its left side, so a bound Q or R
+        is checked, as the engine's check mode does. Not ``//`` and ``rem``:
+        those truncate, and differ on a negative operand (-7, 2 -> -4, 1).
+        """
+        x, y, q, r = (self._convert_expr(a) for a in node.args)
+        goals = [PCompound("integer", (x,)),
+                 PCompound("integer", (y,)),
+                 PCompound("=\\=", (y, PNumber(0))),
+                 PCompound("is", (q, PCompound("div", (x, y)))),
+                 PCompound("is", (r, PCompound("mod", (x, y))))]
+        body = goals[-1]
+        for goal in reversed(goals[:-1]):
+            body = PCompound(",", (goal, body))
+        return body
+
+    def _rewrite_in_domain(self, node: python_ast.Call) -> PTerm:
+        """``in_domain(V, Lo, Hi)`` -> CLP(Z)'s ``in`` / ``ins`` (D21).
+
+        The dialect map used to RENAME it to ``ins/3``, which no engine has:
+        Scryer's (and SWI's) ``ins`` is the BINARY operator ``Vs ins Lo..Hi``
+        over a list, and ``in`` is ``V in Lo..Hi`` over one variable. The
+        engine's in_domain/3 takes EITHER, so the rewrite follows the argument:
+
+        * a list literal -> ``ins(L, Lo..Hi)``;
+        * an integer literal -> ``in(N, Lo..Hi)``;
+        * anything else (a variable that may hold a list at run time, as in
+          ``length(QS, N), in_domain(QS, 1, N)``) -> a type dispatch
+
+              ( (var(V) ; integer(V)), in(V, Lo..Hi)
+              ; nonvar(V), (V == [] ; V = [_|_], ins(V, Lo..Hi)) )
+
+          whose branches are mutually exclusive, so it adds no solution and
+          binds nothing the engine does not. ``V == []`` succeeds as the
+          engine does (no targets); an atom or other non-list fails in both.
+
+        Emitted in functional notation, like ``#=``: the ISO operator table
+        correctly carries neither ``in``, ``ins`` nor ``..``.
+        """
+        target, lo, hi = (self._convert_expr(a) for a in node.args)
+        dom = PCompound("..", (lo, hi))
+        if isinstance(target, PList):
+            self._emitted_clp_domain_ops.add("ins")
+            return PCompound("ins", (target, dom))
+        if isinstance(target, PNumber) and isinstance(target.value, int):
+            self._emitted_clp_domain_ops.add("in")
+            return PCompound("in", (target, dom))
+        self._emitted_clp_domain_ops.update(("in", "ins"))
+        single = PCompound(",", (
+            PCompound(";", (PCompound("var", (target,)),
+                            PCompound("integer", (target,)))),
+            PCompound("in", (target, dom))))
+        listed = PCompound(",", (
+            PCompound("nonvar", (target,)),
+            PCompound(";", (
+                PCompound("==", (target, PList(()))),
+                PCompound(",", (PCompound("=", (target, PList((PVar("_"),), tail=PVar("_")))),
+                                PCompound("ins", (target, dom))))))))
+        return PCompound(";", (single, listed))
+
     def _fold_constant_call(self, node: python_ast.Call):
         """``constant(name)`` -> the declared literal, or None if not that.
 
@@ -2561,6 +2646,13 @@ class _ClausalToProlog:
                 expr = self._convert_expr(node.args[0])
                 result = self._convert_expr(node.args[1])
                 return PCompound("is", (result, expr))
+            if node.func.id == "divmod_" and len(node.args) == 4 \
+                    and not node.keywords:
+                return self._expand_divmod(node)
+            if node.func.id == "in_domain" and len(node.args) == 3 \
+                    and not node.keywords \
+                    and self.dialect.name not in BUILTIN_NAME_MAP["in_domain"]:
+                return self._rewrite_in_domain(node)
             functor = resolve_name(node.func.id, self.dialect)
         elif (isinstance(node.func, python_ast.Constant)
                 and isinstance(node.func.value, str)

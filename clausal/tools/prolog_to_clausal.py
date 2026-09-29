@@ -314,7 +314,11 @@ _PREFIX_MAP = {
 #: here because the forward translator emits `:- use_module(library(clpz),
 #: [(#=)/2]).` alongside every `#=` it emits (ruling 2026-09-18), and the
 #: Clausal spelling of that goal is the `==` operator.
-_OPERATOR_ONLY_IMPORTS: frozenset = frozenset({("#=", 2)})
+#:
+#: `in/2` and `ins/2` (D21) are the same kind of artifact: the forward
+#: translator writes `in_domain(V, Lo, Hi)` as clpz's `in`/`ins` and imports
+#: them itself; Clausal's in_domain/3 is a global builtin, never imported.
+_OPERATOR_ONLY_IMPORTS: frozenset = frozenset({("#=", 2), ("in", 2), ("ins", 2)})
 
 _LIBRARY_TO_MODULE: dict[str, str] = {
     "clpfd": "clausal.logic.clpfd",
@@ -841,6 +845,10 @@ class _PrologToClausal:
         # PrologTranslationError (the cut-free contract, docs/import.md).
         if isinstance(goal, PAtom) and goal.name == "!":
             return self._emit_atom(goal)
+        # D21: the forward translator's in_domain/3 type dispatch folds back.
+        folded = self._fold_in_domain(goal)
+        if folded is not None:
+            return folded
         # Disjunction: (A ; B) → (A or B)
         if isinstance(goal, PCompound) and goal.functor == ";":
             return self._emit_disjunction(goal)
@@ -1424,10 +1432,82 @@ class _PrologToClausal:
         self._data_atoms.add(name)
         return name
 
+    def _fold_in_domain(self, term: PTerm) -> str | None:
+        """``in_domain(T, Lo, Hi)`` if *term* is what the forward translator
+        writes for it (D21), else None.
+
+        Three shapes: ``in(T, Lo..Hi)``, ``ins(T, Lo..Hi)``, and the type
+        dispatch it writes when T may be a variable or a list,
+
+            ( (var(T) ; integer(T)), in(T, Lo..Hi)
+            ; nonvar(T), (T == [] ; T = [_|_], ins(T, Lo..Hi)) )
+
+        which is matched whole, every occurrence of T and of the domain the
+        same, so a hand-written disjunction that merely resembles it is left
+        alone and translated as the disjunction it is. The first two are the
+        clpz constraints themselves; in_domain/3 is the same relation over
+        one variable or a list.
+        """
+        def domain(t):
+            if isinstance(t, PCompound) and t.functor == ".." and len(t.args) == 2:
+                return t.args
+            return None
+
+        def call(t, name, arity):
+            return (isinstance(t, PCompound) and t.functor == name
+                    and len(t.args) == arity)
+
+        if (call(term, "in", 2) or call(term, "ins", 2)) and domain(term.args[1]):
+            lo, hi = domain(term.args[1])
+            return (f"in_domain({self._emit_term(term.args[0])}, "
+                    f"{self._emit_term(lo)}, {self._emit_term(hi)})")
+        if not call(term, ";", 2):
+            return None
+        single, listed = term.args
+        if not (call(single, ",", 2) and call(listed, ",", 2)):
+            return None
+        types, one = single.args
+        nonvar_t, alts = listed.args
+        if not (call(types, ";", 2) and call(alts, ";", 2)):
+            return None
+        var_t, int_t = types.args
+        is_nil, cons_ins = alts.args
+        if not call(cons_ins, ",", 2):
+            return None
+        is_cons, many = cons_ins.args
+        if not (call(var_t, "var", 1) and call(int_t, "integer", 1)
+                and call(one, "in", 2) and call(nonvar_t, "nonvar", 1)
+                and call(is_nil, "==", 2) and call(is_cons, "=", 2)
+                and call(many, "ins", 2) and domain(one.args[1])
+                and domain(many.args[1])):
+            return None
+        cons = is_cons.args[1]
+        if not (isinstance(is_nil.args[1], PList) and not is_nil.args[1].elements
+                and is_nil.args[1].tail is None
+                and isinstance(cons, PList) and len(cons.elements) == 1
+                and isinstance(cons.elements[0], PVar) and cons.elements[0].name == "_"
+                and isinstance(cons.tail, PVar) and cons.tail.name == "_"):
+            return None
+        targets = {self._emit_term(t) for t in (
+            var_t.args[0], int_t.args[0], one.args[0], nonvar_t.args[0],
+            is_nil.args[0], is_cons.args[0], many.args[0])}
+        # Compared bound by bound: `..` itself has no Clausal spelling to emit.
+        domains = {tuple(self._emit_term(b) for b in domain(d))
+                   for d in (one.args[1], many.args[1])}
+        if len(targets) != 1 or len(domains) != 1:
+            return None
+        lo, hi = domain(one.args[1])
+        return f"in_domain({targets.pop()}, {self._emit_term(lo)}, {self._emit_term(hi)})"
+
     def _emit_compound(self, term: PCompound, goal: bool = False) -> str:
         """Emit a compound term (*goal*: it stands in goal position)."""
         functor = term.functor
         args = term.args
+
+        # D21, in TERM position too (a meta-call's goal argument), like `#=`.
+        folded = self._fold_in_domain(term)
+        if folded is not None:
+            return folded
 
         # Control constructs in term/metacall position (e.g. inside findall's
         # goal argument) are rejected the same way as in goal position — the
