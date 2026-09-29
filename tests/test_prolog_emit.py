@@ -439,6 +439,11 @@ reach(X, Y) <- (edge(X, Z), reach(Z, Y))
         ("X != ++kind", "dif(X, foo)"),            # constant folded to an atom
         ("X != 1.5", "dif(X, 1.5)"),               # float literal
         ("X != Y", "dif(X, Y)"),                   # variable vs variable
+        ("X != abs(Y)", "#\\=(X, abs(Y))"),        # evaluable calls
+        ("X != min(Y, 2)", "#\\=(X, min(Y, 2))"),
+        ("X != max(Y, 2)", "#\\=(X, max(Y, 2))"),
+        ("X != sign(Y)", "#\\=(X, sign(Y))"),
+        ("X != f(Y)", "dif(X, f(Y))"),             # not evaluable
     ])
     def test_not_equal_classifies_the_converted_term(self, body, goal):
         # nv
@@ -870,15 +875,18 @@ _SCRYER = "/workspace/scryer-prolog/target/release/scryer-prolog"
     ("ne(X), X = 5000.", "false."),     # a constraint, not a test
     ("nf(2.0).", "true."),
     ("nf(1.5).", "false."),
+    ("na(3, -3).", "false."),           # abs(Y) is EVALUATED, not compared
+    ("na(3, -4).", "true."),
 ])
 def test_not_equal_export_runs_in_scryer(tmp_path, query, answer):
     # nv
     import subprocess
-    source = ("-module(m, [ne(X), nf(X)])\n"
+    source = ("-module(m, [ne(X), nf(X), na(X, Y)])\n"
               "-constant_value(max_fine, 5000)\n"
               "-constant_value(rate, 1.5)\n"
               "ne(X) <- (X != 5000(euro), X != ++max_fine, X != -3)\n"
-              "nf(X) <- (X != ++rate)\n")
+              "nf(X) <- (X != ++rate)\n"
+              "na(X, Y) <- (X != abs(Y))\n")
     pl = clausal_source_to_prolog(source)
     assert "#\\=(X, 5000)" in pl and "dif(X, 1.5)" in pl, pl
     # The exporter leaves `library(dif)` to the consumer (as for `is not`);

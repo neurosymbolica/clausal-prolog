@@ -2790,13 +2790,17 @@ class _ClausalToProlog:
             op_str = "???"
         return PCompound(op_str, (left, right))
 
-    #: The functors `_convert_binop` / `_convert_unaryop` emit for Clausal
-    #: arithmetic.  A converted term headed by one of these (at its own
-    #: arity) is an arithmetic EXPRESSION, the shape CLP(Z) evaluates.
+    #: The expressions CLP(Z) evaluates, by arity: exactly the heads Scryer's
+    #: library(clpz) `parse_clpz/2` accepts (src/lib/clpz.pl, the `m(...)`
+    #: rows), which covers what `_convert_binop` / `_convert_unaryop` emit
+    #: and the evaluable CALLS (`abs(Y)`, `min(A, B)`, ...). The dialects
+    #: have no evaluable table of their own to consult; both ladder engines
+    #: use this clpz. A converted term headed by one of these is arithmetic.
     _ARITH_FUNCTORS_2 = frozenset({
-        "+", "-", "*", "/", "div", "mod", "^", "/\\", "\\/", "xor",
-        "<<", ">>"})
-    _ARITH_FUNCTORS_1 = frozenset({"-", "\\"})
+        "+", "-", "*", "/", "//", "div", "mod", "rem", "^", "min", "max",
+        "<<", ">>", "/\\", "\\/", "xor"})
+    _ARITH_FUNCTORS_1 = frozenset({
+        "-", "\\", "abs", "sign", "msb", "lsb", "popcount"})
 
     def _not_equal(self, left: PTerm, right: PTerm) -> PTerm:
         """Clausal's `!=` constraint in Prolog (ruling R16, 2026-09-29).
@@ -2826,7 +2830,8 @@ class _ClausalToProlog:
 
         An integer `PNumber` (whatever it came from: a literal, `-3`, a
         quantity's magnitude, a folded constant) or a compound headed by an
-        arithmetic functor.  A float `PNumber` is not.  An arithmetic
+        arithmetic functor or evaluable clpz function (`abs(Y)`: as dif/2
+        it would compare X against the UNEVALUATED term).  A float `PNumber` is not.  An arithmetic
         compound counts even if a float sits inside it -- `#\\=` then raises
         in the target, as `#=` does for `==` (ruling 2026-09-19), which is
         louder than the structural `dif/2` silently comparing `X` against
