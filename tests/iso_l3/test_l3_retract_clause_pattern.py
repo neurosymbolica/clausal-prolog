@@ -7,6 +7,8 @@ removed the RULE ``r(X) :- X = 1`` (Scryer removes the fact ``r(2)``), and
 Scryer's for the same program (2026-09-30)."""
 from __future__ import annotations
 
+import pytest
+
 SRC = """\
 :- dynamic(r/1).
 r(X) :- X = 1.
@@ -85,3 +87,50 @@ def test_clause_2_with_a_conjunction_body(native, ans):
     assert ans(mod, "c2") == [[]]
     assert ans(mod, "c3") == [["x"]]
     assert ans(mod, "c4") == [[]]
+
+
+def test_open_tail_and_negation_patterns(native, ans):
+    """(G, Rest) with Rest unbound takes the remaining goals; \\+ G matches
+    a negation.  Scryer: c2 [X = 1], c3 [], c4 [x], c5 [x]."""
+    src = (":- dynamic(g/1).\n"
+           "g(X) :- X = 1, X > 0, X < 5.\n"
+           "g(X) :- \\+ X = 2.\n"
+           "c1(R) :- clause(g(_), (_, R)).\n"
+           "c2(L) :- findall(F, clause(g(_), (F, _, _)), L).\n"
+           "c3(L) :- findall(x, clause(g(_), (_, _, _, _)), L).\n"
+           "c4(L) :- findall(x, clause(g(Y), \\+ Y = 2), L).\n"
+           "c5(L) :- retract((g(_) :- _, _)), findall(x, clause(g(_), _), L).\n")
+    for name, check in (
+            ("c1", lambda r: len(r) == 1 and [g[0] for g in r[0]] == [">", "<"]),
+            ("c2", lambda r: len(r) == 1 and [g[0] for g in r[0]] == ["="]),
+            ("c3", lambda r: r == [[]]),
+            ("c4", lambda r: r == [["x"]]),
+            ("c5", lambda r: r == [["x"]])):
+        mod = native.load(f"l3_open_tail_{name}", src)
+        got = ans(mod, name)
+        assert check(got), (name, got)
+
+
+def test_a_clause_with_no_term_form(tmp_path):
+    """A clause holding a Python expression has no term form: clause/2 and
+    retractall/1 refuse it with permission_error when it may match;
+    retract(Head) skips it (it is no fact)."""
+    from clausal.import_hook import _load_module
+    from clausal.logic.exceptions import LogicException, render_error_term
+    from clausal.logic.solve import _deref_walk, solve
+    from clausal.logic.variables import Var
+    p = tmp_path / "_no_term_form.clausal"
+    p.write_text("-allow_singletons\n-dynamic(h/1)\n-dynamic(k/2)\n"
+                 "h(X) <- (Y is ++(X + 1))\n"
+                 "k(A, ++(A + 1)) <- True\n"
+                 "t2(R) <- retract(h(_))\n"
+                 "t3(R) <- retractall(k(_, _))\n"
+                 "t5(R) <- retract(':-'(h(_), _))\n")
+    m = _load_module("_no_term_form", str(p))
+    v = Var()
+    assert [_deref_walk(v) for _ in solve(("t2", v), m)] == []
+    for goal in ("t3", "t5"):
+        with pytest.raises(LogicException) as ei:
+            list(solve((goal, Var()), m))
+        assert "permission_error(access,private_procedure" in render_error_term(
+            ei.value.term), goal

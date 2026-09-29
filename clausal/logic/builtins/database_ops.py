@@ -801,7 +801,8 @@ def _retract_factory(db):
         # backtracking undoes these bindings via the engine trail.
         from clausal.logic.builtins.clause_ops import _as_cell  # noqa: PLC0415
         unify(_as_cell(term_val), c_head, trail)
-        unify(body_pattern, c_body, trail)
+        from clausal.logic.builtins.clause_ops import unify_body  # noqa: PLC0415
+        unify_body(body_pattern, c_body, trail)
         yield None
         return  # retract is not backtrackable
 
@@ -816,22 +817,22 @@ def _retract_factory(db):
         so ``retract(r(_))`` removed a rule ``r(X) :- X = 1`` (ISO removes
         only a fact) and a program's own ``X is 3`` read as a head test."""
         from clausal.logic.builtins.clause_ops import (  # noqa: PLC0415
-            _as_cell, clause_terms, head_matches)
+            _as_cell, clause_terms, head_matches, unify_body)
         cell = _as_cell(term_val)
         for i, clause in enumerate(clause_list):
             matched, why = head_matches(clause, home, cell)
             if not matched:
                 continue
             if why is not None:
-                raise _no_term_form(clause, "retract/1", why)
+                raise _no_term_form_error(clause, "retract/1", why)
             c_head, c_body, why = clause_terms(clause, home)
             if why is not None:
                 if body_pattern is True:
                     continue        # a body with no term form: not a fact
-                raise _no_term_form(clause, "retract/1", why)
+                raise _no_term_form_error(clause, "retract/1", why)
             tmp = Trail()
             mark = tmp.mark()
-            ok = unify(cell, c_head, tmp) and unify(body_pattern, c_body, tmp)
+            ok = unify(cell, c_head, tmp) and unify_body(body_pattern, c_body, tmp)
             tmp.undo(mark)
             if ok:
                 return i, c_head, c_body
@@ -892,7 +893,7 @@ def _retractall_factory(db):
     return retractall__1
 
 
-def _no_term_form(clause, context: str, why: str) -> LogicException:
+def _no_term_form_error(clause, context: str, why: str) -> LogicException:
     """The clause MAY match the pattern but has no term form to decide it
     by (clause/2 refuses the same clause): permission_error rather than a
     guess either way."""
@@ -914,7 +915,7 @@ def _clause_head_matches(term_val, clause, home) -> bool:
         _as_cell, head_matches)
     matched, why = head_matches(clause, home, _as_cell(term_val))
     if matched and why is not None:
-        raise _no_term_form(clause, "retractall/1", why)
+        raise _no_term_form_error(clause, "retractall/1", why)
     return matched
 
 
