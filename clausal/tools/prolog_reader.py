@@ -331,7 +331,9 @@ class PrologReader:
     """Resumable item-at-a-time L1 reader over the toklex L0 stream.
 
     ``op_table`` precedence: explicit > ``dialect.operator_table`` >
-    ``OperatorTable.swi_default()``. The reader owns the table for its
+    ``OperatorTable.scryer_builtin_default()`` (Scryer's table with no library
+    loaded -- ISO first, then Scryer; it was ``swi_default`` until 2026-09-29,
+    whose non-ISO prefix ``dynamic`` and ``*->`` Scryer refuses). The reader owns the table for its
     lifetime -- ``op/3`` directives parsed by one ``read_term()`` call
     apply to the SAME table used by later calls, so they persist. This
     ownership is exposed: see the ``op_table`` property below.
@@ -354,7 +356,7 @@ class PrologReader:
         elif dialect is not None:
             self._op_table = dialect.operator_table
         else:
-            self._op_table = OperatorTable.swi_default()
+            self._op_table = OperatorTable.scryer_builtin_default()
 
         if lexer is not None:
             self._lexer = lexer

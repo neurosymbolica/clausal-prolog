@@ -31,6 +31,7 @@ Pinned by test.
 from __future__ import annotations
 
 import ast
+import bisect
 from typing import Any
 
 # `$`-prefixed names are not parseable Python, so templates use a DOLLAR_ prefix
@@ -57,10 +58,6 @@ def _pos_tuple(span) -> ast.expr:
     return ast.Tuple(elts=[ast.Constant(value=int(x)) for x in span], ctx=ast.Load())
 
 
-def _is_atom(t: Any) -> bool:
-    return type(t) is str              # STAGE 2: an atom is a str
-
-
 def lower_arg(t: Any, span=None) -> ast.expr:
     """One ISO argument term -> the seam's AST for it. P1 subset."""
     if isinstance(t, bool):
@@ -68,17 +65,14 @@ def lower_arg(t: Any, span=None) -> ast.expr:
     if isinstance(t, int):
         return ast.Constant(value=t)
     if isinstance(t, str):
+        # STAGE 2: an atom IS its str; a string is the ('$chars', s) TUPLE
+        # carrier, which P1 does not lower (refused below).
         return ast.Constant(value=t)
-    if _is_atom(t):
-        # An atom reference resolves by NAME at load time (strict atoms), exactly
-        # as the seam's $LoadName does.
-        call = ast.parse(f"{_DOLLAR}LoadName(name={t[0]!r}, position=None)",
-                         mode="eval").body
-        call.keywords[1].value = _pos_tuple(span)
-        return call
     if isinstance(t, list):
         return ast.List(elts=[lower_arg(x) for x in t], ctx=ast.Load())
-    raise LoweringRefused(f"P1 handles atoms, integers, strings and lists; got {t!r}")
+    raise LoweringRefused(
+        f"P1 handles atoms, integers and proper lists of them (not strings, "
+        f"floats, variables or compounds); got {t!r}")
 
 
 def lower_fact(term: tuple, span=None) -> list[ast.stmt]:
@@ -114,7 +108,30 @@ def lower_fact(term: tuple, span=None) -> list[ast.stmt]:
     return guard + [define]
 
 
-def lower_items(items, *, strict: bool = True) -> tuple[ast.Module, dict]:
+def _line_starts(source: str) -> list[int]:
+    starts = [0]
+    for i, ch in enumerate(source):
+        if ch == "\n":
+            starts.append(i + 1)
+    return starts
+
+
+def _item_span(it):
+    """(start, end) character offsets of a ReaderItem: a SyntaxIssue carries
+    ``span``; a Clause/Directive's span tree leads with it (``spans``)."""
+    span = getattr(it, "span", None)
+    if span is None:
+        span = getattr(it, "spans", None)
+        while type(span) is tuple and span and type(span[0]) is tuple:
+            span = span[0]
+    if (type(span) is tuple and len(span) == 2
+            and all(type(x) is int for x in span) and span[0] >= 0):
+        return span
+    return None
+
+
+def lower_items(items, *, strict: bool = True, source: "str | None" = None,
+                filename: "str | None" = None) -> tuple[ast.Module, dict]:
     """ReaderItems -> (ast.Module, stats). Stats carry the DENOMINATOR (plan §8.4):
     a shrinking population must be visible, not silent.
 
@@ -123,11 +140,24 @@ def lower_items(items, *, strict: bool = True) -> tuple[ast.Module, dict]:
     so a module never imports with a clause missing (2026-09-29: the item
     was counted and the module loaded without it).  ``strict=False`` is the
     explicit counting mode for tooling that surveys a corpus: it skips and
-    counts every refusal in ``stats``."""
+    counts every refusal in ``stats``.
+
+    *source* (the ``.pl`` text the items were read from) makes every refusal
+    name its ``file:line``; *filename* is the file named."""
     body: list[ast.stmt] = []
     stats = {"read": 0, "lowered": 0, "refused": 0, "refusals": []}
+    starts = _line_starts(source) if source is not None else None
 
-    def refuse(msg: str) -> None:
+    def where(span) -> str:
+        if span is None:
+            return ""
+        if starts is None:
+            return f"at {span}: "
+        line = bisect.bisect_right(starts, span[0])
+        return f"{filename or '<.pl>'}:{line}: "
+
+    def refuse(msg: str, span) -> None:
+        msg = where(span) + msg
         if strict:
             raise LoweringRefused(msg)
         stats["refused"] += 1
@@ -135,17 +165,18 @@ def lower_items(items, *, strict: bool = True) -> tuple[ast.Module, dict]:
 
     for it in items:
         stats["read"] += 1
-        span = getattr(it, "span", None)
-        where = f" at {span}" if span else ""
-        if type(it).__name__ != "Clause":
-            detail = getattr(it, "message", None) or getattr(it, "term", None)
-            refuse(f"{type(it).__name__} (P3){where}"
-                   + (f": {detail!r}" if detail is not None else ""))
+        span = _item_span(it)
+        kind = type(it).__name__
+        if kind == "SyntaxIssue":
+            refuse(f"syntax error (SyntaxIssue): {it.message}", span)
+            continue
+        if kind != "Clause":
+            refuse(f"{kind} (P3): {it.term!r}", span)
             continue
         try:
-            lowered = lower_fact(it.term, span)
+            lowered = lower_fact(it.term)   # positions arrive with slice 1
         except LoweringRefused as e:
-            refuse(f"{e}{where}")
+            refuse(str(e), span)
             continue
         body.extend(lowered)
         stats["lowered"] += 1
@@ -161,6 +192,14 @@ def read_iso(source: str) -> list:
     The reader is CLOSED after the source is fed, as ``read_module`` does:
     an end ``.`` is one only when layout or EOF follows it, so without the
     close a last clause with no trailing newline stayed pending and was lost
-    (2026-09-29).  ``SyntaxIssue`` items are returned like any other."""
+    (2026-09-29).  ``SyntaxIssue`` items are returned like any other.
+
+    The operator table is Scryer's with no library loaded (D2(b), ISO first
+    then Scryer): ``Dialect.scryer_reader()``'s, the table the ``.pl``
+    translator reads with -- a FRESH one per call, since ``op/3`` directives
+    mutate the reader's table.  So ``:- dynamic d/1.`` is a syntax error, as
+    in Scryer, and ``:- dynamic(d/1).`` is the spelling."""
+    from clausal.tools.prolog_dialect import Dialect
     from clausal.tools.prolog_reader import read_module
-    return read_module(source)
+    return read_module(source,
+                       op_table=Dialect.scryer_reader().operator_table)
