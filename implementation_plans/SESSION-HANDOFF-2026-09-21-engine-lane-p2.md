@@ -56,7 +56,7 @@ markers in `tests/test_mutation_gate.py` STAY until it is finished.
 
 ## Task 9, what is NOT done
 
-* **The corpus ANSWER-SET axis.** Ask the downstream lane to run the 28 downstream
+* **Downstream code ANSWER-SET axis.** Ask the downstream lane to run the downstream
   answer-set checks on the frozen tip. **Landing waits for that**, as the atoms flip's
   did. Not started — it is another lane's run and the user was away.
 * The clean-base A/B with its own 13-extension build. The NEW 0 above is

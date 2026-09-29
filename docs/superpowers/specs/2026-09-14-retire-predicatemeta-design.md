@@ -175,7 +175,7 @@ once, with L3's own differential harness as one of the controls.
 
 ## 7. Verification
 
-* **A/B the same corpus domain under both representations, comparing ANSWER SETS** — not pass/fail
+* **A/B the same downstream domain under both representations, comparing ANSWER SETS** — not pass/fail
   counts. A wrongly-lowered clause commonly leaves a domain passing with fewer solutions.
 * **Assert which representation ran.** A run that silently used the old path and reported
   "identical" is the failure this exists to catch; it has already happened once in the L3 work,

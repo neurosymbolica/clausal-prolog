@@ -1,6 +1,6 @@
 # Under `-double_quotes(chars)` a string must BE its char list in `==` and in `[H | T]` unification
 
-Found 2026-09-08 by the ISO-export lane on landed canonical 9246f385, reproduced and widened
+Found 2026-09-08 by a downstream exporter on landed canonical 9246f385, reproduced and widened
 by the engine lane. ISO chars mode: `"ab"` and `[a, b]` are the SAME term, so every term
 operation must agree. Today (clausal.testing, `-double_quotes(chars)`):
 

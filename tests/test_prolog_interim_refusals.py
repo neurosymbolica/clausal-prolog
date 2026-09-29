@@ -253,7 +253,7 @@ class TestArrowLambdaInTermPositionLowering:
         """The discrimination the whole refusal rests on. `T` is bound inside
         the lambda but is NOT in the enclosing head, so it is lambda-local and
         must lower. A rule that refused every binding inside a lambda body
-        would refuse nearly every closure in the corpus."""
+        would refuse nearly every closure in downstream code."""
         out = clausal_source_to_prolog(
             "p(A, B) <- (maplist(((X, Y) <- (T is X, Y is g(T))), A, B))\n",
             strict=True)

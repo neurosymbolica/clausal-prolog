@@ -211,7 +211,7 @@ def test_a_table_still_refuses_a_non_numeric_string(tmp_path):
 def test_constant_value_keeps_a_string_a_string(tmp_path):
     """`-constant_value` is NOT in the family this changes. It takes any
     value, and a string there is a string constant -- reading it as a number
-    would silently retype every text constant in the corpus."""
+    would silently retype every text constant in downstream code."""
     m = _load(tmp_path, "plain", """
         -double_quotes(atom)
         -constant_value(s_greeting, "292.00")

@@ -10,23 +10,23 @@ starts fresh. Nothing is pushed to GitLab (operator: not soon; barrier todo list
     clone main       /workspace/clausal-bug-fix    merge of canonical + the clone-side todos
     clone checkout   another session's branch — untouched all day; every commit via a temp worktree
 
-## Landed 2026-09-18, in order (all gated: engine failure-set A/B on a clean base, harness where it could reach a scorer)
+## Landed 2026-09-18, in order (all gated: engine failure-set A/B on a clean base, downstream checks where they could reach)
 
 1. rdiv/decimal line COMPLETE: step 2 evaluator (9e30afa9), cell-operand fix (8f8ab9dd), twin/wrapper
    parity test (c3f4196e), step 7 measured, steps 6+3 under RULED Q6=C/Q7=c (4f0af19b; design status
-   8dfd2734). Harness 82/82 on every sha with live controls; two re-ask CONDITIONS recorded (mixed-scale
-   decimals; unit-bearing quantity literals). Corpus census (mine + corpus-lane's AST walk): ZERO
+   8dfd2734). Harness all on every sha with live controls; two re-ask CONDITIONS recorded (mixed-scale
+   decimals; unit-bearing quantity literals). Corpus census (mine + a downstream user's AST walk): ZERO
    migration — 0 float constants, 0 united, 2 inline negative fixtures; that domain's runner green.
-2. G3 load blockers from iso-export-lane (987772f5) and corpus-lane's `<-` lambda lowering (c070d33f)
+2. G3 load blockers from a downstream user (987772f5) and a downstream user's `<-` lambda lowering (c070d33f)
    landed on the operator's word in THIS session (a relayed approval was refused; the word came here).
 3. **The atoms-as-str flip: SPEC ONLY, nothing built.** `docs/superpowers/specs/2026-09-18-atoms-as-str-design.md`
    + `tools/atoms_flip/STR_SITES.tsv` (147 str type tests, disposition column blank). RULED: proceed;
    `$chars` carrier; carrier FIRST under a LOUD interim rule (bare str as text raises), then the atom
    flip (`('x',)` refused after). Open §8: Q1 (str at the seam = atom), Q3, Q4, Q5 — recommendations given.
    Named dependencies: the library's raw-string escape hatch (conditional, fail-closed BY DESIGN — its
-   undeclared branch must emit `$chars`); closed-side sizing is 214 sites/72 files CEILING (84 in sealed
+   undeclared branch must emit `$chars`); closed-side sizing is 214 sites/72 files CEILING (most in downstream
    bodies this lane cannot read); stage 1 is SWEPT before landing, stages keep separate shas; landing
-   waits for iso-export-lane's first G3 result on a frozen sha; do the flip BEFORE P4.
+   waits for a downstream user's first G3 result on a frozen sha; do the flip BEFORE P4.
 
 ## NEXT, in order
 
@@ -35,8 +35,8 @@ starts fresh. Nothing is pushed to GitLab (operator: not soon; barrier todo list
    `normalize_seg_input`, Seg* walkers, `atom_chars`/text builtins) re-keys on the tag; a bare Python
    str reaching a text site RAISES (the interim rule = positive control); transfer layer carries the
    tag as itself. Gate: A/B, exporter goldens, standard-order + twin-parity suites; then FREEZE and ask
-   the harness lane (informative diff). The §7 human read of STR_SITES.tsv (TEXT sites flip) is the
-   size of this step; corpus-lane's silent-unmatch grep (quoted literals in term patterns) before it lands.
+   a downstream checker (informative diff). The §7 human read of STR_SITES.tsv (TEXT sites flip) is the
+   size of this step; a downstream user's silent-unmatch grep (quoted literals in term patterns) before it lands.
 2. Stage 2 (the atom flip) behind the atoms API — separate sha; harness RE-BASELINE at landing.
 3. Small, parked: Q3 writeq recommendation; the operator's `-float_literals(decimal|rational)`
    read-time directive idea (a language choice; corpus needs no migration).
@@ -45,13 +45,11 @@ starts fresh. Nothing is pushed to GitLab (operator: not soon; barrier todo list
 
 pkill self-match (exit 144); `pytest | tail && git commit` committing on red (again — gate on $?);
 a vacuous list-`==` assertion over Decimals; a fix measured on the Python twin while the C wrapper is
-loaded (defect in the GAP); a read-only census silent about sealed bodies BY RULE (4.5x under);
+loaded (defect in the GAP); a read-only census silent about downstream bodies BY RULE (4.5x under);
 `git branch --contains` reading a cherry-pick as "not landed".
 
 ## Peers
-the harness lane [803e60] (sequential sweeps; atom-literal census tool on the box; re-baseline
-protocol agreed); iso-export-lane [e8cdc5] (G3 first run on a frozen sha before stage 1 lands);
-corpus-lane [0dfae0] (AST instruments immune by construction; rulebase axis unaffected).
+Downstream coordination is tracked outside this repository.
 
 ## ADDENDUM (same session, later): stage 1 of the chars carrier is STARTED on a branch
 
@@ -76,7 +74,7 @@ The operator chose to begin in this context ("spec-writing is lossy"). Branch
           PyUnicode sites (2517/2624: standard order / type in C?), the exporter's 37 branch lines
     OPEN  THEN arm the loud interim rule (a bare str reaching a text entry point RAISES) as the positive
           control; THEN gate (engine A/B on a clean base + exporter goldens) and FREEZE for
-          the harness lane's pre-landing sweep (informative diff, not a re-baseline)
+          a downstream checker's pre-landing sweep (informative diff, not a re-baseline)
     RULE  bare str is ACCEPTED as text at every patched site until the interim rule is armed — the
           suite must stay runnable between slices; commit each slice
 
@@ -106,7 +104,7 @@ Fallout snapshots vs the canonical-engine failure set (145 names): slice 1 = NEW
   money, python_fallbacks, … — rewrite `'text'` expectations to `chars('text')` (or compare through
   `chars_text`); a helper in `tests/` conftest would make this one edit per file.
 * **THEN** arm the loud interim rule (bare str at a text entry raises) as the positive control, run the
-  engine A/B on a clean base + exporter goldens, and FREEZE for the harness lane's pre-landing sweep.
+  engine A/B on a clean base + exporter goldens, and FREEZE for a downstream checker's pre-landing sweep.
 
 Method that worked: fix a funnel, rerun the neighbour set (chars, double_quotes, dcg, bytes, standard
 order, iso, value_terms, seam, the carrier file — green at 728 after slice 1), commit, full snapshot in

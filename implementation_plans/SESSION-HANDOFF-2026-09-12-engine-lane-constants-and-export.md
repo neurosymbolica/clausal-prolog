@@ -17,7 +17,7 @@
 | constants lexical scope | `/3` compiles to `module_constant_units(<owner>, …)`; imports and `owner.name` work; bound-undefined raises |
 
 Four axes on `4fc411ac`: engine suite 144/16312/1 with failure AND skip sets identical; export
-bytes 0 across 1560 files raw and normalised; domain answers 82 unchanged; **transform bytes 931
+bytes 0 across every exported file raw and normalised; domain answers all unchanged; **transform bytes 931
 files, 919 identical, 0 different, 12 errored-under-both reported separately.**
 
 ## Built but NOT promoted: exporter option 3 (`f396838d`)
@@ -64,10 +64,10 @@ process AGE** — a process older than the command inspecting it cannot be that 
 
 **Two rules from peers, both better than what I had:**
 
-* the harness lane: **a control that exercises one AXIS of an instrument says nothing about the
+* A downstream checker: **a control that exercises one AXIS of an instrument says nothing about the
   other.** Their differ's identity run printed "919 identical, 0 different" — which is also what a
   differ stuck on "identical" prints. They proved the diff axis separately.
-* iso-export-lane: **a measured skip is about a CHANGE; it is not a claim about a TREE.** Their
+* A downstream user: **a measured skip is about a CHANGE; it is not a claim about a TREE.** Their
   export claim went stale across 56 commits. Generalised with them: carry the COMMAND where
   re-measuring is cheap, carry the NUMBER AND ITS TREE where it is expensive. **The choice is set
   by re-measurement cost, not taste** — and each of us had generalised our own end of the curve.

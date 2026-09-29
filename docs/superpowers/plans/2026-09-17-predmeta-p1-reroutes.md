@@ -324,8 +324,8 @@ Adapt names to the tree (each `# adapt` comment). Every test must assert somethi
 
 - [ ] **Step 1:** full gate into `p1-candidate.raw`, `failure_diff.py p1-baseline.raw p1-candidate.raw` → NEW must be 0 (the F026 wall-clock test flips either way; anything else NEW is a regression). Re-run every test in `p1-red-in-touched.txt` alone and confirm the same reason.
 - [ ] **Step 2:** `tests/test_funnel_lint.py` alone (nothing inserted in `terms.py`, but the allowlist has tripped on unrelated insertions before).
-- [ ] **Step 3:** handoff note in `implementation_plans/SESSION-HANDOFF-2026-09-16-engine-lane-END.md` under the LANDED block: the range, NEW 0, which rows are `-done`, which R rows were LEFT and why (the class still needed after the test), and the line: "the harness lane asked for the 82-row answer diff because index hints are now arity-exact".
-- [ ] **Step 4 (controller):** message the harness lane with the sha and the question; message harness-date-migration only if `py/datetime.py` or the seam moved (it did not).
+- [ ] **Step 3:** handoff note in `implementation_plans/SESSION-HANDOFF-2026-09-16-engine-lane-END.md` under the LANDED block: the range, NEW 0, which rows are `-done`, which R rows were LEFT and why (the class still needed after the test), and the line: "a downstream checker asked for the full answer diff because index hints are now arity-exact".
+- [ ] **Step 4 (controller):** message a downstream checker with the sha and the question; message a downstream user only if `py/datetime.py` or the seam moved (it did not).
 
 ## Self-review against the spec
 

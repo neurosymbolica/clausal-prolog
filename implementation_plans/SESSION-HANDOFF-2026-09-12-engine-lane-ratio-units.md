@@ -1,7 +1,7 @@
 # Engine lane handoff — 2026-09-12, ratio units
 
 Continues `SESSION-HANDOFF-2026-09-11-engine-lane-minor-units-END.md`, whose "Open" list had
-ratio units as the designed-but-unbuilt item and corpus-lane's live blocker. They are built.
+ratio units as the designed-but-unbuilt item and a downstream user's live blocker. They are built.
 
 ## 1. What landed
 
@@ -66,7 +66,7 @@ dimensioned probe as the positive control showing the checker can refuse:
     usd_cent (real minor unit)          refused = True
 
 The DECLARATION path (`_base_unit_names`) refused correctly throughout. Only the inline path
-was blind — the same half-covered-surface shape corpus-lane found on 2026-09-11, when
+was blind — the same half-covered-surface shape a downstream user found on 2026-09-11, when
 `pay(155000(cent))` reached `_try_quantity` rather than `_collect_constant`.
 
 **It matters more here than for `cent`:** dropping `basis_point` from `300(basis_point)` emits
@@ -105,7 +105,7 @@ saying they move to the derived half when ratios land. They did.
 Done deliberately in two steps: the derivation was extended **first, with the hand list
 untouched**, purely to watch the overlap assertion fire. It did, naming both words to drop.
 A half designed to shrink now has a demonstrated way of noticing that it should have — which
-is the property the harness lane asked for when they built it and which nothing had yet
+is the property a downstream checker asked for when they built it and which nothing had yet
 exercised.
 
 `bps` and `pct` stay: abbreviations no vocabulary holds and no derivation will produce. The
@@ -120,7 +120,7 @@ than tidying.
 Net new suffixes: `basis_point` (singular) and `percents`. `percent` and `basis_points` were
 already in the set by hand, so the lint's population barely moves.
 
-## 5. Where this leaves corpus-lane's blocker — read this before migrating
+## 5. Where this leaves a downstream user's blocker — read this before migrating
 
 Ratio units are built, and `<downstream-domain>` **still cannot migrate and stay exported**:
 the exporter refuses a ratio-unit amount for the same reason it refuses every scaled unit.
@@ -145,8 +145,8 @@ Unchanged and still true from the todo's own analysis:
 | engine suite | me | baseline `144 failed / 16199 passed / 1 error`; after `144 failed / 16219 passed / 1 error` — failure NAME SETS **identical**, 0 new / 0 fixed, both sets non-empty at 144. The +20 passed are exactly the 20 new tests. Same single collection error (`test_clportools.py`) in both arms. |
 | doc blocks | me | 38 before and after — and the scanner was **positive-controlled** into the new section: breaking one new ```clausal block took it to 39, restoring took it back to 38. |
 | scale lint noise floor | me | 2 warnings in each arm, unchanged from the recorded floor. |
-| export bytes | iso-export-lane | **NOT RUN.** `clausal/tools/clausal_to_prolog.py` changed. |
-| domain answers | the harness lane | **NOT RUN.** `clausal/templating/term_rewriting.py` and `clausal/modules/units.py` changed, and term_rewriting is on the load path for all 82 harness bodies. |
+| export bytes | A downstream user | **NOT RUN.** `clausal/tools/clausal_to_prolog.py` changed. |
+| domain answers | A downstream checker | **NOT RUN.** `clausal/templating/term_rewriting.py` and `clausal/modules/units.py` changed, and term_rewriting is on the load path for the downstream bodies. |
 
 **How the engine-suite arm was measured, because the method is the claim.** Both arms ran in
 ONE throwaway worktree (`.claude/worktrees/ratio-baseline`, detached at `c8f38336`, with the
@@ -158,7 +158,7 @@ surfaces as a `SyntaxError` blamed on an unrelated file.
 
 The six files were confirmed **byte-identical** between the clone and the measured worktree
 and content-pinned at `sha256 a6518ff0…`, because a sha names what HEAD said, not what was
-read (iso-export-lane's rule, 2026-09-11).
+read (a downstream user's rule, 2026-09-11).
 
 **A first run was DISCARDED and it is worth saying why.** I started an after-arm in the clone
 and then kept editing source while it ran. That is a torn read by construction; it happened to
@@ -207,7 +207,7 @@ fail. Every gate touched here now has one.
 
 # Peer measurements, same day — two of my open questions answered by other lanes
 
-## corpus-lane: the new suffixes are dead, and here is what ratio units actually unlock
+## A downstream user: the new suffixes are dead, and here is what ratio units actually unlock
 
 My handoff flagged that `basis_point` (singular) and `percents` might shift their 76-pair
 prediction, and said I could not check it from here. Measured: **zero corpus identifiers end
@@ -216,7 +216,7 @@ stands unchanged.
 
 The number neither of us had, which is the one worth keeping:
 
-    ratio-suffixed functors carrying a bare literal:  21 (file, identifier) pairs, 9 domains
+    ratio-suffixed functors carrying a bare literal:  21 (file, identifier) pairs, several domains
 
       5  <downstream-domain>        5  <downstream-domain>
       2  <downstream-domain>
@@ -225,8 +225,8 @@ The number neither of us had, which is the one worth keeping:
       1  <downstream-domain>           1  <downstream-domain>
 
 45 ratio-suffixed functors exist corpus-wide; 21 pairs carry a bare literal and are therefore
-migratable. Money was 171 values across 15 domains, so **ratios are about an eighth of the
-work across 9 domains rather than 15.**
+migratable. Money was 171 values across several domains, so **ratios are about an eighth of the
+work across several domains rather than 15.**
 
 They also record that `<downstream-domain>`'s five `_percent` warnings were previously reported to Mike as
 "genuinely not migratable", and that sentence is now wrong — they are migratable the moment
@@ -234,7 +234,7 @@ this reaches canonical. Their own framing: an accounting of a domain's remaining
 a shelf life measured in HOURS. That is the shape-list-ages rule from 2026-09-11 in different
 clothes, and it applies to counts reported upward, not only to instruments.
 
-## iso-export-lane: no export arm, on a measured basis — and they checked what I did not
+## A downstream user: no export arm, on a measured basis — and they checked what I did not
 
 They skipped the export-bytes run, having measured reachability rather than taking my word:
 **no corpus or library file writes a ratio unit as a unit literal** — `basis_point`,
@@ -260,14 +260,14 @@ instrument that ran nothing.**
 
 Option 2 for the exporter was already a prerequisite after the "follow statutes" ruling. It
 now ALSO gates the feature built to fix leverage ratios. **Two independent routes to the same
-blocker makes it a sequencing fact rather than a preference**, and iso-export-lane is taking
+blocker makes it a sequencing fact rather than a preference**, and a downstream user is taking
 it to Mike in those terms while he decides whether option 2 stands alongside the Prolog units
 library.
 
-## the harness lane: canonical is clean, and the transform-time argument is VERIFIED not agreed
+## A downstream checker: canonical is clean, and the transform-time argument is VERIFIED not agreed
 
-    82 rows on c8f38336, fingerprint c8f38336/so1789092742, one value, zero torn
-    82 unchanged   0 moved   0 no-score   0 unpinned
+    every row on c8f38336, fingerprint c8f38336/so1789092742, one value, zero torn
+    all unchanged   0 moved   0 no-score   0 unpinned
 
 That closes a five-commit live gap on canonical — `term_rewriting.py` had been edited by two
 separate landings (the scale-lint declared union, and this one) with no sweep between them.
@@ -277,7 +277,7 @@ in advance, because a moved row would have had a 5-commit range and not a 1-comm
 **On whether the clone's missing compiled trampoline matters for these two commits.** I argued
 it does not, because both load-path changes are transform-time rather than runtime. That is
 the kind of argument that is convenient enough to deserve checking, and it was checked twice —
-by the harness lane and then independently here:
+by a downstream checker and then independently here:
 
     _name_claims_a_scale  has exactly TWO call sites, term_rewriting.py:6424 and :7986,
     and both terminate in `warnings.warn`. Neither mutates the AST or the emitted Python.
@@ -286,7 +286,7 @@ So widening the suffix set cannot change the transformed output by a byte, and w
 trampoline later solves is identical either way. The `units.py` half is additive module-level
 names nothing imports — import-time only, equally out of the trampoline's reach.
 
-**The bound the harness lane put on that, which is the part worth keeping:** it holds
+**The bound a downstream checker put on that, which is the part worth keeping:** it holds
 because those two call sites were read, NOT because transform-time changes are a category
 that is exempt. A transform-time change that altered emitted output would be exactly as
 exposed as `sum_list/2` was. The argument is about these two commits, not about a kind of
@@ -296,7 +296,7 @@ commit.
 [[rename-swap-so-under-live-importers]] has a SIGBUS failure mode that lands on whichever lane
 has the clone mapped — a risk taken in someone else's session to measure two commits that are
 going to canonical anyway. Promote-then-sweep gets the compiled path for free and puts the
-risk nowhere. the harness lane will run it on canonical once promotion is approved.
+risk nowhere. A downstream checker will run it on canonical once promotion is approved.
 
 ## A design property for assertions, from this landing's one genuinely new idea
 
@@ -365,10 +365,10 @@ only visible signal, and I nearly explained it away.
 | axis | who | result |
 | --- | --- | --- |
 | engine suite | me | 147 failed / 16218 passed / 1 error on canonical; all 3 above the worktree pair's 144 run down to skips and working-tree artifacts, none to these commits |
-| export bytes | iso-export-lane | **0** across 1560 files, raw and normalised, engine content-pinned across the run |
-| domain answers | the harness lane | sweeping `cc008788`, extensions verified byte-identical to the `c8f38336` sweep so these two commits are the only variable |
+| export bytes | A downstream user | **0** across every exported file, raw and normalised, engine content-pinned across the run |
+| domain answers | A downstream checker | sweeping `cc008788`, extensions verified byte-identical to the `c8f38336` sweep so these two commits are the only variable |
 
-## iso-export-lane's finding, which outlives this landing
+## A downstream user's finding, which outlives this landing
 
 Their export zero came with a discovery: their baseline was `3b0e3547`, **56 commits back**
 (counted with `rev-list --count` on both sides, after their own eyeball estimate of ~70 —
@@ -394,14 +394,14 @@ The idea transfers; the code cannot.
 recorded baseline is itself a measurement with a date and a tree, and nothing watches its age
 either. The existing answer in this lane's notes is "never trust a written-down baseline,
 regenerate it", which is safe because regeneration is ~3 minutes. That answer stops scaling
-exactly where regeneration gets expensive, which is where iso-export-lane and
-the harness lane live.
+exactly where regeneration gets expensive, which is where a downstream user and
+A downstream checker live.
 
 ---
 
 # A DEFECT IN THE PROMOTED LANDING, found and fixed: canonical is `dfe1d8f0`
 
-Found by **checking a peer's exoneration instead of accepting it.** the harness lane read
+Found by **checking a peer's exoneration instead of accepting it.** a downstream checker read
 one row as 340/341 once in fourteen sweeps and attributed it to their own instrument. I knew
 something about my diff they could not, so I looked.
 
@@ -418,7 +418,7 @@ That is not merely an import. `clausal/logic/_units_flag.py` promises in its own
 that **"a program that imports no unit module pays nothing"**. Importing units builds 84
 `Quantity` constants, and `Quantity.__init__` calls `_units_flag.touch()`. The flag is read at
 six sites in `clpfd.py` (2609, 2748, 3187, 3221, 3291, 3306) and four in `units_clp.py`. So
-the landing turned the CLP units side channel ON for every program in the corpus, including
+the landing turned the CLP units side channel ON for every program in downstream code, including
 ones with no units anywhere.
 
 **Fix**: `RATIO_UNITS` moves to `clausal/modules/_ratio_data.py`, which constructs nothing;
@@ -431,7 +431,7 @@ subprocess because the flag is process-global, **with a positive control** — a
 only "units not imported" would also pass if the lint had stopped reading the vocabulary
 entirely.
 
-**It was NOT the cause of the 340/341.** the harness lane scanned all 82 domains for
+**It was NOT the cause of the 340/341.** a downstream checker scanned the downstream domains for
 constraint operators, `all_different` and `label(` — zero hits, `<downstream-domain>` included.
 So the branch this enabled is one their axis never takes. A real candidate eliminated by
 measurement rather than an absence of one. Their anomaly stays open and theirs; they have
@@ -441,7 +441,7 @@ with 3 of the 4 deviations being true positives.
 ## The reasoning error, which is the reusable part
 
 I told both lanes the load-path change was "warning-only and cannot change emitted bytes".
-the harness lane verified it by tracing `_name_claims_a_scale` to its two call sites and
+A downstream checker verified it by tracing `_name_claims_a_scale` to its two call sites and
 confirming both terminate in `warnings.warn`. **That was true, and it is still true.**
 
 What neither of us asked is what the function IMPORTS.
@@ -482,9 +482,9 @@ the ESC, leaves the literal `[33m`, and every `^ANCHOR` grep then fails silently
     engine suite   144 failed / 16284 passed / 1 error -- failure NAME SET identical to the
                    pre-fix arm, 0 new / 0 fixed, both non-empty at 144
     skip set       52 lines, extracted and recorded for the first time
-    domain axis    the harness lane re-running <downstream-domain> against the fix
+    domain axis    a downstream checker re-running <downstream-domain> against the fix
 
-**A shared box note, from the harness lane's contention experiment:** four `while :; do :;
+**A shared box note, from a downstream checker's contention experiment:** four `while :; do :;
 done` spinners leaked for ten minutes because `LOADPIDS=$(jobs -p)` inside a non-interactive
 `zsh -c` captures nothing, so `kill $LOADPIDS` fired at nothing with its error hidden by
 `2>/dev/null`. **A deliberate-load experiment needs its teardown verified the same way its
@@ -497,13 +497,13 @@ property of my own fix rather than checking `ps`, I would have had a confident w
 | axis | who | result |
 | --- | --- | --- |
 | engine suite | me | 144 failed / 16284 passed / 1 error — failure NAME SET identical to the pre-fix arm, 0 new / 0 fixed, both non-empty at 144; **skip set (52) extracted for the first time** |
-| export bytes | iso-export-lane | 0 across 1560 files, raw and normalised, engine content-pinned across the run |
-| domain answers | the harness lane | **82 unchanged, 0 moved, 0 no-score, 0 unpinned, one fingerprint, zero torn**, quiet box, 158 commits from `820dc66f` |
+| export bytes | A downstream user | 0 across every exported file, raw and normalised, engine content-pinned across the run |
+| domain answers | A downstream checker | **all unchanged, 0 moved, 0 no-score, 0 unpinned, one fingerprint, zero torn**, quiet box, 158 commits from `820dc66f` |
 
 **My named candidate mover was censused before the run and came back empty**, which is what makes
 the null informative rather than decorative:
 
-    harness bodies mentioning units at all                      0 of 82
+    harness bodies mentioning units at all                      0 of N
     bodies using a unit construct WITHOUT importing the module  0
     domains declaring units in their RULEBASE                   19
 
@@ -523,7 +523,7 @@ known gap rather than a resolved one.
 units**, currency units in its queries file. So the one unexplained reading in 1068 sits on a
 units-using domain, on the axis of the engine that has moved most this week.
 
-**That is a coincidence worth recording, not an explanation**, and the harness lane declined
+**That is a coincidence worth recording, not an explanation**, and a downstream checker declined
 to dress it as more. It does not reproduce: 14 targeted runs green on the unfixed tip (6 of them
 under genuine four-way load) and 6 green on the fix. Recorded here because the next person to
 change the units surface should know which domain to run alone first, and because a lead with no

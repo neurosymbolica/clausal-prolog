@@ -411,7 +411,7 @@ def _iso_structural_ne(a, b, trail, k):
 # ISO's structural `==`/2) is not what powers Clausal's infix `==`: infix
 # `==` compiles to `nodes.ArithEq`, a CLP(FD) arithmetic constraint that
 # BINDS and PROPAGATES rather than merely testing. A runtime measurement over
-# 1933 corpus call sites (430,945 executions) found 33 sites that take TWO
+# 1933 downstream call sites (430,945 executions) found 33 sites that take TWO
 # arithmetic modes — the same site BINDS on one call and TESTS on another.
 # For those, no other ISO spelling works: `'=:='` raises instantiation_error
 # on the binding call, and `'is'` is wrong for the testing one. `#=` is the

@@ -299,8 +299,7 @@ class TestBareNameFact:
 # argument _convert_pred_spec couldn't parse -- with the Name/Arity
 # spelling (`Foo/2`, a Python BinOp(Div), not a Call or bare Name)
 # completely unhandled. A single-argument directive using that spelling,
-# e.g. the live corpus site `-dynamic(vacuous_property/1)`
-# (<downstream>/validate_props.clausal:60), lost its only argument and emitted the
+# e.g. a live downstream site `-dynamic(vacuous_property/1)`, lost its only argument and emitted the
 # MALFORMED `:- dynamic([]).` -- a real directive, strict-clean, that
 # declares nothing dynamic (the opposite of what the source asked for).
 
@@ -314,8 +313,8 @@ class TestMetaDirectivePredSpecs:
         )
         assert ":- dynamic(foo/2)." in out
 
-    def test_live_site_shape_from_kit_validate_props(self):
-        """The exact corpus shape: <downstream>/validate_props.clausal:60."""
+    def test_live_site_shape_from_a_downstream_file(self):
+        """The exact shape of a live downstream site."""
         src = (
             "-double_quotes(atom)\n-dynamic(vacuous_property/1)\n"
             'vacuous_property("__init__"),\n'

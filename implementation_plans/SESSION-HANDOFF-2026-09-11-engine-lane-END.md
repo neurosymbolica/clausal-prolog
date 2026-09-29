@@ -17,8 +17,8 @@ START of the day — every landing below moved it by zero. The extraction is at
 | axis | who | measured on | result |
 | --- | --- | --- | --- |
 | engine suite | me | 946d7296 | 0 new failures vs the 9a719536 baseline |
-| corpus loads | corpus-lane | 946d7296 predecessors | 71 asserted clean / 0 defects / 7 not checked, cold AND warm |
-| batch bodies | the harness lane | not re-run today | — ask before relying on it |
+| corpus loads | A downstream user | 946d7296 predecessors | 71 asserted clean / 0 defects / 7 not checked, cold AND warm |
+| batch bodies | A downstream checker | not re-run today | — ask before relying on it |
 
 ## 2. What landed today, in order
 
@@ -56,10 +56,10 @@ Rulings behind it, all the operator's, all 2026-09-11:
   cents. Base currency with decimals. Extended to ratios: no `percent`, no `basis_point`.
 - **Durations are date arithmetic, not units.** Months vary; business days need holidays.
 
-## 4. The corpus migration — APPROVED, then RE-OPENED on the first real domain
+## 4. Downstream code migration — APPROVED, then RE-OPENED on the first real domain
 
-88 parameters / 28 domains / 337 call sites + 5 in eval bodies. 24 keyed parameters stay facts.
-corpus-lane owns it and has touched nothing.
+88 parameters / several domains / 337 call sites + 5 in eval bodies. 24 keyed parameters stay facts.
+A downstream user owns it and has touched nothing.
 
 **The costing this was approved on is wrong in BOTH directions. Do not inherit either number.**
 
@@ -68,7 +68,7 @@ becomes a bare-atom reference and needs no `-module` listing — measured. My "e
 parameter needs a module-list entry" came from a test that wrote the name BARE, which is a
 different thing, and it inflated the estimate by 88 edits.
 
-*Much larger per domain*, which is the finding that matters. corpus-lane staged
+*Much larger per domain*, which is the finding that matters. A downstream user staged
 `<downstream-domain>` and stopped before editing:
 
 - The domain **computes in bps throughout**. `leverage_ratio_bps/2` is EXPORTED, the library
@@ -84,11 +84,11 @@ different thing, and it inflated the estimate by 88 edits.
 
 So the ruling that unblocked the migration (`_cents` and `_bps` become decimals) is what makes
 it expensive, because those are exactly the two groups it redirects. Being re-decided with the
-real number. **Do not start corpus work here** — it is corpus-lane's, and it is not costed.
+real number. **Do not start corpus work here** — it is a downstream user's, and it is not costed.
 
 ## 4a. NEXT ENGINE TASK: minor-currency units — handed over, NOT started
 
-**Handed to the engine lane by corpus-lane on the operator's instruction, 2026-09-11, late.
+**Handed to the engine lane by a downstream user on the operator's instruction, 2026-09-11, late.
 Nothing has been done. The operator explicitly said: record it, do not start it.**
 
 > "there must be units eur_cents and usd_cents in the currency module, with scale factor vs
@@ -140,25 +140,25 @@ Every non-base unit in the library currently normalises to its base. `constant_n
 reports the DECLARED pair either way (that ruling already landed), so this is about what
 `constant_value/2` and arithmetic return.
 
-corpus-lane's preference, and their reasoning is sound: **stay in the declared unit** — a
+A downstream user's preference, and their reasoning is sound: **stay in the declared unit** — a
 statutory "155000 cents" that reads back as "1550 dollars" is the same recoverability problem
 `/3` was just fixed for. Not their call, and not mine; decide it before implementing, because
 it decides whether this is a new kind of unit or an ordinary scaled one.
 
 ### Corpus state this lands on
 
-- the corpus tree renamed the two ambiguous identifiers that were cleanly
-  corpus-lane's: `sum_cents -> sum_eur_cents`,
+- the downstream tree renamed the two ambiguous identifiers that were cleanly
+  a downstream user's: `sum_cents -> sum_eur_cents`,
   `sga_monthly_amount_cents -> sga_monthly_amount_usd_cents`. Gates and oracles byte-identical.
 - **71 further ambiguous `_cents` names are NOT one lane's**: 13 are profile keys (oracle
-  interface), 56 reach `eval/` bodies (the harness lane), 27 are anchored in mutation
+  interface), 56 reach `eval/` bodies (a downstream checker), 27 are anchored in mutation
   catalogs.
 - **Worth putting to the operator when reporting**: once these units exist, those names can
   carry the currency in the DECLARATION instead of the identifier, which may make most of the
   71 renames unnecessary — turning a 71-name three-lane rename into an engine feature plus a
   much smaller corpus pass. That is the strategic argument for doing this work first.
 
-corpus-lane handed off at 83% context; anything corpus-side now goes to the next corpus-lane
+A downstream user handed off at 83% context; anything corpus-side now goes to the next a downstream user
 session.
 
 ## 4b. THE DESIGN for 4a — ruled by the operator 2026-09-11, NOT implemented
@@ -199,7 +199,7 @@ arithmetic.
 ### What it unlocks
 
 `constant_number_units/3` reporting the DECLARED pair becomes the mechanism for the gate
-corpus-lane wanted: **a parameter whose name ends `_cents` but whose declaration does not say
+A downstream user wanted: **a parameter whose name ends `_cents` but whose declaration does not say
 a minor unit is a defect**, mechanically checkable. That is the whole "documented not
 represented" problem, closed. Eventually the suffix disappears because the declaration carries
 it — which is the argument for doing this BEFORE the 71-name cross-lane rename, since it may
@@ -218,7 +218,7 @@ statute said) is already preserved by `/3`, without paying for it in the value r
 
 ### What it does NOT solve
 
-Nothing here touches corpus-lane's two findings: a domain whose PUBLIC interface computes in
+Nothing here touches a downstream user's two findings: a domain whose PUBLIC interface computes in
 bps (`leverage_ratio_bps/2` exported), and values DUPLICATED as bare literals (the `300` at
 `leverage_ratio.clausal:111`). The second means the migration's DRY premise is partly false
 until the literal sites also become `constant(...)`. This design makes both cheaper — no
@@ -268,8 +268,6 @@ needs a positive control, and you read the evidence line, not the verdict.
 
 ## 7. Lanes
 
-corpus-lane [0dfae0] holds the migration and is the most active. iso-export-lane [e8cdc5],
-the harness lane [803e60], law-portal-1a [718243] have not been engaged today — none of
-today's landings was flagged to them, which is worth doing if anything here reaches their
-trees. The `.so` changed today (`7e825cdf`, `25fe9dce`), so **any lane with a long-lived
+Downstream coordination is tracked outside this repository. The `.so` changed today
+(`7e825cdf`, `25fe9dce`), so **any process with a long-lived
 process that imported the engine before ~09:00 is running the old extension.**

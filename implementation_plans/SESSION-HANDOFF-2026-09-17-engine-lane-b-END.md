@@ -60,7 +60,5 @@ Four commits on canonical this session, all docs/tools, no engine source, no `.s
 
 ## Peers
 
-the harness lane [803e60] (82-row sweep, QUESTION protocol, freeze a sha first);
-harness-date-migration [06e695]; iso-export-lane [e8cdc5] (owed a message before a decimal term can
-reach an export — not yet applicable); corpus-lane [0dfae0] (the canary domain; the count of
-`is/2`-on-decimal-constant sites). Three sessions carried the `engine-lane` name; use the ref.
+Downstream coordination is tracked outside this repository. Three sessions carried the
+`engine-lane` name; use the ref.

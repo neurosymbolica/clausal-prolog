@@ -39,7 +39,7 @@ the guess entirely.
   whether the compiler's name→builtin lookup (`_registry.get_builtin_class`) sees it before
   any Python-level binding is a Task 1 verification, not an assumption.
 - Clausal `is` is unification (`nodes.Unify`, ISO `=`); Clausal's ISO-`is/2` role is
-  played by `eval_/2`, which the corpus never calls, and in practice by `==` (826 goal
+  played by `eval_/2`, which downstream code never calls, and in practice by `==` (826 goal
   positions corpus-wide, per the eq-mode note §2.1).
 
 ## 3. Design
@@ -82,7 +82,7 @@ code, silently.
 CONSEQUENCE FOR THE TRANSLATOR (Task 4): a `'#='` site emits `#=` into `.pl`, which is
 `library(clpz)` in Scryer, not ISO. The exported file therefore needs its `use_module`,
 and a domain using one is no longer pure-ISO. That is a real narrowing of the export
-claim and belongs in the export lane's documentation, not silently in a header.
+claim and belongs in a downstream exporter's documentation, not silently in a header.
 
 Everything else ISO defines by an operator (`\\+`, `->`, `;`, `,`) is OUT of scope: those
 already have Clausal spellings (`not`, if/else, `or`, conjunction) and the translator maps
@@ -103,7 +103,7 @@ existing files keep their meaning; the ratchet is not re-scored. What changes:
    with no mode inference, and keeps its existing (guessing) path for bare `==` so that
    an unmigrated file translates exactly as today. Progress is then measured by the count
    of bare `==` sites the lint still flags — a number that only goes down.
-3. The corpus lane migrates sites to the canonical spelling domain by domain, using the
+3. The a downstream user migrates sites to the canonical spelling domain by domain, using the
    lint's classification; that is corpus work, sequenced by the operator.
 
 ### 3.3 Dates and the two-spelling pairs, settled by standard order

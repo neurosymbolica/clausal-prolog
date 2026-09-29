@@ -146,7 +146,7 @@ def _number__1(x, trail, k):
     or non-numeric contributes nothing... empty list -> 0" — would, on
     attaching units, total ZERO for every field, compare 0 against 0 in every
     consistency rule, and turn a legal conformance surface vacuously true with
-    a green suite (corpus-lane, 2026-09-11, who found it by building the
+    a green suite (a downstream user, 2026-09-11, who found it by building the
     migration rather than reading it).
 
     Accepting inverts the failure mode rather than merely widening the test.

@@ -49,13 +49,13 @@ budgeting for it.
 
 The §4 spec lists under "Not established":
 
-> the corpus's object-shaped predicate access — the one unmeasured number in
+> downstream code's object-shaped predicate access — the one unmeasured number in
 > this document, and the one that decides whether q3 is a **migration or a
 > flag day**
 
 **That number is still unmeasured, and P2 has since produced evidence about
 its magnitude.** `solve(m.pred(X))` — one Python-API access pattern through a
-module attribute — broke every downstream scorer, was invisible to the whole
+module attribute — broke every downstream check, was invisible to the whole
 in-repo suite AND to all 12 packages, and cost a day plus two compiler
 features to unblock. It was a single instance of exactly the class W1 is
 supposed to count.

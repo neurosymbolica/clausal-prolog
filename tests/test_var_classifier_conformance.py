@@ -55,7 +55,7 @@ def test_name_position_copies_agree(spelling, expected):
 
 
 def test_name_position_is_the_variable_rule_minus_titlecase():
-    """Stated as a property, so a new spelling cannot satisfy the corpus
+    """Stated as a property, so a new spelling cannot satisfy the CORPUS
     above while breaking the relationship the two rules are meant to have."""
     for spelling, _ in CORPUS + NAME_POSITION:
         titlecase = (spelling[:1].isupper()

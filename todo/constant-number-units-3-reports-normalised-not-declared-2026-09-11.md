@@ -1,6 +1,6 @@
 # `constant_number_units/3` reports the NORMALISED pair, not what was declared
 
-**Found by corpus-lane 2026-09-11, hours after the predicate landed (`c4c7d6c9`).**
+**Found by a downstream user 2026-09-11, hours after the predicate landed (`c4c7d6c9`).**
 Reproduced here before filing.
 
     -import_from(units, [day])
@@ -15,7 +15,7 @@ relates the Quantity the units library built after normalising to SI base units.
 
 ## Why it matters more than it looks
 
-The corpus has 9 parameters whose names end `_days` and which a migration would want to
+Downstream code has 9 parameters whose names end `_days` and which a migration would want to
 declare in days. `article_2d_standstill_days(10)` becoming
 `-constant_number_units(article_2d_standstill_days, 10, day)` silently turns every
 comparison against it from 10 into 864000. A rule reading
@@ -62,9 +62,9 @@ Even with (1), the VALUE is still 2592000 seconds, so arithmetic on a migrated `
 parameter is still in seconds. A statutory "within 30 days" is 30 CALENDAR days, which is
 not 30 x 86400 across a DST boundary or a month end. Representing a legal deadline in
 seconds looks more precise and is less correct. That is a units-library design problem,
-not a missing table entry, and it gates the "represent the corpus's units" project.
+not a missing table entry, and it gates the "represent downstream code's units" project.
 
-## The rescaling rule, measured (corpus-lane's formulation, confirmed here)
+## The rescaling rule, measured (a downstream user's formulation, confirmed here)
 
 It is NOT "SI-derived units rescale". It is: **a unit that is not the base of its own
 dimension rescales to that base.**
@@ -90,20 +90,20 @@ A `cent` defined as a scaled euro would rescale TO euro, turning a declared 5000
 minor-currency unit is not a table entry either: it has to be its own unit, related to euro
 by a conversion the caller asks for explicitly. Same shape as the calendar-duration problem.
 
-Three unit-design calls now gate the "represent the corpus's units" project, and none is a
+Three unit-design calls now gate the "represent downstream code's units" project, and none is a
 missing table row:
 
     cent          must not rescale to euro
     day           must not rescale to second (and calendar days are not 86400s)
     basis point / percent   dimensionless ratios, no unit at all today
 
-## corpus-lane's argument for DECLARED, which is stronger than mine
+## A downstream user's argument for DECLARED, which is stronger than mine
 
 If /3 reports the declared pair, a corpus gate can check that a parameter's declared unit
 matches the unit its NAME claims — `_cents` declaring `cent`, `_days` declaring `day`. That
 check is impossible against the normalised pair, because every duration comes back as
 `second` whatever was written. So "declared" is not only more faithful: it is what makes the
-documented-vs-represented problem mechanically checkable, which is the reason the corpus
+documented-vs-represented problem mechanically checkable, which is the reason downstream code
 lane cares about the migration at all.
 
 ## Numeric TYPE also changes, and the rule is narrower than "rescaling gives floats"
@@ -134,7 +134,7 @@ So the minor-currency unit has TWO constraints, not one:
 2. whatever it does must keep money out of floats — i.e. behave like the currency path
    (Decimal), not like the SI path.
 
-corpus-lane checked the current values: 30 `_cents` facts, 0 of them not divisible by 100,
+A downstream user checked the current values: 30 `_cents` facts, 0 of them not divisible by 100,
 so today's magnitudes would all land on whole euro. That removes the magnitude hazard for
 the CURRENT data and not the type hazard (50.0 is a float whether or not it is whole) — and
 "every value happens to divide by 100" is not a property anyone maintains, so it would be
@@ -172,7 +172,7 @@ A statutory "within 30 days" is a RELATION between two dates, not a scalar quant
 - **Business days** need a holiday calendar, which is jurisdiction-specific and dated — data,
   not a unit. Two member states disagree about the same Tuesday.
 
-So of the 91 name-encoded units in the corpus, the ~11 duration ones (`_days`, `_months`,
+So of the 91 name-encoded units in downstream code, the ~11 duration ones (`_days`, `_months`,
 `_minutes`) should NOT migrate to units under any design. They want date-arithmetic
 predicates, and the two that do not exist (month arithmetic, business days) are a separate
 piece of engine work with a data dependency.
@@ -210,7 +210,7 @@ a decimal is a number it can. That closes the second of the three unit-design ga
 
 **And durations were already ruled out** — date arithmetic, not units. That closes the third.
 
-So all three gates on the "represent the corpus's units" project are now closed, and none of
+So all three gates on the "represent downstream code's units" project are now closed, and none of
 them by adding a unit:
 
     cent (35 params)     -> base currency with decimals
@@ -223,7 +223,7 @@ them by adding a unit:
 
 Exact — a float gives 0.30000000000000004. Scaling and comparison work too.
 
-**One sharp edge worth knowing before the corpus relies on it:** `eval_/2` is the idiom for
+**One sharp edge worth knowing before downstream code relies on it:** `eval_/2` is the idiom for
 unit-carrying values, not `==`. `docs/arithmetic.md` says so ("CLP constraints don't operate on
 Quantity objects"), and `++a == ++b` on two amounts raises `type_error(integer, Quantity)` from
 clpfd. Comparisons (`>`, `=<`) work directly. Worth stating because `==` is the idiom for

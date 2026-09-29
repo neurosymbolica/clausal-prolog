@@ -843,7 +843,7 @@ def _process_imports(module_items: list, module_dict: dict, db=None) -> None:
             # dotted-name resolution works in the compiler's
             # ``_inject_resolved_targets`` -- but ONLY for a dotted path.
             #
-            # BUG #2 (corpus `_tools/split_domain.py:1049`, reproduced at
+            # BUG #2 (found by a downstream tool, reproduced at
             # engine level 2026-09-11): a SINGLE-SEGMENT module name is also a
             # valid Clausal identifier, so this binding shadows a profile key
             # or atom of the same spelling. The name holds a Python MODULE
@@ -851,7 +851,7 @@ def _process_imports(module_items: list, module_dict: dict, db=None) -> None:
             # different kinds of thing in one namespace slot, so the collision
             # is SILENT: the lookup finds nothing and the rule answers
             # ``unknown([key])``. `currency` is simultaneously a vocab module
-            # and an invoice's own currency field, and the corpus held the
+            # and an invoice's own currency field, and downstream code held the
             # hazard off by emitting imports in a fixed ORDER, with a
             # regression test pinning the order.
             #

@@ -70,7 +70,7 @@ type(value) is str          # text
 
 `++` reads the TYPE, so equality is not the mechanism and a strict `__eq__`
 buys nothing for the round trip. It only costs: **1007 `==`/`!=` comparisons
-against plain string literals, across ALL 82 downstream bodies**, every
+against plain string literals, across ALL the downstream bodies**, every
 atom-side one of which would silently flip True to False. Introducing a
 comparison that quietly changes its answer is the exact defect class this
 boundary exists to remove.

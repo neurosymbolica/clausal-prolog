@@ -21,7 +21,7 @@
 * `_get_dispatch` is a frozen duck-typed protocol with out-of-tree implementors; it is NOT touched by P2.
 * A predicate's CLASS still exists after P2 (P4 deletes it). P2 removes INSTANCES and DATA-functor classes only.
 * Every site change is one of three rewrites (below, "The three rewrites"); anything else is reported, not improvised.
-* Gate per task: the file's neighbour tests green; gate per landing: clean-base engine A/B NEW 0 / GONE 0 on DETACHED worktrees with the same extension set + positive controls, twin-parity, exporter goldens (`tests/test_clausal_to_prolog*`), `tests/iso`, `tests/rewrite`, `tests/iso_l3`; then the corpus ANSWER-SET axis (the downstream lane, the downstream answer-set checks) before promotion. Report class count and the construct/unify benchmark (spec §7) before and after; they are exit criteria.
+* Gate per task: the file's neighbour tests green; gate per landing: clean-base engine A/B NEW 0 / GONE 0 on DETACHED worktrees with the same extension set + positive controls, twin-parity, exporter goldens (`tests/test_clausal_to_prolog*`), `tests/iso`, `tests/rewrite`, `tests/iso_l3`; then the downstream ANSWER-SET axis (the downstream lane, the downstream answer-set checks) before promotion. Report class count and the construct/unify benchmark (spec §7) before and after; they are exit criteria.
 * `git add` explicit paths only; `git branch --show-current` before every commit; build in a same-sha worktree and copy-then-move extensions under live importers.
 
 ---

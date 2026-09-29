@@ -241,7 +241,7 @@ a:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-of
     <span>head <b>7e194140</b></span>
     <span>landed <b>nothing</b></span>
     <span>engine gate <b>0 new</b></span>
-    <span>oracle gate <b>went red</b></span>
+    <span>downstream answer-set gate <b>went red</b></span>
   </div>
 </header>
 
@@ -329,7 +329,7 @@ dict key      str-tagged cell                        0.0335 s / 2M
   </figure>
 
   <p>The one cost, stated plainly: the atom <code>'()'</code> stops being available as an ordinary atom — the same trade <code>'[]'</code> already makes. It is free today: no uses in engine Python, no <code>.clausal</code> file, no test.</p>
-  <p><strong>And the corpus cost is zero.</strong> Swept: no corpus file names <code>TUPLE_TAG</code>, <code>$cells</code> or <code>is_cell</code>, or matches slot 0 on a type. Corpus source writes <code>(1, 2)</code> and the compiler applies the tag, so a re-tagging is compiler-internal. That was the one number between this recommendation and a decision.</p>
+  <p><strong>And downstream code cost is zero.</strong> Swept: no corpus file names <code>TUPLE_TAG</code>, <code>$cells</code> or <code>is_cell</code>, or matches slot 0 on a type. Corpus source writes <code>(1, 2)</code> and the compiler applies the tag, so a re-tagging is compiler-internal. That was the one number between this recommendation and a decision.</p>
 </section>
 
 <section>
@@ -425,7 +425,7 @@ aliased:  aliaser.link IS exporter.edge        <span class="ok">True</span>
       <div class="dhead"><span class="dq">q3</span><span class="dt">A module-level name is ABSENT</span><span class="chip c-measured">Revised</span></div>
       <p>Ruled first as “the atom”. Measured later: the spec's other branch — <em>absent</em> — costs less and is the cleaner end state. A logic module is a plain Python module, so a PEP 562 <code>__getattr__</code> fires on a MISS and resolves the name from its Database row.</p>
       <p><strong>A miss-only hook serves every REACH and cannot ENUMERATE</strong>, and that is the whole distinction. Attribute access, <code>getattr</code> by literal and by variable, <code>hasattr</code>, and <code>from domain import pred</code> all keep working untouched; only <code>vars(m)</code>, <code>dir(m)</code> and name-discovery loops break.</p>
-      <p>Enumeration sites: <strong>3 in the engine</strong> (each already headed for “enumerate the db's rows”), and <strong>zero</strong> in the 82 sealed harness bodies. So q3 costs one hook plus a <code>__dir__</code> — not the ~655 site edits an earlier count in this record claimed.</p>
+      <p>Enumeration sites: <strong>3 in the engine</strong> (each already headed for “enumerate the db's rows”), and <strong>zero</strong> in the downstream harness bodies. So q3 costs one hook plus a <code>__dir__</code> — not the ~655 site edits an earlier count in this record claimed.</p>
     </div>
     <div class="decision">
       <div class="dhead"><span class="dq">q4</span><span class="dt">The type test</span><span class="chip c-measured">Measured</span></div>
@@ -472,12 +472,12 @@ aliased:  aliaser.link IS exporter.edge        <span class="ok">True</span>
 <pre>tracked files    .clausal  <span class="ok">431</span>      .seam  <span class="no">0</span>      .pl  15</pre>
   </figure>
 
-  <p><strong>Zero files have moved to <code>.seam</code>.</strong> <code>.clausal</code> cannot take on ISO syntax while 431 engine files — plus the corpus, which is not measured here — still hold Python-seam syntax under that name. The write-side flip is the prerequisite for the whole cut gate, and it has not started. It does not block L3, which targets <code>.pl</code>.</p>
+  <p><strong>Zero files have moved to <code>.seam</code>.</strong> <code>.clausal</code> cannot take on ISO syntax while 431 engine files — plus downstream code, which is not measured here — still hold Python-seam syntax under that name. The write-side flip is the prerequisite for the whole cut gate, and it has not started. It does not block L3, which targets <code>.pl</code>.</p>
 </section>
 
 <section>
   <div class="shead"><span class="snum">08</span><h2>What the measurements got wrong</h2></div>
-  <p class="lede">A green engine suite said the date change was safe. The oracle gate said otherwise on its first domain, and the difference between those two claims is the most useful thing here.</p>
+  <p class="lede">A green engine suite said the date change was safe. The downstream answer-set gate said otherwise on its first domain, and the difference between those two claims is the most useful thing here.</p>
 
   <figure class="evidence">
     <figcaption><span>The canary, first row</span><span class="chip c-retracted">Caught</span></figcaption>
@@ -486,13 +486,13 @@ aliased:  aliaser.link IS exporter.edge        <span class="ok">True</span>
 canonical,  same domain, same minute            <span class="ok">341/341, EXIT=0</span></pre>
   </figure>
 
-  <p>The claim behind the change was that the corpus never imports the date module and so could not be affected. The sweep was accurate; the claim generalised past it. <strong>The downstream caller bodies are not in the corpus tree</strong>, they construct <code>datetime.date</code> and pass it into goals, and that is exactly the path the change closed. Five of the first six procurement scorers went scoreless; the sweep was stopped there rather than watching the same traceback fifty more times.</p>
+  <p>The claim behind the change was that downstream code never imports the date module and so could not be affected. The sweep was accurate; the claim generalised past it. <strong>The downstream caller bodies are not in the downstream tree</strong>, they construct <code>datetime.date</code> and pass it into goals, and that is exactly the path the change closed. Five of the first six downstream answer-set checks went scoreless; the sweep was stopped there rather than watching the same traceback fifty more times.</p>
 
-  <p>Four claims failed the same way in one day, and the cause is structural rather than careless. <strong>The sealed bodies are excluded from every other lane's census by the seal</strong> — one lane cannot read them, the exporter skips their directory, engine sweeps cover the corpus tree. So <em>“the corpus costs nothing”</em> is silent about the harnesses <em>by construction</em>, and that population exercises the engine more directly than any other.</p>
+  <p>Four claims failed the same way in one day, and the cause is structural rather than careless. <strong>The downstream caller bodies are excluded from every other census by construction</strong> — they cannot be read from here, the exporter skips their directory, engine sweeps cover the downstream tree. So <em>“downstream code costs nothing”</em> is silent about the harnesses <em>by construction</em>, and that population exercises the engine more directly than any other.</p>
 
   <div class="pull">
     <p><span class="chip c-ruled">Protocol</span> Any sweep whose conclusion would cover the harnesses goes to the lane that owns them as a question, before it becomes a number. Most are one AST pass.</p>
-    <p>And state the glob in the sentence. <em>“No <code>.py</code> file does X”</em> is a fact; <em>“the corpus does not do X”</em> is an inference across a boundary, and the two read identically in a report.</p>
+    <p>And state the glob in the sentence. <em>“No <code>.py</code> file does X”</em> is a fact; <em>“downstream code does not do X”</em> is an inference across a boundary, and the two read identically in a report.</p>
   </div>
 
   <h3>One domain answered wrongly rather than failing</h3>
@@ -687,11 +687,11 @@ n=3  sorted 216 ns | raw 135 ns | len-guard <span class="no">250 ns</span>   gua
     <li>
       <span class="stitle">Dates are terms <span class="chip c-measured">Engine done</span></span>
       <p>The compile route is closed and <code>py.datetime</code> produces and consumes terms through two choke points, computing in Python between them. The refusal names the fix.</p>
-      <span class="gate">engine gate 0 new — <b>oracle gate RED; harness side open</b></span>
+      <span class="gate">engine gate 0 new — <b>downstream answer-set gate RED; harness side open</b></span>
     </li>
     <li>
       <span class="stitle">Predicate names leave <code>module_dict</code></span>
-      <p>Now the cheapest large step, because q3 resolved: one PEP 562 <code>__getattr__</code> plus a <code>__dir__</code>, shipped together. The <code>__dir__</code> is a safety property — if a harness body ever declares a predicate, a re-export line becomes a real enumeration in 82 launchers at once.</p>
+      <p>Now the cheapest large step, because q3 resolved: one PEP 562 <code>__getattr__</code> plus a <code>__dir__</code>, shipped together. The <code>__dir__</code> is a safety property — if a harness body ever declares a predicate, a re-export line becomes a real enumeration in the downstream launchers at once.</p>
       <span class="gate">gate — <b>answer-set run; it also unblocks the 5 sites that turned out to be P4, not P1</b></span>
     </li>
     <li>

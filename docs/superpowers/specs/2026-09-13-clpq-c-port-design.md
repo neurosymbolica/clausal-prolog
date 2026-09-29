@@ -288,11 +288,11 @@ a clause, confirm the count moves. Without it, an enumerator that silently sees 
   defect is attributed to the layer that introduced it rather than found in the finished whole.
 
 * **A corpus-answer gate — the fifth instrument.** Under the `{...}` ruling CLP(Q) becomes the
-  default arithmetic surface, so its answers are corpus-visible. The 28 sealed answer-set scorers
+  default arithmetic surface, so its answers are corpus-visible. The the downstream answer-set checks
   (`<downstream-domain>` et al.) exist precisely to catch engine changes that move corpus answers, and
   they run port-vs-`clpq.py` at the `ineq` stage and again at freeze. **Differences are EXPECTED**
   — removed SWI defects are the point — so each is triaged as defect-removal or regression, by
-  corpus-lane, and recorded. Without this the port is faithful to Holzbaur, all instruments green,
+  a downstream user, and recorded. Without this the port is faithful to Holzbaur, all instruments green,
   and rulebase answers move anyway, discovered downstream with no attribution.
 
 **Residual/projected answers are compared exactly, not just sat/unsat.** Two solvers can agree on
@@ -343,7 +343,7 @@ argument rather than a decision.
 
 * at freeze: **no worse than `clpq.py` at <=20 variables, and sub-quadratic scaling demonstrated to
   1000 variables** — the curve, not a single point, since the curve is the reason for the project
-* optimisation phase exits when the corpus workload is no longer marshalling/solve-bound, not "when
+* optimisation phase exits when downstream code workload is no longer marshalling/solve-bound, not "when
   it feels fast"
 * measured by **interleaved A/B in the same process** against `clpq.py`, per this repo's perf-gate
   practice — never against saved baselines

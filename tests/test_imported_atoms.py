@@ -32,17 +32,17 @@ PKG = "tests.fixtures.ia_pkg"
 REDECL = "tests.fixtures.ia_pkg.redecl"
 PLAIN = "tests.fixtures.ia_plain_importer"
 
-# Only the package __init__ loaded.  restricted_procedure is imported and not
+# Only the package __init__ loaded.  closed_kind is imported and not
 # declared by any LOADED file of the package yet (see the loaded-submodule
 # test).  shared_kind is imported from both exporters; the later directive
-# wins, as the name's binding does.  open_procedure is also listed from
+# wins, as the name's binding does.  open_kind is also listed from
 # ia_vocab2, which merely imports it, so ia_vocab (the owner) is the answer.
 # aliased_src is imported under a local alias; the ATOM is the exporter's
 # spelling.  vocab_rel is a predicate.
 INIT_ONLY = {
-    "open_procedure": VOCAB,
+    "open_kind": VOCAB,
     "shared_kind": VOCAB2,
-    "restricted_procedure": VOCAB,
+    "closed_kind": VOCAB,
     "aliased_src": VOCAB,
 }
 
@@ -90,18 +90,18 @@ def test_redeclared_import_is_declared_not_imported(load):
     load(REDECL)
     got = clausal.imported_atoms(REDECL)
     assert got == {"second_only": VOCAB2, "shared_kind": VOCAB}
-    assert clausal.declared_atoms(REDECL) == {"restricted_procedure"}
+    assert clausal.declared_atoms(REDECL) == {"closed_kind"}
 
 
 def test_package_union_is_disjoint_from_declared_atoms(load):
     load(PKG, REDECL)
     got = clausal.imported_atoms(PKG)
-    # restricted_procedure: redecl (a file of the package) declares it, so
+    # closed_kind: redecl (a file of the package) declares it, so
     # the package declares it and it is not reported as imported.
     # shared_kind: __init__ says ia_vocab2, redecl says ia_vocab -- the
     # package's own file is asked first.
     assert got == {
-        "open_procedure": VOCAB,
+        "open_kind": VOCAB,
         "shared_kind": VOCAB2,
         "aliased_src": VOCAB,
         "second_only": VOCAB2,
@@ -110,13 +110,13 @@ def test_package_union_is_disjoint_from_declared_atoms(load):
 
 
 def test_only_the_exporters_own_declarations_count(load):
-    """One level: ia_vocab2 imports open_procedure but does not declare it,
+    """One level: ia_vocab2 imports open_kind but does not declare it,
     so importing it from ia_vocab2 alone does not make it an imported atom
     of ia_vocab2's importer -- and ia_vocab2 itself does not report it as
     imported either, since ia_vocab declares it."""
     load(VOCAB2)
-    assert clausal.imported_atoms(VOCAB2) == {"open_procedure": VOCAB}
-    assert "open_procedure" not in clausal.declared_atoms(VOCAB2)
+    assert clausal.imported_atoms(VOCAB2) == {"open_kind": VOCAB}
+    assert "open_kind" not in clausal.declared_atoms(VOCAB2)
 
 
 def test_plain_module_clash_later_directive_wins(load):

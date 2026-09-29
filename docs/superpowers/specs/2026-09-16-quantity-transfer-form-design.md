@@ -26,7 +26,7 @@ the tree today; **this builds the encoding, not the plumbing.**
 
 The ruling is that a same-interpreter seam **passes the object**. The existing registry
 (`TO_TERM` / `FROM_TERM`) is the seam's registry: `clausal/modules/py/datetime.py` reads it
-through a scope-narrowed wrapper, and the harness lane has measured a `++` hook that would
+through a scope-narrowed wrapper, and a downstream checker has measured a `++` hook that would
 convert every non-tuple entry in it (their handoff of 2026-09-16, §6 — kept for engine-lane's
 use). Registering `Quantity` there would make that hook, or the next widening of the date
 wrapper, convert quantities at the seam and break the ruling silently. A `Fraction` entry is
@@ -133,7 +133,7 @@ Errors use `clausal.logic.exceptions.type_error` / `instantiation_error` wrapped
 
 **The other dialects' half is not here.** For a Prolog with no units, `Number` is the magnitude
 scaled to the standard unit for those dimensions, i.e. `Magnitude × Ratio` with the unit
-discarded. CORRECTED 2026-09-17 (iso-export-lane): the per-dialect preludes
+discarded. CORRECTED 2026-09-17 (a downstream user): the per-dialect preludes
 (`clausal/tools/prolog_preludes/clausal_constants_{scryer,trealla}.pl`) are in THIS tree, and
 the exporter stages COMPANIONS, so the definition's home is the `units` companion on the export
 side — an exported domain reaches it through the module it already imports. Built there
@@ -190,7 +190,7 @@ already contains, so the gate is:
   the date migration measures against those, and this design's whole point is that the seam is
   untouched.
 
-## 8. Interaction with the date migration (the harness lane)
+## 8. Interaction with the date migration (a downstream checker)
 
 Their work is corpus-side crossing sites in another repo; they never edit the engine, and their
 harness reads the registry only through `date_term_to_python`. This design adds no entry to the

@@ -92,7 +92,7 @@ is binding context for every task) + the P3-3 outline in
   call signature and semantics must not change; only OUR `PredicateMeta._get_dispatch`
   IMPLEMENTATION may change (to read the row). Any task drifting into changing the
   protocol: STOP.
-- `<harness-library>` is GATE_CORE — off limits. Dict/set pairs stay plain 2-tuples
+- `<harness-library>` is frozen — off limits. Dict/set pairs stay plain 2-tuples
   (Phase 4). The functor-signature registry
   (`__clausal_functor_signatures__`, read via `functor_signature_for`) stays the single
   source of truth for DATA-functor shape — nothing in this plan may fork it.

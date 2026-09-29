@@ -162,6 +162,24 @@ names the directive and its line. Until 2026-09-29 an unquoted `a/b` path
 became a comment and the import vanished, and a quoted one failed with
 "argument must be a dotted module path".
 
+### Name clashes: qualified calls
+
+When two modules export the same name, import them without a list (or
+without that name) and call each one **module-qualified**, as in ISO and
+Scryer: `m:p(X)` crosses as Clausal's qualified call `m.p(X)`.
+
+```prolog
+:- use_module(small_sizes).
+:- use_module(big_sizes).
+
+both(A, B) :- small_sizes:size(x, A), big_sizes:size(x, B).
+```
+
+Renaming an import with `as` (`use_module(m, [p/2 as q])`) is not
+accepted: neither ISO nor Scryer has it, and the reader refuses the
+directive. (A `.clausal`/`.seam` file has its own rename,
+[`alias(p, q)`](import.md#aliases).)
+
 ### Library imports
 
 Standard Prolog library imports are mapped to Clausal built-in modules:
@@ -203,6 +221,9 @@ Most standard Prolog translates cleanly:
 - Standard order of terms: `X @< Y` (and `@>`, `@=<`, `@>=`) becomes the
   quoted ISO builtin `'@<'(X, Y)`; `compare/3` crosses unchanged. (Refused
   until 2026-09-29, when the engine had had them for weeks.)
+- One name at several arities: `p(1).` and `p(1, 2).` define `p/1` and
+  `p/2`, two procedures, as in ISO; `use_module(m, [p/1])` imports one of
+  them.
 - `bagof/3` and `setof/3` with the existential quantifier: `Y^Goal` becomes
   `Y ^ (Goal)` (nested to the right, `A ^ (B ^ (Goal))`), so the solutions
   group by the free variables as in ISO (8.10):
@@ -392,9 +413,12 @@ Translated `.pl` files are cached as `.pyc` bytecode in `__pycache__/`, just
 like `.clausal` files. Cache invalidation is automatic — if you modify the
 `.pl` file, the next import re-translates and recompiles.
 
-The `.pyc` is keyed on the `.pl` file's mtime and size, so:
+The `.pyc` is keyed on the `.pl` file's mtime and size, and on a
+fingerprint of the engine, including the translator itself (see
+[Caching](caching.md)), so:
 
 - **Editing the `.pl` file** invalidates the cache (triggers re-translation)
+- **Upgrading or editing the engine** invalidates it too
 - **Restarting Python** loads from cache (no re-translation)
 - **`sys.dont_write_bytecode = True`** suppresses cache writes
 

@@ -4,8 +4,8 @@
 
 `find /workspace/clausal -name '*.clausal' -path '*corpus*'` returns nothing; the domain
 files live on the other side of the information barrier. So this file is a REQUEST to a lane
-that holds a corpus (iso-export-lane or corpus-lane), not a result. Do not read a green
-full-suite gate as corpus coverage — the suite does not contain the corpus and structurally
+that holds a corpus (a downstream user or a downstream user), not a result. Do not read a green
+full-suite gate as corpus coverage — the suite does not contain downstream code and structurally
 cannot see this class of change.
 
 ## What changed that needs measuring
@@ -24,7 +24,7 @@ Two commits change `sort/2` and `msort/2` OUTPUT:
 
 ## The three categories, and which one blocks
 
-Run the corpus at `46712278` and at this branch's tip, and diff. Sort every difference into:
+Run downstream code at `46712278` and at this branch's tip, and diff. Sort every difference into:
 
 **(a) equal-value int/float no longer collapsing in `sort/2`.** INTENDED. Report a count, not
 a veto.

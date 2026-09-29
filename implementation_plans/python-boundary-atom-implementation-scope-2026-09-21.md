@@ -4,7 +4,7 @@ Spec: `docs/superpowers/specs/2026-09-21-python-boundary-atom-and-string-design.
 Operator decisions folded in: the class is **`atom`, lower case** (a Python
 class, peer of `str`); `sorted()` mixing `atom` and `str` by text is accepted
 for now — standard order of terms belongs on the Clausal side, returned as a
-list; the downstream dict-key count comes from the corpus lane.
+list; the downstream dict-key count comes from a downstream user.
 
 **CORRECTED 2026-09-21, after steps 1 and 2 landed.** My original headline
 said `++` has no conversion and that wiring one was the whole risk. That was
@@ -95,12 +95,12 @@ invisible to `is_atom` and would be a fourth failure class of the same family.
 4. the IN boundary, behind a directive or flag if one is cheap, so the 779
    sites can be moved in batches rather than at once;
 5. the in-tree `++("literal")` migration — 7 known sites;
-6. the downstream migration, sized by the corpus lane's dict-key count plus a
+6. the downstream migration, sized by a downstream user's dict-key count plus a
    structural census of `++` operands that are `str`-valued at runtime.
 
 ## What I would want before starting step 4
 
-The corpus lane's string-as-dict-key count, and an honest answer to whether the
+The a downstream user's string-as-dict-key count, and an honest answer to whether the
 per-escape conversion cost is acceptable on the `++` path. Both are cheap to
 get and both can change the design (a narrower hook — convert only at goal
 argument positions, say — might be enough and much cheaper).

@@ -131,7 +131,7 @@ this session nor re-derived. Treat them as a starting point and re-measure befor
 ~1228 tracked files sit on the suffix to be reclaimed (787 corpus, 431 engine, 10 library).
 
 For the pure dialect: cut `!` is already at ZERO sites — "Clausal is cut-free" is literally true
-of the corpus today, and what remains are the disguises. `once` 229 domain sites, `findall` 169
+of downstream code today, and what remains are the disguises. `once` 229 domain sites, `findall` 169
 domain / 1050 test, `\+` 44/75. 86% of `findall` is test code asserting determinism, which is why
 the restriction needs a SCOPE BOUNDARY at domain modules rather than the whole tree.
 
@@ -321,7 +321,7 @@ alike** — that is the single most important sentence in this section.
 
 `todo/seam-operator-disambiguation-ruling-2026-09-14.md` on the CLP(Q) branch.
 
-Relayed via iso-export-lane: the seam language is to be changed so the operators `==/2` overloads
+Relayed via a downstream user: the seam language is to be changed so the operators `==/2` overloads
 are **disambiguated at the CALL SITE**, via quoted string functors (`'#='(L,R)`). Both reasons for
 the overloading have expired — Python has no user-defined operators, and fitting Python operator
 semantics matters less because **Clausal will be written by LLMs**.
@@ -330,22 +330,22 @@ semantics matters less because **Clausal will be written by LLMs**.
 arithmetic, both directions. `iso_compare.py:403` shows `'#='(X, foo)` reporting context
 `'(==)/2'` — the quoted form ROUTES THROUGH `==` today, so the change is not purely additive.
 
-**THE GAP, and iso-export-lane agreed it is real:** the ruling says how to disambiguate but not
+**THE GAP, and a downstream user agreed it is real:** the ruling says how to disambiguate but not
 **what bare infix `==` BECOMES** — identity-only, removed, or both-with-optional-migration. Under
 the first the 928 sites are a mandatory migration; under the third they are not a migration at all.
-iso-export-lane is putting the three dispositions to the operator directly.
+A downstream user is putting the three dispositions to the operator directly.
 
 **The hard core, already measured in-tree at `iso_compare.py:381-387`:** 1933 corpus call sites,
 430,945 executions, **33 sites take TWO arithmetic modes — the same site BINDS on one call and
 TESTS on another.** For those, `'=:='` raises instantiation_error on the binding call and `'is'`
 is wrong for the testing one: **`#=` is the only spelling valid in every mode.** So those 33 are a
-FLOOR on any migration, not a judgement call. This also explains why iso-export-lane's static
+FLOOR on any migration, not a judgement call. This also explains why a downstream user's static
 classifier failed: `==`'s meaning is a property of runtime instantiation.
 
-**Two scale figures disagree by >2x** — 1933 (runtime, in-file) vs 928 (static, 58 domains). Not
+**Two scale figures disagree by >2x** — 1933 (runtime, in-file) vs 928 (static, several domains). Not
 reconciled. **Do not quote either as settled**; the 33 is the figure to lean on.
 
-Adjacent, scope UNKNOWN: `=<` `<` `>` `>=` carry the same overloading (53+ sites, 28 domains). The
+Adjacent, scope UNKNOWN: `=<` `<` `>` `>=` carry the same overloading (53+ sites, several domains). The
 operator named `==` specifically, and the ambiguities are NOT symmetric — `==` is
 identity-vs-arithmetic, the comparisons are polymorphic-over-types vs arithmetic-only.
 

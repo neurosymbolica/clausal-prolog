@@ -98,7 +98,7 @@ def test_str_round_trips_to_an_equal_value(tmp_path, label, q):
     # TYPE as well as equality. Equality alone could pass on a coincidence —
     # a bare number comparing equal to a dimensionless Quantity, say — and
     # "is my assertion the weaker one?" is the right question to ask of a
-    # passing round-trip test (corpus-lane, 2026-09-12, who could not
+    # passing round-trip test (a downstream user, 2026-09-12, who could not
     # reproduce this shape and asked it rather than assuming).
     assert type(back) is type(q), (
         f"{text!r} parsed back as {type(back).__name__}, not "

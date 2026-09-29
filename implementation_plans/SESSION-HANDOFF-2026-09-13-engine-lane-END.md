@@ -19,8 +19,8 @@
 | optional rational decimals | `decimal_repr="rational"` → `1_550_00/100`; default `float` keeps output byte-identical |
 
 Axes measured on `4fc411ac` (the constants-scope tip): engine suite 144/16312/1 with failure AND
-skip sets identical; export bytes 0 across 1560 files raw and normalised; domain answers 82
-unchanged; **transform bytes 931 files, 919 identical, 0 different, 12 errored-under-both reported
+skip sets identical; export bytes 0 across every exported file raw and normalised; domain answers all
+unchanged; **transform bytes every source file, 919 identical, 0 different, 12 errored-under-both reported
 separately**. The later commits (option 3, preludes, rational) have the engine suite only —
 144/16341/1, both sets identical — because no corpus file declares a constant, so nothing reaches
 the changed code.
@@ -28,7 +28,7 @@ the changed code.
 ## Open, in rough priority
 
 1. **The later landings have no export-bytes or domain arm.** Expected vacuous (no corpus file
-   declares a constant) but unmeasured. iso-export-lane and the harness lane both know the
+   declares a constant) but unmeasured. A downstream user and a downstream checker both know the
    pattern; ask rather than assume.
 2. **Adopting `decimal_repr="rational"` for the roster** is a separate decision from promoting the
    capability. It changes every constant-declaring file, so it needs its own export-bytes run.
@@ -37,8 +37,8 @@ the changed code.
    `prolog_load_context/2`, but there is no `swipl` here. Reasoning, not measurement.
 5. **SICStus `r/2`** (`155000r100`) unimplemented: no SICStus here, and `3r2` is a syntax error in
    both systems that are.
-6. `<downstream-domain>` can migrate to ratio units now that the exporter carries them — corpus-lane
-   owns that, 21 pairs across 9 domains.
+6. `<downstream-domain>` can migrate to ratio units now that the exporter carries them — a downstream user
+   owns that, 21 pairs across several domains.
 
 ## Things that will cost the next person time if not known
 
@@ -84,10 +84,10 @@ instances this session, each reporting cleanly while doing nothing:
    immediately surfaced a real Trealla defect that would have broken every exported file.
 
 **Two peer rules better than mine:**
-* the harness lane: **a control that exercises one AXIS says nothing about the other.** Their
+* A downstream checker: **a control that exercises one AXIS says nothing about the other.** Their
   differ's identity run printed "919 identical, 0 different" — also what a differ stuck on
   "identical" prints.
-* iso-export-lane: **a measured skip is about a CHANGE, not a claim about a TREE.** Their export
+* A downstream user: **a measured skip is about a CHANGE, not a claim about a TREE.** Their export
   claim went stale across 56 commits.
 
 **Baselines are cost-bound, not absolute**: carry the COMMAND where re-measuring is cheap, the
@@ -122,7 +122,7 @@ constants at use sites, and no corpus file declares one yet — but it IS on can
 `1550.00` — a Prolog FLOAT. The unscaled path stayed integer, so only SCALING lost exactness:
 the fold converted exact cents into binary floating point, which is the hazard the operator ruled
 against when rejecting dimensionless constants, reached by another route. Reported by
-iso-export-lane; fixed at the use-site substitution.
+A downstream user; fixed at the use-site substitution.
 
 **Two things about it worth more than the fix.**
 
@@ -140,10 +140,10 @@ exact INTEGER. They want opposite things and the shared helper had folded them t
 A genuinely fractional fold (`15505 aud_cent` -> `155.05`) is still a float. There is no exact
 form to convert to at a use site — and **CLP(Z) is integer-only**, so under the operator's `#=`
 ruling `V #= 155.05` is not a clpz goal at all. **Fractional money cannot be expressed as the
-constraint the ruling calls for.** iso-export-lane's design question, flagged before their `#=`
+constraint the ruling calls for.** a downstream user's design question, flagged before their `#=`
 conversion meets a fractional amount.
 
-## Also open from iso-export-lane's report (theirs, not this lane's)
+## Also open from a downstream user's report (theirs, not this lane's)
 
 * `==` / `=:=` should be `#=`, with `clpz` not `clpfd` — operator's ruling, and their measurement
   shows **Clausal's `==` IS a CLP(Z) constraint** (`10 == X + 4` binds X to 6, backward)

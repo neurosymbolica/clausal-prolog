@@ -47,7 +47,7 @@ raw C entry points and the Python twins. **Three of its rows had stopped
 testing what they are named.** `("instance", Pt(x=X, y=2))`,
 `cell_in_instance` and `instance_in_cell` were written when `Pt(...)` built
 an instance; Task 3 made the plain call build the CELL. All three became
-duplicates of shapes already in the corpus, the C instance arms stopped being
+duplicates of shapes already in downstream code, the C instance arms stopped being
 exercised by that file, and NOTHING FAILED.
 
 Fixed to `Pt._clausal_head(...)` with `TestTheCorpusStillCoversInstances`

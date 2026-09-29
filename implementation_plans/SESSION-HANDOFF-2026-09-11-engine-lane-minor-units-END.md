@@ -93,11 +93,11 @@ which behaves differently, and neither had been run. One grep-and-run settled bo
   `30` though the engine stores 2592000 seconds. Not fixed here: the correct fix is the
   exporter's, and it is scope, not a line. Pinned by a characterisation test, warned about in
   the docs, three costed options in
-  `todo/exporter-folds-scaled-units-to-the-wrong-magnitude-2026-09-11.md`. **iso-export-lane
+  `todo/exporter-folds-scaled-units-to-the-wrong-magnitude-2026-09-11.md`. **A downstream user
   has been told.** Do not export a rulebase declaring constants in minor units until it lands.
 - **Ratio units (`basis_points`, `percent`) — the obvious next task.** Designed, not built:
   `todo/ratio-declaration-units-basis-points-and-percent-2026-09-11.md`. This landing proved
-  the mechanism needs nothing new, so it is small. It is **corpus-lane's live blocker**
+  the mechanism needs nothing new, so it is small. It is **A downstream user's live blocker**
   (`<downstream-domain>` computes in bps throughout, with `leverage_ratio_bps/2` EXPORTED).
   One thing to verify first, don't assume it: the exactness that makes currency safe comes
   from the CURRENCY coercion path, and a DIMENSIONLESS quantity may not have it.
@@ -108,7 +108,7 @@ which behaves differently, and neither had been run. One grep-and-run settled bo
   channel, the `++` operator export is still unsolved, the CLP(B) `id(Var)` registry is still
   a hazard with no reproduction.
 
-## 5. The corpus migration — one input it did not have
+## 5. Downstream code migration — one input it did not have
 
 Base-currency decimals were **already exact**: `-constant_number_units(x, 1550.00, dollar)`
 stores `Decimal('1550.0')`, and the precision check rejects sub-scale digits. So minor units
@@ -118,7 +118,7 @@ re-costing, which the previous handoff left open in both directions.
 What they DO buy is the option of not renaming: a parameter can keep the name it has while the
 declaration carries the currency and the scale, which may make most of the 71-name cross-lane
 rename unnecessary and gives the "name says `_cents`, declaration doesn't" gate a mechanism.
-**All four lanes have been told**; corpus-lane owns the decision.
+**All four lanes have been told**; a downstream user owns the decision.
 
 ## 6. Method notes worth keeping
 
@@ -165,7 +165,7 @@ of them from a peer finding a defect in the previous one. The final state:
    "off by two cents" came from float ARITHMETIC inside my own probe being reported as a loss
    from a float LITERAL. And the prose said "essentially always" where my own measurement
    said 83%.
-5. **EUR/USD did not cover the corpus.** 139 identifiers across 27 domains, 6 of which used a
+5. **EUR/USD did not cover downstream code.** 139 identifiers across several domains, 6 of which used a
    currency with no minor unit — so the identifier most needing a checkable unit
    (`target_au_turnover_cents`) was the one that could not have one.
 6. **`dollar vs dollar`.** The mismatch message was unusable on exactly the case the widening
@@ -186,11 +186,11 @@ that does not. In the last two the assertion was already right and was being eva
 too small a space — the fixes were to change what the test OBSERVES (render differently;
 subprocess into fresh interpreters) rather than what it asserts.
 
-Companion, from the harness lane: **name the instrument, not the commit.** "Re-measure on
+Companion, from a downstream checker: **name the instrument, not the commit.** "Re-measure on
 the new sha" collects the cheapest thing resembling measurement, which is a load census, and
 a load census cannot see a compiler change.
 
-And, from corpus-lane: **when a probe computes the value it is meant to be testing, it can
+And, from a downstream user: **when a probe computes the value it is meant to be testing, it can
 only confirm itself.**
 
 ## Still open
@@ -198,11 +198,11 @@ only confirm itself.**
 - **Option 2 for the exporter** — fold to the base magnitude. Both refusals are a holding
   position and lift together. It is the prerequisite for migrating any domain that is also
   on the ISO publish list.
-- **Ratio units** (`basis_points`, `percent`) — designed, unbuilt, corpus-lane's live
+- **Ratio units** (`basis_points`, `percent`) — designed, unbuilt, a downstream user's live
   blocker. Verify the dimensionless path's exactness first; the guarantee measured here comes
   from the CURRENCY coercion, and a dimensionless Quantity may not have it.
 - **Mike's calls, unchanged**: base-vs-minor for the migration, dropping the 71-name rename,
-  the `.seam` remainder, iso-export-lane's `remedies_ineffectiveness` roster gap.
+  the `.seam` remainder, one downstream roster gap.
 
 ---
 
@@ -293,8 +293,8 @@ grepping for it.
   `todo/qualified-unit-declarations-have-no-slash-3-answer-2026-09-11.md`. Its "related but
   not the same" section about import shadowing is now **closed for currencies**, since no
   identifier is bound twice — the todo needs that paragraph updated when someone takes it.
-- The corpus writes `dollar`; those sites need `usd` or `aud`. corpus-lane and
-  iso-export-lane have both been told, with the display-word caveat flagged as something for
+- Downstream code writes `dollar`; those sites need `usd` or `aud`. A downstream user and
+  a downstream user have both been told, with the display-word caveat flagged as something for
   them to confirm rather than take on my word.
 
 ---
@@ -335,12 +335,12 @@ both, with all 139 migration identifiers falling on the ungated side.
 - **The doc-block COUNT caught a regression the name-set diff could not.** The new section
   showed a refusal in a ```clausal block, which cannot compile by design: 38 -> 39 while the
   failure name set stayed at 144, because that test was already failing. Retyped as ```text.
-- **A census of NAMES is never evidence about BINDINGS** (corpus-lane). Three of my errors
+- **A census of NAMES is never evidence about BINDINGS** (a downstream user). Three of my errors
   today are this one shape: an AU corpus claim inferred from a `_cents` name census when no
   AU domain imports a currency at all; a blast radius of 1788 that was 74 once `trail.mark()`
   was excluded; and `_base_unit_names` keyed on a word nothing could write after the rename.
 
-## Verification of the whole series, by iso-export-lane
+## Verification of the whole series, by a downstream user
 
 Zero bytes across 1560 exported files, canonical `96cc8df6` against clone `303c2934`, with
 **both engine trees hashed before and after the run** rather than pinned by sha alone — a
@@ -405,13 +405,13 @@ Noise floor: **two** warnings across the full engine suite, both true positives 
     engine suite  144 failed / 15936 passed / 1 error, name set identical to baseline
     doc blocks    38
 
-Asked of corpus-lane, for when it reaches canonical and not before: a load census counting
+Asked of a downstream user, for when it reaches canonical and not before: a load census counting
 warnings per domain. That is the migration's real size in the shape now ruled for, and being
 a count of BINDINGS rather than names it will differ from the 139 in both directions.
 
 ## CORRECTION to the section above: the lint misses the site it was motivated by
 
-Measured by corpus-lane and reproduced here. On `<downstream-domain>` the lint warns at `:93`,
+Measured by a downstream user and reproduced here. On `<downstream-domain>` the lint warns at `:93`,
 the scale-named fact that no longer decides anything, and is **silent at `:111`**, which is
 `check_ratio_gte(P, tier1, total, 300, ...)` — the 3% floor that does decide. The
 discriminator is the FUNCTOR'S name, so a bare literal in an argument of a functor claiming
@@ -421,7 +421,7 @@ warn, so body position is reached and the name really is the test.
 **So the paragraph above that cites `leverage_ratio.clausal:111` as the motivation is wrong,
 and it is wrong in the way that matters**: converting `:93` silences the domain while the
 deciding literal is untouched. The self-emptying property — designed as the progress signal —
-would empty on a domain whose defect is untouched. corpus-lane's phrase for it is the right
+would empty on a domain whose defect is untouched. A downstream user's phrase for it is the right
 one: **the right verdict about the wrong site**, the same failure the constants-only
 instrument had, moved one step later.
 
@@ -435,7 +435,7 @@ position control, so the limit is a test rather than a footnote. Docs carry a
 "What it cannot see, and why that matters" section saying plainly that an emptied
 list is not a completeness claim.
 
-**The harder half, unbuilt and worth designing when ratios land** (corpus-lane's analysis,
+**The harder half, unbuilt and worth designing when ratios land** (a downstream user's analysis,
 which I agree with): a literal under an unscaled functor has nothing in the source to key on.
 The promising signal is the CALLEE'S PARAMETER — if `check_ratio_gte/6`'s fourth parameter
 were declared to take a ratio, the literal would be checkable at the call site. A same-value
@@ -443,10 +443,8 @@ or same-file heuristic is not promising: it learns the cases it was built from. 
 parameter-side version is also the one that would make the migration mean something, because
 it checks the site that decides.
 
-**corpus-lane's static prediction, for checking the load census against when this lands:**
-76 (file, identifier) pairs across 23 domains, 1 under `eval/` — 15 `<downstream-domain>`, 12 `th/visa`,
-10 `<downstream-domain>`, 5 each `<downstream-domain>` and
-`<downstream-domain>`, 3 each for five more. A materially different load
+**A downstream user's static prediction, for checking the load census against when this lands:**
+a fixed set of (file, identifier) pairs across `<downstream-domain>`s. A materially different load
 census means one of the two instruments is wrong, and the difference is the finding.
 
 ---
@@ -462,14 +460,14 @@ Verified by **observation in the canonical tree**, engine path asserted by realp
 `CURRENCY_BINDINGS["USD"] == "usd"`, and a bare `dollar` raising `ImportError`. A ref and an
 exit code say a merge happened; they do not say the tree behaves.
 
-**The operator's go was taken directly, not from the relay.** corpus-lane reported the ruling
+**The operator's go was taken directly, not from the relay.** a downstream user reported the ruling
 accurately, and I still asked him before touching canonical: promoting rewrites source under
 every lane reading the tree, and a ruling relayed through a third party is not the word of the
 operator to the lane that will execute it.
 
 **What crossed is the approved sha PLUS ONE commit.** He approved `c06d5426`; `3b0e3547` is
 that plus `fix(exporter): the scaled-unit refusal names the directive that was WRITTEN`. I
-held the promotion to include it rather than land it under corpus-lane afterwards, and said so
+held the promotion to include it rather than land it under a downstream user afterwards, and said so
 to him and to both lanes. "Approved sha + 1" must never be silent, even when the commit is a
 string.
 
@@ -492,7 +490,7 @@ string.
 - **BUG #2, the module/profile-key shadow.** `-import_from(currency, …)` binds a Python
   MODULE; a bare profile key is the interned atom `('currency',)`; they are different kinds of
   thing competing for one namespace slot, which is why the shadow is SILENT rather than a
-  redefinition error. Reproduced at engine level by corpus-lane, and the first thing anyone
+  redefinition error. Reproduced at engine level by a downstream user, and the first thing anyone
   writing the <downstream-domain> migration will hit. **The resolution-order ruling is open and is this
   lane's.** Deliberately not smuggled into a currency landing.
 - **Option 2 for the exporter** — fold to the BASE magnitude. Now load-bearing, not optional:
@@ -501,7 +499,7 @@ string.
   exporter refuses. NOTE for whoever builds it: the export stays LOSSY by the 2026-09-08
   ruling — ISO Prolog cannot carry a quantity — so option 2 fixes only the MAGNITUDE
   (`pay(1550)` rather than `pay(155000)`), not the unit.
-- **Ratio units** (`basis_points`, `percent`) — designed, unbuilt, still corpus-lane's blocker.
+- **Ratio units** (`basis_points`, `percent`) — designed, unbuilt, still a downstream user's blocker.
 - **<downstream-domain>** proceeds as a separate migration. Its BR-CO tolerance is a READ-THE-STANDARD
   question, ruled: `within_one`'s "1" is one of WHAT? Comparing a base-unit `.value` against a
   bare `1` makes it 1 euro rather than 1 cent — a 100x widening with a green suite, measured.
@@ -515,11 +513,11 @@ string.
 | axis | who | result |
 | --- | --- | --- |
 | engine suite | me, on the promoted tree | 144 failed / 15966 passed / 1 error — failure NAME SET identical to the `946d7296` baseline |
-| export bytes | iso-export-lane, canonical `3b0e3547` | 0 across 1560 files, RAW **and** normalised, both engine trees content-pinned, corpus `b6f2c367` |
-| domain answers | the harness lane, `26c1fdc0` | 82 rows, 82 unchanged, 0 moved, 0 no-score, 0 torn, one fingerprint — **after it caught a regression at `7449448b`** |
+| export bytes | A downstream user, canonical `3b0e3547` | 0 across every exported file, RAW **and** normalised, both engine trees content-pinned, corpus `b6f2c367` |
+| domain answers | A downstream checker, `26c1fdc0` | every row, all unchanged, 0 moved, 0 no-score, 0 torn, one fingerprint — **after it caught a regression at `7449448b`** |
 
 **This landing is the cleanest demonstration yet that none of the three implies another.** The
-engine suite was green and the export roster was zero bytes across 1560 files while a domain
+engine suite was green and the export roster was zero bytes across every exported file while a domain
 was raising `type_error(number, Fraction(...))` at solve time. Only the answer diff could see
 it. `sum_list/2`'s new pre-validation used `isinstance(v, (int, float))`, which excludes
 `Fraction` and `Decimal` — and `Decimal` is the magnitude of every currency amount, so the
@@ -531,8 +529,8 @@ The domain axis has now run across **103 commits from `820dc66f`** with no moved
 has fired three times where the other two axes could not. That is the argument for keeping it
 in the set rather than treating it as confirmation.
 
-**A zero is not always the same result, and the difference is worth naming** (iso-export-lane).
-The `-constant_number_currency` zero was cheap: nothing in the corpus writes that directive,
+**A zero is not always the same result, and the difference is worth naming** (a downstream user).
+The `-constant_number_currency` zero was cheap: nothing in downstream code writes that directive,
 so nothing exercised the new code. The `sum_list/2` zero is expensive: seeding from the first
 element is behavioural and sits on the path of every aggregate in every domain, so the changed
 code RAN 1560 times and agreed. "The changed code ran and produced the same bytes" and
@@ -541,14 +539,14 @@ code RAN 1560 times and agreed. "The changed code ran and produced the same byte
 They also ran a NORMALISED arm beside the raw one, which excludes two changes cancelling
 within one file — cheap once it exists, and it closes the reading a sceptic raises next.
 
-### Why the domain axis stays in the set (the harness lane, recorded at their request)
+### Why the domain axis stays in the set (a downstream checker, recorded at their request)
 
 It has now been measured across **101 engine commits** from `820dc66f` without a single moved
 answer — and **twice in that span the sweep was the thing that found a defect the other two
 axes could not see.** That is the argument for keeping it rather than treating it as
 confirmation: an instrument that has never fired is not thereby useless, provided you can say
 when it DID fire. Export bytes are not answers; a green engine suite says the engine behaves,
-not that the corpus still answers the same.
+not that downstream code still answers the same.
 
 Three candidate movers were named before the run rather than after, which is the half that
 makes a zero informative: `sum_list/2` (behavioural, every aggregate — the one to bet against
@@ -571,7 +569,7 @@ rather than folded into a score).
 resolution. That name holds a Python MODULE; a bare profile key is the interned atom
 `('currency',)`. Two different KINDS of thing in one namespace slot, which is why the
 collision was SILENT rather than a redefinition error — the lookup found nothing and the rule
-answered `unknown([key])`. The corpus held it off by emitting imports in a fixed ORDER, with a
+answered `unknown([key])`. Downstream code held it off by emitting imports in a fixed ORDER, with a
 regression test pinning the order.
 
 **Only a SINGLE-SEGMENT name can collide** — the only form that is also a writable Clausal
@@ -592,15 +590,15 @@ importing only names) can be renamed; nothing depends on it.
 | axis | who | result |
 | --- | --- | --- |
 | engine suite | me | 144 failed / 15973 passed / 1 error — name set identical to the `946d7296` baseline |
-| export bytes | iso-export-lane | 0 across 1560 files, raw and normalised, both trees content-pinned |
-| domain answers | the harness lane | 82 unchanged, 0 moved, zero torn — `64f04898/so1789092742`, 106 commits from `820dc66f` |
+| export bytes | A downstream user | 0 across every exported file, raw and normalised, both trees content-pinned |
+| domain answers | A downstream checker | all unchanged, 0 moved, zero torn — `64f04898/so1789092742`, 106 commits from `820dc66f` |
 
 **Measured on BOTH execution paths.** The clone sweep at `6d609eb1` ran the interpreted
 trampoline (the clone has 12 loadable extensions to canonical's 13); this one ran the
-compiled path. Same 82 answers, no row moved on either.
+compiled path. Same answers, no row moved on either.
 
-`<downstream-domain>` was run ALONE first — 59/59 — because corpus-lane's census makes it the
-only surviving module-name/profile-key pair in the corpus, so it is the one domain where the
+`<downstream-domain>` was run ALONE first — 59/59 — because a downstream user's census makes it the
+only surviving module-name/profile-key pair in downstream code, so it is the one domain where the
 change has anything to act on. Retiring the shape with a named mechanism before the broad run
 means a later move would have moved WITHOUT one, which changes how hard to chase it. Worth
 doing whenever a census has already named the candidate.
@@ -609,8 +607,8 @@ doing whenever a census has already named the candidate.
 
 **The reportable unit is not the number — it is the number plus what the instrument could not
 see.** This landing's gap (the fix measured only on the interpreted path) was findable ONLY
-because the harness lane volunteered that the clone lacked the compiled trampoline. Reported
-as "82 unchanged, clean", it would have been a null that was silent on the axis that mattered,
+because a downstream checker volunteered that the clone lacked the compiled trampoline. Reported
+as "all unchanged, clean", it would have been a null that was silent on the axis that mattered,
 and nobody would have known to look.
 
 Three instances from three lanes in one week makes it a practice rather than an anecdote:
@@ -629,13 +627,13 @@ without either side being wrong.
 
 - **Option 2 for the exporter** — fold to the BASE magnitude. Load-bearing since the "follow
   statutes" ruling. Export stays LOSSY: it fixes the magnitude, not the unit.
-- **Ratio units** (`basis_points`, `percent`) — designed, unbuilt, corpus-lane's blocker.
+- **Ratio units** (`basis_points`, `percent`) — designed, unbuilt, a downstream user's blocker.
 - **<downstream-domain>** as a separate migration; its BR-CO tolerance is a read-the-standard question.
 - **CLP units via a side channel** — `todo/clp-units-side-channel-2026-09-12.md`, earmarked
   for a fable agent. NOTE recorded there and in its commit: the "extract the rule from a
   Prolog definition" half has NO basis in this repo, and the only real `library(clpfd)` source
   on the machine is SICStus's — wrong semantics for us, and commercially licensed.
-- **corpus-lane** retires the import-order mitigation and RE-POINTS its regression test at the
+- **A downstream user** retires the import-order mitigation and RE-POINTS its regression test at the
   new guarantee rather than deleting it.
 - **Box** is the only tree still on the old vocabulary.
 
@@ -647,7 +645,7 @@ without either side being wrong.
     -constants_number_units(span/2, [(short, 5)], metre, number_at(2))
 
 The declaration **defines the predicate the rulebase already calls**, so 217 indexed money
-rows across ~8 domains migrate with ZERO call-site churn. Nothing is reached through
+rows across several domains migrate with ZERO call-site churn. Nothing is reached through
 `constant/1`: that substitutes a single value at COMPILE time, a table is a lookup by key at
 RUNTIME. Implemented as a source-level expansion in a `visit_Module` prepass so the generated
 facts are the same kind of predicate as the fact lines they replace.
@@ -665,12 +663,12 @@ BUG #2: `-import_from` binds the names it lists, not the module.
 | axis | result |
 | --- | --- |
 | engine suite | 144 failed / 16259 passed — name set identical to the `946d7296` baseline |
-| export bytes | 0 across 1560 files (measured at `303c2934`; no exporter change since) |
-| domain answers | 82 unchanged, 0 moved, zero torn — `a25bc430/so1789092742`, **147 commits from `820dc66f`** |
+| export bytes | 0 across every exported file (measured at `303c2934`; no exporter change since) |
+| domain answers | all unchanged, 0 moved, zero torn — `a25bc430/so1789092742`, **147 commits from `820dc66f`** |
 
 The answer diff was ordered: a census named the four bodies carrying a renamed unit word in a
 string literal (`<downstream-domain>`, `<downstream-domain>`, `<downstream-domain>`, `<downstream-domain>`),
-those four ran ALONE first and were at their recorded numbers, then the full 82.
+those four ran ALONE first and were at their recorded numbers, then the full set.
 
 ## Two rules this day produced, both about instruments rather than code
 
@@ -687,7 +685,7 @@ missing shape was the worst kind: `'10/3 (usd)'` parses as `10 / 3(usd)`, same m
 **inverted dimension**. Looks right, is not.
 
 **The failure mode is not that the instrument was wrong; it is that it stayed the same while
-the world it measures moved** (the harness lane's formulation). That is a maintenance
+the world it measures moved** (a downstream checker's formulation). That is a maintenance
 obligation distinct from correctness, and nothing was watching it.
 
 ### The shape for it: derive the instrument's coverage from the AUTHORITY
@@ -710,7 +708,7 @@ has no way to notice it has stopped being.
 - The decimal-literal gap: source `292.00` is a float and loses its trailing zero before any
   Quantity exists. Minor units preserve it exactly, which is one more argument for declaring
   in cents where the statute states cents.
-- corpus-lane migrates `<downstream-domain>` (30 rows) and `<downstream-domain>` (81), and retires the
+- A downstream user migrates `<downstream-domain>` (30 rows) and `<downstream-domain>` (81), and retires the
   import-order mitigation — RE-POINTING its regression test at the new guarantee, not
   deleting it.
 - **Box is the only tree still on the old vocabulary.**
@@ -751,7 +749,7 @@ same magnitude, **INVERTED dimension**, dollars-per-unit rather than dollars. It
 and survived a passing suite.
 
 **The failure mode is not that the instrument was wrong; it is that it stayed the same while
-the world it measures moved** (the harness lane). That is a maintenance obligation distinct
+the world it measures moved** (a downstream checker). That is a maintenance obligation distinct
 from correctness, and nothing watches it by default.
 
 Two shapes for it, and the second bounds the first:
@@ -767,14 +765,14 @@ Two shapes for it, and the second bounds the first:
   each marked, each with a control — empty-derived means blind on the vocabulary, empty-hand
   means blind on residue, and OVERLAP means the authority has taken a word back and the hand
   list should shrink.
-- And: a complete word set is a useless FILTER (486 words flagged 81 of 82 bodies).
+- And: a complete word set is a useless FILTER (486 words flagged 81 of the downstream bodies).
   **Enumerate from the authority; constrain by the SHAPE.**
 
 ## 4. Telling another lane a change is safe
 
 **Name the FILE, not the nature of the change.** "Docs, one test and a suffix set" was true of
 the content and silent about the location — and that suffix set is in `term_rewriting.py`, on
-the load path for all 82 harness bodies. A reader's instrument reacts to location; only the
+the load path for the downstream bodies. A reader's instrument reacts to location; only the
 owner knows the content. The less informative-sounding sentence is the more useful one.
 
 ## Open for whoever picks this lane up
@@ -789,11 +787,10 @@ owner knows the content. The less informative-sounding sentence is the more usef
 - The decimal-literal gap: source `292.00` is a float and loses its trailing zero before any
   Quantity exists. Minor units preserve it exactly.
 - **Box is the only tree still on the old vocabulary.**
-- corpus-lane's side needs no reconstruction: `_tools/MIGRATION-money-constants.md`.
 
 ## ADDENDUM: the scale lint over-reports on a table's CALL SITES
 
-Found by corpus-lane 2026-09-12, after `e7123f2e`. The row-level exemption works — a migrated
+Found by a downstream user 2026-09-12, after `e7123f2e`. The row-level exemption works — a migrated
 DECLARATION is silent. What fires is the call site:
 
     use(X) <- ( t_usd_cents(1, X) )          warns   <- `1` is the INDEX KEY, not money
@@ -812,7 +809,7 @@ to declare a household size as money.
 in a NON-money column of a predicate declared by a table directive. The expansion knows the
 predicate name, its arity and `money_at(N)` at transform time, so recording that on the
 transformer and consulting it in `_lint_scale_in_name` is the shape. It was left because the
-lint is on the load path for all 82 harness bodies and this session had no margin left to
+lint is on the load path for the downstream bodies and this session had no margin left to
 verify a change there — the two regressions today were both in code that looked safe.
 
 So the count now has **three known distortions**, all documented in `docs/currency.md`:

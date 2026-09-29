@@ -147,7 +147,12 @@ test("a qualified call") <- (json_value("[1, 2]", V), V is [1, 2])
 ```
 
 `-import_from` is `use_module/2` and `-import_module` is `use_module/1` with
-every call qualified. Qualified calls use dot notation: `py.json.parse(T, V)`.
+every call qualified. Qualified calls use dot notation: `py.json.parse(T, V)`,
+where Prolog writes `m:p(X)`; a qualified call is also how two modules'
+same-named predicates are told apart (there is no `as` rename in ISO or
+Scryer, and none in `.pl` import). An import entry `p/1` imports one arity,
+as `use_module(m, [p/1])` does; a bare `p` imports every arity. A procedure
+is a name and an arity, as in ISO: `p/1` and `p/2` may share a file.
 
 > **One genuine difference — read this.** Names resolve **lexically, against the
 > defining module** (Python-style): there is no flat global predicate database

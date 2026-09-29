@@ -1,7 +1,7 @@
 """`-import_from` must not bind the module NAME where a rulebase can collide.
 
-BUG #2, documented in the corpus at `_tools/split_domain.py:1049` as a silent
-import-order hazard, reproduced at engine level by corpus-lane 2026-09-11 and
+BUG #2, documented by a downstream tool as a silent
+import-order hazard, reproduced at engine level by a downstream user 2026-09-11 and
 diagnosed here.
 
 `_process_imports` binds the module object under its user-facing name so that
@@ -36,7 +36,7 @@ def _load(tmp_path, name, text):
 
 
 def test_a_profile_key_survives_an_import_from_of_the_same_name(tmp_path):
-    """The bug, in the shape corpus-lane hit within a minute of writing
+    """The bug, in the shape a downstream user hit within a minute of writing
     <downstream-domain>'s real data: `currency` is both a vocab module and the invoice's own
     profile key."""
     m = _load(tmp_path, "shadow", """

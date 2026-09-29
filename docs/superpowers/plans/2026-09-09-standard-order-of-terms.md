@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Give the corpus ISO standard-order comparison — `@<`, `@>`, `@=<`, `@>=`, `compare/3`, `=..` — on an order that is ISO-correct, coherent with `'=='`, and sound for Clausal's own types.
+**Goal:** Give downstream code ISO standard-order comparison — `@<`, `@>`, `@=<`, `@>=`, `compare/3`, `=..` — on an order that is ISO-correct, coherent with `'=='`, and sound for Clausal's own types.
 
-**Architecture:** `_standard_order_key` in `clausal/logic/builtins/_helpers.py` already implements a total standard order and drives `sort/2`. Tasks 1-3 correct it; Tasks 4-5 expose it as quoted canonical predicates in `clausal/logic/builtins/iso_compare.py`; Task 6 proves the ISO identity across the whole surface and gates the corpus.
+**Architecture:** `_standard_order_key` in `clausal/logic/builtins/_helpers.py` already implements a total standard order and drives `sort/2`. Tasks 1-3 correct it; Tasks 4-5 expose it as quoted canonical predicates in `clausal/logic/builtins/iso_compare.py`; Task 6 proves the ISO identity across the whole surface and gates downstream code.
 
 **Tech Stack:** Python 3, pytest, Scryer Prolog as the reference oracle.
 
@@ -525,15 +525,15 @@ Compare the NAME SET against the same extraction run on the branch point. `0 NEW
 
 Tasks 2 and 3 change `sort/2` output, so a corpus gate is REQUIRED before landing.
 
-**The corpus is not in this repository** — `find /workspace/clausal -name '*.clausal' -path '*corpus*'` returns nothing, and the domain files live on the other side of the information barrier. This step therefore CANNOT be executed here, and must not be reported as done.
+**Downstream code is not in this repository** — `find /workspace/clausal -name '*.clausal' -path '*corpus*'` returns nothing, and the domain files live on the other side of the information barrier. This step therefore CANNOT be executed here, and must not be reported as done.
 
-Instead: write `implementation_plans/standard-order-corpus-gate-2026-09-09.md` stating what needs measuring, and request the run from a lane that holds the corpus (iso-export-lane or corpus-lane). The request must name:
+Instead: write `implementation_plans/standard-order-corpus-gate-2026-09-09.md` stating what needs measuring, and request the run from a lane that holds downstream code (a downstream user or a downstream user). The request must name:
 
 - the two commits to compare (branch point and this branch's tip);
 - what to look for — any site whose `sort/2` or `msort/2` output changes, split into (a) equal-value int/float no longer collapsing, (b) `Decimal(1)` no longer collapsing with `1`, (c) anything else, which is a BUG not an intended change;
 - that category (c) blocks landing outright, while (a) and (b) are the intended tiebreak and need a count, not a veto.
 
-If the fallout in (a)/(b) is wide, backing out is a one-line revert of `_NUMERIC_RANK` — independent of Tasks 3-5. **Do not land on a green full-suite gate alone**: the suite does not contain the corpus, so it cannot see this class of change.
+If the fallout in (a)/(b) is wide, backing out is a one-line revert of `_NUMERIC_RANK` — independent of Tasks 3-5. **Do not land on a green full-suite gate alone**: the suite does not contain downstream code, so it cannot see this class of change.
 
 - [ ] **Step 6: Commit**
 

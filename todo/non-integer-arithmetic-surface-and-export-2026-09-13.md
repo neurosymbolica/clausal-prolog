@@ -39,10 +39,10 @@ both known costs: that it re-purposes the set literal, and that **CLP(Q) is in N
 engine**. He ruled with those in hand, so the CLP(Q) availability gate is an implementation problem
 to solve, not grounds to reopen the surface.
 
-Recorded DIRECT by engine-lane. iso-export-lane has been relayed the same, so neither lane is
+Recorded DIRECT by engine-lane. A downstream user has been relayed the same, so neither lane is
 working from a second-hand account any longer.
 
-## The same ruling as first RELAYED via iso-export-lane 2026-09-13 (superseded by the above)
+## The same ruling as first RELAYED via a downstream user 2026-09-13 (superseded by the above)
 
 CLP(Q) uses `{...}`. Clausal's `{}` is a **set literal**, so: **a set in goal position is a set of
 CONSTRAINTS, and calling the goal solves them.** Fractional money goes to CLP(Q) through `{...}`.
@@ -65,7 +65,7 @@ qualification, not new operators — the enclosing goal names which solver inter
 expression, so there is no need for a `#=`-alike per numeric domain. Engine module is `clpz3.py`
 while the surface is `z3.`, so surface and implementation names already differ here.
 
-## THE FLOAT TRAP — this decides the emission (iso-export-lane, on a clpq build)
+## THE FLOAT TRAP — this decides the emission (a downstream user, on a clpq build)
 
     {X = 155.05}       ->  2727668446186701 rdiv 17592186044416    WRONG
     {X = 15505/100}    ->  3101 rdiv 20                            EXACT
@@ -84,9 +84,9 @@ The two paths are then symmetrical and neither goes through a float:
 
 **CLP(Q) is in neither ladder engine.** It exists in a branch build at
 `/workspace/scryer-prolog-clpq` (ships `clpq.pl`, `clpr.pl`). So the emission would depend on a
-capability the ladder does not test. iso-export-lane is raising this with the operator.
+capability the ladder does not test. A downstream user is raising this with the operator.
 
 ## Ownership
 
-Surface + engine: engine-lane. Emission + the `#=` conversion: iso-export-lane. The float trap
+Surface + engine: engine-lane. Emission + the `#=` conversion: a downstream user. The float trap
 binds both.

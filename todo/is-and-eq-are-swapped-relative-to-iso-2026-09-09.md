@@ -46,7 +46,7 @@ and on infix `is` is a much smaller and better-understood set.
 ## Related
 
 - `docs/superpowers/specs/2026-09-08-iso-canonical-form-operators-design.md`
-- `clausal/tools/eq_analysis/instrument.py`, and iso-export-lane's static
+- `clausal/tools/eq_analysis/instrument.py`, and a downstream user's static
   analyser + merge on trunk (`tools/eq_analysis/`)
 - `clausal/pythonic_ast/nodes.py::ArithEq` (what `==` compiles to),
   `::Unify` (what `is` compiles to)

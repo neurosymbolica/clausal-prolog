@@ -141,7 +141,7 @@ Per dialect, because a switch untested on a branch is a branch that does not wor
 
 ## Blast radius
 
-`clausal_to_prolog.py` is iso-export-lane's file; the roster is 1560 files. Today **no corpus file
+`clausal_to_prolog.py` is a downstream user's file; the roster is every exported file. Today **no corpus file
 declares a constant**, so the roster's bytes should not move at all — the change is reachable only
 by files that declare one. That makes export-bytes the measuring axis and a ZERO the expected
 result, with the caveat that a zero here is the cheap kind: nothing reaches the new code yet. The

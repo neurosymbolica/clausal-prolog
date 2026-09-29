@@ -59,11 +59,11 @@ detectable shape before each sweep.
              (UNCHANGED from W1b under the widened net)
     shape 5  __name__/__module__ off a predicate class         0
 
-So the sealed side's whole W4 cliff is the 31 hold-and-call sites, and the
+So the downstream side's whole W4 cliff is the 31 hold-and-call sites, and the
 alias blind spot did not hide anything there; it was real only in the
 corpus tooling (13 isinstance + 31 field reads, already migrated).
 
-## Downstream result 2 of 3 (the export lane, 2026-09-22) — and a LIVE break
+## Downstream result 2 of 3 (a downstream exporter, 2026-09-22) — and a LIVE break
 
 Planted positive first (it failed on its first run — the sample had two
 `.__name__` where one was expected — and was fixed before any number was
@@ -77,7 +77,7 @@ printed). Three trees, ~190k lines.
              (constructors since W2), silently False on the P2 candidate.
              Told them: migrate to is_v/vfield now with a positive control.
              One more corpus tooling site the earlier 13 missed — told the
-             corpus lane.
+             a downstream user.
     shape 2  type-name string: the 1 test already known; bare quoted
              names 23, mostly prose, unsplit
     shape 3  NOT a count: the token census (1623/494/270) is meaningless
@@ -90,7 +90,7 @@ printed). Three trees, ~190k lines.
 
 Their instrument (selftest-refusing) takes `label|root|globs` triples.
 
-**Follow-up (export lane, same day):** two of their three broken files
+**Follow-up (downstream exporter, same day):** two of their three broken files
 migrated to `is_v`/`vfield` with a positive control (a domain the gate MUST
 flag, before and after, plus a check that `is_v` actually matches). The
 third needs a GENERIC walk — "this node's fields without knowing its type"
@@ -98,7 +98,7 @@ third needs a GENERIC walk — "this node's fields without knowing its type"
 `vfields` / `vitems` on feat/reflection-vkind-2026-09-22 (with `is_v` and
 `vfield` finally in `__all__`).
 
-## Census CONTRACT (the corpus lane, adopted 2026-09-22) — two numbers, never one
+## Census CONTRACT (a downstream user, adopted 2026-09-22) — two numbers, never one
 
     Q1  BROKEN NOW      sites that fail on main today (W2 made the nine
                         constructors functions)  -> sizes the REPAIR, which
@@ -116,12 +116,12 @@ file is OUT (name resolution stated, with an UNRESOLVED bucket rather than a
 silent choice); three receiver spellings incl. `reflection as R` ->
 `R.Clause`; per-shape denominators (shape 3's = files that can obtain a
 cell); a planted positive per shape with its expected count asserted.
-Definition: the corpus lane's `_w4-census-definition.md`, under review by the
-export lane. **NOT STARTED — waits on the operator's go.** Correction to
-result 2 above: the export lane's sweep covered THREE trees, not the corpus
+Definition: a downstream user's `_w4-census-definition.md`, under review by the
+downstream exporter. **NOT STARTED — waits on the operator's go.** Correction to
+result 2 above: a downstream exporter's sweep covered THREE trees, not downstream code
 only; the differing counts were definition, not scope.
 
-**Withdrawn (export lane, same day): the "6 files that import reflection"
+**Withdrawn (downstream exporter, same day): the "6 files that import reflection"
 denominator for shape 3.** A callee that receives a cell as a PARAMETER
 reads its fields with no reflection import and no constructor call, so the
 importing set is not the set that can hold a cell: measured 7 name
@@ -133,7 +133,7 @@ arithmetic; only a reader verifies its premises.
 The generic accessors (`reflection.vkind` / `vfields` / `vitems`) LANDED on
 main at 05ebcd91.
 
-## All three broken downstream gates closed (export lane, same day) — and a
+## All three broken downstream gates closed (downstream exporter, same day) — and a
 ## CORRECTION to guidance given here
 
 Migrated with positive controls: the clause-less gate (was deciding
@@ -153,7 +153,7 @@ migrator to swap it for `cell_functor`.
 Two remaining failures in that gate's suite are stale TITLECASE heads in
 the tests' own inline fixtures (a load-time error since 2d48769f), not W2's.
 
-## Downstream result 3 of 3 (the corpus lane, 2026-09-22) — THE CENSUS IS IN
+## Downstream result 3 of 3 (a downstream user, 2026-09-22) — THE CENSUS IS IN
 
     ENGINE 4f404716 start = end (a first run VOIDED when main moved mid-census)
     POPULATION 9233 .py scanned / 9233 parsed / 0 unparsed / 0 unresolved
@@ -172,7 +172,7 @@ type(term).__name__`; every reified item is a tuple, so all 18 of its
 matches nothing, returns nothing, raises nothing. Its importer is the
 classification site. `reflection.vkind` (main 05ebcd91) is the drop-in:
 `_kind = vkind` moves the contract from "the type's name" to "the
-vocabulary's name". Repair is the corpus lane's, awaiting their operator.
+vocabulary's name". Repair is a downstream user's, awaiting their operator.
 
 Shape 3's lower bound is weaker than it looks: that same module holds 30
 field reads and was OUTSIDE the "names reflection" denominator (it imports
@@ -183,14 +183,14 @@ Two instrument bugs fixed mid-run: an unresolvable binding counted as a
 hit; `from clausal import reflection as R` invisible (caught by the
 planted positive). Planted positives 3/3, 1/1, 2/2.
 
-**W4 sizing, downstream, from all three results:** the sealed bodies'
+**W4 sizing, downstream, from all three results:** the downstream bodies'
 31 hold-and-call sites (migrate by wrapping `--handle(X)` once the
 boundary pieces land); 1 classification site + 22 type-name sites +
 field reads in a handful of tooling files, all migratable to
 `is_v`/`vkind`/`vfield`/`vitems` today; and a runtime-hook pass for
-shapes 4/5 outside the sealed bodies, not yet built.
+shapes 4/5 outside the downstream bodies, not yet built.
 
-**Result 3 closed (the corpus lane, same day):** the silently dead module is
+**Result 3 closed (a downstream user, same day):** the silently dead module is
 REPAIRED — `_kind` delegates to `reflection.vkind` (1 line, 18 guards; the
 callers keep asking "what kind" and the question is finally aimed at the
 vocabulary, not the Python type), 28 field reads to `vfield`. Positive

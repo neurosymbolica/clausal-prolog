@@ -419,27 +419,27 @@ them. All-solve is uniform. Filed engine-side as
 question, parked).
 
 Caveats they attached, honestly: the 28/28 was taken BEFORE a units migration
-(many downstream corpus files being rewritten by a lane that is not the corpus lane, not
+(many downstream corpus files being rewritten by a lane that is not a downstream user, not
 downstream checks, not engine — citations/parameters .clausal, new .seam siblings,
 a downstream key-spelling helper) reached the downstream declaration files; five domains
 currently die on `strict_atoms: undeclared atom 'units' used as a dict key`
 in a sweep on main, which is that half-applied migration, not the engine.
 They will re-run the 28 alongside the downstream sweep reference re-baseline once the
-tree is quiescent. Their 82 eval bodies are UNCOMMITTED pending the
+tree is quiescent. Their eval bodies are UNCOMMITTED pending the
 operator's commit-boundary call.
 
 **Landing:** W2 branch tip carries P2; `main..tip` is a fast-forward. Engine
 gates on 23a371ea: house NEW 0 / GONE 0, packages NEW 0 / GONE 0. Awaiting the
 operator's "land it" (recommended: after the settled-tree confirmation run).
 
-**Appendix 5 follow-up:** the many downstream corpus files rewrite was the corpus lane — the
+**Appendix 5 follow-up:** the many downstream corpus files rewrite was a downstream user — the
 operator ruled "a dict key is an ATOM", so every chars-carrier key in the downstream corpus become bare atoms, and `_key_spelling` now REFUSES the
 carrier and the reserved 1-tuple. Applied in place, broke five domains via
 inherited `-strict_atoms` (downstream declaration files with no directive of their own are
-still strict), REVERTED; tree consistent at 8309eab7 + the 82 eval bodies.
+still strict), REVERTED; tree consistent at 8309eab7 + the downstream eval bodies.
 Redo goes through a worktree and lands in one pass. Two consequences for P4:
 the downstream re-baseline and the settled-tree 28 wait for that single pass;
-and the corpus lane now counts an ATOM read as an object-shaped access, so the
+and a downstream user now counts an ATOM read as an object-shaped access, so the
 non-downstream W1 answer is 3, not 0 — note for W4's sizing, not a blocker.
 
 ## APPENDIX 6 — LANDED on main `1c1afb76`; one downstream break surfaced, and it is P2's
@@ -460,7 +460,7 @@ skip loud. NOT reverted. The migration spellings predate W2 and are
 exported from `clausal.reflection`: `is_v(term, Clause)` (False, never
 raises, on a non-cell; accepts a tuple) and `vfield(term, "goals")` (by
 field NAME off `_VOCAB_FIELDS`; raises unless `default=`). Handed to the
-corpus lane, whose tooling it is.
+A downstream user, whose tooling it is.
 
 **Census lesson (the downstream lane's, kept):** W1b's "31 sites hold a
 class as a value / 0 isinstance on PredicateMeta" is a FLOOR. A census keyed
@@ -468,7 +468,7 @@ on the NAME `PredicateMeta` cannot see an ALIAS of a vocabulary class —
 `reflection.Clause`, `Goal`, `Atom`, `Variable`, clpb's, term_expansion's.
 Before W4, sweep the aliases: every exported vocabulary name, by name.
 
-**Appendix 6 follow-up:** the corpus lane migrated its tooling (their
+**Appendix 6 follow-up:** a downstream user migrated its tooling (their
 e2066b11) and the pre-commit check runs again. CORRECTED COUNT: **13
 `isinstance(x, reflection.<Name>)` sites + 31 cell-FIELD reads**
 (`.name` 11, `.args` 6, `.kwargs` 3, `.position` 3, `.goals` 3, `.head` 2,

@@ -2,7 +2,7 @@
 
 Filed 2026-09-11. Operator's call, same session: minor CURRENCY units now, ratios in a todo.
 
-**Why it is worth doing.** It is corpus-lane's live blocker, not a hypothetical.
+**Why it is worth doing.** It is a downstream user's live blocker, not a hypothetical.
 `<downstream-domain>` computes in basis points **throughout**: `leverage_ratio_bps/2`
 is EXPORTED, the library supplies `ratio_bps`, and 15 `bps` references span the public interface,
 the queries and the tests. `<downstream-domain>` has the same shape with `_cents`
@@ -31,7 +31,7 @@ be built with `scaleb` and the multiplication checked for a float result.
 the value is `0.03` — the same "documented but not represented" problem the currency half
 closed. A domain can then stop renaming its parameters `_bps`.
 
-**What it does NOT solve** (measured by corpus-lane, 2026-09-11, and still true):
+**What it does NOT solve** (measured by a downstream user, 2026-09-11, and still true):
 
 * A domain whose PUBLIC interface computes in bps — `leverage_ratio_bps/2` is exported, so
   rescaling the parameter without rescaling its producers and consumers makes the comparison
@@ -114,4 +114,4 @@ the lint no longer used.
 * **The exporter refuses a ratio-unit amount**, so `<downstream-domain>` cannot migrate and
   stay on the export roster until option 2 lands
   (`todo/exporter-folds-scaled-units-to-the-wrong-magnitude-2026-09-11.md`). That todo was
-  already load-bearing; this makes it block corpus-lane's stated blocker too.
+  already load-bearing; this makes it block a downstream user's stated blocker too.

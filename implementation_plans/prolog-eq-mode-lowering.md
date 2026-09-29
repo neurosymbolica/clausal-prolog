@@ -59,7 +59,7 @@ the separate `eval_(EXPR, RESULT)` call (`nodes.py:719-720`,
 So the memory-note "Clausal `is/2` means the OPPOSITE of ISO `is/2`" is **confirmed
 from source, with a correction to its usual phrasing**: Clausal `is` ≈ ISO `=`, and the
 Clausal operator that plays ISO `is/2`'s role is **`==`**, not `eval_` — because
-**the corpus calls `eval_` exactly 0 times** (`grep -rn --include='*.clausal' "eval_("`
+**downstream code calls `eval_` exactly 0 times** (`grep -rn --include='*.clausal' "eval_("`
 over `<downstream-corpus>`, excluding `_`-prefixed scratch trees: 0 hits) while
 it writes `==` in 826 goal positions (§2.1). The `eval_` path in the translator is
 dead for this corpus.
@@ -119,7 +119,7 @@ neither reproduces the two binding rows at all.
 
 ### 1.4 Worked example — the `uk/tax` witness, run in Scryer
 
-Source, `<downstream-corpus>/uk/tax/income_tax_rates_allowances/liability.clausal`,
+Source, `<downstream-domain>/liability.clausal`,
 lines re-derived by `grep -n` in this session. Three of the four line numbers the Task 5
 brief names (133, 169, 217) are confirmed; the fourth, **229, is not a `==` witness** —
 `liability.clausal:229` is `total_income in PROFILE`, a membership goal belonging to the
@@ -198,11 +198,11 @@ $ printf 'chk(2500.0).\nchk(2500).\n' | scryer-prolog num2.pl
 ```
 
 An integer-vs-float mismatch anywhere in a bound comparison silently flips the verdict.
-The corpus is pence/cents/basis-points integer arithmetic throughout, so this is latent
+Downstream code is pence/cents/basis-points integer arithmetic throughout, so this is latent
 today rather than live — but it is latent in 429 goals, and any future `//` → `/` or
 percentage-rate change makes it live.
 
-Supporting fact: **the corpus never writes structural equality at all.**
+Supporting fact: **downstream code never writes structural equality at all.**
 `grep -rn --include='*.clausal' "structural_eq"` over the published domain trees returns
 **0 hits**. So all 553 emitted `==` goals and all 273 emitted `=:=` goals originate from
 `ArithEq`. Not one of them was ever intended as ISO `==`.
@@ -432,7 +432,7 @@ The reasoning:
    a *program that computes verdicts* (head args unbound → `is/2`, and the input-mode
    test suites must be exported differently or accepted as red), or a *relation callable
    in any mode* (→ Option A's helper everywhere, and the readability cost is the price)?
-   This design cannot decide that; §1's evidence is that the corpus's own domain tests
+   This design cannot decide that; §1's evidence is that downstream code's own domain tests
    exercise both.
 4. **Option A is the right fallback, not the right default** — it is the only construct
    that is correct without knowing the mode, so it belongs exactly where the analysis
@@ -695,10 +695,10 @@ without leaving the export emitting calls to predicates that do not exist.
 | `liability.clausal:163` (`ALLOWANCE == 0`) | — | **new witness**, not in the triage doc |
 | the defect is only about binding mode | pilot §5.1 | **narrower than the truth** — §1.5, 429 further goals diverge on numeric type even fully bound |
 | Clausal `==` is "evaluate-and-bind" | pilot §5.1 | **imprecise** — it is a CLP(FD) equality constraint with a documented 7-row behaviour (§1.2), including a raise |
-| Clausal `is/2` is the opposite of ISO `is/2` | memory note | **confirmed with correction** — Clausal `is` ≈ ISO `=`; the ISO-`is` role is played by `==`, not by `eval_`, which the corpus uses 0 times |
+| Clausal `is/2` is the opposite of ISO `is/2` | memory note | **confirmed with correction** — Clausal `is` ≈ ISO `=`; the ISO-`is` role is played by `==`, not by `eval_`, which downstream code uses 0 times |
 | NO engine test pins either behaviour | brief | **false as stated** — 4 assertions pin the *emission* (§5); none pins the *behaviour*, and all 4 are `# nv`-marked |
 | date ordering raises `type_error(evaluable, date/3)` | task-6 §7 | **confirmed**, reproduced in Scryer on the emitted `<downstream-domain>` text |
-| "≥9 non-test files" carry date ordering | task-6 §7 | **raised to 11 non-test files / 11 domains**, by data-flow rather than name grep |
+| "≥9 non-test files" carry date ordering | task-6 §7 | **raised to 11 non-test files / several domains**, by data-flow rather than name grep |
 
 ---
 

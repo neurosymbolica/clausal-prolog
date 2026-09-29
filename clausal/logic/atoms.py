@@ -342,7 +342,7 @@ class atom(str):
     Equality is left alone because ``==`` is not the mechanism: ``++`` reads
     the type, so a strict ``__eq__`` would buy nothing for the round trip and
     would cost every downstream comparison of an atom against a plain string
-    literal — measured at 1007 sites across every one of the 82 downstream
+    literal — measured at 1007 sites across the downstream
     bodies, each silently flipping True to False.  Introducing a comparison
     that quietly changes its answer is the exact defect class this whole
     boundary exists to remove, so the strict form was rejected.

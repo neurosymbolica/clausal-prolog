@@ -737,11 +737,11 @@ dotted name of the module that exports it.
 
 ```python
 import clausal
-import procurement      # procurement/__init__.clausal has no -module list:
-                        #   -import_from(procurement.vocabulary, [open_procedure, ...])
+import shop             # shop/__init__.clausal has no -module list:
+                        #   -import_from(shop.vocabulary, [open_kind, ...])
 
-clausal.declared_atoms("procurement")   # frozenset()
-clausal.imported_atoms("procurement")   # {'open_procedure': 'procurement.vocabulary', ...}
+clausal.declared_atoms("shop")   # frozenset()
+clausal.imported_atoms("shop")   # {'open_kind': 'shop.vocabulary', ...}
 ```
 
 - **Only atoms the exporter declares.** An entry counts when the exporter's

@@ -4,7 +4,7 @@ Follows `SESSION-HANDOFF-2026-09-18-engine-lane-b-END.md` (stage 1, frozen at `7
 `feat/atoms-as-str-stage2-2026-09-18` in the CANONICAL repo (`/workspace/clausal`), off the stage-1 tip
 (merge of `73c86686`). It carries C (`_variables.c`, `_list_unify.c`, `_lists_core.c`, `_chars_core.c`):
 `git worktree add <path> <branch>` + `setup.py build_ext --inplace` in your OWN worktree. Nothing landed on
-main. Nothing pushed. Landing order is unchanged: stage 1 lands first (after iso-export-lane's first G3 on
+main. Nothing pushed. Landing order is unchanged: stage 1 lands first (after a downstream user's first G3 on
 `73c86686`), stage 2 is a SEPARATE sha and a harness RE-BASELINE.
 
 Spec: `docs/superpowers/specs/2026-09-18-atoms-as-str-design.md`. Plan: `docs/superpowers/plans/2026-09-18-atoms-as-str-stage2.md`
@@ -135,14 +135,14 @@ Spec: `docs/superpowers/specs/2026-09-18-atoms-as-str-design.md`. Plan: `docs/su
 
 ## Peers / landing
 
-* the harness lane: stage 2 is a RE-BASELINE (spec §5 step 6), announced beside the stage-1 freeze file in
+* A downstream checker: stage 2 is a RE-BASELINE (spec §5 step 6), announced beside the stage-1 freeze file in
   the lanes' shared announcement directory as `ATOMS-AS-STR-STAGE2-BUILT-2026-09-18.md`; its sweep runs AFTER
   stage 1 lands.
-* iso-export-lane: G3 on the frozen stage-1 sha `73c86686` still gates the stage-1 landing window; the
+* A downstream user: G3 on the frozen stage-1 sha `73c86686` still gates the stage-1 landing window; the
   exporter goldens are unchanged under stage 2 (task 7).
-* NEXT for the engine lane: nothing is open on the branch. Landing waits on stage 1 (iso-export-lane's G3 on
+* NEXT for the engine lane: nothing is open on the branch. Landing waits on stage 1 (a downstream user's G3 on
   `73c86686`) and is the operator's call; stage 2 then lands as its own sha and re-baseline.
-* corpus-lane: the silent-unmatch grep from the stage-1 announcement covers stage 2 too, plus: a `++` escape
+* A downstream user: the silent-unmatch grep from the stage-1 announcement covers stage 2 too, plus: a `++` escape
   that yields Python strs now yields ATOMS (`++sorted(["a","b"])` is `[a, b]`), so a fixture that compared
   such a result against `"..."` strings under chars mode must compare against atoms or take the string side
   through `atom_chars`.

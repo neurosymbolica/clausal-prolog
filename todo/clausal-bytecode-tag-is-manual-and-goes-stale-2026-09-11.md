@@ -71,7 +71,7 @@ Keep the manual tag as an override — a hand bump is still the right tool when 
 
 ## Why a load census could not have caught this
 
-Stale bytecode loads perfectly well. A census that reports "74 of 74 domains load clean" is
+Stale bytecode loads perfectly well. A census that reports "74 of the roster's domains load clean" is
 insensitive to the whole class, in either direction. The instruments that detect it are
 behavioural — probes, oracles, answer comparisons. That is about instrument SELECTION, not
 hygiene, and it applies to what a lane is ASKED for as much as to how they run it.

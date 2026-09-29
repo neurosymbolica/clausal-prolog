@@ -14,13 +14,13 @@ note stands: two census sweep tools hardcode the private corpus path).
 | branch `feat/predmeta-p2-terms-as-tuples-2026-09-18` | `20b32550` | plan, census, registry (Task 2 gated at `b9c127e4`), Task 3 CHECKPOINT (red, see NEXT 3) |
 
 Extensions in the canonical checkout were rebuilt at `3fcfd29e` in a same-sha worktree and swapped by
-copy-then-move (two law-portal runservers had the old ones mapped). No C changed after that.
+copy-then-move (two long-lived downstream servers had the old ones mapped). No C changed after that.
 
 ## What landed tonight, in order (each gated NEW 0 / GONE 0 on detached arms; the flip's handoff has its own record)
 
 1. **The atoms-as-str flip, both stages** — an atom IS the interned `str`; a string is the `('$chars', s)` carrier;
-   `('x',)` is RESERVED and refused; no class is an atom. Landed at the operator's word after iso-export-lane's G3
-   on the stage-1 freeze came back byte-identical (1755 staged `.pl`, 0 differing, 75 domains). Announcements with
+   `('x',)` is RESERVED and refused; no class is an atom. Landed at the operator's word after a downstream export
+   check on the stage-1 freeze came back byte-identical (0 staged `.pl` differing). Announcements with
    LANDED banners: `CHARS-CARRIER-STAGE1-FROZEN-2026-09-18.md`, `ATOMS-AS-STR-STAGE2-BUILT-2026-09-18.md` in the
    lanes' shared directory (the latter carries the successor sha `fb0106f3`).
 2. **Docs pass** (12 user docs, snippet suite green, three stale-docs todos closed into `todo/done/`). One claim a
@@ -86,28 +86,26 @@ annotations only — one signature change, no class-identity dependence.
    still reaches a clause store through a door other than the four patched; use the `_stored_head_key`
    refusal as the probe. Do NOT gate this tip against the base (red by design); gate after Task 4 clears the
    worklist. `q(...)` is quasi-quotation -- never name a probe predicate `q`.
-4. **iso-export-lane's `==` -> `#=` flip**: the LIBRARY half `79fc9e4` is landed on export-trunk main (theirs); the
+4. **The downstream `==` -> `#=` flip**: the downstream library half is landed (theirs); the
    ENGINE half `272e2a3f` sits on `flip/eq-to-clpz-2026-09-19` in the CLONE off `5bf7a8db`, NOT on canonical
    (`733de97a`; needs a cherry-pick + the exporter goldens). Measured G3 10 -> 14, +509 clauses, 0 regressions,
    three inputs moved (attribution strong, not single-variable). LANDED as a62853e2 at the operator's word and
    REVERTED at his word (9faeaae1; clone eada248b; box 9faeaae1): it turned ten of the engine repo's own exporter
    tests red -- 9 goldens pin the old `==` and ~120 unquoted `==` sites across 8+ golden fixtures need the identity
    respell BEFORE regeneration (every one a reading; `iso_control` mixes both kinds on adjacent lines), and the
-   Scryer execution matrix loads no library(clpz). The sweep is iso-export-lane's (their handoff
-   `docs/HANDOFF-2026-09-19-iso-export-lane.md` §1 on export-trunk). OPEN RULING for the operator, §1(b): does the
+   Scryer execution matrix loads no library(clpz). The sweep is downstream's. OPEN RULING for the operator: does the
    translator emit its own `:- use_module(library(clpz), [(#=)/2]).` when it emits `#=`? Engine-lane recommends
    yes (the exporter already leans on a prelude for in_domain/all_different/label; non-self-sufficient output
    pushes the knowledge to every consumer). Re-landing waits on both.
-3. Lanes: the harness lane's RE-BASELINE sweep on `fb0106f3` (told); corpus-lane's attribution of the two
-   newly-exportable wrong-answer domains (GDPR breach notification, <downstream-domain>) — theirs, not an engine block;
-   iso-export-lane: done for this window.
+3. Downstream: a re-baseline on `fb0106f3` (told); two newly-exportable wrong-answer `<downstream-domain>`s are
+   theirs, not an engine block.
 4. Parked from earlier: Q3 writeq, the operator's `-float_literals` idea, the 8 `normalize_seg_input` callers that
    read a bare-str atom as text in `phrase/2` and friends (not a regression).
 
 ## Instruments and pitfalls added tonight
 
 * A failure-set diff cannot see what its baseline holds: transplant onto a CLEAN base (done for every gate).
-* Copying a `.so` into a snapshot is sound ONLY from the same sha (iso-export-lane's caveat for C-changing ranges).
+* Copying a `.so` into a snapshot is sound ONLY from the same sha (a downstream user's caveat for C-changing ranges).
 * An "already applied" check of `old not in s and new in s` is WRONG when `new` contains `old` — it re-applied a
   patch four times. Exact-text patches keep hitting interleaved comment lines: read the span RAW before writing an
   old-string.

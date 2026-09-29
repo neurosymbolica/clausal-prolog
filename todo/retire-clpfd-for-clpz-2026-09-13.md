@@ -20,11 +20,11 @@ very different answers.** Do not treat it as one rename.
 `:104` says `"clpz"`, `:119` says `"fd"`. So the export side is parameterised and Triska's ruling
 is a change of DEFAULT plus the `_CLPFD_CANONICAL` policy at `clausal_to_prolog.py:2123`.
 
-Measured by iso-export-lane, and it settles the direction: **`library(clpfd)` raises
+Measured by a downstream user, and it settles the direction: **`library(clpfd)` raises
 existence_error in BOTH Scryer and Trealla; `library(clpz)` works in both.** So the current
 default emits a library neither reference system has.
 
-**This half is iso-export-lane's and is already in motion** under the operator's `#=` ruling.
+**This half is a downstream user's and is already in motion** under the operator's `#=` ruling.
 Nothing for engine-lane to do but stay out of the way, and rename the knob if it moves.
 
 ## Question 2: the ENGINE's internal module names — churn, with a real hazard
@@ -52,7 +52,7 @@ what its private C module is called.
 
 Ordering within question 1:
 
-1. `_CLPFD_CANONICAL` policy + the emitted library name (iso-export-lane, in motion)
+1. `_CLPFD_CANONICAL` policy + the emitted library name (a downstream user, in motion)
 2. **docs — 235 mentions across 37 files, and this is the half that teaches.** A user reading
    `docs/constraints.md` should see `clpz`. Larger than the code change and lower risk.
 3. `Dialect.clpfd_module` -> `clp_module` or similar, once (1) settles what it holds
@@ -61,7 +61,7 @@ Ordering within question 1:
 
 `#=` under CLP(Z) is **integer-only**, so `V #= 155.05` is not a clpz goal. The exporter can now
 emit fractional money at a use site (an inexact minor-unit fold), so the `#=` conversion will
-meet a value it cannot express. Raised with iso-export-lane 2026-09-13; unresolved. **This is the
+meet a value it cannot express. Raised with a downstream user 2026-09-13; unresolved. **This is the
 one thing in this todo that can produce a wrong exported program rather than an untidy one.**
 
 ## Not to be confused with

@@ -6,7 +6,7 @@ run today will find it. The trigger is the landing, not the code.
 
 ## Why this file exists
 
-iso-export-lane named the gap: this class has a third tense. Not stale, not broken, but
+A downstream user named the gap: this class has a third tense. Not stale, not broken, but
 SCHEDULED to become false. A sweep for wrong statements returns nothing, because they are
 not wrong yet. So the inventory has to be taken in advance and re-read at the flip, and it
 has to live somewhere the flip will actually consult.

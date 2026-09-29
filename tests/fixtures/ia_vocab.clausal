@@ -1,6 +1,6 @@
 # Fixture for tests/test_imported_atoms.py: the vocabulary an -import_from
 # exporter declares.  vocab_rel/1 is a PREDICATE and must never be reported
 # as an imported atom.
--module(ia_vocab, [open_procedure, restricted_procedure, shared_kind, aliased_src, vocab_rel/1])
+-module(ia_vocab, [open_kind, closed_kind, shared_kind, aliased_src, vocab_rel/1])
 
-vocab_rel(open_procedure),
+vocab_rel(open_kind),

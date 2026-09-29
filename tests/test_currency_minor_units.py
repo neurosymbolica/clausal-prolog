@@ -212,7 +212,7 @@ def test_a_decimal_magnitude_is_recorded_as_a_decimal(tmp_path):
 def test_an_integer_magnitude_stays_an_integer(tmp_path):
     """Only the inexact kind changes. An int is already exact, and turning
     every declared count into a Decimal would change what /3 answers for
-    every united constant in the corpus."""
+    every united constant in downstream code."""
     m = _load(tmp_path, "int", """
         -module(int, [look/2, mu_cap])
         -import_from(european_union, [euro])
@@ -298,7 +298,7 @@ def test_a_decimal_magnitude_never_warns():
 def test_a_non_currency_float_never_warns():
     """The negative control for scope: this is a claim about MONEY, where
     the exact decimal is the point. A physical measurement carries no such
-    claim, and warning there would be noise on every float in the corpus."""
+    claim, and warning there would be noise on every float in downstream code."""
     from clausal.modules.units import metre
     assert _warns(123456789012345.69, metre) == []
 
@@ -306,8 +306,8 @@ def test_a_non_currency_float_never_warns():
 # ── the Prolog exporter: refuses what it cannot export faithfully ────────────
 #
 # Ruled 2026-09-11 after three independent censuses agreed the cost is zero
-# today: no corpus file declares a constant at all (corpus-lane), no exported
-# .pl carries a non-base unit comment (iso-export-lane), and the only exporter
+# today: no downstream file declared a constant at all, no exported
+# .pl carried a non-base unit comment, and the only exporter
 # test in this repo uses `euro`, a base unit. Refusing stops being free the
 # moment the constants migration starts, so the window is now.
 
@@ -329,7 +329,7 @@ def test_a_minor_unit_declaration_exports_the_BASE_magnitude():
                   "-constant_number_units(sga_monthly, 155000, usd_cent)\n"
                   "pay(constant(sga_monthly)),\n")
     # `pay(1550)`: an integral scaled fold is an exact INT at a use site since
-    # the 2026-09-13 float fix (iso-export-lane's finding). The guard that
+    # the 2026-09-13 float fix (a downstream user's finding). The guard that
     # matters is unchanged -- it must never be the declared 155000.
     assert "pay(1550)" in out, out
     assert "pay(155000)" not in out
@@ -381,7 +381,7 @@ def test_a_float_money_literal_above_the_band_can_lose_the_amount():
     The tests above assert that a warning appears, which a value in the band
     that happens to survive would also satisfy — so they cannot tell a real
     loss from a safe example, and a docs example built on a surviving value
-    passed them (caught by corpus-lane, 2026-09-11). This one asserts the
+    passed them (caught by a downstream user, 2026-09-11). This one asserts the
     loss, which is the claim the documentation actually makes.
 
     `123456789012345.65` cannot be WRITTEN as a float literal: the parser
@@ -419,7 +419,7 @@ def test_minor_units_keep_the_amount_the_float_literal_loses():
 # amount. `pay(155000(usd_cent))` reaches a different lowering (`_try_quantity`),
 # which kept the magnitude and dropped the unit for every unit, base or
 # scaled — so option 1 covered one shape and left the identical 100x defect
-# open on the other. Found by corpus-lane, 2026-09-11, on this tree.
+# open on the other. Found by a downstream user, 2026-09-11, on this tree.
 
 
 def test_the_exporter_refuses_an_inline_quantity_in_a_scaled_unit():
@@ -442,11 +442,10 @@ def test_an_inline_base_unit_quantity_still_exports():
     assert "fine(5000)" in out
 
 
-# ── the three currencies added for the corpus census ─────────────────────────
+# ── the three currencies added for a downstream census ───────────────────────
 #
-# corpus-lane measured the population the migration has to express: 139
-# identifiers, 114 `_cents` / 18 `_satang` / 7 `_pence`, across 14 eu, 7 us,
-# 4 au, 1 uk and 1 th domains. Six of those domains used a currency with no
+# A downstream census measured the population the migration has to express:
+# identifiers ending `_cents`, `_satang` and `_pence`. Some of those domains used a currency with no
 # minor unit, so "attach the true unit" was not an option that existed for
 # them and the migration would have had to go base-units in some places and
 # minor-units in others. Operator widened the table, 2026-09-11.
@@ -470,7 +469,7 @@ def test_the_thai_satang_is_a_scaled_unit_of_the_baht():
 
 
 def test_sterlings_minor_unit_is_penny_singular():
-    """The corpus spells its identifiers `_pence`, but a unit name is
+    """Downstream code spells its identifiers `_pence`, but a unit name is
     singular here as everywhere else in the vocabulary — `metre`, not
     `metres`. Operator's ruling, 2026-09-11."""
     from clausal.modules.countries import united_kingdom
@@ -515,7 +514,7 @@ def test_the_exporter_refuses_every_named_minor_unit():
 # engine bug, on exactly the case the AUD widening exists to catch. 25 of the
 # 153 distinct currency names are shared by two or more ISO codes (dollar 22,
 # franc 17, pound 12), so it is the diagnostic for the whole family.
-# Found by corpus-lane, 2026-09-11.
+# Found by a downstream user, 2026-09-11.
 
 
 def _mismatch_sides(left, right):
@@ -576,7 +575,7 @@ def test_a_compound_mismatch_qualifies_only_the_colliding_component():
     """The trigger is computed on the whole rendering; the effect must land
     only on the parts that actually collide. `second` is the SAME dimension
     object on both sides — it was never ambiguous and qualifying it violates
-    the rule the qualification exists to serve (corpus-lane, 2026-09-11)."""
+    the rule the qualification exists to serve (a downstream user, 2026-09-11)."""
     from clausal.terms import Quantity
     from clausal.modules.countries.australia import aud
     from clausal.modules.countries.united_states import usd as usd
@@ -933,9 +932,9 @@ def test_a_minor_unit_is_accepted_by_the_currency_directive(tmp_path):
 
     Refusing it split the two safety properties across two directives so that
     an author could have the currency gate or the minor-unit scale but never
-    both — and every one of the 139 identifiers the corpus migration is about
+    both — and every one of the identifiers a downstream migration is about
     is `_cents`/`_satang`/`_pence`, so the gate would have covered the case
-    the migration is least likely to produce (corpus-lane, 2026-09-11).
+    the migration is least likely to produce (a downstream user, 2026-09-11).
     """
     m = _load(tmp_path, "cc_minor", """
         -import_from(united_states, [usd, usd_cent])
@@ -952,7 +951,7 @@ def test_the_gate_is_money_SHAPE_not_currency_TYPE(tmp_path):
     `usd**2` is an area in dollars and `usd / second` is a rate, neither of
     which is an amount of money.
 
-    **`kilometre` is the discriminating row** (corpus-lane, 2026-09-11): a
+    **`kilometre` is the discriminating row** (a downstream user, 2026-09-11): a
     `Quantity` over a single non-currency base at exponent one, structurally
     identical to `usd_cent` in every respect except `is_currency`. Every
     other refusal here fails for a SHAPE reason and would still fail under a
@@ -1116,7 +1115,7 @@ def test_the_lint_is_BLIND_to_a_literal_under_an_unscaled_functor(tmp_path):
     of `check_ratio_gte/6` at :111. The functor claims no scale, so nothing in
     the source keys the literal to one and the lint cannot see it.
 
-    The consequence is the sharp one (corpus-lane, 2026-09-11): converting :93
+    The consequence is the sharp one (a downstream user, 2026-09-11): converting :93
     silences the domain while the deciding literal is untouched. **The lint
     emptying is not "this domain is done."** Self-emptying is a real property
     and a real progress signal for the sites it CAN see; it is not a
@@ -1229,7 +1228,7 @@ def test_compatible_units_same_named_currencies_are_distinguished():
     `_require_same_dims` learned this morning to qualify two sides that
     render identically; this predicate builds its own message and reproduced
     the defect immediately. The fix is to REUSE that logic, not to write a
-    second copy of it (corpus-lane found the original, 2026-09-11)."""
+    second copy of it (a downstream user found the original, 2026-09-11)."""
     from clausal.terms import UnitsMismatch
     from clausal.modules.countries.australia import aud
     from clausal.modules.countries.united_states import usd
@@ -1279,7 +1278,7 @@ def test_compatible_units_raises_rather_than_fails_in_clausal(tmp_path):
 # its currency as RUNTIME DATA (`currency: eur`) and cannot attach units to
 # its twelve money fields without one. Its BR-CO total-consistency rules
 # therefore cannot detect a mixed-currency invoice; under units they would
-# (corpus-lane, who built the data shape and measured it).
+# (a downstream user, who built the data shape and measured it).
 #
 # The third defect is the one that shaped this: `"EUR"` written in a rulebase
 # is an ATOM, `iso_code` is a Python STRING, and they do not unify — so even
@@ -1387,7 +1386,7 @@ def test_the_accessors_still_work_when_bound(tmp_path):
 # ── number/1 accepts a quantity; quantity/1 says it explicitly ───────────────
 #
 # The most dangerous thing found this session, and it was found by building
-# the migration rather than by reading it (corpus-lane, 2026-09-11). <downstream-domain>
+# the migration rather than by reading it (a downstream user, 2026-09-11). <downstream-domain>
 # guards every money field with `number(V)` in `sum_field/3`, documented as
 # "a member whose KEY is absent or non-numeric contributes nothing... empty
 # list -> 0". Measured before the fix:
@@ -1625,7 +1624,7 @@ def test_the_inline_refusal_names_the_directive_that_was_WRITTEN():
 
     The refusal hardcoded `-constant_number_units` even when the author wrote
     `-constant_number_currency`, sending them to look for a directive that is
-    not in their file (iso-export-lane, 2026-09-11).
+    not in their file (a downstream user, 2026-09-11).
 
     Retargeted 2026-09-13: the DECLARATION path no longer refuses at all (it
     converts), so this now guards the INLINE path, which still refuses and
@@ -1641,7 +1640,7 @@ def test_the_inline_refusal_names_the_directive_that_was_WRITTEN():
 
 
 def test_sum_list_still_accepts_every_numeric_kind(tmp_path):
-    """REGRESSION, found on canonical by the harness lane's answer diff.
+    """REGRESSION, found on canonical by a downstream checker's answer diff.
 
     `06290b23` added pre-validation to `sum_list/2` so that a single
     non-numeric element could not be returned unchanged by the new

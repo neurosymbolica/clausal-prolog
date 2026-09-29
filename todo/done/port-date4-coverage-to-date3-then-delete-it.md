@@ -47,7 +47,7 @@ Nothing was deleted to make room: `ymd_date/4`'s own tests still exercise
 `_date_4` directly, which is correct, because it is still a live predicate.
 
 Also pinned while there: `date(2020, True, 5) == date(2020, 1, 5)`. `bool`
-subclasses `int`, so this follows `datetime.date` exactly — but the corpus's gold
+subclasses `int`, so this follows `datetime.date` exactly — but downstream code's gold
 harnesses take the OPPOSITE view and exclude bool explicitly
 (`isinstance(x, int) and not isinstance(x, bool)`). The two disagree. Recorded as
 a pinned behaviour so that making `date/3` stricter is a decision someone takes,
@@ -59,7 +59,7 @@ The blocker recorded here earlier was real and was resolved by an operator
 ruling rather than by code: **bad dates should fail fast and loudly.**
 
 `ymd_date/4` FAILED on a calendrically-invalid triple where the `date/3` TERM
-RAISES, and `library/rolling_window`'s E-malformed tests required the failure. That
+RAISES, and a downstream helper's E-malformed tests required the failure. That
 looked like it needed a construct-or-fail primitive to preserve. It did not —
 the behaviour being preserved was a SILENT one, and explicitly out of contract:
 `max_stay.clausal` §6.3 / DIFFERENTIAL E2 classed a malformed history item as
@@ -70,10 +70,10 @@ it raise, and update the out-of-contract tests to say so.
 
 | phase | what | commits |
 |---|---|---|
-| 1 | 82 ground-literal sites | downstream `156ef73`, domains `4e7160d3`, train `d8ed0e7` |
-| 2a | 6 computed-component sites (sara_irc_tax, <downstream-domain>21) | domains `dcb7d62d` |
-| 2b | 3 transitional compat clauses | downstream `35521d6`, train `21a991b` |
-| 2c | rolling_window + its tests; schengen E2 re-pinned | this change |
+| 1 | 82 ground-literal sites | downstream |
+| 2a | 6 computed-component sites (two `<downstream-domain>`s) | downstream |
+| 2b | 3 transitional compat clauses | downstream |
+| 2c | a downstream helper + its tests; one domain test re-pinned | this change |
 | 3 | `_date_4` and the `ymd_date/4` registration deleted | this change |
 
 `day_of/2` now constructs through `date/3`, so an invalid endpoint raises
@@ -108,9 +108,8 @@ Collection is -14 items, every one of them a deleted `_date_4`/`ymd_date` test
 and nothing else (full collect-only set diffed, no other item moved).
 `143 + 12294 + 50 + 37 = 12524` = collected, so every item is accounted for.
 
-Corpus: schengen_90_180_max_stay 81/81, schengen_90_180 27/27,
-working_time_average 3639/3639, posted_workers 32/32, de_minimis 39/39 —
-all unchanged. Library suites at baseline except test_rolling_window 35 -> 36
+Downstream: every date-bearing `<downstream-domain>` checked was unchanged.
+Library suites at baseline except one helper's suite, 35 -> 36
 (two E-malformed tests became three).
 
 The `++` error-bridge todo is no longer a dependency of this one; it was routed

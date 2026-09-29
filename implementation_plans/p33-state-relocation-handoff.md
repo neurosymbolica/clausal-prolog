@@ -240,7 +240,7 @@ timing user-decided, and is explicitly out of P3-3's scope (see
   >3% regression fails. Assert `'feat/p33...' in clausal.__file__` (or equivalent) before
   ANY bench run from outside the worktree — a P3-2 bench script silently imported canonical
   `/workspace/clausal` once and produced a reproducible 70x-wrong first result.
-- `<harness-library>` is GATE_CORE — off limits. `_get_dispatch` signature frozen (~22 out-of-tree
+- `<harness-library>` is frozen — off limits. `_get_dispatch` signature frozen (~22 out-of-tree
   implementors).
 - User ruling in force since 2026-09-05: C changes are allowed where they make sense — this
   relaxes any assumption that a phase defaults to "no C changes."

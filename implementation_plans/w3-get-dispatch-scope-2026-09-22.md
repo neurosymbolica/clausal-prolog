@@ -62,7 +62,7 @@ is W4's (the class going), not this workstream's.
 
 1. A dotted goal resolving to a module/non-predicate must raise a NAMED
    exception whose class name is in the rendered first line; send the verbatim
-   line to the corpus lane and the export lane BEFORE landing, and say whether the
+   line to a downstream user and a downstream exporter BEFORE landing, and say whether the
    plain AttributeError path is still reachable. They hold their gates until
    then.
 2. `isinstance(x, PredicateMeta) and x._fields != ()` is a live
@@ -142,7 +142,7 @@ suite and the package gate, and independent of the downstream census.
 
 ## RULED 2026-09-22 (operator) — W4's Python boundary
 
-* **GO for the downstream census** (the corpus lane's two-number
+* **GO for the downstream census** (a downstream user's two-number
   definition). Relayed.
 * **`m.pred` becomes the module-qualified atom** (the `-hide` mangling,
   `m<US>pred`), and the engine DEMANGLES it at the dispatch funnel and in
@@ -218,8 +218,8 @@ TWO METHOD NOTES worth more than the diff:
 
 `.so`: built in a same-sha worktree, cp-then-mv'd into the room and then into
 the clone (`ec439fb1a262f758...`). TWO LIVE IMPORTERS held the clone's old
-`.so` at landing time (a law-portal `manage.py runserver`, pids 1046864 and
-2933588); they keep the old inode until restart, so that server is running
+`.so` at landing time (a long-lived downstream server, two
+pids); they keep the old inode until restart, so that server is running
 pre-W4a C against post-W4a Python until it is restarted. The mix is benign
 (the new Python cannot build the instance the old C arm would recognise) but
 it is not the tree.

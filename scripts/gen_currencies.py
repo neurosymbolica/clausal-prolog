@@ -96,14 +96,14 @@ def currency_bindings(records):
 
 # Curated subunit WORDS, one per currency whose minor unit a rulebase writes.
 # EUR and USD first (operator, 2026-09-11), widened the same day to AUD, THB
-# and GBP after a corpus census found 139 identifiers carrying a minor-unit
-# scale in their NAMES across 27 domains -- 6 of which used a currency with no
-# minor unit here. ISO 4217 carries the SCALE but not the WORD, so these are
+# and GBP after a downstream census found identifiers carrying a minor-unit
+# scale in their NAMES, some using a currency with no minor unit here.
+# ISO 4217 carries the SCALE but not the WORD, so these are
 # curated; the FACTOR is never written, `_make_minor_unit` derives it from the
 # currency's own scale.
 #
 # Words are SINGULAR, as every unit name in the vocabulary is (`metre`, not
-# `metres`): GBP's subunit is `penny`, though the corpus spells its identifiers
+# `metres`): GBP's subunit is `penny`, though downstream code spells its identifiers
 # `_pence` (operator, 2026-09-11).
 MINOR_UNIT_WORDS = {"AUD": "cent", "EUR": "cent", "GBP": "penny",
                     "THB": "satang", "USD": "cent"}
