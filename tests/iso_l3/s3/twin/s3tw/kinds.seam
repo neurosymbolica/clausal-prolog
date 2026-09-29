@@ -1,0 +1,5 @@
+-module(kinds, [classify/2, pt(x, y), origin/1])
+-private([class_comparison, class_other])
+classify(1, class_comparison),
+classify(2, class_other),
+origin(pt(0, 0)),

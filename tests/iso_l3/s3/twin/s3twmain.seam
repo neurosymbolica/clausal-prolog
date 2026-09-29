@@ -1,0 +1,12 @@
+-module(s3twmain, [cmp/1, kind_of/2, tagged/1, ox/1, sig/1, ub/1, attr_val/2, made/1])
+-import_from(s3tw, [class_comparison, classify, pt, origin])
+-private([tag(t), attribute(k, v), color, red, size])
+cmp(X) <- classify(X, class_comparison)
+kind_of(X, K) <- classify(X, K)
+tagged(T) <- (T is tag(class_comparison))
+ox(X) <- origin(pt(X, _))
+sig(N) <- signature(pt, 2, N)
+ub(K) <- unbound_keys(pt(1, _), K)
+attrs([attribute(color, red), attribute(size, 3)]),
+attr_val(K, V) <- (attrs(L), member(attribute(K, V), L))
+made(P) <- (P is pt(3, 4))

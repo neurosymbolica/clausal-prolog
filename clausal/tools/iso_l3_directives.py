@@ -28,6 +28,14 @@ What is handled, and how (the ISO directive -> the seam's):
     set_prolog_flag(F, V)           -set_prolog_flag; double_quotes is kept
                                     HERE, per literal (chars/codes/atom)
     op(P, T, N)                     already applied by the reader; nothing
+    constructors([pt(x, y)])        -private([pt(x, y)]): OPTIONAL, gives a
+                                    data functor its FIELD NAMES; an exported
+                                    one (pt/2 in the module/2 list) goes to
+                                    -module as the template pt(x, y) instead
+
+Every atom and data functor a file USES is auto-declared (ruling
+2026-09-30: Clausal Prolog is not strict; there is no ``atoms/1``): see
+:meth:`DirectiveContext.auto_declare`.
 
 REFUSED, each naming the directive's ``.pl`` line: ``initialization/1``
 (D12), a ``./`` or ``../`` relative path (D10), import aliasing with ``as``
@@ -40,13 +48,13 @@ A qualified goal ``m:G`` (D10) is lowered by ``iso_l3`` to the seam's
 qualified call ``a.b.g(...)``; :attr:`DirectiveContext.module_aliases` maps
 the module name ``m`` to the dotted path an import here named.
 
-Room for slice 3: the declarations directives (``atoms/1``,
-``constructors/1``) are one more row in :data:`_DIRECTIVES`.
 """
 from __future__ import annotations
 
 import ast
+import keyword
 import os
+import re
 from typing import Any
 
 from clausal.tools.prolog_reader import VarRef
@@ -108,6 +116,130 @@ _AS_REFUSED = ("import aliasing with `as` is refused (it is SWI-only: not "
 _DOUBLE_QUOTES = ("chars", "codes", "atom")
 
 
+class Uses:
+    """What a file's clauses use, by position (ISO 7.6.2): ``atoms`` and
+    ``functors`` (name -> arities) seen in DATA positions, ``goal_names``
+    called as goals, and the clause ``heads`` (name, arity).  Filled from
+    the reader cells, so the cache-hit path (no clause is lowered) sees the
+    same population as a full lowering."""
+
+    __slots__ = ("atoms", "functors", "goal_names", "heads")
+
+    def __init__(self):
+        self.atoms: set[str] = set()
+        self.functors: dict[str, set[int]] = {}
+        self.goal_names: set[str] = set()
+        self.heads: set[tuple[str, int]] = set()
+
+    def clause(self, term) -> None:
+        if type(term) is tuple and len(term) == 3 and term[0] == ":-":
+            head, body = term[1], term[2]
+        else:
+            head, body = term, None
+        if type(head) is str:
+            self.heads.add((head, 0))
+        elif type(head) is tuple and head and type(head[0]) is str:
+            self.heads.add((head[0], len(head) - 1))
+            for a in head[1:]:
+                self.data(a)
+        if body is not None:
+            self.goal(body)
+
+    def data(self, t) -> None:
+        stack = [t]
+        while stack:
+            t = stack.pop()
+            if type(t) is str:
+                self.atoms.add(t)
+            elif type(t) is list:
+                stack.extend(t)
+            elif type(t) is tuple and t and type(t[0]) is str:
+                if t[0] == "$chars":
+                    continue
+                if t[0] != ".":
+                    self.functors.setdefault(t[0], set()).add(len(t) - 1)
+                stack.extend(t[1:])
+
+    def goal(self, g) -> None:
+        if type(g) is str:
+            self.goal_names.add(g)
+            return
+        if not (type(g) is tuple and g and type(g[0]) is str):
+            return
+        name, args = g[0], g[1:]
+        if name in (",", ";", "->", "*->") and len(args) == 2 \
+                or name == "\\+" and len(args) == 1:
+            for a in args:
+                self.goal(a)
+            return
+        if name == ":" and len(args) == 2:
+            self.goal(args[1])
+            return
+        self.goal_names.add(name)
+        key = (name, len(args))
+        from clausal.tools.iso_l3 import _META_GOAL_ARGS  # noqa: PLC0415
+        meta = _META_GOAL_ARGS.get(key, ())
+        for i, a in enumerate(args):
+            if i in meta:
+                while (type(a) is tuple and len(a) == 3 and a[0] == "^"):
+                    self.data(a[1])
+                    a = a[2]
+                self.goal(a)
+            elif i == 0 and key in _PROCEDURE_ARGS:
+                self._procedure(a)
+            elif i == 0 and name == "call":
+                # A closure names a procedure, not data.
+                self._closure(a)
+            else:
+                self.data(a)
+
+    def _procedure(self, t) -> None:
+        """assertz(C), retract(C), clause(H, B): a CLAUSE, not data -- its
+        head is a procedure (which assertz may create), its body goals."""
+        if type(t) is tuple and len(t) == 3 and t[0] == ":-":
+            self._closure(t[1])
+            self.goal(t[2])
+        else:
+            self._closure(t)
+
+    def _closure(self, t) -> None:
+        if type(t) is str:
+            self.goal_names.add(t)
+        elif type(t) is tuple and t and type(t[0]) is str and t[0] != "$chars":
+            self.goal_names.add(t[0])
+            for a in t[1:]:
+                self.data(a)
+
+
+#: Builtins whose first argument is a clause or a clause head.
+_PROCEDURE_ARGS = frozenset({
+    ("assertz", 1), ("asserta", 1), ("assert", 1), ("retract", 1),
+    ("retractall", 1), ("clause", 2),
+})
+
+
+def _engine_names(name: str) -> bool:
+    """True when the engine gives *name* a meaning of its own -- a goal it
+    runs under that spelling, or an arithmetic evaluable at any arity -- so
+    a module binding of the name would shadow it."""
+    from clausal.tools.prolog_to_clausal import _engine_has_goal  # noqa: PLC0415
+    if _engine_has_goal(name):
+        return True
+    return name in _evaluable_names()
+
+
+_EVALUABLE_NAMES: "frozenset | None" = None
+
+
+def _evaluable_names() -> frozenset:
+    global _EVALUABLE_NAMES
+    if _EVALUABLE_NAMES is None:
+        from clausal.logic.exact_arith import EVALUABLE  # noqa: PLC0415
+        _EVALUABLE_NAMES = frozenset(k[0] if type(k) is tuple else k
+                                     for k in EVALUABLE)
+    return _EVALUABLE_NAMES
+
+
 class DirectiveContext:
     """The per-file state directive lowering shares with clause lowering.
 
@@ -144,6 +276,22 @@ class DirectiveContext:
         self.dropped_keys: set[str] = set()
         #: The module's own name, from its module/2 (``own:G`` is local).
         self.own_module: "str | None" = None
+        #: constructors/1 templates found by :func:`prescan_constructors`
+        #: BEFORE lowering: module/2 comes first, and an exported
+        #: constructor must reach -module as its template, not as name/N.
+        self.prescanned: "dict[tuple[str, int], tuple[str, ...]]" = {}
+        #: (name, arity) -> field names, as constructors/1 declared them.
+        self.constructors: "dict[tuple[str, int], tuple[str, ...]]" = {}
+        #: (name, arity) -> the span of the constructors/1 that declared it.
+        self.constructor_spans: dict = {}
+        #: The (name, arity) module/2 exported as a constructor template.
+        self.exported_constructors: "set[tuple[str, int]]" = set()
+        #: The (name, arity) module/2 exported as a PREDICATE (name/N).
+        self.exported_predicates: "set[tuple[str, int]]" = set()
+        #: What :meth:`auto_declare` declared: atoms, and data functors as
+        #: (name, arity) -- each bound by name.
+        self.auto_atoms: list = []
+        self.auto_functors: list = []
         self._t = None
 
     # ── the seam transformer, one per file ──
@@ -260,6 +408,59 @@ class DirectiveContext:
             raise _refused(_unknown(key), span)
         return handler(self, args, arg_spans, span)
 
+    def auto_declare(self, uses: "Uses", span=None) -> list:
+        """Declare every atom and data functor the file USES (ruling
+        2026-09-30: Clausal Prolog is not strict), through the seam's
+        ``-private`` handler -- the same declaration a seam file writes --
+        and return its statements, for the END of the module body.
+
+        What a declaration buys a ``.pl`` module is its import surface: the
+        name is bound to its spelling, so ``-import_from(m, [red])`` in a
+        seam file (or a Python ``from m import red``) finds it.  A data term
+        builds with or without one (L3 lowers it to its cell).
+
+        A data functor is declared by NAME, as an atom, and gets no field
+        signature: a signature would make it a declared data functor, and
+        ``assertz`` of a term of it would then be refused (ISO lets any
+        callable term be asserted).  Field names come from constructors/1
+        only.
+
+        Left out, because the name already means something here and binding
+        it would shadow that: a clause head, a goal, a name a directive
+        declares (dynamic, table, a name/N export ...), an imported name, a
+        constructor, an engine builtin or evaluable, and any spelling a
+        declaration cannot bind (:func:`_is_declarable`).
+
+        Raises :class:`DirectiveRefused` for a constructor that is also
+        defined by clauses here: a constructor is data."""
+        for key, where in self.constructor_spans.items():
+            if key in uses.heads:
+                raise _refused(
+                    f"constructors(...): {key[0]}/{key[1]} is declared a "
+                    f"constructor (data) and is also defined by clauses in "
+                    f"this file; a name/arity is one or the other", where)
+        taken = set(uses.goal_names) | {n for n, _a in uses.heads}
+        taken |= {n for n, _a in self.constructors}
+        if self._t is not None:
+            taken |= set(self._t._import_remap)
+            taken |= set(getattr(self._t, "_imported_functors", ()))
+            for item in self._t._module_items:
+                for spec in getattr(item, "specs", None) or ():
+                    if type(spec) is tuple and spec and type(spec[0]) is str:
+                        taken.add(spec[0])
+        wanted = set(uses.atoms) | set(uses.functors)
+        wanted |= {n for n, _line in self.bare_atom_imports}
+        names = sorted(n for n in wanted - taken
+                       if _is_declarable(n) and not _engine_names(n))
+        self.auto_atoms = [n for n in names if n not in uses.functors]
+        self.auto_functors = sorted(
+            (n, a) for n in names if n in uses.functors
+            for a in sorted(uses.functors[n]))
+        if not names:
+            return []
+        return self.seam("private", [_list([_name(n) for n in names])],
+                         span, "auto-declaration")
+
     def warn_bare_atom_imports(self) -> None:
         """D11(a): ONE warning per file, with the count and the names."""
         if not self.bare_atom_imports:
@@ -341,8 +542,16 @@ def _module(ctx: DirectiveContext, args, spans, span):
     entries = []
     for e, s in zip(exports, _list_spans(spans[1], len(exports))):
         pi = _indicator(e)
+        if pi is not None and pi in ctx.prescanned:
+            # An exported constructor: -module's template entry is what
+            # exports a DATA functor with its fields (a name/N entry
+            # exports a predicate).
+            entries.append(_template_ast(pi[0], ctx.prescanned[pi]))
+            ctx.exported_constructors.add(pi)
+            continue
         if pi is not None:
             entries.append(_pi_ast(*pi))
+            ctx.exported_predicates.add(pi)
             continue
         if type(e) is tuple and len(e) == 4 and e[0] == "op":
             ctx.apply_op(e[1], e[2], e[3], _top(s) or span, what)
@@ -542,6 +751,74 @@ def _initialization(ctx, args, spans, span):
         span)
 
 
+def _constructors(ctx, args, spans, span):
+    """``constructors([pt(x, y), ...])``: give data functors FIELD NAMES
+    (ruling 2026-09-30).  Optional -- a data functor needs no declaration
+    -- and routed to the seam's ``-private`` template entry, which is what
+    gives a seam constructor its fields (``signature/3``,
+    ``unbound_keys/2``).  An entry module/2 exported as ``pt/2`` already
+    went to ``-module`` as its template (:func:`prescan_constructors`)."""
+    what = "constructors(...)"
+    templates = []
+    for e, s in _sequence(args[0], spans[0]):
+        where = _top(s) or span
+        name, fields = _constructor_template(e, where, what)
+        key = (name, len(fields))
+        if key in ctx.constructors:
+            if ctx.constructors[key] != fields:
+                raise _refused(
+                    f"{what}: {name}/{len(fields)} is declared twice with "
+                    f"different field names ({', '.join(ctx.constructors[key])}"
+                    f" and {', '.join(fields)})", where)
+            continue
+        if key in ctx.exported_predicates:
+            # module/2 routed it before this directive was known: the
+            # prescan missed it (it cannot, for a file that reads).
+            raise _refused(
+                f"{what}: {name}/{len(fields)} was exported by module/2 as a "
+                f"predicate before this declaration was seen", where)
+        ctx.constructors[key] = fields
+        ctx.constructor_spans[key] = where
+        if key not in ctx.exported_constructors:
+            templates.append(_template_ast(name, fields))
+    if not templates:
+        return []
+    return ctx.seam("private", [_list(templates)], span, what)
+
+
+def _constructor_template(e, where, what) -> "tuple[str, tuple[str, ...]]":
+    """``pt(x, y)`` -> ('pt', ('x', 'y')); anything else is refused."""
+    if type(e) is str:
+        raise _refused(
+            f"{what}: {_show(e)} has no fields; an atom needs no "
+            f"declaration (every atom a file uses is declared), and a "
+            f"constructor is written with its field names, pt(x, y)", where)
+    ind = _indicator(e)
+    if ind is not None:
+        raise _refused(
+            f"{what}: {_show(e)} gives no field names; write the template "
+            f"{ind[0]}({', '.join(f'f{i + 1}' for i in range(ind[1]))}) "
+            f"with the names of its fields", where)
+    if not (type(e) is tuple and len(e) > 1 and type(e[0]) is str
+            and e[0] != "$chars"):
+        raise _refused(f"{what}: {_show(e)} is not a template like "
+                       f"pt(x, y)", where)
+    name, fields = e[0], e[1:]
+    if not _is_declarable(name):
+        raise _refused(f"{what}: {_show(name)} cannot name a constructor "
+                       f"(a lowercase identifier that is no Python keyword or "
+                       f"reserved name is required)", where)
+    for f in fields:
+        if type(f) is not str or not _is_declarable(f):
+            raise _refused(
+                f"{what}: in {_show(e)}, the field name {_show(f)} is not a "
+                f"lowercase identifier atom (a Python keyword and a reserved "
+                f"name such as true cannot name a field)", where)
+    if len(set(fields)) != len(fields):
+        raise _refused(f"{what}: {_show(e)} repeats a field name", where)
+    return name, tuple(fields)
+
+
 _DIRECTIVES = {
     ("module", 2): _module,
     ("use_module", 1): _use_module,
@@ -552,6 +829,7 @@ _DIRECTIVES = {
     ("meta_predicate", 1): _meta_predicate,
     ("set_prolog_flag", 2): _set_prolog_flag,
     ("op", 3): _op,
+    ("constructors", 1): _constructors,
     ("initialization", 1): _initialization,
     ("initialization", 2): _initialization,
 }
@@ -735,6 +1013,56 @@ def _name(ident: str) -> ast.Name:
 
 def _list(elts: list) -> ast.List:
     return ast.List(elts=elts, ctx=ast.Load())
+
+
+def _template_ast(name: str, fields) -> ast.Call:
+    """``pt(x, y)``: a -module/-private template entry."""
+    return ast.Call(func=_name(name), args=[_name(f) for f in fields],
+                    keywords=[])
+
+
+#: Names no declaration may bind: the engine's truth values (a seam
+#: declaration of one is a load error) and the reserved empty-list/curly.
+_UNDECLARABLE = frozenset({"true", "false", "undefined", "Undefined",
+                           "True", "False", "None", "[]", "{}"})
+
+
+def _is_declarable(name: str) -> bool:
+    """A spelling a declaration can bind as a module name: a lowercase
+    identifier that is no Python keyword (the translator's rule for a bare
+    atom), and no reserved name."""
+    return (bool(name) and name[0].islower() and name.isidentifier()
+            and not keyword.iskeyword(name) and name not in _UNDECLARABLE)
+
+
+_CONSTRUCTORS_RE = re.compile(r"\bconstructors\s*\(")
+
+
+def prescan_constructors(source: str) -> "dict[tuple[str, int], tuple[str, ...]]":
+    """The constructors/1 templates of *source*, read ahead of lowering.
+
+    module/2 comes first in a file and constructors/1 after it, but an
+    exported constructor must reach the seam's -module as its template
+    (that is what exports a DATA functor with its fields), so the export
+    list needs the templates when it is lowered.  Only a file whose text
+    mentions ``constructors(`` is read twice.  A malformed entry is left
+    for the real directive to refuse, with its line."""
+    if not _CONSTRUCTORS_RE.search(source):
+        return {}
+    from clausal.tools import iso_l3  # noqa: PLC0415
+    items, _table = iso_l3.iter_iso(source)
+    found: dict = {}
+    for it in items:
+        if type(it).__name__ != "Directive":
+            continue
+        t = it.term
+        if not (type(t) is tuple and len(t) == 2 and t[0] == "constructors"):
+            continue
+        for e, _s in _sequence(t[1], None):
+            if (type(e) is tuple and len(e) > 1 and type(e[0]) is str
+                    and all(type(f) is str for f in e[1:])):
+                found.setdefault((e[0], len(e) - 1), tuple(e[1:]))
+    return found
 
 
 def _pi_ast(name: str, arity: int) -> ast.BinOp:

@@ -231,7 +231,11 @@ def test_bare_atoms_in_import_lists_give_one_counted_warning_per_file(
     assert "2 bare atom entries" in msg and "(cite, rule)" in msg, msg
     assert "s2_bare.pl:2" in msg
     assert ans(mod, "t") == ["a", "b"]
-    assert not mod.__dict__.get("cite")
+    # Nothing is imported from s2plib; the entry is a USE of the global atom,
+    # which slice 3 auto-declares (bound to its own spelling, as a seam
+    # facade's -import_from of an atom binds it).
+    assert mod.__dict__.get("cite") == "cite"
+    assert "cite" not in vars(sys.modules["s2p.s2plib"])
 
 
 # ── D12 and unknown directives ──
