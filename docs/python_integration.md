@@ -724,6 +724,11 @@ clausal.declared_atoms(shapes.forms)   # just forms.clausal's declarations
   `sys.modules` whose file is under the package directory. It never imports
   a submodule: asking a question must not run module bodies. Import the
   submodules you want counted first.
+- **For a package it is a vocabulary, not the root's attributes.** An atom
+  declared only in a submodule (a `-private` one, say) is in
+  `declared_atoms(pkg)`, but the root does not bind it, so `getattr(pkg, name)` can be missing: the package
+  root binds only what its own `__init__` declares or imports. To learn the
+  root's attribute surface, read the root module's own names.
 - The argument is an imported module, a `Module`, or a dotted name. A name
   is looked up in `sys.modules` the way `module=` is, and one that is not
   loaded raises `existence_error(module, …)`.

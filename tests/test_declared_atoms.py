@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import importlib
 import sys
+import uuid
 
 import pytest
 
@@ -160,3 +161,35 @@ def test_rejects_non_module():
 
 def test_exported_from_clausal():
     assert "declared_atoms" in clausal.__all__
+
+
+
+def test_package_answer_is_a_vocabulary_not_the_root_attributes(tmp_path):
+    """For a package, ``declared_atoms`` is the union over its own files
+    (its atom vocabulary), NOT the names bound on the package root: an atom
+    declared only in a submodule is listed, yet the root has no such
+    attribute.  The spellings are unique to this test, so no earlier load
+    has put them in the process-wide atom pool."""
+    tag = uuid.uuid4().hex[:8]
+    name, sub_atom, root_atom = f"da_voc_{tag}", f"only_in_sub_{tag}", f"in_root_{tag}"
+    pkg_dir = tmp_path / name
+    pkg_dir.mkdir()
+    (pkg_dir / "__init__.clausal").write_text(
+        f"-import_from({name}.sub, [s/1])\n-private([{root_atom}])\n")
+    (pkg_dir / "sub.clausal").write_text(
+        f"-private([{sub_atom}])\ns({sub_atom}),\n")
+    sys.path.insert(0, str(tmp_path))
+    importlib.invalidate_caches()
+    try:
+        pkg = importlib.import_module(name)
+        assert f"{name}.sub" in sys.modules
+        got = clausal.declared_atoms(pkg)
+        assert got == {sub_atom, root_atom}
+        assert not hasattr(pkg, sub_atom)
+        assert sub_atom in vars(sys.modules[f"{name}.sub"])
+        assert hasattr(pkg, root_atom)
+    finally:
+        for m in [m for m in sys.modules if m == name or m.startswith(name + ".")]:
+            sys.modules.pop(m, None)
+        sys.path.remove(str(tmp_path))
+        importlib.invalidate_caches()
