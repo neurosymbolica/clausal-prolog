@@ -5,7 +5,8 @@ hybrid: clauses are lowered HERE to the transformed AST; directives go through
 the seam's own handlers -- slice 2).  Scope today is slices 0 and 1: facts,
 rules, every ISO term shape, and the control constructs ``,`` ``;`` ``\\+``
 ``true`` ``fail``/``false`` and ``call/N``.  Whatever is outside that scope --
-a directive, a DCG rule, a reader ``SyntaxIssue`` -- is REFUSED, never half-handled, so a gap is a loud import error
+a directive, a DCG rule, a reader ``SyntaxIssue``, and by design ``!``, ``->``
+and ``*->`` -- is REFUSED, never half-handled, so a gap is a loud import error
 and not a silently skipped clause.
 
 WHY THE TRANSFORMED AST IS THE JOIN (plan §2): ``compile_module``'s
@@ -70,7 +71,17 @@ class LoweringRefused(Exception):
         self.span = span
 
 
-# ── meta-argument positions ──────────────────────────────────────────────────
+# ── cut-free ruling ──────────────────────────────────────────────────────────
+
+_CUT_FREE = ("Clausal is cut-free with no committed choice, by design "
+             "(ruling): !, -> and *-> are refused")
+
+#: Control constructs refused by design, and what each one is.
+_REFUSED_CONTROL = {
+    "!": "`!` (cut)",
+    "->": "`->` (if-then)",
+    "*->": "`*->` (soft-cut)",
+}
 
 #: Goal-argument positions the compiler lowers AS GOALS (``terms_to_goalop``
 #: turns these calls into a ``MetaCall``; ``ir.META_GOAL_POSITIONS``), by
@@ -277,14 +288,23 @@ class _ClauseLowering:
         if type(g) is VarRef:
             return self._call("call", [self.var(g)], pos, pos)
         if type(g) is str:
+            if g in _REFUSED_CONTROL:
+                raise LoweringRefused(
+                    f"{_REFUSED_CONTROL[g]} is refused: {_CUT_FREE}",
+                    _top_span(sp))
             if g == "true":
                 return _const(True)
             if g in ("fail", "false"):
                 return _const(False)
+            self._check_goal_name(g, sp)
             return self._call(g, [], pos, pos)
         if type(g) is tuple and g and _is_callable_name(g[0]) and g[0] != "$chars":
             name, args = g[0], g[1:]
             spans = _arg_spans(sp, len(args))
+            if name in _REFUSED_CONTROL and len(args) == 2:
+                raise LoweringRefused(
+                    f"{_REFUSED_CONTROL[name]} is refused: {_CUT_FREE}",
+                    _top_span(sp))
             if name == "," and len(args) == 2:
                 elts: list[ast.expr] = []
                 while (type(g) is tuple and len(g) == 3 and g[0] == ","):
@@ -296,12 +316,20 @@ class _ClauseLowering:
                              elements=ast.List(elts=elts, ctx=ast.Load()),
                              position=_pos_expr(pos))
             if name == ";" and len(args) == 2:
+                left = args[0]
+                if (type(left) is tuple and len(left) == 3
+                        and left[0] in ("->", "*->")):
+                    raise LoweringRefused(
+                        f"{_REFUSED_CONTROL[left[0]]} is refused (as the "
+                        f"condition of a `;`): {_CUT_FREE}",
+                        _top_span(spans[0]) or _top_span(sp))
                 return _node("Or", left=self.goal(args[0], spans[0]),
                              right=self.goal(args[1], spans[1]),
                              position=_pos_expr(pos))
             if name == "\\+" and len(args) == 1:
                 return _node("Not", operand=self.goal(args[0], spans[0]),
                              position=_pos_expr(pos))
+            self._check_goal_name(name, sp)
             key = (name, len(args))
             goal_args = _META_GOAL_ARGS.get(key, ())
             lowered = []
@@ -312,6 +340,8 @@ class _ClauseLowering:
                     else:
                         lowered.append(self.goal(a, s))
                 else:
+                    if name == "call" and i == 0:
+                        self._refuse_control_in(a, s)
                     lowered.append(self.term(a, s))
             head_pos = self._pos.of(_functor_span(sp, name))
             return self._call(name, lowered, head_pos, pos)
@@ -329,6 +359,27 @@ class _ClauseLowering:
                          right=self._iterated_goal(g[2], spans[1]),
                          position=_pos_expr(self._pos.of(_top_span(sp))))
         return self.goal(g, sp)
+
+    def _refuse_control_in(self, g: Any, sp) -> None:
+        """A goal written as ``call/N``'s first argument is still a goal: the
+        cut-free refusal applies to what is visible of it at load time."""
+        if type(g) is str and g in _REFUSED_CONTROL:
+            raise LoweringRefused(
+                f"{_REFUSED_CONTROL[g]} is refused: {_CUT_FREE}", _top_span(sp))
+        if type(g) is tuple and g and type(g[0]) is str:
+            if g[0] in _REFUSED_CONTROL and len(g) == 3:
+                raise LoweringRefused(
+                    f"{_REFUSED_CONTROL[g[0]]} is refused: {_CUT_FREE}",
+                    _top_span(sp))
+            if g[0] in (",", ";") and len(g) == 3 or g[0] == "\\+" and len(g) == 2:
+                for a, s in zip(g[1:], _arg_spans(sp, len(g) - 1)):
+                    self._refuse_control_in(a, s)
+
+    def _check_goal_name(self, name: str, sp) -> None:
+        if name.startswith(_DOLLAR):
+            raise LoweringRefused(
+                f"`{name}` is a reserved name: a `$`-prefixed predicate is "
+                f"the engine's own", _top_span(sp))
 
     def _call(self, name: str, args: list, name_pos, pos) -> ast.expr:
         return _node(
@@ -372,6 +423,9 @@ def lower_clause(term: Any, spans=None, var_names=None,
         head, body = term, None
         head_sp, body_sp = spans, None
 
+    if type(head) is VarRef:
+        raise LoweringRefused(
+            "a clause head is a variable (ISO instantiation_error)", whole_span)
     if type(head) is str:
         name, args = head, ()
     elif type(head) is tuple and head and type(head[0]) is str \
@@ -381,6 +435,17 @@ def lower_clause(term: Any, spans=None, var_names=None,
         raise LoweringRefused(
             f"a clause head is not callable: {head!r} (ISO type_error(callable))",
             whole_span)
+    if name.startswith(_DOLLAR):
+        raise LoweringRefused(
+            f"`{name}` is a reserved name: a `$`-prefixed predicate is the "
+            f"engine's own", whole_span)
+    if name in (",", ";", "->", "*->", "!", "\\+", ":-", "call") \
+            or (name in ("true", "fail", "false") and not args):
+        raise LoweringRefused(
+            f"cannot define the control construct {name}/{len(args)} (ISO "
+            f"permission_error(modify, static_procedure, {name}/{len(args)}))",
+            whole_span)
+
     lw = _ClauseLowering(var_names, positions)
     fields = tuple(f"arg_{i}" for i in range(len(args)))
     decl = ast.Expr(value=ast.Call(
