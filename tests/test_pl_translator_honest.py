@@ -354,3 +354,52 @@ class TestNativeLibraries:
             w(X) :- v(X).
         """)
         assert _answers(m, "w") == [3]
+
+
+# ── E. the double_quotes flag governs the "..." below it ──────────────
+
+
+class TestDoubleQuotesFlag:
+    """``:- set_prolog_flag(double_quotes, M)`` changes how every later
+    ``"..."`` in the file reads (ISO 7.11.2.5).  Scryer, for the file below:
+    d0 = [a,b], d1 = [97,98], d2 = ab, d3 = [a,b]."""
+
+    _SRC = """\
+        d0("ab").
+        :- set_prolog_flag(double_quotes, codes).
+        d1("ab").
+        :- set_prolog_flag(double_quotes, atom).
+        d2("ab").
+        :- set_prolog_flag(double_quotes, chars).
+        d3("ab").
+        t(0) :- d0([a, b]).
+        t(1) :- d1([97, 98]).
+        t(2) :- d2(ab).
+        t(3) :- d3([a, b]).
+    """
+
+    def test_each_mode_reads_as_scryer_does(self, tmp_path):
+        m = _load(tmp_path, "dq", self._SRC)
+        assert _answers(m, "t") == [0, 1, 2, 3]
+
+    def test_codes_answer(self, tmp_path):
+        m = _load(tmp_path, "dq_codes", self._SRC)
+        assert _answers(m, "d1") == [[97, 98]]
+
+    def test_atom_answer(self, tmp_path):
+        m = _load(tmp_path, "dq_atom", self._SRC)
+        assert _answers(m, "d2") == ["ab"]
+
+    def test_short_directive_spelling(self, tmp_path):
+        m = _load(tmp_path, "dq_short", """\
+            :- set_prolog_flag(double_quotes, codes).
+            t(X) :- X = "a".
+        """)
+        assert _answers(m, "t") == [[97]]
+
+    def test_unknown_mode_is_refused(self, tmp_path):
+        with pytest.raises(SyntaxError, match=r"line 1.*double_quotes"):
+            _load(tmp_path, "dq_bad", """\
+                :- set_prolog_flag(double_quotes, string).
+                t("a").
+            """)

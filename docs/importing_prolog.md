@@ -247,12 +247,17 @@ r('hello world'),
 - `true`, `false` and `fail` map to Python `True`/`False` (`a :- true.`
   becomes `a() <- (True)`).
 
-A `:- double_quotes(Mode)` directive in the source — or the ISO spelling
-`:- set_prolog_flag(double_quotes, Mode)` — is carried across in place,
-where it governs the clauses below it: `atom` becomes
-`-double_quotes(atom)`; `chars` is already what the emitted header says, so
-it is not written twice; `codes` has no Clausal mode (codes are spelled
-`b"…"` at the literal) and is emitted as a comment.
+The ISO directive `:- set_prolog_flag(double_quotes, Mode)` (or the short
+`:- double_quotes(Mode)`) governs every `"…"` below it, as in Scryer, and the
+translator applies it at each literal: under `chars` (the default) `"ab"` is
+the string `"ab"` (the chars `[a, b]`), under `codes` it is the list
+`[97, 98]`, and under `atom` it is the atom `'ab'`. The module's own mode
+follows for `chars` and `atom` (`-double_quotes(atom)`), so
+`current_prolog_flag(double_quotes, M)` reports it; Clausal has no `codes`
+module mode, so that directive becomes a comment while its literals are
+still emitted as codes. Any other value is refused, naming the line (Scryer:
+`domain_error(flag_value, double_quotes+Value)`). Until 2026-09-29 `codes`
+was only a comment and the strings below it stayed chars.
 
 Any other `:- set_prolog_flag(Flag, Value).` is carried across as the
 directive [`-set_prolog_flag(Flag, 'Value')`](directives.md#-set_prolog_flag)

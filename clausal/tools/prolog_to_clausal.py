@@ -688,6 +688,11 @@ class _PrologToClausal:
         # emitted, so a translated module that has no strings keeps the
         # engine default and no directive it does not need.
         self._emitted_string = False
+        # The double_quotes flag in force at the current item (``chars``,
+        # ``codes`` or ``atom``), and the mode the emitted module is in
+        # (never ``codes``: Clausal has no such module mode).
+        self._dq_mode = "chars"
+        self._dq_engine = "chars"
         # Names this module uses as a PREDICATE (clause-head or goal
         # functor). Populated by emit_module before the emission pass.
         self._predicate_names: set[str] = set()
@@ -994,18 +999,33 @@ class _PrologToClausal:
             body = PCompound("double_quotes", (body.args[1],))
         if (isinstance(body, PCompound) and body.functor == "double_quotes"
                 and len(body.args) == 1):
+            # The flag governs every later "..." (ISO 7.11.2.5), and the
+            # translator honours it AT THE LITERAL: each PString is emitted
+            # in the mode in force where it stands (``_emit_string``), so
+            # ``codes`` -- which Clausal has no module mode for -- is kept
+            # too (2026-09-29; it was a comment, and "ab" stayed chars).
+            # The module's own mode follows for chars/atom, so
+            # current_prolog_flag(double_quotes, M) reports it.
             mode = body.args[0]
             mode_name = mode.name if isinstance(mode, PAtom) else None
-            if mode_name == "chars":
-                # The preamble carries it; emitting it here too would double it.
-                self._emitted_string = True
+            if mode_name not in ("chars", "codes", "atom"):
+                raise PrologTranslationError(
+                    f":- set_prolog_flag(double_quotes, {_plain_term(mode)}): "
+                    "ISO's double_quotes values are chars, codes and atom "
+                    "(Scryer: domain_error(flag_value, double_quotes+"
+                    f"{_plain_term(mode)})).")
+            self._dq_mode = mode_name
+            if mode_name == "codes":
+                return (f"# double_quotes(codes): each \"...\" below is "
+                        "emitted as its list of character codes")
+            if mode_name == self._dq_engine:
+                # Already the module's mode (chars: the preamble carries
+                # it); emitting it again would double it.
+                if mode_name == "chars":
+                    self._emitted_string = True
                 return None
-            if mode_name == "atom":
-                return "-double_quotes(atom)"
-            # ``codes`` (and anything else) has no clausal directive: codes are
-            # spelled ``b"..."`` at the literal, so the mode cannot be set.
-            return f"# double_quotes({mode_name or self._emit_term(mode)}) " \
-                   f"is not a clausal mode (codes are spelled b\"...\")"
+            self._dq_engine = mode_name
+            return f"-double_quotes({mode_name})"
         # :- set_prolog_flag(Flag, Value) for any other flag carries across as
         # the directive of the same name; the value is emitted QUOTED, so an
         # atom such as ``fail`` stays the atom rather than becoming a goal or
@@ -1243,10 +1263,7 @@ class _PrologToClausal:
                 return repr(term.value)
             return str(term.value)
         if isinstance(term, PString):
-            # A STRING (THE FLIP): double-quoted, and the module carries
-            # ``-double_quotes(chars)`` so it re-reads as one.
-            self._emitted_string = True
-            return _quote_string(term.value)
+            return self._emit_string(term.value)
         if isinstance(term, PList):
             return self._emit_list(term)
         if isinstance(term, PCurly):
@@ -1254,6 +1271,18 @@ class _PrologToClausal:
         if isinstance(term, PCompound):
             return self._emit_compound(term)
         return str(term)
+
+    def _emit_string(self, value: str) -> str:
+        """A ``"..."`` literal, read under the double_quotes flag in force:
+        ``codes`` → the list of codes, ``atom`` → the quoted atom, ``chars``
+        → a string (the module carries ``-double_quotes(chars)`` so it
+        re-reads as one)."""
+        if self._dq_mode == "codes":
+            return "[" + ", ".join(str(ord(c)) for c in value) + "]"
+        if self._dq_mode == "atom":
+            return _quote_atom(value)
+        self._emitted_string = True
+        return _quote_string(value)
 
     # Atoms that map to Python builtins and should not be collected as data atoms.
     _BUILTIN_ATOMS = frozenset({"true", "false", "fail", "True", "False", "None"})
