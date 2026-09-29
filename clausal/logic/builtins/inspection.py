@@ -1004,3 +1004,79 @@ def _module_constant__3(m, name, value, trail, k):
                     and unify(value, v, trail)):
                 yield None
             trail.undo(mark)
+
+
+# ── unify_with_occurs_check/2, subsumes_term/2, acyclic_term/1 (ISO) ─────────
+#
+# ISO core builtins that did not exist (existence_error(procedure, ...)).
+# Answers are Scryer's (measured 2026-09-30).
+
+
+@_builtin("unify_with_occurs_check", 2)
+def _unify_with_occurs_check__2(a, b, trail, k):
+    """unify_with_occurs_check(X, Y) -- ISO 8.2.2: unification that fails
+    rather than build a cyclic term (``unify_with_occurs_check(X, f(X))``
+    fails)."""
+    from clausal.logic.constraints import _structural_unify_oc  # noqa: PLC0415
+    mark = trail.mark()
+    if _structural_unify_oc(a, b, trail):
+        yield None
+    trail.undo(mark)
+
+
+@_builtin("subsumes_term", 2)
+def _subsumes_term__2(general, specific, trail, k):
+    """subsumes_term(General, Specific) -- ISO 8.2.4: some substitution of
+    General's variables makes it identical to Specific, binding none of
+    Specific's.  Leaves no bindings.
+
+    The ISO reference definition, step for step::
+
+        \\+ \\+ (term_variables(S, V1), unify_with_occurs_check(G, S),
+               term_variables(V1, V2), V1 == V2)
+    """
+    from clausal.logic.constraints import _structural_unify_oc  # noqa: PLC0415
+    v1: list = []
+    _collect_vars_impl(deref(specific), v1)
+    mark = trail.mark()
+    ok = _structural_unify_oc(general, specific, trail)
+    if ok:
+        v2: list = []
+        _collect_vars_impl(list(v1), v2)
+        ok = len(v1) == len(v2) and all(
+            deref(x) is deref(y) for x, y in zip(v1, v2))
+    trail.undo(mark)
+    if ok:
+        yield None
+
+
+def _is_acyclic(term) -> bool:
+    """False when *term*, followed through its variable bindings, reaches
+    itself.  Only a binding can close a cycle (a tuple or list built in
+    Python cannot contain itself through a Var otherwise), so a compound is
+    tracked on the current path by identity."""
+    path: set = set()
+
+    def walk(t) -> bool:
+        t = deref(t)
+        if type(t) in (tuple, list):
+            key = id(t)
+            if key in path:
+                return False
+            path.add(key)
+            try:
+                return all(walk(e) for e in t)
+            finally:
+                path.discard(key)
+        if isinstance(t, (SegList,)):
+            return walk(t._walk_raw()) if not isinstance(t._walk_raw(), SegList) else True
+        return True
+    return walk(term)
+
+
+@_builtin("acyclic_term", 1)
+def _acyclic_term__1(term, trail, k):
+    """acyclic_term(T) -- ISO 8.3.11 (Cor.2): T is a finite (acyclic) term.
+    ``X = f(X), acyclic_term(X)`` fails."""
+    if _is_acyclic(term):
+        yield None
