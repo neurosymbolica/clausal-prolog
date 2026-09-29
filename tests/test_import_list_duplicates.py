@@ -61,10 +61,21 @@ class TestDuplicateEntries:
         assert _answers(mod, "both", a, b) == [(7, 7)]
 
 
-def test_the_translator_emits_a_repeated_name_once():
-    """F3's trigger: ``use_module(bar, [baz/1, baz/2])`` became
-    ``-import_from(bar, [baz, baz])``.  A bare name imports every arity, so
-    one ``baz`` says it all."""
+def test_the_translator_emits_a_repeated_library_name_once():
+    """F3's trigger: ``use_module(L, [baz/1, baz/2])`` became
+    ``-import_from(L, [baz, baz])``.  A library list stays bare (a library
+    may be a Python module, which has no arities), so one ``baz`` says it
+    all."""
     from clausal.tools.prolog_to_clausal import prolog_to_clausal
-    out = prolog_to_clausal(":- use_module(bar, [baz/1, baz/2, qux/1]).\n")
-    assert "-import_from(bar, [baz, qux])" in out
+    out = prolog_to_clausal(
+        ":- use_module(library(foo), [baz/1, baz/2, qux/1]).\n")
+    assert "-import_from(foo, [baz, qux])" in out
+
+
+def test_the_translator_keeps_a_module_files_indicators():
+    """roborev round 1: a module FILE's list keeps its indicators (D20), so
+    the import is no broader than the source; a repeat is still once."""
+    from clausal.tools.prolog_to_clausal import prolog_to_clausal
+    out = prolog_to_clausal(
+        ":- use_module(bar, [baz/1, baz/2, qux/1, baz/1]).\n")
+    assert "-import_from(bar, [baz/1, baz/2, qux/1])" in out

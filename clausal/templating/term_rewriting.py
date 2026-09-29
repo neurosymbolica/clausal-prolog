@@ -4775,16 +4775,17 @@ IMPORT_ARITIES_KEY = "$import_arities"
 
 
 def _make_import_arities_record_ast(selected, source):
-    """``globals()['$import_arities'][<handle>] = frozenset({...})`` for each
-    local name whose import selected arities; ``None`` when none did, so a
-    file without ``name/N`` entries compiles byte-identically."""
+    """``predicate.record_import_arities(globals(), {local: arities})`` --
+    *arities* a sorted tuple for a ``name/N`` selection, ``None`` for a bare
+    entry (every arity).  ``None`` when *selected* is empty, so a file with
+    no ``name/N`` entry compiles byte-identically."""
     if not selected:
         return None
-    pairs_text = repr({local: tuple(sorted(found))
+    pairs_text = repr({local: (None if found is None
+                               else tuple(sorted(found)))
                        for local, found in sorted(selected.items())})
-    text = (f"globals().setdefault({IMPORT_ARITIES_KEY!r}, {{}}).update("
-            f"{{globals()[_ia_local]: frozenset(_ia_found) "
-            f"for _ia_local, _ia_found in {pairs_text}.items()}})")
+    text = ("__import__('clausal.logic.predicate', fromlist=['_'])."
+            f"record_import_arities(globals(), {pairs_text})")
     block = parse(text).body[0]
     for node in walk(block):
         copy_location(node, source)
@@ -10286,6 +10287,33 @@ class EmbedTransformer(NodeTransformer):
                 arities[local] = None
             else:
                 arities.setdefault(local, set()).add(arity)
+        # One predicate under SEVERAL local names shares one remapped
+        # reference (``module.orig``), which cannot record which spelling a
+        # call used (review round 5's residual).  With the same arities for
+        # every spelling that is harmless; with DIFFERENT ones
+        # (``[g/1, alias(g/2, gg)]``, across directives too) a call would
+        # reach the wrong spelling's arities, so it is refused (D20).
+        spellings = transformer.__dict__.setdefault("_import_spellings", {})
+        for a in aliases:
+            local = a.asname or a.name
+            per_orig = spellings.setdefault((module_path, a.name), {})
+            found = arities.get(local)
+            per_orig[local] = (None if found is None or per_orig.get(
+                local, ()) is None else frozenset(per_orig.get(local, ()))
+                | frozenset(found))
+            if len(set(per_orig.values())) > 1:
+                shown = ", ".join(
+                    f"`{name}` ("
+                    + ("every arity" if sel is None else ", ".join(
+                        f"{a.name}/{n}" for n in sorted(sel))) + ")"
+                    for name, sel in per_orig.items())
+                raise SyntaxError(
+                    f"-import_from({module_path}, [...]): {module_path}'s "
+                    f"`{a.name}` is imported under several names at "
+                    f"different arities: {shown}. The names share one "
+                    f"reference, so a call could not tell them apart; import "
+                    f"`{a.name}` under one name, or at the same arities "
+                    f"under each")
         if renamed_units:
             transformer._warn_deprecated_unit_spelling(renamed_units, expr_stmt)
         # Accumulate import info for pipeline-split ModuleAST.
@@ -10322,9 +10350,22 @@ class EmbedTransformer(NodeTransformer):
         # ``_make_import_signatures_update_ast``).
         name_pairs = [(a.asname or a.name, a.name) for a in aliases]
         sig_stmt = _make_import_signatures_update_ast(resolved, name_pairs, expr_stmt)
-        arities_stmt = _make_import_arities_record_ast(
-            {local: found for local, found in arities.items()
-             if found is not None}, expr_stmt)
+        # The body-time record (``$import_arities``) is emitted from the
+        # first directive with a ``name/N`` entry on, and then carries EVERY
+        # bare local seen in the file so far as "every arity" too: the
+        # record merges per handle, and a bare import of a handle must
+        # widen a selection made for it elsewhere (roborev, 2026-09-29).
+        bare_seen = transformer.__dict__.setdefault("_import_bare_locals", [])
+        bare_seen.extend(local for local, found in arities.items()
+                         if found is None)
+        if any(found is not None for found in arities.values()):
+            transformer._import_selected_seen = True
+        record = {}
+        if getattr(transformer, "_import_selected_seen", False):
+            record = {local: None for local in bare_seen}
+            record.update({local: found for local, found in arities.items()
+                           if found is not None})
+        arities_stmt = _make_import_arities_record_ast(record, expr_stmt)
         out = [s for s in (stmt, sig_stmt, arities_stmt) if s is not None]
         return out[0] if len(out) == 1 else out
 

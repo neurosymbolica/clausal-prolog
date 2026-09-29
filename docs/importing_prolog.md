@@ -128,7 +128,10 @@ quad(X, Y) :- double(X, T), double(T, Y).
 
 The `use_module` with an explicit import list is the recommended form — it
 maps directly to Clausal's `-import_from` directive, which injects the
-imported predicates into the calling module's namespace. `use_module/1`
+imported predicates into the calling module's namespace. The list keeps its
+indicators, so `[double/2]` imports `double/2` only, as in Scryer; a
+`library(...)` list is imported by bare name (a library may be a Python
+module, which has no arities). `use_module/1`
 imports every predicate the `.pl` module's `module/2` directive exports
 (`-import_module` plus an `-import_from` of that list); for a `.clausal` or
 `.seam` module it is `-import_module`, whose predicates are reached

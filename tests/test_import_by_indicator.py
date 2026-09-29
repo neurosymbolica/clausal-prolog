@@ -208,3 +208,77 @@ class TestImportedAtoms:
             one(A) <- k(A)
         """)
         assert imported_atoms(mod) == {"k": "ibi_lib"}
+
+
+class TestSelectionsMerge:
+    """roborev round 1: a selection is the UNION of the entries and
+    directives that name it, and a bare entry means every arity."""
+
+    def test_two_directives_import_two_arities(self, lib_dir):
+        mod = _load(lib_dir, "ibi_two_dirs", """
+            -import_from(ibi_lib, [g/1])
+            -import_from(ibi_lib, [g/2])
+            both(A, B) <- (g(A), g(B, 5))
+        """)
+        assert mod.__clausal_module__.db.adopted_arities("g") == {1, 2}
+        a, b = Var(), Var()
+        assert _answers(mod, "both", a, b) == [(1, 5)]
+
+    def test_two_directives_refuse_a_local_clause_at_either_arity(
+            self, lib_dir):
+        with pytest.raises(SyntaxError, match="g/1"):
+            _load(lib_dir, "ibi_two_dirs_clash", """
+                -import_from(ibi_lib, [g/1])
+                -import_from(ibi_lib, [g/2])
+                g(7),
+            """)
+
+    def test_a_later_bare_import_widens_an_earlier_selection(self, lib_dir):
+        with pytest.raises(SyntaxError, match="g/2"):
+            _load(lib_dir, "ibi_then_bare", """
+                -import_from(ibi_lib, [g/1])
+                -import_from(ibi_lib, [g])
+                g(7, 8),
+            """)
+
+    def test_an_earlier_bare_import_is_not_narrowed(self, lib_dir):
+        with pytest.raises(SyntaxError, match="g/2"):
+            _load(lib_dir, "ibi_bare_then", """
+                -import_from(ibi_lib, [g])
+                -import_from(ibi_lib, [g/1])
+                g(7, 8),
+            """)
+
+    def test_one_predicate_under_two_names_at_different_arities(
+            self, lib_dir):
+        """``[g/1, alias(g/2, gg)]`` is refused: both spellings share ONE
+        remapped reference, which cannot tell ``g(A, 5)`` from ``gg(A, 5)``
+        (the review-round-5 residual), so either the alias would fail or
+        the name would leak the other arity."""
+        with pytest.raises(SyntaxError) as info:
+            _load(lib_dir, "ibi_name_alias", """
+                -import_from(ibi_lib, [g/1, alias(g/2, gg)])
+            """)
+        text = " ".join(str(info.value).split())
+        assert "`g`" in text and "`gg`" in text
+
+    def test_a_nonterminal_indicator(self, tmp_path):
+        _write(tmp_path, "ibi_dcg_lib", """
+            -module(ibi_dcg_lib, [greeting//0, greeting//1])
+            greeting >> [1]
+            greeting(N) >> [1, N]
+        """)
+        sys.path.insert(0, str(tmp_path))
+        try:
+            mod = _load(tmp_path, "ibi_dcg_use", """
+                -import_from(ibi_dcg_lib, [greeting//1])
+                one(N) <- phrase(greeting(N), [1, 2])
+            """)
+            assert mod.__clausal_module__.db.adopted_arities(
+                "greeting") == {3}
+            n = Var()
+            assert _answers(mod, "one", n) == [(2,)]
+        finally:
+            sys.path.remove(str(tmp_path))
+            for name in ("ibi_dcg_lib", "ibi_dcg_use"):
+                sys.modules.pop(name, None)

@@ -982,6 +982,7 @@ def _import_from_origins(module_items: list, module_dict: dict,
     shapes give the same answers.
     """
     origins = _Origins()
+    everything: set[str] = set()     # names some bare entry imported
     for item in module_items:
         if not isinstance(item, ImportFromItem):
             continue
@@ -993,13 +994,9 @@ def _import_from_origins(module_items: list, module_dict: dict,
                 bound = None
             origins[local] = (item.module, bound)
             selected = _selected_arities(item, local)
-            if selected is not None:
-                origins.arities[local] = selected
-            else:
-                origins.arities.pop(local, None)
+            _merge_selection(origins, local, selected, everything)
             if own_name is not None and own_name != local:
-                if own_name not in origins and selected is not None:
-                    origins.arities[own_name] = selected
+                _merge_selection(origins, own_name, selected, everything)
                 origins.setdefault(own_name, (item.module, bound))
     return origins
 
@@ -1013,6 +1010,17 @@ class _Origins(dict):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.arities: dict[str, frozenset] = {}
+
+
+def _merge_selection(origins, name: str, selected, everything: set) -> None:
+    """Merge one entry's selection for *name* into ``origins.arities``: the
+    union across entries and directives, and a bare entry (``None``) means
+    every arity for good (roborev, 2026-09-29)."""
+    if selected is None or name in everything:
+        everything.add(name)
+        origins.arities.pop(name, None)
+        return
+    origins.arities[name] = origins.arities.get(name, frozenset()) | selected
 
 
 def _selected_arities(item, local: str) -> "frozenset | None":

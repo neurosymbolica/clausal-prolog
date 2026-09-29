@@ -279,6 +279,14 @@ class TestDirectives:
         assert vfield(directive, "name") == "import_from"
         assert vfield(directive, "args") == ["regex", ["match", "search"]]
 
+    def test_import_from_an_indicator(self):
+        """D20: ``name/N`` reifies as the indicator it is."""
+        items = reify_source(
+            "-import_from(m, [f/1, g, alias(h/2, hh)])\n")
+        (directive,) = directives_of(items)
+        assert vfield(directive, "args") == [
+            "m", [["/", "f", 1], "g", [["/", "h", 2], "hh"]]]
+
     def test_module_declaration(self):
         items = reify_source(
             "-module(graph, [path(X, Y, PATH)])\n\npath(X, Y, PATH) <- step(X, Y, PATH)\n"

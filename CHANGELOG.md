@@ -144,6 +144,9 @@ since 0.4.0 finish three moves:
   translator no longer emits `[baz, baz]` for `[baz/1, baz/2]`). Binding ONE
   local name to two different predicates (`[alias(f, x), alias(g, x)]`) is
   now a `SyntaxError`; Python kept the last one silently before.
+- **A `.pl` file's `use_module(file, [p/1])` imports `p/1` only**, as in
+  Scryer; it imported every arity of `p` before. A `library(...)` list is
+  still imported by bare name.
 - **`clausal.declared_atoms(module_or_package)`.** The `frozenset` of atom
   names declared in the `-module`/`-private` lists of a module's own files,
   or, for a package, of its `__init__` and its loaded submodules. An

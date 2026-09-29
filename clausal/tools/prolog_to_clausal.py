@@ -95,6 +95,12 @@ _REVERSE_ARITY_OVERRIDES: dict[tuple[str, int], str] = {
 }
 
 
+def _is_library(term) -> bool:
+    """``library(Name)`` -- a use_module spec naming a library."""
+    return (isinstance(term, PCompound) and term.functor == "library"
+            and len(term.args) == 1)
+
+
 def _slash_path(term) -> str | None:
     """``a``, ``'a/b'`` or ``a/b/c`` (the ``/``/2 compound) as the path
     string ``a/b/c``; None for anything else."""
@@ -1127,7 +1133,11 @@ class _PrologToClausal:
             return f"-import_module({clausal_mod})"
         if len(body.args) >= 2:
             # With import list
-            imports = self._emit_import_list(body.args[1])
+            # A module FILE's list keeps its indicators (D20): ``p/1``
+            # imports p/1 only, as in Scryer.  A library list stays bare --
+            # a library may map to a Python module, which has no arities.
+            imports = self._emit_import_list(
+                body.args[1], keep_arity=not _is_library(lib_term))
             if imports == "[]" and _has_elements(body.args[1]):
                 # Every item was operator-only and got dropped, so the import
                 # itself was an artifact of the forward emission. Emitting
@@ -1808,7 +1818,7 @@ class _PrologToClausal:
             return "[" + ", ".join(items) + "]"
         return self._emit_term(term)
 
-    def _emit_import_list(self, term: PTerm) -> str:
+    def _emit_import_list(self, term: PTerm, keep_arity: bool = False) -> str:
         """Emit an import list [pred1, pred2, ...].
 
         Indicators in :data:`_OPERATOR_ONLY_IMPORTS` are DROPPED. They name
@@ -1825,14 +1835,19 @@ class _PrologToClausal:
                     name = self._emit_atom_name(e.args[0])
                     if (name, _indicator_arity(e.args[1])) in _OPERATOR_ONLY_IMPORTS:
                         continue
-                    items.append(self._predicate_name(
-                        name, _indicator_arity(e.args[1])))
+                    pname = self._predicate_name(
+                        name, _indicator_arity(e.args[1]))
+                    arity = _indicator_arity(e.args[1])
+                    items.append(f"{pname}/{arity}"
+                                 if keep_arity and isinstance(arity, int)
+                                 else pname)
                 elif isinstance(e, PAtom):
                     items.append(self._predicate_name(e.name))
                 else:
                     items.append(self._emit_term(e))
-            # F3: ``[baz/1, baz/2]`` both emit ``baz`` (a bare name imports
-            # every arity), so the second is the same entry: once.
+            # F3: a library's ``[baz/1, baz/2]`` both emit ``baz`` (a bare
+            # name imports every arity), so the second is the same entry:
+            # once.
             items = list(dict.fromkeys(items))
             return "[" + ", ".join(items) + "]"
         return self._emit_term(term)

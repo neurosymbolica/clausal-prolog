@@ -1429,10 +1429,33 @@ def _plain_data(value):
     return value
 
 
+def _import_from_names(item):
+    """An ``ImportFromDirective``'s list as the author wrote it: a bare name,
+    ``[orig, local]`` for an alias, and a ``name/N`` entry (D20) as the
+    indicator ``["/", name, N]`` -- one per selected arity."""
+    out = []
+    for spec in item.names:
+        orig, local = spec if isinstance(spec, tuple) else (spec, spec)
+        selected = (item.arities or {}).get(local)
+        if selected is None:
+            out.append(_plain_data(spec))
+            continue
+        for arity in sorted(selected):
+            ind = ["/", orig, arity]
+            out.append([ind, local] if isinstance(spec, tuple) else ind)
+    return out
+
+
 def _reify_module_item(item):
     cls_name = type(item).__name__
     if cls_name in _SKIPPED_ITEMS:
         return None
+    if cls_name == "ImportFromDirective":
+        # ``arities``/``line`` are the loader's bookkeeping; the selection
+        # is folded back into the list, where the author wrote it.
+        return ModuleDirective(
+            "import_from", [item.module, _import_from_names(item)],
+            getattr(item, "position", None))
     name = _DIRECTIVE_NAMES.get(cls_name, cls_name)
     args = []
     for field in dataclasses.fields(item):

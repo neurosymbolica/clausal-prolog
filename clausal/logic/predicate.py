@@ -2230,6 +2230,30 @@ def _handle_head_cell(handle: str, args: tuple, kwargs: dict,
     return (functor, *written) if written else functor
 
 
+def record_import_arities(namespace: dict, selections: dict) -> None:
+    """The module-body record of ``-import_from`` arity selections (D20),
+    read by :func:`_foreign_head_verdict` while the body builds heads.
+
+    Keyed by the imported HANDLE (a head names the handle, not the local
+    spelling), MERGED across entries and directives: the arities are the
+    union of every selection that reached the handle, and a bare import of
+    it (``None``) means every arity, for good.  A handle imported under two
+    local names at different arities therefore counts as imported at both,
+    which can only send a head to the load gate (a loud refusal), never
+    let one past it.  Non-handle bindings (a Python module's objects) are
+    skipped; the load refuses ``name/N`` against those anyway."""
+    record = namespace.setdefault("$import_arities", {})
+    for local, found in selections.items():
+        handle = namespace.get(local)
+        if type(handle) is not str:
+            continue
+        if found is None or (handle in record and record[handle] is None):
+            record[handle] = None
+        else:
+            record[handle] = frozenset(record.get(handle) or ()) | frozenset(
+                found)
+
+
 def _foreign_head_verdict(handle: str, home: "dict | None",
                           written: int) -> "str | None":
     """How :func:`_handle_head_cell` treats a head the owner's signature

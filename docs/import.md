@@ -174,6 +174,13 @@ and is not defined here is refused like any call at a missing arity
 exporter has that arity and which entry to add. `alias(path/3, route)`
 imports `path/3` under the local name `route`.
 
+Selections add up: `[reachable/1, reachable/2]`, or the two in separate
+directives, import both arities, and a bare `reachable` anywhere in the file
+imports every arity. One predicate imported under two local names must be
+imported at the same arities under each: `[path/1, alias(path/3, route)]`
+is a `SyntaxError`, because both names share one reference and a call could
+not tell them apart.
+
 An indicator the exporter does not have is a load-time `ImportError`
 naming the file, the line, the module and the indicator
 (`existence_error(procedure, reachable/4)`), and saying which arities the
