@@ -1376,7 +1376,9 @@ def _nth_builtin(base, arity):
     return _trampoline_builtin(name, arity)(fn)
 
 
-_nth0__3 = _nth_builtin(0, 3)
-_nth1__3 = _nth_builtin(1, 3)
-_nth0__4 = _nth_builtin(0, 4)
-_nth1__4 = _nth_builtin(1, 4)
+# (Module names ``_iso_nth*``: ``_nth0__3`` is list_item/3's function above,
+# the engine's own 0-based accessor, which keeps its name and semantics.)
+_iso_nth0__3 = _nth_builtin(0, 3)
+_iso_nth1__3 = _nth_builtin(1, 3)
+_iso_nth0__4 = _nth_builtin(0, 4)
+_iso_nth1__4 = _nth_builtin(1, 4)
