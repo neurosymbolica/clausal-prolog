@@ -1708,15 +1708,26 @@ def _arith_cells_to_nodes(x, strict=None):
     return None
 
 
+_Quantity = None
+
+
 def _arith_leaf(a) -> bool:
     """*a* (dereferenced) can stand under an arithmetic node: a number, an
-    unbound variable, an operator node, or an exact-number cell."""
+    unbound variable, an operator node, an exact-number cell, or a quantity
+    (a number with units, which the evaluator and the units side channel
+    both take)."""
+    global _Quantity
     t = type(a)
     if t is int or t is float or t is Fraction or t is Decimal:
         return True
     if is_var(a) or t in _NODE_KEYS:
         return True
-    return exact_cell_number(a) is not None
+    if exact_cell_number(a) is not None:
+        return True
+    if _Quantity is None:
+        from clausal.terms import Quantity  # noqa: PLC0415
+        _Quantity = Quantity
+    return isinstance(a, _Quantity)
 
 
 def _cells_as_nodes(l, r, strict=None):

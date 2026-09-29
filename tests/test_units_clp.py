@@ -1365,3 +1365,258 @@ class TestReviewRoundTwentyOne:
         v = deref(out)
         assert type(v) is Fraction and v == Fraction(5, 2)
         assert v == 2.5                                  # unify-equal to the float; a rational term
+
+
+class TestClpqFrontEnd:
+    """CLP(Q)'s own entry points (``clpq.rational``, ``{C}``, ``q_eq`` and
+    friends, the objectives, ``in_q/3``) run the same side channel as the
+    CLP(FD) comparators: a Quantity is its exact magnitude to the tableau, a
+    united variable its shadow, and a binding comes back as a Quantity in the
+    dimension's base unit. Before, every one of them raised a raw
+    ``TypeError: CLP(Q) requires linear constraints`` on a Quantity operand."""
+
+    E = {"euro": 1}
+
+    def _euro(self, n):
+        return Quantity(n, euro)
+
+    def test_equality_binds_a_quantity_in_the_base_unit(self):
+        import clausal.logic.clpq as clpq
+        t, q = Trail(), Var()
+        assert clpq.q_eq(q, _bin(Mult, 100, self._euro(1)), t)
+        v = deref(q)
+        assert isinstance(v, Quantity) and dict(v.dims) == self.E
+        assert type(v.value) is Decimal and v.value == 100     # the ground path's currency rule
+
+    def test_inequality_posts_and_a_later_binding_decides(self):
+        import clausal.logic.clpq as clpq
+        t, q = Trail(), Var()
+        assert clpq.q_ge(q, self._euro(5000), t)
+        assert is_var_unbound(q)
+        mark = t.mark()
+        assert unify(q, self._euro(6000), t)
+        t.undo(mark)
+        assert not unify(q, self._euro(10), t)
+
+    def test_ground_inequality_decides_at_once(self):
+        import clausal.logic.clpq as clpq
+        t = Trail()
+        assert clpq.q_ge(self._euro(6000), self._euro(5000), t)
+        assert not clpq.q_ge(self._euro(10), self._euro(5000), t)
+        assert clpq.q_lt(self._euro(10), self._euro(5000), t)
+        assert not clpq.q_gt(self._euro(10), self._euro(5000), t)
+
+    def test_unknown_multiplier_defaults_dimensionless_and_binds_a_plain_int(self):
+        import clausal.logic.clpq as clpq
+        t, q, n = Trail(), Var(), Var()
+        assert clpq.q_eq(q, _bin(Mult, n, self._euro(1)), t)
+        assert unify(q, self._euro(300), t)
+        assert deref(n) == 300 and type(deref(n)) is int
+
+    def test_mixed_dimension_is_the_iso_mismatch_before_any_post(self):
+        import clausal.logic.clpq as clpq
+        t, q = Trail(), Var()
+        with pytest.raises(LogicException) as ei:
+            clpq.q_eq(q, _bin(Add, self._euro(1), Quantity(1, second)), t)
+        _assert_system_error(ei, "units_mismatch")
+        assert get_attr(q, UNITS_KEY) is None                 # nothing posted on the way
+
+    def test_rational_answer_keeps_its_units(self):
+        import clausal.logic.clpq as clpq
+        t, q = Trail(), Var()
+        assert clpq.q_eq(_bin(Mult, 2, q), _bin(Mult, 3, self._euro(1)), t)
+        v = deref(q)
+        assert isinstance(v, Quantity) and dict(v.dims) == self.E
+        assert type(v.value) is Fraction and v.value == Fraction(3, 2)
+
+    def test_a_scaled_unit_answers_in_the_base_unit(self):
+        """``5000 cent`` is 50 euro at construction (a scaled unit, like
+        kilometre); the tableau sees 50 and the answer is 50 euro."""
+        import clausal.logic.clpq as clpq
+        from clausal.modules.countries.european_union import eur_cent
+        t, q = Trail(), Var()
+        assert clpq.q_eq(q, Quantity(5000, eur_cent), t)
+        v = deref(q)
+        assert dict(v.dims) == self.E and v.value == 50
+
+    def test_disequality_over_quantities(self):
+        import clausal.logic.clpq as clpq
+        t, q = Trail(), Var()
+        assert clpq.q_ne(q, self._euro(3), t)
+        assert not unify(q, self._euro(3), t)
+        assert unify(q, self._euro(4), t)
+
+    def test_a_quantity_leaf_inside_a_runtime_cell_is_evaluable(self):
+        """``Q = 6000 * constant(one_euro)`` in ISO syntax binds Q to the CELL
+        ``*(6000, Quantity)``; the post rewrites it as its node and the side
+        channel strips the leaf (it raised ``type_error(evaluable, ...)``)."""
+        import clausal.logic.clpq as clpq
+        t = Trail()
+        assert clpq.q_ge(("*", 6000, self._euro(1)), self._euro(5000), t)
+        assert not clpq.q_ge(("*", 10, self._euro(1)), self._euro(5000), t)
+
+    def test_sup_and_inf_answer_quantities(self):
+        import clausal.logic.clpq as clpq
+        t, q, s, i = Trail(), Var(), Var(), Var()
+        assert clpq.q_ge(q, self._euro(1), t)
+        assert clpq.q_le(_bin(Mult, 2, q), self._euro(7), t)
+        assert clpq.sup(q, s, t) and clpq.inf(q, i, t)
+        assert deref(s) == Quantity(Fraction(7, 2), euro)
+        assert deref(i) == self._euro(1)
+        assert is_var_unbound(q)                              # sup/inf do not commit
+
+    def test_maximize_binds_the_united_var_and_the_objective(self):
+        import clausal.logic.clpq as clpq
+        t, q, m = Trail(), Var(), Var()
+        assert clpq.q_le(q, self._euro(5), t)
+        assert clpq.maximize(_bin(Mult, 3, q), m, t)
+        assert deref(q) == self._euro(5) and deref(m) == self._euro(15)
+
+    def test_objective_of_a_dimensionless_expression_stays_a_number(self):
+        import clausal.logic.clpq as clpq
+        t, q, m = Trail(), Var(), Var()
+        assert clpq.q_le(q, self._euro(5), t)
+        assert clpq.maximize(_bin(Div, q, self._euro(1)), m, t)     # euro / euro
+        assert deref(m) == 5 and type(deref(m)) is int
+
+    def test_entailed_reads_through_the_side_channel(self):
+        import clausal.logic.clpq as clpq
+        t, q = Trail(), Var()
+        assert clpq.q_ge(q, self._euro(5000), t)
+        assert clpq.entailed(">=", q, self._euro(100), t)
+        assert not clpq.entailed(">=", q, self._euro(6000), t)
+        with pytest.raises(LogicException) as ei:
+            clpq.entailed(">=", q, Quantity(1, second), t)
+        _assert_system_error(ei, "units_mismatch")
+
+    def test_in_q_takes_quantity_bounds(self):
+        import clausal.logic.clpq as clpq
+        t, q = Trail(), Var()
+        assert clpq.in_q(q, self._euro(0), Quantity(Decimal("10.50"), euro), t)
+        assert not unify(q, self._euro(11), t)
+        assert unify(q, Quantity(Fraction(21, 2), euro), t)
+        t2, r = Trail(), Var()
+        with pytest.raises(LogicException) as ei:
+            clpq.in_q(r, self._euro(0), 10, t2)
+        _assert_system_error(ei, "units_mismatch")
+        with pytest.raises(LogicException) as ei:
+            clpq.in_q(r, self._euro(0), Quantity(10, second), t2)
+        _assert_system_error(ei, "units_mismatch")
+        assert not clpq.in_q(self._euro(11), self._euro(0), self._euro(10), t2)
+        assert clpq.in_q(self._euro(3), self._euro(0), self._euro(10), t2)
+
+    def test_dump_q_projects_a_united_var_through_its_shadow(self):
+        import clausal.logic.clpq as clpq
+        t, q, p = Trail(), Var(), Var()
+        assert clpq.q_ge(q, self._euro(5000), t)
+        assert clpq.q_le(p, 3, t)
+        out = clpq.dump_q([q, p], t)
+        assert len(out) == 2 and any(str(q) in c and "5000" in c for c in out), out
+        assert not any(str(get_attr(q, UNITS_KEY).shadow) in c for c in out), out
+
+    def test_bb_inf_over_a_united_integer_var(self):
+        import clausal.logic.clpq as clpq
+        t, q, m = Trail(), Var(), Var()
+        assert clpq.q_ge(_bin(Mult, 2, q), self._euro(3), t)
+        assert clpq.bb_inf([q], q, m, t)
+        assert deref(q) == self._euro(2) and deref(m) == self._euro(2)
+
+
+class TestCellsHoldingQuantities:
+    """An arithmetic cell built at run time with a quantity leaf, in a
+    CLP(FD) post: the side channel rewrites it as its node first. Before,
+    ``2*3(metre) == 6(metre)`` answered False -- the cell stayed a cell and
+    met the quantity on the ground fallback -- and a variable beside one
+    raised ``domain_error(clpz_expression, ...)``."""
+
+    def test_ground_cell_against_a_quantity_evaluates(self):
+        import clausal.logic.clpfd as clpfd
+        assert clpfd.fd_eq(("*", 2, Quantity(3, M)), Quantity(6, M), Trail())
+        assert not clpfd.fd_eq(("*", 2, Quantity(3, M)), Quantity(7, M), Trail())
+        assert clpfd.fd_lt(("*", 2, Quantity(3, M)), Quantity(7, M), Trail())
+
+    def test_var_against_a_cell_binds_a_quantity(self):
+        import clausal.logic.clpfd as clpfd
+        t, x = Trail(), Var()
+        assert clpfd.fd_eq(x, ("*", 2, Quantity(3, M)), t)
+        assert deref(x) == Quantity(6, M)
+
+    def test_var_inside_a_cell_is_solved_for(self):
+        import clausal.logic.clpfd as clpfd
+        t, x = Trail(), Var()
+        assert clpfd.fd_eq(("*", x, Quantity(3, M)), Quantity(6, M), t)
+        assert deref(x) == 2 and type(deref(x)) is int
+
+    def test_mismatch_inside_a_cell_is_the_iso_term(self):
+        import clausal.logic.clpfd as clpfd
+        with pytest.raises(LogicException) as ei:
+            clpfd.fd_eq(("+", Quantity(1, M), Quantity(1, S)), Var(), Trail())
+        _assert_system_error(ei, "units_mismatch")
+
+    def test_a_data_pair_holding_a_quantity_keeps_the_ground_fallback(self):
+        import clausal.logic.clpfd as clpfd
+        pair = ("-", mint("a"), Quantity(1, M))
+        assert clpfd.fd_eq(pair, ("-", mint("a"), Quantity(1, M)), Trail())
+        assert not clpfd.fd_eq(pair, ("-", mint("b"), Quantity(1, M)), Trail())
+
+
+class TestClprFrontEnd:
+    """CLP(R) runs the side channel too (after the cell rewrite): a physical
+    quantity is solved on its magnitude and bound back; money is refused,
+    since CLP(R) computes in floats. Before, a quantity leaf in a cell was
+    ``type_error(evaluable, ...)`` and one in a node a raw TypeError."""
+
+    def test_cell_with_a_quantity_posts_on_the_shadow(self):
+        """CLP(R) keeps a ground product as an interval (a plain var stays
+        unbound after ``X == 2.0 * 3.5`` too); the post is on the shadow and
+        a later binding is checked against it, as a quantity."""
+        import clausal.logic.clpr as clpr
+        t, x = Trail(), Var()
+        assert clpr.real_eq(x, ("*", 2.0, Quantity(3.5, M)), t)
+        mark = t.mark()
+        assert not unify(x, Quantity(8.0, M), t)
+        t.undo(mark)
+        assert unify(x, Quantity(7.0, M), t)
+        assert deref(x) == Quantity(7.0, M)
+
+    def test_scalar_quantity_binds_a_float_quantity(self):
+        import clausal.logic.clpr as clpr
+        t, x = Trail(), Var()
+        assert clpr.real_eq(x, Quantity(7.0, M), t)
+        assert deref(x) == Quantity(7.0, M) and type(deref(x).value) is float
+
+    def test_node_with_a_quantity_and_a_mismatch(self):
+        import clausal.logic.clpr as clpr
+        t, x = Trail(), Var()
+        assert clpr.real_ge(x, Quantity(2.5, M), t)
+        assert not unify(x, Quantity(2.0, M), t)
+        with pytest.raises(LogicException) as ei:
+            clpr.real_lt(_bin(Add, Quantity(1.0, M), Quantity(1.0, S)), x, t)
+        _assert_system_error(ei, "units_mismatch")
+
+    def test_money_is_refused_not_computed_in_floats(self):
+        import clausal.logic.clpr as clpr
+        t, x = Trail(), Var()
+        with pytest.raises(LogicException) as ei:
+            clpr.real_eq(x, _bin(Mult, 2.0, Quantity(3, euro)), t)
+        _assert_system_error(ei, "units_unsupported")
+        with pytest.raises(LogicException) as ei:
+            clpr.real_le(("*", 2.0, Quantity(3, euro)), 7.0, t)      # inside a cell too
+        _assert_system_error(ei, "units_unsupported")
+
+
+class TestInQDeclaredTarget:
+    def test_dimensionless_bounds_on_a_declared_var_is_a_mismatch(self):
+        import clausal.logic.clpq as clpq
+        from clausal.logic.units_constraint import constrain_var_dims
+        t, x = Trail(), Var()
+        assert constrain_var_dims(x, {"euro": 1}, t)
+        with pytest.raises(LogicException) as ei:
+            clpq.in_q(x, Quantity(0, {}), Quantity(10, {}), t)
+        _assert_system_error(ei, "units_mismatch")
+        assert get_attr(x, "clpq") is None                    # nothing posted on the way
+
+
+def is_var_unbound(v) -> bool:
+    from clausal.logic.variables import is_var
+    return is_var(deref(v))

@@ -252,21 +252,82 @@ def test_clp_goal_takes_a_folded_constant(native):
     """, [("r", V)])
 
 
-@pytest.mark.xfail(strict=True, raises=TypeError, reason=(
-    "clpq.rational rejects a unit-carrying Quantity (clpq.py _linearize: "
-    "'CLP(Q) requires linear constraints') -- in the SEAM as well as the "
-    "native .pl path, so an engine gap, not a lowering one"))
+S6QU_PL = """\
+    :- use_module(library(clpq)).
+    :- use_module(european_union, [euro, eur_cent]).
+    :- use_module(units, [second]).
+    :- constant_number_units(one_euro, 1, euro).
+    :- constant_number_units(max_fine, 5000, euro).
+    :- constant_number_units(one_second, 1, second).
+    :- constant_number_units(small_fine, 5000, eur_cent).
+    :- constant_number_units(big, 6000, euro).
+    :- constant_number_units(tiny, 10, euro).
+    q(Q) :- {Q = 100 * constant(one_euro)}.
+    ge_bound(R) :- Q is 6000 * constant(one_euro), {Q >= constant(max_fine)}, R = Q.
+    ge_bound_fails(R) :- Q is 10 * constant(one_euro), {Q >= constant(max_fine)}, R = Q.
+    ge_posted(R) :- {Q >= constant(max_fine)}, Q = constant(big), R = Q.
+    ge_posted_fails(R) :- {Q >= constant(max_fine)}, Q = constant(tiny), R = Q.
+    mult(N) :- {Q = N * constant(one_euro)}, Q is 300 * constant(one_euro).
+    mixed(R) :- catch(({_ = constant(one_euro) + constant(one_second)}, R = yes),
+                      error(E, _), R = E).
+    half(Q) :- {2 * Q = 3 * constant(one_euro)}.
+    cent(Q) :- {Q = constant(small_fine)}.
+"""
+
+S6QU_SEAM = """\
+    -private([yes])
+    -import_from(european_union, [euro, eur_cent])
+    -import_from(units, [second])
+    -constant_number_units(one_euro, 1, euro)
+    -constant_number_units(max_fine, 5000, euro)
+    -constant_number_units(one_second, 1, second)
+    -constant_number_units(small_fine, 5000, eur_cent)
+    -constant_number_units(big, 6000, euro)
+    -constant_number_units(tiny, 10, euro)
+    q(Q) <- clpq.rational(Q == 100 * constant(one_euro))
+    ge_bound(R) <- (Q == 6000 * constant(one_euro), clpq.rational(Q >= constant(max_fine)), R is Q)
+    ge_bound_fails(R) <- (Q == 10 * constant(one_euro), clpq.rational(Q >= constant(max_fine)), R is Q)
+    ge_posted(R) <- (clpq.rational(Q >= constant(max_fine)), Q is constant(big), R is Q)
+    ge_posted_fails(R) <- (clpq.rational(Q >= constant(max_fine)), Q is constant(tiny), R is Q)
+    mult(N) <- (clpq.rational(Q == N * constant(one_euro)), Q == 300 * constant(one_euro))
+    mixed(R) <- catch((clpq.rational(_ == constant(one_euro) + constant(one_second)), R is yes), error(E, _), R is E)
+    half(Q) <- clpq.rational(2 * Q == 3 * constant(one_euro))
+    cent(Q) <- clpq.rational(Q == constant(small_fine))
+"""
+
+
 def test_clp_goal_takes_a_folded_unit_constant(native):
-    _twin_ab(native, "s6qu", """\
-        :- use_module(library(clpq)).
-        :- use_module(european_union, [euro]).
-        :- constant_number_units(one_euro, 1, euro).
-        q(Q) :- {Q = 100 * constant(one_euro)}.
-    """, "s6qu_twin", """\
-        -import_from(european_union, [euro])
-        -constant_number_units(one_euro, 1, euro)
-        q(Q) <- clpq.rational(Q == 100 * constant(one_euro))
-    """, [("q", V)])
+    """A quantity in ``{C}`` / ``clpq.rational``: solved on its exact
+    magnitude in the dimension's base unit through the units side channel
+    CLP(FD) already used, and bound back as a quantity -- the engine used to
+    raise a raw ``TypeError`` for any Quantity operand, on both front ends."""
+    from decimal import Decimal
+    from fractions import Fraction
+    from clausal.terms import Quantity
+    nat, twin = _twin_ab(native, "s6qu", S6QU_PL, "s6qu_twin", S6QU_SEAM, [
+        ("q", V), ("ge_bound", V), ("ge_posted", V), ("mult", V),
+        ("mixed", V), ("half", V), ("cent", V)])
+    # The two refusals answer nothing on both front ends (the twin helper
+    # counts answers, so they are compared here).
+    for p in ("ge_bound_fails", "ge_posted_fails"):
+        assert _all(nat, p, V) == _all(twin, p, V) == [], p
+    euro = {"euro": 1}
+    assert _all(nat, "q", V) == [(Quantity(Decimal("100"), euro),)]
+    [(v,)] = _all(nat, "q", V)
+    assert type(v.value) is Decimal                       # the ground path's presentation
+    assert _all(nat, "ge_bound", V) == [(Quantity(Decimal("6000"), euro),)]
+    assert _all(nat, "ge_bound_fails", V) == []
+    assert _all(nat, "ge_posted", V) == [(Quantity(Decimal("6000"), euro),)]
+    assert _all(nat, "ge_posted_fails", V) == []
+    assert _all(nat, "mult", V) == [(300,)]
+    [(n,)] = _all(nat, "mult", V)
+    assert type(n) is int                                 # a plain number, not a quantity
+    assert _all(nat, "mixed", V) == [(("system_error", "units_mismatch"),)]
+    [(h,)] = _all(nat, "half", V)
+    assert h == Quantity(Fraction(3, 2), euro) and type(h.value) is Fraction
+    # A scaled unit is its base-unit amount at construction, so the answer
+    # is in the base unit, as ``Q is constant(small_fine)`` presents it.
+    assert _all(nat, "cent", V) == [(Quantity(Decimal("50.00"), euro),)]
 
 
 # ── exit 3: refusals, each naming the .pl line ───────────────────────────────

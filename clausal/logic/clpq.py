@@ -1125,8 +1125,17 @@ register_attr_hook(Q_KEY, _q_hook)
 
 def in_q(var_or_list: Any, lo: Any = None, hi: Any = None,
          trail: Trail | None = None) -> bool:
-    """Declare variable(s) as rational with optional bounds ``[lo, hi]``."""
+    """Declare variable(s) as rational with optional bounds ``[lo, hi]``.
+
+    Quantity bounds declare the targets' dimension too (``in_q(X, 0(euro),
+    10(euro))``): both bounds must then be quantities of one dimension, every
+    target becomes a united variable of it and the bounds are posted on its
+    shadow -- CLP(FD)'s ``in_domain/3`` rule, without its whole-units clause
+    (a rational domain holds any amount)."""
     targets = deref(var_or_list)
+    united = _in_q_units(targets, deref(lo), deref(hi), trail)
+    if united is not None:
+        return united
     lo_val = Fraction(deref(lo)) if lo is not None else None
     hi_val = Fraction(deref(hi)) if hi is not None else None
     if isinstance(targets, list):
@@ -1135,6 +1144,62 @@ def in_q(var_or_list: Any, lo: Any = None, hi: Any = None,
                 return False
         return True
     return _post_q_domain(targets, lo_val, hi_val, trail)
+
+
+def _in_q_units(targets, lo, hi, trail):
+    """``in_q/3`` with a Quantity bound: None when neither bound is one."""
+    from clausal.logic import _units_flag  # noqa: PLC0415
+    if not _units_flag.active:
+        return None
+    from clausal.terms import Quantity  # noqa: PLC0415
+    lo_q, hi_q = isinstance(lo, Quantity), isinstance(hi, Quantity)
+    if not (lo_q or hi_q):
+        return None
+    from clausal.logic import units_clp  # noqa: PLC0415
+    from clausal.logic.units_constraint import UNITS_KEY, to_solver_number  # noqa: PLC0415
+    ctx = "in_q/3"
+    if not (lo_q and hi_q):
+        q, plain = (lo, hi) if lo_q else (hi, lo)
+        if plain is None:
+            # One-sided: the missing bound is unbounded, not a plain number.
+            dims = dict(q.dims)
+        else:
+            raise units_clp._mismatch_text(
+                ctx, f"bound {plain!r} is a plain number beside {q!r}")
+    else:
+        if dict(lo.dims) != dict(hi.dims):
+            raise units_clp._mismatch(ctx, dict(lo.dims), dict(hi.dims))
+        dims = dict(lo.dims)
+    lo_val = Fraction(to_solver_number(lo.value)) if lo_q else None
+    hi_val = Fraction(to_solver_number(hi.value)) if hi_q else None
+    as_list = isinstance(targets, list)
+    shadows = []
+    for v in (targets if as_list else [targets]):
+        v = deref(v)
+        if isinstance(v, Quantity):
+            if dict(v.dims) != dims:
+                raise units_clp._mismatch(ctx, dict(v.dims), dims)
+            shadows.append(to_solver_number(v.value))
+            continue
+        if not is_var(v):
+            raise units_clp._mismatch(ctx, {}, dims, f"target {v!r}")
+        state = get_attr(v, UNITS_KEY)
+        if state is not None and state.dims != dims:
+            raise units_clp._mismatch(ctx, state.dims, dims)
+        if not dims:
+            shadows.append(v)                     # dimensionless bounds: a plain domain
+            continue
+        if state is None and (get_attr(v, Q_KEY) is not None
+                              or get_attr(v, "fd") is not None
+                              or get_attr(v, "real") is not None):
+            raise units_clp._mismatch(ctx, {}, dims,
+                                      f"target {v!r} is already a bare solver variable")
+        units_clp._refuse_bypassed(v, ctx)
+        shadows.append(units_clp.shadow_for(v, dims, trail))
+    for s in shadows:
+        if not _post_q_domain(s, lo_val, hi_val, trail):
+            return False
+    return True
 
 
 # ── Public API: constraint posting ───────────────────────────────────────────
@@ -1156,10 +1221,67 @@ def _cell_as_node(expr: Any, context: str) -> Any:
     return _cells_as_nodes(expr, 0, context)[0]
 
 
+# ── Units ────────────────────────────────────────────────────────────────────
+# The units side channel (clausal.logic.units_clp), the one CLP(FD) uses: a
+# Quantity or a united variable anywhere in a post is analysed for its
+# dimension first (a disagreement is ``system_error(units_mismatch)``), then
+# every Quantity becomes its exact solver number and every united variable its
+# bare shadow, so the tableau only ever sees rationals. When the tableau
+# binds a shadow, the ``units_link`` hook rebinds the user's variable to a
+# Quantity in the dimension's base unit -- ``5000 cent`` is 50 euro on the
+# way in and comes back as euro, exactly as the ground path presents it.
+# Cached on first use; the flag says whether any Quantity exists yet.
+
+_strip_for_solver = None
+_strip_expr_for_solver = None
+_reattach = None
+_label_targets = None
+
+
+def _ensure_units_imports() -> None:
+    global _strip_for_solver, _strip_expr_for_solver, _reattach, _label_targets
+    if _strip_for_solver is None:
+        from clausal.logic import units_clp  # noqa: PLC0415
+        _strip_for_solver = units_clp.strip_for_solver
+        _strip_expr_for_solver = units_clp.strip_expr_for_solver
+        _reattach = units_clp.reattach
+        _label_targets = units_clp.label_targets
+
+
+def _units_strip(l, r, context, trail):
+    """A comparison through the side channel: the ``(l, r)`` the tableau can
+    take, or the pair untouched when no units material is involved. Runs
+    AFTER the cell rewrite (a Quantity leaf may sit inside a cell built at
+    run time) and before the ground fast paths, which read plain numbers."""
+    if _strip_for_solver is None:
+        _ensure_units_imports()
+    stripped = _strip_for_solver(l, r, context, trail)
+    return (l, r) if stripped is None else stripped
+
+
+def _units_strip_expr(expr, context, trail):
+    """An objective through the side channel: ``(expr', dims)`` -- the tree
+    the tableau can take and the dimension its optimum carries (``{}`` when
+    no units material is involved)."""
+    if _strip_expr_for_solver is None:
+        _ensure_units_imports()
+    stripped = _strip_expr_for_solver(expr, context, trail)
+    return (expr, {}) if stripped is None else stripped
+
+
+def _units_result(value, dims):
+    """An optimum as the term the caller gets: a Quantity of *dims*, else the
+    number as the engine presents it (an integral rational is an int)."""
+    if not dims:
+        return present_number(value)
+    return _reattach(value, dims)
+
+
 def q_eq(l: Any, r: Any, trail: Trail) -> bool:
     """Post l == r as a rational equality constraint."""
     l, r = deref(l), deref(r)
     l, r = _cells_as_nodes(l, r, "(==)/2")   # ruling R9 A1
+    l, r = _units_strip(l, r, "(==)/2", trail)
     if _is_ground_q(l) and _is_ground_q(r):
         return Fraction(l) == Fraction(r)
     # If one side is ground and other is a bare var, use unify for speed
@@ -1200,6 +1322,7 @@ def q_ne(l: Any, r: Any, trail: Trail) -> bool:
     """
     l, r = deref(l), deref(r)
     l, r = _cells_as_nodes(l, r, "(!=)/2")   # ruling R9 A1
+    l, r = _units_strip(l, r, "(!=)/2", trail)
     if _is_ground_q(l) and _is_ground_q(r):
         return Fraction(l) != Fraction(r)
     _ensure_q_for_expr(l, trail)
@@ -1231,6 +1354,7 @@ def q_le(l: Any, r: Any, trail: Trail) -> bool:
     """Post l <= r as a rational inequality constraint."""
     l, r = deref(l), deref(r)
     l, r = _cells_as_nodes(l, r, "(=<)/2")   # ruling R9 A1
+    l, r = _units_strip(l, r, "(=<)/2", trail)
     if _is_ground_q(l) and _is_ground_q(r):
         return Fraction(l) <= Fraction(r)
     _ensure_q_for_expr(l, trail)
@@ -1257,6 +1381,10 @@ def q_le(l: Any, r: Any, trail: Trail) -> bool:
 
 def q_lt(l: Any, r: Any, trail: Trail) -> bool:
     """Post l < r.  Equivalent to l <= r AND l != r."""
+    # The side channel once, under the operator the user wrote; the two
+    # posts below then find bare numbers and shadows only and pass through.
+    l, r = _cells_as_nodes(deref(l), deref(r), "(<)/2")
+    l, r = _units_strip(l, r, "(<)/2", trail)
     if not q_le(l, r, trail):
         return False
     return q_ne(l, r, trail)
@@ -1264,11 +1392,15 @@ def q_lt(l: Any, r: Any, trail: Trail) -> bool:
 
 def q_gt(l: Any, r: Any, trail: Trail) -> bool:
     """Post l > r."""
+    l, r = _cells_as_nodes(deref(l), deref(r), "(>)/2")
+    l, r = _units_strip(l, r, "(>)/2", trail)
     return q_lt(r, l, trail)
 
 
 def q_ge(l: Any, r: Any, trail: Trail) -> bool:
     """Post l >= r."""
+    l, r = _cells_as_nodes(deref(l), deref(r), "(>=)/2")
+    l, r = _units_strip(l, r, "(>=)/2", trail)
     return q_le(r, l, trail)
 
 
@@ -1283,6 +1415,7 @@ def sup(expr: Any, result_var: Any, trail: Trail) -> bool:
     """
     expr = deref(expr)
     expr = _cell_as_node(expr, "sup/2")   # ruling R9 A1: a cell objective is its node
+    expr, dims = _units_strip_expr(expr, "sup/2", trail)
     result_var = deref(result_var)
     lc = _linearize(expr, trail)
     if lc is None:
@@ -1293,7 +1426,7 @@ def sup(expr: Any, result_var: Any, trail: Trail) -> bool:
     opt = tab_copy.optimize(coeffs, 'max')
     if opt is None:
         return False  # unbounded
-    return unify(result_var, present_number(opt + const), trail)
+    return unify(result_var, _units_result(opt + const, dims), trail)
 
 
 def inf(expr: Any, result_var: Any, trail: Trail) -> bool:
@@ -1304,6 +1437,7 @@ def inf(expr: Any, result_var: Any, trail: Trail) -> bool:
     """
     expr = deref(expr)
     expr = _cell_as_node(expr, "inf/2")   # ruling R9 A1: a cell objective is its node
+    expr, dims = _units_strip_expr(expr, "inf/2", trail)
     result_var = deref(result_var)
     lc = _linearize(expr, trail)
     if lc is None:
@@ -1314,7 +1448,7 @@ def inf(expr: Any, result_var: Any, trail: Trail) -> bool:
     opt = tab_copy.optimize(coeffs, 'min')
     if opt is None:
         return False  # unbounded
-    return unify(result_var, present_number(opt + const), trail)
+    return unify(result_var, _units_result(opt + const, dims), trail)
 
 
 def entailed(constraint_type: str, l: Any, r: Any, trail: Trail) -> bool:
@@ -1328,6 +1462,10 @@ def entailed(constraint_type: str, l: Any, r: Any, trail: Trail) -> bool:
     """
     l, r = deref(l), deref(r)
     l, r = _cells_as_nodes(l, r, "entailed/1")   # ruling R9 A1
+    # The side channel is read-only too when the shadows exist already; a
+    # first-seen united var gets its shadow here (trailed), which is the
+    # var's identity in the tableau, not a constraint on it.
+    l, r = _units_strip(l, r, "entailed/1", trail)
     # Do NOT call _ensure_q_for_expr — entailed must be read-only.
     # If variables aren't in the Q domain, linearize will still work
     # (it just uses var._id as the key), but optimize won't know about
@@ -1420,6 +1558,7 @@ def maximize(expr: Any, result_var: Any, trail: Trail) -> bool:
     """
     expr = deref(expr)
     expr = _cell_as_node(expr, "maximize/2")   # ruling R9 A1: a cell objective is its node
+    expr, dims = _units_strip_expr(expr, "maximize/2", trail)
     result_var = deref(result_var)
     lc = _linearize(expr, trail)
     if lc is None:
@@ -1432,7 +1571,7 @@ def maximize(expr: Any, result_var: Any, trail: Trail) -> bool:
         return False
     if not _bind_optimal(tableau, trail):
         return False
-    return unify(result_var, present_number(opt + const), trail)
+    return unify(result_var, _units_result(opt + const, dims), trail)
 
 
 def minimize(expr: Any, result_var: Any, trail: Trail) -> bool:
@@ -1443,6 +1582,7 @@ def minimize(expr: Any, result_var: Any, trail: Trail) -> bool:
     """
     expr = deref(expr)
     expr = _cell_as_node(expr, "minimize/2")   # ruling R9 A1: a cell objective is its node
+    expr, dims = _units_strip_expr(expr, "minimize/2", trail)
     result_var = deref(result_var)
     lc = _linearize(expr, trail)
     if lc is None:
@@ -1455,7 +1595,7 @@ def minimize(expr: Any, result_var: Any, trail: Trail) -> bool:
         return False
     if not _bind_optimal(tableau, trail):
         return False
-    return unify(result_var, present_number(opt + const), trail)
+    return unify(result_var, _units_result(opt + const, dims), trail)
 
 
 # ── Public API: projection ───────────────────────────────────────────────────
@@ -1473,11 +1613,15 @@ def dump_q(target_vars: list, trail: Trail) -> list[str]:
     tableau = _get_tableau(trail)
     target_ids = set()
     id_to_name: dict[int, str] = {}
-    for v in target_vars:
-        v = deref(v)
-        if is_var(v):
-            target_ids.add(v._id)
-            id_to_name[v._id] = str(v)
+    if _label_targets is None:
+        _ensure_units_imports()
+    # A united variable's constraints sit on its shadow: project onto the
+    # shadow, named as the variable the program wrote (it answered [] before).
+    for v, s in zip(target_vars, _label_targets(target_vars, "dump_q/2")):
+        v, s = deref(v), deref(s)
+        if is_var(s):
+            target_ids.add(s._id)
+            id_to_name[s._id] = str(v)
 
     constraints = _collect_constraints(tableau, target_ids)
 
@@ -1638,9 +1782,12 @@ def bb_inf(int_vars: list, expr: Any, result_var: Any,
     """
     expr = deref(expr)
     expr = _cell_as_node(expr, "bb_inf/3")   # ruling R9 A1: a cell objective is its node
+    expr, dims = _units_strip_expr(expr, "bb_inf/3", trail)
     result_var = deref(result_var)
+    if _label_targets is None:
+        _ensure_units_imports()
     int_ids = set()
-    for v in int_vars:
+    for v in _label_targets(int_vars, "bb_inf/3"):   # a united var: its shadow is the integer
         v = deref(v)
         if is_var(v):
             int_ids.add(v._id)
@@ -1660,7 +1807,7 @@ def bb_inf(int_vars: list, expr: Any, result_var: Any,
     _tableaux[tid] = best_tab
     if not _bind_optimal(best_tab, trail):
         return False
-    return unify(result_var, present_number(best_val), trail)
+    return unify(result_var, _units_result(best_val, dims), trail)
 
 
 _BB_MAX_DEPTH = 50  # safety limit for branch-and-bound recursion

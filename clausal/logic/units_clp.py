@@ -546,6 +546,15 @@ def strip_for_solver(l: Any, r: Any, context: str, trail: Trail):
         return None            # no Quantity or units var exists in this process
     _ensure_imports()
     l, r = deref(l), deref(r)
+    if type(l) is tuple or type(r) is tuple:
+        # An arithmetic CELL built at run time (``Q = 6000 * constant(c)`` in
+        # ISO syntax) may hold a quantity leaf. The scan reads nodes, so the
+        # cell is rewritten here through the ONE rewriter the posts use
+        # (ruling R9 A1), not spelled a second time; a cell that is not
+        # arithmetic (a data pair ``a-1(metre)``) comes back as it was and
+        # stays foreign to the channel, on the caller's ground fallback.
+        from clausal.logic.clpfd import _cells_as_nodes  # noqa: PLC0415
+        l, r = _cells_as_nodes(l, r)
     material_l = _scan(l)
     if material_l is _FOREIGN:
         return None
@@ -557,6 +566,87 @@ def strip_for_solver(l: Any, r: Any, context: str, trail: Trail):
     except _NotEngaged:
         return None
     return strip(l, env, trail), strip(r, env, trail)
+
+
+def strip_for_real_solver(l: Any, r: Any, context: str, trail: Trail):
+    """:func:`strip_for_solver` for CLP(R), which computes in floats: a
+    currency anywhere in the comparison is refused (``units_unsupported``)
+    before the strip, since money takes the exact route only (CLP(Q)); a
+    physical quantity goes through as for any solver."""
+    if not _units_flag.active:
+        return None
+    _ensure_imports()
+    l, r = deref(l), deref(r)
+    for side in (l, r):
+        money = _first_money(side)
+        if money is not None:
+            raise _unsupported(
+                context,
+                f"{money!r} is money, which CLP(R) would compute in floats; "
+                f"post it in CLP(Q) (clpq.rational, {{...}}) instead")
+    return strip_for_solver(l, r, context, trail)
+
+
+def _first_money(x: Any):
+    """The first currency-dimensioned leaf (a Quantity or a united Var) in
+    the tree, or None."""
+    from clausal.terms import _currency_info  # noqa: PLC0415
+    x = deref(x)
+    dims = None
+    if isinstance(x, _Quantity):
+        dims = x.dims
+    elif is_var(x):
+        state = get_attr(x, UNITS_KEY)
+        dims = state.dims if state is not None else None
+    elif isinstance(x, _BINARY):
+        return _first_money(x.left) or _first_money(x.right)
+    elif isinstance(x, _Negate):
+        return _first_money(x.operand)
+    elif type(x) is tuple:
+        for a in x[1:]:
+            found = _first_money(a)
+            if found is not None:
+                return found
+    if dims and any(_currency_info(k) is not None for k in dims):
+        return x
+    return None
+
+
+def strip_expr_for_solver(expr: Any, context: str, trail: Trail):
+    """The side channel for ONE expression: an objective (``sup/2``,
+    ``maximize/2``, ``bb_inf/3``) or a bound, whose dimension is the answer's.
+
+    Returns None when the tree holds no Quantity or united Var, or a leaf
+    the side channel does not speak for. Otherwise the same analysis as a
+    comparison of the tree with itself — unknown factors default as there,
+    what stays unknown throws ``units_undetermined`` — and the result is
+    ``(stripped, dims)``: the tree the solver can take and the dims the
+    solver's number gets back (empty for a dimensionless expression).
+    """
+    if not _units_flag.active:
+        return None
+    _ensure_imports()
+    expr = deref(expr)
+    material = _scan(expr)
+    if material is _FOREIGN or not material:
+        return None
+    a = _Analysis(context)
+    try:
+        dims, _ = a.run(expr, expr)
+    except _NotEngaged:
+        return None
+    return strip(expr, a.env, trail), dims
+
+
+def reattach(value, dims: dict):
+    """A solver's number as the term it stands for: a Quantity of *dims*, or
+    the number itself when the dims are empty. ``present_number`` first, so an
+    integral rational is an int here as everywhere (the Quantity constructor
+    then applies the currency rule: an int magnitude of a currency is a
+    Decimal, as on the ground path)."""
+    _ensure_imports()
+    value = present_number(value)
+    return _Quantity(value, dims) if dims else value
 
 
 # ── in_domain / label ────────────────────────────────────────────────────────
@@ -666,11 +756,12 @@ def in_domain_units(var_or_list, lo, hi, trail: Trail):
     return in_domain(shadows, lo_n, hi_n, trail)
 
 
-def label_targets(vars_list) -> list:
-    """``label/1``'s list with every united var replaced by its shadow. A
-    united var with no shadow and no solver state has no domain and is left
-    alone (label skips it, as it skips any var without FD state); one with
-    solver state but no shadow was posted on directly and throws."""
+def label_targets(vars_list, context: str = "label/1") -> list:
+    """``label/1``'s list (or ``bb_inf/3``'s integer list, *context* naming
+    the caller) with every united var replaced by its shadow. A united var
+    with no shadow and no solver state has no domain and is left alone
+    (label skips it, as it skips any var without FD state); one with solver
+    state but no shadow was posted on directly and throws."""
     if not _units_flag.active:
         return list(vars_list)
     out = []
@@ -681,7 +772,7 @@ def label_targets(vars_list) -> list:
             # a builtin outside the side channel — shadowed or not — every
             # labelled value would land on the wrong variable or be refused
             # by the units hook with no diagnostic. Say so, first.
-            _refuse_bypassed(dv, "label/1")
+            _refuse_bypassed(dv, context)
             state = get_attr(dv, UNITS_KEY)
             if state is not None and state.shadow is not None:
                 out.append(state.shadow)
