@@ -127,9 +127,33 @@ since 0.4.0 finish three moves:
 - **`sort/2`, `msort/2` and `compare/3` agree with `term_key`.**
 - **The bytecode cache is keyed by an engine fingerprint.** Caches from
   earlier versions are ignored and rebuilt.
+- **An empty test run fails.** `python -m clausal.testing` exits 5 ("no
+  tests collected", pytest's number) when it collects no `test/1` clause; it
+  exited 0. Pass `--allow-empty` when an empty run is expected. `--strict`
+  is now the default and changes nothing. See [docs/testing.md](docs/testing.md).
 
 ### Added
 
+- **One name at several arities in one file**, as in ISO: `p(1),` and
+  `p(1, 2),` define `p/1` and `p/2`, two unrelated procedures (a DCG
+  `s//1` is `s/3`); neither is padded into the other. A bare `p` in a data
+  position is still the atom, `p(1, 2)` is the compound at the arity
+  written, and a call at an arity that has no clauses is still an
+  arity-mismatch error. See [docs/predicates.md](docs/predicates.md).
+- **Declared fields per arity.** A name may carry declared fields at
+  several arities, each with its own field names, in `-module` and
+  `-private` lists and across directives: `-module(lib, [q(X), q(X, Y)])`
+  loads. A clause head of a declared name must be at a declared arity
+  (write `f/2`, an indicator, to add an arity without fields). A term built
+  from Python by field name uses the written arity, else the one declared
+  arity its keywords fit, else raises `AmbiguousArityConstructionError`.
+  An `-edcg_pred` name keeps one arity.
+- **`.pl` files are test files.** `python -m clausal.testing` and the
+  pytest plugin load a `.pl` file through the `.pl` importer and run its
+  `test/1` clauses; a `.pl` file that fails to translate is a failing
+  `<load>` item. A file opts out with a `% clausal: no-collect` comment. A
+  directory scan lists the files it skipped, with the reason. See
+  [docs/testing.md](docs/testing.md).
 - **`-import_from(m, [p/1])` imports one arity of `p`**, as Scryer's
   `use_module(m, [p/1])` does (`s//1` is `s/3`). A bare `p` still imports
   every arity; the forms mix in one list, and `alias(p/1, q)` renames one
@@ -265,6 +289,44 @@ since 0.4.0 finish three moves:
     - Undefined predicates list their candidates.
     - The test runner descends into a failing goal's clauses.
 
+### Changed
+
+Where there is a choice, ISO 13211-1 is the reference, and Scryer Prolog
+where ISO is silent; SWI-Prolog is not a reference.
+
+- **The Prolog exporter prefers ISO/Scryer spellings.** The default (`iso`)
+  dialect writes `all_different` as `all_distinct/1` and `time_goal` as
+  `time/1`, Scryer's names; `in_domain` and `divmod_` are unchanged. The
+  default CLP(ℤ) library is `clpz` (`Dialect.swi()` keeps `clpfd`). Every
+  dialect writes a prefix-operator directive in functional notation
+  (`:- discontiguous(p/1).`), which both Scryer and SWI read. See
+  [docs/prolog_translation.md](docs/prolog_translation.md).
+- **`.pl` import renames nothing silently.** The ISO evaluables keep their
+  names and ISO meaning (`max`, `min`, `abs`, `sqrt`, ...; `max` used to
+  become `max_`, which is not evaluable); `//`, `mod`, `rem`, `div`, `^`,
+  `**` and the bit operators cross as the quoted ISO evaluables
+  (`'^'(2, -1)` is `type_error(float, 2)`, not `0.5`); `profile_get/3`,
+  `atomic/1` and a program's own or imported names cross unchanged.
+- **`.pl` import: `use_module` resolves paths as Scryer does.** A quoted or
+  unquoted slash path (`sub/helpers`, `'../shared/helpers'`, with or without
+  `.pl`) is resolved against the importing file's directory; an unquoted
+  one used to become a comment and the import vanished. A spec that names
+  no module is a `SyntaxError` naming the directive and its line. The
+  built-in libraries (`dif`, `between`, `error`, ...) are explicit no-op
+  imports. Every translation error names the `.pl` line.
+- **`.pl` import: `set_prolog_flag(double_quotes, Mode)`** governs every
+  `"…"` below it: `chars`, `codes` (`[97, 98]`) or `atom`. `codes` used to
+  be ignored.
+- **`.pl` import: the standard-order comparisons** `@<`, `@>`, `@=<`,
+  `@>=` cross as the quoted ISO builtins (they were refused).
+- **`.pl` import refuses what it cannot keep.** A query in program text
+  (`?- G.`) is refused (it used to become a comment); the atom `undefined`
+  is written quoted.
+- **`.pl` import: a name clash between modules** is resolved with a
+  module-qualified call, `m:p(X)` (which becomes `m.p(X)`). Renaming an
+  import with `as` is not accepted, as neither ISO nor Scryer has it. See
+  [docs/importing_prolog.md](docs/importing_prolog.md#name-clashes-qualified-calls).
+
 ### Deprecated
 
 These keep working, with a warning, through 1.x. They are removed in 2.0.
@@ -312,6 +374,39 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
 
 ### Fixed
 
+- **A tail-recursive clause keeps its effects on caller variables.**
+  Tail-recursion optimisation restarted the clause after undoing its whole
+  trail segment, so a `dif` or CLP constraint on a caller variable
+  (`K is not H`, `K != 3`), a binding of one (`K is foo`) and a binding
+  nested in a tail argument were silently lost:
+  `findall(1, (ka(K, [a, b]), K is a), R)` gave `R = [1]` for
+  `ka(K, [H, *T]) <- (K is not H, ka(K, T))`. The restart is now taken only
+  when the clause touched nothing but variables it created; otherwise it
+  makes the ordinary recursive call. See
+  [docs/compiler.md](docs/compiler.md#tail-recursion-optimization-tro).
+- **`==` and `!=` see through bound variables.** A variable bound inside a
+  list, cell or dict reads as its value, as ISO `==/2` dereferences every
+  subterm: `X is [Y], Y is 1, X == [1]` failed silently.
+- **`.pl` import: `bagof/3` and `setof/3` keep `Y^Goal`.** The quantifier
+  was stripped, so `setof(X, Y^p(X, Y), L)` answered once per `Y`.
+- **`.pl` import declares a program's data functors.** `p(f(1)).` in an
+  imported `.pl` file answers `p(f(1))` instead of raising
+  `existence_error(procedure, f/1)`; a name used as data at two arities is
+  declared at both.
+- **The native ISO reader keeps the last clause** of a text with no
+  trailing newline (`clausal.tools.iso_l3.read_iso`, internal; not yet the
+  `.pl` import path), and its `lower_items` raises on a refusal by default.
+- **The bytecode cache key covers everything that decides the emitted
+  code**: the evaluable table, the units and countries tables, the term
+  helpers and the `.pl` translator with its tokenizer, as well as the
+  compiler. Editing any of them used to leave stale cached bytecode.
+- **The Prolog exporter names each import and export once.** A `-module`
+  export list is deduplicated by `Name/Arity`, and so is an import list
+  whose arities are known (`[helper/1, helper/1]`, `helper(X)` beside
+  `helper/1`, `sent//1` beside `sent/3`). An import list holding a bare
+  name, with no module signatures to give its arity, is written as a
+  listless `use_module(lib)`: Scryer refuses a bare atom in an import list
+  and Trealla imports nothing.
 - **An imported `.pl` file's `_Name` variable is no singleton.** By the
   Prolog convention (ISO, Scryer) `_Y` in `setof(X, p(X, _Y), L)` is used
   once on purpose; the `.pl` load warned "rename to `_Y_UNUSED`". The
@@ -374,8 +469,9 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
   plain test `\==` (or `=\=` beside arithmetic), which differs whenever an
   argument is unbound. A numeric `!=` (a side that exports as an integer --
   including `-3`, a quantity literal such as `5000(euro)` and a constant
-  folded to an integer -- or as arithmetic) is now clpz's `#\=`, imported
-  beside `#=`; any other, including a float, is `dif/2`. `is not` stays `dif/2`. See
+  folded to an integer -- or as arithmetic, including a clpz evaluable
+  such as `abs(X)`) is now clpz's `#\=`, imported beside `#=`; any other,
+  including a float, is `dif/2`. `is not` stays `dif/2`. See
   [docs/prolog_translation.md](docs/prolog_translation.md).
 
 ### Migration guide: 0.x to 1.0
