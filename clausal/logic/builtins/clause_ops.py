@@ -319,6 +319,7 @@ _GOAL_ARGS = {
 _BUILTIN_GOAL_ARGS = {
     ("time_goal", 1): (0,), ("time_goal", 2): (0,),
     ("phrase", 2): (0,), ("phrase", 3): (0,),
+    ("findall", 4): (1,),
 }
 
 

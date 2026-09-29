@@ -370,7 +370,11 @@ def test_the_list_case_table_covers_all_nineteen_builtins():
     from clausal.logic.builtins.higher_order import _GOAL_FIRST_LIST_BUILTINS
     keys = {(b, 1 + len(a) + n) for b, _, a, n in _LIST_CASES}
     assert len(keys) == 19
-    assert keys == set(_GOAL_FIRST_LIST_BUILTINS)
+    # maplist/4..8 (2026-09-30) share maplist/3's machinery and are covered
+    # by tests/test_maplist_4_to_8.py and the ruling-B table.
+    newer = {("maplist", n) for n in range(4, 9)}
+    assert keys | newer == set(_GOAL_FIRST_LIST_BUILTINS)
+    keys = keys | newer
     assert keys <= set(_DB_BUILTINS), keys - set(_DB_BUILTINS)
     assert not keys & set(_BUILTINS)
     assert all(getattr(_DB_BUILTINS[k], "_db_optional", False) for k in keys)

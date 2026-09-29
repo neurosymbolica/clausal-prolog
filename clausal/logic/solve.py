@@ -694,6 +694,28 @@ def _parameterize_opaque(goal: Any, params: list) -> Any:
     return walk(goal, True)
 
 
+def _special_form_cell_as_call(goal: Any) -> Any:
+    """A special-form CELL whose goal arguments are themselves cells --
+    ``solve(("catch", ("throw", foo), E, True), m)`` -- as ``call/1`` of it.
+
+    The compiler lowers a special form (``catch``, ``findall``, ``forall``,
+    ``once``, ...) with its goal arguments as raw terms and reads them as
+    goal NODES, so a cell there reached ``terms_to_goalop`` and raised
+    ``NotImplementedError: goal shape not yet supported (tuple)``.  call/1
+    runs exactly such a term (``call_body.special_form_dispatch``)."""
+    is_cell, functor = compound_cell_shape(goal)
+    if not is_cell:
+        return goal
+    from clausal.logic.builtins.call_body import SPECIAL_FORMS  # noqa: PLC0415
+    spec = SPECIAL_FORMS.get((functor, len(goal) - 1))
+    if spec is None:
+        return goal
+    if any(kind == "G" and type(deref(arg)) is tuple
+           for kind, arg in zip(spec, goal[1:])):
+        return ("call", goal)
+    return goal
+
+
 def _compile_as_query(goal: Any, module: Module) -> Any:
     """Compile goal as a zero-arity query predicate and return its dispatch fn.
 
@@ -729,6 +751,7 @@ def _compile_as_query(goal: Any, module: Module) -> Any:
     goal_thunks: list = []
     cache_key = _goal_cache_key(goal, module, goal_thunks)
 
+    goal = _special_form_cell_as_call(goal)
     goal = _term_to_goal(goal, getattr(module, "db", None))
     from clausal.logic.compiler import compile_predicate_trampoline
     from clausal.logic.compiler.goal_trampoline import compile_body_trampoline

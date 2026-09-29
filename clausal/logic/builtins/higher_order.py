@@ -602,6 +602,49 @@ for _n in range(1, 9):
 del _n, _cg_arity, _key  # clean up loop variables
 
 
+# ── findall/4 ─────────────────────────────────────────────────────────────────
+
+
+def _findall_4_factory(db):
+    """findall(Template, Goal, Bag, Tail) -- findall/3 whose result list ends
+    in *Tail* instead of ``[]`` (Scryer, SWI: ``findall(X, member(X, [a, b]),
+    L, [c])`` gives ``L = [a, b, c]``).  It did not exist
+    (existence_error(procedure, findall/4)).  Runs ``call/1`` of the
+    ``findall/3`` term, so the goal is resolved in the calling module and
+    every findall/3 rule -- errors included -- applies unchanged."""
+    call1 = _DB_BUILTINS[("call", 1)](db)
+
+    def _findall__4(this_generator, _proceed, _fail, _catcher,
+                    template, goal, bag, tail, trail):
+        # A Tail that is neither a list nor a partial list is
+        # type_error(list, Tail), as Scryer raises (``findall(X, p(X), L,
+        # foo)``).
+        t = deref(tail)
+        if not (is_var(t) or _as_items(t) is not None
+                or _open_skeleton(t) is not None):
+            from clausal.logic.exceptions import type_error  # noqa: PLC0415
+            raise LogicException(type_error("list", t, "findall/4"))
+        collected = Var()
+        sg = StepGenerator(call1, this_generator, this_generator,
+                           this_generator, ("findall", template, goal, collected),
+                           trail)
+        _st = yield (sg, None)
+        while _st is not DONE:
+            mark = trail.mark()
+            items = _as_items(deref(collected))
+            if items is not None and unify(bag, _partial(list(items), tail), trail):
+                yield (_proceed, None)
+            trail.undo(mark)
+            _st = yield (sg, None)
+        yield (_fail, DONE)
+    return _findall__4
+
+
+_findall_4_factory._db_optional = True
+_DB_BUILTINS[("findall", 4)] = _findall_4_factory
+_BUILTIN_FIELDS[("findall", 4)] = ("template", "goal", "bag", "tail")
+
+
 # ── Higher-order list predicates (V2-11) ──────────────────────────────────────
 
 
@@ -859,6 +902,37 @@ def _map_list__3(this_generator, _proceed, _fail, _catcher, goal, xs, ys, trail)
                              trail))
     trail.undo(outer_mark)
     yield (_fail, DONE)
+
+
+def _make_maplist_n(n_lists):
+    """maplist/(n_lists + 1) for 3..7 lists: the prologue's definition by
+    call/N over every list at once -- proper or open lists, every
+    combination of the calls' solutions an answer (``_open_lists_drive``,
+    which maplist/2,3 use for open lists).  Scryer's library(lists) has
+    maplist/2..9; only /2 and /3 existed here, so ``maplist(plus, Xs, Ys,
+    Zs)`` was existence_error(procedure, maplist/4)."""
+    # Unlike maplist/3 (F063), no string promotion: output lists come back
+    # as lists even when every input is a string (the same term either way).
+    def fn(this_generator, _proceed, _fail, _catcher, goal, *rest):
+        *lists, trail = rest
+        goal_val = deref(goal)
+        if not _is_goal(goal_val):
+            yield (_fail, DONE)
+            return
+        dispatch = _ensure_trampoline_dispatch(goal_val, n_lists)
+        yield from _open_lists_drive(this_generator, _proceed, dispatch,
+                                     lists, lambda _i, hs: hs, trail)
+        yield (_fail, DONE)
+    fn.__name__ = f"_map_list__{n_lists + 1}"
+    fields = ("goal",) + tuple(f"list{i + 1}" for i in range(n_lists))
+    return _trampoline_builtin("maplist", n_lists + 1, fields=fields)(fn)
+
+
+# up to maplist/8: its goal is called with 7 arguments, i.e. call/8, the
+# highest call/N (ISO requires call/1..8).
+for _n_lists in range(3, 8):
+    globals()[f"_map_list__{_n_lists + 1}"] = _make_maplist_n(_n_lists)
+del _n_lists
 
 
 @_trampoline_builtin("include", 3)
@@ -1498,7 +1572,9 @@ def _tpartition__4(this_generator, _proceed, _fail, _catcher, goal, lst, include
 # the same arrangement ``call/N``, ``phrase`` and ``time_goal`` already use.
 
 _GOAL_FIRST_LIST_BUILTINS = (
-    ("maplist", 2), ("maplist", 3), ("include", 3), ("exclude", 3),
+    ("maplist", 2), ("maplist", 3), ("maplist", 4), ("maplist", 5),
+    ("maplist", 6), ("maplist", 7), ("maplist", 8),
+    ("include", 3), ("exclude", 3),
     ("foldl", 4), ("foldl", 5), ("foldl", 6), ("map_list_to_pairs", 3),
     ("take_while", 3), ("drop_while", 3), ("span", 4),
     ("group_by", 3), ("sort_by", 3), ("max_by", 3), ("min_by", 3),
