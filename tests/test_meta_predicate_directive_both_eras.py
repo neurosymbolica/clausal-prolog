@@ -555,10 +555,10 @@ def test_a_lambda_nested_in_a_compound_in_a_colon_position(llib):
 # Python and handed into a query, is a goal OBJECT: a meta-declared position
 # leaves it unwrapped and call_goal runs it, exactly as without the
 # declaration.  Pinned through one and two meta hops, both eras, through the
-# ``call`` Python entry and through a clause that passes it on.  (A raw
-# Python function inside a ``solve`` CELL goal is refused by the query
-# compiler with or without the declaration -- ``term_to_ast_expr:
-# unsupported term type function`` -- so that entry is not pinned here.)
+# ``call`` Python entry, through a clause that passes it on, and (since
+# 2026-09-30) inside a ``solve`` CELL goal -- which the query compiler used to
+# refuse (``term_to_ast_expr: unsupported term type function``; todo/done/
+# solve-cell-goal-with-a-raw-python-function-is-refused-2026-09-25.md).
 
 _CLIB = """
     -module(mclib_ERA, [c1(LO, G, OUT), c2(LO, G, OUT)])
@@ -606,6 +606,17 @@ def test_a_python_written_closure_passed_on_by_a_clause(clib, via):
     _L, D = clib
     out = Var()
     assert [walk(out) for _ in call(via, _python_probe, out, module=D)] == [20]
+
+
+@pytest.mark.parametrize("hop", ["c1", "c2"])
+@pytest.mark.parametrize("where", ["library", "importer"])
+def test_a_python_written_closure_in_a_solve_cell_goal(clib, hop, where):
+    from clausal.logic.solve import solve
+    L, D = clib
+    module = L if where == "library" else D
+    out = Var()
+    assert [walk(out) for _ in solve((hop, 3, _python_probe, out), module)] \
+        == [30]
 
 
 # ── A lambda NODE built in Python and handed to a query (2026-09-25) ───────

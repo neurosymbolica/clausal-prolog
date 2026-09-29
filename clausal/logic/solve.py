@@ -42,6 +42,7 @@ predicate calls.
 
 from __future__ import annotations
 
+import functools as _functools
 import sys
 import types as _types
 from dataclasses import fields as _dc_fields, is_dataclass as _is_dataclass
@@ -592,20 +593,36 @@ def _is_opaque_value(v: Any) -> bool:
     return module_name.split(".")[0] not in ("clausal", "datetime")
 
 
+#: A plain Python FUNCTION value -- a simple-mode goal function
+#: ``fn(*args, trail, k)`` a caller hands in as a meta-argument, say.  It is a
+#: goal OBJECT (``call/N`` and ``call_goal`` run one), but the query compiler
+#: has no literal lowering for it: ``solve(("c1", 2, fn, OUT), m)`` raised
+#: ``NotImplementedError: term_to_ast_expr: unsupported term type function``
+#: while ``call("c1", 2, fn, OUT, module=m)`` answered.  As an ARGUMENT it
+#: crosses by reference, as an opaque object does; never in a cell's functor
+#: slot, which names the call itself.
+_PASSABLE_CALLABLE_TYPES = (_types.FunctionType, _types.BuiltinFunctionType,
+                            _types.MethodType, _functools.partial)
+
+
 def _parameterize_opaque(goal: Any, params: list) -> Any:
     """*goal* with every opaque leaf (``_is_opaque_value``) inside a cell,
     conjunction tuple or list replaced by a fresh Var; ``(Var, value)`` is
-    appended to *params*, which the caller binds before the search."""
-    def walk(t):
+    appended to *params*, which the caller binds before the search.  A
+    Python function in an ARGUMENT position (``_PASSABLE_CALLABLE_TYPES``) is
+    passed the same way."""
+    def walk(t, functor_slot=False):
         if isinstance(t, Var):
             return t
         if type(t) is tuple:
-            new = tuple(walk(e) for e in t)
+            new = tuple(walk(e, i == 0) for i, e in enumerate(t))
             return t if all(a is b for a, b in zip(new, t)) else new
         if type(t) is list:
             new = [walk(e) for e in t]
             return t if all(a is b for a, b in zip(new, t)) else new
-        if _is_opaque_value(t):
+        if _is_opaque_value(t) or (
+                not functor_slot and isinstance(t, _PASSABLE_CALLABLE_TYPES)
+                and not hasattr(t, "_get_dispatch")):
             pv = Var()
             params.append((pv, t))
             return pv
