@@ -272,3 +272,7 @@ than minting a local predicate. That is ruling (a) applied consistently, and
 the census says no such file exists. If a local predicate is wanted there, the
 module should give it clauses (the local definition then wins) or not spell it
 in the canonical name.
+
+## Moved to done/ 2026-09-30
+
+Its status line says CLOSED 2026-09-21 (implemented); it had stayed in todo/.
