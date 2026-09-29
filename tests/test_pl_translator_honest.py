@@ -571,3 +571,55 @@ class TestPackageInitAndNoModuleName:
         a = prolog_to_clausal(src)
         monkeypatch.chdir(cwd)
         assert prolog_to_clausal(src) == a
+
+
+# ── An imported 0-arity predicate used as a goal argument ──────────────
+
+class TestImportedZeroArityGoal:
+    """``:- use_module(lib, [g/0]).  c(L) :- findall(1, g, L).`` -- the
+    translator declared ``g`` a ``-private`` DATA atom (neither the head
+    sweep nor the compound-functor sweep sees a 0-arity import), which
+    shadowed the imported predicate: the goal raised
+    existence_error(procedure, g/0) where Prolog answers L = [1]."""
+
+    def _lib(self, tmp_path):
+        (tmp_path / f"{_PREFIX}zg_lib.pl").write_text(textwrap.dedent(f"""\
+            :- module({_PREFIX}zg_lib, [g/0, h/1]).
+            g.
+            h(1).
+        """))
+
+    def test_findall_over_imported_zero_arity(self, tmp_path):
+        self._lib(tmp_path)
+        m = _load(tmp_path, "zg_use", f"""\
+            :- module({_PREFIX}zg_use, [c/1]).
+            :- use_module({_PREFIX}zg_lib, [g/0, h/1]).
+            c(L) :- findall(1, g, L).
+        """)
+        assert _answers(m, "c") == [[1]]
+
+    def test_call_and_body_goal_over_imported_zero_arity(self, tmp_path):
+        self._lib(tmp_path)
+        m = _load(tmp_path, "zg_use2", f"""\
+            :- use_module({_PREFIX}zg_lib, [g/0, h/1]).
+            d(X) :- g, X = 1.
+            e(X) :- call(g), X = 2.
+            f(L) :- findall(1, (g, h(_)), L).
+        """)
+        assert _answers(m, "d") == [1]
+        assert _answers(m, "e") == [2]
+        assert _answers(m, "f") == [[1]]
+
+    def test_whole_module_import_zero_arity(self, tmp_path):
+        self._lib(tmp_path)
+        m = _load(tmp_path, "zg_use3", f"""\
+            :- use_module({_PREFIX}zg_lib).
+            c(L) :- findall(1, g, L).
+        """)
+        assert _answers(m, "c") == [[1]]
+
+    def test_no_private_declaration_for_the_imported_name(self):
+        out = prolog_to_clausal(
+            ":- module(zq, [c/1]).\n:- use_module(zq_lib, [g/0]).\n"
+            "c(L) :- findall(1, g, L).\n")
+        assert "-private" not in out
