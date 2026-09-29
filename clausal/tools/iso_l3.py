@@ -698,11 +698,30 @@ def lower_items(items, *, strict: bool = True, source: "str | None" = None,
             continue
         body.extend(lowered)
         stats["lowered"] += 1
+    if ctx.dead_stmts or ctx.dropped_keys:
+        body = _drop_removed_imports(body, ctx)
     mod = ast.Module(body=body, type_ignores=[])
     ast.fix_missing_locations(mod)
     if _lowered is not None:
         _lowered.append(ctx)
     return mod, stats
+
+
+def _drop_removed_imports(body: list, ctx) -> list:
+    """``use_module(M, [])`` (D27): drop M's import statements, and re-spell
+    every goal lowered through a dropped import (``$LoadName('m.p')``) as
+    the plain local name, which no longer resolves -- Scryer's
+    existence_error when it is called."""
+    body = [ctx.load_only.get(id(s), s) for s in body
+            if id(s) not in ctx.dead_stmts or id(s) in ctx.load_only]
+    for node in ast.walk(ast.Module(body=body, type_ignores=[])):
+        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                and node.func.id == _DOLLAR + "LoadName"):
+            for kw in node.keywords:
+                if (kw.arg == "name" and isinstance(kw.value, ast.Constant)
+                        and kw.value.value in ctx.dropped_keys):
+                    kw.value = _const(kw.value.value.rsplit(".", 1)[1])
+    return body
 
 
 def _has_chars(t) -> bool:

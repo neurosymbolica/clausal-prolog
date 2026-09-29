@@ -17,6 +17,8 @@ What is handled, and how (the ISO directive -> the seam's):
     use_module(a/b) / ('a/b')       -import_from(a.b, <a/b's name/arity exports>)
                                     (+ the exported op/3s, into the table)
     use_module(a/b, [p/1])          -import_from(a.b, [p/1])
+    use_module(m, [])               Scryer's remove_module/2 (D27): drops the
+                                    names imported from module m, loads nothing
     use_module(library(L)[, Is])    lists/apply/dif/...: built in, nothing
                                     clpz: clausal.logic.clpfd + clpz's ops
                                     reif: clausal.stdlib.reif; clpq: built in
@@ -126,6 +128,12 @@ class DirectiveContext:
         #: goal resolves through).  Non-empty: the loader does not cache the
         #: bytecode, since the cache key covers this file only.
         self.depends_on: set[str] = set()
+        self._imports: dict[str, list] = {}
+        #: ids of import statements a ``use_module(M, [])`` dropped, and the
+        #: ``dotted.name`` remap keys it dropped (see :meth:`drop_imports`).
+        self.dead_stmts: set[int] = set()
+        self.load_only: dict[int, ast.stmt] = {}
+        self.dropped_keys: set[str] = set()
         #: The module's own name, from its module/2 (``own:G`` is local).
         self.own_module: "str | None" = None
         self._t = None
@@ -174,12 +182,49 @@ class DirectiveContext:
             return dotted, ""
         if name == self.own_module:
             return "", ""
-        found = _module_source(name) if all(
-            p.isidentifier() for p in name.split(".")) else None
-        if found is None:
-            return None, (f"`{name}` is no module this file imported (nor a "
-                          f"module on sys.path)")
+        if not all(p.isidentifier() for p in name.split(".")):
+            return None, f"`{name}` is no module name"
+        # As in Scryer, a module nothing imported is resolved when the goal
+        # RUNS: an existence_error then unless some module has loaded it.
         return name, ""
+
+    def imported(self, dotted: str, stmts: list) -> list:
+        """Record the import statements an import of *dotted* emitted (a
+        later ``use_module(M, [])`` drops them); a re-import undoes a drop."""
+        self._imports.setdefault(dotted, []).extend(stmts)
+        for s in stmts:
+            if isinstance(s, ast.ImportFrom):
+                for a in s.names:
+                    self.dropped_keys.discard(f"{dotted}.{a.name}")
+        return stmts
+
+    def drop_imports(self, dotted: str) -> None:
+        """Undo every import of *dotted* so far: its statements, its module
+        items and its remap entries.  A goal already lowered through the
+        remap is re-spelled by ``iso_l3`` at the end (:attr:`dropped_keys`)."""
+        stmts = self._imports.pop(dotted, [])
+        for s in stmts:
+            self.dead_stmts.add(id(s))
+            if isinstance(s, ast.ImportFrom):
+                # The module STAYS loaded (Scryer: m:G still reaches it): the
+                # import runs, binding no name here.
+                keep = ast.Expr(value=ast.Call(
+                    func=ast.Name(id="__import__", ctx=ast.Load()),
+                    args=[ast.Constant(value=s.module)], keywords=[]))
+                ast.copy_location(keep, s)
+                self.load_only[id(s)] = keep
+        if self._t is None:
+            return
+        remap = self._t._import_remap
+        for local, key in list(remap.items()):
+            if key.startswith(dotted + ".") and "." not in key[len(dotted) + 1:]:
+                del remap[local]
+                self._t._imported_functors.discard(local)
+                self.dropped_keys.add(key)
+        items = self._t._module_items
+        items[:] = [i for i in items
+                    if not (type(i).__name__ == "ImportFromDirective"
+                            and getattr(i, "module", None) == dotted)]
 
     def note_literal(self) -> str:
         """The mode a ``"..."`` literal read now takes (and record it)."""
@@ -306,6 +351,8 @@ def _use_module(ctx: DirectiveContext, args, spans, span):
     imports = args[1] if len(args) == 2 else None
     what = f"use_module({_show(spec)}{', [...]' if len(args) == 2 else ''})"
     entries = None
+    if imports == []:
+        return _remove_module(ctx, spec, span, what)
     if imports is not None:
         entries = _import_list(ctx, imports, spans[1], span, what)
     if type(spec) is tuple and len(spec) == 2 and spec[0] == "library":
@@ -343,9 +390,39 @@ def _use_module(ctx: DirectiveContext, args, spans, span):
         entries = exports
     if not entries:
         return []
-    return ctx.seam("import_from",
-                    [_dotted_ast(dotted), _list([_pi_ast(*e) for e in entries])],
-                    span, what)
+    return ctx.imported(dotted, ctx.seam(
+        "import_from",
+        [_dotted_ast(dotted), _list([_pi_ast(*e) for e in entries])],
+        span, what))
+
+
+def _remove_module(ctx, spec, span, what):
+    """``use_module(M, [])`` is Scryer's ``remove_module/2`` (ruling D27,
+    measured against Scryer's ``src/loader.pl``): M must be an atom naming a
+    MODULE (``library(Name)`` or the name from its module/2), never a path
+    -- ``pk/m`` is ``domain_error(module_specifier, pk/m)``.  It does NOT
+    load M.  It drops every name this module imported from M, for the whole
+    module (Scryer resolves a call when it runs, so a clause above the
+    directive loses it too); a later import brings it back.  A module name
+    nothing here imported is a no-op; ``M:G`` then reaches M only if some
+    other module loaded it, else it is an existence_error when called."""
+    if type(spec) is tuple and len(spec) == 2 and spec[0] == "library":
+        raise _refused(
+            f"{what}: Scryer reads this as remove_module/2, which drops the "
+            f"library's predicates from this module; Clausal's library "
+            f"predicates are global builtins and cannot be dropped, so the "
+            f"directive is refused rather than ignored", span)
+    if type(spec) is not str:
+        raise _refused(
+            f"{what}: use_module(M, []) is remove_module/2, which takes a "
+            f"module NAME (Scryer: domain_error(module_specifier, "
+            f"{_show(spec)}))", span)
+    if spec in ctx.module_aliases:
+        dotted, why = ctx.resolve_module(spec)
+        if dotted is None:
+            raise _refused(f"{what}: {why}", span)
+        ctx.drop_imports(dotted)
+    return []
 
 
 def _use_library(ctx, lib, entries, span, what):
@@ -378,11 +455,11 @@ def _use_library(ctx, lib, entries, span, what):
                 f"{module or 'the engine'})", span)
     if not wanted:
         return []
-    return ctx.seam("import_from",
+    return ctx.imported(module, ctx.seam("import_from",
                     [_dotted_ast(module),
                      _list([_name(n) if a is None else _pi_ast(n, a)
                             for n, a in wanted])],
-                    span, what)
+                    span, what))
 
 
 def _predspec(directive: str):
@@ -487,13 +564,6 @@ def _import_list(ctx, imports, spans, span, what):
     if type(imports) is not list:
         raise _refused(f"{what}: the import list must be a proper list, got "
                        f"{_show(imports)}", span)
-    if not imports:
-        raise _refused(
-            f"{what}: an empty import list has no portable meaning. Scryer "
-            f"reads it as remove_module/2 (it drops the module's imports and "
-            f"does not load it), Trealla and SWI as 'load it, import "
-            f"nothing'. Write use_module(M) to import its exports, or "
-            f"use_module(M, [p/1, ...]) to import some", span)
     entries = []
     for e, s in zip(imports, _list_spans(spans, len(imports))):
         where = _top(s) or span

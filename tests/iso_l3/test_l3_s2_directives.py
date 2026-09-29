@@ -207,10 +207,10 @@ def test_as_aliasing_in_canonical_form_is_refused_too(native):
     assert err.lineno == 2 and "aliasing with `as` is refused" in str(err)
 
 
-def test_an_empty_import_list_is_refused(native):
+def test_an_empty_import_list_with_a_path_is_a_domain_error(native):
     _write(native, "s2p/s2plib.pl", LIB_PL)
     err = _refusal(native, "s2_empty", "a.\n:- use_module(s2p/s2plib, []).\n")
-    assert err.lineno == 2 and "empty import list" in str(err)
+    assert err.lineno == 2 and "module_specifier" in str(err)
 
 
 # ── D11: bare atoms in an import list ──
@@ -399,9 +399,14 @@ def test_a_module_that_baked_in_another_files_exports_is_not_cached(native):
     assert "s2_dep2" in written and "s2_dep1" not in written, written
 
 
-def test_a_qualified_goal_through_an_unknown_module_is_refused(native):
-    err = _refusal(native, "s2_qunk", "a.\nt(X) :- nosuchmod:p(X).\n")
-    assert err.lineno == 2 and "nosuchmod" in str(err), str(err)
+def test_a_qualified_goal_through_an_unknown_module_fails_when_called(
+        native, ans):
+    """As in Scryer (D27): resolved when the goal runs, an existence_error
+    unless some module loaded it."""
+    from clausal.predicate_diagnostics import PredicateNotFoundError
+    mod = native.load("s2_qunk", "a.\nt(X) :- nosuchmod:p(X).\n")
+    with pytest.raises(PredicateNotFoundError, match="nosuchmod"):
+        ans(mod, "t")
 
 
 def test_a_module_name_two_imports_claim_is_ambiguous(native):
@@ -425,3 +430,114 @@ def test_the_cache_hit_path_keeps_the_double_quotes_modes_used(native):
     fresh = [i for i in mod.__loader__._recover_module_items(
         mod.__file__) if type(i).__name__ == "DoubleQuotesMode"]
     assert len(fresh) == 1 and fresh[0].modes_used == ("atom",), fresh
+
+
+# ── D27: use_module(M, []) is Scryer's remove_module/2 ──
+#
+# Measured against the Scryer binary (src/loader.pl remove_module/2), with
+# m.pl = ":- module(m, [p/1, r/1]). p(1). p(2). r(9).":
+#   use_module(m, [p/1]), use_module(m, [])  then p(X)  -> existence_error(procedure, p/1)
+#   use_module(m, [])  alone, then m:p(X)                -> existence_error(procedure, p/1)
+#   use_module(m, [p/1]), use_module(m, []) then m:p(X) -> 1 (m stays loaded)
+#   ... use_module(m, []), use_module(m, [p/1]) then p   -> 1 (a re-import restores)
+#   t(X) :- p(X). before both directives                -> existence_error (resolved at call)
+#   use_module(pk/m, [])                                  -> domain_error(module_specifier, pk/m)
+
+D27_LIB = ":- module(dzmod, [dzp/1, dzr/1]).\ndzp(1).\ndzp(2).\ndzr(9).\n"
+
+
+def _existence_error(call_it):
+    """The engine's existing existence_error shape: a PredicateNotFoundError
+    whose ISO term is error(existence_error(procedure, dzp/1), dzp/1)."""
+    from clausal.logic.exceptions import render_error_term
+    from clausal.predicate_diagnostics import PredicateNotFoundError
+    with pytest.raises(PredicateNotFoundError) as ei:
+        call_it()
+    term = render_error_term(ei.value.term)
+    assert "existence_error(procedure,dzp/1)" in term.replace(" ", ""), term
+    return ei.value
+
+
+def test_d27_an_empty_list_drops_the_names_imported_from_the_module(
+        native, ans):
+    _write(native, "dzmod.pl", D27_LIB)
+    mod = native.load("s2_d27a", "early(X) :- dzp(X).\n"
+                                 ":- use_module(dzmod, [dzp/1]).\n"
+                                 ":- use_module(dzmod, []).\n"
+                                 "late(X) :- dzp(X).\n"
+                                 "qual(X) :- dzmod:dzp(X).\n")
+    _existence_error(lambda: ans(mod, "late"))
+    _existence_error(lambda: ans(mod, "early"))
+    assert ans(mod, "qual") == [1, 2]          # m stays loaded, as in Scryer
+    assert not mod.__dict__.get("dzp")
+
+
+def test_d27_a_re_import_after_the_drop_restores_the_name(native, ans):
+    _write(native, "dzmod.pl", D27_LIB)
+    mod = native.load("s2_d27b", ":- use_module(dzmod, [dzp/1]).\n"
+                                 ":- use_module(dzmod, []).\n"
+                                 ":- use_module(dzmod, [dzp/1]).\n"
+                                 "t(X) :- dzp(X).\n")
+    assert ans(mod, "t") == [1, 2]
+
+
+def test_d27_an_empty_list_alone_does_not_load_the_module(native, ans):
+    _write(native, "dzmod.pl", D27_LIB)
+    sys.modules.pop("dzmod", None)
+    mod = native.load("s2_d27c", ":- use_module(dzmod, []).\n"
+                                 "t(X) :- dzmod:dzp(X).\n")
+    assert "dzmod" not in sys.modules
+    err = _existence_error(lambda: ans(mod, "t"))
+    # The engine's own existence_error shape (PredicateNotFoundError).
+    assert type(err).__name__ == "PredicateNotFoundError"
+    assert "module 'dzmod' is not loaded" in str(err)
+
+
+def test_d27_a_path_is_a_domain_error_as_in_scryer(native):
+    _write(native, "dzp2/dzmod.pl", D27_LIB)
+    err = _refusal(native, "s2_d27d", "a.\n:- use_module(dzp2/dzmod, []).\n")
+    assert err.lineno == 2 and "domain_error(module_specifier" in str(err)
+
+
+def test_d27_a_library_cannot_be_dropped_and_says_so(native):
+    err = _refusal(native, "s2_d27e", "a.\n:- use_module(library(lists), []).\n")
+    assert err.lineno == 2 and "remove_module/2" in str(err)
+
+
+@pytest.fixture
+def scryer_bin():
+    import os
+    s = "/workspace/scryer-prolog/target/release/scryer-prolog"
+    if not os.path.exists(s):
+        if os.environ.get("CLAUSAL_ISO_ALLOW_NO_SCRYER"):
+            pytest.skip("the Scryer oracle is not built")
+        pytest.fail(f"the Scryer oracle is not built at {s}")
+    return s
+
+
+@pytest.mark.parametrize("text, goal, want", [
+    (":- use_module(dzmod, [dzp/1]).\n:- use_module(dzmod, []).\n"
+     "t(X) :- dzp(X).\n", "t", "existence_error(procedure,dzp/1)"),
+    (":- use_module(dzmod, []).\nt(X) :- dzmod:dzp(X).\n", "t",
+     "existence_error(procedure,dzp/1)"),
+    (":- use_module(dzmod, [dzp/1]).\n:- use_module(dzmod, []).\n"
+     "t(X) :- dzmod:dzp(X).\n", "t", "[1,2]"),
+])
+def test_d27_scryer_answers_as_the_native_path(native, ans, scryer_bin,
+                                               text, goal, want):
+    import subprocess
+    (native.tmp / "dzmod.pl").write_text(D27_LIB)
+    (native.tmp / "dzmain.pl").write_text(text)
+    proc = subprocess.run(
+        [scryer_bin, "dzmain.pl"], cwd=native.tmp, capture_output=True,
+        text=True, timeout=60,
+        input=f"catch((findall(X, {goal}(X), L), write(L)), error(E, _), "
+              f"write(E)), nl, halt.\n")
+    assert proc.stdout.strip().splitlines()[-1] == want, proc.stdout
+    sys.modules.pop("dzmod", None)
+    native._names.append("dzmod")
+    mod = native.load("s2_d27s", text)
+    if want.startswith("["):
+        assert ans(mod, goal) == [1, 2]
+    else:
+        _existence_error(lambda: ans(mod, goal))
