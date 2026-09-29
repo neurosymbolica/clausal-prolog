@@ -170,9 +170,10 @@ def test_without_library_clpz_its_operators_do_not_read(native):
 
 
 def test_a_clpz_import_the_engine_lacks_is_refused_by_name(native):
+    # (in/2 was the example here until slice 5 made it a builtin.)
     err = _refusal(native, "s2_clpz_in",
-                   ":- use_module(library(clpz), [(#=)/2, in/2]).\n")
-    assert err.lineno == 1 and "in/2 is not available" in str(err)
+                   ":- use_module(library(clpz), [(#=)/2, fd_dom/2]).\n")
+    assert err.lineno == 1 and "fd_dom/2 is not available" in str(err)
 
 
 def test_an_unknown_library_is_a_located_error(native):
@@ -390,13 +391,23 @@ def test_directive_lowering_needs_no_loader(native):
 
 def test_a_module_that_baked_in_another_files_exports_is_not_cached(native):
     """use_module/1 copies the target's export list into this file's code;
-    the cache key covers this file only, so the bytecode is not written."""
+    the cache key covers this file only, so the bytecode is not written.
+    use_module/2 of a module that exports op/3s reads that module's source
+    too (which of its ops arrive -- slice 5), so it is not cached either;
+    use_module/2 of one exporting no op is."""
     _write(native, "s2p/s2plib.pl", LIB_PL)
-    native.load("s2_dep1", ":- use_module(s2p/s2plib).\nt(Y) :- twice(1, Y).\n")
-    native.load("s2_dep2", ":- use_module(s2p/s2plib, [pair/2]).\n"
+    _write(native, "s2p/s2pnoop.pl", LIB_PL.replace(", op(200, xfy, ^^)", "")
+           .replace("s2plib", "s2pnoop"))
+    def written():   # (each load clears __pycache__ first)
+        return {p.name.split(".")[0]
+                for p in native.tmp.glob("__pycache__/*.pyc")}
+    native.load("s2_dep3", ":- use_module(s2p/s2plib, [pair/2]).\n"
                            "t(K) :- pair(K, _).\n")
-    written = {p.name.split(".")[0] for p in native.tmp.glob("__pycache__/*.pyc")}
-    assert "s2_dep2" in written and "s2_dep1" not in written, written
+    assert "s2_dep3" not in written(), written()
+    native.load("s2_dep1", ":- use_module(s2p/s2plib).\nt(Y) :- twice(1, Y).\n")
+    native.load("s2_dep2", ":- use_module(s2p/s2pnoop, [pair/2]).\n"
+                           "t(K) :- pair(K, _).\n")
+    assert "s2_dep2" in written() and "s2_dep1" not in written(), written()
 
 
 def test_a_qualified_goal_through_an_unknown_module_fails_when_called(

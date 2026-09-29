@@ -1,0 +1,8 @@
+# library(clpz)'s label/1 under its Scryer meaning (ruling D9(a)).
+#
+# Scryer: label(Vs) :- labeling([], Vs).  -- leftmost variable first,
+# values ascending.  The engine's global label/1 is first-fail (a different
+# answer ORDER), so a .pl file that imports library(clpz) takes label/1
+# from here, and the seam keeps its own.
+
+label(VS) <- labeling([], VS)

@@ -2,11 +2,14 @@
 
 Plan: ``implementation_plans/native-iso-reader-step2-2026-09-29.md`` (D1 = (c)
 hybrid: clauses are lowered HERE to the transformed AST; directives go through
-the seam's own handlers, ``iso_l3_directives``).  Scope today is slices 0-2:
-facts, rules, every ISO term shape, the control constructs ``,`` ``;`` ``\\+``
-``true`` ``fail``/``false`` and ``call/N``, module-qualified goals ``m:G``, and
+the seam's own handlers, ``iso_l3_directives``).  Scope today is slices 0-2
+and 5: facts, rules, every ISO term shape, the control constructs ``,`` ``;``
+``\\+`` ``true`` ``fail``/``false`` and ``call/N``, module-qualified goals
+``m:G``, clpq's goal ``{C}`` (lowered to the seam's ``clpq.rational(C)``), and
 the directives of ``iso_l3_directives`` (module/2, use_module/1,2, dynamic,
-discontiguous, table, meta_predicate, set_prolog_flag, op).  Whatever is
+discontiguous, table, meta_predicate, set_prolog_flag, op).  clpz's
+predicates need nothing here: they are engine builtins under Scryer's names
+(``clausal.logic.builtins.clpz_names``).  Whatever is
 outside that scope -- an unknown directive, ``initialization/1``, a DCG rule,
 a reader ``SyntaxIssue``, and by design ``!``, ``->`` and ``*->`` -- is
 REFUSED, never half-handled, so a gap is a loud import error and not a
@@ -105,6 +108,12 @@ _META_GOAL_ARGS: dict[tuple[str, int], tuple[int, ...]] = {
     ("catch", 3): (0, 2),
     ("forall", 2): (0, 1),
 }
+
+#: clpq's ``{C}``: each comparison -> the seam's node for it (``=`` and
+#: ``=:=`` are both equality in library(clpq)).
+_CLPQ_COMPARISONS = {"=": "ArithEq", "=:=": "ArithEq", "=\\=": "ArithNeq",
+                     "<": "Lt", ">": "Gt", "=<": "LtE", ">=": "GtE"}
+_CLPQ_BINARY = {"+": "Add", "-": "Sub", "*": "Mult", "/": "Div"}
 
 #: Goals whose second argument is an ISO iterated goal term, ``V^G``.
 _ITERATED_GOAL = {("bagof", 3), ("setof", 3)}
@@ -355,6 +364,9 @@ class _ClauseLowering:
                              position=_pos_expr(pos))
             if name == ":" and len(args) == 2:
                 return self._qualified(args, spans, sp, pos)
+            if (name == "{}" and len(args) == 1 and self._ctx is not None
+                    and self._ctx.clpq):
+                return self._clpq(args[0], spans[0], sp, pos)
             self._check_goal_name(name, sp)
             lowered = self._goal_args(name, args, spans)
             head_pos = self._pos.of(_functor_span(sp, name, self._pos.source))
@@ -436,6 +448,65 @@ class _ClauseLowering:
                           ctx=ast.Load()),
             kwargs=ast.List(elts=[], ctx=ast.Load()),
             position=_pos_expr(pos))
+
+    def _clpq(self, c: Any, c_sp, sp, pos) -> ast.expr:
+        """The clpq goal ``{C}`` -> the seam's ``clpq.rational(C)``: one
+        comparison node, or a ``$TupleLiteral`` of them for a conjunction,
+        over the seam's arithmetic nodes -- the AST the seam's own
+        ``clpq.rational((X + Y == 10, X - Y <= 4))`` lowers to."""
+        parts: list = []
+        while type(c) is tuple and len(c) == 3 and c[0] == ",":
+            s2 = _arg_spans(c_sp, 2)
+            parts.append((c[1], s2[0]))
+            c, c_sp = c[2], s2[1]
+        parts.append((c, c_sp))
+        nodes = [self._clpq_constraint(p, s) for p, s in parts]
+        arg = nodes[0] if len(nodes) == 1 else _node(
+            "TupleLiteral", elements=ast.List(elts=nodes, ctx=ast.Load()),
+            position=_pos_expr(self._pos.of(_top_span(c_sp))))
+        mpos = _pos_expr(self._pos.of(_top_span(sp)))
+        func = _node("LoadAttr",
+                     object=_node("LoadName", name=_const("clpq"),
+                                  position=mpos),
+                     attr=_const("rational"), position=mpos)
+        return _node("Call", func=func,
+                     args=ast.List(elts=[arg], ctx=ast.Load()),
+                     kwargs=ast.List(elts=[], ctx=ast.Load()),
+                     position=_pos_expr(pos))
+
+    def _clpq_constraint(self, c: Any, sp) -> ast.expr:
+        if (type(c) is tuple and len(c) == 3 and type(c[0]) is str
+                and c[0] in _CLPQ_COMPARISONS):
+            s2 = _arg_spans(sp, 2)
+            return _node(_CLPQ_COMPARISONS[c[0]],
+                         left=self._clpq_expr(c[1], s2[0]),
+                         right=self._clpq_expr(c[2], s2[1]),
+                         position=_pos_expr(self._pos.of(_top_span(sp))))
+        raise LoweringRefused(
+            f"{{}}/1 (clpq): {c!r} is not a constraint; the braces hold "
+            f"comparisons (=, =:=, =\\=, <, >, =<, >=) joined by `,`",
+            _top_span(sp))
+
+    def _clpq_expr(self, e: Any, sp) -> ast.expr:
+        if type(e) is VarRef:
+            return self.var(e)
+        if type(e) in (int, float):
+            return _const(e)
+        if type(e) is tuple and len(e) == 3 and e[0] in _CLPQ_BINARY:
+            s2 = _arg_spans(sp, 2)
+            return _node(_CLPQ_BINARY[e[0]],
+                         left=self._clpq_expr(e[1], s2[0]),
+                         right=self._clpq_expr(e[2], s2[1]),
+                         position=_pos_expr(self._pos.of(_top_span(sp))))
+        if type(e) is tuple and len(e) == 2 and e[0] == "-":
+            return _node("Negate",
+                         operand=self._clpq_expr(e[1], _arg_spans(sp, 1)[0]),
+                         position=_pos_expr(self._pos.of(_top_span(sp))))
+        if type(e) is tuple and len(e) == 2 and e[0] == "+":
+            return self._clpq_expr(e[1], _arg_spans(sp, 1)[0])
+        raise LoweringRefused(
+            f"{{}}/1 (clpq): {e!r} is not a linear arithmetic expression "
+            f"(numbers, variables, + - * /)", _top_span(sp))
 
     def _iterated_goal(self, g: Any, sp) -> ast.expr:
         """``V1^V2^G`` in bagof/setof -> ``$BitXor(left=V1, right=...)``, the
@@ -661,6 +732,7 @@ def lower_items(items, *, strict: bool = True, source: "str | None" = None,
         stats["refused"] += 1
         stats["refusals"].append(where(span) + msg)
 
+    defined: set = set()
     for it in items:
         stats["read"] += 1
         kind = type(it).__name__
@@ -682,6 +754,7 @@ def lower_items(items, *, strict: bool = True, source: "str | None" = None,
             refuse(f"{kind} is not lowered (DCG is out of scope; a query "
                    f"`?-` is no clause): {it.term!r}", span)
             continue
+        defined.add(_head_indicator(it.term))
         if directives_only:
             # The clause is not lowered, but the double_quotes modes its
             # literals were read under are module-item facts (the cross-mode
@@ -698,6 +771,10 @@ def lower_items(items, *, strict: bool = True, source: "str | None" = None,
             continue
         body.extend(lowered)
         stats["lowered"] += 1
+    try:
+        ctx.drop_shadowed_overrides(defined)
+    except DirectiveRefused as e:
+        refuse(str(e), None)
     if ctx.dead_stmts or ctx.dropped_keys:
         body = _drop_removed_imports(body, ctx)
     mod = ast.Module(body=body, type_ignores=[])
@@ -705,6 +782,18 @@ def lower_items(items, *, strict: bool = True, source: "str | None" = None,
     if _lowered is not None:
         _lowered.append(ctx)
     return mod, stats
+
+
+def _head_indicator(term) -> "tuple | None":
+    """``(name, arity)`` of the procedure a clause term defines (None when
+    it has none)."""
+    if type(term) is tuple and len(term) == 3 and term[0] == ":-":
+        term = term[1]
+    if type(term) is str:
+        return term, 0
+    if type(term) is tuple and term and type(term[0]) is str:
+        return term[0], len(term) - 1
+    return None
 
 
 def _drop_removed_imports(body: list, ctx) -> list:

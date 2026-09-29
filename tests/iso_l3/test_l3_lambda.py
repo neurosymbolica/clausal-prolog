@@ -14,7 +14,10 @@ from clausal.logic.variables import Var, deref, walk
 LAMBDA_IMPORT = (
     ":- use_module(library(lambda), ["
     + ", ".join([f"(\\)/{n}" for n in range(1, 9)]
-                + [f"(^)/{n}" for n in range(3, 11)])
+                + [f"(^)/{n}" for n in range(3, 11)]
+                # An import list installs only the ops it names (Scryer;
+                # lambda.pl exports +\ but declares no top-level op/3).
+                + ["op(201, xfx, +\\)"])
     + "]).\n")
 
 SRC = LAMBDA_IMPORT + textwrap.dedent(r"""

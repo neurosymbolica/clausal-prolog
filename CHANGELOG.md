@@ -145,6 +145,24 @@ since 0.4.0 finish three moves:
   module that does not import the library can still call them, and
   `call(Y^G, A)` is library(lambda)'s `(^)/3` rather than an
   existence_error.
+- **clpz's predicates under Scryer's names: `in/2`, `ins/2`, `labeling/2`,
+  and the reified connectives `#<==>`, `#==>`, `#<==`, `#\/`, `#/\`, `#\`.**
+  Domains are written `1..3`, `inf..sup`, `1..3 \/ 5..7` or an integer;
+  `labeling/2` takes Scryer's options (`leftmost`/`ff`/`ffc`/`min`/`max`,
+  `up`/`down`, `step`/`enum`/`bisect`) and answers in Scryer's order; a
+  reified comparison or `in/2` keeps its 0/1 variable linked. Errors carry
+  Scryer's formal terms (`domain_error(clpz_domain, D)`, ...). They are
+  builtins, so they work from `solve()` and, quoted, from the seam; a
+  module's own definition of the name answers first. The engine's
+  `label/1` is unchanged (first-fail); a native `.pl` file that imports
+  library(clpz) gets Scryer's `label/1` (`labeling([], Vs)`).
+- **The native `.pl` front end: clpq's `{C}` and ops by import.** After
+  `use_module(library(clpq))`, `{C}` is lowered to `clpq.rational(C)`. An import installs the operators Scryer
+  installs: `use_module/1` every op the module exports; an import list the
+  exported ops it names, plus the exported ops the module also declares
+  with a top-level `op/3` (so `use_module(library(clpz), [label/1])` still
+  makes `#=` an operator, while `use_module(library(lambda), [(\)/2])` no
+  longer makes `+\` one).
 - **`member/2` and `memberchk/2` are builtins under their ISO names.** They
   were registered only as `in_/2` and `in_check/2`, so a `.pl` file read by
   the native front end, or a goal handed to `solve()`, found no procedure.
