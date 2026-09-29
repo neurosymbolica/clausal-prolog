@@ -132,6 +132,16 @@ def neck_parts(term_val: Any) -> "tuple[Any, Any] | None":
     return None
 
 
+class _OpenBody:
+    """``retract((Head :- Body))`` with Body unbound: retract the fact Head
+    and bind Body to ``true``."""
+    __slots__ = ("head", "body")
+
+    def __init__(self, head, body):
+        self.head = head
+        self.body = body
+
+
 def _unneck_clause(term_val: Any, context: str, action: str) -> Any:
     """A ``Head :- Body`` clause term, as assertz/asserta/retract receive it
     from Prolog source: ``Head :- true`` is the fact Head.  It used to be
@@ -151,6 +161,10 @@ def _unneck_clause(term_val: Any, context: str, action: str) -> Any:
     if is_true_body(body):
         return head
     if action == "retract":
+        if is_var(body):
+            # ``retract((H :- B))``: B is ``true`` for a fact (ISO, Scryer);
+            # the caller binds it
+            return _OpenBody(head, body)
         return None          # no runtime clause has a rule body to match
     if is_var(body):
         raise LogicException(instantiation_error(context))
@@ -728,6 +742,9 @@ def _retract_factory(db):
         term_val = _unneck_clause(term_val, "retract/1", "retract")
         if term_val is None:
             return
+        open_body = None
+        if type(term_val) is _OpenBody:
+            term_val, open_body = term_val.head, term_val.body
         # A CELL pattern goes through the SAME gate as the assert doors (P3-3
         # Task 5, R11) and comes back normalized to the shape the clause list
         # actually holds -- without that, ``_first_match_index`` would compare
@@ -785,6 +802,8 @@ def _retract_factory(db):
         for goal in removed.body:
             if isinstance(goal, _Unify):
                 structural_unify(deref(goal.left), deref(goal.right), trail)
+        if open_body is not None:
+            unify(open_body, True, trail)
         yield None
         return  # retract is not backtrackable
 

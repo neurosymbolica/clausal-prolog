@@ -23,6 +23,8 @@ t6(E) :- catch(assertz((_ :- true)), E, true).
 t7(E) :- catch(assertz((4 :- true)), E, true).
 t8(E) :- catch(retract((_ :- true)), E, true).
 t9(E) :- catch(assertz((foo(X) :- X = 1)), error(E, _), true).
+t10(B) :- assertz(v(1)), retract((v(1) :- B)).
+t11(L) :- assertz(w(1)), assertz(w(2)), retract((w(X) :- _)), findall(X-Y, w(Y), L).
 """
 
 
@@ -38,3 +40,6 @@ def test_true_body_in_prolog_source(native, ans):
     assert ans(mod, "t8") == [("error", "instantiation_error", ("/", "retract", 1))]
     (e,) = ans(mod, "t9")
     assert e[0] == "permission_error" and e[1:3] == ("assert", "rule")
+    # an unbound body is `true` for a fact (the engine's True)
+    assert ans(mod, "t10") == [True]
+    assert ans(mod, "t11") == [[("-", 1, 2)]]
