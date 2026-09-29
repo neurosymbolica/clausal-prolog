@@ -16,3 +16,9 @@ Also from the same migration, worth stating in `docs/python_integration.md`
 next to the seam section: a plain `.py` launcher that imports a `.clausal`
 module must `import clausal` first, or the import hook is not installed and
 the module reads as missing — a confident-looking wrong error.
+
+## Closed 2026-09-30 (stale)
+
+No longer reproduces on f84633ea: a file that opens with a `"""..."""` module
+docstring followed by `-module(...)` and `-double_quotes(...)` loads, keeps the
+docstring as `__doc__`, and answers its clauses.
