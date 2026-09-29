@@ -757,6 +757,17 @@ def _refuse_missing_indicators(item, mod, orig_name: str, selected,
     at = f"{where}, line {line}" if line else where
     exporter_db = namespace_db(vars(mod))
     wanted = ", ".join(f"{orig_name}/{a}" for a in sorted(selected))
+    if exporter_db is None and _engine_builtin_for(mod, orig_name) is not None:
+        from clausal.logic.builtins import _BUILTINS, _DB_BUILTINS  # noqa: PLC0415
+        missing = sorted(a for a in selected if (orig_name, a) not in _BUILTINS
+                         and (orig_name, a) not in _DB_BUILTINS)
+        if not missing:
+            return          # the builtin has every arity asked for
+        raise ImportError(
+            f"{at}: -import_from({item.module}, [{wanted}]): "
+            f"existence_error(procedure, {orig_name}/{missing[0]}) -- the "
+            f"builtin {orig_name} has no arity {missing[0]}",
+            name=orig_name, path=getattr(mod, "__file__", None))
     if exporter_db is None:
         raise ImportError(
             f"{at}: -import_from({item.module}, [{wanted}]): {item.module} is "
@@ -777,6 +788,43 @@ def _refuse_missing_indicators(item, mod, orig_name: str, selected,
         f"existence_error(procedure, {first}) -- {item.module} has no "
         f"procedure {first}; {offer}",
         name=orig_name, path=getattr(mod, "__file__", None))
+
+
+#: Engine modules whose functions implement builtins of the same name.
+_ENGINE_SOLVER_MODULES = frozenset({"clausal.logic.clpfd"})
+
+
+def _engine_builtin_for(mod, orig_name: str):
+    """The builtin's goal object (``_BUILTIN_CLASSES[name]``) when *orig_name*
+    names, in the engine's CLP(FD) solver module (``clausal.logic.clpfd``),
+    the Python IMPLEMENTATION of a builtin predicate; else None.  Only that
+    module: elsewhere under ``clausal.logic`` a Python function that shares
+    a builtin's name is imported for its Python value (a Python-backed
+    module's ``date``, say).
+
+    ``-import_from(clausal.logic.clpfd, [label])`` bound the Python function
+    ``label(vars, trail)`` over the builtin label/1, so ``label([X])`` raised
+    DispatchTargetError ("resolved to a function value, not a predicate").
+    The builtin is what the author means: the import binds its goal object
+    instead (a term constructor and a goal, the object ``clausal.label``
+    is).  An engine name that is not a builtin (``fd_eq``) is still bound as
+    the Python value it is."""
+    from clausal.logic.builtins import _BUILTIN_CLASSES  # noqa: PLC0415
+    from clausal.logic.predicate import namespace_db  # noqa: PLC0415
+    if getattr(mod, "__name__", None) not in _ENGINE_SOLVER_MODULES:
+        return None
+    if namespace_db(vars(mod)) is not None:
+        return None
+    builtin = _BUILTIN_CLASSES.get(orig_name)
+    if builtin is None:
+        return None
+    value = getattr(mod, orig_name, None)
+    if value is builtin or not callable(value) or getattr(
+            value, "_get_dispatch", None) is not None:
+        return None
+    if getattr(value, "__module__", None) != mod.__name__:
+        return None     # a helper it re-exports (get_attr, structural_eq)
+    return builtin
 
 
 def _process_imports(module_items: list, module_dict: dict, db=None) -> None:
@@ -817,7 +865,8 @@ def _process_imports(module_items: list, module_dict: dict, db=None) -> None:
                         else name_spec, selected, module_dict)
                 if isinstance(name_spec, tuple):
                     orig_name, local_name = name_spec
-                    value = getattr(mod, orig_name)
+                    value = (_engine_builtin_for(mod, orig_name)
+                             or getattr(mod, orig_name))
                     module_dict[local_name] = value
                     # Keyed by LOCAL_NAME: the aliasing module says ``link``,
                     # so ``link`` is what its database answers to.  A class
@@ -832,7 +881,8 @@ def _process_imports(module_items: list, module_dict: dict, db=None) -> None:
                     module_dict[f"{item.module}.{orig_name}"] = (
                         _imported_reference(mod, orig_name, value))
                 else:
-                    value = getattr(mod, name_spec)
+                    value = (_engine_builtin_for(mod, name_spec)
+                             or getattr(mod, name_spec))
                     module_dict[name_spec] = value
                     _plant_imported_rows(db, mod, name_spec, name_spec,
                                          selected)
@@ -2236,7 +2286,8 @@ def _record_double_quotes_mode(module_items: list, db) -> None:
             # at the end of the file.
             if item.explicit:
                 from clausal.logic.builtins.flags import apply_setting  # noqa: PLC0415
-                apply_setting(db, "double_quotes", item.mode)
+                apply_setting(db, "double_quotes",
+                              getattr(item, "flag", "") or item.mode)
             return
 
 

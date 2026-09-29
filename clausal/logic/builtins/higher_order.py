@@ -645,6 +645,92 @@ _DB_BUILTINS[("findall", 4)] = _findall_4_factory
 _BUILTIN_FIELDS[("findall", 4)] = ("template", "goal", "bag", "tail")
 
 
+# ── aggregate_all/3 ───────────────────────────────────────────────────────────
+
+#: The aggregates, as ``name/arity`` of the Spec term.
+_AGGREGATES = frozenset({("count", 0), ("sum", 1), ("max", 1), ("min", 1),
+                         ("bag", 1), ("set", 1)})
+
+
+def _aggregate_spec(spec):
+    """``(name, template)`` of an aggregate_all/3 Spec, or the ISO error."""
+    from clausal.logic.exceptions import type_error  # noqa: PLC0415
+    s = deref(spec)
+    if is_var(s):
+        raise LogicException(instantiation_error("aggregate_all/3"))
+    if type(s) is str and (s, 0) in _AGGREGATES:
+        return s, ""
+    if type(s) is tuple and len(s) == 2 and (s[0], 1) in _AGGREGATES:
+        return s[0], s[1]
+    raise LogicException(type_error("aggregate", s, "aggregate_all/3"))
+
+
+def _aggregate_value(name, items):
+    """The aggregate of the collected *items*; None when there is none (max
+    and min of no solutions fail)."""
+    from clausal.logic.builtins.iso_compare import _iso_eval  # noqa: PLC0415
+    if name == "count":
+        return len(items)
+    if name == "bag":
+        return list(items)
+    if name == "set":
+        from clausal.logic.builtins.lists import sorted_set  # noqa: PLC0415
+        return sorted_set(items)
+    if name == "sum":
+        acc = 0
+        for x in items:
+            acc = _iso_eval(("+", acc, x), "aggregate_all/3")
+        return acc
+    if not items:
+        return None
+    acc = _iso_eval(items[0], "aggregate_all/3")
+    for x in items[1:]:
+        acc = _iso_eval((name, acc, x), "aggregate_all/3")
+    return acc
+
+
+def _aggregate_all_factory(db):
+    """aggregate_all(Spec, Goal, Result) -- the aggregate of every solution
+    of Goal, as ``findall/3`` collects them (no grouping): ``count`` the
+    number of solutions, ``sum(E)`` the sum of E (0 for none), ``max(E)`` /
+    ``min(E)`` the largest / smallest value of E (arithmetic, evaluated;
+    FAILS when there is no solution), ``bag(E)`` the list of E, ``set(E)``
+    that list sorted with duplicates removed (sort/2).  An unbound Spec is
+    instantiation_error, any other one -- the witness forms ``max(X, W)`` /
+    ``min(X, W)`` and compound specs included, deliberately --
+    type_error(aggregate, Spec).  It did
+    not exist (existence_error(procedure, aggregate_all/3)).  Runs call/1 of
+    the ``findall/3`` term, so Goal is resolved in the calling module and
+    findall/3's rules -- errors included -- apply."""
+    call1 = _DB_BUILTINS[("call", 1)](db)
+
+    def _aggregate_all__3(this_generator, _proceed, _fail, _catcher,
+                          spec, goal, result, trail):
+        name, template = _aggregate_spec(spec)
+        collected = Var()
+        sg = StepGenerator(call1, this_generator, this_generator,
+                           this_generator, ("findall", template, goal, collected),
+                           trail)
+        _st = yield (sg, None)
+        while _st is not DONE:
+            items = _as_items(deref(collected))
+            if items is not None:
+                value = _aggregate_value(name, [deref(x) for x in items])
+                if value is not None:
+                    mark = trail.mark()
+                    if unify(result, value, trail):
+                        yield (_proceed, None)
+                    trail.undo(mark)
+            _st = yield (sg, None)
+        yield (_fail, DONE)
+    return _aggregate_all__3
+
+
+_aggregate_all_factory._db_optional = True
+_DB_BUILTINS[("aggregate_all", 3)] = _aggregate_all_factory
+_BUILTIN_FIELDS[("aggregate_all", 3)] = ("spec", "goal", "result")
+
+
 # ── Higher-order list predicates (V2-11) ──────────────────────────────────────
 
 

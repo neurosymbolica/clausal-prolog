@@ -833,6 +833,28 @@ def _keysort__2(this_generator, _proceed, _fail, _catcher, lst, sorted_lst, trai
     yield (_fail, DONE)
 
 
+def sorted_set(items: list) -> list:
+    """*items* (dereferenced) in the standard order with duplicates -- by
+    standard-order KEY equality -- removed, the first occurrence kept: what
+    sort/2 answers (see its docstring for the key pools)."""
+    seen: list = []
+    hashable_keys: set = set()
+    opaque_keys: list = []
+    for x in items:
+        key = _standard_order_key(x)
+        try:
+            duplicate = key in hashable_keys
+            if not duplicate:
+                hashable_keys.add(key)
+        except TypeError:
+            duplicate = key in opaque_keys
+            if not duplicate:
+                opaque_keys.append(key)
+        if not duplicate:
+            seen.append(x)
+    return _standard_order_sorted(seen)
+
+
 @_trampoline_builtin("sort", 2)
 def _sort__2(this_generator, _proceed, _fail, _catcher, lst, sorted_lst, trail):
     """sort(List, Sorted) — Sorted is List sorted with duplicates removed.
@@ -858,23 +880,7 @@ def _sort__2(this_generator, _proceed, _fail, _catcher, lst, sorted_lst, trail):
     lst_val = deref(lst)
     items = _sort_items(lst_val, deref(sorted_lst), "sort/2")
     if items is not None:
-        items = [deref(x) for x in items]
-        seen: list = []
-        hashable_keys: set = set()
-        opaque_keys: list = []
-        for x in items:
-            key = _standard_order_key(x)
-            try:
-                duplicate = key in hashable_keys
-                if not duplicate:
-                    hashable_keys.add(key)
-            except TypeError:
-                duplicate = key in opaque_keys
-                if not duplicate:
-                    opaque_keys.append(key)
-            if not duplicate:
-                seen.append(x)
-        result = _standard_order_sorted(seen)
+        result = sorted_set([deref(x) for x in items])
         out = _seq_result(result, _was_string(lst_val), _was_bytes(lst_val))
         mark = trail.mark()
         if unify(sorted_lst, out, trail):

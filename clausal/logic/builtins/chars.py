@@ -17,6 +17,8 @@ conversion (upcase_atom/2, downcase_atom/2).
 
 from __future__ import annotations
 
+import re as _re
+from decimal import Decimal as _Decimal
 from typing import Any
 
 from clausal.logic.variables import deref, is_var, unify
@@ -748,3 +750,92 @@ def _number_codes__2(number, codes, trail, k):
         trail.undo(mark)
     else:
         raise LogicException(instantiation_error("number_codes/2"))
+
+
+# ── atom_number/2 ───────────────────────────────────────────────────────────────
+
+#: A number token as Prolog source writes one (ISO 6.4.4/6.4.5): an
+#: optional ``-`` directly before it; decimal, ``0x``/``0o``/``0b`` or
+#: ``0'c`` integers; a float needs a fraction and may carry an exponent.
+_NUMBER_TOKEN = _re.compile(
+    r"-?(?:0x[0-9a-fA-F]+|0o[0-7]+|0b[01]+|0'(?:\\.|.)"
+    r"|[0-9]+\.[0-9]+(?:[eE][+-]?[0-9]+)?|[0-9]+)\Z", _re.S)
+
+
+#: ``0'\\c`` escapes (ISO 6.4.2.1 plus Scryer's ``\\e``, ``\\s``)
+_CHAR_ESCAPES = {"n": "\n", "t": "\t", "\\": "\\", "'": "'", "a": "\a",
+                 "b": "\b", "f": "\f", "v": "\v", "r": "\r", "0": "\0",
+                 "e": "\x1b", "s": " ", '"': '"', "`": "`"}
+
+
+def _parse_number_token(text: str):
+    """The number *text* spells as a Prolog number token, else None."""
+    if not _NUMBER_TOKEN.match(text):
+        return None
+    neg = text.startswith("-")
+    body = text[1:] if neg else text
+    if body.startswith("0'"):
+        ch = body[2:]
+        if ch.startswith("\\"):
+            if ch[1:] not in _CHAR_ESCAPES:
+                return None
+            ch = _CHAR_ESCAPES[ch[1:]]
+        value = ord(ch)
+    elif body[:2] in ("0x", "0o", "0b"):
+        value = int(body[2:], {"0x": 16, "0o": 8, "0b": 2}[body[:2]])
+    elif "." in body:
+        value = float(body)
+    else:
+        # through Decimal: CPython caps int(str) at ~4300 digits
+        value = int(_Decimal(body)) if len(body) > 4000 else int(body)
+    return -value if neg else value
+
+
+def _number_text(n) -> str:
+    """*n* as a Prolog number token that :func:`_parse_number_token` reads
+    back: a float always has its fraction (``1.0e+22``, not Python's
+    ``1e+22``)."""
+    if type(n) is int and abs(n) >= 10 ** 4000:
+        return str(_Decimal(n))     # CPython caps str(int) at ~4300 digits
+    s = str(n)
+    if type(n) is float and "e" in s:
+        mant, exp = s.split("e")
+        if "." not in mant:
+            s = f"{mant}.0e{exp}"
+    return s
+
+
+@_builtin("atom_number", 2)
+def _atom_number__2(atom, number, trail, k):
+    """atom_number(Atom, Number) -- Atom is the text of Number.
+
+    Atom bound: it must be an atom, and it is read as a Prolog number token
+    (an optional ``-`` directly before it; ``0x1A``, ``0'a``; a float needs
+    its fraction).  Text that is not a number FAILS -- the predicate asks
+    whether the atom is a number, it does not raise a syntax error -- and so
+    does surrounding layout.  Atom unbound: Number must be a number, and
+    Atom is its text (as number_codes/2 writes it).  Both unbound is
+    instantiation_error; a bound non-atom Atom is type_error(atom, A); an
+    unbound Atom beside a non-number is type_error(number, N).  It did not
+    exist (existence_error(procedure, atom_number/2))."""
+    va = deref(atom)
+    if is_var(va):
+        vn = deref(number)
+        if is_var(vn):
+            raise LogicException(instantiation_error("atom_number/2"))
+        if isinstance(vn, bool) or not isinstance(vn, (int, float)):
+            raise LogicException(type_error("number", vn, "atom_number/2"))
+        mark = trail.mark()
+        if unify(atom, mint(_number_text(vn)), trail):
+            yield None
+        trail.undo(mark)
+        return
+    if not _term_is_atom(va):
+        raise LogicException(type_error("atom", va, "atom_number/2"))
+    value = _parse_number_token(spelling(va))
+    if value is None:
+        return
+    mark = trail.mark()
+    if unify(number, value, trail):
+        yield None
+    trail.undo(mark)
