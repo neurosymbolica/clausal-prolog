@@ -172,11 +172,13 @@ def test_native_loader_refuses_the_whole_file(tmp_path, monkeypatch):
     assert ei.value.lineno == 4                  # the line of the `/*`
     assert "unterminated block comment" in ei.value.msg
     assert "syntax_error(incomplete_reduction)" in ei.value.msg
-    # the load is abandoned as a whole, as for any other syntax error
-    mod = sys.modules.get(name)
-    if mod is not None:
-        with pytest.raises(Exception):
-            list(solve(("foo", Var()), mod))
+    # The load is abandoned as a whole, as for any other syntax error:
+    # _load_module leaves its module object registered, but with nothing
+    # from the file in it -- not even foo/1, read before the comment.
+    from clausal.predicate_diagnostics import PredicateNotFoundError
+    mod = sys.modules[name]
+    with pytest.raises(PredicateNotFoundError):
+        list(solve(("foo", Var()), mod))
 
 
 def test_translator_loader_refuses_the_file(tmp_path, monkeypatch):

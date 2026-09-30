@@ -8,7 +8,9 @@ from clausal.tools.toklex.driver import IncrementalLexer
 from tests._oracles import SCRYER, run_scryer
 
 SAMPLES = ["foo(X, 1). ", "=.. = . ", "1. 1.5 1.0e7 ", "'a''b' \"s\" 0'a ",
-           "/* c /* n */ */ x ", "a. "]
+           "/* c /* n */ */ x ", "a. ",
+           # an unclosed comment is one unterminated error token (2026-09-30)
+           "a. /* x ", "a. /* c /* n */ x "]
 
 
 def test_render_is_nonempty_and_mentions_every_state():

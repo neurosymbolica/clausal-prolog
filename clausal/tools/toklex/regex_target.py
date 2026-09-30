@@ -454,6 +454,17 @@ class RegexLexer:
             value = lexeme
         return Tok(kind=label, value=value, lexeme=lexeme, start=start, end=end, glue=glue)
 
+    def _error_tok(self, reason: str, start_off: int, end_off: int) -> Tok:
+        """An ``error`` Tok over ``text[start_off:end_off]``, culprit =
+        lexeme -- the shape and glue ``IncrementalLexer._error_tok``
+        gives the same span."""
+        lexeme = self._text[start_off:end_off]
+        glue = self._glue
+        self._glue = "glued"
+        return Tok(kind="error", value=(reason, lexeme), lexeme=lexeme,
+                   start=self._pos_tuple(start_off),
+                   end=self._pos_tuple(end_off), glue=glue)
+
     # ── endgame delegation to the reference driver ───────────────────
 
     def _start_delegation(self) -> None:
@@ -532,11 +543,7 @@ class RegexLexer:
             # comment from its outermost opener.
             start = self._nest["start"]
             self._nest = None
-            glue = self._glue
-            self._glue = "glued"
-            return Tok(kind="error", value=("unterminated", text[start:n]),
-                       lexeme=text[start:n], start=self._pos_tuple(start),
-                       end=self._pos_tuple(n), glue=glue)
+            return self._error_tok("unterminated", start, n)
         # neither pattern starts here: consume one char, fast-skip ahead
         pos += 1
         skip = self._c.nest_skip[rule]
