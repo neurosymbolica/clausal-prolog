@@ -200,6 +200,52 @@ def meta_specs_for_call(db: Any, fname: str, arity: int) -> "tuple | None":
     return row.db._meta_specs.get(row.key)
 
 
+#: Builtin meta-callers and the argument positions they RUN (Scryer's
+#: builtin meta_predicate declarations: ``call(0)``, ``call(1, ?)``, ...,
+#: ``aggregate_all(?, 0, -)``, ``phrase(2, ?)``, ``maplist(1, ?)`` & co.).
+#: Used only for a DOTTED ``lib.p(...)`` / ``lib.p`` written in one of these
+#: positions (see :func:`builtin_goal_positions`); the spec value is ``:``
+#: because a dotted argument's qualification names ``lib`` itself, whatever
+#: the closure's extra arity.
+_BUILTIN_GOAL_POSITIONS: "dict[tuple[str, int], tuple[int, ...]]" = {
+    **{("call", n): (0,) for n in range(1, 9)},
+    ("aggregate_all", 3): (1,),
+    ("time_goal", 1): (0,), ("time_goal", 2): (0,),
+    ("phrase", 2): (0,), ("phrase", 3): (0,),
+}
+
+
+def builtin_goal_positions(db: Any, fname: str, arity: int) -> "tuple | None":
+    """Specs for a compiled call of the BUILTIN meta-caller ``fname/arity``
+    -- ``:`` at each position the builtin runs as a goal, ``?`` elsewhere --
+    or ``None`` when ``fname/arity`` is no such builtin, or when this module
+    has its own (or an imported) predicate of that name and arity.
+
+    A builtin needs no caller qualification (it resolves a plain goal in the
+    calling module already), so the call site uses these specs ONLY for a
+    written dotted ``lib.p(...)`` / ``lib.p`` whose base is a Clausal module:
+    it is the qualified goal ``lib:p(...)``, exactly as the same argument of
+    a user ``-meta_predicate`` callee is (operator ruling 2026-09-25) and as
+    the same dotted call in goal position resolves.  Without it, ruling (a)
+    lowered ``call(lib.p(X))`` to the plain ``p(X)`` cell, run in the
+    CALLING module: ``existence_error(procedure, p/1)`` there, or the
+    caller's own ``p``."""
+    if "." in fname:
+        return None
+    positions = _BUILTIN_GOAL_POSITIONS.get((fname, arity))
+    if positions is None:
+        from clausal.logic.builtins.higher_order import (  # noqa: PLC0415
+            _GOAL_FIRST_LIST_BUILTINS,
+        )
+        if (fname, arity) not in _GOAL_FIRST_LIST_BUILTINS:
+            return None
+        positions = (0,)
+    row_of = getattr(db, "row", None)
+    if row_of is not None and row_of(fname, arity) is not None:
+        return None
+    return tuple(QUALIFIED if i in positions else "?" for i in range(arity))
+
+
 def _clausal_module_db(obj: Any) -> Any:
     """The Database of *obj* when it is a CLAUSAL module -- a logic
     ``Module``, or an imported ``.clausal`` Python module -- else ``None``."""

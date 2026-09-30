@@ -460,10 +460,17 @@ def _convert_inner(goal: Any, db: Any) -> GoalOp:
                 # ``$meta_qualify`` (the value may be a variable bound to an
                 # already-qualified goal, which is left alone).
                 from clausal.logic.meta_predicate import (  # noqa: PLC0415
-                    MetaArg, dotted_module_prefix, is_qualifying_spec,
-                    meta_specs_for_call,
+                    MetaArg, builtin_goal_positions, dotted_module_prefix,
+                    is_qualifying_spec, meta_specs_for_call,
                 )
                 meta_specs = meta_specs_for_call(db, fname, arity)
+                # A BUILTIN meta-caller (call/N, aggregate_all/3, maplist &
+                # co.): only a dotted ``lib.p(...)`` argument is qualified
+                # (with lib); anything else is left exactly as written.
+                builtin_callee = False
+                if not meta_specs:
+                    meta_specs = builtin_goal_positions(db, fname, arity)
+                    builtin_callee = meta_specs is not None
                 if meta_specs:
                     # A DOTTED ``lib.p(...)`` / ``lib.p`` written in a
                     # qualifying position is the qualified goal ``lib:p(...)``
@@ -495,6 +502,7 @@ def _convert_inner(goal: Any, db: Any) -> GoalOp:
                         else a if not is_qualifying_spec(spec)
                         else MetaArg(a, spec, _mod)
                         if (_mod := _dotted_goal_module(a)) is not None
+                        else a if builtin_callee
                         else MetaArg(a, spec)
                         for spec, a in zip(meta_specs, ordered_args)]
             return SubCall(fname=fname, arity=arity, args=ordered_args)

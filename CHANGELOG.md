@@ -574,6 +574,18 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
 
 ### Fixed
 
+- **A dotted `lib.p(...)` passed to a builtin meta-caller runs `p` in `lib`.**
+  `call(lib.p(X))`, `call(lib.p(1), Y)`, `aggregate_all(count, lib.p(_), N)`,
+  `time_goal(lib.p(X))`, `phrase(lib.nt(A), L)` and `maplist(lib.p(1), L)`
+  built the plain `p(...)` term and ran it in the CALLING module:
+  `existence_error(procedure, p/1)`, a Python `NameError` when `lib` has no
+  `p` of that arity, or, silently, the caller's own `p`. The argument is now
+  the qualified goal `lib:p(...)`, as the same dotted call in goal position,
+  inside `findall/3`/`once/1`/`not`/`forall/2`, or in a user
+  `-meta_predicate` position already was (Scryer: `call(lib:p(X))`). A dotted
+  call used as data (`T is lib.p(1)`) is still the plain `p(1)` cell, so
+  `T is lib.p(X), call(T)` still runs `p` in the calling module.
+
 - **A `use_module` sibling of a `.pl` file loaded BY PATH gets its full
   dotted name.** Both `.pl` front ends named a file found beside the
   importer relative to a root climbed one directory per dot of the
