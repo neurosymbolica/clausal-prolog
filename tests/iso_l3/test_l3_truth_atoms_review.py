@@ -13,7 +13,7 @@ ISO text; the Scryer answer is kept beside the expectation.
    Python ``max``/``min``.
 5. assertz(true) escaped as a raw TypeError; retract(true) failed.
 6. list_to_set/2 was a quadratic scan.
-7. A str truth spelling crossed to Python unlike its object.
+7. The seam comparators reported a truth culprit as its str spelling.
 """
 from __future__ import annotations
 
@@ -45,6 +45,11 @@ ISO = """\
     c7(L) :- X in 0..2, Y in 0..2, X #< Y, Y = true, findall(X, label([X]), L).
     c8(ok) :- all_different([true, X]), X = 1.
     c9(X) :- X in 0..2, X = 1.
+    g2(ok) :- scalar_product([1, 1], [true, 1], #=, 2).
+    g3(ok) :- X in true..2, X = 1.
+    g4(ok) :- circuit([2, true]).
+    g5(ok) :- global_cardinality([true, X], [1-2]), X = 1.
+    g6(ok) :- tuples_in([[true, X]], [[1, 2]]), X = 2.
     p(f(true)). p(f(1)). p(f(false)). p(f(0)). p(f(a)).
     h1(L) :- findall(x, p(f(1)), L).
     h2(L) :- findall(x, p(f(true)), L).
@@ -98,6 +103,13 @@ TABLE = {
     "c7": (_err("type_error", "integer", True), "error(type_error(integer,true),_)"),
     "c8": (_err("type_error", "integer", True), "error(type_error(integer,true),can_be/2)"),
     "c9": ([1], "[1]"),
+    # the global constraints' post-time check (roborev on 4bb6a79e)
+    "g2": (_err("type_error", "integer", True), "error(type_error(integer,true),can_be/2)"),
+    "g3": (_err("domain_error", "clpz_domain", ("..", True, 2)),
+           "error(domain_error(clpz_domain,true..2),_)"),
+    "g4": (_err("type_error", "integer", True), "error(type_error(integer,true),can_be/2)"),
+    "g5": (_err("type_error", "integer", True), "error(type_error(integer,true),can_be/2)"),
+    "g6": (_err("type_error", "integer", True), "error(type_error(integer,true),can_be/2)"),
     # 2. head literals, >= _INDEX_THRESHOLD clauses, static and dynamic
     "h1": ([["x"]], "[[x]]"),
     "h2": ([["x"]], "[[x]]"),
@@ -287,21 +299,40 @@ def test_list_to_set_is_not_quadratic(native):
     (~100 s here); the key set takes milliseconds.  The bound is loose."""
     mod = native.load("l3_truth_review_l2s",
                       "q(N) :- numlist(1, 20000, L0), append(L0, L0, L),\n"
-                      "        list_to_set(L, S), length(S, N).\n")
+                      "        list_to_set(L, S), length(S, N).\n"
+                      "c(N) :- numlist(1, 20000, L0), append(L0, L0, L),\n"
+                      "        msort(L, S), length(S, N).\n")
+    _run(mod, "c")                                   # warm the load
+    t0 = time.perf_counter()
+    assert _run(mod, "c") == [40000]                 # the same list work, a linear-ish builtin
+    control = time.perf_counter() - t0
     t0 = time.perf_counter()
     assert _run(mod, "q") == [20000]
-    assert time.perf_counter() - t0 < 5.0
+    took = time.perf_counter() - t0
+    # quadratic was ~1000x the control here; linear is within a small factor
+    assert took < 20 * control + 1.0, (took, control)
 
 
-# ── 7. both spellings of a truth atom cross to Python alike ──────────────────
+# ── 7. the Python boundary: a truth OBJECT crosses as itself, a Python str
+#       as itself (roborev on 4bb6a79e: canonicalising the str "true" to True
+#       broke the round trip of Python-originated text, ``++X_.upper()``) ──
 
-def test_a_str_truth_spelling_crosses_as_the_object():
+def test_the_python_boundary_keeps_both_spellings_as_they_came():
     from clausal.logic.atoms import crossing_value
     from clausal.logic.to_python import to_python, unwrap_atom
     for spell, obj in (("true", True), ("false", False), ("undefined", Undefined)):
-        assert crossing_value(spell) is obj
-        assert to_python(spell) is obj
-        assert unwrap_atom(spell) is obj
-        assert to_python([spell])[0] is obj
-    assert to_python("foo") == "foo"
-    assert crossing_value("foo") == "foo"
+        assert crossing_value(obj) is obj and to_python(obj) is obj
+        assert crossing_value(spell) == spell and type(crossing_value(spell)) is str
+        assert to_python(spell) == spell and type(to_python(spell)) is str
+        assert unwrap_atom(spell) == spell and type(unwrap_atom(spell)) is str
+
+
+def test_the_seam_comparator_reports_a_truth_culprit_as_the_object():
+    """``1 < true`` on two ground operands: the culprit is the atom as is/2
+    reports it (the object), not the str the comparators carry it as."""
+    from clausal.logic import clpfd
+    from clausal.logic.variables import Trail
+    with pytest.raises(LogicException) as ei:
+        clpfd.fd_lt(1, True, Trail())
+    assert ei.value.term[1] == ("type_error", "orderable", True)
+    assert ei.value.term[1][2] is True

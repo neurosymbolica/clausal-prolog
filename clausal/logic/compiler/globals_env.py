@@ -36,6 +36,9 @@ from clausal.logic.builtins import (
 )
 
 from clausal.logic.cells import _cell_shape, is_chars, is_pool_seeded_atom
+from clausal.logic.builtins._helpers import (   # the standard-order bands (setof)
+    _ORD_NUM, _ORD_COMPOUND, _ORD_DICT, _ORD_SET,
+)
 from clausal.logic.atoms import is_atom as _term_is_atom, is_nil
 
 from ._ast_helpers import _name, _call, _assign
@@ -114,9 +117,6 @@ def _setof_merge_key(key):
     scale dropped -- so numbers of equal value compare equal, at any depth,
     and nothing else changes.  A truth atom keys in the ATOM band, so it
     never meets a number here."""
-    from clausal.logic.builtins._helpers import (  # noqa: PLC0415
-        _ORD_NUM, _ORD_COMPOUND, _ORD_DICT, _ORD_SET,
-    )
     band = key[0]
     if band == _ORD_NUM:
         return (band, key[1], key[2], key[5]) if len(key) == 6 else key

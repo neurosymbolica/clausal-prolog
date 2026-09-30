@@ -35,7 +35,7 @@ from __future__ import annotations
 import copy
 
 from clausal.logic.atoms import (
-    crossing_value as _crossing_value, TRUTH_SPELLINGS as _TRUTH_SPELLINGS,
+    crossing_value as _crossing_value,
     is_atom as _term_is_atom, spelling as _atom_spelling, atom, as_dict_key as _as_dict_key)
 from clausal.logic.cells import chars, is_chars, chars_text, TUPLE_TAG  # stage 1: the chars carrier
 from clausal.logic.python_terms import FROM_TERM as _FROM_TERM  # the ONE registry (no cycle: python_terms never imports this module)
@@ -102,10 +102,7 @@ def to_python(val):
     # bound Var, so it needs neither the deref nor the atom branch.  It is
     # the hot case on the thunk path (f-strings), hence the short-circuit.
     if type(val) is str:
-        # ...except the str spelling of a truth atom, which IS that atom
-        # (``atoms.crossing_value``): it crosses as the object, as the
-        # object itself does
-        return _TRUTH_SPELLINGS.get(val, val)
+        return val
     val = deref(val)
     t = type(val)
     if t in _SCALAR_TYPES:

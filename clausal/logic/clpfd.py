@@ -1354,6 +1354,14 @@ def _fd_reject_truth_atom(x) -> None:
         raise _LogicException(_type_error("integer", x))
 
 
+def _fd_reject_truth_atoms(xs) -> None:
+    """:func:`_fd_reject_truth_atom` over every (dereferenced) item of *xs*:
+    the post-time check of the global constraints, whose ground-int arms
+    would otherwise read a bool as 1/0 (``isinstance(True, int)``)."""
+    for x in xs:
+        _fd_reject_truth_atom(deref(x))
+
+
 def _unknown_expr_leaf_error(leaf) -> "Exception":
     """Catchable ``domain_error(clpz_expression, Leaf)`` for a LEAF
     inside an arithmetic expression tree that CLP(FD) cannot type as an
@@ -2655,6 +2663,7 @@ def in_domain(var_or_list, lo, hi, trail: Trail) -> bool:
         return united
     lo = deref(lo)
     hi = deref(hi)
+    _fd_reject_truth_atoms((lo, hi))               # D47: true is not 1
     if not isinstance(lo, int) or not isinstance(hi, int):
         raise TypeError(f"in_domain bounds must be integers, got {lo!r}, {hi!r}")
     new_domain = domain_from_range(lo, hi)
@@ -2994,6 +3003,7 @@ def fd_sum(vars_list, op_str, value, trail: Trail):
     vars_list, value = both[:-1], both[-1]
 
     vars_deref = [deref(v) for v in vars_list]
+    _fd_reject_truth_atoms(vars_deref + [value])   # D47: true is not 1
 
     # Reject non-integer elements up front (A06-F014): a string/float element
     # would otherwise post happily and be treated as an unconstrained integer.
@@ -3069,10 +3079,12 @@ def fd_scalar_product(coeffs, vars_list, op_str, value, trail: Trail):
     vars_list, value = both[:-1], both[-1]
 
     coeffs_deref = [deref(c) for c in coeffs]
+    _fd_reject_truth_atoms(coeffs_deref)           # D47: true is not 1
     if not all(isinstance(c, int) for c in coeffs_deref):
         return
 
     vars_deref = [deref(v) for v in vars_list]
+    _fd_reject_truth_atoms(vars_deref + [value])
 
     # Reject non-integer elements up front (A06-F014).
     if not all(_is_fd_sum_element(v) for v in vars_deref):
@@ -3207,6 +3219,7 @@ def fd_circuit(vars_list, trail: Trail):
         return
 
     vars_deref = [deref(v) for v in vars_list]
+    _fd_reject_truth_atoms(vars_deref)             # D47: true is not 1
 
     # Ensure all have FD domains
     for v in vars_deref:
@@ -3678,6 +3691,7 @@ def global_cardinality(vars_list, pairs, trail: Trail) -> bool:
         from clausal.logic.units_clp import plain_fields_or_unsupported  # noqa: PLC0415
         counts = plain_fields_or_unsupported(counts, "global_cardinality/2")
     pairs = list(zip(keys, counts))
+    _fd_reject_truth_atoms(list(vars_list) + keys + counts)   # D47: true is not 1
 
     vars_deref = []
     for v in vars_list:
@@ -3759,6 +3773,7 @@ def tuples_in(tuples_list, relation, trail: Trail) -> bool:
             if _units_flag_active():
                 from clausal.logic.units_clp import plain_fields_or_unsupported  # noqa: PLC0415
                 tup = plain_fields_or_unsupported(list(tup), "tuples_in/2")
+            _fd_reject_truth_atoms(tup)            # D47: true is not 1
             vars_ = []
             for v in tup:
                 v = deref(v)
