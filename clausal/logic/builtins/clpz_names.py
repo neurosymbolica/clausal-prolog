@@ -519,8 +519,8 @@ def _automaton_3(vs, nodes, arcs, trail, k):
     and each step [S0, V, S1] in the arcs relation (tuples_in/2)."""
     from clausal.logic.clpfd import tuples_in  # noqa: PLC0415
     from clausal.logic.clpz_surface import _post  # noqa: PLC0415
-    from clausal.logic.exceptions import LogicException, domain_error  # noqa: PLC0415
-    from clausal.logic.variables import Var, deref  # noqa: PLC0415
+    from clausal.logic.exceptions import LogicException, instantiation_error  # noqa: PLC0415
+    from clausal.logic.variables import Var  # noqa: PLC0415
     from clausal.logic.solve import _deref_walk  # noqa: PLC0415
     ctx = "automaton/3"
     seq = _items(vs, ctx)
@@ -529,24 +529,36 @@ def _automaton_3(vs, nodes, arcs, trail, k):
     numbers: dict = {}
 
     def num(node):
-        key = repr(_deref_walk(node))
+        # a node is named by a ground term (its walked value is the key)
+        key = _deref_walk(node)
+        try:
+            hash(key)
+        except TypeError:
+            key = repr(key)
+        if _has_var(key):
+            raise LogicException(instantiation_error(ctx))
         if key not in numbers:
             numbers[key] = len(numbers)
         return numbers[key]
 
     relation = []
     for a in _items(arcs, ctx):
-        if not (type(a) is tuple and len(a) == 4 and a[0] == "arc"):
-            raise LogicException(domain_error("automaton_arc", a, ctx))
-        relation.append((num(a[1]), _integer(a[2], ctx), num(a[3])))
+        # arc(From, Label, To), or arc/4 with no counter expressions;
+        # anything else has no clause in Scryer's arc_normalized_: fail
+        if type(a) is tuple and len(a) == 4 and a[0] == "arc":
+            relation.append((num(a[1]), _integer(a[2], ctx), num(a[3])))
+        elif (type(a) is tuple and len(a) == 5 and a[0] == "arc"
+              and _items(a[4], ctx) == []):
+            relation.append((num(a[1]), _integer(a[2], ctx), num(a[3])))
+        else:
+            return
     sources, sinks = [], []
     for n in _items(nodes, ctx):
+        # Scryer picks out source/1 and sink/1 and ignores the rest
         if type(n) is tuple and len(n) == 2 and n[0] == "source":
             sources.append(num(n[1]))
         elif type(n) is tuple and len(n) == 2 and n[0] == "sink":
             sinks.append(num(n[1]))
-        else:
-            raise LogicException(domain_error("automaton_node", n, ctx))
     if not sources or not sinks:
         return
     states = [Var() for _ in range(len(seq) + 1)]
@@ -563,3 +575,15 @@ def _automaton_3(vs, nodes, arcs, trail, k):
     rows = [[states[i], seq[i], states[i + 1]] for i in range(len(seq))]
     if tuples_in(rows, relation, trail):
         yield None
+
+
+def _has_var(t) -> bool:
+    from clausal.logic.variables import deref, is_var  # noqa: PLC0415
+    stack = [t]
+    while stack:
+        x = deref(stack.pop())
+        if is_var(x):
+            return True
+        if type(x) in (tuple, list):
+            stack.extend(x)
+    return False

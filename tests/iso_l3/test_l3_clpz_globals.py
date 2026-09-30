@@ -307,6 +307,10 @@ AUTOMATON = """\
 a1(R) :- findall(Vs, (length(Vs, 3), Vs ins 0..1, automaton(Vs, [source(a),sink(c)], [arc(a,0,a),arc(a,1,b),arc(b,0,a),arc(b,1,c),arc(c,0,c),arc(c,1,c)]), label(Vs)), R).
 a2(R) :- findall(Vs, (length(Vs, 2), Vs ins 0..2, automaton(Vs, [source(s),sink(s)], [arc(s,0,t),arc(t,2,s)]), label(Vs)), R).
 a3(R) :- findall(x, automaton([], [source(s),sink(s)], [arc(s,0,s)]), R).
+a4(R) :- findall(x, automaton([], [source(s),sink(t)], [arc(s,0,t)]), R).
+a5(R) :- findall(x, automaton([0], [sink(s)], [arc(s,0,s)]), R).
+a6(R) :- findall(V, (automaton([1,V], [source(s),foo,sink(s)], [arc(s,1,t),arc(t,0,s),arc(t,2,s)]), label([V])), R0), sort(R0, R).
+a7(R) :- findall(x, automaton([0], [source(s),sink(s)], [bad(s,0,s)]), R).
 """
 
 
@@ -317,3 +321,8 @@ def test_automaton_3(native, ans):
     assert ans(mod, "a1") == [[[0, 1, 1], [1, 1, 0], [1, 1, 1]]]
     assert ans(mod, "a2") == [[[0, 2]]]
     assert ans(mod, "a3") == [["x"]]
+    assert ans(mod, "a4") == [[]]         # empty sequence, source =/= sink
+    assert ans(mod, "a5") == [[]]         # no source
+    # other nodes are ignored; a partly bound sequence
+    assert ans(mod, "a6") == [[0, 2]]
+    assert ans(mod, "a7") == [[]]         # a malformed arc: Scryer fails
