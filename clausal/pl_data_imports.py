@@ -177,6 +177,173 @@ def data_atom(mod, name: str):
     return sys.intern(name)
 
 
+# ── Attribute access (operator ruling 2026-10-01) ─────────────────────────────
+#
+# The import ruling extended to ``getattr(mod, 'name')`` / ``mod.name``: on a
+# module loaded from ``.pl`` (either front end, a package's ``__init__.pl``
+# included), an atom-shaped name the module neither defines as a predicate
+# (any arity) nor binds is the ATOM ``name``.  A module-level ``__getattr__``
+# (PEP 562), installed by ``PrologLoader.exec_module`` once the module has
+# loaded, so it only ever sees names the module's namespace lacks.
+#
+# ATOM-SHAPED is ``iso_l3_directives._is_declarable``: a lowercase identifier,
+# no Python keyword, no reserved name (``true``, ``false``, ``undefined``,
+# ``[]`` ...).  That is the spelling a module can bind as a data atom, the
+# name-level shape the import ruling accepts (a bare ``-import_from`` entry
+# is a seam identifier), and it excludes every dunder and private name.  NOT
+# ``is_auto_declarable_atom``: its extra condition (no builtin or evaluable
+# of that spelling) is about a binding SHADOWING the engine's own name in
+# the defining file, which an attribute read cannot do; and the import path
+# resolves ``-import_from(M, [max])`` to the atom ``max`` too.
+#
+# Who does NOT get the fallback (the caller keeps AttributeError):
+#   - the import machinery: ``from M import name`` (the IMPORT_FROM opcode)
+#     and importlib's ``_handle_fromlist`` probe, so a seam ``-import_from``
+#     keeps its own path above (its ``name/N`` refusal and per-importer
+#     warning) and ``from pkg import sub`` still imports a submodule;
+#   - the engine itself (Python code in the ``clausal`` package): its probes
+#     (``getattr(x, 'db', None)``, ``hasattr(mod, n)`` ...) ask whether the
+#     module BINDS the name, and keep that meaning;
+#   - TOOLING: the Python standard library (unittest's ``load_tests``,
+#     doctest, pickle's ``whichmodule``, inspect ...) and the third-party
+#     tools in ``_TOOLING_PACKAGES`` (pytest's ``pytest_plugins``, Sphinx's
+#     ``setup`` ...), whose hook lookups ``getattr(mod, name, None)`` by a
+#     lowercase name would otherwise get a str back and call it;
+#   - a name that is an importable submodule of a ``.pl`` package.
+# Public code asks existence through ``clausal.has_predicate`` /
+# ``clausal.defines_predicate`` / ``clausal.module_binds`` instead.
+
+#: The modules whose attribute probes are import-machinery probes.
+_IMPORT_MACHINERY = frozenset({
+    "importlib._bootstrap", "_frozen_importlib",
+    "importlib._bootstrap_external", "_frozen_importlib_external",
+})
+
+#: Third-party TOOLING whose hook lookups (``getattr(mod, 'pytest_plugins',
+#: None)``, Sphinx's ``setup`` ...) probe modules by lowercase name: by
+#: top-level package.  The Python standard library is tooling too (unittest's
+#: ``load_tests``, doctest, pickle's ``whichmodule`` ...), found by path.
+_TOOLING_PACKAGES = frozenset({
+    "_pytest", "pytest", "pluggy", "sphinx", "docutils", "setuptools",
+    "pkg_resources", "coverage", "hypothesis", "IPython", "jedi", "pydoc",
+})
+
+#: Names already warned about through attribute access, per module object:
+#: once per module and name.
+_attr_warned: "weakref.WeakKeyDictionary" = weakref.WeakKeyDictionary()
+
+
+def _is_atom_shaped(name) -> bool:
+    from clausal.tools.iso_l3_directives import _is_declarable  # noqa: PLC0415
+    return type(name) is str and _is_declarable(name)
+
+
+def _stdlib_dirs() -> tuple:
+    import sysconfig  # noqa: PLC0415
+    import os  # noqa: PLC0415
+    dirs = {sysconfig.get_path(k) for k in ("stdlib", "platstdlib")}
+    return tuple(os.path.join(d, "") for d in dirs if d)
+
+
+_STDLIB_DIRS = _stdlib_dirs()
+
+
+def _is_stdlib_file(filename: str) -> bool:
+    if filename.startswith("<frozen "):
+        return True
+    return (filename.startswith(_STDLIB_DIRS)
+            and "site-packages" not in filename
+            and "dist-packages" not in filename)
+
+
+def _caller_opts_out(frame) -> bool:
+    """True when the frame reading the attribute is the import machinery,
+    the engine's own Python code, or tooling (see the comment above)."""
+    if frame is None:
+        return False
+    owner = frame.f_globals.get("__name__") or ""
+    if owner in _IMPORT_MACHINERY:
+        return True
+    filename = frame.f_code.co_filename or ""
+    if ((owner == "clausal" or owner.startswith("clausal."))
+            and filename.endswith(".py")):
+        return True     # the engine; not a .clausal/.seam/.pl module under it
+    if owner.partition(".")[0] in _TOOLING_PACKAGES:
+        return True
+    if _is_stdlib_file(filename):
+        return True
+    try:
+        return frame.f_code.co_code[frame.f_lasti] == _IMPORT_FROM
+    except (IndexError, AttributeError):  # pragma: no cover - defensive
+        return False
+
+
+def _import_from_opcode() -> int:
+    import dis  # noqa: PLC0415
+    return dis.opmap["IMPORT_FROM"]
+
+
+_IMPORT_FROM = _import_from_opcode()
+
+
+def _is_submodule(mod, name: str) -> bool:
+    """True when *name* is an importable submodule of the package *mod*
+    (not imported yet, or ``getattr`` would have found it)."""
+    if "__path__" not in vars(mod):
+        return False
+    import importlib.util  # noqa: PLC0415
+    try:
+        return importlib.util.find_spec(f"{mod.__name__}.{name}") is not None
+    except (ImportError, ValueError, AttributeError):
+        return False
+
+
+def _warn_attr_if_misspelled(mod, name: str) -> None:
+    from clausal.lint_warnings import ClausalImportedDataNameWarning  # noqa: PLC0415
+
+    try:
+        seen = _attr_warned.setdefault(mod, set())
+    except TypeError:  # pragma: no cover - not weak-referenceable
+        return
+    if name in seen:
+        return
+    seen.add(name)
+    near = near_predicates(name, _predicate_names(mod))
+    if not near:
+        return
+    shown = ", ".join(f"`{p}`" for p in near)
+    label = mod.__name__.rsplit(".", 1)[-1]
+    warnings.warn(
+        f"{mod.__name__}.{name}: {label} defines no predicate `{name}`, so "
+        f"the attribute is the ATOM {name} (data needs no declaration). "
+        f"{label} does define the predicate {shown}: if that is what you "
+        f"meant, fix the spelling.",
+        ClausalImportedDataNameWarning,
+        stacklevel=3,
+    )
+
+
+def install_attribute_fallback(module) -> None:
+    """Give the loaded ``.pl`` *module* the PEP 562 ``__getattr__`` that
+    answers an unbound atom-shaped data name with its atom."""
+    ref = weakref.ref(module)
+
+    def __getattr__(name):
+        mod = ref()
+        if (mod is not None and _is_atom_shaped(name)
+                and not _caller_opts_out(sys._getframe(1))):
+            atom = data_atom(mod, name)
+            if atom is not None and not _is_submodule(mod, name):
+                _warn_attr_if_misspelled(mod, name)
+                return atom
+        owner = mod.__name__ if mod is not None else "?"
+        raise AttributeError(
+            f"module {owner!r} has no attribute {name!r}", name=name, obj=mod)
+
+    __getattr__.clausal_pl_data_fallback = True
+    vars(module).setdefault("__getattr__", __getattr__)
+
+
 def record_bound_data_names(namespace: dict, module_name: str,
                             pairs: dict, eligible) -> None:
     """After a SUCCESSFUL ``from module_name import ...``: record each bare

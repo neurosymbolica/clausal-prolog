@@ -28,7 +28,11 @@ def test_agrees_with_a_native_load(native):
     assert any(predicted.values()) and not all(predicted.values()), predicted
     body = "".join(f"root_export('{n}').\n" for n in NAMES)
     mod = native.load("autodecl_probe", body)
-    loaded = {n: hasattr(mod, n) for n in NAMES}
+    # module_binds, not hasattr: getattr on a .pl module answers an unbound
+    # atom-shaped name with its atom (ruling 2026-10-01), so hasattr no
+    # longer tells a bound name from an unbound one.
+    from clausal import module_binds
+    loaded = {n: module_binds(mod, n) for n in NAMES}
     assert loaded == predicted
     # The per-file record names exactly the declared ones too.
     auto = set(lower_source(body, "autodecl_probe.pl").context.auto_atoms)

@@ -169,6 +169,46 @@ the `.pl` rulebase writes in `cite(art1)`: the term built from it
 - Only `.pl` targets: a `.clausal`/`.seam` module exports its data in its
   `-module(...)` list, and a name missing there is still an `ImportError`.
 
+### Reading a data name as an attribute
+
+The same rule answers attribute access from Python (ruled 2026-10-01).
+`getattr(mod, 'employment')` or `mod.employment` on a module loaded from
+`.pl` (either front end, including a package's `__init__.pl`) is the atom
+`'employment'` when the module neither defines `employment` as a predicate
+(at any arity) nor binds it:
+
+```python
+import citations                   # citations.pl
+citations.cite                     # 'cite', the atom
+citations.citation                 # the predicate's handle, as before
+```
+
+- Only an atom-shaped name is answered: a lowercase identifier that is no
+  Python keyword and no reserved name (`true`, `false`, `undefined`). A
+  dunder or private name (`__wrapped__`, `_x`), a TitleCase name and a
+  non-identifier still raise `AttributeError`.
+- Tooling gets no answer: the import machinery, the Python standard
+  library (`unittest`'s `load_tests`, `doctest`, `pickle`, `inspect`) and
+  tools such as pytest and Sphinx still see `AttributeError`, so their
+  hook lookups (`getattr(mod, 'load_tests', None)`) behave as before.
+  Only your own code gets the atom.
+- A submodule of a `.pl` package that is not imported yet is not data:
+  `from pkg import sub` still imports it.
+- `from mod import name` in Python is the import path, not attribute
+  access, and still raises `ImportError` for an unbound name (a seam
+  `-import_from` resolves it as above).
+- A near miss of a predicate (`citations.citaton`) warns once per module
+  and name, with `ClausalImportedDataNameWarning`.
+- `.clausal`/`.seam` and Python modules are unchanged.
+
+**`getattr`/`hasattr` on a `.pl` module no longer signals absence; use
+`clausal.has_predicate` / `clausal.defines_predicate` /
+`clausal.module_binds`.** `clausal.has_predicate(mod, name, arity=None)`
+asks whether `name` is a predicate you can call through the module (defined
+there or imported, as in a thin facade), `clausal.defines_predicate` whether
+the module itself defines it, and `clausal.module_binds(mod, name)` whether
+the name is a real attribute of the module (a predicate or data).
+
 ---
 
 ## Importing between `.pl` files

@@ -19,6 +19,7 @@ import os
 import shutil
 import sys
 import textwrap
+import types
 import warnings
 
 import pytest
@@ -84,7 +85,12 @@ def _answers(mod, name):
 
 
 def _under(spec_or_mod, root):
-    origin = getattr(spec_or_mod, "origin", None) or spec_or_mod.__file__
+    # A module's __file__, a spec's origin.  Not getattr(x, "origin", None):
+    # on a .pl module that is the atom 'origin' (ruling 2026-10-01).
+    if isinstance(spec_or_mod, types.ModuleType):
+        origin = spec_or_mod.__file__
+    else:
+        origin = spec_or_mod.origin
     return os.path.commonpath([origin, str(root)]) == str(root)
 
 

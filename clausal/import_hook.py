@@ -993,6 +993,10 @@ class PrologLoader(_ClausalSourceLoader):
         module_dict.update(runtime_builtins)
         _run_v2_pipeline(self, module, module_dict, filename,
                          self._recover_module_items)
+        # Operator ruling 2026-10-01: an unbound atom-shaped data name read
+        # as an attribute is its atom (clausal/pl_data_imports.py).
+        from clausal.pl_data_imports import install_attribute_fallback  # noqa: PLC0415
+        install_attribute_fallback(module)
 
     def _recover_module_items(self, path):
         """Cache-hit path: re-translate .pl source, then parse for module_items.

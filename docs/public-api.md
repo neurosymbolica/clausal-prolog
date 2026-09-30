@@ -301,9 +301,13 @@ Two known gaps in the atom-class deprecation:
   in a minor release. This includes ISO 13211-2 `end_module/1` and its
   setting: the `require_end_module` flag, `CLAUSAL_REQUIRE_END_MODULE`, and
   `clausal.end_module`.
-  To ask a `.pl` module whether it has a predicate or binds a name, use
-  `clausal.defines_predicate(mod, name, arity=None)` and
-  `clausal.module_binds(mod, name)` (1.3), not `getattr`.
+  Attribute access on a `.pl` module answers an unbound atom-shaped name
+  with its atom (`mod.employment` is `'employment'`; see
+  [Importing Prolog](importing_prolog.md#reading-a-data-name-as-an-attribute)),
+  so `getattr`/`hasattr` on a `.pl` module no longer signals absence; use
+  `clausal.has_predicate(mod, name, arity=None)` (a predicate you can call
+  through it), `clausal.defines_predicate` (one it defines itself) or
+  `clausal.module_binds(mod, name)` (a real attribute) (1.3).
 
 ### Exported by `clausal` but not covered
 

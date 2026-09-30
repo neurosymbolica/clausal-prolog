@@ -20,6 +20,23 @@ since 0.4.0 finish three moves:
 
 ### Breaking
 
+- **Attribute access on a `.pl` module answers an unbound data name with
+  its atom** (ruled 2026-10-01, extending the `.pl` data-import ruling).
+  `getattr(mod, 'employment')` / `mod.employment` on a module loaded from
+  `.pl` (either front end, a package's `__init__.pl` included), for a name
+  the module neither defines as a predicate (any arity) nor binds, is the
+  atom `'employment'`; it raised `AttributeError`. Only an atom-shaped name
+  is answered (`iso_l3_directives._is_declarable`: a lowercase identifier,
+  no keyword, no reserved name), so dunder, private, TitleCase and
+  non-identifier names still raise, and an unimported submodule of a `.pl`
+  package is not data. `from mod import name`, the engine's own probes and
+  `.clausal`/`.seam`/Python modules are unchanged. A near miss of a
+  predicate warns once per module and name
+  (`ClausalImportedDataNameWarning`). **`getattr`/`hasattr` on a `.pl`
+  module no longer signals absence; use `clausal.has_predicate` /
+  `clausal.defines_predicate` / `clausal.module_binds`.** A PEP 562 `__getattr__`
+  (`pl_data_imports.install_attribute_fallback`) installed when the module
+  has loaded.
 - **Calling into a module that does not exist is
   `existence_error(procedure, Name/Arity)`** (ruled 2026-09-30; Scryer's
   form). `call(nosuchmod:mp(_))` in `.pl`, `call(':'(nosuchmod, mp(X)))`
