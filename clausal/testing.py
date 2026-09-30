@@ -523,8 +523,10 @@ def _test_description_name(desc) -> str:
 
     THE FLIP (2026-09-06-atoms-as-cells-strings) is why this is a function:
     ``str(desc)`` used to be the text because an atom WAS its spelling; on
-    a cell it is the tuple repr ``("in: found",)``.  Any other ground value
-    still names itself through ``str``.
+    a cell it is the tuple repr ``("in: found",)``.  A compound description
+    is named by its term text, as ``writeq/1`` writes it (``case(2)``, not
+    the tuple repr ``('case', 2)``).  Any other ground value still names
+    itself through ``str``.
     """
     from clausal.logic.atoms import is_atom as _term_is_atom, spelling
     if _term_is_atom(desc):
@@ -534,6 +536,10 @@ def _test_description_name(desc) -> str:
         desc = chars_text(desc)          # stage 1: a test NAME written "..." is the chars carrier
     if isinstance(desc, str):
         return desc
+    from clausal.logic.builtins._helpers import _is_compound  # noqa: PLC0415
+    if _is_compound(desc):
+        from clausal.terms import term_str  # noqa: PLC0415
+        return term_str(desc)
     return str(desc)
 
 

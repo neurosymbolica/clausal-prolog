@@ -574,7 +574,9 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
   back. This affected both `.pl` front ends and `.clausal`/`.seam`
   (`test("name") <- True`), and a compound description on any seam test
   clause (`test(case(2)) <- ...`), which was run as `test(_)` and so could
-  pass on the strength of another test's clause.
+  pass on the strength of another test's clause. A compound description is
+  named by its term text, as `writeq/1` writes it (`case(2)`), not the
+  Python tuple `('case', 2)`.
 - **`findall/4` inside a `findall/3` goal no longer raises "findall/3 not
   found".** When a clause set called both `findall/3` (the compiler special
   form) and `findall/4`, the compiled clause could bind the name to a

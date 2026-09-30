@@ -630,7 +630,8 @@ def test_lint_catches_dotted_receiver_functor_fallback(tmp_path):
 
 
 def test_testing_py_allowlist_entry_is_load_bearing():
-    """clausal/testing.py:2622 (2562 before ``_clause_args`` was added above
+    """clausal/testing.py:2628 (2622 before a compound test description was
+    named by its term text above it, 2026-09-30; 2562 before ``_clause_args`` was added above
     it, 2026-09-30; 2552 before the detached-module registration
     in load_clausal_module/run_file was added above it, 2026-09-30; 2398 before test(Name, fail) collection
     was added above it, 2026-09-29; 2348 before the runner's exit codes, .pl
@@ -667,7 +668,7 @@ def test_testing_py_allowlist_entry_is_load_bearing():
         "allowlist entry is a dead no-op again"
     )
     assert any(
-        v.pattern == "functor_fallback" and v.line == 2622
+        v.pattern == "functor_fallback" and v.line == 2628
         for v in testing_violations
     ), testing_violations
 
