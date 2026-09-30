@@ -342,9 +342,11 @@ def is_auto_declarable_atom(name: str) -> bool:
     actually got are ``lower_source(...).context.auto_atoms``.
 
     The test is ARITY-BLIND: an atom whose spelling is a builtin or an
-    evaluable at ANY arity is excluded (``max``, ``pi``, ``fail``,
-    ``halt``), because the module binding would shadow that name whatever
-    arity the file uses it at.
+    evaluable at ANY arity is excluded (``max``, ``pi``, ``halt``),
+    because the module binding would shadow that name whatever arity the
+    file uses it at.  The control constructs ``fail`` and ``repeat`` are
+    not builtins here, so a file that uses them only as DATA declares
+    them (a file that calls them takes them, per file).
 
     It describes the NATIVE ``.pl`` front end only
     (``CLAUSAL_PL_FRONTEND=native``); the translator and seam files do not
