@@ -163,11 +163,12 @@ SEAM_ROWS = [
     ("#\\= ground atom", "catch('#\\\\='(1, foo), error(F, C), R is F)",
      ["domain_error(clpz_expression,foo)"]),
     # ruled 2026-09-30: a boolean in arithmetic is an error; a Python bool
-    # used to count as 1 (`'#='(X, True)` bound X = 1)
+    # used to count as 1 (`'#='(X, True)` bound X = 1); D47: it is the atom
+    # true, and writes as one
     ("#= a Python bool", "catch('#='(X, True), error(F, C), R is F)",
-     ["domain_error(clpz_expression,True)"]),
+     ["domain_error(clpz_expression,true)"]),
     ("#< a Python bool in a sum", "catch('#<'(0, False + 1), error(F, C), R is F)",
-     ["domain_error(clpz_expression,False)"]),
+     ["domain_error(clpz_expression,false)"]),
     # floats: unchanged by this ruling (a separate one)
     ("#= a float", "'#='(R, 1.5)", ["1.5"]),
     ("number_chars", "catch(number_chars(N, ['1', 'x']), error(F, C), R is F)",

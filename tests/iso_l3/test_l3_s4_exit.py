@@ -189,7 +189,8 @@ def test_the_rows_are_scryers_oracle():
     goal = ("(case(N, L), write(N), write(' '), writeq(L), nl, fail "
             "; true), halt")
     proc = subprocess.run([SCRYER, os.path.join(S4, "s4_exit.pl"), "-g", goal],
-                          capture_output=True, text=True, timeout=120)
+                          capture_output=True, text=True, timeout=120,
+                          stdin=subprocess.DEVNULL)
     rows = {}
     for line in proc.stdout.splitlines():
         name, sep, rest = line.partition(" ")
