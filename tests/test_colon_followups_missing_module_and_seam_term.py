@@ -41,13 +41,14 @@ _LIB = """
 
 _PL = """\
 :- module(cfupl, [mk/1, mkq/1, pl_call/1, pl_goal/1, pl_extra/1,
-                  pl_findall/1]).
+                  pl_findall/1, pl_phrase/1]).
 mk(T) :- T = cfulib:mp(1).
 mkq(T) :- T = cfulib:(cfulib:mp(1)).
 pl_call(X) :- call(cfunosuchmod:mp(X)).
 pl_goal(X) :- cfunosuchmod:mp(X).
 pl_extra(X) :- call(cfunosuchmod:mp, X).
 pl_findall(L) :- findall(X, cfunosuchmod:mp(X), L).
+pl_phrase(L) :- phrase(cfunosuchmod:g, L).
 """
 
 _USER = """
@@ -213,6 +214,29 @@ def test_call_n_extras_count_in_the_arity(mods):
     assert exc.value.term == ("error",
                               ("existence_error", "procedure", ("/", "mp", 3)),
                               ("/", "mp", 3))
+
+
+def test_phrase_over_a_missing_module_is_the_missing_nonterminal(mods):
+    """``phrase(nosuchmod:g, L)`` asks for g/2, as ``call(nosuchmod:g, S0,
+    S)`` does.  (Scryer's phrase/2 writes the culprit qualified,
+    ``nosuchmod:g/2``; call/N's form is the one used here.)"""
+    _user, pl = mods
+    with pytest.raises(LogicException) as exc:
+        _answers(pl, "pl_phrase")
+    assert exc.value.term == ("error",
+                              ("existence_error", "procedure", ("/", "g", 2)),
+                              ("/", "g", 2))
+
+
+def test_a_missing_outer_module_keeps_the_module_error_through_call(mods):
+    """``nosuchmod:cfulib:mp(X)``: cfulib would answer, so no procedure is
+    missing; every layer is still resolved (Scryer answers here -- the
+    outer module is ignored)."""
+    user, _pl = mods
+    goal = (":", "cfunosuchmod", (":", "cfulib", ("mp", Var())))
+    with pytest.raises(LogicException) as exc:
+        list(call("call", goal, module=user.__dict__["$module"]))
+    assert exc.value.term[1][:2] == ("existence_error", "module")
 
 
 def test_a_non_atom_designator_keeps_the_module_error(mods):

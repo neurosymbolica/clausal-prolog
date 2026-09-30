@@ -234,8 +234,11 @@ def _resolve_nonterminal(db, rule_val, extra_args, context):
         # module, then the nonterminal in IT, with the same S0/S extras.
         from clausal.logic.cells import resolve_qualified_goal_cell  # noqa: PLC0415
         from clausal.logic.builtins.higher_order import _calling_module  # noqa: PLC0415
+        # A module that does not exist is the missing procedure NT/(A+2),
+        # as call/N reports it (operator ruling 2026-09-30).
         target, inner = resolve_qualified_goal_cell(
-            rule_val, context, _calling_module(db))
+            rule_val, context, _calling_module(db),
+            call_extra=len(extra_args))
         inner = deref(inner)
         from clausal.logic.meta_predicate import is_goal_object  # noqa: PLC0415
         if is_goal_object(inner):

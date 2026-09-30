@@ -55,8 +55,6 @@ KNOWN = {
     "e77": "c",
     # log(0): Scryer says float_overflow, ISO undefined (Clausal)
     "e71": "o",
-    # call(foo:bar): no module foo -- the culprit is the quoted spelling
-    "x36": "a",
     # msort/2 is a Clausal builtin, absent from Scryer
     "x52": "c",
     # sum_list/2 on a non-number: type_error(number) vs Scryer's evaluable

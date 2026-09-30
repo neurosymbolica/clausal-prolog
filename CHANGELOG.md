@@ -24,9 +24,10 @@ since 0.4.0 finish three moves:
   `existence_error(procedure, Name/Arity)`** (ruled 2026-09-30; Scryer's
   form). `call(nosuchmod:mp(_))` in `.pl`, `call(':'(nosuchmod, mp(X)))`
   and `':'('nosuchmod', mp(X))` in seam, `solve((":", "nosuchmod", G), m)`
-  and `findall`/`call/N` over them raise
+  and `findall`/`call/N`/`phrase` over them raise
   `error(existence_error(procedure, mp/1), mp/1)`; call/N counts its extra
-  arguments (`call(nosuchmod:mp, X)` is `mp/1`). They raised
+  arguments (`call(nosuchmod:mp, X)` is `mp/1`; `phrase(nosuchmod:g, L)`
+  is `g/2`). They raised
   `error(existence_error(module, 'nosuchmod'), call/1)`. The change is in
   the one resolver of qualified goals (`cells.resolve_qualified_goal_cell`),
   for its calling callers only; a non-atom designator (`7:G`), an unbound

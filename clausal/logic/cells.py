@@ -558,8 +558,10 @@ def resolve_qualified_goal_cell(
     procedure, and there is none.  Only when *call_extra* is given (a
     clause lookup or an assert into ``M:`` is not a call) and only for an
     atom designator whose innermost goal is an atom or a cell that names a
-    procedure; a variable, a number, a non-callable or a control construct
-    inside keeps the module error, and so does a missing OUTER module of
+    procedure; a variable, a number, a non-callable or a control-construct
+    CELL (``,``/``;``/``->``/``*->``/``\\+``) inside keeps the module error
+    (an atom goal, ``true`` included, names a procedure: Scryer reports
+    ``nosuchmod:true`` as a missing procedure too), and so does a missing OUTER module of
     ``m1:m2:G`` (every layer is still resolved; ``m2`` would answer).
     """
     from clausal.logic.solve import resolve_module  # noqa: PLC0415 -- see the
