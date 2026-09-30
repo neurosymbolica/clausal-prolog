@@ -2914,6 +2914,23 @@ class TermTransformer(NodeTransformer):
             # ``reify`` contract, and why the refusal is shared with the
             # fact-head reading of the same sugar.
             _refuse_double_quoted_functor(transformer, call.func)
+            if (call.func.value == ":" and len(call.args) == 2
+                    and not call.keywords
+                    and isinstance(call.args[1], Name)
+                    and not _is_logic_var_name(call.args[1].id)):
+                # ``':'(lib, p)``: a bare name as the GOAL of the qualified
+                # form is a name lib answers to (ISO ``lib:p``), not an atom
+                # of THIS module -- read it as the quoted atom, so strict
+                # atoms asks no declaration of it here (operator ruling
+                # 2026-09-30; ``p(...)``/``p()`` there get the same reading
+                # from ``terms_to_ast._qualified_goal_term_ast``).
+                call = replace(
+                    Call(func=call.func,
+                         args=[call.args[0],
+                               replace(Constant(value=call.args[1].id),
+                                       call.args[1])],
+                         keywords=[]),
+                    call)
             func_node = transformer._visit_call_func(
                 replace(Name(id=call.func.value, ctx=load), call.func)
             )

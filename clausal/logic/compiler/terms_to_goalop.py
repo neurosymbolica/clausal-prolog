@@ -417,6 +417,16 @@ def _convert_inner(goal: Any, db: Any) -> GoalOp:
             # operand at runtime, a non-evaluable term raises (ruling R9 A2).
             return ArithEval(target=target_arg, expr=expr_arg)
 
+        # ``':'(M, G)`` as a GOAL: ISO ``M:G``, run G in module M (operator
+        # ruling 2026-09-30).  It is ``call(':'(M, G))`` -- the argument
+        # lowers to the qualified goal cell (``terms_to_ast.
+        # _qualified_goal_term_ast``), which call/1 resolves by module, so
+        # the goal, ``call(T)`` over the same term, and findall/once/not
+        # over it all take one route.  No clause may define ``:/2`` itself.
+        case nodes.Call(func=nodes.LoadName(name=":"),
+                        args=[_m, _g], kwargs=[]):
+            return SubCall(fname="call", arity=1, args=[goal])
+
         # ``Call(LoadName | LoadAttr)`` → ``SubCall``.  Meta-predicate
         # names not captured by the explicit arms above (wrong arity,
         # unexpected kwargs) fall through here and resolve as ordinary

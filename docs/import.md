@@ -262,6 +262,39 @@ a `++()` escape:
 --8<-- "tests/fixtures/docs/import_sigs.txt:qualified_constant_access"
 ```
 
+### Qualified goals as data: `':'(M, G)`
+
+A dotted call runs in its module wherever it is a goal: in a body
+(`lib.p(X)`), inside `findall/3`, `once/1` or `not`, and as the goal
+argument of `call/N`, `aggregate_all/3`, `maplist/N` and the other builtin
+meta-callers (`call(lib.p(X))`). In DATA position it is the plain term:
+`T is lib.p(1)` binds `T` to `p(1)`, so `T is lib.p(X), call(T)` runs `p`
+in the calling module.
+
+To build a qualified goal as a term, write ISO's `:`/2 with the quoted
+functor. It needs no declaration:
+
+```text
+-import_module(lib)
+
+run(X) <- (G is ':'(lib, p(X)), call(G))    # p runs in lib
+every(L) <- findall(X, ':'(lib, p(X)), L)
+cnt(N) <- aggregate_all('count', ':'(lib, p(_)), N)
+```
+
+`':'(lib, p(X))` is the same term the `.pl` front end reads for
+`lib:p(X)` (the two are `==`), and `writeq/1` prints it as `lib:p(X)`. The
+second argument names a predicate of `lib`, so the calling module need not
+declare `p`: a written `p(...)`, `p()` or bare `p` there is the plain term
+of that name. A module that names no loaded module raises
+`existence_error(module, M)`, and a predicate `lib` does not define raises
+`existence_error(procedure, p/N)`.
+
+A zero-argument call `name()` is the atom `name`: `call(zz())` is
+`call(zz)`, and `call(lib.z())` runs `z/0` in `lib`. A name bound to a
+Python callable is still called: `T is time.time()` and `T is ++f()` are
+Python calls.
+
 ### How it works under the hood
 
 1. **`_handle_import_from_directive`** on `EmbedTransformer` parses the directive, emits a Python `from ... import` statement, and records a remap (`{local_name: "full.module.path.Name"}`) in `_import_remap`.

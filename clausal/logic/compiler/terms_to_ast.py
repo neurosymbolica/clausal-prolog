@@ -60,7 +60,8 @@ from clausal.logic.atoms import (
 )
 from clausal.logic.constants import _FrozenList, _FrozenDict, _FrozenSet
 from clausal.logic.cells import (
-    FUNCTOR_SIGNATURES_KEY, IMPLICIT_FUNCTORS_FLAG, registry_signatures,
+    FUNCTOR_SIGNATURES_KEY, IMPLICIT_FUNCTORS_FLAG, QUALIFIED_GOAL_FUNCTOR,
+    registry_signatures,
 )
 
 from clausal.logic.generated_names import dollar_ref
@@ -879,8 +880,17 @@ def _place_signature_slots(fields, positional, keywords, *, functor, missing):
     return [missing() if slot is _UNSET else slot for slot in slots]
 
 
-def cell_literal_ast(functor: str, arg_exprs: list[ast.expr]) -> ast.Tuple:
-    """The cell literal ``("functor", <arg0>, ...)`` as an AST expression."""
+def cell_literal_ast(functor: str, arg_exprs: list[ast.expr]) -> ast.expr:
+    """The cell literal ``("functor", <arg0>, ...)`` as an AST expression.
+
+    With no arguments it is the ATOM ``functor`` (operator ruling
+    2026-09-30): ``name()`` written in a clause means the atom ``name``, in
+    a goal, a meta-call argument (``call(zz())``, ``aggregate_all(count,
+    zz(), N)``) and data alike.  The 1-tuple ``("name",)`` is reserved (an
+    opaque Python object reference) and must never be built -- it used to
+    reach call/N as a ``TypeError``."""
+    if not arg_exprs:
+        return ast.Constant(value=_mint_atom(functor))
     return ast.Tuple(
         elts=[ast.Constant(value=functor), *arg_exprs],
         ctx=ast.Load(),
@@ -987,6 +997,56 @@ def call_arg_context(fname: str, index: int) -> "tuple | None":
     if index == 0 and fname in _MATCH_ARGS:
         return ("cell", _MATCH_ARGS[fname])
     return None
+
+
+def _qualified_goal_term_ast(
+    term: Any, var_context: dict[int, str], eval_arith: bool,
+) -> ast.expr:
+    """``':'(M, G)`` written in a clause: the qualified goal cell
+    ``(":", M, G)`` (operator ruling 2026-09-30).
+
+    M, when it is a written name (``lib``, ``pkg.lib``) that names a Clausal
+    module from this namespace (an ``-import_module``'d module object, or a
+    loaded module), is that module's DESIGNATOR -- spelled as every other
+    qualified goal cell spells it (``$meta_qualify_module``, the dotted
+    ``call(lib.p(X))`` route), so the term is the one the .pl front end
+    builds for ``lib:p(X)``.  Anything else (a quoted atom, a variable) is
+    lowered as written; ``call/N`` reports an M that names no module.
+
+    G is resolved in M, not here: ``':'(lib, p(X))`` is ISO ``lib:p(X)``,
+    where ``p`` is only a NAME that lib answers to.  So a written ``p(...)``
+    (positional arguments) or ``p()`` builds the plain cell / atom of the
+    WRITTEN name, whatever this module declares about ``p`` -- nothing needs
+    declaring in the calling module, as the dotted ``lib.p(X)`` meta
+    argument needs nothing.  Keyword arguments need a signature, so that
+    shape (and every other G: a variable, a nested ``':'``, a conjunction)
+    is lowered as ordinary data.
+    """
+    m_arg, g_arg = term.args
+    rec = lambda t: term_to_ast_expr(t, var_context, eval_arith=eval_arith)
+    g_node = deref(g_arg)
+    if (isinstance(g_node, Call) and isinstance(g_node.func, LoadName)
+            and g_node.func.name != QUALIFIED_GOAL_FUNCTOR
+            and not g_node.kwargs):
+        inner = cell_literal_ast(sys.intern(g_node.func.name),
+                                 [rec(a) for a in g_node.args])
+    else:
+        inner = rec(g_arg)
+    m_node = deref(m_arg)
+    if isinstance(m_node, (LoadName, LoadAttr)):
+        dotted = (m_node.name if isinstance(m_node, LoadName)
+                  else _dotted_name_from_loadattr(m_node))
+        namespace = lowering_globals()
+        if dotted is not None and namespace is not None:
+            from clausal.logic.meta_predicate import (  # noqa: PLC0415
+                _clausal_module_db,
+            )
+            owner = _resolve_module_path(dotted, namespace)
+            if owner is not None and _clausal_module_db(owner) is not None:
+                return _call(_name("$meta_qualify_module"), _name("$meta_db"),
+                             ast.Constant(value=dotted), inner)
+    return ast.Tuple(elts=[ast.Constant(value=QUALIFIED_GOAL_FUNCTOR),
+                           rec(m_arg), inner], ctx=ast.Load())
 
 
 def term_to_ast_expr(
@@ -1401,6 +1461,16 @@ def term_to_ast_expr(
         # ``$present``: whatever the tree produced, an integral Fraction
         # (e.g. (1/2) + (1/2)) reaches unify as an int.
         return _call(_name("$present"), arith_to_ast_expr(term, var_context))
+
+    # ``':'(M, G)`` -- the ISO qualified goal ``M:G`` built as a TERM
+    # (operator ruling 2026-09-30): the cell ``(":", M, G)``, the same term
+    # the .pl front end reads for ``M:G``, which call/N, findall/3,
+    # aggregate_all/3 & co. already run in M.  Ruling (a) is untouched: a
+    # dotted ``m.g(X)`` in data position is still the plain ``g`` cell.
+    if (isinstance(term, Call) and isinstance(term.func, LoadName)
+            and term.func.name == QUALIFIED_GOAL_FUNCTOR
+            and len(term.args) == 2 and not term.kwargs):
+        return _qualified_goal_term_ast(term, var_context, eval_arith)
 
     # Call nodes with LoadName/LoadAttr func: compile as direct function call so
     # that e.g. phrase(count_leaves(T_), ...) constructs a count_leaves instance,

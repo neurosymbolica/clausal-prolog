@@ -172,6 +172,29 @@ since 0.4.0 finish three moves:
 
 ### Added
 
+- **`':'(M, G)` builds a qualified goal term in seam** (ruled 2026-09-30).
+  ISO's `:`/2 is now a known functor in `.clausal`/`.seam` source with no
+  declaration: `T is ':'(lib, p(X)), call(T)`, `call(':'(lib, p(X)))`,
+  `findall(X, ':'(lib, p(X)), L)`, `aggregate_all(count, ':'(lib, p(_)), N)`
+  and `':'(lib, p(X))` as a body goal all run `p` in `lib`. The term is the
+  one the `.pl` front end reads for `lib:p(X)` (`==` across the two) and
+  prints as `lib:p(X)`. The second argument is resolved in `lib`, so the
+  caller need not declare `p`: a written `p(...)`, `p()` or bare `p` there
+  is the plain term of that name. An unknown module is
+  `existence_error(module, M)`; a predicate `lib` does not define is
+  `existence_error(procedure, p/N)`. These used to raise
+  `existence_error(procedure, (:)/2)`. A dotted call in data position is
+  unchanged (`T is lib.p(1)` is still the plain `p(1)`).
+- **`name()` is the atom `name`** (ruled 2026-09-30). A zero-argument call
+  written with parentheses is the same goal as the bare name wherever a
+  goal is expected: `call(zz())`, `aggregate_all(count, zz(), N)`,
+  `maplist`'s closure, and `call(lib.z())` (which runs `z/0` in `lib`).
+  These raised a Python `TypeError` about the reserved 1-tuple `('zz',)`.
+  In data position `T is zz()` (for a predicate `zz`) and `T is lib.z()`
+  bound `T` to that reserved 1-tuple; they now bind the atom. A name bound
+  to a Python callable is unchanged: `T is f()`, `T is time.time()` and
+  `T is ++f()` still call Python.
+
 - **ISO 13211-2 `:- end_module(Name).`, and a "require end_module"
   setting.** A `.pl` module file may end with `end_module/1`; both `.pl`
   front ends check that it names the file's `module/2` module and is the
