@@ -3664,6 +3664,12 @@ def global_cardinality(vars_list, pairs, trail: Trail) -> bool:
     vars_list = deref(vars_list)
     if not isinstance(vars_list, list):
         return False
+    if len({val for val, _ in pairs}) != len(pairs):
+        # clpz: domain_error(gcc_unique_key_pairs, Pairs)
+        from clausal.logic.exceptions import LogicException, domain_error  # noqa: PLC0415
+        raise LogicException(domain_error(
+            "gcc_unique_key_pairs", [("-", val, cnt) for val, cnt in pairs],
+            "global_cardinality/2"))
     # Units: the vars and the pair KEYS share one dimension (a key is a
     # value the vars may take), so they are stripped together.
     keys = [val for val, _ in pairs]
@@ -3838,6 +3844,8 @@ def zcompare(order, x, y, trail: Trail) -> bool:
     # comparison error with a bound one.  What _arith_leaf admits (a number,
     # a variable, an operator node, an exact-number cell, a Quantity) keeps
     # its existing path below.
+    if _Add is None:
+        _ensure_term_imports()     # _arith_leaf reads _NODE_KEYS
     for operand in (x, y):
         if not _arith_leaf(operand):
             from clausal.logic.exceptions import LogicException, type_error  # noqa: PLC0415

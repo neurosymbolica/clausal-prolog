@@ -63,6 +63,8 @@ z7(E) :- catch(zcompare(<, 1, a), error(E, _), true).
 z8(E) :- catch(zcompare(_, a, _), error(E, _), true).
 z9(E) :- catch(zcompare(<, 1, foo(2)), error(E, _), true).
 z10(E) :- catch(zcompare(_, 1, 1+1), error(E, _), true).
+z11(E) :- catch(zcompare(<, X, X+1), error(E, _), true).
+z12(E) :- catch(zcompare(=, 2, 1+1), error(E, _), true).
 ok(R) :- findall(O, zcompare(O, 1, 2), R).
 """
 
@@ -79,6 +81,10 @@ def test_zcompare_order_and_operand_errors(native, ans):
     assert ans(mod, "z8") == [("type_error", "integer", "a")]
     assert ans(mod, "z9") == [("type_error", "integer", ("foo", 2))]
     assert ans(mod, "z10") == [("type_error", "integer", ("+", 1, 1))]
+    # a bound Order does not hand an expression to #< (Scryer refuses it too)
+    [z11] = ans(mod, "z11")
+    assert z11[:2] == ("type_error", "integer") and z11[2][0] == "+"
+    assert ans(mod, "z12") == [("type_error", "integer", ("+", 1, 1))]
     assert ans(mod, "ok") == [["<"]]
 
 
@@ -118,3 +124,33 @@ def test_element_index_and_scalar_product_expression(native, ans):
     assert ans(mod, "s7") == [[]]
     assert ans(mod, "s8") == [[2, 3]]
     assert ans(mod, "s9") == [[0, 2, 3, 4]]
+
+
+def test_zcompare_node_operand_in_a_fresh_process():
+    """zcompare's operand check reads the lazily-filled node table: as the
+    first CLP post of a process, an operator-node operand was refused."""
+    import os
+    import subprocess
+    import sys
+    code = (
+        "from clausal.pythonic_ast.nodes import Add\n"
+        "from clausal.logic.variables import Var, Trail\n"
+        "from clausal.logic import clpfd\n"
+        "from clausal.logic.atoms import mint\n"
+        "assert clpfd._Add is None, 'not a fresh process'\n"
+        "print(clpfd.zcompare(mint('<'), Add(left=Var(), right=1), 3, Trail()))\n"
+    )
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True,
+                         text=True, env=dict(os.environ), timeout=120)
+    assert out.returncode == 0, out.stderr[-2000:]
+    assert out.stdout.strip() == "True"
+
+
+def test_global_cardinality_python_api_refuses_repeated_keys():
+    import pytest
+    from clausal.logic.clpfd import global_cardinality
+    from clausal.logic.exceptions import LogicException
+    from clausal.logic.variables import Trail, Var
+    with pytest.raises(LogicException) as ei:
+        global_cardinality([Var()], [(1, 1), (1, 1)], Trail())
+    assert "gcc_unique_key_pairs" in str(ei.value.term)
