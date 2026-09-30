@@ -1052,6 +1052,16 @@ def _is_call_target(binding, arity: int, db=None, name=None) -> bool:
         if name is not None:
             return binding_grants_arity(binding, arity, db, name)
         return is_declared_predicate(binding, arity=arity, db=db)
+    if type(binding) is _DbDispatchAdapter:
+        # The adapter is fixed to ONE name/arity (``_get_dispatch`` ignores
+        # the call's arity), so it is no target at any other.  Accepting it
+        # let ``findall/3`` -- a special form, no builtin at that arity, so
+        # it gets the adapter -- collected BEFORE ``findall/4`` keep the NAME
+        # key, and the findall/4 goal then raised "findall/3 not found"
+        # (a findall/4 nested in a findall/3 goal; which order the target
+        # set iterated in decided it).  Rejected here, the findall/4 target
+        # falls through to its builtin, which replaces the adapter.
+        return arity < 0 or binding._arity == arity
     return hasattr(binding, "_get_dispatch")
 
 
