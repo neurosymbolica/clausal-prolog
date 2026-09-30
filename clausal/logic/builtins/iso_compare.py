@@ -458,23 +458,17 @@ def _iso_structural_ne(a, b, trail, k):
 # (`#\=`, `#<`, `#>`, `#=<`, `#>=`) are their natural CLP(FD) counterparts,
 # named the same way for symmetry.
 #
-# BECAUSE these name an EXISTING behaviour, they inherit its error surface
-# unchanged, and that surface is neither uniform nor Scryer's. Measured
-# 2026-09-09 with a non-numeric ground operand, against Scryer's clpz, which
-# answers `error(domain_error(clpz_expression,foo),unknown(foo)-1)` for
-# every one of these four goals:
+# Their error surface is clpz's, NOT infix `==`'s (ruled 2026-09-30).
+# Measured 2026-09-09 with a non-numeric ground operand the family had three
+# behaviours -- `'#='(1, foo)` failed silently, `'#\='(1, foo)` succeeded,
+# `'#<'(1, foo)` raised type_error(orderable, foo) -- where Scryer's clpz
+# answers `error(domain_error(clpz_expression,foo),_)` for every one.  Each
+# builtin now hands both operands to `clpfd.clpz_refuse_non_numeric` first,
+# which raises that formal (context: the builtin's own indicator) for an
+# atom, a Python bool, a string, a list or a non-evaluable compound
+# anywhere in the operand.  Infix `==` is untouched.
 #
-#     '#='(1, foo)    fails silently
-#     '#\='(1, foo)   succeeds
-#     '#<'(1, foo)    type_error(orderable, foo)   context '(<)/2'
-#     '#='(X, foo)    type_error(evaluable, foo)   context '(==)/2'
-#
-# Three behaviours across one family, and the last one names `(==)/2` in a
-# `'#='` call. All four are PINNED, not changed, in
-# tests/iso/test_iso_compare_errors.py — changing them would change infix
-# `==`, which this plan may not do.
-#
-# One difference from infix `==` (2026-09-30): under clpz `/` is exact
+# Another difference from infix `==` (2026-09-30): under clpz `/` is exact
 # integer division, so each builtin first hands its operands to
 # `clpfd.clpz_operands`, which posts `A / B` as an integer Z with
 # `Z * B #= A, B #\= 0` (Scryer: `X #= 7/2` fails, `X #= 8/2` is 4).  Infix
@@ -499,7 +493,10 @@ def _clp_eq(a, b, trail, k):
     corpus sites take two arithmetic modes and `#=` is the only spelling
     correct for all of them.
     """
-    from clausal.logic.clpfd import clpz_operands, fd_eq
+    from clausal.logic.clpfd import (  # noqa: PLC0415
+        clpz_operands, clpz_refuse_non_numeric, fd_eq)
+    clpz_refuse_non_numeric(a, "#=/2")
+    clpz_refuse_non_numeric(b, "#=/2")
     ops = clpz_operands(a, b, trail)
     if ops is not None and fd_eq(*ops, trail):
         yield None
@@ -508,7 +505,10 @@ def _clp_eq(a, b, trail, k):
 @_builtin("#\\=", 2)
 def _clp_ne(a, b, trail, k):
     """CLP(FD) disequality constraint — the negation of `#=`."""
-    from clausal.logic.clpfd import clpz_operands, fd_ne
+    from clausal.logic.clpfd import (  # noqa: PLC0415
+        clpz_operands, clpz_refuse_non_numeric, fd_ne)
+    clpz_refuse_non_numeric(a, "#\\=/2")
+    clpz_refuse_non_numeric(b, "#\\=/2")
     ops = clpz_operands(a, b, trail)
     if ops is not None and fd_ne(*ops, trail):
         yield None
@@ -518,7 +518,10 @@ def _clp_ne(a, b, trail, k):
 def _clp_lt(a, b, trail, k):
     """CLP(FD)/CLP(R) strictly-less-than constraint (an all-integer ``/`` is
     clpz's exact integer division, see clpfd.clpz_operands)."""
-    from clausal.logic.clpfd import clpz_operands, fd_lt
+    from clausal.logic.clpfd import (  # noqa: PLC0415
+        clpz_operands, clpz_refuse_non_numeric, fd_lt)
+    clpz_refuse_non_numeric(a, "#</2")
+    clpz_refuse_non_numeric(b, "#</2")
     ops = clpz_operands(a, b, trail)
     if ops is not None and fd_lt(*ops, trail):
         yield None
@@ -528,7 +531,10 @@ def _clp_lt(a, b, trail, k):
 def _clp_gt(a, b, trail, k):
     """CLP(FD)/CLP(R) strictly-greater-than constraint (an all-integer ``/`` is
     clpz's exact integer division, see clpfd.clpz_operands)."""
-    from clausal.logic.clpfd import clpz_operands, fd_gt
+    from clausal.logic.clpfd import (  # noqa: PLC0415
+        clpz_operands, clpz_refuse_non_numeric, fd_gt)
+    clpz_refuse_non_numeric(a, "#>/2")
+    clpz_refuse_non_numeric(b, "#>/2")
     ops = clpz_operands(a, b, trail)
     if ops is not None and fd_gt(*ops, trail):
         yield None
@@ -538,7 +544,10 @@ def _clp_gt(a, b, trail, k):
 def _clp_le(a, b, trail, k):
     """CLP(FD)/CLP(R) less-than-or-equal constraint (an all-integer ``/`` is
     clpz's exact integer division, see clpfd.clpz_operands)."""
-    from clausal.logic.clpfd import clpz_operands, fd_le
+    from clausal.logic.clpfd import (  # noqa: PLC0415
+        clpz_operands, clpz_refuse_non_numeric, fd_le)
+    clpz_refuse_non_numeric(a, "#=</2")
+    clpz_refuse_non_numeric(b, "#=</2")
     ops = clpz_operands(a, b, trail)
     if ops is not None and fd_le(*ops, trail):
         yield None
@@ -548,7 +557,10 @@ def _clp_le(a, b, trail, k):
 def _clp_ge(a, b, trail, k):
     """CLP(FD)/CLP(R) greater-than-or-equal constraint (an all-integer ``/`` is
     clpz's exact integer division, see clpfd.clpz_operands)."""
-    from clausal.logic.clpfd import clpz_operands, fd_ge
+    from clausal.logic.clpfd import (  # noqa: PLC0415
+        clpz_operands, clpz_refuse_non_numeric, fd_ge)
+    clpz_refuse_non_numeric(a, "#>=/2")
+    clpz_refuse_non_numeric(b, "#>=/2")
     ops = clpz_operands(a, b, trail)
     if ops is not None and fd_ge(*ops, trail):
         yield None

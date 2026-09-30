@@ -172,27 +172,23 @@ class TestArg:
         goal = Call(func=LoadName(name="arg"), args=[3, ("f", 10, 20), a], kwargs=[])
         assert sol_var(goal, a, mod=mod) == []
 
-    def test_var_n_enumerates_argument_pairs(self):
-        # Output mode: arg(N, f(10, 20), A) with unbound N enumerates
-        # (1, 10), (2, 20) — SWI-style relational arg/3.  It used to FAIL
-        # SILENTLY, the exact mode-coverage blind spot of
-        # todo/audit-tests-input-output-mode-coverage.md.
+    @pytest.mark.parametrize("third", ["unbound", 20])
+    def test_var_n_is_an_instantiation_error(self, third):
+        # D51 (ruled 2026-09-30): ISO 8.5.2.3 a and Scryer raise
+        # instantiation_error for an unbound N -- ``arg(N, f(a,b), X)`` in
+        # Scryer is error(instantiation_error, arg/3).  It used to ENUMERATE
+        # the (N, Arg) pairs, SWI's extension, and to answer N = 2 for
+        # ``arg(N, f(10, 20), 20)``.
         # nv
-        mod = fresh_module()
-        n, a = Var(), Var()
-        goal = Call(func=LoadName(name="arg"),
-                    args=[n, ("f", 10, 20), a], kwargs=[])
-        trail = Trail()
-        pairs = [(deref(n), deref(a)) for _ in solve(goal, mod, trail)]
-        assert pairs == [(1, 10), (2, 20)]
-
-    def test_var_n_semidet_against_a_given_argument(self):
-        # nv
+        from clausal.logic.exceptions import LogicException
         mod = fresh_module()
         n = Var()
+        a = Var() if third == "unbound" else third
         goal = Call(func=LoadName(name="arg"),
-                    args=[n, ("f", 10, 20), 20], kwargs=[])
-        assert sol_var(goal, n, mod=mod) == [2]
+                    args=[n, ("f", 10, 20), a], kwargs=[])
+        with pytest.raises(LogicException) as ei:
+            list(solve(goal, mod, Trail()))
+        assert ei.value.term[1] == "instantiation_error", ei.value.term
 
     def test_list_arg_cons_cell_head(self):
         # nv

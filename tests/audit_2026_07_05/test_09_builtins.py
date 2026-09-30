@@ -872,12 +872,19 @@ def test_F031_regression_atom_concat_valid(fix):
             and deref(C) == mint("12"))
 
 
-def test_F030_number_chars_python_lenient(fix):
-    """A09-F030: parsing is deliberately Python-native/lenient — a char list
-    with surrounding whitespace parses (documented in docs/builtins.md)."""
+def test_F030_number_chars_reads_as_scryer_does(fix):
+    """A09-F030, ruled 2026-09-30: number_chars/2 READS the text as ISO
+    8.16.7 and Scryer do.  Leading layout is allowed (`" 1"` is 1), trailing
+    layout is not, and text that is not a number raises syntax_error --
+    it used to be parsed by Python's int()/float() and FAIL."""
     _, m = fix
     N = Var()
     assert _first(m, "number_chars", N, chars(" 1")) and deref(N) == 1
+    for text, kind in (("1 ", "unexpected_char"), ("+1", "unexpected_char"),
+                       ("inf", "unexpected_end_of_file")):
+        with pytest.raises(LogicException) as ei:
+            _first(m, "number_chars", Var(), chars(text))
+        assert cell_args(ei.value.term)[0] == ("syntax_error", kind), text
 
 
 # ═══════════════════════════════════════════════════════════════════════════

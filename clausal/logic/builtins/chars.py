@@ -639,59 +639,293 @@ def _sub_atom__5(atom, before, length, after, sub, trail, k):
 
 # ── number_chars/2 ──────────────────────────────────────────────────────────────
 
+#: ISO 6.4.1 layout, and the characters of a symbol-char name token (6.4.2)
+_LAYOUT = frozenset(" \t\n\r\v\f")
+_SYMBOL_CHARS = frozenset("+-*/\\^<>=~:.?@#&$")
+
+
+class _NumberSyntax(Exception):
+    """A number text that is not one: *kind* is Scryer's syntax_error
+    formal (``unexpected_end_of_file``, ``unexpected_char``, ...) and
+    *located* whether Scryer's context carries a position (``PI:0``)."""
+
+    def __init__(self, kind: str, located: bool):
+        super().__init__(kind)
+        self.kind = kind
+        self.located = located
+
+
+def _eof():
+    return _NumberSyntax("unexpected_end_of_file", False)
+
+
+def _bad_char():
+    return _NumberSyntax("unexpected_char", True)
+
+
+def _skip_layout(s: str, i: int) -> int:
+    """*i* moved past layout and comments; an unterminated ``/*`` is the
+    end of the text."""
+    n = len(s)
+    while i < n:
+        c = s[i]
+        if c in _LAYOUT:
+            i += 1
+        elif c == "%":
+            j = s.find("\n", i)
+            i = n if j < 0 else j + 1
+        elif c == "/" and s.startswith("/*", i):
+            j = s.find("*/", i + 2)
+            if j < 0:
+                raise _eof()
+            i = j + 2
+        else:
+            break
+    return i
+
+
+def _digits(s: str, i: int, ok) -> int:
+    """End of a digit run (``_`` digit groups included) starting at *i*."""
+    n = len(s)
+    j = i
+    while j < n and ok(s[j]):
+        j += 1
+        if j + 1 < n and s[j] == "_" and ok(s[j + 1]):
+            j += 1
+    return j
+
+
+def _char_code_token(s: str, j: int):
+    """``0'c`` from its character at *j*: ``(code, end)``."""
+    n = len(s)
+    if j >= n:
+        raise _eof()
+    ch = s[j]
+    if ch == "'":
+        if j + 1 >= n:
+            raise _eof()
+        if s[j + 1] == "'":
+            return 39, j + 2
+        raise _bad_char()
+    if ch == "\\":
+        if j + 1 >= n:
+            raise _eof()
+        e = s[j + 1]
+        if e in _CHAR_ESCAPES:
+            return ord(_CHAR_ESCAPES[e]), j + 2
+        if e == "x" or e in "01234567":
+            base, k = (16, j + 2) if e == "x" else (8, j + 1)
+            ok = (lambda c: c in "0123456789abcdefABCDEF") if base == 16 \
+                else (lambda c: c in "01234567")
+            m = k
+            while m < n and ok(s[m]):
+                m += 1
+            if m == k or m >= n:
+                raise _eof() if m >= n else _bad_char()
+            if s[m] != "\\":
+                raise _bad_char()
+            code = int(s[k:m], base)
+            if code >= 0x110000:
+                raise _bad_char()
+            return code, m + 1
+        raise _bad_char()
+    if ch == "\n":
+        raise _bad_char()
+    return ord(ch), j + 1
+
+
+def _number_token_at(s: str, i: int):
+    """The number token starting at the digit ``s[i]``: ``(value, end)``."""
+    n = len(s)
+    if s[i] == "0" and i + 1 < n:
+        c1 = s[i + 1]
+        if c1 == "'":
+            return _char_code_token(s, i + 2)
+        radix = {"x": 16, "o": 8, "b": 2}.get(c1)
+        if radix is not None:
+            ok = {16: lambda c: c in "0123456789abcdefABCDEF",
+                  8: lambda c: c in "01234567",
+                  2: lambda c: c in "01"}[radix]
+            j = i + 2                # no digit groups here (Scryer)
+            while j < n and ok(s[j]):
+                j += 1
+            if j > i + 2:
+                return int(s[i + 2:j], radix), j
+            if i + 2 >= n:
+                raise _eof()
+            return 0, i + 1          # ``0`` then garbage
+    j = _digits(s, i, lambda c: "0" <= c <= "9")
+    if j + 1 < n and s[j] == "." and "0" <= s[j + 1] <= "9":
+        k = j + 1
+        while k < n and "0" <= s[k] <= "9":
+            k += 1
+        if k < n and s[k] in "eE":
+            m = k + 1
+            if m < n and s[m] in "+-":
+                m += 1
+            if m < n and "0" <= s[m] <= "9":
+                while m < n and "0" <= s[m] <= "9":
+                    m += 1
+                k = m
+        value = float(s[i:k].replace("_", ""))
+        if value in (float("inf"), float("-inf")):
+            raise _NumberSyntax("infinite_float", True)
+        return value, k
+    text = s[i:j].replace("_", "")
+    # through Decimal: CPython caps int(str) at ~4300 digits
+    return (int(_Decimal(text)) if len(text) > 4000 else int(text)), j
+
+
+def _other_token_end(s: str, i: int) -> int:
+    """End of the non-number token at *i*, as Scryer's number reader
+    consumes it; raises for a character that starts no such token."""
+    n = len(s)
+    c = s[i]
+    if c.isalpha() and c.islower():
+        j = i + 1
+        while j < n and (s[j].isalnum() or s[j] == "_"):
+            j += 1
+        return j
+    if c in _SYMBOL_CHARS:
+        j = i + 1
+        while j < n and s[j] in _SYMBOL_CHARS:
+            j += 1
+        return j
+    if c == "'":
+        j = i + 1
+        while True:
+            k = s.find("'", j)
+            if k < 0:
+                raise _eof()
+            if k + 1 < n and s[k + 1] == "'":
+                j = k + 2
+                continue
+            return k + 1
+    if c in "!;":
+        if i + 1 == n:
+            raise _NumberSyntax("cannot_parse_big_int", True)
+        raise _bad_char()
+    raise _bad_char()                # a variable, punctuation, a quote ...
+
+
+def _read_number_text(s: str):
+    """The number *s* spells, read as Scryer's number_chars/2 reads it
+    (ISO 8.16.7): layout and comments may lead, a ``-`` may stand before
+    the number token (layout between them allowed), and nothing may
+    follow it.  Anything else raises :class:`_NumberSyntax` with Scryer's
+    formal: the text ending before a number was read is
+    ``unexpected_end_of_file``, a character where none may be is
+    ``unexpected_char`` (measured against Scryer 2026-09-30)."""
+    n = len(s)
+    i = _skip_layout(s, 0)
+    if i == n:
+        raise _eof()
+    neg = False
+    if s[i] == "-" and (i + 1 == n or s[i + 1] not in _SYMBOL_CHARS):
+        neg = True
+        i = _skip_layout(s, i + 1)
+        if i == n:
+            raise _eof()
+    if "0" <= s[i] <= "9":
+        value, end = _number_token_at(s, i)
+        if end < n:
+            raise _bad_char()
+        return -value if neg else value
+    end = _other_token_end(s, i)
+    raise _eof() if end == n else _bad_char()
+
+
+def _parse_number_chars(s: str, who: str):
+    """*s* read as a number, or ``syntax_error(Kind)`` in Scryer's shape:
+    the context is ``who`` (``number_chars/2``), or ``who:0`` for an error
+    Scryer locates."""
+    try:
+        return _read_number_text(s)
+    except _NumberSyntax as exc:
+        from clausal.logic.exceptions import _error  # noqa: PLC0415
+        name, _, arity = who.rpartition("/")
+        pi = ("/", mint(name), int(arity))
+        context = (":", pi, 0) if exc.located else pi
+        raise LogicException(
+            _error(("syntax_error", mint(exc.kind)), context)) from None
+
+
+def _ground_items(v):
+    """The element list of *v* when it is a proper list with no unbound
+    element, else None."""
+    items = _as_items(v)
+    if items is None:
+        return None
+    items = [deref(e) for e in items]
+    if any(is_var(e) for e in items):
+        return None
+    return items
+
+
 @_builtin("number_chars", 2)
 def _number_chars__2(number, chars, trail, k):
     """number_chars(Number, Chars) — bidirectional number ↔ char-list conversion.
 
-    Number bound → unify Chars with list(str(Number)).
-    Chars bound (list of single-char strings) → parse as int or float.
-    Both bound → test equality.
+    Chars a ground list → it is READ as a number (ISO 8.16.7, as Scryer
+    reads it: leading layout, a ``-`` before the token, ``0x1A``, ``0'a``,
+    ``1_000``) and unified with Number, so ``number_chars(1, ['0', '1'])``
+    holds.  Text that is not a number raises ``syntax_error(Kind)`` with
+    Scryer's formal (``unexpected_end_of_file`` / ``unexpected_char``).
+    Otherwise Number must be a number and Chars unifies with its text.
 
-    A09-F030: parsing is deliberately Python-native (``int()`` then
-    ``float()``), per the language-is-Python contract (A08-D001). It is
-    therefore *lenient* relative to ISO ``number_chars``: surrounding
-    whitespace (``" 1"``), digit-group underscores (``"1_0"``), and the float
-    literals ``"inf"`` / ``"nan"`` are accepted. A char list that Python
-    cannot parse as a number fails (no solution).
+    A09-F030 (2026-07): this used to parse with Python's ``int()`` /
+    ``float()`` and FAIL on text they rejected, accepting ``" 1 "``,
+    ``"+1"``, ``"1e5"`` and ``"inf"`` besides; ruled 2026-09-30 to follow
+    ISO and Scryer.
     """
     vn = deref(number)
     vc = deref(chars)
     n_bound = not is_var(vn)
-    c_bound = not is_var(vc)
-
-    if n_bound:
-        if isinstance(vn, bool) or not isinstance(vn, (int, float)):
-            raise LogicException(type_error("number", vn, "number_chars/2"))
-        mark = trail.mark()
-        if unify(chars, [char_atom(c) for c in str(vn)], trail):
-            yield None
-        trail.undo(mark)
-    elif c_bound:
-        items = _as_items(vc)  # F017: str/ground Seg* → element list
-        if items is None:
-            _refuse_non_list(vc, "number_chars/2")
+    if n_bound and (isinstance(vn, bool) or not isinstance(vn, (int, float))):
+        raise LogicException(type_error("number", vn, "number_chars/2"))
+    items = _ground_items(vc) if not is_var(vc) else None
+    if items is not None:
         elems = []
-        for elem in items:
-            e = deref(elem)
-            if is_var(e):
-                raise LogicException(instantiation_error("number_chars/2"))
+        for e in items:
             if not is_char_atom(e):
                 raise LogicException(type_error("character", e, "number_chars/2"))
             elems.append(spelling(e))
-        s = "".join(elems)
-        try:
-            parsed = int(s)
-        except ValueError:
-            try:
-                parsed = float(s)
-            except ValueError:
-                return  # fail — not a valid number
+        parsed = _parse_number_chars("".join(elems), "number_chars/2")
         mark = trail.mark()
         if unify(number, parsed, trail):
             yield None
         trail.undo(mark)
-    else:
-        raise LogicException(instantiation_error("number_chars/2"))
+        return
+    if n_bound:
+        mark = trail.mark()
+        if unify(chars, [char_atom(c) for c in _number_text(vn)], trail):
+            yield None
+        trail.undo(mark)
+        return
+    if not is_var(vc):
+        _refuse_partial(vc, "number_chars/2", is_char_atom, "character")
+    raise LogicException(instantiation_error("number_chars/2"))
+
+
+def _refuse_partial(vc, who, is_elem, elem_type):
+    """Number unbound and a Chars/Codes that is not a ground list: a
+    non-list is refused as before, a bound element of the wrong kind is
+    ``type_error(elem_type, E)``; the caller then raises the
+    instantiation error."""
+    items = _as_items(vc)
+    if items is None:
+        _refuse_non_list(vc, who)
+        return
+    for e in items:
+        e = deref(e)
+        if is_var(e):
+            return
+        if not is_elem(e):
+            raise LogicException(type_error(elem_type, e, who))
+
+
+def _is_code(e) -> bool:
+    return isinstance(e, int) and not isinstance(e, bool)
 
 
 # ── number_codes/2 ──────────────────────────────────────────────────────────────
@@ -700,34 +934,20 @@ def _number_chars__2(number, chars, trail, k):
 def _number_codes__2(number, codes, trail, k):
     """number_codes(Number, Codes) — bidirectional number ↔ code-point-list.
 
-    Number bound → unify Codes with [ord(c) for c in str(Number)].
-    Codes bound (list of ints) → join as chars, parse as int or float.
-
-    A09-F030: parsing is deliberately Python-native and therefore lenient
-    (accepts whitespace, ``1_0``, ``inf``/``nan``) — see number_chars/2.
+    As number_chars/2 over character codes: a ground Codes list is READ as
+    a number, and text that is not one raises Scryer's
+    ``syntax_error(Kind)`` (A09-F030's silent failure, ruled 2026-09-30).
     """
     vn = deref(number)
     vc = deref(codes)
     n_bound = not is_var(vn)
-    c_bound = not is_var(vc)
-
-    if n_bound:
-        if isinstance(vn, bool) or not isinstance(vn, (int, float)):
-            raise LogicException(type_error("number", vn, "number_codes/2"))
-        mark = trail.mark()
-        if unify(codes, [ord(c) for c in str(vn)], trail):
-            yield None
-        trail.undo(mark)
-    elif c_bound:
-        items = _as_items(vc)  # F017: bytes/str/ground Seg* → element list
-        if items is None:
-            _refuse_non_list(vc, "number_codes/2")
+    if n_bound and (isinstance(vn, bool) or not isinstance(vn, (int, float))):
+        raise LogicException(type_error("number", vn, "number_codes/2"))
+    items = _ground_items(vc) if not is_var(vc) else None
+    if items is not None:
         elems = []
-        for elem in items:
-            e = deref(elem)
-            if is_var(e):
-                raise LogicException(instantiation_error("number_codes/2"))
-            if not isinstance(e, int):
+        for e in items:
+            if not _is_code(e):
                 raise LogicException(type_error("integer", e, "number_codes/2"))
             if not (0 <= e < 0x110000):
                 # ISO / Scryer: not a character code.  This used to FAIL
@@ -736,20 +956,21 @@ def _number_codes__2(number, codes, trail, k):
                 raise LogicException(
                     representation_error("character_code", "number_codes/2"))
             elems.append(chr(e))
-        s = "".join(elems)
-        try:
-            parsed = int(s)
-        except ValueError:
-            try:
-                parsed = float(s)
-            except ValueError:
-                return
+        parsed = _parse_number_chars("".join(elems), "number_codes/2")
         mark = trail.mark()
         if unify(number, parsed, trail):
             yield None
         trail.undo(mark)
-    else:
-        raise LogicException(instantiation_error("number_codes/2"))
+        return
+    if n_bound:
+        mark = trail.mark()
+        if unify(codes, [ord(c) for c in _number_text(vn)], trail):
+            yield None
+        trail.undo(mark)
+        return
+    if not is_var(vc):
+        _refuse_partial(vc, "number_codes/2", _is_code, "integer")
+    raise LogicException(instantiation_error("number_codes/2"))
 
 
 # ── atom_number/2 ───────────────────────────────────────────────────────────────

@@ -74,16 +74,9 @@ test("second arg") <- arg(2, point(10, 20, 30), 20)
 test("third arg") <- arg(3, point(10, 20, 30), 30)
 ```
 
-Fails if N is out of range or Term is atomic. With `N` unbound, `arg/3`
-enumerates the `(N, Value)` pairs in order on backtracking (as Scryer does), and
-is semidet when `Value` is given:
-
-```clausal
-kv(10, 20),
-
-test("enumerates args") <- findall([N, V], arg(N, kv(10, 20), V), [[1, 10], [2, 20]])
-test("finds the index") <- arg(N2, kv(10, 20), 20)
-```
+Fails if N is out of range. An unbound `N` or `Term` is `instantiation_error`,
+an atomic `Term` `type_error(compound, Term)` (ISO 8.5.2.3, as Scryer does;
+an unbound `N` used to enumerate the `(N, Value)` pairs).
 
 ### unpack/2
 

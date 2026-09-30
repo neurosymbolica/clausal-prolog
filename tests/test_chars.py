@@ -519,11 +519,16 @@ class TestNumberChars:
                                snap=lambda: deref(v))
         assert results == [[char_atom("-"), char_atom("5")]]
 
-    def test_invalid_chars_fails(self):
-        """number_chars(N, ["a", "b"]) → no solutions."""
+    def test_invalid_chars_is_a_syntax_error(self):
+        """number_chars(N, [a, b]) raises Scryer's
+        error(syntax_error(unexpected_end_of_file), number_chars/2)
+        (ISO 8.16.7.3 e); it used to FAIL (A09-F030, ruled 2026-09-30)."""
         # nv
         v = Var()
-        assert _run("number_chars", 2, v, [char_atom("a"), char_atom("b")]) == 0
+        with pytest.raises(LogicException) as ei:
+            _run("number_chars", 2, v, [char_atom("a"), char_atom("b")])
+        assert ei.value.term[1] == ("syntax_error", "unexpected_end_of_file")
+        assert ei.value.term[2] == ("/", "number_chars", 2)
 
     def test_both_bound_consistent(self):
         """number_chars(42, ["4", "2"]) → succeeds."""
@@ -594,11 +599,16 @@ class TestNumberCodes:
                                snap=lambda: deref(v))
         assert results == [[ord("-"), ord("5")]]
 
-    def test_invalid_codes_fails(self):
-        """number_codes(N, [ord('a'), ord('b')]) → no solutions."""
+    def test_invalid_codes_is_a_syntax_error(self):
+        """number_codes(N, "1a") raises Scryer's
+        error(syntax_error(unexpected_char), number_codes/2:0); it used to
+        FAIL (A09-F030, ruled 2026-09-30)."""
         # nv
         v = Var()
-        assert _run("number_codes", 2, v, [ord("a"), ord("b")]) == 0
+        with pytest.raises(LogicException) as ei:
+            _run("number_codes", 2, v, [ord("1"), ord("a")])
+        assert ei.value.term[1] == ("syntax_error", "unexpected_char")
+        assert ei.value.term[2] == (":", ("/", "number_codes", 2), 0)
 
     def test_both_unbound_raises(self):
         """number_codes(N, C) with both unbound → instantiation error."""

@@ -444,11 +444,12 @@ def _arg__3(n, term, arg_out, trail, k):
     """arg(N, Term, arg) — unify arg with the N-th argument of Term (1-based)."""
     n_val = deref(n)
     term_val = deref(term)
-    # ISO 8.5.2.3 (Scryer-verified): an unbound Term is an instantiation
-    # error, an atomic one a type_error(compound), and a bound N that is not
-    # a non-negative integer a type or domain error.  All used to FAIL
-    # silently.  (An unbound N enumerates -- a deliberate extension.)
-    if is_var(term_val):
+    # ISO 8.5.2.3 (Scryer-verified): an unbound N or Term is an
+    # instantiation error, an atomic Term a type_error(compound), and a
+    # bound N that is not a non-negative integer a type or domain error.
+    # All used to FAIL silently.  An unbound N used to ENUMERATE the
+    # (N, Arg) pairs -- an SWI extension; ISO and Scryer raise (D51).
+    if is_var(term_val) or is_var(n_val):
         from clausal.logic.exceptions import (  # noqa: PLC0415
             LogicException, instantiation_error)
         raise LogicException(instantiation_error("arg/3"))
@@ -458,24 +459,6 @@ def _arg__3(n, term, arg_out, trail, k):
         from clausal.logic.exceptions import (  # noqa: PLC0415
             LogicException, type_error)
         raise LogicException(type_error("compound", term_val, "arg/3"))
-    if is_var(n_val):
-        # Output mode: enumerate (N, Arg) pairs, SWI-style relational arg/3.
-        # This used to FAIL SILENTLY — the exact ground-vs-var blind spot of
-        # todo/audit-tests-input-output-mode-coverage.md.  Same _nth_arg
-        # semantics as the ground mode, so a list enumerates its cons view
-        # (1 → head, 2 → tail) and arity-0 terms yield nothing.
-        term_norm = walk_seg(term_val)
-        index = 1
-        while True:
-            try:
-                arg_val = _nth_arg(term_norm, index)
-            except IndexError:
-                return
-            mark = trail.mark()
-            if unify(n_val, index, trail) and unify(arg_out, arg_val, trail):
-                yield None
-            trail.undo(mark)
-            index += 1
     # SegList/SegString never appear at the Clausal surface — walk
     # to ground form first (user decision 2026-06-13).
     term_val = walk_seg(term_val)
