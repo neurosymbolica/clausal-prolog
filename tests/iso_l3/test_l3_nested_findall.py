@@ -71,3 +71,22 @@ def test_special_form_adapter_never_answers_another_arity():
         base: dict = {}
         _inject_resolved_targets(order, base, Database(), {})
         assert isinstance(base["findall"], BuiltinPredicate), (order, base)
+
+
+def test_two_database_only_arities_get_one_adapter_each():
+    """No builtin at either arity: the second arity must not take over the
+    NAME key the first holds (nor share it) -- it gets its own ``$disp_``
+    key, whichever order the target set iterates in."""
+    import pytest
+    from clausal.logic.compiler.globals_env import (
+        _DbDispatchAdapter, _disp_key, _inject_resolved_targets)
+    from clausal.logic.database import Database
+    from clausal.predicate_diagnostics import PredicateNotFoundError
+    for first, second in ((1, 2), (2, 1)):
+        base: dict = {}
+        _inject_resolved_targets([("zzq", first), ("zzq", second)], base,
+                                 Database(), {})
+        held = base["zzq"]
+        assert type(held) is _DbDispatchAdapter and held._arity == first
+        with pytest.raises(PredicateNotFoundError, match=f"zzq/{second}"):
+            base[_disp_key("zzq", second)]()

@@ -31,7 +31,7 @@ def _load(tmp_path, monkeypatch, name, src):
     "findall(Y, {}, X)",
 ])
 def test_empty_dict_goal_is_a_load_error(tmp_path, monkeypatch, body):
-    name = f"dict_goal_{abs(hash(body))}"
+    name = "dict_goal_" + "".join(c if c.isalnum() else "_" for c in body)
     with pytest.raises(DictGoalError) as ei:
         _load(tmp_path, monkeypatch, name, f"p(X) <- {body}\n")
     msg = str(ei.value)
