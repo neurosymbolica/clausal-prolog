@@ -174,19 +174,39 @@ def _bag_peel(goal):
             return tuple(existential), g
 
 
+def _variant_marker(i, hole):
+    """The marker standing for the *i*-th variable in a variant key; *hole*
+    is the Seg* type whose hole it fills, or None."""
+    from clausal.terms import SegList, SegString  # noqa: PLC0415
+    if hole is None:
+        return ("$bagof_variant", i)
+    if hole is SegList:
+        return [("$bagof_variant_tail", i)]
+    text = "\x00$bagof_variant_tail_%d" % i
+    return text if hole is SegString else text.encode()
+
+
 def _variant_key(term):
     """A key equal for two terms exactly when they are VARIANTS: each
     variable, in order of first appearance, is replaced by a numbered
     marker no program can write, then the standard-order key is taken."""
     from clausal.logic.builtins.inspection import (  # noqa: PLC0415
-        _collect_vars_impl, _copy_term_py,
+        _collect_vars_impl, _copy_term_py, _hole_var_ids,
     )
     from clausal.logic.builtins._helpers import _standard_order_key  # noqa: PLC0415
     found: list = []
     _collect_vars_impl(term, found)
     if not found:
         return _standard_order_key(term)
-    marks = {id(v): ("$bagof_variant", i) for i, v in enumerate(found)}
+    # A variable in the hole of a partial list (the T of [A|T]) can only
+    # stand for a list, so its marker is the one-element LIST of a marker
+    # cell of its own: the copy is then a proper list the order key reads,
+    # and ``[A|T]`` still keys apart from ``[A, X]`` (a different cell).  A
+    # hole of a partial string / byte string gets a text / bytes marker no
+    # program writes (NUL-prefixed).
+    holes = _hole_var_ids(term)
+    marks = {id(v): _variant_marker(i, holes.get(id(v)))
+             for i, v in enumerate(found)}
     return _standard_order_key(_copy_term_py(term, marks))
 
 

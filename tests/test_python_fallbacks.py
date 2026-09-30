@@ -303,7 +303,7 @@ from typing import NamedTuple
 
 from clausal.logic.cells import TUPLE_TAG
 from clausal.logic.predicate import term_field_names as _tfn
-from clausal.terms import SegList, SegString, VarSeg, ConcreteSeg
+from clausal.terms import SegList, SegString, SegBytes, VarSeg, ConcreteSeg, DictTerm
 
 try:
     from clausal.logic.variables._variables import (
@@ -339,10 +339,12 @@ class _NT(NamedTuple):
 def _corpus():
     """(name, term) pairs, rebuilt on every call so the Vars are fresh.
 
-    Excludes ``Seg*``: those are short-circuited to Python by the wrapper on
-    purpose (F092/F093 — the C twins have never known about them), so raw-C
-    parity is not claimed for them.  They are covered through the wrapper by
-    the ``TestWrapperUsesTheCPathAgain`` Seg* tests below.
+    Includes ``Seg*`` partial lists / strings / byte strings and dict terms
+    at every depth: the C walkers read through them (``walk_container_kind``
+    in ``_variables.c``), so raw-C parity IS claimed for them.  Until they
+    did, a wrapper short-circuited a Seg* to Python at the TOP level only
+    (F092/F093) and one nested in a term was a leaf to C:
+    ``term_variables(f([A|T]), Vs)`` answered [].
 
     THERE ARE NO PredicateMeta-INSTANCE ROWS.  W4a (2026-09-22) retired the
     instance path: ``_clausal_head`` raises, so no such term can be built,
@@ -387,6 +389,21 @@ def _corpus():
         ("namedtuple", _NT(a=1, b=X)),
         ("namedtuple_ground", _NT(a=1, b=2)),
         ("namedtuple_in_cell", ("f", _NT(a=1, b=X))),
+        # --- partial lists / strings / byte strings, at any depth ---
+        ("seglist_top", SegList([ConcreteSeg([X]), VarSeg(Y)])),
+        ("seglist_in_cell", ("f", SegList([ConcreteSeg([X]), VarSeg(Y)]))),
+        ("seglist_in_list", [SegList([ConcreteSeg([1, X]), VarSeg(Y)])]),
+        ("seglist_in_seglist", SegList([ConcreteSeg([
+            SegList([ConcreteSeg([X]), VarSeg(Y)])]), VarSeg(Z)])),
+        ("seglist_shared", ("f", SegList([ConcreteSeg([X]), VarSeg(Y)]), X, Y)),
+        ("seglist_ground_in_cell", ("f", SegList([ConcreteSeg([1, 2])]))),
+        ("segstring_in_cell", ("g", SegString(["ab", VarSeg(X)]))),
+        ("segbytes_in_list", [SegBytes([b"ab", VarSeg(X)])]),
+        # --- dict terms: values are terms, keys ground ---
+        ("dictterm_in_cell", ("h", DictTerm({"k": X, "j": ("p", Y)}))),
+        ("dict_in_list", [{"k": X, "j": 1}]),
+        ("dictterm_holding_seglist", DictTerm({"k": SegList([ConcreteSeg([X]), VarSeg(Y)])})),
+        ("dictterm_ground", DictTerm({"k": 1})),
     ]
 
 
@@ -428,6 +445,12 @@ def _shape(term):
             return ("seglist", [go(s) for s in t.segments])
         if isinstance(t, SegString):
             return ("segstring", [go(s) for s in t.segments])
+        if isinstance(t, SegBytes):
+            return ("segbytes", [go(s) for s in t.segments])
+        if type(t) is DictTerm:
+            return ("dictterm", [(k, go(v)) for k, v in t.data.items()])
+        if type(t) is dict:
+            return ("dict", [(k, go(v)) for k, v in t.items()])
         if isinstance(t, ConcreteSeg):
             return ("concreteseg", [go(e) for e in t.elements])
         if isinstance(t, VarSeg):
@@ -711,7 +734,15 @@ class TestStringDecompositionTwinParity:
 
 
 class TestWrapperUsesTheCPathAgain:
-    """The dispatch Task 2 bypassed, restored — and Seg* still short-circuited."""
+    """The engine's names ARE the C walkers now (no Python wrapper in front),
+    for every shape including Seg*."""
+
+    @requires_c
+    def test_the_engine_names_are_the_c_functions(self):
+        # nv
+        assert _copy_term_impl is _c_copy_raw
+        assert _collect_vars_impl is _c_collect_raw
+        assert _is_ground is _c_is_ground_raw
 
     @pytest.mark.parametrize(
         "name",
@@ -732,7 +763,7 @@ class TestWrapperUsesTheCPathAgain:
         assert _is_ground_py(term_a) == _is_ground(term_a)
 
     def test_seg_list_still_gets_an_independent_copy(self):
-        """F092: the C twins are Seg*-blind; the wrapper must keep routing them."""
+        """F092."""
         # nv
         x = Var()
         seg = SegList([ConcreteSeg([1]), VarSeg(x)])
@@ -754,7 +785,7 @@ class TestWrapperUsesTheCPathAgain:
         # nv
         assert _is_ground(SegString([VarSeg(Var())])) is False
 
-    def test_a_cell_inside_a_seg_list_is_reached_through_the_python_route(self):
+    def test_a_cell_inside_a_seg_list_is_reached(self):
         # nv
         x = Var()
         seg = SegList([ConcreteSeg([("pt", x)])])
@@ -839,84 +870,42 @@ class TestTupleSubclassTrioIsCoherent:
 
 
 class TestTheWrapperActuallyReachesC:
-    """The dispatch restoration itself, not just the twins' agreement.
+    """The engine's names ARE the C entry points, for every shape.
 
-    Every other test in this file compares the wrapper against the Python
-    twin, so reverting ``_copy_term_impl`` / ``_collect_vars_impl`` /
-    ``_is_ground`` to "call the Python twin unconditionally" would leave the
-    file green while quietly giving back the whole point of Task 2C.  These
-    tests fail in that case.
-
-    A SPY on the module-global C name (looked up at call time inside the wrapper, so
-    ``monkeypatch.setattr`` on the module reaches it).
+    Every other test in this file compares the engine's name against the
+    Python twin, so pointing ``_copy_term_impl`` / ``_collect_vars_impl`` /
+    ``_is_ground`` back at the twin would leave the file green while giving
+    back the C speed.  These fail in that case.  (The spies that stood here
+    watched a Python wrapper that sent Seg* to the twins and everything
+    else to C; the C walkers read through Seg* and dict terms at any depth
+    now, so there is no wrapper left to spy on.)
     """
 
-    # --- spy: the only way to prove which twin ran is to watch the C entry
-    #     point.  Applied to all three.
-
-    def test_is_ground_wrapper_calls_the_c_entry_point(self, monkeypatch):
-        # nv
-        if not _HAVE_C:
-            pytest.skip("C accelerator not built")
-        from clausal.logic.builtins import _helpers
-
-        calls = []
-        real = _helpers._c_is_ground
-        monkeypatch.setattr(
-            _helpers, "_c_is_ground",
-            lambda t: (calls.append(t), real(t))[1],
-        )
-        assert _helpers._is_ground(("pt", 1, 2)) is True
-        assert len(calls) == 1, "the wrapper never reached the C _is_ground"
-
-    def test_copy_and_collect_wrappers_call_their_c_entry_points(self, monkeypatch):
-        # nv
-        if not _HAVE_C:
-            pytest.skip("C accelerator not built")
-        from clausal.logic.builtins import inspection
-
-        copies, collects = [], []
-        real_copy = inspection._c_copy_term_impl
-        real_collect = inspection._c_collect_vars_impl
-        monkeypatch.setattr(
-            inspection, "_c_copy_term_impl",
-            lambda t, m: (copies.append(t), real_copy(t, m))[1],
-        )
-        monkeypatch.setattr(
-            inspection, "_c_collect_vars_impl",
-            lambda t, r: (collects.append(t), real_collect(t, r))[1],
-        )
-        cell = ("pt", 1, Var())
-        inspection._copy_term_impl(cell, {})
-        inspection._collect_vars_impl(cell, [])
-        assert len(copies) == 1, "the wrapper never reached the C _copy_term_impl"
-        assert len(collects) == 1, "the wrapper never reached the C _collect_vars_impl"
-
-    def test_the_seg_star_shapes_still_bypass_c(self, monkeypatch):
-        """The other half of the dispatch: Seg* must NOT reach the blind C."""
+    def test_the_names_are_the_c_functions(self):
         # nv
         if not _HAVE_C:
             pytest.skip("C accelerator not built")
         from clausal.logic.builtins import _helpers, inspection
+        assert _helpers._is_ground is _c_is_ground_raw
+        assert inspection._copy_term_impl is _c_copy_raw
+        assert inspection._collect_vars_impl is _c_collect_raw
+        assert inspection._copy_term is _c_copy_raw
 
-        seen = []
-        monkeypatch.setattr(
-            inspection, "_c_copy_term_impl",
-            lambda t, m: seen.append(("copy", t)),
-        )
-        monkeypatch.setattr(
-            inspection, "_c_collect_vars_impl",
-            lambda t, r: seen.append(("collect", t)),
-        )
-        monkeypatch.setattr(
-            _helpers, "_c_is_ground",
-            lambda t: seen.append(("ground", t)),
-        )
-        seg = SegList([ConcreteSeg([1]), VarSeg(Var())])
-        inspection._copy_term_impl(seg, {})
-        inspection._collect_vars_impl(seg, [])
-        _helpers._is_ground(seg)
-        assert seen == [], f"a Seg* shape reached the C twins: {seen}"
+    def test_a_seg_star_nested_in_a_cell_is_walked_by_c(self):
+        # nv
+        if not _HAVE_C:
+            pytest.skip("C accelerator not built")
+        a, t = Var(), Var()
+        term = ("f", SegList([ConcreteSeg([a]), VarSeg(t)]))
+        found: list = []
+        _c_collect_raw(term, found)
+        assert found == [a, t]
+        assert _c_is_ground_raw(term) is False
+        copied = _c_copy_raw(term, {})
+        inner = copied[1]
+        assert isinstance(inner, SegList)
+        assert deref(inner.segments[0].elements[0]) is not a
+        assert deref(inner.segments[1].var) is not t
 
 
 # ── runtime/list_unify.py twins — chars go through char_atom/is_char_atom ────

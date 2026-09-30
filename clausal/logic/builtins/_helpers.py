@@ -245,6 +245,12 @@ def _is_ground_py(term: Any) -> bool:
                 if not _is_ground_py(seg):
                     return False
         return True
+    # A dict term's VALUES are terms (its keys are ground by construction);
+    # kept in step with ``walk_container_kind`` in ``c_is_ground``.
+    if type(term) is DictTerm:
+        return all(_is_ground_py(v) for v in term.data.values())
+    if type(term) is dict:
+        return all(_is_ground_py(v) for v in term.values())
     if is_term_instance(term):
         return all(_is_ground_py(getattr(term, name)) for name in term_field_names(term))
     return True
@@ -269,24 +275,14 @@ try:
         _is_ground as _c_is_ground,
     )
 
-    # F083 (audit 2026-05-25): the C ``_is_ground`` does not know about
-    # SegList / SegString / SegBytes and falls through to "True" for any
-    # unknown container. Short-circuit the Seg* shapes in Python so a
-    # SegList / SegString / SegBytes that still holds an unbound ``VarSeg``
-    # reports *not* ground. Other shapes still go through the fast C path.
-    # P3-2 Task 2 (THE FLIP) briefly made this Python-only: ``c_is_ground``
-    # had no tuple branch, so a CELL -- a bare tuple, and post-flip how every
-    # compound data term is represented -- fell through its tail to "ground"
-    # and ``ground(pt(1, Y))`` answered TRUE.  Task 2C gave ``c_is_ground``
-    # the branch (``PyTuple_CheckExact``, matching this module's
-    # ``type(term) is tuple`` gate and the two in ``inspection.py``) and this
-    # dispatch is back to the Seg*-only short-circuit.  Twin parity is pinned
-    # by ``tests/test_python_fallbacks.py::TestCellIsGroundTwinParity``.
-    def _is_ground(term: Any) -> bool:
-        t = deref(term)
-        if isinstance(t, (SegList, SegString, SegBytes)):
-            return _is_ground_py(t)
-        return _c_is_ground(t)
+    # ``c_is_ground`` reads through every shape ``_is_ground_py`` does --
+    # cells (``PyTuple_CheckExact``), Seg* partial lists/strings/byte
+    # strings and dict terms at ANY depth (``walk_container_kind`` in
+    # ``_variables.c``) -- so it is used directly.  The Python wrapper that
+    # used to short-circuit a Seg* here (F083) caught one only at the TOP
+    # level: ``ground(f([A|T]))`` answered TRUE.  Twin parity is pinned by
+    # ``tests/test_python_fallbacks.py``.
+    _is_ground = _c_is_ground
 except ImportError:
     pass
 

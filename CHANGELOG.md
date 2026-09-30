@@ -669,6 +669,26 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
 - **`retract/1` no longer recompiles the predicate for each clause it
   removes.** The next call recompiles it, once. A drain of 1,000 clauses
   took over a minute and now takes a few hundredths of a second.
+- **`copy_term/2`, `term_variables/2`, `ground/1`, `numbervars/3`,
+  `bagof/3`, `setof/3` and `findall/3` see the variables of a partial list
+  nested in a term.** The C term walkers treated a partial list (`[A|T]`), a
+  partial string or byte string, and a dict term as a leaf below the top
+  level: `term_variables(f([A|T]), Vs)` gave `[]`, `copy_term(f([A|T]),
+  f([B|U]))` left `A == B`, `ground(f([a|T]))` succeeded, and the free
+  variables of a bagof/setof goal and the per-solution copy of findall/3
+  missed them too. The walkers now read through these shapes at any depth,
+  in C (no slowdown for proper terms), with the Python twins in step. A dict
+  term's values are walked the same way (its keys are ground).
+  `numbervars/3` numbers every variable except one in the hole of a partial
+  list or string (the `T` of `[A|T]`), which it leaves unbound at any depth:
+  `[A|'$VAR'(1)]` has no representation and could not be printed (ISO
+  numbers it too; this follows the `[a|b]` gap).
+- **`copy_term/2` copies `dif/2` constraints.** `dif(A, a), copy_term(A, B),
+  B = a` now fails, as in Scryer: the copy carries the constraint, over
+  copies of the constraint's other variables. `freeze/2` goals and CLP
+  constraints are still not copied (their attribute is a compiled goal or a
+  propagator network, not a term); findall/3 and bagof/3 copy no
+  attributes, as in Scryer.
 
 - **A `.pl` module in an earlier `sys.path` entry is no longer shadowed by a
   `.clausal` or `.seam` module of the same name in a later one.** The import

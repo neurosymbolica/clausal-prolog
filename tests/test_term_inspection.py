@@ -522,35 +522,42 @@ class TestCopyTermDictTerm:
         assert len(vals) == 1
         assert isinstance(vals[0], DictTerm)
 
-    def test_copy_dictterm_var_not_freshened(self):
-        """DictTerm Vars are NOT freshened — copy shares the original Var."""
+    def test_copy_dictterm_var_is_freshened(self):
+        """A DictTerm's value Vars are freshened: the copy shares nothing
+        with the original.  (This pinned the gap -- "copy shares the
+        original Var" -- until the term walkers read through dict terms.)"""
         # nv
         x = Var()
         t = DictTerm({"k": x})
         copy = Var()
         mod = fresh_module()
         trail = Trail()
+        n = 0
         for _ in solve(goal("copy_term", t, copy), mod, trail):
+            n += 1
             c = deref(copy)
             assert isinstance(c, DictTerm)
-            # current behaviour: same Var object (not a fresh copy)
-            assert deref(c["k"]) is x
+            assert is_var(deref(c["k"])) and deref(c["k"]) is not x
+        assert n == 1
 
 
 class TestTermVariablesDictTerm:
 
-    def test_dictterm_vars_not_collected(self):
-        """term_variables on DictTerm currently returns [] (gap, not handled)."""
+    def test_dictterm_vars_are_collected(self):
+        """term_variables reads a DictTerm's values.  (This pinned the gap
+        -- an empty list -- until the term walkers read through dict terms.)"""
         # nv
         x = Var()
         t = DictTerm({"k": x})
         out = Var()
         mod = fresh_module()
         trail = Trail()
+        n = 0
         for _ in solve(goal("term_variables", t, out), mod, trail):
+            n += 1
             result = deref(out)
-            # current behaviour: DictTerm falls through → empty list
-            assert result == []
+            assert len(result) == 1 and deref(result[0]) is x
+        assert n == 1
 
 
 class TestCopyTermSegList:
