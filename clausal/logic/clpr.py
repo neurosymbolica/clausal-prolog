@@ -1032,7 +1032,8 @@ def label_real(vars_list, trail: Trail, eps: float | None = None):
     # A united variable's interval sits on its shadow (the units side
     # channel posted there): label the shadow, as label/1 and CLP(Q) do.
     from clausal.logic.units_clp import label_targets  # noqa: PLC0415
-    vars_list = label_targets(vars_list, "label_real/1")
+    vars_list = label_targets(
+        vars_list, "label_real/1" if eps is None else "label_real/2")
 
     # Collect unbound real vars that are still bisectable (not yet at resolution).
     # A var is "resolved" if its midpoint equals an endpoint (IEEE precision)

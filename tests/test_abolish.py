@@ -196,3 +196,26 @@ def test_abolish_through_an_import_removes_the_owners_procedure(tmp_path):
     err = "error(existence_error(procedure, /(d, 1)), /(d, 1))"
     assert _run(imp, "u") == err
     assert _run(own, "t") == err
+
+
+def test_asserting_after_abolish(tmp_path):
+    """The procedure is gone, so a later assertz is what it is for a name
+    never declared: refused by default (ruling R7), and with the flag
+    assert_creates_dynamic on it creates a fresh dynamic procedure (ISO
+    7.5.2(2)) that answers only the new clause."""
+    mod = _module(tmp_path, (
+        "-private([ok, assert_creates_dynamic])\n-dynamic(d/1)\nd(1)\n"
+        "t(X) <- d(X)\n"
+        "plain(ok) <- (abolish(d/1), assertz(d(3)))\n"
+        "flagged(ok) <- (set_prolog_flag(assert_creates_dynamic, true), "
+        "abolish(d/1), assertz(d(3)))"), ["t/1", "plain/1", "flagged/1"])
+    got = _run(mod, "plain")
+    assert isinstance(got, str) and got.startswith(
+        "error(permission_error(modify, static_procedure, /(d, 1))"), got
+    mod = _module(tmp_path, (
+        "-private([ok, assert_creates_dynamic])\n-dynamic(d/1)\nd(1)\n"
+        "t(X) <- d(X)\n"
+        "flagged(ok) <- (set_prolog_flag(assert_creates_dynamic, true), "
+        "abolish(d/1), assertz(d(3)))"), ["t/1", "flagged/1"])
+    assert _run(mod, "flagged") == ["ok"]
+    assert _run(mod, "t") == [3]

@@ -1047,7 +1047,11 @@ def _abolish_factory(db):
             home = _home_db(db, pred_cls, functor, arity)
             functor = _canonical_functor(db, pred_cls, functor)
             row = home.row(functor, arity) if home is not None else None
-            refuse = row is not None and not row.dynamic
+            # A binding that denotes a predicate but reaches no row (its
+            # home unresolvable) is not "no procedure": refuse it as static
+            # rather than succeed having removed nothing.
+            refuse = (row is None and pred_cls is not None) or (
+                row is not None and not row.dynamic)
         if refuse:
             raise LogicException(permission_error(
                 "modify", "static_procedure", ("/", mint(functor), arity),

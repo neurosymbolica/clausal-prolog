@@ -1601,18 +1601,20 @@ class Database:
         key = (functor, arity)
         with self.mutate(functor, arity, author=author or self.runtime_author(),
                          kind=WRITE_RETRACT, detail="abolish/1") as row:
+            # All of it INSIDE the transaction, so no write lands between
+            # the clear and the removal.  The gate's exit then finds no
+            # ``_dispatch`` entry to invalidate (it writes one only over an
+            # existing entry, which would make the key known again) and no
+            # tabled mark; it stamps the detached row object, harmlessly.
             row.ensure_clauses().clear()
-        # After the transaction: its exit re-stamps and invalidates the row
-        # (writing a ``_dispatch`` entry), which would make the key known
-        # again.
-        for store in (self._clauses, self._dispatch, self._lazy_recompile,
-                      self._signatures, self._meta_specs):
-            store.pop(key, None)
-        for marks in (self._dynamic, self._discontiguous, self._tabled,
-                      self._shallow):
-            marks.discard(key)
-        self.abolish_table(functor, arity)
-        self._rows.pop(key, None)
+            self.abolish_table(functor, arity)
+            for store in (self._clauses, self._dispatch, self._lazy_recompile,
+                          self._signatures, self._meta_specs):
+                store.pop(key, None)
+            for marks in (self._dynamic, self._discontiguous, self._tabled,
+                          self._shallow):
+                marks.discard(key)
+            self._rows.pop(key, None)
 
     def abolish_all_tables(self) -> None:
         """Remove all cached tabling answers."""
