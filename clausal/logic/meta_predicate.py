@@ -200,19 +200,9 @@ def meta_specs_for_call(db: Any, fname: str, arity: int) -> "tuple | None":
     return row.db._meta_specs.get(row.key)
 
 
-#: Builtin meta-callers and the argument positions they RUN (Scryer's
-#: builtin meta_predicate declarations: ``call(0)``, ``call(1, ?)``, ...,
-#: ``aggregate_all(?, 0, -)``, ``phrase(2, ?)``, ``maplist(1, ?)`` & co.).
-#: Used only for a DOTTED ``lib.p(...)`` / ``lib.p`` written in one of these
-#: positions (see :func:`builtin_goal_positions`); the spec value is ``:``
-#: because a dotted argument's qualification names ``lib`` itself, whatever
-#: the closure's extra arity.
-_BUILTIN_GOAL_POSITIONS: "dict[tuple[str, int], tuple[int, ...]]" = {
-    **{("call", n): (0,) for n in range(1, 9)},
-    ("aggregate_all", 3): (1,),
-    ("time_goal", 1): (0,), ("time_goal", 2): (0,),
-    ("phrase", 2): (0,), ("phrase", 3): (0,),
-}
+#: ``aggregate_all/3``'s goal: the one builtin meta-caller whose goal
+#: position ``clause_ops._goal_positions`` does not list.
+_AGGREGATE_GOAL_POSITIONS = {("aggregate_all", 3): (1,)}
 
 
 def builtin_goal_positions(db: Any, fname: str, arity: int) -> "tuple | None":
@@ -220,6 +210,13 @@ def builtin_goal_positions(db: Any, fname: str, arity: int) -> "tuple | None":
     -- ``:`` at each position the builtin runs as a goal, ``?`` elsewhere --
     or ``None`` when ``fname/arity`` is no such builtin, or when this module
     has its own (or an imported) predicate of that name and arity.
+
+    The builtin meta-callers are those whose goal reaches them as a TERM:
+    call/N and call_goal/N, time_goal/1,2, phrase/2,3 and the goal-first list
+    builtins (maplist & co.) -- the builtin half of
+    ``clause_ops._goal_positions``, one source of truth -- and
+    aggregate_all/3.  (The control constructs -- findall/3, once/1, forall/2,
+    catch/3, ... -- compile their goal inline and never get here.)
 
     A builtin needs no caller qualification (it resolves a plain goal in the
     calling module already), so the call site uses these specs ONLY for a
@@ -229,17 +226,25 @@ def builtin_goal_positions(db: Any, fname: str, arity: int) -> "tuple | None":
     the same dotted call in goal position resolves.  Without it, ruling (a)
     lowered ``call(lib.p(X))`` to the plain ``p(X)`` cell, run in the
     CALLING module: ``existence_error(procedure, p/1)`` there, or the
-    caller's own ``p``."""
+    caller's own ``p``.  The spec is ``:`` whatever the closure's extra
+    arity: a dotted argument's qualification names ``lib`` itself."""
     if "." in fname:
         return None
-    positions = _BUILTIN_GOAL_POSITIONS.get((fname, arity))
-    if positions is None:
+    if arity and fname in ("call", "call_goal"):
+        positions: "tuple[int, ...] | None" = (0,)
+    else:
+        from clausal.logic.builtins.clause_ops import (  # noqa: PLC0415
+            _BUILTIN_GOAL_ARGS,
+        )
         from clausal.logic.builtins.higher_order import (  # noqa: PLC0415
             _GOAL_FIRST_LIST_BUILTINS,
         )
-        if (fname, arity) not in _GOAL_FIRST_LIST_BUILTINS:
-            return None
-        positions = (0,)
+        key = (fname, arity)
+        positions = (_BUILTIN_GOAL_ARGS.get(key)
+                     or _AGGREGATE_GOAL_POSITIONS.get(key)
+                     or ((0,) if key in _GOAL_FIRST_LIST_BUILTINS else None))
+    if positions is None:
+        return None
     row_of = getattr(db, "row", None)
     if row_of is not None and row_of(fname, arity) is not None:
         return None

@@ -31,13 +31,15 @@ from clausal.logic.solve import call
 from clausal.logic.variables import Var, walk
 
 _LIB = """
-    -module(bmqlib, [mp(X), q(A, B), decide(B, V), g(N, L, R)])
-    -private([lib_version])
+    -module(bmqlib, [mp(X), q(A, B), decide(B, V), g(N, L, R),
+                     k(A, B, C, D, E, F, G, H)])
+    -private([lib_version, lib_k])
     mp(1),
     mp(2),
     q(A, B) <- (B is A)
     decide(_B_UNUSED, lib_version),
     g(N) >> ([N])
+    k(1, 2, 3, 4, 5, 6, 7, lib_k),
 """
 
 _USER = """
@@ -58,6 +60,10 @@ _USER = """
     phrase_args(L) <- phrase(bmqlib.g(7), L)
     builtin_fallback(L) <- call(bmqlib.numlist(3, L))
     missing() <- call(bmqlib.nosuch(1))
+    call9(V) <- call(bmqlib.k, 1, 2, 3, 4, 5, 6, 7, V)
+    call_goal1(X) <- call_goal(bmqlib.mp(X))
+    include_partial(R) <- include(bmqlib.q(1), [1, 2, 1], R)
+    call_plain(X) <- call(same(X, 5))
     direct(X) <- bmqlib.mp(X)
     via_findall(L) <- findall(X, bmqlib.mp(X), L)
     via_once(X) <- once(bmqlib.mp(X))
@@ -97,6 +103,9 @@ def _answers(module, goal, arity=1):
     ("agg", [[2]]),
     ("timed", [[1], [2]]),
     ("builtin_fallback", [[[1, 2, 3]]]),
+    ("call9", [["lib_k"]]),
+    ("call_goal1", [[1], [2]]),
+    ("include_partial", [[[1, 1]]]),
 ])
 def test_a_dotted_goal_argument_of_a_builtin_meta_caller_runs_in_its_module(
         user, goal, expected):
@@ -128,6 +137,7 @@ def test_a_missing_owner_predicate_raises_existence_error(user):
 
 
 @pytest.mark.parametrize("goal, arity, expected", [
+    ("call_plain", 1, [[5]]),
     ("call2_bare", 1, [[1], [2]]),
     ("direct", 1, [[1], [2]]),
     ("via_findall", 1, [[[1, 2]]]),
@@ -147,3 +157,26 @@ def test_a_dotted_call_in_data_position_is_still_the_plain_cell(user):
 def test_a_dotted_python_attribute_is_still_its_value(user):
     import math
     assert _answers(user, "py_attr") == [[math.pi]]
+
+
+_SHADOW = """
+    -module(bmqshadow, [])
+    -import_module(bmqlib)
+    maplist(G, Q) <- (Q is G)
+    shadowed(Q) <- maplist(bmqlib.q(1), Q)
+"""
+
+
+def test_a_local_predicate_named_like_the_builtin_keeps_its_own_argument(
+        user, tmp_path, monkeypatch):
+    """A module's OWN maplist/2 (no -meta_predicate) is no builtin: its
+    argument is data, the plain cell (ruling (a)), not ``bmqlib:q(1)``."""
+    from clausal.import_hook import _load_module
+    monkeypatch.syspath_prepend(str(tmp_path))
+    p = tmp_path / "bmqshadow.clausal"
+    p.write_text(textwrap.dedent(_SHADOW).lstrip())
+    try:
+        m = _load_module("bmqshadow", str(p))
+        assert _answers(m.__dict__["$module"], "shadowed") == [[("q", 1)]]
+    finally:
+        sys.modules.pop("bmqshadow", None)

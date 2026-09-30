@@ -576,10 +576,11 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
 
 - **A dotted `lib.p(...)` passed to a builtin meta-caller runs `p` in `lib`.**
   `call(lib.p(X))`, `call(lib.p(1), Y)`, `aggregate_all(count, lib.p(_), N)`,
-  `time_goal(lib.p(X))`, `phrase(lib.nt(A), L)` and `maplist(lib.p(1), L)`
+  `call_goal(lib.p(X))`, `time_goal(lib.p(X))`, `phrase(lib.nt(A), L)` and
+  `maplist(lib.p(1), L)` (and `include/3`, `foldl/4` & co.)
   built the plain `p(...)` term and ran it in the CALLING module:
-  `existence_error(procedure, p/1)`, a Python `NameError` when `lib` has no
-  `p` of that arity, or, silently, the caller's own `p`. The argument is now
+  `existence_error(procedure, p/1)`, a Python `NameError` when `lib` defines
+  no `p` at all, or, silently, the caller's own `p`. The argument is now
   the qualified goal `lib:p(...)`, as the same dotted call in goal position,
   inside `findall/3`/`once/1`/`not`/`forall/2`, or in a user
   `-meta_predicate` position already was (Scryer: `call(lib:p(X))`). A dotted
