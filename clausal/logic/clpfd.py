@@ -4512,6 +4512,77 @@ def _lift_exact_div(x, aux: list):
     return (key[0],) + args
 
 
+#: clpz's own variable markers, ``#(X)`` / ``?(X)``: an operand, not a
+#: compound to refuse.
+_CLPZ_MARKERS = frozenset({("#", 1), ("?", 1)})
+
+
+def clpz_refuse_non_numeric(e, context: str) -> None:
+    """Raise clpz's ``domain_error(clpz_expression, Culprit)`` when the
+    operand *e* of a ``#``-family comparison (``#=``, ``#\\=``, ``#<``, ...)
+    holds something that is not arithmetic; return None otherwise.
+
+    Measured against Scryer's clpz (2026-09-30): ``'#='(1, foo)``,
+    ``X #= foo + 1``, ``1 #< foo``, ``X #= true``, ``X #= "ab"``,
+    ``X #= [a]`` and ``X #= f(Y)`` all raise ``domain_error(clpz_expression,
+    Culprit)`` naming the offending LEAF (the whole compound for an unknown
+    functor).  The shared comparison posts only reached that error when
+    they had to build a domain for the leaf, so a GROUND non-numeric operand
+    fell through to term comparison: ``'#='(1, foo)`` FAILED silently,
+    ``'#\\='(1, foo)`` and ``'#='(a, a)`` SUCCEEDED, ``'#<'(1, foo)`` raised
+    ``type_error(orderable, foo)``, and a Python ``bool`` counted as 0/1
+    (``X #= True`` bound X to 1).
+
+    Refused: an atom (``true``/``false`` included, once they are atoms), a
+    Python ``bool`` (ruled 2026-09-30: a boolean in arithmetic is an error,
+    as Scryer's clpz treats the atom ``true``), a string, a list, and a
+    compound whose name/arity is not evaluable.  Everything else is left to
+    the posts exactly as before: variables, ints, floats (whether a float
+    belongs in the ``#`` family is a separate ruling), exact rationals,
+    decimals, units quantities and other number-like objects, and the
+    evaluable compounds and operator nodes, whose arguments are checked the
+    same way."""
+    e = deref(e)
+    if is_var(e) or type(e) is int:
+        return
+    if isinstance(e, bool):
+        raise _clpz_domain_error(e, context)
+    if isinstance(e, numbers.Number):
+        return
+    from clausal.logic.runtime._seg_helpers import walk_seg  # noqa: PLC0415
+    e = walk_seg(e)
+    if is_atom(e) or type(e) is list:
+        raise _clpz_domain_error(e, context)
+    _ensure_term_imports()
+    if isinstance(e, _Node):
+        key = _NODE_KEYS.get(type(e))
+        if key is not None:
+            for a in ((e.operand,) if key[1] == 1 else (e.left, e.right)):
+                clpz_refuse_non_numeric(a, context)
+        # A node the evaluator has no key for (``UnaryPlus``, the bitwise
+        # nodes, ...) is left to the posts, which already decide it: this
+        # check only closes the GROUND-leaf holes and must not refuse an
+        # operand the posts accept today.
+        return
+    if exact_cell_number(e) is not None:
+        return
+    ka = _cell_key_args(e)
+    if ka is None:
+        return
+    if ka[0] in _CLPZ_MARKERS:
+        return
+    if ka[0] not in _CLP_CELL_EVALUABLE:
+        # an unknown functor, or the string carrier ``('$chars', Text)``
+        raise _clpz_domain_error(e, context)
+    for a in ka[1]:
+        clpz_refuse_non_numeric(a, context)
+
+
+def _clpz_domain_error(culprit, context: str) -> "Exception":
+    from clausal.logic.exceptions import LogicException, domain_error  # noqa: PLC0415
+    return LogicException(domain_error("clpz_expression", culprit, context))
+
+
 def clpz_operands(l, r, trail):
     """``(l, r)`` for a clpz comparison (``#=``, ``#\\=``, ``#<``, ...), or
     None when the posts below already fail.

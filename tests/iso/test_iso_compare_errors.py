@@ -134,68 +134,58 @@ def test_compound_evaluable_culprit_OPEN_iso_divergence_oracle(scryer):
 # ---------------------------------------------------------------------------
 # The '#…' family's error surface.
 #
-# `#=` NAMES AN EXISTING BEHAVIOUR — infix `==` compiles to nodes.ArithEq and
-# `'#='` dispatches to the very same `fd_eq` — so its error surface is infix
-# `==`'s error surface, and changing it would change infix `==`, which this
-# branch may not do. It is therefore PINNED here, not fixed: three different
-# behaviours across one family, none of them Scryer's.
+# `'#='` and the rest are their OWN builtins (iso_compare.py), not infix
+# `==`, so they can take clpz's error surface without touching `==`.  Ruled
+# 2026-09-30: they refuse a non-arithmetic operand with Scryer's clpz formal.
 # ---------------------------------------------------------------------------
 
 
-def test_hash_family_error_surface_OPEN_iso_divergence(run_clausal):
-    """Four rows with a non-numeric ground operand, measured 2026-09-09.
-    Documents, does not bless.
-
-        '#='(1, foo)    Clausal: FAILS SILENTLY
-        '#\\='(1, foo)  Clausal: SUCCEEDS
-        '#<'(1, foo)    Clausal: type_error(orderable, foo), context '(<)/2'
-        '#='(X, foo)    Clausal: domain_error(clpz_expression, foo), context
-                        '(==)/2' (Scryer's formal since Q3, 2026-09-28)
-
-    Scryer's clpz answers ONE thing for all four:
-    `error(domain_error(clpz_expression,foo),unknown(foo)-1)` (see the oracle
-    test below).
-
-    Two warts are pinned deliberately rather than fixed. First, the family is
-    not internally consistent: `'#='` fails where `'#\\='` succeeds where
-    `'#<'` raises. Second, the last row's error INDICATOR names `(==)/2` for a
-    goal written `'#='` — the context string comes from the shared ArithEq
-    implementation, which knows only its Clausal spelling. Both follow from
-    `#=` being a NAME for `==`'s existing behaviour; correcting either means
-    changing infix `==`."""
-    yes = repr("yes")
-    no = repr("no")
-
-    def yesno(goal, extra_atoms=("foo",)):
-        atoms = ", ".join(("p(R)", "yes", "no") + tuple(extra_atoms))
-        src = (f"-module(_hN, [{atoms}])\n-double_quotes(chars)\n"
-               f"p(R) <- if_({goal}, R is yes, R is no)\n")
-        return run_clausal(src, ("p",))
-
-    assert yesno("'#='(1, foo)") == [no], "'#='(1, foo) fails silently"
-    assert yesno("'#\\\\='(1, foo)") == [yes], "'#\\\\='(1, foo) succeeds"
-
-    lt = _err_term(run_clausal, "'#<'(1, foo)", extra_atoms=("foo",))
-    assert type(lt) is tuple and cell_functor(lt) == "error", lt
-    assert spelling(cell_args(cell_args(lt)[0])[0]) == "orderable", lt
-    assert spelling(cell_args(cell_args(lt)[0])[1]) == "foo", lt
-    assert cell_args(lt)[1] == ("/", "<", 2), lt
-
-    eq = _err_term(run_clausal, "'#='(X_UNUSED, foo)", extra_atoms=("foo",))
+@pytest.mark.parametrize("goal", [
+    "'#='(1, foo)", "'#\\\\='(1, foo)", "'#<'(1, foo)", "'#>'(foo, 1)",
+    "'#=<'(1, foo)", "'#>='(1, foo)", "'#='(X_UNUSED, foo)",
+    "'#='(X_UNUSED, foo + 1)", "'#='(foo, foo)",
+])
+def test_hash_family_refuses_a_non_numeric_operand(run_clausal, goal):
+    """Scryer answers `error(domain_error(clpz_expression,foo),_)` for every
+    row (see the oracle test below).  Measured 2026-09-09 the family had
+    three behaviours: `'#='(1, foo)` FAILED silently, `'#\\='(1, foo)` (and
+    `'#='(foo, foo)`) SUCCEEDED, `'#<'(1, foo)` raised type_error(orderable,
+    foo), and only a variable beside `foo` gave the clpz formal, naming
+    `(==)/2` as its indicator.  The indicator is now the goal's own."""
+    eq = _err_term(run_clausal, goal, extra_atoms=("foo",))
     assert type(eq) is tuple and cell_functor(eq) == "error", eq
-    # Q3 (2026-09-28): Scryer's clpz formal; it was type_error(evaluable, foo).
-    assert cell_functor(cell_args(eq)[0]) == "domain_error", eq
-    assert spelling(cell_args(cell_args(eq)[0])[0]) == "clpz_expression", eq
-    assert spelling(cell_args(cell_args(eq)[0])[1]) == "foo", eq
-    # The wart: a '#=' call reports its indicator as (==)/2.
-    assert cell_args(eq)[1] == ("/", "==", 2), eq
+    formal = cell_args(eq)[0]
+    assert cell_functor(formal) == "domain_error", eq
+    assert spelling(cell_args(formal)[0]) == "clpz_expression", eq
+    assert spelling(cell_args(formal)[1]) == "foo", eq
+    op = goal.split("'")[1].replace("\\\\", "\\")
+    assert cell_args(eq)[1] == ("/", op, 2), eq
 
 
-def test_hash_family_error_surface_OPEN_iso_divergence_oracle(scryer):
+@pytest.mark.parametrize("goal", ["'#='(X_UNUSED, True)", "'#='(1, True)",
+                                  "'#<'(0, False + 1)"])
+def test_hash_family_refuses_a_boolean_operand(run_clausal, goal):
+    """Ruled 2026-09-30: a boolean in arithmetic is an error.  Scryer's clpz
+    refuses the atom `true` with domain_error(clpz_expression, true); a
+    Python bool gets the same formal (culprit the bool).  `'#='(X, True)`
+    used to bind X to 1."""
+    eq = _err_term(run_clausal, goal)
+    formal = cell_args(eq)[0]
+    assert cell_functor(formal) == "domain_error", eq
+    assert spelling(cell_args(formal)[0]) == "clpz_expression", eq
+    assert type(cell_args(formal)[1]) is bool, eq
+
+
+def test_hash_family_refuses_a_non_numeric_operand_oracle(scryer):
     program = ":- use_module(library(clpz)).\n"
     expected = "error(domain_error(clpz_expression,foo),unknown(foo)-1)"
-    for goal in ("1 #= foo", "1 #\\= foo", "1 #< foo", "X #= foo"):
+    for goal in ("1 #= foo", "1 #\\= foo", "1 #< foo", "foo #> 1", "1 #=< foo",
+                 "1 #>= foo", "X #= foo", "X #= foo + 1", "foo #= foo"):
         ref = scryer(
             f"catch(({goal} -> write(yes) ; write(no)), E, (write(E), nl)), halt.",
             program)
         assert ref == expected, f"{goal}: {ref!r}"
+    ref = scryer("catch((X #= true -> write(yes) ; write(no)), E, "
+                 "(write(E), nl)), halt.", program)
+    assert ref == ("error(domain_error(clpz_expression,true),"
+                   "unknown(true)-1)"), ref

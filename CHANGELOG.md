@@ -20,6 +20,25 @@ since 0.4.0 finish three moves:
 
 ### Breaking
 
+- **`arg/3` with an unbound `N` raises `instantiation_error`** (ISO 8.5.2.3,
+  as Scryer). It used to enumerate the `(N, Arg)` pairs, SWI's extension.
+- **The clpz `#` family refuses a non-arithmetic operand.** `'#='`, `'#\='`,
+  `'#<'`, `'#>'`, `'#=<'` and `'#>='` raise clpz's
+  `domain_error(clpz_expression, Culprit)` for an atom, a string, a list, a
+  compound that is not evaluable, or a Python `bool` anywhere in an operand
+  (Scryer's clpz treats the atom `true` the same). A ground one used to fail
+  (`'#='(1, foo)`), succeed (`'#\='(1, foo)`), raise
+  `type_error(orderable, foo)` (`'#<'`), or count a bool as 0/1. Floats are
+  unchanged. Infix `==` is unchanged.
+- **`number_chars/2` and `number_codes/2` read their text as Scryer does**
+  (ISO 8.16.7) and raise `syntax_error(unexpected_end_of_file)` or
+  `syntax_error(unexpected_char)` for text that is not a number. They used to
+  parse it with Python's `int()`/`float()` and fail, accepting `"1 "`,
+  `"+1"`, `"1e5"` and `"inf"` besides; `"0x1A"` and `"0'a"` now read. With
+  both arguments bound the text is read (`number_chars(1, ['0', '1'])`
+  holds), and a float's text always carries its fraction (`1.0e+22`), so it
+  reads back. `atom_number/2` still fails on a non-number, as Scryer's
+  library does.
 - **A bare `/` in evaluation is Python's true division.** In `eval_/2`,
   `'is'/2` and the ISO comparisons, `7 / 2` is 3.5 and `6 / 2` is 3.0 (a
   float for two integers); a `Fraction` or `Decimal` operand stays exact, as
