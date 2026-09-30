@@ -382,3 +382,208 @@ def _nvalue(n, vs, trail, k):
     c = NValueConstraint(n, items)
     if _fd._post_constraint(c, trail):
         yield None
+
+
+def _cumulative(tasks, options, trail):
+    from clausal.logic.exceptions import (  # noqa: PLC0415
+        LogicException, domain_error, instantiation_error, type_error)
+    from clausal.logic.variables import deref, is_var  # noqa: PLC0415
+    ctx = "cumulative/2"
+    ts = _items(tasks, ctx)
+    opts = _items(options, ctx)
+    if not opts:
+        limit = 1
+    elif (len(opts) == 1 and type(opts[0]) is tuple and len(opts[0]) == 2
+          and opts[0][0] == "limit"):
+        limit = _integer(opts[0][1], ctx)
+    else:
+        raise LogicException(domain_error(
+            "cumulative_options_empty_or_limit", opts, ctx))
+    triples = []
+    for t in ts:
+        if not (type(t) is tuple and len(t) == 6 and t[0] == "task"):
+            return False            # not a task/5: Scryer fails
+        s, d, e, c = (deref(a) for a in t[1:5])
+        for x in (s, e):
+            _integer_or_fd_var(x, ctx)
+        if not (type(d) is int and type(c) is int):
+            # the constraint reasons over fixed durations and consumptions
+            # (Scryer accepts variables there too)
+            if is_var(d) or is_var(c):
+                raise LogicException(instantiation_error(
+                    f"{ctx}: a task's duration and consumption must be "
+                    f"integers here"))
+            raise LogicException(type_error(
+                "integer", d if type(d) is not int else c, ctx))
+        if d <= 0 or c < 0:
+            return False            # Scryer: D #> 0, C #>= 0
+        # E = S + D
+        if not _fd.fd_eq(e, ("+", s, d), trail):
+            return False
+        triples.append((s, d, c))
+    return _fd.cumulative(triples, limit, trail)
+
+
+@_builtin("cumulative", 2, fields=("tasks", "options"))
+def _cumulative_2(tasks, options, trail, k):
+    """cumulative(Tasks, Options) -- each task(S, D, E, C, T) runs from S
+    to E = S + D consuming C; at every moment the running tasks consume at
+    most the limit (``[limit(L)]``; 1 by default).  Durations and
+    consumptions must be integers here."""
+    if _cumulative(tasks, options, trail):
+        yield None
+
+
+@_builtin("cumulative", 1, fields=("tasks",))
+def _cumulative_1(tasks, trail, k):
+    """cumulative(Tasks) -- cumulative(Tasks, [limit(1)])."""
+    if _cumulative(tasks, [], trail):
+        yield None
+
+
+@_builtin("serialized", 2, fields=("starts", "durations"))
+def _serialized(starts, durations, trail, k):
+    """serialized(Starts, Durations) -- the tasks (Start, Duration) do not
+    overlap: for each pair, ``Si + Di #=< Sj #\\/ Sj + Dj #=< Si``.
+    Durations are non-negative integers (Scryer's must_be(list(integer)))."""
+    from clausal.logic.clpz_surface import post_connective  # noqa: PLC0415
+    ctx = "serialized/2"
+    ds = [_integer(d, ctx) for d in _items(durations, ctx)]
+    ss = _items(starts, ctx)
+    if len(ss) != len(ds) or any(d < 0 for d in ds):
+        return
+    for s in ss:
+        _integer_or_fd_var(s, ctx)
+    for i in range(len(ss)):
+        for j in range(i + 1, len(ss)):
+            if not post_connective("#\\/", (
+                    ("#=<", ("+", ss[i], ds[i]), ss[j]),
+                    ("#=<", ("+", ss[j], ds[j]), ss[i])), trail):
+                return
+    yield None
+
+
+@_builtin("disjoint2", 1, fields=("rectangles",))
+def _disjoint2(rects, trail, k):
+    """disjoint2(Rectangles) -- each F(X, W, Y, H) is a rectangle and no two
+    overlap; Scryer's decomposition, pair by pair and both ways::
+
+        AX #=< BX #/\\ BX #< AX + AW #==> AY + AH #=< BY #\\/ BY + BH #=< AY
+        AY #=< BY #/\\ BY #< AY + AH #==> AX + AW #=< BX #\\/ BX + BW #=< AX
+    """
+    from clausal.logic.clpz_surface import post_connective  # noqa: PLC0415
+    from clausal.logic.exceptions import LogicException, type_error  # noqa: PLC0415
+    from clausal.logic.exceptions import instantiation_error  # noqa: PLC0415
+    from clausal.logic.variables import is_var  # noqa: PLC0415
+    ctx = "disjoint2/1"
+    rs = []
+    for r in _items(rects, ctx):
+        if is_var(r):
+            raise LogicException(instantiation_error(ctx))   # Scryer's =..
+        rs.append(r)
+    if len(rs) < 2:
+        yield None                  # no pair to compare: Scryer succeeds
+        return
+    for i, r in enumerate(rs):
+        if not (type(r) is tuple and len(r) == 5 and type(r[0]) is str):
+            return                  # not F(X, W, Y, H): no pattern matches
+        for a in r[1:]:
+            _integer_or_fd_var(a, ctx)
+        rs[i] = r[1:]
+
+    def a_not_in_b(a, b):
+        ax, aw, ay, ah = a
+        bx, bw, by, bh = b
+        return (post_connective("#==>", (
+                    ("#/\\", ("#=<", ax, bx), ("#<", bx, ("+", ax, aw))),
+                    ("#\\/", ("#=<", ("+", ay, ah), by),
+                     ("#=<", ("+", by, bh), ay))), trail)
+                and post_connective("#==>", (
+                    ("#/\\", ("#=<", ay, by), ("#<", by, ("+", ay, ah))),
+                    ("#\\/", ("#=<", ("+", ax, aw), bx),
+                     ("#=<", ("+", bx, bw), ax))), trail))
+
+    for i in range(len(rs)):
+        for j in range(i + 1, len(rs)):
+            if not (a_not_in_b(rs[i], rs[j]) and a_not_in_b(rs[j], rs[i])):
+                return
+    yield None
+
+
+@_builtin("automaton", 3, fields=("vars", "nodes", "arcs"))
+def _automaton_3(vs, nodes, arcs, trail, k):
+    """automaton(Vs, Nodes, Arcs) -- the sequence Vs is accepted by the
+    automaton: Nodes lists source(N) and sink(N), Arcs arc(From, Label, To)
+    with integer labels.  Scryer's decomposition: a state variable between
+    each pair of elements, the first in the sources, the last in the sinks,
+    and each step [S0, V, S1] in the arcs relation (tuples_in/2)."""
+    from clausal.logic.clpfd import tuples_in  # noqa: PLC0415
+    from clausal.logic.clpz_surface import _post  # noqa: PLC0415
+    from clausal.logic.exceptions import LogicException, instantiation_error  # noqa: PLC0415
+    from clausal.logic.variables import Var  # noqa: PLC0415
+    from clausal.logic.solve import _deref_walk  # noqa: PLC0415
+    ctx = "automaton/3"
+    seq = _items(vs, ctx)
+    for x in seq:
+        _integer_or_fd_var(x, ctx)
+    numbers: dict = {}
+
+    def num(node):
+        # a node is named by a ground term (its walked value is the key)
+        key = _deref_walk(node)
+        try:
+            hash(key)
+        except TypeError:
+            key = repr(key)
+        if _has_var(key):
+            raise LogicException(instantiation_error(ctx))
+        if key not in numbers:
+            numbers[key] = len(numbers)
+        return numbers[key]
+
+    relation = []
+    for a in _items(arcs, ctx):
+        # arc(From, Label, To), or arc/4 with no counter expressions;
+        # anything else has no clause in Scryer's arc_normalized_: fail
+        if type(a) is tuple and len(a) == 4 and a[0] == "arc":
+            relation.append((num(a[1]), _integer(a[2], ctx), num(a[3])))
+        elif (type(a) is tuple and len(a) == 5 and a[0] == "arc"
+              and _items(a[4], ctx) == []):
+            relation.append((num(a[1]), _integer(a[2], ctx), num(a[3])))
+        else:
+            return
+    sources, sinks = [], []
+    for n in _items(nodes, ctx):
+        # Scryer picks out source/1 and sink/1 and ignores the rest
+        if type(n) is tuple and len(n) == 2 and n[0] == "source":
+            sources.append(num(n[1]))
+        elif type(n) is tuple and len(n) == 2 and n[0] == "sink":
+            sinks.append(num(n[1]))
+    if not sources or not sinks:
+        return
+    states = [Var() for _ in range(len(seq) + 1)]
+    src = tuple((s, s) for s in sorted(set(sources)))
+    snk = tuple((s, s) for s in sorted(set(sinks)))
+    if not (_post([states[0]], _fd._domain_union([src]), trail)
+            and _post([states[-1]], _fd._domain_union([snk]), trail)):
+        return
+    if not seq:
+        yield None
+        return
+    if not relation:
+        return
+    rows = [[states[i], seq[i], states[i + 1]] for i in range(len(seq))]
+    if tuples_in(rows, relation, trail):
+        yield None
+
+
+def _has_var(t) -> bool:
+    from clausal.logic.variables import deref, is_var  # noqa: PLC0415
+    stack = [t]
+    while stack:
+        x = deref(stack.pop())
+        if is_var(x):
+            return True
+        if type(x) in (tuple, list):
+            stack.extend(x)
+    return False

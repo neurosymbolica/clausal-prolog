@@ -232,3 +232,97 @@ def test_nvalue_and_indomain_errors(native, ans):
     assert ans(mod, "m5") == [[]]
     assert ans(mod, "m6") == ["instantiation_error"]
     assert ans(mod, "m7") == [("type_error", "integer", "foo")]
+
+
+CUMULATIVE = """\
+:- use_module(library(clpz)).
+u1(R) :- findall([S1,S2,S3], (Ts = [task(S1,3,_,1,_), task(S2,2,_,1,_), task(S3,2,_,1,_)], [S1,S2,S3] ins 0..4, cumulative(Ts), label([S1,S2,S3])), R).
+u2(R) :- findall([S1,S2], (Ts = [task(S1,2,_,1,_), task(S2,2,_,1,_)], [S1,S2] ins 0..1, cumulative(Ts, [limit(2)]), label([S1,S2])), R).
+u3(R) :- findall(E, (cumulative([task(0,3,E,1,a)])), R).
+u4(E) :- catch(cumulative([], [foo]), error(E, _), true).
+u5(E) :- catch(cumulative([task(0,_,_,1,a)]), error(E, _), true).
+u6(R) :- findall(x, cumulative([task(0,0,_,1,a)]), R).
+u7(R) :- findall(x, cumulative([task(0,-1,_,1,a)]), R).
+u8(R) :- findall(x, cumulative([task(0,1,_,-1,a)]), R).
+u9(R) :- findall(x, cumulative([task(0,1,_,0,a)]), R).
+u10(E) :- catch(cumulative([], [limit(_)]), error(E, _), true).
+u11(R) :- findall(x, cumulative([foo]), R).
+u12(R) :- findall(x, cumulative([task(0,2,5,1,a)]), R).
+"""
+
+
+def test_cumulative(native, ans):
+    """cumulative/1,2 did not exist; Scryer's answers.  A variable duration
+    is refused loudly here (Scryer accepts it; the constraint reasons over
+    fixed durations)."""
+    mod = native.load("l3_clpz_cumulative", CUMULATIVE)
+    assert ans(mod, "u1") == [[[4, 0, 2], [4, 2, 0]]]
+    assert ans(mod, "u2") == [[[0, 0], [0, 1], [1, 0], [1, 1]]]
+    assert ans(mod, "u3") == [[3]]
+    assert ans(mod, "u4") == [("domain_error", "cumulative_options_empty_or_limit",
+                               ["foo"])]
+    assert ans(mod, "u5") == ["instantiation_error"]
+    # Scryer: D #> 0 and C #>= 0; a non-task fails; E = S + D
+    assert [ans(mod, f"u{i}") for i in (6, 7, 8, 9)] == [[[]], [[]], [[]], [["x"]]]
+    assert ans(mod, "u10") == ["instantiation_error"]
+    assert ans(mod, "u11") == [[]]
+    assert ans(mod, "u12") == [[]]
+
+
+SERIAL = """\
+:- use_module(library(clpz)).
+s1(R) :- findall([A,B], ([A,B] ins 0..3, serialized([A,B], [2,2]), label([A,B])), R).
+s2(R) :- findall([A,B,C], ([A,B,C] ins 0..4, serialized([A,B,C], [1,2,1]), A #< B, B #< C, label([A,B,C])), R).
+d1(R) :- findall([X,Y], ([X,Y] ins 0..2, disjoint2([r(0,2,0,2), r(X,1,Y,1)]), label([X,Y])), R).
+d2(R) :- findall(X, (X in 0..3, disjoint2([r(0,2,0,1), r(X,2,0,1)]), label([X])), R).
+s3(E) :- catch(serialized([_], [a]), error(E, _), true).
+s4(R) :- findall(x, serialized([_,_], [1]), R).
+s5(R) :- findall(x, serialized([_], [-1]), R).
+d3(R) :- findall(x, disjoint2([r(a,1,0,1)]), R).
+d4(E) :- catch(disjoint2([r(a,1,0,1), r(0,1,0,1)]), error(E, _), true).
+d5(E) :- catch(disjoint2([_]), error(E, _), true).
+"""
+
+
+def test_serialized_and_disjoint2(native, ans):
+    """serialized/2 and disjoint2/1 did not exist; Scryer's answers."""
+    mod = native.load("l3_clpz_serial", SERIAL)
+    assert ans(mod, "s1") == [[[0, 2], [0, 3], [1, 3], [2, 0], [3, 0], [3, 1]]]
+    assert ans(mod, "s2") == [[[0, 1, 3], [0, 1, 4], [0, 2, 4], [1, 2, 4]]]
+    assert ans(mod, "d1") == [[[0, 2], [1, 2], [2, 0], [2, 1], [2, 2]]]
+    assert ans(mod, "d2") == [[2, 3]]
+    assert ans(mod, "s3") == [("type_error", "integer", "a")]
+    assert ans(mod, "s4") == [[]]
+    assert ans(mod, "s5") == [[]]
+    # one rectangle has no pair to check (Scryer succeeds); with a pair the
+    # coordinates are checked; an unbound rectangle is instantiation_error
+    assert ans(mod, "d3") == [["x"]]
+    assert ans(mod, "d4") == [("type_error", "integer", "a")]
+    assert ans(mod, "d5") == ["instantiation_error"]
+
+
+AUTOMATON = """\
+:- use_module(library(clpz)).
+:- use_module(library(lists)).
+a1(R) :- findall(Vs, (length(Vs, 3), Vs ins 0..1, automaton(Vs, [source(a),sink(c)], [arc(a,0,a),arc(a,1,b),arc(b,0,a),arc(b,1,c),arc(c,0,c),arc(c,1,c)]), label(Vs)), R).
+a2(R) :- findall(Vs, (length(Vs, 2), Vs ins 0..2, automaton(Vs, [source(s),sink(s)], [arc(s,0,t),arc(t,2,s)]), label(Vs)), R).
+a3(R) :- findall(x, automaton([], [source(s),sink(s)], [arc(s,0,s)]), R).
+a4(R) :- findall(x, automaton([], [source(s),sink(t)], [arc(s,0,t)]), R).
+a5(R) :- findall(x, automaton([0], [sink(s)], [arc(s,0,s)]), R).
+a6(R) :- findall(V, (automaton([1,V], [source(s),foo,sink(s)], [arc(s,1,t),arc(t,0,s),arc(t,2,s)]), label([V])), R0), sort(R0, R).
+a7(R) :- findall(x, automaton([0], [source(s),sink(s)], [bad(s,0,s)]), R).
+"""
+
+
+def test_automaton_3(native, ans):
+    """automaton/3 did not exist; Scryer's answers (a1: at least two
+    consecutive ones)."""
+    mod = native.load("l3_clpz_automaton", AUTOMATON)
+    assert ans(mod, "a1") == [[[0, 1, 1], [1, 1, 0], [1, 1, 1]]]
+    assert ans(mod, "a2") == [[[0, 2]]]
+    assert ans(mod, "a3") == [["x"]]
+    assert ans(mod, "a4") == [[]]         # empty sequence, source =/= sink
+    assert ans(mod, "a5") == [[]]         # no source
+    # other nodes are ignored; a partly bound sequence
+    assert ans(mod, "a6") == [[0, 2]]
+    assert ans(mod, "a7") == [[]]         # a malformed arc: Scryer fails

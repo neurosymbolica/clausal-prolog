@@ -171,10 +171,10 @@ def test_without_library_clpz_its_operators_do_not_read(native):
 
 def test_a_clpz_import_the_engine_lacks_is_refused_by_name(native):
     # (in/2 was the example here until slice 5 made it a builtin, then
-    # fd_dom/2 and lex_chain/1 until they became ones.)
+    # fd_dom/2, lex_chain/1 and automaton/3 until they became ones.)
     err = _refusal(native, "s2_clpz_in",
-                   ":- use_module(library(clpz), [(#=)/2, automaton/3]).\n")
-    assert err.lineno == 1 and "automaton/3 is not available" in str(err)
+                   ":- use_module(library(clpz), [(#=)/2, clpz_t/2]).\n")
+    assert err.lineno == 1 and "clpz_t/2 is not available" in str(err)
 
 
 def test_an_unknown_library_is_a_located_error(native):

@@ -180,7 +180,11 @@ def _operand(x, op: str):
 #   can spell;
 # * the cell ``'/'`` is Scryer's division, always a float; ``rdiv`` is the
 #   exact-rational spelling (an exact-number cell, not in this table);
-# * ``+``, ``-``, ``*`` and unary ``-`` are shared: exact on both spellings.
+# * ``+``, ``-``, ``*`` and unary ``-`` are exact on both spellings; a FLOAT
+#   result that overflows is evaluation_error(float_overflow) for the cell
+#   (ISO 9.1.4.1, Scryer) while the bare node keeps Python's ``inf``; inside
+#   a CLP post both spellings keep ``inf`` (``_CLP_CELL_EVALUABLE``), so a
+#   post answers the same whether its operands were bound when it was made.
 #
 # INSIDE A CLP POST (``==``, ``<``, ...) ``/`` keeps its RATIONAL meaning,
 # :func:`exact_div` (``X == 7 / 2`` is 7 rdiv 2, like Scryer's
@@ -951,6 +955,31 @@ def evaluate(x, context: str = "eval_/2"):
     return fn(*[evaluate(a, context) for a in args])
 
 
+from math import isinf as _math_isinf  # noqa: E402
+
+
+def _iso_checked(exact, op: str):
+    """*exact* with ISO 9.1.4.1's float overflow: a float result that
+    overflows is evaluation_error(float_overflow), as Scryer (Python answers
+    inf -- ``1.0e308 * 10`` -- or raises a raw OverflowError for an integer
+    too large to be a float).  The ISO spelling only: a BARE seam operator
+    keeps Python's meaning (ruling 2026-09-28)."""
+    isinf = _math_isinf
+
+    def checked(l, r):
+        try:
+            res = exact(l, r)
+        except OverflowError:
+            raise _float_overflow(op) from None
+        if (type(res) is float and isinf(res)
+                and not (type(l) is float and isinf(l))
+                and not (type(r) is float and isinf(r))):
+            raise _float_overflow(op)
+        return res
+    checked.__name__ = f"iso_{exact.__name__}"
+    return checked
+
+
 def exact_add(l, r):
     if type(l) is int and type(r) is int:
         return l + r
@@ -1014,7 +1043,9 @@ def _exact_div_general(l, r):
 #: The evaluable functor table for CELLS (see the block comment above
 #: ``python_floordiv``); defined last because it names the exact operators.
 EVALUABLE = MappingProxyType({
-    ("+", 2): exact_add, ("-", 2): exact_sub, ("*", 2): exact_mul,
+    ("+", 2): _iso_checked(exact_add, "+"),
+    ("-", 2): _iso_checked(exact_sub, "-"),
+    ("*", 2): _iso_checked(exact_mul, "*"),
     ("/", 2): iso_truediv, ("-", 1): exact_neg,
     ("//", 2): iso_intdiv, ("div", 2): iso_div, ("mod", 2): iso_mod,
     ("**", 2): iso_pow, ("^", 2): iso_intpow, ("rdiv", 2): iso_rdiv,
@@ -1052,6 +1083,8 @@ CELL_ONLY_EVALUABLE = frozenset(k for k in EVALUABLE if k not in {
 #: entries -- what a NODE evaluates through.  A cell never looks here.
 NODE_EVALUABLE = MappingProxyType({
     **EVALUABLE,
+    # a BARE seam operator keeps Python's float overflow (inf)
+    ("+", 2): exact_add, ("-", 2): exact_sub, ("*", 2): exact_mul,
     ("$python_div", 2): python_truediv,
     ("$python_floordiv", 2): python_floordiv, ("$python_mod", 2): python_mod,
     ("$python_pow", 2): python_pow,
