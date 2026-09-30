@@ -112,14 +112,16 @@ def test_retract_refuses_what_iso_refuses(native, ans):
                                   "static_procedure", ("/", "->", 2)),
         "retract(\\+ a)": _err("permission_error", "modify",
                                "static_procedure", ("/", "\\+", 1)),
+        # D47: the truth atom true crosses to Python as True
         "retract(true)": _err("permission_error", "modify",
-                              "static_procedure", ("/", "true", 0)),
+                              "static_procedure", ("/", True, 0)),
         "retract(((a, b) :- true))": _err("permission_error", "modify",
                                           "static_procedure", ("/", ",", 2)),
         "retractall((a, b))": _err("permission_error", "modify",
                                    "static_procedure", ("/", ",", 2)),
+        # D47: the truth atom true crosses to Python as True
         "retractall(true)": _err("permission_error", "modify",
-                                 "static_procedure", ("/", "true", 0)),
+                                 "static_procedure", ("/", True, 0)),
     }
     for i, (goal, want) in enumerate(cases.items()):
         mod = native.load(f"dbr_errors_{i}",

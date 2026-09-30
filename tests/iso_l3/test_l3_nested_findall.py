@@ -62,15 +62,19 @@ def test_special_form_adapter_never_answers_another_arity():
     """The order-independent pin: the target set's iteration order follows
     str hashing (randomised per process), so the load tests above only fail
     on some runs.  Resolving ``findall/3`` BEFORE ``findall/4`` is the order
-    that broke; both orders must leave the findall/4 builtin under the name."""
+    that broke, when findall/4 was a builtin and findall/3 got the adapter.
+    Both are compiler special forms now (native reader slice 4), so the pin
+    uses the same shape with a name that still has it: length/2 is a
+    builtin, length/3 is not.  Both orders must leave the builtin under the
+    name."""
     from clausal.logic.builtins import BuiltinPredicate
     from clausal.logic.compiler.globals_env import _inject_resolved_targets
     from clausal.logic.database import Database
-    for order in ([("findall", 3), ("findall", 4)],
-                  [("findall", 4), ("findall", 3)]):
+    for order in ([("length", 3), ("length", 2)],
+                  [("length", 2), ("length", 3)]):
         base: dict = {}
         _inject_resolved_targets(order, base, Database(), {})
-        assert isinstance(base["findall"], BuiltinPredicate), (order, base)
+        assert isinstance(base["length"], BuiltinPredicate), (order, base)
 
 
 def test_two_database_only_arities_get_one_adapter_each():
