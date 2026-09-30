@@ -172,6 +172,24 @@ since 0.4.0 finish three moves:
 
 ### Added
 
+- **A seam `-import_from` of a data name from a `.pl` module binds the
+  atom** (ruled 2026-09-30). `-import_from(M, [cite])` (or
+  `alias(cite, c)`) against a `.pl` module that neither defines `cite` as a
+  predicate at any arity nor binds it now resolves `cite` to the ATOM
+  `cite`: data needs no declaration, and a `.pl` export list holds only
+  `name/arity` predicates. It used to raise `ImportError: cannot import
+  name 'cite' ... exports: citation/2` unless the `.pl` file happened to
+  use `cite(...)` as data itself. Both `.pl` front ends. A name the module
+  binds (an exported or defined predicate, a data atom it uses) imports
+  as before; a `name/N` entry names a predicate and still fails when there
+  is none; `.clausal`/`.seam` and Python targets are unchanged. A name
+  within a small edit distance of one of the module's predicates
+  (`citaton` for `citation`) still imports as the atom, and warns once
+  with `ClausalImportedDataNameWarning` naming the predicate. The atom is
+  not a functor declaration, exactly as for an atom a `.clausal` module
+  exports: `--cite(++k)` still asks for a declared `cite/1`, and
+  `'=..'(C, [cite, K])` builds or matches the term from the imported atom.
+
 - **ISO 13211-2 `:- end_module(Name).`, and a "require end_module"
   setting.** A `.pl` module file may end with `end_module/1`; both `.pl`
   front ends check that it names the file's `module/2` module and is the

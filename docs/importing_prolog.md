@@ -122,6 +122,54 @@ still wins over a `.py` module of the same name in an earlier entry.
 
 ---
 
+## Importing data names from a `.pl` module
+
+A `.pl` module's export list holds only `name/arity` predicates, and data
+needs no declaration. So a seam `-import_from` of a name that the `.pl`
+module neither defines as a predicate (at any arity) nor binds gives you
+the ATOM of that name:
+
+```prolog
+% citations.pl
+:- module(citations, [citation/2]).
+citation(art1, [label-'Art 1']).
+
+% rules.pl
+:- module(rules, [verdict/2]).
+verdict(P, v(ok, [cite(art1)])) :- P = p.
+```
+
+```python
+# score.seam
+-import_from(citations, [citation, cite])   # citation: the predicate
+                                             # cite: the atom cite
+-import_from(rules, [verdict, p])
+
+match(K, C) <- (verdict(p, T), arg(2, T, [C]), '=..'(C, [cite, K]))
+```
+
+The query `match(K, C)` answers `K = art1, C = cite(art1)`.
+
+An atom is global by spelling, so the `cite` you import is the same atom
+the `.pl` rulebase writes in `cite(art1)`: the term built from it
+(`('cite', 'art1')`) is `==` to the rulebase's.
+
+- A name the module binds keeps its ordinary meaning: an exported (or
+  defined) predicate imports the predicate, and a data atom the file
+  itself uses imports that atom.
+- A `name/N` entry names a predicate, so it never resolves to data: with
+  no `name/N` in the module it is still an `ImportError`.
+- The imported atom is not a functor declaration, exactly as for an atom a
+  `.clausal` module exports: `--cite(++k)` still needs a declared
+  `cite/1`; `'=..'/2` builds or matches the term from the atom.
+- A typo can no longer fail the import, so a name within a small edit
+  distance of one of the module's predicates (`citaton` for `citation`)
+  warns once, with `ClausalImportedDataNameWarning`, naming the predicate.
+- Only `.pl` targets: a `.clausal`/`.seam` module exports its data in its
+  `-module(...)` list, and a name missing there is still an `ImportError`.
+
+---
+
 ## Importing between `.pl` files
 
 Prolog's `:- use_module` directive is translated to Clausal's import system.
