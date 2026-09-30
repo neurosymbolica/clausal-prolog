@@ -325,3 +325,11 @@ class ClausalStringInCatchPatternWarning(ClausalLintWarning):
     emitted under ``-double_quotes(atom)``, where ``"date"`` already IS the
     atom.  Suppress it with ``warnings.filterwarnings`` on this class.
     """
+
+
+class ClausalImportedDataNameWarning(ClausalLintWarning):
+    """A seam ``-import_from(M, [name])`` of a ``.pl`` module M resolved
+    ``name`` to the ATOM ``name`` (M neither defines it as a predicate nor
+    binds it; data needs no declaration) while ``name`` sits within a small
+    edit distance of a predicate M does define -- a likely misspelled
+    predicate import.  Emitted once per (importer, M, name)."""

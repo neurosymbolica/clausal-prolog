@@ -4757,6 +4757,37 @@ def _make_functor_signatures_update_ast(entries, source):
     return block
 
 
+def _wrap_import_for_pl_data(import_stmt, resolved_module, pairs, eligible,
+                             source):
+    """``try: <import_stmt> except ImportError: <bind .pl data names>``.
+
+    The target's kind (``.pl``, ``.clausal``, Python) is only known at run
+    time, so the fallback is emitted for every ``-import_from`` and decides
+    there: ``clausal.pl_data_imports.bind_data_names`` answers ``False`` for
+    anything but a loaded ``.pl`` module, and the bare ``raise`` then
+    re-raises CPython's own error untouched.  On success, ``else:`` records
+    the ``.pl`` module's plain data atoms that carry no functor signature
+    (the native front end declares none), so they build at any arity."""
+    text = (
+        "try:\n"
+        "    pass\n"
+        "except ImportError as _cs_import_error:\n"
+        "    if not __import__('clausal.pl_data_imports', fromlist=['_'])"
+        f".bind_data_names(globals(), {resolved_module!r}, {pairs!r}, "
+        f"{tuple(eligible)!r}, _cs_import_error):\n"
+        "        raise\n"
+        "else:\n"
+        "    __import__('clausal.pl_data_imports', fromlist=['_'])"
+        f".record_bound_data_names(globals(), {resolved_module!r}, "
+        f"{pairs!r}, {tuple(eligible)!r})\n"
+    )
+    block = parse(text).body[0]
+    block.body = [import_stmt]
+    for node in walk(block):
+        copy_location(node, source)
+    return block
+
+
 def _make_import_signatures_update_ast(resolved_module, name_pairs, source):
     """Copy an ``-import_from``'s imported names' registry entries across.
 
@@ -10517,6 +10548,20 @@ class EmbedTransformer(NodeTransformer):
             expr_stmt,
         )
         fix_missing_locations(stmt)
+        # Ruling 2026-09-30: against a .pl module, a bare name the module
+        # neither defines as a predicate nor binds is DATA, and resolves to
+        # its atom (clausal/pl_data_imports.py).  A ``name/N`` entry names a
+        # predicate, so only the bare-name locals are eligible.  A SEAM
+        # importer only: a .pl importer (either front end; the native one's
+        # import bookkeeping, ``iso_l3_directives.imported``, reads this
+        # statement as an ``ast.ImportFrom``) keeps the plain import.
+        if not transformer._prolog_singletons:
+            stmt = _wrap_import_for_pl_data(
+                stmt, resolved,
+                {a.asname or a.name: a.name for a in aliases},
+                sorted(local for local, found in arities.items()
+                       if found is None),
+                expr_stmt)
         # Copy the imported names' functor-signature registry entries into
         # this file's own registry, keyed by the LOCAL spelling (mirroring
         # Python's own ``from X import a, b as a`` shadowing rule: the

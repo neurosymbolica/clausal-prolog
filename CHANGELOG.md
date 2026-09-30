@@ -215,6 +215,26 @@ since 0.4.0 finish three moves:
   resolved in `lib` (the calling module need not declare it). It raised
   `NameError: 'p' is not a declared or imported functor`. `--foo()` is
   still refused, inside `':'` too ("`foo()` is not a term form").
+- **A seam `-import_from` of a data name from a `.pl` module binds the
+  atom** (ruled 2026-09-30). `-import_from(M, [cite])` (or
+  `alias(cite, c)`) against a `.pl` module that neither defines `cite` as a
+  predicate at any arity nor binds it now resolves `cite` to the ATOM
+  `cite`: data needs no declaration, and a `.pl` export list holds only
+  `name/arity` predicates. It used to raise `ImportError: cannot import
+  name 'cite' ... exports: citation/2` unless the `.pl` file happened to
+  use `cite(...)` as data itself. Both `.pl` front ends. A name the module
+  binds (an exported or defined predicate, a data atom it uses) imports
+  as before; a `name/N` entry names a predicate and still fails when there
+  is none; `.clausal`/`.seam` and Python targets are unchanged. A name
+  within a small edit distance of one of the module's predicates
+  (`citaton` for `citation`) still imports as the atom, and warns once
+  with `ClausalImportedDataNameWarning` naming the predicate. Such a name
+  also builds `cite(...)` at ANY arity in the importer, positionally:
+  `--cite(++k)` and a clause's `cite(K)` are `('cite', K)`, `==` the
+  rulebase's `cite(k)`. The same holds for a data functor the `.pl` module
+  itself uses and the importer imports (`v` of `v(ok, [...])`) when the
+  module declares no signature for it, which is the native front end's
+  case: it used to build under the translator only.
 
 - **ISO 13211-2 `:- end_module(Name).`, and a "require end_module"
   setting.** A `.pl` module file may end with `end_module/1`; both `.pl`
