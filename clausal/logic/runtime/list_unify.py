@@ -89,24 +89,29 @@ from ._seg_helpers import (
 )
 
 
+def _pattern_term(var_vals, star_val, after_vals):
+    """The list term a head list pattern spells: ``[V1 ... Vn, *S, A1 ...
+    Am]`` -- a plain list without a star, else a ``SegList``."""
+    if star_val is None:
+        return list(var_vals) + list(after_vals)
+    segs = []
+    if var_vals:
+        segs.append(ConcreteSeg(list(var_vals)))
+    segs.append(VarSeg(star_val))
+    if after_vals:
+        segs.append(ConcreteSeg(list(after_vals)))
+    return SegList(segs)
+
+
 def _seglist_input_fallback(target, var_vals, star_val, after_vals, trail):
     """Input mode against an OPEN SegList *target* (F030): build the pattern
-    as the list term it spells -- ``[V1 ... Vn, *S, A1 ... Am]`` -- and
-    unify the two terms, which pairs the elements and hands the tail over
-    (``SegList.__unify__``).  ``p([H, *T])`` called with ``[1, *_]`` binds
-    ``H = 1`` there, as ISO's ``[H|T] = [1|_]`` does; it used to fail.
-    Shared by the C twin, which calls it for this one case."""
-    if star_val is None:
-        pattern = list(var_vals) + list(after_vals)
-    else:
-        segs = []
-        if var_vals:
-            segs.append(ConcreteSeg(list(var_vals)))
-        segs.append(VarSeg(star_val))
-        if after_vals:
-            segs.append(ConcreteSeg(list(after_vals)))
-        pattern = SegList(segs)
-    return bool(unify(target, pattern, trail))
+    as the list term it spells and unify the two terms, which pairs the
+    elements and hands the tail over (``SegList.__unify__``).
+    ``p([H, *T])`` called with ``[1, *_]`` binds ``H = 1`` there, as ISO's
+    ``[H|T] = [1|_]`` does; it used to fail.  Shared by the C twin, which
+    calls it for this one case."""
+    return bool(unify(target, _pattern_term(var_vals, star_val, after_vals),
+                      trail))
 
 
 def _cons_cell_input_fallback(cell, var_vals, star_val, after_vals, trail):
@@ -116,18 +121,14 @@ def _cons_cell_input_fallback(cell, var_vals, star_val, after_vals, trail):
     unification does (``_unify_seglist_cons``).  ``p([H|T])`` called with
     ``[b|foo]`` binds ``H = b, T = foo``; a proper pattern (no star, or
     elements after the star) matches only a chain that ends in ``[]``.
-    Undoes its own bindings on failure.  Shared by the C twin."""
-    if star_val is None:
-        pattern = list(var_vals) + list(after_vals)
-    else:
-        segs = []
-        if var_vals:
-            segs.append(ConcreteSeg(list(var_vals)))
-        segs.append(VarSeg(star_val))
-        if after_vals:
-            segs.append(ConcreteSeg(list(after_vals)))
-        pattern = SegList(segs)
-    return bool(_unify_seglist_cons(pattern, cell, trail))
+    Undoes its own bindings on failure.  Shared by the C twin.
+
+    The pattern is deliberately NOT walked first (``SegList.__unify__``
+    walks): a star already bound to an atom -- ``p(T, [a|T])`` called as
+    ``p(foo, [a|foo])`` -- would walk to the atom's characters, and the
+    unwalked hole hands the cell's tail to the bound star instead."""
+    return bool(_unify_seglist_cons(
+        _pattern_term(var_vals, star_val, after_vals), cell, trail))
 
 
 def _head_list_unify_input_py(target, var_vals, star_val, after_vals, trail):

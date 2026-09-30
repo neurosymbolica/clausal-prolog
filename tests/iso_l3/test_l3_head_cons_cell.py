@@ -48,6 +48,9 @@ t14(L) :- findall(X, g([a|foo], X), L).
 t15(L) :- findall(X, g([a], X), L).
 t16(L) :- findall(X, d([q|foo], X), L).
 t17(L) :- findall(H-T, m([q,r|foo], H, T), L).
+bs(T, [a|T]).
+t18 :- bs(foo, [a|foo]).
+t19 :- bs(bar, [a|foo]).
 """
 
 
@@ -84,6 +87,13 @@ def test_first_argument_indexing_reaches_the_list_clauses(mod, ans):
     assert ans(mod, "t15") == [["a"]]
 
 
+def test_a_star_bound_by_an_earlier_argument_takes_the_tail(mod, ans):
+    """The star is bound to an atom before the list guard runs; the cell's
+    tail must unify with that atom, not with its characters."""
+    assert ans(mod, "t18", 0) == [()]
+    assert ans(mod, "t19", 0) == []
+
+
 def test_nil_cons_list_dispatch_scans_the_cell(mod, ans):
     assert ans(mod, "t16") == [["q"]]
     assert ans(mod, "t17") == [[("-", "q", (".", "r", "foo"))]]
@@ -116,6 +126,13 @@ def test_c_and_python_twins_agree(impl):
     tr = Trail()
     assert fn(cell, [x, "z"], Var(), [], tr) is False
     assert isinstance(deref(x), Var)
+    # a star already bound to an atom takes the cell's tail
+    t = Var()
+    tr = Trail()
+    from clausal.logic.variables import unify
+    assert unify(t, "foo", tr)
+    assert fn((".", "a", "foo"), ["a"], t, [], tr) is True
+    assert fn((".", "a", "bar"), ["a"], t, [], tr) is False
     # other tuples still fail
     assert fn(("f", "a", "b"), [Var()], Var(), [], Trail()) is False
 
