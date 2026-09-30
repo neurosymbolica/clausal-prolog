@@ -167,15 +167,31 @@ def package_root(source_path: str | None,
                  module_name: str | None) -> str | None:
     """The directory the importer's dotted name *module_name* is relative
     to: climb one directory per dot from the file's directory -- one more
-    for a package ``__init__.pl``, whose name IS its directory's."""
+    for a package ``__init__`` file, whose name IS its directory's.
+
+    None unless the climb ROUND-TRIPS: the file's path below that root,
+    read as a dotted name, must be *module_name* itself.  A file loaded by
+    PATH under a synthetic name (``clausal.testing`` mints
+    ``_clausal_test_<stem>``), or under any name its path does not spell,
+    would otherwise climb to the wrong root and mis-qualify every sibling
+    (``pkg/dom/__init__.pl`` as ``_clausal_test___init__`` climbs to
+    ``pkg/`` and names its sibling ``dom.schema``); the callers then take
+    the most specific ``sys.path`` entry, which holds the file under the
+    name an import actually finds.  The check is geometric only: a name
+    its path does spell (``dom`` for ``pkg/dom/__init__.pl``) is trusted."""
     if not (source_path and module_name):
         return None
+    source_path = os.path.abspath(source_path)
+    modpath = os.path.splitext(source_path)[0]
     depth = module_name.count(".")
-    if os.path.basename(source_path) == "__init__.pl":
+    if os.path.splitext(os.path.basename(source_path))[0] == "__init__":
         depth += 1
-    root = os.path.dirname(os.path.abspath(source_path))
+        modpath = os.path.dirname(source_path)
+    root = os.path.dirname(source_path)
     for _ in range(depth):
         root = os.path.dirname(root)
+    if os.path.relpath(modpath, root).split(os.sep) != module_name.split("."):
+        return None
     return root
 
 
@@ -1415,11 +1431,11 @@ class _PrologToClausal:
         # Only with the importer's name: a direct API call must not read
         # the file system through sys.path (cwd included), or its output
         # would depend on the caller's working directory.
-        root = self._package_root()
-        if root is None:
+        if not (self._source_path and self._module_name):
             return None
+        root = self._package_root()
         parts = dotted.split(".")
-        roots = [root]
+        roots = [root] if root is not None else []
         roots.extend(os.path.abspath(e or os.getcwd()) for e in sys.path
                      if isinstance(e, str))
         for root in roots:

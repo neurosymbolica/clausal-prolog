@@ -828,23 +828,35 @@ class _Export:
         self.path = path          # the sibling source file
 
 
-def _sibling_dotted(sibling, modname):
+def _sibling_dotted(sibling, modname, path):
     """The dotted path *sibling* is importable under, best-effort.
 
     An already-loaded sibling knows its own ``__name__``, which is the only
-    fully reliable answer.  Otherwise the file stem is qualified with the
-    failing module's own package, because a decomposed-DAG package is exactly
-    the case where that holds: ``eu.mar.constants`` next to ``citations.clausal``
-    means ``eu.mar.citations``.
+    fully reliable answer.  Otherwise the sibling is named relative to the
+    failing module's own package root -- ``pkg.mar.constants`` next to
+    ``citations.clausal`` means ``pkg.mar.citations``, and so does the
+    package ``pkg.mar`` itself (its ``__init__``) -- when the failing
+    module's name *modname* round-trips to its file *path*.  A module
+    loaded by path under a synthetic name does not, so the sibling is named
+    by the most specific ``sys.path`` entry holding it, as the ``.pl``
+    front ends' ``use_module`` does.  The last resort is the stem
+    qualified with *modname*'s package.
     """
+    from clausal.tools.prolog_to_clausal import (  # noqa: PLC0415
+        dotted_for_file, package_root)
     mod = _loaded_module_for(sibling)
     loaded = getattr(mod, "__name__", None) if mod is not None else None
     if isinstance(loaded, str) and loaded:
         return loaded
-    stem = os.path.basename(sibling)
+    stem = sibling
     for suffix in _SOURCE_SUFFIXES:
         if stem.endswith(suffix):
             stem = stem[: -len(suffix)]
+    root = package_root(path, modname if isinstance(modname, str) else None)
+    dotted = dotted_for_file(stem, root)
+    if dotted:
+        return dotted
+    stem = os.path.basename(stem)
     package = modname.rpartition(".")[0] if isinstance(modname, str) else ""
     return f"{package}.{stem}" if package else stem
 
@@ -873,7 +885,7 @@ def _exporting_sibling(name, path, modname):
         rendered = _declared_export_entry(sibling, name)
         if rendered is False or rendered is None:
             continue
-        dotted = _sibling_dotted(sibling, modname)
+        dotted = _sibling_dotted(sibling, modname, path)
         if dotted == modname:
             continue  # the failing module itself, reached by another path
         return _Export(dotted, rendered, sibling)

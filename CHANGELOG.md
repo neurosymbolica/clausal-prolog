@@ -565,6 +565,19 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
 
 ### Fixed
 
+- **A `use_module` sibling of a `.pl` file loaded BY PATH gets its full
+  dotted name.** Both `.pl` front ends named a file found beside the
+  importer relative to a root climbed one directory per dot of the
+  importer's module name, which is wrong when that name is not the file's
+  dotted one: `clausal.testing.load_clausal_module('pkg/dom/__init__.pl')`
+  (loaded as `_clausal_test___init__`) named its sibling `dom.schema` and
+  failed ("no module dom.schema on sys.path" / "No module named 'dom'").
+  The climbed root is now used only when it round-trips to the importer's
+  own name; otherwise the most specific `sys.path` entry names the
+  sibling (`pkg.dom.schema`). The same applies to the undefined-name hint
+  that names an exporting sibling, which also named a package
+  `__init__`'s sibling one level too high.
+
 - **A test clause whose body is exactly `true`, or a test fact, keeps its
   name and option.** Such a clause is stored like a fact, with its head
   arguments moved into leading unifications, and the test runner read the
