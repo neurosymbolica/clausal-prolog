@@ -437,3 +437,61 @@ def _cumulative_1(tasks, trail, k):
     """cumulative(Tasks) -- cumulative(Tasks, [limit(1)])."""
     if _cumulative(tasks, [], trail):
         yield None
+
+
+@_builtin("serialized", 2, fields=("starts", "durations"))
+def _serialized(starts, durations, trail, k):
+    """serialized(Starts, Durations) -- the tasks (Start, Duration) do not
+    overlap: for each pair, ``Si + Di #=< Sj #\\/ Sj + Dj #=< Si``.
+    Durations are non-negative integers (Scryer's must_be(list(integer)))."""
+    from clausal.logic.clpz_surface import post_connective  # noqa: PLC0415
+    ctx = "serialized/2"
+    ds = [_integer(d, ctx) for d in _items(durations, ctx)]
+    ss = _items(starts, ctx)
+    if len(ss) != len(ds) or any(d < 0 for d in ds):
+        return
+    for s in ss:
+        _integer_or_fd_var(s, ctx)
+    for i in range(len(ss)):
+        for j in range(i + 1, len(ss)):
+            if not post_connective("#\\/", (
+                    ("#=<", ("+", ss[i], ds[i]), ss[j]),
+                    ("#=<", ("+", ss[j], ds[j]), ss[i])), trail):
+                return
+    yield None
+
+
+@_builtin("disjoint2", 1, fields=("rectangles",))
+def _disjoint2(rects, trail, k):
+    """disjoint2(Rectangles) -- each F(X, W, Y, H) is a rectangle and no two
+    overlap; Scryer's decomposition, pair by pair and both ways::
+
+        AX #=< BX #/\\ BX #< AX + AW #==> AY + AH #=< BY #\\/ BY + BH #=< AY
+        AY #=< BY #/\\ BY #< AY + AH #==> AX + AW #=< BX #\\/ BX + BW #=< AX
+    """
+    from clausal.logic.clpz_surface import post_connective  # noqa: PLC0415
+    from clausal.logic.exceptions import LogicException, type_error  # noqa: PLC0415
+    ctx = "disjoint2/1"
+    rs = []
+    for r in _items(rects, ctx):
+        if not (type(r) is tuple and len(r) == 5 and type(r[0]) is str):
+            raise LogicException(type_error("rectangle", r, ctx))
+        rs.append(r[1:])
+
+    def a_not_in_b(a, b):
+        ax, aw, ay, ah = a
+        bx, bw, by, bh = b
+        return (post_connective("#==>", (
+                    ("#/\\", ("#=<", ax, bx), ("#<", bx, ("+", ax, aw))),
+                    ("#\\/", ("#=<", ("+", ay, ah), by),
+                     ("#=<", ("+", by, bh), ay))), trail)
+                and post_connective("#==>", (
+                    ("#/\\", ("#=<", ay, by), ("#<", by, ("+", ay, ah))),
+                    ("#\\/", ("#=<", ("+", ax, aw), bx),
+                     ("#=<", ("+", bx, bw), ax))), trail))
+
+    for i in range(len(rs)):
+        for j in range(i + 1, len(rs)):
+            if not (a_not_in_b(rs[i], rs[j]) and a_not_in_b(rs[j], rs[i])):
+                return
+    yield None

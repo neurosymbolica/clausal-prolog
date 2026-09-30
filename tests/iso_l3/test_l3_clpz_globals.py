@@ -255,3 +255,23 @@ def test_cumulative(native, ans):
     assert ans(mod, "u4") == [("domain_error", "cumulative_options_empty_or_limit",
                                ["foo"])]
     assert ans(mod, "u5") == ["instantiation_error"]
+
+
+SERIAL = """\
+:- use_module(library(clpz)).
+s1(R) :- findall([A,B], ([A,B] ins 0..3, serialized([A,B], [2,2]), label([A,B])), R).
+s2(R) :- findall([A,B,C], ([A,B,C] ins 0..4, serialized([A,B,C], [1,2,1]), A #< B, B #< C, label([A,B,C])), R).
+d1(R) :- findall([X,Y], ([X,Y] ins 0..2, disjoint2([r(0,2,0,2), r(X,1,Y,1)]), label([X,Y])), R).
+d2(R) :- findall(X, (X in 0..3, disjoint2([r(0,2,0,1), r(X,2,0,1)]), label([X])), R).
+s3(E) :- catch(serialized([_], [a]), error(E, _), true).
+"""
+
+
+def test_serialized_and_disjoint2(native, ans):
+    """serialized/2 and disjoint2/1 did not exist; Scryer's answers."""
+    mod = native.load("l3_clpz_serial", SERIAL)
+    assert ans(mod, "s1") == [[[0, 2], [0, 3], [1, 3], [2, 0], [3, 0], [3, 1]]]
+    assert ans(mod, "s2") == [[[0, 1, 3], [0, 1, 4], [0, 2, 4], [1, 2, 4]]]
+    assert ans(mod, "d1") == [[[0, 2], [1, 2], [2, 0], [2, 1], [2, 2]]]
+    assert ans(mod, "d2") == [[2, 3]]
+    assert ans(mod, "s3") == [("type_error", "integer", "a")]
