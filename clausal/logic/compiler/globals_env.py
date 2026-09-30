@@ -1037,6 +1037,23 @@ def _clausal_module_name_of(value) -> str | None:
     return None
 
 
+_MISSING = object()
+
+
+def _is_injected_runtime_attr(owner, name: str, value) -> bool:
+    """True when *owner*'s attribute *name* is *value* only because the
+    loader injected it into every predicate module's namespace
+    (``import_hook.runtime_builtins``: the ``pythonic_ast`` node classes,
+    ``assertz`` among them, and the engine helpers) -- never the owner's
+    own predicate.  A qualified call ``m.assertz(...)`` must not walk to
+    that value; it resolves in m like any name m does not define."""
+    if getattr(owner, "__dict__", None) is None:
+        return False
+    hook = _sys.modules.get("clausal.import_hook")
+    injected = getattr(hook, "runtime_builtins", None)
+    return injected is not None and injected.get(name, _MISSING) is value
+
+
 def _unresolved_qualified_dispatch(dotted: str, arity: int, globals_, db):
     """The dispatch for a module-qualified call ``m.name(...)`` at *arity*
     that resolved to nothing when the clause set was compiled.
@@ -1063,6 +1080,11 @@ def _unresolved_qualified_dispatch(dotted: str, arity: int, globals_, db):
 
     def resolve_base():
         base = globals_.get(parts[0]) if globals_ else None
+        if _term_is_atom(base):
+            # An ATOM binding of the qualifier is data (the atom pool binds
+            # a module name the file also writes as a term, e.g. inside
+            # ``call(m:G)``): it names the module, it is not the module.
+            base = None
         for part in parts[1:-1]:
             if base is None:
                 break
@@ -1078,6 +1100,17 @@ def _unresolved_qualified_dispatch(dotted: str, arity: int, globals_, db):
             from clausal.logic.atoms import mangle  # noqa: PLC0415
             from clausal.logic.predicate import _dispatch_at  # noqa: PLC0415
             return _dispatch_at(mangle(module_name, name), arity, db)(*args)
+        # Scryer: ``m:G`` for a builtin G runs the builtin even when no
+        # module m is loaded (``zz:atom_length(abc, R)`` answers R = 3).  Only
+        # a DB-FREE builtin answers here: a database builtin
+        # (assertz/retract/findall/...) would act on the CALLER's module,
+        # not on m, so it keeps the existence_error below.
+        from clausal.logic.builtins._registry import (  # noqa: PLC0415
+            _BUILTINS,
+        )
+        builtin = _BUILTINS.get((name, arity))
+        if builtin is not None:
+            return builtin(*args)
         from clausal.logic.exceptions import (  # noqa: PLC0415
             dangling_handle_indicator_and_why,
         )
@@ -1283,6 +1316,13 @@ def _inject_resolved_targets(
                     continue
             parts = target_name.split(".")
             obj = globals_.get(parts[0]) if globals_ else None
+            if target_arity >= 0 and _term_is_atom(obj):
+                # A call qualified by a name bound to an ATOM (data -- the
+                # atom pool binds a module name the file also writes as a
+                # term, e.g. ``call(m:G)``): walking the atom would find
+                # ``str`` attributes, never m's predicates.  Resolve the
+                # qualifier as a module path below instead.
+                obj = None
             parent = None
             for part in parts[1:]:
                 if obj is None:
@@ -1290,8 +1330,10 @@ def _inject_resolved_targets(
                 parent = obj
                 obj = getattr(obj, part, None)
             if (target_arity >= 0 and parent is not None and obj is not None
-                    and is_pool_seeded_atom(getattr(parent, "__dict__", None),
-                                            parts[-1])):
+                    and (is_pool_seeded_atom(getattr(parent, "__dict__", None),
+                                             parts[-1])
+                         or _is_injected_runtime_attr(parent, parts[-1],
+                                                      obj))):
                 # ``m.nosuch(1)`` where m only has ``nosuch`` because the
                 # atom pool seeded it (another module declared the atom):
                 # not m's data reference -- resolve as the unknown call it is.
@@ -1314,8 +1356,10 @@ def _inject_resolved_targets(
             if mod_obj is not None:
                 resolved = getattr(mod_obj, attr_name, None)
                 if (target_arity >= 0 and resolved is not None
-                        and is_pool_seeded_atom(
-                            getattr(mod_obj, "__dict__", None), attr_name)):
+                        and (is_pool_seeded_atom(
+                            getattr(mod_obj, "__dict__", None), attr_name)
+                             or _is_injected_runtime_attr(
+                                 mod_obj, attr_name, resolved))):
                     resolved = None                 # see the walk above
                 if resolved is not None and _is_call_target(
                         resolved, target_arity, db):   # W4b-3

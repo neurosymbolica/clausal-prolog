@@ -1475,6 +1475,13 @@ class Database:
             if lazy_recompile is not None:
                 self._lazy_recompile[key] = lazy_recompile
 
+    def has_lazy_recompile(self, functor: str, arity: int) -> bool:
+        """True when (functor, arity) has a compiled dispatch slot AND a lazy
+        recompile to refill it: invalidating it then costs one recompile at
+        the next call, through :meth:`get_dispatch`."""
+        key = (functor, arity)
+        return key in self._dispatch and self._lazy_recompile.get(key) is not None
+
     def get_dispatch(self, functor: str, arity: int) -> Callable | None:
         """Return the compiled dispatch function for (functor, arity), or None.
 
