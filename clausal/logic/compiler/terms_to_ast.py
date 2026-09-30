@@ -23,6 +23,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from fractions import Fraction
 
+from clausal.pl_data_imports import PL_DATA_NAMES_KEY
 from clausal.logic.exact_arith import (
     exact_add as _exact_add, exact_sub as _exact_sub,
     exact_mul as _exact_mul, python_truediv as _python_truediv,
@@ -506,6 +507,18 @@ def cell_signature_for_name(
     namespace = resolve_globals if resolve_globals is not None else lowering_globals()
     if namespace is None:
         return None
+    pl_data = namespace.get(PL_DATA_NAMES_KEY)
+    if pl_data and name in pl_data:
+        # Operator ruling 2026-09-30: a name an ``-import_from`` resolved to
+        # DATA from a ``.pl`` module (``clausal.pl_data_imports``) builds
+        # the compound at the arity WRITTEN, positionally, as in ISO.  With
+        # no arity asked (a presence test, or the construction site's first
+        # ask) it answers arity 0 and the construction site re-asks at the
+        # written one.  A keyword construction has no fields to place into.
+        if keywords:
+            return None
+        return (pl_data[name],
+                tuple(f"arg_{i}" for i in range(arity or 0)))
     resolved = _resolve_functor_binding(name, namespace)
     if resolved is None:
         return None

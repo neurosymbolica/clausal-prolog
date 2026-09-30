@@ -207,10 +207,13 @@ since 0.4.0 finish three moves:
   is none; `.clausal`/`.seam` and Python targets are unchanged. A name
   within a small edit distance of one of the module's predicates
   (`citaton` for `citation`) still imports as the atom, and warns once
-  with `ClausalImportedDataNameWarning` naming the predicate. The atom is
-  not a functor declaration, exactly as for an atom a `.clausal` module
-  exports: `--cite(++k)` still asks for a declared `cite/1`, and
-  `'=..'(C, [cite, K])` builds or matches the term from the imported atom.
+  with `ClausalImportedDataNameWarning` naming the predicate. Such a name
+  also builds `cite(...)` at ANY arity in the importer, positionally:
+  `--cite(++k)` and a clause's `cite(K)` are `('cite', K)`, `==` the
+  rulebase's `cite(k)`. The same holds for a data functor the `.pl` module
+  itself uses and the importer imports (`v` of `v(ok, [...])`) when the
+  module declares no signature for it, which is the native front end's
+  case: it used to build under the translator only.
 
 - **ISO 13211-2 `:- end_module(Name).`, and a "require end_module"
   setting.** A `.pl` module file may end with `end_module/1`; both `.pl`

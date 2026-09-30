@@ -4765,7 +4765,9 @@ def _wrap_import_for_pl_data(import_stmt, resolved_module, pairs, eligible,
     time, so the fallback is emitted for every ``-import_from`` and decides
     there: ``clausal.pl_data_imports.bind_data_names`` answers ``False`` for
     anything but a loaded ``.pl`` module, and the bare ``raise`` then
-    re-raises CPython's own error untouched."""
+    re-raises CPython's own error untouched.  On success, ``else:`` records
+    the ``.pl`` module's plain data atoms that carry no functor signature
+    (the native front end declares none), so they build at any arity."""
     text = (
         "try:\n"
         "    pass\n"
@@ -4774,6 +4776,10 @@ def _wrap_import_for_pl_data(import_stmt, resolved_module, pairs, eligible,
         f".bind_data_names(globals(), {resolved_module!r}, {pairs!r}, "
         f"{tuple(eligible)!r}, _cs_import_error):\n"
         "        raise\n"
+        "else:\n"
+        "    __import__('clausal.pl_data_imports', fromlist=['_'])"
+        f".record_bound_data_names(globals(), {resolved_module!r}, "
+        f"{pairs!r}, {tuple(eligible)!r})\n"
     )
     block = parse(text).body[0]
     block.body = [import_stmt]

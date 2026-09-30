@@ -37,6 +37,25 @@ import weakref
 #: atoms (``a1``, ``p``) sit one edit from almost anything.
 _TYPO_MIN_LEN = 4
 
+#: The importer-namespace key recording the names this module resolved to
+#: data: ``{spelling: atom}`` for the LOCAL name and the dotted remap key
+#: (``module.orig``) the rewriter emits for it.  Operator ruling 2026-09-30
+#: (follow-up): such a name licenses ``name(...)`` construction at ANY
+#: arity in the importer (``terms_to_ast.cell_signature_for_name``).
+PL_DATA_NAMES_KEY = "$pl_data_names"
+
+
+def record_data_name(namespace: dict, module_name: str, orig: str,
+                     local: str, atom: str) -> None:
+    """Record that *local* (imported as ``module_name.orig``) is the data
+    atom *atom* in *namespace*."""
+    names = namespace.get(PL_DATA_NAMES_KEY)
+    if names is None:
+        names = namespace[PL_DATA_NAMES_KEY] = {}
+    names[local] = atom
+    names[f"{module_name}.{orig}"] = atom
+
+
 #: ``(importer namespace id, importer file, module, name)`` already warned
 #: about -- one load of an importer warns once per name; a fresh load (a new
 #: module namespace) warns again.
@@ -158,6 +177,43 @@ def data_atom(mod, name: str):
     return sys.intern(name)
 
 
+def record_bound_data_names(namespace: dict, module_name: str,
+                            pairs: dict, eligible) -> None:
+    """After a SUCCESSFUL ``from module_name import ...``: record each bare
+    name the ``.pl`` module binds as a plain data atom with no functor
+    signature, so it builds ``name(...)`` at any arity in the importer.
+
+    The native front end binds a data functor its ``.pl`` file uses
+    (``v(ok, [...])``) as the atom ``v`` and declares no signature for it,
+    where the translator declares ``v(_, _)``; without this the importer
+    could build ``v(...)`` under one front end and not the other.  A name
+    WITH a signature (the translator's) keeps it."""
+    mod = sys.modules.get(module_name)
+    if mod is None or not _is_pl_module(mod):
+        return
+    if getattr(getattr(mod, "__spec__", None), "_initializing", False):
+        return
+    for local, orig in pairs.items():
+        if local not in eligible:
+            continue
+        atom = _unsigned_data_atom(mod, orig, namespace.get(local))
+        if atom is not None:
+            record_data_name(namespace, module_name, orig, local, atom)
+
+
+def _unsigned_data_atom(mod, orig: str, value):
+    """*value* when it is *mod*'s plain data atom *orig* with no functor
+    signature in *mod*; else ``None``."""
+    if type(value) is not str or value != orig:
+        return None
+    from clausal.logic.compiler.terms_to_ast import functor_signatures_for  # noqa: PLC0415
+    if functor_signatures_for(orig, vars(mod)):
+        return None
+    if _is_predicate_of(mod, orig):
+        return None
+    return value
+
+
 def bind_data_names(namespace: dict, module_name: str, pairs: dict,
                     eligible, error: ImportError) -> bool:
     """Finish a failed ``from module_name import ...`` for a ``.pl`` target.
@@ -193,6 +249,7 @@ def bind_data_names(namespace: dict, module_name: str, pairs: dict,
                 raise new from None
             value = sys.intern(orig)
             _warn_if_misspelled(mod, orig, namespace)
+            record_data_name(namespace, module_name, orig, local, value)
         resolved[local] = value
     namespace.update(resolved)
     return True

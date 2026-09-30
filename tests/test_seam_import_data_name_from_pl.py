@@ -93,14 +93,57 @@ def test_a_data_name_imports_as_its_atom_and_matches_the_rulebase(pkg, fe):
 
 
 @pytest.mark.parametrize("fe", FRONT_ENDS)
+def test_the_witness_construction_builds_the_rulebase_term(pkg, fe):
+    """Operator ruling 2026-09-30 (follow-up): a data name imported from a
+    .pl module licenses ``name(...)`` at ANY arity in the importer, so
+    ``--cite(++mint(KEY))`` and a clause's ``cite(K)`` build ``('cite', K)``,
+    ``==`` the rulebase's ``cite(key)``.  ``v``, a data functor the rulebase
+    itself uses, builds under BOTH front ends (the native one declares no
+    signature for it)."""
+    load = pkg(fe, f"dn_ctor_{fe}")
+    mod = load("sc", """\
+        -import_from(PKG.dom.citations, [cite])
+        -import_from(PKG.dom.rules, [verdict, v, ok, p])
+        from clausal.logic.atoms import mint
+
+        def mine(key):
+            return --cite(++mint(key))
+
+        def theirs():
+            return [V for V in --verdict(p, V)]
+
+        def agree(key):
+            return [T for T in --found(++(--cite(++mint(key))), T)]
+
+        def wide():
+            return --cite(++mint("a"), 2, 3)
+
+        found(C, T) <- (verdict(p, T), T == v(ok, [C]))
+        built(K, T) <- (T is cite(K))
+        def via_clause(key):
+            return [T for T in --built(++mint(key), T)]
+    """)
+    mine = mod.mine("xx_art1")
+    (verdict,) = mod.theirs()
+    assert mine == ("cite", "xx_art1") == verdict[2][0]
+    assert mod.via_clause("xx_art1") == [("cite", "xx_art1")]
+    assert mod.agree("xx_art1") == [("v", "ok", [("cite", "xx_art1")])]
+    assert mod.agree("nope") == []
+    assert mod.wide() == ("cite", "a", 2, 3)
+
+
+@pytest.mark.parametrize("fe", FRONT_ENDS)
 def test_an_aliased_data_name_binds_the_original_atom(pkg, fe):
     load = pkg(fe, f"dn_alias_{fe}")
     mod = load("al", """\
         -import_from(PKG.dom.citations, [alias(cite, c)])
         def atom():
             return c
+        def build(k):
+            return --c(++k)
     """)
     assert mod.atom() == "cite"
+    assert mod.build(1) == ("cite", 1)
 
 
 @pytest.mark.parametrize("fe", FRONT_ENDS)
@@ -117,22 +160,9 @@ def test_an_exported_predicate_still_imports_the_predicate(pkg, fe):
     assert mod.atom() == "cite"
 
 
-@pytest.mark.parametrize("fe", FRONT_ENDS)
-def test_a_defined_unexported_predicate_is_unchanged(pkg, fe):
-    """Not data: ``helper`` is a predicate of the module, so the ruling does
-    not apply and the import takes the path it took before (on d7f1a837 the
-    module binds its unexported predicates, so this import succeeds and
-    binds the predicate -- never the atom)."""
-    load = pkg(fe, f"dn_unexported_{fe}")
-    mod = load("un", """\
-        -import_from(PKG.dom.citations, [helper])
-        def binding():
-            return helper
-        def keys():
-            return [K for K in --helper(K)]
-    """)
-    assert mod.binding() != "helper"
-    assert mod.keys() == ["xx_art1"]
+# Importing a defined-but-UNEXPORTED .pl predicate currently succeeds (it
+# binds the predicate).  Ruled 2026-09-30 that it should become an error;
+# that is a separate follow-up with a census, so no test pins it here.
 
 
 @pytest.mark.parametrize("fe", FRONT_ENDS)
