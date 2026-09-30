@@ -217,6 +217,14 @@ def _global_cardinality(vs, pairs, trail, k):
             raise LogicException(domain_error("gcc_pair", p,
                                               "global_cardinality/2"))
         kc.append((_integer(parts[0], "global_cardinality/2"), parts[1]))
+    if len({key for key, _ in kc}) != len(kc):
+        # Scryer: domain_error(gcc_unique_key_pairs, Pairs)
+        from clausal.logic.exceptions import domain_error  # noqa: PLC0415
+        raise LogicException(domain_error("gcc_unique_key_pairs", pairs,
+                                          "global_cardinality/2"))
+    # Counts (integer or variable) and elements are type-checked by
+    # clpfd.global_cardinality, after the units side channel has turned a
+    # dimensionless quantity into its plain integer.
     if global_cardinality(_items(vs, "global_cardinality/2"), kc, trail):
         yield None
 

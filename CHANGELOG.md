@@ -480,6 +480,19 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
 
 ### Fixed
 
+- **clpz global constraints follow Scryer's clpz contract.**
+  `global_cardinality(Vs, Pairs)` now requires every element of `Vs` to be
+  one of the keys: it counted per key only, so an element free to take an
+  off-key value satisfied every count (`X in 0..2,
+  global_cardinality([X], [1-0])` labelled X = 0 and 2; clpz has no
+  answer). Its counts and elements must be integers or variables (`[1-a]`
+  succeeded; now `type_error(integer, a)`), and a repeated key is
+  `domain_error(gcc_unique_key_pairs, Pairs)`. `zcompare/3` raises
+  `domain_error(order, O)` for a bound Order other than `<`, `=`, `>` (it
+  failed) and `type_error(integer, X)` for a non-arithmetic operand.
+  `element/3` raises `type_error(integer, I)` for a non-integer index (it
+  failed). `scalar_product/4` takes any clpz expression as its fourth
+  argument (`Y*Y`, `4/2`), as `#=` does; every compound was refused.
 - **A `.pl` module in an earlier `sys.path` entry is no longer shadowed by a
   `.clausal` or `.seam` module of the same name in a later one.** The import
   hook now resolves source modules per `sys.path` entry, in path order: the
