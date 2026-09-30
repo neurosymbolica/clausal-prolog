@@ -218,12 +218,7 @@ def _options(options, opts_term):
             elif o in _CHOICE:
                 slot = "choice"
         elif type(o) is tuple and len(o) == 2 and o[0] in ("min", "max"):
-            # Scryer's optimisation options: not built here.  Refused loudly
-            # rather than ignored (ignoring would change the answers).
-            raise LogicException(domain_error(
-                "labeling_option", walk(o),
-                "labeling/2: the min(Expr)/max(Expr) optimisation options "
-                "are not supported"))
+            continue                       # optimisation: see _objectives
         if slot is None:
             _raise(domain_error("labeling_option", walk(o), ctx))
         cur = {"sel": sel, "order": order, "choice": choice}[slot]
@@ -301,11 +296,92 @@ def labeling(options, vars_, trail: Trail):
     for v in vs:
         _finite_or_raise(v, ctx)
     sel, order, choice = _options(options, options)
+    objectives = _objectives(options)
     # A united variable is labelled through its shadow, as label/1 does.
     if _fd._label_targets is None:
         _fd._ensure_units_imports()
     vs = _fd._label_targets(vs)
-    yield from _label(vs, sel, order, choice, trail)
+    if not objectives:
+        yield from _label(vs, sel, order, choice, trail)
+        return
+    yield from _label_optimising(vs, sel, order, choice, objectives, trail)
+
+
+def _objectives(options):
+    """The ``min(Expr)`` / ``max(Expr)`` options, in order, as
+    ``(sign, Expr)`` (sign -1 for max); each Expr checked as a clpz
+    expression up front (domain_error(clpz_expression, _) otherwise)."""
+    out = []
+    for o in _proper_list(options, "labeling/2"):
+        o = deref(o)
+        if type(o) is tuple and len(o) == 2 and o[0] in ("min", "max"):
+            expr = clpz_expression(o[1], "labeling/2")
+            out.append((-1 if o[0] == "max" else 1, expr))
+    return out
+
+
+def _post_clpz(op, l, r, trail) -> bool:
+    """A clpz comparison ``l op r`` (``/`` as clpz's exact division)."""
+    ops = _fd.clpz_operands(l, r, trail)
+    return ops is not None and _post_cmp(op, ops[0], ops[1], trail)
+
+
+def _objective_value(expr, trail):
+    """The value of the objective once the variables are labelled, or None
+    when it has none -- ``X/2`` with X odd, ``1//X`` with X = 0: the clpz
+    relation fails there (ruling Q14, as Scryer's), so that labelling is
+    not an answer of the optimisation."""
+    if _term_vars(expr):
+        # Scryer: an objective over a variable the labelling leaves unbound
+        _raise(instantiation_error("labeling/2"))
+    v = Var()
+    mark = trail.mark()
+    ok = _post_clpz("eq", v, expr, trail)
+    val = deref(v) if ok else None
+    trail.undo(mark)
+    return val if _is_int(val) else None
+
+
+def _label_optimising(vs, sel, order, choice, objectives, trail):
+    """Scryer's ``min(Expr)``/``max(Expr)``, by branch and bound: the best
+    value of the first objective is found (each solution tightens the
+    bound), the labellings with that value are answered -- ties ordered by
+    the next objective, then by the other options -- and the search moves on
+    to the next value."""
+    if not objectives:
+        yield from _label(vs, sel, order, choice, trail)
+        return
+    sign, expr = objectives[0]
+    better = "gt" if sign < 0 else "lt"       # max: look for larger values
+    beyond = None                             # values already answered
+    while True:
+        best = None
+        while True:
+            mark = trail.mark()
+            ok = True
+            if beyond is not None:
+                # strictly past the values already answered
+                ok = _post_clpz("lt" if sign < 0 else "gt", expr, beyond, trail)
+            if ok and best is not None:
+                ok = _post_clpz(better, expr, best, trail)
+            found = None
+            if ok:
+                for _ in _label(vs, sel, order, choice, trail):
+                    found = _objective_value(expr, trail)
+                    if found is not None:
+                        break
+            trail.undo(mark)
+            if found is None:
+                break
+            best = found
+        if best is None:
+            return
+        mark = trail.mark()
+        if _post_clpz("eq", expr, best, trail):
+            yield from _label_optimising(vs, sel, order, choice,
+                                         objectives[1:], trail)
+        trail.undo(mark)
+        beyond = best
 
 
 def _label(vs, sel, order, choice, trail):

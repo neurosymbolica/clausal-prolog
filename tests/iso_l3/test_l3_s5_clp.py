@@ -170,13 +170,12 @@ def test_the_builtins_from_the_seam_in_quoted_form(native, ans):
     assert ans(mod, "u") == [1, 3, 7]
 
 
-def test_labeling_min_max_optimisation_is_refused_loudly(native, ans):
-    from clausal.logic.exceptions import LogicException
+def test_labeling_min_max_optimisation_orders_the_answers(native, ans):
+    """labeling([max(X)], [X]) answers X from the largest down, as in
+    Scryer (it was refused before the optimisation options existed)."""
     mod = native.load("s5_opt", ":- use_module(library(clpz)).\n"
                                 "t(X) :- X in 1..3, labeling([max(X)], [X]).\n")
-    with pytest.raises(LogicException) as ei:
-        ans(mod, "t")
-    assert "min(Expr)/max(Expr)" in str(ei.value)
+    assert ans(mod, "t") == [3, 2, 1]
 
 
 def test_a_reified_comparison_over_abs_is_accepted(native, ans):
