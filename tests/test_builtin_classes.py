@@ -92,15 +92,15 @@ class TestSingleArityConstruction:
 
     def test_keywords_at_an_unregistered_count_are_refused(self):
         """No padding (operator ruling 2026-09-25): keywords name the slots
-        of a registered arity, so ``append(l1=..., l2=...)`` -- 2 arguments,
-        append is append/3 -- is refused, where it used to pad ``l3`` with a
-        fresh Var."""
+        of a registered arity, so ``append(l1=...)`` -- 1 argument, append
+        is append/2 and append/3 -- is refused, where it used to pad with
+        fresh Vars."""
         # nv
         from clausal.logic.predicate import ClausalTermConstructionError
         append = get_builtin_class("append")
         with pytest.raises(ClausalTermConstructionError,
-                           match="registered only at append/3"):
-            append(l1=[1], l2=[2])
+                           match="registered only at append/2, append/3"):
+            append(l1=[1])
         with pytest.raises(ClausalTermConstructionError,
                            match="registered only at between/3"):
             get_builtin_class("between")(low=1, high=10)
@@ -212,7 +212,8 @@ class TestBuiltinObjectProtocol:
 
     def test_arities(self):
         # nv
-        assert get_builtin_class("append").arities == (3,)
+        assert get_builtin_class("append").arities == (2, 3)
+        assert get_builtin_class("reverse").arities == (2,)
         assert get_builtin_class("maplist").arities[:2] == (2, 3)
 
     def test_carries_no_predicate_state(self):
@@ -225,10 +226,11 @@ class TestBuiltinObjectProtocol:
     def test_get_dispatch(self):
         # nv
         from clausal.logic.builtins._registry import _stateless_dispatch
-        append = get_builtin_class("append")
-        fn = append._get_dispatch()
+        reverse = get_builtin_class("reverse")     # a single arity
+        fn = reverse._get_dispatch()
         assert callable(fn)
-        assert fn is append._dispatch_by_arity[3]
+        assert fn is reverse._dispatch_by_arity[2]
+        assert _stateless_dispatch("reverse", 2) is not None
         assert _stateless_dispatch("append", 3) is not None
 
     def test_db_builtin_no_dispatch(self):
