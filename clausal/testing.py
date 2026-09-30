@@ -379,6 +379,36 @@ def _head_args(head) -> tuple:
     return tuple(getattr(head, n) for n in term_field_names(head))
 
 
+def _clause_args(clause) -> tuple:
+    """The argument tuple of a ``test`` clause as its SOURCE wrote it.
+
+    A fact -- and a clause whose body is exactly ``true``, which is stored
+    the same way -- keeps no ground argument in its head: each one becomes
+    a fresh variable plus a leading ``Unify(V, value)`` body goal (see
+    ``Clause.hoisted``), so the head alone would name the test ``_0`` and
+    run it as ``test(_)``.  Each such variable is read back from its goal:
+    plain data is itself, a bare name (``LoadName``) the atom it spells.
+    Anything else stays the variable, for :func:`_test_option` to render."""
+    from clausal.logic.builtins.clause_ops import _plain  # noqa: PLC0415
+    args = list(_head_args(clause.head))
+    lead = list(clause.body or ())[:getattr(clause, "hoisted", 0)]
+    if not lead:
+        return tuple(args)
+    from clausal.logic.variables import Var  # noqa: PLC0415
+    for i, arg in enumerate(args):
+        if not isinstance(arg, Var):
+            continue
+        for goal in lead:
+            if type(goal).__name__ == "Unify" and goal.left is arg:
+                right = goal.right
+                if type(right).__name__ == "LoadName":
+                    args[i] = right.name
+                elif _plain(right):
+                    args[i] = right
+                break
+    return tuple(args)
+
+
 def _is_negative(clause) -> bool:
     """True for a ``test(Name, fail)`` clause (a ``test/2`` head)."""
     return len(_head_args(clause.head)) == 2
@@ -393,7 +423,7 @@ def _test_option(clause) -> tuple[object, str]:
     atom it spells, anything else is only rendered for the error."""
     from clausal.logic.variables import Var, deref  # noqa: PLC0415
     from clausal.terms import term_str  # noqa: PLC0415
-    opt = deref(_head_args(clause.head)[1])
+    opt = deref(_clause_args(clause)[1])
     if isinstance(opt, Var):
         for goal in list(clause.body or ())[:getattr(clause, "hoisted", 0)]:
             if type(goal).__name__ == "Unify" and goal.left is opt:
@@ -446,10 +476,11 @@ def _check_test_option(mod, clause, name: str) -> None:
         + ", ".join(PLUNIT_UNSUPPORTED_OPTIONS))
 
 
-def _test_description_term(head):
-    """The description ARGUMENT of a ``test/1`` or ``test/2`` clause head."""
-    args = _head_args(head)
-    return args[0] if args else head
+def _test_description_term(clause):
+    """The description ARGUMENT of a ``test/1`` or ``test/2`` clause, as
+    written (:func:`_clause_args`)."""
+    args = _clause_args(clause)
+    return args[0] if args else clause.head
 
 
 def _test_description_name(desc) -> str:
@@ -488,7 +519,7 @@ def collect_tests(mod: object) -> list[str]:
     if logic_module is None:
         return []
     entries = _test_clauses(logic_module)
-    names = [_test_description_name(_test_description_term(clause.head))
+    names = [_test_description_name(_test_description_term(clause))
              for _functor, clause in entries]
     for (_functor, clause), name in zip(entries, names):
         if _is_negative(clause):
@@ -814,7 +845,7 @@ def _diagnose_into(diag, mod, description, path, error, budget) -> None:
 def _test_entry(logic_module, description):
     """The ``(functor, clause)`` whose description names *description*."""
     for functor, clause in _test_clauses(logic_module):
-        desc = _test_description_term(clause.head)
+        desc = _test_description_term(clause)
         if _test_description_name(desc) == description:
             return functor, clause
     return None
@@ -841,7 +872,7 @@ def _test_goal_for_name(logic_module, description):
             return TEST_DEPRECATED_NAME, description, False
         return TEST_NAME, description, False
     functor, clause = entry
-    return (functor, _test_description_term(clause.head),
+    return (functor, _test_description_term(clause),
             _is_negative(clause))
 
 

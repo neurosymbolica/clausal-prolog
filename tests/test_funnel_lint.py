@@ -293,7 +293,10 @@ ALLOWLIST: tuple[AllowEntry, ...] = (
     # Range shifted 2470-2582 -> 2480-2592 by the detached-module
     # registration in load_clausal_module and run_file above the site
     # (2026-09-30; mechanical again).
-    AllowEntry("clausal/testing.py", (2480, 2592),
+    # Range shifted 2480-2592 -> 2511-2623 by ``_clause_args`` (a test
+    # clause's hoisted head arguments read back) above the site
+    # (2026-09-30; mechanical again).
+    AllowEntry("clausal/testing.py", (2511, 2623),
                "task-3 skip: diagnostic head-name fallback, semantics diverge "
                "from _functor_name (see task-3-report.md determination)"),
     # task-2-report.md / plan Task 2 text: "leave head_key itself as-is (it
@@ -627,7 +630,8 @@ def test_lint_catches_dotted_receiver_functor_fallback(tmp_path):
 
 
 def test_testing_py_allowlist_entry_is_load_bearing():
-    """clausal/testing.py:2562 (2552 before the detached-module registration
+    """clausal/testing.py:2593 (2562 before ``_clause_args`` was added above
+    it, 2026-09-30; 2552 before the detached-module registration
     in load_clausal_module/run_file was added above it, 2026-09-30; 2398 before test(Name, fail) collection
     was added above it, 2026-09-29; 2348 before the runner's exit codes, .pl
     loading and .pl diagnostic note were added above it, 2026-09-28; 2353 before the keyword-term class's removal
@@ -643,7 +647,7 @@ def test_testing_py_allowlist_entry_is_load_bearing():
     lines) has a real ``getattr(clause.head, "functor",
     None) or type(clause.head).__name__`` occurrence -- now that the
     receiver group is dotted-aware, the task-3 ALLOWLIST range for
-    testing.py (currently 2480-2592, which still covers the site; the entry's
+    testing.py (currently 2511-2623, which still covers the site; the entry's
     own comment records how it has moved as code above the site grew) is doing
     real exemption work, not sitting on an already-invisible site.
 
@@ -663,7 +667,7 @@ def test_testing_py_allowlist_entry_is_load_bearing():
         "allowlist entry is a dead no-op again"
     )
     assert any(
-        v.pattern == "functor_fallback" and v.line == 2562
+        v.pattern == "functor_fallback" and v.line == 2593
         for v in testing_violations
     ), testing_violations
 
