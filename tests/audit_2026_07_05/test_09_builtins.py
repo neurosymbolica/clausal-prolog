@@ -578,8 +578,20 @@ def test_F015_between_bool_c_py_divergence(fix):
 
 
 def test_F015_regression_succ_rejects_bool(fix):
+    """A bool is not an integer: since 2026-09-30 succ/2 rejects it with
+    type_error(integer, True) (Scryer), on both the C and Python paths --
+    it used to fail silently."""
+    import clausal.logic.builtins.arithmetic as ar
     _, m = fix
-    assert not _first(m, "succ", True, Var())
+    for use_c in (True, False):
+        ar._USE_C_ARITH = use_c
+        try:
+            with pytest.raises(LogicException) as info:
+                _first(m, "succ", True, Var())
+            assert cell_args(info.value.term)[0] == (
+                "type_error", "integer", True)
+        finally:
+            ar._USE_C_ARITH = True
 
 
 # ═══════════════════════════════════════════════════════════════════════════
