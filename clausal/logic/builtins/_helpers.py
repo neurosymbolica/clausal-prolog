@@ -22,6 +22,7 @@ from clausal.logic.atoms import (
     is_truth_atom, truth_spelling,
 )
 from clausal.terms import (
+    Undefined as _Undefined,
     DictTerm, SetTerm, Quantity,
     SegList, SegString, SegBytes, VarSeg, ConcreteSeg,
 )
@@ -754,10 +755,11 @@ def term_key(term: Any) -> tuple:
         # which the opaque band did, via a `<` that rejects its own type.
         return (_ORD_NUM, tuple(sorted(term.dims.items())), term.value,
                 _NUMERIC_RANK_QUANTITY)
-    if is_truth_atom(term):
+    if term is True or term is False or term is _Undefined:
         # True/False/Undefined ARE the atoms true/false/undefined (D35,
-        # ``atoms.is_truth_atom``): the atom band, by spelling -- Scryer
-        # orders ``compare(>, true, a)`` and ``sort([true, 1], [1, true])``.
+        # ``atoms.is_truth_atom``, inlined: this is the hot path of every
+        # sort): the atom band, by spelling -- Scryer orders
+        # ``compare(>, true, a)`` and ``sort([true, 1], [1, true])``.
         # Before ``int`` below, since a bool IS an int to ``isinstance``.
         return (_ORD_ATOM, truth_spelling(term))
     if isinstance(term, (int, float, _Fraction, _Decimal, _Real)):

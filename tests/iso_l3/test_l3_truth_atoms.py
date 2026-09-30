@@ -199,8 +199,9 @@ SEAM_ONLY = {
            "X #= true: raises(error(domain_error(clpz_expression,true),_))"),
     # the seam's ``<`` on two GROUND operands is Python's ``<`` over the
     # atom's spelling, as for any atom: ``1 < true`` is the same
-    # type_error(orderable, true) as ``1 < a`` (measured on the base engine)
-    "r2": (_err("type_error", "orderable", "true"),
+    # type_error(orderable, true) as ``1 < a`` (measured on the base engine),
+    # its culprit the truth OBJECT, as is/2 reports it (review 2026-09-30)
+    "r2": (_err("type_error", "orderable", True),
            "1 #< true: raises(error(domain_error(clpz_expression,true),_)) -- clpz posts; the seam's ground < does not"),
 }
 

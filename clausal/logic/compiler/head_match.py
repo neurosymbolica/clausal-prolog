@@ -1503,6 +1503,29 @@ def _compile_multi_star_guard(
 # ── compile_head_to_match_case ─────────────────────────────────────────────────
 
 
+
+def _same_type_eq(cap: ast.expr, lit: ast.expr) -> ast.expr:
+    """``cap.__class__ is lit.__class__ and cap == lit`` -- the C-speed
+    short-circuit of a head-literal guard.  Python's ``==`` alone says
+    ``1 == True`` and ``Decimal(1) == True``, so a caller's ``true`` passed
+    a head ``1`` (and ``1`` a head ``true``) without ever reaching
+    ``$unify``, which refuses the pair (D47: the truth values are ATOMS).
+    Same-type ``==`` never accepts a pair unify refuses, so a mismatch just
+    falls through to the ``$unify`` disjunct and the guard answers exactly
+    what unify answers.  (``__class__`` rather than ``type(...)``: a user
+    predicate named ``type`` can live in the same globals.)"""
+    return ast.BoolOp(
+        op=ast.And(),
+        values=[
+            ast.Compare(
+                left=ast.Attribute(value=cap, attr="__class__", ctx=ast.Load()),
+                ops=[ast.Is()],
+                comparators=[ast.Attribute(value=lit, attr="__class__", ctx=ast.Load())],
+            ),
+            ast.Compare(left=cap, ops=[ast.Eq()], comparators=[lit]),
+        ],
+    )
+
 def compile_head_to_match_case(
     head: Any,
     body_stmts: list[ast.stmt],
@@ -1696,11 +1719,7 @@ def compile_head_to_match_case(
             test=ast.BoolOp(
                 op=ast.Or(),
                 values=[
-                    ast.Compare(
-                        left=_name(cap_name),
-                        ops=[ast.Eq()],
-                        comparators=[ast.Constant(value=literal)],
-                    ),
+                    _same_type_eq(_name(cap_name), ast.Constant(value=literal)),
                     _call(
                         _name("$unify"),
                         _name(cap_name),
@@ -1725,11 +1744,7 @@ def compile_head_to_match_case(
             test=ast.BoolOp(
                 op=ast.Or(),
                 values=[
-                    ast.Compare(
-                        left=_name(cap_name),
-                        ops=[ast.Eq()],
-                        comparators=[_name(lit_key)],
-                    ),
+                    _same_type_eq(_name(cap_name), _name(lit_key)),
                     _call(
                         # $-prefixed like every sibling guard: the public
                         # "unify" key in the module dict is shadowable by a

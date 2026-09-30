@@ -41,6 +41,9 @@ static PyObject *fn_scalar_propagate_bignum = NULL;
 /* Exact-int domain_remove reference impl — used by alldiff_propagate for a
  * ground member at the INT64_MIN/MAX sentinel or beyond int64 (A06-F007). */
 static PyObject *fn_py_domain_remove = NULL;
+/* clpfd._fd_reject_truth_atom: raises type_error(integer, T) for a truth
+ * atom (D47), returns None otherwise -- shared with the Python twins. */
+static PyObject *fn_fd_reject_truth_atom = NULL;
 
 /*
  * Convert a Python truth value returned by a bignum-fallback propagate
@@ -1067,7 +1070,7 @@ ne_propagate(BinaryConstraintObject *self, PyObject *trail, PyObject *queue)
     }
 
     /* lhs ground int, rhs var */
-    if (!l_isvar && PyLong_Check(lhs) && r_isvar) {
+    if (!l_isvar && PyLong_Check(lhs) && !PyBool_Check(lhs) && r_isvar) {
         PyObject *state = call_get_attr(rhs, FD_KEY_STR);
         if (!state) goto error;
         if (state != Py_None) {
@@ -1102,7 +1105,7 @@ ne_propagate(BinaryConstraintObject *self, PyObject *trail, PyObject *queue)
     }
 
     /* rhs ground int, lhs var */
-    if (!r_isvar && PyLong_Check(rhs) && l_isvar) {
+    if (!r_isvar && PyLong_Check(rhs) && !PyBool_Check(rhs) && l_isvar) {
         PyObject *state = call_get_attr(lhs, FD_KEY_STR);
         if (!state) goto error;
         if (state != Py_None) {
@@ -1485,7 +1488,7 @@ alldiff_propagate(AllDiffConstraintObject *self, PyObject *trail, PyObject *queu
 
         if (isv) {
             if (PyList_Append(free_list, dv) < 0) { Py_DECREF(dv); goto ad_error; }
-        } else if (PyLong_Check(dv)) {
+        } else if (PyLong_Check(dv) && !PyBool_Check(dv)) {
             int already = PySet_Contains(ground_set, dv);
             if (already < 0) { Py_DECREF(dv); goto ad_error; }
             if (already) {
@@ -1494,7 +1497,12 @@ alldiff_propagate(AllDiffConstraintObject *self, PyObject *trail, PyObject *queu
             }
             if (PySet_Add(ground_set, dv) < 0) { Py_DECREF(dv); goto ad_error; }
         } else {
+            /* A truth atom is clpz's type_error(integer, T) (D47), as in
+             * the Python twin; any other non-integer fails. */
+            PyObject *r = PyObject_CallOneArg(fn_fd_reject_truth_atom, dv);
             Py_DECREF(dv); Py_DECREF(ground_set); Py_DECREF(free_list);
+            if (!r) return -1;
+            Py_DECREF(r);
             return 0;  /* non-integer */
         }
         Py_DECREF(dv);
@@ -2904,7 +2912,10 @@ py_fd_hook(PyObject *self, PyObject *args)
 
     /* Case 1: bound to integer (or integer-valued Fraction from CLP(Q)) */
     int is_int_val = PyLong_Check(bt) && !PyBool_Check(bt);
-    if (!is_int_val) {
+    /* A bool HAS .denominator == 1: without the PyBool_Check it came back
+     * in here as the integer 1/0.  True/False are the ATOMS true/false
+     * (D47); the fall-through below raises clpz's type_error for them. */
+    if (!is_int_val && !PyBool_Check(bt)) {
         /* Check for Fraction with denominator == 1 */
         PyObject *denom = PyObject_GetAttrString(bt, "denominator");
         if (denom) {
@@ -3185,7 +3196,13 @@ py_fd_hook(PyObject *self, PyObject *args)
         return PyBool_FromLong(ok > 0);
     }
 
-    /* Non-integer, non-var → fail */
+    /* Non-integer, non-var → fail; a truth atom raises (D47, the twin's
+     * _fd_reject_truth_atom). */
+    {
+        PyObject *r = PyObject_CallOneArg(fn_fd_reject_truth_atom, bt);
+        if (!r) goto hook_error;
+        Py_DECREF(r);
+    }
     if (domain_newref) { Py_DECREF(domain); Py_DECREF(constraints); }
     Py_DECREF(bt);
     Py_RETURN_FALSE;
@@ -3339,6 +3356,7 @@ PyInit__clpfd_propagate(void)
     fn_sum_propagate_bignum = PyObject_GetAttrString(clpfd_mod, "_sum_propagate_bignum");
     fn_scalar_propagate_bignum = PyObject_GetAttrString(clpfd_mod, "_scalar_propagate_bignum");
     fn_py_domain_remove = PyObject_GetAttrString(clpfd_mod, "_py_domain_remove");
+    fn_fd_reject_truth_atom = PyObject_GetAttrString(clpfd_mod, "_fd_reject_truth_atom");
     Py_DECREF(clpfd_mod);
 
     if (!fn_expr_domain || !fn_resolve || !fn_eval_ground ||
@@ -3347,7 +3365,7 @@ PyInit__clpfd_propagate(void)
         !fn_eq_propagate_bignum || !fn_ne_propagate_bignum ||
         !fn_lt_propagate_bignum || !fn_le_propagate_bignum ||
         !fn_sum_propagate_bignum || !fn_scalar_propagate_bignum ||
-        !fn_py_domain_remove)
+        !fn_py_domain_remove || !fn_fd_reject_truth_atom)
         return NULL;
 
     /* Try to import CLP(R) functions (optional) */

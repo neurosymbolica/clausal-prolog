@@ -6,7 +6,7 @@ from __future__ import annotations
 from typing import Any
 
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
-from clausal.logic.atoms import is_atom as _term_is_atom, spelling as _spelling
+from clausal.logic.atoms import is_atom as _term_is_atom, is_truth_atom, spelling as _spelling
 from clausal.logic.exceptions import (
     LogicException, instantiation_error, permission_error,
 )
@@ -158,6 +158,7 @@ def _unneck_clause(term_val: Any, context: str, action: str) -> Any:
     if is_var(head):
         raise LogicException(instantiation_error(context))
     _refuse_non_callable_clause(head, context)
+    _refuse_truth_atom_head(head, context)
     if is_true_body(body):
         return _OpenBody(head, True) if action == "retract" else head
     if action == "retract":
@@ -622,6 +623,22 @@ def _home_globals(db, module_dict: "dict | None", home) -> "dict | None":
 # ── assertz / retract ──────────────────────────────────────────────────────────
 
 
+def _refuse_truth_atom_head(head, who):
+    """``true``/``false`` are control constructs and ``undefined`` a
+    reserved builtin: STATIC procedures.  ISO 8.9.1.3 / 8.9.3.3, Scryer:
+    ``assertz(true)`` and ``retract(true)`` are ``permission_error(modify,
+    static_procedure, true/0)``.  D47 made the truth atoms the OBJECTS
+    ``True``/``False``/``Undefined``, and a head of that shape escaped as a
+    raw Python TypeError (assert) or failed silently (retract)."""
+    if is_truth_atom(head):
+        from clausal.logic.atoms import truth_spelling  # noqa: PLC0415
+        from clausal.logic.exceptions import permission_error  # noqa: PLC0415
+        raise LogicException(permission_error(
+            "modify", "static_procedure", ("/", head, 0),
+            f"{who}: {truth_spelling(head)}/0 is a control construct, a "
+            f"static procedure"))
+
+
 def _refuse_non_callable_clause(term_val, who):
     """ISO 8.9.1.3 b / Scryer: a clause that is a number (or another term
     that can never be a goal) is ``type_error(callable, T)``.  It used to
@@ -653,6 +670,7 @@ def _assertz_factory(db):
             # (Scryer too); it used to fail silently (triage B4a).
             raise LogicException(instantiation_error("assertz/1"))
         _refuse_non_callable_clause(term_val, "assertz/1")
+        _refuse_truth_atom_head(term_val, "assertz/1")
         clause = _build_clause(term_val, "assertz/1", db, module_dict)
         functor, arity = head_key(clause.head)
         pred_cls = _find_pred_cls(functor, arity, module_dict)
@@ -697,6 +715,7 @@ def _asserta_factory(db):
             # (Scryer too); it used to fail silently (triage B4a).
             raise LogicException(instantiation_error("asserta/1"))
         _refuse_non_callable_clause(term_val, "asserta/1")
+        _refuse_truth_atom_head(term_val, "asserta/1")
         clause = _build_clause(term_val, "asserta/1", db, module_dict)
         functor, arity = head_key(clause.head)
         pred_cls = _find_pred_cls(functor, arity, module_dict)
@@ -738,6 +757,7 @@ def _retract_factory(db):
         # ISO 8.9.3: retract(Head) is retract((Head :- true)) -- it removes
         # a FACT only -- and retract((Head :- Body)) matches the clause's
         # body too (see _unneck_clause).
+        _refuse_truth_atom_head(term_val, "retract/1")
         term_val = _unneck_clause(term_val, "retract/1", "retract")
         body_pattern = True
         if type(term_val) is _OpenBody:
@@ -876,6 +896,7 @@ def _retractall_factory(db):
         if is_non_callable_term(h, lists=False):
             from clausal.logic.exceptions import type_error  # noqa: PLC0415
             raise LogicException(type_error("callable", h, "retract/1"))
+        _refuse_truth_atom_head(h, "retract/1")   # Scryer's context, as above
         term_val = _check_cell_head_permission(h, "retract/1", db, module_dict)
         try:
             functor, arity = head_key(term_val)

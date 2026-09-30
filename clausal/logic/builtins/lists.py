@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from clausal.logic.atoms import char_atom, is_char_atom, spelling
+from clausal.logic.atoms import char_atom, is_char_atom, is_truth_atom, spelling
 from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.logic.trampoline import DONE
 
@@ -943,9 +943,42 @@ def _select__3(this_generator, _proceed, _fail, _catcher, elem, lst, rest, trail
     yield (_fail, DONE)
 
 
+class _Members:
+    """Membership by term identity (==/2): 1 and 1.0 are different elements,
+    as are two distinct variables.  Python's ``in`` compared by ``==``, which
+    made 1 and 1.0 (and f(1) and f(1.0)) one element.  Ints, floats and
+    atoms are looked up in a (type, value) set; everything else is scanned
+    with ==/2."""
+
+    __slots__ = ("_atomic", "_other")
+
+    def __init__(self, items=()):
+        self._atomic: set = set()
+        self._other: list = []
+        for x in items:
+            self.add(x)
+
+    def add(self, x) -> None:
+        x = deref(x)
+        t = type(x)
+        if t in (int, float, str):
+            self._atomic.add((t, x))
+        else:
+            self._other.append(x)
+
+    def __contains__(self, x) -> bool:
+        x = deref(x)
+        t = type(x)
+        if t in (int, float, str):
+            return (t, x) in self._atomic
+        from clausal.logic.builtins.iso_compare import _iso_identical  # noqa: PLC0415
+        return any(_iso_identical(x, y) for y in self._other)
+
+
 @_trampoline_builtin("subtract", 3)
 def _subtract__3(this_generator, _proceed, _fail, _catcher, set1, set2, diff, trail):
-    """subtract(Set1, Set2, Diff) — Diff is Set1 minus elements in Set2."""
+    """subtract(Set1, Set2, Diff) — Diff is Set1 minus the elements of Set2
+    (compared by ==/2: 1 and 1.0 differ)."""
     s1 = deref(set1)
     s2 = deref(set2)
     s1_items = _as_items(s1)
@@ -953,7 +986,8 @@ def _subtract__3(this_generator, _proceed, _fail, _catcher, set1, set2, diff, tr
     if s1_items is not None and s2_items is not None:
         _out_str = _was_string(s1) and _was_string(s2)   # stage 1: the carrier is str-shaped
         _out_bytes = isinstance(s1, bytes) and isinstance(s2, bytes)
-        result = _seq_result([x for x in s1_items if x not in s2_items], _out_str, _out_bytes)
+        members = _Members(s2_items)
+        result = _seq_result([x for x in s1_items if x not in members], _out_str, _out_bytes)
         mark = trail.mark()
         if unify(diff, result, trail):
             yield (_proceed, None)
@@ -963,7 +997,8 @@ def _subtract__3(this_generator, _proceed, _fail, _catcher, set1, set2, diff, tr
 
 @_trampoline_builtin("intersection", 3)
 def _intersection__3(this_generator, _proceed, _fail, _catcher, set1, set2, inter, trail):
-    """intersection(Set1, Set2, Inter) — Inter is the intersection of Set1 and Set2."""
+    """intersection(Set1, Set2, Inter) — Inter is the elements of Set1 that
+    are in Set2 (compared by ==/2: 1 and 1.0 differ)."""
     s1 = deref(set1)
     s2 = deref(set2)
     s1_items = _as_items(s1)
@@ -971,7 +1006,8 @@ def _intersection__3(this_generator, _proceed, _fail, _catcher, set1, set2, inte
     if s1_items is not None and s2_items is not None:
         _out_str = _was_string(s1) and _was_string(s2)   # stage 1: the carrier is str-shaped
         _out_bytes = isinstance(s1, bytes) and isinstance(s2, bytes)
-        result = _seq_result([x for x in s1_items if x in s2_items], _out_str, _out_bytes)
+        members = _Members(s2_items)
+        result = _seq_result([x for x in s1_items if x in members], _out_str, _out_bytes)
         mark = trail.mark()
         if unify(inter, result, trail):
             yield (_proceed, None)
@@ -982,9 +1018,10 @@ def _intersection__3(this_generator, _proceed, _fail, _catcher, set1, set2, inte
 @_trampoline_builtin("union", 3)
 def _union__3(this_generator, _proceed, _fail, _catcher, set1, set2, uni, trail):
     """union(Set1, Set2, Union) — Union is Set1 followed by the elements of
-    Set2 not already in Set1 (SWI-consistent). Set1's OWN duplicates are
-    preserved (``union([1,1],[],U)`` = ``[1,1]``); only elements of Set2 that
-    already occur in Set1 are dropped. Use list_to_set/2 first for a true set.
+    Set2 not already in Set1 (compared by ==/2: 1 and 1.0 differ). Set1's
+    OWN duplicates are preserved (``union([1,1],[],U)`` = ``[1,1]``); only
+    elements of Set2 that already occur in Set1 are dropped. Use
+    list_to_set/2 first for a true set.
     """
     s1 = deref(set1)
     s2 = deref(set2)
@@ -994,9 +1031,11 @@ def _union__3(this_generator, _proceed, _fail, _catcher, set1, set2, uni, trail)
         _out_str = _was_string(s1) and _was_string(s2)   # stage 1: the carrier is str-shaped
         _out_bytes = isinstance(s1, bytes) and isinstance(s2, bytes)
         result = list(s1_items)
+        members = _Members(result)
         for x in s2_items:
-            if x not in result:
+            if x not in members:
                 result.append(x)
+                members.add(x)
         out = _seq_result(result, _out_str, _out_bytes)
         mark = trail.mark()
         if unify(uni, out, trail):
@@ -1013,12 +1052,27 @@ def _list_to_set__2(this_generator, _proceed, _fail, _catcher, lst, set_out, tra
     if items is not None:
         items = [deref(x) for x in items]
         # Duplicates by ``==``/2 (Scryer's list_to_set/2), not by Python's
-        # ``==``: ``true`` is not 1 (D35) and 1 is not 1.0.
-        from clausal.logic.builtins.iso_compare import _iso_identical  # noqa: PLC0415
+        # ``==``: ``true`` is not 1 (D35) and 1 is not 1.0.  Two terms are
+        # ``==`` exactly when their standard-order keys are equal (sort/2
+        # dedups by the same key), so a SET of keys finds a duplicate in
+        # O(1); only a term whose key is unhashable (an opaque value inside)
+        # is scanned, against the other unhashable ones -- a hashable key
+        # can never equal an unhashable one.
         seen: list = []
+        keys: set = set()
+        opaque: list = []
         for x in items:
-            if not any(_iso_identical(x, y) for y in seen):
-                seen.append(x)
+            k = _standard_order_key(x)
+            try:
+                if k in keys:
+                    continue
+                keys.add(k)
+            except TypeError:
+                from clausal.logic.builtins.iso_compare import _iso_identical  # noqa: PLC0415
+                if any(_iso_identical(x, y) for y in opaque):
+                    continue
+                opaque.append(x)
+            seen.append(x)
         out = _seq_result(seen, _was_string(lst_val), _was_bytes(lst_val))
         mark = trail.mark()
         if unify(set_out, out, trail):
@@ -1088,6 +1142,20 @@ def _sum_list__2(this_generator, _proceed, _fail, _catcher, lst, total, trail):
     yield (_fail, DONE)
 
 
+def _refuse_truth_atoms(items, context: str) -> None:
+    """max_list/2 and min_list/2 are arithmetic (SWI's: a fold of
+    ``Max is max(Max0, X)``): a truth atom is not a number but the ATOM
+    true/false/undefined (D47), so it raises is/2's
+    ``type_error(evaluable, true/0)`` -- where Python's ``max`` read
+    ``True`` as 1.  The other elements keep Python's order (dates and
+    quantities are ordered here and the evaluator has no max/2 for them)."""
+    for x in items:
+        x = deref(x)
+        if is_truth_atom(x):
+            from clausal.logic.builtins.iso_compare import _iso_eval  # noqa: PLC0415
+            _iso_eval(x, context)      # raises type_error(evaluable, x/0)
+
+
 @_trampoline_builtin("max_list", 2)
 def _max_list__2(this_generator, _proceed, _fail, _catcher, lst, maximum, trail):
     """max_list(List, max_) — max_ is the maximum element of List.
@@ -1100,6 +1168,7 @@ def _max_list__2(this_generator, _proceed, _fail, _catcher, lst, maximum, trail)
     lst_val = deref(lst)
     items = _as_items(lst_val)
     if items is not None and len(items) > 0:
+        _refuse_truth_atoms(items, "max_list/2")
         try:
             m = max(deref(x) for x in items)
         except TypeError as exc:
@@ -1125,6 +1194,7 @@ def _min_list__2(this_generator, _proceed, _fail, _catcher, lst, minimum, trail)
     lst_val = deref(lst)
     items = _as_items(lst_val)
     if items is not None and len(items) > 0:
+        _refuse_truth_atoms(items, "min_list/2")
         try:
             m = min(deref(x) for x in items)
         except TypeError as exc:

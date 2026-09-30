@@ -456,7 +456,11 @@ def crossing_value(atom):
     its spelling.  The boundary sites (``to_python``, ``unwrap_atom``, the
     ``py.*`` wrappers, JSON generation, z3 options) call this rather than
     ``spelling``: ``spelling(True)`` is ``"true"`` for atom_length/2, and a
-    Python caller must never receive that str for a truth value."""
+    Python caller must never receive that str for a truth value.  The str
+    of a truth spelling (``"true"``) is the SAME atom (see above), so it
+    crosses as the object too: both spellings of one atom leave alike."""
+    if type(atom) is str:
+        return TRUTH_SPELLINGS.get(atom, atom)
     return atom if is_truth_atom(atom) else spelling(atom)
 
 

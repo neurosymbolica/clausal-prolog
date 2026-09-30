@@ -23,7 +23,7 @@ from clausal.logic.variables import (
     register_attr_hook,
     Trail,
 )
-from clausal.logic.atoms import is_truth_atom as _is_truth_atom, truth_spelling as _truth_spelling
+from clausal.logic.atoms import truth_spelling as _truth_spelling
 from clausal.logic.predicate import is_term_instance, term_field_names
 from clausal.terms import (
     SegList,
@@ -34,7 +34,10 @@ from clausal.terms import (
     Quantity,
     ConcreteSeg,
     VarSeg,
+    Undefined as _Undefined,
 )
+
+_ATOMIC = (bool, int, float, str, bytes, complex, type(None))
 
 
 DIF_KEY = "dif"
@@ -80,14 +83,20 @@ def structural_eq(left: Any, right: Any) -> bool:
     # A truth atom (True/False/Undefined -- the atoms true/false/undefined,
     # ``atoms.is_truth_atom``) is identical to itself (the identity check
     # above) and to the str of its spelling, never to a number: Python's
-    # ``True == 1`` must not reach here.
-    if _is_truth_atom(left):
-        return type(right) is str and _truth_spelling(left) == right
-    if _is_truth_atom(right):
-        return type(left) is str and _truth_spelling(right) == left
-    _ATOMIC = (bool, int, float, str, bytes, complex, type(None))
+    # ``True == 1`` must not reach ``==``.  The bool test sits INSIDE the
+    # atomic branch (a bool is atomic) so the common int/str pair pays two
+    # ``type`` compares, not two calls; ``Undefined`` is not atomic and is
+    # tested only on the way to the general case.
     if isinstance(left, _ATOMIC) and isinstance(right, _ATOMIC):
+        if type(left) is bool:
+            return type(right) is str and _truth_spelling(left) == right
+        if type(right) is bool:
+            return type(left) is str and _truth_spelling(right) == left
         return left == right
+    if left is _Undefined:
+        return type(right) is str and right == "undefined"
+    if right is _Undefined:
+        return type(left) is str and left == "undefined"
 
     # General case: structurally equal iff unifiable with zero bindings.
     return reify_eq(left, right, Trail()) is True

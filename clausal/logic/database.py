@@ -23,7 +23,7 @@ from clausal.logic.exceptions import (
     permission_error,
     type_error,
 )
-from clausal.logic.atoms import is_mangled
+from clausal.logic.atoms import is_mangled, is_truth_atom, truth_spelling
 from clausal.logic.predicate import (
     is_term_instance,
     module_source_path,
@@ -1989,6 +1989,10 @@ def head_key(head: Any) -> tuple[str, int]:
     # what ``compound_cell_shape`` excludes.
     if type(head) is str:
         return head, 0                 # STAGE 2: an atom head is name/0
+    if is_truth_atom(head):
+        # D47: True/False/Undefined ARE the atoms true/false/undefined, so
+        # a truth-atom head is name/0 too (it raised a raw TypeError here)
+        return truth_spelling(head), 0
     is_cell_head, cell_functor_name = compound_cell_shape(head)
     if is_cell_head:
         return cell_functor_name, len(head) - 1
