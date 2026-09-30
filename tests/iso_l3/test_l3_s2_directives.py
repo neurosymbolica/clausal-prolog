@@ -523,7 +523,7 @@ def test_d27_a_library_cannot_be_dropped_and_says_so(native):
 @pytest.fixture
 def scryer_bin():
     import os
-    s = "/workspace/scryer-prolog/target/release/scryer-prolog"
+    from tests._oracles import SCRYER as s
     if not os.path.exists(s):
         if os.environ.get("CLAUSAL_ISO_ALLOW_NO_SCRYER"):
             pytest.skip("the Scryer oracle is not built")

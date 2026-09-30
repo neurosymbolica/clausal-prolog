@@ -144,8 +144,7 @@ def test_the_declaration_carries_the_UNIT_not_just_the_number():
 # and does not run" (clausal_to_prolog.py's own words). Only execution
 # disproves that, and both binaries are present, so this is a real test.
 
-SCRYER = "/workspace/scryer-prolog/target/release/scryer-prolog"
-TREALLA = "/workspace/trealla-prolog/tpl"
+from tests._oracles import SCRYER, TREALLA
 
 
 def _run(binary, program, goal):
@@ -242,8 +241,7 @@ def test_the_rational_form_reads_back_exactly_in_the_real_system(system):
     """Asserted by RUNNING it: the grouped rational must parse, and both halves
     must come back, or the scale is not actually recoverable."""
     import os, subprocess, tempfile
-    binary = {"scryer": "/workspace/scryer-prolog/target/release/scryer-prolog",
-              "trealla": "/workspace/trealla-prolog/tpl"}[system]
+    binary = {"scryer": SCRYER, "trealla": TREALLA}[system]
     if not os.path.exists(binary):
         pytest.skip(f"{system} not built")
     d = tempfile.mkdtemp()

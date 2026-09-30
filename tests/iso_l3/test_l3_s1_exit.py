@@ -24,12 +24,12 @@ import textwrap
 import pytest
 
 from clausal.tools import iso_l3 as L3
+from tests._oracles import SCRYER
 
 HERE = pathlib.Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 RULEBASE = HERE / "rulebase_s1.pl"
 TWIN = HERE / "rulebase_s1_twin.seam"
-SCRYER = "/workspace/scryer-prolog/target/release/scryer-prolog"
 N_TESTS = 47
 
 V = object()   # a fresh variable in a call pattern

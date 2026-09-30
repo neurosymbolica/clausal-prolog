@@ -25,8 +25,8 @@ import subprocess
 import pytest
 
 from clausal.tools.clausal_to_prolog import clausal_source_to_prolog
+from tests._oracles import SCRYER
 
-SCRYER = "/workspace/scryer-prolog/target/release/scryer-prolog"
 
 needs_scryer = pytest.mark.skipif(
     not os.path.exists(SCRYER),

@@ -1,7 +1,7 @@
 import os, re, subprocess, tempfile
 import pytest
+from tests._oracles import SCRYER
 
-SCRYER = "/workspace/scryer-prolog/target/release/scryer-prolog"
 
 # Scryer is the BINDING oracle for this suite, so its absence is a FAILURE,
 # not a skip: 42 of the original 52 tests requested this fixture and every one

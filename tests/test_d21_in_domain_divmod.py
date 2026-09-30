@@ -29,9 +29,8 @@ from clausal.import_hook import _load_module
 from clausal.logic.variables import Var, deref
 from clausal.tools.clausal_to_prolog import clausal_source_to_prolog
 from clausal.tools.prolog_dialect import Dialect, resolve_name
+from tests._oracles import SCRYER, TREALLA
 
-SCRYER = "/workspace/scryer-prolog/target/release/scryer-prolog"
-TREALLA = "/workspace/trealla-prolog/tpl"
 
 #: name -> goal body binding L. Every case is a findall, so the whole answer
 #: set is compared, not just the first answer: a rewrite that adds or loses a

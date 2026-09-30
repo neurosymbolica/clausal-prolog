@@ -69,8 +69,8 @@ from clausal.logic.variables import Var, deref
 from clausal.tools.clausal_to_prolog import clausal_source_to_prolog
 from clausal.modules.py.datetime import _dt_to_term as _T
 from clausal.modules.py.datetime import _term_to_dt as _P  # py datetime -> its TERM
+from tests._oracles import SCRYER
 
-SCRYER = "/workspace/scryer-prolog/target/release/scryer-prolog"
 SPEC = "implementation_plans/prolog-eq-mode-lowering.md"
 
 pytestmark = pytest.mark.skipif(

@@ -33,10 +33,10 @@ import sys
 import pytest
 
 from clausal.tools import iso_l3 as L3
+from tests._oracles import SCRYER
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 S2 = os.path.join(HERE, "s2")
-SCRYER = "/workspace/scryer-prolog/target/release/scryer-prolog"
 ENV = "CLAUSAL_PL_FRONTEND"
 
 V = object()   # a fresh variable in a call pattern

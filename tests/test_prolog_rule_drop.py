@@ -41,8 +41,7 @@ from clausal.tools.clausal_to_prolog import (
     clausal_source_to_prolog,
     UntranslatableConstructError,
 )
-
-SCRYER = "/workspace/scryer-prolog/target/release/scryer-prolog"
+from tests._oracles import SCRYER
 
 
 # ── The exact reproduction from the incident report ─────────────────────
