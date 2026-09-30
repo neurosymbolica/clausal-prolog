@@ -2297,6 +2297,117 @@ py_term_field_names(PyObject *Py_UNUSED(module), PyObject *obj)
     }
 }
 
+
+/* ================================================================
+ * Container terms the three walkers (c_is_ground, c_copy_term,
+ * c_collect_vars) must read through, besides lists, cells and term
+ * instances: a PARTIAL list / string / byte string (``SegList``,
+ * ``SegString``, ``SegBytes`` -- a VarSeg hole holds a variable) and a
+ * dict term (``DictTerm``, or a plain ``dict``, whose VALUES are terms).
+ *
+ * The walkers used to treat all of these as leaves.  The Python wrappers
+ * in builtins/inspection.py and builtins/_helpers.py short-circuited a
+ * Seg* at the TOP level only, so ``term_variables(f([A|T]), Vs)`` answered
+ * [], ``copy_term(f([A|T]), C)`` shared A and T with the original, and
+ * ``ground(f([A|T]))`` said yes -- and bagof/3's free-variable analysis
+ * and findall/3's per-solution copy, which use the same walkers, went
+ * wrong with them.
+ *
+ * The types come from ``clausal.terms`` and are looked up in sys.modules
+ * (never imported from here): until that module has been imported, no
+ * instance of any of them can exist, so "not loaded" means "no match".
+ * Each is checked by EXACT type, like the cell branch's PyTuple_CheckExact,
+ * and after the list/cell branches, so the common shapes pay nothing.
+ * ================================================================ */
+
+static PyObject *walk_seglist_type   = NULL;
+static PyObject *walk_segstring_type = NULL;
+static PyObject *walk_segbytes_type  = NULL;
+static PyObject *walk_dictterm_type  = NULL;
+static PyObject *walk_segments_name  = NULL;   /* "_segments" */
+static PyObject *walk_data_name      = NULL;   /* "_data" */
+
+/* 1 when the types are cached, 0 when clausal.terms is not (fully) loaded
+ * yet, -1 on error. */
+static int
+walk_types_ready(void)
+{
+    if (walk_dictterm_type) return 1;
+    PyObject *name = PyUnicode_FromString("clausal.terms");
+    if (!name) return -1;
+    PyObject *mod = PyImport_GetModule(name);   /* NULL, no error: not loaded */
+    Py_DECREF(name);
+    if (!mod) return PyErr_Occurred() ? -1 : 0;
+    PyObject *sl = PyObject_GetAttrString(mod, "SegList");
+    PyObject *ss = sl ? PyObject_GetAttrString(mod, "SegString") : NULL;
+    PyObject *sb = ss ? PyObject_GetAttrString(mod, "SegBytes") : NULL;
+    PyObject *dt = sb ? PyObject_GetAttrString(mod, "DictTerm") : NULL;
+    Py_DECREF(mod);
+    if (!dt) {
+        /* Partially initialised (a circular import in progress): nothing
+         * of these types can have been built yet either. */
+        Py_XDECREF(sl); Py_XDECREF(ss); Py_XDECREF(sb);
+        if (PyErr_ExceptionMatches(PyExc_AttributeError)) {
+            PyErr_Clear();
+            return 0;
+        }
+        return -1;
+    }
+    walk_segments_name = PyUnicode_InternFromString("_segments");
+    walk_data_name = PyUnicode_InternFromString("_data");
+    if (!walk_segments_name || !walk_data_name) {
+        Py_DECREF(sl); Py_DECREF(ss); Py_DECREF(sb); Py_DECREF(dt);
+        return -1;
+    }
+    walk_seglist_type = sl;
+    walk_segstring_type = ss;
+    walk_segbytes_type = sb;
+    walk_dictterm_type = dt;   /* set last: it is the "ready" flag */
+    return 1;
+}
+
+/* WALK_SEG / WALK_DICTTERM / WALK_DICT for *term*, WALK_NONE otherwise,
+ * -1 on error. */
+enum { WALK_NONE = 0, WALK_SEG = 1, WALK_DICTTERM = 2, WALK_DICT = 3 };
+
+static int
+walk_container_kind(PyObject *term)
+{
+    if (PyDict_CheckExact(term)) return WALK_DICT;
+    int r = walk_types_ready();
+    if (r <= 0) return r;
+    PyObject *tp = (PyObject *)Py_TYPE(term);
+    if (tp == walk_seglist_type || tp == walk_segstring_type
+            || tp == walk_segbytes_type)
+        return WALK_SEG;
+    if (tp == walk_dictterm_type) return WALK_DICTTERM;
+    return WALK_NONE;
+}
+
+
+/* The walkable payload of a container *kind* term: the ``_segments`` list
+ * of a Seg*, or a NEW list of a dict's / DictTerm's values.  New reference;
+ * NULL on error. */
+static PyObject *
+walk_container_payload(PyObject *term, int kind)
+{
+    if (kind == WALK_SEG)
+        return PyObject_GetAttr(term, walk_segments_name);
+    if (kind == WALK_DICTTERM) {
+        PyObject *d = PyObject_GetAttr(term, walk_data_name);
+        if (!d) return NULL;
+        if (!PyDict_Check(d)) {
+            Py_DECREF(d);
+            PyErr_SetString(PyExc_TypeError, "DictTerm._data is not a dict");
+            return NULL;
+        }
+        PyObject *vals = PyDict_Values(d);
+        Py_DECREF(d);
+        return vals;
+    }
+    return PyDict_Values(term);
+}
+
 /*
  * _is_ground(term) -> bool — recursive groundness check
  */
@@ -2349,6 +2460,20 @@ c_is_ground(PyObject *term, int depth)
             if (r <= 0) return r;
         }
         return 1;
+    }
+    /* Partial list / string / byte string, dict term, plain dict (see
+     * walk_container_kind): ground iff every segment element, VarSeg hole
+     * and dict value is. */
+    {
+        int kind = walk_container_kind(term);
+        if (kind < 0) return -1;
+        if (kind) {
+            PyObject *items = walk_container_payload(term, kind);
+            if (!items) return -1;
+            int r = c_is_ground(items, depth + 1);
+            Py_DECREF(items);
+            return r;
+        }
     }
     /* Term instances (PredicateMeta or @dataclass) */
     {
@@ -2696,14 +2821,14 @@ py_is_compound(PyObject *Py_UNUSED(module), PyObject *term)
  * ================================================================ */
 
 /*
- * c_copy_term(term, var_map, depth) -> new reference
+ * c_copy_term(term, var_map, depth, attvars) -> new reference
  *
  * Recursively copies term, replacing each unbound Var with a fresh one.
  * var_map is a PyDict mapping id(original_var) -> fresh_var (as PyLong keys).
  * Sharing is preserved: two references to the same Var get the same fresh copy.
  */
 static PyObject *
-c_copy_term(PyObject *term, PyObject *var_map, int depth)
+c_copy_term(PyObject *term, PyObject *var_map, int depth, PyObject *attvars)
 {
     if (depth > MAX_DEPTH) {
         PyErr_SetString(PyExc_RecursionError,
@@ -2731,6 +2856,18 @@ c_copy_term(PyObject *term, PyObject *var_map, int depth)
             Py_DECREF(key); Py_DECREF(fresh); return NULL;
         }
         Py_DECREF(key);
+        /* copy_term/2 copies attributes (ISO-compatible, as Scryer): report
+         * each ORIGINAL that carries any, with its fresh copy, so the
+         * caller can re-install them.  Only when asked (attvars != NULL);
+         * findall/bagof copies and every other caller pass NULL. */
+        if (attvars && AttVar_Check(term) && AttVar_CAST(term)->attrs
+                && PyDict_GET_SIZE(AttVar_CAST(term)->attrs) > 0) {
+            PyObject *pair = PyTuple_Pack(2, term, fresh);
+            if (!pair || PyList_Append(attvars, pair) < 0) {
+                Py_XDECREF(pair); Py_DECREF(fresh); return NULL;
+            }
+            Py_DECREF(pair);
+        }
         return fresh;  /* new ref (ref count raised by SetItem, returned here) */
     }
 
@@ -2747,7 +2884,7 @@ c_copy_term(PyObject *term, PyObject *var_map, int depth)
         PyObject *result = PyList_New(n);
         if (!result) return NULL;
         for (Py_ssize_t i = 0; i < n; i++) {
-            PyObject *elem = c_copy_term(PyList_GET_ITEM(term, i), var_map, depth + 1);
+            PyObject *elem = c_copy_term(PyList_GET_ITEM(term, i), var_map, depth + 1, attvars);
             if (!elem) { Py_DECREF(result); return NULL; }
             PyList_SET_ITEM(result, i, elem);  /* steals ref */
         }
@@ -2786,7 +2923,7 @@ c_copy_term(PyObject *term, PyObject *var_map, int depth)
         int changed = 0;
         for (Py_ssize_t i = 0; i < n; i++) {
             PyObject *slot = PyTuple_GET_ITEM(term, i);  /* borrowed */
-            PyObject *copied = c_copy_term(slot, var_map, depth + 1);
+            PyObject *copied = c_copy_term(slot, var_map, depth + 1, attvars);
             if (!copied) { Py_DECREF(result); return NULL; }
             if (copied != slot) changed = 1;
             PyTuple_SET_ITEM(result, i, copied);  /* steals ref */
@@ -2799,6 +2936,51 @@ c_copy_term(PyObject *term, PyObject *var_map, int depth)
         return result;
     }
 
+
+    /* Partial list / string / byte string, dict term, plain dict (see
+     * walk_container_kind).  A Seg* is rebuilt from its copied segment list:
+     * a ConcreteSeg / VarSeg is a @dataclass, so the term-instance branch
+     * below copies it (fresh Var in the hole, copied elements), exactly as
+     * ``_copy_term_py`` does.  A dict keeps its (ground) keys and copies its
+     * values. */
+    {
+        int kind = walk_container_kind(term);
+        if (kind < 0) return NULL;
+        if (kind == WALK_SEG) {
+            PyObject *segs = walk_container_payload(term, kind);
+            if (!segs) return NULL;
+            PyObject *copied = c_copy_term(segs, var_map, depth + 1, attvars);
+            Py_DECREF(segs);
+            if (!copied) return NULL;
+            PyObject *result = PyObject_CallOneArg((PyObject *)Py_TYPE(term), copied);
+            Py_DECREF(copied);
+            return result;
+        }
+        if (kind) {
+            PyObject *d = (kind == WALK_DICTTERM)
+                ? PyObject_GetAttr(term, walk_data_name) : (Py_INCREF(term), term);
+            if (!d) return NULL;
+            PyObject *items = PyDict_Items(d);
+            Py_DECREF(d);
+            if (!items) return NULL;
+            PyObject *nd = PyDict_New();
+            if (!nd) { Py_DECREF(items); return NULL; }
+            Py_ssize_t n = PyList_GET_SIZE(items);
+            for (Py_ssize_t i = 0; i < n; i++) {
+                PyObject *kv = PyList_GET_ITEM(items, i);
+                PyObject *v = c_copy_term(PyTuple_GET_ITEM(kv, 1), var_map, depth + 1, attvars);
+                if (!v) { Py_DECREF(items); Py_DECREF(nd); return NULL; }
+                int ok = PyDict_SetItem(nd, PyTuple_GET_ITEM(kv, 0), v);
+                Py_DECREF(v);
+                if (ok < 0) { Py_DECREF(items); Py_DECREF(nd); return NULL; }
+            }
+            Py_DECREF(items);
+            if (kind == WALK_DICT) return nd;
+            PyObject *result = PyObject_CallOneArg((PyObject *)Py_TYPE(term), nd);
+            Py_DECREF(nd);
+            return result;
+        }
+    }
 
     /* Term instance (PredicateMeta or @dataclass): copy each field, reconstruct */
     {
@@ -2831,7 +3013,7 @@ c_copy_term(PyObject *term, PyObject *var_map, int depth)
                 PyObject *fname = PyTuple_GET_ITEM(fields, i);
                 PyObject *fval = PyObject_GetAttr(term, fname);
                 if (!fval) { Py_DECREF(fields); Py_DECREF(kwargs); return NULL; }
-                PyObject *copied_val = c_copy_term(fval, var_map, depth + 1);
+                PyObject *copied_val = c_copy_term(fval, var_map, depth + 1, attvars);
                 Py_DECREF(fval);
                 if (!copied_val) { Py_DECREF(fields); Py_DECREF(kwargs); return NULL; }
                 int ok = PyDict_SetItem(kwargs, fname, copied_val);
@@ -2857,15 +3039,18 @@ c_copy_term(PyObject *term, PyObject *var_map, int depth)
  * _copy_term_impl(term, var_map) -> copied_term
  *
  * Python-callable wrapper.  var_map must be a dict (initially empty {}).
- * Implements the recursive copy used by copy_term/2.
+ * Implements the recursive copy used by copy_term/2.  The optional third
+ * argument, a list, receives an (original, fresh) pair for every variable
+ * copied that carries attributes (see the Var branch of c_copy_term).
  */
 static PyObject *
 py_copy_term_impl(PyObject *Py_UNUSED(module), PyObject *args)
 {
-    PyObject *term, *var_map;
-    if (!PyArg_ParseTuple(args, "OO!", &term, &PyDict_Type, &var_map))
+    PyObject *term, *var_map, *attvars = NULL;
+    if (!PyArg_ParseTuple(args, "OO!|O!", &term, &PyDict_Type, &var_map,
+                          &PyList_Type, &attvars))
         return NULL;
-    return c_copy_term(term, var_map, 0);
+    return c_copy_term(term, var_map, 0, attvars);
 }
 
 
@@ -3003,6 +3188,21 @@ c_collect_vars(PyObject *term, UIntSet *seen, PyObject *result, int depth)
         return 0;
     }
 
+
+    /* Partial list / string / byte string, dict term, plain dict (see
+     * walk_container_kind): segment elements and VarSeg holes left to
+     * right, dict values in key order. */
+    {
+        int kind = walk_container_kind(term);
+        if (kind < 0) return -1;
+        if (kind) {
+            PyObject *items = walk_container_payload(term, kind);
+            if (!items) return -1;
+            int r = c_collect_vars(items, seen, result, depth + 1);
+            Py_DECREF(items);
+            return r;
+        }
+    }
 
     /* Term instance (PredicateMeta or @dataclass) */
     {
@@ -3482,10 +3682,12 @@ static PyMethodDef module_methods[] = {
      "_is_compound(term) -> bool\n"
      "True if term is a compound term."},
     {"_copy_term_impl", py_copy_term_impl, METH_VARARGS,
-     "_copy_term_impl(term, var_map) -> copied_term\n"
+     "_copy_term_impl(term, var_map[, attvars]) -> copied_term\n"
      "Deep-copy term, replacing each unbound Var with a fresh one.\n"
      "var_map (a dict) maps original Var id to fresh Var; pass {} initially.\n"
-     "Sharing is preserved: two refs to the same Var get the same fresh copy."},
+     "Sharing is preserved: two refs to the same Var get the same fresh copy.\n"
+     "attvars (a list), when given, receives (original, fresh) for each\n"
+     "copied variable that carries attributes."},
     {"_collect_vars_impl", py_collect_vars_impl, METH_VARARGS,
      "_collect_vars_impl(term, result_list) -> None\n"
      "Append all unbound Vars in term to result_list in left-to-right order.\n"

@@ -21,7 +21,7 @@ from clausal.logic.atoms import (
     mint,
     spelling,
 )
-from clausal.terms import SegList, SegString, VarSeg, ConcreteSeg
+from clausal.terms import SegList, SegString, SegBytes, VarSeg, ConcreteSeg, DictTerm
 
 from clausal.logic.builtins._registry import _builtin
 from clausal.logic.builtins._helpers import (
@@ -36,23 +36,28 @@ from clausal.logic.runtime._seg_helpers import walk_seg
 # used when available.  Keep these in sync with any changes to the C code.
 
 
-def _copy_term_py(term: Any, var_map: dict) -> Any:
+def _copy_term_py(term: Any, var_map: dict, attvars: list | None = None) -> Any:
     """Recursively copy *term*, replacing each unbound Var with a fresh one.
 
     *var_map* maps original Var id -> fresh Var so that sharing is preserved.
+    *attvars*, when given, receives ``(original, fresh)`` for every copied
+    variable that carries attributes (copy_term/2 re-installs them; see
+    ``_copy_attributes``).  Twin of ``c_copy_term``.
     """
     term = deref(term)
     if is_var(term):
         vid = id(term)
         if vid not in var_map:
-            var_map[vid] = Var()
+            fresh = var_map[vid] = Var()
+            if attvars is not None and getattr(term, "attrs", None):
+                attvars.append((term, fresh))
         return var_map[vid]
     if isinstance(term, (bool, int, float, str, bytes)) or term is None:
         return term
     if field_names_for(term) == ():
         return term
     if isinstance(term, list):
-        return [_copy_term_py(e, var_map) for e in term]
+        return [_copy_term_py(e, var_map, attvars) for e in term]
     if type(term) is tuple:
         # A CELL -- ``("point", X, Y)`` -- is a plain tuple, and post-P3-2
         # (THE FLIP) it is how every compound DATA term is represented, so a
@@ -68,7 +73,7 @@ def _copy_term_py(term: Any, var_map: dict) -> Any:
         # rebuilding one is not this function's business.  The identity
         # short-circuit keeps a GROUND tuple (the overwhelmingly common case)
         # allocation-free, so this costs nothing where nothing changed.
-        copied = tuple(_copy_term_py(e, var_map) for e in term)
+        copied = tuple(_copy_term_py(e, var_map, attvars) for e in term)
         if all(new is old for new, old in zip(copied, term)):
             return term
         return copied
@@ -88,31 +93,38 @@ def _copy_term_py(term: Any, var_map: dict) -> Any:
         for seg in term.segments:
             if isinstance(seg, ConcreteSeg):
                 new_segments.append(
-                    ConcreteSeg([_copy_term_py(e, var_map) for e in seg.elements])
+                    ConcreteSeg([_copy_term_py(e, var_map, attvars) for e in seg.elements])
                 )
             elif isinstance(seg, VarSeg):
-                new_segments.append(VarSeg(_copy_term_py(seg.var, var_map)))
+                new_segments.append(VarSeg(_copy_term_py(seg.var, var_map, attvars)))
             else:
                 # Unknown segment — be conservative and recurse.
-                new_segments.append(_copy_term_py(seg, var_map))
+                new_segments.append(_copy_term_py(seg, var_map, attvars))
         return SegList(new_segments)
-    if isinstance(term, SegString):
+    if isinstance(term, (SegString, SegBytes)):
+        # A str / bytes literal segment is ground; a hole gets a fresh Var.
         new_segments = []
         for seg in term.segments:
-            if isinstance(seg, str):
+            if isinstance(seg, (str, bytes)):
                 new_segments.append(seg)
             elif isinstance(seg, VarSeg):
-                new_segments.append(VarSeg(_copy_term_py(seg.var, var_map)))
+                new_segments.append(VarSeg(_copy_term_py(seg.var, var_map, attvars)))
             else:
-                new_segments.append(_copy_term_py(seg, var_map))
-        return SegString(new_segments)
+                new_segments.append(_copy_term_py(seg, var_map, attvars))
+        return type(term)(new_segments)
+    # A dict term's VALUES are terms; its keys are ground by construction.
+    # Kept in step with ``walk_container_kind`` in ``c_copy_term``.
+    if type(term) is DictTerm:
+        return DictTerm({k: _copy_term_py(v, var_map, attvars) for k, v in term.data.items()})
+    if type(term) is dict:
+        return {k: _copy_term_py(v, var_map, attvars) for k, v in term.items()}
     if is_term_instance(term):
         cls = type(term)
         # The `_clausal_new` Phase-0 fast-constructor gate that used to
         # precede this was retired in W4b, 2026-09-23 -- see the note in
         # solve.py's _deref_walk_py.
         return cls(**{
-            name: _copy_term_py(getattr(term, name), var_map)
+            name: _copy_term_py(getattr(term, name), var_map, attvars)
             for name in term_field_names(term)
         })
     return term
@@ -161,14 +173,23 @@ def _collect_vars_py(term: Any, result: list, _seen: set | None = None) -> None:
             else:
                 _collect_vars_py(seg, result, _seen)
         return
-    if isinstance(term, SegString):
+    if isinstance(term, (SegString, SegBytes)):
         for seg in term.segments:
-            if isinstance(seg, str):
+            if isinstance(seg, (str, bytes)):
                 continue
             if isinstance(seg, VarSeg):
                 _collect_vars_py(seg.var, result, _seen)
             else:
                 _collect_vars_py(seg, result, _seen)
+        return
+    # Dict values in key order (see the matching branch in _copy_term_py).
+    if type(term) is DictTerm:
+        for v in term.data.values():
+            _collect_vars_py(v, result, _seen)
+        return
+    if type(term) is dict:
+        for v in term.values():
+            _collect_vars_py(v, result, _seen)
         return
     if is_term_instance(term):
         for name in term_field_names(term):
@@ -185,45 +206,73 @@ try:
         _collect_vars_impl as _c_collect_vars_impl,
     )
 
-    # F092 / F093 (audit 2026-05-25): the C accelerators do not know
-    # about ``SegList`` / ``SegString`` — they fall through to "return
-    # as-is" for ``copy_term`` (aliasing the original) and "leaf" for
-    # ``term_variables`` (missing VarSegs).  Both types are absent
-    # from the C walkers' shape arms.  Short-circuit Seg* shapes in Python (same pattern
-    # used by ``_is_ground`` for [[F083]]) and delegate every other
-    # shape to the C fast path.  Within the Python branch we still
-    # recurse via ``_copy_term_py`` / ``_collect_vars_py`` so any
-    # nested Seg* container is handled too.
-    #
-    # P3-2 Task 2 (THE FLIP) briefly made these Python-only: the C twins had
-    # no tuple branch, and a tuple is now a CELL — how every compound data
-    # term is represented — so ``c_copy_term`` returned a cell as-is and the
-    # "copy" kept the ORIGINAL's variables, while ``c_collect_vars`` treated
-    # one as a leaf.  Task 2C gave ``c_copy_term`` / ``c_collect_vars`` the
-    # ``PyTuple_CheckExact`` branch (matching the ``type(x) is tuple`` gate in
-    # the twins above, namedtuples included) and this delegation is back to
-    # the Seg*-only short-circuit.  The parity corpus that keeps the two
-    # implementations honest is
-    # ``tests/test_python_fallbacks.py::TestCell*TwinParity``; a cell nested
-    # inside a Seg* container is still reached, because the Python branch
-    # recurses through the same twins.
-    def _copy_term_impl(term: Any, var_map: dict) -> Any:
-        t = deref(term)
-        if isinstance(t, (SegList, SegString)):
-            return _copy_term_py(t, var_map)
-        return _c_copy_term_impl(t, var_map)
-
-    def _collect_vars_impl(term: Any, result: list) -> None:
-        t = deref(term)
-        if isinstance(t, (SegList, SegString)):
-            _collect_vars_py(t, result)
-            return
-        _c_collect_vars_impl(t, result)
+    # The C walkers read through every shape the twins above do: cells
+    # (``PyTuple_CheckExact``), and Seg* partial lists / strings / byte
+    # strings and dict terms at ANY depth (``walk_container_kind`` in
+    # ``_variables.c``).  The Python wrappers that used to stand here sent a
+    # Seg* to the twins only at the TOP level (F092 / F093), so one nested in
+    # a term reached the C walkers and was a leaf: ``term_variables(f([A|T]),
+    # Vs)`` gave [] and ``copy_term(f([A|T]), C)`` shared A and T with the
+    # original.  The parity corpus that keeps the two implementations honest
+    # is ``tests/test_python_fallbacks.py``.
+    _copy_term_impl = _c_copy_term_impl
+    _collect_vars_impl = _c_collect_vars_impl
 except ImportError:
     pass
 
 # Re-export for callers that import _copy_term directly (e.g. specialization.py)
 _copy_term = _copy_term_impl
+
+
+def _hole_var_ids(term: Any) -> set:
+    """``id``s of the unbound variables of *term* that stand in a HOLE of a
+    partial list / string / byte string -- a ``VarSeg`` (the ``T`` of
+    ``[A|T]``) -- at any depth.
+
+    Such a variable may only ever be bound to a list (a string, a byte
+    string): the engine has no representation for a list with any other
+    tail (``[a|b]``), so binding one to a marker cell -- bagof/3's variant
+    markers -- leaves a term that every later walk refuses
+    (``PartialTermError``).  Callers that substitute markers for variables
+    ask this first.  Empty for a term with no partial list in it.
+
+    numbervars/3 does NOT ask: it numbers a hole variable as ISO counts it
+    (F094), and the term then carries the ``[A|'$VAR'(1)]`` tail that has no
+    representation -- the same answer it has always given for a partial
+    list at the top level.
+    """
+    out: set = set()
+
+    def walk(t: Any) -> None:
+        t = deref(t)
+        if is_var(t) or isinstance(t, (bool, int, float, str, bytes)) or t is None:
+            return
+        if isinstance(t, list) or type(t) is tuple:
+            for e in t:
+                walk(e)
+        elif isinstance(t, (SegList, SegString, SegBytes)):
+            for seg in t.segments:
+                if isinstance(seg, VarSeg):
+                    v = deref(seg.var)
+                    if is_var(v):
+                        out.add(id(v))
+                    else:
+                        walk(v)
+                elif isinstance(seg, ConcreteSeg):
+                    for e in seg.elements:
+                        walk(e)
+        elif type(t) is DictTerm:
+            for v in t.data.values():
+                walk(v)
+        elif type(t) is dict:
+            for v in t.values():
+                walk(v)
+        elif is_term_instance(t):
+            for name in term_field_names(t):
+                walk(getattr(t, name))
+
+    walk(term)
+    return out
 
 
 def _segments_of(tail):
@@ -575,13 +624,66 @@ def _univ__2(term, lst, trail, k):
 # ── V2-13 Term inspection ──────────────────────────────────────────────────────
 
 
+def _copy_dif(value, var_map, attvars, seen, trail) -> bool:
+    """Re-post each ``dif/2`` pair of *value* (the ``"dif"`` attribute: a
+    list of ``(X, Y)`` pairs) on its copy.  A pair is shared by the
+    attributes of all its variables, so *seen* makes it posted once."""
+    from clausal.logic.constraints import dif  # noqa: PLC0415
+    for pair in value:
+        if id(pair) in seen:
+            continue
+        seen.add(id(pair))
+        x, y = pair
+        if not dif(_copy_term_impl(x, var_map, attvars),
+                   _copy_term_impl(y, var_map, attvars), trail):
+            return False
+    return True
+
+
+#: Attribute key -> how copy_term/2 re-installs that attribute on a copy:
+#: ``fn(value, var_map, attvars, seen, trail) -> bool`` (False: the copied
+#: constraint is already violated).  It copies the attribute's terms with
+#: the SAME *var_map* (so a variable shared with the copied term is the
+#: copy's variable, and any other is copied fresh, as Scryer copies an
+#: attribute term) and appends any further attributed variable it meets to
+#: *attvars*.  An attribute whose key has no copier is not copied: its value
+#: is a Python object (a freeze/2 goal closure, a CLP propagator network)
+#: that cannot be renamed apart -- see CHANGELOG / the todo on copying them.
+_ATTRIBUTE_COPIERS = {"dif": _copy_dif}
+
+
+def _copy_attributes(attvars, var_map, trail) -> bool:
+    """Install on each fresh copy the attributes of its original, for every
+    ``(original, fresh)`` in *attvars* -- a worklist: copying an attribute's
+    terms can reach more attributed variables, which are appended to it."""
+    seen: set = set()
+    i = 0
+    while i < len(attvars):
+        orig, _fresh = attvars[i]
+        i += 1
+        for key, value in list((orig.attrs or {}).items()):
+            copier = _ATTRIBUTE_COPIERS.get(key)
+            if copier is not None and not copier(value, var_map, attvars, seen, trail):
+                return False
+    return True
+
+
 @_builtin("copy_term", 2)
 def _copy_term__2(original, copy, trail, k):
-    """copy_term(Original, Copy) — unify Copy with a deep copy of Original with fresh Vars."""
+    """copy_term(Original, Copy) — unify Copy with a deep copy of Original with fresh Vars.
+
+    Attributes are copied too, as Scryer (and SICStus/SWI) copy them: a
+    ``dif/2`` constraint on a variable of Original holds on its copy
+    (``dif(A, a), copy_term(A, B), B = a`` fails).  See
+    ``_ATTRIBUTE_COPIERS`` for which attributes can be copied.
+    """
     orig_val = deref(original)
-    copied = _copy_term_impl(orig_val, {})
+    var_map: dict = {}
+    attvars: list = []
+    copied = _copy_term_impl(orig_val, var_map, attvars)
     mark = trail.mark()
-    if unify(copy, copied, trail):
+    if (not attvars or _copy_attributes(attvars, var_map, trail)) \
+            and unify(copy, copied, trail):
         yield None
     trail.undo(mark)
 
