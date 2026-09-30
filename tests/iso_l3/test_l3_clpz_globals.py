@@ -232,3 +232,26 @@ def test_nvalue_and_indomain_errors(native, ans):
     assert ans(mod, "m5") == [[]]
     assert ans(mod, "m6") == ["instantiation_error"]
     assert ans(mod, "m7") == [("type_error", "integer", "foo")]
+
+
+CUMULATIVE = """\
+:- use_module(library(clpz)).
+u1(R) :- findall([S1,S2,S3], (Ts = [task(S1,3,_,1,_), task(S2,2,_,1,_), task(S3,2,_,1,_)], [S1,S2,S3] ins 0..4, cumulative(Ts), label([S1,S2,S3])), R).
+u2(R) :- findall([S1,S2], (Ts = [task(S1,2,_,1,_), task(S2,2,_,1,_)], [S1,S2] ins 0..1, cumulative(Ts, [limit(2)]), label([S1,S2])), R).
+u3(R) :- findall(E, (cumulative([task(0,3,E,1,a)])), R).
+u4(E) :- catch(cumulative([], [foo]), error(E, _), true).
+u5(E) :- catch(cumulative([task(0,_,_,1,a)]), error(E, _), true).
+"""
+
+
+def test_cumulative(native, ans):
+    """cumulative/1,2 did not exist; Scryer's answers.  A variable duration
+    is refused loudly here (Scryer accepts it; the constraint reasons over
+    fixed durations)."""
+    mod = native.load("l3_clpz_cumulative", CUMULATIVE)
+    assert ans(mod, "u1") == [[[4, 0, 2], [4, 2, 0]]]
+    assert ans(mod, "u2") == [[[0, 0], [0, 1], [1, 0], [1, 1]]]
+    assert ans(mod, "u3") == [[3]]
+    assert ans(mod, "u4") == [("domain_error", "cumulative_options_empty_or_limit",
+                               ["foo"])]
+    assert ans(mod, "u5") == ["instantiation_error"]

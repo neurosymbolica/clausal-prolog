@@ -382,3 +382,58 @@ def _nvalue(n, vs, trail, k):
     c = NValueConstraint(n, items)
     if _fd._post_constraint(c, trail):
         yield None
+
+
+def _cumulative(tasks, options, trail):
+    from clausal.logic.exceptions import (  # noqa: PLC0415
+        LogicException, domain_error, instantiation_error, type_error)
+    from clausal.logic.variables import deref, is_var  # noqa: PLC0415
+    ctx = "cumulative/2"
+    ts = _items(tasks, ctx)
+    opts = _items(options, ctx)
+    if not opts:
+        limit = 1
+    elif (len(opts) == 1 and type(opts[0]) is tuple and len(opts[0]) == 2
+          and opts[0][0] == "limit"):
+        limit = _integer(opts[0][1], ctx)
+    else:
+        raise LogicException(domain_error(
+            "cumulative_options_empty_or_limit", opts, ctx))
+    triples = []
+    for t in ts:
+        if not (type(t) is tuple and len(t) == 6 and t[0] == "task"):
+            raise LogicException(type_error("task", t, ctx))
+        s, d, e, c = (deref(a) for a in t[1:5])
+        for x in (s, e):
+            _integer_or_fd_var(x, ctx)
+        if not (type(d) is int and type(c) is int):
+            # the constraint reasons over fixed durations and consumptions
+            # (Scryer accepts variables there too)
+            if is_var(d) or is_var(c):
+                raise LogicException(instantiation_error(
+                    f"{ctx}: a task's duration and consumption must be "
+                    f"integers here"))
+            raise LogicException(type_error(
+                "integer", d if type(d) is not int else c, ctx))
+        # E = S + D
+        if not _fd.fd_eq(e, ("+", s, d), trail):
+            return False
+        triples.append((s, d, c))
+    return _fd.cumulative(triples, limit, trail)
+
+
+@_builtin("cumulative", 2, fields=("tasks", "options"))
+def _cumulative_2(tasks, options, trail, k):
+    """cumulative(Tasks, Options) -- each task(S, D, E, C, T) runs from S
+    to E = S + D consuming C; at every moment the running tasks consume at
+    most the limit (``[limit(L)]``; 1 by default).  Durations and
+    consumptions must be integers here."""
+    if _cumulative(tasks, options, trail):
+        yield None
+
+
+@_builtin("cumulative", 1, fields=("tasks",))
+def _cumulative_1(tasks, trail, k):
+    """cumulative(Tasks) -- cumulative(Tasks, [limit(1)])."""
+    if _cumulative(tasks, [], trail):
+        yield None
