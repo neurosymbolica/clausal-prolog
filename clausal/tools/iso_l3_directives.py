@@ -326,6 +326,32 @@ def _engine_names(name: str) -> bool:
     return name in _evaluable_names()
 
 
+def is_auto_declarable_atom(name: str) -> bool:
+    """True when the native ``.pl`` front end would auto-declare *name* --
+    bind a data atom of that spelling as a module attribute -- if a file
+    used it as data and gave it no other meaning.
+
+    This is the NAME-LEVEL half of the rule only: a spelling a declaration
+    can bind (:func:`_is_declarable`: a lowercase identifier, no Python
+    keyword, no reserved name such as ``true`` or ``[]``) that the engine
+    gives no meaning of its own (:func:`_engine_names`: no builtin goal and
+    no arithmetic evaluable under that name).  The PER-FILE half -- the
+    names the file itself takes: clause heads, goals, constructors,
+    constants, imports and the names directive specs declare -- is applied
+    by :meth:`DirectiveContext.auto_declare`; the names a given file
+    actually got are ``lower_source(...).context.auto_atoms``.
+
+    The test is ARITY-BLIND: an atom whose spelling is a builtin or an
+    evaluable at ANY arity is excluded (``max``, ``pi``, ``fail``,
+    ``halt``), because the module binding would shadow that name whatever
+    arity the file uses it at.
+
+    It describes the NATIVE ``.pl`` front end only
+    (``CLAUSAL_PL_FRONTEND=native``); the translator and seam files do not
+    auto-declare."""
+    return _is_declarable(name) and not _engine_names(name)
+
+
 _EVALUABLE_NAMES: "frozenset | None" = None
 
 
@@ -662,7 +688,7 @@ class DirectiveContext:
         wanted |= {n for n, _line in self.bare_atom_imports
                    if n not in self.bare_predicate_names}
         names = sorted(n for n in wanted - taken
-                       if _is_declarable(n) and not _engine_names(n))
+                       if is_auto_declarable_atom(n))
         self.auto_atoms = [n for n in names if n not in uses.functors]
         self.auto_functors = sorted(
             (n, a) for n in names if n in uses.functors

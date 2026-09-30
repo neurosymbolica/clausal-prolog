@@ -153,6 +153,15 @@ since 0.4.0 finish three moves:
 
 ### Added
 
+- **`clausal.tools.iso_l3_directives.is_auto_declarable_atom(name)`.**
+  The name-level half of the native `.pl` front end's auto-declaration
+  rule: True when a declaration can bind the spelling and the engine gives
+  it no builtin or evaluable meaning at any arity (arity-blind). The
+  per-file half (names the file itself takes: heads, goals, constructors,
+  constants, imports, directive specs) is applied at load; a file's result
+  is `lower_source(...).context.auto_atoms`. Native front end only.
+  `DirectiveContext.auto_declare` now calls it, so there is one rule.
+
 - **`abolish/1` (ISO 8.9.4).** `abolish(Name/Arity)` removes a dynamic
   procedure: its clauses and the procedure itself, so a later call is
   `existence_error(procedure, Name/Arity)` (a procedure emptied by
