@@ -816,9 +816,13 @@ class TestGlobalCardinality:
         assert global_cardinality(vs, [(1, cnt)], t)
         assert deref(cnt) == 3
 
-    def test_values_outside_pairs_allowed_today(self):
-        # Current behaviour (parked design question A06-D003): values not
-        # listed in Pairs are unconstrained; SWI restricts Vars to the keys.
+    def test_values_outside_pairs_excluded(self):
+        # A06-D003, settled 2026-09-30 by clpz's contract: every element of
+        # Vars is one of the Pairs keys, so an off-key value is excluded.
+        t = Trail()
+        vs = [Var() for _ in range(2)]
+        in_domain(vs, 1, 3, t)
+        assert global_cardinality(vs, [(1, 1)], t) is False
         t = Trail()
         vs = [Var() for _ in range(2)]
         in_domain(vs, 1, 3, t)

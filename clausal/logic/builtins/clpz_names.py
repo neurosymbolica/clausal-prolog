@@ -217,6 +217,10 @@ def _global_cardinality(vs, pairs, trail, k):
             raise LogicException(domain_error("gcc_pair", p,
                                               "global_cardinality/2"))
         kc.append((_integer(parts[0], "global_cardinality/2"), parts[1]))
+    # Repeated keys (domain_error(gcc_unique_key_pairs, Pairs)), counts
+    # (integer or variable) and elements are checked by
+    # clpfd.global_cardinality, after the units side channel has turned a
+    # dimensionless quantity into its plain integer.
     if global_cardinality(_items(vs, "global_cardinality/2"), kc, trail):
         yield None
 

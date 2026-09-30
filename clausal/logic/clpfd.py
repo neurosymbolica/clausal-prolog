@@ -3025,6 +3025,21 @@ def fd_scalar_product(coeffs, vars_list, op_str, value, trail: Trail):
     if not all(isinstance(c, int) for c in coeffs_deref):
         return
 
+    value = deref(value)
+    if not (is_var(value) or isinstance(value, numbers.Number)):
+        # clpz's Expr is any clpz expression (``Y*Y``, ``4/2``,
+        # ``(2-1) rem 1``): name it with a fresh variable posted through
+        # ``#=``, exactly as ``F #= Expr`` does -- its own clpz_expression
+        # error for a non-expression included.  The propagator below takes
+        # only a variable or an integer; handed the compound, it raised
+        # domain_error(clpz_expression, Expr) on every such call.
+        named = Var()
+        if not fd_eq(named, value, trail, _units_done=True):
+            return
+        value = deref(named)
+        if not (is_var(value) or (isinstance(value, int) and not isinstance(value, bool))):
+            return     # a non-integer value (``5/2``): no integer answer
+
     vars_deref = [deref(v) for v in vars_list]
 
     # Reject non-integer elements up front (A06-F014).
@@ -3075,6 +3090,11 @@ def fd_element(index, lst, value, trail: Trail):
 
     index = deref(index)
     value = deref(value)
+    if not (is_var(index) or (isinstance(index, int) and not isinstance(index, bool))):
+        # clpz: type_error(integer, Index); a non-integer index used to fail
+        # silently.
+        from clausal.logic.exceptions import LogicException, type_error  # noqa: PLC0415
+        raise LogicException(type_error("integer", index, "element/3"))
     # Units: the list elements and the value share one dimension; the
     # index is a plain position.
     both = _units_strip_list(list(lst) + [value], "element/3", trail)
@@ -3308,14 +3328,16 @@ class CumulativeConstraint(Constraint):
 class GlobalCardinalityConstraint(Constraint):
     """global_cardinality(Vars, Pairs) — counting constraint.
 
-    Pairs is a tuple of (value, count) pairs.  Decomposes into: for each
-    value, the number of vars equal to that value == count.
+    Pairs is a tuple of (value, count) pairs.  Every var takes one of the
+    pair KEYS (clpz: "every element of Vs is one of the Keys"), and for each
+    key the number of vars equal to it == count.
     """
-    __slots__ = ('gc_vars', 'pairs')
+    __slots__ = ('gc_vars', 'pairs', 'key_domain')
 
     def __init__(self, gc_vars: tuple, pairs: tuple):
         self.gc_vars = gc_vars
         self.pairs = pairs  # tuple of (value, count)
+        self.key_domain = _domain_from_set({val for val, _ in pairs})
         vars_ = list(gc_vars)
         for _val, cnt in pairs:
             if is_var(cnt):
@@ -3323,11 +3345,23 @@ class GlobalCardinalityConstraint(Constraint):
         super().__init__(tuple(v for v in vars_ if is_var(deref(v))))
 
     def propagate(self, trail: Trail, queue: deque) -> bool:
+        # Every var is one of the keys.  Without this a var free to take an
+        # off-key value satisfied every count by taking it, so
+        # ``X in 0..2, global_cardinality([X], [1-0])`` labelled X = 0 and 2
+        # where clpz has no answer.
+        keys = self.key_domain
+        for v in self.gc_vars:
+            v = deref(v)
+            if is_var(v):
+                state = get_attr(v, FD_KEY)
+                new_d = keys if state is None else domain_intersection(state.domain, keys)
+                if not _narrow_if_changed(v, new_d, trail, queue):
+                    return False
+            elif not domain_contains(keys, v):
+                return False
         for value, count in self.pairs:
             count = deref(count)
             count_is_var = is_var(count)
-            if not count_is_var and not isinstance(count, int):
-                continue  # malformed count — leave pending
 
             # Re-deref all vars each iteration (prior narrowing may have
             # bound some vars, making the old references stale).
@@ -3336,6 +3370,8 @@ class GlobalCardinalityConstraint(Constraint):
             if not count_is_var and count == 0:
                 # Remove this value from all variable domains
                 for v in vars_:
+                    if not is_var(v) and v == value:
+                        return False  # an element already IS the value
                     if is_var(v):
                         state = get_attr(v, FD_KEY)
                         if state is not None and domain_contains(state.domain, value):
@@ -3609,6 +3645,16 @@ def cumulative(tasks, limit, trail: Trail) -> bool:
     return _post_constraint(constraint, trail)
 
 
+def _gcc_integer_or_var(x) -> None:
+    """``type_error(integer, X)`` unless *x* (dereferenced) is an unbound
+    variable or an integer -- clpz's ``must_be(integer)`` on the elements
+    and counts of global_cardinality/2."""
+    if is_var(x) or (isinstance(x, int) and not isinstance(x, bool)):
+        return
+    from clausal.logic.exceptions import LogicException, type_error  # noqa: PLC0415
+    raise LogicException(type_error("integer", x, "global_cardinality/2"))
+
+
 def global_cardinality(vars_list, pairs, trail: Trail) -> bool:
     """Post global_cardinality constraint.
 
@@ -3618,6 +3664,12 @@ def global_cardinality(vars_list, pairs, trail: Trail) -> bool:
     vars_list = deref(vars_list)
     if not isinstance(vars_list, list):
         return False
+    if len({val for val, _ in pairs}) != len(pairs):
+        # clpz: domain_error(gcc_unique_key_pairs, Pairs)
+        from clausal.logic.exceptions import LogicException, domain_error  # noqa: PLC0415
+        raise LogicException(domain_error(
+            "gcc_unique_key_pairs", [("-", val, cnt) for val, cnt in pairs],
+            "global_cardinality/2"))
     # Units: the vars and the pair KEYS share one dimension (a key is a
     # value the vars may take), so they are stripped together.
     keys = [val for val, _ in pairs]
@@ -3632,9 +3684,14 @@ def global_cardinality(vars_list, pairs, trail: Trail) -> bool:
         counts = plain_fields_or_unsupported(counts, "global_cardinality/2")
     pairs = list(zip(keys, counts))
 
+    # clpz's must_be(integer) on every element and count (a count may also
+    # be a variable).  A non-integer count used to be skipped by the
+    # propagator ("leave pending"), so ``global_cardinality([X], [1-a])``
+    # succeeded.
     vars_deref = []
     for v in vars_list:
         v = deref(v)
+        _gcc_integer_or_var(v)
         if is_var(v):
             _ensure_fd(v, trail)
         vars_deref.append(v)
@@ -3642,6 +3699,7 @@ def global_cardinality(vars_list, pairs, trail: Trail) -> bool:
     pairs_deref = []
     for val, cnt in pairs:
         cnt = deref(cnt)
+        _gcc_integer_or_var(cnt)
         pairs_deref.append((val, cnt))
 
     constraint = GlobalCardinalityConstraint(tuple(vars_deref), tuple(pairs_deref))
@@ -3775,6 +3833,23 @@ def zcompare(order, x, y, trail: Trail) -> bool:
     # It also means the refusal lands before ``_ensure_fd`` has touched the
     # trail.
     order_name = _op_spelling(order, "zcompare/3")
+    if not is_var(order) and order_name not in ("<", "=", ">"):
+        # clpz: domain_error(order, Order) for a bound Order that is not one
+        # of the three order atoms (it used to fail silently).
+        from clausal.logic.exceptions import LogicException, domain_error  # noqa: PLC0415
+        raise LogicException(domain_error("order", order, "zcompare/3"))
+    # clpz: type_error(integer, Culprit) for an operand that is not an
+    # arithmetic leaf (an atom, a string, a non-arithmetic compound).  It was
+    # domain_error(clpz_expression, _) with an unbound Order, and a raw
+    # comparison error with a bound one.  What _arith_leaf admits (a number,
+    # a variable, an operator node, an exact-number cell, a Quantity) keeps
+    # its existing path below.
+    if _Add is None:
+        _ensure_term_imports()     # _arith_leaf reads _NODE_KEYS
+    for operand in (x, y):
+        if not _arith_leaf(operand):
+            from clausal.logic.exceptions import LogicException, type_error  # noqa: PLC0415
+            raise LogicException(type_error("integer", operand, "zcompare/3"))
     # Units side channel after the Order check, so a bad Order still wins.
     stripped = _units_strip(x, y, "zcompare/3", trail)
     if stripped is not None:

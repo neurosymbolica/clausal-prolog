@@ -123,6 +123,10 @@ class TestCumulative:
 # ══════════════════════════════════════════════════════════════════════════════
 
 
+def _v():
+    return Var()
+
+
 class TestGlobalCardinality:
     def test_basic_cardinality(self):
         """[X, Y, Z] with value 1 appearing exactly twice."""
@@ -150,12 +154,26 @@ class TestGlobalCardinality:
         trail = fresh_trail()
         x, y = Var(), Var()
         assert in_domain([x, y], 1, 3, trail)
-        assert global_cardinality([x, y], [(3, 0)], trail)
+        assert global_cardinality([x, y], [(1, _v()), (2, _v()), (3, 0)], trail)
         # 3 should be removed from both domains
         sx = get_attr(x, FD_KEY)
         assert not domain_contains(sx.domain, 3)
         sy = get_attr(y, FD_KEY)
         assert not domain_contains(sy.domain, 3)
+
+    def test_cardinality_elements_are_keys(self):
+        """Every var takes one of the keys (clpz): with the only key counted
+        zero times there is no answer, and off-key values leave the domain."""
+        # nv
+        trail = fresh_trail()
+        x, y = Var(), Var()
+        assert in_domain([x, y], 1, 3, trail)
+        assert not global_cardinality([x, y], [(3, 0)], trail)
+        trail = fresh_trail()
+        x = Var()
+        assert in_domain([x], 0, 5, trail)
+        assert global_cardinality([x], [(1, _v()), (3, _v())], trail)
+        assert get_attr(x, FD_KEY).domain == ((1, 1), (3, 3))
 
     def test_cardinality_forced(self):
         """If only N vars can take a value and count == N, they must all be that value."""
