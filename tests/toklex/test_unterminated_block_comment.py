@@ -174,10 +174,13 @@ def test_native_loader_refuses_the_whole_file(tmp_path, monkeypatch):
     assert "syntax_error(incomplete_reduction)" in ei.value.msg
     # The load is abandoned as a whole, as for any other syntax error:
     # _load_module leaves its module object registered, but with nothing
-    # from the file in it -- not even foo/1, read before the comment.
-    from clausal.predicate_diagnostics import PredicateNotFoundError
+    # from the file in it -- not even foo/1, read before the comment. (The
+    # exact class depends on what else defined an atom `foo` in the
+    # process: PredicateNotFoundError alone, an existence_error
+    # LogicException in the full suite; both subclass LogicException.)
+    from clausal.logic.exceptions import LogicException
     mod = sys.modules[name]
-    with pytest.raises(PredicateNotFoundError):
+    with pytest.raises(LogicException, match=r"foo"):
         list(solve(("foo", Var()), mod))
 
 
