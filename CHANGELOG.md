@@ -153,6 +153,26 @@ since 0.4.0 finish three moves:
 
 ### Added
 
+- **ISO 13211-2 `:- end_module(Name).`, and a "require end_module"
+  setting.** A `.pl` module file may end with `end_module/1`; both `.pl`
+  front ends check that it names the file's `module/2` module and is the
+  last item (only comments after it). A mismatched name, no `module/2`, or
+  a duplicate is `error(existence_error(module, Name), end_module/1)`; an
+  item after it is `error(permission_error(modify, module, M),
+  end_module/1)`. When end_module is REQUIRED, a module file without it
+  fails to load (`error(existence_error(directive, end_module(M)),
+  load/1)`, naming the file and the module). Required is decided by the
+  file's own `:- set_prolog_flag(require_end_module, true|false).`, else
+  the process-wide setting (`CLAUSAL_REQUIRE_END_MODULE=1|0`,
+  `clausal.end_module.set_require_end_module`, or
+  `set_prolog_flag(require_end_module, V)` as a goal; read with
+  `current_prolog_flag/2`), else a per-SURFACE default
+  (`clausal.end_module.REQUIRE_END_MODULE_DEFAULTS`): `.pl` no, Clausal
+  Prolog yes. Seam files are never affected. Scryer refuses the
+  directive, so the test oracles drop it before handing a file to Scryer
+  (`clausal.end_module.strip_end_module`), and the exporter refuses to
+  emit it.
+
 - **`clausal.tools.iso_l3_directives.is_auto_declarable_atom(name)`.**
   The name-level half of the native `.pl` front end's auto-declaration
   rule: True when a declaration can bind the spelling and the engine gives

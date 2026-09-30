@@ -36,6 +36,10 @@ What is handled, and how (the ISO directive -> the seam's):
     set_prolog_flag(F, V)           -set_prolog_flag; double_quotes is kept
                                     HERE, per literal (chars/codes/atom)
     op(P, T, N)                     already applied by the reader; nothing
+    end_module(M)                   ISO 13211-2: checked (names the module/2
+                                    module, last item: clausal.end_module);
+                                    nothing.  set_prolog_flag(
+                                    require_end_module, B) is file-local
     constructors([pt(x, y)])        -private([pt(x, y)]): OPTIONAL, gives a
                                     data functor its FIELD NAMES; an exported
                                     one (pt/2 in the module/2 list) goes to
@@ -444,6 +448,10 @@ class DirectiveContext:
         #: (name, arity) -- each bound by name.
         self.auto_atoms: list = []
         self.auto_functors: list = []
+        #: The end_module/1 checks (``clausal.end_module``), and the file's
+        #: own set_prolog_flag(require_end_module, V).
+        from clausal.end_module import EndModuleCheck  # noqa: PLC0415
+        self.end_module = EndModuleCheck()
         self._t = None
 
     # ── the seam transformer, one per file ──
@@ -1109,6 +1117,20 @@ def _set_prolog_flag(ctx, args, spans, span):
         if value != "codes":
             ctx._dq_engine_mode = value
         return []
+    if flag == "require_end_module":
+        # FILE-LOCAL, like double_quotes: it says whether THIS module file
+        # must end with end_module/1 (clausal.end_module), and it is
+        # decided here, at the end of the lowering -- nothing is left for
+        # load time, and no other file is affected.
+        from clausal.end_module import parse_flag_value  # noqa: PLC0415
+        setting = parse_flag_value(value)
+        if setting is None:
+            raise _refused(
+                f"{what}: the require_end_module values are true and false "
+                f"(ISO error(domain_error(flag_value, require_end_module+"
+                f"{_show(value)}), set_prolog_flag/2))", span)
+        ctx.end_module.file_setting = setting
+        return []
     if type(flag) is not str:
         raise _refused(f"{what}: the flag must be an atom", span)
     if type(value) is str:
@@ -1119,6 +1141,21 @@ def _set_prolog_flag(ctx, args, spans, span):
         raise _refused(f"{what}: the value must be an atom or an integer",
                        span)
     return ctx.seam("set_prolog_flag", [_name(flag), v], span, what)
+
+
+def _end_module(ctx, args, spans, span):
+    """``:- end_module(M).`` (ISO 13211-2): checked by ``clausal.end_module``
+    against the module/2 of this file; it lowers to nothing.  That it is
+    the LAST item is ``iso_l3.lower_items``' check (it sees every item)."""
+    from clausal.end_module import EndModuleError  # noqa: PLC0415
+    (arg,) = args
+    try:
+        ctx.end_module.end_module(arg, ctx.own_module,
+                                  is_var=type(arg) is VarRef,
+                                  shown=_show(arg), line=ctx._line(span))
+    except EndModuleError as e:
+        raise _refused(str(e), span) from None
+    return []
 
 
 def _op(ctx, args, spans, span):
@@ -1451,6 +1488,7 @@ _DIRECTIVES = {
     ("constants_number_currency", 4): _constant_table(
         "constants_number_currency"),
     ("module", 2): _module,
+    ("end_module", 1): _end_module,
     ("use_module", 1): _use_module,
     ("use_module", 2): _use_module,
     ("dynamic", 1): _predspec("dynamic"),

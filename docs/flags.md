@@ -24,6 +24,7 @@ truth value is `true` / `false`, which compile to Python's `True` / `False`.
 | `unknown` | `error` | `error` only | process | `error` (settable) |
 | `double_quotes` | `chars` | by directive | module | `chars` |
 | `assert_creates_dynamic` | `false` (`true` in an imported `.pl` module) | yes | module | not a flag (ISO assert always creates) |
+| `require_end_module` | `default` | `true` / `false` / `default` | process (file-local as a `.pl` directive) | not a flag |
 
 - **Integers are unbounded** (Python `int`), so `bounded` is `false` and
   `max_integer` / `min_integer` have no value:
@@ -42,6 +43,9 @@ truth value is `true` / `false`, which compile to Python's `True` / `False`.
   compiler reads the module's `"…"` literals, so it is set by a directive, never
   at run time. `codes` is not a mode: codes are spelled `b"…"`.
 - **`assert_creates_dynamic`**: see [below](#assert_creates_dynamic).
+- **`require_end_module`**: whether a Prolog module file must end with
+  `:- end_module(Name).` -- see
+  [Importing Prolog Code](importing_prolog.md#end_module-closing-a-module).
 
 `current_prolog_flag(F, V)` with `F` unbound enumerates every flag that has a
 value.

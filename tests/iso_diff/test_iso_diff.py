@@ -118,8 +118,15 @@ def test_area_matches_scryer_except_known(area, tmp_path):
     name = f"isodiff_{area}"
     path = tmp_path / (name + ".pl")
     path.write_text(src, encoding="utf-8")
+    # Scryer refuses ISO 13211-2's end_module/1 and fails the whole file;
+    # it gets its own copy without it (line numbers kept).
+    from clausal.end_module import strip_end_module
+    scryer_src, scryer_path = strip_end_module(src), path
+    if scryer_src != src:
+        scryer_path = tmp_path / (name + "_scryer.pl")
+        scryer_path.write_text(scryer_src, encoding="utf-8")
 
-    s = subprocess.run([SCRYER, str(path), "-g", "run", "-g", "halt"],
+    s = subprocess.run([SCRYER, str(scryer_path), "-g", "run", "-g", "halt"],
                        stdin=subprocess.DEVNULL, capture_output=True,
                        text=True, timeout=180)
     env = dict(os.environ, PYTHONPATH=ROOT, CLAUSAL_ROOT=ROOT,

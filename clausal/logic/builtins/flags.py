@@ -16,7 +16,18 @@ max_arity                  unbounded     no          process
 unknown                    error         error only  process
 double_quotes              chars         directive   module
 assert_creates_dynamic     false         yes         module
+require_end_module         default       yes         process (goal)
 =========================  ============  ==========  =================
+
+``require_end_module`` (implementation-defined) is the process-wide
+override of whether a Prolog module file must end with
+``:- end_module(Name).`` (``clausal.end_module``): ``true``, ``false``, or
+``default`` (each surface's own default: ``.pl`` no, Clausal Prolog yes).
+Its value lives in ``clausal.end_module`` -- the same setting
+``CLAUSAL_REQUIRE_END_MODULE`` and ``set_require_end_module`` make -- and
+it governs the module files loaded AFTER it is set.  As a directive in a
+``.pl`` file it is FILE-LOCAL (that file's front end reads it); a seam
+file cannot set it.
 
 Integers are unbounded, so ``bounded`` is ``false`` and ``max_integer`` /
 ``min_integer`` have no value: ``current_prolog_flag(max_integer, X)``
@@ -85,6 +96,7 @@ class _Flag:
         self.admits = admits            # value -> bool: ISO's value set
         self.supported = supported      # the values it can be SET to here
         self.scope = scope              # "process" | "module" | "directive"
+                                        # | "end_module" (clausal.end_module)
 
 
 #: The flags, in the order current_prolog_flag/2 enumerates them.
@@ -107,6 +119,9 @@ FLAGS: dict[str, _Flag] = {f.name: f for f in (
           supported=("chars", "atom"), scope="directive"),
     _Flag("assert_creates_dynamic", "false", _is_bool_flag_value,
           supported=("true", "false"), scope="module"),
+    _Flag("require_end_module", "default",
+          lambda v: v in ("true", "false", "default"),
+          supported=("true", "false", "default"), scope="end_module"),
 )}
 
 #: Process-wide values of the settable process flags.
@@ -114,7 +129,8 @@ _PROCESS: dict[str, Any] = {}
 
 #: Flags whose value is a truth value: reported as the Python bool, which is
 #: what ``true`` / ``false`` written in source compile to.
-_BOOL_FLAGS = frozenset({"bounded", "assert_creates_dynamic"})
+_BOOL_FLAGS = frozenset({"bounded", "assert_creates_dynamic",
+                         "require_end_module"})
 
 
 def _normal(v):
@@ -191,7 +207,11 @@ def module_flags(db) -> dict:
 def apply_setting(db, name: str, value) -> None:
     """Record an already-validated setting (:func:`check_setting`)."""
     spec = FLAGS[name]
-    if spec.scope in ("module", "directive"):
+    if spec.scope == "end_module":
+        from clausal.end_module import set_require_end_module  # noqa: PLC0415
+        set_require_end_module(None if value == "default"
+                               else value == "true")
+    elif spec.scope in ("module", "directive"):
         if db is not None:
             module_flags(db)[name] = value
     else:
@@ -202,6 +222,10 @@ def flag_value(db, name: str):
     """The value of flag *name* as the module of *db* sees it, or
     ``_NO_VALUE``."""
     spec = FLAGS[name]
+    if spec.scope == "end_module":
+        from clausal.end_module import require_end_module_setting  # noqa: PLC0415
+        v = require_end_module_setting()
+        return spec.default if v is None else ("true" if v else "false")
     if spec.scope in ("module", "directive"):
         if db is not None:
             v = module_flags(db).get(name)

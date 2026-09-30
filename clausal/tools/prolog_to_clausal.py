@@ -421,7 +421,8 @@ _BUILTIN_LIBRARIES: frozenset = frozenset({
 
 def prolog_to_clausal(source: str, *, dialect: Dialect | None = None,
                       source_path: str | None = None,
-                      module_name: str | None = None) -> str:
+                      module_name: str | None = None,
+                      surface: str | None = None) -> str:
     """Translate Prolog source text to clausal source text.
 
     Parameters
@@ -437,25 +438,103 @@ def prolog_to_clausal(source: str, *, dialect: Dialect | None = None,
         relative ``use_module`` path is resolved against the file's own
         directory, as Scryer does; without them only the dotted reading
         (``a/b`` is the module ``a.b`` on ``sys.path``) is available.
+    surface : str, optional
+        The file's surface (``clausal.end_module.surface_of``), which
+        decides whether a module file must end with ``end_module/1`` when
+        no setting says otherwise.  Default: from *source_path*, else
+        ``pl``.
     """
     if dialect is None:
         dialect = Dialect.scryer_reader()
     pmodule = parse(source, dialect=dialect)
     return prolog_ast_to_clausal(pmodule, dialect=dialect,
                                  source_path=source_path,
-                                 module_name=module_name)
+                                 module_name=module_name, surface=surface)
 
 
 def prolog_ast_to_clausal(pmodule: PModule, *,
                           dialect: Dialect | None = None,
                           source_path: str | None = None,
-                          module_name: str | None = None) -> str:
+                          module_name: str | None = None,
+                          surface: str | None = None) -> str:
     """Translate a Prolog AST module to clausal source text."""
     if dialect is None:
         dialect = Dialect.scryer_reader()
+    pmodule = _check_end_module(pmodule, source_path, surface)
     emitter = _PrologToClausal(dialect, source_path=source_path,
                                module_name=module_name)
     return emitter.emit_module(pmodule)
+
+
+def _check_end_module(pmodule: PModule, source_path: str | None,
+                      surface: str | None) -> PModule:
+    """The ``end_module/1`` checks (``clausal.end_module``, shared with the
+    native front end), and *pmodule* without the directives they consume:
+    ``end_module/1`` and ``set_prolog_flag(require_end_module, V)`` (the
+    file's own requirement) emit nothing.  A refusal is a
+    :class:`PrologTranslationError` naming the line."""
+    from clausal.end_module import (  # noqa: PLC0415
+        EndModuleCheck, EndModuleError, parse_flag_value, surface_of)
+    if surface is None:
+        surface = surface_of(source_path or "") or "pl"
+    check = EndModuleCheck()
+    open_module: str | None = None
+    kept: list = []
+    for item in pmodule.items:
+        if isinstance(item, PComment):
+            kept.append(item)
+            continue
+        body = item.body if isinstance(item, PDirective) else None
+        line = getattr(item, "line", 0)
+        try:
+            if (isinstance(body, PCompound) and body.functor == "end_module"
+                    and len(body.args) == 1):
+                arg = body.args[0]
+                check.end_module(
+                    arg.name if isinstance(arg, PAtom) else arg, open_module,
+                    is_var=isinstance(arg, PVar), shown=_plain_term(arg),
+                    line=line or None)
+                continue
+            if isinstance(item, PDirective):
+                shown = f"the directive :- {_plain_term(body)}"
+            elif isinstance(item, (PClause, PDCGRule)):
+                shown = f"the clause {_plain_term(item.head)}"
+            elif isinstance(item, PQuery):
+                shown = f"the query ?- {_plain_term(item.body)}"
+            else:
+                shown = f"the {type(item).__name__}"
+            check.item(shown)
+        except EndModuleError as e:
+            raise PrologTranslationError(
+                f"line {line}: {e}" if line else str(e)) from None
+        if (isinstance(body, PCompound) and body.functor == "module"
+                and len(body.args) == 2 and isinstance(body.args[0], PAtom)
+                and open_module is None):
+            open_module = body.args[0].name
+        if (isinstance(body, PCompound) and body.functor == "set_prolog_flag"
+                and len(body.args) == 2 and isinstance(body.args[0], PAtom)
+                and body.args[0].name == "require_end_module"):
+            value = body.args[1]
+            setting = parse_flag_value(
+                value.name if isinstance(value, PAtom) else None)
+            if setting is None:
+                raise PrologTranslationError(
+                    f"line {line}: :- set_prolog_flag(require_end_module, "
+                    f"{_plain_term(value)}): the require_end_module values "
+                    f"are true and false (ISO error(domain_error(flag_value, "
+                    f"require_end_module+{_plain_term(value)}), "
+                    f"set_prolog_flag/2))")
+            check.file_setting = setting
+            continue
+        kept.append(item)
+    try:
+        check.finish(open_module, surface,
+                     os.path.basename(source_path) if source_path else "<.pl>")
+    except EndModuleError as e:
+        raise PrologTranslationError(str(e)) from None
+    if len(kept) == len(pmodule.items):
+        return pmodule
+    return PModule(tuple(kept), source_path=pmodule.source_path)
 
 
 def emit_clausal_term(term: PTerm, dialect: Dialect | None = None) -> str:

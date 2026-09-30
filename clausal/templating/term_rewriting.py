@@ -9207,6 +9207,17 @@ class EmbedTransformer(NodeTransformer):
                 "-set_prolog_flag takes two arguments: "
                 "-set_prolog_flag(Flag, Value)")
         flag, value = _arg(args[0]), _arg(args[1])
+        if flag == "require_end_module":
+            # end_module/1 is a Prolog module directive: the seam has none,
+            # and no setting of it reaches a seam file (operator ruling
+            # 2026-09-30).  A .pl file's own directive is its front end's.
+            raise SyntaxError(
+                f"-set_prolog_flag({flag}, {value}): require_end_module "
+                f"says whether a Prolog module file must end with "
+                f":- end_module(Name).; it does not apply to a seam file. "
+                f"Set it process-wide with set_prolog_flag/2 as a goal, "
+                f"CLAUSAL_REQUIRE_END_MODULE, or "
+                f"clausal.end_module.set_require_end_module")
         try:
             name, v = check_setting(flag, value, directive=True)
         except LogicException as exc:

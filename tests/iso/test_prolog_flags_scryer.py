@@ -114,7 +114,8 @@ def test_an_unbound_flag_enumerates_every_flag_with_a_value(plain):
     got = dict(_answers(("current_prolog_flag", F, V), plain, F, V))
     assert set(got) == {"bounded", "integer_rounding_function",
                         "char_conversion", "debug", "max_arity", "unknown",
-                        "double_quotes", "assert_creates_dynamic"}
+                        "double_quotes", "assert_creates_dynamic",
+                        "require_end_module"}
 
 
 # ── the ISO errors (8.17.1.3, 8.17.2.3) ──────────────────────────────────────

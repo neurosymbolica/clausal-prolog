@@ -26,6 +26,21 @@ TREALLA = os.environ.get("CLAUSAL_TREALLA", "/workspace/trealla-prolog/tpl")
 #: Answers one query with Scryer's own toplevel printers; see its header.
 SCRYER_TOPLEVEL = str(pathlib.Path(__file__).resolve().with_name("_scryer_toplevel.pl"))
 
+#: Drops ``:- end_module(Name).`` at load (a ``term_expansion/2`` into
+#: nothing).  Clausal accepts the ISO 13211-2 directive; Scryer refuses it
+#: (``error(domain_error(directive, end_module/1), load/1)``) and fails the
+#: whole file, so it is consulted AHEAD of any program that mentions it.
+SCRYER_END_MODULE_PRELUDE = str(
+    pathlib.Path(__file__).resolve().with_name("_scryer_end_module.pl"))
+
+
+def _mentions_end_module(path: str) -> bool:
+    try:
+        with open(path, encoding="utf-8", errors="replace") as handle:
+            return "end_module" in handle.read()
+    except OSError:
+        return False
+
 
 def _quoted_atom(text: str) -> str:
     return "'" + (text.replace("\\", "\\\\").replace("'", "\\'")
@@ -42,6 +57,8 @@ def scryer_argv(program=None, goals=(), *, binary=None) -> list:
         programs = [os.fspath(program)]
     else:
         programs = [os.fspath(p) for p in program]
+    if any(_mentions_end_module(p) for p in programs):
+        programs.insert(0, SCRYER_END_MODULE_PRELUDE)
     argv = [binary or SCRYER, *programs]
     if goals:
         argv.append(SCRYER_TOPLEVEL)

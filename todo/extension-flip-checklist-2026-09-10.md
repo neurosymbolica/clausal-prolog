@@ -67,6 +67,17 @@ outright.
 `docs/**/*.md` for the same three tenses before the flip. Note the fenced blocks are already
 lint-clean (1045 scanned, 1 hit, an archived design spec), so the risk is prose, not code.
 
+**6. `end_module/1` becomes REQUIRED for `.clausal` files -- by design, with no code change.**
+`clausal/end_module.py` keys the "require end_module" default by SURFACE
+(`REQUIRE_END_MODULE_DEFAULTS`: `pl` no, `clausal_prolog` yes), and `surface_of` reads
+`_suffixes.CLAUSAL_PROLOG_SUFFIXES` (empty today). Moving `.clausal` into that tuple at the
+flip makes every `.clausal` MODULE file (one with `:- module/2`) fail to load unless it ends
+with `:- end_module(Name).` (or `CLAUSAL_REQUIRE_END_MODULE=0` / the file's own
+`set_prolog_flag(require_end_module, false)`). The Prolog loader that takes `.clausal` must
+pass the file's path (or `surface=`) to `iso_l3.lower_source`; the NativePrologLoader
+already does. Plan the Clausal-Prolog `.clausal` files to carry end_module from the start.
+Seam files keep their exemption: `surface_of` names `.seam` `seam`, which has no entry.
+
 ## Ordering constraint
 
 The rename of every seam file must COMPLETE before `CLAUSAL_SUFFIXES` drops `.clausal`,

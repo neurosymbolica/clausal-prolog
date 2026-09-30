@@ -17,6 +17,13 @@ CLAUSAL_SUFFIXES: tuple[str, ...] = (".clausal", ".seam")
 #: Extension of a Prolog source file the import hook translates on load.
 PROLOG_SUFFIX: str = ".pl"
 
+#: Extensions of a CLAUSAL PROLOG source file (the cut-free ISO surface).
+#: Empty today: that surface has no extension of its own until the
+#: extension flip, when ``.clausal`` moves here from ``CLAUSAL_SUFFIXES``.
+#: ``clausal.end_module.surface_of`` reads it, so a file here gets the
+#: Clausal Prolog defaults (end_module required) with no further change.
+CLAUSAL_PROLOG_SUFFIXES: tuple[str, ...] = ()
+
 #: Every extension the import hook loads as a predicate module.
 SOURCE_SUFFIXES: tuple[str, ...] = (*CLAUSAL_SUFFIXES, PROLOG_SUFFIX)
 

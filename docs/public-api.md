@@ -285,7 +285,9 @@ Two known gaps in the atom-class deprecation:
 - **Importing `.pl` files** (a plain `import` of a Prolog source file, see
   [Importing Prolog](importing_prolog.md)). It goes through a translator that
   is being replaced, and what it accepts and how it names things may change
-  in a minor release.
+  in a minor release. This includes ISO 13211-2 `end_module/1` and its
+  setting: the `require_end_module` flag, `CLAUSAL_REQUIRE_END_MODULE`, and
+  `clausal.end_module`.
 
 ### Exported by `clausal` but not covered
 

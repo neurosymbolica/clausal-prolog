@@ -1910,6 +1910,20 @@ class _ClausalToProlog:
             # selects, so there is nothing to emit; and the reference systems
             # do not know the flag, so writing it would be a load error there.
             return None
+        if name == "end_module" or (
+                name == "set_prolog_flag" and len(call.args) == 2
+                and isinstance(call.args[0], python_ast.Name)
+                and call.args[0].id == "require_end_module"):
+            # ISO 13211-2's end_module/1 (and its require_end_module flag)
+            # belong to Prolog module files; the seam has neither, and the
+            # seam loader refuses both.  Emitting it would also break the
+            # export where it runs: Scryer refuses the directive
+            # (domain_error(directive, end_module/1)) and fails the file.
+            raise NotImplementedError(
+                f"clausal_to_prolog: -{name}(...) "
+                f"{'(require_end_module) ' if name != 'end_module' else ''}"
+                "is not a seam directive (end_module/1 belongs to Prolog "
+                "module files), and Scryer refuses end_module/1: remove it")
         if name in ("constant_value", "constant_number_units",
                     "constant_number_currency"):
             self._collect_constant(name, call)

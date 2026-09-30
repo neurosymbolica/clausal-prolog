@@ -154,6 +154,48 @@ SWI load `m` and import nothing. Write `use_module(m)` or
 `use_module(m, [p/1])` instead; after either, `m:p(X)` reaches every
 predicate `m` exports, in Clausal, Scryer and Trealla alike.
 
+### `end_module`: closing a module
+
+A `.pl` module file may end with the ISO 13211-2 directive
+`:- end_module(Name).` Both `.pl` front ends check it:
+
+- `Name` names the module the file's `:- module(Name, Exports).` opened;
+- it is the last item of the file: only comments may follow it.
+
+Anything else is a load-time `SyntaxError` naming the line and carrying the
+ISO error term (the ISO 13211-2 text is not in this repository; the terms
+are Clausal's, in Scryer's `error(E, Context)` shape):
+
+| The file | The error |
+|---|---|
+| `:- end_module(other).` in module `m` | `error(existence_error(module, other), end_module/1)` |
+| `end_module` with no `module/2`, or a second `end_module` | `error(existence_error(module, Name), end_module/1)` |
+| a clause or directive after `end_module(m)` | `error(permission_error(modify, module, m), end_module/1)` |
+| `end_module(X)` / `end_module(f(x))` | `instantiation_error` / `type_error(atom, f(x))` |
+
+**Requiring it.** In a `.pl` file end_module is optional. When it is
+REQUIRED, a module file without it fails to load with
+`error(existence_error(directive, end_module(m)), load/1)`, naming the file
+and the module. Most specific first:
+
+1. the file's own `:- set_prolog_flag(require_end_module, true).` (or
+   `false`) -- it governs that file only;
+2. the process-wide setting: `CLAUSAL_REQUIRE_END_MODULE=1` (or `0`) in the
+   environment, `clausal.end_module.set_require_end_module(True | False |
+   None)` from Python, or `set_prolog_flag(require_end_module, V)` run as a
+   goal (`V` is `true`, `false` or `default`); `current_prolog_flag/2` reads
+   it;
+3. the surface's default: `.pl` does not require it; the Clausal Prolog
+   surface will (it has no file extension of its own yet).
+
+A seam file (`.seam`, and `.clausal` today) is never affected, and has no
+`end_module`.
+
+Scryer does not accept `end_module/1` (`domain_error(directive,
+end_module/1)`, and the file fails to load): a file meant for Scryer as well
+leaves it out, or has it removed on the way
+(`clausal.end_module.strip_end_module`).
+
 ### Importing a Python-backed module
 
 Under the native front end (`CLAUSAL_PL_FRONTEND=native`) a `.pl` file can
