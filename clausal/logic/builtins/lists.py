@@ -936,8 +936,16 @@ def _list_to_set__2(this_generator, _proceed, _fail, _catcher, lst, set_out, tra
         # one element
         from clausal.logic.builtins.iso_compare import _iso_identical  # noqa: PLC0415
         seen: list = []
+        atomic: set = set()             # fast path: (type, value) of atomics
         for x in items:
-            if not any(_iso_identical(x, y) for y in seen):
+            t = type(x)
+            if t in (int, float, str) and not is_var(x):
+                key = (t, x)
+                if key in atomic:
+                    continue
+                atomic.add(key)
+                seen.append(x)
+            elif not any(_iso_identical(x, y) for y in seen):
                 seen.append(x)
         out = _seq_result(seen, _was_string(lst_val), _was_bytes(lst_val))
         mark = trail.mark()

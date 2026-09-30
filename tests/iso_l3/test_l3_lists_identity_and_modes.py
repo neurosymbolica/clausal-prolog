@@ -11,6 +11,7 @@ l2(R) :- findall(X, list_to_set([f(A),f(B),f(A)], X), R).
 p1(R) :- findall(X, permutation(X, [1,2]), R).
 p2(R) :- findall(X, permutation([1,2,3], X), R).
 p3(R) :- findall(x, permutation([1,2], [2,1]), R).
+l3(R) :- findall(X, list_to_set([1,2.0,1,2.0,x,x], X), R).
 """
 
 
@@ -20,6 +21,7 @@ def test_list_to_set_by_identity(native, ans):
     assert ans(mod, "l1") == [[["a", "b", 1, 1.0]]]
     (((first, second),),) = ans(mod, "l2")
     assert is_var(first[1]) and is_var(second[1]) and first[1] is not second[1]
+    assert ans(mod, "l3") == [[[1, 2.0, "x"]]]
 
 
 def test_permutation_with_the_first_argument_unbound(native, ans):
