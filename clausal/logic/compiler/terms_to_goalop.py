@@ -26,7 +26,7 @@ from __future__ import annotations
 from typing import Any, NoReturn
 
 from clausal.pythonic_ast import nodes
-from clausal.terms import PyThunk, Undefined
+from clausal.terms import DictTerm, PyThunk, Undefined
 from clausal.logic.variables import is_var
 from clausal.logic.compiler.terms_to_ast import (
     _is_star_list,
@@ -525,6 +525,12 @@ def _convert_inner(goal: Any, db: Any) -> GoalOp:
             # in DATA position (a head, an argument) is untouched: only
             # goals reach ``_convert``.
             return _convert_inner(_set_goal_as_clpq_rational(goal), db)
+    if isinstance(goal, DictTerm):
+        # ``{}`` parses as the empty DICT (Python's reading), and a dict is
+        # data: it reached ``_not_yet`` and surfaced the internal
+        # NotImplementedError.  (A NON-empty ``{...}`` of comparisons is a
+        # set literal -- the CLP(Q) constraint set above.)
+        raise DictGoalError(goal)
     _not_yet(goal)
 
 
@@ -588,6 +594,32 @@ class SetGoalElementError(Exception):
             f"(the twin of clpq's {{C}}): each element must be a comparison "
             f"(==, !=, <, <=, >, >= or a chain of them), but {culprit}. "
             f"A set of VALUES belongs in an argument, not in goal position."
+        )
+
+
+class DictGoalError(Exception):
+    """A dict term was used in goal position -- most often ``{}``, which
+    Python (and so the seam) reads as the empty DICT, not an empty
+    constraint set.  ``predicate`` is filled in by the predicate compiler
+    once the enclosing ``functor/arity`` is known (like
+    :class:`BareGoalVariableError`)."""
+
+    def __init__(self, goal: Any, predicate: str | None = None) -> None:
+        self.goal = goal
+        self.predicate = predicate
+        location = f" in predicate {predicate}" if predicate else ""
+        pos = getattr(goal, "_position", None)
+        line = pos[0] if isinstance(pos, tuple) and pos else None
+        where = f" (line {line})" if line is not None else ""
+        if len(goal) == 0:
+            what = "`{}` is an empty dict, not a goal"
+        else:
+            what = "`{...}` (a dict with keys) is a dict, not a goal"
+        super().__init__(
+            f"{what}{location}{where}: a dict is data. It belongs in an "
+            f"argument; `true` is the goal that always succeeds, and a "
+            f"CLP(Q) constraint set needs at least one comparison "
+            f"(e.g. {{X >= 0}})."
         )
 
 
@@ -669,4 +701,4 @@ def _not_yet(goal: Any) -> NoReturn:
 
 
 __all__ = ["terms_to_goalop", "BareGoalVariableError", "BareGoalUndefinedError",
-           "SetGoalElementError"]
+           "SetGoalElementError", "DictGoalError"]
