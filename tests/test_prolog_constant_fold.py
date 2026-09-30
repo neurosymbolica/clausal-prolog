@@ -134,6 +134,7 @@ def test_a_united_constant_exports_its_magnitude_AND_its_unit():
     assert "unit discarded" not in out, "nothing is discarded any more"
     assert "constant_number_units(" in out and "euro" in out, out
 
+@needs_scryer
 def test_folded_program_runs(tmp_path):
     """The definition of done: not "it parses", but "it answers".
 

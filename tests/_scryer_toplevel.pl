@@ -1,3 +1,5 @@
+% clausal: no-collect
+% (Scryer-only oracle plumbing, not a Clausal test file.)
 /*  Answer ONE toplevel query the way Scryer's interactive toplevel does,
     for a query handed over with -g instead of on stdin.
 
