@@ -801,10 +801,18 @@ def _sort__2(this_generator, _proceed, _fail, _catcher, lst, sorted_lst, trail):
 
 @_trampoline_builtin("permutation", 2)
 def _permutation__2(this_generator, _proceed, _fail, _catcher, lst, perm, trail):
-    """permutation(List, Perm) — Perm is a permutation of List."""
+    """permutation(List, Perm) — Perm is a permutation of List.  Either
+    argument may be the proper list: ``permutation(Xs, [1, 2])`` enumerates
+    Xs as Scryer does (it had no answers)."""
     import itertools
     lst_val = deref(lst)
     items = _as_items(lst_val)
+    if items is None and is_var(lst_val):
+        # List unbound: the relation is symmetric, so run it the other way
+        perm_val = deref(perm)
+        if _as_items(perm_val) is not None:
+            lst, perm, lst_val = perm, lst, perm_val
+            items = _as_items(lst_val)
     if items is not None:
         was_str = _was_string(lst_val)
         was_bytes = _was_bytes(lst_val)
