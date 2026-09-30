@@ -88,8 +88,9 @@ def test_op_import_table_is_scryers_oracle(tmp_path):
         f.write_text(f"{directive}\nt(X) :- X = (c {op} d).\n")
         proc = subprocess.run(
             [SCRYER, str(f), "-g", "(catch(t(X), _, fail) -> writeq(yes(X)) "
-             "; write(no)), nl, halt"],
-            cwd=tmp_path, capture_output=True, text=True, timeout=60)
+             "; write(no)), nl, halt", "-g", "halt"],
+            cwd=tmp_path, stdin=subprocess.DEVNULL,
+            capture_output=True, text=True, timeout=60)
         last = proc.stdout.strip().splitlines()[-1]
         assert last.startswith("yes(") == reads, (directive, proc.stdout)
 

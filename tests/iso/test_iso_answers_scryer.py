@@ -16,7 +16,6 @@ from __future__ import annotations
 import itertools
 import os
 import re
-import subprocess
 import sys
 import tempfile
 import textwrap
@@ -30,7 +29,7 @@ from clausal.logic.solve import solve
 from clausal.logic.variables import Var, deref
 from clausal.terms import term_writeq
 
-from .conftest import SCRYER
+from .conftest import SCRYER, run_scryer
 
 
 _VAR = re.compile(r"(?<![\w'])_[A-Za-z0-9_]*")
@@ -78,10 +77,9 @@ def _scryer_answers(program: str, goals: list[tuple[str, int]]) -> list[list[str
         pl = os.path.join(d, "oracle.pl")
         with open(pl, "w") as fh:
             fh.write(program + "\n" + driver)
-        stdin = "".join(f"'$row'({i}, {n}, ({g}), R).\n"
-                        for i, (g, n) in enumerate(goals))
-        proc = subprocess.run([SCRYER, pl], input=stdin, capture_output=True,
-                              text=True, timeout=120)
+        queries = [f"'$row'({i}, {n}, ({g}), R)."
+                   for i, (g, n) in enumerate(goals)]
+        proc = run_scryer(pl, queries, timeout=120)
     rows: list[list[str]] = []
     for line in proc.stdout.splitlines():
         if line.startswith("ROW "):

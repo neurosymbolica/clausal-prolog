@@ -55,7 +55,6 @@ from __future__ import annotations
 
 import os
 import re
-import subprocess
 
 import pytest
 
@@ -69,8 +68,8 @@ from clausal.logic.variables import Var, deref
 from clausal.tools.clausal_to_prolog import clausal_source_to_prolog
 from clausal.modules.py.datetime import _dt_to_term as _T
 from clausal.modules.py.datetime import _term_to_dt as _P  # py datetime -> its TERM
+from tests._oracles import SCRYER, run_scryer
 
-SCRYER = "/workspace/scryer-prolog/target/release/scryer-prolog"
 SPEC = "implementation_plans/prolog-eq-mode-lowering.md"
 
 pytestmark = pytest.mark.skipif(
@@ -184,14 +183,7 @@ def _run_scryer(tmp_path, pl_source: str, query: str, *, strip_companion_import:
         pl_source = _USE_MODULE_DIRECTIVE.sub("", pl_source, count=1)
     pl_file = tmp_path / "harness.pl"
     pl_file.write_text(pl_source)
-    proc = subprocess.run(
-        [SCRYER, "harness.pl"],
-        cwd=tmp_path,
-        input=query + "\n",
-        capture_output=True,
-        text=True,
-        timeout=8,
-    )
+    proc = run_scryer("harness.pl", [query], cwd=tmp_path, timeout=30)
     return _classify_scryer(proc, query)
 
 
@@ -587,11 +579,7 @@ def _run_scryer_multifile(tmp_path, files: dict, query: str):
     """
     for name, text in files.items():
         (tmp_path / name).write_text(text)
-    proc = subprocess.run(
-        [SCRYER, "harness.pl"],
-        cwd=tmp_path, input=query + "\n",
-        capture_output=True, text=True, timeout=15,
-    )
+    proc = run_scryer("harness.pl", [query], cwd=tmp_path, timeout=15)
     return _classify_scryer(proc, query)
 
 

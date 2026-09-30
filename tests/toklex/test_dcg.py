@@ -1,13 +1,12 @@
 import os
-import subprocess
 
 import pytest
 
 from clausal.tools.toklex import load_lexer
 from clausal.tools.toklex.dcg import render_dcg
 from clausal.tools.toklex.driver import IncrementalLexer
+from tests._oracles import SCRYER, run_scryer
 
-SCRYER = "/workspace/scryer-prolog/target/release/scryer-prolog"
 SAMPLES = ["foo(X, 1). ", "=.. = . ", "1. 1.5 1.0e7 ", "'a''b' \"s\" 0'a ",
            "/* c /* n */ */ x ", "a. "]
 
@@ -52,9 +51,7 @@ def test_scryer_agrees_with_python_driver(tmp_path, sample):
         f"    toklex_run({_pl_char_list(sample)}, Ts),\n"
         f"    write_canonical(Ts), nl, halt.\n"
     )
-    out = subprocess.run(
-        [SCRYER, str(goal_file)], capture_output=True, text=True, timeout=30
-    ).stdout.strip()
+    out = run_scryer(str(goal_file), [], timeout=30).stdout.strip()
 
     py = IncrementalLexer(lx).run(sample)
     want_items = [f'tok({t.kind},"{t.lexeme}")' for t in py]

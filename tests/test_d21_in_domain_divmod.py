@@ -29,9 +29,8 @@ from clausal.import_hook import _load_module
 from clausal.logic.variables import Var, deref
 from clausal.tools.clausal_to_prolog import clausal_source_to_prolog
 from clausal.tools.prolog_dialect import Dialect, resolve_name
+from tests._oracles import SCRYER, TREALLA
 
-SCRYER = "/workspace/scryer-prolog/target/release/scryer-prolog"
-TREALLA = "/workspace/trealla-prolog/tpl"
 
 #: name -> goal body binding L. Every case is a findall, so the whole answer
 #: set is compared, not just the first answer: a rewrite that adds or loses a
@@ -119,7 +118,10 @@ def _run(binary, flags, pl_path):
     goal = ", ".join(
         f"({n}(L{i}) -> write({n}=L{i}) ; write({n}=no_solution)), nl"
         for i, n in enumerate(CASES)) + ", halt"
-    proc = subprocess.run([binary, *flags, str(pl_path), "-g", goal],
+    # Scryer only: a separate trailing `-g halt`, so a goal that raises still
+    # exits (Trealla keeps just the LAST -g, so it must not get one).
+    tail = ["-g", "halt"] if binary == SCRYER else []
+    proc = subprocess.run([binary, *flags, str(pl_path), "-g", goal, *tail],
                           cwd=pl_path.parent, stdin=subprocess.DEVNULL,
                           capture_output=True, text=True, timeout=120)
     return dict(line.split("=", 1) for line in proc.stdout.splitlines() if "=" in line), proc

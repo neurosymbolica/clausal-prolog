@@ -27,16 +27,15 @@ from __future__ import annotations
 import importlib
 import os
 import shutil
-import subprocess
 import sys
 
 import pytest
 
 from clausal.tools import iso_l3 as L3
+from tests._oracles import SCRYER, run_scryer
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 S2 = os.path.join(HERE, "s2")
-SCRYER = "/workspace/scryer-prolog/target/release/scryer-prolog"
 ENV = "CLAUSAL_PL_FRONTEND"
 
 V = object()   # a fresh variable in a call pattern
@@ -211,9 +210,9 @@ def test_scryer_loads_the_pl_files_and_answers_the_same(tree, scryer):
                              for i, a in enumerate(args))
         goals.append(f"findall([{','.join(vs)}], s2main:{name}({call_args}), "
                      f"L{k}), writeq(L{k}), nl")
-    program = ", ".join(f"({g})" for g in goals) + ", halt.\n"
-    proc = subprocess.run([scryer, "s2main.pl"], input=program, cwd=root,
-                          capture_output=True, text=True, timeout=300)
+    program = ", ".join(f"({g})" for g in goals) + ", halt."
+    proc = run_scryer("s2main.pl", [program], cwd=root, timeout=300,
+                      binary=scryer)
     lines = [ln for ln in proc.stdout.splitlines() if ln.strip()]
     assert len(lines) == len(MAIN_CALLS), proc.stdout + proc.stderr
     ops = L3.reader_op_table()

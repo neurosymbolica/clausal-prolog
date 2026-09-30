@@ -24,12 +24,12 @@ import textwrap
 import pytest
 
 from clausal.tools import iso_l3 as L3
+from tests._oracles import SCRYER, run_scryer
 
 HERE = pathlib.Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 RULEBASE = HERE / "rulebase_s1.pl"
 TWIN = HERE / "rulebase_s1_twin.seam"
-SCRYER = "/workspace/scryer-prolog/target/release/scryer-prolog"
 N_TESTS = 47
 
 V = object()   # a fresh variable in a call pattern
@@ -173,10 +173,8 @@ def scryer():
         pytest.fail(f"the Scryer oracle is not built at {SCRYER}")
 
     def run(goal: str):
-        proc = subprocess.run(
-            [SCRYER, str(RULEBASE)],
-            input=f"{goal}, writeq(Out), nl, halt.\n",
-            capture_output=True, text=True, timeout=60)
+        proc = run_scryer(str(RULEBASE), [f"{goal}, writeq(Out), nl, halt."],
+                          timeout=60)
         line = proc.stdout.strip().splitlines()[-1]
         [item] = L3.read_iso(f"answer({line}).\n")
         assert type(item).__name__ == "Clause", (line, item)

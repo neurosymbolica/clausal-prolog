@@ -11,7 +11,6 @@ not part of the comparison.
 from __future__ import annotations
 
 import os
-import subprocess
 import tempfile
 
 import pytest
@@ -22,7 +21,7 @@ from clausal.logic.exceptions import LogicException, render_error_term
 from clausal.logic.solve import solve
 from clausal.logic.variables import Var
 
-from .conftest import SCRYER
+from .conftest import SCRYER, run_scryer
 
 #: (engine clause body, Scryer goal, the error term both print)
 ROWS = [
@@ -79,11 +78,9 @@ def test_oracle_prints_the_expected_column(scryer):
         f.write(":- use_module(library(error)).\n")
         prelude = f.name
     try:
-        stdin = "".join(f"catch(({goal}), E, true), writeq(E), nl.\n"
-                        for _, goal, _ in ROWS)
-        out = subprocess.run([SCRYER, prelude], input=stdin,
-                             capture_output=True, text=True,
-                             timeout=60).stdout.splitlines()
+        goals = [f"catch(({goal}), E, true), writeq(E), nl."
+                 for _, goal, _ in ROWS]
+        out = run_scryer(prelude, goals, timeout=60).stdout.splitlines()
     finally:
         os.unlink(prelude)
     got = [line for line in (l.strip() for l in out) if line.startswith("error(")]

@@ -20,13 +20,12 @@ want to become constants could not have been exported at all.
 """
 import os
 import re
-import subprocess
 
 import pytest
 
 from clausal.tools.clausal_to_prolog import clausal_source_to_prolog
+from tests._oracles import SCRYER, run_scryer
 
-SCRYER = "/workspace/scryer-prolog/target/release/scryer-prolog"
 
 needs_scryer = pytest.mark.skipif(
     not os.path.exists(SCRYER),
@@ -38,10 +37,7 @@ def _run_scryer(tmp_path, pl_source: str, query: str):
     """Consult *pl_source* in real Scryer and run one *query*."""
     pl_file = tmp_path / "fold.pl"
     pl_file.write_text(pl_source)
-    proc = subprocess.run(
-        [SCRYER, "fold.pl"], cwd=tmp_path, input=query + "\n",
-        capture_output=True, text=True, timeout=15,
-    )
+    proc = run_scryer("fold.pl", [query], cwd=tmp_path, timeout=15)
     line = proc.stdout.strip()
     if line == "true.":
         return ("succeeds", None)
@@ -138,6 +134,7 @@ def test_a_united_constant_exports_its_magnitude_AND_its_unit():
     assert "unit discarded" not in out, "nothing is discarded any more"
     assert "constant_number_units(" in out and "euro" in out, out
 
+@needs_scryer
 def test_folded_program_runs(tmp_path):
     """The definition of done: not "it parses", but "it answers".
 

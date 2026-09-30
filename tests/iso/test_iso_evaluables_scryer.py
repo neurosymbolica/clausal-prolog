@@ -15,7 +15,6 @@ answer in the comment.  NOT_EVALUABLE pins what Scryer does not evaluate
 from __future__ import annotations
 
 import os
-import subprocess
 import tempfile
 
 import pytest
@@ -26,7 +25,7 @@ from clausal.logic.exceptions import LogicException, render_error_term
 from clausal.logic.solve import solve
 from clausal.logic.variables import Var, deref
 
-from .conftest import SCRYER
+from .conftest import SCRYER, run_scryer
 
 #: (cell as written in the engine, the same in Scryer, what both print)
 ROWS = [
@@ -251,16 +250,14 @@ def test_every_new_evaluable_has_a_row():
 
 def test_oracle_prints_the_expected_column(scryer):
     del scryer   # the fixture only asserts the binary is there
-    stdin = "".join(f"r({goal}).\n" for _, goal, _ in ROWS)
+    goals = [f"r({goal})." for _, goal, _ in ROWS]
     with tempfile.NamedTemporaryFile(suffix=".pl", mode="w",
                                      delete=False) as f:
         f.write("r(G) :- catch((V is G, R = V), E, R = E),"
                 " write('R '), writeq(R), nl.\n")
         prelude = f.name
     try:
-        out = subprocess.run([SCRYER, prelude], input=stdin,
-                             capture_output=True, text=True,
-                             timeout=60).stdout.splitlines()
+        out = run_scryer(prelude, goals, timeout=60).stdout.splitlines()
     finally:
         os.unlink(prelude)
     got = [line[2:].strip() for line in out if line.startswith("R ")]

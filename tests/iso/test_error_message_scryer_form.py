@@ -14,7 +14,6 @@ is what Scryer really prints.
 from __future__ import annotations
 
 import re
-import subprocess
 
 import pytest
 
@@ -29,7 +28,7 @@ from clausal.terms import (
     Add, ConcreteSeg, FloorDiv, SegList, VarSeg, term_writeq,
 )
 
-from .conftest import SCRYER
+from .conftest import SCRYER, run_scryer
 
 _X, _Y = Var(), Var()
 
@@ -120,9 +119,8 @@ def test_engine_renders_as_scryer(src, term, expected):
 def test_oracle_prints_the_expected_column(scryer):
     """Scryer's toplevel prints every row's expected column."""
     del scryer   # the fixture only asserts the binary is there
-    stdin = "".join(f"throw(error({src},c)).\n" for src, _, _ in ROWS)
-    out = subprocess.run([SCRYER], input=stdin, capture_output=True,
-                         text=True, timeout=60).stdout.splitlines()
+    goals = [f"throw(error({src},c))." for src, _, _ in ROWS]
+    out = run_scryer(None, goals, timeout=60).stdout.splitlines()
     got = [_norm_vars(line.strip().removesuffix(".")) for line in out if line.strip()]
     want = [f"error({exp},c)" for _, _, exp in ROWS]
     assert len(got) == len(want) == len(ROWS) > 0

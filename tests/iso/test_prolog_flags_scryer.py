@@ -23,7 +23,6 @@ build with no flags touched::
 from __future__ import annotations
 
 import os
-import subprocess
 import sys
 import tempfile
 import textwrap
@@ -36,7 +35,7 @@ from clausal.logic.exceptions import LogicException
 from clausal.logic.solve import _deref_walk, solve
 from clausal.logic.variables import Trail, Var
 
-from .conftest import SCRYER
+from .conftest import SCRYER, run_scryer
 
 
 @pytest.fixture(autouse=True)
@@ -381,8 +380,7 @@ def _scryer(goal: str) -> str:
     pl = os.path.join(d, "w.pl")
     with open(pl, "w") as fh:
         fh.write(":- dynamic(dyn/1).\nst(1).\n")
-    proc = subprocess.run([SCRYER, pl], input=goal + "\n", capture_output=True,
-                          text=True, timeout=30)
+    proc = run_scryer(pl, [goal], timeout=30)
     lines = [ln.strip() for ln in proc.stdout.splitlines()
              if ln.strip() and "put_attr TRACE" not in ln]
     return lines[0] if lines else ""

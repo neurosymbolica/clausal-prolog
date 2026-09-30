@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import os
 import re
-import subprocess
 import tempfile
 
 import pytest
@@ -30,7 +29,7 @@ from clausal.logic.exceptions import LogicException, render_error_term
 from clausal.logic.solve import solve
 from clausal.logic.variables import Var, deref
 
-from .conftest import SCRYER
+from .conftest import SCRYER, run_scryer
 
 #: (evaluable cell as written in the engine, the same in Scryer, what both print)
 ROWS = [
@@ -150,16 +149,14 @@ def test_engine(mod, i):
 
 def test_oracle_prints_the_expected_column(scryer):
     del scryer   # the fixture only asserts the binary is there
-    stdin = "".join(f"r({goal}).\n" for _, goal, _ in ROWS)
+    goals = [f"r({goal})." for _, goal, _ in ROWS]
     with tempfile.NamedTemporaryFile(suffix=".pl", mode="w",
                                      delete=False) as f:
         f.write("r(G) :- catch((V is G, R = V), E, R = E),"
                 " write('R '), writeq(R), nl.\n")
         prelude = f.name
     try:
-        out = subprocess.run([SCRYER, prelude], input=stdin,
-                             capture_output=True, text=True,
-                             timeout=60).stdout.splitlines()
+        out = run_scryer(prelude, goals, timeout=60).stdout.splitlines()
     finally:
         os.unlink(prelude)
     got = [line[2:].strip() for line in out if line.startswith("R ")]
@@ -208,17 +205,14 @@ def test_clp_engine_formal(clp_mod, i):
 
 def test_clp_oracle_formal(scryer):
     del scryer
-    stdin = "".join(
-        f"catch(({goal}), error(F, _), (writeq(F), nl)).\n"
-        for _, goal, _ in CLP_ROWS)
+    goals = [f"catch(({goal}), error(F, _), (writeq(F), nl))."
+             for _, goal, _ in CLP_ROWS]
     with tempfile.NamedTemporaryFile(suffix=".pl", mode="w",
                                      delete=False) as f:
         f.write(":- use_module(library(clpz)).\n")
         prelude = f.name
     try:
-        out = subprocess.run([SCRYER, prelude], input=stdin,
-                             capture_output=True, text=True,
-                             timeout=60).stdout.splitlines()
+        out = run_scryer(prelude, goals, timeout=60).stdout.splitlines()
     finally:
         os.unlink(prelude)
     # a variable prints as _NNN in Scryer: compare it as ``_``

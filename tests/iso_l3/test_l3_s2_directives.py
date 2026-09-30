@@ -523,7 +523,7 @@ def test_d27_a_library_cannot_be_dropped_and_says_so(native):
 @pytest.fixture
 def scryer_bin():
     import os
-    s = "/workspace/scryer-prolog/target/release/scryer-prolog"
+    from tests._oracles import SCRYER as s
     if not os.path.exists(s):
         if os.environ.get("CLAUSAL_ISO_ALLOW_NO_SCRYER"):
             pytest.skip("the Scryer oracle is not built")
@@ -541,14 +541,13 @@ def scryer_bin():
 ])
 def test_d27_scryer_answers_as_the_native_path(native, ans, scryer_bin,
                                                text, goal, want):
-    import subprocess
+    from tests._oracles import run_scryer
     (native.tmp / "dzmod.pl").write_text(D27_LIB)
     (native.tmp / "dzmain.pl").write_text(text)
-    proc = subprocess.run(
-        [scryer_bin, "dzmain.pl"], cwd=native.tmp, capture_output=True,
-        text=True, timeout=60,
-        input=f"catch((findall(X, {goal}(X), L), write(L)), error(E, _), "
-              f"write(E)), nl, halt.\n")
+    proc = run_scryer(
+        "dzmain.pl", [f"catch((findall(X, {goal}(X), L), write(L)), error(E, _), "
+                      f"write(E)), nl, halt."],
+        cwd=native.tmp, timeout=60, binary=scryer_bin)
     assert proc.stdout.strip().splitlines()[-1] == want, proc.stdout
     sys.modules.pop("dzmod", None)
     native._names.append("dzmod")
