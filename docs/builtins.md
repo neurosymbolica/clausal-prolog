@@ -2405,7 +2405,7 @@ Sub-atom relation. Relates an **atom** to the atoms of its sub-spellings with po
 ```clausal
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:number_chars_2"
 ```
-Bidirectional number ↔ character-list conversion. Number bound → `Chars` unifies with the list of the number's **character atoms** (which is the same term as the string of its digits). Chars bound (a char list or the string that is that list) → parse as `int` or `float`. Both bound → test equality. Both unbound → instantiation error. Rejects `bool` values (not considered numbers).
+Bidirectional number ↔ character-list conversion. Number bound → `Chars` unifies with the list of the number's **character atoms** (which is the same term as the string of its digits). Chars a ground list (a char list or the string that is that list) → read as a number token (below) and unified with Number, whether or not Number is bound. Both unbound → instantiation error. Rejects `bool` values (not considered numbers).
 
 A ground `Chars` is READ as a Prolog number token, as ISO 8.16.7 and Scryer read it: layout and comments may lead (`" 1"` is 1), a `-` may stand before the token, and `0x1A`, `0'a`, `1_000` and `1.5e-3` are numbers; nothing may follow the token (`"1 "`, `"+1"`, `"1e5"`, `"inf"` are not numbers). Text that is not a number raises Scryer's `syntax_error(unexpected_end_of_file)` (the text ended before a number was read) or `syntax_error(unexpected_char)` (context `number_chars/2:0`). With both arguments bound the text is read, so `number_chars(1, ['0', '1'])` holds. `number_codes/2` shares this behaviour. (Until 2026-09-30 the text was parsed with Python's `int()`/`float()` and a non-number FAILED.)
 

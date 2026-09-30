@@ -4467,7 +4467,6 @@ def clpz_refuse_non_numeric(e, context: str) -> None:
     decimals, units quantities and other number-like objects, and the
     evaluable compounds and operator nodes, whose arguments are checked the
     same way."""
-    from clausal.logic.runtime._seg_helpers import walk_seg  # noqa: PLC0415
     e = deref(e)
     if is_var(e) or type(e) is int:
         return
@@ -4475,6 +4474,7 @@ def clpz_refuse_non_numeric(e, context: str) -> None:
         raise _clpz_domain_error(e, context)
     if isinstance(e, numbers.Number):
         return
+    from clausal.logic.runtime._seg_helpers import walk_seg  # noqa: PLC0415
     e = walk_seg(e)
     if is_atom(e) or type(e) is list:
         raise _clpz_domain_error(e, context)
@@ -4484,6 +4484,10 @@ def clpz_refuse_non_numeric(e, context: str) -> None:
         if key is not None:
             for a in ((e.operand,) if key[1] == 1 else (e.left, e.right)):
                 clpz_refuse_non_numeric(a, context)
+        # A node the evaluator has no key for (``UnaryPlus``, the bitwise
+        # nodes, ...) is left to the posts, which already decide it: this
+        # check only closes the GROUND-leaf holes and must not refuse an
+        # operand the posts accept today.
         return
     if exact_cell_number(e) is not None:
         return

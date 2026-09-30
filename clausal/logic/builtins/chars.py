@@ -1013,7 +1013,8 @@ def _parse_number_token(text: str):
 
 
 def _number_text(n) -> str:
-    """*n* as a Prolog number token that :func:`_parse_number_token` reads
+    """*n* as a Prolog number token that both :func:`_parse_number_token`
+    (atom_number/2) and :func:`_read_number_text` (number_chars/2) read
     back: a float always has its fraction (``1.0e+22``, not Python's
     ``1e+22``)."""
     if type(n) is int and abs(n) >= 10 ** 4000:
