@@ -794,6 +794,22 @@ def _refuse_missing_indicators(item, mod, orig_name: str, selected,
 _ENGINE_SOLVER_MODULES = frozenset({"clausal.logic.clpfd"})
 
 
+def _imported_attribute(mod, orig_name: str, selected):
+    """``getattr(mod, orig_name)``, or -- for a bare entry naming DATA in a
+    ``.pl`` module (ruling 2026-09-30; ``clausal.pl_data_imports``) -- the
+    atom ``orig_name``, the same value the ``-import_from`` statement bound
+    when the module body ran."""
+    try:
+        return getattr(mod, orig_name)
+    except AttributeError:
+        if selected is None:
+            from clausal.pl_data_imports import data_atom  # noqa: PLC0415
+            atom = data_atom(mod, orig_name)
+            if atom is not None:
+                return atom
+        raise
+
+
 def _engine_builtin_for(mod, orig_name: str):
     """The builtin's goal object (``_BUILTIN_CLASSES[name]``) when *orig_name*
     names, in the engine's CLP(FD) solver module (``clausal.logic.clpfd``),
@@ -866,7 +882,7 @@ def _process_imports(module_items: list, module_dict: dict, db=None) -> None:
                 if isinstance(name_spec, tuple):
                     orig_name, local_name = name_spec
                     value = (_engine_builtin_for(mod, orig_name)
-                             or getattr(mod, orig_name))
+                             or _imported_attribute(mod, orig_name, selected))
                     module_dict[local_name] = value
                     # Keyed by LOCAL_NAME: the aliasing module says ``link``,
                     # so ``link`` is what its database answers to.  A class
@@ -882,7 +898,7 @@ def _process_imports(module_items: list, module_dict: dict, db=None) -> None:
                         _imported_reference(mod, orig_name, value))
                 else:
                     value = (_engine_builtin_for(mod, name_spec)
-                             or getattr(mod, name_spec))
+                             or _imported_attribute(mod, name_spec, selected))
                     module_dict[name_spec] = value
                     _plant_imported_rows(db, mod, name_spec, name_spec,
                                          selected)
