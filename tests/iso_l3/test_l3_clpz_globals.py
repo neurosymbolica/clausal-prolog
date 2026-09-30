@@ -366,12 +366,15 @@ f2(E) :- catch(automaton([1], _, [1|_], [source(a),sink(a)], [arc(a,1,a)], [_], 
 f3(E) :- catch(automaton(foo, _, [1], [source(a),sink(a)], [arc(a,1,a)], [_], [0], _), error(E, _), true).
 f4(E) :- catch(automaton([1], _, [1], [source(a),sink(a)], [arc(a,1,a,[C+Z])], [C], [0], _), error(E, _), true).
 f5(E) :- catch(automaton([1|_], [source(a),sink(a)], [arc(a,1,a)]), error(E, _), true).
+f6(E) :- catch(automaton([1], _, [1], [source(a),sink(a)], [arc(a,1,a,[C+0.5])], [C], [0], _), error(E, _), true).
+f7(E) :- catch(automaton([1], _, [1], [source(a),sink(a)], [arc(a,1,a,[foo])], [_], [0], _), error(E, _), true).
+f8(E) :- catch(automaton([1], foo, [bad(a)]), error(E, _), true).
 """
 
 
 def test_automaton_8(native, ans):
     """automaton/8 did not exist.  Rows b1/b2 are the examples of Scryer's
-    own documentation of automaton/8; b6, b10-b12 and f1-f3, f5 are Scryer's
+    own documentation of automaton/8; b6, b10-b12 and f1-f3, f5-f8 are Scryer's
     answers.  Scryer's library raises instantiation_error (arg/3) for every
     counter expression with a variable (its template_var_path/3 calls arg/3
     with an unbound index), so the rest are the documented relation."""
@@ -397,3 +400,8 @@ def test_automaton_8(native, ans):
     (row,) = ans(mod, "f4")
     assert row[:2] == ("domain_error", "variable_from_template_or_counters")
     assert ans(mod, "f5") == ["instantiation_error"]
+    # each expression is a clpz expression (Scryer's #V #= E)
+    assert ans(mod, "f6") == [("domain_error", "clpz_expression", 0.5)]
+    assert ans(mod, "f7") == [("domain_error", "clpz_expression", "foo")]
+    # Nodes is checked as a list before any arc is read (Scryer's must_be)
+    assert ans(mod, "f8") == [("type_error", "list", "foo")]

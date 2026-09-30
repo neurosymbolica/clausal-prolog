@@ -24,6 +24,7 @@ s3(R) :- findall(D, intersection([1,1.0,2], [1], D), R).
 s4(R) :- findall(D, union([1], [1.0], D), R).
 s5(R) :- findall(D, union([a,b], [b,a,c,c], D), R).
 s6(R) :- findall(D, subtract([1,x,2.0], [2.0,x], D), R).
+s7(R) :- findall(X-Y-D, subtract([X,Y], [X], D), R).
 m1(R) :- findall(M, list_max([1,3,2], M), R).
 m2(R) :- findall(M-N, (list_max([2,2.0], M), list_min([2.0,2], N)), R).
 m3(R) :- findall(M, list_max([1+1], M), R).
@@ -65,6 +66,8 @@ def test_set_predicates_compare_by_identity(native, ans):
     assert ans(mod, "s4") == [[[1, 1.0]]]
     assert ans(mod, "s5") == [[["a", "b", "c"]]]
     assert ans(mod, "s6") == [[[1]]]
+    (((_m, (_m2, x, y), d),),) = ans(mod, "s7")   # variables by identity
+    assert len(d) == 1 and d[0] is y and x is not y
 
 
 def test_list_max_list_min(native, ans):

@@ -699,6 +699,7 @@ def _automaton(seqs, template, sigs, nodes, arcs, counters, initials,
         return e
 
     from clausal.logic.clpfd import clpz_operands, fd_eq  # noqa: PLC0415
+    from clausal.logic.clpz_surface import clpz_expression  # noqa: PLC0415
     states = [Var() for _ in range(len(sig) + 1)]
     rows = []
     values = list(init)
@@ -712,6 +713,8 @@ def _automaton(seqs, template, sigs, nodes, arcs, counters, initials,
                 t = substitute(e, seq[j], values)
                 if t is _NO_PATH:
                     return False
+                # Scryer's #V #= E: a clpz expression, else domain_error
+                t = clpz_expression(t, ctx)
                 v = Var()
                 ops = clpz_operands(v, t, trail)
                 if ops is None or not fd_eq(*ops, trail):
@@ -750,6 +753,8 @@ def _element_constraint(index, values, value, trail) -> bool:
         ElementConstraint, _ensure_fd, _post_constraint)
     from clausal.logic.clpz_surface import _post  # noqa: PLC0415
     from clausal.logic.variables import unify  # noqa: PLC0415
+    if not values:
+        return False
     if len(values) == 1:
         return unify(index, 1, trail) and unify(value, values[0], trail)
     if not _post([index], _fd._domain_union([((1, len(values)),)]), trail):
