@@ -10,6 +10,8 @@ import sys as _sys
 
 from clausal.logic.atoms import (
     demangle,
+    is_truth_atom,
+    truth_spelling,
     is_atom as _term_is_atom,
     is_mangled,
     spelling,
@@ -120,6 +122,8 @@ def _format_term_as_text(val):
         # bare spelling (``foo bar``, not ``'foo bar'``) -- exactly what the
         # str branch above already does for the text of a string.
         return _term_str(val, quoted=False)
+    if is_truth_atom(val):
+        return truth_spelling(val)     # the atoms true/false/undefined (D35)
     return str(val)
 
 
@@ -185,6 +189,8 @@ def _format_term_iso(val, quoted: bool, double_quotes: bool = False,
         # Quantity's own spelling aside, an opaque object -- keeps ``str()``.
         return _term_write(val, quoted=quoted, double_quotes=double_quotes,
                            ignore_ops=ignore_ops, numbervars=numbervars)
+    if is_truth_atom(val):
+        return truth_spelling(val)     # the atoms true/false/undefined (D35)
     return str(val)
 
 
@@ -1234,7 +1240,9 @@ def format_to_text(fs, args) -> str:
                     raise LogicException(instantiation_error("atom_chars/2"))
                 if _is_empty_list(a):
                     es.append(("c", "[]"))         # nil is the atom '[]'
-                elif type(a) is str:
+                elif _term_is_atom(a):
+                    # Any atom, the truth atoms included: ``format("~a",
+                    # [true])`` prints ``true`` (Scryer).
                     es.append(("c", spelling(a)))
                 elif isinstance(a, (int, float)) and not isinstance(a, bool):
                     es.append(("c", str(a)))

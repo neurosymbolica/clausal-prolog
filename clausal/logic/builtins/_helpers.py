@@ -19,6 +19,7 @@ from clausal.logic.predicate import (
 from clausal.logic.cells import TUPLE_TAG, chars, is_chars, chars_text, refuse_reserved_1tuple
 from clausal.logic.atoms import (
     char_atom, is_nil as _is_nil, NIL_SPELLING as _NIL_SPELLING,
+    is_truth_atom, truth_spelling,
 )
 from clausal.terms import (
     DictTerm, SetTerm, Quantity,
@@ -400,6 +401,8 @@ def _functor_name(term: Any) -> Any:
         return f
     if type(term) is str:
         return ("[]" if not term else ".") if text else term
+    if is_truth_atom(term):
+        return term                   # the atom true/false/undefined: its own name (D35)
     return _functor_name_precell(term)
 
 
@@ -412,6 +415,8 @@ def _arity(term: Any) -> int | None:
         return len(term) - 1
     if type(term) is str:
         return (0 if not term else 2) if text else 0
+    if is_truth_atom(term):
+        return 0                      # an atom (D35)
     return _arity_precell(term)
 
 
@@ -609,7 +614,7 @@ _ORD_OTHER = 6
 # `compare(=, X, Y) <=> X == Y` hold by construction rather than by luck.
 # Spec §4b. An extension never interleaves between two ISO terms (§2), which
 # is why Quantity ranks after every ISO numeric type rather than beside them.
-_NUMERIC_RANK = {float: 0, int: 1, bool: 2, _Decimal: 3, _Fraction: 4}
+_NUMERIC_RANK = {float: 0, int: 1, _Decimal: 3, _Fraction: 4}   # bool is an ATOM (D35); rank 2 retired
 _NUMERIC_RANK_QUANTITY = 5
 
 # Flavours within _ORD_COMPOUND.  A cell and a declared term that render
@@ -749,7 +754,13 @@ def term_key(term: Any) -> tuple:
         # which the opaque band did, via a `<` that rejects its own type.
         return (_ORD_NUM, tuple(sorted(term.dims.items())), term.value,
                 _NUMERIC_RANK_QUANTITY)
-    if isinstance(term, (bool, int, float, _Fraction, _Decimal, _Real)):
+    if is_truth_atom(term):
+        # True/False/Undefined ARE the atoms true/false/undefined (D35,
+        # ``atoms.is_truth_atom``): the atom band, by spelling -- Scryer
+        # orders ``compare(>, true, a)`` and ``sort([true, 1], [1, true])``.
+        # Before ``int`` below, since a bool IS an int to ``isinstance``.
+        return (_ORD_ATOM, truth_spelling(term))
+    if isinstance(term, (int, float, _Fraction, _Decimal, _Real)):
         # Plain numbers carry the EMPTY dimension signature, so a dimensionless
         # `Quantity` sorts among them by magnitude instead of after them.
         return _number_key(term)

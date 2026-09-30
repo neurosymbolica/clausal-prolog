@@ -106,7 +106,9 @@ class TestExtractFirstArgKey:
     def test_bool_key(self):
         # nv
         c = Clause(head=("f", True), body=[True])
-        assert _extract_first_arg_key(c, 1) is True
+        # D35 closed: ``true`` is an ATOM, so its bucket is the atom's
+        # ``(name, 0)`` key -- never the raw bool, which hashes as the int 1
+        assert _extract_first_arg_key(c, 1) == ("true", 0)
 
     def test_none_key(self):
         """None is indexable — extracted from Var+Unify pattern."""

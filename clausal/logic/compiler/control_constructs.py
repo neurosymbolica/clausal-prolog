@@ -593,6 +593,7 @@ def _compile_find_all_core(
     *,
     fail_on_empty: bool = False,
     dedup: bool = False,
+    tail: Any = None,
 ) -> list[ast.stmt]:
     """Compile find_all/3, bag_of/3, set_of/3 as special forms.
 
@@ -667,10 +668,15 @@ def _compile_find_all_core(
         orelse=[],
     )
 
+    # findall/4 (*tail* given): the collected list ends in the tail term.
+    tail_tmp = ctx.fresh("_fa_tail") if tail is not None else None
+    collected = (_name(results_var) if tail is None else
+                 _call(_name("$findall_tail"), _name(results_var),
+                       _name(tail_tmp)))
     unify_block = [
         _assign_mark(unify_mark, trail_name),
         ast.If(
-            test=_call(_name("$unify"), _name(bag_tmp), _name(results_var), _name(trail_name)),
+            test=_call(_name("$unify"), _name(bag_tmp), collected, _name(trail_name)),
             body=k_stmts or [ast.Pass()],
             orelse=[],
         ),
@@ -681,10 +687,21 @@ def _compile_find_all_core(
     # nor a partial list is type_error(list, Bag) -- checked BEFORE the goal
     # runs, as Scryer does (``findall(X, _, foo)`` is the type_error).
     who = "setof/3" if dedup else ("bagof/3" if fail_on_empty else "findall/3")
+    tail_check: list[ast.stmt] = []
+    if tail is not None:
+        # Scryer's findall/4 checks BOTH lists (``can_be(list, _)``).
+        who = "findall/4"
+        tail_check = [
+            _assign(tail_tmp, term_to_ast_expr(tail, var_context,
+                                               eval_arith=False)),
+            ast.Expr(value=_call(_name("$check_bag"), _name(tail_tmp),
+                                 ast.Constant(value=who))),
+        ]
     stmts: list[ast.stmt] = [
         bag_build,
         ast.Expr(value=_call(_name("$check_bag"), _name(bag_tmp),
                              ast.Constant(value=who))),
+        *tail_check,
         _assign(results_var, ast.List(elts=[], ctx=ast.Load())),
         _assign(cond_bag, ast.List(elts=[], ctx=ast.Load())),
         _leader_stmt(cond_leader),

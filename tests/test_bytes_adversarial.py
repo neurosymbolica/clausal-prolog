@@ -46,9 +46,9 @@ class TestBytesElementDomainEdges:
         assert unify([97], [97.0], Trail()) is True  # the general behaviour
 
     def test_bool_equal_to_code_matches_engine_consistent(self):
-        # nv  — likewise: True == 1 for the engine's scalar unify.
-        assert unify(b"\x01", [True], Trail()) is True
-        assert unify([1], [True], Trail()) is True  # the general behaviour
+        # nv  — D35 closed: a truth value is an ATOM, never a code: b"\x01" is [1], not [true]
+        assert unify(b"\x01", [True], Trail()) is False
+        assert unify([1], [True], Trail()) is False  # the general behaviour
 
 
 class TestBytesOutOfScopeGuards:

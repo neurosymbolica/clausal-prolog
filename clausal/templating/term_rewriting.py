@@ -405,6 +405,11 @@ _TRUTH_ALIASES = {
 
 _BOOL_ALIAS_VALUES = {"True": True, "False": False}
 
+#: The truth-value spellings that name a user predicate when APPLIED
+#: (``true(X)``, ``false(X, Y)``): D40, ruled 2026-09-30.  true/0 and
+#: false/0 stay the truth values (and the control constructs).
+_APPLIED_TRUTH_NAMES = frozenset({"true", "false"})
+
 # The reified if-then-else goal.  ``if_`` is canonical — lower-case like every
 # other goal, trailing underscore to dodge the Python keyword, and the spelling
 # the reified-conditional literature uses (Neumerkel & Kral's ``if_/3``, see
@@ -2699,6 +2704,14 @@ class TermTransformer(NodeTransformer):
             return node_ast(
                 "LoadName", func_expr,
                 name=replace(Constant(value=dotted or identifier), func_expr))
+        # D40 (operator ruling 2026-09-30): ``true(X)``/``false(X, Y)`` name
+        # the user's own true/N and false/N (N >= 1), as in ISO and Scryer.
+        # Only the bare name (arity 0) is the truth value; APPLIED, the
+        # spelling is a functor, so the truth-value fold must not run here.
+        if isinstance(func_expr, Name) and func_expr.id in _APPLIED_TRUTH_NAMES:
+            return node_ast(
+                "LoadName", func_expr,
+                name=replace(Constant(value=func_expr.id), func_expr))
         prev = transformer._suppress_bare_atom_collection
         prev_callable = transformer._in_callable_position
         transformer._suppress_bare_atom_collection = True

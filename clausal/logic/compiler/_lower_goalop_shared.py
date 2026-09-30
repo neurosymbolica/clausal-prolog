@@ -778,7 +778,7 @@ def _lower_meta_call(
     if kind == "findall":
         return _compile_find_all_core(
             ctx, margs["template"], margs["inner"], margs["bag"], k_stmts,
-            fail_on_empty=False, dedup=False,
+            fail_on_empty=False, dedup=False, tail=margs.get("tail"),
         )
     if kind == "bagof":
         return _compile_find_all_core(

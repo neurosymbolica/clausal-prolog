@@ -134,6 +134,25 @@ since 0.4.0 finish three moves:
 
 ### Added
 
+- **Native `.pl` front end: meta-predicates, library(reif) and the
+  transition constructs.** `findall/4` (the list ends in a given tail, as in
+  Scryer), `maplist/4..9` (every answer, like `maplist/2,3`) and `call/9`
+  are new builtins, for `.seam` as well. After `:- use_module(library(reif))`
+  a `.pl` goal `if_(If_1, Then, Else)` has Scryer's meaning: `If_1` is
+  called with one more argument, the truth value (`X = Y` and `dif(X, Y)`
+  are reified in place, `(A, B)` and `(A ; B)` unfolded), and an unbound or
+  non-boolean truth value raises `instantiation_error` /
+  `type_error(boolean, T)`. The rest of Scryer's reif export list is there:
+  `(=)/3` and `dif/3` are engine builtins (Scryer's answer orders),
+  `tmember/2`, `tmember_t/3` and `cond_t/3` are in `clausal.stdlib.reif`,
+  and so are `tfilter/3` and `tpartition/4` with EVERY answer, which a
+  `.pl` file importing library(reif) takes instead of the engine's
+  committed-choice builtins of the same name. `\+`, `once/1`, `forall/2`,
+  `memberchk/2`, the `findall(_, G, [])` backdoor and `make_quantity/3` are
+  accepted and counted: `l3_stats["transition_constructs"]` holds the goal
+  sites per construct, and a load with any logs one INFO line on the
+  `clausal.pl_frontend` logger.
+
 - **Constants, units and dicts on the native `.pl` front end.** A `.pl`
   file declares constants with the seam's directive family in ISO syntax
   (`:- constant_value(max_retries, 3).`, `:- constant_number_units(max_fine,
@@ -507,6 +526,24 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
   leaf inside an arithmetic cell built at run time (`Q = 6000 * constant(c)`
   in ISO syntax) is evaluable in a post too, instead of
   `type_error(evaluable, ...)`. See [docs/clpq.md](docs/clpq.md#units).
+- **`true` in a `.pl` data position is the truth value.** The native front
+  end left `true`/`false`/`undefined` as atoms where the seam folds them to
+  `True`/`False`/`Undefined`, so `memberd_t(b, [a, b], true)` FAILED (the
+  reified `T` is `True`). They fold now, as in the seam; `True`/`False`
+  written in a `.pl` file stay ordinary variables. Known divergence (as in
+  the seam): the engine treats the folded values as bools, not atoms, so
+  `atom(true)` fails, `atom_length(false, N)` and `functor(F, true, 1)`
+  raise `type_error(atom, _)`, `true = 1` succeeds and `compare(O, true, a)`
+  gives `<` (Scryer: yes, 5, `true(_)`, no, `>`).
+- **A user-defined `true/N` or `false/N` (N >= 1) loads,** in `.seam` and
+  `.pl` alike (ISO and Scryer allow it): the seam refused it as a "reserved
+  truth value name", and `call(true, X)` now reaches it. `true/0` and
+  `false/0` stay the truth values; `undefined/N` stays reserved.
+- **A listless `use_module/1` of a `.seam` module imports its export list**
+  on the native front end: the bare names of its `-module` list were
+  skipped, so the module's predicates were not in scope; a module exporting
+  nothing is still loaded, so `m:G` reaches it.
+
 - **A procedure `assertz` creates is no longer shadowed by an atom of the
   same name some other module declared.** Module dicts are seeded from the
   process-wide atom pool, so the body goal `note(X)` of a later,

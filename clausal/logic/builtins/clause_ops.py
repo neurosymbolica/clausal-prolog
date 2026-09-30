@@ -118,7 +118,8 @@ _CONTEXT = "clause/2"
 SPECIAL_FORMS = frozenset({
     ("throw", 1), ("halt", 0), ("halt", 1), ("once", 1), ("call_nth", 2),
     ("count_all", 2), ("setup_call_cleanup", 3), ("call_cleanup", 2),
-    ("freeze", 2), ("when", 2), ("findall", 3), ("bagof", 3), ("setof", 3),
+    ("freeze", 2), ("when", 2), ("findall", 3), ("findall", 4), ("bagof", 3),
+    ("setof", 3),
     ("catch", 3), ("catch_error", 2), ("catch_recover", 3), ("forall", 2),
     ("eval_", 2),
 })
@@ -306,7 +307,8 @@ def _capturing_thunk(t: Any) -> Any:
 # data): a thunk there is code the goal runs, not a value.
 _GOAL_ARGS = {
     ("once", 1): (0,), ("call_nth", 2): (0,), ("count_all", 2): (0,),
-    ("findall", 3): (1,), ("bagof", 3): (1,), ("setof", 3): (1,),
+    ("findall", 3): (1,), ("findall", 4): (1,), ("bagof", 3): (1,),
+    ("setof", 3): (1,),
     ("forall", 2): (0, 1), ("catch", 3): (0, 2), ("catch_error", 2): (0,),
     ("catch_recover", 3): (0, 2), ("call_cleanup", 2): (0, 1),
     ("setup_call_cleanup", 3): (0, 1, 2), ("freeze", 2): (1,),
@@ -319,7 +321,6 @@ _GOAL_ARGS = {
 _BUILTIN_GOAL_ARGS = {
     ("time_goal", 1): (0,), ("time_goal", 2): (0,),
     ("phrase", 2): (0,), ("phrase", 3): (0,),
-    ("findall", 4): (1,),
 }
 
 

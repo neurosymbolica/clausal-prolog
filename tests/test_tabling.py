@@ -240,7 +240,7 @@ class TestKeyComputation:
         assert _normalize_for_key(42) == 42            # exact int stays canonical
         assert _normalize_for_key("hello") == "hello"
         # A04-F006: numeric leaves are type-tagged so 1/True/1.0 do not conflate
-        assert _normalize_for_key(True) == (bool, True)
+        assert _normalize_for_key(True) == "true"   # D35: a truth ATOM keys as its spelling, never as the int
         assert _normalize_for_key(1.0) == (float, 1.0)
         assert _normalize_for_key(None) is None
 

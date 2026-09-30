@@ -151,7 +151,7 @@ def _lowered(name, arity):
 def test_every_table_entry_is_lowered_inline_by_the_compiler():
     from clausal.logic.builtins.call_body import SPECIAL_FORMS
     from clausal.logic.compiler.ir import SubCall
-    assert len(SPECIAL_FORMS) == 18
+    assert len(SPECIAL_FORMS) == 19     # findall/4 joined (slice 4)
     for (name, arity), roles in SPECIAL_FORMS.items():
         assert len(roles) == arity, name
         assert not isinstance(_lowered(name, arity), SubCall), (name, arity)
@@ -169,7 +169,7 @@ def test_every_compiler_meta_kind_is_in_the_table():
 def test_a_neighbouring_arity_is_an_ordinary_call():
     from clausal.logic.builtins.call_body import is_special_form
     from clausal.logic.compiler.ir import SubCall
-    for name, arity in (("once", 2), ("findall", 4), ("throw", 0)):
+    for name, arity in (("once", 2), ("findall", 5), ("throw", 0)):
         assert isinstance(_lowered(name, arity), SubCall)
         assert not is_special_form(name, arity)
 
@@ -387,6 +387,7 @@ def test_catch_catches_the_error_of_its_own_goal(host):
 
 @pytest.mark.parametrize("args, indicator", [
     ((("once", ("p", Var())), "z"), ("once", 2)),
+    ((("findall", Var(), ("p", Var()), Var()), "z", "w"), ("findall", 5)),
     (("findall", Var()), ("findall", 1)),
 ])
 def test_call_n_extras_past_a_special_form_name_no_procedure(host, args,

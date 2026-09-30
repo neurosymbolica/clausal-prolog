@@ -23,6 +23,7 @@ from clausal.logic.variables import (
     register_attr_hook,
     Trail,
 )
+from clausal.logic.atoms import is_truth_atom as _is_truth_atom, truth_spelling as _truth_spelling
 from clausal.logic.predicate import is_term_instance, term_field_names
 from clausal.terms import (
     SegList,
@@ -76,6 +77,14 @@ def structural_eq(left: Any, right: Any) -> bool:
     # without the reify_eq machinery.  A mixed atomic/structured pair (e.g.
     # str vs char-list) deliberately falls through so the unify contract is
     # honoured symmetrically.
+    # A truth atom (True/False/Undefined -- the atoms true/false/undefined,
+    # ``atoms.is_truth_atom``) is identical to itself (the identity check
+    # above) and to the str of its spelling, never to a number: Python's
+    # ``True == 1`` must not reach here.
+    if _is_truth_atom(left):
+        return type(right) is str and _truth_spelling(left) == right
+    if _is_truth_atom(right):
+        return type(left) is str and _truth_spelling(right) == left
     _ATOMIC = (bool, int, float, str, bytes, complex, type(None))
     if isinstance(left, _ATOMIC) and isinstance(right, _ATOMIC):
         return left == right

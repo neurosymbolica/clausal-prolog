@@ -76,6 +76,12 @@ _ZERO_ARITY_CONTROL_GOALS = {
     "false": _control_fail,
 }
 
+#: D40 (operator ruling 2026-09-30): true/N and false/N for N >= 1 are
+#: ordinary procedures a module may define (ISO; Scryer loads
+#: ``true(X) :- X = 1.``), so call/N's fold onto them takes the normal
+#: lookup, which raises existence_error when nothing defines them.
+_USER_DEFINABLE_WITH_ARGS = frozenset({"true", "false"})
+
 
 def _raise_if_unloaded_handle(functor, arity, context):
     """Ruling 2 (2026-09-24): a MANGLED *functor* that ``qualify_mangled_goal``
@@ -170,6 +176,12 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
     are answered instead of refused, also independently of *db* — see
     ``_ZERO_ARITY_CONTROL_GOALS``.
     """
+    if extra_args and (goal_val is True or goal_val is False):
+        # D40 (operator ruling 2026-09-30): the truth value with extras folds
+        # to the procedure true/N or false/N (N >= 1), which a module may
+        # define (ISO, Scryer): resolved by name below, existence_error
+        # when nothing defines it.
+        goal_val = "true" if goal_val else "false"
     if is_body_term(goal_val):
         # A BODY term -- also reached as the inner goal of ``M:Body``, whose
         # arm below restarts here against M's db (ISO: M is the context
@@ -303,7 +315,9 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
         # arity -- what call/N's fold makes -- names no procedure.
         return iso_control_cell_dispatch(db, folded, functor,
                                          len(call_args), context)
-    if call_args and functor in _ZERO_ARITY_CONTROL_GOALS:
+    if call_args and functor in _ZERO_ARITY_CONTROL_GOALS and (
+            functor not in _USER_DEFINABLE_WITH_ARGS or db is None):
+        # (true/N and false/N with no database: nothing can define them.)
         # ``call(true, X)`` / ``call(fail, X)``: the fold makes true/1, a
         # control construct with extra arguments, which no database defines
         # (Scryer: existence_error(procedure, true/1)) -- the same answer the
@@ -587,62 +601,20 @@ def _make_call_goal_factory(extra_n: int):
     return factory
 
 
-for _n in range(0, 8):  # extra_n=0..7 → arity 1..8
+# extra_n=0..8 → arity 1..9: call/9 is what Scryer's maplist/9 runs on.
+for _n in range(0, 9):
     _cg_arity = _n + 1
     _DB_BUILTINS[("call_goal", _cg_arity)] = _make_call_goal_factory(_n)
     _BUILTIN_FIELDS[("call_goal", _cg_arity)] = ("goal",) + tuple(f"a{i}" for i in range(_n))
 
-# call/1..8 — aliases: call(Goal, A1, ...) = call_goal(Goal, A1, ...)
-for _n in range(1, 9):
+# call/1..9 — aliases: call(Goal, A1, ...) = call_goal(Goal, A1, ...)
+for _n in range(1, 10):
     _key = ("call_goal", _n)
     if _key in _DB_BUILTINS:
         _DB_BUILTINS[("call", _n)] = _DB_BUILTINS[_key]
         _BUILTIN_FIELDS[("call", _n)] = _BUILTIN_FIELDS[_key]
 
 del _n, _cg_arity, _key  # clean up loop variables
-
-
-# ── findall/4 ─────────────────────────────────────────────────────────────────
-
-
-def _findall_4_factory(db):
-    """findall(Template, Goal, Bag, Tail) -- findall/3 whose result list ends
-    in *Tail* instead of ``[]`` (Scryer, SWI: ``findall(X, member(X, [a, b]),
-    L, [c])`` gives ``L = [a, b, c]``).  It did not exist
-    (existence_error(procedure, findall/4)).  Runs ``call/1`` of the
-    ``findall/3`` term, so the goal is resolved in the calling module and
-    every findall/3 rule -- errors included -- applies unchanged."""
-    call1 = _DB_BUILTINS[("call", 1)](db)
-
-    def _findall__4(this_generator, _proceed, _fail, _catcher,
-                    template, goal, bag, tail, trail):
-        # A Tail that is neither a list nor a partial list is
-        # type_error(list, Tail), as Scryer raises (``findall(X, p(X), L,
-        # foo)``).
-        t = deref(tail)
-        if not (is_var(t) or _as_items(t) is not None
-                or _open_skeleton(t) is not None):
-            from clausal.logic.exceptions import type_error  # noqa: PLC0415
-            raise LogicException(type_error("list", t, "findall/4"))
-        collected = Var()
-        sg = StepGenerator(call1, this_generator, this_generator,
-                           this_generator, ("findall", template, goal, collected),
-                           trail)
-        _st = yield (sg, None)
-        while _st is not DONE:
-            mark = trail.mark()
-            items = _as_items(deref(collected))
-            if items is not None and unify(bag, _partial(list(items), tail), trail):
-                yield (_proceed, None)
-            trail.undo(mark)
-            _st = yield (sg, None)
-        yield (_fail, DONE)
-    return _findall__4
-
-
-_findall_4_factory._db_optional = True
-_DB_BUILTINS[("findall", 4)] = _findall_4_factory
-_BUILTIN_FIELDS[("findall", 4)] = ("template", "goal", "bag", "tail")
 
 
 # ── aggregate_all/3 ───────────────────────────────────────────────────────────
@@ -990,37 +962,6 @@ def _map_list__3(this_generator, _proceed, _fail, _catcher, goal, xs, ys, trail)
     yield (_fail, DONE)
 
 
-def _make_maplist_n(n_lists):
-    """maplist/(n_lists + 1) for 3..7 lists: the prologue's definition by
-    call/N over every list at once -- proper or open lists, every
-    combination of the calls' solutions an answer (``_open_lists_drive``,
-    which maplist/2,3 use for open lists).  Scryer's library(lists) has
-    maplist/2..9; only /2 and /3 existed here, so ``maplist(plus, Xs, Ys,
-    Zs)`` was existence_error(procedure, maplist/4)."""
-    # Unlike maplist/3 (F063), no string promotion: output lists come back
-    # as lists even when every input is a string (the same term either way).
-    def fn(this_generator, _proceed, _fail, _catcher, goal, *rest):
-        *lists, trail = rest
-        goal_val = deref(goal)
-        if not _is_goal(goal_val):
-            yield (_fail, DONE)
-            return
-        dispatch = _ensure_trampoline_dispatch(goal_val, n_lists)
-        yield from _open_lists_drive(this_generator, _proceed, dispatch,
-                                     lists, lambda _i, hs: hs, trail)
-        yield (_fail, DONE)
-    fn.__name__ = f"_map_list__{n_lists + 1}"
-    fields = ("goal",) + tuple(f"list{i + 1}" for i in range(n_lists))
-    return _trampoline_builtin("maplist", n_lists + 1, fields=fields)(fn)
-
-
-# up to maplist/8: its goal is called with 7 arguments, i.e. call/8, the
-# highest call/N (ISO requires call/1..8).
-for _n_lists in range(3, 8):
-    globals()[f"_map_list__{_n_lists + 1}"] = _make_maplist_n(_n_lists)
-del _n_lists
-
-
 @_trampoline_builtin("include", 3)
 def _include__3(this_generator, _proceed, _fail, _catcher, goal, lst, included, trail):
     """include(Goal, List, Included) — keep elements where Goal(Elem) succeeds."""
@@ -1137,6 +1078,55 @@ def _foldl__5(this_generator, _proceed, _fail, _catcher, goal, xs, ys, v0, v, tr
 def _foldl__6(this_generator, _proceed, _fail, _catcher, goal, xs, ys, zs, v0, v, trail):
     """foldl(Goal, Xs, Ys, Zs, V0, V) — Goal(X, Y, Z, Acc0, Acc1) over three lists."""
     yield from _foldl(this_generator, _proceed, _fail, goal, [xs, ys, zs], v0, v, trail)
+
+
+def _maplist_n(this_generator, _proceed, _fail, goal, lists, trail):
+    """maplist/4..9 as Scryer's library(lists) defines them::
+
+        maplist(G, [X|Xs], [Y|Ys], ...) :- call(G, X, Y, ...), maplist(G, Xs, Ys, ...).
+
+    Every solution of each call is an answer on backtracking (maplist/2,3's
+    rule, R5/R6).  Proper lists of one length take the stack driver; lists
+    of different lengths answer nothing; an open list enumerates through the
+    prologue's recursion (:func:`_open_lists_drive`), a proper list bounding
+    it."""
+    goal_val = deref(goal)
+    if not _is_goal(goal_val):
+        yield (_fail, DONE)
+        return
+    dispatch = _ensure_trampoline_dispatch(goal_val, len(lists))
+    items = [_as_items(deref(t)) for t in lists]
+    outer_mark = trail.mark()
+    if all(it is not None for it in items):
+        if len({len(it) for it in items}) == 1:
+            yield from _maplist_drive(
+                this_generator, _proceed, dispatch,
+                lambda i: tuple(deref(it[i]) for it in items),
+                len(items[0]), trail)
+    else:
+        yield from _open_lists_drive(this_generator, _proceed, dispatch,
+                                     lists, lambda _i, hs: hs, trail)
+    trail.undo(outer_mark)
+    yield (_fail, DONE)
+
+
+def _register_maplist_n(arity: int) -> None:
+    n = arity - 1
+
+    def _maplist(this_generator, _proceed, _fail, _catcher, goal, *rest):
+        yield from _maplist_n(this_generator, _proceed, _fail, goal,
+                              list(rest[:n]), rest[n])
+    _maplist.__name__ = f"_map_list__{arity}"
+    _maplist.__doc__ = (f"maplist/{arity} -- call(Goal, E1, ..., E{n}) for "
+                        f"the elements of {n} lists in step (Scryer's lists).")
+    _trampoline_builtin("maplist", arity, fields=(
+        "goal", *(f"list{i}" for i in range(1, n + 1))))(_maplist)
+
+
+# maplist/4..9: Scryer's library(lists) exports maplist/2..9.
+for _arity in range(4, 10):
+    _register_maplist_n(_arity)
+del _arity
 
 
 def _unify_pairs(target, kvs, trail) -> bool:
@@ -1659,7 +1649,7 @@ def _tpartition__4(this_generator, _proceed, _fail, _catcher, goal, lst, include
 
 _GOAL_FIRST_LIST_BUILTINS = (
     ("maplist", 2), ("maplist", 3), ("maplist", 4), ("maplist", 5),
-    ("maplist", 6), ("maplist", 7), ("maplist", 8),
+    ("maplist", 6), ("maplist", 7), ("maplist", 8), ("maplist", 9),
     ("include", 3), ("exclude", 3),
     ("foldl", 4), ("foldl", 5), ("foldl", 6), ("map_list_to_pairs", 3),
     ("take_while", 3), ("drop_while", 3), ("span", 4),
