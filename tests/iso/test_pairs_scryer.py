@@ -10,7 +10,6 @@ is a function of the answer, so fresh variables need not be named.
 from __future__ import annotations
 
 import os
-import subprocess
 import tempfile
 
 import pytest
@@ -18,7 +17,7 @@ import pytest
 from clausal.logic.solve import _deref_walk, solve
 from clausal.logic.variables import Trail, Var, is_var
 
-from .conftest import SCRYER
+from .conftest import SCRYER, run_scryer
 
 
 def P(k, v):
@@ -115,8 +114,7 @@ def _scryer(goal: str) -> str:
     pl = os.path.join(d, "w.pl")
     with open(pl, "w") as fh:
         fh.write(":- use_module(library(pairs)).\n")
-    proc = subprocess.run([SCRYER, pl], input=goal + "\n", capture_output=True,
-                          text=True, timeout=30)
+    proc = run_scryer(pl, [goal], timeout=30)
     lines = [ln.strip() for ln in proc.stdout.splitlines()
              if ln.strip() and "put_attr TRACE" not in ln]
     return lines[0] if lines else ""

@@ -33,7 +33,6 @@ tuple with sibling statements (``TestDirectiveInsideTuple``).
 """
 
 import os
-import subprocess
 
 import pytest
 
@@ -41,7 +40,7 @@ from clausal.tools.clausal_to_prolog import (
     clausal_source_to_prolog,
     UntranslatableConstructError,
 )
-from tests._oracles import SCRYER
+from tests._oracles import SCRYER, run_scryer
 
 
 # ── The exact reproduction from the incident report ─────────────────────
@@ -410,14 +409,7 @@ class TestRecoveredRuleResolvesInScryer:
     def _run_scryer_query(self, tmp_path, pl_source: str, query: str):
         pl_file = tmp_path / "witness.pl"
         pl_file.write_text(pl_source)
-        proc = subprocess.run(
-            [SCRYER, "witness.pl"],
-            cwd=tmp_path,
-            input=query + "\n",
-            capture_output=True,
-            text=True,
-            timeout=8,
-        )
+        proc = run_scryer("witness.pl", [query], cwd=tmp_path, timeout=30)
         return proc.stdout.strip(), proc.stderr
 
     def test_recovered_implements_rule_appears_in_output(self):

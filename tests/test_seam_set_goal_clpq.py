@@ -72,8 +72,10 @@ def _scryer(tmp_path, program: str, goal: str, outs: str) -> list:
     f.write_text(":- use_module(library(clpq)).\n" + program)
     proc = subprocess.run(
         [SCRYER, str(f), "-g",
-         f"(findall({outs}, {goal}, L), writeq(answers(L)), nl, halt)"],
-        cwd=tmp_path, capture_output=True, text=True, timeout=120)
+         f"(findall({outs}, {goal}, L), writeq(answers(L)), nl, halt)",
+         "-g", "halt"],
+        cwd=tmp_path, stdin=subprocess.DEVNULL,
+        capture_output=True, text=True, timeout=120)
     m = re.search(r"answers\((.*)\)\s*$", proc.stdout.strip())
     assert m, (proc.stdout, proc.stderr)
     text = m.group(1)

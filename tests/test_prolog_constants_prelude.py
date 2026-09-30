@@ -19,12 +19,26 @@ import subprocess
 import tempfile
 
 import pytest
-from tests._oracles import SCRYER, TREALLA
+from tests._oracles import SCRYER, TREALLA, run_scryer
 
 BINARIES = {
     "scryer": SCRYER,
     "trealla": TREALLA,
 }
+
+
+def _run_program(system, binary, prog, cwd):
+    """Load *prog* (its `:- initialization(main)` does the work) and halt.
+
+    Scryer goes through run_scryer: stdin /dev/null and a trailing `-g halt`,
+    because the clean build hangs in its toplevel otherwise. Trealla keeps its
+    own invocation, with stdin closed so it never waits on a terminal."""
+    if system == "scryer":
+        return run_scryer(prog, [], cwd=cwd, timeout=40, binary=binary)
+    return subprocess.run([binary, prog], capture_output=True, text=True,
+                          timeout=40, cwd=cwd, stdin=subprocess.DEVNULL)
+
+
 PRELUDE_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
     "clausal", "tools", "prolog_preludes")
@@ -54,8 +68,7 @@ def _run_with_prelude(system, program_body, module_name=None):
                  ":- discontiguous(module_constant_units/4).\n"
                  ":- discontiguous(constant_value/2).\n"
                  ":- discontiguous(module_constant/3).\n" + program_body)
-    proc = subprocess.run([binary, prog], capture_output=True, text=True,
-                          timeout=40, cwd=d)
+    proc = _run_program(system, binary, prog, d)
     return proc.stdout + proc.stderr
 
 
@@ -111,8 +124,7 @@ def test_an_unexpanded_program_is_the_negative_control(system):
                  ":- constant_number_units(fee, 5000, euro).\n"
                  "main :- ( catch(module_constant_units(_,fee,_,_), _, fail) "
                  "-> write(unexpectedly_there) ; write(absent) ), nl, halt.\n")
-    proc = subprocess.run([binary, prog], capture_output=True, text=True,
-                          timeout=40, cwd=d)
+    proc = _run_program(system, binary, prog, d)
     res = proc.stdout + proc.stderr
     # Either outcome proves the prelude is what makes the directive work, and
     # Scryer's is the stronger one: without the prelude the directive is not a
@@ -161,8 +173,7 @@ def test_the_exporters_own_output_runs_unmodified(system):
         fh.write(body + "\n:- initialization(main).\n"
                  "main :- ( module_constant_units(M, sga, N, U) -> "
                  "write(got(M,N,U)) ; write(no_answer) ), nl, halt.\n")
-    proc = subprocess.run([binary, prog], capture_output=True, text=True,
-                          timeout=40, cwd=d)
+    proc = _run_program(system, binary, prog, d)
     res = proc.stdout + proc.stderr
     assert "got(fees," in res.replace(" ", ""), res
     assert "usd_cent" in res, res         # the unit crossed

@@ -144,7 +144,7 @@ def test_the_declaration_carries_the_UNIT_not_just_the_number():
 # and does not run" (clausal_to_prolog.py's own words). Only execution
 # disproves that, and both binaries are present, so this is a real test.
 
-from tests._oracles import SCRYER, TREALLA
+from tests._oracles import SCRYER, TREALLA, run_scryer
 
 
 def _run(binary, program, goal):
@@ -153,8 +153,12 @@ def _run(binary, program, goal):
     pl = os.path.join(d, "w.pl")
     with open(pl, "w") as fh:
         fh.write(program)
-    proc = subprocess.run([binary, pl], input=goal + "\n",
-                          capture_output=True, text=True, timeout=30)
+    if binary == SCRYER:
+        # Never Scryer's stdin toplevel: the clean build hangs on it.
+        proc = run_scryer(pl, [goal] if goal.strip() else [], timeout=30)
+    else:
+        proc = subprocess.run([binary, pl], input=goal + "\n",
+                              capture_output=True, text=True, timeout=30)
     return proc.stdout + proc.stderr
 
 
@@ -250,8 +254,11 @@ def test_the_rational_form_reads_back_exactly_in_the_real_system(system):
         fh.write(":- initialization(main).\n"
                  "main :- X = 1_550_00/100, X = N/Dn, "
                  "write(halves(N,Dn)), nl, halt.\n")
-    res = subprocess.run([binary, prog], capture_output=True, text=True,
-                         timeout=30).stdout
+    if system == "scryer":
+        res = run_scryer(prog, [], timeout=30, binary=binary).stdout
+    else:
+        res = subprocess.run([binary, prog], capture_output=True, text=True,
+                             timeout=30, stdin=subprocess.DEVNULL).stdout
     assert "halves(155000,100)" in res.replace(" ", ""), res
 
 

@@ -1,6 +1,6 @@
-import os, re, subprocess, tempfile
+import os, re, tempfile
 import pytest
-from tests._oracles import SCRYER
+from tests._oracles import SCRYER, run_scryer
 
 
 # Scryer is the BINDING oracle for this suite, so its absence is a FAILURE,
@@ -29,8 +29,7 @@ def scryer():
         pl = os.path.join(d, "w.pl")
         with open(pl, "w") as fh:
             fh.write(program)
-        proc = subprocess.run([SCRYER, pl], input=goal + "\n",
-                              capture_output=True, text=True, timeout=30)
+        proc = run_scryer(pl, [goal], timeout=30)
         return proc.stdout.strip().splitlines()[-1].strip() if proc.stdout.strip() else ""
     return run
 

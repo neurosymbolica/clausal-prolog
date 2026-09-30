@@ -118,7 +118,10 @@ def _run(binary, flags, pl_path):
     goal = ", ".join(
         f"({n}(L{i}) -> write({n}=L{i}) ; write({n}=no_solution)), nl"
         for i, n in enumerate(CASES)) + ", halt"
-    proc = subprocess.run([binary, *flags, str(pl_path), "-g", goal],
+    # Scryer only: a separate trailing `-g halt`, so a goal that raises still
+    # exits (Trealla keeps just the LAST -g, so it must not get one).
+    tail = ["-g", "halt"] if binary == SCRYER else []
+    proc = subprocess.run([binary, *flags, str(pl_path), "-g", goal, *tail],
                           cwd=pl_path.parent, stdin=subprocess.DEVNULL,
                           capture_output=True, text=True, timeout=120)
     return dict(line.split("=", 1) for line in proc.stdout.splitlines() if "=" in line), proc

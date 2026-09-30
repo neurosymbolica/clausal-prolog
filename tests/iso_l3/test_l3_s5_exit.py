@@ -154,7 +154,8 @@ def _scryer_rows(fname: str) -> dict:
                     f"CLAUSAL_ISO_ALLOW_NO_SCRYER=1 to run engine-only")
     goal = ("(case(N, L), write(N), write(' '), writeq(L), nl, fail "
             "; true), halt")
-    proc = subprocess.run([SCRYER, os.path.join(S5, fname), "-g", goal],
+    proc = subprocess.run([SCRYER, os.path.join(S5, fname), "-g", goal,
+                           "-g", "halt"], stdin=subprocess.DEVNULL,
                           capture_output=True, text=True, timeout=120)
     rows = {}
     for line in proc.stdout.splitlines():

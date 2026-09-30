@@ -407,6 +407,15 @@ where ISO is silent; SWI-Prolog is not a reference.
   dialect writes a prefix-operator directive in functional notation
   (`:- discontiguous(p/1).`), which both Scryer and SWI read. See
   [docs/prolog_translation.md](docs/prolog_translation.md).
+- **Tests never drive Scryer's toplevel from stdin.** The oracle build hangs
+  when its interactive toplevel reads a pipe or `/dev/null`, and when a `-g`
+  goal raises with no separate `-g halt` after it. `tests/_oracles.py`
+  `run_scryer(program, goals)` now asks each query with `-g` (stdin
+  `/dev/null`, a trailing `-g halt`) and prints the answer with the
+  toplevel's own printers (`tests/_scryer_toplevel.pl`), so `   X = 1.`,
+  `   false.` and `   error(...).` read exactly as before. Every test that
+  fed Scryer queries uses it; `tests/test_oracle_paths.py` guards that no
+  direct Scryer call reads stdin.
 - **`.pl` import renames nothing silently.** The ISO evaluables keep their
   names and ISO meaning (`max`, `min`, `abs`, `sqrt`, ...; `max` used to
   become `max_`, which is not evaluable); `//`, `mod`, `rem`, `div`, `^`,

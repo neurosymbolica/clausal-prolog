@@ -34,7 +34,6 @@ the *inference* half.
 from __future__ import annotations
 
 import os
-import subprocess
 
 import pytest
 
@@ -49,7 +48,7 @@ from clausal.tools.clausal_to_prolog import (
     goal_subterms,
 )
 from clausal.tools.prolog_ast import PAtom, PCompound, PDirective, PNumber
-from tests._oracles import SCRYER
+from tests._oracles import SCRYER, run_scryer
 
 
 requires_scryer = pytest.mark.skipif(
@@ -75,10 +74,7 @@ def _scryer(tmp_path, files: dict[str, str], entry: str, query: str) -> str:
     """
     for name, text in files.items():
         (tmp_path / name).write_text(text)
-    proc = subprocess.run(
-        [SCRYER, entry], cwd=tmp_path, input=query + "\n",
-        capture_output=True, text=True, timeout=15,
-    )
+    proc = run_scryer(entry, [query], cwd=tmp_path, timeout=15)
     out = proc.stdout.strip()
     if not out:
         raise AssertionError(

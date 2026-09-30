@@ -884,7 +884,7 @@ def test_lowercase_unit_name_lowers_the_same_way():
 
 # ── D17: the exported `!=` consults and answers in real Scryer ──────────────
 
-from tests._oracles import SCRYER as _SCRYER
+from tests._oracles import SCRYER as _SCRYER, run_scryer
 
 
 @pytest.mark.skipif(not __import__("os").path.exists(_SCRYER),
@@ -900,7 +900,6 @@ from tests._oracles import SCRYER as _SCRYER
 ])
 def test_not_equal_export_runs_in_scryer(tmp_path, query, answer):
     # nv
-    import subprocess
     source = ("-module(m, [ne(X), nf(X), na(X, Y)])\n"
               "-constant_value(max_fine, 5000)\n"
               "-constant_value(rate, 1.5)\n"
@@ -914,6 +913,5 @@ def test_not_equal_export_runs_in_scryer(tmp_path, query, answer):
     (tmp_path / "ne.pl").write_text(
         pl.replace(":- use_module(library(clpz)",
                    ":- use_module(library(dif)).\n:- use_module(library(clpz)", 1))
-    proc = subprocess.run([_SCRYER, "ne.pl"], cwd=tmp_path, input=query + "\n",
-                          capture_output=True, text=True, timeout=30)
+    proc = run_scryer("ne.pl", [query], cwd=tmp_path, timeout=30)
     assert proc.stdout.strip() == answer, (proc.stdout, proc.stderr, pl)

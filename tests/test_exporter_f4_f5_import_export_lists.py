@@ -16,7 +16,6 @@ F5. With no module signatures the exporter cannot know a bare name's arity. It
 """
 import os
 import shutil
-import subprocess
 
 import pytest
 
@@ -73,7 +72,7 @@ def test_no_import_list_item_is_a_bare_atom():
                 assert all("/" in item for item in items), line
 
 
-from tests._oracles import SCRYER
+from tests._oracles import SCRYER, run_scryer
 
 
 @pytest.mark.skipif(not os.path.exists(SCRYER), reason="Scryer not built here")
@@ -85,9 +84,7 @@ def test_listless_import_consults_and_answers_in_scryer(tmp_path):
         "-import_from(lib, [foo])\nq(X, A, B) <- (foo(X), foo(A, B))\n", strict=True)
     (tmp_path / "user_q.pl").write_text(
         body + "\n:- initialization((q(X, A, B), write(ok(X, A, B)), nl, halt)).\n")
-    out = subprocess.run([SCRYER, str(tmp_path / "user_q.pl")], cwd=tmp_path,
-                         stdin=subprocess.DEVNULL, capture_output=True, text=True,
-                         timeout=60)
+    out = run_scryer(str(tmp_path / "user_q.pl"), [], cwd=tmp_path, timeout=60)
     assert "ok(1,1,2)" in out.stdout, out.stdout + out.stderr
 
 
