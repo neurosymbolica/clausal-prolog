@@ -179,3 +179,20 @@ def test_native_pl_matches_scryer(tmp_path, monkeypatch):
                           timeout=120, stdin=subprocess.DEVNULL)
     lines = [ln for ln in proc.stdout.split() if ln]
     assert lines == SCRYER_OUT, (proc.stdout, proc.stderr)
+
+
+def test_abolish_through_an_import_removes_the_owners_procedure(tmp_path):
+    """In an importer, ``d/1`` compiles to the owner's handle: abolish/1
+    resolves it to the owner's row (it silently removed nothing before the
+    handle was demangled), and both modules then see existence_error."""
+    own = _module(tmp_path, "-dynamic(d/1)\nd(1)\nt(X) <- d(X)", ["d/1", "t/1"])
+    own_name = own.db.module_name()
+    imp = _module(tmp_path,
+                  f"-import_from({own_name}, [d/1])\n-private([ok])\n"
+                  "go(ok) <- abolish(d/1)\nu(X) <- d(X)",
+                  ["go/1", "u/1"])
+    assert _run(imp, "u") == [1]
+    assert _run(imp, "go") == ["ok"]
+    err = "error(existence_error(procedure, /(d, 1)), /(d, 1))"
+    assert _run(imp, "u") == err
+    assert _run(own, "t") == err

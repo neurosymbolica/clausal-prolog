@@ -1032,11 +1032,18 @@ def _abolish_factory(db):
         from clausal.logic.builtins._registry import (  # noqa: PLC0415
             _BUILTINS, _DB_BUILTINS,
         )
+        from clausal.logic.atoms import demangle, is_mangled  # noqa: PLC0415
+        binding = None
+        if is_mangled(functor):
+            # ``abolish(d/1)`` in a module that imports d/1 compiles the
+            # name to the OWNER's handle (ruling D1): that handle is the
+            # binding, and its atom half the name.
+            binding, functor = functor, demangle(functor)[1]
         refuse = ((functor, arity) in _BUILTINS
                   or (functor, arity) in _DB_BUILTINS)
         home = row = None
         if not refuse and db is not None:
-            pred_cls = _find_pred_cls(functor, arity, module_dict)
+            pred_cls = binding or _find_pred_cls(functor, arity, module_dict)
             home = _home_db(db, pred_cls, functor, arity)
             functor = _canonical_functor(db, pred_cls, functor)
             row = home.row(functor, arity) if home is not None else None
