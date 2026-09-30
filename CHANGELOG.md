@@ -498,6 +498,15 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
   instead of `instantiation_error`. With `X` bound to `true` it still asserts
   the fact `foo`. The same applies to `asserta/1`.
 
+- **An improper list read from a `.pl` file is the ISO cons cell, not a
+  list of characters.** The native `.pl` front end read `[b|foo]` as
+  `[b,f,o,o]` (the atom's characters spliced in), so `msort([b|foo], L)`
+  answered `L = [b,f,o,o]`. A tail that is neither a list nor a variable
+  now makes the compound `'.'(H, T)`: `sort/2`, `msort/2`, `keysort/2` and
+  `atom_chars/2` raise `type_error(list, [b|foo])`, `is_list/1`, `length/2`
+  and `append/3` fail, `member/2` finds the heads, `X = [b|foo], X = [H|T]`
+  binds `H = b, T = foo`, and `writeq/1` prints `[b|foo]`, as Scryer does.
+  A clause HEAD `[H|T]` does not yet match an improper list.
 - **A `.pl` module in an earlier `sys.path` entry is no longer shadowed by a
   `.clausal` or `.seam` module of the same name in a later one.** The import
   hook now resolves source modules per `sys.path` entry, in path order: the

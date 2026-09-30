@@ -367,12 +367,30 @@ class _ClauseLowering:
 
     def _cons(self, t: tuple, sp) -> ast.expr:
         """A cons chain ``'.'(H, T)`` -> the seam's ``[H, ..., *T]`` display
-        (Scryer reads ``'.'(a, [])`` as ``[a]``)."""
-        elts: list[ast.expr] = []
+        (Scryer reads ``'.'(a, [])`` as ``[a]``).
+
+        Only a tail that can BE a list is spliced: a variable, a list, a
+        double-quoted literal.  Any other tail -- ``[b|foo]``, ``[b|1]``,
+        ``[b|f(x)]`` -- makes an IMPROPER list, which ISO represents as the
+        cons cell ``'.'(H, T)``; it is lowered as that compound, a
+        ``('.', H, T)`` tuple (ruled 2026-09-30).  Spliced as ``*foo`` the
+        seam would read the atom as its chars (``[b|foo]`` = ``[b,f,o,o]``),
+        a silently different term."""
+        heads: list[tuple] = []
         while type(t) is tuple and len(t) == 3 and t[0] == ".":
             spans = _arg_spans(sp, 2)
-            elts.append(self.term(t[1], spans[0]))
+            heads.append((t[1], spans[0]))
             t, sp = t[2], spans[1]
+        if not self._list_tail(t):
+            # Lowered in READING order: a variable's first occurrence is
+            # the one that binds it (``var``), and Python evaluates the
+            # nested tuple left to right.
+            lowered = [self.term(h, s) for h, s in heads]
+            out = self.term(t, sp)
+            for h in reversed(lowered):
+                out = ast.Tuple(elts=[_const("."), h, out], ctx=ast.Load())
+            return out
+        elts = [self.term(h, s) for h, s in heads]
         if type(t) is list:
             spans = _list_spans(sp, len(t))
             elts.extend(self.term(x, s) for x, s in zip(t, spans))
@@ -380,6 +398,23 @@ class _ClauseLowering:
             elts.append(_node("StarUnpack", value=self.term(t, sp),
                               position=_pos_expr(self._pos.of(_top_span(sp)))))
         return ast.List(elts=elts, ctx=ast.Load())
+
+    def _list_tail(self, t: Any) -> bool:
+        """Whether a cons chain's tail can be a list: a variable, a list,
+        ``[]``, a double-quoted literal read as chars or codes, a
+        ``constant(Name)`` (its value is only known at load), or a prepared
+        directive cell.  Every other tail -- an atom, a number, a compound,
+        a ``"..."`` read as an atom -- ends an improper list."""
+        if type(t) is VarRef or type(t) is list:
+            return True
+        if type(t) is str:
+            return t == "[]"
+        if type(t) is tuple and len(t) == 2 and t[0] == "$chars" \
+                and type(t[1]) is str:
+            return getattr(self._ctx, "dq_mode", "chars") != "atom"
+        if type(t) is tuple and len(t) == 2 and t[0] == "constant":
+            return True
+        return isinstance(t, _embedded_class())
 
     # ── goals ──
 

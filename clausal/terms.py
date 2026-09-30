@@ -481,6 +481,58 @@ def _seglist_from_tokens(tokens):
     return SegList(segs)
 
 
+def _is_cons_cell(t) -> bool:
+    """Whether *t* is the ISO cons cell ``'.'(H, T)`` as a compound -- the
+    representation of an IMPROPER list such as ``[b|foo]`` (a proper list
+    is a Python ``list``, a partial one a ``SegList``)."""
+    return type(t) is tuple and len(t) == 3 and t[0] == "."
+
+
+def _unify_seglist_cons(walked, cell, trail):
+    """A list pattern (*walked*: a ``SegList`` or a plain ``list``) against
+    the cons cell *cell*: pair the pattern's leading elements with the
+    cells' heads, then unify what is left of the pattern with the cells'
+    tail.  ``[H, *T] = '.'(b, foo)`` binds ``H = b, T = foo``, as ISO's
+    ``[H|T] = [b|foo]`` does; ``[b] = [b|foo]`` fails (a proper list is
+    never an improper one)."""
+    from .logic.variables import unify
+    segs = (list(walked.segments) if isinstance(walked, SegList)
+            else [ConcreteSeg(list(walked))])
+    elems: list = []
+    mark = trail.mark()
+    tail = cell
+    while _is_cons_cell(tail):
+        while not elems and segs and isinstance(segs[0], ConcreteSeg):
+            elems = list(segs.pop(0).elements)
+        if not elems:
+            break                        # a hole (or nothing) is next
+        if not unify(elems.pop(0), tail[1], trail):
+            trail.undo(mark)
+            return False
+        tail = deref(tail[2])
+    rest = ([ConcreteSeg(elems)] if elems else []) + segs
+    if _is_cons_cell(tail) and not (len(rest) == 1
+                                    and isinstance(rest[0], VarSeg)):
+        # Stopped at an interior hole (``[*A, b]``, ``[*A, *B]``): a hole
+        # holds a LIST, so what follows it is a proper-list pattern and can
+        # never be the improper remainder -- fail, rather than hand the same
+        # SegList back to this function.
+        trail.undo(mark)
+        return False
+    if not rest:
+        rest_term: Any = []
+    elif len(rest) == 1 and isinstance(rest[0], VarSeg):
+        rest_term = rest[0].var          # the tail variable takes the rest
+    elif len(rest) == 1:
+        rest_term = list(rest[0].elements)
+    else:
+        rest_term = SegList(rest)
+    if unify(rest_term, tail, trail):
+        return True
+    trail.undo(mark)
+    return False
+
+
 def _unify_open_seglists(a, b, trail):
     """Unify two walked, non-ground SegLists; NotImplemented when the pair is
     ambiguous (see the block comment above)."""
@@ -774,6 +826,8 @@ class SegList:
                 # One side walks to a plain list: the list arm above decides.
                 return unify(walked, other_walked, trail)
             return _unify_open_seglists(walked, other_walked, trail)
+        if _is_cons_cell(other):
+            return _unify_seglist_cons(self._walk_raw(), other, trail)
         return NotImplemented
 
     # ── sequence protocol (partial-aware) ────────────────────────────────────
@@ -3837,6 +3891,23 @@ def _wq(t: Any, prec: int, operand: bool = False) -> str:
             arg = deref(args[0])
             return chr(ord("A") + arg % 26) + (str(arg // 26) if arg >= 26 else "")
         return _wq_name(name) + "(" + ",".join(_wq(a, 999) for a in args) + ")"
+    if name == "." and len(args) == 2:
+        # The ISO cons cell: an IMPROPER list ``[b|foo]`` is the compound
+        # ``'.'(b, foo)`` (a proper list is a Python list), and Scryer
+        # writes it in list notation, ``[a,b|c]``.
+        elems = [args[0]]
+        tail = deref(args[1])
+        while True:
+            c = _wq_cell(tail) if type(tail) is tuple else None
+            if c is None or c[0] != "." or len(c[1]) != 2:
+                break
+            elems.append(c[1][0])
+            tail = deref(c[1][1])
+        if _is_nil(tail):
+            return _wq_list(elems, None)
+        if isinstance(tail, list):
+            return _wq_list(elems + tail, None)
+        return _wq_list(elems, tail)
     if len(args) == 2:
         e = ops.lookup_infix(name)
         if e is not None:
