@@ -283,6 +283,13 @@ def _lex_error_message(t) -> str:
     reasons, message-only rather than raised)."""
     reason, culprit = t.value
     if reason == "unterminated":
+        if t.lexeme.startswith("/*"):
+            # ISO: an unclosed block comment is a syntax error; Scryer's
+            # formal for it is incomplete_reduction (ruled 2026-09-30).
+            # The opener's line is named here because an issue's span
+            # starts at its ITEM, which may begin lines earlier.
+            return (f"unterminated block comment opened at line {t.start[1]} "
+                    f"(syntax_error(incomplete_reduction))")
         if t.lexeme.startswith('"'):
             return "unterminated string"
         return "unterminated quoted atom"

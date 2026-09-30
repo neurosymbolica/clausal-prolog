@@ -326,15 +326,13 @@ class TestScryerCorpus:
     than fails -- no file currently needs that fallback, but it's kept for
     robustness against dialect-outside-scope corpus files in general.
 
-    ``len(toks) >= 1`` (not ``> 1``, the brief's original template): one
-    corpus file, crypto.pl, has an unbalanced ``/*``/``*/`` count (16
-    openers, 15 closers), so under nested-comment mode the entire file from
-    that point on is silently swallowed as one still-open comment -- old
-    AND new tokenizer agree exactly (both: just the END token, verified via
-    the scratchpad differ's captured old-tokenizer pickle). That is
-    faithfully-reproduced pre-existing behavior, not a Task 10 regression,
-    so the assertion has to accept a legitimately-empty (comment-only)
-    token stream rather than treating it as a sanity-check failure."""
+    Two corpus files, crypto.pl and clpb.pl, carry a stray ``/*`` inside a
+    comment, so under nested-comment mode (``tokenize()``'s default) the
+    comment never closes. Until 2026-09-30 that swallowed the rest of the
+    file silently (old AND new tokenizer agreed); since the ruling that an
+    unterminated block comment is a syntax error, ``tokenize()`` raises
+    ``TokenizeError`` for them and they skip here -- read without nesting
+    (ISO, Scryer) they tokenize normally."""
 
     @pytest.mark.parametrize("path", sorted(glob.glob(SCRYER_LIB + "/*.pl")))
     def test_corpus_file(self, path):
@@ -342,7 +340,8 @@ class TestScryerCorpus:
         try:
             toks = tokenize(src)
         except TokenizeError:
-            pytest.skip("file uses syntax outside the dialect (also failed before)")
+            pytest.skip("file uses syntax outside the dialect, or a stray /* "
+                        "that nesting leaves unterminated")
         assert toks[-1].type == TokenType.END and len(toks) >= 1
 
 

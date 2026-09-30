@@ -321,7 +321,7 @@ class RegexLexer:
         self._closed = False
         self._eof_returned = False
         self._glue = "spaced"
-        self._nest = None  # (rule, depth)
+        self._nest = None  # {'rule', 'depth', 'start'} as in IncrementalLexer
         self._delegate = None  # (base_offset, IncrementalLexer) draining the tail
 
     # ── feeding (identical position bookkeeping to IncrementalLexer) ─
@@ -370,6 +370,8 @@ class RegexLexer:
                 r = self._nest_step()
                 if r is NEED_MORE:
                     return NEED_MORE
+                if r is not None:
+                    return r  # the unterminated-comment error token
                 continue
             pos = self._pos
             if pos >= n:
@@ -427,7 +429,7 @@ class RegexLexer:
                 self._glue = "spaced"
                 continue
             if kind == "nest":
-                self._nest = {"rule": rule, "depth": 1}
+                self._nest = {"rule": rule, "depth": 1, "start": m.start()}
                 continue
             return self._emit(rule, m.start(), m.end())
 
@@ -525,10 +527,16 @@ class RegexLexer:
         if pos >= n:
             if not self._closed:
                 return NEED_MORE
-            # EOF with depth > 0: lenient silent exit (parity behavior)
+            # EOF with depth > 0: a syntax error (ruled 2026-09-30), the
+            # same `unterminated` token IncrementalLexer emits -- the whole
+            # comment from its outermost opener.
+            start = self._nest["start"]
             self._nest = None
-            self._glue = "spaced"
-            return None
+            glue = self._glue
+            self._glue = "glued"
+            return Tok(kind="error", value=("unterminated", text[start:n]),
+                       lexeme=text[start:n], start=self._pos_tuple(start),
+                       end=self._pos_tuple(n), glue=glue)
         # neither pattern starts here: consume one char, fast-skip ahead
         pos += 1
         skip = self._c.nest_skip[rule]

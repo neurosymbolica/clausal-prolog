@@ -106,3 +106,31 @@ argument). Two options for whoever picks this up:
 
 No preference recorded here; parking the decision rather than picking one
 under review-fix-wave time pressure.
+
+## Resolution (2026-09-30)
+
+**First item DONE** — operator ruling 2026-09-30: an unterminated block
+comment is a syntax error (reverses toklex locked design decision #4,
+recorded in `implementation_plans/toklex-implementation-plan.md`).
+
+- Both drivers (`IncrementalLexer._nest_step`, `RegexLexer._nest_step`)
+  now emit ONE `('unterminated', <comment text>)` error Tok at `close()`
+  with nest depth > 0, spanning the comment from its OUTERMOST opener (the
+  nest state records the opener's offset). Parity and chunk-insensitivity
+  are pinned in `tests/toklex/test_unterminated_block_comment.py`. No spec
+  change: nest-at-EOF is driver behavior, not spec-generated.
+- `_lex_error_message` gained the comment arm (lexeme starts with `/*`):
+  "unterminated block comment opened at line N
+  (syntax_error(incomplete_reduction))" -- the opener's line is in the
+  message because a SyntaxIssue's span starts at its item. `tokenize()`
+  raises `TokenizeError("Unterminated block comment")` at the opener.
+- Native `.pl` loader: the whole load is refused (Python `SyntaxError`,
+  `lineno` = the item's line), the same policy as for every other syntax
+  error in a file. Translator loader: `TokenizeError` at the opener.
+- The frozen `_bootstrap` spec reader is unchanged (reads only the in-repo
+  `.toklex.pl` specs, none of which has an unclosed comment).
+- Scryer's `crypto.pl` and `clpb.pl` carry a stray `/*` in a comment: read
+  with nesting on they are now an error, not a silently truncated file.
+
+The second item (`:- .` classifying as a fact) is NOT addressed here; it
+remains open as described above.

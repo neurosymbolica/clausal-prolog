@@ -151,6 +151,8 @@ def tokenize(source: str, *, nested_comments: bool = True) -> list[Token]:
             reason, culprit = t.value
             line, col = t.start[1], t.start[2]
             if reason == "unterminated":
+                if t.lexeme.startswith("/*"):
+                    raise TokenizeError("Unterminated block comment", line, col)
                 if t.lexeme.startswith('"'):
                     raise TokenizeError("Unterminated string", line, col)
                 raise TokenizeError("Unterminated quoted atom", line, col)

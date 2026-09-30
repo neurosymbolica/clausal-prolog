@@ -20,6 +20,18 @@ since 0.4.0 finish three moves:
 
 ### Breaking
 
+- **An unterminated `/*` block comment is a syntax error** (ruled
+  2026-09-30; ISO, as Scryer's `syntax_error(incomplete_reduction)`). Both
+  toklex lexers used to end an unclosed comment silently at end of input,
+  so everything after the `/*` vanished without a trace. Now the lexer
+  emits an `unterminated` error token from the outermost opener: the
+  reader returns a `resumable=False` `SyntaxIssue` after the items before
+  it, `tokenize()` raises `TokenizeError` at the opener, and a `.pl` file
+  ending in one fails to load under either front end (the native loader
+  names the opener's line). With nested comments (the dialect default) an
+  unclosed inner `/*` counts too, so a stray `/*` inside a comment is now
+  an error; read with `nested_comments=False` it is not.
+
 - **`arg/3` with an unbound `N` raises `instantiation_error`** (ISO 8.5.2.3,
   as Scryer). It used to enumerate the `(N, Arg)` pairs, SWI's extension.
 - **The clpz `#` family refuses a non-arithmetic operand.** `'#='`, `'#\='`,
