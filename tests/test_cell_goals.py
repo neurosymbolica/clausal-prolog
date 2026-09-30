@@ -598,8 +598,11 @@ class TestCellAssertRetract:
         freeze lives in ``_build_clause``, not in the shared gate."""
         lm = _lm(mod)
         X = Var()
-        assert len(list(pcall("retract", ("p", X), module=lm))) == 1
+        # the first answer (retract/1 is re-executable: ISO 8.9.3.1)
+        answers = pcall("retract", ("p", X), module=lm)
+        next(answers)
         assert deref(X) == 1
+        answers.close()
 
     def test_a_cell_retract_removes_a_cell_asserted_clause(self, mod):
         lm = _lm(mod)
@@ -620,8 +623,10 @@ class TestCellAssertRetract:
     def test_a_cell_retract_binds_the_patterns_variables(self, mod):
         lm = _lm(mod)
         X = Var()
-        assert len(list(pcall("retract", ("p", X), module=lm))) == 1
+        answers = pcall("retract", ("p", X), module=lm)
+        next(answers)
         assert deref(X) == 1
+        answers.close()
 
     def test_a_cell_retract_that_matches_nothing_fails_without_writing(self, mod):
         lm = _lm(mod)

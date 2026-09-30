@@ -42,4 +42,5 @@ def test_true_body_in_prolog_source(native, ans):
     assert e[0] == "permission_error" and e[1:3] == ("assert", "rule")
     # an unbound body is `true` for a fact (the engine's True)
     assert ans(mod, "t10") == [True]
-    assert ans(mod, "t11") == [[("-", 1, 2)]]
+    # retract/1 is re-executable: the second answer removes w(2) too
+    assert ans(mod, "t11") == [[("-", 1, 2)], []]

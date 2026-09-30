@@ -21,18 +21,22 @@ t5(L) :- retract((r(_) :- X = 1)), findall(Y, r(Y), L), L = [_|_], X = X.
 
 
 def test_retract_pattern(native, ans):
-    for name, want in (("t1", [[1]]), ("t3", [[2]]), ("t4", [[2]]),
+    # t4: retract/1 is re-executable -- its second answer removes r(2)
+    for name, want in (("t1", [[1]]), ("t3", [[2]]), ("t4", [[2], []]),
                        ("t5", [[2]])):
         mod = native.load(f"l3_retract_{name}", SRC)
         assert ans(mod, name) == want, name
 
 
 def test_retract_of_a_rule_body_binds_it(native, ans):
+    """Scryer: [_ = 1, true] -- the rule's body, then (re-executed) the
+    fact's."""
     mod = native.load("l3_retract_bind",
                       ":- dynamic(r/1).\nr(X) :- X = 1.\nr(2).\n"
                       "t(B) :- retract((r(_) :- B)).\n")
-    (b,) = ans(mod, "t")
-    assert b[0] == "=" and b[2] == 1
+    b1, b2 = ans(mod, "t")
+    assert b1[0] == "=" and b1[2] == 1
+    assert b2 is True
 
 
 def test_retractall_matches_the_head_whatever_the_body(tmp_path):
@@ -134,3 +138,24 @@ def test_a_clause_with_no_term_form(tmp_path):
             list(solve((goal, Var()), m))
         assert "permission_error(access,private_procedure" in render_error_term(
             ei.value.term), goal
+
+
+REEXEC = """\
+:- dynamic(s7/1).
+:- dynamic(k/1).
+s7(a). s7(b). s7(a).
+t1(R) :- findall(X, retract(s7(X)), R).
+t2(R) :- findall(X, retract(s7(X)), _), findall(Y, s7(Y), R).
+t3(R) :- assertz(k(1)), assertz(k(2)), findall(X, (retract(k(X)), assertz(k(9))), R0), findall(Y, k(Y), R1), R = R0-R1.
+t4(R) :- once(retract(s7(X))), R = X.
+"""
+
+
+def test_retract_is_re_executable(native, ans):
+    """ISO 8.9.3.1: on backtracking retract/1 removes the next match, over
+    the clauses as they were at the call (a clause asserted meanwhile is
+    not seen).  It committed to the first match.  Scryer's answers."""
+    for name, want in (("t1", [["a", "b", "a"]]), ("t2", [[]]),
+                       ("t3", [("-", [1, 2], [9, 9])]), ("t4", ["a"])):
+        mod = native.load(f"l3_retract_reexec_{name}", REEXEC)
+        assert ans(mod, name) == want, name
