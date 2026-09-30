@@ -25,6 +25,7 @@ t(r11, x, compare(foo, a, b)).
 t(r12, x, compare(1, a, b)).
 t(r13, R, compare(R, a, b)).
 t(r14, x, compare(<, a, b)).
+t(r15, x, compare([], a, b)).
 """
 
 WANT = {
@@ -42,6 +43,7 @@ WANT = {
     "r12": "ex(error(type_error(atom,1),ctx))",
     "r13": "[<]",
     "r14": "[x]",
+    "r15": "ex(error(domain_error(order,[]),ctx))",
 }
 
 

@@ -608,7 +608,8 @@ def _compare_order_error(o):
     domain_error(order, Order).  compare(foo, a, b) used to fail silently."""
     from clausal.logic.exceptions import (  # noqa: PLC0415
         LogicException, domain_error, type_error)
-    if not is_atom(o):
+    from clausal.logic.atoms import is_nil  # noqa: PLC0415
+    if not (is_atom(o) or is_nil(o)):  # [] is an atom (Scryer)
         raise LogicException(type_error("atom", o, "compare/3"))
     raise LogicException(domain_error("order", o, "compare/3"))
 

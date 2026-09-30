@@ -1,5 +1,5 @@
 """Differential sweep: the native ``.pl`` front end (CLAUSAL_PL_FRONTEND=
-native) against the clean Scryer build, on atoms & strings, term inspection,
+native) against Scryer (:data:`SCRYER`), on atoms & strings, term inspection,
 standard order and sorting, between/succ/numlist, the arithmetic evaluables,
 catch/throw error terms, the all-solutions predicates and library(lists).
 
@@ -25,13 +25,18 @@ import pytest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
-SCRYER = "/workspace/scryer-prolog-clpq/target/release/scryer-prolog"
+#: The oracle: upstream Scryer plus a commit that only adds library(clpq)
+#: (not the /workspace/scryer-prolog working tree, which carries WIP).
+SCRYER = os.environ.get(
+    "CLAUSAL_SCRYER",
+    "/workspace/scryer-prolog-clpq/target/release/scryer-prolog")
 AREAS = ["atoms", "terms", "sorting", "between", "arith", "except", "allsol",
          "lists"]
 
 #: Row -> why the engines still differ.  (c) = a Clausal extension or a
 #: writer/reader difference; (d) = needs a ruling; (o) = the Scryer build is
-#: the one that disagrees with ISO; (a) = Clausal is wrong, not fixed yet.
+#: the one that disagrees with ISO; (a) = Clausal is wrong, not fixed yet;
+#: (b) = a builtin Scryer has and Clausal lacks (a loud existence_error).
 KNOWN = {
     # writeq quotes a non-ASCII lowercase atom that Scryer writes bare
     "a67": "c", "a80": "c",

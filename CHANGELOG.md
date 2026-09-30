@@ -490,6 +490,7 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
   argument `type_error(integer, A)` and a negative one
   `domain_error(not_less_than_zero, A)`; `numlist(a, 3, L)` is
   `type_error(integer, a)`.  All of these used to fail silently.
+  (`numlist/3` with an unbound bound still fails; Scryer enumerates.)
 
 - **A `.pl` module in an earlier `sys.path` entry is no longer shadowed by a
   `.clausal` or `.seam` module of the same name in a later one.** The import
