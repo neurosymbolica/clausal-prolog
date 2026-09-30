@@ -67,12 +67,22 @@ def test_self_qualified_builtin_in_a_pl_file_without_a_module(native, ans,
 def test_a_db_free_builtin_qualified_by_an_unloaded_module(native, ans):
     """Scryer: ``zz:atom_length(abc, R)`` answers R = 3 with no module zz;
     ``zz:foo(X)`` is existence_error(procedure, foo/1)."""
-    mod = native.load("qb_unloaded", ":- module(qb_unloaded, [b/1, c/1]).\n"
+    mod = native.load("qb_unloaded",
+                      ":- module(qb_unloaded, [b/1, c/1, w/1, n/1]).\n"
+                      ":- dynamic(zp/1).\n"
                       "b(R) :- zz:atom_length(abc, R).\n"
-                      "c(X) :- zz:foo(X).\n")
+                      "c(X) :- zz:foo(X).\n"
+                      "w(X) :- zz:assertz(zp(X)).\n"
+                      "n(L) :- findall(X, zp(X), L).\n")
     assert ans(mod, "b") == [3]
     with pytest.raises(PredicateNotFoundError):
         ans(mod, "c")
+    # A DATABASE builtin is not run for an unloaded module (it would write
+    # into the CALLER's module; Scryer writes into zz): it raises, and the
+    # caller's zp/1 stays empty.
+    with pytest.raises(PredicateNotFoundError):
+        ans(mod, "w", 1, 1)
+    assert ans(mod, "n") == [[]]
 
 
 SEAM_OWNER = """\
@@ -90,16 +100,19 @@ def test_qualified_builtins_in_a_seam_module(native, ans, meta):
     <class assertz>)); it now resolves in m, like ``m.atom_length``."""
     native.load("qbs_owner", SEAM_OWNER, suffix=".seam")
     name = f"qbs_user_{int(meta)}"
-    src = (f"-module({name}, [b/1, a/1, c/1])\n"
+    src = (f"-module({name}, [b/1, a/1, r/1, c/1])\n"
            "-import_module(qbs_owner)\n"
            "-private([abc])\n"
            "b(R) <- qbs_owner.atom_length(abc, R)\n"
            "a(L) <- (qbs_owner.assertz(qbs_owner.mp(9)),"
+           " findall(X, qbs_owner.mp(X), L))\n"
+           "r(L) <- (qbs_owner.retract(qbs_owner.mp(1)),"
            " findall(X, qbs_owner.mp(X), L))\n")
     if meta:
         src += "c(L) <- findall(X, qbs_owner.mp(X), L)\n"
     mod = native.load(name, src, suffix=".seam")
     assert ans(mod, "b") == [3]
     assert ans(mod, "a") == [[1, 2, 9]]
+    assert ans(mod, "r") == [[2, 9]]
     if meta:
-        assert ans(mod, "c") == [[1, 2, 9]]
+        assert ans(mod, "c") == [[2, 9]]

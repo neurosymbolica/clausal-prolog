@@ -970,6 +970,9 @@ def _clausal_module_name_of(value) -> str | None:
     return None
 
 
+_MISSING = object()
+
+
 def _is_injected_runtime_attr(owner, name: str, value) -> bool:
     """True when *owner*'s attribute *name* is *value* only because the
     loader injected it into every predicate module's namespace
@@ -982,9 +985,6 @@ def _is_injected_runtime_attr(owner, name: str, value) -> bool:
     hook = _sys.modules.get("clausal.import_hook")
     injected = getattr(hook, "runtime_builtins", None)
     return injected is not None and injected.get(name, _MISSING) is value
-
-
-_MISSING = object()
 
 
 def _unresolved_qualified_dispatch(dotted: str, arity: int, globals_, db):

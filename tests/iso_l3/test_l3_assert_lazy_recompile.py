@@ -107,3 +107,21 @@ add(X) :- assertz(e(X)).
     assert list(call("add", 2, module=mod))
     assert list(call("add", 3, module=mod))
     assert sorted(ans(mod, "e")) == [1, 2, 3]
+
+
+def test_a_shallow_dynamic_predicate_filled_by_asserts(native, ans,
+                                                      monkeypatch):
+    """-shallow keeps its per-assert recompile, onto the TRAMPOLINE compiler
+    as before (its registered lazy recompile is the shallow compiler)."""
+    mod = native.load("alr_sh", """\
+-module(alr_sh, [fill/1, count/1])
+-dynamic(nx/2)
+-shallow(nx/2)
+fill(N) <- findall(I, (between(1, N, I), J is I + 1, assertz(nx(I, J))), _)
+count(C) <- (findall(X, nx(X, _), L), length(L, C))
+""", suffix=".seam")
+    calls = _counting(monkeypatch)
+    from clausal.logic.solve import call
+    assert list(call("fill", 10, module=mod))
+    assert calls.count(("nx", 2)) == 10, calls
+    assert ans(mod, "count") == [10]

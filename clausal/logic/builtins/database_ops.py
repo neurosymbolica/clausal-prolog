@@ -726,7 +726,8 @@ def _assert_clause(db, author, term_val, context, front):
             home.asserta(clause)
         else:
             home.assertz(clause)
-        if home.has_lazy_recompile(functor, arity):
+        if (home.has_lazy_recompile(functor, arity)
+                and not home.is_shallow(functor, arity)):
             # LAZY, as retract/1 is: the gate's exit invalidates the compiled
             # dispatch (and abolishes a table), and the next CALL recompiles
             # the whole clause list once, through the row's lazy recompile
@@ -737,7 +738,10 @@ def _assert_clause(db, author, term_val, context, front):
             return
         # No lazy recompile registered (a brand-new predicate, or one whose
         # dispatch was installed without one): compile now, which registers
-        # it, so every later assert takes the lazy path above.
+        # it, so every later assert takes the lazy path above.  A -shallow
+        # predicate also compiles here: its registered lazy recompile is the
+        # SHALLOW compiler, and a runtime assert has always moved it onto the
+        # trampoline compiler (and the module globals of the assert).
         clauses = home.clauses_for(functor, arity)
         compile_predicate_trampoline(functor, arity, clauses, home,
                                      globals_=home_globals,
