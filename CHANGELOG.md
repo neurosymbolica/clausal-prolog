@@ -480,6 +480,16 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
 
 ### Fixed
 
+- **A module-qualified call to a builtin runs the builtin.** In a `.pl`
+  file that also wrote a module name as data (`call(m:G)`,
+  `findall(X, m:p(X), L)`), every compiled `m:atom_length(...)`,
+  `m:assertz(...)`, `m:retract(...)` in the file raised
+  `existence_error(procedure, _)`: the module name was bound as an atom,
+  and the compiler walked the atom instead of the module.  In a `.seam`
+  module, `m.assertz(...)` reached an internal AST class and raised
+  `type_error(callable, _)`.  Both now run the builtin in module m.  As in
+  Scryer, `zz:atom_length(abc, R)` answers `R = 3` when no module `zz` is
+  loaded (for a builtin that does not touch the database).
 - **`clause/2`, `retract/1` and `retractall/1` answer every clause when the
   pattern holds a frozen variable.** A `freeze/2` goal woken while a clause
   head was tested left its bindings behind, so
