@@ -170,7 +170,8 @@ def test_retract_drain_does_not_recompile_per_removal(native, ans,
     from clausal.logic.solve import call
     assert list(call("half", module=mod))
     assert ans(mod, "count") == [n // 2]
-    assert calls.count(("p", 1)) <= 1, calls
+    # exactly one: the removals compiled nothing, the call recompiled once
+    assert calls.count(("p", 1)) == 1, calls
     del calls[:]
     assert list(call("drain", module=mod))
     assert ans(mod, "count") == [0]
