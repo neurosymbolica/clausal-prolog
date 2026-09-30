@@ -20,6 +20,20 @@ since 0.4.0 finish three moves:
 
 ### Breaking
 
+- **Calling into a module that does not exist is
+  `existence_error(procedure, Name/Arity)`** (ruled 2026-09-30; Scryer's
+  form). `call(nosuchmod:mp(_))` in `.pl`, `call(':'(nosuchmod, mp(X)))`
+  and `':'('nosuchmod', mp(X))` in seam, `solve((":", "nosuchmod", G), m)`
+  and `findall`/`call/N` over them raise
+  `error(existence_error(procedure, mp/1), mp/1)`; call/N counts its extra
+  arguments (`call(nosuchmod:mp, X)` is `mp/1`). They raised
+  `error(existence_error(module, 'nosuchmod'), call/1)`. The change is in
+  the one resolver of qualified goals (`cells.resolve_qualified_goal_cell`),
+  for its calling callers only; a non-atom designator (`7:G`), an unbound
+  or non-callable goal, a control construct, a missing OUTER module of
+  `m1:m2:G`, and `assertz`/`retract`/`clause` into `nosuchmod:` keep
+  `existence_error(module, ...)`, as does `end_module/1`'s mismatch error.
+
 - **An unterminated `/*` block comment is a syntax error** (ruled
   2026-09-30; ISO, as Scryer's `syntax_error(incomplete_reduction)`). Both
   toklex lexers used to end an unclosed comment silently at end of input,
@@ -180,9 +194,9 @@ since 0.4.0 finish three moves:
   one the `.pl` front end reads for `lib:p(X)` (`==` across the two) and
   prints as `lib:p(X)`. The second argument is resolved in `lib`, so the
   caller need not declare `p`: a written `p(...)`, `p()` or bare `p` there
-  is the plain term of that name. An unknown module is
-  `existence_error(module, M)`; a predicate `lib` does not define is
-  `existence_error(procedure, p/N)`. These used to raise
+  is the plain term of that name. A predicate `lib` does not define, or a
+  module that does not exist, is `existence_error(procedure, p/N)` (see
+  below). These used to raise
   `existence_error(procedure, (:)/2)`. A dotted call in data position is
   unchanged (`T is lib.p(1)` is still the plain `p(1)`).
 - **`name()` is the atom `name`** (ruled 2026-09-30). A zero-argument call
@@ -194,6 +208,12 @@ since 0.4.0 finish three moves:
   bound `T` to that reserved 1-tuple; they now bind the atom. A name bound
   to a Python callable is unchanged: `T is f()`, `T is time.time()` and
   `T is ++f()` still call Python.
+- **`--':'(M, G)` builds the qualified goal term from Python** (ruled
+  2026-09-30). The `--` term builder gives the same term as seam
+  `':'(lib, p(1))` and the `.pl` front end's `lib:p(1)` (`==`), with `p`
+  resolved in `lib` (the calling module need not declare it). It raised
+  `NameError: 'p' is not a declared or imported functor`. `--foo()` is
+  still refused, inside `':'` too ("`foo()` is not a term form").
 
 - **ISO 13211-2 `:- end_module(Name).`, and a "require end_module"
   setting.** A `.pl` module file may end with `end_module/1`; both `.pl`

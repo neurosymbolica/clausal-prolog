@@ -286,9 +286,9 @@ cnt(N) <- aggregate_all('count', ':'(lib, p(_)), N)
 `lib:p(X)` (the two are `==`), and `writeq/1` prints it as `lib:p(X)`. The
 second argument names a predicate of `lib`, so the calling module need not
 declare `p`: a written `p(...)`, `p()` or bare `p` there is the plain term
-of that name. A module that names no loaded module raises
-`existence_error(module, M)`, and a predicate `lib` does not define raises
-`existence_error(procedure, p/N)`.
+of that name. A predicate `lib` does not define, or a `lib` that names no
+loaded module, raises `existence_error(procedure, p/N)`, as in Scryer
+(`call/N`'s extra arguments count in `N`).
 
 A zero-argument call `name()` is the atom `name`: `call(zz())` is
 `call(zz)`, and `call(lib.z())` runs `z/0` in `lib`. A name bound to a

@@ -312,7 +312,10 @@ class TestCallNOverCells:
     def test_both_spellings_of_an_unresolvable_qualified_goal_raise_alike(
             self, mod):
         """The other half of F4's pin: the two spellings share the DIAGNOSTIC
-        too, and only the indicator differs (call/3 vs call/1)."""
+        too.  Operator ruling 2026-09-30 (Scryer's form): a module that does
+        not exist is ``existence_error(procedure, p/1)`` for the goal, whose
+        indicator is also error/2's second argument; the prose names the
+        calling surface (call/3 vs call/1)."""
         lm = _lm(mod)
         errors = []
         for goal_args in ((mint(":"), "nosuchmodule", ("p", 1)),
@@ -321,9 +324,11 @@ class TestCallNOverCells:
                 list(pcall("cg" + str(len(goal_args)), *goal_args, module=lm))
             errors.append(_error_term(exc_info.value))
         assert errors[0][0] == errors[1][0] == (
-            "existence_error", mint("module"), "'nosuchmodule'")
-        assert errors[0][1] == ("/", "call", 3) and errors[1][1] == ("/", "call", 1)
-        assert errors[0][2] == errors[1][2]
+            "existence_error", mint("procedure"), ("/", mint("p"), 1))
+        assert errors[0][1] == errors[1][1] == ("/", mint("p"), 1)
+        assert errors[0][2].startswith("call/3: ")
+        assert errors[1][2].startswith("call/1: ")
+        assert errors[0][2][len("call/3"):] == errors[1][2][len("call/1"):]
 
     def test_the_atom_spelling_of_a_control_construct_hits_the_same_refusal(
             self, mod):
@@ -414,10 +419,13 @@ class TestDeferredCellGoalForms:
             self, mod):
         with pytest.raises(LogicException) as exc_info:
             list(solve((":", "nosuchmodule", ("p", 1)), _lm(mod)))
-        inner, _pi, context = _error_term(exc_info.value)
+        # Operator ruling 2026-09-30 (Scryer's form): the missing module
+        # makes p/1 a missing procedure.
+        inner, pi, context = _error_term(exc_info.value)
         assert inner == (
-            "existence_error", mint("module"), "'nosuchmodule'")
-        assert "sys.modules" in context
+            "existence_error", mint("procedure"), ("/", mint("p"), 1))
+        assert pi == ("/", mint("p"), 1)
+        assert "'nosuchmodule' names no module" in context
 
     def test_a_qualified_goal_cell_resolves_through_call_too(self, mod):
         X = Var()

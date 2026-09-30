@@ -99,11 +99,48 @@ def seam_term(node: Any, module_globals: dict, loose: bool = False) -> Any:
                 cur = getattr(cur, part)
         return cur
 
+    def qualified(m_arg: Any, g_arg: Any) -> tuple:
+        # ``--':'(M, G)``: the qualified goal cell ``(":", M, G)`` (operator
+        # ruling 2026-09-30), the term a clause builds for the same source
+        # (``terms_to_ast._qualified_goal_term_ast``) and the .pl front end
+        # reads for ``M:G``.  G is resolved in M, not here: a written
+        # ``p(...)`` there is the plain cell of the WRITTEN name, whatever
+        # this module declares about ``p``.  ``p()`` stays refused (the
+        # 2026-09-06 ruling holds in a ``--`` term), and any other G -- a
+        # bare name, a variable, a nested ``':'`` -- is built as usual.
+        if (isinstance(g_arg, Call) and isinstance(g_arg.func, LoadName)
+                and g_arg.func.name != QUALIFIED_GOAL_FUNCTOR
+                and g_arg.args and not g_arg.kwargs):
+            inner = (sys.intern(g_arg.func.name),
+                     *(build(a) for a in g_arg.args))
+        else:
+            inner = build(g_arg)
+        # A written M that names a Clausal module is that module's
+        # DESIGNATOR, spelled as every qualified goal cell spells it.
+        if isinstance(m_arg, (LoadName, LoadAttr)):
+            from clausal.logic.compiler.terms_to_ast import (  # noqa: PLC0415
+                _resolve_module_path)
+            from clausal.logic.meta_predicate import (  # noqa: PLC0415
+                _clausal_module_db, module_designator)
+            path = (m_arg.name if isinstance(m_arg, LoadName)
+                    else dotted(m_arg))
+            owner_db = _clausal_module_db(
+                _resolve_module_path(path, module_globals))
+            if owner_db is not None:
+                designator = module_designator(owner_db)
+                return (QUALIFIED_GOAL_FUNCTOR,
+                        path if designator is None else designator, inner)
+        return (QUALIFIED_GOAL_FUNCTOR, build(m_arg), inner)
+
     def build(term: Any) -> Any:
         if isinstance(term, Var):
             return term
         if isinstance(term, PyThunk):
             return term.fn(*term.var_objects)
+        if (isinstance(term, Call) and isinstance(term.func, LoadName)
+                and term.func.name == QUALIFIED_GOAL_FUNCTOR
+                and len(term.args) == 2 and not term.kwargs):
+            return qualified(*term.args)
         if isinstance(term, Call) and isinstance(term.func, (LoadName, LoadAttr)):
             fname = (term.func.name if isinstance(term.func, LoadName)
                      else dotted(term.func))

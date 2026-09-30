@@ -226,9 +226,11 @@ def test_writeq_prints_the_iso_form(user):
 
 
 def test_an_unknown_module_is_an_iso_existence_error(user):
+    """Operator ruling 2026-09-30 (Scryer's form): a module that does not
+    exist makes the goal a missing procedure, ``mp/1``."""
     formal = _error_formal(user, "unknown_module")
     assert cell_functor(formal) == "existence_error"
-    assert cell_args(formal)[0] == mint("module")
+    assert cell_args(formal) == (mint("procedure"), ("/", mint("mp"), 1))
 
 
 def test_an_unknown_predicate_is_an_iso_existence_error(user):

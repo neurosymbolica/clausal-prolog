@@ -270,7 +270,7 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
         # extra the fold has not placed yet, and it belongs to the INNER goal.
         target, inner = resolve_qualified_goal_cell(
             (QUALIFIED_GOAL_FUNCTOR, call_args[0], call_args[1]),
-            context, _calling_module(db))
+            context, _calling_module(db), call_extra=len(call_args) - 2)
         # One level only: the resolver unwraps nesting itself, so ``inner`` is
         # never another ``:``/2 and this recursion cannot repeat.  It restarts
         # the WHOLE resolution — the control-construct refusal included, so

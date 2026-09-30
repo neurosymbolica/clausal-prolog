@@ -235,11 +235,15 @@ class TestQualifiedCellGoal:
             "existence_error", mint("procedure"), ("/", mint("."), 2))
 
     def test_an_unresolvable_module_is_an_existence_error(self, mods):
+        """Operator ruling 2026-09-30 (Scryer's form): calling into a module
+        that does not exist is ``existence_error(procedure, p/1)``, with the
+        indicator as error/2's second argument."""
         with pytest.raises(LogicException) as exc_info:
             list(solve((":", "t6_nope", ("p", Var())), mods.importer))
         inner, exc = _error_term(exc_info.value)
-        assert inner == ("existence_error", mint("module"), "'t6_nope'")
-        assert cell_args(exc.term)[1] == ("/", "solve", 1)
+        assert inner == ("existence_error", mint("procedure"), ("/", mint("p"), 1))
+        assert cell_args(exc.term)[1] == ("/", mint("p"), 1)
+        assert exc.message.startswith("solve/1: ")
 
     def test_a_non_str_module_designator_is_an_existence_error(self, mods):
         with pytest.raises(LogicException) as exc_info:
@@ -271,7 +275,10 @@ class TestNestedQualification:
         assert [deref(X) for _ in solve(goal, mods.importer)] == [11, 12]
 
     def test_an_unresolvable_outer_module_still_raises(self, mods):
-        """m1 is resolved even though m2 is the one that answers."""
+        """m1 is resolved even though m2 is the one that answers.  An OUTER
+        missing module keeps the module error: m2 would answer, so no
+        procedure is missing (the 2026-09-30 procedure form is for the
+        innermost qualifier)."""
         goal = (":", "t6_nope", (":", EXPORTER, ("p", Var())))
         with pytest.raises(LogicException) as exc_info:
             list(solve(goal, mods.importer))
@@ -279,11 +286,13 @@ class TestNestedQualification:
         assert inner == ("existence_error", mint("module"), "'t6_nope'")
 
     def test_an_unresolvable_inner_module_raises(self, mods):
+        """Operator ruling 2026-09-30: the innermost module is the one that
+        would answer, so its absence is Scryer's missing procedure."""
         goal = (":", EXPORTER, (":", "t6_nope", ("p", Var())))
         with pytest.raises(LogicException) as exc_info:
             list(solve(goal, mods.importer))
         inner, _exc = _error_term(exc_info.value)
-        assert inner == ("existence_error", mint("module"), "'t6_nope'")
+        assert inner == ("existence_error", mint("procedure"), ("/", mint("p"), 1))
 
     def test_a_cyclic_qualification_terminates_with_an_error(self, mods):
         """``V`` bound to ``(":", M, V)`` has no innermost goal.  ``unify``
@@ -449,12 +458,14 @@ class TestQualifiedCallN:
                               module=mods.importer))) == 1
 
     def test_an_unresolvable_module_raises_out_of_call(self, mods):
+        """Operator ruling 2026-09-30 (Scryer's form)."""
         with pytest.raises(LogicException) as exc_info:
             list(pcall("call_host1", (":", "t6_nope", ("p", Var())),
                        module=mods.importer))
         inner, exc = _error_term(exc_info.value)
-        assert inner == ("existence_error", mint("module"), "'t6_nope'")
-        assert cell_args(exc.term)[1] == ("/", "call", 1)
+        assert inner == ("existence_error", mint("procedure"), ("/", mint("p"), 1))
+        assert cell_args(exc.term)[1] == ("/", mint("p"), 1)
+        assert exc.message.startswith("call/1: ")
 
     def test_a_control_construct_under_a_qualification_runs_in_the_module(
             self, mods):
@@ -526,9 +537,12 @@ class TestQualifiedCallN:
         with pytest.raises(LogicException) as exc_info:
             list(pcall("call_host2", (":", "t6_nope", mint("p")), Var(),
                        module=mods.importer))
+        # Operator ruling 2026-09-30 (Scryer's form): call/2 adds one
+        # argument to p, so p/1 is the missing procedure.
         inner, exc = _error_term(exc_info.value)
-        assert inner == ("existence_error", mint("module"), "'t6_nope'")
-        assert cell_args(exc.term)[1] == ("/", "call", 2)
+        assert inner == ("existence_error", mint("procedure"), ("/", mint("p"), 1))
+        assert cell_args(exc.term)[1] == ("/", mint("p"), 1)
+        assert exc.message.startswith("call/2: ")
 
 
 # ── the tabling entry follows the qualification ────────────────────────────

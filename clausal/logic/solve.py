@@ -282,7 +282,8 @@ def _term_to_goal(term: Any, db: Any = None) -> Any:
     is_cell_goal, functor = compound_cell_shape(term)
     if is_cell_goal:
         if functor == QUALIFIED_GOAL_FUNCTOR and len(term) == 3:
-            _module, inner = resolve_qualified_goal_cell(term, "solve/1")
+            _module, inner = resolve_qualified_goal_cell(
+                term, "solve/1", call_extra=0)
             return _term_to_goal(inner, getattr(_module, "db", None))
         refuse_control_construct_cell(term, functor, "solve/1")
         return AstCall(
@@ -1448,7 +1449,8 @@ def _strip_module_qualification(goal, module):
             and functor == QUALIFIED_GOAL_FUNCTOR and len(goal) == 3):
         return goal, module
     raise_if_dangling_handle(_pre_functor, goal, "solve/1")
-    target, inner = resolve_qualified_goal_cell(goal, "solve/1", module)
+    target, inner = resolve_qualified_goal_cell(
+        goal, "solve/1", module, call_extra=0)
     return inner, target
 
 

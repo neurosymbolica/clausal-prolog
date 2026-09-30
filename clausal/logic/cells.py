@@ -496,6 +496,7 @@ MAX_QUALIFICATION_DEPTH = 64
 
 def resolve_qualified_goal_cell(
     cell: Any, context: str, calling_module: Any = None,
+    *, call_extra: "int | None" = None,
 ) -> tuple:
     """Resolve the module-qualified goal cell ``(":", M, G)`` to ``(module, G)``.
 
@@ -538,10 +539,28 @@ def resolve_qualified_goal_cell(
                            context.
     :param calling_module: the module the qualification was written in, if
                            known -- reported in the diagnostic.
+    :param call_extra:     set by a caller that CALLS the goal (``solve``,
+                           ``call/N``): how many extra arguments call/N adds
+                           to the inner goal (0 for ``solve``/``call/1``).
+                           See "A MODULE THAT DOES NOT EXIST" below.
     :raises LogicException: ``existence_error(module, <designator repr'd>)``
                            when a designator in the chain names no module, or
                            when the chain is cyclic / deeper than
                            ``MAX_QUALIFICATION_DEPTH``.
+
+    A MODULE THAT DOES NOT EXIST, when the goal is CALLED (operator ruling
+    2026-09-30, Scryer's form): a designator that is an ATOM naming no
+    module raises ``existence_error(procedure, Name/Arity)`` for the
+    innermost goal -- ``call(nosuchmod:mp(_))`` is
+    ``error(existence_error(procedure, mp/1), mp/1)``, and
+    ``call(nosuchmod:mp, X)`` is ``mp/1`` -- rather than
+    ``existence_error(module, nosuchmod)``: calling ``M:G`` asks for a
+    procedure, and there is none.  Only when *call_extra* is given (a
+    clause lookup or an assert into ``M:`` is not a call) and only for an
+    atom designator whose innermost goal is an atom or a cell that names a
+    procedure; a variable, a number, a non-callable or a control construct
+    inside keeps the module error, and so does a missing OUTER module of
+    ``m1:m2:G`` (every layer is still resolved; ``m2`` would answer).
     """
     from clausal.logic.solve import resolve_module  # noqa: PLC0415 -- see the
     from clausal.logic.variables import deref       # note in
@@ -555,7 +574,19 @@ def resolve_qualified_goal_cell(
         ok, functor = compound_cell_shape(goal)
         if not (ok and functor == QUALIFIED_GOAL_FUNCTOR and len(goal) == 3):
             break
-        module = resolve_module(deref(goal[1]), calling_module, context)
+        designator = deref(goal[1])
+        if call_extra is None or type(designator) is not str:
+            module = resolve_module(designator, calling_module, context)
+        else:
+            from clausal.logic.exceptions import LogicException  # noqa: PLC0415
+            try:
+                module = resolve_module(designator, calling_module, context)
+            except LogicException as exc:
+                missing = _missing_procedure_error(
+                    goal[2], call_extra, designator, context)
+                if missing is None:
+                    raise
+                raise LogicException(missing) from exc
         calling_module = module
         goal = deref(goal[2])
     else:
@@ -580,6 +611,40 @@ def resolve_qualified_goal_cell(
     # and the caller (``_resolve_named_goal`` / ``_term_to_goal``) is where
     # that refusal belongs, uniformly with an unqualified string goal.
     return module, goal
+
+
+def _missing_procedure_error(
+    goal: Any, call_extra: int, designator: str, context: str,
+) -> Any:
+    """``existence_error(procedure, Name/Arity)`` for the innermost goal of
+    *goal* (the part of ``M:G`` after a module that does not exist), with
+    call/N's *call_extra* arguments counted -- or None when that goal names
+    no procedure (a variable, a number, a control construct ...).
+
+    None, too, when the missing module is not the INNERMOST qualifier
+    (``nosuchmod:m2:G``): the module that would answer is ``m2``, so there
+    is no procedure to name, and the module error stands."""
+    goal = deref(goal)
+    if type(goal) is tuple and len(goal) < 2:
+        return None     # () / the reserved 1-tuple: no goal (the caller says so)
+    ok, functor = compound_cell_shape(goal)
+    if ok and functor == QUALIFIED_GOAL_FUNCTOR and len(goal) == 3:
+        return None
+    if type(goal) is str:
+        name, arity = goal, 0
+    elif (ok and type(functor) is str
+            and functor not in CELL_GOAL_CONTROL_FUNCTORS):
+        name, arity = functor, len(goal) - 1
+    else:
+        return None
+    from clausal.logic.builtins.call_body import _indicator  # noqa: PLC0415
+    from clausal.logic.exceptions import existence_error  # noqa: PLC0415
+    arity += call_extra
+    return existence_error(
+        "procedure", _indicator(name, arity),
+        f"{context}: {designator!r} names no module (resolution is "
+        f"lookup-only and never imports), so {designator}:{name}/{arity} "
+        f"is no procedure")
 
 
 def qualify_mangled_goal(goal: Any, db: Any = None) -> Any:
