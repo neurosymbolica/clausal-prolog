@@ -25,9 +25,13 @@ test(neg_true_body, fail) :- true.
 test(neg_fail_body, fail) :- fail.
 test(var_true_body) :- q(1, Y), Y == 1.
 test('quoted name', fail) :- true.
+test(bare_fact).
+test(case(1)) :- true.
+test(case(2)) :- fail.
 """
 
 SEAM = """\
+-private([bare_fact, case(N)])
 q(X, X) <- True
 test("fact_form"),
 test("true_body") <- True
@@ -36,16 +40,23 @@ test("neg_true_body", fail) <- True
 test("neg_fail_body", fail) <- False
 test("var_true_body") <- (q(1, Y), Y == 1)
 test("quoted name", fail) <- True
+test(bare_fact),
+test(case(1)) <- True
+test(case(2)) <- False
 """
 
 NAMES = ["fact_form", "true_body", "conj_true_body", "neg_true_body",
-         "neg_fail_body", "var_true_body", "quoted name"]
+         "neg_fail_body", "var_true_body", "quoted name", "bare_fact",
+         "('case', 1)", "('case', 2)"]
 
 #: name -> passed.  ``neg_true_body`` and ``quoted name`` are ``fail`` tests
 #: whose goal succeeds: they FAIL (and are not errors).
 PASSED = {"fact_form": True, "true_body": True, "conj_true_body": True,
           "neg_true_body": False, "neg_fail_body": True,
-          "var_true_body": True, "quoted name": False}
+          "var_true_body": True, "quoted name": False, "bare_fact": True,
+          # A compound description runs ITS clause: run as ``test(_)``,
+          # ``case(2)`` passed on the strength of the other clauses.
+          "('case', 1)": True, "('case', 2)": False}
 
 
 @pytest.fixture(params=[("tb_seam.clausal", SEAM, None),
