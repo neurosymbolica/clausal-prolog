@@ -134,6 +134,16 @@ since 0.4.0 finish three moves:
 
 ### Added
 
+- **clpz's `sum/3` and `global_cardinality/3` on the native `.pl` front
+  end.** `sum(Vs, Op, Value)` (Op one of `#=`, `#\=`, `#<`, `#>`, `#=<`,
+  `#>=`; Value a clpz expression) and `global_cardinality(Vs, Pairs,
+  Options)` with Scryer's options `consistency(value)` and `cost(Cost,
+  Matrix)`, answering and raising as Scryer's clpz does. `sum/3` is not a
+  global builtin (a global `sum` would shadow Python's `sum` inside a seam
+  `++` escape): it resolves only in a `.pl` file that imports
+  library(clpz), from `clausal.stdlib.clpz_sum`; a file that defines its
+  own `sum/2` still loads.
+
 - **Constants, units and dicts on the native `.pl` front end.** A `.pl`
   file declares constants with the seam's directive family in ISO syntax
   (`:- constant_value(max_retries, 3).`, `:- constant_number_units(max_fine,

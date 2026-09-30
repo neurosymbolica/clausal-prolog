@@ -123,14 +123,23 @@ _LIBRARY_OPS: dict[str, tuple] = {"clpz": CLPZ_OPS, "clpfd": CLPZ_OPS,
 _LIBRARY_STICKY_OPS: dict[str, tuple] = {"clpz": CLPZ_OPS, "clpfd": CLPZ_OPS}
 
 #: Library predicates whose Scryer meaning differs from the engine builtin
-#: of the same name: an import of the library takes the name from this
-#: module instead (clpz's label/1 is leftmost-first; the engine's is
-#: first-fail, a different answer order).
-_LIBRARY_OVERRIDES: dict[str, tuple[str, tuple[str, ...]]] = {
-    "clpz": ("clausal.stdlib.clpz", ("label",)),
-    "clpfd": ("clausal.stdlib.clpz", ("label",)),
+#: of the same name, or that must not be a global builtin at all: an import
+#: of the library takes the name from the module given (clpz's label/1 is
+#: leftmost-first; the engine's is first-fail, a different answer order).
+#: clpz's sum/3 is no global builtin (a global ``sum`` would shadow Python's
+#: inside a seam ``++`` escape), so only an importer of library(clpz)
+#: resolves it.  ONE module per name: a file that defines one of the names
+#: itself drops that module's import (:meth:`DirectiveContext.
+#: drop_shadowed_overrides`), which must not take the others with it.
+_CLPZ_OVERRIDES: dict[str, str] = {
+    "label": "clausal.stdlib.clpz",
+    "sum": "clausal.stdlib.clpz_sum",
 }
-_OVERRIDE_ARITIES = {"label": ("label", 1)}
+_LIBRARY_OVERRIDES: dict[str, dict[str, str]] = {
+    "clpz": _CLPZ_OVERRIDES,
+    "clpfd": _CLPZ_OVERRIDES,
+}
+_OVERRIDE_ARITIES = {"label": ("label", 1), "sum": ("sum", 3)}
 
 _OP_SPECIFIERS = ("xfx", "xfy", "yfx", "fy", "fx", "xf", "yf")
 
@@ -435,13 +444,23 @@ class DirectiveContext:
         definition wins (Scryer too: it warns and uses the local
         clauses).  A local definition at another arity is refused: the
         engine keys the import by name, so dropping it would silently turn
-        the file's ``label/1`` calls into the engine's first-fail one."""
+        the file's ``label/1`` calls into the engine's first-fail one.  A
+        name with no global builtin behind it (``sum``) is dropped instead:
+        the file's own ``sum/2`` loads, and a ``sum/3`` call is an
+        existence_error rather than another predicate's answer."""
         for module, pis in self.override_imports:
             if pis & defined:
                 self.drop_imports(module)
                 continue
-            clash = sorted(f"{n}/{a}" for n, a in defined
-                           if n in {m for m, _ in pis})
+            names = {m for m, _ in pis}
+            clash = sorted(f"{n}/{a}" for n, a in defined if n in names)
+            if clash and not any(_engine_goal(n) for n in names):
+                # No global of that name to fall back to (clpz's sum/3):
+                # dropping the import cannot turn a call into another
+                # predicate silently -- a sum/3 call then has no
+                # definition and raises existence_error, loudly.
+                self.drop_imports(module)
+                continue
             if clash:
                 raise _refused(
                     f"{', '.join(clash)} is defined here and "
@@ -849,7 +868,7 @@ def _use_library(ctx, lib, entries, span, what, listed_ops=()):
             f"knows (built in: {', '.join(sorted(_BUILTIN_LIBRARIES))}; "
             f"mapped: {', '.join(sorted(_LIBRARY_MODULES))})", span)
     module = _LIBRARY_MODULES[name]
-    over_module, over_names = _LIBRARY_OVERRIDES.get(name, (None, ()))
+    over_names = _LIBRARY_OVERRIDES.get(name, {})
     overridden: list = []
     if entries is None:
         wanted = [(n, None) for n in _LIBRARY_EXPORTS.get(name, ())]
@@ -869,11 +888,14 @@ def _use_library(ctx, lib, entries, span, what, listed_ops=()):
                 f"{what}: library({name})'s {n}/{arity} is not available in "
                 f"Clausal (neither an engine builtin nor defined in "
                 f"{module or 'the engine'})", span)
-    if overridden:
+    groups: list = [(module, wanted)]
+    for n, arity in overridden:
+        over_module = over_names[n]
         ctx.override_imports.append(
-            (over_module, frozenset(_OVERRIDE_ARITIES[n] for n, _ in overridden)))
+            (over_module, frozenset([_OVERRIDE_ARITIES[n]])))
+        groups.append((over_module, [(n, arity)]))
     out: list = []
-    for mod, names in ((module, wanted), (over_module, overridden)):
+    for mod, names in groups:
         if names:
             out.extend(ctx.imported(mod, ctx.seam(
                 "import_from",

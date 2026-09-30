@@ -855,3 +855,167 @@ def post_connective(name: str, args: tuple, trail: Trail) -> bool:
 
 def unify_01(b, value: int, trail) -> bool:
     return unify(b, value, trail)
+
+
+# ── sum/3 and global_cardinality/3 (Scryer's clpz) ──────────────────────────
+
+#: scalar_product/4's relations (Scryer: anything else is
+#: ``domain_error(scalar_product_relation, Op)``).
+_SUM_RELATIONS = ("#=", "#\\=", "#<", "#>", "#=<", "#>=")
+
+
+def _once(gen) -> bool:
+    """True when the (deterministic) posting generator *gen* succeeds."""
+    for _ in gen:
+        return True
+    return False
+
+
+def clpz_sum(vs, op, value, trail: Trail, context: str = "sum/3") -> bool:
+    """Scryer's ``sum(Vs, Op, Value)``: the sum of Vs (integers or
+    variables) is in relation Op (``#=``, ``#\\=``, ``#<``, ``#>``, ``#=<``,
+    ``#>=``) to the clpz expression Value.  Checked in Scryer's order: Vs a
+    list (partial: instantiation_error), each element an integer or a
+    variable, Op bound and a relation, Value a clpz expression."""
+    items = _proper_list(vs, context)
+    for x in items:
+        _fd_variable(x, context)
+    op = deref(op)
+    if is_var(op):
+        _raise(instantiation_error(context))
+    if not (type(op) is str and op in _SUM_RELATIONS):
+        _raise(domain_error("scalar_product_relation", walk(op), context))
+    value = clpz_expression(value, context)
+    if not (is_var(value) or _is_int(value)):
+        # An expression: sum the list into a fresh total equal to it.
+        total = Var()
+        ops = _fd.clpz_operands(total, value, trail)
+        if ops is None or not _fd.fd_eq(*ops, trail):
+            return False
+        value = total
+    return _once(_fd.fd_sum(items, op, value, trail))
+
+
+def _element_posted(index, lst: list, value, trail: Trail) -> bool:
+    """``element(Index, List, Value)`` as a CONSTRAINT (Scryer's): Index in
+    1..len(List), propagated, never enumerated (``clpfd.fd_element``
+    enumerates a free index, which would label the variable)."""
+    n = len(lst)
+    index = deref(index)
+    if _is_int(index):
+        return 1 <= index <= n and unify(value, lst[index - 1], trail)
+    if n == 0:
+        return False
+    if not _fd._narrow(index, domain_from_range(1, n), trail, deque()):
+        return False
+    index = deref(index)
+    if _is_int(index):
+        return unify(value, lst[index - 1], trail)
+    if is_var(deref(value)):
+        _fd._ensure_fd(deref(value), trail)
+    return _fd._post_constraint(
+        _fd.ElementConstraint(index, tuple(lst), deref(value)), trail)
+
+
+def gcc_pairs(pairs, context: str) -> list:
+    """Scryer's ``gcc_pair/1`` over a list: each ``Key-Count`` with Key an
+    integer and Count an integer or a variable (``domain_error(gcc_pair,
+    P)`` for another shape), keys unique (``domain_error(
+    gcc_unique_key_pairs, Pairs)``).  Returns ``[(key, count), ...]``."""
+    from clausal.pythonic_ast.nodes import Sub  # noqa: PLC0415
+    items = _proper_list(pairs, context)
+    kc = []
+    for p in items:
+        p = deref(p)
+        if is_var(p):
+            # Pair = Key-Val binds a variable; must_be(integer, Key) then
+            # finds Key unbound.
+            _raise(instantiation_error(context))
+        if type(p) is tuple and len(p) == 3 and p[0] == "-":
+            key, cnt = p[1], p[2]
+        elif type(p) is Sub:
+            key, cnt = p.left, p.right
+        else:
+            _raise(domain_error("gcc_pair", walk(p), context))
+        key = deref(key)
+        if is_var(key):
+            _raise(instantiation_error(context))
+        if not _is_int(key):
+            _raise(type_error("integer", walk(key), context))
+        _fd_variable(cnt, context)
+        kc.append((key, cnt))
+    keys = [k for k, _ in kc]
+    if len(set(keys)) != len(keys):
+        _raise(domain_error("gcc_unique_key_pairs", walk(deref(pairs)), context))
+    return kc
+
+
+def _keys_domain(keys: list):
+    """The domain of exactly the (distinct) integers *keys*."""
+    out: list = []
+    for k in sorted(keys):
+        if out and k == out[-1][1] + 1:
+            out[-1] = (out[-1][0], k)
+        else:
+            out.append((k, k))
+    return tuple(out)
+
+
+def clpz_global_cardinality(vs, pairs, options, trail: Trail,
+                            context: str = "global_cardinality/3") -> bool:
+    """Scryer's ``global_cardinality(Vs, Pairs, Options)``.  Options:
+    ``consistency(value)`` (a weaker propagation in Scryer; the same
+    solutions, so nothing to do here) and ``cost(Cost, Matrix)``: row i of
+    Matrix gives the cost of each key (in Pairs' order) for the i-th
+    variable, and Cost is the sum of the chosen costs.  Other options are
+    ignored, as Scryer ignores them."""
+    xs = _proper_list(vs, context)
+    _proper_list(pairs, context)
+    opts = _proper_list(options, context)
+    for x in xs:
+        _fd_variable(x, context)
+    kc = gcc_pairs(pairs, context)
+    # Scryer: Nums ins 0..L, Xs ins Drep (the keys), then the constraint.
+    keys = [k for k, _ in kc]
+    if not _post([c for _, c in kc], domain_from_range(0, len(xs)), trail):
+        return False
+    if not _post(xs, _keys_domain(keys), trail):
+        return False
+    if not _fd.global_cardinality(xs, kc, trail):
+        return False
+    # Scryer: member(OC, Options), functor(OC, cost, 2) -- the first option
+    # that is (or, unbound, becomes) cost/2.
+    cost = None
+    for o in opts:
+        o = deref(o)
+        if is_var(o):
+            cost_var, matrix = Var(), Var()
+            if not unify(o, ("cost", cost_var, matrix), trail):
+                return False
+            cost = (cost_var, matrix)
+            break
+        if type(o) is tuple and len(o) == 3 and o[0] == "cost":
+            cost = (o[1], o[2])
+            break
+    if cost is None:
+        return True
+    total, matrix = cost
+    # must_be(list(list(integer)), Matrix)
+    rows = [_proper_list(r, context) for r in _proper_list(matrix, context)]
+    for row in rows:
+        for c in row:
+            c = deref(c)
+            if is_var(c):
+                _raise(instantiation_error(context))
+            if not _is_int(c):
+                _raise(type_error("integer", walk(c), context))
+    if len(rows) != len(xs):
+        return False                    # maplist/4 over lists of other lengths
+    costs = []
+    for x, row in zip(xs, rows):
+        n, c = Var(), Var()
+        if not (_element_posted(n, keys, x, trail)
+                and _element_posted(n, [deref(e) for e in row], c, trail)):
+            return False
+        costs.append(c)
+    return clpz_sum(costs, "#=", total, trail, context)

@@ -1,0 +1,6 @@
+# library(clpz)'s sum/3 (Scryer's: sum(Vs, Op, Value), Op one of #=, #\=,
+# #<, #>, #=<, #>=, Value a clpz expression).  It lives here, not as a
+# global builtin, because a global sum/3 would shadow Python's sum inside a
+# seam `++` escape: only a .pl file importing library(clpz) gets the name.
+
+sum(VS, OP, VALUE) <- '$clpz_sum'(VS, OP, VALUE)

@@ -587,3 +587,27 @@ def _has_var(t) -> bool:
         if type(x) in (tuple, list):
             stack.extend(x)
     return False
+
+
+# ── library(clpz) additions: global_cardinality/3 and sum/3 ───────────────
+
+
+@_builtin("global_cardinality", 3, fields=("vars", "pairs", "options"))
+def _global_cardinality_3(vs, pairs, options, trail, k):
+    """global_cardinality(Vs, Pairs, Options) -- as global_cardinality/2,
+    with Scryer's options ``consistency(value)`` and ``cost(Cost,
+    Matrix)``."""
+    from clausal.logic.clpz_surface import clpz_global_cardinality  # noqa: PLC0415
+    if clpz_global_cardinality(vs, pairs, options, trail):
+        yield None
+
+
+@_builtin("$clpz_sum", 3, fields=("vars", "op", "value"))
+def _clpz_sum(vs, op, value, trail, k):
+    """library(clpz)'s sum(Vs, Op, Value) (Scryer's).  NOT a global
+    ``sum/3``: a global would shadow Python's ``sum`` inside a seam ``++``
+    escape, so ``clausal.stdlib.clpz`` defines ``sum/3`` over this and only
+    a ``.pl`` file that imports library(clpz) gets the name."""
+    from clausal.logic.clpz_surface import clpz_sum  # noqa: PLC0415
+    if clpz_sum(vs, op, value, trail):
+        yield None
