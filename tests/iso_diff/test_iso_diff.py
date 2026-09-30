@@ -40,9 +40,6 @@ KNOWN = {
     "a58": "d", "a62": "d", "a69": "d", "a78": "d", "a90": "d", "x46": "d",
     # [a|b] (a non-list tail) is not represented: it reads as [a,b]
     "a68": "a", "x22": "a", "l12": "a", "s25": "a",
-    # succ/2 and numlist/3 fail where Scryer raises
-    "b17": "a", "b18": "a", "b19": "a", "b20": "a", "b22": "a", "b33": "a",
-    "b35": "a", "x54": "a",
     # compare/3 with Order foo fails (ISO: domain_error(order, foo))
     "t56": "a",
     # arg/3 with an unbound N enumerates (ISO: instantiation_error)

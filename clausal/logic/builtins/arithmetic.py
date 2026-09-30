@@ -710,8 +710,33 @@ def _between__3(low, high, x, trail, k):
         _between_bound_error(x_val)
     yield from (_between__3_c if _USE_C_ARITH else _between__3_py)(low, high, x, trail, k)
 
+def _succ_check(x_val, y_val):
+    """succ/2's errors, as Scryer's library(iso_ext) raises them: both
+    arguments unbound is an instantiation error; a bound argument that is not
+    an integer is type_error(integer, A), a negative one
+    domain_error(not_less_than_zero, A).  These used to FAIL silently
+    (``succ(X, Y)``, ``succ(a, X)``, ``succ(-1, X)``).  A bool is not an
+    integer."""
+    from clausal.logic.exceptions import (  # noqa: PLC0415
+        LogicException, domain_error, instantiation_error, type_error)
+    if is_var(x_val) and is_var(y_val):
+        raise LogicException(instantiation_error("succ/2"))
+    for a in (x_val, y_val):
+        if is_var(a):
+            continue
+        if not isinstance(a, int) or isinstance(a, bool):
+            raise LogicException(type_error("integer", a, "succ/2"))
+        if a < 0:
+            raise LogicException(
+                domain_error("not_less_than_zero", a, "succ/2"))
+
+
 @_builtin("succ", 2)
 def _succ__2(x, y, trail, k):
+    x_val, y_val = deref(x), deref(y)
+    if (is_var(x_val) or type(x_val) is not int or x_val < 0) or (
+            not is_var(y_val) and (type(y_val) is not int or y_val < 0)):
+        _succ_check(x_val, y_val)
     yield from (_succ__2_c if _USE_C_ARITH else _succ__2_py)(x, y, trail, k)
 
 @_builtin("plus", 3)

@@ -1291,9 +1291,14 @@ def _numlist__3(low, high, lst, trail, k):
     """numlist(Low, High, List) — List is integers from Low to High inclusive."""
     low_val = deref(low)
     high_val = deref(high)
+    # Scryer's library(between): a bound that is not an integer is
+    # type_error(integer, B) (it used to fail silently: numlist(a, 3, L)).
+    for b in (low_val, high_val):
+        if not is_var(b) and not _is_int(b):
+            from clausal.logic.exceptions import (  # noqa: PLC0415
+                LogicException, type_error)
+            raise LogicException(type_error("integer", b, "numlist/3"))
     if is_var(low_val) or is_var(high_val):
-        return
-    if not _is_int(low_val) or not _is_int(high_val):
         return
     if low_val > high_val:
         return
