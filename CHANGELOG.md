@@ -134,6 +134,17 @@ since 0.4.0 finish three moves:
 
 ### Added
 
+- **`abolish/1` (ISO 8.9.4).** `abolish(Name/Arity)` removes a dynamic
+  procedure: its clauses and the procedure itself, so a later call is
+  `existence_error(procedure, Name/Arity)` (a procedure emptied by
+  `retract/1` fails instead). A static procedure, user-defined or builtin,
+  is `permission_error(modify, static_procedure, Name/Arity)`; a procedure
+  that does not exist is no error; the indicator's errors are ISO's
+  (instantiation, `type_error(predicate_indicator, PI)`, `type_error(atom,
+  Name)`, `type_error(integer, Arity)`, `domain_error(not_less_than_zero,
+  Arity)`). It was an existence error. The database has a matching
+  `Database.abolish(functor, arity)`.
+
 - **clpz's `sum/3` and `global_cardinality/3` on the native `.pl` front
   end.** `sum(Vs, Op, Value)` (Op one of `#=`, `#\=`, `#<`, `#>`, `#=<`,
   `#>=`; Value a clpz expression) and `global_cardinality(Vs, Pairs,

@@ -1,5 +1,5 @@
 """Runtime database manipulation builtins: assertz/1, asserta/1, retract/1,
-abolish_table/2, abolish_all_tables/0."""
+abolish/1, abolish_table/2, abolish_all_tables/0."""
 
 from __future__ import annotations
 
@@ -983,6 +983,74 @@ def _current_predicate_factory(db):
             trail.undo(mark)
 
     return current_predicate__1
+
+
+def _abolish_pi(pi) -> "tuple[str, int]":
+    """``(name, arity)`` of abolish/1's predicate indicator, with ISO
+    8.9.4.3's errors in its order: instantiation (the indicator or either
+    part unbound), type_error(predicate_indicator, PI), type_error(atom,
+    Name), type_error(integer, Arity), domain_error(not_less_than_zero,
+    Arity).  ``max_arity`` is unbounded, so there is no representation
+    error."""
+    from clausal.terms import Div  # noqa: PLC0415
+    from clausal.logic.exceptions import domain_error, type_error  # noqa: PLC0415
+    ctx = "abolish/1"
+    t = deref(pi)
+    if is_var(t):
+        raise LogicException(instantiation_error(ctx))
+    if type(t) is tuple and len(t) == 3 and t[0] == "/":
+        name, arity = deref(t[1]), deref(t[2])
+    elif isinstance(t, Div):          # ``foo/1`` written in a clause body
+        name, arity = deref(t.left), deref(t.right)
+    else:
+        raise LogicException(type_error("predicate_indicator", t, ctx))
+    if is_var(name) or is_var(arity):
+        raise LogicException(instantiation_error(ctx))
+    if not _term_is_atom(name):
+        raise LogicException(type_error("atom", name, ctx))
+    if type(arity) is not int:
+        raise LogicException(type_error("integer", arity, ctx))
+    if arity < 0:
+        raise LogicException(domain_error("not_less_than_zero", arity, ctx))
+    return _spelling(name), arity
+
+
+@_db_builtin("abolish", 1, fields=("indicator",))
+def _abolish_factory(db):
+    """abolish(Name/Arity) -- ISO 8.9.4: remove a DYNAMIC procedure: its
+    clauses and the procedure itself, so a later call is
+    existence_error(procedure, Name/Arity) (ISO and Scryer; a dynamic
+    procedure merely emptied by retract/1 fails instead).  A static
+    procedure -- user-defined or a builtin -- is permission_error(modify,
+    static_procedure, Name/Arity); a procedure that does not exist is no
+    error (there is nothing to remove).  It did not exist
+    (existence_error(procedure, abolish/1))."""
+    module_dict = getattr(db, "module_dict", None)
+
+    def abolish__1(pi, trail, k):
+        functor, arity = _abolish_pi(pi)
+        from clausal.logic.builtins._registry import (  # noqa: PLC0415
+            _BUILTINS, _DB_BUILTINS,
+        )
+        refuse = ((functor, arity) in _BUILTINS
+                  or (functor, arity) in _DB_BUILTINS)
+        home = row = None
+        if not refuse and db is not None:
+            pred_cls = _find_pred_cls(functor, arity, module_dict)
+            home = _home_db(db, pred_cls, functor, arity)
+            functor = _canonical_functor(db, pred_cls, functor)
+            row = home.row(functor, arity) if home is not None else None
+            refuse = row is not None and not row.dynamic
+        if refuse:
+            raise LogicException(permission_error(
+                "modify", "static_procedure", ("/", mint(functor), arity),
+                f"abolish/1: {functor}/{arity} is a static procedure; only "
+                f"a -dynamic one can be abolished"))
+        if row is not None:
+            row.db.abolish(functor, arity, author=db.runtime_author())
+        yield None
+
+    return abolish__1
 
 
 # ── Tabling ───────────────────────────────────────────────────────────────────
