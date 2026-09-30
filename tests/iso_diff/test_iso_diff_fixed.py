@@ -21,6 +21,10 @@ t(r07, X, succ(X, 0)).
 t(r08, X, succ(X, 4)).
 t(r09, X, numlist(a, 3, X)).
 t(r10, X, numlist(1, b, X)).
+t(r11, x, compare(foo, a, b)).
+t(r12, x, compare(1, a, b)).
+t(r13, R, compare(R, a, b)).
+t(r14, x, compare(<, a, b)).
 """
 
 WANT = {
@@ -34,6 +38,10 @@ WANT = {
     "r08": "[3]",
     "r09": "ex(error(type_error(integer,a),ctx))",
     "r10": "ex(error(type_error(integer,b),ctx))",
+    "r11": "ex(error(domain_error(order,foo),ctx))",
+    "r12": "ex(error(type_error(atom,1),ctx))",
+    "r13": "[<]",
+    "r14": "[x]",
 }
 
 

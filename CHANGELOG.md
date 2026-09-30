@@ -480,6 +480,11 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
 
 ### Fixed
 
+- **`compare/3` checks its Order argument (ISO 8.4.2.3).** An Order that is
+  neither a variable nor an atom is `type_error(atom, Order)`; an atom other
+  than `<`, `=` and `>` is `domain_error(order, Order)`.  `compare(foo, a, b)`
+  used to fail silently.
+
 - **`succ/2` and `numlist/3` raise Scryer's errors instead of failing.**
   `succ(X, Y)` with both unbound is an instantiation error, a non-integer
   argument `type_error(integer, A)` and a negative one

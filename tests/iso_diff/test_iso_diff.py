@@ -40,8 +40,6 @@ KNOWN = {
     "a58": "d", "a62": "d", "a69": "d", "a78": "d", "a90": "d", "x46": "d",
     # [a|b] (a non-list tail) is not represented: it reads as [a,b]
     "a68": "a", "x22": "a", "l12": "a", "s25": "a",
-    # compare/3 with Order foo fails (ISO: domain_error(order, foo))
-    "t56": "a",
     # arg/3 with an unbound N enumerates (ISO: instantiation_error)
     "t15": "d",
     # copy_term/2 does not copy a dif/2 constraint
