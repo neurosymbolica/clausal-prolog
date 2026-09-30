@@ -132,11 +132,12 @@ def test_the_two_front_ends_have_different_cache_keys(tmp_path):
     nat = ih.NativePrologLoader("ck", str(path)).path_stats(str(path))
     assert tr["size"] == nat["size"]
     assert tr["mtime"] != nat["mtime"]
-    # The translator's key is exactly what it was before the switch existed,
-    # so every cache written with the env unset stays valid.
+    # The translator's key is the seam loader's, plus the ``.pl`` suffix salt
+    # (a same-directory twin.pl / twin.clausal share one .pyc path).
     st = os.stat(path)
-    assert tr["mtime"] == (st.st_mtime_ns
-                           ^ ih._effective_bytecode_tag()) & 0xFFFFFFFF
+    assert tr["mtime"] == (st.st_mtime_ns ^ ih._effective_bytecode_tag()
+                           ^ ih._suffix_salt(str(path))) & 0xFFFFFFFF
+    assert ih._suffix_salt(str(path)) != 0
 
 
 def test_the_native_salt_is_nonzero_in_the_32_bits_importlib_keeps():
