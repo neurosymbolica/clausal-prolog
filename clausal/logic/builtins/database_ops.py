@@ -717,15 +717,14 @@ def _asserta_factory(db):
 
 @_db_builtin("retract", 1, fields=("term",))
 def _retract_factory(db):
-    """retract(Term) — remove the first clause whose head unifies with Term.
-
-    Uses unification (not structural equality) so it correctly handles
-    normalized facts whose heads contain Var placeholders.  Bindings
-    from the head unification are undone after the clause is removed
-    (retract is not backtrackable in this implementation).
-    when a module dict is available on the database, also recompiles
-    through the predicate's binding.
-    """
+    """retract(Clause) -- ISO 8.9.3: remove a clause that unifies with
+    Clause (``Head`` is ``Head :- true``, a fact), binding the pattern to
+    it.  RE-EXECUTABLE: on backtracking the next matching clause is removed,
+    over the clauses as they were at the call (the logical update view,
+    ISO 7.5.4): one asserted meanwhile is not seen, and one another goal
+    removed meanwhile is still answered, with nothing left to remove.
+    Each removal is its own write through the gate; a retract that matches
+    nothing writes nothing."""
     from clausal.logic.database import head_key
     from clausal.logic.compiler import compile_predicate_trampoline
     module_dict = getattr(db, "module_dict", None)
@@ -769,42 +768,58 @@ def _retract_factory(db):
         # the compiled dispatch, abolish the tabled answers and stamp a write
         # that never happened.  ``Database.retract`` has always pre-checked
         # for a match and opened no transaction; both retract doors agree.
-        found = _first_match(term_val, body_pattern, clause_list, home)
-        if found is None:
-            return
-        index, c_head, c_body = found
-        # THROUGH THE GATE (P3-3 Task 3).  The lock check that used to stand
-        # here is the gate's policy now, and its exit is what invalidates the
-        # dispatch when the last clause goes (the recompile below is skipped
-        # then, and the predicate would otherwise keep dispatching to the
-        # function compiled from the clause it just lost).  The transaction
-        # closes BEFORE the yield: leaving it open across a solution the
-        # caller may abandon would leak an open transaction.  ``home`` is the
-        # row the CLASS reads (see ``_home_db``): a predicate reached through
-        # an -import_from is one predicate, so a retract through it removes
-        # from the owner's clause list, the one both modules see — and the
-        # recompile runs in THAT database's namespace (see ``_home_globals``).
+        # ISO 8.9.3.1: retract/1 is RE-EXECUTABLE -- on backtracking it
+        # removes the next matching clause, over the clauses as they were
+        # at the call (the logical update view, 7.5.4).  It committed to
+        # the first match (``findall(X, retract(p(X)), L)`` removed one).
+        from clausal.logic.builtins.clause_ops import (  # noqa: PLC0415
+            _as_cell, unify_body)
+        snapshot = list(clause_list)
         home_globals = _home_globals(db, module_dict, home)
-        with home.mutate(functor, arity, author=db.runtime_author(),
-                         kind="retract", detail="retract/1",
-                         through=pred_cls):
-            removed = clause_list.pop(index)
-            clauses = home.clauses_for(functor, arity)
-            if clauses:
-                compile_predicate_trampoline(
-                    functor, arity, clauses, home,
-                    globals_=home_globals, pred_cls=pred_cls)
-        # A09-F008 (decision A09-D003 a): bind the pattern on the REAL
-        # trail so the retracted clause's argument values escape with the
-        # solution (ISO/SWI "retract by pattern"). The clause is already
-        # removed, so binding its template vars is safe; normal
-        # backtracking undoes these bindings via the engine trail.
-        from clausal.logic.builtins.clause_ops import _as_cell  # noqa: PLC0415
-        unify(_as_cell(term_val), c_head, trail)
-        from clausal.logic.builtins.clause_ops import unify_body  # noqa: PLC0415
-        unify_body(body_pattern, c_body, trail)
-        yield None
-        return  # retract is not backtrackable
+        pos = 0
+        while pos < len(snapshot):
+            # re-read the row on every resume: it may have been replaced
+            found = None
+            while pos < len(snapshot):
+                clause = snapshot[pos]
+                pos += 1
+                found = _first_match(term_val, body_pattern, [clause], home)
+                if found is not None:
+                    break
+            if found is None:
+                return
+            _j, c_head, c_body = found
+            # re-read the row on every resume: it may have been replaced.
+            # A snapshot clause another goal removed meanwhile is still
+            # answered (ISO 7.5.4: a change does not affect an activation
+            # already running; Scryer too) -- there is just nothing to remove.
+            current = home._clauses.get((functor, arity)) or []
+            index = next((i for i, c in enumerate(current) if c is clause),
+                         None)
+            if index is not None:
+                # THROUGH THE GATE (P3-3 Task 3): the transaction closes
+                # BEFORE the yield (leaving it open across a solution the
+                # caller may abandon would leak it); its exit invalidates the
+                # dispatch when the last clause goes.  ``home`` is the row the
+                # CLASS reads (``_home_db``), and the recompile runs in THAT
+                # database's namespace (``_home_globals``).
+                with home.mutate(functor, arity, author=db.runtime_author(),
+                                 kind="retract", detail="retract/1",
+                                 through=pred_cls):
+                    current.pop(index)
+                    clauses = home.clauses_for(functor, arity)
+                    if clauses:
+                        compile_predicate_trampoline(
+                            functor, arity, clauses, home,
+                            globals_=home_globals, pred_cls=pred_cls)
+            # A09-F008: bind the pattern on the REAL trail so the retracted
+            # clause's values escape with the solution; backtracking undoes
+            # them before the next match is sought.
+            mark = trail.mark()
+            if (unify(_as_cell(term_val), c_head, trail)
+                    and unify_body(body_pattern, c_body, trail)):
+                yield None
+            trail.undo(mark)
 
     def _first_match(term_val, body_pattern, clause_list, home):
         """``(index, Head, Body)`` of the first clause whose head AND body
