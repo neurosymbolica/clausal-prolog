@@ -157,12 +157,17 @@ def _unneck_clause(term_val: Any, context: str, action: str) -> Any:
     head, body = deref(parts[0]), deref(parts[1])
     if is_var(head):
         raise LogicException(instantiation_error(context))
-    _refuse_non_callable_clause(head, context)
+    _refuse_non_callable_clause(head, context, lists=action == "retract")
     if is_true_body(body):
         return _OpenBody(head, True) if action == "retract" else head
     if action == "retract":
         if not is_var(body):
-            _refuse_non_callable_clause(body, context)
+            from clausal.logic.builtins.call_body import (  # noqa: PLC0415
+                is_non_callable_term)
+            if is_non_callable_term(body, lists=False):
+                # ISO 8.9.3 / Scryer: ``retract((r(_) :- 1))`` FAILS --
+                # no clause has that body; 8.9.3.3 has no error for it.
+                return _NEVER_MATCHES
         return _OpenBody(head, body)
     if not is_var(body):
         _refuse_non_callable_clause(body, context)
@@ -625,15 +630,127 @@ def _home_globals(db, module_dict: "dict | None", home) -> "dict | None":
 # ── assertz / retract ──────────────────────────────────────────────────────────
 
 
-def _refuse_non_callable_clause(term_val, who):
+def _refuse_non_callable_clause(term_val, who, lists=False):
     """ISO 8.9.1.3 b / Scryer: a clause that is a number (or another term
     that can never be a goal) is ``type_error(callable, T)``.  It used to
     escape as a raw Python ``TypeError`` ("Cannot extract (functor, arity)
-    from head term: 1")."""
+    from head term: 1").  *lists* also refuses a non-empty list and a
+    string, as Scryer's retract/1 does (``retract([a])`` and
+    ``retract("ab")`` are type_error(callable, _) there)."""
     from clausal.logic.builtins.call_body import is_non_callable_term  # noqa: PLC0415
-    if is_non_callable_term(term_val, lists=False):
+    if is_non_callable_term(term_val, lists=lists):
         from clausal.logic.exceptions import type_error  # noqa: PLC0415
         raise LogicException(type_error("callable", term_val, who))
+
+
+def _refuse_control_construct(head, who):
+    """ISO 8.9.3.3 c / Scryer: a control construct is a static procedure,
+    so ``retract((a, b))`` and ``retractall((a, b))`` are
+    permission_error(modify, static_procedure, (',')/2).  They used to fail
+    (retract/1) or succeed (retractall/1) silently."""
+    from clausal.logic.builtins.call_body import _construct, is_body_term  # noqa: PLC0415
+    from clausal.logic.builtins.clause_ops import _ZERO_ARITY_CONTROL  # noqa: PLC0415
+    from clausal.logic.cells import (  # noqa: PLC0415
+        CELL_GOAL_CONTROL_FUNCTORS, compound_cell_shape,
+    )
+    head = deref(head)
+    if is_body_term(head):
+        name, arity = _construct(head)
+    else:
+        ok, functor = compound_cell_shape(head)
+        if ok and functor in CELL_GOAL_CONTROL_FUNCTORS:
+            name, arity = functor, len(head) - 1
+        elif type(head) is str and head in _ZERO_ARITY_CONTROL:
+            name, arity = head, 0
+        else:
+            return
+    raise LogicException(permission_error(
+        "modify", "static_procedure", ("/", mint(name), arity),
+        f"{who}: {name}/{arity} is a control construct"))
+
+
+def _qualified_target(db, term_val, who):
+    """``(db, term)``: the database a ``M:Clause`` argument writes to and
+    the clause without its qualification -- ``(db, term_val)`` unchanged
+    for an unqualified one.  Only the WHOLE clause is qualified here:
+    ``(M:Head :- Body)`` is a clause for (:)/2, as in Scryer (``retract((m:
+    p(X) :- true))`` fails there).
+
+    Before this, assertz/asserta stored ``M:C`` as a fact of ``(:)/2`` in
+    the CALLING module (unreachable by anything), and retract/retractall
+    looked for such facts and silently found none.  The qualification is
+    resolved as clause/2 resolves it (``clause_ops._resolve``); an unbound
+    or non-callable qualified clause is refused as an unqualified one is."""
+    from clausal.logic.builtins.higher_order import _calling_module  # noqa: PLC0415
+    from clausal.logic.cells import (  # noqa: PLC0415
+        QUALIFIED_GOAL_FUNCTOR, compound_cell_shape,
+        resolve_qualified_goal_cell,
+    )
+
+    ok, functor = compound_cell_shape(term_val)
+    if ok and functor == QUALIFIED_GOAL_FUNCTOR and len(term_val) == 3:
+        if is_var(deref(term_val[1])):
+            # An unbound module (ISO/IEC 13211-2: instantiation_error); it
+            # read as existence_error(module, <the variable's repr>).
+            raise LogicException(instantiation_error(who))
+        module, inner = resolve_qualified_goal_cell(
+            term_val, who, _calling_module(db))
+        inner = deref(inner)
+        if is_var(inner):
+            raise LogicException(instantiation_error(who))
+        _refuse_non_callable_clause(inner, who, lists=who.startswith("retract"))
+        return module.db, inner
+    return db, term_val
+
+
+def _assert_clause(db, author, term_val, context, front):
+    """assertz/asserta's write of the clause *term_val* into *db* (the
+    module a ``M:`` qualification named, else the caller's), as *author*."""
+    from clausal.logic.database import head_key  # noqa: PLC0415
+    from clausal.logic.compiler import compile_predicate_trampoline  # noqa: PLC0415
+    module_dict = getattr(db, "module_dict", None)
+    clause = _build_clause(term_val, context, db, module_dict)
+    functor, arity = head_key(clause.head)
+    pred_cls = _find_pred_cls(functor, arity, module_dict)
+    # THROUGH THE GATE (P3-3 Task 3).  The lock check that used to stand
+    # here is the gate's policy now — one question, "may this author write
+    # this row", asked identically by all four channels — and it still
+    # raises a typed permission_error rather than a RuntimeError, which
+    # the drive loop would treat as generator exhaustion and swallow
+    # (A09-F006 / decision A09-D002 a).  ``through=pred_cls`` is what
+    # carries the check onto an -import_from'd predicate: the clause goes
+    # into THIS module's row, but a shared class makes the exporter's row
+    # part of the write's blast radius.
+    home = _home_db(db, pred_cls, functor, arity)
+    home_globals = _home_globals(db, module_dict, home)
+    with home.mutate(functor, arity, author=author,
+                     kind="assert", detail=context, through=pred_cls):
+        if front:
+            home.asserta(clause)
+        else:
+            home.assertz(clause)
+        clauses = home.clauses_for(functor, arity)
+        compile_predicate_trampoline(functor, arity, clauses, home,
+                                     globals_=home_globals,
+                                     pred_cls=pred_cls)
+
+
+def _assert_factory(context, front):
+    def factory(db):
+        def assert__1(term, trail, k):
+            term_val = deref(term)
+            if is_var(term_val):
+                # ISO 8.9.1.3 a: an unbound clause is an instantiation error
+                # (Scryer too); it used to fail silently (triage B4a).
+                raise LogicException(instantiation_error(context))
+            _refuse_non_callable_clause(term_val, context)
+            target, term_val = _qualified_target(db, term_val, context)
+            _assert_clause(target, db.runtime_author(), term_val, context,
+                           front)
+            yield None
+        assert__1.__name__ = context.replace("/", "__")
+        return assert__1
+    return factory
 
 
 @_db_builtin("assertz", 1, fields=("term",))
@@ -643,43 +760,10 @@ def _assertz_factory(db):
     Ground facts are automatically normalized to Var+Is form so they are
     queryable in output mode (matching standard Prolog assert semantics).
     when a module dict is available on the database, also recompiles with
-    module globals for cross-predicate resolution.
+    module globals for cross-predicate resolution.  ``assertz(M:Term)``
+    writes into module M.
     """
-    from clausal.logic.database import head_key
-    from clausal.logic.compiler import compile_predicate_trampoline
-    module_dict = getattr(db, "module_dict", None)
-
-    def assertz__1(term, trail, k):
-        term_val = deref(term)
-        if is_var(term_val):
-            # ISO 8.9.1.3 a: an unbound clause is an instantiation error
-            # (Scryer too); it used to fail silently (triage B4a).
-            raise LogicException(instantiation_error("assertz/1"))
-        _refuse_non_callable_clause(term_val, "assertz/1")
-        clause = _build_clause(term_val, "assertz/1", db, module_dict)
-        functor, arity = head_key(clause.head)
-        pred_cls = _find_pred_cls(functor, arity, module_dict)
-        # THROUGH THE GATE (P3-3 Task 3).  The lock check that used to stand
-        # here is the gate's policy now — one question, "may this author write
-        # this row", asked identically by all four channels — and it still
-        # raises a typed permission_error rather than a RuntimeError, which
-        # the drive loop would treat as generator exhaustion and swallow
-        # (A09-F006 / decision A09-D002 a).  ``through=pred_cls`` is what
-        # carries the check onto an -import_from'd predicate: the clause goes
-        # into THIS module's row, but a shared class makes the exporter's row
-        # part of the write's blast radius.
-        home = _home_db(db, pred_cls, functor, arity)
-        home_globals = _home_globals(db, module_dict, home)
-        with home.mutate(functor, arity, author=db.runtime_author(),
-                         kind="assert", detail="assertz/1", through=pred_cls):
-            home.assertz(clause)
-            clauses = home.clauses_for(functor, arity)
-            compile_predicate_trampoline(functor, arity, clauses, home,
-                                         globals_=home_globals,
-                                         pred_cls=pred_cls)
-        yield None
-
-    return assertz__1
+    return _assert_factory("assertz/1", front=False)(db)
 
 
 @_db_builtin("asserta", 1, fields=("term",))
@@ -687,35 +771,9 @@ def _asserta_factory(db):
     """asserta(Term) — add Term as a fact at front of its predicate's clause list.
 
     when a module dict is available on the database, also recompiles with
-    module globals.
+    module globals.  ``asserta(M:Term)`` writes into module M.
     """
-    from clausal.logic.database import head_key
-    from clausal.logic.compiler import compile_predicate_trampoline
-    module_dict = getattr(db, "module_dict", None)
-
-    def asserta__1(term, trail, k):
-        term_val = deref(term)
-        if is_var(term_val):
-            # ISO 8.9.1.3 a: an unbound clause is an instantiation error
-            # (Scryer too); it used to fail silently (triage B4a).
-            raise LogicException(instantiation_error("asserta/1"))
-        _refuse_non_callable_clause(term_val, "asserta/1")
-        clause = _build_clause(term_val, "asserta/1", db, module_dict)
-        functor, arity = head_key(clause.head)
-        pred_cls = _find_pred_cls(functor, arity, module_dict)
-        # Through the gate; see assertz/1 above.
-        home = _home_db(db, pred_cls, functor, arity)
-        home_globals = _home_globals(db, module_dict, home)
-        with home.mutate(functor, arity, author=db.runtime_author(),
-                         kind="assert", detail="asserta/1", through=pred_cls):
-            home.asserta(clause)
-            clauses = home.clauses_for(functor, arity)
-            compile_predicate_trampoline(functor, arity, clauses, home,
-                                         globals_=home_globals,
-                                         pred_cls=pred_cls)
-        yield None
-
-    return asserta__1
+    return _assert_factory("asserta/1", front=True)(db)
 
 
 @_db_builtin("retract", 1, fields=("term",))
@@ -727,10 +785,7 @@ def _retract_factory(db):
     ISO 7.5.4): one asserted meanwhile is not seen, and one another goal
     removed meanwhile is still answered, with nothing left to remove.
     Each removal is its own write through the gate; a retract that matches
-    nothing writes nothing."""
-    from clausal.logic.database import head_key
-    from clausal.logic.compiler import compile_predicate_trampoline
-    module_dict = getattr(db, "module_dict", None)
+    nothing writes nothing.  ``retract(M:Clause)`` removes from module M."""
 
     def retract__1(term, trail, k):
         term_val = deref(term)
@@ -738,125 +793,131 @@ def _retract_factory(db):
             # ISO 8.9.3.3 a (Scryer too): an unbound clause is an
             # instantiation error; it used to fail silently.
             raise LogicException(instantiation_error("retract/1"))
-        # ISO 8.9.3: retract(Head) is retract((Head :- true)) -- it removes
-        # a FACT only -- and retract((Head :- Body)) matches the clause's
-        # body too (see _unneck_clause).
-        term_val = _unneck_clause(term_val, "retract/1", "retract")
-        body_pattern = True
-        if type(term_val) is _OpenBody:
-            from clausal.logic.builtins.clause_ops import (  # noqa: PLC0415
-                engine_body_pattern)
-            term_val, body_pattern = (term_val.head,
-                                      engine_body_pattern(term_val.body))
-        # A CELL pattern goes through the SAME gate as the assert doors (P3-3
-        # Task 5, R11) and comes back normalized to the shape the clause list
-        # actually holds -- without that, ``_first_match`` would compare
-        # a tuple against a class-term head and never match, so a legal
-        # ``retract(("p", 1))`` would silently fail instead of retracting.
-        term_val = _check_cell_head_permission(term_val, "retract/1", db,
-                                               module_dict)
-        try:
-            functor, arity = head_key(term_val)
-        except TypeError:
-            return
-        pred_cls = _find_pred_cls(functor, arity, module_dict)
-        home = _home_db(db, pred_cls, functor, arity)
-        clause_list = home._clauses.get((functor, arity))
-        if clause_list is None:
-            return
-        # SEARCH FIRST, THEN OPEN THE TRANSACTION (P3-3 Task 3 fix round 2).
-        # A retract that matches nothing is not a write, and the gate's exit
-        # invalidates on the KIND rather than on what the body did — so
-        # opening a transaction around the search made a failed retract drop
-        # the compiled dispatch, abolish the tabled answers and stamp a write
-        # that never happened.  ``Database.retract`` has always pre-checked
-        # for a match and opened no transaction; both retract doors agree.
-        # ISO 8.9.3.1: retract/1 is RE-EXECUTABLE -- on backtracking it
-        # removes the next matching clause, over the clauses as they were
-        # at the call (the logical update view, 7.5.4).  It committed to
-        # the first match (``findall(X, retract(p(X)), L)`` removed one).
-        from clausal.logic.builtins.clause_ops import (  # noqa: PLC0415
-            _as_cell, unify_body)
-        snapshot = list(clause_list)
-        home_globals = _home_globals(db, module_dict, home)
-        pos = 0
-        while pos < len(snapshot):
-            # re-read the row on every resume: it may have been replaced
-            found = None
-            while pos < len(snapshot):
-                clause = snapshot[pos]
-                pos += 1
-                found = _first_match(term_val, body_pattern, [clause], home)
-                if found is not None:
-                    break
-            if found is None:
-                return
-            _j, c_head, c_body = found
-            # re-read the row on every resume: it may have been replaced.
-            # A snapshot clause another goal removed meanwhile is still
-            # answered (ISO 7.5.4: a change does not affect an activation
-            # already running; Scryer too) -- there is just nothing to remove.
-            current = home._clauses.get((functor, arity)) or []
-            index = next((i for i, c in enumerate(current) if c is clause),
-                         None)
-            if index is not None:
-                # THROUGH THE GATE (P3-3 Task 3): the transaction closes
-                # BEFORE the yield (leaving it open across a solution the
-                # caller may abandon would leak it); its exit invalidates the
-                # dispatch when the last clause goes.  ``home`` is the row the
-                # CLASS reads (``_home_db``), and the recompile runs in THAT
-                # database's namespace (``_home_globals``).
-                with home.mutate(functor, arity, author=db.runtime_author(),
-                                 kind="retract", detail="retract/1",
-                                 through=pred_cls):
-                    current.pop(index)
-                    clauses = home.clauses_for(functor, arity)
-                    if clauses:
-                        compile_predicate_trampoline(
-                            functor, arity, clauses, home,
-                            globals_=home_globals, pred_cls=pred_cls)
-            # A09-F008: bind the pattern on the REAL trail so the retracted
-            # clause's values escape with the solution; backtracking undoes
-            # them before the next match is sought.
-            mark = trail.mark()
-            if (unify(_as_cell(term_val), c_head, trail)
-                    and unify_body(body_pattern, c_body, trail)):
-                yield None
-            trail.undo(mark)
-
-    def _first_match(term_val, body_pattern, clause_list, home):
-        """``(index, Head, Body)`` of the first clause whose head AND body
-        unify with the pattern, as clause/2 reads them (``clause_ops.
-        head_matches`` / ``clause_terms``: the hoisted head arguments put
-        back, the body as a term, both a fresh renaming), or None.
-
-        A pure SEARCH on a private trail: it removes nothing and leaves no
-        bindings.  It used to test the head plus EVERY ``Unify`` in the body,
-        so ``retract(r(_))`` removed a rule ``r(X) :- X = 1`` (ISO removes
-        only a fact) and a program's own ``X is 3`` read as a head test."""
-        from clausal.logic.builtins.clause_ops import (  # noqa: PLC0415
-            _as_cell, clause_terms, head_matches, unify_body)
-        cell = _as_cell(term_val)
-        for i, clause in enumerate(clause_list):
-            matched, why = head_matches(clause, home, cell)
-            if not matched:
-                continue
-            if why is not None:
-                raise _no_term_form_error(clause, "retract/1", why)
-            c_head, c_body, why = clause_terms(clause, home)
-            if why is not None:
-                if body_pattern is True:
-                    continue        # a body with no term form: not a fact
-                raise _no_term_form_error(clause, "retract/1", why)
-            tmp = Trail()
-            mark = tmp.mark()
-            ok = unify(cell, c_head, tmp) and unify_body(body_pattern, c_body, tmp)
-            tmp.undo(mark)
-            if ok:
-                return i, c_head, c_body
-        return None
+        # ISO 8.9.3.3 b (Scryer too): ``retract(1)``, ``retract("ab")``,
+        # ``retract([a])`` are type errors; they used to fail silently.
+        _refuse_non_callable_clause(term_val, "retract/1", lists=True)
+        target, term_val = _qualified_target(db, term_val, "retract/1")
+        yield from _retract_in(target, db.runtime_author(), term_val, trail)
 
     return retract__1
+
+
+# ``retract((H :- B))`` with a body that is no goal: nothing can match it.
+_NEVER_MATCHES = object()
+
+
+def _retract_in(db, author, term_val, trail):
+    """retract/1 against *db* (the module a ``M:`` qualification named,
+    else the caller's), writing as *author*."""
+    from clausal.logic.database import head_key  # noqa: PLC0415
+    from clausal.logic.builtins.clause_ops import (  # noqa: PLC0415
+        _as_cell, engine_body_pattern, unify_body)
+    module_dict = getattr(db, "module_dict", None)
+    # ISO 8.9.3: retract(Head) is retract((Head :- true)) -- it removes
+    # a FACT only -- and retract((Head :- Body)) matches the clause's
+    # body too (see _unneck_clause).
+    term_val = _unneck_clause(term_val, "retract/1", "retract")
+    if term_val is _NEVER_MATCHES:
+        return
+    body_pattern = True
+    if type(term_val) is _OpenBody:
+        term_val, body_pattern = (term_val.head,
+                                  engine_body_pattern(term_val.body))
+    _refuse_control_construct(term_val, "retract/1")
+    # A CELL pattern goes through the SAME gate as the assert doors (P3-3
+    # Task 5, R11) and comes back normalized to the shape the clause list
+    # actually holds -- without that, ``_first_match`` would compare
+    # a tuple against a class-term head and never match, so a legal
+    # ``retract(("p", 1))`` would silently fail instead of retracting.
+    term_val = _check_cell_head_permission(term_val, "retract/1", db,
+                                           module_dict)
+    try:
+        functor, arity = head_key(term_val)
+    except TypeError:
+        return
+    pred_cls = _find_pred_cls(functor, arity, module_dict)
+    home = _home_db(db, pred_cls, functor, arity)
+    clause_list = home._clauses.get((functor, arity))
+    if clause_list is None:
+        return
+    # SEARCH FIRST, THEN OPEN THE TRANSACTION (P3-3 Task 3 fix round 2).
+    # A retract that matches nothing is not a write, and the gate's exit
+    # invalidates on the KIND rather than on what the body did — so
+    # opening a transaction around the search made a failed retract drop
+    # the compiled dispatch, abolish the tabled answers and stamp a write
+    # that never happened.  ``Database.retract`` has always pre-checked
+    # for a match and opened no transaction; both retract doors agree.
+    # ISO 8.9.3.1: retract/1 is RE-EXECUTABLE -- on backtracking it
+    # removes the next matching clause, over the clauses as they were
+    # at the call (the logical update view, 7.5.4).
+    snapshot = list(clause_list)
+    cell = _as_cell(term_val)
+    for clause in snapshot:
+        found = _match_clause(cell, body_pattern, clause, home, trail)
+        if found is None:
+            continue
+        c_head, c_body = found
+        # re-read the row on every resume: it may have been replaced.
+        # A snapshot clause another goal removed meanwhile is still
+        # answered (ISO 7.5.4: a change does not affect an activation
+        # already running; Scryer too) -- there is just nothing to remove.
+        current = home._clauses.get((functor, arity)) or []
+        index = next((i for i, c in enumerate(current) if c is clause),
+                     None)
+        if index is not None:
+            # THROUGH THE GATE (P3-3 Task 3): the transaction closes
+            # BEFORE the yield (leaving it open across a solution the
+            # caller may abandon would leak it).  NO RECOMPILE HERE: the
+            # gate's exit invalidates the compiled dispatch, and the next
+            # CALL recompiles it once, through the row's lazy recompile
+            # (``Database.get_dispatch``).  Recompiling the whole remaining
+            # clause list on every removal made a drain of n clauses cost
+            # O(n^2) compiles' worth of work.  An activation already
+            # running keeps the dispatch it started with (7.5.4).
+            with home.mutate(functor, arity, author=author,
+                             kind="retract", detail="retract/1",
+                             through=pred_cls):
+                current.pop(index)
+        # A09-F008: bind the pattern on the REAL trail so the retracted
+        # clause's values escape with the solution; backtracking undoes
+        # them before the next match is sought.
+        mark = trail.mark()
+        if unify(cell, c_head, trail) and unify_body(body_pattern, c_body,
+                                                     trail):
+            yield None
+        trail.undo(mark)
+
+
+def _match_clause(cell, body_pattern, clause, home, trail):
+    """``(Head, Body)`` of *clause* when its head AND body unify with the
+    pattern, as clause/2 reads them (``clause_ops.head_matches`` /
+    ``clause_terms``: the hoisted head arguments put back, the body as a
+    term, both a fresh renaming), else None.
+
+    A pure SEARCH: it removes nothing and leaves no bindings.  It probes on
+    the CALLER's *trail* between a mark and an undo, not on a private one:
+    unifying with the caller's pattern may wake a ``freeze/2`` goal, which
+    binds on the engine trail -- on a private trail those bindings survived
+    the probe (``freeze(Y, Y = X), retract(p(Y))`` then matched only the
+    first clause).  It used to test the head plus EVERY ``Unify`` in the
+    body, so ``retract(r(_))`` removed a rule ``r(X) :- X = 1`` (ISO removes
+    only a fact) and a program's own ``X is 3`` read as a head test."""
+    from clausal.logic.builtins.clause_ops import (  # noqa: PLC0415
+        clause_terms, head_matches, unify_body)
+    matched, why = head_matches(clause, home, cell, trail)
+    if not matched:
+        return None
+    if why is not None:
+        raise _no_term_form_error(clause, "retract/1", why)
+    c_head, c_body, why = clause_terms(clause, home)
+    if why is not None:
+        if body_pattern is True:
+            return None         # a body with no term form: not a fact
+        raise _no_term_form_error(clause, "retract/1", why)
+    mark = trail.mark()
+    ok = unify(cell, c_head, trail) and unify_body(body_pattern, c_body, trail)
+    trail.undo(mark)
+    return (c_head, c_body) if ok else None
 
 
 @_db_builtin("retractall", 1, fields=("head",))
@@ -875,29 +936,32 @@ def _retractall_factory(db):
         h = deref(head)
         if is_var(h):
             raise LogicException(instantiation_error("retract/1"))
-        from clausal.logic.builtins.call_body import is_non_callable_term  # noqa: PLC0415
-        if is_non_callable_term(h, lists=False):
-            from clausal.logic.exceptions import type_error  # noqa: PLC0415
-            raise LogicException(type_error("callable", h, "retract/1"))
-        term_val = _check_cell_head_permission(h, "retract/1", db, module_dict)
+        _refuse_non_callable_clause(h, "retract/1")
+        # ``retractall(M:Head)`` removes from module M (it was a silent
+        # no-op, looking for facts of (:)/2 here).
+        target, h = _qualified_target(db, h, "retract/1")
+        _refuse_control_construct(h, "retract/1")
+        target_dict = getattr(target, "module_dict", None)
+        term_val = _check_cell_head_permission(h, "retract/1", target,
+                                               target_dict)
         try:
             functor, arity = head_key(term_val)
         except TypeError:
             yield None
             return
-        pred_cls = _find_pred_cls(functor, arity, module_dict)
-        home = _home_db(db, pred_cls, functor, arity)
+        pred_cls = _find_pred_cls(functor, arity, target_dict)
+        home = _home_db(target, pred_cls, functor, arity)
         clause_list = home._clauses.get((functor, arity))
         keep = None
         if clause_list:
             keep = [c for c in clause_list
-                    if not _clause_head_matches(term_val, c, home)]
+                    if not _clause_head_matches(term_val, c, home, trail)]
         if keep is not None and len(keep) != len(clause_list):
             # ONE write for the whole removal (retract/1's gate and
             # recompile, once -- not once per clause).  An undefined
             # predicate is left undefined: ISO Cor.2 and Scryer create it
             # dynamic, which the gate's declaration model has no door for.
-            home_globals = _home_globals(db, module_dict, home)
+            home_globals = _home_globals(target, target_dict, home)
             with home.mutate(functor, arity, author=db.runtime_author(),
                              kind="retract", detail="retractall/1",
                              through=pred_cls):
@@ -923,7 +987,7 @@ def _no_term_form_error(clause, context: str, why: str) -> LogicException:
         f"-- so it cannot be matched against a pattern"))
 
 
-def _clause_head_matches(term_val, clause, home) -> bool:
+def _clause_head_matches(term_val, clause, home, trail=None) -> bool:
     """retractall/1's match: the clause's head, with its hoisted arguments
     put back (``clause_ops.head_matches``, clause/2's reading), unifies with
     *term_val* -- whatever the body.  It used to require EVERY body
@@ -931,7 +995,7 @@ def _clause_head_matches(term_val, clause, home) -> bool:
     out of ``retractall(h(5))``.  Leaves no bindings."""
     from clausal.logic.builtins.clause_ops import (  # noqa: PLC0415
         _as_cell, head_matches)
-    matched, why = head_matches(clause, home, _as_cell(term_val))
+    matched, why = head_matches(clause, home, _as_cell(term_val), trail)
     if matched and why is not None:
         raise _no_term_form_error(clause, "retractall/1", why)
     return matched

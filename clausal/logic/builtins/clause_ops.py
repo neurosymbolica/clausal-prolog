@@ -582,7 +582,7 @@ class _BuildFailed(Exception):
 _NO_SOLUTION = object()
 
 
-def _on_private_trail(built: _Built, then):
+def _on_private_trail(built: _Built, then, trail=None):
     """Run *built* on a private trail, call ``then(tmp)`` with its bindings
     in place, undo, and return what *then* returned.
 
@@ -590,9 +590,17 @@ def _on_private_trail(built: _Built, then):
     may see them bound -- a meta-interpreter calls clause/2 again, on the
     same clause, while an answer is live.  The drive is CLOSED before the
     trail is undone, so no suspended frame outlives the bindings it ran on.
-    A build error from the construction comes out as ``_BuildFailed``."""
+    A build error from the construction comes out as ``_BuildFailed``.
+
+    *trail*, when given, is used instead of a fresh one, between a mark and
+    an undo -- the bindings are just as temporary.  A probe that unifies
+    with the CALLER's term must pass the caller's trail: a ``freeze/2`` goal
+    that the probe wakes is a closure over the ENGINE trail, so whatever it
+    binds lands there; on a private trail those bindings sat below the
+    caller's mark and outlived the probe (``freeze(Y, Y = X), clause(p(Y),
+    true)`` answered only its first clause)."""
     from clausal.logic.solve import _drive_trampoline  # noqa: PLC0415
-    tmp = Trail()
+    tmp = Trail() if trail is None else trail
     mark = tmp.mark()
     gen = None
     try:
@@ -681,7 +689,7 @@ def unify_body(pattern, body, trail) -> bool:
     return unify(pattern.tail, rest[0] if len(rest) == 1 else rest, trail)
 
 
-def head_matches(clause, home_db, cell) -> "tuple[bool, str | None]":
+def head_matches(clause, home_db, cell, trail=None) -> "tuple[bool, str | None]":
     """``(matched, why)``: whether *clause*'s head, hoisted arguments put
     back, unifies with the query head *cell* -- decided on the private
     trail, with nothing copied and the body not built.  The filter that
@@ -690,14 +698,19 @@ def head_matches(clause, home_db, cell) -> "tuple[bool, str | None]":
     *why* is set when the hoisted arguments cannot be built: *matched* then
     says whether the stored head with those positions left as fresh
     variables unifies -- the clause MAY be the one asked about, and the
-    caller refuses it rather than answer with a wrong head."""
+    caller refuses it rather than answer with a wrong head.
+
+    *trail* is the CALLER's trail (see ``_on_private_trail``): the probe
+    unifies with the caller's *cell*, which may wake a coroutine."""
     head = _as_cell(clause.head)
     built = _head_built(clause, home_db)
     try:
-        matched = _on_private_trail(built, lambda tmp: bool(unify(cell, head, tmp)))
+        matched = _on_private_trail(
+            built, lambda tmp: bool(unify(cell, head, tmp)), trail)
     except _BuildFailed as failed:
         built = _head_failed(clause, home_db, failed.exc)
-        matched = _on_private_trail(built, lambda tmp: bool(unify(cell, head, tmp)))
+        matched = _on_private_trail(
+            built, lambda tmp: bool(unify(cell, head, tmp)), trail)
     return matched, built.why
 
 
@@ -797,7 +810,7 @@ def _clause_factory(db):
         for clause in list(row.clauses):
             # Head first, cheaply: the body is built only for a clause the
             # query selects.
-            matched, why = head_matches(clause, home, cell)
+            matched, why = head_matches(clause, home, cell, trail)
             if not matched:
                 continue
             if why is not None:

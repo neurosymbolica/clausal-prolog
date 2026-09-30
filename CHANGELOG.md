@@ -631,6 +631,25 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
   called with `[b|foo]` answers `H = b, T = foo`, `[a, b|T]` walks nested
   cells, and a proper pattern such as `[a, b]` matches only a chain that
   ends in `[]` (the head matcher, C and Python, shares the body's code).
+- **`clause/2`, `retract/1` and `retractall/1` answer every clause when the
+  pattern holds a frozen variable.** A `freeze/2` goal woken while a clause
+  head was tested left its bindings behind, so
+  `freeze(Y, Y = X), clause(p(Y), true)` found only the first clause, with no
+  error.
+- **`assertz(M:C)`, `asserta(M:C)`, `retract(M:C)` and `retractall(M:H)` act
+  on module M.** Before, the assert stored a clause for `(:)/2` in the
+  calling module, where nothing could reach it, and the retracts removed
+  nothing and gave no error. An unbound `M` is an `instantiation_error`.
+- **`retract/1` raises ISO's errors.** `retract(1)`, `retract("ab")` and
+  `retract([a])` raise `type_error(callable, _)`, and a control construct
+  (`retract((a, b))`, `retractall(true)`) raises
+  `permission_error(modify, static_procedure, _)`, as in Scryer. Before,
+  `retract/1` failed and `retractall/1` succeeded. `retract((p(_) :- 1))`
+  now fails, as in ISO 8.9.3 and Scryer, instead of raising.
+- **`retract/1` no longer recompiles the predicate for each clause it
+  removes.** The next call recompiles it, once. A drain of 1,000 clauses
+  took over a minute and now takes a few hundredths of a second.
+
 - **A `.pl` module in an earlier `sys.path` entry is no longer shadowed by a
   `.clausal` or `.seam` module of the same name in a later one.** The import
   hook now resolves source modules per `sys.path` entry, in path order: the
