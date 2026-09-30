@@ -480,6 +480,15 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
 
 ### Fixed
 
+- **CLP(R) reads a united variable's interval.** The units side channel
+  posts a physical quantity's constraint on a shadow variable; `inf/2`,
+  `sup/2` and `label_real/1,2` read the user's variable instead, so after
+  `clpr.real((X >= constant(one_metre), X <= 2 * constant(one_metre)))`,
+  `inf(X, L)` answered `0 metre` (from CLP(Q)) and `sup(X, H)` failed. They
+  now read the shadow and answer with the expression's dimension (`1.0
+  metre`, `2.0... metre`), the same numbers as the unit-free twin. Money is
+  still refused by CLP(R) (`units_unsupported`).
+
 - **A `.pl` module in an earlier `sys.path` entry is no longer shadowed by a
   `.clausal` or `.seam` module of the same name in a later one.** The import
   hook now resolves source modules per `sys.path` entry, in path order: the
