@@ -47,17 +47,12 @@ KNOWN = {
     "a68": "a", "x22": "a", "l12": "a", "s25": "a",
     # arg/3 with an unbound N enumerates (ISO: instantiation_error)
     "t15": "d",
-    # copy_term/2 does not copy a dif/2 constraint
-    "t37": "a",
     # standard order: ISO 7.2 puts every float before every integer; Clausal
     # compares numbers by value (float first on a tie)
     "t43": "d", "t52": "d", "t67": "d", "s04": "d", "s11": "d",
     # the Scryer build: a list inside sort/2's list is a type_error, and
     # [a] @> [a, c] (both are Scryer defects)
     "t58": "o", "t71": "o", "s09": "o", "s12": "o", "s13": "o", "s28": "o",
-    # term_variables/2 misses variables in a partial list nested in a term
-    # (the C walker is SegList-blind below the top level)
-    "t72": "a", "t73": "a", "l24": "a", "f20": "a",
     # -0.0 and 0.0 are equal in standard order; sort/2 keeps a different one
     "s16": "c",
     # atan/2 is a Clausal evaluable (Scryer has atan2/2 only)
