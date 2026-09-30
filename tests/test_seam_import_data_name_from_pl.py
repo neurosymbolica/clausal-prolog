@@ -146,6 +146,36 @@ def test_an_indicator_never_resolves_to_data(pkg, fe):
 
 
 @pytest.mark.parametrize("fe", FRONT_ENDS)
+def test_a_missing_indicator_after_a_data_name_is_the_error(pkg, fe):
+    """``from M import cite, nothere`` fails on ``cite`` first; the handler
+    resolves ``cite`` as data and must still refuse ``nothere/1``."""
+    load = pkg(fe, f"dn_mixed_{fe}")
+    with pytest.raises(ImportError, match="cannot import name 'nothere'") as info:
+        load("mx", """\
+            -import_from(PKG.dom.citations, [cite, nothere/1])
+        """)
+    assert info.value.__cause__ is None and info.value.__suppress_context__
+
+
+@pytest.mark.parametrize("fe", FRONT_ENDS)
+def test_a_pl_importer_keeps_the_plain_import(pkg, fe):
+    """The ruling is for SEAM importers: a .pl importer's import stays the
+    plain statement (the native front end's import bookkeeping reads it as
+    an ``ast.ImportFrom``; its drop/override paths are pinned by
+    tests/iso_l3/test_l3_s2_directives.py D27 and the local-wins tests)."""
+    load = pkg(fe, f"dn_plimp_{fe}")
+    mod = load("pi", """\
+        :- module(pi, [t/1]).
+        :- use_module(PKG/dom/citations, [citation/2]).
+        t(X) :- citation(X, _).
+    """, ext="pl")
+    from clausal.logic.solve import _deref_walk, solve
+    from clausal.logic.variables import Var
+    x = Var()
+    assert [_deref_walk(x) for _ in solve(("t", x), mod)] == ["xx_art1"]
+
+
+@pytest.mark.parametrize("fe", FRONT_ENDS)
 def test_a_near_miss_of_a_predicate_warns_once_naming_it(pkg, fe):
     load = pkg(fe, f"dn_typo_{fe}")
     with warnings.catch_warnings(record=True) as caught:

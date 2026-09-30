@@ -10528,13 +10528,17 @@ class EmbedTransformer(NodeTransformer):
         # Ruling 2026-09-30: against a .pl module, a bare name the module
         # neither defines as a predicate nor binds is DATA, and resolves to
         # its atom (clausal/pl_data_imports.py).  A ``name/N`` entry names a
-        # predicate, so only the bare-name locals are eligible.
-        stmt = _wrap_import_for_pl_data(
-            stmt, resolved,
-            {a.asname or a.name: a.name for a in aliases},
-            sorted(local for local, found in arities.items()
-                   if found is None),
-            expr_stmt)
+        # predicate, so only the bare-name locals are eligible.  A SEAM
+        # importer only: a .pl importer (either front end; the native one's
+        # import bookkeeping, ``iso_l3_directives.imported``, reads this
+        # statement as an ``ast.ImportFrom``) keeps the plain import.
+        if not transformer._prolog_singletons:
+            stmt = _wrap_import_for_pl_data(
+                stmt, resolved,
+                {a.asname or a.name: a.name for a in aliases},
+                sorted(local for local, found in arities.items()
+                       if found is None),
+                expr_stmt)
         # Copy the imported names' functor-signature registry entries into
         # this file's own registry, keyed by the LOCAL spelling (mirroring
         # Python's own ``from X import a, b as a`` shadowing rule: the

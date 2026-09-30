@@ -30,14 +30,21 @@ from __future__ import annotations
 
 import sys
 import warnings
+import weakref
 
 #: Edit-distance bound for the misspelled-predicate warning, by name length.
 #: Names shorter than ``_TYPO_MIN_LEN`` are never warned about: short data
 #: atoms (``a1``, ``p``) sit one edit from almost anything.
 _TYPO_MIN_LEN = 4
 
-#: ``(importer file, module, name)`` triples already warned about.
-_warned: set[tuple[str, str, str]] = set()
+#: ``(importer namespace id, importer file, module, name)`` already warned
+#: about -- one load of an importer warns once per name; a fresh load (a new
+#: module namespace) warns again.
+_warned: set[tuple[int, str, str, str]] = set()
+
+#: Source-derived predicate names per ``.pl`` module object (re-reading the
+#: source is the expensive part; the module object is replaced on reload).
+_names_cache: "weakref.WeakKeyDictionary" = weakref.WeakKeyDictionary()
 
 
 def _is_pl_module(mod) -> bool:
@@ -51,6 +58,10 @@ def _is_pl_module(mod) -> bool:
 
 def _predicate_names(mod) -> set[str]:
     """Every name *mod* defines or exports as a predicate, at any arity."""
+    try:
+        return _names_cache[mod]
+    except (KeyError, TypeError):
+        pass
     from clausal.import_diagnostics import (  # noqa: PLC0415
         _declared_exports, _defined_names, _module_items_of,
     )
@@ -61,10 +72,16 @@ def _predicate_names(mod) -> set[str]:
     except Exception:  # pragma: no cover - source unreadable now
         entries = []
     names.update(bare for bare, _ in entries)
+    try:
+        _names_cache[mod] = names
+    except TypeError:  # pragma: no cover - not weak-referenceable
+        pass
     return names
 
 
-def _is_predicate_of(mod, name: str, predicates: set[str]) -> bool:
+def _is_predicate_of(mod, name: str) -> bool:
+    """The module's database first; the source-derived names (exports with
+    no clauses) only when it does not say so."""
     db = getattr(vars(mod).get("$module"), "db", None)
     if db is not None:
         try:
@@ -72,7 +89,7 @@ def _is_predicate_of(mod, name: str, predicates: set[str]) -> bool:
                 return True
         except Exception:  # pragma: no cover - defensive
             pass
-    return name in predicates
+    return name in _predicate_names(mod)
 
 
 def _distance(a: str, b: str, cap: int) -> int:
@@ -106,14 +123,14 @@ def near_predicates(name: str, predicates) -> list[str]:
                   if p != name and _distance(name, p, cap) <= cap)
 
 
-def _warn_if_misspelled(mod, name: str, importer_file: str,
-                        predicates: set[str]) -> None:
+def _warn_if_misspelled(mod, name: str, namespace: dict) -> None:
     from clausal.lint_warnings import ClausalImportedDataNameWarning  # noqa: PLC0415
 
-    key = (importer_file, mod.__name__, name)
+    key = (id(namespace), namespace.get("__file__") or "<unknown>",
+           mod.__name__, name)
     if key in _warned:
         return
-    near = near_predicates(name, predicates)
+    near = near_predicates(name, _predicate_names(mod))
     if not near:
         return
     _warned.add(key)
@@ -136,7 +153,7 @@ def data_atom(mod, name: str):
         return None
     if getattr(getattr(mod, "__spec__", None), "_initializing", False):
         return None
-    if _is_predicate_of(mod, name, _predicate_names(mod)):
+    if _is_predicate_of(mod, name):
         return None
     return sys.intern(name)
 
@@ -161,15 +178,11 @@ def bind_data_names(namespace: dict, module_name: str, pairs: dict,
     if getattr(getattr(mod, "__spec__", None), "_initializing", False):
         return False   # a circular import: the name may simply not be bound YET
     missing = object()
-    predicates = None
     resolved = {}
     for local, orig in pairs.items():
         value = getattr(mod, orig, missing)
         if value is missing:
-            if predicates is None:
-                predicates = _predicate_names(mod)
-            if local not in eligible or _is_predicate_of(mod, orig,
-                                                         predicates):
+            if local not in eligible or _is_predicate_of(mod, orig):
                 path = getattr(mod, "__file__", None)
                 new = ImportError(
                     f"cannot import name {orig!r} from {mod.__name__!r} "
@@ -177,11 +190,9 @@ def bind_data_names(namespace: dict, module_name: str, pairs: dict,
                     name=getattr(error, "name", None) or mod.__name__,
                     path=path)
                 new.name_from = orig
-                raise new
+                raise new from None
             value = sys.intern(orig)
-            _warn_if_misspelled(mod, orig,
-                                namespace.get("__file__") or "<unknown>",
-                                predicates)
+            _warn_if_misspelled(mod, orig, namespace)
         resolved[local] = value
     namespace.update(resolved)
     return True
