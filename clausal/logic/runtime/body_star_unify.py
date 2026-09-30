@@ -38,6 +38,7 @@ from ._seg_helpers import (
     maybe_promote_to_str, join_chars, seq_getitem, str_chars,
 )
 from .list_unify import _head_list_unify_input, _head_list_unify_output
+from clausal.terms import _is_cons_cell
 
 
 def _body_star_unify(target, before_vals, star_val, after_vals, trail):
@@ -75,6 +76,11 @@ def _body_star_unify(target, before_vals, star_val, after_vals, trail):
     if is_var(d):
         # Construction: build list from bound vars and unify with target
         return _head_list_unify_output(target, before_vals, star_val, after_vals, trail)
+
+    if _is_cons_cell(d):
+        # An improper list, the ISO cons cell (D50): the head matcher takes
+        # it apart as body unification does.
+        return _head_list_unify_input(target, before_vals, star_val, after_vals, trail)
 
     return False
 

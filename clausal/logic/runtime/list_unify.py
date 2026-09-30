@@ -82,7 +82,7 @@ from clausal.logic.cells import chars, is_chars, chars_text  # stage 1: the char
 from clausal.logic.variables import is_var, deref, unify
 from clausal.terms import (
     SegList, ConcreteSeg, VarSeg,
-    SegString, SegBytes,
+    SegString, SegBytes, _is_cons_cell, _unify_seglist_cons,
 )
 from ._seg_helpers import (
     maybe_promote_to_str, maybe_promote_to_bytes, seq_getitem, str_chars,
@@ -107,6 +107,27 @@ def _seglist_input_fallback(target, var_vals, star_val, after_vals, trail):
             segs.append(ConcreteSeg(list(after_vals)))
         pattern = SegList(segs)
     return bool(unify(target, pattern, trail))
+
+
+def _cons_cell_input_fallback(cell, var_vals, star_val, after_vals, trail):
+    """Input mode against the ISO cons cell *cell* -- ``('.', H, T)``, the
+    term an improper list such as ``[b|foo]`` is (D50): build the pattern as
+    the list term it spells and take the cell apart exactly as body
+    unification does (``_unify_seglist_cons``).  ``p([H|T])`` called with
+    ``[b|foo]`` binds ``H = b, T = foo``; a proper pattern (no star, or
+    elements after the star) matches only a chain that ends in ``[]``.
+    Undoes its own bindings on failure.  Shared by the C twin."""
+    if star_val is None:
+        pattern = list(var_vals) + list(after_vals)
+    else:
+        segs = []
+        if var_vals:
+            segs.append(ConcreteSeg(list(var_vals)))
+        segs.append(VarSeg(star_val))
+        if after_vals:
+            segs.append(ConcreteSeg(list(after_vals)))
+        pattern = SegList(segs)
+    return bool(_unify_seglist_cons(pattern, cell, trail))
 
 
 def _head_list_unify_input_py(target, var_vals, star_val, after_vals, trail):
@@ -194,6 +215,10 @@ def _head_list_unify_input_py(target, var_vals, star_val, after_vals, trail):
     elif is_var(d):
         # Defer to output mode — vars will be bound by body
         return None
+
+    elif _is_cons_cell(d):
+        # An improper list (D50): take the cell apart as the body does.
+        return _cons_cell_input_fallback(d, var_vals, star_val, after_vals, trail)
 
     else:
         return False

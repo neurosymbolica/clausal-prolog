@@ -488,7 +488,10 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
   `atom_chars/2` raise `type_error(list, [b|foo])`, `is_list/1`, `length/2`
   and `append/3` fail, `member/2` finds the heads, `X = [b|foo], X = [H|T]`
   binds `H = b, T = foo`, and `writeq/1` prints `[b|foo]`, as Scryer does.
-  A clause HEAD `[H|T]` does not yet match an improper list.
+  A clause head list pattern takes the cell apart too: `p([H|T], H, T)`
+  called with `[b|foo]` answers `H = b, T = foo`, `[a, b|T]` walks nested
+  cells, and a proper pattern such as `[a, b]` matches only a chain that
+  ends in `[]` (the head matcher, C and Python, shares the body's code).
 - **A `.pl` module in an earlier `sys.path` entry is no longer shadowed by a
   `.clausal` or `.seam` module of the same name in a later one.** The import
   hook now resolves source modules per `sys.path` entry, in path order: the
