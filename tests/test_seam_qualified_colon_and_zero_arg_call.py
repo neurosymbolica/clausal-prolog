@@ -104,6 +104,12 @@ _USER = """
     py_dotted(T) <- (T is sqcpyhelp.f0())
     py_dotted_escape(T) <- (T is ++sqcpyhelp.f0())
     py_time(T) <- (T is time.time())
+
+    head_colon(':'(sqclib, mp(1))),
+    head_zero(zz()),
+    head_colon_term(T) <- head_colon(T)
+    head_colon_run(X) <- (head_colon(T), call(T), X is 1)
+    head_zero_term(T) <- head_zero(T)
 """
 
 
@@ -232,6 +238,12 @@ def test_an_unknown_predicate_is_an_iso_existence_error(user):
     assert cell_args(formal) == (mint("procedure"), ("/", mint("own"), 1))
 
 
+def test_the_colon_term_in_a_fact_head(user):
+    """The head-argument path builds the same cell, and it runs in sqclib."""
+    assert _answers(user, "head_colon_term") == [(":", "sqclib", ("mp", 1))]
+    assert _answers(user, "head_colon_run") == [1]
+
+
 # ── RULING 2: name() is the atom name ───────────────────────────────────────
 
 @pytest.mark.parametrize("goal, expected", [
@@ -257,6 +269,10 @@ def test_a_zero_argument_call_in_data_is_the_atom(user, goal, expected):
     got = _answers(user, goal)
     assert got == expected
     assert all(type(t) is not tuple for t in got)
+
+
+def test_a_zero_argument_call_in_a_fact_head_is_the_atom(user):
+    assert _answers(user, "head_zero_term") == ["zz"]
 
 
 @pytest.mark.parametrize("goal", [
