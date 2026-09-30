@@ -496,7 +496,7 @@ MAX_QUALIFICATION_DEPTH = 64
 
 def resolve_qualified_goal_cell(
     cell: Any, context: str, calling_module: Any = None,
-    *, call_extra: "int | None" = None,
+    *, call_extra: "int | None" = None, qualified_culprit: bool = False,
 ) -> tuple:
     """Resolve the module-qualified goal cell ``(":", M, G)`` to ``(module, G)``.
 
@@ -563,6 +563,18 @@ def resolve_qualified_goal_cell(
     (an atom goal, ``true`` included, names a procedure: Scryer reports
     ``nosuchmod:true`` as a missing procedure too), and so does a missing OUTER module of
     ``m1:m2:G`` (every layer is still resolved; ``m2`` would answer).
+
+    An UNBOUND or NON-CALLABLE innermost goal under a missing module
+    (operator ruling 2026-10-01, Scryer's terms): ``call(nosuchmod:_)`` is
+    ``error(instantiation_error, call/1)`` and ``call(nosuchmod:1)`` is
+    ``error(type_error(callable, 1), call/1)`` -- the context is call/N,
+    N counting call/N's extras (``call(nosuchmod:_, x)`` is ``call/2``),
+    what call/N answers for a module that exists.  phrase/2,3 follow
+    Scryer's phrase: ``call/3`` and ``call/1`` (see _raise_if_not_a_goal).
+
+    *qualified_culprit* (phrase/2,3, Scryer's form): the missing procedure
+    is reported QUALIFIED, ``existence_error(procedure, nosuchmod:g/2)``,
+    with the plain ``g/2`` as the context.
     """
     from clausal.logic.solve import resolve_module  # noqa: PLC0415 -- see the
     from clausal.logic.variables import deref       # note in
@@ -584,8 +596,11 @@ def resolve_qualified_goal_cell(
             try:
                 module = resolve_module(designator, calling_module, context)
             except LogicException as exc:
+                _raise_if_not_a_goal(goal[2], call_extra, exc,
+                                     phrase=qualified_culprit)
                 missing = _missing_procedure_error(
-                    goal[2], call_extra, designator, context)
+                    goal[2], call_extra, designator, context,
+                    qualified=qualified_culprit)
                 if missing is None:
                     raise
                 raise LogicException(missing) from exc
@@ -615,8 +630,36 @@ def resolve_qualified_goal_cell(
     return module, goal
 
 
+def _raise_if_not_a_goal(goal: Any, call_extra: int, cause: Any,
+                         *, phrase: bool = False) -> None:
+    """Scryer's error for an unbound or non-callable innermost goal of a
+    call into a missing module: ``instantiation_error`` /
+    ``type_error(callable, G)``, context ``call/N`` (N = 1 + extras) -- the
+    terms call/N and solve give for a module that exists
+    (``call(lists:_)``).  Through phrase/2,3 (*phrase*) Scryer reports the
+    non-callable case at ``call/1`` (measured: ``phrase(nosuchmod:1, L)``
+    is ``error(type_error(callable, 1), call/1)``; ``phrase(nosuchmod:_,
+    L)`` is ``call/3``)."""
+    from clausal.logic.exceptions import (  # noqa: PLC0415
+        LogicException, instantiation_error,
+    )
+    goal = deref(goal)
+    if type(goal) is tuple and len(goal) < 2:
+        return      # () / the reserved 1-tuple: the caller refuses it
+    at = f"call/{1 + call_extra}"
+    if is_var(goal):
+        raise LogicException(instantiation_error(at)) from cause
+    from clausal.logic.builtins.call_body import (  # noqa: PLC0415
+        is_non_callable_term, non_callable_goal_error,
+    )
+    if is_non_callable_term(goal, lists=False):
+        raise LogicException(non_callable_goal_error(
+            goal, "call/1" if phrase else at)) from cause
+
+
 def _missing_procedure_error(
     goal: Any, call_extra: int, designator: str, context: str,
+    *, qualified: bool = False,
 ) -> Any:
     """``existence_error(procedure, Name/Arity)`` for the innermost goal of
     *goal* (the part of ``M:G`` after a module that does not exist), with
@@ -642,6 +685,13 @@ def _missing_procedure_error(
     from clausal.logic.builtins.call_body import _indicator  # noqa: PLC0415
     from clausal.logic.exceptions import existence_error  # noqa: PLC0415
     arity += call_extra
+    if qualified:
+        return existence_error(
+            "procedure",
+            (QUALIFIED_GOAL_FUNCTOR, designator, _indicator(name, arity)),
+            f"{name}/{arity}: {designator!r} names no module (resolution "
+            f"is lookup-only and never imports), so {designator}:{name}/"
+            f"{arity} is no procedure")
     return existence_error(
         "procedure", _indicator(name, arity),
         f"{context}: {designator!r} names no module (resolution is "
