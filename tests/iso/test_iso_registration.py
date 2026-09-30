@@ -68,6 +68,10 @@ def test_registered_fields_match_the_declared_arity(key):
     assert "trail" not in fields and "k" not in fields, (name, fields)
 
 
+#: Builtins registered under an ISO name at another arity too.
+_OTHER_ARITIES = {"=": (3,)}
+
+
 @pytest.mark.parametrize("key", ISO_KEYS, ids=[f"{n}/{a}" for n, a in ISO_KEYS])
 def test_the_builtin_class_has_the_declared_arity(key):
     name, arity = key
@@ -77,7 +81,9 @@ def test_the_builtin_class_has_the_declared_arity(key):
     # a ``PredicateMeta`` class before) is registered at exactly the
     # declared arity, and a positional construction at it builds the cell
     # of that arity -- what every consumer of the constructor sees.
-    assert obj.arities == (arity,), (name, repr(obj))
+    # =/3 is library(reif)'s reified equality (slice 4), under the same name.
+    assert obj.arities == (arity,) + _OTHER_ARITIES.get(name, ()), \
+        (name, repr(obj))
     assert len(obj._fields_by_arity[arity]) == arity, (name, obj)
     cell = obj(*range(arity))
     assert cell == (name, *range(arity)), cell

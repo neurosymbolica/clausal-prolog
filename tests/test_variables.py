@@ -276,9 +276,9 @@ class TestUnifyAtomics(unittest.TestCase):
         self.assertTrue(unify(None, None, self.t))
 
     def test_bool_int(self):
-        # True == 1 in Python
+        # True == 1 in Python, but D35 closed: a truth value is an ATOM: it never unifies with a number
         # nv
-        self.assertTrue(unify(True, 1, self.t))
+        self.assertFalse(unify(True, 1, self.t))
 
 
 class TestUnifyCompound(unittest.TestCase):

@@ -33,7 +33,7 @@ from decimal import Decimal
 from fractions import Fraction
 from typing import Any
 
-from clausal.logic.atoms import is_atom, mint, spelling
+from clausal.logic.atoms import is_atom, is_truth_atom, mint, spelling, truth_atom, truth_spelling
 from dataclasses import replace as _replace   # a rebuilt node keeps its position
 from clausal.logic.exact_arith import EVALUABLE as _EVALUABLE, NODE_EVALUABLE as _NODE_EVALUABLE
 from clausal.logic.exact_arith import cell_key_args as _cell_key_args, node_keys as _node_keys
@@ -543,12 +543,12 @@ def _ne_propagate_bignum(lhs, rhs, trail, queue) -> bool:
         if lv is None or rv is None:
             return True
         return lv != rv
-    if not is_var(lhs) and isinstance(lhs, int) and is_var(rhs):
+    if not is_var(lhs) and _is_fd_int(lhs) and is_var(rhs):
         state = get_attr(rhs, FD_KEY)
         if state is not None:
             new_d = domain_remove(state.domain, lhs)
             return _narrow_if_changed(rhs, new_d, trail, queue)
-    if not is_var(rhs) and isinstance(rhs, int) and is_var(lhs):
+    if not is_var(rhs) and _is_fd_int(rhs) and is_var(lhs):
         state = get_attr(lhs, FD_KEY)
         if state is not None:
             new_d = domain_remove(state.domain, rhs)
@@ -768,12 +768,12 @@ class NeConstraint(Constraint):
             if lv is None or rv is None:
                 return True  # an expression still has unbound vars — pending
             return lv != rv
-        if not is_var(lhs) and isinstance(lhs, int) and is_var(rhs):
+        if not is_var(lhs) and _is_fd_int(lhs) and is_var(rhs):
             state = get_attr(rhs, FD_KEY)
             if state is not None:
                 new_d = domain_remove(state.domain, lhs)
                 return _narrow_if_changed(rhs, new_d, trail, queue)
-        if not is_var(rhs) and isinstance(rhs, int) and is_var(lhs):
+        if not is_var(rhs) and _is_fd_int(rhs) and is_var(lhs):
             state = get_attr(lhs, FD_KEY)
             if state is not None:
                 new_d = domain_remove(state.domain, rhs)
@@ -874,11 +874,12 @@ class AllDiffConstraint(Constraint):
             v = deref(v)
             if is_var(v):
                 free_vars.append(v)
-            elif isinstance(v, int):
+            elif _is_fd_int(v):
                 if v in ground_vals:
                     return False  # duplicate ground value
                 ground_vals.add(v)
             else:
+                _fd_reject_truth_atom(v)   # a truth atom is not 1/0 (D47)
                 return False  # non-integer
         for v in free_vars:
             state = get_attr(v, FD_KEY)
@@ -1335,6 +1336,32 @@ def _ensure_exc_imports():
         _type_error = type_error
 
 
+def _is_fd_int(x) -> bool:
+    """*x* is a ground CLP(FD) integer: an ``int`` but never a ``bool`` --
+    ``True``/``False`` are the ATOMS true/false (D47), not 1/0."""
+    return isinstance(x, int) and not isinstance(x, bool)
+
+
+def _fd_reject_truth_atom(x) -> None:
+    """Raise clpz's ``type_error(integer, T)`` when *x* is a truth atom
+    (D47: a boolean in CLP is a type error; Scryer: ``X in 0..2, X = true``
+    is ``type_error(integer, true)``).  Returns None for anything else, so a
+    caller keeps its own answer for the other non-integers.  The C
+    propagate module calls this too (``fn_fd_reject_truth_atom``): one
+    definition for both twins."""
+    if is_truth_atom(x):
+        _ensure_exc_imports()
+        raise _LogicException(_type_error("integer", x))
+
+
+def _fd_reject_truth_atoms(xs) -> None:
+    """:func:`_fd_reject_truth_atom` over every (dereferenced) item of *xs*:
+    the post-time check of the global constraints, whose ground-int arms
+    would otherwise read a bool as 1/0 (``isinstance(True, int)``)."""
+    for x in xs:
+        _fd_reject_truth_atom(deref(x))
+
+
 def _unknown_expr_leaf_error(leaf) -> "Exception":
     """Catchable ``domain_error(clpz_expression, Leaf)`` for a LEAF
     inside an arithmetic expression tree that CLP(FD) cannot type as an
@@ -1552,7 +1579,10 @@ def _eval_ground(expr):
     _ensure_term_imports()
     if not isinstance(expr, _Node):
         if isinstance(expr, bool):
-            return None  # bools are deliberately not FD numbers; keep pending
+            # A truth ATOM (D35) is not an FD number: Scryer's clpz answers
+            # ``1 #< true`` with ``domain_error(clpz_expression, true)``.
+            # Keeping it "pending" made the seam's ``1 < true`` FAIL silently.
+            raise _unknown_expr_leaf_error(expr)
         # An exact-number CELL (the transfer form of a Fraction or a Decimal,
         # RULED 2026-09-17) evaluates as the number it denotes: an ``rdiv``
         # cell is its Fraction and a ``decimal`` cell its Decimal, both
@@ -1734,6 +1764,17 @@ def _cells_as_nodes(l, r, strict=None):
     """``(l, r)`` with arithmetic cells rewritten (see _arith_cells_to_nodes;
     CLP(Q) and CLP(R) pass their context as *strict*)."""
     tl, tr = type(l), type(r)
+    # A truth atom (D35: True/False/Undefined ARE the atoms true/false/
+    # undefined) meets the comparators as the str of its spelling -- the
+    # shape every atom already has here -- so ``X == True`` with X bound to
+    # True holds, ``true != 1`` holds, ``1 < true`` is the same
+    # type_error(orderable, ...) as ``1 < a``, and a var beside one is the
+    # same domain_error(clpz_expression, ...) as beside any atom.  Python's
+    # ``True == 1`` never reaches the ground fallbacks.
+    if tl is bool or is_truth_atom(l):
+        l, tl = truth_spelling(l), str
+    if tr is bool or is_truth_atom(r):
+        r, tr = truth_spelling(r), str
     cl = None if tl is int or tl is float else _arith_cells_to_nodes(l, strict)
     cr = None if tr is int or tr is float else _arith_cells_to_nodes(r, strict)
     return (l if cl is None else cl), (r if cr is None else cr)
@@ -2213,7 +2254,18 @@ def _incomparable_order_error(culprit, context: str) -> "LogicException":
     catches them all.  *culprit* is the right-hand operand; *context* names
     the primitive operator (``"(<)/2"`` or ``"(=<)/2"``)."""
     from clausal.logic.exceptions import LogicException, type_error  # noqa: PLC0415
-    return LogicException(type_error("orderable", culprit, context))
+    return LogicException(type_error("orderable", _truth_culprit(culprit), context))
+
+
+def _truth_culprit(x):
+    """An error's culprit, with a truth atom as its OBJECT: the comparators
+    carry ``True`` as the str ``"true"`` (``_cells_as_nodes``), the same
+    atom, but is/2 reports the object and so must the comparators (D47)."""
+    if type(x) is str:
+        obj = truth_atom(x)
+        if obj is not None:
+            return obj
+    return x
 
 
 def _reject_nonnumeric_order(l, r, context: str) -> None:
@@ -2256,7 +2308,7 @@ def _reject_nonnumeric_order(l, r, context: str) -> None:
     # Scryer's ``X #< foo(1)`` formal (Q3, 2026-09-28; it was
     # type_error(orderable, Ground)).
     from clausal.logic.exceptions import LogicException, domain_error  # noqa: PLC0415
-    raise LogicException(domain_error("clpz_expression", ground, context))
+    raise LogicException(domain_error("clpz_expression", _truth_culprit(ground), context))
 
 
 def fd_eq(l, r, trail: Trail, *, _units_done: bool = False) -> bool:
@@ -2588,7 +2640,8 @@ def _fd_hook(attr_value: Any, bound_to: Any, trail: Trail) -> bool:
             return propagate(queue, trail)
         return True
 
-    # Non-integer, non-var → fail
+    # Non-integer, non-var → fail; a truth atom is clpz's type_error (D47)
+    _fd_reject_truth_atom(bound_to)
     return False
 
 
@@ -2610,6 +2663,7 @@ def in_domain(var_or_list, lo, hi, trail: Trail) -> bool:
         return united
     lo = deref(lo)
     hi = deref(hi)
+    _fd_reject_truth_atoms((lo, hi))               # D47: true is not 1
     if not isinstance(lo, int) or not isinstance(hi, int):
         raise TypeError(f"in_domain bounds must be integers, got {lo!r}, {hi!r}")
     new_domain = domain_from_range(lo, hi)
@@ -2738,6 +2792,8 @@ def all_different(vars_list, trail: Trail) -> bool:
         return False
     vars_list = _units_strip_list(vars_list, "all_different/1", trail)
     vars_tuple = tuple(deref(v) for v in vars_list)
+    for v in vars_tuple:
+        _fd_reject_truth_atom(v)   # Scryer: all_different([true, X]) is type_error(integer, true)
     constraint = AllDiffConstraint(vars_tuple)
     return _post_constraint(constraint, trail)
 
@@ -2947,6 +3003,7 @@ def fd_sum(vars_list, op_str, value, trail: Trail):
     vars_list, value = both[:-1], both[-1]
 
     vars_deref = [deref(v) for v in vars_list]
+    _fd_reject_truth_atoms(vars_deref + [value])   # D47: true is not 1
 
     # Reject non-integer elements up front (A06-F014): a string/float element
     # would otherwise post happily and be treated as an unconstrained integer.
@@ -3022,6 +3079,7 @@ def fd_scalar_product(coeffs, vars_list, op_str, value, trail: Trail):
     vars_list, value = both[:-1], both[-1]
 
     coeffs_deref = [deref(c) for c in coeffs]
+    _fd_reject_truth_atoms(coeffs_deref)           # D47: true is not 1
     if not all(isinstance(c, int) for c in coeffs_deref):
         return
 
@@ -3041,6 +3099,7 @@ def fd_scalar_product(coeffs, vars_list, op_str, value, trail: Trail):
             return     # a non-integer value (``5/2``): no integer answer
 
     vars_deref = [deref(v) for v in vars_list]
+    _fd_reject_truth_atoms(vars_deref + [value])
 
     # Reject non-integer elements up front (A06-F014).
     if not all(_is_fd_sum_element(v) for v in vars_deref):
@@ -3180,6 +3239,7 @@ def fd_circuit(vars_list, trail: Trail):
         return
 
     vars_deref = [deref(v) for v in vars_list]
+    _fd_reject_truth_atoms(vars_deref)             # D47: true is not 1
 
     # Ensure all have FD domains
     for v in vars_deref:
@@ -3683,6 +3743,7 @@ def global_cardinality(vars_list, pairs, trail: Trail) -> bool:
         from clausal.logic.units_clp import plain_fields_or_unsupported  # noqa: PLC0415
         counts = plain_fields_or_unsupported(counts, "global_cardinality/2")
     pairs = list(zip(keys, counts))
+    _fd_reject_truth_atoms(list(vars_list) + keys + counts)   # D47: true is not 1
 
     # clpz's must_be(integer) on every element and count (a count may also
     # be a variable).  A non-integer count used to be skipped by the
@@ -3770,6 +3831,7 @@ def tuples_in(tuples_list, relation, trail: Trail) -> bool:
             if _units_flag_active():
                 from clausal.logic.units_clp import plain_fields_or_unsupported  # noqa: PLC0415
                 tup = plain_fields_or_unsupported(list(tup), "tuples_in/2")
+            _fd_reject_truth_atoms(tup)            # D47: true is not 1
             vars_ = []
             for v in tup:
                 v = deref(v)

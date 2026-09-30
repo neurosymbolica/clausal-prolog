@@ -1,4 +1,4 @@
-"""Constraint builtins: dif/2, eq/3, dif_t/3, in_domain/3, label/1,
+"""Constraint builtins: dif/2, eq/3, dif_t/3, =/3, dif/3, in_domain/3, label/1,
 all_different/1, structural_eq/2, sum_/3, scalar_product/4, element/3, circuit/1,
 sat/1, taut/2, sat_count/2, bool_labeling/1,
 in_real/1, in_real/3, label_real/1, label_real/2,
@@ -32,6 +32,24 @@ def _dif_t__3(x, y, t, trail, k):
     """dif_t(X, Y, T) — reified disequality: T is True if dif(X,Y), False if X=Y."""
     from clausal.logic.reif import dif_t__3  # noqa: PLC0415
     yield from dif_t__3(x, y, t, trail, k)
+
+
+@_builtin("=", 3)
+def _reif_eq__3(x, y, t, trail, k):
+    """=(X, Y, T) -- library(reif)'s reified equality (Scryer's reif.pl):
+    eq/3 under the name Scryer's ``if_(X = Y, ...)`` and ``tfilter(=(a), ...)``
+    call.  T is true (X = Y) or false (dif(X, Y)), true first."""
+    from clausal.logic.reif import eq__3  # noqa: PLC0415
+    yield from eq__3(x, y, t, trail, k)
+
+
+@_builtin("dif", 3)
+def _reif_dif__3(x, y, t, trail, k):
+    """dif(X, Y, T) -- library(reif)'s reified disequality, Scryer's
+    ``dif(X, Y, T) :- =(X, Y, NT), non(NT, T).``: the answer ORDER is
+    =/3's, so T = false (X = Y) comes first (dif_t/3 answers true first)."""
+    from clausal.logic.reif import reif_dif__3  # noqa: PLC0415
+    yield from reif_dif__3(x, y, t, trail, k)
 
 
 # ── CLP(FD) builtins ─────────────────────────────────────────────────────────

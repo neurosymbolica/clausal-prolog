@@ -222,7 +222,7 @@ def kind__p0_b4__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail)
     _d1 = $deref(arg1)
     match (_d0, _d1):
         case [_ncap0, _v23]:
-            if _ncap0 == 42 or $unify(_ncap0, 42, trail):
+            if _ncap0.__class__ is 42 .__class__ and _ncap0 == 42 or $unify(_ncap0, 42, trail):
                 _m19 = trail.mark()
                 if $unify(_v23, 'num', trail):
                     yield (_proceed, None)

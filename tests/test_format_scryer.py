@@ -13,6 +13,7 @@ import re
 import pytest
 
 from clausal.logic.builtins.io import format_to_text
+from clausal.logic.atoms import mint
 from clausal.logic.cells import chars
 from clausal.logic.exceptions import LogicException
 from clausal.logic.variables import Var
@@ -57,6 +58,7 @@ ROWS = [
     ("~2f|", [-1.5], "-1.50|"),
     ("~f|", [10 ** 30], "1000000000000000000000000000000.000000|"),
     ("~a|", [[]], "[]|"),
+    ("~a|", [True], "true|"),        # true is an atom (D47), as in Scryer
 ]
 
 
@@ -79,8 +81,9 @@ ERRORS = [
     ("~d|", [1.0], ("type_error", "integer", 1.0)),
     ("~a|", [("f", "x")], ("type_error", "atom", ("f", "x"))),
     ("~w", "hello", ("type_error", "list", "hello")),
-    ("~f|", [float("inf")], ("evaluation_error", "undefined")),
-    ("~a|", [True], ("type_error", "atom", True)),
+    # The atom undefined is the Undefined object (D47: ``mint("undefined")``).
+    ("~f|", [float("inf")], ("evaluation_error", mint("undefined"))),
+    ("~a|", [("f", True)], ("type_error", "atom", ("f", True))),
     ("~*c|", [3], ("domain_error", "format_string", ["~", "*", "c", "|"])),
 ]
 

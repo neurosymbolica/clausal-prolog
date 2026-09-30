@@ -763,8 +763,7 @@ def test_F020_regression_c_error_paths_hold_under_loop(refcount_stable, fix):
 # A09-F022 — cross-type == conflation (inherits A01-D001; A05-D001 precedent)
 # ═══════════════════════════════════════════════════════════════════════════
 
-@pytest.mark.xfail(strict=False, reason="A09-F022: subtract removes 1 for "
-                   "True via Python == (cross-type conflation)")
+# A09-F022 (subtract) CLOSED (D47 review, 2026-09-30): membership is ==/2.
 def test_F022_subtract_cross_type(fix):
     _, m = fix
     D = Var()

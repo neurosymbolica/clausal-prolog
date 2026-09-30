@@ -35,6 +35,7 @@ from __future__ import annotations
 import copy
 
 from clausal.logic.atoms import (
+    crossing_value as _crossing_value,
     is_atom as _term_is_atom, spelling as _atom_spelling, atom, as_dict_key as _as_dict_key)
 from clausal.logic.cells import chars, is_chars, chars_text, TUPLE_TAG  # stage 1: the chars carrier
 from clausal.logic.python_terms import FROM_TERM as _FROM_TERM  # the ONE registry (no cycle: python_terms never imports this module)
@@ -133,7 +134,7 @@ def to_python(val):
     # A Var BOUND to an atom: the ``type(val) is str`` hot case above ran
     # before the deref, so the dereferenced str arrives here.
     if _term_is_atom(val):
-        return _atom_spelling(val)
+        return _crossing_value(val)    # a truth atom crosses as its OBJECT (D35)
     if isinstance(val, _SEG_TYPES):
         # ``deref`` follows Var bindings only; a Seg* normalises under
         # ``walk``, which yields the ground form exactly when every hole is
@@ -462,4 +463,4 @@ def unwrap_atom(val):
         if any(is_chars(deref(x)) for x in val):
             return [chars_text(e) if is_chars(e) else e for e in (deref(x) for x in val)]
         return val
-    return _atom_spelling(val) if _term_is_atom(val) else val
+    return _crossing_value(val) if _term_is_atom(val) else val   # a truth atom crosses as its OBJECT (D35)

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from clausal.logic.atoms import char_atom, is_char_atom, spelling
+from clausal.logic.atoms import char_atom, is_char_atom, is_truth_atom, spelling
 from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.logic.trampoline import DONE
 
@@ -1178,22 +1178,28 @@ def _list_to_set__2(this_generator, _proceed, _fail, _catcher, lst, set_out, tra
     items = _as_items(lst_val)
     if items is not None:
         items = [deref(x) for x in items]
-        # duplicates by term identity (==/2, Scryer), first occurrence kept:
-        # Python's `in` compared by ==, so 1 and 1.0 (distinct terms) were
-        # one element
-        from clausal.logic.builtins.iso_compare import _iso_identical  # noqa: PLC0415
+        # Duplicates by ``==``/2 (Scryer's list_to_set/2), not by Python's
+        # ``==``: ``true`` is not 1 (D35) and 1 is not 1.0.  Two terms are
+        # ``==`` exactly when their standard-order keys are equal (sort/2
+        # dedups by the same key), so a SET of keys finds a duplicate in
+        # O(1); only a term whose key is unhashable (an opaque value inside)
+        # is scanned, against the other unhashable ones -- a hashable key
+        # can never equal an unhashable one.
         seen: list = []
-        atomic: set = set()             # fast path: (type, value) of atomics
+        keys: set = set()
+        opaque: list = []
         for x in items:
-            t = type(x)
-            if t in (int, float, str) and not is_var(x):
-                key = (t, x)
-                if key in atomic:
+            k = _standard_order_key(x)
+            try:
+                if k in keys:
                     continue
-                atomic.add(key)
-                seen.append(x)
-            elif not any(_iso_identical(x, y) for y in seen):
-                seen.append(x)
+                keys.add(k)
+            except TypeError:
+                from clausal.logic.builtins.iso_compare import _iso_identical  # noqa: PLC0415
+                if any(_iso_identical(x, y) for y in opaque):
+                    continue
+                opaque.append(x)
+            seen.append(x)
         out = _seq_result(seen, _was_string(lst_val), _was_bytes(lst_val))
         mark = trail.mark()
         if unify(set_out, out, trail):
@@ -1263,6 +1269,20 @@ def _sum_list__2(this_generator, _proceed, _fail, _catcher, lst, total, trail):
     yield (_fail, DONE)
 
 
+def _refuse_truth_atoms(items, context: str) -> None:
+    """max_list/2 and min_list/2 are arithmetic (SWI's: a fold of
+    ``Max is max(Max0, X)``): a truth atom is not a number but the ATOM
+    true/false/undefined (D47), so it raises is/2's
+    ``type_error(evaluable, true/0)`` -- where Python's ``max`` read
+    ``True`` as 1.  The other elements keep Python's order (dates and
+    quantities are ordered here and the evaluator has no max/2 for them)."""
+    for x in items:
+        x = deref(x)
+        if is_truth_atom(x):
+            from clausal.logic.builtins.iso_compare import _iso_eval  # noqa: PLC0415
+            _iso_eval(x, context)      # raises type_error(evaluable, x/0)
+
+
 @_trampoline_builtin("max_list", 2)
 def _max_list__2(this_generator, _proceed, _fail, _catcher, lst, maximum, trail):
     """max_list(List, max_) — max_ is the maximum element of List.
@@ -1275,6 +1295,7 @@ def _max_list__2(this_generator, _proceed, _fail, _catcher, lst, maximum, trail)
     lst_val = deref(lst)
     items = _as_items(lst_val)
     if items is not None and len(items) > 0:
+        _refuse_truth_atoms(items, "max_list/2")
         try:
             m = max(deref(x) for x in items)
         except TypeError as exc:
@@ -1300,6 +1321,7 @@ def _min_list__2(this_generator, _proceed, _fail, _catcher, lst, minimum, trail)
     lst_val = deref(lst)
     items = _as_items(lst_val)
     if items is not None and len(items) > 0:
+        _refuse_truth_atoms(items, "min_list/2")
         try:
             m = min(deref(x) for x in items)
         except TypeError as exc:

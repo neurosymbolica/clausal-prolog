@@ -1073,6 +1073,7 @@ class NativePrologLoader(PrologLoader):
         iso_l3.warn_singletons(low.singletons, pl_source, path)
         low.context.warn_bare_atom_imports()
         iso_l3.log_auto_declared(low.context, path)
+        iso_l3.log_transition_constructs(low.stats, path)
         return low.tree, _prolog_default_items() + low.module_items
 
     def source_to_code(self, data, path="<string>"):

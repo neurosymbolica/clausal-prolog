@@ -279,8 +279,15 @@ def text_of(value: Any) -> str:
     f-string's ``{x}``); ``%s``, ``.format``, ``print`` and container reprs
     are untouched and still show the cell.
     """
-    from clausal.logic.atoms import is_atom, spelling
+    from clausal.logic.atoms import is_atom, is_truth_atom, spelling
     from clausal.logic.cells import is_chars, chars_text  # noqa: PLC0415
+    if is_truth_atom(value):
+        # A truth value in PYTHON-hosted code is Python's ``True``/``False``
+        # (and ``Undefined``): ``str(v)`` is ``"True"``, as it is for a
+        # bool literal in a plain file.  The engine reads the same object as
+        # the atom ``true`` (D35) in unify/compare/write; this crossing is
+        # Python's text, not the engine's.
+        return str(value)
     if is_atom(value):
         return spelling(value)
     if is_chars(value):
@@ -299,8 +306,10 @@ def text_value(value: Any) -> Any:
     is not valid for ``str``.)  ``{x!s}`` keeps Python's meaning -- ``str``
     first, then the spec -- through :func:`text_of` instead.
     """
-    from clausal.logic.atoms import is_atom, spelling
+    from clausal.logic.atoms import is_atom, is_truth_atom, spelling
     from clausal.logic.cells import is_chars, chars_text  # noqa: PLC0415
+    if is_truth_atom(value):
+        return value                   # Python's bool, unchanged: ``f"{flag:>6}"`` formats ``True`` (see text_of)
     if is_atom(value):
         return spelling(value)
     if is_chars(value):

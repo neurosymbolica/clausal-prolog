@@ -702,7 +702,16 @@ def _special_form_cell_as_call(goal: Any) -> Any:
     ``once``, ...) with its goal arguments as raw terms and reads them as
     goal NODES, so a cell there reached ``terms_to_goalop`` and raised
     ``NotImplementedError: goal shape not yet supported (tuple)``.  call/1
-    runs exactly such a term (``call_body.special_form_dispatch``)."""
+    runs exactly such a term (``call_body.special_form_dispatch``).
+
+    A VARIABLE in a goal argument goes the same way, where the compiler
+    refuses a bare goal variable (``BareGoalVariableError``): a user's
+    unbound one is ``call(V)`` by ISO's body conversion, so
+    ``solve(("findall", X, G, L), m)`` with G unbound is
+    ``instantiation_error`` (Scryer); and a parameter Var
+    ``_templatize_query_goal`` put in place of a ground atom
+    (``solve(("once", "fail"), m)``) is bound to that atom before the
+    search, which call/1 then runs."""
     is_cell, functor = compound_cell_shape(goal)
     if not is_cell:
         return goal
@@ -710,9 +719,12 @@ def _special_form_cell_as_call(goal: Any) -> Any:
     spec = SPECIAL_FORMS.get((functor, len(goal) - 1))
     if spec is None:
         return goal
-    if any(kind == "G" and type(deref(arg)) is tuple
-           for kind, arg in zip(spec, goal[1:])):
-        return ("call", goal)
+    for kind, arg in zip(spec, goal[1:]):
+        if kind != "G":
+            continue
+        val = deref(arg)
+        if type(val) is tuple or is_var(val):
+            return ("call", goal)
     return goal
 
 

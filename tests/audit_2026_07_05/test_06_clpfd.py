@@ -661,13 +661,17 @@ class TestInDomainPropagation:
 
 
 class TestBooleanHandling:
-    @pytest.mark.xfail(strict=False, reason="A06-F009: C _fd_hook accepts bool via the "
-                       ".denominator sniff; docs say booleans are rejected by CLP(Z)")
-    def test_binding_fd_var_to_bool_fails(self):
+    def test_binding_fd_var_to_bool_raises(self):
+        # A06-F009 closed (D47 review, 2026-09-30): the C hook's
+        # .denominator sniff no longer re-admits a bool as 1; a truth atom
+        # is clpz's type_error(integer, true) (Scryer), not a silent 1.
+        from clausal.logic.exceptions import LogicException
         t = Trail()
         x = Var()
         assert in_domain(x, 1, 5, t)
-        assert not unify(x, True, t)
+        with pytest.raises(LogicException) as ei:
+            unify(x, True, t)
+        assert ei.value.term[1] == ("type_error", "integer", True)
 
     @pytest.mark.xfail(strict=False, reason="A06-F009: ground comparison paths treat "
                        "True as 1 (docs: booleans are not numbers in CLP(Z))")

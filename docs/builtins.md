@@ -61,7 +61,7 @@ Notation in signature lines:
 |---|---|
 | [Control Flow](#control-flow) | once/1, `not`, if_/3, throw/1, catch_recover/3, catch/3, halt/0,1, setup_call_cleanup/3, call_cleanup/2 |
 | [Coroutining](#coroutining) | freeze/2, when/2 |
-| [Meta-Predicates](#meta-predicates) | findall/3, bagof/3, setof/3, forall/2, call_nth/2, count_all/2 |
+| [Meta-Predicates](#meta-predicates) | findall/3,4, bagof/3, setof/3, forall/2, call_nth/2, count_all/2 |
 | [Higher-Order Call](#higher-order-call) | call/1..8, call_goal/1..8 |
 | [DCG (Definite Clause Grammars)](#dcg-definite-clause-grammars) | phrase/2, phrase/3 |
 | [Term Inspection](#term-inspection) | functor/3, arg/3, unpack/2, copy_term/2, term_variables/2, numbervars/3, gensym/2, module_constant/3 |
@@ -69,14 +69,14 @@ Notation in signature lines:
 | [Prolog Flags](#prolog-flags) | set_prolog_flag/2, current_prolog_flag/2 |
 | [Keyword-Term Introspection](#keyword-term-introspection) | vary/3, unbound_keys/2, signature/3 |
 | [Attributed Variables](#attributed-variables) | put_attr/3, get_attr/3, del_attr/2, get_attrs/2, put_attrs/2, attvar/1, term_attvars/2 |
-| [Constraint Predicates](#constraint-predicates) | dif/2, eq/3, dif_t/3 |
+| [Constraint Predicates](#constraint-predicates) | dif/2, eq/3, dif_t/3, =/3, dif/3 |
 | [CLP(ℤ) — Integer Constraints](#clpfd-integer-constraints) | in_domain/3, label/1, all_different/1, structural_eq/2, sum_/3, scalar_product/4, element/3, circuit/1 |
 | [CLP(B) — Boolean Constraints](#clpb-boolean-constraints) | sat/1, taut/2, sat_count/2, bool_labeling/1 |
 | [Type Checks](#type-checks) | var/1, nonvar/1, atom/1, string/1, is_str/1, atomic/1, number/1, integer/1, float_/1, compound/1, callable_/1, is_list/1, ground/1, must_be/2, can_be/2 |
 | [Dict and Set Predicates](#dict-and-set-predicates) | get/3,4, get_strict/3, tri_get/3, delete/3, is_dict/1, dict_get/3, dict_put/4, dict_merge/3, gen_dict/3, sub_dict/2, is_set/1, set_union/3, set_subset/2, gen_set/2 |
 | [Arithmetic](#arithmetic) | between/3, succ/2, plus/3, abs_/2, max_/3, min_/3, sign/2, gcd/3, divmod_/4, lcm/3, exp_mod/4, popcount/2, msb/2, lsb/2 |
 | [List Predicates](#list-predicates) | in_/2, append/3, length/2, reverse/2, sort/2, permutation/2, select/3, flatten/2, take/3, drop/3, zip_/3, map_list_to_pairs/3, split_with/3, numlist/2,3, same_length/2, transpose/2 |
-| [Higher-Order List Predicates](#higher-order-list-predicates) | maplist/2,3, include/3, exclude/3, partition/4, tfilter/3, tpartition/4, foldl/4,5,6, take_while/3, drop_while/3, span/4, group_by/3, sort_by/3, filter_map/3 |
+| [Higher-Order List Predicates](#higher-order-list-predicates) | maplist/2..9, include/3, exclude/3, partition/4, tfilter/3, tpartition/4, foldl/4,5,6, take_while/3, drop_while/3, span/4, group_by/3, sort_by/3, filter_map/3 |
 | [Character/String](#characterstring) | char_type/2, char_code/2, upcase_atom/2, downcase_atom/2, atom_length/2, atom_chars/2, atom_codes/2, atom_concat/3, sub_atom/5, number_chars/2, number_codes/2 |
 | [I/O](#io) | write/1, writeq/1, write_canonical/1, write_term/2, writeln/1, write_text/1, writeln_text/1, print_term/1, nl/0, tab/1, write_to_string/2, write_text_to_string/2, term_to_string/2, listing/1, portray_clause/1 |
 | [Logging (`log` module)](#logging-log-module) | get_logger, debug, info, warning, error, critical, log, set_level, get_level, stream_handler, file_handler |
@@ -246,6 +246,18 @@ Collect all bindings of `Template` produced by `Goal` into `Bag` (a list). Succe
 ??? info "Implementation & tests"
     **Clausal tests:** `tests/fixtures/meta_test.clausal`
     **Python tests:** `tests/test_meta.py`
+
+---
+
+### `findall/4`
+
+`findall(Template, Goal, Bag, Tail)`: as `findall/3`, but the collected list
+ends in `Tail` instead of `[]` (Scryer's difference-list form):
+`findall(X, member(X, [1, 2]), L, [3])` gives `L = [1, 2, 3]`. `Bag` and
+`Tail` must each be a list or a partial list (`type_error(list, _)`).
+
+??? info "Implementation & tests"
+    **Python tests:** `tests/iso_l3/test_l3_s4_constructs.py`
 
 ---
 
@@ -980,6 +992,20 @@ Reified disequality. `T` is `True` if `dif(X, Y)`, `False` if `X = Y`.
 ??? info "Implementation & tests"
     **Clausal tests:** `tests/fixtures/builtins_dif.clausal`
     **Python tests:** `tests/test_reif_builtins.py`
+
+---
+
+### `=/3` and `dif/3` (library(reif))
+
+Scryer's library(reif) names: `=(X, Y, T)` is `eq/3` (`T = True` with
+`X = Y` first, then `T = False` with `dif(X, Y)`), and `dif(X, Y, T)` is its
+negation in the SAME answer order (`T = False` first; `dif_t/3` answers
+`True` first). A `.pl` file's `if_(X = Y, ...)` and closures such as
+`tfilter(=(a), ...)` run on them. `if_/3`'s library(reif) meaning for a
+`.pl` file is described in [Reified if-then-else](reified_ite.md).
+
+??? info "Implementation & tests"
+    **Python tests:** `tests/iso_l3/test_l3_s4_constructs.py`
 
 ---
 
@@ -2114,6 +2140,19 @@ Map `Goal(X, Y)` over `Xs` to produce `Ys`. Takes the first solution of `Goal` p
 ??? info "Implementation & tests"
     **Clausal tests:** `tests/fixtures/builtins_higher_order.clausal`
     **Python tests:** `tests/test_higher_order.py`
+
+---
+
+### `maplist/4` .. `maplist/9`
+
+`maplist(Goal, L1, ..., Ln)` calls `Goal(E1, ..., En)` on the elements of
+the lists in step (Scryer's library(lists)); lists of different lengths give
+no answer, an open list is enumerated as by `maplist/2,3`, and every
+solution of every call is an answer on backtracking. `maplist/9` runs on
+`call/9`.
+
+??? info "Implementation & tests"
+    **Python tests:** `tests/iso_l3/test_l3_s4_constructs.py`
 
 ---
 

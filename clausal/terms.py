@@ -29,6 +29,7 @@ from types import MappingProxyType
 from typing import Any
 
 from .logic.atoms import (
+    _register_undefined as _register_undefined_atom, truth_spelling as _truth_spelling,
     as_dict_key as _as_dict_key, char_atom, demangle_for_display,
     is_char_atom, is_mangled, is_nil as _is_nil, spelling,
 )
@@ -3071,6 +3072,12 @@ class _UndefinedType:
         # preserving the singleton across process/serialisation boundaries.
         return (_get_undefined, ())
 
+    def __unify__(self, other, trail):
+        # The atom ``undefined``: identical to itself (the unifier's identity
+        # fast path) and to the str of its spelling (``atoms.TRUTH_SPELLINGS``
+        # -- the same atom in its other spelling); to nothing else.
+        return type(other) is str and other == "undefined"
+
 
 def _get_undefined() -> "_UndefinedType":
     """Module-level factory used by ``_UndefinedType.__reduce__`` (picklable)."""
@@ -3079,6 +3086,7 @@ def _get_undefined() -> "_UndefinedType":
 
 
 Undefined = _UndefinedType()
+_register_undefined_atom(Undefined)   # the third truth atom: see clausal.logic.atoms
 
 
 # ── Deferred Python expression thunk ──────────────────────────────────────────
@@ -3346,8 +3354,8 @@ def term_str(t: Any, style: TermStyle | None = None, _bd: int = 0,
         return "None"
     if t is ...:
         return "..."
-    if isinstance(t, bool):
-        return str(t)
+    if isinstance(t, bool) or t is Undefined:
+        return _truth_spelling(t)   # the atoms true/false/undefined (D35)
     if isinstance(t, Decimal):
         return _c(str(t), 'number', style)
     if isinstance(t, (int, float, complex)):
@@ -3534,8 +3542,8 @@ def term_canonical(t: Any) -> str:
         return "None"
     if t is ...:
         return "..."
-    if isinstance(t, bool):
-        return str(t)
+    if isinstance(t, bool) or t is Undefined:
+        return _truth_spelling(t)   # the atoms true/false/undefined (D35)
     if isinstance(t, Decimal):
         return str(t)
     if isinstance(t, (int, float, complex)):

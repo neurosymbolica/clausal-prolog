@@ -286,7 +286,9 @@ def _numeric_tag(x):
     """
     if type(x) is int:
         return int
-    if isinstance(x, (bool, float, complex, _Decimal, _Fraction)):
+    if isinstance(x, bool):
+        return None                     # a truth ATOM (D35), not a number kind
+    if isinstance(x, (float, complex, _Decimal, _Fraction)):
         return type(x)
     # An exact-number CELL (``('decimal', M, S)``, ``('rdiv', N, D)``) is NOT
     # tagged here, deliberately: ``structural_eq`` already separates a cell
