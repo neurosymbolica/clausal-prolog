@@ -402,7 +402,7 @@ def _cumulative(tasks, options, trail):
     triples = []
     for t in ts:
         if not (type(t) is tuple and len(t) == 6 and t[0] == "task"):
-            raise LogicException(type_error("task", t, ctx))
+            return False            # not a task/5: Scryer fails
         s, d, e, c = (deref(a) for a in t[1:5])
         for x in (s, e):
             _integer_or_fd_var(x, ctx)
@@ -415,6 +415,8 @@ def _cumulative(tasks, options, trail):
                     f"integers here"))
             raise LogicException(type_error(
                 "integer", d if type(d) is not int else c, ctx))
+        if d <= 0 or c < 0:
+            return False            # Scryer: D #> 0, C #>= 0
         # E = S + D
         if not _fd.fd_eq(e, ("+", s, d), trail):
             return False
@@ -471,12 +473,23 @@ def _disjoint2(rects, trail, k):
     """
     from clausal.logic.clpz_surface import post_connective  # noqa: PLC0415
     from clausal.logic.exceptions import LogicException, type_error  # noqa: PLC0415
+    from clausal.logic.exceptions import instantiation_error  # noqa: PLC0415
+    from clausal.logic.variables import is_var  # noqa: PLC0415
     ctx = "disjoint2/1"
     rs = []
     for r in _items(rects, ctx):
+        if is_var(r):
+            raise LogicException(instantiation_error(ctx))   # Scryer's =..
+        rs.append(r)
+    if len(rs) < 2:
+        yield None                  # no pair to compare: Scryer succeeds
+        return
+    for i, r in enumerate(rs):
         if not (type(r) is tuple and len(r) == 5 and type(r[0]) is str):
-            raise LogicException(type_error("rectangle", r, ctx))
-        rs.append(r[1:])
+            return                  # not F(X, W, Y, H): no pattern matches
+        for a in r[1:]:
+            _integer_or_fd_var(a, ctx)
+        rs[i] = r[1:]
 
     def a_not_in_b(a, b):
         ax, aw, ay, ah = a

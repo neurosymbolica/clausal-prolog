@@ -241,6 +241,13 @@ u2(R) :- findall([S1,S2], (Ts = [task(S1,2,_,1,_), task(S2,2,_,1,_)], [S1,S2] in
 u3(R) :- findall(E, (cumulative([task(0,3,E,1,a)])), R).
 u4(E) :- catch(cumulative([], [foo]), error(E, _), true).
 u5(E) :- catch(cumulative([task(0,_,_,1,a)]), error(E, _), true).
+u6(R) :- findall(x, cumulative([task(0,0,_,1,a)]), R).
+u7(R) :- findall(x, cumulative([task(0,-1,_,1,a)]), R).
+u8(R) :- findall(x, cumulative([task(0,1,_,-1,a)]), R).
+u9(R) :- findall(x, cumulative([task(0,1,_,0,a)]), R).
+u10(E) :- catch(cumulative([], [limit(_)]), error(E, _), true).
+u11(R) :- findall(x, cumulative([foo]), R).
+u12(R) :- findall(x, cumulative([task(0,2,5,1,a)]), R).
 """
 
 
@@ -255,6 +262,11 @@ def test_cumulative(native, ans):
     assert ans(mod, "u4") == [("domain_error", "cumulative_options_empty_or_limit",
                                ["foo"])]
     assert ans(mod, "u5") == ["instantiation_error"]
+    # Scryer: D #> 0 and C #>= 0; a non-task fails; E = S + D
+    assert [ans(mod, f"u{i}") for i in (6, 7, 8, 9)] == [[[]], [[]], [[]], [["x"]]]
+    assert ans(mod, "u10") == ["instantiation_error"]
+    assert ans(mod, "u11") == [[]]
+    assert ans(mod, "u12") == [[]]
 
 
 SERIAL = """\
@@ -264,6 +276,11 @@ s2(R) :- findall([A,B,C], ([A,B,C] ins 0..4, serialized([A,B,C], [1,2,1]), A #< 
 d1(R) :- findall([X,Y], ([X,Y] ins 0..2, disjoint2([r(0,2,0,2), r(X,1,Y,1)]), label([X,Y])), R).
 d2(R) :- findall(X, (X in 0..3, disjoint2([r(0,2,0,1), r(X,2,0,1)]), label([X])), R).
 s3(E) :- catch(serialized([_], [a]), error(E, _), true).
+s4(R) :- findall(x, serialized([_,_], [1]), R).
+s5(R) :- findall(x, serialized([_], [-1]), R).
+d3(R) :- findall(x, disjoint2([r(a,1,0,1)]), R).
+d4(E) :- catch(disjoint2([r(a,1,0,1), r(0,1,0,1)]), error(E, _), true).
+d5(E) :- catch(disjoint2([_]), error(E, _), true).
 """
 
 
@@ -275,3 +292,10 @@ def test_serialized_and_disjoint2(native, ans):
     assert ans(mod, "d1") == [[[0, 2], [1, 2], [2, 0], [2, 1], [2, 2]]]
     assert ans(mod, "d2") == [[2, 3]]
     assert ans(mod, "s3") == [("type_error", "integer", "a")]
+    assert ans(mod, "s4") == [[]]
+    assert ans(mod, "s5") == [[]]
+    # one rectangle has no pair to check (Scryer succeeds); with a pair the
+    # coordinates are checked; an unbound rectangle is instantiation_error
+    assert ans(mod, "d3") == [["x"]]
+    assert ans(mod, "d4") == [("type_error", "integer", "a")]
+    assert ans(mod, "d5") == ["instantiation_error"]
