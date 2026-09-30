@@ -326,3 +326,74 @@ def test_automaton_3(native, ans):
     # other nodes are ignored; a partly bound sequence
     assert ans(mod, "a6") == [[0, 2]]
     assert ans(mod, "a7") == [[]]         # a malformed arc: Scryer fails
+
+
+AUTOMATON8 = """\
+:- use_module(library(clpz)).
+:- use_module(library(lists)).
+sequence_inflexions(Vs, N) :-
+        variables_signature(Vs, Sigs),
+        automaton(Sigs, _, Sigs,
+                  [source(s),sink(i),sink(j),sink(s)],
+                  [arc(s,0,s), arc(s,1,j), arc(s,2,i),
+                   arc(i,0,i), arc(i,1,j,[C+1]), arc(i,2,i),
+                   arc(j,0,j), arc(j,1,j),
+                   arc(j,2,i,[C+1])],
+                  [C], [0], [N]).
+variables_signature([], []).
+variables_signature([V|Vs], Sigs) :- variables_signature_(Vs, V, Sigs).
+variables_signature_([], _, []).
+variables_signature_([V|Vs], Prev, [S|Sigs]) :-
+        V #= Prev #<==> S #= 0,
+        Prev #< V #<==> S #= 1,
+        Prev #> V #<==> S #= 2,
+        variables_signature_(Vs, V, Sigs).
+b1(R) :- findall(N, sequence_inflexions([1,2,3,3,2,1,3,0], N), R).
+b2(R) :- findall(Ls, (length(Ls, 5), Ls ins 0..1, sequence_inflexions(Ls, 3), label(Ls)), R).
+b3(R) :- findall(N, automaton([1,0,1], _, [1,0,1], [source(a),sink(a)], [arc(a,0,a), arc(a,1,a,[C+1])], [C], [0], [N]), R).
+b4(R) :- findall(S, automaton([2,3,4], V, [0,1,0], [source(a),sink(a)], [arc(a,0,a,[C+V]), arc(a,1,a)], [C], [0], [S]), R).
+b5(R) :- findall(T, automaton([p(1,5),p(0,7),p(1,2)], p(_,W), [1,0,1], [source(a),sink(a)], [arc(a,1,a,[C+W]), arc(a,0,a)], [C], [0], [T]), R).
+b6(R) :- findall(F, automaton([], _, [], [source(a),sink(a)], [arc(a,0,a)], [_], [7], F), R).
+b7(R) :- findall(Q-N, automaton(Q, _, [1,1], [source(a),sink(a)], [arc(a,1,a,[C+1])], [C], [0], [N]), R).
+b8(R) :- findall(Vs, (length(Vs, 3), Vs ins 0..1, automaton(Vs, _, Vs, [source(a),sink(a)], [arc(a,0,a), arc(a,1,a,[C+1])], [C], [0], [2]), label(Vs)), R).
+b9(R) :- findall(F, automaton([1,1], _, [1,1], [source(a),sink(a)], [arc(a,1,a,[C+1,D*2])], [C,D], [0,1], F), R).
+b10(R) :- findall(F, automaton([1], _, [1], [source(a),sink(a)], [arc(a,1,a,[1+2])], [_], [0], F), R).
+b11(R) :- findall(F, automaton([1], _, [1], [source(a),sink(a)], [arc(a,1,a)], [1], [0], F), R).
+b12(R) :- findall(x, automaton([1,2], _, [1], [source(a),sink(a)], [arc(a,1,a)], [_], [0], _), R).
+b13(R) :- findall(X-F, (automaton([X], _, [X], [source(a),sink(a)], [arc(a,1,a,[C+1]), arc(a,2,a,[C+5])], [C], [0], [F]), F = 5), R).
+f1(E) :- catch(automaton([1], _, [1], [source(a),sink(a)], [arc(a,1,a)], foo, [0], _), error(E, _), true).
+f2(E) :- catch(automaton([1], _, [1|_], [source(a),sink(a)], [arc(a,1,a)], [_], [0], _), error(E, _), true).
+f3(E) :- catch(automaton(foo, _, [1], [source(a),sink(a)], [arc(a,1,a)], [_], [0], _), error(E, _), true).
+f4(E) :- catch(automaton([1], _, [1], [source(a),sink(a)], [arc(a,1,a,[C+Z])], [C], [0], _), error(E, _), true).
+f5(E) :- catch(automaton([1|_], [source(a),sink(a)], [arc(a,1,a)]), error(E, _), true).
+"""
+
+
+def test_automaton_8(native, ans):
+    """automaton/8 did not exist.  Rows b1/b2 are the examples of Scryer's
+    own documentation of automaton/8; b6, b10-b12 and f1-f3, f5 are Scryer's
+    answers.  Scryer's library raises instantiation_error (arg/3) for every
+    counter expression with a variable (its template_var_path/3 calls arg/3
+    with an unbound index), so the rest are the documented relation."""
+    mod = native.load("l3_clpz_automaton8", AUTOMATON8)
+    assert ans(mod, "b1") == [[3]]
+    assert ans(mod, "b2") == [[[0, 1, 0, 1, 0], [1, 0, 1, 0, 1]]]
+    assert ans(mod, "b3") == [[2]]            # counting the ones
+    assert ans(mod, "b4") == [[6]]            # summing where the label is 0
+    assert ans(mod, "b5") == [[7]]            # a compound template
+    assert ans(mod, "b6") == [[[7]]]          # empty: Finals = Initials
+    (row,) = ans(mod, "b7")                   # unbound Sequence = Signature
+    assert [(q, n) for (_m, q, n) in row] == [([1, 1], 2)]
+    assert ans(mod, "b8") == [[[0, 1, 1], [1, 0, 1], [1, 1, 0]]]
+    assert ans(mod, "b9") == [[[2, 4]]]       # two counters
+    assert ans(mod, "b10") == [[[3]]]
+    assert ans(mod, "b11") == [[[1]]]         # arc/3: the counter "term" 1
+    assert ans(mod, "b12") == [[]]            # lengths differ: fail
+    (row,) = ans(mod, "b13")                  # propagates to the label
+    assert [(x, f) for (_m, x, f) in row] == [(2, 5)]
+    assert ans(mod, "f1") == [("type_error", "list", "foo")]
+    assert ans(mod, "f2") == ["instantiation_error"]
+    assert ans(mod, "f3") == [("type_error", "list", "foo")]
+    (row,) = ans(mod, "f4")
+    assert row[:2] == ("domain_error", "variable_from_template_or_counters")
+    assert ans(mod, "f5") == ["instantiation_error"]
