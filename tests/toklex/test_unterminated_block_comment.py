@@ -208,3 +208,62 @@ def test_seam_source_is_not_affected(tmp_path, monkeypatch):
     mod = _load_module(name, str(p))
     v = Var()
     assert [_deref_walk(v) for _ in solve(("colour", v), mod)] == ["red"]
+
+
+# ── .pl source: block comments do NOT nest (ISO, Scryer) ─────────────────
+#
+# Both files from the Scryer measurement, 2026-09-30: N1 loads in Scryer
+# (the `*/` closes the comment its `/*` opened; the inner `/*` is text) and
+# N2 does not (` still */` is left over as code:
+# syntax_error(incomplete_reduction)). Until then both .pl front ends read
+# with nesting on and did the opposite: N1 refused, N2 loaded.
+
+N1 = ":- module({name}, []).\n/* outer /* inner */\na(1).\ntest(t) :- a(1).\n"
+N2 = ":- module({name}, []).\n/* outer /* inner */ still */\na(1).\ntest(t) :- a(1).\n"
+
+
+@pytest.mark.parametrize("frontend", ["native", "translator"])
+def test_pl_comment_closes_at_the_first_close(tmp_path, monkeypatch, frontend):
+    from clausal.import_hook import _load_module
+    from clausal.logic.solve import _deref_walk, solve
+    from clausal.logic.variables import Var
+    monkeypatch.setenv("CLAUSAL_PL_FRONTEND", frontend)
+    name = f"nest_n1_{frontend}_{next(_N)}"
+    p = tmp_path / f"{name}.pl"
+    p.write_text(N1.format(name=name))
+    mod = _load_module(name, str(p))
+    v = Var()
+    assert [_deref_walk(v) for _ in solve(("test", v), mod)] == ["t"]
+
+
+@pytest.mark.parametrize("frontend", ["native", "translator"])
+def test_pl_text_after_the_first_close_is_code(tmp_path, monkeypatch, frontend):
+    from clausal.import_hook import _load_module
+    monkeypatch.setenv("CLAUSAL_PL_FRONTEND", frontend)
+    name = f"nest_n2_{frontend}_{next(_N)}"
+    p = tmp_path / f"{name}.pl"
+    p.write_text(N2.format(name=name))
+    with pytest.raises(SyntaxError) as ei:
+        _load_module(name, str(p))
+    assert "*/" in str(ei.value)                 # the leftover ` still */`
+
+
+def test_reader_default_still_nests():
+    # The parameter stays: only the .pl loaders pass nested_comments=False.
+    src = "/* outer /* inner */ still */\na(1).\n"
+    assert [type(i) for i in read_module(src)] == [Clause]
+    assert type(read_module(src, nested_comments=False)[0]) is SyntaxIssue
+
+
+@pytest.mark.parametrize("text,loads", [(N1, True), (N2, False)])
+def test_scryer_agrees(tmp_path, text, loads):
+    import os
+    from tests._oracles import SCRYER, run_scryer
+    if not os.path.exists(SCRYER):
+        pytest.skip("scryer binary not present")
+    p = tmp_path / "nest.pl"
+    p.write_text(text.format(name="nest"))
+    out = run_scryer(str(p), ["nest:test(X)."], timeout=30)
+    text_out = out.stdout + out.stderr
+    assert ("X = t" in text_out) is loads, text_out
+    assert ("syntax_error(incomplete_reduction)" in text_out) is (not loads)

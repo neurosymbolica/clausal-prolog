@@ -1139,7 +1139,9 @@ def read_iso(source: str, op_table=None) -> list:
     close a last clause with no trailing newline stayed pending and was lost
     (2026-09-29).  ``SyntaxIssue`` items are returned like any other."""
     from clausal.tools.prolog_reader import read_module
-    return read_module(source, op_table=op_table or reader_op_table())
+    from clausal.tools.prolog_tokenizer import PL_SOURCE_NESTED_COMMENTS
+    return read_module(source, op_table=op_table or reader_op_table(),
+                       nested_comments=PL_SOURCE_NESTED_COMMENTS)
 
 
 def iter_iso(source: str, op_table=None):
@@ -1148,8 +1150,10 @@ def iter_iso(source: str, op_table=None):
     so a directive lowered between two reads can change the table the
     next item is parsed with (``use_module(library(clpz))``'s ops)."""
     from clausal.tools.prolog_reader import EOF, NEED_MORE, PrologReader  # noqa: PLC0415
+    from clausal.tools.prolog_tokenizer import PL_SOURCE_NESTED_COMMENTS  # noqa: PLC0415
     table = op_table if op_table is not None else reader_op_table()
-    reader = PrologReader(op_table=table)
+    reader = PrologReader(op_table=table,
+                          nested_comments=PL_SOURCE_NESTED_COMMENTS)
     reader.feed(source)
     reader.close()
 

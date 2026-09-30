@@ -67,7 +67,8 @@ import glob
 
 import pytest
 
-from clausal.tools.prolog_tokenizer import Token, TokenType, TokenizeError, tokenize
+from clausal.tools.prolog_tokenizer import (PL_SOURCE_NESTED_COMMENTS, Token,
+                                            TokenType, TokenizeError, tokenize)
 
 NASTY = [
     "foo(X) :- bar(X).", "X =.. L.", "a. ", "1. ", "1.5.", "1.0e7. ", "0'a.",
@@ -326,23 +327,21 @@ class TestScryerCorpus:
     than fails -- no file currently needs that fallback, but it's kept for
     robustness against dialect-outside-scope corpus files in general.
 
-    Two corpus files, crypto.pl and clpb.pl, carry a stray ``/*`` inside a
-    comment, so under nested-comment mode (``tokenize()``'s default) the
-    comment never closes. Until 2026-09-30 that swallowed the rest of the
-    file silently (old AND new tokenizer agreed); since the ruling that an
-    unterminated block comment is a syntax error, ``tokenize()`` raises
-    ``TokenizeError`` for them and they skip here -- read without nesting
-    (ISO, Scryer) they tokenize normally."""
+    The files are read as the ``.pl`` loaders read them, with
+    ``PL_SOURCE_NESTED_COMMENTS`` (no nesting: ISO, Scryer). Two corpus
+    files, crypto.pl and clpb.pl, carry a stray ``/*`` inside a comment:
+    with nesting on the comment never closes -- until 2026-09-30 that
+    swallowed the rest of the file silently, and since then it is an
+    unterminated-comment error -- but without nesting they read in full."""
 
     @pytest.mark.parametrize("path", sorted(glob.glob(SCRYER_LIB + "/*.pl")))
     def test_corpus_file(self, path):
         src = open(path, encoding="utf-8", errors="strict").read()
         try:
-            toks = tokenize(src)
+            toks = tokenize(src, nested_comments=PL_SOURCE_NESTED_COMMENTS)
         except TokenizeError:
-            pytest.skip("file uses syntax outside the dialect, or a stray /* "
-                        "that nesting leaves unterminated")
-        assert toks[-1].type == TokenType.END and len(toks) >= 1
+            pytest.skip("file uses syntax outside the dialect (also failed before)")
+        assert toks[-1].type == TokenType.END and len(toks) > 1
 
 
 class TestTokenOffsets:

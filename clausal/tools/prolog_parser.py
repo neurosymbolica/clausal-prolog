@@ -66,7 +66,8 @@ class ParseError(Exception):
 
 
 def parse(source: str, *, dialect: Dialect | None = None,
-          op_table: OperatorTable | None = None) -> PModule:
+          op_table: OperatorTable | None = None,
+          nested_comments: bool = True) -> PModule:
     """Parse Prolog source text into a PModule AST.
 
     Parameters
@@ -78,13 +79,16 @@ def parse(source: str, *, dialect: Dialect | None = None,
         as the starting point (unless *op_table* is also given).
     op_table : OperatorTable, optional
         Explicit operator table.  Takes precedence over *dialect*.
+    nested_comments : bool
+        Whether ``/* /* */ */`` nests (see ``tokenize()``). A ``.pl`` file
+        is read with ``PL_SOURCE_NESTED_COMMENTS`` (False: ISO, Scryer).
     """
     if op_table is None:
         if dialect is not None:
             op_table = dialect.operator_table
         else:
             op_table = OperatorTable.scryer_builtin_default()
-    tokens = tokenize(source)
+    tokens = tokenize(source, nested_comments=nested_comments)
     parser = PrologParser(tokens, op_table)
     return parser.parse_program()
 

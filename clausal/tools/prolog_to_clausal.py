@@ -43,6 +43,7 @@ from clausal.templating.term_rewriting import (
     _titlecase_to_snake,
 )
 from clausal.tools.prolog_parser import parse
+from clausal.tools.prolog_tokenizer import PL_SOURCE_NESTED_COMMENTS
 # The two quoted-token writers (spec §6.7): an ATOM is single-quoted, a
 # STRING is double-quoted, and which one a literal gets is the whole
 # difference between the two terms after THE FLIP.
@@ -440,7 +441,8 @@ def prolog_to_clausal(source: str, *, dialect: Dialect | None = None,
     """
     if dialect is None:
         dialect = Dialect.scryer_reader()
-    pmodule = parse(source, dialect=dialect)
+    pmodule = parse(source, dialect=dialect,
+                    nested_comments=PL_SOURCE_NESTED_COMMENTS)
     return prolog_ast_to_clausal(pmodule, dialect=dialect,
                                  source_path=source_path,
                                  module_name=module_name)
@@ -1401,7 +1403,8 @@ class _PrologToClausal:
             return []
         try:
             text = Path(path).read_text(encoding="utf-8")
-            pmod = parse(text, dialect=self._dialect)
+            pmod = parse(text, dialect=self._dialect,
+                         nested_comments=PL_SOURCE_NESTED_COMMENTS)
         except Exception as e:  # noqa: BLE001
             raise PrologTranslationError(
                 f"{directive}: cannot read the export list of {path}: "
