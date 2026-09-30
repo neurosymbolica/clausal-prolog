@@ -34,6 +34,8 @@ il :- is_list([b|foo]).
 len :- length([b|foo], _).
 app :- append([b|foo], [c], _).
 mem(X) :- member(X, [a,b|foo]).
+memchk :- memberchk(b, [a,b|foo]).
+ac(E) :- catch(atom_chars(_, [b|foo]), error(E, _), true).
 fun(N/A) :- functor([b|foo], N, A).
 univ(L) :- [b|foo] =.. L.
 wq :- writeq([b|foo]), nl, writeq([a,b|c]), nl, writeq([f(1)|g(1)]), nl,
@@ -76,6 +78,8 @@ def test_list_builtins_reject_it_as_iso_requires(mod, ans):
     assert ans(mod, "len", 0) == []           # Scryer's length/2 fails
     assert ans(mod, "app", 0) == []
     assert ans(mod, "mem") == ["a", "b"]      # member(X, [X|_]) walks cells
+    assert ans(mod, "memchk", 0) == [()]
+    assert ans(mod, "ac") == [("type_error", "list", cell)]
 
 
 def test_it_is_the_compound_dot_2(mod, ans):
@@ -95,3 +99,17 @@ def test_the_writer_on_the_cell():
     assert term_write((".", "a", ["b"]), quoted=True) == "[a,b]"
     assert term_write((".", "a", "c"), quoted=True,
                       ignore_ops=True) == "'.'(a,c)"
+
+
+def test_an_interior_hole_fails_against_the_cell():
+    """A seam pattern with a hole before its end (``[*A, b]``) is a proper
+    list: it fails against a cons cell, rather than recursing."""
+    from clausal.logic.variables import Trail, Var, unify
+    from clausal.terms import ConcreteSeg, SegList, VarSeg
+    cell = (".", "x", "foo")
+    for segs in ([VarSeg(Var()), ConcreteSeg(["b"])],
+                 [ConcreteSeg(["x"]), VarSeg(Var()), ConcreteSeg(["b"])],
+                 [VarSeg(Var()), VarSeg(Var())]):
+        assert not unify(SegList(segs), cell, Trail())
+    t = Var()
+    assert unify(SegList([ConcreteSeg(["x"]), VarSeg(t)]), cell, Trail())

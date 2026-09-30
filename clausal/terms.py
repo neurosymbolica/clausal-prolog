@@ -511,6 +511,14 @@ def _unify_seglist_cons(walked, cell, trail):
             return False
         tail = deref(tail[2])
     rest = ([ConcreteSeg(elems)] if elems else []) + segs
+    if _is_cons_cell(tail) and not (len(rest) == 1
+                                    and isinstance(rest[0], VarSeg)):
+        # Stopped at an interior hole (``[*A, b]``, ``[*A, *B]``): a hole
+        # holds a LIST, so what follows it is a proper-list pattern and can
+        # never be the improper remainder -- fail, rather than hand the same
+        # SegList back to this function.
+        trail.undo(mark)
+        return False
     if not rest:
         rest_term: Any = []
     elif len(rest) == 1 and isinstance(rest[0], VarSeg):
