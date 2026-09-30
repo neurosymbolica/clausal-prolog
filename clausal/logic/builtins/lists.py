@@ -95,6 +95,16 @@ def _as_membership_items(val):
     from clausal.terms import DictTerm, SetTerm
     if isinstance(val, (DictTerm, dict, SetTerm, set, frozenset)):
         return list(val)
+    if type(val) is tuple and len(val) == 3 and val[0] == ".":
+        # An IMPROPER list, the cons cell ``'.'(H, T)``: the prologue's
+        # member/2 (``member(X, [X|_])``) finds every head it walks past,
+        # so ``member(b, [b|foo])`` succeeds, as in Scryer.
+        heads = []
+        while type(val) is tuple and len(val) == 3 and val[0] == ".":
+            heads.append(val[1])
+            val = deref(val[2])
+        tail = _as_items(val)
+        return heads + tail if tail is not None else heads
     return None
 
 
