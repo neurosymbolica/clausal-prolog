@@ -964,8 +964,18 @@ def is_real_expression(expr, context: str) -> bool:
     ``inf/2``/``sup/2`` use to answer from CLP(R) rather than CLP(Q)."""
     vars_list: list = []
     _collect_vars_from(_expr_node(expr, context), vars_list)
-    return any(is_var(v := deref(x)) and get_attr(v, REAL_KEY) is not None
+    return any(is_var(v := deref(x)) and get_attr(_solver_var(v), REAL_KEY) is not None
                for x in vars_list)
+
+
+def _solver_var(v):
+    """The variable CLP(R) holds the interval on: a united variable's shadow
+    (the side channel posts there), else *v* itself."""
+    from clausal.logic.units_constraint import UNITS_KEY  # noqa: PLC0415
+    state = get_attr(v, UNITS_KEY)
+    if state is not None and state.shadow is not None:
+        return state.shadow
+    return v
 
 
 def _expr_node(expr, context):
@@ -987,11 +997,19 @@ def real_bound(expr, result, trail: Trail, which: str) -> bool:
     ``[-1, 1]``) -- this solver narrows intervals, it is not a simplex.
     """
     context = f"{which}/2"
-    lo, hi = _expr_interval(_expr_node(expr, context), trail)
+    node = _expr_node(expr, context)
+    # The units side channel, as CLP(Q)'s sup/inf run it: a united variable
+    # reads its shadow's interval and the bound comes back with the
+    # expression's dimension (it read the unconstrained user variable before
+    # and answered wrongly or not at all).
+    from clausal.logic.units_clp import reattach, strip_expr_for_solver  # noqa: PLC0415
+    stripped = strip_expr_for_solver(node, context, trail)
+    node, dims = (node, {}) if stripped is None else stripped
+    lo, hi = _expr_interval(node, trail)
     bound = lo if which == "inf" else hi
     if math.isinf(bound) or math.isnan(bound):
         return False
-    return unify(result, bound, trail)
+    return unify(result, reattach(bound, dims) if dims else bound, trail)
 
 
 def label_real(vars_list, trail: Trail, eps: float | None = None):
@@ -1011,6 +1029,11 @@ def label_real(vars_list, trail: Trail, eps: float | None = None):
     vars_list = deref(vars_list)
     if not isinstance(vars_list, list):
         vars_list = [vars_list]
+    # A united variable's interval sits on its shadow (the units side
+    # channel posted there): label the shadow, as label/1 and CLP(Q) do.
+    from clausal.logic.units_clp import label_targets  # noqa: PLC0415
+    vars_list = label_targets(
+        vars_list, "label_real/1" if eps is None else "label_real/2")
 
     # Collect unbound real vars that are still bisectable (not yet at resolution).
     # A var is "resolved" if its midpoint equals an endpoint (IEEE precision)

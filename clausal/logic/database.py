@@ -1581,6 +1581,41 @@ class Database:
         for k in to_remove:
             del self._table_store[k]
 
+    def abolish(self, functor: str, arity: int, author: str | None = None) -> None:
+        """ISO 8.9.4 ``abolish/1`` for a DYNAMIC procedure this database is
+        the home of: every clause AND the procedure itself go, so a later
+        call is ``existence_error(procedure, F/N)`` as for a name never
+        defined (ISO, Scryer) -- not the silent failure a dynamic procedure
+        with no clauses gives.  The caller checks that the row is dynamic
+        (a static one is ISO's permission_error); the write goes through
+        the gate as a retract, which authorizes it and abolishes the table.
+
+        The key leaves every store that makes a procedure known here
+        (:meth:`_home_stores`, the cached row) and its per-procedure
+        declarations (dynamic, discontiguous, tabled, shallow,
+        meta_predicate).  Kept: a fielded DATA declaration and a ``name/N``
+        export entry, which belong to the module's vocabulary, not to the
+        procedure.  A row object an importer adopted keeps reading this
+        database live by key, so it sees the procedure gone too.
+        """
+        key = (functor, arity)
+        with self.mutate(functor, arity, author=author or self.runtime_author(),
+                         kind=WRITE_RETRACT, detail="abolish/1") as row:
+            # All of it INSIDE the transaction, so no write lands between
+            # the clear and the removal.  The gate's exit then finds no
+            # ``_dispatch`` entry to invalidate (it writes one only over an
+            # existing entry, which would make the key known again) and no
+            # tabled mark; it stamps the detached row object, harmlessly.
+            row.ensure_clauses().clear()
+            self.abolish_table(functor, arity)
+            for store in (self._clauses, self._dispatch, self._lazy_recompile,
+                          self._signatures, self._meta_specs):
+                store.pop(key, None)
+            for marks in (self._dynamic, self._discontiguous, self._tabled,
+                          self._shallow):
+                marks.discard(key)
+            self._rows.pop(key, None)
+
     def abolish_all_tables(self) -> None:
         """Remove all cached tabling answers."""
         self._table_store.clear()

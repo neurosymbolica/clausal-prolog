@@ -153,6 +153,27 @@ since 0.4.0 finish three moves:
 
 ### Added
 
+- **`abolish/1` (ISO 8.9.4).** `abolish(Name/Arity)` removes a dynamic
+  procedure: its clauses and the procedure itself, so a later call is
+  `existence_error(procedure, Name/Arity)` (a procedure emptied by
+  `retract/1` fails instead). A static procedure, user-defined or builtin,
+  is `permission_error(modify, static_procedure, Name/Arity)`; a procedure
+  that does not exist is no error; the indicator's errors are ISO's
+  (instantiation, `type_error(predicate_indicator, PI)`, `type_error(atom,
+  Name)`, `type_error(integer, Arity)`, `domain_error(not_less_than_zero,
+  Arity)`). It was an existence error. The database has a matching
+  `Database.abolish(functor, arity)`.
+
+- **clpz's `sum/3` and `global_cardinality/3` on the native `.pl` front
+  end.** `sum(Vs, Op, Value)` (Op one of `#=`, `#\=`, `#<`, `#>`, `#=<`,
+  `#>=`; Value a clpz expression) and `global_cardinality(Vs, Pairs,
+  Options)` with Scryer's options `consistency(value)` and `cost(Cost,
+  Matrix)`, answering and raising as Scryer's clpz does. `sum/3` is not a
+  global builtin (a global `sum` would shadow Python's `sum` inside a seam
+  `++` escape): it resolves only in a `.pl` file that imports
+  library(clpz), from `clausal.stdlib.clpz_sum`; a file that defines its
+  own `sum/2` still loads.
+
 - **Constants, units and dicts on the native `.pl` front end.** A `.pl`
   file declares constants with the seam's directive family in ISO syntax
   (`:- constant_value(max_retries, 3).`, `:- constant_number_units(max_fine,
@@ -581,6 +602,14 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
   `domain_error(not_less_than_zero, A)`; `numlist(a, 3, L)` is
   `type_error(integer, a)`.  All of these used to fail silently.
   (`numlist/3` with an unbound bound still fails; Scryer enumerates.)
+- **CLP(R) reads a united variable's interval.** The units side channel
+  posts a physical quantity's constraint on a shadow variable; `inf/2`,
+  `sup/2` and `label_real/1,2` read the user's variable instead, so after
+  `clpr.real((X >= constant(one_metre), X <= 2 * constant(one_metre)))`,
+  `inf(X, L)` answered `0 metre` (from CLP(Q)) and `sup(X, H)` failed. They
+  now read the shadow and answer with the expression's dimension (`1.0
+  metre`, `2.0... metre`), the same numbers as the unit-free twin. Money is
+  still refused by CLP(R) (`units_unsupported`).
 
 - **A `.pl` module in an earlier `sys.path` entry is no longer shadowed by a
   `.clausal` or `.seam` module of the same name in a later one.** The import
