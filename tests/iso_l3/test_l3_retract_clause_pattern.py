@@ -148,6 +148,7 @@ t1(R) :- findall(X, retract(s7(X)), R).
 t2(R) :- findall(X, retract(s7(X)), _), findall(Y, s7(Y), R).
 t3(R) :- assertz(k(1)), assertz(k(2)), findall(X, (retract(k(X)), assertz(k(9))), R0), findall(Y, k(Y), R1), R = R0-R1.
 t4(R) :- once(retract(s7(X))), R = X.
+t5(R) :- findall(X, (retract(s7(X)), retractall(s7(b))), R).
 """
 
 
@@ -156,6 +157,9 @@ def test_retract_is_re_executable(native, ans):
     the clauses as they were at the call (a clause asserted meanwhile is
     not seen).  It committed to the first match.  Scryer's answers."""
     for name, want in (("t1", [["a", "b", "a"]]), ("t2", [[]]),
-                       ("t3", [("-", [1, 2], [9, 9])]), ("t4", ["a"])):
+                       ("t3", [("-", [1, 2], [9, 9])]), ("t4", ["a"]),
+                       # a clause removed between answers is still seen
+                       # by the running retract (ISO 7.5.4; Scryer too)
+                       ("t5", [["a", "b", "a"]])):
         mod = native.load(f"l3_retract_reexec_{name}", REEXEC)
         assert ans(mod, name) == want, name
