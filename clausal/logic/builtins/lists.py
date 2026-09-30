@@ -917,14 +917,19 @@ def _union__3(this_generator, _proceed, _fail, _catcher, set1, set2, uni, trail)
 
 @_trampoline_builtin("list_to_set", 2)
 def _list_to_set__2(this_generator, _proceed, _fail, _catcher, lst, set_out, trail):
-    """list_to_set(List, Set) — Set is List with duplicates removed (order preserved)."""
+    """list_to_set(List, Set) — Set is List with duplicates (==/2) removed,
+    first occurrences kept in order."""
     lst_val = deref(lst)
     items = _as_items(lst_val)
     if items is not None:
         items = [deref(x) for x in items]
+        # duplicates by term identity (==/2, Scryer), first occurrence kept:
+        # Python's `in` compared by ==, so 1 and 1.0 (distinct terms) were
+        # one element
+        from clausal.logic.builtins.iso_compare import _iso_identical  # noqa: PLC0415
         seen: list = []
         for x in items:
-            if x not in seen:
+            if not any(_iso_identical(x, y) for y in seen):
                 seen.append(x)
         out = _seq_result(seen, _was_string(lst_val), _was_bytes(lst_val))
         mark = trail.mark()
