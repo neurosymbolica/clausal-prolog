@@ -87,7 +87,8 @@ def test_load_module_takes_a_path_on_a_warm_cache(frontend, tmp_path,
         shutil.rmtree(tmp_path / "__pycache__", ignore_errors=True)
 
 
-@pytest.mark.parametrize("bad", [None, b"/nonexistent-bytes-entry", 7])
+@pytest.mark.parametrize("bad", [None, b"/nonexistent-bytes-entry", 7,
+                                 pathlib.Path("/nonexistent-path-entry")])
 def test_a_non_str_sys_path_entry_is_skipped(tmp_path, bad):
     (tmp_path / "sfxodd.clausal").write_text("which(3),\n")
     saved = list(sys.path)

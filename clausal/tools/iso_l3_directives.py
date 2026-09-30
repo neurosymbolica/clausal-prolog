@@ -1396,7 +1396,8 @@ def _sibling_dotted(ctx, path: str, span, what) -> "str | None":
     whatever top-level ``sib`` ``sys.path`` also holds."""
     if not (ctx.source_path and ctx.module_name):
         return None
-    if path.startswith(("./", "../", "/")) or path in (".", ".."):
+    if path.startswith("/") or any(p in (".", "..")
+                                    for p in path.split("/")):
         return None     # refused by _dotted (ruling D10)
     from clausal.tools.prolog_to_clausal import (  # noqa: PLC0415
         dotted_for_file, package_root, sibling_module_file)

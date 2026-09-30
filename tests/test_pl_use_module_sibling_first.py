@@ -133,3 +133,53 @@ def test_nested_package_bare_and_slash_paths(frontend, roots):
     assert _answers(importlib.import_module("sfq_n.inner.m"), "h") == ["beside"]
     assert "sfq_n.inner.sfq_sub.x" in sys.modules
     assert "sfq_sub.x" not in sys.modules
+
+
+def test_a_plain_directory_beside_the_importer_is_no_module(frontend, roots):
+    # Scryer opens only sfq_top.pl beside the file; a data directory of the
+    # same name must not stop the fallback to the top-level module.
+    ra, rb = roots("RA", "RB")
+    _write(ra / "sfq_pkg" / "__init__.pl", """\
+        :- module(sfq_pkg, [g/1]).
+        :- use_module(sfq_top, [f/1]).
+        g(X) :- f(X).
+    """)
+    _write(ra / "sfq_pkg" / "sfq_top" / "readme.txt", "data\n")
+    _write(rb / "sfq_top.pl", ":- module(sfq_top, [f/1]).\nf(top).\n")
+    assert _answers(importlib.import_module("sfq_pkg"), "g") == ["top"]
+
+
+def test_a_sibling_seam_module_is_imported_from_a_pl_file(frontend, roots):
+    (ra,) = roots("RA")
+    _write(ra / "sfq_pkg" / "__init__.pl", _PKG)
+    _write(ra / "sfq_pkg" / "sfq_sib.clausal",
+           "-module(sfq_sib, [f(X)])\nf(8)\n")
+    assert _answers(importlib.import_module("sfq_pkg"), "g") == [8]
+
+
+def test_a_sibling_file_with_no_dotted_name_is_refused(frontend, roots):
+    (ra,) = roots("RA")
+    _write(ra / "sfq_pkg" / "__init__.pl", """\
+        :- module(sfq_pkg, [g/1]).
+        :- use_module('sfq-bad', [f/1]).
+        g(X) :- f(X).
+    """)
+    _write(ra / "sfq_pkg" / "sfq-bad.pl", ":- module(sfq_bad, [f/1]).\nf(1).\n")
+    with pytest.raises((SyntaxError, ImportError)) as ei:
+        importlib.import_module("sfq_pkg")
+    assert "sfq-bad" in str(ei.value)
+
+
+def test_native_refuses_a_dot_dot_component_inside_a_path(monkeypatch, roots):
+    # Ruling D10 (native): no relative file path, not even mid-path.
+    monkeypatch.setenv(ih.PL_FRONTEND_ENV, "native")
+    (ra,) = roots("RA")
+    _write(ra / "sfq_pkg" / "__init__.pl", """\
+        :- module(sfq_pkg, [g/1]).
+        :- use_module('sfq_sub/../sfq_sib', [f/1]).
+        g(X) :- f(X).
+    """)
+    _write(ra / "sfq_pkg" / "sfq_sib.pl", ":- module(sfq_sib, [f/1]).\nf(1).\n")
+    with pytest.raises(SyntaxError) as ei:
+        importlib.import_module("sfq_pkg")
+    assert "module path" in str(ei.value)

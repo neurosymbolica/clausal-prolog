@@ -489,6 +489,10 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
   front end read the path as a top-level module only: a same-named module
   later on `sys.path` answered silently, and without one the import was
   refused.
+  In both front ends a plain directory beside the importer (one with no
+  `__init__` file) is no module: Scryer opens only the file, and the
+  translator used to take such a directory and never fall back to
+  `sys.path`.
 - **The bytecode cache key includes the source suffix.** A same-directory
   `twin.pl` and `twin.clausal` share one `__pycache__` file; with equal size
   and modification time each was served the other's bytecode. `.pl` and

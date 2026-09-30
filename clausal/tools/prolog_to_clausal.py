@@ -139,10 +139,17 @@ def _plain_term(term) -> str:
     return str(term)
 
 
+_MODULE_EXTS = (".pl", ".clausal", ".seam", ".py")
+
+
 def _module_file_exists(cand: str) -> bool:
-    return (os.path.isdir(cand)
-            or any(os.path.isfile(cand + ext)
-                   for ext in (".pl", ".clausal", ".seam", ".py")))
+    """A module file ``cand.<ext>``, or a PACKAGE ``cand/__init__.<ext>``.
+    A plain directory (data, tests) is no module: Scryer opens only
+    ``cand.pl``, and counting the directory would stop the fallback to the
+    dotted reading on ``sys.path``."""
+    return any(os.path.isfile(cand + ext)
+               or os.path.isfile(os.path.join(cand, "__init__" + ext))
+               for ext in _MODULE_EXTS)
 
 
 def sibling_module_file(path: str, source_path: str) -> str | None:
