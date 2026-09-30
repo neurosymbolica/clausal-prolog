@@ -480,6 +480,13 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
 
 ### Fixed
 
+- **assertz/1 and asserta/1 no longer recompile the predicate on every
+  call.** Each assert recompiled the whole clause list, so filling a
+  predicate was quadratic (about 90 s for 250 clauses). An assert now only
+  invalidates the compiled code and the next call recompiles it once, as
+  retract/1 already does: 250 clauses fill in 0.02 s, 10,000 in 0.5 s (plus
+  one compile at the first call). A call between asserts still sees every
+  clause asserted before it, and a running call still iterates its snapshot.
 - **A module-qualified call to a builtin runs the builtin.** In a `.pl`
   file that also wrote a module name as data (`call(m:G)`,
   `findall(X, m:p(X), L)`), every compiled `m:atom_length(...)`,

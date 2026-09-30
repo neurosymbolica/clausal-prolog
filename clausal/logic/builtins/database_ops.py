@@ -726,6 +726,18 @@ def _assert_clause(db, author, term_val, context, front):
             home.asserta(clause)
         else:
             home.assertz(clause)
+        if home.has_lazy_recompile(functor, arity):
+            # LAZY, as retract/1 is: the gate's exit invalidates the compiled
+            # dispatch (and abolishes a table), and the next CALL recompiles
+            # the whole clause list once, through the row's lazy recompile
+            # (``Database.get_dispatch``).  Recompiling here, on every
+            # assert, made a fill of n clauses O(n^2) (~90 s for 250).  A
+            # call already running keeps the dispatch it started with, so it
+            # still iterates its snapshot (ISO 7.5.4).
+            return
+        # No lazy recompile registered (a brand-new predicate, or one whose
+        # dispatch was installed without one): compile now, which registers
+        # it, so every later assert takes the lazy path above.
         clauses = home.clauses_for(functor, arity)
         compile_predicate_trampoline(functor, arity, clauses, home,
                                      globals_=home_globals,
@@ -756,9 +768,9 @@ def _assertz_factory(db):
 
     Ground facts are automatically normalized to Var+Is form so they are
     queryable in output mode (matching standard Prolog assert semantics).
-    when a module dict is available on the database, also recompiles with
-    module globals for cross-predicate resolution.  ``assertz(M:Term)``
-    writes into module M.
+    The predicate is recompiled (against the module globals, for
+    cross-predicate resolution) lazily, at its next call, not per assert.
+    ``assertz(M:Term)`` writes into module M.
     """
     return _assert_factory("assertz/1", front=False)(db)
 
@@ -767,8 +779,8 @@ def _assertz_factory(db):
 def _asserta_factory(db):
     """asserta(Term) — add Term as a fact at front of its predicate's clause list.
 
-    when a module dict is available on the database, also recompiles with
-    module globals.  ``asserta(M:Term)`` writes into module M.
+    Recompiled lazily, at the next call, as for assertz/1.
+    ``asserta(M:Term)`` writes into module M.
     """
     return _assert_factory("asserta/1", front=True)(db)
 

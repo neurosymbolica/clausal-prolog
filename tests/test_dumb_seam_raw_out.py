@@ -330,8 +330,9 @@ def test_the_constant_registry_dies_with_the_code_object():
 
 
 def test_a_recompiling_dynamic_predicate_does_not_grow_the_registry():
-    """The worst case roborev 252 named: assertz recompiles the predicate
-    every time, and every old code object's constants must go with it.
+    """The worst case roborev 252 named: a predicate recompiled after every
+    assertz (an assert/call loop, since assertz recompiles lazily at the next
+    call), and every old code object's constants must go with it.
     DISCRIMINATING (roborev 257): the growth over two EQUAL intervals is the
     same for linear growth and ~1.7x for quadratic (a*i^2: 30000a vs 50000a),
     the total is bounded by the live clause count, and the table must have
@@ -349,6 +350,10 @@ def test_a_recompiling_dynamic_predicate_does_not_grow_the_registry():
     sizes = [len(cells._COMPILED_GROUND)]
     for i in range(1, 301):
         for _ in call("assertz", ("d", i, ("pt", "a", i)), module=mod):
+            pass
+        # assertz recompiles lazily, at the next call: call d/2 so every
+        # iteration still recompiles (and drops the previous code object).
+        for _ in call("d", i, ("pt", "a", i), module=mod):
             pass
         if i % 100 == 0:
             gc.collect()
