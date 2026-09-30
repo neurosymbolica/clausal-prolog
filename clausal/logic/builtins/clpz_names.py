@@ -250,7 +250,7 @@ def _lex_chain(lists, trail, k):
     ls = [_items(li, "lex_chain/1") for li in _items(lists, "lex_chain/1")]
     for li in ls:                   # every element first, as Scryer checks
         for x in li:
-            _integer_or_fd_var(x)
+            _integer_or_fd_var(x, "lex_chain/1")
     for a, b in zip(ls, ls[1:]):
         if len(a) != len(b):
             return                  # lists of different lengths: Scryer fails
@@ -269,12 +269,12 @@ def _lex_chain(lists, trail, k):
     yield None
 
 
-def _integer_or_fd_var(x):
+def _integer_or_fd_var(x, ctx):
     from clausal.logic.exceptions import LogicException, type_error  # noqa: PLC0415
     from clausal.logic.variables import deref, is_var  # noqa: PLC0415
     x = deref(x)
     if not (is_var(x) or type(x) is int):
-        raise LogicException(type_error("integer", x, "lex_chain/1"))
+        raise LogicException(type_error("integer", x, ctx))
 
 
 #: chain/2's relation atoms (clpz's) -> clpfd.chain's names
@@ -294,7 +294,7 @@ def _chain(relation, vs, trail, k):
     from clausal.logic.variables import deref, is_var  # noqa: PLC0415
     zs = _items(vs, "chain/2")
     for z in zs:
-        _integer_or_fd_var(z)
+        _integer_or_fd_var(z, "chain/2")
     rel = deref(relation)
     if is_var(rel):
         raise LogicException(instantiation_error("chain/2"))
@@ -324,58 +324,48 @@ def _indomain(x, trail, k):
     yield from label([x], trail)
 
 
-def _nvalue_constraint_class():
-    """NValueConstraint, built on first use (clpfd's Constraint base)."""
-    global _NValue
-    if _NValue is not None:
-        return _NValue
-    class NValueConstraint(_fd.Constraint):
-        """``N`` is the number of distinct values among ``Vars``: N lies
-        between the distinct values already taken (at least 1 when Vars is
-        not empty) and the smaller of len(Vars) and the size of the union
-        of their domains; once every variable is bound N is that count, and
-        once N distinct values are taken the rest must repeat them."""
-        __slots__ = ('n', 'vs')
+class NValueConstraint(_fd.Constraint):
+    """``N`` is the number of distinct values among ``Vars``: N lies
+    between the distinct values already taken (at least 1 when Vars is
+    not empty) and the smaller of len(Vars) and the size of the union
+    of their domains; once every variable is bound N is that count, and
+    once N distinct values are taken the rest must repeat them."""
+    __slots__ = ('n', 'vs')
 
-        def __init__(self, n, vs):
-            self.n = n
-            self.vs = tuple(vs)
-            super().__init__((n,) + self.vs)
+    def __init__(self, n, vs):
+        self.n = n
+        self.vs = tuple(vs)
+        super().__init__((n,) + self.vs)
 
-        def propagate(self, trail, queue) -> bool:
-            from clausal.logic.variables import deref, is_var  # noqa: PLC0415
-            vs = [deref(v) for v in self.vs]
-            taken = {v for v in vs if type(v) is int}
-            doms = [_fd._expr_domain(v, trail) for v in vs]
-            union = _fd._domain_union(list(doms))
-            lo = max(len(taken), 1 if vs else 0)
-            hi = min(len(vs), _fd.domain_size(union)) if vs else 0
-            if all(type(v) is int for v in vs):
-                lo = hi = len(taken)
-            n = deref(self.n)
-            nd = _fd.domain_intersection(_fd._expr_domain(n, trail),
-                                         _fd.domain_from_range(lo, hi))
-            if not nd:
-                return False
-            if is_var(n) and not _fd._narrow_if_changed(n, nd, trail, queue):
-                return False
-            n = deref(self.n)
-            if type(n) is int and n == len(taken) and taken:
-                allowed = _fd._indices_to_domain(sorted(taken))
-                for v in vs:
-                    if is_var(v):
-                        dv = _fd.domain_intersection(
-                            _fd._expr_domain(v, trail), allowed)
-                        if not dv or not _fd._narrow_if_changed(
-                                v, dv, trail, queue):
-                            return False
-            return True
+    def propagate(self, trail, queue) -> bool:
+        from clausal.logic.variables import deref, is_var  # noqa: PLC0415
+        vs = [deref(v) for v in self.vs]
+        taken = {v for v in vs if type(v) is int}
+        doms = [_fd._expr_domain(v, trail) for v in vs]
+        union = _fd._domain_union(list(doms))
+        lo = max(len(taken), 1 if vs else 0)
+        hi = min(len(vs), _fd.domain_size(union)) if vs else 0
+        if all(type(v) is int for v in vs):
+            lo = hi = len(taken)
+        n = deref(self.n)
+        nd = _fd.domain_intersection(_fd._expr_domain(n, trail),
+                                     _fd.domain_from_range(lo, hi))
+        if not nd:
+            return False
+        if is_var(n) and not _fd._narrow_if_changed(n, nd, trail, queue):
+            return False
+        n = deref(self.n)
+        if type(n) is int and n == len(taken) and taken:
+            allowed = _fd._indices_to_domain(sorted(taken))
+            for v in vs:
+                if is_var(v):
+                    dv = _fd.domain_intersection(
+                        _fd._expr_domain(v, trail), allowed)
+                    if not dv or not _fd._narrow_if_changed(
+                            v, dv, trail, queue):
+                        return False
+        return True
 
-    _NValue = NValueConstraint
-    return _NValue
-
-
-_NValue = None
 
 
 @_builtin("nvalue", 2, fields=("n", "vars"))
@@ -384,10 +374,11 @@ def _nvalue(n, vs, trail, k):
     from clausal.logic.variables import deref, is_var  # noqa: PLC0415
     items = _items(vs, "nvalue/2")
     for x in items:
-        _integer_or_fd_var(x)
+        _integer_or_fd_var(x, "nvalue/2")
+    _integer_or_fd_var(n, "nvalue/2")
     for x in items + [n]:
         if is_var(deref(x)):
             _fd._ensure_fd(deref(x), trail)
-    c = _nvalue_constraint_class()(n, items)
+    c = NValueConstraint(n, items)
     if _fd._post_constraint(c, trail):
         yield None

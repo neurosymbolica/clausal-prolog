@@ -208,3 +208,27 @@ def test_nvalue(native, ans):
                                p([2, 2], 1)]]
     assert ans(mod, "n4") == [[0]]
     assert ans(mod, "n5") == [[[1, 2, 3]]]
+
+
+NVALUE_ERR = """\
+:- use_module(library(clpz)).
+m1(E) :- catch(nvalue(_, foo), error(E, _), true).
+m2(E) :- catch(nvalue(_, _), error(E, _), true).
+m3(E) :- catch(nvalue(_, [a]), error(E, _), true).
+m4(E) :- catch(nvalue(foo, [1]), error(E, _), true).
+m5(R) :- findall(x, nvalue(3, [_, _]), R).
+m6(E) :- catch((X #> 3, indomain(X)), error(E, _), true).
+m7(E) :- catch(indomain(foo), error(E, _), true).
+"""
+
+
+def test_nvalue_and_indomain_errors(native, ans):
+    """Scryer's error terms; an unreachable N fails."""
+    mod = native.load("l3_clpz_nvalue_err", NVALUE_ERR)
+    assert ans(mod, "m1") == [("type_error", "list", "foo")]
+    assert ans(mod, "m2") == ["instantiation_error"]
+    assert ans(mod, "m3") == [("type_error", "integer", "a")]
+    assert ans(mod, "m4") == [("type_error", "integer", "foo")]
+    assert ans(mod, "m5") == [[]]
+    assert ans(mod, "m6") == ["instantiation_error"]
+    assert ans(mod, "m7") == [("type_error", "integer", "foo")]
