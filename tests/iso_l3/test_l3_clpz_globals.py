@@ -299,3 +299,21 @@ def test_serialized_and_disjoint2(native, ans):
     assert ans(mod, "d3") == [["x"]]
     assert ans(mod, "d4") == [("type_error", "integer", "a")]
     assert ans(mod, "d5") == ["instantiation_error"]
+
+
+AUTOMATON = """\
+:- use_module(library(clpz)).
+:- use_module(library(lists)).
+a1(R) :- findall(Vs, (length(Vs, 3), Vs ins 0..1, automaton(Vs, [source(a),sink(c)], [arc(a,0,a),arc(a,1,b),arc(b,0,a),arc(b,1,c),arc(c,0,c),arc(c,1,c)]), label(Vs)), R).
+a2(R) :- findall(Vs, (length(Vs, 2), Vs ins 0..2, automaton(Vs, [source(s),sink(s)], [arc(s,0,t),arc(t,2,s)]), label(Vs)), R).
+a3(R) :- findall(x, automaton([], [source(s),sink(s)], [arc(s,0,s)]), R).
+"""
+
+
+def test_automaton_3(native, ans):
+    """automaton/3 did not exist; Scryer's answers (a1: at least two
+    consecutive ones)."""
+    mod = native.load("l3_clpz_automaton", AUTOMATON)
+    assert ans(mod, "a1") == [[[0, 1, 1], [1, 1, 0], [1, 1, 1]]]
+    assert ans(mod, "a2") == [[[0, 2]]]
+    assert ans(mod, "a3") == [["x"]]

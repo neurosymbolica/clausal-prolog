@@ -508,3 +508,58 @@ def _disjoint2(rects, trail, k):
             if not (a_not_in_b(rs[i], rs[j]) and a_not_in_b(rs[j], rs[i])):
                 return
     yield None
+
+
+@_builtin("automaton", 3, fields=("vars", "nodes", "arcs"))
+def _automaton_3(vs, nodes, arcs, trail, k):
+    """automaton(Vs, Nodes, Arcs) -- the sequence Vs is accepted by the
+    automaton: Nodes lists source(N) and sink(N), Arcs arc(From, Label, To)
+    with integer labels.  Scryer's decomposition: a state variable between
+    each pair of elements, the first in the sources, the last in the sinks,
+    and each step [S0, V, S1] in the arcs relation (tuples_in/2)."""
+    from clausal.logic.clpfd import tuples_in  # noqa: PLC0415
+    from clausal.logic.clpz_surface import _post  # noqa: PLC0415
+    from clausal.logic.exceptions import LogicException, domain_error  # noqa: PLC0415
+    from clausal.logic.variables import Var, deref  # noqa: PLC0415
+    from clausal.logic.solve import _deref_walk  # noqa: PLC0415
+    ctx = "automaton/3"
+    seq = _items(vs, ctx)
+    for x in seq:
+        _integer_or_fd_var(x, ctx)
+    numbers: dict = {}
+
+    def num(node):
+        key = repr(_deref_walk(node))
+        if key not in numbers:
+            numbers[key] = len(numbers)
+        return numbers[key]
+
+    relation = []
+    for a in _items(arcs, ctx):
+        if not (type(a) is tuple and len(a) == 4 and a[0] == "arc"):
+            raise LogicException(domain_error("automaton_arc", a, ctx))
+        relation.append((num(a[1]), _integer(a[2], ctx), num(a[3])))
+    sources, sinks = [], []
+    for n in _items(nodes, ctx):
+        if type(n) is tuple and len(n) == 2 and n[0] == "source":
+            sources.append(num(n[1]))
+        elif type(n) is tuple and len(n) == 2 and n[0] == "sink":
+            sinks.append(num(n[1]))
+        else:
+            raise LogicException(domain_error("automaton_node", n, ctx))
+    if not sources or not sinks:
+        return
+    states = [Var() for _ in range(len(seq) + 1)]
+    src = tuple((s, s) for s in sorted(set(sources)))
+    snk = tuple((s, s) for s in sorted(set(sinks)))
+    if not (_post([states[0]], _fd._domain_union([src]), trail)
+            and _post([states[-1]], _fd._domain_union([snk]), trail)):
+        return
+    if not seq:
+        yield None
+        return
+    if not relation:
+        return
+    rows = [[states[i], seq[i], states[i + 1]] for i in range(len(seq))]
+    if tuples_in(rows, relation, trail):
+        yield None
