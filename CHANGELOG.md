@@ -20,6 +20,25 @@ since 0.4.0 finish three moves:
 
 ### Breaking
 
+- **An unterminated `/*` block comment is a syntax error** (ruled
+  2026-09-30; ISO, as Scryer's `syntax_error(incomplete_reduction)`). Both
+  toklex lexers used to end an unclosed comment silently at end of input,
+  so everything after the `/*` vanished without a trace. Now the lexer
+  emits an `unterminated` error token from the outermost opener: the
+  reader returns a `resumable=False` `SyntaxIssue` after the items before
+  it, `tokenize()` raises `TokenizeError` at the opener, and a `.pl` file
+  ending in one fails to load under either front end (the native loader
+  names the opener's line).
+- **Block comments in `.pl` source do not nest** (ISO, as Scryer). Both
+  `.pl` front ends read with `nested_comments=False`
+  (`prolog_tokenizer.PL_SOURCE_NESTED_COMMENTS`): `/*` closes at the first
+  `*/`, and only end of input before any `*/` is the unterminated error.
+  `/* outer /* inner */` followed by clauses now loads, and
+  `/* outer /* inner */ still */` is a syntax error (` still */` is code).
+  Both used to go the other way. `PrologReader`, `read_module()`,
+  `tokenize()` and `parse()` keep a `nested_comments` parameter; their
+  default (nesting on) is unchanged.
+
 - **`arg/3` with an unbound `N` raises `instantiation_error`** (ISO 8.5.2.3,
   as Scryer). It used to enumerate the `(N, Arg)` pairs, SWI's extension.
 - **The clpz `#` family refuses a non-arithmetic operand.** `'#='`, `'#\='`,

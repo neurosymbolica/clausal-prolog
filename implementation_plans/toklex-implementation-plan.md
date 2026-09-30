@@ -81,8 +81,17 @@ with its spirit — flag to the user in the final report):
    buffer").
 3. **No DFA minimization** in v1. Tables are tiny; minimization adds risk for zero
    observable benefit.
-4. **Lenient nest-at-EOF**: an unterminated block comment at true EOF ends the trivia
-   silently (parity with the current tokenizer's documented behavior).
+4. ~~**Lenient nest-at-EOF**: an unterminated block comment at true EOF ends the trivia
+   silently (parity with the current tokenizer's documented behavior).~~
+   **REVERSED — ruled 2026-09-30: an unterminated block comment is a syntax error.**
+   At `close()` with nest depth > 0 both drivers (`IncrementalLexer`, `RegexLexer`)
+   emit ONE `error` Tok `('unterminated', <comment text>)` spanning the comment from
+   its outermost opener; the reader turns it into a `resumable=False` `SyntaxIssue`
+   (Scryer's formal: `syntax_error(incomplete_reduction)`), `tokenize()` raises
+   `TokenizeError` at the opener, and a `.pl` file ending in one fails to load. The
+   silent exit had hidden whole files (a stray `/*` inside a comment, read with
+   nesting on, swallowed everything after it). The frozen `_bootstrap` spec reader
+   keeps the old behavior; it reads only the in-repo `.toklex.pl` specs.
 
 ---
 

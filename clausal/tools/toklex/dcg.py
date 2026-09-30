@@ -13,7 +13,7 @@ characters -- no value builders (an ``integer``/``float_num`` token's
 numeric value is never computed, only its lexeme text), no ``Glue``, no
 ``Span``. Trivia (whitespace, comments) is scanned and discarded.
 Nested comments are handled with an explicit depth counter
-(``nest_skip//2``). Batch only: the whole input is read into one char
+(``nest_skip//4``). Batch only: the whole input is read into one char
 list up front (see "Incrementality" below).
 
 ## Generated module shape
@@ -57,9 +57,9 @@ Two layers:
    fall to ``resolve``), ``resolve//3`` mirrors ``driver._resolve``
    (accept-history replay via ``accept_history/2``, longest-first
    accept selection with ``follow_ok/3``, the distance-gated commit
-   check, bounded pushback via ``pushback//1``), ``nest_skip//2``
+   check, bounded pushback via ``pushback//1``), ``nest_skip//4``
    mirrors ``driver._nest_step`` (greedy longest match of the close/open
-   sub-DFAs, depth counting, lenient EOF).
+   sub-DFAs, depth counting, an unterminated error token at EOF).
 
    **Per-state nonterminals** (``q0//2`` .. ``q<N-1>//2``, one per DFA
    state, as the brief specifies) are then generated as *thin
@@ -227,8 +227,9 @@ resolve(State, Pnd, T) -->
             lexeme_atom(Matched, LexAtom), toklex_kind(Label, Kind) },
           pushback(PushBack),
           ( { Kind == trivia } ->
-              ( { toklex_nest_rule(Label) } -> nest_skip(Label, 1) ; [] ),
-              { T = skip }
+              ( { toklex_nest_rule(Label) } -> nest_skip(Label, 1, Matched, T)
+              ; { T = skip }
+              )
           ; { T = tok(Label, LexAtom) }
           )
       ; no_accept_case(PndFwd, PndLen, NextInfo, T)
@@ -331,17 +332,25 @@ strip_quotes([C|Cs], Out) :-
     ).
 
 % ── nested comments: greedy longest match of the open/close sub-DFAs,
-% depth counting, lenient EOF (mirrors driver._match_dfa/_nest_step) ──
+% depth counting (mirrors driver._match_dfa/_nest_step). EOF with
+% Depth > 0 is an unterminated comment (ruled 2026-09-30): ONE error
+% token over the whole comment, opener included, as the drivers emit. ──
 
-nest_skip(Label, Depth, S0, S) :-
-    ( Depth =< 0 -> S = S0
+nest_skip(Label, Depth, Opener, T, S0, S) :-
+    nest_body(Label, Depth, S0, S, Closed),
+    ( Closed == true -> T = skip
+    ; append(Opener, S0, Comment), emit_unterminated(Comment, T)
+    ).
+
+nest_body(Label, Depth, S0, S, Closed) :-
+    ( Depth =< 0 -> S = S0, Closed = true
     ; nest_greedy_match(Label, close, S0, CLen), CLen > 0 ->
-        drop(CLen, S0, S1), Depth1 is Depth - 1, nest_skip(Label, Depth1, S1, S)
+        drop(CLen, S0, S1), Depth1 is Depth - 1, nest_body(Label, Depth1, S1, S, Closed)
     ; nest_greedy_match(Label, open, S0, OLen), OLen > 0 ->
-        drop(OLen, S0, S1), Depth2 is Depth + 1, nest_skip(Label, Depth2, S1, S)
+        drop(OLen, S0, S1), Depth2 is Depth + 1, nest_body(Label, Depth2, S1, S, Closed)
     ; S0 = [_|S1] ->
-        nest_skip(Label, Depth, S1, S)
-    ; S = S0
+        nest_body(Label, Depth, S1, S, Closed)
+    ; S = S0, Closed = false
     ).
 
 nest_greedy_match(Label, Kind, S0, Len) :-
@@ -399,7 +408,7 @@ def render_dcg(lexer: Lexer, module_name: str = "toklex_iso") -> str:
     emit("% builders: an integer/float_num token's numeric value is never")
     emit("% computed, only its lexeme text; no Glue, no Span). Trivia")
     emit("% (whitespace, comments) is scanned and discarded. Nested comments")
-    emit("% use an explicit depth argument (nest_skip//2).")
+    emit("% use an explicit depth argument (nest_skip//4).")
     emit("%")
     emit("% Batch only: the whole input is one in-memory, fully-closed char")
     emit("% list -- toklex_run/2's Chars argument always ends in [], never an")

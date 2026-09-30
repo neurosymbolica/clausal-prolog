@@ -12,8 +12,9 @@ default (``nested_comments=True``) is a *clausal-dialect* choice (clausal's
 own ``/* /* */ */`` nests). Real Scryer/SWI/ISO library source never nests
 block comments -- and at least one corpus file (``crypto.pl``) contains a
 stray ``/*`` inside its opening comment that, read with the nesting default,
-swallows the entire rest of the file as one unterminated comment (zero items
-back, not even a SyntaxIssue). ``nested_comments=False`` is an existing,
+leaves the comment unterminated: one ``resumable=False`` SyntaxIssue and no
+items (until the 2026-09-30 ruling it was zero items back, not even a
+SyntaxIssue). ``nested_comments=False`` is an existing,
 already-tested toggle (see ``tests/toklex/test_iso_spec.py::
 test_strict_iso_comments_flag``) -- reading genuinely external Prolog
 dialect source with it is a call-site choice, not a reader code change.

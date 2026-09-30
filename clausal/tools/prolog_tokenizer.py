@@ -100,6 +100,14 @@ def _end_of_source_pos(source: str) -> tuple[int, int]:
     return nl_count + 1, len(source) - last_nl
 
 
+#: How a ``.pl`` SOURCE FILE is read by both front ends (the native reader
+#: and the translator): ISO block comments do NOT nest, and neither do
+#: Scryer's -- ``/*`` closes at the first ``*/`` (ruled 2026-09-30, "as
+#: strict as Scryer"). The loaders pass this explicitly; the reader's and
+#: ``tokenize()``'s own ``nested_comments=True`` defaults are unchanged.
+PL_SOURCE_NESTED_COMMENTS = False
+
+
 def tokenize(source: str, *, nested_comments: bool = True) -> list[Token]:
     """Tokenize Prolog source text into a list of tokens.
 
@@ -151,6 +159,8 @@ def tokenize(source: str, *, nested_comments: bool = True) -> list[Token]:
             reason, culprit = t.value
             line, col = t.start[1], t.start[2]
             if reason == "unterminated":
+                if t.lexeme.startswith("/*"):
+                    raise TokenizeError("Unterminated block comment", line, col)
                 if t.lexeme.startswith('"'):
                     raise TokenizeError("Unterminated string", line, col)
                 raise TokenizeError("Unterminated quoted atom", line, col)

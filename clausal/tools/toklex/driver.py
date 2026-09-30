@@ -99,7 +99,9 @@ class IncrementalLexer:
         self._start = 0  # attempt start offset; pending == text[_start:_pos]
         self._accepts: list = []  # list[(length, labels)]
         self._glue = "spaced"  # glue for the token being attempted (start-of-stream)
-        self._nest = None  # {'rule': name, 'depth': int} or None
+        # {'rule': name, 'depth': int, 'start': offset of the outermost
+        # opener} or None
+        self._nest = None
 
     # ── feeding ──────────────────────────────────────────────────────
 
@@ -331,7 +333,7 @@ class IncrementalLexer:
         if kind == "trivia":
             self._reset_attempt()
             if label in self.lexer.nest:
-                self._nest = {"rule": label, "depth": 1}
+                self._nest = {"rule": label, "depth": 1, "start": start_off}
             else:
                 self._glue = "spaced"
             return _CONTINUE
@@ -486,10 +488,12 @@ class IncrementalLexer:
         if not self._closed:
             return NEED_MORE
 
-        # EOF with depth > 0 -- leave nest mode silently (parity-mandated
-        # lenient behavior). (Setting glue here is unreachable-in-effect:
-        # the next resolve at true EOF returns EOF; kept for symmetry.)
+        # EOF with depth > 0: the comment was never closed. That is a
+        # syntax error (operator ruling 2026-09-30, reversing the old
+        # lenient silent exit): ONE `unterminated` error token spanning
+        # the whole comment from its outermost opener, like an unclosed
+        # quote. Nest mode ends; the next call returns EOF.
+        start = self._nest["start"]
         self._nest = None
-        self._start = self._pos
-        self._glue = "spaced"
-        return None
+        return self._error_tok("unterminated", self._text[start:self._pos],
+                               start, self._pos)

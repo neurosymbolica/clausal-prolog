@@ -1668,9 +1668,11 @@ def _declared_exports(path: str):
 def _pl_exports(path: str):
     from clausal.tools import iso_l3  # noqa: PLC0415
     from clausal.tools.prolog_reader import EOF, NEED_MORE, PrologReader  # noqa: PLC0415
+    from clausal.tools.prolog_tokenizer import PL_SOURCE_NESTED_COMMENTS  # noqa: PLC0415
     with open(path, encoding="utf-8") as f:
         text = f.read()
-    reader = PrologReader(op_table=iso_l3.reader_op_table())
+    reader = PrologReader(op_table=iso_l3.reader_op_table(),
+                          nested_comments=PL_SOURCE_NESTED_COMMENTS)
     reader.feed(text)
     reader.close()
     while True:
