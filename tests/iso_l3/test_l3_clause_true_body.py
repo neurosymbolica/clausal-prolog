@@ -7,7 +7,8 @@ created by assertz, and a ``Head :- Body`` clause term was taken as a fact
 of ``(:-)/2``: ``assertz((k(1) :- true))`` stored an uncallable clause and
 ``retract((u(1) :- true))`` removed nothing.  Every answer and error term
 below is Scryer's for the same goal (2026-09-30), except the runtime rule
-refusal (Clausal asserts no rule at runtime; it used to be silent)."""
+refusal (Clausal asserts no rule at runtime; it used to be silent) -- which
+an unbound body gets too, where Scryer asserts ``foo :- call(X)``."""
 from __future__ import annotations
 
 SRC = """\
@@ -25,6 +26,9 @@ t8(E) :- catch(retract((_ :- true)), E, true).
 t9(E) :- catch(assertz((foo(X) :- X = 1)), error(E, _), true).
 t10(B) :- assertz(v(1)), retract((v(1) :- B)).
 t11(L) :- assertz(w(1)), assertz(w(2)), retract((w(X) :- _)), findall(X-Y, w(Y), L).
+t12(E) :- catch(assertz((foo :- X)), E, true), var(X).
+t13(E) :- catch(asserta((bar(1) :- _)), E, true).
+t14(L) :- X = true, assertz((baz(7) :- X)), findall(Y, baz(Y), L).
 """
 
 
@@ -44,3 +48,11 @@ def test_true_body_in_prolog_source(native, ans):
     assert ans(mod, "t10") == [True]
     # retract/1 is re-executable: the second answer removes w(2) too
     assert ans(mod, "t11") == [[("-", 1, 2)], []]
+    # An UNBOUND body is a rule body (ISO 8.9.1.1: ``call(X)``; Scryer
+    # asserts ``foo :- call(X)``), so it gets the runtime rule refusal -- it
+    # was instantiation_error.  Bound to ``true`` it is a fact.
+    assert ans(mod, "t12") == [("error", ("permission_error", "assert", "rule", "foo"),
+                                ("/", "assertz", 1))]
+    assert ans(mod, "t13") == [("error", ("permission_error", "assert", "rule",
+                                          ("bar", 1)), ("/", "asserta", 1))]
+    assert ans(mod, "t14") == [[7]]

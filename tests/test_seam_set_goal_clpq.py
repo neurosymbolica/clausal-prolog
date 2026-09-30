@@ -283,11 +283,15 @@ def test_a_non_constraint_element_is_a_load_error_naming_it(tmp_path, body,
 
 def test_an_empty_brace_pair_in_goal_position_is_a_dict_not_a_set(tmp_path):
     """``{}`` is Python's empty dict; in goal position it is refused as the
-    dict it is (the compiler's unsupported-goal-shape error names
-    ``DictTerm``), never read as an empty constraint set."""
-    with pytest.raises(NotImplementedError) as ei:
+    dict it is (a load-time ``DictGoalError`` naming the predicate, no
+    longer the internal unsupported-goal-shape ``NotImplementedError``),
+    never read as an empty constraint set."""
+    from clausal.logic.compiler.terms_to_goalop import DictGoalError
+    with pytest.raises(DictGoalError) as ei:
         _module(tmp_path, "e() <- {}", ["e()"])
-    assert "DictTerm" in str(ei.value) and "CLP(Q)" not in str(ei.value)
+    text = str(ei.value)
+    assert "`{}` is an empty dict, not a goal" in text and "e/0" in text
+    assert "a set literal in goal position" not in text
 
 
 def test_a_set_in_data_position_is_still_a_set(tmp_path):

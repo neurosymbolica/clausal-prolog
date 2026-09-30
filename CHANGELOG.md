@@ -480,6 +480,24 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
 
 ### Fixed
 
+- **`findall/4` inside a `findall/3` goal no longer raises "findall/3 not
+  found".** When a clause set called both `findall/3` (the compiler special
+  form) and `findall/4`, the compiled clause could bind the name to a
+  dispatch stand-in fixed at arity 3 and route the `findall/4` goal through
+  it. Whether this happened depended on hash order, so it failed only on some
+  runs. It affected `.pl` and `.seam` source alike.
+- **`{}` in goal position is now a clear load-time error.** In `.seam`
+  source `{}` is the empty dict, not an empty constraint set. As a goal it
+  used to surface an internal `NotImplementedError` ("goal shape not yet
+  supported (DictTerm)"). It now raises `DictGoalError`: "`{}` is an empty
+  dict, not a goal in predicate p/1 (line N)". A non-empty set of
+  comparisons in goal position is still the CLP(Q) constraint set.
+- **`assertz((foo :- X))` with `X` unbound raises the runtime rule refusal.**
+  An unbound body is a rule body (ISO converts it to `call(X)`), so it now
+  gets `permission_error(assert, rule, foo)` like every other rule assert
+  instead of `instantiation_error`. With `X` bound to `true` it still asserts
+  the fact `foo`. The same applies to `asserta/1`.
+
 - **A `.pl` module in an earlier `sys.path` entry is no longer shadowed by a
   `.clausal` or `.seam` module of the same name in a later one.** The import
   hook now resolves source modules per `sys.path` entry, in path order: the

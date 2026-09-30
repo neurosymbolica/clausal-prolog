@@ -105,7 +105,7 @@ from ._vars import _var_python_name, _collect_vars
 from .terms_to_ast import term_to_ast_expr, _dotted_name_from_loadattr  # noqa: F401
 from .terms_to_ast import lowering_scope
 from .terms_to_goalop import (BareGoalVariableError, BareGoalUndefinedError,
-                              SetGoalElementError)
+                              SetGoalElementError, DictGoalError)
 from .globals_env import (
     _GlobalsDb, _DbDispatchAdapter, _set_of_dedup, _set_of_sort_dedup,
     _undeclared_functor, _undeclared_functor_in, _constructor_in,
@@ -1643,6 +1643,11 @@ def _compile_predicate_trampoline_impl(
             raise SetGoalElementError(
                 exc.goal, exc.element, predicate=f"{functor}/{arity}") from None
         raise
+    except DictGoalError as exc:
+        # A dict (``{}``) in goal position — same enrichment.
+        if exc.predicate is None:
+            raise DictGoalError(exc.goal, predicate=f"{functor}/{arity}") from None
+        raise
     finally:
         pass
 
@@ -2247,6 +2252,10 @@ def _compile_predicate_shallow_impl(
         if exc.predicate is None:
             raise SetGoalElementError(
                 exc.goal, exc.element, predicate=f"{functor}/{arity}") from None
+        raise
+    except DictGoalError as exc:
+        if exc.predicate is None:
+            raise DictGoalError(exc.goal, predicate=f"{functor}/{arity}") from None
         raise
     finally:
         _CURRENT_SHALLOW_BASE_GLOBALS = _saved_shallow_globals

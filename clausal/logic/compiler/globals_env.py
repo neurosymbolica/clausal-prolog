@@ -489,6 +489,16 @@ class _DbDispatchAdapter:
         raise undeclared_functor_error(self._functor, self._arity)
 
 
+def _adapter_dispatch(adapter: "_DbDispatchAdapter"):
+    """A ``$disp_`` dispatch function resolving *adapter* at CALL time, as
+    ``$dispatch_at(adapter, N)`` does (a row asserted after compilation
+    still answers)."""
+    def dispatch(*args):
+        return adapter._get_dispatch()(*args)
+    dispatch.__qualname__ = f"db_adapter[{adapter._functor}/{adapter._arity}]"
+    return dispatch
+
+
 class _GlobalsDb:
     """Minimal db-like proxy for signature lookup from module globals.
 
@@ -1052,6 +1062,16 @@ def _is_call_target(binding, arity: int, db=None, name=None) -> bool:
         if name is not None:
             return binding_grants_arity(binding, arity, db, name)
         return is_declared_predicate(binding, arity=arity, db=db)
+    if type(binding) is _DbDispatchAdapter:
+        # The adapter is fixed to ONE name/arity (``_get_dispatch`` ignores
+        # the call's arity), so it is no target at any other.  Accepting it
+        # let ``findall/3`` -- a special form, no builtin at that arity, so
+        # it gets the adapter -- collected BEFORE ``findall/4`` keep the NAME
+        # key, and the findall/4 goal then raised "findall/3 not found"
+        # (a findall/4 nested in a findall/3 goal; which order the target
+        # set iterated in decided it).  Rejected here, the findall/4 target
+        # falls through to its builtin, which replaces the adapter.
+        return arity < 0 or binding._arity == arity
     return hasattr(binding, "_get_dispatch")
 
 
@@ -1328,7 +1348,19 @@ def _inject_resolved_targets(
             _maybe_cache_dispatch(obj, target_name, target_arity)
         elif db is not None:
             obj = _DbDispatchAdapter(db, target_name, target_arity)
-            base_globals[target_name] = obj
+            held = base_globals.get(target_name)
+            if (type(held) is _DbDispatchAdapter and target_arity >= 0
+                    and held._arity != target_arity):
+                # The NAME key already holds the adapter of ANOTHER arity:
+                # one key cannot answer two arities (the adapter ignores the
+                # call's), so this arity gets its own ``$disp_`` key, which
+                # the goal emitters prefer, and the name key is left alone.
+                # Otherwise the last-visited arity took both calls, as the
+                # first-visited one did before adapters were arity-checked.
+                base_globals[_disp_key(target_name, target_arity)] = (
+                    _adapter_dispatch(obj))
+            else:
+                base_globals[target_name] = obj
 
 
 def _preallocate_body_vars(

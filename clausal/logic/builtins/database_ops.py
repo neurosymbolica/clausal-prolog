@@ -164,9 +164,12 @@ def _unneck_clause(term_val: Any, context: str, action: str) -> Any:
         if not is_var(body):
             _refuse_non_callable_clause(body, context)
         return _OpenBody(head, body)
-    if is_var(body):
-        raise LogicException(instantiation_error(context))
-    _refuse_non_callable_clause(body, context)
+    if not is_var(body):
+        _refuse_non_callable_clause(body, context)
+    # An UNBOUND body is a rule body too: ISO 8.9.1.1 converts it to
+    # ``call(X)`` and Scryer asserts ``foo :- call(X)``.  It used to be
+    # instantiation_error here, as if the clause were malformed; it is the
+    # same refusal as any other rule body (only ``true`` makes a fact).
     raise LogicException(permission_error("assert", "rule", head, context))
 
 
