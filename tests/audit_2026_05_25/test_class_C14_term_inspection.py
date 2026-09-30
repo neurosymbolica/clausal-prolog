@@ -295,15 +295,18 @@ def test_F093_term_variables_blind_to_segstring_varseg():
 
 
 def test_F094_numbervars_misses_varsegs_in_segstring():
-    """``numbervars(SegString([..., VarSeg(V)]), 0, End)`` should
-    advance ``End`` to ``1`` and bind ``V`` to ``$VAR(0)``.
+    """``numbervars(SegString([..., VarSeg(V)]), 0, End)`` leaves the HOLE
+    variable ``V`` unbound and ``End = 0`` -- deliberately, since
+    2026-09-30.
 
-    ``numbervars`` walks ``_collect_vars_impl`` (the same blind walker
-    behind F093), finds no Vars inside Seg* containers, and silently
-    returns ``End = 0`` with ``V`` unbound. Downstream pretty-printers
-    that depend on ``numbervars`` having reached every variable emit
-    a fresh ``_42``-style name instead of the canonical ``$VAR(N)``
-    form, breaking "textually-identical clauses print identically".
+    This pinned ``End = 1`` with ``V = '$VAR'(0)`` (ISO numbers it).  But a
+    hole bound to a cell has no representation: every later walk of the
+    term -- writeq, the answer snapshot -- raised ``PartialTermError``, so
+    the numbered term could not be printed, which is what numbervars is
+    for.  When the walkers learned to see partial lists NESTED in a term,
+    that crash would have spread from this top-level case to every
+    ``numbervars(f([A|T]), ...)``; numbervars/3 now leaves hole variables
+    unbound at every depth and numbers the rest (``_hole_var_ids``).
     """
     V = Var()
     ss = SegString(["x", VarSeg(V)])
@@ -312,14 +315,5 @@ def test_F094_numbervars_misses_varsegs_in_segstring():
         "numbervars", 3, ss, 0, End,
         snap=lambda End=End: deref(End),
     )
-    assert len(sols) == 1, (
-        f"numbervars/3 should yield one solution; got {sols!r}"
-    )
-    end_val = sols[0]
-    assert end_val == 1, (
-        f"numbervars(SegString(['x', VarSeg(V)]), 0, End) bound "
-        f"End={end_val!r}; expected End=1 (one Var numbered). Today "
-        f"the walker is Seg*-blind (inspection.py:224-253 drives "
-        f"_collect_vars_impl which has no Seg* branch) — End comes "
-        f"back as 0 and V is left unbound. Same root cause as F093."
-    )
+    assert sols == [0]
+    assert deref(V) is V

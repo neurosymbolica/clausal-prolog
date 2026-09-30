@@ -75,7 +75,8 @@ t(d18b, x, (dif(A, a), copy_term(A, B), B = C, C = a)).
 t(d19b, x, (dif(A, a), dif(A, b), copy_term(A, B), B = b)).
 t(d20, x, (dif(A, a), copy_term(A, B), B = c, A = c)).
 row(Id, L) :- t(Id, T, G), findall(T, G, L).
-nv(L) :- findall(N-A-B, numbervars(f([A|T], B), 0, N), L).
+nv(L) :- findall(N-A-B-V, (numbervars(f([A|T], B), 0, N), (var(T), V = var ; nonvar(T), V = bound)), L).
+nvw(L) :- findall(x, (X = g([A|T], B), numbervars(X, 0, _), writeq(X), nl), L).
 """
 
 WANT = {
@@ -133,7 +134,8 @@ def test_copy_reports_attributed_variables(impl):
     from clausal.logic.constraints import dif
     from clausal.terms import SegList, ConcreteSeg, VarSeg
     if impl == "c":
-        from clausal.logic.variables._variables import _copy_term_impl as copy
+        c = pytest.importorskip("clausal.logic.variables._variables")
+        copy = c._copy_term_impl
     else:
         copy = _copy_term_py
     a, b, t = Var(), Var(), Var()
@@ -149,10 +151,31 @@ def test_copy_reports_attributed_variables(impl):
     assert copy(term, {}) is not None
 
 
-def test_numbervars_counts_a_nested_list_tail(pl_mod):
-    """numbervars/3 numbers the T of a nested [A|T] as ISO counts it
-    (Scryer: ``numbervars(f([A|T], B), 0, N)`` gives N = 3), as it already
-    did for a partial list at the top level (F094)."""
+def test_numbervars_leaves_a_list_tail_unbound(pl_mod):
+    """numbervars/3 cannot bind the T of [A|T] to '$VAR'(N): a list with a
+    non-list tail has no representation, and every later walk of the term
+    (writeq, the answer snapshot) would raise.  It numbers every other
+    variable, and the numbered term still prints.  (ISO / Scryer number T
+    too: N = 3.)"""
     v = Var()
     got = [_deref_walk(v) for _ in solve(("nv", v), pl_mod)]
-    assert got == [[("-", ("-", 3, ("$VAR", 0)), ("$VAR", 2))]]
+    assert got == [[("-", ("-", ("-", 2, ("$VAR", 0)), ("$VAR", 1)), "var")]]
+    w = Var()
+    assert [_deref_walk(w) for _ in solve(("nvw", w), pl_mod)] == [["x"]]
+
+
+def test_bagof_variant_key_over_partial_strings_and_bytes():
+    """bagof/3 groups by the VARIANT key of its witness; a partial string /
+    byte string hole in the witness gets a text / bytes marker (a list
+    marker there was refused by the walk)."""
+    from clausal.logic.compiler.globals_env import _variant_key
+    from clausal.terms import SegList, SegString, SegBytes, ConcreteSeg, VarSeg
+    def k(mk):
+        return _variant_key(("f", mk(Var())))
+    s1, s2 = (k(lambda v: SegString(["ab", VarSeg(v)])) for _ in range(2))
+    b1, b2 = (k(lambda v: SegBytes([b"ab", VarSeg(v)])) for _ in range(2))
+    l1 = k(lambda v: SegList([ConcreteSeg(["a"]), VarSeg(v)]))
+    assert s1 == s2 and b1 == b2
+    assert len({s1, b1, l1}) == 3
+    # [a|T] keys apart from the proper list [a, X].
+    assert l1 != _variant_key(("f", ["a", Var()]))

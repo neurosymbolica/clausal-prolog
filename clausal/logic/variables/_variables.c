@@ -2966,15 +2966,26 @@ c_copy_term(PyObject *term, PyObject *var_map, int depth, PyObject *attvars)
             PyObject *nd = PyDict_New();
             if (!nd) { Py_DECREF(items); return NULL; }
             Py_ssize_t n = PyList_GET_SIZE(items);
+            int changed = 0;
             for (Py_ssize_t i = 0; i < n; i++) {
                 PyObject *kv = PyList_GET_ITEM(items, i);
-                PyObject *v = c_copy_term(PyTuple_GET_ITEM(kv, 1), var_map, depth + 1, attvars);
+                PyObject *old = PyTuple_GET_ITEM(kv, 1);
+                PyObject *v = c_copy_term(old, var_map, depth + 1, attvars);
                 if (!v) { Py_DECREF(items); Py_DECREF(nd); return NULL; }
+                if (v != old) changed = 1;
                 int ok = PyDict_SetItem(nd, PyTuple_GET_ITEM(kv, 0), v);
                 Py_DECREF(v);
                 if (ok < 0) { Py_DECREF(items); Py_DECREF(nd); return NULL; }
             }
             Py_DECREF(items);
+            /* Nothing inside changed (a ground dict, the common case): the
+             * term itself, as the cell branch does -- identity (and a
+             * DictTerm's source position) kept. */
+            if (!changed) {
+                Py_DECREF(nd);
+                Py_INCREF(term);
+                return term;
+            }
             if (kind == WALK_DICT) return nd;
             PyObject *result = PyObject_CallOneArg((PyObject *)Py_TYPE(term), nd);
             Py_DECREF(nd);

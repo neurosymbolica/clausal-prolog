@@ -114,10 +114,13 @@ def _copy_term_py(term: Any, var_map: dict, attvars: list | None = None) -> Any:
         return type(term)(new_segments)
     # A dict term's VALUES are terms; its keys are ground by construction.
     # Kept in step with ``walk_container_kind`` in ``c_copy_term``.
-    if type(term) is DictTerm:
-        return DictTerm({k: _copy_term_py(v, var_map, attvars) for k, v in term.data.items()})
-    if type(term) is dict:
-        return {k: _copy_term_py(v, var_map, attvars) for k, v in term.items()}
+    # Nothing inside changed (a ground dict): the term itself, as for cells.
+    if type(term) is DictTerm or type(term) is dict:
+        data = term.data if type(term) is DictTerm else term
+        copied = {k: _copy_term_py(v, var_map, attvars) for k, v in data.items()}
+        if all(copied[k] is v for k, v in data.items()):
+            return term
+        return DictTerm(copied) if type(term) is DictTerm else copied
     if is_term_instance(term):
         cls = type(term)
         # The `_clausal_new` Phase-0 fast-constructor gate that used to
@@ -224,24 +227,22 @@ except ImportError:
 _copy_term = _copy_term_impl
 
 
-def _hole_var_ids(term: Any) -> set:
-    """``id``s of the unbound variables of *term* that stand in a HOLE of a
-    partial list / string / byte string -- a ``VarSeg`` (the ``T`` of
-    ``[A|T]``) -- at any depth.
+def _hole_var_ids(term: Any) -> dict:
+    """``{id(var): hole type}`` for the unbound variables of *term* that
+    stand in a HOLE of a partial list / string / byte string -- a ``VarSeg``
+    (the ``T`` of ``[A|T]``) -- at any depth; the hole type is the
+    container's (``SegList``, ``SegString`` or ``SegBytes``; the first one
+    met wins).
 
     Such a variable may only ever be bound to a list (a string, a byte
     string): the engine has no representation for a list with any other
-    tail (``[a|b]``), so binding one to a marker cell -- bagof/3's variant
-    markers -- leaves a term that every later walk refuses
-    (``PartialTermError``).  Callers that substitute markers for variables
-    ask this first.  Empty for a term with no partial list in it.
-
-    numbervars/3 does NOT ask: it numbers a hole variable as ISO counts it
-    (F094), and the term then carries the ``[A|'$VAR'(1)]`` tail that has no
-    representation -- the same answer it has always given for a partial
-    list at the top level.
+    tail (``[a|b]``), so binding one to a marker cell -- numbervars/3's
+    ``'$VAR'(N)``, bagof/3's variant markers -- leaves a term that every
+    later walk refuses (``PartialTermError``: writeq, answer snapshots).
+    Callers that substitute markers for variables ask this first.  Empty for
+    a term with no partial list in it.
     """
-    out: set = set()
+    out: dict = {}
 
     def walk(t: Any) -> None:
         t = deref(t)
@@ -255,7 +256,7 @@ def _hole_var_ids(term: Any) -> set:
                 if isinstance(seg, VarSeg):
                     v = deref(seg.var)
                     if is_var(v):
-                        out.add(id(v))
+                        out.setdefault(id(v), type(t))
                     else:
                         walk(v)
                 elif isinstance(seg, ConcreteSeg):
@@ -713,6 +714,16 @@ def _number_vars__3(term, start, end, trail, k):
     term_val = deref(term)
     vars_list: list = []
     _collect_vars_impl(term_val, vars_list)
+    # A variable in the hole of a partial list / string (the T of [A|T]) can
+    # only be bound to a list: ``[A|'$VAR'(1)]`` has no representation, and
+    # every later walk of the term -- writeq, the answer snapshot -- would
+    # raise PartialTermError.  It stays unbound and is not counted, at any
+    # depth.  (ISO numbers it: Scryer gives N = 3 for f([A|T], B).  This
+    # follows the [a|b] representation gap, not a choice about numbervars.)
+    if vars_list:
+        holes = _hole_var_ids(term_val)
+        if holes:
+            vars_list = [v for v in vars_list if id(v) not in holes]
     # Bind each unbound var to the cell '$VAR'(N)
     marks = []
     for i, v in enumerate(vars_list):

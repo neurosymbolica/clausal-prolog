@@ -490,6 +490,10 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
   missed them too. The walkers now read through these shapes at any depth,
   in C (no slowdown for proper terms), with the Python twins in step. A dict
   term's values are walked the same way (its keys are ground).
+  `numbervars/3` numbers every variable except one in the hole of a partial
+  list or string (the `T` of `[A|T]`), which it leaves unbound at any depth:
+  `[A|'$VAR'(1)]` has no representation and could not be printed (ISO
+  numbers it too; this follows the `[a|b]` gap).
 - **`copy_term/2` copies `dif/2` constraints.** `dif(A, a), copy_term(A, B),
   B = a` now fails, as in Scryer: the copy carries the constraint, over
   copies of the constraint's other variables. `freeze/2` goals and CLP
