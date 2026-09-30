@@ -9,6 +9,7 @@ from decimal import Decimal as _Decimal
 from fractions import Fraction as _Fraction
 
 from clausal.logic.atoms import is_atom, mint, spelling
+from clausal.logic.variables import deref as _deref, is_var as _is_var
 from clausal.logic.builtins._helpers import _arity as _term_arity
 from clausal.logic.builtins._helpers import _functor_name as _term_functor_name
 from clausal.logic.builtins._helpers import _standard_order_key
@@ -614,6 +615,18 @@ _register_order_cmp("@=<", ("<", "="))
 _register_order_cmp("@>=", (">", "="))
 
 
+def _compare_order_error(o):
+    """ISO 8.4.2.3: an Order that is neither a variable nor an atom is
+    type_error(atom, Order); an atom other than <, = and > is
+    domain_error(order, Order).  compare(foo, a, b) used to fail silently."""
+    from clausal.logic.exceptions import (  # noqa: PLC0415
+        LogicException, domain_error, type_error)
+    from clausal.logic.atoms import is_nil  # noqa: PLC0415
+    if not (is_atom(o) or is_nil(o)):  # [] is an atom (Scryer)
+        raise LogicException(type_error("atom", o, "compare/3"))
+    raise LogicException(domain_error("order", o, "compare/3"))
+
+
 @_builtin("compare", 3, fields=("order", "a", "b"))
 def _iso_compare(order, a, b, trail, k):
     """ISO compare/3: unify Order with the atom `<`, `=` or `>`.
@@ -624,6 +637,9 @@ def _iso_compare(order, a, b, trail, k):
     numeric kinds `_numeric_tag` uses, so two terms share a key exactly when
     `_iso_identical` calls them identical.
     """
+    o = _deref(order)
+    if not _is_var(o) and not (type(o) is str and o in ("<", "=", ">")):
+        _compare_order_error(o)
     got = _order_atom(a, b)
     atom = _ORD_LT if got == "<" else (_ORD_EQ if got == "=" else _ORD_GT)
     if _unify(order, atom, trail):

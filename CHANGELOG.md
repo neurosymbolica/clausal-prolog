@@ -570,6 +570,18 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
   `element/3` raises `type_error(integer, I)` for a non-integer index (it
   failed). `scalar_product/4` takes any clpz expression as its fourth
   argument (`Y*Y`, `4/2`), as `#=` does; every compound was refused.
+- **`compare/3` checks its Order argument (ISO 8.4.2.3).** An Order that is
+  neither a variable nor an atom is `type_error(atom, Order)`; an atom other
+  than `<`, `=` and `>` is `domain_error(order, Order)`.  `compare(foo, a, b)`
+  used to fail silently.
+
+- **`succ/2` and `numlist/3` raise Scryer's errors instead of failing.**
+  `succ(X, Y)` with both unbound is an instantiation error, a non-integer
+  argument `type_error(integer, A)` and a negative one
+  `domain_error(not_less_than_zero, A)`; `numlist(a, 3, L)` is
+  `type_error(integer, a)`.  All of these used to fail silently.
+  (`numlist/3` with an unbound bound still fails; Scryer enumerates.)
+
 - **A `.pl` module in an earlier `sys.path` entry is no longer shadowed by a
   `.clausal` or `.seam` module of the same name in a later one.** The import
   hook now resolves source modules per `sys.path` entry, in path order: the
