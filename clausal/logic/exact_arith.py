@@ -951,6 +951,26 @@ def evaluate(x, context: str = "eval_/2"):
     return fn(*[evaluate(a, context) for a in args])
 
 
+def _iso_checked(exact, op: str):
+    """*exact* with ISO 9.1.4.1's float overflow: a float result that
+    overflows is evaluation_error(float_overflow), as Scryer (Python answers
+    inf -- ``1.0e308 * 10`` -- or raises a raw OverflowError for an integer
+    too large to be a float).  The ISO spelling only: a BARE seam operator
+    keeps Python's meaning (ruling 2026-09-28)."""
+    def checked(l, r):
+        try:
+            res = exact(l, r)
+        except OverflowError:
+            raise _float_overflow(op) from None
+        if (type(res) is float and res in (float("inf"), float("-inf"))
+                and l not in (float("inf"), float("-inf"))
+                and r not in (float("inf"), float("-inf"))):
+            raise _float_overflow(op)
+        return res
+    checked.__name__ = f"iso_{exact.__name__}"
+    return checked
+
+
 def exact_add(l, r):
     if type(l) is int and type(r) is int:
         return l + r
@@ -1014,7 +1034,9 @@ def _exact_div_general(l, r):
 #: The evaluable functor table for CELLS (see the block comment above
 #: ``python_floordiv``); defined last because it names the exact operators.
 EVALUABLE = MappingProxyType({
-    ("+", 2): exact_add, ("-", 2): exact_sub, ("*", 2): exact_mul,
+    ("+", 2): _iso_checked(exact_add, "+"),
+    ("-", 2): _iso_checked(exact_sub, "-"),
+    ("*", 2): _iso_checked(exact_mul, "*"),
     ("/", 2): iso_truediv, ("-", 1): exact_neg,
     ("//", 2): iso_intdiv, ("div", 2): iso_div, ("mod", 2): iso_mod,
     ("**", 2): iso_pow, ("^", 2): iso_intpow, ("rdiv", 2): iso_rdiv,
@@ -1052,6 +1074,8 @@ CELL_ONLY_EVALUABLE = frozenset(k for k in EVALUABLE if k not in {
 #: entries -- what a NODE evaluates through.  A cell never looks here.
 NODE_EVALUABLE = MappingProxyType({
     **EVALUABLE,
+    # a BARE seam operator keeps Python's float overflow (inf)
+    ("+", 2): exact_add, ("-", 2): exact_sub, ("*", 2): exact_mul,
     ("$python_div", 2): python_truediv,
     ("$python_floordiv", 2): python_floordiv, ("$python_mod", 2): python_mod,
     ("$python_pow", 2): python_pow,
