@@ -139,10 +139,65 @@ def _plain_term(term) -> str:
     return str(term)
 
 
+_MODULE_EXTS = (".pl", ".clausal", ".seam", ".py")
+
+
 def _module_file_exists(cand: str) -> bool:
-    return (os.path.isdir(cand)
-            or any(os.path.isfile(cand + ext)
-                   for ext in (".pl", ".clausal", ".seam", ".py")))
+    """A module file ``cand.<ext>``, or a PACKAGE ``cand/__init__.<ext>``.
+    A plain directory (data, tests) is no module: Scryer opens only
+    ``cand.pl``, and counting the directory would stop the fallback to the
+    dotted reading on ``sys.path``."""
+    return any(os.path.isfile(cand + ext)
+               or os.path.isfile(os.path.join(cand, "__init__" + ext))
+               for ext in _MODULE_EXTS)
+
+
+def sibling_module_file(path: str, source_path: str) -> str | None:
+    """The module file (without its extension) or package directory the
+    ``use_module`` path *path* (``sib``, ``a/b``, ``../x``) names BESIDE the
+    importing file *source_path*, or None.  Scryer resolves a relative path
+    against the importing file's own directory; so do both ``.pl`` front
+    ends, before falling back to the dotted reading on ``sys.path``."""
+    base = os.path.dirname(os.path.abspath(source_path))
+    cand = os.path.normpath(os.path.join(base, path))
+    return cand if _module_file_exists(cand) else None
+
+
+def package_root(source_path: str | None,
+                 module_name: str | None) -> str | None:
+    """The directory the importer's dotted name *module_name* is relative
+    to: climb one directory per dot from the file's directory -- one more
+    for a package ``__init__.pl``, whose name IS its directory's."""
+    if not (source_path and module_name):
+        return None
+    depth = module_name.count(".")
+    if os.path.basename(source_path) == "__init__.pl":
+        depth += 1
+    root = os.path.dirname(os.path.abspath(source_path))
+    for _ in range(depth):
+        root = os.path.dirname(root)
+    return root
+
+
+def dotted_for_file(cand: str, root: str | None) -> str | None:
+    """*cand* (a module path without extension) as a dotted module name:
+    relative to the importer's package *root* when known, else to the most
+    specific sys.path entry."""
+    roots: list[str] = []
+    if root is not None:
+        roots.append(root)
+    entries = sorted({os.path.abspath(e or os.getcwd()) for e in sys.path
+                      if isinstance(e, str)}, key=len, reverse=True)
+    roots.extend(entries)
+    for root in roots:
+        rel = os.path.relpath(cand, root)
+        if rel.startswith(os.pardir) or os.path.isabs(rel):
+            continue
+        parts = rel.split(os.sep)
+        if all(p.isidentifier() and not keyword.iskeyword(p)
+               for p in parts):
+            return ".".join(parts)
+    return None
 
 
 def _names_all_native(term) -> bool:
@@ -1300,9 +1355,8 @@ class _PrologToClausal:
         if path.endswith(".pl"):
             path = path[:-3]
         if self._source_path:
-            base = os.path.dirname(os.path.abspath(self._source_path))
-            cand = os.path.normpath(os.path.join(base, path))
-            if _module_file_exists(cand):
+            cand = sibling_module_file(path, self._source_path)
+            if cand is not None:
                 if not self._module_name:
                     # Without it the dotted name would come from whichever
                     # sys.path entry (cwd included) happens to contain the
@@ -1355,18 +1409,7 @@ class _PrologToClausal:
         return []
 
     def _package_root(self) -> str | None:
-        """The directory the importer's dotted name is relative to: climb
-        one directory per dot from the file's directory -- one more for a
-        package ``__init__.pl``, whose name IS its directory's."""
-        if not (self._source_path and self._module_name):
-            return None
-        depth = self._module_name.count(".")
-        if os.path.basename(self._source_path) == "__init__.pl":
-            depth += 1
-        root = os.path.dirname(os.path.abspath(self._source_path))
-        for _ in range(depth):
-            root = os.path.dirname(root)
-        return root
+        return package_root(self._source_path, self._module_name)
 
     def _find_module_file(self, dotted: str) -> str | None:
         # Only with the importer's name: a direct API call must not read
@@ -1401,25 +1444,7 @@ class _PrologToClausal:
             "(a/b/c of plain names).")
 
     def _dotted_for_file(self, cand: str) -> str | None:
-        """*cand* (a module path without extension) as a dotted module name:
-        relative to this module's own package root when the importer's
-        dotted name is known, else to the most specific sys.path entry."""
-        roots: list[str] = []
-        root = self._package_root()
-        if root is not None:
-            roots.append(root)
-        entries = sorted({os.path.abspath(e or os.getcwd()) for e in sys.path
-                          if isinstance(e, str)}, key=len, reverse=True)
-        roots.extend(entries)
-        for root in roots:
-            rel = os.path.relpath(cand, root)
-            if rel.startswith(os.pardir) or os.path.isabs(rel):
-                continue
-            parts = rel.split(os.sep)
-            if all(p.isidentifier() and not keyword.iskeyword(p)
-                   for p in parts):
-                return ".".join(parts)
-        return None
+        return dotted_for_file(cand, self._package_root())
 
     def _emit_meta_directive(self, kind: str, body: PCompound) -> str:
         """Emit -dynamic(pred/N), -discontiguous(pred/N), -table(pred/N)."""

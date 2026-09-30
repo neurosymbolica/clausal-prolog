@@ -821,6 +821,8 @@ def lower_items(items, *, strict: bool = True, source: "str | None" = None,
                 filename: "str | None" = None,
                 singletons: "list | None" = None,
                 op_table=None, directives_only: bool = False,
+                source_path: "str | None" = None,
+                module_name: "str | None" = None,
                 _lowered: "list | None" = None) -> tuple[ast.Module, dict]:
     """ReaderItems -> (ast.Module, stats).  Stats carry the DENOMINATOR (plan
     §8.4): a shrinking population must be visible, not silent.
@@ -841,13 +843,20 @@ def lower_items(items, *, strict: bool = True, source: "str | None" = None,
     clause as ``skipped``.
 
     *source* (the ``.pl`` text the items were read from) turns spans into
-    seam positions and every refusal message into a ``file:line`` one."""
+    seam positions and every refusal message into a ``file:line`` one.
+
+    *source_path* and *module_name* (the file's full path and the dotted
+    name it is imported as; the loader passes both) let a ``use_module``
+    path resolve against the importing file's own directory first, as
+    Scryer does; without them only the dotted reading on ``sys.path``
+    is available."""
     from clausal.tools.iso_l3_directives import (  # noqa: PLC0415
         DirectiveContext, DirectiveRefused, Uses, prescan_constructors)
     positions = _Positions(source)
     where_file = filename or "<.pl>"
     ctx = DirectiveContext(source=source, filename=where_file,
-                           positions=positions, op_table=op_table)
+                           positions=positions, op_table=op_table,
+                           source_path=source_path, module_name=module_name)
     if source is not None:
         ctx.prescanned = prescan_constructors(source)
     uses = Uses()
@@ -1063,7 +1072,9 @@ def iter_iso(source: str, op_table=None):
 
 
 def lower_source(source: str, filename: "str | None" = None, *,
-                 op_table=None, directives_only: bool = False) -> Lowered:
+                 op_table=None, directives_only: bool = False,
+                 source_path: "str | None" = None,
+                 module_name: "str | None" = None) -> Lowered:
     """``.pl`` text -> :class:`Lowered`, strict: the native loader's one
     call.  Raises :class:`LoweringRefused` with a ``file:line`` message on
     the first item it cannot lower."""
@@ -1072,7 +1083,9 @@ def lower_source(source: str, filename: "str | None" = None, *,
     ctxs: list = []
     mod, stats = lower_items(items, source=source, filename=filename,
                              singletons=singletons, op_table=table,
-                             directives_only=directives_only, _lowered=ctxs)
+                             directives_only=directives_only,
+                             source_path=source_path, module_name=module_name,
+                             _lowered=ctxs)
     ctx = ctxs[0]
     return Lowered(mod, stats, singletons, ctx.module_items(), ctx)
 

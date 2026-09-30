@@ -664,6 +664,28 @@ def pl_frontend() -> str:
     return value
 
 
+_SUFFIX_SALTS: dict = {}
+
+
+def _suffix_salt(path) -> int:
+    """The source suffix's part of the bytecode cache key: 0 for
+    ``.clausal`` (the key existing caches were written under), else a
+    NONZERO digest of the suffix, so two same-stem sources in one directory
+    never share a key."""
+    suffix = os.path.splitext(os.fspath(path))[1]
+    salt = _SUFFIX_SALTS.get(suffix)
+    if salt is None:
+        if suffix == ".clausal":
+            salt = 0
+        else:
+            digest = hashlib.blake2b(
+                b"clausal-source-suffix:" + suffix.encode("utf-8"),
+                digest_size=4)
+            salt = int.from_bytes(digest.digest(), "big") or 1
+        _SUFFIX_SALTS[suffix] = salt
+    return salt
+
+
 def _native_frontend_salt() -> int:
     """The native front end's part of the cache key: a digest of its id and
     of :data:`_NATIVE_FRONTEND_FILES`, NONZERO in the low 32 bits that
@@ -756,7 +778,12 @@ class _ClausalSourceLoader(SourceLoader):
         # importlib stores/compares this field masked with 0xFFFFFFFF, so any
         # deterministic int is valid; masking keeps the value in range and the
         # tag XOR still participates, so a tag bump still invalidates old caches.
-        return {"mtime": (st.st_mtime_ns ^ _effective_bytecode_tag()) & 0xFFFFFFFF,
+        # The source SUFFIX is part of the key too: a same-directory
+        # ``twin.pl`` and ``twin.clausal`` share ``__pycache__/twin.*.pyc``,
+        # and with equal size and mtime_ns each would be served the other's
+        # bytecode.
+        return {"mtime": (st.st_mtime_ns ^ _effective_bytecode_tag()
+                          ^ _suffix_salt(path)) & 0xFFFFFFFF,
                 "size": st.st_size}
 
     def set_data(self, path, data):
@@ -1028,7 +1055,8 @@ class NativePrologLoader(PrologLoader):
             # full path.
             low = iso_l3.lower_source(
                 pl_source, os.path.basename(path), op_table=self._op_table(),
-                directives_only=directives_only)
+                directives_only=directives_only, source_path=path,
+                module_name=self._fullname)
         except iso_l3.LoweringRefused as e:
             line = iso_l3.line_of(pl_source, e.span) or 0
             # Split on "\n" only: _Positions numbers lines that way, and
@@ -1087,9 +1115,11 @@ def _load_module(fullname, path):
     Each call creates a fresh loader and module instance: a PredicateLoader,
     or -- for a ``.pl`` path -- the loader :func:`_load_prolog_module` uses
     (the front end ``CLAUSAL_PL_FRONTEND`` selects), so a Prolog file is
-    never parsed as Clausal source.
+    never parsed as Clausal source.  *path* may be any path-like (a
+    ``pathlib.Path``): importlib's cache-hit path needs a ``str``.
     """
-    if os.fspath(path).endswith(".pl"):
+    path = os.fspath(path)
+    if path.endswith(".pl"):
         return _load_prolog_module(fullname, path)
     sys.modules.pop(fullname, None)
     loader = PredicateLoader(fullname, path)
@@ -1105,7 +1135,9 @@ def _load_prolog_module(fullname, path, dialect=None):
 
     Test/external helper. Each call creates a fresh loader and module, of the
     front end ``CLAUSAL_PL_FRONTEND`` selects (the translator when unset).
+    *path* may be any path-like.
     """
+    path = os.fspath(path)
     sys.modules.pop(fullname, None)
     loader = _pl_loader_class()(fullname, path, dialect=dialect)
     spec = ModuleSpec(fullname, loader, origin=path)
@@ -1236,6 +1268,10 @@ class _ExtensionFinder(MetaPathFinder):
         search_dirs = path if path else sys.path
         groups = self._suffix_groups()
         for dir_entry in search_dirs:
+            if not isinstance(dir_entry, str):
+                # As CPython's PathFinder: a non-str entry (None, bytes, an
+                # int, a Path) is skipped, not a TypeError out of import.
+                continue
             found = self._find_in_entry(dir_entry, tail, groups)
             if found is None:
                 continue

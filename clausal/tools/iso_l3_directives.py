@@ -280,9 +280,14 @@ class DirectiveContext:
     ``visit_Name`` does."""
 
     def __init__(self, *, source: "str | None", filename: str, positions,
-                 op_table=None):
+                 op_table=None, source_path: "str | None" = None,
+                 module_name: "str | None" = None):
         self._source = source
         self._filename = filename
+        #: The importing file's full path and dotted module name (both from
+        #: the loader): a use_module path resolves beside the file first.
+        self.source_path = source_path
+        self.module_name = module_name
         self._pos = positions
         self.op_table = op_table
         self.dq_mode = "chars"
@@ -665,7 +670,8 @@ def _use_module(ctx: DirectiveContext, args, spans, span):
         raise _refused(f"{what}: the module is not an atom, an a/b path or "
                        f"library(Name), so it names no module to import",
                        span)
-    dotted = _dotted(path, span, what)
+    dotted = _sibling_dotted(ctx, path, span, what) or _dotted(path, span,
+                                                               what)
     target = _engine_module_path(dotted)
     found = _module_source(target)
     if found is None:
@@ -1378,6 +1384,36 @@ def _dotted(path: str, span, what) -> str:
         raise _refused(f"{what}: {path!r} is not a module path (each "
                        f"component must be a name)", span)
     return ".".join(parts)
+
+
+def _sibling_dotted(ctx, path: str, span, what) -> "str | None":
+    """The dotted module a ``use_module`` path names BESIDE the importing
+    file, or None (then the path is read as a dotted module on
+    ``sys.path``).  Scryer resolves a relative path against the importing
+    file's own directory, and so does the translator
+    (``prolog_to_clausal._resolve_module_path``): inside a package
+    ``pk``, ``use_module(sib)`` is ``pk.sib`` when ``pk/sib.pl`` exists,
+    whatever top-level ``sib`` ``sys.path`` also holds."""
+    if not (ctx.source_path and ctx.module_name):
+        return None
+    if path.startswith("/") or any(p in (".", "..")
+                                    for p in path.split("/")):
+        return None     # refused by _dotted (ruling D10)
+    from clausal.tools.prolog_to_clausal import (  # noqa: PLC0415
+        dotted_for_file, package_root, sibling_module_file)
+    if path.endswith(".pl"):
+        path = path[:-3]
+    cand = sibling_module_file(path, ctx.source_path)
+    if cand is None:
+        return None
+    dotted = dotted_for_file(
+        cand, package_root(ctx.source_path, ctx.module_name))
+    if dotted is None:
+        raise _refused(f"{what}: {path!r} is the file {cand}, which no "
+                       f"sys.path entry (nor this module's own package "
+                       f"root) contains as a dotted module path, so it "
+                       f"cannot be imported", span)
+    return dotted
 
 
 def _module_source(dotted: str) -> "str | None":

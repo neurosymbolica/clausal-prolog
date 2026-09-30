@@ -507,6 +507,28 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
   and `append/3` fail, `member/2` finds the heads, `X = [b|foo], X = [H|T]`
   binds `H = b, T = foo`, and `writeq/1` prints `[b|foo]`, as Scryer does.
   A clause HEAD `[H|T]` does not yet match an improper list.
+- **The native `.pl` front end resolves a `use_module` path beside the
+  importing file first.** Inside a `.pl` package `pk`, `use_module(sib, ...)`
+  now imports `pk.sib` when `pk/sib.pl` (or `.clausal`, `.seam`, `.py`, a
+  package) exists, and a slash path `a/b` names `a/b` beside the importer;
+  only a path with nothing beside the importer is read as a dotted module on
+  `sys.path`. This is Scryer's rule and the translator's. Before, the native
+  front end read the path as a top-level module only: a same-named module
+  later on `sys.path` answered silently, and without one the import was
+  refused.
+  In both front ends a plain directory beside the importer (one with no
+  `__init__` file) is no module: Scryer opens only the file, and the
+  translator used to take such a directory and never fall back to
+  `sys.path`.
+- **The bytecode cache key includes the source suffix.** A same-directory
+  `twin.pl` and `twin.clausal` share one `__pycache__` file; with equal size
+  and modification time each was served the other's bytecode. `.pl` and
+  `.seam` caches are rebuilt once; `.clausal` caches are unaffected.
+- `_load_module` and `_load_prolog_module` accept a `pathlib.Path` on a warm
+  bytecode cache too (it raised `TypeError`).
+- A non-`str` `sys.path` entry (`None`, `bytes`, an `int`, a `Path`) is
+  skipped by the source finder, as CPython's `PathFinder` skips it, instead
+  of raising `TypeError` out of every import.
 - **A `.pl` module in an earlier `sys.path` entry is no longer shadowed by a
   `.clausal` or `.seam` module of the same name in a later one.** The import
   hook now resolves source modules per `sys.path` entry, in path order: the
