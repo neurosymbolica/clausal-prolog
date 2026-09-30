@@ -611,6 +611,10 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
   metre`, `2.0... metre`), the same numbers as the unit-free twin. Money is
   still refused by CLP(R) (`units_unsupported`).
 
+  A clause head list pattern takes the cell apart too: `p([H|T], H, T)`
+  called with `[b|foo]` answers `H = b, T = foo`, `[a, b|T]` walks nested
+  cells, and a proper pattern such as `[a, b]` matches only a chain that
+  ends in `[]` (the head matcher, C and Python, shares the body's code).
 - **A `.pl` module in an earlier `sys.path` entry is no longer shadowed by a
   `.clausal` or `.seam` module of the same name in a later one.** The import
   hook now resolves source modules per `sys.path` entry, in path order: the

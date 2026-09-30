@@ -24,6 +24,10 @@ static PyObject *fn_is_var = NULL;  /* clausal.logic.variables.is_var */
  * first use: that module imports this one, so it cannot be bound at init. */
 static PyObject *fn_seglist_fallback = NULL;
 
+/* clausal.logic.runtime.list_unify._cons_cell_input_fallback, looked up on
+ * first use for the same reason. */
+static PyObject *fn_cons_fallback = NULL;
+
 static PyTypeObject *SegListType     = NULL;
 static PyTypeObject *SegStringType   = NULL;
 static PyTypeObject *SegBytesType    = NULL;
@@ -213,6 +217,17 @@ seq_slice(PyObject *seq, Py_ssize_t start, Py_ssize_t end)
         return c;
     }
     return s;
+}
+
+/* The ISO cons cell ('.', H, T) -- the term an improper list such as
+ * [b|foo] is (D50).  Twin of ``clausal.terms._is_cons_cell``. */
+static inline int
+is_cons_cell(PyObject *t)
+{
+    if (!PyTuple_CheckExact(t) || PyTuple_GET_SIZE(t) != 3)
+        return 0;
+    PyObject *f = PyTuple_GET_ITEM(t, 0);
+    return PyUnicode_Check(f) && PyUnicode_CompareWithASCIIString(f, ".") == 0;
 }
 
 /* Get length of a list or string. */
@@ -471,12 +486,31 @@ py_head_list_unify_input(PyObject *Py_UNUSED(module), PyObject *args)
     /* ── Unbound Var → defer to output mode ── */
     {
         int isv = call_is_var(d);
+        if (isv < 0) { Py_DECREF(d); return NULL; }
+        if (isv) { Py_DECREF(d); Py_RETURN_NONE; }
+    }
+
+    /* ── An improper list, the cons cell ('.', H, T) (D50): take it apart
+     * as body unification does, via the Python twin's
+     * _cons_cell_input_fallback, which both implementations share. ── */
+    if (is_cons_cell(d)) {
+        if (!fn_cons_fallback) {
+            PyObject *mod = PyImport_ImportModule(
+                "clausal.logic.runtime.list_unify");
+            if (!mod) { Py_DECREF(d); return NULL; }
+            fn_cons_fallback = PyObject_GetAttrString(
+                mod, "_cons_cell_input_fallback");
+            Py_DECREF(mod);
+            if (!fn_cons_fallback) { Py_DECREF(d); return NULL; }
+        }
+        PyObject *r = PyObject_CallFunctionObjArgs(
+            fn_cons_fallback, d, var_vals, star_val, after_vals, trail, NULL);
         Py_DECREF(d);
-        if (isv < 0) return NULL;
-        if (isv) Py_RETURN_NONE;
+        return r;
     }
 
     /* ── Otherwise: fail ── */
+    Py_DECREF(d);
     Py_RETURN_FALSE;
 }
 
