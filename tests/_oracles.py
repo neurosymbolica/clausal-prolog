@@ -35,11 +35,18 @@ SCRYER_END_MODULE_PRELUDE = str(
 
 
 def _mentions_end_module(path: str) -> bool:
+    """True when *path* holds an ``:- end_module(...)`` directive line
+    (``strip_end_module``'s own match, so a comment or an atom spelled
+    end_module does not add the prelude)."""
     try:
         with open(path, encoding="utf-8", errors="replace") as handle:
-            return "end_module" in handle.read()
+            text = handle.read()
     except OSError:
         return False
+    if "end_module" not in text:
+        return False
+    from clausal.end_module import strip_end_module
+    return strip_end_module(text) != text
 
 
 def _quoted_atom(text: str) -> str:

@@ -196,6 +196,34 @@ def test_the_files_own_flag_false_wins_over_the_process_setting(native, fe):
         """)
 
 
+@pytest.mark.parametrize("fe", FRONTENDS)
+def test_the_requirement_is_checked_on_a_bytecode_cache_hit(native,
+                                                            monkeypatch, fe):
+    """The setting is not in the cache key: the check must run again when
+    the module's cached bytecode is reused (the loaders re-read the source
+    for the module items)."""
+    import importlib
+    name = f"em_cache_{fe}"
+    _load(native, fe, name, _MISSING.format(name=name))   # writes the .pyc
+    assert list(native.tmp.rglob(f"__pycache__/{name}*.pyc"))
+    sys.modules.pop(name, None)
+    importlib.invalidate_caches()
+    monkeypatch.setenv(EM.REQUIRE_END_MODULE_ENV, "yes")
+    with pytest.raises(SyntaxError) as ei:
+        importlib.import_module(name)                     # NO cache clear
+    assert "CLAUSAL_REQUIRE_END_MODULE=yes" in str(ei.value)
+    assert name not in sys.modules
+
+
+@pytest.mark.parametrize("fe", FRONTENDS)
+def test_a_bad_env_value_fails_the_load_with_a_refusal(native, monkeypatch,
+                                                       fe):
+    monkeypatch.setenv(EM.REQUIRE_END_MODULE_ENV, "maybe")
+    name = f"em_badenv_{fe}"
+    msg = _refused(native, fe, name, _MISSING.format(name=name))
+    assert "domain_error(flag_value, require_end_module+'maybe')" in msg
+
+
 def test_an_unknown_env_value_is_an_error_not_a_default(monkeypatch):
     monkeypatch.setenv(EM.REQUIRE_END_MODULE_ENV, "maybe")
     with pytest.raises(ValueError, match="CLAUSAL_REQUIRE_END_MODULE"):
@@ -321,3 +349,20 @@ def test_the_exporter_refuses_to_emit_end_module():
     with pytest.raises(NotImplementedError, match="Scryer refuses"):
         clausal_source_to_prolog("-module(sx, [p/1])\np(1),\n"
                                  "-end_module(sx)\n")
+
+
+def test_the_scryer_prelude_is_added_only_for_the_directive(tmp_path):
+    here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    sys.path.insert(0, here)
+    try:
+        from _oracles import SCRYER_END_MODULE_PRELUDE, scryer_argv
+    finally:
+        sys.path.remove(here)
+    mention = tmp_path / "mention.pl"
+    mention.write_text("% end_module is not used here\np(end_module).\n")
+    directive = tmp_path / "directive.pl"
+    directive.write_text(":- module(directive, []).\n"
+                         ":- end_module(directive).\n")
+    assert SCRYER_END_MODULE_PRELUDE not in scryer_argv(str(mention))
+    argv = scryer_argv(str(directive))
+    assert argv.index(SCRYER_END_MODULE_PRELUDE) < argv.index(str(directive))

@@ -224,7 +224,12 @@ def flag_value(db, name: str):
     spec = FLAGS[name]
     if spec.scope == "end_module":
         from clausal.end_module import require_end_module_setting  # noqa: PLC0415
-        v = require_end_module_setting()
+        try:
+            v = require_end_module_setting()
+        except ValueError as e:         # a bad CLAUSAL_REQUIRE_END_MODULE
+            raise LogicException(domain_error(
+                "flag_value", ("+", name, "CLAUSAL_REQUIRE_END_MODULE"),
+                f"{_CURRENT}: {e}")) from None
         return spec.default if v is None else ("true" if v else "false")
     if spec.scope in ("module", "directive"):
         if db is not None:

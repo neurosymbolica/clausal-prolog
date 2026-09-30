@@ -166,7 +166,8 @@ def _requirement_source(surface, file_setting) -> str:
     if _setting is not _UNSET and _setting is not None:
         return "the process-wide require_end_module flag"
     if _setting is _UNSET and _env_setting() is not None:
-        return f"{REQUIRE_END_MODULE_ENV}=1"
+        raw = os.environ.get(REQUIRE_END_MODULE_ENV, "").strip()
+        return f"{REQUIRE_END_MODULE_ENV}={raw}"
     return f"the {surface} surface's default"
 
 
@@ -255,7 +256,13 @@ class EndModuleCheck:
         setting requires one."""
         if open_module is None or self.ended is not None:
             return
-        if not end_module_required(surface, self.file_setting):
+        try:
+            required = end_module_required(surface, self.file_setting)
+        except ValueError as e:         # a bad CLAUSAL_REQUIRE_END_MODULE
+            raise _error(f"domain_error(flag_value, require_end_module+"
+                         f"{os.environ.get(REQUIRE_END_MODULE_ENV)!r})",
+                         "load/1", f"{filename}: {e}") from None
+        if not required:
             return
         why = _requirement_source(surface, self.file_setting)
         raise _error(

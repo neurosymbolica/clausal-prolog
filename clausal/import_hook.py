@@ -995,9 +995,17 @@ class PrologLoader(_ClausalSourceLoader):
                          self._recover_module_items)
 
     def _recover_module_items(self, path):
-        """Cache-hit path: re-translate .pl source, then parse for module_items."""
+        """Cache-hit path: re-translate .pl source, then parse for module_items.
+        A refusal is the ``SyntaxError`` :meth:`source_to_code` raises (a
+        load-time check such as a required end_module/1 runs here too)."""
+        from clausal.tools.prolog_to_clausal import PrologTranslationError
+        from clausal.tools.prolog_parser import ParseError
         pl_source = self.get_data(path).decode("utf-8")
-        clausal_source = self._translate(pl_source)
+        try:
+            clausal_source = self._translate(pl_source)
+        except (ParseError, PrologTranslationError) as e:
+            raise SyntaxError(f"Cannot import {path}: {e}",
+                              (path, 0, 0, "")) from e
         return _prolog_default_items() + _extract_module_items(
             clausal_source, path, prolog_singletons=True)
 
