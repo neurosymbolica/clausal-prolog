@@ -153,10 +153,12 @@ def _items(x, ctx):
     from clausal.logic.exceptions import (  # noqa: PLC0415
         LogicException, instantiation_error, type_error)
     from clausal.logic.variables import deref, is_var  # noqa: PLC0415
+    from clausal.logic.builtins.lists import _open_skeleton  # noqa: PLC0415
     d = deref(x)
     items = _as_items(d)
     if items is None:
-        if is_var(d):
+        # a variable or a partial list: Scryer's must_be(list, _)
+        if is_var(d) or _open_skeleton(d) is not None:
             raise LogicException(instantiation_error(ctx))
         raise LogicException(type_error("list", d, ctx))
     return [deref(i) for i in items]
@@ -520,16 +522,74 @@ def _automaton_3(vs, nodes, arcs, trail, k):
     automaton: Nodes lists source(N) and sink(N), Arcs arc(From, Label, To)
     with integer labels.  Scryer's decomposition: a state variable between
     each pair of elements, the first in the sources, the last in the sinks,
-    and each step [S0, V, S1] in the arcs relation (tuples_in/2)."""
+    and each step [S0, V, S1] in the arcs relation (tuples_in/2).  It is
+    ``automaton(_, _, Vs, Nodes, Arcs, [], [], _)``."""
+    from clausal.logic.variables import Var  # noqa: PLC0415
+    if _automaton(Var(), Var(), vs, nodes, arcs, [], [], Var(), trail,
+                  "automaton/3"):
+        yield None
+
+
+@_builtin("automaton", 8, fields=("sequence", "template", "signature",
+                                  "nodes", "arcs", "counters", "initials",
+                                  "finals"))
+def _automaton_8(seqs, template, sigs, nodes, arcs, counters, initials,
+                 finals, trail, k):
+    """automaton(Sequence, Template, Signature, Nodes, Arcs, Counters,
+    Initials, Finals) -- automaton/3 over Signature, extended with counters
+    (clpz, Scryer's signature).  An arc arc(From, Label, To, Exprs) updates
+    each counter to its expression, where a variable of Counters stands for
+    that counter's previous value and a variable of Template for the part of
+    the current element of Sequence in the same position; an arc without
+    Exprs leaves the counters as they are.  The counters start at Initials
+    and end at Finals.  An unbound Sequence is Signature."""
+    if _automaton(seqs, template, sigs, nodes, arcs, counters, initials,
+                  finals, trail, "automaton/8"):
+        yield None
+
+
+def _automaton(seqs, template, sigs, nodes, arcs, counters, initials,
+               finals, trail, ctx) -> bool:
+    """Scryer's automaton/8 decomposition (library(clpz)):
+
+    - nodes are numbered, a state variable sits between each pair of
+      signature elements, the first in the sources, the last in the sinks;
+    - for counter i, the distinct (==/2) expressions Ex_i of all the arcs
+      are numbered 1.. (an arc without Exprs has the counter itself);
+    - step j is the tuple [S_j, Sig_j, S_j+1, I_1 .. I_k] in the relation
+      of rows [From, Label, To, N_1 .. N_k] (tuples_in/2), and the counter
+      C_i after the step is element(I_i, [V_1 ..], C_i) with each
+      ``V #= E`` for E in Ex_i, its template variables replaced by the
+      current element's parts and its counter variables by the counters
+      before the step.
+
+    Scryer's own library raises instantiation_error (arg/3) for any counter
+    expression that has a variable: its template_var_path/3 calls arg/3
+    with an unbound index, which ISO arg/3 does not enumerate.  This is the
+    documented relation instead (the sequence_inflexions example of its
+    documentation answers N = 3)."""
     from clausal.logic.clpfd import tuples_in  # noqa: PLC0415
     from clausal.logic.clpz_surface import _post  # noqa: PLC0415
-    from clausal.logic.exceptions import LogicException, instantiation_error  # noqa: PLC0415
-    from clausal.logic.variables import Var  # noqa: PLC0415
+    from clausal.logic.exceptions import (  # noqa: PLC0415
+        LogicException, domain_error, instantiation_error)
+    from clausal.logic.variables import Var, deref, is_var, unify  # noqa: PLC0415
     from clausal.logic.solve import _deref_walk  # noqa: PLC0415
-    ctx = "automaton/3"
-    seq = _items(vs, ctx)
-    for x in seq:
+    from clausal.logic.builtins.iso_compare import _iso_identical  # noqa: PLC0415
+
+    sig = _items(sigs, ctx)
+    node_items = _items(nodes, ctx)
+    arc_items = _items(arcs, ctx)
+    ctr = _items(counters, ctx)
+    init = _items(initials, ctx)
+    for x in sig:
         _integer_or_fd_var(x, ctx)
+    sv = deref(seqs)
+    if is_var(sv):
+        if not unify(sv, sig, trail):
+            return False
+        seq = list(sig)
+    else:
+        seq = _items(sv, ctx)
     numbers: dict = {}
 
     def num(node):
@@ -545,40 +605,167 @@ def _automaton_3(vs, nodes, arcs, trail, k):
             numbers[key] = len(numbers)
         return numbers[key]
 
+    exprs: list = [[] for _ in ctr]     # per counter: its distinct expressions
+
+    def expr_num(i, e):
+        for n, e0 in enumerate(exprs[i]):
+            if _iso_identical(e0, e):
+                return n + 1
+        exprs[i].append(e)
+        return len(exprs[i])
+
     relation = []
-    for a in _items(arcs, ctx):
-        # arc(From, Label, To), or arc/4 with no counter expressions;
-        # anything else has no clause in Scryer's arc_normalized_: fail
+    for a in arc_items:
+        # arc(From, Label, To) or arc(From, Label, To, Exprs); anything
+        # else has no clause in Scryer's arc_normalized_: fail
         if type(a) is tuple and len(a) == 4 and a[0] == "arc":
-            relation.append((num(a[1]), _integer(a[2], ctx), num(a[3])))
-        elif (type(a) is tuple and len(a) == 5 and a[0] == "arc"
-              and _items(a[4], ctx) == []):
-            relation.append((num(a[1]), _integer(a[2], ctx), num(a[3])))
+            es = list(ctr)
+        elif type(a) is tuple and len(a) == 5 and a[0] == "arc":
+            es = _items(a[4], ctx)
         else:
-            return
+            return False
+        if len(es) != len(ctr):
+            return False
+        relation.append((num(a[1]), _integer(a[2], ctx), num(a[3]),
+                         *(expr_num(i, e) for i, e in enumerate(es))))
     sources, sinks = [], []
-    for n in _items(nodes, ctx):
+    for n in node_items:
         # Scryer picks out source/1 and sink/1 and ignores the rest
         if type(n) is tuple and len(n) == 2 and n[0] == "source":
             sources.append(num(n[1]))
         elif type(n) is tuple and len(n) == 2 and n[0] == "sink":
             sinks.append(num(n[1]))
+    if len(seq) != len(sig):
+        return False
+
+    def path_in(t, v):
+        # the argument path of the variable v in the template t, or None
+        t = deref(t)
+        if is_var(t):
+            return [] if t is v else None
+        if type(t) is tuple and t and type(t[0]) is str:
+            args = t[1:]
+        elif isinstance(t, list):
+            args = t
+        else:
+            return None
+        for n, a in enumerate(args):
+            p = path_in(a, v)
+            if p is not None:
+                return [(len(args), n)] + p
+        return None
+
+    def at_path(t, path):
+        for arity, n in path:
+            t = deref(t)
+            if is_var(t):
+                raise LogicException(instantiation_error(ctx))
+            if type(t) is tuple and t and type(t[0]) is str:
+                args = t[1:]
+            elif isinstance(t, list):
+                args = t
+            else:
+                return _NO_PATH
+            if len(args) != arity:
+                return _NO_PATH
+            t = args[n]
+        return t
+
+    def substitute(e, element, values):
+        e = deref(e)
+        if is_var(e):
+            p = path_in(template, e)
+            if p is not None:
+                return at_path(element, p)
+            for n, c in enumerate(ctr):
+                if deref(c) is e:
+                    if n >= len(values):
+                        return _NO_PATH
+                    return values[n]
+            raise LogicException(domain_error(
+                "variable_from_template_or_counters", e, ctx))
+        if type(e) is tuple and e and type(e[0]) is str:
+            out = [e[0]]
+            for a in e[1:]:
+                x = substitute(a, element, values)
+                if x is _NO_PATH:
+                    return _NO_PATH
+                out.append(x)
+            return tuple(out)
+        if isinstance(e, list):
+            out = []
+            for a in e:
+                x = substitute(a, element, values)
+                if x is _NO_PATH:
+                    return _NO_PATH
+                out.append(x)
+            return out
+        return e
+
+    from clausal.logic.clpfd import clpz_operands, fd_eq  # noqa: PLC0415
+    from clausal.logic.clpz_surface import clpz_expression  # noqa: PLC0415
+    states = [Var() for _ in range(len(sig) + 1)]
+    rows = []
+    values = list(init)
+    for j in range(len(sig)):
+        idx = [Var() for _ in ctr]
+        rows.append([states[j], sig[j], states[j + 1], *idx])
+        nxt = []
+        for i in range(len(ctr)):
+            vs = []
+            for e in exprs[i]:
+                t = substitute(e, seq[j], values)
+                if t is _NO_PATH:
+                    return False
+                # Scryer's #V #= E: a clpz expression, else domain_error
+                t = clpz_expression(t, ctx)
+                v = Var()
+                ops = clpz_operands(v, t, trail)
+                if ops is None or not fd_eq(*ops, trail):
+                    return False
+                vs.append(v)
+            c = Var()
+            if not _element_constraint(idx[i], vs, c, trail):
+                return False
+            nxt.append(c)
+        values = nxt
+    if not unify(finals, values, trail):
+        return False
     if not sources or not sinks:
-        return
-    states = [Var() for _ in range(len(seq) + 1)]
+        return False
     src = tuple((s, s) for s in sorted(set(sources)))
     snk = tuple((s, s) for s in sorted(set(sinks)))
     if not (_post([states[0]], _fd._domain_union([src]), trail)
             and _post([states[-1]], _fd._domain_union([snk]), trail)):
-        return
-    if not seq:
-        yield None
-        return
+        return False
+    if not sig:
+        return True
     if not relation:
-        return
-    rows = [[states[i], seq[i], states[i + 1]] for i in range(len(seq))]
-    if tuples_in(rows, relation, trail):
-        yield None
+        return False
+    return tuples_in(rows, relation, trail)
+
+
+_NO_PATH = object()
+
+
+def _element_constraint(index, values, value, trail) -> bool:
+    """clpz's element(Index, Values, Value) as a CONSTRAINT: Index in
+    1..len(Values) and Value the Index-th of Values, propagated both ways.
+    (``clpfd.fd_element`` enumerates the index when propagation leaves it
+    open, which would commit automaton/8 to one arc per step.)"""
+    from clausal.logic.clpfd import (  # noqa: PLC0415
+        ElementConstraint, _ensure_fd, _post_constraint)
+    from clausal.logic.clpz_surface import _post  # noqa: PLC0415
+    from clausal.logic.variables import unify  # noqa: PLC0415
+    if not values:
+        return False
+    if len(values) == 1:
+        return unify(index, 1, trail) and unify(value, values[0], trail)
+    if not _post([index], _fd._domain_union([((1, len(values)),)]), trail):
+        return False
+    _ensure_fd(value, trail)
+    return _post_constraint(ElementConstraint(index, tuple(values), value),
+                            trail)
 
 
 def _has_var(t) -> bool:

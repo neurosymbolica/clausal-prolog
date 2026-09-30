@@ -174,6 +174,22 @@ since 0.4.0 finish three moves:
   library(clpz), from `clausal.stdlib.clpz_sum`; a file that defines its
   own `sum/2` still loads.
 
+- **automaton/8** (clpz, Scryer's signature): automaton/3 with counters.
+  An arc `arc(From, Label, To, Exprs)` sets each counter to its
+  expression, where a variable of `Counters` is that counter's previous
+  value and a variable of `Template` the matching part of the current
+  element; an arc without `Exprs` leaves the counters. Scryer's own
+  library raises `instantiation_error` for every counter expression with a
+  variable (its `template_var_path/3` calls `arg/3` with an unbound
+  index); Clausal gives the documented relation (the documentation's
+  `sequence_inflexions` example answers `N = 3`).
+- **append/2, list_max/2 and list_min/2** (Scryer's library(lists)).
+  `append(ListOfLists, List)` answers as its two-clause definition does,
+  in the same order and with the same non-termination (`append([A,B],
+  [1,2])` enumerates the three splits; `append(foo, L)` fails).
+  `list_max/2` and `list_min/2` fold with `max/2` / `min/2` through `is/2`
+  (`list_max([2, 2.0], M)` is `M = 2.0`; the first element is taken
+  unevaluated, so `list_max([1+1], M)` is `M = 1+1`).
 - **Constants, units and dicts on the native `.pl` front end.** A `.pl`
   file declares constants with the seam's directive family in ISO syntax
   (`:- constant_value(max_retries, 3).`, `:- constant_number_units(max_fine,
@@ -629,6 +645,14 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
   `foo.clausal` or `foo.seam` in a later one. See
   [docs/importing_prolog.md](docs/importing_prolog.md).
 
+- **A partial list is `instantiation_error` in the clpz globals.**
+  `tuples_in/2`, `global_cardinality/2`, `lex_chain/1`, `automaton/3` and
+  the other clpz predicates that read a list raised
+  `type_error(list, [1|_])` for a partial list; Scryer's `must_be/2` gives
+  `instantiation_error`.
+- **subtract/3, intersection/3 and union/3 compare elements by `==/2`.**
+  Python's `==` made `1` and `1.0` (and `f(1)` and `f(1.0)`) one element:
+  `subtract([1, 2, 1.0], [1.0], D)` gave `[2]`, now `[1, 2]`.
 - **CLP(Q) accepts quantities.** `{Q = 100 * constant(one_euro)}` in a
   `.pl` file, `clpq.rational(Q == 100 * constant(one_euro))`, `in_q/3` with
   quantity bounds, `entailed/1` and the objectives of `maximize/2`,
