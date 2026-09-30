@@ -134,6 +134,13 @@ since 0.4.0 finish three moves:
 
 ### Added
 
+- **append/2, list_max/2 and list_min/2** (Scryer's library(lists)).
+  `append(ListOfLists, List)` answers as its two-clause definition does,
+  in the same order and with the same non-termination (`append([A,B],
+  [1,2])` enumerates the three splits; `append(foo, L)` fails).
+  `list_max/2` and `list_min/2` fold with `max/2` / `min/2` through `is/2`
+  (`list_max([2, 2.0], M)` is `M = 2.0`; the first element is taken
+  unevaluated, so `list_max([1+1], M)` is `M = 1+1`).
 - **Constants, units and dicts on the native `.pl` front end.** A `.pl`
   file declares constants with the seam's directive family in ISO syntax
   (`:- constant_value(max_retries, 3).`, `:- constant_number_units(max_fine,
@@ -480,6 +487,9 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
 
 ### Fixed
 
+- **subtract/3, intersection/3 and union/3 compare elements by `==/2`.**
+  Python's `==` made `1` and `1.0` (and `f(1)` and `f(1.0)`) one element:
+  `subtract([1, 2, 1.0], [1.0], D)` gave `[2]`, now `[1, 2]`.
 - **CLP(Q) accepts quantities.** `{Q = 100 * constant(one_euro)}` in a
   `.pl` file, `clpq.rational(Q == 100 * constant(one_euro))`, `in_q/3` with
   quantity bounds, `entailed/1` and the objectives of `maximize/2`,

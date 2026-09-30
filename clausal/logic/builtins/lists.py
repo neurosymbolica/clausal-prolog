@@ -1,6 +1,7 @@
-"""List builtins: in_/2, in_check/2, append/3, length/2, last/2, reverse/2,
+"""List builtins: in_/2, in_check/2, append/2, append/3, length/2, last/2, reverse/2,
 list_item/3, flatten/2, msort/2, sort/2, permutation/2, select/3,
 subtract/3, intersection/3, union/3, list_to_set/2, sum_list/2, max_list/2, min_list/2,
+list_max/2, list_min/2,
 take/3, drop/3, split_at/4, zip_/3, replicate/3, split_with/3,
 numlist/2,3, same_length/2, transpose/2."""
 
@@ -439,6 +440,113 @@ def _append__3(this_generator, _proceed, _fail, _catcher, l1, l2, l3, trail):
     yield (_fail, DONE)
 
 
+
+_NO_TAIL = object()
+
+
+def _append2_alternatives(ls, l, trail):
+    """The two clauses of append/2 for the goal ``append(Ls, L)``::
+
+        append([], []).
+        append([L0|Ls0], Ls) :- append(L0, Rest, Ls), append(Ls0, Rest).
+
+    Yields None when the goal is solved outright (clause 1), or the next
+    goal ``(Ls0, Rest)`` for each answer of ``append(L0, Rest, Ls)``
+    (clause 2).  Each binding is undone before the next alternative.  *ls*
+    may also be ``(items, i)``: the proper list ``items[i:]`` without the
+    copy."""
+    if type(ls) is tuple and len(ls) == 2 and ls[0] is _NO_TAIL:
+        items, i = ls[1]
+        if i == len(items):
+            mark = trail.mark()
+            if unify(l, [], trail):
+                yield None
+            trail.undo(mark)
+            return
+        head, tail = items[i], (_NO_TAIL, (items, i + 1))
+    else:
+        v = deref(ls)
+        mark = trail.mark()
+        if unify(v, [], trail) and unify(l, [], trail):
+            yield None
+        trail.undo(mark)
+        if isinstance(v, list):
+            if not v:
+                return
+            head, tail = v[0], (_NO_TAIL, (v, 1))
+        else:
+            items = _as_items(v)
+            if items is not None:
+                if not items:
+                    return
+                head, tail = items[0], (_NO_TAIL, (items, 1))
+            else:
+                # an open list (or a variable): take it apart by unification
+                head, rest = Var(), Var()
+                mark = trail.mark()
+                if not unify(v, _partial([head], rest), trail):
+                    trail.undo(mark)
+                    return
+                tail = rest
+                rest_var = Var()
+                for sig, _ in _append__3(None, _NO_TAIL, None, None,
+                                         head, rest_var, l, trail):
+                    if sig is _NO_TAIL:
+                        yield (tail, rest_var)
+                trail.undo(mark)
+                return
+    rest_var = Var()
+    for sig, _ in _append__3(None, _NO_TAIL, None, None,
+                             head, rest_var, l, trail):
+        if sig is _NO_TAIL:
+            yield (tail, rest_var)
+
+
+@_trampoline_builtin("append", 2)
+def _append__2(this_generator, _proceed, _fail, _catcher, lists, lst, trail):
+    """append(ListOfLists, List) — List is the concatenation of the lists in
+    ListOfLists (Scryer's library(lists)), by its definition::
+
+        append([], []).
+        append([L0|Ls0], Ls) :- append(L0, Rest, Ls), append(Ls0, Rest).
+
+    with the same answers, in the same order: ``append([X, [a]], [b, a])``
+    is ``X = [b]``; ``append([A, B], [1, 2])`` enumerates the three splits;
+    ``append(foo, L)`` fails.  Where the definition does not terminate
+    (``append(Ls, [1])`` with Ls unbound) neither does this.  A proper list
+    of proper lists is concatenated in one step."""
+    ls_val = deref(lists)
+    if isinstance(ls_val, list):
+        parts = []
+        for x in ls_val:
+            x = deref(x)
+            if not isinstance(x, list):
+                parts = None
+                break
+            parts.append(x)
+        if parts is not None:
+            mark = trail.mark()
+            if unify(lst, [e for p in parts for e in p], trail):
+                yield (_proceed, None)
+            trail.undo(mark)
+            yield (_fail, DONE)
+            return
+    # the definition, run with an explicit stack of choice points (a Python
+    # recursion would stop at the interpreter's depth limit)
+    stack = [_append2_alternatives(lists, lst, trail)]
+    while stack:
+        try:
+            nxt = next(stack[-1])
+        except StopIteration:
+            stack.pop()
+            continue
+        if nxt is None:
+            yield (_proceed, None)
+        else:
+            stack.append(_append2_alternatives(nxt[0], nxt[1], trail))
+    yield (_fail, DONE)
+
+
 def _length_n_error(n_val):
     """The prologue's errors for length/2's N (ISO, Scryer):
     ``type_error(integer, N)`` for a non-integer -- a bool included, which
@@ -861,9 +969,42 @@ def _select__3(this_generator, _proceed, _fail, _catcher, elem, lst, rest, trail
     yield (_fail, DONE)
 
 
+class _Members:
+    """Membership by term identity (==/2): 1 and 1.0 are different elements,
+    as are two distinct variables.  Python's ``in`` compared by ``==``, which
+    made 1 and 1.0 (and f(1) and f(1.0)) one element.  Ints, floats and
+    atoms are looked up in a (type, value) set; everything else is scanned
+    with ==/2."""
+
+    __slots__ = ("_atomic", "_other")
+
+    def __init__(self, items=()):
+        self._atomic: set = set()
+        self._other: list = []
+        for x in items:
+            self.add(x)
+
+    def add(self, x) -> None:
+        x = deref(x)
+        t = type(x)
+        if t in (int, float, str):
+            self._atomic.add((t, x))
+        else:
+            self._other.append(x)
+
+    def __contains__(self, x) -> bool:
+        x = deref(x)
+        t = type(x)
+        if t in (int, float, str):
+            return (t, x) in self._atomic
+        from clausal.logic.builtins.iso_compare import _iso_identical  # noqa: PLC0415
+        return any(_iso_identical(x, y) for y in self._other)
+
+
 @_trampoline_builtin("subtract", 3)
 def _subtract__3(this_generator, _proceed, _fail, _catcher, set1, set2, diff, trail):
-    """subtract(Set1, Set2, Diff) — Diff is Set1 minus elements in Set2."""
+    """subtract(Set1, Set2, Diff) — Diff is Set1 minus the elements of Set2
+    (compared by ==/2: 1 and 1.0 differ)."""
     s1 = deref(set1)
     s2 = deref(set2)
     s1_items = _as_items(s1)
@@ -871,7 +1012,8 @@ def _subtract__3(this_generator, _proceed, _fail, _catcher, set1, set2, diff, tr
     if s1_items is not None and s2_items is not None:
         _out_str = _was_string(s1) and _was_string(s2)   # stage 1: the carrier is str-shaped
         _out_bytes = isinstance(s1, bytes) and isinstance(s2, bytes)
-        result = _seq_result([x for x in s1_items if x not in s2_items], _out_str, _out_bytes)
+        members = _Members(s2_items)
+        result = _seq_result([x for x in s1_items if x not in members], _out_str, _out_bytes)
         mark = trail.mark()
         if unify(diff, result, trail):
             yield (_proceed, None)
@@ -881,7 +1023,8 @@ def _subtract__3(this_generator, _proceed, _fail, _catcher, set1, set2, diff, tr
 
 @_trampoline_builtin("intersection", 3)
 def _intersection__3(this_generator, _proceed, _fail, _catcher, set1, set2, inter, trail):
-    """intersection(Set1, Set2, Inter) — Inter is the intersection of Set1 and Set2."""
+    """intersection(Set1, Set2, Inter) — Inter is the elements of Set1 that
+    are in Set2 (compared by ==/2: 1 and 1.0 differ)."""
     s1 = deref(set1)
     s2 = deref(set2)
     s1_items = _as_items(s1)
@@ -889,7 +1032,8 @@ def _intersection__3(this_generator, _proceed, _fail, _catcher, set1, set2, inte
     if s1_items is not None and s2_items is not None:
         _out_str = _was_string(s1) and _was_string(s2)   # stage 1: the carrier is str-shaped
         _out_bytes = isinstance(s1, bytes) and isinstance(s2, bytes)
-        result = _seq_result([x for x in s1_items if x in s2_items], _out_str, _out_bytes)
+        members = _Members(s2_items)
+        result = _seq_result([x for x in s1_items if x in members], _out_str, _out_bytes)
         mark = trail.mark()
         if unify(inter, result, trail):
             yield (_proceed, None)
@@ -900,9 +1044,10 @@ def _intersection__3(this_generator, _proceed, _fail, _catcher, set1, set2, inte
 @_trampoline_builtin("union", 3)
 def _union__3(this_generator, _proceed, _fail, _catcher, set1, set2, uni, trail):
     """union(Set1, Set2, Union) — Union is Set1 followed by the elements of
-    Set2 not already in Set1 (SWI-consistent). Set1's OWN duplicates are
-    preserved (``union([1,1],[],U)`` = ``[1,1]``); only elements of Set2 that
-    already occur in Set1 are dropped. Use list_to_set/2 first for a true set.
+    Set2 not already in Set1 (compared by ==/2: 1 and 1.0 differ). Set1's
+    OWN duplicates are preserved (``union([1,1],[],U)`` = ``[1,1]``); only
+    elements of Set2 that already occur in Set1 are dropped. Use
+    list_to_set/2 first for a true set.
     """
     s1 = deref(set1)
     s2 = deref(set2)
@@ -912,9 +1057,11 @@ def _union__3(this_generator, _proceed, _fail, _catcher, set1, set2, uni, trail)
         _out_str = _was_string(s1) and _was_string(s2)   # stage 1: the carrier is str-shaped
         _out_bytes = isinstance(s1, bytes) and isinstance(s2, bytes)
         result = list(s1_items)
+        members = _Members(result)
         for x in s2_items:
-            if x not in result:
+            if x not in members:
                 result.append(x)
+                members.add(x)
         out = _seq_result(result, _out_str, _out_bytes)
         mark = trail.mark()
         if unify(uni, out, trail):
@@ -1065,6 +1212,68 @@ def _min_list__2(this_generator, _proceed, _fail, _catcher, lst, minimum, trail)
         trail.undo(mark)
     yield (_fail, DONE)
 
+
+
+def _list_extreme(fn, lst, extreme, trail, _proceed, _fail):
+    """Scryer's list_max/2 and list_min/2::
+
+        list_max([N|Ns], Max) :- foldl(list_max_, Ns, N, Max).
+        list_max_(N, Max0, Max) :- Max is max(N, Max0).
+
+    The first element is taken as it is (``list_max([1+1], M)`` is
+    ``M = 1+1``); every later one is evaluated with the running extreme
+    through is/2, so its errors are is/2's.  An empty list or a non-list
+    fails.  An open tail first answers with the tail closed, then (the fold
+    reaching an unbound element) raises instantiation_error, as Scryer's
+    foldl does."""
+    from clausal.logic.builtins.iso_compare import _iso_eval  # noqa: PLC0415
+    from clausal.logic.exceptions import (  # noqa: PLC0415
+        LogicException, instantiation_error)
+    val = deref(lst)
+    items = _as_items(val)
+    tail = None
+    if items is None:
+        skel = _open_skeleton(val)
+        if skel is None:
+            yield (_fail, DONE)
+            return
+        items, tail = skel
+        if not items:
+            # [N|Ns] with Ns open: Max = N when Ns = []
+            n = Var()
+            mark = trail.mark()
+            if unify(tail, [n], trail) and unify(extreme, n, trail):
+                yield (_proceed, None)
+            trail.undo(mark)
+            raise LogicException(instantiation_error("is/2"))
+    if not items:
+        yield (_fail, DONE)
+        return
+    acc = items[0]
+    for x in items[1:]:
+        acc = _iso_eval((fn, x, acc), "is/2")
+    mark = trail.mark()
+    if (tail is None or unify(tail, [], trail)) and unify(extreme, acc, trail):
+        yield (_proceed, None)
+    trail.undo(mark)
+    if tail is not None:
+        raise LogicException(instantiation_error("is/2"))
+    yield (_fail, DONE)
+
+
+@_trampoline_builtin("list_max", 2)
+def _list_max__2(this_generator, _proceed, _fail, _catcher, lst, maximum, trail):
+    """list_max(List, Max) — Max is the largest of the numbers in List
+    (Scryer's library(lists): evaluated with max/2, so
+    ``list_max([2, 2.0], M)`` is ``M = 2.0``)."""
+    yield from _list_extreme("max", lst, maximum, trail, _proceed, _fail)
+
+
+@_trampoline_builtin("list_min", 2)
+def _list_min__2(this_generator, _proceed, _fail, _catcher, lst, minimum, trail):
+    """list_min(List, Min) — Min is the smallest of the numbers in List
+    (Scryer's library(lists), evaluated with min/2)."""
+    yield from _list_extreme("min", lst, minimum, trail, _proceed, _fail)
 
 # ── V3-5: Extended list predicates ────────────────────────────────────────────
 
