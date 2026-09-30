@@ -187,6 +187,19 @@ since 0.4.0 finish three moves:
 
 ### Added
 
+- **`clausal.has_predicate(mod, name, arity=None)`,
+  `clausal.defines_predicate(mod, name, arity=None)` and
+  `clausal.module_binds(mod, name)`** ask a module about a name without
+  going through `getattr`. `has_predicate` answers "is it a predicate I can
+  call through the module": True whether the module defines the predicate
+  or imports it (a thin facade), False for a data atom; it replaces
+  `getattr(mod, name, None) is not None` as a predicate probe.
+  `defines_predicate` is True iff the module
+  defines, or imports and exports, the predicate `name/arity` (any arity
+  when `arity` is `None`; the population of `module_signatures`).
+  `module_binds` is True iff `name` is a real attribute of the module (in
+  its `__dict__`: defined, imported, declared or auto-declared). Both work
+  for `.clausal`/`.seam`, `.pl` under either front end, and package roots.
 - **`':'(M, G)` builds a qualified goal term in seam** (ruled 2026-09-30).
   ISO's `:`/2 is now a known functor in `.clausal`/`.seam` source with no
   declaration: `T is ':'(lib, p(X)), call(T)`, `call(':'(lib, p(X)))`,

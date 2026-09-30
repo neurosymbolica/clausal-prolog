@@ -106,7 +106,7 @@ from clausal import (
     solve, call, once, query,            # the query API
     query_wfs, Solutions,
     declared_atoms, imported_atoms,      # module introspection
-    module_signatures,
+    module_signatures, has_predicate, defines_predicate, module_binds,
     Var, Trail, Module,                  # runtime objects
     deref, unify,                        # term access
     cell_functor, cell_args, make_cell,  # reading and building a cell
@@ -126,7 +126,10 @@ from clausal import (
 | `Solutions` | `Solutions(goal, module=...)` | The interactive (REPL/notebook) solution iterator and display. |
 | `declared_atoms` | `declared_atoms(module_or_package) -> frozenset[str]` | The atoms the module's own files declare in their `-module`/`-private` lists; for a package, also its **loaded** submodules: the package's atom vocabulary, NOT the attributes bound on the package root (an atom declared only in a submodule is listed although the root does not bind it, so `getattr(pkg, name)` can be missing; read the root module's own names for that). Excludes `-import_from`ed atoms and does not depend on import order. Takes a module, a `Module` or a dotted name (lookup-only, like `module=`). See [Python integration](python_integration.md#listing-the-atoms-a-module-declares-declared_atoms). |
 | `imported_atoms` | `imported_atoms(module_or_package) -> dict[str, str]` | `{atom: exporter module name}` for the atoms the module's own files (for a package, also its **loaded** submodules) bring in via `-import_from` without re-declaring them. Counts a name only when the exporter's own file declares it as an atom (one level, as the import edge resolves it; for a package exporter, its `__init__` only), so imported predicates are excluded (a `name/N` entry always names a predicate and is never counted). Disjoint from `declared_atoms`. On a clash the later directive in a file that names the atom wins (an `alias(x, y)` names `x`), and the package's `__init__` wins over its submodules. Same argument forms and errors as `declared_atoms`. See [Python integration](python_integration.md#listing-the-atoms-a-module-imports-imported_atoms). |
-| `module_signatures` | `module_signatures(module) -> dict[str, frozenset[int]]` | `{name: arities}` for the predicates a module offers to `-import_from`, keys sorted. For a Clausal module: the predicates its own database holds (clauses, `-dynamic`, a bare `name/N` export entry), not what it imports, not a fielded data declaration. For a Python-backed module (`py.datetime`, `currency`, `units`, ...): each public predicate adapter with at least one registered arity; a unit or currency constant and a plain function (such as `date/3`) are not predicates. An adapter whose arity cannot be read (its dispatch takes `*args`) is listed with an empty `frozenset`. Takes a module, a `Module`, or a name spelled as `-import_from` spells it (`py.datetime`, `date_time`, `currency`), resolved the same way and **imported if not loaded** (unlike `declared_atoms`). A name that resolves to no module raises `LogicException(existence_error(module, Name))`. A package answers for its `__init__` only. |
+| `module_signatures` | `module_signatures(module) -> dict[str, frozenset[int]]` | `{name: arities}` for the predicates a module offers to `-import_from`, keys sorted. For a Clausal module: the predicates its own database holds (clauses, `-dynamic`, a bare `name/N` export entry, which is how an imported predicate is re-exported), not what it merely imports, not a fielded data declaration. For a Python-backed module (`py.datetime`, `currency`, `units`, ...): each public predicate adapter with at least one registered arity; a unit or currency constant and a plain function (such as `date/3`) are not predicates. An adapter whose arity cannot be read (its dispatch takes `*args`) is listed with an empty `frozenset`. Takes a module, a `Module`, or a name spelled as `-import_from` spells it (`py.datetime`, `date_time`, `currency`), resolved the same way and **imported if not loaded** (unlike `declared_atoms`). A name that resolves to no module raises `LogicException(existence_error(module, Name))`. A package answers for its `__init__` only. |
+| `has_predicate` | `has_predicate(module, name, arity=None) -> bool` | True iff calling `name/arity` through the module resolves to a predicate (any arity when `arity` is `None`), whether the module defines it or imports it (from `.pl`, `.clausal`/`.seam`, or by a Python-level import in a facade `__init__`). False for a data atom and for a name only the `.pl` attribute fallback answers. The replacement for `getattr(mod, name, None) is not None` as a predicate probe. |
+| `defines_predicate` | `defines_predicate(module, name, arity=None) -> bool` | True iff the module defines, or imports and exports, the predicate `name/arity` (any arity when `arity` is `None`): the population of `module_signatures`, with its argument forms. An imported predicate counts only when a `name/N` entry in the module's export list re-exports it. Works for `.clausal`/`.seam`, `.pl` (both front ends) and package roots. It answers "does the module itself define it"; to ask whether a predicate can be called through the module, use `has_predicate`. |
+| `module_binds` | `module_binds(module, name) -> bool` | True iff `name` is a real attribute of the module: in its `__dict__`, where a definition, an import, a declaration or a native `.pl` auto-declaration binds it. Takes a module, a `Module` or a dotted name (lookup-only: a module that is not loaded binds nothing). |
 | `cell_functor`, `cell_args`, `make_cell` | `cell_functor(c)`, `cell_args(c) -> tuple`, `make_cell(functor, *args) -> tuple` | Read and build a compound term (a cell). |
 | `to_python` | `to_python(val)` | Deep conversion out. |
 | `to_clausal` | `to_clausal(value) -> Any` | Deep conversion in. Raises `TypeError` for an unregistered class. |
@@ -139,6 +142,16 @@ from clausal import (
 | `LogicException` | `.term` is the thrown term; `.message` is the prose or `None` | Every `throw/1` and ISO error that reaches Python. |
 | `UnboundVarCoercionError` | subclass of `TypeError` | |
 | `Quantity`, `UnitsMismatch` | | The units value and its error. |
+
+Three existence questions, three functions (`getattr` answers none of them
+on a `.pl` module, where an unbound atom-shaped name reads as its atom):
+
+- "is `n` a predicate I can call through `m`": `has_predicate(m, n)`. A thin
+  facade that only imports `n` answers True.
+- "does `m` itself define `n`": `defines_predicate(m, n)`. It is False for a
+  predicate a facade only imports without re-exporting it.
+- "is `n` a real attribute of `m` (predicate or data)": `module_binds(m, n)`.
+  It is True for a data atom too, so it is no predicate probe.
 
 `module=` accepts a `Module`, an imported `.clausal` module, or the module's
 dotted name as a string. An unqualified cell with no module raises ISO
@@ -288,6 +301,9 @@ Two known gaps in the atom-class deprecation:
   in a minor release. This includes ISO 13211-2 `end_module/1` and its
   setting: the `require_end_module` flag, `CLAUSAL_REQUIRE_END_MODULE`, and
   `clausal.end_module`.
+  To ask a `.pl` module whether it has a predicate or binds a name, use
+  `clausal.defines_predicate(mod, name, arity=None)` and
+  `clausal.module_binds(mod, name)` (1.3), not `getattr`.
 
 ### Exported by `clausal` but not covered
 

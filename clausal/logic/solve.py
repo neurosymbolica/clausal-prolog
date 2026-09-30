@@ -1296,6 +1296,126 @@ def _adapter_arities(value: Any) -> "set | None":
     return {arity} if arity >= 0 else set()
 
 
+#: The three existence questions, and which function answers each
+#: (``getattr(mod, name, None)`` answers none of them on a ``.pl`` module,
+#: where an unbound atom-shaped name reads as its atom; ruling 2026-10-01):
+#:
+#: - "is *name* a predicate I can call through *mod*"  -> :func:`has_predicate`
+#: - "does *mod* itself define (or export) *name*"     -> :func:`defines_predicate`
+#: - "is *name* a real attribute of *mod* (predicate or data)"
+#:                                                     -> :func:`module_binds`
+
+
+def _namespace_and_db(module: Any, caller: str):
+    """``(namespace, db)`` for the argument forms :func:`module_signatures`
+    takes (a name is imported if not loaded)."""
+    target = module
+    if isinstance(target, str):
+        target = _import_for_signatures(target)
+    if isinstance(target, Module):
+        return target.module_dict or {}, target.db
+    if isinstance(target, _types.ModuleType):
+        from clausal.logic.predicate import namespace_db  # noqa: PLC0415
+        ns = vars(target)
+        return ns, namespace_db(ns)
+    raise TypeError(
+        f"{caller}() expects a module object, a clausal Module or a module "
+        f"name, got {type(target).__name__}")
+
+
+def has_predicate(module: Any, name: str, arity: "int | None" = None) -> bool:
+    """Answers "is *name* a predicate I can call through *module*": True iff
+    calling *name*/*arity* in *module* resolves to a predicate (any arity
+    when *arity* is ``None``), whether *module* defines it or IMPORTS it --
+    from a ``.pl`` or ``.clausal``/``.seam`` module (an ``-import_from`` /
+    ``use_module`` row), or by a Python-level import binding a predicate
+    handle or adapter in a facade ``__init__``.  False for a data atom and
+    for a name only the ``.pl`` attribute fallback answers.
+
+    This is the replacement for ``getattr(mod, name, None) is not None`` as
+    a predicate probe.  Compare :func:`defines_predicate` ("does *module*
+    itself define it"), which is False for a predicate a thin facade only
+    imports, and :func:`module_binds` ("is it a real attribute"), which is
+    True for a data atom too.  An adapter whose arity cannot be read answers
+    True for any *arity*.  Argument forms as :func:`module_signatures`.
+    """
+    from clausal.logic.predicate import predicate_arities_for  # noqa: PLC0415
+    ns, db = _namespace_and_db(module, "has_predicate")
+    arities: set = set()
+    unknown = False
+    if db is not None:
+        defined, _declared = db.arity_maps()
+        arities |= defined.get(name, set())
+        arities |= {a for (f, a) in getattr(db, "_adopted", ())
+                    if f == name}
+    missing = object()
+    value = ns.get(name, missing) if ns is not None else missing
+    if value is not missing:
+        adapter = _adapter_arities(value)
+        if adapter is not None:
+            arities |= adapter
+            unknown = not adapter
+        else:
+            try:
+                arities |= predicate_arities_for(value)
+            except Exception:  # pragma: no cover - a probe must not raise
+                pass
+    if unknown:
+        return True
+    if not arities:
+        return False
+    return arity is None or arity in arities
+
+
+def defines_predicate(module: Any, name: str, arity: "int | None" = None) -> bool:
+    """Answers "does *module* itself define (or export) *name*": True iff
+    *module* offers the predicate *name*/*arity* -- it defines it, or
+    imports it and re-exports it with a ``name/N`` export entry -- at any
+    arity when *arity* is ``None``.  The population of
+    :func:`module_signatures`, with its argument forms.
+
+    NOT "can I call it through *module*": a thin facade that only imports a
+    predicate does not define it -- ask :func:`has_predicate`.  For a
+    Python-backed module whose adapter's arity cannot be read
+    (``module_signatures`` lists it with an empty set), any *arity* is
+    answered True.
+    """
+    arities = module_signatures(module).get(name)
+    if arities is None:
+        return False
+    return arity is None or not arities or arity in arities
+
+
+def module_binds(module: Any, name: str) -> bool:
+    """Answers "is *name* a real attribute of *module* (predicate or data)":
+    True iff *name* is a REAL attribute of *module*: present in its
+    namespace (``__dict__``), which is where a definition, an import, a
+    declaration and a native ``.pl`` auto-declaration all bind it.
+
+    False for a name only the ``.pl`` attribute fallback answers (operator
+    ruling 2026-10-01: ``getattr`` on a ``.pl`` module answers a name the
+    module does not bind with the atom of that name), so
+    ``module_binds(m, n)`` is what ``hasattr(m, n)`` meant before that
+    ruling.  True for a data atom as well as a predicate: to ask for a
+    predicate, use :func:`has_predicate`.  *module* is a module object, a :class:`Module` (its
+    ``module_dict``), or a dotted name looked up in ``sys.modules`` (lookup
+    only: a module that is not loaded binds nothing).
+    """
+    if isinstance(module, str):
+        module = sys.modules.get(module)
+        if module is None:
+            return False
+    if isinstance(module, Module):
+        ns = module.module_dict
+    elif isinstance(module, _types.ModuleType):
+        ns = vars(module)
+    else:
+        raise TypeError(
+            f"module_binds() expects a module object, a clausal Module or a "
+            f"module name, got {type(module).__name__}")
+    return ns is not None and name in ns
+
+
 def _import_for_signatures(name: str):
     """Resolve *name* as ``-import_from`` resolves a module path
     (``compiler_v2._resolve_module``: the ``clausal.modules`` spelling
