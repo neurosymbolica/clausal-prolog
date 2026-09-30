@@ -40,13 +40,9 @@ AREAS = ["atoms", "terms", "sorting", "between", "arith", "except", "allsol",
 KNOWN = {
     # writeq quotes a non-ASCII lowercase atom that Scryer writes bare
     "a67": "c", "a80": "c",
-    # number_chars/number_codes parse with Python's int()/float(), leniently
-    # by design (A09-F030): no syntax_error, "+1" and "1 " read, "0'a" fails
-    "a58": "d", "a62": "d", "a69": "d", "a78": "d", "a90": "d", "x46": "d",
-    # [a|b] (a non-list tail) is not represented: it reads as [a,b]
-    "a68": "a", "x22": "a", "l12": "a", "s25": "a",
-    # arg/3 with an unbound N enumerates (ISO: instantiation_error)
-    "t15": "d",
+    # [a|b] (a non-list tail) in a type_error(list, _) culprit comes out
+    # as [a,b]
+    "a68": "a", "x22": "a", "s25": "a",
     # standard order: ISO 7.2 puts every float before every integer; Clausal
     # compares numbers by value (float first on a tie)
     "t43": "d", "t52": "d", "t67": "d", "s04": "d", "s11": "d",
@@ -65,15 +61,13 @@ KNOWN = {
     "x52": "c",
     # sum_list/2 on a non-number: type_error(number) vs Scryer's evaluable
     "x59": "d", "l56": "d",
-    # setof/3 and list_to_set/2 merge 1 and 1.0 (parked decision A01-D001)
-    "f21": "d", "l34": "d",
+    # setof/3 merges 1 and 1.0 (parked decision A01-D001)
+    "f21": "d",
     # setof/3 with a Bag [a|b]: see the [a|b] rows
     "f36": "a",
-    # append/2, list_max/2, list_min/2 are absent from Clausal
-    "l06": "b", "l47": "b", "l48": "b", "l54": "b", "l55": "b",
-    # select/3 and permutation/2 do not run in the (-, ?, +) modes;
-    # sum_list/2 does not enumerate a list; permutation(foo, _) fails
-    "l43": "a", "l53": "a", "l49": "d", "l65": "a", "l66": "a",
+    # select/3 does not run in the (-, ?, +) mode; sum_list/2 does not
+    # enumerate a list; permutation(foo, _) fails
+    "l43": "a", "l53": "a", "l49": "d", "l65": "a",
 }
 
 _ROW = re.compile(r"([a-z]+\d+) (.*)$")
