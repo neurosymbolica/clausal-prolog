@@ -180,7 +180,11 @@ def _operand(x, op: str):
 #   can spell;
 # * the cell ``'/'`` is Scryer's division, always a float; ``rdiv`` is the
 #   exact-rational spelling (an exact-number cell, not in this table);
-# * ``+``, ``-``, ``*`` and unary ``-`` are shared: exact on both spellings.
+# * ``+``, ``-``, ``*`` and unary ``-`` are exact on both spellings; a FLOAT
+#   result that overflows is evaluation_error(float_overflow) for the cell
+#   (ISO 9.1.4.1, Scryer) while the bare node keeps Python's ``inf``; inside
+#   a CLP post both spellings keep ``inf`` (``_CLP_CELL_EVALUABLE``), so a
+#   post answers the same whether its operands were bound when it was made.
 #
 # INSIDE A CLP POST (``==``, ``<``, ...) ``/`` keeps its RATIONAL meaning,
 # :func:`exact_div` (``X == 7 / 2`` is 7 rdiv 2, like Scryer's
@@ -951,20 +955,25 @@ def evaluate(x, context: str = "eval_/2"):
     return fn(*[evaluate(a, context) for a in args])
 
 
+from math import isinf as _math_isinf  # noqa: E402
+
+
 def _iso_checked(exact, op: str):
     """*exact* with ISO 9.1.4.1's float overflow: a float result that
     overflows is evaluation_error(float_overflow), as Scryer (Python answers
     inf -- ``1.0e308 * 10`` -- or raises a raw OverflowError for an integer
     too large to be a float).  The ISO spelling only: a BARE seam operator
     keeps Python's meaning (ruling 2026-09-28)."""
+    isinf = _math_isinf
+
     def checked(l, r):
         try:
             res = exact(l, r)
         except OverflowError:
             raise _float_overflow(op) from None
-        if (type(res) is float and res in (float("inf"), float("-inf"))
-                and l not in (float("inf"), float("-inf"))
-                and r not in (float("inf"), float("-inf"))):
+        if (type(res) is float and isinf(res)
+                and not (type(l) is float and isinf(l))
+                and not (type(r) is float and isinf(r))):
             raise _float_overflow(op)
         return res
     checked.__name__ = f"iso_{exact.__name__}"

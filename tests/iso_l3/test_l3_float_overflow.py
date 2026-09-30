@@ -11,14 +11,18 @@ f2(E) :- catch(_ is 1.0e308 + 1.0e308, error(E, _), true).
 f3(E) :- catch(_ is -1.0e308 - 1.0e308, error(E, _), true).
 f4(E) :- catch(_ is 10^400 + 1.0, error(E, _), true).
 f5(X) :- X is 1.5 * 2.
+f6(E) :- catch(_ is 10^400 - 1.0, error(E, _), true).
+f7(E) :- catch(_ is 10^400 * 1.0, error(E, _), true).
+f8(C) :- catch(_ is 1.0e308 * 10, error(_, C), true).
 """
 
 
 def test_iso_float_overflow(native, ans):
     mod = native.load("l3_float_overflow", SRC)
-    for name in ("f1", "f2", "f3", "f4"):
+    for name in ("f1", "f2", "f3", "f4", "f6", "f7"):
         assert ans(mod, name) == [("evaluation_error", "float_overflow")], name
     assert ans(mod, "f5") == [3.0]
+    assert ans(mod, "f8") == [("/", "*", 2)]
 
 
 def test_bare_seam_operator_keeps_python_inf(tmp_path):
@@ -30,3 +34,10 @@ def test_bare_seam_operator_keeps_python_inf(tmp_path):
     m = _load_module("_bare_overflow", str(p))
     v = Var()
     assert [_deref_walk(v) for _ in solve(("g", v), m)] == [float("inf")]
+
+
+def test_an_infinite_operand_passes_through():
+    """Only an overflow from FINITE operands is the error: inf * 2 is inf."""
+    from clausal.logic.exact_arith import EVALUABLE
+    assert EVALUABLE[("*", 2)](float("inf"), 2) == float("inf")
+    assert EVALUABLE[("+", 2)](float("-inf"), 1.0) == float("-inf")

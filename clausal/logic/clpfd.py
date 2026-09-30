@@ -3881,7 +3881,13 @@ _ensure_exc_imports()
 #: The cells as a CLP post evaluates them: :data:`EVALUABLE` with ``/``
 #: RATIONAL (ruling Q15, 2026-09-28; see ``_ensure_term_imports``).
 from clausal.logic.exact_arith import exact_div as _exact_div_cell  # noqa: E402
-_CLP_CELL_EVALUABLE = {**_EVALUABLE, ("/", 2): _exact_div_cell}
+from clausal.logic.exact_arith import (  # noqa: E402
+    exact_add as _exact_add, exact_sub as _exact_sub, exact_mul as _exact_mul)
+# ``+ - *`` unchecked, as their nodes evaluate (see exact_arith): a post
+# answers the same whether a cell was folded or rewritten to its node
+_CLP_CELL_EVALUABLE = {**_EVALUABLE, ("/", 2): _exact_div_cell,
+                       ("+", 2): _exact_add, ("-", 2): _exact_sub,
+                       ("*", 2): _exact_mul}
 _eval_ground_py = _eval_ground
 _eval_ground = _eval_ground_for_c        # what the C init binds (see above)
 try:
