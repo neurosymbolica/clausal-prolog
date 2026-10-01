@@ -302,6 +302,23 @@ def test_the_translator_imports_the_facade(spec, imports, facade):
 
 
 @pytest.mark.parametrize("frontend", ["native", "translator"])
+def test_clausal_prolog_refuses_a_python_module_as_a_library(native,
+                                                             frontend,
+                                                             clausal_prolog):
+    """An unknown library(...) read as a module path must not reach a
+    Python module around the rule (the native front end refuses an unknown
+    library outright; the translator reads it as a module)."""
+    name = f"fac_lib_py_{frontend}"
+    with pytest.raises(SyntaxError):
+        native.load(name, textwrap.dedent(f"""\
+            :- module({name}, []).
+            :- use_module(library(clausal/modules/py/datetime),
+                          [date_add/3]).
+            :- end_module({name}).
+            """), frontend=frontend)
+
+
+@pytest.mark.parametrize("frontend", ["native", "translator"])
 def test_clausal_prolog_refuses_a_currency_module_path(native, frontend,
                                                        clausal_prolog):
     name = f"fac_m_no_{frontend}"

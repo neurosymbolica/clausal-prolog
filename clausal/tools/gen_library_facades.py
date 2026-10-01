@@ -42,8 +42,6 @@ import argparse
 import importlib
 import os
 import sys
-from decimal import Decimal
-from fractions import Fraction
 
 #: The engine's module directory and the facade directory, in this tree.
 _HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -94,20 +92,9 @@ _HEADER = """\
 """
 
 
-def is_value(v) -> bool:
-    """A VALUE a facade re-exports: a unit or currency (a units predicate
-    with no arity), a quantity, or a number.  Not a function, class,
-    module or sentinel -- those are the module's own machinery."""
-    from clausal.modules.units import _UnitsPredicate  # noqa: PLC0415
-    from clausal.terms import Quantity  # noqa: PLC0415
-    if type(v) is bool:
-        return False
-    return isinstance(v, (_UnitsPredicate, Quantity, int, float, Decimal,
-                          Fraction))
-
-
 def offer(mod) -> "tuple[dict, list[str]]":
     """``(predicate signatures, sorted value names)`` of module *mod*."""
+    from clausal.library import is_value  # noqa: PLC0415
     from clausal.logic.solve import module_signatures  # noqa: PLC0415
     sig = module_signatures(mod)
     values = sorted(n for n, v in vars(mod).items()

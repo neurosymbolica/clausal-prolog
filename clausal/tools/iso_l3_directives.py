@@ -966,7 +966,8 @@ def _library_facade(lib) -> "str | None":
             or lib in _LIBRARY_MODULES):
         return None
     parts = lib.split("/")
-    if not all(p.isidentifier() for p in parts):
+    if not all(p.isidentifier() and not keyword.iskeyword(p)
+               for p in parts):
         return None
     dotted = ".".join((_FACADE_PACKAGE, *parts))
     found = _module_source(dotted)
@@ -1003,7 +1004,7 @@ def _facade_bare(ctx, facade, bare) -> list:
     D11."""
     if not bare:
         return []
-    from clausal.tools.gen_library_facades import is_value  # noqa: PLC0415
+    from clausal.library import is_value  # noqa: PLC0415
     ns = vars(facade)
     values, atoms = [], []
     for n, line in bare:
