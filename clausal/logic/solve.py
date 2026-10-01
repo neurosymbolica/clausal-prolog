@@ -267,6 +267,13 @@ def _term_to_goal(term: Any, db: Any = None) -> Any:
         # Lowered to the goal literals the compiler reads the same way.
         if term == "true":
             return True
+        if term == "!":
+            # A cut that is the WHOLE query is local to it (ISO 7.8.3) and
+            # cuts nothing: it succeeds once, as ``call(!)`` does
+            # (``higher_order._ZERO_ARITY_CONTROL_GOALS``).  It used to be
+            # looked up as ``!/0`` and raised PredicateNotFoundError.  A cut
+            # inside a body term is refused by call/1's converter.
+            return True
         if term in ("fail", "false"):
             return False
         return AstCall(func=LoadName(name=term), args=[], kwargs=[])

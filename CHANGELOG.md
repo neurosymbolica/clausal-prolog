@@ -852,6 +852,10 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
 
 ### Fixed
 
+- **`solve("!")` succeeds once, as `call(!)` does.** A cut that is the
+  whole query is local to it and cuts nothing (ISO 7.8.3). `solve` already
+  answered `true`, `fail` and `false` by name; `!` (and `M:!`) was looked
+  up as a procedure `!/0` and raised `PredicateNotFoundError`.
 - **`phrase(!, L)` and `phrase(!, L, R)` answer as ISO and Scryer do.** A
   cut that is the whole grammar body is local to phrase and cuts nothing,
   as in `call(!)`: `phrase(!, [])` succeeds, `phrase(!, [a])` fails, and
