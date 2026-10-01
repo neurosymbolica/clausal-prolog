@@ -713,6 +713,154 @@ class BareGoalUndefinedError(Exception):
         )
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# D13 twin: the seam's transition-construct counter
+# ─────────────────────────────────────────────────────────────────────────────
+
+#: D13's keys, shared with the native ``.pl`` front end (the seam's ``not``
+#: is ``\+/1``; ``if_/3`` is not one).
+from clausal._transition_constructs import TRANSITION_KEYS  # noqa: E402
+
+_TRANSITION_SUBCALLS = {("memberchk", 2): "memberchk/2",
+                        ("make_quantity", 3): "make_quantity/3"}
+
+
+def _each_conjunct(body: Any):
+    """The top-level conjuncts of a clause body (``_extend``'s flattening,
+    without converting), so one goal the converter cannot take costs that
+    goal's count, not the clause's."""
+    body = nodes.literal_value(body)
+    if isinstance(body, list):
+        for g in body:
+            yield from _each_conjunct(g)
+    elif isinstance(body, nodes.TupleLiteral):
+        for g in body.elements:
+            yield from _each_conjunct(g)
+    elif isinstance(body, nodes.And):
+        yield from _each_conjunct(body.left)
+        yield from _each_conjunct(body.right)
+    elif body is not True and body is not None:
+        yield body
+
+
+def _is_empty_list(t: Any) -> bool:
+    if isinstance(t, nodes.ListLiteral):
+        return not t.elements
+    t = nodes.literal_value(t)
+    return (type(t) is list and not t) or (type(t) is str and t == "[]")
+
+
+def count_transition_constructs(bodies, db: Any = None,
+                                counts: "dict | None" = None,
+                                skipped: "list | None" = None) -> dict:
+    """D13 on the seam: the goal-position sites of each transition
+    construct in *bodies* (clause bodies, as the compiler gets them), read
+    off the GoalOps :func:`terms_to_goalop` makes of them -- ``Negate`` (and
+    tabled NAF) is ``\\+/1``, ``MetaCall`` once / forall / findall-into-
+    ``[]``, a ``SubCall`` of memberchk/2 or make_quantity/3 (a dotted
+    ``lists.memberchk`` too), descending into every meta-call goal argument
+    (:data:`~clausal.logic.compiler.ir.META_GOAL_POSITIONS`) and into a
+    qualified ``m:G``.  A closure passed as DATA (``maplist(memberchk(X),
+    Ls)``) is not counted -- the ``.pl`` counter's rule.
+
+    Pure: it converts, it does not compile, so it counts each SOURCE site
+    once however often the strategies re-convert a body, and never sees the
+    ``not`` that forall/2's lowering synthesises.  A goal the converter
+    refuses is skipped (appended to *skipped* when given).  -> *counts*,
+    every key present."""
+    from clausal.logic.compiler.ir import META_GOAL_POSITIONS  # noqa: PLC0415
+    if counts is None:
+        counts = dict.fromkeys(TRANSITION_KEYS, 0)
+
+    def walk(goal: Any) -> None:
+        # The control constructs are walked STRUCTURALLY, each child on its
+        # own: a goal the converter refuses (a keyword call with no *db*)
+        # costs that goal's count, not its enclosing ``not``/``or``/if's.
+        goal = nodes.literal_value(goal)
+        if isinstance(goal, nodes.Not):
+            counts["\\+/1"] += 1      # Negate, or tabled NAF
+            op = goal.operand
+            if not (isinstance(op, nodes.Call) and _is_tabled_naf(op, db)):
+                walk(op)
+            return
+        if isinstance(goal, (list, nodes.TupleLiteral, nodes.And)):
+            for g in _each_conjunct(goal):
+                walk(g)
+            return
+        if isinstance(goal, nodes.Or):
+            walk(goal.left)
+            walk(goal.right)
+            return
+        if isinstance(goal, nodes.IfExpr):
+            walk(goal.test)
+            walk(goal.body)
+            walk(goal.orelse)
+            return
+        if isinstance(goal, nodes.BitXor):
+            # ISO ``V^G`` (bagof/setof's iterated goal): G is the goal.
+            walk(goal.right)
+            return
+        if isinstance(goal, nodes.CompareChain):
+            return      # comparisons only
+        if (isinstance(goal, nodes.Call)
+                and isinstance(goal.func, nodes.StringLiteral)):
+            # The SOURCE spelling of a quoted name, ``'once'(G)`` (the census
+            # reads unexecuted source; a loaded body has the name).
+            goal = nodes.Call(func=nodes.LoadName(name=goal.func.value),
+                              args=goal.args, kwargs=goal.kwargs)
+        try:
+            op = _convert(goal, db)
+        except Exception as e:  # noqa: BLE001 -- a count never fails a load
+            if skipped is not None:
+                skipped.append((goal, e))
+            return
+        if isinstance(op, MetaCall):
+            if op.kind == "once":
+                counts["once/1"] += 1
+            elif op.kind == "forall":
+                counts["forall/2"] += 1
+            elif (op.kind == "findall" and "tail" not in op.args
+                  and _is_empty_list(op.args.get("bag"))):
+                counts["findall/3_empty"] += 1
+            for key in META_GOAL_POSITIONS.get(op.kind, ()):
+                if key in op.args:
+                    walk(op.args[key])
+        elif isinstance(op, SubCall):
+            key = _TRANSITION_SUBCALLS.get(
+                (op.fname.rsplit(".", 1)[-1], op.arity))
+            if key is not None:
+                counts[key] += 1
+            elif op.fname == "call" and op.arity == 1 and op.args:
+                # ``M:G`` as a goal converts to call(':'(M, G)).
+                q = op.args[0]
+                if (isinstance(q, nodes.Call)
+                        and isinstance(q.func, nodes.LoadName)
+                        and q.func.name == ":" and len(q.args) == 2):
+                    walk(q.args[1])
+
+    for body in bodies:
+        for goal in _each_conjunct(body):
+            walk(goal)
+    return counts
+
+
+def log_transition_constructs(counts: dict, filename: str) -> None:
+    """ONE info line per seam load that has any transition construct, the
+    ``.pl`` front end's line (``iso_l3.log_transition_constructs``) on the
+    seam's logger."""
+    total = sum(counts.values())
+    if not total:
+        return
+    import logging  # noqa: PLC0415
+    logging.getLogger(SEAM_LOGGER_NAME).info(
+        "%s: transition constructs: %d sites (%s)", filename, total,
+        ", ".join(f"{k}: {n}" for k, n in counts.items() if n))
+
+
+#: The logger the seam loader reports load-time facts on (INFO).
+SEAM_LOGGER_NAME = "clausal.seam_frontend"
+
+
 def _not_yet(goal: Any) -> NoReturn:
     """Signal that the D2 subset does not yet cover this goal shape.
 
@@ -726,5 +874,6 @@ def _not_yet(goal: Any) -> NoReturn:
     )
 
 
-__all__ = ["terms_to_goalop", "BareGoalVariableError", "BareGoalUndefinedError",
+__all__ = ["terms_to_goalop", "count_transition_constructs", "TRANSITION_KEYS",
+           "BareGoalVariableError", "BareGoalUndefinedError",
            "SetGoalElementError", "DictGoalError"]

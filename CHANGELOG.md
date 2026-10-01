@@ -262,6 +262,25 @@ since 0.4.0 finish three moves:
 
 ### Added
 
+- **The seam counts its transition constructs, and a census keeps the count
+  from growing** (ruling D13: allowed where they are, no new ones). A seam
+  module's loader now has `l3_stats["transition_constructs"]`, the key and
+  shape the native `.pl` front end already fills: the goal-position sites
+  of `not` (as `\+/1`), `once/1`, `forall/2`, `memberchk/2`,
+  `findall(_, G, [])` and `make_quantity/3`. A load with any of them logs
+  one INFO line on `clausal.seam_frontend`. `if_/3` is not counted; it is
+  library(reif)'s pure conditional and the thing to rewrite to. Each source
+  site counts once: the `not` pair that `forall/2` lowers to, a `not` in a
+  data position and a construct passed as a `call/N` closure do not count.
+  `python -m clausal.tools.transition_census` counts every seam and `.pl`
+  file under `clausal/`, `tests/` and `docs/`, prints per-file counts,
+  totals and the census size (an empty census is an error, exit 2), and
+  exits 1 when a file cannot be read at all, or when any (file, construct)
+  count, or a file's count of goals it cannot convert, goes above the committed
+  baseline (`clausal/tools/transition_census_baseline.json`; `--update`
+  rewrites it). One test runs it against the baseline. Nothing is refused
+  at load time.
+
 - **`clausal.has_predicate(mod, name, arity=None)`,
   `clausal.defines_predicate(mod, name, arity=None)` and
   `clausal.module_binds(mod, name)`** ask a module about a name without
