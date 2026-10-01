@@ -69,6 +69,7 @@ import os
 import re
 from typing import Any
 
+from clausal.end_module import SURFACE_CLAUSAL_PROLOG as _SURFACE_CLAUSAL_PROLOG
 from clausal.tools.prolog_reader import VarRef
 
 #: Libraries whose predicates the engine provides natively: importing one
@@ -381,9 +382,13 @@ class DirectiveContext:
 
     def __init__(self, *, source: "str | None", filename: str, positions,
                  op_table=None, source_path: "str | None" = None,
-                 module_name: "str | None" = None):
+                 module_name: "str | None" = None,
+                 surface: str = "pl"):
         self._source = source
         self._filename = filename
+        #: The file's surface (``clausal.end_module.surface_of``'s name):
+        #: under ``clausal_prolog`` a Python module is no import target.
+        self.surface = surface
         #: The importing file's full path and dotted module name (both from
         #: the loader): a use_module path resolves beside the file first.
         self.source_path = source_path
@@ -821,27 +826,50 @@ def _use_module(ctx: DirectiveContext, args, spans, span):
     if imports is not None:
         entries, listed_ops, bare = _import_list(ctx, imports, spans[1],
                                                  span, what)
+    facade = None
     if type(spec) is tuple and len(spec) == 2 and spec[0] == "library":
-        _warn_bare(ctx, bare)
-        return _use_library(ctx, spec[1], entries, span, what, listed_ops)
-    path = _slash_path(spec)
-    if path is None:
-        raise _refused(f"{what}: the module is not an atom, an a/b path or "
-                       f"library(Name), so it names no module to import",
-                       span)
-    dotted = _sibling_dotted(ctx, path, span, what) or _dotted(path, span,
-                                                               what)
+        facade = _library_facade(_slash_path(spec[1]))
+        if facade is None:
+            _warn_bare(ctx, bare)
+            return _use_library(ctx, spec[1], entries, span, what,
+                                listed_ops)
+    if facade is not None:
+        # library(datetime): the .seam facade clausal/library/datetime.seam,
+        # imported as the module file it is.
+        path = f"library({_slash_path(spec[1])})"
+        dotted = facade
+    else:
+        path = _slash_path(spec)
+        if path is None:
+            raise _refused(f"{what}: the module is not an atom, an a/b path "
+                           f"or library(Name), so it names no module to "
+                           f"import", span)
+        dotted = (_sibling_dotted(ctx, path, span, what)
+                  or _dotted(path, span, what))
     target = _engine_module_path(dotted)
     found = _module_source(target)
+    via_alias = False
     if found is None:
         # The seam's import aliases: a currency jurisdiction
         # (``european_union``) names ``clausal.modules.countries.<it>``, as
         # ``-import_from(european_union, [euro])`` resolves it.
         target = _resolve_import_path(dotted)
         found = _module_source(target)
+        via_alias = target != dotted
     if found is None:
         raise _refused(f"{what}: no module {dotted} on sys.path (a slash "
                        f"path a/b names the dotted module a.b)", span)
+    if ctx.surface == _SURFACE_CLAUSAL_PROLOG and _is_python_module(found):
+        # Clausal Prolog reaches Python only through a .seam module.  A
+        # module NAME the seam's aliases resolve (european_union, units,
+        # date_time) is no Python path: it names the module's facade.  A
+        # Python path (py/datetime, clausal/modules/units) is refused.
+        alias_facade = _facade_for(target) if via_alias else None
+        if alias_facade is None:
+            raise _refused(_python_import_refusal(what, dotted, target),
+                           span)
+        dotted = target = alias_facade
+        found = _module_source(target)
     if _is_python_module(found):
         mod = _import_python_module(dotted, target, span, what)
         # A Python module (a currency's units, say) is no Prolog module: a
@@ -853,6 +881,13 @@ def _use_module(ctx: DirectiveContext, args, spans, span):
         if namespace_db(vars(mod)) is None:
             return _use_python_module(ctx, dotted, mod, found, entries,
                                       span, what, values)
+        if values:
+            entries = list(entries or ()) + [(n, None) for n in values]
+    elif dotted.startswith(_FACADE_PACKAGE + "."):
+        # A facade re-exports its Python module's VALUES too: a bare name
+        # imports one exactly as it does from the module itself.
+        values = _facade_bare(ctx, _import_python_module(dotted, target, span,
+                                                         what), bare)
         if values:
             entries = list(entries or ()) + [(n, None) for n in values]
     else:
@@ -908,6 +943,95 @@ def _use_module(ctx: DirectiveContext, args, spans, span):
          _list([_name(n) if a is None else _pi_ast(n, a)
                 for n, a in entries])],
         span, what))
+
+
+#: The package of the ``library(<lib>)`` facades (``clausal/library``).
+_FACADE_PACKAGE = "clausal.library"
+
+
+#: The package of the engine's Python modules the facades wrap.
+_MODULES_PACKAGE = "clausal.modules"
+
+
+def _library_facade(lib) -> "str | None":
+    """The dotted ``.seam`` facade ``library(<lib>)`` names
+    (``library(datetime)`` -> ``clausal.library.datetime``,
+    ``library(countries/european_union)`` ->
+    ``clausal.library.countries.european_union``), or None: *lib* is no
+    atom or a/b path, is a library the front end already knows (built in,
+    or mapped in :data:`_LIBRARY_MODULES` -- never shadowed), or has no
+    facade file."""
+    if (type(lib) is not str or lib in _BUILTIN_LIBRARIES
+            or lib in _LIBRARY_MODULES):
+        return None
+    parts = lib.split("/")
+    if not all(p.isidentifier() and not keyword.iskeyword(p)
+               for p in parts):
+        return None
+    dotted = ".".join((_FACADE_PACKAGE, *parts))
+    found = _module_source(dotted)
+    if found is None or not found.endswith(".seam"):
+        return None
+    return dotted
+
+
+def _facade_lib(target: str) -> "str | None":
+    """The ``library(...)`` path of the facade over the engine module
+    *target* (``clausal.modules.py.datetime`` -> ``datetime``,
+    ``clausal.modules.countries.european_union`` ->
+    ``countries/european_union``, ``clausal.modules.py.os`` -> ``py_os``:
+    a Scryer library name takes the ``py_`` prefix), whether or not one
+    ships; None for a
+    module outside ``clausal.modules``."""
+    prefix = _MODULES_PACKAGE + "."
+    if not target.startswith(prefix):
+        return None
+    rest = target[len(prefix):]
+    if rest.startswith("py."):
+        rest = rest[3:]
+    from clausal.library import facade_path  # noqa: PLC0415
+    return facade_path(rest.replace(".", "/"))
+
+
+def _facade_for(target: str) -> "str | None":
+    """The dotted facade over the engine module *target*, or None."""
+    lib = _facade_lib(target)
+    return None if lib is None else _library_facade(lib)
+
+
+def _facade_bare(ctx, facade, bare) -> list:
+    """The bare names of an import list that name a VALUE the *facade*
+    re-exports (a unit, a currency, a number): imported, as from the Python
+    module itself (:func:`_python_bare`).  Any other bare name is an atom,
+    D11."""
+    if not bare:
+        return []
+    from clausal.library import is_value  # noqa: PLC0415
+    ns = vars(facade)
+    values, atoms = [], []
+    for n, line in bare:
+        if not n.startswith("_") and n in ns and is_value(ns[n]):
+            values.append(n)
+        else:
+            atoms.append((n, line))
+    _warn_bare(ctx, atoms)
+    return values
+
+
+def _python_import_refusal(what: str, dotted: str, target: str) -> str:
+    """The message refusing a Python import target in Clausal Prolog,
+    naming the ``library(...)`` facade when one ships."""
+    head = (f"{what}: permission_error(access, python_module, {dotted}) -- "
+            f"Clausal Prolog reaches Python only through a .seam module")
+    lib = _facade_lib(target)
+    if lib is not None and _library_facade(lib) is not None:
+        return (f"{head}; import the facade library({lib}) instead: "
+                f":- use_module(library({lib}), [...]).")
+    if lib is not None:
+        return (f"{head}; {dotted} has no library({lib}) facade -- generate "
+                f"one with clausal/tools/gen_library_facades.py, or write a "
+                f".seam wrapper and import that")
+    return f"{head}; write a .seam wrapper over {dotted} and import that"
 
 
 def _import_python_module(dotted, target, span, what):

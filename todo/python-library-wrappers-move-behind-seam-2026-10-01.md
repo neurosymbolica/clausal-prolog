@@ -12,6 +12,17 @@ Companion rulings, same day:
 - So the Clausal dialect's guarantees hold TRANSITIVELY: its only exits are other `.clausal`
   modules and `.seam` wrappers.
 
+## Status (2026-10-01, branch feat/py-adapters-behind-seam-facades-2026-10-01)
+
+- Done for core: every Python module under `clausal/modules` (py/, the
+  domain modules, countries/) has a generated `.seam` facade imported as
+  `library(<path>)` (ruled spelling); `clausal/_py_facades.py` lists them.
+- Done: the load-time refusal under the `clausal_prolog` surface (both
+  `.pl` front ends), inert until the extension flip; alias module names
+  (`european_union`, `units`) import their facade.
+- Open: extension distributions -- `todo/package-adapters-need-library-facades-2026-10-01.md`;
+  Do item 2's other routes and item 3's downstream migration census.
+
 ## Population (measured 2026-10-01)
 
 - Core wrappers, `clausal/modules/py/*.py`: 20 modules (csv, datetime, files, hash, hmac,

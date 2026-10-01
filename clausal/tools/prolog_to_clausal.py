@@ -464,7 +464,7 @@ def prolog_ast_to_clausal(pmodule: PModule, *,
         dialect = Dialect.scryer_reader()
     pmodule = _check_end_module(pmodule, source_path, surface)
     emitter = _PrologToClausal(dialect, source_path=source_path,
-                               module_name=module_name)
+                               module_name=module_name, surface=surface)
     return emitter.emit_module(pmodule)
 
 
@@ -578,6 +578,40 @@ def load_operator_mapping(path: str | Path) -> dict[str, dict]:
 
 
 # ── Emitter ──────────────────────────────────────────────────────────
+
+
+def _library_facade(lib: str) -> "str | None":
+    """The ``library(<lib>)`` facade's dotted name, or None (the native
+    front end's rule, ``iso_l3_directives._library_facade``)."""
+    from clausal.tools.iso_l3_directives import (  # noqa: PLC0415
+        _library_facade as facade)
+    return facade(lib)
+
+
+def _clausal_prolog_facade(directive: str, dotted: str) -> "str | None":
+    """For a Clausal Prolog import of *dotted*: None when it is a Clausal
+    source (``.seam``/``.clausal``/``.pl``, imported as before); the facade
+    when it is a module NAME a seam alias resolves to an engine Python
+    module (``european_union``, ``units``); else -- a Python path such as
+    ``py/datetime`` -- a :class:`PrologTranslationError`.  The native front
+    end's rule (``iso_l3_directives._use_module``), with its message."""
+    from clausal.tools.iso_l3_directives import (  # noqa: PLC0415
+        _engine_module_path, _facade_for, _is_python_module, _module_source,
+        _python_import_refusal, _resolve_import_path)
+    target = _engine_module_path(dotted)
+    found = _module_source(target)
+    via_alias = False
+    if found is None:
+        target = _resolve_import_path(dotted)
+        found = _module_source(target)
+        via_alias = target != dotted
+    if found is None or not _is_python_module(found):
+        return None
+    facade = _facade_for(target) if via_alias else None
+    if facade is None:
+        raise PrologTranslationError(
+            _python_import_refusal(directive, dotted, target))
+    return facade
 
 
 def _python_backed_module(dotted: str):
@@ -883,10 +917,17 @@ class _PrologToClausal:
     def __init__(self, dialect: Dialect,
                  operator_mappings: dict[str, dict] | None = None, *,
                  source_path: str | None = None,
-                 module_name: str | None = None):
+                 module_name: str | None = None,
+                 surface: str | None = None):
         self._dialect = dialect
         self._source_path = source_path
         self._module_name = module_name
+        if surface is None:
+            from clausal.end_module import surface_of  # noqa: PLC0415
+            surface = surface_of(source_path or "") or "pl"
+        #: The file's surface: under ``clausal_prolog`` a Python module is
+        #: no import target (the native front end refuses it the same way).
+        self._surface = surface
         self._user_ops = operator_mappings or {}
         self._data_atoms: set[str] = set()  # atoms used as data values
         # THE FLIP (2026-09-06-atoms-as-cells-strings §7): a Prolog
@@ -1326,8 +1367,18 @@ class _PrologToClausal:
                     "a/b path.")
             if lib_name in _BUILTIN_LIBRARIES:
                 return f"# library({lib_name}) is built-in — no import needed"
+            facade = (None if lib_name in _LIBRARY_TO_MODULE
+                      else _library_facade(lib_name))
             if lib_name in _LIBRARY_TO_MODULE:
                 clausal_mod = _LIBRARY_TO_MODULE[lib_name]
+            elif facade is not None:
+                # library(datetime): the .seam facade over py/datetime
+                # (clausal/library/datetime.seam).  Its offer is the
+                # adapter's, so the list is checked as for a py/ module.
+                import importlib  # noqa: PLC0415
+                return self._emit_python_use_module(
+                    facade, importlib.import_module(facade),
+                    body.args[1] if len(body.args) == 2 else None, directive)
             elif len(body.args) == 2 and _names_all_native(body.args[1]):
                 return (f"# library({lib_name}): every name it imports is "
                         "provided by the engine -- no import needed")
@@ -1335,6 +1386,16 @@ class _PrologToClausal:
                 # Unknown library -- read it as a module of that name (a
                 # missing one is an import error at load).
                 clausal_mod = self._dotted_or_refuse(lib_name, directive)
+                if self._surface == "clausal_prolog":
+                    # library(math) must not reach Python around the rule
+                    # (the native front end refuses an unknown library).
+                    facade = _clausal_prolog_facade(directive, clausal_mod)
+                    if facade is not None:
+                        import importlib  # noqa: PLC0415
+                        return self._emit_python_use_module(
+                            facade, importlib.import_module(facade),
+                            body.args[1] if len(body.args) == 2 else None,
+                            directive)
         else:
             spec = _slash_path(lib_term)
             if spec is None:
@@ -1342,6 +1403,16 @@ class _PrologToClausal:
                     f"{directive}: the module is not an atom, an a/b path "
                     "or library(Name), so it names no module to import.")
             clausal_mod = self._resolve_module_path(spec, directive)
+            if self._surface == "clausal_prolog":
+                facade = _clausal_prolog_facade(directive, clausal_mod)
+                if facade is not None:
+                    # A module NAME an alias resolves (european_union):
+                    # its .seam facade.
+                    import importlib  # noqa: PLC0415
+                    return self._emit_python_use_module(
+                        facade, importlib.import_module(facade),
+                        body.args[1] if len(body.args) == 2 else None,
+                        directive)
             try:
                 py_mod = _python_backed_module(clausal_mod)
             except PrologTranslationError as e:

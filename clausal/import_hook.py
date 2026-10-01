@@ -1332,7 +1332,11 @@ class _ExtensionFinder(MetaPathFinder):
             # after a standard-library module is almost always an accident.
             # These finders run before PathFinder, so shadowing would be silent —
             # defer to the stdlib (return None) and warn loudly instead.
-            if tail in sys.stdlib_module_names:
+            # Only a TOP-LEVEL name can shadow: a submodule ``pkg.datetime``
+            # is reached by its dotted path and never stands in for the
+            # stdlib's ``datetime`` (the ``clausal.library`` facades are named
+            # after the Python libraries they wrap, on purpose).
+            if "." not in fullname and tail in sys.stdlib_module_names:
                 from clausal.templating.term_rewriting import (
                     ClausalLintWarning,
                 )

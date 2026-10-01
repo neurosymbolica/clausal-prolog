@@ -280,6 +280,31 @@ since 0.4.0 finish three moves:
   baseline (`clausal/tools/transition_census_baseline.json`; `--update`
   rewrites it). One test runs it against the baseline. Nothing is refused
   at load time.
+- **`library(...)` facades: Clausal Prolog reaches Python only through
+  `.seam` modules** (ruled 2026-10-01). Every engine Python module has a
+  generated `.seam` facade under `clausal/library/`, a pure re-export of
+  its predicates (same names and arities) and values (units, currencies,
+  numbers): `py/<lib>` is `library(<lib>)` (`library(datetime)`,
+  `library(json)`, ...) -- or `library(py_<lib>)` where Scryer has a
+  library of that name (`py_os`, `py_files`, `py_random`, `py_uuid`,
+  `py_csv`, `py_process`; `library(os)` stays an unknown library) --
+  `units`/`imperial`/`currency`/`graphs`/`reflection`
+  are `library(<m>)`, and each currency jurisdiction is
+  `library(countries/<j>)` -- 203 facades, 204 predicate indicators.
+  `:- use_module(library(datetime), [date_add/3]).` works from a `.pl`
+  under both front ends. A library the front end already knows is never
+  shadowed. `python -m clausal.tools.gen_library_facades` regenerates them
+  (`--check`, `--census`); `clausal._py_facades.PY_FACADE_LIBS` lists them
+  without importing the engine. Under the Clausal Prolog surface, an import
+  whose target is a Python module by path (`py/datetime`,
+  `clausal/modules/units`, a user `.py`) is refused at load with
+  `permission_error(access, python_module, M)` naming the facade, and a
+  module name a seam alias resolves (`european_union`, `units`) imports its
+  facade. That surface has no extension until the extension flip, so the
+  refusal is inactive today; `.pl` and seam files are unchanged. A
+  `.clausal`/`.seam`/`.pl` file inside a package may now be named after a
+  standard-library module (`clausal/library/datetime.seam`): only a
+  top-level name is deferred to the stdlib.
 
 - **`clausal.has_predicate(mod, name, arity=None)`,
   `clausal.defines_predicate(mod, name, arity=None)` and
