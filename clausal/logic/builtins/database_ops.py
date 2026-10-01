@@ -159,6 +159,7 @@ def _unneck_clause(term_val: Any, context: str, action: str) -> Any:
         raise LogicException(instantiation_error(context))
     _refuse_non_callable_clause(head, context, lists=action == "retract")
     _refuse_truth_atom_head(head, context)
+    _refuse_control_construct(head, context)
     if is_true_body(body):
         return _OpenBody(head, True) if action == "retract" else head
     if action == "retract":
@@ -664,7 +665,9 @@ def _refuse_control_construct(head, who):
     """ISO 8.9.3.3 c / Scryer: a control construct is a static procedure,
     so ``retract((a, b))`` and ``retractall((a, b))`` are
     permission_error(modify, static_procedure, (',')/2).  They used to fail
-    (retract/1) or succeed (retractall/1) silently."""
+    (retract/1) or succeed (retractall/1) silently.  ISO 8.9.1.3 c gives
+    assertz/asserta the same error: ``assertz(!)`` used to STORE a fact
+    ``!/0``, which ``solve("!")`` then answered."""
     from clausal.logic.builtins.call_body import _construct, is_body_term  # noqa: PLC0415
     from clausal.logic.builtins.clause_ops import _ZERO_ARITY_CONTROL  # noqa: PLC0415
     from clausal.logic.cells import (  # noqa: PLC0415
@@ -779,6 +782,7 @@ def _assert_factory(context, front):
             _refuse_non_callable_clause(term_val, context)
             target, term_val = _qualified_target(db, term_val, context)
             _refuse_truth_atom_head(term_val, context)
+            _refuse_control_construct(term_val, context)
             _assert_clause(target, db.runtime_author(), term_val, context,
                            front)
             yield None

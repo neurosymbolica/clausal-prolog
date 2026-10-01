@@ -20,6 +20,32 @@ since 0.4.0 finish three moves:
 
 ### Breaking
 
+- **A cut inside a meta-called body is refused, never run as `true`.**
+  Clausal has no cut. A clause body cannot spell `!`, but a goal built at
+  run time could carry one into `call/N`, and `call/1` ran it as `true`:
+  `call((p(X), !))` gave every `p` answer where ISO and Scryer give the
+  first. The same happened in `findall`, `forall`, `\+`, `once`, `catch`
+  and `aggregate_all` bodies, which all reach their goals through `call/1`.
+  A `!` that is a leaf inside a body term now raises
+  `error(existence_error(procedure, !/0), !/0)`. This is the error `->` and
+  `*->` already raise at run time, and the one an ISO system gives for a
+  construct it does not provide. The refused placements include `(G, !)`,
+  `(!, G)`, `(G ; !)`, `\+ (G, !)` and `findall(X, (p(X), !), L)`. The
+  whole body is refused before it runs. Inside a `phrase/2,3` body, `!` is
+  now read as ISO's `!, S0 = S` and gets the same refusal. It used to be
+  called as the nonterminal `!/2`.
+
+  A cut that is the WHOLE goal of a call is unchanged: `call(!)`, `\+ !`,
+  `findall(X, !, L)`, and `call(V)` with `V` bound to `!` all still run it
+  as `true`. ISO 7.8.3 makes such a cut local to the call, so it has
+  nothing to cut and `true` is the ISO answer.
+- **`assertz/1` and `asserta/1` refuse a control construct as a clause
+  head**, as ISO 8.9.1.3 and Scryer do. The error is
+  `permission_error(modify, static_procedure, PI)`: `assertz(!)` is `!/0`
+  and `assertz((a, b))` is `','/2`. `assertz(!)` used to store a fact `!/0`,
+  and a later `solve("!")` then succeeded through that fact. `retract/1`
+  already refused these heads.
+
 - **Calling a qualified goal whose module argument is unbound or not an
   atom raises Scryer's error** (ruled 2026-10-01). `call(7:foo)` is
   `error(type_error(atom, 7), call/0)` and `call(_:foo)` is

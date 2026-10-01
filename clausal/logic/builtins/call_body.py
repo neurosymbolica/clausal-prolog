@@ -276,6 +276,18 @@ class _Converter:
             return True
         if type(t) is str and t in ("fail", "false"):
             return False
+        if type(t) is str and t == "!":
+            # A cut INSIDE a body term -- ``(G, !)``, ``(!, G)``, ``(G ; !)``,
+            # ``\\+ (G, !)``, an if_ branch.  Here it would cut the body's
+            # own choice points, which Clausal cannot do, so running it as
+            # ``true`` silently changes the answers.  Refused.  A cut that IS
+            # the whole goal never reaches this converter (it is not a body
+            # term): ``call(!)`` stays ``true`` -- see
+            # ``higher_order._ZERO_ARITY_CONTROL_GOALS``.  A variable leaf is
+            # ``call(V)`` (above), so a cut bound to it at run time is that
+            # call's whole goal too.
+            from clausal.logic.exceptions import LogicException  # noqa: PLC0415
+            raise LogicException(cut_refusal_error("call/1"))
         if is_conjunction_tuple(t):
             return nodes.TupleLiteral(elements=[self.goal(e) for e in t])
         tt = type(t)
@@ -475,6 +487,36 @@ def folded_existence_error(name, arity, context):
         "procedure", _indicator(name, arity),
         f"{context}: call/N adds its extra arguments to the goal, and "
         f"{name}/{arity} is no procedure")
+
+
+def cut_refusal_error(context):
+    """``existence_error(procedure, !/0)`` for a cut INSIDE a meta-called body.
+
+    Clausal is cut-free with no committed choice (ruled permanently).  A
+    clause body cannot spell ``!`` -- the seam's parser rejects it and the
+    native ``.pl`` front end refuses it at load -- so a cut reaches the
+    solver only as a TERM built at run time and handed to a meta-call
+    (``call/N``, ``findall``, ``forall``, ``\\+``, ``once``, ``catch``,
+    ``aggregate_all``, a ``phrase`` body), all of which reach their goal
+    through call/1.  When the cut is the WHOLE goal, ISO 7.8.3 makes it local
+    to that call and there is nothing to cut: ``call(!)`` is ``call(true)``
+    and stays so.  When it is a leaf INSIDE a body term (``(p(X), !)``), it
+    would cut that body's choice points; it used to run as ``true`` there,
+    which silently changed the answers (``call((p(X), !))`` gave every ``p``
+    where ISO and Scryer give the first).  That case is refused.
+
+    The form is the one ``->``/``*->`` already get at run time
+    (``iso_control_cell_dispatch``): ``existence_error(procedure, PI)`` is
+    what an ISO system answers for a construct it does not provide, so a
+    portable ``catch/3`` for "no such procedure" sees it, and the context
+    names the reason."""
+    from clausal.logic.exceptions import existence_error  # noqa: PLC0415
+    return existence_error(
+        "procedure", _indicator("!", 0),
+        f"{context}: !/0 is not provided -- Clausal is cut-free with no "
+        f"committed choice (ruled permanently), so a cut inside a "
+        f"meta-called body is refused rather than run as true; use once/1 "
+        f"for the first solution, or if_(Cond, Then, Else)")
 
 
 def body_with_extras_error(goal, n_extra, context):
@@ -712,6 +754,7 @@ __all__ = [
     "is_body_term", "check_callable_body", "body_goal_dispatch",
     "body_with_extras_error", "non_callable_goal_error",
     "iso_control_cell_dispatch", "folded_existence_error",
+    "cut_refusal_error",
     "is_non_callable_term",
     "needs_meta_call", "MetaCallGoal",
     "SPECIAL_FORMS", "is_special_form", "special_form_dispatch",

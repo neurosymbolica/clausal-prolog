@@ -149,6 +149,14 @@ def _dcg_body_goal(body, s0, s):
         return (";", _dcg_body_goal(b[1], s0, s), _dcg_body_goal(b[2], s0, s))
     if is_cell and functor == "\\+" and len(b) == 2:
         return (",", ("\\+", _dcg_body_goal(b[1], s0, Var())), ("=", s0, s))
+    if type(b) is str and b == "!":
+        # ISO 7.14.2: ``!`` inside a grammar body is ``!, S0 = S``, so the
+        # cut is a leaf of the translated body and call/1's converter
+        # REFUSES it (existence_error(procedure, !/0)), as in any other
+        # meta-called body -- it used to reach the fold as the nonterminal
+        # ``!/2``.  A bare ``phrase(!, L)`` never comes here (it is not a
+        # control body) and keeps that nonterminal reading.
+        return (",", "!", ("=", s0, s))
     if isinstance(b, list) or is_chars(b) or isinstance(b, bytes):
         items = list(_elements(b))
         if not items:

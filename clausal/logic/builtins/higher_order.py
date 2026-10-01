@@ -69,6 +69,14 @@ def _control_fail(this_generator, _proceed, _fail, _catcher, trail):
 # local to that call, so the barrier is the call itself and there is nothing
 # left inside it to cut.  ``call("!")`` is therefore ``call("true")`` — opaque,
 # not a no-op that silently changes the caller's choice points.
+#
+# This entry answers ONLY a cut that is the WHOLE goal (also the whole goal
+# of findall/forall/\+/once/catch..., which are defined on call/1, and a
+# variable leaf ``call(V)`` bound to ``!``).  A cut INSIDE a body term --
+# ``call((p(X), !))`` -- would cut that body's choice points, so running it
+# as ``true`` silently changed the answers; ``call_body._Converter.goal``
+# refuses it (existence_error(procedure, !/0), ``cut_refusal_error``) before
+# it can reach this table.
 _ZERO_ARITY_CONTROL_GOALS = {
     "true": _control_succeed_once,
     "!": _control_succeed_once,
