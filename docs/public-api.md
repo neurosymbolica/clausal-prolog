@@ -308,6 +308,12 @@ Two known gaps in the atom-class deprecation:
   `clausal.has_predicate(mod, name, arity=None)` (a predicate you can call
   through it), `clausal.defines_predicate` (one it defines itself) or
   `clausal.module_binds(mod, name)` (a real attribute) (1.3).
+  Python code can also reach a `.pl` module's **unexported** predicates
+  (`getattr`, `mod.name`, `from mod import name`), as with any Python
+  module attribute. That is possible but **not supported long-term and not
+  advisable**: it may stop working in a future release, so use the
+  module's exported predicates (see
+  [Importing Prolog](importing_prolog.md#unexported-predicates-from-python)).
 
 ### Exported by `clausal` but not covered
 

@@ -212,6 +212,26 @@ there or imported, as in a thin facade), `clausal.defines_predicate` whether
 the module itself defines it, and `clausal.module_binds(mod, name)` whether
 the name is a real attribute of the module (a predicate or data).
 
+### Unexported predicates from Python
+
+In Python code there is no export privacy (ruled 2026-10-01: in Python
+code, Python semantics apply). A predicate a `.pl` module defines but does
+not list in its `module/2` export list is still an attribute of the module,
+so Python reaches it like any module attribute:
+
+```python
+import citations                   # :- module(citations, [citation/2]).
+citations.helper                   # helper/1 is not exported: its handle
+from citations import helper       # the same handle
+solve(("helper", X := Var()), module=citations)   # runs
+```
+
+!!! warning "Possible, but not supported long-term and not advisable"
+    Reaching an unexported predicate from Python works today, under both
+    front ends, but it is **not supported long-term** and may stop working
+    in a future release. Python callers should use the module's exported
+    predicates. There is no runtime warning.
+
 ---
 
 ## Importing between `.pl` files
