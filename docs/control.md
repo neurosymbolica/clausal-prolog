@@ -13,7 +13,7 @@ performance, and controlling search. For delayed execution, see
 `once(Goal)` — call `Goal` and commit to the first solution. Prevents
 backtracking into the goal.
 
-```clausal
+```seam
 test("first only") <- (
     once(in_(X, [1, 2, 3])),
     X == 1
@@ -23,7 +23,7 @@ test("first only") <- (
 `once` is useful when you know a predicate has multiple solutions but you only
 want the first:
 
-```clausal
+```seam
 any_member(ELEM, LIST) <- once(in_(ELEM, LIST))
 
 test("any") <- (any_member(X, [10, 20, 30]), X == 10)
@@ -40,7 +40,7 @@ and CPU time to stderr. The goal's solutions pass through unchanged; the line
 is printed once `Goal` is **exhausted**, so a caller that stops at the first
 solution (`once`, an `if --` seam) prints nothing.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/control_sigs.txt:time_goal_1"
 ```
 
@@ -55,7 +55,7 @@ Output (to stderr):
 `time_goal(Goal, Elapsed)` — execute `Goal` and unify `Elapsed` with the
 wall-clock time in seconds (as a float). Useful for programmatic benchmarking.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/control_sigs.txt:time_goal_2"
 ```
 
@@ -65,7 +65,7 @@ wall-clock time in seconds (as a float). Useful for programmatic benchmarking.
 
 ### Benchmark two approaches
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/control_sigs.txt:benchmark_recipe"
 ```
 
@@ -73,7 +73,7 @@ wall-clock time in seconds (as a float). Useful for programmatic benchmarking.
 
 Prevent a test predicate from generating multiple successes:
 
-```clausal
+```seam
 test("exactly one solution") <- once(
     permutation([1, 2, 3], [3, 2, 1])
 )

@@ -6,7 +6,7 @@ The `sqlite` module provides SQLite database predicates backed by Python's `sqli
 
 Since Python's `sqlite3` module is the backend, all SQLite features are available — in-memory databases, WAL mode, JSON1 extension, full-text search, etc.
 
-```clausal
+```seam
 -import_from(sqlite, [connect, exec, query, disconnect])
 
 main <- (
@@ -20,7 +20,7 @@ main <- (
 
 Or via [module import](import.md):
 
-```clausal
+```seam
 -import_module(sqlite)
 
 main <- (
@@ -35,7 +35,7 @@ main <- (
 
 ## Import
 
-```clausal
+```seam
 -import_from(sqlite, [
     connect, disconnect, current_connection,
     query, exec, row_count,
@@ -51,7 +51,7 @@ Connections are identified by string aliases. A module-level registry maps alias
 
 ### `connect/2`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sqlite_sigs.txt:connect_sig"
 ```
 
@@ -61,7 +61,7 @@ Open a SQLite database at `Path` and register it under `Alias`. `Path` can be a 
 
 ### `disconnect/1`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sqlite_sigs.txt:disconnect_sig"
 ```
 
@@ -69,13 +69,13 @@ Close the connection and unregister `Alias`. **Fails** if `Alias` is not connect
 
 ### `current_connection/1`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sqlite_sigs.txt:current_connection_sig"
 ```
 
 when `Alias` is unbound, **nondeterministically enumerates** all open connection aliases. when `Alias` is ground, succeeds if that alias is currently connected.
 
-```clausal
+```seam
 list_dbs <- (
     current_connection(A),
     ++print(f"Open: {A}")
@@ -90,13 +90,13 @@ All SQL execution uses parameterized queries (`?` placeholders) internally. **St
 
 ### `query/3`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sqlite_sigs.txt:query_sig"
 ```
 
 Execute a SELECT query and **nondeterministically iterate** over result rows via [backtracking](control.md). Each solution binds `Row` to one row. Single-column rows are unwrapped to the bare value. A multi-column row is the tuple of its values: `SELECT name, age` gives `("alice", 30)`. Match it against a tuple pattern, `(NAME, AGE)`, to take it apart. A TEXT value is a **string** (database text is data, not a symbol) in both shapes; an INTEGER or REAL is a number and NULL is `None`.
 
-```clausal
+```seam
 # Multi-column: Row unifies with a tuple
 all_users(ROW) <- query("db", "SELECT name, age FROM users", ROW)
 
@@ -111,13 +111,13 @@ all_names(NAME) <- query("db", "SELECT name FROM users", NAME)
 
 ### `query/4`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sqlite_sigs.txt:query_params_sig"
 ```
 
 Parameterized query with `?` placeholders. `Params` is a list of values.
 
-```clausal
+```seam
 older_than(MIN_AGE, NAME) <- (
     query("db", "SELECT name FROM users WHERE age > ?", [MIN_AGE], NAME)
 )
@@ -125,13 +125,13 @@ older_than(MIN_AGE, NAME) <- (
 
 ### `exec/2`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sqlite_sigs.txt:exec_sig"
 ```
 
 Execute a DDL or DML statement (CREATE, INSERT, UPDATE, DELETE). **Succeeds once** and auto-commits.
 
-```clausal
+```seam
 setup <- (
     exec("db", "CREATE TABLE items (id INTEGER PRIMARY KEY, name TEXT)"),
     exec("db", "INSERT INTO items VALUES (1, 'widget')")
@@ -140,13 +140,13 @@ setup <- (
 
 ### `exec/3`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sqlite_sigs.txt:exec_params_sig"
 ```
 
 Parameterized DML with `?` placeholders. Auto-commits.
 
-```clausal
+```seam
 add_user(NAME, AGE) <- (
     exec("db", "INSERT INTO users VALUES (?, ?)", [NAME, AGE])
 )
@@ -154,13 +154,13 @@ add_user(NAME, AGE) <- (
 
 ### `row_count/3`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sqlite_sigs.txt:row_count_sig"
 ```
 
 Execute DML and unify `Count` with the number of affected rows.
 
-```clausal
+```seam
 cleanup(N) <- (
     row_count("db", "DELETE FROM sessions WHERE expired = 1", N),
     ++print(f"Removed {N} expired sessions")
@@ -173,13 +173,13 @@ cleanup(N) <- (
 
 ### `table/2`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sqlite_sigs.txt:table_sig"
 ```
 
 when `TableName` is unbound, **nondeterministically enumerates** all table names. when ground, succeeds if that table exists.
 
-```clausal
+```seam
 has_users_table <- table("db", "users")
 
 list_tables(T) <- table("db", T)
@@ -187,13 +187,13 @@ list_tables(T) <- table("db", T)
 
 ### `column/4`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sqlite_sigs.txt:column_sig"
 ```
 
 Enumerate columns of a table, one `ColName`/`ColType` solution per column. Both are strings; column types are SQLite type names: `"TEXT"`, `"INTEGER"`, `"REAL"`, `"BLOB"`, etc.
 
-```clausal
+```seam
 show_schema(COL, TYPE) <- (
     column("db", "users", COL, TYPE),
     ++print(f"  {COL}: {TYPE}")
@@ -206,19 +206,19 @@ show_schema(COL, TYPE) <- (
 
     ### CRUD operations
 
-    ```clausal
+    ```seam
     --8<-- "tests/fixtures/docs/sqlite_sigs.txt:crud_example"
     ```
 
     ### Joining tables
 
-    ```clausal
+    ```seam
     --8<-- "tests/fixtures/docs/sqlite_sigs.txt:join_example"
     ```
 
     ### Schema exploration
 
-    ```clausal
+    ```seam
     --8<-- "tests/fixtures/docs/sqlite_sigs.txt:schema_example"
     ```
 

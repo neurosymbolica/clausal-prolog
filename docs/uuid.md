@@ -4,7 +4,7 @@
 
 The `uuid` module provides predicates for generating, converting, and inspecting UUIDs backed by Python's `uuid` module. It produces and consumes real `uuid.UUID` objects.
 
-```clausal
+```seam
 -import_from(uuid, [uuid_v4, uuid_str, uuid_version, is_uuid])
 
 make_id(ID) <- (
@@ -20,7 +20,7 @@ main <- (
 
 Or via [module import](import.md):
 
-```clausal
+```seam
 -import_module(uuid)
 
 main <- (
@@ -34,7 +34,7 @@ main <- (
 
 ## Import
 
-```clausal
+```seam
 -import_from(uuid, [
     uuid_v4, uuid_v1, uuid_v3, uuid_v5,
     uuid_str, uuid_hex, uuid_urn, uuid_bytes, uuid_int,
@@ -66,7 +66,7 @@ For `uuid_v3` and `uuid_v5`, the namespace argument accepts string aliases or ra
 | `"oid"` | `uuid.NAMESPACE_OID` |
 | `"x500"` | `uuid.NAMESPACE_X500` |
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/uuid_sigs.txt:generation_examples"
 ```
 
@@ -84,7 +84,7 @@ All conversion predicates are **bidirectional**: pass a ground UUID to decompose
 | `uuid_bytes(U, B)` | `?U, ?B` | UUID ↔ 16-byte `bytes` object |
 | `uuid_int(U, N)` | `?U, ?N` | UUID ↔ 128-bit integer |
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/uuid_sigs.txt:conversion_examples"
 ```
 
@@ -98,7 +98,7 @@ All conversion predicates are **bidirectional**: pass a ground UUID to decompose
 | `uuid_fields(U, TL, TM, TH, CSH, CSL, NODE)` | `+U, -TL, -TM, -TH, -CSH, -CSL, -NODE` | Decompose into 6 integer fields |
 | `is_uuid(U)` | `+U` | Type test — succeeds if U is a `uuid.UUID` |
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/uuid_sigs.txt:inspection_examples"
 ```
 
@@ -108,13 +108,13 @@ All conversion predicates are **bidirectional**: pass a ground UUID to decompose
 
     ### Session tokens
 
-    ```clausal
+    ```seam
     --8<-- "tests/fixtures/docs/uuid_sigs.txt:session_tokens"
     ```
 
     ### Deterministic IDs
 
-    ```clausal
+    ```seam
     --8<-- "tests/fixtures/docs/uuid_sigs.txt:deterministic_ids"
     ```
 

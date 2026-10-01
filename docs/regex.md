@@ -15,7 +15,7 @@ answer. The examples below also state
 
 ## Quick Example
 
-```clausal
+```seam
 -double_quotes(chars)
 -allow_singletons
 # Named-group auto-bind: the second occurrence of YEAR/MONTH lives
@@ -40,13 +40,13 @@ The named groups `YEAR` and `MONTH` are automatically bound to the clause variab
 
 ## Import
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/regex_sigs.txt:import_from"
 ```
 
 Or via [module import](import.md):
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/regex_sigs.txt:import_module"
 ```
 
@@ -58,7 +58,7 @@ Or via [module import](import.md):
 
 `match(Pattern, String)` — succeeds if Pattern matches String (anchored at start):
 
-```clausal
+```seam
 -double_quotes(chars)
 -import_from(regex, [match])
 
@@ -71,7 +71,7 @@ test("match anchored") <- (not match(r"\d+$", "123abc"))
 
 `match(Pattern, String, Groups)` — unifies Groups with a dict of named groups (or tuple of positional groups):
 
-```clausal
+```seam
 -double_quotes(chars)
 -import_from(regex, [match])
 
@@ -104,7 +104,7 @@ a group name is an atom key, a captured value a string.
 
 Like match but unanchored — finds the pattern anywhere in the string:
 
-```clausal
+```seam
 -double_quotes(chars)
 -import_from(regex, [search])
 
@@ -124,7 +124,7 @@ test("search groups") <- (
 
 `replace(Pattern, Replacement, String, Result)` — regex substitution:
 
-```clausal
+```seam
 -double_quotes(chars)
 -import_from(regex, [replace])
 
@@ -136,7 +136,7 @@ test("remove digits") <- (replace(r"\d+", "", "a1b2c3", R), R == "abc")
 
 `split(Pattern, String, Fragments)` — split string by pattern:
 
-```clausal
+```seam
 -double_quotes(chars)
 -import_from(regex, [split])
 
@@ -148,7 +148,7 @@ test("split whitespace") <- (split(r"\s+", "x y z", F), F == ["x", "y", "z"])
 
 `findall(Pattern, String, match)` — nondeterministic; succeeds once for each non-overlapping match:
 
-```clausal
+```seam
 -double_quotes(chars)
 -import_from(regex, [findall])
 
@@ -160,7 +160,7 @@ value is the whole-match string when the pattern has no capturing group, the
 group's bare string when it has exactly one group, and a tuple of group
 strings when it has two or more:
 
-```clausal
+```seam
 -double_quotes(chars)
 -import_from(regex, [findall])
 
@@ -177,7 +177,7 @@ Named groups whose names are spelled like clause [variables](syntax.md) — capi
 
 ### Capital-Initial Groups
 
-```clausal
+```seam
 -double_quotes(chars)
 -allow_singletons
 # Named-group auto-bind: the head params' second occurrence lives
@@ -197,7 +197,7 @@ test("parse email") <- (
 
 ### Leading-Underscore Groups
 
-```clausal
+```seam
 -double_quotes(chars)
 -allow_singletons
 # Named-group auto-bind: _port's second occurrence lives inside the
@@ -218,7 +218,7 @@ test("extract port") <- (
 
 The goal expansion pass detects `(?P<NAME>...)` patterns where NAME matches a variable in scope. It rewrites the match/2 call into match/3 plus unification:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/regex_sigs.txt:expansion_example"
 ```
 
@@ -230,7 +230,7 @@ You never see the expanded form — just use the variable names in your pattern.
 
 ### Log Parsing
 
-```clausal
+```seam
 -double_quotes(chars)
 -allow_singletons
 # Named-group auto-bind: LEVEL/MESSAGE's second occurrence lives inside
@@ -254,7 +254,7 @@ test("not error") <- (not is_error("INFO ok"))
 
 ### CSV Field Extraction
 
-```clausal
+```seam
 -double_quotes(chars)
 -import_from(regex, [split])
 
@@ -268,7 +268,7 @@ test("parse csv") <- (
 
 ### URL Routing
 
-```clausal
+```seam
 -double_quotes(chars)
 -allow_singletons
 # Named-group auto-bind: USER_ID's second occurrence lives inside the
@@ -288,7 +288,7 @@ test("not api") <- (not route_api("/users/1"))
 
 ### Data Validation
 
-```clausal
+```seam
 -double_quotes(chars)
 -import_from(regex, [match])
 
@@ -304,7 +304,7 @@ test("valid ipv4") <- valid_ipv4("192.168.1.1")
 
 Use the [`findall` meta-predicate](meta_predicates.md) to collect all regex matches into a list:
 
-```clausal
+```seam
 -double_quotes(chars)
 -import_module(regex)
 
@@ -334,7 +334,7 @@ The goal expansion pass (`clausal/logic/goal_expansion.py`) detects string-liter
 
 Patterns can be variables or f-strings — they are compiled at runtime:
 
-```clausal
+```seam
 -double_quotes(chars)
 -import_from(regex, [match])
 
@@ -358,7 +358,7 @@ its variable to Python `None`: in dynamic mode every in-scope clause variable
 is a binding candidate, so a non-participating group leaves the variable
 unbound rather than clobbering it with `None`.
 
-```clausal
+```seam
 -double_quotes(chars)
 -allow_singletons
 # Dynamic-pattern auto-bind: YEAR's binding happens at runtime from the

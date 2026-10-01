@@ -98,7 +98,7 @@ is automatically tested by the documentation test runner.
 
 ### Family tree
 
-```clausal
+```seam
 parent('alice', 'bob'),
 parent('alice', 'carol'),
 parent('bob', 'dave'),
@@ -122,7 +122,7 @@ import family
 
 ### List membership and append
 
-```clausal
+```seam
 member(X, [X, *_]),
 member(X, [_, *REST]) <- member(X, REST)
 
@@ -135,7 +135,7 @@ test("append two lists") <- (my_append([1, 2], [3, 4], [1, 2, 3, 4]))
 
 ### Recursive length
 
-```clausal
+```seam
 my_len([], 0),
 my_len([_, *T], N) <- (
     my_len(T, N1),
@@ -148,7 +148,7 @@ test("length of three-element list") <- (my_len(['a', 'b', 'c'], 3))
 
 ### Accumulator pattern
 
-```clausal
+```seam
 sum_list([], 0),
 sum_list([H, *T], S) <- (
     sum_list(T, S1),
@@ -167,7 +167,7 @@ test("sum of empty is 0") <- (
 
 ### Fibonacci
 
-```clausal
+```seam
 fib(0, 0),
 fib(1, 1),
 fib(N, F) <- (

@@ -7,7 +7,7 @@ relational arithmetic predicates that work in multiple directions.
 
 ## Quick Example
 
-```clausal
+```seam
 factorial(0, 1),
 factorial(N, F) <- (
     N > 0,
@@ -27,7 +27,7 @@ test("fact 5") <- factorial(5, 120)
 
 `==` posts an arithmetic constraint ([CLP(ℤ)](constraints.md) or [CLP(ℝ)](clpr.md)) that works in all directions:
 
-```clausal
+```seam
 test("eval") <- (X == 3 + 4 * 2, X == 11)
 ```
 
@@ -47,7 +47,7 @@ A **bare** operator keeps Python's meaning in today's syntax (`-7 // 2` is -4,
 `eval_(EXPR, RESULT)` evaluates `EXPR` immediately and unifies the value with
 `RESULT` (Prolog's `is/2`):
 
-```clausal
+```seam
 test("eval") <- (eval_(6 * 7, X), X == 42)
 ```
 
@@ -150,7 +150,7 @@ differs: `log(0)` is `evaluation_error(undefined)` (Scryer:
 Scryer). The exact-number term `decimal(M, S)` evaluates as the number it
 denotes.
 
-```clausal
+```seam
 test("rounding") <- ('is'(A, round(-2.5)), A == -3, 'is'(B, truncate(3.7)), B == 3)
 test("rem and gcd") <- ('is'(R, rem(-7, 2)), R == -1, 'is'(G, gcd(12, 18)), G == 6)
 test("bitwise") <- ('is'(X, '/\\'(12, 10)), X == 8, 'is'(Y, '>>'(-7, 1)), Y == -4)
@@ -191,7 +191,7 @@ simply the float 8.0.
 
 ### Comparison operators
 
-```clausal
+```seam
 test("compare") <- (3 < 5, 5 >= 5, 10 != 7)
 ```
 
@@ -217,7 +217,7 @@ computed.
 
 `plus(X, Y, Z)` — `Z = X + Y`. Any two arguments determine the third.
 
-```clausal
+```seam
 test("plus forward") <- plus(3, 4, 7)
 test("plus subtract") <- (plus(3, Y, 7), Y == 4)
 test("plus other") <- (plus(X, 4, 7), X == 3)
@@ -227,7 +227,7 @@ test("plus other") <- (plus(X, 4, 7), X == 3)
 
 `succ(X, Y)` — `Y = X + 1` for non-negative integers. Bidirectional.
 
-```clausal
+```seam
 test("succ forward") <- succ(4, 5)
 test("succ backward") <- (succ(X, 5), X == 4)
 ```
@@ -240,7 +240,7 @@ test("succ backward") <- (succ(X, 5), X == 4)
 
 `between(Low, High, X)` — generate or test integers in a range (inclusive).
 
-```clausal
+```seam
 test("generate") <- (between(1, 5, X), X == 3)
 test("check") <- between(1, 10, 7)
 ```
@@ -256,7 +256,7 @@ backtracking.
 
 `abs_(X, Y)` — `Y` is the absolute value of `X`.
 
-```clausal
+```seam
 test("abs") <- abs_(-7, 7)
 ```
 
@@ -264,7 +264,7 @@ test("abs") <- abs_(-7, 7)
 
 `sign(X, S)` — `S` is `-1`, `0`, or `1` depending on the sign of `X`.
 
-```clausal
+```seam
 test("sign negative") <- sign(-42, -1)
 test("sign zero") <- sign(0, 0)
 test("sign positive") <- sign(99, 1)
@@ -274,7 +274,7 @@ test("sign positive") <- sign(99, 1)
 
 `max_(X, Y, Z)` / `min_(X, Y, Z)` — `Z` is the maximum/minimum of `X` and `Y`.
 
-```clausal
+```seam
 test("max") <- max_(3, 7, 7)
 test("min") <- min_(3, 7, 3)
 ```
@@ -283,7 +283,7 @@ test("min") <- min_(3, 7, 3)
 
 `gcd(X, Y, G)` — `G` is the greatest common divisor of `X` and `Y`.
 
-```clausal
+```seam
 test("gcd") <- gcd(12, 8, 4)
 test("coprime") <- gcd(7, 13, 1)
 ```
@@ -292,7 +292,7 @@ test("coprime") <- gcd(7, 13, 1)
 
 `divmod_(X, Y, Quotient, Remainder)` — integer division and modulo in one step.
 
-```clausal
+```seam
 test("divmod") <- divmod_(17, 5, 3, 2)
 ```
 
@@ -302,7 +302,7 @@ test("divmod") <- divmod_(17, 5, 3, 2)
 
 ### Fibonacci with accumulator
 
-```clausal
+```seam
 fib(N, F) <- fib_acc(N, 0, 1, F)
 fib_acc(0, A, _, A),
 fib_acc(N, A, B, F) <- (
@@ -317,7 +317,7 @@ test("fib 10") <- fib(10, 55)
 
 ### Collatz sequence length
 
-```clausal
+```seam
 collatz(1, 0),
 collatz(N, STEPS) <- (
     N > 1,
@@ -341,7 +341,7 @@ test("collatz 6") <- collatz(6, 8)
 
 ### sum_ of digits
 
-```clausal
+```seam
 digit_sum(0, 0),
 digit_sum(N, SUM) <- (
     N > 0,

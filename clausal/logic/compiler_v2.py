@@ -812,8 +812,10 @@ def _refuse_private_procedure(item, mod, orig_name: str, selected,
     at = f"{where}, line {line}" if line else where
     wanted = (orig_name if selected is None else
               ", ".join(f"{orig_name}/{a}" for a in sorted(selected)))
-    directive = ("use_module" if str(module_dict.get("__file__") or "")
-                 .endswith(".pl") else "-import_from")
+    from clausal._suffixes import is_prolog_source  # noqa: PLC0415
+    directive = ("use_module"
+                 if is_prolog_source(module_dict.get("__file__") or "")
+                 else "-import_from")
     raise ImportError(
         f"{at}: {directive}({item.module}, [{wanted}]): "
         f"permission_error(access, private_procedure, {indicator}) -- "

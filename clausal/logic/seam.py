@@ -535,15 +535,16 @@ def _module_of(module_globals: dict):
         # Only rewritten code reaches here (a plain .py file never runs the
         # seam rewriter, so its `--g` is Python's double negation), and
         # rewritten code without a `$module` is the REPL (ClausalConsole,
-        # ptpython) or other code transformed outside a .clausal file.
+        # ptpython) or other code transformed outside a seam file.
+        from clausal._suffixes import SEAM_SUFFIX  # noqa: PLC0415
         raise NameError(
             "--: a goal-position seam (`if --g:`, `for X in --g:`, "
             "`while --g:`) runs the goal against its host Clausal module, and "
             "this code has none — the goal seam is not available in the REPL "
-            "or anywhere outside Python hosted by a .clausal file. Query with "
-            "solve(('pred', X := Var()), module=m) instead (in the REPL, "
+            f"or anywhere outside Python hosted by a {SEAM_SUFFIX} file. Query "
+            "with solve(('pred', X := Var()), module=m) instead (in the REPL, "
             "`*(pred(X))` after `from m import pred`), or move the code into "
-            "a .clausal file") from None
+            f"a {SEAM_SUFFIX} file") from None
 
 
 def _has_var_thunk(term: Any) -> bool:

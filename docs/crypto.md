@@ -6,7 +6,7 @@ Three small modules wrapping Python's `hashlib` and `hmac` stdlib for
 cryptographic hashing, message authentication, and key derivation. All modules
 use only the standard library — no third-party dependencies.
 
-```clausal
+```seam
 -import_from(py.hash, [hash])
 -import_from(py.hmac, [sign, verify])
 -import_from(py.pbkdf2, [derive])
@@ -25,7 +25,7 @@ verify_message(KEY, MSG, SIG) <- verify(KEY, MSG, SIG)
 
 ## `py.hash` — Cryptographic Hashing
 
-```clausal
+```seam
 -import_from(py.hash, [hash, hash_bytes])
 ```
 
@@ -39,7 +39,7 @@ verify_message(KEY, MSG, SIG) <- verify(KEY, MSG, SIG)
 
 **Data** can be a string (UTF-8 encoded) or `bytes`.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/crypto_sigs.txt:hash_examples"
 ```
 
@@ -49,7 +49,7 @@ Fails silently if the algorithm is unknown, or if `Algorithm` or `Data` is unbou
 
 ## `py.hmac` — Message Authentication
 
-```clausal
+```seam
 -import_from(py.hmac, [sign, verify])
 ```
 
@@ -63,7 +63,7 @@ Fails silently if the algorithm is unknown, or if `Algorithm` or `Data` is unbou
 `Key` and `Data` can be strings (UTF-8 encoded) or `bytes`. `verify` uses
 `hmac.compare_digest` for constant-time comparison.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/crypto_sigs.txt:hmac_examples"
 ```
 
@@ -71,7 +71,7 @@ Fails silently if the algorithm is unknown, or if `Algorithm` or `Data` is unbou
 
 ## `py.pbkdf2` — Key Derivation
 
-```clausal
+```seam
 -import_from(py.pbkdf2, [derive])
 ```
 
@@ -83,7 +83,7 @@ Fails silently if the algorithm is unknown, or if `Algorithm` or `Data` is unbou
 `DerivedKey` is a hex string. `Password` and `Salt` can be strings, atoms or `bytes`.
 `Iterations` must be a positive integer.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/crypto_sigs.txt:pbkdf2_examples"
 ```
 
@@ -93,19 +93,19 @@ Fails silently if the algorithm is unknown, or if `Algorithm` or `Data` is unbou
 
     ### File integrity check (using the [Files](files.md) module)
 
-    ```clausal
+    ```seam
     --8<-- "tests/fixtures/docs/crypto_sigs.txt:file_integrity"
     ```
 
     ### API request signing
 
-    ```clausal
+    ```seam
     --8<-- "tests/fixtures/docs/crypto_sigs.txt:api_signing"
     ```
 
     ### Password hashing
 
-    ```clausal
+    ```seam
     --8<-- "tests/fixtures/docs/crypto_sigs.txt:password_hashing"
     ```
 

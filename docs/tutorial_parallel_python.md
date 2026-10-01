@@ -49,7 +49,7 @@ Write the query in a `.clausal` or `.seam` file, in
 Every run of a `--` goal makes its own variables and its own Trail, so
 the function is safe to call from any thread. With `graph.clausal`:
 
-```clausal
+```seam
 edge('a', 'b'),
 edge('b', 'c'),
 edge('c', 'd'),

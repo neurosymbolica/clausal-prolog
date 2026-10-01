@@ -12,7 +12,7 @@ The implementation lives in `clausal.logic.specialization`.
 
 Clausal ships five MIs ported from Triska's [acomip](https://www.metalevel.at/acomip/), all available via:
 
-```clausal
+```seam
 -import_from(clausal.examples.metainterpreters, [solve, solve_count, solve_limit, solve_tree])
 ```
 
@@ -32,7 +32,7 @@ Object programs are represented as lists of `[Head, BodyGoals]` pairs, where ter
 
 ### The `-specialize` directive
 
-```clausal
+```seam
 -import_from(clausal.examples.metainterpreters, [solve_count])
 
 natnum_program(PROGRAM) <- (
@@ -53,7 +53,7 @@ This produces a new predicate `solve_count_natnum` that:
 
 Call it directly:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/specialization_sigs.txt:count_natnum_test"
 ```
 
@@ -112,7 +112,7 @@ The counting logic is woven into each clause. The program argument is gone.
 
 when an object program uses goals that aren't defined in the program itself (arithmetic, comparisons, etc.), the specializer generates a catch-all clause that dispatches unknown goals through a runtime resolver:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/specialization_sigs.txt:specialize_factorial"
 ```
 
@@ -124,7 +124,7 @@ The catch-all handles `gt`, `gte`, `lt`, `lte`, `eq`, `neq`, `add`, `sub`, `mul`
 
 With `depth=N`, the specializer recursively unfolds body goals that match object-program heads, up to N levels:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/specialization_sigs.txt:deep_unfolding"
 ```
 
@@ -142,7 +142,7 @@ Deep unfolding inlines deterministic goals (single matching object clause), prod
 
 With `cpd=True`, the specializer applies **deforestation** — eliminating intermediate goal-list constructions by unfolding the first goal in a constructed list against *all* matching object clauses:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/specialization_sigs.txt:cpd_directive"
 ```
 

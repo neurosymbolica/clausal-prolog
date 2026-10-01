@@ -6,7 +6,7 @@ Clausal provides built-in predicates for formatted output, term-to-string conver
 
 ## Quick Example
 
-```clausal
+```seam
 greet(NAME) <- (
     write_text("Hello, "),
     writeln_text(NAME)
@@ -74,7 +74,7 @@ prints it in its source form, `(1 + 2)`; see [Operators](operators.md).
 `'.'/2` structure itself; the string stays a compact `str` internally, the
 writer only *shows* the cons structure.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/io_examples.clausal:three_writers"
 ```
 
@@ -138,7 +138,7 @@ An unrecognised option raises `domain_error(write_option, Opt)`; a non-list
 (`[quoted(true) | _]`) raises `instantiation_error`. Streams are out of
 scope, so there is no `write_term/3`, and `max_depth(N)` is not supported.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/io_examples.clausal:write_term"
 ```
 
@@ -152,7 +152,7 @@ scope, so there is no `write_term/3`, and `max_depth(N)` is not supported.
 | `writeq/1` | ISO, quoted | no |
 | `write_canonical/1` | canonical | no |
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/io_examples.clausal:write_family"
 ```
 
@@ -170,7 +170,7 @@ scope, so there is no `write_term/3`, and `max_depth(N)` is not supported.
 
 write a newline character:
 
-```clausal
+```seam
 test("newline") <- (nl(), nl())
 ```
 
@@ -178,7 +178,7 @@ test("newline") <- (nl(), nl())
 
 write N spaces:
 
-```clausal
+```seam
 indented(X) <- (tab(4), writeln_text(X))
 
 test("indented") <- indented("hello")
@@ -196,7 +196,7 @@ Both answer with a **string**, never with an atom.
 rendering of Term: text comes out bare. This is the one to build
 human-readable text with.
 
-```clausal
+```seam
 -double_quotes(chars)
 
 format_pair(K, V, S) <- write_text_to_string(K - V, S)
@@ -213,7 +213,7 @@ test("write text to string") <- (
 rendering of Term: unquoted, list syntax intact, and a string spelled out as
 the char list it is.
 
-```clausal
+```seam
 -double_quotes(chars)
 
 iso_form(X, S) <- write_to_string(X, S)
@@ -230,7 +230,7 @@ test("write to string is ISO") <- (
 rendering of Term (`write_term(Term, [quoted(true), double_quotes(true)])`):
 quoted, so an atom is distinguishable from a string.
 
-```clausal
+```seam
 -double_quotes(chars)
 
 label(X, S) <- term_to_string(X, S)
@@ -265,7 +265,7 @@ module's `-double_quotes` mode — the chars string by default, and an atom
 under `-double_quotes(atom)` (ruled 2026-09-28; it used to be an atom in every
 mode). Compare it with a `"..."` literal:
 
-```clausal
+```seam
 -double_quotes(chars)
 
 describe(NAME, AGE, S) <- (
@@ -287,7 +287,7 @@ test("an f-string is a string") <- (
 
 F-strings support arbitrary Python expressions inside `{}`:
 
-```clausal
+```seam
 -double_quotes(chars)
 
 summarize(XS, S) <- (
@@ -305,7 +305,7 @@ test("summarize") <- (
 
 All logic variables referenced in the f-string are dereferenced:
 
-```clausal
+```seam
 -double_quotes(chars)
 
 full_name(FIRST, LAST, S) <- (
@@ -322,7 +322,7 @@ test("full name") <- (
 
 F-strings use deferred evaluation — the f-string is evaluated at search time, after variables are bound. This means f-strings work correctly with backtracking:
 
-```clausal
+```seam
 -double_quotes(chars)
 
 color("red"),
@@ -346,7 +346,7 @@ test("deferred f-string") <- (
 
 ### Printing a List
 
-```clausal
+```seam
 show_all(XS) <- (
     in_(X, XS),
     writeln_text(X)
@@ -357,7 +357,7 @@ test("show all") <- show_all([1, 2, 3])
 
 ### String Building with term_to_string
 
-```clausal
+```seam
 -double_quotes(chars)
 
 format_item(X, S) <- term_to_string(X, S)
@@ -375,7 +375,7 @@ closure. (`+` is arithmetic, not concatenation: `R == A + E` on text raises
 `type_error(integer, "ab")` from the CLP(ℤ) expression. `==` itself is fine on
 strings — it is the `+` that has no text meaning.)
 
-```clausal
+```seam
 -double_quotes(chars)
 
 concat_all(XS, RESULT) <- (
@@ -402,7 +402,7 @@ test("concat all") <- (
 
 ### Examples
 
-```clausal
+```seam
 fib(0, 0),
 fib(1, 1),
 

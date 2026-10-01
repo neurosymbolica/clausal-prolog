@@ -24,7 +24,7 @@ Two constraint solvers are built in:
 
 In `.clausal` files, `is not` has dif semantics:
 
-```clausal
+```seam
 safe_assign(X, Y) <- (
     X is not Y,
     X is 1,
@@ -36,7 +36,7 @@ This succeeds because X and Y end up with different values (1 and 2), even thoug
 
 The builtin `dif/2` can also be called explicitly:
 
-```clausal
+```seam
 constrained(X, Y) <- (
     dif(X, Y),
     X is 1,
@@ -56,22 +56,22 @@ The `is not` operator uses `dif/2` constraint semantics rather than immediate `\
 ??? example "Examples"
 
     **Constraint succeeds — terms stay different:**
-    ```clausal
+    ```seam
     --8<-- "tests/fixtures/docs/constraints_sigs.txt:semantics"
     ```
 
     **Constraint fails — terms become equal:**
-    ```clausal
+    ```seam
     --8<-- "tests/fixtures/docs/constraints_sigs.txt:semantics_ex2"
     ```
 
     **Multiple constraints:**
-    ```clausal
+    ```seam
     --8<-- "tests/fixtures/docs/constraints_sigs.txt:semantics_ex3"
     ```
 
     **Immediate check (old semantics):**
-    ```clausal
+    ```seam
     --8<-- "tests/fixtures/docs/constraints_sigs.txt:semantics_ex4"
     ```
 
@@ -195,7 +195,7 @@ What an operator means, bare or quoted, is defined once in [Operators](operators
 - **A zero divisor makes a constraint fail**, it does not raise. `X == 1 // 0` has no solutions, in every goal order, and a divisor that becomes 0 during labeling fails only that branch. Evaluation (`eval_(1 // 0, X)`) raises `evaluation_error(zero_divisor)` instead.
 - **A non-arithmetic term is a domain error.** `X == foo(1)` raises Scryer's clpz error `error(domain_error(clpz_expression, foo(1)), (==)/2)`.
 
-```clausal
+```seam
 -module(div_demo, [])
 
 half(X) <- (X == 7 / 2)                 # X = Fraction(7, 2)
@@ -307,7 +307,7 @@ quotients(X, Y) <- (                    # Y = 0 fails its branch only
 ### Syntax examples
 
 **Domain declaration and labeling:**
-```clausal
+```seam
 solve(X) <- (
     in_domain(X, 1, 10),
     label([X])
@@ -315,14 +315,14 @@ solve(X) <- (
 ```
 
 **Chained comparison (natural Python syntax):**
-```clausal
+```seam
 bounded(X) <- (1 <= X, X <= 10, label([X]))
 ```
 
 Since `<=` is CLP(ℤ), `1 <= X` and `X <= 10` naturally constrain X's domain.
 
 **N-Queens via all_different:**
-```clausal
+```seam
 queens(N, QS) <- (
     in_domain(QS, 1, N),
     all_different(QS),
@@ -332,7 +332,7 @@ queens(N, QS) <- (
 ```
 
 **SEND + MORE = MONEY:**
-```clausal
+```seam
 sendmoney(S, E, N, D, M, O, R, Y) <- (
     in_domain([S, E, N, D, M, O, R, Y], 0, 9),
     all_different([S, E, N, D, M, O, R, Y]),
@@ -347,7 +347,7 @@ The `==` constraint is posted *before* `label` so the solver propagates the equa
 
 **Querying from Python.** In a `.seam` file (or any `.clausal` file hosting Python), a goal in `for` position runs and hands back each answer; the goal's variables become ordinary locals:
 
-```clausal
+```seam
 -module(puzzle, [])
 
 sendmoney(S, E, N, D, M, O, R, Y) <- (
@@ -370,7 +370,7 @@ Call `main()` after the module has loaded; a query at module top level runs befo
 
 A common mistake is to call `label` first and then check the arithmetic — this is **generate-and-test** and is extremely slow:
 
-```clausal
+```seam
 # SLOW -- generate-and-test: label runs before the equation is known
 sendmoney_slow(S, E, N, D, M, O, R, Y) <- (
     in_domain([S, E, N, D, M, O, R, Y], 0, 9),
@@ -389,7 +389,7 @@ sendmoney_slow(S, E, N, D, M, O, R, Y) <- (
 
 The fix is to post the equation as a `==` constraint *before* `label`:
 
-```clausal
+```seam
 # FAST -- constraint-and-label: equation is propagated before any labeling
 sendmoney_fast(S, E, N, D, M, O, R, Y) <- (
     in_domain([S, E, N, D, M, O, R, Y], 0, 9),
@@ -540,12 +540,12 @@ These operators are unused by the arithmetic compiler path — `BitAnd`, `BitOr`
 ### Syntax examples
 
 **Posting constraints:**
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/constraints_sigs.txt:syntax_examples"
 ```
 
 **Half adder:**
-```clausal
+```seam
 -import_from(clausal.logic.clpb, [BoolEq])
 
 half_adder(X, Y, SUM, CARRY) <- (
@@ -555,17 +555,17 @@ half_adder(X, Y, SUM, CARRY) <- (
 ```
 
 **Tautology check (De Morgan's law):**
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/constraints_sigs.txt:syntax_examples_ex2"
 ```
 
 **Model counting:**
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/constraints_sigs.txt:syntax_examples_ex3"
 ```
 
 **Labeling (enumerate all solutions):**
-```clausal
+```seam
 solve(X, Y) <- (
     sat(X ^ Y),
     bool_labeling([X, Y])
@@ -574,7 +574,7 @@ solve(X, Y) <- (
 ```
 
 **Pigeon-hole (unsatisfiable):**
-```clausal
+```seam
 pigeon_hole() <- (
     sat(P11 | P12),
     sat(P21 | P22),
@@ -676,7 +676,7 @@ Quick reference:
 
 The same comparison operators (`==`, `!=`, `<`, `>`, `<=`, `>=`) route to CLP(ℝ) automatically when either operand is a `float` literal or a variable declared with `in_real`. No separate operator set or brace syntax is needed.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/constraints_sigs.txt:unified_dispatch"
 ```
 

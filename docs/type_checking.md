@@ -7,7 +7,7 @@ succeed or fail — they never bind variables.
 
 ## Quick Example
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/type_checking_sigs.txt:describe_example"
 ```
 
@@ -19,7 +19,7 @@ succeed or fail — they never bind variables.
 
 `var(X)` — succeeds if `X` is an unbound logic variable.
 
-```clausal
+```seam
 test("unbound") <- var(_)
 test("bound fails") <- (not var(42))
 ```
@@ -29,7 +29,7 @@ test("bound fails") <- (not var(42))
 `nonvar(X)` — succeeds if `X` is *not* an unbound variable. The complement of
 `var`.
 
-```clausal
+```seam
 test("number") <- nonvar(42)
 test("string") <- nonvar("hello")
 test("list") <- nonvar([1, 2])
@@ -69,7 +69,7 @@ all four. A string is stored compactly (wrapping its text), but that is a
 representation choice and no test keys on it — and it is not a bare `str`,
 since a bare `str` is now an atom.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/type_checking_sigs.txt:atom_vs_string"
 ```
 
@@ -83,7 +83,7 @@ since a bare `str` is now an atom.
 single-quoted spelling such as `'hello world'`. Bare atoms must be declared
 (`-private([red])`, `-module(m, [red])`, an import).
 
-```clausal
+```seam
 -private([red, blue])
 
 test("bare atom") <- atom(red)
@@ -101,7 +101,7 @@ and a proper list of char atoms, since those are the same terms. It does
 **not** match atoms — a bare `str` is an atom now, not a string — and it does
 not match a list with a non-character element.
 
-```clausal
+```seam
 -private([red])
 
 test("str") <- is_str("hello")
@@ -119,7 +119,7 @@ test("atom is not a string") <- (not string(red))
 `atomic(X)` — succeeds if `X` is an atom, a number, or another atomic constant.
 It is **false for a non-empty string**, which is a list (`""` is `[]`, an atom).
 
-```clausal
+```seam
 -private([red])
 
 test("atom is atomic") <- atomic(red)
@@ -132,7 +132,7 @@ test("string is not atomic") <- (not atomic("red"))
 `integer(X)` — succeeds if `X` is an integer. Booleans are excluded (even though
 Python's `bool` is a subclass of `int`).
 
-```clausal
+```seam
 test("int") <- integer(42)
 test("not float") <- (not integer(3.14))
 test("not bool") <- (not integer(True))
@@ -142,7 +142,7 @@ test("not bool") <- (not integer(True))
 
 `float_(X)` — succeeds if `X` is a float.
 
-```clausal
+```seam
 test("float") <- float_(3.14)
 test("not int") <- (not float_(42))
 ```
@@ -151,7 +151,7 @@ test("not int") <- (not float_(42))
 
 `number(X)` — succeeds if `X` is an int or float (but not bool).
 
-```clausal
+```seam
 test("int") <- number(42)
 test("float") <- number(3.14)
 test("not bool") <- (not number(True))
@@ -170,7 +170,7 @@ which is the `'.'/2` structure. An **atom
 is not compound**: it has arity 0 (it is a name, not a functor application),
 and arity 0 is not `> 0`.
 
-```clausal
+```seam
 -private([red])
 
 point(1, 2, 3),
@@ -186,7 +186,7 @@ that could appear as a goal. As in ISO, that includes a string, which is a list
 (`'.'/2`), so `callable_("hello")` succeeds — and calling one does not call
 `hello`: `call("foo")` raises `error(existence_error(procedure, '.'/2), '.'/2)`.
 
-```clausal
+```seam
 -private([red])
 
 point(1, 2, 3),
@@ -205,7 +205,7 @@ builtin: `append`, `length`, `reverse`, `member`, `maplist`, `take`, `drop`.
 `is_str/1` narrows that to the lists that are *character* sequences — it is not
 a test for a particular representation (see below).
 
-```clausal
+```seam
 
 test("list") <- is_list([1, 2, 3])
 test("empty") <- is_list([])
@@ -220,7 +220,7 @@ test("not int") <- (not is_list(42))
 checked; `is_str/1` is the test that they are characters). A `bytes` value is a
 *code* sequence and is rejected — use `is_codes/1` for that.
 
-```clausal
+```seam
 
 test("string") <- is_chars("hello")
 test("list") <- is_chars([1, 2, 3])
@@ -254,7 +254,7 @@ interchangeability.
 in its structure. Recursively checks lists, compound terms, and predicate
 fields.
 
-```clausal
+```seam
 test("ground int") <- ground(42)
 test("ground list") <- ground([1, 2, 3])
 test("unbound fails") <- (not ground([1, _, 3]))
@@ -263,7 +263,7 @@ test("unbound fails") <- (not ground([1, _, 3]))
 This is useful as a guard before [arithmetic](arithmetic.md) or [I/O](io.md) operations that require all
 values to be determined:
 
-```clausal
+```seam
 safe_print(X) <- (ground(X), writeln_text(X))
 ```
 
@@ -278,7 +278,7 @@ guards mutually exclusive. A string is a list, so the list clause must exclude
 character sequences with `not is_str(X)` — and because `is_str/1` is the term
 test, `[]` and every character list land in the text clause too:
 
-```clausal
+```seam
 -private([unknown, text(s), items(n)])
 
 process(X, R) <- (var(X),                                R is unknown)
@@ -296,7 +296,7 @@ test("dispatch on char list") <- process(['a'], text("a"))
 
 ### Safe arithmetic guard
 
-```clausal
+```seam
 safe_add(X, Y, Z) <- (
     number(X), number(Y),
     Z == X + Y

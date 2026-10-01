@@ -12,7 +12,7 @@ Clausal has no `!/0` (cut), no `(->)/2` (committed choice), and no `(*->)/2` (so
 
 In `.clausal` files, use the `if_` function call:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:if_signature"
 ```
 
@@ -46,12 +46,12 @@ a located `SyntaxError` at the first `If(...)` naming the rewrite
 ### Examples
 
 **Ground branching — deterministic:**
-```clausal
+```seam
 classify(X, L) <- if_(X >= 0, L is 'positive', L is 'negative')
 ```
 
 **Undetermined branching — explores both paths:**
-```clausal
+```seam
 check(X, R) <- if_(X is 1, R is 'equal', R is 'different')
 ```
 
@@ -66,7 +66,7 @@ when `X` is unbound, this produces two solutions: `X=1, R='equal'` and `dif(X,1)
 seam export must be a value, and there `X` is unbound under `dif`.)
 
 **Nested ITE:**
-```clausal
+```seam
 grade(S, G) <- if_(S >= 90, G is 'A', if_(S >= 80, G is 'B', G is 'C'))
 ```
 

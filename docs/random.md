@@ -10,7 +10,7 @@ The implementation lives in `clausal/modules/py/random.py`.
 
 ## Import
 
-```clausal
+```seam
 -import_from(py.random, [float_0_to_1, integer_between, choice,
                          permutation, sample,
                          set_seed, maybe])
@@ -18,7 +18,7 @@ The implementation lives in `clausal/modules/py/random.py`.
 
 Or via [module import](import.md):
 
-```clausal
+```seam
 -import_module(py.random)
 # then use py.random.float_0_to_1(X_), py.random.integer_between(1, 6, X_), etc.
 ```
@@ -31,7 +31,7 @@ Or via [module import](import.md):
 
 `float_0_to_1(X)` — bind X to a random float in [0.0, 1.0).
 
-```clausal
+```seam
 random_unit(X) <- float_0_to_1(X)
 ```
 
@@ -39,7 +39,7 @@ random_unit(X) <- float_0_to_1(X)
 
 `float_between(Low, High, X)` — bind X to a random float in [Low, High). Fails if Low >= High or args are unbound.
 
-```clausal
+```seam
 random_temperature(T) <- float_between(36.0, 42.0, T)
 ```
 
@@ -47,7 +47,7 @@ random_temperature(T) <- float_between(36.0, 42.0, T)
 
 `integer_between(Low, High, X)` — bind X to a random integer in [Low, High] (inclusive both ends).
 
-```clausal
+```seam
 roll_die(N) <- integer_between(1, 6, N)
 ```
 
@@ -55,7 +55,7 @@ roll_die(N) <- integer_between(1, 6, N)
 
 `choice(List, X)` — bind X to a randomly chosen element of [List](lists.md). Deterministic (one solution). Fails if List is empty or unbound.
 
-```clausal
+```seam
 pick_color(COLOR) <- choice(['red', 'green', 'blue'], COLOR)
 ```
 
@@ -63,7 +63,7 @@ pick_color(COLOR) <- choice(['red', 'green', 'blue'], COLOR)
 
 `permutation(List, Shuffled)` — bind Shuffled to a random permutation of [List](lists.md).
 
-```clausal
+```seam
 shuffle_deck(DECK, SHUFFLED) <- permutation(DECK, SHUFFLED)
 ```
 
@@ -71,7 +71,7 @@ shuffle_deck(DECK, SHUFFLED) <- permutation(DECK, SHUFFLED)
 
 `sample(List, Size, Sample)` — bind Sample to `Size` randomly chosen elements without replacement. Fails if `Size` > length of List.
 
-```clausal
+```seam
 draw_hand(DECK, HAND) <- sample(DECK, 5, HAND)
 ```
 
@@ -79,7 +79,7 @@ draw_hand(DECK, HAND) <- sample(DECK, 5, HAND)
 
 `set_seed(Seed)` — set the PRNG seed for reproducibility. Always succeeds (given a ground arg).
 
-```clausal
+```seam
 deterministic_test(X) <- (set_seed(42), float_0_to_1(X))
 ```
 
@@ -89,7 +89,7 @@ deterministic_test(X) <- (set_seed(42), float_0_to_1(X))
 
 `maybe(P)` — succeeds with probability P (float in [0.0, 1.0]).
 
-```clausal
+```seam
 maybe_print(X) <- (maybe(), writeln_text(X))
 
 risky_action(X) <- (maybe(0.1), writeln_text(X))
@@ -99,7 +99,7 @@ risky_action(X) <- (maybe(0.1), writeln_text(X))
 
 ## Example
 
-```clausal
+```seam
 -import_from(py.random, [integer_between, set_seed, choice, maybe])
 
 roll_die(N) <- integer_between(1, 6, N)

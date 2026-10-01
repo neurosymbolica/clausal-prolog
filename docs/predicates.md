@@ -6,7 +6,7 @@ Predicates are the core building block of Clausal programs. A predicate defines 
 
 ## Quick Example
 
-```clausal
+```seam
 # Facts: edge/2 is true for these pairs
 edge(1, 2),
 edge(2, 3),
@@ -39,7 +39,7 @@ From a plain `.py` file, use `solve(("reach", 1, Y), module=m)` — see
 
 A fact is a clause with no body — it is unconditionally true. Facts end with a trailing comma:
 
-```clausal
+```seam
 color('red', 'warm'),
 color('blue', 'cool'),
 color('green', 'cool'),
@@ -59,7 +59,7 @@ A quoted `'red'` is an atom anywhere. A bare `red` must be declared first
 
 A rule has a **head** (the conclusion) and a **body** (the conditions). The head holds when all conditions in the body hold:
 
-```clausal
+```seam
 color('red', 'warm'),
 warm_color(C) <- color(C, 'warm')
 ```
@@ -70,7 +70,7 @@ Read this as: "C is a warm color if `color(C, 'warm')` holds."
 
 when a rule has multiple goals, they are comma-separated and wrapped in parentheses:
 
-```clausal
+```seam
 friend_of_friend(A, C) <- (
     friend(A, B),
     friend(B, C),
@@ -86,7 +86,7 @@ The conditions in the body must all hold for the head to hold. If a condition do
 
 A predicate can have multiple clauses — facts and rules mixed freely. These are logical alternatives; Clausal searches for those whose heads unify with the goal, in source order:
 
-```clausal
+```seam
 factorial(0, 1),
 factorial(N, F) <- (
     N > 0,
@@ -102,7 +102,7 @@ The first clause states that the factorial of 0 is 1. The second clause states t
 
 Guards are conditions in the rule body that state when a clause holds:
 
-```clausal
+```seam
 classify(N, 'positive') <- (N > 0)
 classify(0, 'zero'),
 classify(N, 'negative') <- (N < 0)
@@ -114,7 +114,7 @@ The condition `N > 0` ensures the first clause only holds for positive numbers. 
 
 when multiple clause heads unify with the goal, Clausal explores them in source order:
 
-```clausal
+```seam
 maximum(X, Y, X) <- (X >= Y)
 maximum(X, Y, Y) <- (X < Y)
 
@@ -130,7 +130,7 @@ For `maximum(3, 5, R)`: the first clause's condition `3 >= 5` does not hold, so 
 
 Start with a simple family tree:
 
-```clausal
+```seam
 parent('alice', 'bob'),
 parent('bob', 'carol'),
 parent('carol', 'dave'),
@@ -140,7 +140,7 @@ parent('carol', 'dave'),
 
 **Ancestor relation** — generalize parent to any depth:
 
-```clausal
+```seam
 ancestor(X, Y) <- parent(X, Y)
 ancestor(X, Y) <- (
     parent(X, Z),
@@ -152,7 +152,7 @@ Now `ancestor('alice', 'dave')` holds — the relation connects them through the
 
 **Add metadata** — track the generation distance:
 
-```clausal
+```seam
 ancestor(X, Y, 1) <- parent(X, Y)
 ancestor(X, Y, N) <- (
     parent(X, Z),
@@ -171,7 +171,7 @@ This pattern — base case as a fact, recursive case as a rule — is the fundam
 
 Recursive predicates define relations over inductively structured data (like lists or natural numbers). The pattern is: a base clause and a recursive clause:
 
-```clausal
+```seam
 length([], 0),
 length([_, *REST], N) <- (
     length(REST, N1),
@@ -190,7 +190,7 @@ For [list](lists.md) relations, the base clause typically holds for the empty li
 
 The `-private` directive marks predicates as internal to the module — not part of the surface other modules are meant to build on:
 
-```clausal
+```seam
 -private([helper(X, Y)])
 
 # Documented surface: other modules are meant to call this
@@ -214,7 +214,7 @@ Use `-private` when a predicate is an implementation detail that other modules s
 
 Predicate fields are inferred from clause heads — no separate declaration needed:
 
-```clausal
+```seam
 # point/2 has fields ('arg_0', 'arg_1'): no head variable names them
 point(0, 0),
 point(1, 1),
@@ -244,7 +244,7 @@ entry, a `-module(m, [f(A)])` template entry -- has exactly the arities its
 declarations name, each with its own field names. One list may declare
 several:
 
-```clausal
+```seam
 -module(lib, [q(X), q(X, Y)])
 q(1),
 q(1, 2),
@@ -295,7 +295,7 @@ and the message lists what is reachable — see [Importing](import.md).
 
 Clausal files use [Python syntax](syntax.md) with logic programming semantics:
 
-```clausal
+```seam
 # Comments start with #
 
 # Facts end with a comma

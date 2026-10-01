@@ -8,14 +8,14 @@ The implementation lives in `clausal/modules/py/csv.py`.
 
 ## Import
 
-```clausal
+```seam
 -import_from(py.csv, [parse, parse_row, parse_records, generate,
                       generate_records, read_file, read_records, write_file])
 ```
 
 Or via [module import](import.md):
 
-```clausal
+```seam
 -import_module(py.csv)
 # then use py.csv.read_file("data.csv", ROWS_), etc.
 ```
@@ -36,7 +36,7 @@ Or via [module import](import.md):
 
 `parse_row(String, Row)` — parse a single CSV line into a list of strings. Handles quoting.
 
-```clausal
+```seam
 parse_line(LINE, FIELDS) <- parse_row(LINE, FIELDS)
 ```
 
@@ -48,7 +48,7 @@ parse_line(LINE, FIELDS) <- parse_row(LINE, FIELDS)
 
 `parse_records(String, Headers, Records)` — parse CSV with the first row as headers. Each record is a `DictTerm` keyed by the header **atoms**, and `Headers` is the list of those same atoms, so `RECORD.name` and `get(RECORD, name, V)` both read a column. Values stay strings.
 
-```clausal
+```seam
 -import_from(py.csv, [parse_records])
 -import_from(py.json, [get])
 
@@ -78,7 +78,7 @@ With the text `"name,age\nann,3\nbob,4\n"` this yields `NAME = "ann"`, then
 
 `read_records(Path, Records)` — read a CSV file with headers, returning a list of DictTerms keyed by the header atoms.
 
-```clausal
+```seam
 load_data(RECORDS) <- read_records("data.csv", RECORDS)
 ```
 
@@ -90,7 +90,7 @@ load_data(RECORDS) <- read_records("data.csv", RECORDS)
 
 ## Example
 
-```clausal
+```seam
 -import_from(py.csv, [read_records, parse_row, generate])
 
 load_data(RECORDS) <- read_records("data.csv", RECORDS)

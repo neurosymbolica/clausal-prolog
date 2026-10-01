@@ -60,7 +60,7 @@ out of the box, but some Prolog conventions must change.
 
 ### Tabling (SLG resolution)
 
-```clausal
+```seam
 -table(fib/2)
 
 fib(0, 0),
@@ -80,7 +80,7 @@ Clausal's equivalent of `:- table`.
 
 ### CLP(ℤ)
 
-```clausal
+```seam
 -private([safe_queens(QS), no_attack(Q, QS, D)])
 
 n_queens(N, QUEENS) <- (
@@ -117,7 +117,7 @@ in scope without an import. See [Constraints](constraints.md).
 
 ### DCGs
 
-```clausal
+```seam
 greeting >> (['hello'], name)
 name >> ['world']
 name >> ['clausal']
@@ -136,7 +136,7 @@ available as builtins.
 
 ### [Module system](import.md)
 
-```clausal
+```seam
 -import_from(py.csv, [parse_row])
 -import_module(py.json)
 
@@ -239,7 +239,7 @@ memorizing a shorthand lexicon.
 
 You can call any Python expression from within a clause using [`++()`](python_integration.md):
 
-```clausal
+```seam
 word_count(TEXT, N) <- (N is ++len(TEXT.split()))
 ```
 

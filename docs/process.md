@@ -8,13 +8,13 @@ The implementation lives in `clausal/modules/py/process.py`.
 
 ## Import
 
-```clausal
+```seam
 -import_from(py.process, [shell, shell_output, process_create, sleep])
 ```
 
 Or via [module import](import.md):
 
-```clausal
+```seam
 -import_module(py.process)
 # then use py.process.shell("ls"), py.process.sleep(1.0), etc.
 ```
@@ -27,7 +27,7 @@ Or via [module import](import.md):
 
 `shell(Command)` — run a shell command. Succeeds if the exit code is 0, fails otherwise.
 
-```clausal
+```seam
 run_tests <- shell("python -m pytest -x")
 ```
 
@@ -35,7 +35,7 @@ run_tests <- shell("python -m pytest -x")
 
 `shell(Command, ExitCode)` — run a shell command and unify ExitCode with the integer exit code. Always succeeds (even for non-zero exit codes).
 
-```clausal
+```seam
 check_status(CMD, CODE) <- shell(CMD, CODE)
 ```
 
@@ -43,7 +43,7 @@ check_status(CMD, CODE) <- shell(CMD, CODE)
 
 `shell_output(Command, Output)` — run a shell command and capture stdout as a string (trailing newline included). Fails on non-zero exit code.
 
-```clausal
+```seam
 git_status(STATUS) <- shell_output("git status --porcelain", STATUS)
 ```
 
@@ -51,7 +51,7 @@ git_status(STATUS) <- shell_output("git status --porcelain", STATUS)
 
 `shell_output(Command, Output, Error)` — run a shell command and capture both stdout and stderr. Fails on non-zero exit code.
 
-```clausal
+```seam
 compile_and_check(CMD, OUT, ERR) <- shell_output(CMD, OUT, ERR)
 ```
 
@@ -59,7 +59,7 @@ compile_and_check(CMD, OUT, ERR) <- shell_output(CMD, OUT, ERR)
 
 `process_create(Program, Args, Result)` — run a program with an argument list (no shell). Result is a [`DictTerm`](dicts_sets.md) keyed by the atoms `exit_code`, `stdout`, `stderr` — read it with `RESULT.stdout` or `get(RESULT, stdout, OUT)` (declare the bare key names, e.g. `-private([stdout, exit_code])`, or single-quote them). The captured output is a string.
 
-```clausal
+```seam
 -private([stdout, exit_code])
 
 run_python(CODE, RESULT) <- process_create("python3", ["-c", CODE], RESULT)
@@ -88,7 +88,7 @@ also found -- an option key is matched by its text whichever way it was
 quoted -- but under the default `-double_quotes(chars)` it is a string, so
 prefer the atom spellings:
 
-```clausal
+```seam
 -private([cwd, input])
 
 run_in_dir(DIR, RESULT) <- process_create(
@@ -105,7 +105,7 @@ run_with_input(INPUT, RESULT) <- process_create(
 
 `sleep(Seconds)` — pause execution for the given number of seconds (integer or float).
 
-```clausal
+```seam
 wait_and_retry(GOAL) <- (sleep(1.0), call(GOAL))
 ```
 
@@ -113,7 +113,7 @@ wait_and_retry(GOAL) <- (sleep(1.0), call(GOAL))
 
 ## Example
 
-```clausal
+```seam
 -import_from(py.process, [shell, shell_output, process_create, sleep])
 -import_from(py.json, [parse, get])
 

@@ -95,7 +95,7 @@ Previously, each `$define_predicate` call immediately compiled the predicate wit
 
 With deferred compilation, `$define_predicate` only collects predicate nodes. After `exec()` completes, `compiler_v2.compile_module` asserts and compiles each predicate exactly once with the full clause set:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:caching_phases"
 ```
 

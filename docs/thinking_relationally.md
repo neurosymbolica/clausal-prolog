@@ -22,7 +22,7 @@ relation hold?" — is what gives logic programming its extraordinary power.
 
 A relation is a set of tuples for which a statement is true.
 
-```clausal
+```seam
 parent('alice', 'bob'),
 parent('alice', 'carol'),
 parent('bob', 'dave'),
@@ -34,7 +34,7 @@ true that alice is a parent of bob."
 
 A predicate with a body extends the relation with conditions:
 
-```clausal
+```seam
 grandparent(X, Z) <- (
     parent(X, Y),
     parent(Y, Z)
@@ -58,7 +58,7 @@ arguments, it produces a result. A relation has no such restriction.
 
 Consider `append/3`, which relates three [lists](lists.md):
 
-```clausal
+```seam
 test("concatenate") <- append([1, 2], [3, 4], [1, 2, 3, 4])
 
 test("split") <- (
@@ -99,7 +99,7 @@ for its arguments?"**
 
 Consider `list_sum/2`:
 
-```clausal
+```seam
 list_sum([], 0),
 list_sum([HEAD, *TAIL], TOTAL) <- (
     list_sum(TAIL, SUBTOTAL),
@@ -170,7 +170,7 @@ Every clause can be read as a logical statement. This is called the
 A fact is a clause with no body. It states something that is unconditionally
 true:
 
-```clausal
+```seam
 edge('a', 'b'),
 ```
 
@@ -181,7 +181,7 @@ Read: "It is true that the edge relation holds between 'a' and 'b'."
 A rule has a head and a body. The head holds when all conditions in the body
 hold:
 
-```clausal
+```seam
 reachable(X, Y) <- edge(X, Y)
 reachable(X, Y) <- (
     edge(X, Z),
@@ -248,7 +248,7 @@ Tests for relational predicates are simply queries that should hold or not
 hold. No mock objects, no test scaffolding, no elaborate setup. A [test](testing.md) is just a
 fact about the relation:
 
-```clausal
+```seam
 list_sum([], 0),
 list_sum([HEAD, *TAIL], TOTAL) <- (
     list_sum(TAIL, SUBTOTAL),

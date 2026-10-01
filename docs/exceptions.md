@@ -12,7 +12,7 @@ The implementation lives in `clausal/logic/exceptions.py`.
 
 Raises an exception with a structured error term:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/exceptions_sigs.txt:throw_1"
 ```
 
@@ -22,7 +22,7 @@ Any term can be thrown — strings, atoms, or structured error terms.
 
 Catches any exception and binds the error term to a variable or pattern:
 
-```clausal
+```seam
 -private([boom(N)])
 
 test("catch_error/2 binds the ball") <- (
@@ -40,7 +40,7 @@ test("catch_error/2 binds the ball") <- (
 
 Like `catch_error/2` but with an explicit recovery goal:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/exceptions_sigs.txt:catch_recover_3"
 ```
 
@@ -54,7 +54,7 @@ Like `catch_error/2` but with an explicit recovery goal:
 
 The standard form with selective matching and re-raise on mismatch:
 
-```clausal
+```seam
 safe_div(X, Y, R) <- catch(
     eval_(X / Y, R),
     error(evaluation_error('zero_divisor'), _),
@@ -79,7 +79,7 @@ divisor inside a constraint makes it **fail**, so there is nothing to catch
 term whose functor is the exception class name — so the catcher can match
 them the same way as logic throw terms:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/exceptions_sigs.txt:catch_3"
 ```
 
@@ -95,7 +95,7 @@ The `ClassName(Message)` shape above matches by *spelling*. A catcher written
 as a [`++()` escape](python_integration.md) instead matches the **original
 Python exception object**:
 
-```clausal
+```seam
 risky(X) <- (X is ++int("nope"))
 
 guarded_class(R) <- catch(risky(_A), ++ValueError, R is "caught")
@@ -128,7 +128,7 @@ Those are `BaseException`s and pass straight through any handler.
 
 ### halt/0, halt/1
 
-```clausal
+```seam
 done <- halt()
 done_with_code <- halt(1)
 ```
@@ -145,7 +145,7 @@ Clausal terms during catch. Python exceptions become the term
 structural shape as any predicate term — so there is
 no distinction between catching a logic throw and catching a Python exception:
 
-```clausal
+```seam
 -private([my_error(N)])
 
 risky_int(X) <- (X is ++int("nope"))
@@ -207,7 +207,7 @@ exactly the Scryer term and carries no prose of its own; when it is thrown
 again the new exception recovers the prose on a best-effort basis (it is kept
 for the most recent error terms only).
 
-```clausal
+```seam
 test("the formal term and the culprit indicator") <- (
     catch(atom_length(1, _), error(type_error(T, V), _), true),
     T is 'atom',
@@ -233,7 +233,7 @@ An error term is a plain **cell**: a tuple whose first element is the functor.
 builds one. In a `.clausal` (or `.seam`) file, a goal in goal position raises
 the uncaught error straight into the Python around it:
 
-```clausal
+```seam
 # errs.clausal
 from clausal import LogicException, cell_args, cell_functor
 
@@ -266,7 +266,7 @@ name nothing declares fails (ISO 8.9.3). The prose names the fix:
 Uncaught logic exception: error(permission_error(modify,static_procedure,fixed/1),assertz/1): fixed/1 is a static procedure — declare it -dynamic(fixed/1) to modify it at runtime
 ```
 
-```clausal
+```seam
 -dynamic(counter/1)
 
 counter(0),
@@ -308,7 +308,7 @@ malformed. Declare the error functor in `-private([...])` so it constructs a ter
 the [strict-atoms default](strict-atoms-migration.md) instead of tripping the
 undeclared-atom guard:
 
-```clausal
+```seam
 -private([is_ymd_triple(REF), wf_bad_shape(MSG, CULPRIT)])
 
 is_ymd_triple([Y, M, D]) <- (integer(Y), integer(M), integer(D))
@@ -337,7 +337,7 @@ To use the ISO `error(...)` taxonomy above instead of your own functor, import t
 constructor from `clausal.logic.exceptions` — the helper builds the nested `error(...)`
 term for you, so no functor declaration is needed:
 
-```clausal
+```seam
 from clausal.logic.exceptions import type_error
 
 -private([is_ymd_triple(REF)])
@@ -389,27 +389,27 @@ An uncaught `throw/1` surfaces as `LogicException` in Python code; `str(e)` is
 ??? example "Examples"
 
     **Catch a type error:**
-    ```clausal
+    ```seam
     --8<-- "tests/fixtures/docs/exceptions_sigs.txt:logicexception"
     ```
 
     **Catch a Python exception (no recovery needed):**
-    ```clausal
+    ```seam
     --8<-- "tests/fixtures/docs/exceptions_sigs.txt:logicexception_ex2"
     ```
 
     **catch_recover with error access:**
-    ```clausal
+    ```seam
     --8<-- "tests/fixtures/docs/exceptions_sigs.txt:logicexception_ex3"
     ```
 
     **Re-throw after logging:**
-    ```clausal
+    ```seam
     --8<-- "tests/fixtures/docs/exceptions_sigs.txt:logicexception_ex4"
     ```
 
     **Catch-all:**
-    ```clausal
+    ```seam
     --8<-- "tests/fixtures/docs/exceptions_sigs.txt:logicexception_ex5"
     ```
 

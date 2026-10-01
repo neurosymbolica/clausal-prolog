@@ -21,7 +21,7 @@ Any predicate that only unifies, backtracks, and calls other pure
 predicates is safe for concurrent use. The C extension handles all the
 locking internally.
 
-```clausal
+```seam
 # These are all safe for concurrent queries:
 
 list_concat([], YS, YS),
@@ -54,7 +54,7 @@ Tabled predicates memoize their answers. A completed table is kept on
 the module and reused: a second query for the same call does not run the
 clauses again.
 
-```clausal
+```seam
 -table(path/2)
 
 edge('a', 'b'),
@@ -82,7 +82,7 @@ free-threading, the per-variable critical section in `unify()` protects
 attribute access. As long as each thread works with its own constraint
 variables (the normal case), constraint solving is safe.
 
-```clausal
+```seam
 -private([safe_queens(QS), no_attack(Q, QS, D)])
 
 n_queens(N, QUEENS) <- (
@@ -124,7 +124,7 @@ predicate declared `-dynamic` accepts `assertz`/`retract`. Concurrent
 (Phase 2 will add copy-on-write locking). However, asserting facts
 before launching threads and then only reading is fine. In `counters.clausal`:
 
-```clausal
+```seam
 -module(counters, [counter(N)])
 -dynamic(counter/1)
 
@@ -157,7 +157,7 @@ Predicates that perform I/O or call Python functions with side effects
 are safe in the sense that they won't crash, but the *ordering* of side
 effects across threads is nondeterministic:
 
-```clausal
+```seam
 # Output from different threads will interleave unpredictably
 log(MSG) <- ++print(MSG)
 
@@ -175,7 +175,7 @@ Use Python-level synchronization (locks, queues) if you need ordered output.
 Predicates that only unify and backtrack are trivially safe. Push
 side effects to the Python caller:
 
-```clausal
+```seam
 # Good: a pure relation; the caller does the I/O
 order_total(ITEMS, TOTAL) <- (
     findall(P, in_([_, P], ITEMS), PRICES),
@@ -244,7 +244,7 @@ in Python test files (`tests/test_free_threading.py`).
 
 ### `.clausal` tests for correctness
 
-```clausal
+```seam
 list_concat([], YS, YS),
 list_concat([H, *XS], YS, [H, *ZS]) <- list_concat(XS, YS, ZS)
 

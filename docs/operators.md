@@ -86,7 +86,7 @@ operand, an evaluable functor's argument); as data (`f(e)`, `T is e`) they
 are ordinary atoms that a module declares like any other. Evaluating a bound
 atom reads it as ISO does: `T is e, 'is'(X, T)` gives `X = 2.718...`.
 
-```clausal
+```seam
 half_toward_zero(N, H) <- 'is'(H, '//'(N, 2))
 
 test("toward zero") <- half_toward_zero(-7, -3)

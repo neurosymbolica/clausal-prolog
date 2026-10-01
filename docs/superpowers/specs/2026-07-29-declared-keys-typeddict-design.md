@@ -52,7 +52,7 @@ to the whole class.
 Separate **declaration** from **representation**, exactly as Python's `TypedDict` does — a declared
 key set, checked at compile time, that at runtime is a plain dict with string keys.
 
-```clausal
+```seam
 # profile.clausal — the type module
 -keys([ query_date, filing_status, foreign_person, acquisition_value_cents ])
 ```

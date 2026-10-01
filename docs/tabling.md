@@ -10,7 +10,7 @@ The implementation lives in `clausal.logic.tabling`.
 
 Plain SLD resolution (depth-first, left-to-right) diverges on left-recursive definitions. Consider transitive closure over an acyclic graph:
 
-```clausal
+```seam
 -table(path/2)
 
 edge(1, 2),
@@ -37,7 +37,7 @@ Other classic programs that require tabling:
 
 Mark a predicate as tabled with the [`-table` directive](directives.md):
 
-```clausal
+```seam
 -table(path/2)
 
 path(X, Y) <- edge(X, Y)
@@ -49,7 +49,7 @@ path(X, Y) <- (
 
 The directive must appear before any clauses for that predicate. Multiple predicates can be tabled in the same module:
 
-```clausal
+```seam
 -table(reach_a/2)
 -table(reach_b/2)
 
@@ -266,7 +266,7 @@ After the SLG leader finishes driving all consumers and no new answers appear, `
 
 ### Example: symmetric game
 
-```clausal
+```seam
 -table(win/1)
 
 move(1, 2),
@@ -279,7 +279,7 @@ win(X) <- (move(X, Y), not win(Y))
 
 ### Example: asymmetric game
 
-```clausal
+```seam
 -table(win/1)
 
 move('a', 'b'),

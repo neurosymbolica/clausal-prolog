@@ -10,7 +10,7 @@ Standard negation-as-failure (`not Goal`) works fine when negation is not recurs
 
 WFS handles this by delaying negation until enough information is available:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:wfs_example"
 ```
 
@@ -144,7 +144,7 @@ undefined answers is itself undefined, not true.
 
 A position wins if there is a move to a position that does NOT win:
 
-```clausal
+```seam
 -table(wins/1)
 
 move('a', 'b'),
@@ -160,7 +160,7 @@ With the cyclic graph a→b→c→a, every position depends on its successor not
 
 Add a non-cyclic escape and the picture changes:
 
-```clausal
+```seam
 -table(wins/1)
 
 move('a', 'b'),
@@ -184,7 +184,7 @@ Now:
 
 WFS handles mutual recursion where two predicates depend on each other's negation:
 
-```clausal
+```seam
 -table(even_node/1)
 -table(odd_node/1)
 
@@ -222,7 +222,7 @@ Undefined does NOT mean "error" — it is a legitimate third truth value. In gam
 
 WFS only applies to **tabled** predicates. Mark them with the [`-table` directive](directives.md):
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:wfs_directive"
 ```
 

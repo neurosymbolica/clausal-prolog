@@ -14,7 +14,7 @@ source text. It is safe to reflect over untrusted rulebases.
 
 ## Quick Example
 
-```clausal
+```seam
 -import_from(reflection, [
     reified_clause, clause_head, clause_body, goal_functor, Clause, Goal,
 ])
@@ -29,7 +29,7 @@ head_name(SRC, NAME) <- (
 Query it from a `.seam` file with the goal-position seam, passing the
 source text in with `++`:
 
-```clausal
+```seam
 -import_from(reflection, [reified_clause, clause_head, goal_functor])
 
 head_name(SRC, NAME) <- (
@@ -88,7 +88,7 @@ inside `or` becomes a nested list.
 
 ## Import
 
-```clausal
+```seam
 -import_from(reflection, [
     reified_item, reified_clause, reified_file_item,
     clause_head, clause_body, goal_functor, reified_subterm,
@@ -150,7 +150,7 @@ starting with `TERM` itself; recurses through vocabulary terms, raw
 operator nodes, lists, tuples, and dict values. The workhorse for "find a
 `++` escape anywhere" checks:
 
-```clausal
+```seam
 -import_from(reflection, [reified_item, reified_subterm, Escape])
 
 escape_code(SRC, CODE) <- (
@@ -166,7 +166,7 @@ escape_code(SRC, CODE) <- (
 matcher can *quote* the clause it is objecting to — including one it rebuilt
 with `replace_subterm/4` that never came from source text:
 
-```clausal
+```seam
 swapped_source(SRC, TEXT) <- (
     reified_clause(SRC, CLAUSE),
     reified_subterm(CLAUSE, SUB),
@@ -189,13 +189,13 @@ Inside a reflection builtin's argument, a ``(HEAD <- BODY)`` expression is
 sugar for the equivalent vocabulary pattern, so matchers are written in the
 same syntax as the clauses they match:
 
-```clausal
+```seam
 shape_xy(SRC) <- reified_clause(SRC, my_pred(A, B) <- (goalx(A), goaly(B)))
 ```
 
 is rewritten at compile time (goal expansion) into
 
-```clausal
+```seam
 -import_from(reflection, [reified_clause, Clause, Goal])
 
 shape_xy(SRC) <- reified_clause(SRC,
@@ -249,7 +249,7 @@ Boundaries:
 The motivating example — "a called predicate that is neither defined nor
 imported":
 
-```clausal
+```seam
 called_predicate(SRC, NAME, ARITY) <- (
     reified_clause(SRC, CLAUSE),
     clause_body(CLAUSE, GOALS),
@@ -277,7 +277,7 @@ A clause body is a plain list of goals, so [DCGs](dcg.md) match goal
 *sequences* directly — the right tool for "a body that starts with an
 `edge/2` call":
 
-```clausal
+```seam
 edge_goal >> ([GOAL], {goal_functor(GOAL, 'edge', _)})
 any_goal >> ([_])
 any_goals >> ([])

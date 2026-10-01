@@ -19,7 +19,7 @@ required.
 
 Create a file called `hello.clausal`:
 
-```clausal
+```seam
 greeting('hello'),
 greeting('hi'),
 greeting('hey there'),
@@ -91,7 +91,7 @@ The rest of this tutorial uses the `--` form; see
 
 Let's model a small family tree. Create `family.clausal`:
 
-```clausal
+```seam
 parent('alice', 'bob'),
 parent('alice', 'carol'),
 parent('bob', 'dave'),
@@ -141,7 +141,7 @@ equivalents are `solve(goal, module=…)` and `once(goal, module=…)`.
 Variables in `.clausal` files are written in **ALLCAPS**: `X`, `PARENT`, `CHILD`,
 `RESULT`, `HEAD`, `TAIL`. This makes them easy to spot in a rule.
 
-```clausal
+```seam
 sibling(A, B) <- (
     parent(PARENT, A),
     parent(PARENT, B)
@@ -156,7 +156,7 @@ becomes `'bob'` for the rest of that branch.
 The **anonymous variable** `_` unifies with anything and is never reported in
 results:
 
-```clausal
+```seam
 has_child(PERSON) <- parent(PERSON, _)
 ```
 
@@ -181,7 +181,7 @@ Lists are written with square brackets: `[]` (empty), `[1, 2, 3]`, `['a', 'b']`.
 (`'a'` is an atom, a symbolic constant; `"a"` is a string, text.)
 The head/tail pattern uses a star:
 
-```clausal
+```seam
 first(HEAD, [HEAD, *_]),
 
 rest(TAIL, [_, *TAIL]),
@@ -195,7 +195,7 @@ element and `TAIL` to the remaining elements.
 These are built-in predicates. `in_(X, LIST)` describes the membership relation
 — it holds for each element of `LIST` in turn:
 
-```clausal
+```seam
 contains_three(LIST) <- in_(3, LIST)
 ```
 
@@ -203,7 +203,7 @@ contains_three(LIST) <- in_(3, LIST)
 with `SUFFIX` gives `WHOLE`. You can use it forwards (split a list) or backwards
 (build one):
 
-```clausal
+```seam
 last(ELEMENT, LIST) <- append(_, [ELEMENT], LIST)
 ```
 
@@ -212,7 +212,7 @@ last(ELEMENT, LIST) <- append(_, [ELEMENT], LIST)
 Clause heads can describe the structure of list arguments directly, which is
 often cleaner than stating the structure as a separate condition in the body:
 
-```clausal
+```seam
 sum_list([], 0),
 sum_list([HEAD, *TAIL], TOTAL) <- (
     sum_list(TAIL, SUBTOTAL),
@@ -224,7 +224,7 @@ The first clause states that the sum of the empty list is 0. The second states
 that the sum of [HEAD, *TAIL] is TOTAL when the sum of TAIL is SUBTOTAL and
 TOTAL is SUBTOTAL + HEAD.
 
-```clausal
+```seam
 double_list([], []),
 double_list([HEAD, *TAIL], [DOUBLED, *REST]) <- (
     DOUBLED == HEAD * 2,
@@ -242,7 +242,7 @@ goal.
 
 Use `==` to post an arithmetic constraint between a variable and an expression:
 
-```clausal
+```seam
 square(N, SQ) <- (SQ == N * N)
 
 factorial(0, 1),
@@ -268,7 +268,7 @@ a Python escape, `X is ++(1 + 2)`.
 
 The standard comparison operators work directly as goals:
 
-```clausal
+```seam
 positive(N) <- (N > 0)
 in_range(LOW, HIGH, N) <- (
     N >= LOW,
@@ -281,7 +281,7 @@ Comparison operators `<`, `>`, `>=`, `<=` work directly as goals. Use `==` and
 
 ### A worked example: fizzbuzz
 
-```clausal
+```seam
 fizzbuzz(N, 'fizzbuzz') <- (N % 15 == 0)
 fizzbuzz(N, 'fizz') <- (N % 3 == 0, N % 5 != 0)
 fizzbuzz(N, 'buzz') <- (N % 5 == 0, N % 3 != 0)
@@ -310,7 +310,7 @@ def labels(upto):
 
 `not goal` is **negation as failure**: it succeeds if `goal` has no solutions.
 
-```clausal
+```seam
 safe_to_delete(FILE) <- (not important(FILE))
 ```
 
@@ -320,7 +320,7 @@ Negation as failure is appropriate when you want to express "there is no evidenc
 that...". It works correctly when all the relevant facts are already known — the
 classic **closed-world assumption**.
 
-```clausal
+```seam
 bachelor(PERSON) <- (
     male(PERSON),
     not married(PERSON)
@@ -341,7 +341,7 @@ will almost always fail, because Clausal can instantiate `LIST` to something tha
 contains 5. Instead, make sure any variables in the negated goal are already bound
 before the check:
 
-```clausal
+```seam
 no_fives(LIST) <- (5 not in LIST)
 ```
 
@@ -364,7 +364,7 @@ For constraint-based "not equal" on partially-instantiated terms, use `dif/2`
 
 Clausal has a lightweight convention for inline tests. Define `test/1` predicates:
 
-```clausal
+```seam
 sum_list([], 0),
 sum_list([HEAD, *TAIL], TOTAL) <- (
     sum_list(TAIL, SUBTOTAL),
@@ -420,7 +420,7 @@ and parametrize.
 Let's put it all together with a classic logic programming problem — finding reachable
 nodes in a directed graph.
 
-```clausal
+```seam
 edge('a', 'b'),
 edge('b', 'c'),
 edge('c', 'd'),

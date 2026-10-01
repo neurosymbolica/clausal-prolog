@@ -729,6 +729,29 @@ since 0.4.0 finish three moves:
 
 ### Changed
 
+- **Preparation for the extension flip** (`.seam` becomes the only seam
+  suffix and `.clausal` the Clausal Prolog surface). Nothing changes for a
+  `.clausal` or `.seam` file today; the flip itself is now the edit of the
+  two tuples in `clausal/_suffixes.py` plus the rename of seam files.
+  - The bytecode cache key is keyed on the file's surface: a Clausal Prolog
+    file gets its own key, so a seam `.pyc` is never served for it. Existing
+    `.clausal`, `.seam` and `.pl` caches keep their keys.
+  - A Clausal Prolog file always loads through the native front end,
+    whatever `CLAUSAL_PL_FRONTEND` says. `PrologFinder` and the import
+    finder take the Prolog suffixes from the Clausal Prolog tuple then
+    `.pl`; the seam group is still asked first. So in one directory
+    `name.seam` beats `name.pl`, and after the flip `name.clausal` beats
+    `name.pl`, for every importer.
+  - `clausal-fmt` and `clausal-rewrite` refuse a file whose extension says
+    it is Prolog (`.pl`, or Clausal Prolog), naming the surface, instead of
+    feeding it to the seam parser.
+  - Diagnostics and CLI help derive their suffix lists from the tuples; a
+    message telling you where to put seam code names `.seam` (for example
+    the goal-seam `NameError`: "move the code into a .seam file").
+  - Seam code blocks in `docs/` are fenced ```` ```seam ````. The doc-snippet
+    checks and the docs collector accept ```` ```clausal ```` as an alias
+    for now.
+
 - **No export privacy from Python.** Python code reaches a `.pl` module's
   unexported predicates through `getattr`, `mod.name` and
   `from mod import name`, as with any module attribute (this already worked

@@ -920,7 +920,7 @@ def _coerce_module(module) -> Module:
     if hasattr(module, '__dict__') and hasattr(module, '__name__'):
         return Module(module.__name__, module_dict=vars(module))
     raise TypeError(
-        f"Expected a clausal Module or an imported .clausal module, got {type(module).__name__}"
+        f"Expected a clausal Module or an imported Clausal source module, got {type(module).__name__}"
     )
 
 
@@ -1003,7 +1003,7 @@ def _no_such_module(designator, calling_module, context: str, cause=None):
         f"{prefix}{designator!r} does not name a module{asker} — a module "
         f"designator is a dotted Python module name already present in "
         f"sys.modules (resolution is lookup-only and never imports), a "
-        f"clausal Module, or an imported .clausal module object",
+        f"clausal Module, or an imported Clausal source module object",
     ))
     if cause is not None:
         raise exc from cause

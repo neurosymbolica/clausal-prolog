@@ -44,6 +44,7 @@ from clausal.logic.atoms import NIL_SPELLING, mangle
 # cell primitives that registry feeds.
 from clausal.logic.cells import FUNCTOR_SIGNATURES_KEY, IMPLICIT_FUNCTORS_FLAG, CHARS_TAG
 from clausal.logic.generated_names import dollar_name, has_twin
+from clausal._suffixes import SEAM_SUFFIX, seam_suffixes_text
 
 load = Load()
 store = Store()
@@ -3280,7 +3281,8 @@ class TermTransformer(NodeTransformer):
 
     def visit_Lambda(transformer, lambda_expr):
         raise SyntaxError(
-            "Python 'lambda' syntax is not supported in .clausal files; "
+            "Python 'lambda' syntax is not supported in seam "
+            f"({seam_suffixes_text()}) files; "
             "use arrow syntax instead: X_ <- (body) or (X_, Y_) <- (body)"
         )
 
@@ -9782,7 +9784,7 @@ class EmbedTransformer(NodeTransformer):
         if transformer._interactive:
             raise SyntaxError(
                 f"{spelling} is not supported interactively yet; declare "
-                f"constants in a .clausal module and import it")
+                f"constants in a {SEAM_SUFFIX} module and import it")
         if len(args) != arity:
             raise SyntaxError(
                 f"{spelling} takes {arity} arguments, a name then a value"
