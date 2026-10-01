@@ -31,6 +31,9 @@ static PyObject *Quantity_type = NULL;
 static PyObject *ConcreteSeg_type = NULL;
 static PyObject *VarSeg_type = NULL;
 static PyObject *Seg_types = NULL;       /* (SegList, SegString, SegBytes) tuple */
+static PyObject *SegList_type = NULL;
+static PyObject *partial_list_parts_fn = NULL;  /* terms._partial_list_parts */
+static PyObject *partial_list_build_fn = NULL;  /* terms._partial_list_build */
 
 /* Interned strings */
 static PyObject *DIF_KEY_STR = NULL;    /* "dif" */
@@ -248,6 +251,88 @@ py_collect_free_vars(PyObject *Py_UNUSED(module), PyObject *term)
 
 /* ── _structural_unify_oc ────────────────────────────────────────────── */
 
+static int c_structural_unify_oc(PyObject *t1, PyObject *t2,
+                                 TrailObject *trail, int depth);
+
+/*
+ * Unify d1 and d2 as lists [E1, ..., En|Tail] (terms._partial_list_parts
+ * reads each: elements + an unbound tail Var, or + None for a proper list):
+ * pair the elements, then the shorter side's tail takes the rest of the
+ * longer side, occurs-checked.  The Python twin is
+ * constraints._unify_partial_lists_oc.
+ * Returns 1 (unified), 0 (failed), -1 (error), 2 (not two lists: the
+ * caller falls through).
+ */
+static int
+unify_partial_lists_oc(PyObject *d1, PyObject *d2, TrailObject *trail,
+                       int depth)
+{
+    PyObject *p1 = PyObject_CallOneArg(partial_list_parts_fn, d1);
+    if (!p1) return -1;
+    if (p1 == Py_None) { Py_DECREF(p1); return 2; }
+    PyObject *p2 = PyObject_CallOneArg(partial_list_parts_fn, d2);
+    if (!p2) { Py_DECREF(p1); return -1; }
+    if (p2 == Py_None) { Py_DECREF(p1); Py_DECREF(p2); return 2; }
+
+    int result = -1;
+    PyObject *rest = NULL, *build = NULL;
+    PyObject *e1 = PySequence_Fast(PyTuple_GET_ITEM(p1, 0), "elements");
+    PyObject *e2 = e1 ? PySequence_Fast(PyTuple_GET_ITEM(p2, 0), "elements")
+                      : NULL;
+    if (!e2) goto done;
+    PyObject *t1 = PyTuple_GET_ITEM(p1, 1);   /* borrowed: Var or None */
+    PyObject *t2 = PyTuple_GET_ITEM(p2, 1);
+    Py_ssize_t n1 = PySequence_Fast_GET_SIZE(e1);
+    Py_ssize_t n2 = PySequence_Fast_GET_SIZE(e2);
+    Py_ssize_t n = n1 < n2 ? n1 : n2;
+    for (Py_ssize_t i = 0; i < n; i++) {
+        int r = c_structural_unify_oc(PySequence_Fast_GET_ITEM(e1, i),
+                                      PySequence_Fast_GET_ITEM(e2, i),
+                                      trail, depth + 1);
+        if (r <= 0) { result = r; goto done; }
+    }
+    if (n1 != n2) {
+        /* The shorter side's tail takes [rest of the longer|its tail]. */
+        PyObject *long_e = n1 > n ? e1 : e2;
+        PyObject *long_t = n1 > n ? t1 : t2;
+        PyObject *short_t = n1 > n ? t2 : t1;
+        if (short_t == Py_None) { result = 0; goto done; }
+        rest = PyList_New(0);
+        if (!rest) goto done;
+        Py_ssize_t nl = PySequence_Fast_GET_SIZE(long_e);
+        for (Py_ssize_t i = n; i < nl; i++) {
+            if (PyList_Append(rest, PySequence_Fast_GET_ITEM(long_e, i)) < 0)
+                goto done;
+        }
+        build = PyObject_CallFunctionObjArgs(partial_list_build_fn, rest,
+                                             long_t, NULL);
+        if (!build) goto done;
+        result = c_structural_unify_oc(short_t, build, trail, depth + 1);
+        goto done;
+    }
+    if (t1 == Py_None && t2 == Py_None) { result = 1; goto done; }
+    {
+        /* Equal lengths: the tails unify ([] for a proper side). */
+        PyObject *nil = NULL;
+        if (t1 == Py_None || t2 == Py_None) {
+            nil = PyList_New(0);
+            if (!nil) goto done;
+        }
+        result = c_structural_unify_oc(t1 == Py_None ? nil : t1,
+                                       t2 == Py_None ? nil : t2,
+                                       trail, depth + 1);
+        Py_XDECREF(nil);
+    }
+done:
+    Py_XDECREF(build);
+    Py_XDECREF(rest);
+    Py_XDECREF(e1);
+    Py_XDECREF(e2);
+    Py_DECREF(p1);
+    Py_DECREF(p2);
+    return result;
+}
+
 /*
  * Structural unify with occurs check.
  * Returns 1 (unified), 0 (failed), -1 (error).
@@ -303,6 +388,19 @@ c_structural_unify_oc(PyObject *t1, PyObject *t2, TrailObject *trail, int depth)
             if (r <= 0) return r;
         }
         return 1;
+    }
+
+    /* A partial list ([a|T], the seam's [a, *T]) against a list: read it
+     * and pair the elements here.  Handing it to SegList.__unify__ (through
+     * unify_oc) PROBES a hook that advances a cached split generator on
+     * every call with the same (target, trail): reify_eq's trial unify
+     * consumed the one split a partial list has, so the real unify that
+     * followed failed and '='([a, b], [a|L], T) answered only T = false. */
+    if ((Py_TYPE(d1) == (PyTypeObject *)SegList_type
+         || Py_TYPE(d2) == (PyTypeObject *)SegList_type)
+        && !Var_Check(d1) && !Var_Check(d2)) {
+        int r = unify_partial_lists_oc(d1, d2, trail, depth);
+        if (r != 2) return r;
     }
 
     /* Fall through to unify_with_occurs_check (direct C call) */
@@ -623,6 +721,13 @@ PyInit__constraints_dif(void)
     ConcreteSeg_type = PyObject_GetAttrString(terms_mod, "ConcreteSeg");
     VarSeg_type = PyObject_GetAttrString(terms_mod, "VarSeg");
     PyObject *seglist_type = PyObject_GetAttrString(terms_mod, "SegList");
+    partial_list_parts_fn = PyObject_GetAttrString(terms_mod, "_partial_list_parts");
+    partial_list_build_fn = PyObject_GetAttrString(terms_mod, "_partial_list_build");
+    if (!partial_list_parts_fn || !partial_list_build_fn) {
+        Py_DECREF(terms_mod);
+        Py_XDECREF(seglist_type);
+        return NULL;
+    }
     PyObject *segstring_type = PyObject_GetAttrString(terms_mod, "SegString");
     PyObject *segbytes_type = PyObject_GetAttrString(terms_mod, "SegBytes");
     Py_DECREF(terms_mod);
@@ -636,7 +741,7 @@ PyInit__constraints_dif(void)
     }
     /* PyTuple_Pack steals no refs; it INCREFs, so drop our own refs after. */
     Seg_types = PyTuple_Pack(3, seglist_type, segstring_type, segbytes_type);
-    Py_DECREF(seglist_type);
+    SegList_type = seglist_type;   /* keeps our reference */
     Py_DECREF(segstring_type);
     Py_DECREF(segbytes_type);
     if (!Seg_types) return NULL;

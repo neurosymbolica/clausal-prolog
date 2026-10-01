@@ -435,6 +435,56 @@ def _walked_nil(w) -> bool:
 # ordinary list comparison, not by type mismatch).
 
 
+# ── A partial list, read for the reified equality (=/3) and dif/2 ──────────
+#
+# The occurs-checked structural unifier behind ``reify_eq`` and ``dif``
+# (``_structural_unify_oc`` in clausal/logic/_constraints_dif.c, and its
+# Python twin in clausal.logic.constraints) PROBES: it unifies, looks at the
+# trail, and undoes.  It must not reach ``SegList.__unify__`` to do that:
+# that hook advances a cached split generator on every call with the same
+# ``(target, trail)`` (F015), so the probe consumed the one split a partial
+# list has and the real unification that followed answered False --
+# ``'='([a, b], [a|L], T)`` gave only ``T = false``.  A partial list has
+# exactly one way to unify, so the unifier reads it with these two helpers
+# and pairs its elements itself.
+
+
+def _partial_list_parts(t):
+    """Read *t* (dereferenced, not a Var) as the list ``[E1, ..., En|Tail]``:
+    ``(elements, tail)`` with *tail* an unbound Var, or ``(elements, None)``
+    for a proper list (a ``list``, a chars carrier -- its chars -- a
+    ``bytes`` -- its codes, as ``SegList.__unify__`` reads them -- or a
+    SegList whose holes are all filled).  ``None`` for anything else: a
+    SegList with a hole that is not its tail (``[*A, x]``), which only the
+    split-enumerating ``SegList.__unify__`` can answer, and every non-list."""
+    if isinstance(t, list):
+        return t, None
+    if is_chars(t):
+        return [char_atom(c) for c in chars_text(t)], None
+    if isinstance(t, bytes):
+        return list(t), None
+    if isinstance(t, SegList):
+        w = t._walk_raw()
+        if isinstance(w, list):
+            return w, None
+        segs = w.segments
+        if not isinstance(segs[-1], VarSeg) or not all(
+                isinstance(s, ConcreteSeg) for s in segs[:-1]):
+            return None
+        return [e for s in segs[:-1] for e in s.elements], deref(segs[-1].var)
+    return None
+
+
+def _partial_list_build(elements, tail):
+    """The list ``[E1, ..., En|Tail]`` (*tail* an unbound Var, or None for
+    ``[]``): what a shorter list's tail binds to."""
+    if tail is None:
+        return list(elements)
+    if not elements:
+        return tail
+    return SegList([ConcreteSeg(list(elements)), VarSeg(tail)])
+
+
 # ── Two OPEN SegLists (F030) ───────────────────────────────────────────────
 #
 # ISO unifies two partial lists element by element: ``[1|T1] = [H|T2]`` binds

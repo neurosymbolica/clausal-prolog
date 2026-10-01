@@ -38,8 +38,8 @@ since 0.4.0 finish three moves:
   removed. In a DCG or EDCG body the condition must be a `{Goal}` block (a
   terminal, non-terminal or accumulator push as the condition is refused).
   A unification with a partial list (`if_(X is [a, *T], ...)`, and a `.pl`
-  `if_(X = [a|T], ...)`) is refused as well until the reified equality
-  reads a partial list (`'='([a, b], [a, *T], R)` answers only `False`).
+  `if_(X = [a|T], ...)`) is reif's `=/3` and answers as Scryer does (`y`
+  and `n` for an unbound or `[a, b]` `X`).
   To migrate a semidet plain goal G, write
   `(G, Then) or (not G, Else)`, or define the reified `p_t/2`. call/1 of an
   `if_` term follows the same rule.
@@ -874,6 +874,19 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
   with -private([...]) or quote them`.
 
 ### Fixed
+
+- **library(reif)'s `=/3` (and `dif/2`) read a partial list.**
+  `'='([a, b], [a|L], T)` (the seam's `[a, *L]`) answered only `T = false`;
+  it now answers `T = true, L = [b]` and then `T = false` with
+  `dif(L, [b])`, as Scryer does, for a partial list against a proper list,
+  another partial list, a nested one or a string, and decides `false`
+  against a list it cannot match or a non-list. The occurs-checked
+  unifier behind `reify_eq` and `dif` (C, with its Python twin) probed a
+  partial list through its split-enumerating unify hook, which advanced a
+  cached generator: the probe used up the one split and the real
+  unification that followed failed. It now pairs a partial list's
+  elements itself. A list with a hole that is not its tail (`[*A, x]`)
+  still goes through the hook.
 
 - **A clpz inequality with an arithmetic side narrows its variables and
   binds a singleton.** `7*R #=< 1000000` left R in `inf..sup`: the posted

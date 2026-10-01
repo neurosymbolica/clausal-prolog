@@ -188,23 +188,36 @@ def test_a_variable_condition(native, ans):
 
 
 @pytest.mark.parametrize("suffix, src", [
-    (".seam", "-private([a, y, n])\ns(X, R) <- if_(X is [a, *T_UNUSED], R is y, R is n)\n"),
-    (".pl", ":- use_module(library(reif)).\ns(X, R) :- if_(X = [a|_], R = y, R = n).\n"),
+    (".seam", """\
+-private([a, b, y, n])
+s(X, R) <- if_(X is [a, *T_UNUSED], R is y, R is n)
+g(R) <- (X is [a, b], if_(X is [a, *T_UNUSED], R is y, R is n))
+h(R) <- (X is [b], if_(X is [a, *T_UNUSED], R is y, R is n))
+"""),
+    (".pl", """\
+:- use_module(library(reif)).
+s(X, R) :- if_(X = [a|_], R = y, R = n).
+g(R) :- X = [a, b], if_(X = [a|_], R = y, R = n).
+h(R) :- X = [b], if_(X = [a|_], R = y, R = n).
+"""),
 ], ids=["seam", "pl"])
-def test_a_partial_list_unification_is_refused_not_misanswered(
-        native, suffix, src):
-    """Scryer: ``X = [a,b], if_(X = [a|_], R = y, R = n)`` answers y and n.
-    The engine's reified equality does not read a partial list
-    ('='([a, b], [a|_], T) gives only T = False, on fbbecc3f too), so the
-    branch would be wrong: the condition is refused at load, on both front
-    ends, until it does.  (Before the 2026-10-01 ruling it ran as a soft
-    cut and answered y only.)"""
-    from clausal.logic.compiler.terms_to_goalop import (
-        NonReifiableConditionError,
-    )
+def test_a_partial_list_unification_reifies_as_scryer(native, ans, suffix, src):
+    """reif's =/3 over a partial list, on both front ends (Scryer,
+    2026-10-01): ``if_(X = [a|_], R = y, R = n)`` answers ``X = [a|_], y``
+    then ``n`` (with dif); ``X = [a, b]`` answers y AND n (the anonymous
+    tail could be anything else); ``X = [b]`` answers n.  (It was refused
+    at load while the reified equality could not read a partial list:
+    '='([a, b], [a|_], T) gave only T = false.)"""
     kw = {"frontend": None} if suffix == ".seam" else {}
-    with pytest.raises(NonReifiableConditionError, match="partial list"):
-        _load(native, "ifr_star" + suffix[1:], src, suffix=suffix, **kw)
+    mod = _load(native, "ifr_star" + suffix[1:], src, suffix=suffix, **kw)
+    rows = ans(mod, "s", 2)
+    assert [r for _x, r in rows] == ["y", "n"]
+    x_y, x_n = rows[0][0], rows[1][0]
+    assert is_var(x_n)
+    from clausal.terms import SegList
+    assert isinstance(x_y, SegList) and x_y.segments[0].elements == ["a"]
+    assert ans(mod, "g") == ["y", "n"]
+    assert ans(mod, "h") == ["n"]
 
 
 def test_call_of_an_if_term_with_no_reifiable_test_is_a_runtime_error(

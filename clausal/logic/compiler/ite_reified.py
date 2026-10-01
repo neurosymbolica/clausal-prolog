@@ -77,14 +77,6 @@ class NonReifiable:
         self.reason = reason
 
 
-#: Why a partial-list unification is refused rather than reified.
-PARTIAL_LIST_REASON = (
-    "a unification with a partial list ([..., *T]) is not reified yet: the "
-    "reified equality (=/3, reify_eq) does not read a partial list -- "
-    "'='([a, b], [a, *T], R) answers R = False -- so the branch taken would "
-    "be wrong; unify the list outside the if_ and test its elements")
-
-
 def _is_star_list_term(t) -> bool:
     from clausal.logic.compiler.terms_to_ast import _is_star_list  # noqa: PLC0415
     return _is_star_list(t)
@@ -101,11 +93,10 @@ def if_expansion(ifexpr):
     * ``(A, B)`` / ``A and B`` -> ``if_(A, if_(B, Then, Else), Else)``;
       ``A or B`` -> ``if_(A, Then, if_(B, Then, Else))`` (reif's (',')/3 and
       (;)/3, unfolded as the native .pl front end does);
-    * a closure -- a goal ``p(Args...)``, an atom ``p``, a variable ->
+    * a closure -- a goal ``p(Args...)``, an atom ``p``, a variable, or a
+      unification with a partial (star) list (reif's =/3) ->
       ``(p(Args..., T), must_be(boolean, T), if_(T is True, Then, Else))``,
       reif's own body;
-    * a unification with a partial (star) list -> :class:`NonReifiable`
-      (:data:`PARTIAL_LIST_REASON`);
     * anything else -> :class:`NonReifiable`.
 
     Whether a closure's ``p/N+1`` exists is the compiler's question (it
@@ -147,9 +138,9 @@ def _expand_if(ifexpr):
         if isinstance(test, Unify) and (_is_star_list_term(test.left)
                                         or _is_star_list_term(test.right)):
             # A star-list unification converts to a ListPatternUnify op,
-            # which the reified lowering cannot consume, and reif's =/3
-            # (reify_eq) does not read the partial list it builds either.
-            return NonReifiable(test, PARTIAL_LIST_REASON)
+            # which the reified lowering cannot consume; reif's =/3 answers
+            # the same three ways (reify_eq reads the partial list).
+            return closure(nodes.LoadName(name="="), [test.left, test.right])
         return ifexpr
     conj = None
     if isinstance(test, nodes.TupleLiteral):
