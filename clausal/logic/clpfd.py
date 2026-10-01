@@ -2541,7 +2541,7 @@ def _quotient_hull(zlo, zhi, blo, bhi):
 
 def _linearise_lifting(expr, aux: list):
     """:func:`_linearise`, with each product of two non-constant factors
-    replaced by a fresh Var Z (``(Z, left, right)`` appended to *aux*).
+    replaced by a fresh Var Z (``(key, Z, left, right)`` appended to *aux*).
     None for anything else that is not linear (``//``, ``mod``, ...)."""
     expr = deref(expr)
     if type(expr) is int:
@@ -2573,8 +2573,16 @@ def _linearise_lifting(expr, aux: list):
         if not rc[0]:
             k = rc[1]
             return {v: c * k for v, c in lc[0].items()}, lc[1] * k
+        # one Z per product of the same two variables, so ``R*T - R*T``
+        # cancels as ``R - R`` does and a repeated product is one propagator
+        a, b = deref(expr.left), deref(expr.right)
+        key = (frozenset((id(a), id(b))) if is_var(a) and is_var(b)
+               else id(expr))
+        for k, z, _a, _b in aux:
+            if k == key:
+                return {z: 1}, 0
         z = Var()
-        aux.append((z, expr.left, expr.right))
+        aux.append((key, z, expr.left, expr.right))
         return {z: 1}, 0
     if isinstance(expr, _Negate):
         inner = _linearise_lifting(expr.operand, aux)
@@ -2605,7 +2613,7 @@ def _post_linear_ineq(l, r, strict: bool, trail: Trail):
     rc = _linearise_lifting(r, aux)
     if rc is None:
         return None
-    for z, a, b in aux:
+    for _key, z, a, b in aux:
         xa = _operand_var(a, trail)
         if xa is False:
             return False

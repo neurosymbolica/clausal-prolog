@@ -8,10 +8,11 @@ left R unbound where Scryer binds R = 142857.  An inequality with an
 coefficient) and a product of two unknowns is lifted into a times
 propagator, as clpz does.
 
-Every row fails on 81dcd42b.  The expected domains are Scryer's
-(/workspace/scryer-prolog-clpq), except the three rows marked TIGHTER:
-there Scryer answers a weaker but equally sound bound (``7*R #>= 1000000``
-is R in 142857..sup in Scryer, but 7*142857 = 999999).
+Every row fails on 81dcd42b except the UNCHANGED pins of the fallback.
+The expected domains are Scryer's (/workspace/scryer-prolog-clpq), except
+the rows marked TIGHTER: there Scryer answers a weaker but equally sound
+bound (``7*R #>= 1000000`` is R in 142857..sup in Scryer, but 7*142857 =
+999999), and the fdiv/fmod pins, where Scryer is tighter.
 """
 from __future__ import annotations
 
@@ -56,6 +57,12 @@ tneg(R, D) :- R*T #=< 10, T = -2, fd_dom(R, D).
 tdom(R, D) :- T in 2..5, R*T #=< 10, R #>= 0, fd_dom(R, D).
 gtexp(R, D) :- Y in 0..5, R - 1 #> Y, fd_dom(R, D).
 canc0(R, D) :- R - R #< 0, D = ok.
+prodcanc(R, D) :- R*T - T*R #< 0, D = ok.
+zeroin(R, D) :- T in -1..5, R*T #=< 10, fd_dom(R, D).
+reif(R, D) :- B #<==> (7*R #=< 10), B = 1, fd_dom(R, D).
+reif0(R, D) :- R in 0..10, B #<==> (7*R #=< 10), B = 0, fd_dom(R, D).
+fdiv(R, D) :- R in 0..100, R // 2 #=< 3, fd_dom(R, D).
+fmod(R, D) :- R in 0..100, R mod 3 + R #< 5, fd_dom(R, D).
 """
 
 INF, SUP = "inf", "sup"
@@ -93,7 +100,18 @@ WANT = {
     "tdom": (None, _d(0, 5)),
     "gtexp": (None, _d(2, SUP)),
     "canc0": None,                            # R - R < 0 has no solution
+    "prodcanc": None,                         # TIGHTER: Scryer succeeds
+    "zeroin": (None, _d(INF, SUP)),           # T may be 0: R unconstrained
+    "reif": (None, _d(INF, 1)),
+    "reif0": (None, _d(2, 10)),
+    # a // or mod node is not linearised: posted as before (81dcd42b's
+    # answer, and weaker than Scryer's 0..7 / 0..4 -- not in this fix)
+    "fdiv": (None, _d(0, 100)),
+    "fmod": (None, _d(0, 100)),
 }
+
+#: rows that already passed on 81dcd42b (pins of the unchanged fallback)
+UNCHANGED = {"zeroin", "fdiv", "fmod"}
 
 
 @pytest.fixture(scope="module")
@@ -173,6 +191,24 @@ def test_seam_bare_comparisons_bind(seam_mod):
     assert _answers(("r", 100, 7, r), seam_mod, r) == [(142857,)]
     r = Var()
     assert _answers(("late", r), seam_mod, r) == [(142857,)]
+
+
+def test_clpq_variable_in_an_expression_side_still_dispatches_to_clpq():
+    from fractions import Fraction
+
+    from clausal.logic.clpfd import fd_le
+    from clausal.logic.clpq import Q_KEY, q_le
+    from clausal.logic.variables import Trail, get_attr
+    from clausal.terms import Add, Mult
+
+    t = Trail()
+    r = Var()
+    assert fd_le(Mult(left=r, right=2), Fraction(5, 2), t)
+    assert get_attr(r, Q_KEY) is not None and get_attr(r, "fd") is None
+    x = Var()
+    assert q_le(x, 10, t)
+    assert fd_le(Add(left=x, right=1), 4, t)
+    assert get_attr(x, "fd") is None
 
 
 def test_python_twin_agrees():
