@@ -303,12 +303,18 @@ def _run_v2_pipeline(loader, module, module_dict, filename, recover_module_items
     begin_loading_declarations(module_dict)
     try:
         exec_with_import_diagnostics(code, module_dict, module_items, filename)
+        # The SOURCE clauses, before compile_module's term/goal expansion
+        # rewrites them (the transition counter below reads these).
+        source_nodes = list(predicate_nodes)
 
         logic_module = compile_module(
             predicate_nodes, module_items, module_dict, module.__name__,
         )
     finally:
         end_loading_declarations(module_dict)
+    if isinstance(loader, PredicateLoader):
+        _count_seam_transition_constructs(loader, source_nodes,
+                                          logic_module.db, filename)
     # -constants directives register into $module.constants (see
     # register_module_constant, clausal/logic/constants.py) WHILE the
     # module body execs — i.e. onto dummy_logic_module, the placeholder.
@@ -319,6 +325,22 @@ def _run_v2_pipeline(loader, module, module_dict, filename, recover_module_items
     # These two writes are therefore no-ops on the normal path.
     module_dict["$module"] = logic_module
     module.__clausal_module__ = logic_module
+
+
+def _count_seam_transition_constructs(loader, source_nodes, db, filename):
+    """D13 on the seam: count the load's transition constructs (``not``,
+    once/1, forall/2, memberchk/2, ``findall(_, G, [])``, make_quantity/3)
+    into ``loader.l3_stats["transition_constructs"]`` -- the native ``.pl``
+    loader's key and shape, so one consumer reads both -- and log the
+    ``.pl`` front end's one line.  Counted from the clauses exec built, so a
+    bytecode-cache hit counts the same as a fresh compile.  A ratchet's
+    instrument, never a refusal."""
+    from clausal.logic.compiler.terms_to_goalop import (  # noqa: PLC0415
+        count_transition_constructs, log_transition_constructs)
+    counts = count_transition_constructs(
+        (getattr(p, "body", None) for p in source_nodes), db=db)
+    loader.l3_stats = {"transition_constructs": counts}
+    log_transition_constructs(counts, filename)
 
 
 # ── Builtins injected into every predicate module ────────────────────────────
@@ -885,6 +907,10 @@ class PredicateLoader(_ClausalSourceLoader):
     bytecode is cached in ``__pycache__/`` so subsequent imports skip parsing
     and AST transformation.
     """
+
+    #: The seam's load facts, the native ``.pl`` loader's attribute: here
+    #: ONE key, ``"transition_constructs"`` (D13), filled on every load.
+    l3_stats: "dict | None" = None
 
     def source_to_code(self, data, path="<string>"):
         source = data.decode("utf-8")
