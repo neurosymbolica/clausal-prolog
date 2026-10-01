@@ -100,6 +100,8 @@ def _is_dcg_control_body(rule_val) -> bool:
     if is_conjunction_tuple(rule_val):
         return True
     is_cell, functor = compound_cell_shape(rule_val)
+    if is_cell and functor == "{}" and len(rule_val) == 2:
+        return True             # ``{G}``: ISO DCG braces, see _dcg_body_goal
     return (is_cell and functor in _DCG_CONTROL_CELLS
             and len(rule_val) == (2 if functor == "\\+" else 3))
 
@@ -149,6 +151,17 @@ def _dcg_body_goal(body, s0, s):
         return (";", _dcg_body_goal(b[1], s0, s), _dcg_body_goal(b[2], s0, s))
     if is_cell and functor == "\\+" and len(b) == 2:
         return (",", ("\\+", _dcg_body_goal(b[1], s0, Var())), ("=", s0, s))
+    if is_cell and functor == "{}" and len(b) == 2:
+        # ISO 7.14.2 / Scryer's library(dcgs): ``{G}`` is ``G, S0 = S`` --
+        # G runs as written (its bindings shared with the rest of the body,
+        # every answer kept) and consumes nothing.  G is a goal leaf of the
+        # translated body, so call/1's converter handles it as any other:
+        # a variable G is call(G) (instantiation_error while unbound), a
+        # non-callable is a type_error, and a cut in it is refused like a
+        # cut anywhere inside a meta-called body (Scryer's cut there is
+        # NOT local: ``phrase(({member(X, [1,2,3])}, {!}), [])`` gives one
+        # answer).  A WHOLE body ``{!}`` is ``_is_whole_body_cut``'s.
+        return (",", b[1], ("=", s0, s))
     if type(b) is str and b == "!":
         # ISO 7.14.2: ``!`` inside a grammar body is ``!, S0 = S``, so the
         # cut is a leaf of the translated body and call/1's converter
@@ -177,9 +190,18 @@ def _is_whole_body_cut(rule_val) -> bool:
     is ``S0 = S`` -- exactly how call/1 answers a cut that is its whole goal
     (``higher_order._ZERO_ARITY_CONTROL_GOALS``).  Scryer:
     ``phrase(!, [])`` succeeds, ``phrase(!, [a])`` fails,
-    ``phrase(!, [a], R)`` gives ``R = [a]``.  A cut INSIDE a larger body
-    (``phrase((a, !), L)``) is still refused by call/1's converter."""
-    return type(rule_val) is str and rule_val == "!"
+    ``phrase(!, [a], R)`` gives ``R = [a]``.  ``{!}`` translates the same
+    way.  A cut INSIDE a larger body (``phrase((a, !), L)``,
+    ``phrase((a, {!}), L)``) is still refused by call/1's converter."""
+    if type(rule_val) is str and rule_val == "!":
+        return True
+    # ``{!}`` translates to the same ``!, S0 = S`` (Scryer: phrase({!}, [])
+    # succeeds), so it is the same local cut.
+    is_cell, functor = compound_cell_shape(rule_val)
+    if is_cell and functor == "{}" and len(rule_val) == 2:
+        inner = deref(rule_val[1])
+        return type(inner) is str and inner == "!"
+    return False
 
 
 def _resolve_nonterminal(db, rule_val, extra_args, context):

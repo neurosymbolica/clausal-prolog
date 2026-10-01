@@ -5066,16 +5066,22 @@ def _rewrite_dcg_body(node, s_in, s_out, counter, source):
             )
             return replace(call, source), counter
 
-        case Set(elts=[goal]):
-            # Inline goal {goal}: no state consumed.
-            return goal, counter
-
-        case Set(elts=goals) if len(goals) >= 2:
-            # Multi-goal inline block {g1, g2, ...}: a conjunction of embedded
-            # goals, matching Prolog's ``{A, B}``. Python's AST preserves the
-            # source order of set-display elements, so the order is deterministic
-            # here (the set is never materialised). No state is consumed.
-            return replace(BoolOp(op=And(), values=list(goals)), source), counter
+        case Set():
+            # Inline goal ``{goal}`` / ``{g1, g2, ...}`` as a WHOLE body (or a
+            # whole disjunct / if-then-else branch): ISO 7.14.2 translates
+            # ``{G}`` as ``G, S0 = S`` -- no state consumed, so the two states
+            # are the SAME.  The equation used to be dropped here (only
+            # ``_rewrite_dcg_sequence`` emitted it), which left S0 and S
+            # unconnected: ``e(_x) >> ({_x is 5})`` accepted ``[a]`` and left
+            # phrase/3's rest unbound.  Python's AST preserves the source order
+            # of set-display elements (the set is never materialised).
+            eq = replace(Compare(
+                left=Name(id=s_in, ctx=load),
+                ops=[Is()],
+                comparators=[Name(id=s_out, ctx=load)],
+            ), source)
+            goal = _dcg_set_goals(node, source)
+            return replace(BoolOp(op=And(), values=[goal, eq]), source), counter
 
         case Dict(keys=[], values=[]):
             # Empty ``{}`` parses as an empty dict display, not a set.
@@ -5154,12 +5160,20 @@ def _rewrite_dcg_body(node, s_in, s_out, counter, source):
             return replace(result, source), max_counter
 
         case UnaryOp(op=Not(), operand=inner):
-            # NAF: not rewrite(inner, s_in, _fresh). State passes through.
+            # NAF: not rewrite(inner, s_in, _fresh), S0 = S -- consumes
+            # nothing (ISO DCG: ``\+ phrase(B, S0, _), S0 = S``).  As a WHOLE
+            # body (or disjunct / branch) the equation used to be dropped,
+            # like ``{G}``'s above, so ``r >> (not {fail})`` accepted ``[z]``.
             fresh = f"_dcg{counter}"
             counter += 1
             inner_r, counter = _rewrite_dcg_body(inner, s_in, fresh, counter, source)
-            result = UnaryOp(op=Not(), operand=inner_r)
-            return replace(result, source), counter
+            result = replace(UnaryOp(op=Not(), operand=inner_r), source)
+            eq = replace(Compare(
+                left=Name(id=s_in, ctx=load),
+                ops=[Is()],
+                comparators=[Name(id=s_out, ctx=load)],
+            ), source)
+            return replace(BoolOp(op=And(), values=[result, eq]), source), counter
 
     raise SyntaxError(
         f"Unsupported DCG body element: {dump(node)}. To embed a goal in a DCG "

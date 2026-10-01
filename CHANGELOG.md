@@ -852,6 +852,16 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
 
 ### Fixed
 
+- **DCG braces `{G}` follow ISO and Scryer.** `phrase({G}, L)`,
+  `phrase({G}, L, R)` and a `{G}` inside a phrase body run `G, S0 = S`
+  (every answer of G kept, nothing consumed); they raised
+  `existence_error(procedure, {}/3)`. A rule whose whole body, or a whole
+  disjunct or if-then-else branch, is `{G}` (or `\+ G`) now ties its two
+  states together: `e(X) --> {X = 5}.` (and the seam's
+  `e(_x) >> ({_x is 5})`) accepted `[a]` and left phrase/3's rest
+  unbound. A whole body `{!}` is a local cut, like
+  `phrase(!, L)`; a braced cut inside a larger body is refused, as any cut
+  inside a meta-called body is.
 - **`solve("!")` succeeds once, as `call(!)` does.** A cut that is the
   whole query is local to it and cuts nothing (ISO 7.8.3). `solve` already
   answered `true`, `fail` and `false` by name; `!` (and `M:!`) was looked
