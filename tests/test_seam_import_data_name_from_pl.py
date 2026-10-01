@@ -225,6 +225,24 @@ def test_a_near_miss_of_a_predicate_warns_once_naming_it(pkg, fe):
 
 
 @pytest.mark.parametrize("fe", FRONT_ENDS)
+def test_a_seam_import_keeps_the_seam_path_not_getattr(pkg, fe):
+    """In Python code ``from M import name`` is getattr (ruling
+    2026-10-01); in a seam module the lowered ``from M import`` must still
+    decline the attribute fallback and take ``bind_data_names``: its
+    warning names the ``-import_from`` directive, not the attribute."""
+    load = pkg(fe, f"dn_seampath_{fe}")
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        load("sp", """\
+            -import_from(PKG.dom.citations, [citaton])
+        """)
+    hits = [str(w.message) for w in caught
+            if issubclass(w.category, ClausalImportedDataNameWarning)]
+    assert len(hits) == 1, hits
+    assert hits[0].startswith("-import_from("), hits
+
+
+@pytest.mark.parametrize("fe", FRONT_ENDS)
 def test_a_data_name_far_from_every_predicate_does_not_warn(pkg, fe):
     load = pkg(fe, f"dn_nowarn_{fe}")
     with warnings.catch_warnings(record=True) as caught:

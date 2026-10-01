@@ -37,6 +37,12 @@ OPEN = """\
     helper(5).
 """
 
+MULTI = """\
+    :- module(multi, [p/1, p/2]).
+    p(1).
+    p(1, 2).
+"""
+
 ERR = r"permission_error\(access, private_procedure, {}\)"
 
 
@@ -52,6 +58,7 @@ def pkg(tmp_path, monkeypatch):
         (root / "__init__.py").write_text("")
         (root / "pm.pl").write_text(textwrap.dedent(PM))
         (root / "open_pl.pl").write_text(textwrap.dedent(OPEN))
+        (root / "multi.pl").write_text(textwrap.dedent(MULTI))
         made.append(tag)
 
         def load(name, src, ext="seam"):
@@ -92,6 +99,34 @@ def test_an_unexported_arity_of_an_exported_name_is_an_error(pkg, fe):
 
 
 @pytest.mark.parametrize("fe", FRONT_ENDS)
+def test_a_name_exported_at_several_arities_imports_each(pkg, fe):
+    """``[p/1, p/2]`` exports both arities (review finding: the export
+    list was read one entry per name, so ``p/2`` was refused)."""
+    load = pkg(fe, f"ux_multi_{fe}")
+    mod = load("ok", """\
+        -import_from(PKG.multi, [p/2])
+        def f():
+            return [(X, Y) for X, Y in --p(X, Y)]
+    """)
+    assert mod.f() == [(1, 2)]
+    mod = load("ok1", "-import_from(PKG.multi, [p/1, p/2])\n")
+
+
+@pytest.mark.parametrize("fe", FRONT_ENDS)
+def test_a_bare_name_exported_at_one_arity_binds_the_name(pkg, fe):
+    """A bare entry imports the NAME: exported as ``duo/1``, it binds
+    ``duo`` and so reaches the private ``duo/2`` too (pinned as is; the
+    ``duo/2`` indicator is the refused form)."""
+    load = pkg(fe, f"ux_barepart_{fe}")
+    mod = load("ok", """\
+        -import_from(PKG.pm, [duo])
+        def f():
+            return [(X, Y) for X, Y in --duo(X, Y)]
+    """)
+    assert mod.f() == [(1, 2)]
+
+
+@pytest.mark.parametrize("fe", FRONT_ENDS)
 def test_exported_predicates_and_data_names_still_import(pkg, fe):
     load = pkg(fe, f"ux_ok_{fe}")
     mod = load("ok", """\
@@ -119,7 +154,8 @@ def test_a_pl_file_with_no_module_directive_exports_everything(pkg, fe):
 @pytest.mark.parametrize("fe", FRONT_ENDS)
 def test_a_pl_use_module_of_an_unexported_predicate_is_an_error(pkg, fe):
     load = pkg(fe, f"ux_pl_{fe}")
-    with pytest.raises(ImportError, match=ERR.format("helper/1")):
+    with pytest.raises(ImportError, match=r"use_module\(.*" + ERR.format(
+            "helper/1")):
         load("pu", """\
             :- module(pu, [t/1]).
             :- use_module(PKG/pm, [helper/1]).

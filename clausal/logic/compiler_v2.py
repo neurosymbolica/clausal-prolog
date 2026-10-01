@@ -812,8 +812,10 @@ def _refuse_private_procedure(item, mod, orig_name: str, selected,
     at = f"{where}, line {line}" if line else where
     wanted = (orig_name if selected is None else
               ", ".join(f"{orig_name}/{a}" for a in sorted(selected)))
+    directive = ("use_module" if str(module_dict.get("__file__") or "")
+                 .endswith(".pl") else "-import_from")
     raise ImportError(
-        f"{at}: -import_from({item.module}, [{wanted}]): "
+        f"{at}: {directive}({item.module}, [{wanted}]): "
         f"permission_error(access, private_procedure, {indicator}) -- "
         f"{item.module} defines {indicator} but does not export it; add it "
         f"to {item.module}'s module/2 export list, or call an exported "
