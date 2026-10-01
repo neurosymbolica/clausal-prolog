@@ -245,11 +245,14 @@ class TestQualifiedCellGoal:
         assert cell_args(exc.term)[1] == ("/", mint("p"), 1)
         assert exc.message.startswith("solve/1: ")
 
-    def test_a_non_str_module_designator_is_an_existence_error(self, mods):
+    def test_a_non_atom_module_designator_is_a_type_error(self, mods):
+        """Operator ruling 2026-10-01, Scryer's term: ``7:p(X)`` is
+        ``error(type_error(atom, 7), call/1)`` (it was
+        ``existence_error(module, '7')``)."""
         with pytest.raises(LogicException) as exc_info:
             list(solve((":", 7, ("p", Var())), mods.importer))
-        inner, _exc = _error_term(exc_info.value)
-        assert inner == ("existence_error", mint("module"), "7")
+        assert exc_info.value.term == (
+            "error", ("type_error", "atom", 7), ("/", "call", 1))
 
     def test_a_control_construct_under_a_qualification_is_still_refused(
             self, mods):

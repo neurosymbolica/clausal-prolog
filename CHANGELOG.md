@@ -20,6 +20,21 @@ since 0.4.0 finish three moves:
 
 ### Breaking
 
+- **Calling a qualified goal whose module argument is unbound or not an
+  atom raises Scryer's error** (ruled 2026-10-01). `call(7:foo)` is
+  `error(type_error(atom, 7), call/0)` and `call(_:foo)` is
+  `error(instantiation_error, call/0)`; both raised
+  `existence_error(module, …)`. The context is `call/N` with N = the goal's
+  arity plus call/N's extras, as Scryer reports it (`call(7:foo, x)` is
+  `call/1`). With an unbound or non-callable goal the whole term is refused:
+  `call(7:_)` is `type_error(callable, 7:_)` at `call/1`, and
+  `phrase(7:g, L)` is `type_error(callable, 7:g(L, []))` at `call/1`. This
+  holds for call/N, findall/3, `\+`, phrase/2,3, `solve`, seam `':'`, and a
+  body goal: the native `.pl` front end no longer refuses `M:foo` /
+  `7:foo` in a body at load, it calls the term at run time. Asserting into,
+  or looking up clauses in, `M:`, a missing OUTER atom module
+  (`nosuchmod:m2:G`) and `module=` arguments keep `existence_error(module,
+  …)`.
 - **Attribute access on a `.pl` module answers an unbound data name with
   its atom** (ruled 2026-10-01, extending the `.pl` data-import ruling).
   `getattr(mod, 'employment')` / `mod.employment` on a module loaded from

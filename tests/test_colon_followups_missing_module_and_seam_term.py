@@ -15,7 +15,8 @@ exactly that term), in both front ends.  It was
 ``error(existence_error(module, 'nosuchmod'), call/1)``.
 
 Every test here fails on 5428c692 except the pins of what is kept
-(``foo()`` refused in ``--``, the module error for a non-atom designator)
+(``foo()`` refused in ``--``; the non-atom designator pin was the module
+error until the 2026-10-01 ruling made it Scryer's type_error(atom, M))
 and the two .pl body-goal cases (``pl_goal``, ``pl_findall``): the native
 front end lowers a WRITTEN ``M:G`` body goal itself and already raised
 Scryer's form there; they pin that every route now agrees.
@@ -296,9 +297,12 @@ def test_a_missing_outer_module_keeps_the_module_error_through_call(mods):
     assert exc.value.term[1][:2] == ("existence_error", "module")
 
 
-def test_a_non_atom_designator_keeps_the_module_error(mods):
-    """Not ruled: ``7:mp(X)`` is not a module that does not exist."""
+def test_a_non_atom_designator_is_scryers_type_error(mods):
+    """Ruled 2026-10-01 (see test_qualified_goal_bad_module_argument.py):
+    ``7:mp(X)`` is ``error(type_error(atom, 7), call/1)``; it was the
+    module error."""
     user, _pl = mods
     with pytest.raises(LogicException) as exc:
         list(solve((":", 7, ("mp", Var())), user.__dict__["$module"]))
-    assert exc.value.term[1][:2] == ("existence_error", "module")
+    assert exc.value.term == (
+        "error", ("type_error", "atom", 7), ("/", "call", 1))

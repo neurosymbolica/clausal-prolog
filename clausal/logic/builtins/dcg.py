@@ -239,7 +239,8 @@ def _resolve_nonterminal(db, rule_val, extra_args, context):
         # (operator rulings 2026-09-30 and 2026-10-01).
         target, inner = resolve_qualified_goal_cell(
             rule_val, context, _calling_module(db),
-            call_extra=len(extra_args), qualified_culprit=True)
+            call_extra=len(extra_args), qualified_culprit=True,
+            phrase_args=tuple(extra_args))
         inner = deref(inner)
         from clausal.logic.meta_predicate import is_goal_object  # noqa: PLC0415
         if is_goal_object(inner):

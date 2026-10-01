@@ -497,6 +497,7 @@ MAX_QUALIFICATION_DEPTH = 64
 def resolve_qualified_goal_cell(
     cell: Any, context: str, calling_module: Any = None,
     *, call_extra: "int | None" = None, qualified_culprit: bool = False,
+    phrase_args: "tuple | None" = None,
 ) -> tuple:
     """Resolve the module-qualified goal cell ``(":", M, G)`` to ``(module, G)``.
 
@@ -575,6 +576,15 @@ def resolve_qualified_goal_cell(
     *qualified_culprit* (phrase/2,3, Scryer's form): the missing procedure
     is reported QUALIFIED, ``existence_error(procedure, nosuchmod:g/2)``,
     with the plain ``g/2`` as the context.
+
+    A MODULE ARGUMENT THAT IS NOT AN ATOM, when the goal is CALLED
+    (operator ruling 2026-10-01, Scryer's terms; see
+    :func:`_raise_if_bad_module_argument`): ``call(7:foo)`` is
+    ``error(type_error(atom, 7), call/0)`` and ``call(_:foo)`` is
+    ``error(instantiation_error, call/0)`` -- not the module error.  Any
+    layer of a chain counts (``nosuchmod:7:foo`` is the type error too); a
+    clause lookup or an assert into ``M:`` (no *call_extra*) is unchanged.
+    *phrase_args* (phrase/2,3): the S0/S pair, for Scryer's phrase culprit.
     """
     from clausal.logic.solve import resolve_module  # noqa: PLC0415 -- see the
     from clausal.logic.variables import deref       # note in
@@ -589,13 +599,25 @@ def resolve_qualified_goal_cell(
         if not (ok and functor == QUALIFIED_GOAL_FUNCTOR and len(goal) == 3):
             break
         designator = deref(goal[1])
-        if call_extra is None or type(designator) is not str:
+        if call_extra is None:
             module = resolve_module(designator, calling_module, context)
+        elif type(designator) is not str:
+            from clausal.logic.exceptions import LogicException  # noqa: PLC0415
+            try:
+                module = resolve_module(designator, calling_module, context)
+            except LogicException as exc:
+                _raise_if_bad_module_argument(
+                    cell, call_extra, exc, phrase=qualified_culprit,
+                    phrase_args=phrase_args)
+                raise
         else:
             from clausal.logic.exceptions import LogicException  # noqa: PLC0415
             try:
                 module = resolve_module(designator, calling_module, context)
             except LogicException as exc:
+                _raise_if_bad_module_argument(
+                    cell, call_extra, exc, phrase=qualified_culprit,
+                    phrase_args=phrase_args)
                 _raise_if_not_a_goal(goal[2], call_extra, exc,
                                      phrase=qualified_culprit)
                 missing = _missing_procedure_error(
@@ -628,6 +650,137 @@ def resolve_qualified_goal_cell(
     # and the caller (``_resolve_named_goal`` / ``_term_to_goal``) is where
     # that refusal belongs, uniformly with an unqualified string goal.
     return module, goal
+
+
+def _raise_if_bad_module_argument(
+    cell: Any, call_extra: int, cause: Any,
+    *, phrase: bool = False, phrase_args: "tuple | None" = None,
+) -> None:
+    """Scryer's error when a module argument of the CALLED qualified goal
+    *cell* is unbound or is not an atom (operator ruling 2026-10-01); a
+    no-op when every designator is an atom or resolves (a ``Module``, an
+    imported module object).  Asked only once resolution has already
+    failed, so the success path pays nothing.
+
+    Measured on scryer-prolog (N counts the goal's arity plus call/N's
+    extras -- Scryer names the call/N it would have run):
+
+      call(7:foo)            error(type_error(atom, 7), call/0)
+      call(_:foo)            error(instantiation_error, call/0)
+      call(7:foo(a), x)      error(type_error(atom, 7), call/2)
+      call(f(x):foo)         error(type_error(atom, f(x)), call/0)
+      call(7:(foo(a), foo))  error(type_error(atom, 7), call/1)  (leftmost)
+      call(7:_)              error(type_error(callable, 7:_), call/1)
+      call(7:1)              error(type_error(callable, 7:1), call/1)
+      call(7:_, x)           error(instantiation_error, call/2)
+      call(7:1, x)           error(type_error(callable, 1), call/2)
+      phrase(7:g, L)         error(type_error(callable, 7:g(L, [])), call/1)
+      phrase(7:_, L)         error(instantiation_error, call/3)
+      phrase(7:1, L)         error(type_error(callable, 7:1), call/1)
+
+    The INNERMOST bad designator is the one reported (``f(x):_:foo`` is the
+    instantiation error, as Scryer has it)."""
+    from clausal.logic.solve import resolve_module  # noqa: PLC0415
+    from clausal.logic.exceptions import (  # noqa: PLC0415
+        LogicException, instantiation_error, type_error,
+    )
+    layers = []
+    goal = deref(cell)
+    for _ in range(MAX_QUALIFICATION_DEPTH + 1):
+        if type(goal) is tuple and len(goal) < 2:
+            return      # () / the reserved 1-tuple: the caller refuses it
+        ok, functor = compound_cell_shape(goal)
+        if not (ok and functor == QUALIFIED_GOAL_FUNCTOR and len(goal) == 3):
+            break
+        layers.append(goal)
+        goal = deref(goal[2])
+    else:
+        return              # cyclic / too deep: the resolver's own error
+    bad = None
+    for layer in reversed(layers):
+        designator = deref(layer[1])
+        if type(designator) is str:
+            continue
+        if not is_var(designator):
+            try:
+                resolve_module(designator)
+                continue
+            except LogicException:
+                pass
+        bad = layer, designator
+        break
+    if bad is None:
+        return
+    layer, designator = bad
+    innermost = layer is layers[-1]
+    from clausal.logic.builtins.call_body import (  # noqa: PLC0415
+        is_non_callable_term, non_callable_goal_error,
+    )
+    at = f"call/{1 + call_extra}"
+    if is_var(goal) or is_non_callable_term(goal, lists=False):
+        if innermost and (call_extra == 0
+                          or (phrase and not is_var(goal))):
+            # Scryer's call/1 refuses the whole ``M:G``: its module part is
+            # no module, so ``M:G`` is not a qualified goal it can run.
+            raise LogicException(type_error(
+                "callable", (QUALIFIED_GOAL_FUNCTOR, designator, goal),
+                "call/1: the module of a qualified goal is not an atom and "
+                "its goal is not callable")) from cause
+        if is_var(goal):
+            raise LogicException(instantiation_error(at)) from cause
+        raise LogicException(non_callable_goal_error(
+            goal, "call/1" if phrase else at)) from cause
+    if phrase and innermost and phrase_args is not None:
+        # Scryer's phrase/2,3 builds ``M:NT(.., S0, S)`` and call/1 refuses
+        # it whole (``phrase(7:g, L)`` -> type_error(callable, 7:g(L, []))).
+        ok, functor = compound_cell_shape(goal)
+        if type(goal) is str:
+            built = (goal, *phrase_args)
+        elif ok and type(functor) is str:
+            built = (*goal, *phrase_args)
+        else:
+            built = None
+        if built is not None:
+            raise LogicException(type_error(
+                "callable", (QUALIFIED_GOAL_FUNCTOR, designator, built),
+                "call/1: the module of a qualified nonterminal is not an "
+                "atom")) from cause
+    at = f"call/{_scryer_call_arity(goal, call_extra)}"
+    if is_var(designator):
+        raise LogicException(instantiation_error(
+            f"{at}: the module of a qualified goal is unbound")) from cause
+    culprit = list(chars_text(designator)) if is_chars(designator) \
+        else designator
+    raise LogicException(type_error(
+        "atom", culprit,
+        f"{at}: {culprit!r} is not a module name -- the module of a "
+        f"qualified goal must be an atom")) from cause
+
+
+def _scryer_call_arity(goal: Any, call_extra: int) -> int:
+    """The N of the ``call/N`` Scryer reports for a qualified goal it could
+    not run: the goal's arity plus call/N's extras.  With no extras a
+    control construct is not the goal Scryer reports -- it reports the
+    leftmost goal it reached (``7:(foo(a), foo)`` is ``call/1``)."""
+    if call_extra == 0:
+        for _ in range(MAX_QUALIFICATION_DEPTH):
+            goal = deref(goal)
+            if type(goal) is tuple and len(goal) < 2:
+                break
+            ok, functor = compound_cell_shape(goal)
+            if not ok:
+                break
+            if (functor in CELL_GOAL_CONTROL_FUNCTORS
+                    or (functor == "call" and len(goal) == 2)):
+                goal = deref(goal[1])
+                continue
+            break
+    goal = deref(goal)
+    if type(goal) is tuple and len(goal) < 2:
+        return call_extra
+    ok, functor = compound_cell_shape(goal)
+    arity = len(goal) - 1 if ok and type(functor) is str else 0
+    return arity + call_extra
 
 
 def _raise_if_not_a_goal(goal: Any, call_extra: int, cause: Any,

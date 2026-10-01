@@ -536,9 +536,14 @@ class _ClauseLowering:
         m, g = args
         m_sp, g_sp = spans
         if type(m) is not str:
-            raise LoweringRefused(
-                f"the module of a qualified goal must be an atom at load, "
-                f"got {m!r}", _top_span(m_sp) or _top_span(sp))
+            # A module that is a variable or not an atom (``M:foo``,
+            # ``7:foo``) is no name to bind at load: the goal is the TERM
+            # ``M:G``, called at run time like a variable goal, where the
+            # shared resolver gives Scryer's instantiation_error /
+            # type_error(atom, M) (operator ruling 2026-10-01).
+            whole = (":", m, g)
+            self._refuse_control_in(g, g_sp)
+            return self._call("call", [self.term(whole, sp)], pos, pos)
         if type(g) is str:
             gname, gargs, gspans = g, (), []
         elif (type(g) is tuple and g and type(g[0]) is str
