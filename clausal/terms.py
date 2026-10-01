@@ -466,6 +466,8 @@ def _partial_list_parts(t):
     if isinstance(t, bytes):
         return list(t), None
     if isinstance(t, SegList):
+        if not all(isinstance(g, (ConcreteSeg, VarSeg)) for g in t._segments):
+            return None        # not a SegList this module builds (__unify__ too)
         w = t._walk_raw()
         if isinstance(w, list):
             return w, None

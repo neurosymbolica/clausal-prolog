@@ -160,6 +160,7 @@ print(run(P("a", tail=L), ["a", "b", "c"], (M, ["c"])))
 L = Var(); print(run(P(tail=L), (), (L, [])))                   # () is nil
 t = Trail(); L, M = Var(), Var()
 print(C.dif(P("a", tail=L), P("a", tail=M), t), unify(L, M, t))
+print(run(SegList([1]), SegList([1.0])))   # raw items: left to the hook
 """
 
 
@@ -190,4 +191,5 @@ def test_the_python_twin_agrees_with_c():
         "[[True, True, \"['c']\"], [False, False, '_']]",
         "[[True, True, '[]'], [False, False, '_']]",
         "True False",                         # dif(L, M) refuses L = M
+        "[[True]]",
     ]
