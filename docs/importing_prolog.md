@@ -298,8 +298,11 @@ helper(5).
 
 - A bare name is refused when the module exports it at no arity; a `p/N`
   entry when the module defines `p/N` and does not export it. A bare name
-  exported at one arity binds the NAME, so it also reaches the module's
-  other, unexported arities; import `p/N` to take only the exported one.
+  exported at some arities imports only those: with `p/1` exported and
+  `p/2` defined but not exported, `-import_from(m, [p])` (or
+  `use_module(m, [p])`) is `-import_from(m, [p/1])`, so a call `p(X, Y)`
+  through it raises `existence_error(procedure, p/2)` and the importer may
+  define its own `p/2`.
 - A circular import is not checked (the exporter is still loading).
 - A `.pl` file with no `module/2` directive exports everything.
 - A name the module does not define as a predicate is unaffected: a data

@@ -944,7 +944,8 @@ def _process_imports(module_items: list, module_dict: dict, db=None) -> None:
                     # wherever it goes, which is why ``_import_from_origins``
                     # has to index an aliased import under both spellings.
                     _plant_imported_rows(db, mod, orig_name, local_name,
-                                         selected)
+                                         _imported_arities(item, local_name,
+                                                           orig_name, mod))
                     # Also store under the dotted key ("module.OrigName") so
                     # that _inject_resolved_targets can resolve it when the compiler
                     # emits LoadName(name="module.OrigName") for remapped imports.
@@ -957,7 +958,8 @@ def _process_imports(module_items: list, module_dict: dict, db=None) -> None:
                                  item.module, name_spec))
                     module_dict[name_spec] = value
                     _plant_imported_rows(db, mod, name_spec, name_spec,
-                                         selected)
+                                         _imported_arities(item, name_spec,
+                                                           name_spec, mod))
                     # Dotted key for compiler resolution (e.g. "py.sympy.inf").
                     module_dict[f"{item.module}.{name_spec}"] = (
                         _imported_reference(mod, name_spec, value))
@@ -1117,6 +1119,7 @@ def _import_from_origins(module_items: list, module_dict: dict,
     for item in module_items:
         if not isinstance(item, ImportFromItem):
             continue
+        mod = _UNRESOLVED       # resolved once per item, on first need
         for name_spec in item.names:
             local = name_spec[1] if isinstance(name_spec, tuple) else name_spec
             bound = module_dict.get(local)
@@ -1124,7 +1127,15 @@ def _import_from_origins(module_items: list, module_dict: dict,
             if own_name is None:
                 bound = None
             origins[local] = (item.module, bound)
-            selected = _selected_arities(item, local)
+            if mod is _UNRESOLVED and _selected_arities(item, local) is None:
+                try:
+                    mod = _resolve_module(item.module)
+                except ImportError:
+                    mod = None
+            selected = _imported_arities(
+                item, local,
+                name_spec[0] if isinstance(name_spec, tuple) else name_spec,
+                mod)
             _merge_selection(origins, local, selected, everything)
             if own_name is not None and own_name != local:
                 _merge_selection(origins, own_name, selected, everything)
@@ -1158,6 +1169,33 @@ def _selected_arities(item, local: str) -> "frozenset | None":
     """The arities an ``-import_from`` item's ``name/N`` entries selected for
     the LOCAL name *local*, or ``None`` when it imports every arity."""
     return (getattr(item, "arities", None) or {}).get(local)
+
+
+_UNRESOLVED = object()
+
+
+def _imported_arities(item, local: str, orig: str, mod=_UNRESOLVED
+                      ) -> "frozenset | None":
+    """The arities the entry for *local* (spelled *orig* in the exporter)
+    actually imports: its ``name/N`` selection, else -- for a BARE entry --
+    the arities a ``.pl`` exporter EXPORTS when it also defines the name at
+    an unexported arity (operator ruling 2026-10-01,
+    ``pl_data_imports.exported_only_arities``), else ``None`` (every
+    arity).  Not written back into the item: reflection shows the import
+    as the author wrote it, and the load-time refusals
+    (``_refuse_missing_indicators``, ``_refuse_private_procedure``) read
+    the author's selection; the planting, ``_import_from_origins`` and
+    ``_imported_indicators`` read this effective one."""
+    selected = _selected_arities(item, local)
+    if selected is not None:
+        return selected
+    if mod is _UNRESOLVED:
+        try:
+            mod = _resolve_module(item.module)
+        except ImportError:
+            return None
+    from clausal.pl_data_imports import exported_only_arities  # noqa: PLC0415
+    return exported_only_arities(mod, orig)
 
 
 def _imported_at(origins: dict, functor: str, arity) -> bool:
@@ -1588,7 +1626,7 @@ def _imported_indicators(module_items: list) -> dict:
             else:
                 spelling = local = name_spec
                 text = f"-import_from({item.module}, [{spelling}])"
-            selected = _selected_arities(item, local)
+            selected = _imported_arities(item, local, spelling, mod)
             for arity in owner_db.declared_arities_for(spelling):
                 if selected is not None and arity not in selected:
                     continue            # D20: not imported at this arity

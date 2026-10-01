@@ -112,18 +112,88 @@ def test_a_name_exported_at_several_arities_imports_each(pkg, fe):
     mod = load("ok1", "-import_from(PKG.multi, [p/1, p/2])\n")
 
 
+def _existence(exc_info, indicator):
+    from clausal.logic.exceptions import LogicException
+    assert isinstance(exc_info.value, LogicException)
+    name, arity = indicator.split("/")
+    assert exc_info.value.term[1] == (
+        "existence_error", "procedure", ("/", name, int(arity)))
+
+
 @pytest.mark.parametrize("fe", FRONT_ENDS)
-def test_a_bare_name_exported_at_one_arity_binds_the_name(pkg, fe):
-    """A bare entry imports the NAME: exported as ``duo/1``, it binds
-    ``duo`` and so reaches the private ``duo/2`` too (pinned as is; the
-    ``duo/2`` indicator is the refused form)."""
-    load = pkg(fe, f"ux_barepart_{fe}")
+@pytest.mark.parametrize("entry, local", [("duo", "duo"),
+                                          ("alias(duo, dd)", "dd")])
+def test_a_bare_name_exported_at_one_arity_imports_only_that_arity(
+        pkg, fe, entry, local):
+    """Operator ruling 2026-10-01 (flipped from the pinned gap): a bare
+    entry brings ONLY the exported arities.  ``duo/1`` is exported and
+    ``duo/2`` is not, so ``duo(X, Y)`` through the bare import is an
+    unimported predicate -- existence_error, exactly as through
+    ``-import_from(m, [duo/1])``.  It used to reach the private ``duo/2``."""
+    from clausal.logic.solve import solve
+    from clausal.logic.variables import Var
+    load = pkg(fe, f"ux_barepart_{fe}_{local}")
+    mod = load("ok", f"""\
+        -import_from(PKG.pm, [{entry}])
+        t1(X) <- {local}(X)
+        t2(X, Y) <- {local}(X, Y)
+    """)
+    assert len(list(solve(("t1", Var()), module=mod))) == 1
+    with pytest.raises(Exception) as ei:
+        list(solve(("t2", Var(), Var()), module=mod))
+    _existence(ei, f"{local}/2")
+
+
+@pytest.mark.parametrize("fe", FRONT_ENDS)
+def test_the_unexported_arity_is_free_for_the_importer(pkg, fe):
+    """With only ``duo/1`` imported, the importer's own ``duo/2`` clause is
+    a procedure of its own (as with ``[duo/1]``); it used to be refused as
+    a write to the exporter's ``duo/2``."""
+    from clausal.logic.solve import solve
+    from clausal.logic.variables import Var, deref
+    load = pkg(fe, f"ux_bareown_{fe}")
     mod = load("ok", """\
         -import_from(PKG.pm, [duo])
-        def f():
-            return [(X, Y) for X, Y in --duo(X, Y)]
+        duo(3, 4),
+        t2(X, Y) <- duo(X, Y)
     """)
-    assert mod.f() == [(1, 2)]
+    X, Y = Var(), Var()
+    assert [(deref(X), deref(Y))
+            for _ in solve(("t2", X, Y), module=mod)] == [(3, 4)]
+
+
+@pytest.mark.parametrize("fe", FRONT_ENDS)
+def test_a_bare_name_exported_at_every_defined_arity_imports_each(pkg, fe):
+    from clausal.logic.solve import solve
+    from clausal.logic.variables import Var
+    load = pkg(fe, f"ux_bareall_{fe}")
+    mod = load("ok", """\
+        -import_from(PKG.multi, [p])
+        t1(X) <- p(X)
+        t2(X, Y) <- p(X, Y)
+    """)
+    assert len(list(solve(("t1", Var()), module=mod))) == 1
+    assert len(list(solve(("t2", Var(), Var()), module=mod))) == 1
+
+
+@pytest.mark.parametrize("fe", FRONT_ENDS)
+def test_a_pl_bare_use_module_entry_does_not_reach_the_private_arity(
+        pkg, fe):
+    """``use_module(m, [duo])`` in a ``.pl`` importer: ``duo/2`` is not
+    reached.  (The native front end imports nothing for a bare entry -- an
+    ISO import list holds Name/Arity -- so ``duo/1`` is unreachable there
+    too; the translator brings the exported ``duo/1``.)"""
+    from clausal.logic.solve import solve
+    from clausal.logic.variables import Var
+    load = pkg(fe, f"ux_plbare_{fe}")
+    mod = load("pb", """\
+        :- module(pb, [t2/2]).
+        :- use_module(PKG/pm, [duo]).
+        t2(X, Y) :- duo(X, Y).
+    """, ext="pl")
+    with pytest.raises(Exception) as ei:
+        list(solve(("t2", Var(), Var()), module=mod))
+    _existence(ei, "duo/2")
 
 
 @pytest.mark.parametrize("fe", FRONT_ENDS)

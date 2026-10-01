@@ -852,6 +852,14 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
 
 ### Fixed
 
+- **A bare-name import of a `.pl` predicate brings only its exported
+  arities** (ruled 2026-10-01). With `:- module(m, [p/1])` and an
+  unexported `p/2` also defined, `-import_from(m, [p])` (or
+  `alias(p, q)`, or a translator `.pl` `use_module(m, [p])`) imports
+  `p/1` alone, as `[p/1]` does: a clause calling `p(X, Y)` through it
+  raises `existence_error(procedure, p/2)`, and the importer may define
+  its own `p/2`. It used to reach the private `p/2`. Python access is
+  unchanged.
 - **DCG braces `{G}` follow ISO and Scryer.** `phrase({G}, L)`,
   `phrase({G}, L, R)` and a `{G}` inside a phrase body run `G, S0 = S`
   (every answer of G kept, nothing consumed); they raised

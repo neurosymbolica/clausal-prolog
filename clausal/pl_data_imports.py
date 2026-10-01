@@ -208,6 +208,38 @@ def private_procedure(mod, name: str, selected):
     return f"{name}/{private[0]}" if private else None
 
 
+def exported_only_arities(mod, name: str) -> "frozenset | None":
+    """The arities a BARE import entry *name* brings from the ``.pl``
+    module *mod* when *mod* exports *name* at some arities and also
+    DEFINES it at another; ``None`` when the bare entry brings every arity
+    (not a ``.pl`` module, no ``module/2`` directive, the name exported
+    with no arity, or no defined arity is left out of the export list).
+
+    Operator ruling 2026-10-01: a bare-name import (``-import_from(m,
+    [p])``, ``use_module(m, [p])``) brings ONLY the exported arities, so
+    the unexported ``p/2`` of a module exporting ``p/1`` is unimported
+    there, exactly as with ``-import_from(m, [p/1])``.  Python access is
+    not affected (no caller on that path asks)."""
+    if not _is_pl_module(mod):
+        return None
+    if getattr(getattr(mod, "__spec__", None), "_initializing", False):
+        return None             # circular import: see private_procedure
+    db = getattr(vars(mod).get("$module"), "db", None)
+    if db is None:
+        return None
+    try:
+        defined = set(db.arities_for(name))
+    except Exception:  # pragma: no cover - defensive
+        return None
+    exports = _exported_arities(mod)
+    if exports is None or name not in exports or exports[name] is None:
+        return None
+    exported = exports[name]
+    if not exported or defined <= exported:
+        return None
+    return frozenset(exported)
+
+
 def _is_predicate_of(mod, name: str) -> bool:
     """The module's database first; the source-derived names (exports with
     no clauses) only when it does not say so."""
