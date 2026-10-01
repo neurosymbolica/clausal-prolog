@@ -187,16 +187,19 @@ citations.citation                 # the predicate's handle, as before
   Python keyword and no reserved name (`true`, `false`, `undefined`). A
   dunder or private name (`__wrapped__`, `_x`), a TitleCase name and a
   non-identifier still raise `AttributeError`.
-- Tooling gets no answer: the import machinery, the Python standard
+- Tooling gets no answer: importlib's submodule probe, the Python standard
   library (`unittest`'s `load_tests`, `doctest`, `pickle`, `inspect`) and
   tools such as pytest and Sphinx still see `AttributeError`, so their
   hook lookups (`getattr(mod, 'load_tests', None)`) behave as before.
   Only your own code gets the atom.
 - A submodule of a `.pl` package that is not imported yet is not data:
   `from pkg import sub` still imports it.
-- `from mod import name` in Python is the import path, not attribute
-  access, and still raises `ImportError` for an unbound name (a seam
-  `-import_from` resolves it as above).
+- In Python code, `from mod import name` is `getattr(mod, 'name')`, so an
+  unbound atom-shaped name imports its atom too (ruled 2026-10-01: in
+  Python code, Python semantics apply). That includes a name that is not a
+  submodule of a `.pl` package: `from pkg import nosuchsub` gives the atom
+  `'nosuchsub'`. In Clausal code the same name goes through the seam
+  `-import_from` rules above.
 - A near miss of a predicate (`citations.citaton`) warns once per module
   and name, with `ClausalImportedDataNameWarning`.
 - `.clausal`/`.seam` and Python modules are unchanged.

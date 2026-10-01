@@ -197,10 +197,12 @@ def data_atom(mod, name: str):
 # resolves ``-import_from(M, [max])`` to the atom ``max`` too.
 #
 # Who does NOT get the fallback (the caller keeps AttributeError):
-#   - the import machinery: ``from M import name`` (the IMPORT_FROM opcode)
-#     and importlib's ``_handle_fromlist`` probe, so a seam ``-import_from``
-#     keeps its own path above (its ``name/N`` refusal and per-importer
-#     warning) and ``from pkg import sub`` still imports a submodule;
+#   - the import machinery: importlib's ``_handle_fromlist`` probe, so
+#     ``from pkg import sub`` still imports a submodule, and the IMPORT_FROM
+#     opcode in CLAUSAL code only, so a seam ``-import_from`` keeps its own
+#     path above (its ``name/N`` refusal and per-importer warning).  In
+#     PYTHON code ``from M import name`` is getattr and gets the atom
+#     (operator ruling 2026-10-01: in Python code, Python semantics apply);
 #   - the engine itself (Python code in the ``clausal`` package): its probes
 #     (``getattr(x, 'db', None)``, ``hasattr(mod, n)`` ...) ask whether the
 #     module BINDS the name, and keep that meaning;
@@ -272,6 +274,16 @@ def _caller_opts_out(frame) -> bool:
         return True
     if _is_stdlib_file(filename):
         return True
+    # ``from M import name`` (the IMPORT_FROM opcode) in PYTHON code is
+    # getattr (operator ruling 2026-10-01, "in Python code, Python semantics
+    # apply"), so it gets the atom like ``M.name`` does.  In CLAUSAL code
+    # (a compiled .clausal/.seam/.pl module, whose namespace holds
+    # ``$module``) the statement is a seam ``-import_from`` or a .pl
+    # ``use_module``: it keeps its own path (``bind_data_names``, with its
+    # ``name/N`` refusal and per-importer warning, and the .pl importer's
+    # plain import).
+    if "$module" not in frame.f_globals:
+        return False
     try:
         return frame.f_code.co_code[frame.f_lasti] == _IMPORT_FROM
     except (IndexError, AttributeError):  # pragma: no cover - defensive
