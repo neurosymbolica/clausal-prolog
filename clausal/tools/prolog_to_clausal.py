@@ -1404,19 +1404,14 @@ class _PrologToClausal:
                 return (f"# library({lib_name}): every name it imports is "
                         "provided by the engine -- no import needed")
             else:
-                # Unknown library -- read it as a module of that name (a
-                # missing one is an import error at load).
+                # A library the NATIVE front end maps but this translator
+                # has no table entry for (reif, clpq, lambda: every unknown
+                # name was refused above).  Its long-standing handling is
+                # kept: the name read as a module of that name.  No Clausal
+                # Prolog Python-module check is needed here: none of these
+                # names is a Python module, and a new one cannot arrive
+                # without joining the native table first.
                 clausal_mod = self._dotted_or_refuse(lib_name, directive)
-                if self._surface == "clausal_prolog":
-                    # library(math) must not reach Python around the rule
-                    # (the native front end refuses an unknown library).
-                    facade = _clausal_prolog_facade(directive, clausal_mod)
-                    if facade is not None:
-                        import importlib  # noqa: PLC0415
-                        return self._emit_python_use_module(
-                            facade, importlib.import_module(facade),
-                            body.args[1] if len(body.args) == 2 else None,
-                            directive)
         else:
             spec = _slash_path(lib_term)
             if spec is None:
