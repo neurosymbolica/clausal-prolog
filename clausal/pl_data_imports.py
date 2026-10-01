@@ -81,21 +81,131 @@ def _predicate_names(mod) -> set[str]:
         return _names_cache[mod]
     except (KeyError, TypeError):
         pass
-    from clausal.import_diagnostics import (  # noqa: PLC0415
-        _declared_exports, _defined_names, _module_items_of,
-    )
+    from clausal.import_diagnostics import _defined_names  # noqa: PLC0415
     names = {bare for bare, _ in _defined_names(mod)}
-    loader = getattr(mod, "__loader__", None)
-    try:
-        entries, _ = _declared_exports(_module_items_of(mod, loader))
-    except Exception:  # pragma: no cover - source unreadable now
-        entries = []
-    names.update(bare for bare, _ in entries)
+    names.update(_exported_arities(mod) or ())
     try:
         _names_cache[mod] = names
     except TypeError:  # pragma: no cover - not weak-referenceable
         pass
     return names
+
+
+#: ``{name: arities}`` of each loaded ``.pl`` module's ``module/2`` export
+#: list (``_export_arities_of``), or ``_NO_DIRECTIVE``; recorded by the
+#: loader while it holds the module items.
+_pl_exports: "weakref.WeakKeyDictionary" = weakref.WeakKeyDictionary()
+
+_NO_DIRECTIVE = "no module/2 directive"
+
+
+def _export_arities_of(module_items):
+    """``{name: {arity, ...} | None}`` from every ``-module(...)`` in
+    *module_items* (``None``: an entry with no arity, a bare atom, which
+    exports the name at every arity), or ``_NO_DIRECTIVE`` when there is
+    none.  Every ``name/arity`` entry counts: ``[p/1, p/2]`` is
+    ``{'p': {1, 2}}`` (``import_diagnostics._declared_exports`` keeps one
+    entry per bare name, for its message, so it cannot answer this)."""
+    from clausal.pythonic_ast.nodes import (  # noqa: PLC0415
+        Directive, ModuleDeclaration, PrivateDeclaration,
+    )
+    result, saw, pending = {}, False, []
+    for item in module_items or ():
+        # An ISO ``name/arity`` entry is a ``predicate_export`` directive
+        # item just BEFORE the -module/-private item it belongs to.
+        if isinstance(item, Directive) and item.name == "predicate_export":
+            pending.extend((functor, arity)
+                           for functor, arity, *_ in item.specs)
+            continue
+        if isinstance(item, PrivateDeclaration):
+            pending = []
+            continue
+        if not isinstance(item, ModuleDeclaration):
+            continue
+        saw = True
+        for functor, arity in pending:
+            arities = result.setdefault(functor, set())
+            if arities is not None:
+                arities.add(arity)
+        pending = []
+        for entry in item.exports:
+            if isinstance(entry, str):
+                result[entry] = None
+            elif (isinstance(entry, (tuple, list)) and len(entry) == 2
+                    and isinstance(entry[0], str)):
+                arities = result.setdefault(entry[0], set())
+                if arities is not None:
+                    arities.add(len(entry[1] or ()))
+    return result if saw else _NO_DIRECTIVE
+
+
+def record_pl_exports(module, module_items) -> None:
+    """Record the ``.pl`` *module*'s export list from its *module_items*."""
+    try:
+        _pl_exports[module] = _export_arities_of(module_items)
+    except Exception:  # pragma: no cover - defensive
+        _pl_exports.pop(module, None)
+
+
+def _exported_arities(mod):
+    """``{name: {arity, ...} | None}`` for *mod*'s ``module/2`` export list
+    (``None``: every arity), or ``None`` when the file has no ``module/2``
+    directive.  The loader's record; else (a module loaded before the
+    record existed) re-read from source."""
+    try:
+        result = _pl_exports[mod]
+    except (KeyError, TypeError):
+        from clausal.import_diagnostics import _module_items_of  # noqa: PLC0415
+        try:
+            result = _export_arities_of(
+                _module_items_of(mod, getattr(mod, "__loader__", None)))
+        except Exception:  # pragma: no cover - source unreadable now
+            return None
+    return None if result is _NO_DIRECTIVE else result
+
+
+def private_procedure(mod, name: str, selected):
+    """The indicator ``name/N`` when importing *name* (every arity when
+    *selected* is ``None``, else the arities in *selected*) from the
+    ``.pl`` module *mod* names a predicate *mod* DEFINES but does not
+    export; else ``None``.
+
+    Operator ruling 2026-10-01: in Clausal code an import of an unexported
+    ``.pl`` predicate is an error (Python code is not affected).  A bare
+    name is refused when *mod* exports it at no arity; a ``name/N`` entry
+    when *mod* defines ``name/N`` and does not export it.  A module with no
+    ``module/2`` directive exports everything.  A name *mod* only imports
+    (it defines no clauses for it) is not this check's business."""
+    if not _is_pl_module(mod):
+        return None
+    if getattr(getattr(mod, "__spec__", None), "_initializing", False):
+        # A circular import: the exporter's database is not complete yet,
+        # so "defines" cannot be answered.  Known gap: such an import is
+        # not checked.
+        return None
+    db = getattr(vars(mod).get("$module"), "db", None)
+    if db is None:
+        return None
+    try:
+        defined = set(db.arities_for(name))
+    except Exception:  # pragma: no cover - defensive
+        return None
+    if not defined:
+        return None
+    exports = _exported_arities(mod)
+    if exports is None:
+        return None
+    if name in exports and exports[name] is None:
+        return None             # exported with no arity: every arity
+    exported = exports.get(name, set())
+    if selected is None:
+        # Exported at ANY arity imports the name (and so every arity the
+        # module defines: a bare entry binds the name, not one arity).
+        if exported:
+            return None
+        return f"{name}/{min(defined)}"
+    private = sorted(a for a in selected if a in defined and a not in exported)
+    return f"{name}/{private[0]}" if private else None
 
 
 def _is_predicate_of(mod, name: str) -> bool:
@@ -197,10 +307,12 @@ def data_atom(mod, name: str):
 # resolves ``-import_from(M, [max])`` to the atom ``max`` too.
 #
 # Who does NOT get the fallback (the caller keeps AttributeError):
-#   - the import machinery: ``from M import name`` (the IMPORT_FROM opcode)
-#     and importlib's ``_handle_fromlist`` probe, so a seam ``-import_from``
-#     keeps its own path above (its ``name/N`` refusal and per-importer
-#     warning) and ``from pkg import sub`` still imports a submodule;
+#   - the import machinery: importlib's ``_handle_fromlist`` probe, so
+#     ``from pkg import sub`` still imports a submodule, and the IMPORT_FROM
+#     opcode in CLAUSAL code only, so a seam ``-import_from`` keeps its own
+#     path above (its ``name/N`` refusal and per-importer warning).  In
+#     PYTHON code ``from M import name`` is getattr and gets the atom
+#     (operator ruling 2026-10-01: in Python code, Python semantics apply);
 #   - the engine itself (Python code in the ``clausal`` package): its probes
 #     (``getattr(x, 'db', None)``, ``hasattr(mod, n)`` ...) ask whether the
 #     module BINDS the name, and keep that meaning;
@@ -272,6 +384,16 @@ def _caller_opts_out(frame) -> bool:
         return True
     if _is_stdlib_file(filename):
         return True
+    # ``from M import name`` (the IMPORT_FROM opcode) in PYTHON code is
+    # getattr (operator ruling 2026-10-01, "in Python code, Python semantics
+    # apply"), so it gets the atom like ``M.name`` does.  In CLAUSAL code
+    # (a compiled .clausal/.seam/.pl module, whose namespace holds
+    # ``$module``) the statement is a seam ``-import_from`` or a .pl
+    # ``use_module``: it keeps its own path (``bind_data_names``, with its
+    # ``name/N`` refusal and per-importer warning, and the .pl importer's
+    # plain import).
+    if "$module" not in frame.f_globals:
+        return False
     try:
         return frame.f_code.co_code[frame.f_lasti] == _IMPORT_FROM
     except (IndexError, AttributeError):  # pragma: no cover - defensive

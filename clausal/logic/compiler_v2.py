@@ -790,6 +790,39 @@ def _refuse_missing_indicators(item, mod, orig_name: str, selected,
         name=orig_name, path=getattr(mod, "__file__", None))
 
 
+def _refuse_private_procedure(item, mod, orig_name: str, selected,
+                              module_dict: dict) -> None:
+    """Operator ruling 2026-10-01: in Clausal code, importing a predicate
+    that a ``.pl`` module DEFINES but does not EXPORT is a load-time
+    ``permission_error(access, private_procedure, Name/Arity)``.  Covers a
+    seam ``-import_from(m, [p])`` (and ``p/N``, ``alias(p, q)``) and a
+    ``.pl`` ``use_module(m, [p/N])``.  Python's ``from m import p`` does not
+    come here and is not affected (no export privacy from Python).
+
+    Scryer accepts ``use_module(m, [p/1])`` for an unexported ``p/1``
+    silently and imports nothing, so a later call is an
+    ``existence_error(procedure, p/1)``; the permission error is the
+    operator's provisional shape for refusing it at load time."""
+    from clausal.pl_data_imports import private_procedure  # noqa: PLC0415
+    indicator = private_procedure(mod, orig_name, selected)
+    if indicator is None:
+        return
+    where = module_dict.get("__file__") or module_dict.get("__name__") or ""
+    line = getattr(item, "line", 0)
+    at = f"{where}, line {line}" if line else where
+    wanted = (orig_name if selected is None else
+              ", ".join(f"{orig_name}/{a}" for a in sorted(selected)))
+    directive = ("use_module" if str(module_dict.get("__file__") or "")
+                 .endswith(".pl") else "-import_from")
+    raise ImportError(
+        f"{at}: {directive}({item.module}, [{wanted}]): "
+        f"permission_error(access, private_procedure, {indicator}) -- "
+        f"{item.module} defines {indicator} but does not export it; add it "
+        f"to {item.module}'s module/2 export list, or call an exported "
+        f"predicate",
+        name=orig_name, path=getattr(mod, "__file__", None))
+
+
 #: Engine modules whose functions implement builtins of the same name.
 _ENGINE_SOLVER_MODULES = frozenset({"clausal.logic.clpfd"})
 
@@ -892,6 +925,10 @@ def _process_imports(module_items: list, module_dict: dict, db=None) -> None:
                         item, mod,
                         name_spec[0] if isinstance(name_spec, tuple)
                         else name_spec, selected, module_dict)
+                _refuse_private_procedure(
+                    item, mod,
+                    name_spec[0] if isinstance(name_spec, tuple)
+                    else name_spec, selected, module_dict)
                 if isinstance(name_spec, tuple):
                     orig_name, local_name = name_spec
                     value = (_engine_builtin_for(mod, orig_name)

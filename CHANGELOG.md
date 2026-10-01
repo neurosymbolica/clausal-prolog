@@ -35,6 +35,23 @@ since 0.4.0 finish three moves:
   or looking up clauses in, `M:`, a missing OUTER atom module
   (`nosuchmod:m2:G`) and `module=` arguments keep `existence_error(module,
   …)`.
+- **Importing an unexported `.pl` predicate in Clausal code is an error**
+  (ruled 2026-10-01). A seam `-import_from(m, [p])` (also `[p/N]` and
+  `[alias(p, q)]`) or a `.pl` `:- use_module(m, [p/N])` naming a predicate
+  that the `.pl` module `m` defines but does not export raises
+  `ImportError` with `permission_error(access, private_procedure, p/N)` at
+  load time, under both front ends; it silently imported the predicate.
+  A `.pl` file with no `module/2` directive exports everything. Scryer
+  accepts such a `use_module` silently and imports nothing (the call then
+  raises `existence_error(procedure, p/N)`); the error term is provisional.
+- **In Python code, `from plmod import name` is `getattr`** (ruled
+  2026-10-01: in Python code, Python semantics apply). For an unbound
+  atom-shaped name of a module loaded from `.pl` it now gives the atom,
+  like `plmod.name`; it raised `ImportError`. A real submodule still
+  imports (`from pkg import sub`); an atom-shaped name that is no
+  submodule gives the atom (`from pkg import nosuchsub` is `'nosuchsub'`).
+  In Clausal code the statement keeps the seam `-import_from` rules.
+
 - **Attribute access on a `.pl` module answers an unbound data name with
   its atom** (ruled 2026-10-01, extending the `.pl` data-import ruling).
   `getattr(mod, 'employment')` / `mod.employment` on a module loaded from
@@ -629,6 +646,14 @@ since 0.4.0 finish three moves:
     - The test runner descends into a failing goal's clauses.
 
 ### Changed
+
+- **No export privacy from Python.** Python code reaches a `.pl` module's
+  unexported predicates through `getattr`, `mod.name` and
+  `from mod import name`, as with any module attribute (this already worked
+  under both front ends; now pinned by tests). It is documented as possible
+  but **not supported long-term and not advisable**: use exported
+  predicates, since unexported access may stop working in a future release.
+  No runtime warning.
 
 Where there is a choice, ISO 13211-1 is the reference, and Scryer Prolog
 where ISO is silent; SWI-Prolog is not a reference.

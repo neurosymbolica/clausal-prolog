@@ -9,9 +9,10 @@ On 53bf70df reading a root atom off a ``.pl`` package root raised
 
 Atom-shaped is ``iso_l3_directives._is_declarable`` (a lowercase
 identifier, no keyword, no reserved name): no dunder, private, TitleCase,
-keyword or non-identifier name is answered.  ``from M import name`` keeps
-its import-path behaviour, and ``.clausal``/``.seam`` and Python modules
-are unchanged.  Absence is asked through ``clausal.defines_predicate`` /
+keyword or non-identifier name is answered.  ``from M import name`` in
+Python code is getattr (operator ruling 2026-10-01); in Clausal code it is a
+seam ``-import_from`` and keeps its own path.  ``.clausal``/``.seam`` and
+Python modules are unchanged.  Absence is asked through ``clausal.defines_predicate`` /
 ``clausal.module_binds``.
 """
 import importlib
@@ -134,13 +135,53 @@ def test_an_unimported_submodule_is_not_data(pkg, fe):
 
 
 @pytest.mark.parametrize("fe", FRONT_ENDS)
-def test_from_import_keeps_the_import_path(pkg, fe):
-    """``from M import name`` is the import path (the seam ``-import_from``
-    ruling owns data names there); a Python ``from`` import of an unbound
-    name is still ImportError."""
-    _root, tag = pkg(fe, "ga_from")
-    with pytest.raises(ImportError, match="cannot import name 'employment'"):
-        exec(f"from {tag} import employment", {})
+def test_from_import_in_python_is_getattr(pkg, fe):
+    """Operator ruling 2026-10-01 ("in Python code, Python semantics
+    apply"): ``from M import name`` in Python behaves exactly like
+    ``getattr(M, 'name')``, so an unbound atom-shaped name is its atom.
+    On 841b6b24 the IMPORT_FROM opcode was excluded and this raised
+    ``ImportError: cannot import name 'employment'``."""
+    root, tag = pkg(fe, "ga_from")
+    ns = {}
+    exec(f"from {tag} import employment, citation", ns)
+    assert ns["employment"] == "employment" == getattr(root, "employment")
+    assert type(ns["employment"]) is str
+    assert ns["citation"] == root.citation          # bound: unchanged
+
+
+@pytest.mark.parametrize("fe", FRONT_ENDS)
+def test_from_import_in_a_python_module_file(pkg, fe, tmp_path):
+    """The same from a real ``.py`` module (not ``exec``)."""
+    _root, tag = pkg(fe, "ga_fromfile")
+    (tmp_path / f"user_{tag}.py").write_text(
+        f"from {tag} import employment\n")
+    importlib.invalidate_caches()
+    try:
+        user = importlib.import_module(f"user_{tag}")
+        assert user.employment == "employment"
+    finally:
+        sys.modules.pop(f"user_{tag}", None)
+
+
+@pytest.mark.parametrize("fe", FRONT_ENDS)
+def test_from_import_of_a_missing_submodule_name_is_the_atom(pkg, fe):
+    """``from pkg import nosuchsub``: importlib's submodule probe finds no
+    ``pkg.nosuchsub`` (and swallows that), then IMPORT_FROM reads the
+    attribute, which -- like ``pkg.nosuchsub`` -- is the atom."""
+    root, tag = pkg(fe, "ga_nosub")
+    ns = {}
+    exec(f"from {tag} import nosuchsub", ns)
+    assert ns["nosuchsub"] == "nosuchsub" == root.nosuchsub
+    assert f"{tag}.nosuchsub" not in sys.modules
+
+
+@pytest.mark.parametrize("fe", FRONT_ENDS)
+@pytest.mark.parametrize("name", ["Employment", "_employment", "__wrapped__"])
+def test_from_import_of_a_name_that_is_not_atom_shaped_still_fails(
+        pkg, fe, name):
+    _root, tag = pkg(fe, "ga_fromshape")
+    with pytest.raises(ImportError, match=f"cannot import name '{name}'"):
+        exec(f"from {tag} import {name}", {})
 
 
 @pytest.mark.parametrize("fe", FRONT_ENDS)

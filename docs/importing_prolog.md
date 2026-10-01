@@ -154,9 +154,11 @@ An atom is global by spelling, so the `cite` you import is the same atom
 the `.pl` rulebase writes in `cite(art1)`: the term built from it
 (`('cite', 'art1')`) is `==` to the rulebase's.
 
-- A name the module binds keeps its ordinary meaning: an exported (or
-  defined) predicate imports the predicate, and a data atom the file
-  itself uses imports that atom.
+- A name the module binds keeps its ordinary meaning: an exported
+  predicate imports the predicate, and a data atom the file itself uses
+  imports that atom. A predicate the module defines but does not export
+  is an error (see
+  [Unexported predicates in Clausal code](#unexported-predicates-in-clausal-code)).
 - A `name/N` entry names a predicate, so it never resolves to data: with
   no `name/N` in the module it is still an `ImportError`.
 - The imported name also builds terms at any arity, positionally:
@@ -187,16 +189,19 @@ citations.citation                 # the predicate's handle, as before
   Python keyword and no reserved name (`true`, `false`, `undefined`). A
   dunder or private name (`__wrapped__`, `_x`), a TitleCase name and a
   non-identifier still raise `AttributeError`.
-- Tooling gets no answer: the import machinery, the Python standard
+- Tooling gets no answer: importlib's submodule probe, the Python standard
   library (`unittest`'s `load_tests`, `doctest`, `pickle`, `inspect`) and
   tools such as pytest and Sphinx still see `AttributeError`, so their
   hook lookups (`getattr(mod, 'load_tests', None)`) behave as before.
   Only your own code gets the atom.
 - A submodule of a `.pl` package that is not imported yet is not data:
   `from pkg import sub` still imports it.
-- `from mod import name` in Python is the import path, not attribute
-  access, and still raises `ImportError` for an unbound name (a seam
-  `-import_from` resolves it as above).
+- In Python code, `from mod import name` is `getattr(mod, 'name')`, so an
+  unbound atom-shaped name imports its atom too (ruled 2026-10-01: in
+  Python code, Python semantics apply). That includes a name that is not a
+  submodule of a `.pl` package: `from pkg import nosuchsub` gives the atom
+  `'nosuchsub'`. In Clausal code the same name goes through the seam
+  `-import_from` rules above.
 - A near miss of a predicate (`citations.citaton`) warns once per module
   and name, with `ClausalImportedDataNameWarning`.
 - `.clausal`/`.seam` and Python modules are unchanged.
@@ -208,6 +213,32 @@ asks whether `name` is a predicate you can call through the module (defined
 there or imported, as in a thin facade), `clausal.defines_predicate` whether
 the module itself defines it, and `clausal.module_binds(mod, name)` whether
 the name is a real attribute of the module (a predicate or data).
+
+### Unexported predicates from Python
+
+In Python code there is no export privacy (ruled 2026-10-01: in Python
+code, Python semantics apply). A predicate a `.pl` module defines but does
+not list in its `module/2` export list is still an attribute of the module,
+so Python reaches it like any module attribute:
+
+```python
+import citations                   # :- module(citations, [citation/2]).
+citations.helper                   # helper/1 is not exported: its handle
+from citations import helper       # the same handle
+solve(("helper", X := Var()), module=citations)   # runs
+```
+
+!!! warning "Possible, but not supported long-term and not advisable"
+    Reaching an unexported predicate from Python works today, under both
+    front ends, but it is **not supported long-term** and may stop working
+    in a future release. Python callers should use the module's exported
+    predicates. There is no runtime warning.
+
+Clausal code gets no such access: a seam `-import_from(citations, [helper])`
+(or `helper/1`, or `alias(helper, h)`) and a `.pl`
+`:- use_module(citations, [helper/1])` of a predicate the module defines
+but does not export are load-time errors (see
+[Unexported predicates in Clausal code](#unexported-predicates-in-clausal-code)).
 
 ---
 
@@ -242,6 +273,43 @@ does not load `m`, so `m:p(X)` is an `existence_error`), while Trealla and
 SWI load `m` and import nothing. Write `use_module(m)` or
 `use_module(m, [p/1])` instead; after either, `m:p(X)` reaches every
 predicate `m` exports, in Clausal, Scryer and Trealla alike.
+
+### Unexported predicates in Clausal code
+
+In Clausal code, importing a predicate that a `.pl` module defines but does
+not list in its `module/2` export list is a load-time `ImportError` carrying
+`permission_error(access, private_procedure, Name/Arity)` (ruled
+2026-10-01). That covers a seam `-import_from(m, [p])`, `[p/N]` and
+`[alias(p, q)]`, and a `.pl` `:- use_module(m, [p/N])`, under both front
+ends:
+
+```prolog
+% m.pl
+:- module(m, [rate/1]).
+rate(X) :- helper(X).
+helper(5).
+```
+
+```python
+-import_from(m, [helper])   # ImportError: ... permission_error(access,
+                            #   private_procedure, helper/1) -- m defines
+                            #   helper/1 but does not export it
+```
+
+- A bare name is refused when the module exports it at no arity; a `p/N`
+  entry when the module defines `p/N` and does not export it. A bare name
+  exported at one arity binds the NAME, so it also reaches the module's
+  other, unexported arities; import `p/N` to take only the exported one.
+- A circular import is not checked (the exporter is still loading).
+- A `.pl` file with no `module/2` directive exports everything.
+- A name the module does not define as a predicate is unaffected: a data
+  name still imports its atom (above).
+- Scryer accepts `use_module(m, [helper/1])` for an unexported `helper/1`
+  silently and imports nothing, so the later call raises
+  `existence_error(procedure, helper/1)`; Clausal refuses at load time
+  instead. The error term is provisional.
+- Python code is not affected (see
+  [Unexported predicates from Python](#unexported-predicates-from-python)).
 
 ### `end_module`: closing a module
 

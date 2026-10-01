@@ -283,6 +283,12 @@ def _run_v2_pipeline(loader, module, module_dict, filename, recover_module_items
     else:
         module_items = recover_module_items_fn(filename)
 
+    if isinstance(loader, PrologLoader):
+        # The .pl export list, for importers' private-procedure check
+        # (clausal/pl_data_imports.py), read now so nobody re-lowers the
+        # source later (a re-lowering resets the native loader's l3_stats).
+        from clausal.pl_data_imports import record_pl_exports  # noqa: PLC0415
+        record_pl_exports(module, module_items)
     module_dict["$intern_atom"] = _make_intern_atom(module_dict, module_items,
                                                     module.__name__)
     _unseed_foreign_pool_atoms(module_dict, module_items)

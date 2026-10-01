@@ -160,9 +160,9 @@ def test_an_exported_predicate_still_imports_the_predicate(pkg, fe):
     assert mod.atom() == "cite"
 
 
-# Importing a defined-but-UNEXPORTED .pl predicate currently succeeds (it
-# binds the predicate).  Ruled 2026-09-30 that it should become an error;
-# that is a separate follow-up with a census, so no test pins it here.
+# Importing a defined-but-UNEXPORTED .pl predicate is a load-time
+# permission_error(access, private_procedure, Name/Arity) (operator ruling
+# 2026-10-01): tests/test_seam_import_unexported_pl_predicate.py.
 
 
 @pytest.mark.parametrize("fe", FRONT_ENDS)
@@ -222,6 +222,24 @@ def test_a_near_miss_of_a_predicate_warns_once_naming_it(pkg, fe):
     assert "`citation`" in str(hits[0].message)
     assert "citaton" in str(hits[0].message)
     assert mod.atom() == "citaton"
+
+
+@pytest.mark.parametrize("fe", FRONT_ENDS)
+def test_a_seam_import_keeps_the_seam_path_not_getattr(pkg, fe):
+    """In Python code ``from M import name`` is getattr (ruling
+    2026-10-01); in a seam module the lowered ``from M import`` must still
+    decline the attribute fallback and take ``bind_data_names``: its
+    warning names the ``-import_from`` directive, not the attribute."""
+    load = pkg(fe, f"dn_seampath_{fe}")
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        load("sp", """\
+            -import_from(PKG.dom.citations, [citaton])
+        """)
+    hits = [str(w.message) for w in caught
+            if issubclass(w.category, ClausalImportedDataNameWarning)]
+    assert len(hits) == 1, hits
+    assert hits[0].startswith("-import_from("), hits
 
 
 @pytest.mark.parametrize("fe", FRONT_ENDS)
