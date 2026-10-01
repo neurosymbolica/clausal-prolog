@@ -246,6 +246,13 @@ def _resolve_nonterminal(db, rule_val, extra_args, context):
     ``existence_error(procedure, nosuch/2)`` -- N//A is N/(A+2) -- as Scryer.
     """
     from clausal.logic.builtins.higher_order import _resolve_named_goal  # noqa: PLC0415
+    if is_var(rule_val):
+        # ISO / Scryer: phrase(B, L) with B unbound -- also a variable
+        # grammar body, translated as phrase(B, S0, S), and the NT of
+        # ``M:NT`` -- is an instantiation_error.  It used to fail silently.
+        from clausal.logic.exceptions import (  # noqa: PLC0415
+            LogicException, instantiation_error)
+        raise LogicException(instantiation_error(context))
     if len(extra_args) == 2 and _is_whole_body_cut(rule_val):
         # ``phrase(!, L)`` is ``call((!, S0 = S))``: the local cut cuts
         # nothing (``_is_whole_body_cut``).  It used to be looked up as the

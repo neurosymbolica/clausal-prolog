@@ -852,6 +852,11 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
 
 ### Fixed
 
+- **`phrase/2,3` with an unbound grammar body raise
+  `instantiation_error`**, as ISO and Scryer do: `phrase(_, L)`,
+  `phrase(_, L, [])`, and so a variable grammar body (`v(B) --> B.`)
+  called with `B` unbound. They used to fail silently.
+
 - **A bare-name import of a `.pl` predicate brings only its exported
   arities** (ruled 2026-10-01). With `:- module(m, [p/1])` and an
   unexported `p/2` also defined, `-import_from(m, [p])` (or
