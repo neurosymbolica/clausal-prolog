@@ -374,6 +374,54 @@ has. A Python predicate is one object for all its arities, so importing
 `p/N` also makes `p`'s other registered arities callable. A bare atom in
 the list imports nothing, as for any module.
 
+### Python libraries from Clausal Prolog: `library(...)` facades
+
+Clausal Prolog reaches Python **only through a `.seam` module**. Every
+engine Python module has a generated `.seam` facade, which Clausal Prolog
+imports as a system library, the Scryer way:
+
+```prolog
+:- use_module(library(datetime), [date_add/3, timedelta/3, days_between/3]).
+:- use_module(library(countries/european_union), [euro, eur_cent]).
+:- use_module(library(units), [second]).
+```
+
+| Python module | Clausal Prolog import |
+|---|---|
+| `clausal/modules/py/<lib>.py` (`py/datetime`, `py/json`, `py/re`, ...) | `library(<lib>)` |
+| `clausal/modules/<m>.py` (`units`, `imperial`, `currency`, `graphs`, `reflection`) | `library(<m>)` |
+| `clausal/modules/countries/<j>.py` (`european_union`, ...) | `library(countries/<j>)` |
+
+A facade (`clausal/library/<path>.seam`) is a pure re-export: the module's
+predicates with the same names and arities, and its values (units,
+currencies, numeric constants), the very same objects. So a call site
+changes only its import line. A library the front end already knows
+(`clpz`, `lists`, `reif`, ...) is never shadowed by a facade. The list of
+facades is `clausal._py_facades.PY_FACADE_LIBS`, readable without importing
+the engine; `python -m clausal.tools.gen_library_facades` regenerates the
+facades (`--census` prints the module -> facade table).
+
+In a Clausal Prolog module, an import whose target is a Python module **by
+path** is refused at load time, naming the facade:
+
+```text
+use_module(py/datetime, [...]): permission_error(access, python_module,
+py.datetime) -- Clausal Prolog reaches Python only through a .seam module;
+import the facade library(datetime) instead
+```
+
+A module **name** that the seam resolves through its aliases
+(`european_union`, `units`, `date_time`) is no Python path: in Clausal
+Prolog it imports that module's facade, so
+`:- use_module(european_union, [euro]).` keeps working. A Python module that
+has no facade (one of your own) needs a `.seam` wrapper written for it.
+
+The Clausal Prolog surface has no file extension of its own until the
+extension flip (`clausal._suffixes.CLAUSAL_PROLOG_SUFFIXES` is empty), so
+the refusal is not active yet. A `.pl` file (the ISO surface) and a seam
+file are unaffected: a `.pl` may still import `py/datetime` directly, and
+may use the `library(...)` spelling too.
+
 ### Module paths
 
 A module is named by an atom (`helpers`), a quoted or unquoted path

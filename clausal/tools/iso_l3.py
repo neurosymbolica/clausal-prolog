@@ -962,7 +962,8 @@ def lower_items(items, *, strict: bool = True, source: "str | None" = None,
     where_file = filename or "<.pl>"
     ctx = DirectiveContext(source=source, filename=where_file,
                            positions=positions, op_table=op_table,
-                           source_path=source_path, module_name=module_name)
+                           source_path=source_path, module_name=module_name,
+                           surface=surface)
     if source is not None:
         ctx.prescanned = prescan_constructors(source)
     uses = Uses()
