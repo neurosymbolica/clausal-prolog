@@ -17,6 +17,32 @@ A name the native front end already knows as a library (``clpz``,
 from decimal import Decimal
 from fractions import Fraction
 
+#: Scryer Prolog's own library names (``src/lib`` of Scryer 0.9.x,
+#: measured 2026-10-01).  A facade never takes one of these: an engine
+#: module that would is published as ``library(py_<name>)`` instead
+#: (operator ruling 2026-10-01), so ``library(os)`` keeps meaning Scryer's
+#: library -- an unknown library in a ``.pl`` stays an error.
+SCRYER_LIBRARIES: frozenset = frozenset({
+    "arithmetic", "assoc", "atts", "between", "builtins", "charsio", "clpb",
+    "clpq", "clpr", "clpz", "cont", "crypto", "csv", "dcgs", "debug", "diag",
+    "dif", "error", "ffi", "files", "format", "freeze", "gensym",
+    "http/http_open", "http/http_server", "iso_ext", "lambda", "lists",
+    "numerics/quadtests", "numerics/special_functions",
+    "numerics/testutils", "ops_and_meta_predicates", "ordsets", "os",
+    "pairs", "pio", "process", "queues", "random", "reif",
+    "serialization/abnf", "serialization/json", "sgml", "si", "simplex",
+    "sockets", "tabling", "terms", "time", "tls", "ugraphs", "uuid", "wasm",
+    "when", "xpath",
+})
+
+
+def facade_path(path: str) -> str:
+    """The ``library(...)`` path of the facade over the engine module at
+    *path* below ``clausal/modules`` (``py/`` dropped): the path itself, or
+    ``py_<path>`` when Scryer has a library of that name
+    (``os`` -> ``py_os``, ``datetime`` -> ``datetime``)."""
+    return f"py_{path}" if path in SCRYER_LIBRARIES else path
+
 
 def is_value(v) -> bool:
     """A VALUE a facade re-exports: a unit or currency (a units predicate

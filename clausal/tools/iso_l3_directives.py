@@ -980,7 +980,9 @@ def _facade_lib(target: str) -> "str | None":
     """The ``library(...)`` path of the facade over the engine module
     *target* (``clausal.modules.py.datetime`` -> ``datetime``,
     ``clausal.modules.countries.european_union`` ->
-    ``countries/european_union``), whether or not one ships; None for a
+    ``countries/european_union``, ``clausal.modules.py.os`` -> ``py_os``:
+    a Scryer library name takes the ``py_`` prefix), whether or not one
+    ships; None for a
     module outside ``clausal.modules``."""
     prefix = _MODULES_PACKAGE + "."
     if not target.startswith(prefix):
@@ -988,7 +990,8 @@ def _facade_lib(target: str) -> "str | None":
     rest = target[len(prefix):]
     if rest.startswith("py."):
         rest = rest[3:]
-    return rest.replace(".", "/")
+    from clausal.library import facade_path  # noqa: PLC0415
+    return facade_path(rest.replace(".", "/"))
 
 
 def _facade_for(target: str) -> "str | None":

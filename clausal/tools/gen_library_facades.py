@@ -15,6 +15,11 @@ Every Python module a ``use_module`` in Prolog text can resolve to under
     clausal/modules/py/datetime.py               -> library(datetime)
     clausal/modules/units.py (and py/units.py)   -> library(units)
     clausal/modules/countries/european_union.py  -> library(countries/european_union)
+    clausal/modules/py/os.py                     -> library(py_os)
+
+A name Scryer already uses for a library of its own (``os``, ``files``,
+``random``, ``uuid``, ``csv``, ``process``: ``clausal.library.SCRYER_LIBRARIES``)
+gets the ``py_`` prefix, so ``library(os)`` never means two things.
 
 A facade is a pure re-export, no clauses of its own: the module's
 PREDICATES (:func:`clausal.module_signatures`, same names and arities) and
@@ -124,7 +129,9 @@ def sources(modules_dir: str = MODULES_DIR) -> "list[tuple[str, str, list]]":
                 out[path][1].append(dotted)
             else:
                 out[path] = (dotted, [dotted])
-    return [(p, src, spellings) for p, (src, spellings) in sorted(out.items())]
+    from clausal.library import facade_path  # noqa: PLC0415
+    return sorted((facade_path(p), src, spellings)
+                  for p, (src, spellings) in out.items())
 
 
 def facade_text(path: str, source: str, sig: dict,

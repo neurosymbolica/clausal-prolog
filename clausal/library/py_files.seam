@@ -3,9 +3,9 @@
 #     clausal.modules.py.files
 # Clausal Prolog reaches Python only through a .seam module, so it
 # imports this one:
-#     :- use_module(library(files), [absolute_path/2]).
+#     :- use_module(library(py_files), [absolute_path/2]).
 # A pure re-export of the module's predicates, same names and arities.
--module(files, [
+-module(py_files, [
     absolute_path/2,
     append_string_to_file/2,
     copy_file/2,

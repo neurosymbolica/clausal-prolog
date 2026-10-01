@@ -137,6 +137,47 @@ def test_no_facade_shadows_a_known_library():
     assert not facades & known
 
 
+def test_no_facade_takes_a_scryer_library_name():
+    """Operator ruling 2026-10-01: a facade whose name is one of Scryer's
+    own libraries is published as library(py_<name>)."""
+    from clausal.library import SCRYER_LIBRARIES
+    facades = {f[:-len(gen.FACADE_SUFFIX)] for f in gen.committed()}
+    assert not facades & SCRYER_LIBRARIES
+    clashed = {f[3:] for f in facades if f.startswith("py_")}
+    assert clashed == {"csv", "files", "os", "process", "random", "uuid"}
+    assert clashed <= SCRYER_LIBRARIES
+
+
+@pytest.mark.parametrize("frontend", ["native", "translator"])
+def test_clausal_prolog_imports_a_py_prefixed_facade(native, ans, frontend,
+                                                     clausal_prolog):
+    name = f"fac_pyos_{frontend}"
+    mod = native.load(name, textwrap.dedent(f"""\
+        :- module({name}, [n/1]).
+        :- use_module(library(py_os), [cpu_count/1]).
+        n(yes) :- cpu_count(C), C > 0.
+        :- end_module({name}).
+        """), frontend=frontend)
+    assert ans(mod, "n") == ["yes"]
+
+
+def test_a_scryer_library_name_stays_unknown_in_a_pl(native):
+    """library(os) is Scryer's library, which Clausal does not provide:
+    no facade answers it, so the native front end still refuses it."""
+    msg = _refusal(native, "fac_scryer_os",
+                   ":- use_module(library(os), [getenv/2]).\n")
+    assert "library(os) is not a library" in msg
+
+
+def test_the_refusal_of_py_os_names_library_py_os(native, clausal_prolog):
+    msg = _refusal(native, "fac_no_os", """\
+        :- module(fac_no_os, []).
+        :- use_module(py/os, [cpu_count/1]).
+        :- end_module(fac_no_os).
+        """)
+    assert "library(py_os)" in msg
+
+
 def test_a_submodule_named_after_the_stdlib_loads():
     """The stdlib-shadow guard defers only a TOP-LEVEL name: the facade
     ``clausal.library.datetime`` cannot stand in for ``datetime``."""

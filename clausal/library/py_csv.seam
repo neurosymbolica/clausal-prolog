@@ -3,9 +3,9 @@
 #     clausal.modules.py.csv
 # Clausal Prolog reaches Python only through a .seam module, so it
 # imports this one:
-#     :- use_module(library(csv), [generate/2]).
+#     :- use_module(library(py_csv), [generate/2]).
 # A pure re-export of the module's predicates, same names and arities.
--module(csv, [
+-module(py_csv, [
     generate/2,
     generate_records/3,
     parse/2,

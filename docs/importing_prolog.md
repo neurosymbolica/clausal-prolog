@@ -389,6 +389,7 @@ imports as a system library, the Scryer way:
 | Python module | Clausal Prolog import |
 |---|---|
 | `clausal/modules/py/<lib>.py` (`py/datetime`, `py/json`, `py/re`, ...) | `library(<lib>)` |
+| `py/os`, `py/files`, `py/random`, `py/uuid`, `py/csv`, `py/process` | `library(py_<lib>)` (`library(py_os)`, ...) |
 | `clausal/modules/<m>.py` (`units`, `imperial`, `currency`, `graphs`, `reflection`) | `library(<m>)` |
 | `clausal/modules/countries/<j>.py` (`european_union`, ...) | `library(countries/<j>)` |
 
@@ -396,7 +397,11 @@ A facade (`clausal/library/<path>.seam`) is a pure re-export: the module's
 predicates with the same names and arities, and its values (units,
 currencies, numeric constants), the very same objects. So a call site
 changes only its import line. A library the front end already knows
-(`clpz`, `lists`, `reif`, ...) is never shadowed by a facade. The list of
+(`clpz`, `lists`, `reif`, ...) is never shadowed by a facade, and no facade
+takes the name of one of Scryer's own libraries: the six adapters whose
+names Scryer already uses (`os`, `files`, `random`, `uuid`, `csv`,
+`process`) are `library(py_<lib>)`, so `library(os)` still means Scryer's
+library, which Clausal does not provide (an error, as before). The list of
 facades is `clausal._py_facades.PY_FACADE_LIBS`, readable without importing
 the engine; `python -m clausal.tools.gen_library_facades` regenerates the
 facades (`--census` prints the module -> facade table).

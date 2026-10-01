@@ -3,9 +3,9 @@
 #     clausal.modules.py.uuid
 # Clausal Prolog reaches Python only through a .seam module, so it
 # imports this one:
-#     :- use_module(library(uuid), [is_uuid/1]).
+#     :- use_module(library(py_uuid), [is_uuid/1]).
 # A pure re-export of the module's predicates, same names and arities.
--module(uuid, [
+-module(py_uuid, [
     is_uuid/1,
     uuid_bytes/2,
     uuid_fields/7,

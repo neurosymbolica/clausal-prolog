@@ -3,9 +3,9 @@
 #     clausal.modules.py.random
 # Clausal Prolog reaches Python only through a .seam module, so it
 # imports this one:
-#     :- use_module(library(random), [choice/2]).
+#     :- use_module(library(py_random), [choice/2]).
 # A pure re-export of the module's predicates, same names and arities.
--module(random, [
+-module(py_random, [
     choice/2,
     float_0_to_1/1,
     float_between/3,

@@ -3,9 +3,9 @@
 #     clausal.modules.py.os
 # Clausal Prolog reaches Python only through a .seam module, so it
 # imports this one:
-#     :- use_module(library(os), [argv/1]).
+#     :- use_module(library(py_os), [argv/1]).
 # A pure re-export of the module's predicates, same names and arities.
--module(os, [
+-module(py_os, [
     argv/1,
     change_directory/1,
     cpu_count/1,

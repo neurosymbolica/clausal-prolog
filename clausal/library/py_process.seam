@@ -3,9 +3,9 @@
 #     clausal.modules.py.process
 # Clausal Prolog reaches Python only through a .seam module, so it
 # imports this one:
-#     :- use_module(library(process), [process_create/3]).
+#     :- use_module(library(py_process), [process_create/3]).
 # A pure re-export of the module's predicates, same names and arities.
--module(process, [
+-module(py_process, [
     process_create/3,
     process_create/4,
     shell/1,

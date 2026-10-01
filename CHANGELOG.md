@@ -241,7 +241,10 @@ since 0.4.0 finish three moves:
   generated `.seam` facade under `clausal/library/`, a pure re-export of
   its predicates (same names and arities) and values (units, currencies,
   numbers): `py/<lib>` is `library(<lib>)` (`library(datetime)`,
-  `library(json)`, ...), `units`/`imperial`/`currency`/`graphs`/`reflection`
+  `library(json)`, ...) -- or `library(py_<lib>)` where Scryer has a
+  library of that name (`py_os`, `py_files`, `py_random`, `py_uuid`,
+  `py_csv`, `py_process`; `library(os)` stays an unknown library) --
+  `units`/`imperial`/`currency`/`graphs`/`reflection`
   are `library(<m>)`, and each currency jurisdiction is
   `library(countries/<j>)` -- 203 facades, 204 predicate indicators.
   `:- use_module(library(datetime), [date_add/3]).` works from a `.pl`
