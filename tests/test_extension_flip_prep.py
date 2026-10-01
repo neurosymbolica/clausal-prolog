@@ -220,3 +220,78 @@ def test_translate_reads_clausal_prolog_as_prolog(flip):
     assert _detect_direction("m.clausal", None) == "prolog_to_clausal"
     assert _detect_direction("m.seam", None) == "clausal_to_prolog"
 
+
+# ── a seam/.pl twin: a Prolog importer gets the SEAM module ──
+#
+# A name that exists as both ``name.seam`` and ``name.pl`` in one directory
+# (a helper library with a Scryer twin) resolves to the ``.seam`` for every
+# importer: the finder asks each path entry for the seam group BEFORE the
+# Prolog group, and that order is the same before and after the flip.
+
+_HELPER_SEAM = "-module(helperlib, [p(X)])\np(1),\n"
+_HELPER_PL = ":- module(helperlib, [p/1]).\np(2).\n"
+_IMPORTER = (":- module({m}, [q/1]).\n:- use_module(helperlib, [p/1]).\n"
+             "q(X) :- p(X).\n{end}")
+_TWIN_NAMES = ("helperlib", "efimp_cp", "efimp_pl")
+
+
+@pytest.fixture
+def twin(tmp_path, monkeypatch):
+    (tmp_path / "helperlib.seam").write_text(_HELPER_SEAM)
+    (tmp_path / "helperlib.pl").write_text(_HELPER_PL)
+    (tmp_path / "efimp_cp.clausal").write_text(
+        _IMPORTER.format(m="efimp_cp", end=":- end_module(efimp_cp).\n"))
+    (tmp_path / "efimp_pl.pl").write_text(
+        _IMPORTER.format(m="efimp_pl", end=""))
+    for n in _TWIN_NAMES:
+        sys.modules.pop(n, None)
+    monkeypatch.setattr(sys, "path", [str(tmp_path)] + sys.path)
+    importlib.invalidate_caches()
+    yield tmp_path
+    for n in _TWIN_NAMES:
+        sys.modules.pop(n, None)
+    shutil.rmtree(tmp_path / "__pycache__", ignore_errors=True)
+    importlib.invalidate_caches()
+
+
+def _group_suffixes():
+    return [tuple(s) for s, _ in ih.PredicateFinder()._suffix_groups()]
+
+
+def test_the_finder_asks_for_seam_before_prolog_before_the_flip():
+    assert _group_suffixes() == [(".clausal", ".seam"), (".pl",)]
+
+
+def test_the_finder_asks_for_seam_before_prolog_after_the_flip(flip):
+    assert _group_suffixes() == [(".seam",), (".pl", ".clausal")]
+
+
+def test_the_finder_picks_the_seam_twin(twin):
+    spec = ih.PredicateFinder().find_spec("helperlib", path=[str(twin)])
+    assert spec.origin.endswith("helperlib.seam")
+
+
+@pytest.mark.parametrize("frontend", ["native", "translator"])
+def test_a_pl_importer_of_a_twin_gets_the_seam_module(twin, monkeypatch,
+                                                      frontend):
+    monkeypatch.setenv(ih.PL_FRONTEND_ENV, frontend)
+    assert _answers(importlib.import_module("efimp_pl"), "q") == [1]
+    assert sys.modules["helperlib"].__file__.endswith("helperlib.seam")
+
+
+@pytest.mark.parametrize("frontend", ["native", "translator"])
+def test_a_clausal_prolog_importer_of_a_twin_gets_the_seam_module(
+        flip, twin, monkeypatch, frontend):
+    monkeypatch.setenv(ih.PL_FRONTEND_ENV, frontend)
+    mod = importlib.import_module("efimp_cp")
+    assert isinstance(mod.__spec__.loader, ih.NativePrologLoader)
+    assert _answers(mod, "q") == [1]
+    assert sys.modules["helperlib"].__file__.endswith("helperlib.seam")
+
+
+@pytest.mark.parametrize("frontend", ["native", "translator"])
+def test_after_the_flip_a_pl_importer_of_a_twin_still_gets_the_seam_module(
+        flip, twin, monkeypatch, frontend):
+    monkeypatch.setenv(ih.PL_FRONTEND_ENV, frontend)
+    assert _answers(importlib.import_module("efimp_pl"), "q") == [1]
+    assert sys.modules["helperlib"].__file__.endswith("helperlib.seam")
