@@ -306,8 +306,7 @@ class Uses:
 #: constant).  A site is a GOAL position (ISO 7.6.2, including a
 #: meta-argument the compiler runs as a goal and a qualified ``m:G``); a
 #: closure passed as data (``maplist(memberchk(X), Ls)``) is not counted.
-TRANSITION_KEYS = ("\\+/1", "once/1", "forall/2", "memberchk/2",
-                   "findall/3_empty", "make_quantity/3")
+from clausal._transition_constructs import TRANSITION_KEYS  # noqa: E402
 _TRANSITION_GOALS = {("once", 1): "once/1", ("forall", 2): "forall/2",
                      ("memberchk", 2): "memberchk/2",
                      ("findall", 3): "findall/3_empty",

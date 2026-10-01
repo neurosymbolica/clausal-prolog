@@ -717,15 +717,9 @@ class BareGoalUndefinedError(Exception):
 # D13 twin: the seam's transition-construct counter
 # ─────────────────────────────────────────────────────────────────────────────
 
-#: The transition constructs (operator ruling D13, 2026-09-30: accepted,
-#: COUNTED, allowed-existing / no-new), one key each -- the SAME keys, in
-#: the same order, as the native ``.pl`` front end's
-#: ``l3_stats["transition_constructs"]``
-#: (``clausal.tools.iso_l3_directives.TRANSITION_KEYS``), so one consumer
-#: reads both.  The seam's ``not`` is ``\+/1``.  ``if_/3`` is NOT one: it
-#: is library(reif)'s pure conditional, the replacement target.
-TRANSITION_KEYS = ("\\+/1", "once/1", "forall/2", "memberchk/2",
-                   "findall/3_empty", "make_quantity/3")
+#: D13's keys, shared with the native ``.pl`` front end (the seam's ``not``
+#: is ``\+/1``; ``if_/3`` is not one).
+from clausal._transition_constructs import TRANSITION_KEYS  # noqa: E402
 
 _TRANSITION_SUBCALLS = {("memberchk", 2): "memberchk/2",
                         ("make_quantity", 3): "make_quantity/3"}

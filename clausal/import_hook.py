@@ -337,8 +337,14 @@ def _count_seam_transition_constructs(loader, source_nodes, db, filename):
     instrument, never a refusal."""
     from clausal.logic.compiler.terms_to_goalop import (  # noqa: PLC0415
         count_transition_constructs, log_transition_constructs)
-    counts = count_transition_constructs(
-        (getattr(p, "body", None) for p in source_nodes), db=db)
+    try:
+        counts = count_transition_constructs(
+            (getattr(p, "body", None) for p in source_nodes), db=db)
+    except Exception as e:  # noqa: BLE001 -- a count never fails a load
+        warnings.warn(f"{filename}: transition constructs not counted: "
+                      f"{type(e).__name__}: {e}", RuntimeWarning,
+                      stacklevel=2)
+        return
     loader.l3_stats = {"transition_constructs": counts}
     log_transition_constructs(counts, filename)
 

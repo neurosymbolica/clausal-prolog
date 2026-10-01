@@ -60,7 +60,7 @@ def _counts(mod):
 
 def test_keys_are_the_pl_front_ends():
     from clausal.tools.iso_l3_directives import TRANSITION_KEYS as PL_KEYS
-    assert TRANSITION_KEYS == PL_KEYS
+    assert TRANSITION_KEYS is PL_KEYS
 
 
 def test_a_clean_module_counts_zero_every_key_present(seam, caplog):
@@ -152,6 +152,16 @@ def test_the_census_reads_a_file_as_the_loader_does(seam, tmp_path):
     assert counts == _counts(mod) and skipped == 0
 
 
+def test_the_census_reads_a_dcg_rule_as_the_loader_does(seam, tmp_path):
+    mod = seam("tc_dcg", """\
+        -private([a, b])
+        ab >> (["a"], not ["b"])
+        """)
+    counts, skipped = tc.count_seam_file(tmp_path / "tc_dcg.seam")
+    assert counts == _counts(mod) == {**ZERO, "\\+/1": 1}
+    assert skipped == 0
+
+
 # ── the ratchet ──
 
 
@@ -191,6 +201,33 @@ def test_the_ratchet_fails_when_a_construct_is_added(tmp_path):
     (root / "m.pl").write_text("q(X) :- X = 1.\n")
     rc, out = _check(root, bl)
     assert rc == 0 and "shrank: m.pl: \\+/1 1 -> 0" in out
+
+
+def test_a_file_the_census_cannot_read_fails_the_ratchet(tmp_path):
+    # Not "shrank to zero": a counted file that stops parsing would hide
+    # every later growth in it.
+    root = tmp_path / "src"
+    root.mkdir()
+    (root / "m.seam").write_text("p(1),\na(X) <- (p(X), not p(2))\n")
+    bl = tmp_path / "baseline.json"
+    assert _check(root, bl, update=True)[0] == 0
+    (root / "m.seam").write_text("p(1),\na(X) <- (p(X), not p(2)\n")
+    rc, out = _check(root, bl)
+    assert rc == 1 and "not counted: m.seam: SyntaxError" in out
+
+
+def test_a_goal_the_census_cannot_convert_is_ratcheted_too(tmp_path):
+    # A construct could hide inside a goal the converter refuses (here a
+    # keyword call, which needs the module database): its count is kept.
+    root = tmp_path / "src"
+    root.mkdir()
+    (root / "m.seam").write_text("p(1),\na(X) <- (p(X), not p(2))\n")
+    bl = tmp_path / "baseline.json"
+    assert _check(root, bl, update=True)[0] == 0
+    (root / "m.seam").write_text(
+        "p(1),\na(X) <- (p(X), not p(2))\nb(X) <- q(x=X)\n")
+    rc, out = _check(root, bl)
+    assert rc == 1 and "GREW: m.seam: unreadable 0 -> 1" in out
 
 
 def test_if_does_not_trip_the_ratchet(tmp_path):

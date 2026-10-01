@@ -249,7 +249,8 @@ since 0.4.0 finish three moves:
   `python -m clausal.tools.transition_census` counts every seam and `.pl`
   file under `clausal/`, `tests/` and `docs/`, prints per-file counts,
   totals and the census size (an empty census is an error, exit 2), and
-  exits 1 when any (file, construct) count goes above the committed
+  exits 1 when a file cannot be read at all, or when any (file, construct)
+  count, or a file's count of goals it cannot convert, goes above the committed
   baseline (`clausal/tools/transition_census_baseline.json`; `--update`
   rewrites it). One test runs it against the baseline. Nothing is refused
   at load time.

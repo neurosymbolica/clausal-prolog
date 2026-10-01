@@ -59,8 +59,9 @@ def _keys() -> tuple[str, ...]:
 # ── per-file counters ────────────────────────────────────────────────────────
 
 
-def _seam_clause_bodies(source: str, filename: str) -> list:
-    """The bodies of a seam file's ``head <- body`` clause statements, as
+def _seam_clause_bodies(source: str, filename: str) -> tuple[list, list]:
+    """The bodies of a seam file's ``head <- body`` clause statements (and
+    ``head >> body`` DCG rules), as
     the pythonic nodes the compiler's converter takes.  Arrow detection is
     the transformer's own (``<`` and ``-`` adjacent in the source)."""
     from clausal.pythonic_ast.conversion_from_python_ast import visit  # noqa: PLC0415
@@ -69,13 +70,20 @@ def _seam_clause_bodies(source: str, filename: str) -> list:
         warnings.simplefilter("ignore", SyntaxWarning)
         tree = ast.parse(source, filename=filename)
     lines = source.splitlines(keepends=True)
-    bodies = []
+    bodies: list = []
+    dcg: list = []
     for stmt in tree.body:
         if not isinstance(stmt, ast.Expr):
             continue
         exprs = (stmt.value.elts if isinstance(stmt.value, ast.Tuple)
                  else [stmt.value])
         for e in exprs:
+            if isinstance(e, ast.BinOp) and isinstance(e.op, ast.RShift):
+                # A DCG rule ``head >> body``: the loader counts the clause
+                # it translates to, whose goals are the body's ``not`` /
+                # ``{...}`` goals (a nonterminal is not a construct).
+                dcg.append(visit(e.right))
+                continue
             if not isinstance(e, ast.Compare):
                 continue
             try:
@@ -84,7 +92,7 @@ def _seam_clause_bodies(source: str, filename: str) -> list:
                 continue    # the loader refuses it; nothing to count
             if arrow is not None:
                 bodies.append(visit(arrow[1]))
-    return bodies
+    return bodies, dcg
 
 
 def count_seam_file(path: Path) -> tuple[dict, int]:
@@ -93,8 +101,11 @@ def count_seam_file(path: Path) -> tuple[dict, int]:
         count_transition_constructs)
     source = path.read_text(encoding="utf-8")
     skipped: list = []
-    counts = count_transition_constructs(
-        _seam_clause_bodies(source, str(path)), skipped=skipped)
+    bodies, dcg = _seam_clause_bodies(source, str(path))
+    counts = count_transition_constructs(bodies, skipped=skipped)
+    # A DCG body's terminals and nonterminals are not goals the converter
+    # takes: walk it for its constructs, without reporting them as skipped.
+    count_transition_constructs(dcg, counts=counts)
     return counts, len(skipped)
 
 
@@ -178,21 +189,34 @@ def baseline_of(result: dict) -> dict:
                      "existing, no-new). Regenerate with `python -m "
                      "clausal.tools.transition_census --update`."),
         "totals": totals(result),
-        "files": {rel: {k: n for k, n in rec["counts"].items() if n}
-                  for rel, rec in sorted(result["files"].items())
-                  if any(rec["counts"].values())},
+        "files": {rel: c for rel, c in sorted(
+            (rel, _row(rec)) for rel, rec in result["files"].items()) if c},
     }
+
+
+#: The baseline key of a file's goals/items the census could not count: it
+#: is ratcheted like a construct, so a construct cannot hide in a goal the
+#: converter refuses or a ``.pl`` item the reader cannot read.
+UNREADABLE = "unreadable"
+
+
+def _row(rec: dict) -> dict:
+    """A file's NONZERO counts, its unreadable goals/items included."""
+    row = {k: n for k, n in rec["counts"].items() if n}
+    if rec["skipped"]:
+        row[UNREADABLE] = rec["skipped"]
+    return row
 
 
 def compare(result: dict, baseline: dict) -> tuple[list, list]:
     """-> (grown, shrunk): ``(file, key, baseline, now)`` per changed count."""
     grown, shrunk = [], []
     base_files = baseline.get("files", {})
-    now_files = {rel: rec["counts"] for rel, rec in result["files"].items()}
+    now_files = {rel: _row(rec) for rel, rec in result["files"].items()}
     for rel in sorted(set(base_files) | set(now_files)):
         was = base_files.get(rel, {})
         now = now_files.get(rel, {})
-        for k in _keys():
+        for k in (*_keys(), UNREADABLE):
             a, b = was.get(k, 0), now.get(k, 0)
             if b > a:
                 grown.append((rel, k, a, b))
@@ -235,9 +259,16 @@ def check(roots=DEFAULT_ROOTS, base: Path = REPO_ROOT,
           baseline_path: Path = BASELINE, *, update: bool = False,
           per_file: bool = True, out=sys.stdout) -> int:
     """Run the census and the ratchet; -> exit status (0 ok, 1 a count
-    grew, 2 an empty census or a missing baseline)."""
+    grew or a file could not be counted at all, 2 an empty census or a
+    missing baseline)."""
     result = census(roots, base)
     found = report(result, out, per_file=per_file)
+    if result["errors"] and not update:
+        # A file the census cannot read at all would otherwise read as
+        # "shrank to zero" -- and pass.
+        print(f"FAIL: {len(result['errors'])} file(s) could not be counted "
+              "(listed above)", file=out)
+        return 1
     if not sum(result["scanned"].values()) or not found:
         print("ERROR: the census is EMPTY (N=0): a ratchet over nothing "
               "passes vacuously", file=out)
@@ -247,7 +278,7 @@ def check(roots=DEFAULT_ROOTS, base: Path = REPO_ROOT,
             json.dumps(baseline_of(result), indent=1, sort_keys=False) + "\n",
             encoding="utf-8")
         print(f"baseline written: {baseline_path}", file=out)
-        return 0
+        return 1 if result["errors"] else 0
     if not baseline_path.exists():
         print(f"ERROR: no baseline at {baseline_path} (run --update)",
               file=out)

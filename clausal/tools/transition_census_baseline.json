@@ -2,7 +2,7 @@
  "_comment": "transition-construct census baseline (D13: allowed-existing, no-new). Regenerate with `python -m clausal.tools.transition_census --update`.",
  "totals": {
   "seam": {
-   "\\+/1": 367,
+   "\\+/1": 369,
    "once/1": 22,
    "forall/2": 20,
    "memberchk/2": 1,
@@ -53,6 +53,12 @@
   },
   "clausal/rewrite/rules/unnecessary_lambda.clausal": {
    "\\+/1": 1
+  },
+  "clausal/tools/toklex/specs/clausal.toklex.pl": {
+   "unreadable": 25
+  },
+  "clausal/tools/toklex/specs/iso.toklex.pl": {
+   "unreadable": 26
   },
   "tests/clausal_modules/higher_order.clausal": {
    "\\+/1": 1
@@ -108,7 +114,8 @@
    "\\+/1": 4,
    "once/1": 5,
    "forall/2": 1,
-   "findall/3_empty": 1
+   "findall/3_empty": 1,
+   "unreadable": 3
   },
   "tests/fixtures/clpq_module.clausal": {
    "\\+/1": 1
@@ -119,6 +126,9 @@
   "tests/fixtures/coroutining.clausal": {
    "\\+/1": 6,
    "once/1": 3
+  },
+  "tests/fixtures/dcg_grammar.clausal": {
+   "\\+/1": 1
   },
   "tests/fixtures/deep_index.clausal": {
    "\\+/1": 1
@@ -138,7 +148,8 @@
    "\\+/1": 6
   },
   "tests/fixtures/docs/coroutining_examples.clausal": {
-   "\\+/1": 2
+   "\\+/1": 2,
+   "unreadable": 1
   },
   "tests/fixtures/docs/database_ops_examples.clausal": {
    "\\+/1": 3
@@ -160,6 +171,9 @@
   },
   "tests/fixtures/docs/type_checking_sig_tests.clausal": {
    "\\+/1": 17
+  },
+  "tests/fixtures/edcg_counter.clausal": {
+   "unreadable": 1
   },
   "tests/fixtures/head_list_compound.clausal": {
    "\\+/1": 1
@@ -188,6 +202,9 @@
   },
   "tests/fixtures/phase5_builtins.clausal": {
    "\\+/1": 7
+  },
+  "tests/fixtures/prolog_golden/dcg_grammar.clausal": {
+   "\\+/1": 1
   },
   "tests/fixtures/prolog_golden/iso_arithmetic.clausal": {
    "\\+/1": 12
@@ -257,13 +274,15 @@
   },
   "tests/fixtures/units_basic.clausal": {
    "\\+/1": 8,
-   "make_quantity/3": 1
+   "make_quantity/3": 1,
+   "unreadable": 3
   },
   "tests/fixtures/units_clpfd.clausal": {
    "\\+/1": 1
   },
   "tests/fixtures/units_information.clausal": {
-   "\\+/1": 2
+   "\\+/1": 2,
+   "unreadable": 1
   },
   "tests/fixtures/wfs_bounded_chain.clausal": {
    "\\+/1": 1
@@ -311,6 +330,12 @@
   "tests/iso_l3/rulebase_s1_twin.seam": {
    "\\+/1": 4
   },
+  "tests/iso_l3/s2/native/s2lib/facts.pl": {
+   "unreadable": 2
+  },
+  "tests/iso_l3/s2/native/s2main.pl": {
+   "unreadable": 2
+  },
   "tests/iso_l3/s4/s4_exit.pl": {
    "\\+/1": 1,
    "once/1": 2,
@@ -324,6 +349,9 @@
    "forall/2": 2,
    "memberchk/2": 1,
    "findall/3_empty": 1
+  },
+  "tests/iso_l3/s5/s5_clpz_exit.pl": {
+   "unreadable": 19
   }
  }
 }
