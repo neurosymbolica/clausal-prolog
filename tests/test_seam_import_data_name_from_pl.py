@@ -160,9 +160,9 @@ def test_an_exported_predicate_still_imports_the_predicate(pkg, fe):
     assert mod.atom() == "cite"
 
 
-# Importing a defined-but-UNEXPORTED .pl predicate currently succeeds (it
-# binds the predicate).  Ruled 2026-09-30 that it should become an error;
-# that is a separate follow-up with a census, so no test pins it here.
+# Importing a defined-but-UNEXPORTED .pl predicate is a load-time
+# permission_error(access, private_procedure, Name/Arity) (operator ruling
+# 2026-10-01): tests/test_seam_import_unexported_pl_predicate.py.
 
 
 @pytest.mark.parametrize("fe", FRONT_ENDS)

@@ -154,9 +154,11 @@ An atom is global by spelling, so the `cite` you import is the same atom
 the `.pl` rulebase writes in `cite(art1)`: the term built from it
 (`('cite', 'art1')`) is `==` to the rulebase's.
 
-- A name the module binds keeps its ordinary meaning: an exported (or
-  defined) predicate imports the predicate, and a data atom the file
-  itself uses imports that atom.
+- A name the module binds keeps its ordinary meaning: an exported
+  predicate imports the predicate, and a data atom the file itself uses
+  imports that atom. A predicate the module defines but does not export
+  is an error (see
+  [Unexported predicates in Clausal code](#unexported-predicates-in-clausal-code)).
 - A `name/N` entry names a predicate, so it never resolves to data: with
   no `name/N` in the module it is still an `ImportError`.
 - The imported name also builds terms at any arity, positionally:
@@ -232,6 +234,12 @@ solve(("helper", X := Var()), module=citations)   # runs
     in a future release. Python callers should use the module's exported
     predicates. There is no runtime warning.
 
+Clausal code gets no such access: a seam `-import_from(citations, [helper])`
+(or `helper/1`, or `alias(helper, h)`) and a `.pl`
+`:- use_module(citations, [helper/1])` of a predicate the module defines
+but does not export are load-time errors (see
+[Unexported predicates in Clausal code](#unexported-predicates-in-clausal-code)).
+
 ---
 
 ## Importing between `.pl` files
@@ -265,6 +273,40 @@ does not load `m`, so `m:p(X)` is an `existence_error`), while Trealla and
 SWI load `m` and import nothing. Write `use_module(m)` or
 `use_module(m, [p/1])` instead; after either, `m:p(X)` reaches every
 predicate `m` exports, in Clausal, Scryer and Trealla alike.
+
+### Unexported predicates in Clausal code
+
+In Clausal code, importing a predicate that a `.pl` module defines but does
+not list in its `module/2` export list is a load-time `ImportError` carrying
+`permission_error(access, private_procedure, Name/Arity)` (ruled
+2026-10-01). That covers a seam `-import_from(m, [p])`, `[p/N]` and
+`[alias(p, q)]`, and a `.pl` `:- use_module(m, [p/N])`, under both front
+ends:
+
+```prolog
+% m.pl
+:- module(m, [rate/1]).
+rate(X) :- helper(X).
+helper(5).
+```
+
+```python
+-import_from(m, [helper])   # ImportError: ... permission_error(access,
+                            #   private_procedure, helper/1) -- m defines
+                            #   helper/1 but does not export it
+```
+
+- A bare name is refused when the module exports it at no arity; a `p/N`
+  entry when the module defines `p/N` and does not export it.
+- A `.pl` file with no `module/2` directive exports everything.
+- A name the module does not define as a predicate is unaffected: a data
+  name still imports its atom (above).
+- Scryer accepts `use_module(m, [helper/1])` for an unexported `helper/1`
+  silently and imports nothing, so the later call raises
+  `existence_error(procedure, helper/1)`; Clausal refuses at load time
+  instead. The error term is provisional.
+- Python code is not affected (see
+  [Unexported predicates from Python](#unexported-predicates-from-python)).
 
 ### `end_module`: closing a module
 

@@ -81,13 +81,10 @@ def _predicate_names(mod) -> set[str]:
         return _names_cache[mod]
     except (KeyError, TypeError):
         pass
-    from clausal.import_diagnostics import (  # noqa: PLC0415
-        _declared_exports, _defined_names, _module_items_of,
-    )
+    from clausal.import_diagnostics import _defined_names  # noqa: PLC0415
     names = {bare for bare, _ in _defined_names(mod)}
-    loader = getattr(mod, "__loader__", None)
     try:
-        entries, _ = _declared_exports(_module_items_of(mod, loader))
+        entries, _ = _export_entries(mod)
     except Exception:  # pragma: no cover - source unreadable now
         entries = []
     names.update(bare for bare, _ in entries)
@@ -96,6 +93,91 @@ def _predicate_names(mod) -> set[str]:
     except TypeError:  # pragma: no cover - not weak-referenceable
         pass
     return names
+
+
+#: ``(entries, saw_module_directive)`` of each loaded ``.pl`` module's
+#: ``module/2`` export list (``import_diagnostics._declared_exports``),
+#: recorded by the loader while it holds the module items.
+_pl_exports: "weakref.WeakKeyDictionary" = weakref.WeakKeyDictionary()
+
+
+def record_pl_exports(module, module_items) -> None:
+    """Record the ``.pl`` *module*'s export list from its *module_items*."""
+    from clausal.import_diagnostics import _declared_exports  # noqa: PLC0415
+    try:
+        _pl_exports[module] = _declared_exports(module_items)
+    except Exception:  # pragma: no cover - defensive
+        _pl_exports.pop(module, None)
+
+
+def _export_entries(mod):
+    """``(entries, saw)`` for the ``.pl`` module *mod*: the recorded list,
+    else (a module loaded before the record existed) re-read from source."""
+    try:
+        return _pl_exports[mod]
+    except (KeyError, TypeError):
+        pass
+    from clausal.import_diagnostics import (  # noqa: PLC0415
+        _declared_exports, _module_items_of,
+    )
+    return _declared_exports(
+        _module_items_of(mod, getattr(mod, "__loader__", None)))
+
+
+def _exported_arities(mod):
+    """``{name: {arity, ...}}`` for the entries of *mod*'s ``module/2``
+    export list (a non-``name/arity`` entry maps to an empty set), or
+    ``None`` when the file has no ``module/2`` directive."""
+    try:
+        entries, saw = _export_entries(mod)
+    except Exception:  # pragma: no cover - source unreadable now
+        return None
+    if not saw:
+        return None
+    result = {}
+    for bare, rendered in entries:
+        head, sep, arity = (rendered or "").rpartition("/")
+        arities = result.setdefault(bare, set())
+        if sep and head == bare and arity.isdigit():
+            arities.add(int(arity))
+    return result
+
+
+def private_procedure(mod, name: str, selected):
+    """The indicator ``name/N`` when importing *name* (every arity when
+    *selected* is ``None``, else the arities in *selected*) from the
+    ``.pl`` module *mod* names a predicate *mod* DEFINES but does not
+    export; else ``None``.
+
+    Operator ruling 2026-10-01: in Clausal code an import of an unexported
+    ``.pl`` predicate is an error (Python code is not affected).  A bare
+    name is refused when *mod* exports it at no arity; a ``name/N`` entry
+    when *mod* defines ``name/N`` and does not export it.  A module with no
+    ``module/2`` directive exports everything.  A name *mod* only imports
+    (it defines no clauses for it) is not this check's business."""
+    if not _is_pl_module(mod):
+        return None
+    if getattr(getattr(mod, "__spec__", None), "_initializing", False):
+        return None
+    db = getattr(vars(mod).get("$module"), "db", None)
+    if db is None:
+        return None
+    try:
+        defined = set(db.arities_for(name))
+    except Exception:  # pragma: no cover - defensive
+        return None
+    if not defined:
+        return None
+    exports = _exported_arities(mod)
+    if exports is None:
+        return None
+    exported = exports.get(name, set())
+    if selected is None:
+        if exported or name in exports:
+            return None
+        return f"{name}/{min(defined)}"
+    private = sorted(a for a in selected if a in defined and a not in exported)
+    return f"{name}/{private[0]}" if private else None
 
 
 def _is_predicate_of(mod, name: str) -> bool:
