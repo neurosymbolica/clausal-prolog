@@ -413,7 +413,7 @@ _LIBRARY_TO_MODULE: dict[str, str] = {
 #: library is dropped only when every name its import list gives is native.
 _BUILTIN_LIBRARIES: frozenset = frozenset({
     "lists", "apply", "dif", "between", "error", "pairs", "when", "freeze",
-    "iso_ext",
+    "iso_ext", "dcgs",
 })
 
 

@@ -49,7 +49,8 @@ def test_the_cut_family_is_refused_with_the_ruling_and_the_line(
     ("r_dollarhead", "'$module'(1).", "reserved name"),
     ("r_dollargoal", "p :- '$unify'(a, a).", "reserved name"),
     ("r_directive", ":- initialization(main).", "initialization/1 is refused"),
-    ("r_dcg", "s --> [a].", "DCGRule"),
+    ("r_dcg_cut", "s --> [a], !.", "`!` (cut) is refused"),
+    ("r_dcg_not", "s --> \\+ [a].", "representation_error(dcg_body)"),
 ])
 def test_what_iso_does_not_make_a_clause_is_refused(native, name, text,
                                                     fragment):

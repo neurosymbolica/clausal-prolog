@@ -111,8 +111,12 @@ def count_seam_file(path: Path) -> tuple[dict, int]:
 
 def count_pl_file(path: Path) -> tuple[dict, int]:
     """-> (counts, unreadable items) for one ``.pl`` file: the native front
-    end's reader and ``Uses`` counter, over every clause it reads."""
-    from clausal.tools.iso_l3 import iter_iso  # noqa: PLC0415
+    end's reader and ``Uses`` counter, over every clause it reads -- a
+    grammar rule as the clause the front end translates it to, as the
+    loader counts it.  A grammar rule the translation refuses counts as
+    unreadable."""
+    from clausal.tools.iso_l3 import (  # noqa: PLC0415
+        LoweringRefused, iter_iso, translate_dcg_rule)
     from clausal.tools.iso_l3_directives import Uses  # noqa: PLC0415
     source = path.read_text(encoding="utf-8")
     uses = Uses()
@@ -122,6 +126,12 @@ def count_pl_file(path: Path) -> tuple[dict, int]:
         kind = type(it).__name__
         if kind == "Clause":
             uses.clause(it.term)
+        elif kind == "DCGRule":
+            try:
+                uses.clause(translate_dcg_rule(it.term, it.spans,
+                                               it.var_names)[0])
+            except LoweringRefused:
+                unreadable += 1
         elif kind == "SyntaxIssue":
             unreadable += 1
     return dict(uses.transition), unreadable
@@ -196,7 +206,8 @@ def baseline_of(result: dict) -> dict:
 
 #: The baseline key of a file's goals/items the census could not count: it
 #: is ratcheted like a construct, so a construct cannot hide in a goal the
-#: converter refuses or a ``.pl`` item the reader cannot read.
+#: converter refuses, a ``.pl`` item the reader cannot read, or a grammar
+#: rule the native front end refuses.
 UNREADABLE = "unreadable"
 
 
@@ -248,7 +259,8 @@ def report(result: dict, out=sys.stdout, per_file: bool = True) -> int:
           f"{found} constructs found; not counted: {skipped['seam']} seam "
           f"goals the converter refuses, {skipped['pl']} .pl items the "
           f"reader cannot read (an op/3 or library operator the census "
-          f"does not load), {len(result['errors'])} whole files",
+          f"does not load) or grammar rules the front end refuses, "
+          f"{len(result['errors'])} whole files",
           file=out)
     for rel, msg in sorted(result["errors"].items()):
         print(f"  not counted: {rel}: {msg}", file=out)

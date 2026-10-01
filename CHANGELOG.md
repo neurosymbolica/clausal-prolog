@@ -274,6 +274,20 @@ since 0.4.0 finish three moves:
 
 ### Added
 
+- **DCG grammar rules in the native `.pl` front end** (and so in Clausal
+  Prolog). A `-->` rule used to be refused at load ("DCG is out of
+  scope"). It is now translated to the clause ISO 7.14 / Scryer's
+  `library(dcgs)` give it -- terminal lists and `"..."` per the
+  `double_quotes` flag, nonterminals, `,`, `;`, `|`, `{G}`, `call//N`, a
+  variable body, `M:NT` and pushback (`H, PB --> B`) -- and loaded as that
+  clause, so `phrase/2,3` (with the rest) answer as Scryer's, and
+  nonterminals export and import as `name//N`. `!`, `->` and `{!}` in a
+  grammar body are refused with the clause-body refusal (cut-free), and
+  `\+` with Scryer's `representation_error(dcg_body)`. `library(dcgs)` is
+  a built-in library for both front ends; in the native one it installs
+  `op(1105, xfy, '|')`. The transition-construct census counts a grammar
+  rule as its translated clause.
+
 - **The seam counts its transition constructs, and a census keeps the count
   from growing** (ruling D13: allowed where they are, no new ones). A seam
   module's loader now has `l3_stats["transition_constructs"]`, the key and

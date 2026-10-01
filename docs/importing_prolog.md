@@ -478,7 +478,7 @@ Standard Prolog library imports are mapped to Clausal built-in modules:
 | `:- use_module(library(tabling), [...])` | `-import_from(clausal.logic.tabling, [...])` |
 | `:- use_module(library(lists))` | *(built-in — no import needed)* |
 | `:- use_module(library(apply))` | *(built-in — no import needed)* |
-| `:- use_module(library(L))`, L one of `dif`, `between`, `error`, `pairs`, `when`, `freeze`, `iso_ext` | *(built-in — no import needed)* |
+| `:- use_module(library(L))`, L one of `dif`, `between`, `error`, `pairs`, `when`, `freeze`, `iso_ext`, `dcgs` | *(built-in — no import needed)* |
 | `:- use_module(library(L), [...])`, every listed name an engine builtin | *(built-in — no import needed)* |
 
 Any other `library(Name)` is read as the module `Name` (a missing one is an
@@ -527,6 +527,54 @@ value(V)    :- constant_value(max_fine, V).               % program-wide
   builds, `get/3` reads softly (fails on a missing key), `get_strict/3` reads
   strictly (`existence_error(dict_key, Key)`), `dict_put/4` and
   `dict_put_pairs/3` update.
+
+### DCG rules (native front end)
+
+With `CLAUSAL_PL_FRONTEND=native` (the front end of Clausal Prolog), a
+`-->` rule is translated to the clause ISO 7.14 and Scryer's
+`library(dcgs)` give it, then loaded as that clause. A nonterminal
+`name//N` is the predicate `name/(N+2)`, the two list states last, and
+`phrase/2,3` call it:
+
+```prolog
+:- module(greet, [greeting//0, word//1]).
+:- use_module(library(dcgs)).          % optional; brings the `|` operator
+
+greeting --> [hello], word(_).
+word(W) --> [W].
+digits([D|T]) --> digit(D), digits(T).
+digits([D]) --> digit(D).
+digit(D) --> [D], { member(D, "0123456789") }.
+look(X), [X] --> [X].                  % pushback: X is left in the input
+```
+
+| Grammar body | Clause body (between `S0` and `S`) |
+|---|---|
+| `[T1, ..., Tn]` | `S0 = [T1, ..., Tn \| S]` |
+| `[]` | `S0 = S` |
+| `"abc"` | the terminals `[a, b, c]` under `double_quotes` `chars` (the default), the codes under `codes`; under `atom`, the nonterminal `abc//0` |
+| `A, B` | `A(S0, S1), B(S1, S)` |
+| `A ; B`, `A \| B` | `A(S0, S) ; B(S0, S)` |
+| `{G}` | `G, S0 = S` |
+| `call(G, Args...)` | `call(G, Args..., S0, S)` (`call//N`) |
+| a variable `B` | `phrase(B, S0, S)` |
+| `M:NT` | `M:NT(..., S0, S)` |
+| `H, PB --> B` | `H(S0, S) :- B(S0, S1), S = PB ++ S1` (pushback) |
+
+* Export and import nonterminals as `name//N` (`:- module(m, [greeting//0])`,
+  `:- use_module(m, [greeting//0])`); `name/(N+2)` names the same
+  predicate, as in Scryer.
+* `!` and `->` are refused in a grammar body exactly as in a clause body
+  (Clausal is cut-free), and so is `{!}`: in a rule it is the cut
+  `!, S0 = S` of the rule's own clause. Only a WHOLE `phrase/2,3` body
+  `!` or `{!}` is local to the call, and answers `S0 = S`.
+* `\+` in a grammar body is refused, as Scryer refuses it
+  (`representation_error(dcg_body)`); negate a goal inside `{...}`.
+* A partial or improper terminal list (`[a|T]`, `[a|b]`) is refused at
+  load, where Scryer raises `instantiation_error` / `type_error(list, ...)`.
+* `use_module(library(dcgs))` is accepted (phrase/2,3 are engine
+  builtins) and, without an import list, installs Scryer's
+  `op(1105, xfy, '|')`, so `A | B` reads only after it -- as in Scryer.
 
 ---
 

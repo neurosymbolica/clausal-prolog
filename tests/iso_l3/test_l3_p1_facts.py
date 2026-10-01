@@ -105,13 +105,14 @@ def test_P1_iso_facts_answer_identically_to_the_seam_twin(l3_env):
 
 
 def test_P1_denominator_is_reported_for_refused_constructs(l3_env):
-    """A construct out of scope (a DCG rule) must be REFUSED and
+    """A construct out of scope (a DCG rule with a ``\\+`` body, which
+    Scryer refuses too) must be REFUSED and
     COUNTED, never silently dropped.  The COUNTING mode is the explicit
     ``strict=False`` (tooling that surveys many files); the default raises (see
     the slice-0 tests below).  (Rules were the P1 example; slice 1 lowers
     them.)"""
     tmp, stats, L3 = l3_env
-    items = L3.read_iso("f(1).\ns --> [a].\n")
+    items = L3.read_iso("f(1).\ns --> \\+ [a].\n")
     _, st = L3.lower_items(items, strict=False)
     assert st["read"] == 2, st
     assert st["lowered"] == 1, st

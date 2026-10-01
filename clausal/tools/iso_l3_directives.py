@@ -77,7 +77,7 @@ from clausal.tools.prolog_reader import VarRef
 #: agree on what "built in" means).
 _BUILTIN_LIBRARIES = frozenset({
     "lists", "apply", "dif", "between", "error", "pairs", "when", "freeze",
-    "iso_ext",
+    "iso_ext", "dcgs",
 })
 
 #: library(L) -> the Clausal module that holds what the engine does NOT
@@ -121,8 +121,12 @@ CLPZ_OPS: tuple[tuple[int, str, str], ...] = (
 #: library(lambda)'s operator (Scryer ``lambda.pl``'s module/2 export list).
 LAMBDA_OPS: tuple[tuple[int, str, str], ...] = ((201, "xfx", "+\\"),)
 
+#: library(dcgs)'s operator (Scryer ``dcgs.pl``'s module/2 export list):
+#: the grammar-body alternative ``A | B``.
+DCGS_OPS: tuple[tuple[int, str, str], ...] = ((1105, "xfy", "|"),)
+
 _LIBRARY_OPS: dict[str, tuple] = {"clpz": CLPZ_OPS, "clpfd": CLPZ_OPS,
-                                  "lambda": LAMBDA_OPS}
+                                  "lambda": LAMBDA_OPS, "dcgs": DCGS_OPS}
 
 #: The library ops an import installs even when its list does not name them:
 #: Scryer's rule for an op a module both EXPORTS and declares with a

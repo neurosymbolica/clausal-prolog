@@ -11,14 +11,16 @@ data-position truth values (``true``/``false``/``undefined`` ARE
 ``True``/``False``/``Undefined``, D35), ``constant(Name)`` (folded at compile time), the
 directives of ``iso_l3_directives`` (module/2, use_module/1,2, dynamic,
 discontiguous, table, meta_predicate, set_prolog_flag, op, constructors, and
-the constants/units family), and the auto-declaration of every atom and data
-functor a file uses (slice 3).  clpz's predicates need nothing here: they are
-engine builtins under Scryer's names (``clausal.logic.builtins.clpz_names``).
-Whatever is
-outside that scope -- an unknown directive, ``initialization/1``, a DCG rule,
-a reader ``SyntaxIssue``, and by design ``!``, ``->`` and ``*->`` -- is
-REFUSED, never half-handled, so a gap is a loud import error and not a
-silently skipped clause.
+the constants/units family), the auto-declaration of every atom and data
+functor a file uses (slice 3), and DCG grammar rules (translated to their
+ISO 7.14 clause, then lowered as one: ``translate_dcg_rule``).  clpz's
+predicates need nothing here: they are engine builtins under Scryer's names
+(``clausal.logic.builtins.clpz_names``).  Whatever is outside that scope
+-- an unknown directive, ``initialization/1``, a query, a reader
+``SyntaxIssue``, a grammar body Scryer refuses (``\\+``), and by design
+``!``, ``->`` and ``*->`` (in a clause or a grammar body) -- is REFUSED,
+never half-handled, so a gap is a loud import error and not a silently
+skipped clause.
 
 WHY THE TRANSFORMED AST IS THE JOIN (plan §2): ``compile_module``'s
 ``module_dict`` is the name-resolution environment for the whole compile.
@@ -877,6 +879,257 @@ def lower_clause(term: Any, spans=None, var_names=None,
     return [decl, define]
 
 
+# ── DCG rules (ISO 7.14; Scryer's library(dcgs)) ────────────────────────────
+#
+# A grammar rule is TRANSLATED to the clause ISO 7.14 / Scryer's
+# ``dcg_rule/2`` gives, as a reader term (functor-first tuples, VarRefs),
+# and that clause is lowered by ``lower_clause`` like any written clause --
+# so a DCG rule reaches the engine through the same clause lowering, and
+# ``phrase/2,3`` call it as they call a seam ``>>`` rule: a nonterminal
+# ``name//N`` is the procedure ``name/(N+2)``, the two states last
+# (``dcg._DCG_ARITY_NOTE``).
+#
+# The translation is Scryer's ``dcg_body/4``, clause for clause:
+#
+#   Var              phrase(Var, S0, S)
+#   [] / ""          S0 = S
+#   [T1, ..., Tn]    S0 = [T1, ..., Tn | S]
+#   "..."            a terminal list under double_quotes chars/codes; the
+#                    nonterminal of that name under double_quotes atom
+#   (A, B)           A(S0, S1), B(S1, S)
+#   (A ; B), (A|B)   A(S0, S) ; B(S0, S)
+#   {G}              G, S0 = S
+#   call(G, A...)    call(G, A..., S0, S)          (call//N)
+#   M:NT             M:NT(..., S0, S)
+#   NT(A...)         NT(A..., S0, S)
+#   H, PB --> B      H(S0, S) :- B(S0, S1), S = PB ++ S1    (pushback)
+#
+# Clausal is cut-free: ``!`` and ``->``/``*->`` are translated as Scryer
+# translates them (``!, S0 = S``; ``If -> Then``), and the clause lowering
+# refuses them with its clause-body refusal, word for word.  ``{!}`` is the
+# cut ``!, S0 = S`` in
+# the rule's own clause -- not the call-local cut a WHOLE phrase body
+# ``{!}`` is (``dcg._is_whole_body_cut``) -- so it is refused too: its G is
+# lowered as any clause goal.  ``\+`` follows Scryer: ISO leaves it
+# implementation defined and Scryer refuses it,
+# representation_error(dcg_body).
+
+#: The name the translation gives its state variables: a ``$`` keeps them
+#: apart from every ISO variable name; the ``_`` lead exempts them from the
+#: singleton lint.
+_DCG_STATE = "_S$"
+
+
+def _max_var_id(t: Any) -> int:
+    top = -1
+    stack = [t]
+    while stack:
+        t = stack.pop()
+        if type(t) is VarRef:
+            top = max(top, t.i)
+        elif type(t) in (tuple, list):
+            stack.extend(t)
+    return top
+
+
+def _dcg_refused(msg: str, sp) -> LoweringRefused:
+    return LoweringRefused(f"grammar rule: {msg}", _top_span(sp))
+
+
+class _DcgTranslation:
+    """One grammar rule -> its clause term, span tree and variable names."""
+
+    def __init__(self, term: Any, var_names: dict, ctx):
+        self._ctx = ctx
+        self._next = _max_var_id(term) + 1
+        self.var_names = dict(var_names)
+
+    def fresh(self) -> VarRef:
+        ref = VarRef(self._next)
+        self.var_names[ref.i] = f"{_DCG_STATE}{ref.i}"
+        self._next += 1
+        return ref
+
+    # ── the rule ──
+
+    def rule(self, term: Any, spans) -> tuple:
+        lhs, rhs = term[1], term[2]
+        l_sp, r_sp = _arg_spans(spans, 2)
+        pushback = pb_sp = None
+        if type(lhs) is tuple and len(lhs) == 3 and lhs[0] == ",":
+            (lhs, pushback), (l_sp, pb_sp) = lhs[1:], _arg_spans(l_sp, 2)
+        if type(lhs) is VarRef:
+            raise _dcg_refused("the head is a variable (ISO "
+                               "instantiation_error)", l_sp or spans)
+        if (type(lhs) is tuple and len(lhs) == 3 and lhs[0] == ":") or not (
+                type(lhs) is str or (type(lhs) is tuple and lhs
+                                     and type(lhs[0]) is str
+                                     and lhs[0] != "$chars")):
+            raise _dcg_refused(
+                f"the head {_show_cell(lhs)} is not a nonterminal (ISO "
+                f"type_error(callable)); a module-qualified head is not "
+                f"supported", l_sp or spans)
+        s0, s = self.fresh(), self.fresh()
+        head, head_sp = self._nonterminal(lhs, l_sp, s0, s)
+        if pushback is None:
+            body, body_sp = self.body(rhs, r_sp, s0, s)
+        else:
+            s1 = self.fresh()
+            b1, b1_sp = self.body(rhs, r_sp, s0, s1)
+            items = self._terminals(pushback, pb_sp, "the pushback list")
+            if items is None:
+                raise _dcg_refused(
+                    f"the pushback {_show_cell(pushback)} is not a list of "
+                    f"terminals", pb_sp or spans)
+            top = _top_span(pb_sp)
+            body = (",", b1, ("=", s, _cons_onto(items, s1)))
+            body_sp = (_top_span(spans), b1_sp, (top, None, None))
+        return (":-", head, body), (_top_span(spans), head_sp, body_sp)
+
+    # ── the body (Scryer's dcg_body/4) ──
+
+    def body(self, b: Any, sp, s0: VarRef, s: VarRef) -> tuple:
+        top = _top_span(sp)
+        if type(b) is VarRef:
+            return ("phrase", b, s0, s), (top, sp, None, None)
+        items = self._terminals(b, sp, "a terminal list")
+        if items is not None:
+            if not items:
+                return ("=", s0, s), (top, None, None)
+            return ("=", s0, _cons_onto(items, s)), (top, None, None)
+        if type(b) is str and b == "!":
+            # ``!, S0 = S``: the clause lowering refuses the cut.
+            return (",", b, ("=", s0, s)), (top, sp, (top, None, None))
+        if type(b) is tuple and b and type(b[0]) is str:
+            name, n = b[0], len(b) - 1
+            if name in ("->", "*->") and n == 2:
+                # ``(If -> Then)`` translated as Scryer does; the clause
+                # lowering refuses it, alone or as a `;` condition.
+                a_sp, b_sp = _arg_spans(sp, 2)
+                mid = self.fresh()
+                g1, g1_sp = self.body(b[1], a_sp, s0, mid)
+                g2, g2_sp = self.body(b[2], b_sp, mid, s)
+                return (name, g1, g2), (top, g1_sp, g2_sp)
+            if name == "," and n == 2:
+                a_sp, b_sp = _arg_spans(sp, 2)
+                mid = self.fresh()
+                g1, g1_sp = self.body(b[1], a_sp, s0, mid)
+                g2, g2_sp = self.body(b[2], b_sp, mid, s)
+                return (",", g1, g2), (top, g1_sp, g2_sp)
+            if name in (";", "|") and n == 2:
+                a_sp, b_sp = _arg_spans(sp, 2)
+                g1, g1_sp = self.body(b[1], a_sp, s0, s)
+                g2, g2_sp = self.body(b[2], b_sp, s0, s)
+                return (";", g1, g2), (top, g1_sp, g2_sp)
+            if name == "\\+" and n == 1:
+                raise _dcg_refused(
+                    f"`\\+` in a grammar body is refused, as Scryer refuses "
+                    f"it (ISO 7.14 leaves it implementation defined; "
+                    f"representation_error(dcg_body)): culprit "
+                    f"{_show_cell(b)}. Negate a goal inside {{...}}, or "
+                    f"name the lookahead as a nonterminal of its own", sp)
+            if name == "{}" and n == 1:
+                g_sp = _arg_spans(sp, 1)[0]
+                return ((",", b[1], ("=", s0, s)),
+                        (top, g_sp, (top, None, None)))
+            if name == ":" and n == 2:
+                m_sp, nt_sp = _arg_spans(sp, 2)
+                nt = b[2]
+                if not (type(nt) is str or (type(nt) is tuple and nt
+                                            and type(nt[0]) is str)) \
+                        or _is_dcg_construct(nt):
+                    raise _dcg_refused(
+                        f"{_show_cell(b)}: a module-qualified grammar body "
+                        f"must be a nonterminal", sp)
+                g, g_sp = self._nonterminal(nt, nt_sp, s0, s)
+                return (":", b[1], g), (top, m_sp, g_sp)
+        if type(b) is tuple and len(b) == 2 and b[0] == "$chars":
+            # ``"abc"`` under double_quotes atom: the atom names the
+            # nonterminal abc//0 (``_terminals`` answered None).
+            return (b[1], s0, s), (top, None, None)
+        if type(b) is str or (type(b) is tuple and b and type(b[0]) is str):
+            return self._nonterminal(b, sp, s0, s)
+        # A number (or other non-callable): the clause body holds it as
+        # written, and the clause lowering refuses it -- ISO
+        # type_error(callable), as Scryer's dcg_non_terminal leaves it.
+        return b, sp
+
+    def _nonterminal(self, nt: Any, sp, s0: VarRef, s: VarRef) -> tuple:
+        top = _top_span(sp)
+        if type(nt) is str:
+            return (nt, s0, s), (top, None, None)
+        n = len(nt) - 1
+        return ((*nt, s0, s), (top, *_arg_spans(sp, n), None, None))
+
+    def _terminals(self, t: Any, sp, what: str) -> "list | None":
+        """The terminals a list (or ``"..."``) body denotes; None for any
+        other body.  A partial or improper list is refused (Scryer:
+        must_be(list, ...) at expansion)."""
+        if type(t) is str:
+            return [] if t == "[]" else None
+        if type(t) is list:
+            return list(t)
+        if type(t) is tuple and len(t) == 2 and t[0] == "$chars" \
+                and type(t[1]) is str:
+            mode = self._ctx.note_literal() if self._ctx is not None \
+                else "chars"
+            if mode == "atom":
+                return None             # the nonterminal of that name
+            if mode == "codes":
+                return [ord(c) for c in t[1]]
+            return list(t[1])
+        if type(t) is tuple and len(t) == 3 and t[0] == ".":
+            items = []
+            while type(t) is tuple and len(t) == 3 and t[0] == ".":
+                items.append(t[1])
+                t = t[2]
+            if type(t) is list:
+                return items + t
+            if type(t) is str and t == "[]":
+                return items
+            if type(t) is VarRef:
+                raise _dcg_refused(
+                    f"{what} ends in a variable: a partial list is no "
+                    f"terminal list (ISO instantiation_error, as Scryer's "
+                    f"must_be(list, ...))", sp)
+            raise _dcg_refused(
+                f"{what} ends in {_show_cell(t)}: an improper list is no "
+                f"terminal list (ISO type_error(list, ...))", sp)
+        return None
+
+
+def _is_dcg_construct(t: Any) -> bool:
+    """A grammar-body control construct (Scryer's ``dcg_constr/1``)."""
+    if type(t) is str:
+        return t in ("[]", "!")
+    if type(t) is list:
+        return True
+    if type(t) is tuple and t and type(t[0]) is str:
+        n = len(t) - 1
+        return ((t[0] in (",", ";", "|", "->", "*->") and n == 2)
+                or (t[0] in ("{}", "\\+") and n == 1)
+                or t[0] in (".", "$chars"))
+    return False
+
+
+def _cons_onto(items: list, tail: Any) -> Any:
+    out = tail
+    for x in reversed(items):
+        out = (".", x, out)
+    return out
+
+
+def translate_dcg_rule(term: Any, spans=None, var_names=None,
+                       ctx=None) -> tuple:
+    """A grammar rule ``('-->', H, B)`` -> ``(clause, spans, var_names)``:
+    the clause ISO 7.14 / Scryer's library(dcgs) translates it to (see the
+    table above), ready for :func:`lower_clause`.  Raises
+    :class:`LoweringRefused` for what the translation refuses."""
+    tr = _DcgTranslation(term, var_names or {}, ctx)
+    clause, clause_spans = tr.rule(term, spans)
+    return clause, clause_spans, tr.var_names
+
+
 def lower_fact(term: Any, span=None) -> list[ast.stmt]:
     """P1's entry point, kept: a fact (or clause) term with no source map."""
     return lower_clause(term, span)
@@ -929,9 +1182,9 @@ def lower_items(items, *, strict: bool = True, source: "str | None" = None,
     table) governs the items after it, as in Scryer.
 
     *strict* (the default) raises :class:`LoweringRefused` on the first item
-    it cannot lower -- an unknown or refused directive, a DCG rule, a refused
-    control construct, or a reader ``SyntaxIssue`` -- so a module never
-    imports with a clause missing.  ``strict=False`` is the explicit counting
+    it cannot lower -- an unknown or refused directive, a query, a refused
+    control construct or grammar body, or a reader ``SyntaxIssue`` -- so a
+    module never imports with a clause missing.  ``strict=False`` is the explicit counting
     mode for tooling that surveys many files: it skips and counts every
     refusal in ``stats``.
 
@@ -1010,9 +1263,19 @@ def lower_items(items, *, strict: bool = True, source: "str | None" = None,
             stats["lowered"] += 1
             stats["directives"] += 1
             continue
+        if kind == "DCGRule":
+            # A grammar rule is the clause it translates to (ISO 7.14):
+            # from here on it is lowered, counted and censused as one.
+            try:
+                it = _Item(*translate_dcg_rule(it.term, it.spans,
+                                               it.var_names, ctx))
+            except LoweringRefused as e:
+                refuse(str(e), e.span or span)
+                continue
+            kind = "Clause"
         if kind != "Clause":
-            refuse(f"{kind} is not lowered (DCG is out of scope; a query "
-                   f"`?-` is no clause): {it.term!r}", span)
+            refuse(f"{kind} is not lowered (a query `?-` is no clause): "
+                   f"{it.term!r}", span)
             continue
         defined.add(_head_indicator(it.term))
         uses.reif = ctx.reif
@@ -1061,6 +1324,17 @@ def lower_items(items, *, strict: bool = True, source: "str | None" = None,
     if _lowered is not None:
         _lowered.append(ctx)
     return mod, stats
+
+
+class _Item:
+    """A translated grammar rule, shaped as the reader's ``Clause``."""
+
+    __slots__ = ("term", "spans", "var_names")
+
+    def __init__(self, term, spans, var_names):
+        self.term = term
+        self.spans = spans
+        self.var_names = var_names
 
 
 def _is_end_module(term) -> bool:
