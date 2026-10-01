@@ -747,6 +747,21 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
 
 ### Fixed
 
+- **A clpz inequality with an arithmetic side narrows its variables and
+  binds a singleton.** `7*R #=< 1000000` left R in `inf..sup`: the posted
+  constraint narrowed only a side that was a bare variable, so an expression
+  side was merely checked. The floor-division idiom
+  `T #> 0, R*T #=< C*10000, C*10000 - R*T #< T` left R unbound where Scryer
+  binds `R = 142857`, and `R - R #< 0` succeeded. A `#=<`, `#<`, `#>=` or
+  `#>` with an `+ - *` / negation side (and the seam's bare `<=`, `<`, `>=`,
+  `>`) is now linearised: one variable left is narrowed by ceil/floor
+  division by its coefficient, several are posted as a bounds-consistent
+  scalar product, and a product of two unknowns (`R*T`) gets a times
+  propagator, so `R*T #=< 1000000, T = 7` narrows R once T is known.
+  `7*R #>= 1000000` gives `142858..sup`, one tighter than Scryer's
+  `142857..sup` (7*142857 is 999999). A chain of such posts now propagates
+  bounds both ways, as clpz does, and costs more to post.
+
 - **A dotted `lib.p(...)` passed to a builtin meta-caller runs `p` in `lib`.**
   `call(lib.p(X))`, `call(lib.p(1), Y)`, `aggregate_all(count, lib.p(_), N)`,
   `call_goal(lib.p(X))`, `time_goal(lib.p(X))`, `phrase(lib.nt(A), L)` and

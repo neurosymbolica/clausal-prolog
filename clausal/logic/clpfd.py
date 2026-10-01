@@ -2433,6 +2433,228 @@ def fd_ne(l, r, trail: Trail, *, _units_done: bool = False) -> bool:
     return _post_constraint(constraint, trail)
 
 
+# ── Linear (in)equalities over expression trees ──────────────────────────────
+#
+# ``7*R #=< 1000000`` used to post a LeConstraint over the TREE ``7*R``: its
+# propagator narrows only a side that is a bare variable, so an expression
+# side was merely CHECKED and R kept inf..sup -- ``R*T #=< C*10000, C*10000 -
+# R*T #< T`` (floor division as constraints) left R unbound where clpz binds
+# it.  A comparison with an expression side is now posted the way clpz posts
+# it: both sides are linearised into  Σ c_i*V_i  =<  K  (``#<`` is ``=< K-1``)
+# and posted as a bounds-consistent scalar product over a fresh total S in
+# inf..K -- or, with one variable left, as a one-shot narrowing of that
+# variable (ceil/floor division by its coefficient).  A product of two
+# non-constant factors is lifted into a fresh Z with a TimesConstraint, so
+# ``R*T #=< 1000000, T = 7`` narrows R once T is known.
+
+
+class TimesConstraint(Constraint):
+    """``Z = X * Y`` over the integers (bounds propagation): Z is narrowed
+    to the product of the factors' bounds (``X * X`` to the square's), and a
+    factor to the quotient of Z's bounds by the OTHER factor's whenever that
+    factor's domain excludes 0 (ceil for the lower bound, floor for the
+    upper); a factor known to be 0 needs 0 in Z's domain."""
+    __slots__ = ('z', 'x', 'y')
+
+    def __init__(self, z, x, y):
+        self.z = z
+        self.x = x
+        self.y = y
+        super().__init__((z, x) if x is y else (z, x, y))
+
+    def propagate(self, trail: Trail, queue: deque) -> bool:
+        z, x, y = deref(self.z), deref(self.x), deref(self.y)
+        xd = _expr_domain(x, trail)
+        yd = _expr_domain(y, trail)
+        zd = _expr_domain(z, trail)
+        if not xd or not yd or not zd:
+            return False
+        square = x is y and is_var(x)
+        if square:
+            lo, hi = domain_min(xd), domain_max(xd)
+            if lo >= 0:
+                pd = domain_from_range(_safe_mult(lo, lo), _safe_mult(hi, hi))
+            elif hi <= 0:
+                pd = domain_from_range(_safe_mult(hi, hi), _safe_mult(lo, lo))
+            else:
+                pd = domain_from_range(0, max(_safe_mult(lo, lo), _safe_mult(hi, hi)))
+        else:
+            pd = _domain_mult(xd, yd)
+        nz = domain_intersection(zd, pd)
+        if not nz:
+            return False
+        if is_var(z) and not _narrow_if_changed(z, nz, trail, queue):
+            return False
+        if square:
+            zhi = domain_max(_expr_domain(deref(self.z), trail))
+            if zhi != _POS_INF:
+                r = math.isqrt(zhi)
+                nd = domain_intersection(_expr_domain(x, trail),
+                                         domain_from_range(-r, r))
+                if not nd or not _narrow_if_changed(x, nd, trail, queue):
+                    return False
+            return True
+        for a, b in ((x, y), (y, x)):
+            a, b = deref(a), deref(b)
+            if not is_var(a):
+                continue
+            bd = _expr_domain(b, trail)
+            zd = _expr_domain(deref(self.z), trail)
+            if not bd or not zd:
+                return False
+            blo, bhi = domain_min(bd), domain_max(bd)
+            if blo == bhi == 0:
+                if not domain_contains(zd, 0):
+                    return False
+                continue
+            if blo <= 0 <= bhi:
+                continue                  # b may be 0: a is unconstrained
+            hull = _quotient_hull(domain_min(zd), domain_max(zd), blo, bhi)
+            if hull is None:
+                continue
+            ad = _expr_domain(a, trail)
+            nd = domain_intersection(ad, domain_from_range(*hull))
+            if not nd or not _narrow_if_changed(a, nd, trail, queue):
+                return False
+        return True
+
+
+def _quotient_hull(zlo, zhi, blo, bhi):
+    """Integer bounds (ceil of the least, floor of the greatest) of z / b
+    over z in [zlo, zhi] and b in [blo, bhi], 0 not in [blo, bhi]; None when
+    a corner is undefined (an infinite z over an infinite b)."""
+    qs = []
+    for zz in (zlo, zhi):
+        for bb in (blo, bhi):
+            if bb in (_NEG_INF, _POS_INF):
+                if zz in (_NEG_INF, _POS_INF):
+                    return None
+                qs.append(0)
+            elif zz in (_NEG_INF, _POS_INF):
+                qs.append(zz if bb > 0 else -zz)
+            else:
+                qs.append(Fraction(zz, bb))
+    lo, hi = min(qs), max(qs)
+    return (lo if lo == _NEG_INF else math.ceil(lo),
+            hi if hi == _POS_INF else math.floor(hi))
+
+
+def _linearise_lifting(expr, aux: list):
+    """:func:`_linearise`, with each product of two non-constant factors
+    replaced by a fresh Var Z (``(Z, left, right)`` appended to *aux*).
+    None for anything else that is not linear (``//``, ``mod``, ...)."""
+    expr = deref(expr)
+    if type(expr) is int:
+        return {}, expr
+    if is_var(expr):
+        return {expr: 1}, 0
+    if isinstance(expr, (_Add, _Sub)):
+        lc = _linearise_lifting(expr.left, aux)
+        if lc is None:
+            return None
+        rc = _linearise_lifting(expr.right, aux)
+        if rc is None:
+            return None
+        sign = 1 if isinstance(expr, _Add) else -1
+        merged = dict(lc[0])
+        for v, c in rc[0].items():
+            merged[v] = merged.get(v, 0) + sign * c
+        return merged, lc[1] + sign * rc[1]
+    if isinstance(expr, _Mult):
+        lc = _linearise_lifting(expr.left, aux)
+        if lc is None:
+            return None
+        rc = _linearise_lifting(expr.right, aux)
+        if rc is None:
+            return None
+        if not lc[0]:
+            k = lc[1]
+            return {v: c * k for v, c in rc[0].items()}, rc[1] * k
+        if not rc[0]:
+            k = rc[1]
+            return {v: c * k for v, c in lc[0].items()}, lc[1] * k
+        z = Var()
+        aux.append((z, expr.left, expr.right))
+        return {z: 1}, 0
+    if isinstance(expr, _Negate):
+        inner = _linearise_lifting(expr.operand, aux)
+        if inner is None:
+            return None
+        return {v: -c for v, c in inner[0].items()}, -inner[1]
+    return None
+
+
+def _post_linear_ineq(l, r, strict: bool, trail: Trail):
+    """Post ``l =< r`` (``l < r`` when *strict*) where a side is an
+    arithmetic tree, as clpz does (see the section comment).  None when the
+    comparison is not of that shape -- no side is an ``+ - *`` / negation
+    tree, a leaf is not an integer or a plain FD variable, or a node other
+    than ``+ - *`` / negation occurs -- and the caller posts it as before."""
+    if _Add is None:
+        _ensure_term_imports()
+    l, r = deref(l), deref(r)
+    lin = (_Add, _Sub, _Mult, _Negate)
+    if not (isinstance(l, lin) or isinstance(r, lin)):
+        return None
+    if not _fd_int_term(l)[0] or not _fd_int_term(r)[0]:
+        return None
+    aux: list = []
+    lc = _linearise_lifting(l, aux)
+    if lc is None:
+        return None
+    rc = _linearise_lifting(r, aux)
+    if rc is None:
+        return None
+    for z, a, b in aux:
+        xa = _operand_var(a, trail)
+        if xa is False:
+            return False
+        xb = _operand_var(b, trail)
+        if xb is False:
+            return False
+        _ensure_fd(z, trail)
+        if not _post_constraint(TimesConstraint(z, xa, xb), trail):
+            return False
+    # Σ c*V =< bound, read AFTER the products were posted (their propagation
+    # may have bound a variable): a bound variable folds into the bound, two
+    # aliased ones merge.
+    bound = rc[1] - lc[1] - (1 if strict else 0)
+    coeffs: dict = {}
+    for terms, sign in ((lc[0], 1), (rc[0], -1)):
+        for v, c in terms.items():
+            v = deref(v)
+            if type(v) is int:
+                bound -= sign * c * v
+            elif c:
+                coeffs[v] = coeffs.get(v, 0) + sign * c
+    coeffs = {v: c for v, c in coeffs.items() if c}
+    if not coeffs:
+        return 0 <= bound
+    queue: deque = deque()
+    if len(coeffs) == 1:
+        # c*V =< bound: V =< floor(bound/c) for c > 0, V >= ceil(bound/c)
+        # for c < 0 -- entailed once narrowed, so nothing stays posted
+        (v, c), = coeffs.items()
+        _ensure_fd(v, trail)
+        if c > 0:
+            rng = domain_from_range(DEFAULT_MIN, bound // c)
+        else:
+            rng = domain_from_range(-(bound // -c), DEFAULT_MAX)
+        nd = domain_intersection(_expr_domain(v, trail), rng)
+        if not nd or not _narrow_if_changed(v, nd, trail, queue):
+            return False
+        return propagate(queue, trail)
+    for v in coeffs:
+        _ensure_fd(v, trail)
+    s = Var()
+    _ensure_fd(s, trail)
+    if not _narrow(s, domain_from_range(DEFAULT_MIN, bound), trail, queue):
+        return False
+    return _post_constraint(
+        ScalarProductConstraint(tuple(coeffs.values()), tuple(coeffs), s),
+        trail)
+
+
 def fd_lt(l, r, trail: Trail, *, _units_done: bool = False) -> bool:
     """Post X < Y.  Dispatches to CLP(R) when appropriate."""
     l = deref(l)
@@ -2474,6 +2696,9 @@ def fd_lt(l, r, trail: Trail, *, _units_done: bool = False) -> bool:
         if _any_rational(l, r) and _any_real(l, r):
             raise
         raise _incomparable_order_error(r, "(<)/2")
+    linear = _post_linear_ineq(l, r, True, trail)
+    if linear is not None:
+        return linear
     if is_var(l):
         _ensure_fd(l, trail)
     if is_var(r):
@@ -2520,6 +2745,9 @@ def fd_le(l, r, trail: Trail, *, _units_done: bool = False) -> bool:
         if _any_rational(l, r) and _any_real(l, r):
             raise
         raise _incomparable_order_error(r, "(=<)/2")
+    linear = _post_linear_ineq(l, r, False, trail)
+    if linear is not None:
+        return linear
     if is_var(l):
         _ensure_fd(l, trail)
     if is_var(r):
@@ -4164,6 +4392,11 @@ if _USE_C_PROPAGATE:
         # A var vs a ground non-numeric would post a broken constraint, so
         # guard before delegating (like fd_eq above).
         _reject_nonnumeric_order(l, r, "(<)/2")
+        # an expression side posts as clpz does (see _post_linear_ineq);
+        # it answers None for every other shape, before any dispatch
+        linear = _post_linear_ineq(l, r, True, trail)
+        if linear is not None:
+            return linear
         try:
             return _c_impl(l, r, trail)
         except TypeError:
@@ -4195,6 +4428,11 @@ if _USE_C_PROPAGATE:
         # exactly as the Python twin does
         l, r = _cells_as_nodes(_dl, _dr)
         _reject_nonnumeric_order(l, r, "(=<)/2")
+        # an expression side posts as clpz does (see _post_linear_ineq);
+        # it answers None for every other shape, before any dispatch
+        linear = _post_linear_ineq(l, r, False, trail)
+        if linear is not None:
+            return linear
         try:
             return _c_impl(l, r, trail)
         except TypeError:
