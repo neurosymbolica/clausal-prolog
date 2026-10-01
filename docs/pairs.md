@@ -19,7 +19,7 @@ An unbound argument or a partial list enumerates, as the Prolog definition does.
 
 ## Quick Example
 
-```clausal
+```seam
 test("unzip") <- (
     pairs_keys_values([1 - 'a', 2 - 'b', 3 - 'c'], KEYS, VALUES),
     KEYS == [1, 2, 3],
@@ -38,7 +38,7 @@ its values, in every direction.
 
 **Decompose mode** (Pairs bound):
 
-```clausal
+```seam
 test("decompose") <- (
     pairs_keys_values(['name' - 'alice', 'age' - 30], KS, VS),
     KS == ['name', 'age'],
@@ -48,7 +48,7 @@ test("decompose") <- (
 
 **Construct mode** (Keys and Values bound):
 
-```clausal
+```seam
 test("construct") <- (
     pairs_keys_values(PAIRS, ['x', 'y', 'z'], [1, 2, 3]),
     PAIRS == ['-'('x', 1), '-'('y', 2), '-'('z', 3)]
@@ -58,7 +58,7 @@ test("construct") <- (
 Any one proper list fixes the length: `pairs_keys_values(P, ['x', 'y'], V)` gives
 `P = ['-'('x', _A), '-'('y', _B)]` and `V = [_A, _B]`.
 
-```clausal
+```seam
 test("not a pair fails") <- (not pairs_keys_values([1 - 'a', 'b'], _K, _V))
 ```
 
@@ -66,7 +66,7 @@ test("not a pair fails") <- (not pairs_keys_values([1 - 'a', 'b'], _K, _V))
 
 `pairs_keys(Pairs, Keys)` — the keys: `pairs_keys_values(Pairs, Keys, _)`.
 
-```clausal
+```seam
 test("keys") <- pairs_keys([1 - 'a', 2 - 'b', 3 - 'c'], [1, 2, 3])
 ```
 
@@ -74,7 +74,7 @@ test("keys") <- pairs_keys([1 - 'a', 2 - 'b', 3 - 'c'], [1, 2, 3])
 
 `pairs_values(Pairs, Values)` — the values: `pairs_keys_values(Pairs, _, Values)`.
 
-```clausal
+```seam
 test("values") <- pairs_values([1 - 'a', 2 - 'b', 3 - 'c'], ['a', 'b', 'c'])
 ```
 
@@ -84,7 +84,7 @@ test("values") <- pairs_values([1 - 'a', 2 - 'b', 3 - 'c'], ['a', 'b', 'c'])
 identical (`==`). Each group is `Key-Values`. It does not sort, so a key that
 comes back after another key starts a new group:
 
-```clausal
+```seam
 test("adjacent groups") <- (
     group_pairs_by_key(['a' - 1, 'a' - 2, 'b' - 3, 'a' - 4], GROUPS),
     GROUPS == ['-'('a', [1, 2]), '-'('b', [3]), '-'('a', [4])]
@@ -93,7 +93,7 @@ test("adjacent groups") <- (
 
 Sort the pairs first to collect every occurrence of a key:
 
-```clausal
+```seam
 test("sort then group") <- (
     msort(['b' - 2, 'a' - 1, 'b' - 3], SORTED),
     group_pairs_by_key(SORTED, GROUPS),
@@ -108,7 +108,7 @@ a key: `Pairs` is `[K1-E1, K2-E2, ...]` where `call(Goal, Ei, Ki)`. Every
 solution of each call is an answer on backtracking. With `msort/2` and
 `pairs_values/2` it sorts a list by a computed key:
 
-```clausal
+```seam
 test("pair with a key") <- (
     map_list_to_pairs(length, [[1, 2, 3], [4], [5, 6]], PAIRS),
     PAIRS == ['-'(3, [1, 2, 3]), '-'(1, [4]), '-'(2, [5, 6])]
@@ -128,7 +128,7 @@ test("sort by length") <- (
 
 ### Lookup by key
 
-```clausal
+```seam
 lookup(KEY, PAIRS, VALUE) <- in_('-'(KEY, VALUE), PAIRS)
 
 test("lookup") <- lookup('b', ['-'('a', 1), '-'('b', 2), '-'('c', 3)], 2)
@@ -142,7 +142,7 @@ unify with `'-'(KEY, VALUE)`.
 Standard order compares the key first, so `msort/2` sorts pairs by key (and
 by value within a key):
 
-```clausal
+```seam
 test("sort by key") <- (
     msort(['-'('b', 2), '-'('a', 1), '-'('c', 3)], SORTED),
     pairs_keys(SORTED, ['a', 'b', 'c'])
@@ -151,7 +151,7 @@ test("sort by key") <- (
 
 ### Invert a mapping (using [maplist](higher_order.md))
 
-```clausal
+```seam
 swap_pair('-'(K, V), '-'(V, K)),
 
 invert(PAIRS, INVERTED) <- (

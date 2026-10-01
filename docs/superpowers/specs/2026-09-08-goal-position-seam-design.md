@@ -25,7 +25,7 @@ meaning of `--` is decided by a lookup, not by a heuristic.
 
 ## 2. Surface
 
-```clausal
+```seam
 -module(oracle, [])
 -double_quotes(chars)
 -import_from(rulebase, [decide, verdict, permitted])

@@ -394,7 +394,7 @@ Insert immediately before the `## Predicates` line (line 63):
 comparison operators — `<`, `>`, `<=`, `>=` — because they are real Python
 objects with a natural chronological order:
 
-```clausal
+```seam
 -import_from(date_time, [date])
 
 earlier(A, B) <- (date(2020, 1, 1, A), date(2021, 1, 1, B), A < B)  # succeeds
@@ -408,7 +408,7 @@ with a `datetime`, a naive `datetime` with a tz-aware one, or a date with a
 number raises a catchable `error(type_error(orderable, Culprit), (<)/2)` —
 the same error `min_list/2` and `max_list/2` raise for a non-orderable list:
 
-```clausal
+```seam
 catch(
     (date(2020, 1, 1, D), datetime(2020, 1, 1, 0, 0, 0, DT), D < DT),
     error(type_error(orderable, _), _),

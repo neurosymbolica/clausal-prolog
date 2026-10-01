@@ -50,7 +50,7 @@ truth value is `true` / `false`, which compile to Python's `True` / `False`.
 `current_prolog_flag(F, V)` with `F` unbound enumerates every flag that has a
 value.
 
-```clausal
+```seam
 test("bounded") <- current_prolog_flag('bounded', false)
 
 test("unknown is error") <- current_prolog_flag('unknown', 'error')
@@ -76,7 +76,7 @@ A **module** flag has a value per module:
 - the directive `-set_prolog_flag(Flag, Value)` sets it for the module that
   carries the directive.
 
-```clausal
+```seam
 test("a module flag") <- (
     set_prolog_flag('assert_creates_dynamic', true),
     current_prolog_flag('assert_creates_dynamic', true)
@@ -90,7 +90,7 @@ test("a module flag") <- (
 directive it governs the literals below it. A setting that `set_prolog_flag/2`
 would refuse is a load-time `SyntaxError` that carries the ISO error term.
 
-```clausal
+```seam
 -set_prolog_flag(assert_creates_dynamic, true)
 -set_prolog_flag(double_quotes, chars)
 ```
@@ -114,7 +114,7 @@ Scryer departs from ISO on two rows. It reports a read-only flag
 (`set_prolog_flag(max_arity, 5)`) and a bad `unknown` value as
 `domain_error(prolog_flag, Flag)`. Here ISO decides.
 
-```clausal
+```seam
 test("not a flag") <- catch(
     set_prolog_flag('nosuch', 1),
     error(domain_error('prolog_flag', 'nosuch'), _),
@@ -154,7 +154,7 @@ With either value, these are still refused with
 
 The flag is module-scoped: it governs asserts into the module whose flag is set.
 
-```clausal
+```seam
 -set_prolog_flag(assert_creates_dynamic, true)
 
 remember(X) <- assertz(seen(X))

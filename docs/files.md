@@ -8,14 +8,14 @@ The implementation lives in `clausal/modules/py/files.py`.
 
 ## Import
 
-```clausal
+```seam
 -import_from(py.files, [file_exists, directory_files, read_file_to_string,
                         write_string_to_file, join_path, make_directory_path])
 ```
 
 Or via [module import](import.md):
 
-```clausal
+```seam
 -import_module(py.files)
 # then use py.files.file_exists("data.csv"), py.files.join_path(A_, B_, P_), etc.
 ```
@@ -41,7 +41,7 @@ hands back — file names, joined paths, file contents, extensions — is a
 
 `file_exists(Path)` — succeeds if Path is a regular file.
 
-```clausal
+```seam
 check_config <- file_exists("config.json")
 ```
 
@@ -59,7 +59,7 @@ check_config <- file_exists("config.json")
 
 `directory_files(Dir, Files)` — unify Files with a sorted list of filenames in Dir. Deterministic (one solution, full list).
 
-```clausal
+```seam
 list_dir(DIR, FILES) <- directory_files(DIR, FILES)
 ```
 
@@ -67,7 +67,7 @@ list_dir(DIR, FILES) <- directory_files(DIR, FILES)
 
 `directory_entries(Dir, Entry)` — enumerate directory entries one at a time via backtracking.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:directory_listing"
 ```
 
@@ -77,7 +77,7 @@ list_dir(DIR, FILES) <- directory_files(DIR, FILES)
 
 `file_size(Path, Size)` — unify Size with file size in bytes (integer).
 
-```clausal
+```seam
 is_large_file(PATH) <- (file_size(PATH, SIZE), SIZE > 1000000)
 ```
 
@@ -115,7 +115,7 @@ All destructive predicates require ground path arguments.
 
 `make_directory_path(Path)` — create a directory and all parents (like `mkdir -p`). Succeeds even if the directory already exists.
 
-```clausal
+```seam
 ensure_output_dir <- make_directory_path("output/reports/2024")
 ```
 
@@ -125,7 +125,7 @@ ensure_output_dir <- make_directory_path("output/reports/2024")
 
 `read_file_to_string(Path, Contents)` — read an entire file as a UTF-8 string. Fails on missing files or binary content.
 
-```clausal
+```seam
 read_config(PATH, CONTENT) <- (file_exists(PATH), read_file_to_string(PATH, CONTENT))
 ```
 
@@ -147,7 +147,7 @@ read_config(PATH, CONTENT) <- (file_exists(PATH), read_file_to_string(PATH, CONT
 
 `join_path(Base, Relative, Joined)` — join two path components.
 
-```clausal
+```seam
 output_path(DIR, NAME, PATH) <- join_path(DIR, NAME, PATH)
 ```
 
@@ -155,7 +155,7 @@ output_path(DIR, NAME, PATH) <- join_path(DIR, NAME, PATH)
 
 `split_path(Path, Directory, Filename)` — split a path into its directory and filename parts.
 
-```clausal
+```seam
 get_filename(PATH, NAME) <- split_path(PATH, _, NAME)
 ```
 
@@ -163,7 +163,7 @@ get_filename(PATH, NAME) <- split_path(PATH, _, NAME)
 
 `file_extension(Path, Extension)` — unify Extension with the file extension (including the dot, e.g. `".csv"`). Empty string if no extension.
 
-```clausal
+```seam
 is_python_file(PATH) <- file_extension(PATH, ".py")
 ```
 
@@ -183,7 +183,7 @@ is_python_file(PATH) <- file_extension(PATH, ".py")
 
 This example uses [`include`](higher_order.md) to select files by extension.
 
-```clausal
+```seam
 -import_from(py.files, [file_exists, directory_files, read_file_to_string,
                         write_string_to_file, join_path, make_directory_path,
                         file_extension])

@@ -8,13 +8,13 @@ The implementation lives in `clausal/modules/py/json.py`.
 
 ## Import
 
-```clausal
+```seam
 -import_from(py.json, [parse, generate, pretty_generate, get, read_file, write_file])
 ```
 
 Or via [module import](import.md):
 
-```clausal
+```seam
 -import_module(py.json)
 # then use py.json.parse(S_, T_), py.json.get(T_, key, V_), etc.
 ```
@@ -54,7 +54,7 @@ the `atoms` vocabulary reaches every nested string value.
 
 `parse(String, Term)` — parse a JSON string into Clausal terms. Fails on invalid JSON or unbound String.
 
-```clausal
+```seam
 parse_config(S, CONFIG) <- parse(S, CONFIG)
 ```
 
@@ -65,7 +65,7 @@ that should come back as **atoms**. The only option is `atoms(Spellings)`,
 where `Spellings` is a list of the texts to mint; anything else raises
 `domain_error(json_option, Opt)`.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/json_examples.clausal:parse_atoms"
 ```
 
@@ -77,11 +77,11 @@ text. Everything not listed stays a string.
 
 `generate(Term, String)` — serialize a Clausal term to a compact JSON string. Fails if the term contains unbound [variables](syntax.md). An atom serialises as the JSON string of its spelling; a compound cell raises `type_error(json_term, Cell)`.
 
-```clausal
+```seam
 to_json(DATA, JSON) <- generate(DATA, JSON)
 ```
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/json_examples.clausal:generate_kinds"
 ```
 
@@ -96,7 +96,7 @@ to_json(DATA, JSON) <- generate(DATA, JSON)
 - **Key bound**: direct lookup, unify Value. Fails if key not found. Keys of a parsed object are atoms.
 - **Key unbound**: enumerate all key-value pairs via backtracking.
 
-```clausal
+```seam
 -import_from(py.json, [parse, get])
 
 get_name(JSON_STRING, NAME) <- (
@@ -112,7 +112,7 @@ unbound, `get(DATA, KEY, V)` enumerates `KEY = name, V = "Ann"`.
 
 `read_file(Path, Term)` — read and parse a JSON file. Fails on file or parse error.
 
-```clausal
+```seam
 load_config(CONFIG) <- read_file("config.json", CONFIG)
 ```
 
@@ -124,7 +124,7 @@ load_config(CONFIG) <- read_file("config.json", CONFIG)
 
 ## Example
 
-```clausal
+```seam
 -import_from(py.json, [parse, generate, get, read_file])
 
 load_config(CONFIG) <- read_file("config.json", CONFIG)

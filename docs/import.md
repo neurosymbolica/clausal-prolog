@@ -18,7 +18,7 @@ A `.clausal`/`.seam` file imports another the same way, with a directive, and
 can then query it in [goal position](python_integration.md#goal-position-if-goal-for-in-goal)
 — the usual way to drive Clausal from Python code:
 
-```clausal
+```seam
 # report.seam
 -import_module(fibonacci)
 
@@ -137,7 +137,7 @@ This emits `from myapp.graphs.utils import shortest_path, reachable` in the gene
 
 Imported predicates can be used in clause bodies just like locally-defined ones:
 
-```clausal
+```seam
 connected(X, Y) <- reachable(X, Y)
 ```
 
@@ -149,7 +149,7 @@ connected(X, Y) <- reachable(X, Y)
 
 Generates `from myapp.graphs.utils import reachable as reach`. Use the alias name in clause bodies:
 
-```clausal
+```seam
 connected(X, Y) <- reach(X, Y)
 ```
 
@@ -209,7 +209,7 @@ Behind the scenes, imported predicates are stored under a fully-qualified dotted
 [Module-level constants](syntax.md#constants) (`pi`) use the same two directives, with the
 same direct and alias forms:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/import_sigs.txt:import_from_constants"
 ```
 
@@ -230,13 +230,13 @@ it.
 
 ### `-import_module` — whole-module import with qualified calls
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/import_sigs.txt:import_module_directive"
 ```
 
 This emits `import myapp.graphs.utils` in the generated Python code. The module object lands in globals. Predicates are accessed via qualified (dotted) names:
 
-```clausal
+```seam
 connected(X, Y) <- myapp.graphs.utils.reachable(X, Y)
 ```
 
@@ -246,7 +246,7 @@ Qualified calls are resolved at compile time: the compiler walks the dotted attr
 
 The dotted chain in a qualified call must consist entirely of non-variable names. Logic variables (ALL-CAPS like `FOO`, or leading underscore like `_x`) are rejected with a `SyntaxError`:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/import_sigs.txt:qualified_name_errors"
 ```
 
@@ -258,7 +258,7 @@ reference passes this rule by construction, with no special-casing needed. After
 `-import_module(other_module)`, `other_module.pi` resolves in **both** term position and inside
 a `++()` escape:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/import_sigs.txt:qualified_constant_access"
 ```
 
@@ -448,12 +448,12 @@ A library predicate cannot "reach back" into the importer to call a predicate
 the importer defined. The name isn't in the library's namespace, so the call
 raises at runtime:
 
-```clausal
+```seam
 # lib.clausal — the library knows nothing about hook
 run_check(X) <- (hook(X))
 ```
 
-```clausal
+```seam
 # caller.clausal
 -import_from(lib, [run_check])
 
@@ -488,14 +488,14 @@ argument is a goal, with Scryer's [`-meta_predicate`](directives.md#-meta_predic
 declaration. An integer (or `':'`) position is qualified with the **caller's**
 module at the call site; `'+'`, `'-'` and `'?'` positions are left alone:
 
-```clausal
+```seam
 # lib.clausal — the hook is a parameter, not a free name
 -meta_predicate(run_check(1, '?'))
 
 run_check(HOOK, X) <- (call_goal(HOOK, X))
 ```
 
-```clausal
+```seam
 # caller.clausal
 -import_from(lib, [run_check])
 
@@ -512,7 +512,7 @@ into domain-specific predicates. For example, a generic eligibility engine takes
 the domain's `requirement` predicate as a goal argument rather than calling a
 bare `requirement/4` and hoping the caller defined one:
 
-```clausal
+```seam
 -allow_singletons
 # Generic, reusable: the requirement relation is passed in. Every
 # parameter below is a singleton on purpose — the body is elided; the
@@ -553,14 +553,14 @@ error — see [`-strict_atoms`](directives.md#-strict_atoms)) — it does **not*
 create a module-local variant of it. Two modules that each declare the same
 atom hold the exact same value.
 
-```clausal
+```seam
 # lib.clausal — declares its own `approved`
 -module(lib, [approved, check(X)])
 
 check(approved),
 ```
 
-```clausal
+```seam
 # caller.clausal — separately declares the SAME spelling `approved`
 -import_from(lib, [check])
 -private([approved])

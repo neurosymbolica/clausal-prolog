@@ -19,13 +19,13 @@ The implementation lives in `clausal/templating/term_rewriting.py` (source-level
 
 Grammar rules use `>>` instead of `<-`:
 
-```clausal
+```seam
 greeting >> (['hello', 'world'])
 ```
 
 This rewrites to a clause with two hidden arguments (the input list and the remainder list):
 
-```clausal
+```seam
 greeting(S0, S) <- append(['hello', 'world'], S, S0)
 ```
 
@@ -33,13 +33,13 @@ greeting(S0, S) <- append(['hello', 'world'], S, S0)
 
 Terminals are list literals — they consume tokens from the input:
 
-```clausal
+```seam
 greeting >> (['hello', 'world'])
 ```
 
 The empty list `[]` matches without consuming any input:
 
-```clausal
+```seam
 epsilon >> ([])
 ```
 
@@ -47,7 +47,7 @@ epsilon >> ([])
 
 Non-terminals are predicate references — they delegate to other grammar rules:
 
-```clausal
+```seam
 sentence >> (noun_phrase, verb_phrase, noun_phrase)
 ```
 
@@ -57,7 +57,7 @@ This chains three grammar rules: `noun_phrase` consumes some tokens, then `verb_
 
 DCG rules can have extra arguments beyond the hidden state pair:
 
-```clausal
+```seam
 digit(D) >> ([D], {D >= 0}, {D <= 9})
 ```
 
@@ -65,7 +65,7 @@ digit(D) >> ([D], {D >= 0}, {D <= 9})
 
 Curly braces `{...}` embed arbitrary [Clausal goals](syntax.md) inside a grammar rule. They do not consume input:
 
-```clausal
+```seam
 digit(D) >> ([D], {D >= 0}, {D <= 9})
 ```
 
@@ -73,7 +73,7 @@ The goals `D >= 0` and `D <= 9` are [CLP(ℤ)](constraints.md) constraints check
 
 A single brace pair may hold **several goals**, separated by commas — this is a conjunction of embedded goals, exactly like Prolog's `{A, B}`. All goals must succeed; the source order is preserved:
 
-```clausal
+```seam
 digit(D) >> ([D], {D >= 0, D <= 9})
 ```
 
@@ -85,13 +85,13 @@ This is equivalent to the two-block form `([D], {D >= 0}, {D <= 9})` above. A mu
 
 Multiple items in a rule are joined with `,` (conjunction):
 
-```clausal
+```seam
 sentence >> (noun_phrase, verb_phrase, noun_phrase)
 ```
 
 Alternatives use `or`:
 
-```clausal
+```seam
 noun_phrase >> (['the', 'dog'] or ['the', 'cat'] or ['a', 'bird'])
 verb_phrase >> (['chases'] or ['sees'] or ['likes'])
 ```
@@ -100,7 +100,7 @@ verb_phrase >> (['chases'] or ['sees'] or ['likes'])
 
 `not` tests that a terminal does NOT match:
 
-```clausal
+```seam
 not_a >> (not ['a'], [X])
 ```
 
@@ -110,7 +110,7 @@ This matches any single token that is not `'a'`.
 
 A rule can peek at the next token without consuming it using pushback notation:
 
-```clausal
+```seam
 (look_ahead(T), [T]) >> ([T])
 ```
 
@@ -120,7 +120,7 @@ The left side `(look_ahead(T), [T])` means: match `look_ahead(T)` and push back 
 
 DCG rules can be recursive:
 
-```clausal
+```seam
 ab >> (['a'], ab)
 ab >> (['b'], ab)
 ab >> ([])
@@ -138,7 +138,7 @@ The `phrase` builtin invokes a grammar rule on an input list.
 
 `phrase(RuleName, InputList)` — parse InputList with the named rule, succeeding if the entire list is consumed:
 
-```clausal
+```seam
 sentence >> (noun_phrase, verb_phrase, noun_phrase)
 noun_phrase >> (['the', 'dog'] or ['the', 'cat'] or ['a', 'bird'])
 verb_phrase >> (['chases'] or ['sees'] or ['likes'])
@@ -162,7 +162,7 @@ A double-quoted literal is a **string** (the default since 2026-09-26, as in
 Scryer), and a string *is* the list of its one-character **atoms**, so it can
 be passed directly to `phrase`. This makes character-level DCGs natural:
 
-```clausal
+```seam
 # `'digit'` is single-quoted: char_type/2's Type argument is an atom, and a
 # bare `digit` would name the nonterminal on the next line.
 digit >> ([D], {char_type(D, 'digit')})
@@ -184,7 +184,7 @@ for more details.
 
 `phrase(RuleName, S0, S)` — parse with explicit remainder. S is the unconsumed suffix:
 
-```clausal
+```seam
 noun_phrase >> (['the', 'dog'] or ['the', 'cat'] or ['a', 'bird'])
 
 # Parse and get remainder
@@ -199,7 +199,7 @@ test("remainder") <- partial_parse(['the', 'cat', 'sees'], ['sees'])
 
 For rules with extra arguments, pass them as part of the rule:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:dcg_phrase_example"
 ```
 
@@ -215,7 +215,7 @@ A complete working example of all patterns below is in `clausal/examples/dcg_sta
 
 Two helper non-terminals provide state access:
 
-```clausal
+```seam
 # state/1: read current state (passthrough)
 (state(S), [S]) >> ([S])
 
@@ -227,7 +227,7 @@ Two helper non-terminals provide state access:
 
 Thread an integer counter through `phrase/3`:
 
-```clausal
+```seam
 inc >> (state(N0), {N == N0 + 1}, state2(_, N))
 
 count3 >> (inc, inc, inc)
@@ -235,7 +235,7 @@ count3 >> (inc, inc, inc)
 
 Usage:
 
-```clausal
+```seam
 # phrase(count3, [0], [N])  →  N = 3
 ```
 
@@ -245,7 +245,7 @@ The initial state `[0]` is passed as the input list; the final state `[N]` is th
 
 Thread a counter to count leaves in a binary tree:
 
-```clausal
+```seam
 count_leaves('leaf') >> (state(N0), {N == N0 + 1}, state2(_, N))
 count_leaves([L, R]) >> (count_leaves(L), count_leaves(R))
 
@@ -256,7 +256,7 @@ num_leaves(T, N) <- phrase(count_leaves(T), [0], [N])
 
 Thread a list accumulator to collect items:
 
-```clausal
+```seam
 push(X) >> (state(ACC0), {ACC is [X, *ACC0]}, state2(_, ACC))
 
 push_all([]) >> ([])
@@ -271,7 +271,7 @@ collect_items(XS, R) <- phrase(push_all(XS), [[]], [R])
 
 DCG rules and regular `<-` clauses can coexist in the same module:
 
-```clausal
+```seam
 sentence >> (noun_phrase, verb_phrase, noun_phrase)
 
 # Regular predicate that uses the DCG rule

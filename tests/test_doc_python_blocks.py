@@ -28,6 +28,8 @@ from pathlib import Path
 
 import pytest
 
+from clausal.tools.doc_snippet_check import SEAM_FENCE_LANGS
+
 _ROOT = Path(__file__).resolve().parent.parent
 _DOCS = _ROOT / "docs"
 _FENCE = re.compile(r"^([ \t]*)```(\w*)[^\n]*\n(.*?)^\1```", re.M | re.S)
@@ -35,9 +37,11 @@ _FENCE = re.compile(r"^([ \t]*)```(\w*)[^\n]*\n(.*?)^\1```", re.M | re.S)
 
 def _blocks(page: str, lang: str) -> list[str]:
     text = (_DOCS / page).read_text()
+    # ```clausal is the seam fence's alias while docs still carry it.
+    langs = SEAM_FENCE_LANGS if lang in SEAM_FENCE_LANGS else (lang,)
     out = []
     for m in _FENCE.finditer(text):
-        if m.group(2) != lang:
+        if m.group(2) not in langs:
             continue
         indent = len(m.group(1))
         out.append("\n".join(line[indent:] for line in m.group(3).split("\n")))
@@ -144,7 +148,7 @@ def test_doc_python_block_runs(tmp_path, page, anchor, modules, post, expected):
     # nv
     for name, source in modules.items():
         if source is None:
-            source = _block(page, "clausal", _PAGE_MODULE_ANCHORS[(page, name)])
+            source = _block(page, "seam", _PAGE_MODULE_ANCHORS[(page, name)])
         (tmp_path / f"{name}.clausal").write_text(source)
     code = (
         f"import sys; sys.path[0:0] = [{str(_ROOT)!r}, '.']\n"
@@ -218,7 +222,7 @@ _SEAM_CLAIM = re.compile(r"^([A-Za-z_][^\n#]*?)\s+#\s+(.+?)\s*$", re.M)
 
 
 def test_doc_seam_example_claims_hold(tmp_path):
-    block = _block("python_integration.md", "clausal", "WANT = --order(")
+    block = _block("python_integration.md", "seam", "WANT = --order(")
     claims = [(lhs, want) for lhs, want in _SEAM_CLAIM.findall(block)
               if not lhs.startswith(("def ", "return "))]
     assert len(claims) >= 4, claims

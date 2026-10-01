@@ -12,7 +12,7 @@ All predicates in this module are **compiler special forms** — they are compil
 
 ## freeze/2
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/coroutining_sigs.txt:freeze_2"
 ```
 
@@ -23,11 +23,11 @@ Delay `Goal` until variable `X` is bound.
 
 Multiple freezes on the same variable accumulate. All fire when the variable is bound. Backtracking undoes the attribute (the freeze is removed if the trail is unwound).
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/coroutining_sigs.txt:freeze_2_ex2"
 ```
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/coroutining_sigs.txt:freeze_2_ex3"
 ```
 
@@ -40,7 +40,7 @@ Multiple freezes on the same variable accumulate. All fire when the variable is 
 
 ## when/2
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/coroutining_sigs.txt:when_2"
 ```
 
@@ -55,7 +55,7 @@ Generalized coroutining: delay `Goal` until `Condition` is satisfied.
 | `(C1, C2)` | Conjunction: both C1 and C2 must be satisfied |
 | `(C1 ; C2)` | Disjunction: either C1 or C2 suffices |
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/coroutining_examples.clausal:supported_conditions"
 ```
 
@@ -75,7 +75,7 @@ Generalized coroutining: delay `Goal` until `Condition` is satisfied.
 
 ## setup_call_cleanup/3
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/coroutining_sigs.txt:setup_call_cleanup_3"
 ```
 
@@ -90,7 +90,7 @@ Deterministic resource management — the logic programming equivalent of `try/f
 
 If **Setup fails**, the whole goal fails and Cleanup does **not** run.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/coroutining_examples.clausal:setup_call_cleanup_3_ex2"
 ```
 
@@ -98,13 +98,13 @@ If **Setup fails**, the whole goal fails and Cleanup does **not** run.
 
 ## call_cleanup/2
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/coroutining_sigs.txt:call_cleanup_2"
 ```
 
 Sugar for `setup_call_cleanup(true, Call, Cleanup)` — no setup step, just guaranteed cleanup.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/coroutining_sigs.txt:call_cleanup_2_ex2"
 ```
 
@@ -112,7 +112,7 @@ Sugar for `setup_call_cleanup(true, Call, Cleanup)` — no setup step, just guar
 
 ## call_nth/2
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/coroutining_sigs.txt:call_nth_2"
 ```
 
@@ -124,7 +124,7 @@ Call `Goal` and succeed only on the **Nth solution**. The first N-1 solutions ar
 - If Goal has fewer than N solutions, `call_nth` fails.
 - Only the Nth solution's bindings are visible to the continuation.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/coroutining_examples.clausal:call_nth_2_ex2"
 ```
 
@@ -132,7 +132,7 @@ Call `Goal` and succeed only on the **Nth solution**. The first N-1 solutions ar
 
 ## count_all/2
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/coroutining_sigs.txt:count_all_2"
 ```
 
@@ -140,7 +140,7 @@ Count the number of solutions of `Goal` without collecting them. Unifies `Count`
 
 Unlike [findall](meta_predicates.md) + `length`, `count_all` does not build a list — it just counts. Bindings from the inner goal are **not** visible after counting (the trail is unwound).
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/coroutining_examples.clausal:count_all_2_ex2"
 ```
 
@@ -150,7 +150,7 @@ Unlike [findall](meta_predicates.md) + `length`, `count_all` does not build a li
 
 All of these are compiler special forms that compile their goal arguments inline. They nest freely inside other meta-predicates — [findall](meta_predicates.md), [once](control.md), [catch](exceptions.md), [forall](meta_predicates.md), and each other:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/coroutining_examples.clausal:nesting_inside_meta_predicates"
 ```
 

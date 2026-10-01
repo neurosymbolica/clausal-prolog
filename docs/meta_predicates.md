@@ -13,7 +13,7 @@ These are compiled inline by the compiler — they are not dispatched as builtin
 
 `findall(Template, Goal, Bag)` — collect all instances of Template for which Goal succeeds.
 
-```clausal
+```seam
 squares(NS, SQS) <- (
     findall(
         SQ,
@@ -34,7 +34,7 @@ of the goal's **free variables**: the variables of `Goal` that are neither in
 bags in the standard order of those bindings, as ISO specifies and Scryer
 does. With no free variables it is findall that fails on empty.
 
-```clausal
+```seam
 adults(PEOPLE, ADULTS) <- (
     bagof(P, A ^ (in_(P, PEOPLE), age(P, A), A >= 18), ADULTS)
 )
@@ -46,7 +46,7 @@ Without the `A ^`, `A` is free and `adults` would answer one bag per age.
 
 The only difference between bagof and findall is how they handle the empty case:
 
-```clausal
+```seam
 age('alice', 30),
 age('bob', 25),
 age('carol', 30),
@@ -63,7 +63,7 @@ Use bagof when you want failure on empty results, findall when you always want a
 
 #### Free variables and `^`
 
-```clausal
+```seam
 test("one bag per age") <- (
     findall([AGE, NAMES], bagof(NAME, age(NAME, AGE), NAMES), BAGS),
     BAGS is [[25, ['bob']], [30, ['alice', 'carol']]]
@@ -82,7 +82,7 @@ bindings are variants share a bag.
 variables, `^` for existential ones), but each bag is a **sorted list with
 duplicates removed**. Also fails on no solutions.
 
-```clausal
+```seam
 unique_members(XS, US) <- setof(X, in_(X, XS), US)
 ```
 
@@ -96,7 +96,7 @@ Both produce sorted, deduplicated results. The differences:
 | Deduplication | Yes (sorted set) | Only if you call `sort` |
 | Use when | You want failure on empty | You always want a list |
 
-```clausal
+```seam
 test("setof unique") <- (
     setof(X, in_(X, [3, 1, 2, 1, 3]), XS),
     length(XS, 3)
@@ -113,7 +113,7 @@ test("findall empty ok") <- (
 
 `forall(Condition, Action)` — succeeds if for every solution of Condition, Action also succeeds. equivalent to `not (Condition, not Action)`.
 
-```clausal
+```seam
 all_positive(XS) <- forall(in_(X, XS), X > 0)
 ```
 
@@ -121,13 +121,13 @@ all_positive(XS) <- forall(in_(X, XS), X > 0)
 
 **Validate all elements**:
 
-```clausal
+```seam
 all_in_range(XS, LO, HI) <- forall(in_(X, XS), (X >= LO, X <= HI))
 ```
 
 **Check a property across a collection**:
 
-```clausal
+```seam
 all_connected(NODES, GRAPH) <- (
     forall(
         (in_(A, NODES), in_(B, NODES), dif(A, B)),   # dif — see [Constraints](constraints.md)
@@ -138,7 +138,7 @@ all_connected(NODES, GRAPH) <- (
 
 **Guard before processing**:
 
-```clausal
+```seam
 safe_sum(XS, TOTAL) <- (
     forall(in_(X, XS), number(X)),
     sum_list(XS, TOTAL)
@@ -151,14 +151,14 @@ safe_sum(XS, TOTAL) <- (
 
 `call/1..8` invokes a goal closure with 0–7 extra arguments. `call_goal/1..8` are aliases.
 
-```clausal
+```seam
 apply(GOAL, X) <- call(GOAL, X)
 apply2(GOAL, X, Y) <- call(GOAL, X, Y)
 ```
 
 These are primarily used with [lambdas](lambdas.md):
 
-```clausal
+```seam
 plus_one(R) <- call((X <- (R == X + 1)), 5)
 ```
 
@@ -172,7 +172,7 @@ These builtins take a goal as their first argument — either a [lambda](lambdas
 
 `maplist(Goal, List)` — succeeds if Goal succeeds for every element of List.
 
-```clausal
+```seam
 # With a lambda
 all_positive(XS) <- maplist((X <- (X > 0)), XS)
 
@@ -184,7 +184,7 @@ all_numbers(XS) <- maplist(number, XS)
 
 `maplist(Goal, List, ResultList)` — apply a binary goal to each element, collecting results.
 
-```clausal
+```seam
 doubles(XS, YS) <- maplist(((X, Y) <- (Y == X * 2)), XS, YS)
 ```
 
@@ -192,7 +192,7 @@ doubles(XS, YS) <- maplist(((X, Y) <- (Y == X * 2)), XS, YS)
 
 `include(Goal, List, Filtered)` — keep elements for which Goal succeeds.
 
-```clausal
+```seam
 # With a lambda
 positives(XS, PS) <- include((X <- (X > 0)), XS, PS)
 
@@ -204,7 +204,7 @@ keep_numbers(XS, NS) <- include(number, XS, NS)
 
 `exclude(Goal, List, Remaining)` — keep elements for which Goal fails (complement of include).
 
-```clausal
+```seam
 remove_zeros(XS, RS) <- exclude((X <- (X is 0)), XS, RS)
 ```
 
@@ -212,7 +212,7 @@ remove_zeros(XS, RS) <- exclude((X <- (X is 0)), XS, RS)
 
 `foldl(Goal, List, Acc0, Result)` — left fold with a ternary goal closure.
 
-```clausal
+```seam
 fold_sum(XS, S) <- foldl(((ELEM, ACC, R) <- (R == ACC + ELEM)), XS, 0, S)
 fold_product(XS, P) <- foldl(((ELEM, ACC, R) <- (R == ACC * ELEM)), XS, 1, P)
 ```
@@ -221,7 +221,7 @@ fold_product(XS, P) <- foldl(((ELEM, ACC, R) <- (R == ACC * ELEM)), XS, 1, P)
 
 `take_while(Goal, List, Prefix)` — longest prefix where Goal succeeds for each consecutive element.
 
-```clausal
+```seam
 take_pos(XS, PS) <- take_while((X <- (X > 0)), XS, PS)
 # take_pos([3, 1, -2, 4], PS) → PS = [3, 1]
 ```
@@ -230,7 +230,7 @@ take_pos(XS, PS) <- take_while((X <- (X > 0)), XS, PS)
 
 `drop_while(Goal, List, Suffix)` — suffix after dropping the longest prefix where Goal succeeds.
 
-```clausal
+```seam
 drop_pos(XS, RS) <- drop_while((X <- (X > 0)), XS, RS)
 # drop_pos([3, 1, -2, 4], RS) → RS = [-2, 4]
 ```
@@ -239,7 +239,7 @@ drop_pos(XS, RS) <- drop_while((X <- (X > 0)), XS, RS)
 
 `span(Goal, List, Yes, No)` — take_while + drop_while in one pass.
 
-```clausal
+```seam
 split_pos(XS, YES, NO) <- span((X <- (X > 0)), XS, YES, NO)
 ```
 
@@ -247,7 +247,7 @@ split_pos(XS, YES, NO) <- span((X <- (X > 0)), XS, YES, NO)
 
 `group_by(Goal, List, Groups)` — group consecutive elements by key projected via `Goal(Elem, Key)`.
 
-```clausal
+```seam
 by_sign(XS, GS) <- group_by(((X, K) <- if_(X > 0, K is 'pos', K is 'neg')), XS, GS)
 ```
 
@@ -255,7 +255,7 @@ by_sign(XS, GS) <- group_by(((X, K) <- if_(X > 0, K is 'pos', K is 'neg')), XS, 
 
 `sort_by(Goal, List, Sorted)` — sort by key projected via `Goal(Elem, Key)`. Stable sort.
 
-```clausal
+```seam
 sort_by_abs(XS, SS) <- sort_by(((X, K) <- abs_(X, K)), XS, SS)
 ```
 
@@ -267,7 +267,7 @@ sort_by_abs(XS, SS) <- sort_by(((X, K) <- abs_(X, K)), XS, SS)
 
 `filter_map(Goal, List, Result)` — map + filter in one pass. Calls `Goal(Elem, Out)` for each element; keeps Out when goal succeeds, skips when it fails.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/meta_predicates_sigs.txt:filter_map_example"
 ```
 
@@ -285,13 +285,13 @@ sort_by_abs(XS, SS) <- sort_by(((X, K) <- abs_(X, K)), XS, SS)
 
     Meta-predicates take inline goal expressions (not closures), so lambdas aren't needed:
 
-    ```clausal
+    ```seam
     --8<-- "tests/fixtures/docs/meta_predicates_sigs.txt:meta_with_inline"
     ```
 
     Higher-order list predicates take either lambdas or predicate references:
 
-    ```clausal
+    ```seam
     --8<-- "tests/fixtures/docs/meta_predicates_sigs.txt:higher_order_with_lambda"
     ```
 

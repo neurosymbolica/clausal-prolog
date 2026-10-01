@@ -8,7 +8,7 @@ Clausal a functional programming feel.
 
 ## Quick Example
 
-```clausal
+```seam
 double(X, Y) <- (Y == X * 2)
 
 test("double all") <- (
@@ -29,7 +29,7 @@ test("keep evens") <- (
 `call(Goal)` invokes a goal. `call(Goal, A1, ..., AN)` appends extra arguments.
 `call_goal` is an alias.
 
-```clausal
+```seam
 test("call/1") <- call((X <- (X == 42)), 42)
 
 test("call/2") <- (
@@ -53,7 +53,7 @@ partial list `[a, *T]`) it enumerates as that definition does, depth first
 and without end: `maplist(p, L)` answers `L = []`, `L = [1]`, `L = [1, 1]`,
 ...
 
-```clausal
+```seam
 positive(X) <- (X > 0)
 
 test("all positive") <- maplist(positive, [1, 2, 3])
@@ -64,7 +64,7 @@ test("all positive") <- maplist(positive, [1, 2, 3])
 `maplist(Goal, Xs, Ys)` — transform each element via `Goal(X, Y)`; like
 maplist/2 it backtracks into every call.
 
-```clausal
+```seam
 square(X, Y) <- (Y == X ** 2)
 
 test("squares") <- (
@@ -74,7 +74,7 @@ test("squares") <- (
 
 With an inline lambda:
 
-```clausal
+```seam
 test("squares inline") <- (
     maplist(((X, Y) <- (Y == X ** 2)), [1, 2, 3, 4], [1, 4, 9, 16])
 )
@@ -88,7 +88,7 @@ test("squares inline") <- (
 
 `include(Goal, List, Included)` — keep elements where `Goal(Elem)` succeeds.
 
-```clausal
+```seam
 test("filter") <- include((X <- (X > 3)), [1, 5, 2, 8, 3], [5, 8])
 ```
 
@@ -97,7 +97,7 @@ test("filter") <- include((X <- (X > 3)), [1, 5, 2, 8, 3], [5, 8])
 `exclude(Goal, List, Kept)` — keep elements where `Goal(Elem)` *fails*.
 The inverse of include.
 
-```clausal
+```seam
 test("exclude") <- exclude((X <- (X > 3)), [1, 5, 2, 8, 3], [1, 2, 3])
 ```
 
@@ -106,7 +106,7 @@ test("exclude") <- exclude((X <- (X > 3)), [1, 5, 2, 8, 3], [1, 2, 3])
 `filter_map(Goal, List, Result)` — map and filter in one pass. Keep the output
 value when `Goal(Elem, Out)` succeeds; skip elements where it fails.
 
-```clausal
+```seam
 safe_sqrt(X, Y) <- (X >= 0, eval_(X ** 0.5, Y))
 
 test("filtermap") <- filter_map(safe_sqrt, [4, -1, 9, -2, 16], [2.0, 3.0, 4.0])
@@ -127,7 +127,7 @@ Like maplist, foldl backtracks into every call (each solution of the goal
 gives another fold), and an open list enumerates: `foldl(G, L, 0, S)` with
 `L` unbound answers `L = []` first, then longer lists.
 
-```clausal
+```seam
 add_step(X, ACC, OUT) <- (OUT == ACC + X)
 
 test("sum") <- (
@@ -137,7 +137,7 @@ test("sum") <- (
 
 With an inline lambda:
 
-```clausal
+```seam
 test("sum inline") <- (
     foldl(((X, ACC, OUT) <- (OUT == ACC + X)), [1, 2, 3, 4], 0, 10)
 )
@@ -151,7 +151,7 @@ test("sum inline") <- (
 
 `take_while(Goal, List, Prefix)` — longest prefix where `Goal(Elem)` succeeds.
 
-```clausal
+```seam
 test("takewhile") <- take_while((X <- (X < 5)), [1, 3, 7, 2, 4], [1, 3])
 ```
 
@@ -159,7 +159,7 @@ test("takewhile") <- take_while((X <- (X < 5)), [1, 3, 7, 2, 4], [1, 3])
 
 `drop_while(Goal, List, Suffix)` — drop the prefix where `Goal(Elem)` succeeds.
 
-```clausal
+```seam
 test("dropwhile") <- drop_while((X <- (X < 5)), [1, 3, 7, 2, 4], [7, 2, 4])
 ```
 
@@ -167,7 +167,7 @@ test("dropwhile") <- drop_while((X <- (X < 5)), [1, 3, 7, 2, 4], [7, 2, 4])
 
 `span(Goal, List, Yes, No)` — take_while + drop_while in one pass.
 
-```clausal
+```seam
 test("span") <- (
     span((X <- (X < 5)), [1, 3, 7, 2, 4], [1, 3], [7, 2, 4])
 )
@@ -182,7 +182,7 @@ test("span") <- (
 `group_by(Goal, List, Groups)` — group *consecutive* elements by key.
 `Goal(Elem, Key)` extracts the grouping key.
 
-```clausal
+```seam
 first_char(S, C) <- (C is ++S[0])
 
 test("group by first char") <- (
@@ -197,7 +197,7 @@ global groups.
 
 `sort_by(Goal, List, Sorted)` — sort by projected key.
 
-```clausal
+```seam
 abs_key(X, K) <- (abs_(X, K))
 
 test("sort by abs") <- (
@@ -210,7 +210,7 @@ test("sort by abs") <- (
 `max_by(Goal, List, max_)` / `min_by(Goal, List, min_)` — element with the
 largest/smallest projected key.
 
-```clausal
+```seam
 str_len(S, K) <- (K is ++len(S))    # see [Python interop](python_integration.md)
 
 test("longest") <- (
@@ -224,7 +224,7 @@ test("longest") <- (
 
 ### Map then filter (pipeline)
 
-```clausal
+```seam
 sq(X, Y) <- (Y == X * X)
 
 test("pipeline") <- (
@@ -236,7 +236,7 @@ test("pipeline") <- (
 
 ### flatten via foldl
 
-```clausal
+```seam
 test("flat") <- (
     foldl(((CHUNK, ACC, OUT) <- append(ACC, CHUNK, OUT)),
         [[1, 2], [3], [4, 5]],
@@ -247,7 +247,7 @@ test("flat") <- (
 
 ### Count occurrences
 
-```clausal
+```seam
 count(PRED, LIST, N) <- (
     include(PRED, LIST, MATCHED),
     length(MATCHED, N)

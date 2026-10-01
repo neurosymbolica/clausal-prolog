@@ -13,7 +13,7 @@ Clausal, you write **[relations](thinking_relationally.md)** that describe when 
 their arguments. A relation has no fixed inputs or outputs — the same
 definition can compute, verify, generate, and enumerate.
 
-```clausal
+```seam
 # A relation between a list, a prefix, and a suffix
 append([], SUFFIX, SUFFIX),
 append([HEAD, *TAIL], SUFFIX, [HEAD, *REST]) <- (
@@ -81,7 +81,7 @@ In Clausal, a logic variable is an **unknown** — it starts unbound and gets
 bound through unification. once bound, it cannot be reassigned (within that
 branch of search). Logic variables are written in ALLCAPS:
 
-```clausal
+```seam
 # X is unbound; unification with 'hello' binds it
 greeting(X) <- (X is 'hello')
 ```
@@ -101,7 +101,7 @@ def square(n):
     return n * n
 ```
 
-```clausal
+```seam
 # Clausal: relation holds between n and its square
 square(N, SQ) <- (SQ == N * N)
 ```
@@ -112,7 +112,7 @@ A Python function produces one result. A Clausal predicate can produce
 **multiple answers** by having multiple clauses or through nondeterministic
 search:
 
-```clausal
+```seam
 -private([red, green, blue])
 
 color(red),
@@ -137,7 +137,7 @@ Python 3.10+ has `match` statements, but they are one-directional: you match a
 value against patterns. Clausal's unification is bidirectional — variables on
 **both sides** can be bound:
 
-```clausal
+```seam
 # Both HEAD and TAIL are bound by unifying with the list
 first_and_rest([HEAD, *TAIL], HEAD, TAIL),
 ```
@@ -150,7 +150,7 @@ In logic programming, an **atom** is a symbolic constant — like an enum
 value. An atom **is** the interned Python `str`: declaring one in `-private`
 or `-module` doesn't wrap it in a class, it just interns the spelling:
 
-```clausal
+```seam
 -private([red, green, blue, color(C)])
 
 color(red),
@@ -228,7 +228,7 @@ def sum_list(lst):
     return total
 ```
 
-```clausal
+```seam
 # Clausal: relation between a list and its sum
 list_sum([], 0),
 list_sum([HEAD, *TAIL], TOTAL) <- (
@@ -251,7 +251,7 @@ def classify(n):
     else: return "negative"
 ```
 
-```clausal
+```seam
 # Clausal: three clauses, three cases
 classify(N, 'positive') <- (N > 0)
 classify(0, 'zero'),
@@ -268,7 +268,7 @@ relation holds.
 squares_of_evens = [x**2 for x in range(10) if x % 2 == 0]
 ```
 
-```clausal
+```seam
 # Clausal: describe the relation, collect with findall
 square_of_even(N, SQ) <- (
     between(0, 9, N),
@@ -289,7 +289,7 @@ test("squares") <- (
 capitals = {"france": "paris", "germany": "berlin", "japan": "tokyo"}
 ```
 
-```clausal
+```seam
 # Clausal: facts that can be queried in any direction
 capital('france', 'paris'),
 capital('germany', 'berlin'),
@@ -309,7 +309,7 @@ Need to solve a Sudoku, schedule a timetable, or find valid configurations?
 In Python, you'd reach for a solver library or write custom search. In
 Clausal, you describe the constraints and let CLP(ℤ) search:
 
-```clausal
+```seam
 send_more_money([S, E, N, D, M, O, R, Y]) <- (
     in_domain([S, E, N, D, M, O, R, Y], 0, 9),
     all_different([S, E, N, D, M, O, R, Y]),
@@ -328,7 +328,7 @@ send_more_money([S, E, N, D, M, O, R, Y]) <- (
 [DCGs](dcg.md) (Definite Clause Grammars) let you describe grammars declaratively —
 and the same grammar can parse, generate, and validate:
 
-```clausal
+```seam
 greeting >> (['hello'], name)
 name >> (['world'])
 name >> (['clausal'])
@@ -342,7 +342,7 @@ name >> (['clausal'])
 You never leave the Python ecosystem. Call pandas, numpy, scikit-learn, or
 any Python library from within your logic predicates:
 
-```clausal
+```seam
 dataframe_mean(DF, COL, MEAN) <- (
     MEAN is ++DF[COL].mean()
 )

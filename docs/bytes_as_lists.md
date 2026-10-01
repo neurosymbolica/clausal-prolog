@@ -6,7 +6,7 @@ in the range `[0, 255]` — at the logic level. This is the classical Prolog
 term inspection, and DCGs the way character strings do under
 [strings as lists](strings_as_lists.md).
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/bytes_as_lists_examples.clausal:unification"
 ```
 
@@ -34,13 +34,13 @@ iterating `bytes` yields ints (`list(b"abc") == [97, 98, 99]`).
 A byte therefore has **no fixed point** — it decomposes to an `int`, never to a
 one-byte `bytes`:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/bytes_as_lists_examples.clausal:no_fixed_point"
 ```
 
 The empty `bytes` unifies with the empty list:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/bytes_as_lists_examples.clausal:empty_bytes"
 ```
 
@@ -85,7 +85,7 @@ Python `bytes` object underneath.
 The ISO inspection predicates follow the codes-model cons cell — an **int**
 head and a **`bytes`** tail (symmetric with the char cons cell for a string):
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/bytes_as_lists_examples.clausal:inspection"
 ```
 
@@ -100,7 +100,7 @@ The [list predicates](lists.md) accept a `bytes` value as a sequence of codes.
 Element results are int codes; sequence results reconstruct as `bytes`
 (input-type-wins):
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/bytes_as_lists_examples.clausal:list_predicates"
 ```
 
@@ -108,7 +108,7 @@ Element results are int codes; sequence results reconstruct as `bytes`
 
 ## Type Checks
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/bytes_as_lists_examples.clausal:type_checks"
 ```
 
@@ -124,7 +124,7 @@ is not a string, and a code sequence is not a character sequence.
 A clause-head or body list pattern destructures a `bytes` argument: the head
 binds to an **int** code and the tail stays **`bytes`**.
 
-```clausal
+```seam
 head_tail([H, *T], H, T),
 
 test("head tail") <- (head_tail(b"abc", H, T), H is 97, T is b"bc")
@@ -151,7 +151,7 @@ This is the headline use case. A [DCG](dcg.md) parses a `bytes` subject with
 `phrase//2,3`; terminals are written as **integer code lists**, and the `bytes`
 remainder is preserved as `bytes`.
 
-```clausal
+```seam
 g >> ([71, 69, 84, 32])          # [71,69,84,32] is the code list for b"GET "
 
 test("GET prefix") <- (phrase(g, b"GET /x", REST), REST is b"/x")
@@ -161,7 +161,7 @@ test("GET whole") <- phrase(g, b"GET ")
 You can also wrap a `bytes` literal in the `sequence//1` non-terminal to match
 it as a unit:
 
-```clausal
+```seam
 header >> (sequence(b"GET "))
 
 test("sequence of bytes") <- (phrase(header, b"GET /index", REST), REST is b"/index")
@@ -177,7 +177,7 @@ Under `phrase/3`, when the subject is a `bytes`, the residue is bound to a
 Because byte codes are ordinary integers, **any** list of ints in `[0, 255]`
 unifies with the matching `bytes`:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/bytes_as_lists_examples.clausal:promiscuity"
 ```
 
@@ -190,7 +190,7 @@ int lists unify as int lists, and **nothing ever spuriously becomes `bytes`.**
 
 ## Out of Scope
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/bytes_as_lists_examples.clausal:out_of_scope"
 ```
 

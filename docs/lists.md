@@ -16,7 +16,7 @@ Python's native list syntax — no cons cells, no special notation.
 
 ## Quick Example
 
-```clausal
+```seam
 palindrome(XS) <- (reverse(XS, XS))
 
 test("palindrome") <- palindrome([1, 2, 1])
@@ -27,14 +27,14 @@ test("not palindrome") <- (not palindrome([1, 2, 3]))
 
 ## List Syntax
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/lists_sigs.txt:list_syntax"
 ```
 
 Clause heads can describe list structure using `[HEAD, *TAIL]`, relating the
 whole list to its parts (see [Syntax](syntax.md) for the full pattern language):
 
-```clausal
+```seam
 list_sum([], 0),
 list_sum([X, *XS], TOTAL) <- (
     list_sum(XS, REST),
@@ -55,7 +55,7 @@ prologue's member/2 does: `in_(1, L)` answers `L = [1, *_]`;
 The `X in L` goal is the same relation, open lists included; `X not in L`
 fails for an open `L` (some extension always holds `X`).
 
-```clausal
+```seam
 test("member") <- in_(2, [1, 2, 3])
 test("generate") <- (in_(X, ['a', 'b', 'c']), X == 'b')
 ```
@@ -66,7 +66,7 @@ test("generate") <- (in_(X, ['a', 'b', 'c']), X == 'b')
 unifying element only). Use when you need to confirm membership without
 enumerating alternatives.
 
-```clausal
+```seam
 test("check") <- in_check('b', ['a', 'b', 'c'])
 ```
 
@@ -84,7 +84,7 @@ remainder from a bound `L1` and `L3`, and the open modes --
 not a proper list, `append(X, Y, Z)` enumerates `X = [], Z = Y`;
 `X = [_A], Z = [_A, *Y]`; ... without end.
 
-```clausal
+```seam
 # Concatenate
 test("concat") <- append([1, 2], [3, 4], [1, 2, 3, 4])
 
@@ -106,7 +106,7 @@ test("suffix") <- (
 
 `replicate(N, Elem, List)` — `List` is `N` copies of `Elem`.
 
-```clausal
+```seam
 test("replicate") <- replicate(3, 'x', ['x', 'x', 'x'])
 ```
 
@@ -115,7 +115,7 @@ test("replicate") <- replicate(3, 'x', ['x', 'x', 'x'])
 `zip_(L1, L2, Pairs)` — pair up corresponding elements as `X-Y` pairs (the
 `'-'(X, Y)` cell of the [pairs library](pairs.md)). Stops at the shorter list.
 
-```clausal
+```seam
 test("zip") <- zip_([1, 2, 3], ['a', 'b', 'c'], ['-'(1, 'a'), '-'(2, 'b'), '-'(3, 'c')])
 ```
 
@@ -132,7 +132,7 @@ end (`length([a, *T], N)` likewise from `N = 1`). A non-integer `N` is
 `type_error(integer, N)`, a negative one
 `domain_error(not_less_than_zero, N)`.
 
-```clausal
+```seam
 test("length") <- length([10, 20, 30], 3)
 ```
 
@@ -140,7 +140,7 @@ test("length") <- length([10, 20, 30], 3)
 
 `list_item(N, List, Elem)` — relates a 0-based index, a list, and an element.
 
-```clausal
+```seam
 test("get") <- list_item(1, ['a', 'b', 'c'], 'b')
 test("enumerate") <- (list_item(I, [10, 20, 30], 20), I == 1)
 ```
@@ -149,7 +149,7 @@ test("enumerate") <- (list_item(I, [10, 20, 30], 20), I == 1)
 
 `last(List, Elem)` — the last element.
 
-```clausal
+```seam
 test("last") <- last([1, 2, 3], 3)
 ```
 
@@ -157,7 +157,7 @@ test("last") <- last([1, 2, 3], 3)
 
 `take(N, List, Taken)` — first `N` elements.
 
-```clausal
+```seam
 test("take") <- take(2, [1, 2, 3, 4], [1, 2])
 ```
 
@@ -165,7 +165,7 @@ test("take") <- take(2, [1, 2, 3, 4], [1, 2])
 
 `drop(N, List, Rest)` — everything after the first `N` elements.
 
-```clausal
+```seam
 test("drop") <- drop(2, [1, 2, 3, 4], [3, 4])
 ```
 
@@ -173,7 +173,7 @@ test("drop") <- drop(2, [1, 2, 3, 4], [3, 4])
 
 `split_at(N, List, Left, Right)` — split at index `N`.
 
-```clausal
+```seam
 test("split_at") <- split_at(2, [1, 2, 3, 4], [1, 2], [3, 4])
 ```
 
@@ -185,7 +185,7 @@ test("split_at") <- split_at(2, [1, 2, 3, 4], [1, 2], [3, 4])
 
 `reverse(List, Rev)` — reverse a list.
 
-```clausal
+```seam
 test("reverse") <- reverse([1, 2, 3], [3, 2, 1])
 ```
 
@@ -193,7 +193,7 @@ test("reverse") <- reverse([1, 2, 3], [3, 2, 1])
 
 `sort(List, Sorted)` — sort and remove duplicates.
 
-```clausal
+```seam
 test("sort") <- sort([3, 1, 2, 1], [1, 2, 3])
 ```
 
@@ -201,7 +201,7 @@ test("sort") <- sort([3, 1, 2, 1], [1, 2, 3])
 
 `msort(List, Sorted)` — sort preserving duplicates.
 
-```clausal
+```seam
 test("msort") <- msort([3, 1, 2, 1], [1, 1, 2, 3])
 ```
 
@@ -210,7 +210,7 @@ test("msort") <- msort([3, 1, 2, 1], [1, 1, 2, 3])
 `permutation(List, Perm)` — the permutation relation. Holds for each
 permutation of `List` on backtracking.
 
-```clausal
+```seam
 test("perm") <- permutation([1, 2, 3], [3, 1, 2])
 ```
 
@@ -218,7 +218,7 @@ test("perm") <- permutation([1, 2, 3], [3, 1, 2])
 
 `flatten(List, Flat)` — recursively flatten nested lists.
 
-```clausal
+```seam
 test("flatten") <- flatten([[1, [2]], [3, 4]], [1, 2, 3, 4])
 ```
 
@@ -231,14 +231,14 @@ test("flatten") <- flatten([[1, [2]], [3, 4]], [1, 2, 3, 4])
 `select(Elem, List, Rest)` — relates an element, a list containing it, and
 the list without it. Holds for each element on backtracking.
 
-```clausal
+```seam
 test("select") <- select(2, [1, 2, 3], [1, 3])
 ```
 
 This is useful for constraint-style problems where you need to choose from a
 pool:
 
-```clausal
+```seam
 assign([], []),
 assign([SLOT, *SLOTS], POOL) <- (
     select(CHOICE, POOL, REMAINING),
@@ -252,7 +252,7 @@ assign([SLOT, *SLOTS], POOL) <- (
 `split_with(Sep, List, Parts)` — split a list by separator value, or join parts
 with a separator.
 
-```clausal
+```seam
 # Split mode
 test("split_with") <- split_with(0, [1, 2, 0, 3, 4, 0, 5], [[1, 2], [3, 4], [5]])
 ```
@@ -267,7 +267,7 @@ These operate on plain lists, treating them as sets.
 
 `list_to_set(List, Set)` — remove duplicates, preserving order.
 
-```clausal
+```seam
 test("to_set") <- list_to_set([1, 2, 1, 3, 2], [1, 2, 3])
 ```
 
@@ -278,7 +278,7 @@ in `S1`. `S1`'s own duplicates are preserved
 (`union([1,1], [], U)` gives `[1,1]`); run `list_to_set/2` first for a true
 set.
 
-```clausal
+```seam
 test("union") <- union([1, 2, 3], [2, 3, 4], [1, 2, 3, 4])
 ```
 
@@ -286,7 +286,7 @@ test("union") <- union([1, 2, 3], [2, 3, 4], [1, 2, 3, 4])
 
 `intersection(S1, S2, Result)` — elements in both sets.
 
-```clausal
+```seam
 test("intersection") <- intersection([1, 2, 3], [2, 3, 4], [2, 3])
 ```
 
@@ -294,7 +294,7 @@ test("intersection") <- intersection([1, 2, 3], [2, 3, 4], [2, 3])
 
 `subtract(S1, S2, Result)` — elements in `S1` but not in `S2`.
 
-```clausal
+```seam
 test("subtract") <- subtract([1, 2, 3, 4], [2, 4], [1, 3])
 ```
 
@@ -306,7 +306,7 @@ test("subtract") <- subtract([1, 2, 3, 4], [2, 4], [1, 3])
 
 `sum_list(List, Total)` — sum all numbers in a list.
 
-```clausal
+```seam
 test("sum") <- sum_list([1, 2, 3, 4], 10)
 ```
 
@@ -314,7 +314,7 @@ test("sum") <- sum_list([1, 2, 3, 4], 10)
 
 `max_list(List, Max)` — maximum element.
 
-```clausal
+```seam
 test("max") <- max_list([3, 1, 4, 1, 5], 5)
 ```
 
@@ -322,7 +322,7 @@ test("max") <- max_list([3, 1, 4, 1, 5], 5)
 
 `min_list(List, Min)` — minimum element.
 
-```clausal
+```seam
 test("min") <- min_list([3, 1, 4, 1, 5], 1)
 ```
 
@@ -332,7 +332,7 @@ test("min") <- min_list([3, 1, 4, 1, 5], 1)
 
 ### Rotate a list
 
-```clausal
+```seam
 rotate([FIRST, *REST], YS) <- (
     append(REST, [FIRST], YS)
 )
@@ -342,13 +342,13 @@ rotate([FIRST, *REST], YS) <- (
 
 Using [call/N](higher_order.md#call18-and-call_goal18) to apply a predicate argument:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/lists_examples.clausal:partition_example"
 ```
 
 ### Sliding window
 
-```clausal
+```seam
 window(N, LIST, WINDOW) <- (
     append(WINDOW, _, AFTER),
     append(_, AFTER, LIST),

@@ -6,13 +6,13 @@ Clausal has two kinds of tests: Python-level pytest tests in `tests/`, and inlin
 
 Any `.clausal` file (see [Syntax](syntax.md)) can include test clauses of the form:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:test_syntax"
 ```
 
 A test passes if its body succeeds (produces at least one solution); a body that raises fails the test and reports the error. The head is `test/1`, lowercase like every predicate name: the old `Test/1` spelling is now a load-time error (TitleCase names have no role in Clausal), and the runner names the rename. Tests live alongside the predicates they exercise:
 
-```clausal
+```seam
 fib(0, 0),
 fib(1, 1),
 fib(N, F) <- (
@@ -32,7 +32,7 @@ test("fib(7) = 13") <- (fib(7, F), F == 13)
 
 A test that must find **no** solution is plunit's `test/2` with the option `fail`. It passes iff its body has no solution; a body that succeeds fails the test (reported as `test(..., fail) succeeded`), and a body that raises is an error, as for `test/1`. The seam spelling is the same term:
 
-```clausal
+```seam
 parent("tom", "bob"),
 
 test("bob is not tom's parent", fail) <- parent("bob", "tom")
@@ -92,7 +92,7 @@ A `.pl` file the translator rejects (a syntax error, or a construct it cannot tr
 
 ## Running `.clausal` tests via pytest
 
-The `conftest.py` at the project root registers a pytest plugin that automatically collects `.clausal` files (and their `.seam` alias), Prolog `.pl` files (through the Prolog importer; a file that does not translate is one failing `<load>` item), and also every ```` ```clausal ```` block in `docs/*.md` that contains a `test/1` clause. The [import hook](import.md) handles loading and compilation. Each `test/1` clause appears as an individual pytest item:
+The `conftest.py` at the project root registers a pytest plugin that automatically collects `.clausal` files (and their `.seam` alias), Prolog `.pl` files (through the Prolog importer; a file that does not translate is one failing `<load>` item), and also every ```` ```seam ```` block (or its older alias ```` ```clausal ````) in `docs/*.md` that contains a `test/1` clause. The [import hook](import.md) handles loading and compilation. Each `test/1` clause appears as an individual pytest item:
 
 ```bash
 python -m pytest clausal/examples/fibonacci.clausal -v
@@ -100,7 +100,7 @@ python -m pytest clausal/examples/fibonacci.clausal -v
 
 Output looks like:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:test_output"
 ```
 

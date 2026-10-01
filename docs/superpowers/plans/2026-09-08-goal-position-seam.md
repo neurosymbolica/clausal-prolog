@@ -824,7 +824,7 @@ In `docs/python_integration.md`, after the "Text crossings" subsection, add:
 A term in goal position is called. Goal positions are exactly: the test of
 `if`/`elif`/`while`, the iterable of `for`, and `not` inside those tests.
 
-```clausal
+```seam
 if --(verdict(S, IDS, _) is ++answer):      # unify once; S, IDS become locals
     use(S, IDS)
 for S, IDS in --decide(++profile, verdict(S, IDS, _)):   # every solution

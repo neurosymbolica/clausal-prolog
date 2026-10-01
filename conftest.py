@@ -25,7 +25,7 @@ from pathlib import Path
 
 import pytest
 
-from clausal._suffixes import SOURCE_SUFFIXES
+from clausal._suffixes import SEAM_SUFFIX, SOURCE_SUFFIXES
 from clausal.testing import (
     TestCollectionError,
     collect_tests,
@@ -34,6 +34,7 @@ from clausal.testing import (
     run_test,
 )
 from clausal.tools.clear_pycache import clear_pycache
+from clausal.tools.doc_snippet_check import SEAM_FENCE_RE
 
 # Ensure test fixtures directory is importable (for -import_from directives
 # between fixture files, e.g. expansion_importer.clausal).
@@ -55,8 +56,9 @@ collect_ignore_glob = [
     "clausal/tools/prolog_preludes/*.pl",
 ]
 
-# Fenced ```clausal ... ``` blocks in markdown.
-_CLAUSAL_FENCE_RE = re.compile(r"```clausal\n(.*?)```", re.DOTALL)
+# Fenced seam blocks in markdown: ```seam ... ```, or the ```clausal alias
+# (one pattern, shared with the doc-snippet coverage checks).
+_CLAUSAL_FENCE_RE = SEAM_FENCE_RE
 
 # Session-scoped home for doc-block compile buffers.  The blocks used to be
 # NamedTemporaryFiles unlinked at collection time, which is why a failing doc
@@ -213,7 +215,8 @@ def _spelled(name, result) -> str:
 
 
 def _extract_clausal_blocks(md_path: Path) -> list[tuple[int, str]]:
-    """Return (line_number, content) pairs for each ```clausal block."""
+    """Return (line_number, content) pairs for each seam block (```seam or
+    its alias ```clausal)."""
     text = md_path.read_text()
     results = []
     for m in _CLAUSAL_FENCE_RE.finditer(text):
@@ -270,7 +273,7 @@ class DocMdFile(pytest.File):
                     self.path.relative_to(_docs_dir).with_suffix("").parts)
             except ValueError:
                 stem = self.path.stem
-            tmp_path = _doc_block_home() / f"{stem}_L{lineno}.clausal"
+            tmp_path = _doc_block_home() / f"{stem}_L{lineno}{SEAM_SUFFIX}"
             tmp_path.write_text(content)
 
             try:

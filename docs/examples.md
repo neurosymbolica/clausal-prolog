@@ -17,7 +17,7 @@ Clausal ships with example programs in `clausal/examples/`. Each is a self-conta
 
 Classic Fibonacci sequence with pattern-matching base cases:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:fib_definition"
 ```
 
@@ -70,7 +70,7 @@ Symbolic differentiation: `diff(EXPR, VAR, DERIV)` computes the derivative of an
 
 Classic Sudoku solver using CLP(ℤ) constraints, ported from [Markus Triska's `sudoku.pl`](https://www.metalevel.at/sudoku/). Posts row, column, and 3×3 block `all_different` constraints, then labels. Includes three sample puzzles.
 
-```clausal
+```seam
 sudoku(ROWS) <- (
     ROWS is [R1, R2, R3, R4, R5, R6, R7, R8, R9],
     flatten(ROWS, VS),
@@ -124,7 +124,7 @@ Five meta-interpreters ported from Markus Triska's [A Couple of Meta-interpreter
 
 **solve/2** — vanilla list-based meta-interpreter (tail-recursive). Resolves goals against an explicit program:
 
-```clausal
+```seam
 solve([], _PROGRAM_UNUSED),
 solve([GOAL, *GOALS], PROGRAM) <- (
     match_clause(GOAL, BODY, PROGRAM),
@@ -141,7 +141,7 @@ match_clause(GOAL, FRESH_BODY, PROGRAM) <- (
 
 **solve_count/3** — counts inference steps:
 
-```clausal
+```seam
 solve_count([], _PROGRAM_UNUSED, 0),
 solve_count([GOAL, *GOALS], PROGRAM, COUNT) <- (
     match_clause(GOAL, BODY, PROGRAM),
@@ -153,7 +153,7 @@ solve_count([GOAL, *GOALS], PROGRAM, COUNT) <- (
 
 **solve_limit/3** — depth-limited search. Each clause resolution consumes one unit of depth:
 
-```clausal
+```seam
 solve_limit([], _PROGRAM_UNUSED, _MAX_UNUSED),
 solve_limit([GOAL, *GOALS], PROGRAM, MAX) <- (
     MAX > 0,
@@ -166,7 +166,7 @@ solve_limit([GOAL, *GOALS], PROGRAM, MAX) <- (
 
 **solve_iterative_deepening/2** — complete search via increasing depth limits. Finds solutions even in cyclic programs where naive DFS diverges:
 
-```clausal
+```seam
 solve_iterative_deepening(GOALS, PROGRAM) <- (
     between(0, 1000, DEPTH),
     solve_limit(GOALS, PROGRAM, DEPTH)
@@ -175,7 +175,7 @@ solve_iterative_deepening(GOALS, PROGRAM) <- (
 
 **solve_tree/3** — builds explicit proof trees. Each node is `[Goal, [subtrees...]]`:
 
-```clausal
+```seam
 solve_tree([], _PROGRAM_UNUSED, []),
 solve_tree([GOAL, *GOALS], PROGRAM, [[GOAL, BODY_TREE], *GOALS_TREE]) <- (
     match_clause(GOAL, BODY, PROGRAM),
@@ -204,7 +204,7 @@ DCG state threading patterns: counter (`inc`, `count3`), tree leaf counting (`co
 
 Add test predicates to any example file, then run with pytest:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:fib_test"
 ```
 

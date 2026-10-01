@@ -4,13 +4,13 @@
 
 The `graphs` module provides predicates for graph creation, traversal, pathfinding, cycle detection, connectivity, and minimum spanning trees. Graphs are represented as edge lists — plain [lists](lists.md) matching the [pairs](pairs.md) convention.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/graphs_sigs.txt:overview_import"
 ```
 
 Or via [module import](import.md):
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/graphs_sigs.txt:overview_module"
 ```
 
@@ -18,7 +18,7 @@ Or via [module import](import.md):
 
 ## Import
 
-```clausal
+```seam
 -import_from(graphs, [
     vertices, neighbors, has_edge, degree,
     is_connected, is_isolated,
@@ -91,7 +91,7 @@ Other conventions worth noting:
 | `has_edge(Edges, U, V)` | `+Edges, ?U, ?V` | Succeeds if a **directed** edge `[U, V]` exists (order matters); enumerates on backtrack |
 | `degree(Edges, Node, Deg)` | `+Edges, +Node, -Deg` | Count of incident edges |
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/graphs_sigs.txt:query_examples"
 ```
 
@@ -113,7 +113,7 @@ Other conventions worth noting:
 | `breadth_first_nodes(Edges, Source, Nodes)` | `+Edges, +Source, -Nodes` | BFS node ordering from source |
 | `depth_first_nodes(Edges, Source, Nodes)` | `+Edges, +Source, -Nodes` | DFS preorder node ordering from source |
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/graphs_sigs.txt:traversal_example"
 ```
 
@@ -127,7 +127,7 @@ Other conventions worth noting:
 | `shortest_path(Edges, Start, End, Path)` | `+Edges, +Start, +End, -Path` | Shortest path (BFS for unweighted, Dijkstra for weighted). **Precondition:** weighted edges must be non-negative; a graph with any negative weight fails (Dijkstra is unsound with negative weights). |
 | `path_cost(Edges, Path, Cost)` | `+Edges, +Path, -Cost` | Sum of edge weights along a path |
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/graphs_sigs.txt:pathfinding_examples"
 ```
 
@@ -141,7 +141,7 @@ Other conventions worth noting:
 | `topological_sort(Edges, Order)` | `+Edges, -Order` | Topological ordering of a DAG; fails if cyclic |
 | `has_cycle(Edges)` | `+Edges` | Succeeds if the directed graph contains a cycle |
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/graphs_sigs.txt:component_examples"
 ```
 
@@ -154,7 +154,7 @@ Other conventions worth noting:
 | `spanning_tree(Edges, Tree)` | `+Edges, -Tree` | A spanning tree (edge subset) via BFS |
 | `min_spanning_tree(Edges, Tree, Cost)` | `+Edges, -Tree, -Cost` | Minimum spanning tree via Prim's algorithm |
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/graphs_sigs.txt:tree_example"
 ```
 
@@ -167,7 +167,7 @@ Other conventions worth noting:
 | `reverse_edges(Edges, Reversed)` | `+Edges, -Reversed` | reverse all edge directions |
 | `merge_graphs(Edges1, Edges2, Merged)` | `+Edges1, +Edges2, -Merged` | union of two edge lists |
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/graphs_sigs.txt:transform_example"
 ```
 

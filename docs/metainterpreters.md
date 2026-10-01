@@ -20,13 +20,13 @@ The key idea is to represent an *object-level* program — the program being int
 
 In Clausal, object-level terms are ordinary compound terms — cells such as `('natnum', ('succ', 0))`. We declare the object-level functors with `-private` so they are treated purely as data, not called directly:
 
-```clausal
+```seam
 -private([natnum(VALUE), succ(INNER), edge(FROM, TO), path(FROM, TO)])
 ```
 
 A program is then a list of such clauses:
 
-```clausal
+```seam
 natnum_program(PROGRAM) <- (
     PROGRAM is [
         [natnum(0), []],
@@ -44,7 +44,7 @@ natnum(s(X)) :- natnum(X).
 
 Similarly, a graph reachability program:
 
-```clausal
+```seam
 graph_program(PROGRAM) <- (
     PROGRAM is [
         [edge('a', 'b'), []],
@@ -62,7 +62,7 @@ graph_program(PROGRAM) <- (
 
 All meta-interpreters share a helper that finds a clause in the program whose head unifies with a given goal, returning a fresh copy of the body (to avoid variable clashes between different resolution steps):
 
-```clausal
+```seam
 match_clause(GOAL, FRESH_BODY, PROGRAM) <- (
     CLAUSE in PROGRAM,
     copy_term(CLAUSE, [FRESH_HEAD, FRESH_BODY]),
@@ -78,7 +78,7 @@ match_clause(GOAL, FRESH_BODY, PROGRAM) <- (
 
 The simplest meta-interpreter processes a *list* of goals, replacing each goal with the body of a matching clause, and recursing until the list is empty.
 
-```clausal
+```seam
 solve([], _PROGRAM_UNUSED),
 solve([GOAL, *GOALS], PROGRAM) <- (
     match_clause(GOAL, BODY, PROGRAM),
@@ -91,7 +91,7 @@ The base case: an empty goal list means all goals are proved. The recursive case
 
 **Querying it** from Python hosted in a `.seam` file, with the goal in goal position:
 
-```clausal
+```seam
 -import_from(clausal.examples.metainterpreters, [natnum_program, graph_program, solve])
 -private([natnum(value), succ(inner), path(from_, to)])
 
@@ -140,7 +140,7 @@ result = list(solve(("solve", [("path", "a", "c")], G.value), module=mi))
 
 By adding a counter argument, we can count the number of resolution steps (clause applications) the interpreter performs:
 
-```clausal
+```seam
 solve_count([], _PROGRAM_UNUSED, 0),
 solve_count([GOAL, *GOALS], PROGRAM, COUNT) <- (
     match_clause(GOAL, BODY, PROGRAM),
@@ -169,7 +169,7 @@ Each recursive call adds one to the count after the sub-proof completes. The cou
 
 The vanilla interpreter will loop forever on programs that have cycles or infinite derivations. Adding a depth limit causes it to fail rather than diverge:
 
-```clausal
+```seam
 solve_limit([], _PROGRAM_UNUSED, _MAX_UNUSED),
 solve_limit([GOAL, *GOALS], PROGRAM, MAX) <- (
     MAX > 0,
@@ -197,7 +197,7 @@ solve_limit([path('a', 'c')], P, 4)      → succeeds
 
 Iterative deepening combines the completeness of breadth-first search with the space efficiency of depth-first search. It repeatedly tries increasing depth limits until a proof is found:
 
-```clausal
+```seam
 solve_iterative_deepening(GOALS, PROGRAM) <- (
     between(0, 1000, DEPTH),
     solve_limit(GOALS, PROGRAM, DEPTH),
@@ -208,7 +208,7 @@ solve_iterative_deepening(GOALS, PROGRAM) <- (
 
 **The key advantage** is completeness on programs where naive DFS would loop. Consider a cyclic graph where the only successful path clause is listed *after* the recursive one:
 
-```clausal
+```seam
 cyclic_program(PROGRAM) <- (
     PROGRAM is [
         [edge('a', 'b'), []],
@@ -227,7 +227,7 @@ cyclic_program(PROGRAM) <- (
 
 The proof tree interpreter extends the vanilla interpreter to build a *trace* of the proof — a tree recording which clause was used to resolve each goal, and how its body was proved:
 
-```clausal
+```seam
 solve_tree([], _PROGRAM_UNUSED, []),
 solve_tree([GOAL, *GOALS], PROGRAM, [[GOAL, BODY_TREE], *GOALS_TREE]) <- (
     match_clause(GOAL, BODY, PROGRAM),
@@ -249,7 +249,7 @@ path('a', 'c')
 
 In Clausal list notation:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:metainterp_graph_test"
 ```
 
@@ -261,7 +261,7 @@ natnum(succ(succ(0)))
    └─ natnum(0)             ← leaf (fact)
 ```
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:metainterp_tree_display"
 ```
 

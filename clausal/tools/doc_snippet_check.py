@@ -19,7 +19,7 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from clausal._suffixes import CLAUSAL_SUFFIXES
+from clausal._suffixes import CLAUSAL_SUFFIXES, SEAM_SUFFIX
 
 # Matches --8<-- "path/to/file" or --8<-- "path/to/file:section".
 _SNIPPET_REF_RE = re.compile(r'--8<--\s+"([^"]+)"')
@@ -28,8 +28,16 @@ _SNIPPET_REF_RE = re.compile(r'--8<--\s+"([^"]+)"')
 _SECTION_START_RE = re.compile(r"--8<--\s*\[start:([^\]]+)\]")
 _SECTION_END_RE = re.compile(r"--8<--\s*\[end:([^\]]+)\]")
 
-# Code-fence pattern for ```clausal blocks.
-_CLAUSAL_FENCE_RE = re.compile(r"```clausal\n(.*?)```", re.DOTALL)
+#: The fence languages of a SEAM code block: ```seam, and ```clausal, kept
+#: as an alias for now so no block goes untested while docs still carry it.
+#: (At the extension flip ```clausal becomes Clausal Prolog and leaves this
+#: tuple.)
+SEAM_FENCE_LANGS: tuple[str, ...] = ("seam", "clausal")
+
+#: Code-fence pattern for a seam block; group 1 is its content.
+SEAM_FENCE_RE = re.compile(
+    r"```(?:" + "|".join(SEAM_FENCE_LANGS) + r")\n(.*?)```", re.DOTALL)
+_CLAUSAL_FENCE_RE = SEAM_FENCE_RE   # the older name
 
 
 @dataclass(frozen=True)
@@ -154,7 +162,8 @@ def check_no_raw_untested_blocks(
     *,
     known_uncompilable: set[tuple[str, int]] | None = None,
 ) -> list[str]:
-    """Every ```clausal block must be a --8<-- ref, contain a test/1 clause, or compile.
+    """Every seam block (```seam, or its alias ```clausal) must be a --8<-- ref,
+    contain a test/1 clause, or compile.
 
     ``known_uncompilable`` is an allowlist of ``(filename, line_number)`` pairs
     for legacy display fragments that don't compile standalone (partial
@@ -175,7 +184,7 @@ def check_no_raw_untested_blocks(
                 continue
             # Try to compile — if it works, the block is fine.
             with tempfile.NamedTemporaryFile(
-                suffix=".clausal", mode="w", delete=False
+                suffix=SEAM_SUFFIX, mode="w", delete=False
             ) as f:
                 f.write(content)
                 tmp = Path(f.name)

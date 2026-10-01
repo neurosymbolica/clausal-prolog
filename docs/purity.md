@@ -55,7 +55,7 @@ program by adding and removing goals:
 - If a predicate gives too few answers (or none), remove a condition to find
   which one is too restrictive.
 
-```clausal
+```seam
 -allow_singletons
 # These three queries are in order of increasing specificity: X stays
 # unbound in the first Test on purpose — that's what makes it "the most
@@ -111,7 +111,7 @@ above. when these properties are violated, the core advantages are lost.
 This is **not monotonic** — adding information (binding a variable) can cause
 a previously successful negation to fail.
 
-```clausal
+```seam
 # Dangerous: X is unbound, so not in_(X, [1,2,3]) may behave unexpectedly
 risky(X) <- (not in_(X, [1, 2, 3]))
 
@@ -124,7 +124,7 @@ For disequality with unbound variables, use [`dif/2`](constraints.md) (`is not`)
 is a monotonic constraint that survives and is rechecked as variables become
 bound:
 
-```clausal
+```seam
 # Safe: dif is a constraint, not a point-in-time check
 safe(X) <- (X is not 1, X is not 2)
 
@@ -137,7 +137,7 @@ test("dif rechecks") <- (not (safe(X), X is 1))    # binding X to 1 later fails
 The `==` operator posts [CLP(ℤ)](constraints.md) constraints that work in all directions,
 even when variables are unbound:
 
-```clausal
+```seam
 # Works in all directions:
 square(N, SQ) <- (SQ == N * N)
 ```
@@ -155,7 +155,7 @@ as the very last step**. If the output exists only on the terminal, you cannot
 easily reason about it. If it exists as a term, you can test it, transform it,
 and reason about it with the full power of logic programming.
 
-```clausal
+```seam
 # Describe the output as a term (an f-string builds the text in one step):
 greeting_text(NAME, TEXT) <- (
     TEXT is f"Hello, {NAME}!"
@@ -198,7 +198,7 @@ A **clean** representation lets you distinguish all cases symbolically by the
 principal functor of a term. A **defaulty** representation requires guards or
 type tests to distinguish cases.
 
-```clausal
+```seam
 # Defaulty: need a guard to tell if the value is special
 handle(0, 'zero'),
 handle(N, 'positive') <- (N > 0)
@@ -267,7 +267,7 @@ control can be changed flexibly, independently of the logic.
 This separation is a major attraction of logic programming, and it only works
 within the pure monotonic core. Consider the N-Queens problem:
 
-```clausal
+```seam
 # Logic: describe what must hold
 n_queens(N, QUEENS) <- (
     length(QUEENS, N),

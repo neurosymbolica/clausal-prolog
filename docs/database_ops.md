@@ -8,7 +8,7 @@ memoization, and self-modifying programs.
 
 ## Quick Example
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/database_ops_examples.clausal:quick_example"
 ```
 
@@ -22,7 +22,7 @@ ISO Prolog: modifying it raises
 `permission_error(modify, static_procedure, Name/Arity)`, with the builtin
 as the culprit (Scryer's form; see [Exceptions](exceptions.md)).
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/database_ops_examples.clausal:declare_first"
 ```
 
@@ -35,7 +35,7 @@ case to ISO 7.5.2(2): with it `true`, asserting into a procedure that does not
 exist creates it as a dynamic procedure. An imported `.pl` module has it on.
 Declare several at once:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/database_ops_examples.clausal:dynamic_directive"
 ```
 
@@ -74,7 +74,7 @@ static predicate that already has clauses.
 `assertz(Term)` — add a fact at the **end** of the clause list (like Prolog's
 `assertz`).
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/database_ops_examples.clausal:assertz_example"
 ```
 
@@ -83,7 +83,7 @@ static predicate that already has clauses.
 `asserta(Term)` — add a fact at the **beginning** of the clause list (like
 Prolog's `asserta`). The new clause will be tried first on subsequent queries.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/database_ops_examples.clausal:asserta_example"
 ```
 
@@ -95,7 +95,7 @@ Prolog's `asserta`). The new clause will be tried first on subsequent queries.
 
 `retract(Term)` — remove the first clause whose head unifies with `Term`.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/database_ops_examples.clausal:retract_example"
 ```
 
@@ -108,7 +108,7 @@ an unbound `Term` raises `instantiation_error`. (`retractall/1` and
 
 `retract` uses unification for matching, so you can retract by pattern:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/database_ops_examples.clausal:retract_pattern"
 ```
 
@@ -121,7 +121,7 @@ an unbound `Term` raises `instantiation_error`. (`retractall/1` and
 `abolish_table(functor, Arity)` — clear cached answers for a specific tabled
 predicate.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/database_ops_examples.clausal:abolish_table_example"
 ```
 
@@ -129,7 +129,7 @@ predicate.
 
 `abolish_all_tables()` — clear all tabling caches at once.
 
-```clausal
+```seam
 test("clear all") <- abolish_all_tables()
 ```
 
@@ -144,7 +144,7 @@ constraint (`N1 == N - 1`): a bare `X is N - 1` is unification and would
 bind `X` to the unevaluated term (see [Operators](operators.md)).
 
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/database_ops_examples.clausal:memoization_recipe"
 ```
 
@@ -152,13 +152,13 @@ bind `X` to the unevaluated term (see [Operators](operators.md)).
 
 ### Counter / mutable state
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/database_ops_examples.clausal:counter_recipe"
 ```
 
 ### Collecting facts from a computation
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/database_ops_examples.clausal:collect_recipe"
 ```
 

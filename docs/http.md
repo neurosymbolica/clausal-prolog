@@ -5,7 +5,7 @@
 Two modules for HTTP requests and URL manipulation, wrapping Python's `urllib`
 stdlib. Zero third-party dependencies.
 
-```clausal
+```seam
 -import_from(py.http, [get, json_get, post, request])
 -import_from(py.url, [encode, decode, parse, join])
 
@@ -16,7 +16,7 @@ fetch_api(URL, DATA) <- json_get(URL, DATA)
 
 Or via [module import](import.md):
 
-```clausal
+```seam
 -import_module(py.http)
 -import_module(py.url)
 
@@ -37,7 +37,7 @@ Python), and a parsed JSON object is a `DictTerm` whose keys are **atoms**.
 
 ## `py.http` — HTTP Requests
 
-```clausal
+```seam
 -import_from(py.http, [get, post, request, json_get, json_post])
 ```
 
@@ -50,7 +50,7 @@ Python), and a parsed JSON object is a `DictTerm` whose keys are **atoms**.
 | `post(Url, Data, Body)` | `+Url, +Data, -Body` | POST string data, response as string. |
 | `post(Url, Data, Headers, Body)` | `+Url, +Data, +Headers, -Body` | POST with custom headers. |
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/http_sigs.txt:simple_request_examples"
 ```
 
@@ -76,7 +76,7 @@ a double-quoted `"url"` is matched by its text too.
 Unlike `get` and `post`, `request` does **not** fail on 4xx/5xx — it returns
 the status code so you can handle errors explicitly.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/http_sigs.txt:general_request_example"
 ```
 
@@ -92,7 +92,7 @@ JSON strings to strings, using the same conversion as the [`py.json`](json.md) m
 Read a field as `USER.name` or `py.json.get(USER, name, NAME)` (with `-import_module(py.json)`
 and `name` declared); a string key `"name"` does not match an atom key and the goal fails.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/http_sigs.txt:json_request_examples"
 ```
 
@@ -100,7 +100,7 @@ and `name` declared); a string key `"name"` does not match an atom key and the g
 
 ## `py.url` — URL Utilities
 
-```clausal
+```seam
 -import_from(py.url, [encode, decode, parse, join])
 ```
 
@@ -113,7 +113,7 @@ and `name` declared); a string key `"name"` does not match an atom key and the g
 
 ### encode / decode
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/http_sigs.txt:url_encode_examples"
 ```
 
@@ -125,7 +125,7 @@ encode uses `safe=""` — all special characters are encoded.
 `query`, `fragment` — so `PARTS.scheme` reads a part, and `join` consumes the
 same dict unchanged. Port is an integer (0 if not specified).
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/http_sigs.txt:url_parse_examples"
 ```
 
@@ -135,13 +135,13 @@ same dict unchanged. Port is an integer (0 if not specified).
 
     ### Build a query URL
 
-    ```clausal
+    ```seam
     --8<-- "tests/fixtures/docs/http_sigs.txt:build_query_url"
     ```
 
     ### Check API health
 
-    ```clausal
+    ```seam
     --8<-- "tests/fixtures/docs/http_sigs.txt:health_check"
     ```
 

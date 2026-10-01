@@ -10,7 +10,7 @@ The implementation lives in `clausal/logic/compiler/` (codegen), `clausal/templa
 
 Arrow lambdas use `head <- body` — the same syntax as clause definitions, making them anonymous clauses:
 
-```clausal
+```seam
 # One-arg lambda
 apply_val(RESULT, VAL) <- call_goal((X <- (RESULT is X)), VAL)
 
@@ -30,7 +30,7 @@ The head is a variable (single param) or tuple of variables (multiple params). T
 
 Multiple goals are separated with `,` inside `(...)`:
 
-```clausal
+```seam
 transform(R) <- call_goal(((X, Y) <- (T == X + 1, Y == T * 2)), 5, R)
 ```
 
@@ -38,7 +38,7 @@ transform(R) <- call_goal(((X, Y) <- (T == X + 1, Y == T * 2)), 5, R)
 
 Arrow lambdas are homoiconic — they look like the clause definitions they represent:
 
-```clausal
+```seam
 # Clause definition (statement level)
 double(X, Y) <- (Y == X + X)
 
@@ -54,7 +54,7 @@ Python's `lambda` syntax is not supported in `.clausal` files.
 
 Lambdas capture variables from the enclosing clause implicitly, using Python's native closure semantics. No `in` declaration or explicit free-variable marking is needed.
 
-```clausal
+```seam
 # Z and RESULT are captured from the enclosing clause head.
 # X is a lambda parameter.
 captured_add(Z, RESULT) <- call_goal((X <- (RESULT == X + Z)), 10)
@@ -78,7 +78,7 @@ Captured variables share the same `Var` object as the enclosing clause. when the
 
 If a lambda parameter has the same name as an enclosing variable, the parameter shadows it:
 
-```clausal
+```seam
 # X in the lambda body refers to the parameter, not the clause-head X
 shadowed(X) <- call_goal((X <- (X is 42)), _)
 ```
@@ -99,7 +99,7 @@ Lambdas are invoked with the `call_goal` builtin, which takes a goal closure and
 
 The extra arguments are passed as positional parameters to the lambda:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/lambdas_sigs.txt:call_goal_examples"
 ```
 
@@ -107,7 +107,7 @@ The extra arguments are passed as positional parameters to the lambda:
 
 A lambda can produce multiple solutions. If the lambda body calls a multi-solution predicate, each solution is propagated to the caller:
 
-```clausal
+```seam
 color('red'),
 color('green'),
 color('blue'),
@@ -128,7 +128,7 @@ Querying it yields three solutions:
 
 Lambda bodies can call user-defined predicates. Internally, this works through the `_tramp_call` bridge, which adapts between the lambda's simple-mode execution and the predicate's trampoline-mode dispatch:
 
-```clausal
+```seam
 double(X, Y) <- (Y == X + X)
 
 apply_double(VAL, RESULT) <- call_goal((X <- (double(X, RESULT))), VAL)
@@ -142,7 +142,7 @@ This is transparent — no special syntax is needed. The bridge (`_tramp_call`) 
 
 Lambdas compile to **simple-mode** Python generator functions. A lambda like:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/lambdas_sigs.txt:compilation_example"
 ```
 
@@ -176,7 +176,7 @@ when a lambda appears as an argument to a predicate call, the compiler **hoists*
 
 `_` in a lambda body is the anonymous variable — each occurrence is a fresh `Var()`:
 
-```clausal
+```seam
 get_color(C) <- call_goal((X <- (color(X), C is X)), _)
 ```
 
@@ -188,7 +188,7 @@ Here `_` as the second arg to `call_goal` is a fresh throwaway variable.
 
 Lambdas combine naturally with [findall, bagof, setof, and forall](meta_predicates.md). The goal argument to these meta-predicates can be any goal expression, including lambda calls:
 
-```clausal
+```seam
 # Collect squares of a list using a lambda
 squares(NS, SQS) <- (
     findall(
@@ -210,13 +210,13 @@ Since `findall` and friends are compiler special forms, the goal argument is com
 
 The [higher-order list builtins](higher_order.md) — `maplist`, `include`, `exclude`, `foldl` — take a **callable goal** as a runtime argument. This can be a lambda (goal closure) or a **predicate reference** (builtin or user-defined):
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/lambdas_sigs.txt:builtin_as_goal"
 ```
 
 when the goal logic is more complex than a single predicate call, lambdas are the natural choice:
 
-```clausal
+```seam
 # maplist/3 — double every element
 doubles(XS, YS) <- maplist(((X, Y) <- (Y == X * 2)), XS, YS)
 

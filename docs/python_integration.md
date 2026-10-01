@@ -23,7 +23,7 @@ Write the Python that asks questions in a `.seam` file (`.clausal` is the
 same format; the two suffixes are aliases). It is ordinary Python plus
 Clausal terms, and a term in goal position is a query:
 
-```clausal
+```seam
 # report.seam
 -import_from(clausal.examples.fibonacci, [fib])
 
@@ -50,7 +50,7 @@ answer, and the goal's variables come back as ordinary Python locals. A
 predicate in another module is reached with `-import_from(m, [pred])` as
 above, or with `-import_module(m)` and the dotted form `--m.pred(X)`:
 
-```clausal
+```seam
 -import_module(clausal.examples.fibonacci)
 
 def fib_10():
@@ -190,7 +190,7 @@ Use `++expr` as the value in a unification (`R is ++expr`) to compute a
 Python value. The value enters **unconverted**: a Python `str` is an atom, an
 `int` is an integer, any other object is itself.
 
-```clausal
+```seam
 list_len(L, N) <- (N is ++len(L))
 to_upper(S, R) <- (R is ++S.upper())
 inc(X, R) <- (R is ++(X + 1))
@@ -206,7 +206,7 @@ Any valid Python expression works: function calls, method calls, subscripts, com
 
 Use `++expr` as a standalone goal for side effects:
 
-```clausal
+```seam
 show(X) <- ++print(X)
 ```
 
@@ -216,7 +216,7 @@ when used as a goal, `++()` always succeeds once.
 
 All logic variables in the expression are dereferenced before evaluation:
 
-```clausal
+```seam
 add_len(A, B, R) <- (R is ++(len(A) + len(B)))
 ```
 
@@ -224,7 +224,7 @@ add_len(A, B, R) <- (R is ++(len(A) + len(B)))
 
 `PyThunk` values are evaluated fresh for each solution during backtracking:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:python_escape_example"
 ```
 
@@ -239,7 +239,7 @@ the engine builds for that source in a clause — at the point of execution. In
 [goal position](#goal-position-if-goal-for-in-goal) it runs the term as a goal
 instead.
 
-```clausal
+```seam
 -module(shop, [order(STATUS, ITEMS, NOTES)])
 -private([shipped])
 
@@ -310,7 +310,7 @@ comparison can no longer see that class of wrong answer. Compare terms.
 A term in goal position is called. Goal positions are exactly: the test of
 `if`/`elif`/`while`, the iterable of `for`, and `not` inside those tests.
 
-```clausal
+```seam
 -module(orders, [])
 -private([small, large, open, closed, a1, a2, state(S, IDS)])
 
@@ -360,7 +360,7 @@ compound is its cell, a dict is the `DictTerm` — nothing is walked or
 converted. Compare an answer against a `--`-wrapped term, and ask for a
 Python value by name:
 
-```clausal
+```seam
 -module(rawout, [])
 -private([ok, done, result(STATUS, TEXT, TAG)])
 from clausal import to_python
@@ -557,7 +557,7 @@ Inbound, a plain Python `str` coming back through `++` is an **atom** — the
 same value an atom is — so an atom that crosses out and back is unchanged,
 and text that crosses out comes back as an atom, not a string:
 
-```clausal
+```seam
 -private([bar])
 
 round_trip(X, Y) <- (Y is ++X)
@@ -685,7 +685,7 @@ deref(v)  # → datetime.date(2026, 3, 16)
 
 This means `Decimal`, `pathlib.Path`, and any other Python type with `__eq__` works as a logic term without wrapping. Dates and times are the exception on the **query** path: a date is the term `("date", Y, M, D)` (likewise `("datetime", …)`, `("time", …)` and `("timedelta", …)`), and that term is what a query passes — `solve(("same_day", ("date", 2024, 1, 1), X), module=m)`, directly or nested inside a list or compound argument. A bare Python `datetime.date` as a query argument is refused with a `NotImplementedError` that names the term to write, rather than binding by reference and quietly matching nothing. An object with no term form at all — a socket, a lock, a plain `object()` — crosses a query BY REFERENCE, at the top level or nested in a list or compound argument: `solve(("=", X, sock), module=m)` binds `X` to that very socket. Call methods via `++()`:
 
-```clausal
+```seam
 -import_from(date_time, [date])
 
 iso_date(Y, M, D, S) <- (

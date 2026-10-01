@@ -258,7 +258,7 @@ when the last goal in a clause body is a self-recursive `Call` and all preceding
 
 **Eligible pattern** — accumulator-style recursion:
 
-```clausal
+```seam
 acc_sum([], ACC, ACC),
 acc_sum([H, *T], ACC, RESULT) <- (
     NEWACC == ACC + H,
@@ -509,7 +509,7 @@ class _DbDispatchAdapter:
 
 ### Two-phase architecture
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:compiler_phases"
 ```
 
@@ -564,7 +564,7 @@ Phase A bytecode is cached by Python's `SourceLoader` machinery. On cache hit, `
 
 when a [`match/2` or `search/2`](regex.md) call has a static pattern string containing ALLCAPS or leading-underscore named groups, goal expansion rewrites it to `match/3` + `Unify` chains:
 
-```clausal
+```seam
 -allow_singletons
 # Named-group auto-bind (see regex.md): the second occurrence of YEAR
 # and MONTH lives inside the pattern STRING, invisible to the singleton

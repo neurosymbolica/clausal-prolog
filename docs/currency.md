@@ -21,7 +21,7 @@ currency adds.
 A `.seam` file (the same syntax as `.clausal`, hosting Python) declares the rules and
 queries them from Python with a goal-position `--`:
 
-```clausal
+```seam
 -module(shop, [])
 -import_from(european_union, [euro])
 -import_from(currency, [money_round, money_str, money_format])
@@ -77,14 +77,14 @@ word the system **prints**.
 
 **Single-currency module** — import the bare name and never write the prefix:
 
-```clausal
+```seam
 -import_from(japan, [yen])
 -constant_number_currency(budget, 1000000, yen)   # a Japanese rule means Japanese yen
 ```
 
 **Multiple currencies** — import each, or qualify with the jurisdiction:
 
-```clausal
+```seam
 -import_from(european_union, [euro])
 -import_from(united_states, [usd])
 -import_module(united_states)         # enables the qualified form below
@@ -139,7 +139,7 @@ Where a country reused a currency word across successive currencies, the names a
 discriminated: the **current** one keeps the plain word, and older ones take the
 distinguishing term from their official name, or a date range when only the date differs:
 
-```clausal
+```seam
 -import_from(germany, [dem])            # Deutsche Mark (1948–2002), historical
 -import_from(zimbabwe, [gold, dollar_1980_2008, dollar_2009_2024])
 -import_from(angola,  [kwanza, new_kwanza, readjusted_kwanza])
@@ -156,7 +156,7 @@ same `money_*` predicates. `19.99(dem) + 0.01(dem)` is `20.00(dem)`; `dem + euro
 
 ### `value(currency)` — the normal form
 
-```clausal
+```seam
 -import_from(european_union, [euro])
 -import_from(japan, [yen])
 -import_from(bahrain, [bhd])
@@ -174,7 +174,7 @@ binary-float `7.8899999…`. Integers and decimal literals both work.
 Tagging a number as a currency **rejects any value with more decimal places than the
 currency's scale**, raising [`CurrencyPrecisionError`](#errors-and-catch3):
 
-```clausal
+```seam
 -import_from(european_union, [euro])
 -import_from(japan, [yen])
 -import_from(bahrain, [bhd])
@@ -188,7 +188,7 @@ ok_2(X) <- eval_(1.234(bhd), X)     # ok: the Bahraini dinar has scale 3
 This is deliberate: it catches money entering through lossy float arithmetic. The
 canonical footgun is doing the maths in float **before** tagging:
 
-```clausal
+```seam
 -import_from(european_union, [euro])
 
 wrong(X) <- eval_((0.1 + 0.2)(euro), X)      # RAISES: 0.1 + 0.2 is a float first (0.30000000000000004)
@@ -244,7 +244,7 @@ way to write one:
 precision-checked). `money_precise(Text, Currency, Out)` is the same but **skips** the
 precision check — for genuine sub-scale amounts (unit prices, tariffs, tax rates).
 
-```clausal
+```seam
 -import_from(european_union, [euro])
 -import_from(currency, [money, money_precise])
 
@@ -259,7 +259,7 @@ you want parsed exactly with no chance of a float in the pipeline.
 
 `strip_units/2` (from `py.units`) yields the bare `Decimal`:
 
-```clausal
+```seam
 -import_from(py.units, [strip_units])
 -import_from(european_union, [euro])
 
@@ -362,7 +362,7 @@ Much published money is in TABLES, not single facts. Declare the table and it **
 predicate your rules already call** — so a program migrates by replacing N fact lines with one
 declaration, and no call site changes:
 
-```clausal
+```seam
 -import_from(united_states, [usd, usd_cent])
 -constants_number_currency(benefit_cap/2,
                            [(1, 29200), (2, 53600), (3, 76800)],
@@ -398,7 +398,7 @@ recorded below rather than deleted.
 A minor unit is an **ordinary scaled unit** of its base currency, defined in the same
 jurisdiction module as the currency itself — the same shape as `kilometre` against `metre`:
 
-```clausal
+```seam
 -import_from(united_states, [usd, usd_cent])
 
 # what the source SAID, in the unit it said it in
@@ -419,7 +419,7 @@ documentation the engine cannot check; a declared unit is a fact it can.
 After declaration the constant simply **is** a dollar amount, which is what makes minor and
 major amounts add with no conversion logic and no mixed-dimension arithmetic:
 
-```clausal
+```seam
 -import_from(european_union, [euro, eur_cent])
 
 total(T) <- (eval_(5000 (eur_cent), A), eval_(10.00 (euro), B), eval_(A + B, T))   # T = 60.00 (euro)
@@ -445,7 +445,7 @@ recover it — by the time the value reaches a `Quantity` the digits are gone.
 So a **string in the number position is read as an exact `Decimal`**, in all four members of the
 family:
 
-```clausal
+```seam
 -import_from(united_states, [usd])
 
 -constant_number_units(s_fee, "292.00", usd)
@@ -485,7 +485,7 @@ as unit ones. As ever, a falling count is evidence of progress rather than a mea
 number written at a scale — 300 basis points **is** the ratio 0.03 — so a ratio unit is an
 ordinary scaled unit against the *dimensionless* base rather than a currency:
 
-```clausal
+```seam
 -import_from(py.units, [basis_point])
 
 # what the regulation SAID, in the unit it said it in
@@ -507,7 +507,7 @@ quantity** and compare equal — a program declares in whichever spelling its so
 the arithmetic does not care which was chosen. A ratio multiplies against money and keeps the
 money's dimension:
 
-```clausal
+```seam
 -import_from(py.units, [basis_point])
 -import_from(united_states, [usd])
 
@@ -545,7 +545,7 @@ cheaper, because no representation changes at any interface, not free.
 
 `-constant_number_units` takes any unit. When the constant is **money**, say so:
 
-```clausal
+```seam
 -import_from(united_states, [usd])
 -constant_number_currency(monthly_limit, 5000, usd)     # stored Decimal('5000') usd
 ```
@@ -634,7 +634,7 @@ subunit is `penny`, even where a rulebase spells its own identifiers `_pence`.
 A minor unit is **jurisdiction-scoped**, and since a shared word is not bound bare, the
 identifier already says which. A cent of one currency still never adds to a cent of another.
 
-```clausal
+```seam
 -import_from(united_states, [usd, usd_cent])
 -import_module(european_union)
 
@@ -718,7 +718,7 @@ hold**:
 Decimal amounts in the **base** currency remain exact and remain correct — minor units record
 what a source *said*, they do not make the base form insufficient:
 
-```clausal
+```seam
 -import_from(european_union, [euro])
 -constant_number_units(rate, 0.10, euro)
 
@@ -756,7 +756,7 @@ rules for each operator are in [Arithmetic](arithmetic.md) and [Operators](opera
 | `euro / 0` | `evaluation_error(zero_divisor)` in `eval_/2`; inside a constraint (`X == 1(euro) / 0`) the goal fails |
 | `euro / euro` | a **dimensionless** ratio (e.g. for “what fraction of …”) |
 
-```clausal
+```seam
 -import_from(european_union, [euro])
 -import_from(py.units, [percent])
 
@@ -787,7 +787,7 @@ string (`"half_up"`) is accepted too.
 The argument is an amount, so compute it first; `money_round(10.00(euro) / 3, …)` would hand
 the rounding predicate the unevaluated term and fail.
 
-```clausal
+```seam
 -import_from(european_union, [euro])
 -import_from(currency, [money_precise, money_round, money_str, money_format])
 -private([half_up, symbol])
@@ -817,7 +817,7 @@ f"{amt:plain,half_up}"# "3.35"
 
 Query a currency's metadata (the argument is the currency, e.g. `euro`):
 
-```clausal
+```seam
 -import_from(currency, [currency_scale, currency_code, currency_symbol,
                         currency_start, currency_end])
 -import_from(european_union, [euro])
@@ -912,7 +912,7 @@ In a goal position a failure is swallowed — the guard does not fire, the rule 
 and the caller gets "no" rather than "you passed the wrong thing". When the answer matters,
 assert it:
 
-```clausal
+```seam
 -import_from(py.units, [compatible_units])
 -import_from(european_union, [euro])
 
@@ -971,7 +971,7 @@ A **comparison** across dimensions (`V > 0` with `V` a euro amount) raises the I
 term `error(system_error(units_mismatch), (>)/2)` instead; catch it with an ordinary
 `error(system_error(units_mismatch), _)` pattern.
 
-```clausal
+```seam
 -module(prices, [safe_price(TEXT, P), checked_sum(A, B, RESULT), mismatch(MESSAGE)])
 -import_from(clausal.terms, [CurrencyPrecisionError, UnitsMismatch])
 -import_from(currency, [money, money_precise, money_round])
@@ -1037,7 +1037,7 @@ alpha-3 codes as atoms (`currency.eur`, plus `all`/`try_` escapes). Replace them
 
 **4. Common patterns.**
 
-```clausal
+```seam
 -import_from(european_union, [euro])
 -import_from(py.units, [percent])
 -import_from(currency, [money_precise, money_round])

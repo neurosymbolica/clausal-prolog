@@ -2581,7 +2581,7 @@ whole state. The query *succeeds* with a wrong answer (`Rest =
 runtime error, no warning.
 
 **Reproducer:**
-```clausal
+```seam
 -module(s2, [state2(_s0, _s, S0_2, S_2), set_name(_n, _s0, _s)])
 (state2(_s0, _s), [_s]) >> ([_s0])
 set_name(_n) >> (state2(_, _n))

@@ -33,7 +33,7 @@ Three double-prefix operators demarcate the boundary between Python and logic co
 - it is visually prominent and quick to type
 
 Example:
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/syntax_sigs.txt:escape_operators"
 ```
 
@@ -176,7 +176,7 @@ read its value — suppress the warning with the `_UNUSED` suffix. This is the *
 spelling: `_UNUSED` (uppercase, exact) is recognised; `_unused`, `_Unused`, and every other
 casing are not exempt — one spelling, one grep target, no guessing which files opted out.
 
-```clausal
+```seam
 handle(EVENT, REASON_UNUSED) <- (EVENT == 'click')   # REASON_UNUSED never read — fine
 ```
 
@@ -194,7 +194,7 @@ than once in its clause
 To opt an entire file out — a fixture that deliberately demonstrates the pattern, for
 example — use [`-allow_singletons`](directives.md#-allow_singletons):
 
-```clausal
+```seam
 -allow_singletons
 
 test("most general query") <- var(SOME_UNBOUND_VAR)
@@ -263,7 +263,7 @@ constant in place, so `constant(max_retries)` is still `3`.
 
 ### Declaring
 
-```clausal
+```seam
 -constant_value(pi, 3.14159)
 -constant_value(max_retries, 3)
 
@@ -288,7 +288,7 @@ accepts:
 - **structured literals** — lists, tuples, sets, dicts, and functor calls, nested arbitrarily,
   mixing any of the above at any depth:
 
-```clausal
+```seam
 -constant_value(pi, ++__import__('math').pi)
 ```
 
@@ -304,7 +304,7 @@ accepts:
 A structured RHS builds a **real Clausal term** — the same term the identical literal would
 build in a clause body, with the same unification semantics — not a Python value:
 
-```clausal
+```seam
 -module(m, [point(X, Y)])
 -private([mn, mx, red, green])
 
@@ -398,7 +398,7 @@ an error, though: it declares the ATOM of the same spelling, which is the intend
 `pi` the atom and `++pi` the value, in one file. Import with the same directives used for
 predicates:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/syntax_sigs.txt:constants_importing"
 ```
 
@@ -428,7 +428,7 @@ Inside a logical term:
   Single-quoting is unaffected: `'Foo'` is the atom `Foo` in every
   position, functor position included.)
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/syntax_sigs.txt:atoms"
 ```
 
@@ -462,7 +462,7 @@ Python object reference and is refused with a `TypeError` if constructed as a te
     atom, the interned `str` `'red'`, and the two compare equal, matching
     Prolog's convention. `==` is the test to write.
 
-    ```clausal
+    ```seam
     --8<-- "tests/fixtures/docs/syntax_sigs.txt:atoms_global_default"
     ```
 
@@ -473,7 +473,7 @@ Python object reference and is refused with a `TypeError` if constructed as a te
     [`-hide([...])`](directives.md#-hide), which renames it to a spelling the
     reader refuses to accept:
 
-    ```clausal
+    ```seam
     --8<-- "tests/fixtures/docs/syntax_sigs.txt:atoms_module_local"
     ```
 
@@ -503,7 +503,7 @@ The trailing underscore keeps the builtin namespace cleanly separate from Python
 
 Unification is written with `is`:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/syntax_sigs.txt:unification"
 ```
 
@@ -514,7 +514,7 @@ The quoted spelling is the ISO predicate, as every quoted operator is: see
 [Operators](operators.md) for the full bare-versus-quoted table, and
 [Arithmetic](arithmetic.md) for evaluation.
 
-```clausal
+```seam
 test("bare is unifies") <- (X is 1 + 2, not (X is 3))
 test("quoted is evaluates") <- ('is'(X, 1 + 2), X == 3)
 test("quoted = unifies too") <- ('='(X, 'a'), X is 'a')
@@ -537,7 +537,7 @@ unifies pairwise, and the shared middle operand is evaluated **once**. This
 names a term and uses it in the same goal — where Python code would reach for
 the walrus operator:
 
-```clausal
+```seam
 -allow_singletons
 # VALUE is named to demonstrate the inline-naming feature itself — that
 # it *can* be named is the point, not any further use of it here.
@@ -558,7 +558,7 @@ independent unification of the adjacent operands.
 
 To constrain a variable to an arithmetic expression, use `==`:
 
-```clausal
+```seam
 fib(N, RESULT) <- (
     N > 1,
     N1 == N - 1,
@@ -582,7 +582,7 @@ The distinction from `is`:
 
 The comparison operators `==`, `!=`, `<`, `>`, `<=`, `>=` are CLP(ℤ) (Constraint Logic Programming over Integers) operators. They post constraints on integer variables rather than performing immediate checks.
 
-```clausal
+```seam
 bounded(X) <- (
     in_domain(X, 1, 10),
     X > 3,
@@ -615,7 +615,7 @@ A **set literal in goal position** is a set of CLP(ℚ) constraints over exact r
 arithmetic — the twin of Prolog's clpq goal `{C}`. Its elements are comparisons (`==`, `!=`,
 `<`, `<=`, `>`, `>=`, or a chain), posted together:
 
-```clausal
+```seam
 two(N, Q) <- {Q == N * 2}                    # two(3, Q) gives 6; two(N, 8) gives 4
 within(X) <- {0 <= X <= 10}
 half(X) <- {2 * X == 3}                       # X = Fraction(3, 2)
@@ -629,7 +629,7 @@ comparison is a load-time error. See [CLP(Q)](clpq.md).
 
 ## Horn clauses
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/syntax_sigs.txt:horn_clauses"
 ```
 
@@ -640,17 +640,17 @@ The `<-` operator denotes a Horn clause (rule). It will never be added to Python
 The body after `<-` must be one of:
 
 - **A single call** — no parentheses needed:
-  ```clausal
+  ```seam
   --8<-- "tests/fixtures/docs/syntax_sigs.txt:body_style_ex2"
   ```
 
 - **A bare name** — no parentheses needed:
-  ```clausal
+  ```seam
   --8<-- "tests/fixtures/docs/syntax_sigs.txt:body_style_ex3"
   ```
 
 - **Anything else** — parenthesized:
-  ```clausal
+  ```seam
   --8<-- "tests/fixtures/docs/syntax_sigs.txt:body_style_ex4"
   ```
 
@@ -658,7 +658,7 @@ This rule exists because Python's parser sees `<-` as `<` followed by unary `-`.
 
 To keep things safe, attempting to write an unparenthesized operator body produces a clear error:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/syntax_sigs.txt:body_style"
 ```
 
@@ -666,7 +666,7 @@ To keep things safe, attempting to write an unparenthesized operator body produc
 
 Multiple goals in a body are separated by commas, with each goal on its own line:
 
-```clausal
+```seam
 is_permutation(XS, YS) <- (
     length(XS, N),
     length(YS, N),
@@ -679,20 +679,20 @@ This looks a bit like a Python function def doesn't it? But it is actually much 
 
 As usual in programming, be careful about operator precedence: Inside sub-expressions like `not (...)` or `... or ...`, use `and` instead of commas — commas inside these would be parsed as Python tuples:
 
-```clausal
+```seam
 test("fails") <- (not (X is 1 and X is 2))
 test("either") <- (X is 1 or X is 2)
 ```
 
 What if we just want to state a fact that always holds? We could do so by using a body that is always true, i.e. `True`.
 
-```clausal
+```seam
 parent('tom', 'bob') <- True
 ```
 
 But there is a shorthand for this. Facts (trivially true rules) are simply written without a body, only a trailing comma:
 
-```clausal
+```seam
 parent('tom', 'bob'),
 parent('bob', 'ann'),
 ```
@@ -702,7 +702,7 @@ parent('bob', 'ann'),
 
 Grammar rules (Definite Clause Grammars):
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/syntax_sigs.txt:conjunction_style"
 ```
 
@@ -710,7 +710,7 @@ Grammar rules (Definite Clause Grammars):
 
 ## Lists
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/syntax_sigs.txt:lists"
 ```
 
@@ -722,7 +722,7 @@ Partial lists (Prolog `[H|T]` where `T` is a variable) use Python's `*` spread s
 
 Python dict literals in `.clausal` files create `DictTerm` objects — unification-aware dictionaries. Keys must be ground; values may be logic variables.
 
-```clausal
+```seam
 # Ground dict fact
 point({'x': 0, 'y': 0}),
 
@@ -746,7 +746,7 @@ See [Dicts & Sets](dicts_sets.md) for the full design.
 
 Python set literals in `.clausal` files create `SetTerm` objects — unification-aware sets. Elements must be ground (hashable).
 
-```clausal
+```seam
 colors({1, 2, 3}),
 primary({'red', 'green', 'blue'}),
 ```
@@ -770,7 +770,7 @@ Python as the carrier `('$chars', text)`. `-double_quotes(atom)` is a
 temporary per-module setting for code not yet migrated. See
 [strings as lists](strings_as_lists.md):
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/syntax_sigs.txt:strings"
 ```
 
@@ -843,7 +843,7 @@ external system, say — use `atom_chars/2` on the text, or Python's
 
 Python f-strings work naturally in `.clausal` files. Logic variables are auto-dereferenced at search time — bound variables interpolate their value, unbound variables show `_N`.
 
-```clausal
+```seam
 greet(NAME) <- writeln_text(f"Hello, {NAME}!")
 
 show_pair(X, Y) <- writeln_text(f"{X} and {Y}")
@@ -869,7 +869,7 @@ in the module namespace when the thunk runs.
 `--X` states it instead. Inside an f-string slot or a `++` operand, `--X`
 means **the Clausal variable `X`**:
 
-```clausal
+```seam
 label(S) <- (tree(Node), S is f"{--Node}")
 shout(S) <- (tree(Node), S is ++str(--Node).upper())
 ```
@@ -917,7 +917,7 @@ The `++()` operator evaluates an arbitrary Python expression at search time. Log
 
 **As a value** (inside `is`):
 
-```clausal
+```seam
 # Call a Python builtin
 list_len(L, N) <- (N is ++len(L))
 
@@ -942,7 +942,7 @@ get_pi(R) <- (R is ++(3.14159))
 
 **As a goal** (side effects):
 
-```clausal
+```seam
 # Print as a goal
 show(X) <- ++print(X)
 
@@ -962,14 +962,14 @@ The values cross in both directions without a converter: a string argument (`"ab
 A special case of the `++()` pattern: when a numeric literal is used as the
 callable with a single unit-predicate argument, it desugars to `++(Unit(n))`:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/syntax_sigs.txt:unit_literal_sugar"
 ```
 
 when a **logic variable** is used as the callable instead, `X(Unit)` becomes a
 goal that posts a dimension constraint on `X`:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/syntax_sigs.txt:unit_literal_sugar_ex2"
 ```
 
@@ -979,7 +979,7 @@ See [Units](units.md) for the full reference.
 
 ## Compound terms and goals
 
-```clausal
+```seam
 goal(_, _),             # compound goal
 not goal,               # negation as failure
 ```
@@ -1008,7 +1008,7 @@ an EDCG hidden argument (`_edcg_len_in=0`).
 
 > **Note:** This syntax is not yet implemented. Use the `assertz(goal)` and `retract(term)` builtins directly.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/syntax_sigs.txt:immediate_goals"
 ```
 
@@ -1018,7 +1018,7 @@ an EDCG hidden argument (`_edcg_len_in=0`).
 
 Predicates from imported modules are called with dotted notation after loading the module:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/syntax_sigs.txt:module_qualification"
 ```
 
@@ -1030,7 +1030,7 @@ See [Directives](directives.md) and [Import System](import.md) for details.
 
 Lambdas are anonymous clauses — goal closures passed as arguments to higher-order predicates. They use the same `head <- body` arrow syntax as clause definitions:
 
-```clausal
+```seam
 # One-arg lambda — X is a parameter, RESULT is captured
 apply(RESULT, VAL) <- call_goal((X <- (RESULT == X + 1)), VAL)
 
@@ -1059,7 +1059,7 @@ DCG rules provide syntactic sugar for difference-list grammars. Each `>>` rule c
 
 ### Basic syntax
 
-```clausal
+```seam
 # Terminal — consume literal tokens from the input list
 greeting >> (['hello', 'world'])
 
@@ -1074,7 +1074,7 @@ epsilon >> ([])
 
 DCG predicates can have extra arguments beyond the hidden state:
 
-```clausal
+```seam
 # Extra arg D, plus inline goals {D >= 0} and {D <= 9}
 digit(D) >> ([D], {D >= 0}, {D <= 9})
 ```
@@ -1083,7 +1083,7 @@ Inline goals are written with `{...}` (Python set literal syntax). They execute 
 
 ### Conjunction and disjunction
 
-```clausal
+```seam
 # Conjunction — comma-separated (canonical style)
 rule >> (a, b, c)
 
@@ -1093,7 +1093,7 @@ letter >> (['a'] or ['b'] or ['c'])
 
 ### Negation
 
-```clausal
+```seam
 # Negation as failure — state passes through
 not_a >> (not ['a'], [X])
 ```
@@ -1102,7 +1102,7 @@ not_a >> (not ['a'], [X])
 
 The LHS can be a tuple `(head, [pushback_tokens])` to push tokens back onto the input after matching:
 
-```clausal
+```seam
 # Peek at next token without consuming it
 (look_ahead(T), [T]) >> ([T])
 ```
@@ -1113,7 +1113,7 @@ After the body matches `[T]`, the pushback `[T]` is prepended to the remainder.
 
 Use `phrase/2` or `phrase/3` to call DCG rules from regular predicates:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/syntax_sigs.txt:invoking_dcgs_with_phrase"
 ```
 
@@ -1123,7 +1123,7 @@ Use `phrase/2` or `phrase/3` to call DCG rules from regular predicates:
 
 when using `-module(...)`, DCG predicates must be declared with their full signature including the two hidden state arguments:
 
-```clausal
+```seam
 # Correct: predicates declared with proper arities
 -module(my_grammar, [greeting(S0, S), digit(D, S0, S)])
 
@@ -1135,7 +1135,7 @@ when using `-module(...)`, DCG predicates must be declared with their full signa
 
 The `>>` rewriting is purely syntactic — it transforms DCG rules into ordinary `<-` clauses before the compiler sees them:
 
-```clausal
+```seam
 # This DCG rule:
 greeting >> (['hello', 'world'])
 
@@ -1143,7 +1143,7 @@ greeting >> (['hello', 'world'])
 greeting(S0, S) <- (S0 is ['hello', 'world', *S])
 ```
 
-```clausal
+```seam
 # This DCG rule:
 digit(D) >> ([D], {D >= 0}, {D <= 9})
 
@@ -1160,7 +1160,7 @@ to `phrase/3` and receive `[Final]`, with two helper nonterminals reading and
 replacing the state. [DCGs — state threading](dcg.md#state-threading) has the
 pattern and worked examples (counter, tree leaves, accumulator):
 
-```clausal
+```seam
 (state(S), [S]) >> ([S])            # read the state
 (state2(S0, S), [S]) >> ([S0])      # read the old state, write a new one
 inc >> (state(N0), {N == N0 + 1}, state2(_, N))
@@ -1185,7 +1185,7 @@ EDCGs are based on Peter Van Roy's 1989 design and use three directives to decla
 
 An accumulator has a name and a **joiner goal** that relates a pushed value to the input/output state:
 
-```clausal
+```seam
 # Numeric counter: Out = in + Value
 -edcg_acc(counter, X, IN, OUT, {OUT == IN + X})
 
@@ -1202,7 +1202,7 @@ The joiner goal can be any clausal goal wrapped in `{braces}`. The variable name
 
 A **passed argument** is a read-only value threaded unchanged through all sub-calls:
 
-```clausal
+```seam
 -edcg_pass(config)
 -edcg_pass(scale)
 ```
@@ -1211,7 +1211,7 @@ A **passed argument** is a read-only value threaded unchanged through all sub-ca
 
 Each EDCG predicate must declare its **visible arity** and which accumulators/passes it uses:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/syntax_sigs.txt:declaring_predicates"
 ```
 
@@ -1221,7 +1221,7 @@ The special name `dcg` refers to the standard DCG difference-list accumulator. I
 
 EDCG rules use `>>` just like standard DCGs, with additional operators:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/syntax_sigs.txt:edcg_rule_syntax"
 ```
 
@@ -1231,7 +1231,7 @@ The `//` operator pushes a value through the accumulator's joiner goal. The `/` 
 
 A single rule can update multiple accumulators simultaneously:
 
-```clausal
+```seam
 -edcg_acc(counter, X, IN, OUT, {OUT == IN + X})
 -edcg_acc(items, ITEM, IN, OUT, {OUT is [ITEM, *IN]})
 -edcg_pred(process, 1, [counter, items])
@@ -1242,7 +1242,7 @@ process(X) >> ([1] // counter, [X] // items)
 
 when a sub-call uses fewer accumulators than the caller, only the shared ones are threaded:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/syntax_sigs.txt:multiple_accumulators"
 ```
 
@@ -1250,20 +1250,20 @@ when a sub-call uses fewer accumulators than the caller, only the shared ones ar
 
 EDCG predicates are compiled to ordinary predicates with hidden arguments appended in declaration order: 2 per accumulator (in, out) + 1 per pass. You can call them from regular `<-` clauses using keyword syntax:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/syntax_sigs.txt:calling_edcg_predicates"
 ```
 
 Or positionally — hidden args follow visible args in the order declared:
 
-```clausal
+```seam
 # count_elems(List, len_in, len_out)
 my_length(L, N) <- count_elems(L, 0, N)
 ```
 
 ### Complete example: counter with scale factor
 
-```clausal
+```seam
 -module(example, [run_scaled(LIST, SCALE, COUNT, ITEMS)])
 
 -edcg_acc(counter, X, IN, OUT, {OUT == IN + X})
@@ -1292,7 +1292,7 @@ run_scaled(LIST, SCALE, COUNT, ITEMS) <- (
 Disjunction (`or`), negation (`not`) and [reified if-then-else](reified_ite.md)
 (`if_/3`) all thread accumulators:
 
-```clausal
+```seam
 -module(edcg_ite, [classify(_edcg_counter_in, _edcg_counter_out)])
 -edcg_acc(counter, X, IN, OUT, {OUT == IN + X})
 -edcg_pred(inc, 0, [counter])
@@ -1328,7 +1328,7 @@ Meta-predicates are higher-order predicates that take goals as arguments. They a
 
 ### [All-solutions predicates](meta_predicates.md)
 
-```clausal
+```seam
 test("findall") <- findall(X, in_(X, [1, 2, 3]), [1, 2, 3])
 test("filter") <- findall(X, (in_(X, [1, 2, 3]) and X > 1), [2, 3])
 test("product") <- findall([X, Y], (in_(X, ['a', 'b']) and in_(Y, [1, 2])), [['a', 1], ['a', 2], ['b', 1], ['b', 2]])
@@ -1345,7 +1345,7 @@ test("setof sorts and dedups") <- setof(X, in_(X, [3, 1, 2, 1]), [1, 2, 3])
 
 ### Universal quantification
 
-```clausal
+```seam
 # forall(Cond, Action) succeeds iff Action holds for every solution of Cond
 test("forall holds") <- forall(in_(X, [2, 4, 6]), X > 0)
 test("forall fails") <- (not forall(in_(X, [2, -1, 6]), X > 0))
@@ -1357,7 +1357,7 @@ test("forall fails") <- (not forall(in_(X, [2, -1, 6]), X > 0))
 
 `call/N` invokes a goal closure with extra arguments. It is an alias for `call_goal/N`:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/syntax_sigs.txt:call_n"
 ```
 
@@ -1367,7 +1367,7 @@ test("forall fails") <- (not forall(in_(X, [2, -1, 6]), X > 0))
 
 These predicates take a goal closure and apply it across a list. All use committed choice (first solution per element).
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/syntax_sigs.txt:higher_order_list_predicates"
 ```
 
@@ -1377,7 +1377,7 @@ These predicates take a goal closure and apply it across a list. All use committ
 
 Clausal supports [CLP(ℤ)](constraints.md) (integer constraints) and [CLP(B)](clpb.md) (Boolean constraints). Constraint operators are used directly in clause bodies — no special escape or domain wrapper is needed.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/syntax_sigs.txt:constraint_logic_programming"
 ```
 
@@ -1403,7 +1403,7 @@ The escape mechanisms (`--`, `++`) cover all cases where interop is genuinely ne
 
 ## Syntax cheat sheet
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/syntax_sigs.txt:syntax_cheat_sheet"
 ```
 

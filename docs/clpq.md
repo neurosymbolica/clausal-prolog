@@ -36,7 +36,7 @@ Prolog's clpq goal `{C}`. Each element is a comparison over rational arithmetic 
 `<`, `<=`, `>`, `>=`, or a chain such as `0 <= X <= 10`); the elements are posted together,
 and `/` inside them is exact division.
 
-```clausal
+```seam
 two(N, Q) <- {Q == N * 2}
 within(X) <- {0 <= X <= 10}
 box(X, Y) <- {X + Y == 1, X - Y == 1/2}      # X = 3/4, Y = 1/4
@@ -48,7 +48,7 @@ the constraint in the store and binds `Q` the moment `N` is known. The long spel
 module predicate the set lowers to — `{C1, C2}` **is** `clpq.rational((C1, C2))`, one goal,
 so the two forms answer identically:
 
-```clausal
+```seam
 two(N, Q) <- clpq.rational(Q == N * 2)
 box(X, Y) <- clpq.rational((X + Y == 1, X - Y == 1/2))
 ```
@@ -89,13 +89,13 @@ Mixing a rational (CLP(Q)) and a `float` (CLP(R)) operand in the same constraint
 
 Inside a constraint (`==`, `!=`, `<`, ...) `/` is **exact rational division**, as inside Scryer's `{...}`. A quotient that IS an integer is that integer: `X == 6 / 2` gives `3`, not `Fraction(3, 1)`. Only non-integral results are `Fraction`.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/clpq_sigs.txt:int_int_produces_fraction_ex2"
 ```
 
 In **evaluation** (`eval_/2`, `'is'/2`, the ISO comparisons) a bare `/` keeps Python's meaning, true division, so it is a float. Use `rdiv/2` when you want the exact quotient outside a constraint:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/clpq_sigs.txt:int_int_produces_fraction"
 ```
 
@@ -126,7 +126,7 @@ Integral rationals are presented as `int` by every binder — the arithmetic com
 CLP(Q) constraints are posted with a [constraint set in goal position](#the-constraint-set-in-goal-position);
 the optimisation and projection predicates live in the `clpq` module namespace:
 
-```clausal
+```seam
 optimal(X, Y, COST) <- (
     {0 <= X <= 1, 0 <= Y <= 1, X + Y == 3/4},
     clpq.maximize(X, COST),
@@ -137,7 +137,7 @@ optimal(X, Y, COST) <- (
 `clpq.rational((constraints))` is the long spelling of the same block — what the set lowers
 to:
 
-```clausal
+```seam
 optimal(X, Y, COST) <- (
     clpq.rational((
         0 <= X <= 1,
@@ -164,7 +164,7 @@ Inside the constraint block, standard Python operators (`+`, `-`, `*`, `<`, `<=`
 
 Declares a variable as rational-domain (unbounded). This is the type declaration — it says "X is rational", nothing more.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/clpq_sigs.txt:rational_1"
 ```
 
@@ -172,7 +172,7 @@ Declares a variable as rational-domain (unbounded). This is the type declaration
 
 Declares a rational variable with explicit bounds. Equivalent to `rational(X), Lo <= X <= Hi`. If the variable already has bounds, intersects with the new ones. Fails if the intersection is empty.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/clpq_sigs.txt:in_q_3"
 ```
 
@@ -182,7 +182,7 @@ When the bounds collapse to a point (`lo == hi`), the variable is automatically 
 
 Finds the optimum of a linear expression subject to all currently posted constraints. Unifies `Result` with the optimal objective value **and binds all constrained variables to their optimal assignments**. Fails if the problem is unbounded.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/clpq_sigs.txt:maximize_2_and_minimize_2"
 ```
 
@@ -190,7 +190,7 @@ Finds the optimum of a linear expression subject to all currently posted constra
 
 Compute the upper or lower bound of a linear expression **without binding variables**. Useful for inspecting the feasible range or for implementing `entailed`.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/clpq_sigs.txt:sup_2_and_inf_2"
 ```
 
@@ -198,7 +198,7 @@ Compute the upper or lower bound of a linear expression **without binding variab
 
 Tests whether a constraint is logically implied by the current store — i.e., whether it holds for **all** feasible points. Does not modify the store.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/clpq_sigs.txt:entailed_1"
 ```
 
@@ -210,7 +210,7 @@ Minimize a linear expression subject to the current constraints **and** the requ
 
 `bb_inf/3` is accepted as an alias (SICStus compatibility).
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/clpq_sigs.txt:int_minimize_3"
 ```
 
@@ -218,7 +218,7 @@ Minimize a linear expression subject to the current constraints **and** the requ
 
 Projects the constraint store onto a list of variables, eliminating all internal (slack) variables via Fourier-Motzkin elimination. Returns a list of constraint strings.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/clpq_sigs.txt:dump_q_2"
 ```
 
@@ -241,7 +241,7 @@ split(N)  :- {Q = N * constant(one_euro)}, Q is 300 * constant(one_euro).   % N 
 half(Q)   :- {2 * Q = 3 * constant(one_euro)}.      % Q = 3/2 euro
 ```
 
-```clausal
+```seam
 price(Q) <- clpq.rational(Q == 100 * constant(one_euro))
 ```
 
@@ -283,31 +283,31 @@ currency amount is exact and must not be computed in floats.
 
 ### Linear equalities
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/clpq_sigs.txt:linear_equalities"
 ```
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/clpq_sigs.txt:linear_equalities_ex2"
 ```
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/clpq_sigs.txt:linear_equalities_ex3"
 ```
 
 ### Linear inequalities
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/clpq_sigs.txt:linear_inequalities"
 ```
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/clpq_sigs.txt:linear_inequalities_ex2"
 ```
 
 ### Optimization
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/clpq_sigs.txt:optimization"
 ```
 
@@ -704,7 +704,7 @@ A variable can have **both** FD and Q attributes simultaneously, just like FD an
 4. When FD narrows (via `_narrow`), Q bounds are tightened to match
 5. Integer-valued `Fraction` results (like `Fraction(3)`) are accepted by the FD hook
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/clpq_sigs.txt:fd_q_coexistence"
 ```
 
@@ -786,13 +786,13 @@ A variable can have **both** FD and Q attributes simultaneously, just like FD an
 
     **LP optimization:**
 
-    ```clausal
+    ```seam
     --8<-- "tests/fixtures/docs/clpq_sigs.txt:dispatch_table"
     ```
 
     **Backtracking (constraints are undone when a branch fails):**
 
-    ```clausal
+    ```seam
     --8<-- "tests/fixtures/docs/clpq_sigs.txt:dispatch_table_ex2"
     ```
 

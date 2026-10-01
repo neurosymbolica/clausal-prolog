@@ -4,7 +4,7 @@
 
 Without indexing, every query against a predicate tries all clauses sequentially. For a predicate with N fact clauses, a ground lookup costs O(N) — each clause's `match` block is entered and compared. This is acceptable for small predicates but becomes a bottleneck for large fact tables (100+ clauses).
 
-```clausal
+```seam
 color('red',   [255,   0,   0]),
 color('green', [  0, 128,   0]),
 color('blue',  [  0,   0, 255]),
@@ -242,7 +242,7 @@ Groundness-keyed dispatch generalises first-argument indexing to **multi-argumen
 
 First-argument indexing only helps when the first argument is ground. Many predicates are queried in multiple modes:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/indexing_sigs.txt:color_query_modes"
 ```
 
@@ -343,7 +343,7 @@ With groundness-keyed dispatch, querying `color(NAME, 'warm')` uses a second-arg
 
 ## Example: colour database
 
-```clausal
+```seam
 color('red',    'warm'),
 color('blue',   'cool'),
 color('green',  'cool'),
@@ -412,7 +412,7 @@ Single-arg groundness-keyed dispatch picks the *best single position* that is gr
 
 Without compound-key indexing, compound heads fell into the default bucket.  A predicate like:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/indexing_sigs.txt:compound_keys"
 ```
 
@@ -420,7 +420,7 @@ had no indexing at all on `arg0`, even though the four clauses are perfectly dis
 
 With compound-key indexing, `_extract_arg_key` returns `("circle", 1)`, `("rect", 2)`, `("triangle", 3)`, `("sq", 1)` as bucket keys. The runtime dispatch uses `_runtime_arg_key` to extract the same tuple from the caller's argument before dict lookup. Scalar keys and `(name, arity)` tuple keys coexist safely in the same `idx_dict` because a tuple never equals a plain number or bytes value (an atom `circle` keys `("circle", 0)`, distinct from `circle(R)`'s `("circle", 1)`).
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/indexing_sigs.txt:compound_dispatch"
 ```
 
@@ -430,7 +430,7 @@ With compound-key indexing, `_extract_arg_key` returns `("circle", 1)`, `("rect"
 
 Some predicates have poor single-arg discrimination but perfect joint discrimination:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/indexing_sigs.txt:flat_joint_example"
 ```
 
@@ -442,7 +442,7 @@ Some predicates have poor single-arg discrimination but perfect joint discrimina
 
 when activated (joint coverage ≥ 80%, meaning ≥80% of clauses have both args ground), the dispatch uses a **flat joint dict**:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/indexing_sigs.txt:flat_joint_dispatch"
 ```
 
@@ -454,7 +454,7 @@ Single-arg fallbacks ensure correct behaviour for partial-groundness queries.
 
 when joint coverage < 80%, secondary (hierarchical) dispatch is preferred over flat joint key.  Secondary indexing builds a **two-level nested structure** that efficiently handles partial groundness:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/indexing_sigs.txt:secondary_structure"
 ```
 
@@ -462,7 +462,7 @@ Within each level-0 bucket (all clauses sharing a given `argI` key), a second `_
 
 **Level-1 default is all clauses in the level-0 bucket** (not just var-headed clauses). This is the key correctness requirement: when `argJ` is unbound at call time, every clause in the level-0 bucket is a potential match and must be tried.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/indexing_sigs.txt:secondary_dispatch"
 ```
 

@@ -295,3 +295,19 @@ def test_after_the_flip_a_pl_importer_of_a_twin_still_gets_the_seam_module(
     monkeypatch.setenv(ih.PL_FRONTEND_ENV, frontend)
     assert _answers(importlib.import_module("efimp_pl"), "q") == [1]
     assert sys.modules["helperlib"].__file__.endswith("helperlib.seam")
+
+
+# ── docs: ```seam is the seam fence, ```clausal its alias for now ──
+
+
+def test_the_doc_checker_sees_both_seam_fences(tmp_path):
+    from clausal.tools.doc_snippet_check import (
+        SEAM_FENCE_RE, check_no_raw_untested_blocks)
+    page = tmp_path / "page.md"
+    page.write_text("```seam\np(1),\n```\n\n```clausal\nq(1),\n```\n\n"
+                    "```seam\nthis is not ( seam\n```\n\n"
+                    "```clausal\nnor ( is this\n```\n\n"
+                    "```prolog\np(1).\n```\n")
+    assert len(SEAM_FENCE_RE.findall(page.read_text())) == 4
+    bad = check_no_raw_untested_blocks(tmp_path)
+    assert [v.split()[0] for v in bad] == ["page.md:9", "page.md:13"], bad

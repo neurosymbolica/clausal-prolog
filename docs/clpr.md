@@ -42,7 +42,7 @@ Inside a constraint a bare `/` is **exact rational** division (see [Operators](o
 
 Declares one or more real variables. If the variable already has a real domain, intersects with the new bounds. Fails if the intersection is empty.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/clpr_sigs.txt:in_real_1_and_in_real_3"
 ```
 
@@ -50,7 +50,7 @@ Declares one or more real variables. If the variable already has a real domain, 
 
 Bisects intervals using a **widest-first** strategy (the variable with the largest interval is bisected first, analogous to largest-domain-first in CLP(ℤ)).
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/clpr_sigs.txt:label_real_1_and_label_real_2"
 ```
 
@@ -88,7 +88,7 @@ whose bounds propagation fixed, but interval arithmetic can make it looser
 than the true infimum (`X - X` over `[0, 1]` is `[-1, 1]`). A non-linear
 `Expr` is accepted and bounded the same way.
 
-```clausal
+```seam
 test("inf and sup read the interval") <- (
     in_real(X, 0.0, 10.0),
     in_real(Y, 0.0, 5.0),
@@ -110,7 +110,7 @@ goal fails rather than mixing the two solvers. A term that is not arithmetic rai
 
 CLP(R) constraints can also be posted via the `clpr` module namespace using constraint blocks:
 
-```clausal
+```seam
 circle(X, Y) <- (
     clpr.real((
         -10 <= X <= 10,
@@ -135,17 +135,17 @@ Inside the constraint block, standard Python operators are interpreted as real-d
 
 ### Linear constraints
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/clpr_sigs.txt:linear_constraints"
 ```
 
 ### Non-linear constraints
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/clpr_sigs.txt:non_linear_constraints"
 ```
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/clpr_sigs.txt:non_linear_constraints_ex2"
 ```
 
@@ -153,7 +153,7 @@ Inside the constraint block, standard Python operators are interpreted as real-d
 
 Integer and real variables can appear together. when an FD variable is involved in a real constraint, a real interval is added alongside the existing FD domain — both attributes coexist on the same variable:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/clpr_sigs.txt:mixed_fd_and_real"
 ```
 
@@ -161,7 +161,7 @@ In this example, `HOURS` keeps its FD domain `{1..8}` even after participating i
 
 You can also add an FD domain to a variable that already has a real interval:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/clpr_sigs.txt:mixed_fd_and_real_ex2"
 ```
 
@@ -169,7 +169,7 @@ The FD domain is automatically narrowed against the real interval (and vice vers
 
 ### Float literals trigger CLP(ℝ) automatically
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/clpr_sigs.txt:float_literals_trigger_clp"
 ```
 

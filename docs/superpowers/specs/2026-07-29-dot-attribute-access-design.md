@@ -71,7 +71,7 @@ body containing one or more occurrences of `P.key`, the compiler:
    `P[key]`'s semantics — as a **goal**, at the position of the first occurrence;
 3. substitutes that variable at every remaining occurrence of `P.key` in the same scope.
 
-```clausal
+```seam
 foo(P) <- ( bar(P.k), baz(P.k, 1) )
 
 # means exactly
@@ -92,7 +92,7 @@ occurrence inlines its own `$subscript` call) and needs its own regression pass.
 The read is inserted **immediately before the goal that uses it, inside the innermost enclosing
 control construct** — never lifted out of a disjunction arm, `not`, or if-then-else branch:
 
-```clausal
+```seam
 ( a(P) or b(P.k) )
 
 # means
@@ -165,7 +165,7 @@ Predicates are `snake_case` per the standing convention
 models generate it far more reliably than TitleCase, and because it matches Python's stdlib and
 SWI-Prolog.
 
-```clausal
+```seam
 # profile.clausal — owns the keys
 -module(profile, [ make(Fields, P), valid(P), is_foreign_person(P), acquisition_value_cents(P, C) ])
 -private([ foreign_person, investor_type, acquisition_value_cents, query_date ])

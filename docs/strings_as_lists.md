@@ -42,7 +42,7 @@ single character `h`, not the one-character string `"h"`. So
 
 A string unifies with the list of its character atoms:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/strings_as_lists_examples.clausal:unification"
 ```
 
@@ -51,7 +51,7 @@ equality (no element-wise comparison needed).
 
 The empty string unifies with the empty list:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/strings_as_lists_examples.clausal:empty_string"
 ```
 
@@ -63,7 +63,7 @@ Multi-star list patterns work on strings. Star variables bind to
 **substrings** (not character lists, and not atoms — a substring stays a
 string):
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/strings_as_lists_examples.clausal:pattern_matching"
 ```
 
@@ -91,37 +91,37 @@ is a character sequence, the result is returned as a string:
 
 ### append
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/strings_as_lists_examples.clausal:append_examples"
 ```
 
 ### length
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/strings_as_lists_examples.clausal:length_example"
 ```
 
 ### in_ (Member)
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/strings_as_lists_examples.clausal:member_examples"
 ```
 
 ### reverse
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/strings_as_lists_examples.clausal:reverse_example"
 ```
 
 ### take, drop, split_at
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/strings_as_lists_examples.clausal:take_drop_split"
 ```
 
 ### list_item
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/strings_as_lists_examples.clausal:list_item_example"
 ```
 
@@ -131,7 +131,7 @@ is a character sequence, the result is returned as a string:
 
 [Definite Clause Grammars](dcg.md) parse strings directly:
 
-```clausal
+```seam
 # `'digit'` is single-quoted: char_type/2's Type argument is an ATOM, and a
 # bare `digit` here would name the nonterminal defined on the next line.
 digit >> ([D], {char_type(D, 'digit')})
@@ -154,7 +154,7 @@ and the DCG consumes its characters as list elements.
 Because strings are character lists, you can write character-level grammars
 naturally:
 
-```clausal
+```seam
 letter >> ([C], {char_type(C, 'alpha')})
 space >> ([' '])
 word >> (letter)
@@ -191,7 +191,7 @@ None of the three accepts an **atom**: an atom is a symbol, not a sequence.
 `atom("hello")` and `string(hello)` are both false, and the two never unify.
 The atom-flavoured predicates in the next section are the bridge between them.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/strings_as_lists_examples.clausal:type_checking"
 ```
 
@@ -204,7 +204,7 @@ The ISO `atom_*` predicates (`atom_chars/2`, `atom_codes/2`, `atom_concat/3`,
 **atom** in the atom position and give atoms back. Handing one a string raises
 `type_error(atom, …)` — it is not a silent failure:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/strings_as_lists_examples.clausal:atom_family"
 ```
 
@@ -339,7 +339,7 @@ byte-stream unification and binary-protocol DCGs.
 
 ### Palindrome check (works on both strings and lists)
 
-```clausal
+```seam
 palindrome(XS) <- reverse(XS, XS)
 
 test("list palindrome") <- palindrome([1, 2, 1])
@@ -351,7 +351,7 @@ test("not palindrome") <- (not palindrome("hello"))
 
 Using [findall](meta_predicates.md) to count matching characters:
 
-```clausal
+```seam
 char_count(STR, CHAR, COUNT) <- (
     findall(C, (in_(C, STR), C is CHAR), MATCHES),
     length(MATCHES, COUNT)
@@ -365,7 +365,7 @@ test("count z") <- char_count("hello", 'z', 0)
 
 ### Simple tokenizer with DCGs
 
-```clausal
+```seam
 # char_type/2's Type argument and the token tags are ATOMS, single-quoted
 # so they cannot be mistaken for the nonterminals of the same spelling.
 alpha >> ([C], {char_type(C, 'alpha')})

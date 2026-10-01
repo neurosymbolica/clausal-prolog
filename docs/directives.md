@@ -6,7 +6,7 @@ Directives are module-level declarations in `.clausal` files that control predic
 
 ## Module Declaration
 
-```clausal
+```seam
 -module(my_module, [pred1(A, B), pred2(X)])
 ```
 
@@ -14,7 +14,7 @@ Declares the module name and its public exports. The export list specifies which
 
 The export list may mix predicates with arity (e.g. `pred1(A, B)`) and bare atoms (zero-arity predicates):
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/directives_sigs.txt:module_with_atoms"
 ```
 
@@ -24,7 +24,7 @@ A **field-carrying** entry — `point(X, Y)` — declares a *data functor*: a sh
 you build terms with. Its terms compile to cells, plain tuples tagged with the
 functor spelling, and the name binds that spelling rather than a class:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/directives_sigs.txt:module_data_functor"
 ```
 
@@ -44,11 +44,11 @@ The ISO `name/arity` spelling exports a **predicate** by name and arity, which
 is what module exports look like in ISO Prolog anyway. The module that exports
 it is the module that defines it, and other modules import it from there:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/directives_sigs.txt:module_predicate_export_vocab"
 ```
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/directives_sigs.txt:module_predicate_export_impl"
 ```
 
@@ -79,7 +79,7 @@ It is silent when `base/9` has clauses or a declaration (`-dynamic(base/9)`,
 
 ### -private
 
-```clausal
+```seam
 -private([helper(X, Y), edge(A, B)])
 ```
 
@@ -87,7 +87,7 @@ Declares predicates and atoms that are internal to the module. Predicates are de
 
 The list may also contain bare atoms:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/directives_sigs.txt:private_with_atoms"
 ```
 
@@ -119,13 +119,13 @@ A [constant](#-constant_value) used to be listable in `-private` as pure documen
 
 Import specific predicates from another module:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/directives_sigs.txt:import_from"
 ```
 
 With aliasing:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/directives_sigs.txt:import_from_ex2"
 ```
 
@@ -143,7 +143,7 @@ does, and `alias(double/2, my_double)` renames one arity. See
 
 Import all exported predicates from a module:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/directives_sigs.txt:import_module"
 ```
 
@@ -172,7 +172,7 @@ Upgrading an existing codebase from the old auto-mint default? See the [strict-a
 That protection now applies everywhere by default, making this directive
 redundant.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/directives_sigs.txt:strict_atoms"
 ```
 
@@ -222,7 +222,7 @@ declared or not — at any written arity compiles to a cell (or matches one, on
 a clause head). The identical rule applies on the head side, so a flagged
 module's own clause heads pattern-match the cells its own bodies build.
 
-```clausal
+```seam
 -implicit_functors
 -module(scratch, [p(A)])
 
@@ -283,7 +283,7 @@ imported modules.
 
 **Problem**: Atoms are global by spelling — any module can write `red` and reach the same atom every other module declaring `red` reaches. That is almost always what you want (see [Import System](import.md#atoms-are-global-by-spelling)), but a module occasionally needs a truly private symbol: an internal sentinel or tag value that other modules must not be able to spell, read, or accidentally collide with.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/directives_sigs.txt:hide"
 ```
 
@@ -307,7 +307,7 @@ imported modules.
 them at runtime. But some programs need to add or remove facts during execution
 (counters, caches, learned knowledge).
 
-```clausal
+```seam
 -dynamic(color/1)
 
 color('red'),
@@ -332,7 +332,7 @@ flag [`assert_creates_dynamic`](flags.md#assert_creates_dynamic) (below). A
 loads, the ISO `:- set_prolog_flag(Flag, Value).` as a directive. A module-scoped
 flag is set for this module:
 
-```clausal
+```seam
 -set_prolog_flag(assert_creates_dynamic, true)
 ```
 
@@ -353,7 +353,7 @@ carrying the ISO error term, e.g.
 subproblems. Tabling automatically caches answers and handles left-recursive
 definitions.
 
-```clausal
+```seam
 -table(path/2)
 
 edge(1, 2),
@@ -392,7 +392,7 @@ See [Tabling](tabling.md) for details.
 **Problem**: By default, all clauses for a predicate must be grouped together
 in the source file. Sometimes it's clearer to interleave related predicates.
 
-```clausal
+```seam
 -discontiguous(test/1)
 
 helper(X, Y) <- (Y == X + 1)
@@ -411,7 +411,7 @@ would trigger a warning or error.
 module system needs to know which arguments are goals (to resolve them in the
 correct module context).
 
-```clausal
+```seam
 -meta_predicate(my_map(2, '+', '-'))
 
 my_map(_, [], []),
@@ -440,7 +440,7 @@ correct cross-module resolution when `my_map` is imported. See [Higher-Order Pre
 stack safety. For predicates known to have bounded recursion depth (lookups,
 simple dispatches), this overhead is unnecessary.
 
-```clausal
+```seam
 -shallow(lookup/2)
 
 lookup('a', 1),
@@ -466,7 +466,7 @@ maintenance hazard — rename the meaning, and every occurrence has to be found 
 hand. Prolog has no answer to this beyond a fact plus an extra goal (`is_pi(PI), area == PI *
 R**2`); Clausal gives constants their own lexical class instead.
 
-```clausal
+```seam
 -constant_value(pi, 3.14159)
 -constant_value(max_retries, 3)
 
@@ -480,7 +480,7 @@ test("area of radius 2") <- (
 
 ### -constant_number_units
 
-```clausal
+```seam
 -import_from(european_union, [euro])
 -constant_number_units(max_fine, 5000, euro)
 
@@ -564,7 +564,7 @@ can.
 in `-module` or `-private` declares the bare **atom** of that spelling (see above), not the
 constant. Import a constant the same way you import a predicate:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/syntax_sigs.txt:constants_importing"
 ```
 
@@ -587,7 +587,7 @@ clause (`ClausalSingletonWarning`) — almost always a typo. A few files have a 
 reason to be full of them: a fixture built to demonstrate the singleton pattern itself, or a
 page of "most general query" examples where an unbound variable is the whole point.
 
-```clausal
+```seam
 -allow_singletons
 
 test("most general query") <- var(SOME_UNBOUND_VAR)
@@ -613,7 +613,7 @@ lint reference, including the exact warning text and the DCG/EDCG coverage gap.
 
 ### -specialize
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/directives_sigs.txt:specialize"
 ```
 
@@ -621,7 +621,7 @@ Specializes a [meta-interpreter](metainterpreters.md) with respect to an object 
 
 Options:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/directives_sigs.txt:specialize_ex2"
 ```
 
@@ -638,7 +638,7 @@ Extended DCGs allow multiple named accumulators and passed arguments to be threa
 
 ### -edcg_acc
 
-```clausal
+```seam
 -edcg_acc(counter, X, IN, OUT, {OUT == IN + X})
 ```
 
@@ -646,7 +646,7 @@ Declares a named accumulator with its joining operation. Arguments: name, value 
 
 ### -edcg_pass
 
-```clausal
+```seam
 -edcg_pass(scale)
 ```
 
@@ -654,7 +654,7 @@ Declares a passed argument — a value that threads through EDCG nonterminals wi
 
 ### -edcg_pred
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/directives_sigs.txt:edcg_pred"
 ```
 
@@ -671,7 +671,7 @@ literal means in the file, and it exists only so modules can migrate one at a
 time. Single quotes are unaffected: `'hello'` is the atom `hello` in every
 mode, and `b"…"`/`b'…'` are always [codes](bytes_as_lists.md).
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/directives_sigs.txt:double_quotes"
 ```
 

@@ -6,7 +6,7 @@ The `tcp` module provides predicates for TCP client/server socket operations,
 wrapping Python's `socket` module. Socket handles are opaque Python objects —
 use them with `send`, `receive`, and `close`.
 
-```clausal
+```seam
 -import_from(py.tcp, [connect, send, receive, close])
 
 echo_client(HOST, PORT, MESSAGE, RESPONSE) <- (
@@ -19,7 +19,7 @@ echo_client(HOST, PORT, MESSAGE, RESPONSE) <- (
 
 Or via [module import](import.md):
 
-```clausal
+```seam
 -import_module(py.tcp)
 
 main <- (
@@ -35,7 +35,7 @@ main <- (
 
 ## Import
 
-```clausal
+```seam
 -import_from(py.tcp, [
     connect, listen, accept,
     send, receive, close, set_timeout
@@ -50,7 +50,7 @@ main <- (
 |-----------|------|-------------|
 | `connect(Host, Port, Socket)` | `+Host, +Port, -Socket` | connect to TCP server, bind opaque socket handle |
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/tcp_sigs.txt:connect_example"
 ```
 
@@ -65,7 +65,7 @@ Fails if the connection is refused or the host is unreachable.
 | `listen(Host, Port, ServerSocket)` | `+Host, +Port, -ServerSocket` | Create listening socket with `SO_REUSEADDR`. Port `0` → ephemeral. |
 | `accept(ServerSocket, ClientSocket)` | `+Server, -Client` | accept incoming connection. Blocks until a client connects. |
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/tcp_sigs.txt:server_example"
 ```
 
@@ -82,7 +82,7 @@ Fails if the connection is refused or the host is unreachable.
 `receive` returns a string if the data is valid UTF-8, or raw `bytes` if
 decoding fails. Fails if the connection is closed (no data received).
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/tcp_sigs.txt:data_transfer_examples"
 ```
 
@@ -95,7 +95,7 @@ decoding fails. Fails if the connection is closed (no data received).
 | `close(Socket)` | `+Socket` | close socket. Always succeeds (even on already-closed sockets). |
 | `set_timeout(Socket, Seconds)` | `+Socket, +Seconds` | Set socket timeout (float). Subsequent operations fail on timeout. |
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/tcp_sigs.txt:socket_management_example"
 ```
 
@@ -105,13 +105,13 @@ decoding fails. Fails if the connection is closed (no data received).
 
     ### Simple TCP client
 
-    ```clausal
+    ```seam
     --8<-- "tests/fixtures/docs/tcp_sigs.txt:tcp_client_example"
     ```
 
     ### Echo server (single client)
 
-    ```clausal
+    ```seam
     --8<-- "tests/fixtures/docs/tcp_sigs.txt:echo_server_example"
     ```
 

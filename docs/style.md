@@ -10,7 +10,7 @@ what the formatter emits, so a formatted tree never churns under it again
 A parenthesised clause body lists **exactly one goal per line**, indented one
 step, with the closing parenthesis on its own line:
 
-```clausal
+```seam
 positive(1),
 positive(2),
 
@@ -27,7 +27,7 @@ literals and strings stay where they are.
 The formatter normalises every rule body to the parenthesised form — a
 single-goal rule written `q(X) <- r(X)` is emitted as:
 
-```clausal
+```seam
 r(1),
 
 q(X) <- (

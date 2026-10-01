@@ -6,7 +6,7 @@ The `log` module provides structured logging predicates backed by Python's `logg
 
 Since Python's `logging` module is the backend, all of Python's handler ecosystem is available — file rotation, syslog, SMTP, JSON formatters, etc.
 
-```clausal
+```seam
 -import_from(log, [get_logger, info, debug, warning, error, set_level])
 
 main(NAME) <- (
@@ -19,7 +19,7 @@ main(NAME) <- (
 
 Or via [module import](import.md):
 
-```clausal
+```seam
 -import_module(log)
 
 main <- (
@@ -32,7 +32,7 @@ main <- (
 
 ## Import
 
-```clausal
+```seam
 -import_from(log, [
     get_logger, debug, info, warning, error, critical,
     set_level, get_level, is_enabled_for, log,
@@ -68,7 +68,7 @@ All logging predicates **always succeed** — they are side-effects. A message b
 
 ### `debug/1`, `debug/2`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/logging_sigs.txt:debug_sig"
 ```
 
@@ -76,7 +76,7 @@ log `Msg` at DEBUG level. The arity-1 form uses the default `"clausal"` logger.
 
 ### `info/1`, `info/2`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/logging_sigs.txt:info_sig"
 ```
 
@@ -84,7 +84,7 @@ log at INFO level.
 
 ### `warning/1`, `warning/2`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/logging_sigs.txt:warning_sig"
 ```
 
@@ -92,7 +92,7 @@ log at WARNING level.
 
 ### `error/1`, `error/2`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/logging_sigs.txt:error_sig"
 ```
 
@@ -100,7 +100,7 @@ log at ERROR level.
 
 ### `critical/1`, `critical/2`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/logging_sigs.txt:critical_sig"
 ```
 
@@ -108,7 +108,7 @@ log at CRITICAL level.
 
 ### `log/3`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/logging_sigs.txt:log_sig"
 ```
 
@@ -118,7 +118,7 @@ log at an arbitrary level. `Level` is a string (`"debug"`, `"info"`, etc.) or an
 
 A message is a string or an atom (an f-string is a string, like `"..."`). Clausal's [f-string support](io.md) means interpolation works naturally:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/logging_sigs.txt:fstring_example"
 ```
 
@@ -130,7 +130,7 @@ Logic variables in f-strings are auto-dereferenced at search time.
 
 ### `get_logger/1`, `get_logger/2`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/logging_sigs.txt:get_logger_sig"
 ```
 
@@ -140,7 +140,7 @@ Python's logger hierarchy applies: `get_logger("myapp.db", L)` creates a child o
 
 ### `set_level/2`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/logging_sigs.txt:set_level_sig"
 ```
 
@@ -148,7 +148,7 @@ Set the logger's level. Messages below this level will be discarded (but the log
 
 ### `get_level/2`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/logging_sigs.txt:get_level_sig"
 ```
 
@@ -156,13 +156,13 @@ Unify `Level` with the logger's effective level name, a string (e.g. `"DEBUG"`, 
 
 ### `is_enabled_for/2`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/logging_sigs.txt:is_enabled_for_sig"
 ```
 
 **Succeeds** if the logger would process a message at `Level`; **fails** otherwise. This is the one logging predicate that can fail — useful for guarding expensive message construction:
 
-```clausal
+```seam
 process(L, DATA) <- (
     ((is_enabled_for(L, "debug"), debug(L, f"Processing: {DATA}")) or True),
     do_work(DATA)
@@ -175,7 +175,7 @@ process(L, DATA) <- (
 
 ### `stream_handler/2`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/logging_sigs.txt:stream_handler_sig"
 ```
 
@@ -183,7 +183,7 @@ Create a `logging.StreamHandler`. `StreamName` is `"stdout"` or `"stderr"`.
 
 ### `file_handler/2`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/logging_sigs.txt:file_handler_sig"
 ```
 
@@ -191,7 +191,7 @@ Create a `logging.FileHandler` that writes to the given file path.
 
 ### `set_formatter/2`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/logging_sigs.txt:set_formatter_sig"
 ```
 
@@ -199,7 +199,7 @@ Set a `logging.Formatter` on the handler using Python's format string syntax (e.
 
 ### `add_handler/2`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/logging_sigs.txt:add_handler_sig"
 ```
 
@@ -207,7 +207,7 @@ Add a handler to the logger.
 
 ### `remove_handler/2`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/logging_sigs.txt:remove_handler_sig"
 ```
 
@@ -215,7 +215,7 @@ Remove a handler from the logger.
 
 ### `basic_config/1`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/logging_sigs.txt:basic_config_sig"
 ```
 
@@ -227,19 +227,19 @@ Call `logging.basicConfig()` with a dict of options (`{level: "info"}`, keys dec
 
     ### Basic usage
 
-    ```clausal
+    ```seam
     --8<-- "tests/fixtures/docs/logging_sigs.txt:basic_usage"
     ```
 
     ### Custom handler and formatter
 
-    ```clausal
+    ```seam
     --8<-- "tests/fixtures/docs/logging_sigs.txt:custom_handler"
     ```
 
     ### Logger hierarchy
 
-    ```clausal
+    ```seam
     --8<-- "tests/fixtures/docs/logging_sigs.txt:logger_hierarchy"
     ```
 

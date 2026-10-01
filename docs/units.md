@@ -8,7 +8,7 @@ syntactic sugar for writing measurements inline.
 
 ## Quick start
 
-```clausal
+```seam
 -import_from(py.units,    [m, s, newton, kilo, has_units, strip_units])
 -import_from(py.imperial, [foot, inch])
 
@@ -82,7 +82,7 @@ dimension keys and arithmetic are unchanged.
 
 ### `n(Unit)` sugar — SI predicates only
 
-```clausal
+```seam
 -import_from(py.units, [m, s, newton])
 
 a(X) <- eval_(5(m), X)          # 5 (metre)
@@ -104,7 +104,7 @@ right of `*` (`5 * kilo * m` raises a `TypeError`).
 
 For unusual constructions, use `++()` directly:
 
-```clausal
+```seam
 -import_from(py.units, [kilogram, metre, second])
 
 custom(X) <- (X is ++(kilogram(1) * metre(1) / second(1)**2 * 9.8))   # same as 9.8(newton)
@@ -115,7 +115,7 @@ custom(X) <- (X is ++(kilogram(1) * metre(1) / second(1)**2 * 9.8))   # same as 
 SI prefixes are plain numbers; imperial/non-SI units are `Quantity` unit
 vectors.  Both are used via multiplication inside a `++()` escape:
 
-```clausal
+```seam
 -import_from(py.units, [kilo, nano, giga, newton, second, hertz])
 -import_from(py.imperial, [inch, mph])
 
@@ -133,7 +133,7 @@ pace(X) <- (X is ++(60 * mph))                     # 60 mph → 26.8224 (metre /
 An empty-argument call on any numeric literal produces a dimensionless
 `Quantity(n, {})`:
 
-```clausal
+```seam
 answer(X) <- eval_(42(), X)     # 42 (dimensionless)
 pi(X) <- eval_(3.14(), X)       # 3.14 (dimensionless)
 ```
@@ -145,7 +145,7 @@ pi(X) <- eval_(3.14(), X)       # 3.14 (dimensionless)
 when the callee is a logic variable, `MY_VAL(Unit)` desugars to
 `++(Quantity(MY_VAL, Unit))`:
 
-```clausal
+```seam
 -import_from(py.units, [newton])
 
 force_of(N, F) <- eval_(N(newton), F)     # force_of(9.8, F): F = 9.8 (kilogram * metre / second ** 2)
@@ -155,7 +155,7 @@ force_of(N, F) <- eval_(N(newton), F)     # force_of(9.8, F): F = 9.8 (kilogram 
 
 ## `has_units(X, Unit)` — dimension constraint / check
 
-```clausal
+```seam
 -import_from(py.units, [m, s, newton, has_units])
 
 is_force(F) <- has_units(F, newton)              # check or constrain: F must have newton dims
@@ -214,7 +214,7 @@ its exact `Decimal` magnitude is refused.
 
 ### `py.units` — SI units and prefixes
 
-```clausal
+```seam
 -import_from(py.units, [m, kg, s, newton, kilo, has_units, strip_units])
 ```
 
@@ -225,7 +225,7 @@ and utility predicates (`has_units`, `strip_units`, `dimension_of`, `make_quanti
 
 ### `py.imperial` — imperial and non-SI unit vectors
 
-```clausal
+```seam
 -import_from(py.imperial, [inch, foot, yard, mile, pound_mass, mph, lbf])
 ```
 
@@ -284,7 +284,7 @@ These scale on the way in and store as SI base units.  Use with `n(Unit)` sugar.
 
 `bit` is the base unit (IEC 80000-13).  All values are normalised to bits.
 
-```clausal
+```seam
 -import_from(py.units, [bit, byte, kilobyte, gigabyte, kibibyte, gibibyte,
                         kilobit, megabit, kibi, mebi, gibi, tebi])
 
@@ -360,7 +360,7 @@ Scaled variants: `bar`, `millibar`, `atmosphere`, `electronvolt`, `kilowatt`
 Plain Python numbers — **not** predicates.  Use inside `++()` by multiplying
 against a unit vector:
 
-```clausal
+```seam
 -import_from(py.units, [kilo, nano, giga, mega, newton, second, hertz, joule])
 
 prefixed(X) <- (X is ++(5 * kilo * newton(1)))     # 5 kN
@@ -404,7 +404,7 @@ unit together.
 
 Plain Python numbers — use inside `++()` by multiplying against a unit vector:
 
-```clausal
+```seam
 -import_from(py.units, [gibi, mebi, kibi, byte, bit])
 
 binary(X) <- (X is ++(4 * gibi * byte(1)))      # 4 GiB → 34359738368 (bit)
@@ -432,7 +432,7 @@ an uppercase letter is a logic variable.
 Plain `Quantity` values — **not** predicates.  Import from `py.imperial` and
 use by multiplying a scalar inside a `++()` escape:
 
-```clausal
+```seam
 -import_from(py.imperial, [inch, pound_mass, mph, kilowatt_hour])
 
 imperial(LEN, MASS, SPD, E) <- (
@@ -446,7 +446,7 @@ imperial(LEN, MASS, SPD, E) <- (
 All values are stored in SI base units; dimensions are the same as their SI
 equivalents so `has_units` checks work without any changes:
 
-```clausal
+```seam
 -import_from(py.imperial, [inch])
 -import_from(py.units, [metre, has_units])
 
@@ -599,7 +599,7 @@ and the design in `docs/superpowers/specs/2026-09-12-clp-units-side-channel-desi
 `UnitsMismatch` is a Python exception class, so a module imports it and catches it with a
 `++` catcher (see [`catch/3`](exceptions.md)); the instance form binds the message:
 
-```clausal
+```seam
 -import_from(py.units, [metre, second])
 -import_from(clausal.terms, [UnitsMismatch])
 

@@ -32,7 +32,7 @@ verify:
 - **Use the most general query.** If `predicate(X, Y)` with all fresh
   variables gives meaningful answers, the predicate is correct in all modes.
 
-```clausal
+```seam
 # The definition
 list_length([], 0),
 list_length([_, *REST], N) <- (
@@ -66,7 +66,7 @@ Clausal predicates compose naturally. A predicate that describes one relation
 can be used as a condition in another predicate's body. There is no need to
 manage state, threading, or data flow between components:
 
-```clausal
+```seam
 ancestor(X, Y) <- parent(X, Y)
 ancestor(X, Y) <- (parent(X, Z), ancestor(Z, Y))
 
@@ -115,7 +115,7 @@ the computation and I/O.
 Every predicate describes a relation between its arguments. Ask: "when does
 this relation hold?" — not "What should this function do?"
 
-```clausal
+```seam
 # Good: describes a relation
 list_sorted([], []),
 list_sorted([X], [X]),
@@ -152,7 +152,7 @@ If you can state it clearly in natural language, the clause will be correct.
 when the [arithmetic](arithmetic.md) direction isn't fixed, use [CLP(ℤ)](constraints.md) constraints instead of
 eager `eval_/2` evaluation:
 
-```clausal
+```seam
 # Only works forward (N must be known):
 double(N, D) <- (eval_(N * 2, D))
 
@@ -176,7 +176,7 @@ is truly relational.
 
 when the user provides structured data, encode it as facts:
 
-```clausal
+```seam
 employee('alice', 'engineering', 95000),
 employee('bob', 'marketing', 72000),
 employee('carol', 'engineering', 105000),
@@ -189,7 +189,7 @@ high_earner(NAME) <- (employee(NAME, _, SALARY), SALARY > 90000)
 
 For problems over recursive structures (lists, trees, graphs):
 
-```clausal
+```seam
 -private([leaf, node(LEFT, RIGHT)])
 
 # Base clause: state when the relation trivially holds
@@ -210,7 +210,7 @@ test("depth 2") <- tree_depth(node(node(leaf, leaf), leaf), 2)
 
 For constraint satisfaction problems, separate the model from the search:
 
-```clausal
+```seam
 # Model: describe what must hold
 schedule([A, B, C]) <- (
     in_domain([A, B, C], 1, 3),
@@ -231,7 +231,7 @@ test("three slots") <- findall(T, solution(T), [[1, 2, 3], [1, 3, 2], [2, 3, 1]]
 
 For hybrid tasks, use `++()` for Python and predicates for logic:
 
-```clausal
+```seam
 # Python does the computation
 word_frequency(TEXT, WORD, COUNT) <- (
     WORDS is ++TEXT.lower().split(),

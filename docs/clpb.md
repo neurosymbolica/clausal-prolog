@@ -27,7 +27,7 @@ Variables in CLP(B) are constrained to values 0 (false) and 1 (true).
 `BoolEq` and `BoolImpl` are term constructors (Python classes), so a module names them in
 its import list — the one place a TitleCase name is declared:
 
-```clausal
+```seam
 -import_from(clausal.logic.clpb, [BoolEq, BoolImpl])
 
 implies(X, Y) <- sat(BoolImpl(X, Y))
@@ -49,13 +49,13 @@ same(X, Y) <- sat(BoolEq(X, Y))
 
 Posts a Boolean constraint. Fails immediately if the formula is unsatisfiable:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/clpb_sigs.txt:sat_1"
 ```
 
 Multiple `sat` calls on shared variables build a single constraint network:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/clpb_sigs.txt:sat_1_ex2"
 ```
 
@@ -63,7 +63,7 @@ Multiple `sat` calls on shared variables build a single constraint network:
 
 Tests if a formula is a tautology, contradiction, or neither:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/clpb_sigs.txt:taut_2"
 ```
 
@@ -71,7 +71,7 @@ Tests if a formula is a tautology, contradiction, or neither:
 
 Counts the number of satisfying assignments:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/clpb_sigs.txt:sat_count_2"
 ```
 
@@ -79,7 +79,7 @@ Counts the number of satisfying assignments:
 
 Enumerates all 0/1 assignments for a list of variables:
 
-```clausal
+```seam
 solve(X, Y) <- (
     sat(X ^ Y),
     bool_labeling([X, Y])
@@ -94,7 +94,7 @@ solve(X, Y) <- (
 In a `.seam` file, query with a goal-position `--`; each exported variable arrives as a plain
 `0` or `1`:
 
-```clausal
+```seam
 -import_from(clausal.logic.clpb, [BoolEq])
 
 half_adder(X, Y, SUM, CARRY) <- (
@@ -122,7 +122,7 @@ you need the constrained variables themselves.
 
     ### Half Adder
 
-    ```clausal
+    ```seam
     --8<-- "tests/fixtures/docs/clpb_sigs.txt:half_adder"
     ```
 
@@ -130,7 +130,7 @@ you need the constrained variables themselves.
 
     3 pigeons in 2 holes — no solution exists:
 
-    ```clausal
+    ```seam
     --8<-- "tests/fixtures/docs/clpb_sigs.txt:pigeon_hole"
     ```
 
@@ -138,7 +138,7 @@ you need the constrained variables themselves.
 
     Verify De Morgan's law via tautology check:
 
-    ```clausal
+    ```seam
     --8<-- "tests/fixtures/docs/clpb_sigs.txt:circuit_equivalence"
     ```
 

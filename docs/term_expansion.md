@@ -6,7 +6,7 @@ Term expansion and goal expansion are compile-time transformation passes that re
 
 ## Quick Example
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/term_expansion_sigs.txt:quick_example"
 ```
 
@@ -18,7 +18,7 @@ Term expansion rewrites module items (clauses, facts, directives) at load time, 
 
 ### Writing Expansion Rules
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/term_expansion_sigs.txt:writing_expansion_rules"
 ```
 
@@ -33,7 +33,7 @@ Arguments:
 
 If no rule matches an item, it passes through unchanged. You can also write an explicit identity rule:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/term_expansion_sigs.txt:identity_expansion"
 ```
 
@@ -41,7 +41,7 @@ If no rule matches an item, it passes through unchanged. You can also write an e
 
 Return an empty list to remove an item from the module:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/term_expansion_sigs.txt:suppressing_items"
 ```
 
@@ -49,7 +49,7 @@ Return an empty list to remove an item from the module:
 
 Return a list to expand one item into multiple items. This is the most powerful pattern — it lets a single declaration generate multiple clauses:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/term_expansion_sigs.txt:one_to_many_expansion"
 ```
 
@@ -63,7 +63,7 @@ Return a list to expand one item into multiple items. This is the most powerful 
 
 A pattern is written as a plain term, as in ISO `term_expansion/2`: in argument position a term is data, never a goal, so nothing needs quoting:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/term_expansion_sigs.txt:plain_term_patterns"
 ```
 
@@ -75,7 +75,7 @@ Variables are shared between the pattern and the replacement. In the example abo
 
 The STATE arguments thread a value through all expansions in order. Use this to count items, collect metadata, or coordinate between rules:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/term_expansion_sigs.txt:module_state_threading"
 ```
 
@@ -87,11 +87,11 @@ Start the count at 0 — the expansion engine initializes MODULE_STATE to `None`
 
 Expansion rules can be [imported](import.md) from other modules. The imported rules apply to items in the **importing** module:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/term_expansion_sigs.txt:importing_expansion_rules"
 ```
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/term_expansion_sigs.txt:importing_expansion_rules_ex2"
 ```
 
@@ -120,7 +120,7 @@ The goal expansion pass (`clausal/logic/goal_expansion.py`) applies these transf
 
 **[Regex](regex.md) auto-binding**: Named capture groups with ALLCAPS or leading-underscore names are automatically bound to clause variables:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/term_expansion_sigs.txt:regex_auto_binding"
 ```
 
@@ -159,7 +159,7 @@ The compiler pipeline orchestrates both expansions in sequence:
 
 The goal expansion for regex auto-binding shows both systems working together. when you write:
 
-```clausal
+```seam
 -allow_singletons
 # Named-group auto-bind: YEAR's binding occurrence lives inside the
 # pattern STRING, invisible to the singleton counter's AST-Name check.
