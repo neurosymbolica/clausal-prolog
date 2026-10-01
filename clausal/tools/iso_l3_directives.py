@@ -1018,6 +1018,24 @@ def _facade_bare(ctx, facade, bare) -> list:
     return values
 
 
+def _is_known_library(name: str) -> bool:
+    """Whether ``library(<name>)`` names a library Clausal provides: built
+    in, mapped to an engine module, or a ``.seam`` facade."""
+    return (name in _BUILTIN_LIBRARIES or name in _LIBRARY_MODULES
+            or _library_facade(name) is not None)
+
+
+def _unknown_library(what: str, name: str) -> str:
+    """The refusal of an unknown ``library(<name>)``, shared by both .pl
+    front ends: Scryer's library names Clausal does not provide (``os``,
+    ``charsio``) and plain misspellings alike.  Never read as a module of
+    that name -- ``library(os)`` would otherwise be Python's ``os``."""
+    return (f"{what}: library({name}) is not a library the native front end "
+            f"knows (built in: {', '.join(sorted(_BUILTIN_LIBRARIES))}; "
+            f"mapped: {', '.join(sorted(_LIBRARY_MODULES))}; facades: "
+            f"library(L) for each L in clausal._py_facades.PY_FACADE_LIBS)")
+
+
 def _python_import_refusal(what: str, dotted: str, target: str) -> str:
     """The message refusing a Python import target in Clausal Prolog,
     naming the ``library(...)`` facade when one ships."""
@@ -1142,10 +1160,7 @@ def _use_library(ctx, lib, entries, span, what, listed_ops=()):
     if name in _BUILTIN_LIBRARIES:
         return []
     if name not in _LIBRARY_MODULES:
-        raise _refused(
-            f"{what}: library({name}) is not a library the native front end "
-            f"knows (built in: {', '.join(sorted(_BUILTIN_LIBRARIES))}; "
-            f"mapped: {', '.join(sorted(_LIBRARY_MODULES))})", span)
+        raise _refused(_unknown_library(what, name), span)
     module = _LIBRARY_MODULES[name]
     over_names = _LIBRARY_OVERRIDES.get(name, {})
     overridden: list = []

@@ -580,6 +580,21 @@ def load_operator_mapping(path: str | Path) -> dict[str, dict]:
 # ── Emitter ──────────────────────────────────────────────────────────
 
 
+def _native_knows_library(lib: str) -> bool:
+    """Whether the native front end knows ``library(<lib>)``
+    (``iso_l3_directives._is_known_library``)."""
+    from clausal.tools.iso_l3_directives import (  # noqa: PLC0415
+        _is_known_library)
+    return _is_known_library(lib)
+
+
+def _unknown_library_message(directive: str, lib: str) -> str:
+    """The native front end's unknown-library refusal, for *directive*."""
+    from clausal.tools.iso_l3_directives import (  # noqa: PLC0415
+        _unknown_library)
+    return _unknown_library(directive, lib)
+
+
 def _library_facade(lib: str) -> "str | None":
     """The ``library(<lib>)`` facade's dotted name, or None (the native
     front end's rule, ``iso_l3_directives._library_facade``)."""
@@ -1379,6 +1394,12 @@ class _PrologToClausal:
                 return self._emit_python_use_module(
                     facade, importlib.import_module(facade),
                     body.args[1] if len(body.args) == 2 else None, directive)
+            elif not _native_knows_library(lib_name):
+                # Unknown to Clausal: refused, as the native front end
+                # refuses it -- never read as a module of that name, which
+                # for library(os) would be Python's os.
+                raise PrologTranslationError(
+                    _unknown_library_message(directive, lib_name))
             elif len(body.args) == 2 and _names_all_native(body.args[1]):
                 return (f"# library({lib_name}): every name it imports is "
                         "provided by the engine -- no import needed")

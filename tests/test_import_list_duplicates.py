@@ -67,9 +67,10 @@ def test_the_translator_emits_a_repeated_library_name_once():
     may be a Python module, which has no arities), so one ``baz`` says it
     all."""
     from clausal.tools.prolog_to_clausal import prolog_to_clausal
+    # (A known library: an unknown one is refused, as natively.)
     out = prolog_to_clausal(
-        ":- use_module(library(foo), [baz/1, baz/2, qux/1]).\n")
-    assert "-import_from(foo, [baz, qux])" in out
+        ":- use_module(library(clpb), [baz/1, baz/2, qux/1]).\n")
+    assert "-import_from(clausal.logic.clpb, [baz, qux])" in out
 
 
 def test_the_translator_keeps_a_module_files_indicators():

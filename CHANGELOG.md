@@ -20,6 +20,18 @@ since 0.4.0 finish three moves:
 
 ### Breaking
 
+- **An unknown `library(X)` is refused by the translator `.pl` front end
+  too** (ruled 2026-10-01), with the native front end's error:
+  `library(X) is not a library the native front end knows (built in: ...;
+  mapped: ...; facades: ...)`, a load-time `SyntaxError` naming the line.
+  The translator used to read an unknown library name as a module of that
+  name, so `library(os)`, `library(math)`, `library(random)` or
+  `library(time)` silently imported Python's standard-library module, and
+  a list naming only engine builtins (`library(charsio), [atom_chars/2]`)
+  was dropped as a no-op. Known libraries -- built in, mapped
+  (`clpz`, `clpb`, ...), the `library(...)` facades and `py_*` -- are
+  unchanged.
+
 - **A cut inside a meta-called body is refused, never run as `true`.**
   Clausal has no cut. A clause body cannot spell `!`, but a goal built at
   run time could carry one into `call/N`, and `call/1` ran it as `true`:
