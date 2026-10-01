@@ -1696,7 +1696,8 @@ def _bare_exported(exports, bare) -> list:
     the name at (operator ruling 2026-10-01, as the translator's
     ``use_module(m, [p])`` and the seam's ``-import_from(m, [p])`` import
     it) -- ``p/1`` alone when m exports ``p/1`` and also defines an
-    unexported ``p/2``.  A seam module's bare export stays a bare entry.
+    unexported ``p/2``.  A name a seam module exports with no arity is
+    imported by name, every arity, as ``-import_from(m, [p])`` does.
     A name the module does not export imports nothing: it is a bare atom,
     D11(a).  (Scryer refuses a bare name in an import list.)"""
     if not exports or not bare:

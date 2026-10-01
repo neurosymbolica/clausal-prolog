@@ -114,7 +114,10 @@ def count_pl_file(path: Path) -> tuple[dict, int]:
     end's reader and ``Uses`` counter, over every clause it reads -- a
     grammar rule as the clause the front end translates it to, as the
     loader counts it.  A grammar rule the translation refuses counts as
-    unreadable."""
+    unreadable.  The census does not track ``set_prolog_flag(double_quotes,
+    _)``: a ``"..."`` grammar body is read as chars (the default), so under
+    ``atom`` it counts terminals where the loader calls a nonterminal --
+    neither holds a transition construct, so no count differs."""
     from clausal.tools.iso_l3 import (  # noqa: PLC0415
         LoweringRefused, iter_iso, translate_dcg_rule)
     from clausal.tools.iso_l3_directives import Uses  # noqa: PLC0415
