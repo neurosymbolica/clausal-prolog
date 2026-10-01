@@ -29,7 +29,7 @@ import os
 import sys
 import warnings
 
-from clausal._suffixes import CLAUSAL_SUFFIXES
+from clausal._suffixes import CLAUSAL_SUFFIXES, seam_suffixes_text
 
 
 def dump_source(path: str) -> str:
@@ -127,7 +127,7 @@ def main(argv: list[str] | None = None) -> None:
             print(f"warning: {arg!r} not found, skipping", file=sys.stderr)
 
     if not paths:
-        print("No .clausal (or .seam) files found.", file=sys.stderr)
+        print(f"No seam ({seam_suffixes_text()}) files found.", file=sys.stderr)
         sys.exit(1)
 
     for path in paths:

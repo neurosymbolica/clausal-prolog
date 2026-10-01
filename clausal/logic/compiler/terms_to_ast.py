@@ -1790,7 +1790,7 @@ def term_to_ast_expr(
         raise NotImplementedError(
             f"term_to_ast_expr: a Python {type(term).__name__} is not a term.\n"
             f"  Write the term instead:  {suggestion}\n"
-            f"  in .clausal source:      {_source_form(suggestion)}\n"
+            f"  in seam source:          {_source_form(suggestion)}\n"
             f"  (got {term!r})"
         )
     raise NotImplementedError(

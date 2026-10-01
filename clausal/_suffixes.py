@@ -1,18 +1,32 @@
 """File extensions the engine recognises as predicate-module source.
 
-``.clausal`` and ``.seam`` are aliases for one another: both carry the same
-Python-seam syntax and go through the same loader, so every place that
-recognises a predicate module by its extension consults these tuples rather
-than spelling ``".clausal"`` itself.  ``.pl`` is Prolog source, translated on
-the way in (see ``clausal.import_hook.PrologLoader``).
+Two surfaces, each a tuple here, and every place that recognises a source
+file by its extension consults these tuples (or ``end_module.surface_of``)
+rather than spelling a suffix itself:
+
+* ``CLAUSAL_SUFFIXES`` -- SEAM source (Python syntax), loaded by
+  ``clausal.import_hook.PredicateLoader``.  Today ``.clausal`` and ``.seam``
+  both name it; ``.seam`` (``SEAM_SUFFIX``) is its own spelling and the one
+  messages name.
+* ``CLAUSAL_PROLOG_SUFFIXES`` -- the Clausal Prolog surface (cut-free,
+  ISO-like), always loaded by the native front end.  Empty today.
+
+``.pl`` is ISO Prolog source.  The extension flip is an edit of the two
+tuples alone: ``CLAUSAL_SUFFIXES = (".seam",)`` and
+``CLAUSAL_PROLOG_SUFFIXES = (".clausal",)``.
 
 This module has no imports on purpose: the lazy stub finder, the diagnostics
 and the tools all need these names before ``clausal.import_hook`` is loaded.
 """
 
-#: Extensions of a Clausal predicate-module source file, in finder priority
-#: order.  Order matters where two files share a stem in one directory.
+#: Extensions of a SEAM source file, in finder priority order (today the
+#: order decides between ``name.clausal`` and ``name.seam`` in one
+#: directory; after the extension flip there is one seam suffix and no tie).
 CLAUSAL_SUFFIXES: tuple[str, ...] = (".clausal", ".seam")
+
+#: The SEAM's own extension: correct before and after the extension flip,
+#: so a message telling a reader where to put seam code names this one.
+SEAM_SUFFIX: str = ".seam"
 
 #: Extension of a Prolog source file the import hook translates on load.
 PROLOG_SUFFIX: str = ".pl"
@@ -43,8 +57,25 @@ def is_prolog_source(path) -> bool:
     return str(path).endswith(prolog_suffixes())
 
 
+def suffix_list(suffixes) -> str:
+    """``(".a", ".b", ".c")`` -> ``".a, .b or .c"``: a message's spelling of
+    a suffix tuple, so prose that enumerates file kinds follows the tuples
+    instead of naming one suffix and going stale at the extension flip."""
+    suffixes = tuple(suffixes)
+    if len(suffixes) <= 1:
+        return "".join(suffixes)
+    return ", ".join(suffixes[:-1]) + " or " + suffixes[-1]
+
+
+def seam_suffixes_text() -> str:
+    """The seam source extensions as prose, read at each call:
+    ``".clausal or .seam"`` before the extension flip, ``".seam"`` after."""
+    return suffix_list(CLAUSAL_SUFFIXES)
+
+
 def strip_clausal_suffix(name: str) -> str:
-    """``"m.clausal"`` / ``"m.seam"`` → ``"m"``; anything else is unchanged."""
+    """Strip a SEAM suffix (one of ``CLAUSAL_SUFFIXES``): ``"m.seam"`` ->
+    ``"m"``; anything else is unchanged."""
     for suffix in CLAUSAL_SUFFIXES:
         if name.endswith(suffix):
             return name[: -len(suffix)]

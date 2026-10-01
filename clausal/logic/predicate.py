@@ -25,7 +25,7 @@ import textwrap
 from typing import Any, Callable
 
 from clausal.logic.cells import is_chars, chars_text  # stage 1: the chars carrier
-from clausal._suffixes import CLAUSAL_SUFFIXES
+from clausal._suffixes import CLAUSAL_SUFFIXES, SEAM_SUFFIX
 
 
 _MISSING = object()  # sentinel for "field not provided"
@@ -2063,7 +2063,7 @@ def declare_head(functor: str, fields: tuple, /) -> None:
         raise RuntimeError(
             f"cannot declare the predicate {functor}: this namespace belongs "
             f"to no module (it has no usable __name__), and a predicate is "
-            f"named by its module.  Define {functor} in a .clausal file and "
+            f"named by its module.  Define {functor} in a {SEAM_SUFFIX} file and "
             f"import it, or run this code with a non-empty module-level "
             f"__name__")
     namespace.setdefault(PREDICATE_HEADS_KEY, {}).setdefault(functor, {})[

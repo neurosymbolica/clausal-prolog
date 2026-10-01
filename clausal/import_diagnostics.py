@@ -47,7 +47,7 @@ import sys
 import textwrap
 from typing import NamedTuple
 
-from clausal._suffixes import SOURCE_SUFFIXES
+from clausal._suffixes import SOURCE_SUFFIXES, suffix_list
 
 # Display cap for the export list.
 #
@@ -543,12 +543,12 @@ def _describe_missing_module(exc, dotted, failed, directive, importer_file):
         return "\n".join(lines)
 
     if failed != dotted:
-        claim = (f"No .clausal file, .pl file or Python module called "
-                 f"'{failed}' is on the import path")
+        claim = (f"No source file ({suffix_list(SOURCE_SUFFIXES)}) or Python "
+                 f"module called '{failed}' is on the import path")
     else:
-        claim = (f"names a module that does not exist: no .clausal file, .pl "
-                 f"file or Python module called '{dotted}' is on the import "
-                 f"path")
+        claim = (f"names a module that does not exist: no source file "
+                 f"({suffix_list(SOURCE_SUFFIXES)}) or Python module called "
+                 f"'{dotted}' is on the import path")
     lines.extend(textwrap.wrap(
         f"{claim}. There is therefore no export list to show — this is a "
         f"MISSING module, not a module that exports nothing.",

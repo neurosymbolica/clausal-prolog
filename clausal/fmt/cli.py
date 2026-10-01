@@ -18,7 +18,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from clausal._suffixes import CLAUSAL_SUFFIXES
+from clausal._suffixes import CLAUSAL_SUFFIXES, seam_suffixes_text
 from clausal.fmt.comments import CommentLeakError
 from clausal.fmt.emit import format_source
 from clausal.fmt.verify import unified_diff
@@ -42,7 +42,8 @@ def clausal_files(paths: list[str]) -> list[Path]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        prog="clausal-fmt", description="Format .clausal (or .seam) source."
+        prog="clausal-fmt",
+        description=f"Format seam ({seam_suffixes_text()}) source."
     )
     parser.add_argument("paths", nargs="+", help="files or directories")
     parser.add_argument(

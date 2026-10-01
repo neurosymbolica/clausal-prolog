@@ -21,7 +21,7 @@ import pathlib
 import sys
 from pathlib import Path
 
-from clausal._suffixes import CLAUSAL_SUFFIXES
+from clausal._suffixes import CLAUSAL_SUFFIXES, seam_suffixes_text
 from clausal.fmt.cli import clausal_files
 from clausal.fmt.comments import CommentLeakError
 from clausal.fmt.verify import unified_diff
@@ -88,8 +88,8 @@ def rule_paths(names: list[str]) -> list[Path]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="clausal-rewrite",
-        description="Apply Clausal rewrite rules to .clausal (or .seam) source, "
-                    "then format it.",
+        description=f"Apply Clausal rewrite rules to seam "
+                    f"({seam_suffixes_text()}) source, then format it.",
     )
     parser.add_argument("paths", nargs="+", help="files or directories")
     parser.add_argument(

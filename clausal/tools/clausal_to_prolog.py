@@ -4605,13 +4605,17 @@ def _main() -> None:
     import argparse
     import sys
 
+    from clausal._suffixes import seam_suffixes_text
+
     parser = argparse.ArgumentParser(
         prog="clausal_to_prolog",
-        description="Translate .clausal source files to Prolog (.pl).",
+        description=f"Translate seam ({seam_suffixes_text()}) source files "
+                    "to Prolog (.pl).",
     )
     parser.add_argument(
         "input", nargs="?", default=None,
-        help="Input .clausal file (reads stdin if omitted)",
+        help=f"Input seam ({seam_suffixes_text()}) file (reads stdin if "
+             "omitted)",
     )
     parser.add_argument(
         "-o", "--output", default=None,

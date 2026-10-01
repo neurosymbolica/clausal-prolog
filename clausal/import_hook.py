@@ -1353,14 +1353,18 @@ class _ExtensionFinder(MetaPathFinder):
 
 
 class PredicateFinder(_ExtensionFinder):
-    """Find predicate-module source on sys.path: .clausal (or its alias .seam)
-    via PredicateLoader, and .pl via the loader ``CLAUSAL_PL_FRONTEND`` selects.
+    """Find predicate-module source on sys.path: SEAM source (the
+    ``CLAUSAL_SUFFIXES``) via PredicateLoader, then Prolog source
+    (``_suffixes.prolog_suffixes()``: ``.pl`` through the loader
+    ``CLAUSAL_PL_FRONTEND`` selects, a Clausal Prolog file through the
+    native one).
 
     This is the one source finder on ``sys.meta_path``: a single scan walks
-    the path entries in order and asks each for .clausal/.seam, then .pl, so
-    an earlier entry's .pl module beats a later entry's .clausal one, and a
-    .clausal/.seam file beats a .pl file only within the same entry.
-    ``_extensions`` stays the .clausal group alone.
+    the path entries in order and asks each for the seam group, then the
+    Prolog group, so an earlier entry's Prolog module beats a later entry's
+    seam one, and a seam file beats a Prolog file (``name.seam`` beats
+    ``name.pl``) only within the same entry -- before and after the
+    extension flip alike.  ``_extensions`` stays the seam group alone.
     """
     _extensions = CLAUSAL_SUFFIXES
     _loader_cls = PredicateLoader

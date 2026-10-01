@@ -2222,12 +2222,16 @@ def _main() -> None:
     import argparse
     import sys
 
+    from clausal._suffixes import SEAM_SUFFIX
+
     parser = argparse.ArgumentParser(
         prog="prolog_to_clausal",
-        description="Translate Prolog (.pl) source to clausal (.clausal) source.",
+        description=f"Translate Prolog (.pl) source to seam ({SEAM_SUFFIX}) "
+                    "source.",
     )
     parser.add_argument("input", nargs="?", help="Input .pl file (stdin if omitted)")
-    parser.add_argument("-o", "--output", help="Output .clausal file (stdout if omitted)")
+    parser.add_argument("-o", "--output",
+                        help=f"Output {SEAM_SUFFIX} file (stdout if omitted)")
     parser.add_argument("--dialect", choices=["swi", "scryer", "iso"], default=None,
                         help="Prolog dialect (default: Scryer's operator table)")
     parser.add_argument("--operator-map", help="JSON file with user-defined operator mappings")
