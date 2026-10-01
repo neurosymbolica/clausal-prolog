@@ -51,10 +51,12 @@ class NativeLoads:
         importlib.invalidate_caches()
         mod = importlib.import_module(name)
         if suffix == ".pl":
-            want = (ih.NativePrologLoader if frontend == "native"
-                    else ih.PrologLoader)
+            # The routing itself decides: a file of the Clausal Prolog
+            # surface (a test may patch .pl into that tuple) is always
+            # native, whatever CLAUSAL_PL_FRONTEND says.
+            want = ih._prolog_loader_class_for(str(self.tmp / (name + suffix)))
             assert type(mod.__loader__) is want, type(mod.__loader__)
-            if frontend == "native":
+            if want is ih.NativePrologLoader:
                 st = mod.__loader__.l3_stats
                 assert st is not None, "L3 never ran"
                 assert st["read"] > 0, st
