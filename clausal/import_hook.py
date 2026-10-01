@@ -36,7 +36,7 @@ import os
 import warnings
 
 from . import _suffixes as _sfx
-from ._suffixes import CLAUSAL_SUFFIXES, PROLOG_SUFFIX
+from ._suffixes import CLAUSAL_SUFFIXES
 from .end_module import SURFACE_CLAUSAL_PROLOG, SURFACE_SEAM, surface_of
 from .pythonic_ast import nodes as simple_ast
 from .atom_diagnostics import truth_literal_hint_lines
@@ -1366,6 +1366,7 @@ class PredicateFinder(_ExtensionFinder):
     ``name.pl``) only within the same entry -- before and after the
     extension flip alike.  ``_extensions`` stays the seam group alone.
     """
+    # Informational snapshot (import time); lookups read _suffixes() below.
     _extensions = CLAUSAL_SUFFIXES
     _loader_cls = PredicateLoader
 
@@ -1389,6 +1390,7 @@ class PrologFinder(_ExtensionFinder):
     after it would let a later entry's .clausal beat an earlier entry's .pl).
     Kept for callers that want a .pl-only finder.
     """
+    # Informational snapshot (import time); lookups read _suffixes() below.
     _extensions = _sfx.prolog_suffixes()
 
     def _suffixes(self):

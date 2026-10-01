@@ -311,3 +311,29 @@ def test_the_doc_checker_sees_both_seam_fences(tmp_path):
     assert len(SEAM_FENCE_RE.findall(page.read_text())) == 4
     bad = check_no_raw_untested_blocks(tmp_path)
     assert [v.split()[0] for v in bad] == ["page.md:9", "page.md:13"], bad
+
+
+# ── the private-procedure ImportError names the importer's own directive ──
+
+
+def test_a_clausal_prolog_importer_is_told_use_module(flip, tmp_path,
+                                                      monkeypatch):
+    # The private-procedure check guards imports from a .pl module.
+    (tmp_path / "efprivlib.pl").write_text(
+        ":- module(efprivlib, [p/1]).\np(1).\nhidden(2).\n")
+    (tmp_path / "efprivimp.clausal").write_text(
+        ":- module(efprivimp, [q/1]).\n"
+        ":- use_module(efprivlib, [hidden/1]).\n"
+        "q(X) :- hidden(X).\n:- end_module(efprivimp).\n")
+    monkeypatch.setattr(sys, "path", [str(tmp_path)] + sys.path)
+    importlib.invalidate_caches()
+    try:
+        with pytest.raises(ImportError) as ei:
+            importlib.import_module("efprivimp")
+        assert "private_procedure" in str(ei.value)
+        assert "use_module(efprivlib" in str(ei.value)
+        assert "-import_from" not in str(ei.value)
+    finally:
+        for n in ("efprivlib", "efprivimp"):
+            sys.modules.pop(n, None)
+        shutil.rmtree(tmp_path / "__pycache__", ignore_errors=True)

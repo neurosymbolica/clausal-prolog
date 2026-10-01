@@ -15,14 +15,18 @@ Read this section first; the original inventory follows, each item marked.
        CLAUSAL_SUFFIXES: tuple[str, ...] = (".seam",)
        CLAUSAL_PROLOG_SUFFIXES: tuple[str, ...] = (".clausal",)
 
-   Everything else follows these two constants at each call (verified by
-   `tests/test_extension_flip_prep.py`, which patches exactly these two):
-   `SOURCE_SUFFIXES`, `prolog_suffixes()`, `is_prolog_source()`,
+   Everything else follows these two constants (verified by
+   `tests/test_extension_flip_prep.py`, which patches exactly these two).
+   Read at each call: `prolog_suffixes()`, `is_prolog_source()`,
    `seam_suffixes_text()`, `end_module.surface_of`, the finders' groups, the
    loader choice (`_prolog_loader_class_for`: Clausal Prolog is ALWAYS
    native), the cache salt (`_suffix_salt`, keyed on the surface), the test
    runner, use_module's export-list reader, clausal-fmt/-rewrite (refuse
-   Clausal Prolog), translate.py's direction, and every message.
+   Clausal Prolog), translate.py's direction, and every message.  Frozen at
+   import (so correct after a real edit of the file, but NOT exercised by
+   the patched-tuple tests): `SOURCE_SUFFIXES`, and through it the test
+   runner's `TEST_SUFFIXES`, the lazy stub finder and the diagnostics'
+   suffix lists; the finders' informational `_extensions` attributes.
 2. **The rename sweep:** `git mv` every seam `.clausal` to `.seam` (MOVE,
    never copy: a stale twin would be a different module after the flip).
    Includes `clausal/stdlib`, `clausal/examples`, `clausal/rewrite/rules`

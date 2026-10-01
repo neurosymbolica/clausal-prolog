@@ -28,6 +28,7 @@ from pathlib import Path
 
 import pytest
 
+from clausal._suffixes import SEAM_SUFFIX
 from clausal.tools.doc_snippet_check import SEAM_FENCE_LANGS
 
 _ROOT = Path(__file__).resolve().parent.parent
@@ -149,7 +150,7 @@ def test_doc_python_block_runs(tmp_path, page, anchor, modules, post, expected):
     for name, source in modules.items():
         if source is None:
             source = _block(page, "seam", _PAGE_MODULE_ANCHORS[(page, name)])
-        (tmp_path / f"{name}.clausal").write_text(source)
+        (tmp_path / f"{name}{SEAM_SUFFIX}").write_text(source)
     code = (
         f"import sys; sys.path[0:0] = [{str(_ROOT)!r}, '.']\n"
         "import clausal\n"
@@ -186,7 +187,7 @@ _PRINT_CLAIM = re.compile(r"^print\(.*\)\s+#\s+(\S+)", re.M)
 
 def _run_block(tmp_path, modules, body):
     for name, source in modules.items():
-        (tmp_path / f"{name}.clausal").write_text(source)
+        (tmp_path / f"{name}{SEAM_SUFFIX}").write_text(source)
     code = (
         f"import sys; sys.path[0:0] = [{str(_ROOT)!r}, '.']\n"
         "import clausal\n"
