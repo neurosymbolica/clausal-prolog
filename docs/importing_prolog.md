@@ -517,7 +517,9 @@ value(V)    :- constant_value(max_fine, V).               % program-wide
   plain number.
 * `use_module(M, [name])` on a **Python** module (a currency jurisdiction
   such as `european_union`) imports the value `name`, as `-import_from` does;
-  on a Prolog module a bare name imports nothing (D11).
+  on a Prolog module a bare name the module exports imports exactly its
+  exported arities (`[p]` is `[p/1]` when `p/1` is the export), and a
+  name it does not export imports nothing (D11).
 * A value is ISO data: `:- constant_value(k, 2*3).` holds the term
   `'*'(2, 3)` (which `is/2` evaluates to 6), an atom is that atom, and
   `"..."` follows the `double_quotes` flag in force (chars by default).

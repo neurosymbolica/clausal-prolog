@@ -9,7 +9,9 @@ native-iso-reader-step2 §4 Slice 3, §5 D4/D5 as ruled 2026-09-30).
 * ``:- constructors([pt(x, y)]).`` is OPTIONAL and only gives a data functor
   its FIELD NAMES (the seam's -private/-module template).  Exported as
   ``pt/2`` in module/2, it reaches -module as its template.
-* An atom entry in a use_module/2 list imports nothing (D11(a), slice 2).
+* An atom entry in a use_module/2 list imports nothing (D11(a), slice 2),
+  unless the module exports that name: then it imports the exported
+  arities (ruling 2026-10-01).
 
 Every load clears ``__pycache__`` and asserts the native loader ran over a
 non-zero population (the ``native`` fixture) -- except the cache test, which
@@ -389,11 +391,12 @@ def test_constants_their_fold_and_table_heads_are_not_auto_declared(native,
     assert ans(mod, "cl") == [2, 3]
 
 
-def test_a_bare_entry_naming_an_export_is_not_an_atom_use(native, ans):
-    """D11(a): a bare entry imports nothing.  It counts as a use of its atom
-    -- unless the module offers the name as name/N (an export here; a
-    Python module's predicate likewise), where it only hides the missing
-    indicator."""
+def test_a_bare_entry_naming_an_export_imports_its_exported_arities(
+        native, ans):
+    """D11(a): a bare entry naming no export imports nothing and counts as
+    a use of its atom.  A bare entry naming an export imports exactly the
+    exported arities (operator ruling 2026-10-01, as the translator does;
+    until then it imported nothing here)."""
     _write(native, "s3_exp.pl", """\
         :- module(s3_exp, [s3_exp_pred/1]).
         s3_exp_pred(1).
@@ -403,7 +406,8 @@ def test_a_bare_entry_naming_an_export_is_not_an_atom_use(native, ans):
         mod = native.load("s3_bare_exp", textwrap.dedent("""\
             :- use_module(s3_exp, [s3_exp_pred, s3_exp_atom]).
             t(1).
+            u(X) :- s3_exp_pred(X).
             """))
     assert ans(mod, "t") == [1]
     assert mod.s3_exp_atom == "s3_exp_atom"
-    assert "s3_exp_pred" not in vars(mod)
+    assert ans(mod, "u") == [1]

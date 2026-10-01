@@ -878,7 +878,10 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
   `p/1` alone, as `[p/1]` does: a clause calling `p(X, Y)` through it
   raises `existence_error(procedure, p/2)`, and the importer may define
   its own `p/2`. It used to reach the private `p/2`. Python access is
-  unchanged.
+  unchanged. The native `.pl` front end now does the same for
+  `use_module(m, [p])`: it imported nothing for a bare name (D11), so
+  `p(X)` through it raised `existence_error(procedure, p/1)`. A name `m`
+  does not export still imports nothing and warns as a bare atom.
 - **DCG braces `{G}` follow ISO and Scryer.** `phrase({G}, L)`,
   `phrase({G}, L, R)` and a `{G}` inside a phrase body run `G, S0 = S`
   (every answer of G kept, nothing consumed); they raised

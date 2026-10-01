@@ -874,6 +874,7 @@ def _use_module(ctx: DirectiveContext, args, spans, span):
                            span)
         dotted = target = alias_facade
         found = _module_source(target)
+    declared, exports, ops, sticky = _declared_exports(found)
     if _is_python_module(found):
         mod = _import_python_module(dotted, target, span, what)
         # A Python module (a currency's units, say) is no Prolog module: a
@@ -895,13 +896,16 @@ def _use_module(ctx: DirectiveContext, args, spans, span):
         if values:
             entries = list(entries or ()) + [(n, None) for n in values]
     else:
-        _warn_bare(ctx, bare)
+        bare_pis = _bare_exported(exports, bare)
+        if bare_pis:
+            entries = list(entries or ()) + bare_pis
+        imported_bare = {n for n, _a in bare_pis}
+        _warn_bare(ctx, [b for b in bare if b[0] not in imported_bare])
     for n, a in entries or ():
         if not n.isidentifier():
             raise _refused(
                 f"{what}: {n}/{a} cannot be imported by name (the name is no "
                 f"identifier); call it qualified, m:'{n}'(...)", span)
-    declared, exports, ops, sticky = _declared_exports(found)
     if exports and bare:
         # A bare entry naming one of the module's name/N exports is not a
         # use of the atom (see DirectiveContext.auto_declare).
@@ -1684,6 +1688,25 @@ def _import_list(ctx, imports, spans, span, what):
         raise _refused(f"{what}: the import entry {_show(e)} is not "
                        f"name/N (or name//N)", where)
     return entries, ops, bare
+
+
+def _bare_exported(exports, bare) -> list:
+    """The ``(name, arity)`` entries a bare ``name`` in a Prolog (or seam)
+    module's import list imports: EXACTLY the arities the module exports
+    the name at (operator ruling 2026-10-01, as the translator's
+    ``use_module(m, [p])`` and the seam's ``-import_from(m, [p])`` import
+    it) -- ``p/1`` alone when m exports ``p/1`` and also defines an
+    unexported ``p/2``.  A seam module's bare export stays a bare entry.
+    A name the module does not export imports nothing: it is a bare atom,
+    D11(a).  (Scryer refuses a bare name in an import list.)"""
+    if not exports or not bare:
+        return []
+    out: list = []
+    for n, _line in bare:
+        for pi in exports:
+            if pi[0] == n and pi not in out:
+                out.append(pi)
+    return out
 
 
 def _warn_bare(ctx, bare) -> None:
