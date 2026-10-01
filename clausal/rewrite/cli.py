@@ -22,7 +22,7 @@ import sys
 from pathlib import Path
 
 from clausal._suffixes import CLAUSAL_SUFFIXES, seam_suffixes_text
-from clausal.fmt.cli import clausal_files
+from clausal.fmt.cli import clausal_files, prolog_refusal
 from clausal.fmt.comments import CommentLeakError
 from clausal.fmt.verify import unified_diff
 from clausal.rewrite.driver import RewriteError, rewrite_source
@@ -117,6 +117,11 @@ def main(argv: list[str] | None = None) -> int:
     changed = 0
     failed = 0
     for path in clausal_files(args.paths):
+        refusal = prolog_refusal(path, "clausal-rewrite")
+        if refusal is not None:
+            print(refusal, file=sys.stderr)
+            failed += 1
+            continue
         try:
             source = path.read_text()
             result = rewrite_source(source, rules)

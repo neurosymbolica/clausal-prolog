@@ -25,7 +25,7 @@ import sys
 from pathlib import Path
 
 from clausal._suffixes import (
-    CLAUSAL_SUFFIXES, PROLOG_SUFFIX, prolog_suffixes, seam_suffixes_text,
+    CLAUSAL_SUFFIXES, prolog_suffixes, seam_suffixes_text,
     suffix_list,
 )
 from clausal.tools.clausal_to_prolog import clausal_source_to_prolog
@@ -52,7 +52,7 @@ def _detect_direction(path: str | None, to_flag: str | None) -> str:
 
     if path:
         ext = Path(path).suffix.lower()
-        if ext == PROLOG_SUFFIX:
+        if ext in prolog_suffixes():
             return "prolog_to_clausal"
         if ext in CLAUSAL_SUFFIXES:
             return "clausal_to_prolog"

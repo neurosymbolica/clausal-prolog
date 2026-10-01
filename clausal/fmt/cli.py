@@ -1,7 +1,10 @@
-"""``clausal-fmt`` -- format ``.clausal`` files in place, or check them.
+"""``clausal-fmt`` -- format SEAM source files in place, or check them.
 
-``.seam`` is an alias extension for the same syntax; a directory walk picks
-up both.  A file named on the command line is formatted whatever its name.
+Seam source is a file with one of ``_suffixes.CLAUSAL_SUFFIXES`` (``.clausal``
+or ``.seam`` today); a directory walk picks up those.  A file named on the
+command line is formatted whatever its name -- unless its extension says it
+is PROLOG syntax (``.pl``, or the Clausal Prolog surface, which ``.clausal``
+becomes at the extension flip): that file is refused, not mangled.
 
     clausal-fmt src/                 rewrite every .clausal/.seam file under src/
     clausal-fmt --check src/         exit 1 if any file would change
@@ -18,26 +21,44 @@ import argparse
 import sys
 from pathlib import Path
 
+from clausal import _suffixes as _sfx
 from clausal._suffixes import CLAUSAL_SUFFIXES, seam_suffixes_text
+from clausal.end_module import SURFACE_CLAUSAL_PROLOG, surface_of
 from clausal.fmt.comments import CommentLeakError
 from clausal.fmt.emit import format_source
 from clausal.fmt.verify import unified_diff
 
+#: The seam suffixes when this module was imported.  The walk itself reads
+#: ``_suffixes.CLAUSAL_SUFFIXES`` at each call.
 SUFFIXES = CLAUSAL_SUFFIXES
 
 
 def clausal_files(paths: list[str]) -> list[Path]:
-    """Every file named, or every ``.clausal``/``.seam`` file under a named directory."""
+    """Every file named, or every seam source file under a named directory."""
+    suffixes = _sfx.CLAUSAL_SUFFIXES
     found: list[Path] = []
     for raw in paths:
         path = Path(raw)
         if path.is_dir():
             found.extend(sorted(
-                p for p in path.rglob("*") if p.suffix in SUFFIXES
+                p for p in path.rglob("*") if p.suffix in suffixes
             ))
         else:
             found.append(path)
     return found
+
+
+def prolog_refusal(path, tool: str) -> str | None:
+    """The refusal for a file *tool* must not touch because its extension
+    says it is Prolog syntax, or None for anything else.  These tools read
+    and write SEAM syntax only; run on Prolog they could only fail, or
+    rewrite it as though it were Python."""
+    if not _sfx.is_prolog_source(path):
+        return None
+    kind = ("Clausal Prolog" if surface_of(path) == SURFACE_CLAUSAL_PROLOG
+            else "Prolog")
+    return (f"{path}: refused: this is {kind} source; {tool} handles seam "
+            f"({seam_suffixes_text()}) source only")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -59,6 +80,11 @@ def main(argv: list[str] | None = None) -> int:
     changed = 0
     failed = 0
     for path in clausal_files(args.paths):
+        refusal = prolog_refusal(path, "clausal-fmt")
+        if refusal is not None:
+            print(refusal, file=sys.stderr)
+            failed += 1
+            continue
         try:
             source = path.read_text()
             formatted = format_source(source)

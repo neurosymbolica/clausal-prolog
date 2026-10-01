@@ -162,3 +162,61 @@ def test_prolog_finder_extensions_follow_the_tuple(flip, tree):
 def test_prolog_finder_before_the_flip(tree):
     assert ih.PrologFinder._extensions == (".pl",)
     assert ih.PrologFinder().find_spec("efcp", path=[str(tree)]) is None
+
+
+# ── clausal-fmt / clausal-rewrite refuse Prolog-syntax files ──
+
+_PROLOG = ":- module(efp, [p/1]).\np(1).\n:- end_module(efp).\n"
+_SEAM = "p(1),\n"
+
+
+@pytest.mark.parametrize("tool", ["fmt", "rewrite"])
+def test_after_the_flip_the_seam_tools_refuse_clausal_prolog(
+        flip, tmp_path, capsys, tool):
+    from clausal.fmt.cli import main as fmt_main
+    from clausal.rewrite.cli import main as rewrite_main
+    main = fmt_main if tool == "fmt" else rewrite_main
+    cp = tmp_path / "efp.clausal"
+    cp.write_text(_PROLOG)
+    assert main([str(cp)]) == 2
+    err = capsys.readouterr().err
+    assert "refused: this is Clausal Prolog source" in err
+    assert f"clausal-{tool} handles seam (.seam) source only" in err
+    assert cp.read_text() == _PROLOG                  # untouched
+    if tool == "rewrite":
+        # Its shipped rules are themselves seam files still spelled
+        # .clausal: under a simulated flip they cannot load until the
+        # rename sweep moves them, so only the refusal is checked here.
+        return
+    # A directory walk does not pick the Prolog file up at all.
+    seam = tmp_path / "efs.seam"
+    seam.write_text(_SEAM)
+    assert main(["--check", str(tmp_path)]) == 0
+    assert capsys.readouterr().err == ""
+
+
+@pytest.mark.parametrize("tool", ["fmt", "rewrite"])
+def test_the_seam_tools_refuse_a_named_pl_file(tmp_path, capsys, tool):
+    from clausal.fmt.cli import main as fmt_main
+    from clausal.rewrite.cli import main as rewrite_main
+    main = fmt_main if tool == "fmt" else rewrite_main
+    pl = tmp_path / "efp.pl"
+    pl.write_text(_PROLOG)
+    assert main([str(pl)]) == 2
+    assert "refused: this is Prolog source" in capsys.readouterr().err
+    assert pl.read_text() == _PROLOG
+
+
+def test_before_the_flip_the_seam_tools_take_clausal(tmp_path, capsys):
+    from clausal.fmt.cli import main as fmt_main
+    src = tmp_path / "efs.clausal"
+    src.write_text(_SEAM)
+    assert fmt_main(["--check", str(src)]) == 0
+    assert capsys.readouterr().err == ""
+
+
+def test_translate_reads_clausal_prolog_as_prolog(flip):
+    from clausal.tools.translate import _detect_direction
+    assert _detect_direction("m.clausal", None) == "prolog_to_clausal"
+    assert _detect_direction("m.seam", None) == "clausal_to_prolog"
+
