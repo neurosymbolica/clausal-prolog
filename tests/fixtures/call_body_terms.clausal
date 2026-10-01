@@ -32,8 +32,11 @@ b(5, X, Y) <- (p(X) or s(X))
 g(5, X, Y, G) <- (G is (p(X) or s(X)))
 b(6, X, Y) <- if_(X == 1, True, fail)
 g(6, X, Y, G) <- (G is if_(X == 1, True, fail))
-b(7, X, Y) <- if_(p(X), s(X), r(X))
-g(7, X, Y, G) <- (G is if_(p(X), s(X), r(X)))
+# if_/3 takes a REIFIABLE condition (ruling 2026-10-01): p_t/2 is p/1
+# reified, the closure if_ calls with the truth value appended.
+p_t(X, T) <- if_(X is 1, T is True, if_(X is 2, T is True, T is False))
+b(7, X, Y) <- if_(p_t(X), s(X), r(X))
+g(7, X, Y, G) <- (G is if_(p_t(X), s(X), r(X)))
 b(8, X, Y) <- (X is not 1)
 g(8, X, Y, G) <- (G is (X is not 1))
 b(9, X, Y) <- (X in [1, 2])

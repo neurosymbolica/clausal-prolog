@@ -26,6 +26,9 @@ p(1),
 p(2),
 s(2),
 s(3),
+# p/1 reified, for the if_ row below: if_/3 takes a reifiable condition
+# (ruling 2026-10-01).
+p_t(X, T) <- if_(X is 1, T is True, if_(X is 2, T is True, T is False)),
 
 # Head shapes: constants, a repeated variable, compound / list / nested
 # arguments.  Every argument the loader hoists into the body must come back
@@ -44,7 +47,7 @@ d([a, pt(Y, [b])], Y) <- p(Y),
 d(pt(X, Y), a) <- (p(X), s(Y)),
 d(X, Y) <- (p(X), s(Y)),
 d(X, Y) <- (not p(X), s(Y)),
-d(X, Y) <- if_(p(X), s(Y), Y is 3),
+d(X, Y) <- if_(p_t(X), s(Y), Y is 3),
 d(X, Y) <- (p(X), Y is X + 1),
 d(X, Y) <- (p(X) or s(Y)),
 d(X, Y) <- (s(Y), 0 < Y < 3),

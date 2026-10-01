@@ -5001,6 +5001,30 @@ def _dcg_set_goals(node, source):
     return replace(BoolOp(op=And(), values=list(node.elts)), source)
 
 
+def _grammar_if_condition(cond, source, kind):
+    """The goal of a grammar-body ``if_``'s condition, which must be a
+    ``{Goal}`` block: if_/3 requires a REIFIABLE condition (library(reif)'s
+    meaning; operator ruling 2026-10-01), and a condition that consumes
+    input (a terminal list, a non-terminal) or pushes to an accumulator
+    reads the state, so it is a plain goal -- it used to run as a soft cut,
+    which is not monotone.  ``{Goal}`` consumes nothing; Goal itself must
+    then be reifiable (a comparison, or a closure), which the compiler
+    checks like any other if_ condition."""
+    if isinstance(cond, Set):
+        return _dcg_set_goals(cond, source)
+    line = getattr(cond, "lineno", None) or getattr(source, "lineno", None)
+    where = f" (line {line})" if line else ""
+    raise SyntaxError(
+        f"{ITE_NAME}/3 in a {kind} body requires a reifiable condition"
+        f"{where}: the condition must be a {{Goal}} block that consumes no "
+        f"input, with Goal a reified comparison or closure -- a grammar "
+        f"body as the condition was run as a soft cut, which is not "
+        f"monotone (library(reif)'s if_/3; operator ruling 2026-10-01). "
+        f"Read the token you test into a variable first, e.g. "
+        f"`[T], {ITE_NAME}({{T is x}}, ..., ...)`, or write the "
+        f"alternatives with `or`.")
+
+
 def _rewrite_dcg_body(node, s_in, s_out, counter, source):
     """Rewrite a single DCG body element into ordinary clause body AST.
 
@@ -5120,11 +5144,11 @@ def _rewrite_dcg_body(node, s_in, s_out, counter, source):
             # If-then-else: if_(cond, then, else).  The rebuilt node keeps
             # *name* rather than normalising to ``if_`` so that a deprecated
             # spelling still reaches the term pass's lint.
+            # The condition is a ``{Goal}`` block, so it consumes nothing
+            # and Then starts where the if_ does (_grammar_if_condition).
             cond, then_, else_ = args
-            mid = f"_dcg{counter}"
-            counter += 1
-            cond_r, counter = _rewrite_dcg_body(cond, s_in, mid, counter, source)
-            then_r, counter = _rewrite_dcg_body(then_, mid, s_out, counter, source)
+            cond_r = _grammar_if_condition(cond, source, "DCG")
+            then_r, counter = _rewrite_dcg_body(then_, s_in, s_out, counter, source)
             else_r, counter = _rewrite_dcg_body(else_, s_in, s_out, counter, source)
             result = Call(
                 func=Name(id=name, ctx=load),
@@ -5514,28 +5538,21 @@ def _rewrite_edcg_body(node, acc_states, pass_states, edcg_accs, edcg_passes,
             # is what it already is in an ordinary clause body — TermTransformer
             # .visit_Call recognises it before any user predicate of that name.
             #
-            # Condition and then-branch are one chain (in → cond → then → out);
-            # the else-branch runs in → out, so a push made by a *failing*
-            # condition never reaches it.  Mirrors _rewrite_dcg_body's ITE arm,
-            # which threads the same three edges through s_in/mid/s_out.
+            # Both branches run in → out: the condition is a ``{Goal}`` block
+            # that touches no accumulator (if_/3 requires a reifiable
+            # condition, ruling 2026-10-01).  Mirrors _rewrite_dcg_body's ITE
+            # arm.
             #
             # The rebuilt node keeps *name* rather than normalising to ``if_``
             # so that a deprecated spelling still reaches the term pass's lint.
+            # The condition is a ``{Goal}`` block (_grammar_if_condition):
+            # it touches no accumulator, so Then starts from the in state.
             joins, counter = _edcg_join_vars(acc_states, counter)
-            mid_states = {}
-            for acc_name, (in_var, out_var) in acc_states.items():
-                mid = f"_edcg_{acc_name}_{counter}"
-                counter += 1
-                mid_states[acc_name] = (in_var, mid)
-            cond_r, cond_out_states, counter = _rewrite_edcg_body(
-                cond, mid_states, pass_states,
-                edcg_accs, edcg_passes, edcg_preds, counter, source
-            )
-            # Then branch starts from where cond left off.
-            then_states = {}
-            for acc_name in acc_states:
-                cin, _ = cond_out_states[acc_name]
-                then_states[acc_name] = (cin, joins[acc_name])
+            cond_r = _grammar_if_condition(cond, source, "EDCG")
+            then_states = {
+                acc_name: (in_var, joins[acc_name])
+                for acc_name, (in_var, _) in acc_states.items()
+            }
             then_r, then_final, counter = _rewrite_edcg_body(
                 then_, then_states, pass_states,
                 edcg_accs, edcg_passes, edcg_preds, counter, source

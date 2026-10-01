@@ -63,7 +63,7 @@ class TestIfUnderscore:
         # nv
         src = (
             "-module(x, [g(S0, S), x, y, z])\n"
-            "g >> (if_([x], [y], [z]))\n"
+            "g >> ([T], if_({T is x}, [y], {T is z}))\n"
         )
         mod = _load("ifu_dcg", src, tmp_path)
         g = mod.module_dict["g"]
@@ -97,8 +97,10 @@ class TestIfUnderscore:
         # nv
         src = (
             "-private([kee])\n"
-            "yes({kee: 1}),\n"
-            "prc(PROF, R) <- if_(yes(PROF), R is PROF.kee, R is 0)\n"
+            # yes/1 reified: if_/3 takes a reifiable condition (2026-10-01)
+            "yes_t({kee: 1}, True),\n"
+            "yes_t(P, False) <- (P is not {kee: 1})\n"
+            "prc(PROF, R) <- if_(yes_t(PROF), R is PROF.kee, R is 0)\n"
         )
         mod = _load("ifu_dictread", src, tmp_path)
         out = Var()

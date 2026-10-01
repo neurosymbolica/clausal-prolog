@@ -362,14 +362,33 @@ class TestNegation:
 
 
 class TestIfThenElse:
+    """if_/3 in a DCG body.  The condition must be a ``{Goal}`` block that
+    consumes no input, with Goal reifiable (operator ruling 2026-10-01): a
+    grammar body as the condition -- a terminal, a non-terminal -- is a plain
+    goal, and it used to run as a soft cut.  Each refused shape below is
+    followed by its reified rewrite: read the token, branch on it."""
+
+    @pytest.mark.parametrize("rule", [
+        "a_or_c >> (if_(a_rule, b_rule, c_rule))\n",
+        "c(_x) >> (if_([_x], [done], [empty]))\n",
+        "g >> (if_([x], [y], [z]))\n",
+    ], ids=["nonterminal", "terminal-var", "terminal"])
+    def test_grammar_body_condition_is_refused(self, tmp_path, rule):
+        src = ("-double_quotes(atom)\n-private([a, b, c, done, empty, x, y, z])\n"
+               "a_rule >> ([\"a\"])\nb_rule >> ([\"b\"])\nc_rule >> ([\"c\"])\n"
+               + rule)
+        with pytest.raises(SyntaxError, match="reifiable condition"):
+            _load("ite_refused", src, tmp_path)
+
     def test_if_then_else_nonterminals(self, tmp_path):
-        """If-then-else with non-terminal conditions (no star-list in if_)."""
+        """The non-terminal condition, rewritten: read the token, branch on
+        it reifiedly; the else branch consumes the token it read."""
         # nv
         src = (
             '-double_quotes(atom)\na_rule >> (["a"])\n'
             'b_rule >> (["b"])\n'
             'c_rule >> (["c"])\n'
-            'a_or_c >> (if_(a_rule, b_rule, c_rule))\n'
+            'a_or_c >> ([T], if_({T is "a"}, b_rule, {T is "c"}))\n'
         )
         mod = _load("ite1", src, tmp_path)
         cls = mod.module_dict["a_or_c"]
@@ -381,33 +400,28 @@ class TestIfThenElse:
         assert not _succeeds("phrase", cls, [mint("b")], module=mod)
 
     def test_if_then_else_terminal_branches(self, tmp_path):
-        """R2: If-then-else with terminal (list) branches must not crash.
-
-        A star-list unify condition converts to ListPatternUnify, which the
-        reified-branch lowering can't read; reifiability must be gated so the
-        general single-eval ITE path is used.
-        """
+        """Terminal (list) branches under a reified token test."""
         src = (
             "-module(x, [c(X, S0, S), done, empty])\n"
-            "c(_x) >> (if_([_x], [done], [empty]))\n"
+            "c(_x) >> ([T], if_({T is _x}, [done], {T is empty}))\n"
         )
         mod = _load("ite2", src, tmp_path)
         c = mod.module_dict["c"]
         done = mod.module_dict["done"]
         empty = mod.module_dict["empty"]
-        # [_x] consumes the leading `done`; then-branch [done] consumes the next.
+        # the token is `done`; then-branch [done] consumes the next.
         assert _succeeds("phrase", _nt(c, done), [done, done], module=mod)
-        # leading token is not `done` → condition fails → else-branch [empty].
+        # leading token is not `done` → else-branch: it is `empty`.
         assert _succeeds("phrase", _nt(c, done), [empty], module=mod)
-        # condition commits: after consuming `done`, then-branch needs another
-        # `done` but sees `empty` — must fail (does NOT fall through to else).
+        # the token is `done`, then-branch needs another `done` but sees
+        # `empty` — fails (a ground reified test takes one branch only).
         assert not _succeeds("phrase", _nt(c, done), [done, empty], module=mod)
 
     def test_if_then_else_terminal_else_branch(self, tmp_path):
-        """R2: the else-branch (terminal) path also produces a parse."""
+        """The else-branch path also produces a parse."""
         src = (
             "-module(x, [g(S0, S), x, y, z])\n"
-            "g >> (if_([x], [y], [z]))\n"
+            "g >> ([T], if_({T is x}, [y], {T is z}))\n"
         )
         mod = _load("ite3", src, tmp_path)
         g = mod.module_dict["g"]
@@ -416,7 +430,7 @@ class TestIfThenElse:
         z = mod.module_dict["z"]
         # input starts with x → cond holds → then-branch consumes y
         assert _succeeds("phrase", g, [x, y], module=mod)
-        # input does not start with x → else-branch consumes z
+        # input does not start with x → else-branch: it is z
         assert _succeeds("phrase", g, [z], module=mod)
 
 

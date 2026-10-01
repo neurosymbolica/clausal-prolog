@@ -20,6 +20,29 @@ since 0.4.0 finish three moves:
 
 ### Breaking
 
+- **The seam's `if_/3` requires a reifiable condition** (ruled
+  2026-10-01), as Scryer's library(reif) does and as the native `.pl` front
+  end already did. The condition is a reified comparison (`X is Y`,
+  `X is not Y`, `==`, `!=`, `<`, `<=`, `>`, `>=`), a conjunction or
+  disjunction of them, or a closure called with the truth value appended:
+  `if_(memberd_t(X, Es), ...)` runs `memberd_t(X, Es, T)`,
+  `must_be(boolean, T)` and branches on `T`. Every way the closure answers
+  is a solution, so `if_(memberd_t(X, [a, b]), R is yes, R is no)` gives
+  `a-yes`, `b-yes` and `dif`-constrained `X` with `no`, as Scryer does. A
+  plain goal as the condition (`if_(atom(X), ...)`, `if_(p(X), ...)` with no
+  `p/2`, `not G`, `X in L`, `once(G)`, `True`) is now a load-time
+  `SyntaxError` (`NonReifiableConditionError`) naming the predicate and line
+  and the reified form to write. It used to run as a soft cut (every
+  solution of the condition, the else branch only when there were none),
+  which is not monotone; that lowering, and its tabled-NAF variant, are
+  removed. In a DCG or EDCG body the condition must be a `{Goal}` block (a
+  terminal, non-terminal or accumulator push as the condition is refused).
+  A unification with a partial list (`if_(X is [a, *T], ...)`, and a `.pl`
+  `if_(X = [a|T], ...)`) is reif's `=/3` and answers as Scryer does (`y`
+  and `n` for an unbound or `[a, b]` `X`).
+  To migrate a semidet plain goal G, write
+  `(G, Then) or (not G, Else)`, or define the reified `p_t/2`. call/1 of an
+  `if_` term follows the same rule.
 - **An unknown `library(X)` is refused by the translator `.pl` front end
   too** (ruled 2026-10-01), with the native front end's error:
   `library(X) is not a library the native front end knows (built in: ...;
@@ -902,6 +925,18 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
   `phrase(!, [a], R)` gives `R = [a]`. It used to be looked up as the
   nonterminal `!//0` and raised `existence_error(procedure, !/2)`. A cut
   inside a larger body (`phrase((a, !), L)`) is still refused.
+- **library(reif)'s `=/3` (and `dif/2`) read a partial list.**
+  `'='([a, b], [a|L], T)` (the seam's `[a, *L]`) answered only `T = false`;
+  it now answers `T = true, L = [b]` and then `T = false` with
+  `dif(L, [b])`, as Scryer does, for a partial list against a proper list,
+  another partial list, a nested one or a string, and decides `false`
+  against a list it cannot match or a non-list. The occurs-checked
+  unifier behind `reify_eq` and `dif` (C, with its Python twin) probed a
+  partial list through its split-enumerating unify hook, which advanced a
+  cached generator: the probe used up the one split and the real
+  unification that followed failed. It now pairs a partial list's
+  elements itself. A list with a hole that is not its tail (`[*A, x]`)
+  still goes through the hook.
 - **A clpz inequality with an arithmetic side narrows its variables and
   binds a singleton.** `7*R #=< 1000000` left R in `inf..sup`: the posted
   constraint narrowed only a side that was a bare variable, so an expression

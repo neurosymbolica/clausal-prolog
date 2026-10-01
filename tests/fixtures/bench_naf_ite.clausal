@@ -25,9 +25,13 @@ item(3),
 item(4),
 item(5),
 
-# 10 solutions (pairs with Y > X); a user-predicate condition is not
-# reifiable, so if_(multi_step(...), ...) takes the general-ITE arm.
+# 10 solutions (pairs with Y > X).  if_/3 takes a reifiable condition
+# (ruling 2026-10-01), so the ITE loops below use the reified closures
+# item_t/2 and multi_step_t/3 (True on each solution; the general soft-cut
+# ITE arm they used to exercise is gone).
 multi_step(X, Y) <- (item(X), item(Y), Y > X),
+item_t(X, T) <- (item(X), T is True),
+multi_step_t(X, Y, T) <- (multi_step(X, Y), T is True),
 
 # Fails only after enumerating all 25 item pairs — a many-step NAF goal.
 no_pair(S) <- (item(A), item(B), S == A + B),
@@ -39,7 +43,7 @@ naf_chain_loop(0),
 naf_chain_loop(N) <- (N > 0, not no_pair(99), M == N - 1, naf_chain_loop(M)),
 
 ite_det_loop(0),
-ite_det_loop(N) <- (N > 0, if_(item(1), true, true), M == N - 1, ite_det_loop(M)),
+ite_det_loop(N) <- (N > 0, if_(item_t(1), true, true), M == N - 1, ite_det_loop(M)),
 
 ite_multi_loop(0),
-ite_multi_loop(N) <- (N > 0, if_(multi_step(_X, _Y), true, true), M == N - 1, ite_multi_loop(M)),
+ite_multi_loop(N) <- (N > 0, if_(multi_step_t(_X, _Y), true, true), M == N - 1, ite_multi_loop(M)),

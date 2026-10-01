@@ -205,11 +205,12 @@ def test_catch_inside_a_goal_lambda_absorbs_the_exception(mod):
 
 
 def test_catch_inside_an_ite_condition_absorbs_the_exception(mod):
-    """A catch/3 inside a general-ITE *condition* absorbs; then-branch runs.
+    """A catch/3 inside an if_ *condition* (a reified closure) absorbs; the
+    then-branch runs.
 
-    The condition sub-generator is driven by the ITE's own mini-trampoline,
-    which — emitted inline — had no exception routing, so the ValueError
-    escaped the whole construct instead of reaching the handler.
+    The condition used to be driven by the general ITE's own mini-trampoline,
+    which — emitted inline — had no exception routing.  Since the 2026-10-01
+    ruling the condition is an ordinary call of the closure.
     """
     assert _answers(mod.ite_cond_catch) == [(mint("then"),)]
 
@@ -229,7 +230,7 @@ def test_uncaught_error_in_an_ite_condition_still_escapes(mod):
 
 
 def test_ite_then_branch_runs_once_per_condition_solution(mod):
-    """Control: the general ITE enumerates ALL condition solutions."""
+    """Control: if_ explores every way the reified closure holds."""
     assert _answers(mod.ite_multi) == [(1,), (2,), (3,)]
 
 

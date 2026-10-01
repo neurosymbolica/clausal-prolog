@@ -70,9 +70,9 @@ ReifiedKind = Literal[
     "unify", "dif", "fd_eq", "fd_ne", "fd_lt", "fd_le", "fd_gt", "fd_ge",
 ]
 """Closed enumeration of reifiable ITE test shapes.  When
-``Branch.reified_test`` is one of these, the backend may emit the
-three-way reified form (``_reify_eq`` / ``_reify_fd``); ``None`` means
-general single-evaluation ITE."""
+``Branch.reified_test`` is one of these, the backend emits the
+three-way reified form (``_reify_eq`` / ``_reify_fd``).  Every
+``Branch`` carries one: there is no general (soft-cut) ITE."""
 
 MetaKind = Literal[
     "once", "call_nth", "count_all", "setup_call_cleanup", "call_cleanup",
@@ -210,33 +210,26 @@ class Negate(GoalOp):
 
 @dataclasses.dataclass
 class Branch(GoalOp):
-    """If-then-else with reifiability hint.
+    """If-then-else over a reified test -- ``if_/3``.
 
-    When ``reified_test`` is a :data:`ReifiedKind` value, the backend
-    may emit the three-way reified form (``_reify_eq`` / ``_reify_fd``):
+    ``reified_test`` is the :data:`ReifiedKind` of ``test``; the backend
+    emits the three-way reified form (``_reify_eq`` / ``_reify_fd``):
 
     - returned ``True``  → run ``then``
     - returned ``False`` → run ``else_``
     - returned ``None``  → explore both with the matching constraint.
 
-    ``reified_test is None`` means general single-evaluation ITE
-    (sub-generator for the test; ``_found`` flag gates ``else_``).
-
-    ``tabled_naf`` — set when ``reified_test is None`` and ``test`` is
-    a :class:`SubCall` to a tabled predicate.  The general-ITE lowering
-    then replaces the ``if not _found`` else-guard with a
-    ``_naf_tabled(...)`` call, matching legacy
-    ``_compile_general_ite_{shallow,trampoline}`` under
-    ``use_tabled_naf``.  WFS-sound: required so cycles through negation
-    delay-and-resume correctly.  Must be ``False`` when
-    ``reified_test is not None`` (reifiable tests never target tabled
-    predicates in practice; legacy does not emit that combination).
+    There is no general form: ``if_/3`` requires a reifiable condition
+    (operator ruling 2026-10-01), and a closure condition reaches the IR
+    already expanded to ``p(..., T), must_be(boolean, T)`` followed by a
+    ``Branch`` over ``T = True`` (``ite_reified.if_expansion``).  The
+    soft-cut lowering of a plain-goal condition, and its tabled-NAF
+    else-guard variant, were removed with that ruling.
     """
     test: GoalOp
     then: GoalOp
     else_: GoalOp
-    reified_test: Union[ReifiedKind, None] = None
-    tabled_naf: bool = False
+    reified_test: ReifiedKind
 
 
 # ─────────────────────────────────────────────────────────────────────────────

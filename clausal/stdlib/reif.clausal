@@ -11,11 +11,13 @@
 # writes each as ``if_(call(C, X), Then, Else)``: if_/3 calls its condition
 # with one more argument, the truth value, and branches on it -- an unbound
 # truth value is instantiation_error, anything but true/false
-# type_error(boolean, T).  The seam's if_ takes a GOAL as its condition, so
-# here the reified call and the check are written out, then if_ branches on
-# the (now ground) truth value.  (=)/3 and dif/3 are engine builtins; if_/3,
-# (',')/3 and (;)/3 in an if_ condition are lowered by the native .pl front
-# end (clausal/tools/iso_l3.py).
+# type_error(boolean, T).  The seam's if_ has the same meaning since the
+# 2026-10-01 ruling (a closure condition is called with T appended); the
+# bodies below predate it and spell the reified call and the check out,
+# then branch on the (now ground) truth value -- the same thing.  (=)/3 and
+# dif/3 are engine builtins; if_/3, (',')/3 and (;)/3 in a .pl if_
+# condition are lowered by the native .pl front end
+# (clausal/tools/iso_l3.py).
 #
 # tfilter/3 and tpartition/4 are ALSO engine builtins, committed to each
 # call's first truth value.  A .pl file that imports library(reif) takes

@@ -381,11 +381,9 @@ def _lower_shared_body(
             call_expr = term_to_ast_expr(thunk, var_context, eval_arith=False)
             return [ast.Expr(value=call_expr)] + list(k_stmts)
 
-        # ── Reified Branch — three-way ITE.  General Branch
-        # (``reified_test is None``) is strategy-specific and handled
-        # in the ``lower_python_{shallow,trampoline}`` caller.
-        case Branch(test=t_op, then=th_op, else_=el_op, reified_test=kind) \
-                if kind is not None:
+        # ── Reified Branch — three-way ITE, the only kind there is: if_/3
+        # requires a reifiable condition (operator ruling 2026-10-01).
+        case Branch(test=t_op, then=th_op, else_=el_op, reified_test=kind):
             return _lower_reified_branch(
                 ctx, kind, t_op, th_op, el_op, k_stmts, recurse,
             )

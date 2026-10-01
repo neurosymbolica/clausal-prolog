@@ -124,8 +124,8 @@ def test_type_checks_and_goals(tmp_path):
     # its first clause still loads the class (the value arm needs the
     # registration), and a class is no longer an atom -- an order-dependence
     # recorded in the handoff
-    mod = _mod(tmp_path, 'foo,\np(R) <- if_(atom(foo), R is yes, R is no)\nq(R) <- if_(string(foo), R is yes, R is no)\n'
-                         'r(R) <- if_(atom("foo"), R is yes, R is no)\ns <- call(foo)\nt(R) <- if_("ab" == [a, b], R is yes, R is no)\n'
+    mod = _mod(tmp_path, 'foo,\np(R) <- ((atom(foo), R is yes) or (not atom(foo), R is no))\nq(R) <- ((string(foo), R is yes) or (not string(foo), R is no))\n'
+                         'r(R) <- ((atom("foo"), R is yes) or (not atom("foo"), R is no))\ns <- call(foo)\nt(R) <- if_("ab" == [a, b], R is yes, R is no)\n'
                          'u(R) <- if_(ab == [a, b], R is yes, R is no)\n', hdr="-double_quotes(chars)\n-private([yes, no, a, b, ab])\n")
     assert _first(mod, "p", Var()) == ["yes"] and _first(mod, "q", Var()) == ["no"] and _first(mod, "r", Var()) == ["no"]
     assert _first(mod, "s") is not None
@@ -145,7 +145,7 @@ def test_a_python_str_crosses_in_as_the_atom_and_the_carrier_crosses_out_as_text
 
 def test_a_thunk_result_str_is_the_atom(tmp_path):
     from clausal.logic.variables import Var
-    mod = _mod(tmp_path, 'p(R) <- (R is ++"foo".upper())\nq(R) <- if_(atom(++"x"), R is yes, R is no)\nr(R) <- if_(string(++"x"), R is yes, R is no)\n')
+    mod = _mod(tmp_path, 'p(R) <- (R is ++"foo".upper())\nq(R) <- ((atom(++"x"), R is yes) or (not atom(++"x"), R is no))\nr(R) <- ((string(++"x"), R is yes) or (not string(++"x"), R is no))\n')
     assert _first(mod, "p", Var()) == ["FOO"] and _first(mod, "q", Var()) == ["yes"] and _first(mod, "r", Var()) == ["no"]
 
 

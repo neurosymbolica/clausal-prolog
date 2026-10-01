@@ -308,8 +308,11 @@ def bench_struct_tabling_tagged(n: int = 1500, reps: int = 3, intern: bool = Fal
 
 
 def bench_naf_ite(n: int = 3000) -> str:
-    """NAF + general-ITE drive loops — stresses ``$naf_has_solution`` and the
-    ITE condition driver in both the trivial one-step and many-step shapes.
+    """NAF + ITE loops — stresses ``$naf_has_solution`` and if_/3 over a
+    reified closure condition, in both the one-step and many-step shapes.
+    (The general soft-cut ITE condition driver these loops were written for
+    was removed when if_/3 came to require a reifiable condition, ruling
+    2026-10-01.)
 
     Each sub-loop recurses *n* times; every iteration drives one NAF or ITE
     mini-trampoline.  See tests/fixtures/bench_naf_ite.clausal for the four

@@ -165,8 +165,8 @@ pb(X) <- (seed(X), not pa(X))
 ITE_TEST_CYCLE = """
 seed(1),
 
-qa(X) <- if_(qb(X), seed(X), seed(X))
-qb(X) <- (seed(X), not qa(X))
+qa(X) <- if_(qb_t(X), seed(X), seed(X))
+qb_t(X, T) <- (seed(X), not qa(X), T is True)
 """
 
 
@@ -180,8 +180,9 @@ class TestCompositeBodies:
         assert "pa/1" in msg and "pb/1" in msg
 
     def test_ite_test_edge_warns(self, load):
-        """An if-else test is a negative dependency for its else branch."""
+        """An if_ test is a reified closure (ruling 2026-10-01): ``qb_t(X)``
+        is a call of ``qb_t/2``, so the cycle through its ``not`` is seen."""
         _, strat = load("ite_cycle", ITE_TEST_CYCLE)
         assert len(strat) == 1
         msg = str(strat[0].message)
-        assert "qa/1" in msg and "qb/1" in msg
+        assert "qa/1" in msg and "qb_t/2" in msg

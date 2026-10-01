@@ -294,9 +294,9 @@ def test_body_shapes(lm):
     assert type(b[5]) is tuple and b[5][0][0] == "p" and b[5][1][0] == "s"
     # (not p(X), s(Y))
     assert type(b[6][0]) is nodes.Not and b[6][0].operand[0] == "p"
-    # if_(p(X), s(Y), Y is 3)
+    # if_(p_t(X), s(Y), Y is 3)
     ite = b[7]
-    assert type(ite) is nodes.IfExpr and ite.test[0] == "p"
+    assert type(ite) is nodes.IfExpr and ite.test[0] == "p_t"
     assert ite.body[0] == "s" and type(ite.orelse) is nodes.Unify
     assert ite.orelse.right == 3 and ite.orelse.left is ite.body[1]
     # (p(X), Y is X + 1): `is` is Unify; the arithmetic stays a term

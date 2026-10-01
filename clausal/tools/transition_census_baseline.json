@@ -2,7 +2,7 @@
  "_comment": "transition-construct census baseline (D13: allowed-existing, no-new). Regenerate with `python -m clausal.tools.transition_census --update`.",
  "totals": {
   "seam": {
-   "\\+/1": 369,
+   "\\+/1": 370,
    "once/1": 22,
    "forall/2": 20,
    "memberchk/2": 1,
@@ -268,6 +268,9 @@
   },
   "tests/fixtures/specialize_limit.clausal": {
    "\\+/1": 2
+  },
+  "tests/fixtures/tabled_ite.clausal": {
+   "\\+/1": 1
   },
   "tests/fixtures/tabled_left_rec.clausal": {
    "\\+/1": 1

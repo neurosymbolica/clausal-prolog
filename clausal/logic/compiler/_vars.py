@@ -22,6 +22,7 @@ from clausal.terms import (
     Call,  # noqa: F401 — referenced in Evaluate/Unify patterns via type system
 )
 from clausal.pythonic_ast.nodes import Lambda, StarUnpack, SetLiteral as _SL, literal_value
+from clausal.pythonic_ast.nodes import IfExpr as _IfExpr
 from clausal.logic.predicate import is_term_instance, term_field_names
 
 
@@ -124,6 +125,16 @@ def _collect_vars(term: Any, seen: set[int] | None = None,
             result.extend(_collect_vars(e, seen, include_bound))
         return result
 
+    if type(term) is _IfExpr:
+        # if_/3 compiles as its reif expansion, which may hold a truth
+        # variable of its own (``p(X, T), must_be(boolean, T), ...``): walk
+        # the expansion so that variable is pre-allocated too.
+        from clausal.logic.compiler.ite_reified import (  # noqa: PLC0415
+            NonReifiable, if_expansion,
+        )
+        exp = if_expansion(term)
+        if exp is not term and not isinstance(exp, NonReifiable):
+            return pre + _collect_vars(exp, seen, include_bound)
 
     if is_term_instance(term):
         result = pre

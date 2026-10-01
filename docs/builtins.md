@@ -121,11 +121,11 @@ For tabled predicates, uses well-founded semantics (delayed negation); see [WFS]
 ```seam
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:if_3"
 ```
-The reified if-then-else (see [Reified if-then-else](reified_ite.md)); Clausal has no cut and no `->`. `Then` runs for **every** solution of `Cond` and `Else` only when `Cond` has none, so nothing is committed: `if_(in_(Y, [1, 2]), X is Y, X is 0)` answers `X = 1` and `X = 2`. A unification condition (`X is 1`) is reified: with `X` unbound both branches are explored, the `Else` branch under `dif(X, 1)`.
+The reified if-then-else, library(reif)'s `if_/3` (see [Reified if-then-else](reified_ite.md)); Clausal has no cut and no `->`. `Cond` must be **reifiable**: a reified comparison (`X is 1`, `X is not Y`, `==`, `!=`, `<`, `<=`, `>`, `>=`), a conjunction or disjunction of them, or a closure called with the truth value appended (`memberd_t(E, Es)` runs `memberd_t(E, Es, T)`). With `X` unbound, `if_(X is 1, ...)` explores both branches, the `Else` branch under `dif(X, 1)`; a closure's every answer is explored. A plain goal (`if_(in_(Y, [1, 2]), ...)`, `if_(atom(X), ...)`) is refused at load time -- it used to run as a soft cut, which is not monotone (ruling 2026-10-01).
 
 ??? info "Implementation & tests"
     **Clausal tests:** `tests/fixtures/reified_memberd.clausal`, `tests/fixtures/tabled_ite.clausal`, `tests/fixtures/reified_max.clausal`
-    **Python tests:** `tests/test_reified_ite.py`
+    **Python tests:** `tests/test_reified_ite.py`, `tests/iso_l3/test_seam_if_requires_reifiable.py`
 
 ---
 
@@ -1001,8 +1001,9 @@ Scryer's library(reif) names: `=(X, Y, T)` is `eq/3` (`T = True` with
 `X = Y` first, then `T = False` with `dif(X, Y)`), and `dif(X, Y, T)` is its
 negation in the SAME answer order (`T = False` first; `dif_t/3` answers
 `True` first). A `.pl` file's `if_(X = Y, ...)` and closures such as
-`tfilter(=(a), ...)` run on them. `if_/3`'s library(reif) meaning for a
-`.pl` file is described in [Reified if-then-else](reified_ite.md).
+`tfilter(=(a), ...)` run on them, and so does the seam's
+`if_('='(X, Y), ...)`. `if_/3`'s library(reif) meaning is described in
+[Reified if-then-else](reified_ite.md).
 
 ??? info "Implementation & tests"
     **Python tests:** `tests/iso_l3/test_l3_s4_constructs.py`
@@ -3102,7 +3103,7 @@ builtins. [Operators](operators.md) is the reference for their meaning.
     | `tests/fixtures/tabled_mutual_rec.clausal` | tabled mutual recursion |
     | `tests/fixtures/tabled_left_rec.clausal` | tabled left recursion |
     | `tests/fixtures/tabled_same_gen.clausal` | tabled same-generation |
-    | `tests/fixtures/tabled_ite.clausal` | `if_/3` with tabled predicate |
+    | `tests/fixtures/tabled_ite.clausal` | tabled predicate under `not` (was an `if_/3` condition) |
     | `tests/fixtures/clpfd_queens.clausal` | `in_domain/3`, `all_different/1`, `label/1` |
     | `tests/fixtures/clpfd_sendmore.clausal` | `in_domain/3`, `all_different/1`, `label/1` |
     | `tests/fixtures/wfs_win.clausal` | well-founded semantics, `not` on tabled |

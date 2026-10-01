@@ -35,6 +35,8 @@ from clausal.terms import (
     ConcreteSeg,
     VarSeg,
     Undefined as _Undefined,
+    _partial_list_build,
+    _partial_list_parts,
 )
 
 _ATOMIC = (bool, int, float, str, bytes, complex, type(None))
@@ -202,8 +204,43 @@ def _structural_unify_oc(t1: Any, t2: Any, trail: Trail) -> bool:
                 return False
         return True
 
+    # A partial list ([a|T], the seam's [a, *T]) is read and paired here,
+    # never handed to SegList.__unify__ (see _partial_list_parts).
+    if ((type(t1) is SegList or type(t2) is SegList)
+            and not is_var(t1) and not is_var(t2)):
+        p1 = _partial_list_parts(t1)
+        if p1 is not None:
+            p2 = _partial_list_parts(t2)
+            if p2 is not None:
+                return _unify_partial_lists_oc(p1, p2, trail)
+
     # Fall through to C extension for Var/scalar/tuple.
     return unify_with_occurs_check(t1, t2, trail)
+
+
+def _unify_partial_lists_oc(p1, p2, trail: Trail) -> bool:
+    """Unify two lists read by ``_partial_list_parts`` (``(elements, tail)``,
+    tail an unbound Var or None for ``[]``), as ISO unifies ``[E1..En|T]``:
+    pair the elements, then the shorter side's tail takes the rest of the
+    longer side.  Occurs-checked, like the rest of ``_structural_unify_oc``
+    (the C ``unify_partial_lists_oc`` is its twin)."""
+    (e1, t1), (e2, t2) = p1, p2
+    n = min(len(e1), len(e2))
+    for i in range(n):
+        if not _structural_unify_oc(e1[i], e2[i], trail):
+            return False
+    if len(e1) > n:
+        if t2 is None:
+            return False
+        return _structural_unify_oc(t2, _partial_list_build(e1[n:], t1), trail)
+    if len(e2) > n:
+        if t1 is None:
+            return False
+        return _structural_unify_oc(t1, _partial_list_build(e2[n:], t2), trail)
+    if t1 is None and t2 is None:
+        return True
+    return _structural_unify_oc([] if t1 is None else t1,
+                                [] if t2 is None else t2, trail)
 
 
 # ── Core dif ─────────────────────────────────────────────────────────────────

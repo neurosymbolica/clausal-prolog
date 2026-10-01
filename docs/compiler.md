@@ -89,7 +89,7 @@ A worklist handles arbitrary nesting depth (e.g. `[[[X, *Y], *Z], *W]` produces 
 | `And(l, r)` | `compile_goal(l, ..., compile_goal(r, ..., k))` (right-nested) |
 | `Or(l, r)` | two independent mark/undo blocks; both branches inline |
 | `Not(goal)` | inner goal as sub-generator + flag; succeed only if inner fails. If inner is a call to a [tabled](tabling.md) predicate, emits `_naf_tabled` call instead ([well-founded semantics](wfs.md)). |
-| `IfExpr(test, body, orelse)` | [Reified ITE](reified_ite.md): three-way check for reifiable conditions, single-evaluation `_found` flag for general conditions. |
+| `IfExpr(test, body, orelse)` | [Reified ITE](reified_ite.md): three-way check on a reifiable condition; a closure condition runs as `p(..., T), must_be(boolean, T)` then the check on `T`; a plain-goal condition is a load-time error. |
 | `Call(LoadName("once"), [goal])` | Sub-generator + `for` loop with `break` after first yield. Bindings escape to continuation. |
 | `Call(LoadName("findall"), [tmpl, goal, bag])` | Sub-generator collects `_deref_walk(tmpl)` per solution, undoes inner bindings, unifies result list with `bag`. Always succeeds (empty list on failure). |
 | `Call(LoadName("bagof"), [tmpl, goal, bag])` | Same as `findall`, but fails if no solutions (empty result list), and answers one bag per binding of the goal's free variables. |
