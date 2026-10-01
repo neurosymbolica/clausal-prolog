@@ -206,6 +206,9 @@
   "tests/fixtures/prolog_golden/dcg_grammar.clausal": {
    "\\+/1": 1
   },
+  "tests/fixtures/prolog_golden/dcg_grammar.pl": {
+   "unreadable": 1
+  },
   "tests/fixtures/prolog_golden/iso_arithmetic.clausal": {
    "\\+/1": 12
   },
