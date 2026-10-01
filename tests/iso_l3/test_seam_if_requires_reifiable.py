@@ -142,3 +142,79 @@ def test_call_of_an_if_term_takes_the_closure_too(native, ans):
         q(X, R) <- (G is if_(memberd_t(X, [a, b]), R is yes, R is no), call(G))
         """)
     assert _rows(ans(seam, "q", 2)) == [("a", "yes"), ("b", "yes"), ("_", "no")]
+
+
+def test_a_disjunction_unfolds_as_reifs_semicolon_3(native, ans):
+    pl = _load(native, "ifr_disj_pl", """\
+        :- use_module(library(reif)).
+        q(X, Y, R) :- if_((X = a ; Y = b), R = y, R = n).
+        """)
+    seam = _seam(native, "ifr_disj_seam", """\
+        -private([a, b, y, n])
+        q(X, Y, R) <- if_((X is a or Y is b), R is y, R is n)
+        """)
+    want = [("a", "_", "y"), ("_", "b", "y"), ("_", "_", "n")]   # Scryer
+    assert _rows(ans(pl, "q", 3)) == want
+    assert _rows(ans(seam, "q", 3)) == want
+
+
+def test_a_conjunction_ending_in_a_closure(native, ans):
+    """The Else branch is duplicated by the unfolding; the closure's truth
+    variable sits in the inner if_ only."""
+    pl = _load(native, "ifr_conjc_pl", """\
+        :- use_module(library(reif)).
+        q(X, R) :- if_((X = a, memberd_t(X, [a, b])), R = y, R = n).
+        """)
+    seam = _seam(native, "ifr_conjc_seam", """\
+        -import_from(clausal.stdlib.reif, [memberd_t])
+        -private([a, b, y, n])
+        q(X, R) <- if_((X is a, memberd_t(X, [a, b])), R is y, R is n)
+        """)
+    want = [("a", "y"), ("_", "n")]                                # Scryer
+    assert _rows(ans(pl, "q", 2)) == want
+    assert _rows(ans(seam, "q", 2)) == want
+
+
+def test_a_variable_condition(native, ans):
+    seam = _seam(native, "ifr_var", """\
+        -import_from(clausal.stdlib.reif, [memberd_t])
+        -private([a, b, y, n])
+        v(L, R) <- (C is memberd_t(b), if_(call(C, L), R is y, R is n))
+        w(R) <- (C is memberd_t(b, [a, b]), if_(C, R is y, R is n))
+        """)
+    assert ans(seam, "v", 2, ["a", "b"]) == ["y"]
+    assert ans(seam, "v", 2, ["a"]) == ["n"]
+    assert ans(seam, "w") == ["y"]
+
+
+@pytest.mark.parametrize("suffix, src", [
+    (".seam", "-private([a, y, n])\ns(X, R) <- if_(X is [a, *T_UNUSED], R is y, R is n)\n"),
+    (".pl", ":- use_module(library(reif)).\ns(X, R) :- if_(X = [a|_], R = y, R = n).\n"),
+], ids=["seam", "pl"])
+def test_a_partial_list_unification_is_refused_not_misanswered(
+        native, suffix, src):
+    """Scryer: ``X = [a,b], if_(X = [a|_], R = y, R = n)`` answers y and n.
+    The engine's reified equality does not read a partial list
+    ('='([a, b], [a|_], T) gives only T = False, on fbbecc3f too), so the
+    branch would be wrong: the condition is refused at load, on both front
+    ends, until it does.  (Before the 2026-10-01 ruling it ran as a soft
+    cut and answered y only.)"""
+    from clausal.logic.compiler.terms_to_goalop import (
+        NonReifiableConditionError,
+    )
+    kw = {"frontend": None} if suffix == ".seam" else {}
+    with pytest.raises(NonReifiableConditionError, match="partial list"):
+        _load(native, "ifr_star" + suffix[1:], src, suffix=suffix, **kw)
+
+
+def test_call_of_an_if_term_with_no_reifiable_test_is_a_runtime_error(
+        native, ans):
+    """call/1 of ``if_(True, ...)`` reaches reif's ``call(true, T)`` -- an
+    existence_error catch/3 sees (Scryer: existence_error(procedure,
+    true/1)), never the compiler's load-time SyntaxError."""
+    seam = _seam(native, "ifr_callerr", """\
+        -private([y, n])
+        e(K) <- catch((G is if_(True, R is y, R is n), call(G)), error(E, _),
+                      functor(E, K, _A))
+        """)
+    assert ans(seam, "e") == ["existence_error"]

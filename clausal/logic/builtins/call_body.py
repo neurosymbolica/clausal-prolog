@@ -308,8 +308,20 @@ class _Converter:
             # ``call(P)``, so ``call(P, T)``, as reif's ``call(If_1, T)``).
             # No tabled-NAF probe: the test is not negated (ruling
             # 2026-10-01).
+            # A test that is no reifiable shape at all (``True``, a negation,
+            # a membership test) is still called as reif calls it --
+            # ``call(P, T)`` -- so the program meets the runtime error
+            # Scryer gives (an existence_error a catch/3 can see), never
+            # the compiler's load-time refusal.
+            from clausal.logic.compiler.ite_reified import (  # noqa: PLC0415
+                NonReifiable, if_expansion,
+            )
+            test = self.goal(t.test)
+            if isinstance(if_expansion(nodes.IfExpr(
+                    test=test, body=True, orelse=True)), NonReifiable):
+                test = self._call_leaf(t.test)
             return nodes.IfExpr(
-                test=self.goal(t.test),
+                test=test,
                 body=self.goal(t.body), orelse=self.goal(t.orelse))
         if tt is nodes.CompareChain:
             return nodes.CompareChain(

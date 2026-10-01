@@ -51,6 +51,12 @@ plain goal is semidet, write it as two exclusive alternatives,
 `(atom(X), R is yes) or (not atom(X), R is no)`, or define the reified
 `p_t/2`.
 
+A unification with a partial list, `if_(X is [a, *T], ...)` (in a `.pl`
+file, `if_(X = [a|T], ...)`), is refused too for now: the reified equality
+does not yet read a partial list (`'='([a, b], [a, *T], R)` answers only
+`R = False`, where Scryer answers `true` and `false`), so the branch taken
+would be wrong.  Unify the list outside the `if_` and test its elements.
+
 In a DCG or EDCG body the condition must be a `{Goal}` block (it consumes no
 input), with `Goal` reifiable: `if_({V == 1}, [y], [z])`.  A grammar body as
 the condition (`if_([x], ...)`) is refused for the same reason.

@@ -5010,11 +5010,8 @@ def _grammar_if_condition(cond, source, kind):
     which is not monotone.  ``{Goal}`` consumes nothing; Goal itself must
     then be reifiable (a comparison, or a closure), which the compiler
     checks like any other if_ condition."""
-    match cond:
-        case Set(elts=[goal]):
-            return goal
-        case Set(elts=goals) if len(goals) >= 2:
-            return replace(BoolOp(op=And(), values=list(goals)), source)
+    if isinstance(cond, Set):
+        return _dcg_set_goals(cond, source)
     line = getattr(cond, "lineno", None) or getattr(source, "lineno", None)
     where = f" (line {line})" if line else ""
     raise SyntaxError(

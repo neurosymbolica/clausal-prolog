@@ -133,7 +133,8 @@ def _convert_if(goal: Any, db: Any) -> GoalOp:
     branch only when there were none -- which is not monotone.)"""
     exp = if_expansion(goal)
     if isinstance(exp, NonReifiable):
-        raise NonReifiableConditionError(goal, exp.test, None)
+        raise NonReifiableConditionError(goal, exp.test, None,
+                                         reason=exp.reason)
     if exp is goal:
         return Branch(
             test=_convert(goal.test, db),
@@ -166,14 +167,18 @@ def _closure_resolves(name: str, arity: int, db: Any) -> bool:
     appended -- names a procedure this module can call: a builtin, one of
     its own predicates (defined or ``-dynamic``), or an imported one.  A
     dotted ``lib.p`` is taken as written (the qualified call resolves at run
-    time, and reports its own existence_error)."""
-    if name == "call" or "." in name:
+    time, and reports its own existence_error), and so is any closure
+    compiled with no module to ask (``db is None``).
+
+    The module answers for every clause a file defines -- a file's
+    predicates compile after all of its clauses are loaded -- so the
+    refusal does not depend on clause order within a file.  A ``p/N+1``
+    that only an ``assertz`` will create must be declared ``-dynamic``."""
+    if name == "call" or "." in name or db is None:
         return True
     from clausal.logic.builtins._registry import get_builtin_dispatch  # noqa: PLC0415
     if get_builtin_dispatch(name, arity, db) is not None:
         return True
-    if db is None:
-        return False
     if db.is_defined(name, arity) or (name, arity) in getattr(
             db, "_dynamic", ()):
         return True
@@ -197,11 +202,13 @@ class NonReifiableConditionError(SyntaxError):
     (like :class:`BareGoalVariableError`)."""
 
     def __init__(self, goal: Any, test: Any, predicate: "str | None",
-                 closure: "tuple[str, int] | None" = None) -> None:
+                 closure: "tuple[str, int] | None" = None,
+                 reason: "str | None" = None) -> None:
         self.goal = goal
         self.test = test
         self.predicate = predicate
         self.closure = closure
+        self.reason = reason
         pos = getattr(goal, "position", None) or getattr(test, "position", None)
         where = f" in predicate {predicate}" if predicate else ""
         if pos:
@@ -215,6 +222,9 @@ class NonReifiableConditionError(SyntaxError):
                     f"the condition holds, False when it does not) and write "
                     f"if_({name}_t({', '.join(str(a) for a in test.args)}), "
                     f"...), or use a reified comparison")
+        elif reason is not None:
+            why = f"`{test}`: {reason}"
+            hint = "see docs/reified_ite.md"
         else:
             why = f"`{test}` is not a reifiable condition"
             hint = ("write a reified comparison (X is Y, X is not Y, ==, !=, "

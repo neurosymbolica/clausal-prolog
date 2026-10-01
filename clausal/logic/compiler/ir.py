@@ -229,7 +229,7 @@ class Branch(GoalOp):
     test: GoalOp
     then: GoalOp
     else_: GoalOp
-    reified_test: ReifiedKind = "unify"
+    reified_test: ReifiedKind
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -37,6 +37,9 @@ since 0.4.0 finish three moves:
   which is not monotone; that lowering, and its tabled-NAF variant, are
   removed. In a DCG or EDCG body the condition must be a `{Goal}` block (a
   terminal, non-terminal or accumulator push as the condition is refused).
+  A unification with a partial list (`if_(X is [a, *T], ...)`, and a `.pl`
+  `if_(X = [a|T], ...)`) is refused as well until the reified equality
+  reads a partial list (`'='([a, b], [a, *T], R)` answers only `False`).
   To migrate a semidet plain goal G, write
   `(G, Then) or (not G, Else)`, or define the reified `p_t/2`. call/1 of an
   `if_` term follows the same rule.

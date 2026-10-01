@@ -1655,7 +1655,7 @@ def _compile_predicate_trampoline_impl(
         if exc.predicate is None:
             raise NonReifiableConditionError(
                 exc.goal, exc.test, f"{functor}/{arity}",
-                closure=exc.closure) from None
+                closure=exc.closure, reason=exc.reason) from None
         raise
     finally:
         pass
@@ -2272,7 +2272,7 @@ def _compile_predicate_shallow_impl(
         if exc.predicate is None:
             raise NonReifiableConditionError(
                 exc.goal, exc.test, f"{functor}/{arity}",
-                closure=exc.closure) from None
+                closure=exc.closure, reason=exc.reason) from None
         raise
     finally:
         _CURRENT_SHALLOW_BASE_GLOBALS = _saved_shallow_globals
