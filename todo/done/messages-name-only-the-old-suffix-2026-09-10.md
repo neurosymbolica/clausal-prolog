@@ -120,3 +120,11 @@ Run from the repo root, feeding this to python on stdin so cwd is on the path:
                     and any(c.isspace() for c in n.value)):
                 tag = "both" if NEW in n.value else "OLD ONLY"
                 print(f"[{tag}] {f}:{n.lineno}", n.value.strip()[:80])
+
+## Resolved 2026-10-01 (feat/extension-flip-prep-2026-10-01, e209ee21)
+
+Every message reads the tuples in `clausal/_suffixes.py`: a message saying
+WHERE to put seam code names `SEAM_SUFFIX` (`.seam`); a message enumerating
+file kinds spells the tuple (`suffix_list`, `seam_suffixes_text`), so it is
+correct before and after the extension flip.  The sweep above now reports
+only the CSS false positive (`clausal/terms.py`, `.clausal-output`).

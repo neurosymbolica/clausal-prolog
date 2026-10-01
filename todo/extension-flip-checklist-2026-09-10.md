@@ -4,6 +4,68 @@
 own. **Not a bug list.** Every item here is correct right now, which is exactly why no sweep
 run today will find it. The trigger is the landing, not the code.
 
+## Status 2026-10-01 (engine preparation landed on feat/extension-flip-prep-2026-10-01)
+
+Read this section first; the original inventory follows, each item marked.
+
+### The exact remaining flip diff
+
+1. **`clausal/_suffixes.py`, two lines:**
+
+       CLAUSAL_SUFFIXES: tuple[str, ...] = (".seam",)
+       CLAUSAL_PROLOG_SUFFIXES: tuple[str, ...] = (".clausal",)
+
+   Everything else follows these two constants at each call (verified by
+   `tests/test_extension_flip_prep.py`, which patches exactly these two):
+   `SOURCE_SUFFIXES`, `prolog_suffixes()`, `is_prolog_source()`,
+   `seam_suffixes_text()`, `end_module.surface_of`, the finders' groups, the
+   loader choice (`_prolog_loader_class_for`: Clausal Prolog is ALWAYS
+   native), the cache salt (`_suffix_salt`, keyed on the surface), the test
+   runner, use_module's export-list reader, clausal-fmt/-rewrite (refuse
+   Clausal Prolog), translate.py's direction, and every message.
+2. **The rename sweep:** `git mv` every seam `.clausal` to `.seam` (MOVE,
+   never copy: a stale twin would be a different module after the flip).
+   Includes `clausal/stdlib`, `clausal/examples`, `clausal/rewrite/rules`
+   (clausal-rewrite cannot load its rules until they move), `tests/`,
+   `packages/`, plus any path that names a `.clausal` file
+   (`--8<--` snippet refs in docs, test fixtures that name paths, the
+   funnel-lint allowlist's path entries).
+3. **Tests that pin the PRE-flip state and must be repointed in the same
+   landing** (they are correct today, by design):
+   - `tests/test_import.py::test_finder_lists_both_clausal_extensions`
+     (`(".clausal", ".seam")`);
+   - `tests/rewrite/test_cli.py::test_the_twin_resolves_in_finder_priority_order`
+     (asserts `CLAUSAL_SUFFIXES[0] == ".clausal"`; becomes vacuous -- item 3
+     below -- delete it or repoint it, do not let it pass vacuously);
+   - `tests/test_extension_flip_prep.py`: the `before_the_flip` tests and
+     `test_existing_cache_keys_are_unchanged_before_the_flip` (their
+     `flip`-fixture twins become the unpatched truth; drop the fixture);
+   - `tests/iso_l3/test_l3_end_module.py::test_surface_of_follows_the_suffix_tuples`
+     (`surface_of("m.clausal") == "seam"`).
+4. **Doc fences:** drop `"clausal"` from
+   `clausal/tools/doc_snippet_check.SEAM_FENCE_LANGS` -- only AFTER
+   `packages/*/docs` (861 blocks, still ```clausal) are fenced ```seam;
+   else those blocks silently stop being tested.  `docs/` is done.
+
+Not engine-prep, but the plan puts them in the SAME landing (see the cut
+sizing plan, sec. 7.3 step 4): the `.clausal`-may-not-import-`.pl`
+refusal (route 1); and nothing may be renamed before every downstream glob
+reads a shared suffix list (positive control required).
+
+### Still remaining, outside the two-line diff
+
+- The end-of-life translator (`clausal/tools/prolog_to_clausal.py`) spells
+  `(".clausal", ".seam")` as "the seam twin" in `_find_module_file` and
+  `_MODULE_EXTS`.  After the flip a `.clausal` twin of a `.pl` is Prolog, and
+  the finder takes the `.pl` (Prolog group order `.pl`, `.clausal`).  Only
+  the translator's export-list shortcut is affected.  Fix it or retire the
+  translator first.
+- Prose in `docs/**/*.md` naming `.clausal` as seam source (item 5) is not
+  swept; only the fences are.
+- Ruling wanted: within one directory, `name.pl` beats a Clausal Prolog
+  `name.clausal` (the Prolog group is `(PROLOG_SUFFIX,
+  *CLAUSAL_PROLOG_SUFFIXES)`).  Today `name.clausal` (seam) beats `name.pl`.
+
 ## Why this file exists
 
 A downstream user named the gap: this class has a third tense. Not stale, not broken, but
@@ -32,8 +94,8 @@ not for anything a human reads.
 
 ## The items — prose that flips from true to false
 
-**1. Twenty message strings, and BOTH groups need editing, at different times.**
-See `todo/messages-name-only-the-old-suffix-2026-09-10.md` for the inventory and the sweep.
+**1. Twenty message strings, and BOTH groups need editing, at different times.** -- **DONE 2026-10-01** (e209ee21): every one reads the tuples (`SEAM_SUFFIX`, `suffix_list`, `seam_suffixes_text`), correct in both states; the sweep reports only the CSS false positive.
+See `todo/done/messages-name-only-the-old-suffix-2026-09-10.md` for the inventory and the sweep.
 
 - The 12 naming ONLY `.clausal` are INCOMPLETE today (they omit the alias) and become
   WRONG at the flip (they name the ISO surface as though it were seam source).
@@ -47,27 +109,27 @@ file" — which instructs the reader to put seam code in what will be the ISO su
 message is implicitly concatenated: the sweep reports it at the node's first line, 312, and
 the suffix itself is on 314. Edit by content, not by line number.
 
-**2. The suffix module's own docstring.** `clausal/_suffixes.py` opens with "``.clausal``
+**2. The suffix module's own docstring.** -- **DONE 2026-10-01**: it now describes two surfaces and the flip as the two-tuple edit; `strip_clausal_suffix` says it strips a SEAM suffix. `clausal/_suffixes.py` opens with "``.clausal``
 and ``.seam`` are aliases for one another: both carry the same Python-seam syntax". That is
 the sentence the whole aliasing design rests on, and it is precisely what stops being true.
 Its `strip_clausal_suffix` docstring example follows it.
 
-**3. `CLAUSAL_SUFFIXES` is documented as "in finder priority order. Order matters where two
+**3. REMAINING (in the flip landing; see 'Tests that pin the PRE-flip state').** The comment is reworded (DONE); the tie-break test is not touched yet. `CLAUSAL_SUFFIXES` is documented as "in finder priority order. Order matters where two
 files share a stem in one directory."** At the flip there is no tie to break, because the
 two suffixes stop being alternatives for the same thing. The comment and the tie-break
 tests in `tests/rewrite/test_cli.py` both encode a rule that becomes vacuous rather than
 wrong — decide whether to delete or repoint them, and do not let a vacuously-passing test
 stand in as evidence of anything.
 
-**4. Anything that says a `.clausal` file is loaded by `PredicateLoader`.** After the flip
+**4. Anything that says a `.clausal` file is loaded by `PredicateLoader`.** -- **DONE 2026-10-01** for the engine: `PredicateFinder`/`PrologFinder` docstrings name the seam and Prolog groups by tuple; the dispatch itself is by surface (8180d533). After the flip
 that dispatch is the bug, not the behaviour. `import_hook.py:854`'s docstring says it
 outright.
 
-**5. Docs.** Not inventoried here — this file is code-side. Someone should sweep
+**5. Docs.** -- **PARTLY DONE 2026-10-01** (3fddf3eb): the 1159 seam blocks in `docs/` are fenced ```seam (counts unchanged, see the commit); `packages/*/docs` fences and the prose sweep REMAIN. Not inventoried here — this file is code-side. Someone should sweep
 `docs/**/*.md` for the same three tenses before the flip. Note the fenced blocks are already
 lint-clean (1045 scanned, 1 hit, an archived design spec), so the risk is prose, not code.
 
-**6. `end_module/1` becomes REQUIRED for `.clausal` files -- by design, with no code change.**
+**6. `end_module/1` becomes REQUIRED for `.clausal` files -- by design, with no code change.** -- **DONE (nothing to do)**; the finder now hands Clausal Prolog files to `NativePrologLoader`, which passes the path to `iso_l3.lower_source`, so the requirement fires (exercised by `tests/test_extension_flip_prep.py`).
 `clausal/end_module.py` keys the "require end_module" default by SURFACE
 (`REQUIRE_END_MODULE_DEFAULTS`: `pl` no, `clausal_prolog` yes), and `surface_of` reads
 `_suffixes.CLAUSAL_PROLOG_SUFFIXES` (empty today). Moving `.clausal` into that tuple at the
