@@ -70,8 +70,8 @@ from typing import Iterator
 
 from clausal._suffixes import (
     CLAUSAL_SUFFIXES,
-    PROLOG_SUFFIX,
     SOURCE_SUFFIXES,
+    is_prolog_source,
     strip_clausal_suffix,
 )
 
@@ -272,9 +272,9 @@ def load_clausal_module(path: str | Path) -> object:
 
     path = str(path)
     base = os.path.basename(path)
-    is_prolog = base.endswith(PROLOG_SUFFIX)
+    is_prolog = is_prolog_source(base)
     if is_prolog:
-        base = base[: -len(PROLOG_SUFFIX)]
+        base = os.path.splitext(base)[0]
     mod_name = f"_clausal_test_{strip_clausal_suffix(base)}"
 
     # _load_module handles sys.modules eviction internally.
@@ -494,7 +494,7 @@ def _check_test_option(mod, clause, name: str) -> None:
     if value == TEST_OPTION_FAIL:
         return
     where = getattr(mod, "__file__", None) or getattr(mod, "__name__", "<module>")
-    if clause.position and not str(where).endswith(PROLOG_SUFFIX):
+    if clause.position and not is_prolog_source(where):
         # A .pl file's positions are lines of its translation (no source map).
         where = f"{where}: line {clause.position[0]}"
     raise TestCollectionError(
@@ -649,7 +649,7 @@ def run_test(
         result.diagnostic = diagnose_failure(mod, description, path=path,
                                              error=result.error)
         result.line = result.diagnostic.line
-        if path is not None and str(path).endswith(PROLOG_SUFFIX):
+        if path is not None and is_prolog_source(path):
             # The translator keeps no source map: positions are lines of the
             # generated Clausal text, not of the .pl file.  Reporting one as
             # ``file.pl:N`` would point at the wrong clause.
@@ -931,7 +931,7 @@ def _reified_clause(path, clause):
     position, or ``None``.  Cache shared with :func:`_reified_goals`."""
     if path is None or not clause.position:
         return None
-    if str(path).endswith(PROLOG_SUFFIX):
+    if is_prolog_source(path):
         # A .pl file is Prolog: reifying it as Clausal source can only fail
         # (re-read and re-parsed per failing test) or, worse, succeed on the
         # wrong language.  Its clause positions are lines of the translation.
@@ -2911,7 +2911,7 @@ def opts_out_of_collection(path: str | Path) -> bool:
     """True if a test file carries the no-collect marker in its first 30
     lines (``# clausal: no-collect``; ``% clausal: no-collect`` in .pl)."""
     path = Path(path)
-    marker = (NO_COLLECT_MARKER_PL if path.suffix == PROLOG_SUFFIX
+    marker = (NO_COLLECT_MARKER_PL if is_prolog_source(path)
               else NO_COLLECT_MARKER)
     try:
         with path.open(encoding="utf-8") as fh:

@@ -1658,9 +1658,13 @@ def _declared_exports(path: str):
     STICKY ops are the exported ops the file also declares with a top-level
     ``op/3`` directive: Scryer installs those in an importer whatever its
     import list names (measured)."""
-    if path.endswith(".pl"):
+    from clausal.end_module import SURFACE_SEAM, surface_of  # noqa: PLC0415
+    from clausal._suffixes import is_prolog_source  # noqa: PLC0415
+    # By SURFACE, not by a spelled suffix: at the extension flip ``.clausal``
+    # becomes Prolog syntax, and reading it with ``ast`` would be wrong.
+    if is_prolog_source(path):
         return _pl_exports(path)
-    if path.endswith((".seam", ".clausal")):
+    if surface_of(path) == SURFACE_SEAM:
         return _seam_exports(path) + ([],)
     return None, None, [], []
 

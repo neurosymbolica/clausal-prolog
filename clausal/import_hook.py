@@ -35,7 +35,9 @@ import hashlib
 import os
 import warnings
 
+from . import _suffixes as _sfx
 from ._suffixes import CLAUSAL_SUFFIXES, PROLOG_SUFFIX
+from .end_module import SURFACE_CLAUSAL_PROLOG, SURFACE_SEAM, surface_of
 from .pythonic_ast import nodes as simple_ast
 from .atom_diagnostics import truth_literal_hint_lines
 from .import_diagnostics import exec_with_import_diagnostics
@@ -674,21 +676,32 @@ _SUFFIX_SALTS: dict = {}
 
 
 def _suffix_salt(path) -> int:
-    """The source suffix's part of the bytecode cache key: 0 for
-    ``.clausal`` (the key existing caches were written under), else a
-    NONZERO digest of the suffix, so two same-stem sources in one directory
-    never share a key."""
+    """The source's part of the bytecode cache key, keyed on its SURFACE
+    (:func:`clausal.end_module.surface_of`) and its suffix.
+
+    0 only for SEAM source spelled ``.clausal`` (the key existing caches
+    were written under); any other seam or ``.pl`` suffix is a NONZERO
+    digest of the suffix alone (unchanged, so their caches stay valid); a
+    Clausal Prolog file is a NONZERO digest of the surface AND the suffix.
+    So two same-stem sources in one directory never share a key, and when
+    the extension flip moves ``.clausal`` to the Clausal Prolog surface, a
+    seam ``.pyc`` written under 0 is never served for a Prolog file."""
     suffix = os.path.splitext(os.fspath(path))[1]
-    salt = _SUFFIX_SALTS.get(suffix)
+    surface = surface_of(path)
+    key = (surface, suffix)
+    salt = _SUFFIX_SALTS.get(key)
     if salt is None:
-        if suffix == ".clausal":
+        if surface == SURFACE_SEAM and suffix == ".clausal":
             salt = 0
         else:
-            digest = hashlib.blake2b(
-                b"clausal-source-suffix:" + suffix.encode("utf-8"),
-                digest_size=4)
+            if surface == SURFACE_CLAUSAL_PROLOG:
+                tag = b"clausal-source-surface:" + surface.encode("utf-8") + b":"
+            else:
+                tag = b"clausal-source-suffix:"
+            digest = hashlib.blake2b(tag + suffix.encode("utf-8"),
+                                     digest_size=4)
             salt = int.from_bytes(digest.digest(), "big") or 1
-        _SUFFIX_SALTS[suffix] = salt
+        _SUFFIX_SALTS[key] = salt
     return salt
 
 
@@ -1123,6 +1136,23 @@ def _pl_loader_class():
     return NativePrologLoader if pl_frontend() == "native" else PrologLoader
 
 
+def _prolog_loader_class_for(path):
+    """The loader class for the Prolog-syntax file *path*: always the NATIVE
+    front end for a Clausal Prolog file (the translator is end-of-life for
+    that surface, so ``CLAUSAL_PL_FRONTEND`` is not consulted), else the
+    ``.pl`` loader ``CLAUSAL_PL_FRONTEND`` selects.  Inert until the
+    extension flip gives the Clausal Prolog surface a suffix."""
+    if surface_of(path) == SURFACE_CLAUSAL_PROLOG:
+        return NativePrologLoader
+    return _pl_loader_class()
+
+
+def _new_prolog_loader(fullname, path, dialect=None):
+    """A loader for the Prolog-syntax file *path* (the finders' factory: the
+    class depends on the file's surface)."""
+    return _prolog_loader_class_for(path)(fullname, path, dialect=dialect)
+
+
 # Backward-compat alias — prefer _load_module() for new code.
 _predicate_loader = None
 
@@ -1138,7 +1168,7 @@ def _load_module(fullname, path):
     ``pathlib.Path``): importlib's cache-hit path needs a ``str``.
     """
     path = os.fspath(path)
-    if path.endswith(".pl"):
+    if _sfx.is_prolog_source(path):
         return _load_prolog_module(fullname, path)
     sys.modules.pop(fullname, None)
     loader = PredicateLoader(fullname, path)
@@ -1153,12 +1183,13 @@ def _load_prolog_module(fullname, path, dialect=None):
     """Load a .pl file as a Clausal module and return it.
 
     Test/external helper. Each call creates a fresh loader and module, of the
-    front end ``CLAUSAL_PL_FRONTEND`` selects (the translator when unset).
+    front end ``CLAUSAL_PL_FRONTEND`` selects (the translator when unset) --
+    or, for a Clausal Prolog file, always the native one.
     *path* may be any path-like.
     """
     path = os.fspath(path)
     sys.modules.pop(fullname, None)
-    loader = _pl_loader_class()(fullname, path, dialect=dialect)
+    loader = _new_prolog_loader(fullname, path, dialect=dialect)
     spec = ModuleSpec(fullname, loader, origin=path)
     mod = importlib.util.module_from_spec(spec)
     sys.modules[fullname] = mod
@@ -1334,25 +1365,36 @@ class PredicateFinder(_ExtensionFinder):
     _extensions = CLAUSAL_SUFFIXES
     _loader_cls = PredicateLoader
 
+    def _suffixes(self):
+        # Read through the module, at each lookup: the extension flip edits
+        # the tuples (and a test simulates it by patching them).
+        return _sfx.CLAUSAL_SUFFIXES
+
     def _suffix_groups(self):
         return ((self._suffixes(), lambda: self._loader_cls),
-                ((PROLOG_SUFFIX,), _pl_loader_class))
+                (_sfx.prolog_suffixes(), lambda: _new_prolog_loader))
 
 
 class PrologFinder(_ExtensionFinder):
-    """Find .pl Prolog files only, via the ``CLAUSAL_PL_FRONTEND`` loader.
+    """Find Prolog-syntax files only -- ``.pl`` via the
+    ``CLAUSAL_PL_FRONTEND`` loader, and a Clausal Prolog file (none until
+    the extension flip) via the native one.
 
     Not installed on ``sys.meta_path``: :class:`PredicateFinder` covers .pl
     in the same per-entry scan (a separate finder scanning the whole path
     after it would let a later entry's .clausal beat an earlier entry's .pl).
     Kept for callers that want a .pl-only finder.
     """
-    _extensions = (PROLOG_SUFFIX,)
+    _extensions = _sfx.prolog_suffixes()
+
+    def _suffixes(self):
+        return _sfx.prolog_suffixes()
 
     @property
     def _loader_cls(self):
-        # Read per lookup: the front end is CLAUSAL_PL_FRONTEND's at import.
-        return _pl_loader_class()
+        # A factory choosing the class per file: the front end is
+        # CLAUSAL_PL_FRONTEND's at import, or native for Clausal Prolog.
+        return _new_prolog_loader
 
 
 class ModulesFinder(MetaPathFinder):

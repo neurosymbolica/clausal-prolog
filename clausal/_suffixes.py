@@ -25,7 +25,22 @@ PROLOG_SUFFIX: str = ".pl"
 CLAUSAL_PROLOG_SUFFIXES: tuple[str, ...] = ()
 
 #: Every extension the import hook loads as a predicate module.
-SOURCE_SUFFIXES: tuple[str, ...] = (*CLAUSAL_SUFFIXES, PROLOG_SUFFIX)
+SOURCE_SUFFIXES: tuple[str, ...] = (*CLAUSAL_SUFFIXES, PROLOG_SUFFIX,
+                                    *CLAUSAL_PROLOG_SUFFIXES)
+
+
+def prolog_suffixes() -> tuple[str, ...]:
+    """The extensions of PROLOG-syntax source -- ``.pl`` and the Clausal
+    Prolog surface -- in finder priority order.  Read at each call (a
+    function, not a constant) so a caller follows the tuples as they stand,
+    including a test that simulates the extension flip by patching them."""
+    return (PROLOG_SUFFIX, *CLAUSAL_PROLOG_SUFFIXES)
+
+
+def is_prolog_source(path) -> bool:
+    """True when *path* names Prolog-syntax source (``.pl`` or the Clausal
+    Prolog surface): never to be read as seam source."""
+    return str(path).endswith(prolog_suffixes())
 
 
 def strip_clausal_suffix(name: str) -> str:
