@@ -22,7 +22,7 @@ from __future__ import annotations
 import ast
 from typing import NoReturn
 
-from clausal.logic.compiler.ir import Branch, GoalOp, Negate, SubCall
+from clausal.logic.compiler.ir import GoalOp, Negate
 from clausal.logic.compiler.compile_ctx import CompilationContext
 from clausal.logic.compiler._ast_helpers import (
     _EXTRA_FUNCDEF,
@@ -54,90 +54,6 @@ def _lower_body(
     k_stmts: list[ast.stmt],
 ) -> list[ast.stmt]:
     match ir:
-
-        # ── General ITE — shallow form.  (Reified Branch is handled
-        # by ``lower_shared``.)  Mirrors legacy
-        # ``_compile_general_ite_shallow`` byte-for-byte, including the
-        # tabled-NAF else-guard variant (Slice D5h) when
-        # ``tabled_naf=True`` — in that case ``test`` is a :class:`SubCall`
-        # to a tabled predicate and we reconstruct the
-        # ``_naf_tabled(fname, arity, (args...), trail, _table_store)``
-        # call from its fields.
-        case Branch(test=t_op, then=th_op, else_=el_op,
-                    reified_test=None, tabled_naf=tnaf):
-            trail_name = ctx.trail_name
-            cond_gen = ctx.fresh("_ite_cond")
-            cond_stmts = lower(t_op, ctx, [_yield_none_stmt()])
-            cond_body = cond_stmts + [
-                ast.Return(value=ast.Constant(value=None)),
-                ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
-            ]
-            cond_fn = ast.FunctionDef(
-                name=cond_gen,
-                args=ast.arguments(
-                    posonlyargs=[], args=[], vararg=None,
-                    kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[],
-                ),
-                body=cond_body,
-                decorator_list=[], returns=None, type_comment=None,
-                **_EXTRA_FUNCDEF,
-            )
-            then_stmts = lower(th_op, ctx, k_stmts)
-            else_stmts = lower(el_op, ctx, k_stmts)
-            if tnaf:
-                assert isinstance(t_op, SubCall)
-                from clausal.logic.compiler.terms_to_ast import (
-                    term_to_ast_expr,
-                )
-                true_mark = ctx.fresh(_MARK_PREFIX)
-                true_block = [
-                    _assign_mark(true_mark, trail_name),
-                    ast.For(
-                        target=_name("_", ast.Store()),
-                        iter=_call(_name(cond_gen)),
-                        body=then_stmts,
-                        orelse=[],
-                    ),
-                    _undo_stmt(true_mark, trail_name),
-                ]
-                arg_exprs = [
-                    term_to_ast_expr(a, ctx.var_context, eval_arith=False)
-                    for a in t_op.args
-                ]
-                naf_call = _call(
-                    _name("$naf_tabled"),
-                    ast.Constant(t_op.fname),
-                    ast.Constant(t_op.arity),
-                    ast.List(elts=arg_exprs, ctx=ast.Load()),
-                    _name(trail_name),
-                    _name("$table_store"),
-                    _name("$naf_db"),
-                )
-                naf_mark = ctx.fresh(_MARK_PREFIX)
-                false_block = [
-                    _assign_mark(naf_mark, trail_name),
-                    _if(naf_call, else_stmts),
-                    _undo_stmt(naf_mark, trail_name),
-                ]
-                return [cond_fn] + true_block + false_block
-            found_flag = ctx.fresh("_found")
-            mark = ctx.fresh(_MARK_PREFIX)
-            return [
-                cond_fn,
-                _assign(found_flag, ast.Constant(value=False)),
-                _assign_mark(mark, trail_name),
-                ast.For(
-                    target=_name("_", ast.Store()),
-                    iter=_call(_name(cond_gen)),
-                    body=[_assign(found_flag, ast.Constant(value=True))] + then_stmts,
-                    orelse=[],
-                ),
-                _undo_stmt(mark, trail_name),
-                _if(
-                    ast.UnaryOp(op=ast.Not(), operand=_name(found_flag)),
-                    else_stmts,
-                ),
-            ]
 
         # ── Negation-as-failure — shallow form.
         # Inline sub-generator function + ``for`` loop over its first

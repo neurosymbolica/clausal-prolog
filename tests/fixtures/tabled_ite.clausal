@@ -11,8 +11,11 @@ path(X, Y) <- (
     path(Z, Y)
 )
 
-# check_path/2: uses ITE with a tabled predicate as condition
-check_path(X, RESULT) <- if_(path(1, X), RESULT is "reachable", RESULT is "unreachable")
+# check_path/2: a tabled predicate and its WFS negation as two exclusive
+# alternatives.  (It was an if_ with path(1, X) as the condition; if_/3 now
+# requires a reifiable condition, ruling 2026-10-01, and path/2 is a plain
+# goal.  For a bound X the answers are the same.)
+check_path(X, RESULT) <- ((path(1, X), RESULT is "reachable") or (not path(1, X), RESULT is "unreachable"))
 
 
 test("path 1 to 2") <- path(1, 2)  # nv

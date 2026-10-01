@@ -615,7 +615,7 @@ def test_guard_dcg_parse_generate_if_not_str(tmp_path):
         -double_quotes(atom)
         greeting >> (["hello"], name)
         name >> (["world"])
-        opt >> if_(["a"], ["b"], ["c"])
+        opt >> ([T], if_({T is "a"}, ["b"], {T is "c"}))
         nox >> (not ["x"], ["y"])
         hi >> ("hi")
     """)

@@ -27,6 +27,7 @@ from clausal.logic.variables import Var, deref, is_var, walk
 FIXTURE = '''
 -double_quotes(atom)
 -import_from(clausal.examples.metainterpreters, [solve, solve_count, solve_limit, solve_tree])
+-import_from(clausal.stdlib.reif, [memberd_t])
 -private([kab(KA)])
 
 # ── A03-F001: TRO with nondeterministic prefix goals ──────────────────
@@ -139,7 +140,7 @@ mem2(X) <- (X in [1, 2])
 gen("a"),
 gen("b"),
 gen("c"),
-altif(X, R) <- if_(gen(X), R is "yes", R is "no")
+altif(X, R) <- if_(memberd_t(X, ["a", "b", "c"]), R is "yes", R is "no")
 
 # ── continuation-TCO — regression guards ──────────────────────────────
 w(X) <- gen(X)
@@ -168,7 +169,7 @@ edge(2, 3),
 edge(3, 1),
 path(PA, PB) <- edge(PA, PB)
 path(PA, PB) <- (edge(PA, PC), path(PC, PB))
-check_path(CX, RESULT) <- if_(path(1, CX), RESULT is "reachable", RESULT is "unreachable")
+check_path(CX, RESULT) <- ((path(1, CX), RESULT is "reachable") or (not path(1, CX), RESULT is "unreachable"))
 not_path(NX) <- (not path(1, NX))
 
 # ── specialization ────────────────────────────────────────────────────
@@ -777,10 +778,15 @@ class TestIteGuards:
         X, L3 = Var(), Var()
         assert sorted(sols(mod, ("cldif", X, L3), L3)) == [(mint("eq"),), (mint("ne"),)]
 
-    def test_general_ite_runs_then_per_condition_solution(self, mod):
+    def test_reified_closure_runs_then_per_way_it_holds(self, mod):
+        """if_/3 requires a reifiable condition (ruling 2026-10-01): a
+        reified closure answers every way it holds, then the else branch
+        under the constraints that make it false (library(reif))."""
         X, R = Var(), Var()
-        assert sols(mod, ("altif", X, R), X, R) == [
+        got = sols(mod, ("altif", X, R), X, R)
+        assert got[:3] == [
             (mint("a"), mint("yes")), (mint("b"), mint("yes")), (mint("c"), mint("yes"))]
+        assert len(got) == 4 and is_var(got[3][0]) and got[3][1] == mint("no")
 
     def test_tabled_ite_and_naf(self, mod):
         R1, R2 = Var(), Var()

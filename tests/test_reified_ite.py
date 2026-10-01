@@ -940,108 +940,40 @@ class TestReifiedIteFd:
         assert results == [("lo",)]
 
 
-class TestGeneralIte:
-    """Test general ITE with non-reifiable conditions (predicate calls)."""
+class TestNonReifiableConditionRefused:
+    """if_/3 requires a REIFIABLE condition (operator ruling 2026-10-01): a
+    plain goal -- a membership test, once/1, a predicate with no reified
+    ``p/N+1`` -- is refused when the predicate compiles, in both strategies.
+    (These shapes used to take a general soft-cut lowering: every solution
+    of the condition, the else branch only when there were none.)"""
 
-    def _run_simple(self, clauses, arity=1):
+    @pytest.mark.parametrize("strategy", ["simple", "trampoline"])
+    @pytest.mark.parametrize("test_of", [
+        lambda x: in_(left=x, right=[1, 2, 3]),
+        lambda x: _once(in_(left=x, right=[1, 2, 3])),
+        lambda x: Call(func=LoadName(name="no_such_reified"), args=[x],
+                       kwargs=[]),
+    ], ids=["in", "once", "plain-call"])
+    def test_refused_at_compile_time(self, strategy, test_of):
+        from clausal.logic.compiler.terms_to_goalop import (
+            NonReifiableConditionError,
+        )
+        x, r = Var(), Var()
+        clause = Clause(
+            head=("ite_test", r),
+            body=[IfExpr(test=test_of(x),
+                         body=Unify(left=r, right="yes"),
+                         orelse=Unify(left=r, right="no"))],
+        )
         db = _make_db()
-        functor = "ite_test"
-        for c in clauses:
-            db.assertz(c)
-        fn = compile_predicate(functor, arity, clauses, db)
-        trail = Trail()
-        results = []
-        args = [Var() for _ in range(arity)]
-        for _ in fn(*args, trail, None):
-            results.append(tuple(deref(a) for a in args))
-        return results
-
-    def _run_trampoline(self, clauses, arity=1):
-        from clausal.logic.trampoline import StepGenerator, DONE
-        db = _make_db()
-        functor = "ite_test"
-        for c in clauses:
-            db.assertz(c)
-        fn = compile_predicate_trampoline(functor, arity, clauses, db)
-        trail = Trail()
-        results = []
-        args = [Var() for _ in range(arity)]
-        root = StepGenerator(fn, None, None, None, *args, trail)
-        gen, value = root.send(None)
-        while True:
-            if gen is None:
-                if value is DONE:
-                    break
-                results.append(tuple(deref(a) for a in args))
-                gen, value = root.send(None)
-            else:
-                gen, value = gen.send(value)
-        return results
-
-    def test_succeeding_condition_simple(self):
-        """If condition succeeds, run then branch."""
-        # member/2: member(X, [X|_]). member(X, [_|T]) :- member(X, T).
-        # We'll use in_ instead for simplicity: if_(1 in [1,2,3], 'yes', 'no')
-        # nv
-        r = Var()
-        clause = Clause(
-            head=("ite_test", r),
-            body=[IfExpr(
-                test=in_(left=1, right=[1, 2, 3]),
-                body=Unify(left=r, right="yes"),
-                orelse=Unify(left=r, right="no"),
-            )],
-        )
-        results = self._run_simple([clause])
-        # in_(1, [1,2,3]) succeeds (matches element 1), so then runs
-        # But it also matches element 1 at position 0 only, then 2 and 3 don't match
-        # Actually in_ is a for-loop that yields for each match.
-        # 1 matches 1 → then runs once. 1 doesn't match 2,3.
-        # So we get exactly one "yes"
-        assert ("yes",) in results
-
-    def test_failing_condition_simple(self):
-        """If condition fails, run else branch."""
-        # nv
-        r = Var()
-        clause = Clause(
-            head=("ite_test", r),
-            body=[IfExpr(
-                test=in_(left=99, right=[1, 2, 3]),
-                body=Unify(left=r, right="yes"),
-                orelse=Unify(left=r, right="no"),
-            )],
-        )
-        results = self._run_simple([clause])
-        assert results == [("no",)]
-
-    def test_succeeding_condition_trampoline(self):
-        # nv
-        r = Var()
-        clause = Clause(
-            head=("ite_test", r),
-            body=[IfExpr(
-                test=in_(left=1, right=[1, 2, 3]),
-                body=Unify(left=r, right="yes"),
-                orelse=Unify(left=r, right="no"),
-            )],
-        )
-        results = self._run_trampoline([clause])
-        assert ("yes",) in results
-
-    def test_failing_condition_trampoline(self):
-        # nv
-        r = Var()
-        clause = Clause(
-            head=("ite_test", r),
-            body=[IfExpr(
-                test=in_(left=99, right=[1, 2, 3]),
-                body=Unify(left=r, right="yes"),
-                orelse=Unify(left=r, right="no"),
-            )],
-        )
-        results = self._run_trampoline([clause])
-        assert results == [("no",)]
+        db.assertz(clause)
+        compile_fn = (compile_predicate if strategy == "simple"
+                      else compile_predicate_trampoline)
+        with pytest.raises(NonReifiableConditionError) as info:
+            compile_fn("ite_test", 1, [clause], db)
+        assert isinstance(info.value, SyntaxError)
+        assert "ite_test/1" in str(info.value)
+        assert "reifiable" in str(info.value)
 
 
 class TestIteControlFlow:
@@ -1135,104 +1067,6 @@ class TestIteControlFlow:
         assert results == [("a", "b")]
 
 
-# ── Multi-solution general ITE ────────────────────────────────────────────────
-
-
-class TestGeneralIteMultiSolution:
-    """Test general ITE with conditions that yield multiple solutions."""
-
-    def _run_simple(self, clause, arity=1):
-        db = _make_db()
-        db.assertz(clause)
-        fn = compile_predicate("ite_test", arity, [clause], db)
-        trail = Trail()
-        results = []
-        args = [Var() for _ in range(arity)]
-        for _ in fn(*args, trail, None):
-            results.append(tuple(deref(a) for a in args))
-        return results
-
-    def _run_trampoline(self, clause, arity=1):
-        from clausal.logic.trampoline import StepGenerator, DONE
-        db = _make_db()
-        db.assertz(clause)
-        fn = compile_predicate_trampoline("ite_test", arity, [clause], db)
-        trail = Trail()
-        results = []
-        args = [Var() for _ in range(arity)]
-        root = StepGenerator(fn, None, None, None, *args, trail)
-        gen, value = root.send(None)
-        while True:
-            if gen is None:
-                if value is DONE:
-                    break
-                results.append(tuple(deref(a) for a in args))
-                gen, value = root.send(None)
-            else:
-                gen, value = gen.send(value)
-        return results
-
-    def test_multi_solution_runs_then_for_each(self):
-        """if_(X in [1,2,3], R is X, R is 'none') → then runs 3 times."""
-        # nv
-        x = Var()
-        r = Var()
-        clause = Clause(
-            head=("ite_test", x, r),
-            body=[IfExpr(
-                test=in_(left=x, right=[1, 2, 3]),
-                body=Unify(left=r, right=x),
-                orelse=Unify(left=r, right="none"),
-            )],
-        )
-        results = self._run_simple(clause, arity=2)
-        # Condition matches 3 times (X=1, X=2, X=3), then branch runs for each
-        then_results = [(a, b) for a, b in results if b != "none"]
-        assert len(then_results) == 3
-        vals = {a for a, _ in then_results}
-        assert vals == {1, 2, 3}
-
-    def test_multi_solution_then_for_each_trampoline(self):
-        """Same multi-solution test in trampoline mode."""
-        # nv
-        x = Var()
-        r = Var()
-        clause = Clause(
-            head=("ite_test", x, r),
-            body=[IfExpr(
-                test=in_(left=x, right=[1, 2, 3]),
-                body=Unify(left=r, right=x),
-                orelse=Unify(left=r, right="none"),
-            )],
-        )
-        results = self._run_trampoline(clause, arity=2)
-        then_results = [(a, b) for a, b in results if b != "none"]
-        assert len(then_results) == 3
-
-    def test_general_ite_preserves_condition_bindings(self):
-        """General ITE: bindings from condition survive into then branch."""
-        # nv
-        x = Var()
-        r = Var()
-        # if_(X in [10, 20], R is X, R is 0) — then branch sees X bound by condition
-        clause = Clause(
-            head=("ite_test", x, r),
-            body=[IfExpr(
-                test=in_(left=x, right=[10, 20]),
-                body=Unify(left=r, right=x),
-                orelse=Unify(left=r, right=0),
-            )],
-        )
-        results = self._run_simple(clause, arity=2)
-        then_results = [(a, b) for a, b in results if b != 0]
-        # Each then result should have R == X (bound by condition)
-        for a, b in then_results:
-            assert a == b, f"then branch should see X={a} bound by condition, got R={b}"
-
-
-# ── ITE + dif/2 interaction ──────────────────────────────────────────────────
-
-
 class TestIteDifInteraction:
     """Test ITE interacting with pre-existing dif constraints."""
 
@@ -1297,7 +1131,9 @@ class TestIteDifInteraction:
 
 
 class TestTabledIteCondition:
-    """Test ITE where the condition is a call to a tabled predicate."""
+    """A tabled predicate and its WFS negation as two exclusive branches (the
+    fixture's former if_ over a tabled condition: if_/3 now requires a
+    reifiable condition, ruling 2026-10-01)."""
 
     def _load_fixture(self, filename):
         import os
@@ -1575,37 +1411,6 @@ class TestOnce:
         )
         results = self._run_trampoline([clause])
         assert results == [(42,)]
-
-    def test_once_in_if_condition_simple(self):
-        """if_(once(X in [1,2,3]), then, else) — once inside if_ condition."""
-        # nv
-        r = Var()
-        x = Var()
-        clause = Clause(
-            head=("once_test", r),
-            body=[IfExpr(
-                test=_once(in_(left=x, right=[1, 2, 3])),
-                body=Unify(left=r, right="found"),
-                orelse=Unify(left=r, right="not_found"),
-            )],
-        )
-        results = self._run_simple([clause])
-        assert ("found",) in results
-
-    def test_once_in_if_condition_trampoline(self):
-        # nv
-        r = Var()
-        x = Var()
-        clause = Clause(
-            head=("once_test", r),
-            body=[IfExpr(
-                test=_once(in_(left=x, right=[1, 2, 3])),
-                body=Unify(left=r, right="found"),
-                orelse=Unify(left=r, right="not_found"),
-            )],
-        )
-        results = self._run_trampoline([clause])
-        assert ("found",) in results
 
 
 class TestOnceClausal:

@@ -135,7 +135,7 @@ class TestParityAndValues:
         assert type(got_is) is float and got_is == 6.0
 
     def test_a_decimal_leaf_compares_in_the_interpreted_path(self, tmp_path):
-        mod = _module(tmp_path, "p(R) <- (dec(D), if_('<'(1, D), R is yes, R is no))\n")
+        mod = _module(tmp_path, "p(R) <- (dec(D), (('<'(1, D), R is yes) or (not '<'(1, D), R is no)))\n")
         r = Var()
         for _ in call("p", r, module=mod):
             assert deref(r) == "yes"

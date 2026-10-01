@@ -735,6 +735,20 @@ def _collect_types_from_term(term: Any) -> dict[str, type]:
     return types
 
 
+def _if_expansion_of(term: Any) -> Any:
+    """The reif expansion an ``if_`` node compiles as, when it differs from
+    the node itself (a closure condition adds ``p(..., T)`` and
+    ``must_be(boolean, T)`` calls the raw node does not show); else None."""
+    from clausal.pythonic_ast.nodes import IfExpr  # noqa: PLC0415
+    if type(term) is not IfExpr:
+        return None
+    from .ite_reified import NonReifiable, if_expansion  # noqa: PLC0415
+    exp = if_expansion(term)
+    if exp is term or isinstance(exp, NonReifiable):
+        return None
+    return exp
+
+
 def _collect_call_targets(clauses: list[Clause]) -> set[tuple[str, int]]:
     """Collect (fname, arity) pairs from Call(LoadName/LoadAttr) nodes in clause bodies.
 
@@ -750,6 +764,9 @@ def _collect_call_targets(clauses: list[Clause]) -> set[tuple[str, int]]:
     targets: set[tuple[str, int]] = set()
 
     def _walk(term: Any) -> None:
+        if (exp := _if_expansion_of(term)) is not None:
+            _walk(exp)
+            return
         if isinstance(term, Call) and isinstance(term.func, LoadName):
             n_kwargs = len(term.kwargs) if term.kwargs else 0
             targets.add((term.func.name, len(term.args) + n_kwargs))
@@ -855,6 +872,9 @@ def _collect_globals_info(
         # Call-target detection runs on the raw (pre-deref) term so that
         # Call/LoadName nodes (which are dataclass instances, not Vars) are
         # seen before any potential deref() short-circuits them.
+        if (exp := _if_expansion_of(term)) is not None:
+            _walk_body(exp)
+            return
         if isinstance(term, Call) and isinstance(term.func, LoadName):
             n_kwargs = len(term.kwargs) if term.kwargs else 0
             targets.add((term.func.name, len(term.args) + n_kwargs))

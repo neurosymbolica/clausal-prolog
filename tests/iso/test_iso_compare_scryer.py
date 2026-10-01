@@ -24,10 +24,14 @@ _NO = repr("no")
 
 
 def _yesno_src(goal, extra_atoms=()):
-    """A one-clause module whose `p(R)` answers `yes`/`no` for *goal*."""
+    """A one-clause module whose `p(R)` answers `yes`/`no` for *goal*.
+
+    *goal* is a plain semidet goal, not a reifiable condition, so it is not an
+    if_/3 test (ruling 2026-10-01): the two exclusive alternatives answer
+    exactly as ``(G -> yes ; no)`` does for a semidet G."""
     atoms = ", ".join(("p(R)", "yes", "no") + tuple(extra_atoms))
     return (f"-module(_hN, [{atoms}])\n-double_quotes(chars)\n"
-            f"p(R) <- if_({goal}, R is yes, R is no)\n")
+            f"p(R) <- ((({goal}), R is yes) or (not ({goal}), R is no))\n")
 
 
 def _engine_yesno(run_clausal, goal, extra_atoms=()):
@@ -304,13 +308,13 @@ def test_iso_is_conflates_int_and_float_OPEN_iso_divergence_oracle(scryer):
 
 def test_iso_not_unifiable(run_clausal):
     src = ("-module(_hN, [p(R), yes, no])\n-double_quotes(chars)\n"
-           "p(R) <- if_('\\\\='(1, 2), R is yes, R is no)\n")
+           "p(R) <- (('\\\\='(1, 2), R is yes) or (not '\\\\='(1, 2), R is no))\n")
     assert run_clausal(src, ("p",)) == [_YES]
 
 
 def test_iso_not_unifiable_fails_when_unifiable(run_clausal):
     src = ("-module(_hN, [p(R), yes, no])\n-double_quotes(chars)\n"
-           "p(R) <- if_('\\\\='(X, X), R is yes, R is no)\n")
+           "p(R) <- (('\\\\='(X, X), R is yes) or (not '\\\\='(X, X), R is no))\n")
     assert run_clausal(src, ("p",)) == [_NO]
 
 
@@ -318,7 +322,7 @@ def test_iso_structural_ne(run_clausal):
     """'\\==' distinguishes 1 from 1.0 too — it is the direct negation of
     '=='."""
     src = ("-module(_hN, [p(R), yes, no])\n-double_quotes(chars)\n"
-           "p(R) <- if_('\\\\=='(1, 1.0), R is yes, R is no)\n")
+           "p(R) <- (('\\\\=='(1, 1.0), R is yes) or (not '\\\\=='(1, 1.0), R is no))\n")
     assert run_clausal(src, ("p",)) == [_YES]
 
 

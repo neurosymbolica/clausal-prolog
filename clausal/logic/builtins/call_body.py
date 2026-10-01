@@ -35,7 +35,7 @@ it then shares.  Two choices keep that faithful and cheap:
   to the leaf.  So ``call((A, B))`` is exactly ``call(A), call(B)``: name
   resolution, module qualification, predicate handles, lambdas and the
   "unknown name fails" contract are ``call/1``'s own, never a second copy.
-  The one exception is a leaf under ``not``/the test of ``if_`` that names a
+  The one exception is a leaf under ``not`` that names a
   TABLED predicate: it is emitted as the direct call, because that is what
   makes the compiler pick WFS-sound tabled negation, as it does for the same
   text in a clause.
@@ -249,7 +249,7 @@ class _Converter:
                           args=[self._param(t)], kwargs=[])
 
     def _maybe_tabled(self, raw):
-        """Under ``not`` / an ``if_`` test: a cell naming a TABLED predicate
+        """Under ``not``: a cell naming a TABLED predicate
         is emitted as the direct call (WFS-sound tabled negation, as the
         compiler gives the same text in a clause); None otherwise."""
         t = deref(raw)
@@ -302,9 +302,14 @@ class _Converter:
             return nodes.Not(operand=direct if direct is not None
                              else self._call_leaf(t.operand))
         if tt is nodes.IfExpr:
-            test = self._maybe_tabled(t.test)
+            # if_/3 is library(reif)'s: the test is a reifiable condition --
+            # a comparison, a conjunction/disjunction of them, or a closure
+            # called with the truth value appended (a leaf goal here is
+            # ``call(P)``, so ``call(P, T)``, as reif's ``call(If_1, T)``).
+            # No tabled-NAF probe: the test is not negated (ruling
+            # 2026-10-01).
             return nodes.IfExpr(
-                test=test if test is not None else self.goal(t.test),
+                test=self.goal(t.test),
                 body=self.goal(t.body), orelse=self.goal(t.orelse))
         if tt is nodes.CompareChain:
             return nodes.CompareChain(

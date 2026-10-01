@@ -566,8 +566,10 @@ class TestDictReadOnceLowering:
         # nv
         src = (
             "-private([kee])\n"
-            "yes({kee: 1}),\n"
-            "prc(PROF, R) <- if_(yes(PROF), R is PROF.kee, R is 0)\n"
+            # yes/1 reified: if_/3 takes a reifiable condition (2026-10-01)
+            "yes_t({kee: 1}, True),\n"
+            "yes_t(P, False) <- (P is not {kee: 1})\n"
+            "prc(PROF, R) <- if_(yes_t(PROF), R is PROF.kee, R is 0)\n"
         )
         mod, logic_mod, reads = self._load_counting(
             tmp_path, monkeypatch, src, "readonce_ite")

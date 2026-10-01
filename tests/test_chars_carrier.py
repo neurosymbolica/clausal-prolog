@@ -55,7 +55,7 @@ class TestEqualToTheListSpelling:
         assert [k if isinstance(k, str) else "".join(c[0] for c in k) for k in keys] == ["a", "a", "b", "b"], l
 
     def test_string_1_and_length_2(self, tmp_path):
-        mod = _mod(tmp_path, 'p(R) <- if_(string("ab"), R is yes, R is no)\nq(N) <- length("abc", N)\n')
+        mod = _mod(tmp_path, 'p(R) <- ((string("ab"), R is yes) or (not string("ab"), R is no))\nq(N) <- length("abc", N)\n')
         (r,) = _first(mod, "p", Var()); assert r == "yes"
         (n,) = _first(mod, "q", Var()); assert n == 3
 
@@ -64,7 +64,7 @@ class TestEqualToTheListSpelling:
         (r,) = _first(mod, "p", Var()); assert r == chars("abcd"), r
 
     def test_identity_eq_across_spellings(self, tmp_path):
-        mod = _mod(tmp_path, "p(R) <- if_('=='(\"ab\", [a, b]), R is yes, R is no)\n")
+        mod = _mod(tmp_path, "p(R) <- (('=='(\"ab\", [a, b]), R is yes) or (not '=='(\"ab\", [a, b]), R is no))\n")
         (r,) = _first(mod, "p", Var()); assert r == "yes", r
 
     def test_unify_across_spellings(self, tmp_path):
@@ -179,7 +179,7 @@ class TestSlice4SegLayer:
         assert _first(mod, "r") is not None
 
     def test_is_list_flatten_and_fresh_shape(self, tmp_path):
-        mod = _mod(tmp_path, 'p(R) <- if_(is_list("ab"), R is yes, R is no)\nq(F) <- flatten([[a], "bc"], F)\n')
+        mod = _mod(tmp_path, 'p(R) <- ((is_list("ab"), R is yes) or (not is_list("ab"), R is no))\nq(F) <- flatten([[a], "bc"], F)\n')
         (r,) = _first(mod, "p", Var()); assert r == "yes"
         (f,) = _first(mod, "q", Var()); assert f == ["a", "b", "c"], f
 
@@ -193,15 +193,15 @@ class TestSlice4SegLayer:
 
 _PARITY_GOALS = [
     "functor(X, N, A)", "unpack(X, L)", "length(X, N)", "msort([X, [a]], L)",
-    "sort([X, [a]], L)", "if_(compound(X), R is yes, R is no)",
-    "if_(atomic(X), R is yes, R is no)", "if_(is_list(X), R is yes, R is no)",
-    "if_(string(X), R is yes, R is no)", "if_(atom(X), R is yes, R is no)",
-"if_(ground(X), R is yes, R is no)",
+    "sort([X, [a]], L)", "((compound(X), R is yes) or (not compound(X), R is no))",
+    "((atomic(X), R is yes) or (not atomic(X), R is no))", "((is_list(X), R is yes) or (not is_list(X), R is no))",
+    "((string(X), R is yes) or (not string(X), R is no))", "((atom(X), R is yes) or (not atom(X), R is no))",
+"((ground(X), R is yes) or (not ground(X), R is no))",
     "copy_term(X, Y)", "term_variables(X, V)", "append(X, [c], R)",
     "append(X, \"c\", R)", "reverse(X, R)", "last(X, E)", 
     "flatten([X, [c]], F)", "in_(E, X)", "compare(O, X, [a, b])",
-    "compare(O, X, [a, c])", "if_('=='(X, [a, b]), R is yes, R is no)",
-    "if_('@<'(X, [a, c]), R is yes, R is no)", "write_to_string(X, S)",
+    "compare(O, X, [a, c])", "(('=='(X, [a, b]), R is yes) or (not '=='(X, [a, b]), R is no))",
+    "(('@<'(X, [a, c]), R is yes) or (not '@<'(X, [a, c]), R is no))", "write_to_string(X, S)",
     "term_to_string(X, S)", "write_text_to_string(X, S)", "arg(1, X, E)",
     "sum_list([1], S), length(X, N)", "list_to_set(X, S)", "exclude(is_a, X, R)",
     "include(is_a, X, R)", "if_(\"ab\" == X, R is yes, R is no)",

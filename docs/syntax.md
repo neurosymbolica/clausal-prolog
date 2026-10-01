@@ -1306,10 +1306,11 @@ classify >> (if_({1 == 1}, inc, (inc, inc)), inc)
   same starting state and meets at one variable, so a branch that pushes fewer
   times than its siblings is padded out. Whatever follows the construct
   continues from that meeting point.
-- **The condition and the then-branch are one chain**: a push inside the
-  condition is visible to the then-branch. The else-branch starts from the
-  state *before* the condition, so a push made by a condition that failed is
-  not counted.
+- **The `if_/3` condition is a `{Goal}` block**: it touches no accumulator,
+  and `Goal` must be reifiable (a comparison or a reified closure; see
+  [Reified if-then-else](reified_ite.md)). A condition that pushes, or a
+  non-terminal as the condition, is refused at load time: it would be a
+  plain goal, which `if_/3` does not take (ruling 2026-10-01).
 - **Negation does not consume**: `not G` leaves every accumulator where it
   found it.
 

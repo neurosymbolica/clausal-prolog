@@ -584,12 +584,12 @@ class TestEdcgEdgeCases:
 
 
 class TestEdcgIfThenElse:
-    """`if_/3` threads accumulators through the condition and both branches.
+    """`if_/3` threads accumulators through both branches.
 
-    The condition and the then-branch form one chain (`in` → cond → then →
-    `out`); the else-branch runs from `in` straight to `out`, so a push made
-    by a failing condition never reaches it. Both chains are closed to `out`
-    so the element *after* the ITE picks up from there.
+    The condition is a `{Goal}` block that touches no accumulator (if_/3
+    requires a reifiable condition, ruling 2026-10-01); each branch runs from
+    `in` to `out`, and both are closed to `out` so the element *after* the
+    ITE picks up from there.
 
     Regression: this whole case used to be unreachable — the generic
     ``case Call(...)`` above it matched first, leaving the branches with no
@@ -622,16 +622,13 @@ class TestEdcgIfThenElse:
         assert self._count(
             "ite_else", "if_({1 == 2}, inc, (inc, inc))", tmp_path) == 2
 
-    def test_condition_push_carries_into_the_then_branch(self, tmp_path):
-        """# nv"""
-        assert self._count(
-            "ite_condpush", "if_((inc, {1 == 1}), inc, inc)", tmp_path) == 2
-
-    def test_condition_push_does_not_reach_the_else_branch(self, tmp_path):
-        """A push made by a *failing* condition must not be counted."""
-        # nv
-        assert self._count(
-            "ite_condfail", "if_((inc, {1 == 2}), inc, inc)", tmp_path) == 1
+    @pytest.mark.parametrize("cond", ["(inc, {1 == 1})", "(inc, {1 == 2})", "inc"])
+    def test_a_condition_that_pushes_is_refused(self, tmp_path, cond):
+        """if_/3 requires a reifiable condition (operator ruling 2026-10-01):
+        a condition that pushes to an accumulator is a plain goal, refused at
+        load time (it used to run as a soft cut)."""
+        with pytest.raises(SyntaxError, match="reifiable condition"):
+            self._count("ite_condpush", f"if_({cond}, inc, inc)", tmp_path)
 
     def test_a_goal_after_the_ite_continues_the_chain(self, tmp_path):
         """Both branches close to `out`, so the next element picks up there."""
@@ -645,7 +642,7 @@ class TestEdcgIfThenElse:
         src = (
             "-module(ite_dcg, [g(_dcg0, _dcg1), x, y, z])\n"
             "-edcg_pred(g, 0, [dcg])\n"
-            "g >> (if_([x], [y], [z]))\n"
+            "g >> ([T], if_({T is x}, [y], {T is z}))\n"
         )
         mod = _load("ite_dcg", src, tmp_path)
         g = mod.module_dict["g"]
@@ -654,6 +651,6 @@ class TestEdcgIfThenElse:
         z = mod.module_dict["z"]
         # leading x → condition holds → then-branch consumes y
         assert _succeeds("phrase", g, [x, y], module=mod)
-        # no leading x → else-branch consumes z
+        # leading token is not x → else-branch: it is z
         assert _succeeds("phrase", g, [z], module=mod)
         assert not _succeeds("phrase", g, [x, z], module=mod)

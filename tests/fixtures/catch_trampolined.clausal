@@ -127,20 +127,24 @@ test("catch/3 around a many-solution callee still yields every solution") <- (
     NS == [1, 2, 3],
 )
 
-# ── the SEVENTH copy: the general-ITE condition driver ──────────────────────
-# if_/3 with a non-reifiable (user-predicate) condition compiles to a
-# mini-trampoline that drives the condition sub-generator.  Emitted inline it
-# had no exception routing at all, so a catch/3 inside the CONDITION was
-# inert — the ValueError walked out of the whole construct (confirmed
-# 2026-08-26).  These pin the routed behaviour plus the two controls that
-# must not change: a declining/absent handler still lets the error escape,
-# and the then-branch still runs once per condition solution.
-cond_absorbs(R) <- (catch(raise_value_error(_X), _E, R is "absorbed")),
-ite_cond_catch(R) <- (if_(cond_absorbs(_C), R is "then", R is "else")),
+# ── an if_/3 condition: a reified closure ────────────────────────────────────
+# if_/3 with a user-predicate condition used to compile to a mini-trampoline
+# that drove the condition sub-generator (the SEVENTH copy of the drive
+# loop), and emitted inline it had no exception routing: a catch/3 inside the
+# CONDITION was inert (confirmed 2026-08-26).  Since the 2026-10-01 ruling the
+# condition must be reifiable, and a closure condition is an ordinary call of
+# the closure with the truth value appended -- so these pin the same three
+# observables through that call: a catch/3 inside the condition absorbs, a
+# declining/absent handler lets the error escape, and the then-branch runs
+# once per way the condition holds.
+cond_absorbs_t(R, T) <- (catch(raise_value_error(_X), _E, R is "absorbed"), T is True),
+ite_cond_catch(R) <- (if_(cond_absorbs_t(_C), R is "then", R is "else")),
 
-cond_declines(R) <- (catch(raise_value_error(_X), "no_such_error", R is "nope")),
-ite_cond_decline(R) <- (if_(cond_declines(_C), R is "then", R is "else")),
+cond_declines_t(R, T) <- (catch(raise_value_error(_X), "no_such_error", R is "nope"), T is True),
+ite_cond_decline(R) <- (if_(cond_declines_t(_C), R is "then", R is "else")),
 
-ite_cond_raw(R) <- (if_(raise_value_error(_X), R is "then", R is "else")),
+raise_value_error_t(X, T) <- (raise_value_error(X), T is True),
+ite_cond_raw(R) <- (if_(raise_value_error_t(_X), R is "then", R is "else")),
 
-ite_multi(N) <- (if_(counted(N), true, N == 0)),
+counted_t(N, T) <- (counted(N), T is True),
+ite_multi(N) <- (if_(counted_t(N), true, N == 0)),

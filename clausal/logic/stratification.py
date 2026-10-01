@@ -18,8 +18,8 @@ This analysis REPORTS, never refuses:
 
 The graph is conservative in the lint direction: edges are recorded only for
 syntactic goal-position calls (``Call``/bare-name goals, their negations, and
-``if_`` tests — whose *else* branch is guarded by the test's failure, hence
-both a positive and a negative edge). Goals reached through meta-calls
+``if_`` closure tests -- a positive call of the closure with the truth value
+appended, library(reif)'s meaning). Goals reached through meta-calls
 (``findall``, ``call/1``, …) are not traced, so a cycle hidden behind one is
 missed rather than a stratified program flagged.
 """
@@ -68,10 +68,21 @@ def _walk_goal(goal, negative, add_edge):
         _walk_goal(goal.right, negative, add_edge)
         return
     if isinstance(goal, nodes.IfExpr):
-        # The else branch runs under the test's FAILURE — a negative
-        # dependency on the test — while the then branch needs its success.
-        _walk_goal(goal.test, negative, add_edge)
-        _walk_goal(goal.test, True, add_edge)
+        # if_/3 is library(reif)'s (ruling 2026-10-01): its condition is a
+        # reified comparison (no predicate edge) or a closure called with
+        # the truth value appended -- ``p_t(X)`` is a POSITIVE call of
+        # ``p_t/2``, never a negation (the else branch runs on T = False,
+        # not on the closure's failure).  Walk what it compiles as.
+        from clausal.logic.compiler.ite_reified import (  # noqa: PLC0415
+            NonReifiable, if_expansion,
+        )
+        exp = if_expansion(goal)
+        if exp is not goal and not isinstance(exp, NonReifiable):
+            parts = (exp.elements if isinstance(exp, nodes.TupleLiteral)
+                     else [exp])
+            for part in parts:
+                _walk_goal(part, negative, add_edge)
+            return
         _walk_goal(goal.body, negative, add_edge)
         _walk_goal(goal.orelse, negative, add_edge)
         return

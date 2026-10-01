@@ -32,7 +32,9 @@ from clausal.logic.compiler.terms_to_ast import (
     _is_star_list,
     _dotted_name_from_loadattr,
 )
-from clausal.logic.compiler.ite_reified import _is_reifiable
+from clausal.logic.compiler.ite_reified import (
+    NonReifiable, _is_reifiable, if_expansion,
+)
 from clausal.logic.compiler.tabled_naf import _is_tabled_naf
 from clausal.logic.compiler.ir import (
     Alternate,
@@ -110,6 +112,119 @@ _REIFIED_KIND: dict[type, ReifiedKind] = {
     nodes.Gt: "fd_gt",
     nodes.GtE: "fd_ge",
 }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# if_/3: the condition must be REIFIABLE (operator ruling 2026-10-01)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _convert_if(goal: Any, db: Any) -> GoalOp:
+    """``if_(Cond, Then, Else)`` with Scryer's library(reif) meaning:
+    ``call(Cond, T)``, then ``Then`` when ``T`` is true and ``Else`` when it
+    is false -- every way the condition comes out is an answer, so the
+    construct is monotone.  The condition must be REIFIABLE: a reified
+    comparison, a conjunction/disjunction of reifiable conditions, or a
+    closure ``p(Args...)`` for which ``p/N+1`` exists (see
+    :func:`.ite_reified.if_expansion` for the shapes).  Anything else -- a
+    plain goal with no ``p/N+1``, a negation, a membership test, ``once/1``,
+    a literal ``True`` -- is refused at load time with
+    :class:`NonReifiableConditionError`.  (The seam used to run such a
+    condition as a soft cut -- every solution of the condition, the else
+    branch only when there were none -- which is not monotone.)"""
+    exp = if_expansion(goal)
+    if isinstance(exp, NonReifiable):
+        raise NonReifiableConditionError(goal, exp.test, None)
+    if exp is goal:
+        return Branch(
+            test=_convert(goal.test, db),
+            then=_convert(goal.body, db),
+            else_=_convert(goal.orelse, db),
+            reified_test=_REIFIED_KIND[type(nodes.literal_value(goal.test))],
+        )
+    if isinstance(exp, nodes.TupleLiteral):
+        call = exp.elements[0]
+        name = _closure_name(call.func)
+        if name is None or not _closure_resolves(name, len(call.args), db):
+            shown = nodes.Call(func=call.func, args=list(call.args[:-1]),
+                               kwargs=[])
+            raise NonReifiableConditionError(
+                goal, shown, None,
+                closure=None if name is None else (name, len(call.args)))
+    return _convert(exp, db)
+
+
+def _closure_name(func: Any) -> "str | None":
+    if isinstance(func, nodes.LoadName):
+        return func.name
+    if isinstance(func, nodes.LoadAttr):
+        return _dotted_name_from_loadattr(func)
+    return None
+
+
+def _closure_resolves(name: str, arity: int, db: Any) -> bool:
+    """True when ``name/arity`` -- a closure's call with the truth argument
+    appended -- names a procedure this module can call: a builtin, one of
+    its own predicates (defined or ``-dynamic``), or an imported one.  A
+    dotted ``lib.p`` is taken as written (the qualified call resolves at run
+    time, and reports its own existence_error)."""
+    if name == "call" or "." in name:
+        return True
+    from clausal.logic.builtins._registry import get_builtin_dispatch  # noqa: PLC0415
+    if get_builtin_dispatch(name, arity, db) is not None:
+        return True
+    if db is None:
+        return False
+    if db.is_defined(name, arity) or (name, arity) in getattr(
+            db, "_dynamic", ()):
+        return True
+    md = getattr(db, "module_dict", None)
+    cand = md.get(name) if md is not None else None
+    if cand is None:
+        return False
+    from clausal.logic.predicate import resolve_predicate_row  # noqa: PLC0415
+    row = resolve_predicate_row(cand, arity=arity, db=db)
+    return row is not None and row.key[1] == arity
+
+
+class NonReifiableConditionError(SyntaxError):
+    """``if_/3`` was given a condition that is not reifiable.
+
+    The seam's ``if_`` is library(reif)'s (operator ruling 2026-10-01): it
+    calls its condition with one more argument, the truth value, and
+    branches on it.  A plain goal has no truth argument, so it is refused at
+    load time rather than run as a soft cut.  ``predicate`` is filled in by
+    the predicate compiler once the enclosing ``functor/arity`` is known
+    (like :class:`BareGoalVariableError`)."""
+
+    def __init__(self, goal: Any, test: Any, predicate: "str | None",
+                 closure: "tuple[str, int] | None" = None) -> None:
+        self.goal = goal
+        self.test = test
+        self.predicate = predicate
+        self.closure = closure
+        pos = getattr(goal, "position", None) or getattr(test, "position", None)
+        where = f" in predicate {predicate}" if predicate else ""
+        if pos:
+            where += f" (line {pos[0]})"
+        if closure is not None:
+            name, arity = closure
+            why = (f"`{test}` is a plain goal: if_ calls its condition with "
+                   f"one more argument, the truth value, and there is no "
+                   f"{name}/{arity}")
+            hint = (f"define the reified {name}_t/{arity} (T is True when "
+                    f"the condition holds, False when it does not) and write "
+                    f"if_({name}_t({', '.join(str(a) for a in test.args)}), "
+                    f"...), or use a reified comparison")
+        else:
+            why = f"`{test}` is not a reifiable condition"
+            hint = ("write a reified comparison (X is Y, X is not Y, ==, !=, "
+                    "<, <=, >, >=), a conjunction/disjunction of them, or a "
+                    "reified closure p_t(X) whose p_t/2 binds T to True or "
+                    "False")
+        super().__init__(
+            f"if_/3 requires a reifiable condition{where}: {why}. The "
+            f"condition is not run as a soft cut (Scryer's library(reif) "
+            f"if_/3; operator ruling 2026-10-01) -- {hint}.")
 
 
 def _extend(ops: list[GoalOp], body: Any, db: Any) -> None:
@@ -286,38 +401,11 @@ def _convert_inner(goal: Any, db: Any) -> GoalOp:
                 return MetaCall(kind="naf_tabled", args={"call": op})
             return Negate(op=_convert(op, db))
 
-        # ``IfExpr(test, body, orelse)`` → ``Branch``.  ``reified_test``
-        # is populated for the legacy reifiable test types
-        # (unify/dif/FD comparisons); otherwise ``None`` — the general
-        # single-eval ITE shape that each strategy lowers in its own
-        # dialect.  An ``IfExpr`` whose test is a tabled-predicate call
-        # exercises a bespoke ``_naf_tabled`` branch in the legacy
-        # general-ITE compiler; defer those to D5f.
-        case nodes.IfExpr(test=test, body=then, orelse=else_):
-            tabled = (
-                isinstance(test, nodes.Call) and _is_tabled_naf(test, db)
-            )
-            # A unify test whose either side is a star-list converts to a
-            # ListPatternUnify op (see the nodes.Unify case below), which the
-            # reified-branch lowering can't consume (it reads test_op.l/.r).
-            # Such a test is NOT reifiable as a simple eq — fall back to the
-            # general single-eval ITE shape. Surfaces with DCG terminal-branch
-            # if-then-else, e.g. ``g >> (if_([x], [y], [z]))``.
-            star_list_unify = (
-                isinstance(test, nodes.Unify)
-                and (_is_star_list(test.left) or _is_star_list(test.right))
-            )
-            kind = (
-                None if tabled or star_list_unify
-                else (_REIFIED_KIND[type(test)] if _is_reifiable(test) else None)
-            )
-            return Branch(
-                test=_convert(test, db),
-                then=_convert(then, db),
-                else_=_convert(else_, db),
-                reified_test=kind,
-                tabled_naf=tabled,
-            )
+        # ``IfExpr(test, body, orelse)`` -- seam ``if_/3`` -- requires a
+        # REIFIABLE condition (operator ruling 2026-10-01), as Scryer's
+        # library(reif) does: see :func:`_convert_if`.
+        case nodes.IfExpr():
+            return _convert_if(goal, db)
 
         # ── Meta-predicate calls ─────────────────────────────────────
         # Inner goals are passed through as raw terms (not recursively
@@ -876,4 +964,5 @@ def _not_yet(goal: Any) -> NoReturn:
 
 __all__ = ["terms_to_goalop", "count_transition_constructs", "TRANSITION_KEYS",
            "BareGoalVariableError", "BareGoalUndefinedError",
+           "NonReifiableConditionError",
            "SetGoalElementError", "DictGoalError"]

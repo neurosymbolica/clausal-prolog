@@ -16,7 +16,44 @@ In `.clausal` files, use the `if_` function call:
 --8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:if_signature"
 ```
 
-This compiles to a reified three-way branch when the condition is a built-in reifiable operation, or a sound double-evaluation fallback otherwise.
+`if_` is library(reif)'s `if_/3` (Scryer's): the condition must be
+**reifiable** -- something that answers *true* or *false* (or both, each under
+a constraint), never a plain goal that merely succeeds or fails.  A reifiable
+condition is one of:
+
+- a **reified comparison** -- `X is Y`, `X is not Y` (reif's `=/3`, `dif/3`),
+  `==`, `!=`, `<`, `<=`, `>`, `>=` (CLP(ℤ) reification) -- compiled to the
+  three-way branch below;
+- a **conjunction** `(A, B)` / `A and B` or **disjunction** `A or B` of
+  reifiable conditions (reif's `','/3` and `;/3`):
+  `if_(A, if_(B, Then, Else), Else)` and `if_(A, Then, if_(B, Then, Else))`;
+- a **closure** called with one more argument, the truth value: `p_t(X)`
+  when `p_t/2` exists (it binds its last argument to `True` or `False`),
+  `memberd_t(E, Es)`, `'='(X, Y)`, `call(C, X)`, or a variable bound to a
+  closure at run time.  It runs as reif's own body,
+  `p_t(X, T), must_be(boolean, T), if_(T is True, Then, Else)`, so every way
+  the closure answers is a solution:
+
+```seam
+-import_from(clausal.stdlib.reif, [memberd_t])
+-private([a, b, yes, no])
+q(X, R) <- if_(memberd_t(X, [a, b]), R is yes, R is no)
+# X = a, R = yes ; X = b, R = yes ; dif(X, a), dif(X, b), R = no
+```
+
+Anything else -- a plain goal `p(X)` with no `p/2`, `not G`, `X in L`,
+`once(G)`, a type test such as `atom(X)`, a literal `True` -- is refused when
+the file loads, with a `SyntaxError` naming the predicate and line and the
+reified form to write instead.  (Until 2026-10-01 the seam ran such a
+condition as a soft cut: every solution of the condition, the else branch
+only when there were none.  That is not monotone, and it is gone.)  When the
+plain goal is semidet, write it as two exclusive alternatives,
+`(atom(X), R is yes) or (not atom(X), R is no)`, or define the reified
+`p_t/2`.
+
+In a DCG or EDCG body the condition must be a `{Goal}` block (it consumes no
+input), with `Goal` reifiable: `if_({V == 1}, [y], [z])`.  A grammar body as
+the condition (`if_([x], ...)`) is refused for the same reason.
 
 All three arguments are required.
 
@@ -30,9 +67,9 @@ follows it (`instantiation_error` when it is unbound,
 `if_(X = Y, ...)` and `if_(dif(X, Y), ...)` compile to the reified branch
 above, and `if_((A, B), ...)`/`if_((A ; B), ...)` are unfolded as reif's
 `','/3` and `;/3`. Without the import `if_` is an ordinary (undefined) call,
-as in Scryer. The seam's `if_` keeps taking a goal; the seam spells a
-closure condition out:
-`(memberd_t(E, L, T), must_be(boolean, T), if_(T is True, A, B))`.
+as in Scryer. The seam's `if_` has the same meaning (see above): a .pl
+`if_(memberd_t(X, [a, b]), R = yes, R = no)` and the seam
+`if_(memberd_t(X, [a, b]), R is yes, R is no)` give the same three answers.
 
 ### The old spelling, `If/3`
 
@@ -91,11 +128,9 @@ For ground cases, this is as efficient as a simple `if`. For undetermined cases,
 
 This is a direct translation of Neumerkel's `(=)/3` and `if_/3`.
 
-### Reifiable vs general conditions
+### Reified comparisons
 
-The compiler distinguishes two kinds of conditions:
-
-**Reifiable conditions** get the fast three-way check:
+A reified comparison gets the three-way check:
 
 | Condition | Reified via | Undetermined: then path | Undetermined: else path |
 |---|---|---|---|
@@ -108,12 +143,9 @@ The compiler distinguishes two kinds of conditions:
 | `X > Y` | `reify_fd("gt")` | `fd_gt(X, Y)` | `fd_le(X, Y)` |
 | `X >= Y` | `reify_fd("ge")` | `fd_ge(X, Y)` | `fd_lt(X, Y)` |
 
-**Non-reifiable conditions** (arbitrary predicate calls, `in`, etc.) use a single-evaluation pattern with a `_found` flag:
-
-1. Run the condition as a sub-generator. For each solution, set `_found = True` and run the then branch.
-2. After exhaustion, if `_found` is false, run the else branch.
-
-This evaluates the condition only once. For [tabled](tabling.md) predicates, the false path uses `_naf_tabled` instead ([WFS](wfs.md) requires separate tabled negation).
+A closure condition compiles to the closure call with the truth value
+appended, `must_be(boolean, T)`, and this three-way check on `T is True`.
+There is no other kind: a non-reifiable condition does not load.
 
 ---
 
@@ -182,32 +214,17 @@ else:
         trail.undo(_m_4)
 ```
 
-### Generated code (general non-reifiable condition)
+### Generated code (closure condition)
 
-For `if_(member(X, Xs), then_goal, else_goal)`:
-
-```python
-def _ite_cond_0():
-    # compiled member(X, Xs) with yield None as k_stmts
-    ...
-    return; yield
-
-# Single evaluation with _found flag
-_found_0 = False
-_m_0 = trail.mark()
-for _ in _ite_cond_0():
-    _found_0 = True
-    <compiled then_goal>
-trail.undo(_m_0)
-if not _found_0:
-    <compiled else_goal>
-```
-
-For tabled predicates, the false path uses `_naf_tabled` instead of the `_found` flag (required for WFS soundness with conditional answers).
+For `if_(memberd_t(X, Es), then_goal, else_goal)` the compiler emits the code
+for `memberd_t(X, Es, T), must_be(boolean, T), if_(T is True, then_goal,
+else_goal)`: the reified equality branch above, once per answer of the
+closure.
 
 ### Trampoline mode
 
-Both reifiable and general ITE work in trampoline mode. The then/else branches compile in trampoline mode. For general ITE, the condition sub-generator is compiled in simple mode (same pattern as NAF in trampoline).
+Both strategies compile the same reified branch; the then/else branches
+compile in the enclosing strategy.
 
 ---
 
@@ -253,8 +270,8 @@ Goal reordering changes answers — a fundamental soundness problem. Even "soft 
 
 Clausal avoids this entirely:
 
-- **Reifiable conditions** get a three-way check: ground cases are deterministic (no choicepoints), undetermined cases explore both branches with proper constraints.
-- **Non-reifiable conditions** use single evaluation with a `_found` flag.
+- **`if_` requires a reifiable condition**: ground cases are deterministic (no choicepoints), undetermined cases explore both branches with proper constraints, and a closure's every answer is explored.
+- **A plain goal is not a condition**: it is refused at load time rather than run as a soft cut.
 - **Users who want first-solution commitment** use `once()` explicitly.
 
 The result is a system where goal reordering is always safe and adding constraints never loses solutions.
@@ -283,7 +300,7 @@ Key properties:
 - **Failing goal = no solutions**: if the inner goal has no solutions, the continuation is never reached.
 - **Works in both simple and trampoline modes**: inner goal always compiles in simple mode (sub-generator pattern).
 
-`once()` is the explicit escape hatch for users who want first-solution commitment. It is ISO's `once/1` and is the building block for committed-choice patterns like `if_(once(goal), then, else)`. See also [Control](control.md) for other control-flow predicates.
+`once()` is the explicit escape hatch for users who want first-solution commitment. It is ISO's `once/1`. It is not an `if_` condition (it is a plain goal); commit inside a reified closure instead. See also [Control](control.md) for other control-flow predicates.
 
 ---
 
@@ -296,11 +313,9 @@ Key properties:
     - **Reified ITE equality** (6): ground true/false, undetermined explores both — simple + trampoline modes
     - **Reified ITE dif** (3): ground dif true/false, undetermined with swapped branches
     - **Reified ITE FD** (4): ground lt/eq true/false
-    - **General ITE** (4): succeeding/failing condition — simple + trampoline modes
+    - **Non-reifiable conditions** : refused at load time (`tests/iso_l3/test_seam_if_requires_reifiable.py`)
     - **Control flow** (6): no-else (conjunction), nested ITE, binding preservation, conjunction body
-    - **Multi-solution ITE** (2): multi-solution condition, binding preservation
     - **dif interaction** (2): pre-existing dif constraint, undetermined with compatible dif
-    - **Tabled ITE** (2): tabled condition with true/false paths
     - **Import integration** (5): `.clausal` file with ITE, memberd ground/absent/unbound/no-duplicates
     - **`once()` tests** (12): first solution only, failing goal, continuation backtracking, binding preservation, once-inside-if_, `.clausal` file integration — simple + trampoline modes
     - **`once()` .clausal integration** (1): `once_member.clausal` fixture
