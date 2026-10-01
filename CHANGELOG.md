@@ -656,9 +656,10 @@ since 0.4.0 finish three moves:
     `.clausal`, `.seam` and `.pl` caches keep their keys.
   - A Clausal Prolog file always loads through the native front end,
     whatever `CLAUSAL_PL_FRONTEND` says. `PrologFinder` and the import
-    finder take the Prolog suffixes from `.pl` plus the Clausal Prolog
-    tuple; the seam group is still asked first, so `name.seam` beats
-    `name.pl` in one directory for every importer.
+    finder take the Prolog suffixes from the Clausal Prolog tuple then
+    `.pl`; the seam group is still asked first. So in one directory
+    `name.seam` beats `name.pl`, and after the flip `name.clausal` beats
+    `name.pl`, for every importer.
   - `clausal-fmt` and `clausal-rewrite` refuse a file whose extension says
     it is Prolog (`.pl`, or Clausal Prolog), naming the surface, instead of
     feeding it to the seam parser.

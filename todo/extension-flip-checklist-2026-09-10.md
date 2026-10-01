@@ -60,15 +60,20 @@ reads a shared suffix list (positive control required).
 
 - The end-of-life translator (`clausal/tools/prolog_to_clausal.py`) spells
   `(".clausal", ".seam")` as "the seam twin" in `_find_module_file` and
-  `_MODULE_EXTS`.  After the flip a `.clausal` twin of a `.pl` is Prolog, and
-  the finder takes the `.pl` (Prolog group order `.pl`, `.clausal`).  Only
-  the translator's export-list shortcut is affected.  Fix it or retire the
-  translator first.
+  `_MODULE_EXTS`.  After the flip a `.clausal` twin of a `.pl` is Clausal
+  Prolog, and the finder takes the `.clausal` (ruled order below), so the
+  translator's "a twin exists, read no export list" shortcut still matches
+  what the hook loads; only its comment ("seam twin") goes stale.  Fix it
+  or retire the translator first.
 - Prose in `docs/**/*.md` naming `.clausal` as seam source (item 5) is not
   swept; only the fences are.
-- Ruling wanted: within one directory, `name.pl` beats a Clausal Prolog
-  `name.clausal` (the Prolog group is `(PROLOG_SUFFIX,
-  *CLAUSAL_PROLOG_SUFFIXES)`).  Today `name.clausal` (seam) beats `name.pl`.
+- RULED 2026-10-01 (operator), DONE on this branch: the Prolog group is
+  `(*CLAUSAL_PROLOG_SUFFIXES, PROLOG_SUFFIX)` (`_suffixes.prolog_suffixes()`),
+  so after the flip `name.clausal` beats `name.pl` in one directory for ANY
+  importer (a `.pl` importer may use a `.clausal` module).  Full finder order
+  per path entry, before the flip: `[.clausal, .seam]` then `[.pl]`; after:
+  `[.seam]` then `[.clausal, .pl]`.  Pinned in
+  `tests/test_extension_flip_prep.py` (simulated flip).
 
 ## Why this file exists
 

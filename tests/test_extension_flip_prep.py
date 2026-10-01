@@ -153,7 +153,7 @@ def test_before_the_flip_the_finder_reads_clausal_as_seam(tree):
 
 
 def test_prolog_finder_extensions_follow_the_tuple(flip, tree):
-    assert ih.PrologFinder()._suffixes() == (".pl", ".clausal")
+    assert ih.PrologFinder()._suffixes() == (".clausal", ".pl")
     spec = ih.PrologFinder().find_spec("efcp", path=[str(tree)])
     assert isinstance(spec.loader, ih.NativePrologLoader)
     assert ih.PrologFinder().find_spec("efseam", path=[str(tree)]) is None
@@ -263,7 +263,7 @@ def test_the_finder_asks_for_seam_before_prolog_before_the_flip():
 
 
 def test_the_finder_asks_for_seam_before_prolog_after_the_flip(flip):
-    assert _group_suffixes() == [(".seam",), (".pl", ".clausal")]
+    assert _group_suffixes() == [(".seam",), (".clausal", ".pl")]
 
 
 def test_the_finder_picks_the_seam_twin(twin):
@@ -337,3 +337,45 @@ def test_a_clausal_prolog_importer_is_told_use_module(flip, tmp_path,
         for n in ("efprivlib", "efprivimp"):
             sys.modules.pop(n, None)
         shutil.rmtree(tmp_path / "__pycache__", ignore_errors=True)
+
+
+# ── a Clausal Prolog / .pl twin: the .clausal wins (operator ruling) ──
+
+
+@pytest.fixture
+def cp_twin(tmp_path, monkeypatch):
+    (tmp_path / "eftwinlib.clausal").write_text(
+        ":- module(eftwinlib, [p/1]).\np(1).\n:- end_module(eftwinlib).\n")
+    (tmp_path / "eftwinlib.pl").write_text(
+        ":- module(eftwinlib, [p/1]).\np(2).\n")
+    body = ":- use_module(eftwinlib, [p/1]).\nq(X) :- p(X).\n"
+    (tmp_path / "eftwin_cp.clausal").write_text(
+        ":- module(eftwin_cp, [q/1]).\n" + body
+        + ":- end_module(eftwin_cp).\n")
+    (tmp_path / "eftwin_pl.pl").write_text(
+        ":- module(eftwin_pl, [q/1]).\n" + body)
+    names = ("eftwinlib", "eftwin_cp", "eftwin_pl")
+    for n in names:
+        sys.modules.pop(n, None)
+    monkeypatch.setattr(sys, "path", [str(tmp_path)] + sys.path)
+    importlib.invalidate_caches()
+    yield tmp_path
+    for n in names:
+        sys.modules.pop(n, None)
+    shutil.rmtree(tmp_path / "__pycache__", ignore_errors=True)
+
+
+def test_the_finders_pick_clausal_prolog_over_pl(flip, cp_twin):
+    for finder in (ih.PredicateFinder(), ih.PrologFinder()):
+        spec = finder.find_spec("eftwinlib", path=[str(cp_twin)])
+        assert spec.origin.endswith("eftwinlib.clausal")
+        assert isinstance(spec.loader, ih.NativePrologLoader)
+
+
+@pytest.mark.parametrize("frontend", ["native", "translator"])
+@pytest.mark.parametrize("importer", ["eftwin_cp", "eftwin_pl"])
+def test_any_importer_of_a_clausal_pl_twin_gets_the_clausal(
+        flip, cp_twin, monkeypatch, frontend, importer):
+    monkeypatch.setenv(ih.PL_FRONTEND_ENV, frontend)
+    assert _answers(importlib.import_module(importer), "q") == [1]
+    assert sys.modules["eftwinlib"].__file__.endswith("eftwinlib.clausal")

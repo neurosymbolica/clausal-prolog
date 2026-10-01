@@ -45,10 +45,13 @@ SOURCE_SUFFIXES: tuple[str, ...] = (*CLAUSAL_SUFFIXES, PROLOG_SUFFIX,
 
 def prolog_suffixes() -> tuple[str, ...]:
     """The extensions of PROLOG-syntax source -- ``.pl`` and the Clausal
-    Prolog surface -- in finder priority order.  Read at each call (a
-    function, not a constant) so a caller follows the tuples as they stand,
-    including a test that simulates the extension flip by patching them."""
-    return (PROLOG_SUFFIX, *CLAUSAL_PROLOG_SUFFIXES)
+    Prolog surface -- in finder priority order: the Clausal Prolog suffixes
+    FIRST, so ``name.clausal`` beats ``name.pl`` in one directory for every
+    importer (operator ruling 2026-10-01; a ``.pl`` importer may use a
+    Clausal Prolog module).  Read at each call (a function, not a constant)
+    so a caller follows the tuples as they stand, including a test that
+    simulates the extension flip by patching them."""
+    return (*CLAUSAL_PROLOG_SUFFIXES, PROLOG_SUFFIX)
 
 
 def is_prolog_source(path) -> bool:
