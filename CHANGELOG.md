@@ -852,6 +852,12 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
 
 ### Fixed
 
+- **`phrase(!, L)` and `phrase(!, L, R)` answer as ISO and Scryer do.** A
+  cut that is the whole grammar body is local to phrase and cuts nothing,
+  as in `call(!)`: `phrase(!, [])` succeeds, `phrase(!, [a])` fails, and
+  `phrase(!, [a], R)` gives `R = [a]`. It used to be looked up as the
+  nonterminal `!//0` and raised `existence_error(procedure, !/2)`. A cut
+  inside a larger body (`phrase((a, !), L)`) is still refused.
 - **A clpz inequality with an arithmetic side narrows its variables and
   binds a singleton.** `7*R #=< 1000000` left R in `inf..sup`: the posted
   constraint narrowed only a side that was a bare variable, so an expression

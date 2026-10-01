@@ -154,8 +154,9 @@ def _dcg_body_goal(body, s0, s):
         # cut is a leaf of the translated body and call/1's converter
         # REFUSES it (existence_error(procedure, !/0)), as in any other
         # meta-called body -- it used to reach the fold as the nonterminal
-        # ``!/2``.  A bare ``phrase(!, L)`` never comes here (it is not a
-        # control body) and keeps that nonterminal reading.
+        # ``!/2``.  A cut that is the WHOLE phrase body never comes here:
+        # ``_resolve_nonterminal`` answers it as ``S0 = S`` (see
+        # ``_is_whole_body_cut``).
         return (",", "!", ("=", s0, s))
     if isinstance(b, list) or is_chars(b) or isinstance(b, bytes):
         items = list(_elements(b))
@@ -165,6 +166,20 @@ def _dcg_body_goal(body, s0, s):
     if is_cell:
         return (functor, *b[1:], s0, s)
     return (b, s0, s)
+
+
+def _is_whole_body_cut(rule_val) -> bool:
+    """True when the WHOLE grammar body handed to phrase/2,3 is a cut.
+
+    ISO 7.14.2 translates ``!`` as ``!, S0 = S`` and phrase/3 CALLS that
+    translation, so the cut is local to the call and is its first goal:
+    nothing precedes it inside the barrier, it cuts nothing, and the goal
+    is ``S0 = S`` -- exactly how call/1 answers a cut that is its whole goal
+    (``higher_order._ZERO_ARITY_CONTROL_GOALS``).  Scryer:
+    ``phrase(!, [])`` succeeds, ``phrase(!, [a])`` fails,
+    ``phrase(!, [a], R)`` gives ``R = [a]``.  A cut INSIDE a larger body
+    (``phrase((a, !), L)``) is still refused by call/1's converter."""
+    return type(rule_val) is str and rule_val == "!"
 
 
 def _resolve_nonterminal(db, rule_val, extra_args, context):
@@ -209,6 +224,12 @@ def _resolve_nonterminal(db, rule_val, extra_args, context):
     ``existence_error(procedure, nosuch/2)`` -- N//A is N/(A+2) -- as Scryer.
     """
     from clausal.logic.builtins.higher_order import _resolve_named_goal  # noqa: PLC0415
+    if len(extra_args) == 2 and _is_whole_body_cut(rule_val):
+        # ``phrase(!, L)`` is ``call((!, S0 = S))``: the local cut cuts
+        # nothing (``_is_whole_body_cut``).  It used to be looked up as the
+        # nonterminal ``!//0`` -- existence_error(procedure, !/2).
+        s0, s = extra_args
+        return _resolve_named_goal(db, ("=", s0, s), [], context)
     if len(extra_args) == 2 and (_is_dcg_control_body(rule_val)
                                  or _is_dcg_terminal_body(rule_val)):
         # A control-construct BODY -- ``phrase((a, b), L)`` -- is translated,
