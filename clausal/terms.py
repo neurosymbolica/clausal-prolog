@@ -452,13 +452,15 @@ def _walked_nil(w) -> bool:
 def _partial_list_parts(t):
     """Read *t* (dereferenced, not a Var) as the list ``[E1, ..., En|Tail]``:
     ``(elements, tail)`` with *tail* an unbound Var, or ``(elements, None)``
-    for a proper list (a ``list``, a chars carrier -- its chars -- a
-    ``bytes`` -- its codes, as ``SegList.__unify__`` reads them -- or a
+    for a proper list (a ``list``, the nil ``()``, a chars carrier -- its
+    chars -- a ``bytes`` -- its codes, as ``SegList.__unify__`` reads them -- or a
     SegList whose holes are all filled).  ``None`` for anything else: a
     SegList with a hole that is not its tail (``[*A, x]``), which only the
     split-enumerating ``SegList.__unify__`` can answer, and every non-list."""
     if isinstance(t, list):
         return t, None
+    if type(t) is tuple and not t:
+        return [], None                # () is the nil (atoms.NIL_KEY)
     if is_chars(t):
         return [char_atom(c) for c in chars_text(t)], None
     if isinstance(t, bytes):

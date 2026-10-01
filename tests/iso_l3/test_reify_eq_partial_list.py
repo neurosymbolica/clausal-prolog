@@ -123,7 +123,7 @@ from clausal.terms import SegList, ConcreteSeg, VarSeg
 
 def P(*els, tail=None):
     tail = Var() if tail is None else tail
-    return SegList([ConcreteSeg(list(els)), VarSeg(tail)])
+    return SegList(([ConcreteSeg(list(els))] if els else []) + [VarSeg(tail)])
 
 def show(v):
     v = walk(deref(v))
@@ -154,6 +154,12 @@ print(run(P("a", "b"), ["a"]))
 L = Var(); print(run(P("a", tail=L), P("a", "b", tail=L)))   # occurs check
 t = Trail(); L = Var(); print(C.dif(["a", "b"], P("a", tail=L), t),
                               unify(L, ["b"], t))
+L = Var(); print(run(b"ab", P(97, tail=L), (L, [98])))         # codes
+L, M = Var(), Var(); t = Trail(); unify(L, P("b", tail=M), t)  # chained tail
+print(run(P("a", tail=L), ["a", "b", "c"], (M, ["c"])))
+L = Var(); print(run(P(tail=L), (), (L, [])))                   # () is nil
+t = Trail(); L, M = Var(), Var()
+print(C.dif(P("a", tail=L), P("a", tail=M), t), unify(L, M, t))
 """
 
 
@@ -180,4 +186,8 @@ def test_the_python_twin_agrees_with_c():
         "[[False]]",
         "[[False]]",          # occurs-checked: L = [b|L] has no answer
         "True False",
+        "[[True, True, '[98]'], [False, False, '_']]",
+        "[[True, True, \"['c']\"], [False, False, '_']]",
+        "[[True, True, '[]'], [False, False, '_']]",
+        "True False",                         # dif(L, M) refuses L = M
     ]

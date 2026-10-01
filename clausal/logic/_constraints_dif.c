@@ -267,12 +267,26 @@ static int
 unify_partial_lists_oc(PyObject *d1, PyObject *d2, TrailObject *trail,
                        int depth)
 {
+    /* Only a list-shaped pair can be read (a SegList, a list, a bytes, or a
+     * tuple -- the chars carrier or the nil ()): anything else falls through
+     * without a call into Python. */
+#define LISTISH(o) (Py_TYPE(o) == (PyTypeObject *)SegList_type \
+                    || PyList_Check(o) || PyBytes_Check(o) || PyTuple_Check(o))
+    if (!LISTISH(d1) || !LISTISH(d2)) return 2;
+#undef LISTISH
     PyObject *p1 = PyObject_CallOneArg(partial_list_parts_fn, d1);
     if (!p1) return -1;
     if (p1 == Py_None) { Py_DECREF(p1); return 2; }
     PyObject *p2 = PyObject_CallOneArg(partial_list_parts_fn, d2);
     if (!p2) { Py_DECREF(p1); return -1; }
     if (p2 == Py_None) { Py_DECREF(p1); Py_DECREF(p2); return 2; }
+    if (!PyTuple_Check(p1) || PyTuple_GET_SIZE(p1) != 2
+        || !PyTuple_Check(p2) || PyTuple_GET_SIZE(p2) != 2) {
+        PyErr_SetString(PyExc_TypeError,
+                        "_partial_list_parts must return (elements, tail)");
+        Py_DECREF(p1); Py_DECREF(p2);
+        return -1;
+    }
 
     int result = -1;
     PyObject *rest = NULL, *build = NULL;
@@ -726,6 +740,12 @@ PyInit__constraints_dif(void)
     if (!partial_list_parts_fn || !partial_list_build_fn) {
         Py_DECREF(terms_mod);
         Py_XDECREF(seglist_type);
+        Py_CLEAR(DictTerm_type);
+        Py_CLEAR(Quantity_type);
+        Py_CLEAR(ConcreteSeg_type);
+        Py_CLEAR(VarSeg_type);
+        Py_CLEAR(partial_list_parts_fn);
+        Py_CLEAR(partial_list_build_fn);
         return NULL;
     }
     PyObject *segstring_type = PyObject_GetAttrString(terms_mod, "SegString");
