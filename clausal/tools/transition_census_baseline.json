@@ -203,48 +203,48 @@
   "tests/fixtures/phase5_builtins.seam": {
    "\\+/1": 7
   },
-  "tests/fixtures/prolog_golden/dcg_grammar.seam": {
-   "\\+/1": 1
-  },
   "tests/fixtures/prolog_golden/dcg_grammar.pl": {
    "unreadable": 1
   },
-  "tests/fixtures/prolog_golden/iso_arithmetic.seam": {
-   "\\+/1": 12
+  "tests/fixtures/prolog_golden/dcg_grammar.seam": {
+   "\\+/1": 1
   },
   "tests/fixtures/prolog_golden/iso_arithmetic.pl": {
    "\\+/1": 12
   },
-  "tests/fixtures/prolog_golden/iso_control.seam": {
-   "\\+/1": 16
+  "tests/fixtures/prolog_golden/iso_arithmetic.seam": {
+   "\\+/1": 12
   },
   "tests/fixtures/prolog_golden/iso_control.pl": {
    "\\+/1": 16
   },
-  "tests/fixtures/prolog_golden/iso_list_operations.seam": {
+  "tests/fixtures/prolog_golden/iso_control.seam": {
    "\\+/1": 16
   },
   "tests/fixtures/prolog_golden/iso_list_operations.pl": {
    "\\+/1": 16,
    "memberchk/2": 2
   },
-  "tests/fixtures/prolog_golden/iso_type_checking.seam": {
-   "\\+/1": 30
+  "tests/fixtures/prolog_golden/iso_list_operations.seam": {
+   "\\+/1": 16
   },
   "tests/fixtures/prolog_golden/iso_type_checking.pl": {
    "\\+/1": 30
   },
-  "tests/fixtures/prolog_golden/iso_unification.seam": {
-   "\\+/1": 11
+  "tests/fixtures/prolog_golden/iso_type_checking.seam": {
+   "\\+/1": 30
   },
   "tests/fixtures/prolog_golden/iso_unification.pl": {
    "\\+/1": 11
   },
-  "tests/fixtures/prolog_golden/meta_test.seam": {
+  "tests/fixtures/prolog_golden/iso_unification.seam": {
+   "\\+/1": 11
+  },
+  "tests/fixtures/prolog_golden/meta_test.pl": {
    "\\+/1": 4,
    "forall/2": 4
   },
-  "tests/fixtures/prolog_golden/meta_test.pl": {
+  "tests/fixtures/prolog_golden/meta_test.seam": {
    "\\+/1": 4,
    "forall/2": 4
   },
