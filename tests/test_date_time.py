@@ -114,11 +114,12 @@ class TestTime:
         assert deref(m) == 30
         assert deref(s) == 45
 
-    def test_construct_invalid_fails(self):
-        # nv
-        t = Var()
-        results, _ = simple_solutions(_time_4, 25, 0, 0, t)
-        assert len(results) == 0
+    def test_construct_invalid_raises_domain_error(self):
+        # nv -- RULED 2026-10-02: right types, no such time.  The time TERM
+        # is the culprit, as date/3 raises domain_error(date, date(...)).
+        assert raised(_time_4, 25, 0, 0, Var()) == (
+            'error', ('domain_error', 'time', ('time', 25, 0, 0)),
+            ('/', 'time', 4))
 
     def test_midnight(self):
         # nv
@@ -157,11 +158,16 @@ class TestDateTime:
         assert deref(mi) == 30
         assert deref(s) == 45
 
-    def test_construct_invalid_fails(self):
-        # nv
-        v = Var()
-        results, _ = simple_solutions(_datetime_7, 2026, 13, 1, 0, 0, 0, v)
-        assert len(results) == 0
+    def test_construct_invalid_raises_domain_error(self):
+        # nv -- month 13, and day 32: domain_error(datetime, datetime(...)).
+        assert raised(_datetime_7, 2026, 13, 1, 0, 0, 0, Var()) == (
+            'error',
+            ('domain_error', 'datetime', ('datetime', 2026, 13, 1, 0, 0, 0)),
+            ('/', 'datetime', 7))
+        assert raised(_datetime_7, 2026, 1, 32, 0, 0, 0, Var()) == (
+            'error',
+            ('domain_error', 'datetime', ('datetime', 2026, 1, 32, 0, 0, 0)),
+            ('/', 'datetime', 7))
 
 
 # ── timedelta/3 ─────────────────────────────────────────────────────────
@@ -356,13 +362,18 @@ class TestDatetimeString:
         )
         assert len(results) == 0
 
-    def test_parse_invalid_fails(self):
-        # vn
-        v = Var()
-        results, _ = simple_solutions(
-            _datetime_string_3, v, chars("not-a-date"), chars("%Y-%m-%d")
-        )
-        assert len(results) == 0
+    def test_parse_invalid_raises_domain_error(self):
+        # vn -- text that does not match the format.
+        s = chars("not-a-date")
+        assert raised(_datetime_string_3, Var(), s, chars("%Y-%m-%d")) == (
+            'error', ('domain_error', 'datetime_text', s),
+            ('/', 'datetime_string', 3))
+
+    def test_parse_bad_directive_raises_domain_error_on_format(self):
+        f = chars("%Q")
+        assert raised(_datetime_string_3, Var(), chars("x"), f) == (
+            'error', ('domain_error', 'datetime_format', f),
+            ('/', 'datetime_string', 3))
 
     def test_both_unbound_raises(self):
         # vv
@@ -771,11 +782,12 @@ class TestDatetimeStringIso:
         assert len(results) == 1
         assert deref(v) == _T(dt.datetime(2026, 3, 16, 14, 30, 0))
 
-    def test_inverse_invalid_fails(self):
+    def test_inverse_invalid_raises_domain_error(self):
         # vn
-        v = Var()
-        results, _ = simple_solutions(_datetime_string_iso_2, v, chars("nope"))
-        assert len(results) == 0
+        s = chars("nope")
+        assert raised(_datetime_string_iso_2, Var(), s) == (
+            'error', ('domain_error', 'iso_datetime', s),
+            ('/', 'datetime_string_iso', 2))
 
     def test_both_unbound_raises(self):
         # vv
@@ -810,11 +822,12 @@ class TestDateStringIso:
             _date_string_iso_2, _T(dt.datetime(2026, 3, 16, 1, 2, 3)), Var()
         ) == ('error', ('type_error', 'date', ('datetime', 2026, 3, 16, 1, 2, 3, 0)), ('/', 'date_string_iso', 2))
 
-    def test_inverse_invalid_fails(self):
+    def test_inverse_invalid_raises_domain_error(self):
         # vn
-        v = Var()
-        results, _ = simple_solutions(_date_string_iso_2, v, chars("2026-03-16T00:00:00"))
-        assert len(results) == 0
+        s = chars("2026-03-16T00:00:00")
+        assert raised(_date_string_iso_2, Var(), s) == (
+            'error', ('domain_error', 'iso_date', s),
+            ('/', 'date_string_iso', 2))
 
     def test_both_unbound_raises(self):
         # vv
@@ -876,15 +889,26 @@ class TestDateMaxMin:
         )
         assert len(results) == 0
 
-    def test_mixed_date_and_datetime_fails_cleanly(self):
-        """date < datetime comparison raises TypeError in Python — the
-        builtin fails the goal rather than leaking the exception."""
+    def test_mixed_date_and_datetime_raises_type_error(self):
+        """A plain date and a datetime are not comparable.  RULED 2026-10-02:
+        the first argument fixes the type, so the second is a type_error --
+        ``type_error(date, DT)`` / ``type_error(datetime, D)``."""
         # nnv
-        results, _ = simple_solutions(
-            _date_max_3, _T(dt.date(2026, 3, 16)),
-            _T(dt.datetime(2026, 3, 16, 9, 0)), Var()
-        )
-        assert len(results) == 0
+        d, t = _T(dt.date(2026, 3, 16)), _T(dt.datetime(2026, 3, 16, 9, 0))
+        assert raised(_date_max_3, d, t, Var()) == (
+            'error', ('type_error', 'date', t), ('/', 'date_max', 3))
+        assert raised(_date_min_3, t, d, Var()) == (
+            'error', ('type_error', 'datetime', d), ('/', 'date_min', 3))
+
+    def test_mixed_naive_and_aware_raises_domain_error(self):
+        naive = _T(dt.datetime(2026, 3, 16, 9, 0))
+        aware = _T(dt.datetime(2026, 3, 16, 9, 0, tzinfo=dt.timezone.utc))
+        assert raised(_date_max_3, naive, aware, Var()) == (
+            'error', ('domain_error', 'naive_datetime', aware),
+            ('/', 'date_max', 3))
+        assert raised(_date_min_3, aware, naive, Var()) == (
+            'error', ('domain_error', 'aware_datetime', naive),
+            ('/', 'date_min', 3))
 
     def test_non_date_arg_raises(self):
         # nnv
@@ -935,12 +959,14 @@ class TestOrdinal:
         assert len(results) == 1
         assert deref(n) == dt.date(2026, 3, 16).toordinal()
 
-    def test_reverse_out_of_range_fails(self):
-        """date.fromordinal raises ValueError for ordinal < 1 — the builtin
-        fails the goal rather than leaking the exception."""
+    def test_reverse_out_of_range_raises_domain_error(self):
+        """date.fromordinal accepts 1 .. 3652059.  RULED 2026-10-02: outside
+        that is domain_error(ordinal, N); it used to fail the goal."""
         # vn
-        results, _ = simple_solutions(_ordinal_2, Var(), 0)
-        assert len(results) == 0
+        assert raised(_ordinal_2, Var(), 0) == (
+            'error', ('domain_error', 'ordinal', 0), ('/', 'ordinal', 2))
+        assert raised(_ordinal_2, Var(), 3652060) == (
+            'error', ('domain_error', 'ordinal', 3652060), ('/', 'ordinal', 2))
 
     def test_both_unbound_raises(self):
         # vv

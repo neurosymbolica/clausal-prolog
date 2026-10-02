@@ -239,11 +239,11 @@ class TestUUIDStr:
         results, _ = simple_solutions(_uuid_str_2, u, chars("not-a-match"))
         assert len(results) == 0
 
-    def test_bad_string_fails(self):
-        # nv
-        u = Var()
-        results, _ = simple_solutions(_uuid_str_2, u, chars("not-a-uuid"))
-        assert len(results) == 0
+    def test_bad_string_raises_domain_error(self):
+        # nv -- RULED 2026-10-02 (it used to fail with a note).
+        s = chars("not-a-uuid")
+        assert raised(_uuid_str_2, Var(), s) == (
+            'error', ('domain_error', 'uuid_text', s), ('/', 'uuid_str', 2))
 
 
 # ── uuid_hex ──────────────────────────────────────────────────────────────
@@ -274,11 +274,16 @@ class TestUUIDHex:
         simple_solutions(_uuid_hex_2, u_out, deref(h))
         assert deref(u_out) == u_in
 
-    def test_bad_hex_fails(self):
+    def test_bad_hex_raises_domain_error(self):
         # nv
-        u = Var()
-        results, _ = simple_solutions(_uuid_hex_2, u, chars("zzzz"))
-        assert len(results) == 0
+        s = chars("zzzz")
+        assert raised(_uuid_hex_2, Var(), s) == (
+            'error', ('domain_error', 'uuid_hex', s), ('/', 'uuid_hex', 2))
+
+    def test_bad_urn_raises_domain_error(self):
+        s = chars("urn:uuid:nope")
+        assert raised(_uuid_urn_2, Var(), s) == (
+            'error', ('domain_error', 'uuid_urn', s), ('/', 'uuid_urn', 2))
 
 
 # ── uuid_urn ──────────────────────────────────────────────────────────────
@@ -338,11 +343,11 @@ class TestUUIDBytes:
         simple_solutions(_uuid_bytes_2, u_out, deref(b))
         assert deref(u_out) == u_in
 
-    def test_wrong_length_fails(self):
-        # nv
-        u = Var()
-        results, _ = simple_solutions(_uuid_bytes_2, u, b"\x00\x01\x02")
-        assert len(results) == 0
+    def test_wrong_length_raises_domain_error(self):
+        # nv -- not 16 bytes.
+        assert raised(_uuid_bytes_2, Var(), b"\x00\x01\x02") == (
+            'error', ('domain_error', 'uuid_bytes', b"\x00\x01\x02"),
+            ('/', 'uuid_bytes', 2))
 
 
 # ── uuid_int ──────────────────────────────────────────────────────────────
@@ -373,11 +378,13 @@ class TestUUIDInt:
         simple_solutions(_uuid_int_2, u_out, deref(n))
         assert deref(u_out) == u_in
 
-    def test_negative_fails(self):
-        # nv
-        u = Var()
-        results, _ = simple_solutions(_uuid_int_2, u, -1)
-        assert len(results) == 0
+    def test_negative_raises_domain_error(self):
+        # nv -- outside 0 .. 2**128 - 1.
+        assert raised(_uuid_int_2, Var(), -1) == (
+            'error', ('domain_error', 'uuid_int', -1), ('/', 'uuid_int', 2))
+        assert raised(_uuid_int_2, Var(), 2 ** 128) == (
+            'error', ('domain_error', 'uuid_int', 2 ** 128),
+            ('/', 'uuid_int', 2))
 
 
 # ── uuid_version ──────────────────────────────────────────────────────────

@@ -15,7 +15,7 @@ from clausal.modules.py import (
     ModulePredicate,
     _import_stdlib,
     expect_type,
-    note_mismatch,
+    raise_domain_error,
     simple_to_trampoline,
     to_bytes,
 )
@@ -41,12 +41,10 @@ def _derive_5(password, salt, iterations, key_length, derived_key, trail, k):
         expect_type(sa, (str, bytes), "derive/5", arg=2)   # raises
     expect_type(it, int, "derive/5", arg=3)
     if it <= 0:
-        note_mismatch("derive/5", "was called with iterations <= 0 (argument 3)")
-        return
+        raise_domain_error("positive_integer", it, "derive/5", arg=3)
     expect_type(kl, int, "derive/5", arg=4)
     if kl <= 0:
-        note_mismatch("derive/5", "was called with key length <= 0 (argument 4)")
-        return
+        raise_domain_error("positive_integer", kl, "derive/5", arg=4)
     dk = _hashlib.pbkdf2_hmac("sha256", pw_b, sa_b, it, dklen=kl)
     if unify(derived_key, text_result(dk.hex()), trail):
         yield None

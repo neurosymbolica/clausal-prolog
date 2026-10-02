@@ -95,7 +95,12 @@ any_goals >> (any_goal, any_goals)
 
 starts_with_edge >> (edge_goal, any_goals)
 
-starts_with_edge(SRC, NAME) <- (
+# NOT named `starts_with_edge/2`: that is the DCG nonterminal's own
+# predicate, so the rule used to run as a second `starts_with_edge` clause
+# inside phrase/2 with the GOALS list as SRC -- a non-text source, which
+# reified_clause/2 failed on silently and now (ruling 2026-10-02) raises
+# type_error(text, ...).
+edge_led_clause(SRC, NAME) <- (
     reified_clause(SRC, CLAUSE),
     clause_head(CLAUSE, HEAD),
     goal_functor(HEAD, NAME, _),
@@ -183,7 +188,7 @@ class TestFiles:
 
 class TestDcgMatching:
     def test_dcg_matches_bodies_starting_with_edge_call(self, matchers):
-        names = _all_bindings("starts_with_edge", chars(_TARGET), module=matchers)
+        names = _all_bindings("edge_led_clause", chars(_TARGET), module=matchers)
         assert names == [mint("connected"), mint("connected")]
 
 

@@ -665,12 +665,58 @@ print(repr(my_module.bar))            # 'bar'
   -- and an unbound input that the call needs is `instantiation_error`. The
   type is ISO's name where there is one (`integer`, `number`, `list`) and the
   wrapper's own otherwise (`text` for an atom-or-string position, `date`,
-  `datetime`, `time`, `timedelta`, `uuid`, `dict`, `socket`). A value of the
-  right type that the library rejects -- month 13, malformed JSON, an unknown
-  hash name, a file that does not exist -- still fails the goal, and the
-  failure report of `clausal.testing` names what was rejected. An output
-  argument is unchanged: leave it unbound. Wrap a call in `catch/3` where a
-  caller wants the old failure.
+  `datetime`, `time`, `timedelta`, `uuid`, `dict`, `socket`); `text` is
+  final.
+- **Out-of-range and invalid values raise** (ruled 2026-10-02). A value of
+  the right type that the wrapper or the library rejects raises
+  `error(domain_error(Domain, Culprit), Name/Arity)`, where `Culprit` is the
+  term as written. The domain is ISO's name where there is one
+  (`not_less_than_zero`) and the wrapper's own otherwise:
+
+    | Call | Error |
+    |---|---|
+    | `hash(nope, "abc", H)`, `hash(shake_128, ...)`, `sign(nope, K, D, H)` | `domain_error(hash_algorithm, nope)` |
+    | `derive(P, S, 0, DK)` (iterations or key length <= 0) | `domain_error(positive_integer, 0)` |
+    | `parse("{bad", T)` (`py.json`) | `domain_error(json_text, "{bad")` |
+    | `read_file(F, T)` (`py.json`) on a file that is not JSON | `domain_error(json_file, F)` |
+    | `time(25, 0, 0, T)` | `domain_error(time, time(25, 0, 0))` |
+    | `datetime(2026, 13, 1, 0, 0, 0, DT)` | `domain_error(datetime, datetime(2026, 13, 1, 0, 0, 0))` |
+    | `ordinal(D, 0)` | `domain_error(ordinal, 0)` |
+    | `datetime_string(DT, "x", "%Y")` / `(..., "%Q")` | `domain_error(datetime_text, "x")` / `domain_error(datetime_format, "%Q")` |
+    | `date_string_iso(D, "nope")`, `datetime_string_iso(DT, "nope")` | `domain_error(iso_date, "nope")`, `domain_error(iso_datetime, "nope")` |
+    | `date_max(DT, Aware, M)` (a naive and an aware datetime) | `domain_error(naive_datetime, Aware)` |
+    | `get("not-a-url", B)`, `py.url.parse("http://[::1", P)` | `domain_error(url, "not-a-url")` |
+    | `request(Opts, S, B)` with no `url` key | `domain_error(http_request_options, Opts)` |
+    | `uuid_str(U, "nope")` (also `uuid_hex`, `uuid_urn`, `uuid_bytes`, `uuid_int`) | `domain_error(uuid_text, "nope")` |
+    | `generate_records(Hs, [R], S)` with a key `Hs` lacks | `domain_error(csv_record, R)` |
+    | `sample(L, -1, S)` | `domain_error(not_less_than_zero, -1)` |
+    | `maybe(1.5)` | `domain_error(probability, 1.5)` |
+
+    Mixing a plain `date` with a `datetime` (`date_max/3`, `date_min/3`,
+    `date_diff/3`, `days_between/3`, `date_between/3`) is a TYPE error on
+    the second argument -- the first argument fixes which type the call is
+    about, and no value of the other type could answer:
+    `date_max(date(2026,3,16), datetime(...), M)` is
+    `type_error(date, datetime(...))`. A naive with an aware datetime is the
+    domain error in the table: both are datetimes, and a different value of
+    the same type would answer. `date_add/3` or `date_sub/3` whose result
+    falls outside years 1..9999 raises `representation_error(date)`. A JSON
+    term with something JSON has no form for -- bytes, a rational, a
+    compound -- is `type_error(json_term, Culprit)`; a nested unbound
+    variable is `instantiation_error`. `set_seed/1` with an unbound seed is
+    `instantiation_error`.
+
+    What still fails is a legitimate "no": a network failure or an HTTP
+    error status, a file-system failure (a missing file, a permission
+    refusal), `integer_between(5, 1, X)`, `sample/3` asking for more
+    elements than the list has. Before this ruling a rejected value failed
+    the goal and left a diagnostic note in the `clausal.testing` failure
+    report; the error term now carries what the note said, and the note
+    machinery is gone.
+
+  An output argument is unchanged: leave it unbound. Wrap a call in
+  `catch/3` where a caller wants the old failure:
+  `catch(hash(A, D, H), error(domain_error(hash_algorithm, _), _), fail)`.
 
 !!! note "Interpolated containers are terms, not converted Python"
     The thunk path converts a **top-level** string (and a list's string

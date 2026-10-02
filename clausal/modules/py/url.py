@@ -15,7 +15,7 @@ from clausal.modules.py import (
     ModulePredicate,
     _import_stdlib,
     expect_type,
-    note_rejected_call,
+    raise_domain_error,
     option,
     require_text,
     simple_to_trampoline,
@@ -81,18 +81,16 @@ def _parse_2(url, parts, trail, k):
     so ``P.scheme`` reads it and ``join/2`` consumes it unchanged.  The
     VALUES stay text (§9.4).
     """
-    u = require_text(deref(url), "parse/2", 1)
-    if u is None:
-        return
+    url_term = deref(url)
+    u = require_text(url_term, "parse/2", 1)
     try:
         # urlparse itself raises ValueError on e.g. an unclosed IPv6 bracket
         # ("http://[::1"); .port raises on an out-of-range port — both are
-        # malformed input and fail cleanly (F017).
+        # malformed input (F017), and raise (RULED 2026-10-02).
         parsed = _urllib_parse.urlparse(u)
         port = parsed.port  # int or None
-    except ValueError as exc:
-        note_rejected_call("parse/2", exc)
-        return
+    except ValueError:
+        raise_domain_error("url", url_term, "parse/2", arg=1)
     result = DictTerm({
         mint("scheme"): parsed.scheme,
         mint("host"): parsed.hostname or "",

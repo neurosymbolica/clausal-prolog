@@ -414,58 +414,76 @@ def test_F015_guard_timedelta3_int_and_unbound_seconds():
     assert len(sols) == 1 and deref(TD) == _T(pydt.timedelta(days=2))
 
 
-def test_F016_date_between_mixed_types_fails_cleanly():
-    # A11-F016 (fixed): date/datetime mix fails cleanly.
+def _raised_term(fn):
+    from clausal.logic.exceptions import LogicException
+    with pytest.raises(LogicException) as info:
+        fn()
+    return info.value.term
+
+
+def test_F016_date_between_mixed_types_raises_type_error():
+    # A11-F016: a date/datetime mix used to fail cleanly; RULED 2026-10-02 it
+    # raises -- the first argument fixes the type, so a datetime second is
+    # type_error(date, DT).
     import datetime as pydt
     from clausal.modules.py.datetime import _date_between_3
+    dt = _T(pydt.datetime(2020, 1, 3))
     gen = _date_between_3(None, "P", "F", None,
-                          _T(pydt.date(2020, 1, 1)), _T(pydt.datetime(2020, 1, 3)),
-                          Var(), Trail())
-    sols = [1 for parent, _v in gen if parent == "P"]  # must not raise
-    assert sols == []
+                          _T(pydt.date(2020, 1, 1)), dt, Var(), Trail())
+    assert _raised_term(lambda: list(gen)) == (
+        "error", ("type_error", "date", dt), ("/", "date_between", 3))
 
 
-def test_F016_date_between_naive_aware_mix_fails_cleanly():
+def test_F016_date_between_naive_aware_mix_raises_domain_error():
     # A11-F016 residual: tz-naive vs tz-aware datetimes pass the date/datetime
-    # guard but are not comparable — must fail cleanly, not raise at <=.
+    # guard but are not comparable.  RULED 2026-10-02: both are datetimes, so
+    # it is the VALUE that is wrong -- domain_error(naive_datetime, Aware).
     import datetime as pydt
     from clausal.modules.py.datetime import _date_between_3
+    aware = _T(pydt.datetime(2020, 1, 3, tzinfo=pydt.timezone.utc))
     gen = _date_between_3(None, "P", "F", None,
-                          _T(pydt.datetime(2020, 1, 1)),
-                          _T(pydt.datetime(2020, 1, 3, tzinfo=pydt.timezone.utc)),
-                          Var(), Trail())
-    sols = [1 for parent, _v in gen if parent == "P"]  # must not raise
-    assert sols == []
+                          _T(pydt.datetime(2020, 1, 1)), aware, Var(), Trail())
+    assert _raised_term(lambda: list(gen)) == (
+        "error", ("domain_error", "naive_datetime", aware),
+        ("/", "date_between", 3))
 
 
-def test_F017_url_parse_bad_port_fails_cleanly():
-    # A11-F017 (fixed): out-of-range port fails cleanly.
+def test_F017_url_parse_bad_port_raises_domain_error():
+    # A11-F017: an out-of-range port failed cleanly; RULED 2026-10-02 it is
+    # domain_error(url, Url).
     from clausal.modules.py.url import _parse_2
-    sols = list(_parse_2(chars("http://h:99999/"), Var(), Trail(), None))
-    assert sols == []
+    u = chars("http://h:99999/")
+    assert _raised_term(lambda: list(_parse_2(u, Var(), Trail(), None))) == (
+        "error", ("domain_error", "url", u), ("/", "parse", 2))
 
 
-def test_F017_url_parse_malformed_bracket_fails_cleanly():
+def test_F017_url_parse_malformed_bracket_raises_domain_error():
     # A11-F017 residual: urlparse itself raises ValueError on "http://[::1"
-    # (unclosed IPv6 bracket) — the wrapper must fail cleanly, uniformly with
-    # the bad-port path.
+    # (unclosed IPv6 bracket) -- uniformly with the bad-port path, a
+    # domain_error(url, Url) (RULED 2026-10-02).
     from clausal.modules.py.url import _parse_2
-    sols = list(_parse_2(chars("http://[::1"), Var(), Trail(), None))
-    assert sols == []
+    u = chars("http://[::1")
+    assert _raised_term(lambda: list(_parse_2(u, Var(), Trail(), None))) == (
+        "error", ("domain_error", "url", u), ("/", "parse", 2))
 
 
-def test_F018_http_get_malformed_url_fails_cleanly():
-    # A11-F018 (fixed): malformed URL fails cleanly.
+def test_F018_http_get_malformed_url_raises_domain_error():
+    # A11-F018: a malformed URL failed cleanly; RULED 2026-10-02 it is the
+    # caller's value, domain_error(url, Url) -- and no request is made.
     from clausal.modules.py.http import _get_2
-    sols = list(_get_2(chars("not-a-url"), Var(), Trail(), None))
-    assert sols == []
+    u = chars("not-a-url")
+    assert _raised_term(lambda: list(_get_2(u, Var(), Trail(), None))) == (
+        "error", ("domain_error", "url", u), ("/", "get", 2))
 
 
-def test_F019_hash_shake_fails_cleanly():
-    # A11-F019 (fixed): shake_* variable-length digest fails cleanly.
+def test_F019_hash_shake_raises_domain_error():
+    # A11-F019: shake_* (a variable-length digest hash/3 has no length for)
+    # failed cleanly; RULED 2026-10-02 it is domain_error(hash_algorithm, A).
     from clausal.modules.py.hash import _hash_3
-    sols = list(_hash_3(chars("shake_128"), chars("abc"), Var(), Trail(), None))
-    assert sols == []
+    a = chars("shake_128")
+    assert _raised_term(
+        lambda: list(_hash_3(a, chars("abc"), Var(), Trail(), None))) == (
+        "error", ("domain_error", "hash_algorithm", a), ("/", "hash", 3))
 
 
 def test_F019_guard_hash_sha256_matches_hashlib():
@@ -785,13 +803,16 @@ def test_F044_find_path_long_chain():
     assert sols and len(sols[0]) == 2501
 
 
-def test_F045_shortest_path_negative_weight():
-    # A11-F045 (fixed): negative weights fail cleanly (Dijkstra precondition).
+def test_F045_shortest_path_negative_weight_raises_domain_error():
+    # A11-F045 (fixed): negative weights violate Dijkstra's precondition.
+    # Ruling 2026-10-02: that is a typed ISO error, not a clean failure --
+    # a failure read as "no path".
+    from clausal.logic.exceptions import LogicException, domain_error
     edges = [["a", "b", 1], ["a", "c", 5], ["c", "b", -100]]
     p = Var()
-    sols = _gsols(G._shortest_path__4, edges, "a", "b", p, out=p)
-    # correct behavior: the true shortest path, or a clean failure/typed error
-    assert sols == [] or sols[0] == ["a", "c", "b"]
+    with pytest.raises(LogicException) as ei:
+        _gsols(G._shortest_path__4, edges, "a", "b", p, out=p)
+    assert ei.value.term == domain_error("not_less_than_zero", -100, "shortest_path/4")
 
 
 def test_F046_is_isolated_enumerate():

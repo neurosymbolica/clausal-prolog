@@ -23,11 +23,13 @@ from clausal.modules.py import (
     _import_stdlib,
     NUMBER_TYPES,
     expect_type,
-    note_rejected_call,
+    raise_domain_error,
     simple_to_trampoline,
+    to_text,
 )
 _random = _import_stdlib("random")
 
+from clausal.logic.exceptions import LogicException, instantiation_error
 from clausal.logic.variables import Var, deref, is_var, unify
 
 
@@ -102,8 +104,10 @@ def _random_sample_3(lst, size, sample, trail, k_cont):
         return
     expect_type(size_val, int, "sample/3", arg=2)
     size_int = size_val
-    if size_int < 0 or size_int > len(lst):
-        return
+    if size_int < 0:
+        raise_domain_error("not_less_than_zero", size_int, "sample/3", arg=2)
+    if size_int > len(lst):
+        return                         # no sample that size: a legitimate "no"
     result = _rng.sample(lst, size_int)
     if unify(sample, result, trail):
         yield None
@@ -113,8 +117,15 @@ def _random_seed_1(seed, trail, k):
     """set_seed/1: set the PRNG seed for reproducibility."""
     seed = deref(seed)
     if is_var(seed):
-        return
-    _rng.seed(seed)
+        # RULED 2026-10-02: an unbound seed is an instantiation_error; it
+        # used to fail the goal and leave the generator unseeded.
+        raise LogicException(instantiation_error("set_seed/1: argument 1"))
+    text = to_text(seed)
+    if text is not None:
+        _rng.seed(text)                # an atom or a string seeds by its text
+    else:
+        expect_type(seed, (int, float), "set_seed/1", arg=1)
+        _rng.seed(seed)
     yield None
 
 
@@ -128,6 +139,9 @@ def _maybe_1(p, trail, k):
     """maybe/1: succeeds with probability P."""
     p = deref(p)
     expect_type(p, NUMBER_TYPES, "maybe/1", arg=1)
+    if not 0 <= p <= 1:
+        # A probability; 1.5 used to always succeed and -1 never.
+        raise_domain_error("probability", p, "maybe/1", arg=1)
     p_f = float(p)
     if _rng.random() < p_f:
         yield None

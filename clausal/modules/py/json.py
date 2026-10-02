@@ -38,10 +38,9 @@ from clausal.modules.py import (
     ModulePredicate,
     _import_stdlib,
     expect_type,
-    note_rejected_call,
+    raise_domain_error,
     require_text,
     simple_to_trampoline,
-    value_is_ground,
 )
 _json = _import_stdlib("json")
 
@@ -92,8 +91,7 @@ def _clausal_to_python(term: Any, context: str = "py.json.generate/2") -> Any:
 
     An atom becomes its spelling (a ``str``, so it serialises as a JSON
     string); DictTerm → dict with converted KEYS AND VALUES; lists recurse;
-    Vars raise TypeError (a mode situation the wrapper turns into a silent
-    failure).
+    a nested unbound variable raises ``instantiation_error``.
 
     Only a **compound cell** — a tuple with a ``str`` functor in slot 0 and
     arity >= 1, i.e. ``point(1, 2)`` — has no JSON counterpart, so it raises a
@@ -117,7 +115,9 @@ def _clausal_to_python(term: Any, context: str = "py.json.generate/2") -> Any:
     """
     term = deref(term)
     if is_var(term):
-        raise TypeError("Cannot serialize unbound variable to JSON")
+        # A nested unbound variable: the term is not ground enough to
+        # serialise (RULED 2026-10-02: an error, not a silent failure).
+        raise LogicException(instantiation_error(context))
     if is_atom(term):
         return crossing_value(term)    # ``true`` is the JSON boolean, not the string "true" (D35)
     if isinstance(term, DictTerm):
@@ -127,6 +127,12 @@ def _clausal_to_python(term: Any, context: str = "py.json.generate/2") -> Any:
         }
     if isinstance(term, list):
         return [_clausal_to_python(deref(item), context) for item in term]
+    if type(term) is dict:
+        # A plain dict from a Python caller: the same as a DictTerm.
+        return {
+            _clausal_to_python(k, context): _clausal_to_python(deref(v), context)
+            for k, v in term.items()
+        }
     if is_chars(term):
         return chars_text(term)        # stage 1: a chars string serialises as its text
     if type(term) is tuple:
@@ -137,8 +143,13 @@ def _clausal_to_python(term: Any, context: str = "py.json.generate/2") -> Any:
         if term and term[0] == TUPLE_TAG:
             return [_clausal_to_python(e, context) for e in term[1:]]
         return [_clausal_to_python(e, context) for e in term]
-    # int, float, bool, None — pass through
-    return term
+    if term is None or type(term) in (bool, int, float):
+        return term                    # the JSON scalars
+    # Anything else -- bytes, a rational, a decimal, a Python object -- has
+    # no JSON counterpart, exactly as a compound cell has none: the same
+    # ``type_error(json_term, Culprit)``, not the stdlib TypeError the
+    # wrapper used to swallow into a silent failure.
+    raise LogicException(type_error("json_term", term, context))
 
 
 # ── parse/3 options ─────────────────────────────────────────────────────
@@ -209,14 +220,12 @@ def _option_shape(opt: Any) -> tuple:
 
 def _parse_2(string, term, trail, k):
     """parse/2: parse JSON string into Clausal terms."""
-    string = require_text(deref(string), "parse/2", 1)
-    if string is None:
-        return
+    text_term = deref(string)
+    string = require_text(text_term, "parse/2", 1)
     try:
         obj = _json.loads(string)
-    except (ValueError, TypeError) as exc:
-        note_rejected_call("parse/2", exc)
-        return
+    except ValueError:
+        raise_domain_error("json_text", text_term, "parse/2", arg=1)
     result = _python_to_clausal(obj)
     if unify(term, result, trail):
         yield None
@@ -230,15 +239,13 @@ def _parse_3(string, term, options, trail, k):
     corresponding ATOM.  That is the whole vocabulary hook of spec §9.2 —
     "atoms by vocabulary" loaders are built on it rather than in here.
     """
-    string = require_text(deref(string), "parse/3", 1)
-    if string is None:
-        return
+    text_term = deref(string)
+    string = require_text(text_term, "parse/3", 1)
     atoms = _parse_options(options)
     try:
         obj = _json.loads(string)
-    except (ValueError, TypeError) as exc:
-        note_rejected_call("parse/3", exc)
-        return
+    except ValueError:
+        raise_domain_error("json_text", text_term, "parse/3", arg=1)
     result = _python_to_clausal(obj, atoms)
     if unify(term, result, trail):
         yield None
@@ -249,13 +256,10 @@ def _generate_2(term, string, trail, k):
     term = deref(term)
     if is_var(term):
         raise LogicException(instantiation_error("generate/2: argument 1"))
-    try:
-        obj = _clausal_to_python(term, "py.json.generate/2")
-        result = _json.dumps(obj, ensure_ascii=False)
-    except (TypeError, ValueError) as exc:
-        if value_is_ground(term):
-            note_rejected_call("generate/2", exc)
-        return
+    # The converter raises for anything with no JSON counterpart (RULED
+    # 2026-10-02), so dumps gets plain JSON data only.
+    obj = _clausal_to_python(term, "py.json.generate/2")
+    result = _json.dumps(obj, ensure_ascii=False)
     if unify(string, text_result(result), trail):   # stage 1
         yield None
 
@@ -266,13 +270,10 @@ def _pretty_generate_2(term, string, trail, k):
     if is_var(term):
         raise LogicException(
             instantiation_error("pretty_generate/2: argument 1"))
-    try:
-        obj = _clausal_to_python(term, "py.json.pretty_generate/2")
-        result = _json.dumps(obj, indent=2, ensure_ascii=False)
-    except (TypeError, ValueError) as exc:
-        if value_is_ground(term):
-            note_rejected_call("pretty_generate/2", exc)
-        return
+    # The converter raises for anything with no JSON counterpart (RULED
+    # 2026-10-02), so dumps gets plain JSON data only.
+    obj = _clausal_to_python(term, "py.json.pretty_generate/2")
+    result = _json.dumps(obj, indent=2, ensure_ascii=False)
     if unify(string, text_result(result), trail):   # stage 1
         yield None
 
@@ -308,14 +309,16 @@ def _get_3(term, key, value, trail, k):
 
 def _read_file_2(path, term, trail, k):
     """read_file/2: read and parse a JSON file."""
-    path = require_text(deref(path), "read_file/2", 1)
-    if path is None:
-        return
+    path_term = deref(path)
+    path = require_text(path_term, "read_file/2", 1)
     try:
         with open(path, "r", encoding="utf-8") as f:
             obj = _json.load(f)
-    except (OSError, ValueError, TypeError):
-        return
+    except OSError:
+        return                         # file-system failure: see the CHANGELOG
+    except ValueError:
+        # The file is there and readable but is not JSON (or not UTF-8).
+        raise_domain_error("json_file", path_term, "read_file/2", arg=1)
     result = _python_to_clausal(obj)
     if unify(term, result, trail):
         yield None
@@ -326,14 +329,12 @@ def _write_file_2(path, term, trail, k):
     path, term = require_text(deref(path), "write_file/2", 1), deref(term)
     if is_var(term):
         raise LogicException(instantiation_error("write_file/2: argument 2"))
+    # Converted BEFORE the file is opened: an unserialisable term raises
+    # and leaves no truncated file behind.
+    obj = _clausal_to_python(term, "py.json.write_file/2")
     try:
-        obj = _clausal_to_python(term, "py.json.write_file/2")
         with open(path, "w", encoding="utf-8") as f:
             _json.dump(obj, f, ensure_ascii=False, indent=2)
-    except (TypeError, ValueError) as exc:
-        if value_is_ground(term):
-            note_rejected_call("write_file/2", exc)
-        return
     except OSError:
         return
     yield None

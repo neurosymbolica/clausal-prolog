@@ -24,8 +24,7 @@ from clausal.modules.py import (
     ModulePredicate,
     _import_stdlib,
     expect_type,
-    note_mismatch,
-    note_rejected_call,
+    raise_domain_error,
     simple_to_trampoline,
     text_or_str,
     to_text,
@@ -103,11 +102,9 @@ def _uuid3_3(ns, name, u, trail, k):
         _reject_namespace(ns, "uuid_v3/3")
     if is_var(name):
         raise LogicException(instantiation_error("uuid_v3/3: argument 2"))
-    try:
-        result = _uuid.uuid3(namespace, text_or_str(name))
-    except (TypeError, ValueError) as exc:
-        note_rejected_call("uuid_v3/3", exc)
-        return
+    # The namespace is resolved and the name crosses as text, so uuid3
+    # has nothing left to reject.
+    result = _uuid.uuid3(namespace, text_or_str(name))
     if unify(u, result, trail):
         yield None
 
@@ -120,11 +117,9 @@ def _uuid5_3(ns, name, u, trail, k):
         _reject_namespace(ns, "uuid_v5/3")
     if is_var(name):
         raise LogicException(instantiation_error("uuid_v5/3: argument 2"))
-    try:
-        result = _uuid.uuid5(namespace, text_or_str(name))
-    except (TypeError, ValueError) as exc:
-        note_rejected_call("uuid_v5/3", exc)
-        return
+    # The namespace is resolved and the name crosses as text, so uuid5
+    # has nothing left to reject.
+    result = _uuid.uuid5(namespace, text_or_str(name))
     if unify(u, result, trail):
         yield None
 
@@ -146,9 +141,8 @@ def _uuid_str_2(u, s, trail, k):
     elif (s_text := to_text(s)) is not None:
         try:
             val = _uuid.UUID(s_text)
-        except (ValueError, AttributeError) as exc:
-            note_rejected_call("uuid_str/2", exc)
-            return
+        except ValueError:
+            raise_domain_error("uuid_text", s, "uuid_str/2", arg=2)
         if unify(u, val, trail):
             yield None
     elif not is_var(u):
@@ -171,9 +165,8 @@ def _uuid_hex_2(u, h, trail, k):
     elif (h_text := to_text(h)) is not None:
         try:
             val = _uuid.UUID(hex=h_text)
-        except (ValueError, AttributeError) as exc:
-            note_rejected_call("uuid_hex/2", exc)
-            return
+        except ValueError:
+            raise_domain_error("uuid_hex", h, "uuid_hex/2", arg=2)
         if unify(u, val, trail):
             yield None
     elif not is_var(u):
@@ -196,9 +189,8 @@ def _uuid_urn_2(u, urn, trail, k):
     elif (urn_text := to_text(urn)) is not None:
         try:
             val = _uuid.UUID(urn_text)
-        except (ValueError, AttributeError) as exc:
-            note_rejected_call("uuid_urn/2", exc)
-            return
+        except ValueError:
+            raise_domain_error("uuid_urn", urn, "uuid_urn/2", arg=2)
         if unify(u, val, trail):
             yield None
     elif not is_var(u):
@@ -220,9 +212,9 @@ def _uuid_bytes_2(u, b, trail, k):
     elif isinstance(b, bytes) and not is_var(b):
         try:
             val = _uuid.UUID(bytes=b)
-        except (ValueError, AttributeError) as exc:
-            note_rejected_call("uuid_bytes/2", exc)
-            return
+        except ValueError:
+            # Not exactly 16 bytes.
+            raise_domain_error("uuid_bytes", b, "uuid_bytes/2", arg=2)
         if unify(u, val, trail):
             yield None
     elif not is_var(u):
@@ -244,9 +236,9 @@ def _uuid_int_2(u, n, trail, k):
     elif isinstance(n, int) and type(n) is not bool:
         try:
             val = _uuid.UUID(int=n)
-        except (ValueError, OverflowError) as exc:
-            note_rejected_call("uuid_int/2", exc)
-            return
+        except (ValueError, OverflowError):
+            # Outside 0 .. 2**128 - 1.
+            raise_domain_error("uuid_int", n, "uuid_int/2", arg=2)
         if unify(u, val, trail):
             yield None
     elif not is_var(u):

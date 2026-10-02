@@ -367,61 +367,22 @@ def to_bytes(val):
     return None
 
 
-# ── Argument type checks, and the diagnostic notes that remain ──────────────
+# ── Argument checks: wrong type, unbound, out of domain ────────────────────
 #
 # RULED 2026-10-02: a py-interop predicate handed an argument of the WRONG
 # TYPE entirely (``date_add(90, TD, R)``) RAISES ``type_error(Type, Culprit)``
 # with the predicate as context; an unbound argument where a value is
-# required raises ``instantiation_error``.  That is :func:`expect_type` and
-# :func:`require_text` below.  (Before the ruling a guard failed the goal and
-# recorded a note -- a bare "no" indistinguishable from a goal with no
-# solution.)
+# required raises ``instantiation_error`` (:func:`expect_type`,
+# :func:`require_text`).  A right-typed value the library rejects as out of
+# range or invalid (month 13, an unknown hash name, malformed JSON) RAISES
+# ``domain_error(Domain, Culprit)`` (:func:`raise_domain_error`).
 #
-# The note machinery stays for what is NOT a type error: a library call that
-# rejected a right-typed value (:func:`note_rejected_call` -- month 13, an
-# unknown hash name, malformed JSON) and the mismatches no ISO error names
-# (:func:`note_mismatch` -- a plain date mixed with a datetime).  While a
-# collector is active (the failure-diagnostic re-run in clausal.testing)
-# each of those records what it rejected.
-
-# The active note sink, or None outside a diagnostic re-run.  A plain module
-# global, not a contextvar: the engine solves single-threaded and the
-# diagnostic re-run is synchronous.
-_mismatch_notes: list | None = None
-_mismatch_seen: set | None = None
-
-
-class _NoteCollection:
-    """Context manager handed out by :func:`collect_type_mismatch_notes`."""
-
-    def __enter__(self):
-        global _mismatch_notes, _mismatch_seen
-        self._prev = (_mismatch_notes, _mismatch_seen)
-        _mismatch_notes = []
-        _mismatch_seen = set()
-        return _mismatch_notes
-
-    def __exit__(self, *exc_info):
-        global _mismatch_notes, _mismatch_seen
-        _mismatch_notes, _mismatch_seen = self._prev
-        return False
-
-
-def collect_type_mismatch_notes():
-    """Collect py-interop type-rejection notes for the ``with`` block.
-
-    Yields the (deduplicated, in rejection order) list of note strings; it is
-    filled in place as guards fire, so it can be read after the block.
-    """
-    return _NoteCollection()
-
-
-def _record_note(message: str) -> None:
-    if _mismatch_notes is None or message in _mismatch_seen:
-        return
-    _mismatch_seen.add(message)
-    _mismatch_notes.append(message)
-
+# Before the rulings each of these failed the goal -- a bare "no"
+# indistinguishable from a goal with no solution -- and recorded a
+# diagnostic note that only the ``clausal.testing`` failure re-run read.
+# Every such site raises now, so the note machinery (``note_mismatch``,
+# ``note_rejected_call``, ``collect_type_mismatch_notes``) is gone: the
+# error term carries what the note used to say.
 
 #: The numbers a py-interop numeric argument accepts: the engine's numeric
 #: tower.  ``bool`` is excluded by :func:`expect_type`, since true/false are
@@ -486,45 +447,23 @@ def expect_type(value, types, pred, *, type_name=None, arg=None,
         context))
 
 
-def note_mismatch(pred, detail: str) -> None:
-    """Record a rejection the ``isinstance`` helper cannot phrase.
+def raise_domain_error(domain, culprit, pred, *, arg=None):
+    """Raise ``error(domain_error(Domain, Culprit), Context)`` for *pred*.
 
-    For guards where the mismatch is not "wrong class" — e.g. ``date`` mixed
-    with ``datetime`` (not comparable), or a ``datetime`` where a plain
-    ``date`` is required (a subclass, so ``isinstance`` passes).  *detail*
-    completes the sentence: ``f"{pred} {detail}"``.
+    For a right-typed argument whose VALUE the predicate or the library
+    behind it rejects (RULED 2026-10-02): month 13, an unknown hash
+    algorithm, malformed JSON text, iterations <= 0.  *domain* is ISO's
+    name where ISO has one (``not_less_than_zero``) and the wrapper's own
+    otherwise (``hash_algorithm``, ``json_text``, ``url``).  *culprit* is the
+    TERM the caller wrote (the dereferenced argument, not the ``str`` it
+    converted to), and *arg* the 1-based position, carried in the message.
     """
-    _record_note(f"{pred} {detail}")
-
-
-def value_is_ground(value) -> bool:
-    """Conservative groundness check for gating rejection notes.
-
-    A term whose top level is bound can still hold a nested unbound Var; a
-    serializer choking on that Var is a mode/instantiation situation, not
-    an ill-typed call, and its exception text leaks internal type names
-    ("Object of type Var is not JSON serializable") — the same rule as the
-    datetime constructors' fully-bound-only notes.  True on any doubt: a
-    wrongly-recorded note is better than a wrongly-suppressed one.
-    """
-    try:
-        from clausal.logic.builtins._helpers import _is_ground
-        return bool(_is_ground(value))
-    except Exception:  # noqa: BLE001 - gate must never break the guard
-        return True
-
-
-def note_rejected_call(pred, exc) -> None:
-    """Record that *pred*'s underlying Python call rejected its arguments.
-
-    For the try/except twin of the isinstance guard: constructors like
-    ``datetime.date`` reject bad values (month=13) or bad types with an
-    exception whose message says exactly what was wrong — worth surfacing
-    for the same reason as the guard note.
-    """
-    _record_note(
-        f"{pred} rejected its arguments — {type(exc).__name__}: {exc}"
+    from clausal.logic.exceptions import (  # noqa: PLC0415
+        LogicException, domain_error,
     )
+    context = f"{pred}: argument {arg}" if arg is not None else pred
+    raise LogicException(domain_error(domain, culprit, context)) from None
+
 
 
 # ── Stdlib import helper ─────────────────────────────────────────────────────

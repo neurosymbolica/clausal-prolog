@@ -152,6 +152,8 @@ compare chronologically (`date(2030, 1, 1) < DT` holds for a `datetime` in
 --8<-- "tests/fixtures/docs/date_time_sigs.txt:datetime_example"
 ```
 
+A component of the right type but no such value raises a domain error carrying the term, as `date/3` does: `time(25, 0, 0, T)` is `domain_error(time, time(25, 0, 0))` and `datetime(2026, 13, 1, 0, 0, 0, DT)` is `domain_error(datetime, datetime(2026, 13, 1, 0, 0, 0))`.
+
 ### timedelta/3 — Bidirectional
 
 `timedelta(Days, Seconds, TdObj)`:
@@ -196,7 +198,7 @@ compare chronologically (`date(2030, 1, 1) < DT` holds for a `datetime` in
 
 ### date_max/3, date_min/3
 
-`date_max(D1, D2, M)` / `date_min(D1, D2, M)` — `M` is the later (resp. earlier) of two dates or datetimes, with no `++` escape. A date/datetime mix is not comparable and fails the goal:
+`date_max(D1, D2, M)` / `date_min(D1, D2, M)` — `M` is the later (resp. earlier) of two dates or datetimes, with no `++` escape. A date/datetime mix is not comparable and raises a `type_error` on the second argument (`date_max(date(2026,3,16), datetime(2026,3,16,9,0,0,0), M)` is `type_error(date, datetime(2026,3,16,9,0,0,0))`: the first argument fixes the type); a naive with an aware datetime raises `domain_error(naive_datetime, DT)` (or `aware_datetime`). `date_diff/3`, `days_between/3` and `date_between/3` raise the same:
 
 ```seam
 --8<-- "tests/fixtures/docs/date_time_sigs.txt:date_max_min"
@@ -204,7 +206,7 @@ compare chronologically (`date(2030, 1, 1) < DT` holds for a `datetime` in
 
 ### ordinal/2 — Bidirectional
 
-`ordinal(Date, N)` — the proleptic-Gregorian day number (Python's `toordinal()`). Forward binds `N` (a datetime contributes its calendar day's ordinal); in reverse (`Date` unbound) it builds the `date` term for day `N`, so enumerating every calendar day in `[CS, CE]` is `ordinal(CS, A), ordinal(CE, B), numlist(A, B, Ns)` mapped back through the inverse mode:
+`ordinal(Date, N)` — the proleptic-Gregorian day number (Python's `toordinal()`). Forward binds `N` (a datetime contributes its calendar day's ordinal); in reverse (`Date` unbound) it builds the `date` term for day `N` (an `N` outside 1..3652059 raises `domain_error(ordinal, N)`), so enumerating every calendar day in `[CS, CE]` is `ordinal(CS, A), ordinal(CE, B), numlist(A, B, Ns)` mapped back through the inverse mode:
 
 ```seam
 --8<-- "tests/fixtures/docs/date_time_sigs.txt:ordinal"
@@ -234,7 +236,7 @@ Bidirectional ISO-8601 string conversion without a format argument:
 --8<-- "tests/fixtures/docs/date_time_sigs.txt:iso"
 ```
 
-`datetime_string_iso/2` forward requires a `datetime` term and produces the full ISO-8601 string; inverse (datetime unbound, string bound) parses it. `date_string_iso/2` forward requires a `date` term (a `datetime` is rejected — use `date_of/2` first if needed) and produces `YYYY-MM-DD`; inverse parses it. Unparsable text fails the goal; a wrong kind of term raises `type_error` (`date_string_iso(DT, S)` with a `datetime` is `type_error(date, datetime(...))`), and both arguments unbound raises `instantiation_error` (see [Wrong-type arguments raise](python_integration.md#what-the-py-wrappers-accept-and-answer)).
+`datetime_string_iso/2` forward requires a `datetime` term and produces the full ISO-8601 string; inverse (datetime unbound, string bound) parses it. `date_string_iso/2` forward requires a `date` term (a `datetime` is rejected — use `date_of/2` first if needed) and produces `YYYY-MM-DD`; inverse parses it. Unparsable text raises `domain_error(iso_datetime, S)` / `domain_error(iso_date, S)`; a wrong kind of term raises `type_error` (`date_string_iso(DT, S)` with a `datetime` is `type_error(date, datetime(...))`), and both arguments unbound raises `instantiation_error` (see [Wrong-type arguments raise](python_integration.md#what-the-py-wrappers-accept-and-answer)).
 
 ### date_between/3 — Nondeterministic
 

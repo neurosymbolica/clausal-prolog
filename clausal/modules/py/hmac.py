@@ -15,7 +15,7 @@ from clausal.modules.py import (
     ModulePredicate,
     _import_stdlib,
     expect_type,
-    note_rejected_call,
+    raise_domain_error,
     require_text,
     simple_to_trampoline,
     to_bytes,
@@ -38,7 +38,8 @@ def _resolve_algo(algo_str):
 
 def _sign_4(algorithm, key, data, hex_out, trail, k):
     """sign/4: sign(Algorithm, Key, Data, Hex) — HMAC with specified algorithm."""
-    algo = require_text(deref(algorithm), "sign/4", 1)
+    algo_term = deref(algorithm)
+    algo = require_text(algo_term, "sign/4", 1)
     key_d = deref(key)
     data_d = deref(data)
     key_b = to_bytes(key_d)
@@ -52,11 +53,9 @@ def _sign_4(algorithm, key, data, hex_out, trail, k):
         return
     try:
         h = _hmac.new(key_b, data_b, digest_mod)
-    except (ValueError, AttributeError) as exc:
-        # Both are argument-shaped: ValueError for an unsupported hash
-        # name, AttributeError for a digestmod without the hash protocol.
-        note_rejected_call("sign/4", exc)
-        return
+    except ValueError:
+        # An unsupported hash name (and shake_*, which needs a length).
+        raise_domain_error("hash_algorithm", algo_term, "sign/4", arg=1)
     if unify(hex_out, text_result(h.hexdigest()), trail):
         yield None
 
@@ -72,6 +71,7 @@ def _verify_4(algorithm, key, data, hex_in, trail, k):
     key_d = deref(key)
     data_d = deref(data)
     hex_d = deref(hex_in)
+    algo_term = algo
     algo = require_text(algo, "verify/4", 1)
     key_b = to_bytes(key_d)
     if key_b is None:
@@ -85,11 +85,9 @@ def _verify_4(algorithm, key, data, hex_in, trail, k):
         return
     try:
         h = _hmac.new(key_b, data_b, digest_mod)
-    except (ValueError, AttributeError) as exc:
-        # Both are argument-shaped: ValueError for an unsupported hash
-        # name, AttributeError for a digestmod without the hash protocol.
-        note_rejected_call("verify/4", exc)
-        return
+    except ValueError:
+        # An unsupported hash name (and shake_*, which needs a length).
+        raise_domain_error("hash_algorithm", algo_term, "verify/4", arg=1)
     if _hmac.compare_digest(h.hexdigest(), hex_d):
         yield None
 

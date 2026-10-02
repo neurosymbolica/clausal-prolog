@@ -53,6 +53,7 @@ from clausal.terms import (  # noqa: F401
 from clausal.lint_warnings import ClausalDeprecatedSpellingWarning
 from clausal.logic.variables import deref, is_var, unify, get_attr
 from clausal.logic.trampoline import DONE
+from clausal.logic.exceptions import LogicException, instantiation_error, type_error
 from clausal.modules.py import ModulePredicate, simple_to_trampoline
 
 
@@ -524,6 +525,12 @@ def _dimension_of_impl(d, dims_out, trail):
 
     Works for ground Quantity values and for uninstantiated AttVars that
     carry a dimensional constraint.
+
+    Ruling 2026-10-02: a plain unbound variable (no dimensional constraint)
+    is ``instantiation_error`` and a bound non-quantity is
+    ``type_error(quantity, D)`` -- both used to fail silently. A bare number
+    is not "dimensionless" here, by the same ruling as ``compatible_units``
+    (2026-09-11): it carries no unit claim at all.
     """
     from clausal.terms import DictTerm
     from clausal.logic.units_constraint import UNITS_KEY
@@ -534,17 +541,25 @@ def _dimension_of_impl(d, dims_out, trail):
             yield None
     elif is_var(dv):
         state = get_attr(dv, UNITS_KEY)
-        if state is not None:
-            dims_term = DictTerm(state.dims)
-            if unify(deref(dims_out), dims_term, trail):
-                yield None
+        if state is None:
+            raise LogicException(instantiation_error("dimension_of/2"))
+        dims_term = DictTerm(state.dims)
+        if unify(deref(dims_out), dims_term, trail):
+            yield None
+    else:
+        raise LogicException(type_error("quantity", dv, "dimension_of/2"))
 
 
 def _strip_dimensions_impl(d, value_out, trail):
-    """strip_units(Quantity, Value): unify Value with the numeric component."""
+    """strip_units(Quantity, Value): unify Value with the numeric component.
+
+    Unbound -> instantiation_error; a non-quantity -> ``type_error(quantity,
+    D)`` (ruling 2026-10-02; both used to fail silently)."""
     dv = deref(d)
+    if is_var(dv):
+        raise LogicException(instantiation_error("strip_units/2"))
     if not isinstance(dv, Quantity):
-        return
+        raise LogicException(type_error("quantity", dv, "strip_units/2"))
     if unify(deref(value_out), dv.value, trail):
         yield None
 
@@ -554,14 +569,14 @@ def _make_dimensioned_impl(value, dims_in, d_out, trail):
     from clausal.terms import DictTerm
     v = deref(value)
     di = deref(dims_in)
-    if is_var(v) or is_var(di):
-        return
+    if is_var(v) or is_var(di):          # ruling 2026-10-02: was a silent no
+        raise LogicException(instantiation_error("make_quantity/3"))
     if isinstance(di, DictTerm):
         raw_dims = dict(di.data)
     elif isinstance(di, dict):
         raw_dims = di
     else:
-        return
+        raise LogicException(type_error("dict", di, "make_quantity/3: argument 2"))
     target = Quantity(v, raw_dims)
     if unify(deref(d_out), target, trail):
         yield None

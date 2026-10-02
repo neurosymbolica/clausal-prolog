@@ -267,10 +267,14 @@ class TestRandomSeed:
 
         assert v1 == v2
 
-    def test_unbound_seed_fails(self):
-        # nv
-        sols, _ = simple_solutions(_random_seed_1, Var())
-        assert len(sols) == 0
+    def test_unbound_seed_raises_instantiation_error(self):
+        # nv -- RULED 2026-10-02; it used to fail, leaving the PRNG unseeded.
+        assert raised(_random_seed_1, Var()) == (
+            'error', 'instantiation_error', ('/', 'set_seed', 1))
+
+    def test_compound_seed_raises_type_error(self):
+        assert raised(_random_seed_1, ('f', 1)) == (
+            'error', ('type_error', 'number', ('f', 1)), ('/', 'set_seed', 1))
 
 
 # ── maybe/0, maybe/1 ───────────────────────────────────────────────────

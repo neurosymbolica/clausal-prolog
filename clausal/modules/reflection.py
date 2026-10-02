@@ -52,7 +52,8 @@ from clausal.logic.atoms import is_atom, mint, spelling
 from clausal.logic.cells import chars as _chars  # stage 1: the chars carrier
 from clausal.logic.builtins._helpers import _functor_name
 from clausal.logic.predicate import is_term_instance, term_field_names
-from clausal.logic.exceptions import LogicException, instantiation_error, type_error
+from clausal.logic.exceptions import (
+    LogicException, existence_error, instantiation_error, type_error)
 from clausal.logic.trampoline import DONE
 from clausal.logic.variables import deref, is_var, unify
 from clausal.modules.py import ModulePredicate, simple_to_trampoline, to_text
@@ -132,18 +133,24 @@ def _class_name_spelling(name, context):
     return None
 
 
-def _source_text(value):
-    """The ``str`` a reflection builtin's SOURCE/PATH argument denotes, or None.
+def _source_text(value, context):
+    """The ``str`` a reflection builtin's SOURCE/PATH argument denotes.
 
     A source text or a file path is a TEXT position (§9.4): an atom and a
     string both denote the same ``str``, so this is ``to_text`` and not an
     ``isinstance(source, str)`` gate.  Under the default
     ``-double_quotes(atom)`` mode a source-written ``"Edge(1, 2),"`` is the
     atom ``("Edge(1, 2),",)``, and the old gate made every such call fail
-    silently — the builtin simply had no solutions.  A non-text bound
-    argument still fails cleanly (``None``), as it always has.
+    silently — the builtin simply had no solutions.
+
+    A bound NON-text argument (a number, a compound) is ``type_error(text,
+    V)`` (operator ruling 2026-10-02): it used to fail cleanly, which made a
+    wrong argument read as "this source has no items".
     """
-    return to_text(value)
+    text = to_text(value)
+    if text is None:
+        raise LogicException(type_error("text", value, context))
+    return text
 
 
 def _reified_item_2(this_generator, _proceed, _fail, _catcher,
@@ -151,10 +158,7 @@ def _reified_item_2(this_generator, _proceed, _fail, _catcher,
     source = deref(source)
     if is_var(source):
         raise LogicException(instantiation_error("reified_item/2"))
-    source = _source_text(source)
-    if source is None:
-        yield (_fail, DONE)
-        return
+    source = _source_text(source, "reified_item/2")
     yield from _yield_matches(
         _items_from_text(source), item, _proceed, _fail, trail)
 
@@ -164,10 +168,7 @@ def _reified_clause_2(this_generator, _proceed, _fail, _catcher,
     source = deref(source)
     if is_var(source):
         raise LogicException(instantiation_error("reified_clause/2"))
-    source = _source_text(source)
-    if source is None:
-        yield (_fail, DONE)
-        return
+    source = _source_text(source, "reified_clause/2")
     clauses = [
         candidate for candidate in _items_from_text(source)
         if is_v(candidate, Clause)
@@ -177,13 +178,15 @@ def _reified_clause_2(this_generator, _proceed, _fail, _catcher,
 
 def _reified_file_item_2(this_generator, _proceed, _fail, _catcher,
                          path, item, trail):
-    path = deref(path)
-    if is_var(path):
+    path_term = deref(path)
+    if is_var(path_term):
         raise LogicException(instantiation_error("reified_file_item/2"))
-    path = _source_text(path)
-    if path is None or not os.path.exists(path):
-        yield (_fail, DONE)
-        return
+    path = _source_text(path_term, "reified_file_item/2")
+    if not os.path.exists(path):
+        # ISO: a source/sink that does not exist is existence_error
+        # (open/3, 8.11.5.3 h) -- it used to fail, reading as "no items".
+        raise LogicException(existence_error(
+            "source_sink", path_term, "reified_file_item/2"))
     candidates = _items_from_file(path, os.path.getmtime(path))
     yield from _yield_matches(candidates, item, _proceed, _fail, trail)
 

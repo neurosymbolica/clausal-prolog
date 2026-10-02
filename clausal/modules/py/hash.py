@@ -21,7 +21,7 @@ from clausal.modules.py import (
     ModulePredicate,
     _import_stdlib,
     expect_type,
-    note_rejected_call,
+    raise_domain_error,
     require_text,
     simple_to_trampoline,
     to_bytes,
@@ -39,44 +39,48 @@ from clausal.logic.variables import deref, is_var, unify
 
 def _hash_3(algorithm, data, hex_out, trail, k):
     """hash/3: hash(Algorithm, Data, Hex) — compute hex digest."""
-    algo = require_text(deref(algorithm), "hash/3")
+    algo_term = deref(algorithm)
+    algo = require_text(algo_term, "hash/3", 1)
     data_d = deref(data)
     data_bytes = to_bytes(data_d)
     if data_bytes is None:
         expect_type(data_d, (str, bytes), "hash/3", arg=2)   # raises
     try:
         h = _hashlib.new(algo)
-    except ValueError as exc:  # unknown algorithm
-        note_rejected_call("hash/3", exc)
-        return
+    except ValueError:  # unknown algorithm
+        raise_domain_error("hash_algorithm", algo_term, "hash/3", arg=1)
     h.update(data_bytes)
     try:
-        digest = h.hexdigest()  # TypeError: shake_* needs a length (F019)
-    except TypeError as exc:
-        note_rejected_call("hash/3", exc)
-        return
+        digest = h.hexdigest()
+    except TypeError:
+        # shake_128/shake_256 are hashlib names, but an extendable-output
+        # function needs a digest length this predicate has no place for
+        # (F019): not an algorithm it accepts.
+        raise_domain_error("hash_algorithm", algo_term, "hash/3", arg=1)
     if unify(hex_out, text_result(digest), trail):
         yield None
 
 
 def _hash_bytes_3(algorithm, data, bytes_out, trail, k):
     """hash_bytes/3: hash_bytes(Algorithm, Data, Bytes) — compute raw digest bytes."""
-    algo = require_text(deref(algorithm), "hash_bytes/3")
+    algo_term = deref(algorithm)
+    algo = require_text(algo_term, "hash_bytes/3", 1)
     data_d = deref(data)
     data_bytes = to_bytes(data_d)
     if data_bytes is None:
         expect_type(data_d, (str, bytes), "hash_bytes/3", arg=2)   # raises
     try:
         h = _hashlib.new(algo)
-    except ValueError as exc:  # unknown algorithm
-        note_rejected_call("hash_bytes/3", exc)
-        return
+    except ValueError:  # unknown algorithm
+        raise_domain_error("hash_algorithm", algo_term, "hash_bytes/3", arg=1)
     h.update(data_bytes)
     try:
-        digest = h.digest()  # TypeError: shake_* needs a length (F019)
-    except TypeError as exc:
-        note_rejected_call("hash_bytes/3", exc)
-        return
+        digest = h.digest()
+    except TypeError:
+        # shake_128/shake_256 are hashlib names, but an extendable-output
+        # function needs a digest length this predicate has no place for
+        # (F019): not an algorithm it accepts.
+        raise_domain_error("hash_algorithm", algo_term, "hash_bytes/3", arg=1)
     if unify(bytes_out, digest, trail):
         yield None
 

@@ -13,7 +13,8 @@ from clausal.terms import Quantity, _quantize_to_scale, _format_money
 from clausal.logic.cells import chars, is_chars, chars_text  # stage 1: the chars carrier
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.trampoline import DONE
-from clausal.logic.exceptions import LogicException, instantiation_error
+from clausal.logic.exceptions import (
+    LogicException, domain_error, instantiation_error, type_error)
 from clausal.modules.py import ModulePredicate
 
 
@@ -46,21 +47,85 @@ def _quantize(amount, currency, mode_str):
     return _quantize_to_scale(amount.value, currency.scale, mode_str)
 
 
+# ── argument checks (operator rulings 2026-10-02) ─────────────────────────────
+#
+# Every one of these used to be a bare ``return`` -- no solutions, no error --
+# so an unbound argument or a non-currency in a currency position made the
+# rule silently not fire. Each is a caller error, not a "no".
+
+
+def _require_currency(value, context):
+    """*value* deref'd, which must be a currency: instantiation_error when
+    unbound, ``type_error(currency, V)`` when it is anything else."""
+    c = deref(value)
+    if is_var(c):
+        raise LogicException(instantiation_error(context))
+    if not getattr(c, "is_currency", False):
+        raise LogicException(type_error("currency", c, context))
+    return c
+
+
+def _require_money(value, context):
+    """The ``UnitInfo`` of a money amount (a Quantity in exactly one currency).
+
+    Unbound -> instantiation_error; not a quantity -> ``type_error(quantity,
+    A)`` (the type name ``quantity_number/2`` already uses); a quantity that
+    is not an amount of ONE currency (metres, euro/hour) is the right type
+    out of range -> ``domain_error(money, A)``.
+    """
+    a = deref(value)
+    if is_var(a):
+        raise LogicException(instantiation_error(context))
+    if not isinstance(a, Quantity):
+        raise LogicException(type_error("quantity", a, context))
+    c = _currency_of(a)
+    if c is None:
+        raise LogicException(domain_error("money", a, context))
+    return a, c
+
+
+def _require_mode_text(value, table, domain, context):
+    """A rounding-mode / display-style argument: an ATOM or string naming an
+    entry of *table*. Unbound -> instantiation_error; not text ->
+    ``type_error(text, V)``; text naming no entry -> ``domain_error(Domain, V)``
+    (it used to reach ``_quantize_to_scale`` and escape as a raw ValueError)."""
+    from clausal.modules.py import to_text            # noqa: PLC0415
+    v = deref(value)
+    if is_var(v):
+        raise LogicException(instantiation_error(context))
+    text = to_text(v)
+    if text is None:
+        raise LogicException(type_error("text", v, context))
+    if text not in table:
+        raise LogicException(domain_error(domain, v, context))
+    return text
+
+
+_MONEY_STYLES = ("symbol", "code", "name", "plain")
+
+
+def _rounding_modes():
+    from clausal.terms import _MONEY_ROUNDING           # noqa: PLC0415
+    return _MONEY_ROUNDING
+
+
 # ── constructors ──────────────────────────────────────────────────────────────
 
 def _money_impl(text, currency, out, trail):
-    t, c = deref(text), deref(currency)
-    if is_var(t) or is_var(c) or not getattr(c, "is_currency", False):
-        return
+    t = deref(text)
+    if is_var(t):
+        raise LogicException(instantiation_error("money/3"))
+    c = _require_currency(currency, "money/3")
     q = Quantity(Decimal(chars_text(t) if is_chars(t) else str(t)), c)   # CHECKED path (precision check)
     if unify(deref(out), q, trail):
         yield None
 
 
 def _money_precise_impl(text, currency, out, trail):
-    t, c = deref(text), deref(currency)
-    if is_var(t) or is_var(c) or not getattr(c, "is_currency", False):
-        return
+    t = deref(text)
+    if is_var(t):
+        raise LogicException(instantiation_error("money_precise/3"))
+    c = _require_currency(currency, "money_precise/3")
     q = Quantity(Decimal(chars_text(t) if is_chars(t) else str(t)), dict(c._dims))   # UNCHECKED path (raw dict dims)
     if unify(deref(out), q, trail):
         yield None
@@ -81,11 +146,7 @@ def _accessor(attr):
     identifies a currency, so that one is a RELATION and runs backwards.
     """
     def impl(currency, out, trail):
-        c = deref(currency)
-        if is_var(c):
-            raise LogicException(instantiation_error(f"currency_{attr}/2"))
-        if not getattr(c, "is_currency", False):
-            return
+        c = _require_currency(currency, f"currency_{attr}/2")
         if unify(deref(out), getattr(c, attr), trail):
             yield None
     return impl
@@ -140,14 +201,21 @@ def _currency_code_impl(currency, code, trail):
     """
     c, k = deref(currency), deref(code)
     if not is_var(c):
-        if not getattr(c, "is_currency", False):
-            return
+        _require_currency(c, "currency_code/2")
         if unify(deref(code), chars(c.iso_code), trail):   # stage 1: a code is text
             yield None
         return
     if not is_var(k):
-        text = _mode_text(k)
-        found = _currency_for_code(text) if text else None
+        # A CODE that is not text (a number, a compound) is a caller error:
+        # type_error (ruling 2026-10-02; it used to fail). A TEXT naming no
+        # ISO 4217 currency stays an ordinary "no" -- this is a lookup
+        # RELATION and must stay usable as a test
+        # (test_an_unknown_code_fails_rather_than_raising).
+        from clausal.modules.py import to_text            # noqa: PLC0415
+        text = to_text(k)
+        if text is None:
+            raise LogicException(type_error("text", k, "currency_code/2"))
+        found = _currency_for_code(text)
         if found is not None and unify(deref(currency), found, trail):
             yield None
         return
@@ -205,11 +273,9 @@ def _mode_text(val) -> str:
 # ── rounding & display ────────────────────────────────────────────────────────
 
 def _money_round_impl(amount, mode, out, trail):
-    a, m = deref(amount), deref(mode)
-    c = _currency_of(a)
-    if c is None or is_var(m):
-        return
-    q = Quantity(_quantize(a, c, _mode_text(m)), dict(a.dims))   # UNCHECKED raw dict
+    a, c = _require_money(amount, "money_round/3")
+    m = _require_mode_text(mode, _rounding_modes(), "rounding_mode", "money_round/3")
+    q = Quantity(_quantize(a, c, m), dict(a.dims))   # UNCHECKED raw dict
     if unify(deref(out), q, trail):
         yield None
 
@@ -219,20 +285,17 @@ def _format_value(a, c, mode_str, style):
 
 
 def _money_str_impl(amount, mode, out, trail):
-    a, m = deref(amount), deref(mode)
-    c = _currency_of(a)
-    if c is None or is_var(m):
-        return
-    if unify(deref(out), chars(_format_value(a, c, _mode_text(m), "code")), trail):   # stage 1
+    a, c = _require_money(amount, "money_str/3")
+    m = _require_mode_text(mode, _rounding_modes(), "rounding_mode", "money_str/3")
+    if unify(deref(out), chars(_format_value(a, c, m, "code")), trail):   # stage 1
         yield None
 
 
 def _money_format_impl(amount, style, mode, out, trail):
-    a, sty, m = deref(amount), deref(style), deref(mode)
-    c = _currency_of(a)
-    if c is None or is_var(sty) or is_var(m):
-        return
-    if unify(deref(out), _format_value(a, c, _mode_text(m), _mode_text(sty)), trail):
+    a, c = _require_money(amount, "money_format/4")
+    sty = _require_mode_text(style, _MONEY_STYLES, "money_style", "money_format/4")
+    m = _require_mode_text(mode, _rounding_modes(), "rounding_mode", "money_format/4")
+    if unify(deref(out), _format_value(a, c, m, sty), trail):
         yield None
 
 

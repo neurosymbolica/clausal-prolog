@@ -96,11 +96,31 @@ class TestHash:
         assert len(sols) == 1
         assert deref(h) == chars("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
 
-    def test_unknown_algorithm_fails(self):
-        # nv
-        h = Var()
-        sols, _ = simple_solutions(_hash_3, chars("nonexistent"), chars("abc"), h)
-        assert len(sols) == 0
+    def test_unknown_algorithm_raises_domain_error(self):
+        # nv -- RULED 2026-10-02: a right-typed name hashlib does not know
+        # is domain_error(hash_algorithm, Name); it used to fail.
+        a = chars("nonexistent")
+        assert raised(_hash_3, a, chars("abc"), Var()) == (
+            'error', ('domain_error', 'hash_algorithm', a), ('/', 'hash', 3))
+
+    def test_hash_bytes_unknown_algorithm_raises_domain_error(self):
+        assert raised(_hash_bytes_3, "nonexistent", chars("abc"), Var()) == (
+            'error', ('domain_error', 'hash_algorithm', 'nonexistent'),
+            ('/', 'hash_bytes', 3))
+
+    def test_hash_bytes_shake_raises_domain_error(self):
+        # shake_* needs a digest length hash_bytes/3 has no place for.
+        assert raised(_hash_bytes_3, "shake_256", chars("abc"), Var()) == (
+            'error', ('domain_error', 'hash_algorithm', 'shake_256'),
+            ('/', 'hash_bytes', 3))
+
+    def test_hmac_unknown_algorithm_raises_domain_error(self):
+        assert raised(_sign_4, "nope", chars("k"), chars("d"), Var()) == (
+            'error', ('domain_error', 'hash_algorithm', 'nope'), ('/', 'sign', 4))
+        assert raised(_verify_4, "nope", chars("k"), chars("d"),
+                      chars("00")) == (
+            'error', ('domain_error', 'hash_algorithm', 'nope'),
+            ('/', 'verify', 4))
 
     def test_unbound_data_raises(self):
         # nv
@@ -263,11 +283,17 @@ class TestPbkdf2:
         term = raised(_derive_4, Var(), chars("salt"), 1, dk)
         assert term == ('error', 'instantiation_error', ('/', 'derive', 5))
 
-    def test_zero_iterations_fails(self):
-        # nv
-        dk = Var()
-        sols, _ = simple_solutions(_derive_5, chars("pw"), chars("salt"), 0, 32, dk)
-        assert len(sols) == 0
+    def test_zero_iterations_raises_domain_error(self):
+        # nv -- RULED 2026-10-02: iterations <= 0 is
+        # domain_error(positive_integer, N); it used to fail with a note.
+        assert raised(_derive_5, chars("pw"), chars("salt"), 0, 32, Var()) == (
+            'error', ('domain_error', 'positive_integer', 0), ('/', 'derive', 5))
+        assert raised(_derive_5, chars("pw"), chars("salt"), -5, 32, Var()) == (
+            'error', ('domain_error', 'positive_integer', -5), ('/', 'derive', 5))
+
+    def test_zero_key_length_raises_domain_error(self):
+        assert raised(_derive_5, chars("pw"), chars("salt"), 1, 0, Var()) == (
+            'error', ('domain_error', 'positive_integer', 0), ('/', 'derive', 5))
 
     def test_trampoline_protocol(self):
         # nv

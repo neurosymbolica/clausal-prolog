@@ -15,15 +15,13 @@ from clausal.modules.py import (
     ModulePredicate,
     _import_stdlib,
     expect_type,
-    note_mismatch,
-    note_rejected_call,
     option,
+    raise_domain_error,
     require_text,
     simple_to_trampoline,
     text_or_str,
     to_bytes,
     to_text,
-    value_is_ground,
 )
 _urllib_request = _import_stdlib("urllib.request")
 _urllib_error = _import_stdlib("urllib.error")
@@ -31,7 +29,8 @@ _urllib_parse = _import_stdlib("urllib.parse")
 _json_mod = _import_stdlib("json")
 
 from clausal.logic.variables import deref, is_var, unify
-from clausal.logic.exceptions import LogicException, instantiation_error
+from clausal.logic.exceptions import (
+    LogicException, instantiation_error, type_error)
 from clausal.terms import DictTerm
 
 # JSON conversion helpers from py.json module
@@ -54,8 +53,17 @@ def _dict_term_to_headers(dt):
     return {text_or_str(k): text_or_str(deref(v)) for k, v in dt.data.items()}
 
 
-def _do_request(url, method="GET", headers=None, data=None, timeout=30):
-    """Perform an HTTP request, return (status, body_str) or None on error."""
+def _do_request(url, method="GET", headers=None, data=None, timeout=30, *,
+                pred="request/3", url_term=None):
+    """Perform an HTTP request, return (status, body_str) or None on error.
+
+    A URL ``urllib`` cannot use at all -- no scheme, an unknown scheme, a
+    malformed host -- is the caller's value, not the network's answer, so it
+    raises ``domain_error(url, Url)`` for *pred* (RULED 2026-10-02);
+    *url_term* is the term the caller wrote.  A network failure (refused,
+    unreachable, timed out) still answers None and the predicate fails.
+    """
+    culprit = url if url_term is None else url_term
     if headers is None:
         headers = {}
     data_bytes = None
@@ -65,20 +73,41 @@ def _do_request(url, method="GET", headers=None, data=None, timeout=30):
         data_bytes = to_bytes(data)
     try:
         req = _urllib_request.Request(url, data=data_bytes, method=method)
+    except ValueError:
+        # "unknown url type": no scheme, or not a URL at all (F018).
+        raise_domain_error("url", culprit, pred, arg=1)
+    try:
         for k, v in headers.items():
             req.add_header(k, v)
         with _urlopen(req, timeout=timeout) as resp:
-            body = resp.read().decode("utf-8")
-            return resp.status, body
+            raw, status = resp.read(), resp.status
     except _urllib_error.HTTPError as e:
         try:
             body = e.read().decode("utf-8")
         except Exception:
             body = ""
         return e.code, body
-    except (OSError, _urllib_error.URLError, ValueError):
-        # ValueError: urlopen on a malformed URL ("unknown url type") — F018
+    except _urllib_error.URLError as e:
+        if _is_url_rejection(e):
+            raise_domain_error("url", culprit, pred, arg=1)
         return None
+    except ValueError:
+        # A malformed authority ("Invalid IPv6 URL", a non-numeric port).
+        raise_domain_error("url", culprit, pred, arg=1)
+    except OSError:
+        return None
+    try:
+        return status, raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return None                    # the SERVER's bytes, not the caller's value
+
+
+def _is_url_rejection(exc) -> bool:
+    """Whether a ``URLError`` is urllib refusing the URL itself (a scheme it
+    has no handler for, no host) rather than a network failure."""
+    reason = getattr(exc, "reason", "")
+    return isinstance(reason, str) and (
+        reason.startswith("unknown url type") or reason == "no host given")
 
 
 
@@ -90,7 +119,7 @@ def _get_2(url, body, trail, k):
     url_d = require_text(deref(url), "get/2")
     if url_d is None:
         return
-    result = _do_request(url_d)
+    result = _do_request(url_d, pred="get/2", url_term=deref(url))
     if result is None:
         return
     status, body_str = result
@@ -110,7 +139,8 @@ def _get_3(url, headers, body, trail, k):
     if not is_var(headers_d):
         expect_type(headers_d, DictTerm, "get/3", arg=2)
     hdrs = _dict_term_to_headers(headers_d) if not is_var(headers_d) else {}
-    result = _do_request(url_d, headers=hdrs)
+    result = _do_request(url_d, headers=hdrs, pred="get/3",
+                         url_term=deref(url))
     if result is None:
         return
     status, body_str = result
@@ -130,7 +160,8 @@ def _post_3(url, data, body, trail, k):
     # raises (RULED 2026-10-02) -- it used to send a body-less POST.
     if to_bytes(data_d) is None:
         expect_type(data_d, (str, bytes), "post/3", arg=2)   # raises
-    result = _do_request(url_d, method="POST", data=data_d)
+    result = _do_request(url_d, method="POST", data=data_d, pred="post/3",
+                         url_term=deref(url))
     if result is None:
         return
     status, body_str = result
@@ -153,7 +184,8 @@ def _post_4(url, data, headers, body, trail, k):
     if not is_var(headers_d):
         expect_type(headers_d, DictTerm, "post/4", arg=3)
     hdrs = _dict_term_to_headers(headers_d) if not is_var(headers_d) else {}
-    result = _do_request(url_d, method="POST", data=data_d, headers=hdrs)
+    result = _do_request(url_d, method="POST", data=data_d, headers=hdrs,
+                         pred="post/4", url_term=deref(url))
     if result is None:
         return
     status, body_str = result
@@ -178,28 +210,37 @@ def _request_3(options, status_out, body_out, trail, k):
     url = to_text(url_raw) if url_raw is not None else None
     if url is None:
         if url_raw is None:
-            note_mismatch("request/3",
-                          "was called with an options dict that lacks a url key")
-        else:
-            # Unbound -> instantiation_error; not text -> type_error(text, U).
-            expect_type(url_raw, str, "request/3", arg=1)
-        return
+            # No url key: the options dict is not one request/3 can run.
+            raise_domain_error("http_request_options", opts, "request/3",
+                               arg=1)
+        # Unbound -> instantiation_error; not text -> type_error(text, U).
+        expect_type(url_raw, str, "request/3", arg=1)
     method = deref(option(opts.data, "method", "GET"))
     if is_var(method):
         method = text_result("GET")    # a module default is text (review 2026-09-18)
     hdrs_raw = option(opts.data, "headers")
-    hdrs = _dict_term_to_headers(deref(hdrs_raw)) if hdrs_raw is not None else {}
+    hdrs = {}
+    if hdrs_raw is not None and not is_var(deref(hdrs_raw)):
+        # A bound headers option that is not a dict used to be dropped.
+        expect_type(deref(hdrs_raw), DictTerm, "request/3", arg=1)
+        hdrs = _dict_term_to_headers(deref(hdrs_raw))
     data_raw = option(opts.data, "data")
     data = deref(data_raw) if data_raw is not None else None
     if is_var(data) if data is not None else False:
         data = None
     timeout_raw = option(opts.data, "timeout")
     timeout = 30
-    if timeout_raw is not None:
+    if timeout_raw is not None and not is_var(deref(timeout_raw)):
+        # A bound timeout that is not a number used to be ignored, and a
+        # negative one failed the request as if the network had.
         t = deref(timeout_raw)
-        if isinstance(t, (int, float)):
-            timeout = t
-    result = _do_request(url, method=text_or_str(method), headers=hdrs, data=data, timeout=timeout)
+        expect_type(t, (int, float), "request/3", arg=1)
+        if t < 0:
+            raise_domain_error("not_less_than_zero", t, "request/3", arg=1)
+        timeout = t
+    result = _do_request(url, method=text_or_str(method), headers=hdrs,
+                         data=data, timeout=timeout, pred="request/3",
+                         url_term=url_raw)
     if result is None:
         return
     status, body_str = result
@@ -212,7 +253,8 @@ def _json_get_2(url, term_out, trail, k):
     url_d = require_text(deref(url), "json_get/2")
     if url_d is None:
         return
-    result = _do_request(url_d, headers={"Accept": "application/json"})
+    result = _do_request(url_d, headers={"Accept": "application/json"},
+                         pred="json_get/2", url_term=deref(url))
     if result is None:
         return
     status, body_str = result
@@ -233,17 +275,13 @@ def _json_post_3(url, term_in, term_out, trail, k):
     term_d = deref(term_in)
     if is_var(term_d):
         raise LogicException(instantiation_error("json_post/3: argument 2"))
-    try:
-        json_str = _json_mod.dumps(_clausal_to_python(term_d, "py.http.json_post/3"))
-    except (ValueError, TypeError) as exc:
-        # Ground terms only — a nested unbound Var is a mode signal, and
-        # its exception text leaks internal type names.
-        if value_is_ground(term_d):
-            note_rejected_call("json_post/3", exc)
-        return
+    # The converter raises for a term with no JSON counterpart
+    # (type_error(json_term, _)) or a nested unbound variable.
+    json_str = _json_mod.dumps(_clausal_to_python(term_d, "py.http.json_post/3"))
     result = _do_request(
         url_d, method="POST", data=text_result(json_str),   # stage 1: our own text is text
         headers={"Content-Type": "application/json", "Accept": "application/json"},
+        pred="json_post/3", url_term=deref(url),
     )
     if result is None:
         return

@@ -27,8 +27,7 @@ from clausal.modules.py import (
     ModulePredicate,
     _import_stdlib,
     expect_type,
-    note_mismatch,
-    note_rejected_call,
+    raise_domain_error,
     require_text,
     simple_to_trampoline,
     text_or_str,
@@ -38,6 +37,7 @@ _csv = _import_stdlib("csv")
 import io
 
 from clausal.logic.atoms import mint
+from clausal.logic.exceptions import LogicException, instantiation_error
 from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.terms import DictTerm
 
@@ -63,13 +63,17 @@ def _field_key(name):
     return mint(name) if type(name) is str else name
 
 
-def _deref_row(row):
-    """Deref all elements in a row, converting to strings."""
+def _deref_row(row, pred="generate/2", arg=1):
+    """Deref all elements in a row, converting to strings.
+
+    An unbound cell is ``instantiation_error`` for *pred* (RULED
+    2026-10-02); it used to fail the goal silently."""
     result = []
     for item in row:
         v = deref(item)
         if is_var(v):
-            raise TypeError("Cannot serialize unbound variable to CSV")
+            raise LogicException(
+                instantiation_error(f"{pred}: argument {arg}"))
         # Spec §9.4: text is a string or an ATOM; ``str()`` on the arity-0
         # cell would write its Python tuple repr into the file.
         result.append(text_or_str(v))
@@ -135,17 +139,15 @@ def _generate_2(rows, string, trail, k):
     rows = deref(rows)
     if not expect_type(rows, list, "generate/2", arg=1):
         return
-    try:
-        buf = io.StringIO()
-        writer = _csv.writer(buf)
-        for row in rows:
-            row = deref(row)
-            expect_type(row, list, "generate/2", arg=1)   # each row a list
-            writer.writerow(_deref_row(row))
-        result = buf.getvalue()
-    except (TypeError, ValueError) as exc:
-        note_rejected_call("generate/2", exc)
-        return
+    # Every cell crosses as text (text_or_str), so the writer has nothing
+    # left to reject: the errors are the row checks' and _deref_row's.
+    buf = io.StringIO()
+    writer = _csv.writer(buf)
+    for row in rows:
+        row = deref(row)
+        expect_type(row, list, "generate/2", arg=1)   # each row a list
+        writer.writerow(_deref_row(row, "generate/2", 1))
+    result = buf.getvalue()
     if unify(string, text_result(result), trail):
         yield None
 
@@ -162,21 +164,23 @@ def _generate_records_3(headers, records, string, trail, k):
         return
     if not expect_type(records, list, "generate_records/3", arg=2):
         return
-    try:
-        header_strs = [text_or_str(h) for h in headers]
-        buf = io.StringIO()
-        writer = _csv.DictWriter(buf, fieldnames=header_strs)
-        writer.writeheader()
-        for record in records:
-            record = deref(record)
-            expect_type(record, DictTerm, "generate_records/3", arg=2)
-            row_dict = {text_or_str(k): text_or_str(v)
-                        for k, v in record.data.items()}
+    header_strs = [text_or_str(h) for h in headers]
+    buf = io.StringIO()
+    writer = _csv.DictWriter(buf, fieldnames=header_strs)
+    writer.writeheader()
+    for record in records:
+        record = deref(record)
+        expect_type(record, DictTerm, "generate_records/3", arg=2)
+        row_dict = {text_or_str(k): text_or_str(v)
+                    for k, v in record.data.items()}
+        try:
             writer.writerow(row_dict)
-        result = buf.getvalue()
-    except (TypeError, ValueError) as exc:
-        note_rejected_call("generate_records/3", exc)
-        return
+        except ValueError:
+            # "dict contains fields not in fieldnames": a record keyed by a
+            # column the Headers do not name.
+            raise_domain_error("csv_record", record, "generate_records/3",
+                               arg=2)
+    result = buf.getvalue()
     if unify(string, text_result(result), trail):
         yield None
 
@@ -224,16 +228,16 @@ def _write_file_2(path, rows, trail, k):
         return
     if not expect_type(rows, list, "write_file/2", arg=2):
         return
+    # Rows are checked and converted BEFORE the file is opened, so a bad
+    # row raises and leaves no truncated file behind.
+    lines = []
+    for row in rows:
+        row = deref(row)
+        expect_type(row, list, "write_file/2", arg=2)
+        lines.append(_deref_row(row, "write_file/2", 2))
     try:
         with open(path, "w", encoding="utf-8", newline="") as f:
-            writer = _csv.writer(f)
-            for row in rows:
-                row = deref(row)
-                expect_type(row, list, "write_file/2", arg=2)
-                writer.writerow(_deref_row(row))
-    except (TypeError, ValueError) as exc:
-        note_rejected_call("write_file/2", exc)
-        return
+            _csv.writer(f).writerows(lines)
     except OSError:
         return
     yield None

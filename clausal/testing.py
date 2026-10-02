@@ -729,29 +729,15 @@ def diagnose_failure(
     ``assertz``-ing test genuinely does re-apply.  That is the documented
     price of the diagnostic; it is paid only on an already-failing test.
     """
-    # Error path only: the py-interop package is heavy to import, and most
-    # failing tests never touch it — but its guards are the only place that
-    # knows WHY an interop goal failed (int where timedelta is required, …),
-    # so collect their rejection notes for the whole re-run.  A failed
-    # import degrades to no collection: this function promises never to
-    # raise, and the notes are an enrichment, not the diagnosis.
-    try:
-        from clausal.modules.py import collect_type_mismatch_notes
-    except Exception:  # noqa: BLE001 - never-raise contract
-        def collect_type_mismatch_notes():
-            return contextlib.nullcontext([])
-
     diag = GoalDiagnostic()
     logic_module = mod.__dict__.get("$module") if hasattr(mod, "__dict__") else None
     before = _clause_count(logic_module)
     budget = _diag_budget()
-    type_notes: list[str] = []
     try:
         with _watchdog(budget):
             sink = io.StringIO()
             with contextlib.redirect_stdout(sink), contextlib.redirect_stderr(sink):
-                with collect_type_mismatch_notes() as type_notes:
-                    _diagnose_into(diag, mod, description, path, error, budget)
+                _diagnose_into(diag, mod, description, path, error, budget)
     except _DiagBudgetExceeded:
         diag.notes.append(
             f"diagnostic re-run exceeded its {budget:g}s budget — "
@@ -767,11 +753,6 @@ def diagnose_failure(
         raise
     except BaseException as exc:  # noqa: BLE001 - diagnostics must never escape
         diag.notes.append(f"diagnostic unavailable: {type(exc).__name__}: {exc}")
-
-    # Guard rejections recorded during the re-run (deduplicated in order).
-    # The list object survives the context manager, and holds whatever was
-    # collected even when the re-run died on the budget or an exception.
-    diag.notes.extend(type_notes)
 
     after = _clause_count(logic_module)
     if before is not None and after is not None and after != before:

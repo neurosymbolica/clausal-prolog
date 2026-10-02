@@ -666,17 +666,20 @@ class TestUtilityPredicates:
         assert result.value == 10
         assert result.dims == {"kilogram": 1, "metre": 1, "second": -2}
 
-    def test_dimension_of_plain_number_fails(self):
+    def test_dimension_of_plain_number_raises_type_error(self):
         # nv
+        # Ruling 2026-10-02: a bare number is the wrong type, not a "no".
         from clausal.modules.py.units import dimension_of
-        sols = run(dimension_of, 42, "DIMS")
-        assert not sols
+        from clausal.logic.exceptions import LogicException
+        with pytest.raises(LogicException, match=r"type_error\(quantity,42\)"):
+            run(dimension_of, 42, "DIMS")
 
-    def test_value_of_plain_number_fails(self):
+    def test_value_of_plain_number_raises_type_error(self):
         # nv
         from clausal.modules.py.units import strip_units
-        sols = run(strip_units, 42, "V")
-        assert not sols
+        from clausal.logic.exceptions import LogicException
+        with pytest.raises(LogicException, match=r"type_error\(quantity,42\)"):
+            run(strip_units, 42, "V")
 
 
 # ════════════════════════════════════════════════════════════════════════════

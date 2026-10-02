@@ -25,6 +25,8 @@ from collections import deque
 
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.trampoline import DONE
+from clausal.logic.exceptions import (
+    LogicException, domain_error, instantiation_error, type_error)
 from clausal.modules.py import ModulePredicate
 
 
@@ -37,6 +39,34 @@ from clausal.modules.py import ModulePredicate
 # directly), but a TypeError the moment a second arity was registered (F053).
 # The base also gives catchable errors and consistent wrong-arity handling.
 _GraphPredicate = ModulePredicate
+
+
+# ── Argument checks (operator rulings 2026-10-02) ───────────────────────────
+#
+# An EDGE LIST that is unbound or not a list is a caller error, not a graph
+# with no answer: it used to fail silently (every predicate gated on
+# ``isinstance(edges_val, list)``), so a typo'd argument made the rule quietly
+# not fire. Likewise a node argument the computation needs (a traversal
+# source, a path endpoint, the node whose neighbours/degree is asked).
+# "No path", "not connected", "has a cycle" etc. stay legitimate FAILURES.
+
+
+def _edges_arg(value, context):
+    """The deref'd edge list *value*, or raise the ISO error for it."""
+    v = deref(value)
+    if is_var(v):
+        raise LogicException(instantiation_error(context))
+    if not isinstance(v, list):
+        raise LogicException(type_error("list", v, context))
+    return v
+
+
+def _needed_node(value, context):
+    """The deref'd node *value*; instantiation_error if it is unbound."""
+    v = deref(value)
+    if is_var(v):
+        raise LogicException(instantiation_error(context))
+    return v
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -136,7 +166,7 @@ def _build_weighted_adj(edges):
 
 def _vertices__2(this_generator, _proceed, _fail, _catcher, edges, verts, trail):
     """vertices(Edges, Verts) — extract unique vertex list from edges."""
-    edges_val = deref(edges)
+    edges_val = _edges_arg(edges, "vertices/2")
     if isinstance(edges_val, list):
         result = _extract_vertices(edges_val)
         mark = trail.mark()
@@ -148,8 +178,8 @@ def _vertices__2(this_generator, _proceed, _fail, _catcher, edges, verts, trail)
 
 def _neighbors__3(this_generator, _proceed, _fail, _catcher, edges, node, nbrs, trail):
     """neighbors(Edges, Node, Nbrs) — list of adjacent nodes for Node."""
-    edges_val = deref(edges)
-    node_val = deref(node)
+    edges_val = _edges_arg(edges, "neighbors/3")
+    node_val = _needed_node(node, "neighbors/3")
     if isinstance(edges_val, list) and not is_var(node_val):
         adj = _build_adj(edges_val)
         result = adj.get(node_val, [])
@@ -162,7 +192,7 @@ def _neighbors__3(this_generator, _proceed, _fail, _catcher, edges, node, nbrs, 
 
 def _has_edge__3(this_generator, _proceed, _fail, _catcher, edges, u, v, trail):
     """has_edge(Edges, U, V) — succeeds if edge [U,V] exists."""
-    edges_val = deref(edges)
+    edges_val = _edges_arg(edges, "has_edge/3")
     if isinstance(edges_val, list):
         seen = set()
         for edge in edges_val:
@@ -183,8 +213,8 @@ def _has_edge__3(this_generator, _proceed, _fail, _catcher, edges, u, v, trail):
 
 def _degree__3(this_generator, _proceed, _fail, _catcher, edges, node, deg, trail):
     """degree(Edges, Node, Deg) — degree of Node (count of incident edges)."""
-    edges_val = deref(edges)
-    node_val = deref(node)
+    edges_val = _edges_arg(edges, "degree/3")
+    node_val = _needed_node(node, "degree/3")
     if isinstance(edges_val, list) and not is_var(node_val):
         count = 0
         for edge in edges_val:
@@ -204,7 +234,7 @@ def _degree__3(this_generator, _proceed, _fail, _catcher, edges, node, deg, trai
 
 def _is_connected__1(this_generator, _proceed, _fail, _catcher, edges, trail):
     """is_connected(Edges) — succeeds if graph is connected."""
-    edges_val = deref(edges)
+    edges_val = _edges_arg(edges, "is_connected/1")
     if isinstance(edges_val, list):
         verts = _extract_vertices(edges_val)
         if len(verts) == 0:
@@ -228,7 +258,7 @@ def _is_connected__1(this_generator, _proceed, _fail, _catcher, edges, trail):
 
 def _is_isolated__2(this_generator, _proceed, _fail, _catcher, edges, node, trail):
     """is_isolated(Edges, Node) — check/enumerate isolated nodes (degree 0)."""
-    edges_val = deref(edges)
+    edges_val = _edges_arg(edges, "is_isolated/2")
     node_val = deref(node)
     if isinstance(edges_val, list):
         adj = _build_adj(edges_val)
@@ -251,8 +281,8 @@ def _is_isolated__2(this_generator, _proceed, _fail, _catcher, edges, node, trai
 
 def _breadth_first_nodes__3(this_generator, _proceed, _fail, _catcher, edges, source, nodes, trail):
     """breadth_first_nodes(Edges, Source, Nodes) — BFS node ordering from Source."""
-    edges_val = deref(edges)
-    source_val = deref(source)
+    edges_val = _edges_arg(edges, "breadth_first_nodes/3")
+    source_val = _needed_node(source, "breadth_first_nodes/3")
     if isinstance(edges_val, list) and not is_var(source_val):
         adj = _build_adj(edges_val)
         visited_set = set()
@@ -275,8 +305,8 @@ def _breadth_first_nodes__3(this_generator, _proceed, _fail, _catcher, edges, so
 
 def _depth_first_nodes__3(this_generator, _proceed, _fail, _catcher, edges, source, nodes, trail):
     """depth_first_nodes(Edges, Source, Nodes) — DFS preorder node ordering from Source."""
-    edges_val = deref(edges)
-    source_val = deref(source)
+    edges_val = _edges_arg(edges, "depth_first_nodes/3")
+    source_val = _needed_node(source, "depth_first_nodes/3")
     if isinstance(edges_val, list) and not is_var(source_val):
         adj = _build_adj(edges_val)
         visited_set = set()
@@ -302,9 +332,9 @@ def _depth_first_nodes__3(this_generator, _proceed, _fail, _catcher, edges, sour
 
 def _find_path__4(this_generator, _proceed, _fail, _catcher, edges, start, end, path, trail):
     """find_path(Edges, Start, End, Path) — enumerate simple paths via backtracking."""
-    edges_val = deref(edges)
-    start_val = deref(start)
-    end_val = deref(end)
+    edges_val = _edges_arg(edges, "find_path/4")
+    start_val = _needed_node(start, "find_path/4")
+    end_val = _needed_node(end, "find_path/4")
     if isinstance(edges_val, list) and not is_var(start_val) and not is_var(end_val):
         adj = _build_adj(edges_val)
 
@@ -354,9 +384,9 @@ def _shortest_path__4(this_generator, _proceed, _fail, _catcher, edges, start, e
     Uses BFS for unweighted graphs (2-element edges),
     Dijkstra for weighted graphs (3-element edges).
     """
-    edges_val = deref(edges)
-    start_val = deref(start)
-    end_val = deref(end)
+    edges_val = _edges_arg(edges, "shortest_path/4")
+    start_val = _needed_node(start, "shortest_path/4")
+    end_val = _needed_node(end, "shortest_path/4")
     if isinstance(edges_val, list) and not is_var(start_val) and not is_var(end_val):
         has_weights = any(
             isinstance(deref(e), list) and len(deref(e)) >= 3
@@ -364,17 +394,18 @@ def _shortest_path__4(this_generator, _proceed, _fail, _catcher, edges, start, e
         )
         if has_weights:
             # Dijkstra is unsound with negative weights and would silently
-            # return a non-shortest path; fail cleanly instead (F045). A
-            # Bellman-Ford fallback could be added later if needed.
-            has_negative = any(
-                isinstance(deref(e), list) and len(deref(e)) >= 3
-                and isinstance(deref(deref(e)[2]), (int, float))
-                and deref(deref(e)[2]) < 0
-                for e in edges_val
-            )
-            if has_negative:
-                yield (_fail, DONE)
-                return
+            # return a non-shortest path (F045). A Bellman-Ford fallback
+            # could be added later if needed.
+            # Ruling 2026-10-02: a negative weight is a right-typed value
+            # outside what the predicate admits -> domain_error, where it
+            # used to fail and read as "no path".
+            for e in edges_val:
+                e = deref(e)
+                if isinstance(e, list) and len(e) >= 3:
+                    w = deref(e[2])
+                    if isinstance(w, (int, float)) and w < 0:
+                        raise LogicException(domain_error(
+                            "not_less_than_zero", w, "shortest_path/4"))
             wadj = _build_weighted_adj(edges_val)
             dist = {start_val: 0}
             prev: dict = {start_val: None}
@@ -432,8 +463,12 @@ def _shortest_path__4(this_generator, _proceed, _fail, _catcher, edges, start, e
 
 def _path_cost__3(this_generator, _proceed, _fail, _catcher, edges, path, cost, trail):
     """path_cost(Edges, Path, Cost) — cost of a path in a weighted graph."""
-    edges_val = deref(edges)
+    edges_val = _edges_arg(edges, "path_cost/3")
     path_val = deref(path)
+    if is_var(path_val):
+        raise LogicException(instantiation_error("path_cost/3"))
+    if not isinstance(path_val, list):
+        raise LogicException(type_error("list", path_val, "path_cost/3"))
     if isinstance(edges_val, list) and isinstance(path_val, list) and len(path_val) >= 2:
         weight_map: dict = {}
         for edge in edges_val:
@@ -472,7 +507,7 @@ def _path_cost__3(this_generator, _proceed, _fail, _catcher, edges, path, cost, 
 
 def _connected_components__2(this_generator, _proceed, _fail, _catcher, edges, components, trail):
     """connected_components(Edges, Components) — list of components (each a vertex list)."""
-    edges_val = deref(edges)
+    edges_val = _edges_arg(edges, "connected_components/2")
     if isinstance(edges_val, list):
         verts = _extract_vertices(edges_val)
         adj = _build_adj(edges_val)
@@ -503,7 +538,7 @@ def _topological_sort__2(this_generator, _proceed, _fail, _catcher, edges, order
 
     Fails if graph has a cycle.
     """
-    edges_val = deref(edges)
+    edges_val = _edges_arg(edges, "topological_sort/2")
     if isinstance(edges_val, list):
         adj = _build_directed_adj(edges_val)
         all_nodes = list(adj.keys())
@@ -534,7 +569,7 @@ def _topological_sort__2(this_generator, _proceed, _fail, _catcher, edges, order
 
 def _has_cycle__1(this_generator, _proceed, _fail, _catcher, edges, trail):
     """has_cycle(Edges) — succeeds if graph contains a cycle."""
-    edges_val = deref(edges)
+    edges_val = _edges_arg(edges, "has_cycle/1")
     if isinstance(edges_val, list):
         adj = _build_directed_adj(edges_val)
         all_nodes = list(adj.keys())
@@ -579,7 +614,7 @@ def _has_cycle__1(this_generator, _proceed, _fail, _catcher, edges, trail):
 
 def _spanning_tree__2(this_generator, _proceed, _fail, _catcher, edges, tree, trail):
     """spanning_tree(Edges, Tree) — a spanning tree (edge subset) via BFS."""
-    edges_val = deref(edges)
+    edges_val = _edges_arg(edges, "spanning_tree/2")
     if isinstance(edges_val, list):
         verts = _extract_vertices(edges_val)
         if len(verts) == 0:
@@ -613,7 +648,7 @@ def _spanning_tree__2(this_generator, _proceed, _fail, _catcher, edges, tree, tr
 
 def _min_spanning_tree__3(this_generator, _proceed, _fail, _catcher, edges, tree, total_cost, trail):
     """min_spanning_tree(Edges, Tree, TotalCost) — MST via Prim's algorithm."""
-    edges_val = deref(edges)
+    edges_val = _edges_arg(edges, "min_spanning_tree/3")
     if isinstance(edges_val, list):
         verts = _extract_vertices(edges_val)
         if len(verts) == 0:
@@ -662,7 +697,7 @@ def _min_spanning_tree__3(this_generator, _proceed, _fail, _catcher, edges, tree
 
 def _reverse_edges__2(this_generator, _proceed, _fail, _catcher, edges, reversed_edges, trail):
     """reverse_edges(Edges, Reversed) — reverse all edge directions."""
-    edges_val = deref(edges)
+    edges_val = _edges_arg(edges, "reverse_edges/2")
     if isinstance(edges_val, list):
         result = []
         for edge in edges_val:
@@ -680,8 +715,8 @@ def _reverse_edges__2(this_generator, _proceed, _fail, _catcher, edges, reversed
 
 def _merge_graphs__3(this_generator, _proceed, _fail, _catcher, edges1, edges2, merged, trail):
     """merge_graphs(Edges1, Edges2, Merged) — union of two edge lists."""
-    e1 = deref(edges1)
-    e2 = deref(edges2)
+    e1 = _edges_arg(edges1, "merge_graphs/3: argument 1")
+    e2 = _edges_arg(edges2, "merge_graphs/3: argument 2")
     if isinstance(e1, list) and isinstance(e2, list):
         result = list(e1) + list(e2)
         mark = trail.mark()

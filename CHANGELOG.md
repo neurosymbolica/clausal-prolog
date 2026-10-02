@@ -20,6 +20,73 @@ since 0.4.0 finish three moves:
 
 ### Breaking
 
+- **A library adapter given a right-typed value it rejects raises
+  `domain_error`** (ruled 2026-10-02) instead of failing the goal with a
+  diagnostic note: `error(domain_error(Domain, Culprit), Name/Arity)`, the
+  culprit being the term as written, the domain ISO's name where ISO has one
+  (`not_less_than_zero`) and the adapter's own otherwise. In `py.*`:
+  `hash/3`, `hash_bytes/3`, `sign/4`, `verify/4` with an unknown algorithm
+  or `shake_*` → `domain_error(hash_algorithm, A)`; `derive/4,5` with
+  iterations or key length <= 0 → `domain_error(positive_integer, N)`;
+  `py.json` `parse/2,3` on malformed text → `domain_error(json_text, S)`,
+  `read_file/2` on a non-JSON file → `domain_error(json_file, Path)`;
+  `time/4` hour 25 → `domain_error(time, time(25, 0, 0))`, `datetime/7`
+  month 13 or day 32 → `domain_error(datetime, datetime(...))`,
+  `timedelta/3` past ±999999999 days → `domain_error(timedelta, ...)`;
+  `ordinal/2` outside 1..3652059 → `domain_error(ordinal, N)`;
+  `datetime_string/3` → `domain_error(datetime_text, S)` or
+  `domain_error(datetime_format, F)`; `datetime_string_iso/2`,
+  `date_string_iso/2` → `domain_error(iso_datetime, S)`,
+  `domain_error(iso_date, S)`; `timestamp/2` out of range or NaN →
+  `domain_error(timestamp, X)`; `py.http` `get`, `post`, `request`,
+  `json_get`, `json_post` with a URL urllib cannot use (no or unknown
+  scheme, no host, malformed authority) → `domain_error(url, U)`, and
+  `request/3` with no `url` key → `domain_error(http_request_options,
+  Opts)`, a negative timeout → `domain_error(not_less_than_zero, T)`, a
+  non-number timeout or non-dict headers → `type_error` (both were ignored);
+  `py.url` `parse/2` → `domain_error(url, U)`; `uuid_str/2`, `uuid_hex/2`,
+  `uuid_urn/2`, `uuid_bytes/2`, `uuid_int/2` → `domain_error(uuid_text |
+  uuid_hex | uuid_urn | uuid_bytes | uuid_int, X)`; `generate_records/3`
+  with a record key the headers lack → `domain_error(csv_record, R)`;
+  `sample/3` with a negative size → `domain_error(not_less_than_zero, N)`;
+  `maybe/1` outside 0..1 → `domain_error(probability, P)`.
+  A plain date mixed with a datetime in `date_max/3`, `date_min/3`,
+  `date_diff/3`, `days_between/3`, `date_between/3` is
+  `type_error(date, DT)` / `type_error(datetime, D)` on the second argument
+  (the first fixes the type; no value of the other type answers); a naive
+  mixed with an aware datetime is `domain_error(naive_datetime, DT)` /
+  `domain_error(aware_datetime, DT)`. `date_add/3`, `date_sub/3` past years
+  1..9999 raise `representation_error(date)`. JSON generation
+  (`generate/2`, `pretty_generate/2`, `write_file/2`, `json_post/3`) with
+  bytes, a rational or a decimal inside is `type_error(json_term, X)` (as a
+  compound already was) and a nested unbound variable is
+  `instantiation_error`; `write_file/2` (JSON and CSV) checks before it opens
+  the file, so a bad term leaves no truncated file. CSV `generate/2`,
+  `write_file/2` with an unbound cell and `set_seed/1` with an unbound seed
+  are `instantiation_error`; `set_seed/1` with a non-number non-text seed is
+  `type_error(number, S)`.
+  The non-`py` adapters follow the same rules: `graphs` (every predicate
+  taking an edge list: an unbound or non-list Edges, an unbound node, start
+  or end, and `path_cost/3`'s path; `shortest_path/4` with a negative weight
+  is `domain_error(not_less_than_zero, W)`), `currency` (`money/3`,
+  `money_precise/3`, `currency_scale/2`, `currency_symbol/2`,
+  `currency_start/2`, `currency_end/2`, `currency_code/2` forward,
+  `money_round/3`, `money_str/3`, `money_format/4`: `type_error(currency |
+  quantity | text, X)`, `domain_error(money | rounding_mode | money_style,
+  X)`), `units` (`strip_units/2`, `dimension_of/2`: `type_error(quantity,
+  X)` for a non-quantity, including a bare number; `make_quantity/3`) and
+  `reflection` (`reified_item/2`, `reified_clause/2`,
+  `reified_file_item/2`: `type_error(text, S)`; a missing file is
+  `existence_error(source_sink, Path)`).
+  Still a plain failure, because it is a legitimate "no": a network failure
+  or HTTP error status, a file-system failure in `py.files`, `py.os`,
+  `py.csv`, `py.json`, `py.process`, `py.tcp`, an empty range, a sample
+  larger than its list, no path in a graph, an unknown currency code in
+  `currency_code(-C, +Code)`. The diagnostic-note machinery
+  (`note_mismatch`, `note_rejected_call`, `collect_type_mismatch_notes`,
+  `value_is_ground` in `clausal.modules.py`) is removed: nothing fails
+  silently for it to explain. Wrap a call in `catch/3` where a caller wants
+  the old failure.
 - **A `py.*` wrapper given an argument of the wrong type raises** (ruled
   2026-10-02) instead of failing the goal. `date_add(90, TD, R)` is
   `error(type_error(date, 90), date_add/3)`, `sleep(abc)` is
@@ -42,10 +109,8 @@ since 0.4.0 finish three moves:
   POST; `uuid_v3/3`, `uuid_v5/3` with an unknown namespace alias raise
   `domain_error(uuid_namespace, Ns)`; `timedelta/3` accepts a rational or
   decimal day count (as its float) instead of refusing it. A right-typed
-  value the library
-  rejects (month 13, malformed JSON, an unknown hash name, a missing file)
-  still fails, with its diagnostic note in the `clausal.testing` failure
-  report. Wrap the call in `catch/3` where a caller wants the old failure.
+  value the library rejects raises too: see the next entry. Wrap the call
+  in `catch/3` where a caller wants the old failure.
 
 - **The seam's `if_/3` requires a reifiable condition** (ruled
   2026-10-01), as Scryer's library(reif) does and as the native `.pl` front

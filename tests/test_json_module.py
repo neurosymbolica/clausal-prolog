@@ -106,9 +106,12 @@ class TestConverters:
         assert result == [1, {"a": 2}]
 
     def test_clausal_to_python_unbound_var_raises(self):
-        # nv
-        with pytest.raises(TypeError, match="unbound variable"):
+        # nv -- RULED 2026-10-02: an instantiation_error, not a TypeError
+        # the wrapper swallowed into a silent failure.
+        with pytest.raises(LogicException) as info:
             _clausal_to_python(Var())
+        assert info.value.term == (
+            'error', 'instantiation_error', ('/', 'py.json.generate', 2))
 
 
 # ── parse/2 ─────────────────────────────────────────────────────────────
@@ -198,10 +201,12 @@ class TestParse:
         term = raised(_parse_2, Var(), Var())
         assert term == ('error', 'instantiation_error', ('/', 'parse', 2))
 
-    def test_invalid_json_fails(self):
-        # nv
-        sols, _ = simple_solutions(_parse_2, chars('{bad json}'), Var())
-        assert len(sols) == 0
+    def test_invalid_json_raises_domain_error(self):
+        # nv -- RULED 2026-10-02: malformed JSON text is
+        # domain_error(json_text, Text); it used to fail with a note.
+        s = chars('{bad json}')
+        assert raised(_parse_2, s, Var()) == (
+            'error', ('domain_error', 'json_text', s), ('/', 'parse', 2))
 
     def test_trampoline(self):
         # nv

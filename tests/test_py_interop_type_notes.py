@@ -9,10 +9,11 @@ silent-failures.md``).
 
 RULED 2026-10-02: the call RAISES instead.  An argument of the wrong type
 entirely is ``type_error(Type, Culprit)`` with the predicate as context; an
-unbound argument where a value is required is ``instantiation_error``; a
-right-typed value the library rejects (month 13, malformed JSON) still fails
-the goal and records a note during the diagnostic re-run, which is what the
-note machinery is kept for.
+unbound argument where a value is required is ``instantiation_error``; and
+(the follow-up ruling, same day) a right-typed value the library rejects as
+out of range or invalid -- month 13, malformed JSON, an unknown hash name --
+is ``domain_error(Domain, Culprit)``.  With every rejection raising, the note
+machinery that used to explain a silent failure was removed.
 """
 
 from __future__ import annotations
@@ -22,12 +23,8 @@ import textwrap
 import pytest
 
 from clausal.logic.exceptions import LogicException
-from clausal.modules.py import (
-    collect_type_mismatch_notes,
-    expect_type,
-    note_mismatch,
-    note_rejected_call,
-)
+import clausal.modules.py as py_pkg
+from clausal.modules.py import expect_type, raise_domain_error
 from clausal.testing import main
 from tests._suffix import SEAM
 
@@ -47,17 +44,28 @@ def raised(fn, *args):
 # ── expect_type ───────────────────────────────────────────────────────────────
 
 
-def test_expect_type_passes_matching_value_and_records_nothing():
-    with collect_type_mismatch_notes() as notes:
-        assert expect_type("x", str, "parse/2")
-    assert notes == []
+def test_expect_type_passes_matching_value():
+    assert expect_type("x", str, "parse/2")
 
 
 def test_expect_type_raises_type_error_on_bound_wrong_type():
-    with collect_type_mismatch_notes() as notes:
-        term = raised(expect_type, 90, str, "parse/2")
+    term = raised(expect_type, 90, str, "parse/2")
     assert term == ("error", ("type_error", "text", 90), ("/", "parse", 2))
-    assert notes == []          # an error, not a note
+
+
+def test_raise_domain_error_builds_the_iso_term():
+    with pytest.raises(LogicException) as info:
+        raise_domain_error("hash_algorithm", "nope", "hash/3", arg=1)
+    assert info.value.term == (
+        "error", ("domain_error", "hash_algorithm", "nope"), ("/", "hash", 3))
+    assert "argument 1" in str(info.value)
+
+
+def test_note_machinery_is_gone():
+    # Every rejection raises now; nothing is left for a note to explain.
+    for name in ("note_mismatch", "note_rejected_call", "value_is_ground",
+                 "collect_type_mismatch_notes"):
+        assert not hasattr(py_pkg, name), name
 
 
 def test_expect_type_argument_position_goes_to_the_message():
@@ -97,26 +105,13 @@ def test_expect_type_unbound_var_raises_instantiation_error():
         "error", "instantiation_error", ("/", "parse", 2))
 
 
-def test_notes_are_deduplicated():
-    with collect_type_mismatch_notes() as notes:
-        note_mismatch("date_between/3", "mixed a date and a datetime")
-        note_mismatch("date_between/3", "mixed a date and a datetime")
-    assert notes == ["date_between/3 mixed a date and a datetime"]
-
-
-def test_note_is_silent_noop_outside_collection():
-    note_mismatch("date_between/3", "mixed a date and a datetime")
-
-
 def test_constructor_with_unbound_component_raises_instantiation_error():
     # A construct mode fed an unbound component (and nothing to decompose)
     # can run in neither mode: an instantiation_error, not a type note.
     from clausal.logic.variables import Trail, Var
     from clausal.modules.py.datetime import _timedelta_3
-    with collect_type_mismatch_notes() as notes:
-        term = raised(lambda: list(_timedelta_3(Var(), Var(), Var(), Trail(), None)))
+    term = raised(lambda: list(_timedelta_3(Var(), Var(), Var(), Trail(), None)))
     assert term == ("error", "instantiation_error", ("/", "timedelta", 3))
-    assert notes == []
 
 
 def test_constructor_with_wrong_type_component_raises_type_error():
@@ -172,20 +167,6 @@ def test_timedelta_accepts_a_rational_day_count():
     assert deref(td)[:3] == ("timedelta", 1, 43200)
 
 
-def test_note_rejected_call_records_exception():
-    with collect_type_mismatch_notes() as notes:
-        try:
-            import datetime as dt
-            dt.date(2024, 13, 1)
-        except ValueError as exc:
-            note_rejected_call("date/4", exc)
-    # Stdlib exception wording is not a stable API — assert the stable
-    # prefix and the load-bearing word only.
-    assert len(notes) == 1
-    assert notes[0].startswith("date/4 rejected its arguments — ValueError:")
-    assert "month" in notes[0]
-
-
 def test_bool_timestamp_raises_type_error():
     # bool subclasses int, so a plain isinstance check would wave it
     # through -- but true is an atom, not a number.
@@ -195,23 +176,26 @@ def test_bool_timestamp_raises_type_error():
     assert term == ("error", ("type_error", "number", True), ("/", "timestamp", 2))
 
 
-def test_json_generate_nested_var_records_nothing():
-    # A term that is bound at the top but holds a nested unbound Var is a
-    # mode/instantiation situation — no note (and no leaked "Var" text).
+def test_json_generate_nested_var_raises_instantiation_error():
+    # A term bound at the top that holds a nested unbound Var is not ground
+    # enough to serialise: an instantiation_error (it used to fail silently).
     from clausal.logic.variables import Trail, Var
     from clausal.modules.py.json import _generate_2
-    with collect_type_mismatch_notes() as notes:
-        list(_generate_2([1, Var()], Var(), Trail(), None))
-    assert notes == []
+    term = raised(lambda: list(_generate_2([1, Var()], Var(), Trail(), None)))
+    assert term == ("error", "instantiation_error",
+                    ("/", "py.json.generate", 2))
 
 
-def test_json_generate_ground_unserializable_records_note():
+def test_json_generate_bytes_raises_type_error():
+    # bytes has no JSON counterpart, exactly as a compound has none: the
+    # same type_error(json_term, Culprit) (it used to fail with a note).
     from clausal.logic.variables import Trail, Var
-    from clausal.modules.py.json import _generate_2
-    with collect_type_mismatch_notes() as notes:
-        list(_generate_2([1, b"raw-bytes"], Var(), Trail(), None))
-    assert len(notes) == 1
-    assert notes[0].startswith("generate/2 rejected its arguments")
+    from clausal.modules.py.json import _generate_2, _pretty_generate_2
+    for fn, name in ((_generate_2, "generate"),
+                     (_pretty_generate_2, "pretty_generate")):
+        term = raised(lambda: list(fn([1, b"raw-bytes"], Var(), Trail(), None)))
+        assert term == ("error", ("type_error", "json_term", b"raw-bytes"),
+                        ("/", f"py.json.{name}", 2))
 
 
 def test_http_post_wrong_typed_data_raises_before_any_request(monkeypatch):
@@ -231,7 +215,7 @@ def test_http_post_wrong_typed_data_raises_before_any_request(monkeypatch):
 def test_diagnose_failure_survives_broken_interop_import(
         capsys, tmp_path, monkeypatch):
     # diagnose_failure promises never to raise; a broken py-interop package
-    # must degrade to no notes, not crash the harness.
+    # must not crash the harness.
     import sys
     import types
     monkeypatch.setitem(sys.modules, "clausal.modules.py",
@@ -306,17 +290,15 @@ test("month 13") <- (
 """
 
 
-def test_constructor_rejection_noted(capsys, tmp_path):
+def test_constructor_rejection_reports_the_domain_error(capsys, tmp_path):
+    # date/3 is a TERM constructor: it raises an ISO domain_error carrying
+    # the culprit, and the error term names the predicate -- the job the
+    # removed rejection note used to do.
     p = write(tmp_path, f"d13{SEAM}", CONSTRUCT_REJECT_SRC)
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
-    assert "date/3 rejected its arguments" in out
-    assert "month must be in 1..12" in out
-    # date/3 is a TERM constructor, so it cannot fail the way date/4's goal
-    # could: it raises an ISO domain_error carrying the culprit. The note is
-    # kept as well, because the note is what names the predicate in a failure
-    # report and losing it would make the diagnostic worse than what it replaced.
-    assert "domain_error" in out
+    assert "error(domain_error(date,date(2024,13,1)),date/3)" in out
+    assert "rejected its arguments" not in out
 
 
 UNBOUND_TD_SRC = """

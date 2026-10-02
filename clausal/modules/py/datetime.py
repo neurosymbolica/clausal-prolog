@@ -60,8 +60,7 @@ from clausal.modules.py import (
     _import_stdlib,
     NUMBER_TYPES,
     expect_type as _expect_type,
-    note_mismatch,
-    note_rejected_call,
+    raise_domain_error,
     simple_to_trampoline,
     to_text,
 )
@@ -74,7 +73,8 @@ from clausal.logic.variables import (  # noqa: F401
 )
 from clausal.logic.builtins._helpers import _is_ground
 from clausal.logic.exceptions import (
-    LogicException, domain_error, instantiation_error, type_error)
+    LogicException, domain_error, instantiation_error, representation_error,
+    type_error)
 from clausal.logic.trampoline import DONE
 
 
@@ -214,6 +214,35 @@ def expect_type(value, types, pred, *, expected=None, arg=None) -> bool:  # noqa
     _reject_dt_term(value, pred)
     return _expect_type(value, types, pred, arg=arg,
                         culprit=_dt_to_term(value))
+
+
+def _require_comparable(d1, d2, pred) -> None:
+    """Raise unless two date-family values can be compared or subtracted.
+
+    Each argument is already a ``date`` (a ``datetime`` is one), but Python
+    neither compares nor subtracts a plain date and a datetime, nor a naive
+    and an aware datetime.  RULED 2026-10-02 (silent failure is gone), and
+    the error is placed by what would fix it:
+
+    - a plain date with a datetime is a TYPE error on argument 2: the first
+      argument fixes which of the two types the call is about, and no value
+      of the other type can ever answer -- ``type_error(date, DT)`` /
+      ``type_error(datetime, D)``, as ``date_string_iso/2`` already raises
+      ``type_error(date, DT)`` for a datetime;
+    - a naive with an aware datetime is a DOMAIN error: both are datetimes,
+      and a different value of that same type (one with, or without, a
+      timezone) would answer -- ``domain_error(naive_datetime, DT)`` /
+      ``domain_error(aware_datetime, DT)``.
+    """
+    is_dt1, is_dt2 = isinstance(d1, _dt.datetime), isinstance(d2, _dt.datetime)
+    if is_dt1 != is_dt2:
+        raise LogicException(type_error(
+            "datetime" if is_dt1 else "date", _dt_to_term(d2),
+            f"{pred}: argument 2")) from None
+    if is_dt1 and (d1.tzinfo is None) != (d2.tzinfo is None):
+        raise_domain_error(
+            "naive_datetime" if d1.tzinfo is None else "aware_datetime",
+            _dt_to_term(d2), pred, arg=2)
 
 
 def _as_float_if_exact(v):
@@ -367,7 +396,6 @@ def date(year, month, day):
         # translate. `catch(D is date(Y, 2, 29), error(domain_error(date, _),
         # _), fail)` recovers date/4's failure semantics where a caller wants
         # them.
-        note_rejected_call("date/3", exc)
         culprit = ("date", y, m, d)
         if isinstance(exc, TypeError):
             # Wrong TYPE of component (a float, a string) -> type_error.
@@ -404,8 +432,9 @@ def _time_4(hour, minute, second, t, trail, k):
                 # can run, and failing would read as "no such time".
                 raise LogicException(instantiation_error("time/4")) from None
             _component_type_error("time/4", comps, int, exc)
-            note_rejected_call("time/4", exc)    # right types, no such time
-            return
+            # Right types, no such time (hour 25): the time/3 TERM's
+            # domain error, as date/3 raises for month 13.
+            raise_domain_error("time", ("time", *comps), "time/4")
         if unify(t, tm, trail):
             yield None
     elif isinstance(t, _dt.time):
@@ -443,8 +472,8 @@ def _datetime_7(year, month, day, hour, minute, second, dt, trail, k):
                 raise LogicException(
                     instantiation_error("datetime/7")) from None
             _component_type_error("datetime/7", comps, int, exc)
-            note_rejected_call("datetime/7", exc)
-            return
+            # Right types, no such instant (month 13, day 32).
+            raise_domain_error("datetime", ("datetime", *comps), "datetime/7")
         if unify(dt, obj, trail):
             yield None
     elif isinstance(dt, _dt.datetime):
@@ -483,7 +512,7 @@ def _timedelta_3(days, seconds, td, trail, k):
             obj = _dt.timedelta(days=_as_float_if_exact(days),
                                 seconds=_as_float_if_exact(seconds)
                                 if not is_var(seconds) else 0)
-        except (TypeError, ValueError) as exc:
+        except (TypeError, ValueError, OverflowError) as exc:
             # seconds is already substituted when unbound, so only days can
             # be unbound here.
             if is_var(days):
@@ -493,8 +522,9 @@ def _timedelta_3(days, seconds, td, trail, k):
                 "timedelta/3",
                 (days,) if is_var(seconds) else (days, seconds),
                 NUMBER_TYPES, exc)
-            note_rejected_call("timedelta/3", exc)
-            return
+            # Right types, no such duration (|days| > 999999999, a NaN).
+            raise_domain_error(
+                "timedelta", ("timedelta", days, seconds), "timedelta/3")
         if unify(td, obj, trail):
             yield None
     elif isinstance(td, _dt.timedelta):
@@ -523,9 +553,12 @@ def _date_add_3(d, td, result, trail, k):
         return
     try:
         out = d + td
-    except (TypeError, OverflowError) as exc:
-        note_rejected_call("date_add/3", exc)
-        return
+    except OverflowError:
+        # The arguments are each in their domain; the RESULT falls outside
+        # the calendar the implementation represents (years 1..9999) --
+        # ISO 7.12.2 g, an implementation-defined limit.
+        raise LogicException(
+            representation_error("date", "date_add/3")) from None
     if unify(result, out, trail):
         yield None
 
@@ -545,9 +578,12 @@ def _date_sub_3(d, td, result, trail, k):
         return
     try:
         out = d - td
-    except (TypeError, OverflowError) as exc:
-        note_rejected_call("date_sub/3", exc)
-        return
+    except OverflowError:
+        # The arguments are each in their domain; the RESULT falls outside
+        # the calendar the implementation represents (years 1..9999) --
+        # ISO 7.12.2 g, an implementation-defined limit.
+        raise LogicException(
+            representation_error("date", "date_sub/3")) from None
     if unify(result, out, trail):
         yield None
 
@@ -565,11 +601,8 @@ def _date_diff_3(d1, d2, td, trail, k):
         return
     if not expect_type(d2, _dt.date, "date_diff/3", arg=2):
         return
-    try:
-        out = d1 - d2
-    except TypeError as exc:
-        note_rejected_call("date_diff/3", exc)
-        return
+    _require_comparable(d1, d2, "date_diff/3")
+    out = d1 - d2
     if unify(td, out, trail):
         yield None
 
@@ -595,6 +628,7 @@ def _datetime_string_3(dt_obj, s, fmt, trail, k):
     datetime.
     """
     dt_obj, s, fmt = deref(dt_obj), deref(s), deref(fmt)
+    fmt_term, s_term = fmt, s
     fmt_text = to_text(fmt)
     if fmt_text is None:
         expect_type(fmt, str, "datetime_string/3", arg=3)
@@ -603,18 +637,25 @@ def _datetime_string_3(dt_obj, s, fmt, trail, k):
     if hasattr(dt_obj, 'strftime'):
         try:
             out = dt_obj.strftime(fmt)
-        except (TypeError, ValueError) as exc:
-            note_rejected_call("datetime_string/3", exc)
-            return
+        except ValueError:
+            # A format the platform's strftime refuses (an embedded NUL).
+            raise_domain_error("datetime_format", fmt_term,
+                               "datetime_string/3", arg=3)
         if unify(s, text_result(out), trail):   # stage 1
             yield None
     elif _is_open(dt_obj) and (s_text := to_text(s)) is not None:
         s = s_text
         try:
             out = _dt.datetime.strptime(s, fmt)
-        except (TypeError, ValueError) as exc:
-            note_rejected_call("datetime_string/3", exc)
-            return
+        except ValueError as exc:
+            # strptime names a bad FORMAT ("'q' is a bad directive", "stray
+            # %") apart from text that does not match a good one.
+            if ("bad directive" in str(exc)
+                    or "stray %" in str(exc)):
+                raise_domain_error("datetime_format", fmt_term,
+                                   "datetime_string/3", arg=3)
+            raise_domain_error("datetime_text", s_term,
+                               "datetime_string/3", arg=2)
         if unify(dt_obj, out, trail):
             yield None
     elif not is_var(dt_obj):
@@ -680,12 +721,8 @@ def _days_between_3(d1, d2, n, trail, k):
         return
     if not expect_type(d2, _dt.date, "days_between/3", arg=2):
         return
-    try:
-        days = (d1 - d2).days
-    except TypeError as exc:
-        # mixing naive date and datetime, etc.
-        note_rejected_call("days_between/3", exc)
-        return
+    _require_comparable(d1, d2, "days_between/3")
+    days = (d1 - d2).days
     if unify(n, days, trail):
         yield None
 
@@ -697,20 +734,17 @@ def _date_max_3(d1, d2, m, trail, k):
     """date_max/3: date_max(DateA, DateB, Max).
 
     Max = the later of two dates (or datetimes) — the clean form of
-    ``M is ++max(D1, D2)``.  With Max bound this acts as a check.  A naive
-    date/datetime mix is not comparable in Python; the goal fails rather
-    than leaking the TypeError.
+    ``M is ++max(D1, D2)``.  With Max bound this acts as a check.  A plain
+    date with a datetime raises ``type_error``, a naive with an aware
+    datetime ``domain_error`` (see :func:`_require_comparable`).
     """
     d1, d2, m = deref(d1), deref(d2), deref(m)
     if not expect_type(d1, _dt.date, "date_max/3", arg=1):
         return
     if not expect_type(d2, _dt.date, "date_max/3", arg=2):
         return
-    try:
-        out = max(d1, d2)
-    except TypeError as exc:
-        note_rejected_call("date_max/3", exc)
-        return
+    _require_comparable(d1, d2, "date_max/3")
+    out = max(d1, d2)
     if unify(m, out, trail):
         yield None
 
@@ -719,7 +753,7 @@ def _date_min_3(d1, d2, m, trail, k):
     """date_min/3: date_min(DateA, DateB, Min).
 
     Min = the earlier of two dates (or datetimes) — the clean form of
-    ``M is ++min(D1, D2)``.  Same modes and failure behaviour as
+    ``M is ++min(D1, D2)``.  Same modes and errors as
     ``date_max/3``.
     """
     d1, d2, m = deref(d1), deref(d2), deref(m)
@@ -727,11 +761,8 @@ def _date_min_3(d1, d2, m, trail, k):
         return
     if not expect_type(d2, _dt.date, "date_min/3", arg=2):
         return
-    try:
-        out = min(d1, d2)
-    except TypeError as exc:
-        note_rejected_call("date_min/3", exc)
-        return
+    _require_comparable(d1, d2, "date_min/3")
+    out = min(d1, d2)
     if unify(m, out, trail):
         yield None
 
@@ -749,11 +780,12 @@ def _ordinal_2(d, n, trail, k):
     - **Inverse** (Date unbound, N an integer): bind Date to
       ``date.fromordinal(N)`` — so "every calendar day in [CS, CE]" is
       ``ordinal(CS, A), ordinal(CE, B), numlist(A, B, Ns)`` mapped back
-      through the inverse mode.  An out-of-range N fails the goal.
+      through the inverse mode.
 
     Raises ``instantiation_error`` when both are unbound and
     ``type_error`` for a value of the wrong type (RULED 2026-10-02); an
-    out-of-range N fails.
+    out-of-range N (below 1, above 3652059) raises
+    ``domain_error(ordinal, N)``.
     """
     d, n = deref(d), deref(n)
     if isinstance(d, _dt.date):
@@ -767,9 +799,9 @@ def _ordinal_2(d, n, trail, k):
     if isinstance(n, int) and not isinstance(n, bool):
         try:
             out = _dt.date.fromordinal(n)
-        except (ValueError, OverflowError) as exc:
-            note_rejected_call("ordinal/2", exc)
-            return
+        except (ValueError, OverflowError):
+            # 1 is 0001-01-01 and 3652059 is 9999-12-31.
+            raise_domain_error("ordinal", n, "ordinal/2", arg=2)
         if unify(d, out, trail):
             yield None
     else:
@@ -808,22 +840,9 @@ def _date_between_3(this_generator, _proceed, _fail, _catcher, start, end, d, tr
         yield (_fail, DONE)
         return
     # A plain date and a datetime are not comparable (datetime subclasses
-    # date, so the isinstance checks above both pass) — fail cleanly (F016).
-    if isinstance(start, _dt.datetime) != isinstance(end, _dt.datetime):
-        note_mismatch("date_between/3",
-                      "was called with a plain date and a datetime — "
-                      "not comparable")
-        yield (_fail, DONE)
-        return
-    # Likewise a tz-naive and a tz-aware datetime are not comparable —
-    # fail cleanly instead of raising TypeError at `current <= end` (F016).
-    if (isinstance(start, _dt.datetime) and isinstance(end, _dt.datetime)
-            and (start.tzinfo is None) != (end.tzinfo is None)):
-        note_mismatch("date_between/3",
-                      "was called with a tz-naive and a tz-aware datetime — "
-                      "not comparable")
-        yield (_fail, DONE)
-        return
+    # date, so the isinstance checks above both pass), nor are a naive and
+    # an aware datetime: raise, as date_diff/3 and the rest do.
+    _require_comparable(start, end, "date_between/3")
     current = start
     one_day = _dt.timedelta(days=1)
     while current <= end:
@@ -851,9 +870,9 @@ def _timestamp_2(dt_obj, stamp, trail, k):
     if isinstance(dt_obj, _dt.datetime):
         try:
             out = dt_obj.timestamp()
-        except (OverflowError, OSError, ValueError) as exc:
-            note_rejected_call("timestamp/2", exc)
-            return
+        except (OverflowError, OSError, ValueError):
+            raise_domain_error("datetime", _dt_to_term(dt_obj),
+                               "timestamp/2", arg=1)
         if unify(stamp, out, trail):
             yield None
     elif (_is_open(dt_obj) and isinstance(stamp, NUMBER_TYPES)
@@ -863,9 +882,9 @@ def _timestamp_2(dt_obj, stamp, trail, k):
             # is a number too, and crosses as its float.
             out = _dt.datetime.fromtimestamp(
                 stamp if isinstance(stamp, (int, float)) else float(stamp))
-        except (OverflowError, OSError, ValueError, TypeError) as exc:
-            note_rejected_call("timestamp/2", exc)
-            return
+        except (OverflowError, OSError, ValueError):
+            # Outside the representable instants, or NaN.
+            raise_domain_error("timestamp", stamp, "timestamp/2", arg=2)
         if unify(dt_obj, out, trail):
             yield None
     elif not is_var(dt_obj):
@@ -886,6 +905,7 @@ def _datetime_string_iso_2(dt_obj, s, trail, k):
     §9.4): DateTime = datetime.fromisoformat(String).
     """
     dt_obj, s = deref(dt_obj), deref(s)
+    s_term = s
     if isinstance(dt_obj, _dt.datetime):
         if unify(s, text_result(dt_obj.isoformat()), trail):   # stage 1
             yield None
@@ -893,9 +913,9 @@ def _datetime_string_iso_2(dt_obj, s, trail, k):
         s = s_text
         try:
             out = _dt.datetime.fromisoformat(s)
-        except (TypeError, ValueError) as exc:
-            note_rejected_call("datetime_string_iso/2", exc)
-            return
+        except ValueError:
+            raise_domain_error("iso_datetime", s_term,
+                               "datetime_string_iso/2", arg=2)
         if unify(dt_obj, out, trail):
             yield None
     elif not is_var(dt_obj):
@@ -912,6 +932,7 @@ def _date_string_iso_2(d_obj, s, trail, k):
     Date = date.fromisoformat(String).
     """
     d_obj, s = deref(d_obj), deref(s)
+    s_term = s
     if isinstance(d_obj, _dt.date) and not isinstance(d_obj, _dt.datetime):
         if unify(s, text_result(d_obj.isoformat()), trail):   # stage 1
             yield None
@@ -919,9 +940,8 @@ def _date_string_iso_2(d_obj, s, trail, k):
         s = s_text
         try:
             out = _dt.date.fromisoformat(s)
-        except (TypeError, ValueError) as exc:
-            note_rejected_call("date_string_iso/2", exc)
-            return
+        except ValueError:
+            raise_domain_error("iso_date", s_term, "date_string_iso/2", arg=2)
         if unify(d_obj, out, trail):
             yield None
     elif isinstance(d_obj, _dt.datetime):
