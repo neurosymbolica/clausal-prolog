@@ -62,7 +62,7 @@ class TestFinderDirectoryBranch:
         # nv
         pkg_b = tmp_path / "a" / "b"
         pkg_b.mkdir(parents=True)
-        init = pkg_b / "__init__.clausal"
+        init = pkg_b / f"__init__{SEAM}"
         init.write_text("-module(b, [ping])\nping(1),\n")
 
         spec = PredicateFinder().find_spec("a.b", path=[str(tmp_path / "a")])

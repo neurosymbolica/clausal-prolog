@@ -63,7 +63,7 @@ def test_same_stem_pl_and_clausal_do_not_share_bytecode(frontend, tmp_path):
 
 
 def test_the_clausal_key_is_unchanged(tmp_path):
-    src = tmp_path / f"sfxkey{SEAM}"
+    src = tmp_path / "sfxkey.clausal"   # pins the legacy key: keep .clausal
     src.write_text("f(1),\n")
     stats = ih.PredicateLoader("sfxkey", str(src)).path_stats(str(src))
     assert stats["mtime"] == (os.stat(src).st_mtime_ns

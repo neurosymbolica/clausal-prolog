@@ -169,9 +169,9 @@ def test_package_root_round_trips_or_declines(tmp_path):
 
 
 @pytest.mark.parametrize("modname,fname", [
-    ("sbp_pkg.dom", "__init__.clausal"),
+    ("sbp_pkg.dom", f"__init__{SEAM}"),
     ("sbp_pkg.dom.rules", f"rules{SEAM}"),
-    ("_clausal_test___init__", "__init__.clausal"),
+    ("_clausal_test___init__", f"__init__{SEAM}"),
     ("_clausal_test_rules", f"rules{SEAM}"),
 ])
 def test_undefined_name_hint_names_the_full_dotted_sibling(

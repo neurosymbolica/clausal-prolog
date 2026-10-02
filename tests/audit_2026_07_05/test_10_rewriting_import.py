@@ -812,20 +812,23 @@ def test_F018_path_stats_folds_bytecode_tag(tmp_path):
     import os
     from clausal.import_hook import (
         _ClausalSourceLoader, CLAUSAL_BYTECODE_TAG, _effective_bytecode_tag,
-        _compilation_fingerprint)
+        _compilation_fingerprint, _suffix_salt)
     src = tmp_path / f"a10f018{SEAM}"
     src.write_text("fact(1),\n")
     loader = _ClausalSourceLoader("a10f018", str(src))
     stats = loader.path_stats(str(src))
     raw_ns = os.stat(str(src)).st_mtime_ns
-    assert stats["mtime"] == (raw_ns ^ _effective_bytecode_tag()) & 0xFFFFFFFF
+    # The seam suffix salt (0 only for the legacy `.clausal` spelling) folds
+    # in too; it is constant per suffix, so it does not mask either half.
+    salt = _suffix_salt(str(src))
+    assert stats["mtime"] == (raw_ns ^ _effective_bytecode_tag() ^ salt) & 0xFFFFFFFF
     # Idempotent within a version.
     assert loader.path_stats(str(src))["mtime"] == stats["mtime"]
     # The MANUAL half still participates: a hand bump alone must be able to
     # invalidate, which is the lever for a RUNTIME change the fingerprint
     # cannot see.
     bumped = (raw_ns ^ ((CLAUSAL_BYTECODE_TAG + 1)
-                        ^ _compilation_fingerprint())) & 0xFFFFFFFF
+                        ^ _compilation_fingerprint()) ^ salt) & 0xFFFFFFFF
     assert bumped != stats["mtime"]
     # And the AUTOMATIC half: the folded tag is not merely the manual one.
     assert _effective_bytecode_tag() != CLAUSAL_BYTECODE_TAG
