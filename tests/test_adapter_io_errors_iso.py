@@ -278,6 +278,19 @@ def test_delete_file_in_a_read_only_directory_is_a_permission_error(tmp_path):
         os.chmod(d, stat.S_IRWXU)
 
 
+def test_rename_missing_old_is_existence_error_even_when_rename_says_exdev(
+        tmp_path, monkeypatch):
+    import pathlib
+
+    def exdev(self, target):
+        raise OSError(errno.EXDEV, "Invalid cross-device link", str(self),
+                      None, str(target))
+    monkeypatch.setattr(pathlib.Path, "rename", exdev)
+    p = chars(str(tmp_path / "missing.txt"))
+    assert raised(pfiles._rename_file_2, p, chars(str(tmp_path / "b"))) == _err(
+        _exists(p), "rename_file", 2)
+
+
 def test_rename_into_a_missing_directory_blames_the_new_name(tmp_path):
     old = tmp_path / "a.txt"
     old.write_text("x")

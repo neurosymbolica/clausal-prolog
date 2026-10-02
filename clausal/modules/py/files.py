@@ -192,6 +192,12 @@ def _rename_file_2(old, new, trail, k):
     except OSError as exc:
         import errno as _errno  # noqa: PLC0415
         old_dir = _os.path.dirname(_os.path.abspath(old))
+        if not _os.path.lexists(old):
+            # A missing Old is existence_error whatever errno the kernel
+            # checked first: across file systems rename(2) can answer EXDEV
+            # before it looks for Old (measured on the gate box).
+            exc = FileNotFoundError(_errno.ENOENT, "No such file or directory",
+                                    old)
         if not _os.path.lexists(old) or (
                 exc.errno in (_errno.EACCES, _errno.EPERM)
                 and not _os.access(old_dir, _os.W_OK | _os.X_OK)):
