@@ -131,11 +131,11 @@ def _infer_args(stmts: list[ast.stmt], globals_: dict | None = None) -> ast.argu
 # OUTLINING, bottom-up: a statement whose blocks nest ``_OUTLINE_HEIGHT``
 # deep moves into a nested helper function -- a generator delegated to with
 # ``yield from`` when it yields, a plain call otherwise -- and the helper
-# starts a fresh block stack.  Every name the moved code binds stays the
-# ORIGINAL function's local: the helper declares it ``nonlocal`` and the
-# original function keeps a never-run ``if False: name = None`` binding, so
-# the scoping is exactly the single-function scoping it replaced.  A
-# ``return`` in moved code comes back as a 1-tuple and is re-returned.
+# starts a fresh block stack.  Each name then gets the innermost scope that
+# can own it without changing what any mention reads (``_Outliner.localise``):
+# helpers below the owner that bind it declare it ``nonlocal``.  A ``return``
+# in moved code comes back as a 1-tuple and is re-returned; a ``break`` or
+# ``continue`` is never separated from its loop.
 #
 # ``functiondef_to_function`` runs the pass only after CPython has refused
 # the nesting, so functions under the limit -- everything but a very long
@@ -155,17 +155,26 @@ _TRY_NODES = (ast.Try, ast.TryStar) if hasattr(ast, "TryStar") else (ast.Try,)
 
 def _child_lists(stmt: ast.stmt) -> list[tuple[int, ast.AST, str]]:
     """``(added_depth, owner, field)`` for each statement list nested in
-    *stmt*, by CPython's frame-block accounting: a loop or ``with`` body +1, a
-    ``try`` body/``else``/``finally`` +1, an ``except`` handler +2 (handler +
-    cleanup); ``if``/``match`` bodies and a loop's ``else`` +0.  Nested
-    function and class bodies are scopes of their own and are not listed."""
+    *stmt*, by CPython 3.13's frame-block accounting (measured): a loop or
+    ``with`` body +1 (``async with`` +2); a ``try`` body +1, or +2 when it
+    has both ``except`` handlers and a ``finally`` (CPython nests a
+    try/except inside a try/finally); an ``except`` handler +2 (handler and
+    cleanup), +3 under a ``finally``; a ``finally`` body +1; a ``try``'s
+    ``else`` +1 under a ``finally``, else +0; ``if``/``match`` bodies and a
+    loop's ``else`` +0.  Nested function and class bodies are scopes of
+    their own and are not listed."""
     if isinstance(stmt, _LOOP_NODES):
         return [(1, stmt, "body"), (0, stmt, "orelse")]
-    if isinstance(stmt, (ast.With, ast.AsyncWith)):
+    if isinstance(stmt, ast.With):
         return [(1, stmt, "body")]
+    if isinstance(stmt, ast.AsyncWith):
+        return [(2, stmt, "body")]
     if isinstance(stmt, _TRY_NODES):
-        return ([(1, stmt, "body"), (1, stmt, "orelse"), (1, stmt, "finalbody")]
-                + [(2, h, "body") for h in stmt.handlers])
+        fin = 1 if stmt.finalbody else 0
+        both = 1 if (stmt.finalbody and stmt.handlers) else 0
+        return ([(1 + both, stmt, "body"), (fin, stmt, "orelse"),
+                 (1, stmt, "finalbody")]
+                + [(2 + fin, h, "body") for h in stmt.handlers])
     if isinstance(stmt, ast.If):
         return [(0, stmt, "body"), (0, stmt, "orelse")]
     if isinstance(stmt, ast.Match):
@@ -237,10 +246,16 @@ def _walk_same_scope(node: ast.AST):
 
 
 def _bound_names(node: ast.AST) -> set[str]:
-    """Names *node* binds in its own scope."""
+    """Names *node* binds in its own scope.  A comprehension's loop target
+    binds in the comprehension's own scope and is not counted (a walrus
+    inside one still binds here, and is)."""
     out: set[str] = set()
+    comp_targets: set[int] = set()
     for n in _walk_same_scope(node):
-        if isinstance(n, ast.Name) and isinstance(n.ctx, (ast.Store, ast.Del)):
+        if isinstance(n, ast.comprehension):
+            comp_targets.update(id(t) for t in ast.walk(n.target))
+        elif (isinstance(n, ast.Name) and isinstance(n.ctx, (ast.Store, ast.Del))
+                and id(n) not in comp_targets):
             out.add(n.id)
         elif isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
             out.add(n.name)
@@ -279,21 +294,22 @@ def _can_outline(stmt: ast.stmt) -> bool:
 
 
 class _Outliner:
+    """Outlines one function (``function``); see the comment block above."""
+
     def __init__(self, globals_declared: set[str]):
         self.globs = globals_declared
         self.counter = 0
-        #: Every name a helper declared ``nonlocal``: the function being
-        #: split keeps a binding for each (see ``function``).
-        self.shared: set[str] = set()
+        #: The helpers made, in creation order: a helper is made after every
+        #: helper it contains.
+        self.helpers: list[ast.FunctionDef] = []
 
     def outline(self, s: ast.stmt) -> list[ast.stmt]:
-        """The statements that replace *s*: a helper holding it and a call."""
+        """The statements that replace *s*: a helper holding it and a call.
+        The helper's ``nonlocal`` declaration is ``localise``'s to write."""
         self.counter += 1
         name = f"$nest{self.counter}"
         res = f"$nest{self.counter}_r"
-        stored = _bound_names(s)
-        global_names = sorted(stored & self.globs)
-        nonlocal_names = sorted(stored - self.globs)
+        global_names = sorted(_bound_names(s) & self.globs)
         has_yield = has_return = False
         for n in _walk_same_scope(s):
             if isinstance(n, (ast.Yield, ast.YieldFrom)):
@@ -304,8 +320,6 @@ class _Outliner:
                     elts=[n.value if n.value is not None else ast.Constant(None)],
                     ctx=ast.Load())
         body: list[ast.stmt] = []
-        if nonlocal_names:
-            body.append(ast.Nonlocal(names=nonlocal_names))
         if global_names:
             body.append(ast.Global(names=global_names))
         body.append(s)
@@ -315,9 +329,9 @@ class _Outliner:
             args=ast.arguments(posonlyargs=[], args=[], vararg=None, kwonlyargs=[],
                                kw_defaults=[], kwarg=None, defaults=[]),
             body=body, decorator_list=[], returns=None, type_comment=None, **extra)
+        self.helpers.append(helper)
         call = ast.Call(func=ast.Name(id=name, ctx=ast.Load()), args=[], keywords=[])
         value = ast.YieldFrom(value=call) if has_yield else call
-        self.shared.update(nonlocal_names)
         out: list[ast.stmt] = [helper]
         if has_return:
             out.append(ast.Assign(targets=[ast.Name(id=res, ctx=ast.Store())], value=value))
@@ -343,9 +357,13 @@ class _Outliner:
 
     def function(self, fn) -> None:
         """Outline, bottom-up, every statement of *fn*'s own scope whose
-        blocks nest ``_OUTLINE_HEIGHT`` deep."""
+        blocks nest ``_OUTLINE_HEIGHT`` deep; then each outermost statement
+        that came to contain a helper (a long clause's whole arm), so the
+        clause's own variables belong to that helper rather than to *fn*;
+        then declare every name's scope (``localise``)."""
         heights: dict = {}
         marked: set = set()
+        holds_helper: set = set()
 
         def rebuilt(stmts):
             if not any(id(c) in marked for c in stmts):
@@ -354,8 +372,10 @@ class _Outliner:
             for c in stmts:
                 if id(c) in marked:
                     for x in self.outline(c):
-                        heights[id(x)] = 0   # a def, a call, never-run binds
+                        heights[id(x)] = 0   # a def and a call
                         out.append(x)
+                    holds_helper.add(id(out[-1]))
+                    holds_helper.add(id(out[0]))
                 else:
                     out.append(c)
             return out
@@ -363,36 +383,218 @@ class _Outliner:
         for s in _postorder(fn.body):
             for _, owner, field in _child_lists(s):
                 setattr(owner, field, rebuilt(getattr(owner, field)))
+            if any(id(c) in holds_helper for _, o, f in _child_lists(s)
+                   for c in getattr(o, f)):
+                holds_helper.add(id(s))
             h = _height(s, heights)
             if h >= _OUTLINE_HEIGHT and _can_outline(s):
                 marked.add(id(s))
                 h = 0
             heights[id(s)] = h
         fn.body = rebuilt(fn.body)
-        if self.shared:
-            # ``nonlocal`` resolves to the nearest enclosing function that
-            # binds the name, and a moved statement may have been its only
-            # binder: bind every shared name in *fn* itself, so each resolves
-            # to *fn*'s local exactly as before the split.  Never runs and
-            # compiles to nothing.
+
+        def hoist(stmts):
+            for s in stmts:
+                if id(s) not in holds_helper or not _child_lists(s):
+                    continue                  # a helper's own def or call
+                if _can_outline(s):
+                    marked.add(id(s))
+                else:
+                    for _, o, f in _child_lists(s):
+                        hoist(getattr(o, f))
+                        setattr(o, f, rebuilt(getattr(o, f)))
+        hoist(fn.body)
+        fn.body = rebuilt(fn.body)
+        self.localise(fn)
+
+    def localise(self, fn) -> None:
+        """Give every name the moved code mentions the scope it had.
+
+        Python resolves a name to the innermost function that binds it, so
+        each name gets an OWNER -- the innermost scope (*fn* or a helper)
+        enclosing every mention of it -- that binds it, and every helper
+        below the owner that binds it declares it ``nonlocal``.  A helper
+        runs afresh on each call, so a helper may own a name only when its
+        value never has to outlive one call: some statement list of the
+        helper holds a plain ``name = expr`` (``expr`` not mentioning it), or
+        the helper ``def`` of that name, before every other mention (a list
+        always runs from its first statement).  Otherwise the owner moves
+        out, ending at *fn*, which owns everything it owned before the split
+        (an owner that does not bind the name itself gets a never-run
+        ``if False: name = None``).
+
+        Owning by the innermost scope keeps closure cells to the names that
+        really cross a helper boundary: every cell is allocated on EACH call
+        of its function, so making a long clause's names cells of *fn*
+        would tax every call of the predicate, whichever clause runs."""
+        helpers = self.helpers
+        hid = {id(h) for h in helpers}
+        deep: dict[int, dict[str, int]] = {}     # id(stmt or helper) -> counts
+        own_names: dict[int, set] = {}            # id(scope) -> names mentioned
+        binds: dict[int, set] = {}                # id(scope) -> names bound
+        parent: dict[int, ast.AST] = {}
+        lists_of: dict[int, list] = {}
+
+        def add(into, more):
+            for k, v in more.items():
+                into[k] = into.get(k, 0) + v
+
+        def direct(stmt):
+            """Name counts in *stmt* outside its nested statement lists."""
+            c: dict[str, int] = {}
+            nested = {id(x) for _, o, f in _child_lists(stmt) for x in getattr(o, f)}
+            stack = list(ast.iter_child_nodes(stmt))
+            while stack:
+                n = stack.pop()
+                if id(n) in nested:
+                    continue
+                if isinstance(n, ast.Name):
+                    c[n.id] = c.get(n.id, 0) + 1
+                stack.extend(ast.iter_child_nodes(n))
+            return c
+
+        for scope in helpers + [fn]:             # children before parents
+            mentioned: set = set()
+            bound: set = set()
+            lists = [scope.body]
+            for st in _postorder(scope.body):
+                if id(st) in hid:
+                    c = dict(deep[id(st)])
+                    parent[id(st)] = scope
+                    bound.add(st.name)
+                else:
+                    c = direct(st)
+                    mentioned.update(c)
+                    bound |= _bound_names_direct(st)
+                    for _, o, f in _child_lists(st):
+                        lists.append(getattr(o, f))
+                        for x in getattr(o, f):
+                            add(c, deep[id(x)])
+                deep[id(st)] = c
+            total: dict[str, int] = {}
+            for st in scope.body:
+                add(total, deep[id(st)])
+            deep[id(scope)] = total
+            own_names[id(scope)] = mentioned
+            binds[id(scope)] = bound
+            lists_of[id(scope)] = lists
+
+        def chain(scope):
+            out = [scope]
+            while id(out[-1]) in parent:
+                out.append(parent[id(out[-1])])
+            return out                            # scope, ..., fn
+
+        def can_own(scope, name):
+            total = deep[id(scope)].get(name, 0)
+            for lst in lists_of[id(scope)]:
+                for i, st in enumerate(lst):
+                    if deep[id(st)].get(name) or (
+                            id(st) in hid and st.name == name):
+                        break
+                else:
+                    continue
+                if id(st) in hid and st.name == name:
+                    pass                          # the helper ``def`` binds it
+                elif not (isinstance(st, ast.Assign) and len(st.targets) == 1
+                          and isinstance(st.targets[0], ast.Name)
+                          and st.targets[0].id == name
+                          and deep[id(st)][name] == 1):
+                    continue
+                if sum(deep[id(x)].get(name, 0) for x in lst[i:]) == total:
+                    return True
+            return False
+
+        fixed = ({a.arg for a in fn.args.posonlyargs + fn.args.args + fn.args.kwonlyargs}
+                 | {a.arg for a in (fn.args.vararg, fn.args.kwarg) if a}
+                 | {x for st in fn.body if isinstance(st, (ast.Nonlocal, ast.Global))
+                    for x in st.names}
+                 | self.globs)
+        scopes = helpers + [fn]
+        names: set = set()
+        for sc in scopes:
+            names |= own_names[id(sc)] | binds[id(sc)]
+        decls: dict[int, list] = {id(h): [] for h in helpers}
+        keeps: dict[int, list] = {id(sc): [] for sc in scopes}
+        for name in sorted(names):
+            users = [sc for sc in scopes
+                     if name in own_names[id(sc)] or name in binds[id(sc)]]
+            binders = [sc for sc in users if name in binds[id(sc)]]
+            if name in self.globs:
+                continue                          # ``global`` already declared
+            if name in fixed:
+                owner = fn
+            else:
+                # The innermost scope enclosing every user ...
+                common = None
+                for sc in users:
+                    c = chain(sc)
+                    common = c if common is None else [x for x in common if
+                                                      any(x is y for y in c)]
+                owner = common[0]
+                # ... moved out until its value need not outlive one call.
+                while owner is not fn and not can_own(owner, name):
+                    owner = parent[id(owner)]
+            for sc in binders:
+                if sc is not owner:
+                    decls[id(sc)].append(name)
+            if owner is fn and name not in fixed and name not in binds[id(fn)] and any(
+                    sc is not fn for sc in binders):
+                keeps[id(fn)].append(name)
+        for h in helpers:
+            if decls[id(h)]:
+                d = ast.Nonlocal(names=decls[id(h)])
+                ast.copy_location(d, h)
+                h.body.insert(0, d)
+        if keeps[id(fn)]:
             keep = ast.If(
                 test=ast.Constant(False),
                 body=[ast.Assign(targets=[ast.Name(id=k, ctx=ast.Store())],
-                                 value=ast.Constant(None))
-                      for k in sorted(self.shared)],
+                                 value=ast.Constant(None)) for k in keeps[id(fn)]],
                 orelse=[])
-            ast.copy_location(keep, fn.body[0])
+            for c in ast.walk(keep):
+                ast.copy_location(c, fn.body[0])
             fn.body.insert(0, keep)
 
 
-def split_deep_nesting(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+def _bound_names_direct(stmt: ast.stmt) -> set[str]:
+    """Names *stmt* binds outside its nested statement lists (and outside
+    the body of a function or class it defines)."""
+    if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+        return {stmt.name}
+    nested = {id(x) for _, o, f in _child_lists(stmt) for x in getattr(o, f)}
+    out: set[str] = set()
+    if nested:
+        for c in ast.iter_child_nodes(stmt):
+            if id(c) in nested:
+                continue
+            if isinstance(c, (ast.ExceptHandler,)):
+                if c.name:
+                    out.add(c.name)
+                out |= _bound_names(c.type) if c.type else set()
+            elif isinstance(c, ast.match_case):
+                out |= _bound_names(c.pattern)
+                if c.guard is not None:
+                    out |= _bound_names(c.guard)
+            else:
+                out |= _bound_names(c)
+        return out
+    return _bound_names(stmt)
+
+
+def split_deep_nesting(node: ast.FunctionDef | ast.AsyncFunctionDef,
+                       *, force: bool = False) -> bool:
     """Outline statements of *node* (and of the functions defined in it) that
     would nest blocks past CPython's static limit.  Mutates *node*; returns
     True when anything moved, False -- touching nothing -- for a function
     already under the limit."""
     moved = False
+    # *force*: CPython has already refused *node*, so split every function
+    # deep enough to hold an outlinable statement, even one this count puts
+    # under the limit -- the count is a model of CPython's, not CPython.
+    bound = _OUTLINE_HEIGHT if force else _MAX_BLOCK_DEPTH
     for fn, depth in _function_depths(node):
-        if depth <= _MAX_BLOCK_DEPTH:
+        if depth <= bound:
             continue
         globs = {x for n in _walk_same_scope(fn) if isinstance(n, ast.Global)
                  for x in n.names}
@@ -453,6 +655,11 @@ class GeneratedCodeError(SyntaxError):
         self.filename = filename
         self.lineno = lineno
 
+    def __str__(self):
+        # The message already leads with ``file:line``; SyntaxError's own
+        # ``(file, line N)`` suffix would say it twice.
+        return self.msg
+
     def for_predicate(self, predicate: str, positions=()) -> "GeneratedCodeError":
         """The same error naming *predicate*.  *positions* are the clauses'
         source positions ``(line, col, end_line, end_col)`` (``None`` for a
@@ -499,11 +706,11 @@ def functiondef_to_function(
             # out of compiler recursion before it reaches the block check.)
             if isinstance(exc, SyntaxError) and "nested blocks" not in str(exc.msg):
                 raise
-            if not split_deep_nesting(node):
+            if not split_deep_nesting(node, force=True):
                 raise
             _fix_missing_locations(module)
             code = compile(module, filename, "exec")
-    except (SyntaxError, RecursionError, ValueError) as exc:
+    except (SyntaxError, RecursionError) as exc:
         src = (globals_ or {}).get("__file__") or (
             filename if filename != "<template>" else None)
         raise GeneratedCodeError(

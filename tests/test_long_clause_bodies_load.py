@@ -128,6 +128,69 @@ def test_long_tail_recursive_body_keeps_running(tmp_path, monkeypatch):
 # ── 2. other constructs that nest ───────────────────────────────────────────
 
 @pytest.mark.parametrize("front_end", ("native", "translator"))
+def test_long_body_in_a_multi_clause_predicate_with_head_variables(
+        tmp_path, monkeypatch, front_end):
+    # Each clause of a multi-clause predicate runs in try/except/finally,
+    # which costs CPython more blocks than a bare try.
+    n = 30
+    m = _load(tmp_path, monkeypatch, front_end, f"""
+        q(X, Y) :- succ(X, Y).
+        m(a, X, V{n}) :- {_chain(n)}.
+        m(b, X, Y) :- Y is X - 1.
+        m(c, X, Y) :- q(X, Y).
+        """)
+    K, Y = Var(), Var()
+    assert _answers(m, "m", K, 1, Y, outs=(K, Y)) == [
+        ("a", n + 1), ("b", 0), ("c", 2)]
+
+
+@pytest.mark.parametrize("front_end", ("native", "translator"))
+def test_long_body_around_catch_and_setup_call_cleanup(tmp_path, monkeypatch, front_end):
+    n = 20
+    chain2 = _chain(2 * n).split(f"q(V{n - 1}, V{n}), ", 1)[1]
+    m = _load(tmp_path, monkeypatch, front_end, f"""
+        q(X, Y) :- succ(X, Y).
+        boom(_) :- throw(oops).
+        p(X, Y, E) :- {_chain(n)}, catch(boom(V{n}), E, true),
+                      setup_call_cleanup(true, member(Z, [1, 2]), true),
+                      {chain2}, Y is V{2 * n} + Z.
+        """)
+    Y, E = Var(), Var()
+    assert _answers(m, "p", 0, Y, E, outs=(Y, E)) == [
+        (2 * n + 1, "oops"), (2 * n + 2, "oops")]
+
+
+def test_a_long_clause_does_not_tax_its_siblings(tmp_path, monkeypatch):
+    # Only names that cross a helper boundary become closure cells of the
+    # predicate's function, and a cell costs an allocation on EVERY call,
+    # whichever clause runs: a 40-goal clause must not make its short
+    # siblings pay for its 40 variables.
+    captured = []
+    real = codegen.functiondef_to_function
+
+    def spy(node, globals_=None, filename="<template>"):
+        fn = real(node, globals_, filename)
+        if node.name.startswith("len__"):
+            captured.append(fn)
+        return fn
+
+    monkeypatch.setattr("clausal.logic.compiler.predicate.functiondef_to_function", spy)
+    n = 40
+    m = _load(tmp_path, monkeypatch, "native", f"""
+        q(X, Y) :- succ(X, Y).
+        len([], N, N).
+        len([_|T], N0, N) :- N1 is N0 + 1, len(T, N1, N).
+        len(long(X), _, V{n}) :- {_chain(n)}.
+        """)
+    A = Var()
+    assert _answers(m, "len", [7, 8, 9], 0, A, outs=(A,)) == [(3,)]
+    assert _answers(m, "len", ("long", 1), 0, A, outs=(A,)) == [(n + 1,)]
+    assert captured
+    cells = max(len(f.__code__.co_cellvars) for f in captured)
+    assert cells <= 12, captured[0].__code__.co_cellvars
+
+
+@pytest.mark.parametrize("front_end", ("native", "translator"))
 def test_deep_disjunction_of_conjunctions(tmp_path, monkeypatch, front_end):
     depth = 40
     goal = "q(X, Y)"
@@ -202,6 +265,7 @@ def _nested_loops(depth, body, *, generator):
         ind += "    "
     lines += [ind + line for line in body]
     lines.append("    yield ('end', acc)" if generator else "    return acc")
+    lines.append("    v")       # reads the global ``v`` outside every loop
     node = ast.parse("\n".join(lines)).body[0]
     assert split_deep_nesting(node) is True
     helpers = [n for n in ast.walk(node)
@@ -235,6 +299,16 @@ def test_outlined_generator_delegates_sends():
     assert g.send("b") == ("end", ["a", "b"])
 
 
+def test_a_comprehension_target_does_not_become_a_local():
+    # ``v`` is a global the function reads; the comprehension's own ``v``
+    # must not turn it into the function's (unbound) local.
+    f = _nested_loops(30, ["acc.append([v for v in (v29,)][0] + v)"],
+                      generator=False)
+    assert f.__globals__ is not None
+    f.__globals__["v"] = 100
+    assert f([1, 2]) == [101, 102]
+
+
 def test_break_and_continue_stay_with_their_loop():
     f = _nested_loops(30, ["acc.append(v29)", "if v29 == 0:", "    continue",
                            "acc.append(-v29)", "break"], generator=False)
@@ -246,7 +320,8 @@ def test_break_and_continue_stay_with_their_loop():
 @pytest.mark.parametrize("front_end", FRONT_ENDS)
 def test_a_codegen_failure_names_the_predicate_file_and_line(
         tmp_path, monkeypatch, front_end):
-    monkeypatch.setattr(codegen, "_MAX_BLOCK_DEPTH", 10 ** 6)   # outliner off
+    monkeypatch.setattr(codegen, "split_deep_nesting",       # outliner off
+                        lambda node, force=False: False)
     n = 25
     with pytest.raises(GeneratedCodeError) as ei:
         _load(tmp_path, monkeypatch, front_end,
@@ -260,3 +335,4 @@ def test_a_codegen_failure_names_the_predicate_file_and_line(
     msg = str(e)
     assert "p/2" in msg and f"{e.filename}:3" in msg
     assert "too many statically nested blocks" in msg
+    assert msg.count(":3") == 1                 # the location, said once
