@@ -188,7 +188,7 @@ class TestHyphenatedSourceFile:
         msg = _flat(str(_load_error(
             on_path, "-import_from(orgs.grant_aid, [Aid])\n")))
 
-        assert (f"{pkg / 'grant-aid{SEAM}'} is there, but 'grant-aid' is not "
+        assert (f"{pkg / f'grant-aid{SEAM}'} is there, but 'grant-aid' is not "
                 f"a valid Python identifier" in msg)
         assert (f"rename the file 'grant-aid{SEAM}' to 'grant_aid{SEAM}'. "
                 "Renaming is the only repair: a module file is importable only "
