@@ -683,7 +683,7 @@ print(repr(my_module.bar))            # 'bar'
     | `datetime_string(DT, "2026-02-30", "%Y-%m-%d")` / `(..., "%Q")` | `domain_error(datetime_text, "2026-02-30")` / `domain_error(datetime_format, "%Q")` |
     | `date_string_iso(D, "2026-13-01")`, `datetime_string_iso(DT, "2026-01-01T25:00")` | `domain_error(iso_date, "2026-13-01")`, `domain_error(iso_datetime, ...)` |
     | `date_max(DT, Aware, M)` (a naive and an aware datetime) | `domain_error(naive_datetime, Aware)` |
-    | `get("not-a-url", B)` (no scheme), `py.url.parse("http://h:99999/", P)` (port out of range) | `domain_error(url, "not-a-url")` |
+    | `get("not-a-url", B)` (no scheme) / `py.url.parse("http://h:99999/", P)` (port out of range) | `domain_error(url, "not-a-url")` / `domain_error(url, "http://h:99999/")` |
     | `request(Opts, S, B)` with no `url` key | `domain_error(http_request_options, Opts)` |
     | `uuid_bytes(U, B)` (not 16 bytes), `uuid_int(U, -1)` | `domain_error(uuid_bytes, B)`, `domain_error(uuid_int, -1)` |
     | `generate_records(Hs, [R], S)` with a key `Hs` lacks | `domain_error(csv_record, R)` |

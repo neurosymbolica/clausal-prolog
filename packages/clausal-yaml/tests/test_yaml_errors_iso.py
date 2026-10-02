@@ -198,3 +198,18 @@ def test_predicates_are_lower_snake_case():
         assert hasattr(pyaml, name), name
     for old in ("Read", "ReadAll", "ReadFile", "WriteAll", "WriteFile", "Get"):
         assert not hasattr(pyaml, old), old
+
+
+def test_get_3_single_string_key_matches():
+    out = Var()
+    assert len(solutions(pyaml._get_3, {"a": 1}, chars("a"), out)) == 1
+    assert deref(out) == 1
+
+
+def test_read_2_non_text_raises_type_error():
+    assert raised(pyaml._read_2, 42, Var())[1] == ("type_error", "text", 42)
+
+
+def test_read_all_2_unbound_text_raises():
+    assert raised(pyaml._read_all_2, Var(), Var())[1] == \
+        "instantiation_error"

@@ -343,3 +343,42 @@ def test_domain_error_is_catchable_in_a_program(tmp_path):
     sols = [(deref(D), deref(C)) for _ in call("caught", "nope", D, C,
                                                module=mod)]
     assert sols == [("hash_algorithm", "nope")]
+
+
+# ── the CPython wordings the syntax_error / domain_error split reads ─────
+
+
+def test_cpython_messages_the_parse_split_depends_on():
+    """py.datetime, py.url and py.http tell text that does not PARSE
+    (syntax_error) from text that parses to no value (domain_error) by the
+    ValueError's wording.  Pinned here so a CPython that rewords one fails
+    loudly instead of silently flipping the error class."""
+    import datetime as dt
+    import urllib.parse as up
+    import urllib.request as ur
+    from clausal.modules.py.datetime import _is_syntax_message
+
+    def msg(f, *a):
+        with pytest.raises(ValueError) as info:
+            f(*a)
+        return info.value
+
+    # syntax: the text does not parse
+    for exc in (msg(dt.date.fromisoformat, "nope"),
+                msg(dt.datetime.fromisoformat, "nope"),
+                msg(dt.datetime.strptime, "x", "%Y"),
+                msg(dt.datetime.strptime, "2026-01-01x", "%Y-%m-%d")):
+        assert _is_syntax_message(exc), exc
+    # domain: it parses to fields that name no date
+    for exc in (msg(dt.date.fromisoformat, "2026-13-01"),
+                msg(dt.date.fromisoformat, "2026-02-30"),
+                msg(dt.datetime.fromisoformat, "2026-01-01T25:00"),
+                msg(dt.datetime.strptime, "2026-02-30", "%Y-%m-%d")):
+        assert not _is_syntax_message(exc), exc
+    # py.url: an out-of-range port says "out of range"; a non-numeric one
+    # and a bad IPv6 bracket do not.
+    assert "out of range" in str(msg(lambda: up.urlparse("http://h:99999/").port))
+    assert "out of range" not in str(msg(lambda: up.urlparse("http://h:ab/").port))
+    assert "out of range" not in str(msg(up.urlparse, "http://[::1"))
+    # py.http: urllib's own refusal of a scheme.
+    assert str(msg(ur.Request, "not-a-url")).startswith("unknown url type")

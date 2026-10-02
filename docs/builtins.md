@@ -3131,4 +3131,4 @@ builtins. [Operators](operators.md) is the reference for their meaning.
     | `tests/fixtures/clpb_circuit.clausal` | `sat/1`, `bool_labeling/1`, `BoolEq` — HalfAdder, FullAdder, PigeonHole |
     | `tests/fixtures/logging_basic.clausal` | `get_logger`, `set_level`, `get_level`, `is_enabled_for`, `debug`, `info`, `warning`, `error`, `critical`, `log`, `stream_handler`, `set_formatter`, `add_handler`, `remove_handler` |
     | `tests/test_date_time.py` (99 tests) | `now`, `now_utc`, `today`, `date`, `time`, `datetime`, `timedelta`, `date_add`, `date_sub`, `date_diff`, `datetime_string`, `weekday`, `date_between`, `timestamp`, `datetime_string_iso`, `date_string_iso` |
-    | `packages/clausal-yaml/tests/test_yaml_module.py` | `Read`, `write`, `ReadAll`, `WriteAll`, `ReadFile`, `WriteFile`, `Get` (45 tests) |
+    | `packages/clausal-yaml/tests/test_yaml_module.py` | `read`, `write`, `read_all`, `write_all`, `read_file`, `write_file`, `get` |
