@@ -141,6 +141,13 @@ def _term_to_dt(value):
         return value                   # the ORIGINAL: ``is not`` discriminates
 
 
+#: The lengths (functor included) of the date-family term shapes the module
+#: reads and writes: the full form it emits and the short forms it accepts
+#: (no trailing microsecond; ``datetime`` with 9 is the aware form).
+_DT_LENGTHS = {"date": (4,), "time": (4, 5), "datetime": (7, 8, 9),
+               "timedelta": (3, 4)}
+
+
 def _is_dt_term(value) -> bool:
     """A cell whose functor is one of the date family's (``date/3``, ...)."""
     return (type(value) is tuple and len(value) > 1
@@ -150,7 +157,9 @@ def _is_dt_term(value) -> bool:
 def _is_open(value) -> bool:
     """An argument an OUTPUT may still be unified into: an unbound variable,
     or a date-family term with an unbound component (``date(Y, M, D)``)."""
-    return is_var(value) or (_is_dt_term(value) and not _is_ground(value))
+    return is_var(value) or (_is_dt_term(value)
+                             and len(value) in _DT_LENGTHS[value[0]]
+                             and not _is_ground(value))
 
 
 def _reject_dt_term(value, pred) -> None:
@@ -161,12 +170,19 @@ def _reject_dt_term(value, pred) -> None:
     ``instantiation_error``; a component of the wrong type ->
     ``type_error(integer, Term)`` (``number`` for ``timedelta``); right types
     but no such value -> ``domain_error(<functor>, Term)`` -- the same terms
-    ``date/3`` raises when it is constructed from bad components.  A term that
+    ``date/3`` raises when it is constructed from bad components; the wrong
+    number of components -> ``type_error(<functor>, Term)``.  A term that
     DID convert, and anything else, returns: the caller's ordinary type guard
     decides.
     """
     if not _is_dt_term(value):
         return
+    if len(value) not in _DT_LENGTHS[value[0]]:
+        # The wrong number of components: no binding can make it a value
+        # (``date(2025, 3)``).  A ground one the constructor still accepts
+        # converted already and never reaches here.
+        raise LogicException(
+            type_error(value[0], _walk(value), pred)) from None
     if not _is_ground(value):
         raise LogicException(instantiation_error(pred))
     try:
@@ -216,7 +232,29 @@ def deref(value):  # noqa: F811 -- deliberately shadows the import above
 def unify(a, b, trail):  # noqa: F811 -- deliberately shadows the import above
     """``variables.unify`` with Python->term on the way out, so no predicate
     below can hand a Python datetime across the seam."""
-    return _unify(_dt_to_term(a), _dt_to_term(b), trail)
+    a, b = _dt_to_term(a), _dt_to_term(b)
+    return _unify(_fit(a, b), _fit(b, a), trail)
+
+
+def _fit(term, target):
+    """*term* trimmed to the SHORT form *target* is written in, if any.
+
+    The module emits the full form (``time(H, M, S, Us)``) and accepts the
+    short one on input (``time(H, M, S)``, microsecond 0), so a partial
+    short-form target -- ``timedelta(3, 0, timedelta(D, S))`` -- must meet a
+    short-form value or it can never unify.  Only trailing ZERO microseconds
+    of a NAIVE value are dropped: anything else is a real difference.
+    """
+    if type(term) is not tuple or not _is_dt_term(term):
+        return term
+    t = _deref(target)
+    if (not _is_dt_term(t) or t[0] != term[0] or len(t) >= len(term)
+            or len(t) not in _DT_LENGTHS[t[0]]
+            or (term[0] == "datetime" and len(term) == 9)):
+        return term
+    if all(c == 0 for c in term[len(t):]):
+        return term[:len(t)]
+    return term
 
 
 

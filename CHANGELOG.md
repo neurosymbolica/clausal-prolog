@@ -924,9 +924,12 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
   `instantiation_error` for an unbound component (`ordinal(date(_, 3, 1),
   N)`), `type_error(integer, date(foo, 3, 1))` for an ill-typed one and
   `domain_error(date, date(2025, 2, 30))` for an impossible one, as
-  `date/3` already did. A partial term is an output target where the
-  predicate can compute the date: `ordinal(date(Y, M, D), 739311)` binds
-  `Y = 2025, M = 3, D = 1`. A value of another type (`date_add(90, TD,
+  `date/3` already did, and `type_error(date, date(2025, 3))` for the wrong
+  number of components. A partial term is an output target where the
+  predicate can compute the value: `ordinal(date(Y, M, D), 739311)` binds
+  `Y = 2025, M = 3, D = 1`, and a short-form target such as
+  `timedelta(3, 0, timedelta(D, S))` or `time(10, 30, 0, time(H, 30, 0))`
+  meets the value when its microseconds are zero. A value of another type (`date_add(90, TD,
   R)`) still fails with a diagnostic note, as before.
 - **`phrase/2,3` with an unbound grammar body raise
   `instantiation_error`**, as ISO and Scryer do: `phrase(_, L)`,
