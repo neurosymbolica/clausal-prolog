@@ -24,7 +24,7 @@ def test_non_clausal_file_errors(capsys, tmp_path):
     p.write_text("hello")
     rc = main([str(p)])
     assert rc == 2
-    assert "not a .clausal, .seam or .pl file" in capsys.readouterr().err
+    assert "not a .seam, .clausal or .pl file" in capsys.readouterr().err
 
 
 def test_testless_file_is_distinct_not_passed(capsys, tmp_path):

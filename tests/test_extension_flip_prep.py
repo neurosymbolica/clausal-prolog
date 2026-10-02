@@ -1,18 +1,18 @@
-"""The extension flip is a change of the suffix tuples in ``_suffixes.py``.
+"""The extension flip: ``.clausal`` is Clausal Prolog, seam source is ``.seam``.
 
-At the flip ``CLAUSAL_SUFFIXES`` becomes ``(".seam",)`` and
-``CLAUSAL_PROLOG_SUFFIXES`` becomes ``(".clausal",)``.  Everything else the
-flip needs is already in code paths that read those tuples at each call, so
-these tests SIMULATE the flip by patching the tuples and check:
+``CLAUSAL_SUFFIXES`` is ``(".seam",)`` and ``CLAUSAL_PROLOG_SUFFIXES`` is
+``(".clausal",)``; every consumer reads those tuples at each call.  These
+tests pin the post-flip behaviour:
 
-* the bytecode cache key of a ``.clausal`` file changes with its surface, so
-  a seam ``.pyc`` is never served for a Clausal Prolog file;
+* the bytecode cache key of a ``.clausal`` file is its own (nonzero), so a
+  seam ``.pyc`` written for the same path before the flip is never served;
 * a Clausal Prolog file loads through the NATIVE front end whatever
   ``CLAUSAL_PL_FRONTEND`` says (the translator is end-of-life there);
-* ``PrologFinder`` and ``PredicateFinder`` follow the tuples.
+* ``PrologFinder`` and ``PredicateFinder`` follow the tuples, seam group
+  first, then ``(.clausal, .pl)``.
 
-Before the flip every one of these paths is inert (the Clausal Prolog tuple
-is empty); the unpatched assertions pin that.
+The ``flip`` fixture no longer patches anything: it asserts the tuples ARE
+the flipped ones, so a revert of the flip fails here loudly.
 """
 from __future__ import annotations
 
@@ -31,16 +31,18 @@ from clausal.logic.variables import Var, deref, walk
 
 FLIPPED = {"CLAUSAL_SUFFIXES": (".seam",),
            "CLAUSAL_PROLOG_SUFFIXES": (".clausal",)}
+#: The tuples before the flip (``.clausal`` a seam alias), for the one test
+#: that needs a pre-flip cache entry on disk.
+PRE_FLIP = {"CLAUSAL_SUFFIXES": (".clausal", ".seam"),
+            "CLAUSAL_PROLOG_SUFFIXES": ()}
 
 
 @pytest.fixture
-def flip(monkeypatch):
-    """Simulate the extension flip: ``.clausal`` is Clausal Prolog."""
+def flip():
+    """The extension flip is in effect: ``.clausal`` is Clausal Prolog."""
     for name, value in FLIPPED.items():
-        monkeypatch.setattr(_suffixes, name, value)
-    ih._SUFFIX_SALTS.clear()
+        assert getattr(_suffixes, name) == value, (name, value)
     yield
-    ih._SUFFIX_SALTS.clear()
 
 
 def _old_salt(suffix):
@@ -60,11 +62,6 @@ def _answers(mod, name="which"):
 # ── (a) the cache key follows the surface ──
 
 
-def test_existing_cache_keys_are_unchanged_before_the_flip():
-    for suffix in (".clausal", ".seam", ".pl"):
-        assert ih._suffix_salt("m" + suffix) == _old_salt(suffix), suffix
-
-
 def test_the_flip_changes_the_clausal_key(flip):
     salt = ih._suffix_salt("m.clausal")
     assert salt != 0, "a Clausal Prolog file must not get the seam key"
@@ -75,19 +72,23 @@ def test_the_flip_changes_the_clausal_key(flip):
 
 
 def test_a_seam_pyc_is_not_served_for_the_same_file_after_the_flip(
-        tmp_path, monkeypatch):
-    """Same path, same size, same mtime_ns: only the surface changes."""
+        flip, tmp_path, monkeypatch):
+    """Same path, same size, same mtime_ns: only the surface changes.  The
+    seam .pyc is written under the PRE-flip tuples (patched back for that
+    load only), then read under the real ones."""
     src = tmp_path / "efkey.clausal"
     src.write_text("which(1),\n")                 # seam
     try:
+        for name, value in PRE_FLIP.items():
+            monkeypatch.setattr(_suffixes, name, value)
+        ih._SUFFIX_SALTS.clear()
         assert _answers(ih._load_module("efkey_seam", str(src))) == [1]
         assert list((tmp_path / "__pycache__").glob("efkey.*.pyc"))
         st = os.stat(src)
         src.write_text("which(2).\n")             # Prolog, same size
         os.utime(src, ns=(st.st_atime_ns, st.st_mtime_ns))
         assert os.stat(src).st_size == st.st_size
-        for name, value in FLIPPED.items():
-            monkeypatch.setattr(_suffixes, name, value)
+        monkeypatch.undo()
         ih._SUFFIX_SALTS.clear()
         mod = ih._load_module("efkey_cp", str(src))
         assert isinstance(mod.__spec__.loader, ih.NativePrologLoader)
@@ -112,11 +113,12 @@ def test_clausal_prolog_ignores_the_pl_frontend_switch(flip, monkeypatch,
     assert ih._prolog_loader_class_for("m.pl") is expected
 
 
-def test_before_the_flip_clausal_is_not_prolog(monkeypatch):
-    monkeypatch.setenv(ih.PL_FRONTEND_ENV, "translator")
-    assert not _suffixes.is_prolog_source("m.clausal")
-    assert _suffixes.prolog_suffixes() == (".pl",)
-    assert ih._prolog_loader_class_for("m.pl") is ih.PrologLoader
+def test_clausal_is_prolog_and_seam_is_not(flip):
+    assert _suffixes.is_prolog_source("m.clausal")
+    assert _suffixes.is_prolog_source("m.pl")
+    assert not _suffixes.is_prolog_source("m.seam")
+    assert _suffixes.prolog_suffixes() == (".clausal", ".pl")
+    assert _suffixes.SOURCE_SUFFIXES == (".seam", ".clausal", ".pl")
 
 
 @pytest.fixture
@@ -144,9 +146,9 @@ def test_the_finder_routes_clausal_prolog_to_the_native_loader(
     assert _answers(importlib.import_module("efseam")) == [4]
 
 
-def test_before_the_flip_the_finder_reads_clausal_as_seam(tree):
+def test_the_finder_never_reads_clausal_as_seam(flip, tree):
     spec = ih.PredicateFinder().find_spec("efcp", path=[str(tree)])
-    assert type(spec.loader) is ih.PredicateLoader
+    assert type(spec.loader) is not ih.PredicateLoader
 
 
 # ── (c) PrologFinder follows the tuple ──
@@ -159,9 +161,9 @@ def test_prolog_finder_extensions_follow_the_tuple(flip, tree):
     assert ih.PrologFinder().find_spec("efseam", path=[str(tree)]) is None
 
 
-def test_prolog_finder_before_the_flip(tree):
-    assert ih.PrologFinder._extensions == (".pl",)
-    assert ih.PrologFinder().find_spec("efcp", path=[str(tree)]) is None
+def test_prolog_finder_extensions_snapshot(flip):
+    assert ih.PrologFinder._extensions == (".clausal", ".pl")
+    assert ih.PredicateFinder._extensions == (".seam",)
 
 
 # ── clausal-fmt / clausal-rewrite refuse Prolog-syntax files ──
@@ -183,11 +185,6 @@ def test_after_the_flip_the_seam_tools_refuse_clausal_prolog(
     assert "refused: this is Clausal Prolog source" in err
     assert f"clausal-{tool} handles seam (.seam) source only" in err
     assert cp.read_text() == _PROLOG                  # untouched
-    if tool == "rewrite":
-        # Its shipped rules are themselves seam files still spelled
-        # .clausal: under a simulated flip they cannot load until the
-        # rename sweep moves them, so only the refusal is checked here.
-        return
     # A directory walk does not pick the Prolog file up at all.
     seam = tmp_path / "efs.seam"
     seam.write_text(_SEAM)
@@ -207,9 +204,9 @@ def test_the_seam_tools_refuse_a_named_pl_file(tmp_path, capsys, tool):
     assert pl.read_text() == _PROLOG
 
 
-def test_before_the_flip_the_seam_tools_take_clausal(tmp_path, capsys):
+def test_the_seam_tools_take_seam(flip, tmp_path, capsys):
     from clausal.fmt.cli import main as fmt_main
-    src = tmp_path / "efs.clausal"
+    src = tmp_path / "efs.seam"
     src.write_text(_SEAM)
     assert fmt_main(["--check", str(src)]) == 0
     assert capsys.readouterr().err == ""
@@ -256,10 +253,6 @@ def twin(tmp_path, monkeypatch):
 
 def _group_suffixes():
     return [tuple(s) for s, _ in ih.PredicateFinder()._suffix_groups()]
-
-
-def test_the_finder_asks_for_seam_before_prolog_before_the_flip():
-    assert _group_suffixes() == [(".clausal", ".seam"), (".pl",)]
 
 
 def test_the_finder_asks_for_seam_before_prolog_after_the_flip(flip):

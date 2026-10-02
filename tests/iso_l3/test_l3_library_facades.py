@@ -395,5 +395,13 @@ def test_a_seam_file_still_imports_py_datetime(native, ans):
     assert ans(mod, "gap") == [-45]
 
 
-def test_the_refusal_is_inert_until_the_flip():
-    assert _suffixes.CLAUSAL_PROLOG_SUFFIXES == ()
+def test_the_refusal_is_active_since_the_flip(native):
+    """No fixture: a real ``.clausal`` file is Clausal Prolog, so its
+    Python import is refused."""
+    assert _suffixes.CLAUSAL_PROLOG_SUFFIXES == (".clausal",)
+    msg = _refusal(native, "fac_flip_os", """\
+        :- module(fac_flip_os, []).
+        :- use_module(py/os, [cpu_count/1]).
+        :- end_module(fac_flip_os).
+        """, suffix=".clausal")
+    assert "library(py_os)" in msg

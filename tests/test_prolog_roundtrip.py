@@ -507,14 +507,15 @@ class TestDirectivePreservation:
 
 
 class TestSeamAliasDirection:
-    """A ``.seam`` input is the clausal → Prolog direction, like ``.clausal``."""
+    """A ``.seam`` input is the seam → Prolog direction.  Since the
+    extension flip ``.clausal`` is Clausal Prolog, read like ``.pl``."""
 
     def test_detect_direction_seam(self):
         # nv
         from clausal.tools.translate import _detect_direction
         assert _detect_direction("x.seam", None) == "clausal_to_prolog"
         assert _detect_direction("x.SEAM", None) == "clausal_to_prolog"
-        assert _detect_direction("x.clausal", None) == "clausal_to_prolog"
+        assert _detect_direction("x.clausal", None) == "prolog_to_clausal"
         assert _detect_direction("x.pl", None) == "prolog_to_clausal"
 
     def test_translate_seam_to_prolog_autodetect(self, tmp_path):

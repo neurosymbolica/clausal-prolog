@@ -236,25 +236,28 @@ def test_seam_vs_pl_across_entries(roots, frontend, order):
     assert _answers(mod, "which") == ([1] if first is a else [4])
 
 
-# ── same-entry priority: unchanged ──────────────────────────────────────────
+# ── same-entry priority ─────────────────────────────────────────────────────
 
 
 def test_same_entry_priority_unchanged(roots, frontend):
     (d,) = roots("S")
-    # Flat files: .clausal > .seam > .pl.
-    _write(d / "d49same.clausal", "which(0),\n")
+    # Flat files (since the extension flip): .seam > .clausal > .pl -- the
+    # seam group, then the Prolog group (.clausal, .pl).
     _write(d / "d49same.seam", "which(0),\n")
+    _write(d / "d49same.clausal", "which(0).\n")
     _write(d / "d49same.pl", "which(0).\n")
-    assert importlib.util.find_spec("d49same").origin.endswith(".clausal")
-    (d / "d49same.clausal").unlink()
-    importlib.invalidate_caches()
     assert importlib.util.find_spec("d49same").origin.endswith(".seam")
     (d / "d49same.seam").unlink()
     importlib.invalidate_caches()
     spec = importlib.util.find_spec("d49same")
+    assert spec.origin.endswith(".clausal")
+    assert type(spec.loader) is ih.NativePrologLoader     # whatever frontend
+    (d / "d49same.clausal").unlink()
+    importlib.invalidate_caches()
+    spec = importlib.util.find_spec("d49same")
     assert spec.origin.endswith(".pl")
     assert type(spec.loader) is PL_LOADER[frontend]
-    # A .clausal PACKAGE beats a flat .pl in the same entry (the .clausal
+    # A seam PACKAGE beats a flat .pl in the same entry (the .clausal
     # group, flat then package, is asked before the .pl group).
     _write(d / "d49same" / "__init__.seam", "which(0),\n")
     importlib.invalidate_caches()

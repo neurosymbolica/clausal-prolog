@@ -63,11 +63,18 @@ def test_same_stem_pl_and_clausal_do_not_share_bytecode(frontend, tmp_path):
 
 
 def test_the_clausal_key_is_unchanged(tmp_path):
-    src = tmp_path / "sfxkey.clausal"   # pins the legacy key: keep .clausal
-    src.write_text("f(1),\n")
+    """Since the extension flip a .clausal file is Clausal Prolog: its key
+    is a NONZERO salt of its own (never the 0 a seam .clausal had), so a
+    pre-flip seam .pyc is never served for it; .seam and .pl keys differ."""
+    src = tmp_path / "sfxkey.clausal"
+    src.write_text("f(1).\n")
+    salt = ih._suffix_salt(str(src))
+    assert salt != 0
+    assert salt not in (ih._suffix_salt("a.seam"), ih._suffix_salt("a.pl"))
     stats = ih.PredicateLoader("sfxkey", str(src)).path_stats(str(src))
     assert stats["mtime"] == (os.stat(src).st_mtime_ns
-                              ^ ih._effective_bytecode_tag()) & 0xFFFFFFFF
+                              ^ ih._effective_bytecode_tag()
+                              ^ salt) & 0xFFFFFFFF
     assert ih._suffix_salt("a.seam") not in (0, ih._suffix_salt("a.pl"))
 
 

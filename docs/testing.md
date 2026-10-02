@@ -73,7 +73,7 @@ A file that fails to load is reported as one failing `<load>` item, with the loa
 ```text
 1 file(s) skipped (unsupported suffix: 1):
   docs/README.md  (unsupported suffix)
-no test files (.clausal, .seam or .pl) found
+no test files (.seam, .clausal or .pl) found
 0 tests [NO TESTS] (exit 5; pass --allow-empty to accept an empty run)
 ```
 

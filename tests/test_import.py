@@ -460,25 +460,24 @@ def alias_dir(tmp_path):
 
 
 def test_seam_file_imports_like_clausal(alias_dir):
-    """The same content under ``.seam`` and ``.clausal`` gives the same module."""
+    """Seam source is ``.seam``.  Since the extension flip the same content
+    under ``.clausal`` is Clausal Prolog: the native front end reads it and
+    refuses it, instead of loading it as seam."""
     import importlib
     from clausal.logic.variables import Var
     from clausal.import_hook import PredicateLoader
 
     seam = importlib.import_module("seam_probe_seam")
-    clausal_ = importlib.import_module("seam_probe_clausal")
-
     assert isinstance(seam.__loader__, PredicateLoader)
-    assert type(seam.__loader__) is type(clausal_.__loader__)
     assert seam.__file__ == str(alias_dir / "seam_probe_seam.seam")
+    lm = seam.__dict__["$module"]
+    assert len(lm.db.clauses_for("p", 1)) == 2
+    assert len(lm.db.clauses_for("q", 1)) == 1
+    assert _answers(seam.p, Var()) == [(1,), (2,)]
+    assert _answers(seam.q, Var()) == [(2,)]
 
-    for mod in (seam, clausal_):
-        lm = mod.__dict__["$module"]
-        assert len(lm.db.clauses_for("p", 1)) == 2
-        assert len(lm.db.clauses_for("q", 1)) == 1
-
-    assert _answers(seam.p, Var()) == _answers(clausal_.p, Var()) == [(1,), (2,)]
-    assert _answers(seam.q, Var()) == _answers(clausal_.q, Var()) == [(2,)]
+    with pytest.raises(SyntaxError):
+        importlib.import_module("seam_probe_clausal")
 
 
 def test_seam_package_init_and_submodule(alias_dir):
@@ -506,6 +505,9 @@ def test_txt_file_with_the_same_content_is_not_importable(alias_dir):
 
 
 def test_finder_lists_both_clausal_extensions():
-    """The ``.clausal`` finder is the ``.seam`` finder: one class, two suffixes."""
+    """Since the extension flip the seam finder group is ``.seam`` alone;
+    ``.clausal`` is in the Prolog group, before ``.pl``."""
     from clausal.import_hook import PredicateFinder
-    assert tuple(PredicateFinder._extensions) == (".clausal", ".seam")
+    assert tuple(PredicateFinder._extensions) == (".seam",)
+    groups = [tuple(s) for s, _ in PredicateFinder()._suffix_groups()]
+    assert groups == [(".seam",), (".clausal", ".pl")]

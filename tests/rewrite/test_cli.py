@@ -145,21 +145,23 @@ def test_seam_files_are_found_under_a_directory(tmp_path):
 # outcome.
 
 def test_a_seam_rule_file_is_listed_and_resolvable(tmp_path, monkeypatch):
-    """Plant one of each spelling and require both to be found."""
+    """A rule is seam source: a .seam rule is found; since the extension
+    flip a .clausal file is Clausal Prolog, so it is not a rule."""
     from clausal.rewrite import cli
 
     rules = tmp_path / "rules"
     rules.mkdir()
-    (rules / "in_clausal.clausal").write_text("# a rule\n")
+    (rules / "in_clausal.clausal").write_text("% not a rule\n")
     (rules / "in_seam.seam").write_text("# a rule\n")
     (rules / "_hidden.seam").write_text("# excluded, leading underscore\n")
     monkeypatch.setattr(cli, "RULES_DIR", rules)
 
-    assert cli.default_rule_names() == ["in_clausal", "in_seam"]
+    assert cli.default_rule_names() == ["in_seam"]
     assert cli.rule_path("in_seam") == rules / "in_seam.seam"
-    assert cli.rule_path("in_clausal") == rules / "in_clausal.clausal"
-    assert cli.rule_paths(["in_seam", "in_clausal"]) == [
-        rules / "in_seam.seam", rules / "in_clausal.clausal"]
+    assert cli.rule_path("in_clausal") is None
+    assert cli.rule_paths(["in_seam"]) == [rules / "in_seam.seam"]
+    with pytest.raises(cli.UnknownRule):
+        cli.rule_paths(["in_clausal"])
 
 
 def test_an_unknown_rule_is_still_refused_by_name(tmp_path, monkeypatch):
@@ -182,23 +184,22 @@ def test_an_unknown_rule_is_still_refused_by_name(tmp_path, monkeypatch):
 
 
 def test_the_twin_resolves_in_finder_priority_order(tmp_path, monkeypatch):
-    """A directory holding both spellings of one stem resolves the way an
-    import of that stem would — `.clausal` first — rather than by whatever
-    order the filesystem hands back.  A stale twin winning silently is the
-    documented hazard of the rename, so the tie-break is pinned, not left to
-    `glob`."""
+    """A directory holding a stale pre-flip ``twin.clausal`` beside the
+    renamed ``twin.seam`` resolves to the ``.seam``, as an import of that
+    stem would (seam group first): since the extension flip the seam has
+    one suffix, and a ``.clausal`` is never a rule."""
     from clausal._suffixes import CLAUSAL_SUFFIXES
     from clausal.rewrite import cli
 
-    assert CLAUSAL_SUFFIXES[0] == ".clausal", "priority order changed"
+    assert CLAUSAL_SUFFIXES == (".seam",)
     rules = tmp_path / "rules"
     rules.mkdir()
-    (rules / "twin.clausal").write_text("# the winner\n")
-    (rules / "twin.seam").write_text("# the stale twin\n")
+    (rules / "twin.clausal").write_text("# the stale pre-flip twin\n")
+    (rules / "twin.seam").write_text("# the winner\n")
     monkeypatch.setattr(cli, "RULES_DIR", rules)
 
     assert cli.default_rule_names() == ["twin"]          # listed once
-    assert cli.rule_path("twin") == rules / "twin.clausal"
+    assert cli.rule_path("twin") == rules / "twin.seam"
 
 
 def test_a_real_seam_rule_loads_and_fires(tmp_path, monkeypatch):
@@ -271,9 +272,13 @@ def test_no_rewrite_site_spells_the_suffix_itself():
     import ast
     import pathlib
 
-    from clausal._suffixes import CLAUSAL_SUFFIXES
+    from clausal._suffixes import CLAUSAL_PROLOG_SUFFIXES, CLAUSAL_SUFFIXES
     from clausal.rewrite import cli
 
+    # Both surfaces' suffixes: a hardcoded seam suffix is the class this
+    # check hunts, and a hardcoded .clausal (Clausal Prolog since the
+    # extension flip) in a rule path would be the same defect, worse.
+    suffixes = (*CLAUSAL_SUFFIXES, *CLAUSAL_PROLOG_SUFFIXES)
     root = pathlib.Path(__file__).resolve().parents[2]
     watched = [
         root / "clausal" / "rewrite" / "cli.py",
@@ -301,7 +306,7 @@ def test_no_rewrite_site_spells_the_suffix_itself():
             if isinstance(node, ast.Constant) and isinstance(node.value, str):
                 if id(node) in docstrings:
                     continue
-                if not any(sfx in node.value for sfx in CLAUSAL_SUFFIXES):
+                if not any(sfx in node.value for sfx in suffixes):
                     continue
                 # Prose mentions a suffix inside a sentence; a path or a glob
                 # is one whitespace-free token (`".clausal"`, `"*.seam"`,
