@@ -3,15 +3,15 @@
 The `sympy` standard library module provides symbolic mathematics predicates backed by [SymPy](https://www.sympy.org/). It accepts **native Clausal terms** directly — logic variables and arithmetic operators are converted to SymPy expressions automatically.
 
 ```clausal
--import_from(sympy, [Diff, Solve, Simplify, sin, cos, inf])
+-import_from(sympy, [diff, solve, simplify, sin, cos, inf])
 
 test("diff sin") <- (
-    Diff(sin(X), X, R),
+    diff(sin(X), X, R),
     R == cos(X)
 )
 
 test("solve quadratic") <- (
-    Solve(X**2 - 4, X, S),
+    solve(X**2 - 4, X, S),
     S == 2
 )
 ```
@@ -23,7 +23,7 @@ The implementation lives in `clausal/modules/sympy.py`.
 ## Import
 
 ```clausal
--import_from(sympy, [Simplify, Expand, Factor, Solve, Diff, Integrate,
+-import_from(sympy, [simplify, expand, factor, solve, diff, integrate,
                              sin, cos, exp, log, sqrt, inf, pi])
 ```
 
@@ -31,7 +31,7 @@ Or via [module import](import.md):
 
 ```clausal
 -import_module(sympy)
-# then use sympy.Diff(...), sympy.sin(...), etc.
+# then use sympy.diff(...), sympy.sin(...), etc.
 ```
 
 ---
@@ -63,7 +63,7 @@ Predicate results are wrapped in `SymExpr`, which overrides `__eq__` to do symbo
 
 This handles term reordering (SymPy may internally reorder `x + 1` to `1 + x`) and alpha-equivalence (different variable names between the result and the expected value).
 
-Numeric results (integers, floats) are collapsed to plain Python values, so `Simplify(X - X, R), R == 0` works with ordinary equality.
+Numeric results (integers, floats) are collapsed to plain Python values, so `simplify(X - X, R), R == 0` works with ordinary equality.
 
 ### Chaining
 
@@ -85,76 +85,76 @@ The `==` operator also preserves symbolic equality through chains:
 
 ### Core calculus
 
-#### Simplify/2
+#### simplify/2
 
-`Simplify(Expr, Result)` — simplify an expression:
+`simplify(Expr, Result)` — simplify an expression:
 
 ```clausal
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:simplify_2"
 ```
 
-#### Expand/2
+#### expand/2
 
-`Expand(Expr, Result)` — algebraic expansion:
+`expand(Expr, Result)` — algebraic expansion:
 
 ```clausal
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:expand_2"
 ```
 
-#### Factor/2
+#### factor/2
 
-`Factor(Expr, Result)` — factorization:
+`factor(Expr, Result)` — factorization:
 
 ```clausal
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:factor_2"
 ```
 
-#### Solve/3
+#### solve/3
 
-`Solve(Equation, Var, Solution)` — solve equation = 0 for Var. **Nondeterministic** — yields one solution per answer on backtracking:
+`solve(Equation, Var, Solution)` — solve equation = 0 for Var. **Nondeterministic** — yields one solution per answer on backtracking:
 
 ```clausal
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:solve_3"
 ```
 
-#### SolveAll/3
+#### solve_all/3
 
-`SolveAll(Equation, Var, Solutions)` — deterministic, unifies Solutions with a list:
+`solve_all(Equation, Var, Solutions)` — deterministic, unifies Solutions with a list:
 
 ```clausal
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:solve_all_3"
 ```
 
-#### Diff/2, Diff/3
+#### diff/2, diff/3
 
-`Diff(Expr, Result)` — differentiate w.r.t. the single free variable.
-`Diff(Expr, Var, Result)` — differentiate w.r.t. specified variable:
+`diff(Expr, Result)` — differentiate w.r.t. the single free variable.
+`diff(Expr, Var, Result)` — differentiate w.r.t. specified variable:
 
 ```clausal
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:diff_2_3"
 ```
 
-#### Integrate/2, Integrate/3
+#### integrate/2, integrate/3
 
-`Integrate(Expr, Result)` — indefinite integral w.r.t. the single free variable.
-`Integrate(Expr, Var, Result)` — w.r.t. specified variable:
+`integrate(Expr, Result)` — indefinite integral w.r.t. the single free variable.
+`integrate(Expr, Var, Result)` — w.r.t. specified variable:
 
 ```clausal
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:integrate_2_3"
 ```
 
-#### Limit/4
+#### limit/4
 
-`Limit(Expr, Var, Point, Result)` — limit as Var approaches Point:
+`limit(Expr, Var, Point, Result)` — limit as Var approaches Point:
 
 ```clausal
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:limit_4"
 ```
 
-#### Series/4, Series/5
+#### series/4, series/5
 
-`Series(Expr, Var, N, Result)` — Taylor series around Var=0 to N terms.
-`Series(Expr, Var, Point, N, Result)` — around a specified point:
+`series(Expr, Var, N, Result)` — Taylor series around Var=0 to N terms.
+`series(Expr, Var, Point, N, Result)` — around a specified point:
 
 ```clausal
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:series_4_5"
@@ -162,57 +162,57 @@ The `==` operator also preserves symbolic equality through chains:
 
 ### Algebra extras
 
-#### Collect/3
+#### collect/3
 
-`Collect(Expr, Var, Result)` — collect terms by powers of Var:
+`collect(Expr, Var, Result)` — collect terms by powers of Var:
 
 ```clausal
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:collect_3"
 ```
 
-#### Cancel/2
+#### cancel/2
 
-`Cancel(Expr, Result)` — cancel common factors in a rational expression:
+`cancel(Expr, Result)` — cancel common factors in a rational expression:
 
 ```clausal
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:cancel_2"
 ```
 
-#### Apart/2, Apart/3
+#### apart/2, apart/3
 
-`Apart(Expr, Result)` — partial fraction decomposition:
+`apart(Expr, Result)` — partial fraction decomposition:
 
 ```clausal
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:apart_2_3"
 ```
 
-#### Together/2
+#### together/2
 
-`Together(Expr, Result)` — combine fractions over a common denominator:
+`together(Expr, Result)` — combine fractions over a common denominator:
 
 ```clausal
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:together_2"
 ```
 
-#### Degree/2, Degree/3
+#### degree/2, degree/3
 
-`Degree(Expr, Result)` / `Degree(Expr, Var, Result)` — polynomial degree:
+`degree(Expr, Result)` / `degree(Expr, Var, Result)` — polynomial degree:
 
 ```clausal
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:degree_2_3"
 ```
 
-#### Coeffs/3
+#### coeffs/3
 
-`Coeffs(Expr, Var, Result)` — polynomial coefficients (highest degree first):
+`coeffs(Expr, Var, Result)` — polynomial coefficients (highest degree first):
 
 ```clausal
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:coeffs_3"
 ```
 
-#### Roots/3
+#### roots/3
 
-`Roots(Equation, Var, Pair)` — **nondeterministic**, yields `(root, multiplicity)` tuples:
+`roots(Equation, Var, Pair)` — **nondeterministic**, yields `(root, multiplicity)` tuples:
 
 ```clausal
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:roots_3"
@@ -220,17 +220,17 @@ The `==` operator also preserves symbolic equality through chains:
 
 ### Trigonometry
 
-#### TrigSimp/2
+#### trig_simp/2
 
-`TrigSimp(Expr, Result)` — simplify trigonometric expressions:
+`trig_simp(Expr, Result)` — simplify trigonometric expressions:
 
 ```clausal
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:trig_simp_2"
 ```
 
-#### ExpandTrig/2
+#### expand_trig/2
 
-`ExpandTrig(Expr, Result)` — expand trig identities:
+`expand_trig(Expr, Result)` — expand trig identities:
 
 ```clausal
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:expand_trig_2"
@@ -238,33 +238,33 @@ The `==` operator also preserves symbolic equality through chains:
 
 ### Number theory
 
-#### IsPrime/1
+#### is_prime/1
 
-`IsPrime(N)` — succeeds if N is prime:
+`is_prime(N)` — succeeds if N is prime:
 
 ```clausal
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:is_prime_1"
 ```
 
-#### NextPrime/2
+#### next_prime/2
 
-`NextPrime(N, Result)` — smallest prime greater than N:
+`next_prime(N, Result)` — smallest prime greater than N:
 
 ```clausal
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:next_prime_2"
 ```
 
-#### FactorInt/2
+#### factor_int/2
 
-`FactorInt(N, Result)` — prime factorization as `{prime: exponent}` dict:
+`factor_int(N, Result)` — prime factorization as `{prime: exponent}` dict:
 
 ```clausal
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:factor_int_2"
 ```
 
-#### Divisors/2
+#### divisors/2
 
-`Divisors(N, Result)` — sorted list of positive divisors:
+`divisors(N, Result)` — sorted list of positive divisors:
 
 ```clausal
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:divisors_2"
@@ -288,17 +288,17 @@ The `==` operator also preserves symbolic equality through chains:
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:sum_5"
 ```
 
-#### Product/5
+#### product/5
 
-`Product(Expr, Var, Low, High, Result)` — symbolic product:
+`product(Expr, Var, Low, High, Result)` — symbolic product:
 
 ```clausal
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:product_5"
 ```
 
-#### Binomial/3
+#### binomial/3
 
-`Binomial(N, K, Result)` — binomial coefficient:
+`binomial(N, K, Result)` — binomial coefficient:
 
 ```clausal
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:binomial_3"
@@ -306,31 +306,31 @@ The `==` operator also preserves symbolic equality through chains:
 
 ### Printing
 
-#### Latex/2
+#### latex/2
 
-`Latex(Expr, String)` — convert expression to LaTeX:
+`latex(Expr, String)` — convert expression to LaTeX:
 
 ```clausal
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:latex_2"
 ```
 
-#### Pretty/2
+#### pretty/2
 
-`Pretty(Expr, String)` — Unicode pretty-print:
+`pretty(Expr, String)` — Unicode pretty-print:
 
 ```clausal
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:pretty_2"
 ```
 
-#### MathML/2
+#### math_ml/2
 
-`MathML(Expr, String)` — convert to MathML.
+`math_ml(Expr, String)` — convert to math_ml.
 
 ### Substitution and inspection
 
-#### Subs/3
+#### subs/3
 
-`Subs(Expr, Bindings, Result)` — substitute values. Bindings is a dict or list of pairs:
+`subs(Expr, Bindings, Result)` — substitute values. Bindings is a dict or list of pairs:
 
 ```clausal
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:subs_3"
@@ -338,9 +338,9 @@ The `==` operator also preserves symbolic equality through chains:
 
 Note: binding dicts with logic variable keys must be wrapped in `++()` so the Vars are dereferenced.
 
-#### FreeVars/2
+#### free_vars/2
 
-`FreeVars(Expr, Names)` — sorted list of free symbol name strings:
+`free_vars(Expr, Names)` — sorted list of free symbol name strings:
 
 ```clausal
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:free_vars_2"
@@ -348,17 +348,17 @@ Note: binding dicts with logic variable keys must be wrapped in `++()` so the Va
 
 ### Display and comparison
 
-#### SymStr/2
+#### sym_str/2
 
-`SymStr(Expr, String)` — convert expression to a readable string via SymPy:
+`sym_str(Expr, String)` — convert expression to a readable string via SymPy:
 
 ```clausal
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:sym_str_2"
 ```
 
-#### SymEqual/2
+#### sym_equal/2
 
-`SymEqual(A, B)` — explicit symbolic equality (usually `==` suffices, but `SymEqual` is available for cases where both sides are raw Clausal terms):
+`sym_equal(A, B)` — explicit symbolic equality (usually `==` suffices, but `sym_equal` is available for cases where both sides are raw Clausal terms):
 
 ```clausal
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:sym_equal_2"
@@ -366,9 +366,9 @@ Note: binding dicts with logic variable keys must be wrapped in `++()` so the Va
 
 ### Conversion
 
-#### Sym/2
+#### sym/2
 
-`Sym(Name, Symbol)` — create a named SymPy Symbol. Rarely needed since predicates auto-convert Vars, but useful when you want a specific display name:
+`sym(Name, Symbol)` — create a named SymPy Symbol. Rarely needed since predicates auto-convert Vars, but useful when you want a specific display name:
 
 ```clausal
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:sym_2"
@@ -425,7 +425,7 @@ Function and constant names follow SymPy's conventions where possible:
 - **`abs_`**: capitalized — matches SymPy (they capitalized it because `abs` is a Python builtin)
 - **`inf`**: instead of SymPy's `oo` — readability
 - **`e`**: instead of SymPy's `E` — `E` is ALLCAPS so Clausal treats it as a logic variable
-- **Predicates**: capitalized (`Simplify`, `Diff`, `Solve`) — these are Python
+- **Predicates**: capitalized (`simplify`, `diff`, `solve`) — these are Python
   objects reached through the `-import_from(sympy, [...])` list, not Clausal
   predicates; a name that arrives through an import list keeps its Python
   spelling. Clausal's own predicates are lowercase.

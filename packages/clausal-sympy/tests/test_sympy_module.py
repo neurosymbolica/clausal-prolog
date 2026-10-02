@@ -10,9 +10,9 @@ from clausal.logic.trampoline import DONE
 from clausal.terms import Add, Sub, Mult, Div, Pow, Negate
 from clausal.modules.py.sympy import (
     to_sympy, from_sympy, _ConversionContext,
-    Sym, ToSympy, FromSympy,
-    Simplify, Expand, Factor, Solve, SolveAll,
-    Diff, Integrate, Limit, Series, Subs, FreeVars,
+    sym, ToSympy, FromSympy,
+    simplify, expand, factor, solve, solve_all,
+    diff, integrate, limit, series, subs, free_vars,
 )
 
 
@@ -296,7 +296,7 @@ class TestSym:
     def test_create_symbol(self):
         # nv
         result = Var()
-        sol = _first_solution(Sym, "x", result)
+        sol = _first_solution(sym, "x", result)
         assert sol is not None
         assert isinstance(deref(result), sp.Symbol)
         assert str(deref(result)) == "x"
@@ -317,7 +317,7 @@ class TestSimplify:
             right=Mult(left=2, right=v),
         )
         result = Var()
-        sol = _first_solution(Simplify, term, result)
+        sol = _first_solution(simplify, term, result)
         assert sol is not None
         assert deref(result) == 1
 
@@ -330,7 +330,7 @@ class TestSimplify:
             right=Pow(left=("cos", x), right=2),
         )
         result = Var()
-        sol = _first_solution(Simplify, term, result)
+        sol = _first_solution(simplify, term, result)
         assert sol is not None
         assert deref(result) == 1
 
@@ -341,7 +341,7 @@ class TestExpand:
         x = sp.Symbol("x")
         term = Pow(left=Add(left=x, right=1), right=2)
         result = Var()
-        sol = _first_solution(Expand, term, result)
+        sol = _first_solution(expand, term, result)
         assert sol is not None
         r = deref(result)
         # Result is a SymExpr wrapper around a SymPy expression
@@ -356,7 +356,7 @@ class TestFactor:
         x = sp.Symbol("x")
         term = Sub(left=Pow(left=x, right=2), right=1)
         result = Var()
-        sol = _first_solution(Factor, term, result)
+        sol = _first_solution(factor, term, result)
         assert sol is not None
         r = deref(result)
         assert sp.expand(r - (x - 1) * (x + 1)) == 0
@@ -369,7 +369,7 @@ class TestSolve:
         # 2x - 6 = 0 → x = 3
         eq = Sub(left=Mult(left=2, right=x), right=6)
         solution = Var()
-        sols = _collect_solutions(Solve, eq, x, solution)
+        sols = _collect_solutions(solve, eq, x, solution)
         assert len(sols) == 1
         # Check the snapshot (solution Var is unbound after trail.undo)
         assert sols[0][2] == 3
@@ -380,7 +380,7 @@ class TestSolve:
         # x^2 - 4 = 0 → x = -2, 2
         eq = Sub(left=Pow(left=x, right=2), right=4)
         solution = Var()
-        sols = _collect_solutions(Solve, eq, x, solution)
+        sols = _collect_solutions(solve, eq, x, solution)
         values = sorted(s[2] for s in sols)  # 3rd arg is solution
         assert values == [-2, 2]
 
@@ -390,7 +390,7 @@ class TestSolve:
         # x^2 + 1 = 0 has no real solutions — SymPy gives complex
         eq = Add(left=Pow(left=x, right=2), right=1)
         solution = Var()
-        sols = _collect_solutions(Solve, eq, x, solution)
+        sols = _collect_solutions(solve, eq, x, solution)
         # SymPy returns complex solutions: ±i
         assert len(sols) == 2
 
@@ -401,7 +401,7 @@ class TestSolveAll:
         x = sp.Symbol("x")
         eq = Sub(left=Pow(left=x, right=2), right=9)
         solutions = Var()
-        sol = _first_solution(SolveAll, eq, x, solutions)
+        sol = _first_solution(solve_all, eq, x, solutions)
         assert sol is not None
         result = deref(solutions)
         assert sorted(result) == [-3, 3]
@@ -414,7 +414,7 @@ class TestDiff:
         # d/dx(x^3) = 3x^2
         term = Pow(left=x, right=3)
         result = Var()
-        sol = _first_solution(Diff, term, result)
+        sol = _first_solution(diff, term, result)
         assert sol is not None
         r = deref(result)
         assert sp.expand(r - 3 * x**2) == 0
@@ -424,7 +424,7 @@ class TestDiff:
         x = sp.Symbol("x")
         term = ("sin", x)
         result = Var()
-        sol = _first_solution(Diff, term, x, result)
+        sol = _first_solution(diff, term, x, result)
         assert sol is not None
         r = deref(result)
         assert r == sp.cos(x)
@@ -435,7 +435,7 @@ class TestDiff:
         # d/dx(x*y + x^2)
         term = Add(left=Mult(left=x, right=y), right=Pow(left=x, right=2))
         result = Var()
-        sol = _first_solution(Diff, term, x, result)
+        sol = _first_solution(diff, term, x, result)
         assert sol is not None
         r = deref(result)
         assert sp.expand(r - (y + 2 * x)) == 0
@@ -448,7 +448,7 @@ class TestIntegrate:
         # ∫ x^2 dx = x^3/3
         term = Pow(left=x, right=2)
         result = Var()
-        sol = _first_solution(Integrate, term, result)
+        sol = _first_solution(integrate, term, result)
         assert sol is not None
         r = deref(result)
         assert sp.simplify(r - x**3 / 3) == 0
@@ -457,7 +457,7 @@ class TestIntegrate:
         # nv
         x = sp.Symbol("x")
         result = Var()
-        sol = _first_solution(Integrate, ("cos", x), x, result)
+        sol = _first_solution(integrate, ("cos", x), x, result)
         assert sol is not None
         r = deref(result)
         assert r == sp.sin(x)
@@ -470,7 +470,7 @@ class TestLimit:
         # lim x→0 sin(x)/x = 1
         term = Div(left=("sin", x), right=x)
         result = Var()
-        sol = _first_solution(Limit, term, x, 0, result)
+        sol = _first_solution(limit, term, x, 0, result)
         assert sol is not None
         assert deref(result) == 1
 
@@ -482,7 +482,7 @@ class TestSeries:
         # exp(x) around 0 to 4 terms: 1 + x + x^2/2 + x^3/6
         term = ("exp", x)
         result = Var()
-        sol = _first_solution(Series, term, x, 4, result)
+        sol = _first_solution(series, term, x, 4, result)
         assert sol is not None
         r = deref(result)
         expected = 1 + x + x**2 / 2 + x**3 / 6
@@ -495,7 +495,7 @@ class TestSubs:
         x = sp.Symbol("x")
         term = Add(left=Pow(left=x, right=2), right=1)
         result = Var()
-        sol = _first_solution(Subs, term, {"x": 3}, result)
+        sol = _first_solution(subs, term, {"x": 3}, result)
         assert sol is not None
         assert deref(result) == 10  # 3^2 + 1
 
@@ -504,7 +504,7 @@ class TestSubs:
         x, y = sp.Symbol("x"), sp.Symbol("y")
         term = Add(left=x, right=y)
         result = Var()
-        sol = _first_solution(Subs, term, [("x", 2), ("y", 3)], result)
+        sol = _first_solution(subs, term, [("x", 2), ("y", 3)], result)
         assert sol is not None
         assert deref(result) == 5
 
@@ -515,7 +515,7 @@ class TestFreeVars:
         x, y = sp.Symbol("x"), sp.Symbol("y")
         term = Add(left=Mult(left=x, right=y), right=1)
         result = Var()
-        sol = _first_solution(FreeVars, term, result)
+        sol = _first_solution(free_vars, term, result)
         assert sol is not None
         assert deref(result) == ["x", "y"]
 
@@ -527,31 +527,31 @@ class TestIntegration:
     """Tests that verify the module works end-to-end with the trampoline."""
 
     def test_solve_and_verify(self):
-        """Solve x^2 = 9, verify each solution by substitution."""
+        """solve x^2 = 9, verify each solution by substitution."""
         # nv
         x = sp.Symbol("x")
         eq = Sub(left=Pow(left=x, right=2), right=9)
         solution = Var()
-        sols = _collect_solutions(Solve, eq, x, solution)
+        sols = _collect_solutions(solve, eq, x, solution)
         values = sorted(s[2] for s in sols)
         for val in values:
             # val^2 should be 9
             assert val**2 == 9
 
     def test_differentiate_then_integrate(self):
-        """Diff then integrate should give back (up to constant)."""
+        """diff then integrate should give back (up to constant)."""
         # nv
         x = sp.Symbol("x")
         original = Pow(left=x, right=3)
 
         # Differentiate: 3x^2
         deriv = Var()
-        _first_solution(Diff, original, deriv)
+        _first_solution(diff, original, deriv)
         d = deref(deriv)
 
-        # Integrate the derivative: should get x^3 back
+        # integrate the derivative: should get x^3 back
         integral = Var()
-        _first_solution(Integrate, d, integral)
+        _first_solution(integrate, d, integral)
         i = deref(integral)
 
         assert sp.simplify(i - x**3) == 0

@@ -1,5 +1,5 @@
 -double_quotes(atom)
--import_from(sympy, [sum_, Product, Binomial, SymEqual, Inf])
+-import_from(sympy, [sum_, product, binomial, sym_equal, Inf])
 
 # ── sum_/5 ──────────────────────────────────────────────────────────────
 
@@ -18,37 +18,37 @@ test("sum of constants") <- (
     R == 3*N
 )  # nv
 
-# ── Product/5 ─────────────────────────────────────────────────────────────
+# ── product/5 ─────────────────────────────────────────────────────────────
 
 test("product 1 to 5") <- (
-    Product(I, I, 1, 5, R),
+    product(I, I, 1, 5, R),
     R == 120
 )  # nv
 
 test("product symbolic") <- (
-    Product(X, X, 1, N_UNUSED, R),
+    product(X, X, 1, N_UNUSED, R),
     S is ++str(R),
     ++("factorial" in S)
 )  # nv
 
-# ── Binomial/3 ───────────────────────────────────────────────────────────────
+# ── binomial/3 ───────────────────────────────────────────────────────────────
 
 test("binomial 5 choose 2") <- (
-    Binomial(5, 2, R),
+    binomial(5, 2, R),
     R == 10
 )  # nv
 
 test("binomial 10 choose 0") <- (
-    Binomial(10, 0, R),
+    binomial(10, 0, R),
     R == 1
 )  # nv
 
 test("binomial 10 choose 10") <- (
-    Binomial(10, 10, R),
+    binomial(10, 10, R),
     R == 1
 )  # nv
 
 test("binomial symbolic") <- (
-    Binomial(N, 2, R),
+    binomial(N, 2, R),
     R == N*(N - 1)/2
 )  # nv
