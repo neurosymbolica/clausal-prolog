@@ -507,11 +507,21 @@ class TestSympyTerm:
         # review: this is the predicate where a Dummy-vs-Symbol mismatch
         # would silently return False instead of raising or misbehaving
         # loudly).
+        #
+        # sym_equal(S, X+1) is NOT a sufficient test here (code review,
+        # round 2): its alpha-equivalence fallback renames free symbols
+        # across sides by permutation, so it ALSO succeeds for a totally
+        # UNRELATED Y (sym_equal(S, Y+1) with S built from X -- confirmed
+        # empirically) and would pass whether or not detagging actually
+        # reunified S's symbol with X's. sym_equal(S - X, 1) only holds
+        # if S's tagged symbol and this fresh X's conversion are THE SAME
+        # SymPy symbol -- an unrelated var in S leaves 2 free symbols
+        # (not 0) and correctly fails (confirmed empirically).
         # nv
         x = Var()
         s = Var()
         _first_solution(sympy_term, s, Add(left=x, right=1))
-        sol = _first_solution(sym_equal, deref(s), Add(left=x, right=1))
+        sol = _first_solution(sym_equal, Sub(left=deref(s), right=x), 1)
         assert sol is not None
 
     def test_detag_dereferences_a_var_bound_after_tagging(self):
@@ -551,6 +561,24 @@ class TestSympyTerm:
         # the Var is gone: what comes back is a bare SymPy Symbol leaf,
         # not Clausal's X.
         assert _find_var(back) is None
+
+    def test_cyclic_binding_fails_cleanly_instead_of_crashing(self):
+        # sympy_term(S, X+1), X = S unifies X with the very expression
+        # whose Dummy tag points right back at X -- a cycle the engine's
+        # own occurs check cannot see, since X is reachable only through
+        # that opaque Python attribute. Detagging it (what simplify/2,
+        # subs/2, etc. all do on their way in) used to recurse forever
+        # and crash with an uncaught RecursionError; now it fails the
+        # goal cleanly, like any other conversion failure (RULED
+        # 2026-10-02, code review).
+        # nv
+        x = Var()
+        s = Var()
+        _first_solution(sympy_term, s, Add(left=x, right=1))
+        trail = Trail()
+        assert unify(x, deref(s), trail)
+        sol = _first_solution(simplify, deref(s), Var())
+        assert sol is None
 
     def test_sympy_bound_to_a_bool_is_accepted(self):
         # _to_pyval collapses S.true/S.false to Python True/False, not a

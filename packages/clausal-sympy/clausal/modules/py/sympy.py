@@ -169,12 +169,28 @@ def _detag_vars(expr: Any, ctx: "_ConversionContext") -> Any:
     ``x + 1``), and only ``_to_sympy_ctx`` dereferences before deciding
     whether it is still free. A plain, untagged symbol is returned as
     itself (nothing to detag).
+
+    Dereferencing opens a CYCLE the engine's own occurs check cannot see,
+    since the Var is reachable only through this opaque Python attribute,
+    not through Clausal's own term structure: ``sympy_term(S, X+1), X =
+    S`` unifies X with the very sympy expression that has X's tag buried
+    inside it, and detagging it recurses forever (RULED 2026-10-02, code
+    review: confirmed empirically -- an uncaught ``RecursionError``,
+    since every predicate here only catches ``TypeError``/``ValueError``
+    around a conversion). Caught here and turned into the ``ValueError``
+    those catches already expect, so a cyclic binding becomes an
+    ordinary caught conversion failure (-> ``type_error(sympy_expression,
+    ...)`` from ``sympy_term/2`` itself, a plain failed goal from
+    everything else) instead of a process-level crash.
     """
     tagged = {s for s in expr.free_symbols if isinstance(s, _VarSymbol)}
     if not tagged:
         return expr
-    replace_map = {s: _to_sympy_ctx(s._clausal_var, ctx) for s in tagged
-                   if s._clausal_var is not None}
+    try:
+        replace_map = {s: _to_sympy_ctx(s._clausal_var, ctx) for s in tagged
+                       if s._clausal_var is not None}
+    except RecursionError:
+        raise ValueError("sympy_term/2: cyclic variable binding")
     return expr.xreplace(replace_map) if replace_map else expr
 
 
