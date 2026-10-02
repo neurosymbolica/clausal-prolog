@@ -1015,6 +1015,17 @@ since 0.4.0 finish three moves:
 
 ### Changed
 
+- **A gate reads the names Python modules REGISTER as predicates.**
+  `tests/test_python_predicate_name_gate.py` imports every module under
+  `clausal/modules/` and `packages/*/clausal/modules/` from source (in a
+  child process) and checks each name `module_signatures` offers, and
+  each predicate adapter's own `_name`, against the engine's
+  logic-variable rule: a TitleCase, ALL-CAPS or underscore-led name fails.
+  The source lint never saw these (`ModulePredicate("Name")`, `_pred`,
+  hand-rolled adapters). A package module whose declared third-party
+  dependency is absent is read statically instead; any other import
+  failure fails the gate. Run against the tree before the package renames,
+  it reports 334 such names.
 - **The `.pl` translator reads which twins hide a `.pl` from the finder
   order.** When a `use_module` names a `.pl` file, its `module/2` export
   list is read only if no twin the import hook loads first sits beside it.
