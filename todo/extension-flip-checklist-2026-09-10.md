@@ -70,8 +70,16 @@ reads a shared suffix list (positive control required).
   repros under `todo/done/` with no `use_module`); 1 test-generated site,
   `test_extension_flip_prep.py::test_a_clausal_prolog_importer_is_told_use_module`,
   repointed at a `.clausal` library on this branch.  Not covered (routes
-  2-7, later, with the dialect gate): a run-time `M:G` / `call/N` into a
-  `.pl` module some other code loaded still runs (xfail-strict pin).
+  2-7, later, with the dialect gate; route 2 RULED strict: a `.pl` closure
+  passed into a `.clausal` meta-predicate is refused too): a run-time
+  `M:G` / `call/N` into a `.pl` module some other code loaded still runs
+  (pinned as today's behaviour, labelled "closed by route 2").
+  Open Low (review): the defensive `.pl` check on mapped libraries in
+  `iso_l3_directives._use_library` is unreachable today (every mapped
+  module is `.py`/`.seam`), costs a `find_spec` per mapped-library import
+  under the Clausal Prolog surface, and has no twin in the translator's
+  mapped-library branch; a static test over `_LIBRARY_MODULES` /
+  `_LIBRARY_OVERRIDES` would replace it.
   `ensure_loaded/1` is no native directive; `library(L)` never reaches a
   `.pl` (built-in, mapped engine module, or `.seam` facade only).
 
