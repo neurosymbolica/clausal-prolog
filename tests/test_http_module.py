@@ -32,6 +32,16 @@ def simple_solutions(fn, *args):
     return results, trail
 
 
+def raised(fn, *args):
+    """The error term a simple-mode builtin raises.  RULED 2026-10-02: an
+    argument of the wrong type raises type_error, an unbound required one
+    instantiation_error -- neither fails the goal."""
+    from clausal.logic.exceptions import LogicException
+    with pytest.raises(LogicException) as info:
+        list(fn(*args, Trail(), None))
+    return info.value.term
+
+
 def trampoline_solutions(pred, *args):
     """Run a trampoline-protocol predicate and collect solution snapshots."""
     trail = Trail()
@@ -78,11 +88,11 @@ class TestHttpGet:
         sols, _ = simple_solutions(_get_2, chars("http://example.com"), body)
         assert len(sols) == 0
 
-    def test_unbound_url_fails(self):
+    def test_unbound_url_raises(self):
         # nv
         body = Var()
-        sols, _ = simple_solutions(_get_2, Var(), body)
-        assert len(sols) == 0
+        term = raised(_get_2, Var(), body)
+        assert term == ('error', 'instantiation_error', ('/', 'get', 2))
 
     @patch("clausal.modules.py.http._urlopen")
     def test_get_with_headers(self, mock_urlopen):
@@ -129,11 +139,11 @@ class TestHttpPost:
         sols, _ = simple_solutions(_post_4, chars("http://example.com"), chars("data"), headers, body)
         assert len(sols) == 1
 
-    def test_post_unbound_data_fails(self):
+    def test_post_unbound_data_raises(self):
         # nv
         body = Var()
-        sols, _ = simple_solutions(_post_3, chars("http://example.com"), Var(), body)
-        assert len(sols) == 0
+        term = raised(_post_3, chars("http://example.com"), Var(), body)
+        assert term == ('error', 'instantiation_error', ('/', 'post', 3))
 
 
 # ── request/3 ────────────────────────────────────────────────────────────
@@ -250,10 +260,10 @@ class TestUrlEncode:
         simple_solutions(_decode_2, deref(e), s)
         assert deref(s) == chars("test value&more")
 
-    def test_unbound_fails(self):
+    def test_unbound_raises(self):
         # nv
-        sols, _ = simple_solutions(_encode_2, Var(), Var())
-        assert len(sols) == 0
+        term = raised(_encode_2, Var(), Var())
+        assert term == ('error', 'instantiation_error', ('/', 'encode', 2))
 
 
 # ── URL parse/join ───────────────────────────────────────────────────────
@@ -288,10 +298,10 @@ class TestUrlParse:
         assert result.data[mint("scheme")] == chars("http")
         assert result.data[mint("host")] == chars("example.com")
 
-    def test_unbound_fails(self):
+    def test_unbound_raises(self):
         # nv
-        sols, _ = simple_solutions(_parse_2, Var(), Var())
-        assert len(sols) == 0
+        term = raised(_parse_2, Var(), Var())
+        assert term == ('error', 'instantiation_error', ('/', 'parse', 2))
 
 
 class TestUrlJoin:
@@ -326,10 +336,10 @@ class TestUrlJoin:
         assert len(sols) == 1
         assert "example.com" in chars_text(deref(url))
 
-    def test_unbound_fails(self):
+    def test_unbound_raises(self):
         # nv
-        sols, _ = simple_solutions(_join_2, Var(), Var())
-        assert len(sols) == 0
+        term = raised(_join_2, Var(), Var())
+        assert term == ('error', 'instantiation_error', ('/', 'join', 2))
 
 
 # ── Task 12c: the URL parts dict is keyed by ATOMS (spec §6.8) ──────────

@@ -21,6 +21,7 @@ from __future__ import annotations
 from clausal.modules.py import (
     ModulePredicate,
     _import_stdlib,
+    NUMBER_TYPES,
     expect_type,
     note_rejected_call,
     simple_to_trampoline,
@@ -47,13 +48,9 @@ def _random_1(x, trail, k):
 def _random_float_3(low, high, x, trail, k):
     """float_between/3: bind X to a random float in [Low, High)."""
     low, high = deref(low), deref(high)
-    if is_var(low) or is_var(high):
-        return
-    try:
-        low_f, high_f = float(low), float(high)
-    except (TypeError, ValueError) as exc:
-        note_rejected_call("float_between/3", exc)
-        return
+    expect_type(low, NUMBER_TYPES, "float_between/3", arg=1)
+    expect_type(high, NUMBER_TYPES, "float_between/3", arg=2)
+    low_f, high_f = float(low), float(high)
     if low_f >= high_f:
         return
     if unify(x, _rng.uniform(low_f, high_f), trail):
@@ -63,13 +60,11 @@ def _random_float_3(low, high, x, trail, k):
 def _random_integer_3(low, high, x, trail, k):
     """integer_between/3: bind X to a random integer in [Low, High]."""
     low, high = deref(low), deref(high)
-    if is_var(low) or is_var(high):
-        return
-    try:
-        low_i, high_i = int(low), int(high)
-    except (TypeError, ValueError) as exc:
-        note_rejected_call("integer_between/3", exc)
-        return
+    # An integer, not anything int() accepts: int(2.7) truncated, and int()
+    # of an atom spelled '3' parsed it (RULED 2026-10-02: type_error).
+    expect_type(low, int, "integer_between/3", arg=1)
+    expect_type(high, int, "integer_between/3", arg=2)
+    low_i, high_i = low, high
     if low_i > high_i:
         return
     if unify(x, _rng.randint(low_i, high_i), trail):
@@ -105,13 +100,8 @@ def _random_sample_3(lst, size, sample, trail, k_cont):
     lst, size_val = deref(lst), deref(size)
     if not expect_type(lst, list, "sample/3", arg=1):
         return
-    if is_var(size_val):
-        return
-    try:
-        size_int = int(size_val)
-    except (TypeError, ValueError) as exc:
-        note_rejected_call("sample/3", exc)
-        return
+    expect_type(size_val, int, "sample/3", arg=2)
+    size_int = size_val
     if size_int < 0 or size_int > len(lst):
         return
     result = _rng.sample(lst, size_int)
@@ -137,13 +127,8 @@ def _maybe_0(trail, k):
 def _maybe_1(p, trail, k):
     """maybe/1: succeeds with probability P."""
     p = deref(p)
-    if is_var(p):
-        return
-    try:
-        p_f = float(p)
-    except (TypeError, ValueError) as exc:
-        note_rejected_call("maybe/1", exc)
-        return
+    expect_type(p, NUMBER_TYPES, "maybe/1", arg=1)
+    p_f = float(p)
     if _rng.random() < p_f:
         yield None
 

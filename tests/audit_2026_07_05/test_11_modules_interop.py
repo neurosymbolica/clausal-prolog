@@ -76,11 +76,14 @@ def test_F001_regex_shim_importable():
     assert hasattr(clausal.regex, "match")
 
 
-def test_F002_search_unbound_subject_no_solution():
-    # A11-F002 (fixed): unbound subject fails cleanly, no repr scanning.
+def test_F002_search_unbound_subject_raises():
+    # A11-F002 (fixed): an unbound subject never repr-scans.  RULED
+    # 2026-10-02: it is a required input, so instantiation_error.
+    from clausal.logic.exceptions import LogicException
     from clausal.modules.py.re import _search_2
-    sols = list(_search_2(r"^_\d+$", Var(), Trail(), None))
-    assert sols == []
+    with pytest.raises(LogicException) as info:
+        list(_search_2(r"^_\d+$", Var(), Trail(), None))
+    assert info.value.term == ("error", "instantiation_error", ("/", "search", 2))
 
 
 def test_F002_match_charlist_equals_string(tmp_path):
@@ -134,11 +137,14 @@ def test_F004_invalid_pattern_catchable(tmp_path):
     assert out == [mint("caught")]
 
 
-def test_F004_replace_unbound_repl_fails_cleanly():
-    # A11-F004 (fixed): unbound replacement fails cleanly.
+def test_F004_replace_unbound_repl_raises():
+    # A11-F004 (fixed): an unbound replacement is no raw Python error.
+    # RULED 2026-10-02: it is a catchable instantiation_error.
+    from clausal.logic.exceptions import LogicException
     from clausal.modules.py.re import _replace_4
-    sols = list(_replace_4("x", Var(), "x", Var(), Trail(), None))
-    assert sols == []
+    with pytest.raises(LogicException) as info:
+        list(_replace_4("x", Var(), "x", Var(), Trail(), None))
+    assert info.value.term == ("error", "instantiation_error", ("/", "replace", 4))
 
 
 def test_F005_wrong_arity_is_an_error_not_silent_failure(tmp_path):
@@ -353,11 +359,15 @@ def test_guard_reified_item_enumerates(tmp_path):
 # The time/4 equivalent below is untouched -- _time_4 still exists.
 
 
-def test_F015_time4_rejects_float_components():
+def test_F015_time4_float_component_raises():
     # A11-F015 (completed): time/4 rejects floats like date/4, no truncation.
+    # RULED 2026-10-02: a float component is type_error(integer, F).
+    from clausal.logic.exceptions import LogicException
     from clausal.modules.py.datetime import _time_4
-    sols = list(_time_4(10.9, 5.9, 0, Var(), Trail(), None))
-    assert sols == []  # stdlib datetime.time raises TypeError on floats
+    with pytest.raises(LogicException) as info:
+        list(_time_4(10.9, 5.9, 0, Var(), Trail(), None))
+    assert info.value.term == (
+        "error", ("type_error", "integer", 10.9), ("/", "time", 4))
 
 
 def test_F015_guard_time4_construct_and_decompose():
@@ -368,11 +378,14 @@ def test_F015_guard_time4_construct_and_decompose():
     assert len(sols) == 1 and deref(T) == _T(pydt.time(10, 5, 0))
 
 
-def test_F015_datetime7_rejects_float_components():
+def test_F015_datetime7_float_component_raises():
     # A11-F015 (completed): datetime/7 rejects floats, no truncation.
+    from clausal.logic.exceptions import LogicException
     from clausal.modules.py.datetime import _datetime_7
-    sols = list(_datetime_7(2020.9, 1, 5, 10.9, 0, 0, Var(), Trail(), None))
-    assert sols == []
+    with pytest.raises(LogicException) as info:
+        list(_datetime_7(2020.9, 1, 5, 10.9, 0, 0, Var(), Trail(), None))
+    assert info.value.term == (
+        "error", ("type_error", "integer", 2020.9), ("/", "datetime", 7))
 
 
 def test_F015_guard_datetime7_construct():

@@ -41,16 +41,12 @@ def _sign_4(algorithm, key, data, hex_out, trail, k):
     algo = require_text(deref(algorithm), "sign/4", 1)
     key_d = deref(key)
     data_d = deref(data)
-    if algo is None:
-        return
-    if is_var(key_d) or is_var(data_d):
-        return
     key_b = to_bytes(key_d)
+    if key_b is None:
+        expect_type(key_d, (str, bytes), "sign/4", arg=2)   # raises
     data_b = to_bytes(data_d)
-    if key_b is None or data_b is None:
-        expect_type(key_d, (str, bytes), "sign/4", arg=2)
-        expect_type(data_d, (str, bytes), "sign/4", arg=3)
-        return
+    if data_b is None:
+        expect_type(data_d, (str, bytes), "sign/4", arg=3)   # raises
     digest_mod = _resolve_algo(algo)
     if digest_mod is None:
         return
@@ -76,18 +72,14 @@ def _verify_4(algorithm, key, data, hex_in, trail, k):
     key_d = deref(key)
     data_d = deref(data)
     hex_d = deref(hex_in)
-    if any(is_var(x) for x in (algo, key_d, data_d, hex_d)):
-        return
     algo = require_text(algo, "verify/4", 1)
-    hex_d = require_text(hex_d, "verify/4", 4)
-    if algo is None or hex_d is None:
-        return
     key_b = to_bytes(key_d)
+    if key_b is None:
+        expect_type(key_d, (str, bytes), "verify/4", arg=2)   # raises
     data_b = to_bytes(data_d)
-    if key_b is None or data_b is None:
-        expect_type(key_d, (str, bytes), "verify/4", arg=2)
-        expect_type(data_d, (str, bytes), "verify/4", arg=3)
-        return
+    if data_b is None:
+        expect_type(data_d, (str, bytes), "verify/4", arg=3)   # raises
+    hex_d = require_text(hex_d, "verify/4", 4)
     digest_mod = _resolve_algo(algo)
     if digest_mod is None:
         return

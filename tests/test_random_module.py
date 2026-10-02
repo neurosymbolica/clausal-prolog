@@ -25,6 +25,16 @@ def simple_solutions(fn, *args):
     return results, trail
 
 
+def raised(fn, *args):
+    """The error term a simple-mode builtin raises.  RULED 2026-10-02: an
+    argument of the wrong type raises type_error, an unbound required one
+    instantiation_error -- neither fails the goal."""
+    from clausal.logic.exceptions import LogicException
+    with pytest.raises(LogicException) as info:
+        list(fn(*args, Trail(), None))
+    return info.value.term
+
+
 def trampoline_solutions(pred, *args):
     """Run a trampoline-protocol predicate and collect solution snapshots."""
     trail = Trail()
@@ -85,15 +95,15 @@ class TestRandomFloat:
         sols, _ = simple_solutions(_random_float_3, 5.0, 1.0, x)
         assert len(sols) == 0
 
-    def test_unbound_low_fails(self):
+    def test_unbound_low_raises(self):
         # nv
-        sols, _ = simple_solutions(_random_float_3, Var(), 5.0, Var())
-        assert len(sols) == 0
+        term = raised(_random_float_3, Var(), 5.0, Var())
+        assert term == ('error', 'instantiation_error', ('/', 'float_between', 3))
 
-    def test_unbound_high_fails(self):
+    def test_unbound_high_raises(self):
         # nv
-        sols, _ = simple_solutions(_random_float_3, 1.0, Var(), Var())
-        assert len(sols) == 0
+        term = raised(_random_float_3, 1.0, Var(), Var())
+        assert term == ('error', 'instantiation_error', ('/', 'float_between', 3))
 
 
 # ── integer_between/3 ─────────────────────────────────────────────────────
@@ -127,10 +137,10 @@ class TestRandomInteger:
         sols, _ = simple_solutions(_random_integer_3, 6, 1, Var())
         assert len(sols) == 0
 
-    def test_unbound_args_fail(self):
+    def test_unbound_args_raise(self):
         # nv
-        sols, _ = simple_solutions(_random_integer_3, Var(), 6, Var())
-        assert len(sols) == 0
+        term = raised(_random_integer_3, Var(), 6, Var())
+        assert term == ('error', 'instantiation_error', ('/', 'integer_between', 3))
 
 
 # ── choice/2 ──────────────────────────────────────────────────────
@@ -150,10 +160,10 @@ class TestRandomMember:
         sols, _ = simple_solutions(_random_member_2, [], Var())
         assert len(sols) == 0
 
-    def test_unbound_list_fails(self):
+    def test_unbound_list_raises(self):
         # nv
-        sols, _ = simple_solutions(_random_member_2, Var(), Var())
-        assert len(sols) == 0
+        term = raised(_random_member_2, Var(), Var())
+        assert term == ('error', 'instantiation_error', ('/', 'choice', 2))
 
     def test_trampoline(self):
         # nv
@@ -183,10 +193,10 @@ class TestRandomPermutation:
         assert len(sols) == 1
         assert deref(p) == []
 
-    def test_unbound_list_fails(self):
+    def test_unbound_list_raises(self):
         # nv
-        sols, _ = simple_solutions(_random_permutation_2, Var(), Var())
-        assert len(sols) == 0
+        term = raised(_random_permutation_2, Var(), Var())
+        assert term == ('error', 'instantiation_error', ('/', 'permutation', 2))
 
 
 # ── sample/3 ─────────────────────────────────────────────────────
@@ -214,10 +224,10 @@ class TestRandomSample:
         sols, _ = simple_solutions(_random_sample_3, [1, 2], 5, Var())
         assert len(sols) == 0
 
-    def test_unbound_k_fails(self):
+    def test_unbound_k_raises(self):
         # nv
-        sols, _ = simple_solutions(_random_sample_3, [1, 2, 3], Var(), Var())
-        assert len(sols) == 0
+        term = raised(_random_sample_3, [1, 2, 3], Var(), Var())
+        assert term == ('error', 'instantiation_error', ('/', 'sample', 3))
 
 
 # ── set_seed/1 ───────────────────────────────────────────────────────
@@ -295,10 +305,10 @@ class TestMaybe:
             sols, _ = simple_solutions(_maybe_1, 0.0)
             assert len(sols) == 0
 
-    def test_maybe_1_unbound_fails(self):
+    def test_maybe_1_unbound_raises(self):
         # nv
-        sols, _ = simple_solutions(_maybe_1, Var())
-        assert len(sols) == 0
+        term = raised(_maybe_1, Var())
+        assert term == ('error', 'instantiation_error', ('/', 'maybe', 1))
 
     def test_maybe_trampoline_multi_arity(self):
         """maybe supports both arity 0 and 1 via multi-dispatch."""

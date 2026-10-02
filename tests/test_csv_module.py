@@ -30,6 +30,16 @@ def simple_solutions(fn, *args):
     return results, trail
 
 
+def raised(fn, *args):
+    """The error term a simple-mode builtin raises.  RULED 2026-10-02: an
+    argument of the wrong type raises type_error, an unbound required one
+    instantiation_error -- neither fails the goal."""
+    from clausal.logic.exceptions import LogicException
+    with pytest.raises(LogicException) as info:
+        list(fn(*args, Trail(), None))
+    return info.value.term
+
+
 def trampoline_solutions(pred, *args):
     """Run a trampoline-protocol predicate and collect solution snapshots."""
     trail = Trail()
@@ -75,10 +85,10 @@ class TestParseRow:
         assert len(sols) == 1
         assert deref(row) == [chars("hello")]
 
-    def test_unbound_string_fails(self):
+    def test_unbound_string_raises(self):
         # nv
-        sols, _ = simple_solutions(_parse_row_2, Var(), Var())
-        assert len(sols) == 0
+        term = raised(_parse_row_2, Var(), Var())
+        assert term == ('error', 'instantiation_error', ('/', 'parse_row', 2))
 
     def test_trampoline(self):
         # nv
@@ -121,10 +131,10 @@ class TestParse:
         assert result[0] == [chars("a"), chars("b,c")]
         assert result[1] == [chars("d,e"), chars("f")]
 
-    def test_unbound_fails(self):
+    def test_unbound_raises(self):
         # nv
-        sols, _ = simple_solutions(_parse_2, Var(), Var())
-        assert len(sols) == 0
+        term = raised(_parse_2, Var(), Var())
+        assert term == ('error', 'instantiation_error', ('/', 'parse', 2))
 
 
 # ── parse_records/3 ─────────────────────────────────────────────────────
@@ -163,10 +173,10 @@ class TestParseRecords:
         sols, _ = simple_solutions(_parse_records_3, chars(""), Var(), Var())
         assert len(sols) == 0
 
-    def test_unbound_fails(self):
+    def test_unbound_raises(self):
         # nv
-        sols, _ = simple_solutions(_parse_records_3, Var(), Var(), Var())
-        assert len(sols) == 0
+        term = raised(_parse_records_3, Var(), Var(), Var())
+        assert term == ('error', 'instantiation_error', ('/', 'parse_records', 3))
 
 
 # ── generate/2 ─────────────────────────────────────────────────────────
@@ -202,15 +212,15 @@ class TestGenerate:
         simple_solutions(_generate_2, deref(rows), s)
         assert deref(s) == chars(original)
 
-    def test_unbound_fails(self):
+    def test_unbound_raises(self):
         # nv
-        sols, _ = simple_solutions(_generate_2, Var(), Var())
-        assert len(sols) == 0
+        term = raised(_generate_2, Var(), Var())
+        assert term == ('error', 'instantiation_error', ('/', 'generate', 2))
 
-    def test_non_list_row_fails(self):
+    def test_non_list_row_raises(self):
         # nv
-        sols, _ = simple_solutions(_generate_2, ["not_a_list"], Var())
-        assert len(sols) == 0
+        term = raised(_generate_2, ["not_a_list"], Var())
+        assert term == ('error', ('type_error', 'list', 'not_a_list'), ('/', 'generate', 2))
 
 
 # ── generate_records/3 ──────────────────────────────────────────────────
@@ -228,17 +238,17 @@ class TestGenerateRecords:
         assert "name,age" in chars_text(result)
         assert "alice,30" in chars_text(result)
 
-    def test_unbound_headers_fails(self):
+    def test_unbound_headers_raises(self):
         # nv
-        sols, _ = simple_solutions(_generate_records_3, Var(), [], Var())
-        assert len(sols) == 0
+        term = raised(_generate_records_3, Var(), [], Var())
+        assert term == ('error', 'instantiation_error', ('/', 'generate_records', 3))
 
-    def test_non_dict_term_record_fails(self):
+    def test_non_dict_term_record_raises(self):
         # nv
-        sols, _ = simple_solutions(
+        term = raised(
             _generate_records_3, [chars("a")], ["not_a_dict_term"], Var()
         )
-        assert len(sols) == 0
+        assert term == ('error', ('type_error', 'dict', 'not_a_dict_term'), ('/', 'generate_records', 3))
 
 
 # ── read_file/2 & write_file/2 ───────────────────────────────────────────
@@ -265,15 +275,15 @@ class TestFileIO:
         sols, _ = simple_solutions(_read_file_2, chars("/nonexistent/file.csv"), Var())
         assert len(sols) == 0
 
-    def test_read_unbound_path_fails(self):
+    def test_read_unbound_path_raises(self):
         # nv
-        sols, _ = simple_solutions(_read_file_2, Var(), Var())
-        assert len(sols) == 0
+        term = raised(_read_file_2, Var(), Var())
+        assert term == ('error', 'instantiation_error', ('/', 'read_file', 2))
 
-    def test_write_unbound_rows_fails(self):
+    def test_write_unbound_rows_raises(self):
         # nv
-        sols, _ = simple_solutions(_write_file_2, chars("/tmp/test.csv"), Var())
-        assert len(sols) == 0
+        term = raised(_write_file_2, chars("/tmp/test.csv"), Var())
+        assert term == ('error', 'instantiation_error', ('/', 'write_file', 2))
 
 
 # ── read_records/2 ──────────────────────────────────────────────────────

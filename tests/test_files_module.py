@@ -40,6 +40,16 @@ def simple_solutions(fn, *args):
     return results, trail
 
 
+def raised(fn, *args):
+    """The error term a simple-mode builtin raises.  RULED 2026-10-02: an
+    argument of the wrong type raises type_error, an unbound required one
+    instantiation_error -- neither fails the goal."""
+    from clausal.logic.exceptions import LogicException
+    with pytest.raises(LogicException) as info:
+        list(fn(*args, Trail(), None))
+    return info.value.term
+
+
 def trampoline_solutions(pred, *args):
     """Run a trampoline-protocol predicate and collect solution snapshots."""
     trail = Trail()
@@ -74,10 +84,10 @@ class TestFileExists:
         sols, _ = simple_solutions(_file_exists_1, chars(str(tmp_path)))
         assert len(sols) == 0
 
-    def test_unbound_fails(self):
+    def test_unbound_raises(self):
         # nv
-        sols, _ = simple_solutions(_file_exists_1, Var())
-        assert len(sols) == 0
+        term = raised(_file_exists_1, Var())
+        assert term == ('error', 'instantiation_error', ('/', 'file_exists', 1))
 
     def test_trampoline(self, tmp_path):
         # nv
@@ -152,10 +162,10 @@ class TestDirectoryFiles:
         sols, _ = simple_solutions(_directory_files_2, chars("/nonexistent_dir"), Var())
         assert len(sols) == 0
 
-    def test_unbound_dir_fails(self):
+    def test_unbound_dir_raises(self):
         # nv
-        sols, _ = simple_solutions(_directory_files_2, Var(), Var())
-        assert len(sols) == 0
+        term = raised(_directory_files_2, Var(), Var())
+        assert term == ('error', 'instantiation_error', ('/', 'directory_files', 2))
 
     def test_trampoline(self, tmp_path):
         # nv
@@ -260,10 +270,10 @@ class TestDeleteFile:
         sols, _ = simple_solutions(_delete_file_1, chars("/nonexistent_xyz"))
         assert len(sols) == 0
 
-    def test_unbound_fails(self):
+    def test_unbound_raises(self):
         # nv
-        sols, _ = simple_solutions(_delete_file_1, Var())
-        assert len(sols) == 0
+        term = raised(_delete_file_1, Var())
+        assert term == ('error', 'instantiation_error', ('/', 'delete_file', 1))
 
 
 # ── delete_directory/1 ────────────────────────────────────────────────
@@ -390,10 +400,10 @@ class TestReadFileToString:
         )
         assert len(sols) == 0
 
-    def test_unbound_path_fails(self):
+    def test_unbound_path_raises(self):
         # nv
-        sols, _ = simple_solutions(_read_file_to_string_2, Var(), Var())
-        assert len(sols) == 0
+        term = raised(_read_file_to_string_2, Var(), Var())
+        assert term == ('error', 'instantiation_error', ('/', 'read_file_to_string', 2))
 
     def test_trampoline(self, tmp_path):
         # nv
@@ -423,12 +433,12 @@ class TestWriteStringToFile:
         simple_solutions(_write_string_to_file_2, chars(str(f)), chars("new"))
         assert f.read_text() == "new"
 
-    def test_unbound_contents_fails(self, tmp_path):
+    def test_unbound_contents_raises(self, tmp_path):
         # nv
-        sols, _ = simple_solutions(
+        term = raised(
             _write_string_to_file_2, chars(str(tmp_path / "out.txt")), Var()
         )
-        assert len(sols) == 0
+        assert term == ('error', 'instantiation_error', ('/', 'write_string_to_file', 2))
 
 
 # ── append_string_to_file/2 ───────────────────────────────────────────
@@ -463,10 +473,10 @@ class TestAbsolutePath:
         abs_path = deref(result)
         assert os.path.isabs(chars_text(abs_path))
 
-    def test_unbound_fails(self):
+    def test_unbound_raises(self):
         # nv
-        sols, _ = simple_solutions(_absolute_path_2, Var(), Var())
-        assert len(sols) == 0
+        term = raised(_absolute_path_2, Var(), Var())
+        assert term == ('error', 'instantiation_error', ('/', 'absolute_path', 2))
 
 
 # ── join_path/3 ─────────────────────────────────────────────────────
@@ -480,15 +490,15 @@ class TestJoinPath:
         assert len(sols) == 1
         assert deref(result) == chars(str(pathlib.Path("/home") / "user"))
 
-    def test_unbound_base_fails(self):
+    def test_unbound_base_raises(self):
         # nv
-        sols, _ = simple_solutions(_join_path_3, Var(), chars("user"), Var())
-        assert len(sols) == 0
+        term = raised(_join_path_3, Var(), chars("user"), Var())
+        assert term == ('error', 'instantiation_error', ('/', 'join_path', 3))
 
-    def test_unbound_relative_fails(self):
+    def test_unbound_relative_raises(self):
         # nv
-        sols, _ = simple_solutions(_join_path_3, chars("/home"), Var(), Var())
-        assert len(sols) == 0
+        term = raised(_join_path_3, chars("/home"), Var(), Var())
+        assert term == ('error', 'instantiation_error', ('/', 'join_path', 3))
 
     def test_trampoline(self):
         # nv
@@ -512,10 +522,10 @@ class TestSplitPath:
         assert deref(dir_var) == chars("/home/user")
         assert deref(name_var) == chars("file.txt")
 
-    def test_unbound_fails(self):
+    def test_unbound_raises(self):
         # nv
-        sols, _ = simple_solutions(_split_path_3, Var(), Var(), Var())
-        assert len(sols) == 0
+        term = raised(_split_path_3, Var(), Var(), Var())
+        assert term == ('error', 'instantiation_error', ('/', 'split_path', 3))
 
 
 # ── file_extension/2 ────────────────────────────────────────────────

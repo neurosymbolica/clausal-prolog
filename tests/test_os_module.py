@@ -29,6 +29,16 @@ def simple_solutions(fn, *args):
     return results, trail
 
 
+def raised(fn, *args):
+    """The error term a simple-mode builtin raises.  RULED 2026-10-02: an
+    argument of the wrong type raises type_error, an unbound required one
+    instantiation_error -- neither fails the goal."""
+    from clausal.logic.exceptions import LogicException
+    with pytest.raises(LogicException) as info:
+        list(fn(*args, Trail(), None))
+    return info.value.term
+
+
 def trampoline_solutions(pred, *args):
     """Run a trampoline-protocol predicate and collect solution snapshots."""
     trail = Trail()
@@ -117,20 +127,20 @@ class TestSetEnvironmentVariable:
         finally:
             os.environ.pop(key, None)
 
-    def test_unbound_name_fails(self):
+    def test_unbound_name_raises(self):
         # nv
-        sols, _ = simple_solutions(_set_environment_variable_2, Var(), chars("val"))
-        assert len(sols) == 0
+        term = raised(_set_environment_variable_2, Var(), chars("val"))
+        assert term == ('error', 'instantiation_error', ('/', 'set_environment_variable', 2))
 
-    def test_unbound_value_fails(self):
+    def test_unbound_value_raises(self):
         # nv
-        sols, _ = simple_solutions(_set_environment_variable_2, chars("KEY"), Var())
-        assert len(sols) == 0
+        term = raised(_set_environment_variable_2, chars("KEY"), Var())
+        assert term == ('error', 'instantiation_error', ('/', 'set_environment_variable', 2))
 
-    def test_non_string_name_fails(self):
+    def test_non_string_name_raises(self):
         # nv
-        sols, _ = simple_solutions(_set_environment_variable_2, 42, chars("val"))
-        assert len(sols) == 0
+        term = raised(_set_environment_variable_2, 42, chars("val"))
+        assert term == ('error', ('type_error', 'text', 42), ('/', 'set_environment_variable', 2))
 
 
 # ── unset_environment_variable/1 ─────────────────────────────────────────
@@ -152,10 +162,10 @@ class TestUnsetEnvironmentVariable:
         )
         assert len(sols) == 0
 
-    def test_unbound_fails(self):
+    def test_unbound_raises(self):
         # nv
-        sols, _ = simple_solutions(_unset_environment_variable_1, Var())
-        assert len(sols) == 0
+        term = raised(_unset_environment_variable_1, Var())
+        assert term == ('error', 'instantiation_error', ('/', 'unset_environment_variable', 1))
 
 
 # ── working_directory/1 ─────────────────────────────────────────────────
@@ -204,10 +214,10 @@ class TestChangeDirectory:
         sols, _ = simple_solutions(_change_directory_1, chars("/nonexistent_dir_xyz"))
         assert len(sols) == 0
 
-    def test_unbound_fails(self):
+    def test_unbound_raises(self):
         # nv
-        sols, _ = simple_solutions(_change_directory_1, Var())
-        assert len(sols) == 0
+        term = raised(_change_directory_1, Var())
+        assert term == ('error', 'instantiation_error', ('/', 'change_directory', 1))
 
 
 # ── pid/1 ──────────────────────────────────────────────────────────────

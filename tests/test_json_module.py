@@ -31,6 +31,16 @@ def simple_solutions(fn, *args):
     return results, trail
 
 
+def raised(fn, *args):
+    """The error term a simple-mode builtin raises.  RULED 2026-10-02: an
+    argument of the wrong type raises type_error, an unbound required one
+    instantiation_error -- neither fails the goal."""
+    from clausal.logic.exceptions import LogicException
+    with pytest.raises(LogicException) as info:
+        list(fn(*args, Trail(), None))
+    return info.value.term
+
+
 def trampoline_solutions(pred, *args):
     """Run a trampoline-protocol predicate and collect solution snapshots."""
     trail = Trail()
@@ -183,10 +193,10 @@ class TestParse:
         assert len(sols) == 1
         assert deref(t) == []
 
-    def test_unbound_string_fails(self):
+    def test_unbound_string_raises(self):
         # nv
-        sols, _ = simple_solutions(_parse_2, Var(), Var())
-        assert len(sols) == 0
+        term = raised(_parse_2, Var(), Var())
+        assert term == ('error', 'instantiation_error', ('/', 'parse', 2))
 
     def test_invalid_json_fails(self):
         # nv
@@ -237,11 +247,11 @@ class TestGenerate:
         assert len(sols) == 1
         assert deref(s) == chars('"hello"')
 
-    def test_unbound_var_fails(self):
+    def test_unbound_var_raises(self):
         """Unbound term fails (can't serialize)."""
         # nv
-        sols, _ = simple_solutions(_generate_2, Var(), Var())
-        assert len(sols) == 0
+        term = raised(_generate_2, Var(), Var())
+        assert term == ('error', 'instantiation_error', ('/', 'generate', 2))
 
     def test_round_trip(self):
         """parse then generate yields equivalent JSON."""
@@ -311,10 +321,10 @@ class TestGet:
             count += 1
         assert count == 3
 
-    def test_not_dict_term_fails(self):
+    def test_not_dict_term_raises(self):
         # nv
-        sols, _ = simple_solutions(_get_3, "not a dict", "key", Var())
-        assert len(sols) == 0
+        term = raised(_get_3, "not a dict", "key", Var())
+        assert term == ('error', ('type_error', 'dict', 'not a dict'), ('/', 'get', 3))
 
     def test_trampoline(self):
         # nv
@@ -349,15 +359,15 @@ class TestFileIO:
         sols, _ = simple_solutions(_read_file_2, chars("/nonexistent/file.json"), Var())
         assert len(sols) == 0
 
-    def test_write_unbound_term_fails(self):
+    def test_write_unbound_term_raises(self):
         # nv
-        sols, _ = simple_solutions(_write_file_2, chars("/tmp/test.json"), Var())
-        assert len(sols) == 0
+        term = raised(_write_file_2, chars("/tmp/test.json"), Var())
+        assert term == ('error', 'instantiation_error', ('/', 'write_file', 2))
 
-    def test_read_unbound_path_fails(self):
+    def test_read_unbound_path_raises(self):
         # nv
-        sols, _ = simple_solutions(_read_file_2, Var(), Var())
-        assert len(sols) == 0
+        term = raised(_read_file_2, Var(), Var())
+        assert term == ('error', 'instantiation_error', ('/', 'read_file', 2))
 
 
 # ── parse/3 (spec §9.2: the atoms(Spellings) vocabulary hook) ────────────

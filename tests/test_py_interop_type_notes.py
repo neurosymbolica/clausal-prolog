@@ -1,22 +1,31 @@
-"""Type-mismatch notes for py-interop predicates in the failure diagnostic.
+"""Py-interop argument checks: wrong type RAISES; the notes that remain.
 
-A py-interop builtin that bails on an ``isinstance`` guard is a bare "no" —
-indistinguishable from a goal that genuinely has no solution.  A measured
-authoring study stalled for 7 attempts on ``date_add/3`` called with an int
-where a timedelta is required.  During the diagnostic re-run the guard now
-records what it rejected, and the note lands in the failure report.
-See ``todo/done/C1-ill-typed-interop-calls-are-silent-failures.md``.
+A py-interop builtin that bailed on an ``isinstance`` guard used to be a bare
+"no" -- indistinguishable from a goal that genuinely has no solution.  A
+measured authoring study stalled for 7 attempts on ``date_add/3`` called with
+an int where a timedelta is required.  The first fix recorded a note during
+the failure-diagnostic re-run (``todo/done/C1-ill-typed-interop-calls-are-
+silent-failures.md``).
 
-normal (non-diagnostic) runs are unchanged: the goal still just fails.
+RULED 2026-10-02: the call RAISES instead.  An argument of the wrong type
+entirely is ``type_error(Type, Culprit)`` with the predicate as context; an
+unbound argument where a value is required is ``instantiation_error``; a
+right-typed value the library rejects (month 13, malformed JSON) still fails
+the goal and records a note during the diagnostic re-run, which is what the
+note machinery is kept for.
 """
 
 from __future__ import annotations
 
 import textwrap
 
+import pytest
+
+from clausal.logic.exceptions import LogicException
 from clausal.modules.py import (
     collect_type_mismatch_notes,
     expect_type,
+    note_mismatch,
     note_rejected_call,
 )
 from clausal.testing import main
@@ -29,7 +38,13 @@ def write(tmp_path, name, src):
     return p
 
 
-# ── helper unit behaviour ─────────────────────────────────────────────────────
+def raised(fn, *args):
+    with pytest.raises(LogicException) as info:
+        fn(*args)
+    return info.value.term
+
+
+# ── expect_type ───────────────────────────────────────────────────────────────
 
 
 def test_expect_type_passes_matching_value_and_records_nothing():
@@ -38,69 +53,77 @@ def test_expect_type_passes_matching_value_and_records_nothing():
     assert notes == []
 
 
-def test_expect_type_records_bound_wrong_type():
+def test_expect_type_raises_type_error_on_bound_wrong_type():
     with collect_type_mismatch_notes() as notes:
-        assert not expect_type(90, str, "parse/2")
-    assert notes == ["parse/2 was called with int where str is required"]
+        term = raised(expect_type, 90, str, "parse/2")
+    assert term == ("error", ("type_error", "text", 90), ("/", "parse", 2))
+    assert notes == []          # an error, not a note
 
 
-def test_expect_type_names_argument_when_given():
-    with collect_type_mismatch_notes() as notes:
-        assert not expect_type(90, str, "parse/2", arg=1)
-    assert notes == [
-        "parse/2 was called with int where str is required (argument 1)"
-    ]
+def test_expect_type_argument_position_goes_to_the_message():
+    with pytest.raises(LogicException) as info:
+        expect_type(90, str, "parse/2", arg=1)
+    assert info.value.term == (
+        "error", ("type_error", "text", 90), ("/", "parse", 2))
+    assert "argument 1" in str(info.value)
 
 
-def test_expect_type_expected_description_override():
+@pytest.mark.parametrize("types, name", [
+    (int, "integer"),
+    ((int, float), "number"),
+    (list, "list"),
+    ((str, bytes), "text"),
+])
+def test_expect_type_uses_iso_type_names(types, name):
+    assert raised(expect_type, ("f", 1), types, "p/1")[1] == (
+        "type_error", name, ("f", 1))
+
+
+def test_expect_type_adapter_type_name():
     import datetime as dt
-    with collect_type_mismatch_notes() as notes:
-        assert not expect_type(
-            90, (dt.date, dt.datetime), "date_add/3",
-            expected="date or datetime", arg=1,
-        )
-    assert notes == [
-        "date_add/3 was called with int where date or datetime is required "
-        "(argument 1)"
-    ]
+    assert raised(expect_type, 90, dt.date, "date_add/3")[1] == (
+        "type_error", "date", 90)
 
 
-def test_expect_type_unbound_var_fails_silently():
+def test_expect_type_bool_is_not_an_integer():
+    # true/false are atoms (D35), so a bool never passes an int check.
+    assert raised(expect_type, True, int, "p/1")[1] == (
+        "type_error", "integer", True)
+
+
+def test_expect_type_unbound_var_raises_instantiation_error():
     from clausal.logic.variables import Var
-    with collect_type_mismatch_notes() as notes:
-        assert not expect_type(Var(), str, "parse/2")
-    assert notes == []
-
-
-def test_expect_type_is_silent_noop_outside_collection():
-    # No collector active: still a plain type check, records nowhere.
-    assert expect_type("x", str, "parse/2")
-    assert not expect_type(90, str, "parse/2")
+    assert raised(expect_type, Var(), str, "parse/2") == (
+        "error", "instantiation_error", ("/", "parse", 2))
 
 
 def test_notes_are_deduplicated():
     with collect_type_mismatch_notes() as notes:
-        expect_type(90, str, "parse/2")
-        expect_type(90, str, "parse/2")
-        expect_type(91, str, "parse/2")  # same message → one note
-    assert notes == ["parse/2 was called with int where str is required"]
+        note_mismatch("date_between/3", "mixed a date and a datetime")
+        note_mismatch("date_between/3", "mixed a date and a datetime")
+    assert notes == ["date_between/3 mixed a date and a datetime"]
 
 
-def test_constructor_with_unbound_component_records_nothing():
-    # The diagnostic re-run probes predicates with fresh Vars; a construct
-    # mode fed an unbound component raises TypeError inside the stdlib
-    # constructor, and that must NOT read as "the user passed garbage".
-    from clausal.logic.trampoline import DONE  # noqa: F401 - engine import path
+def test_note_is_silent_noop_outside_collection():
+    note_mismatch("date_between/3", "mixed a date and a datetime")
+
+
+def test_constructor_with_unbound_component_raises_instantiation_error():
+    # A construct mode fed an unbound component (and nothing to decompose)
+    # can run in neither mode: an instantiation_error, not a type note.
     from clausal.logic.variables import Trail, Var
-    # The _date_4 half was deleted with the predicate (2026-09-01). date/3 has
-    # no equivalent hazard: an unbound component yields a pattern CELL for
-    # unification rather than calling the stdlib constructor at all, so there is
-    # no TypeError to mis-record. _timedelta_3 still takes this path.
     from clausal.modules.py.datetime import _timedelta_3
-    trail = Trail()
     with collect_type_mismatch_notes() as notes:
-        list(_timedelta_3(Var(), Var(), Var(), trail, None))
+        term = raised(lambda: list(_timedelta_3(Var(), Var(), Var(), Trail(), None)))
+    assert term == ("error", "instantiation_error", ("/", "timedelta", 3))
     assert notes == []
+
+
+def test_constructor_with_wrong_type_component_raises_type_error():
+    from clausal.logic.variables import Trail, Var
+    from clausal.modules.py.datetime import _time_4
+    term = raised(lambda: list(_time_4(10.5, 0, 0, Var(), Trail(), None)))
+    assert term == ("error", ("type_error", "integer", 10.5), ("/", "time", 4))
 
 
 def test_note_rejected_call_records_exception():
@@ -117,17 +140,13 @@ def test_note_rejected_call_records_exception():
     assert "month" in notes[0]
 
 
-def test_bool_timestamp_records_note():
-    # bool subclasses int, so a plain isinstance guard would wave it
-    # through — but timestamp/2's binding branch excludes it on purpose.
+def test_bool_timestamp_raises_type_error():
+    # bool subclasses int, so a plain isinstance check would wave it
+    # through -- but true is an atom, not a number.
     from clausal.logic.variables import Trail, Var
     from clausal.modules.py.datetime import _timestamp_2
-    with collect_type_mismatch_notes() as notes:
-        list(_timestamp_2(Var(), True, Trail(), None))
-    assert notes == [
-        "timestamp/2 was called with bool where int or float is required "
-        "(argument 2)"
-    ]
+    term = raised(lambda: list(_timestamp_2(Var(), True, Trail(), None)))
+    assert term == ("error", ("type_error", "number", True), ("/", "timestamp", 2))
 
 
 def test_json_generate_nested_var_records_nothing():
@@ -149,22 +168,18 @@ def test_json_generate_ground_unserializable_records_note():
     assert notes[0].startswith("generate/2 rejected its arguments")
 
 
-def test_http_post_wrong_typed_data_notes_but_behaves_as_before(monkeypatch):
-    # The body-less POST for non-str/bytes data is pre-existing behaviour;
-    # the guard is note-only.
+def test_http_post_wrong_typed_data_raises_before_any_request(monkeypatch):
+    # It used to send a body-less POST and record a note; now no request.
     import clausal.modules.py.http as http_mod
     from clausal.logic.cells import chars
     from clausal.logic.variables import Trail, Var
     calls = []
     monkeypatch.setattr(http_mod, "_do_request",
                         lambda *a, **kw: calls.append((a, kw)) or (200, "ok"))
-    body = Var()
-    with collect_type_mismatch_notes() as notes:
-        results = list(http_mod._post_3(chars("http://x.test/"), 42, body, Trail(), None))
-    assert notes == [
-        "post/3 was called with int where str or bytes is required (argument 2)"
-    ]
-    assert len(results) == 1 and len(calls) == 1  # request still made
+    term = raised(lambda: list(
+        http_mod._post_3(chars("http://x.test/"), 42, Var(), Trail(), None)))
+    assert term == ("error", ("type_error", "text", 42), ("/", "post", 3))
+    assert calls == []
 
 
 def test_diagnose_failure_survives_broken_interop_import(
@@ -203,11 +218,11 @@ test("window end computes") <- (
 """
 
 
-def test_date_add_int_note_in_failure_report(capsys, tmp_path):
+def test_date_add_int_raises_type_error_in_report(capsys, tmp_path):
     p = write(tmp_path, f"dadd{SEAM}", DATE_ADD_INT_SRC)
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
-    assert "date_add/3 was called with int where timedelta is required" in out
+    assert "error(type_error(timedelta,90),date_add/3)" in out
 
 
 DATE_ADD_DEEP_SRC = """
@@ -226,13 +241,12 @@ test("window end via helper") <- (
 """
 
 
-def test_note_survives_descent_into_user_predicate(capsys, tmp_path):
-    # The ill-typed call sits one predicate down — the descent re-runs it,
-    # so the guard note must still surface.
+def test_type_error_raised_from_inside_user_predicate(capsys, tmp_path):
+    # The ill-typed call sits one predicate down; the error still names it.
     p = write(tmp_path, f"dadd_deep{SEAM}", DATE_ADD_DEEP_SRC)
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
-    assert "date_add/3 was called with int where timedelta is required" in out
+    assert "error(type_error(timedelta,90),date_add/3)" in out
 
 
 CONSTRUCT_REJECT_SRC = """
@@ -263,7 +277,7 @@ UNBOUND_TD_SRC = """
 -double_quotes(atom)
 -import_from(date_time, [date_add, date])
 
-test("unbound timedelta is a mode, not a type error") <- (
+test("unbound timedelta is an instantiation error") <- (
     D is date(2024, 1, 1),
     date_add(D, TD, END),
     END is not _
@@ -271,10 +285,11 @@ test("unbound timedelta is a mode, not a type error") <- (
 """
 
 
-def test_unbound_arg_gets_no_type_note(capsys, tmp_path):
-    # An unbound Var is a legitimate "different mode / no solution" signal —
-    # rung-2 already covers it; a type note would be noise.
+def test_unbound_required_arg_raises_instantiation_error(capsys, tmp_path):
+    # date_add/3 has one mode: its timedelta is a required input, so an
+    # unbound one is an instantiation_error (and no type note).
     p = write(tmp_path, f"dvar{SEAM}", UNBOUND_TD_SRC)
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
+    assert "error(instantiation_error,date_add/3)" in out
     assert "was called with" not in out

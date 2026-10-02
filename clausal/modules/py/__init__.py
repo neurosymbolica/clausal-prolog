@@ -39,6 +39,8 @@ for _finder in list(_sys.meta_path):
             __path__.append(_candidate)
 del _os, _site, _sp, _sys, _finder, _finder_module, _namespaces, _candidate
 
+from decimal import Decimal as _Decimal
+from fractions import Fraction as _Fraction
 from typing import Callable
 
 from clausal.logic.trampoline import DONE
@@ -164,7 +166,7 @@ def to_text(val):
     - a CELL of arity >= 1 → ``None``: a compound is not text.  It does not
       raise here — every caller already documents and implements a fallback
       for "not text" (``logging`` writes the term with the engine's own
-      writer, the others note the mismatch and fail cleanly), and a raise
+      writer, :func:`require_text` raises a type_error), and a raise
       would reach past all of them: ``info(Logger, foo(1))`` must log
       ``foo(1)``, not throw.  The one position where a non-text argument is
       unambiguously an error — a sqlite path/alias/SQL/table — raises at the
@@ -309,8 +311,8 @@ def text_or_str(val):
     ``url._part_text``, ``uuid._name_text``); every one of them calls here
     now, and a new wrapper should too rather than growing a ninth.
 
-    The sibling shape — text, or a recorded type-mismatch note and a clean
-    failure — is :func:`require_text`.  The one deliberate non-adopter of
+    The sibling shape — text, or a ``type_error(text, …)`` — is
+    :func:`require_text`.  The one deliberate non-adopter of
     either is ``sqlite._text``, which RAISES on a non-text argument because a
     sqlite path/alias/SQL/table is unambiguously text.
     """
@@ -322,15 +324,14 @@ def text_or_str(val):
 
 
 def require_text(val, pred, arg=1):
-    """The ``str`` a wrapper's text argument denotes, or ``None`` (noted).
+    """The ``str`` a wrapper's text argument denotes; raises when it is not text.
 
     The companion to :func:`text_or_str` for a position that has a type
     contract: a path, a URL, a host, a command, an algorithm name, a JSON or
     CSV document.  There is no sensible ``str()`` rendering of a compound
-    there, so a bound value that is not text records a diagnostic note and
-    the caller fails cleanly.  It never raises — a py-interop guard is a
-    guard, not an error (see ``expect_type``), and an unbound ``Var`` stays
-    silent because that is a mode signal.
+    there, so (RULED 2026-10-02) a bound value that is not text raises
+    ``type_error(text, Culprit)`` and an unbound one ``instantiation_error``
+    -- see :func:`expect_type`.  It never answers ``None`` any more.
 
     Spec §9.4: text is a string or an ATOM and both convert to the same
     ``str``, so ``read_file('/tmp/x', T)``, ``read_file("/tmp/x", T)`` and a
@@ -338,24 +339,22 @@ def require_text(val, pred, arg=1):
     FLIP (2026-09-06-atoms-as-cells-strings) is why this has to be a funnel
     and not an ``isinstance`` gate: under ``-double_quotes(atom)`` a
     source-written ``"…"`` IS the arity-0 cell, so a bare
-    ``expect_type(x, str, …)`` rejected every documented call, silently.
+    ``expect_type(x, str, …)`` would reject every documented call.
 
     *pred* is the registered predicate name/arity (e.g. ``"read_file/2"``)
-    and *arg* the 1-based argument position; both appear in the note, which
-    is why this takes them rather than being a bare coercion.
+    and *arg* the 1-based argument position; the error carries both.
 
     Ten modules had grown their own copy (``csv``, ``files``, ``hash``,
     ``hmac``, ``http``, ``json``, ``os``, ``process``, ``tcp``, ``url``);
-    they all call here now.  The note is recorded on the DEREFERENCED value
-    so it names the actual type (``int``) and not the box (``Var``).
+    they all call here now.  The check runs on the DEREFERENCED value so the
+    culprit is the term and not the box.
     """
     text = to_text(val)
     if text is not None:
         return text
     from clausal.logic.variables import deref  # noqa: PLC0415
-    # Records the note (and stays silent on an unbound Var); always False here.
-    expect_type(deref(val), str, pred, arg=arg)
-    return None
+    expect_type(deref(val), str, pred, arg=arg)   # raises: not text
+    raise AssertionError("unreachable: expect_type raised")
 
 
 def to_bytes(val):
@@ -368,14 +367,22 @@ def to_bytes(val):
     return None
 
 
-# ── Type-mismatch diagnostic notes ──────────────────────────────────────────
+# ── Argument type checks, and the diagnostic notes that remain ──────────────
 #
-# A py-interop predicate that bails on a type guard produces a bare "no" —
-# indistinguishable from a goal that genuinely has no solution (see
-# todo/C1-ill-typed-interop-calls-are-silent-failures.md).  Raising type_error
-# instead would change semantics for every existing caller, so the guards
-# stay guards; but while a collector is active (the failure-diagnostic re-run
-# in clausal.testing) each rejection records what it rejected.
+# RULED 2026-10-02: a py-interop predicate handed an argument of the WRONG
+# TYPE entirely (``date_add(90, TD, R)``) RAISES ``type_error(Type, Culprit)``
+# with the predicate as context; an unbound argument where a value is
+# required raises ``instantiation_error``.  That is :func:`expect_type` and
+# :func:`require_text` below.  (Before the ruling a guard failed the goal and
+# recorded a note -- a bare "no" indistinguishable from a goal with no
+# solution.)
+#
+# The note machinery stays for what is NOT a type error: a library call that
+# rejected a right-typed value (:func:`note_rejected_call` -- month 13, an
+# unknown hash name, malformed JSON) and the mismatches no ISO error names
+# (:func:`note_mismatch` -- a plain date mixed with a datetime).  While a
+# collector is active (the failure-diagnostic re-run in clausal.testing)
+# each of those records what it rejected.
 
 # The active note sink, or None outside a diagnostic re-run.  A plain module
 # global, not a contextvar: the engine solves single-threaded and the
@@ -416,34 +423,67 @@ def _record_note(message: str) -> None:
     _mismatch_notes.append(message)
 
 
-def expect_type(value, types, pred, *, expected=None, arg=None) -> bool:
-    """Type guard for a py-interop argument: True iff *value* may be used.
+#: The numbers a py-interop numeric argument accepts: the engine's numeric
+#: tower.  ``bool`` is excluded by :func:`expect_type`, since true/false are
+#: atoms (D35), not integers.
+NUMBER_TYPES = (int, float, _Decimal, _Fraction)
 
-    ``isinstance``-check plus rejection note.  An unbound Var fails silently
-    — that is a mode signal, and the diagnostic's rung-2 analysis already
-    reports unbound arguments; only a BOUND value of the wrong type records
-    "*pred* was called with <actual> where <expected> is required".
 
-    *expected* overrides the type-derived wording (e.g. "date or datetime");
-    *arg* is the 1-based argument position for the "(argument N)" suffix.
+def _type_name(types) -> str:
+    """The ISO type name for an ``isinstance`` spec, where ISO has one
+    (``integer``, ``float``, ``number``, ``list``), else the adapter's own
+    (``text`` for a string-or-atom position, ``date``, ``timedelta``,
+    ``uuid``, ``dict``, ``socket`` ...)."""
+    ts = types if isinstance(types, tuple) else (types,)
+    if set(ts) >= {int, float}:
+        return "number"
+    if str in ts:
+        return "text"          # a string or an ATOM (spec §9.4), or bytes
+    t = ts[0]
+    if t is int:
+        return "integer"
+    if t.__name__ == "DictTerm" or t is dict:
+        return "dict"
+    return t.__name__.lower()
+
+
+def expect_type(value, types, pred, *, type_name=None, arg=None,
+                culprit=_OPTION_MISSING, expected=None) -> bool:
+    """Type check for a py-interop INPUT argument: True, or it raises.
+
+    - *value* an instance of *types* -> ``True`` (``bool`` never passes as
+      an ``int``: true/false are atoms, D35);
+    - *value* unbound -> ``instantiation_error`` -- the argument is required;
+    - otherwise -> ``type_error(Type, Culprit)``, context *pred*.
+
+    Call it only on an argument the predicate needs bound in the mode it is
+    in: an output position, or a mode the predicate can still run in with the
+    argument unbound, is decided by the caller before it gets here.
+
+    *type_name* is the error's type; by default it is derived from *types*
+    (:func:`_type_name`).  *culprit* is the term the error carries when the
+    value the predicate computed with is not itself the term the caller
+    wrote (datetime's module seam converts a date TERM to a Python date).
+    *arg* is the 1-based argument position, carried in the message.
+    *expected* is accepted for older callers and ignored.
     """
-    if isinstance(value, types):
+    if isinstance(value, types) and not (
+            type(value) is bool and bool not in (
+                types if isinstance(types, tuple) else (types,))):
         return True
     # Import on the failure path only — the success path above is hot
     # (every well-typed interop call passes through it).
-    from clausal.logic.variables import is_var
-    if not is_var(value):
-        if expected is None:
-            if isinstance(types, tuple):
-                expected = " or ".join(t.__name__ for t in types)
-            else:
-                expected = types.__name__
-        where = f" (argument {arg})" if arg is not None else ""
-        _record_note(
-            f"{pred} was called with {type(value).__name__} "
-            f"where {expected} is required{where}"
-        )
-    return False
+    from clausal.logic.exceptions import (  # noqa: PLC0415
+        LogicException, instantiation_error, type_error,
+    )
+    from clausal.logic.variables import is_var  # noqa: PLC0415
+    context = f"{pred}: argument {arg}" if arg is not None else pred
+    if is_var(value):
+        raise LogicException(instantiation_error(context))
+    raise LogicException(type_error(
+        type_name or _type_name(types),
+        value if culprit is _OPTION_MISSING else culprit,
+        context))
 
 
 def note_mismatch(pred, detail: str) -> None:

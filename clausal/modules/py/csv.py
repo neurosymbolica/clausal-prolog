@@ -140,13 +140,7 @@ def _generate_2(rows, string, trail, k):
         writer = _csv.writer(buf)
         for row in rows:
             row = deref(row)
-            if not isinstance(row, list):
-                note_mismatch(
-                    "generate/2",
-                    f"was called with a list containing {type(row).__name__} "
-                    "where a list of row lists is required (argument 1)",
-                )
-                return
+            expect_type(row, list, "generate/2", arg=1)   # each row a list
             writer.writerow(_deref_row(row))
         result = buf.getvalue()
     except (TypeError, ValueError) as exc:
@@ -175,13 +169,7 @@ def _generate_records_3(headers, records, string, trail, k):
         writer.writeheader()
         for record in records:
             record = deref(record)
-            if not isinstance(record, DictTerm):
-                note_mismatch(
-                    "generate_records/3",
-                    f"was called with a list containing {type(record).__name__} "
-                    "where a list of DictTerm records is required (argument 2)",
-                )
-                return
+            expect_type(record, DictTerm, "generate_records/3", arg=2)
             row_dict = {text_or_str(k): text_or_str(v)
                         for k, v in record.data.items()}
             writer.writerow(row_dict)
@@ -241,13 +229,7 @@ def _write_file_2(path, rows, trail, k):
             writer = _csv.writer(f)
             for row in rows:
                 row = deref(row)
-                if not isinstance(row, list):
-                    note_mismatch(
-                        "write_file/2",
-                        f"was called with a list containing {type(row).__name__} "
-                        "where a list of row lists is required (argument 2)",
-                    )
-                    return
+                expect_type(row, list, "write_file/2", arg=2)
                 writer.writerow(_deref_row(row))
     except (TypeError, ValueError) as exc:
         note_rejected_call("write_file/2", exc)

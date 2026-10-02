@@ -59,8 +59,6 @@ def _environment_variable_2(name, value, trail, k):
 def _set_environment_variable_2(name, value, trail, k):
     """set_environment_variable/2: set an environment variable."""
     name, value = deref(name), deref(value)
-    if is_var(name) or is_var(value):
-        return
     name = require_text(name, "set_environment_variable/2", 1)
     value = require_text(value, "set_environment_variable/2", 2)
     if name is None or value is None:

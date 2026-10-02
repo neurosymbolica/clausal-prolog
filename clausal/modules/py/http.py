@@ -31,6 +31,7 @@ _urllib_parse = _import_stdlib("urllib.parse")
 _json_mod = _import_stdlib("json")
 
 from clausal.logic.variables import deref, is_var, unify
+from clausal.logic.exceptions import LogicException, instantiation_error
 from clausal.terms import DictTerm
 
 # JSON conversion helpers from py.json module
@@ -105,9 +106,9 @@ def _get_3(url, headers, body, trail, k):
     headers_d = deref(headers)
     if url_d is None:
         return
-    # Note-only — see post/3: headers still degrade to {} as before.
+    # An unbound Headers still means none; a bound non-dict raises.
     if not is_var(headers_d):
-        expect_type(headers_d, DictTerm, "get/3", expected="dict", arg=2)
+        expect_type(headers_d, DictTerm, "get/3", arg=2)
     hdrs = _dict_term_to_headers(headers_d) if not is_var(headers_d) else {}
     result = _do_request(url_d, headers=hdrs)
     if result is None:
@@ -125,15 +126,10 @@ def _post_3(url, data, body, trail, k):
     data_d = deref(data)
     if url_d is None:
         return
-    if is_var(data_d):
-        return
-    # Note-only: _do_request has always sent a body-less POST for data that
-    # is neither text nor bytes, and changing that success into a failure is
-    # outside this diagnostic's blast radius — record the mismatch, behave
-    # as before.  An ATOM is text (§9.4) and no longer records a note.
+    # Data that is neither text (a string or an ATOM, §9.4) nor bytes
+    # raises (RULED 2026-10-02) -- it used to send a body-less POST.
     if to_bytes(data_d) is None:
-        expect_type(data_d, (str, bytes), "post/3",
-                    expected="str or bytes", arg=2)
+        expect_type(data_d, (str, bytes), "post/3", arg=2)   # raises
     result = _do_request(url_d, method="POST", data=data_d)
     if result is None:
         return
@@ -151,15 +147,11 @@ def _post_4(url, data, headers, body, trail, k):
     headers_d = deref(headers)
     if url_d is None:
         return
-    if is_var(data_d):
-        return
-    # Note-only guards — see post/3: behaviour (body-less POST, headers
-    # degrading to {}) is deliberately unchanged.
+    # See post/3.  An unbound Headers still means none.
     if to_bytes(data_d) is None:
-        expect_type(data_d, (str, bytes), "post/4",
-                    expected="str or bytes", arg=2)
+        expect_type(data_d, (str, bytes), "post/4", arg=2)   # raises
     if not is_var(headers_d):
-        expect_type(headers_d, DictTerm, "post/4", expected="dict", arg=3)
+        expect_type(headers_d, DictTerm, "post/4", arg=3)
     hdrs = _dict_term_to_headers(headers_d) if not is_var(headers_d) else {}
     result = _do_request(url_d, method="POST", data=data_d, headers=hdrs)
     if result is None:
@@ -180,7 +172,7 @@ def _request_3(options, status_out, body_out, trail, k):
     dict read as empty.
     """
     opts = deref(options)
-    if not expect_type(opts, DictTerm, "request/3", expected="dict", arg=1):
+    if not expect_type(opts, DictTerm, "request/3", arg=1):
         return
     url_raw = deref(option(opts.data, "url"))
     url = to_text(url_raw) if url_raw is not None else None
@@ -188,11 +180,9 @@ def _request_3(options, status_out, body_out, trail, k):
         if url_raw is None:
             note_mismatch("request/3",
                           "was called with an options dict that lacks a url key")
-        elif not is_var(url_raw):
-            note_mismatch("request/3",
-                          f"was called with an options dict whose url is "
-                          f"{type(url_raw).__name__} where text (an atom or "
-                          f"a string) is required")
+        else:
+            # Unbound -> instantiation_error; not text -> type_error(text, U).
+            expect_type(url_raw, str, "request/3", arg=1)
         return
     method = deref(option(opts.data, "method", "GET"))
     if is_var(method):
@@ -241,10 +231,8 @@ def _json_post_3(url, term_in, term_out, trail, k):
     """json_post/3: POST JSON body + parse JSON response."""
     url_d = require_text(deref(url), "json_post/3")
     term_d = deref(term_in)
-    if url_d is None:
-        return
     if is_var(term_d):
-        return
+        raise LogicException(instantiation_error("json_post/3: argument 2"))
     try:
         json_str = _json_mod.dumps(_clausal_to_python(term_d, "py.http.json_post/3"))
     except (ValueError, TypeError) as exc:
