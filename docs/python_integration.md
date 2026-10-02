@@ -700,9 +700,11 @@ print(repr(my_module.bar))            # 'bar'
     `type_error(date, datetime(...))`. A naive with an aware datetime is the
     domain error in the table: both are datetimes, and a different value of
     the same type would answer. `date_add/3` or `date_sub/3` whose result
-    falls outside years 1..9999 raises `representation_error(date)`. A JSON
-    term with something JSON has no form for -- bytes, a rational, a
-    compound -- is `type_error(json_term, Culprit)`; a nested unbound
+    falls outside years 1..9999 raises `representation_error(date)`. JSON
+    generation writes a decimal as its exact digits and an integral
+    rational as its integer; a JSON term with something JSON has no exact
+    form for -- bytes, a non-integral rational, a compound -- is
+    `type_error(json_term, Culprit)`; a nested unbound
     variable is `instantiation_error`. `set_seed/1` with an unbound seed is
     `instantiation_error`.
 

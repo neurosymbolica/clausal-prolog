@@ -12,6 +12,8 @@ Covers:
 """
 
 import pytest
+from decimal import Decimal
+from fractions import Fraction
 
 from clausal import Var, cell_args, cell_functor
 from clausal.terms import Quantity, UnitsMismatch, DictTerm
@@ -666,20 +668,29 @@ class TestUtilityPredicates:
         assert result.value == 10
         assert result.dims == {"kilogram": 1, "metre": 1, "second": -2}
 
-    def test_dimension_of_plain_number_raises_type_error(self):
-        # nv
-        # Ruling 2026-10-02: a bare number is the wrong type, not a "no".
+    def test_dimension_of_plain_number_is_dimensionless(self):
+        # nv -- RULED 2026-10-02: a bare number is a dimensionless quantity
+        # (it used to fail): its dimension is the empty dict.
         from clausal.modules.py.units import dimension_of
-        from clausal.logic.exceptions import LogicException
-        with pytest.raises(LogicException, match=r"type_error\(quantity,42\)"):
-            run(dimension_of, 42, "DIMS")
+        for n in (42, 4.2, Fraction(1, 3), Decimal("0.5")):
+            sols = run(dimension_of, n, "DIMS")
+            assert len(sols) == 1
+            assert sols[0]["DIMS"] == DictTerm({})
 
-    def test_value_of_plain_number_raises_type_error(self):
+    def test_value_of_plain_number_is_itself(self):
         # nv
         from clausal.modules.py.units import strip_units
+        sols = run(strip_units, 42, "V")
+        assert len(sols) == 1 and sols[0]["V"] == 42
+
+    def test_non_number_non_quantity_still_raises_type_error(self):
+        from clausal.modules.py.units import dimension_of, strip_units
         from clausal.logic.exceptions import LogicException
-        with pytest.raises(LogicException, match=r"type_error\(quantity,42\)"):
-            run(strip_units, 42, "V")
+        for pred in (dimension_of, strip_units):
+            with pytest.raises(LogicException, match=r"type_error\(quantity,f\(1\)\)"):
+                run(pred, ("f", 1), "X")
+            with pytest.raises(LogicException, match=r"type_error\(quantity,true\)"):
+                run(pred, True, "X")
 
 
 # ════════════════════════════════════════════════════════════════════════════

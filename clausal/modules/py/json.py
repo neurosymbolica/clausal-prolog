@@ -44,6 +44,8 @@ from clausal.modules.py import (
 )
 _json = _import_stdlib("json")
 
+from decimal import Decimal as _Decimal
+from fractions import Fraction as _Fraction
 from typing import Any
 
 from clausal.logic.atoms import crossing_value, is_atom, key_of, mint, spelling
@@ -122,7 +124,7 @@ def _clausal_to_python(term: Any, context: str = "py.json.generate/2") -> Any:
         return crossing_value(term)    # ``true`` is the JSON boolean, not the string "true" (D35)
     if isinstance(term, DictTerm):
         return {
-            _clausal_to_python(k, context): _clausal_to_python(deref(v), context)
+            _json_key(_clausal_to_python(k, context)): _clausal_to_python(deref(v), context)
             for k, v in term.data.items()
         }
     if isinstance(term, list):
@@ -130,7 +132,7 @@ def _clausal_to_python(term: Any, context: str = "py.json.generate/2") -> Any:
     if type(term) is dict:
         # A plain dict from a Python caller: the same as a DictTerm.
         return {
-            _clausal_to_python(k, context): _clausal_to_python(deref(v), context)
+            _json_key(_clausal_to_python(k, context)): _clausal_to_python(deref(v), context)
             for k, v in term.items()
         }
     if is_chars(term):
@@ -145,11 +147,65 @@ def _clausal_to_python(term: Any, context: str = "py.json.generate/2") -> Any:
         return [_clausal_to_python(e, context) for e in term]
     if term is None or type(term) in (bool, int, float):
         return term                    # the JSON scalars
-    # Anything else -- bytes, a rational, a decimal, a Python object -- has
-    # no JSON counterpart, exactly as a compound cell has none: the same
-    # ``type_error(json_term, Culprit)``, not the stdlib TypeError the
-    # wrapper used to swallow into a silent failure.
+    # The engine's exact numbers (RULED 2026-10-02): a decimal is a JSON
+    # number written with its own exact digits; an integral rational is the
+    # integer it denotes; a non-integral rational has no exact JSON form.
+    if type(term) is _Decimal and term.is_finite():
+        return _JsonNumber(str(term))
+    if type(term) is _Fraction and term.denominator == 1:
+        return int(term)
+    # Anything else -- bytes, a non-integral rational, a NaN or infinite
+    # decimal, a Python object -- has no JSON counterpart, exactly as a
+    # compound cell has none: the same ``type_error(json_term, Culprit)``,
+    # not the stdlib TypeError the wrapper used to swallow into a silent
+    # failure.
     raise LogicException(type_error("json_term", term, context))
+
+
+class _JsonNumber:
+    """A number :func:`_dumps` writes as its exact TEXT (a decimal's digits),
+    which ``json.dumps`` has no hook for: it can only emit a float's repr."""
+
+    __slots__ = ("text",)
+
+    def __init__(self, text: str) -> None:
+        self.text = text
+
+
+def _dumps(obj: Any, **kw: Any) -> str:
+    """``json.dumps`` for :func:`_clausal_to_python`'s output, writing each
+    :class:`_JsonNumber` as its exact text.
+
+    The number goes through ``default`` as a placeholder string carrying a
+    per-call random nonce, and the quoted placeholder is then replaced by
+    the digits -- so no user string can be mistaken for one.
+    """
+    nonce = _uuid4_hex()
+    texts: list[str] = []
+
+    def default(o):
+        if isinstance(o, _JsonNumber):
+            texts.append(o.text)
+            return f"\x01{nonce}:{len(texts) - 1}\x01"
+        raise TypeError(f"not JSON serialisable: {type(o).__name__}")
+
+    out = _json.dumps(obj, default=default, **kw)
+    if not texts:
+        return out
+    for i, text in enumerate(texts):
+        out = out.replace(f'"\\u0001{nonce}:{i}\\u0001"', text, 1)
+    return out
+
+
+def _uuid4_hex() -> str:
+    import uuid as _uuid_mod  # noqa: PLC0415 -- stdlib, not py.uuid
+    return _uuid_mod.uuid4().hex
+
+
+def _json_key(k):
+    """An object key: a decimal key is written as its text, as JSON writes
+    every number key (a key is always a string in JSON)."""
+    return k.text if isinstance(k, _JsonNumber) else k
 
 
 # ── parse/3 options ─────────────────────────────────────────────────────
@@ -259,7 +315,7 @@ def _generate_2(term, string, trail, k):
     # The converter raises for anything with no JSON counterpart (RULED
     # 2026-10-02), so dumps gets plain JSON data only.
     obj = _clausal_to_python(term, "py.json.generate/2")
-    result = _json.dumps(obj, ensure_ascii=False)
+    result = _dumps(obj, ensure_ascii=False)
     if unify(string, text_result(result), trail):   # stage 1
         yield None
 
@@ -273,7 +329,7 @@ def _pretty_generate_2(term, string, trail, k):
     # The converter raises for anything with no JSON counterpart (RULED
     # 2026-10-02), so dumps gets plain JSON data only.
     obj = _clausal_to_python(term, "py.json.pretty_generate/2")
-    result = _json.dumps(obj, indent=2, ensure_ascii=False)
+    result = _dumps(obj, indent=2, ensure_ascii=False)
     if unify(string, text_result(result), trail):   # stage 1
         yield None
 
@@ -334,7 +390,7 @@ def _write_file_2(path, term, trail, k):
     obj = _clausal_to_python(term, "py.json.write_file/2")
     try:
         with open(path, "w", encoding="utf-8") as f:
-            _json.dump(obj, f, ensure_ascii=False, indent=2)
+            f.write(_dumps(obj, ensure_ascii=False, indent=2))
     except OSError:
         return
     yield None

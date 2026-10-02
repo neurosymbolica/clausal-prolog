@@ -57,8 +57,10 @@ since 0.4.0 finish three moves:
   mixed with an aware datetime is `domain_error(naive_datetime, DT)` /
   `domain_error(aware_datetime, DT)`. `date_add/3`, `date_sub/3` past years
   1..9999 raise `representation_error(date)`. JSON generation
-  (`generate/2`, `pretty_generate/2`, `write_file/2`, `json_post/3`) with
-  bytes, a rational or a decimal inside is `type_error(json_term, X)` (as a
+  (`generate/2`, `pretty_generate/2`, `write_file/2`, `json_post/3`) writes
+  a decimal as its exact digits (`0.10` stays `0.10`) and an integral
+  rational as its integer -- both used to fail; bytes, a non-integral
+  rational or a NaN/infinite decimal is `type_error(json_term, X)` (as a
   compound already was) and a nested unbound variable is
   `instantiation_error`; `write_file/2` (JSON and CSV) checks before it opens
   the file, so a bad term leaves no truncated file. CSV `generate/2`,
@@ -74,8 +76,11 @@ since 0.4.0 finish three moves:
   `currency_start/2`, `currency_end/2`, `currency_code/2` forward,
   `money_round/3`, `money_str/3`, `money_format/4`: `type_error(currency |
   quantity | text, X)`, `domain_error(money | rounding_mode | money_style,
-  X)`), `units` (`strip_units/2`, `dimension_of/2`: `type_error(quantity,
-  X)` for a non-quantity, including a bare number; `make_quantity/3`) and
+  X)`), `units` (`strip_units/2`, `dimension_of/2`: a bare number is a
+  dimensionless quantity -- `dimension_of(42, D)` gives `D = {}` and
+  `strip_units(42, V)` gives `V = 42`, where both used to fail -- and
+  anything else that is not a quantity is `type_error(quantity, X)`;
+  `make_quantity/3`) and
   `reflection` (`reified_item/2`, `reified_clause/2`,
   `reified_file_item/2`: `type_error(text, S)`; a missing file is
   `existence_error(source_sink, Path)`).

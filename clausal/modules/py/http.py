@@ -36,6 +36,7 @@ from clausal.terms import DictTerm
 
 # JSON conversion helpers from py.json module
 from clausal.modules.py.json import _python_to_clausal, _clausal_to_python
+from clausal.modules.py.json import _dumps as _json_dumps
 
 
 # ── Internal helpers ─────────────────────────────────────────────────────
@@ -283,7 +284,7 @@ def _json_post_3(url, term_in, term_out, trail, k):
         raise LogicException(instantiation_error("json_post/3: argument 2"))
     # The converter raises for a term with no JSON counterpart
     # (type_error(json_term, _)) or a nested unbound variable.
-    json_str = _json_mod.dumps(_clausal_to_python(term_d, "py.http.json_post/3"))
+    json_str = _json_dumps(_clausal_to_python(term_d, "py.http.json_post/3"))
     result = _do_request(
         url_d, method="POST", data=text_result(json_str),   # stage 1: our own text is text
         headers={"Content-Type": "application/json", "Accept": "application/json"},

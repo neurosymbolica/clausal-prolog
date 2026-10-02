@@ -528,9 +528,9 @@ def _dimension_of_impl(d, dims_out, trail):
 
     Ruling 2026-10-02: a plain unbound variable (no dimensional constraint)
     is ``instantiation_error`` and a bound non-quantity is
-    ``type_error(quantity, D)`` -- both used to fail silently. A bare number
-    is not "dimensionless" here, by the same ruling as ``compatible_units``
-    (2026-09-11): it carries no unit claim at all.
+    ``type_error(quantity, D)`` -- both used to fail silently.  RULED
+    2026-10-02: a bare NUMBER is a dimensionless quantity, so its dimension
+    is the empty dict -- the dims ``dimensionless`` itself carries.
     """
     from clausal.terms import DictTerm
     from clausal.logic.units_constraint import UNITS_KEY
@@ -546,18 +546,34 @@ def _dimension_of_impl(d, dims_out, trail):
         dims_term = DictTerm(state.dims)
         if unify(deref(dims_out), dims_term, trail):
             yield None
+    elif _is_bare_number(dv):
+        if unify(deref(dims_out), DictTerm({}), trail):
+            yield None
     else:
         raise LogicException(type_error("quantity", dv, "dimension_of/2"))
+
+
+def _is_bare_number(v) -> bool:
+    """A plain number of the engine's tower (never a bool: true/false are
+    atoms, D35) -- what dimension_of/2 and strip_units/2 read as a
+    dimensionless quantity (RULED 2026-10-02)."""
+    from clausal.modules.py import NUMBER_TYPES
+    return isinstance(v, NUMBER_TYPES) and type(v) is not bool
 
 
 def _strip_dimensions_impl(d, value_out, trail):
     """strip_units(Quantity, Value): unify Value with the numeric component.
 
-    Unbound -> instantiation_error; a non-quantity -> ``type_error(quantity,
-    D)`` (ruling 2026-10-02; both used to fail silently)."""
+    Unbound -> instantiation_error; a bare number is a dimensionless
+    quantity and strips to itself (RULED 2026-10-02); anything else ->
+    ``type_error(quantity, D)`` (both used to fail silently)."""
     dv = deref(d)
     if is_var(dv):
         raise LogicException(instantiation_error("strip_units/2"))
+    if _is_bare_number(dv):
+        if unify(deref(value_out), dv, trail):
+            yield None
+        return
     if not isinstance(dv, Quantity):
         raise LogicException(type_error("quantity", dv, "strip_units/2"))
     if unify(deref(value_out), dv.value, trail):

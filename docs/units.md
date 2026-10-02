@@ -539,7 +539,7 @@ ratio scales.
 
 | Predicate                  | Description |
 |----------------------------|-------------|
-| `dimension_of(D, Dims)`     | Unify `Dims` with a `DictTerm` of the dimension dict |
+| `dimension_of(D, Dims)`     | Unify `Dims` with a `DictTerm` of the dimension dict (a bare number is dimensionless: `{}`) |
 | `strip_units(D, V)`         | Unify `V` with the numeric component |
 | `make_quantity(V, Dims, D)` | Construct `Quantity` from value `V` and `DictTerm` dims |
 

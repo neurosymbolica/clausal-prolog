@@ -227,12 +227,13 @@ def test_money_format_style_and_mode_checks():
 
 def test_strip_units_checks():
     assert _term(U.strip_units, Var(), Var()) == instantiation_error("strip_units/2")
-    assert _term(U.strip_units, 42, Var()) == type_error("quantity", 42, "strip_units/2")
+    # A bare number is dimensionless (RULED 2026-10-02); an atom is not a quantity.
+    assert _term(U.strip_units, "abc", Var()) == type_error("quantity", "abc", "strip_units/2")
 
 
 def test_dimension_of_checks():
     assert _term(U.dimension_of, Var(), Var()) == instantiation_error("dimension_of/2")
-    assert _term(U.dimension_of, 42, Var()) == type_error("quantity", 42, "dimension_of/2")
+    assert _term(U.dimension_of, "abc", Var()) == type_error("quantity", "abc", "dimension_of/2")
 
 
 def test_make_quantity_checks():
@@ -285,10 +286,10 @@ def test_catchable_by_iso_pattern_from_source(tmp_path):
     from tests._suffix import SEAM
     p = tmp_path / f"nonpy_raise_catch{SEAM}"
     p.write_text(
-        "-private([nope])\n"
+        "-private([nope, abc])\n"
         "-import_from(units, [strip_units])\n"
         "-import_from(graphs, [vertices])\n"
-        "t1(T) <- catch(strip_units(42, _), error(type_error(T, 42), _), true)\n"
+        "t1(T) <- catch(strip_units(abc, _), error(type_error(T, abc), _), true)\n"
         "t2(D) <- catch(vertices(nope, _), error(type_error(D, nope), _), true)\n"
     )
     mod = _load_module("nonpy_raise_catch", str(p)).__dict__["$module"]

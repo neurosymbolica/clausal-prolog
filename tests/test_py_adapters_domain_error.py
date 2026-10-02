@@ -125,11 +125,57 @@ def test_json_write_file_unserialisable_raises_and_writes_nothing(tmp_path):
     assert not p.exists()
 
 
-def test_json_generate_rational_raises_type_error():
+def test_json_generate_non_integral_rational_raises_type_error():
+    # 1/3 has no exact JSON number (RULED 2026-10-02).
     from fractions import Fraction
     from clausal.modules.py.json import _generate_2
     assert raised(_generate_2, [Fraction(1, 3)], Var()) == _err(
         ("type_error", "json_term", Fraction(1, 3)), "py.json.generate", 2)
+
+
+def test_json_generate_writes_exact_numbers():
+    # RULED 2026-10-02: a decimal is its exact digits, an integral rational
+    # its integer; a float stays a float.
+    from decimal import Decimal
+    from fractions import Fraction
+    from clausal.logic.cells import chars_text
+    from clausal.logic.variables import deref
+    from clausal.modules.py.json import _generate_2, _pretty_generate_2
+    from clausal.terms import DictTerm
+    out = Var()
+    term = [Decimal("0.10"), Decimal("1E+2"), Fraction(4, 2), 1.5,
+            DictTerm({"k": Decimal("2.50")})]
+    assert len(list(_generate_2(term, out, Trail(), None))) == 1
+    assert chars_text(deref(out)) == '[0.10, 1E+2, 2, 1.5, {"k": 2.50}]'
+    out = Var()
+    assert len(list(_pretty_generate_2([Decimal("3.14")], out, Trail(), None))) == 1
+    assert chars_text(deref(out)) == "[\n  3.14\n]"
+
+
+def test_json_generate_decimal_round_trips_through_parse():
+    from decimal import Decimal
+    import json
+    from clausal.logic.cells import chars_text
+    from clausal.logic.variables import deref
+    from clausal.modules.py.json import _generate_2
+    out = Var()
+    list(_generate_2([Decimal("0.1")], out, Trail(), None))
+    assert json.loads(chars_text(deref(out)), parse_float=Decimal) == [Decimal("0.1")]
+
+
+def test_json_generate_nan_decimal_raises_type_error():
+    from decimal import Decimal
+    from clausal.modules.py.json import _generate_2
+    term = raised(_generate_2, [Decimal("NaN")], Var())
+    assert term[1][:2] == ("type_error", "json_term")
+
+
+def test_json_write_file_writes_exact_decimal(tmp_path):
+    from decimal import Decimal
+    from clausal.modules.py.json import _write_file_2
+    p = tmp_path / "d.json"
+    assert len(list(_write_file_2(chars(str(p)), [Decimal("1.50")], Trail(), None))) == 1
+    assert "1.50" in p.read_text()
 
 
 # ── http ─────────────────────────────────────────────────────────────────
